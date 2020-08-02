@@ -1,0 +1,69 @@
+name: Publish
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+jobs:
+  publish:
+    name: Publish for ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+
+    env:
+      CARGO: cargo
+      TARGET_FLAGS: ''
+      TARGET_DIR: ./target
+
+    strategy:
+      matrix:
+        name: [linux, windows, macos]
+        include:
+          - name: linux
+            os: ubuntu-latest
+            target: x86_64-unknown-linux-musl
+            artifact_name: hl
+            asset_name: hl-linux.tar.gz
+          - name: windows
+            os: windows-latest
+            artifact_name: hl.exe
+            asset_name: hl-windows.zip
+          - name: macos
+            os: macos-latest
+            artifact_name: hl
+            asset_name: hl-macos.zip
+
+    steps:
+      - uses: actions/checkout@v2
+
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+
+      - name: Install Cross
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          cargo install cross
+          echo "::set-env name=CARGO::cross"
+          echo "::set-env name=TARGET_FLAGS::--target ${{ matrix.target }}"
+          echo "::set-env name=TARGET_DIR::./target/${{ matrix.target }}"
+
+      - name: Build
+        run: ${{ env.CARGO }} build --release --locked --verbose ${{ env.TARGET_FLAGS }}
+
+      - name: Package
+        if: matrix.os == 'ubuntu-latest'
+        run: tar -C "${{ env.TARGET_DIR }}/release" -cz -f "${{ matrix.asset_name }}" "${{ matrix.artifact_name }}"
+
+      - name: Package
+        if: matrix.os != 'ubuntu-latest'
+        run: 7z a "${{ matrix.asset_name }}" "${{ env.TARGET_DIR }}/release/${{ matrix.artifact_name }}"
+
+      - name: Upload binaries to release
+        uses: svenstaro/upload-release-action@v1-release
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: ${{ matrix.asset_name }}
+          asset_name: ${{ matrix.asset_name }}
+          tag: ${{ github.ref }}

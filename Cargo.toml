@@ -1,0 +1,28 @@
+[package]
+authors = ["Pavel Ivanov <mr.pavel.ivanov@gmail.com>"]
+categories = ["command-line-utilities"]
+description = "Utility for viewing json-formatted log files."
+keywords = ["cli", "human", "log"]
+name = "hl"
+version = "0.1.0-alpha.0"
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+ansi_term = "0.12"
+anyhow = "1.0"
+atoi = "0.3.2"
+chrono = { version = "0.4", features = ["serde"] }
+closure = "0.3.0"
+error-chain = "0.12"
+heapless = "0.5.5"
+itertools = "0.9"
+crossbeam-utils = "0.7"
+crossbeam-queue = "0.2"
+crossbeam-channel = "0.4"
+isatty = "0.1"
+num_cpus = "1.0"
+structopt = "0.3"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = { version = "1.0", features = ["raw_value"] }
