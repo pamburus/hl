@@ -75,7 +75,7 @@ jobs:
     steps:
       - uses: oprypin/find-latest-tag@v1
         with:
-          repository: https://github.com/pamburus/hl
+          repository: pamburus/hl
           prefix: v
         id: find-latest-tag
       - uses: actions/checkout@v2
