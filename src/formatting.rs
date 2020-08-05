@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use chrono::naive::NaiveDateTime;
 use chrono::{DateTime, Datelike, Timelike};
+use heapless::consts::*;
 use json::{de::Read, de::StrRead, value::RawValue};
 use serde_json as json;
 
@@ -88,19 +89,18 @@ impl MessageFormatter {
                 buf.push(b':');
             }
             //
-            // message
+            // message text
             //
             if let Some(text) = msg.text {
                 buf.push(b' ');
-                styler.set(buf, Element::Message);
-                format_str_unescaped(buf, text.get());
+                self.format_message_text(buf, styler, text);
             }
             //
             // fields
             //
             for (k, v) in msg.fields() {
                 buf.push(b' ');
-                self.format_field_value(buf, styler, k, v);
+                self.format_field(buf, styler, k, v);
             }
             //
             // caller
@@ -118,7 +118,7 @@ impl MessageFormatter {
         });
     }
 
-    fn format_field_value<'a, 'b: 'a>(
+    fn format_field<'a, 'b: 'a>(
         &self,
         buf: &'a mut Vec<u8>,
         styler: &'a mut Styler<'b>,
@@ -127,6 +127,102 @@ impl MessageFormatter {
     ) {
         let mut fv = FieldFormatter::new(self, buf, styler);
         fv.format(key, value);
+    }
+
+    fn format_value<'a, 'b: 'a>(
+        &self,
+        buf: &'a mut Vec<u8>,
+        styler: &'a mut Styler<'b>,
+        value: &RawValue,
+    ) {
+        let mut fv = FieldFormatter::new(self, buf, styler);
+        fv.format_value(value);
+    }
+
+    fn format_message_text<'a, 'b: 'a>(
+        &self,
+        buf: &'a mut Vec<u8>,
+        styler: &'a mut Styler<'b>,
+        value: &RawValue,
+    ) {
+        match value.get().as_bytes()[0] {
+            b'"' => {
+                styler.set(buf, Element::Message);
+                format_str_unescaped(buf, value.get());
+            }
+            b'0'..=b'9' => {
+                styler.set(buf, Element::LiteralNumber);
+                buf.extend_from_slice(value.get().as_bytes());
+            }
+            b't' | b'f' => {
+                styler.set(buf, Element::LiteralBoolean);
+                buf.extend_from_slice(value.get().as_bytes());
+            }
+            b'n' => {
+                styler.set(buf, Element::LiteralNull);
+                buf.extend_from_slice(value.get().as_bytes());
+            }
+            b'{' => {
+                let item = json::from_str::<model::Object>(value.get()).unwrap();
+                styler.set(buf, Element::Brace);
+                buf.push(b'{');
+                for (k, v) in item.fields.iter() {
+                    buf.push(b' ');
+                    self.format_field(buf, styler, k, v)
+                }
+                styler.set(buf, Element::Brace);
+                buf.extend_from_slice(b" }");
+            }
+            b'[' => {
+                let item = json::from_str::<model::Array<U256>>(value.get()).unwrap();
+                let is_byte_string = item
+                    .iter()
+                    .map(|&v| {
+                        let v = v.get().as_bytes();
+                        only_digits(v) && (v.len() < 3 || (v.len() == 3 && v <= b"255"))
+                    })
+                    .position(|x| x == false)
+                    .is_none();
+                if is_byte_string {
+                    styler.set(buf, Element::Quote);
+                    buf.push(b'b');
+                    buf.push(b'\'');
+                    for item in item.iter() {
+                        let b = atoi::atoi::<u8>(item.get().as_bytes()).unwrap();
+                        if b >= 32 {
+                            styler.set(buf, Element::Message);
+                            buf.push(b);
+                        } else {
+                            styler.set(buf, Element::LiteralString);
+                            buf.push(b'\\');
+                            buf.push(HEXDIGIT[(b >> 4) as usize]);
+                            buf.push(HEXDIGIT[(b & 0xF) as usize]);
+                        }
+                    }
+                    styler.set(buf, Element::Quote);
+                    buf.push(b'\'');
+                } else {
+                    styler.set(buf, Element::Brace);
+                    buf.push(b'[');
+                    let mut first = true;
+                    for v in item.iter() {
+                        if !first {
+                            styler.set(buf, Element::Punctuation);
+                            buf.push(b',');
+                        } else {
+                            first = false;
+                        }
+                        self.format_value(buf, styler, v);
+                    }
+                    styler.set(buf, Element::Brace);
+                    buf.push(b']');
+                }
+            }
+            _ => {
+                styler.set(buf, Element::Message);
+                buf.extend_from_slice(value.get().as_bytes());
+            }
+        };
     }
 }
 
@@ -195,11 +291,11 @@ impl<'a, 'b> FieldFormatter<'a, 'b> {
                 self.buf.extend_from_slice(b" }");
             }
             b'[' => {
-                let item = json::from_str::<model::Array>(value.get()).unwrap();
+                let item = json::from_str::<model::Array<U32>>(value.get()).unwrap();
                 self.styler.set(self.buf, Element::Brace);
                 self.buf.push(b'[');
                 let mut first = true;
-                for v in item.items.iter() {
+                for v in item.iter() {
                     if !first {
                         self.styler.set(self.buf, Element::Punctuation);
                         self.buf.push(b',');
@@ -353,6 +449,10 @@ fn only_digits(b: &[u8]) -> bool {
         .position(|x| x == false)
         .is_none()
 }
+
+const HEXDIGIT: [u8; 16] = [
+    b'0', b'1', b'2', b'3', b'4', b'5', b'6', b'7', b'8', b'9', b'a', b'b', b'c', b'd', b'e', b'f',
+];
 
 const DIGITS: [[u8; 2]; 100] = [
     [b'0', b'0'],

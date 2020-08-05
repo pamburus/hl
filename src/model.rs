@@ -321,14 +321,33 @@ impl<'de: 'a, 'a> Deserialize<'de> for Object<'a> {
     }
 }
 
-pub struct Array<'a> {
-    pub items: heapless::Vec<&'a RawValue, U32>,
+pub struct Array<'a, N>
+where
+    N: heapless::ArrayLength<&'a RawValue>,
+{
+    items: heapless::Vec<&'a RawValue, N>,
+    more: Vec<&'a RawValue>,
 }
 
-struct ArrayVisitor<'a> {
-    marker: PhantomData<fn() -> Array<'a>>,
+impl<'a, N> Array<'a, N>
+where
+    N: heapless::ArrayLength<&'a RawValue>,
+{
+    pub fn iter(&self) -> impl Iterator<Item = &&'a RawValue> {
+        self.items.iter().chain(self.more.iter())
+    }
 }
-impl<'a> ArrayVisitor<'a> {
+
+struct ArrayVisitor<'a, N>
+where
+    N: heapless::ArrayLength<&'a RawValue>,
+{
+    marker: PhantomData<fn() -> Array<'a, N>>,
+}
+impl<'a, N> ArrayVisitor<'a, N>
+where
+    N: heapless::ArrayLength<&'a RawValue>,
+{
     fn new() -> Self {
         Self {
             marker: PhantomData,
@@ -336,22 +355,32 @@ impl<'a> ArrayVisitor<'a> {
     }
 }
 
-impl<'de: 'a, 'a> Visitor<'de> for ArrayVisitor<'a> {
-    type Value = Array<'a>;
+impl<'de: 'a, 'a, N> Visitor<'de> for ArrayVisitor<'a, N>
+where
+    N: heapless::ArrayLength<&'a RawValue>,
+{
+    type Value = Array<'a, N>;
     fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
         formatter.write_str("object json")
     }
 
     fn visit_seq<A: SeqAccess<'de>>(self, mut access: A) -> Result<Self::Value, A::Error> {
         let mut items = heapless::Vec::new();
+        let mut more = Vec::new();
         while let Some(item) = access.next_element()? {
-            items.push(item).ok();
+            match items.push(item) {
+                Ok(()) => {}
+                Err(item) => more.push(item),
+            }
         }
-        Ok(Array { items })
+        Ok(Array { items, more })
     }
 }
 
-impl<'de: 'a, 'a> Deserialize<'de> for Array<'a> {
+impl<'de: 'a, 'a, N> Deserialize<'de> for Array<'a, N>
+where
+    N: heapless::ArrayLength<&'a RawValue>,
+{
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
