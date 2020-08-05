@@ -1,4 +1,5 @@
 use std::env;
+use std::io::Read;
 use std::path::PathBuf;
 use std::process;
 use std::sync::Arc;
@@ -138,29 +139,27 @@ fn run() -> Result<()> {
         filter: filter,
     });
 
-    // Configure inputs.
-    let has_inputs = opt.files.len() != 0;
-    for path in opt.files.iter() {
-        if path.to_str() != Some("-") {
-            open(&path)?;
-        }
-    }
-    let inputs = opt.files.into_iter().map(|x| {
-        if x.to_str() == Some("-") {
-            Ok(Input::new("<stdin>".into(), Box::new(std::io::stdin())))
-        } else {
-            open(&x)
-        }
-    });
-    let mut stdin = std::io::stdin();
+    // Configure input.
+    let inputs = opt
+        .files
+        .iter()
+        .map(|x| {
+            if x.to_str() == Some("-") {
+                Ok(Input::new("<stdin>".into(), Box::new(std::io::stdin())))
+            } else {
+                open(&x)
+            }
+        })
+        .collect::<std::io::Result<Vec<_>>>()?;
+    let mut input: Box<dyn Read + Send + Sync> = if inputs.len() == 0 {
+        Box::new(std::io::stdin())
+    } else {
+        Box::new(ConcatReader::new(inputs.into_iter().map(|x| Ok(x))))
+    };
     let mut stdout = std::io::stdout();
-    let mut input = ConcatReader::new(inputs);
 
     // Run app.
-    match app.run(
-        if has_inputs { &mut input } else { &mut stdin },
-        &mut stdout,
-    ) {
+    match app.run(input.as_mut(), &mut stdout) {
         Ok(()) => Ok(()),
         Err(Error(ErrorKind::Io(ref e), _)) if e.kind() == std::io::ErrorKind::BrokenPipe => Ok(()),
         Err(err) => Err(err),
