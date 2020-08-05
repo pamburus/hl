@@ -4,63 +4,68 @@ use std::path::PathBuf;
 
 use ansi_term::Colour;
 
-pub struct ConcatReader {
-    files: Vec<PathBuf>,
-    i: usize,
-    f: Option<File>,
+pub struct Input {
+    pub name: String,
+    pub stream: Box<dyn Read + Send + Sync>,
 }
 
-impl ConcatReader {
-    pub fn new(files: Vec<PathBuf>) -> Self {
-        Self {
-            files,
-            i: 0,
-            f: None,
-        }
-    }
+pub struct ConcatReader<I> {
+    iter: I,
+    item: Option<Input>,
+}
 
-    pub fn is_empty(&self) -> bool {
-        self.files.len() == 0
+pub fn open(filename: &PathBuf) -> Result<Input> {
+    let name = format!(
+        "file '{}'",
+        Colour::Yellow.paint(filename.to_string_lossy()),
+    );
+
+    let f = File::open(filename)
+        .map_err(|e| Error::new(e.kind(), format!("failed to open {}: {}", name, e)))?;
+
+    Ok(Input::new(name, Box::new(f)))
+}
+
+impl Input {
+    pub fn new(name: String, stream: Box<dyn Read + Send + Sync>) -> Self {
+        Self { name, stream }
     }
 }
 
-impl Read for ConcatReader {
+impl<I> ConcatReader<I>
+where
+    I: Iterator<Item = Result<Input>>,
+{
+    pub fn new(iter: I) -> Self {
+        Self { iter, item: None }
+    }
+}
+
+impl<I> Read for ConcatReader<I>
+where
+    I: Iterator<Item = Result<Input>>,
+{
     fn read(&mut self, buf: &mut [u8]) -> Result<usize> {
         loop {
-            if self.i >= self.files.len() {
-                return Ok(0);
+            if self.item.is_none() {
+                match self.iter.next() {
+                    None => {
+                        return Ok(0);
+                    }
+                    Some(result) => {
+                        self.item = Some(result?);
+                    }
+                };
             }
 
-            let filename = &self.files[self.i];
-            if self.f.is_none() {
-                self.f = Some(File::open(&filename).map_err(|e| {
-                    Error::new(
-                        e.kind(),
-                        format!(
-                            "failed to open file '{}': {}",
-                            Colour::Yellow.paint(filename.to_string_lossy()),
-                            e
-                        ),
-                    )
-                })?);
-            }
-
-            let mut f = self.f.as_ref().unwrap();
-            let n = f.read(buf).map_err(|e| {
-                Error::new(
-                    e.kind(),
-                    format!(
-                        "failed to read file '{}': {}",
-                        Colour::Yellow.paint(filename.to_string_lossy()),
-                        e
-                    ),
-                )
+            let input = self.item.as_mut().unwrap();
+            let n = input.stream.read(buf).map_err(|e| {
+                Error::new(e.kind(), format!("failed to read {}: {}", input.name, e))
             })?;
             if n != 0 {
                 return Ok(n);
             }
-            self.f = None;
-            self.i += 1;
+            self.item = None;
         }
     }
 }

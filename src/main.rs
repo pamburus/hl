@@ -9,7 +9,7 @@ use structopt::clap::arg_enum;
 use structopt::StructOpt;
 
 use hl::error::*;
-use hl::input::ConcatReader;
+use hl::input::{open, ConcatReader, Input};
 
 /// JSON log converter to human readable representation.
 #[derive(StructOpt)]
@@ -72,9 +72,8 @@ arg_enum! {
 
 fn run() -> Result<()> {
     let opt = Opt::from_args();
-    let mut stdin = std::io::stdin();
-    let mut stdout = std::io::stdout();
 
+    // Configure color scheme.
     let color = if opt.color_always {
         Color::Always
     } else {
@@ -95,14 +94,18 @@ fn run() -> Result<()> {
         Color::Never => hl::theme::Theme::none(),
     };
 
+    // Configure concurrency.
     let concurrency = match opt.concurrency {
         0 => num_cpus::get(),
         _ => opt.concurrency,
     };
+
+    // Configure buffer size.
     let buffer_size = match opt.buffer_size {
         0 => 2 << 20,
         _ => opt.buffer_size << 10,
     };
+    // Configure level.
     let level = match opt.level {
         'e' | 'E' => hl::Level::Error,
         'w' | 'W' => hl::Level::Warning,
@@ -120,10 +123,13 @@ fn run() -> Result<()> {
             .into());
         }
     };
+    // Configure filter.
     let filter = hl::Filter {
         fields: hl::FieldFilterSet::new(&opt.filter[..]),
         level: Some(level),
     };
+
+    // Create app.
     let app = hl::App::new(hl::Options {
         theme: Arc::new(theme),
         raw_fields: opt.raw_fields,
@@ -131,13 +137,28 @@ fn run() -> Result<()> {
         concurrency: concurrency,
         filter: filter,
     });
-    let mut files = ConcatReader::new(opt.files);
-    match app.run(
-        if !files.is_empty() {
-            &mut files
+
+    // Configure inputs.
+    let has_inputs = opt.files.len() != 0;
+    for path in opt.files.iter() {
+        if path.to_str() != Some("-") {
+            open(&path)?;
+        }
+    }
+    let inputs = opt.files.into_iter().map(|x| {
+        if x.to_str() == Some("-") {
+            Ok(Input::new("<stdin>".into(), Box::new(std::io::stdin())))
         } else {
-            &mut stdin
-        },
+            open(&x)
+        }
+    });
+    let mut stdin = std::io::stdin();
+    let mut stdout = std::io::stdout();
+    let mut input = ConcatReader::new(inputs);
+
+    // Run app.
+    match app.run(
+        if has_inputs { &mut input } else { &mut stdin },
         &mut stdout,
     ) {
         Ok(()) => Ok(()),
