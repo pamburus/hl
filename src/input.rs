@@ -1,12 +1,15 @@
 use std::fs::File;
-use std::io::{Error, Read, Result};
+use std::io::{BufReader, Error, Read, Result};
 use std::path::PathBuf;
 
 use ansi_term::Colour;
+use flate2::bufread::GzDecoder;
+
+pub type Stream = Box<dyn Read + Send + Sync>;
 
 pub struct Input {
     pub name: String,
-    pub stream: Box<dyn Read + Send + Sync>,
+    pub stream: Stream,
 }
 
 pub struct ConcatReader<I> {
@@ -14,20 +17,22 @@ pub struct ConcatReader<I> {
     item: Option<Input>,
 }
 
-pub fn open(filename: &PathBuf) -> Result<Input> {
-    let name = format!(
-        "file '{}'",
-        Colour::Yellow.paint(filename.to_string_lossy()),
-    );
+pub fn open(path: &PathBuf) -> Result<Input> {
+    let name = format!("file '{}'", Colour::Yellow.paint(path.to_string_lossy()),);
 
-    let f = File::open(filename)
+    let f = File::open(path)
         .map_err(|e| Error::new(e.kind(), format!("failed to open {}: {}", name, e)))?;
 
-    Ok(Input::new(name, Box::new(f)))
+    let stream: Stream = match path.extension().map(|x| x.to_str()) {
+        Some(Some("gz")) => Box::new(GzDecoder::new(BufReader::new(f))),
+        _ => Box::new(f),
+    };
+
+    Ok(Input::new(name, stream))
 }
 
 impl Input {
-    pub fn new(name: String, stream: Box<dyn Read + Send + Sync>) -> Self {
+    pub fn new(name: String, stream: Stream) -> Self {
         Self { name, stream }
     }
 }
