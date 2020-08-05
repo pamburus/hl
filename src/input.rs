@@ -37,10 +37,7 @@ impl Input {
     }
 }
 
-impl<I> ConcatReader<I>
-where
-    I: Iterator<Item = Result<Input>>,
-{
+impl<I> ConcatReader<I> {
     pub fn new(iter: I) -> Self {
         Self { iter, item: None }
     }
