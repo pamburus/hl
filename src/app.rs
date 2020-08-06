@@ -16,6 +16,7 @@ use crate::theme::Theme;
 
 pub struct Options {
     pub theme: Arc<Theme>,
+    pub time_format: String,
     pub raw_fields: bool,
     pub buffer_size: usize,
     pub concurrency: usize,
@@ -79,8 +80,11 @@ impl App {
             // spawn processing threads
             for (rxi, txo) in izip!(rxi, txo) {
                 scope.spawn(closure!(ref bfo, ref sfi, |_| {
-                    let mut formatter = MessageFormatter::new(self.options.theme.clone())
-                        .with_field_unescaping(!self.options.raw_fields);
+                    let mut formatter = MessageFormatter::new(
+                        self.options.theme.clone(),
+                        &self.options.time_format,
+                    )
+                    .with_field_unescaping(!self.options.raw_fields);
                     for segment in rxi.iter() {
                         match segment {
                             ScannedSegment::Complete(segment) => {
@@ -110,10 +114,10 @@ impl App {
         return Ok(());
     }
 
-    fn process_segement(
+    fn process_segement<'a>(
         &self,
         segment: &Segment,
-        formatter: &mut MessageFormatter,
+        formatter: &mut MessageFormatter<'a>,
         buf: &mut Vec<u8>,
     ) {
         for data in segment.data().split(|c| *c == b'\n') {

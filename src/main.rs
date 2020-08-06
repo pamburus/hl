@@ -52,6 +52,10 @@ struct Opt {
     #[structopt(short, long, default_value = "d")]
     level: char,
     //
+    /// Time format, see https://man7.org/linux/man-pages/man3/strftime.3.html.
+    #[structopt(short, long, default_value = "%b %d %T.%3f")]
+    time_format: String,
+    //
     /// Files to process
     #[structopt(name = "FILE", parse(from_os_str))]
     files: Vec<PathBuf>,
@@ -148,6 +152,7 @@ fn run() -> Result<()> {
     let app = hl::App::new(hl::Options {
         theme: Arc::new(theme),
         raw_fields: opt.raw_fields,
+        time_format: opt.time_format,
         buffer_size: buffer_size,
         concurrency: concurrency,
         filter: filter,

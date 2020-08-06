@@ -1,27 +1,38 @@
 use std::sync::Arc;
 
-use chrono::naive::NaiveDateTime;
-use chrono::{DateTime, Datelike, Timelike};
+use chrono::prelude::*;
 use heapless::consts::*;
 use json::{de::Read, de::StrRead, value::RawValue};
 use serde_json as json;
 
+use crate::datefmt;
+use crate::fmtx;
 use crate::model;
 use crate::theme;
 
+use datefmt::{format_date, reformat_rfc3339_timestamp, StrftimeFormat};
+use fmtx::{aligned, Counter};
 use model::Level;
 use theme::{Element, Styler, Theme};
 
-pub struct MessageFormatter {
+pub struct MessageFormatter<'s> {
     theme: Arc<Theme>,
     unescape_fields: bool,
+    ts_format: &'s str,
+    ts_width: usize,
 }
 
-impl MessageFormatter {
-    pub fn new(theme: Arc<Theme>) -> Self {
+impl<'s> MessageFormatter<'s> {
+    pub fn new(theme: Arc<Theme>, ts_format: &'s str) -> Self {
+        let mut counter = Counter::new();
+        let tts = Utc.ymd(2020, 12, 30).and_hms_nano(23, 59, 49, 999_999_999);
+        format_date(&mut counter, tts, StrftimeFormat::new(ts_format));
+        let ts_width = counter.result();
         Self {
             theme,
             unescape_fields: true,
+            ts_format,
+            ts_width,
         }
     }
 
@@ -36,32 +47,23 @@ impl MessageFormatter {
             // time
             //
             styler.set(buf, Element::Time);
-            if let Some(ts) = msg.ts {
-                let mut format = || -> Option<()> {
-                    let s = json::from_str::<&str>(ts.get()).ok()?;
-                    let bytes = s.as_bytes();
-                    if only_digits(bytes) {
-                        let (ts, nsec) = parse_unix_timestamp(bytes)?;
-                        let ts = NaiveDateTime::from_timestamp_opt(ts, nsec)?;
-                        let ts = DateTime::from_utc(ts, chrono::Utc);
-                        format_date(buf, ts);
-                        Some(())
-                    } else if is_rfc_3339(bytes) {
-                        let (date, time) = split_rfc3339(bytes);
-                        buf.extend_from_slice(date);
-                        buf.push(b' ');
-                        buf.extend_from_slice(time);
-                        Some(())
+            aligned(buf, self.ts_width, b' ', |mut buf| {
+                if let Some(ts) = msg.ts() {
+                    if ts.is_rfc3339() {
+                        reformat_rfc3339_timestamp(
+                            &mut buf,
+                            ts.raw(),
+                            StrftimeFormat::new(self.ts_format),
+                        );
+                    } else if let Some(ts) = ts.parse() {
+                        format_date(&mut buf, ts, StrftimeFormat::new(self.ts_format));
                     } else {
-                        None
+                        buf.extend_from_slice(ts.raw().as_bytes());
                     }
-                };
-                if format().is_none() {
-                    buf.extend_from_slice(b"    <<< bad time >>>   ");
+                } else {
+                    buf.centered(b"---");
                 }
-            } else {
-                buf.extend_from_slice(b"  <<< missing time >>> ");
-            }
+            });
             //
             // level
             //
@@ -232,7 +234,7 @@ fn format_str_unescaped(buf: &mut Vec<u8>, s: &str) {
 }
 
 struct FieldFormatter<'a, 'b> {
-    mf: &'a MessageFormatter,
+    mf: &'a MessageFormatter<'a>,
     buf: &'a mut Vec<u8>,
     styler: &'a mut Styler<'b>,
 }
@@ -315,244 +317,10 @@ impl<'a, 'b> FieldFormatter<'a, 'b> {
     }
 }
 
-fn format_date(buf: &mut Vec<u8>, dt: DateTime<chrono::Utc>) {
-    format_u32_p2(buf, dt.year() as u32);
-    buf.push(b'-');
-    format_u32_p2(buf, dt.month());
-    buf.push(b'-');
-    format_u32_p2(buf, dt.day());
-    buf.push(b' ');
-    format_u32_p2(buf, dt.hour());
-    buf.push(b':');
-    format_u32_p2(buf, dt.minute());
-    buf.push(b':');
-    format_u32_p2(buf, dt.second());
-    buf.push(b'.');
-    format_u32_p3(buf, dt.nanosecond() / 1000000);
-}
-
-fn format_u32_p2(buf: &mut Vec<u8>, v: u32) {
-    let d = DIGITS[(v % 100) as usize];
-    buf.push(d[0]);
-    buf.push(d[1]);
-}
-
-fn format_u32_p3(buf: &mut Vec<u8>, v: u32) {
-    let d0 = DIGITS[(v % 100) as usize];
-    let d1 = DIGITS[(v / 100 % 100) as usize];
-    buf.push(d1[1]);
-    buf.push(d0[0]);
-    buf.push(d0[1]);
-}
-
-fn is_rfc_3339(v: &[u8]) -> bool {
-    if v.len() < 19 {
-        return false;
-    }
-    if !v[0].is_ascii_digit() {
-        return false;
-    }
-    if !v[1].is_ascii_digit() {
-        return false;
-    }
-    if !v[2].is_ascii_digit() {
-        return false;
-    }
-    if !v[3].is_ascii_digit() {
-        return false;
-    }
-    if v[4] != b'-' {
-        return false;
-    }
-    if !v[5].is_ascii_digit() {
-        return false;
-    }
-    if !v[6].is_ascii_digit() {
-        return false;
-    }
-    if v[7] != b'-' {
-        return false;
-    }
-    if !v[8].is_ascii_digit() {
-        return false;
-    }
-    if !v[9].is_ascii_digit() {
-        return false;
-    }
-    if v[10] != b'T' {
-        return false;
-    }
-    if !v[11].is_ascii_digit() {
-        return false;
-    }
-    if !v[12].is_ascii_digit() {
-        return false;
-    }
-    if v[13] != b':' {
-        return false;
-    }
-    if !v[14].is_ascii_digit() {
-        return false;
-    }
-    if !v[15].is_ascii_digit() {
-        return false;
-    }
-    if v[16] != b':' {
-        return false;
-    }
-    if !v[17].is_ascii_digit() {
-        return false;
-    }
-    if !v[18].is_ascii_digit() {
-        return false;
-    }
-
-    true
-}
-
-fn split_rfc3339<'a>(mut v: &'a [u8]) -> (&'a [u8], &'a [u8]) {
-    if v.len() > 23 {
-        v = &v[..23]
-    }
-    for i in 19..23 {
-        if v[i] != b'.' && !v[i].is_ascii_digit() {
-            v = &v[..i];
-            break;
-        }
-    }
-    (&v[2..10], &v[11..])
-}
-
-fn parse_unix_timestamp<I: atoi::FromRadix10>(mut text: &[u8]) -> Option<(I, u32)> {
-    let n = text.len();
-    let nsec = if n > 14 {
-        let (nsec, _): (u32, _) = atoi::FromRadix10::from_radix_10(&text[n - 6..]);
-        text = &text[..n - 6];
-        nsec * 1000
-    } else if n > 11 {
-        let (nsec, _): (u32, _) = atoi::FromRadix10::from_radix_10(&text[n - 3..]);
-        text = &text[..n - 3];
-        nsec * 1000000
-    } else {
-        0
-    };
-
-    match I::from_radix_10(text) {
-        (_, 0) => None,
-        (n, _) => Some((n, nsec)),
-    }
-}
-
 fn only_digits(b: &[u8]) -> bool {
-    b.iter()
-        .map(|&b| b.is_ascii_digit())
-        .position(|x| x == false)
-        .is_none()
+    b.iter().position(|&b| !b.is_ascii_digit()).is_none()
 }
 
 const HEXDIGIT: [u8; 16] = [
     b'0', b'1', b'2', b'3', b'4', b'5', b'6', b'7', b'8', b'9', b'a', b'b', b'c', b'd', b'e', b'f',
-];
-
-const DIGITS: [[u8; 2]; 100] = [
-    [b'0', b'0'],
-    [b'0', b'1'],
-    [b'0', b'2'],
-    [b'0', b'3'],
-    [b'0', b'4'],
-    [b'0', b'5'],
-    [b'0', b'6'],
-    [b'0', b'7'],
-    [b'0', b'8'],
-    [b'0', b'9'],
-    [b'1', b'0'],
-    [b'1', b'1'],
-    [b'1', b'2'],
-    [b'1', b'3'],
-    [b'1', b'4'],
-    [b'1', b'5'],
-    [b'1', b'6'],
-    [b'1', b'7'],
-    [b'1', b'8'],
-    [b'1', b'9'],
-    [b'2', b'0'],
-    [b'2', b'1'],
-    [b'2', b'2'],
-    [b'2', b'3'],
-    [b'2', b'4'],
-    [b'2', b'5'],
-    [b'2', b'6'],
-    [b'2', b'7'],
-    [b'2', b'8'],
-    [b'2', b'9'],
-    [b'3', b'0'],
-    [b'3', b'1'],
-    [b'3', b'2'],
-    [b'3', b'3'],
-    [b'3', b'4'],
-    [b'3', b'5'],
-    [b'3', b'6'],
-    [b'3', b'7'],
-    [b'3', b'8'],
-    [b'3', b'9'],
-    [b'4', b'0'],
-    [b'4', b'1'],
-    [b'4', b'2'],
-    [b'4', b'3'],
-    [b'4', b'4'],
-    [b'4', b'5'],
-    [b'4', b'6'],
-    [b'4', b'7'],
-    [b'4', b'8'],
-    [b'4', b'9'],
-    [b'5', b'0'],
-    [b'5', b'1'],
-    [b'5', b'2'],
-    [b'5', b'3'],
-    [b'5', b'4'],
-    [b'5', b'5'],
-    [b'5', b'6'],
-    [b'5', b'7'],
-    [b'5', b'8'],
-    [b'5', b'9'],
-    [b'6', b'0'],
-    [b'6', b'1'],
-    [b'6', b'2'],
-    [b'6', b'3'],
-    [b'6', b'4'],
-    [b'6', b'5'],
-    [b'6', b'6'],
-    [b'6', b'7'],
-    [b'6', b'8'],
-    [b'6', b'9'],
-    [b'7', b'0'],
-    [b'7', b'1'],
-    [b'7', b'2'],
-    [b'7', b'3'],
-    [b'7', b'4'],
-    [b'7', b'5'],
-    [b'7', b'6'],
-    [b'7', b'7'],
-    [b'7', b'8'],
-    [b'7', b'9'],
-    [b'8', b'0'],
-    [b'8', b'1'],
-    [b'8', b'2'],
-    [b'8', b'3'],
-    [b'8', b'4'],
-    [b'8', b'5'],
-    [b'8', b'6'],
-    [b'8', b'7'],
-    [b'8', b'8'],
-    [b'8', b'9'],
-    [b'9', b'0'],
-    [b'9', b'1'],
-    [b'9', b'2'],
-    [b'9', b'3'],
-    [b'9', b'4'],
-    [b'9', b'5'],
-    [b'9', b'6'],
-    [b'9', b'7'],
-    [b'9', b'8'],
-    [b'9', b'9'],
 ];

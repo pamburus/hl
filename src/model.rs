@@ -6,12 +6,13 @@ use json::value::RawValue;
 use serde::de::{Deserialize, Deserializer, MapAccess, SeqAccess, Visitor};
 use serde_json as json;
 
+use crate::timestamp::Timestamp;
 use crate::types;
 
 pub use types::Level;
 
 pub struct Message<'a> {
-    pub ts: Option<&'a RawValue>,
+    ts: Option<&'a RawValue>,
     pub text: Option<&'a RawValue>,
     pub level: Option<Level>,
     pub logger: Option<&'a str>,
@@ -23,6 +24,21 @@ pub struct Message<'a> {
 impl<'a> Message<'a> {
     pub fn fields(&self) -> impl Iterator<Item = &(&'a str, &'a RawValue)> {
         self.extra.iter().chain(self.extrax.iter())
+    }
+
+    pub fn ts(&self) -> Option<Timestamp<'a>> {
+        match self.ts {
+            None => None,
+            Some(ts) => {
+                let s = ts.get();
+                let s = if s.as_bytes()[0] == b'"' {
+                    &s[1..s.len() - 1]
+                } else {
+                    s
+                };
+                Some(Timestamp::new(s))
+            }
+        }
     }
 
     pub fn matches(&self, filter: &Filter) -> bool {
