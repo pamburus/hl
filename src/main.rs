@@ -1,5 +1,4 @@
 use std::env;
-use std::io::Read;
 use std::path::PathBuf;
 use std::process;
 use std::sync::Arc;
@@ -10,7 +9,8 @@ use structopt::clap::arg_enum;
 use structopt::StructOpt;
 
 use hl::error::*;
-use hl::input::{open, ConcatReader, Input};
+use hl::input::{open, ConcatReader, Input, InputStream};
+use hl::output::{OutputStream, Pager};
 
 /// JSON log converter to human readable representation.
 #[derive(StructOpt)]
@@ -19,34 +19,39 @@ struct Opt {
     /// Color output options, one of { auto, always, never }
     #[structopt(long, default_value = "auto")]
     color: Color,
-
+    //
     /// Handful alias for --color=always, overrides --color option
     #[structopt(short)]
     color_always: bool,
-
+    //
+    /// Output paging options, one of { auto, always, never }
+    #[structopt(long, default_value = "auto")]
+    paging: Paging,
+    //
     /// Color theme, one of { auto, dark, dark24, light }
     #[structopt(long, default_value = "auto")]
     theme: Theme,
+    //
     /// Do not unescape string fields.
     #[structopt(short, long)]
     raw_fields: bool,
-
+    //
     /// Buffer size, kibibytes.
     #[structopt(long, default_value = "2048")]
     buffer_size: usize,
-
+    //
     /// Number of processing threads. Zero means automatic selection.
     #[structopt(long, default_value = "0")]
     concurrency: usize,
-
+    //
     /// Filtering by field values in form <key>=<value> or <key>~=<value>.
     #[structopt(short, long)]
     filter: Vec<String>,
-
+    //
     /// Filtering by level, valid values: ['d', 'i', 'w', 'e'].
     #[structopt(short, long, default_value = "d")]
     level: char,
-
+    //
     /// Files to process
     #[structopt(name = "FILE", parse(from_os_str))]
     files: Vec<PathBuf>,
@@ -68,6 +73,15 @@ arg_enum! {
         Dark,
         Dark24,
         Light,
+    }
+}
+
+arg_enum! {
+    #[derive(Debug)]
+    enum Paging {
+        Auto,
+        Always,
+        Never,
     }
 }
 
@@ -151,15 +165,34 @@ fn run() -> Result<()> {
             }
         })
         .collect::<std::io::Result<Vec<_>>>()?;
-    let mut input: Box<dyn Read + Send + Sync> = if inputs.len() == 0 {
+    let mut input: InputStream = if inputs.len() == 0 {
         Box::new(std::io::stdin())
     } else {
         Box::new(ConcatReader::new(inputs.into_iter().map(|x| Ok(x))))
     };
-    let mut stdout = std::io::stdout();
+    let paging = match opt.paging {
+        Paging::Auto => {
+            if stdout_isatty() {
+                true
+            } else {
+                false
+            }
+        }
+        Paging::Always => true,
+        Paging::Never => false,
+    };
+    let mut output: OutputStream = if paging {
+        if let Ok(pager) = Pager::new() {
+            Box::new(pager)
+        } else {
+            Box::new(std::io::stdout())
+        }
+    } else {
+        Box::new(std::io::stdout())
+    };
 
     // Run app.
-    match app.run(input.as_mut(), &mut stdout) {
+    match app.run(input.as_mut(), output.as_mut()) {
         Ok(()) => Ok(()),
         Err(Error(ErrorKind::Io(ref e), _)) if e.kind() == std::io::ErrorKind::BrokenPipe => Ok(()),
         Err(err) => Err(err),

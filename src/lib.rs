@@ -4,6 +4,7 @@ mod eseq;
 mod formatting;
 pub mod input;
 mod model;
+pub mod output;
 mod scanning;
 pub mod theme;
 pub mod types;

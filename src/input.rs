@@ -5,11 +5,11 @@ use std::path::PathBuf;
 use ansi_term::Colour;
 use flate2::bufread::GzDecoder;
 
-pub type Stream = Box<dyn Read + Send + Sync>;
+pub type InputStream = Box<dyn Read + Send + Sync>;
 
 pub struct Input {
     pub name: String,
-    pub stream: Stream,
+    pub stream: InputStream,
 }
 
 pub struct ConcatReader<I> {
@@ -23,7 +23,7 @@ pub fn open(path: &PathBuf) -> Result<Input> {
     let f = File::open(path)
         .map_err(|e| Error::new(e.kind(), format!("failed to open {}: {}", name, e)))?;
 
-    let stream: Stream = match path.extension().map(|x| x.to_str()) {
+    let stream: InputStream = match path.extension().map(|x| x.to_str()) {
         Some(Some("gz")) => Box::new(GzDecoder::new(BufReader::new(f))),
         _ => Box::new(f),
     };
@@ -32,7 +32,7 @@ pub fn open(path: &PathBuf) -> Result<Input> {
 }
 
 impl Input {
-    pub fn new(name: String, stream: Stream) -> Self {
+    pub fn new(name: String, stream: InputStream) -> Self {
         Self { name, stream }
     }
 }
