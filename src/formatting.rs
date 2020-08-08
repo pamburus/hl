@@ -10,23 +10,23 @@ use crate::fmtx;
 use crate::model;
 use crate::theme;
 
-use datefmt::{format_date, reformat_rfc3339_timestamp, StrftimeFormat};
-use fmtx::{aligned, Counter};
+use datefmt::{format_date, reformat_rfc3339_timestamp, DateTimeFormat};
+use fmtx::{aligned_left, centered, Counter};
 use model::Level;
 use theme::{Element, Styler, Theme};
 
-pub struct MessageFormatter<'s> {
+pub struct MessageFormatter {
     theme: Arc<Theme>,
     unescape_fields: bool,
-    ts_format: &'s str,
+    ts_format: DateTimeFormat,
     ts_width: usize,
 }
 
-impl<'s> MessageFormatter<'s> {
-    pub fn new(theme: Arc<Theme>, ts_format: &'s str) -> Self {
+impl MessageFormatter {
+    pub fn new(theme: Arc<Theme>, ts_format: DateTimeFormat) -> Self {
         let mut counter = Counter::new();
         let tts = Utc.ymd(2020, 12, 30).and_hms_nano(23, 59, 49, 999_999_999);
-        format_date(&mut counter, tts, StrftimeFormat::new(ts_format));
+        format_date(&mut counter, tts, &ts_format);
         let ts_width = counter.result();
         Self {
             theme,
@@ -47,23 +47,21 @@ impl<'s> MessageFormatter<'s> {
             // time
             //
             styler.set(buf, Element::Time);
-            aligned(buf, self.ts_width, b' ', |mut buf| {
-                if let Some(ts) = msg.ts() {
+            if let Some(ts) = msg.ts() {
+                aligned_left(buf, self.ts_width, b' ', |mut buf| {
                     if ts.is_rfc3339() {
-                        reformat_rfc3339_timestamp(
-                            &mut buf,
-                            ts.raw(),
-                            StrftimeFormat::new(self.ts_format),
-                        );
+                        reformat_rfc3339_timestamp(&mut buf, ts.raw(), &self.ts_format);
                     } else if let Some(ts) = ts.parse() {
-                        format_date(&mut buf, ts, StrftimeFormat::new(self.ts_format));
+                        format_date(&mut buf, ts, &self.ts_format);
                     } else {
                         buf.extend_from_slice(ts.raw().as_bytes());
                     }
-                } else {
-                    buf.centered(b"---");
-                }
-            });
+                });
+            } else {
+                centered(buf, self.ts_width, b' ', |mut buf| {
+                    buf.extend_from_slice(b"---");
+                });
+            }
             //
             // level
             //
@@ -234,7 +232,7 @@ fn format_str_unescaped(buf: &mut Vec<u8>, s: &str) {
 }
 
 struct FieldFormatter<'a, 'b> {
-    mf: &'a MessageFormatter<'a>,
+    mf: &'a MessageFormatter,
     buf: &'a mut Vec<u8>,
     styler: &'a mut Styler<'b>,
 }

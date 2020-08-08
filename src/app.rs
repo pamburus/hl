@@ -8,6 +8,7 @@ use crossbeam_utils::thread;
 use itertools::izip;
 use serde_json as json;
 
+use crate::datefmt::DateTimeFormat;
 use crate::error::*;
 use crate::formatting::MessageFormatter;
 use crate::model::{Filter, Message};
@@ -16,7 +17,7 @@ use crate::theme::Theme;
 
 pub struct Options {
     pub theme: Arc<Theme>,
-    pub time_format: String,
+    pub time_format: DateTimeFormat,
     pub raw_fields: bool,
     pub buffer_size: usize,
     pub concurrency: usize,
@@ -82,7 +83,7 @@ impl App {
                 scope.spawn(closure!(ref bfo, ref sfi, |_| {
                     let mut formatter = MessageFormatter::new(
                         self.options.theme.clone(),
-                        &self.options.time_format,
+                        self.options.time_format.clone(),
                     )
                     .with_field_unescaping(!self.options.raw_fields);
                     for segment in rxi.iter() {
@@ -114,10 +115,10 @@ impl App {
         return Ok(());
     }
 
-    fn process_segement<'a>(
+    fn process_segement(
         &self,
         segment: &Segment,
-        formatter: &mut MessageFormatter<'a>,
+        formatter: &mut MessageFormatter,
         buf: &mut Vec<u8>,
     ) {
         for data in segment.data().split(|c| *c == b'\n') {

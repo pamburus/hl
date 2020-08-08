@@ -3,19 +3,27 @@ use std::io::Write;
 use chrono::{format::strftime::StrftimeItems, Datelike, Timelike};
 use criterion::{criterion_group, criterion_main, Criterion};
 
-use hl::datefmt::{format_date, StrftimeFormat};
+use hl::datefmt::{format_date, LinuxDateFormat};
 use hl::timestamp::Timestamp;
 
 fn criterion_benchmark(c: &mut Criterion) {
     let ts = Timestamp::new("2020-06-27T00:48:30.466249792+03:00")
         .parse()
         .unwrap();
-    let items = StrftimeItems::new("%y-%m-%d %T.%3f");
     let tsn = ts.naive_local();
-    c.bench_function("datefmt format %y-%m-%d %T%f", |b| {
+    c.bench_function("datefmt format [%y-%m-%d %T.%N]", |b| {
         let mut buf = Vec::<u8>::with_capacity(4096);
+        let format = LinuxDateFormat::new("%y-%m-%d %T.%N").compile();
         b.iter(|| {
-            format_date(&mut buf, ts, StrftimeFormat::new("%y-%m-%d %T%f"));
+            format_date(&mut buf, ts, &format);
+            buf.clear();
+        });
+    });
+    c.bench_function("datefmt format [%b %d %T.%N]", |b| {
+        let mut buf = Vec::<u8>::with_capacity(4096);
+        let format = LinuxDateFormat::new("%b %d %T.%N").compile();
+        b.iter(|| {
+            format_date(&mut buf, ts, &format);
             buf.clear();
         });
     });
@@ -33,6 +41,7 @@ fn criterion_benchmark(c: &mut Criterion) {
             );
         });
     });
+    let items = StrftimeItems::new("%y-%m-%d %T.%3f");
     c.bench_function("chrono format", |b| {
         let mut buf = Vec::<u8>::with_capacity(4096);
         b.iter(|| {

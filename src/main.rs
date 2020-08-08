@@ -8,6 +8,7 @@ use isatty::stdout_isatty;
 use structopt::clap::arg_enum;
 use structopt::StructOpt;
 
+use hl::datefmt::LinuxDateFormat;
 use hl::error::*;
 use hl::input::{open, ConcatReader, Input, InputStream};
 use hl::output::{OutputStream, Pager};
@@ -52,8 +53,8 @@ struct Opt {
     #[structopt(short, long, default_value = "d")]
     level: char,
     //
-    /// Time format, see https://man7.org/linux/man-pages/man3/strftime.3.html.
-    #[structopt(short, long, default_value = "%b %d %T.%3f")]
+    /// Time format, see https://man7.org/linux/man-pages/man1/date.1.html.
+    #[structopt(short, long, default_value = "%b %d %T.%3N")]
     time_format: String,
     //
     /// Files to process
@@ -152,7 +153,7 @@ fn run() -> Result<()> {
     let app = hl::App::new(hl::Options {
         theme: Arc::new(theme),
         raw_fields: opt.raw_fields,
-        time_format: opt.time_format,
+        time_format: LinuxDateFormat::new(&opt.time_format).compile(),
         buffer_size: buffer_size,
         concurrency: concurrency,
         filter: filter,
