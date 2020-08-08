@@ -77,7 +77,7 @@ impl<'a> Message<'a> {
                         for (k, v) in self.extra.iter() {
                             if field.key_match(*k) {
                                 found = true;
-                                if !field.value_match(Some(v.get()), true) {
+                                if !field.value_match(Some(v.get()), v.get().starts_with('"')) {
                                     return false;
                                 }
                             }
@@ -210,7 +210,9 @@ pub struct FieldFilter {
 #[derive(Debug)]
 enum Operator {
     Equal,
+    NotEqual,
     Like,
+    NotLike,
 }
 
 impl FieldFilter {
@@ -220,9 +222,19 @@ impl FieldFilter {
             (Some(mut key), Some(value)) => {
                 let operator = if key.ends_with('~') {
                     key = &key[..key.len() - 1];
-                    Operator::Like
+                    if key.ends_with('!') {
+                        key = &key[..key.len() - 1];
+                        Operator::NotLike
+                    } else {
+                        Operator::Like
+                    }
                 } else {
-                    Operator::Equal
+                    if key.ends_with('!') {
+                        key = &key[..key.len() - 1];
+                        Operator::NotEqual
+                    } else {
+                        Operator::Equal
+                    }
                 };
                 Some(Self {
                     key: key.into(),
@@ -263,7 +275,9 @@ impl FieldFilter {
 
         match (&self.operator, value) {
             (Operator::Equal, Some(value)) => pattern == value,
+            (Operator::NotEqual, Some(value)) => pattern != value,
             (Operator::Like, Some(value)) => value.contains(&self.value[..]),
+            (Operator::NotLike, Some(value)) => !value.contains(&self.value[..]),
             (_, None) => false,
         }
     }
