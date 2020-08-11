@@ -874,6 +874,7 @@ fn reformat_numeric<B: Push<u8>>(buf: &mut B, flags: Flags, b: &[u8]) {
 
 // ---
 
+#[inline]
 fn case_index(flags: Flags) -> usize {
     if flags.contains(UpperCase) {
         1
