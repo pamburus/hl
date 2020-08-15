@@ -145,7 +145,7 @@ fn run() -> Result<()> {
     };
     // Configure filter.
     let filter = hl::Filter {
-        fields: hl::FieldFilterSet::new(&opt.filter[..]),
+        fields: hl::FieldFilterSet::new(opt.filter),
         level: Some(level),
     };
 

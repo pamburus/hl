@@ -56,6 +56,12 @@ pub enum Item {
     TimezoneName(Flags),
 }
 
+impl AsRef<Item> for Item {
+    fn as_ref(&self) -> &Item {
+        self
+    }
+}
+
 // ---
 
 pub type DateTimeFormat = Vec<Item>;
@@ -72,22 +78,18 @@ pub struct LinuxDateFormat<'a> {
 }
 
 impl<'a> LinuxDateFormat<'a> {
-    pub fn new(spec: &'a str) -> Self {
-        Self::from_bytes(spec.as_bytes())
-    }
-
-    pub fn compile(&mut self) -> DateTimeFormat {
-        self.collect()
-    }
-
-    pub fn from_bytes(spec: &'a [u8]) -> Self {
+    pub fn new<T: AsRef<[u8]> + ?Sized>(spec: &'a T) -> Self {
         Self {
-            spec,
+            spec: spec.as_ref(),
             jump: b"",
             pad_counter: 0,
             pad: b' ',
             flags: Flags::none(),
         }
+    }
+
+    pub fn compile(&mut self) -> DateTimeFormat {
+        self.collect()
     }
 
     #[inline]
@@ -314,15 +316,16 @@ impl<'a> From<LinuxDateFormat<'a>> for Vec<Item> {
 
 // ---
 
-pub fn format_date<'a, B, F>(buf: &mut B, dt: DateTime<Utc>, format: F)
+pub fn format_date<T, B, F>(buf: &mut B, dt: DateTime<Utc>, format: F)
 where
     B: Push<u8>,
-    F: IntoIterator<Item = &'a Item>,
+    T: AsRef<Item>,
+    F: IntoIterator<Item = T>,
 {
     let dt = dt.naive_utc();
     let mut f = Formatter::new(buf);
     for item in format {
-        match *item {
+        match *item.as_ref() {
             Item::Char(b) => {
                 f.char(b);
             }
@@ -421,10 +424,11 @@ where
 
 // ---
 
-pub fn reformat_rfc3339_timestamp<'a, 'b, B, F>(buf: &mut B, ts: &'a str, format: F)
+pub fn reformat_rfc3339_timestamp<'a, T, B, F>(buf: &mut B, ts: &'a str, format: F)
 where
+    T: AsRef<Item>,
     B: Push<u8>,
-    F: IntoIterator<Item = &'b Item>,
+    F: IntoIterator<Item = T>,
 {
     let mut dt_cache = None;
     let mut dt = || {
@@ -469,7 +473,7 @@ where
     let mut f = Formatter::new(buf);
 
     for item in format {
-        match *item {
+        match *item.as_ref() {
             Item::Char(b) => {
                 f.char(b);
             }

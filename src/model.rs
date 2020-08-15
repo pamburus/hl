@@ -287,10 +287,10 @@ impl FieldFilter {
 pub struct FieldFilterSet(Vec<FieldFilter>);
 
 impl FieldFilterSet {
-    pub fn new(items: &[String]) -> Self {
+    pub fn new<T: AsRef<str>, I: IntoIterator<Item = T>>(items: I) -> Self {
         let mut fields = Vec::new();
         for i in items {
-            if let Some(item) = FieldFilter::parse(&i[..]) {
+            if let Some(item) = FieldFilter::parse(i.as_ref()) {
                 fields.push(item);
             }
         }
