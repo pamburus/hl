@@ -40,7 +40,7 @@ diligent-date-parser = "0.1"
 regex = "1"
 
 [profile.release]
-debug = true
+debug = false
 
 [[bench]]
 name = "ts_parse"
