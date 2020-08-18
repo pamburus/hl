@@ -8,6 +8,7 @@ pub mod input;
 mod model;
 pub mod output;
 mod scanning;
+pub mod signal;
 pub mod theme;
 pub mod timestamp;
 pub mod types;

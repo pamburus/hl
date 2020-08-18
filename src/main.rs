@@ -1,17 +1,24 @@
+// std imports
 use std::env;
 use std::path::PathBuf;
 use std::process;
 use std::sync::Arc;
+use std::time::Duration;
 
+// third-party imports
 use ansi_term::Colour;
 use isatty::stdout_isatty;
 use structopt::clap::arg_enum;
 use structopt::StructOpt;
 
+// local imports
 use hl::datefmt::LinuxDateFormat;
 use hl::error::*;
 use hl::input::{open, ConcatReader, Input, InputStream};
 use hl::output::{OutputStream, Pager};
+use hl::signal::SignalHandler;
+
+// ---
 
 /// JSON log converter to human readable representation.
 #[derive(StructOpt)]
@@ -36,6 +43,10 @@ struct Opt {
     /// Do not unescape string fields.
     #[structopt(short, long)]
     raw_fields: bool,
+    //
+    /// Number of interrupts to ignore, i.e. Ctrl-C (SIGINT).
+    #[structopt(short, long, default_value = "3")]
+    interrupt_ignore_count: usize,
     //
     /// Buffer size, kibibytes.
     #[structopt(long, default_value = "2048")]
@@ -197,12 +208,15 @@ fn run() -> Result<()> {
         Box::new(std::io::stdout())
     };
 
-    // Run app.
-    match app.run(input.as_mut(), output.as_mut()) {
+    // Run the app.
+    let run = || match app.run(input.as_mut(), output.as_mut()) {
         Ok(()) => Ok(()),
         Err(Error(ErrorKind::Io(ref e), _)) if e.kind() == std::io::ErrorKind::BrokenPipe => Ok(()),
         Err(err) => Err(err),
-    }
+    };
+
+    // Run the app with signal handling.
+    SignalHandler::run(opt.interrupt_ignore_count, Duration::from_secs(1), run)
 }
 
 fn main() {
