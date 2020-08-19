@@ -111,11 +111,11 @@ impl MessageFormatter {
                 styler.set(buf, Element::Caller);
                 buf.extend_from_slice(text.as_bytes());
             };
-            //
-            // eol
-            //
-            buf.push(b'\n');
         });
+        //
+        // eol
+        //
+        buf.push(b'\n');
     }
 
     fn format_field<'a, 'b: 'a>(
