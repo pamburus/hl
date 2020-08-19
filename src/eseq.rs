@@ -135,6 +135,7 @@ pub fn eseq0() -> Vec<u8> {
 pub fn eseq1(c1: StyleCode) -> Vec<u8> {
     let mut buf = Vec::with_capacity(24);
     begin(&mut buf);
+    next(&mut buf);
     c1.render(&mut buf);
     end(&mut buf);
     buf
@@ -144,6 +145,7 @@ pub fn eseq1(c1: StyleCode) -> Vec<u8> {
 pub fn eseq2(c1: StyleCode, c2: StyleCode) -> Vec<u8> {
     let mut buf = Vec::with_capacity(48);
     begin(&mut buf);
+    next(&mut buf);
     c1.render(&mut buf);
     next(&mut buf);
     c2.render(&mut buf);
@@ -155,6 +157,7 @@ pub fn eseq2(c1: StyleCode, c2: StyleCode) -> Vec<u8> {
 pub fn eseq3(c1: StyleCode, c2: StyleCode, c3: StyleCode) -> Vec<u8> {
     let mut buf = Vec::with_capacity(72);
     begin(&mut buf);
+    next(&mut buf);
     c1.render(&mut buf);
     next(&mut buf);
     c2.render(&mut buf);
@@ -164,17 +167,19 @@ pub fn eseq3(c1: StyleCode, c2: StyleCode, c3: StyleCode) -> Vec<u8> {
     buf
 }
 
+#[inline]
 fn begin(buf: &mut Vec<u8>) {
     buf.push(b'\x1b');
     buf.push(b'[');
     buf.push(b'0');
-    buf.push(b';');
 }
 
+#[inline]
 fn next(buf: &mut Vec<u8>) {
     buf.push(b';');
 }
 
+#[inline]
 fn end(buf: &mut Vec<u8>) {
     buf.push(b'm');
 }
