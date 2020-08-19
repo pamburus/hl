@@ -1,18 +1,26 @@
+// public modules
 pub mod app;
 pub mod datefmt;
 pub mod error;
-mod eseq;
 pub mod fmtx;
-mod formatting;
 pub mod input;
-mod model;
 pub mod output;
-mod scanning;
-pub mod signal;
 pub mod theme;
 pub mod timestamp;
 pub mod types;
 
+// private modules
+mod eseq;
+mod formatting;
+mod model;
+mod scanning;
+
+// conditional public modules
+#[cfg_attr(unix, path = "signal_unix.rs")]
+#[cfg_attr(windows, path = "signal_windows.rs")]
+pub mod signal;
+
+// public uses
 pub use app::App;
 pub use app::Options;
 pub use model::FieldFilterSet;
