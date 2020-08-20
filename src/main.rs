@@ -36,6 +36,11 @@ struct Opt {
     #[structopt(long, default_value = "auto")]
     paging: Paging,
     //
+    /// Handful alias for --paging=never, overrides --paging option
+    #[structopt(short = "P")]
+    paging_never: bool,
+    //
+    //
     /// Color theme, one of { auto, dark, dark24, light }
     #[structopt(long, default_value = "auto")]
     theme: Theme,
@@ -198,6 +203,7 @@ fn run() -> Result<()> {
         Paging::Always => true,
         Paging::Never => false,
     };
+    let paging = if opt.paging_never { false } else { paging };
     let mut output: OutputStream = if paging {
         if let Ok(pager) = Pager::new() {
             Box::new(pager)
