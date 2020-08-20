@@ -50,7 +50,7 @@ struct Opt {
     raw_fields: bool,
     //
     /// Number of interrupts to ignore, i.e. Ctrl-C (SIGINT).
-    #[structopt(short, long, default_value = "3")]
+    #[structopt(long, default_value = "3")]
     interrupt_ignore_count: usize,
     //
     /// Buffer size, kibibytes.
