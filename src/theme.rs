@@ -220,8 +220,8 @@ impl Theme {
             result.add(Element::EqualSign, &dark);
             result.add(Element::Brace, &gray);
             result.add(Element::Quote, &gray);
-            result.add(Element::Delimiter, &gray);
-            result.add(Element::Punctuation, &gray);
+            result.add(Element::Delimiter, &medium);
+            result.add(Element::Punctuation, &dark);
             result.add(Element::LiteralNull, &yellow);
             result.add(Element::LiteralBoolean, &yellow);
             result.add(Element::LiteralNumber, &cyan);
