@@ -67,7 +67,7 @@ impl App {
                 loop {
                     match rxo[sn % n].recv() {
                         Ok(buf) => {
-                            output.write(&buf[..])?;
+                            output.write_all(&buf[..])?;
                             bfo.recycle(buf);
                         }
                         Err(RecvError) => {
