@@ -11,8 +11,8 @@ Log viewer which translates JSON logs into human-readable representation.
     curl -sSfL https://github.com/pamburus/hl/releases/latest/download/hl-linux.tar.gz | tar xz
     ```
 
-* Download and extract using `curl` and `funzip` on macOS
+* Download and extract using `curl` and `tar` on macOS
 
     ```
-    curl -sSfL https://github.com/pamburus/hl/releases/latest/download/hl-macos.zip | funzip >hl && chmod +x hl
+    curl -sSfL https://github.com/pamburus/hl/releases/latest/download/hl-macos.tar.gz | tar xz
     ```
