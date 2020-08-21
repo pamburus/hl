@@ -23,7 +23,29 @@ Log viewer which translates JSON logs into pretty human-readable representation.
 
 ![](doc/screenshot.png)
 
-## Usage
+## Features and usage
+
+### Concatenation of multiple log files
+
+- Concatenate all log files
+
+    Command
+
+    ```
+    $ hl $(ls -tr /var/log/example/*.log)
+    ```
+    Concatenates and humanizes all `*.log` files found in `/var/log/example/`.
+
+### Support for gzipped log files
+
+- Concatenate all log files including gzipped log files
+
+    Command
+
+    ```
+    $ hl $(ls -tr /var/log/example/*.{log,log.gz})
+    ```
+    Concatenates and humanizes all `*.log` and `*.log.gz` files found in `/var/log/example/`.
 
 ### Automatic usage of pager
 
@@ -54,7 +76,7 @@ Log viewer which translates JSON logs into pretty human-readable representation.
     ```
     Opens `bat` pager.
 
-### Quick filtering by Log Level
+### Quick filtering by log level
 
 - Errors only
 
@@ -162,3 +184,7 @@ ARGS:
 ### Current limitations
 
 - Only UTC timezone is supported.
+
+### Future features
+
+- Optional sorting of all log messages
