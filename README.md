@@ -21,7 +21,7 @@ Log viewer which translates JSON logs into pretty human-readable representation.
 
 ### Screenshot
 
-![](doc/screenshot.png)
+![screenshot](doc/screenshot.png)
 
 ## Features and usage
 
@@ -181,10 +181,34 @@ ARGS:
     <FILE>...    Files to process
 ```
 
-### Current limitations
+## Performance
+
+* MacBook Pro (16-inch, 2019)
+    * CPU - 2,4 GHz 8-Core Intel Core i9
+    * OS - macOS 10.15.6
+    * Data - ~1GiB log file, 4.150.000 lines
+        * hl ~ 1 second
+            ```
+            $ time hl prom-m2.log -c >/dev/null
+            hl prom-m2.log -c > /dev/null  12.41s user 0.64s system 1430% cpu 0.912 total
+            ```
+        * hlogf ~ 10 seconds
+            ```
+            $ time hlogf prom-m2.log --color= >/dev/null
+            hlogf prom-m2.log --color= > /dev/null  9.91s user 1.22s system 101% cpu 10.970 total
+            ```
+        * humanlog ~ 60 seconds
+            ```
+            $ time humanlog <prom-m2.log >/dev/null
+            humanlog> reading stdin...
+            humanlog < prom-m2.log > /dev/null  58.55s user 4.89s system 107% cpu 58.931 total
+            ```
+        ![performance chart](doc/performance-chart.png)
+
+## Current limitations
 
 - Only UTC timezone is supported.
 
-### Future features
+## Future features
 
-- Optional sorting of all log messages
+- Optional sorting of log messages by timestamp
