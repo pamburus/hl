@@ -134,3 +134,39 @@ jobs:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           file: ${{ matrix.asset }}
           tag: ${{ github.ref }}
+
+      - name: Checkout homebrew-tap repository
+        if: matrix.os == 'macos-latest'
+        uses: actions/checkout@v2
+        with:
+          repository: pamburus/homebrew-tap
+          path: homebrew-tap
+
+      - name: Download tera
+        if: matrix.os == 'macos-latest'
+        run: curl -sSfL https://github.com/guangie88/tera-cli/releases/download/v0.4.1/tera-cli-v0.4.1-x86_64-apple-darwin.tar.gz | tar -x --strip-components 1 '*/tera'
+
+      - name: Fetch version
+        if: matrix.os == 'macos-latest'
+        run: |
+          echo "::set-env name=VERSION::$(echo ${{ github.ref }} | sed 's/^refs\/tags\/v\(.*\)$/\1/g')"
+
+      - name: Render homebrew formula template
+        if: matrix.os == 'macos-latest'
+        run: |
+          version=${VERSION} \
+          sha256=$(openssl sha256 "${{ matrix.asset_name }}" | cut -d ' ' -f2) \
+          ./tera -f templates/homebrew/hl.rb.tpl --env >homebrew-tap/hl-v${VERSION}.rb
+
+      - name: Commit homebrew formula
+        if: matrix.os == 'macos-latest'
+        run: |
+          (cd homebrew-tap && git add . && git commit -m "new: formula for hl v${VERSION}")
+
+      - name: Push changes in homebrew-tap
+        if: matrix.os == 'macos-latest'
+        uses: ad-m/github-push-action@master
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          repository: pamburus/homebrew-tap
+          directory: homebrew-tap
