@@ -24,24 +24,24 @@ use hl::signal::SignalHandler;
 #[derive(StructOpt)]
 #[structopt()]
 struct Opt {
-    /// Color output options, one of { auto, always, never }
+    /// Color output options, one of { auto, always, never }.
     #[structopt(long, default_value = "auto")]
     color: Color,
     //
-    /// Handful alias for --color=always, overrides --color option
+    /// Handful alias for --color=always, overrides --color option.
     #[structopt(short)]
     color_always: bool,
     //
-    /// Output paging options, one of { auto, always, never }
+    /// Output paging options, one of { auto, always, never }.
     #[structopt(long, default_value = "auto")]
     paging: Paging,
     //
-    /// Handful alias for --paging=never, overrides --paging option
+    /// Handful alias for --paging=never, overrides --paging option.
     #[structopt(short = "P")]
     paging_never: bool,
     //
     //
-    /// Color theme, one of { auto, dark, dark24, light }
+    /// Color theme, one of { auto, dark, dark24, light }.
     #[structopt(long, default_value = "auto")]
     theme: Theme,
     //
