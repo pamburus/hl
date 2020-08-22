@@ -57,9 +57,9 @@ struct Opt {
     #[structopt(long, default_value = "2048")]
     buffer_size: usize,
     //
-    /// Number of processing threads. Zero means automatic selection.
-    #[structopt(long, default_value = "0")]
-    concurrency: usize,
+    /// Number of processing threads.
+    #[structopt(long, short = "C")]
+    concurrency: Option<usize>,
     //
     /// Filtering by field values in form <key>=<value> or <key>~=<value>.
     #[structopt(short, long)]
@@ -132,8 +132,8 @@ fn run() -> Result<()> {
 
     // Configure concurrency.
     let concurrency = match opt.concurrency {
-        0 => num_cpus::get(),
-        _ => opt.concurrency,
+        None | Some(0) => num_cpus::get(),
+        Some(value) => value,
     };
 
     // Configure buffer size.
