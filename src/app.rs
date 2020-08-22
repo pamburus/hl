@@ -1,6 +1,7 @@
 use std::io::{Read, Write};
 use std::sync::Arc;
 
+use chrono::FixedOffset;
 use closure::closure;
 use crossbeam_channel as channel;
 use crossbeam_channel::RecvError;
@@ -8,7 +9,7 @@ use crossbeam_utils::thread;
 use itertools::izip;
 use serde_json as json;
 
-use crate::datefmt::DateTimeFormat;
+use crate::datefmt::{DateTimeFormat, DateTimeFormatter};
 use crate::error::*;
 use crate::formatting::RecordFormatter;
 use crate::model::{Filter, Record};
@@ -22,6 +23,7 @@ pub struct Options {
     pub buffer_size: usize,
     pub concurrency: usize,
     pub filter: Filter,
+    pub time_zone: FixedOffset,
 }
 
 pub struct App {
@@ -83,7 +85,10 @@ impl App {
                 scope.spawn(closure!(ref bfo, ref sfi, |_| {
                     let mut formatter = RecordFormatter::new(
                         self.options.theme.clone(),
-                        self.options.time_format.clone(),
+                        DateTimeFormatter::new(
+                            self.options.time_format.clone(),
+                            self.options.time_zone,
+                        ),
                     )
                     .with_field_unescaping(!self.options.raw_fields);
                     for segment in rxi.iter() {

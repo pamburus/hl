@@ -10,7 +10,7 @@ use crate::fmtx;
 use crate::model;
 use crate::theme;
 
-use datefmt::{format_date, reformat_rfc3339_timestamp, DateTimeFormat};
+use datefmt::DateTimeFormatter;
 use fmtx::{aligned_left, centered, Counter};
 use model::Level;
 use theme::{Element, Styler, Theme};
@@ -18,20 +18,20 @@ use theme::{Element, Styler, Theme};
 pub struct RecordFormatter {
     theme: Arc<Theme>,
     unescape_fields: bool,
-    ts_format: DateTimeFormat,
+    ts_formatter: DateTimeFormatter,
     ts_width: usize,
 }
 
 impl RecordFormatter {
-    pub fn new(theme: Arc<Theme>, ts_format: DateTimeFormat) -> Self {
+    pub fn new(theme: Arc<Theme>, ts_formatter: DateTimeFormatter) -> Self {
         let mut counter = Counter::new();
         let tts = Utc.ymd(2020, 12, 30).and_hms_nano(23, 59, 49, 999_999_999);
-        format_date(&mut counter, tts, &ts_format);
+        ts_formatter.format(&mut counter, tts.into());
         let ts_width = counter.result();
         RecordFormatter {
             theme,
             unescape_fields: true,
-            ts_format,
+            ts_formatter,
             ts_width,
         }
     }
@@ -49,12 +49,16 @@ impl RecordFormatter {
             styler.set(buf, Element::Time);
             if let Some(ts) = rec.ts() {
                 aligned_left(buf, self.ts_width, b' ', |mut buf| {
-                    if ts.is_rfc3339() {
-                        reformat_rfc3339_timestamp(&mut buf, ts.raw(), &self.ts_format);
-                    } else if let Some(ts) = ts.parse() {
-                        format_date(&mut buf, ts, &self.ts_format);
-                    } else {
-                        buf.extend_from_slice(ts.raw().as_bytes());
+                    if ts
+                        .as_rfc3339()
+                        .and_then(|ts| self.ts_formatter.reformat_rfc3339(&mut buf, ts))
+                        .is_none()
+                    {
+                        if let Some(ts) = ts.parse() {
+                            self.ts_formatter.format(&mut buf, ts);
+                        } else {
+                            buf.extend_from_slice(ts.raw().as_bytes());
+                        }
                     }
                 });
             } else {

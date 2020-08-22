@@ -205,10 +205,6 @@ ARGS:
             ```
         ![performance chart](doc/performance-chart.png)
 
-## Current limitations
-
-- Only UTC timezone is supported.
-
 ## Future features
 
 - Optional sorting of log messages by timestamp

@@ -7,6 +7,8 @@ use std::time::Duration;
 
 // third-party imports
 use ansi_term::Colour;
+use chrono::{FixedOffset, Local, TimeZone};
+use chrono_tz::{Tz, UTC};
 use isatty::stdout_isatty;
 use structopt::clap::arg_enum;
 use structopt::StructOpt;
@@ -72,6 +74,14 @@ struct Opt {
     /// Time format, see https://man7.org/linux/man-pages/man1/date.1.html.
     #[structopt(short, long, default_value = "%b %d %T.%3N")]
     time_format: String,
+    //
+    /// Time zone, one of {utc, local}.
+    #[structopt(long, default_value = "UTC")]
+    time_zone: Tz,
+    //
+    /// Use local time zone, overrides --time-zone option.
+    #[structopt(long, short = "L")]
+    local: bool,
     //
     /// Files to process
     #[structopt(name = "FILE", parse(from_os_str))]
@@ -173,6 +183,13 @@ fn run() -> Result<()> {
         buffer_size: buffer_size,
         concurrency: concurrency,
         filter: filter,
+        time_zone: if opt.local {
+            *Local.timestamp(0, 0).offset()
+        } else {
+            let tz = opt.time_zone;
+            let offset = UTC.ymd(1970, 1, 1).and_hms(0, 0, 0) - tz.ymd(1970, 1, 1).and_hms(0, 0, 0);
+            FixedOffset::east(offset.num_seconds() as i32)
+        },
     });
 
     // Configure input.

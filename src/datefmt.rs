@@ -1,11 +1,44 @@
 use std::cmp::{max, min, PartialOrd};
 
 use bitmask::bitmask;
-use chrono::{DateTime, Datelike, NaiveDateTime, Timelike, Utc};
+use chrono::{DateTime, Datelike, FixedOffset, NaiveDateTime, Timelike};
 
 use crate::fmtx;
+use crate::timestamp::rfc3339;
 
 use fmtx::{Alignment, Push};
+
+// ---
+
+pub struct DateTimeFormatter {
+    format: Vec<Item>,
+    tz: FixedOffset,
+}
+
+impl DateTimeFormatter {
+    pub fn new(format: Vec<Item>, tz: FixedOffset) -> Self {
+        Self { format, tz }
+    }
+
+    pub fn format<B>(&self, buf: &mut B, dt: DateTime<FixedOffset>)
+    where
+        B: Push<u8>,
+    {
+        format_date(buf, dt.with_timezone(&self.tz), &self.format)
+    }
+
+    pub fn reformat_rfc3339<'a, B>(&self, buf: &mut B, ts: rfc3339::Timestamp<'a>) -> Option<()>
+    where
+        B: Push<u8>,
+    {
+        if ts.timezone().is_utc() && self.tz.local_minus_utc() == 0 {
+            reformat_rfc3339(buf, ts, &self.format);
+            Some(())
+        } else {
+            None
+        }
+    }
+}
 
 // ---
 
@@ -52,8 +85,10 @@ pub enum Item {
     Second(Flags),
     Nanosecond((Flags, Precision)),
     UnixTimestamp(Flags),
-    TimezoneNumeric(Flags),
-    TimezoneName(Flags),
+    TimeZoneHour(Flags),
+    TimeZoneMinute(Flags),
+    TimeZoneSecond(Flags),
+    TimeZoneName(Flags),
 }
 
 impl AsRef<Item> for Item {
@@ -75,6 +110,7 @@ pub struct LinuxDateFormat<'a> {
     pad_counter: u8,
     pad: u8,
     flags: Flags,
+    jump_tz: bool,
 }
 
 impl<'a> LinuxDateFormat<'a> {
@@ -85,6 +121,7 @@ impl<'a> LinuxDateFormat<'a> {
             pad_counter: 0,
             pad: b' ',
             flags: Flags::none(),
+            jump_tz: false,
         }
     }
 
@@ -102,6 +139,7 @@ impl<'a> LinuxDateFormat<'a> {
             self.jump = &self.jump[1..];
             Some(result)
         } else if self.spec.len() != 0 {
+            self.jump_tz = false;
             let result = self.spec[0];
             self.spec = &self.spec[1..];
             Some(result)
@@ -121,6 +159,17 @@ impl<'a> LinuxDateFormat<'a> {
     }
 
     #[inline]
+    fn jump_tz(&mut self, jump: &'static [u8], jump_width: u8, width: u8) -> Option<Item> {
+        self.jump = jump;
+        self.jump_tz = true;
+        if jump_width < width {
+            self.pad = b' ';
+            self.pad_counter = width - jump_width;
+        }
+        self.next()
+    }
+
+    #[inline]
     fn jump_pad(&mut self, jump: &'static [u8], pad: u8, width: u8) -> Option<Item> {
         self.jump = jump;
         self.pad = pad;
@@ -131,8 +180,17 @@ impl<'a> LinuxDateFormat<'a> {
     #[inline]
     fn parse_item(&mut self) -> Option<Item> {
         let b = self.pop();
+        if self.jump_tz {
+            return match b {
+                Some(b'H') => Some(Item::TimeZoneHour(self.flags)),
+                Some(b'M') => Some(Item::TimeZoneMinute(Flags::none())),
+                Some(b'S') => Some(Item::TimeZoneSecond(Flags::none())),
+                _ => None,
+            };
+        }
         let (flags, b) = self.parse_flags(b);
         let (width, b) = self.parse_width(b);
+        let (tzf, b) = self.parse_tz_format(b);
         let b = self.skip_modifier(b);
         self.flags = Flags::none();
         let with_padding = |default| {
@@ -164,6 +222,9 @@ impl<'a> LinuxDateFormat<'a> {
                 self.jump_pad(jump, pad, width - min_width)
             }
         };
+        if tzf != 0 && b != Some(b'z') {
+            return None;
+        }
         let precision = || min(width, 9);
         match b {
             Some(b'%') => pad(1, b' ', b' ', b"%%", Some(Item::Char(b'%'))),
@@ -236,8 +297,13 @@ impl<'a> LinuxDateFormat<'a> {
             Some(b'X') => self.jump(b"%H:%M:%S", 8, width),
             Some(b'y') => pad(2, b'0', b'0', b"%y", Some(Item::YearShort(flags))),
             Some(b'Y') => pad(4, b'0', b'0', b"%Y", Some(Item::Year(flags))),
-            Some(b'z') => pad(5, b' ', b'0', b"%z", Some(Item::TimezoneNumeric(flags))),
-            Some(b'Z') => pad(3, b' ', b' ', b"%Z", Some(Item::TimezoneName(flags))),
+            Some(b'z') => match tzf {
+                0 => self.jump_tz(b"%H%M", 5, width),
+                1 => self.jump_tz(b"%H:%M", 6, width),
+                2 => self.jump_tz(b"%H:%M:%S", 9, width),
+                _ => None,
+            },
+            Some(b'Z') => pad(3, b' ', b' ', b"%Z", Some(Item::TimeZoneName(flags))),
             _ => None,
         }
     }
@@ -285,6 +351,16 @@ impl<'a> LinuxDateFormat<'a> {
             _ => b,
         }
     }
+
+    #[inline]
+    fn parse_tz_format(&mut self, mut b: Option<u8>) -> (u8, Option<u8>) {
+        let mut format: u8 = 0;
+        while b == Some(b':') {
+            format += 1;
+            b = self.pop();
+        }
+        (format, b)
+    }
 }
 
 impl<'a> Iterator for LinuxDateFormat<'a> {
@@ -316,13 +392,13 @@ impl<'a> From<LinuxDateFormat<'a>> for Vec<Item> {
 
 // ---
 
-pub fn format_date<T, B, F>(buf: &mut B, dt: DateTime<Utc>, format: F)
+pub fn format_date<T, B, F>(buf: &mut B, dto: DateTime<FixedOffset>, format: F)
 where
     B: Push<u8>,
     T: AsRef<Item>,
     F: IntoIterator<Item = T>,
 {
-    let dt = dt.naive_utc();
+    let dt = dto.naive_local();
     let mut f = Formatter::new(buf);
     for item in format {
         match *item.as_ref() {
@@ -407,14 +483,35 @@ where
             Item::UnixTimestamp(flags) => {
                 f.numeric(dt.timestamp(), 10, flags);
             }
-            Item::TimezoneNumeric(flags) => {
-                f.numeric(0, 5, flags);
-            }
-            Item::TimezoneName(flags) => {
-                let text = if flags.contains(LowerCase) {
-                    b"utc"
+            Item::TimeZoneHour(flags) => {
+                let secs = dto.timezone().local_minus_utc();
+                let (sign, secs) = if secs >= 0 {
+                    (b'+', secs)
                 } else {
-                    b"UTC"
+                    (b'-', -secs)
+                };
+                f.char(sign);
+                f.numeric(secs / 3600, 2, flags);
+            }
+            Item::TimeZoneMinute(flags) => {
+                let secs = dto.timezone().local_minus_utc();
+                let secs = if secs >= 0 { secs } else { -secs };
+                f.numeric(secs / 60 % 60, 2, flags);
+            }
+            Item::TimeZoneSecond(flags) => {
+                let secs = dto.timezone().local_minus_utc();
+                let secs = if secs >= 0 { secs } else { -secs };
+                f.numeric(secs % 60, 2, flags);
+            }
+            Item::TimeZoneName(flags) => {
+                let text = if dto.timezone().local_minus_utc() == 0 {
+                    if flags.contains(LowerCase) {
+                        b"utc"
+                    } else {
+                        b"UTC"
+                    }
+                } else {
+                    b"(?)"
                 };
                 f.text(text);
             }
@@ -424,33 +521,34 @@ where
 
 // ---
 
-pub fn reformat_rfc3339_timestamp<'a, T, B, F>(buf: &mut B, ts: &'a str, format: F)
+pub fn reformat_rfc3339<'a, T, B, F>(buf: &mut B, sts: rfc3339::Timestamp<'a>, format: F)
 where
     T: AsRef<Item>,
     B: Push<u8>,
     F: IntoIterator<Item = T>,
 {
+    let tss = sts.as_str();
     let mut dt_cache = None;
     let mut dt = || {
         if let Some(dt) = dt_cache {
             dt
         } else {
-            let dt = DateTime::parse_from_rfc3339(ts)
+            let dt = DateTime::parse_from_rfc3339(tss)
                 .ok()
-                .map(|dt| dt.naive_utc());
+                .map(|dt| dt.naive_local());
             dt_cache = Some(dt);
             dt
         }
     };
 
-    let ts = ts.as_bytes();
+    let ts = sts.as_bytes();
 
     let mut month_cache = None;
     let mut month = || {
         if let Some(month) = month_cache {
             month
         } else {
-            let month = (ts[6] - b'0') + (ts[5] - b'0') * 10;
+            let month = sts.date().month().value();
             let month = min(max(month, 1), 12) - 1;
             let month = month as usize;
             month_cache = Some(month);
@@ -463,7 +561,7 @@ where
         if let Some(hour) = hour_cache {
             hour
         } else {
-            let hour = (ts[12] - b'0') + (ts[11] - b'0') * 10;
+            let hour = sts.time().hour().value();
             let hour = min(hour, 23);
             hour_cache = Some(hour);
             hour
@@ -481,7 +579,7 @@ where
                 reformat_numeric_2(f.buf, n, ts[0], ts[1]);
             }
             Item::Year(n) => {
-                reformat_numeric(f.buf, n, &ts[0..4]);
+                reformat_numeric(f.buf, n, sts.date().year().as_bytes());
             }
             Item::YearShort(n) => {
                 reformat_numeric_2(f.buf, n, ts[2], ts[3]);
@@ -574,15 +672,8 @@ where
                 reformat_numeric_2(f.buf, n, ts[17], ts[18]);
             }
             Item::Nanosecond((_, width)) => {
-                let nsec = if ts.len() > 20 {
-                    if let Some(pos) = (&ts[20..]).iter().position(|&b| !b.is_ascii_digit()) {
-                        &ts[20..20 + pos]
-                    } else {
-                        &ts[19..19]
-                    }
-                } else {
-                    &ts[19..19]
-                };
+                let nsec = sts.fraction().as_bytes();
+                let nsec = if nsec.len() == 0 { nsec } else { &nsec[1..] };
                 let precision = if width == 0 { 9 } else { width as usize };
                 if precision < nsec.len() {
                     f.text(&nsec[..precision])
@@ -598,38 +689,43 @@ where
                     f.numeric(dt.timestamp(), 10, flags);
                 }
             }
-            Item::TimezoneNumeric(_) => {
-                if let Some(pos) = (&ts[20..]).iter().position(|&b| !b.is_ascii_digit()) {
-                    let tz = &ts[20 + pos..];
-                    if tz == b"Z" || tz == b"z" {
-                        f.text(b"+0000");
-                    } else {
-                        f.text(tz);
+            Item::TimeZoneHour(_) => {
+                if sts.timezone().is_utc() {
+                    f.char(b'+');
+                    f.char(b'0');
+                    f.char(b'0');
+                } else {
+                    if let Some(sign) = sts.timezone().sign() {
+                        f.char(sign);
+                    }
+                    if let Some(hour) = sts.timezone().hour() {
+                        f.text(hour.as_bytes());
                     }
                 }
             }
-            Item::TimezoneName(flags) => {
-                let value = if let Some(pos) = (&ts[20..]).iter().position(|&b| !b.is_ascii_digit())
-                {
-                    let tz = &ts[20 + pos..];
-                    if tz == b"Z"
-                        || tz == b"z"
-                        || ((tz[0] == b'+' || tz[0] == b'-') && &tz[1..] == b"0000")
-                    {
+            Item::TimeZoneMinute(_) => {
+                if let Some(minute) = sts.timezone().minute() {
+                    f.text(minute.as_bytes());
+                } else {
+                    f.char(b'0');
+                    f.char(b'0');
+                }
+            }
+            Item::TimeZoneSecond(_) => {
+                f.char(b'0');
+                f.char(b'0');
+            }
+            Item::TimeZoneName(flags) => {
+                let tz = sts.timezone().as_bytes();
+                let value = match tz {
+                    b"Z" | b"z" | b"+00:00" | b"-00:00" => {
                         if flags.contains(LowerCase) {
                             b"utc"
                         } else {
                             b"UTC"
                         }
-                    } else {
-                        b"(?)"
                     }
-                } else {
-                    if flags.contains(LowerCase) {
-                        b"utc"
-                    } else {
-                        b"UTC"
-                    }
+                    _ => b"(?)",
                 };
                 f.text(value);
             }

@@ -12,13 +12,9 @@ fn criterion_benchmark(c: &mut Criterion) {
             .unwrap();
         b.iter(|| assert!(re.is_match(rfc3339)));
     });
-    c.bench_function("is_rfc3339", |b| {
+    c.bench_function("as_rfc3339", |b| {
         let ts = Timestamp::new(rfc3339);
-        b.iter(|| assert!(ts.is_rfc3339()));
-    });
-    c.bench_function("split_rfc3339", |b| {
-        let ts = Timestamp::new(rfc3339);
-        b.iter(|| assert!(ts.split_rfc3339().is_some()));
+        b.iter(|| assert!(ts.as_rfc3339().is_some()));
     });
     c.bench_function("parse unix", |b| {
         let ts = Timestamp::new(unix);
