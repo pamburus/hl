@@ -11,9 +11,9 @@ use crate::types;
 
 pub use types::Level;
 
-pub struct Message<'a> {
+pub struct Record<'a> {
     ts: Option<&'a RawValue>,
-    pub text: Option<&'a RawValue>,
+    pub message: Option<&'a RawValue>,
     pub level: Option<Level>,
     pub logger: Option<&'a str>,
     pub caller: Option<&'a str>,
@@ -21,7 +21,7 @@ pub struct Message<'a> {
     extrax: Vec<(&'a str, &'a RawValue)>,
 }
 
-impl<'a> Message<'a> {
+impl<'a> Record<'a> {
     pub fn fields(&self) -> impl Iterator<Item = &(&'a str, &'a RawValue)> {
         self.extra.iter().chain(self.extrax.iter())
     }
@@ -58,7 +58,7 @@ impl<'a> Message<'a> {
             for field in filter.fields.0.iter() {
                 match &field.key[..] {
                     "msg" | "message" => {
-                        if !field.value_match(self.text.map(|x| x.get()), true) {
+                        if !field.value_match(self.message.map(|x| x.get()), true) {
                             return false;
                         }
                     }
@@ -94,20 +94,20 @@ impl<'a> Message<'a> {
     }
 }
 
-impl<'de: 'a, 'a> Deserialize<'de> for Message<'a> {
+impl<'de: 'a, 'a> Deserialize<'de> for Record<'a> {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
     {
-        Ok(deserializer.deserialize_map(MessageVisitor::new())?)
+        Ok(deserializer.deserialize_map(RecordVisitor::new())?)
     }
 }
 
-struct MessageVisitor<'a> {
-    marker: PhantomData<fn() -> Message<'a>>,
+struct RecordVisitor<'a> {
+    marker: PhantomData<fn() -> Record<'a>>,
 }
 
-impl<'a> MessageVisitor<'a> {
+impl<'a> RecordVisitor<'a> {
     fn new() -> Self {
         Self {
             marker: PhantomData,
@@ -115,8 +115,8 @@ impl<'a> MessageVisitor<'a> {
     }
 }
 
-impl<'de: 'a, 'a> Visitor<'de> for MessageVisitor<'a> {
-    type Value = Message<'a>;
+impl<'de: 'a, 'a> Visitor<'de> for RecordVisitor<'a> {
+    type Value = Record<'a>;
     fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
         formatter.write_str("object json")
     }
@@ -124,7 +124,7 @@ impl<'de: 'a, 'a> Visitor<'de> for MessageVisitor<'a> {
     fn visit_map<M: MapAccess<'de>>(self, mut access: M) -> Result<Self::Value, M::Error> {
         let mut ts = None;
         let mut rts = None;
-        let mut text = None;
+        let mut message = None;
         let mut level = None;
         let mut priority = None;
         let mut logger = None;
@@ -147,7 +147,7 @@ impl<'de: 'a, 'a> Visitor<'de> for MessageVisitor<'a> {
                     rts = rts.or(Some(access.next_value()?));
                 }
                 "msg" | "MESSAGE" => {
-                    text = access.next_value()?;
+                    message = access.next_value()?;
                 }
                 "level" | "LEVEL" => {
                     level = access.next_value()?;
@@ -187,9 +187,9 @@ impl<'de: 'a, 'a> Visitor<'de> for MessageVisitor<'a> {
                 _ => None,
             },
         };
-        Ok(Message {
+        Ok(Record {
             ts: ts.or(rts),
-            text,
+            message,
             level,
             logger,
             caller,

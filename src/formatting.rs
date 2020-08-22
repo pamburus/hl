@@ -15,20 +15,20 @@ use fmtx::{aligned_left, centered, Counter};
 use model::Level;
 use theme::{Element, Styler, Theme};
 
-pub struct MessageFormatter {
+pub struct RecordFormatter {
     theme: Arc<Theme>,
     unescape_fields: bool,
     ts_format: DateTimeFormat,
     ts_width: usize,
 }
 
-impl MessageFormatter {
+impl RecordFormatter {
     pub fn new(theme: Arc<Theme>, ts_format: DateTimeFormat) -> Self {
         let mut counter = Counter::new();
         let tts = Utc.ymd(2020, 12, 30).and_hms_nano(23, 59, 49, 999_999_999);
         format_date(&mut counter, tts, &ts_format);
         let ts_width = counter.result();
-        Self {
+        RecordFormatter {
             theme,
             unescape_fields: true,
             ts_format,
@@ -41,13 +41,13 @@ impl MessageFormatter {
         self
     }
 
-    pub fn format_message(&mut self, buf: &mut Vec<u8>, msg: &model::Message) {
-        self.theme.apply(buf, &msg.level, |buf, styler| {
+    pub fn format_record(&mut self, buf: &mut Vec<u8>, rec: &model::Record) {
+        self.theme.apply(buf, &rec.level, |buf, styler| {
             //
             // time
             //
             styler.set(buf, Element::Time);
-            if let Some(ts) = msg.ts() {
+            if let Some(ts) = rec.ts() {
                 aligned_left(buf, self.ts_width, b' ', |mut buf| {
                     if ts.is_rfc3339() {
                         reformat_rfc3339_timestamp(&mut buf, ts.raw(), &self.ts_format);
@@ -69,7 +69,7 @@ impl MessageFormatter {
             styler.set(buf, Element::Delimiter);
             buf.push(b'|');
             styler.set(buf, Element::Level);
-            buf.extend_from_slice(match msg.level {
+            buf.extend_from_slice(match rec.level {
                 Some(Level::Debug) => b"DBG",
                 Some(Level::Info) => b"INF",
                 Some(Level::Warning) => b"WRN",
@@ -81,7 +81,7 @@ impl MessageFormatter {
             //
             // logger
             //
-            if let Some(logger) = msg.logger {
+            if let Some(logger) = rec.logger {
                 buf.push(b' ');
                 styler.set(buf, Element::Logger);
                 buf.extend_from_slice(logger.as_bytes());
@@ -91,21 +91,21 @@ impl MessageFormatter {
             //
             // message text
             //
-            if let Some(text) = msg.text {
+            if let Some(text) = rec.message {
                 buf.push(b' ');
-                self.format_message_text(buf, styler, text);
+                self.format_message(buf, styler, text);
             }
             //
             // fields
             //
-            for (k, v) in msg.fields() {
+            for (k, v) in rec.fields() {
                 buf.push(b' ');
                 self.format_field(buf, styler, k, v);
             }
             //
             // caller
             //
-            if let Some(text) = msg.caller {
+            if let Some(text) = rec.caller {
                 styler.set(buf, Element::Punctuation);
                 buf.extend_from_slice(b" @ ");
                 styler.set(buf, Element::Caller);
@@ -139,7 +139,7 @@ impl MessageFormatter {
         fv.format_value(value);
     }
 
-    fn format_message_text<'a, 'b: 'a>(
+    fn format_message<'a, 'b: 'a>(
         &self,
         buf: &'a mut Vec<u8>,
         styler: &'a mut Styler<'b>,
@@ -232,13 +232,13 @@ fn format_str_unescaped(buf: &mut Vec<u8>, s: &str) {
 }
 
 struct FieldFormatter<'a, 'b> {
-    mf: &'a MessageFormatter,
+    mf: &'a RecordFormatter,
     buf: &'a mut Vec<u8>,
     styler: &'a mut Styler<'b>,
 }
 
 impl<'a, 'b> FieldFormatter<'a, 'b> {
-    fn new(mf: &'a MessageFormatter, buf: &'a mut Vec<u8>, styler: &'a mut Styler<'b>) -> Self {
+    fn new(mf: &'a RecordFormatter, buf: &'a mut Vec<u8>, styler: &'a mut Styler<'b>) -> Self {
         Self { mf, buf, styler }
     }
 

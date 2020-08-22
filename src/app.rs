@@ -10,8 +10,8 @@ use serde_json as json;
 
 use crate::datefmt::DateTimeFormat;
 use crate::error::*;
-use crate::formatting::MessageFormatter;
-use crate::model::{Filter, Message};
+use crate::formatting::RecordFormatter;
+use crate::model::{Filter, Record};
 use crate::scanning::{BufFactory, ScannedSegment, Scanner, Segment, SegmentFactory};
 use crate::theme::Theme;
 
@@ -81,7 +81,7 @@ impl App {
             // spawn processing threads
             for (rxi, txo) in izip!(rxi, txo) {
                 scope.spawn(closure!(ref bfo, ref sfi, |_| {
-                    let mut formatter = MessageFormatter::new(
+                    let mut formatter = RecordFormatter::new(
                         self.options.theme.clone(),
                         self.options.time_format.clone(),
                     )
@@ -118,7 +118,7 @@ impl App {
     fn process_segement(
         &self,
         segment: &Segment,
-        formatter: &mut MessageFormatter,
+        formatter: &mut RecordFormatter,
         buf: &mut Vec<u8>,
     ) {
         for data in segment.data().split(|c| *c == b'\n') {
@@ -126,10 +126,10 @@ impl App {
             if data.len() == 0 {
                 continue;
             }
-            match json::from_slice::<Message>(data) {
-                Ok(msg) => {
-                    if msg.matches(&self.options.filter) {
-                        formatter.format_message(buf, &msg);
+            match json::from_slice::<Record>(data) {
+                Ok(rec) => {
+                    if rec.matches(&self.options.filter) {
+                        formatter.format_record(buf, &rec);
                     }
                 }
                 _ => {
