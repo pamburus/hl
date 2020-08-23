@@ -399,38 +399,54 @@ mod tests {
 
     #[test]
     fn test_split_rfc3339() {
-        use rfc3339::{Date, Fraction, Time, Timestamp, Timezone};
-        let ts = |date, time, fraction, timezone| {
-            Timestamp::new(
-                Date::parse(date).unwrap(),
-                Time::parse(time).unwrap(),
-                Fraction::parse(fraction).unwrap(),
-                Timezone::parse(timezone).unwrap(),
-            )
+        use rfc3339::Timestamp;
+        let test = |ts: Timestamp, date, time, fraction, timezone| {
+            assert_eq!(ts.date().as_str(), date);
+            assert_eq!(ts.time().as_str(), time);
+            assert_eq!(ts.fraction().as_str(), fraction);
+            assert_eq!(ts.timezone().as_str(), timezone);
         };
-        assert_eq!(
+        test(
             Timestamp::parse("2020-08-21T07:20:48Z").unwrap(),
-            ts("2020-08-21", "07:20:48", "", "Z")
+            "2020-08-21",
+            "07:20:48",
+            "",
+            "Z",
         );
-        assert_eq!(
+        test(
             Timestamp::parse("2020-08-21t07:20:48Z").unwrap(),
-            ts("2020-08-21", "07:20:48", "", "Z")
+            "2020-08-21",
+            "07:20:48",
+            "",
+            "Z",
         );
-        assert_eq!(
+        test(
             Timestamp::parse("2020-08-21 07:20:48z").unwrap(),
-            ts("2020-08-21", "07:20:48", "", "z")
+            "2020-08-21",
+            "07:20:48",
+            "",
+            "z",
         );
-        assert_eq!(
+        test(
             Timestamp::parse("2020-08-21T07:20:48.092+03:00").unwrap(),
-            ts("2020-08-21", "07:20:48", ".092", "+03:00")
+            "2020-08-21",
+            "07:20:48",
+            ".092",
+            "+03:00",
         );
-        assert_eq!(
+        test(
             Timestamp::parse("2020-08-21T07:20:48.092-03:00").unwrap(),
-            ts("2020-08-21", "07:20:48", ".092", "-03:00")
+            "2020-08-21",
+            "07:20:48",
+            ".092",
+            "-03:00",
         );
-        assert_eq!(
+        test(
             Timestamp::parse("2020-08-21T07:20:48+03:00").unwrap(),
-            ts("2020-08-21", "07:20:48", "", "+03:00")
+            "2020-08-21",
+            "07:20:48",
+            "",
+            "+03:00",
         );
     }
 }
