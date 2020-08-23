@@ -75,8 +75,8 @@ struct Opt {
     #[structopt(short, long, default_value = "%b %d %T.%3N")]
     time_format: String,
     //
-    /// Time zone, one of {utc, local}.
-    #[structopt(long, default_value = "UTC")]
+    /// Time zone name, see column "TZ database name" at https://en.wikipedia.org/wiki/List_of_tz_database_time_zones.
+    #[structopt(long, short = "Z", default_value = "UTC")]
     time_zone: Tz,
     //
     /// Use local time zone, overrides --time-zone option.
