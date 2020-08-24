@@ -137,7 +137,7 @@ Log viewer which translates JSON logs into pretty human-readable representation.
 ### Complete set of options and flags
 
 ```
-hl 0.7.2
+hl 0.7.3
 JSON log converter to human readable representation
 
 USAGE:
@@ -148,7 +148,7 @@ FLAGS:
     -h, --help          Prints help information
     -L, --local         Use local time zone, overrides --time-zone option
     -P                  Handful alias for --paging=never, overrides --paging option
-    -r, --raw-fields    Do not unescape string fields
+    -r, --raw-fields    Disable unescaping and prettifying of field values
     -V, --version       Prints version information
 
 OPTIONS:
@@ -170,7 +170,7 @@ OPTIONS:
             Output paging options, one of { auto, always, never } [default: auto]
 
         --theme <theme>
-            Color theme, one of { auto, dark, dark24, light } [default: auto]
+            Color theme, one of { auto, dark, dark24, light } [default: dark]
 
     -t, --time-format <time-format>
             Time format, see https://man7.org/linux/man-pages/man1/date.1.html [default: %b %d %T.%3N]
@@ -189,17 +189,17 @@ ARGS:
     * CPU - 2,4 GHz 8-Core Intel Core i9
     * OS - macOS 10.15.6
     * Data - ~1GiB log file, 4.150.000 lines
-        * hl ~ 1 second
+        * hl v0.6.8 ~ 1 second
             ```
             $ time hl prom-m2.log -c >/dev/null
             hl prom-m2.log -c > /dev/null  12.41s user 0.64s system 1430% cpu 0.912 total
             ```
-        * hlogf ~ 10 seconds
+        * hlogf v1.4.1 ~ 10 seconds
             ```
             $ time hlogf prom-m2.log --color= >/dev/null
             hlogf prom-m2.log --color= > /dev/null  9.91s user 1.22s system 101% cpu 10.970 total
             ```
-        * humanlog ~ 60 seconds
+        * humanlog v0.4.1 ~ 60 seconds
             ```
             $ time humanlog <prom-m2.log >/dev/null
             humanlog> reading stdin...
