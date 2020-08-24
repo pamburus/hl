@@ -44,7 +44,7 @@ struct Opt {
     //
     //
     /// Color theme, one of { auto, dark, dark24, light }.
-    #[structopt(long, default_value = "auto")]
+    #[structopt(long, default_value = "dark")]
     theme: Theme,
     //
     /// Do not unescape string fields.
