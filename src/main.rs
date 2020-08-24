@@ -63,7 +63,7 @@ struct Opt {
     #[structopt(long, short = "C")]
     concurrency: Option<usize>,
     //
-    /// Filtering by field values in form <key>=<value> or <key>~=<value>.
+    /// Filtering by field values in one of forms <key>=<value>, <key>~=<value>, <key>!=<value>, <key>!~=<value>.
     #[structopt(short, long)]
     filter: Vec<String>,
     //
