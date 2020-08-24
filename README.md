@@ -137,7 +137,7 @@ Log viewer which translates JSON logs into pretty human-readable representation.
 ### Complete set of options and flags
 
 ```
-hl 0.6.8
+hl 0.7.1
 JSON log converter to human readable representation
 
 USAGE:
@@ -146,8 +146,9 @@ USAGE:
 FLAGS:
     -c                  Handful alias for --color=always, overrides --color option
     -h, --help          Prints help information
+    -L, --local         Use local time zone, overrides --time-zone option
     -P                  Handful alias for --paging=never, overrides --paging option
-    -r, --raw-fields    Disables decoding and prettifying field values
+    -r, --raw-fields    Do not unescape string fields
     -V, --version       Prints version information
 
 OPTIONS:
@@ -155,9 +156,7 @@ OPTIONS:
         --color <color>
             Color output options, one of { auto, always, never } [default: auto]
 
-        --concurrency <concurrency>
-            Number of processing threads. Zero means automatic selection [default: 0]
-
+    -C, --concurrency <concurrency>                          Number of processing threads
     -f, --filter <filter>...
             Filtering by field values in form <key>=<value> or <key>~=<value>
 
@@ -176,6 +175,9 @@ OPTIONS:
     -t, --time-format <time-format>
             Time format, see https://man7.org/linux/man-pages/man1/date.1.html [default: %b %d %T.%3N]
 
+    -Z, --time-zone <time-zone>
+            Time zone name, see column "TZ database name" at
+            https://en.wikipedia.org/wiki/List_of_tz_database_time_zones [default: UTC]
 
 ARGS:
     <FILE>...    Files to process
