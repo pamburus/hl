@@ -47,7 +47,7 @@ struct Opt {
     #[structopt(long, default_value = "dark")]
     theme: Theme,
     //
-    /// Do not unescape string fields.
+    /// Disable unescaping and prettifying of field values.
     #[structopt(short, long)]
     raw_fields: bool,
     //
