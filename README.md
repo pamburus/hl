@@ -137,7 +137,7 @@ Log viewer which translates JSON logs into pretty human-readable representation.
 ### Complete set of options and flags
 
 ```
-hl 0.7.1
+hl 0.7.2
 JSON log converter to human readable representation
 
 USAGE:
@@ -158,7 +158,7 @@ OPTIONS:
 
     -C, --concurrency <concurrency>                          Number of processing threads
     -f, --filter <filter>...
-            Filtering by field values in form <key>=<value> or <key>~=<value>
+            Filtering by field values in one of forms <key>=<value>, <key>~=<value>, <key>!=<value>, <key>!~=<value>
 
         --interrupt-ignore-count <interrupt-ignore-count>
             Number of interrupts to ignore, i.e. Ctrl-C (SIGINT) [default: 3]
