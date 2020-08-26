@@ -43,6 +43,8 @@ regex = "1"
 
 [profile.release]
 debug = false
+opt-level = 3
+lto = true
 
 [[bench]]
 name = "ts_parse"
