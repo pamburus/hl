@@ -63,23 +63,6 @@ impl App {
                 }
                 Ok(())
             }));
-            // spawn writer thread
-            let writer = scope.spawn(closure!(ref bfo, |_| -> Result<()> {
-                let mut sn = 0;
-                loop {
-                    match rxo[sn % n].recv() {
-                        Ok(buf) => {
-                            output.write_all(&buf[..])?;
-                            bfo.recycle(buf);
-                        }
-                        Err(RecvError) => {
-                            break;
-                        }
-                    }
-                    sn += 1;
-                }
-                Ok(())
-            }));
             // spawn processing threads
             for (rxi, txo) in izip!(rxi, txo) {
                 scope.spawn(closure!(ref bfo, ref sfi, |_| {
@@ -110,6 +93,23 @@ impl App {
                     }
                 }));
             }
+            // spawn writer thread
+            let writer = scope.spawn(closure!(ref bfo, |_| -> Result<()> {
+                let mut sn = 0;
+                loop {
+                    match rxo[sn % n].recv() {
+                        Ok(buf) => {
+                            output.write_all(&buf[..])?;
+                            bfo.recycle(buf);
+                        }
+                        Err(RecvError) => {
+                            break;
+                        }
+                    }
+                    sn += 1;
+                }
+                Ok(())
+            }));
             // collect errors from reader and writer threads
             reader.join().unwrap()?;
             writer.join().unwrap()?;
