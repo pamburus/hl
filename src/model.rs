@@ -1,15 +1,22 @@
+// std imports
 use std::fmt;
 use std::marker::PhantomData;
 
+// third-party imports
 use heapless::consts::*;
 use json::value::RawValue;
 use serde::de::{Deserialize, Deserializer, MapAccess, SeqAccess, Visitor};
 use serde_json as json;
 
+// local imports
 use crate::timestamp::Timestamp;
 use crate::types;
 
+// ---
+
 pub use types::Level;
+
+// ---
 
 pub struct Record<'a> {
     ts: Option<&'a RawValue>,
@@ -58,27 +65,36 @@ impl<'a> Record<'a> {
             for field in filter.fields.0.iter() {
                 match &field.key[..] {
                     "msg" | "message" => {
-                        if !field.value_match(self.message.map(|x| x.get()), true) {
+                        if !field.match_value(self.message.map(|x| x.get()), true) {
                             return false;
                         }
                     }
                     "logger" => {
-                        if !field.value_match(self.logger, false) {
+                        if !field.match_value(self.logger, false) {
                             return false;
                         }
                     }
                     "caller" => {
-                        if !field.value_match(self.caller, false) {
+                        if !field.match_value(self.caller, false) {
                             return false;
                         }
                     }
                     _ => {
                         let mut found = false;
                         for (k, v) in self.extra.iter() {
-                            if field.key_match(*k) {
-                                found = true;
-                                if !field.value_match(Some(v.get()), v.get().starts_with('"')) {
-                                    return false;
+                            match field.match_key(*k) {
+                                None => {}
+                                Some(KeyMatch::Full) => {
+                                    found = true;
+                                    if !field.match_value(Some(v.get()), v.get().starts_with('"')) {
+                                        return false;
+                                    }
+                                }
+                                Some(KeyMatch::Partial(subkey)) => {
+                                    found = true;
+                                    if !field.match_value_partial(subkey, *v) {
+                                        return false;
+                                    }
                                 }
                             }
                         }
@@ -102,6 +118,8 @@ impl<'de: 'a, 'a> Deserialize<'de> for Record<'a> {
         Ok(deserializer.deserialize_map(RecordVisitor::new())?)
     }
 }
+
+// ---
 
 struct RecordVisitor<'a> {
     marker: PhantomData<fn() -> Record<'a>>,
@@ -199,13 +217,7 @@ impl<'de: 'a, 'a> Visitor<'de> for RecordVisitor<'a> {
     }
 }
 
-#[derive(Debug)]
-pub struct FieldFilter {
-    key: String,
-    value: String,
-    value_escaped: String,
-    operator: Operator,
-}
+// ---
 
 #[derive(Debug)]
 enum Operator {
@@ -213,6 +225,71 @@ enum Operator {
     NotEqual,
     Like,
     NotLike,
+}
+
+// ---
+
+#[derive(Debug)]
+pub enum KeyMatch<'a> {
+    Full,
+    Partial(KeyMatcher<'a>),
+}
+
+// ---
+
+#[derive(Debug)]
+pub struct KeyMatcher<'a> {
+    key: &'a str,
+}
+
+impl<'a> KeyMatcher<'a> {
+    pub fn new(key: &'a str) -> Self {
+        Self { key }
+    }
+
+    pub fn match_key<'b>(&'b self, key: &str) -> Option<KeyMatch<'a>> {
+        let norm = |b: u8| {
+            if b == b'_' {
+                b'-'
+            } else {
+                b.to_ascii_lowercase()
+            }
+        };
+        let bytes = self.key.as_bytes();
+        if bytes
+            .iter()
+            .zip(key.as_bytes().iter())
+            .position(|(&x, &y)| norm(x) != norm(y))
+            .is_some()
+        {
+            return None;
+        }
+
+        if self.key.len() == key.len() {
+            Some(KeyMatch::Full)
+        } else if self.key.len() > key.len() {
+            if bytes[key.len()] == b'.' {
+                Some(KeyMatch::Partial(KeyMatcher::new(
+                    &self.key[key.len() + 1..],
+                )))
+            } else {
+                None
+            }
+        } else {
+            None
+        }
+    }
+}
+
+// ---
+
+#[derive(Debug)]
+pub struct FieldFilter {
+    key: String,
+    value: String,
+    value_escaped: String,
+    operator: Operator,
+    flat_key: bool,
 }
 
 impl FieldFilter {
@@ -236,37 +313,28 @@ impl FieldFilter {
                         Operator::Equal
                     }
                 };
+                let flat_key = key.as_bytes().iter().position(|&x| x == b'.').is_none();
                 Some(Self {
                     key: key.into(),
                     value: value.into(),
                     value_escaped: json::to_string(value).unwrap(),
                     operator: operator,
+                    flat_key,
                 })
             }
             _ => None,
         }
     }
 
-    fn key_match(&self, key: &str) -> bool {
-        if self.key.len() != key.len() {
-            return false;
+    fn match_key<'a>(&'a self, key: &str) -> Option<KeyMatch<'a>> {
+        if self.flat_key && self.key.len() != key.len() {
+            return None;
         }
-        let norm = |b: u8| {
-            if b == b'_' {
-                b'-'
-            } else {
-                b.to_ascii_lowercase()
-            }
-        };
-        self.key
-            .as_bytes()
-            .iter()
-            .zip(key.as_bytes().iter())
-            .position(|(&x, &y)| norm(x) != norm(y))
-            .is_none()
+
+        KeyMatcher::new(&self.key).match_key(key)
     }
 
-    fn value_match(&self, value: Option<&str>, escaped: bool) -> bool {
+    fn match_value(&self, value: Option<&str>, escaped: bool) -> bool {
         let pattern = if escaped {
             &self.value_escaped
         } else {
@@ -281,7 +349,32 @@ impl FieldFilter {
             (_, None) => false,
         }
     }
+
+    fn match_value_partial(&self, subkey: KeyMatcher, value: &RawValue) -> bool {
+        let bytes = value.get().as_bytes();
+        if bytes[0] != b'{' {
+            return false;
+        }
+
+        let item = json::from_str::<Object>(value.get()).unwrap();
+        for (k, v) in item.fields.iter() {
+            match subkey.match_key(*k) {
+                None => {
+                    continue;
+                }
+                Some(KeyMatch::Full) => {
+                    return self.match_value(Some(v.get()), v.get().starts_with('"'));
+                }
+                Some(KeyMatch::Partial(subkey)) => {
+                    return self.match_value_partial(subkey, *v);
+                }
+            }
+        }
+        false
+    }
 }
+
+// ---
 
 #[derive(Debug)]
 pub struct FieldFilterSet(Vec<FieldFilter>);
@@ -297,6 +390,8 @@ impl FieldFilterSet {
         FieldFilterSet(fields)
     }
 }
+
+// ---
 
 #[derive(Debug)]
 pub struct Filter {
