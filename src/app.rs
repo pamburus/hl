@@ -127,32 +127,32 @@ impl App {
         buf: &mut Vec<u8>,
     ) {
         for data in segment.data().split(|c| *c == b'\n') {
-            let data = strip(data, b'\r');
+            let data = trim_right(data, |ch| ch == b'\r');
             if data.len() == 0 {
                 continue;
             }
-            match json::from_slice::<Record>(data) {
-                Ok(rec) => {
-                    if rec.matches(&self.options.filter) {
-                        formatter.format_record(buf, &rec);
-                    }
+            let mut stream = json::Deserializer::from_slice(data).into_iter::<Record>();
+            while let Some(Ok(record)) = stream.next() {
+                if record.matches(&self.options.filter) {
+                    formatter.format_record(buf, &record);
                 }
-                _ => {
-                    buf.extend_from_slice(data);
-                    buf.push(b'\n');
-                }
+            }
+            let remainder = trim_right(&data[stream.byte_offset()..], |ch| match ch {
+                b'\r' | b'\n' | b' ' | b'\t' => true,
+                _ => false,
+            });
+            if remainder.len() > 0 {
+                buf.extend_from_slice(remainder);
+                buf.push(b'\n');
             }
         }
     }
 }
 
-fn strip<'a>(slice: &'a [u8], ch: u8) -> &'a [u8] {
-    let n = slice.len();
-    if n == 0 {
-        slice
-    } else if slice[n - 1] == ch {
-        &slice[..n - 1]
+fn trim_right<'a, F: Fn(u8) -> bool>(slice: &'a [u8], predicate: F) -> &'a [u8] {
+    if let Some(pos) = slice.iter().rposition(|&ch| !predicate(ch)) {
+        &slice[..pos + 1]
     } else {
-        slice
+        &slice[0..0]
     }
 }
