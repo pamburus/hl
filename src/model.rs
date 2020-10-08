@@ -153,7 +153,7 @@ impl<'de: 'a, 'a> Visitor<'de> for RecordVisitor<'a> {
             false => Vec::new(),
             true => Vec::with_capacity(count - 32),
         };
-        while let Some(key) = access.next_key::<&'a str>()? {
+        while let Some(Some(key)) = access.next_key::<&'a str>().ok() {
             match key {
                 "ts" | "TS" | "time" | "TIME" => {
                     ts = access.next_value()?;
