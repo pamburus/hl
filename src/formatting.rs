@@ -175,7 +175,10 @@ impl RecordFormatter {
                     self.format_field(buf, styler, k, v)
                 }
                 styler.set(buf, Element::Brace);
-                buf.extend_from_slice(b" }");
+                if item.fields.len() > 0 {
+                    buf.push(b' ');
+                }
+                buf.push(b'}');
             }
             b'[' => {
                 let item = json::from_str::<model::Array<U256>>(value.get()).unwrap();
@@ -292,7 +295,10 @@ impl<'a, 'b> FieldFormatter<'a, 'b> {
                     self.format(k, v);
                 }
                 self.styler.set(self.buf, Element::Brace);
-                self.buf.extend_from_slice(b" }");
+                if item.fields.len() > 0 {
+                    self.buf.push(b' ');
+                }
+                self.buf.push(b'}');
             }
             b'[' => {
                 let item = json::from_str::<model::Array<U32>>(value.get()).unwrap();
