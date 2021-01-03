@@ -155,7 +155,7 @@ impl<'de: 'a, 'a> Visitor<'de> for RecordVisitor<'a> {
         };
         while let Some(Some(key)) = access.next_key::<&'a str>().ok() {
             match key {
-                "ts" | "TS" | "time" | "TIME" => {
+                "ts" | "TS" | "time" | "TIME" | "Time" => {
                     ts = access.next_value()?;
                 }
                 "_SOURCE_REALTIME_TIMESTAMP" => {
@@ -164,19 +164,19 @@ impl<'de: 'a, 'a> Visitor<'de> for RecordVisitor<'a> {
                 "__REALTIME_TIMESTAMP" => {
                     rts = rts.or(Some(access.next_value()?));
                 }
-                "msg" | "MESSAGE" => {
+                "msg" | "MESSAGE" | "Message" => {
                     message = access.next_value()?;
                 }
-                "level" | "LEVEL" => {
+                "level" | "LEVEL" | "Level" => {
                     level = access.next_value()?;
                 }
                 "PRIORITY" => {
                     priority = access.next_value()?;
                 }
-                "logger" | "LOGGER" => {
+                "logger" | "LOGGER" | "Logger" => {
                     logger = access.next_value()?;
                 }
-                "caller" | "CALLER" => {
+                "caller" | "CALLER" | "Caller" => {
                     caller = access.next_value()?;
                 }
                 _ => {
