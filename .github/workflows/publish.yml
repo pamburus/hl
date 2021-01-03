@@ -45,9 +45,9 @@ jobs:
         if: matrix.os == 'ubuntu-latest'
         run: |
           cargo install cross
-          echo "::set-env name=CARGO::cross"
-          echo "::set-env name=TARGET_FLAGS::--target ${{ matrix.target }}"
-          echo "::set-env name=TARGET_DIR::./target/${{ matrix.target }}"
+          echo "CARGO=cross" >> $GITHUB_ENV
+          echo "TARGET_FLAGS=--target ${{ matrix.target }}" >> $GITHUB_ENV
+          echo "TARGET_DIR=./target/${{ matrix.target }}" >> $GITHUB_ENV
 
       - name: Build
         run: ${{ env.CARGO }} build --release --locked --verbose ${{ env.TARGET_FLAGS }}
