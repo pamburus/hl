@@ -20,10 +20,11 @@ pub struct RecordFormatter {
     unescape_fields: bool,
     ts_formatter: DateTimeFormatter,
     ts_width: usize,
+    hide_empty_fields: bool,
 }
 
 impl RecordFormatter {
-    pub fn new(theme: Arc<Theme>, ts_formatter: DateTimeFormatter) -> Self {
+    pub fn new(theme: Arc<Theme>, ts_formatter: DateTimeFormatter, hide_empty_fields: bool) -> Self {
         let mut counter = Counter::new();
         let tts = Utc.ymd(2020, 12, 30).and_hms_nano(23, 59, 49, 999_999_999);
         ts_formatter.format(&mut counter, tts.into());
@@ -33,6 +34,7 @@ impl RecordFormatter {
             unescape_fields: true,
             ts_formatter,
             ts_width,
+            hide_empty_fields,
         }
     }
 
@@ -102,9 +104,21 @@ impl RecordFormatter {
             //
             // fields
             //
-            for (k, v) in rec.fields() {
-                buf.push(b' ');
-                self.format_field(buf, styler, k, v);
+            if self.hide_empty_fields {
+                for (k, v) in rec.fields() {
+                    match v.get() {
+                        r#""""# | "null" | "{}" | "[]" => continue,
+                        _ => {
+                            buf.push(b' ');
+                            self.format_field(buf, styler, k, v);
+                        },
+                    }
+                }
+            } else {
+                for (k, v) in rec.fields() {
+                    buf.push(b' ');
+                    self.format_field(buf, styler, k, v);
+                }
             }
             //
             // caller

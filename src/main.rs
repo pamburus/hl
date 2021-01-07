@@ -86,6 +86,14 @@ struct Opt {
     /// Files to process
     #[structopt(name = "FILE", parse(from_os_str))]
     files: Vec<PathBuf>,
+    //
+    /// Hide empty fields, applies for null, string, object and array fields only.
+    #[structopt(long, short = "H")]
+    hide_empty_fields: bool,
+    //
+    /// Show empty fields, overrides --hide-empty-fields option.
+    #[structopt(long, short = "S")]
+    show_empty_fields: bool,
 }
 
 arg_enum! {
@@ -174,6 +182,8 @@ fn run() -> Result<()> {
         fields: hl::FieldFilterSet::new(opt.filter),
         level: Some(level),
     };
+    // Configure hide_empty_fields
+    let hide_empty_fields = !opt.show_empty_fields && opt.hide_empty_fields;
 
     // Create app.
     let app = hl::App::new(hl::Options {
@@ -190,6 +200,7 @@ fn run() -> Result<()> {
             let offset = UTC.ymd(1970, 1, 1).and_hms(0, 0, 0) - tz.ymd(1970, 1, 1).and_hms(0, 0, 0);
             FixedOffset::east(offset.num_seconds() as i32)
         },
+        hide_empty_fields,
     });
 
     // Configure input.

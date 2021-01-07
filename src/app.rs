@@ -24,6 +24,7 @@ pub struct Options {
     pub concurrency: usize,
     pub filter: Filter,
     pub time_zone: FixedOffset,
+    pub hide_empty_fields: bool,
 }
 
 pub struct App {
@@ -72,6 +73,7 @@ impl App {
                             self.options.time_format.clone(),
                             self.options.time_zone,
                         ),
+                        self.options.hide_empty_fields,
                     )
                     .with_field_unescaping(!self.options.raw_fields);
                     for segment in rxi.iter() {
