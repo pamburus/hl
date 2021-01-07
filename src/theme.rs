@@ -4,9 +4,7 @@ use std::vec::Vec;
 use crate::eseq;
 use crate::types;
 
-use eseq::{
-    eseq0, eseq1, eseq2, eseq3, Color, ColorCode::RGB, Style::Faint, Style::Reverse, StyleCode,
-};
+use eseq::{eseq0, eseq1, eseq2, eseq3, Color, ColorCode::RGB, Style::Reverse, StyleCode};
 pub use types::Level;
 
 #[repr(u8)]
@@ -20,7 +18,9 @@ pub enum Element {
     Brace,
     Quote,
     Delimiter,
-    Punctuation,
+    Comma,
+    LocationSign,
+    Ellipsis,
     FieldKey,
     LiteralNull,
     LiteralBoolean,
@@ -183,7 +183,9 @@ impl Theme {
             result.add(Element::Brace, &gray);
             result.add(Element::Quote, &green);
             result.add(Element::Delimiter, &gray);
-            result.add(Element::Punctuation, &dark);
+            result.add(Element::Comma, &dark);
+            result.add(Element::Ellipsis, &dark);
+            result.add(Element::LocationSign, &dark);
             result.add(Element::LiteralNull, &yellow);
             result.add(Element::LiteralBoolean, &yellow);
             result.add(Element::LiteralNumber, &blue);
@@ -207,7 +209,6 @@ impl Theme {
             let dark = Color::Black.bright().fg().into();
             let medium = eseq0().into();
             let bright = Color::White.bright().fg().into();
-            let gray = (Faint.into(), Color::White.bright().fg()).into();
             let green = Color::Green.fg().into();
             let yellow = Color::Yellow.fg().into();
             let cyan = Color::Cyan.fg().into();
@@ -218,10 +219,12 @@ impl Theme {
             result.add(Element::Message, &bright);
             result.add(Element::FieldKey, &green);
             result.add(Element::EqualSign, &dark);
-            result.add(Element::Brace, &gray);
-            result.add(Element::Quote, &gray);
+            result.add(Element::Brace, &medium);
+            result.add(Element::Quote, &medium);
             result.add(Element::Delimiter, &medium);
-            result.add(Element::Punctuation, &dark);
+            result.add(Element::Comma, &medium);
+            result.add(Element::Ellipsis, &dark);
+            result.add(Element::LocationSign, &dark);
             result.add(Element::LiteralNull, &yellow);
             result.add(Element::LiteralBoolean, &yellow);
             result.add(Element::LiteralNumber, &cyan);
@@ -251,7 +254,6 @@ impl Theme {
             let dark = Color::Black.bright().fg().into();
             let medium = eseq0().into();
             let bright = Color::Black.fg().into();
-            let gray = Color::Black.bright().fg().into();
             let green = Color::Green.fg().into();
             let yellow = Color::Yellow.fg().into();
             let cyan = Color::Cyan.fg().into();
@@ -262,10 +264,12 @@ impl Theme {
             result.add(Element::Message, &bright);
             result.add(Element::FieldKey, &green);
             result.add(Element::EqualSign, &dark);
-            result.add(Element::Brace, &gray);
-            result.add(Element::Quote, &gray);
-            result.add(Element::Delimiter, &gray);
-            result.add(Element::Punctuation, &gray);
+            result.add(Element::Brace, &medium);
+            result.add(Element::Quote, &medium);
+            result.add(Element::Delimiter, &medium);
+            result.add(Element::Comma, &medium);
+            result.add(Element::Ellipsis, &dark);
+            result.add(Element::LocationSign, &dark);
             result.add(Element::LiteralNull, &yellow);
             result.add(Element::LiteralBoolean, &yellow);
             result.add(Element::LiteralNumber, &cyan);

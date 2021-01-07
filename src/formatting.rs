@@ -100,7 +100,6 @@ impl RecordFormatter {
                 buf.push(b' ');
                 styler.set(buf, Element::Logger);
                 buf.extend_from_slice(logger.as_bytes());
-                styler.set(buf, Element::Punctuation);
                 buf.push(b':');
             }
             //
@@ -125,14 +124,14 @@ impl RecordFormatter {
                 }
             }
             if some_fields_hidden {
-                styler.set(buf, Element::Punctuation);
+                styler.set(buf, Element::Ellipsis);
                 buf.extend_from_slice(b" ...");
             }
             //
             // caller
             //
             if let Some(text) = rec.caller {
-                styler.set(buf, Element::Punctuation);
+                styler.set(buf, Element::LocationSign);
                 buf.extend_from_slice(b" @ ");
                 styler.set(buf, Element::Caller);
                 buf.extend_from_slice(text.as_bytes());
@@ -237,7 +236,7 @@ impl RecordFormatter {
                     let mut first = true;
                     for v in item.iter() {
                         if !first {
-                            styler.set(buf, Element::Punctuation);
+                            styler.set(buf, Element::Comma);
                             buf.push(b',');
                         } else {
                             first = false;
@@ -344,7 +343,7 @@ impl<'a, 'b> FieldFormatter<'a, 'b> {
                     some_fields_hidden |= !self.format(k, v, filter, setting);
                 }
                 if some_fields_hidden {
-                    self.styler.set(self.buf, Element::Punctuation);
+                    self.styler.set(self.buf, Element::Ellipsis);
                     self.buf.extend_from_slice(b" ...");
                 }
                 if item.fields.len() != 0 {
@@ -360,7 +359,7 @@ impl<'a, 'b> FieldFormatter<'a, 'b> {
                 let mut first = true;
                 for v in item.iter() {
                     if !first {
-                        self.styler.set(self.buf, Element::Punctuation);
+                        self.styler.set(self.buf, Element::Comma);
                         self.buf.push(b',');
                     } else {
                         first = false;
