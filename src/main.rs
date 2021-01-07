@@ -88,11 +88,11 @@ struct Opt {
     files: Vec<PathBuf>,
     //
     /// Hide empty fields, applies for null, string, object and array fields only.
-    #[structopt(long, short = "H")]
+    #[structopt(long, short = "e")]
     hide_empty_fields: bool,
     //
     /// Show empty fields, overrides --hide-empty-fields option.
-    #[structopt(long, short = "S")]
+    #[structopt(long, short = "E")]
     show_empty_fields: bool,
 }
 
