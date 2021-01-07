@@ -28,7 +28,7 @@ use hl::{IncludeExcludeKeyFilter, KeyMatchOptions};
 #[structopt()]
 struct Opt {
     /// Color output options, one of { auto, always, never }.
-    #[structopt(long, default_value = "auto")]
+    #[structopt(long, default_value = "auto", overrides_with = "color")]
     color: Color,
     //
     /// Handful alias for --color=always, overrides --color option.
@@ -36,7 +36,7 @@ struct Opt {
     color_always: bool,
     //
     /// Output paging options, one of { auto, always, never }.
-    #[structopt(long, default_value = "auto")]
+    #[structopt(long, default_value = "auto", overrides_with = "paging")]
     paging: Paging,
     //
     /// Handful alias for --paging=never, overrides --paging option.
@@ -45,7 +45,7 @@ struct Opt {
     //
     //
     /// Color theme, one of { auto, dark, dark24, light }.
-    #[structopt(long, default_value = "dark")]
+    #[structopt(long, default_value = "dark", overrides_with = "theme")]
     theme: Theme,
     //
     /// Disable unescaping and prettifying of field values.
@@ -53,15 +53,15 @@ struct Opt {
     raw_fields: bool,
     //
     /// Number of interrupts to ignore, i.e. Ctrl-C (SIGINT).
-    #[structopt(long, default_value = "3")]
+    #[structopt(long, default_value = "3", overrides_with = "interrupt-ignore-count")]
     interrupt_ignore_count: usize,
     //
     /// Buffer size, kibibytes.
-    #[structopt(long, default_value = "2048")]
+    #[structopt(long, default_value = "2048", overrides_with = "buffer-size")]
     buffer_size: usize,
     //
     /// Number of processing threads.
-    #[structopt(long, short = "C")]
+    #[structopt(long, short = "C", overrides_with = "concurrency")]
     concurrency: Option<usize>,
     //
     /// Filtering by field values in one of forms <key>=<value>, <key>~=<value>, <key>!=<value>, <key>!~=<value>.
@@ -77,15 +77,20 @@ struct Opt {
     show: Vec<String>,
     //
     /// Filtering by level, valid values: ['d', 'i', 'w', 'e'].
-    #[structopt(short, long, default_value = "d")]
+    #[structopt(short, long, default_value = "d", overrides_with = "level")]
     level: char,
     //
     /// Time format, see https://man7.org/linux/man-pages/man1/date.1.html.
-    #[structopt(short, long, default_value = "%b %d %T.%3N")]
+    #[structopt(
+        short,
+        long,
+        default_value = "%b %d %T.%3N",
+        overrides_with = "time-format"
+    )]
     time_format: String,
     //
     /// Time zone name, see column "TZ database name" at https://en.wikipedia.org/wiki/List_of_tz_database_time_zones.
-    #[structopt(long, short = "Z", default_value = "UTC")]
+    #[structopt(long, short = "Z", default_value = "UTC", overrides_with = "time-zone")]
     time_zone: Tz,
     //
     /// Use local time zone, overrides --time-zone option.
