@@ -6,9 +6,11 @@ use json::{de::Read, de::StrRead, value::RawValue};
 use serde_json as json;
 
 use crate::datefmt;
+use crate::filtering::IncludeExcludeSetting;
 use crate::fmtx;
 use crate::model;
 use crate::theme;
+use crate::IncludeExcludeKeyFilter;
 
 use datefmt::DateTimeFormatter;
 use fmtx::{aligned_left, centered, Counter};
@@ -21,10 +23,16 @@ pub struct RecordFormatter {
     ts_formatter: DateTimeFormatter,
     ts_width: usize,
     hide_empty_fields: bool,
+    fields: Arc<IncludeExcludeKeyFilter>,
 }
 
 impl RecordFormatter {
-    pub fn new(theme: Arc<Theme>, ts_formatter: DateTimeFormatter, hide_empty_fields: bool) -> Self {
+    pub fn new(
+        theme: Arc<Theme>,
+        ts_formatter: DateTimeFormatter,
+        hide_empty_fields: bool,
+        fields: Arc<IncludeExcludeKeyFilter>,
+    ) -> Self {
         let mut counter = Counter::new();
         let tts = Utc.ymd(2020, 12, 30).and_hms_nano(23, 59, 49, 999_999_999);
         ts_formatter.format(&mut counter, tts.into());
@@ -35,6 +43,7 @@ impl RecordFormatter {
             ts_formatter,
             ts_width,
             hide_empty_fields,
+            fields,
         }
     }
 
@@ -109,14 +118,12 @@ impl RecordFormatter {
                     match v.get() {
                         r#""""# | "null" | "{}" | "[]" => continue,
                         _ => {
-                            buf.push(b' ');
                             self.format_field(buf, styler, k, v);
-                        },
+                        }
                     }
                 }
             } else {
                 for (k, v) in rec.fields() {
-                    buf.push(b' ');
                     self.format_field(buf, styler, k, v);
                 }
             }
@@ -142,9 +149,14 @@ impl RecordFormatter {
         styler: &'a mut Styler<'b>,
         key: &str,
         value: &RawValue,
-    ) {
+    ) -> bool {
         let mut fv = FieldFormatter::new(self, buf, styler);
-        fv.format(key, value);
+        fv.format(
+            key,
+            value,
+            Some(&self.fields),
+            IncludeExcludeSetting::Unspecified,
+        )
     }
 
     fn format_value<'a, 'b: 'a>(
@@ -154,7 +166,7 @@ impl RecordFormatter {
         value: &RawValue,
     ) {
         let mut fv = FieldFormatter::new(self, buf, styler);
-        fv.format_value(value);
+        fv.format_value(value, None, IncludeExcludeSetting::Unspecified);
     }
 
     fn format_message<'a, 'b: 'a>(
@@ -184,12 +196,12 @@ impl RecordFormatter {
                 let item = json::from_str::<model::Object>(value.get()).unwrap();
                 styler.set(buf, Element::Brace);
                 buf.push(b'{');
+                let mut has_some = false;
                 for (k, v) in item.fields.iter() {
-                    buf.push(b' ');
-                    self.format_field(buf, styler, k, v)
+                    has_some |= self.format_field(buf, styler, k, v)
                 }
                 styler.set(buf, Element::Brace);
-                if item.fields.len() > 0 {
+                if has_some {
                     buf.push(b' ');
                 }
                 buf.push(b'}');
@@ -253,17 +265,37 @@ fn format_str_unescaped(buf: &mut Vec<u8>, s: &str) {
 }
 
 struct FieldFormatter<'a, 'b> {
-    mf: &'a RecordFormatter,
+    rf: &'a RecordFormatter,
     buf: &'a mut Vec<u8>,
     styler: &'a mut Styler<'b>,
 }
 
 impl<'a, 'b> FieldFormatter<'a, 'b> {
-    fn new(mf: &'a RecordFormatter, buf: &'a mut Vec<u8>, styler: &'a mut Styler<'b>) -> Self {
-        Self { mf, buf, styler }
+    fn new(rf: &'a RecordFormatter, buf: &'a mut Vec<u8>, styler: &'a mut Styler<'b>) -> Self {
+        Self { rf, buf, styler }
     }
 
-    fn format(&mut self, key: &str, value: &'a RawValue) {
+    fn format(
+        &mut self,
+        key: &str,
+        value: &'a RawValue,
+        filter: Option<&IncludeExcludeKeyFilter>,
+        setting: IncludeExcludeSetting,
+    ) -> bool {
+        let (filter, setting, leaf) = match filter {
+            Some(filter) => {
+                let setting = setting.apply(filter.setting());
+                match filter.get(key) {
+                    Some(filter) => (Some(filter), setting.apply(filter.setting()), filter.leaf()),
+                    None => (None, setting, true),
+                }
+            }
+            None => (None, setting, true),
+        };
+        if setting == IncludeExcludeSetting::Exclude && leaf {
+            return false;
+        }
+        self.buf.push(b' ');
         self.styler.set(self.buf, Element::FieldKey);
         for b in key.as_bytes() {
             let b = if *b == b'_' { b'-' } else { *b };
@@ -271,14 +303,20 @@ impl<'a, 'b> FieldFormatter<'a, 'b> {
         }
         self.styler.set(self.buf, Element::EqualSign);
         self.buf.push(b'=');
-        if self.mf.unescape_fields {
-            self.format_value(value);
+        if self.rf.unescape_fields {
+            self.format_value(value, filter, setting);
         } else {
             self.buf.extend_from_slice(value.get().as_bytes())
         }
+        true
     }
 
-    fn format_value(&mut self, value: &'a RawValue) {
+    fn format_value(
+        &mut self,
+        value: &'a RawValue,
+        filter: Option<&IncludeExcludeKeyFilter>,
+        setting: IncludeExcludeSetting,
+    ) {
         match value.get().as_bytes()[0] {
             b'"' => {
                 self.styler.set(self.buf, Element::Quote);
@@ -304,12 +342,12 @@ impl<'a, 'b> FieldFormatter<'a, 'b> {
                 let item = json::from_str::<model::Object>(value.get()).unwrap();
                 self.styler.set(self.buf, Element::Brace);
                 self.buf.push(b'{');
+                let mut has_some = false;
                 for (k, v) in item.fields.iter() {
-                    self.buf.push(b' ');
-                    self.format(k, v);
+                    has_some |= self.format(k, v, filter, setting);
                 }
                 self.styler.set(self.buf, Element::Brace);
-                if item.fields.len() > 0 {
+                if has_some {
                     self.buf.push(b' ');
                 }
                 self.buf.push(b'}');
@@ -326,7 +364,7 @@ impl<'a, 'b> FieldFormatter<'a, 'b> {
                     } else {
                         first = false;
                     }
-                    self.format_value(v);
+                    self.format_value(v, None, IncludeExcludeSetting::Unspecified);
                 }
                 self.styler.set(self.buf, Element::Brace);
                 self.buf.push(b']');

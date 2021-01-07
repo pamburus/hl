@@ -19,6 +19,7 @@ use hl::error::*;
 use hl::input::{open, ConcatReader, Input, InputStream};
 use hl::output::{OutputStream, Pager};
 use hl::signal::SignalHandler;
+use hl::{IncludeExcludeKeyFilter, KeyMatchOptions};
 
 // ---
 
@@ -66,6 +67,14 @@ struct Opt {
     /// Filtering by field values in one of forms <key>=<value>, <key>~=<value>, <key>!=<value>, <key>!~=<value>.
     #[structopt(short, long, number_of_values = 1)]
     filter: Vec<String>,
+    //
+    /// An exclude-list of keys.
+    #[structopt(long, short = "h", number_of_values = 1)]
+    hide: Vec<String>,
+    //
+    /// An include-list of keys.
+    #[structopt(long, short = "H", number_of_values = 1)]
+    show: Vec<String>,
     //
     /// Filtering by level, valid values: ['d', 'i', 'w', 'e'].
     #[structopt(short, long, default_value = "d")]
@@ -185,6 +194,18 @@ fn run() -> Result<()> {
     // Configure hide_empty_fields
     let hide_empty_fields = !opt.show_empty_fields && opt.hide_empty_fields;
 
+    // Configure field filter.
+    let mut fields = IncludeExcludeKeyFilter::new(KeyMatchOptions::default());
+    if opt.hide.len() == 0 && opt.show.len() != 0 {
+        fields.exclude();
+    }
+    for key in opt.hide {
+        fields.entry(&key).exclude();
+    }
+    for key in opt.show {
+        fields.entry(&key).include();
+    }
+
     // Create app.
     let app = hl::App::new(hl::Options {
         theme: Arc::new(theme),
@@ -193,6 +214,7 @@ fn run() -> Result<()> {
         buffer_size: buffer_size,
         concurrency: concurrency,
         filter: filter,
+        fields: Arc::new(fields),
         time_zone: if opt.local {
             *Local.timestamp(0, 0).offset()
         } else {

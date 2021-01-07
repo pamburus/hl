@@ -15,6 +15,7 @@ use crate::formatting::RecordFormatter;
 use crate::model::{Filter, Record};
 use crate::scanning::{BufFactory, ScannedSegment, Scanner, Segment, SegmentFactory};
 use crate::theme::Theme;
+use crate::IncludeExcludeKeyFilter;
 
 pub struct Options {
     pub theme: Arc<Theme>,
@@ -23,6 +24,7 @@ pub struct Options {
     pub buffer_size: usize,
     pub concurrency: usize,
     pub filter: Filter,
+    pub fields: Arc<IncludeExcludeKeyFilter>,
     pub time_zone: FixedOffset,
     pub hide_empty_fields: bool,
 }
@@ -74,6 +76,7 @@ impl App {
                             self.options.time_zone,
                         ),
                         self.options.hide_empty_fields,
+                        self.options.fields.clone(),
                     )
                     .with_field_unescaping(!self.options.raw_fields);
                     for segment in rxi.iter() {
