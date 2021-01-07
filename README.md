@@ -129,27 +129,62 @@ Log viewer which translates JSON logs into pretty human-readable representation.
 - Command
 
     ```
+    $ hl example.log -f component!=tsdb -f component!=uninteresting
+    ```
+    Shows only messages with field `component` having value other than `tsdb` or `uninteresting`.
+
+- Command
+
+    ```
     $ hl example.log -f provider~=string
     ```
     Shows only messages with field `provider` containing sub-string `string`.
 
 
+### Hiding or showing selected fields.
+
+- Command
+
+    ```
+    $ hl example.log --hide provider
+    ```
+    Hides field `provider`.
+
+
+- Command
+
+    ```
+    $ hl example.log --show provider
+    ```
+    Hides all fields except `provider`.
+
+
+- Command
+
+    ```
+    $ hl example.log -h headers -h body -H headers.content-type
+    ```
+    Hides fields `headers` and `body` but shows a single sub-field `content-type` inside field `headers`.
+
+
 ### Complete set of options and flags
 
 ```
-hl 0.7.3
+hl 0.8.5
 JSON log converter to human readable representation
 
 USAGE:
     hl [FLAGS] [OPTIONS] [--] [FILE]...
 
 FLAGS:
-    -c                  Handful alias for --color=always, overrides --color option
-    -h, --help          Prints help information
-    -L, --local         Use local time zone, overrides --time-zone option
-    -P                  Handful alias for --paging=never, overrides --paging option
-    -r, --raw-fields    Disable unescaping and prettifying of field values
-    -V, --version       Prints version information
+    -c                         Handful alias for --color=always, overrides --color option
+        --help                 Prints help information
+    -e, --hide-empty-fields    Hide empty fields, applies for null, string, object and array fields only
+    -L, --local                Use local time zone, overrides --time-zone option
+    -P                         Handful alias for --paging=never, overrides --paging option
+    -r, --raw-fields           Disable unescaping and prettifying of field values
+    -E, --show-empty-fields    Show empty fields, overrides --hide-empty-fields option
+    -V, --version              Prints version information
 
 OPTIONS:
         --buffer-size <buffer-size>                          Buffer size, kibibytes [default: 2048]
@@ -160,6 +195,7 @@ OPTIONS:
     -f, --filter <filter>...
             Filtering by field values in one of forms <key>=<value>, <key>~=<value>, <key>!=<value>, <key>!~=<value>
 
+    -h, --hide <hide>...                                     An exclude-list of keys
         --interrupt-ignore-count <interrupt-ignore-count>
             Number of interrupts to ignore, i.e. Ctrl-C (SIGINT) [default: 3]
 
@@ -169,6 +205,7 @@ OPTIONS:
         --paging <paging>
             Output paging options, one of { auto, always, never } [default: auto]
 
+    -H, --show <show>...                                     An include-list of keys
         --theme <theme>
             Color theme, one of { auto, dark, dark24, light } [default: dark]
 
