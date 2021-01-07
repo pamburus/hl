@@ -113,19 +113,20 @@ impl RecordFormatter {
             //
             // fields
             //
-            if self.hide_empty_fields {
-                for (k, v) in rec.fields() {
-                    match v.get() {
-                        r#""""# | "null" | "{}" | "[]" => continue,
-                        _ => {
-                            self.format_field(buf, styler, k, v);
-                        }
+            let mut some_fields_hidden = false;
+            for (k, v) in rec.fields() {
+                if !self.hide_empty_fields
+                    || match v.get() {
+                        r#""""# | "null" | "{}" | "[]" => false,
+                        _ => true,
                     }
+                {
+                    some_fields_hidden |= !self.format_field(buf, styler, k, v, Some(&self.fields));
                 }
-            } else {
-                for (k, v) in rec.fields() {
-                    self.format_field(buf, styler, k, v);
-                }
+            }
+            if some_fields_hidden {
+                styler.set(buf, Element::Punctuation);
+                buf.extend_from_slice(b" ...");
             }
             //
             // caller
@@ -149,14 +150,10 @@ impl RecordFormatter {
         styler: &'a mut Styler<'b>,
         key: &str,
         value: &RawValue,
+        filter: Option<&IncludeExcludeKeyFilter>,
     ) -> bool {
         let mut fv = FieldFormatter::new(self, buf, styler);
-        fv.format(
-            key,
-            value,
-            Some(&self.fields),
-            IncludeExcludeSetting::Unspecified,
-        )
+        fv.format(key, value, filter, IncludeExcludeSetting::Unspecified)
     }
 
     fn format_value<'a, 'b: 'a>(
@@ -198,7 +195,7 @@ impl RecordFormatter {
                 buf.push(b'{');
                 let mut has_some = false;
                 for (k, v) in item.fields.iter() {
-                    has_some |= self.format_field(buf, styler, k, v)
+                    has_some |= self.format_field(buf, styler, k, v, None)
                 }
                 styler.set(buf, Element::Brace);
                 if has_some {
@@ -342,14 +339,18 @@ impl<'a, 'b> FieldFormatter<'a, 'b> {
                 let item = json::from_str::<model::Object>(value.get()).unwrap();
                 self.styler.set(self.buf, Element::Brace);
                 self.buf.push(b'{');
-                let mut has_some = false;
+                let mut some_fields_hidden = false;
                 for (k, v) in item.fields.iter() {
-                    has_some |= self.format(k, v, filter, setting);
+                    some_fields_hidden |= !self.format(k, v, filter, setting);
                 }
-                self.styler.set(self.buf, Element::Brace);
-                if has_some {
+                if some_fields_hidden {
+                    self.styler.set(self.buf, Element::Punctuation);
+                    self.buf.extend_from_slice(b" ...");
+                }
+                if item.fields.len() != 0 {
                     self.buf.push(b' ');
                 }
+                self.styler.set(self.buf, Element::Brace);
                 self.buf.push(b'}');
             }
             b'[' => {
