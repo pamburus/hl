@@ -176,7 +176,7 @@ impl RecordFormatter {
                 styler.set(buf, Element::Message);
                 format_str_unescaped(buf, value.get());
             }
-            b'0'..=b'9' => {
+            b'0'..=b'9' | b'-' | b'+' | b'.' => {
                 styler.set(buf, Element::LiteralNumber);
                 buf.extend_from_slice(value.get().as_bytes());
             }
@@ -322,7 +322,7 @@ impl<'a, 'b> FieldFormatter<'a, 'b> {
                 self.styler.set(self.buf, Element::Quote);
                 self.buf.push(b'\'');
             }
-            b'0'..=b'9' => {
+            b'0'..=b'9' | b'-' | b'+' | b'.' => {
                 self.styler.set(self.buf, Element::LiteralNumber);
                 self.buf.extend_from_slice(value.get().as_bytes());
             }
