@@ -4,7 +4,10 @@ use std::thread::{spawn, JoinHandle};
 use std::time::{Duration, Instant};
 
 // third-party imports
-use signal_hook::{iterator::Signals, SIGINT};
+use signal_hook::{
+    consts::signal::SIGINT,
+    iterator::{Handle, Signals},
+};
 
 // local imports
 use crate::error::*;
@@ -12,7 +15,7 @@ use crate::error::*;
 // ---
 
 pub struct SignalHandler {
-    signals: Signals,
+    signals: Handle,
     thread: Option<JoinHandle<()>>,
 }
 
@@ -26,13 +29,13 @@ impl SignalHandler {
     }
 
     fn new(max_count: usize, timeout: Duration) -> Result<Self> {
-        let signals = Signals::new(&[SIGINT])?;
-        let s = signals.clone();
+        let mut signals = Signals::new(&[SIGINT])?;
+        let handle = signals.handle();
 
         let thread = spawn(move || {
             let mut count = 0;
             let mut ts = Instant::now();
-            for signal in &s {
+            for signal in &mut signals {
                 match signal {
                     SIGINT => {
                         if count < max_count {
@@ -53,7 +56,7 @@ impl SignalHandler {
         });
 
         Ok(Self {
-            signals,
+            signals: handle,
             thread: Some(thread),
         })
     }

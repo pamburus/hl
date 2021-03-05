@@ -1,7 +1,7 @@
 use std::io::Read;
 use std::sync::Arc;
 
-use crossbeam_queue::{PopError, SegQueue};
+use crossbeam_queue::SegQueue;
 
 use crate::error::*;
 
@@ -35,8 +35,8 @@ impl SegmentFactory {
 
     pub fn new_segment(&self) -> Segment {
         match self.recycled.pop() {
-            Ok(segment) => segment.resetted(),
-            Err(PopError) => Segment::new(self.buf_size),
+            Some(segment) => segment.resetted(),
+            None => Segment::new(self.buf_size),
         }
     }
 
@@ -60,11 +60,11 @@ impl BufFactory {
 
     pub fn new_buf(&self) -> Vec<u8> {
         match self.recycled.pop() {
-            Ok(mut buf) => {
+            Some(mut buf) => {
                 buf.resize(0, 0);
                 buf
             }
-            Err(PopError) => Vec::with_capacity(self.buf_size),
+            None => Vec::with_capacity(self.buf_size),
         }
     }
 

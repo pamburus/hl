@@ -10,35 +10,35 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-ansi_term = "0.12"
-anyhow = "1.0"
-atoi = "0.3.2"
-bitmask = "0.5"
-chrono = { version = "0.4", features = ["serde"] }
-chrono-tz = "0.5"
-closure = "0.3"
-crossbeam-channel = "0.4"
-crossbeam-queue = "0.2"
-crossbeam-utils = "0.7"
-error-chain = "0.12"
-flate2 = "1.0"
-heapless = "0.5.5"
-isatty = "0.1"
-itertools = "0.9"
-num_cpus = "1.0"
-serde = { version = "1.0", features = ["derive"] }
-serde_json = { version = "1.0", features = ["raw_value"] }
-shellwords = "1.1"
-signal-hook = "0.1"
-structopt = "0.3"
+ansi_term = "0"
+anyhow = "1"
+atoi = "0"
+bitmask = "0"
+chrono = { version = "0", features = ["serde"] }
+chrono-tz = "0"
+closure = "0"
+crossbeam-channel = "0"
+crossbeam-queue = "0"
+crossbeam-utils = "0"
+error-chain = "0"
+flate2 = "1"
+heapless = "0"
+atty = "0"
+itertools = "0"
+num_cpus = "1"
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["raw_value"] }
+shellwords = "1"
+signal-hook = "0"
+structopt = "0"
 
 [dependencies.itoa]
-version = "0.4.3"
+version = "0"
 default-features = false
 
 [dev-dependencies]
-criterion = "0.3"
-diligent-date-parser = "0.1"
+criterion = "0"
+diligent-date-parser = "0"
 regex = "1"
 
 [profile.release]

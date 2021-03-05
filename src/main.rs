@@ -9,7 +9,6 @@ use std::time::Duration;
 use ansi_term::Colour;
 use chrono::{FixedOffset, Local, TimeZone};
 use chrono_tz::{Tz, UTC};
-use isatty::stdout_isatty;
 use structopt::clap::arg_enum;
 use structopt::StructOpt;
 
@@ -140,6 +139,7 @@ arg_enum! {
 
 fn run() -> Result<()> {
     let opt = Opt::from_args();
+    let stdout_is_atty = || atty::is(atty::Stream::Stdout);
 
     // Configure color scheme.
     let color = if opt.color_always {
@@ -154,7 +154,7 @@ fn run() -> Result<()> {
         (Theme::Light, _) => hl::theme::Theme::light(),
     };
     let theme = match color {
-        Color::Auto => match stdout_isatty() {
+        Color::Auto => match stdout_is_atty() {
             true => theme(opt.theme),
             false => hl::theme::Theme::none(),
         },
@@ -249,7 +249,7 @@ fn run() -> Result<()> {
     };
     let paging = match opt.paging {
         Paging::Auto => {
-            if stdout_isatty() {
+            if stdout_is_atty() {
                 true
             } else {
                 false
