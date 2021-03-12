@@ -80,25 +80,20 @@ impl<'a> Record<'a> {
                         }
                     }
                     _ => {
-                        let mut found = false;
+                        let mut matched = false;
                         for (k, v) in self.extra.iter() {
                             match field.match_key(*k) {
                                 None => {}
                                 Some(KeyMatch::Full) => {
-                                    found = true;
-                                    if !field.match_value(Some(v.get()), v.get().starts_with('"')) {
-                                        return false;
-                                    }
+                                    let escaped = v.get().starts_with('"');
+                                    matched |= field.match_value(Some(v.get()), escaped);
                                 }
                                 Some(KeyMatch::Partial(subkey)) => {
-                                    found = true;
-                                    if !field.match_value_partial(subkey, *v) {
-                                        return false;
-                                    }
+                                    matched |= field.match_value_partial(subkey, *v);
                                 }
                             }
                         }
-                        if !found {
+                        if !matched {
                             return false;
                         }
                     }
