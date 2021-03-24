@@ -19,6 +19,7 @@ use hl::input::{open, ConcatReader, Input, InputStream};
 use hl::output::{OutputStream, Pager};
 use hl::signal::SignalHandler;
 use hl::theme::Theme;
+use hl::Level;
 use hl::{IncludeExcludeKeyFilter, KeyMatchOptions};
 
 // ---
@@ -78,7 +79,7 @@ struct Opt {
     //
     /// Filtering by level, valid values: ['d', 'i', 'w', 'e'].
     #[structopt(short, long, default_value = "d", overrides_with = "level")]
-    level: char,
+    level: Level,
     //
     /// Time format, see https://man7.org/linux/man-pages/man1/date.1.html.
     #[structopt(
@@ -168,34 +169,15 @@ fn run() -> Result<()> {
         None | Some(0) => num_cpus::get(),
         Some(value) => value,
     };
-
     // Configure buffer size.
     let buffer_size = match opt.buffer_size {
         0 => 2 << 20,
         _ => opt.buffer_size << 10,
     };
-    // Configure level.
-    let level = match opt.level {
-        'e' | 'E' => hl::Level::Error,
-        'w' | 'W' => hl::Level::Warning,
-        'i' | 'I' => hl::Level::Info,
-        'd' | 'D' => hl::Level::Debug,
-        _ => {
-            return Err(format!(
-                "invalid level '{}': use any of ['{}', '{}', '{}', '{}']",
-                Colour::Yellow.paint(opt.level.to_string()),
-                Colour::Green.paint("e"),
-                Colour::Green.paint("w"),
-                Colour::Green.paint("i"),
-                Colour::Green.paint("d"),
-            )
-            .into());
-        }
-    };
     // Configure filter.
     let filter = hl::Filter {
         fields: hl::FieldFilterSet::new(opt.filter),
-        level: Some(level),
+        level: Some(opt.level),
     };
     // Configure hide_empty_fields
     let hide_empty_fields = !opt.show_empty_fields && opt.hide_empty_fields;
@@ -217,9 +199,9 @@ fn run() -> Result<()> {
         theme: Arc::new(theme),
         raw_fields: opt.raw_fields,
         time_format: LinuxDateFormat::new(&opt.time_format).compile(),
-        buffer_size: buffer_size,
-        concurrency: concurrency,
-        filter: filter,
+        buffer_size,
+        concurrency,
+        filter,
         fields: Arc::new(fields),
         time_zone: if opt.local {
             *Local.timestamp(0, 0).offset()
@@ -278,7 +260,7 @@ fn run() -> Result<()> {
     // Run the app.
     let run = || match app.run(input.as_mut(), output.as_mut()) {
         Ok(()) => Ok(()),
-        Err(Error(ErrorKind::Io(ref e), _)) if e.kind() == std::io::ErrorKind::BrokenPipe => Ok(()),
+        Err(Error::Io(ref e)) if e.kind() == std::io::ErrorKind::BrokenPipe => Ok(()),
         Err(err) => Err(err),
     };
 

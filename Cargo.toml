@@ -14,6 +14,7 @@ ansi_term = "0"
 anyhow = "1"
 atoi = "0"
 bitmask = "0"
+bytefmt = "0"
 chrono = { version = "0", features = ["serde"] }
 chrono-tz = "0"
 closure = "0"
@@ -31,6 +32,7 @@ serde_json = { version = "1", features = ["raw_value"] }
 shellwords = "1"
 signal-hook = "0"
 structopt = "0"
+thiserror = "1"
 
 [dependencies.itoa]
 version = "0"
