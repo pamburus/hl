@@ -1,4 +1,5 @@
 // std imports
+use std::convert::TryFrom;
 use std::env;
 use std::path::PathBuf;
 use std::process;
@@ -57,8 +58,8 @@ struct Opt {
     #[structopt(long, default_value = "3", overrides_with = "interrupt-ignore-count")]
     interrupt_ignore_count: usize,
     //
-    /// Buffer size, kibibytes.
-    #[structopt(long, default_value = "2048", overrides_with = "buffer-size")]
+    /// Buffer size.
+    #[structopt(long, default_value = "2 MiB", overrides_with = "buffer-size", parse(try_from_str = parse_non_zero_size))]
     buffer_size: usize,
     //
     /// Number of processing threads.
@@ -139,6 +140,27 @@ arg_enum! {
     }
 }
 
+fn parse_size(s: &str) -> Result<usize> {
+    match bytefmt::parse(s) {
+        Ok(value) => Ok(usize::try_from(value)?),
+        Err(_) => {
+            if let Ok(value) = bytefmt::parse(s.to_owned() + "ib") {
+                return Ok(usize::try_from(value)?);
+            }
+            Err(Error::InvalidSize(s.into()))
+        }
+    }
+}
+
+fn parse_non_zero_size(s: &str) -> Result<usize> {
+    let value = parse_size(s)?;
+    if value == 0 {
+        Err(Error::ZeroSize)
+    } else {
+        Ok(value)
+    }
+}
+
 fn run() -> Result<()> {
     let opt = Opt::from_args();
     let stdout_is_atty = || atty::is(atty::Stream::Stdout);
@@ -169,11 +191,6 @@ fn run() -> Result<()> {
         None | Some(0) => num_cpus::get(),
         Some(value) => value,
     };
-    // Configure buffer size.
-    let buffer_size = match opt.buffer_size {
-        0 => 2 << 20,
-        _ => opt.buffer_size << 10,
-    };
     // Configure filter.
     let filter = hl::Filter {
         fields: hl::FieldFilterSet::new(opt.filter),
@@ -199,7 +216,7 @@ fn run() -> Result<()> {
         theme: Arc::new(theme),
         raw_fields: opt.raw_fields,
         time_format: LinuxDateFormat::new(&opt.time_format).compile(),
-        buffer_size,
+        buffer_size: opt.buffer_size,
         concurrency,
         filter,
         fields: Arc::new(fields),
