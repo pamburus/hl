@@ -1,89 +1,59 @@
+// std imports
+use std::convert::From;
 use std::io::Read;
 use std::sync::Arc;
 
+// third-party imports
 use crossbeam_queue::SegQueue;
 
+// local imports
 use crate::error::*;
 
-pub struct Segment {
+// ---
+
+/// Scans input stream and splits it into segments containing a whole number of tokens delimited by the given delimiter.
+/// If a single token exceeds size of a buffer allocated by SegmentBufFactory, it is split into multiple Incomplete segments.
+pub struct Scanner {
+    delimiter: String,
+    sf: Arc<SegmentBufFactory>,
+}
+
+impl Scanner {
+    /// Returns a new Scanner with the given parameters.
+    pub fn new(sf: Arc<SegmentBufFactory>, delimiter: String) -> Self {
+        Self {
+            delimiter: delimiter.clone(),
+            sf,
+        }
+    }
+
+    /// Returns an iterator over segments found in the input.
+    pub fn items<'a, 'b>(&'a self, input: &'b mut dyn Read) -> ScannerIter<'a, 'b> {
+        return ScannerIter::new(self, input);
+    }
+}
+
+// ---
+
+/// Contains a pre-allocated data buffer for a Segment and data size.
+#[derive(Eq)]
+pub struct SegmentBuf {
     data: Vec<u8>,
     size: usize,
 }
 
-pub enum ScannedSegment {
-    Complete(Segment),
-    Incomplete(Segment),
-}
-
-pub struct Scanner {
-    delimiter: String,
-    sf: Arc<SegmentFactory>,
-}
-
-pub struct SegmentFactory {
-    buf_size: usize,
-    recycled: SegQueue<Segment>,
-}
-
-impl SegmentFactory {
-    pub fn new(buf_size: usize) -> Self {
-        return Self {
-            buf_size,
-            recycled: SegQueue::new(),
-        };
+impl SegmentBuf {
+    /// Returns a reference to the contained data.
+    pub fn data(&self) -> &[u8] {
+        &self.data[..self.size]
     }
 
-    pub fn new_segment(&self) -> Segment {
-        match self.recycled.pop() {
-            Some(segment) => segment.resetted(),
-            None => Segment::new(self.buf_size),
-        }
+    /// Converts the SegmentBuf to a Vec<u8>.
+    pub fn to_vec(mut self) -> Vec<u8> {
+        self.data.resize(self.size, 0);
+        self.data
     }
 
-    pub fn recycle(&self, segment: Segment) {
-        self.recycled.push(segment);
-    }
-}
-
-pub struct BufFactory {
-    buf_size: usize,
-    recycled: SegQueue<Vec<u8>>,
-}
-
-impl BufFactory {
-    pub fn new(buf_size: usize) -> Self {
-        return Self {
-            buf_size,
-            recycled: SegQueue::new(),
-        };
-    }
-
-    pub fn new_buf(&self) -> Vec<u8> {
-        match self.recycled.pop() {
-            Some(mut buf) => {
-                buf.resize(0, 0);
-                buf
-            }
-            None => Vec::with_capacity(self.buf_size),
-        }
-    }
-
-    pub fn recycle(&self, buf: Vec<u8>) {
-        self.recycled.push(buf);
-    }
-}
-
-impl ScannedSegment {
-    fn new(segment: Segment, partial: bool) -> Self {
-        if partial {
-            Self::Incomplete(segment)
-        } else {
-            Self::Complete(segment)
-        }
-    }
-}
-
-impl Segment {
     fn new(capacity: usize) -> Self {
         let mut data = Vec::with_capacity(capacity);
         data.resize(capacity, 0);
@@ -95,15 +65,6 @@ impl Segment {
             data: Vec::new(),
             size: 0,
         }
-    }
-
-    pub fn data(&self) -> &[u8] {
-        &self.data[..self.size]
-    }
-
-    pub fn to_vec(mut self) -> Vec<u8> {
-        self.data.resize(self.size, 0);
-        self.data
     }
 
     fn reset(&mut self) {
@@ -122,23 +83,126 @@ impl Segment {
     }
 }
 
-impl Scanner {
-    pub fn new(sf: Arc<SegmentFactory>, delimiter: String) -> Self {
-        Self {
-            delimiter: delimiter.clone(),
-            sf,
-        }
-    }
-
-    pub fn items<'a, 'b>(&'a self, input: &'b mut dyn Read) -> ScannerIter<'a, 'b> {
-        return ScannerIter::new(self, input);
+impl PartialEq for SegmentBuf {
+    fn eq(&self, other: &Self) -> bool {
+        self.size == other.size && self.data().eq(other.data())
     }
 }
 
+impl std::fmt::Debug for SegmentBuf {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if let Ok(s) = std::str::from_utf8(self.data()) {
+            write!(f, "{:?}", s)
+        } else {
+            write!(f, "{:?}", self.data())
+        }
+    }
+}
+
+impl<T: AsRef<[u8]>> From<T> for SegmentBuf {
+    fn from(data: T) -> Self {
+        let size = data.as_ref().len();
+        Self {
+            data: data.as_ref().into(),
+            size,
+        }
+    }
+}
+
+// ---
+
+/// Segment is an output of Scanner.
+/// Complete segment cantains a whole number of tokens.
+/// Incomplete segment contains a part of a token.
+#[derive(Debug, Eq, PartialEq)]
+pub enum Segment {
+    Complete(SegmentBuf),
+    Incomplete(SegmentBuf),
+}
+
+impl Segment {
+    /// Returns a new Segment containing the given SegmentBuf.
+    fn new(buf: SegmentBuf, partial: bool) -> Self {
+        if partial {
+            Self::Incomplete(buf)
+        } else {
+            Self::Complete(buf)
+        }
+    }
+}
+
+// ---
+
+/// Constructs new SegmentBuf's with the configures size and recycles unneeded SegmentBuf's.
+pub struct SegmentBufFactory {
+    buf_size: usize,
+    recycled: SegQueue<SegmentBuf>,
+}
+
+impl SegmentBufFactory {
+    /// Returns a new SegmentBufFactory with the given parameters.
+    pub fn new(buf_size: usize) -> Self {
+        return Self {
+            buf_size,
+            recycled: SegQueue::new(),
+        };
+    }
+
+    /// Returns a new or recycled SegmentBuf.
+    pub fn new_segment(&self) -> SegmentBuf {
+        match self.recycled.pop() {
+            Some(buf) => buf.resetted(),
+            None => SegmentBuf::new(self.buf_size),
+        }
+    }
+
+    /// Recycles the given SegmentBuf.
+    pub fn recycle(&self, buf: SegmentBuf) {
+        self.recycled.push(buf);
+    }
+}
+
+// ---
+
+/// Constructs new raw Vec<u8> buffers with the configured size.
+pub struct BufFactory {
+    buf_size: usize,
+    recycled: SegQueue<Vec<u8>>,
+}
+
+impl BufFactory {
+    /// Returns a new BufFactory with the given parameters.
+    pub fn new(buf_size: usize) -> Self {
+        return Self {
+            buf_size,
+            recycled: SegQueue::new(),
+        };
+    }
+
+    /// Returns a new or recycled buffer.
+    pub fn new_buf(&self) -> Vec<u8> {
+        match self.recycled.pop() {
+            Some(mut buf) => {
+                buf.resize(0, 0);
+                buf
+            }
+            None => Vec::with_capacity(self.buf_size),
+        }
+    }
+
+    /// Recycles the given buffer.
+    pub fn recycle(&self, buf: Vec<u8>) {
+        self.recycled.push(buf);
+    }
+}
+
+// ---
+
+/// Iterates over the input stream and returns segments containing one or more tokens.
 pub struct ScannerIter<'a, 'b> {
     scanner: &'a Scanner,
     input: &'b mut dyn Read,
-    next: Segment,
+    next: SegmentBuf,
     partial: bool,
     done: bool,
 }
@@ -154,7 +218,7 @@ impl<'a, 'b> ScannerIter<'a, 'b> {
         };
     }
 
-    fn split(&mut self) -> Option<Segment> {
+    fn split(&mut self) -> Option<SegmentBuf> {
         let k = self.scanner.delimiter.len();
         if self.next.size < k || k == 0 {
             return None;
@@ -180,7 +244,7 @@ impl<'a, 'b> ScannerIter<'a, 'b> {
 }
 
 impl<'a, 'b> Iterator for ScannerIter<'a, 'b> {
-    type Item = Result<ScannedSegment>;
+    type Item = Result<Segment>;
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.done {
@@ -200,7 +264,7 @@ impl<'a, 'b> Iterator for ScannerIter<'a, 'b> {
 
             let (next, partial) = if n == 0 {
                 self.done = true;
-                (Segment::zero(), self.partial)
+                (SegmentBuf::zero(), self.partial)
             } else {
                 match self.split() {
                     Some(next) => {
@@ -218,7 +282,91 @@ impl<'a, 'b> Iterator for ScannerIter<'a, 'b> {
                 }
             };
 
-            return Some(Ok(ScannedSegment::new(self.next.replace(next), partial)));
+            let result = self.next.replace(next);
+            return if result.size != 0 {
+                Some(Ok(Segment::new(result, partial)))
+            } else {
+                None
+            };
         }
+    }
+}
+
+// ---
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_small_token() {
+        let sf = Arc::new(SegmentBufFactory::new(20));
+        let scanner = Scanner::new(sf.clone(), "/".into());
+        let mut data = std::io::Cursor::new(b"token");
+        let tokens = scanner
+            .items(&mut data)
+            .collect::<Result<Vec<_>>>()
+            .unwrap();
+        assert_eq!(tokens, vec![Segment::Complete(b"token".into())])
+    }
+
+    #[test]
+    fn test_empty_token_and_small_token() {
+        let sf = Arc::new(SegmentBufFactory::new(20));
+        let scanner = Scanner::new(sf.clone(), "/".into());
+        let mut data = std::io::Cursor::new(b"/token");
+        let tokens = scanner
+            .items(&mut data)
+            .collect::<Result<Vec<_>>>()
+            .unwrap();
+        assert_eq!(
+            tokens,
+            vec![
+                Segment::Complete(b"/".into()),
+                Segment::Complete(b"token".into())
+            ]
+        )
+    }
+
+    #[test]
+    fn test_small_token_and_empty_token() {
+        let sf = Arc::new(SegmentBufFactory::new(20));
+        let scanner = Scanner::new(sf.clone(), "/".into());
+        let mut data = std::io::Cursor::new(b"token/");
+        let tokens = scanner
+            .items(&mut data)
+            .collect::<Result<Vec<_>>>()
+            .unwrap();
+        assert_eq!(tokens, vec![Segment::Complete(b"token/".into())])
+    }
+
+    #[test]
+    fn test_two_small_tokens() {
+        let sf = Arc::new(SegmentBufFactory::new(20));
+        let scanner = Scanner::new(sf.clone(), "/".into());
+        let mut data = std::io::Cursor::new(b"test/token/");
+        let tokens = scanner
+            .items(&mut data)
+            .collect::<Result<Vec<_>>>()
+            .unwrap();
+        assert_eq!(tokens, vec![Segment::Complete(b"test/token/".into())])
+    }
+
+    #[test]
+    fn test_two_tokens_over_segment_size() {
+        let sf = Arc::new(SegmentBufFactory::new(10));
+        let scanner = Scanner::new(sf.clone(), "/".into());
+        let mut data = std::io::Cursor::new(b"test/token/");
+        let tokens = scanner
+            .items(&mut data)
+            .collect::<Result<Vec<_>>>()
+            .unwrap();
+        assert_eq!(
+            tokens,
+            vec![
+                Segment::Complete(b"test/".into()),
+                Segment::Complete(b"token/".into())
+            ]
+        )
     }
 }
