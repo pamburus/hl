@@ -18,6 +18,7 @@ use hl::error::*;
 use hl::input::{open, ConcatReader, Input, InputStream};
 use hl::output::{OutputStream, Pager};
 use hl::signal::SignalHandler;
+use hl::theme::Theme;
 use hl::{IncludeExcludeKeyFilter, KeyMatchOptions};
 
 // ---
@@ -28,7 +29,7 @@ use hl::{IncludeExcludeKeyFilter, KeyMatchOptions};
 struct Opt {
     /// Color output options, one of { auto, always, never }.
     #[structopt(long, default_value = "auto", overrides_with = "color")]
-    color: Color,
+    color: ColorOption,
     //
     /// Handful alias for --color=always, overrides --color option.
     #[structopt(short)]
@@ -36,7 +37,7 @@ struct Opt {
     //
     /// Output paging options, one of { auto, always, never }.
     #[structopt(long, default_value = "auto", overrides_with = "paging")]
-    paging: Paging,
+    paging: PagingOption,
     //
     /// Handful alias for --paging=never, overrides --paging option.
     #[structopt(short = "P")]
@@ -45,7 +46,7 @@ struct Opt {
     //
     /// Color theme, one of { auto, dark, dark24, light }.
     #[structopt(long, default_value = "dark", overrides_with = "theme")]
-    theme: Theme,
+    theme: ThemeOption,
     //
     /// Disable unescaping and prettifying of field values.
     #[structopt(short, long)]
@@ -111,7 +112,7 @@ struct Opt {
 
 arg_enum! {
     #[derive(Debug)]
-    enum Color {
+    enum ColorOption {
         Auto,
         Always,
         Never,
@@ -120,7 +121,7 @@ arg_enum! {
 
 arg_enum! {
     #[derive(Debug)]
-    enum Theme {
+    enum ThemeOption {
         Auto,
         Dark,
         Dark24,
@@ -130,7 +131,7 @@ arg_enum! {
 
 arg_enum! {
     #[derive(Debug)]
-    enum Paging {
+    enum PagingOption {
         Auto,
         Always,
         Never,
@@ -143,23 +144,23 @@ fn run() -> Result<()> {
 
     // Configure color scheme.
     let color = if opt.color_always {
-        Color::Always
+        ColorOption::Always
     } else {
         opt.color
     };
     let truecolor = env::var("COLORTERM").unwrap_or_default() == "truecolor";
-    let theme = |theme: Theme| match (theme, truecolor) {
-        (Theme::Auto, false) | (Theme::Dark, _) => hl::theme::Theme::dark(),
-        (Theme::Auto, true) | (Theme::Dark24, _) => hl::theme::Theme::dark24(),
-        (Theme::Light, _) => hl::theme::Theme::light(),
+    let theme = |theme: ThemeOption| match (theme, truecolor) {
+        (ThemeOption::Auto, false) | (ThemeOption::Dark, _) => Theme::dark(),
+        (ThemeOption::Auto, true) | (ThemeOption::Dark24, _) => Theme::dark24(),
+        (ThemeOption::Light, _) => Theme::light(),
     };
     let theme = match color {
-        Color::Auto => match stdout_is_atty() {
+        ColorOption::Auto => match stdout_is_atty() {
             true => theme(opt.theme),
-            false => hl::theme::Theme::none(),
+            false => Theme::none(),
         },
-        Color::Always => theme(opt.theme),
-        Color::Never => hl::theme::Theme::none(),
+        ColorOption::Always => theme(opt.theme),
+        ColorOption::Never => Theme::none(),
     };
 
     // Configure concurrency.
@@ -248,15 +249,15 @@ fn run() -> Result<()> {
         Box::new(ConcatReader::new(inputs.into_iter().map(|x| Ok(x))))
     };
     let paging = match opt.paging {
-        Paging::Auto => {
+        PagingOption::Auto => {
             if stdout_is_atty() {
                 true
             } else {
                 false
             }
         }
-        Paging::Always => true,
-        Paging::Never => false,
+        PagingOption::Always => true,
+        PagingOption::Never => false,
     };
     let paging = if opt.paging_never { false } else { paging };
     let mut output: OutputStream = if paging {
