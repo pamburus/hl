@@ -270,6 +270,11 @@ fn run() -> Result<()> {
         Box::new(std::io::stdout())
     };
 
+    #[cfg(windows)]
+    if stdout_is_atty() {
+        let _ = ansi_term::enable_ansi_support();
+    }
+
     // Run the app.
     let run = || match app.run(input.as_mut(), output.as_mut()) {
         Ok(()) => Ok(()),
