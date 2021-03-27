@@ -1,4 +1,5 @@
 // std imports
+use std::collections::VecDeque;
 use std::convert::From;
 use std::io::Read;
 use std::sync::Arc;
@@ -117,18 +118,28 @@ impl<T: AsRef<[u8]>> From<T> for SegmentBuf {
 #[derive(Debug, Eq, PartialEq)]
 pub enum Segment {
     Complete(SegmentBuf),
-    Incomplete(SegmentBuf),
+    Incomplete(SegmentBuf, PartialPlacement),
 }
 
 impl Segment {
     /// Returns a new Segment containing the given SegmentBuf.
-    fn new(buf: SegmentBuf, partial: bool) -> Self {
-        if partial {
-            Self::Incomplete(buf)
+    fn new(buf: SegmentBuf, placement: Option<PartialPlacement>) -> Self {
+        if let Some(placement) = placement {
+            Self::Incomplete(buf, placement)
         } else {
             Self::Complete(buf)
         }
     }
+}
+
+// ---
+
+/// Defines partial segment placement in a sequence.
+#[derive(Debug, Eq, PartialEq, Clone, Copy)]
+pub enum PartialPlacement {
+    First,
+    Next,
+    Last,
 }
 
 // ---
@@ -158,7 +169,9 @@ impl SegmentBufFactory {
 
     /// Recycles the given SegmentBuf.
     pub fn recycle(&self, buf: SegmentBuf) {
-        self.recycled.push(buf);
+        if buf.data.capacity() == self.buf_size {
+            self.recycled.push(buf);
+        }
     }
 }
 
@@ -203,17 +216,21 @@ pub struct ScannerIter<'a, 'b> {
     scanner: &'a Scanner,
     input: &'b mut dyn Read,
     next: SegmentBuf,
-    partial: bool,
+    placement: Option<PartialPlacement>,
     done: bool,
 }
 
 impl<'a, 'b> ScannerIter<'a, 'b> {
+    pub fn with_max_segment_size(self, max_segment_size: usize) -> ScannerJumboIter<'a, 'b> {
+        ScannerJumboIter::new(self, max_segment_size)
+    }
+
     fn new(scanner: &'a Scanner, input: &'b mut dyn Read) -> Self {
         return Self {
             scanner,
             input,
             next: scanner.sf.new_segment(),
-            partial: false,
+            placement: None,
             done: false,
         };
     }
@@ -262,32 +279,116 @@ impl<'a, 'b> Iterator for ScannerIter<'a, 'b> {
             self.next.size += n;
             let full = self.next.size == self.next.data.capacity();
 
-            let (next, partial) = if n == 0 {
+            let (next, placement) = if n == 0 {
                 self.done = true;
-                (SegmentBuf::zero(), self.partial)
+                (
+                    SegmentBuf::zero(),
+                    self.placement.and(Some(PartialPlacement::Last)),
+                )
             } else {
                 match self.split() {
                     Some(next) => {
-                        let result = (next, self.partial);
-                        self.partial = false;
+                        let result = (next, self.placement.and(Some(PartialPlacement::Last)));
+                        self.placement = None;
                         result
                     }
                     None => {
                         if !full {
                             continue;
                         }
-                        self.partial = true;
-                        (self.scanner.sf.new_segment(), true)
+                        self.placement = self
+                            .placement
+                            .and(Some(PartialPlacement::Next))
+                            .or(Some(PartialPlacement::First));
+                        (self.scanner.sf.new_segment(), self.placement)
                     }
                 }
             };
 
             let result = self.next.replace(next);
+            self.placement = placement;
             return if result.size != 0 {
-                Some(Ok(Segment::new(result, partial)))
+                Some(Ok(Segment::new(result, placement)))
             } else {
                 None
             };
+        }
+    }
+}
+
+// ---
+
+/// Iterates over the input stream and returns segments containing tokens.
+/// Unlike ScannerIter ScannerJumboIter joins incomplete segments into a single complete segment
+/// if its size does not exceed max_segment_size.
+pub struct ScannerJumboIter<'a, 'b> {
+    inner: ScannerIter<'a, 'b>,
+    max_segment_size: usize,
+    fetched: VecDeque<(SegmentBuf, PartialPlacement)>,
+    next: Option<Result<Segment>>,
+}
+
+impl<'a, 'b> ScannerJumboIter<'a, 'b> {
+    fn new(inner: ScannerIter<'a, 'b>, max_segment_size: usize) -> Self {
+        return Self {
+            inner,
+            max_segment_size,
+            fetched: VecDeque::new(),
+            next: None,
+        };
+    }
+
+    fn complete(&mut self, next: Option<Result<Segment>>) -> Option<Result<Segment>> {
+        if self.fetched.len() == 0 {
+            return next;
+        }
+
+        self.next = next;
+        let buf = self
+            .fetched
+            .iter()
+            .flat_map(|(buf, _)| buf.data())
+            .cloned()
+            .collect::<Vec<u8>>();
+        for (buf, _) in self.fetched.drain(..) {
+            self.inner.scanner.sf.recycle(buf);
+        }
+
+        return Some(Ok(Segment::Complete(buf.into())));
+    }
+}
+
+impl<'a, 'b> Iterator for ScannerJumboIter<'a, 'b> {
+    type Item = Result<Segment>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        loop {
+            if let Some((buf, placement)) = self.fetched.pop_front() {
+                return Some(Ok(Segment::Incomplete(buf, placement)));
+            }
+            if let Some(next) = self.next.take() {
+                return Some(next);
+            }
+
+            let mut total = 0;
+            loop {
+                let next = self.inner.next();
+                match next {
+                    Some(Ok(Segment::Incomplete(buf, placement))) => {
+                        total += buf.data().len();
+                        self.fetched.push_back((buf, placement));
+                        if placement == PartialPlacement::Last {
+                            return self.complete(None);
+                        }
+                    }
+                    next @ _ => {
+                        return self.complete(next);
+                    }
+                };
+                if total > self.max_segment_size {
+                    break;
+                }
+            }
         }
     }
 }
@@ -366,6 +467,27 @@ mod tests {
             vec![
                 Segment::Complete(b"test/".into()),
                 Segment::Complete(b"token/".into())
+            ]
+        )
+    }
+
+    #[test]
+    fn test_jumbo_1() {
+        let sf = Arc::new(SegmentBufFactory::new(2));
+        let scanner = Scanner::new(sf.clone(), "/".into());
+        let mut data = std::io::Cursor::new(b"test/token/very/large/");
+        let tokens = scanner
+            .items(&mut data)
+            .with_max_segment_size(6)
+            .collect::<Result<Vec<_>>>()
+            .unwrap();
+        assert_eq!(
+            tokens,
+            vec![
+                Segment::Complete(b"test/".into()),
+                Segment::Complete(b"token/".into()),
+                Segment::Complete(b"very/".into()),
+                Segment::Complete(b"large/".into()),
             ]
         )
     }

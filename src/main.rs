@@ -62,6 +62,10 @@ struct Opt {
     #[structopt(long, default_value = "2 MiB", overrides_with = "buffer-size", parse(try_from_str = parse_non_zero_size))]
     buffer_size: usize,
     //
+    /// Maximum message size.
+    #[structopt(long, default_value = "64 MiB", overrides_with = "max-message-size", parse(try_from_str = parse_non_zero_size))]
+    max_message_size: usize,
+    //
     /// Number of processing threads.
     #[structopt(long, short = "C", overrides_with = "concurrency")]
     concurrency: Option<usize>,
@@ -211,12 +215,16 @@ fn run() -> Result<()> {
         fields.entry(&key).include();
     }
 
+    let max_message_size = opt.max_message_size;
+    let buffer_size = std::cmp::min(max_message_size, opt.buffer_size);
+
     // Create app.
     let app = hl::App::new(hl::Options {
         theme: Arc::new(theme),
         raw_fields: opt.raw_fields,
         time_format: LinuxDateFormat::new(&opt.time_format).compile(),
-        buffer_size: opt.buffer_size,
+        buffer_size,
+        max_message_size,
         concurrency,
         filter,
         fields: Arc::new(fields),

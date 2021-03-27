@@ -22,6 +22,7 @@ pub struct Options {
     pub time_format: DateTimeFormat,
     pub raw_fields: bool,
     pub buffer_size: usize,
+    pub max_message_size: usize,
     pub concurrency: usize,
     pub filter: Filter,
     pub fields: Arc<IncludeExcludeKeyFilter>,
@@ -58,7 +59,7 @@ impl App {
             let reader = scope.spawn(closure!(clone sfi, |_| -> Result<()> {
                 let mut sn: usize = 0;
                 let scanner = Scanner::new(sfi, "\n".to_string());
-                for item in scanner.items(input) {
+                for item in scanner.items(input).with_max_segment_size(self.options.max_message_size) {
                     if let Err(_) = txi[sn % n].send(item?) {
                         break;
                     }
@@ -89,7 +90,7 @@ impl App {
                                     break;
                                 };
                             }
-                            Segment::Incomplete(segment) => {
+                            Segment::Incomplete(segment, _) => {
                                 if let Err(_) = txo.send(segment.to_vec()) {
                                     break;
                                 }
