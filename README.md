@@ -170,7 +170,7 @@ Log viewer which translates JSON logs into pretty human-readable representation.
 ### Complete set of options and flags
 
 ```
-hl 0.8.5
+hl 0.8.13
 JSON log converter to human readable representation
 
 USAGE:
@@ -187,7 +187,7 @@ FLAGS:
     -V, --version              Prints version information
 
 OPTIONS:
-        --buffer-size <buffer-size>                          Buffer size, kibibytes [default: 2048]
+        --buffer-size <buffer-size>                          Buffer size [default: 2 MiB]
         --color <color>
             Color output options, one of { auto, always, never } [default: auto]
 
@@ -202,6 +202,7 @@ OPTIONS:
     -l, --level <level>
             Filtering by level, valid values: ['d', 'i', 'w', 'e'] [default: d]
 
+        --max-message-size <max-message-size>                Maximum message size [default: 64 MiB]
         --paging <paging>
             Output paging options, one of { auto, always, never } [default: auto]
 
