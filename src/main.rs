@@ -68,11 +68,11 @@ struct Opt {
     #[structopt(short, long, number_of_values = 1)]
     filter: Vec<String>,
     //
-    /// An exclude-list of keys.
+    /// Hide fields with the specified keys.
     #[structopt(long, short = "h", number_of_values = 1)]
     hide: Vec<String>,
     //
-    /// An include-list of keys.
+    /// Hide all fields except fields with the specified keys.
     #[structopt(long, short = "H", number_of_values = 1)]
     show: Vec<String>,
     //
