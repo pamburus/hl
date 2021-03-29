@@ -1,4 +1,5 @@
 // std imports
+use std::convert::TryFrom;
 use std::env;
 use std::path::PathBuf;
 use std::process;
@@ -19,6 +20,7 @@ use hl::input::{open, ConcatReader, Input, InputStream};
 use hl::output::{OutputStream, Pager};
 use hl::signal::SignalHandler;
 use hl::theme::Theme;
+use hl::Level;
 use hl::{IncludeExcludeKeyFilter, KeyMatchOptions};
 
 // ---
@@ -56,9 +58,13 @@ struct Opt {
     #[structopt(long, default_value = "3", overrides_with = "interrupt-ignore-count")]
     interrupt_ignore_count: usize,
     //
-    /// Buffer size, kibibytes.
-    #[structopt(long, default_value = "2048", overrides_with = "buffer-size")]
+    /// Buffer size.
+    #[structopt(long, default_value = "2 MiB", overrides_with = "buffer-size", parse(try_from_str = parse_non_zero_size))]
     buffer_size: usize,
+    //
+    /// Maximum message size.
+    #[structopt(long, default_value = "64 MiB", overrides_with = "max-message-size", parse(try_from_str = parse_non_zero_size))]
+    max_message_size: usize,
     //
     /// Number of processing threads.
     #[structopt(long, short = "C", overrides_with = "concurrency")]
@@ -68,17 +74,17 @@ struct Opt {
     #[structopt(short, long, number_of_values = 1)]
     filter: Vec<String>,
     //
-    /// An exclude-list of keys.
+    /// Hide fields with the specified keys.
     #[structopt(long, short = "h", number_of_values = 1)]
     hide: Vec<String>,
     //
-    /// An include-list of keys.
+    /// Hide all fields except fields with the specified keys.
     #[structopt(long, short = "H", number_of_values = 1)]
     show: Vec<String>,
     //
     /// Filtering by level, valid values: ['d', 'i', 'w', 'e'].
     #[structopt(short, long, default_value = "d", overrides_with = "level")]
-    level: char,
+    level: Level,
     //
     /// Time format, see https://man7.org/linux/man-pages/man1/date.1.html.
     #[structopt(
@@ -138,6 +144,27 @@ arg_enum! {
     }
 }
 
+fn parse_size(s: &str) -> Result<usize> {
+    match bytefmt::parse(s) {
+        Ok(value) => Ok(usize::try_from(value)?),
+        Err(_) => {
+            if let Ok(value) = bytefmt::parse(s.to_owned() + "ib") {
+                return Ok(usize::try_from(value)?);
+            }
+            Err(Error::InvalidSize(s.into()))
+        }
+    }
+}
+
+fn parse_non_zero_size(s: &str) -> Result<usize> {
+    let value = parse_size(s)?;
+    if value == 0 {
+        Err(Error::ZeroSize)
+    } else {
+        Ok(value)
+    }
+}
+
 fn run() -> Result<()> {
     let opt = Opt::from_args();
     let stdout_is_atty = || atty::is(atty::Stream::Stdout);
@@ -168,34 +195,10 @@ fn run() -> Result<()> {
         None | Some(0) => num_cpus::get(),
         Some(value) => value,
     };
-
-    // Configure buffer size.
-    let buffer_size = match opt.buffer_size {
-        0 => 2 << 20,
-        _ => opt.buffer_size << 10,
-    };
-    // Configure level.
-    let level = match opt.level {
-        'e' | 'E' => hl::Level::Error,
-        'w' | 'W' => hl::Level::Warning,
-        'i' | 'I' => hl::Level::Info,
-        'd' | 'D' => hl::Level::Debug,
-        _ => {
-            return Err(format!(
-                "invalid level '{}': use any of ['{}', '{}', '{}', '{}']",
-                Colour::Yellow.paint(opt.level.to_string()),
-                Colour::Green.paint("e"),
-                Colour::Green.paint("w"),
-                Colour::Green.paint("i"),
-                Colour::Green.paint("d"),
-            )
-            .into());
-        }
-    };
     // Configure filter.
     let filter = hl::Filter {
         fields: hl::FieldFilterSet::new(opt.filter),
-        level: Some(level),
+        level: Some(opt.level),
     };
     // Configure hide_empty_fields
     let hide_empty_fields = !opt.show_empty_fields && opt.hide_empty_fields;
@@ -212,14 +215,18 @@ fn run() -> Result<()> {
         fields.entry(&key).include();
     }
 
+    let max_message_size = opt.max_message_size;
+    let buffer_size = std::cmp::min(max_message_size, opt.buffer_size);
+
     // Create app.
     let app = hl::App::new(hl::Options {
         theme: Arc::new(theme),
         raw_fields: opt.raw_fields,
         time_format: LinuxDateFormat::new(&opt.time_format).compile(),
-        buffer_size: buffer_size,
-        concurrency: concurrency,
-        filter: filter,
+        buffer_size,
+        max_message_size,
+        concurrency,
+        filter,
         fields: Arc::new(fields),
         time_zone: if opt.local {
             *Local.timestamp(0, 0).offset()
@@ -278,7 +285,7 @@ fn run() -> Result<()> {
     // Run the app.
     let run = || match app.run(input.as_mut(), output.as_mut()) {
         Ok(()) => Ok(()),
-        Err(Error(ErrorKind::Io(ref e), _)) if e.kind() == std::io::ErrorKind::BrokenPipe => Ok(()),
+        Err(Error::Io(ref e)) if e.kind() == std::io::ErrorKind::BrokenPipe => Ok(()),
         Err(err) => Err(err),
     };
 

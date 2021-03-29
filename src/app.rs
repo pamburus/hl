@@ -13,7 +13,7 @@ use crate::datefmt::{DateTimeFormat, DateTimeFormatter};
 use crate::error::*;
 use crate::formatting::RecordFormatter;
 use crate::model::{Filter, Record};
-use crate::scanning::{BufFactory, ScannedSegment, Scanner, Segment, SegmentFactory};
+use crate::scanning::{BufFactory, Scanner, Segment, SegmentBuf, SegmentBufFactory};
 use crate::theme::Theme;
 use crate::IncludeExcludeKeyFilter;
 
@@ -22,6 +22,7 @@ pub struct Options {
     pub time_format: DateTimeFormat,
     pub raw_fields: bool,
     pub buffer_size: usize,
+    pub max_message_size: usize,
     pub concurrency: usize,
     pub filter: Filter,
     pub fields: Arc<IncludeExcludeKeyFilter>,
@@ -44,7 +45,7 @@ impl App {
         output: &mut (dyn Write + Send + Sync),
     ) -> Result<()> {
         let n = self.options.concurrency;
-        let sfi = Arc::new(SegmentFactory::new(self.options.buffer_size));
+        let sfi = Arc::new(SegmentBufFactory::new(self.options.buffer_size));
         let bfo = BufFactory::new(self.options.buffer_size);
         thread::scope(|scope| -> Result<()> {
             // prepare receive/transmit channels for input data
@@ -58,7 +59,7 @@ impl App {
             let reader = scope.spawn(closure!(clone sfi, |_| -> Result<()> {
                 let mut sn: usize = 0;
                 let scanner = Scanner::new(sfi, "\n".to_string());
-                for item in scanner.items(input) {
+                for item in scanner.items(input).with_max_segment_size(self.options.max_message_size) {
                     if let Err(_) = txi[sn % n].send(item?) {
                         break;
                     }
@@ -81,7 +82,7 @@ impl App {
                     .with_field_unescaping(!self.options.raw_fields);
                     for segment in rxi.iter() {
                         match segment {
-                            ScannedSegment::Complete(segment) => {
+                            Segment::Complete(segment) => {
                                 let mut buf = bfo.new_buf();
                                 self.process_segement(&segment, &mut formatter, &mut buf);
                                 sfi.recycle(segment);
@@ -89,7 +90,7 @@ impl App {
                                     break;
                                 };
                             }
-                            ScannedSegment::Incomplete(segment) => {
+                            Segment::Incomplete(segment, _) => {
                                 if let Err(_) = txo.send(segment.to_vec()) {
                                     break;
                                 }
@@ -127,7 +128,7 @@ impl App {
 
     fn process_segement(
         &self,
-        segment: &Segment,
+        segment: &SegmentBuf,
         formatter: &mut RecordFormatter,
         buf: &mut Vec<u8>,
     ) {
