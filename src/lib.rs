@@ -18,6 +18,7 @@ mod eseq;
 mod filtering;
 mod formatting;
 mod model;
+mod pool;
 mod scanning;
 
 // conditional public modules
