@@ -4,11 +4,9 @@ use std::convert::From;
 use std::io::Read;
 use std::sync::Arc;
 
-// third-party imports
-use crossbeam_queue::SegQueue;
-
 // local imports
 use crate::error::*;
+use crate::pool::{Factory, Recycler, SQPool};
 
 // ---
 
@@ -146,32 +144,46 @@ pub enum PartialPlacement {
 
 /// Constructs new SegmentBuf's with the configures size and recycles unneeded SegmentBuf's.
 pub struct SegmentBufFactory {
-    buf_size: usize,
-    recycled: SegQueue<SegmentBuf>,
+    pool: SQPool<SegmentBuf, SBFFactory, SBFRecycler>,
 }
 
 impl SegmentBufFactory {
     /// Returns a new SegmentBufFactory with the given parameters.
-    pub fn new(buf_size: usize) -> Self {
-        return Self {
-            buf_size,
-            recycled: SegQueue::new(),
+    pub fn new(buf_size: usize) -> SegmentBufFactory {
+        return SegmentBufFactory {
+            pool: SQPool::new_with_factory(SBFFactory { buf_size }).with_recycler(SBFRecycler),
         };
     }
 
     /// Returns a new or recycled SegmentBuf.
     pub fn new_segment(&self) -> SegmentBuf {
-        match self.recycled.pop() {
-            Some(buf) => buf.resetted(),
-            None => SegmentBuf::new(self.buf_size),
-        }
+        self.pool.checkout()
     }
 
     /// Recycles the given SegmentBuf.
     pub fn recycle(&self, buf: SegmentBuf) {
-        if buf.data.capacity() == self.buf_size {
-            self.recycled.push(buf);
-        }
+        self.pool.checkin(buf)
+    }
+}
+
+// --
+
+struct SBFFactory {
+    buf_size: usize,
+}
+
+impl Factory<SegmentBuf> for SBFFactory {
+    fn new(&self) -> SegmentBuf {
+        SegmentBuf::new(self.buf_size)
+    }
+}
+// --
+
+struct SBFRecycler;
+
+impl Recycler<SegmentBuf> for SBFRecycler {
+    fn recycle(&self, buf: SegmentBuf) -> SegmentBuf {
+        buf.resetted()
     }
 }
 
@@ -179,33 +191,50 @@ impl SegmentBufFactory {
 
 /// Constructs new raw Vec<u8> buffers with the configured size.
 pub struct BufFactory {
-    buf_size: usize,
-    recycled: SegQueue<Vec<u8>>,
+    pool: SQPool<Vec<u8>, RawBufFactory, RawBufRecycler>,
 }
 
 impl BufFactory {
     /// Returns a new BufFactory with the given parameters.
     pub fn new(buf_size: usize) -> Self {
         return Self {
-            buf_size,
-            recycled: SegQueue::new(),
+            pool: SQPool::new()
+                .with_factory(RawBufFactory { buf_size })
+                .with_recycler(RawBufRecycler),
         };
     }
 
     /// Returns a new or recycled buffer.
     pub fn new_buf(&self) -> Vec<u8> {
-        match self.recycled.pop() {
-            Some(mut buf) => {
-                buf.resize(0, 0);
-                buf
-            }
-            None => Vec::with_capacity(self.buf_size),
-        }
+        self.pool.checkout()
     }
 
     /// Recycles the given buffer.
     pub fn recycle(&self, buf: Vec<u8>) {
-        self.recycled.push(buf);
+        self.pool.checkin(buf);
+    }
+}
+
+// ---
+
+struct RawBufFactory {
+    buf_size: usize,
+}
+
+impl Factory<Vec<u8>> for RawBufFactory {
+    fn new(&self) -> Vec<u8> {
+        Vec::with_capacity(self.buf_size)
+    }
+}
+
+// ---
+
+struct RawBufRecycler;
+
+impl Recycler<Vec<u8>> for RawBufRecycler {
+    fn recycle(&self, mut buf: Vec<u8>) -> Vec<u8> {
+        buf.resize(0, 0);
+        buf
     }
 }
 
