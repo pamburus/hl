@@ -159,7 +159,7 @@ impl<'de: 'a, 'a> Visitor<'de> for RecordVisitor<'a> {
                 "__REALTIME_TIMESTAMP" => {
                     rts = rts.or(Some(access.next_value()?));
                 }
-                "msg" | "MESSAGE" | "Message" => {
+                "msg" | "message" | "MESSAGE" | "Message" => {
                     message = access.next_value()?;
                 }
                 "level" | "LEVEL" | "Level" => {
