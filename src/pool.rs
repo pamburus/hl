@@ -72,7 +72,7 @@ impl<T> Recycler<T> for RecycleAsIs {
 // ---
 
 /// Constructs new items of type T using Factory F and recycles them using Recycler R on request.
-pub struct SQPool<T, F, R>
+pub struct SQPool<T, F = DefaultFactory, R = RecycleAsIs>
 where
     F: Factory<T>,
     R: Recycler<T>,
