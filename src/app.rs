@@ -1,6 +1,11 @@
-use std::io::{Read, Write};
+// std imports
 use std::sync::Arc;
 
+// third-party imports
+use async_std::{
+    io::{Read, Write},
+    stream::Stream,
+};
 use chrono::FixedOffset;
 use closure::closure;
 use crossbeam_channel as channel;
@@ -9,9 +14,11 @@ use crossbeam_utils::thread;
 use itertools::izip;
 use serde_json as json;
 
+// local imports
 use crate::datefmt::{DateTimeFormat, DateTimeFormatter};
 use crate::error::*;
 use crate::formatting::RecordFormatter;
+use crate::input::Input;
 use crate::model::{Filter, Record};
 use crate::scanning::{BufFactory, Scanner, Segment, SegmentBuf, SegmentBufFactory};
 use crate::theme::Theme;
@@ -39,11 +46,7 @@ impl App {
         Self { options }
     }
 
-    pub fn run(
-        &self,
-        input: &mut (dyn Read + Send + Sync),
-        output: &mut (dyn Write + Send + Sync),
-    ) -> Result<()> {
+    pub async fn run(&self, input: &impl Stream<Item = Input>, output: &impl Write) -> Result<()> {
         let n = self.options.concurrency;
         let sfi = Arc::new(SegmentBufFactory::new(self.options.buffer_size));
         let bfo = BufFactory::new(self.options.buffer_size);

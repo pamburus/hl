@@ -258,7 +258,8 @@ async fn run() -> Result<()> {
     let mut input: InputStream = if inputs.len() == 0 {
         Box::new(stdin())
     } else {
-        Box::new(ConcatReader::new(inputs.into_iter().map(|x| x.stream)))
+        Box::new(stdin())
+        //Box::new(ConcatReader::new(inputs.into_iter().map(|x| x.stream)))
     };
     let paging = match opt.paging {
         PagingOption::Auto => {

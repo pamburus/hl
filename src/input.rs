@@ -37,12 +37,9 @@ pub async fn open(path: &PathBuf) -> Result<Input> {
 
 // ---
 
-pin_project! {
-    pub struct Input {
-        pub name: String,
-        #[pin]
-        pub stream: InputStream,
-    }
+pub struct Input {
+    pub name: String,
+    pub stream: InputStream,
 }
 
 impl Input {

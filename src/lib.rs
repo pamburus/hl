@@ -10,6 +10,7 @@ pub mod timestamp;
 pub mod types;
 
 // private modules
+mod chop;
 mod eseq;
 mod filtering;
 mod formatting;
