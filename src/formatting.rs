@@ -52,7 +52,7 @@ impl RecordFormatter {
         self
     }
 
-    pub fn format_record(&mut self, buf: &mut Vec<u8>, rec: &model::Record) {
+    pub fn format_record(&self, buf: &mut Vec<u8>, rec: &model::Record) {
         self.theme.apply(buf, &rec.level, |buf, styler| {
             //
             // time

@@ -70,7 +70,7 @@ impl App {
             // spawn processing threads
             for (rxi, txo) in izip!(rxi, txo) {
                 scope.spawn(closure!(ref bfo, ref sfi, |_| {
-                    let mut formatter = RecordFormatter::new(
+                    let formatter = RecordFormatter::new(
                         self.options.theme.clone(),
                         DateTimeFormatter::new(
                             self.options.time_format.clone(),
@@ -84,7 +84,7 @@ impl App {
                         match segment {
                             Segment::Complete(segment) => {
                                 let mut buf = bfo.new_buf();
-                                self.process_segement(&segment, &mut formatter, &mut buf);
+                                self.process_segement(&segment, &formatter, &mut buf);
                                 sfi.recycle(segment);
                                 if let Err(_) = txo.send(buf) {
                                     break;
@@ -129,7 +129,7 @@ impl App {
     fn process_segement(
         &self,
         segment: &SegmentBuf,
-        formatter: &mut RecordFormatter,
+        formatter: &RecordFormatter,
         buf: &mut Vec<u8>,
     ) {
         for data in segment.data().split(|c| *c == b'\n') {
