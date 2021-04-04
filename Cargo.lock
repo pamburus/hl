@@ -63,6 +63,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "async-compression"
+version = "0.3.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b72c1f1154e234325b50864a349b9c8e56939e266a4c307c0f159812df2f9537"
+dependencies = [
+ "flate2",
+ "futures-core",
+ "futures-io",
+ "memchr",
+ "pin-project-lite",
+]
+
+[[package]]
 name = "async-executor"
 version = "1.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -782,6 +795,7 @@ version = "0.9.0-alpha.0"
 dependencies = [
  "ansi_term",
  "anyhow",
+ "async-compression",
  "async-std",
  "async-stream",
  "atoi",
@@ -799,12 +813,15 @@ dependencies = [
  "error-chain",
  "flate2",
  "futures",
+ "futures-core",
+ "futures-io",
  "futures-timer",
  "futures-util",
  "heapless",
- "itertools 0.9.0",
+ "itertools 0.10.0",
  "itoa",
  "num_cpus",
+ "pin-project-lite",
  "regex",
  "serde",
  "serde_json",

@@ -8,6 +8,11 @@ use std::time::Duration;
 
 // third-party imports
 use ansi_term::Colour;
+use async_std::{
+    io::stdin,
+    stream::{self, Stream},
+    task,
+};
 use chrono::{FixedOffset, Local, TimeZone};
 use chrono_tz::{Tz, UTC};
 use structopt::clap::arg_enum;
@@ -165,7 +170,7 @@ fn parse_non_zero_size(s: &str) -> Result<usize> {
     }
 }
 
-fn run() -> Result<()> {
+async fn run() -> Result<()> {
     let opt = Opt::from_args();
     let stdout_is_atty = || atty::is(atty::Stream::Stdout);
 
@@ -244,16 +249,16 @@ fn run() -> Result<()> {
         .iter()
         .map(|x| {
             if x.to_str() == Some("-") {
-                Ok(Input::new("<stdin>".into(), Box::new(std::io::stdin())))
+                Ok(Input::new("<stdin>".into(), Box::new(stdin())))
             } else {
-                open(&x)
+                task::block_on(open(&x))
             }
         })
         .collect::<std::io::Result<Vec<_>>>()?;
     let mut input: InputStream = if inputs.len() == 0 {
-        Box::new(std::io::stdin())
+        Box::new(stdin())
     } else {
-        Box::new(ConcatReader::new(inputs.into_iter().map(|x| Ok(x))))
+        Box::new(ConcatReader::new(inputs.into_iter().map(|x| x.stream)))
     };
     let paging = match opt.paging {
         PagingOption::Auto => {
@@ -294,7 +299,7 @@ fn run() -> Result<()> {
 }
 
 fn main() {
-    if let Err(err) = run() {
+    if let Err(err) = task::block_on(run()) {
         eprintln!("{}: {}", Colour::Red.paint("error"), err);
         process::exit(1);
     }
