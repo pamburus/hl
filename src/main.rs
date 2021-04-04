@@ -9,8 +9,8 @@ use std::time::Duration;
 // third-party imports
 use ansi_term::Colour;
 use async_std::{
-    io::stdin,
-    stream::{self, Stream},
+    io::{stdin, stdout},
+    stream::{self},
     task,
 };
 use chrono::{FixedOffset, Local, TimeZone};
@@ -19,14 +19,18 @@ use structopt::clap::arg_enum;
 use structopt::StructOpt;
 
 // local imports
-use hl::datefmt::LinuxDateFormat;
-use hl::error::*;
-use hl::input::{open, ConcatReader, Input, InputStream};
-use hl::output::{OutputStream, Pager};
-use hl::signal::SignalHandler;
-use hl::theme::Theme;
-use hl::Level;
-use hl::{IncludeExcludeKeyFilter, KeyMatchOptions};
+use hl::{
+    datefmt::LinuxDateFormat,
+    error::*,
+    input::{open, Input},
+    // output::{OutputStream, Pager},
+    // signal::SignalHandler,
+    theme::Theme,
+    App,
+    IncludeExcludeKeyFilter,
+    KeyMatchOptions,
+    Level,
+};
 
 // ---
 
@@ -224,7 +228,7 @@ async fn run() -> Result<()> {
     let buffer_size = std::cmp::min(max_message_size, opt.buffer_size);
 
     // Create app.
-    let app = hl::App::new(hl::Options {
+    let app = App::new(hl::Options {
         theme: Arc::new(theme),
         raw_fields: opt.raw_fields,
         time_format: LinuxDateFormat::new(&opt.time_format).compile(),
@@ -255,12 +259,6 @@ async fn run() -> Result<()> {
             }
         })
         .collect::<std::io::Result<Vec<_>>>()?;
-    let mut input: InputStream = if inputs.len() == 0 {
-        Box::new(stdin())
-    } else {
-        Box::new(stdin())
-        //Box::new(ConcatReader::new(inputs.into_iter().map(|x| x.stream)))
-    };
     let paging = match opt.paging {
         PagingOption::Auto => {
             if stdout_is_atty() {
@@ -273,14 +271,14 @@ async fn run() -> Result<()> {
         PagingOption::Never => false,
     };
     let paging = if opt.paging_never { false } else { paging };
-    let mut output: OutputStream = if paging {
-        if let Ok(pager) = Pager::new() {
-            Box::new(pager)
-        } else {
-            Box::new(std::io::stdout())
-        }
+    let output = if paging {
+        // if let Ok(pager) = Pager::new() {
+        //     Box::new(pager)
+        // } else {
+        Box::new(stdout())
+        // }
     } else {
-        Box::new(std::io::stdout())
+        Box::new(stdout())
     };
 
     #[cfg(windows)]
@@ -289,14 +287,14 @@ async fn run() -> Result<()> {
     }
 
     // Run the app.
-    let run = || match app.run(input.as_mut(), output.as_mut()) {
+    match app.run(stream::from_iter(inputs), output).await {
         Ok(()) => Ok(()),
         Err(Error::Io(ref e)) if e.kind() == std::io::ErrorKind::BrokenPipe => Ok(()),
         Err(err) => Err(err),
-    };
+    }
 
     // Run the app with signal handling.
-    SignalHandler::run(opt.interrupt_ignore_count, Duration::from_secs(1), run)
+    // SignalHandler::run(opt.interrupt_ignore_count, Duration::from_secs(1), run)
 }
 
 fn main() {

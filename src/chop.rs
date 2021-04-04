@@ -44,7 +44,6 @@ impl Chopper {
                     Ok(value) => value,
                     Err(err) => {
                         yield Err(err.into());
-                        done = true;
                         break;
                     }
                 };

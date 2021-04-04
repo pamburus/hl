@@ -8,8 +8,7 @@ use ansi_term::Colour;
 use async_compression::futures::bufread::GzipDecoder;
 use async_std::{
     fs::File,
-    io::{self, empty, BufReader, Error, Read, ReadExt, Result},
-    stream::Stream,
+    io::{BufReader, Error, Read, Result},
 };
 use futures_core::ready;
 use pin_project_lite::pin_project;

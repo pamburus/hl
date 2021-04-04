@@ -2,17 +2,10 @@
 use std::sync::Arc;
 
 // third-party imports
-use async_std::{
-    io::{Read, Write},
-    stream::Stream,
-};
+use async_std::{io::Write, stream::Stream};
 use chrono::FixedOffset;
-use closure::closure;
-use crossbeam_channel::{self as channel, RecvError};
-use crossbeam_utils::thread;
-use futures::{future::ready, stream::StreamExt};
+use futures::{future::ready, io::AsyncWriteExt, stream::StreamExt};
 use futures_util::pin_mut;
-use itertools::izip;
 use serde_json as json;
 
 // local imports
@@ -49,97 +42,47 @@ impl App {
         Self { options }
     }
 
-    pub async fn run(&self, inputs: impl Stream<Item = Input>, output: &impl Write) -> Result<()> {
+    pub async fn run(&self, inputs: impl Stream<Item = Input>, output: impl Write) -> Result<()> {
         let n = self.options.concurrency;
         let sbf = Arc::new(SegmentBufFactory::new(self.options.buffer_size));
         let bfo = BufFactory::new(self.options.buffer_size);
+        let formatter = RecordFormatter::new(
+            self.options.theme.clone(),
+            DateTimeFormatter::new(self.options.time_format.clone(), self.options.time_zone),
+            self.options.hide_empty_fields,
+            self.options.fields.clone(),
+        )
+        .with_field_unescaping(!self.options.raw_fields);
 
         pin_mut!(inputs);
+        pin_mut!(output);
         while let Some(input) = inputs.next().await {
-            let segments = Chopper::new(sbf, "\n".to_string())
+            let segments = Chopper::new(sbf.clone(), "\n".to_string())
                 .chop_jumbo(input.stream, self.options.max_message_size)
                 .map(|x| ready(x))
-                .buffered(self.options.concurrency);
-            pin_mut!(segments);
+                .buffered(n);
+
+            let outbufs = segments.map(|segment| {
+                segment.map(|segment| match segment {
+                    Segment::Regular(segment) => {
+                        let mut buf = bfo.new_buf();
+                        self.process_segement(&segment, &formatter, &mut buf);
+                        sbf.recycle(segment);
+                        buf
+                    }
+                    Segment::Partial(segment, _) => segment.to_vec(),
+                })
+            });
+
+            pin_mut!(outbufs);
+            while let Some(buf) = outbufs.next().await {
+                let buf = buf?;
+                output.write(&buf[..]).await?;
+                bfo.recycle(buf);
+            }
         }
 
-        thread::scope(|scope| -> Result<()> {
-            // prepare receive/transmit channels for input data
-            let (txi, rxi): (Vec<_>, Vec<_>) = (0..n).map(|_| channel::bounded(1)).unzip();
-            // prepare receive/transmit channels for output data
-            let (txo, rxo): (Vec<_>, Vec<_>) = (0..n)
-                .into_iter()
-                .map(|_| channel::bounded::<Vec<u8>>(1))
-                .unzip();
-            // spawn reader thread
-            let reader = scope.spawn(closure!(clone sfi, |_| -> Result<()> {
-                let mut sn: usize = 0;
-                let scanner = Scanner::new(sfi, "\n".to_string());
-                for item in scanner.items(input).with_max_segment_size(self.options.max_message_size) {
-                    if let Err(_) = txi[sn % n].send(item?) {
-                        break;
-                    }
-                    sn += 1;
-                }
-                Ok(())
-            }));
-            // spawn processing threads
-            for (rxi, txo) in izip!(rxi, txo) {
-                scope.spawn(closure!(ref bfo, ref sfi, |_| {
-                    let formatter = RecordFormatter::new(
-                        self.options.theme.clone(),
-                        DateTimeFormatter::new(
-                            self.options.time_format.clone(),
-                            self.options.time_zone,
-                        ),
-                        self.options.hide_empty_fields,
-                        self.options.fields.clone(),
-                    )
-                    .with_field_unescaping(!self.options.raw_fields);
-                    for segment in rxi.iter() {
-                        match segment {
-                            Segment::Complete(segment) => {
-                                let mut buf = bfo.new_buf();
-                                self.process_segement(&segment, &formatter, &mut buf);
-                                sfi.recycle(segment);
-                                if let Err(_) = txo.send(buf) {
-                                    break;
-                                };
-                            }
-                            Segment::Incomplete(segment, _) => {
-                                if let Err(_) = txo.send(segment.to_vec()) {
-                                    break;
-                                }
-                            }
-                        }
-                    }
-                }));
-            }
-            // spawn writer thread
-            let writer = scope.spawn(closure!(ref bfo, |_| -> Result<()> {
-                let mut sn = 0;
-                loop {
-                    match rxo[sn % n].recv() {
-                        Ok(buf) => {
-                            output.write_all(&buf[..])?;
-                            bfo.recycle(buf);
-                        }
-                        Err(RecvError) => {
-                            break;
-                        }
-                    }
-                    sn += 1;
-                }
-                Ok(())
-            }));
-            // collect errors from reader and writer threads
-            reader.join().unwrap()?;
-            writer.join().unwrap()?;
-            Ok(())
-        })
-        .unwrap()?;
-
-        return Ok(());
+        Ok(())
     }
 
     fn process_segement(
