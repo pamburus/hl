@@ -12,7 +12,10 @@ edition = "2018"
 [dependencies]
 ansi_term = "0"
 anyhow = "1"
+async-std = {version="1", features = ["unstable"]}
+async-stream = "0"
 atoi = "0"
+atty = "0"
 bitmask = "0"
 bytefmt = "0"
 chrono = { version = "0", features = ["serde"] }
@@ -22,9 +25,11 @@ crossbeam-channel = "0"
 crossbeam-queue = "0"
 crossbeam-utils = "0"
 error-chain = "0"
+futures = "0"
+futures-timer = "3"
+futures-util =  "0"
 flate2 = "1"
 heapless = "0"
-atty = "0"
 itertools = "0"
 num_cpus = "1"
 serde = { version = "1", features = ["derive"] }
