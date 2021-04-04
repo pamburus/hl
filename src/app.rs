@@ -8,21 +8,24 @@ use async_std::{
 };
 use chrono::FixedOffset;
 use closure::closure;
-use crossbeam_channel as channel;
-use crossbeam_channel::RecvError;
+use crossbeam_channel::{self as channel, RecvError};
 use crossbeam_utils::thread;
+use futures::{future::ready, stream::StreamExt};
+use futures_util::pin_mut;
 use itertools::izip;
 use serde_json as json;
 
 // local imports
-use crate::datefmt::{DateTimeFormat, DateTimeFormatter};
-use crate::error::*;
-use crate::formatting::RecordFormatter;
-use crate::input::Input;
-use crate::model::{Filter, Record};
-use crate::scanning::{BufFactory, Scanner, Segment, SegmentBuf, SegmentBufFactory};
-use crate::theme::Theme;
-use crate::IncludeExcludeKeyFilter;
+use crate::{
+    chop::{BufFactory, Chopper, Segment, SegmentBuf, SegmentBufFactory},
+    datefmt::{DateTimeFormat, DateTimeFormatter},
+    error::*,
+    formatting::RecordFormatter,
+    input::Input,
+    model::{Filter, Record},
+    theme::Theme,
+    IncludeExcludeKeyFilter,
+};
 
 pub struct Options {
     pub theme: Arc<Theme>,
@@ -46,10 +49,20 @@ impl App {
         Self { options }
     }
 
-    pub async fn run(&self, input: &impl Stream<Item = Input>, output: &impl Write) -> Result<()> {
+    pub async fn run(&self, inputs: impl Stream<Item = Input>, output: &impl Write) -> Result<()> {
         let n = self.options.concurrency;
-        let sfi = Arc::new(SegmentBufFactory::new(self.options.buffer_size));
+        let sbf = Arc::new(SegmentBufFactory::new(self.options.buffer_size));
         let bfo = BufFactory::new(self.options.buffer_size);
+
+        pin_mut!(inputs);
+        while let Some(input) = inputs.next().await {
+            let segments = Chopper::new(sbf, "\n".to_string())
+                .chop_jumbo(input.stream, self.options.max_message_size)
+                .map(|x| ready(x))
+                .buffered(self.options.concurrency);
+            pin_mut!(segments);
+        }
+
         thread::scope(|scope| -> Result<()> {
             // prepare receive/transmit channels for input data
             let (txi, rxi): (Vec<_>, Vec<_>) = (0..n).map(|_| channel::bounded(1)).unzip();
