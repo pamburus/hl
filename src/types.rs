@@ -1,9 +1,17 @@
+// std imports
 use std::cmp::Ord;
 use std::str::FromStr;
 
+// third-party imports
+use serde::Deserialize;
+
+// local imports
 use crate::error::{Error, Result};
 
-#[derive(Ord, PartialOrd, PartialEq, Eq, Debug, Hash, Clone)]
+// ---
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[serde(rename_all = "kebab-case")]
 pub enum Level {
     Error,
     Warning,
@@ -27,8 +35,25 @@ impl FromStr for Level {
         } else {
             Err(Error::InvalidLevel {
                 value: s.into(),
-                valid_values: vec!["e".into(), "w".into(), "i".into(), "d".into()],
+                valid_values: vec![
+                    "error".into(),
+                    "warning".into(),
+                    "info".into(),
+                    "debug".into(),
+                ],
             })
         }
     }
+}
+
+// ---
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[serde(rename_all = "kebab-case")]
+pub enum FieldKind {
+    Time,
+    Level,
+    Logger,
+    Message,
+    Caller,
 }

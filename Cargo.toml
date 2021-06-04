@@ -18,15 +18,18 @@ bytefmt = "0"
 chrono = { version = "0", features = ["serde"] }
 chrono-tz = "0"
 closure = "0"
+config = "0"
 crossbeam-channel = "0"
 crossbeam-queue = "0"
 crossbeam-utils = "0"
+derive_deref = "1"
 error-chain = "0"
 flate2 = "1"
 heapless = "0"
 atty = "0"
 itertools = "0"
 num_cpus = "1"
+platform-dirs = "0"
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["raw_value"] }
 shellwords = "1"
