@@ -4,6 +4,7 @@ use std::io;
 use std::num::{ParseIntError, TryFromIntError};
 
 // third-party imports
+use config::ConfigError;
 use thiserror::Error;
 
 /// Error is an error which may occur in the application.
@@ -15,12 +16,19 @@ pub enum Error {
     ParseIntError(#[from] ParseIntError),
     #[error(transparent)]
     TryFromIntError(#[from] TryFromIntError),
+    #[error("failed to load configuration: {0}")]
+    Config(#[from] ConfigError),
     #[error(transparent)]
     Boxed(#[from] Box<dyn std::error::Error + std::marker::Send>),
     #[error("file {filename:?} not found")]
     FileNotFoundError { filename: String },
     #[error("invalid level {value:?}, use any of {valid_values:?}")]
     InvalidLevel {
+        value: String,
+        valid_values: Vec<String>,
+    },
+    #[error("invalid field kind {value:?}, use any of {valid_values:?}")]
+    InvalidFieldKind {
         value: String,
         valid_values: Vec<String>,
     },

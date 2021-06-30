@@ -12,12 +12,15 @@ use serde_json as json;
 use crate::datefmt::{DateTimeFormat, DateTimeFormatter};
 use crate::error::*;
 use crate::formatting::RecordFormatter;
-use crate::model::{Filter, Record};
+use crate::model::{Filter, Parser, ParserSettings, RawRecord};
 use crate::scanning::{BufFactory, Scanner, Segment, SegmentBuf, SegmentBufFactory};
+use crate::settings::Settings;
 use crate::theme::Theme;
 use crate::IncludeExcludeKeyFilter;
 
+// TODO: merge Options to Settings and replace Options with Settings.
 pub struct Options {
+    pub settings: Settings,
     pub theme: Arc<Theme>,
     pub time_format: DateTimeFormat,
     pub raw_fields: bool,
@@ -47,6 +50,8 @@ impl App {
         let n = self.options.concurrency;
         let sfi = Arc::new(SegmentBufFactory::new(self.options.buffer_size));
         let bfo = BufFactory::new(self.options.buffer_size);
+        let settings = ParserSettings::from(&self.options.settings);
+        let parser = Parser::new(&settings);
         thread::scope(|scope| -> Result<()> {
             // prepare receive/transmit channels for input data
             let (txi, rxi): (Vec<_>, Vec<_>) = (0..n).map(|_| channel::bounded(1)).unzip();
@@ -69,7 +74,7 @@ impl App {
             }));
             // spawn processing threads
             for (rxi, txo) in izip!(rxi, txo) {
-                scope.spawn(closure!(ref bfo, ref sfi, |_| {
+                scope.spawn(closure!(ref bfo, ref parser, ref sfi, |_| {
                     let mut formatter = RecordFormatter::new(
                         self.options.theme.clone(),
                         DateTimeFormatter::new(
@@ -84,7 +89,7 @@ impl App {
                         match segment {
                             Segment::Complete(segment) => {
                                 let mut buf = bfo.new_buf();
-                                self.process_segement(&segment, &mut formatter, &mut buf);
+                                self.process_segement(&parser, &segment, &mut formatter, &mut buf);
                                 sfi.recycle(segment);
                                 if let Err(_) = txo.send(buf) {
                                     break;
@@ -128,6 +133,7 @@ impl App {
 
     fn process_segement(
         &self,
+        parser: &Parser,
         segment: &SegmentBuf,
         formatter: &mut RecordFormatter,
         buf: &mut Vec<u8>,
@@ -137,8 +143,9 @@ impl App {
             if data.len() == 0 {
                 continue;
             }
-            let mut stream = json::Deserializer::from_slice(data).into_iter::<Record>();
+            let mut stream = json::Deserializer::from_slice(data).into_iter::<RawRecord>();
             while let Some(Ok(record)) = stream.next() {
+                let record = parser.parse(record);
                 if record.matches(&self.options.filter) {
                     formatter.format_record(buf, &record);
                 }

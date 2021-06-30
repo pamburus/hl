@@ -5,6 +5,7 @@ pub mod error;
 pub mod fmtx;
 pub mod input;
 pub mod output;
+pub mod settings;
 pub mod theme;
 pub mod timestamp;
 pub mod types;

@@ -10,6 +10,7 @@ use std::time::Duration;
 use ansi_term::Colour;
 use chrono::{FixedOffset, Local, TimeZone};
 use chrono_tz::{Tz, UTC};
+use platform_dirs::AppDirs;
 use structopt::clap::arg_enum;
 use structopt::StructOpt;
 
@@ -18,6 +19,7 @@ use hl::datefmt::LinuxDateFormat;
 use hl::error::*;
 use hl::input::{open, ConcatReader, Input, InputStream};
 use hl::output::{OutputStream, Pager};
+use hl::settings::Settings;
 use hl::signal::SignalHandler;
 use hl::theme::Theme;
 use hl::Level;
@@ -166,6 +168,8 @@ fn parse_non_zero_size(s: &str) -> Result<usize> {
 }
 
 fn run() -> Result<()> {
+    let app_dirs = AppDirs::new(Some("hl"), true).unwrap();
+    let settings = Settings::load(&app_dirs)?;
     let opt = Opt::from_args();
     let stdout_is_atty = || atty::is(atty::Stream::Stdout);
 
@@ -220,6 +224,7 @@ fn run() -> Result<()> {
 
     // Create app.
     let app = hl::App::new(hl::Options {
+        settings: settings,
         theme: Arc::new(theme),
         raw_fields: opt.raw_fields,
         time_format: LinuxDateFormat::new(&opt.time_format).compile(),

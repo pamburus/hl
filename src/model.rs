@@ -1,5 +1,7 @@
 // std imports
+use std::collections::HashMap;
 use std::fmt;
+use std::iter::IntoIterator;
 use std::marker::PhantomData;
 
 // third-party imports
@@ -9,8 +11,9 @@ use serde::de::{Deserialize, Deserializer, MapAccess, SeqAccess, Visitor};
 use serde_json as json;
 
 // local imports
+use crate::settings::Settings;
 use crate::timestamp::Timestamp;
-use crate::types;
+use crate::types::{self, FieldKind};
 
 // ---
 
@@ -103,24 +106,221 @@ impl<'a> Record<'a> {
 
         return true;
     }
-}
 
-impl<'de: 'a, 'a> Deserialize<'de> for Record<'a> {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        Ok(deserializer.deserialize_map(RecordVisitor::new())?)
+    fn with_capacity(capacity: usize) -> Self {
+        Self {
+            ts: None,
+            message: None,
+            level: None,
+            logger: None,
+            caller: None,
+            extra: heapless::Vec::new(),
+            extrax: if capacity > 32 {
+                Vec::with_capacity(capacity - 32)
+            } else {
+                Vec::new()
+            },
+        }
     }
 }
 
 // ---
 
-struct RecordVisitor<'a> {
-    marker: PhantomData<fn() -> Record<'a>>,
+pub struct ParserSettings {
+    fields: HashMap<String, (FieldSettings, usize)>,
 }
 
-impl<'a> RecordVisitor<'a> {
+impl Default for ParserSettings {
+    fn default() -> Self {
+        Self {
+            fields: HashMap::new(),
+        }
+    }
+}
+
+impl From<&Settings> for ParserSettings {
+    fn from(s: &Settings) -> Self {
+        let mut fields = HashMap::new();
+        for (i, name) in s.fields.time.names.iter().enumerate() {
+            fields.insert(name.clone(), (FieldSettings::Time, i));
+        }
+        let mut j = 0;
+        for variant in &s.fields.level.variants {
+            let mut mapping = HashMap::new();
+            for (level, values) in &variant.values {
+                for value in values {
+                    mapping.insert(value.clone(), level.clone());
+                }
+            }
+            for (i, name) in variant.names.iter().enumerate() {
+                fields.insert(name.clone(), (FieldSettings::Level(mapping.clone()), j + i));
+            }
+            j += variant.names.len();
+        }
+        for (i, name) in s.fields.message.names.iter().enumerate() {
+            fields.insert(name.clone(), (FieldSettings::Message, i));
+        }
+        for (i, name) in s.fields.logger.names.iter().enumerate() {
+            fields.insert(name.clone(), (FieldSettings::Logger, i));
+        }
+        for (i, name) in s.fields.caller.names.iter().enumerate() {
+            fields.insert(name.clone(), (FieldSettings::Caller, i));
+        }
+        Self { fields }
+    }
+}
+
+impl ParserSettings {
+    fn apply<'a>(
+        &self,
+        key: &'a str,
+        value: &'a RawValue,
+        to: &mut Record<'a>,
+        ctx: &mut PriorityContext,
+    ) {
+        match self.fields.get(key) {
+            Some((field, p)) => {
+                let kind = field.kind();
+                let priority = ctx.priority(kind);
+                if priority.is_none() || Some(*p) <= *priority {
+                    field.apply(value, to);
+                    *priority = Some(*p);
+                }
+            }
+            None => match to.extra.push((key, value)) {
+                Ok(_) => {}
+                Err(value) => to.extrax.push(value),
+            },
+        };
+    }
+
+    fn apply_each<'a, 'i, I>(&self, items: I, to: &mut Record<'a>)
+    where
+        I: IntoIterator<Item = &'i (&'a str, &'a RawValue)>,
+        'a: 'i,
+    {
+        let mut ctx = PriorityContext {
+            time: None,
+            level: None,
+            logger: None,
+            message: None,
+            caller: None,
+        };
+        for (key, value) in items {
+            self.apply(key, value, to, &mut ctx)
+        }
+    }
+}
+
+// ---
+
+struct PriorityContext {
+    time: Option<usize>,
+    level: Option<usize>,
+    logger: Option<usize>,
+    message: Option<usize>,
+    caller: Option<usize>,
+}
+
+impl PriorityContext {
+    fn priority(&mut self, kind: FieldKind) -> &mut Option<usize> {
+        match kind {
+            FieldKind::Time => &mut self.time,
+            FieldKind::Level => &mut self.level,
+            FieldKind::Logger => &mut self.logger,
+            FieldKind::Message => &mut self.message,
+            FieldKind::Caller => &mut self.caller,
+        }
+    }
+}
+
+// ---
+
+enum FieldSettings {
+    Time,
+    Level(HashMap<String, Level>),
+    Logger,
+    Message,
+    Caller,
+}
+
+impl FieldSettings {
+    fn apply<'a>(&self, value: &'a RawValue, to: &mut Record<'a>) {
+        match self {
+            Self::Time => to.ts = Some(value),
+            Self::Level(values) => {
+                to.level = json::from_str(value.get())
+                    .ok()
+                    .and_then(|x: &'a str| values.get(x).cloned());
+            }
+            Self::Logger => to.logger = json::from_str(value.get()).ok(),
+            Self::Message => to.message = Some(value),
+            Self::Caller => to.caller = json::from_str(value.get()).ok(),
+        }
+    }
+
+    fn kind(&self) -> FieldKind {
+        match self {
+            Self::Time => FieldKind::Time,
+            Self::Level(_) => FieldKind::Level,
+            Self::Logger => FieldKind::Logger,
+            Self::Message => FieldKind::Message,
+            Self::Caller => FieldKind::Caller,
+        }
+    }
+}
+
+// ---
+
+pub struct Parser<'s> {
+    settings: &'s ParserSettings,
+}
+
+impl<'s> Parser<'s> {
+    pub fn new(settings: &'s ParserSettings) -> Self {
+        Self { settings }
+    }
+
+    pub fn parse<'a>(&self, record: RawRecord<'a>) -> Record<'a> {
+        let fields = record.fields();
+        let count = fields.size_hint().1.unwrap_or(0);
+        let mut record = Record::<'a>::with_capacity(count);
+
+        self.settings.apply_each(fields, &mut record);
+
+        record
+    }
+}
+
+// ---
+
+pub struct RawRecord<'a> {
+    fields: heapless::Vec<(&'a str, &'a RawValue), U64>,
+    fieldsx: Vec<(&'a str, &'a RawValue)>,
+}
+
+impl<'a> RawRecord<'a> {
+    pub fn fields(&self) -> impl Iterator<Item = &(&'a str, &'a RawValue)> {
+        self.fields.iter().chain(self.fieldsx.iter())
+    }
+}
+
+impl<'de: 'a, 'a> Deserialize<'de> for RawRecord<'a> {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        Ok(deserializer.deserialize_map(RawRecordVisitor::new())?)
+    }
+}
+
+// ---
+
+struct RawRecordVisitor<'a> {
+    marker: PhantomData<fn() -> RawRecord<'a>>,
+}
+
+impl<'a> RawRecordVisitor<'a> {
     fn new() -> Self {
         Self {
             marker: PhantomData,
@@ -128,87 +328,27 @@ impl<'a> RecordVisitor<'a> {
     }
 }
 
-impl<'de: 'a, 'a> Visitor<'de> for RecordVisitor<'a> {
-    type Value = Record<'a>;
+impl<'de: 'a, 'a> Visitor<'de> for RawRecordVisitor<'a> {
+    type Value = RawRecord<'a>;
     fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
         formatter.write_str("object json")
     }
 
     fn visit_map<M: MapAccess<'de>>(self, mut access: M) -> Result<Self::Value, M::Error> {
-        let mut ts = None;
-        let mut rts = None;
-        let mut message = None;
-        let mut level = None;
-        let mut priority = None;
-        let mut logger = None;
-        let mut caller = None;
-        let mut extra = heapless::Vec::new();
+        let mut fields = heapless::Vec::new();
         let count = access.size_hint().unwrap_or(0);
-        let mut extrax = match count > 32 {
+        let mut fieldsx = match count > 64 {
             false => Vec::new(),
-            true => Vec::with_capacity(count - 32),
+            true => Vec::with_capacity(count - 64),
         };
         while let Some(Some(key)) = access.next_key::<&'a str>().ok() {
-            match key {
-                "ts" | "TS" | "time" | "TIME" | "Time" => {
-                    ts = access.next_value()?;
-                }
-                "_SOURCE_REALTIME_TIMESTAMP" => {
-                    rts = access.next_value()?;
-                }
-                "__REALTIME_TIMESTAMP" => {
-                    rts = rts.or(Some(access.next_value()?));
-                }
-                "msg" | "message" | "MESSAGE" | "Message" => {
-                    message = access.next_value()?;
-                }
-                "level" | "LEVEL" | "Level" => {
-                    level = access.next_value()?;
-                }
-                "PRIORITY" => {
-                    priority = access.next_value()?;
-                }
-                "logger" | "LOGGER" | "Logger" => {
-                    logger = access.next_value()?;
-                }
-                "caller" | "CALLER" | "Caller" => {
-                    caller = access.next_value()?;
-                }
-                _ => {
-                    if key.starts_with("_") {
-                        drop(access.next_value::<&'a RawValue>().ok());
-                        continue;
-                    }
-                    match extra.push((key, access.next_value()?)) {
-                        Ok(_) => {}
-                        Err(value) => extrax.push(value),
-                    }
-                }
+            match fields.push((key, access.next_value()?)) {
+                Ok(_) => {}
+                Err(value) => fieldsx.push(value),
             }
         }
 
-        let level = match level {
-            Some("debug") => Some(Level::Debug),
-            Some("info") | Some("information") => Some(Level::Info),
-            Some("warn") | Some("warning") => Some(Level::Warning),
-            Some("err") | Some("error") | Some("fatal") | Some("panic") => Some(Level::Error),
-            _ => match priority {
-                Some("7") => Some(Level::Debug),
-                Some("6") => Some(Level::Info),
-                Some("5") | Some("4") => Some(Level::Warning),
-                Some("3") | Some("2") | Some("1") => Some(Level::Error),
-                _ => None,
-            },
-        };
-        Ok(Record {
-            ts: ts.or(rts),
-            message,
-            level,
-            logger,
-            caller,
-            extra,
-            extrax,
-        })
+        Ok(RawRecord { fields, fieldsx })
     }
 }
 
