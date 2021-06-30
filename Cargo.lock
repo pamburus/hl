@@ -503,7 +503,7 @@ dependencies = [
 
 [[package]]
 name = "hl"
-version = "0.9.0-alpha.0"
+version = "0.9.0"
 dependencies = [
  "ansi_term",
  "anyhow",
@@ -524,7 +524,7 @@ dependencies = [
  "error-chain",
  "flate2",
  "heapless",
- "itertools 0.10.0",
+ "itertools 0.9.0",
  "itoa",
  "num_cpus",
  "platform-dirs",
