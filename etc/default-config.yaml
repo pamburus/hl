@@ -1,0 +1,23 @@
+fields:
+  time:
+    names: [ts, TS, time, TIME, Time, _SOURCE_REALTIME_TIMESTAMP, __REALTIME_TIMESTAMP]
+  logger:
+    names: [logger, LOGGER, Logger]
+  level:
+    variants:
+      - names: [level, LEVEL, Level]
+        values:
+          debug: [debug]
+          info: [info, information]
+          warning: [warning, warn]
+          error: [error, err, fatal, critical, panic]
+      - names: [PRIORITY]
+        values:
+          debug: [7]
+          info: [6]
+          warning: [5, 4]
+          error: [3, 2, 1]
+  message:
+    names: [msg, message, MESSAGE, Message]
+  caller:
+    names: [caller, CALLER, Caller]
