@@ -5,7 +5,6 @@ use std::iter::IntoIterator;
 use std::marker::PhantomData;
 
 // third-party imports
-use heapless::consts::*;
 use json::value::RawValue;
 use serde::de::{Deserialize, Deserializer, MapAccess, SeqAccess, Visitor};
 use serde_json as json;
@@ -27,7 +26,7 @@ pub struct Record<'a> {
     pub level: Option<Level>,
     pub logger: Option<&'a str>,
     pub caller: Option<&'a str>,
-    extra: heapless::Vec<(&'a str, &'a RawValue), U32>,
+    extra: heapless::Vec<(&'a str, &'a RawValue), RECORD_EXTRA_CAPACITY>,
     extrax: Vec<(&'a str, &'a RawValue)>,
 }
 
@@ -115,8 +114,8 @@ impl<'a> Record<'a> {
             logger: None,
             caller: None,
             extra: heapless::Vec::new(),
-            extrax: if capacity > 32 {
-                Vec::with_capacity(capacity - 32)
+            extrax: if capacity > RECORD_EXTRA_CAPACITY {
+                Vec::with_capacity(capacity - RECORD_EXTRA_CAPACITY)
             } else {
                 Vec::new()
             },
@@ -295,7 +294,7 @@ impl<'s> Parser<'s> {
 // ---
 
 pub struct RawRecord<'a> {
-    fields: heapless::Vec<(&'a str, &'a RawValue), U64>,
+    fields: heapless::Vec<(&'a str, &'a RawValue), RAW_RECORD_FIELDS_CAPACITY>,
     fieldsx: Vec<(&'a str, &'a RawValue)>,
 }
 
@@ -337,9 +336,9 @@ impl<'de: 'a, 'a> Visitor<'de> for RawRecordVisitor<'a> {
     fn visit_map<M: MapAccess<'de>>(self, mut access: M) -> Result<Self::Value, M::Error> {
         let mut fields = heapless::Vec::new();
         let count = access.size_hint().unwrap_or(0);
-        let mut fieldsx = match count > 64 {
+        let mut fieldsx = match count > RAW_RECORD_FIELDS_CAPACITY {
             false => Vec::new(),
-            true => Vec::with_capacity(count - 64),
+            true => Vec::with_capacity(count - RAW_RECORD_FIELDS_CAPACITY),
         };
         while let Some(Some(key)) = access.next_key::<&'a str>().ok() {
             match fields.push((key, access.next_value()?)) {
@@ -541,7 +540,7 @@ impl Filter {
 }
 
 pub struct Object<'a> {
-    pub fields: heapless::Vec<(&'a str, &'a RawValue), U32>,
+    pub fields: heapless::Vec<(&'a str, &'a RawValue), 32>,
 }
 
 struct ObjectVisitor<'a> {
@@ -581,33 +580,21 @@ impl<'de: 'a, 'a> Deserialize<'de> for Object<'a> {
     }
 }
 
-pub struct Array<'a, N>
-where
-    N: heapless::ArrayLength<&'a RawValue>,
-{
+pub struct Array<'a, const N: usize> {
     items: heapless::Vec<&'a RawValue, N>,
     more: Vec<&'a RawValue>,
 }
 
-impl<'a, N> Array<'a, N>
-where
-    N: heapless::ArrayLength<&'a RawValue>,
-{
+impl<'a, const N: usize> Array<'a, N> {
     pub fn iter(&self) -> impl Iterator<Item = &&'a RawValue> {
         self.items.iter().chain(self.more.iter())
     }
 }
 
-struct ArrayVisitor<'a, N>
-where
-    N: heapless::ArrayLength<&'a RawValue>,
-{
+struct ArrayVisitor<'a, const N: usize> {
     marker: PhantomData<fn() -> Array<'a, N>>,
 }
-impl<'a, N> ArrayVisitor<'a, N>
-where
-    N: heapless::ArrayLength<&'a RawValue>,
-{
+impl<'a, const N: usize> ArrayVisitor<'a, N> {
     fn new() -> Self {
         Self {
             marker: PhantomData,
@@ -615,10 +602,7 @@ where
     }
 }
 
-impl<'de: 'a, 'a, N> Visitor<'de> for ArrayVisitor<'a, N>
-where
-    N: heapless::ArrayLength<&'a RawValue>,
-{
+impl<'de: 'a, 'a, const N: usize> Visitor<'de> for ArrayVisitor<'a, N> {
     type Value = Array<'a, N>;
     fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
         formatter.write_str("object json")
@@ -637,10 +621,7 @@ where
     }
 }
 
-impl<'de: 'a, 'a, N> Deserialize<'de> for Array<'a, N>
-where
-    N: heapless::ArrayLength<&'a RawValue>,
-{
+impl<'de: 'a, 'a, const N: usize> Deserialize<'de> for Array<'a, N> {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
@@ -648,3 +629,8 @@ where
         Ok(deserializer.deserialize_seq(ArrayVisitor::new())?)
     }
 }
+
+// ---
+
+const RECORD_EXTRA_CAPACITY: usize = 32;
+const RAW_RECORD_FIELDS_CAPACITY: usize = RECORD_EXTRA_CAPACITY + 8;

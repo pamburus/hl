@@ -1,7 +1,6 @@
 use std::sync::Arc;
 
 use chrono::prelude::*;
-use heapless::consts::*;
 use json::{de::Read, de::StrRead, value::RawValue};
 use serde_json as json;
 
@@ -203,7 +202,7 @@ impl RecordFormatter {
                 buf.push(b'}');
             }
             b'[' => {
-                let item = json::from_str::<model::Array<U256>>(value.get()).unwrap();
+                let item = json::from_str::<model::Array<256>>(value.get()).unwrap();
                 let is_byte_string = item
                     .iter()
                     .map(|&v| {
@@ -353,7 +352,7 @@ impl<'a, 'b> FieldFormatter<'a, 'b> {
                 self.buf.push(b'}');
             }
             b'[' => {
-                let item = json::from_str::<model::Array<U32>>(value.get()).unwrap();
+                let item = json::from_str::<model::Array<32>>(value.get()).unwrap();
                 self.styler.set(self.buf, Element::Brace);
                 self.buf.push(b'[');
                 let mut first = true;

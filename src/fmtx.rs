@@ -1,4 +1,3 @@
-use heapless::consts::*;
 use std::cmp::min;
 
 // ---
@@ -345,7 +344,7 @@ where
 // ---
 
 enum AlignerBuffer<T> {
-    Static(heapless::Vec<T, U64>),
+    Static(heapless::Vec<T, 64>),
     Dynamic(Vec<T>),
 }
 
