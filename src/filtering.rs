@@ -1,4 +1,3 @@
-use heapless::consts::*;
 use std::{collections::HashMap, hash::Hash};
 
 // ---
@@ -164,7 +163,7 @@ impl<N: KeyNormalize> IncludeExcludeKeyFilter<N> {
 
 #[derive(PartialEq, Eq, Hash, Debug)]
 enum Key {
-    Short(heapless::Vec<u8, U64>),
+    Short(heapless::Vec<u8, 64>),
     Long(Vec<u8>),
 }
 
