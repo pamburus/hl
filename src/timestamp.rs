@@ -4,11 +4,11 @@ use chrono::{DateTime, FixedOffset};
 
 // ---
 
-pub struct Timestamp<'a>(&'a str);
+pub struct Timestamp<'a>(&'a str, Option<Option<DateTime<FixedOffset>>>);
 
 impl<'a> Timestamp<'a> {
-    pub fn new(value: &'a str) -> Self {
-        Self(value)
+    pub fn new(value: &'a str, parsed: Option<Option<DateTime<FixedOffset>>>) -> Self {
+        Self(value, parsed)
     }
 
     pub fn raw(&self) -> &'a str {
@@ -16,6 +16,10 @@ impl<'a> Timestamp<'a> {
     }
 
     pub fn parse(&self) -> Option<DateTime<FixedOffset>> {
+        if let Some(parsed) = self.1 {
+            return parsed;
+        }
+
         if let Ok(ts) = self.0.parse::<i64>() {
             let (ts, nsec) = if ts < 100000000000 {
                 (ts, 0)

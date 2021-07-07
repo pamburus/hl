@@ -57,7 +57,7 @@ impl RecordFormatter {
             // time
             //
             styler.set(buf, Element::Time);
-            if let Some(ts) = rec.ts() {
+            if let Some(ts) = &rec.ts {
                 aligned_left(buf, self.ts_width, b' ', |mut buf| {
                     if ts
                         .as_rfc3339()

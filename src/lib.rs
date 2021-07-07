@@ -7,6 +7,7 @@ pub mod input;
 pub mod output;
 pub mod settings;
 pub mod theme;
+pub mod timeparse;
 pub mod timestamp;
 pub mod types;
 

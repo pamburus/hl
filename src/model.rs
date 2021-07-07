@@ -5,6 +5,7 @@ use std::iter::IntoIterator;
 use std::marker::PhantomData;
 
 // third-party imports
+use chrono::{DateTime, Utc};
 use json::value::RawValue;
 use serde::de::{Deserialize, Deserializer, MapAccess, SeqAccess, Visitor};
 use serde_json as json;
@@ -21,7 +22,7 @@ pub use types::Level;
 // ---
 
 pub struct Record<'a> {
-    ts: Option<&'a RawValue>,
+    pub ts: Option<Timestamp<'a>>,
     pub message: Option<&'a RawValue>,
     pub level: Option<Level>,
     pub logger: Option<&'a str>,
@@ -35,24 +36,24 @@ impl<'a> Record<'a> {
         self.extra.iter().chain(self.extrax.iter())
     }
 
-    pub fn ts(&self) -> Option<Timestamp<'a>> {
-        match self.ts {
-            None => None,
-            Some(ts) => {
-                let s = ts.get();
-                let s = if s.as_bytes()[0] == b'"' {
-                    &s[1..s.len() - 1]
-                } else {
-                    s
-                };
-                Some(Timestamp::new(s))
-            }
-        }
-    }
-
     pub fn matches(&self, filter: &Filter) -> bool {
         if filter.is_empty() {
             return true;
+        }
+
+        if filter.since.is_some() || filter.until.is_some() {
+            if let Some(ts) = self.ts.as_ref().and_then(|ts| ts.parse()) {
+                if let Some(since) = filter.since {
+                    if ts < since {
+                        return false;
+                    }
+                }
+                if let Some(until) = filter.until {
+                    if ts > until {
+                        return false;
+                    }
+                }
+            }
         }
 
         if let Some(bound) = &filter.level {
@@ -137,11 +138,11 @@ impl Default for ParserSettings {
     }
 }
 
-impl From<&Settings> for ParserSettings {
-    fn from(s: &Settings) -> Self {
+impl ParserSettings {
+    pub fn new(s: &Settings, preparse_time: bool) -> Self {
         let mut fields = HashMap::new();
         for (i, name) in s.fields.time.names.iter().enumerate() {
-            fields.insert(name.clone(), (FieldSettings::Time, i));
+            fields.insert(name.clone(), (FieldSettings::Time(preparse_time), i));
         }
         let mut j = 0;
         for variant in &s.fields.level.variants {
@@ -167,9 +168,7 @@ impl From<&Settings> for ParserSettings {
         }
         Self { fields }
     }
-}
 
-impl ParserSettings {
     fn apply<'a>(
         &self,
         key: &'a str,
@@ -236,7 +235,7 @@ impl PriorityContext {
 // ---
 
 enum FieldSettings {
-    Time,
+    Time(bool),
     Level(HashMap<String, Level>),
     Logger,
     Message,
@@ -246,7 +245,20 @@ enum FieldSettings {
 impl FieldSettings {
     fn apply<'a>(&self, value: &'a RawValue, to: &mut Record<'a>) {
         match self {
-            Self::Time => to.ts = Some(value),
+            Self::Time(preparse) => {
+                let s = value.get();
+                let s = if s.as_bytes()[0] == b'"' {
+                    &s[1..s.len() - 1]
+                } else {
+                    s
+                };
+                let ts = Timestamp::new(s, None);
+                if *preparse {
+                    to.ts = Some(Timestamp::new(ts.raw(), Some(ts.parse())));
+                } else {
+                    to.ts = Some(ts);
+                }
+            }
             Self::Level(values) => {
                 to.level = json::from_str(value.get())
                     .ok()
@@ -260,7 +272,7 @@ impl FieldSettings {
 
     fn kind(&self) -> FieldKind {
         match self {
-            Self::Time => FieldKind::Time,
+            Self::Time(_) => FieldKind::Time,
             Self::Level(_) => FieldKind::Level,
             Self::Logger => FieldKind::Logger,
             Self::Message => FieldKind::Message,
@@ -531,11 +543,16 @@ impl FieldFilterSet {
 pub struct Filter {
     pub fields: FieldFilterSet,
     pub level: Option<Level>,
+    pub since: Option<DateTime<Utc>>,
+    pub until: Option<DateTime<Utc>>,
 }
 
 impl Filter {
     pub fn is_empty(&self) -> bool {
-        self.fields.0.is_empty() && self.level.is_none()
+        self.fields.0.is_empty()
+            && self.level.is_none()
+            && self.since.is_none()
+            && self.until.is_none()
     }
 }
 
