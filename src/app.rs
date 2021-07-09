@@ -141,23 +141,26 @@ impl App {
         formatter: &mut RecordFormatter,
         buf: &mut Vec<u8>,
     ) {
-        for data in segment.data().split(|c| *c == b'\n') {
-            let data = trim_right(data, |ch| ch == b'\r');
+        for data in rtrim(segment.data(), b'\n').split(|c| *c == b'\n') {
             if data.len() == 0 {
+                buf.push(b'\n');
                 continue;
             }
             let mut stream = json::Deserializer::from_slice(data).into_iter::<RawRecord>();
+            let mut some = false;
             while let Some(Ok(record)) = stream.next() {
+                some = true;
                 let record = parser.parse(record);
                 if record.matches(&self.options.filter) {
                     formatter.format_record(buf, &record);
                 }
             }
-            let remainder = trim_right(&data[stream.byte_offset()..], |ch| match ch {
-                b'\r' | b'\n' | b' ' | b'\t' => true,
-                _ => false,
-            });
-            if remainder.len() > 0 {
+            let remainder = if some {
+                &data[stream.byte_offset()..]
+            } else {
+                data
+            };
+            if remainder.len() != 0 {
                 buf.extend_from_slice(remainder);
                 buf.push(b'\n');
             }
@@ -165,10 +168,10 @@ impl App {
     }
 }
 
-fn trim_right<'a, F: Fn(u8) -> bool>(slice: &'a [u8], predicate: F) -> &'a [u8] {
-    if let Some(pos) = slice.iter().rposition(|&ch| !predicate(ch)) {
-        &slice[..pos + 1]
+fn rtrim<'a>(s: &'a [u8], c: u8) -> &'a [u8] {
+    if s.len() > 0 && s[s.len() - 1] == c {
+        &s[..s.len() - 1]
     } else {
-        &slice[0..0]
+        s
     }
 }
