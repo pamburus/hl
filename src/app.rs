@@ -50,7 +50,10 @@ impl App {
         let n = self.options.concurrency;
         let sfi = Arc::new(SegmentBufFactory::new(self.options.buffer_size));
         let bfo = BufFactory::new(self.options.buffer_size);
-        let settings = ParserSettings::from(&self.options.settings);
+        let settings = ParserSettings::new(
+            &self.options.settings,
+            self.options.filter.since.is_some() || self.options.filter.until.is_some(),
+        );
         let parser = Parser::new(&settings);
         thread::scope(|scope| -> Result<()> {
             // prepare receive/transmit channels for input data

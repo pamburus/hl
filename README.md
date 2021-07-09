@@ -141,6 +141,30 @@ Log viewer which translates JSON logs into pretty human-readable representation.
     Shows only messages with field `provider` containing sub-string `string`.
 
 
+### Filtering by time range.
+
+- Command
+
+    ```
+    $ hl example.log --since 'Jun 19 11:22:33' --until yesterday
+    ```
+    Shows only messages occurred after Jun 19 11:22:33 UTC of the current year (or of the previous one if current date is less than Jun 19 11:22:33) and until yesterday midnight.
+
+- Command
+
+    ```
+    $ hl example.log --since -3d
+    ```
+    Shows only messages for the last 48 hours.
+
+- Command
+
+    ```
+    $ hl example.log --until '2021-06-01 18:00:00' --local
+    ```
+    Shows only messages occurred before 6 PM on 1st Jun 2021 in local time as well as show timestamps in local time.
+
+
 ### Hiding or showing selected fields.
 
 - Command
@@ -170,7 +194,7 @@ Log viewer which translates JSON logs into pretty human-readable representation.
 ### Complete set of options and flags
 
 ```
-hl 0.8.13
+hl 0.9.2
 JSON log converter to human readable representation
 
 USAGE:
@@ -195,7 +219,7 @@ OPTIONS:
     -f, --filter <filter>...
             Filtering by field values in one of forms <key>=<value>, <key>~=<value>, <key>!=<value>, <key>!~=<value>
 
-    -h, --hide <hide>...                                     An exclude-list of keys
+    -h, --hide <hide>...                                     Hide fields with the specified keys
         --interrupt-ignore-count <interrupt-ignore-count>
             Number of interrupts to ignore, i.e. Ctrl-C (SIGINT) [default: 3]
 
@@ -206,7 +230,10 @@ OPTIONS:
         --paging <paging>
             Output paging options, one of { auto, always, never } [default: auto]
 
-    -H, --show <show>...                                     An include-list of keys
+    -H, --show <show>...                                     Hide all fields except fields with the specified keys
+        --since <since>
+            Filtering by timestamp >= the value (--time-zone and --local options are honored)
+
         --theme <theme>
             Color theme, one of { auto, dark, dark24, light } [default: dark]
 
@@ -216,6 +243,9 @@ OPTIONS:
     -Z, --time-zone <time-zone>
             Time zone name, see column "TZ database name" at
             https://en.wikipedia.org/wiki/List_of_tz_database_time_zones [default: UTC]
+        --until <until>
+            Filtering by timestamp <= the value (--time-zone and --local options are honored)
+
 
 ARGS:
     <FILE>...    Files to process

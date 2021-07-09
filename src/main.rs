@@ -4,7 +4,6 @@ use std::env;
 use std::path::PathBuf;
 use std::process;
 use std::sync::Arc;
-use std::time::Duration;
 
 // third-party imports
 use ansi_term::Colour;
@@ -22,6 +21,7 @@ use hl::output::{OutputStream, Pager};
 use hl::settings::Settings;
 use hl::signal::SignalHandler;
 use hl::theme::Theme;
+use hl::timeparse::parse_time;
 use hl::Level;
 use hl::{IncludeExcludeKeyFilter, KeyMatchOptions};
 
@@ -87,6 +87,14 @@ struct Opt {
     /// Filtering by level, valid values: ['d', 'i', 'w', 'e'].
     #[structopt(short, long, default_value = "d", overrides_with = "level")]
     level: Level,
+    //
+    /// Filtering by timestamp >= the value (--time-zone and --local options are honored).
+    #[structopt(long, allow_hyphen_values = true)]
+    since: Option<String>,
+    //
+    /// Filtering by timestamp <= the value (--time-zone and --local options are honored).
+    #[structopt(long, allow_hyphen_values = true)]
+    until: Option<String>,
     //
     /// Time format, see https://man7.org/linux/man-pages/man1/date.1.html.
     #[structopt(
@@ -199,10 +207,30 @@ fn run() -> Result<()> {
         None | Some(0) => num_cpus::get(),
         Some(value) => value,
     };
+    // Configure timezone.
+    let tz = if opt.local {
+        *Local.timestamp(0, 0).offset()
+    } else {
+        let tz = opt.time_zone;
+        let offset = UTC.ymd(1970, 1, 1).and_hms(0, 0, 0) - tz.ymd(1970, 1, 1).and_hms(0, 0, 0);
+        FixedOffset::east(offset.num_seconds() as i32)
+    };
+    // Configure time format.
+    let time_format = LinuxDateFormat::new(&opt.time_format).compile();
     // Configure filter.
     let filter = hl::Filter {
         fields: hl::FieldFilterSet::new(opt.filter),
         level: Some(opt.level),
+        since: if let Some(v) = &opt.since {
+            Some(parse_time(v, &tz, &time_format)?.into())
+        } else {
+            None
+        },
+        until: if let Some(v) = &opt.until {
+            Some(parse_time(v, &tz, &time_format)?.into())
+        } else {
+            None
+        },
     };
     // Configure hide_empty_fields
     let hide_empty_fields = !opt.show_empty_fields && opt.hide_empty_fields;
@@ -227,19 +255,13 @@ fn run() -> Result<()> {
         settings: settings,
         theme: Arc::new(theme),
         raw_fields: opt.raw_fields,
-        time_format: LinuxDateFormat::new(&opt.time_format).compile(),
+        time_format: time_format,
         buffer_size,
         max_message_size,
         concurrency,
         filter,
         fields: Arc::new(fields),
-        time_zone: if opt.local {
-            *Local.timestamp(0, 0).offset()
-        } else {
-            let tz = opt.time_zone;
-            let offset = UTC.ymd(1970, 1, 1).and_hms(0, 0, 0) - tz.ymd(1970, 1, 1).and_hms(0, 0, 0);
-            FixedOffset::east(offset.num_seconds() as i32)
-        },
+        time_zone: tz,
         hide_empty_fields,
     });
 
@@ -295,7 +317,11 @@ fn run() -> Result<()> {
     };
 
     // Run the app with signal handling.
-    SignalHandler::run(opt.interrupt_ignore_count, Duration::from_secs(1), run)
+    SignalHandler::run(
+        opt.interrupt_ignore_count,
+        std::time::Duration::from_secs(1),
+        run,
+    )
 }
 
 fn main() {

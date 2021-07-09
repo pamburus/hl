@@ -39,6 +39,8 @@ pub enum Error {
         "64KB"
     )]
     InvalidSize(String),
+    #[error("cannot recognize time {0:?}")]
+    UnrecognizedTime(String),
     #[error("zero size")]
     ZeroSize,
 }
