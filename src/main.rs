@@ -85,8 +85,8 @@ struct Opt {
     show: Vec<String>,
     //
     /// Filtering by level, valid values: ['d', 'i', 'w', 'e'].
-    #[structopt(short, long, default_value = "d", overrides_with = "level")]
-    level: Level,
+    #[structopt(short, long, overrides_with = "level")]
+    level: Option<Level>,
     //
     /// Filtering by timestamp >= the value (--time-zone and --local options are honored).
     #[structopt(long, allow_hyphen_values = true)]
@@ -220,7 +220,7 @@ fn run() -> Result<()> {
     // Configure filter.
     let filter = hl::Filter {
         fields: hl::FieldFilterSet::new(opt.filter),
-        level: Some(opt.level),
+        level: opt.level,
         since: if let Some(v) = &opt.since {
             Some(parse_time(v, &tz, &time_format)?.into())
         } else {

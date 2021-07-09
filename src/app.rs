@@ -92,7 +92,7 @@ impl App {
                         match segment {
                             Segment::Complete(segment) => {
                                 let mut buf = bfo.new_buf();
-                                self.process_segement(&parser, &segment, &mut formatter, &mut buf);
+                                self.process_segement(&parser, &segment, &mut formatter, &mut buf, self.options.filter.is_empty());
                                 sfi.recycle(segment);
                                 if let Err(_) = txo.send(buf) {
                                     break;
@@ -140,6 +140,7 @@ impl App {
         segment: &SegmentBuf,
         formatter: &mut RecordFormatter,
         buf: &mut Vec<u8>,
+        include_unparsed: bool,
     ) {
         for data in rtrim(segment.data(), b'\n').split(|c| *c == b'\n') {
             if data.len() == 0 {
@@ -160,7 +161,7 @@ impl App {
             } else {
                 data
             };
-            if remainder.len() != 0 {
+            if remainder.len() != 0 && include_unparsed {
                 buf.extend_from_slice(remainder);
                 buf.push(b'\n');
             }
