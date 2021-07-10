@@ -132,6 +132,7 @@ struct Opt {
     #[structopt(
         short,
         long,
+        env="HL_TIME_FORMAT",
         default_value = &CONFIG.time_format,
         overrides_with = "time-format"
     )]
