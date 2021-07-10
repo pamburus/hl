@@ -11,7 +11,7 @@ use serde::de::{Deserialize, Deserializer, MapAccess, SeqAccess, Visitor};
 use serde_json as json;
 
 // local imports
-use crate::settings::Settings;
+use crate::settings::Fields;
 use crate::timestamp::Timestamp;
 use crate::types::{self, FieldKind};
 
@@ -139,13 +139,13 @@ impl Default for ParserSettings {
 }
 
 impl ParserSettings {
-    pub fn new(s: &Settings, preparse_time: bool) -> Self {
+    pub fn new(s: &Fields, preparse_time: bool) -> Self {
         let mut fields = HashMap::new();
-        for (i, name) in s.fields.time.names.iter().enumerate() {
+        for (i, name) in s.time.names.iter().enumerate() {
             fields.insert(name.clone(), (FieldSettings::Time(preparse_time), i));
         }
         let mut j = 0;
-        for variant in &s.fields.level.variants {
+        for variant in &s.level.variants {
             let mut mapping = HashMap::new();
             for (level, values) in &variant.values {
                 for value in values {
@@ -157,13 +157,13 @@ impl ParserSettings {
             }
             j += variant.names.len();
         }
-        for (i, name) in s.fields.message.names.iter().enumerate() {
+        for (i, name) in s.message.names.iter().enumerate() {
             fields.insert(name.clone(), (FieldSettings::Message, i));
         }
-        for (i, name) in s.fields.logger.names.iter().enumerate() {
+        for (i, name) in s.logger.names.iter().enumerate() {
             fields.insert(name.clone(), (FieldSettings::Logger, i));
         }
-        for (i, name) in s.fields.caller.names.iter().enumerate() {
+        for (i, name) in s.caller.names.iter().enumerate() {
             fields.insert(name.clone(), (FieldSettings::Caller, i));
         }
         Self { fields }

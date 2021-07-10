@@ -14,13 +14,12 @@ use crate::error::*;
 use crate::formatting::RecordFormatter;
 use crate::model::{Filter, Parser, ParserSettings, RawRecord};
 use crate::scanning::{BufFactory, Scanner, Segment, SegmentBuf, SegmentBufFactory};
-use crate::settings::Settings;
+use crate::settings::Fields;
 use crate::theme::Theme;
 use crate::IncludeExcludeKeyFilter;
 
 // TODO: merge Options to Settings and replace Options with Settings.
 pub struct Options {
-    pub settings: Settings,
     pub theme: Arc<Theme>,
     pub time_format: DateTimeFormat,
     pub raw_fields: bool,
@@ -28,9 +27,14 @@ pub struct Options {
     pub max_message_size: usize,
     pub concurrency: usize,
     pub filter: Filter,
-    pub fields: Arc<IncludeExcludeKeyFilter>,
+    pub fields: FieldOptions,
     pub time_zone: FixedOffset,
     pub hide_empty_fields: bool,
+}
+
+pub struct FieldOptions {
+    pub filter: Arc<IncludeExcludeKeyFilter>,
+    pub settings: Fields,
 }
 
 pub struct App {
@@ -51,7 +55,7 @@ impl App {
         let sfi = Arc::new(SegmentBufFactory::new(self.options.buffer_size));
         let bfo = BufFactory::new(self.options.buffer_size);
         let settings = ParserSettings::new(
-            &self.options.settings,
+            &self.options.fields.settings,
             self.options.filter.since.is_some() || self.options.filter.until.is_some(),
         );
         let parser = Parser::new(&settings);
@@ -85,7 +89,7 @@ impl App {
                             self.options.time_zone,
                         ),
                         self.options.hide_empty_fields,
-                        self.options.fields.clone(),
+                        self.options.fields.filter.clone(),
                     )
                     .with_field_unescaping(!self.options.raw_fields);
                     for segment in rxi.iter() {

@@ -9,9 +9,12 @@ use std::sync::Arc;
 use ansi_term::Colour;
 use chrono::{FixedOffset, Local, TimeZone};
 use chrono_tz::{Tz, UTC};
+use once_cell::sync::Lazy;
 use platform_dirs::AppDirs;
-use structopt::clap::arg_enum;
-use structopt::StructOpt;
+use structopt::{
+    clap::{arg_enum, AppSettings::*},
+    StructOpt,
+};
 
 // local imports
 use hl::datefmt::LinuxDateFormat;
@@ -27,12 +30,21 @@ use hl::{IncludeExcludeKeyFilter, KeyMatchOptions};
 
 // ---
 
+const APP_NAME: &str = "hl";
+
+// ---
+
 /// JSON log converter to human readable representation.
 #[derive(StructOpt)]
-#[structopt()]
+#[structopt(setting(ColorAuto), setting(ColoredHelp))]
 struct Opt {
     /// Color output options, one of { auto, always, never }.
-    #[structopt(long, default_value = "auto", overrides_with = "color")]
+    #[structopt(
+        long,
+        default_value = "auto",
+        env = "HL_COLOR",
+        overrides_with = "color"
+    )]
     color: ColorOption,
     //
     /// Handful alias for --color=always, overrides --color option.
@@ -40,7 +52,12 @@ struct Opt {
     color_always: bool,
     //
     /// Output paging options, one of { auto, always, never }.
-    #[structopt(long, default_value = "auto", overrides_with = "paging")]
+    #[structopt(
+        long,
+        default_value = "auto",
+        env = "HL_PAGING",
+        overrides_with = "paging"
+    )]
     paging: PagingOption,
     //
     /// Handful alias for --paging=never, overrides --paging option.
@@ -49,7 +66,12 @@ struct Opt {
     //
     //
     /// Color theme, one of { auto, dark, dark24, light }.
-    #[structopt(long, default_value = "dark", overrides_with = "theme")]
+    #[structopt(
+        long,
+        default_value = "dark",
+        env = "HL_THEME",
+        overrides_with = "theme"
+    )]
     theme: ThemeOption,
     //
     /// Disable unescaping and prettifying of field values.
@@ -57,19 +79,29 @@ struct Opt {
     raw_fields: bool,
     //
     /// Number of interrupts to ignore, i.e. Ctrl-C (SIGINT).
-    #[structopt(long, default_value = "3", overrides_with = "interrupt-ignore-count")]
+    #[structopt(
+        long,
+        default_value = "3",
+        env = "HL_INTERRUPT_IGNORE_COUNT",
+        overrides_with = "interrupt-ignore-count"
+    )]
     interrupt_ignore_count: usize,
     //
     /// Buffer size.
-    #[structopt(long, default_value = "2 MiB", overrides_with = "buffer-size", parse(try_from_str = parse_non_zero_size))]
+    #[structopt(long, default_value = "2 MiB", env="HL_BUFFER_SIZE", overrides_with = "buffer-size", parse(try_from_str = parse_non_zero_size))]
     buffer_size: usize,
     //
     /// Maximum message size.
-    #[structopt(long, default_value = "64 MiB", overrides_with = "max-message-size", parse(try_from_str = parse_non_zero_size))]
+    #[structopt(long, default_value = "64 MiB", env="HL_MAX_MESSAGE_SIZE", overrides_with = "max-message-size", parse(try_from_str = parse_non_zero_size))]
     max_message_size: usize,
     //
     /// Number of processing threads.
-    #[structopt(long, short = "C", overrides_with = "concurrency")]
+    #[structopt(
+        long,
+        short = "C",
+        env = "HL_CONCURRENCY",
+        overrides_with = "concurrency"
+    )]
     concurrency: Option<usize>,
     //
     /// Filtering by field values in one of forms <key>=<value>, <key>~=<value>, <key>!=<value>, <key>!~=<value>.
@@ -85,7 +117,7 @@ struct Opt {
     show: Vec<String>,
     //
     /// Filtering by level, valid values: ['d', 'i', 'w', 'e'].
-    #[structopt(short, long, overrides_with = "level")]
+    #[structopt(short, long, env = "HL_LEVEL", overrides_with = "level")]
     level: Option<Level>,
     //
     /// Filtering by timestamp >= the value (--time-zone and --local options are honored).
@@ -100,13 +132,13 @@ struct Opt {
     #[structopt(
         short,
         long,
-        default_value = "%b %d %T.%3N",
+        default_value = &CONFIG.time_format,
         overrides_with = "time-format"
     )]
     time_format: String,
     //
     /// Time zone name, see column "TZ database name" at https://en.wikipedia.org/wiki/List_of_tz_database_time_zones.
-    #[structopt(long, short = "Z", default_value = "UTC", overrides_with = "time-zone")]
+    #[structopt(long, short = "Z", env="HL_TIME_ZONE", default_value = &CONFIG.time_zone.name(), overrides_with = "time-zone")]
     time_zone: Tz,
     //
     /// Use local time zone, overrides --time-zone option.
@@ -118,11 +150,11 @@ struct Opt {
     files: Vec<PathBuf>,
     //
     /// Hide empty fields, applies for null, string, object and array fields only.
-    #[structopt(long, short = "e")]
+    #[structopt(long, short = "e", env = "HL_HIDE_EMPTY_FIELDS")]
     hide_empty_fields: bool,
     //
     /// Show empty fields, overrides --hide-empty-fields option.
-    #[structopt(long, short = "E")]
+    #[structopt(long, short = "E", env = "HL_SHOW_EMPTY_FIELDS")]
     show_empty_fields: bool,
 }
 
@@ -154,6 +186,17 @@ arg_enum! {
     }
 }
 
+// ---
+
+static CONFIG: Lazy<Settings> = Lazy::new(|| load_config());
+
+// ---
+
+fn load_config() -> Settings {
+    let app_dirs = AppDirs::new(Some(APP_NAME), true).unwrap();
+    Settings::load(&app_dirs).unwrap()
+}
+
 fn parse_size(s: &str) -> Result<usize> {
     match bytefmt::parse(s) {
         Ok(value) => Ok(usize::try_from(value)?),
@@ -174,6 +217,8 @@ fn parse_non_zero_size(s: &str) -> Result<usize> {
         Ok(value)
     }
 }
+
+// ---
 
 fn run() -> Result<()> {
     let app_dirs = AppDirs::new(Some("hl"), true).unwrap();
@@ -203,7 +248,7 @@ fn run() -> Result<()> {
     };
 
     // Configure concurrency.
-    let concurrency = match opt.concurrency {
+    let concurrency = match opt.concurrency.or(settings.concurrency) {
         None | Some(0) => num_cpus::get(),
         Some(value) => value,
     };
@@ -252,7 +297,6 @@ fn run() -> Result<()> {
 
     // Create app.
     let app = hl::App::new(hl::Options {
-        settings: settings,
         theme: Arc::new(theme),
         raw_fields: opt.raw_fields,
         time_format: time_format,
@@ -260,7 +304,10 @@ fn run() -> Result<()> {
         max_message_size,
         concurrency,
         filter,
-        fields: Arc::new(fields),
+        fields: hl::FieldOptions {
+            settings: settings.fields,
+            filter: Arc::new(fields),
+        },
         time_zone: tz,
         hide_empty_fields,
     });
