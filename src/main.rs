@@ -226,6 +226,16 @@ fn run() -> Result<()> {
     let settings = Settings::load(&app_dirs)?;
     let opt = Opt::from_args();
     let stdout_is_atty = || atty::is(atty::Stream::Stdout);
+    let color_supported = if stdout_is_atty() {
+        if let Err(err) = hl::enable_ansi_support() {
+            eprintln!("failed to enable ansi support: {}", err);
+            false
+        } else {
+            true
+        }
+    } else {
+        false
+    };
 
     // Configure color scheme.
     let color = if opt.color_always {
@@ -240,7 +250,7 @@ fn run() -> Result<()> {
         (ThemeOption::Light, _) => Theme::light(),
     };
     let theme = match color {
-        ColorOption::Auto => match stdout_is_atty() {
+        ColorOption::Auto => match stdout_is_atty() && color_supported {
             true => theme(opt.theme),
             false => Theme::none(),
         },
@@ -351,11 +361,6 @@ fn run() -> Result<()> {
     } else {
         Box::new(std::io::stdout())
     };
-
-    #[cfg(windows)]
-    if stdout_is_atty() {
-        let _ = ansi_term::enable_ansi_support();
-    }
 
     // Run the app.
     let run = || match app.run(input.as_mut(), output.as_mut()) {

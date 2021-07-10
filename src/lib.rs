@@ -12,6 +12,7 @@ pub mod timestamp;
 pub mod types;
 
 // private modules
+mod console;
 mod eseq;
 mod filtering;
 mod formatting;
@@ -30,6 +31,9 @@ pub use filtering::DefaultNormalizing;
 pub use model::FieldFilterSet;
 pub use model::Filter;
 pub use model::Level;
+
+// public uses (platform-specific)
+pub use console::enable_ansi_support;
 
 // public type aliases
 pub type IncludeExcludeKeyFilter = filtering::IncludeExcludeKeyFilter<DefaultNormalizing>;

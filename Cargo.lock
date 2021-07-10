@@ -567,7 +567,7 @@ dependencies = [
 
 [[package]]
 name = "hl"
-version = "0.9.5"
+version = "0.9.6"
 dependencies = [
  "ansi_term",
  "anyhow",
@@ -603,6 +603,7 @@ dependencies = [
  "signal-hook",
  "structopt",
  "thiserror",
+ "winapi",
 ]
 
 [[package]]
