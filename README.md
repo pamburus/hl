@@ -155,7 +155,7 @@ Log viewer which translates JSON logs into pretty human-readable representation.
     ```
     $ hl example.log --since -3d
     ```
-    Shows only messages for the last 48 hours.
+    Shows only messages for the last 72 hours.
 
 - Command
 
