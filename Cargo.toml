@@ -4,7 +4,7 @@ categories = ["command-line-utilities"]
 description = "Utility for viewing json-formatted log files."
 keywords = ["cli", "human", "log"]
 name = "hl"
-version = "0.9.5-alpha.1"
+version = "0.9.5-alpha.2"
 edition = "2018"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -45,6 +45,7 @@ version = "0"
 default-features = false
 
 [dependencies.clap]
+version = "2"
 features = ["wrap_help"]
 
 [dev-dependencies]
