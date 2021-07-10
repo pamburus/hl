@@ -117,7 +117,7 @@ Log viewer which translates JSON logs into pretty human-readable representation.
     Flag `-P` disables automatic using of pager in this case.
 
 
-### Filtering by field values.
+### Filtering by field values
 
 - Command
 
@@ -141,7 +141,7 @@ Log viewer which translates JSON logs into pretty human-readable representation.
     Shows only messages with field `provider` containing sub-string `string`.
 
 
-### Filtering by time range.
+### Filtering by time range
 
 - Command
 
@@ -155,7 +155,7 @@ Log viewer which translates JSON logs into pretty human-readable representation.
     ```
     $ hl example.log --since -3d
     ```
-    Shows only messages for the last 48 hours.
+    Shows only messages for the last 72 hours.
 
 - Command
 
@@ -165,7 +165,7 @@ Log viewer which translates JSON logs into pretty human-readable representation.
     Shows only messages occurred before 6 PM on 1st Jun 2021 in local time as well as show timestamps in local time.
 
 
-### Hiding or showing selected fields.
+### Hiding or showing selected fields
 
 - Command
 
@@ -191,58 +191,97 @@ Log viewer which translates JSON logs into pretty human-readable representation.
     Hides fields `headers` and `body` but shows a single sub-field `content-type` inside field `headers`.
 
 
+### Configuration files
+
+- Configuration file is loaded automatically if found at predefined platform-specific location.
+
+    | OS      | Location                                      |
+    | ------- | --------------------------------------------- | 
+    | macOS   | ~/.config/hl/config.yaml                      |
+    | Linux   | ~/.config/hl/config.yaml                      |
+    | Windows | %USERPROFILE%\AppData\Roaming\hl\config.yaml  |
+
+- Any parameters in the configuration file are optional and may be omitted. In this case default values will be used.
+
+#### Default configuration file
+
+- [config.yaml](etc/defaults/config.yaml)
+
+
+### Envrionment variables
+
+- Many parameters which are defined in command-line arguments and configuration files may be specified by envrionment variables also.
+
+#### Precedence of configuraton sources
+* Configuration file
+* Environment variables
+* Command-line arguments
+
+#### Examples
+* `HL_TIME_FORMAT='%y-%m-%d %T.%3N'` overrides time format specified in configuration file.
+* `HL_TIME_ZONE=Europe/Moscow` overrides time zone specified in configuration file.
+* `HL_CONCURRENCY=4` overrides concurrency limit specified in configuration file.
+* `HL_PAGING=never` specified default value for paging option but it may be overriden by command-line arguments.
+
+
 ### Complete set of options and flags
 
 ```
-hl 0.9.2
+hl 0.9.4
 JSON log converter to human readable representation
 
 USAGE:
     hl [FLAGS] [OPTIONS] [--] [FILE]...
 
 FLAGS:
-    -c                         Handful alias for --color=always, overrides --color option
-        --help                 Prints help information
-    -e, --hide-empty-fields    Hide empty fields, applies for null, string, object and array fields only
-    -L, --local                Use local time zone, overrides --time-zone option
-    -P                         Handful alias for --paging=never, overrides --paging option
-    -r, --raw-fields           Disable unescaping and prettifying of field values
-    -E, --show-empty-fields    Show empty fields, overrides --hide-empty-fields option
-    -V, --version              Prints version information
+    -c                  Handful alias for --color=always, overrides --color option
+        --help          Prints help information
+    -L, --local         Use local time zone, overrides --time-zone option
+    -P                  Handful alias for --paging=never, overrides --paging option
+    -r, --raw-fields    Disable unescaping and prettifying of field values
+    -V, --version       Prints version information
 
 OPTIONS:
-        --buffer-size <buffer-size>                          Buffer size [default: 2 MiB]
+        --buffer-size <buffer-size>                          Buffer size [env: HL_BUFFER_SIZE=]  [default: 2 MiB]
         --color <color>
-            Color output options, one of { auto, always, never } [default: auto]
+            Color output options, one of { auto, always, never } [env: HL_COLOR=always]  [default: auto]
 
-    -C, --concurrency <concurrency>                          Number of processing threads
+    -C, --concurrency <concurrency>                          Number of processing threads [env: HL_CONCURRENCY=]
     -f, --filter <filter>...
             Filtering by field values in one of forms <key>=<value>, <key>~=<value>, <key>!=<value>, <key>!~=<value>
 
     -h, --hide <hide>...                                     Hide fields with the specified keys
+    -e, --hide-empty-fields <hide-empty-fields>
+            Hide empty fields, applies for null, string, object and array fields only [env: HL_HIDE_EMPTY_FIELDS=]
+
         --interrupt-ignore-count <interrupt-ignore-count>
-            Number of interrupts to ignore, i.e. Ctrl-C (SIGINT) [default: 3]
+            Number of interrupts to ignore, i.e. Ctrl-C (SIGINT) [env: HL_INTERRUPT_IGNORE_COUNT=]  [default: 3]
 
     -l, --level <level>
-            Filtering by level, valid values: ['d', 'i', 'w', 'e'] [default: d]
+            Filtering by level, valid values: ['d', 'i', 'w', 'e'] [env: HL_LEVEL=]
 
-        --max-message-size <max-message-size>                Maximum message size [default: 64 MiB]
+        --max-message-size <max-message-size>
+            Maximum message size [env: HL_MAX_MESSAGE_SIZE=]  [default: 64 MiB]
+
         --paging <paging>
-            Output paging options, one of { auto, always, never } [default: auto]
+            Output paging options, one of { auto, always, never } [env: HL_PAGING=]  [default: auto]
 
     -H, --show <show>...                                     Hide all fields except fields with the specified keys
+    -E, --show-empty-fields <show-empty-fields>
+            Show empty fields, overrides --hide-empty-fields option [env: HL_SHOW_EMPTY_FIELDS=]
+
         --since <since>
             Filtering by timestamp >= the value (--time-zone and --local options are honored)
 
         --theme <theme>
-            Color theme, one of { auto, dark, dark24, light } [default: dark]
+            Color theme, one of { auto, dark, dark24, light } [env: HL_THEME=]  [default: dark]
 
     -t, --time-format <time-format>
-            Time format, see https://man7.org/linux/man-pages/man1/date.1.html [default: %b %d %T.%3N]
+            Time format, see https://man7.org/linux/man-pages/man1/date.1.html [default: %y-%m-%d %T.%3N]
 
     -Z, --time-zone <time-zone>
             Time zone name, see column "TZ database name" at
-            https://en.wikipedia.org/wiki/List_of_tz_database_time_zones [default: UTC]
+            https://en.wikipedia.org/wiki/List_of_tz_database_time_zones [env: HL_TIME_ZONE=]  [default: UTC]
         --until <until>
             Filtering by timestamp <= the value (--time-zone and --local options are honored)
 

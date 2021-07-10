@@ -301,6 +301,7 @@ impl<'a, 'b> FieldFormatter<'a, 'b> {
         if self.rf.unescape_fields {
             self.format_value(value, filter, setting);
         } else {
+            self.styler.set(self.buf, Element::LiteralString);
             self.buf.extend_from_slice(value.get().as_bytes())
         }
         true

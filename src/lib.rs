@@ -25,7 +25,7 @@ pub mod signal;
 
 // public uses
 pub use app::App;
-pub use app::Options;
+pub use app::{FieldOptions, Options};
 pub use filtering::DefaultNormalizing;
 pub use model::FieldFilterSet;
 pub use model::Filter;
