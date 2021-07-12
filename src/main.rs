@@ -1,6 +1,5 @@
 // std imports
 use std::convert::TryFrom;
-use std::env;
 use std::path::PathBuf;
 use std::process;
 use std::sync::Arc;
@@ -65,14 +64,14 @@ struct Opt {
     paging_never: bool,
     //
     //
-    /// Color theme, one of { auto, dark, dark24, light }.
+    /// Color theme.
     #[structopt(
         long,
-        default_value = "dark",
+        default_value = &CONFIG.theme,
         env = "HL_THEME",
         overrides_with = "theme"
     )]
-    theme: ThemeOption,
+    theme: String,
     //
     /// Disable unescaping and prettifying of field values.
     #[structopt(short, long)]
@@ -116,7 +115,7 @@ struct Opt {
     #[structopt(long, short = "H", number_of_values = 1)]
     show: Vec<String>,
     //
-    /// Filtering by level, valid values: ['d', 'i', 'w', 'e'].
+    /// Filtering by level, one of { d[ebug], i[nfo], w[arning], e[rror] }.
     #[structopt(short, long, env = "HL_LEVEL", overrides_with = "level")]
     level: Option<Level>,
     //
@@ -165,16 +164,6 @@ arg_enum! {
         Auto,
         Always,
         Never,
-    }
-}
-
-arg_enum! {
-    #[derive(Debug)]
-    enum ThemeOption {
-        Auto,
-        Dark,
-        Dark24,
-        Light,
     }
 }
 
@@ -243,19 +232,20 @@ fn run() -> Result<()> {
     } else {
         opt.color
     };
-    let truecolor = env::var("COLORTERM").unwrap_or_default() == "truecolor";
-    let theme = |theme: ThemeOption| match (theme, truecolor) {
-        (ThemeOption::Auto, false) | (ThemeOption::Dark, _) => Theme::dark(),
-        (ThemeOption::Auto, true) | (ThemeOption::Dark24, _) => Theme::dark24(),
-        (ThemeOption::Light, _) => Theme::light(),
+    let use_colors = match color {
+        ColorOption::Auto => stdout_is_atty() && color_supported,
+        ColorOption::Always => true,
+        ColorOption::Never => false,
     };
-    let theme = match color {
-        ColorOption::Auto => match stdout_is_atty() && color_supported {
-            true => theme(opt.theme),
-            false => Theme::none(),
-        },
-        ColorOption::Always => theme(opt.theme),
-        ColorOption::Never => Theme::none(),
+    let theme = if use_colors {
+        Theme::load(
+            CONFIG
+                .themes
+                .get(&opt.theme)
+                .ok_or(Error::UnknownTheme(opt.theme.into()))?,
+        )
+    } else {
+        Theme::none()
     };
 
     // Configure concurrency.

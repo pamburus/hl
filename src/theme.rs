@@ -2,9 +2,10 @@ use std::collections::HashMap;
 use std::vec::Vec;
 
 use crate::eseq;
+use crate::settings;
 use crate::types;
 
-use eseq::{eseq0, eseq1, eseq2, eseq3, Color, ColorCode::RGB, Style::Reverse, StyleCode};
+use eseq::{Brightness, Color, ColorCode, Mode, Sequence, StyleCode};
 pub use types::Level;
 
 #[repr(u8)]
@@ -19,13 +20,14 @@ pub enum Element {
     Quote,
     Delimiter,
     Comma,
-    LocationSign,
+    AtSign,
     Ellipsis,
     FieldKey,
-    LiteralNull,
-    LiteralBoolean,
-    LiteralNumber,
-    LiteralString,
+    Null,
+    Boolean,
+    Number,
+    String,
+    Whitespace,
 }
 
 pub type Buf = Vec<u8>;
@@ -41,35 +43,78 @@ pub struct Theme {
 }
 
 #[derive(Clone, Eq, PartialEq)]
-struct Style(Buf);
+struct Style(Sequence);
 
 impl Style {
     pub fn apply(&self, buf: &mut Buf) {
-        buf.extend_from_slice(self.0.as_slice())
+        buf.extend_from_slice(self.0.data())
+    }
+
+    pub fn reset() -> Self {
+        Sequence::reset().into()
+    }
+
+    fn convert_color(color: &settings::Color) -> ColorCode {
+        match color {
+            settings::Color::Plain(color) => {
+                let c = match color {
+                    settings::PlainColor::Black => (Color::Black, Brightness::Normal),
+                    settings::PlainColor::Blue => (Color::Blue, Brightness::Normal),
+                    settings::PlainColor::Cyan => (Color::Cyan, Brightness::Normal),
+                    settings::PlainColor::Green => (Color::Green, Brightness::Normal),
+                    settings::PlainColor::Magenta => (Color::Magenta, Brightness::Normal),
+                    settings::PlainColor::Red => (Color::Red, Brightness::Normal),
+                    settings::PlainColor::White => (Color::White, Brightness::Normal),
+                    settings::PlainColor::Yellow => (Color::Yellow, Brightness::Normal),
+                    settings::PlainColor::BrightBlack => (Color::Black, Brightness::Bright),
+                    settings::PlainColor::BrightBlue => (Color::Blue, Brightness::Bright),
+                    settings::PlainColor::BrightCyan => (Color::Cyan, Brightness::Bright),
+                    settings::PlainColor::BrightGreen => (Color::Green, Brightness::Bright),
+                    settings::PlainColor::BrightMagenta => (Color::Magenta, Brightness::Bright),
+                    settings::PlainColor::BrightRed => (Color::Red, Brightness::Bright),
+                    settings::PlainColor::BrightWhite => (Color::White, Brightness::Bright),
+                    settings::PlainColor::BrightYellow => (Color::Yellow, Brightness::Bright),
+                };
+                ColorCode::Plain(c.0, c.1)
+            }
+            settings::Color::Palette(code) => ColorCode::Palette(*code),
+            settings::Color::RGB(settings::RGB(r, g, b)) => ColorCode::RGB(*r, *g, *b),
+        }
     }
 }
 
-impl From<Vec<u8>> for Style {
-    fn from(value: Vec<u8>) -> Self {
-        Self(value)
+impl<T: Into<Sequence>> From<T> for Style {
+    fn from(value: T) -> Self {
+        Self(value.into())
     }
 }
 
-impl From<StyleCode> for Style {
-    fn from(value: StyleCode) -> Self {
-        Self(eseq1(value))
-    }
-}
-
-impl From<(StyleCode, StyleCode)> for Style {
-    fn from(v: (StyleCode, StyleCode)) -> Self {
-        Self(eseq2(v.0, v.1))
-    }
-}
-
-impl From<(StyleCode, StyleCode, StyleCode)> for Style {
-    fn from(v: (StyleCode, StyleCode, StyleCode)) -> Self {
-        Self(eseq3(v.0, v.1, v.2))
+impl From<&settings::Style> for Style {
+    fn from(style: &settings::Style) -> Self {
+        let mut codes = Vec::<StyleCode>::new();
+        for mode in &style.modes {
+            codes.push(
+                match mode {
+                    settings::Mode::Bold => Mode::Bold,
+                    settings::Mode::Conseal => Mode::Conseal,
+                    settings::Mode::CrossedOut => Mode::CrossedOut,
+                    settings::Mode::Faint => Mode::Faint,
+                    settings::Mode::Italic => Mode::Italic,
+                    settings::Mode::RapidBlink => Mode::RapidBlink,
+                    settings::Mode::Reverse => Mode::Reverse,
+                    settings::Mode::SlowBlink => Mode::SlowBlink,
+                    settings::Mode::Underline => Mode::Underline,
+                }
+                .into(),
+            );
+        }
+        if let Some(color) = &style.background {
+            codes.push(StyleCode::Background(Self::convert_color(color)));
+        }
+        if let Some(color) = &style.foreground {
+            codes.push(StyleCode::Foreground(Self::convert_color(color)));
+        }
+        Self(codes.into())
     }
 }
 
@@ -128,7 +173,7 @@ struct StylePack {
 impl StylePack {
     fn new() -> Self {
         Self {
-            styles: vec![Style(eseq0())],
+            styles: vec![Style::reset()],
             reset: Some(0),
             elements: vec![None; 255],
         }
@@ -152,6 +197,28 @@ impl StylePack {
         };
         self.elements[element as usize] = Some(pos);
     }
+
+    fn load(s: &settings::StylePack<settings::Style>) -> Self {
+        let mut result = Self::new();
+        result.add(Element::Caller, &Style::from(&s.caller));
+        result.add(Element::Comma, &Style::from(&s.comma));
+        result.add(Element::Delimiter, &Style::from(&s.delimiter));
+        result.add(Element::Ellipsis, &Style::from(&s.ellipsis));
+        result.add(Element::EqualSign, &Style::from(&s.equal_sign));
+        result.add(Element::FieldKey, &Style::from(&s.field_key));
+        result.add(Element::Level, &Style::from(&s.level));
+        result.add(Element::Boolean, &Style::from(&s.boolean));
+        result.add(Element::Null, &Style::from(&s.null));
+        result.add(Element::Number, &Style::from(&s.number));
+        result.add(Element::String, &Style::from(&s.string));
+        result.add(Element::AtSign, &Style::from(&s.at_sign));
+        result.add(Element::Logger, &Style::from(&s.logger));
+        result.add(Element::Message, &Style::from(&s.message));
+        result.add(Element::Quote, &Style::from(&s.quote));
+        result.add(Element::Time, &Style::from(&s.time));
+        result.add(Element::Whitespace, &Style::from(&s.time));
+        result
+    }
 }
 
 impl Theme {
@@ -162,142 +229,13 @@ impl Theme {
         }
     }
 
-    pub fn dark24() -> Self {
-        let pack = |level| {
-            let mut result = StylePack::new();
-            let dark = RGB(92, 96, 100).fg().into();
-            let medium = RGB(162, 185, 194).fg().into();
-            let bright = RGB(255, 255, 255).fg().into();
-            let orange = RGB(209, 154, 102).fg().into();
-            let green = RGB(0, 175, 135).fg().into();
-            let gray = RGB(153, 153, 153).fg().into();
-            let yellow = RGB(255, 255, 175).fg().into();
-            let blue = RGB(93, 175, 239).fg().into();
-            result.add(Element::Time, &dark);
-            result.add(Element::Level, &level);
-            result.add(Element::Logger, &dark);
-            result.add(Element::Caller, &dark);
-            result.add(Element::Message, &bright);
-            result.add(Element::FieldKey, &orange);
-            result.add(Element::EqualSign, &dark);
-            result.add(Element::Brace, &gray);
-            result.add(Element::Quote, &green);
-            result.add(Element::Delimiter, &gray);
-            result.add(Element::Comma, &dark);
-            result.add(Element::Ellipsis, &dark);
-            result.add(Element::LocationSign, &dark);
-            result.add(Element::LiteralNull, &yellow);
-            result.add(Element::LiteralBoolean, &yellow);
-            result.add(Element::LiteralNumber, &blue);
-            result.add(Element::LiteralString, &medium);
-            result
-        };
+    pub fn load(s: &settings::Theme) -> Self {
+        let default = StylePack::load(&s.default);
         let mut packs = HashMap::new();
-        packs.insert(Level::Debug, pack(RGB(56, 119, 128).fg().into()));
-        packs.insert(Level::Info, pack(RGB(86, 182, 194).fg().into()));
-        packs.insert(Level::Warning, pack(RGB(255, 224, 128).fg().into()));
-        packs.insert(Level::Error, pack(RGB(255, 128, 128).fg().into()));
-        Self {
-            packs,
-            default: pack(RGB(56, 119, 128).fg().into()),
+        for (level, pack) in &s.levels {
+            packs.insert(*level, StylePack::load(&s.default.clone().merged(&pack)));
         }
-    }
-
-    pub fn dark() -> Self {
-        let pack = |level| {
-            let mut result = StylePack::new();
-            let dark = Color::Black.bright().fg().into();
-            let medium = eseq0().into();
-            let bright = Color::White.bright().fg().into();
-            let green = Color::Green.fg().into();
-            let yellow = Color::Yellow.fg().into();
-            let cyan = Color::Cyan.fg().into();
-            result.add(Element::Time, &dark);
-            result.add(Element::Level, &level);
-            result.add(Element::Logger, &dark);
-            result.add(Element::Caller, &dark);
-            result.add(Element::Message, &bright);
-            result.add(Element::FieldKey, &green);
-            result.add(Element::EqualSign, &dark);
-            result.add(Element::Brace, &medium);
-            result.add(Element::Quote, &medium);
-            result.add(Element::Delimiter, &medium);
-            result.add(Element::Comma, &medium);
-            result.add(Element::Ellipsis, &dark);
-            result.add(Element::LocationSign, &dark);
-            result.add(Element::LiteralNull, &yellow);
-            result.add(Element::LiteralBoolean, &yellow);
-            result.add(Element::LiteralNumber, &cyan);
-            result.add(Element::LiteralString, &medium);
-            result
-        };
-        let mut packs = HashMap::new();
-        packs.insert(Level::Debug, pack(Color::Magenta.fg().into()));
-        packs.insert(Level::Info, pack(Color::Cyan.fg().into()));
-        packs.insert(
-            Level::Warning,
-            pack((Reverse.into(), Color::Yellow.bright().fg()).into()),
-        );
-        packs.insert(
-            Level::Error,
-            pack((Reverse.into(), Color::Red.bright().fg()).into()),
-        );
-        Self {
-            packs,
-            default: pack(Color::Magenta.fg().into()),
-        }
-    }
-
-    pub fn light() -> Self {
-        let pack = |level| {
-            let mut result = StylePack::new();
-            let dark = Color::Black.bright().fg().into();
-            let medium = eseq0().into();
-            let bright = Color::Black.fg().into();
-            let green = Color::Green.fg().into();
-            let yellow = Color::Yellow.fg().into();
-            let cyan = Color::Cyan.fg().into();
-            result.add(Element::Time, &dark);
-            result.add(Element::Level, &level);
-            result.add(Element::Logger, &dark);
-            result.add(Element::Caller, &dark);
-            result.add(Element::Message, &bright);
-            result.add(Element::FieldKey, &green);
-            result.add(Element::EqualSign, &dark);
-            result.add(Element::Brace, &medium);
-            result.add(Element::Quote, &medium);
-            result.add(Element::Delimiter, &medium);
-            result.add(Element::Comma, &medium);
-            result.add(Element::Ellipsis, &dark);
-            result.add(Element::LocationSign, &dark);
-            result.add(Element::LiteralNull, &yellow);
-            result.add(Element::LiteralBoolean, &yellow);
-            result.add(Element::LiteralNumber, &cyan);
-            result.add(Element::LiteralString, &medium);
-            result
-        };
-        let mut packs = HashMap::new();
-        packs.insert(Level::Debug, pack(Color::Magenta.fg().into()));
-        packs.insert(Level::Info, pack(Color::Cyan.fg().into()));
-        packs.insert(
-            Level::Warning,
-            pack(
-                (
-                    Reverse.into(),
-                    Color::Yellow.bright().fg(),
-                    Color::Black.bg(),
-                )
-                    .into(),
-            ),
-        );
-        packs.insert(
-            Level::Error,
-            pack((Reverse.into(), Color::Red.bright().fg(), Color::Black.bg()).into()),
-        );
-        Self {
-            packs,
-            default: pack(Color::Magenta.fg().into()),
-        }
+        Self { default, packs }
     }
 }
 
@@ -307,7 +245,7 @@ mod tests {
 
     #[test]
     fn test_theme() {
-        let theme = Theme::dark();
+        let theme = Theme::none();
         let mut buf = Vec::new();
         theme.apply(&mut buf, &Some(Level::Debug), |buf, styler| {
             styler.set(buf, Element::Message);

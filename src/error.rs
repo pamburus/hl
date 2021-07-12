@@ -41,6 +41,8 @@ pub enum Error {
     InvalidSize(String),
     #[error("cannot recognize time {0:?}")]
     UnrecognizedTime(String),
+    #[error("unknown theme {0:?}")]
+    UnknownTheme(String),
     #[error("zero size")]
     ZeroSize,
 }

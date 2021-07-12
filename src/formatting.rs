@@ -79,6 +79,7 @@ impl RecordFormatter {
             //
             // level
             //
+            styler.set(buf, Element::Whitespace);
             buf.push(b' ');
             styler.set(buf, Element::Delimiter);
             buf.push(b'|');
@@ -96,6 +97,7 @@ impl RecordFormatter {
             // logger
             //
             if let Some(logger) = rec.logger {
+                styler.set(buf, Element::Whitespace);
                 buf.push(b' ');
                 styler.set(buf, Element::Logger);
                 buf.extend_from_slice(logger.as_bytes());
@@ -105,6 +107,7 @@ impl RecordFormatter {
             // message text
             //
             if let Some(text) = rec.message {
+                styler.set(buf, Element::Whitespace);
                 buf.push(b' ');
                 self.format_message(buf, styler, text);
             }
@@ -130,7 +133,7 @@ impl RecordFormatter {
             // caller
             //
             if let Some(text) = rec.caller {
-                styler.set(buf, Element::LocationSign);
+                styler.set(buf, Element::AtSign);
                 buf.extend_from_slice(b" @ ");
                 styler.set(buf, Element::Caller);
                 buf.extend_from_slice(text.as_bytes());
@@ -176,15 +179,15 @@ impl RecordFormatter {
                 format_str_unescaped(buf, value.get());
             }
             b'0'..=b'9' | b'-' | b'+' | b'.' => {
-                styler.set(buf, Element::LiteralNumber);
+                styler.set(buf, Element::Number);
                 buf.extend_from_slice(value.get().as_bytes());
             }
             b't' | b'f' => {
-                styler.set(buf, Element::LiteralBoolean);
+                styler.set(buf, Element::Boolean);
                 buf.extend_from_slice(value.get().as_bytes());
             }
             b'n' => {
-                styler.set(buf, Element::LiteralNull);
+                styler.set(buf, Element::Null);
                 buf.extend_from_slice(value.get().as_bytes());
             }
             b'{' => {
@@ -221,7 +224,7 @@ impl RecordFormatter {
                             styler.set(buf, Element::Message);
                             buf.push(b);
                         } else {
-                            styler.set(buf, Element::LiteralString);
+                            styler.set(buf, Element::String);
                             buf.push(b'\\');
                             buf.push(HEXDIGIT[(b >> 4) as usize]);
                             buf.push(HEXDIGIT[(b & 0xF) as usize]);
@@ -301,7 +304,7 @@ impl<'a, 'b> FieldFormatter<'a, 'b> {
         if self.rf.unescape_fields {
             self.format_value(value, filter, setting);
         } else {
-            self.styler.set(self.buf, Element::LiteralString);
+            self.styler.set(self.buf, Element::String);
             self.buf.extend_from_slice(value.get().as_bytes())
         }
         true
@@ -317,21 +320,21 @@ impl<'a, 'b> FieldFormatter<'a, 'b> {
             b'"' => {
                 self.styler.set(self.buf, Element::Quote);
                 self.buf.push(b'\'');
-                self.styler.set(self.buf, Element::LiteralString);
+                self.styler.set(self.buf, Element::String);
                 format_str_unescaped(self.buf, value.get());
                 self.styler.set(self.buf, Element::Quote);
                 self.buf.push(b'\'');
             }
             b'0'..=b'9' | b'-' | b'+' | b'.' => {
-                self.styler.set(self.buf, Element::LiteralNumber);
+                self.styler.set(self.buf, Element::Number);
                 self.buf.extend_from_slice(value.get().as_bytes());
             }
             b't' | b'f' => {
-                self.styler.set(self.buf, Element::LiteralBoolean);
+                self.styler.set(self.buf, Element::Boolean);
                 self.buf.extend_from_slice(value.get().as_bytes());
             }
             b'n' => {
-                self.styler.set(self.buf, Element::LiteralNull);
+                self.styler.set(self.buf, Element::Null);
                 self.buf.extend_from_slice(value.get().as_bytes());
             }
             b'{' => {
@@ -370,7 +373,7 @@ impl<'a, 'b> FieldFormatter<'a, 'b> {
                 self.buf.push(b']');
             }
             _ => {
-                self.styler.set(self.buf, Element::LiteralString);
+                self.styler.set(self.buf, Element::String);
                 self.buf.extend_from_slice(value.get().as_bytes());
             }
         };
