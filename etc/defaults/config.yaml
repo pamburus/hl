@@ -5,30 +5,36 @@ time-format: '%b %d %T.%3N'
 # https://en.wikipedia.org/wiki/List_of_tz_database_time_zones
 time-zone: UTC
 
-# Configuration of the predefined set of fields
+# Settings for fields processing
 fields:
-  time:
-    names: [ts, TS, time, TIME, Time, _SOURCE_REALTIME_TIMESTAMP, __REALTIME_TIMESTAMP]
-  logger:
-    names: [logger, LOGGER, Logger]
-  level:
-    variants:
-      - names: [level, LEVEL, Level]
-        values:
-          debug: [debug]
-          info: [info, information]
-          warning: [warning, warn]
-          error: [error, err, fatal, critical, panic]
-      - names: [PRIORITY]
-        values:
-          debug: [7]
-          info: [6]
-          warning: [5, 4]
-          error: [3, 2, 1]
-  message:
-    names: [msg, message, MESSAGE, Message]
-  caller:
-    names: [caller, CALLER, Caller]
+  # Configuration of the predefined set of fields
+  predefined:
+    time:
+      names: [ts, TS, time, TIME, Time, _SOURCE_REALTIME_TIMESTAMP, __REALTIME_TIMESTAMP]
+    logger:
+      names: [logger, LOGGER, Logger]
+    level:
+      variants:
+        - names: [level, LEVEL, Level]
+          values:
+            debug: [debug]
+            info: [info, information]
+            warning: [warning, warn]
+            error: [error, err, fatal, critical, panic]
+        - names: [PRIORITY]
+          values:
+            debug: [7]
+            info: [6]
+            warning: [5, 4]
+            error: [3, 2, 1]
+    message:
+      names: [msg, message, MESSAGE, Message]
+    caller:
+      names: [caller, CALLER, Caller]
+  # List of wildcard field names to ignore
+  ignore: ['_*']
+  # List of exact field names to hide
+  hide: []
 
 # Number of processing threads, configured automatically based on CPU count if not specified
 concurrency: ~

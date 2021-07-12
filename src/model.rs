@@ -9,6 +9,7 @@ use chrono::{DateTime, Utc};
 use json::value::RawValue;
 use serde::de::{Deserialize, Deserializer, MapAccess, SeqAccess, Visitor};
 use serde_json as json;
+use wildmatch::WildMatch;
 
 // local imports
 use crate::settings::Fields;
@@ -126,26 +127,20 @@ impl<'a> Record<'a> {
 
 // ---
 
+#[derive(Default)]
 pub struct ParserSettings {
     fields: HashMap<String, (FieldSettings, usize)>,
-}
-
-impl Default for ParserSettings {
-    fn default() -> Self {
-        Self {
-            fields: HashMap::new(),
-        }
-    }
+    ignore: Vec<WildMatch>,
 }
 
 impl ParserSettings {
     pub fn new(s: &Fields, preparse_time: bool) -> Self {
         let mut fields = HashMap::new();
-        for (i, name) in s.time.names.iter().enumerate() {
+        for (i, name) in s.predefined.time.names.iter().enumerate() {
             fields.insert(name.clone(), (FieldSettings::Time(preparse_time), i));
         }
         let mut j = 0;
-        for variant in &s.level.variants {
+        for variant in &s.predefined.level.variants {
             let mut mapping = HashMap::new();
             for (level, values) in &variant.values {
                 for value in values {
@@ -157,16 +152,19 @@ impl ParserSettings {
             }
             j += variant.names.len();
         }
-        for (i, name) in s.message.names.iter().enumerate() {
+        for (i, name) in s.predefined.message.names.iter().enumerate() {
             fields.insert(name.clone(), (FieldSettings::Message, i));
         }
-        for (i, name) in s.logger.names.iter().enumerate() {
+        for (i, name) in s.predefined.logger.names.iter().enumerate() {
             fields.insert(name.clone(), (FieldSettings::Logger, i));
         }
-        for (i, name) in s.caller.names.iter().enumerate() {
+        for (i, name) in s.predefined.caller.names.iter().enumerate() {
             fields.insert(name.clone(), (FieldSettings::Caller, i));
         }
-        Self { fields }
+        Self {
+            fields,
+            ignore: s.ignore.iter().map(|v| WildMatch::new(v)).collect(),
+        }
     }
 
     fn apply<'a>(
@@ -185,10 +183,17 @@ impl ParserSettings {
                     *priority = Some(*p);
                 }
             }
-            None => match to.extra.push((key, value)) {
-                Ok(_) => {}
-                Err(value) => to.extrax.push(value),
-            },
+            None => {
+                for pattern in &self.ignore {
+                    if pattern.matches(key) {
+                        return;
+                    }
+                }
+                match to.extra.push((key, value)) {
+                    Ok(_) => {}
+                    Err(value) => to.extrax.push(value),
+                }
+            }
         };
     }
 

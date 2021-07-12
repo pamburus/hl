@@ -302,6 +302,9 @@ fn run() -> Result<()> {
     for key in opt.show {
         fields.entry(&key).include();
     }
+    for key in &CONFIG.fields.hide {
+        fields.entry(&key).exclude();
+    }
 
     let max_message_size = opt.max_message_size;
     let buffer_size = std::cmp::min(max_message_size, opt.buffer_size);
