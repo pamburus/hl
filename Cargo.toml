@@ -4,7 +4,7 @@ categories = ["command-line-utilities"]
 description = "Utility for viewing json-formatted log files."
 keywords = ["cli", "human", "log"]
 name = "hl"
-version = "0.9.6"
+version = "0.9.7"
 edition = "2018"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -39,6 +39,7 @@ shellwords = "1"
 signal-hook = "0"
 structopt = "0"
 thiserror = "1"
+wildmatch = "2"
 
 [dependencies.itoa]
 version = "0"
@@ -54,8 +55,10 @@ features = ["handleapi"]
 
 [dev-dependencies]
 criterion = "0"
+stats_alloc = "0"
 diligent-date-parser = "0"
 regex = "1"
+wildmatch = "2"
 
 [profile.release]
 debug = false
@@ -64,9 +67,17 @@ codegen-units = 1
 lto = true
 
 [[bench]]
+name = "re_match"
+harness = false
+
+[[bench]]
 name = "ts_parse"
 harness = false
 
 [[bench]]
 name = "ts_format"
+harness = false
+
+[[bench]]
+name = "wild_match"
 harness = false

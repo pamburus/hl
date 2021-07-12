@@ -45,6 +45,15 @@ impl Settings {
 
 #[derive(Debug, Deserialize)]
 pub struct Fields {
+    pub predefined: PrefedinedFields,
+    pub ignore: Vec<String>,
+    pub hide: Vec<String>,
+}
+
+// ---
+
+#[derive(Debug, Deserialize)]
+pub struct PrefedinedFields {
     pub time: TimeField,
     pub level: LevelField,
     pub message: MessageField,

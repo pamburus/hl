@@ -13,19 +13,19 @@ fn criterion_benchmark(c: &mut Criterion) {
         b.iter(|| assert!(re.is_match(rfc3339)));
     });
     c.bench_function("as_rfc3339", |b| {
-        let ts = Timestamp::new(rfc3339);
+        let ts = Timestamp::new(rfc3339, None);
         b.iter(|| assert!(ts.as_rfc3339().is_some()));
     });
     c.bench_function("parse unix", |b| {
-        let ts = Timestamp::new(unix);
+        let ts = Timestamp::new(unix, None);
         b.iter(|| assert!(ts.parse().is_some()))
     });
     c.bench_function("parse unix microseconds", |b| {
-        let ts = Timestamp::new(unix_us);
+        let ts = Timestamp::new(unix_us, None);
         b.iter(|| assert!(ts.parse().is_some()))
     });
     c.bench_function("parse rfc3339", |b| {
-        let ts = Timestamp::new(rfc3339);
+        let ts = Timestamp::new(rfc3339, None);
         b.iter(|| assert!(ts.parse().is_some()))
     });
 }

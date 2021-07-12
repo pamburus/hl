@@ -567,7 +567,7 @@ dependencies = [
 
 [[package]]
 name = "hl"
-version = "0.9.6"
+version = "0.9.7"
 dependencies = [
  "ansi_term",
  "anyhow",
@@ -601,8 +601,10 @@ dependencies = [
  "serde_json",
  "shellwords",
  "signal-hook",
+ "stats_alloc",
  "structopt",
  "thiserror",
+ "wildmatch",
  "winapi",
 ]
 
@@ -1202,6 +1204,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
 
 [[package]]
+name = "stats_alloc"
+version = "0.1.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a260c96bf26273969f360c2fc2e2c7732acc2ce49d939c7243c7230c2ad179d0"
+
+[[package]]
 name = "strsim"
 version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1454,6 +1462,12 @@ dependencies = [
  "js-sys",
  "wasm-bindgen",
 ]
+
+[[package]]
+name = "wildmatch"
+version = "2.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d6c48bd20df7e4ced539c12f570f937c6b4884928a87fee70a479d72f031d4e0"
 
 [[package]]
 name = "winapi"
