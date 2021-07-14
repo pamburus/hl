@@ -82,3 +82,7 @@ harness = false
 [[bench]]
 name = "wild_match"
 harness = false
+
+[[bench]]
+name = "theme"
+harness = false
