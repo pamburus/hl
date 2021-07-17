@@ -1,14 +1,18 @@
-use std::collections::HashMap;
+// std imports
 use std::vec::Vec;
 
-use crate::eseq;
-use crate::settings;
-use crate::types;
+// third-party imports
+use enum_map::{Enum, EnumMap};
 
-use eseq::{Brightness, Color, ColorCode, Mode, Sequence, StyleCode};
+// local imports
+use crate::{
+    eseq::{Brightness, Color, ColorCode, Mode, Sequence, StyleCode},
+    settings, types,
+};
 pub use types::Level;
 
 #[repr(u8)]
+#[derive(Enum)]
 pub enum Element {
     Time,
     Level,
@@ -38,7 +42,7 @@ pub struct Styler<'a> {
 }
 
 pub struct Theme {
-    packs: HashMap<Level, StylePack>,
+    packs: EnumMap<Level, StylePack>,
     default: StylePack,
 }
 
@@ -46,6 +50,7 @@ pub struct Theme {
 struct Style(Sequence);
 
 impl Style {
+    #[inline]
     pub fn apply(&self, buf: &mut Buf) {
         buf.extend_from_slice(self.0.data())
     }
@@ -80,6 +85,12 @@ impl Style {
             settings::Color::Palette(code) => ColorCode::Palette(*code),
             settings::Color::RGB(settings::RGB(r, g, b)) => ColorCode::RGB(*r, *g, *b),
         }
+    }
+}
+
+impl Default for Style {
+    fn default() -> Self {
+        Self::reset()
     }
 }
 
@@ -119,14 +130,17 @@ impl From<&settings::Style> for Style {
 }
 
 impl<'a> Styler<'a> {
+    #[inline]
     pub fn set(&mut self, buf: &mut Buf, e: Element) {
-        self.set_style(buf, self.pack.elements[e as usize])
+        self.set_style(buf, self.pack.elements[e])
     }
 
+    #[inline]
     fn reset(&mut self, buf: &mut Buf) {
         self.set_style(buf, None)
     }
 
+    #[inline]
     fn set_style(&mut self, buf: &mut Buf, style: Option<usize>) {
         let style = match style {
             Some(style) => Some(style),
@@ -151,10 +165,7 @@ impl Theme {
     ) {
         let mut styler = Styler {
             pack: match level {
-                Some(level) => match self.packs.get(level) {
-                    Some(pack) => pack,
-                    None => &self.default,
-                },
+                Some(level) => &self.packs[*level],
                 None => &self.default,
             },
             current: None,
@@ -164,29 +175,14 @@ impl Theme {
     }
 }
 
+#[derive(Default)]
 struct StylePack {
-    elements: Vec<Option<usize>>,
+    elements: EnumMap<Element, Option<usize>>,
     reset: Option<usize>,
     styles: Vec<Style>,
 }
 
 impl StylePack {
-    fn new() -> Self {
-        Self {
-            styles: vec![Style::reset()],
-            reset: Some(0),
-            elements: vec![None; 255],
-        }
-    }
-
-    fn none() -> Self {
-        Self {
-            elements: vec![None; 255],
-            reset: None,
-            styles: Vec::new(),
-        }
-    }
-
     fn add(&mut self, element: Element, style: &Style) {
         let pos = match self.styles.iter().position(|x| x == style) {
             Some(pos) => pos,
@@ -195,11 +191,11 @@ impl StylePack {
                 self.styles.len() - 1
             }
         };
-        self.elements[element as usize] = Some(pos);
+        self.elements[element] = Some(pos);
     }
 
     fn load(s: &settings::StylePack<settings::Style>) -> Self {
-        let mut result = Self::new();
+        let mut result = Self::default();
         result.add(Element::Caller, &Style::from(&s.caller));
         result.add(Element::Comma, &Style::from(&s.comma));
         result.add(Element::Delimiter, &Style::from(&s.delimiter));
@@ -215,6 +211,7 @@ impl StylePack {
         result.add(Element::Logger, &Style::from(&s.logger));
         result.add(Element::Message, &Style::from(&s.message));
         result.add(Element::Quote, &Style::from(&s.quote));
+        result.add(Element::Brace, &Style::from(&s.brace));
         result.add(Element::Time, &Style::from(&s.time));
         result.add(Element::Whitespace, &Style::from(&s.time));
         result
@@ -224,16 +221,16 @@ impl StylePack {
 impl Theme {
     pub fn none() -> Self {
         Self {
-            packs: HashMap::new(),
-            default: StylePack::none(),
+            packs: EnumMap::default(),
+            default: StylePack::default(),
         }
     }
 
     pub fn load(s: &settings::Theme) -> Self {
         let default = StylePack::load(&s.default);
-        let mut packs = HashMap::new();
+        let mut packs = EnumMap::default();
         for (level, pack) in &s.levels {
-            packs.insert(*level, StylePack::load(&s.default.clone().merged(&pack)));
+            packs[*level] = StylePack::load(&s.default.clone().merged(&pack));
         }
         Self { default, packs }
     }
