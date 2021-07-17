@@ -23,6 +23,7 @@ pub use types::Level;
 pub trait StylingPush<B: Push<u8>> {
     fn element<R, F: FnOnce(&mut Self) -> R>(&mut self, element: Element, f: F) -> R;
     fn batch<F: FnOnce(&mut B)>(&mut self, f: F);
+    fn space(&mut self);
 }
 
 // ---
@@ -68,7 +69,6 @@ impl Theme {
             current: None,
         };
         f(&mut styler);
-        // styler.reset()
     }
 }
 
@@ -222,6 +222,10 @@ impl<'a, B: Push<u8>> StylingPush<B> for Styler<'a, B> {
         let result = f(self);
         self.set_style(style);
         result
+    }
+    #[inline(always)]
+    fn space(&mut self) {
+        self.buf.push(b' ');
     }
     #[inline(always)]
     fn batch<F: FnOnce(&mut B)>(&mut self, f: F) {
