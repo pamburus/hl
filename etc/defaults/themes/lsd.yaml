@@ -1,0 +1,48 @@
+elements:
+  time:
+    foreground: bright-black
+  logger:
+    foreground: bright-black
+  caller:
+    foreground: bright-black
+    modes: [italic]
+  level:
+    foreground: bright-black
+  message:
+    foreground: bright-white
+  field:
+    foreground: default
+  key:
+    foreground: bright-blue
+    modes: [underline]
+  ellipsis:
+    foreground: bright-black
+  object:
+    foreground: blue
+  array:
+    foreground: blue
+  string:
+    foreground: green
+  number:
+    foreground: yellow
+  boolean:
+    foreground: yellow
+  'null':
+    foreground: yellow
+levels:
+  debug:
+    level-inner:
+      foreground: magenta
+  info:
+    level-inner:
+      foreground: cyan
+  warning:
+    time:
+      foreground: yellow
+    level-inner:
+      foreground: bright-yellow
+  error:
+    time:
+      foreground: red
+    level-inner:
+      foreground: bright-red

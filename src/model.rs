@@ -288,12 +288,12 @@ impl FieldSettings {
 
 // ---
 
-pub struct Parser<'s> {
-    settings: &'s ParserSettings,
+pub struct Parser {
+    settings: ParserSettings,
 }
 
-impl<'s> Parser<'s> {
-    pub fn new(settings: &'s ParserSettings) -> Self {
+impl Parser {
+    pub fn new(settings: ParserSettings) -> Self {
         Self { settings }
     }
 
@@ -527,7 +527,7 @@ impl FieldFilter {
 
 // ---
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct FieldFilterSet(Vec<FieldFilter>);
 
 impl FieldFilterSet {
@@ -544,7 +544,7 @@ impl FieldFilterSet {
 
 // ---
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct Filter {
     pub fields: FieldFilterSet,
     pub level: Option<Level>,
@@ -560,6 +560,8 @@ impl Filter {
             && self.until.is_none()
     }
 }
+
+// ---
 
 pub struct Object<'a> {
     pub fields: heapless::Vec<(&'a str, &'a RawValue), 32>,

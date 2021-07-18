@@ -4,7 +4,7 @@ categories = ["command-line-utilities"]
 description = "Utility for viewing json-formatted log files."
 keywords = ["cli", "human", "log"]
 name = "hl"
-version = "0.9.7"
+version = "0.10.0"
 edition = "2018"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -24,6 +24,7 @@ crossbeam-channel = "0"
 crossbeam-queue = "0"
 crossbeam-utils = "0"
 derive_deref = "1"
+enum-map = "1"
 error-chain = "0"
 flate2 = "1"
 heapless = "0"
@@ -33,8 +34,10 @@ itertools = "0"
 num_cpus = "1"
 once_cell = "1"
 platform-dirs = "0"
+rust-embed = "5"
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["raw_value"] }
+serde_yaml = "0"
 shellwords = "1"
 signal-hook = "0"
 structopt = "0"
@@ -54,9 +57,11 @@ version = "0"
 features = ["handleapi"]
 
 [dev-dependencies]
+byte-strings = "0"
 criterion = "0"
-stats_alloc = "0"
 diligent-date-parser = "0"
+pipe = "0"
+stats_alloc = "0"
 regex = "1"
 wildmatch = "2"
 
@@ -67,17 +72,25 @@ codegen-units = 1
 lto = true
 
 [[bench]]
-name = "re_match"
+name = "regex"
 harness = false
 
 [[bench]]
-name = "ts_parse"
+name = "ts-parse"
 harness = false
 
 [[bench]]
-name = "ts_format"
+name = "ts-format"
 harness = false
 
 [[bench]]
-name = "wild_match"
+name = "wildcard"
+harness = false
+
+[[bench]]
+name = "theme"
+harness = false
+
+[[bench]]
+name = "parse-and-format"
 harness = false

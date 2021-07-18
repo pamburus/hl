@@ -7,6 +7,7 @@ pub mod input;
 pub mod output;
 pub mod settings;
 pub mod theme;
+pub mod themecfg;
 pub mod timeparse;
 pub mod timestamp;
 pub mod types;
@@ -25,12 +26,13 @@ mod scanning;
 pub mod signal;
 
 // public uses
-pub use app::App;
-pub use app::{FieldOptions, Options};
+pub use app::{App, FieldOptions, Options, SegmentProcesor};
+pub use datefmt::{DateTimeFormatter, LinuxDateFormat};
 pub use filtering::DefaultNormalizing;
-pub use model::FieldFilterSet;
-pub use model::Filter;
-pub use model::Level;
+pub use formatting::RecordFormatter;
+pub use model::{FieldFilterSet, Filter, Level, Parser, ParserSettings};
+pub use settings::Settings;
+pub use theme::Theme;
 
 // public uses (platform-specific)
 pub use console::enable_ansi_support;

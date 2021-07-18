@@ -9,7 +9,9 @@ use stats_alloc::{Region, StatsAlloc, INSTRUMENTED_SYSTEM};
 #[global_allocator]
 static GLOBAL: &StatsAlloc<System> = &INSTRUMENTED_SYSTEM;
 
-fn criterion_benchmark(c: &mut Criterion) {
+fn benchmark(c: &mut Criterion) {
+    let mut c = c.benchmark_group("regex");
+
     let re = Regex::new(r"^_").unwrap();
 
     let mut c1 = None;
@@ -48,5 +50,5 @@ fn criterion_benchmark(c: &mut Criterion) {
     });
 }
 
-criterion_group!(benches, criterion_benchmark);
+criterion_group!(benches, benchmark);
 criterion_main!(benches);

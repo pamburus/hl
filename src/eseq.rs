@@ -1,9 +1,11 @@
 use std::io::Write;
 
+// ---
+
 #[repr(u8)]
 #[allow(dead_code)]
 #[derive(Clone, Copy)]
-pub enum Style {
+pub enum Mode {
     Reset = 0,
     Bold,
     Faint,
@@ -15,6 +17,14 @@ pub enum Style {
     Conseal,
     CrossedOut,
 }
+
+impl Mode {
+    fn render(&self, buf: &mut Vec<u8>) {
+        write!(buf, "{}", (*self as u8)).unwrap()
+    }
+}
+
+// ---
 
 #[repr(u8)]
 #[allow(dead_code)]
@@ -28,44 +38,6 @@ pub enum Color {
     Magenta,
     Cyan,
     White,
-}
-
-pub struct PlainColor(Color, Brightness);
-
-#[allow(dead_code)]
-pub enum ColorCode {
-    Plain(Color, Brightness),
-    Palette(u8),
-    RGB(u8, u8, u8),
-}
-
-#[allow(dead_code)]
-pub enum Brightness {
-    Normal,
-    Bright,
-}
-
-#[allow(dead_code)]
-pub enum StyleCode {
-    Style(Style),
-    Background(ColorCode),
-    Foreground(ColorCode),
-}
-
-impl StyleCode {
-    fn render(&self, buf: &mut Vec<u8>) {
-        match self {
-            Self::Style(style) => style.render(buf),
-            Self::Background(color) => color.render(buf, 40),
-            Self::Foreground(color) => color.render(buf, 30),
-        }
-    }
-}
-
-impl From<Style> for StyleCode {
-    fn from(style: Style) -> Self {
-        StyleCode::Style(style)
-    }
 }
 
 #[allow(dead_code)]
@@ -87,6 +59,10 @@ impl Color {
     }
 }
 
+// ---
+
+pub struct PlainColor(Color, Brightness);
+
 #[allow(dead_code)]
 impl PlainColor {
     pub fn fg(self) -> StyleCode {
@@ -98,10 +74,14 @@ impl PlainColor {
     }
 }
 
-impl Style {
-    fn render(&self, buf: &mut Vec<u8>) {
-        write!(buf, "{}", (*self as u8)).unwrap()
-    }
+// ---
+
+#[allow(dead_code)]
+pub enum ColorCode {
+    Default,
+    Plain(Color, Brightness),
+    Palette(u8),
+    RGB(u8, u8, u8),
 }
 
 impl ColorCode {
@@ -115,6 +95,7 @@ impl ColorCode {
 
     fn render(&self, buf: &mut Vec<u8>, base: u8) {
         match self {
+            Self::Default => write!(buf, "{}", base + 9).unwrap(),
             Self::Plain(color, Brightness::Normal) => color.render(buf, base),
             Self::Plain(color, Brightness::Bright) => color.render(buf, base + 60),
             Self::Palette(color) => write!(buf, "{};5;{}", base + 8, color).unwrap(),
@@ -123,49 +104,118 @@ impl ColorCode {
     }
 }
 
-#[allow(dead_code)]
-pub fn eseq0() -> Vec<u8> {
-    let mut buf = Vec::with_capacity(5);
-    begin(&mut buf);
-    end(&mut buf);
-    buf
-}
+// ---
 
 #[allow(dead_code)]
-pub fn eseq1(c1: StyleCode) -> Vec<u8> {
-    let mut buf = Vec::with_capacity(24);
-    begin(&mut buf);
-    next(&mut buf);
-    c1.render(&mut buf);
-    end(&mut buf);
-    buf
+pub enum Brightness {
+    Normal,
+    Bright,
 }
 
-#[allow(dead_code)]
-pub fn eseq2(c1: StyleCode, c2: StyleCode) -> Vec<u8> {
-    let mut buf = Vec::with_capacity(48);
-    begin(&mut buf);
-    next(&mut buf);
-    c1.render(&mut buf);
-    next(&mut buf);
-    c2.render(&mut buf);
-    end(&mut buf);
-    buf
-}
+// ---
 
 #[allow(dead_code)]
-pub fn eseq3(c1: StyleCode, c2: StyleCode, c3: StyleCode) -> Vec<u8> {
-    let mut buf = Vec::with_capacity(72);
-    begin(&mut buf);
-    next(&mut buf);
-    c1.render(&mut buf);
-    next(&mut buf);
-    c2.render(&mut buf);
-    next(&mut buf);
-    c3.render(&mut buf);
-    end(&mut buf);
-    buf
+pub enum StyleCode {
+    Mode(Mode),
+    Background(ColorCode),
+    Foreground(ColorCode),
 }
+
+impl StyleCode {
+    fn render(&self, buf: &mut Vec<u8>) {
+        match self {
+            Self::Mode(mode) => mode.render(buf),
+            Self::Background(color) => color.render(buf, 40),
+            Self::Foreground(color) => color.render(buf, 30),
+        }
+    }
+}
+
+impl From<Mode> for StyleCode {
+    fn from(mode: Mode) -> Self {
+        StyleCode::Mode(mode)
+    }
+}
+
+// ---
+
+#[derive(Clone, Eq, PartialEq)]
+pub struct Sequence {
+    buf: Vec<u8>,
+}
+
+impl Sequence {
+    pub fn reset() -> Self {
+        let mut buf = Vec::with_capacity(5);
+        begin(&mut buf);
+        end(&mut buf);
+        Self { buf }
+    }
+
+    pub fn data(&self) -> &[u8] {
+        &self.buf
+    }
+}
+
+impl From<Vec<u8>> for Sequence {
+    fn from(buf: Vec<u8>) -> Self {
+        Self { buf }
+    }
+}
+
+impl From<StyleCode> for Sequence {
+    fn from(c1: StyleCode) -> Self {
+        let mut buf = Vec::with_capacity(24);
+        begin(&mut buf);
+        next(&mut buf);
+        c1.render(&mut buf);
+        end(&mut buf);
+        Self { buf }
+    }
+}
+
+impl From<(StyleCode, StyleCode)> for Sequence {
+    fn from(v: (StyleCode, StyleCode)) -> Self {
+        let mut buf = Vec::with_capacity(48);
+        begin(&mut buf);
+        next(&mut buf);
+        v.0.render(&mut buf);
+        next(&mut buf);
+        v.1.render(&mut buf);
+        end(&mut buf);
+        Self { buf }
+    }
+}
+
+impl From<(StyleCode, StyleCode, StyleCode)> for Sequence {
+    fn from(v: (StyleCode, StyleCode, StyleCode)) -> Self {
+        let mut buf = Vec::with_capacity(72);
+        begin(&mut buf);
+        next(&mut buf);
+        v.0.render(&mut buf);
+        next(&mut buf);
+        v.1.render(&mut buf);
+        next(&mut buf);
+        v.2.render(&mut buf);
+        end(&mut buf);
+        Self { buf }
+    }
+}
+
+impl From<Vec<StyleCode>> for Sequence {
+    fn from(v: Vec<StyleCode>) -> Self {
+        let mut buf = Vec::new();
+        begin(&mut buf);
+        for s in v {
+            next(&mut buf);
+            s.render(&mut buf);
+        }
+        end(&mut buf);
+        Self { buf }
+    }
+}
+
+// ---
 
 #[inline]
 fn begin(buf: &mut Vec<u8>) {

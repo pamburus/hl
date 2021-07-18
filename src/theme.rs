@@ -1,147 +1,249 @@
-use std::collections::HashMap;
-use std::vec::Vec;
+// std imports
+use std::{borrow::Borrow, collections::HashMap, vec::Vec};
 
-use crate::eseq;
-use crate::types;
+// third-party imports
+use enum_map::EnumMap;
+use platform_dirs::AppDirs;
 
-use eseq::{eseq0, eseq1, eseq2, eseq3, Color, ColorCode::RGB, Style::Reverse, StyleCode};
+// local imports
+use crate::{
+    error::*,
+    eseq::{Brightness, Color, ColorCode, Mode, Sequence, StyleCode},
+    fmtx::Push,
+    themecfg, types,
+};
+
+// ---
+
+pub use themecfg::{Element, ThemeInfo, ThemeOrigin};
 pub use types::Level;
 
-#[repr(u8)]
-pub enum Element {
-    Time,
-    Level,
-    Logger,
-    Caller,
-    Message,
-    EqualSign,
-    Brace,
-    Quote,
-    Delimiter,
-    Comma,
-    LocationSign,
-    Ellipsis,
-    FieldKey,
-    LiteralNull,
-    LiteralBoolean,
-    LiteralNumber,
-    LiteralString,
+// ---
+
+pub trait StylingPush<B: Push<u8>> {
+    fn element<R, F: FnOnce(&mut Self) -> R>(&mut self, element: Element, f: F) -> R;
+    fn batch<F: FnOnce(&mut B)>(&mut self, f: F);
+    fn space(&mut self);
 }
 
-pub type Buf = Vec<u8>;
-
-pub struct Styler<'a> {
-    pack: &'a StylePack,
-    current: Option<usize>,
-}
+// ---
 
 pub struct Theme {
-    packs: HashMap<Level, StylePack>,
+    packs: EnumMap<Level, StylePack>,
     default: StylePack,
 }
 
-#[derive(Clone, Eq, PartialEq)]
-struct Style(Buf);
-
-impl Style {
-    pub fn apply(&self, buf: &mut Buf) {
-        buf.extend_from_slice(self.0.as_slice())
-    }
-}
-
-impl From<Vec<u8>> for Style {
-    fn from(value: Vec<u8>) -> Self {
-        Self(value)
-    }
-}
-
-impl From<StyleCode> for Style {
-    fn from(value: StyleCode) -> Self {
-        Self(eseq1(value))
-    }
-}
-
-impl From<(StyleCode, StyleCode)> for Style {
-    fn from(v: (StyleCode, StyleCode)) -> Self {
-        Self(eseq2(v.0, v.1))
-    }
-}
-
-impl From<(StyleCode, StyleCode, StyleCode)> for Style {
-    fn from(v: (StyleCode, StyleCode, StyleCode)) -> Self {
-        Self(eseq3(v.0, v.1, v.2))
-    }
-}
-
-impl<'a> Styler<'a> {
-    pub fn set(&mut self, buf: &mut Buf, e: Element) {
-        self.set_style(buf, self.pack.elements[e as usize])
-    }
-
-    fn reset(&mut self, buf: &mut Buf) {
-        self.set_style(buf, None)
-    }
-
-    fn set_style(&mut self, buf: &mut Buf, style: Option<usize>) {
-        let style = match style {
-            Some(style) => Some(style),
-            None => self.pack.reset,
-        };
-        if let Some(style) = style {
-            if self.current != Some(style) {
-                self.current = Some(style);
-                let style = &self.pack.styles[style];
-                style.apply(buf);
-            }
+impl Theme {
+    pub fn none() -> Self {
+        Self {
+            packs: EnumMap::default(),
+            default: StylePack::default(),
         }
     }
-}
 
-impl Theme {
-    pub fn apply<'a, F: FnOnce(&mut Buf, &mut Styler<'a>)>(
+    pub fn load(app_dirs: &AppDirs, name: &str) -> Result<Self> {
+        Ok(themecfg::Theme::load(app_dirs, name)?.into())
+    }
+
+    pub fn embedded(name: &str) -> Result<Self> {
+        Ok(themecfg::Theme::embedded(name)?.into())
+    }
+
+    pub fn list(app_dirs: &AppDirs) -> Result<HashMap<String, ThemeInfo>> {
+        themecfg::Theme::list(app_dirs)
+    }
+
+    pub fn apply<'a, B: Push<u8>, F: FnOnce(&mut Styler<'a, B>)>(
         &'a self,
-        buf: &mut Buf,
+        buf: &'a mut B,
         level: &Option<Level>,
         f: F,
     ) {
         let mut styler = Styler {
+            buf,
             pack: match level {
-                Some(level) => match self.packs.get(level) {
-                    Some(pack) => pack,
-                    None => &self.default,
-                },
+                Some(level) => &self.packs[*level],
                 None => &self.default,
             },
+            synced: None,
             current: None,
         };
-        f(buf, &mut styler);
-        styler.reset(buf)
+        f(&mut styler);
     }
 }
 
+impl<S: Borrow<themecfg::Theme>> From<S> for Theme {
+    fn from(s: S) -> Self {
+        let s = s.borrow();
+        let default = StylePack::load(&s.elements);
+        let mut packs = EnumMap::default();
+        for (level, pack) in &s.levels {
+            packs[*level] = StylePack::load(&s.elements.clone().merged(pack.clone()));
+        }
+        Self { default, packs }
+    }
+}
+
+// ---
+
+#[derive(Clone, Eq, PartialEq)]
+struct Style(Sequence);
+
+impl Style {
+    #[inline(always)]
+    pub fn apply<B: Push<u8>>(&self, buf: &mut B) {
+        buf.extend_from_slice(self.0.data())
+    }
+
+    pub fn reset() -> Self {
+        Sequence::reset().into()
+    }
+
+    fn convert_color(color: &themecfg::Color) -> ColorCode {
+        match color {
+            themecfg::Color::Plain(color) => match color {
+                themecfg::PlainColor::Default => ColorCode::Default,
+                themecfg::PlainColor::Black => ColorCode::Plain(Color::Black, Brightness::Normal),
+                themecfg::PlainColor::Blue => ColorCode::Plain(Color::Blue, Brightness::Normal),
+                themecfg::PlainColor::Cyan => ColorCode::Plain(Color::Cyan, Brightness::Normal),
+                themecfg::PlainColor::Green => ColorCode::Plain(Color::Green, Brightness::Normal),
+                themecfg::PlainColor::Magenta => {
+                    ColorCode::Plain(Color::Magenta, Brightness::Normal)
+                }
+                themecfg::PlainColor::Red => ColorCode::Plain(Color::Red, Brightness::Normal),
+                themecfg::PlainColor::White => ColorCode::Plain(Color::White, Brightness::Normal),
+                themecfg::PlainColor::Yellow => ColorCode::Plain(Color::Yellow, Brightness::Normal),
+                themecfg::PlainColor::BrightBlack => {
+                    ColorCode::Plain(Color::Black, Brightness::Bright)
+                }
+                themecfg::PlainColor::BrightBlue => {
+                    ColorCode::Plain(Color::Blue, Brightness::Bright)
+                }
+                themecfg::PlainColor::BrightCyan => {
+                    ColorCode::Plain(Color::Cyan, Brightness::Bright)
+                }
+                themecfg::PlainColor::BrightGreen => {
+                    ColorCode::Plain(Color::Green, Brightness::Bright)
+                }
+                themecfg::PlainColor::BrightMagenta => {
+                    ColorCode::Plain(Color::Magenta, Brightness::Bright)
+                }
+                themecfg::PlainColor::BrightRed => ColorCode::Plain(Color::Red, Brightness::Bright),
+                themecfg::PlainColor::BrightWhite => {
+                    ColorCode::Plain(Color::White, Brightness::Bright)
+                }
+                themecfg::PlainColor::BrightYellow => {
+                    ColorCode::Plain(Color::Yellow, Brightness::Bright)
+                }
+            },
+            themecfg::Color::Palette(code) => ColorCode::Palette(*code),
+            themecfg::Color::RGB(themecfg::RGB(r, g, b)) => ColorCode::RGB(*r, *g, *b),
+        }
+    }
+}
+
+impl Default for Style {
+    fn default() -> Self {
+        Self::reset()
+    }
+}
+
+impl<T: Into<Sequence>> From<T> for Style {
+    fn from(value: T) -> Self {
+        Self(value.into())
+    }
+}
+
+impl From<&themecfg::Style> for Style {
+    fn from(style: &themecfg::Style) -> Self {
+        let mut codes = Vec::<StyleCode>::new();
+        for mode in &style.modes {
+            codes.push(
+                match mode {
+                    themecfg::Mode::Bold => Mode::Bold,
+                    themecfg::Mode::Conseal => Mode::Conseal,
+                    themecfg::Mode::CrossedOut => Mode::CrossedOut,
+                    themecfg::Mode::Faint => Mode::Faint,
+                    themecfg::Mode::Italic => Mode::Italic,
+                    themecfg::Mode::RapidBlink => Mode::RapidBlink,
+                    themecfg::Mode::Reverse => Mode::Reverse,
+                    themecfg::Mode::SlowBlink => Mode::SlowBlink,
+                    themecfg::Mode::Underline => Mode::Underline,
+                }
+                .into(),
+            );
+        }
+        if let Some(color) = &style.background {
+            codes.push(StyleCode::Background(Self::convert_color(color)));
+        }
+        if let Some(color) = &style.foreground {
+            codes.push(StyleCode::Foreground(Self::convert_color(color)));
+        }
+        Self(codes.into())
+    }
+}
+
+// ---
+
+pub struct Styler<'a, B: Push<u8>> {
+    buf: &'a mut B,
+    pack: &'a StylePack,
+    synced: Option<usize>,
+    current: Option<usize>,
+}
+
+impl<'a, B: Push<u8>> Styler<'a, B> {
+    #[inline(always)]
+    fn set(&mut self, e: Element) -> Option<usize> {
+        self.set_style(self.pack.elements[e])
+    }
+
+    #[inline(always)]
+    fn set_style(&mut self, style: Option<usize>) -> Option<usize> {
+        self.current.replace(style?)
+    }
+
+    #[inline(always)]
+    fn sync(&mut self) {
+        if self.synced != self.current {
+            if let Some(style) = self.current.or(self.pack.reset) {
+                self.pack.styles[style].apply(self.buf);
+            }
+            self.synced = self.current;
+        }
+    }
+}
+
+impl<'a, B: Push<u8>> StylingPush<B> for Styler<'a, B> {
+    #[inline(always)]
+    fn element<R, F: FnOnce(&mut Self) -> R>(&mut self, element: Element, f: F) -> R {
+        let style = self.current;
+        self.set(element);
+        let result = f(self);
+        self.set_style(style);
+        result
+    }
+    #[inline(always)]
+    fn space(&mut self) {
+        self.buf.push(b' ');
+    }
+    #[inline(always)]
+    fn batch<F: FnOnce(&mut B)>(&mut self, f: F) {
+        self.sync();
+        f(self.buf)
+    }
+}
+
+// ---
+
+#[derive(Default)]
 struct StylePack {
-    elements: Vec<Option<usize>>,
+    elements: EnumMap<Element, Option<usize>>,
     reset: Option<usize>,
     styles: Vec<Style>,
 }
 
 impl StylePack {
-    fn new() -> Self {
-        Self {
-            styles: vec![Style(eseq0())],
-            reset: Some(0),
-            elements: vec![None; 255],
-        }
-    }
-
-    fn none() -> Self {
-        Self {
-            elements: vec![None; 255],
-            reset: None,
-            styles: Vec::new(),
-        }
-    }
-
     fn add(&mut self, element: Element, style: &Style) {
         let pos = match self.styles.iter().position(|x| x == style) {
             Some(pos) => pos,
@@ -150,156 +252,19 @@ impl StylePack {
                 self.styles.len() - 1
             }
         };
-        self.elements[element as usize] = Some(pos);
+        self.elements[element] = Some(pos);
+    }
+
+    fn load(s: &themecfg::StylePack) -> Self {
+        let mut result = Self::default();
+        for (&element, style) in s.items() {
+            result.add(element, &Style::from(style))
+        }
+        result
     }
 }
 
-impl Theme {
-    pub fn none() -> Self {
-        Self {
-            packs: HashMap::new(),
-            default: StylePack::none(),
-        }
-    }
-
-    pub fn dark24() -> Self {
-        let pack = |level| {
-            let mut result = StylePack::new();
-            let dark = RGB(92, 96, 100).fg().into();
-            let medium = RGB(162, 185, 194).fg().into();
-            let bright = RGB(255, 255, 255).fg().into();
-            let orange = RGB(209, 154, 102).fg().into();
-            let green = RGB(0, 175, 135).fg().into();
-            let gray = RGB(153, 153, 153).fg().into();
-            let yellow = RGB(255, 255, 175).fg().into();
-            let blue = RGB(93, 175, 239).fg().into();
-            result.add(Element::Time, &dark);
-            result.add(Element::Level, &level);
-            result.add(Element::Logger, &dark);
-            result.add(Element::Caller, &dark);
-            result.add(Element::Message, &bright);
-            result.add(Element::FieldKey, &orange);
-            result.add(Element::EqualSign, &dark);
-            result.add(Element::Brace, &gray);
-            result.add(Element::Quote, &green);
-            result.add(Element::Delimiter, &gray);
-            result.add(Element::Comma, &dark);
-            result.add(Element::Ellipsis, &dark);
-            result.add(Element::LocationSign, &dark);
-            result.add(Element::LiteralNull, &yellow);
-            result.add(Element::LiteralBoolean, &yellow);
-            result.add(Element::LiteralNumber, &blue);
-            result.add(Element::LiteralString, &medium);
-            result
-        };
-        let mut packs = HashMap::new();
-        packs.insert(Level::Debug, pack(RGB(56, 119, 128).fg().into()));
-        packs.insert(Level::Info, pack(RGB(86, 182, 194).fg().into()));
-        packs.insert(Level::Warning, pack(RGB(255, 224, 128).fg().into()));
-        packs.insert(Level::Error, pack(RGB(255, 128, 128).fg().into()));
-        Self {
-            packs,
-            default: pack(RGB(56, 119, 128).fg().into()),
-        }
-    }
-
-    pub fn dark() -> Self {
-        let pack = |level| {
-            let mut result = StylePack::new();
-            let dark = Color::Black.bright().fg().into();
-            let medium = eseq0().into();
-            let bright = Color::White.bright().fg().into();
-            let green = Color::Green.fg().into();
-            let yellow = Color::Yellow.fg().into();
-            let cyan = Color::Cyan.fg().into();
-            result.add(Element::Time, &dark);
-            result.add(Element::Level, &level);
-            result.add(Element::Logger, &dark);
-            result.add(Element::Caller, &dark);
-            result.add(Element::Message, &bright);
-            result.add(Element::FieldKey, &green);
-            result.add(Element::EqualSign, &dark);
-            result.add(Element::Brace, &medium);
-            result.add(Element::Quote, &medium);
-            result.add(Element::Delimiter, &medium);
-            result.add(Element::Comma, &medium);
-            result.add(Element::Ellipsis, &dark);
-            result.add(Element::LocationSign, &dark);
-            result.add(Element::LiteralNull, &yellow);
-            result.add(Element::LiteralBoolean, &yellow);
-            result.add(Element::LiteralNumber, &cyan);
-            result.add(Element::LiteralString, &medium);
-            result
-        };
-        let mut packs = HashMap::new();
-        packs.insert(Level::Debug, pack(Color::Magenta.fg().into()));
-        packs.insert(Level::Info, pack(Color::Cyan.fg().into()));
-        packs.insert(
-            Level::Warning,
-            pack((Reverse.into(), Color::Yellow.bright().fg()).into()),
-        );
-        packs.insert(
-            Level::Error,
-            pack((Reverse.into(), Color::Red.bright().fg()).into()),
-        );
-        Self {
-            packs,
-            default: pack(Color::Magenta.fg().into()),
-        }
-    }
-
-    pub fn light() -> Self {
-        let pack = |level| {
-            let mut result = StylePack::new();
-            let dark = Color::Black.bright().fg().into();
-            let medium = eseq0().into();
-            let bright = Color::Black.fg().into();
-            let green = Color::Green.fg().into();
-            let yellow = Color::Yellow.fg().into();
-            let cyan = Color::Cyan.fg().into();
-            result.add(Element::Time, &dark);
-            result.add(Element::Level, &level);
-            result.add(Element::Logger, &dark);
-            result.add(Element::Caller, &dark);
-            result.add(Element::Message, &bright);
-            result.add(Element::FieldKey, &green);
-            result.add(Element::EqualSign, &dark);
-            result.add(Element::Brace, &medium);
-            result.add(Element::Quote, &medium);
-            result.add(Element::Delimiter, &medium);
-            result.add(Element::Comma, &medium);
-            result.add(Element::Ellipsis, &dark);
-            result.add(Element::LocationSign, &dark);
-            result.add(Element::LiteralNull, &yellow);
-            result.add(Element::LiteralBoolean, &yellow);
-            result.add(Element::LiteralNumber, &cyan);
-            result.add(Element::LiteralString, &medium);
-            result
-        };
-        let mut packs = HashMap::new();
-        packs.insert(Level::Debug, pack(Color::Magenta.fg().into()));
-        packs.insert(Level::Info, pack(Color::Cyan.fg().into()));
-        packs.insert(
-            Level::Warning,
-            pack(
-                (
-                    Reverse.into(),
-                    Color::Yellow.bright().fg(),
-                    Color::Black.bg(),
-                )
-                    .into(),
-            ),
-        );
-        packs.insert(
-            Level::Error,
-            pack((Reverse.into(), Color::Red.bright().fg(), Color::Black.bg()).into()),
-        );
-        Self {
-            packs,
-            default: pack(Color::Magenta.fg().into()),
-        }
-    }
-}
+// ---
 
 #[cfg(test)]
 mod tests {
@@ -307,10 +272,12 @@ mod tests {
 
     #[test]
     fn test_theme() {
-        let theme = Theme::dark();
+        let theme = Theme::none();
         let mut buf = Vec::new();
-        theme.apply(&mut buf, &Some(Level::Debug), |buf, styler| {
-            styler.set(buf, Element::Message);
+        theme.apply(&mut buf, &Some(Level::Debug), |s| {
+            s.element(Element::Message, |s| {
+                s.batch(|buf| buf.extend_from_slice(b"hello!"))
+            });
         });
     }
 }

@@ -1,0 +1,54 @@
+elements:
+  time:
+    foreground: 8
+  logger:
+    foreground: 8
+  caller:
+    foreground: 8
+    modes: [italic]
+  level:
+    foreground: 139
+  message:
+    foreground: 255
+  field:
+    foreground: 60
+  key:
+    foreground: 117
+    modes: [underline]
+  ellipsis:
+    foreground: 8
+  object:
+    foreground: 41
+  array:
+    foreground: 41
+  string:
+    foreground: 36
+  number:
+    foreground: 41
+  boolean:
+    foreground: 192
+  'null':
+    foreground: 136
+levels:
+  debug:
+    level-inner:
+      foreground: 31
+  info:
+    level-inner:
+      foreground: 68
+  warning:
+    time:
+      foreground: 214
+    level-inner:
+      foreground: 214
+    message:
+      foreground: bright-white
+      modes: [underline]
+  error:
+    time:
+      foreground: 202
+    level-inner:
+      foreground: 202
+    message:
+      foreground: bright-white
+      modes: [underline]

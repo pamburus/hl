@@ -78,6 +78,7 @@ impl<N: KeyNormalize + Default> Default for MatchOptions<N> {
 
 // ---
 
+#[derive(Default)]
 pub struct IncludeExcludeKeyFilter<N: KeyNormalize> {
     children: HashMap<Key, IncludeExcludeKeyFilter<N>>,
     options: MatchOptions<N>,

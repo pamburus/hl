@@ -9,7 +9,8 @@ use wildmatch::WildMatch;
 #[global_allocator]
 static GLOBAL: &StatsAlloc<System> = &INSTRUMENTED_SYSTEM;
 
-fn criterion_benchmark(c: &mut Criterion) {
+fn benchmark(c: &mut Criterion) {
+    let mut c = c.benchmark_group("wildcard");
     let pattern = WildMatch::new(r"_*");
     let prefix = String::from("_");
 
@@ -73,5 +74,5 @@ fn criterion_benchmark(c: &mut Criterion) {
     });
 }
 
-criterion_group!(benches, criterion_benchmark);
+criterion_group!(benches, benchmark);
 criterion_main!(benches);

@@ -224,22 +224,93 @@ Log viewer which translates JSON logs into pretty human-readable representation.
 * `HL_PAGING=never` specified default value for paging option but it may be overriden by command-line arguments.
 
 
+### Themes
+
+#### Stock themes
+- [themes](etc/defaults/themes/)
+
+#### Selecting current theme
+* Using `theme` value in the configuration file.
+* Using environment variable, i.e. `HL_THEME=classic`, overrides the value specified in configuration file.
+* Using command-line argument, i.e. `--theme classic`, overrides all other values.
+
+#### Custom themes
+- Custom themes are loaded automatically if found at predefined platform-specific location.
+
+    | OS      | Location                                       |
+    | ------- | ---------------------------------------------- | 
+    | macOS   | ~/.config/hl/themes/*.yaml                     |
+    | Linux   | ~/.config/hl/themes/*.yaml                     |
+    | Windows | %USERPROFILE%\AppData\Roaming\hl\themes\*.yaml |
+
+- Format description
+  - Section `elements` contains styles for predefined elements.
+  - Section `levels` contains optional overrides for styles defined in `elements` sections per logging level, which are [`debug`, `info`, `warning`, `error`].
+  - Each element style contains optional `background`, `foreground` and `modes` parameters.
+  - Example
+    ```yaml
+    elements:
+        <element>:
+            foreground: <color>
+            background: <color>
+            modes: [<mode>, <mode>, ...]
+    levels:
+        <level>:
+            <element>:
+                foreground: <color>
+                background: <color>
+                modes: [<mode>, <mode>, ...]
+    ```
+  - Color format is one of
+    - Keyword `default` specifies default color defined by the terminal.
+    - ASCII basic color name, one of
+      - `black`
+      - `red`
+      - `green`
+      - `yellow`
+      - `blue`
+      - `magenta`
+      - `cyan`
+      - `white`
+      - `bright-black`
+      - `bright-red`
+      - `bright-green`
+      - `bright-yellow`
+      - `bright-blue`
+      - `bright-magenta`
+      - `bright-cyan`
+      - `bright-white`
+    - 256-color palette code, from `0` to `255`.
+    - RGB color in hex web color format, i.e. `#FFFF00` for bright yellow color.
+  - Modes is a list of additional styles, each of them is one of
+    - `bold`
+    - `faint`
+    - `italic`
+    - `underline`
+    - `slow-blink`
+    - `rapid-blink`
+    - `reverse`
+    - `conseal`
+    - `crossed-out`
+
+
 ### Complete set of options and flags
 
 ```
-hl 0.9.5
+hl 0.10.0
 JSON log converter to human readable representation
 
 USAGE:
     hl [FLAGS] [OPTIONS] [--] [FILE]...
 
 FLAGS:
-    -c                  Handful alias for --color=always, overrides --color option
-        --help          Prints help information
-    -L, --local         Use local time zone, overrides --time-zone option
-    -P                  Handful alias for --paging=never, overrides --paging option
-    -r, --raw-fields    Disable unescaping and prettifying of field values
-    -V, --version       Prints version information
+    -c                   Handful alias for --color=always, overrides --color option
+        --help           Prints help information
+        --list-themes    List available themes and exit
+    -L, --local          Use local time zone, overrides --time-zone option
+    -P                   Handful alias for --paging=never, overrides --paging option
+    -r, --raw-fields     Disable unescaping and prettifying of field values
+    -V, --version        Prints version information
 
 OPTIONS:
         --buffer-size <buffer-size>                          Buffer size [env: HL_BUFFER_SIZE=]  [default: 2 MiB]
@@ -249,13 +320,13 @@ OPTIONS:
     -h, --hide <hide>...                                     Hide fields with the specified keys
     -e, --hide-empty-fields <hide-empty-fields>              Hide empty fields, applies for null, string, object and array fields only [env: HL_HIDE_EMPTY_FIELDS=]
         --interrupt-ignore-count <interrupt-ignore-count>    Number of interrupts to ignore, i.e. Ctrl-C (SIGINT) [env: HL_INTERRUPT_IGNORE_COUNT=]  [default: 3]
-    -l, --level <level>                                      Filtering by level, valid values: ['d', 'i', 'w', 'e'] [env: HL_LEVEL=]
+    -l, --level <level>                                      Filtering by level, one of { d[ebug], i[nfo], w[arning], e[rror] } [env: HL_LEVEL=]
         --max-message-size <max-message-size>                Maximum message size [env: HL_MAX_MESSAGE_SIZE=]  [default: 64 MiB]
         --paging <paging>                                    Output paging options, one of { auto, always, never } [env: HL_PAGING=]  [default: auto]
     -H, --show <show>...                                     Hide all fields except fields with the specified keys
     -E, --show-empty-fields <show-empty-fields>              Show empty fields, overrides --hide-empty-fields option [env: HL_SHOW_EMPTY_FIELDS=]
         --since <since>                                      Filtering by timestamp >= the value (--time-zone and --local options are honored)
-        --theme <theme>                                      Color theme, one of { auto, dark, dark24, light } [env: HL_THEME=]  [default: dark]
+        --theme <theme>                                      Color theme [env: HL_THEME=]  [default: one-dark-green]
     -t, --time-format <time-format>                          Time format, see https://man7.org/linux/man-pages/man1/date.1.html [env: HL_TIME_FORMAT=]  [default: %b %d %T.%3N]
     -Z, --time-zone <time-zone>                              Time zone name, see column "TZ database name" at https://en.wikipedia.org/wiki/List_of_tz_database_time_zones [env: HL_TIME_ZONE=]  [default: UTC]
         --until <until>                                      Filtering by timestamp <= the value (--time-zone and --local options are honored)

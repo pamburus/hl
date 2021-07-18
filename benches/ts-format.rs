@@ -6,7 +6,8 @@ use criterion::{criterion_group, criterion_main, Criterion};
 use hl::datefmt::{DateTimeFormatter, LinuxDateFormat};
 use hl::timestamp::Timestamp;
 
-fn criterion_benchmark(c: &mut Criterion) {
+fn benchmark(c: &mut Criterion) {
+    let mut c = c.benchmark_group("ts-format");
     let tsr = Timestamp::new("2020-06-27T00:48:30.466249792+00:00", None);
     let ts = tsr.parse().unwrap();
     let tsn = ts.naive_local();
@@ -105,5 +106,5 @@ fn criterion_benchmark(c: &mut Criterion) {
     });
 }
 
-criterion_group!(benches, criterion_benchmark);
+criterion_group!(benches, benchmark);
 criterion_main!(benches);

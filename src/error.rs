@@ -41,8 +41,14 @@ pub enum Error {
     InvalidSize(String),
     #[error("cannot recognize time {0:?}")]
     UnrecognizedTime(String),
+    #[error("unknown theme {name:?}, use any of {known:?}")]
+    UnknownTheme { name: String, known: Vec<String> },
     #[error("zero size")]
     ZeroSize,
+    #[error("failed to parse utf-8 string: {0}")]
+    Utf8Error(#[from] std::str::Utf8Error),
+    #[error("failed to parse yaml: {0}")]
+    YamlError(#[from] serde_yaml::Error),
 }
 
 /// Result is an alias for standard result with bound Error type.

@@ -1,6 +1,5 @@
 // std imports
 use std::convert::TryFrom;
-use std::env;
 use std::path::PathBuf;
 use std::process;
 use std::sync::Arc;
@@ -9,6 +8,7 @@ use std::sync::Arc;
 use ansi_term::Colour;
 use chrono::{FixedOffset, Local, TimeZone};
 use chrono_tz::{Tz, UTC};
+use itertools::Itertools;
 use once_cell::sync::Lazy;
 use platform_dirs::AppDirs;
 use structopt::{
@@ -23,7 +23,7 @@ use hl::input::{open, ConcatReader, Input, InputStream};
 use hl::output::{OutputStream, Pager};
 use hl::settings::Settings;
 use hl::signal::SignalHandler;
-use hl::theme::Theme;
+use hl::theme::{Theme, ThemeOrigin};
 use hl::timeparse::parse_time;
 use hl::Level;
 use hl::{IncludeExcludeKeyFilter, KeyMatchOptions};
@@ -65,14 +65,14 @@ struct Opt {
     paging_never: bool,
     //
     //
-    /// Color theme, one of { auto, dark, dark24, light }.
+    /// Color theme.
     #[structopt(
         long,
-        default_value = "dark",
+        default_value = &CONFIG.theme,
         env = "HL_THEME",
         overrides_with = "theme"
     )]
-    theme: ThemeOption,
+    theme: String,
     //
     /// Disable unescaping and prettifying of field values.
     #[structopt(short, long)]
@@ -116,7 +116,7 @@ struct Opt {
     #[structopt(long, short = "H", number_of_values = 1)]
     show: Vec<String>,
     //
-    /// Filtering by level, valid values: ['d', 'i', 'w', 'e'].
+    /// Filtering by level, one of { d[ebug], i[nfo], w[arning], e[rror] }.
     #[structopt(short, long, env = "HL_LEVEL", overrides_with = "level")]
     level: Option<Level>,
     //
@@ -157,6 +157,10 @@ struct Opt {
     /// Show empty fields, overrides --hide-empty-fields option.
     #[structopt(long, short = "E", env = "HL_SHOW_EMPTY_FIELDS")]
     show_empty_fields: bool,
+    //
+    /// List available themes and exit.
+    #[structopt(long)]
+    list_themes: bool,
 }
 
 arg_enum! {
@@ -165,16 +169,6 @@ arg_enum! {
         Auto,
         Always,
         Never,
-    }
-}
-
-arg_enum! {
-    #[derive(Debug)]
-    enum ThemeOption {
-        Auto,
-        Dark,
-        Dark24,
-        Light,
     }
 }
 
@@ -243,20 +237,34 @@ fn run() -> Result<()> {
     } else {
         opt.color
     };
-    let truecolor = env::var("COLORTERM").unwrap_or_default() == "truecolor";
-    let theme = |theme: ThemeOption| match (theme, truecolor) {
-        (ThemeOption::Auto, false) | (ThemeOption::Dark, _) => Theme::dark(),
-        (ThemeOption::Auto, true) | (ThemeOption::Dark24, _) => Theme::dark24(),
-        (ThemeOption::Light, _) => Theme::light(),
+    let use_colors = match color {
+        ColorOption::Auto => stdout_is_atty() && color_supported,
+        ColorOption::Always => true,
+        ColorOption::Never => false,
     };
-    let theme = match color {
-        ColorOption::Auto => match stdout_is_atty() && color_supported {
-            true => theme(opt.theme),
-            false => Theme::none(),
-        },
-        ColorOption::Always => theme(opt.theme),
-        ColorOption::Never => Theme::none(),
+    let theme = if use_colors {
+        let theme = &opt.theme;
+        Theme::load(&app_dirs, theme)?
+    } else {
+        Theme::none()
     };
+
+    if opt.list_themes {
+        let themes = Theme::list(&app_dirs)?
+            .into_iter()
+            .sorted_by_key(|(name, info)| (info.origin, name.clone()));
+        for (origin, group) in themes.group_by(|(_, info)| info.origin).into_iter() {
+            let origin = match origin {
+                ThemeOrigin::Stock => "stock",
+                ThemeOrigin::Custom => "custom",
+            };
+            println!("{}:", origin);
+            for (name, _) in group {
+                println!("  {}", name);
+            }
+        }
+        return Ok(());
+    }
 
     // Configure concurrency.
     let concurrency = match opt.concurrency.or(settings.concurrency) {

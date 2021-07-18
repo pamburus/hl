@@ -3,6 +3,7 @@ use std::cmp::Ord;
 use std::str::FromStr;
 
 // third-party imports
+use enum_map::Enum;
 use serde::Deserialize;
 
 // local imports
@@ -10,7 +11,7 @@ use crate::error::{Error, Result};
 
 // ---
 
-#[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Enum)]
 #[serde(rename_all = "kebab-case")]
 pub enum Level {
     Error,

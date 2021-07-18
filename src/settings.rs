@@ -1,7 +1,6 @@
 // std imports
 use std::collections::HashMap;
 use std::include_str;
-use std::str;
 
 // third-party imports
 use chrono_tz::Tz;
@@ -27,6 +26,7 @@ pub struct Settings {
     pub concurrency: Option<usize>,
     pub time_format: String,
     pub time_zone: Tz,
+    pub theme: String,
 }
 
 impl Settings {
@@ -38,6 +38,15 @@ impl Settings {
         s.merge(File::with_name(&filename.to_string_lossy()).required(false))?;
 
         Ok(s.try_into()?)
+    }
+}
+
+impl Default for Settings {
+    fn default() -> Self {
+        let mut s = Config::default();
+        s.merge(File::from_str(DEFAULT_SETTINGS, FileFormat::Yaml))
+            .unwrap();
+        s.try_into().unwrap()
     }
 }
 
@@ -102,3 +111,5 @@ pub struct CallerField(Field);
 pub struct Field {
     pub names: Vec<String>,
 }
+
+// ---

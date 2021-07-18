@@ -1,13 +1,13 @@
-# Time format, see https://man7.org/linux/man-pages/man1/date.1.html
+# Time format, see https://man7.org/linux/man-pages/man1/date.1.html for details.
 time-format: '%b %d %T.%3N'
 
 # Time zone name, see column "TZ database name" at
-# https://en.wikipedia.org/wiki/List_of_tz_database_time_zones
+# https://en.wikipedia.org/wiki/List_of_tz_database_time_zones page.
 time-zone: UTC
 
-# Settings for fields processing
+# Settings for fields processing.
 fields:
-  # Configuration of the predefined set of fields
+  # Configuration of the predefined set of fields.
   predefined:
     time:
       names: [ts, TS, time, TIME, Time, _SOURCE_REALTIME_TIMESTAMP, __REALTIME_TIMESTAMP]
@@ -31,10 +31,13 @@ fields:
       names: [msg, message, MESSAGE, Message]
     caller:
       names: [caller, CALLER, Caller]
-  # List of wildcard field names to ignore
+  # List of wildcard field names to ignore.
   ignore: ['_*']
-  # List of exact field names to hide
+  # List of exact field names to hide.
   hide: []
 
-# Number of processing threads, configured automatically based on CPU count if not specified
+# Number of processing threads, configured automatically based on CPU count if not specified.
 concurrency: ~
+
+# Currently selected theme.
+theme: one-dark-green
