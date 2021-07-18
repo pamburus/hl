@@ -7,9 +7,8 @@ use stats_alloc::{Region, StatsAlloc, INSTRUMENTED_SYSTEM};
 
 // local imports
 use hl::{
-    fmtx::Push,
     settings::{self, Color, Mode, Style, StylePack},
-    theme::{Element, Theme},
+    theme::{Element, StylingPush, Theme},
     types::Level,
 };
 
@@ -129,41 +128,51 @@ fn criterion_benchmark(c: &mut Criterion) {
         let reg = Region::new(&GLOBAL);
         b.iter(|| {
             buf.clear();
-            theme.apply(&mut buf, &Some(Level::Debug), |buf, s| {
-                s.set(buf, Element::Time);
-                buf.extend_from_slice(b"2020-01-01 00:00:00");
-                s.set(buf, Element::Whitespace);
-                buf.push(b' ');
-                s.set(buf, Element::Delimiter);
-                buf.push(b'|');
-                s.set(buf, Element::Level);
-                buf.extend_from_slice(b"INF");
-                s.set(buf, Element::Delimiter);
-                buf.push(b'|');
-                s.set(buf, Element::Whitespace);
-                buf.push(b' ');
-                s.set(buf, Element::Logger);
-                buf.extend_from_slice(b"logger");
-                buf.push(b':');
-                s.set(buf, Element::Message);
-                buf.push(b' ');
-                buf.extend_from_slice(b"hello!");
+            theme.apply(&mut buf, &Some(Level::Debug), |s| {
+                s.element(Element::Time, |s| {
+                    s.batch(|buf| buf.extend_from_slice(b"2020-01-01 00:00:00"))
+                });
+                s.batch(|buf| buf.push(b' '));
+                s.element(Element::Delimiter, |s| s.batch(|buf| buf.push(b'|')));
+                s.element(Element::Level, |s| {
+                    s.batch(|buf| buf.extend_from_slice(b"INF"))
+                });
+                s.element(Element::Delimiter, |s| s.batch(|buf| buf.push(b'|')));
+                s.batch(|buf| buf.push(b' '));
+                s.element(Element::Logger, |s| {
+                    s.batch(|buf| {
+                        buf.extend_from_slice(b"logger");
+                        buf.push(b':');
+                    })
+                });
+                s.batch(|buf| buf.push(b' '));
+                s.element(Element::Message, |s| {
+                    s.batch(|buf| {
+                        buf.extend_from_slice(b"hello!");
+                    })
+                });
                 for _ in 0..4 {
                     for (key, value) in &fields {
-                        s.set(buf, Element::Whitespace);
-                        buf.push(b' ');
-                        s.set(buf, Element::FieldKey);
-                        buf.extend_from_slice(&key[..]);
-                        s.set(buf, Element::EqualSign);
-                        buf.push(b'=');
-                        s.set(buf, Element::String);
-                        buf.extend_from_slice(&value[..]);
+                        s.batch(|buf| buf.push(b' '));
+                        s.element(Element::FieldKey, |s| {
+                            s.batch(|buf| {
+                                buf.extend_from_slice(&key[..]);
+                            })
+                        });
+                        s.element(Element::EqualSign, |s| s.batch(|buf| buf.push(b'=')));
+                        s.element(Element::String, |s| {
+                            s.batch(|buf| {
+                                buf.extend_from_slice(&value[..]);
+                            })
+                        });
                     }
                 }
-                s.set(buf, Element::AtSign);
-                buf.extend_from_slice(b" @ ");
-                s.set(buf, Element::Caller);
-                buf.extend_from_slice(b"caller");
+                s.element(Element::AtSign, |s| {
+                    s.batch(|buf| buf.extend_from_slice(b" @ "))
+                });
+                s.element(Element::Caller, |s| {
+                    s.batch(|buf| buf.extend_from_slice(b"caller"))
+                });
             });
             n1 += 1;
         });

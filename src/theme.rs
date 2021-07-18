@@ -7,9 +7,19 @@ use enum_map::{Enum, EnumMap};
 // local imports
 use crate::{
     eseq::{Brightness, Color, ColorCode, Mode, Sequence, StyleCode},
+    fmtx::Push,
     settings, types,
 };
 pub use types::Level;
+
+// ---
+
+pub trait StylingPush<B: Push<u8>> {
+    fn element<F: FnOnce(&mut Self)>(&mut self, element: Element, f: F);
+    fn batch<F: FnOnce(&mut B)>(&mut self, f: F);
+}
+
+// ---
 
 #[repr(u8)]
 #[derive(Enum)]
@@ -36,7 +46,8 @@ pub enum Element {
 
 pub type Buf = Vec<u8>;
 
-pub struct Styler<'a> {
+pub struct Styler<'a, B: Push<u8>> {
+    buf: &'a mut B,
     pack: &'a StylePack,
     current: Option<usize>,
 }
@@ -50,8 +61,8 @@ pub struct Theme {
 struct Style(Sequence);
 
 impl Style {
-    #[inline]
-    pub fn apply(&self, buf: &mut Buf) {
+    #[inline(always)]
+    pub fn apply<B: Push<u8>>(&self, buf: &mut B) {
         buf.extend_from_slice(self.0.data())
     }
 
@@ -129,19 +140,19 @@ impl From<&settings::Style> for Style {
     }
 }
 
-impl<'a> Styler<'a> {
-    #[inline]
-    pub fn set(&mut self, buf: &mut Buf, e: Element) {
-        self.set_style(buf, self.pack.elements[e])
+impl<'a, B: Push<u8>> Styler<'a, B> {
+    #[inline(always)]
+    pub fn set(&mut self, e: Element) {
+        self.set_style(self.pack.elements[e])
     }
 
-    #[inline]
-    fn reset(&mut self, buf: &mut Buf) {
-        self.set_style(buf, None)
+    #[inline(always)]
+    fn reset(&mut self) {
+        self.set_style(None)
     }
 
-    #[inline]
-    fn set_style(&mut self, buf: &mut Buf, style: Option<usize>) {
+    #[inline(always)]
+    fn set_style(&mut self, style: Option<usize>) {
         let style = match style {
             Some(style) => Some(style),
             None => self.pack.reset,
@@ -150,28 +161,41 @@ impl<'a> Styler<'a> {
             if self.current != Some(style) {
                 self.current = Some(style);
                 let style = &self.pack.styles[style];
-                style.apply(buf);
+                style.apply(self.buf);
             }
         }
     }
 }
 
+impl<'a, B: Push<u8>> StylingPush<B> for Styler<'a, B> {
+    #[inline(always)]
+    fn element<F: FnOnce(&mut Self)>(&mut self, element: Element, f: F) {
+        self.set(element);
+        f(self);
+    }
+    #[inline(always)]
+    fn batch<F: FnOnce(&mut B)>(&mut self, f: F) {
+        f(self.buf)
+    }
+}
+
 impl Theme {
-    pub fn apply<'a, F: FnOnce(&mut Buf, &mut Styler<'a>)>(
+    pub fn apply<'a, B: Push<u8>, F: FnOnce(&mut Styler<'a, B>)>(
         &'a self,
-        buf: &mut Buf,
+        buf: &'a mut B,
         level: &Option<Level>,
         f: F,
     ) {
         let mut styler = Styler {
+            buf,
             pack: match level {
                 Some(level) => &self.packs[*level],
                 None => &self.default,
             },
             current: None,
         };
-        f(buf, &mut styler);
-        styler.reset(buf)
+        f(&mut styler);
+        styler.reset()
     }
 }
 
@@ -244,8 +268,10 @@ mod tests {
     fn test_theme() {
         let theme = Theme::none();
         let mut buf = Vec::new();
-        theme.apply(&mut buf, &Some(Level::Debug), |buf, styler| {
-            styler.set(buf, Element::Message);
+        theme.apply(&mut buf, &Some(Level::Debug), |s| {
+            s.element(Element::Message, |s| {
+                s.batch(|buf| buf.extend_from_slice(b"hello!"))
+            });
         });
     }
 }

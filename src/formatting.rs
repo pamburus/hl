@@ -1,9 +1,12 @@
+// std imports
 use std::sync::Arc;
 
+// third-party imports
 use chrono::prelude::*;
 use json::{de::Read, de::StrRead, value::RawValue};
 use serde_json as json;
 
+// local imports
 use crate::datefmt;
 use crate::filtering::IncludeExcludeSetting;
 use crate::fmtx;
@@ -14,7 +17,13 @@ use crate::IncludeExcludeKeyFilter;
 use datefmt::DateTimeFormatter;
 use fmtx::{aligned_left, centered, Counter};
 use model::Level;
-use theme::{Element, Styler, Theme};
+use theme::{Element, StylingPush, Theme};
+
+// ---
+
+type Buf = Vec<u8>;
+
+// ---
 
 pub struct RecordFormatter {
     theme: Arc<Theme>,
@@ -51,65 +60,71 @@ impl RecordFormatter {
         self
     }
 
-    pub fn format_record(&mut self, buf: &mut Vec<u8>, rec: &model::Record) {
-        self.theme.apply(buf, &rec.level, |buf, styler| {
+    pub fn format_record(&mut self, buf: &mut Buf, rec: &model::Record) {
+        self.theme.apply(buf, &rec.level, |s| {
             //
             // time
             //
-            styler.set(buf, Element::Time);
-            if let Some(ts) = &rec.ts {
-                aligned_left(buf, self.ts_width, b' ', |mut buf| {
-                    if ts
-                        .as_rfc3339()
-                        .and_then(|ts| self.ts_formatter.reformat_rfc3339(&mut buf, ts))
-                        .is_none()
-                    {
-                        if let Some(ts) = ts.parse() {
-                            self.ts_formatter.format(&mut buf, ts);
-                        } else {
-                            buf.extend_from_slice(ts.raw().as_bytes());
-                        }
+            s.element(Element::Time, |s| {
+                s.batch(|buf| {
+                    if let Some(ts) = &rec.ts {
+                        aligned_left(buf, self.ts_width, b' ', |mut buf| {
+                            if ts
+                                .as_rfc3339()
+                                .and_then(|ts| self.ts_formatter.reformat_rfc3339(&mut buf, ts))
+                                .is_none()
+                            {
+                                if let Some(ts) = ts.parse() {
+                                    self.ts_formatter.format(&mut buf, ts);
+                                } else {
+                                    buf.extend_from_slice(ts.raw().as_bytes());
+                                }
+                            }
+                        });
+                    } else {
+                        centered(buf, self.ts_width, b' ', |mut buf| {
+                            buf.extend_from_slice(b"---");
+                        });
                     }
-                });
-            } else {
-                centered(buf, self.ts_width, b' ', |mut buf| {
-                    buf.extend_from_slice(b"---");
-                });
-            }
+                })
+            });
             //
             // level
             //
-            styler.set(buf, Element::Whitespace);
-            buf.push(b' ');
-            styler.set(buf, Element::Delimiter);
-            buf.push(b'|');
-            styler.set(buf, Element::Level);
-            buf.extend_from_slice(match rec.level {
-                Some(Level::Debug) => b"DBG",
-                Some(Level::Info) => b"INF",
-                Some(Level::Warning) => b"WRN",
-                Some(Level::Error) => b"ERR",
-                _ => b"(?)",
+            s.batch(|buf| buf.push(b' '));
+            s.element(Element::Delimiter, |s| s.batch(|buf| buf.push(b'|')));
+            s.element(Element::Level, |s| {
+                s.batch(|buf| {
+                    buf.extend_from_slice(match rec.level {
+                        Some(Level::Debug) => b"DBG",
+                        Some(Level::Info) => b"INF",
+                        Some(Level::Warning) => b"WRN",
+                        Some(Level::Error) => b"ERR",
+                        _ => b"(?)",
+                    })
+                })
             });
-            styler.set(buf, Element::Delimiter);
-            buf.push(b'|');
+            s.element(Element::Delimiter, |s| s.batch(|buf| buf.push(b'|')));
             //
             // logger
             //
             if let Some(logger) = rec.logger {
-                styler.set(buf, Element::Whitespace);
-                buf.push(b' ');
-                styler.set(buf, Element::Logger);
-                buf.extend_from_slice(logger.as_bytes());
-                buf.push(b':');
+                s.batch(|buf| buf.push(b' '));
+                s.element(Element::Logger, |s| {
+                    s.batch(|buf| {
+                        buf.extend_from_slice(logger.as_bytes());
+                        buf.push(b':');
+                    })
+                });
             }
             //
             // message text
             //
             if let Some(text) = rec.message {
-                styler.set(buf, Element::Whitespace);
-                buf.push(b' ');
-                self.format_message(buf, styler, text);
+                s.batch(|buf| buf.push(b' '));
+                s.element(Element::Message, |s| {
+                    self.format_message(s, text);
+                });
             }
             //
             // fields
@@ -122,87 +137,84 @@ impl RecordFormatter {
                         _ => true,
                     }
                 {
-                    some_fields_hidden |= !self.format_field(buf, styler, k, v, Some(&self.fields));
+                    some_fields_hidden |= !self.format_field(s, k, v, Some(&self.fields));
                 }
             }
             if some_fields_hidden {
-                styler.set(buf, Element::Ellipsis);
-                buf.extend_from_slice(b" ...");
+                s.element(Element::Ellipsis, |s| {
+                    s.batch(|buf| buf.extend_from_slice(b" ..."))
+                });
             }
             //
             // caller
             //
             if let Some(text) = rec.caller {
-                styler.set(buf, Element::AtSign);
-                buf.extend_from_slice(b" @ ");
-                styler.set(buf, Element::Caller);
-                buf.extend_from_slice(text.as_bytes());
+                // println!("P1");
+                s.element(Element::AtSign, |s| {
+                    s.batch(|buf| buf.extend_from_slice(b" @ "))
+                });
+                // println!("P2");
+                s.element(Element::Caller, |s| {
+                    s.batch(|buf| buf.extend_from_slice(text.as_bytes()))
+                });
+                // println!("P3");
             };
+            //
+            // eol
+            //
+            s.batch(|buf| buf.push(b'\n'));
         });
-        //
-        // eol
-        //
-        buf.push(b'\n');
     }
 
-    fn format_field<'a, 'b: 'a>(
+    fn format_field<S: StylingPush<Buf>>(
         &self,
-        buf: &'a mut Vec<u8>,
-        styler: &'a mut Styler<'b>,
+        s: &mut S,
         key: &str,
         value: &RawValue,
         filter: Option<&IncludeExcludeKeyFilter>,
     ) -> bool {
-        let mut fv = FieldFormatter::new(self, buf, styler);
-        fv.format(key, value, filter, IncludeExcludeSetting::Unspecified)
+        let mut fv = FieldFormatter::new(self);
+        fv.format(s, key, value, filter, IncludeExcludeSetting::Unspecified)
     }
 
-    fn format_value<'a, 'b: 'a>(
-        &self,
-        buf: &'a mut Vec<u8>,
-        styler: &'a mut Styler<'b>,
-        value: &RawValue,
-    ) {
-        let mut fv = FieldFormatter::new(self, buf, styler);
-        fv.format_value(value, None, IncludeExcludeSetting::Unspecified);
+    fn format_value<S: StylingPush<Buf>>(&self, s: &mut S, value: &RawValue) {
+        let mut fv = FieldFormatter::new(self);
+        fv.format_value(s, value, None, IncludeExcludeSetting::Unspecified);
     }
 
-    fn format_message<'a, 'b: 'a>(
-        &self,
-        buf: &'a mut Vec<u8>,
-        styler: &'a mut Styler<'b>,
-        value: &RawValue,
-    ) {
+    fn format_message<S: StylingPush<Buf>>(&self, s: &mut S, value: &RawValue) {
         match value.get().as_bytes()[0] {
             b'"' => {
-                styler.set(buf, Element::Message);
-                format_str_unescaped(buf, value.get());
+                s.element(Element::Message, |s| {
+                    s.batch(|buf| format_str_unescaped(buf, value.get()))
+                });
             }
             b'0'..=b'9' | b'-' | b'+' | b'.' => {
-                styler.set(buf, Element::Number);
-                buf.extend_from_slice(value.get().as_bytes());
+                s.element(Element::Number, |s| {
+                    s.batch(|buf| buf.extend_from_slice(value.get().as_bytes()))
+                });
             }
             b't' | b'f' => {
-                styler.set(buf, Element::Boolean);
-                buf.extend_from_slice(value.get().as_bytes());
+                s.element(Element::Boolean, |s| {
+                    s.batch(|buf| buf.extend_from_slice(value.get().as_bytes()))
+                });
             }
             b'n' => {
-                styler.set(buf, Element::Null);
-                buf.extend_from_slice(value.get().as_bytes());
+                s.element(Element::Null, |s| {
+                    s.batch(|buf| buf.extend_from_slice(value.get().as_bytes()))
+                });
             }
             b'{' => {
                 let item = json::from_str::<model::Object>(value.get()).unwrap();
-                styler.set(buf, Element::Brace);
-                buf.push(b'{');
+                s.element(Element::Brace, |s| s.batch(|buf| buf.push(b'{')));
                 let mut has_some = false;
                 for (k, v) in item.fields.iter() {
-                    has_some |= self.format_field(buf, styler, k, v, None)
+                    has_some |= self.format_field(s, k, v, None)
                 }
-                styler.set(buf, Element::Brace);
                 if has_some {
-                    buf.push(b' ');
+                    s.batch(|buf| buf.push(b' '));
                 }
-                buf.push(b'}');
+                s.element(Element::Brace, |s| s.batch(|buf| buf.push(b'}')));
             }
             b'[' => {
                 let item = json::from_str::<model::Array<256>>(value.get()).unwrap();
@@ -210,71 +222,71 @@ impl RecordFormatter {
                     .iter()
                     .map(|&v| {
                         let v = v.get().as_bytes();
-                        only_digits(v) && (v.len() < 3 || (v.len() == 3 && v <= b"255"))
+                        only_digits(v) && (v.len() < 3 || (v.len() == 3 && v <= &b"255"[..]))
                     })
                     .position(|x| x == false)
                     .is_none();
                 if is_byte_string {
-                    styler.set(buf, Element::Quote);
-                    buf.push(b'b');
-                    buf.push(b'\'');
-                    for item in item.iter() {
-                        let b = atoi::atoi::<u8>(item.get().as_bytes()).unwrap();
-                        if b >= 32 {
-                            styler.set(buf, Element::Message);
-                            buf.push(b);
-                        } else {
-                            styler.set(buf, Element::String);
-                            buf.push(b'\\');
-                            buf.push(HEXDIGIT[(b >> 4) as usize]);
-                            buf.push(HEXDIGIT[(b & 0xF) as usize]);
+                    s.element(Element::Quote, |s| {
+                        s.batch(|buf| buf.extend_from_slice(b"b'"))
+                    });
+                    s.element(Element::Message, |s| {
+                        for item in item.iter() {
+                            let b = atoi::atoi::<u8>(item.get().as_bytes()).unwrap();
+                            if b >= 32 {
+                                s.batch(|buf| buf.push(b));
+                            } else {
+                                s.element(Element::String, |s| {
+                                    s.batch(|buf| {
+                                        buf.push(b'\\');
+                                        buf.push(HEXDIGIT[(b >> 4) as usize]);
+                                        buf.push(HEXDIGIT[(b & 0xF) as usize]);
+                                    })
+                                });
+                            }
                         }
-                    }
-                    styler.set(buf, Element::Quote);
-                    buf.push(b'\'');
+                    });
+                    s.element(Element::Quote, |s| s.batch(|buf| buf.push(b'\'')));
                 } else {
-                    styler.set(buf, Element::Brace);
-                    buf.push(b'[');
+                    s.element(Element::Brace, |s| s.batch(|buf| buf.push(b'[')));
                     let mut first = true;
                     for v in item.iter() {
                         if !first {
-                            styler.set(buf, Element::Comma);
-                            buf.push(b',');
+                            s.element(Element::Comma, |s| s.batch(|buf| buf.push(b',')));
                         } else {
                             first = false;
                         }
-                        self.format_value(buf, styler, v);
+                        self.format_value(s, v);
                     }
-                    styler.set(buf, Element::Brace);
-                    buf.push(b']');
+                    s.element(Element::Brace, |s| s.batch(|buf| buf.push(b']')));
                 }
             }
             _ => {
-                styler.set(buf, Element::Message);
-                buf.extend_from_slice(value.get().as_bytes());
+                s.element(Element::Message, |s| {
+                    s.batch(|buf| buf.extend_from_slice(value.get().as_bytes()))
+                });
             }
         };
     }
 }
 
-fn format_str_unescaped(buf: &mut Vec<u8>, s: &str) {
+fn format_str_unescaped(buf: &mut Buf, s: &str) {
     let mut reader = StrRead::new(&s[1..]);
     reader.parse_str_raw(buf).unwrap();
 }
 
-struct FieldFormatter<'a, 'b> {
+struct FieldFormatter<'a> {
     rf: &'a RecordFormatter,
-    buf: &'a mut Vec<u8>,
-    styler: &'a mut Styler<'b>,
 }
 
-impl<'a, 'b> FieldFormatter<'a, 'b> {
-    fn new(rf: &'a RecordFormatter, buf: &'a mut Vec<u8>, styler: &'a mut Styler<'b>) -> Self {
-        Self { rf, buf, styler }
+impl<'a> FieldFormatter<'a> {
+    fn new(rf: &'a RecordFormatter) -> Self {
+        Self { rf }
     }
 
-    fn format(
+    fn format<S: StylingPush<Buf>>(
         &mut self,
+        s: &mut S,
         key: &str,
         value: &'a RawValue,
         filter: Option<&IncludeExcludeKeyFilter>,
@@ -293,88 +305,89 @@ impl<'a, 'b> FieldFormatter<'a, 'b> {
         if setting == IncludeExcludeSetting::Exclude && leaf {
             return false;
         }
-        self.buf.push(b' ');
-        self.styler.set(self.buf, Element::FieldKey);
-        for b in key.as_bytes() {
-            let b = if *b == b'_' { b'-' } else { *b };
-            self.buf.push(b.to_ascii_lowercase());
-        }
-        self.styler.set(self.buf, Element::EqualSign);
-        self.buf.push(b'=');
+        s.batch(|buf| buf.push(b' '));
+        s.element(Element::FieldKey, |s| {
+            for b in key.as_bytes() {
+                let b = if *b == b'_' { b'-' } else { *b };
+                s.batch(|buf| buf.push(b.to_ascii_lowercase()));
+            }
+        });
+        s.element(Element::EqualSign, |s| s.batch(|buf| buf.push(b'=')));
         if self.rf.unescape_fields {
-            self.format_value(value, filter, setting);
+            self.format_value(s, value, filter, setting);
         } else {
-            self.styler.set(self.buf, Element::String);
-            self.buf.extend_from_slice(value.get().as_bytes())
+            s.element(Element::String, |s| {
+                s.batch(|buf| buf.extend_from_slice(value.get().as_bytes()))
+            });
         }
         true
     }
 
-    fn format_value(
+    fn format_value<S: StylingPush<Buf>>(
         &mut self,
+        s: &mut S,
         value: &'a RawValue,
         filter: Option<&IncludeExcludeKeyFilter>,
         setting: IncludeExcludeSetting,
     ) {
         match value.get().as_bytes()[0] {
             b'"' => {
-                self.styler.set(self.buf, Element::Quote);
-                self.buf.push(b'\'');
-                self.styler.set(self.buf, Element::String);
-                format_str_unescaped(self.buf, value.get());
-                self.styler.set(self.buf, Element::Quote);
-                self.buf.push(b'\'');
+                s.element(Element::Quote, |s| s.batch(|buf| buf.push(b'\'')));
+                s.element(Element::String, |s| {
+                    s.batch(|buf| format_str_unescaped(buf, value.get()))
+                });
+                s.element(Element::Quote, |s| s.batch(|buf| buf.push(b'\'')));
             }
             b'0'..=b'9' | b'-' | b'+' | b'.' => {
-                self.styler.set(self.buf, Element::Number);
-                self.buf.extend_from_slice(value.get().as_bytes());
+                s.element(Element::Number, |s| {
+                    s.batch(|buf| buf.extend_from_slice(value.get().as_bytes()))
+                });
             }
             b't' | b'f' => {
-                self.styler.set(self.buf, Element::Boolean);
-                self.buf.extend_from_slice(value.get().as_bytes());
+                s.element(Element::Boolean, |s| {
+                    s.batch(|buf| buf.extend_from_slice(value.get().as_bytes()))
+                });
             }
             b'n' => {
-                self.styler.set(self.buf, Element::Null);
-                self.buf.extend_from_slice(value.get().as_bytes());
+                s.element(Element::Null, |s| {
+                    s.batch(|buf| buf.extend_from_slice(value.get().as_bytes()))
+                });
             }
             b'{' => {
                 let item = json::from_str::<model::Object>(value.get()).unwrap();
-                self.styler.set(self.buf, Element::Brace);
-                self.buf.push(b'{');
+                s.element(Element::Brace, |s| s.batch(|buf| buf.push(b'{')));
                 let mut some_fields_hidden = false;
                 for (k, v) in item.fields.iter() {
-                    some_fields_hidden |= !self.format(k, v, filter, setting);
+                    some_fields_hidden |= !self.format(s, k, v, filter, setting);
                 }
                 if some_fields_hidden {
-                    self.styler.set(self.buf, Element::Ellipsis);
-                    self.buf.extend_from_slice(b" ...");
+                    s.element(Element::Ellipsis, |s| {
+                        s.batch(|buf| buf.extend_from_slice(b" ..."))
+                    });
                 }
                 if item.fields.len() != 0 {
-                    self.buf.push(b' ');
+                    s.batch(|buf| buf.push(b' '));
                 }
-                self.styler.set(self.buf, Element::Brace);
-                self.buf.push(b'}');
+                s.element(Element::Brace, |s| s.batch(|buf| buf.push(b'}')));
             }
             b'[' => {
                 let item = json::from_str::<model::Array<32>>(value.get()).unwrap();
-                self.styler.set(self.buf, Element::Brace);
-                self.buf.push(b'[');
+                s.element(Element::Brace, |s| s.batch(|buf| buf.push(b'[')));
                 let mut first = true;
                 for v in item.iter() {
                     if !first {
-                        self.styler.set(self.buf, Element::Comma);
-                        self.buf.push(b',');
+                        s.element(Element::Comma, |s| s.batch(|buf| buf.push(b',')));
                     } else {
                         first = false;
                     }
-                    self.format_value(v, None, IncludeExcludeSetting::Unspecified);
+                    self.format_value(s, v, None, IncludeExcludeSetting::Unspecified);
                 }
-                self.styler.set(self.buf, Element::Brace);
-                self.buf.push(b']');
+                s.element(Element::Brace, |s| s.batch(|buf| buf.push(b']')));
             }
             _ => {
-                self.styler.set(self.buf, Element::String);
-                self.buf.extend_from_slice(value.get().as_bytes());
+                s.element(Element::String, |s| {
+                    s.batch(|buf| buf.extend_from_slice(value.get().as_bytes()))
+                });
             }
         };
     }
