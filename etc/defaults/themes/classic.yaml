@@ -7,6 +7,8 @@ default:
     foreground: bright-black
   level:
     foreground: magenta
+  delimiter:
+    foreground: default
   message:
     foreground: bright-white
   field-key:
@@ -15,8 +17,14 @@ default:
     foreground: bright-black
   ellipsis:
     foreground: bright-black
+  brace:
+    foreground: default
+  quote:
+    foreground: default
   at-sign:
     foreground: bright-black
+  string:
+    foreground: default
   'null':
     foreground: yellow
   boolean:

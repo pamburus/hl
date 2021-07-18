@@ -20,7 +20,7 @@ default:
   quote:
     foreground: cyan
   brace:
-    foreground: bright-black
+    foreground: default
   ellipsis:
     foreground: bright-black
   at-sign:

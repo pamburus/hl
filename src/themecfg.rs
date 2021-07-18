@@ -32,16 +32,24 @@ impl Theme {
         let filename = Self::filename(name);
         match Self::load_from(app_dirs.config_dir.join("themes"), &filename) {
             Err(Error::Io(error)) => match error.kind() {
-                ErrorKind::NotFound => Self::from_buf(
-                    Asset::get(&filename)
-                        .ok_or_else(|| Error::UnknownTheme(name.to_string()))?
-                        .as_ref(),
-                ),
+                ErrorKind::NotFound => Self::load_embedded(name, &filename),
                 _ => Err(Error::Io(error)),
             },
             Err(error) => Err(error),
             Ok(result) => Ok(result),
         }
+    }
+
+    pub fn embedded(name: &str) -> Result<Self> {
+        Self::load_embedded(name, &Self::filename(name))
+    }
+
+    fn load_embedded(name: &str, filename: &str) -> Result<Self> {
+        Self::from_buf(
+            Asset::get(&filename)
+                .ok_or_else(|| Error::UnknownTheme(name.to_string()))?
+                .as_ref(),
+        )
     }
 
     fn from_buf(data: &[u8]) -> Result<Self> {
@@ -152,6 +160,7 @@ pub enum Color {
 #[derive(Clone, Copy, Debug, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum PlainColor {
+    Default,
     Black,
     Red,
     Green,

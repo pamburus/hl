@@ -2,7 +2,8 @@ use criterion::{criterion_group, criterion_main, Criterion};
 
 use hl::timestamp::Timestamp;
 
-fn criterion_benchmark(c: &mut Criterion) {
+fn benchmark(c: &mut Criterion) {
+    let mut c = c.benchmark_group("ts-parse");
     let unix = "1596742694";
     let unix_us = "1596742694123654";
     let rfc3339 = "2020-06-27T00:48:30.466249792+03:00";
@@ -30,5 +31,5 @@ fn criterion_benchmark(c: &mut Criterion) {
     });
 }
 
-criterion_group!(benches, criterion_benchmark);
+criterion_group!(benches, benchmark);
 criterion_main!(benches);

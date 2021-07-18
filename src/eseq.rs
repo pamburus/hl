@@ -78,6 +78,7 @@ impl PlainColor {
 
 #[allow(dead_code)]
 pub enum ColorCode {
+    Default,
     Plain(Color, Brightness),
     Palette(u8),
     RGB(u8, u8, u8),
@@ -94,6 +95,7 @@ impl ColorCode {
 
     fn render(&self, buf: &mut Vec<u8>, base: u8) {
         match self {
+            Self::Default => write!(buf, "{}", base + 9).unwrap(),
             Self::Plain(color, Brightness::Normal) => color.render(buf, base),
             Self::Plain(color, Brightness::Bright) => color.render(buf, base + 60),
             Self::Palette(color) => write!(buf, "{};5;{}", base + 8, color).unwrap(),

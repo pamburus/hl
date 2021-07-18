@@ -8,13 +8,19 @@ default:
     modes: [italic]
   level:
     foreground: magenta
+  delimiter:
+    foreground: bright-black
   message:
     foreground: bright-white
   field-key:
     foreground: bright-blue
     modes: [underline]
   equal-sign:
-    foreground: bright-black
+    foreground: default
+  quote:
+    foreground: green
+  brace:
+    foreground: blue
   ellipsis:
     foreground: bright-black
   at-sign:

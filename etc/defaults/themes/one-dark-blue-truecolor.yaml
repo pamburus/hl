@@ -1,4 +1,5 @@
 palette:
+  - &light-gray '#ABB2BF'
   - &red '#E06C75'
   - &gray '#636D83'
   - &white '#CFD7E5'
@@ -27,9 +28,9 @@ default:
   equal-sign:
     foreground: *gray
   quote:
-    foreground: *gray
+    foreground: *cyan
   brace:
-    foreground: *gray
+    foreground: *green
   ellipsis:
     foreground: *gray
   at-sign:

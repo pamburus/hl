@@ -30,7 +30,8 @@ macro_rules! collection {
 #[global_allocator]
 static GLOBAL: &StatsAlloc<System> = &INSTRUMENTED_SYSTEM;
 
-fn criterion_benchmark(c: &mut Criterion) {
+fn benchmark(c: &mut Criterion) {
+    let mut c = c.benchmark_group("theme");
     let theme = Theme::from(&themecfg::Theme {
         default: HashMap::from(collection! {
             Element::Time => Style {
@@ -197,5 +198,5 @@ fn criterion_benchmark(c: &mut Criterion) {
     println!("allocations at 1 ({:?} iterations): {:#?}", n1, c1);
 }
 
-criterion_group!(benches, criterion_benchmark);
+criterion_group!(benches, benchmark);
 criterion_main!(benches);

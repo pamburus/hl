@@ -13,7 +13,7 @@ use crate::datefmt::{DateTimeFormat, DateTimeFormatter};
 use crate::error::*;
 use crate::formatting::RecordFormatter;
 use crate::model::{Filter, Parser, ParserSettings, RawRecord};
-use crate::scanning::{BufFactory, Scanner, Segment, SegmentBuf, SegmentBufFactory};
+use crate::scanning::{BufFactory, Scanner, Segment, SegmentBufFactory};
 use crate::settings::Fields;
 use crate::theme::Theme;
 use crate::IncludeExcludeKeyFilter;
@@ -54,11 +54,10 @@ impl App {
         let n = self.options.concurrency;
         let sfi = Arc::new(SegmentBufFactory::new(self.options.buffer_size));
         let bfo = BufFactory::new(self.options.buffer_size);
-        let settings = ParserSettings::new(
+        let parser = Parser::new(ParserSettings::new(
             &self.options.fields.settings,
             self.options.filter.since.is_some() || self.options.filter.until.is_some(),
-        );
-        let parser = Parser::new(&settings);
+        ));
         thread::scope(|scope| -> Result<()> {
             // prepare receive/transmit channels for input data
             let (txi, rxi): (Vec<_>, Vec<_>) = (0..n).map(|_| channel::bounded(1)).unzip();
@@ -92,11 +91,12 @@ impl App {
                         self.options.fields.filter.clone(),
                     )
                     .with_field_unescaping(!self.options.raw_fields);
+                    let mut processor = SegmentProcesor::new(&parser, &mut formatter, &self.options.filter);
                     for segment in rxi.iter() {
                         match segment {
                             Segment::Complete(segment) => {
                                 let mut buf = bfo.new_buf();
-                                self.process_segement(&parser, &segment, &mut formatter, &mut buf, self.options.filter.is_empty());
+                                processor.run(segment.data(), &mut buf);
                                 sfi.recycle(segment);
                                 if let Err(_) = txo.send(buf) {
                                     break;
@@ -137,16 +137,27 @@ impl App {
 
         return Ok(());
     }
+}
 
-    fn process_segement(
-        &self,
-        parser: &Parser,
-        segment: &SegmentBuf,
-        formatter: &mut RecordFormatter,
-        buf: &mut Vec<u8>,
-        include_unparsed: bool,
-    ) {
-        for data in rtrim(segment.data(), b'\n').split(|c| *c == b'\n') {
+// ---
+
+pub struct SegmentProcesor<'a> {
+    parser: &'a Parser,
+    formatter: &'a mut RecordFormatter,
+    filter: &'a Filter,
+}
+
+impl<'a> SegmentProcesor<'a> {
+    pub fn new(parser: &'a Parser, formatter: &'a mut RecordFormatter, filter: &'a Filter) -> Self {
+        Self {
+            parser,
+            formatter,
+            filter,
+        }
+    }
+
+    pub fn run(&mut self, data: &[u8], buf: &mut Vec<u8>) {
+        for data in rtrim(data, b'\n').split(|c| *c == b'\n') {
             if data.len() == 0 {
                 buf.push(b'\n');
                 continue;
@@ -155,9 +166,9 @@ impl App {
             let mut some = false;
             while let Some(Ok(record)) = stream.next() {
                 some = true;
-                let record = parser.parse(record);
-                if record.matches(&self.options.filter) {
-                    formatter.format_record(buf, &record);
+                let record = self.parser.parse(record);
+                if record.matches(self.filter) {
+                    self.formatter.format_record(buf, &record);
                 }
             }
             let remainder = if some {
@@ -165,13 +176,15 @@ impl App {
             } else {
                 data
             };
-            if remainder.len() != 0 && include_unparsed {
+            if remainder.len() != 0 && self.filter.is_empty() {
                 buf.extend_from_slice(remainder);
                 buf.push(b'\n');
             }
         }
     }
 }
+
+// ---
 
 fn rtrim<'a>(s: &'a [u8], c: u8) -> &'a [u8] {
     if s.len() > 0 && s[s.len() - 1] == c {

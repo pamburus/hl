@@ -8,6 +8,8 @@ default:
     modes: [italic]
   level:
     foreground: 25
+  delimiter:
+    foreground: 8
   message:
     foreground: 255
   field-key:
@@ -18,7 +20,7 @@ default:
   quote:
     foreground: 246
   brace:
-    foreground: 246
+    foreground: 41
   ellipsis:
     foreground: 8
   at-sign:

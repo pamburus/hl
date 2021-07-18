@@ -44,6 +44,10 @@ impl Theme {
         Ok(themecfg::Theme::load(app_dirs, name)?.into())
     }
 
+    pub fn embedded(name: &str) -> Result<Self> {
+        Ok(themecfg::Theme::embedded(name)?.into())
+    }
+
     pub fn apply<'a, B: Push<u8>, F: FnOnce(&mut Styler<'a, B>)>(
         &'a self,
         buf: &'a mut B,
@@ -92,27 +96,41 @@ impl Style {
 
     fn convert_color(color: &themecfg::Color) -> ColorCode {
         match color {
-            themecfg::Color::Plain(color) => {
-                let c = match color {
-                    themecfg::PlainColor::Black => (Color::Black, Brightness::Normal),
-                    themecfg::PlainColor::Blue => (Color::Blue, Brightness::Normal),
-                    themecfg::PlainColor::Cyan => (Color::Cyan, Brightness::Normal),
-                    themecfg::PlainColor::Green => (Color::Green, Brightness::Normal),
-                    themecfg::PlainColor::Magenta => (Color::Magenta, Brightness::Normal),
-                    themecfg::PlainColor::Red => (Color::Red, Brightness::Normal),
-                    themecfg::PlainColor::White => (Color::White, Brightness::Normal),
-                    themecfg::PlainColor::Yellow => (Color::Yellow, Brightness::Normal),
-                    themecfg::PlainColor::BrightBlack => (Color::Black, Brightness::Bright),
-                    themecfg::PlainColor::BrightBlue => (Color::Blue, Brightness::Bright),
-                    themecfg::PlainColor::BrightCyan => (Color::Cyan, Brightness::Bright),
-                    themecfg::PlainColor::BrightGreen => (Color::Green, Brightness::Bright),
-                    themecfg::PlainColor::BrightMagenta => (Color::Magenta, Brightness::Bright),
-                    themecfg::PlainColor::BrightRed => (Color::Red, Brightness::Bright),
-                    themecfg::PlainColor::BrightWhite => (Color::White, Brightness::Bright),
-                    themecfg::PlainColor::BrightYellow => (Color::Yellow, Brightness::Bright),
-                };
-                ColorCode::Plain(c.0, c.1)
-            }
+            themecfg::Color::Plain(color) => match color {
+                themecfg::PlainColor::Default => ColorCode::Default,
+                themecfg::PlainColor::Black => ColorCode::Plain(Color::Black, Brightness::Normal),
+                themecfg::PlainColor::Blue => ColorCode::Plain(Color::Blue, Brightness::Normal),
+                themecfg::PlainColor::Cyan => ColorCode::Plain(Color::Cyan, Brightness::Normal),
+                themecfg::PlainColor::Green => ColorCode::Plain(Color::Green, Brightness::Normal),
+                themecfg::PlainColor::Magenta => {
+                    ColorCode::Plain(Color::Magenta, Brightness::Normal)
+                }
+                themecfg::PlainColor::Red => ColorCode::Plain(Color::Red, Brightness::Normal),
+                themecfg::PlainColor::White => ColorCode::Plain(Color::White, Brightness::Normal),
+                themecfg::PlainColor::Yellow => ColorCode::Plain(Color::Yellow, Brightness::Normal),
+                themecfg::PlainColor::BrightBlack => {
+                    ColorCode::Plain(Color::Black, Brightness::Bright)
+                }
+                themecfg::PlainColor::BrightBlue => {
+                    ColorCode::Plain(Color::Blue, Brightness::Bright)
+                }
+                themecfg::PlainColor::BrightCyan => {
+                    ColorCode::Plain(Color::Cyan, Brightness::Bright)
+                }
+                themecfg::PlainColor::BrightGreen => {
+                    ColorCode::Plain(Color::Green, Brightness::Bright)
+                }
+                themecfg::PlainColor::BrightMagenta => {
+                    ColorCode::Plain(Color::Magenta, Brightness::Bright)
+                }
+                themecfg::PlainColor::BrightRed => ColorCode::Plain(Color::Red, Brightness::Bright),
+                themecfg::PlainColor::BrightWhite => {
+                    ColorCode::Plain(Color::White, Brightness::Bright)
+                }
+                themecfg::PlainColor::BrightYellow => {
+                    ColorCode::Plain(Color::Yellow, Brightness::Bright)
+                }
+            },
             themecfg::Color::Palette(code) => ColorCode::Palette(*code),
             themecfg::Color::RGB(themecfg::RGB(r, g, b)) => ColorCode::RGB(*r, *g, *b),
         }

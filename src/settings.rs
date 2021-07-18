@@ -41,6 +41,15 @@ impl Settings {
     }
 }
 
+impl Default for Settings {
+    fn default() -> Self {
+        let mut s = Config::default();
+        s.merge(File::from_str(DEFAULT_SETTINGS, FileFormat::Yaml))
+            .unwrap();
+        s.try_into().unwrap()
+    }
+}
+
 // ---
 
 #[derive(Debug, Deserialize)]
