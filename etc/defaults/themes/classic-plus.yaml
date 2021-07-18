@@ -13,18 +13,18 @@ default:
   field:
     foreground: bright-black
   key:
-    foreground: blue
+    foreground: green
     modes: [underline]
   ellipsis:
     foreground: bright-black
   object:
-    foreground: green
+    foreground: default
   array:
-    foreground: green
+    foreground: default
   string:
-    foreground: cyan
+    foreground: default
   number:
-    foreground: green
+    foreground: blue
   boolean:
     foreground: red
   'null':
@@ -35,7 +35,7 @@ levels:
       foreground: magenta
   info:
     level-inner:
-      foreground: blue
+      foreground: cyan
   warning:
     time:
       foreground: bright-yellow

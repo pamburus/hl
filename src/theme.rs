@@ -1,5 +1,5 @@
 // std imports
-use std::{borrow::Borrow, vec::Vec};
+use std::{borrow::Borrow, collections::HashSet, vec::Vec};
 
 // third-party imports
 use enum_map::EnumMap;
@@ -46,6 +46,10 @@ impl Theme {
 
     pub fn embedded(name: &str) -> Result<Self> {
         Ok(themecfg::Theme::embedded(name)?.into())
+    }
+
+    pub fn list(app_dirs: &AppDirs) -> Result<HashSet<String>> {
+        themecfg::Theme::list(app_dirs)
     }
 
     pub fn apply<'a, B: Push<u8>, F: FnOnce(&mut Styler<'a, B>)>(

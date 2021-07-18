@@ -41,10 +41,8 @@ levels:
       foreground: yellow
     level-inner:
       foreground: bright-yellow
-      modes: [bold]
   error:
     time:
       foreground: red
     level-inner:
       foreground: bright-red
-      modes: [bold]

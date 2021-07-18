@@ -7,11 +7,11 @@ default:
     foreground: 8
     modes: [italic]
   level:
-    foreground: 8
+    foreground: 139
   message:
     foreground: 255
   field:
-    foreground: 8
+    foreground: 60
   key:
     foreground: 117
     modes: [underline]
@@ -26,23 +26,29 @@ default:
   number:
     foreground: 41
   boolean:
-    foreground: 178
+    foreground: 192
   'null':
     foreground: 136
 levels:
   debug:
     level-inner:
-      foreground: 26
+      foreground: 31
   info:
     level-inner:
-      foreground: 32
+      foreground: 68
   warning:
     time:
-      foreground: 192
+      foreground: 214
     level-inner:
-      foreground: 192
+      foreground: 214
+    message:
+      foreground: bright-white
+      modes: [underline]
   error:
     time:
-      foreground: 214
+      foreground: 202
     level-inner:
-      foreground: 214
+      foreground: 202
+    message:
+      foreground: bright-white
+      modes: [underline]

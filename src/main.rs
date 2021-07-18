@@ -8,6 +8,7 @@ use std::sync::Arc;
 use ansi_term::Colour;
 use chrono::{FixedOffset, Local, TimeZone};
 use chrono_tz::{Tz, UTC};
+use itertools::sorted;
 use once_cell::sync::Lazy;
 use platform_dirs::AppDirs;
 use structopt::{
@@ -156,6 +157,10 @@ struct Opt {
     /// Show empty fields, overrides --hide-empty-fields option.
     #[structopt(long, short = "E", env = "HL_SHOW_EMPTY_FIELDS")]
     show_empty_fields: bool,
+    //
+    /// List available themes and exit.
+    #[structopt(long)]
+    list_themes: bool,
 }
 
 arg_enum! {
@@ -243,6 +248,13 @@ fn run() -> Result<()> {
     } else {
         Theme::none()
     };
+
+    if opt.list_themes {
+        for name in sorted(Theme::list(&app_dirs)?) {
+            println!("{}", name);
+        }
+        return Ok(());
+    }
 
     // Configure concurrency.
     let concurrency = match opt.concurrency.or(settings.concurrency) {

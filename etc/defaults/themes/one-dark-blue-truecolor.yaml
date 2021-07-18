@@ -17,7 +17,7 @@ default:
     foreground: *gray
     modes: [italic]
   level:
-    foreground: *gray
+    foreground: *light-gray
   message:
     foreground: *white
   field:

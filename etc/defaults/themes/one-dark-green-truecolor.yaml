@@ -17,7 +17,7 @@ default:
     foreground: *gray
     modes: [italic]
   level:
-    foreground: *gray
+    foreground: *light-gray
   message:
     foreground: *white
   field:
@@ -28,9 +28,9 @@ default:
   ellipsis:
     foreground: *gray
   object:
-    foreground: *light-gray
+    foreground: *cyan
   array:
-    foreground: *light-gray
+    foreground: *cyan
   string:
     foreground: *cyan
   number:
@@ -41,20 +41,20 @@ default:
     foreground: *red
 levels:
   debug:
-    level:
+    level-inner:
       foreground: *magenta
   info:
-    level:
+    level-inner:
       foreground: *blue
   warning:
     time:
       foreground: *yellow
-    level:
+    level-inner:
       foreground: *yellow
   error:
     time:
       foreground: *red
-    level:
+    level-inner:
       foreground: *red
     message:
       foreground: *red

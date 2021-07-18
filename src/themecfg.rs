@@ -1,10 +1,10 @@
 // std imports
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     convert::TryFrom,
     fmt::{self, Write},
     io::ErrorKind,
-    path::PathBuf,
+    path::{Path, PathBuf},
     str::{self, FromStr},
 };
 
@@ -30,7 +30,7 @@ pub struct Theme {
 impl Theme {
     pub fn load(app_dirs: &AppDirs, name: &str) -> Result<Self> {
         let filename = Self::filename(name);
-        match Self::load_from(app_dirs.config_dir.join("themes"), &filename) {
+        match Self::load_from(Self::themes_dir(app_dirs), &filename) {
             Err(Error::Io(error)) => match error.kind() {
                 ErrorKind::NotFound => Self::load_embedded(name, &filename),
                 _ => Err(Error::Io(error)),
@@ -42,6 +42,22 @@ impl Theme {
 
     pub fn embedded(name: &str) -> Result<Self> {
         Self::load_embedded(name, &Self::filename(name))
+    }
+
+    pub fn list(app_dirs: &AppDirs) -> Result<HashSet<String>> {
+        let path = Self::themes_dir(app_dirs);
+        let dir = Path::new(&path);
+        let mut result = HashSet::new();
+        for item in dir.read_dir()? {
+            let path = item?.path();
+            if path.extension().map(|x| x.to_str()) == Some(Some("yaml")) {
+                if let Some(stem) = path.file_stem() {
+                    result.insert(stem.to_str().unwrap().to_string());
+                }
+            }
+        }
+
+        Ok(result)
     }
 
     fn load_embedded(name: &str, filename: &str) -> Result<Self> {
@@ -61,6 +77,9 @@ impl Theme {
     }
     fn filename(name: &str) -> String {
         format!("{}.yaml", name)
+    }
+    fn themes_dir(app_dirs: &AppDirs) -> PathBuf {
+        app_dirs.config_dir.join("themes")
     }
 }
 

@@ -7,7 +7,7 @@ default:
     foreground: bright-black
     modes: [italic]
   level:
-    foreground: bright-black
+    foreground: default
   message:
     foreground: bright-white
   field:
@@ -18,9 +18,9 @@ default:
   ellipsis:
     foreground: bright-black
   object:
-    foreground: default
+    foreground: cyan
   array:
-    foreground: default
+    foreground: cyan
   string:
     foreground: cyan
   number:
@@ -38,14 +38,13 @@ levels:
       foreground: blue
   warning:
     time:
-      foreground: yellow
+      foreground: bright-yellow
     level-inner:
-      foreground: yellow
+      foreground: bright-yellow
   error:
     time:
-      foreground: red
-      modes: [bold]
+      foreground: bright-red
     level-inner:
-      foreground: red
+      foreground: bright-red
     message:
-      foreground: red
+      foreground: bright-red
