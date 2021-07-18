@@ -16,26 +16,30 @@ use hl::{
 
 fn benchmark(c: &mut Criterion) {
     let mut c = c.benchmark_group("parse-and-format");
-    c.bench_function("kibana-record-01", |b| {
-        let settings = Settings::default();
-        let parser = Parser::new(ParserSettings::new(&settings.fields, false));
-        let mut formatter = RecordFormatter::new(
-            Arc::new(Theme::embedded("classic").unwrap()),
-            DateTimeFormatter::new(
-                LinuxDateFormat::new("%b %d %T.%3N").compile(),
-                FixedOffset::east(0),
-            ),
-            false,
-            Arc::new(IncludeExcludeKeyFilter::default()),
-        );
-        let filter = Filter::default();
-        let mut processor = SegmentProcesor::new(&parser, &mut formatter, &filter);
-        let mut buf = Vec::new();
-        b.iter(|| {
-            processor.run(KIBANA_RECORD_01, &mut buf);
-            buf.clear();
-        });
-    });
+    for (name, record) in [("kibana-record-01", KIBANA_RECORD_01)] {
+        for theme in ["classic", "one-dark-green-truecolor", "dmt"] {
+            c.bench_function(format!("{}/{}", name, theme), |b| {
+                let settings = Settings::default();
+                let parser = Parser::new(ParserSettings::new(&settings.fields, false));
+                let mut formatter = RecordFormatter::new(
+                    Arc::new(Theme::embedded(theme).unwrap()),
+                    DateTimeFormatter::new(
+                        LinuxDateFormat::new("%b %d %T.%3N").compile(),
+                        FixedOffset::east(0),
+                    ),
+                    false,
+                    Arc::new(IncludeExcludeKeyFilter::default()),
+                );
+                let filter = Filter::default();
+                let mut processor = SegmentProcesor::new(&parser, &mut formatter, &filter);
+                let mut buf = Vec::new();
+                b.iter(|| {
+                    processor.run(record, &mut buf);
+                    buf.clear();
+                });
+            });
+        }
+    }
 }
 
 // ---

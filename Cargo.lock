@@ -620,7 +620,7 @@ dependencies = [
 
 [[package]]
 name = "hl"
-version = "0.10.0-alpha.7"
+version = "0.10.0-alpha.8"
 dependencies = [
  "ansi_term",
  "anyhow",
