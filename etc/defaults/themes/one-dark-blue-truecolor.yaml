@@ -18,48 +18,43 @@ default:
     modes: [italic]
   level:
     foreground: *gray
-  delimiter:
-    foreground: *gray
   message:
     foreground: *white
-  field-key:
+  field:
+    foreground: *gray
+  key:
     foreground: *blue
     modes: [underline]
-  equal-sign:
-    foreground: *gray
-  quote:
-    foreground: *cyan
-  brace:
-    foreground: *green
   ellipsis:
     foreground: *gray
-  at-sign:
-    foreground: *gray
-    modes: [italic]
-  'null':
-    foreground: *red
-  boolean:
-    foreground: *red
-  number:
+  object:
+    foreground: *green
+  array:
     foreground: *green
   string:
     foreground: *cyan
+  number:
+    foreground: *green
+  boolean:
+    foreground: *red
+  'null':
+    foreground: *red
 levels:
   debug:
-    level:
+    level-inner:
       foreground: *magenta
   info:
-    level:
+    level-inner:
       foreground: *blue
   warning:
     time:
       foreground: *yellow
-    level:
+    level-inner:
       foreground: *yellow
   error:
     time:
       foreground: *red
-    level:
+    level-inner:
       foreground: *red
     message:
       foreground: *red

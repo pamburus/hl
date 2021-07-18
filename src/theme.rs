@@ -21,7 +21,7 @@ pub use types::Level;
 // ---
 
 pub trait StylingPush<B: Push<u8>> {
-    fn element<F: FnOnce(&mut Self)>(&mut self, element: Element, f: F);
+    fn element<R, F: FnOnce(&mut Self) -> R>(&mut self, element: Element, f: F) -> R;
     fn batch<F: FnOnce(&mut B)>(&mut self, f: F);
 }
 
@@ -60,10 +60,11 @@ impl Theme {
                 Some(level) => &self.packs[*level],
                 None => &self.default,
             },
+            synced: None,
             current: None,
         };
         f(&mut styler);
-        styler.reset()
+        // styler.reset()
     }
 }
 
@@ -183,44 +184,44 @@ impl From<&themecfg::Style> for Style {
 pub struct Styler<'a, B: Push<u8>> {
     buf: &'a mut B,
     pack: &'a StylePack,
+    synced: Option<usize>,
     current: Option<usize>,
 }
 
 impl<'a, B: Push<u8>> Styler<'a, B> {
     #[inline(always)]
-    pub fn set(&mut self, e: Element) {
+    fn set(&mut self, e: Element) -> Option<usize> {
         self.set_style(self.pack.elements[e])
     }
 
     #[inline(always)]
-    fn reset(&mut self) {
-        self.set_style(None)
+    fn set_style(&mut self, style: Option<usize>) -> Option<usize> {
+        self.current.replace(style?)
     }
 
     #[inline(always)]
-    fn set_style(&mut self, style: Option<usize>) {
-        let style = match style {
-            Some(style) => Some(style),
-            None => self.pack.reset,
-        };
-        if let Some(style) = style {
-            if self.current != Some(style) {
-                self.current = Some(style);
-                let style = &self.pack.styles[style];
-                style.apply(self.buf);
+    fn sync(&mut self) {
+        if self.synced != self.current {
+            if let Some(style) = self.current.or(self.pack.reset) {
+                self.pack.styles[style].apply(self.buf);
             }
+            self.synced = self.current;
         }
     }
 }
 
 impl<'a, B: Push<u8>> StylingPush<B> for Styler<'a, B> {
     #[inline(always)]
-    fn element<F: FnOnce(&mut Self)>(&mut self, element: Element, f: F) {
+    fn element<R, F: FnOnce(&mut Self) -> R>(&mut self, element: Element, f: F) -> R {
+        let style = self.current;
         self.set(element);
-        f(self);
+        let result = f(self);
+        self.set_style(style);
+        result
     }
     #[inline(always)]
     fn batch<F: FnOnce(&mut B)>(&mut self, f: F) {
+        self.sync();
         f(self.buf)
     }
 }

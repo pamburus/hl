@@ -92,29 +92,33 @@ impl RecordFormatter {
             // level
             //
             s.batch(|buf| buf.push(b' '));
-            s.element(Element::Delimiter, |s| s.batch(|buf| buf.push(b'|')));
             s.element(Element::Level, |s| {
                 s.batch(|buf| {
-                    buf.extend_from_slice(match rec.level {
-                        Some(Level::Debug) => b"DBG",
-                        Some(Level::Info) => b"INF",
-                        Some(Level::Warning) => b"WRN",
-                        Some(Level::Error) => b"ERR",
-                        _ => b"(?)",
+                    buf.push(b'|');
+                });
+                s.element(Element::LevelInner, |s| {
+                    s.batch(|buf| {
+                        buf.extend_from_slice(match rec.level {
+                            Some(Level::Debug) => b"DBG",
+                            Some(Level::Info) => b"INF",
+                            Some(Level::Warning) => b"WRN",
+                            Some(Level::Error) => b"ERR",
+                            _ => b"(?)",
+                        })
                     })
-                })
+                });
+                s.batch(|buf| buf.push(b'|'));
             });
-            s.element(Element::Delimiter, |s| s.batch(|buf| buf.push(b'|')));
             //
             // logger
             //
             if let Some(logger) = rec.logger {
                 s.batch(|buf| buf.push(b' '));
                 s.element(Element::Logger, |s| {
-                    s.batch(|buf| {
-                        buf.extend_from_slice(logger.as_bytes());
-                        buf.push(b':');
-                    })
+                    s.element(Element::LoggerInner, |s| {
+                        s.batch(|buf| buf.extend_from_slice(logger.as_bytes()))
+                    });
+                    s.batch(|buf| buf.push(b':'));
                 });
             }
             //
@@ -122,9 +126,7 @@ impl RecordFormatter {
             //
             if let Some(text) = rec.message {
                 s.batch(|buf| buf.push(b' '));
-                s.element(Element::Message, |s| {
-                    self.format_message(s, text);
-                });
+                s.element(Element::Message, |s| self.format_message(s, text));
             }
             //
             // fields
@@ -149,15 +151,12 @@ impl RecordFormatter {
             // caller
             //
             if let Some(text) = rec.caller {
-                // println!("P1");
-                s.element(Element::AtSign, |s| {
-                    s.batch(|buf| buf.extend_from_slice(b" @ "))
-                });
-                // println!("P2");
                 s.element(Element::Caller, |s| {
-                    s.batch(|buf| buf.extend_from_slice(text.as_bytes()))
+                    s.batch(|buf| buf.extend_from_slice(b" @ "));
+                    s.element(Element::CallerInner, |s| {
+                        s.batch(|buf| buf.extend_from_slice(text.as_bytes()))
+                    });
                 });
-                // println!("P3");
             };
             //
             // eol
@@ -174,7 +173,9 @@ impl RecordFormatter {
         filter: Option<&IncludeExcludeKeyFilter>,
     ) -> bool {
         let mut fv = FieldFormatter::new(self);
-        fv.format(s, key, value, filter, IncludeExcludeSetting::Unspecified)
+        s.element(Element::Field, |s| {
+            fv.format(s, key, value, filter, IncludeExcludeSetting::Unspecified)
+        })
     }
 
     fn format_value<S: StylingPush<Buf>>(&self, s: &mut S, value: &RawValue) {
@@ -205,16 +206,18 @@ impl RecordFormatter {
                 });
             }
             b'{' => {
-                let item = json::from_str::<model::Object>(value.get()).unwrap();
-                s.element(Element::Brace, |s| s.batch(|buf| buf.push(b'{')));
-                let mut has_some = false;
-                for (k, v) in item.fields.iter() {
-                    has_some |= self.format_field(s, k, v, None)
-                }
-                if has_some {
-                    s.batch(|buf| buf.push(b' '));
-                }
-                s.element(Element::Brace, |s| s.batch(|buf| buf.push(b'}')));
+                s.element(Element::Object, |s| {
+                    let item = json::from_str::<model::Object>(value.get()).unwrap();
+                    s.batch(|buf| buf.push(b'{'));
+                    let mut has_some = false;
+                    for (k, v) in item.fields.iter() {
+                        has_some |= self.format_field(s, k, v, None)
+                    }
+                    if has_some {
+                        s.batch(|buf| buf.push(b' '));
+                    }
+                    s.batch(|buf| buf.push(b'}'));
+                });
             }
             b'[' => {
                 let item = json::from_str::<model::Array<256>>(value.get()).unwrap();
@@ -227,9 +230,7 @@ impl RecordFormatter {
                     .position(|x| x == false)
                     .is_none();
                 if is_byte_string {
-                    s.element(Element::Quote, |s| {
-                        s.batch(|buf| buf.extend_from_slice(b"b'"))
-                    });
+                    s.batch(|buf| buf.extend_from_slice(b"b'"));
                     s.element(Element::Message, |s| {
                         for item in item.iter() {
                             let b = atoi::atoi::<u8>(item.get().as_bytes()).unwrap();
@@ -246,19 +247,21 @@ impl RecordFormatter {
                             }
                         }
                     });
-                    s.element(Element::Quote, |s| s.batch(|buf| buf.push(b'\'')));
+                    s.batch(|buf| buf.push(b'\''));
                 } else {
-                    s.element(Element::Brace, |s| s.batch(|buf| buf.push(b'[')));
-                    let mut first = true;
-                    for v in item.iter() {
-                        if !first {
-                            s.element(Element::Comma, |s| s.batch(|buf| buf.push(b',')));
-                        } else {
-                            first = false;
+                    s.element(Element::Array, |s| {
+                        s.batch(|buf| buf.push(b'['));
+                        let mut first = true;
+                        for v in item.iter() {
+                            if !first {
+                                s.batch(|buf| buf.push(b','));
+                            } else {
+                                first = false;
+                            }
+                            self.format_value(s, v);
                         }
-                        self.format_value(s, v);
-                    }
-                    s.element(Element::Brace, |s| s.batch(|buf| buf.push(b']')));
+                        s.batch(|buf| buf.push(b']'));
+                    });
                 }
             }
             _ => {
@@ -306,13 +309,13 @@ impl<'a> FieldFormatter<'a> {
             return false;
         }
         s.batch(|buf| buf.push(b' '));
-        s.element(Element::FieldKey, |s| {
+        s.element(Element::Key, |s| {
             for b in key.as_bytes() {
                 let b = if *b == b'_' { b'-' } else { *b };
                 s.batch(|buf| buf.push(b.to_ascii_lowercase()));
             }
         });
-        s.element(Element::EqualSign, |s| s.batch(|buf| buf.push(b'=')));
+        s.batch(|buf| buf.push(b'='));
         if self.rf.unescape_fields {
             self.format_value(s, value, filter, setting);
         } else {
@@ -332,11 +335,13 @@ impl<'a> FieldFormatter<'a> {
     ) {
         match value.get().as_bytes()[0] {
             b'"' => {
-                s.element(Element::Quote, |s| s.batch(|buf| buf.push(b'\'')));
                 s.element(Element::String, |s| {
-                    s.batch(|buf| format_str_unescaped(buf, value.get()))
+                    s.batch(|buf| {
+                        buf.push(b'\'');
+                        format_str_unescaped(buf, value.get());
+                        buf.push(b'\'');
+                    })
                 });
-                s.element(Element::Quote, |s| s.batch(|buf| buf.push(b'\'')));
             }
             b'0'..=b'9' | b'-' | b'+' | b'.' => {
                 s.element(Element::Number, |s| {
@@ -355,34 +360,40 @@ impl<'a> FieldFormatter<'a> {
             }
             b'{' => {
                 let item = json::from_str::<model::Object>(value.get()).unwrap();
-                s.element(Element::Brace, |s| s.batch(|buf| buf.push(b'{')));
-                let mut some_fields_hidden = false;
-                for (k, v) in item.fields.iter() {
-                    some_fields_hidden |= !self.format(s, k, v, filter, setting);
-                }
-                if some_fields_hidden {
-                    s.element(Element::Ellipsis, |s| {
-                        s.batch(|buf| buf.extend_from_slice(b" ..."))
+                s.element(Element::Object, |s| {
+                    s.batch(|buf| buf.push(b'{'));
+                    let mut some_fields_hidden = false;
+                    for (k, v) in item.fields.iter() {
+                        some_fields_hidden |= !self.format(s, k, v, filter, setting);
+                    }
+                    if some_fields_hidden {
+                        s.element(Element::Ellipsis, |s| {
+                            s.batch(|buf| buf.extend_from_slice(b" ..."))
+                        });
+                    }
+                    s.batch(|buf| {
+                        if item.fields.len() != 0 {
+                            buf.push(b' ');
+                        }
+                        buf.push(b'}');
                     });
-                }
-                if item.fields.len() != 0 {
-                    s.batch(|buf| buf.push(b' '));
-                }
-                s.element(Element::Brace, |s| s.batch(|buf| buf.push(b'}')));
+                });
             }
             b'[' => {
-                let item = json::from_str::<model::Array<32>>(value.get()).unwrap();
-                s.element(Element::Brace, |s| s.batch(|buf| buf.push(b'[')));
-                let mut first = true;
-                for v in item.iter() {
-                    if !first {
-                        s.element(Element::Comma, |s| s.batch(|buf| buf.push(b',')));
-                    } else {
-                        first = false;
+                s.element(Element::Array, |s| {
+                    let item = json::from_str::<model::Array<32>>(value.get()).unwrap();
+                    s.batch(|buf| buf.push(b'['));
+                    let mut first = true;
+                    for v in item.iter() {
+                        if !first {
+                            s.batch(|buf| buf.push(b','));
+                        } else {
+                            first = false;
+                        }
+                        self.format_value(s, v, None, IncludeExcludeSetting::Unspecified);
                     }
-                    self.format_value(s, v, None, IncludeExcludeSetting::Unspecified);
-                }
-                s.element(Element::Brace, |s| s.batch(|buf| buf.push(b']')));
+                    s.batch(|buf| buf.push(b']'));
+                });
             }
             _ => {
                 s.element(Element::String, |s| {

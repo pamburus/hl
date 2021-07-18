@@ -7,30 +7,26 @@ default:
     foreground: bright-black
   level:
     foreground: magenta
-  delimiter:
-    foreground: default
   message:
     foreground: black
-  field-key:
-    foreground: green
-  equal-sign:
+  field:
     foreground: bright-black
+  key:
+    foreground: green
   ellipsis:
     foreground: bright-black
-  brace:
+  object:
     foreground: default
-  quote:
+  array:
     foreground: default
-  at-sign:
-    foreground: bright-black
   string:
     foreground: default
-  'null':
-    foreground: yellow
-  boolean:
-    foreground: yellow
   number:
     foreground: cyan
+  boolean:
+    foreground: yellow
+  'null':
+    foreground: yellow
 levels:
   debug:
     level:

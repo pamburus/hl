@@ -27,8 +27,12 @@ macro_rules! collection {
     }};
 }
 
+// ---
+
 #[global_allocator]
 static GLOBAL: &StatsAlloc<System> = &INSTRUMENTED_SYSTEM;
+
+// ---
 
 fn benchmark(c: &mut Criterion) {
     let mut c = c.benchmark_group("theme");
@@ -59,34 +63,19 @@ fn benchmark(c: &mut Criterion) {
                 foreground: Some(Color::Palette(255)),
                 background: None,
             },
-            Element::EqualSign => Style {
+            Element::Field => Style {
                 modes: Vec::default(),
                 foreground: Some(Color::Palette(8)),
                 background: None,
             },
-            Element::Brace => Style {
+            Element::Object => Style {
                 modes: Vec::default(),
                 foreground: Some(Color::Palette(246)),
                 background: None,
             },
-            Element::Quote => Style {
+            Element::Array => Style {
                 modes: Vec::default(),
                 foreground: Some(Color::Palette(246)),
-                background: None,
-            },
-            Element::Delimiter => Style {
-                modes: Vec::default(),
-                foreground: Some(Color::Palette(8)),
-                background: None,
-            },
-            Element::Comma => Style {
-                modes: Vec::default(),
-                foreground: Some(Color::Palette(8)),
-                background: None,
-            },
-            Element::AtSign => Style {
-                modes: vec![Mode::Italic],
-                foreground: Some(Color::Palette(8)),
                 background: None,
             },
             Element::Ellipsis => Style {
@@ -94,8 +83,8 @@ fn benchmark(c: &mut Criterion) {
                 foreground: Some(Color::Palette(8)),
                 background: None,
             },
-            Element::FieldKey => Style {
-                modes: Vec::default(),
+            Element::Key => Style {
+                modes: vec![Mode::Underline],
                 foreground: Some(Color::Palette(117)),
                 background: None,
             },
@@ -117,11 +106,6 @@ fn benchmark(c: &mut Criterion) {
             Element::String => Style {
                 modes: Vec::default(),
                 foreground: Some(Color::Palette(36)),
-                background: None,
-            },
-            Element::Whitespace => Style {
-                modes: Vec::default(),
-                foreground: None,
                 background: None,
             },
         })
@@ -150,17 +134,19 @@ fn benchmark(c: &mut Criterion) {
                     s.batch(|buf| buf.extend_from_slice(b"2020-01-01 00:00:00"))
                 });
                 s.batch(|buf| buf.push(b' '));
-                s.element(Element::Delimiter, |s| s.batch(|buf| buf.push(b'|')));
                 s.element(Element::Level, |s| {
-                    s.batch(|buf| buf.extend_from_slice(b"INF"))
+                    s.batch(|buf| buf.push(b'|'));
+                    s.element(Element::LevelInner, |s| {
+                        s.batch(|buf| buf.extend_from_slice(b"INF"))
+                    });
+                    s.batch(|buf| buf.push(b'|'))
                 });
-                s.element(Element::Delimiter, |s| s.batch(|buf| buf.push(b'|')));
                 s.batch(|buf| buf.push(b' '));
                 s.element(Element::Logger, |s| {
-                    s.batch(|buf| {
-                        buf.extend_from_slice(b"logger");
-                        buf.push(b':');
-                    })
+                    s.element(Element::LoggerInner, |s| {
+                        s.batch(|buf| buf.extend_from_slice(b"logger"))
+                    });
+                    s.batch(|buf| buf.push(b':'))
                 });
                 s.batch(|buf| buf.push(b' '));
                 s.element(Element::Message, |s| {
@@ -170,25 +156,23 @@ fn benchmark(c: &mut Criterion) {
                 });
                 for _ in 0..4 {
                     for (key, value) in &fields {
-                        s.batch(|buf| buf.push(b' '));
-                        s.element(Element::FieldKey, |s| {
-                            s.batch(|buf| {
-                                buf.extend_from_slice(&key[..]);
-                            })
-                        });
-                        s.element(Element::EqualSign, |s| s.batch(|buf| buf.push(b'=')));
-                        s.element(Element::String, |s| {
-                            s.batch(|buf| {
-                                buf.extend_from_slice(&value[..]);
-                            })
+                        s.element(Element::Field, |s| {
+                            s.batch(|buf| buf.push(b' '));
+                            s.element(Element::Key, |s| {
+                                s.batch(|buf| buf.extend_from_slice(&key[..]))
+                            });
+                            s.batch(|buf| buf.push(b'='));
+                            s.element(Element::String, |s| {
+                                s.batch(|buf| buf.extend_from_slice(&value[..]))
+                            });
                         });
                     }
                 }
-                s.element(Element::AtSign, |s| {
-                    s.batch(|buf| buf.extend_from_slice(b" @ "))
-                });
                 s.element(Element::Caller, |s| {
-                    s.batch(|buf| buf.extend_from_slice(b"caller"))
+                    s.batch(|buf| buf.extend_from_slice(b" @ "));
+                    s.element(Element::CallerInner, |s| {
+                        s.batch(|buf| buf.extend_from_slice(b"caller"))
+                    });
                 });
             });
             n1 += 1;
@@ -197,6 +181,8 @@ fn benchmark(c: &mut Criterion) {
     });
     println!("allocations at 1 ({:?} iterations): {:#?}", n1, c1);
 }
+
+// ---
 
 criterion_group!(benches, benchmark);
 criterion_main!(benches);
