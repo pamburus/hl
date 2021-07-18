@@ -8,7 +8,7 @@ palette:
   - &cyan '#56B6C2'
   - &magenta '#C678DD'
   - &green '#98C379'
-default:
+elements:
   time:
     foreground: *gray
   logger:

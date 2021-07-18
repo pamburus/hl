@@ -75,10 +75,10 @@ impl Theme {
 impl<S: Borrow<themecfg::Theme>> From<S> for Theme {
     fn from(s: S) -> Self {
         let s = s.borrow();
-        let default = StylePack::load(&s.default);
+        let default = StylePack::load(&s.elements);
         let mut packs = EnumMap::default();
         for (level, pack) in &s.levels {
-            packs[*level] = StylePack::load(&s.default.clone().merged(pack.clone()));
+            packs[*level] = StylePack::load(&s.elements.clone().merged(pack.clone()));
         }
         Self { default, packs }
     }

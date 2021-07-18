@@ -243,6 +243,56 @@ Log viewer which translates JSON logs into pretty human-readable representation.
     | Linux   | ~/.config/hl/themes/*.yaml                     |
     | Windows | %USERPROFILE%\AppData\Roaming\hl\themes\*.yaml |
 
+- Format description
+  - Section `elements` contains styles for predefined elements.
+  - Section `levels` contains optional overrides for styles defined in `elements` sections per logging level, which are [`debug`, `info`, `warning`, `error`].
+  - Each element style contains optional `background`, `foreground` and `modes` parameters.
+  - Example
+    ```yaml
+    elements:
+        <element>:
+            foreground: <color>
+            background: <color>
+            modes: [<mode>, <mode>, ...]
+    levels:
+        <level>:
+            <element>:
+                foreground: <color>
+                background: <color>
+                modes: [<mode>, <mode>, ...]
+    ```
+  - Color format is one of
+    - Keyword `default` specifies default color defined by the terminal.
+    - ASCII basic color name, one of
+      - `black`
+      - `red`
+      - `green`
+      - `yellow`
+      - `blue`
+      - `magenta`
+      - `cyan`
+      - `white`
+      - `bright-black`
+      - `bright-red`
+      - `bright-green`
+      - `bright-yellow`
+      - `bright-blue`
+      - `bright-magenta`
+      - `bright-cyan`
+      - `bright-white`
+    - 256-color palette code, from `0` to `255`.
+    - RGB color in hex web color format, i.e. `#FFFF00` for bright yellow color.
+  - Modes is a list of additional styles, each of them is one of
+    - `bold`
+    - `faint`
+    - `italic`
+    - `underline`
+    - `slow-blink`
+    - `rapid-blink`
+    - `reverse`
+    - `conseal`
+    - `crossed-out`
+
 
 ### Complete set of options and flags
 

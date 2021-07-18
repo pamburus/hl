@@ -23,7 +23,7 @@ use crate::{error::*, types::Level};
 #[derive(Debug, Default, Deserialize)]
 #[serde(default)]
 pub struct Theme {
-    pub default: StylePack,
+    pub elements: StylePack,
     pub levels: HashMap<Level, StylePack>,
 }
 
