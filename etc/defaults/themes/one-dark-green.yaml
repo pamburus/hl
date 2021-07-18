@@ -1,0 +1,56 @@
+default:
+  time:
+    foreground: bright-black
+  logger:
+    foreground: bright-black
+  caller:
+    foreground: bright-black
+    modes: [italic]
+  level:
+    foreground: bright-black
+  delimiter:
+    foreground: bright-black
+  message:
+    foreground: bright-white
+  field-key:
+    foreground: green
+    modes: [underline]
+  equal-sign:
+    foreground: bright-black
+  quote:
+    foreground: cyan
+  brace:
+    foreground: bright-black
+  ellipsis:
+    foreground: bright-black
+  at-sign:
+    foreground: bright-black
+    modes: [italic]
+  'null':
+    foreground: red
+  boolean:
+    foreground: red
+  number:
+    foreground: blue
+  string:
+    foreground: cyan
+levels:
+  debug:
+    level:
+      foreground: magenta
+  info:
+    level:
+      foreground: blue
+  warning:
+    time:
+      foreground: yellow
+    level:
+      foreground: yellow
+  error:
+    time:
+      foreground: red
+      modes: [bold]
+    level:
+      foreground: red
+    message:
+      foreground: red

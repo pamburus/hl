@@ -45,6 +45,10 @@ pub enum Error {
     UnknownTheme(String),
     #[error("zero size")]
     ZeroSize,
+    #[error("failed to parse utf-8 string: {0}")]
+    Utf8Error(#[from] std::str::Utf8Error),
+    #[error("failed to parse yaml: {0}")]
+    YamlError(#[from] serde_yaml::Error),
 }
 
 /// Result is an alias for standard result with bound Error type.

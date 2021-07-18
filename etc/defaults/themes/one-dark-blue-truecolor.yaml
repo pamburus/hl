@@ -1,0 +1,64 @@
+palette:
+  - &red '#E06C75'
+  - &gray '#636D83'
+  - &white '#CFD7E5'
+  - &blue '#61AFEF'
+  - &yellow '#D19A66'
+  - &cyan '#56B6C2'
+  - &magenta '#C678DD'
+  - &green '#98C379'
+default:
+  time:
+    foreground: *gray
+  logger:
+    foreground: *gray
+  caller:
+    foreground: *gray
+    modes: [italic]
+  level:
+    foreground: *gray
+  delimiter:
+    foreground: *gray
+  message:
+    foreground: *white
+  field-key:
+    foreground: *blue
+    modes: [underline]
+  equal-sign:
+    foreground: *gray
+  quote:
+    foreground: *gray
+  brace:
+    foreground: *gray
+  ellipsis:
+    foreground: *gray
+  at-sign:
+    foreground: *gray
+    modes: [italic]
+  'null':
+    foreground: *red
+  boolean:
+    foreground: *red
+  number:
+    foreground: *green
+  string:
+    foreground: *cyan
+levels:
+  debug:
+    level:
+      foreground: *magenta
+  info:
+    level:
+      foreground: *blue
+  warning:
+    time:
+      foreground: *yellow
+    level:
+      foreground: *yellow
+  error:
+    time:
+      foreground: *red
+    level:
+      foreground: *red
+    message:
+      foreground: *red

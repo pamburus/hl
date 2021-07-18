@@ -1,0 +1,40 @@
+default:
+  time:
+    foreground: bright-black
+  logger:
+    foreground: bright-black
+  caller:
+    foreground: bright-black
+  level:
+    foreground: magenta
+  message:
+    foreground: bright-white
+  field-key:
+    foreground: green
+  equal-sign:
+    foreground: bright-black
+  ellipsis:
+    foreground: bright-black
+  at-sign:
+    foreground: bright-black
+  'null':
+    foreground: yellow
+  boolean:
+    foreground: yellow
+  number:
+    foreground: cyan
+levels:
+  debug:
+    level:
+      foreground: magenta
+  info:
+    level:
+      foreground: cyan
+  warning:
+    level:
+      foreground: bright-yellow
+      modes: [reverse]
+  error:
+    level:
+      foreground: bright-red
+      modes: [reverse]

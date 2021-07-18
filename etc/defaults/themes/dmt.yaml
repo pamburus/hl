@@ -1,0 +1,51 @@
+default:
+  time:
+    foreground: 8
+  logger:
+    foreground: 8
+  caller:
+    foreground: 8
+    modes: [italic]
+  level:
+    foreground: 25
+  message:
+    foreground: 255
+  field-key:
+    foreground: 117
+    modes: [underline]
+  equal-sign:
+    foreground: 8
+  quote:
+    foreground: 246
+  brace:
+    foreground: 246
+  ellipsis:
+    foreground: 8
+  at-sign:
+    foreground: 8
+    modes: [italic]
+  'null':
+    foreground: 136
+  boolean:
+    foreground: 178
+  number:
+    foreground: 41
+  string:
+    foreground: 36
+levels:
+  debug:
+    level:
+      foreground: 26
+  info:
+    level:
+      foreground: 32
+  warning:
+    time:
+      foreground: 192
+    level:
+      foreground: 192
+  error:
+    time:
+      foreground: 214
+    level:
+      foreground: 214

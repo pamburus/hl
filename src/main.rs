@@ -238,12 +238,8 @@ fn run() -> Result<()> {
         ColorOption::Never => false,
     };
     let theme = if use_colors {
-        Theme::load(
-            CONFIG
-                .themes
-                .get(&opt.theme)
-                .ok_or(Error::UnknownTheme(opt.theme.into()))?,
-        )
+        let theme = &opt.theme;
+        Theme::load(&app_dirs, theme)?
     } else {
         Theme::none()
     };

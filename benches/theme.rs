@@ -7,108 +7,124 @@ use stats_alloc::{Region, StatsAlloc, INSTRUMENTED_SYSTEM};
 
 // local imports
 use hl::{
-    settings::{self, Color, Mode, Style, StylePack},
     theme::{Element, StylingPush, Theme},
+    themecfg::{self, Color, Mode, Style},
     types::Level,
 };
+
+// ---
+
+macro_rules! collection {
+    // map-like
+    ($($k:expr => $v:expr),* $(,)?) => {{
+        use std::iter::{Iterator, IntoIterator};
+        Iterator::collect(IntoIterator::into_iter([$(($k, $v),)*]))
+    }};
+    // set-like
+    ($($v:expr),* $(,)?) => {{
+        use std::iter::{Iterator, IntoIterator};
+        Iterator::collect(IntoIterator::into_iter([$($v,)*]))
+    }};
+}
 
 #[global_allocator]
 static GLOBAL: &StatsAlloc<System> = &INSTRUMENTED_SYSTEM;
 
 fn criterion_benchmark(c: &mut Criterion) {
-    let theme = Theme::load(&settings::Theme {
-        default: StylePack {
-            time: Style {
+    let theme = Theme::from(&themecfg::Theme {
+        default: HashMap::from(collection! {
+            Element::Time => Style {
                 modes: Vec::default(),
                 foreground: Some(Color::Palette(8)),
                 background: None,
             },
-            level: Style {
+            Element::Level => Style {
                 modes: Vec::default(),
                 foreground: Some(Color::Palette(25)),
                 background: None,
             },
-            logger: Style {
+            Element::Logger => Style {
                 modes: Vec::default(),
                 foreground: Some(Color::Palette(8)),
                 background: None,
             },
-            caller: Style {
+            Element::Caller => Style {
                 modes: Vec::default(),
                 foreground: Some(Color::Palette(8)),
                 background: None,
             },
-            message: Style {
+            Element::Message => Style {
                 modes: Vec::default(),
                 foreground: Some(Color::Palette(255)),
                 background: None,
             },
-            equal_sign: Style {
+            Element::EqualSign => Style {
                 modes: Vec::default(),
                 foreground: Some(Color::Palette(8)),
                 background: None,
             },
-            brace: Style {
+            Element::Brace => Style {
                 modes: Vec::default(),
                 foreground: Some(Color::Palette(246)),
                 background: None,
             },
-            quote: Style {
+            Element::Quote => Style {
                 modes: Vec::default(),
                 foreground: Some(Color::Palette(246)),
                 background: None,
             },
-            delimiter: Style {
+            Element::Delimiter => Style {
                 modes: Vec::default(),
                 foreground: Some(Color::Palette(8)),
                 background: None,
             },
-            comma: Style {
+            Element::Comma => Style {
                 modes: Vec::default(),
                 foreground: Some(Color::Palette(8)),
                 background: None,
             },
-            at_sign: Style {
+            Element::AtSign => Style {
                 modes: vec![Mode::Italic],
                 foreground: Some(Color::Palette(8)),
                 background: None,
             },
-            ellipsis: Style {
+            Element::Ellipsis => Style {
                 modes: Vec::default(),
                 foreground: Some(Color::Palette(8)),
                 background: None,
             },
-            field_key: Style {
+            Element::FieldKey => Style {
                 modes: Vec::default(),
                 foreground: Some(Color::Palette(117)),
                 background: None,
             },
-            null: Style {
+            Element::Null => Style {
                 modes: Vec::default(),
                 foreground: Some(Color::Palette(136)),
                 background: None,
             },
-            boolean: Style {
+            Element::Boolean => Style {
                 modes: Vec::default(),
                 foreground: Some(Color::Palette(178)),
                 background: None,
             },
-            number: Style {
+            Element::Number => Style {
                 modes: Vec::default(),
                 foreground: Some(Color::Palette(41)),
                 background: None,
             },
-            string: Style {
+            Element::String => Style {
                 modes: Vec::default(),
                 foreground: Some(Color::Palette(36)),
                 background: None,
             },
-            whitespace: Style {
+            Element::Whitespace => Style {
                 modes: Vec::default(),
                 foreground: None,
                 background: None,
             },
-        },
+        })
+        .into(),
         levels: HashMap::new(),
     });
     let fields = vec![

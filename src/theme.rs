@@ -1,15 +1,21 @@
 // std imports
-use std::vec::Vec;
+use std::{borrow::Borrow, vec::Vec};
 
 // third-party imports
-use enum_map::{Enum, EnumMap};
+use enum_map::EnumMap;
+use platform_dirs::AppDirs;
 
 // local imports
 use crate::{
+    error::*,
     eseq::{Brightness, Color, ColorCode, Mode, Sequence, StyleCode},
     fmtx::Push,
-    settings, types,
+    themecfg, types,
 };
+
+// ---
+
+pub use themecfg::Element;
 pub use types::Level;
 
 // ---
@@ -21,41 +27,55 @@ pub trait StylingPush<B: Push<u8>> {
 
 // ---
 
-#[repr(u8)]
-#[derive(Enum)]
-pub enum Element {
-    Time,
-    Level,
-    Logger,
-    Caller,
-    Message,
-    EqualSign,
-    Brace,
-    Quote,
-    Delimiter,
-    Comma,
-    AtSign,
-    Ellipsis,
-    FieldKey,
-    Null,
-    Boolean,
-    Number,
-    String,
-    Whitespace,
-}
-
-pub type Buf = Vec<u8>;
-
-pub struct Styler<'a, B: Push<u8>> {
-    buf: &'a mut B,
-    pack: &'a StylePack,
-    current: Option<usize>,
-}
-
 pub struct Theme {
     packs: EnumMap<Level, StylePack>,
     default: StylePack,
 }
+
+impl Theme {
+    pub fn none() -> Self {
+        Self {
+            packs: EnumMap::default(),
+            default: StylePack::default(),
+        }
+    }
+
+    pub fn load(app_dirs: &AppDirs, name: &str) -> Result<Self> {
+        Ok(themecfg::Theme::load(app_dirs, name)?.into())
+    }
+
+    pub fn apply<'a, B: Push<u8>, F: FnOnce(&mut Styler<'a, B>)>(
+        &'a self,
+        buf: &'a mut B,
+        level: &Option<Level>,
+        f: F,
+    ) {
+        let mut styler = Styler {
+            buf,
+            pack: match level {
+                Some(level) => &self.packs[*level],
+                None => &self.default,
+            },
+            current: None,
+        };
+        f(&mut styler);
+        styler.reset()
+    }
+}
+
+impl<S: Borrow<themecfg::Theme>> From<S> for Theme {
+    fn from(s: S) -> Self {
+        let s = s.borrow();
+        let default = StylePack::load(&s.default);
+        let mut packs = EnumMap::default();
+        for (level, pack) in &s.levels {
+            packs[*level] = StylePack::load(&s.default.clone().merged(pack.clone()));
+        }
+        Self { default, packs }
+    }
+}
+
+// ---
 
 #[derive(Clone, Eq, PartialEq)]
 struct Style(Sequence);
@@ -70,31 +90,31 @@ impl Style {
         Sequence::reset().into()
     }
 
-    fn convert_color(color: &settings::Color) -> ColorCode {
+    fn convert_color(color: &themecfg::Color) -> ColorCode {
         match color {
-            settings::Color::Plain(color) => {
+            themecfg::Color::Plain(color) => {
                 let c = match color {
-                    settings::PlainColor::Black => (Color::Black, Brightness::Normal),
-                    settings::PlainColor::Blue => (Color::Blue, Brightness::Normal),
-                    settings::PlainColor::Cyan => (Color::Cyan, Brightness::Normal),
-                    settings::PlainColor::Green => (Color::Green, Brightness::Normal),
-                    settings::PlainColor::Magenta => (Color::Magenta, Brightness::Normal),
-                    settings::PlainColor::Red => (Color::Red, Brightness::Normal),
-                    settings::PlainColor::White => (Color::White, Brightness::Normal),
-                    settings::PlainColor::Yellow => (Color::Yellow, Brightness::Normal),
-                    settings::PlainColor::BrightBlack => (Color::Black, Brightness::Bright),
-                    settings::PlainColor::BrightBlue => (Color::Blue, Brightness::Bright),
-                    settings::PlainColor::BrightCyan => (Color::Cyan, Brightness::Bright),
-                    settings::PlainColor::BrightGreen => (Color::Green, Brightness::Bright),
-                    settings::PlainColor::BrightMagenta => (Color::Magenta, Brightness::Bright),
-                    settings::PlainColor::BrightRed => (Color::Red, Brightness::Bright),
-                    settings::PlainColor::BrightWhite => (Color::White, Brightness::Bright),
-                    settings::PlainColor::BrightYellow => (Color::Yellow, Brightness::Bright),
+                    themecfg::PlainColor::Black => (Color::Black, Brightness::Normal),
+                    themecfg::PlainColor::Blue => (Color::Blue, Brightness::Normal),
+                    themecfg::PlainColor::Cyan => (Color::Cyan, Brightness::Normal),
+                    themecfg::PlainColor::Green => (Color::Green, Brightness::Normal),
+                    themecfg::PlainColor::Magenta => (Color::Magenta, Brightness::Normal),
+                    themecfg::PlainColor::Red => (Color::Red, Brightness::Normal),
+                    themecfg::PlainColor::White => (Color::White, Brightness::Normal),
+                    themecfg::PlainColor::Yellow => (Color::Yellow, Brightness::Normal),
+                    themecfg::PlainColor::BrightBlack => (Color::Black, Brightness::Bright),
+                    themecfg::PlainColor::BrightBlue => (Color::Blue, Brightness::Bright),
+                    themecfg::PlainColor::BrightCyan => (Color::Cyan, Brightness::Bright),
+                    themecfg::PlainColor::BrightGreen => (Color::Green, Brightness::Bright),
+                    themecfg::PlainColor::BrightMagenta => (Color::Magenta, Brightness::Bright),
+                    themecfg::PlainColor::BrightRed => (Color::Red, Brightness::Bright),
+                    themecfg::PlainColor::BrightWhite => (Color::White, Brightness::Bright),
+                    themecfg::PlainColor::BrightYellow => (Color::Yellow, Brightness::Bright),
                 };
                 ColorCode::Plain(c.0, c.1)
             }
-            settings::Color::Palette(code) => ColorCode::Palette(*code),
-            settings::Color::RGB(settings::RGB(r, g, b)) => ColorCode::RGB(*r, *g, *b),
+            themecfg::Color::Palette(code) => ColorCode::Palette(*code),
+            themecfg::Color::RGB(themecfg::RGB(r, g, b)) => ColorCode::RGB(*r, *g, *b),
         }
     }
 }
@@ -111,21 +131,21 @@ impl<T: Into<Sequence>> From<T> for Style {
     }
 }
 
-impl From<&settings::Style> for Style {
-    fn from(style: &settings::Style) -> Self {
+impl From<&themecfg::Style> for Style {
+    fn from(style: &themecfg::Style) -> Self {
         let mut codes = Vec::<StyleCode>::new();
         for mode in &style.modes {
             codes.push(
                 match mode {
-                    settings::Mode::Bold => Mode::Bold,
-                    settings::Mode::Conseal => Mode::Conseal,
-                    settings::Mode::CrossedOut => Mode::CrossedOut,
-                    settings::Mode::Faint => Mode::Faint,
-                    settings::Mode::Italic => Mode::Italic,
-                    settings::Mode::RapidBlink => Mode::RapidBlink,
-                    settings::Mode::Reverse => Mode::Reverse,
-                    settings::Mode::SlowBlink => Mode::SlowBlink,
-                    settings::Mode::Underline => Mode::Underline,
+                    themecfg::Mode::Bold => Mode::Bold,
+                    themecfg::Mode::Conseal => Mode::Conseal,
+                    themecfg::Mode::CrossedOut => Mode::CrossedOut,
+                    themecfg::Mode::Faint => Mode::Faint,
+                    themecfg::Mode::Italic => Mode::Italic,
+                    themecfg::Mode::RapidBlink => Mode::RapidBlink,
+                    themecfg::Mode::Reverse => Mode::Reverse,
+                    themecfg::Mode::SlowBlink => Mode::SlowBlink,
+                    themecfg::Mode::Underline => Mode::Underline,
                 }
                 .into(),
             );
@@ -138,6 +158,14 @@ impl From<&settings::Style> for Style {
         }
         Self(codes.into())
     }
+}
+
+// ---
+
+pub struct Styler<'a, B: Push<u8>> {
+    buf: &'a mut B,
+    pack: &'a StylePack,
+    current: Option<usize>,
 }
 
 impl<'a, B: Push<u8>> Styler<'a, B> {
@@ -179,25 +207,7 @@ impl<'a, B: Push<u8>> StylingPush<B> for Styler<'a, B> {
     }
 }
 
-impl Theme {
-    pub fn apply<'a, B: Push<u8>, F: FnOnce(&mut Styler<'a, B>)>(
-        &'a self,
-        buf: &'a mut B,
-        level: &Option<Level>,
-        f: F,
-    ) {
-        let mut styler = Styler {
-            buf,
-            pack: match level {
-                Some(level) => &self.packs[*level],
-                None => &self.default,
-            },
-            current: None,
-        };
-        f(&mut styler);
-        styler.reset()
-    }
-}
+// ---
 
 #[derive(Default)]
 struct StylePack {
@@ -218,47 +228,16 @@ impl StylePack {
         self.elements[element] = Some(pos);
     }
 
-    fn load(s: &settings::StylePack<settings::Style>) -> Self {
+    fn load(s: &themecfg::StylePack) -> Self {
         let mut result = Self::default();
-        result.add(Element::Caller, &Style::from(&s.caller));
-        result.add(Element::Comma, &Style::from(&s.comma));
-        result.add(Element::Delimiter, &Style::from(&s.delimiter));
-        result.add(Element::Ellipsis, &Style::from(&s.ellipsis));
-        result.add(Element::EqualSign, &Style::from(&s.equal_sign));
-        result.add(Element::FieldKey, &Style::from(&s.field_key));
-        result.add(Element::Level, &Style::from(&s.level));
-        result.add(Element::Boolean, &Style::from(&s.boolean));
-        result.add(Element::Null, &Style::from(&s.null));
-        result.add(Element::Number, &Style::from(&s.number));
-        result.add(Element::String, &Style::from(&s.string));
-        result.add(Element::AtSign, &Style::from(&s.at_sign));
-        result.add(Element::Logger, &Style::from(&s.logger));
-        result.add(Element::Message, &Style::from(&s.message));
-        result.add(Element::Quote, &Style::from(&s.quote));
-        result.add(Element::Brace, &Style::from(&s.brace));
-        result.add(Element::Time, &Style::from(&s.time));
-        result.add(Element::Whitespace, &Style::from(&s.time));
+        for (&element, style) in s.items() {
+            result.add(element, &Style::from(style))
+        }
         result
     }
 }
 
-impl Theme {
-    pub fn none() -> Self {
-        Self {
-            packs: EnumMap::default(),
-            default: StylePack::default(),
-        }
-    }
-
-    pub fn load(s: &settings::Theme) -> Self {
-        let default = StylePack::load(&s.default);
-        let mut packs = EnumMap::default();
-        for (level, pack) in &s.levels {
-            packs[*level] = StylePack::load(&s.default.clone().merged(&pack));
-        }
-        Self { default, packs }
-    }
-}
+// ---
 
 #[cfg(test)]
 mod tests {
