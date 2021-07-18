@@ -41,8 +41,8 @@ pub enum Error {
     InvalidSize(String),
     #[error("cannot recognize time {0:?}")]
     UnrecognizedTime(String),
-    #[error("unknown theme {0:?}")]
-    UnknownTheme(String),
+    #[error("unknown theme {name:?}, use any of {known:?}")]
+    UnknownTheme { name: String, known: Vec<String> },
     #[error("zero size")]
     ZeroSize,
     #[error("failed to parse utf-8 string: {0}")]

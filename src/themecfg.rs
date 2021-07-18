@@ -1,6 +1,6 @@
 // std imports
 use std::{
-    collections::{HashMap, HashSet},
+    collections::HashMap,
     convert::TryFrom,
     fmt::{self, Write},
     io::ErrorKind,
@@ -31,12 +31,23 @@ impl Theme {
     pub fn load(app_dirs: &AppDirs, name: &str) -> Result<Self> {
         let filename = Self::filename(name);
         match Self::load_from(Self::themes_dir(app_dirs), &filename) {
-            Err(Error::Io(error)) => match error.kind() {
-                ErrorKind::NotFound => Self::load_embedded(name, &filename),
-                _ => Err(Error::Io(error)),
+            Err(Error::Io(e)) => match e.kind() {
+                ErrorKind::NotFound => match Self::load_embedded(name, &filename) {
+                    Err(Error::UnknownTheme { name, mut known }) => {
+                        if let Some(names) = Self::custom_names(app_dirs).ok() {
+                            known.extend(names.into_iter().filter_map(|n| n.ok()));
+                        }
+                        known.sort_unstable();
+                        known.dedup();
+                        Err(Error::UnknownTheme { name, known })
+                    }
+                    Err(e) => Err(e),
+                    Ok(v) => Ok(v),
+                },
+                _ => Err(Error::Io(e)),
             },
-            Err(error) => Err(error),
-            Ok(result) => Ok(result),
+            Err(e) => Err(e),
+            Ok(v) => Ok(v),
         }
     }
 
@@ -44,17 +55,15 @@ impl Theme {
         Self::load_embedded(name, &Self::filename(name))
     }
 
-    pub fn list(app_dirs: &AppDirs) -> Result<HashSet<String>> {
-        let path = Self::themes_dir(app_dirs);
-        let dir = Path::new(&path);
-        let mut result = HashSet::new();
-        for item in dir.read_dir()? {
-            let path = item?.path();
-            if path.extension().map(|x| x.to_str()) == Some(Some("yaml")) {
-                if let Some(stem) = path.file_stem() {
-                    result.insert(stem.to_str().unwrap().to_string());
-                }
-            }
+    pub fn list(app_dirs: &AppDirs) -> Result<HashMap<String, ThemeInfo>> {
+        let mut result = HashMap::new();
+
+        for name in Self::embedded_names() {
+            result.insert(name, ThemeOrigin::Stock.into());
+        }
+
+        for name in Self::custom_names(app_dirs)? {
+            result.insert(name?, ThemeOrigin::Custom.into());
         }
 
         Ok(result)
@@ -62,8 +71,11 @@ impl Theme {
 
     fn load_embedded(name: &str, filename: &str) -> Result<Self> {
         Self::from_buf(
-            Asset::get(&filename)
-                .ok_or_else(|| Error::UnknownTheme(name.to_string()))?
+            Assets::get(&filename)
+                .ok_or_else(|| Error::UnknownTheme {
+                    name: name.to_string(),
+                    known: Self::embedded_names().into_iter().collect(),
+                })?
                 .as_ref(),
         )
     }
@@ -71,16 +83,67 @@ impl Theme {
     fn from_buf(data: &[u8]) -> Result<Self> {
         Ok(serde_yaml::from_str(std::str::from_utf8(data)?)?)
     }
+
     fn load_from(dir: PathBuf, filename: &str) -> Result<Self> {
         let f = std::fs::File::open(dir.join(filename))?;
         Ok(serde_yaml::from_reader(f)?)
     }
+
     fn filename(name: &str) -> String {
-        format!("{}.yaml", name)
+        format!("{}.{}", name, Self::EXTENSION)
     }
+
     fn themes_dir(app_dirs: &AppDirs) -> PathBuf {
         app_dirs.config_dir.join("themes")
     }
+
+    fn embedded_names() -> impl IntoIterator<Item = String> {
+        Assets::iter().filter_map(|a| Self::strip_extension(&a).map(|n| n.to_string()))
+    }
+
+    fn custom_names(app_dirs: &AppDirs) -> Result<impl IntoIterator<Item = Result<String>>> {
+        let path = Self::themes_dir(app_dirs);
+        let dir = Path::new(&path);
+        Ok(dir
+            .read_dir()?
+            .map(|item| {
+                Ok(item?
+                    .path()
+                    .file_name()
+                    .and_then(|n| n.to_str())
+                    .and_then(|a| Self::strip_extension(&a).map(|n| n.to_string())))
+            })
+            .filter_map(|x| x.transpose()))
+    }
+
+    fn strip_extension(filename: &str) -> Option<&str> {
+        filename
+            .strip_suffix(Self::EXTENSION)
+            .and_then(|r| r.strip_suffix("."))
+    }
+
+    const EXTENSION: &'static str = "yaml";
+}
+
+// ---
+
+#[derive(Debug, Clone)]
+pub struct ThemeInfo {
+    pub origin: ThemeOrigin,
+}
+
+impl From<ThemeOrigin> for ThemeInfo {
+    fn from(origin: ThemeOrigin) -> Self {
+        Self { origin }
+    }
+}
+
+// ---
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash)]
+pub enum ThemeOrigin {
+    Stock,
+    Custom,
 }
 
 // ---
@@ -243,7 +306,7 @@ impl fmt::Display for RGB {
 
 #[derive(RustEmbed)]
 #[folder = "etc/defaults/themes/"]
-struct Asset;
+struct Assets;
 
 // ---
 

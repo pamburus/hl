@@ -1,5 +1,5 @@
 // std imports
-use std::{borrow::Borrow, collections::HashSet, vec::Vec};
+use std::{borrow::Borrow, collections::HashMap, vec::Vec};
 
 // third-party imports
 use enum_map::EnumMap;
@@ -15,7 +15,7 @@ use crate::{
 
 // ---
 
-pub use themecfg::Element;
+pub use themecfg::{Element, ThemeInfo, ThemeOrigin};
 pub use types::Level;
 
 // ---
@@ -49,7 +49,7 @@ impl Theme {
         Ok(themecfg::Theme::embedded(name)?.into())
     }
 
-    pub fn list(app_dirs: &AppDirs) -> Result<HashSet<String>> {
+    pub fn list(app_dirs: &AppDirs) -> Result<HashMap<String, ThemeInfo>> {
         themecfg::Theme::list(app_dirs)
     }
 

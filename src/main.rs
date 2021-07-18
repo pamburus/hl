@@ -8,7 +8,7 @@ use std::sync::Arc;
 use ansi_term::Colour;
 use chrono::{FixedOffset, Local, TimeZone};
 use chrono_tz::{Tz, UTC};
-use itertools::sorted;
+use itertools::Itertools;
 use once_cell::sync::Lazy;
 use platform_dirs::AppDirs;
 use structopt::{
@@ -23,7 +23,7 @@ use hl::input::{open, ConcatReader, Input, InputStream};
 use hl::output::{OutputStream, Pager};
 use hl::settings::Settings;
 use hl::signal::SignalHandler;
-use hl::theme::Theme;
+use hl::theme::{Theme, ThemeOrigin};
 use hl::timeparse::parse_time;
 use hl::Level;
 use hl::{IncludeExcludeKeyFilter, KeyMatchOptions};
@@ -250,8 +250,18 @@ fn run() -> Result<()> {
     };
 
     if opt.list_themes {
-        for name in sorted(Theme::list(&app_dirs)?) {
-            println!("{}", name);
+        let themes = Theme::list(&app_dirs)?
+            .into_iter()
+            .sorted_by_key(|(name, info)| (info.origin, name.clone()));
+        for (origin, group) in themes.group_by(|(_, info)| info.origin).into_iter() {
+            let origin = match origin {
+                ThemeOrigin::Stock => "stock",
+                ThemeOrigin::Custom => "custom",
+            };
+            println!("{}:", origin);
+            for (name, _) in group {
+                println!("  {}", name);
+            }
         }
         return Ok(());
     }
