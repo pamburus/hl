@@ -13,7 +13,7 @@ elements:
   field:
     foreground: bright-black
   key:
-    foreground: blue
+    foreground: bright-blue
     modes: [underline]
   ellipsis:
     foreground: bright-black
@@ -26,16 +26,16 @@ elements:
   number:
     foreground: green
   boolean:
-    foreground: red
+    foreground: bright-red
   'null':
-    foreground: red
+    foreground: bright-red
 levels:
   debug:
     level-inner:
-      foreground: magenta
+      foreground: bright-magenta
   info:
     level-inner:
-      foreground: blue
+      foreground: bright-blue
   warning:
     time:
       foreground: bright-yellow

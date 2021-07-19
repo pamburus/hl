@@ -18,9 +18,9 @@ elements:
   ellipsis:
     foreground: bright-black
   object:
-    foreground: blue
+    foreground: bright-blue
   array:
-    foreground: blue
+    foreground: bright-blue
   string:
     foreground: green
   number:

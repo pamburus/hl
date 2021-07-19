@@ -24,18 +24,18 @@ elements:
   string:
     foreground: cyan
   number:
-    foreground: blue
+    foreground: bright-blue
   boolean:
-    foreground: red
+    foreground: bright-red
   'null':
-    foreground: red
+    foreground: bright-red
 levels:
   debug:
     level-inner:
-      foreground: magenta
+      foreground: bright-magenta
   info:
     level-inner:
-      foreground: blue
+      foreground: bright-blue
   warning:
     time:
       foreground: bright-yellow
