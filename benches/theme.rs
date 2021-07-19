@@ -37,7 +37,7 @@ static GLOBAL: &StatsAlloc<System> = &INSTRUMENTED_SYSTEM;
 fn benchmark(c: &mut Criterion) {
     let mut c = c.benchmark_group("theme");
     let theme = Theme::from(&themecfg::Theme {
-        default: HashMap::from(collection! {
+        elements: HashMap::from(collection! {
             Element::Time => Style {
                 modes: Vec::default(),
                 foreground: Some(Color::Palette(8)),
