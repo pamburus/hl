@@ -7,11 +7,13 @@ use std::marker::PhantomData;
 // third-party imports
 use chrono::{DateTime, Utc};
 use json::value::RawValue;
+use regex::Regex;
 use serde::de::{Deserialize, Deserializer, MapAccess, SeqAccess, Visitor};
 use serde_json as json;
 use wildmatch::WildMatch;
 
 // local imports
+use crate::error::{Error, Result};
 use crate::settings::Fields;
 use crate::timestamp::Timestamp;
 use crate::types::{self, FieldKind};
@@ -322,7 +324,7 @@ impl<'a> RawRecord<'a> {
 }
 
 impl<'de: 'a, 'a> Deserialize<'de> for RawRecord<'a> {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
     where
         D: Deserializer<'de>,
     {
@@ -350,7 +352,10 @@ impl<'de: 'a, 'a> Visitor<'de> for RawRecordVisitor<'a> {
         formatter.write_str("object json")
     }
 
-    fn visit_map<M: MapAccess<'de>>(self, mut access: M) -> Result<Self::Value, M::Error> {
+    fn visit_map<M: MapAccess<'de>>(
+        self,
+        mut access: M,
+    ) -> std::result::Result<Self::Value, M::Error> {
         let mut fields = heapless::Vec::new();
         let count = access.size_hint().unwrap_or(0);
         let mut fieldsx = match count > RAW_RECORD_FIELDS_CAPACITY {
@@ -366,16 +371,6 @@ impl<'de: 'a, 'a> Visitor<'de> for RawRecordVisitor<'a> {
 
         Ok(RawRecord { fields, fieldsx })
     }
-}
-
-// ---
-
-#[derive(Debug)]
-enum Operator {
-    Equal,
-    NotEqual,
-    Like,
-    NotLike,
 }
 
 // ---
@@ -435,46 +430,97 @@ impl<'a> KeyMatcher<'a> {
 // ---
 
 #[derive(Debug)]
+pub enum ValueMatchPolicy {
+    Exact(String),
+    SubString(String),
+    RegularExpression(Regex),
+}
+
+impl ValueMatchPolicy {
+    fn matches(&self, subject: &str) -> bool {
+        match self {
+            Self::Exact(pattern) => subject == pattern,
+            Self::SubString(pattern) => subject.contains(pattern),
+            Self::RegularExpression(pattern) => pattern.is_match(subject),
+        }
+    }
+}
+
+// ---
+
+#[derive(Copy, Clone, Debug)]
+enum UnaryBoolOp {
+    None,
+    Negate,
+}
+
+impl UnaryBoolOp {
+    #[inline(always)]
+    fn apply(self, value: bool) -> bool {
+        match self {
+            Self::None => value,
+            Self::Negate => !value,
+        }
+    }
+}
+
+impl Default for UnaryBoolOp {
+    fn default() -> Self {
+        Self::None
+    }
+}
+
+// ---
+
+#[derive(Debug)]
 pub struct FieldFilter {
     key: String,
-    value: String,
-    value_escaped: String,
-    operator: Operator,
+    match_policy: ValueMatchPolicy,
+    op: UnaryBoolOp,
     flat_key: bool,
 }
 
 impl FieldFilter {
-    fn parse(text: &str) -> Option<Self> {
+    fn parse(text: &str) -> Result<Self> {
         let mut parts = text.split('=');
         match (parts.next(), parts.next()) {
-            (Some(mut key), Some(value)) => {
-                let operator = if key.ends_with('~') {
-                    key = &key[..key.len() - 1];
-                    if key.ends_with('!') {
-                        key = &key[..key.len() - 1];
-                        Operator::NotLike
-                    } else {
-                        Operator::Like
-                    }
-                } else {
-                    if key.ends_with('!') {
-                        key = &key[..key.len() - 1];
-                        Operator::NotEqual
-                    } else {
-                        Operator::Equal
-                    }
-                };
+            (Some(key), Some(value)) => {
+                let (key, match_policy, op) = Self::parse_mp_op(key, value)?;
                 let flat_key = key.as_bytes().iter().position(|&x| x == b'.').is_none();
-                Some(Self {
+                Ok(Self {
                     key: key.into(),
-                    value: value.into(),
-                    value_escaped: json::to_string(value).unwrap(),
-                    operator: operator,
+                    match_policy,
+                    op,
                     flat_key,
                 })
             }
-            _ => None,
+            _ => Err(Error::WrongFieldFilter(text.into())),
         }
+    }
+
+    fn parse_mp_op<'k>(
+        key: &'k str,
+        value: &str,
+    ) -> Result<(&'k str, ValueMatchPolicy, UnaryBoolOp)> {
+        let key_op = |key: &'k str| {
+            if let Some(key) = key.strip_suffix('!') {
+                (key, UnaryBoolOp::Negate)
+            } else {
+                (key, UnaryBoolOp::None)
+            }
+        };
+        Ok(if let Some(key) = key.strip_suffix('~') {
+            if let Some(key) = key.strip_suffix('~') {
+                let (key, op) = key_op(key);
+                (key, ValueMatchPolicy::RegularExpression(value.parse()?), op)
+            } else {
+                let (key, op) = key_op(key);
+                (key, ValueMatchPolicy::SubString(value.into()), op)
+            }
+        } else {
+            let (key, op) = key_op(key);
+            (key, ValueMatchPolicy::Exact(value.into()), op)
+        })
     }
 
     fn match_key<'a>(&'a self, key: &str) -> Option<KeyMatch<'a>> {
@@ -486,18 +532,21 @@ impl FieldFilter {
     }
 
     fn match_value(&self, value: Option<&str>, escaped: bool) -> bool {
-        let pattern = if escaped {
-            &self.value_escaped
+        let apply = |value| self.op.apply(self.match_policy.matches(value));
+        if let Some(value) = value {
+            if escaped {
+                if let Some(value) = json::from_str::<&str>(value).ok() {
+                    apply(value)
+                } else if let Some(value) = json::from_str::<String>(value).ok() {
+                    apply(&value)
+                } else {
+                    false
+                }
+            } else {
+                apply(value)
+            }
         } else {
-            &self.value
-        };
-
-        match (&self.operator, value) {
-            (Operator::Equal, Some(value)) => pattern == value,
-            (Operator::NotEqual, Some(value)) => pattern != value,
-            (Operator::Like, Some(value)) => value.contains(&self.value[..]),
-            (Operator::NotLike, Some(value)) => !value.contains(&self.value[..]),
-            (_, None) => false,
+            false
         }
     }
 
@@ -531,14 +580,12 @@ impl FieldFilter {
 pub struct FieldFilterSet(Vec<FieldFilter>);
 
 impl FieldFilterSet {
-    pub fn new<T: AsRef<str>, I: IntoIterator<Item = T>>(items: I) -> Self {
+    pub fn new<T: AsRef<str>, I: IntoIterator<Item = T>>(items: I) -> Result<Self> {
         let mut fields = Vec::new();
         for i in items {
-            if let Some(item) = FieldFilter::parse(i.as_ref()) {
-                fields.push(item);
-            }
+            fields.push(FieldFilter::parse(i.as_ref())?);
         }
-        FieldFilterSet(fields)
+        Ok(FieldFilterSet(fields))
     }
 }
 
@@ -584,7 +631,10 @@ impl<'de: 'a, 'a> Visitor<'de> for ObjectVisitor<'a> {
         formatter.write_str("object json")
     }
 
-    fn visit_map<A: MapAccess<'de>>(self, mut access: A) -> Result<Self::Value, A::Error> {
+    fn visit_map<A: MapAccess<'de>>(
+        self,
+        mut access: A,
+    ) -> std::result::Result<Self::Value, A::Error> {
         let mut fields = heapless::Vec::new();
         while let Some(key) = access.next_key::<&'a str>()? {
             let value = access.next_value()?;
@@ -596,7 +646,7 @@ impl<'de: 'a, 'a> Visitor<'de> for ObjectVisitor<'a> {
 }
 
 impl<'de: 'a, 'a> Deserialize<'de> for Object<'a> {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
     where
         D: Deserializer<'de>,
     {
@@ -632,7 +682,10 @@ impl<'de: 'a, 'a, const N: usize> Visitor<'de> for ArrayVisitor<'a, N> {
         formatter.write_str("object json")
     }
 
-    fn visit_seq<A: SeqAccess<'de>>(self, mut access: A) -> Result<Self::Value, A::Error> {
+    fn visit_seq<A: SeqAccess<'de>>(
+        self,
+        mut access: A,
+    ) -> std::result::Result<Self::Value, A::Error> {
         let mut items = heapless::Vec::new();
         let mut more = Vec::new();
         while let Some(item) = access.next_element()? {
@@ -646,7 +699,7 @@ impl<'de: 'a, 'a, const N: usize> Visitor<'de> for ArrayVisitor<'a, N> {
 }
 
 impl<'de: 'a, 'a, const N: usize> Deserialize<'de> for Array<'a, N> {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
     where
         D: Deserializer<'de>,
     {

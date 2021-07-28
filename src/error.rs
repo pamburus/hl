@@ -49,6 +49,10 @@ pub enum Error {
     Utf8Error(#[from] std::str::Utf8Error),
     #[error("failed to parse yaml: {0}")]
     YamlError(#[from] serde_yaml::Error),
+    #[error("wrong field filter format: {0}")]
+    WrongFieldFilter(String),
+    #[error("wrong regular expression: {0}")]
+    WrongRegularExpression(#[from] regex::Error),
 }
 
 /// Result is an alias for standard result with bound Error type.
