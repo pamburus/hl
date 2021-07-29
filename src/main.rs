@@ -104,7 +104,7 @@ struct Opt {
     )]
     concurrency: Option<usize>,
     //
-    /// Filtering by field values in one of forms <key>=<value>, <key>~=<value>, <key>!=<value>, <key>!~=<value>.
+    /// Filtering by field values in one of forms [<key>=<value>, <key>~=<value>, <key>~~=<value>, <key>!=<value>, <key>!~=<value>, <key>!~~=<value>] where ~ denotes substring match and ~~ denotes regular expression match.
     #[structopt(short, long, number_of_values = 1)]
     filter: Vec<String>,
     //
@@ -283,7 +283,7 @@ fn run() -> Result<()> {
     let time_format = LinuxDateFormat::new(&opt.time_format).compile();
     // Configure filter.
     let filter = hl::Filter {
-        fields: hl::FieldFilterSet::new(opt.filter),
+        fields: hl::FieldFilterSet::new(opt.filter)?,
         level: opt.level,
         since: if let Some(v) = &opt.since {
             Some(parse_time(v, &tz, &time_format)?.into())

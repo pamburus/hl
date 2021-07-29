@@ -297,7 +297,7 @@ Log viewer which translates JSON logs into pretty human-readable representation.
 ### Complete set of options and flags
 
 ```
-hl 0.10.0
+hl 0.10.2
 JSON log converter to human readable representation
 
 USAGE:
@@ -316,7 +316,7 @@ OPTIONS:
         --buffer-size <buffer-size>                          Buffer size [env: HL_BUFFER_SIZE=]  [default: 2 MiB]
         --color <color>                                      Color output options, one of { auto, always, never } [env: HL_COLOR=]  [default: auto]
     -C, --concurrency <concurrency>                          Number of processing threads [env: HL_CONCURRENCY=]
-    -f, --filter <filter>...                                 Filtering by field values in one of forms <key>=<value>, <key>~=<value>, <key>!=<value>, <key>!~=<value>
+    -f, --filter <filter>...                                 Filtering by field values in one of forms [<key>=<value>, <key>~=<value>, <key>~~=<value>, <key>!=<value>, <key>!~=<value>, <key>!~~=<value>] where ~ denotes substring match and ~~ denotes regular expression match
     -h, --hide <hide>...                                     Hide fields with the specified keys
     -e, --hide-empty-fields <hide-empty-fields>              Hide empty fields, applies for null, string, object and array fields only [env: HL_HIDE_EMPTY_FIELDS=]
         --interrupt-ignore-count <interrupt-ignore-count>    Number of interrupts to ignore, i.e. Ctrl-C (SIGINT) [env: HL_INTERRUPT_IGNORE_COUNT=]  [default: 3]
