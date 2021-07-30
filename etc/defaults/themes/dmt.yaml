@@ -18,9 +18,9 @@ elements:
   ellipsis:
     foreground: 8
   object:
-    foreground: 41
+    foreground: 174
   array:
-    foreground: 41
+    foreground: 174
   string:
     foreground: 36
   number:
