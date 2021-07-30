@@ -297,7 +297,7 @@ Log viewer which translates JSON logs into pretty human-readable representation.
 ### Complete set of options and flags
 
 ```
-hl 0.10.2
+hl 0.10.3
 JSON log converter to human readable representation
 
 USAGE:
@@ -329,6 +329,7 @@ OPTIONS:
         --theme <theme>                                      Color theme [env: HL_THEME=]  [default: one-dark-green]
     -t, --time-format <time-format>                          Time format, see https://man7.org/linux/man-pages/man1/date.1.html [env: HL_TIME_FORMAT=]  [default: %b %d %T.%3N]
     -Z, --time-zone <time-zone>                              Time zone name, see column "TZ database name" at https://en.wikipedia.org/wiki/List_of_tz_database_time_zones [env: HL_TIME_ZONE=]  [default: UTC]
+    -u, --unhide <unhide>...                                 Unhide fields with the specified keys
         --until <until>                                      Filtering by timestamp <= the value (--time-zone and --local options are honored)
 
 ARGS:

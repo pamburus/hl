@@ -116,6 +116,10 @@ struct Opt {
     #[structopt(long, short = "H", number_of_values = 1)]
     show: Vec<String>,
     //
+    /// Unhide fields with the specified keys.
+    #[structopt(long, short = "u", number_of_values = 1)]
+    unhide: Vec<String>,
+    //
     /// Filtering by level, one of { d[ebug], i[nfo], w[arning], e[rror] }.
     #[structopt(short, long, env = "HL_LEVEL", overrides_with = "level")]
     level: Option<Level>,
@@ -304,14 +308,11 @@ fn run() -> Result<()> {
     if opt.hide.len() == 0 && opt.show.len() != 0 {
         fields.exclude();
     }
-    for key in opt.hide {
+    for key in CONFIG.fields.hide.iter().chain(&opt.hide) {
         fields.entry(&key).exclude();
     }
-    for key in opt.show {
+    for key in opt.show.iter().chain(&opt.unhide) {
         fields.entry(&key).include();
-    }
-    for key in &CONFIG.fields.hide {
-        fields.entry(&key).exclude();
     }
 
     let max_message_size = opt.max_message_size;
