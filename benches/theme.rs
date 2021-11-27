@@ -2,6 +2,7 @@
 use std::{alloc::System, collections::HashMap};
 
 // third-party imports
+use collection_macros::hashmap;
 use criterion::{criterion_group, criterion_main, Criterion};
 use stats_alloc::{Region, StatsAlloc, INSTRUMENTED_SYSTEM};
 
@@ -14,21 +15,6 @@ use hl::{
 
 // ---
 
-macro_rules! collection {
-    // map-like
-    ($($k:expr => $v:expr),* $(,)?) => {{
-        use std::iter::{Iterator, IntoIterator};
-        Iterator::collect(IntoIterator::into_iter([$(($k, $v),)*]))
-    }};
-    // set-like
-    ($($v:expr),* $(,)?) => {{
-        use std::iter::{Iterator, IntoIterator};
-        Iterator::collect(IntoIterator::into_iter([$($v,)*]))
-    }};
-}
-
-// ---
-
 #[global_allocator]
 static GLOBAL: &StatsAlloc<System> = &INSTRUMENTED_SYSTEM;
 
@@ -37,7 +23,7 @@ static GLOBAL: &StatsAlloc<System> = &INSTRUMENTED_SYSTEM;
 fn benchmark(c: &mut Criterion) {
     let mut c = c.benchmark_group("theme");
     let theme = Theme::from(&themecfg::Theme {
-        elements: HashMap::from(collection! {
+        elements: hashmap! {
             Element::Time => Style {
                 modes: Vec::default(),
                 foreground: Some(Color::Palette(8)),
@@ -108,7 +94,7 @@ fn benchmark(c: &mut Criterion) {
                 foreground: Some(Color::Palette(36)),
                 background: None,
             },
-        })
+        }
         .into(),
         levels: HashMap::new(),
     });

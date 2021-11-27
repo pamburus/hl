@@ -4,7 +4,7 @@ categories = ["command-line-utilities"]
 description = "Utility for viewing json-formatted log files."
 keywords = ["cli", "human", "log"]
 name = "hl"
-version = "0.10.4"
+version = "0.10.5"
 edition = "2018"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -19,6 +19,7 @@ bytefmt = "0"
 chrono = { version = "0", features = ["serde"] }
 chrono-tz = { version = "0", features = ["serde"] }
 closure = "0"
+collection_macros = "0"
 config = "0"
 crossbeam-channel = "0"
 crossbeam-queue = "0"
