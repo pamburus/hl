@@ -53,6 +53,11 @@ jobs:
             os: macos-latest
             artifact_name: hl
             asset_name: hl-macos.tar.gz
+          - name: arm64-macos
+            os: macos-11
+            target: aarch64-apple-darwin
+            artifact_name: hl
+            asset_name: hl-arm64-macos.tar.gz
 
     steps:
       - uses: actions/checkout@v2
