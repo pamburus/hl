@@ -1,6 +1,8 @@
 use std::env;
 use std::ffi::OsString;
 use std::io::Write;
+#[cfg(unix)]
+use std::os::unix::process::ExitStatusExt;
 use std::path::PathBuf;
 use std::process::{Child, Command, Stdio};
 
@@ -42,7 +44,18 @@ impl Pager {
 
 impl Drop for Pager {
     fn drop(&mut self) {
-        self.process.wait().ok();
+        let status = self.process.wait().ok();
+        #[cfg(unix)]
+        if let Some(status) = status {
+            if let Some(signal) = status.signal() {
+                if signal == 9 {
+                    eprintln!("\x1bm\nhl: pager killed");
+                    if atty::is(atty::Stream::Stdin) {
+                        Command::new("stty").arg("echo").status().ok();
+                    }
+                }
+            }
+        }
     }
 }
 
