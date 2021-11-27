@@ -280,6 +280,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d6173fd61b610d15a7566dd7b7620775627441c4ab9dac8906e17cb93a24b782"
 
 [[package]]
+name = "collection_macros"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "50b180e6a75e306052a61658f832b4fc565a6e5a204da05f0fe7f50a31fb827a"
+
+[[package]]
 name = "config"
 version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -620,7 +626,7 @@ dependencies = [
 
 [[package]]
 name = "hl"
-version = "0.10.4"
+version = "0.10.5-alpha.0"
 dependencies = [
  "ansi_term",
  "anyhow",
@@ -633,6 +639,7 @@ dependencies = [
  "chrono-tz",
  "clap",
  "closure",
+ "collection_macros",
  "config",
  "criterion",
  "crossbeam-channel",
