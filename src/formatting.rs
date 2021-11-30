@@ -158,11 +158,11 @@ impl RecordFormatter {
                     });
                 });
             };
-            //
-            // eol
-            //
-            s.batch(|buf| buf.push(b'\n'));
         });
+        //
+        // eol
+        //
+        buf.push(b'\n')
     }
 
     fn format_field<S: StylingPush<Buf>>(
