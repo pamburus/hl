@@ -69,6 +69,7 @@ impl Theme {
             current: None,
         };
         f(&mut styler);
+        styler.reset()
     }
 }
 
@@ -193,6 +194,12 @@ pub struct Styler<'a, B: Push<u8>> {
 }
 
 impl<'a, B: Push<u8>> Styler<'a, B> {
+    fn reset(&mut self) {
+        if let Some(style) = self.pack.reset {
+            self.pack.styles[style].apply(self.buf)
+        }
+    }
+
     #[inline(always)]
     fn set(&mut self, e: Element) -> Option<usize> {
         self.set_style(self.pack.elements[e])
@@ -257,6 +264,11 @@ impl StylePack {
 
     fn load(s: &themecfg::StylePack) -> Self {
         let mut result = Self::default();
+        let items = s.items();
+        if items.len() != 0 {
+            result.styles.push(Style::reset());
+            result.reset = Some(0);
+        }
         for (&element, style) in s.items() {
             result.add(element, &Style::from(style))
         }
