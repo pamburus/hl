@@ -4,7 +4,7 @@ use std::io::Write;
 #[cfg(unix)]
 use std::os::unix::process::ExitStatusExt;
 use std::path::PathBuf;
-use std::process::{Child, Command, Stdio};
+use std::process::{Child, Command, ExitStatus, Stdio};
 
 use crate::error::*;
 
@@ -40,21 +40,28 @@ impl Pager {
 
         Ok(Self { process })
     }
+
+    #[cfg(unix)]
+    fn recover(status: ExitStatus) {
+        if let Some(signal) = status.signal() {
+            if signal == 9 {
+                eprintln!("\x1bm\nhl: pager killed");
+                if atty::is(atty::Stream::Stdin) {
+                    Command::new("stty").arg("echo").status().ok();
+                }
+            }
+        }
+    }
+
+    #[cfg(not(unix))]
+    #[allow(unused_variables)]
+    fn recover(status: ExitStatus) {}
 }
 
 impl Drop for Pager {
     fn drop(&mut self) {
-        let status = self.process.wait().ok();
-        #[cfg(unix)]
-        if let Some(status) = status {
-            if let Some(signal) = status.signal() {
-                if signal == 9 {
-                    eprintln!("\x1bm\nhl: pager killed");
-                    if atty::is(atty::Stream::Stdin) {
-                        Command::new("stty").arg("echo").status().ok();
-                    }
-                }
-            }
+        if let Some(status) = self.process.wait().ok() {
+            Self::recover(status);
         }
     }
 }
