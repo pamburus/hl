@@ -108,17 +108,9 @@ struct Opt {
     #[clap(short, long, number_of_values = 1)]
     filter: Vec<String>,
     //
-    /// Hide fields with the specified keys.
+    /// Hide or unhide fields with the specified keys, prefix with ! to unhide, specify !* to unhide all.
     #[clap(long, short = 'h', number_of_values = 1)]
     hide: Vec<String>,
-    //
-    /// Hide all fields except fields with the specified keys.
-    #[structopt(long, short = 'H', number_of_values = 1)]
-    show: Vec<String>,
-    //
-    /// Unhide fields with the specified keys.
-    #[structopt(long, short = 'u', number_of_values = 1)]
-    unhide: Vec<String>,
     //
     /// Filtering by level.
     #[clap(short, long, env = "HL_LEVEL", overrides_with = "level")]
@@ -300,15 +292,26 @@ fn run() -> Result<()> {
     let hide_empty_fields = !opt.show_empty_fields && opt.hide_empty_fields;
 
     // Configure field filter.
-    let mut fields = IncludeExcludeKeyFilter::new(KeyMatchOptions::default());
-    if opt.hide.len() == 0 && opt.show.len() != 0 {
-        fields.exclude();
-    }
-    for key in CONFIG.fields.hide.iter().chain(&opt.hide) {
-        fields.entry(&key).exclude();
-    }
-    for key in opt.show.iter().chain(&opt.unhide) {
-        fields.entry(&key).include();
+    let all = || IncludeExcludeKeyFilter::new(KeyMatchOptions::default());
+    let none = || all().excluded();
+    let mut fields = all();
+    for (i, key) in CONFIG.fields.hide.iter().chain(&opt.hide).enumerate() {
+        if key == "*" {
+            fields = none();
+        } else if key == "!*" {
+            fields = all();
+        } else if key.starts_with("!") {
+            if i == 0 {
+                fields = none();
+            }
+            fields.entry(&key[1..]).include();
+        } else if key.starts_with("\\!") {
+            fields.entry(&key[1..]).exclude();
+        } else if key.starts_with("\\\\") {
+            fields.entry(&key[1..]).exclude();
+        } else {
+            fields.entry(&key).exclude();
+        }
     }
 
     let max_message_size = opt.max_message_size;
