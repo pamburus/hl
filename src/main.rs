@@ -12,6 +12,7 @@ use clap::{ArgEnum, Parser};
 use itertools::Itertools;
 use once_cell::sync::Lazy;
 use platform_dirs::AppDirs;
+use std::num::NonZeroUsize;
 
 // local imports
 use hl::datefmt::LinuxDateFormat;
@@ -88,11 +89,11 @@ struct Opt {
     //
     /// Buffer size.
     #[clap(long, default_value = "2 MiB", env="HL_BUFFER_SIZE", overrides_with = "buffer-size", parse(try_from_str = parse_non_zero_size))]
-    buffer_size: usize,
+    buffer_size: NonZeroUsize,
     //
     /// Maximum message size.
     #[clap(long, default_value = "64 MiB", env="HL_MAX_MESSAGE_SIZE", overrides_with = "max-message-size", parse(try_from_str = parse_non_zero_size))]
-    max_message_size: usize,
+    max_message_size: NonZeroUsize,
     //
     /// Number of processing threads.
     #[clap(
@@ -204,12 +205,11 @@ fn parse_size(s: &str) -> std::result::Result<usize, SizeParseError> {
     }
 }
 
-fn parse_non_zero_size(s: &str) -> std::result::Result<usize, NonZeroSizeParseError> {
-    let value = parse_size(s)?;
-    if value == 0 {
-        Err(NonZeroSizeParseError::ZeroSize)
+fn parse_non_zero_size(s: &str) -> std::result::Result<NonZeroUsize, NonZeroSizeParseError> {
+    if let Some(value) = NonZeroUsize::new(parse_size(s)?) {
+        Ok(NonZeroUsize::from(value))
     } else {
-        Ok(value)
+        Err(NonZeroSizeParseError::ZeroSize)
     }
 }
 
