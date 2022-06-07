@@ -8,6 +8,7 @@ use crossbeam_channel::RecvError;
 use crossbeam_utils::thread;
 use itertools::izip;
 use serde_json as json;
+use std::num::NonZeroUsize;
 
 use crate::datefmt::{DateTimeFormat, DateTimeFormatter};
 use crate::error::*;
@@ -23,8 +24,8 @@ pub struct Options {
     pub theme: Arc<Theme>,
     pub time_format: DateTimeFormat,
     pub raw_fields: bool,
-    pub buffer_size: usize,
-    pub max_message_size: usize,
+    pub buffer_size: NonZeroUsize,
+    pub max_message_size: NonZeroUsize,
     pub concurrency: usize,
     pub filter: Filter,
     pub fields: FieldOptions,
@@ -52,8 +53,8 @@ impl App {
         output: &mut (dyn Write + Send + Sync),
     ) -> Result<()> {
         let n = self.options.concurrency;
-        let sfi = Arc::new(SegmentBufFactory::new(self.options.buffer_size));
-        let bfo = BufFactory::new(self.options.buffer_size);
+        let sfi = Arc::new(SegmentBufFactory::new(self.options.buffer_size.into()));
+        let bfo = BufFactory::new(self.options.buffer_size.into());
         let parser = Parser::new(ParserSettings::new(
             &self.options.fields.settings,
             self.options.filter.since.is_some() || self.options.filter.until.is_some(),
@@ -70,7 +71,7 @@ impl App {
             let reader = scope.spawn(closure!(clone sfi, |_| -> Result<()> {
                 let mut sn: usize = 0;
                 let scanner = Scanner::new(sfi, "\n".to_string());
-                for item in scanner.items(input).with_max_segment_size(self.options.max_message_size) {
+                for item in scanner.items(input).with_max_segment_size(self.options.max_message_size.into()) {
                     if let Err(_) = txi[sn % n].send(item?) {
                         break;
                     }

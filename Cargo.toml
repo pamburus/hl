@@ -4,15 +4,15 @@ categories = ["command-line-utilities"]
 description = "Utility for viewing json-formatted log files."
 keywords = ["cli", "human", "log"]
 name = "hl"
-version = "0.11.1"
-edition = "2018"
+version = "0.11.2"
+edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 ansi_term = "0"
 anyhow = "1"
-atoi = "0"
+atoi = "1"
 atty = "0"
 bitmask = "0"
 bytefmt = "0"
@@ -25,7 +25,7 @@ crossbeam-channel = "0"
 crossbeam-queue = "0"
 crossbeam-utils = "0"
 derive_deref = "1"
-enum-map = "1"
+enum-map = "2"
 error-chain = "0"
 flate2 = "1"
 heapless = "0"
@@ -42,17 +42,16 @@ serde_json = { version = "1", features = ["raw_value"] }
 serde_yaml = "0"
 shellwords = "1"
 signal-hook = "0"
-structopt = "0"
 thiserror = "1"
 wildmatch = "2"
 
 [dependencies.itoa]
-version = "0"
+version = "1"
 default-features = false
 
 [dependencies.clap]
-version = "2"
-features = ["wrap_help"]
+version = "3"
+features = ["wrap_help", "derive", "env"]
 
 [dependencies.winapi]
 version = "0"
