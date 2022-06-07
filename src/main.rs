@@ -8,13 +8,10 @@ use std::sync::Arc;
 use ansi_term::Colour;
 use chrono::{FixedOffset, Local, TimeZone};
 use chrono_tz::{Tz, UTC};
+use clap::{ArgEnum, Parser};
 use itertools::Itertools;
 use once_cell::sync::Lazy;
 use platform_dirs::AppDirs;
-use structopt::{
-    clap::{arg_enum, AppSettings::*},
-    StructOpt,
-};
 
 // local imports
 use hl::datefmt::LinuxDateFormat;
@@ -35,38 +32,40 @@ const APP_NAME: &str = "hl";
 // ---
 
 /// JSON log converter to human readable representation.
-#[derive(StructOpt)]
-#[structopt(setting(ColorAuto), setting(ColoredHelp))]
+#[derive(Parser)]
+#[clap(version)]
 struct Opt {
-    /// Color output options, one of { auto, always, never }.
-    #[structopt(
+    /// Color output options.
+    #[clap(
         long,
         default_value = "auto",
         env = "HL_COLOR",
         overrides_with = "color"
     )]
+    #[clap(arg_enum)]
     color: ColorOption,
     //
     /// Handful alias for --color=always, overrides --color option.
-    #[structopt(short)]
+    #[clap(short)]
     color_always: bool,
     //
-    /// Output paging options, one of { auto, always, never }.
-    #[structopt(
+    /// Output paging options.
+    #[clap(
         long,
         default_value = "auto",
         env = "HL_PAGING",
         overrides_with = "paging"
     )]
+    #[clap(arg_enum)]
     paging: PagingOption,
     //
     /// Handful alias for --paging=never, overrides --paging option.
-    #[structopt(short = "P")]
+    #[clap(short = 'P')]
     paging_never: bool,
     //
     //
     /// Color theme.
-    #[structopt(
+    #[clap(
         long,
         default_value = &CONFIG.theme,
         env = "HL_THEME",
@@ -75,11 +74,11 @@ struct Opt {
     theme: String,
     //
     /// Disable unescaping and prettifying of field values.
-    #[structopt(short, long)]
+    #[clap(short, long)]
     raw_fields: bool,
     //
     /// Number of interrupts to ignore, i.e. Ctrl-C (SIGINT).
-    #[structopt(
+    #[clap(
         long,
         default_value = "3",
         env = "HL_INTERRUPT_IGNORE_COUNT",
@@ -88,52 +87,53 @@ struct Opt {
     interrupt_ignore_count: usize,
     //
     /// Buffer size.
-    #[structopt(long, default_value = "2 MiB", env="HL_BUFFER_SIZE", overrides_with = "buffer-size", parse(try_from_str = parse_non_zero_size))]
+    #[clap(long, default_value = "2 MiB", env="HL_BUFFER_SIZE", overrides_with = "buffer-size", parse(try_from_str = parse_non_zero_size))]
     buffer_size: usize,
     //
     /// Maximum message size.
-    #[structopt(long, default_value = "64 MiB", env="HL_MAX_MESSAGE_SIZE", overrides_with = "max-message-size", parse(try_from_str = parse_non_zero_size))]
+    #[clap(long, default_value = "64 MiB", env="HL_MAX_MESSAGE_SIZE", overrides_with = "max-message-size", parse(try_from_str = parse_non_zero_size))]
     max_message_size: usize,
     //
     /// Number of processing threads.
-    #[structopt(
+    #[clap(
         long,
-        short = "C",
+        short = 'C',
         env = "HL_CONCURRENCY",
         overrides_with = "concurrency"
     )]
     concurrency: Option<usize>,
     //
     /// Filtering by field values in one of forms [<key>=<value>, <key>~=<value>, <key>~~=<value>, <key>!=<value>, <key>!~=<value>, <key>!~~=<value>] where ~ denotes substring match and ~~ denotes regular expression match.
-    #[structopt(short, long, number_of_values = 1)]
+    #[clap(short, long, number_of_values = 1)]
     filter: Vec<String>,
     //
     /// Hide fields with the specified keys.
-    #[structopt(long, short = "h", number_of_values = 1)]
+    #[clap(long, short = 'h', number_of_values = 1)]
     hide: Vec<String>,
     //
     /// Hide all fields except fields with the specified keys.
-    #[structopt(long, short = "H", number_of_values = 1)]
+    #[structopt(long, short = 'H', number_of_values = 1)]
     show: Vec<String>,
     //
     /// Unhide fields with the specified keys.
-    #[structopt(long, short = "u", number_of_values = 1)]
+    #[structopt(long, short = 'u', number_of_values = 1)]
     unhide: Vec<String>,
     //
-    /// Filtering by level, one of { d[ebug], i[nfo], w[arning], e[rror] }.
-    #[structopt(short, long, env = "HL_LEVEL", overrides_with = "level")]
+    /// Filtering by level.
+    #[clap(short, long, env = "HL_LEVEL", overrides_with = "level")]
+    #[clap(arg_enum)]
     level: Option<Level>,
     //
     /// Filtering by timestamp >= the value (--time-zone and --local options are honored).
-    #[structopt(long, allow_hyphen_values = true)]
+    #[clap(long, allow_hyphen_values = true)]
     since: Option<String>,
     //
     /// Filtering by timestamp <= the value (--time-zone and --local options are honored).
-    #[structopt(long, allow_hyphen_values = true)]
+    #[clap(long, allow_hyphen_values = true)]
     until: Option<String>,
     //
     /// Time format, see https://man7.org/linux/man-pages/man1/date.1.html.
-    #[structopt(
+    #[clap(
         short,
         long,
         env="HL_TIME_FORMAT",
@@ -143,46 +143,42 @@ struct Opt {
     time_format: String,
     //
     /// Time zone name, see column "TZ database name" at https://en.wikipedia.org/wiki/List_of_tz_database_time_zones.
-    #[structopt(long, short = "Z", env="HL_TIME_ZONE", default_value = &CONFIG.time_zone.name(), overrides_with = "time-zone")]
+    #[clap(long, short = 'Z', env="HL_TIME_ZONE", default_value = &CONFIG.time_zone.name(), overrides_with = "time-zone")]
     time_zone: Tz,
     //
     /// Use local time zone, overrides --time-zone option.
-    #[structopt(long, short = "L")]
+    #[clap(long, short = 'L')]
     local: bool,
     //
     /// Files to process
-    #[structopt(name = "FILE", parse(from_os_str))]
+    #[clap(name = "FILE", parse(from_os_str))]
     files: Vec<PathBuf>,
     //
     /// Hide empty fields, applies for null, string, object and array fields only.
-    #[structopt(long, short = "e", env = "HL_HIDE_EMPTY_FIELDS")]
+    #[clap(long, short = 'e', env = "HL_HIDE_EMPTY_FIELDS")]
     hide_empty_fields: bool,
     //
     /// Show empty fields, overrides --hide-empty-fields option.
-    #[structopt(long, short = "E", env = "HL_SHOW_EMPTY_FIELDS")]
+    #[clap(long, short = 'E', env = "HL_SHOW_EMPTY_FIELDS")]
     show_empty_fields: bool,
     //
     /// List available themes and exit.
-    #[structopt(long)]
+    #[clap(long)]
     list_themes: bool,
 }
 
-arg_enum! {
-    #[derive(Debug)]
-    enum ColorOption {
-        Auto,
-        Always,
-        Never,
-    }
+#[derive(ArgEnum, Debug, Clone, Copy)]
+enum ColorOption {
+    Auto,
+    Always,
+    Never,
 }
 
-arg_enum! {
-    #[derive(Debug)]
-    enum PagingOption {
-        Auto,
-        Always,
-        Never,
-    }
+#[derive(ArgEnum, Debug, Clone, Copy)]
+enum PagingOption {
+    Auto,
+    Always,
+    Never,
 }
 
 // ---
@@ -196,22 +192,22 @@ fn load_config() -> Settings {
     Settings::load(&app_dirs).unwrap()
 }
 
-fn parse_size(s: &str) -> Result<usize> {
+fn parse_size(s: &str) -> std::result::Result<usize, SizeParseError> {
     match bytefmt::parse(s) {
         Ok(value) => Ok(usize::try_from(value)?),
         Err(_) => {
             if let Ok(value) = bytefmt::parse(s.to_owned() + "ib") {
                 return Ok(usize::try_from(value)?);
             }
-            Err(Error::InvalidSize(s.into()))
+            Err(SizeParseError::InvalidSize(s.into()))
         }
     }
 }
 
-fn parse_non_zero_size(s: &str) -> Result<usize> {
+fn parse_non_zero_size(s: &str) -> std::result::Result<usize, NonZeroSizeParseError> {
     let value = parse_size(s)?;
     if value == 0 {
-        Err(Error::ZeroSize)
+        Err(NonZeroSizeParseError::ZeroSize)
     } else {
         Ok(value)
     }
@@ -222,7 +218,7 @@ fn parse_non_zero_size(s: &str) -> Result<usize> {
 fn run() -> Result<()> {
     let app_dirs = AppDirs::new(Some("hl"), true).unwrap();
     let settings = Settings::load(&app_dirs)?;
-    let opt = Opt::from_args();
+    let opt = Opt::parse();
     let stdout_is_atty = || atty::is(atty::Stream::Stdout);
     let color_supported = if stdout_is_atty() {
         if let Err(err) = hl::enable_ansi_support() {

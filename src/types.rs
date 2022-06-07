@@ -1,17 +1,19 @@
 // std imports
 use std::cmp::Ord;
+use std::result::Result;
 use std::str::FromStr;
 
 // third-party imports
+use clap::ArgEnum;
 use enum_map::Enum;
 use serde::Deserialize;
 
 // local imports
-use crate::error::{Error, Result};
+use crate::error::InvalidLevelError;
 
 // ---
 
-#[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Enum)]
+#[derive(ArgEnum, Clone, Copy, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Enum)]
 #[serde(rename_all = "kebab-case")]
 pub enum Level {
     Error,
@@ -21,9 +23,9 @@ pub enum Level {
 }
 
 impl FromStr for Level {
-    type Err = Error;
+    type Err = InvalidLevelError;
 
-    fn from_str(s: &str) -> Result<Level> {
+    fn from_str(s: &str) -> Result<Level, InvalidLevelError> {
         let matches = |value| s.eq_ignore_ascii_case(value);
         if matches("e") || matches("error") {
             Ok(Level::Error)
@@ -34,7 +36,7 @@ impl FromStr for Level {
         } else if matches("d") || matches("debug") {
             Ok(Level::Debug)
         } else {
-            Err(Error::InvalidLevel {
+            Err(InvalidLevelError {
                 value: s.into(),
                 valid_values: vec![
                     "error".into(),
@@ -50,7 +52,6 @@ impl FromStr for Level {
 // ---
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd)]
-#[serde(rename_all = "kebab-case")]
 pub enum FieldKind {
     Time,
     Level,

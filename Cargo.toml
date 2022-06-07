@@ -42,7 +42,6 @@ serde_json = { version = "1", features = ["raw_value"] }
 serde_yaml = "0"
 shellwords = "1"
 signal-hook = "0"
-structopt = "0"
 thiserror = "1"
 wildmatch = "2"
 
@@ -51,8 +50,8 @@ version = "1"
 default-features = false
 
 [dependencies.clap]
-version = "2"
-features = ["wrap_help"]
+version = "3"
+features = ["wrap_help", "derive", "env"]
 
 [dependencies.winapi]
 version = "0"
