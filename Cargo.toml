@@ -12,7 +12,7 @@ edition = "2018"
 [dependencies]
 ansi_term = "0"
 anyhow = "1"
-atoi = "0"
+atoi = "1"
 atty = "0"
 bitmask = "0"
 bytefmt = "0"
@@ -25,7 +25,7 @@ crossbeam-channel = "0"
 crossbeam-queue = "0"
 crossbeam-utils = "0"
 derive_deref = "1"
-enum-map = "1"
+enum-map = "2"
 error-chain = "0"
 flate2 = "1"
 heapless = "0"
@@ -47,7 +47,7 @@ thiserror = "1"
 wildmatch = "2"
 
 [dependencies.itoa]
-version = "0"
+version = "1"
 default-features = false
 
 [dependencies.clap]
