@@ -31,22 +31,24 @@ pub struct Settings {
 
 impl Settings {
     pub fn load(app_dirs: &AppDirs) -> Result<Self, Error> {
-        let mut s = Config::default();
         let filename = app_dirs.config_dir.join("config.yaml");
 
-        s.merge(File::from_str(DEFAULT_SETTINGS, FileFormat::Yaml))?;
-        s.merge(File::with_name(&filename.to_string_lossy()).required(false))?;
-
-        Ok(s.try_into()?)
+        Ok(Config::builder()
+            .add_source(File::from_str(DEFAULT_SETTINGS, FileFormat::Yaml))
+            .add_source(File::with_name(&filename.to_string_lossy()).required(false))
+            .build()?
+            .try_deserialize()?)
     }
 }
 
 impl Default for Settings {
     fn default() -> Self {
-        let mut s = Config::default();
-        s.merge(File::from_str(DEFAULT_SETTINGS, FileFormat::Yaml))
-            .unwrap();
-        s.try_into().unwrap()
+        Config::builder()
+            .add_source(File::from_str(DEFAULT_SETTINGS, FileFormat::Yaml))
+            .build()
+            .unwrap()
+            .try_deserialize()
+            .unwrap()
     }
 }
 
