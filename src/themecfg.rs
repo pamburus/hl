@@ -76,6 +76,7 @@ impl Theme {
                     name: name.to_string(),
                     known: Self::embedded_names().into_iter().collect(),
                 })?
+                .data
                 .as_ref(),
         )
     }
