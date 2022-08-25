@@ -178,7 +178,7 @@ Log viewer which translates JSON logs into pretty human-readable representation.
 - Command
 
     ```
-    $ hl example.log --show provider
+    $ hl example.log --hide '*' --hide '!provider'
     ```
     Hides all fields except `provider`.
 
@@ -186,7 +186,7 @@ Log viewer which translates JSON logs into pretty human-readable representation.
 - Command
 
     ```
-    $ hl example.log -h headers -h body -H headers.content-type
+    $ hl example.log -h headers -h body -h '!headers.content-type'
     ```
     Hides fields `headers` and `body` but shows a single sub-field `content-type` inside field `headers`.
 
@@ -297,7 +297,7 @@ Log viewer which translates JSON logs into pretty human-readable representation.
 ### Complete set of options and flags
 
 ```
-hl 0.11.0
+hl 0.12.0
 JSON log converter to human readable representation
 
 USAGE:
@@ -314,8 +314,7 @@ OPTIONS:
     -e, --hide-empty-fields                                  Hide empty fields, applies for null, string, object and array fields only [env: HL_HIDE_EMPTY_FIELDS=]
     -E, --show-empty-fields                                  Show empty fields, overrides --hide-empty-fields option [env: HL_SHOW_EMPTY_FIELDS=]
     -f, --filter <FILTER>                                    Filtering by field values in one of forms [<key>=<value>, <key>~=<value>, <key>~~=<value>, <key>!=<value>, <key>!~=<value>, <key>!~~=<value>] where ~ denotes substring match and ~~ denotes regular expression match
-    -h, --hide <HIDE>                                        Hide fields with the specified keys
-    -H, --show <SHOW>                                        Hide all fields except fields with the specified keys
+    -h, --hide <HIDE>                                        Hide or unhide fields with the specified keys, prefix with ! to unhide, specify !* to unhide all
         --help                                               Print help information
         --interrupt-ignore-count <INTERRUPT_IGNORE_COUNT>    Number of interrupts to ignore, i.e. Ctrl-C (SIGINT) [env: HL_INTERRUPT_IGNORE_COUNT=] [default: 3]
     -l, --level <LEVEL>                                      Filtering by level [env: HL_LEVEL=] [possible values: error, warning, info, debug]
@@ -328,7 +327,6 @@ OPTIONS:
         --since <SINCE>                                      Filtering by timestamp >= the value (--time-zone and --local options are honored)
     -t, --time-format <TIME_FORMAT>                          Time format, see https://man7.org/linux/man-pages/man1/date.1.html [env: HL_TIME_FORMAT=] [default: "%y-%m-%d %T.%3N"]
         --theme <THEME>                                      Color theme [env: HL_THEME=] [default: one-dark-green]
-    -u, --unhide <UNHIDE>                                    Unhide fields with the specified keys
         --until <UNTIL>                                      Filtering by timestamp <= the value (--time-zone and --local options are honored)
     -V, --version                                            Print version information
     -Z, --time-zone <TIME_ZONE>                              Time zone name, see column "TZ database name" at https://en.wikipedia.org/wiki/List_of_tz_database_time_zones [env: HL_TIME_ZONE=] [default: UTC]

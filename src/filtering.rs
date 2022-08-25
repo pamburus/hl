@@ -126,7 +126,17 @@ impl<N: KeyNormalize> IncludeExcludeKeyFilter<N> {
         self
     }
 
+    pub fn included(mut self) -> Self {
+        self.setting = IncludeExcludeSetting::Include;
+        self
+    }
+
     pub fn exclude(&mut self) -> &mut Self {
+        self.setting = IncludeExcludeSetting::Exclude;
+        self
+    }
+
+    pub fn excluded(mut self) -> Self {
         self.setting = IncludeExcludeSetting::Exclude;
         self
     }
