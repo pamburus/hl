@@ -28,21 +28,25 @@ jobs:
           - name: amd64-linux-musl
             os: ubuntu-latest
             target: x86_64-unknown-linux-musl
+            use_cross: true
             artifact_name: hl
             asset_name: hl-linux.tar.gz
           - name: amd64-linux-gnu
             os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
+            use_cross: true
             artifact_name: hl
             asset_name: hl-amd64-linux-gnu.tar.gz
           - name: arm64-linux-musl
             os: ubuntu-latest
             target: aarch64-unknown-linux-musl
+            use_cross: true
             artifact_name: hl
             asset_name: hl-arm64-linux-musl.tar.gz
           - name: arm64-linux-gnu
             os: ubuntu-latest
             target: aarch64-unknown-linux-gnu
+            use_cross: true
             artifact_name: hl
             asset_name: hl-arm64-linux-gnu.tar.gz
           - name: amd64-windows
@@ -56,6 +60,7 @@ jobs:
           - name: arm64-macos
             os: macos-11
             target: aarch64-apple-darwin
+            use_cross: false
             artifact_name: hl
             asset_name: hl-arm64-macos.tar.gz
 
@@ -68,21 +73,26 @@ jobs:
           toolchain: stable
 
       - name: Install Cross
-        if: matrix.target != ''
+        if: matrix.use_cross
         run: |
           cargo install cross
           echo "CARGO=cross" >> $GITHUB_ENV
           echo "TARGET_FLAGS=--target ${{ matrix.target }}" >> $GITHUB_ENV
           echo "TARGET_DIR=./target/${{ matrix.target }}" >> $GITHUB_ENV
 
+      - name: Add Target
+        if: matrix.use_cross == false && matrix.target != ''
+        run: |
+          rustup target add ${{ matrix.target }}
+
       - name: Build
         run: ${{ env.CARGO }} build --release --locked --verbose ${{ env.TARGET_FLAGS }}
 
-      - name: Package
+      - name: Package using `tar`
         if: matrix.os != 'windows-latest'
         run: tar -C "${{ env.TARGET_DIR }}/release" -cz -f "${{ matrix.asset_name }}" "${{ matrix.artifact_name }}"
 
-      - name: Package
+      - name: Package using `7z`
         if: matrix.os == 'windows-latest'
         run: 7z a "${{ matrix.asset_name }}" "${{ env.TARGET_DIR }}/release/${{ matrix.artifact_name }}"
 
