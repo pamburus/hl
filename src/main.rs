@@ -5,11 +5,11 @@ use std::process;
 use std::sync::Arc;
 
 // third-party imports
-use ansi_term::Colour;
 use chrono::{FixedOffset, Local, TimeZone};
 use chrono_tz::{Tz, UTC};
 use clap::{ArgEnum, Parser};
 use itertools::Itertools;
+use nu_ansi_term::Color;
 use once_cell::sync::Lazy;
 use platform_dirs::AppDirs;
 use std::num::NonZeroUsize;
@@ -390,7 +390,7 @@ fn run() -> Result<()> {
 
 fn main() {
     if let Err(err) = run() {
-        eprintln!("{}: {}", Colour::Red.paint("error"), err);
+        eprintln!("{}: {}", Color::Red.paint("error"), err);
         process::exit(1);
     }
 }
