@@ -5,8 +5,7 @@ use std::process;
 use std::sync::Arc;
 
 // third-party imports
-use chrono::{FixedOffset, Local, TimeZone};
-use chrono_tz::{Tz, UTC};
+use chrono::Utc;
 use clap::{ArgEnum, CommandFactory, Parser};
 use itertools::Itertools;
 use nu_ansi_term::Color;
@@ -23,6 +22,7 @@ use hl::settings::Settings;
 use hl::signal::SignalHandler;
 use hl::theme::{Theme, ThemeOrigin};
 use hl::timeparse::parse_time;
+use hl::timezone::Tz;
 use hl::Level;
 use hl::{IncludeExcludeKeyFilter, KeyMatchOptions};
 
@@ -137,7 +137,7 @@ struct Opt {
     //
     /// Time zone name, see column "TZ database name" at https://en.wikipedia.org/wiki/List_of_tz_database_time_zones.
     #[clap(long, short = 'Z', env="HL_TIME_ZONE", default_value = &CONFIG.time_zone.name(), overrides_with = "time-zone")]
-    time_zone: Tz,
+    time_zone: chrono_tz::Tz,
     //
     /// Use local time zone, overrides --time-zone option.
     #[clap(long, short = 'L')]
@@ -266,11 +266,9 @@ fn run() -> Result<()> {
     };
     // Configure timezone.
     let tz = if opt.local {
-        *Local.timestamp(0, 0).offset()
+        Tz::Local
     } else {
-        let tz = opt.time_zone;
-        let offset = UTC.ymd(1970, 1, 1).and_hms(0, 0, 0) - tz.ymd(1970, 1, 1).and_hms(0, 0, 0);
-        FixedOffset::east(offset.num_seconds() as i32)
+        Tz::IANA(opt.time_zone)
     };
     // Configure time format.
     let time_format = LinuxDateFormat::new(&opt.time_format).compile();
@@ -279,12 +277,12 @@ fn run() -> Result<()> {
         fields: hl::FieldFilterSet::new(opt.filter)?,
         level: opt.level,
         since: if let Some(v) = &opt.since {
-            Some(parse_time(v, &tz, &time_format)?.into())
+            Some(parse_time(v, &tz, &time_format)?.with_timezone(&Utc))
         } else {
             None
         },
         until: if let Some(v) = &opt.until {
-            Some(parse_time(v, &tz, &time_format)?.into())
+            Some(parse_time(v, &tz, &time_format)?.with_timezone(&Utc))
         } else {
             None
         },

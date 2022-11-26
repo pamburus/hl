@@ -10,6 +10,7 @@ pub mod theme;
 pub mod themecfg;
 pub mod timeparse;
 pub mod timestamp;
+pub mod timezone;
 pub mod types;
 
 // private modules
