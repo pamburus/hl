@@ -7,7 +7,7 @@ use std::sync::Arc;
 // third-party imports
 use chrono::{FixedOffset, Local, TimeZone};
 use chrono_tz::{Tz, UTC};
-use clap::{ArgEnum, Parser};
+use clap::{ArgEnum, CommandFactory, Parser};
 use itertools::Itertools;
 use nu_ansi_term::Color;
 use once_cell::sync::Lazy;
@@ -211,6 +211,7 @@ fn run() -> Result<()> {
     let app_dirs = AppDirs::new(Some("hl"), true).unwrap();
     let settings = Settings::load(&app_dirs)?;
     let opt = Opt::parse();
+    let stdin_is_atty = || atty::is(atty::Stream::Stdin);
     let stdout_is_atty = || atty::is(atty::Stream::Stdout);
     let color_supported = if stdout_is_atty() {
         if let Err(err) = hl::enable_ansi_support() {
@@ -321,7 +322,7 @@ fn run() -> Result<()> {
     let app = hl::App::new(hl::Options {
         theme: Arc::new(theme),
         raw_fields: opt.raw_fields,
-        time_format: time_format,
+        time_format,
         buffer_size,
         max_message_size,
         concurrency,
@@ -347,6 +348,10 @@ fn run() -> Result<()> {
         })
         .collect::<std::io::Result<Vec<_>>>()?;
     let mut input: InputStream = if inputs.len() == 0 {
+        if stdin_is_atty() {
+            let mut cmd = Opt::command();
+            return cmd.print_help().map_err(Error::Io);
+        }
         Box::new(std::io::stdin())
     } else {
         Box::new(ConcatReader::new(inputs.into_iter().map(|x| Ok(x))))
