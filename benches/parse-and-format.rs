@@ -3,13 +3,13 @@ use std::sync::Arc;
 
 // third-party imports
 use byte_strings::concat_bytes;
-use chrono::FixedOffset;
+use chrono::{Offset, Utc};
 use criterion::{criterion_group, criterion_main, Criterion};
 
 // local imports
 use hl::{
-    DateTimeFormatter, Filter, IncludeExcludeKeyFilter, LinuxDateFormat, Parser, ParserSettings,
-    RecordFormatter, SegmentProcesor, Settings, Theme,
+    timezone::Tz, DateTimeFormatter, Filter, IncludeExcludeKeyFilter, LinuxDateFormat, Parser,
+    ParserSettings, RecordFormatter, SegmentProcesor, Settings, Theme,
 };
 
 // ---
@@ -25,7 +25,7 @@ fn benchmark(c: &mut Criterion) {
                     Arc::new(Theme::embedded(theme).unwrap()),
                     DateTimeFormatter::new(
                         LinuxDateFormat::new("%b %d %T.%3N").compile(),
-                        FixedOffset::east(0),
+                        Tz::FixedOffset(Utc.fix()),
                     ),
                     false,
                     Arc::new(IncludeExcludeKeyFilter::default()),

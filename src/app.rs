@@ -1,7 +1,6 @@
 use std::io::{Read, Write};
 use std::sync::Arc;
 
-use chrono::FixedOffset;
 use closure::closure;
 use crossbeam_channel as channel;
 use crossbeam_channel::RecvError;
@@ -17,6 +16,7 @@ use crate::model::{Filter, Parser, ParserSettings, RawRecord};
 use crate::scanning::{BufFactory, Scanner, Segment, SegmentBufFactory};
 use crate::settings::Fields;
 use crate::theme::Theme;
+use crate::timezone::Tz;
 use crate::IncludeExcludeKeyFilter;
 
 // TODO: merge Options to Settings and replace Options with Settings.
@@ -29,7 +29,7 @@ pub struct Options {
     pub concurrency: usize,
     pub filter: Filter,
     pub fields: FieldOptions,
-    pub time_zone: FixedOffset,
+    pub time_zone: Tz,
     pub hide_empty_fields: bool,
 }
 

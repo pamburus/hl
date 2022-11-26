@@ -1,22 +1,22 @@
 use std::cmp::{max, min, PartialOrd};
 
 use bitmask::bitmask;
-use chrono::{DateTime, Datelike, FixedOffset, NaiveDateTime, Timelike};
+use chrono::{DateTime, Datelike, FixedOffset, NaiveDateTime, Offset, TimeZone, Timelike};
+use chrono_tz::OffsetName;
 
-use crate::fmtx;
+use crate::fmtx::{aligned_left, Alignment, Counter, Push};
 use crate::timestamp::rfc3339;
-
-use fmtx::{Alignment, Push};
+use crate::timezone::Tz;
 
 // ---
 
 pub struct DateTimeFormatter {
     format: Vec<Item>,
-    tz: FixedOffset,
+    tz: Tz,
 }
 
 impl DateTimeFormatter {
-    pub fn new(format: Vec<Item>, tz: FixedOffset) -> Self {
+    pub fn new(format: Vec<Item>, tz: Tz) -> Self {
         Self { format, tz }
     }
 
@@ -31,18 +31,28 @@ impl DateTimeFormatter {
     where
         B: Push<u8>,
     {
-        if ts.timezone().is_utc() && self.tz.local_minus_utc() == 0 {
+        if ts.timezone().is_utc() && self.tz.is_utc() {
             reformat_rfc3339(buf, ts, &self.format);
             Some(())
         } else {
             None
         }
     }
+
+    pub fn max_length(&self) -> usize {
+        let mut counter = Counter::new();
+        let ts = NaiveDateTime::from_timestamp_opt(1654041600, 999_999_999).unwrap();
+        let offset = self.tz.offset_from_utc_datetime(&ts);
+        let tts = DateTime::<Tz>::from_utc(ts, offset);
+        self.format(&mut counter, tts.with_timezone(&offset.fix()));
+        counter.result()
+    }
 }
 
 // ---
 
 bitmask! {
+    #[derive(Debug)]
     pub mask Flags: u8 where flags Flag {
         SpacePadding  = 0b00000001,
         ZeroPadding   = 0b00000010,
@@ -51,16 +61,18 @@ bitmask! {
         LowerCase     = 0b00001000,
         FromZero      = 0b00010000,
         FromSunday    = 0b00100000,
+        NoDelimiters  = 0b01000000,
     }
 }
 
 use Flag::*;
 
 type Precision = u8;
+type Width = u8;
 
 // ---
 
-#[derive(Clone)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Item {
     Char(u8),
     Century(Flags),
@@ -85,10 +97,8 @@ pub enum Item {
     Second(Flags),
     Nanosecond((Flags, Precision)),
     UnixTimestamp(Flags),
-    TimeZoneHour(Flags),
-    TimeZoneMinute(Flags),
-    TimeZoneSecond(Flags),
-    TimeZoneName(Flags),
+    TimeZoneOffset((Flags, Precision)),
+    TimeZoneName((Flags, Width)),
 }
 
 impl AsRef<Item> for Item {
@@ -110,7 +120,6 @@ pub struct LinuxDateFormat<'a> {
     pad_counter: u8,
     pad: u8,
     flags: Flags,
-    jump_tz: bool,
 }
 
 impl<'a> LinuxDateFormat<'a> {
@@ -121,7 +130,6 @@ impl<'a> LinuxDateFormat<'a> {
             pad_counter: 0,
             pad: b' ',
             flags: Flags::none(),
-            jump_tz: false,
         }
     }
 
@@ -139,7 +147,6 @@ impl<'a> LinuxDateFormat<'a> {
             self.jump = &self.jump[1..];
             Some(result)
         } else if self.spec.len() != 0 {
-            self.jump_tz = false;
             let result = self.spec[0];
             self.spec = &self.spec[1..];
             Some(result)
@@ -159,17 +166,6 @@ impl<'a> LinuxDateFormat<'a> {
     }
 
     #[inline]
-    fn jump_tz(&mut self, jump: &'static [u8], jump_width: u8, width: u8) -> Option<Item> {
-        self.jump = jump;
-        self.jump_tz = true;
-        if jump_width < width {
-            self.pad = b' ';
-            self.pad_counter = width - jump_width;
-        }
-        self.next()
-    }
-
-    #[inline]
     fn jump_pad(&mut self, jump: &'static [u8], pad: u8, width: u8) -> Option<Item> {
         self.jump = jump;
         self.pad = pad;
@@ -180,14 +176,6 @@ impl<'a> LinuxDateFormat<'a> {
     #[inline]
     fn parse_item(&mut self) -> Option<Item> {
         let b = self.pop();
-        if self.jump_tz {
-            return match b {
-                Some(b'H') => Some(Item::TimeZoneHour(self.flags)),
-                Some(b'M') => Some(Item::TimeZoneMinute(Flags::none())),
-                Some(b'S') => Some(Item::TimeZoneSecond(Flags::none())),
-                _ => None,
-            };
-        }
         let (flags, b) = self.parse_flags(b);
         let (width, b) = self.parse_width(b);
         let (tzf, b) = self.parse_tz_format(b);
@@ -297,13 +285,13 @@ impl<'a> LinuxDateFormat<'a> {
             Some(b'X') => self.jump(b"%H:%M:%S", 8, width),
             Some(b'y') => pad(2, b'0', b'0', b"%y", Some(Item::YearShort(flags))),
             Some(b'Y') => pad(4, b'0', b'0', b"%Y", Some(Item::Year(flags))),
-            Some(b'z') => match tzf {
-                0 => self.jump_tz(b"%H%M", 5, width),
-                1 => self.jump_tz(b"%H:%M", 6, width),
-                2 => self.jump_tz(b"%H:%M:%S", 9, width),
-                _ => None,
-            },
-            Some(b'Z') => pad(3, b' ', b' ', b"%Z", Some(Item::TimeZoneName(flags))),
+            Some(b'z') => Some(Item::TimeZoneOffset(match tzf {
+                0 => (flags | NoDelimiters, 2),
+                1 => (flags, 2),
+                2 => (flags, 3),
+                _ => (flags, 0),
+            })),
+            Some(b'Z') => Some(Item::TimeZoneName((flags, width))),
             _ => None,
         }
     }
@@ -392,7 +380,7 @@ impl<'a> From<LinuxDateFormat<'a>> for Vec<Item> {
 
 // ---
 
-pub fn format_date<T, B, F>(buf: &mut B, dto: DateTime<FixedOffset>, format: F)
+pub fn format_date<T, B, F>(buf: &mut B, dto: DateTime<Tz>, format: F)
 where
     B: Push<u8>,
     T: AsRef<Item>,
@@ -483,8 +471,8 @@ where
             Item::UnixTimestamp(flags) => {
                 f.numeric(dt.timestamp(), 10, flags);
             }
-            Item::TimeZoneHour(flags) => {
-                let secs = dto.timezone().local_minus_utc();
+            Item::TimeZoneOffset((flags, precision)) => {
+                let secs = dto.offset().fix().local_minus_utc();
                 let (sign, secs) = if secs >= 0 {
                     (b'+', secs)
                 } else {
@@ -492,28 +480,41 @@ where
                 };
                 f.char(sign);
                 f.numeric(secs / 3600, 2, flags);
-            }
-            Item::TimeZoneMinute(flags) => {
-                let secs = dto.timezone().local_minus_utc();
-                let secs = if secs >= 0 { secs } else { -secs };
-                f.numeric(secs / 60 % 60, 2, flags);
-            }
-            Item::TimeZoneSecond(flags) => {
-                let secs = dto.timezone().local_minus_utc();
-                let secs = if secs >= 0 { secs } else { -secs };
-                f.numeric(secs % 60, 2, flags);
-            }
-            Item::TimeZoneName(flags) => {
-                let text = if dto.timezone().local_minus_utc() == 0 {
-                    if flags.contains(LowerCase) {
-                        b"utc"
-                    } else {
-                        b"UTC"
+                if precision == 0 || precision > 1 {
+                    if !flags.contains(NoDelimiters) {
+                        f.char(b':');
                     }
+                    f.numeric(secs / 60 % 60, 2, Flags::none());
+                }
+                if precision == 0 || precision > 2 {
+                    if !flags.contains(NoDelimiters) {
+                        f.char(b':');
+                    }
+                    f.numeric(secs % 60, 2, Flags::none());
+                }
+            }
+            Item::TimeZoneName((flags, width)) => {
+                let offset = dto.offset();
+                let name = offset.abbreviation();
+                let width = if width != 0 {
+                    width as usize
                 } else {
-                    b"(?)"
+                    name.len()
                 };
-                f.text(text);
+                aligned_left(f.buf, width, b' ', |mut buf| {
+                    let mut f = Formatter::new(&mut buf);
+                    if flags.contains(LowerCase) {
+                        for b in name.as_bytes() {
+                            f.char(b.to_ascii_lowercase())
+                        }
+                    } else if flags.contains(UpperCase) {
+                        for b in name.as_bytes() {
+                            f.char(b.to_ascii_uppercase())
+                        }
+                    } else {
+                        f.text(name.as_bytes());
+                    }
+                })
             }
         }
     }
@@ -689,7 +690,7 @@ where
                     f.numeric(dt.timestamp(), 10, flags);
                 }
             }
-            Item::TimeZoneHour(_) => {
+            Item::TimeZoneOffset((_, precision)) => {
                 if sts.timezone().is_utc() {
                     f.char(b'+');
                     f.char(b'0');
@@ -702,32 +703,41 @@ where
                         f.text(hour.as_bytes());
                     }
                 }
-            }
-            Item::TimeZoneMinute(_) => {
-                if let Some(minute) = sts.timezone().minute() {
-                    f.text(minute.as_bytes());
-                } else {
+                if precision == 0 || precision > 1 {
+                    if let Some(minute) = sts.timezone().minute() {
+                        f.text(minute.as_bytes());
+                    } else {
+                        f.char(b'0');
+                        f.char(b'0');
+                    }
+                }
+                if precision == 0 || precision > 2 {
                     f.char(b'0');
                     f.char(b'0');
                 }
             }
-            Item::TimeZoneSecond(_) => {
-                f.char(b'0');
-                f.char(b'0');
-            }
-            Item::TimeZoneName(flags) => {
-                let tz = sts.timezone().as_bytes();
-                let value = match tz {
-                    b"Z" | b"z" | b"+00:00" | b"-00:00" => {
-                        if flags.contains(LowerCase) {
-                            b"utc"
-                        } else {
-                            b"UTC"
-                        }
-                    }
-                    _ => b"(?)",
+            Item::TimeZoneName((flags, width)) => {
+                let tz = sts.timezone();
+                let name = if tz.is_utc() { b"UTC" } else { tz.as_bytes() };
+                let width = if width != 0 {
+                    width as usize
+                } else {
+                    name.len()
                 };
-                f.text(value);
+                aligned_left(f.buf, width, b' ', |mut buf| {
+                    let mut f = Formatter::new(&mut buf);
+                    if flags.contains(LowerCase) {
+                        for b in name {
+                            f.char(b.to_ascii_lowercase())
+                        }
+                    } else if flags.contains(UpperCase) {
+                        for b in name {
+                            f.char(b.to_ascii_uppercase())
+                        }
+                    } else {
+                        f.text(name);
+                    }
+                })
             }
         }
     }
@@ -1085,3 +1095,20 @@ const WEEKDAYS_LONG: [[&str; 7]; 3] = [
 const MAX_WEEKDAY_LONG_LEN: usize = 9;
 
 const AM_PM: [[&str; 2]; 3] = [["AM", "PM"], ["AM", "PM"], ["am", "pm"]];
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn format(s: &str) -> DateTimeFormat {
+        LinuxDateFormat::new(s).compile()
+    }
+
+    #[test]
+    fn test_compile_offset() {
+        assert_eq!(
+            format("%:z"),
+            vec![Item::TimeZoneOffset((Flags::none(), 2))]
+        );
+    }
+}

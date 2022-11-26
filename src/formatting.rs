@@ -2,7 +2,6 @@
 use std::sync::Arc;
 
 // third-party imports
-use chrono::prelude::*;
 use json::{de::Read, de::StrRead, value::RawValue};
 use serde_json as json;
 
@@ -15,7 +14,7 @@ use crate::theme;
 use crate::IncludeExcludeKeyFilter;
 
 use datefmt::DateTimeFormatter;
-use fmtx::{aligned_left, centered, Counter};
+use fmtx::{aligned_left, centered};
 use model::Level;
 use theme::{Element, StylingPush, Theme};
 
@@ -41,10 +40,7 @@ impl RecordFormatter {
         hide_empty_fields: bool,
         fields: Arc<IncludeExcludeKeyFilter>,
     ) -> Self {
-        let mut counter = Counter::new();
-        let tts = Utc.ymd(2020, 12, 30).and_hms_nano(23, 59, 49, 999_999_999);
-        ts_formatter.format(&mut counter, tts.into());
-        let ts_width = counter.result();
+        let ts_width = ts_formatter.max_length();
         RecordFormatter {
             theme,
             unescape_fields: true,

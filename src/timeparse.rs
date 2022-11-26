@@ -1,59 +1,66 @@
 // third-party imports
-use chrono::{DateTime, Datelike, Duration, FixedOffset, TimeZone, Utc};
+use chrono::{DateTime, Datelike, Duration, NaiveDateTime, Offset, TimeZone, Utc};
 use humantime::parse_duration;
 
 // local imports
 use crate::datefmt::{DateTimeFormat, Flag, Flags, Item};
 use crate::error::*;
+use crate::timezone::Tz;
 
-pub fn parse_time(
-    s: &str,
-    tz: &FixedOffset,
-    format: &DateTimeFormat,
-) -> Result<DateTime<FixedOffset>> {
+pub fn parse_time(s: &str, tz: &Tz, format: &DateTimeFormat) -> Result<DateTime<Tz>> {
     let s = s.trim();
     None.or_else(|| relative_past(s))
         .or_else(|| relative_future(s))
         .or_else(|| use_custom_format(s, format, &Utc::now().with_timezone(tz), tz))
+        .or_else(|| rfc3339(s, tz))
         .or_else(|| rfc3339_weak(s, tz))
         .or_else(|| human(s, tz))
         .ok_or(Error::UnrecognizedTime(s.into()))
 }
 
-fn relative_past(s: &str) -> Option<DateTime<FixedOffset>> {
+fn relative_past(s: &str) -> Option<DateTime<Tz>> {
     if s.starts_with('-') {
         let d = parse_duration(&s[1..]).ok()?;
-        Some((Utc::now() - Duration::from_std(d).ok()?).into())
+        let ts = Utc::now() - Duration::from_std(d).ok()?;
+        Some(ts.with_timezone(&ts.timezone().into()))
     } else {
         None
     }
 }
 
-fn relative_future(s: &str) -> Option<DateTime<FixedOffset>> {
+fn relative_future(s: &str) -> Option<DateTime<Tz>> {
     if s.starts_with('+') {
         let d = parse_duration(&s[1..]).ok()?;
-        Some((Utc::now() + Duration::from_std(d).ok()?).into())
+        let ts = Utc::now() + Duration::from_std(d).ok()?;
+        Some(ts.with_timezone(&ts.timezone().into()))
     } else {
         None
     }
 }
 
-fn human(s: &str, tz: &FixedOffset) -> Option<DateTime<FixedOffset>> {
+fn human(s: &str, tz: &Tz) -> Option<DateTime<Tz>> {
     htp::parse(s, Utc::now().with_timezone(tz)).ok()
 }
 
-fn rfc3339_weak(s: &str, tz: &FixedOffset) -> Option<DateTime<FixedOffset>> {
-    let offset = Duration::seconds(tz.utc_minus_local().into());
-    let time = DateTime::<Utc>::from(humantime::parse_rfc3339_weak(s).ok()?) + offset;
-    Some(time.into())
+fn rfc3339(s: &str, tz: &Tz) -> Option<DateTime<Tz>> {
+    Some(DateTime::parse_from_rfc3339(s).ok()?.with_timezone(tz))
+}
+
+fn rfc3339_weak(s: &str, tz: &Tz) -> Option<DateTime<Tz>> {
+    let time = DateTime::<Utc>::from(humantime::parse_rfc3339_weak(s).ok()?).with_timezone(tz);
+    let fix1 = time.offset().fix().local_minus_utc();
+    let time = time - Duration::seconds(fix1 as i64);
+    let fix2 = time.offset().fix().local_minus_utc();
+    let time = time - Duration::seconds((fix2 - fix1) as i64);
+    Some(time)
 }
 
 fn use_custom_format(
     s: &str,
     format: &DateTimeFormat,
-    now: &DateTime<FixedOffset>,
-    tz: &FixedOffset,
-) -> Option<DateTime<FixedOffset>> {
+    now: &DateTime<Tz>,
+    tz: &Tz,
+) -> Option<DateTime<Tz>> {
     let unsupported = || None;
     let mut buf = Vec::new();
     let mut has_year = false;
@@ -63,6 +70,7 @@ fn use_custom_format(
     let mut has_hour = false;
     let mut has_minute = false;
     let mut has_second = false;
+    let mut has_offset = false;
 
     for item in format {
         match *item.as_ref() {
@@ -178,18 +186,16 @@ fn use_custom_format(
             Item::UnixTimestamp(flags) => {
                 add_format_item(&mut buf, b"s", flags)?;
             }
-            Item::TimeZoneHour(_) => {
-                return unsupported();
+            Item::TimeZoneOffset((flags, precision)) => {
+                let format: &[u8] = match precision {
+                    0 => b"z",
+                    1 => b":z",
+                    _ => b"::z",
+                };
+                add_format_item(&mut buf, format, flags)?;
+                has_offset = true;
             }
-            Item::TimeZoneMinute(_) => {
-                return unsupported();
-            }
-            Item::TimeZoneSecond(_) => {
-                return unsupported();
-            }
-            Item::TimeZoneName(_) => {
-                return unsupported();
-            }
+            Item::TimeZoneName(_) => {}
         }
     }
     let mut extra = Vec::new();
@@ -221,30 +227,42 @@ fn use_custom_format(
         buf.extend_from_slice(b" %S");
         extra.extend_from_slice(b" 00");
     }
+    if !has_offset {
+        buf.extend_from_slice(b" %:z");
+        extra.extend_from_slice(b" %:z");
+    }
+    let now = now.with_timezone(tz);
     let f1 = std::str::from_utf8(&buf).ok()?;
     let f2 = std::str::from_utf8(&extra).ok()?;
     let s = format!("{}{}", s, now.format(f2));
-    let result = tz.datetime_from_str(&s, f1).ok()?;
-    smart_adjust(result, now, has_year, has_month, has_day).or(Some(result))
+    let result = DateTime::parse_from_str(&s, f1).ok()?.with_timezone(tz);
+    let initial_offset = (if has_offset { result } else { now }).offset().fix();
+    let result = smart_adjust(&result, &now, has_year, has_month, has_day).unwrap_or(result);
+    let shift = initial_offset.local_minus_utc() - result.offset().fix().local_minus_utc();
+    Some(result + Duration::seconds(shift as i64))
 }
 
 fn smart_adjust(
-    result: DateTime<FixedOffset>,
-    now: &DateTime<FixedOffset>,
+    result: &DateTime<Tz>,
+    now: &DateTime<Tz>,
     has_year: bool,
     has_month: bool,
     has_day: bool,
-) -> Option<DateTime<FixedOffset>> {
-    if &result <= now {
+) -> Option<DateTime<Tz>> {
+    if result <= now {
         return None;
     }
 
     if !has_day {
-        let pred = result.date().pred();
-        let fixed = result
-            .timezone()
-            .ymd(pred.year(), pred.month(), pred.day())
-            .and_time(result.time())?;
+        let pred = result.date_naive().pred_opt()?;
+        let pred = NaiveDateTime::new(pred, result.time());
+        let fixed = DateTime::from_local(
+            pred,
+            result
+                .timezone()
+                .offset_from_local_datetime(&pred)
+                .latest()?,
+        );
         if &fixed <= now {
             return Some(fixed);
         }
@@ -291,5 +309,153 @@ fn add_format_item(buf: &mut Vec<u8>, item: &[u8], flags: Flags) -> Option<()> {
         None
     } else {
         Some(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use chrono::FixedOffset;
+
+    use super::*;
+    use crate::datefmt::LinuxDateFormat;
+
+    fn ts(s: &str, tz: &Tz) -> DateTime<Tz> {
+        DateTime::parse_from_rfc3339(s).unwrap().with_timezone(tz)
+    }
+
+    fn format(s: &str) -> DateTimeFormat {
+        LinuxDateFormat::new(s).compile()
+    }
+
+    #[test]
+    fn test_use_custom_format_utc_t() {
+        let tz = Tz::FixedOffset(Utc.fix());
+        let ts = |s| ts(s, &tz);
+        let format = format("%T");
+
+        assert_eq!(
+            use_custom_format("12:00:00", &format, &ts("2000-01-02T12:00:00Z"), &tz),
+            Some(ts("2000-01-02T12:00:00Z"))
+        );
+
+        assert_eq!(
+            use_custom_format("11:00:00", &format, &ts("2000-01-02T12:00:00Z"), &tz),
+            Some(ts("2000-01-02T11:00:00Z"))
+        );
+
+        assert_eq!(
+            use_custom_format("13:00:00", &format, &ts("2000-01-02T12:00:00Z"), &tz),
+            Some(ts("2000-01-01T13:00:00Z"))
+        );
+
+        assert_eq!(
+            use_custom_format("00:00:00", &format, &ts("2000-01-01T00:00:00Z"), &tz),
+            Some(ts("2000-01-01T00:00:00Z"))
+        );
+
+        assert_eq!(
+            use_custom_format("23:59:59", &format, &ts("2000-01-01T00:00:00Z"), &tz),
+            Some(ts("1999-12-31T23:59:59Z"))
+        );
+
+        assert_eq!(
+            use_custom_format("00:00:01", &format, &ts("2000-01-01T00:00:00Z"), &tz),
+            Some(ts("1999-12-31T00:00:01Z"))
+        );
+    }
+
+    #[test]
+    fn test_use_custom_format_dst_t() {
+        let tz = Tz::IANA(chrono_tz::Europe::Belgrade);
+        let ts = |s| ts(s, &tz);
+        let format = format("%T");
+
+        assert_eq!(
+            tz.offset_from_utc_datetime(&ts("2022-10-30T00:00:00Z").naive_utc())
+                .fix(),
+            FixedOffset::east_opt(7200).unwrap()
+        );
+
+        assert_eq!(
+            tz.offset_from_utc_datetime(&ts("2022-10-30T01:00:00Z").naive_utc())
+                .fix(),
+            FixedOffset::east_opt(3600).unwrap()
+        );
+
+        assert_eq!(
+            use_custom_format("00:00:00", &format, &ts("2022-10-30T04:00:00+01:00"), &tz),
+            Some(ts("2022-10-30T00:00:00+02:00"))
+        );
+
+        assert_eq!(
+            use_custom_format("01:00:00", &format, &ts("2022-10-30T04:00:00+01:00"), &tz),
+            Some(ts("2022-10-30T01:00:00+02:00"))
+        );
+
+        assert_eq!(
+            use_custom_format("02:00:00", &format, &ts("2022-10-30T04:00:00+01:00"), &tz),
+            Some(ts("2022-10-30T02:00:00+01:00"))
+        );
+
+        assert_eq!(
+            use_custom_format("03:00:00", &format, &ts("2022-10-30T04:00:00+01:00"), &tz),
+            Some(ts("2022-10-30T03:00:00+01:00"))
+        );
+    }
+
+    #[test]
+    fn test_use_custom_format_dst_offset() {
+        let tz = Tz::IANA(chrono_tz::Europe::Belgrade);
+        let ts = |s| ts(s, &tz);
+        let format = format("%y-%m-%d %T.%3N %:z");
+
+        assert_eq!(
+            use_custom_format(
+                "22-10-29 01:32:16.810 +01:00",
+                &format,
+                &ts("2022-10-30T14:00:00+01:00"),
+                &tz
+            ),
+            Some(ts("2022-10-29T01:32:16.810+01:00"))
+        );
+    }
+
+    #[test]
+    fn test_use_custom_format_dst_zone() {
+        let tz = Tz::IANA(chrono_tz::Europe::Belgrade);
+        let ts = |s| ts(s, &tz);
+        let format = format("%y-%m-%d %T.%3N %Z");
+        println!("{:?}", format);
+
+        assert_eq!(
+            use_custom_format(
+                "22-10-29 01:32:16.810",
+                &format,
+                &ts("2022-10-30T14:00:00+01:00"),
+                &tz
+            ),
+            Some(ts("2022-10-29T01:32:16.810+02:00"))
+        );
+    }
+
+    #[test]
+    fn test_rfc3339_weak() {
+        let tz = Tz::IANA(chrono_tz::Europe::Belgrade);
+        let ts = |s| ts(s, &tz);
+
+        assert_eq!(
+            rfc3339_weak("2022-10-30 01:00:00", &tz),
+            Some(ts("2022-10-30T01:00:00+02:00"))
+        );
+
+        assert_eq!(
+            rfc3339_weak("2022-10-30 02:00:00", &tz),
+            Some(ts("2022-10-30T02:00:00+01:00"))
+        );
+
+        assert_eq!(
+            rfc3339_weak("2022-10-30 03:00:00", &tz),
+            Some(ts("2022-10-30T03:00:00+01:00"))
+        );
     }
 }
