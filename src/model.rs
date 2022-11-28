@@ -24,7 +24,11 @@ pub use types::Level;
 
 // ---
 
-pub struct Record<'a> {
+pub trait RawValueTrait {}
+
+impl RawValueTrait for json::value::RawValue {}
+
+pub struct Record<'a, RawValue: RawValueTrait> {
     pub ts: Option<Timestamp<'a>>,
     pub message: Option<&'a RawValue>,
     pub level: Option<Level>,
@@ -34,7 +38,7 @@ pub struct Record<'a> {
     extrax: Vec<(&'a str, &'a RawValue)>,
 }
 
-impl<'a> Record<'a> {
+impl<'a, RawValue: RawValueTrait> Record<'a, RawValue> {
     pub fn fields(&self) -> impl Iterator<Item = &(&'a str, &'a RawValue)> {
         self.extra.iter().chain(self.extrax.iter())
     }
@@ -169,11 +173,11 @@ impl ParserSettings {
         }
     }
 
-    fn apply<'a>(
+    fn apply<'a, RawValue: RawValueTrait>(
         &self,
         key: &'a str,
         value: &'a RawValue,
-        to: &mut Record<'a>,
+        to: &mut Record<'a, RawValue>,
         ctx: &mut PriorityContext,
     ) {
         match self.fields.get(key) {
@@ -199,8 +203,11 @@ impl ParserSettings {
         };
     }
 
-    fn apply_each<'a, 'i, I>(&self, items: I, to: &mut Record<'a>)
-    where
+    fn apply_each<'a, 'i, I, RawValue: RawValueTrait>(
+        &self,
+        items: I,
+        to: &mut Record<'a, RawValue>,
+    ) where
         I: IntoIterator<Item = &'i (&'a str, &'a RawValue)>,
         'a: 'i,
     {
@@ -250,7 +257,11 @@ enum FieldSettings {
 }
 
 impl FieldSettings {
-    fn apply<'a>(&self, value: &'a RawValue, to: &mut Record<'a>) {
+    fn apply<'a, RawValue: RawValueTrait>(
+        &self,
+        value: &'a RawValue,
+        to: &mut Record<'a, RawValue>,
+    ) {
         match self {
             Self::Time(preparse) => {
                 let s = value.get();
@@ -299,7 +310,10 @@ impl Parser {
         Self { settings }
     }
 
-    pub fn parse<'a>(&self, record: RawRecord<'a>) -> Record<'a> {
+    pub fn parse<'a, RawValue: RawValueTrait>(
+        &self,
+        record: RawRecord<'a, RawValue>,
+    ) -> Record<'a, RawValue> {
         let fields = record.fields();
         let count = fields.size_hint().1.unwrap_or(0);
         let mut record = Record::<'a>::with_capacity(count);
@@ -312,18 +326,18 @@ impl Parser {
 
 // ---
 
-pub struct RawRecord<'a> {
+pub struct RawRecord<'a, RawValue: RawValueTrait> {
     fields: heapless::Vec<(&'a str, &'a RawValue), RAW_RECORD_FIELDS_CAPACITY>,
     fieldsx: Vec<(&'a str, &'a RawValue)>,
 }
 
-impl<'a> RawRecord<'a> {
+impl<'a, RawValue: RawValueTrait> RawRecord<'a, RawValue> {
     pub fn fields(&self) -> impl Iterator<Item = &(&'a str, &'a RawValue)> {
         self.fields.iter().chain(self.fieldsx.iter())
     }
 }
 
-impl<'de: 'a, 'a> Deserialize<'de> for RawRecord<'a> {
+impl<'de: 'a, 'a, RawValue: RawValueTrait> Deserialize<'de> for RawRecord<'a, RawValue> {
     fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
     where
         D: Deserializer<'de>,
@@ -334,11 +348,11 @@ impl<'de: 'a, 'a> Deserialize<'de> for RawRecord<'a> {
 
 // ---
 
-struct RawRecordVisitor<'a> {
-    marker: PhantomData<fn() -> RawRecord<'a>>,
+struct RawRecordVisitor<'a, RawValue: RawValueTrait> {
+    marker: PhantomData<fn() -> RawRecord<'a, RawValue>>,
 }
 
-impl<'a> RawRecordVisitor<'a> {
+impl<'a, RawValue: RawValueTrait> RawRecordVisitor<'a, RawValue> {
     fn new() -> Self {
         Self {
             marker: PhantomData,
@@ -346,8 +360,8 @@ impl<'a> RawRecordVisitor<'a> {
     }
 }
 
-impl<'de: 'a, 'a> Visitor<'de> for RawRecordVisitor<'a> {
-    type Value = RawRecord<'a>;
+impl<'de: 'a, 'a, RawValue: RawValueTrait> Visitor<'de> for RawRecordVisitor<'a, RawValue> {
+    type Value = RawRecord<'a, RawValue>;
     fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
         formatter.write_str("object json")
     }

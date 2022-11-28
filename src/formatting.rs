@@ -1,3 +1,4 @@
+use std::marker::PhantomData;
 // std imports
 use std::sync::Arc;
 
@@ -15,7 +16,7 @@ use crate::IncludeExcludeKeyFilter;
 
 use datefmt::DateTimeFormatter;
 use fmtx::{aligned_left, centered};
-use model::Level;
+use model::{Level, RawValueTrait};
 use theme::{Element, StylingPush, Theme};
 
 // ---
@@ -24,16 +25,17 @@ type Buf = Vec<u8>;
 
 // ---
 
-pub struct RecordFormatter {
+pub struct RecordFormatter<RawValue: RawValueTrait> {
     theme: Arc<Theme>,
     unescape_fields: bool,
     ts_formatter: DateTimeFormatter,
     ts_width: usize,
     hide_empty_fields: bool,
     fields: Arc<IncludeExcludeKeyFilter>,
+    _marker: PhantomData<RawValue>,
 }
 
-impl RecordFormatter {
+impl<RawValue: RawValueTrait> RecordFormatter<RawValue> {
     pub fn new(
         theme: Arc<Theme>,
         ts_formatter: DateTimeFormatter,
@@ -48,6 +50,7 @@ impl RecordFormatter {
             ts_width,
             hide_empty_fields,
             fields,
+            _marker: PhantomData,
         }
     }
 
@@ -56,7 +59,7 @@ impl RecordFormatter {
         self
     }
 
-    pub fn format_record(&mut self, buf: &mut Buf, rec: &model::Record) {
+    pub fn format_record(&mut self, buf: &mut Buf, rec: &model::Record<RawValue>) {
         self.theme.apply(buf, &rec.level, |s| {
             //
             // time
@@ -276,12 +279,12 @@ fn format_str_unescaped(buf: &mut Buf, s: &str) {
     reader.parse_str_raw(buf).unwrap();
 }
 
-struct FieldFormatter<'a> {
-    rf: &'a RecordFormatter,
+struct FieldFormatter<'a, RawValue: RawValueTrait> {
+    rf: &'a RecordFormatter<RawValue>,
 }
 
-impl<'a> FieldFormatter<'a> {
-    fn new(rf: &'a RecordFormatter) -> Self {
+impl<'a, RawValue: RawValueTrait> FieldFormatter<'a, RawValue> {
+    fn new(rf: &'a RecordFormatter<RawValue>) -> Self {
         Self { rf }
     }
 

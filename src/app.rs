@@ -6,13 +6,13 @@ use crossbeam_channel as channel;
 use crossbeam_channel::RecvError;
 use crossbeam_utils::thread;
 use itertools::izip;
-use serde_json as json;
+use serde_json::{self as json, value::RawValue};
 use std::num::NonZeroUsize;
 
 use crate::datefmt::{DateTimeFormat, DateTimeFormatter};
 use crate::error::*;
 use crate::formatting::RecordFormatter;
-use crate::model::{Filter, Parser, ParserSettings, RawRecord};
+use crate::model::{Filter, Parser, ParserSettings, RawRecord, RawValueTrait};
 use crate::scanning::{BufFactory, Scanner, Segment, SegmentBufFactory};
 use crate::settings::Fields;
 use crate::theme::Theme;
@@ -82,7 +82,7 @@ impl App {
             // spawn processing threads
             for (rxi, txo) in izip!(rxi, txo) {
                 scope.spawn(closure!(ref bfo, ref parser, ref sfi, |_| {
-                    let mut formatter = RecordFormatter::new(
+                    let mut formatter = RecordFormatter::<RawValue>::new(
                         self.options.theme.clone(),
                         DateTimeFormatter::new(
                             self.options.time_format.clone(),
@@ -142,14 +142,18 @@ impl App {
 
 // ---
 
-pub struct SegmentProcesor<'a> {
+pub struct SegmentProcesor<'a, RawValue: RawValueTrait> {
     parser: &'a Parser,
-    formatter: &'a mut RecordFormatter,
+    formatter: &'a mut RecordFormatter<RawValue>,
     filter: &'a Filter,
 }
 
-impl<'a> SegmentProcesor<'a> {
-    pub fn new(parser: &'a Parser, formatter: &'a mut RecordFormatter, filter: &'a Filter) -> Self {
+impl<'a, RawValue: RawValueTrait> SegmentProcesor<'a, RawValue> {
+    pub fn new(
+        parser: &'a Parser,
+        formatter: &'a mut RecordFormatter<RawValue>,
+        filter: &'a Filter,
+    ) -> Self {
         Self {
             parser,
             formatter,
