@@ -15,6 +15,7 @@ use wildmatch::WildMatch;
 // local imports
 use crate::error::{Error, Result};
 use crate::level;
+use crate::logformat::RawValueLike;
 use crate::settings::PredefinedFields;
 use crate::timestamp::Timestamp;
 use crate::types::FieldKind;
@@ -25,7 +26,7 @@ pub use level::Level;
 
 // ---
 
-pub struct Record<'a> {
+pub struct Record<'a, RawValue: RawValueLike + ?Sized + 'a> {
     pub prefix: Option<&'a [u8]>,
     pub ts: Option<Timestamp<'a>>,
     pub message: Option<&'a RawValue>,
@@ -37,7 +38,7 @@ pub struct Record<'a> {
     pub(crate) predefined: heapless::Vec<(&'a str, &'a RawValue), MAX_PREDEFINED_FIELDS>,
 }
 
-impl<'a> Record<'a> {
+impl<'a, RawValue: RawValueLike + ?Sized + 'a> Record<'a, RawValue> {
     #[inline(always)]
     pub fn fields(&self) -> impl Iterator<Item = &(&'a str, &'a RawValue)> {
         self.extra.iter().chain(self.extrax.iter())
@@ -329,7 +330,7 @@ struct ParserSettingsBlock {
 }
 
 impl ParserSettingsBlock {
-    fn apply<'a>(
+    fn apply<'a, RawValue: RawValueLike + ?Sized + 'a>(
         &self,
         ps: &ParserSettings,
         key: &'a str,
@@ -369,7 +370,7 @@ impl ParserSettingsBlock {
     }
 
     #[inline(always)]
-    fn apply_each_ctx<'a, 'i, I>(
+    fn apply_each_ctx<'a, 'i, I, RawValue: ?Sized + 'a>(
         &self,
         ps: &ParserSettings,
         items: I,
@@ -437,7 +438,12 @@ enum FieldSettings {
 }
 
 impl FieldSettings {
-    fn apply<'a>(&self, ps: &ParserSettings, value: &'a RawValue, to: &mut Record<'a>) {
+    fn apply<'a, RawValue: RawValueLike + ?Sized + 'a>(
+        &self,
+        ps: &ParserSettings,
+        value: &'a RawValue,
+        to: &mut Record<'a>,
+    ) {
         match *self {
             Self::Time => {
                 let s = value.get();
