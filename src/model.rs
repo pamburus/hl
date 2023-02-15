@@ -532,7 +532,7 @@ impl Parser {
         Self { settings }
     }
 
-    pub fn parse<'a>(&self, record: RawRecord<'a>) -> Record<'a> {
+    pub fn parse<'a, RawValue: ?Sized>(&self, record: RawRecord<'a, RawValue>) -> Record<'a> {
         let fields = record.fields();
         let count = fields.size_hint().1.unwrap_or(0);
         let mut record = Record::<'a>::with_capacity(count);
@@ -545,19 +545,19 @@ impl Parser {
 
 // ---
 
-pub struct RawRecord<'a> {
+pub struct RawRecord<'a, RawValue: ?Sized> {
     fields: heapless::Vec<(&'a str, &'a RawValue), RAW_RECORD_FIELDS_CAPACITY>,
     fieldsx: Vec<(&'a str, &'a RawValue)>,
 }
 
-impl<'a> RawRecord<'a> {
+impl<'a, RawValue: ?Sized> RawRecord<'a, RawValue> {
     #[inline(always)]
     pub fn fields(&self) -> impl Iterator<Item = &(&'a str, &'a RawValue)> {
         self.fields.iter().chain(self.fieldsx.iter())
     }
 }
 
-impl<'de: 'a, 'a> Deserialize<'de> for RawRecord<'a> {
+impl<'de: 'a, 'a, RawValue: ?Sized> Deserialize<'de> for RawRecord<'a, RawValue> {
     fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
     where
         D: Deserializer<'de>,
@@ -568,19 +568,22 @@ impl<'de: 'a, 'a> Deserialize<'de> for RawRecord<'a> {
 
 // ---
 
-struct RawRecordVisitor<'a> {
-    marker: PhantomData<fn() -> RawRecord<'a>>,
+struct RawRecordVisitor<'a, RawValue: ?Sized> {
+    marker: PhantomData<fn() -> RawRecord<'a, RawValue>>,
 }
 
-impl<'a> RawRecordVisitor<'a> {
+impl<'a, RawValue: ?Sized> RawRecordVisitor<'a, RawValue> {
     #[inline(always)]
     fn new() -> Self {
         Self { marker: PhantomData }
     }
 }
 
-impl<'de: 'a, 'a> Visitor<'de> for RawRecordVisitor<'a> {
-    type Value = RawRecord<'a>;
+impl<'de: 'a, 'a, RawValue: ?Sized> Visitor<'de> for RawRecordVisitor<'a, RawValue>
+where
+    &'de RawValue: Deserialize<'de> + 'de,
+{
+    type Value = RawRecord<'a, RawValue>;
     fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
         formatter.write_str("object json")
     }

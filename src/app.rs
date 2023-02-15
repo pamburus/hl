@@ -770,7 +770,7 @@ impl<'a, Formatter: RecordWithSourceFormatter, Filter: RecordFilter> SegmentProc
             
             let xn = extra_prefix.len();
             let json_data = &data[xn..];
-            let stream = json::Deserializer::from_slice(json_data).into_iter::<RawRecord>();
+            let stream = json::Deserializer::from_slice(json_data).into_iter::<RawRecord<json::value::RawValue>>();
             let mut stream = StreamDeserializerWithOffsets(stream);
             let mut parsed_some = false;
             let mut produced_some = false;
