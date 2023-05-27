@@ -329,6 +329,7 @@ fn run() -> Result<()> {
             settings: settings.fields,
             filter: Arc::new(fields),
         },
+        formatting: settings.formatting,
         time_zone: tz,
         hide_empty_fields,
     });

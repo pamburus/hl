@@ -11,10 +11,10 @@ use std::num::NonZeroUsize;
 
 use crate::datefmt::{DateTimeFormat, DateTimeFormatter};
 use crate::error::*;
-use crate::formatting::RecordFormatter;
+use crate::formatting::{RecordFormatter};
 use crate::model::{Filter, Parser, ParserSettings, RawRecord};
 use crate::scanning::{BufFactory, Scanner, Segment, SegmentBufFactory};
-use crate::settings::Fields;
+use crate::settings::{Fields, Formatting};
 use crate::theme::Theme;
 use crate::timezone::Tz;
 use crate::IncludeExcludeKeyFilter;
@@ -29,6 +29,7 @@ pub struct Options {
     pub concurrency: usize,
     pub filter: Filter,
     pub fields: FieldOptions,
+    pub formatting: Formatting,
     pub time_zone: Tz,
     pub hide_empty_fields: bool,
 }
@@ -90,6 +91,7 @@ impl App {
                         ),
                         self.options.hide_empty_fields,
                         self.options.fields.filter.clone(),
+                        self.options.formatting.clone(),
                     )
                     .with_field_unescaping(!self.options.raw_fields);
                     let mut processor = SegmentProcesor::new(&parser, &mut formatter, &self.options.filter);
