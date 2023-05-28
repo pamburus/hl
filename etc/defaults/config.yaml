@@ -36,6 +36,18 @@ fields:
   # List of exact field names to hide.
   hide: []
 
+# Formatting settings.
+formatting:
+  punctuation:
+    logger-name-separator: ':'
+    field-key-value-separator: ':'
+    string-opening-quote: "'"
+    string-closing-quote: "'"
+    source-location-separator: '@ '
+    hidden-fields-indicator: ' ...'
+    level-left-separator: '|'
+    level-right-separator: '|'
+
 # Number of processing threads, configured automatically based on CPU count if not specified.
 concurrency: ~
 

@@ -10,6 +10,7 @@ use crate::datefmt;
 use crate::filtering::IncludeExcludeSetting;
 use crate::fmtx;
 use crate::model;
+use crate::settings::Formatting;
 use crate::theme;
 use crate::IncludeExcludeKeyFilter;
 
@@ -31,6 +32,7 @@ pub struct RecordFormatter {
     ts_width: usize,
     hide_empty_fields: bool,
     fields: Arc<IncludeExcludeKeyFilter>,
+    cfg: Formatting,
 }
 
 impl RecordFormatter {
@@ -39,6 +41,7 @@ impl RecordFormatter {
         ts_formatter: DateTimeFormatter,
         hide_empty_fields: bool,
         fields: Arc<IncludeExcludeKeyFilter>,
+        cfg: Formatting,
     ) -> Self {
         let ts_width = ts_formatter.max_length();
         RecordFormatter {
@@ -48,6 +51,7 @@ impl RecordFormatter {
             ts_width,
             hide_empty_fields,
             fields,
+            cfg,
         }
     }
 
@@ -90,7 +94,7 @@ impl RecordFormatter {
             s.space();
             s.element(Element::Level, |s| {
                 s.batch(|buf| {
-                    buf.push(b'|');
+                    buf.extend_from_slice(self.cfg.punctuation.level_left_separator.as_bytes());
                 });
                 s.element(Element::LevelInner, |s| {
                     s.batch(|buf| {
@@ -103,7 +107,9 @@ impl RecordFormatter {
                         })
                     })
                 });
-                s.batch(|buf| buf.push(b'|'));
+                s.batch(|buf| {
+                    buf.extend_from_slice(self.cfg.punctuation.level_right_separator.as_bytes())
+                });
             });
             //
             // logger
@@ -114,7 +120,9 @@ impl RecordFormatter {
                     s.element(Element::LoggerInner, |s| {
                         s.batch(|buf| buf.extend_from_slice(logger.as_bytes()))
                     });
-                    s.batch(|buf| buf.push(b':'));
+                    s.batch(|buf| {
+                        buf.extend_from_slice(self.cfg.punctuation.logger_name_separator.as_bytes())
+                    });
                 });
             }
             //
@@ -140,7 +148,11 @@ impl RecordFormatter {
             }
             if some_fields_hidden {
                 s.element(Element::Ellipsis, |s| {
-                    s.batch(|buf| buf.extend_from_slice(b" ..."))
+                    s.batch(|buf| {
+                        buf.extend_from_slice(
+                            self.cfg.punctuation.hidden_fields_indicator.as_bytes(),
+                        )
+                    })
                 });
             }
             //
@@ -148,7 +160,12 @@ impl RecordFormatter {
             //
             if let Some(text) = rec.caller {
                 s.element(Element::Caller, |s| {
-                    s.batch(|buf| buf.extend_from_slice(b" @ "));
+                    s.batch(|buf| {
+                        buf.push(b' ');
+                        buf.extend_from_slice(
+                            self.cfg.punctuation.source_location_separator.as_bytes(),
+                        )
+                    });
                     s.element(Element::CallerInner, |s| {
                         s.batch(|buf| buf.extend_from_slice(text.as_bytes()))
                     });
@@ -313,7 +330,9 @@ impl<'a> FieldFormatter<'a> {
                 s.batch(|buf| buf.push(b.to_ascii_lowercase()));
             }
         });
-        s.batch(|buf| buf.push(b'='));
+        s.batch(|buf| {
+            buf.extend_from_slice(self.rf.cfg.punctuation.field_key_value_separator.as_bytes())
+        });
         if self.rf.unescape_fields {
             self.format_value(s, value, filter, setting);
         } else {
@@ -335,9 +354,9 @@ impl<'a> FieldFormatter<'a> {
             b'"' => {
                 s.element(Element::String, |s| {
                     s.batch(|buf| {
-                        buf.push(b'\'');
+                        buf.extend_from_slice(self.rf.cfg.punctuation.string_opening_quote.as_bytes());
                         format_str_unescaped(buf, value.get());
-                        buf.push(b'\'');
+                        buf.extend_from_slice(self.rf.cfg.punctuation.string_closing_quote.as_bytes());
                     })
                 });
             }

@@ -26,6 +26,7 @@ pub struct Settings {
     pub concurrency: Option<usize>,
     pub time_format: String,
     pub time_zone: Tz,
+    pub formatting: Formatting,
     pub theme: String,
 }
 
@@ -115,3 +116,38 @@ pub struct Field {
 }
 
 // ---
+
+#[derive(Debug, Deserialize, Clone)]
+pub struct Formatting {
+    pub punctuation: Punctuation,
+}
+
+// ---
+
+#[derive(Debug, Deserialize, Clone)]
+#[serde(rename_all = "kebab-case")]
+pub struct Punctuation {
+    pub logger_name_separator: String,
+    pub field_key_value_separator: String,
+    pub string_opening_quote: String,
+    pub string_closing_quote: String,
+    pub source_location_separator: String,
+    pub hidden_fields_indicator: String,
+    pub level_left_separator: String,
+    pub level_right_separator: String,
+}
+
+impl Default for Punctuation {
+    fn default() -> Self {
+        Self {
+            logger_name_separator: ":".into(),
+            field_key_value_separator: ":".into(),
+            string_opening_quote: "'".into(),
+            string_closing_quote: "'".into(),
+            source_location_separator: "@ ".into(),
+            hidden_fields_indicator: " ...".into(),
+            level_left_separator: "|".into(),
+            level_right_separator: "|".into(),
+        }
+    }
+}
