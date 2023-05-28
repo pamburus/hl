@@ -11,7 +11,7 @@ elements:
   message:
     foreground: bright-white
   field:
-    foreground: default
+    foreground: bright-black
   key:
     foreground: green
     modes: [underline]
