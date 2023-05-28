@@ -785,7 +785,7 @@ dependencies = [
 
 [[package]]
 name = "hl"
-version = "0.15.0"
+version = "0.15.1"
 dependencies = [
  "anyhow",
  "atoi",
