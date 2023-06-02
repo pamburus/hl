@@ -10,6 +10,7 @@ use criterion::{criterion_group, criterion_main, Criterion};
 use hl::{
     timezone::Tz, DateTimeFormatter, Filter, IncludeExcludeKeyFilter, LinuxDateFormat, Parser,
     ParserSettings, RecordFormatter, SegmentProcesor, Settings, Theme,
+    settings,
 };
 
 // ---
@@ -29,6 +30,7 @@ fn benchmark(c: &mut Criterion) {
                     ),
                     false,
                     Arc::new(IncludeExcludeKeyFilter::default()),
+                    settings::Formatting::default(),
                 );
                 let filter = Filter::default();
                 let mut processor = SegmentProcesor::new(&parser, &mut formatter, &filter);
