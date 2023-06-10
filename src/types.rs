@@ -6,14 +6,14 @@ use std::str::FromStr;
 // third-party imports
 use clap::ArgEnum;
 use enum_map::Enum;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 // local imports
 use crate::error::InvalidLevelError;
 
 // ---
 
-#[derive(ArgEnum, Clone, Copy, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Enum)]
+#[derive(ArgEnum, Clone, Copy, Debug, Deserialize, Serialize, Eq, Hash, Ord, PartialEq, PartialOrd, Enum)]
 #[serde(rename_all = "kebab-case")]
 pub enum Level {
     Error,
@@ -38,12 +38,7 @@ impl FromStr for Level {
         } else {
             Err(InvalidLevelError {
                 value: s.into(),
-                valid_values: vec![
-                    "error".into(),
-                    "warning".into(),
-                    "info".into(),
-                    "debug".into(),
-                ],
+                valid_values: vec!["error".into(), "warning".into(), "info".into(), "debug".into()],
             })
         }
     }

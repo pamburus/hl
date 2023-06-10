@@ -9,6 +9,8 @@ palette:
   - &magenta '#C678DD'
   - &green '#98C379'
 elements:
+  input:
+    foreground: bright-black
   time:
     foreground: *gray
   logger:

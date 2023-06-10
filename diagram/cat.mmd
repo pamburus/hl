@@ -1,0 +1,27 @@
+%% @config{./.config.json}
+
+graph LR
+
+subgraph scanner
+    si1(input 1) & si2(input 2) & si3(input 3) --> so("⤐")
+end
+
+so --> |segments| pi
+
+subgraph parser
+    pi("⤛⟳") --> po1("⤑") & po2("⤑") & po3("⤑")
+end
+
+po1 --> |records| fi1
+po2 --> |records| fi2
+po3 --> |records| fi3
+
+subgraph formatter
+    fi1("⤑") & fi2("⤑") & fi3("⤑") --> fo("⟳⤐")
+end
+
+fo --> |buffers| o
+
+subgraph output
+    o("⤑")
+end

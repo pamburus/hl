@@ -1,4 +1,6 @@
 elements:
+  input:
+    foreground: bright-black
   time:
     foreground: 8
   logger:

@@ -1,5 +1,5 @@
 // std imports
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::include_str;
 
 // third-party imports
@@ -7,7 +7,7 @@ use chrono_tz::Tz;
 use config::{Config, File, FileFormat};
 use derive_deref::Deref;
 use platform_dirs::AppDirs;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize, Serializer};
 
 // local imports
 use crate::error::Error;
@@ -55,17 +55,17 @@ impl Default for Settings {
 
 // ---
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Fields {
-    pub predefined: PrefedinedFields,
+    pub predefined: PredefinedFields,
     pub ignore: Vec<String>,
     pub hide: Vec<String>,
 }
 
 // ---
 
-#[derive(Debug, Deserialize)]
-pub struct PrefedinedFields {
+#[derive(Debug, Serialize, Deserialize)]
+pub struct PredefinedFields {
     pub time: TimeField,
     pub level: LevelField,
     pub message: MessageField,
@@ -75,42 +75,43 @@ pub struct PrefedinedFields {
 
 // ---
 
-#[derive(Debug, Deserialize, Deref)]
+#[derive(Debug, Serialize, Deserialize, Deref)]
 pub struct TimeField(pub Field);
 
 // ---
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct LevelField {
     pub variants: Vec<LevelFieldVariant>,
 }
 
 // ---
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct LevelFieldVariant {
     pub names: Vec<String>,
+    #[serde(serialize_with = "ordered_map_serialize")]
     pub values: HashMap<Level, Vec<String>>,
 }
 
 // ---
 
-#[derive(Debug, Deserialize, Deref)]
+#[derive(Debug, Serialize, Deserialize, Deref)]
 pub struct MessageField(Field);
 
 // ---
 
-#[derive(Debug, Deserialize, Deref)]
+#[derive(Debug, Serialize, Deserialize, Deref)]
 pub struct LoggerField(Field);
 
 // ---
 
-#[derive(Debug, Deserialize, Deref)]
+#[derive(Debug, Serialize, Deserialize, Deref)]
 pub struct CallerField(Field);
 
 // ---
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Field {
     pub names: Vec<String>,
 }
@@ -135,6 +136,13 @@ pub struct Punctuation {
     pub hidden_fields_indicator: String,
     pub level_left_separator: String,
     pub level_right_separator: String,
+    pub input_number_prefix: String,
+    pub input_number_left_separator: String,
+    pub input_number_right_separator: String,
+    pub input_name_left_separator: String,
+    pub input_name_right_separator: String,
+    pub input_name_clipping: String,
+    pub input_name_common_part: String,
 }
 
 impl Default for Punctuation {
@@ -148,6 +156,24 @@ impl Default for Punctuation {
             hidden_fields_indicator: " ...".into(),
             level_left_separator: "|".into(),
             level_right_separator: "|".into(),
+            input_number_prefix: "#".into(),
+            input_number_left_separator: "".into(),
+            input_number_right_separator: " | ".into(),
+            input_name_left_separator: "".into(),
+            input_name_right_separator: " | ".into(),
+            input_name_clipping: "...".into(),
+            input_name_common_part: "...".into(),
         }
     }
+}
+
+fn ordered_map_serialize<K: Eq + PartialEq + Ord + PartialOrd + Serialize, V: Serialize, S>(
+    value: &HashMap<K, V>,
+    serializer: S,
+) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+{
+    let ordered: BTreeMap<_, _> = value.iter().collect();
+    ordered.serialize(serializer)
 }
