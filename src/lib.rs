@@ -27,7 +27,7 @@ mod scanning;
 pub mod signal;
 
 // public uses
-pub use app::{App, FieldOptions, Options, SegmentProcesor};
+pub use app::{App, FieldOptions, Options, SegmentProcessor};
 pub use datefmt::{DateTimeFormatter, LinuxDateFormat};
 pub use filtering::DefaultNormalizing;
 pub use formatting::RecordFormatter;

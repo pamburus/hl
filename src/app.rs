@@ -94,7 +94,7 @@ impl App {
                         self.options.formatting.clone(),
                     )
                     .with_field_unescaping(!self.options.raw_fields);
-                    let mut processor = SegmentProcesor::new(&parser, &mut formatter, &self.options.filter);
+                    let mut processor = SegmentProcessor::new(&parser, &mut formatter, &self.options.filter);
                     for segment in rxi.iter() {
                         match segment {
                             Segment::Complete(segment) => {
@@ -144,13 +144,13 @@ impl App {
 
 // ---
 
-pub struct SegmentProcesor<'a> {
+pub struct SegmentProcessor<'a> {
     parser: &'a Parser,
     formatter: &'a mut RecordFormatter,
     filter: &'a Filter,
 }
 
-impl<'a> SegmentProcesor<'a> {
+impl<'a> SegmentProcessor<'a> {
     pub fn new(parser: &'a Parser, formatter: &'a mut RecordFormatter, filter: &'a Filter) -> Self {
         Self {
             parser,
