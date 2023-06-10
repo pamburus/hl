@@ -117,7 +117,7 @@ pub struct Field {
 
 // ---
 
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Clone, Debug, Default, Deserialize)]
 pub struct Formatting {
     pub punctuation: Punctuation,
 }

@@ -482,20 +482,26 @@ pub struct FieldFilter {
 
 impl FieldFilter {
     fn parse(text: &str) -> Result<Self> {
-        let mut parts = text.split('=');
-        match (parts.next(), parts.next()) {
-            (Some(key), Some(value)) => {
-                let (key, match_policy, op) = Self::parse_mp_op(key, value)?;
-                let flat_key = key.as_bytes().iter().position(|&x| x == b'.').is_none();
-                Ok(Self {
-                    key: key.into(),
-                    match_policy,
-                    op,
-                    flat_key,
-                })
-            }
-            _ => Err(Error::WrongFieldFilter(text.into())),
+        let parse = |key, value| {
+            let (key, match_policy, op) = Self::parse_mp_op(key, value)?;
+            let flat_key = key.as_bytes().iter().position(|&x| x == b'.').is_none();
+            Ok(Self {
+                key: key.into(),
+                match_policy,
+                op,
+                flat_key,
+            })
+        };
+
+        if let Some(index) = text.find('=') {
+            return parse(&text[0..index], &text[index+1..]);
         }
+
+        if let Some(index) = text.find(':') {
+            return parse(&text[0..index], &text[index+1..]);
+        }
+
+        Err(Error::WrongFieldFilter(text.into()))
     }
 
     fn parse_mp_op<'k>(
