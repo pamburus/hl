@@ -162,7 +162,7 @@ impl From<&themecfg::Style> for Style {
             codes.push(
                 match mode {
                     themecfg::Mode::Bold => Mode::Bold,
-                    themecfg::Mode::Conseal => Mode::Conseal,
+                    themecfg::Mode::Conceal => Mode::Conceal,
                     themecfg::Mode::CrossedOut => Mode::CrossedOut,
                     themecfg::Mode::Faint => Mode::Faint,
                     themecfg::Mode::Italic => Mode::Italic,
