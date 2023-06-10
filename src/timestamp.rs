@@ -1,9 +1,10 @@
 // third-party imports
 use chrono::naive::NaiveDateTime;
-use chrono::{DateTime, FixedOffset};
+use chrono::{DateTime, FixedOffset, TimeZone, Utc};
 
 // ---
 
+#[derive(Debug)]
 pub struct Timestamp<'a>(&'a str, Option<Option<DateTime<FixedOffset>>>);
 
 impl<'a> Timestamp<'a> {
@@ -30,13 +31,22 @@ impl<'a> Timestamp<'a> {
             };
             let ts = NaiveDateTime::from_timestamp_opt(ts, nsec as u32)?;
             Some(DateTime::from_utc(ts, FixedOffset::east_opt(0)?))
+        } else if let Ok(ts) = self.0.parse() {
+            Some(ts)
         } else {
-            DateTime::parse_from_rfc3339(self.0).ok()
+            Utc.datetime_from_str(self.0, "%Y-%m-%d %H:%M:%S%.f")
+                .ok()
+                .map(|ts| ts.into())
         }
     }
 
     pub fn as_rfc3339(&self) -> Option<rfc3339::Timestamp> {
         rfc3339::Timestamp::parse(self.0)
+    }
+
+    pub fn unix_utc(&self) -> Option<(i64, u32)> {
+        self.parse()
+            .and_then(|ts| Some((ts.timestamp(), ts.timestamp_subsec_nanos())))
     }
 }
 
@@ -74,16 +84,12 @@ pub mod rfc3339 {
 
         #[inline]
         pub fn fraction(&self) -> Fraction {
-            Fraction {
-                v: &self.v[19..self.d],
-            }
+            Fraction { v: &self.v[19..self.d] }
         }
 
         #[inline]
         pub fn timezone(&self) -> Timezone {
-            Timezone {
-                v: &self.v[self.d..],
-            }
+            Timezone { v: &self.v[self.d..] }
         }
 
         #[inline]
@@ -389,10 +395,7 @@ pub mod rfc3339 {
 // ---
 
 fn only_digits(b: &[u8]) -> bool {
-    b.iter()
-        .map(|&b| b.is_ascii_digit())
-        .position(|x| x == false)
-        .is_none()
+    b.iter().map(|&b| b.is_ascii_digit()).position(|x| x == false).is_none()
 }
 
 // ---

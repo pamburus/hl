@@ -4,21 +4,31 @@ categories = ["command-line-utilities"]
 description = "Utility for viewing json-formatted log files."
 keywords = ["cli", "human", "log"]
 name = "hl"
-version = "0.15.2"
+version = "0.20.0-beta.1"
 edition = "2021"
+build = "build.rs"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[build-dependencies]
+capnpc = "0.17"
+generic-array = "0"
+hex = "0"
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["raw_value"] }
+sha2 = "0"
 
 [dependencies]
 nu-ansi-term = "0"
 anyhow = "1"
 atoi = "1"
 atty = "0"
-bitmask = "0"
+bincode = "1"
+bitmask = "0" 
 bytefmt = "0"
+capnp = "0.17"
 chrono = { version = "0", features = ["serde"] }
 chrono-tz = { version = "0", features = ["serde"] }
 closure = "0"
+clru = "0"
 collection_macros = "0"
 config = "0"
 crossbeam-channel = "0"
@@ -28,7 +38,9 @@ derive_deref = "1"
 enum-map = "2"
 error-chain = "0"
 flate2 = "1"
+generic-array = "0"
 heapless = "0"
+hex = "0"
 htp = "0"
 humantime = "2"
 itertools = "0"
@@ -40,8 +52,10 @@ rust-embed = "6"
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["raw_value"] }
 serde_yaml = "0"
+sha2 = "0"
 shellwords = "1"
 signal-hook = "0"
+snap = "1"
 thiserror = "1"
 wildmatch = "2"
 

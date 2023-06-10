@@ -2,9 +2,11 @@
 use std::boxed::Box;
 use std::io;
 use std::num::{ParseIntError, TryFromIntError};
+use std::path::PathBuf;
 
 // third-party imports
 use config::ConfigError;
+use nu_ansi_term::Color;
 use thiserror::Error;
 
 /// Error is an error which may occur in the application.
@@ -18,6 +20,12 @@ pub enum Error {
     NonZeroSizeParseError(#[from] NonZeroSizeParseError),
     #[error("failed to load configuration: {0}")]
     Config(#[from] ConfigError),
+    #[error(transparent)]
+    Infallible(#[from] std::convert::Infallible),
+    #[error(transparent)]
+    Capnp(#[from] capnp::Error),
+    #[error(transparent)]
+    Bincode(#[from] bincode::Error),
     #[error(transparent)]
     Boxed(#[from] Box<dyn std::error::Error + std::marker::Send>),
     #[error("file {filename:?} not found")]
@@ -36,6 +44,37 @@ pub enum Error {
     WrongFieldFilter(String),
     #[error("wrong regular expression: {0}")]
     WrongRegularExpression(#[from] regex::Error),
+    #[error("inconsistent index: {details}")]
+    InconsistentIndex { details: String },
+    #[error("failed to open file '{}' for reading: {source}", HILITE.paint(.path.to_string_lossy()))]
+    FailedToOpenFileForReading {
+        path: PathBuf,
+        #[source]
+        source: io::Error,
+    },
+    #[error("failed to open file '{}' for writing: {source}", HILITE.paint(.path.to_string_lossy()))]
+    FailedToOpenFileForWriting {
+        path: PathBuf,
+        #[source]
+        source: io::Error,
+    },
+    #[error("failed to get metadata of file '{}': {source}", HILITE.paint(.path.to_string_lossy()))]
+    FailedToGetFileMetadata {
+        path: PathBuf,
+        #[source]
+        source: io::Error,
+    },
+    #[error("invalid index header")]
+    InvalidIndexHeader,
+    #[error("requested sorting of messages in {} file '{}' that is not currently supported", HILITE.paint(.format), HILITE.paint(.path.to_string_lossy()))]
+    UnsupportedFormatForIndexing {
+        path: PathBuf,
+        format: String,
+    },
+    #[error("failed to parse json: {0}")]
+    JsonParseError(#[from] serde_json::Error),
+    #[error(transparent)]
+    TryFromIntError(#[from] TryFromIntError),
 }
 
 /// SizeParseError is an error which may occur when parsing size.
@@ -73,3 +112,5 @@ pub struct InvalidLevelError {
 
 /// Result is an alias for standard result with bound Error type.
 pub type Result<T> = std::result::Result<T, Error>;
+
+pub const HILITE: Color = Color::Yellow;

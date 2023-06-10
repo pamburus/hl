@@ -180,6 +180,11 @@ impl<I: Into<HashMap<Element, Style>>> From<I> for StylePack {
 #[derive(Clone, Copy, Debug, Hash, Eq, PartialEq, Ord, PartialOrd, Enum, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum Element {
+    Input,
+    InputNumber,
+    InputNumberInner,
+    InputName,
+    InputNameInner,
     Time,
     Level,
     LevelInner,

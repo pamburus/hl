@@ -1,0 +1,53 @@
+%%{init: { "theme": "dark" } }%%
+
+graph LR
+
+subgraph scanner
+    sci1(input 1) 
+    sci2(input 2)
+    sci3(input 3)
+end
+
+sci1 --> |segments| ii1
+sci2 --> |segments| ii2
+sci3 --> |segments| ii3
+
+subgraph indexer
+    ii1("⤑") --> io1("⤑")
+    ii2("⤑") --> io2("⤑")
+    ii3("⤑") --> io3("⤑")
+end
+
+io1 --> |indexed segments| soi1
+io2 --> |indexed segments| soi2
+io3 --> |indexed segments| soi3
+
+
+subgraph sorter
+    soi1("⤛") & soi2("⤛") & soi3("⤛") --> som1("↣") & som2("↣") --> soo("⟳⤐")
+end
+
+soo --> |lines| pi1
+soo --> |lines| pi2
+soo --> |lines| pi3
+
+subgraph parser
+    pi1("⤑") --> po1("⤑") 
+    pi2("⤑") --> po2("⤑") 
+    pi3("⤑") --> po3("⤑") 
+end
+
+
+po1 --> |records| fi1
+po2 --> |records| fi2
+po3 --> |records| fi3
+
+subgraph formatter
+    fi1("⤑") & fi2("⤑") & fi3("⤑") --> fo("⟳⤐")
+end
+
+fo --> |buffers| o
+
+subgraph output
+    o("⤑")
+end
