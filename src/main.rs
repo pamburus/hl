@@ -1,12 +1,13 @@
 // std imports
 use std::convert::TryFrom;
+use std::default::Default;
 use std::path::PathBuf;
 use std::process;
 use std::sync::Arc;
 
 // third-party imports
 use chrono::Utc;
-use clap::{CommandFactory, Parser, ValueEnum};
+use clap::{ArgAction, CommandFactory, Parser, ValueEnum};
 use itertools::Itertools;
 use nu_ansi_term::Color;
 use once_cell::sync::Lazy;
@@ -17,13 +18,13 @@ use std::num::NonZeroUsize;
 use hl::datefmt::LinuxDateFormat;
 use hl::error::*;
 use hl::input::InputReference;
+use hl::level::{LevelValueParser, RelaxedLevel};
 use hl::output::{OutputStream, Pager};
 use hl::settings::Settings;
 use hl::signal::SignalHandler;
 use hl::theme::{Theme, ThemeOrigin};
 use hl::timeparse::parse_time;
 use hl::timezone::Tz;
-use hl::Level;
 use hl::{IncludeExcludeKeyFilter, KeyMatchOptions};
 
 // ---
@@ -34,7 +35,7 @@ const APP_NAME: &str = "hl";
 
 /// JSON log converter to human readable representation.
 #[derive(Parser)]
-#[clap(version)]
+#[clap(version, disable_help_flag = true)]
 struct Opt {
     /// Color output options.
     #[arg(long, default_value = "auto", env = "HL_COLOR", overrides_with = "color")]
@@ -69,7 +70,12 @@ struct Opt {
     raw_fields: bool,
     //
     /// Number of interrupts to ignore, i.e. Ctrl-C (SIGINT).
-    #[arg(long, default_value = "3", env = "HL_INTERRUPT_IGNORE_COUNT", overrides_with="interrupt_ignore_count")]
+    #[arg(
+        long,
+        default_value = "3",
+        env = "HL_INTERRUPT_IGNORE_COUNT",
+        overrides_with = "interrupt_ignore_count"
+    )]
     interrupt_ignore_count: usize,
     //
     /// Buffer size.
@@ -81,7 +87,7 @@ struct Opt {
     max_message_size: NonZeroUsize,
     //
     /// Number of processing threads.
-    #[arg(long, short = 'C', env = "HL_CONCURRENCY", overrides_with="concurrency")]
+    #[arg(long, short = 'C', env = "HL_CONCURRENCY", overrides_with = "concurrency")]
     concurrency: Option<usize>,
     //
     /// Filtering by field values in one of forms [<key>=<value>, <key>~=<value>, <key>~~=<value>, <key>!=<value>, <key>!~=<value>, <key>!~~=<value>] where ~ denotes substring match and ~~ denotes regular expression match.
@@ -89,13 +95,13 @@ struct Opt {
     filter: Vec<String>,
     //
     /// Hide or unhide fields with the specified keys, prefix with ! to unhide, specify !* to unhide all.
-    #[arg(long, short = 'H', number_of_values = 1)]
+    #[arg(long, short = 'h', number_of_values = 1)]
     hide: Vec<String>,
     //
     /// Filtering by level.
-    #[arg(short, long, env = "HL_LEVEL", overrides_with="level")]
+    #[arg(short, long, env = "HL_LEVEL", overrides_with="level", ignore_case=true, value_parser = LevelValueParser)]
     #[arg(value_enum)]
-    level: Option<Level>,
+    level: Option<RelaxedLevel>,
     //
     /// Filtering by timestamp >= the value (--time-zone and --local options are honored).
     #[arg(long, allow_hyphen_values = true)]
@@ -128,15 +134,25 @@ struct Opt {
     files: Vec<PathBuf>,
     //
     /// Hide empty fields, applies for null, string, object and array fields only.
-    #[arg(long, short = 'e', env = "HL_HIDE_EMPTY_FIELDS", overrides_with="hide_empty_fields")]
+    #[arg(
+        long,
+        short = 'e',
+        env = "HL_HIDE_EMPTY_FIELDS",
+        overrides_with = "hide_empty_fields"
+    )]
     hide_empty_fields: bool,
     //
     /// Show empty fields, overrides --hide-empty-fields option.
-    #[arg(long, short = 'E', env = "HL_SHOW_EMPTY_FIELDS", overrides_with="show_empty_fields")]
+    #[arg(
+        long,
+        short = 'E',
+        env = "HL_SHOW_EMPTY_FIELDS",
+        overrides_with = "show_empty_fields"
+    )]
     show_empty_fields: bool,
 
     /// Show input number and/or input filename before each message.
-    #[arg(long, default_value = "auto", overrides_with="input_info")]
+    #[arg(long, default_value = "auto", overrides_with = "input_info")]
     #[arg(value_enum)]
     input_info: InputInfoOption,
     //
@@ -155,6 +171,11 @@ struct Opt {
     /// Dump index metadata and exit.
     #[arg(long)]
     dump_index: bool,
+
+    //
+    /// Print help.
+    #[arg(long, default_value_t = false, action = ArgAction::SetTrue)]
+    help: bool,
 }
 
 #[derive(ValueEnum, Debug, Clone, Copy)]
@@ -220,6 +241,10 @@ fn run() -> Result<()> {
     let app_dirs = app_dirs();
     let settings = Settings::load(&app_dirs)?;
     let opt = Opt::parse();
+    if opt.help {
+        return Opt::command().print_help().map_err(Error::Io);
+    }
+
     let stdin_is_atty = || atty::is(atty::Stream::Stdin);
     let stdout_is_atty = || atty::is(atty::Stream::Stdout);
     let color_supported = if stdout_is_atty() {
@@ -280,7 +305,7 @@ fn run() -> Result<()> {
     // Configure filter.
     let filter = hl::Filter {
         fields: hl::FieldFilterSet::new(opt.filter)?,
-        level: opt.level,
+        level: opt.level.map(|x| x.into()),
         since: if let Some(v) = &opt.since {
             Some(parse_time(v, &tz, &time_format)?.with_timezone(&Utc))
         } else {

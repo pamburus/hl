@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize, Serializer};
 
 // local imports
 use crate::error::Error;
-use crate::types::Level;
+use crate::level::Level;
 
 // ---
 

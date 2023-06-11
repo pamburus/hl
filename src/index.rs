@@ -39,7 +39,7 @@ use crate::input::Input;
 use crate::model::{Parser, ParserSettings, RawRecord};
 use crate::scanning::{Scanner, Segment, SegmentBuf, SegmentBufFactory};
 use crate::settings::PredefinedFields;
-use crate::types::Level;
+use crate::level::Level;
 
 // types
 pub type Writer = dyn Write + Send + Sync;

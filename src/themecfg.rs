@@ -16,7 +16,7 @@ use rust_embed::RustEmbed;
 use serde::Deserialize;
 
 // local imports
-use crate::{error::*, types::Level};
+use crate::{error::*, level::Level};
 
 // ---
 

@@ -14,13 +14,14 @@ use wildmatch::WildMatch;
 
 // local imports
 use crate::error::{Error, Result};
+use crate::level;
 use crate::settings::PredefinedFields;
 use crate::timestamp::Timestamp;
-use crate::types::{self, FieldKind};
+use crate::types::{FieldKind};
 
 // ---
 
-pub use types::Level;
+pub use level::Level;
 
 // ---
 
