@@ -3,7 +3,10 @@ pub mod app;
 pub mod datefmt;
 pub mod error;
 pub mod fmtx;
+pub mod index;
+pub mod index_capnp;
 pub mod input;
+pub mod iox;
 pub mod output;
 pub mod settings;
 pub mod theme;
@@ -19,7 +22,10 @@ mod eseq;
 mod filtering;
 mod formatting;
 mod model;
+mod pool;
+mod replay;
 mod scanning;
+mod tee;
 
 // conditional public modules
 #[cfg_attr(unix, path = "signal_unix.rs")]

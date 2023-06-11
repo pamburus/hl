@@ -14,7 +14,7 @@ use wildmatch::WildMatch;
 
 // local imports
 use crate::error::{Error, Result};
-use crate::settings::Fields;
+use crate::settings::PredefinedFields;
 use crate::timestamp::Timestamp;
 use crate::types::{self, FieldKind};
 
@@ -136,13 +136,17 @@ pub struct ParserSettings {
 }
 
 impl ParserSettings {
-    pub fn new(s: &Fields, preparse_time: bool) -> Self {
+    pub fn new<'a, I: IntoIterator<Item = &'a String>>(
+        predefined: &PredefinedFields,
+        ignore: I,
+        preparse_time: bool,
+    ) -> Self {
         let mut fields = HashMap::new();
-        for (i, name) in s.predefined.time.names.iter().enumerate() {
+        for (i, name) in predefined.time.names.iter().enumerate() {
             fields.insert(name.clone(), (FieldSettings::Time(preparse_time), i));
         }
         let mut j = 0;
-        for variant in &s.predefined.level.variants {
+        for variant in &predefined.level.variants {
             let mut mapping = HashMap::new();
             for (level, values) in &variant.values {
                 for value in values {
@@ -154,18 +158,18 @@ impl ParserSettings {
             }
             j += variant.names.len();
         }
-        for (i, name) in s.predefined.message.names.iter().enumerate() {
+        for (i, name) in predefined.message.names.iter().enumerate() {
             fields.insert(name.clone(), (FieldSettings::Message, i));
         }
-        for (i, name) in s.predefined.logger.names.iter().enumerate() {
+        for (i, name) in predefined.logger.names.iter().enumerate() {
             fields.insert(name.clone(), (FieldSettings::Logger, i));
         }
-        for (i, name) in s.predefined.caller.names.iter().enumerate() {
+        for (i, name) in predefined.caller.names.iter().enumerate() {
             fields.insert(name.clone(), (FieldSettings::Caller, i));
         }
         Self {
             fields,
-            ignore: s.ignore.iter().map(|v| WildMatch::new(v)).collect(),
+            ignore: ignore.into_iter().map(|v| WildMatch::new(v)).collect(),
         }
     }
 

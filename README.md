@@ -290,14 +290,14 @@ Log viewer which translates JSON logs into pretty human-readable representation.
     - `slow-blink`
     - `rapid-blink`
     - `reverse`
-    - `conseal`
+    - `conceal`
     - `crossed-out`
 
 
 ### Complete set of options and flags
 
 ```
-hl 0.12.0
+hl 0.20.0-beta.1
 JSON log converter to human readable representation
 
 USAGE:
@@ -307,23 +307,27 @@ ARGS:
     <FILE>...    Files to process
 
 OPTIONS:
-        --buffer-size <BUFFER_SIZE>                          Buffer size [env: HL_BUFFER_SIZE=] [default: "2 MiB"]
+        --buffer-size <BUFFER_SIZE>                          Buffer size [env: HL_BUFFER_SIZE=] [default: "256 KiB"]
     -c                                                       Handful alias for --color=always, overrides --color option
     -C, --concurrency <CONCURRENCY>                          Number of processing threads [env: HL_CONCURRENCY=]
         --color <COLOR>                                      Color output options [env: HL_COLOR=] [default: auto] [possible values: auto, always, never]
+        --dump-index                                         Dump index metadata and exit
     -e, --hide-empty-fields                                  Hide empty fields, applies for null, string, object and array fields only [env: HL_HIDE_EMPTY_FIELDS=]
     -E, --show-empty-fields                                  Show empty fields, overrides --hide-empty-fields option [env: HL_SHOW_EMPTY_FIELDS=]
     -f, --filter <FILTER>                                    Filtering by field values in one of forms [<key>=<value>, <key>~=<value>, <key>~~=<value>, <key>!=<value>, <key>!~=<value>, <key>!~~=<value>] where ~ denotes substring match and ~~ denotes regular expression match
     -h, --hide <HIDE>                                        Hide or unhide fields with the specified keys, prefix with ! to unhide, specify !* to unhide all
         --help                                               Print help information
+        --input-info <INPUT_INFO>                            Show input number and/or input filename before each message [default: auto] [possible values: auto, none, full, compact, minimal]
         --interrupt-ignore-count <INTERRUPT_IGNORE_COUNT>    Number of interrupts to ignore, i.e. Ctrl-C (SIGINT) [env: HL_INTERRUPT_IGNORE_COUNT=] [default: 3]
     -l, --level <LEVEL>                                      Filtering by level [env: HL_LEVEL=] [possible values: error, warning, info, debug]
     -L, --local                                              Use local time zone, overrides --time-zone option
         --list-themes                                        List available themes and exit
         --max-message-size <MAX_MESSAGE_SIZE>                Maximum message size [env: HL_MAX_MESSAGE_SIZE=] [default: "64 MiB"]
+    -o, --output <OUTPUT>                                    Output file
     -P                                                       Handful alias for --paging=never, overrides --paging option
         --paging <PAGING>                                    Output paging options [env: HL_PAGING=] [default: auto] [possible values: auto, always, never]
     -r, --raw-fields                                         Disable unescaping and prettifying of field values
+    -s, --sort                                               Sort messages chronologically
         --since <SINCE>                                      Filtering by timestamp >= the value (--time-zone and --local options are honored)
     -t, --time-format <TIME_FORMAT>                          Time format, see https://man7.org/linux/man-pages/man1/date.1.html [env: HL_TIME_FORMAT=] [default: "%y-%m-%d %T.%3N"]
         --theme <THEME>                                      Color theme [env: HL_THEME=] [default: one-dark-green]
@@ -355,7 +359,3 @@ OPTIONS:
             humanlog < prom-m2.log > /dev/null  58.55s user 4.89s system 107% cpu 58.931 total
             ```
         ![performance chart](doc/performance-chart.png)
-
-## Future features
-
-- Optional sorting of log messages by timestamp

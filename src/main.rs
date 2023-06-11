@@ -16,7 +16,7 @@ use std::num::NonZeroUsize;
 // local imports
 use hl::datefmt::LinuxDateFormat;
 use hl::error::*;
-use hl::input::{open, ConcatReader, Input, InputStream};
+use hl::input::InputReference;
 use hl::output::{OutputStream, Pager};
 use hl::settings::Settings;
 use hl::signal::SignalHandler;
@@ -37,12 +37,7 @@ const APP_NAME: &str = "hl";
 #[clap(version)]
 struct Opt {
     /// Color output options.
-    #[clap(
-        long,
-        default_value = "auto",
-        env = "HL_COLOR",
-        overrides_with = "color"
-    )]
+    #[clap(long, default_value = "auto", env = "HL_COLOR", overrides_with = "color")]
     #[clap(arg_enum)]
     color: ColorOption,
     //
@@ -51,12 +46,7 @@ struct Opt {
     color_always: bool,
     //
     /// Output paging options.
-    #[clap(
-        long,
-        default_value = "auto",
-        env = "HL_PAGING",
-        overrides_with = "paging"
-    )]
+    #[clap(long, default_value = "auto", env = "HL_PAGING", overrides_with = "paging")]
     #[clap(arg_enum)]
     paging: PagingOption,
     //
@@ -88,7 +78,7 @@ struct Opt {
     interrupt_ignore_count: usize,
     //
     /// Buffer size.
-    #[clap(long, default_value = "2 MiB", env="HL_BUFFER_SIZE", overrides_with = "buffer-size", parse(try_from_str = parse_non_zero_size))]
+    #[clap(long, default_value = "256 KiB", env="HL_BUFFER_SIZE", overrides_with = "buffer-size", parse(try_from_str = parse_non_zero_size))]
     buffer_size: NonZeroUsize,
     //
     /// Maximum message size.
@@ -96,12 +86,7 @@ struct Opt {
     max_message_size: NonZeroUsize,
     //
     /// Number of processing threads.
-    #[clap(
-        long,
-        short = 'C',
-        env = "HL_CONCURRENCY",
-        overrides_with = "concurrency"
-    )]
+    #[clap(long, short = 'C', env = "HL_CONCURRENCY", overrides_with = "concurrency")]
     concurrency: Option<usize>,
     //
     /// Filtering by field values in one of forms [<key>=<value>, <key>~=<value>, <key>~~=<value>, <key>!=<value>, <key>!~=<value>, <key>!~~=<value>] where ~ denotes substring match and ~~ denotes regular expression match.
@@ -154,10 +139,27 @@ struct Opt {
     /// Show empty fields, overrides --hide-empty-fields option.
     #[clap(long, short = 'E', env = "HL_SHOW_EMPTY_FIELDS")]
     show_empty_fields: bool,
+
+    /// Show input number and/or input filename before each message.
+    #[clap(long, default_value = "auto", overrides_with = "input-info")]
+    #[clap(arg_enum)]
+    input_info: InputInfoOption,
     //
     /// List available themes and exit.
     #[clap(long)]
     list_themes: bool,
+
+    /// Sort messages chronologically.
+    #[clap(long, short = 's')]
+    sort: bool,
+
+    /// Output file.
+    #[clap(long, short = 'o')]
+    output: Option<String>,
+
+    /// Dump index metadata and exit.
+    #[clap(long)]
+    dump_index: bool,
 }
 
 #[derive(ArgEnum, Debug, Clone, Copy)]
@@ -174,15 +176,27 @@ enum PagingOption {
     Never,
 }
 
+#[derive(ArgEnum, Debug, Clone, Copy)]
+enum InputInfoOption {
+    Auto,
+    None,
+    Full,
+    Compact,
+    Minimal,
+}
+
 // ---
 
 static CONFIG: Lazy<Settings> = Lazy::new(|| load_config());
 
 // ---
 
+fn app_dirs() -> AppDirs {
+    AppDirs::new(Some(APP_NAME), true).unwrap()
+}
+
 fn load_config() -> Settings {
-    let app_dirs = AppDirs::new(Some(APP_NAME), true).unwrap();
-    Settings::load(&app_dirs).unwrap()
+    Settings::load(&app_dirs()).unwrap()
 }
 
 fn parse_size(s: &str) -> std::result::Result<usize, SizeParseError> {
@@ -208,7 +222,7 @@ fn parse_non_zero_size(s: &str) -> std::result::Result<NonZeroUsize, NonZeroSize
 // ---
 
 fn run() -> Result<()> {
-    let app_dirs = AppDirs::new(Some("hl"), true).unwrap();
+    let app_dirs = app_dirs();
     let settings = Settings::load(&app_dirs)?;
     let opt = Opt::parse();
     let stdin_is_atty = || atty::is(atty::Stream::Stdin);
@@ -265,11 +279,7 @@ fn run() -> Result<()> {
         Some(value) => value,
     };
     // Configure timezone.
-    let tz = if opt.local {
-        Tz::Local
-    } else {
-        Tz::IANA(opt.time_zone)
-    };
+    let tz = if opt.local { Tz::Local } else { Tz::IANA(opt.time_zone) };
     // Configure time format.
     let time_format = LinuxDateFormat::new(&opt.time_format).compile();
     // Configure filter.
@@ -332,29 +342,56 @@ fn run() -> Result<()> {
         formatting: settings.formatting,
         time_zone: tz,
         hide_empty_fields,
+        sort: opt.sort,
+        input_info: match opt.input_info {
+            InputInfoOption::Auto => Some(hl::app::InputInfo::Auto),
+            InputInfoOption::None => None,
+            InputInfoOption::Full => Some(hl::app::InputInfo::Full),
+            InputInfoOption::Compact => Some(hl::app::InputInfo::Compact),
+            InputInfoOption::Minimal => Some(hl::app::InputInfo::Minimal),
+        },
+        dump_index: opt.dump_index,
+        app_dirs: Some(app_dirs),
     });
 
     // Configure input.
-    let inputs = opt
+    let mut inputs = opt
         .files
         .iter()
         .map(|x| {
             if x.to_str() == Some("-") {
-                Ok(Input::new("<stdin>".into(), Box::new(std::io::stdin())))
+                InputReference::Stdin
             } else {
-                open(&x)
+                InputReference::File(x.clone())
             }
         })
-        .collect::<std::io::Result<Vec<_>>>()?;
-    let mut input: InputStream = if inputs.len() == 0 {
+        .collect::<Vec<_>>();
+    if inputs.len() == 0 {
         if stdin_is_atty() {
             let mut cmd = Opt::command();
             return cmd.print_help().map_err(Error::Io);
         }
-        Box::new(std::io::stdin())
-    } else {
-        Box::new(ConcatReader::new(inputs.into_iter().map(|x| Ok(x))))
-    };
+        inputs.push(InputReference::Stdin);
+    }
+
+    if opt.sort {
+        for input in &inputs {
+            if let InputReference::File(path) = input {
+                if let Some(Some("gz")) = path.extension().map(|x| x.to_str()) {
+                    return Err(Error::UnsupportedFormatForIndexing {
+                        path: path.clone(),
+                        format: "gzip".into(),
+                    });
+                }
+            }
+        }
+    }
+
+    let inputs = inputs
+        .into_iter()
+        .map(|input| input.hold().map_err(Error::Io))
+        .collect::<Result<Vec<_>>>()?;
+
     let paging = match opt.paging {
         PagingOption::Auto => {
             if stdout_is_atty() {
@@ -367,29 +404,30 @@ fn run() -> Result<()> {
         PagingOption::Never => false,
     };
     let paging = if opt.paging_never { false } else { paging };
-    let mut output: OutputStream = if paging {
-        if let Ok(pager) = Pager::new() {
-            Box::new(pager)
-        } else {
-            Box::new(std::io::stdout())
+    let mut output: OutputStream = match opt.output {
+        Some(output) => Box::new(std::fs::File::create(PathBuf::from(&output))?),
+        None => {
+            if paging {
+                if let Ok(pager) = Pager::new() {
+                    Box::new(pager)
+                } else {
+                    Box::new(std::io::stdout())
+                }
+            } else {
+                Box::new(std::io::stdout())
+            }
         }
-    } else {
-        Box::new(std::io::stdout())
     };
 
     // Run the app.
-    let run = || match app.run(input.as_mut(), output.as_mut()) {
+    let run = || match app.run(inputs, output.as_mut()) {
         Ok(()) => Ok(()),
         Err(Error::Io(ref e)) if e.kind() == std::io::ErrorKind::BrokenPipe => Ok(()),
         Err(err) => Err(err),
     };
 
     // Run the app with signal handling.
-    SignalHandler::run(
-        opt.interrupt_ignore_count,
-        std::time::Duration::from_secs(1),
-        run,
-    )
+    SignalHandler::run(opt.interrupt_ignore_count, std::time::Duration::from_secs(1), run)
 }
 
 fn main() {
