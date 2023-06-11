@@ -10,13 +10,14 @@ use crate::{
     error::*,
     eseq::{Brightness, Color, ColorCode, Mode, Sequence, StyleCode},
     fmtx::Push,
-    themecfg, types,
+    themecfg, 
+    level,
 };
 
 // ---
 
 pub use themecfg::{Element, ThemeInfo, ThemeOrigin};
-pub use types::Level;
+pub use level::Level;
 
 // ---
 

@@ -2,6 +2,7 @@
 use std::convert::TryFrom;
 use std::path::PathBuf;
 use std::process;
+use std::default::Default;
 use std::sync::Arc;
 
 // third-party imports
@@ -23,7 +24,7 @@ use hl::signal::SignalHandler;
 use hl::theme::{Theme, ThemeOrigin};
 use hl::timeparse::parse_time;
 use hl::timezone::Tz;
-use hl::Level;
+use hl::{level::{RelaxedLevel,LevelValueParser}};
 use hl::{IncludeExcludeKeyFilter, KeyMatchOptions};
 
 // ---
@@ -69,7 +70,12 @@ struct Opt {
     raw_fields: bool,
     //
     /// Number of interrupts to ignore, i.e. Ctrl-C (SIGINT).
-    #[arg(long, default_value = "3", env = "HL_INTERRUPT_IGNORE_COUNT", overrides_with="interrupt_ignore_count")]
+    #[arg(
+        long,
+        default_value = "3",
+        env = "HL_INTERRUPT_IGNORE_COUNT",
+        overrides_with = "interrupt_ignore_count"
+    )]
     interrupt_ignore_count: usize,
     //
     /// Buffer size.
@@ -81,7 +87,7 @@ struct Opt {
     max_message_size: NonZeroUsize,
     //
     /// Number of processing threads.
-    #[arg(long, short = 'C', env = "HL_CONCURRENCY", overrides_with="concurrency")]
+    #[arg(long, short = 'C', env = "HL_CONCURRENCY", overrides_with = "concurrency")]
     concurrency: Option<usize>,
     //
     /// Filtering by field values in one of forms [<key>=<value>, <key>~=<value>, <key>~~=<value>, <key>!=<value>, <key>!~=<value>, <key>!~~=<value>] where ~ denotes substring match and ~~ denotes regular expression match.
@@ -93,9 +99,9 @@ struct Opt {
     hide: Vec<String>,
     //
     /// Filtering by level.
-    #[arg(short, long, env = "HL_LEVEL", overrides_with="level")]
+    #[arg(short, long, env = "HL_LEVEL", overrides_with="level", ignore_case=true, value_parser = LevelValueParser)]
     #[arg(value_enum)]
-    level: Option<Level>,
+    level: Option<RelaxedLevel>,
     //
     /// Filtering by timestamp >= the value (--time-zone and --local options are honored).
     #[arg(long, allow_hyphen_values = true)]
@@ -128,15 +134,25 @@ struct Opt {
     files: Vec<PathBuf>,
     //
     /// Hide empty fields, applies for null, string, object and array fields only.
-    #[arg(long, short = 'e', env = "HL_HIDE_EMPTY_FIELDS", overrides_with="hide_empty_fields")]
+    #[arg(
+        long,
+        short = 'e',
+        env = "HL_HIDE_EMPTY_FIELDS",
+        overrides_with = "hide_empty_fields"
+    )]
     hide_empty_fields: bool,
     //
     /// Show empty fields, overrides --hide-empty-fields option.
-    #[arg(long, short = 'E', env = "HL_SHOW_EMPTY_FIELDS", overrides_with="show_empty_fields")]
+    #[arg(
+        long,
+        short = 'E',
+        env = "HL_SHOW_EMPTY_FIELDS",
+        overrides_with = "show_empty_fields"
+    )]
     show_empty_fields: bool,
 
     /// Show input number and/or input filename before each message.
-    #[arg(long, default_value = "auto", overrides_with="input_info")]
+    #[arg(long, default_value = "auto", overrides_with = "input_info")]
     #[arg(value_enum)]
     input_info: InputInfoOption,
     //
@@ -280,7 +296,7 @@ fn run() -> Result<()> {
     // Configure filter.
     let filter = hl::Filter {
         fields: hl::FieldFilterSet::new(opt.filter)?,
-        level: opt.level,
+        level: opt.level.map(|x|x.into()),
         since: if let Some(v) = &opt.since {
             Some(parse_time(v, &tz, &time_format)?.with_timezone(&Utc))
         } else {
