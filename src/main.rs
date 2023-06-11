@@ -1,13 +1,13 @@
 // std imports
 use std::convert::TryFrom;
+use std::default::Default;
 use std::path::PathBuf;
 use std::process;
-use std::default::Default;
 use std::sync::Arc;
 
 // third-party imports
 use chrono::Utc;
-use clap::{CommandFactory, Parser, ValueEnum};
+use clap::{ArgAction, CommandFactory, Parser, ValueEnum};
 use itertools::Itertools;
 use nu_ansi_term::Color;
 use once_cell::sync::Lazy;
@@ -18,13 +18,13 @@ use std::num::NonZeroUsize;
 use hl::datefmt::LinuxDateFormat;
 use hl::error::*;
 use hl::input::InputReference;
+use hl::level::{LevelValueParser, RelaxedLevel};
 use hl::output::{OutputStream, Pager};
 use hl::settings::Settings;
 use hl::signal::SignalHandler;
 use hl::theme::{Theme, ThemeOrigin};
 use hl::timeparse::parse_time;
 use hl::timezone::Tz;
-use hl::{level::{RelaxedLevel,LevelValueParser}};
 use hl::{IncludeExcludeKeyFilter, KeyMatchOptions};
 
 // ---
@@ -35,7 +35,7 @@ const APP_NAME: &str = "hl";
 
 /// JSON log converter to human readable representation.
 #[derive(Parser)]
-#[clap(version)]
+#[clap(version, disable_help_flag = true)]
 struct Opt {
     /// Color output options.
     #[arg(long, default_value = "auto", env = "HL_COLOR", overrides_with = "color")]
@@ -95,7 +95,7 @@ struct Opt {
     filter: Vec<String>,
     //
     /// Hide or unhide fields with the specified keys, prefix with ! to unhide, specify !* to unhide all.
-    #[arg(long, short = 'H', number_of_values = 1)]
+    #[arg(long, short = 'h', number_of_values = 1)]
     hide: Vec<String>,
     //
     /// Filtering by level.
@@ -171,6 +171,11 @@ struct Opt {
     /// Dump index metadata and exit.
     #[arg(long)]
     dump_index: bool,
+
+    //
+    /// Print help.
+    #[arg(long, default_value_t = false, action = ArgAction::SetTrue)]
+    help: bool,
 }
 
 #[derive(ValueEnum, Debug, Clone, Copy)]
@@ -236,6 +241,10 @@ fn run() -> Result<()> {
     let app_dirs = app_dirs();
     let settings = Settings::load(&app_dirs)?;
     let opt = Opt::parse();
+    if opt.help {
+        return Opt::command().print_help().map_err(Error::Io);
+    }
+
     let stdin_is_atty = || atty::is(atty::Stream::Stdin);
     let stdout_is_atty = || atty::is(atty::Stream::Stdout);
     let color_supported = if stdout_is_atty() {
@@ -296,7 +305,7 @@ fn run() -> Result<()> {
     // Configure filter.
     let filter = hl::Filter {
         fields: hl::FieldFilterSet::new(opt.filter)?,
-        level: opt.level.map(|x|x.into()),
+        level: opt.level.map(|x| x.into()),
         since: if let Some(v) = &opt.since {
             Some(parse_time(v, &tz, &time_format)?.with_timezone(&Utc))
         } else {
