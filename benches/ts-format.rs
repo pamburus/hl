@@ -6,6 +6,11 @@ use criterion::{criterion_group, criterion_main, Criterion};
 use hl::datefmt::{DateTimeFormatter, LinuxDateFormat};
 use hl::{timestamp::Timestamp, timezone::Tz};
 
+#[inline(never)]
+fn ignore<T>(t: T) {
+    drop(t)
+}
+
 fn benchmark(c: &mut Criterion) {
     let mut c = c.benchmark_group("ts-format");
     let tsr = Timestamp::new("2020-06-27T00:48:30.466249792+00:00", None);
@@ -14,7 +19,7 @@ fn benchmark(c: &mut Criterion) {
     let tz = |secs| Tz::FixedOffset(FixedOffset::east_opt(secs).unwrap());
     c.bench_function("chrono conversion to naive local", |b| {
         b.iter(|| {
-            ts.naive_local();
+            ignore(ts.naive_local());
         });
     });
     c.bench_function("datefmt format utc [%y-%m-%d %T.%N]", |b| {

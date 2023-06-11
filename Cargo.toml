@@ -4,7 +4,7 @@ categories = ["command-line-utilities"]
 description = "Utility for viewing json-formatted log files."
 keywords = ["cli", "human", "log"]
 name = "hl"
-version = "0.20.0-beta.1"
+version = "0.20.0-beta.2"
 edition = "2021"
 build = "build.rs"
 
@@ -64,7 +64,7 @@ version = "1"
 default-features = false
 
 [dependencies.clap]
-version = "3"
+version = "4"
 features = ["wrap_help", "derive", "env"]
 
 [dependencies.winapi]
