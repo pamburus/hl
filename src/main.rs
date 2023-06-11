@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 // third-party imports
 use chrono::Utc;
-use clap::{ArgEnum, CommandFactory, Parser};
+use clap::{CommandFactory, Parser, ValueEnum};
 use itertools::Itertools;
 use nu_ansi_term::Color;
 use once_cell::sync::Lazy;
@@ -37,146 +37,141 @@ const APP_NAME: &str = "hl";
 #[clap(version)]
 struct Opt {
     /// Color output options.
-    #[clap(long, default_value = "auto", env = "HL_COLOR", overrides_with = "color")]
-    #[clap(arg_enum)]
+    #[arg(long, default_value = "auto", env = "HL_COLOR", overrides_with = "color")]
+    #[arg(value_enum)]
     color: ColorOption,
     //
     /// Handful alias for --color=always, overrides --color option.
-    #[clap(short)]
+    #[arg(short)]
     color_always: bool,
     //
     /// Output paging options.
-    #[clap(long, default_value = "auto", env = "HL_PAGING", overrides_with = "paging")]
-    #[clap(arg_enum)]
+    #[arg(long, default_value = "auto", env = "HL_PAGING", overrides_with = "paging")]
+    #[arg(value_enum)]
     paging: PagingOption,
     //
     /// Handful alias for --paging=never, overrides --paging option.
-    #[clap(short = 'P')]
+    #[arg(short = 'P')]
     paging_never: bool,
     //
     //
     /// Color theme.
-    #[clap(
+    #[arg(
         long,
-        default_value = &CONFIG.theme,
+        default_value_t = CONFIG.theme.clone(),
         env = "HL_THEME",
-        overrides_with = "theme"
+        overrides_with="theme",
     )]
     theme: String,
     //
     /// Disable unescaping and prettifying of field values.
-    #[clap(short, long)]
+    #[arg(short, long)]
     raw_fields: bool,
     //
     /// Number of interrupts to ignore, i.e. Ctrl-C (SIGINT).
-    #[clap(
-        long,
-        default_value = "3",
-        env = "HL_INTERRUPT_IGNORE_COUNT",
-        overrides_with = "interrupt-ignore-count"
-    )]
+    #[arg(long, default_value = "3", env = "HL_INTERRUPT_IGNORE_COUNT", overrides_with="interrupt_ignore_count")]
     interrupt_ignore_count: usize,
     //
     /// Buffer size.
-    #[clap(long, default_value = "256 KiB", env="HL_BUFFER_SIZE", overrides_with = "buffer-size", parse(try_from_str = parse_non_zero_size))]
+    #[arg(long, default_value = "256 KiB", env="HL_BUFFER_SIZE",  value_parser = parse_non_zero_size, overrides_with="buffer_size")]
     buffer_size: NonZeroUsize,
     //
     /// Maximum message size.
-    #[clap(long, default_value = "64 MiB", env="HL_MAX_MESSAGE_SIZE", overrides_with = "max-message-size", parse(try_from_str = parse_non_zero_size))]
+    #[arg(long, default_value = "64 MiB", env="HL_MAX_MESSAGE_SIZE",  value_parser = parse_non_zero_size, overrides_with="max_message_size")]
     max_message_size: NonZeroUsize,
     //
     /// Number of processing threads.
-    #[clap(long, short = 'C', env = "HL_CONCURRENCY", overrides_with = "concurrency")]
+    #[arg(long, short = 'C', env = "HL_CONCURRENCY", overrides_with="concurrency")]
     concurrency: Option<usize>,
     //
     /// Filtering by field values in one of forms [<key>=<value>, <key>~=<value>, <key>~~=<value>, <key>!=<value>, <key>!~=<value>, <key>!~~=<value>] where ~ denotes substring match and ~~ denotes regular expression match.
-    #[clap(short, long, number_of_values = 1)]
+    #[arg(short, long, number_of_values = 1)]
     filter: Vec<String>,
     //
     /// Hide or unhide fields with the specified keys, prefix with ! to unhide, specify !* to unhide all.
-    #[clap(long, short = 'h', number_of_values = 1)]
+    #[arg(long, short = 'H', number_of_values = 1)]
     hide: Vec<String>,
     //
     /// Filtering by level.
-    #[clap(short, long, env = "HL_LEVEL", overrides_with = "level")]
-    #[clap(arg_enum)]
+    #[arg(short, long, env = "HL_LEVEL", overrides_with="level")]
+    #[arg(value_enum)]
     level: Option<Level>,
     //
     /// Filtering by timestamp >= the value (--time-zone and --local options are honored).
-    #[clap(long, allow_hyphen_values = true)]
+    #[arg(long, allow_hyphen_values = true)]
     since: Option<String>,
     //
     /// Filtering by timestamp <= the value (--time-zone and --local options are honored).
-    #[clap(long, allow_hyphen_values = true)]
+    #[arg(long, allow_hyphen_values = true)]
     until: Option<String>,
     //
     /// Time format, see https://man7.org/linux/man-pages/man1/date.1.html.
-    #[clap(
+    #[arg(
         short,
         long,
         env="HL_TIME_FORMAT",
-        default_value = &CONFIG.time_format,
-        overrides_with = "time-format"
+        default_value_t = CONFIG.time_format.clone(),
+        overrides_with = "time_format",
     )]
     time_format: String,
     //
     /// Time zone name, see column "TZ database name" at https://en.wikipedia.org/wiki/List_of_tz_database_time_zones.
-    #[clap(long, short = 'Z', env="HL_TIME_ZONE", default_value = &CONFIG.time_zone.name(), overrides_with = "time-zone")]
+    #[arg(long, short = 'Z', env="HL_TIME_ZONE", default_value = &CONFIG.time_zone.name(), overrides_with="time_zone")]
     time_zone: chrono_tz::Tz,
     //
     /// Use local time zone, overrides --time-zone option.
-    #[clap(long, short = 'L')]
+    #[arg(long, short = 'L')]
     local: bool,
     //
     /// Files to process
-    #[clap(name = "FILE", parse(from_os_str))]
+    #[arg(name = "FILE")]
     files: Vec<PathBuf>,
     //
     /// Hide empty fields, applies for null, string, object and array fields only.
-    #[clap(long, short = 'e', env = "HL_HIDE_EMPTY_FIELDS")]
+    #[arg(long, short = 'e', env = "HL_HIDE_EMPTY_FIELDS", overrides_with="hide_empty_fields")]
     hide_empty_fields: bool,
     //
     /// Show empty fields, overrides --hide-empty-fields option.
-    #[clap(long, short = 'E', env = "HL_SHOW_EMPTY_FIELDS")]
+    #[arg(long, short = 'E', env = "HL_SHOW_EMPTY_FIELDS", overrides_with="show_empty_fields")]
     show_empty_fields: bool,
 
     /// Show input number and/or input filename before each message.
-    #[clap(long, default_value = "auto", overrides_with = "input-info")]
-    #[clap(arg_enum)]
+    #[arg(long, default_value = "auto", overrides_with="input_info")]
+    #[arg(value_enum)]
     input_info: InputInfoOption,
     //
     /// List available themes and exit.
-    #[clap(long)]
+    #[arg(long)]
     list_themes: bool,
 
     /// Sort messages chronologically.
-    #[clap(long, short = 's')]
+    #[arg(long, short = 's')]
     sort: bool,
 
     /// Output file.
-    #[clap(long, short = 'o')]
+    #[arg(long, short = 'o')]
     output: Option<String>,
 
     /// Dump index metadata and exit.
-    #[clap(long)]
+    #[arg(long)]
     dump_index: bool,
 }
 
-#[derive(ArgEnum, Debug, Clone, Copy)]
+#[derive(ValueEnum, Debug, Clone, Copy)]
 enum ColorOption {
     Auto,
     Always,
     Never,
 }
 
-#[derive(ArgEnum, Debug, Clone, Copy)]
+#[derive(ValueEnum, Debug, Clone, Copy)]
 enum PagingOption {
     Auto,
     Always,
     Never,
 }
 
-#[derive(ArgEnum, Debug, Clone, Copy)]
+#[derive(ValueEnum, Debug, Clone, Copy)]
 enum InputInfoOption {
     Auto,
     None,

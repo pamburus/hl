@@ -4,7 +4,7 @@ use std::result::Result;
 use std::str::FromStr;
 
 // third-party imports
-use clap::ArgEnum;
+use clap::ValueEnum;
 use enum_map::Enum;
 use serde::{Deserialize, Serialize};
 
@@ -13,7 +13,7 @@ use crate::error::InvalidLevelError;
 
 // ---
 
-#[derive(ArgEnum, Clone, Copy, Debug, Deserialize, Serialize, Eq, Hash, Ord, PartialEq, PartialOrd, Enum)]
+#[derive(ValueEnum, Clone, Copy, Debug, Deserialize, Serialize, Eq, Hash, Ord, PartialEq, PartialOrd, Enum)]
 #[serde(rename_all = "kebab-case")]
 pub enum Level {
     Error,
