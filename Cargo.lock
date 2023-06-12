@@ -259,9 +259,9 @@ checksum = "14c189c53d098945499cdfa7ecc63567cf3886b3332b312a5b4585d8d3a6a610"
 
 [[package]]
 name = "capnp"
-version = "0.17.1"
+version = "0.17.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ce543aeff6518ec71a3a11156afe71a8dd72ffbb668021eb32c2c86437fbbf5d"
+checksum = "95e65021d89250bbfe7c2791789ced2c4bdc21b0e8bb59c64f3fd6145a5fd678"
 
 [[package]]
 name = "capnpc"
@@ -809,7 +809,7 @@ checksum = "7f24254aa9a54b5c858eaee2f5bccdb46aaf0e486a595ed5fd8f86ba55232a70"
 
 [[package]]
 name = "hl"
-version = "0.20.0-beta.4"
+version = "0.20.0-beta.5"
 dependencies = [
  "anyhow",
  "atoi",
