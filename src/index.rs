@@ -102,6 +102,7 @@ impl Indexer {
     /// Builds the index, saves it to disk and returns it.
     pub fn index(&self, source_path: &PathBuf) -> Result<Index> {
         let source_path = std::fs::canonicalize(source_path)?;
+        let meta = source_path.metadata()?;
         let hash = hex::encode(sha256(source_path.to_string_lossy().as_bytes()));
         let index_path = self.dir.join(PathBuf::from(hash));
         if Path::new(&index_path).exists() {
@@ -115,7 +116,9 @@ impl Indexer {
                 }
             };
             if let Ok(index) = Index::load(&mut file) {
-                return Ok(index);
+                if meta.len() == index.source().size && ts(meta.modified()?) == index.source().modified {
+                    return Ok(index);
+                }
             }
         }
 

@@ -312,7 +312,7 @@ impl App {
                         }
                     }
 
-                    if done {
+                    if done && workspace.len() == 0 {
                         break;
                     }
 
