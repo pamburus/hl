@@ -40,7 +40,7 @@ fields:
 formatting:
   punctuation:
     logger-name-separator: ':'
-    field-key-value-separator: ':'
+    field-key-value-separator: '='
     string-opening-quote: "'"
     string-closing-quote: "'"
     source-location-separator: '@ '
