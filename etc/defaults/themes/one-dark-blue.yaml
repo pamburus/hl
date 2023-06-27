@@ -37,7 +37,7 @@ levels:
       foreground: bright-magenta
   info:
     level-inner:
-      foreground: bright-blue
+      foreground: cyan
   warning:
     time:
       foreground: bright-yellow
