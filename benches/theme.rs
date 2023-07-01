@@ -10,7 +10,7 @@ use stats_alloc::{Region, StatsAlloc, INSTRUMENTED_SYSTEM};
 use hl::{
     theme::{Element, StylingPush, Theme},
     themecfg::{self, Color, Mode, Style},
-    types::Level,
+    Level,
 };
 
 // ---
