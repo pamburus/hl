@@ -22,7 +22,6 @@ jobs:
           - amd64-linux-musl
           - amd64-macos
           - amd64-windows
-          - arm64-macos
           - arm64-linux-gnu
           - arm64-linux-musl
         include:
@@ -84,10 +83,6 @@ jobs:
         if: matrix.use_cross == false && matrix.target != ''
         run: |
           rustup target add ${{ matrix.target }}
-
-      - name: Setup static linkage
-        if: matrix.os == 'windows-latest'
-        run: echo "RUSTFLAGS=-Ctarget-feature=+crt-static" >> $GITHUB_ENV
 
       - name: Build
         run: ${{ env.CARGO }} build --release --locked --verbose ${{ env.TARGET_FLAGS }}
