@@ -70,6 +70,7 @@ jobs:
       - uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
           toolchain: stable
+          rustflags: ''
 
       - name: Install Cross
         if: matrix.use_cross
