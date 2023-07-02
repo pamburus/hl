@@ -19,9 +19,9 @@ elements:
   ellipsis:
     modes: [faint]
   object:
-    foreground: cyan
+    foreground: yellow
   array:
-    foreground: cyan
+    foreground: yellow
   string:
     foreground: default
   number:
@@ -38,12 +38,12 @@ levels:
     level-inner:
       foreground: cyan
   warning:
-    time:
-      foreground: bright-yellow
     level-inner:
-      foreground: bright-yellow
+      foreground: yellow
+      modes: [bold]
   error:
     time:
       foreground: bright-red
     level-inner:
       foreground: bright-red
+      modes: [bold]

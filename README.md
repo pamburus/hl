@@ -23,6 +23,7 @@ Log viewer which translates JSON logs into pretty human-readable representation.
 
 ![screenshot](doc/screenshot.png)
 
+
 ## Features and usage
 
 ### Concatenation of multiple log files
@@ -208,20 +209,20 @@ Log viewer which translates JSON logs into pretty human-readable representation.
 - [config.yaml](etc/defaults/config.yaml)
 
 
-### Envrionment variables
+### Environment variables
 
 - Many parameters which are defined in command-line arguments and configuration files may be specified by envrionment variables also.
 
-#### Precedence of configuraton sources
+#### Precedence of configuration sources
 * Configuration file
 * Environment variables
 * Command-line arguments
 
 #### Examples
 * `HL_TIME_FORMAT='%y-%m-%d %T.%3N'` overrides time format specified in configuration file.
-* `HL_TIME_ZONE=Europe/Moscow` overrides time zone specified in configuration file.
+* `HL_TIME_ZONE=Europe/Berlin` overrides time zone specified in configuration file.
 * `HL_CONCURRENCY=4` overrides concurrency limit specified in configuration file.
-* `HL_PAGING=never` specified default value for paging option but it may be overriden by command-line arguments.
+* `HL_PAGING=never` specified default value for paging option but it may be overridden by command-line arguments.
 
 
 ### Themes
@@ -294,46 +295,58 @@ Log viewer which translates JSON logs into pretty human-readable representation.
     - `crossed-out`
 
 
+### Used terminal color schemes
+
+#### iTerm2
+* [One Dark Neo](https://gist.github.com/pamburus/0ad130f2af9ab03a97f2a9f7b4f18c68/746ca7103726d43b767f2111799d3cb5ec08adbb)
+* Built-in "Light Background" color scheme
+
+#### Alacritty
+* [One Dark Neo](https://gist.github.com/pamburus/e27ebf60aa17d126f5c879f06112edd6/a1e66d34a65b883f1cb8ec28820cc0c53233e3aa#file-alacritty-yml-L904)
+  * Note: It is recommended to use `draw_bold_text_with_bright_colors: true` setting
+* [Light](https://gist.github.com/pamburus/e27ebf60aa17d126f5c879f06112edd6/a1e66d34a65b883f1cb8ec28820cc0c53233e3aa#file-alacritty-yml-L875)
+  * Note: It is recommended to use `draw_bold_text_with_bright_colors: false` setting
+
+
 ### Complete set of options and flags
 
 ```
-hl 0.20.0-beta.1
 JSON log converter to human readable representation
 
-USAGE:
-    hl [OPTIONS] [--] [FILE]...
+Usage: hl [OPTIONS] [FILE]...
 
-ARGS:
-    <FILE>...    Files to process
+Arguments:
+  [FILE]...  Files to process
 
-OPTIONS:
-        --buffer-size <BUFFER_SIZE>                          Buffer size [env: HL_BUFFER_SIZE=] [default: "256 KiB"]
-    -c                                                       Handful alias for --color=always, overrides --color option
-    -C, --concurrency <CONCURRENCY>                          Number of processing threads [env: HL_CONCURRENCY=]
-        --color <COLOR>                                      Color output options [env: HL_COLOR=] [default: auto] [possible values: auto, always, never]
-        --dump-index                                         Dump index metadata and exit
-    -e, --hide-empty-fields                                  Hide empty fields, applies for null, string, object and array fields only [env: HL_HIDE_EMPTY_FIELDS=]
-    -E, --show-empty-fields                                  Show empty fields, overrides --hide-empty-fields option [env: HL_SHOW_EMPTY_FIELDS=]
-    -f, --filter <FILTER>                                    Filtering by field values in one of forms [<key>=<value>, <key>~=<value>, <key>~~=<value>, <key>!=<value>, <key>!~=<value>, <key>!~~=<value>] where ~ denotes substring match and ~~ denotes regular expression match
-    -h, --hide <HIDE>                                        Hide or unhide fields with the specified keys, prefix with ! to unhide, specify !* to unhide all
-        --help                                               Print help information
-        --input-info <INPUT_INFO>                            Show input number and/or input filename before each message [default: auto] [possible values: auto, none, full, compact, minimal]
-        --interrupt-ignore-count <INTERRUPT_IGNORE_COUNT>    Number of interrupts to ignore, i.e. Ctrl-C (SIGINT) [env: HL_INTERRUPT_IGNORE_COUNT=] [default: 3]
-    -l, --level <LEVEL>                                      Filtering by level [env: HL_LEVEL=] [possible values: error, warning, info, debug]
-    -L, --local                                              Use local time zone, overrides --time-zone option
-        --list-themes                                        List available themes and exit
-        --max-message-size <MAX_MESSAGE_SIZE>                Maximum message size [env: HL_MAX_MESSAGE_SIZE=] [default: "64 MiB"]
-    -o, --output <OUTPUT>                                    Output file
-    -P                                                       Handful alias for --paging=never, overrides --paging option
-        --paging <PAGING>                                    Output paging options [env: HL_PAGING=] [default: auto] [possible values: auto, always, never]
-    -r, --raw-fields                                         Disable unescaping and prettifying of field values
-    -s, --sort                                               Sort messages chronologically
-        --since <SINCE>                                      Filtering by timestamp >= the value (--time-zone and --local options are honored)
-    -t, --time-format <TIME_FORMAT>                          Time format, see https://man7.org/linux/man-pages/man1/date.1.html [env: HL_TIME_FORMAT=] [default: "%y-%m-%d %T.%3N"]
-        --theme <THEME>                                      Color theme [env: HL_THEME=] [default: one-dark-green]
-        --until <UNTIL>                                      Filtering by timestamp <= the value (--time-zone and --local options are honored)
-    -V, --version                                            Print version information
-    -Z, --time-zone <TIME_ZONE>                              Time zone name, see column "TZ database name" at https://en.wikipedia.org/wiki/List_of_tz_database_time_zones [env: HL_TIME_ZONE=] [default: UTC]
+Options:
+      --color <COLOR>                                    Color output options [env: HL_COLOR=] [default: auto] [possible values: auto, always, never]
+  -c                                                     Handful alias for --color=always, overrides --color option
+      --paging <PAGING>                                  Output paging options [env: HL_PAGING=] [default: auto] [possible values: auto, always, never]
+  -P                                                     Handful alias for --paging=never, overrides --paging option
+      --theme <THEME>                                    Color theme [env: HL_THEME=] [default: universal]
+  -r, --raw-fields                                       Disable unescaping and prettifying of field values
+      --interrupt-ignore-count <INTERRUPT_IGNORE_COUNT>  Number of interrupts to ignore, i.e. Ctrl-C (SIGINT) [env: HL_INTERRUPT_IGNORE_COUNT=] [default: 3]
+      --buffer-size <BUFFER_SIZE>                        Buffer size [env: HL_BUFFER_SIZE=] [default: "256 KiB"]
+      --max-message-size <MAX_MESSAGE_SIZE>              Maximum message size [env: HL_MAX_MESSAGE_SIZE=] [default: "64 MiB"]
+  -C, --concurrency <CONCURRENCY>                        Number of processing threads [env: HL_CONCURRENCY=]
+  -f, --filter <FILTER>                                  Filtering by field values in one of forms [<key>=<value>, <key>~=<value>, <key>~~=<value>, <key>!=<value>, <key>!~=<value>, <key>!~~=<value>] where ~ denotes substring
+                                                         match and ~~ denotes regular expression match
+  -h, --hide <HIDE>                                      Hide or unhide fields with the specified keys, prefix with ! to unhide, specify !* to unhide all
+  -l, --level <LEVEL>                                    Filtering by level [env: HL_LEVEL=]
+      --since <SINCE>                                    Filtering by timestamp >= the value (--time-zone and --local options are honored)
+      --until <UNTIL>                                    Filtering by timestamp <= the value (--time-zone and --local options are honored)
+  -t, --time-format <TIME_FORMAT>                        Time format, see https://man7.org/linux/man-pages/man1/date.1.html [env: HL_TIME_FORMAT=%y-%m-%d %T.%3N] [default: "%y-%m-%d %T.%3N"]
+  -Z, --time-zone <TIME_ZONE>                            Time zone name, see column "TZ database name" at https://en.wikipedia.org/wiki/List_of_tz_database_time_zones [env: HL_TIME_ZONE=] [default: UTC]
+  -L, --local                                            Use local time zone, overrides --time-zone option
+  -e, --hide-empty-fields                                Hide empty fields, applies for null, string, object and array fields only [env: HL_HIDE_EMPTY_FIELDS=]
+  -E, --show-empty-fields                                Show empty fields, overrides --hide-empty-fields option [env: HL_SHOW_EMPTY_FIELDS=]
+      --input-info <INPUT_INFO>                          Show input number and/or input filename before each message [default: auto] [possible values: auto, none, full, compact, minimal]
+      --list-themes                                      List available themes and exit
+  -s, --sort                                             Sort messages chronologically
+  -o, --output <OUTPUT>                                  Output file
+      --dump-index                                       Dump index metadata and exit
+      --help                                             Print help
+  -V, --version                                          Print version
 ```
 
 ## Performance

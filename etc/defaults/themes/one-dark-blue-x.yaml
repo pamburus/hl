@@ -10,24 +10,24 @@ elements:
   level:
     foreground: default
   message:
-    foreground: default
-    modes: [bold]
+    foreground: bright-white
   field:
     modes: [faint]
   key:
-    foreground: green
+    foreground: bright-blue
+    modes: [underline]
   ellipsis:
     modes: [faint]
   object:
-    foreground: yellow
+    foreground: green
   array:
-    foreground: yellow
+    foreground: green
   string:
-    foreground: default
+    foreground: cyan
   number:
-    foreground: bright-blue
+    foreground: green
   boolean:
-    foreground: yellow
+    foreground: bright-red
   'null':
     foreground: bright-red
 levels:
@@ -38,12 +38,14 @@ levels:
     level-inner:
       foreground: cyan
   warning:
-    level:
-      foreground: yellow
-      modes: [reverse]
+    time:
+      foreground: bright-yellow
+    level-inner:
+      foreground: bright-yellow
   error:
     time:
       foreground: bright-red
-    level:
+    level-inner:
       foreground: bright-red
-      modes: [reverse]
+    message:
+      foreground: bright-red
