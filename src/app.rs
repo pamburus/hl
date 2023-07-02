@@ -71,12 +71,14 @@ pub struct App {
     options: Options,
 }
 
+pub type Output = dyn Write + Send + Sync;
+
 impl App {
     pub fn new(options: Options) -> Self {
         Self { options }
     }
 
-    pub fn run(&self, inputs: Vec<InputHolder>, output: &mut (dyn Write + Send + Sync)) -> Result<()> {
+    pub fn run(&self, inputs: Vec<InputHolder>, output: &mut Output) -> Result<()> {
         if self.options.sort {
             self.sort(inputs, output)
         } else {
@@ -84,7 +86,7 @@ impl App {
         }
     }
 
-    fn cat(&self, inputs: Vec<InputHolder>, output: &mut (dyn Write + Send + Sync)) -> Result<()> {
+    fn cat(&self, inputs: Vec<InputHolder>, output: &mut Output) -> Result<()> {
         let input_badges = self.input_badges(inputs.iter().map(|x| &x.reference));
 
         let inputs = inputs
@@ -157,7 +159,7 @@ impl App {
         Ok(())
     }
 
-    fn sort(&self, inputs: Vec<InputHolder>, output: &mut (dyn Write + Send + Sync)) -> Result<()> {
+    fn sort(&self, inputs: Vec<InputHolder>, output: &mut Output) -> Result<()> {
         let mut output = BufWriter::new(output);
         let param_hash = hex::encode(self.parameters_hash()?);
         let cache_dir = self
