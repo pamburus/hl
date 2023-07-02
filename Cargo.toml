@@ -4,7 +4,7 @@ categories = ["command-line-utilities"]
 description = "Utility for viewing json-formatted log files."
 keywords = ["cli", "human", "log"]
 name = "hl"
-version = "0.20.0-beta.9"
+version = "0.20.0-beta.10"
 edition = "2021"
 build = "build.rs"
 

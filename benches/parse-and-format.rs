@@ -8,8 +8,8 @@ use criterion::{criterion_group, criterion_main, Criterion};
 
 // local imports
 use hl::{
-    settings, timezone::Tz, DateTimeFormatter, Filter, IncludeExcludeKeyFilter, LinuxDateFormat, Parser,
-    ParserSettings, RecordFormatter, SegmentProcessor, Settings, Theme,
+    app::RecordIgnorer, settings, timezone::Tz, DateTimeFormatter, Filter, IncludeExcludeKeyFilter, LinuxDateFormat,
+    Parser, ParserSettings, RecordFormatter, SegmentProcessor, Settings, Theme,
 };
 
 // ---
@@ -35,7 +35,7 @@ fn benchmark(c: &mut Criterion) {
                 let mut processor = SegmentProcessor::new(&parser, &mut formatter, &filter);
                 let mut buf = Vec::new();
                 b.iter(|| {
-                    processor.run(record, &mut buf, "");
+                    processor.run(record, &mut buf, "", &mut RecordIgnorer {});
                     buf.clear();
                 });
             });

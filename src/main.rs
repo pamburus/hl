@@ -4,6 +4,7 @@ use std::default::Default;
 use std::path::PathBuf;
 use std::process;
 use std::sync::Arc;
+use std::time::Duration;
 
 // third-party imports
 use chrono::Utc;
@@ -163,6 +164,14 @@ struct Opt {
     /// Sort messages chronologically.
     #[arg(long, short = 's')]
     sort: bool,
+
+    /// Follow input streams and sort messages chronologically during time frame set by --sync-interval-ms option.
+    #[arg(long, short = 'F')]
+    follow: bool,
+
+    /// Synchronization interval for live streaming mode enabled by --follow option.
+    #[arg(long, default_value = "1000")]
+    sync_interval_ms: u64,
 
     /// Output file.
     #[arg(long, short = 'o')]
@@ -363,6 +372,8 @@ fn run() -> Result<()> {
         time_zone: tz,
         hide_empty_fields,
         sort: opt.sort,
+        follow: opt.follow,
+        sync_interval: Duration::from_millis(opt.sync_interval_ms),
         input_info: match opt.input_info {
             InputInfoOption::Auto => Some(hl::app::InputInfo::Auto),
             InputInfoOption::None => None,
@@ -423,7 +434,7 @@ fn run() -> Result<()> {
         PagingOption::Always => true,
         PagingOption::Never => false,
     };
-    let paging = if opt.paging_never { false } else { paging };
+    let paging = if opt.paging_never || opt.follow { false } else { paging };
     let mut output: OutputStream = match opt.output {
         Some(output) => Box::new(std::fs::File::create(PathBuf::from(&output))?),
         None => {
@@ -446,8 +457,10 @@ fn run() -> Result<()> {
         Err(err) => Err(err),
     };
 
+    let interrupt_ignore_count = if opt.follow { 0 } else { opt.interrupt_ignore_count };
+
     // Run the app with signal handling.
-    SignalHandler::run(opt.interrupt_ignore_count, std::time::Duration::from_secs(1), run)
+    SignalHandler::run(interrupt_ignore_count, std::time::Duration::from_secs(1), run)
 }
 
 fn main() {

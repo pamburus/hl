@@ -47,10 +47,35 @@ pub type Reader = dyn Read + Send + Sync;
 
 // ---
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug, Hash)]
 pub struct Timestamp {
     pub sec: i64,
     pub nsec: u32,
+}
+
+impl Timestamp {
+    pub fn add(mut self, interval: std::time::Duration) -> Self {
+        self.sec += interval.as_secs() as i64;
+        self.nsec += interval.subsec_nanos();
+        self
+    }
+
+    pub fn sub(mut self, interval: std::time::Duration) -> Self {
+        self.sec -= interval.as_secs() as i64;
+        if self.nsec >= interval.subsec_nanos() {
+            self.nsec -= interval.subsec_nanos();
+        } else {
+            self.sec -= 1;
+            self.nsec += 1_000_000_000 - interval.subsec_nanos();
+        }
+        self
+    }
+}
+
+impl Display for Timestamp {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "({}, {})", self.sec, self.nsec)
+    }
 }
 
 impl From<(i64, u32)> for Timestamp {
@@ -62,9 +87,27 @@ impl From<(i64, u32)> for Timestamp {
     }
 }
 
-impl Display for Timestamp {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "({}, {})", self.sec, self.nsec)
+impl From<chrono::DateTime<chrono::Utc>> for Timestamp {
+    fn from(value: chrono::DateTime<chrono::Utc>) -> Self {
+        Self {
+            sec: value.timestamp(),
+            nsec: value.timestamp_subsec_nanos(),
+        }
+    }
+}
+
+impl std::ops::Sub for Timestamp {
+    type Output = std::time::Duration;
+
+    fn sub(self, rhs: Self) -> Self::Output {
+        let mut secs = (self.sec - rhs.sec) as u64;
+        let nanos = if self.nsec >= rhs.nsec {
+            self.nsec - rhs.nsec
+        } else {
+            secs -= 1;
+            self.nsec + 1_000_000_000 - rhs.nsec
+        };
+        std::time::Duration::new(secs, nanos)
     }
 }
 
