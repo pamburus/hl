@@ -10,14 +10,13 @@ use crate::{
     error::*,
     eseq::{Brightness, Color, ColorCode, Mode, Sequence, StyleCode},
     fmtx::Push,
-    themecfg, 
-    level,
+    level, themecfg,
 };
 
 // ---
 
-pub use themecfg::{Element, ThemeInfo, ThemeOrigin};
 pub use level::Level;
+pub use themecfg::{Element, ThemeInfo, ThemeOrigin};
 
 // ---
 
@@ -109,34 +108,18 @@ impl Style {
                 themecfg::PlainColor::Blue => ColorCode::Plain(Color::Blue, Brightness::Normal),
                 themecfg::PlainColor::Cyan => ColorCode::Plain(Color::Cyan, Brightness::Normal),
                 themecfg::PlainColor::Green => ColorCode::Plain(Color::Green, Brightness::Normal),
-                themecfg::PlainColor::Magenta => {
-                    ColorCode::Plain(Color::Magenta, Brightness::Normal)
-                }
+                themecfg::PlainColor::Magenta => ColorCode::Plain(Color::Magenta, Brightness::Normal),
                 themecfg::PlainColor::Red => ColorCode::Plain(Color::Red, Brightness::Normal),
                 themecfg::PlainColor::White => ColorCode::Plain(Color::White, Brightness::Normal),
                 themecfg::PlainColor::Yellow => ColorCode::Plain(Color::Yellow, Brightness::Normal),
-                themecfg::PlainColor::BrightBlack => {
-                    ColorCode::Plain(Color::Black, Brightness::Bright)
-                }
-                themecfg::PlainColor::BrightBlue => {
-                    ColorCode::Plain(Color::Blue, Brightness::Bright)
-                }
-                themecfg::PlainColor::BrightCyan => {
-                    ColorCode::Plain(Color::Cyan, Brightness::Bright)
-                }
-                themecfg::PlainColor::BrightGreen => {
-                    ColorCode::Plain(Color::Green, Brightness::Bright)
-                }
-                themecfg::PlainColor::BrightMagenta => {
-                    ColorCode::Plain(Color::Magenta, Brightness::Bright)
-                }
+                themecfg::PlainColor::BrightBlack => ColorCode::Plain(Color::Black, Brightness::Bright),
+                themecfg::PlainColor::BrightBlue => ColorCode::Plain(Color::Blue, Brightness::Bright),
+                themecfg::PlainColor::BrightCyan => ColorCode::Plain(Color::Cyan, Brightness::Bright),
+                themecfg::PlainColor::BrightGreen => ColorCode::Plain(Color::Green, Brightness::Bright),
+                themecfg::PlainColor::BrightMagenta => ColorCode::Plain(Color::Magenta, Brightness::Bright),
                 themecfg::PlainColor::BrightRed => ColorCode::Plain(Color::Red, Brightness::Bright),
-                themecfg::PlainColor::BrightWhite => {
-                    ColorCode::Plain(Color::White, Brightness::Bright)
-                }
-                themecfg::PlainColor::BrightYellow => {
-                    ColorCode::Plain(Color::Yellow, Brightness::Bright)
-                }
+                themecfg::PlainColor::BrightWhite => ColorCode::Plain(Color::White, Brightness::Bright),
+                themecfg::PlainColor::BrightYellow => ColorCode::Plain(Color::Yellow, Brightness::Bright),
             },
             themecfg::Color::Palette(code) => ColorCode::Palette(*code),
             themecfg::Color::RGB(themecfg::RGB(r, g, b)) => ColorCode::RGB(*r, *g, *b),
@@ -288,9 +271,7 @@ mod tests {
         let theme = Theme::none();
         let mut buf = Vec::new();
         theme.apply(&mut buf, &Some(Level::Debug), |s| {
-            s.element(Element::Message, |s| {
-                s.batch(|buf| buf.extend_from_slice(b"hello!"))
-            });
+            s.element(Element::Message, |s| s.batch(|buf| buf.extend_from_slice(b"hello!")));
         });
     }
 }

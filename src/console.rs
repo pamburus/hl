@@ -32,11 +32,7 @@ pub fn enable_ansi_support() -> Result<(), ConsoleError> {
         }
 
         if console_mode & ENABLE_VIRTUAL_TERMINAL_PROCESSING == 0 {
-            if SetConsoleMode(
-                std_out_handle,
-                console_mode | ENABLE_VIRTUAL_TERMINAL_PROCESSING,
-            ) == 0
-            {
+            if SetConsoleMode(std_out_handle, console_mode | ENABLE_VIRTUAL_TERMINAL_PROCESSING) == 0 {
                 return Err(ConsoleError::FailedToSetConsoleMode(GetLastError()));
             }
         }

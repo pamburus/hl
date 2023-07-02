@@ -96,10 +96,7 @@ impl<N: KeyNormalize> IncludeExcludeKeyFilter<N> {
 
     pub fn entry<'a>(&'a mut self, key: &str) -> &'a mut IncludeExcludeKeyFilter<N> {
         let (head, tail) = self.split(key);
-        let child = self
-            .children
-            .entry(head)
-            .or_insert(Self::new(self.options.clone()));
+        let child = self.children.entry(head).or_insert(Self::new(self.options.clone()));
         match tail {
             None => child,
             Some(tail) => child.entry(tail),
@@ -151,21 +148,14 @@ impl<N: KeyNormalize> IncludeExcludeKeyFilter<N> {
 
     fn split<'a>(&self, key: &'a str) -> (Key, Option<&'a str>) {
         let bytes = key.as_bytes();
-        let n = bytes
-            .iter()
-            .take_while(|&&x| x != self.options.delimiter)
-            .count();
+        let n = bytes.iter().take_while(|&&x| x != self.options.delimiter).count();
         let head = bytes[..n].iter().map(|&x| self.options.norm.normalize(x));
         let head = if n <= 64 {
             Key::Short(head.collect())
         } else {
             Key::Long(head.collect())
         };
-        let tail = if n == key.len() {
-            None
-        } else {
-            Some(&key[n + 1..])
-        };
+        let tail = if n == key.len() { None } else { Some(&key[n + 1..]) };
         (head, tail)
     }
 }
@@ -195,8 +185,7 @@ mod tests {
 
     #[test]
     fn test_filter() {
-        let mut filter =
-            IncludeExcludeKeyFilter::new(MatchOptions::<DefaultNormalizing>::default());
+        let mut filter = IncludeExcludeKeyFilter::new(MatchOptions::<DefaultNormalizing>::default());
         filter.entry("a").exclude();
         filter.entry("a.b").include();
 

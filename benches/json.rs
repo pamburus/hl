@@ -31,10 +31,7 @@ fn benchmark(c: &mut Criterion) {
         let sample = r#""test-\"message\"""#;
         let reg = Region::new(&GLOBAL);
         b.iter(|| {
-            assert_eq!(
-                json::from_str::<String>(sample).unwrap(),
-                r#"test-"message""#
-            );
+            assert_eq!(json::from_str::<String>(sample).unwrap(), r#"test-"message""#);
             n2 += 1;
         });
         c2 = Some(reg.change());

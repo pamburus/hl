@@ -36,10 +36,10 @@ use sha2::{Digest, Sha256};
 use crate::error::{Error, Result};
 use crate::index_capnp as schema;
 use crate::input::Input;
+use crate::level::Level;
 use crate::model::{Parser, ParserSettings, RawRecord};
 use crate::scanning::{Scanner, Segment, SegmentBuf, SegmentBufFactory};
 use crate::settings::PredefinedFields;
-use crate::level::Level;
 
 // types
 pub type Writer = dyn Write + Send + Sync;

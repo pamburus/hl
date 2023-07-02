@@ -67,10 +67,7 @@ pub enum Error {
     #[error("invalid index header")]
     InvalidIndexHeader,
     #[error("requested sorting of messages in {} file '{}' that is not currently supported", HILITE.paint(.format), HILITE.paint(.path.to_string_lossy()))]
-    UnsupportedFormatForIndexing {
-        path: PathBuf,
-        format: String,
-    },
+    UnsupportedFormatForIndexing { path: PathBuf, format: String },
     #[error("failed to parse json: {0}")]
     JsonParseError(#[from] serde_json::Error),
     #[error(transparent)]

@@ -4,7 +4,10 @@ use std::ops::Deref;
 use std::result::Result;
 
 // third-party imports
-use clap::{builder::{EnumValueParser,ValueParserFactory,TypedValueParser}, ValueEnum};
+use clap::{
+    builder::{EnumValueParser, TypedValueParser, ValueParserFactory},
+    ValueEnum,
+};
 use enum_map::Enum;
 use serde::{Deserialize, Serialize};
 
@@ -38,7 +41,6 @@ impl Deref for RelaxedLevel {
     }
 }
 
-
 impl ValueParserFactory for RelaxedLevel {
     type Parser = LevelValueParser;
     fn value_parser() -> Self::Parser {
@@ -61,8 +63,8 @@ impl TypedValueParser for LevelValueParser {
         value: &std::ffi::OsStr,
     ) -> Result<RelaxedLevel, clap::Error> {
         for (level, values) in Self::alternate_values() {
-            if values.iter().cloned().any(|x|value.eq_ignore_ascii_case(x)) {
-                return Ok(RelaxedLevel(*level))
+            if values.iter().cloned().any(|x| value.eq_ignore_ascii_case(x)) {
+                return Ok(RelaxedLevel(*level));
             }
         }
 
