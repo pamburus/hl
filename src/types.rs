@@ -2,7 +2,7 @@
 use std::cmp::Ord;
 
 // third-party imports
-use serde::{Deserialize};
+use serde::Deserialize;
 
 // ---
 

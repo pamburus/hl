@@ -12,7 +12,7 @@ use flate2::bufread::GzDecoder;
 use nu_ansi_term::Color;
 
 // local imports
-use crate::error::{Result,Error::UnsupportedFormatForIndexing};
+use crate::error::{Error::UnsupportedFormatForIndexing, Result};
 use crate::index::{Index, Indexer, SourceBlock};
 use crate::iox::ReadFill;
 use crate::pool::SQPool;

@@ -55,12 +55,7 @@ fn rfc3339_weak(s: &str, tz: &Tz) -> Option<DateTime<Tz>> {
     Some(time)
 }
 
-fn use_custom_format(
-    s: &str,
-    format: &DateTimeFormat,
-    now: &DateTime<Tz>,
-    tz: &Tz,
-) -> Option<DateTime<Tz>> {
+fn use_custom_format(s: &str, format: &DateTimeFormat, now: &DateTime<Tz>, tz: &Tz) -> Option<DateTime<Tz>> {
     let unsupported = || None;
     let mut buf = Vec::new();
     let mut has_year = false;
@@ -160,11 +155,7 @@ fn use_custom_format(
                 has_hour = true;
             }
             Item::AmPm(flags) => {
-                let item = if flags.contains(Flag::LowerCase) {
-                    b"p"
-                } else {
-                    b"P"
-                };
+                let item = if flags.contains(Flag::LowerCase) { b"p" } else { b"P" };
                 add_format_item(&mut buf, item, Flags::none())?;
                 has_ampm = true;
             }
@@ -256,13 +247,7 @@ fn smart_adjust(
     if !has_day {
         let pred = result.date_naive().pred_opt()?;
         let pred = NaiveDateTime::new(pred, result.time());
-        let fixed = DateTime::from_local(
-            pred,
-            result
-                .timezone()
-                .offset_from_local_datetime(&pred)
-                .latest()?,
-        );
+        let fixed = DateTime::from_local(pred, result.timezone().offset_from_local_datetime(&pred).latest()?);
         if &fixed <= now {
             return Some(fixed);
         }
@@ -271,11 +256,7 @@ fn smart_adjust(
     if !has_month {
         let month = result.month();
         let fixed = result
-            .with_year(if month > 1 {
-                result.year()
-            } else {
-                result.year() - 1
-            })?
+            .with_year(if month > 1 { result.year() } else { result.year() - 1 })?
             .with_month(if month > 1 { month - 1 } else { 12 })?;
         if &fixed <= now {
             return Some(fixed);
@@ -428,12 +409,7 @@ mod tests {
         println!("{:?}", format);
 
         assert_eq!(
-            use_custom_format(
-                "22-10-29 01:32:16.810",
-                &format,
-                &ts("2022-10-30T14:00:00+01:00"),
-                &tz
-            ),
+            use_custom_format("22-10-29 01:32:16.810", &format, &ts("2022-10-30T14:00:00+01:00"), &tz),
             Some(ts("2022-10-29T01:32:16.810+02:00"))
         );
     }

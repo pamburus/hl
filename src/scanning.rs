@@ -281,10 +281,7 @@ impl<'a, 'b> Iterator for ScannerIter<'a, 'b> {
 
             let (next, placement) = if n == 0 {
                 self.done = true;
-                (
-                    SegmentBuf::zero(),
-                    self.placement.and(Some(PartialPlacement::Last)),
-                )
+                (SegmentBuf::zero(), self.placement.and(Some(PartialPlacement::Last)))
             } else {
                 match self.split() {
                     Some(next) => {
@@ -404,10 +401,7 @@ mod tests {
         let sf = Arc::new(SegmentBufFactory::new(20));
         let scanner = Scanner::new(sf.clone(), "/".into());
         let mut data = std::io::Cursor::new(b"token");
-        let tokens = scanner
-            .items(&mut data)
-            .collect::<Result<Vec<_>>>()
-            .unwrap();
+        let tokens = scanner.items(&mut data).collect::<Result<Vec<_>>>().unwrap();
         assert_eq!(tokens, vec![Segment::Complete(b"token".into())])
     }
 
@@ -416,16 +410,10 @@ mod tests {
         let sf = Arc::new(SegmentBufFactory::new(20));
         let scanner = Scanner::new(sf.clone(), "/".into());
         let mut data = std::io::Cursor::new(b"/token");
-        let tokens = scanner
-            .items(&mut data)
-            .collect::<Result<Vec<_>>>()
-            .unwrap();
+        let tokens = scanner.items(&mut data).collect::<Result<Vec<_>>>().unwrap();
         assert_eq!(
             tokens,
-            vec![
-                Segment::Complete(b"/".into()),
-                Segment::Complete(b"token".into())
-            ]
+            vec![Segment::Complete(b"/".into()), Segment::Complete(b"token".into())]
         )
     }
 
@@ -434,10 +422,7 @@ mod tests {
         let sf = Arc::new(SegmentBufFactory::new(20));
         let scanner = Scanner::new(sf.clone(), "/".into());
         let mut data = std::io::Cursor::new(b"token/");
-        let tokens = scanner
-            .items(&mut data)
-            .collect::<Result<Vec<_>>>()
-            .unwrap();
+        let tokens = scanner.items(&mut data).collect::<Result<Vec<_>>>().unwrap();
         assert_eq!(tokens, vec![Segment::Complete(b"token/".into())])
     }
 
@@ -446,10 +431,7 @@ mod tests {
         let sf = Arc::new(SegmentBufFactory::new(20));
         let scanner = Scanner::new(sf.clone(), "/".into());
         let mut data = std::io::Cursor::new(b"test/token/");
-        let tokens = scanner
-            .items(&mut data)
-            .collect::<Result<Vec<_>>>()
-            .unwrap();
+        let tokens = scanner.items(&mut data).collect::<Result<Vec<_>>>().unwrap();
         assert_eq!(tokens, vec![Segment::Complete(b"test/token/".into())])
     }
 
@@ -458,16 +440,10 @@ mod tests {
         let sf = Arc::new(SegmentBufFactory::new(10));
         let scanner = Scanner::new(sf.clone(), "/".into());
         let mut data = std::io::Cursor::new(b"test/token/");
-        let tokens = scanner
-            .items(&mut data)
-            .collect::<Result<Vec<_>>>()
-            .unwrap();
+        let tokens = scanner.items(&mut data).collect::<Result<Vec<_>>>().unwrap();
         assert_eq!(
             tokens,
-            vec![
-                Segment::Complete(b"test/".into()),
-                Segment::Complete(b"token/".into())
-            ]
+            vec![Segment::Complete(b"test/".into()), Segment::Complete(b"token/".into())]
         )
     }
 

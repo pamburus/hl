@@ -104,14 +104,10 @@ where
     fn new(out: &'a mut O, adjustment: Option<Adjustment<T>>) -> Self {
         if let Some(adjustment) = adjustment {
             match adjustment.alignment {
-                Alignment::Left => {
-                    Self::Unbuffered(UnbufferedAligner::new(out, adjustment.padding))
+                Alignment::Left => Self::Unbuffered(UnbufferedAligner::new(out, adjustment.padding)),
+                Alignment::Center | Alignment::Right => {
+                    Self::Buffered(BufferedAligner::new(out, adjustment.padding, adjustment.alignment))
                 }
-                Alignment::Center | Alignment::Right => Self::Buffered(BufferedAligner::new(
-                    out,
-                    adjustment.padding,
-                    adjustment.alignment,
-                )),
             }
         } else {
             Self::Disabled(DisabledAligner::new(out))
@@ -193,11 +189,7 @@ where
     O: Push<T>,
 {
     pub fn new(out: &'a mut O, padding: Padding<T>) -> Self {
-        Self {
-            out,
-            padding,
-            cur: 0,
-        }
+        Self { out, padding, cur: 0 }
     }
 
     pub fn push(&mut self, value: T) {
@@ -374,9 +366,5 @@ where
     O: Push<T>,
     F: FnOnce(BufferedAligner<'a, T, O>),
 {
-    f(BufferedAligner::new(
-        out,
-        Padding::new(pad, width),
-        Alignment::Center,
-    ));
+    f(BufferedAligner::new(out, Padding::new(pad, width), Alignment::Center));
 }

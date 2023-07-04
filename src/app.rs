@@ -1,16 +1,19 @@
 // std imports
-use std::cmp::Reverse;
+use std::cmp::{Reverse, max};
+use std::collections::BTreeMap;
 use std::convert::{TryFrom, TryInto};
 use std::fs;
 use std::io::{BufWriter, Write};
 use std::iter::repeat;
 use std::ops::Range;
 use std::path::PathBuf;
+use std::rc::Rc;
 use std::sync::Arc;
+use std::time::Duration;
 
 // third-party imports
 use closure::closure;
-use crossbeam_channel::{self as channel, Receiver, RecvError, Sender};
+use crossbeam_channel::{self as channel, Receiver, RecvError, Sender,RecvTimeoutError};
 use crossbeam_utils::thread;
 use itertools::{izip, Itertools};
 use platform_dirs::AppDirs;
@@ -25,7 +28,7 @@ use crate::fmtx::aligned_left;
 use crate::formatting::RecordFormatter;
 use crate::index::{Indexer, Timestamp};
 use crate::input::{BlockLine, InputHolder, InputReference};
-use crate::model::{Filter, Parser, ParserSettings, RawRecord};
+use crate::model::{Filter, Parser, ParserSettings, RawRecord, Record};
 use crate::scanning::{BufFactory, Scanner, Segment, SegmentBufFactory};
 use crate::settings::{Fields, Formatting};
 use crate::theme::{Element, StylingPush, Theme};
@@ -49,6 +52,8 @@ pub struct Options {
     pub time_zone: Tz,
     pub hide_empty_fields: bool,
     pub sort: bool,
+    pub follow: bool,
+    pub sync_interval: Duration,
     pub input_info: Option<InputInfo>,
     pub dump_index: bool,
     pub app_dirs: Option<AppDirs>,
@@ -71,20 +76,24 @@ pub struct App {
     options: Options,
 }
 
+pub type Output = dyn Write + Send + Sync;
+
 impl App {
     pub fn new(options: Options) -> Self {
         Self { options }
     }
 
-    pub fn run(&self, inputs: Vec<InputHolder>, output: &mut (dyn Write + Send + Sync)) -> Result<()> {
-        if self.options.sort {
+    pub fn run(&self, inputs: Vec<InputHolder>, output: &mut Output) -> Result<()> {
+        if self.options.follow {
+            self.follow(inputs, output)
+        } else if self.options.sort {
             self.sort(inputs, output)
         } else {
             self.cat(inputs, output)
         }
     }
 
-    fn cat(&self, inputs: Vec<InputHolder>, output: &mut (dyn Write + Send + Sync)) -> Result<()> {
+    fn cat(&self, inputs: Vec<InputHolder>, output: &mut Output) -> Result<()> {
         let input_badges = self.input_badges(inputs.iter().map(|x| &x.reference));
 
         let inputs = inputs
@@ -124,7 +133,7 @@ impl App {
                         match segment {
                             Segment::Complete(segment) => {
                                 let mut buf = bfo.new_buf();
-                                processor.run(segment.data(), &mut buf, prefix);
+                                processor.run(segment.data(), &mut buf, prefix, &mut RecordIgnorer{});
                                 sfi.recycle(segment);
                                 if let Err(_) = txo.send((i, buf)) {
                                     break;
@@ -157,7 +166,7 @@ impl App {
         Ok(())
     }
 
-    fn sort(&self, inputs: Vec<InputHolder>, output: &mut (dyn Write + Send + Sync)) -> Result<()> {
+    fn sort(&self, inputs: Vec<InputHolder>, output: &mut Output) -> Result<()> {
         let mut output = BufWriter::new(output);
         let param_hash = hex::encode(self.parameters_hash()?);
         let cache_dir = self
@@ -350,6 +359,129 @@ impl App {
         Ok(())
     }
 
+    fn follow(&self, inputs: Vec<InputHolder>, output: &mut Output) -> Result<()> {
+        let input_badges = self.input_badges(inputs.iter().map(|x| &x.reference));
+
+        let inputs = inputs
+            .into_iter()
+            .map(|x| x.open())
+            .collect::<std::io::Result<Vec<_>>>()?;
+
+        let m = inputs.len();
+        let n = self.options.concurrency;
+        let parser = self.parser();
+        let sfi = Arc::new(SegmentBufFactory::new(self.options.buffer_size.try_into()?));
+        let bfo = BufFactory::new(self.options.buffer_size.try_into()?);
+        thread::scope(|scope| -> Result<()> {
+            // prepare receive/transmit channels for input data
+            let (txi, rxi) = channel::bounded(1);
+            // prepare receive/transmit channels for output data
+            let (txo, rxo) = channel::bounded(1);
+            // spawn reader threads
+            let mut readers = Vec::with_capacity(m);
+            for (i, mut input) in inputs.into_iter().enumerate() {
+                let reader = scope.spawn(closure!(clone sfi, clone txi, |_| -> Result<()> {
+                    let scanner = Scanner::new(sfi, "\n".to_string());
+                    for (j, item) in scanner.items(&mut input.stream).with_max_segment_size(self.options.max_message_size.into()).enumerate() {
+                        if txi.send((i, j, item?)).is_err() {
+                            break;
+                        }
+                    }
+                    Ok(())
+                }));
+                readers.push(reader);
+            }
+            drop(txi);
+
+
+            // spawn processing threads
+            let mut workers = Vec::with_capacity(n);
+            for _ in 0..n {
+                let worker = scope.spawn(closure!(ref bfo, ref parser, ref sfi, ref input_badges, clone rxi, clone txo, |_| {
+                    let mut formatter = self.formatter();
+                    let mut processor = SegmentProcessor::new(&parser, &mut formatter, &self.options.filter);
+                    for (i, j, segment) in rxi.iter() {
+                        let prefix = input_badges.as_ref().map(|b|b[i].as_str()).unwrap_or("");
+                        match segment {
+                            Segment::Complete(segment) => {
+                                let mut buf = bfo.new_buf();
+                                let mut index_builder = TimestampIndexBuilder{result: TimestampIndex::new(j)};
+                                processor.run(segment.data(), &mut buf, prefix, &mut index_builder);
+                                sfi.recycle(segment);
+                                if txo.send((i, buf, index_builder.result)).is_err() {
+                                    return;
+                                };
+                            }
+                            Segment::Incomplete(_, _) => {}
+                        }
+                    }
+                }));
+                workers.push(worker);
+            }
+            drop(txo);
+
+            // spawn merger thread
+            let merger = scope.spawn(move |_| -> Result<()> {
+                type Key = (Timestamp, usize, usize); // (ts, input, block)
+                type Line = (Rc<Vec<u8>>, Range<usize>); // (buf, location)
+               
+                let mut window = BTreeMap::<Key,Line>::new();
+                let mut last_ts: Option<Timestamp> = None;
+                let mut mem_usage = 0;
+                let mem_limit = n * usize::from(self.options.buffer_size);
+
+                loop {
+                    let deadline = Timestamp::from(chrono::Utc::now()).sub(self.options.sync_interval);
+                    while let Some(first) = window.first_key_value() {
+                        if first.0.0 > deadline && mem_usage < mem_limit {
+                            break;
+                        }
+                        if let Some(entry) = window.pop_first() {
+                            mem_usage -= entry.1.1.end - entry.1.1.start;
+                            output.write_all(&entry.1.0[entry.1.1.clone()])?;
+                        }
+                    }
+
+                    let next_ts = window.first_entry().map(|e|e.key().0);
+                    let timeout = next_ts.map(|next_ts| max(deadline, next_ts) - next_ts );
+                    match rxo.recv_timeout(timeout.unwrap_or(std::time::Duration::MAX)) {
+                        Ok((i, buf, index)) => {
+                            let buf = Rc::new(buf);
+                            for line in index.lines {
+                                last_ts = Some(last_ts.map(|last_ts| std::cmp::max(last_ts, line.ts)).unwrap_or(line.ts));
+                                mem_usage += line.location.end - line.location.start;
+                                let key = (line.ts, i, index.block);
+                                let value = (buf.clone(), line.location);
+                                window.insert(key, value);
+                            }
+                        }
+                        Err(RecvTimeoutError::Timeout) => {}
+                        Err(RecvTimeoutError::Disconnected) => {
+                            break
+                        }
+                    }
+                }
+
+                Ok(())
+            });
+
+            for reader in readers {
+                reader.join().unwrap()?;
+            }
+
+            for worker in workers {
+                worker.join().unwrap();
+            }
+
+            merger.join().unwrap()?;
+
+            Ok(())
+        })
+        .unwrap()?;
+
+        Ok(())
+    }
+
     fn parameters_hash(&self) -> Result<[u8; 32]> {
         let mut hasher = Sha256::new();
         bincode::serialize_into(
@@ -367,7 +499,7 @@ impl App {
         Parser::new(ParserSettings::new(
             &self.options.fields.settings.predefined,
             &self.options.fields.settings.ignore,
-            self.options.filter.since.is_some() || self.options.filter.until.is_some(),
+            self.options.filter.since.is_some() || self.options.filter.until.is_some() || self.options.follow,
         ))
     }
 
@@ -498,7 +630,10 @@ impl<'a> SegmentProcessor<'a> {
         }
     }
 
-    pub fn run(&mut self, data: &[u8], buf: &mut Vec<u8>, prefix: &str) {
+    pub fn run<O>(&mut self, data: &[u8], buf: &mut Vec<u8>, prefix: &str, observer: &mut O)
+    where
+        O: RecordObserver,
+    {
         for data in rtrim(data, b'\n').split(|c| *c == b'\n') {
             if data.len() == 0 {
                 continue;
@@ -509,8 +644,11 @@ impl<'a> SegmentProcessor<'a> {
                 some = true;
                 let record = self.parser.parse(record);
                 if record.matches(self.filter) {
+                    let begin = buf.len();
                     buf.extend(prefix.as_bytes());
                     self.formatter.format_record(buf, &record);
+                    let end = buf.len();
+                    observer.observe_record(&record, begin..end);
                 }
             }
             let remainder = if some { &data[stream.byte_offset()..] } else { data };
@@ -520,6 +658,57 @@ impl<'a> SegmentProcessor<'a> {
             }
         }
     }
+}
+
+// ---
+
+pub trait RecordObserver {
+    fn observe_record<'a>(&mut self, record: &'a Record<'a>, location: Range<usize>);
+}
+
+// ---
+
+pub struct RecordIgnorer {}
+
+impl RecordObserver for RecordIgnorer {
+    fn observe_record<'a>(&mut self, _: &'a Record<'a>, _: Range<usize>) {}
+}
+
+// ---
+
+struct TimestampIndexBuilder {
+    result: TimestampIndex,
+}
+
+impl RecordObserver for TimestampIndexBuilder {
+    fn observe_record<'a>(&mut self, record: &'a Record<'a>, location: Range<usize>) {
+        if let Some(ts) = record.ts.as_ref().and_then(|ts| ts.unix_utc()).map(|ts| ts.into()) {
+            self.result.lines.push(TimestampIndexLine { location, ts });
+        }
+    }
+}
+
+// ---
+
+struct TimestampIndex {
+    block: usize,
+    lines: Vec<TimestampIndexLine>,
+}
+
+impl TimestampIndex {
+    fn new(block: usize) -> Self {
+        Self {
+            block,
+            lines: Vec::new(),
+        }
+    }
+}
+
+// ---
+
+struct TimestampIndexLine {
+    location: Range<usize>,
+    ts: Timestamp,
 }
 
 // ---

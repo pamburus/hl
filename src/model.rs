@@ -17,7 +17,7 @@ use crate::error::{Error, Result};
 use crate::level;
 use crate::settings::PredefinedFields;
 use crate::timestamp::Timestamp;
-use crate::types::{FieldKind};
+use crate::types::FieldKind;
 
 // ---
 
@@ -174,13 +174,7 @@ impl ParserSettings {
         }
     }
 
-    fn apply<'a>(
-        &self,
-        key: &'a str,
-        value: &'a RawValue,
-        to: &mut Record<'a>,
-        ctx: &mut PriorityContext,
-    ) {
+    fn apply<'a>(&self, key: &'a str, value: &'a RawValue, to: &mut Record<'a>, ctx: &mut PriorityContext) {
         match self.fields.get(key) {
             Some((field, p)) => {
                 let kind = field.kind();
@@ -259,11 +253,7 @@ impl FieldSettings {
         match self {
             Self::Time(preparse) => {
                 let s = value.get();
-                let s = if s.as_bytes()[0] == b'"' {
-                    &s[1..s.len() - 1]
-                } else {
-                    s
-                };
+                let s = if s.as_bytes()[0] == b'"' { &s[1..s.len() - 1] } else { s };
                 let ts = Timestamp::new(s, None);
                 if *preparse {
                     to.ts = Some(Timestamp::new(ts.raw(), Some(ts.parse())));
@@ -345,9 +335,7 @@ struct RawRecordVisitor<'a> {
 
 impl<'a> RawRecordVisitor<'a> {
     fn new() -> Self {
-        Self {
-            marker: PhantomData,
-        }
+        Self { marker: PhantomData }
     }
 }
 
@@ -357,10 +345,7 @@ impl<'de: 'a, 'a> Visitor<'de> for RawRecordVisitor<'a> {
         formatter.write_str("object json")
     }
 
-    fn visit_map<M: MapAccess<'de>>(
-        self,
-        mut access: M,
-    ) -> std::result::Result<Self::Value, M::Error> {
+    fn visit_map<M: MapAccess<'de>>(self, mut access: M) -> std::result::Result<Self::Value, M::Error> {
         let mut fields = heapless::Vec::new();
         let count = access.size_hint().unwrap_or(0);
         let mut fieldsx = match count > RAW_RECORD_FIELDS_CAPACITY {
@@ -420,9 +405,7 @@ impl<'a> KeyMatcher<'a> {
             Some(KeyMatch::Full)
         } else if self.key.len() > key.len() {
             if bytes[key.len()] == b'.' {
-                Some(KeyMatch::Partial(KeyMatcher::new(
-                    &self.key[key.len() + 1..],
-                )))
+                Some(KeyMatch::Partial(KeyMatcher::new(&self.key[key.len() + 1..])))
             } else {
                 None
             }
@@ -499,20 +482,17 @@ impl FieldFilter {
         };
 
         if let Some(index) = text.find('=') {
-            return parse(&text[0..index], &text[index+1..]);
+            return parse(&text[0..index], &text[index + 1..]);
         }
 
         if let Some(index) = text.find(':') {
-            return parse(&text[0..index], &text[index+1..]);
+            return parse(&text[0..index], &text[index + 1..]);
         }
 
         Err(Error::WrongFieldFilter(text.into()))
     }
 
-    fn parse_mp_op<'k>(
-        key: &'k str,
-        value: &str,
-    ) -> Result<(&'k str, ValueMatchPolicy, UnaryBoolOp)> {
+    fn parse_mp_op<'k>(key: &'k str, value: &str) -> Result<(&'k str, ValueMatchPolicy, UnaryBoolOp)> {
         let key_op = |key: &'k str| {
             if let Some(key) = key.strip_suffix('!') {
                 (key, UnaryBoolOp::Negate)
@@ -612,10 +592,7 @@ pub struct Filter {
 
 impl Filter {
     pub fn is_empty(&self) -> bool {
-        self.fields.0.is_empty()
-            && self.level.is_none()
-            && self.since.is_none()
-            && self.until.is_none()
+        self.fields.0.is_empty() && self.level.is_none() && self.since.is_none() && self.until.is_none()
     }
 }
 
@@ -630,9 +607,7 @@ struct ObjectVisitor<'a> {
 }
 impl<'a> ObjectVisitor<'a> {
     fn new() -> Self {
-        Self {
-            marker: PhantomData,
-        }
+        Self { marker: PhantomData }
     }
 }
 
@@ -642,10 +617,7 @@ impl<'de: 'a, 'a> Visitor<'de> for ObjectVisitor<'a> {
         formatter.write_str("object json")
     }
 
-    fn visit_map<A: MapAccess<'de>>(
-        self,
-        mut access: A,
-    ) -> std::result::Result<Self::Value, A::Error> {
+    fn visit_map<A: MapAccess<'de>>(self, mut access: A) -> std::result::Result<Self::Value, A::Error> {
         let mut fields = heapless::Vec::new();
         while let Some(key) = access.next_key::<&'a str>()? {
             let value = access.next_value()?;
@@ -681,9 +653,7 @@ struct ArrayVisitor<'a, const N: usize> {
 }
 impl<'a, const N: usize> ArrayVisitor<'a, N> {
     fn new() -> Self {
-        Self {
-            marker: PhantomData,
-        }
+        Self { marker: PhantomData }
     }
 }
 
@@ -693,10 +663,7 @@ impl<'de: 'a, 'a, const N: usize> Visitor<'de> for ArrayVisitor<'a, N> {
         formatter.write_str("object json")
     }
 
-    fn visit_seq<A: SeqAccess<'de>>(
-        self,
-        mut access: A,
-    ) -> std::result::Result<Self::Value, A::Error> {
+    fn visit_seq<A: SeqAccess<'de>>(self, mut access: A) -> std::result::Result<Self::Value, A::Error> {
         let mut items = heapless::Vec::new();
         let mut more = Vec::new();
         while let Some(item) = access.next_element()? {

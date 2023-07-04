@@ -122,9 +122,7 @@ fn benchmark(c: &mut Criterion) {
                 s.batch(|buf| buf.push(b' '));
                 s.element(Element::Level, |s| {
                     s.batch(|buf| buf.push(b'|'));
-                    s.element(Element::LevelInner, |s| {
-                        s.batch(|buf| buf.extend_from_slice(b"INF"))
-                    });
+                    s.element(Element::LevelInner, |s| s.batch(|buf| buf.extend_from_slice(b"INF")));
                     s.batch(|buf| buf.push(b'|'))
                 });
                 s.batch(|buf| buf.push(b' '));
@@ -144,13 +142,9 @@ fn benchmark(c: &mut Criterion) {
                     for (key, value) in &fields {
                         s.element(Element::Field, |s| {
                             s.batch(|buf| buf.push(b' '));
-                            s.element(Element::Key, |s| {
-                                s.batch(|buf| buf.extend_from_slice(&key[..]))
-                            });
+                            s.element(Element::Key, |s| s.batch(|buf| buf.extend_from_slice(&key[..])));
                             s.batch(|buf| buf.push(b'='));
-                            s.element(Element::String, |s| {
-                                s.batch(|buf| buf.extend_from_slice(&value[..]))
-                            });
+                            s.element(Element::String, |s| s.batch(|buf| buf.extend_from_slice(&value[..])));
                         });
                     }
                 }

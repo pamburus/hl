@@ -8,9 +8,8 @@ use criterion::{criterion_group, criterion_main, Criterion};
 
 // local imports
 use hl::{
-    timezone::Tz, DateTimeFormatter, Filter, IncludeExcludeKeyFilter, LinuxDateFormat, Parser,
-    ParserSettings, RecordFormatter, SegmentProcessor, Settings, Theme,
-    settings,
+    app::RecordIgnorer, settings, timezone::Tz, DateTimeFormatter, Filter, IncludeExcludeKeyFilter, LinuxDateFormat,
+    Parser, ParserSettings, RecordFormatter, SegmentProcessor, Settings, Theme,
 };
 
 // ---
@@ -21,11 +20,7 @@ fn benchmark(c: &mut Criterion) {
         for theme in ["classic", "one-dark-green-truecolor", "dmt"] {
             c.bench_function(format!("{}/{}", name, theme), |b| {
                 let settings = Settings::default();
-                let parser = Parser::new(ParserSettings::new(
-                    &settings.fields.predefined,
-                    empty(),
-                    false,
-                ));
+                let parser = Parser::new(ParserSettings::new(&settings.fields.predefined, empty(), false));
                 let mut formatter = RecordFormatter::new(
                     Arc::new(Theme::embedded(theme).unwrap()),
                     DateTimeFormatter::new(
@@ -40,7 +35,7 @@ fn benchmark(c: &mut Criterion) {
                 let mut processor = SegmentProcessor::new(&parser, &mut formatter, &filter);
                 let mut buf = Vec::new();
                 b.iter(|| {
-                    processor.run(record, &mut buf, "");
+                    processor.run(record, &mut buf, "", &mut RecordIgnorer {});
                     buf.clear();
                 });
             });

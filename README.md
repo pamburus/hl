@@ -329,8 +329,8 @@ Options:
       --buffer-size <BUFFER_SIZE>                        Buffer size [env: HL_BUFFER_SIZE=] [default: "256 KiB"]
       --max-message-size <MAX_MESSAGE_SIZE>              Maximum message size [env: HL_MAX_MESSAGE_SIZE=] [default: "64 MiB"]
   -C, --concurrency <CONCURRENCY>                        Number of processing threads [env: HL_CONCURRENCY=]
-  -f, --filter <FILTER>                                  Filtering by field values in one of forms [<key>=<value>, <key>~=<value>, <key>~~=<value>, <key>!=<value>, <key>!~=<value>, <key>!~~=<value>] where ~ denotes substring
-                                                         match and ~~ denotes regular expression match
+  -f, --filter <FILTER>                                  Filtering by field values in one of forms [<key>=<value>, <key>~=<value>, <key>~~=<value>, <key>!=<value>, <key>!~=<value>, <key>!~~=<value>] where ~ denotes substring match and ~~ denotes regular
+                                                         expression match
   -h, --hide <HIDE>                                      Hide or unhide fields with the specified keys, prefix with ! to unhide, specify !* to unhide all
   -l, --level <LEVEL>                                    Filtering by level [env: HL_LEVEL=]
       --since <SINCE>                                    Filtering by timestamp >= the value (--time-zone and --local options are honored)
@@ -343,6 +343,8 @@ Options:
       --input-info <INPUT_INFO>                          Show input number and/or input filename before each message [default: auto] [possible values: auto, none, full, compact, minimal]
       --list-themes                                      List available themes and exit
   -s, --sort                                             Sort messages chronologically
+  -F, --follow                                           Follow input streams and sort messages chronologically during time frame set by --sync-interval-ms option
+      --sync-interval-ms <SYNC_INTERVAL_MS>              Synchronization interval for live streaming mode enabled by --follow option [default: 1000]
   -o, --output <OUTPUT>                                  Output file
       --dump-index                                       Dump index metadata and exit
       --help                                             Print help

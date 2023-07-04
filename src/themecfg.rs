@@ -118,9 +118,7 @@ impl Theme {
     }
 
     fn strip_extension(filename: &str) -> Option<&str> {
-        filename
-            .strip_suffix(Self::EXTENSION)
-            .and_then(|r| r.strip_suffix("."))
+        filename.strip_suffix(Self::EXTENSION).and_then(|r| r.strip_suffix("."))
     }
 
     const EXTENSION: &'static str = "yaml";

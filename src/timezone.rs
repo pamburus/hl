@@ -107,12 +107,8 @@ impl TimeZone for Tz {
     /// Creates the offset(s) for given local `NaiveDateTime` if possible.
     fn offset_from_local_datetime(&self, local: &NaiveDateTime) -> LocalResult<Self::Offset> {
         match self {
-            Self::Local => Local
-                .offset_from_local_datetime(local)
-                .map(Self::Offset::Local),
-            Self::FixedOffset(tz) => tz
-                .offset_from_local_datetime(local)
-                .map(Self::Offset::Fixed),
+            Self::Local => Local.offset_from_local_datetime(local).map(Self::Offset::Local),
+            Self::FixedOffset(tz) => tz.offset_from_local_datetime(local).map(Self::Offset::Fixed),
             Self::IANA(tz) => tz.offset_from_local_datetime(local).map(Self::Offset::IANA),
         }
     }

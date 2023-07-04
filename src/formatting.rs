@@ -107,9 +107,7 @@ impl RecordFormatter {
                         })
                     })
                 });
-                s.batch(|buf| {
-                    buf.extend_from_slice(self.cfg.punctuation.level_right_separator.as_bytes())
-                });
+                s.batch(|buf| buf.extend_from_slice(self.cfg.punctuation.level_right_separator.as_bytes()));
             });
             //
             // logger
@@ -120,9 +118,7 @@ impl RecordFormatter {
                     s.element(Element::LoggerInner, |s| {
                         s.batch(|buf| buf.extend_from_slice(logger.as_bytes()))
                     });
-                    s.batch(|buf| {
-                        buf.extend_from_slice(self.cfg.punctuation.logger_name_separator.as_bytes())
-                    });
+                    s.batch(|buf| buf.extend_from_slice(self.cfg.punctuation.logger_name_separator.as_bytes()));
                 });
             }
             //
@@ -148,11 +144,7 @@ impl RecordFormatter {
             }
             if some_fields_hidden {
                 s.element(Element::Ellipsis, |s| {
-                    s.batch(|buf| {
-                        buf.extend_from_slice(
-                            self.cfg.punctuation.hidden_fields_indicator.as_bytes(),
-                        )
-                    })
+                    s.batch(|buf| buf.extend_from_slice(self.cfg.punctuation.hidden_fields_indicator.as_bytes()))
                 });
             }
             //
@@ -162,9 +154,7 @@ impl RecordFormatter {
                 s.element(Element::Caller, |s| {
                     s.batch(|buf| {
                         buf.push(b' ');
-                        buf.extend_from_slice(
-                            self.cfg.punctuation.source_location_separator.as_bytes(),
-                        )
+                        buf.extend_from_slice(self.cfg.punctuation.source_location_separator.as_bytes())
                     });
                     s.element(Element::CallerInner, |s| {
                         s.batch(|buf| buf.extend_from_slice(text.as_bytes()))
@@ -330,9 +320,7 @@ impl<'a> FieldFormatter<'a> {
                 s.batch(|buf| buf.push(b.to_ascii_lowercase()));
             }
         });
-        s.batch(|buf| {
-            buf.extend_from_slice(self.rf.cfg.punctuation.field_key_value_separator.as_bytes())
-        });
+        s.batch(|buf| buf.extend_from_slice(self.rf.cfg.punctuation.field_key_value_separator.as_bytes()));
         if self.rf.unescape_fields {
             self.format_value(s, value, filter, setting);
         } else {
@@ -384,9 +372,7 @@ impl<'a> FieldFormatter<'a> {
                         some_fields_hidden |= !self.format(s, k, v, filter, setting);
                     }
                     if some_fields_hidden {
-                        s.element(Element::Ellipsis, |s| {
-                            s.batch(|buf| buf.extend_from_slice(b" ..."))
-                        });
+                        s.element(Element::Ellipsis, |s| s.batch(|buf| buf.extend_from_slice(b" ...")));
                     }
                     s.batch(|buf| {
                         if item.fields.len() != 0 {

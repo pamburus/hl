@@ -224,13 +224,7 @@ impl<'a> LinuxDateFormat<'a> {
             Some(b'C') => pad(2, b'0', b'0', b"%C", Some(Item::Century(flags))),
             Some(b'd') => pad(2, b'0', b'0', b"%d", Some(Item::Day(flags))),
             Some(b'D') => self.jump(b"%m/%d/%y", 8, width),
-            Some(b'e') => pad(
-                2,
-                b' ',
-                b'0',
-                b"%e",
-                Some(Item::Day(with_padding(SpacePadding))),
-            ),
+            Some(b'e') => pad(2, b' ', b'0', b"%e", Some(Item::Day(with_padding(SpacePadding)))),
             Some(b'F') => self.jump(b"%Y-%m-%d", 10, width),
             Some(b'g') => pad(2, b'0', b'0', b"%g", Some(Item::IsoYearShort(flags))),
             Some(b'G') => pad(4, b'0', b'0', b"%G", Some(Item::IsoYear(flags))),
@@ -238,20 +232,8 @@ impl<'a> LinuxDateFormat<'a> {
             Some(b'H') => pad(2, b'0', b'0', b"%H", Some(Item::Hour(flags))),
             Some(b'I') => pad(2, b'0', b'0', b"%I", Some(Item::Hour12(flags))),
             Some(b'j') => pad(3, b'0', b'0', b"%j", Some(Item::YearDay(flags))),
-            Some(b'k') => pad(
-                2,
-                b' ',
-                b'0',
-                b"%k",
-                Some(Item::Hour(with_padding(SpacePadding))),
-            ),
-            Some(b'l') => pad(
-                2,
-                b' ',
-                b'0',
-                b"%l",
-                Some(Item::Hour12(with_padding(SpacePadding))),
-            ),
+            Some(b'k') => pad(2, b' ', b'0', b"%k", Some(Item::Hour(with_padding(SpacePadding)))),
+            Some(b'l') => pad(2, b' ', b'0', b"%l", Some(Item::Hour12(with_padding(SpacePadding)))),
             Some(b'm') => pad(2, b'0', b'0', b"%m", Some(Item::MonthNumeric(flags))),
             Some(b'M') => pad(2, b'0', b'0', b"%M", Some(Item::Minute(flags))),
             Some(b'n') => Some(Item::Char(b' ')),
@@ -473,11 +455,7 @@ where
             }
             Item::TimeZoneOffset((flags, precision)) => {
                 let secs = dto.offset().fix().local_minus_utc();
-                let (sign, secs) = if secs >= 0 {
-                    (b'+', secs)
-                } else {
-                    (b'-', -secs)
-                };
+                let (sign, secs) = if secs >= 0 { (b'+', secs) } else { (b'-', -secs) };
                 f.char(sign);
                 f.numeric(secs / 3600, 2, flags);
                 if precision == 0 || precision > 1 {
@@ -496,11 +474,7 @@ where
             Item::TimeZoneName((flags, width)) => {
                 let offset = dto.offset();
                 let name = offset.abbreviation();
-                let width = if width != 0 {
-                    width as usize
-                } else {
-                    name.len()
-                };
+                let width = if width != 0 { width as usize } else { name.len() };
                 aligned_left(f.buf, width, b' ', |mut buf| {
                     let mut f = Formatter::new(&mut buf);
                     if flags.contains(LowerCase) {
@@ -534,9 +508,7 @@ where
         if let Some(dt) = dt_cache {
             dt
         } else {
-            let dt = DateTime::parse_from_rfc3339(tss)
-                .ok()
-                .map(|dt| dt.naive_local());
+            let dt = DateTime::parse_from_rfc3339(tss).ok().map(|dt| dt.naive_local());
             dt_cache = Some(dt);
             dt
         }
@@ -719,11 +691,7 @@ where
             Item::TimeZoneName((flags, width)) => {
                 let tz = sts.timezone();
                 let name = if tz.is_utc() { b"UTC" } else { tz.as_bytes() };
-                let width = if width != 0 {
-                    width as usize
-                } else {
-                    name.len()
-                };
+                let width = if width != 0 { width as usize } else { name.len() };
                 aligned_left(f.buf, width, b' ', |mut buf| {
                     let mut f = Formatter::new(&mut buf);
                     if flags.contains(LowerCase) {
@@ -809,11 +777,7 @@ impl<'a, B: Push<u8>> Formatter<'a, B> {
 
     #[inline]
     fn month_numeric(&mut self, index: usize, flags: Flags) {
-        let month = if flags.contains(FromZero) {
-            index
-        } else {
-            index + 1
-        };
+        let month = if flags.contains(FromZero) { index } else { index + 1 };
         self.numeric(month, 2, flags);
     }
 
@@ -870,11 +834,7 @@ impl<'a, B: Push<u8>> Formatter<'a, B> {
     #[inline]
     fn quarter(&mut self, month0: usize, flags: Flags) {
         let value = month0 / 4;
-        let value = if flags.contains(FromZero) {
-            value
-        } else {
-            value + 1
-        };
+        let value = if flags.contains(FromZero) { value } else { value + 1 };
         self.numeric(value, 1, flags);
     }
 
@@ -967,10 +927,7 @@ fn reformat_numeric<B: Push<u8>>(buf: &mut B, flags: Flags, b: &[u8]) {
     if !flags.contains(NoPadding) && !flags.contains(SpacePadding) {
         buf.extend_from_slice(&b)
     } else {
-        let pos = (&b[0..b.len() - 1])
-            .iter()
-            .map(|&b| b == b'0')
-            .position(|x| x == false);
+        let pos = (&b[0..b.len() - 1]).iter().map(|&b| b == b'0').position(|x| x == false);
         if !flags.contains(NoPadding) {
             for _ in 0..pos.unwrap_or_default() {
                 buf.push(b' ')
@@ -1106,9 +1063,6 @@ mod tests {
 
     #[test]
     fn test_compile_offset() {
-        assert_eq!(
-            format("%:z"),
-            vec![Item::TimeZoneOffset((Flags::none(), 2))]
-        );
+        assert_eq!(format("%:z"), vec![Item::TimeZoneOffset((Flags::none(), 2))]);
     }
 }
