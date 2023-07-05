@@ -317,7 +317,7 @@ impl<'a> FieldFormatter<'a> {
         s.element(Element::Key, |s| {
             for b in key.as_bytes() {
                 let b = if *b == b'_' { b'-' } else { *b };
-                s.batch(|buf| buf.push(b.to_ascii_lowercase()));
+                s.batch(|buf| buf.push(b));
             }
         });
         s.batch(|buf| buf.extend_from_slice(self.rf.cfg.punctuation.field_key_value_separator.as_bytes()));
