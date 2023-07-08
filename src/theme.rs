@@ -31,6 +31,7 @@ pub trait StylingPush<B: Push<u8>> {
 pub struct Theme {
     packs: EnumMap<Level, StylePack>,
     default: StylePack,
+    pub indicators: IndicatorPack,
 }
 
 impl Theme {
@@ -38,6 +39,7 @@ impl Theme {
         Self {
             packs: EnumMap::default(),
             default: StylePack::default(),
+            indicators: IndicatorPack::default(),
         }
     }
 
@@ -81,7 +83,11 @@ impl<S: Borrow<themecfg::Theme>> From<S> for Theme {
         for (level, pack) in &s.levels {
             packs[*level] = StylePack::load(&s.elements.clone().merged(pack.clone()));
         }
-        Self { default, packs }
+        Self {
+            default,
+            packs,
+            indicators: IndicatorPack::from(&s.indicators),
+        }
     }
 }
 
@@ -94,6 +100,17 @@ impl Style {
     #[inline(always)]
     pub fn apply<B: Push<u8>>(&self, buf: &mut B) {
         buf.extend_from_slice(self.0.data())
+    }
+
+    #[inline(always)]
+    pub fn with<B: Push<u8>, F: FnOnce(&mut B)>(&self, buf: &mut B, f: F) {
+        if self.0.data().is_empty() {
+            f(buf)
+        } else {
+            buf.extend_from_slice(self.0.data());
+            f(buf);
+            buf.extend_from_slice(Self::reset().0.data());
+        }
     }
 
     pub fn reset() -> Self {
@@ -257,6 +274,67 @@ impl StylePack {
             result.add(element, &Style::from(style))
         }
         result
+    }
+}
+
+// ---
+
+#[derive(Default)]
+pub struct IndicatorPack {
+    pub sync: SyncIndicatorPack,
+}
+
+impl From<&themecfg::IndicatorPack> for IndicatorPack {
+    fn from(indicator: &themecfg::IndicatorPack) -> Self {
+        Self {
+            sync: SyncIndicatorPack::from(&indicator.sync),
+        }
+    }
+}
+
+// ---
+
+#[derive(Default)]
+pub struct SyncIndicatorPack {
+    pub synced: Indicator,
+    pub failed: Indicator,
+}
+
+impl From<&themecfg::SyncIndicatorPack> for SyncIndicatorPack {
+    fn from(indicator: &themecfg::SyncIndicatorPack) -> Self {
+        Self {
+            synced: Indicator::from(&indicator.synced),
+            failed: Indicator::from(&indicator.failed),
+        }
+    }
+}
+
+// ---
+
+#[derive(Default)]
+pub struct Indicator {
+    pub value: String,
+}
+
+impl From<&themecfg::Indicator> for Indicator {
+    fn from(indicator: &themecfg::Indicator) -> Self {
+        let mut buf = Vec::new();
+        let os = Style::from(&indicator.outer.style);
+        let is = Style::from(&indicator.inner.style);
+        os.apply(&mut buf);
+        os.with(&mut buf, |buf| {
+            buf.extend(indicator.outer.prefix.as_bytes());
+            is.with(buf, |buf| {
+                buf.extend(indicator.inner.prefix.as_bytes());
+                buf.extend(indicator.text.as_bytes());
+                buf.extend(indicator.outer.prefix.as_bytes());
+            });
+            buf.extend(indicator.outer.suffix.as_bytes());
+        });
+
+        Self {
+            value: String::from_utf8(buf).unwrap(),
+        }
     }
 }
 
