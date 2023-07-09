@@ -339,7 +339,7 @@ impl Default for SyncIndicatorPack {
                     prefix: String::default(),
                     suffix: String::default(),
                     style: Style {
-                        modes: Vec::default(),
+                        modes: vec![Mode::Bold],
                         background: None,
                         foreground: Some(Color::Plain(PlainColor::Yellow)),
                     },
