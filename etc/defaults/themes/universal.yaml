@@ -56,3 +56,4 @@ indicators:
       inner:
         style:
           foreground: 'yellow'
+          modes: [bold]
