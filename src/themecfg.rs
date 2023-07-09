@@ -25,6 +25,7 @@ use crate::{error::*, level::Level};
 pub struct Theme {
     pub elements: StylePack,
     pub levels: HashMap<Level, StylePack>,
+    pub indicators: IndicatorPack,
 }
 
 impl Theme {
@@ -304,6 +305,71 @@ impl fmt::Display for RGB {
         write_hex(f, self.2)?;
         Ok(())
     }
+}
+
+// ---
+
+#[derive(Clone, Debug, Default, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+#[serde(default)]
+pub struct IndicatorPack {
+    pub sync: SyncIndicatorPack,
+}
+
+// ---
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub struct SyncIndicatorPack {
+    pub synced: Indicator,
+    pub failed: Indicator,
+}
+
+impl Default for SyncIndicatorPack {
+    fn default() -> Self {
+        Self {
+            synced: Indicator {
+                outer: IndicatorStyle::default(),
+                inner: IndicatorStyle::default(),
+                text: " ".into(),
+            },
+            failed: Indicator {
+                outer: IndicatorStyle::default(),
+                inner: IndicatorStyle {
+                    prefix: String::default(),
+                    suffix: String::default(),
+                    style: Style {
+                        modes: Vec::default(),
+                        background: None,
+                        foreground: Some(Color::Plain(PlainColor::Yellow)),
+                    },
+                },
+                text: "!".into(),
+            },
+        }
+    }
+}
+
+// ---
+
+#[derive(Clone, Debug, Default, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+#[serde(default)]
+pub struct Indicator {
+    pub outer: IndicatorStyle,
+    pub inner: IndicatorStyle,
+    pub text: String,
+}
+
+// ---
+
+#[derive(Clone, Debug, Default, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+#[serde(default)]
+pub struct IndicatorStyle {
+    pub prefix: String,
+    pub suffix: String,
+    pub style: Style,
 }
 
 // ---

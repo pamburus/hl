@@ -427,6 +427,7 @@ impl App {
                
                 let mut window = BTreeMap::<Key,Line>::new();
                 let mut last_ts: Option<Timestamp> = None;
+                let mut prev_ts: Option<Timestamp> = None;
                 let mut mem_usage = 0;
                 let mem_limit = n * usize::from(self.options.buffer_size);
 
@@ -437,7 +438,14 @@ impl App {
                             break;
                         }
                         if let Some(entry) = window.pop_first() {
+                            let sync_indicator = if prev_ts.map(|ts| ts <= entry.0.0).unwrap_or(true) {
+                                &self.options.theme.indicators.sync.synced
+                            } else {
+                                &self.options.theme.indicators.sync.failed
+                            };
+                            prev_ts = Some(entry.0.0);
                             mem_usage -= entry.1.1.end - entry.1.1.start;
+                            output.write_all(sync_indicator.value.as_bytes())?;
                             output.write_all(&entry.1.0[entry.1.1.clone()])?;
                         }
                     }

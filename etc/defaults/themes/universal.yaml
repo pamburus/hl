@@ -47,3 +47,12 @@ levels:
     level:
       foreground: bright-red
       modes: [reverse]
+indicators:
+  sync:
+    synced:
+      text: ' '
+    failed:
+      text: '!'
+      inner:
+        style:
+          foreground: 'yellow'

@@ -97,6 +97,7 @@ fn benchmark(c: &mut Criterion) {
         }
         .into(),
         levels: HashMap::new(),
+        indicators: themecfg::IndicatorPack::default(),
     });
     let fields = vec![
         (b"key1", b"value1"),

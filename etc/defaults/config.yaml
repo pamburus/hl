@@ -10,7 +10,16 @@ fields:
   # Configuration of the predefined set of fields.
   predefined:
     time:
-      names: [ts, TS, time, TIME, Time, _SOURCE_REALTIME_TIMESTAMP, __REALTIME_TIMESTAMP]
+      names:
+        [
+          ts,
+          TS,
+          time,
+          TIME,
+          Time,
+          _SOURCE_REALTIME_TIMESTAMP,
+          __REALTIME_TIMESTAMP,
+        ]
     logger:
       names: [logger, LOGGER, Logger]
     level:
