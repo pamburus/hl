@@ -192,6 +192,24 @@ Log viewer which translates JSON logs into pretty human-readable representation.
     Hides fields `headers` and `body` but shows a single sub-field `content-type` inside field `headers`.
 
 
+### Sorting messages chronologically
+
+- Command
+
+    ```
+    $ hl -s *.log
+    ```
+    Shows log messages from all log files in current directory sorted in chronological order.
+
+
+- Command
+
+    ```
+    $ hl -F <(kubectl logs -l app=my-app-1 -f) <(kubectl logs -l app=my-app-2 -f)
+    ```
+    Runs without pager in follow mode by merging messages from outputs of these 2 commands and sorting them chronologically within default interval of 100ms.
+
+
 ### Configuration files
 
 - Configuration file is loaded automatically if found at predefined platform-specific location.
@@ -329,13 +347,12 @@ Options:
       --buffer-size <BUFFER_SIZE>                        Buffer size [env: HL_BUFFER_SIZE=] [default: "256 KiB"]
       --max-message-size <MAX_MESSAGE_SIZE>              Maximum message size [env: HL_MAX_MESSAGE_SIZE=] [default: "64 MiB"]
   -C, --concurrency <CONCURRENCY>                        Number of processing threads [env: HL_CONCURRENCY=]
-  -f, --filter <FILTER>                                  Filtering by field values in one of forms [<key>=<value>, <key>~=<value>, <key>~~=<value>, <key>!=<value>, <key>!~=<value>, <key>!~~=<value>] where ~ denotes substring match and ~~ denotes regular
-                                                         expression match
+  -f, --filter <FILTER>                                  Filtering by field values in one of forms [<key>=<value>, <key>~=<value>, <key>~~=<value>, <key>!=<value>, <key>!~=<value>, <key>!~~=<value>] where ~ denotes substring match and ~~ denotes regular expression match
   -h, --hide <HIDE>                                      Hide or unhide fields with the specified keys, prefix with ! to unhide, specify !* to unhide all
   -l, --level <LEVEL>                                    Filtering by level [env: HL_LEVEL=]
       --since <SINCE>                                    Filtering by timestamp >= the value (--time-zone and --local options are honored)
       --until <UNTIL>                                    Filtering by timestamp <= the value (--time-zone and --local options are honored)
-  -t, --time-format <TIME_FORMAT>                        Time format, see https://man7.org/linux/man-pages/man1/date.1.html [env: HL_TIME_FORMAT=%y-%m-%d %T.%3N] [default: "%y-%m-%d %T.%3N"]
+  -t, --time-format <TIME_FORMAT>                        Time format, see https://man7.org/linux/man-pages/man1/date.1.html [env: HL_TIME_FORMAT=] [default: "%y-%m-%d %T.%3N"]
   -Z, --time-zone <TIME_ZONE>                            Time zone name, see column "TZ database name" at https://en.wikipedia.org/wiki/List_of_tz_database_time_zones [env: HL_TIME_ZONE=] [default: UTC]
   -L, --local                                            Use local time zone, overrides --time-zone option
   -e, --hide-empty-fields                                Hide empty fields, applies for null, string, object and array fields only [env: HL_HIDE_EMPTY_FIELDS=]
@@ -344,7 +361,7 @@ Options:
       --list-themes                                      List available themes and exit
   -s, --sort                                             Sort messages chronologically
   -F, --follow                                           Follow input streams and sort messages chronologically during time frame set by --sync-interval-ms option
-      --sync-interval-ms <SYNC_INTERVAL_MS>              Synchronization interval for live streaming mode enabled by --follow option [default: 1000]
+      --sync-interval-ms <SYNC_INTERVAL_MS>              Synchronization interval for live streaming mode enabled by --follow option [default: 100]
   -o, --output <OUTPUT>                                  Output file
       --dump-index                                       Dump index metadata and exit
       --help                                             Print help
