@@ -423,7 +423,7 @@ impl App {
             // spawn merger thread
             let merger = scope.spawn(move |_| -> Result<()> {
                 type Key = (Timestamp, usize, usize); // (ts, input, block)
-                type Line = (Rc<Vec<u8>>, Range<usize>); // (buf, location)
+                type Line = (Rc<Vec<u8>>, Range<usize>, Timestamp); // (buf, location, timestamp)
                
                 let mut window = BTreeMap::<Key,Line>::new();
                 let mut last_ts: Option<Timestamp> = None;
@@ -434,7 +434,7 @@ impl App {
                 loop {
                     let deadline = Timestamp::from(chrono::Utc::now()).sub(self.options.sync_interval);
                     while let Some(first) = window.first_key_value() {
-                        if first.0.0 > deadline && mem_usage < mem_limit {
+                        if first.1.2 > deadline && mem_usage < mem_limit {
                             break;
                         }
                         if let Some(entry) = window.pop_first() {
@@ -450,7 +450,7 @@ impl App {
                         }
                     }
 
-                    let next_ts = window.first_entry().map(|e|e.key().0);
+                    let next_ts = window.first_entry().map(|e|e.get().2);
                     let timeout = next_ts.map(|next_ts| max(deadline, next_ts) - next_ts );
                     match rxo.recv_timeout(timeout.unwrap_or(std::time::Duration::MAX)) {
                         Ok((i, buf, index)) => {
@@ -459,7 +459,7 @@ impl App {
                                 last_ts = Some(last_ts.map(|last_ts| std::cmp::max(last_ts, line.ts)).unwrap_or(line.ts));
                                 mem_usage += line.location.end - line.location.start;
                                 let key = (line.ts, i, index.block);
-                                let value = (buf.clone(), line.location);
+                                let value = (buf.clone(), line.location, Timestamp::from(chrono::Utc::now()));
                                 window.insert(key, value);
                             }
                         }
