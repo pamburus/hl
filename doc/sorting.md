@@ -22,7 +22,7 @@
     2. Put the block into workspace
     3. Sort all blocks in a workspace by next record timestamp
     4. Copy the first record of the first block
-    5. If its timestamp is >= than timestamp of recenly pulled formatted block, go to (1), else go to (3)
+    5. If its timestamp is >= than timestamp of recently pulled formatted block, go to (1), else go to (3)
 
 ## Named pipe or standard input
 
@@ -50,7 +50,7 @@
     2. Put the block into workspace
     3. Sort all blocks in a workspace by next record timestamp
     4. Copy the first record of the first block
-    5. If its timestamp is >= than timestamp of recenly pulled formatted block, go to (1), else go to (3)
+    5. If its timestamp is >= than timestamp of recently pulled formatted block, go to (1), else go to (3)
 
 ### Desired implementation
 
@@ -84,7 +84,7 @@
     2. Put the block into workspace
     3. Sort all blocks in a workspace by next record timestamp
     4. Copy the first record of the first block
-    5. If its timestamp is >= than timestamp of recenly pulled formatted block, go to (1), else go to (3)
+    5. If its timestamp is >= than timestamp of recently pulled formatted block, go to (1), else go to (3)
 
 ## Compressed file
 
@@ -123,6 +123,6 @@
     2. Put the block into workspace
     3. Sort all blocks in a workspace by next record timestamp
     4. Copy the first record of the first block
-    5. If its timestamp is >= than timestamp of recenly pulled formatted block, go to (1), else go to (3)
+    5. If its timestamp is >= than timestamp of recently pulled formatted block, go to (1), else go to (3)
 
 
