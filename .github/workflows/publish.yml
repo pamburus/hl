@@ -12,8 +12,6 @@ jobs:
 
     env:
       CARGO: cargo
-      TARGET_FLAGS: ''
-      TARGET_DIR: ./target
 
     strategy:
       matrix:
@@ -79,7 +77,6 @@ jobs:
         run: |
           cargo install cross
           echo "CARGO=cross" >> $GITHUB_ENV
-          echo "TARGET_DIR=./target/${{ matrix.target }}" >> $GITHUB_ENV
 
       - name: Add Target
         if: matrix.use_cross == false && matrix.target != ''
@@ -91,11 +88,11 @@ jobs:
 
       - name: Package using `tar`
         if: matrix.os != 'windows-latest'
-        run: tar -C "${{ env.TARGET_DIR }}/release" -cz -f "${{ matrix.asset_name }}" "${{ matrix.artifact_name }}"
+        run: tar -C "./target/${{ matrix.target }}/release" -cz -f "${{ matrix.asset_name }}" "${{ matrix.artifact_name }}"
 
       - name: Package using `7z`
         if: matrix.os == 'windows-latest'
-        run: 7z a "${{ matrix.asset_name }}" "${{ env.TARGET_DIR }}/release/${{ matrix.artifact_name }}"
+        run: 7z a "${{ matrix.asset_name }}" "./target/${{ matrix.target }}/release/${{ matrix.artifact_name }}"
 
       - name: Upload binaries to release
         uses: svenstaro/upload-release-action@v2
