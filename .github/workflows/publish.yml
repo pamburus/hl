@@ -51,10 +51,12 @@ jobs:
             asset_name: hl-arm64-linux-gnu.tar.gz
           - name: amd64-windows
             os: windows-latest
+            target: x86_64-pc-windows-msvc
             artifact_name: hl.exe
             asset_name: hl-windows.zip
           - name: amd64-macos
             os: macos-latest
+            target: x86_64-apple-darwin
             artifact_name: hl
             asset_name: hl-macos.tar.gz
           - name: arm64-macos
@@ -85,7 +87,7 @@ jobs:
           rustup target add ${{ matrix.target }}
 
       - name: Build
-        run: ${{ env.CARGO }} build --release --locked --verbose --target ${{ matrix.target }}"
+        run: ${{ env.CARGO }} build --release --locked --verbose --target ${{ matrix.target }}
 
       - name: Package using `tar`
         if: matrix.os != 'windows-latest'
