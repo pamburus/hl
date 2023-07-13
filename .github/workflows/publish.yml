@@ -12,57 +12,71 @@ jobs:
 
     env:
       CARGO: cargo
+      ARTIFACT: hl
 
     strategy:
       matrix:
         name:
-          - amd64-linux-gnu
-          - amd64-linux-musl
-          - amd64-macos
-          - amd64-windows
-          - arm64-linux-gnu
-          - arm64-linux-musl
+          - linux-x86-gnu
+          - linux-x86-musl
+          - linux-arm-gnu
+          - linux-arm-musl
+          - macos-x86
+          - macos-arm
+          - windows-x86
         include:
-          - name: amd64-linux-musl
+          - name: linux-x86-gnu
             os: ubuntu-latest
-            target: x86_64-unknown-linux-musl
-            use_cross: true
-            artifact_name: hl
-            asset_name: hl-linux.tar.gz
-          - name: amd64-linux-gnu
-            os: ubuntu-latest
+            family: linux
+            arch: x86_64
             target: x86_64-unknown-linux-gnu
-            use_cross: true
-            artifact_name: hl
-            asset_name: hl-amd64-linux-gnu.tar.gz
-          - name: arm64-linux-musl
+            archive: tar.gz
+            asset: hl-linux-x86_64-gnu.tar.gz
+          - name: linux-x86-musl
             os: ubuntu-latest
-            target: aarch64-unknown-linux-musl
-            use_cross: true
-            artifact_name: hl
-            asset_name: hl-arm64-linux-musl.tar.gz
-          - name: arm64-linux-gnu
+            family: linux
+            arch: x86_64
+            target: x86_64-unknown-linux-musl
+            archive: tar.gz
+            asset: hl-linux-x86_64-musl.tar.gz
+            cross: true
+          - name: linux-arm-gnu
             os: ubuntu-latest
+            family: linux
+            arch: aarch64
             target: aarch64-unknown-linux-gnu
-            use_cross: true
-            artifact_name: hl
-            asset_name: hl-arm64-linux-gnu.tar.gz
-          - name: amd64-windows
-            os: windows-latest
-            target: x86_64-pc-windows-msvc
-            artifact_name: hl.exe
-            asset_name: hl-windows.zip
-          - name: amd64-macos
+            archive: tar.gz
+            asset: hl-linux-arm64-gnu.tar.gz
+            cross: true
+          - name: linux-arm-musl
+            os: ubuntu-latest
+            family: linux
+            arch: aarch64
+            target: aarch64-unknown-linux-musl
+            archive: tar.gz
+            asset: hl-linux-arm64-musl.tar.gz
+            cross: true
+          - name: macos-x86
             os: macos-latest
+            family: macos
+            arch: x86_64
             target: x86_64-apple-darwin
-            artifact_name: hl
-            asset_name: hl-macos.tar.gz
-          - name: arm64-macos
-            os: macos-11
+            archive: tar.gz
+            asset: hl-macos-x86_64.tar.gz
+          - name: macos-arm
+            os: macos-latest
+            family: macos
+            arch: aarch64
             target: aarch64-apple-darwin
-            use_cross: false
-            artifact_name: hl
-            asset_name: hl-arm64-macos.tar.gz
+            archive: tar.gz
+            asset: hl-macos-arm64.tar.gz
+          - name: windows-x86
+            os: windows-latest
+            family: windows
+            arch: x86_64
+            target: x86_64-pc-windows-msvc
+            archive: 7z
+            asset: hl-windows-x86_64.7z
 
     steps:
       - uses: actions/checkout@v3
@@ -73,13 +87,13 @@ jobs:
           rustflags: ''
 
       - name: Install Cross
-        if: matrix.use_cross
+        if: matrix.cross
         run: |
           cargo install cross
           echo "CARGO=cross" >> $GITHUB_ENV
 
       - name: Add Target
-        if: matrix.use_cross == false && matrix.target != ''
+        if: matrix.cross == false && matrix.target != ''
         run: |
           rustup target add ${{ matrix.target }}
 
@@ -87,21 +101,21 @@ jobs:
         run: ${{ env.CARGO }} build --release --locked --verbose --target ${{ matrix.target }}
 
       - name: Sign
-        if: matrix.os == 'macos-latest' || matrix.os == 'macos-11'
-        run: codesign --force --deep --sign - ./target/${{ matrix.target }}/release/hl
+        if: matrix.family == 'macos'
+        run: codesign --force --deep --sign - ./target/${{ matrix.target }}/release/${ARTIFACT}
 
       - name: Package using `tar`
-        if: matrix.os != 'windows-latest'
-        run: tar -C "./target/${{ matrix.target }}/release" -cz -f "${{ matrix.asset_name }}" "${{ matrix.artifact_name }}"
+        if: matrix.archive == 'tar.gz'
+        run: tar -C ./target/${{ matrix.target }}/release -cz -f ${{ matrix.asset }} ${ARTIFACT}
 
       - name: Package using `7z`
-        if: matrix.os == 'windows-latest'
-        run: 7z a "${{ matrix.asset_name }}" "./target/${{ matrix.target }}/release/${{ matrix.artifact_name }}"
+        if: matrix.archive == '7z'
+        run: 7z a ${{ matrix.asset }} ./target/${{ matrix.target }}/release/${ARTIFACT}
 
       - name: Upload binaries to release
         uses: svenstaro/upload-release-action@v2
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: ${{ matrix.asset_name }}
-          asset_name: ${{ matrix.asset_name }}
+          file: ${{ matrix.asset }}
+          asset: ${{ matrix.asset }}
           tag: ${{ github.ref }}
