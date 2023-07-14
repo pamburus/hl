@@ -12,7 +12,6 @@ jobs:
 
     env:
       CARGO: cargo
-      ARTIFACT: hl
 
     strategy:
       matrix:
@@ -111,28 +110,27 @@ jobs:
 
       - name: Sign
         if: matrix.family == 'macos'
-        run: codesign --force --deep --sign - ./target/${{ matrix.target }}/release/${ARTIFACT}
+        run: codesign --force --deep --sign - ./target/${{ matrix.target }}/release/hl
 
       - name: Package using `tar`
         if: matrix.archive == 'tar.gz' && matrix.universal == false
-        run: tar -C ./target/${{ matrix.target }}/release -cz -f ${{ matrix.asset }} ${ARTIFACT}
+        run: tar -C ./target/${{ matrix.target }}/release -cz -f ${{ matrix.asset }} hl
 
       - name: Package using `7z`
         if: matrix.archive == '7z' && matrix.universal == false
-        run: 7z a ${{ matrix.asset }} ./target/${{ matrix.target }}/release/${ARTIFACT}
+        run: 7z a ${{ matrix.asset }} .\target\${{ matrix.target }}\release\hl.exe
 
       - name: Make universal binary
         if: matrix.family == 'macos' && matrix.universal == true
-        run: lipo ./target/${{ matrix.target }}/release/${ARTIFACT} -create -output ./target/${ARTIFACT}
+        run: lipo ./target/${{ matrix.target }}/release/hl -create -output ./target/hl
 
       - name: Package universal binary using `tar`
         if: matrix.archive == 'tar.gz' && matrix.universal == true
-        run: tar -C ./target -cz -f ${{ matrix.asset }} ${ARTIFACT}
+        run: tar -C ./target -cz -f ${{ matrix.asset }} hl
 
       - name: Upload binaries to release
         uses: svenstaro/upload-release-action@v2
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           file: ${{ matrix.asset }}
-          asset: ${{ matrix.asset }}
           tag: ${{ github.ref }}
