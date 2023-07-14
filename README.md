@@ -8,13 +8,19 @@ Log viewer which translates JSON logs into pretty human-readable representation.
 * Download and extract using `curl` and `tar` on Linux
 
     ```
-    curl -sSfL https://github.com/pamburus/hl/releases/latest/download/hl-linux.tar.gz | tar xz
+    curl -sSfL https://github.com/pamburus/hl/releases/latest/download/hl-linux-x86_64-musl.tar.gz | tar xz
     ```
 
 * Download and extract using `curl` and `tar` on macOS
 
     ```
     curl -sSfL https://github.com/pamburus/hl/releases/latest/download/hl-macos.tar.gz | tar xz
+    ```
+
+* Install using [cargo](https://www.rust-lang.org/tools/install)
+
+    ```
+    cargo install --locked --git https://github.com/pamburus/hl.git
     ```
 
 ## Examples
