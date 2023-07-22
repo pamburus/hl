@@ -1,0 +1,59 @@
+elements:
+  input:
+    modes: [faint]
+  time:
+    modes: [faint, italic]
+  logger:
+    modes: [faint, underline]
+  caller:
+    modes: [faint, italic]
+  level:
+    foreground: cyan
+  message:
+    foreground: default
+    modes: [bold]
+  field:
+    modes: [faint]
+  key:
+    foreground: green
+  ellipsis:
+    modes: [faint]
+  object:
+    foreground: yellow
+  array:
+    foreground: bright-yellow
+  string:
+    foreground: default
+  number:
+    foreground: bright-blue
+  boolean:
+    foreground: bright-green
+  'null':
+    foreground: bright-red
+levels:
+  debug:
+    level-inner:
+      foreground: bright-magenta
+  info:
+    level-inner:
+      foreground: cyan
+  warning:
+    level:
+      foreground: yellow
+      modes: [reverse]
+  error:
+    time:
+      foreground: bright-red
+    level:
+      foreground: bright-red
+      modes: [reverse]
+indicators:
+  sync:
+    synced:
+      text: ' '
+    failed:
+      text: '!'
+      inner:
+        style:
+          foreground: 'yellow'
+          modes: [bold]

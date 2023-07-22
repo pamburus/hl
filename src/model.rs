@@ -31,8 +31,8 @@ pub struct Record<'a> {
     pub level: Option<Level>,
     pub logger: Option<&'a str>,
     pub caller: Option<&'a str>,
-    extra: heapless::Vec<(&'a str, &'a RawValue), RECORD_EXTRA_CAPACITY>,
-    extrax: Vec<(&'a str, &'a RawValue)>,
+    pub(crate) extra: heapless::Vec<(&'a str, &'a RawValue), RECORD_EXTRA_CAPACITY>,
+    pub(crate) extrax: Vec<(&'a str, &'a RawValue)>,
 }
 
 impl<'a> Record<'a> {

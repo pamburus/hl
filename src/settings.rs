@@ -167,6 +167,29 @@ impl Default for Punctuation {
     }
 }
 
+impl Punctuation {
+    #[cfg(test)]
+    pub fn test_default() -> Self {
+        Self {
+            logger_name_separator: ":".into(),
+            field_key_value_separator: ":".into(),
+            string_opening_quote: "'".into(),
+            string_closing_quote: "'".into(),
+            source_location_separator: "@ ".into(),
+            hidden_fields_indicator: " ...".into(),
+            level_left_separator: "|".into(),
+            level_right_separator: "|".into(),
+            input_number_prefix: "#".into(),
+            input_number_left_separator: "".into(),
+            input_number_right_separator: " | ".into(),
+            input_name_left_separator: "".into(),
+            input_name_right_separator: " | ".into(),
+            input_name_clipping: "...".into(),
+            input_name_common_part: "...".into(),
+        }
+    }
+}
+
 fn ordered_map_serialize<K: Eq + PartialEq + Ord + PartialOrd + Serialize, V: Serialize, S>(
     value: &HashMap<K, V>,
     serializer: S,

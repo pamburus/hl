@@ -38,6 +38,8 @@ pub enum Error {
     UnknownTheme { name: String, known: Vec<String> },
     #[error("failed to parse utf-8 string: {0}")]
     Utf8Error(#[from] std::str::Utf8Error),
+    #[error("failed to construct utf-8 string from bytes: {0}")]
+    FromUtf8Error(#[from] std::string::FromUtf8Error),
     #[error("failed to parse yaml: {0}")]
     YamlError(#[from] serde_yaml::Error),
     #[error("wrong field filter format: {0}")]
