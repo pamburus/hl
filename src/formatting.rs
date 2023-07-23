@@ -13,7 +13,6 @@ use crate::model;
 use crate::settings::Formatting;
 use crate::theme;
 use crate::IncludeExcludeKeyFilter;
-
 use datefmt::DateTimeFormatter;
 use fmtx::{aligned_left, centered};
 use model::Level;
@@ -176,9 +175,7 @@ impl RecordFormatter {
         filter: Option<&IncludeExcludeKeyFilter>,
     ) -> bool {
         let mut fv = FieldFormatter::new(self);
-        s.element(Element::Field, |s| {
-            fv.format(s, key, value, filter, IncludeExcludeSetting::Unspecified)
-        })
+        fv.format(s, key, value, filter, IncludeExcludeSetting::Unspecified)
     }
 
     fn format_value<S: StylingPush<Buf>>(&self, s: &mut S, value: &RawValue) {
@@ -320,7 +317,9 @@ impl<'a> FieldFormatter<'a> {
                 s.batch(|buf| buf.push(b));
             }
         });
-        s.batch(|buf| buf.extend_from_slice(self.rf.cfg.punctuation.field_key_value_separator.as_bytes()));
+        s.element(Element::Field, |s| {
+            s.batch(|buf| buf.extend_from_slice(self.rf.cfg.punctuation.field_key_value_separator.as_bytes()));
+        });
         if self.rf.unescape_fields {
             self.format_value(s, value, filter, setting);
         } else {
@@ -414,3 +413,55 @@ fn only_digits(b: &[u8]) -> bool {
 const HEXDIGIT: [u8; 16] = [
     b'0', b'1', b'2', b'3', b'4', b'5', b'6', b'7', b'8', b'9', b'a', b'b', b'c', b'd', b'e', b'f',
 ];
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::model::Record;
+    use crate::theme::Theme;
+    use crate::themecfg::testing;
+    use crate::timestamp::Timestamp;
+    use crate::timezone::Tz;
+    use crate::{error::Error, settings::Punctuation};
+    use chrono::{Offset, Utc};
+    use datefmt::LinuxDateFormat;
+    use json::value::RawValue;
+    use serde_json as json;
+
+    fn format(rec: &Record) -> Result<String, Error> {
+        let mut formatter = RecordFormatter::new(
+            Arc::new(Theme::from(testing::theme()?)),
+            DateTimeFormatter::new(
+                LinuxDateFormat::new("%y-%m-%d %T.%3N").compile(),
+                Tz::FixedOffset(Utc.fix()),
+            ),
+            false,
+            Arc::new(IncludeExcludeKeyFilter::default()),
+            Formatting {
+                punctuation: Punctuation::test_default(),
+            },
+        );
+        let mut buf = Vec::new();
+        formatter.format_record(&mut buf, rec);
+        Ok(String::from_utf8(buf)?)
+    }
+
+    #[test]
+    fn test_nested_objects() {
+        assert_eq!(
+            format(&Record {
+                ts: Some(Timestamp::new("2000-01-02T03:04:05.123Z", None)),
+                message: Some(RawValue::from_string(r#""tm""#.into()).unwrap().as_ref()),
+                level: Some(Level::Debug),
+                logger: Some("tl"),
+                caller: Some("tc"),
+                extra: heapless::Vec::from_slice(&[
+                    ("ka", RawValue::from_string(r#"{"va":{"kb":42}}"#.into()).unwrap().as_ref()),
+                ]).unwrap(),
+                extrax: Vec::default(),
+            })
+            .unwrap(),
+            String::from("\u{1b}[0;2;3m00-01-02 03:04:05.123 \u{1b}[0;36m|\u{1b}[0;95mDBG\u{1b}[0;36m|\u{1b}[0;2;3m \u{1b}[0;2;4mtl:\u{1b}[0;2;3m \u{1b}[0;1;39mtm \u{1b}[0;32mka\u{1b}[0;2m:\u{1b}[0;33m{ \u{1b}[0;32mva\u{1b}[0;2m:\u{1b}[0;33m{ \u{1b}[0;32mkb\u{1b}[0;2m:\u{1b}[0;94m42\u{1b}[0;33m } }\u{1b}[0;2;3m @ tc\u{1b}[0m\n"),
+        );
+    }
+}

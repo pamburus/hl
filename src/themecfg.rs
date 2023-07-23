@@ -33,7 +33,7 @@ impl Theme {
         let filename = Self::filename(name);
         match Self::load_from(Self::themes_dir(app_dirs), &filename) {
             Err(Error::Io(e)) => match e.kind() {
-                ErrorKind::NotFound => match Self::load_embedded(name, &filename) {
+                ErrorKind::NotFound => match Self::load_embedded::<Assets>(name, &filename) {
                     Err(Error::UnknownTheme { name, mut known }) => {
                         if let Some(names) = Self::custom_names(app_dirs).ok() {
                             known.extend(names.into_iter().filter_map(|n| n.ok()));
@@ -53,7 +53,7 @@ impl Theme {
     }
 
     pub fn embedded(name: &str) -> Result<Self> {
-        Self::load_embedded(name, &Self::filename(name))
+        Self::load_embedded::<Assets>(name, &Self::filename(name))
     }
 
     pub fn list(app_dirs: &AppDirs) -> Result<HashMap<String, ThemeInfo>> {
@@ -70,9 +70,9 @@ impl Theme {
         Ok(result)
     }
 
-    fn load_embedded(name: &str, filename: &str) -> Result<Self> {
+    fn load_embedded<S: RustEmbed>(name: &str, filename: &str) -> Result<Self> {
         Self::from_buf(
-            Assets::get(&filename)
+            S::get(&filename)
                 .ok_or_else(|| Error::UnknownTheme {
                     name: name.to_string(),
                     known: Self::embedded_names().into_iter().collect(),
@@ -404,6 +404,19 @@ const HEXDIGIT: [u8; 16] = [
 ];
 
 // ---
+
+#[cfg(test)]
+pub mod testing {
+    use super::*;
+
+    #[derive(RustEmbed)]
+    #[folder = "src/testing/assets/themes/"]
+    struct Assets;
+
+    pub fn theme() -> Result<Theme> {
+        Theme::load_embedded::<Assets>("test", &Theme::filename("test"))
+    }
+}
 
 #[cfg(test)]
 mod tests {
