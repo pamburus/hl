@@ -11,6 +11,10 @@ use std::rc::Rc;
 use std::sync::Arc;
 use std::time::{Duration,Instant};
 
+// unix-only std imports
+#[cfg(unix)]
+use std::os::unix::fs::MetadataExt;
+
 // third-party imports
 use closure::closure;
 use crossbeam_channel::{self as channel, Receiver, RecvError, Sender,RecvTimeoutError};
@@ -25,9 +29,10 @@ use std::num::{NonZeroU32, NonZeroUsize};
 use crate::datefmt::{DateTimeFormat, DateTimeFormatter};
 use crate::error::*;
 use crate::fmtx::aligned_left;
+use crate::fsmon::{self, EventKind};
 use crate::formatting::RecordFormatter;
 use crate::index::{Indexer, Timestamp};
-use crate::input::{BlockLine, InputHolder, InputReference};
+use crate::input::{BlockLine, InputHolder, InputReference, Input};
 use crate::model::{Filter, Parser, ParserSettings, RawRecord, Record};
 use crate::scanning::{BufFactory, Scanner, Segment, SegmentBufFactory};
 use crate::settings::{Fields, Formatting};
@@ -85,7 +90,7 @@ impl App {
 
     pub fn run(&self, inputs: Vec<InputHolder>, output: &mut Output) -> Result<()> {
         if self.options.follow {
-            self.follow(inputs, output)
+            self.follow(inputs.into_iter().map(|x|x.reference).collect(), output)
         } else if self.options.sort {
             self.sort(inputs, output)
         } else {
@@ -359,13 +364,8 @@ impl App {
         Ok(())
     }
 
-    fn follow(&self, inputs: Vec<InputHolder>, output: &mut Output) -> Result<()> {
-        let input_badges = self.input_badges(inputs.iter().map(|x| &x.reference));
-
-        let inputs = inputs
-            .into_iter()
-            .map(|x| x.open())
-            .collect::<std::io::Result<Vec<_>>>()?;
+    fn follow(&self, inputs: Vec<InputReference>, output: &mut Output) -> Result<()> {
+        let input_badges = self.input_badges(inputs.iter());
 
         let m = inputs.len();
         let n = self.options.concurrency;
@@ -379,15 +379,62 @@ impl App {
             let (txo, rxo) = channel::bounded(1);
             // spawn reader threads
             let mut readers = Vec::with_capacity(m);
-            for (i, mut input) in inputs.into_iter().enumerate() {
+            for (i, input_ref) in inputs.into_iter().enumerate() {
                 let reader = scope.spawn(closure!(clone sfi, clone txi, |_| -> Result<()> {
-                    let scanner = Scanner::new(sfi, "\n".to_string());
-                    for (j, item) in scanner.items(&mut input.stream).with_max_segment_size(self.options.max_message_size.into()).enumerate() {
-                        if txi.send((i, j, item?)).is_err() {
-                            break;
-                        }
+                    let scanner = Scanner::new(sfi.clone(), "\n".to_string());
+                    let mut meta = None;
+                    if let InputReference::File(filename) = &input_ref { 
+                        meta = Some(fs::metadata(filename)?);
                     }
-                    Ok(())
+                    let mut input = Some(input_ref.open()?);
+                    let is_file = |meta: &Option<fs::Metadata>| meta.as_ref().map(|m|m.is_file()).unwrap_or(false);
+                    let process = |input: &mut Option<Input>, is_file: bool| {
+                        if let Some(input) = input {
+                            for (j, item) in scanner.items(&mut input.stream).with_max_segment_size(self.options.max_message_size.into()).enumerate() {
+                                if txi.send((i, j, item?)).is_err() {
+                                    break;
+                                }
+                            }
+                            Ok(!is_file)
+                        } else {
+                            Ok(false)
+                        }
+                    };
+                    if let InputReference::File(filename) = &input_ref {
+                        if process(&mut input, is_file(&meta))? {
+                            return Ok(())
+                        }
+                        fsmon::run(vec![filename.clone()], |event| {
+                            match event.kind {
+                                EventKind::Modify(_) | EventKind::Create(_) | EventKind::Any | EventKind::Other => {
+                                    if let (Some(old_meta), Ok(new_meta)) = (&meta, fs::metadata(&filename)) {
+                                        if old_meta.len() > new_meta.len() {
+                                            input = None;
+                                        }
+                                        #[cfg(unix)]
+                                        if old_meta.ino() != new_meta.ino() || old_meta.dev() != new_meta.dev() {
+                                            input = None;
+                                        }
+                                        meta = Some(new_meta);
+                                    }
+                                    if input.is_none() {
+                                        input = input_ref.open().ok();
+                                    }
+                                    if process(&mut input, is_file(&meta))? {
+                                        return Ok(())
+                                    }
+                                    Ok(())
+                                }
+                                EventKind::Remove(_) => {
+                                    input = None;
+                                    Ok(())
+                                },
+                                EventKind::Access(_) => Ok(()),
+                            }
+                        })
+                    } else {
+                        process(&mut input, is_file(&meta)).map(|_|())
+                    }
                 }));
                 readers.push(reader);
             }

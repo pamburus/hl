@@ -57,6 +57,10 @@ impl InputReference {
         ))
     }
 
+    pub fn open(&self) -> io::Result<Input> {
+        self.hold()?.open()
+    }
+
     pub fn description(&self) -> String {
         match self {
             Self::Stdin => "<stdin>".into(),

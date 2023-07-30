@@ -3,6 +3,7 @@ use std::boxed::Box;
 use std::io;
 use std::num::{ParseIntError, TryFromIntError};
 use std::path::PathBuf;
+use std::sync::mpsc;
 
 // third-party imports
 use config::ConfigError;
@@ -74,6 +75,13 @@ pub enum Error {
     JsonParseError(#[from] serde_json::Error),
     #[error(transparent)]
     TryFromIntError(#[from] TryFromIntError),
+    #[error(transparent)]
+    NotifyError(#[from] notify::Error),
+    #[error("failed to receive from mpsc channel: {source}")]
+    RecvTimeoutError {
+        #[source]
+        source: mpsc::RecvTimeoutError,
+    },
 }
 
 /// SizeParseError is an error which may occur when parsing size.
