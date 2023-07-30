@@ -469,7 +469,9 @@ impl App {
                         }
                         Err(RecvTimeoutError::Timeout) => {}
                         Err(RecvTimeoutError::Disconnected) => {
-                            break
+                            if timeout.is_none() {
+                                break
+                            }
                         }
                     }
                 }
