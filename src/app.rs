@@ -422,7 +422,7 @@ impl App {
 
             // spawn merger thread
             let merger = scope.spawn(move |_| -> Result<()> {
-                type Key = (Timestamp, usize, usize); // (ts, input, block)
+                type Key = (Timestamp, usize, usize, usize); // (ts, input, block, offset)
                 type Line = (Rc<Vec<u8>>, Range<usize>, Instant); // (buf, location, instant)
                
                 let mut window = BTreeMap::<Key,Line>::new();
@@ -462,7 +462,7 @@ impl App {
                             for line in index.lines {
                                 last_ts = Some(last_ts.map(|last_ts| std::cmp::max(last_ts, line.ts)).unwrap_or(line.ts));
                                 mem_usage += line.location.end - line.location.start;
-                                let key = (line.ts, i, index.block);
+                                let key = (line.ts, i, index.block, line.location.start);
                                 let value = (buf.clone(), line.location, Instant::now());
                                 window.insert(key, value);
                             }
