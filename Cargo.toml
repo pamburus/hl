@@ -4,7 +4,7 @@ categories = ["command-line-utilities"]
 description = "Utility for viewing json-formatted log files."
 keywords = ["cli", "human", "log"]
 name = "hl"
-version = "0.20.0-beta.14"
+version = "0.20.0-beta.14.1"
 edition = "2021"
 build = "build.rs"
 
@@ -57,7 +57,7 @@ sha2 = "0"
 shellwords = "1"
 signal-hook = "0"
 snap = "1"
-time = "0.2"
+time = "0.3"
 thiserror = "1"
 wildmatch = "2"
 
@@ -79,7 +79,7 @@ criterion = "0"
 diligent-date-parser = "0"
 pipe = "0"
 stats_alloc = "0"
-time = "0.2"
+time = "0.3"
 regex = "1"
 wildmatch = "2"
 
