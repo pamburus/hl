@@ -4,7 +4,7 @@ categories = ["command-line-utilities"]
 description = "Utility for viewing json-formatted log files."
 keywords = ["cli", "human", "log"]
 name = "hl"
-version = "0.20.0-beta.14"
+version = "0.20.0-beta.14.3"
 edition = "2021"
 build = "build.rs"
 
@@ -18,9 +18,7 @@ sha2 = "0"
 
 [dependencies]
 nu-ansi-term = "0"
-anyhow = "1"
 atoi = "1"
-atty = "0"
 bincode = "1"
 bitmask = "0" 
 bytefmt = "0"
@@ -28,7 +26,6 @@ capnp = "0.17"
 chrono = { version = "0", features = ["serde"] }
 chrono-tz = { version = "0", features = ["serde"] }
 closure = "0"
-clru = "0"
 collection_macros = "0"
 config = "0"
 crossbeam-channel = "0"
@@ -36,7 +33,6 @@ crossbeam-queue = "0"
 crossbeam-utils = "0"
 derive_deref = "1"
 enum-map = "2"
-error-chain = "0"
 flate2 = "1"
 generic-array = "0"
 heapless = "0"
@@ -57,7 +53,7 @@ sha2 = "0"
 shellwords = "1"
 signal-hook = "0"
 snap = "1"
-time = "0.2"
+time = "0.3"
 thiserror = "1"
 wildmatch = "2"
 
@@ -76,10 +72,7 @@ features = ["handleapi"]
 [dev-dependencies]
 byte-strings = "0"
 criterion = "0"
-diligent-date-parser = "0"
-pipe = "0"
 stats_alloc = "0"
-time = "0.2"
 regex = "1"
 wildmatch = "2"
 
