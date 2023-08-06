@@ -1,6 +1,7 @@
 // std imports
 use std::convert::TryFrom;
 use std::default::Default;
+use std::io::{stdin, stdout, IsTerminal};
 use std::path::PathBuf;
 use std::process;
 use std::sync::Arc;
@@ -254,9 +255,7 @@ fn run() -> Result<()> {
         return Opt::command().print_help().map_err(Error::Io);
     }
 
-    let stdin_is_atty = || atty::is(atty::Stream::Stdin);
-    let stdout_is_atty = || atty::is(atty::Stream::Stdout);
-    let color_supported = if stdout_is_atty() {
+    let color_supported = if stdout().is_terminal() {
         if let Err(err) = hl::enable_ansi_support() {
             eprintln!("failed to enable ansi support: {}", err);
             false
@@ -274,7 +273,7 @@ fn run() -> Result<()> {
         opt.color
     };
     let use_colors = match color {
-        ColorOption::Auto => stdout_is_atty() && color_supported,
+        ColorOption::Auto => stdout().is_terminal() && color_supported,
         ColorOption::Always => true,
         ColorOption::Never => false,
     };
@@ -398,7 +397,7 @@ fn run() -> Result<()> {
         })
         .collect::<Vec<_>>();
     if inputs.len() == 0 {
-        if stdin_is_atty() {
+        if stdin().is_terminal() {
             let mut cmd = Opt::command();
             return cmd.print_help().map_err(Error::Io);
         }
@@ -425,7 +424,7 @@ fn run() -> Result<()> {
 
     let paging = match opt.paging {
         PagingOption::Auto => {
-            if stdout_is_atty() {
+            if stdout().is_terminal() {
                 true
             } else {
                 false
@@ -442,10 +441,10 @@ fn run() -> Result<()> {
                 if let Ok(pager) = Pager::new() {
                     Box::new(pager)
                 } else {
-                    Box::new(std::io::stdout())
+                    Box::new(stdout())
                 }
             } else {
-                Box::new(std::io::stdout())
+                Box::new(stdout())
             }
         }
     };

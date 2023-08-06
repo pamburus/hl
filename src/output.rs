@@ -1,6 +1,6 @@
 use std::env;
 use std::ffi::OsString;
-use std::io::Write;
+use std::io::{stdin, IsTerminal, Write};
 #[cfg(unix)]
 use std::os::unix::process::ExitStatusExt;
 use std::path::PathBuf;
@@ -46,7 +46,7 @@ impl Pager {
         if let Some(signal) = status.signal() {
             if signal == 9 {
                 eprintln!("\x1bm\nhl: pager killed");
-                if atty::is(atty::Stream::Stdin) {
+                if stdin().is_terminal() {
                     Command::new("stty").arg("echo").status().ok();
                 }
             }
