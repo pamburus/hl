@@ -4,7 +4,7 @@ categories = ["command-line-utilities"]
 description = "Utility for viewing json-formatted log files."
 keywords = ["cli", "human", "log"]
 name = "hl"
-version = "0.20.0-beta.14.3"
+version = "0.20.0-beta.14.4"
 edition = "2021"
 build = "build.rs"
 
@@ -25,6 +25,7 @@ bytefmt = "0"
 capnp = "0.17"
 chrono = { version = "0", features = ["serde"] }
 chrono-tz = { version = "0", features = ["serde"] }
+clap = {version = "4", features = ["wrap_help", "derive", "env"]}
 closure = "0"
 collection_macros = "0"
 config = "0"
@@ -40,7 +41,8 @@ hex = "0"
 htp = "0"
 humantime = "2"
 itertools = "0"
-notify = "6"
+itoa = { version = "1", default-features = false }
+notify = { version = "6", features = ["macos_kqueue"] }
 num_cpus = "1"
 once_cell = "1"
 platform-dirs = "0"
@@ -56,18 +58,10 @@ snap = "1"
 time = "0.3"
 thiserror = "1"
 wildmatch = "2"
+winapi = {version = "0", features = ["handleapi"]}
 
-[dependencies.itoa]
-version = "1"
-default-features = false
-
-[dependencies.clap]
-version = "4"
-features = ["wrap_help", "derive", "env"]
-
-[dependencies.winapi]
-version = "0"
-features = ["handleapi"]
+[target.'cfg(target_os = "macos")'.dependencies]
+kqueue = "1"
 
 [dev-dependencies]
 byte-strings = "0"

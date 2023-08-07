@@ -748,7 +748,7 @@ checksum = "7f24254aa9a54b5c858eaee2f5bccdb46aaf0e486a595ed5fd8f86ba55232a70"
 
 [[package]]
 name = "hl"
-version = "0.20.0-beta.14.3"
+version = "0.20.0-beta.14.4"
 dependencies = [
  "atoi",
  "bincode",
@@ -777,6 +777,7 @@ dependencies = [
  "humantime",
  "itertools",
  "itoa",
+ "kqueue",
  "notify",
  "nu-ansi-term",
  "num_cpus",
