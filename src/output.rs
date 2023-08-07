@@ -1,10 +1,14 @@
 use std::env;
 use std::ffi::OsString;
-use std::io::{stdin, IsTerminal, Write};
-#[cfg(unix)]
-use std::os::unix::process::ExitStatusExt;
+use std::io::Write;
 use std::path::PathBuf;
 use std::process::{Child, Command, ExitStatus, Stdio};
+
+#[cfg(unix)]
+use std::{
+    io::{stdin, IsTerminal},
+    os::unix::process::ExitStatusExt,
+};
 
 use crate::error::*;
 
