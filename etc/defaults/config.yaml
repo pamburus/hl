@@ -17,6 +17,7 @@ fields:
           time,
           TIME,
           Time,
+          Timestamp,
           _SOURCE_REALTIME_TIMESTAMP,
           __REALTIME_TIMESTAMP,
         ]
@@ -26,10 +27,10 @@ fields:
       variants:
         - names: [level, LEVEL, Level]
           values:
-            debug: [debug]
-            info: [info, information]
-            warning: [warning, warn]
-            error: [error, err, fatal, critical, panic]
+            debug: [debug, Debug]
+            info: [info, information, Information]
+            warning: [warning, Warning, warn]
+            error: [error, Error, err, fatal, critical, panic]
         - names: [PRIORITY]
           values:
             debug: [7]
