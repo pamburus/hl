@@ -123,7 +123,7 @@ struct Opt {
     )]
     time_format: String,
     //
-    /// Time zone name, see column "TZ database name" at https://en.wikipedia.org/wiki/List_of_tz_database_time_zones.
+    /// Time zone name, see column "TZ identifier" at https://en.wikipedia.org/wiki/List_of_tz_database_time_zones.
     #[arg(long, short = 'Z', env="HL_TIME_ZONE", default_value = &CONFIG.time_zone.name(), overrides_with="time_zone")]
     time_zone: chrono_tz::Tz,
     //
