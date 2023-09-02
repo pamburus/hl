@@ -1,5 +1,5 @@
 // third-party imports
-use chrono::{DateTime, Datelike, Duration, NaiveDateTime, Offset, TimeZone, Utc};
+use chrono::{DateTime, Datelike, Duration, NaiveDateTime, Offset, Utc};
 use humantime::parse_duration;
 
 // local imports
@@ -247,7 +247,7 @@ fn smart_adjust(
     if !has_day {
         let pred = result.date_naive().pred_opt()?;
         let pred = NaiveDateTime::new(pred, result.time());
-        let fixed = DateTime::from_local(pred, result.timezone().offset_from_local_datetime(&pred).latest()?);
+        let fixed = pred.and_local_timezone(result.timezone()).latest()?;
         if &fixed <= now {
             return Some(fixed);
         }
@@ -295,7 +295,7 @@ fn add_format_item(buf: &mut Vec<u8>, item: &[u8], flags: Flags) -> Option<()> {
 
 #[cfg(test)]
 mod tests {
-    use chrono::FixedOffset;
+    use chrono::{FixedOffset, TimeZone};
 
     use super::*;
     use crate::datefmt::LinuxDateFormat;

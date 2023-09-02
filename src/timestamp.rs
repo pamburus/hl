@@ -30,7 +30,7 @@ impl<'a> Timestamp<'a> {
                 (ts / 1000000, (ts % 1000000) * 1000)
             };
             let ts = NaiveDateTime::from_timestamp_opt(ts, nsec as u32)?;
-            Some(DateTime::from_utc(ts, FixedOffset::east_opt(0)?))
+            Some(DateTime::from_naive_utc_and_offset(ts, FixedOffset::east_opt(0)?))
         } else if let Ok(ts) = self.0.parse() {
             Some(ts)
         } else {

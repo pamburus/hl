@@ -43,7 +43,7 @@ impl DateTimeFormatter {
         let mut counter = Counter::new();
         let ts = NaiveDateTime::from_timestamp_opt(1654041600, 999_999_999).unwrap();
         let offset = self.tz.offset_from_utc_datetime(&ts);
-        let tts = DateTime::<Tz>::from_utc(ts, offset);
+        let tts = DateTime::<Tz>::from_naive_utc_and_offset(ts, offset);
         self.format(&mut counter, tts.with_timezone(&offset.fix()));
         counter.result()
     }
