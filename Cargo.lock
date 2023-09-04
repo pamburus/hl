@@ -739,7 +739,7 @@ checksum = "7f24254aa9a54b5c858eaee2f5bccdb46aaf0e486a595ed5fd8f86ba55232a70"
 
 [[package]]
 name = "hl"
-version = "0.20.0-beta.14.7"
+version = "0.20.0-beta.14.7.1"
 dependencies = [
  "atoi",
  "bincode",
@@ -792,7 +792,7 @@ dependencies = [
 [[package]]
 name = "htp"
 version = "0.4.2"
-source = "git+https://github.com/pamburus/htp.git#defb429bd780f2c2ab152637768dba792381dd49"
+source = "git+https://github.com/pamburus/htp.git#3fd9234bd64807d855faf404f7ea5f77672c5e7e"
 dependencies = [
  "chrono",
  "pest",
