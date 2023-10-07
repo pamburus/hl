@@ -65,6 +65,48 @@ impl<'a> Record<'a> {
 
 pub trait RecordFilter {
     fn apply<'a>(&self, record: &'a Record<'a>) -> bool;
+
+    fn and<F>(self, rhs: F) -> RecordFilterAnd<Self, F>
+    where
+        Self: Sized,
+        F: RecordFilter,
+    {
+        RecordFilterAnd { lhs: self, rhs }
+    }
+
+    fn or<F>(self, rhs: F) -> RecordFilterOr<Self, F>
+    where
+        Self: Sized,
+        F: RecordFilter,
+    {
+        RecordFilterOr { lhs: self, rhs }
+    }
+}
+
+// ---
+
+pub struct RecordFilterAnd<L: RecordFilter, R: RecordFilter> {
+    lhs: L,
+    rhs: R,
+}
+
+impl<L: RecordFilter, R: RecordFilter> RecordFilter for RecordFilterAnd<L, R> {
+    fn apply<'a>(&self, record: &'a Record<'a>) -> bool {
+        self.lhs.apply(record) && self.rhs.apply(record)
+    }
+}
+
+// ---
+
+pub struct RecordFilterOr<L: RecordFilter, R: RecordFilter> {
+    lhs: L,
+    rhs: R,
+}
+
+impl<L: RecordFilter, R: RecordFilter> RecordFilter for RecordFilterOr<L, R> {
+    fn apply<'a>(&self, record: &'a Record<'a>) -> bool {
+        self.lhs.apply(record) || self.rhs.apply(record)
+    }
 }
 
 // ---
