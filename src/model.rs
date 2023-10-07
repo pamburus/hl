@@ -88,7 +88,7 @@ impl<'a> Record<'a> {
                     }
                     _ => {
                         let mut matched = false;
-                        for (k, v) in self.extra.iter() {
+                        for (k, v) in self.fields() {
                             match field.match_key(*k) {
                                 None => {}
                                 Some(KeyMatch::Full) => {
