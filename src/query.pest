@@ -1,0 +1,65 @@
+whole = _{ SOI ~ query ~ EOI }
+
+query        = _{ statement ~ logical_binary_op ~ statement | statement }
+statement    =  { not ~ primary | primary }
+primary      =  { "(" ~ query ~ ")" | term }
+term         =  { level_filter | field_filter }
+level_filter = @{ ^"level" ~ is ~ level }
+field_filter =  { "." ~ field_name ~ string_op ~ string }
+field_name   = @{ ("@" | "_" | "-" | "." | LETTER | NUMBER)+ }
+
+level         = ${
+    !ASCII_ALPHANUMERIC ~ level_debug
+  | level_info
+  | level_warning
+  | level_error ~ !ASCII_ALPHANUMERIC
+}
+level_debug   = @{ ^"debug" | ^"dbg" }
+level_info    = @{ ^"info" | ^"inf" }
+level_warning = @{ ^"warning" | ^"warn" | ^"wrn" }
+level_error   = @{ ^"error" | ^"err" }
+
+logical_binary_op =  { and | or | xor }
+and               = @{
+    !ASCII_ALPHANUMERIC ~ ^"and" ~ !ASCII_ALPHANUMERIC
+}
+or                = @{
+    !ASCII_ALPHANUMERIC ~ ^"or" ~ !ASCII_ALPHANUMERIC
+}
+xor               = @{
+    !ASCII_ALPHANUMERIC ~ ^"xor" ~ !ASCII_ALPHANUMERIC
+}
+not               = @{
+    !ASCII_ALPHANUMERIC ~ ^"not" ~ !ASCII_ALPHANUMERIC
+}
+is                = @{
+    !ASCII_ALPHANUMERIC ~ ^"is" ~ !ASCII_ALPHANUMERIC
+}
+string_op         = _{ equal | like | match }
+equal             = @{
+    "="
+  | (!ASCII_ALPHANUMERIC ~ ^"eq" ~ !ASCII_ALPHANUMERIC)
+}
+like              = @{
+    "~="
+  | (!ASCII_ALPHANUMERIC ~ ^"like" ~ !ASCII_ALPHANUMERIC)
+}
+match             = @{
+    "~~="
+  | (!ASCII_ALPHANUMERIC ~ ^"match" ~ !ASCII_ALPHANUMERIC)
+}
+
+string = ${ json_string | simple_string }
+
+json_string       = @{ "\"" ~ json_string_inner ~ "\"" }
+json_string_inner = @{ json_char* }
+json_char         =  {
+    !("\"" | "\\") ~ ANY
+  | "\\" ~ ("\"" | "\\" | "/" | "b" | "f" | "n" | "r" | "t")
+  | "\\" ~ ("u" ~ ASCII_HEX_DIGIT{4})
+}
+
+simple_string = @{ simple_char* }
+simple_char   = @{ (LETTER | NUMBER | "@" | "." | "_" | "-" | ":" | "/" | "!" | "#" | "%" | "$" | "*" | "+")+ }
+
+WHITESPACE = _{ " " }

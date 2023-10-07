@@ -451,7 +451,7 @@ pub struct FieldFilter {
 }
 
 impl FieldFilter {
-    fn parse(text: &str) -> Result<Self> {
+    pub(crate) fn parse(text: &str) -> Result<Self> {
         let parse = |key, value| {
             let (key, match_policy, op) = Self::parse_mp_op(key, value)?;
             let flat_key = key.as_bytes().iter().position(|&x| x == b'.').is_none();

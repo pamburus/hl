@@ -82,6 +82,8 @@ pub enum Error {
         #[source]
         source: mpsc::RecvTimeoutError,
     },
+    #[error(transparent)]
+    QueryParseError(#[from] pest::error::Error<crate::query::Rule>),
 }
 
 /// SizeParseError is an error which may occur when parsing size.

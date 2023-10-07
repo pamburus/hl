@@ -25,6 +25,7 @@ mod formatting;
 mod fsmon;
 mod model;
 mod pool;
+mod query;
 mod replay;
 mod scanning;
 mod tee;
