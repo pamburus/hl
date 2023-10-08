@@ -32,7 +32,7 @@ fn benchmark(c: &mut Criterion) {
                     settings::Formatting::default(),
                 );
                 let filter = Filter::default();
-                let mut processor = SegmentProcessor::new(&parser, &mut formatter, &filter);
+                let mut processor = SegmentProcessor::new(&parser, &mut formatter, &filter, false);
                 let mut buf = Vec::new();
                 b.iter(|| {
                     processor.run(record, &mut buf, "", &mut RecordIgnorer {});

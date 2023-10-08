@@ -40,7 +40,7 @@ impl<'a> Record<'a> {
         self.extra.iter().chain(self.extrax.iter())
     }
 
-    pub fn matches<F: RecordFilter>(&self, filter: &F) -> bool {
+    pub fn matches<F: RecordFilter + ?Sized>(&self, filter: &F) -> bool {
         filter.apply(self)
     }
 
@@ -83,6 +83,18 @@ pub trait RecordFilter {
     }
 }
 
+impl<T: RecordFilter + ?Sized> RecordFilter for Box<T> {
+    fn apply<'a>(&self, record: &'a Record<'a>) -> bool {
+        (**self).apply(record)
+    }
+}
+
+impl<T: RecordFilter + ?Sized> RecordFilter for &T {
+    fn apply<'a>(&self, record: &'a Record<'a>) -> bool {
+        (**self).apply(record)
+    }
+}
+
 // ---
 
 pub struct RecordFilterAnd<L: RecordFilter, R: RecordFilter> {
@@ -106,6 +118,16 @@ pub struct RecordFilterOr<L: RecordFilter, R: RecordFilter> {
 impl<L: RecordFilter, R: RecordFilter> RecordFilter for RecordFilterOr<L, R> {
     fn apply<'a>(&self, record: &'a Record<'a>) -> bool {
         self.lhs.apply(record) || self.rhs.apply(record)
+    }
+}
+
+// ---
+
+pub struct RecordFilterNone;
+
+impl RecordFilter for RecordFilterNone {
+    fn apply<'a>(&self, _: &'a Record<'a>) -> bool {
+        true
     }
 }
 

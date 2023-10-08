@@ -33,7 +33,7 @@ use crate::fsmon::{self, EventKind};
 use crate::formatting::RecordFormatter;
 use crate::index::{Indexer, Timestamp};
 use crate::input::{BlockLine, InputHolder, InputReference, Input};
-use crate::model::{Filter, Parser, ParserSettings, RawRecord, Record};
+use crate::model::{Filter, Parser, ParserSettings, RawRecord, Record, RecordFilter};
 use crate::scanning::{BufFactory, Scanner, Segment, SegmentBufFactory};
 use crate::settings::{Fields, Formatting};
 use crate::theme::{Element, StylingPush, Theme};
@@ -52,6 +52,7 @@ pub struct Options {
     pub max_message_size: NonZeroUsize,
     pub concurrency: usize,
     pub filter: Filter,
+    pub query: Box<dyn RecordFilter + Sync>,
     pub fields: FieldOptions,
     pub formatting: Formatting,
     pub time_zone: Tz,
@@ -62,6 +63,12 @@ pub struct Options {
     pub input_info: Option<InputInfo>,
     pub dump_index: bool,
     pub app_dirs: Option<AppDirs>,
+}
+
+impl Options {
+    fn filter_and_query<'a>(&'a self) -> impl RecordFilter+'a {
+        (&self.filter).and(&self.query)
+    }
 }
 
 pub struct FieldOptions {
@@ -132,7 +139,7 @@ impl App {
             for (rxi, txo) in izip!(rxi, txo) {
                 scope.spawn(closure!(ref bfo, ref parser, ref sfi, ref input_badges, |_| {
                     let mut formatter = self.formatter();
-                    let mut processor = SegmentProcessor::new(&parser, &mut formatter, &self.options.filter);
+                    let mut processor = SegmentProcessor::new(&parser, &mut formatter, self.options.filter_and_query(), self.options.filter.is_empty());
                     for (i, segment) in rxi.iter() {
                         let prefix = input_badges.as_ref().map(|b|b[i].as_str()).unwrap_or("");
                         match segment {
@@ -446,7 +453,7 @@ impl App {
             for _ in 0..n {
                 let worker = scope.spawn(closure!(ref bfo, ref parser, ref sfi, ref input_badges, clone rxi, clone txo, |_| {
                     let mut formatter = self.formatter();
-                    let mut processor = SegmentProcessor::new(&parser, &mut formatter, &self.options.filter);
+                    let mut processor = SegmentProcessor::new(&parser, &mut formatter, self.options.filter_and_query(), self.options.filter.is_empty());
                     for (i, j, segment) in rxi.iter() {
                         let prefix = input_badges.as_ref().map(|b|b[i].as_str()).unwrap_or("");
                         match segment {
@@ -676,18 +683,20 @@ impl App {
 
 // ---
 
-pub struct SegmentProcessor<'a> {
+pub struct SegmentProcessor<'a, F: RecordFilter> {
     parser: &'a Parser,
     formatter: &'a mut RecordFormatter,
-    filter: &'a Filter,
+    filter: F,
+    include_remainder: bool,
 }
 
-impl<'a> SegmentProcessor<'a> {
-    pub fn new(parser: &'a Parser, formatter: &'a mut RecordFormatter, filter: &'a Filter) -> Self {
+impl<'a, F: RecordFilter> SegmentProcessor<'a, F> {
+    pub fn new(parser: &'a Parser, formatter: &'a mut RecordFormatter, filter: F, include_remainder: bool) -> Self {
         Self {
             parser,
             formatter,
             filter,
+            include_remainder,
         }
     }
 
@@ -704,7 +713,7 @@ impl<'a> SegmentProcessor<'a> {
             while let Some(Ok(record)) = stream.next() {
                 some = true;
                 let record = self.parser.parse(record);
-                if record.matches(self.filter) {
+                if record.matches(&self.filter) {
                     let begin = buf.len();
                     buf.extend(prefix.as_bytes());
                     self.formatter.format_record(buf, &record);
@@ -713,7 +722,7 @@ impl<'a> SegmentProcessor<'a> {
                 }
             }
             let remainder = if some { &data[stream.byte_offset()..] } else { data };
-            if remainder.len() != 0 && self.filter.is_empty() {
+            if remainder.len() != 0 && self.include_remainder {
                 buf.extend_from_slice(remainder);
                 buf.push(b'\n');
             }

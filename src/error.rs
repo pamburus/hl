@@ -43,7 +43,7 @@ pub enum Error {
     FromUtf8Error(#[from] std::string::FromUtf8Error),
     #[error("failed to parse yaml: {0}")]
     YamlError(#[from] serde_yaml::Error),
-    #[error("wrong field filter format: {0}")]
+    #[error("failed to parse json: {0}")]
     WrongFieldFilter(String),
     #[error("wrong regular expression: {0}")]
     WrongRegularExpression(#[from] regex::Error),

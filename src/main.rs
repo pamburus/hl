@@ -27,7 +27,7 @@ use hl::signal::SignalHandler;
 use hl::theme::{Theme, ThemeOrigin};
 use hl::timeparse::parse_time;
 use hl::timezone::Tz;
-use hl::{IncludeExcludeKeyFilter, KeyMatchOptions};
+use hl::{IncludeExcludeKeyFilter, KeyMatchOptions, Query, QueryNone, RecordFilter};
 
 // ---
 
@@ -95,6 +95,10 @@ struct Opt {
     /// Filtering by field values in one of forms [<key>=<value>, <key>~=<value>, <key>~~=<value>, <key>!=<value>, <key>!~=<value>, <key>!~~=<value>] where ~ denotes substring match and ~~ denotes regular expression match.
     #[arg(short, long, number_of_values = 1)]
     filter: Vec<String>,
+    //
+    /// Customer query.
+    #[arg(short, long, number_of_values = 1)]
+    query: Vec<String>,
     //
     /// Hide or unhide fields with the specified keys, prefix with ! to unhide, specify !* to unhide all.
     #[arg(long, short = 'h', number_of_values = 1)]
@@ -354,6 +358,11 @@ fn run() -> Result<()> {
     let max_message_size = opt.max_message_size;
     let buffer_size = std::cmp::min(max_message_size, opt.buffer_size);
 
+    let mut query: Query = Box::new(QueryNone {});
+    for q in opt.query {
+        query = Box::new(query.and(hl::query::parse(&q)?));
+    }
+
     // Create app.
     let app = hl::App::new(hl::Options {
         theme: Arc::new(theme),
@@ -363,6 +372,7 @@ fn run() -> Result<()> {
         max_message_size,
         concurrency,
         filter,
+        query,
         fields: hl::FieldOptions {
             settings: settings.fields,
             filter: Arc::new(fields),

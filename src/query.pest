@@ -1,7 +1,7 @@
 whole = _{ SOI ~ query ~ EOI }
 
-query        = _{ statement ~ logical_binary_op ~ statement | statement }
-statement    =  { not ~ primary | primary }
+query        =  { logical_binary_op | statement }
+statement    =  { logical_unary_op | primary }
 primary      =  { "(" ~ query ~ ")" | term }
 term         =  { level_filter | field_filter }
 level_filter = @{ ^"level" ~ is ~ level }
@@ -19,7 +19,12 @@ level_info    = @{ ^"info" | ^"inf" }
 level_warning = @{ ^"warning" | ^"warn" | ^"wrn" }
 level_error   = @{ ^"error" | ^"err" }
 
-logical_binary_op =  { and | or | xor }
+logical_binary_op = _{
+    statement ~ (and | or | xor) ~ statement
+}
+logical_unary_op  = _{
+    not ~ primary
+}
 and               = @{
     !ASCII_ALPHANUMERIC ~ ^"and" ~ !ASCII_ALPHANUMERIC
 }
@@ -27,10 +32,12 @@ or                = @{
     !ASCII_ALPHANUMERIC ~ ^"or" ~ !ASCII_ALPHANUMERIC
 }
 xor               = @{
-    !ASCII_ALPHANUMERIC ~ ^"xor" ~ !ASCII_ALPHANUMERIC
+    "!="
+  | !ASCII_ALPHANUMERIC ~ ^"xor" ~ !ASCII_ALPHANUMERIC
 }
 not               = @{
-    !ASCII_ALPHANUMERIC ~ ^"not" ~ !ASCII_ALPHANUMERIC
+    "!"
+  | !ASCII_ALPHANUMERIC ~ ^"not" ~ !ASCII_ALPHANUMERIC
 }
 is                = @{
     !ASCII_ALPHANUMERIC ~ ^"is" ~ !ASCII_ALPHANUMERIC
