@@ -25,7 +25,6 @@ pub fn parse(str: &str) -> Result<Query> {
 fn expression(pair: Pair<Rule>) -> Result<Query> {
     match pair.as_rule() {
         Rule::or => binary_op::<Or>(pair),
-        Rule::xor => binary_op::<Xor>(pair),
         Rule::and => binary_op::<And>(pair),
         Rule::not => not(pair),
         Rule::primary => primary(pair),
@@ -119,25 +118,6 @@ impl RecordFilter for Or {
 }
 
 impl BinaryOp for Or {
-    fn new(lhs: Query, rhs: Query) -> Self {
-        Self { lhs, rhs }
-    }
-}
-
-// ---
-
-struct Xor {
-    lhs: Query,
-    rhs: Query,
-}
-
-impl RecordFilter for Xor {
-    fn apply<'a>(&self, record: &'a Record<'a>) -> bool {
-        self.lhs.apply(record) != self.rhs.apply(record)
-    }
-}
-
-impl BinaryOp for Xor {
     fn new(lhs: Query, rhs: Query) -> Self {
         Self { lhs, rhs }
     }

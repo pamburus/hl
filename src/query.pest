@@ -1,12 +1,10 @@
 input = _{ SOI ~ ws* ~ _expression ~ ws* ~ EOI }
 
 _expression  = _{ _e_or }
-or           =  { _e_xor ~ ws* ~ (_or ~ ws* ~ _e_xor)+ }
-xor          =  { _e_and ~ ws* ~ (_xor ~ ws* ~ _e_and)+ }
+or           =  { _e_and ~ ws* ~ (_or ~ ws* ~ _e_and)+ }
 and          =  { _e_unary ~ ws* ~ (_and ~ ws* ~ _e_unary)+ }
 not          =  { _not ~ ws* ~ _e_unary }
-_e_or        = _{ or | _e_xor }
-_e_xor       = _{ xor | _e_and }
+_e_or        = _{ or | _e_and }
 _e_and       = _{ and | _e_unary }
 _e_unary     = _{ not | primary }
 primary      =  { "(" ~ ws* ~ _expression ~ ws* ~ ")" | term }
@@ -24,7 +22,6 @@ level_warning = @{ ^"warning" | ^"warn" | ^"wrn" }
 level_error   = @{ ^"error" | ^"err" }
 
 _or             = _{ ^"or" ~ &punctuation }
-_xor            = _{ ^"xor" ~ &punctuation }
 _and            = _{ ^"and" ~ &punctuation }
 _not            = _{ ^"not" ~ &punctuation }
 is              = @{
