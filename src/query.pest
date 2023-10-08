@@ -1,8 +1,15 @@
-whole = _{ SOI ~ query ~ EOI }
+input = _{ SOI ~ _expression ~ EOI }
 
-query        =  { logical_binary_op | statement }
-statement    =  { logical_unary_op | primary }
-primary      =  { "(" ~ query ~ ")" | term }
+_expression  = _{ _e_or }
+or           =  { _e_xor ~ (_or ~ _e_xor)+ }
+xor          =  { _e_and ~ (_xor ~ _e_and)+ }
+and          =  { _e_unary ~ (_and ~ _e_unary)+ }
+not          =  { _not ~ _e_unary }
+_e_or        = _{ or | _e_xor }
+_e_xor       = _{ xor | _e_and }
+_e_and       = _{ and | _e_unary }
+_e_unary     = _{ not | primary }
+primary      =  { "(" ~ _expression ~ ")" | term }
 term         =  { level_filter | field_filter }
 level_filter = @{ ^"level" ~ is ~ level }
 field_filter =  { "." ~ field_name ~ string_op ~ string }
@@ -19,53 +26,37 @@ level_info    = @{ ^"info" | ^"inf" }
 level_warning = @{ ^"warning" | ^"warn" | ^"wrn" }
 level_error   = @{ ^"error" | ^"err" }
 
-logical_binary_op =  {
-    statement ~ (and | or | xor) ~ query
+_or       = _{ ^"or" }
+_xor      = _{ ^"xor" }
+_and      = _{ ^"and" }
+_not      = _{ ^"not" }
+is        = @{
+    ^"is" ~ &punctuation
 }
-logical_unary_op  =  {
-    not ~ primary
-}
-and               = @{
-    ^"and" ~ &punctuation
-}
-or                = @{
-    ^"or"
-}
-xor               = @{
-    "!="
-  | !ASCII_ALPHANUMERIC ~ ^"xor" ~ !ASCII_ALPHANUMERIC
-}
-not               = @{
-    "!"
-  | !ASCII_ALPHANUMERIC ~ ^"not" ~ !ASCII_ALPHANUMERIC
-}
-is                = @{
-    !ASCII_ALPHANUMERIC ~ ^"is" ~ !ASCII_ALPHANUMERIC
-}
-string_op         = _{ equal | like | match | not_equal | not_like | not_match }
-equal             = @{
+string_op = _{ equal | like | match | not_equal | not_like | not_match }
+equal     = @{
     "="
-  | (!ASCII_ALPHANUMERIC ~ ^"eq" ~ !ASCII_ALPHANUMERIC)
+  | ^"eq" ~ &punctuation
 }
-like              = @{
+like      = @{
     "~="
-  | (!ASCII_ALPHANUMERIC ~ ^"like" ~ !ASCII_ALPHANUMERIC)
+  | ^"like" ~ &punctuation
 }
-match             = @{
+match     = @{
     "~~="
-  | (!ASCII_ALPHANUMERIC ~ ^"match" ~ !ASCII_ALPHANUMERIC)
+  | ^"match" ~ &punctuation
 }
-not_equal         = @{
+not_equal = @{
     "!="
-  | (!ASCII_ALPHANUMERIC ~ ^"not" ~ WHITESPACE+ ~ ^"eq" ~ !ASCII_ALPHANUMERIC)
+  | ^"not" ~ WHITESPACE+ ~ ^"eq" ~ &punctuation
 }
-not_like          = @{
+not_like  = @{
     "!~="
-  | (!ASCII_ALPHANUMERIC ~ ^"not" ~ WHITESPACE+ ~ ^"like" ~ !ASCII_ALPHANUMERIC)
+  | ^"not" ~ WHITESPACE+ ~ ^"like" ~ &punctuation
 }
-not_match         = @{
+not_match = @{
     "!~~="
-  | (!ASCII_ALPHANUMERIC ~ ^"not" ~ WHITESPACE+ ~ ^"match" ~ !ASCII_ALPHANUMERIC)
+  | ^"not" ~ WHITESPACE+ ~ ^"match" ~ &punctuation
 }
 
 punctuation = @{ "(" | ")" | WHITESPACE | EOI }

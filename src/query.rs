@@ -18,81 +18,59 @@ pub type Query = Box<dyn RecordFilter + Sync>;
 // ---
 
 pub fn parse(str: &str) -> Result<Query> {
-    let mut pairs = QueryParser::parse(Rule::whole, str)?;
-    Ok(new_query(pairs.next().unwrap())?)
+    let mut pairs = QueryParser::parse(Rule::input, str)?;
+    Ok(expression(pairs.next().unwrap())?)
 }
 
-fn new_query(pair: Pair<Rule>) -> Result<Query> {
-    assert_eq!(pair.as_rule(), Rule::query);
-
-    let inner = pair.into_inner().next().unwrap();
-    match inner.as_rule() {
-        Rule::logical_binary_op => new_logical_binary_op(inner),
-        Rule::statement => new_statement(inner),
+fn expression(pair: Pair<Rule>) -> Result<Query> {
+    match pair.as_rule() {
+        Rule::or => binary_op::<Or>(pair),
+        Rule::xor => binary_op::<Xor>(pair),
+        Rule::and => binary_op::<And>(pair),
+        Rule::not => not(pair),
+        Rule::primary => primary(pair),
         _ => unreachable!(),
     }
 }
 
-fn new_logical_binary_op(pair: Pair<Rule>) -> Result<Query> {
-    assert_eq!(pair.as_rule(), Rule::logical_binary_op);
-
+fn binary_op<Op: BinaryOp + Sync + 'static>(pair: Pair<Rule>) -> Result<Query> {
     let mut inner = pair.into_inner();
-    let lhs = new_statement(inner.next().unwrap())?;
-    let op = inner.next().unwrap();
-    let rhs = new_query(inner.next().unwrap())?;
-    match op.as_rule() {
-        Rule::and => Ok(Box::new(And { lhs, rhs })),
-        Rule::or => Ok(Box::new(Or { lhs, rhs })),
-        Rule::xor => Ok(Box::new(Xor { lhs, rhs })),
-        _ => unreachable!(),
+    let mut result = expression(inner.next().unwrap())?;
+    for inner in inner {
+        result = Box::new(Op::new(result, expression(inner)?));
     }
+    Ok(result)
 }
 
-fn new_statement(pair: Pair<Rule>) -> Result<Query> {
-    assert_eq!(pair.as_rule(), Rule::statement);
+fn not(pair: Pair<Rule>) -> Result<Query> {
+    assert_eq!(pair.as_rule(), Rule::not);
 
-    let inner = pair.into_inner().next().unwrap();
-    match inner.as_rule() {
-        Rule::logical_unary_op => new_logical_unary_op(inner),
-        Rule::primary => new_primary(inner),
-        _ => unreachable!(),
-    }
+    Ok(Box::new(Not {
+        arg: expression(pair.into_inner().next().unwrap())?,
+    }))
 }
 
-fn new_logical_unary_op(pair: Pair<Rule>) -> Result<Query> {
-    assert_eq!(pair.as_rule(), Rule::logical_unary_op);
-
-    let mut inner = pair.into_inner();
-    let op = inner.next().unwrap();
-    let arg = new_primary(inner.next().unwrap())?;
-    match op.as_rule() {
-        Rule::not => Ok(Box::new(Not { arg })),
-        _ => unreachable!(),
-    }
-}
-
-fn new_primary(pair: Pair<Rule>) -> Result<Query> {
+fn primary(pair: Pair<Rule>) -> Result<Query> {
     assert_eq!(pair.as_rule(), Rule::primary);
 
     let inner = pair.into_inner().next().unwrap();
     match inner.as_rule() {
-        Rule::query => new_query(inner),
-        Rule::term => new_term(inner),
-        _ => unreachable!(),
+        Rule::term => term(inner),
+        _ => expression(inner),
     }
 }
 
-fn new_term(pair: Pair<Rule>) -> Result<Query> {
+fn term(pair: Pair<Rule>) -> Result<Query> {
     assert_eq!(pair.as_rule(), Rule::term);
 
     let inner = pair.into_inner().next().unwrap();
     match inner.as_rule() {
-        Rule::field_filter => new_field_filter(inner),
+        Rule::field_filter => field_filter(inner),
         _ => unreachable!(),
     }
 }
 
-fn new_field_filter(pair: Pair<Rule>) -> Result<Query> {
+fn field_filter(pair: Pair<Rule>) -> Result<Query> {
     assert_eq!(pair.as_rule(), Rule::field_filter);
 
     let mut inner = pair.into_inner();
@@ -115,15 +93,8 @@ fn new_string(pair: Pair<Rule>) -> Result<String> {
 
 // ---
 
-struct And {
-    lhs: Query,
-    rhs: Query,
-}
-
-impl RecordFilter for And {
-    fn apply<'a>(&self, record: &'a Record<'a>) -> bool {
-        self.lhs.apply(record) && self.rhs.apply(record)
-    }
+trait BinaryOp: RecordFilter {
+    fn new(lhs: Query, rhs: Query) -> Self;
 }
 
 // ---
@@ -139,6 +110,12 @@ impl RecordFilter for Or {
     }
 }
 
+impl BinaryOp for Or {
+    fn new(lhs: Query, rhs: Query) -> Self {
+        Self { lhs, rhs }
+    }
+}
+
 // ---
 
 struct Xor {
@@ -149,6 +126,31 @@ struct Xor {
 impl RecordFilter for Xor {
     fn apply<'a>(&self, record: &'a Record<'a>) -> bool {
         self.lhs.apply(record) != self.rhs.apply(record)
+    }
+}
+
+impl BinaryOp for Xor {
+    fn new(lhs: Query, rhs: Query) -> Self {
+        Self { lhs, rhs }
+    }
+}
+
+// ---
+
+struct And {
+    lhs: Query,
+    rhs: Query,
+}
+
+impl RecordFilter for And {
+    fn apply<'a>(&self, record: &'a Record<'a>) -> bool {
+        self.lhs.apply(record) && self.rhs.apply(record)
+    }
+}
+
+impl BinaryOp for And {
+    fn new(lhs: Query, rhs: Query) -> Self {
+        Self { lhs, rhs }
     }
 }
 
@@ -171,11 +173,51 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_parse() {
-        let mut pairs = QueryParser::parse(Rule::whole, ".a=10").unwrap();
+    fn test_or_3() {
+        let mut pairs = QueryParser::parse(Rule::input, ".a=1 or .b=2 or .c=3").unwrap();
         let p1 = pairs.next().unwrap();
-        assert_eq!(p1.as_rule(), Rule::statement);
+        assert_eq!(p1.as_rule(), Rule::or);
         let mut pi1 = p1.into_inner();
+        assert_eq!(pi1.len(), 3);
+        assert_eq!(pi1.next().unwrap().as_rule(), Rule::primary);
+        assert_eq!(pi1.next().unwrap().as_rule(), Rule::primary);
+        assert_eq!(pi1.next().unwrap().as_rule(), Rule::primary);
+        assert_eq!(pi1.next(), None);
+    }
+
+    #[test]
+    fn test_and_3() {
+        let mut pairs = QueryParser::parse(Rule::input, ".a=1 and .b=2 and .c=3").unwrap();
+        let p1 = pairs.next().unwrap();
+        assert_eq!(p1.as_rule(), Rule::and);
+        let mut pi1 = p1.into_inner();
+        assert_eq!(pi1.len(), 3);
+        assert_eq!(pi1.next().unwrap().as_rule(), Rule::primary);
+        assert_eq!(pi1.next().unwrap().as_rule(), Rule::primary);
+        assert_eq!(pi1.next().unwrap().as_rule(), Rule::primary);
+        assert_eq!(pi1.next(), None);
+    }
+
+    #[test]
+    fn test_or_and() {
+        let mut pairs = QueryParser::parse(Rule::input, ".a=1 or .b=2 and .c=3").unwrap();
+        let p1 = pairs.next().unwrap();
+        assert_eq!(p1.as_rule(), Rule::or);
+        let mut pi1 = p1.into_inner();
+        assert_eq!(pi1.len(), 2);
+        assert_eq!(pi1.next().unwrap().as_rule(), Rule::primary);
+        assert_eq!(pi1.next().unwrap().as_rule(), Rule::and);
+        assert_eq!(pi1.next(), None);
+    }
+
+    #[test]
+    fn test_and_or() {
+        let mut pairs = QueryParser::parse(Rule::input, ".a=1 and .b=2 or .c=3").unwrap();
+        let p1 = pairs.next().unwrap();
+        assert_eq!(p1.as_rule(), Rule::or);
+        let mut pi1 = p1.into_inner();
+        assert_eq!(pi1.len(), 2);
+        assert_eq!(pi1.next().unwrap().as_rule(), Rule::and);
         assert_eq!(pi1.next().unwrap().as_rule(), Rule::primary);
         assert_eq!(pi1.next(), None);
     }
