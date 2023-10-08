@@ -39,7 +39,7 @@ fn new_logical_binary_op(pair: Pair<Rule>) -> Result<Query> {
     let mut inner = pair.into_inner();
     let lhs = new_statement(inner.next().unwrap())?;
     let op = inner.next().unwrap();
-    let rhs = new_statement(inner.next().unwrap())?;
+    let rhs = new_query(inner.next().unwrap())?;
     match op.as_rule() {
         Rule::and => Ok(Box::new(And { lhs, rhs })),
         Rule::or => Ok(Box::new(Or { lhs, rhs })),

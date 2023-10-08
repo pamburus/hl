@@ -40,7 +40,7 @@ impl<'a> Record<'a> {
         self.extra.iter().chain(self.extrax.iter())
     }
 
-    pub fn matches<F: RecordFilter + ?Sized>(&self, filter: &F) -> bool {
+    pub fn matches<F: RecordFilter>(&self, filter: F) -> bool {
         filter.apply(self)
     }
 

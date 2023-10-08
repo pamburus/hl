@@ -19,17 +19,17 @@ level_info    = @{ ^"info" | ^"inf" }
 level_warning = @{ ^"warning" | ^"warn" | ^"wrn" }
 level_error   = @{ ^"error" | ^"err" }
 
-logical_binary_op = _{
-    statement ~ (and | or | xor) ~ statement
+logical_binary_op =  {
+    statement ~ (and | or | xor) ~ query
 }
-logical_unary_op  = _{
+logical_unary_op  =  {
     not ~ primary
 }
 and               = @{
-    !ASCII_ALPHANUMERIC ~ ^"and" ~ !ASCII_ALPHANUMERIC
+    ^"and" ~ &punctuation
 }
 or                = @{
-    !ASCII_ALPHANUMERIC ~ ^"or" ~ !ASCII_ALPHANUMERIC
+    ^"or"
 }
 xor               = @{
     "!="
@@ -42,7 +42,7 @@ not               = @{
 is                = @{
     !ASCII_ALPHANUMERIC ~ ^"is" ~ !ASCII_ALPHANUMERIC
 }
-string_op         = _{ equal | like | match }
+string_op         = _{ equal | like | match | not_equal | not_like | not_match }
 equal             = @{
     "="
   | (!ASCII_ALPHANUMERIC ~ ^"eq" ~ !ASCII_ALPHANUMERIC)
@@ -55,6 +55,20 @@ match             = @{
     "~~="
   | (!ASCII_ALPHANUMERIC ~ ^"match" ~ !ASCII_ALPHANUMERIC)
 }
+not_equal         = @{
+    "!="
+  | (!ASCII_ALPHANUMERIC ~ ^"not" ~ WHITESPACE+ ~ ^"eq" ~ !ASCII_ALPHANUMERIC)
+}
+not_like          = @{
+    "!~="
+  | (!ASCII_ALPHANUMERIC ~ ^"not" ~ WHITESPACE+ ~ ^"like" ~ !ASCII_ALPHANUMERIC)
+}
+not_match         = @{
+    "!~~="
+  | (!ASCII_ALPHANUMERIC ~ ^"not" ~ WHITESPACE+ ~ ^"match" ~ !ASCII_ALPHANUMERIC)
+}
+
+punctuation = @{ "(" | ")" | WHITESPACE | EOI }
 
 string = ${ json_string | simple_string }
 

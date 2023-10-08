@@ -281,7 +281,7 @@ impl App {
                             }
                             if let Ok(record) = json::from_slice(line.bytes()) {
                                 let record = parser.parse(record);
-                                if record.matches(&self.options.filter) {
+                                if record.matches(self.options.filter_and_query()) {
                                     let offset = buf.len();
                                     formatter.format_record(&mut buf, &record);
                                     if let Some(ts) = record.ts {
