@@ -75,12 +75,20 @@ fn field_filter(pair: Pair<Rule>) -> Result<Query> {
 
     let mut inner = pair.into_inner();
     let lhs = inner.next().unwrap().as_str();
-    let op = inner.next().unwrap().as_str();
-    let rhs = new_string(inner.next().unwrap())?;
+    let op = match inner.next().unwrap().as_rule() {
+        Rule::equal => "=",
+        Rule::not_equal => "!=",
+        Rule::like => "~=",
+        Rule::not_like => "!~=",
+        Rule::regex_match => "~~=",
+        Rule::not_regex_match => "!~~=",
+        _ => unreachable!(),
+    };
+    let rhs = string(inner.next().unwrap())?;
     Ok(Box::new(FieldFilter::parse(&format!("{}{}{}", lhs, op, rhs))?))
 }
 
-fn new_string(pair: Pair<Rule>) -> Result<String> {
+fn string(pair: Pair<Rule>) -> Result<String> {
     assert_eq!(pair.as_rule(), Rule::string);
 
     let inner = pair.into_inner().next().unwrap();
