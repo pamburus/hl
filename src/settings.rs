@@ -32,11 +32,12 @@ pub struct Settings {
 
 impl Settings {
     pub fn load(app_dirs: &AppDirs) -> Result<Self, Error> {
-        let filename = app_dirs.config_dir.join("config.yaml");
+        let filename = std::env::var("HL_CONFIG")
+            .unwrap_or_else(|_| app_dirs.config_dir.join("config.yaml").to_string_lossy().to_string());
 
         Ok(Config::builder()
             .add_source(File::from_str(DEFAULT_SETTINGS, FileFormat::Yaml))
-            .add_source(File::with_name(&filename.to_string_lossy()).required(false))
+            .add_source(File::with_name(&filename).required(false))
             .build()?
             .try_deserialize()?)
     }
