@@ -17,6 +17,12 @@ Log viewer which translates JSON logs into pretty human-readable representation.
     curl -sSfL https://github.com/pamburus/hl/releases/latest/download/hl-macos.tar.gz | tar xz
     ```
 
+* Install [AUR package](https://aur.archlinux.org/packages/hl-log-viewer-bin) on Arch Linux
+
+    ```
+    yay -S hl-log-viewer-bin
+    ```
+
 * Install using [cargo](https://www.rust-lang.org/tools/install)
 
     ```
