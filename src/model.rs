@@ -40,75 +40,8 @@ impl<'a> Record<'a> {
         self.extra.iter().chain(self.extrax.iter())
     }
 
-    pub fn matches(&self, filter: &Filter) -> bool {
-        if filter.is_empty() {
-            return true;
-        }
-
-        if filter.since.is_some() || filter.until.is_some() {
-            if let Some(ts) = self.ts.as_ref().and_then(|ts| ts.parse()) {
-                if let Some(since) = filter.since {
-                    if ts < since {
-                        return false;
-                    }
-                }
-                if let Some(until) = filter.until {
-                    if ts > until {
-                        return false;
-                    }
-                }
-            }
-        }
-
-        if let Some(bound) = &filter.level {
-            if let Some(level) = self.level.as_ref() {
-                if level > bound {
-                    return false;
-                }
-            }
-        }
-
-        if !filter.fields.0.is_empty() {
-            for field in filter.fields.0.iter() {
-                match &field.key[..] {
-                    "msg" | "message" => {
-                        if !field.match_value(self.message.map(|x| x.get()), true) {
-                            return false;
-                        }
-                    }
-                    "logger" => {
-                        if !field.match_value(self.logger, false) {
-                            return false;
-                        }
-                    }
-                    "caller" => {
-                        if !field.match_value(self.caller, false) {
-                            return false;
-                        }
-                    }
-                    _ => {
-                        let mut matched = false;
-                        for (k, v) in self.fields() {
-                            match field.match_key(*k) {
-                                None => {}
-                                Some(KeyMatch::Full) => {
-                                    let escaped = v.get().starts_with('"');
-                                    matched |= field.match_value(Some(v.get()), escaped);
-                                }
-                                Some(KeyMatch::Partial(subkey)) => {
-                                    matched |= field.match_value_partial(subkey, *v);
-                                }
-                            }
-                        }
-                        if !matched {
-                            return false;
-                        }
-                    }
-                }
-            }
-        }
-
-        return true;
+    pub fn matches<F: RecordFilter>(&self, filter: &F) -> bool {
+        filter.apply(self)
     }
 
     fn with_capacity(capacity: usize) -> Self {
@@ -126,6 +59,12 @@ impl<'a> Record<'a> {
             },
         }
     }
+}
+
+// ---
+
+pub trait RecordFilter {
+    fn apply<'a>(&self, record: &'a Record<'a>) -> bool;
 }
 
 // ---
@@ -565,6 +504,48 @@ impl FieldFilter {
     }
 }
 
+impl RecordFilter for FieldFilter {
+    fn apply<'a>(&self, record: &'a Record<'a>) -> bool {
+        match &self.key[..] {
+            "msg" | "message" => {
+                if !self.match_value(record.message.map(|x| x.get()), true) {
+                    return false;
+                }
+            }
+            "logger" => {
+                if !self.match_value(record.logger, false) {
+                    return false;
+                }
+            }
+            "caller" => {
+                if !self.match_value(record.caller, false) {
+                    return false;
+                }
+            }
+            _ => {
+                let mut matched = false;
+                for (k, v) in record.fields() {
+                    match self.match_key(*k) {
+                        None => {}
+                        Some(KeyMatch::Full) => {
+                            let escaped = v.get().starts_with('"');
+                            matched |= self.match_value(Some(v.get()), escaped);
+                        }
+                        Some(KeyMatch::Partial(subkey)) => {
+                            matched |= self.match_value_partial(subkey, *v);
+                        }
+                    }
+                }
+                if !matched {
+                    return false;
+                }
+            }
+        }
+
+        true
+    }
+}
+
 // ---
 
 #[derive(Debug, Default)]
@@ -577,6 +558,12 @@ impl FieldFilterSet {
             fields.push(FieldFilter::parse(i.as_ref())?);
         }
         Ok(FieldFilterSet(fields))
+    }
+}
+
+impl RecordFilter for FieldFilterSet {
+    fn apply<'a>(&self, record: &'a Record<'a>) -> bool {
+        self.0.iter().all(|field| field.apply(record))
     }
 }
 
@@ -593,6 +580,43 @@ pub struct Filter {
 impl Filter {
     pub fn is_empty(&self) -> bool {
         self.fields.0.is_empty() && self.level.is_none() && self.since.is_none() && self.until.is_none()
+    }
+}
+
+impl RecordFilter for Filter {
+    fn apply<'a>(&self, record: &'a Record<'a>) -> bool {
+        if self.is_empty() {
+            return true;
+        }
+
+        if self.since.is_some() || self.until.is_some() {
+            if let Some(ts) = record.ts.as_ref().and_then(|ts| ts.parse()) {
+                if let Some(since) = self.since {
+                    if ts < since {
+                        return false;
+                    }
+                }
+                if let Some(until) = self.until {
+                    if ts > until {
+                        return false;
+                    }
+                }
+            }
+        }
+
+        if let Some(bound) = &self.level {
+            if let Some(level) = record.level.as_ref() {
+                if level > bound {
+                    return false;
+                }
+            }
+        }
+
+        if !self.fields.apply(record) {
+            return false;
+        }
+
+        true
     }
 }
 
