@@ -323,18 +323,11 @@ impl<'a> KeyMatcher<'a> {
     }
 
     pub fn match_key<'b>(&'b self, key: &str) -> Option<KeyMatch<'a>> {
-        let norm = |b: u8| {
-            if b == b'_' {
-                b'-'
-            } else {
-                b.to_ascii_lowercase()
-            }
-        };
         let bytes = self.key.as_bytes();
         if bytes
             .iter()
             .zip(key.as_bytes().iter())
-            .position(|(&x, &y)| norm(x) != norm(y))
+            .position(|(&x, &y)| Self::norm(x.into()) != Self::norm(y.into()))
             .is_some()
         {
             return None;
@@ -350,6 +343,14 @@ impl<'a> KeyMatcher<'a> {
             }
         } else {
             None
+        }
+    }
+
+    fn norm(c: char) -> char {
+        if c == '_' {
+            '-'
+        } else {
+            c.to_ascii_lowercase()
         }
     }
 }
@@ -413,7 +414,7 @@ impl FieldFilter {
             let (key, match_policy, op) = Self::parse_mp_op(key, value)?;
             let flat_key = key.as_bytes().iter().position(|&x| x == b'.').is_none();
             Ok(Self {
-                key: key.into(),
+                key: key.chars().map(KeyMatcher::norm).collect(),
                 match_policy,
                 op,
                 flat_key,
