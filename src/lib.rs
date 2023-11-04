@@ -1,3 +1,24 @@
+// public uses
+pub use app::{App, FieldOptions, Options, SegmentProcessor};
+pub use datefmt::{DateTimeFormatter, LinuxDateFormat};
+pub use filtering::DefaultNormalizing;
+pub use formatting::RecordFormatter;
+pub use model::{FieldFilterSet, Filter, Level, Parser, ParserSettings, RecordFilter};
+pub use query::Query;
+pub use settings::Settings;
+pub use theme::Theme;
+
+// public uses (platform-specific)
+pub use console::enable_ansi_support;
+
+// public type aliases
+pub type IncludeExcludeKeyFilter = filtering::IncludeExcludeKeyFilter<DefaultNormalizing>;
+pub type KeyMatchOptions = filtering::MatchOptions<DefaultNormalizing>;
+pub type QueryNone = model::RecordFilterNone;
+
+// private uses
+use lalrpop_util::lalrpop_mod;
+
 // public modules
 pub mod app;
 pub mod datefmt;
@@ -26,6 +47,7 @@ mod formatting;
 mod fsmon;
 mod model;
 mod pool;
+mod query_ast;
 mod replay;
 mod scanning;
 mod tee;
@@ -34,21 +56,3 @@ mod tee;
 #[cfg_attr(unix, path = "signal_unix.rs")]
 #[cfg_attr(windows, path = "signal_windows.rs")]
 pub mod signal;
-
-// public uses
-pub use app::{App, FieldOptions, Options, SegmentProcessor};
-pub use datefmt::{DateTimeFormatter, LinuxDateFormat};
-pub use filtering::DefaultNormalizing;
-pub use formatting::RecordFormatter;
-pub use model::{FieldFilterSet, Filter, Level, Parser, ParserSettings, RecordFilter};
-pub use query::Query;
-pub use settings::Settings;
-pub use theme::Theme;
-
-// public uses (platform-specific)
-pub use console::enable_ansi_support;
-
-// public type aliases
-pub type IncludeExcludeKeyFilter = filtering::IncludeExcludeKeyFilter<DefaultNormalizing>;
-pub type KeyMatchOptions = filtering::MatchOptions<DefaultNormalizing>;
-pub type QueryNone = model::RecordFilterNone;

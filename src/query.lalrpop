@@ -1,0 +1,13 @@
+use std::str::FromStr;
+
+grammar;
+
+pub enum Input {
+    r"[0-9]+"
+    <e:Expression> => e,
+    "(" <t:Term> ")" => t,
+};
+
+pub Whitespace: 
+
+Num: i32 = <s:r"[0-9]+"> => i32::from_str(s).unwrap();

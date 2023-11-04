@@ -6,7 +6,8 @@ use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
 
 fn main() {
-    build_capnp()
+    build_capnp();
+    build_lalrpop();
 }
 
 fn build_capnp() {
@@ -35,6 +36,10 @@ fn build_capnp() {
 
         std::fs::write(&hash_file, serde_json::to_string_pretty(&hashes).unwrap()).unwrap();
     }
+}
+
+fn build_lalrpop() {
+    lalrpop::process_root().unwrap();
 }
 
 fn file_hash(filename: &PathBuf) -> GenericArray<u8, U32> {
