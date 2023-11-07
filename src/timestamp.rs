@@ -1,6 +1,5 @@
 // third-party imports
-use chrono::naive::NaiveDateTime;
-use chrono::{DateTime, FixedOffset, TimeZone, Utc};
+use chrono::{DateTime, FixedOffset, NaiveDateTime};
 
 // ---
 
@@ -34,9 +33,9 @@ impl<'a> Timestamp<'a> {
         } else if let Ok(ts) = self.0.parse() {
             Some(ts)
         } else {
-            Utc.datetime_from_str(self.0, "%Y-%m-%d %H:%M:%S%.f")
+            NaiveDateTime::parse_from_str(self.0, "%Y-%m-%d %H:%M:%S%.f")
                 .ok()
-                .map(|ts| ts.into())
+                .map(|ts| ts.and_utc().into())
         }
     }
 
@@ -403,6 +402,16 @@ fn only_digits(b: &[u8]) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_parse() {
+        let test = |s, unix_timestamp, tz| {
+            let ts = Timestamp(s, None).parse().unwrap();
+            assert_eq!(ts.timestamp(), unix_timestamp);
+            assert_eq!(ts.timezone().local_minus_utc(), tz);
+        };
+        test("2020-08-21 07:20:48", 1597994448, 0);
+    }
 
     #[test]
     fn test_split_rfc3339() {
