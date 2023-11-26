@@ -27,6 +27,7 @@ mod model;
 mod pool;
 mod replay;
 mod scanning;
+mod serdex;
 mod tee;
 
 // conditional public modules

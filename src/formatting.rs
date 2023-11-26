@@ -24,6 +24,33 @@ type Buf = Vec<u8>;
 
 // ---
 
+pub trait RecordWithSourceFormatter {
+    fn format_record(&self, buf: &mut Buf, rec: model::RecordWithSource);
+}
+
+pub struct RawRecordFormatter {}
+
+impl RecordWithSourceFormatter for RawRecordFormatter {
+    fn format_record(&self, buf: &mut Buf, rec: model::RecordWithSource) {
+        buf.extend_from_slice(rec.source);
+        buf.push(b'\n');
+    }
+}
+
+impl<T: RecordWithSourceFormatter> RecordWithSourceFormatter for &T {
+    fn format_record(&self, buf: &mut Buf, rec: model::RecordWithSource) {
+        (**self).format_record(buf, rec)
+    }
+}
+
+impl RecordWithSourceFormatter for Box<dyn RecordWithSourceFormatter> {
+    fn format_record(&self, buf: &mut Buf, rec: model::RecordWithSource) {
+        (**self).format_record(buf, rec)
+    }
+}
+
+// ---
+
 pub struct RecordFormatter {
     theme: Arc<Theme>,
     unescape_fields: bool,
@@ -59,7 +86,7 @@ impl RecordFormatter {
         self
     }
 
-    pub fn format_record(&mut self, buf: &mut Buf, rec: &model::Record) {
+    pub fn format_record(&self, buf: &mut Buf, rec: &model::Record) {
         self.theme.apply(buf, &rec.level, |s| {
             //
             // time
@@ -275,10 +302,20 @@ impl RecordFormatter {
     }
 }
 
+impl RecordWithSourceFormatter for RecordFormatter {
+    fn format_record(&self, buf: &mut Buf, rec: model::RecordWithSource) {
+        RecordFormatter::format_record(self, buf, rec.record)
+    }
+}
+
+// ---
+
 fn format_str_unescaped(buf: &mut Buf, s: &str) {
     let mut reader = StrRead::new(&s[1..]);
     reader.parse_str_raw(buf).unwrap();
 }
+
+// ---
 
 struct FieldFormatter<'a> {
     rf: &'a RecordFormatter,
@@ -429,7 +466,7 @@ mod tests {
     use serde_json as json;
 
     fn format(rec: &Record) -> Result<String, Error> {
-        let mut formatter = RecordFormatter::new(
+        let formatter = RecordFormatter::new(
             Arc::new(Theme::from(testing::theme()?)),
             DateTimeFormatter::new(
                 LinuxDateFormat::new("%y-%m-%d %T.%3N").compile(),
@@ -459,8 +496,7 @@ mod tests {
                     ("ka", RawValue::from_string(r#"{"va":{"kb":42}}"#.into()).unwrap().as_ref()),
                 ]).unwrap(),
                 extrax: Vec::default(),
-            })
-            .unwrap(),
+            }).unwrap(),
             String::from("\u{1b}[0;2;3m00-01-02 03:04:05.123 \u{1b}[0;36m|\u{1b}[0;95mDBG\u{1b}[0;36m|\u{1b}[0;2;3m \u{1b}[0;2;4mtl:\u{1b}[0;2;3m \u{1b}[0;1;39mtm \u{1b}[0;32mka\u{1b}[0;2m:\u{1b}[0;33m{ \u{1b}[0;32mva\u{1b}[0;2m:\u{1b}[0;33m{ \u{1b}[0;32mkb\u{1b}[0;2m:\u{1b}[0;94m42\u{1b}[0;33m } }\u{1b}[0;2;3m @ tc\u{1b}[0m\n"),
         );
     }

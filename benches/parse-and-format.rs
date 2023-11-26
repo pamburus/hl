@@ -21,7 +21,7 @@ fn benchmark(c: &mut Criterion) {
             c.bench_function(format!("{}/{}", name, theme), |b| {
                 let settings = Settings::default();
                 let parser = Parser::new(ParserSettings::new(&settings.fields.predefined, empty(), false));
-                let mut formatter = RecordFormatter::new(
+                let formatter = RecordFormatter::new(
                     Arc::new(Theme::embedded(theme).unwrap()),
                     DateTimeFormatter::new(
                         LinuxDateFormat::new("%b %d %T.%3N").compile(),
@@ -32,7 +32,7 @@ fn benchmark(c: &mut Criterion) {
                     settings::Formatting::default(),
                 );
                 let filter = Filter::default();
-                let mut processor = SegmentProcessor::new(&parser, &mut formatter, &filter);
+                let mut processor = SegmentProcessor::new(&parser, &formatter, &filter);
                 let mut buf = Vec::new();
                 b.iter(|| {
                     processor.run(record, &mut buf, "", &mut RecordIgnorer {});
