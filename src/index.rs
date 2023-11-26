@@ -409,7 +409,7 @@ impl Index {
         Ok(Index {
             source: SourceFile {
                 size: source.get_size(),
-                path: source.get_path()?.into(),
+                path: source.get_path()?.to_string()?,
                 modified: (modified.get_sec(), modified.get_nsec()),
                 stat: Self::load_stat(source.get_index()?),
                 blocks: Self::load_blocks(source)?,
@@ -425,7 +425,7 @@ impl Index {
         let root: schema::root::Builder = message.init_root();
         let mut source = root.init_source();
         source.set_size(self.source.size);
-        source.set_path(&self.source.path);
+        source.set_path(self.source.path.as_bytes().into());
         let mut modified = source.reborrow().init_modified();
         modified.set_sec(self.source.modified.0);
         modified.set_nsec(self.source.modified.1);
