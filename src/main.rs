@@ -67,8 +67,12 @@ struct Opt {
     )]
     theme: String,
     //
-    /// Disable unescaping and prettifying of field values.
+    /// Output raw JSON messages instead of formatter messages, it can be useful for applying filters and saving results in original format.
     #[arg(short, long)]
+    raw: bool,
+    //
+    /// Disable unescaping and prettifying of field values.
+    #[arg(long)]
     raw_fields: bool,
     //
     /// Number of interrupts to ignore, i.e. Ctrl-C (SIGINT).
@@ -357,6 +361,7 @@ fn run() -> Result<()> {
     // Create app.
     let app = hl::App::new(hl::Options {
         theme: Arc::new(theme),
+        raw: opt.raw,
         raw_fields: opt.raw_fields,
         time_format,
         buffer_size,

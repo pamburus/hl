@@ -63,6 +63,31 @@ impl<'a> Record<'a> {
 
 // ---
 
+pub trait RecordWithSourceConstructor {
+    fn with_source<'a>(&'a self, source: &'a [u8]) -> RecordWithSource<'a>;
+}
+
+// ---
+
+pub struct RecordWithSource<'a> {
+    pub record: &'a Record<'a>,
+    pub source: &'a [u8],
+}
+
+impl<'a> RecordWithSource<'a> {
+    pub fn new(record: &'a Record<'a>, source: &'a [u8]) -> Self {
+        Self { record, source }
+    }
+}
+
+impl RecordWithSourceConstructor for Record<'_> {
+    fn with_source<'a>(&'a self, source: &'a [u8]) -> RecordWithSource<'a> {
+        RecordWithSource::new(self, source)
+    }
+}
+
+// ---
+
 pub trait RecordFilter {
     fn apply<'a>(&self, record: &'a Record<'a>) -> bool;
 }

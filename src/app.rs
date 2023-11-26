@@ -30,11 +30,12 @@ use crate::datefmt::{DateTimeFormat, DateTimeFormatter};
 use crate::error::*;
 use crate::fmtx::aligned_left;
 use crate::fsmon::{self, EventKind};
-use crate::formatting::RecordFormatter;
+use crate::formatting::{RecordFormatter, RecordWithSourceFormatter, RawRecordFormatter};
 use crate::index::{Indexer, Timestamp};
 use crate::input::{BlockLine, InputHolder, InputReference, Input};
-use crate::model::{Filter, Parser, ParserSettings, RawRecord, Record};
+use crate::model::{Filter, Parser, ParserSettings, RawRecord, Record, RecordWithSourceConstructor};
 use crate::scanning::{BufFactory, Scanner, Segment, SegmentBufFactory};
+use crate::serdex::StreamDeserializerWithOffsets;
 use crate::settings::{Fields, Formatting};
 use crate::theme::{Element, StylingPush, Theme};
 use crate::timezone::Tz;
@@ -47,6 +48,7 @@ use crate::IncludeExcludeKeyFilter;
 pub struct Options {
     pub theme: Arc<Theme>,
     pub time_format: DateTimeFormat,
+    pub raw: bool,
     pub raw_fields: bool,
     pub buffer_size: NonZeroUsize,
     pub max_message_size: NonZeroUsize,
@@ -131,8 +133,8 @@ impl App {
             // spawn processing threads
             for (rxi, txo) in izip!(rxi, txo) {
                 scope.spawn(closure!(ref bfo, ref parser, ref sfi, ref input_badges, |_| {
-                    let mut formatter = self.formatter();
-                    let mut processor = SegmentProcessor::new(&parser, &mut formatter, &self.options.filter);
+                    let formatter = self.formatter();
+                    let mut processor = SegmentProcessor::new(&parser, &formatter, &self.options.filter);
                     for (i, segment) in rxi.iter() {
                         let prefix = input_badges.as_ref().map(|b|b[i].as_str()).unwrap_or("");
                         match segment {
@@ -264,7 +266,7 @@ impl App {
             let mut workers = Vec::with_capacity(n);
             for (rxp, txw) in izip!(rxp, txw) {
                 workers.push(scope.spawn(closure!(ref parser, |_| -> Result<()> {
-                    let mut formatter = self.formatter();
+                    let formatter = self.formatter();
                     for (block, ts_min, i, j) in rxp.iter() {
                         let mut buf = Vec::with_capacity(2 * usize::try_from(block.size())?);
                         let mut items = Vec::with_capacity(2 * usize::try_from(block.lines_valid())?);
@@ -276,7 +278,7 @@ impl App {
                                 let record = parser.parse(record);
                                 if record.matches(&self.options.filter) {
                                     let offset = buf.len();
-                                    formatter.format_record(&mut buf, &record);
+                                    formatter.format_record(&mut buf, record.with_source(line.bytes()));
                                     if let Some(ts) = record.ts {
                                         if let Some(unix_ts) = ts.unix_utc() {
                                             items.push((unix_ts.into(), offset..buf.len()));
@@ -445,8 +447,8 @@ impl App {
             let mut workers = Vec::with_capacity(n);
             for _ in 0..n {
                 let worker = scope.spawn(closure!(ref bfo, ref parser, ref sfi, ref input_badges, clone rxi, clone txo, |_| {
-                    let mut formatter = self.formatter();
-                    let mut processor = SegmentProcessor::new(&parser, &mut formatter, &self.options.filter);
+                    let formatter = self.formatter();
+                    let mut processor = SegmentProcessor::new(&parser, &formatter, &self.options.filter);
                     for (i, j, segment) in rxi.iter() {
                         let prefix = input_badges.as_ref().map(|b|b[i].as_str()).unwrap_or("");
                         match segment {
@@ -564,15 +566,19 @@ impl App {
         ))
     }
 
-    fn formatter(&self) -> RecordFormatter {
-        RecordFormatter::new(
-            self.options.theme.clone(),
-            DateTimeFormatter::new(self.options.time_format.clone(), self.options.time_zone),
-            self.options.hide_empty_fields,
-            self.options.fields.filter.clone(),
-            self.options.formatting.clone(),
-        )
-        .with_field_unescaping(!self.options.raw_fields)
+    fn formatter(&self) -> Box<dyn RecordWithSourceFormatter> {
+        if self.options.raw {
+            Box::new(RawRecordFormatter{})
+        } else {
+            Box::new(RecordFormatter::new(
+                self.options.theme.clone(),
+                DateTimeFormatter::new(self.options.time_format.clone(), self.options.time_zone),
+                self.options.hide_empty_fields,
+                self.options.fields.filter.clone(),
+                self.options.formatting.clone(),
+            )
+            .with_field_unescaping(!self.options.raw_fields))
+        }
     }
 
     fn input_badges<'a, I: IntoIterator<Item = &'a InputReference>>(&self, inputs: I) -> Option<Vec<String>> {
@@ -676,14 +682,14 @@ impl App {
 
 // ---
 
-pub struct SegmentProcessor<'a> {
+pub struct SegmentProcessor<'a, F: RecordWithSourceFormatter> {
     parser: &'a Parser,
-    formatter: &'a mut RecordFormatter,
+    formatter: F,
     filter: &'a Filter,
 }
 
-impl<'a> SegmentProcessor<'a> {
-    pub fn new(parser: &'a Parser, formatter: &'a mut RecordFormatter, filter: &'a Filter) -> Self {
+impl<'a, F: RecordWithSourceFormatter> SegmentProcessor<'a, F> {
+    pub fn new(parser: &'a Parser, formatter: F, filter: &'a Filter) -> Self {
         Self {
             parser,
             formatter,
@@ -699,20 +705,21 @@ impl<'a> SegmentProcessor<'a> {
             if data.len() == 0 {
                 continue;
             }
-            let mut stream = json::Deserializer::from_slice(data).into_iter::<RawRecord>();
+            let stream = json::Deserializer::from_slice(data).into_iter::<RawRecord>();
+            let mut stream = StreamDeserializerWithOffsets(stream);
             let mut some = false;
-            while let Some(Ok(record)) = stream.next() {
+            while let Some(Ok((record, offsets))) = stream.next() {
                 some = true;
                 let record = self.parser.parse(record);
                 if record.matches(self.filter) {
                     let begin = buf.len();
                     buf.extend(prefix.as_bytes());
-                    self.formatter.format_record(buf, &record);
+                    self.formatter.format_record(buf, record.with_source(&data[offsets]));
                     let end = buf.len();
                     observer.observe_record(&record, begin..end);
                 }
             }
-            let remainder = if some { &data[stream.byte_offset()..] } else { data };
+            let remainder = if some { &data[stream.0.byte_offset()..] } else { data };
             if remainder.len() != 0 && self.filter.is_empty() {
                 buf.extend_from_slice(remainder);
                 buf.push(b'\n');

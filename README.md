@@ -354,7 +354,8 @@ Options:
       --paging <PAGING>                                  Output paging options [env: HL_PAGING=] [default: auto] [possible values: auto, always, never]
   -P                                                     Handful alias for --paging=never, overrides --paging option
       --theme <THEME>                                    Color theme [env: HL_THEME=] [default: universal]
-  -r, --raw-fields                                       Disable unescaping and prettifying of field values
+  -r, --raw                                              Output raw JSON messages instead of formatter messages, it can be useful for applying filters and saving results in original format
+      --raw-fields                                       Disable unescaping and prettifying of field values
       --interrupt-ignore-count <INTERRUPT_IGNORE_COUNT>  Number of interrupts to ignore, i.e. Ctrl-C (SIGINT) [env: HL_INTERRUPT_IGNORE_COUNT=] [default: 3]
       --buffer-size <BUFFER_SIZE>                        Buffer size [env: HL_BUFFER_SIZE=] [default: "256 KiB"]
       --max-message-size <MAX_MESSAGE_SIZE>              Maximum message size [env: HL_MAX_MESSAGE_SIZE=] [default: "64 MiB"]
