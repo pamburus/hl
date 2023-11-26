@@ -248,7 +248,7 @@ impl Indexer {
                 scope.spawn(closure!(ref sfi, |_| {
                     for segment in rxi.iter() {
                         let ((stat, chronology), segment) = match segment {
-                            Segment::Complete(segment) => (self.process_segement(&segment), segment),
+                            Segment::Complete(segment) => (self.process_segment(&segment), segment),
                             Segment::Incomplete(segment, _) => {
                                 let mut stat = Stat::new();
                                 stat.add_invalid();
@@ -304,7 +304,7 @@ impl Indexer {
         .unwrap()
     }
 
-    fn process_segement(&self, segment: &SegmentBuf) -> (Stat, Chronology) {
+    fn process_segment(&self, segment: &SegmentBuf) -> (Stat, Chronology) {
         let mut stat = Stat::new();
         let mut sorted = true;
         let mut prev_ts = None;
@@ -441,7 +441,7 @@ impl Index {
         let ts = index.get_timestamps();
         let flags = index.get_flags();
         Stat {
-            flags: flags,
+            flags,
             lines_valid: lines.get_valid(),
             lines_invalid: lines.get_invalid(),
             ts_min_max: if flags & schema::FLAG_HAS_TIMESTAMPS != 0 {
