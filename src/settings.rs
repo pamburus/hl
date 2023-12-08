@@ -66,12 +66,15 @@ pub struct Fields {
 // ---
 
 #[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
 pub struct PredefinedFields {
     pub time: TimeField,
     pub level: LevelField,
     pub message: MessageField,
     pub logger: LoggerField,
     pub caller: CallerField,
+    pub caller_file: CallerFileField,
+    pub caller_line: CallerLineField,
 }
 
 // ---
@@ -109,6 +112,16 @@ pub struct LoggerField(Field);
 
 #[derive(Debug, Serialize, Deserialize, Deref)]
 pub struct CallerField(Field);
+
+// ---
+
+#[derive(Debug, Serialize, Deserialize, Deref)]
+pub struct CallerFileField(Field);
+
+// ---
+
+#[derive(Debug, Serialize, Deserialize, Deref)]
+pub struct CallerLineField(Field);
 
 // ---
 

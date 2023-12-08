@@ -30,7 +30,7 @@ pub struct Record<'a> {
     pub message: Option<&'a RawValue>,
     pub level: Option<Level>,
     pub logger: Option<&'a str>,
-    pub caller: Option<&'a str>,
+    pub caller: Option<Caller<'a>>,
     pub(crate) extra: heapless::Vec<(&'a str, &'a RawValue), RECORD_EXTRA_CAPACITY>,
     pub(crate) extrax: Vec<(&'a str, &'a RawValue)>,
 }
@@ -69,6 +69,13 @@ pub trait RecordWithSourceConstructor {
 
 // ---
 
+pub enum Caller<'a> {
+    Text(&'a str),
+    FileLine(&'a str, &'a str),
+}
+
+// ---
+
 pub struct RecordWithSource<'a> {
     pub record: &'a Record<'a>,
     pub source: &'a [u8],
@@ -94,9 +101,11 @@ pub trait RecordFilter {
 
 // ---
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct ParserSettings {
-    fields: HashMap<String, (FieldSettings, usize)>,
+    pre_parse_time: bool,
+    level: Vec<HashMap<String, Level>>,
+    blocks: Vec<ParserSettingsBlock>,
     ignore: Vec<WildMatch>,
 }
 
@@ -104,62 +113,87 @@ impl ParserSettings {
     pub fn new<'a, I: IntoIterator<Item = &'a String>>(
         predefined: &PredefinedFields,
         ignore: I,
-        preparse_time: bool,
+        pre_parse_time: bool,
     ) -> Self {
-        let mut fields = HashMap::new();
-        for (i, name) in predefined.time.names.iter().enumerate() {
-            fields.insert(name.clone(), (FieldSettings::Time(preparse_time), i));
-        }
+        let mut result = Self {
+            pre_parse_time,
+            level: Vec::new(),
+            blocks: vec![ParserSettingsBlock::default()],
+            ignore: ignore.into_iter().map(|x| WildMatch::new(x)).collect(),
+        };
+
+        result.init(predefined);
+        result
+    }
+
+    fn init(&mut self, pf: &PredefinedFields) {
+        self.build_block(0, &pf.time.names, FieldSettings::Time, 0);
+        self.build_block(0, &pf.message.names, FieldSettings::Message, 0);
+        self.build_block(0, &pf.logger.names, FieldSettings::Logger, 0);
+        self.build_block(0, &pf.caller.names, FieldSettings::Caller, 0);
+        self.build_block(0, &pf.caller_file.names, FieldSettings::CallerFile, 0);
+        self.build_block(0, &pf.caller_line.names, FieldSettings::CallerLine, 0);
+
         let mut j = 0;
-        for variant in &predefined.level.variants {
+        for variant in &pf.level.variants {
             let mut mapping = HashMap::new();
             for (level, values) in &variant.values {
                 for value in values {
                     mapping.insert(value.clone(), level.clone());
                 }
             }
-            for (i, name) in variant.names.iter().enumerate() {
-                fields.insert(name.clone(), (FieldSettings::Level(mapping.clone()), j + i));
-            }
+            let k = self.level.len();
+            self.level.push(mapping.clone());
+            self.build_block(0, &variant.names, FieldSettings::Level(k), j);
             j += variant.names.len();
-        }
-        for (i, name) in predefined.message.names.iter().enumerate() {
-            fields.insert(name.clone(), (FieldSettings::Message, i));
-        }
-        for (i, name) in predefined.logger.names.iter().enumerate() {
-            fields.insert(name.clone(), (FieldSettings::Logger, i));
-        }
-        for (i, name) in predefined.caller.names.iter().enumerate() {
-            fields.insert(name.clone(), (FieldSettings::Caller, i));
-        }
-        Self {
-            fields,
-            ignore: ignore.into_iter().map(|v| WildMatch::new(v)).collect(),
         }
     }
 
-    fn apply<'a>(&self, key: &'a str, value: &'a RawValue, to: &mut Record<'a>, ctx: &mut PriorityContext) {
-        match self.fields.get(key) {
-            Some((field, p)) => {
-                let kind = field.kind();
-                let priority = ctx.priority(kind);
-                if priority.is_none() || Some(*p) <= *priority {
-                    field.apply(value, to);
-                    *priority = Some(*p);
-                }
-            }
-            None => {
-                for pattern in &self.ignore {
-                    if pattern.matches(key) {
-                        return;
+    fn build_block<'a, N: IntoIterator<Item = &'a String>>(
+        &mut self,
+        n: usize,
+        names: N,
+        settings: FieldSettings,
+        priority: usize,
+    ) {
+        for (i, name) in names.into_iter().enumerate() {
+            self.build_block_for_name(n, name, settings, priority + i)
+        }
+    }
+
+    fn build_block_for_name(&mut self, n: usize, name: &String, settings: FieldSettings, priority: usize) {
+        self.blocks[n].fields.insert(name.clone(), (settings, priority));
+        let mut remainder = &name[..];
+        while let Some(k) = remainder.rfind('.') {
+            let (name, nested) = name.split_at(k);
+            let nested = &nested[1..];
+
+            let nest = self.blocks[n]
+                .fields
+                .get(name)
+                .and_then(|f| {
+                    if let FieldSettings::Nested(nest) = f.0 {
+                        Some(nest)
+                    } else {
+                        None
                     }
-                }
-                match to.extra.push((key, value)) {
-                    Ok(_) => {}
-                    Err(value) => to.extrax.push(value),
-                }
-            }
-        };
+                })
+                .unwrap_or_else(|| {
+                    let nest = self.blocks.len();
+                    self.blocks.push(ParserSettingsBlock::default());
+                    self.blocks[n]
+                        .fields
+                        .insert(name.to_string(), (FieldSettings::Nested(nest), priority));
+                    nest
+                });
+
+            self.build_block_for_name(nest, &nested.into(), settings, priority);
+            remainder = name;
+        }
+    }
+
+    fn apply<'a>(&self, key: &'a str, value: &'a RawValue, to: &mut Record<'a>, pc: &mut PriorityController) {
+        self.blocks[0].apply(self, key, value, to, pc, true);
     }
 
     fn apply_each<'a, 'i, I>(&self, items: I, to: &mut Record<'a>)
@@ -167,82 +201,208 @@ impl ParserSettings {
         I: IntoIterator<Item = &'i (&'a str, &'a RawValue)>,
         'a: 'i,
     {
-        let mut ctx = PriorityContext {
-            time: None,
-            level: None,
-            logger: None,
-            message: None,
-            caller: None,
-        };
+        let mut pc = PriorityController::default();
+        self.apply_each_ctx(items, to, &mut pc);
+    }
+
+    fn apply_each_ctx<'a, 'i, I>(&self, items: I, to: &mut Record<'a>, pc: &mut PriorityController)
+    where
+        I: IntoIterator<Item = &'i (&'a str, &'a RawValue)>,
+        'a: 'i,
+    {
         for (key, value) in items {
-            self.apply(key, value, to, &mut ctx)
+            self.apply(key, value, to, pc)
         }
     }
 }
 
 // ---
 
-struct PriorityContext {
+#[derive(Default, Debug)]
+struct ParserSettingsBlock {
+    fields: HashMap<String, (FieldSettings, usize)>,
+}
+
+impl ParserSettingsBlock {
+    fn apply<'a>(
+        &self,
+        ps: &ParserSettings,
+        key: &'a str,
+        value: &'a RawValue,
+        to: &mut Record<'a>,
+        pc: &mut PriorityController,
+        is_root: bool,
+    ) {
+        let done = match self.fields.get(key) {
+            Some((field, priority)) => {
+                let kind = field.kind();
+                if let Some(kind) = kind {
+                    pc.prioritize(kind, *priority, |pc| field.apply_ctx(ps, value, to, pc))
+                } else {
+                    field.apply_ctx(ps, value, to, pc);
+                    false
+                }
+            }
+            None => false,
+        };
+        if done || !is_root {
+            return;
+        }
+
+        for pattern in &ps.ignore {
+            if pattern.matches(key) {
+                return;
+            }
+        }
+        match to.extra.push((key, value)) {
+            Ok(_) => {}
+            Err(value) => to.extrax.push(value),
+        }
+    }
+
+    fn apply_each_ctx<'a, 'i, I>(
+        &self,
+        ps: &ParserSettings,
+        items: I,
+        to: &mut Record<'a>,
+        ctx: &mut PriorityController,
+        is_root: bool,
+    ) where
+        I: IntoIterator<Item = &'i (&'a str, &'a RawValue)>,
+        'a: 'i,
+    {
+        for (key, value) in items {
+            self.apply(ps, key, value, to, ctx, is_root)
+        }
+    }
+}
+
+// ---
+
+#[derive(Default)]
+struct PriorityController {
     time: Option<usize>,
     level: Option<usize>,
     logger: Option<usize>,
     message: Option<usize>,
     caller: Option<usize>,
+    caller_file: Option<usize>,
+    caller_line: Option<usize>,
 }
 
-impl PriorityContext {
-    fn priority(&mut self, kind: FieldKind) -> &mut Option<usize> {
-        match kind {
+impl PriorityController {
+    fn prioritize<F: FnOnce(&mut Self) -> ()>(&mut self, kind: FieldKind, priority: usize, update: F) -> bool {
+        let p = match kind {
             FieldKind::Time => &mut self.time,
             FieldKind::Level => &mut self.level,
             FieldKind::Logger => &mut self.logger,
             FieldKind::Message => &mut self.message,
             FieldKind::Caller => &mut self.caller,
+            FieldKind::CallerFile => &mut self.caller_file,
+            FieldKind::CallerLine => &mut self.caller_line,
+        };
+
+        if p.is_none() || Some(priority) <= *p {
+            *p = Some(priority);
+            update(self);
+            true
+        } else {
+            false
         }
     }
 }
 
 // ---
 
+#[derive(Clone, Copy, Debug)]
 enum FieldSettings {
-    Time(bool),
-    Level(HashMap<String, Level>),
+    Time,
+    Level(usize),
     Logger,
     Message,
     Caller,
+    CallerFile,
+    CallerLine,
+    Nested(usize),
 }
 
 impl FieldSettings {
-    fn apply<'a>(&self, value: &'a RawValue, to: &mut Record<'a>) {
-        match self {
-            Self::Time(preparse) => {
+    fn apply<'a>(&self, ps: &ParserSettings, value: &'a RawValue, to: &mut Record<'a>) {
+        match *self {
+            Self::Time => {
                 let s = value.get();
                 let s = if s.as_bytes()[0] == b'"' { &s[1..s.len() - 1] } else { s };
                 let ts = Timestamp::new(s, None);
-                if *preparse {
+                if ps.pre_parse_time {
                     to.ts = Some(Timestamp::new(ts.raw(), Some(ts.parse())));
                 } else {
                     to.ts = Some(ts);
                 }
             }
-            Self::Level(values) => {
+            Self::Level(i) => {
                 to.level = json::from_str(value.get())
                     .ok()
-                    .and_then(|x: &'a str| values.get(x).cloned());
+                    .and_then(|x: &'a str| ps.level[i].get(x).cloned());
             }
             Self::Logger => to.logger = json::from_str(value.get()).ok(),
             Self::Message => to.message = Some(value),
-            Self::Caller => to.caller = json::from_str(value.get()).ok(),
+            Self::Caller => to.caller = json::from_str(value.get()).ok().map(|x| Caller::Text(x)),
+            Self::CallerFile => match &mut to.caller {
+                None => {
+                    to.caller = json::from_str(value.get()).ok().map(|x| Caller::FileLine(x, ""));
+                }
+                Some(Caller::FileLine(file, _)) => {
+                    if let Some(value) = json::from_str(value.get()).ok() {
+                        *file = value
+                    }
+                }
+                _ => {}
+            },
+            Self::CallerLine => match &mut to.caller {
+                None => {
+                    to.caller = Some(Caller::FileLine("", value.get()));
+                }
+                Some(Caller::FileLine(_, line)) => {
+                    if let Some(value) = json::from_str(value.get()).ok() {
+                        *line = value
+                    }
+                }
+                _ => {}
+            },
+            Self::Nested(_) => {}
         }
     }
 
-    fn kind(&self) -> FieldKind {
+    fn apply_ctx<'a>(
+        &self,
+        ps: &ParserSettings,
+        value: &'a RawValue,
+        to: &mut Record<'a>,
+        ctx: &mut PriorityController,
+    ) {
+        match *self {
+            Self::Nested(nested) => {
+                let s = value.get();
+                if s.len() > 0 && s.as_bytes()[0] == b'{' {
+                    if let Ok(record) = json::from_str::<RawRecord>(s) {
+                        ps.blocks[nested].apply_each_ctx(ps, record.fields(), to, ctx, false);
+                    }
+                }
+            }
+            _ => self.apply(ps, value, to),
+        }
+    }
+
+    fn kind(&self) -> Option<FieldKind> {
         match self {
-            Self::Time(_) => FieldKind::Time,
-            Self::Level(_) => FieldKind::Level,
-            Self::Logger => FieldKind::Logger,
-            Self::Message => FieldKind::Message,
-            Self::Caller => FieldKind::Caller,
+            Self::Time => Some(FieldKind::Time),
+            Self::Level(_) => Some(FieldKind::Level),
+            Self::Logger => Some(FieldKind::Logger),
+            Self::Message => Some(FieldKind::Message),
+            Self::Caller => Some(FieldKind::Caller),
+            Self::CallerFile => Some(FieldKind::CallerFile),
+            Self::CallerLine => Some(FieldKind::CallerLine),
+            Self::Nested(_) => None,
         }
     }
 }
@@ -544,7 +704,11 @@ impl RecordFilter for FieldFilter {
                 }
             }
             "caller" => {
-                if !self.match_value(record.caller, false) {
+                if let Some(Caller::Text(caller)) = record.caller {
+                    if !self.match_value(Some(caller), false) {
+                        return false;
+                    }
+                } else {
                     return false;
                 }
             }

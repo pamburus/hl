@@ -10,45 +10,30 @@ fields:
   # Configuration of the predefined set of fields.
   predefined:
     time:
-      names:
-        [
-          ts,
-          TS,
-          time,
-          TIME,
-          Time,
-          Timestamp,
-          _SOURCE_REALTIME_TIMESTAMP,
-          __REALTIME_TIMESTAMP,
-        ]
+      names: ['@timestamp']
     logger:
-      names: [logger, LOGGER, Logger]
+      names: [log.logger]
     level:
       variants:
-        - names: [level, LEVEL, Level]
+        - names: [log.level]
           values:
-            debug: [debug, Debug]
-            info: [info, information, Information]
-            warning: [warning, Warning, warn]
-            error: [error, Error, err, fatal, critical, panic]
-        - names: [PRIORITY]
-          values:
-            debug: [7]
-            info: [6]
-            warning: [5, 4]
-            error: [3, 2, 1]
+            debug: [debug, dbg, d]
+            info: [info, inf, i, informational]
+            warning: [warning, warn, wrn, w]
+            error: [error, err, fatal, critical, panic, e]
     message:
-      names: [msg, message, MESSAGE, Message]
+      names: [message]
     caller:
-      names: [caller, CALLER, Caller]
+      names: []
     caller-file:
-      names: []
+      names: [log.origin.file.name]
     caller-line:
-      names: []
+      names: [log.origin.file.line]
   # List of wildcard field names to ignore.
   ignore: ['_*']
   # List of exact field names to hide.
-  hide: []
+  hide:
+    - log
 
 # Formatting settings.
 formatting:

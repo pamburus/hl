@@ -15,7 +15,7 @@ use crate::theme;
 use crate::IncludeExcludeKeyFilter;
 use datefmt::DateTimeFormatter;
 use fmtx::{aligned_left, centered};
-use model::Level;
+use model::{Caller, Level};
 use theme::{Element, StylingPush, Theme};
 
 // ---
@@ -176,14 +176,25 @@ impl RecordFormatter {
             //
             // caller
             //
-            if let Some(text) = rec.caller {
+            if let Some(caller) = &rec.caller {
                 s.element(Element::Caller, |s| {
                     s.batch(|buf| {
                         buf.push(b' ');
                         buf.extend_from_slice(self.cfg.punctuation.source_location_separator.as_bytes())
                     });
                     s.element(Element::CallerInner, |s| {
-                        s.batch(|buf| buf.extend_from_slice(text.as_bytes()))
+                        s.batch(|buf| {
+                            match caller {
+                                Caller::Text(text) => {
+                                    buf.extend_from_slice(text.as_bytes());
+                                }
+                                Caller::FileLine(file, line) => {
+                                    buf.extend_from_slice(file.as_bytes());
+                                    buf.push(b':');
+                                    buf.extend_from_slice(line.as_bytes());
+                                }
+                            };
+                        });
                     });
                 });
             };
@@ -491,7 +502,7 @@ mod tests {
                 message: Some(RawValue::from_string(r#""tm""#.into()).unwrap().as_ref()),
                 level: Some(Level::Debug),
                 logger: Some("tl"),
-                caller: Some("tc"),
+                caller: Some(Caller::Text("tc")),
                 extra: heapless::Vec::from_slice(&[
                     ("ka", RawValue::from_string(r#"{"va":{"kb":42}}"#.into()).unwrap().as_ref()),
                 ]).unwrap(),
