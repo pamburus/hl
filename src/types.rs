@@ -13,4 +13,6 @@ pub enum FieldKind {
     Logger,
     Message,
     Caller,
+    CallerFile,
+    CallerLine,
 }
