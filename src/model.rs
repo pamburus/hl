@@ -363,7 +363,9 @@ impl FieldSettings {
                     to.caller = Some(Caller::FileLine("", value.get()));
                 }
                 Some(Caller::FileLine(_, line)) => {
-                    if let Some(value) = json::from_str(value.get()).ok() {
+                    if value.get().bytes().next().map_or(false, |x| x.is_ascii_digit()) {
+                        *line = value.get()
+                    } else if let Some(value) = json::from_str(value.get()).ok() {
                         *line = value
                     }
                 }
