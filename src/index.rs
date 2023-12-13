@@ -315,6 +315,8 @@ impl Indexer {
             let data = strip(data, b'\r');
             let mut ts = None;
             if data.len() != 0 {
+                let prefix = data.split(|c| *c == b'{').next().unwrap();
+                let data = &data[prefix.len()..];
                 match json::from_slice::<RawRecord>(data) {
                     Ok(rec) => {
                         let rec = self.parser.parse(rec);

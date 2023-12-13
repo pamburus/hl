@@ -26,6 +26,7 @@ pub use level::Level;
 // ---
 
 pub struct Record<'a> {
+    pub prefix: Option<&'a [u8]>,
     pub ts: Option<Timestamp<'a>>,
     pub message: Option<&'a RawValue>,
     pub level: Option<Level>,
@@ -44,8 +45,15 @@ impl<'a> Record<'a> {
         filter.apply(self)
     }
 
+    pub fn with_prefix(mut self, prefix: &'a [u8]) -> Self {
+        self.prefix = Some(prefix);
+
+        return self;
+    }
+
     fn with_capacity(capacity: usize) -> Self {
         Self {
+            prefix: None,
             ts: None,
             message: None,
             level: None,
