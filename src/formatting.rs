@@ -190,8 +190,10 @@ impl RecordFormatter {
                                 }
                                 Caller::FileLine(file, line) => {
                                     buf.extend_from_slice(file.as_bytes());
-                                    buf.push(b':');
-                                    buf.extend_from_slice(line.as_bytes());
+                                    if line.len() != 0 {
+                                        buf.push(b':');
+                                        buf.extend_from_slice(line.as_bytes());
+                                    }
                                 }
                             };
                         });
