@@ -267,6 +267,7 @@ impl App {
             for (rxp, txw) in izip!(rxp, txw) {
                 workers.push(scope.spawn(closure!(ref parser, |_| -> Result<()> {
                     let formatter = self.formatter();
+                    let mut processor = SegmentProcessor::new(&parser, &formatter, &self.options.filter);
                     for (block, ts_min, i, j) in rxp.iter() {
                         let mut buf = Vec::with_capacity(2 * usize::try_from(block.size())?);
                         let mut items = Vec::with_capacity(2 * usize::try_from(block.lines_valid())?);
@@ -274,22 +275,17 @@ impl App {
                             if line.len() == 0 {
                                 continue;
                             }
-                            if let Ok(record) = json::from_slice(line.bytes()) {
-                                let record = parser.parse(record);
-                                if record.matches(&self.options.filter) {
-                                    let offset = buf.len();
-                                    formatter.format_record(&mut buf, record.with_source(line.bytes()));
-                                    if let Some(ts) = record.ts {
-                                        if let Some(unix_ts) = ts.unix_utc() {
-                                            items.push((unix_ts.into(), offset..buf.len()));
-                                        } else {
-                                            eprintln!("skipped message because timestamp cannot be parsed: {:#?}", ts)
-                                        }
+                            processor.run(line.bytes(), &mut buf, "", &mut |record: &Record, location: Range<usize>|{ 
+                                if let Some(ts) = &record.ts {
+                                    if let Some(unix_ts) = ts.unix_utc() {
+                                        items.push((unix_ts.into(), location));
                                     } else {
-                                        eprintln!("skipped message with missing timestamp")
+                                        eprintln!("skipped message because timestamp cannot be parsed: {:#?}", ts)
                                     }
+                                } else {
+                                    eprintln!("skipped message with missing timestamp")
                                 }
-                            }
+                            });  
                         }
 
                         let buf = Arc::new(buf);
@@ -705,12 +701,15 @@ impl<'a, F: RecordWithSourceFormatter> SegmentProcessor<'a, F> {
             if data.len() == 0 {
                 continue;
             }
-            let stream = json::Deserializer::from_slice(data).into_iter::<RawRecord>();
+            let extra_prefix = data.split(|c|*c==b'{').next().unwrap();
+            let xn = extra_prefix.len();
+            let json_data = &data[xn..];
+            let stream = json::Deserializer::from_slice(json_data).into_iter::<RawRecord>();
             let mut stream = StreamDeserializerWithOffsets(stream);
             let mut some = false;
             while let Some(Ok((record, offsets))) = stream.next() {
                 some = true;
-                let record = self.parser.parse(record);
+                let record = self.parser.parse(record).with_prefix(extra_prefix);
                 if record.matches(self.filter) {
                     let begin = buf.len();
                     buf.extend(prefix.as_bytes());
@@ -719,7 +718,7 @@ impl<'a, F: RecordWithSourceFormatter> SegmentProcessor<'a, F> {
                     observer.observe_record(&record, begin..end);
                 }
             }
-            let remainder = if some { &data[stream.0.byte_offset()..] } else { data };
+            let remainder = if some { &data[xn+stream.0.byte_offset()..] } else { data };
             if remainder.len() != 0 && self.filter.is_empty() {
                 buf.extend_from_slice(remainder);
                 buf.push(b'\n');
@@ -753,6 +752,14 @@ impl RecordObserver for TimestampIndexBuilder {
         if let Some(ts) = record.ts.as_ref().and_then(|ts| ts.unix_utc()).map(|ts| ts.into()) {
             self.result.lines.push(TimestampIndexLine { location, ts });
         }
+    }
+}
+
+// ---
+
+impl<T: FnMut(&Record, Range<usize>)> RecordObserver for T {
+    fn observe_record<'b>(&mut self, record: &'b Record<'b>, location: Range<usize>) {
+        self(record, location)
     }
 }
 
