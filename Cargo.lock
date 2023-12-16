@@ -718,7 +718,7 @@ checksum = "7f24254aa9a54b5c858eaee2f5bccdb46aaf0e486a595ed5fd8f86ba55232a70"
 
 [[package]]
 name = "hl"
-version = "0.23.2"
+version = "0.24.0-beta.1"
 dependencies = [
  "atoi",
  "bincode",
@@ -752,6 +752,8 @@ dependencies = [
  "nu-ansi-term",
  "num_cpus",
  "once_cell",
+ "pest",
+ "pest_derive",
  "platform-dirs",
  "regex",
  "rust-embed",

@@ -34,6 +34,7 @@ pub struct Record<'a> {
     pub caller: Option<Caller<'a>>,
     pub(crate) extra: heapless::Vec<(&'a str, &'a RawValue), RECORD_EXTRA_CAPACITY>,
     pub(crate) extrax: Vec<(&'a str, &'a RawValue)>,
+    pub(crate) predefined: heapless::Vec<(&'a str, &'a RawValue), MAX_PREDEFINED_FIELDS>,
 }
 
 impl<'a> Record<'a> {
@@ -41,7 +42,11 @@ impl<'a> Record<'a> {
         self.extra.iter().chain(self.extrax.iter())
     }
 
-    pub fn matches<F: RecordFilter>(&self, filter: &F) -> bool {
+    pub fn fields_for_search(&self) -> impl Iterator<Item = &(&'a str, &'a RawValue)> {
+        self.fields().chain(self.predefined.iter())
+    }
+
+    pub fn matches<F: RecordFilter>(&self, filter: F) -> bool {
         filter.apply(self)
     }
 
@@ -65,6 +70,7 @@ impl<'a> Record<'a> {
             } else {
                 Vec::new()
             },
+            predefined: heapless::Vec::new(),
         }
     }
 }
@@ -105,6 +111,80 @@ impl RecordWithSourceConstructor for Record<'_> {
 
 pub trait RecordFilter {
     fn apply<'a>(&self, record: &'a Record<'a>) -> bool;
+
+    fn and<F>(self, rhs: F) -> RecordFilterAnd<Self, F>
+    where
+        Self: Sized,
+        F: RecordFilter,
+    {
+        RecordFilterAnd { lhs: self, rhs }
+    }
+
+    fn or<F>(self, rhs: F) -> RecordFilterOr<Self, F>
+    where
+        Self: Sized,
+        F: RecordFilter,
+    {
+        RecordFilterOr { lhs: self, rhs }
+    }
+}
+
+impl<T: RecordFilter + ?Sized> RecordFilter for Box<T> {
+    fn apply<'a>(&self, record: &'a Record<'a>) -> bool {
+        (**self).apply(record)
+    }
+}
+
+impl<T: RecordFilter + ?Sized> RecordFilter for &T {
+    fn apply<'a>(&self, record: &'a Record<'a>) -> bool {
+        (**self).apply(record)
+    }
+}
+
+impl<T: RecordFilter> RecordFilter for Option<T> {
+    fn apply<'a>(&self, record: &'a Record<'a>) -> bool {
+        if let Some(filter) = self {
+            filter.apply(record)
+        } else {
+            true
+        }
+    }
+}
+
+// ---
+
+pub struct RecordFilterAnd<L: RecordFilter, R: RecordFilter> {
+    lhs: L,
+    rhs: R,
+}
+
+impl<L: RecordFilter, R: RecordFilter> RecordFilter for RecordFilterAnd<L, R> {
+    fn apply<'a>(&self, record: &'a Record<'a>) -> bool {
+        self.lhs.apply(record) && self.rhs.apply(record)
+    }
+}
+
+// ---
+
+pub struct RecordFilterOr<L: RecordFilter, R: RecordFilter> {
+    lhs: L,
+    rhs: R,
+}
+
+impl<L: RecordFilter, R: RecordFilter> RecordFilter for RecordFilterOr<L, R> {
+    fn apply<'a>(&self, record: &'a Record<'a>) -> bool {
+        self.lhs.apply(record) || self.rhs.apply(record)
+    }
+}
+
+// ---
+
+pub struct RecordFilterNone;
+
+impl RecordFilter for RecordFilterNone {
+    fn apply<'a>(&self, _: &'a Record<'a>) -> bool {
+        true
+    }
 }
 
 // ---
@@ -253,6 +333,9 @@ impl ParserSettingsBlock {
             }
             None => false,
         };
+        if is_root && done {
+            to.predefined.push((key, value)).ok();
+        }
         if done || !is_root {
             return;
         }
@@ -553,10 +636,26 @@ impl<'a> KeyMatcher<'a> {
 // ---
 
 #[derive(Debug)]
+pub enum NumericOp {
+    Eq(f64),
+    Ne(f64),
+    Gt(f64),
+    Ge(f64),
+    Lt(f64),
+    Le(f64),
+    In(Vec<f64>),
+}
+
+// ---
+
+#[derive(Debug)]
 pub enum ValueMatchPolicy {
     Exact(String),
     SubString(String),
     RegularExpression(Regex),
+    In(Vec<String>),
+    WildCard(WildMatch),
+    Numerically(NumericOp),
 }
 
 impl ValueMatchPolicy {
@@ -565,6 +664,23 @@ impl ValueMatchPolicy {
             Self::Exact(pattern) => subject == pattern,
             Self::SubString(pattern) => subject.contains(pattern),
             Self::RegularExpression(pattern) => pattern.is_match(subject),
+            Self::In(patterns) => patterns.iter().any(|pattern| subject == pattern),
+            Self::WildCard(pattern) => pattern.matches(subject),
+            Self::Numerically(op) => {
+                if let Some(value) = subject.parse::<f64>().ok() {
+                    match op {
+                        NumericOp::Eq(pattern) => value == *pattern,
+                        NumericOp::Ne(pattern) => value != *pattern,
+                        NumericOp::Gt(pattern) => value > *pattern,
+                        NumericOp::Ge(pattern) => value >= *pattern,
+                        NumericOp::Lt(pattern) => value < *pattern,
+                        NumericOp::Le(pattern) => value <= *pattern,
+                        NumericOp::In(patterns) => patterns.iter().any(|pattern| value == *pattern),
+                    }
+                } else {
+                    false
+                }
+            }
         }
     }
 }
@@ -572,7 +688,7 @@ impl ValueMatchPolicy {
 // ---
 
 #[derive(Copy, Clone, Debug)]
-enum UnaryBoolOp {
+pub(crate) enum UnaryBoolOp {
     None,
     Negate,
 }
@@ -596,24 +712,56 @@ impl Default for UnaryBoolOp {
 // ---
 
 #[derive(Debug)]
+pub enum FieldFilterKey<S> {
+    Predefined(FieldKind),
+    Custom(S),
+}
+
+impl FieldFilterKey<String> {
+    pub fn borrowed(&self) -> FieldFilterKey<&str> {
+        match self {
+            FieldFilterKey::Predefined(kind) => FieldFilterKey::Predefined(*kind),
+            FieldFilterKey::Custom(key) => FieldFilterKey::Custom(key.as_str()),
+        }
+    }
+}
+
+// ---
+
+#[derive(Debug)]
 pub struct FieldFilter {
-    key: String,
+    key: FieldFilterKey<String>,
     match_policy: ValueMatchPolicy,
     op: UnaryBoolOp,
     flat_key: bool,
 }
 
 impl FieldFilter {
-    fn parse(text: &str) -> Result<Self> {
+    pub(crate) fn new(key: FieldFilterKey<&str>, match_policy: ValueMatchPolicy, op: UnaryBoolOp) -> Self {
+        Self {
+            key: match key {
+                FieldFilterKey::Predefined(kind) => FieldFilterKey::Predefined(kind),
+                FieldFilterKey::Custom(key) => FieldFilterKey::Custom(key.chars().map(KeyMatcher::norm).collect()),
+            },
+            match_policy,
+            op,
+            flat_key: match key {
+                FieldFilterKey::Predefined(_) => true,
+                FieldFilterKey::Custom(key) => !key.contains('.'),
+            },
+        }
+    }
+
+    pub(crate) fn parse(text: &str) -> Result<Self> {
         let parse = |key, value| {
             let (key, match_policy, op) = Self::parse_mp_op(key, value)?;
-            let flat_key = key.as_bytes().iter().position(|&x| x == b'.').is_none();
-            Ok(Self {
-                key: key.chars().map(KeyMatcher::norm).collect(),
-                match_policy,
-                op,
-                flat_key,
-            })
+            let key = match key {
+                "message" | "msg" => FieldFilterKey::Predefined(FieldKind::Message),
+                "caller" => FieldFilterKey::Predefined(FieldKind::Caller),
+                "logger" => FieldFilterKey::Predefined(FieldKind::Logger),
+                _ => FieldFilterKey::Custom(key.trim_start_matches('.')),
+            };
+            Ok(Self::new(key, match_policy, op))
         };
 
         if let Some(index) = text.find('=') {
@@ -649,12 +797,16 @@ impl FieldFilter {
         })
     }
 
-    fn match_key<'a>(&'a self, key: &str) -> Option<KeyMatch<'a>> {
-        if self.flat_key && self.key.len() != key.len() {
-            return None;
-        }
+    fn match_custom_key<'a>(&'a self, key: &str) -> Option<KeyMatch<'a>> {
+        if let FieldFilterKey::Custom(k) = &self.key {
+            if self.flat_key && k.len() != key.len() {
+                return None;
+            }
 
-        KeyMatcher::new(&self.key).match_key(key)
+            KeyMatcher::new(k).match_key(key)
+        } else {
+            None
+        }
     }
 
     fn match_value(&self, value: Option<&str>, escaped: bool) -> bool {
@@ -702,47 +854,58 @@ impl FieldFilter {
 
 impl RecordFilter for FieldFilter {
     fn apply<'a>(&self, record: &'a Record<'a>) -> bool {
-        match &self.key[..] {
-            "msg" | "message" => {
-                if !self.match_value(record.message.map(|x| x.get()), true) {
-                    return false;
-                }
-            }
-            "logger" => {
-                if !self.match_value(record.logger, false) {
-                    return false;
-                }
-            }
-            "caller" => {
-                if let Some(Caller::Text(caller)) = record.caller {
-                    if !self.match_value(Some(caller), false) {
-                        return false;
+        match &self.key {
+            FieldFilterKey::Predefined(kind) => match kind {
+                FieldKind::Time => {
+                    if let Some(ts) = &record.ts {
+                        self.match_value(Some(ts.raw()), false)
+                    } else {
+                        false
                     }
-                } else {
-                    return false;
                 }
-            }
-            _ => {
-                let mut matched = false;
-                for (k, v) in record.fields() {
-                    match self.match_key(*k) {
+                FieldKind::Message => {
+                    if let Some(message) = record.message {
+                        self.match_value(Some(message.get()), true)
+                    } else {
+                        false
+                    }
+                }
+                FieldKind::Logger => {
+                    if let Some(logger) = record.logger {
+                        self.match_value(Some(logger), false)
+                    } else {
+                        false
+                    }
+                }
+                FieldKind::Caller => {
+                    if let Some(Caller::Text(caller)) = record.caller {
+                        self.match_value(Some(caller), false)
+                    } else {
+                        false
+                    }
+                }
+                _ => true,
+            },
+            FieldFilterKey::Custom(_) => {
+                for (k, v) in record.fields_for_search() {
+                    match self.match_custom_key(*k) {
                         None => {}
                         Some(KeyMatch::Full) => {
                             let escaped = v.get().starts_with('"');
-                            matched |= self.match_value(Some(v.get()), escaped);
+                            if self.match_value(Some(v.get()), escaped) {
+                                return true;
+                            }
                         }
                         Some(KeyMatch::Partial(subkey)) => {
-                            matched |= self.match_value_partial(subkey, *v);
+                            if self.match_value_partial(subkey, *v) {
+                                return true;
+                            }
                         }
                     }
                 }
-                if !matched {
-                    return false;
-                }
+                false
             }
         }
-
-        true
     }
 }
 
@@ -785,10 +948,6 @@ impl Filter {
 
 impl RecordFilter for Filter {
     fn apply<'a>(&self, record: &'a Record<'a>) -> bool {
-        if self.is_empty() {
-            return true;
-        }
-
         if self.since.is_some() || self.until.is_some() {
             if let Some(ts) = record.ts.as_ref().and_then(|ts| ts.parse()) {
                 if let Some(since) = self.since {
@@ -914,4 +1073,5 @@ impl<'de: 'a, 'a, const N: usize> Deserialize<'de> for Array<'a, N> {
 // ---
 
 const RECORD_EXTRA_CAPACITY: usize = 32;
-const RAW_RECORD_FIELDS_CAPACITY: usize = RECORD_EXTRA_CAPACITY + 8;
+const MAX_PREDEFINED_FIELDS: usize = 8;
+const RAW_RECORD_FIELDS_CAPACITY: usize = RECORD_EXTRA_CAPACITY + MAX_PREDEFINED_FIELDS;

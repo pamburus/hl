@@ -99,7 +99,7 @@ Log viewer which translates JSON logs into pretty human-readable representation.
     $ hl -l e
     ```
 
-    Shows only messages with error log level.
+    Displays only error log level messages.
 
 - Errors and warnings
 
@@ -108,7 +108,7 @@ Log viewer which translates JSON logs into pretty human-readable representation.
     ```
     $ hl -l w
     ```
-    Shows only messages with warning and error log level.
+    Displays only warning and error log level messages.
 
 - Errors, warnings and informational
 
@@ -117,7 +117,7 @@ Log viewer which translates JSON logs into pretty human-readable representation.
     ```
     $ hl -l i
     ```
-    Shows all log messages except debug level messages.
+    Displays all log messages except debug level messages.
 
 ### Using live log streaming
 
@@ -126,7 +126,7 @@ Log viewer which translates JSON logs into pretty human-readable representation.
     ```
     $ tail -f example.log | hl -P
     ```
-    Follows changes in example.log file and displays them immediately.
+    Tracks changes in the example.log file and displays them immediately.
     Flag `-P` disables automatic using of pager in this case.
 
 
@@ -135,23 +135,71 @@ Log viewer which translates JSON logs into pretty human-readable representation.
 - Command
 
     ```
-    $ hl example.log -f component=tsdb
+    $ hl example.log --filter component=tsdb
     ```
-    Shows only messages with field `component` having value `tsdb`.
+    Displays only messages where the `component` field has the value `tsdb`.
 
 - Command
 
     ```
     $ hl example.log -f component!=tsdb -f component!=uninteresting
     ```
-    Shows only messages with field `component` having value other than `tsdb` or `uninteresting`.
+    Displays only messages where the `component` field has a value other than `tsdb` or `uninteresting`.
 
 - Command
 
     ```
     $ hl example.log -f provider~=string
     ```
-    Shows only messages with field `provider` containing sub-string `string`.
+    Displays only messages where the `provider` field contains the `string` sub-string.
+
+
+### Performing complex queries
+
+- Command
+
+    ```
+    $ hl my-service.log --query 'level > info or status-code >= 400 or duration > 0.5'
+    ```
+    Displays messages that either have a level higher than info (i.e. warning or error) or have a status code field with a numeric value >= 400 or a duration field with a numeric value >= 0.5.
+
+- Command
+
+    ```
+    $ hl my-service.log -q '(request in (95c72499d9ec, 9697f7aa134f, bc3451d0ad60)) or (method != GET)'
+    ```
+    Displays all messages that have the 'request' field with one of these values, or the 'method' field with a value other than 'GET'.
+
+- Complete set of supported operators
+
+    * Logical operators
+        * Logical conjunction - `and`, `&&`
+        * Logical disjunction - `or`, `||`
+        * Logical negation - `not`, `!`
+    * Comparison operators
+        * Equal - `eq`, `=`
+        * Not equal - `ne`, `!=`
+        * Greater than - `gt`, `>`
+        * Greater or equal - `ge`, `>=`
+        * Less than - `lt`, `<`
+        * Less or equal - `le`, `<=`
+    * String matching operators
+        * Sub-string check - (`contain`, `~=`), (`not contain`, `!~=`)
+        * Wildcard match - (`like`), (`not like`)
+            * Wildcard characters are: `*` for zero or more characters and `?` for a single character
+        * Regular expression match - (`match`, `~~=`), (`not match`, `!~~=`)
+    * Operators with sets
+        * Test if value is one of the values in a set - `in (v1, v2)`, `not in (v1, v2)`
+    
+- Notes
+
+    * Special field names that are reserved for filtering by predefined fields regardless of the actual JSON field names used to load the corresponding value: `level`, `message`, `caller` and `logger`.
+    * To address a JSON field with one of these names instead of predefined fields, add a period before its name, i.e., `.level` will perform a match against the "level" JSON field.
+    * To address a JSON field by its exact name, use a JSON-formatted string, i.e. `-q '".level" = info'`.
+    * To specify special characters in field values, also use a JSON-formatted string, i.e. 
+        ```
+        $ hl my-service.log -q 'message contain "Error:\nSomething unexpected happened"'
+        ```
 
 
 ### Filtering by time range
@@ -161,21 +209,21 @@ Log viewer which translates JSON logs into pretty human-readable representation.
     ```
     $ hl example.log --since 'Jun 19 11:22:33' --until yesterday
     ```
-    Shows only messages occurred after Jun 19 11:22:33 UTC of the current year (or of the previous one if current date is less than Jun 19 11:22:33) and until yesterday midnight.
+    Displays only messages that occurred after Jun 19 11:22:33 UTC of the current year (or the previous year if the current date is less than Jun 19 11:22:33) and before yesterday midnight.
 
 - Command
 
     ```
     $ hl example.log --since -3d
     ```
-    Shows only messages for the last 72 hours.
+    Displays only messages from the past 72 hours.
 
 - Command
 
     ```
     $ hl example.log --until '2021-06-01 18:00:00' --local
     ```
-    Shows only messages occurred before 6 PM on 1st Jun 2021 in local time as well as show timestamps in local time.
+    Displays only messages that occurred before 6 PM local time on June 1, 2021, and shows timestamps in local time.
 
 
 ### Hiding or showing selected fields
@@ -211,7 +259,7 @@ Log viewer which translates JSON logs into pretty human-readable representation.
     ```
     $ hl -s *.log
     ```
-    Shows log messages from all log files in current directory sorted in chronological order.
+    Displays log messages from all log files in the current directory sorted in chronological order.
 
 
 - Command
@@ -219,12 +267,12 @@ Log viewer which translates JSON logs into pretty human-readable representation.
     ```
     $ hl -F <(kubectl logs -l app=my-app-1 -f) <(kubectl logs -l app=my-app-2 -f)
     ```
-    Runs without pager in follow mode by merging messages from outputs of these 2 commands and sorting them chronologically within default interval of 100ms.
+    Runs without a pager in follow mode by merging messages from the outputs of these 2 commands and sorting them chronologically within a default interval of 100ms.
 
 
 ### Configuration files
 
-- Configuration file is loaded automatically if found at predefined platform-specific location.
+- Configuration file is automatically loaded if found in a predefined platform-specific location.
 
     | OS      | Location                                      |
     | ------- | --------------------------------------------- | 
@@ -232,7 +280,7 @@ Log viewer which translates JSON logs into pretty human-readable representation.
     | Linux   | ~/.config/hl/config.yaml                      |
     | Windows | %USERPROFILE%\AppData\Roaming\hl\config.yaml  |
 
-- Any parameters in the configuration file are optional and may be omitted. In this case default values will be used.
+- All parameters in the configuration file are optional and can be omitted. In this case, default values are used.
 
 #### Default configuration file
 
@@ -241,7 +289,7 @@ Log viewer which translates JSON logs into pretty human-readable representation.
 
 ### Environment variables
 
-- Many parameters which are defined in command-line arguments and configuration files may be specified by envrionment variables also.
+- Many parameters that are defined in command line arguments and configuration files can also be specified by environment variables.
 
 #### Precedence of configuration sources
 * Configuration file
@@ -266,7 +314,7 @@ Log viewer which translates JSON logs into pretty human-readable representation.
 * Using command-line argument, i.e. `--theme classic`, overrides all other values.
 
 #### Custom themes
-- Custom themes are loaded automatically if found at predefined platform-specific location.
+- Custom themes are automatically loaded when found in a predefined platform-specific location.
 
     | OS      | Location                                       |
     | ------- | ---------------------------------------------- | 
@@ -361,7 +409,8 @@ Options:
       --buffer-size <BUFFER_SIZE>                        Buffer size [env: HL_BUFFER_SIZE=] [default: "256 KiB"]
       --max-message-size <MAX_MESSAGE_SIZE>              Maximum message size [env: HL_MAX_MESSAGE_SIZE=] [default: "64 MiB"]
   -C, --concurrency <CONCURRENCY>                        Number of processing threads [env: HL_CONCURRENCY=]
-  -f, --filter <FILTER>                                  Filtering by field values in one of forms [<key>=<value>, <key>~=<value>, <key>~~=<value>, <key>!=<value>, <key>!~=<value>, <key>!~~=<value>] where ~ denotes substring match and ~~ denotes regular expression match
+  -f, --filter <FILTER>                                  Filtering by field values in one of forms [k=v, k~=v, k~~=v, 'k!=v', 'k!~=v', 'k!~~=v'] where ~ does substring match and ~~ does regular expression match
+  -q, --query <QUERY>                                    Custom query, accepts expressions from --filter and supports '(', ')', 'and', 'or', 'not', 'in', 'contain', 'like', '<', '>', '<=', '>=', etc
   -h, --hide <HIDE>                                      Hide or unhide fields with the specified keys, prefix with ! to unhide, specify !* to unhide all
   -l, --level <LEVEL>                                    Filtering by level [env: HL_LEVEL=]
       --since <SINCE>                                    Filtering by timestamp >= the value (--time-zone and --local options are honored)
