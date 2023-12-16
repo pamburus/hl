@@ -1,5 +1,6 @@
 // std imports
 use std::cmp::Ord;
+use std::fmt;
 use std::ops::Deref;
 use std::result::Result;
 
@@ -20,6 +21,23 @@ pub enum Level {
     Warning,
     Info,
     Debug,
+}
+
+// ---
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ParseError;
+
+impl fmt::Display for ParseError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "failed to parse level")
+    }
+}
+
+impl std::error::Error for ParseError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        None
+    }
 }
 
 // ---
@@ -45,6 +63,18 @@ impl ValueParserFactory for RelaxedLevel {
     type Parser = LevelValueParser;
     fn value_parser() -> Self::Parser {
         LevelValueParser
+    }
+}
+
+impl TryFrom<&str> for RelaxedLevel {
+    type Error = ParseError;
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        LevelValueParser::alternate_values()
+            .iter()
+            .find(|(_, values)| values.iter().cloned().any(|x| value.eq_ignore_ascii_case(x)))
+            .map(|(level, _)| RelaxedLevel(*level))
+            .ok_or(ParseError)
     }
 }
 
@@ -77,10 +107,10 @@ impl TypedValueParser for LevelValueParser {
 impl LevelValueParser {
     fn alternate_values<'a>() -> &'a [(Level, &'a [&'a str])] {
         &[
-            (Level::Error, &["err", "e"]),
-            (Level::Warning, &["warn", "wrn", "w"]),
-            (Level::Info, &["inf", "i"]),
-            (Level::Debug, &["dbg", "d"]),
+            (Level::Error, &["error", "err", "e"]),
+            (Level::Warning, &["warning", "warn", "wrn", "w"]),
+            (Level::Info, &["info", "inf", "i"]),
+            (Level::Debug, &["debug", "dbg", "d"]),
         ]
     }
 }

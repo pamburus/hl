@@ -1,0 +1,111 @@
+input = _{ SOI ~ ws* ~ _expression ~ ws* ~ EOI }
+
+_expression  = _{ _e_or }
+expr_or      =  { _e_and ~ ws* ~ (_or ~ ws* ~ _e_and ~ ws*)+ }
+expr_and     =  { _e_unary ~ ws* ~ (_and ~ ws* ~ _e_unary ~ ws*)+ }
+expr_not     =  { _not ~ ws* ~ _e_unary }
+_e_or        = _{ expr_or | _e_and }
+_e_and       = _{ expr_and | _e_unary }
+_e_unary     = _{ expr_not | primary }
+primary      =  { "(" ~ ws* ~ _expression ~ ws* ~ ")" | term }
+term         =  { level_filter | field_filter }
+level_filter =  { ^"level" ~ ws* ~ _lvl_op ~ ws* ~ level }
+field_filter =  { field_name ~ ws* ~ (_ff_rhs_num_1 | _ff_rhs_num_n | _ff_rhs_str_1 | _ff_rhs_str_n) ~ ws* }
+field_name   = ${ _f_name_short | json_string }
+
+_ff_rhs_num_1 = _{ _ff_num_op_1 ~ ws* ~ number }
+_ff_rhs_num_n = _{ _ff_num_op_n ~ ws* ~ number_set }
+_ff_rhs_str_1 = _{ _ff_str_op_1 ~ ws* ~ string }
+_ff_rhs_str_n = _{ _ff_str_op_n ~ ws* ~ string_set }
+_f_name_short = @{ ("@" | "_" | "-" | "." | LETTER | NUMBER)+ }
+
+level = ${
+    string ~ &punctuation
+}
+
+_or  = _{ ^"or" ~ &punctuation | "||" }
+_and = _{ ^"and" ~ &punctuation | "&&" }
+_not = _{ ^"not" ~ &punctuation | "!" }
+
+_ff_num_op_1 = _{ op_le | op_ge | op_lt | op_gt }
+_ff_num_op_n = _{ op_in | op_not_in }
+_ff_str_op_1 = _{ op_regex_match | op_not_regex_match | op_contain | op_not_contain | op_like | op_not_like | op_equal | op_not_equal }
+_ff_str_op_n = _{ op_in | op_not_in }
+_lvl_op      = _{ op_le | op_ge | op_lt | op_gt | op_equal | op_not_equal }
+string_set   = ${ "(" ~ ws* ~ string ~ (ws* ~ "," ~ ws* ~ string)* ~ ws* ~ ")" }
+number_set   = ${ "(" ~ ws* ~ number ~ (ws* ~ "," ~ ws* ~ number)* ~ ws* ~ ")" }
+
+op_regex_match     = @{
+    "~~="
+  | ^"match" ~ &punctuation
+}
+op_not_regex_match = @{
+    "!~~="
+  | ^"not" ~ ws+ ~ ^"match" ~ &punctuation
+}
+op_contain         = @{
+    "~="
+  | ^"contain" ~ &punctuation
+}
+op_not_contain     = @{
+    "!~="
+  | ^"not" ~ ws+ ~ ^"contain" ~ &punctuation
+}
+op_like            = @{
+    ^"like" ~ &punctuation
+}
+op_not_like        = @{
+    ^"not" ~ ws+ ~ ^"like" ~ &punctuation
+}
+op_equal           = @{
+    "="
+  | ^"eq" ~ &punctuation
+}
+op_not_equal       = @{
+    "!="
+  | ^"not" ~ ws+ ~ ^"eq" ~ &punctuation
+  | ^"ne" ~ &punctuation
+}
+op_in              = @{
+    ^"in" ~ &punctuation
+}
+op_not_in          = @{
+    ^"not" ~ ws+ ~ ^"in" ~ &punctuation
+}
+op_le              = @{
+    "<="
+  | ^"le" ~ &punctuation
+}
+op_lt              = @{
+    "<"
+  | ^"lt" ~ &punctuation
+}
+op_ge              = @{
+    ">="
+  | ^"ge" ~ &punctuation
+}
+op_gt              = @{
+    ">"
+  | ^"gt" ~ &punctuation
+}
+
+punctuation = _{ "(" | ")" | ws | EOI }
+
+string = ${ json_string | simple_string }
+
+json_string       = @{ "\"" ~ json_string_inner ~ "\"" }
+json_string_inner = @{ json_char* }
+json_char         =  {
+    !("\"" | "\\") ~ ANY
+  | "\\" ~ ("\"" | "\\" | "/" | "b" | "f" | "n" | "r" | "t")
+  | "\\" ~ ("u" ~ ASCII_HEX_DIGIT{4})
+}
+
+simple_string = @{ simple_char+ }
+simple_char   = @{ (LETTER | NUMBER | "@" | "." | "_" | "-" | ":" | "/" | "!" | "#" | "%" | "$" | "*" | "+" | "?") }
+
+number = @{
+    "-"? ~ ("0" | ASCII_NONZERO_DIGIT ~ ASCII_DIGIT*) ~ ("." ~ ASCII_DIGIT*)? ~ (^"e" ~ ("+" | "-")? ~ ASCII_DIGIT+)?
+}
+
+ws = _{ (" " | "\t" | "\r" | "\n") }

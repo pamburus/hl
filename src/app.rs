@@ -27,13 +27,13 @@ use std::num::{NonZeroU32, NonZeroUsize};
 
 // local imports
 use crate::datefmt::{DateTimeFormat, DateTimeFormatter};
-use crate::error::*;
+use crate::{error::*, QueryNone};
 use crate::fmtx::aligned_left;
 use crate::fsmon::{self, EventKind};
 use crate::formatting::{RecordFormatter, RecordWithSourceFormatter, RawRecordFormatter};
 use crate::index::{Indexer, Timestamp};
 use crate::input::{BlockLine, InputHolder, InputReference, Input};
-use crate::model::{Filter, Parser, ParserSettings, RawRecord, Record, RecordWithSourceConstructor};
+use crate::model::{Filter, Parser, ParserSettings, RawRecord, Record, RecordFilter, RecordWithSourceConstructor};
 use crate::scanning::{BufFactory, Scanner, Segment, SegmentBufFactory};
 use crate::serdex::StreamDeserializerWithOffsets;
 use crate::settings::{Fields, Formatting};
@@ -55,6 +55,7 @@ pub struct Options {
     pub max_message_size: NonZeroUsize,
     pub concurrency: usize,
     pub filter: Filter,
+    pub query: Option<Query>,
     pub fields: FieldOptions,
     pub formatting: Formatting,
     pub time_zone: Tz,
@@ -66,6 +67,19 @@ pub struct Options {
     pub dump_index: bool,
     pub app_dirs: Option<AppDirs>,
 }
+
+impl Options {
+    fn filter_and_query<'a>(&'a self) -> Box<dyn RecordFilter +'a> {
+        match (self.filter.is_empty(), &self.query) {
+            (true, None) => return Box::new(QueryNone{}),
+            (false, None) => return Box::new(&self.filter),
+            (false, Some(query)) => return Box::new(query),
+            (true, Some(query)) => return Box::new((&self.filter).and(query)),
+        }
+    }
+}
+
+type Query = Box<dyn RecordFilter + Sync>;
 
 pub struct FieldOptions {
     pub filter: Arc<IncludeExcludeKeyFilter>,
@@ -140,7 +154,7 @@ impl App {
                         match segment {
                             Segment::Complete(segment) => {
                                 let mut buf = bfo.new_buf();
-                                processor.run(segment.data(), &mut buf, prefix, &mut RecordIgnorer{});
+                                processor.process(segment.data(), &mut buf, prefix, &mut RecordIgnorer{});
                                 sfi.recycle(segment);
                                 if let Err(_) = txo.send((i, buf)) {
                                     break;
@@ -274,7 +288,7 @@ impl App {
                             if line.len() == 0 {
                                 continue;
                             }
-                            processor.run(line.bytes(), &mut buf, "", &mut |record: &Record, location: Range<usize>|{ 
+                            processor.process(line.bytes(), &mut buf, "", &mut |record: &Record, location: Range<usize>|{ 
                                 if let Some(ts) = &record.ts {
                                     if let Some(unix_ts) = ts.unix_utc() {
                                         items.push((unix_ts.into(), location));
@@ -448,7 +462,7 @@ impl App {
                             Segment::Complete(segment) => {
                                 let mut buf = bfo.new_buf();
                                 let mut index_builder = TimestampIndexBuilder{result: TimestampIndex::new(j)};
-                                processor.run(segment.data(), &mut buf, prefix, &mut index_builder);
+                                processor.process(segment.data(), &mut buf, prefix, &mut index_builder);
                                 sfi.recycle(segment);
                                 if txo.send((i, buf, index_builder.result)).is_err() {
                                     return;
@@ -673,42 +687,55 @@ impl App {
     }
 
     fn new_segment_processor<'a>(&'a self, parser: &'a Parser) -> impl SegmentProcess+'a {
-        SegmentProcessor::new(parser, self.formatter(), &self.options.filter, self.options.allow_prefix)
+        let options = SegmentProcessorOptions{
+            allow_prefix: self.options.allow_prefix, 
+            allow_unparsed_data: self.options.filter.is_empty() && self.options.query.is_none(),
+        };
+        
+        SegmentProcessor::new(parser, self.formatter(), self.options.filter_and_query(), options)
     }
 }
 
 // ---
 
 pub trait SegmentProcess {
-    fn run<O: RecordObserver>(&mut self, data: &[u8], buf: &mut Vec<u8>, prefix: &str, observer: &mut O);
+    fn process<O: RecordObserver>(&mut self, data: &[u8], buf: &mut Vec<u8>, prefix: &str, observer: &mut O);
 }
 
 // ---
 
-pub struct SegmentProcessor<'a, F> {
-    parser: &'a Parser,
-    formatter: F,
-    filter: &'a Filter,
-    allow_prefix: bool,
+#[derive(Default)]
+pub struct SegmentProcessorOptions {
+    pub allow_prefix: bool,
+    pub allow_unparsed_data: bool,
 }
 
-impl<'a, F: RecordWithSourceFormatter> SegmentProcessor<'a, F> {
-    pub fn new(parser: &'a Parser, formatter: F, filter: &'a Filter, allow_prefix: bool) -> Self {
+// ---
+
+pub struct SegmentProcessor<'a, Formatter, Filter> {
+    parser: &'a Parser,
+    formatter: Formatter,
+    filter: Filter,
+    options: SegmentProcessorOptions,
+}
+
+impl<'a, Formatter: RecordWithSourceFormatter, Filter: RecordFilter> SegmentProcessor<'a, Formatter, Filter> {
+    pub fn new(parser: &'a Parser, formatter: Formatter, filter: Filter, options: SegmentProcessorOptions) -> Self {
         Self {
             parser,
             formatter,
             filter,
-            allow_prefix,
+            options,
         }
     }
 
     fn show_unparsed(&self) -> bool {
-        self.filter.is_empty()
+        self.options.allow_unparsed_data
     }
 }
 
-impl<'a, F: RecordWithSourceFormatter> SegmentProcess for SegmentProcessor<'a, F> {
-    fn run<O>(&mut self, data: &[u8], buf: &mut Vec<u8>, prefix: &str, observer: &mut O)
+impl<'a, Formatter: RecordWithSourceFormatter, Filter: RecordFilter> SegmentProcess for SegmentProcessor<'a, Formatter, Filter> {
+    fn process<O>(&mut self, data: &[u8], buf: &mut Vec<u8>, prefix: &str, observer: &mut O)
     where
         O: RecordObserver,
     {
@@ -717,7 +744,7 @@ impl<'a, F: RecordWithSourceFormatter> SegmentProcess for SegmentProcessor<'a, F
                 continue;
             }
             
-            let extra_prefix = if self.allow_prefix {
+            let extra_prefix = if self.options.allow_prefix {
                 data.split(|c|*c==b'{').next().unwrap() 
             }  else {
                 b""  
@@ -735,7 +762,7 @@ impl<'a, F: RecordWithSourceFormatter> SegmentProcess for SegmentProcessor<'a, F
                 }
                 parsed_some = true;
                 let record = self.parser.parse(record).with_prefix(extra_prefix);
-                if record.matches(self.filter) {
+                if record.matches(&self.filter) {
                     let begin = buf.len();
                     buf.extend(prefix.as_bytes());
                     self.formatter.format_record(buf, record.with_source(&data[offsets.start..xn+offsets.end]));

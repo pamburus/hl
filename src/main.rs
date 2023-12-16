@@ -100,9 +100,13 @@ struct Opt {
     #[arg(long, short = 'C', env = "HL_CONCURRENCY", overrides_with = "concurrency")]
     concurrency: Option<usize>,
     //
-    /// Filtering by field values in one of forms [<key>=<value>, <key>~=<value>, <key>~~=<value>, <key>!=<value>, <key>!~=<value>, <key>!~~=<value>] where ~ denotes substring match and ~~ denotes regular expression match.
+    /// Filtering by field values in one of forms [k=v, k~=v, k~~=v, 'k!=v', 'k!~=v', 'k!~~=v'] where ~ does substring match and ~~ does regular expression match.
     #[arg(short, long, number_of_values = 1)]
     filter: Vec<String>,
+    //
+    /// Custom query, accepts expressions from --filter and supports '(', ')', 'and', 'or', 'not', 'in', 'contain', 'like', '<', '>', '<=', '>=', etc.
+    #[arg(short, long, number_of_values = 1)]
+    query: Vec<String>,
     //
     /// Hide or unhide fields with the specified keys, prefix with ! to unhide, specify !* to unhide all.
     #[arg(long, short = 'h', number_of_values = 1)]
@@ -362,6 +366,11 @@ fn run() -> Result<()> {
     let max_message_size = opt.max_message_size;
     let buffer_size = std::cmp::min(max_message_size, opt.buffer_size);
 
+    let mut query = None;
+    for q in opt.query {
+        query = Some(hl::query::parse(&q)?);
+    }
+
     // Create app.
     let app = hl::App::new(hl::Options {
         theme: Arc::new(theme),
@@ -373,6 +382,7 @@ fn run() -> Result<()> {
         max_message_size,
         concurrency,
         filter,
+        query,
         fields: hl::FieldOptions {
             settings: settings.fields,
             filter: Arc::new(fields),

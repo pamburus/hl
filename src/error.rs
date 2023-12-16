@@ -1,7 +1,7 @@
 // std imports
 use std::boxed::Box;
 use std::io;
-use std::num::{ParseIntError, TryFromIntError};
+use std::num::{ParseFloatError, ParseIntError, TryFromIntError};
 use std::path::PathBuf;
 use std::sync::mpsc;
 
@@ -9,6 +9,9 @@ use std::sync::mpsc;
 use config::ConfigError;
 use nu_ansi_term::Color;
 use thiserror::Error;
+
+// local imports
+use crate::level;
 
 /// Error is an error which may occur in the application.
 #[derive(Error, Debug)]
@@ -43,7 +46,7 @@ pub enum Error {
     FromUtf8Error(#[from] std::string::FromUtf8Error),
     #[error("failed to parse yaml: {0}")]
     YamlError(#[from] serde_yaml::Error),
-    #[error("wrong field filter format: {0}")]
+    #[error("failed to parse json: {0}")]
     WrongFieldFilter(String),
     #[error("wrong regular expression: {0}")]
     WrongRegularExpression(#[from] regex::Error),
@@ -82,6 +85,12 @@ pub enum Error {
         #[source]
         source: mpsc::RecvTimeoutError,
     },
+    #[error(transparent)]
+    QueryParseError(#[from] pest::error::Error<crate::query::Rule>),
+    #[error(transparent)]
+    LevelParseError(#[from] level::ParseError),
+    #[error(transparent)]
+    ParseFloatError(#[from] ParseFloatError),
 }
 
 /// SizeParseError is an error which may occur when parsing size.
