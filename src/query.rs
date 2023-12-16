@@ -86,37 +86,38 @@ fn field_filter(pair: Pair<Rule>) -> Result<Query> {
 
     let (match_policy, negated) = match (op, rhs.as_rule()) {
         (Rule::op_in | Rule::op_not_in, Rule::string_set) => {
-            (ValueMatchPolicy::In(string_set(rhs)?), op == Rule::op_not_in)
+            (ValueMatchPolicy::In(parse_string_set(rhs)?), op == Rule::op_not_in)
         }
         (Rule::op_equal | Rule::op_not_equal, Rule::string) => {
-            (ValueMatchPolicy::Exact(string(rhs)?), op == Rule::op_not_equal)
+            (ValueMatchPolicy::Exact(parse_string(rhs)?), op == Rule::op_not_equal)
         }
         (Rule::op_like | Rule::op_not_like, Rule::string) => (
-            ValueMatchPolicy::WildCard(WildMatch::new(string(rhs)?.as_str())),
+            ValueMatchPolicy::WildCard(WildMatch::new(parse_string(rhs)?.as_str())),
             op == Rule::op_not_like,
         ),
-        (Rule::op_contain | Rule::op_not_contain, Rule::string) => {
-            (ValueMatchPolicy::SubString(string(rhs)?), op == Rule::op_not_contain)
-        }
+        (Rule::op_contain | Rule::op_not_contain, Rule::string) => (
+            ValueMatchPolicy::SubString(parse_string(rhs)?),
+            op == Rule::op_not_contain,
+        ),
         (Rule::op_regex_match | Rule::op_not_regex_match, Rule::string) => (
-            ValueMatchPolicy::RegularExpression(string(rhs)?.parse()?),
+            ValueMatchPolicy::RegularExpression(parse_string(rhs)?.parse()?),
             op == Rule::op_not_regex_match,
         ),
         (Rule::op_in | Rule::op_not_in, Rule::number_set) => (
-            ValueMatchPolicy::Numerically(NumericOp::In(number_set(rhs)?)),
+            ValueMatchPolicy::Numerically(NumericOp::In(parse_number_set(rhs)?)),
             op == Rule::op_not_in,
         ),
-        (Rule::op_equal, Rule::number) => (ValueMatchPolicy::Numerically(NumericOp::Eq(number(rhs)?)), false),
-        (Rule::op_not_equal, Rule::number) => (ValueMatchPolicy::Numerically(NumericOp::Ne(number(rhs)?)), false),
-        (Rule::op_ge, Rule::number) => (ValueMatchPolicy::Numerically(NumericOp::Ge(number(rhs)?)), false),
-        (Rule::op_gt, Rule::number) => (ValueMatchPolicy::Numerically(NumericOp::Gt(number(rhs)?)), false),
-        (Rule::op_le, Rule::number) => (ValueMatchPolicy::Numerically(NumericOp::Le(number(rhs)?)), false),
-        (Rule::op_lt, Rule::number) => (ValueMatchPolicy::Numerically(NumericOp::Lt(number(rhs)?)), false),
+        (Rule::op_equal, Rule::number) => (ValueMatchPolicy::Numerically(NumericOp::Eq(parse_number(rhs)?)), false),
+        (Rule::op_not_equal, Rule::number) => (ValueMatchPolicy::Numerically(NumericOp::Ne(parse_number(rhs)?)), false),
+        (Rule::op_ge, Rule::number) => (ValueMatchPolicy::Numerically(NumericOp::Ge(parse_number(rhs)?)), false),
+        (Rule::op_gt, Rule::number) => (ValueMatchPolicy::Numerically(NumericOp::Gt(parse_number(rhs)?)), false),
+        (Rule::op_le, Rule::number) => (ValueMatchPolicy::Numerically(NumericOp::Le(parse_number(rhs)?)), false),
+        (Rule::op_lt, Rule::number) => (ValueMatchPolicy::Numerically(NumericOp::Lt(parse_number(rhs)?)), false),
         _ => unreachable!(),
     };
 
     Ok(Box::new(FieldFilter::new(
-        field_name(lhs)?.borrowed(),
+        parse_field_name(lhs)?.borrowed(),
         match_policy,
         if negated {
             UnaryBoolOp::Negate
@@ -132,7 +133,7 @@ fn level_filter(pair: Pair<Rule>) -> Result<Query> {
     let mut inner = pair.into_inner();
 
     let op = inner.next().unwrap().as_rule();
-    let level = level(inner.next().unwrap())?;
+    let level = parse_level(inner.next().unwrap())?;
     Ok(match op {
         Rule::op_equal => LevelFilter::query(closure!(clone level, | l | l == level)),
         Rule::op_not_equal => LevelFilter::query(closure!(clone level, | l | l != level)),
@@ -144,7 +145,7 @@ fn level_filter(pair: Pair<Rule>) -> Result<Query> {
     })
 }
 
-fn string(pair: Pair<Rule>) -> Result<String> {
+fn parse_string(pair: Pair<Rule>) -> Result<String> {
     assert_eq!(pair.as_rule(), Rule::string);
 
     let inner = pair.into_inner().next().unwrap();
@@ -155,36 +156,36 @@ fn string(pair: Pair<Rule>) -> Result<String> {
     })
 }
 
-fn string_set(pair: Pair<Rule>) -> Result<Vec<String>> {
+fn parse_string_set(pair: Pair<Rule>) -> Result<Vec<String>> {
     assert_eq!(pair.as_rule(), Rule::string_set);
 
     let inner = pair.into_inner();
-    inner.map(|p| string(p)).collect::<Result<Vec<_>>>()
+    inner.map(|p| parse_string(p)).collect::<Result<Vec<_>>>()
 }
 
-fn number(pair: Pair<Rule>) -> Result<f64> {
+fn parse_number(pair: Pair<Rule>) -> Result<f64> {
     assert_eq!(pair.as_rule(), Rule::number);
 
     let inner = pair.as_str();
     Ok(inner.parse()?)
 }
 
-fn number_set(pair: Pair<Rule>) -> Result<Vec<f64>> {
+fn parse_number_set(pair: Pair<Rule>) -> Result<Vec<f64>> {
     assert_eq!(pair.as_rule(), Rule::number_set);
 
     let inner = pair.into_inner();
-    inner.map(|p| number(p)).collect::<Result<Vec<_>>>()
+    inner.map(|p| parse_number(p)).collect::<Result<Vec<_>>>()
 }
 
-fn level(pair: Pair<Rule>) -> Result<Level> {
+fn parse_level(pair: Pair<Rule>) -> Result<Level> {
     assert_eq!(pair.as_rule(), Rule::level);
 
     let mut inner = pair.into_inner();
-    let level = string(inner.next().unwrap())?;
+    let level = parse_string(inner.next().unwrap())?;
     Ok(RelaxedLevel::try_from(level.as_str())?.into())
 }
 
-fn field_name(pair: Pair<Rule>) -> Result<FieldFilterKey<String>> {
+fn parse_field_name(pair: Pair<Rule>) -> Result<FieldFilterKey<String>> {
     assert_eq!(pair.as_rule(), Rule::field_name);
 
     let inner = pair.into_inner().next().unwrap();
