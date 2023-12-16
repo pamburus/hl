@@ -33,7 +33,6 @@ pub struct RawRecordFormatter {}
 impl RecordWithSourceFormatter for RawRecordFormatter {
     fn format_record(&self, buf: &mut Buf, rec: model::RecordWithSource) {
         buf.extend_from_slice(rec.source);
-        buf.push(b'\n');
     }
 }
 
@@ -210,10 +209,6 @@ impl RecordFormatter {
                 });
             };
         });
-        //
-        // eol
-        //
-        buf.push(b'\n')
     }
 
     fn format_field<S: StylingPush<Buf>>(
@@ -520,7 +515,7 @@ mod tests {
                 ]).unwrap(),
                 extrax: Vec::default(),
             }).unwrap(),
-            String::from("\u{1b}[0;2;3m00-01-02 03:04:05.123 \u{1b}[0;36m|\u{1b}[0;95mDBG\u{1b}[0;36m|\u{1b}[0;2;3m \u{1b}[0;2;4mtl:\u{1b}[0;2;3m \u{1b}[0;1;39mtm \u{1b}[0;32mka\u{1b}[0;2m:\u{1b}[0;33m{ \u{1b}[0;32mva\u{1b}[0;2m:\u{1b}[0;33m{ \u{1b}[0;32mkb\u{1b}[0;2m:\u{1b}[0;94m42\u{1b}[0;33m } }\u{1b}[0;2;3m @ tc\u{1b}[0m\n"),
+            String::from("\u{1b}[0;2;3m00-01-02 03:04:05.123 \u{1b}[0;36m|\u{1b}[0;95mDBG\u{1b}[0;36m|\u{1b}[0;2;3m \u{1b}[0;2;4mtl:\u{1b}[0;2;3m \u{1b}[0;1;39mtm \u{1b}[0;32mka\u{1b}[0;2m:\u{1b}[0;33m{ \u{1b}[0;32mva\u{1b}[0;2m:\u{1b}[0;33m{ \u{1b}[0;32mkb\u{1b}[0;2m:\u{1b}[0;94m42\u{1b}[0;33m } }\u{1b}[0;2;3m @ tc\u{1b}[0m"),
         );
     }
 }

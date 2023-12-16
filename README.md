@@ -356,6 +356,7 @@ Options:
       --theme <THEME>                                    Color theme [env: HL_THEME=] [default: universal]
   -r, --raw                                              Output raw JSON messages instead of formatter messages, it can be useful for applying filters and saving results in original format
       --raw-fields                                       Disable unescaping and prettifying of field values
+      --allow-prefix                                     Allow non-JSON prefixes before JSON messages [env: HL_ALLOW_PREFIX=]
       --interrupt-ignore-count <INTERRUPT_IGNORE_COUNT>  Number of interrupts to ignore, i.e. Ctrl-C (SIGINT) [env: HL_INTERRUPT_IGNORE_COUNT=] [default: 3]
       --buffer-size <BUFFER_SIZE>                        Buffer size [env: HL_BUFFER_SIZE=] [default: "256 KiB"]
       --max-message-size <MAX_MESSAGE_SIZE>              Maximum message size [env: HL_MAX_MESSAGE_SIZE=] [default: "64 MiB"]

@@ -50,6 +50,7 @@ pub struct Options {
     pub time_format: DateTimeFormat,
     pub raw: bool,
     pub raw_fields: bool,
+    pub allow_prefix: bool,
     pub buffer_size: NonZeroUsize,
     pub max_message_size: NonZeroUsize,
     pub concurrency: usize,
@@ -133,8 +134,7 @@ impl App {
             // spawn processing threads
             for (rxi, txo) in izip!(rxi, txo) {
                 scope.spawn(closure!(ref bfo, ref parser, ref sfi, ref input_badges, |_| {
-                    let formatter = self.formatter();
-                    let mut processor = SegmentProcessor::new(&parser, &formatter, &self.options.filter);
+                    let mut processor = self.new_segment_processor(&parser);
                     for (i, segment) in rxi.iter() {
                         let prefix = input_badges.as_ref().map(|b|b[i].as_str()).unwrap_or("");
                         match segment {
@@ -266,8 +266,7 @@ impl App {
             let mut workers = Vec::with_capacity(n);
             for (rxp, txw) in izip!(rxp, txw) {
                 workers.push(scope.spawn(closure!(ref parser, |_| -> Result<()> {
-                    let formatter = self.formatter();
-                    let mut processor = SegmentProcessor::new(&parser, &formatter, &self.options.filter);
+                    let mut processor = self.new_segment_processor(&parser);
                     for (block, ts_min, i, j) in rxp.iter() {
                         let mut buf = Vec::with_capacity(2 * usize::try_from(block.size())?);
                         let mut items = Vec::with_capacity(2 * usize::try_from(block.lines_valid())?);
@@ -282,8 +281,6 @@ impl App {
                                     } else {
                                         eprintln!("skipped message because timestamp cannot be parsed: {:#?}", ts)
                                     }
-                                } else {
-                                    eprintln!("skipped message with missing timestamp")
                                 }
                             });  
                         }
@@ -340,6 +337,7 @@ impl App {
                         output.write_all(&badges[item.2].as_bytes())?;
                     }
                     output.write_all((item.0).1.bytes())?;
+                    output.write_all(&[b'\n'])?;
                     match item.1.next() {
                         Some(head) => item.0 = head,
                         None => drop(workspace.swap_remove(k)),
@@ -443,8 +441,7 @@ impl App {
             let mut workers = Vec::with_capacity(n);
             for _ in 0..n {
                 let worker = scope.spawn(closure!(ref bfo, ref parser, ref sfi, ref input_badges, clone rxi, clone txo, |_| {
-                    let formatter = self.formatter();
-                    let mut processor = SegmentProcessor::new(&parser, &formatter, &self.options.filter);
+                    let mut processor = self.new_segment_processor(&parser);
                     for (i, j, segment) in rxi.iter() {
                         let prefix = input_badges.as_ref().map(|b|b[i].as_str()).unwrap_or("");
                         match segment {
@@ -674,26 +671,44 @@ impl App {
 
         Some(result)
     }
+
+    fn new_segment_processor<'a>(&'a self, parser: &'a Parser) -> impl SegmentProcess+'a {
+        SegmentProcessor::new(parser, self.formatter(), &self.options.filter, self.options.allow_prefix)
+    }
 }
 
 // ---
 
-pub struct SegmentProcessor<'a, F: RecordWithSourceFormatter> {
+pub trait SegmentProcess {
+    fn run<O: RecordObserver>(&mut self, data: &[u8], buf: &mut Vec<u8>, prefix: &str, observer: &mut O);
+}
+
+// ---
+
+pub struct SegmentProcessor<'a, F> {
     parser: &'a Parser,
     formatter: F,
     filter: &'a Filter,
+    allow_prefix: bool,
 }
 
 impl<'a, F: RecordWithSourceFormatter> SegmentProcessor<'a, F> {
-    pub fn new(parser: &'a Parser, formatter: F, filter: &'a Filter) -> Self {
+    pub fn new(parser: &'a Parser, formatter: F, filter: &'a Filter, allow_prefix: bool) -> Self {
         Self {
             parser,
             formatter,
             filter,
+            allow_prefix,
         }
     }
 
-    pub fn run<O>(&mut self, data: &[u8], buf: &mut Vec<u8>, prefix: &str, observer: &mut O)
+    fn show_unparsed(&self) -> bool {
+        self.filter.is_empty()
+    }
+}
+
+impl<'a, F: RecordWithSourceFormatter> SegmentProcess for SegmentProcessor<'a, F> {
+    fn run<O>(&mut self, data: &[u8], buf: &mut Vec<u8>, prefix: &str, observer: &mut O)
     where
         O: RecordObserver,
     {
@@ -701,14 +716,24 @@ impl<'a, F: RecordWithSourceFormatter> SegmentProcessor<'a, F> {
             if data.len() == 0 {
                 continue;
             }
-            let extra_prefix = data.split(|c|*c==b'{').next().unwrap();
+            
+            let extra_prefix = if self.allow_prefix {
+                data.split(|c|*c==b'{').next().unwrap() 
+            }  else {
+                b""  
+            };
+            
             let xn = extra_prefix.len();
             let json_data = &data[xn..];
             let stream = json::Deserializer::from_slice(json_data).into_iter::<RawRecord>();
             let mut stream = StreamDeserializerWithOffsets(stream);
-            let mut some = false;
+            let mut parsed_some = false;
+            let mut produced_some = false;
             while let Some(Ok((record, offsets))) = stream.next() {
-                some = true;
+                if parsed_some {
+                    buf.push(b'\n');
+                }
+                parsed_some = true;
                 let record = self.parser.parse(record).with_prefix(extra_prefix);
                 if record.matches(self.filter) {
                     let begin = buf.len();
@@ -716,11 +741,19 @@ impl<'a, F: RecordWithSourceFormatter> SegmentProcessor<'a, F> {
                     self.formatter.format_record(buf, record.with_source(&data[offsets.start..xn+offsets.end]));
                     let end = buf.len();
                     observer.observe_record(&record, begin..end);
+                    produced_some = true;
                 }
             }
-            let remainder = if some { &data[xn+stream.0.byte_offset()..] } else { data };
-            if remainder.len() != 0 && self.filter.is_empty() {
-                buf.extend_from_slice(remainder);
+            let remainder = if parsed_some { &data[xn+stream.0.byte_offset()..] } else { data };
+            if remainder.len() != 0 && self.show_unparsed()  {
+                if !parsed_some {
+                    buf.extend(prefix.as_bytes());
+                }
+                if !parsed_some || produced_some {
+                    buf.extend_from_slice(remainder);
+                    buf.push(b'\n');
+                }
+            } else if produced_some {
                 buf.push(b'\n');
             }
         }

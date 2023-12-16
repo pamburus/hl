@@ -75,6 +75,10 @@ struct Opt {
     #[arg(long)]
     raw_fields: bool,
     //
+    /// Allow non-JSON prefixes before JSON messages.
+    #[arg(long, env = "HL_ALLOW_PREFIX")]
+    allow_prefix: bool,
+    //
     /// Number of interrupts to ignore, i.e. Ctrl-C (SIGINT).
     #[arg(
         long,
@@ -363,6 +367,7 @@ fn run() -> Result<()> {
         theme: Arc::new(theme),
         raw: opt.raw,
         raw_fields: opt.raw_fields,
+        allow_prefix: opt.allow_prefix,
         time_format,
         buffer_size,
         max_message_size,
