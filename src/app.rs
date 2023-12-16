@@ -713,7 +713,7 @@ impl<'a, F: RecordWithSourceFormatter> SegmentProcessor<'a, F> {
                 if record.matches(self.filter) {
                     let begin = buf.len();
                     buf.extend(prefix.as_bytes());
-                    self.formatter.format_record(buf, record.with_source(&data[offsets]));
+                    self.formatter.format_record(buf, record.with_source(&data[offsets.start..xn+offsets.end]));
                     let end = buf.len();
                     observer.observe_record(&record, begin..end);
                 }
