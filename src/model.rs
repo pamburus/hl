@@ -809,6 +809,8 @@ impl RecordFilter for Filter {
                 if level > bound {
                     return false;
                 }
+            } else {
+                return false;
             }
         }
 
