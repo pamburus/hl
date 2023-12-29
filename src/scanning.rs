@@ -303,7 +303,6 @@ impl<'a, 'b> Iterator for ScannerIter<'a, 'b> {
             };
 
             let result = self.next.replace(next);
-            self.placement = placement;
             return if result.size != 0 {
                 Some(Ok(Segment::new(result, placement)))
             } else {
