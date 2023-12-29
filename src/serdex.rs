@@ -9,6 +9,8 @@ where
     T: serde::de::Deserialize<'de>,
 {
     type Item = serde_json::Result<(T, Range<usize>)>;
+
+    #[inline(always)]
     fn next(&mut self) -> Option<Self::Item> {
         let start_offset = self.0.byte_offset();
         self.0

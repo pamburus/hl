@@ -31,18 +31,21 @@ pub trait RecordWithSourceFormatter {
 pub struct RawRecordFormatter {}
 
 impl RecordWithSourceFormatter for RawRecordFormatter {
+    #[inline(always)]
     fn format_record(&self, buf: &mut Buf, rec: model::RecordWithSource) {
         buf.extend_from_slice(rec.source);
     }
 }
 
 impl<T: RecordWithSourceFormatter> RecordWithSourceFormatter for &T {
+    #[inline(always)]
     fn format_record(&self, buf: &mut Buf, rec: model::RecordWithSource) {
         (**self).format_record(buf, rec)
     }
 }
 
 impl RecordWithSourceFormatter for Box<dyn RecordWithSourceFormatter> {
+    #[inline(always)]
     fn format_record(&self, buf: &mut Buf, rec: model::RecordWithSource) {
         (**self).format_record(buf, rec)
     }
