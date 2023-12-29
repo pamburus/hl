@@ -38,18 +38,22 @@ pub struct Record<'a> {
 }
 
 impl<'a> Record<'a> {
+    #[inline(always)]
     pub fn fields(&self) -> impl Iterator<Item = &(&'a str, &'a RawValue)> {
         self.extra.iter().chain(self.extrax.iter())
     }
 
+    #[inline(always)]
     pub fn fields_for_search(&self) -> impl Iterator<Item = &(&'a str, &'a RawValue)> {
         self.fields().chain(self.predefined.iter())
     }
 
+    #[inline(always)]
     pub fn matches<F: RecordFilter>(&self, filter: F) -> bool {
         filter.apply(self)
     }
 
+    #[inline(always)]
     pub fn with_prefix(mut self, prefix: &'a [u8]) -> Self {
         self.prefix = Some(prefix);
 
@@ -96,12 +100,14 @@ pub struct RecordWithSource<'a> {
 }
 
 impl<'a> RecordWithSource<'a> {
+    #[inline(always)]
     pub fn new(record: &'a Record<'a>, source: &'a [u8]) -> Self {
         Self { record, source }
     }
 }
 
 impl RecordWithSourceConstructor for Record<'_> {
+    #[inline(always)]
     fn with_source<'a>(&'a self, source: &'a [u8]) -> RecordWithSource<'a> {
         RecordWithSource::new(self, source)
     }
@@ -112,6 +118,7 @@ impl RecordWithSourceConstructor for Record<'_> {
 pub trait RecordFilter {
     fn apply<'a>(&self, record: &'a Record<'a>) -> bool;
 
+    #[inline(always)]
     fn and<F>(self, rhs: F) -> RecordFilterAnd<Self, F>
     where
         Self: Sized,
@@ -120,6 +127,7 @@ pub trait RecordFilter {
         RecordFilterAnd { lhs: self, rhs }
     }
 
+    #[inline(always)]
     fn or<F>(self, rhs: F) -> RecordFilterOr<Self, F>
     where
         Self: Sized,
@@ -130,18 +138,21 @@ pub trait RecordFilter {
 }
 
 impl<T: RecordFilter + ?Sized> RecordFilter for Box<T> {
+    #[inline(always)]
     fn apply<'a>(&self, record: &'a Record<'a>) -> bool {
         (**self).apply(record)
     }
 }
 
 impl<T: RecordFilter + ?Sized> RecordFilter for &T {
+    #[inline(always)]
     fn apply<'a>(&self, record: &'a Record<'a>) -> bool {
         (**self).apply(record)
     }
 }
 
 impl<T: RecordFilter> RecordFilter for Option<T> {
+    #[inline(always)]
     fn apply<'a>(&self, record: &'a Record<'a>) -> bool {
         if let Some(filter) = self {
             filter.apply(record)
@@ -159,6 +170,7 @@ pub struct RecordFilterAnd<L: RecordFilter, R: RecordFilter> {
 }
 
 impl<L: RecordFilter, R: RecordFilter> RecordFilter for RecordFilterAnd<L, R> {
+    #[inline(always)]
     fn apply<'a>(&self, record: &'a Record<'a>) -> bool {
         self.lhs.apply(record) && self.rhs.apply(record)
     }
@@ -172,6 +184,7 @@ pub struct RecordFilterOr<L: RecordFilter, R: RecordFilter> {
 }
 
 impl<L: RecordFilter, R: RecordFilter> RecordFilter for RecordFilterOr<L, R> {
+    #[inline(always)]
     fn apply<'a>(&self, record: &'a Record<'a>) -> bool {
         self.lhs.apply(record) || self.rhs.apply(record)
     }
@@ -182,6 +195,7 @@ impl<L: RecordFilter, R: RecordFilter> RecordFilter for RecordFilterOr<L, R> {
 pub struct RecordFilterNone;
 
 impl RecordFilter for RecordFilterNone {
+    #[inline(always)]
     fn apply<'a>(&self, _: &'a Record<'a>) -> bool {
         true
     }
@@ -280,10 +294,12 @@ impl ParserSettings {
         }
     }
 
+    #[inline(always)]
     fn apply<'a>(&self, key: &'a str, value: &'a RawValue, to: &mut Record<'a>, pc: &mut PriorityController) {
         self.blocks[0].apply(self, key, value, to, pc, true);
     }
 
+    #[inline(always)]
     fn apply_each<'a, 'i, I>(&self, items: I, to: &mut Record<'a>)
     where
         I: IntoIterator<Item = &'i (&'a str, &'a RawValue)>,
@@ -293,6 +309,7 @@ impl ParserSettings {
         self.apply_each_ctx(items, to, &mut pc);
     }
 
+    #[inline(always)]
     fn apply_each_ctx<'a, 'i, I>(&self, items: I, to: &mut Record<'a>, pc: &mut PriorityController)
     where
         I: IntoIterator<Item = &'i (&'a str, &'a RawValue)>,
@@ -351,6 +368,7 @@ impl ParserSettingsBlock {
         }
     }
 
+    #[inline(always)]
     fn apply_each_ctx<'a, 'i, I>(
         &self,
         ps: &ParserSettings,
@@ -382,6 +400,7 @@ struct PriorityController {
 }
 
 impl PriorityController {
+    #[inline(always)]
     fn prioritize<F: FnOnce(&mut Self) -> ()>(&mut self, kind: FieldKind, priority: usize, update: F) -> bool {
         let p = match kind {
             FieldKind::Time => &mut self.time,
@@ -466,6 +485,7 @@ impl FieldSettings {
         }
     }
 
+    #[inline(always)]
     fn apply_ctx<'a>(
         &self,
         ps: &ParserSettings,
@@ -486,6 +506,7 @@ impl FieldSettings {
         }
     }
 
+    #[inline(always)]
     fn kind(&self) -> Option<FieldKind> {
         match self {
             Self::Time => Some(FieldKind::Time),
@@ -530,6 +551,7 @@ pub struct RawRecord<'a> {
 }
 
 impl<'a> RawRecord<'a> {
+    #[inline(always)]
     pub fn fields(&self) -> impl Iterator<Item = &(&'a str, &'a RawValue)> {
         self.fields.iter().chain(self.fieldsx.iter())
     }
@@ -551,6 +573,7 @@ struct RawRecordVisitor<'a> {
 }
 
 impl<'a> RawRecordVisitor<'a> {
+    #[inline(always)]
     fn new() -> Self {
         Self { marker: PhantomData }
     }
@@ -596,6 +619,7 @@ pub struct KeyMatcher<'a> {
 }
 
 impl<'a> KeyMatcher<'a> {
+    #[inline(always)]
     pub fn new(key: &'a str) -> Self {
         Self { key }
     }
@@ -624,6 +648,7 @@ impl<'a> KeyMatcher<'a> {
         }
     }
 
+    #[inline(always)]
     fn norm(c: char) -> char {
         if c == '_' {
             '-'
@@ -704,6 +729,7 @@ impl UnaryBoolOp {
 }
 
 impl Default for UnaryBoolOp {
+    #[inline(always)]
     fn default() -> Self {
         Self::None
     }
@@ -718,6 +744,7 @@ pub enum FieldFilterKey<S> {
 }
 
 impl FieldFilterKey<String> {
+    #[inline(always)]
     pub fn borrowed(&self) -> FieldFilterKey<&str> {
         match self {
             FieldFilterKey::Predefined(kind) => FieldFilterKey::Predefined(*kind),
@@ -797,6 +824,7 @@ impl FieldFilter {
         })
     }
 
+    #[inline(always)]
     fn match_custom_key<'a>(&'a self, key: &str) -> Option<KeyMatch<'a>> {
         if let FieldFilterKey::Custom(k) = &self.key {
             if self.flat_key && k.len() != key.len() {
@@ -925,6 +953,7 @@ impl FieldFilterSet {
 }
 
 impl RecordFilter for FieldFilterSet {
+    #[inline(always)]
     fn apply<'a>(&self, record: &'a Record<'a>) -> bool {
         self.0.iter().all(|field| field.apply(record))
     }
@@ -941,6 +970,7 @@ pub struct Filter {
 }
 
 impl Filter {
+    #[inline(always)]
     pub fn is_empty(&self) -> bool {
         self.fields.0.is_empty() && self.level.is_none() && self.since.is_none() && self.until.is_none()
     }
@@ -991,6 +1021,7 @@ struct ObjectVisitor<'a> {
     marker: PhantomData<fn() -> Object<'a>>,
 }
 impl<'a> ObjectVisitor<'a> {
+    #[inline(always)]
     fn new() -> Self {
         Self { marker: PhantomData }
     }
@@ -1028,6 +1059,7 @@ pub struct Array<'a, const N: usize> {
 }
 
 impl<'a, const N: usize> Array<'a, N> {
+    #[inline(always)]
     pub fn iter(&self) -> impl Iterator<Item = &&'a RawValue> {
         self.items.iter().chain(self.more.iter())
     }
@@ -1037,6 +1069,7 @@ struct ArrayVisitor<'a, const N: usize> {
     marker: PhantomData<fn() -> Array<'a, N>>,
 }
 impl<'a, const N: usize> ArrayVisitor<'a, N> {
+    #[inline(always)]
     fn new() -> Self {
         Self { marker: PhantomData }
     }

@@ -729,6 +729,7 @@ impl<'a, Formatter: RecordWithSourceFormatter, Filter: RecordFilter> SegmentProc
         }
     }
 
+    #[inline(always)]
     fn show_unparsed(&self) -> bool {
         self.options.allow_unparsed_data
     }
