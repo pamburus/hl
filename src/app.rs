@@ -503,6 +503,7 @@ impl App {
                             mem_usage -= entry.1.1.end - entry.1.1.start;
                             output.write_all(sync_indicator.value.as_bytes())?;
                             output.write_all(&entry.1.0[entry.1.1.clone()])?;
+                            output.write_all(&[b'\n'])?;
                         }
                     }
 
