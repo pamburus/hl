@@ -1,4 +1,5 @@
 // std imports
+use std::cmp::min;
 use std::convert::TryInto;
 use std::fs::File;
 use std::io::{self, stdin, BufReader, Read, Seek, SeekFrom};
@@ -61,11 +62,55 @@ impl InputReference {
         self.hold()?.open()
     }
 
+    pub fn open_tail(&self, n: u64) -> io::Result<Input> {
+        match self {
+            Self::Stdin => self.open(),
+            Self::File(path) => {
+                let mut file = File::open(path)
+                    .map_err(|e| io::Error::new(e.kind(), format!("failed to open {}: {}", self.description(), e)))?;
+                Self::seek_tail(&mut file, n).ok();
+                Ok(Input::new(self.clone(), Box::new(file)))
+            }
+        }
+    }
+
     pub fn description(&self) -> String {
         match self {
             Self::Stdin => "<stdin>".into(),
             Self::File(filename) => format!("file '{}'", Color::Yellow.paint(filename.to_string_lossy())),
         }
+    }
+
+    fn seek_tail(file: &mut File, lines: u64) -> io::Result<()> {
+        const BUF_SIZE: usize = 64 * 1024;
+        let mut scratch = [0; BUF_SIZE];
+        let mut count: u64 = 0;
+        let mut prev_pos = file.seek(SeekFrom::End(0))?;
+        let mut pos = prev_pos;
+        while pos > 0 {
+            pos -= min(BUF_SIZE as u64, pos);
+            pos = file.seek(SeekFrom::Start(pos))?;
+            if pos == prev_pos {
+                break;
+            }
+            let bn = min(BUF_SIZE, (prev_pos - pos) as usize);
+            let buf = scratch[..bn].as_mut();
+
+            file.read_exact(buf)?;
+
+            for i in (0..bn).rev() {
+                if buf[i] == b'\n' {
+                    if count == lines {
+                        file.seek(SeekFrom::Start(pos + i as u64 + 1))?;
+                        return Ok(());
+                    }
+                    count += 1;
+                }
+            }
+
+            prev_pos = pos;
+        }
+        Ok(())
     }
 }
 

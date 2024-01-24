@@ -424,6 +424,7 @@ Options:
       --list-themes                                      List available themes and exit
   -s, --sort                                             Sort messages chronologically
   -F, --follow                                           Follow input streams and sort messages chronologically during time frame set by --sync-interval-ms option
+      --tail <TAIL>                                      Number of last messages to preload from each file in --follow mode [default: 10]
       --sync-interval-ms <SYNC_INTERVAL_MS>              Synchronization interval for live streaming mode enabled by --follow option [default: 100]
   -o, --output <OUTPUT>                                  Output file
       --dump-index                                       Dump index metadata and exit
