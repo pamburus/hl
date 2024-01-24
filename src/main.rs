@@ -182,6 +182,10 @@ struct Opt {
     #[arg(long, short = 'F')]
     follow: bool,
 
+    /// Number of last messages to preload from each file in --follow mode.
+    #[arg(long, default_value = "10")]
+    tail: u64,
+
     /// Synchronization interval for live streaming mode enabled by --follow option.
     #[arg(long, default_value = "100")]
     sync_interval_ms: u64,
@@ -402,6 +406,7 @@ fn run() -> Result<()> {
         },
         dump_index: opt.dump_index,
         app_dirs: Some(app_dirs),
+        tail: opt.tail,
     });
 
     // Configure input.

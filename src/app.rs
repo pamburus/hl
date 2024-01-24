@@ -66,6 +66,7 @@ pub struct Options {
     pub input_info: Option<InputInfo>,
     pub dump_index: bool,
     pub app_dirs: Option<AppDirs>,
+    pub tail: u64,
 }
 
 impl Options {
@@ -396,7 +397,7 @@ impl App {
                     if let InputReference::File(filename) = &input_ref { 
                         meta = Some(fs::metadata(filename)?);
                     }
-                    let mut input = Some(input_ref.open()?);
+                    let mut input = Some(input_ref.open_tail(self.options.tail)?);
                     let is_file = |meta: &Option<fs::Metadata>| meta.as_ref().map(|m|m.is_file()).unwrap_or(false);
                     let process = |input: &mut Option<Input>, is_file: bool| {
                         if let Some(input) = input {
