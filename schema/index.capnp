@@ -24,6 +24,7 @@ struct SourceBlock {
     size @1 :UInt32;
     index @2 :Index;
     chronology @3 :Chronology;
+    hash @4 :Hash;
 }
 
 # Index holds index information of a block or a whole file.
@@ -63,6 +64,19 @@ struct Chronology {
     }
     # Field `jumps` holds offsets in a SourceBlock bytes for lines which breaks chronological order.
     jumps @3 :List(UInt32);
+}
+
+# HashAlgorithm is an algorithm used to calculate data hash.
+enum HashAlgorithm {
+    sha256 @0;
+    gxHash64 @1;
+    wyHash @2;
+}
+
+# Hash is a hash of some data.
+struct Hash {
+    algorithm @0 :HashAlgorithm;
+    value @1 :Data;
 }
 
 # Various flags.

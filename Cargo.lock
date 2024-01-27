@@ -717,7 +717,7 @@ checksum = "7f24254aa9a54b5c858eaee2f5bccdb46aaf0e486a595ed5fd8f86ba55232a70"
 
 [[package]]
 name = "hl"
-version = "0.25.1-beta.2"
+version = "0.25.1-beta.3"
 dependencies = [
  "atoi",
  "bincode",
@@ -767,6 +767,7 @@ dependencies = [
  "thiserror",
  "wildmatch",
  "winapi",
+ "wyhash",
 ]
 
 [[package]]
@@ -1856,6 +1857,15 @@ name = "windows_x86_64_msvc"
 version = "0.52.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dff9641d1cd4be8d1a070daf9e3773c5f67e78b4d9d42263020c057706765c04"
+
+[[package]]
+name = "wyhash"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "baf6e163c25e3fac820b4b453185ea2dea3b6a3e0a721d4d23d75bd33734c295"
+dependencies = [
+ "rand_core",
+]
 
 [[package]]
 name = "yaml-rust"
