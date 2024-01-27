@@ -255,15 +255,27 @@ impl App {
                         if src.stat.lines_valid == 0 {
                             return None;
                         }
-                        if let Some(level) = self.options.filter.level {
-                            if !src.match_level(level) {
-                                return None;
+                        if let Some((ts_min, ts_max)) = src.stat.ts_min_max {
+                            if let Some(until) = self.options.filter.until  {
+                                if ts_min > until.into() {
+                                    return None;
+                                }
                             }
+                            if let Some(since) = self.options.filter.since  {
+                                if ts_max < since.into(){
+                                    return None;
+                                }
+                            }
+                            if let Some(level) = self.options.filter.level {
+                                if !src.match_level(level) {
+                                    return None;
+                                }
+                            }
+                            let offset = block.offset();
+                            Some((block, ts_min, ts_max, i, offset))
+                        } else {
+                            None
                         }
-                        let offset = block.offset();
-                        src.stat
-                            .ts_min_max
-                            .map(|(ts_min, ts_max)| (block, ts_min, ts_max, i, offset))
                     })
                     .collect();
 
