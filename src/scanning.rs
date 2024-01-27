@@ -15,17 +15,14 @@ use crate::error::*;
 /// Scans input stream and splits it into segments containing a whole number of tokens delimited by the given delimiter.
 /// If a single token exceeds size of a buffer allocated by SegmentBufFactory, it is split into multiple Incomplete segments.
 pub struct Scanner {
-    delimiter: String,
+    delimiter: u8,
     sf: Arc<SegmentBufFactory>,
 }
 
 impl Scanner {
     /// Returns a new Scanner with the given parameters.
-    pub fn new(sf: Arc<SegmentBufFactory>, delimiter: String) -> Self {
-        Self {
-            delimiter: delimiter.clone(),
-            sf,
-        }
+    pub fn new(sf: Arc<SegmentBufFactory>, delimiter: u8) -> Self {
+        Self { delimiter, sf }
     }
 
     /// Returns an iterator over segments found in the input.
@@ -236,27 +233,36 @@ impl<'a, 'b> ScannerIter<'a, 'b> {
     }
 
     fn split(&mut self) -> Option<SegmentBuf> {
-        let k = self.scanner.delimiter.len();
-        if self.next.size < k || k == 0 {
+        if self.next.size < 1 {
             return None;
         }
 
-        for i in (0..self.next.size - k + 1).rev() {
-            if self.next.data[i..].starts_with(self.scanner.delimiter.as_bytes()) {
-                let n = self.next.size - i - k;
-                let mut result = self.scanner.sf.new_segment();
-                if result.data.len() < n {
-                    result.data.resize(n, 0);
-                }
-                if n > 0 {
-                    result.data[..n].copy_from_slice(&self.next.data[i + k..i + k + n]);
-                    result.size = n;
-                    self.next.size -= n;
-                }
-                return Some(result);
-            }
+        self.next.data[..self.next.size]
+            .rsplit(|x| *x == self.scanner.delimiter)
+            .next()
+            .map(|data| data.len())
+            .and_then(|n| self.split_n(n))
+    }
+
+    #[inline(always)]
+    fn split_n(&mut self, n: usize) -> Option<SegmentBuf> {
+        let s = self.next.size;
+        if n == s {
+            return None;
         }
-        None
+
+        let mut result = self.scanner.sf.new_segment();
+        if result.data.len() < n {
+            result.data.resize(n, 0);
+        }
+
+        if n > 0 {
+            result.data[..n].copy_from_slice(&self.next.data[s - n..s]);
+            result.size = n;
+            self.next.size -= n;
+        }
+
+        Some(result)
     }
 }
 
@@ -398,7 +404,7 @@ mod tests {
     #[test]
     fn test_small_token() {
         let sf = Arc::new(SegmentBufFactory::new(20));
-        let scanner = Scanner::new(sf.clone(), "/".into());
+        let scanner = Scanner::new(sf.clone(), b'/');
         let mut data = std::io::Cursor::new(b"token");
         let tokens = scanner.items(&mut data).collect::<Result<Vec<_>>>().unwrap();
         assert_eq!(tokens, vec![Segment::Complete(b"token".into())])
@@ -407,7 +413,7 @@ mod tests {
     #[test]
     fn test_empty_token_and_small_token() {
         let sf = Arc::new(SegmentBufFactory::new(20));
-        let scanner = Scanner::new(sf.clone(), "/".into());
+        let scanner = Scanner::new(sf.clone(), b'/');
         let mut data = std::io::Cursor::new(b"/token");
         let tokens = scanner.items(&mut data).collect::<Result<Vec<_>>>().unwrap();
         assert_eq!(
@@ -419,7 +425,7 @@ mod tests {
     #[test]
     fn test_small_token_and_empty_token() {
         let sf = Arc::new(SegmentBufFactory::new(20));
-        let scanner = Scanner::new(sf.clone(), "/".into());
+        let scanner = Scanner::new(sf.clone(), b'/');
         let mut data = std::io::Cursor::new(b"token/");
         let tokens = scanner.items(&mut data).collect::<Result<Vec<_>>>().unwrap();
         assert_eq!(tokens, vec![Segment::Complete(b"token/".into())])
@@ -428,7 +434,7 @@ mod tests {
     #[test]
     fn test_two_small_tokens() {
         let sf = Arc::new(SegmentBufFactory::new(20));
-        let scanner = Scanner::new(sf.clone(), "/".into());
+        let scanner = Scanner::new(sf.clone(), b'/');
         let mut data = std::io::Cursor::new(b"test/token/");
         let tokens = scanner.items(&mut data).collect::<Result<Vec<_>>>().unwrap();
         assert_eq!(tokens, vec![Segment::Complete(b"test/token/".into())])
@@ -437,7 +443,7 @@ mod tests {
     #[test]
     fn test_two_tokens_over_segment_size() {
         let sf = Arc::new(SegmentBufFactory::new(10));
-        let scanner = Scanner::new(sf.clone(), "/".into());
+        let scanner = Scanner::new(sf.clone(), b'/');
         let mut data = std::io::Cursor::new(b"test/token/");
         let tokens = scanner.items(&mut data).collect::<Result<Vec<_>>>().unwrap();
         assert_eq!(
@@ -449,7 +455,7 @@ mod tests {
     #[test]
     fn test_jumbo_1() {
         let sf = Arc::new(SegmentBufFactory::new(2));
-        let scanner = Scanner::new(sf.clone(), "/".into());
+        let scanner = Scanner::new(sf.clone(), b'/');
         let mut data = std::io::Cursor::new(b"test/token/very/large/");
         let tokens = scanner
             .items(&mut data)

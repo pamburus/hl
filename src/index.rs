@@ -234,7 +234,7 @@ impl Indexer {
             // spawn reader thread
             let reader = scope.spawn(closure!(clone sfi, |_| -> Result<()> {
                 let mut sn: usize = 0;
-                let scanner = Scanner::new(sfi, "\n".to_string());
+                let scanner = Scanner::new(sfi, b'\n');
                 for item in scanner.items(input).with_max_segment_size(self.max_message_size.try_into()?) {
                     if let Err(_) = txi[sn % n].send(item?) {
                         break;
