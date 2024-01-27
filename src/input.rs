@@ -1,6 +1,7 @@
 // std imports
 use std::cmp::min;
 use std::convert::TryInto;
+use std::fmt;
 use std::fs::File;
 use std::io::{self, stdin, BufReader, Read, Seek, SeekFrom};
 use std::mem::size_of_val;
@@ -31,7 +32,7 @@ pub type BufPool = SQPool<Vec<u8>>;
 
 // ---
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum InputReference {
     Stdin,
     File(PathBuf),
@@ -144,6 +145,12 @@ impl InputHolder {
                 None => IndexedInput::open(&path, indexer),
             },
         }
+    }
+}
+
+impl fmt::Debug for InputHolder {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "InputHolder {:?}", self.reference)
     }
 }
 

@@ -58,6 +58,8 @@ shellwords = "1"
 signal-hook = "0"
 snap = "1"
 thiserror = "1"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["json", "env-filter"] }
 wildmatch = "2"
 winapi = {version = "0", features = ["handleapi"]}
 

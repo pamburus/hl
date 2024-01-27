@@ -24,6 +24,7 @@ use platform_dirs::AppDirs;
 use serde_json as json;
 use sha2::{Digest, Sha256};
 use std::num::{NonZeroU32, NonZeroUsize};
+use tracing::{span, Level, event};
 
 // local imports
 use crate::datefmt::{DateTimeFormat, DateTimeFormatter};
@@ -189,6 +190,10 @@ impl App {
     }
 
     fn sort(&self, inputs: Vec<InputHolder>, output: &mut Output) -> Result<()> {
+        let span = span!(Level::TRACE, "sort", ?inputs);
+        let _enter = span.enter();
+        
+        event!(Level::TRACE, "creating cache dir");
         let mut output = BufWriter::new(output);
         let param_hash = hex::encode(self.parameters_hash()?);
         let cache_dir = self
@@ -209,12 +214,14 @@ impl App {
 
         let input_badges = self.input_badges(inputs.iter().map(|x| &x.reference));
 
+        event!(Level::TRACE, "updating index");
         let inputs = inputs
             .into_iter()
             .map(|x| x.index(&indexer))
             .collect::<Result<Vec<_>>>()?;
 
         if self.options.dump_index {
+            event!(Level::TRACE, "dumping index");
             for input in inputs {
                 for block in input.into_blocks().sorted() {
                     writeln!(output, "block at {} with size {}", block.offset(), block.size())?;
@@ -245,6 +252,10 @@ impl App {
                 .unzip();
             // spawn pusher thread
             let pusher = scope.spawn(closure!(|_| -> Result<()> {
+                let span = span!(Level::TRACE, "pusher");
+                let _enter = span.enter();
+
+                event!(Level::TRACE, "collecting blocks");
                 let mut blocks: Vec<_> = inputs
                     .into_iter()
                     .enumerate()
@@ -267,22 +278,31 @@ impl App {
                     })
                     .collect();
 
+                event!(Level::TRACE, count=blocks.len(), "sorting blocks");
                 blocks.sort_by(|a, b| (a.1, a.2, a.3, a.4).partial_cmp(&(b.1, b.2, b.3, b.4)).unwrap());
 
                 let mut output = StripedSender::new(txp);
                 for (j, (block, ts_min, _, i, _)) in blocks.into_iter().enumerate() {
+                    event!(Level::TRACE, block=j, i, "ts-min" = ?ts_min, "sending block");
                     if output.send((block, ts_min, i, j)).is_none() {
                         break;
                     }
+                    event!(Level::TRACE, "reading next block");
                 }
+                event!(Level::TRACE, "done");
                 Ok(())
             }));
             // spawn worker threads
             let mut workers = Vec::with_capacity(n);
-            for (rxp, txw) in izip!(rxp, txw) {
+            for (wi, (rxp, txw)) in izip!(rxp, txw).enumerate() {
                 workers.push(scope.spawn(closure!(ref parser, |_| -> Result<()> {
+                    let span = span!(Level::TRACE, "worker", worker=wi);
+                    let _enter = span.enter();
+
+                    event!(Level::TRACE, "waiting for data");
                     let mut processor = self.new_segment_processor(&parser);
                     for (block, ts_min, i, j) in rxp.iter() {
+                        event!(Level::TRACE, block=j, i, "ts-min" = ?ts_min, "processing block");
                         let mut buf = Vec::with_capacity(2 * usize::try_from(block.size())?);
                         let mut items = Vec::with_capacity(2 * usize::try_from(block.lines_valid())?);
                         for line in block.into_lines()? {
@@ -300,16 +320,21 @@ impl App {
                             });  
                         }
 
+                        event!(Level::TRACE, block=j, i, "ts-min" = ?ts_min, items=items.len(), "sending block");
                         let buf = Arc::new(buf);
                         if txw.send((OutputBlock { ts_min, buf, items }, i, j)).is_err() {
                             break;
                         }
                     }
+                    event!(Level::TRACE, "done");
                     Ok(())
                 })));
             }
             // spawn merger thread
             let merger = scope.spawn(|_| -> Result<()> {
+                let span = span!(Level::TRACE, "merger");
+                let _enter = span.enter();
+
                 let mut input = StripedReceiver::new(rxw);
                 let (mut tsi, mut tso) = (None, None);
                 let mut workspace = Vec::new();
@@ -322,7 +347,11 @@ impl App {
 
                 loop {
                     while tso >= tsi || workspace.len() == 0 {
+                        if !done {
+                            event!(Level::TRACE, "waiting for next block");
+                        }
                         if let Some((block, i, j)) = input.next() {
+                            event!(Level::TRACE, block=j, i, "ts-min" = ?block.ts_min, "processing block");
                             tsi = Some(block.ts_min.clone());
                             tso = tso.or(tsi);
                             let mut tail = block.into_lines();
@@ -331,7 +360,10 @@ impl App {
                                 workspace.push((head, tail, i, j));
                             }
                         } else {
-                            done = true;
+                            if !done {
+                                event!(Level::TRACE, "finalizing workspace");
+                                done = true;
+                            }
                             break;
                         }
                     }
@@ -359,6 +391,7 @@ impl App {
                     }
                 }
 
+                event!(Level::TRACE, "done");
                 Ok(())
             });
 
@@ -372,6 +405,7 @@ impl App {
         })
         .unwrap()?;
 
+        event!(Level::TRACE, "done");
         Ok(())
     }
 

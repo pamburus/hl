@@ -15,6 +15,7 @@ use nu_ansi_term::Color;
 use once_cell::sync::Lazy;
 use platform_dirs::AppDirs;
 use std::num::NonZeroUsize;
+use tracing::{event, Level};
 
 // local imports
 use hl::datefmt::LinuxDateFormat;
@@ -197,6 +198,10 @@ struct Opt {
     /// Dump index metadata and exit.
     #[arg(long)]
     dump_index: bool,
+
+    /// Log debug trace to a file.
+    #[arg(long)]
+    trace_file: Option<String>,
 
     //
     /// Print help.
@@ -440,6 +445,17 @@ fn run() -> Result<()> {
                 }
             }
         }
+    }
+
+    if let Some(trace_file) = opt.trace_file {
+        let file = std::fs::File::create(trace_file)?;
+        tracing_subscriber::fmt()
+            .json()
+            .with_writer(file)
+            .with_max_level(Level::TRACE)
+            .init();
+
+        event!(Level::INFO, args = ?std::env::args().collect_vec(), "running");
     }
 
     let inputs = inputs
