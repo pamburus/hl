@@ -136,7 +136,7 @@ impl App {
             // spawn reader thread
             let reader = scope.spawn(closure!(clone sfi, |_| -> Result<()> {
                 let mut tx = StripedSender::new(txi);
-                let scanner = Scanner::new(sfi, "\n".to_string());
+                let scanner = Scanner::new(sfi, b'\n');
                 for (i, mut input) in inputs.into_iter().enumerate() {
                     for item in scanner.items(&mut input.stream).with_max_segment_size(self.options.max_message_size.into()) {
                         if tx.send((i, item?)).is_none() {
@@ -404,7 +404,7 @@ impl App {
             let mut readers = Vec::with_capacity(m);
             for (i, input_ref) in inputs.into_iter().enumerate() {
                 let reader = scope.spawn(closure!(clone sfi, clone txi, |_| -> Result<()> {
-                    let scanner = Scanner::new(sfi.clone(), "\n".to_string());
+                    let scanner = Scanner::new(sfi.clone(), b'\n');
                     let mut meta = None;
                     if let InputReference::File(filename) = &input_ref { 
                         meta = Some(fs::metadata(filename)?);
