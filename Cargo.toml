@@ -4,12 +4,12 @@ categories = ["command-line-utilities"]
 description = "Utility for viewing json-formatted log files."
 keywords = ["cli", "human", "log"]
 name = "hl"
-version = "0.25.1-beta.4"
+version = "0.25.1"
 edition = "2021"
 build = "build.rs"
 
 [build-dependencies]
-capnpc = "0.18"
+capnpc = "0.19"
 generic-array = "0"
 hex = "0"
 serde = { version = "1", features = ["derive"] }
@@ -17,11 +17,11 @@ serde_json = { version = "1", features = ["raw_value"] }
 sha2 = "0"
 
 [dependencies]
-atoi = "1"
+atoi = "2"
 bincode = "1"
 bitmask = "0" 
 bytefmt = "0"
-capnp = "0.18"
+capnp = "0.19"
 chrono = { version = "0.4", default-features = false, features = ["clock", "serde", "std"] }
 chrono-tz = { version = "0", features = ["serde"] }
 clap = {version = "4", features = ["wrap_help", "derive", "env"]}
@@ -39,7 +39,7 @@ heapless = "0"
 hex = "0"
 htp = { git = "https://github.com/pamburus/htp.git" }
 humantime = "2"
-itertools = "0"
+itertools = "0.12"
 itoa = { version = "1", default-features = false }
 notify = { version = "6", features = ["macos_kqueue"] }
 nu-ansi-term = "0"
@@ -49,7 +49,7 @@ pest = "2"
 pest_derive = "2"
 platform-dirs = "0"
 regex = "1"
-rust-embed = "6"
+rust-embed = "8"
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["raw_value"] }
 serde_yaml = "0"
