@@ -37,7 +37,7 @@ use crate::index_capnp as schema;
 use crate::input::Input;
 use crate::level::Level;
 use crate::model::{Parser, ParserSettings, RawRecord};
-use crate::scanning::{Scanner, Segment, SegmentBuf, SegmentBufFactory};
+use crate::scanning::{Delimiter, Scanner, Segment, SegmentBuf, SegmentBufFactory};
 use crate::settings::PredefinedFields;
 
 // types
@@ -128,6 +128,7 @@ pub struct Indexer {
     max_message_size: u32,
     dir: PathBuf,
     parser: Parser,
+    delimiter: Delimiter,
 }
 
 impl Indexer {
@@ -138,6 +139,7 @@ impl Indexer {
         max_message_size: u32,
         dir: PathBuf,
         fields: &PredefinedFields,
+        delimiter: Delimiter,
     ) -> Self {
         Self {
             concurrency,
@@ -145,6 +147,7 @@ impl Indexer {
             max_message_size,
             dir,
             parser: Parser::new(ParserSettings::new(&fields, empty(), false)),
+            delimiter,
         }
     }
 
@@ -252,7 +255,7 @@ impl Indexer {
             // spawn reader thread
             let reader = scope.spawn(closure!(clone sfi, |_| -> Result<()> {
                 let mut sn: usize = 0;
-                let scanner = Scanner::new(sfi, b'\n');
+                let scanner = Scanner::new(sfi, &self.delimiter);
                 for item in scanner.items(input).with_max_segment_size(self.max_message_size.try_into()?) {
                     if let Err(_) = txi[sn % n].send((sn, item?)) {
                         break;

@@ -471,6 +471,7 @@ Options:
       --tail <TAIL>                                      Number of last messages to preload from each file in --follow mode [default: 10]
       --sync-interval-ms <SYNC_INTERVAL_MS>              Synchronization interval for live streaming mode enabled by --follow option [default: 100]
   -o, --output <OUTPUT>                                  Output file
+      --delimiter <DELIMITER>                            Log message delimiter, [NUL, CR, LF, CRLF] or any custom string
       --dump-index                                       Dump index metadata and exit
       --help                                             Print help
   -V, --version                                          Print version
