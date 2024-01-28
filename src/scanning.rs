@@ -47,8 +47,7 @@ impl SegmentBuf {
     }
 
     /// Converts the SegmentBuf to a Vec<u8>.
-    pub fn to_vec(mut self) -> Vec<u8> {
-        self.data.resize(self.size, 0);
+    pub fn into_inner(self) -> Vec<u8> {
         self.data
     }
 
@@ -110,7 +109,7 @@ impl<T: AsRef<[u8]>> From<T> for SegmentBuf {
 // ---
 
 /// Segment is an output of Scanner.
-/// Complete segment cantains a whole number of tokens.
+/// Complete segment contains a whole number of tokens.
 /// Incomplete segment contains a part of a token.
 #[derive(Debug, Eq, PartialEq)]
 pub enum Segment {
