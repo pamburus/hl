@@ -17,7 +17,7 @@ use std::os::unix::fs::MetadataExt;
 
 // third-party imports
 use closure::closure;
-use crossbeam_channel::{self as channel, Receiver, RecvError, Sender,RecvTimeoutError};
+use crossbeam_channel::{self as channel, Receiver, RecvError, Sender, RecvTimeoutError};
 use crossbeam_utils::thread;
 use itertools::{izip, Itertools};
 use platform_dirs::AppDirs;
@@ -34,7 +34,7 @@ use crate::formatting::{RecordFormatter, RecordWithSourceFormatter, RawRecordFor
 use crate::index::{Indexer, Timestamp};
 use crate::input::{BlockLine, InputHolder, InputReference, Input};
 use crate::model::{Filter, Parser, ParserSettings, RawRecord, Record, RecordFilter, RecordWithSourceConstructor};
-use crate::scanning::{BufFactory, Scanner, Segment, SegmentBufFactory};
+use crate::scanning::{BufFactory, Scanner, Segment, SegmentBuf, SegmentBufFactory};
 use crate::serdex::StreamDeserializerWithOffsets;
 use crate::settings::{Fields, Formatting};
 use crate::theme::{Element, StylingPush, Theme};
@@ -132,7 +132,7 @@ impl App {
             // prepare receive/transmit channels for input data
             let (txi, rxi): (Vec<_>, Vec<_>) = (0..n).map(|_| channel::bounded(1)).unzip();
             // prepare receive/transmit channels for output data
-            let (txo, rxo): (Vec<_>, Vec<_>) = (0..n).into_iter().map(|_| channel::bounded::<(usize, Vec<u8>)>(1)).unzip();
+            let (txo, rxo): (Vec<_>, Vec<_>) = (0..n).into_iter().map(|_| channel::bounded::<(usize, SegmentBuf)>(1)).unzip();
             // spawn reader thread
             let reader = scope.spawn(closure!(clone sfi, |_| -> Result<()> {
                 let mut tx = StripedSender::new(txi);
@@ -157,12 +157,12 @@ impl App {
                                 let mut buf = bfo.new_buf();
                                 processor.process(segment.data(), &mut buf, prefix, &mut RecordIgnorer{});
                                 sfi.recycle(segment);
-                                if let Err(_) = txo.send((i, buf)) {
+                                if let Err(_) = txo.send((i, buf.into())) {
                                     break;
                                 };
                             }
                             Segment::Incomplete(segment, _) => {
-                                if let Err(_) = txo.send((i, segment.to_vec())) {
+                                if let Err(_) = txo.send((i, segment)) {
                                     break;
                                 }
                             }
@@ -173,8 +173,8 @@ impl App {
             // spawn writer thread
             let writer = scope.spawn(closure!(ref bfo, |_| -> Result<()> {
                 for (_, buf) in StripedReceiver::new(rxo) {
-                    output.write_all(&buf[..])?;
-                    bfo.recycle(buf);
+                    output.write_all(buf.data())?;
+                    bfo.recycle(buf.into_inner());
                 }
                 Ok(())
             }));
