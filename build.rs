@@ -1,4 +1,3 @@
-use generic_array::{typenum::U32, GenericArray};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::fs::File;
@@ -37,12 +36,12 @@ fn build_capnp() {
     }
 }
 
-fn file_hash(filename: &PathBuf) -> GenericArray<u8, U32> {
+fn file_hash(filename: &PathBuf) -> [u8; 32] {
     let mut hasher = Sha256::new();
     for line in BufReader::new(File::open(filename).unwrap()).lines() {
         hasher.update(line.unwrap());
     }
-    hasher.finalize()
+    hasher.finalize().into()
 }
 
 #[derive(Debug, Eq, PartialEq, Deserialize, Serialize)]

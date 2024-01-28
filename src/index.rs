@@ -26,7 +26,6 @@ use closure::closure;
 use crossbeam_channel as channel;
 use crossbeam_channel::RecvError;
 use crossbeam_utils::thread;
-use generic_array::{typenum::U32, GenericArray};
 use itertools::izip;
 use serde::{Deserialize, Serialize};
 use serde_json as json;
@@ -49,7 +48,7 @@ pub type Reader = dyn Read + Send + Sync;
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug, Hash)]
 pub enum Hash {
-    Sha256(GenericArray<u8, U32>),
+    Sha256([u8; 32]),
     GxHash64(u64),
     WyHash(u64),
 }
@@ -469,7 +468,7 @@ impl Index {
         let root: schema::root::Builder = message.init_root();
         let mut source = root.init_source();
         source.set_size(self.source.size);
-        source.set_path(self.source.path.as_bytes().into());
+        source.set_path(&self.source.path);
         let mut modified = source.reborrow().init_modified();
         modified.set_sec(self.source.modified.0);
         modified.set_nsec(self.source.modified.1);
@@ -616,7 +615,7 @@ impl Index {
             Some(schema::HashAlgorithm::Sha256) => {
                 let value = hash.get_value()?;
                 if value.len() == 32 {
-                    Ok(Some(Hash::Sha256(*GenericArray::from_slice(value))))
+                    Ok(Some(Hash::Sha256(value.try_into().unwrap())))
                 } else {
                     Ok(None)
                 }
@@ -884,10 +883,10 @@ fn ts(ts: SystemTime) -> (i64, u32) {
     }
 }
 
-fn sha256(bytes: &[u8]) -> GenericArray<u8, U32> {
+fn sha256(bytes: &[u8]) -> [u8; 32] {
     let mut hasher = Sha256::new();
     hasher.update(bytes);
-    hasher.finalize()
+    hasher.finalize().into()
 }
 
 fn strip<'a>(slice: &'a [u8], ch: u8) -> &'a [u8] {
