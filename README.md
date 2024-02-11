@@ -470,30 +470,30 @@ Options:
 * MacBook Pro (16-inch, 2021)
     * **CPU**:   Apple M1 Max CPU
     * **OS**:    macOS Sonoma 14.2.1
-    * **Data**:  ~2.3GiB log file, 6 000 000 lines
-        * [hl](https://github.com/pamburus/hl) v0.25.1 ~ 1.2 seconds
+    * **Data**:  ~ **2.3 GiB** log file, **6 000 000** lines
+        * [hl](https://github.com/pamburus/hl) **v0.25.1** ~ *1.2 seconds*
             ```
             $ time hl example.log -c >/dev/null
             hl example.log -c > /dev/null  10.61s user 0.53s system 887% cpu 1.256 total
             ```
-        * [hlogf](https://github.com/ssgreg/hlogf) v1.41.1 ~ 8.5 seconds
+        * [hlogf](https://github.com/ssgreg/hlogf) **v1.41.1** ~ *8.5 seconds*
             ```
             $ time hlogf example.log --color always >/dev/null
             hlogf example.log --color always > /dev/null  6.70s user 1.83s system 99% cpu 8.563 total
             ```
-        * [humanlog](https://github.com/humanlogio/humanlog) v0.7.6 ~ 75 seconds
+        * [humanlog](https://github.com/humanlogio/humanlog) **v0.7.6** ~ *75 seconds*
             ```
             $ time humanlog <example.log --color always >/dev/null
             humanlog> reading stdin...
             humanlog --color always < example.log > /dev/null  78.51s user 4.60s system 109% cpu 1:15.65 total
             ```
-        * [fblog](https://github.com/brocode/fblog) v4.8.0 ~ 33 seconds
+        * [fblog](https://github.com/brocode/fblog) **v4.8.0** ~ *33 seconds*
             ```
             $ time fblog example.log >/dev/null
             fblog example.log > /dev/null  31.25s user 2.07s system 99% cpu 33.448 total
             ```
 
-        * [fblog](https://github.com/brocode/fblog) -d v4.8.0 ~ 146 seconds
+        * [fblog](https://github.com/brocode/fblog) with `-d` flag **v4.8.0** ~ *146 seconds*
             ```
             $ time fblog -d example.log >/dev/null
             fblog -d example.log > /dev/null  130.64s user 14.70s system 99% cpu 2:25.98 total
