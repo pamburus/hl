@@ -26,7 +26,7 @@ High performance and convenient features are the main goals.
 
 ## Performance comparison chart
 
-### Performance comparison with [humanlog](https://github.com/humanlogio/humanlog), [hlogf](https://github.com/ssgreg/hlogf) and [fblog](https://github.com/brocode/fblog)
+### Performance comparison with [humanlog](https://github.com/humanlogio/humanlog), [hlogf](https://github.com/ssgreg/hlogf) and [fblog](https://github.com/brocode/fblog) on a 2.3 GiB log file
 
 ![performance chart](doc/performance-chart.svg)
 
