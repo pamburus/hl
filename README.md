@@ -15,10 +15,10 @@ High performance and convenient features are the main goals.
 * Quick and easy [hiding and unhiding](#hiding-or-showing-selected-fields) of fields with the `-h` option.
 * Hide empty fields with the `-E` flag.
 * Lightning fast [message sorting](#sorting-messages-chronologically) with automatic indexing for local files using the `-s` flag.
-    * Handles ~ 1 GiB/s for the first scan and allows fast filtering by timestamp range and level without scanning the data afterwards.
+    * Handles ~1 GiB/s for the first scan and allows fast filtering by timestamp range and level without scanning the data afterwards.
     * Works fast with hundreds of local files containing hundreds of gigabytes of data.
     * Reindexes large, growing files at lightning speed, skipping unmodified blocks, ~10 GiB/s.
-* Follow mode with live message sorting by timestamp from different sources using the `-F` flag and preview of several recent message with the `--tail` option.
+* Follow mode with live message sorting by timestamp from different sources using the `-F` flag and preview of several recent messages with the `--tail` option.
 * Custom complex [queries](#performing-complex-queries) that can include and/or conditions and much more.
 * Non-JSON prefixes with `--allow-prefix` flag.
 * Displays timestamps in UTC by default and supports easy timezone switching with the `-Z` option and the `-L` flag for a local timezone.
