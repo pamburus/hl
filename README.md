@@ -18,7 +18,7 @@ High performance and convenient features are the main goals.
     * Handles ~1 GiB/s for the first scan and allows fast filtering by timestamp range and level without scanning the data afterwards.
     * Works fast with hundreds of local files containing hundreds of gigabytes of data.
     * Reindexes large, growing files at lightning speed, skipping unmodified blocks, ~10 GiB/s.
-* Follow mode with live message sorting by timestamp from different sources using the `-F` flag and preview of several recent messages with the `--tail` option.
+* [Follow mode](#sorting-messages-chronologically-with-following-the-changes) with live message sorting by timestamp from different sources using the `-F` flag and preview of several recent messages with the `--tail` option.
 * Custom complex [queries](#performing-complex-queries) that can include and/or conditions and much more.
 * Non-JSON prefixes with `--allow-prefix` flag.
 * Displays timestamps in UTC by default and supports easy timezone switching with the `-Z` option and the `-L` flag for a local timezone.
@@ -293,12 +293,23 @@ High performance and convenient features are the main goals.
     Displays log messages from all log files in the current directory sorted in chronological order.
 
 
+### Sorting messages chronologically with following the changes
+
 - Command
 
     ```
-    $ hl -F <(kubectl logs -l app=my-app-1 -f) <(kubectl logs -l app=my-app-2 -f)
+    $ hl --sync-interval-ms 500 -F <(kubectl logs -l app=my-app-1 -f) <(kubectl logs -l app=my-app-2 -f)
     ```
-    Runs without a pager in follow mode by merging messages from the outputs of these 2 commands and sorting them chronologically within a default interval of 100ms.
+    Runs without a pager in follow mode by merging messages from the outputs of these 2 commands and sorting them chronologically within a custom 500ms interval.
+
+- Command
+
+    ```
+    $ hl -F --tail 100 app1.log app2.log app3.log
+    ```
+    Runs without a pager in follow mode, following the changes in three log files in the current directory and sorting them chronologically at a default interval of 100ms.
+    Preloads 100 lines from the end of each file before filtering.
+
 
 
 ### Configuration files
