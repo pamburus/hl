@@ -1,5 +1,36 @@
 # hl
-Log viewer which translates JSON logs into pretty human-readable representation. It is a faster alternative to [humanlog](https://github.com/aybabtme/humanlog) and [hlogf](https://github.com/ssgreg/hlogf) with several additional features.
+A fast and powerful log viewer that translates JSON logs into a pretty human-readable format.
+High performance and convenient features are the main goals.
+
+## Features overview
+
+* [Automatic usage](#automatic-usage-of-pager) of the [less](https://github.com/vbwagner/less) pager by default for convenience.
+* Log streaming with the `-P` flag that disables the pager.
+* Log record [filtering by field key/value pairs](#filtering-by-field-values) with the `-f` option with support for hierarchical keys.
+* Quick and easy [filtering by level](#quick-filtering-by-log-level) with the `-l` option.
+* Quick and easy [filtering by timestamp range](#filtering-by-time-range) using the `--since` and `--until` options and intuitive formats:
+    * RFC-3339 timestamp format.
+    * Current configured timestamp output format with the `-t` option or environment variable.
+    * Human friendly shortcuts like `today`, `yesterday`, `friday` or relative offsets like `-3h` or `-14d`.
+* Quick and easy [hiding and unhiding](#hiding-or-showing-selected-fields) of fields with the `-h` option.
+* Hide empty fields with the `-E` flag.
+* Lightning fast [message sorting](#sorting-messages-chronologically) with automatic indexing for local files using the `-s` flag.
+    * Handles ~ 1 GiB/s for the first scan and allows fast filtering by timestamp range and level without scanning the data afterwards.
+    * Works fast with hundreds of local files containing hundreds of gigabytes of data.
+    * Reindexes large, growing files at lightning speed, skipping unmodified blocks, ~10 GiB/s.
+* Follow mode with live message sorting by timestamp from different sources using the `-F` flag and preview of several recent message with the `--tail` option.
+* Custom complex [queries](#performing-complex-queries) that can include and/or conditions and much more.
+* Non-JSON prefixes with `--allow-prefix` flag.
+* Displays timestamps in UTC by default and supports easy timezone switching with the `-Z` option and the `-L` flag for a local timezone.
+* Customizable via [configuration](#configuration-files) file and environment variables, supports easy [theme switching](#selecting-current-theme) and custom [themes](#custom-themes).
+
+## Performance comparison chart
+
+### Performance comparison with [humanlog](https://github.com/humanlogio/humanlog), [hlogf](https://github.com/ssgreg/hlogf) and [fblog](https://github.com/brocode/fblog)
+
+![performance chart](doc/performance-chart.svg)
+
+* See [performance](#performance) section for more details.
 
 ## Installation options
 
@@ -434,24 +465,36 @@ Options:
 
 ## Performance
 
-* MacBook Pro (16-inch, 2019)
-    * CPU - 2,4 GHz 8-Core Intel Core i9
-    * OS - macOS 10.15.6
-    * Data - ~1GiB log file, 4.150.000 lines
-        * hl v0.6.8 ~ 1 second
+![performance chart](doc/performance-chart.svg)
+
+* MacBook Pro (16-inch, 2021)
+    * **CPU**:   Apple M1 Max CPU
+    * **OS**:    macOS Sonoma 14.2.1
+    * **Data**:  ~2.3GiB log file, 6 000 000 lines
+        * [hl](https://github.com/pamburus/hl) v0.25.1 ~ 1.2 seconds
             ```
-            $ time hl prom-m2.log -c >/dev/null
-            hl prom-m2.log -c > /dev/null  12.41s user 0.64s system 1430% cpu 0.912 total
+            $ time hl example.log -c >/dev/null
+            hl example.log -c > /dev/null  10.61s user 0.53s system 887% cpu 1.256 total
             ```
-        * hlogf v1.4.1 ~ 10 seconds
+        * [hlogf](https://github.com/ssgreg/hlogf) v1.41.1 ~ 8.5 seconds
             ```
-            $ time hlogf prom-m2.log --color= >/dev/null
-            hlogf prom-m2.log --color= > /dev/null  9.91s user 1.22s system 101% cpu 10.970 total
+            $ time hlogf example.log --color always >/dev/null
+            hlogf example.log --color always > /dev/null  6.70s user 1.83s system 99% cpu 8.563 total
             ```
-        * humanlog v0.4.1 ~ 60 seconds
+        * [humanlog](https://github.com/humanlogio/humanlog) v0.7.6 ~ 75 seconds
             ```
-            $ time humanlog <prom-m2.log >/dev/null
+            $ time humanlog <example.log --color always >/dev/null
             humanlog> reading stdin...
-            humanlog < prom-m2.log > /dev/null  58.55s user 4.89s system 107% cpu 58.931 total
+            humanlog --color always < example.log > /dev/null  78.51s user 4.60s system 109% cpu 1:15.65 total
             ```
-        ![performance chart](doc/performance-chart.png)
+        * [fblog](https://github.com/brocode/fblog) v4.8.0 ~ 33 seconds
+            ```
+            $ time fblog example.log >/dev/null
+            fblog example.log > /dev/null  31.25s user 2.07s system 99% cpu 33.448 total
+            ```
+
+        * [fblog](https://github.com/brocode/fblog) -d v4.8.0 ~ 146 seconds
+            ```
+            $ time fblog -d example.log >/dev/null
+            fblog -d example.log > /dev/null  130.64s user 14.70s system 99% cpu 2:25.98 total
+            ```
