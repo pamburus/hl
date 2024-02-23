@@ -381,9 +381,9 @@ fn run() -> Result<()> {
 
     let mut query: Option<Query> = None;
     for q in opt.query {
-        let right = hl::query::parse(&q)?;
+        let right = Query::parse(&q)?;
         if let Some(left) = query {
-            query = Some(hl::query::and(left, right));
+            query = Some(left.and(right));
         } else {
             query = Some(right);
         }
