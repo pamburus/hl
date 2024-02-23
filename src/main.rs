@@ -22,6 +22,7 @@ use hl::error::*;
 use hl::input::InputReference;
 use hl::level::{LevelValueParser, RelaxedLevel};
 use hl::output::{OutputStream, Pager};
+use hl::query::Query;
 use hl::settings::Settings;
 use hl::signal::SignalHandler;
 use hl::theme::{Theme, ThemeOrigin};
@@ -370,9 +371,14 @@ fn run() -> Result<()> {
     let max_message_size = opt.max_message_size;
     let buffer_size = std::cmp::min(max_message_size, opt.buffer_size);
 
-    let mut query = None;
+    let mut query: Option<Query> = None;
     for q in opt.query {
-        query = Some(hl::query::parse(&q)?);
+        let right = hl::query::parse(&q)?;
+        if let Some(left) = query {
+            query = Some(hl::query::and(left, right));
+        } else {
+            query = Some(right);
+        }
     }
 
     // Create app.

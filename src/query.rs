@@ -28,6 +28,14 @@ pub fn parse(str: &str) -> Result<Query> {
     Ok(expression(pairs.next().unwrap())?)
 }
 
+pub fn and(lhs: Query, rhs: Query) -> Query {
+    Box::new(And { lhs, rhs })
+}
+
+pub fn or(lhs: Query, rhs: Query) -> Query {
+    Box::new(Or { lhs, rhs })
+}
+
 fn expression(pair: Pair<Rule>) -> Result<Query> {
     match pair.as_rule() {
         Rule::expr_or => binary_op::<Or>(pair),
