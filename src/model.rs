@@ -144,7 +144,7 @@ impl<T: RecordFilter + ?Sized> RecordFilter for Box<T> {
     }
 }
 
-impl<T: RecordFilter + ?Sized> RecordFilter for &T {
+impl<T: RecordFilter> RecordFilter for &T {
     #[inline(always)]
     fn apply<'a>(&self, record: &'a Record<'a>) -> bool {
         (**self).apply(record)

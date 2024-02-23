@@ -72,10 +72,10 @@ pub struct Options {
 impl Options {
     fn filter_and_query<'a>(&'a self) -> Box<dyn RecordFilter +'a> {
         match (self.filter.is_empty(), &self.query) {
-            (true, None) => return Box::new(QueryNone{}),
-            (false, None) => return Box::new(&self.filter),
-            (false, Some(query)) => return Box::new(query),
-            (true, Some(query)) => return Box::new((&self.filter).and(query)),
+            (true, None) =>  Box::new(QueryNone{}),
+            (false, None) =>  Box::new(&self.filter),
+            (true, Some(query)) => Box::new(query),
+            (false, Some(query)) => Box::new((&self.filter).and(query)),
         }
     }
 }
