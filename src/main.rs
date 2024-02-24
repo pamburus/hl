@@ -69,15 +69,19 @@ struct Opt {
     theme: String,
     //
     /// Output raw JSON messages instead of formatter messages, it can be useful for applying filters and saving results in original format.
-    #[arg(short, long)]
+    #[arg(short, long, overrides_with = "raw")]
     raw: bool,
     //
+    /// Disable raw JSON messages output, overrides --raw option.
+    #[arg(long, overrides_with = "raw")]
+    _no_raw: bool,
+    //
     /// Disable unescaping and prettifying of field values.
-    #[arg(long)]
+    #[arg(long, overrides_with = "raw_fields")]
     raw_fields: bool,
     //
     /// Allow non-JSON prefixes before JSON messages.
-    #[arg(long, env = "HL_ALLOW_PREFIX")]
+    #[arg(long, env = "HL_ALLOW_PREFIX", overrides_with = "allow_prefix")]
     allow_prefix: bool,
     //
     /// Number of interrupts to ignore, i.e. Ctrl-C (SIGINT).
@@ -119,11 +123,11 @@ struct Opt {
     level: Option<RelaxedLevel>,
     //
     /// Filtering by timestamp >= the value (--time-zone and --local options are honored).
-    #[arg(long, allow_hyphen_values = true)]
+    #[arg(long, allow_hyphen_values = true, overrides_with = "since")]
     since: Option<String>,
     //
     /// Filtering by timestamp <= the value (--time-zone and --local options are honored).
-    #[arg(long, allow_hyphen_values = true)]
+    #[arg(long, allow_hyphen_values = true, overrides_with = "until")]
     until: Option<String>,
     //
     /// Time format, see https://man7.org/linux/man-pages/man1/date.1.html.
@@ -141,8 +145,12 @@ struct Opt {
     time_zone: chrono_tz::Tz,
     //
     /// Use local time zone, overrides --time-zone option.
-    #[arg(long, short = 'L')]
+    #[arg(long, short = 'L', overrides_with = "local")]
     local: bool,
+    //
+    /// Disable local time zone, overrides --local option.
+    #[arg(long, overrides_with = "local")]
+    _no_local: bool,
     //
     /// Files to process
     #[arg(name = "FILE")]
@@ -176,23 +184,23 @@ struct Opt {
     list_themes: bool,
 
     /// Sort messages chronologically.
-    #[arg(long, short = 's')]
+    #[arg(long, short = 's', overrides_with = "sort")]
     sort: bool,
 
     /// Follow input streams and sort messages chronologically during time frame set by --sync-interval-ms option.
-    #[arg(long, short = 'F')]
+    #[arg(long, short = 'F', overrides_with = "follow")]
     follow: bool,
 
     /// Number of last messages to preload from each file in --follow mode.
-    #[arg(long, default_value = "10")]
+    #[arg(long, default_value = "10", overrides_with = "tail")]
     tail: u64,
 
     /// Synchronization interval for live streaming mode enabled by --follow option.
-    #[arg(long, default_value = "100")]
+    #[arg(long, default_value = "100", overrides_with = "sync-interval-ms")]
     sync_interval_ms: u64,
 
     /// Output file.
-    #[arg(long, short = 'o')]
+    #[arg(long, short = 'o', overrides_with = "output")]
     output: Option<String>,
 
     /// Dump index metadata and exit.
