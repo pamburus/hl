@@ -445,6 +445,7 @@ Options:
   -P                                                     Handful alias for --paging=never, overrides --paging option
       --theme <THEME>                                    Color theme [env: HL_THEME=] [default: universal]
   -r, --raw                                              Output raw JSON messages instead of formatter messages, it can be useful for applying filters and saving results in original format
+      --no-raw                                           Disable raw JSON messages output, overrides --raw option
       --raw-fields                                       Disable unescaping and prettifying of field values
       --allow-prefix                                     Allow non-JSON prefixes before JSON messages [env: HL_ALLOW_PREFIX=]
       --interrupt-ignore-count <INTERRUPT_IGNORE_COUNT>  Number of interrupts to ignore, i.e. Ctrl-C (SIGINT) [env: HL_INTERRUPT_IGNORE_COUNT=] [default: 3]
@@ -460,6 +461,7 @@ Options:
   -t, --time-format <TIME_FORMAT>                        Time format, see https://man7.org/linux/man-pages/man1/date.1.html [env: HL_TIME_FORMAT=] [default: "%y-%m-%d %T.%3N"]
   -Z, --time-zone <TIME_ZONE>                            Time zone name, see column "TZ identifier" at https://en.wikipedia.org/wiki/List_of_tz_database_time_zones [env: HL_TIME_ZONE=] [default: UTC]
   -L, --local                                            Use local time zone, overrides --time-zone option
+      --no-local                                         Disable local time zone, overrides --local option
   -e, --hide-empty-fields                                Hide empty fields, applies for null, string, object and array fields only [env: HL_HIDE_EMPTY_FIELDS=]
   -E, --show-empty-fields                                Show empty fields, overrides --hide-empty-fields option [env: HL_SHOW_EMPTY_FIELDS=]
       --input-info <INPUT_INFO>                          Show input number and/or input filename before each message [default: auto] [possible values: auto, none, full, compact, minimal]
