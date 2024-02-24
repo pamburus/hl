@@ -20,9 +20,16 @@ pub struct Pager {
 
 impl Pager {
     pub fn new() -> Result<Self> {
-        let pager = match env::var("PAGER") {
-            Ok(pager) => pager,
-            _ => "less".into(),
+        let mut pager = "less".to_owned();
+
+        if let Ok(p) = env::var("HL_PAGER") {
+            if !p.is_empty() {
+                pager = p;
+            }
+        } else if let Ok(p) = env::var("PAGER") {
+            if !p.is_empty() {
+                pager = p;
+            }
         };
 
         let pager = shellwords::split(&pager).unwrap_or(vec![pager]);
