@@ -26,20 +26,21 @@ use sha2::{Digest, Sha256};
 use std::num::{NonZeroU32, NonZeroUsize};
 
 // local imports
-use crate::datefmt::{DateTimeFormat, DateTimeFormatter};
 use crate::{error::*, QueryNone};
+use crate::datefmt::{DateTimeFormat, DateTimeFormatter};
 use crate::fmtx::aligned_left;
-use crate::fsmon::{self, EventKind};
 use crate::formatting::{RecordFormatter, RecordWithSourceFormatter, RawRecordFormatter};
+use crate::fsmon::{self, EventKind};
+use crate::IncludeExcludeKeyFilter;
 use crate::index::{Indexer, Timestamp};
 use crate::input::{BlockLine, InputHolder, InputReference, Input};
 use crate::model::{Filter, Parser, ParserSettings, RawRecord, Record, RecordFilter, RecordWithSourceConstructor};
+use crate::query::Query;
 use crate::scanning::{BufFactory, Scanner, Segment, SegmentBuf, SegmentBufFactory};
 use crate::serdex::StreamDeserializerWithOffsets;
 use crate::settings::{Fields, Formatting};
 use crate::theme::{Element, StylingPush, Theme};
 use crate::timezone::Tz;
-use crate::IncludeExcludeKeyFilter;
 
 // TODO: merge Options to Settings and replace Options with Settings.
 
@@ -79,8 +80,6 @@ impl Options {
         }
     }
 }
-
-type Query = Box<dyn RecordFilter + Sync>;
 
 pub struct FieldOptions {
     pub filter: Arc<IncludeExcludeKeyFilter>,

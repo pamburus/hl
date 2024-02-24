@@ -19,22 +19,42 @@ use crate::types::FieldKind;
 #[grammar = "query.pest"]
 pub struct QueryParser;
 
-pub type Query = Box<dyn RecordFilter + Sync>;
+pub struct Query {
+    filter: Box<dyn RecordFilter + Sync>,
+}
+
+impl Query {
+    pub fn parse(str: &str) -> Result<Self> {
+        let mut pairs = QueryParser::parse(Rule::input, str)?;
+        Ok(expression(pairs.next().unwrap())?)
+    }
+
+    pub fn and(self, rhs: Query) -> Query {
+        Query::new(And { lhs: self, rhs })
+    }
+
+    pub fn or(self, rhs: Query) -> Query {
+        Query::new(Or { lhs: self, rhs })
+    }
+
+    pub fn not(self) -> Query {
+        Query::new(Not { arg: self })
+    }
+
+    fn new<F: RecordFilter + Sync + 'static>(filter: F) -> Self {
+        Self {
+            filter: Box::new(filter),
+        }
+    }
+}
+
+impl RecordFilter for Query {
+    fn apply<'a>(&self, record: &'a Record<'a>) -> bool {
+        self.filter.apply(record)
+    }
+}
 
 // ---
-
-pub fn parse(str: &str) -> Result<Query> {
-    let mut pairs = QueryParser::parse(Rule::input, str)?;
-    Ok(expression(pairs.next().unwrap())?)
-}
-
-pub fn and(lhs: Query, rhs: Query) -> Query {
-    Box::new(And { lhs, rhs })
-}
-
-pub fn or(lhs: Query, rhs: Query) -> Query {
-    Box::new(Or { lhs, rhs })
-}
 
 fn expression(pair: Pair<Rule>) -> Result<Query> {
     match pair.as_rule() {
@@ -50,7 +70,7 @@ fn binary_op<Op: BinaryOp + Sync + 'static>(pair: Pair<Rule>) -> Result<Query> {
     let mut inner = pair.into_inner();
     let mut result = expression(inner.next().unwrap())?;
     for inner in inner {
-        result = Box::new(Op::new(result, expression(inner)?));
+        result = Query::new(Op::new(result, expression(inner)?));
     }
     Ok(result)
 }
@@ -58,7 +78,7 @@ fn binary_op<Op: BinaryOp + Sync + 'static>(pair: Pair<Rule>) -> Result<Query> {
 fn not(pair: Pair<Rule>) -> Result<Query> {
     assert_eq!(pair.as_rule(), Rule::expr_not);
 
-    Ok(Box::new(Not {
+    Ok(Query::new(Not {
         arg: expression(pair.into_inner().next().unwrap())?,
     }))
 }
@@ -124,7 +144,7 @@ fn field_filter(pair: Pair<Rule>) -> Result<Query> {
         _ => unreachable!(),
     };
 
-    Ok(Box::new(FieldFilter::new(
+    Ok(Query::new(FieldFilter::new(
         parse_field_name(lhs)?.borrowed(),
         match_policy,
         if negated {
@@ -276,7 +296,7 @@ impl<F: Fn(Level) -> bool + Send + Sync + 'static> LevelFilter<F> {
     }
 
     fn query(f: F) -> Query {
-        Box::new(Self::new(f))
+        Query::new(Self::new(f))
     }
 }
 
