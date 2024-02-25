@@ -31,6 +31,7 @@ use crate::datefmt::{DateTimeFormat, DateTimeFormatter};
 use crate::fmtx::aligned_left;
 use crate::formatting::{RecordFormatter, RecordWithSourceFormatter, RawRecordFormatter};
 use crate::fsmon::{self, EventKind};
+use crate::logformat::RawValueLike;
 use crate::IncludeExcludeKeyFilter;
 use crate::index::{Indexer, Timestamp};
 use crate::input::{BlockLine, InputHolder, InputReference, Input};
@@ -808,7 +809,7 @@ impl<'a, Formatter: RecordWithSourceFormatter, Filter: RecordFilter> SegmentProc
 // ---
 
 pub trait RecordObserver {
-    fn observe_record<'a>(&mut self, record: &'a Record<'a>, location: Range<usize>);
+    fn observe_record<'a,RawValue:RawValueLike+?Sized+'a>(&mut self, record: &'a Record<'a,RawValue>, location: Range<usize>);
 }
 
 // ---
@@ -816,7 +817,7 @@ pub trait RecordObserver {
 pub struct RecordIgnorer {}
 
 impl RecordObserver for RecordIgnorer {
-    fn observe_record<'a>(&mut self, _: &'a Record<'a>, _: Range<usize>) {}
+    fn observe_record<'a,RawValue:RawValueLike+?Sized+'a>(&mut self, _: &'a Record<'a,RawValue>, _: Range<usize>) {}
 }
 
 // ---
@@ -826,7 +827,7 @@ struct TimestampIndexBuilder {
 }
 
 impl RecordObserver for TimestampIndexBuilder {
-    fn observe_record<'a>(&mut self, record: &'a Record<'a>, location: Range<usize>) {
+    fn observe_record<'a, RawValue: RawValueLike+?Sized+'a>(&mut self, record: &'a Record<'a, RawValue>, location: Range<usize>) {
         if let Some(ts) = record.ts.as_ref().and_then(|ts| ts.unix_utc()).map(|ts| ts.into()) {
             self.result.lines.push(TimestampIndexLine { location, ts });
         }
@@ -835,11 +836,11 @@ impl RecordObserver for TimestampIndexBuilder {
 
 // ---
 
-impl<T: FnMut(&Record, Range<usize>)> RecordObserver for T {
-    fn observe_record<'b>(&mut self, record: &'b Record<'b>, location: Range<usize>) {
-        self(record, location)
-    }
-}
+// impl<'a, RawValue: RawValueLike + ?Sized + 'a, T: FnMut(&'a Record<RawValue>, Range<usize>)> RecordObserver for T {
+//     fn observe_record<'b,RawValue2: RawValueLike + ?Sized+'b>(&mut self, record: &'b Record<'b,RawValue2>, location: Range<usize>) {
+//         self(record, location)
+//     }
+// }
 
 // ---
 

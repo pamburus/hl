@@ -9,6 +9,7 @@ use serde_json as json;
 use crate::datefmt;
 use crate::filtering::IncludeExcludeSetting;
 use crate::fmtx;
+use crate::logformat::RawValueLike;
 use crate::model;
 use crate::settings::Formatting;
 use crate::theme;
@@ -25,28 +26,28 @@ type Buf = Vec<u8>;
 // ---
 
 pub trait RecordWithSourceFormatter {
-    fn format_record(&self, buf: &mut Buf, rec: model::RecordWithSource);
+    fn format_record<RawValue: RawValueLike + ?Sized>(&self, buf: &mut Buf, rec: model::RecordWithSource<RawValue>);
 }
 
 pub struct RawRecordFormatter {}
 
 impl RecordWithSourceFormatter for RawRecordFormatter {
     #[inline(always)]
-    fn format_record(&self, buf: &mut Buf, rec: model::RecordWithSource) {
+    fn format_record<RawValue: RawValueLike + ?Sized>(&self, buf: &mut Buf, rec: model::RecordWithSource<RawValue>) {
         buf.extend_from_slice(rec.source);
     }
 }
 
 impl<T: RecordWithSourceFormatter> RecordWithSourceFormatter for &T {
     #[inline(always)]
-    fn format_record(&self, buf: &mut Buf, rec: model::RecordWithSource) {
+    fn format_record<RawValue: RawValueLike + ?Sized>(&self, buf: &mut Buf, rec: model::RecordWithSource<RawValue>) {
         (**self).format_record(buf, rec)
     }
 }
 
 impl RecordWithSourceFormatter for Box<dyn RecordWithSourceFormatter> {
     #[inline(always)]
-    fn format_record(&self, buf: &mut Buf, rec: model::RecordWithSource) {
+    fn format_record<RawValue: RawValueLike + ?Sized>(&self, buf: &mut Buf, rec: model::RecordWithSource<RawValue>) {
         (**self).format_record(buf, rec)
     }
 }
@@ -88,7 +89,7 @@ impl RecordFormatter {
         self
     }
 
-    pub fn format_record(&self, buf: &mut Buf, rec: &model::Record) {
+    pub fn format_record<RawValue: RawValueLike + ?Sized>(&self, buf: &mut Buf, rec: &model::Record<RawValue>) {
         if let Some(prefix) = rec.prefix {
             if prefix.len() != 0 {
                 buf.extend_from_slice(prefix);
@@ -323,7 +324,7 @@ impl RecordFormatter {
 }
 
 impl RecordWithSourceFormatter for RecordFormatter {
-    fn format_record(&self, buf: &mut Buf, rec: model::RecordWithSource) {
+    fn format_record<RawValue: RawValueLike + ?Sized>(&self, buf: &mut Buf, rec: model::RecordWithSource<RawValue>) {
         RecordFormatter::format_record(self, buf, rec.record)
     }
 }

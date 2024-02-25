@@ -25,7 +25,6 @@ use crate::types::FieldKind;
 pub use level::Level;
 
 // ---
-
 pub struct Record<'a, RawValue: RawValueLike + ?Sized + 'a> {
     pub prefix: Option<&'a [u8]>,
     pub ts: Option<Timestamp<'a>>,
@@ -83,7 +82,7 @@ impl<'a, RawValue: RawValueLike + ?Sized + 'a> Record<'a, RawValue> {
 // ---
 
 pub trait RecordWithSourceConstructor {
-    fn with_source<'a>(&'a self, source: &'a [u8]) -> RecordWithSource<'a>;
+    fn with_source<'a, RawValue: RawValueLike + ?Sized>(&'a self, source: &'a [u8]) -> RecordWithSource<'a, RawValue>;
 }
 
 // ---
@@ -95,21 +94,21 @@ pub enum Caller<'a> {
 
 // ---
 
-pub struct RecordWithSource<'a> {
-    pub record: &'a Record<'a>,
+pub struct RecordWithSource<'a, RawValue: RawValueLike + ?Sized + 'a> {
+    pub record: &'a Record<'a, RawValue>,
     pub source: &'a [u8],
 }
 
-impl<'a> RecordWithSource<'a> {
+impl<'a, RawValue: RawValueLike + ?Sized + 'a> RecordWithSource<'a, RawValue> {
     #[inline(always)]
-    pub fn new(record: &'a Record<'a>, source: &'a [u8]) -> Self {
+    pub fn new(record: &'a Record<'a, RawValue>, source: &'a [u8]) -> Self {
         Self { record, source }
     }
 }
 
-impl RecordWithSourceConstructor for Record<'_> {
+impl<RawValue: RawValueLike + ?Sized> RecordWithSourceConstructor for Record<'_, RawValue> {
     #[inline(always)]
-    fn with_source<'a>(&'a self, source: &'a [u8]) -> RecordWithSource<'a> {
+    fn with_source<'a>(&'a self, source: &'a [u8]) -> RecordWithSource<'a, RawValue> {
         RecordWithSource::new(self, source)
     }
 }
@@ -117,7 +116,7 @@ impl RecordWithSourceConstructor for Record<'_> {
 // ---
 
 pub trait RecordFilter {
-    fn apply<'a>(&self, record: &'a Record<'a>) -> bool;
+    fn apply<'a, RawValue: RawValueLike + ?Sized + 'a>(&self, record: &'a Record<'a, RawValue>) -> bool;
 
     #[inline(always)]
     fn and<F>(self, rhs: F) -> RecordFilterAnd<Self, F>
@@ -140,21 +139,21 @@ pub trait RecordFilter {
 
 impl<T: RecordFilter + ?Sized> RecordFilter for Box<T> {
     #[inline(always)]
-    fn apply<'a>(&self, record: &'a Record<'a>) -> bool {
+    fn apply<'a, RawValue: RawValueLike + ?Sized + 'a>(&self, record: &'a Record<'a, RawValue>) -> bool {
         (**self).apply(record)
     }
 }
 
 impl<T: RecordFilter> RecordFilter for &T {
     #[inline(always)]
-    fn apply<'a>(&self, record: &'a Record<'a>) -> bool {
+    fn apply<'a, RawValue: RawValueLike + ?Sized + 'a>(&self, record: &'a Record<'a, RawValue>) -> bool {
         (**self).apply(record)
     }
 }
 
 impl<T: RecordFilter> RecordFilter for Option<T> {
     #[inline(always)]
-    fn apply<'a>(&self, record: &'a Record<'a>) -> bool {
+    fn apply<'a, RawValue: RawValueLike + ?Sized + 'a>(&self, record: &'a Record<'a, RawValue>) -> bool {
         if let Some(filter) = self {
             filter.apply(record)
         } else {
@@ -172,7 +171,7 @@ pub struct RecordFilterAnd<L: RecordFilter, R: RecordFilter> {
 
 impl<L: RecordFilter, R: RecordFilter> RecordFilter for RecordFilterAnd<L, R> {
     #[inline(always)]
-    fn apply<'a>(&self, record: &'a Record<'a>) -> bool {
+    fn apply<'a, RawValue: RawValueLike + ?Sized + 'a>(&self, record: &'a Record<'a, RawValue>) -> bool {
         self.lhs.apply(record) && self.rhs.apply(record)
     }
 }
@@ -186,7 +185,7 @@ pub struct RecordFilterOr<L: RecordFilter, R: RecordFilter> {
 
 impl<L: RecordFilter, R: RecordFilter> RecordFilter for RecordFilterOr<L, R> {
     #[inline(always)]
-    fn apply<'a>(&self, record: &'a Record<'a>) -> bool {
+    fn apply<'a, RawValue: RawValueLike + ?Sized + 'a>(&self, record: &'a Record<'a, RawValue>) -> bool {
         self.lhs.apply(record) || self.rhs.apply(record)
     }
 }
@@ -197,7 +196,7 @@ pub struct RecordFilterNone;
 
 impl RecordFilter for RecordFilterNone {
     #[inline(always)]
-    fn apply<'a>(&self, _: &'a Record<'a>) -> bool {
+    fn apply<'a, RawValue: RawValueLike + ?Sized + 'a>(&self, _: &'a Record<'a, RawValue>) -> bool {
         true
     }
 }
@@ -296,12 +295,18 @@ impl ParserSettings {
     }
 
     #[inline(always)]
-    fn apply<'a>(&self, key: &'a str, value: &'a RawValue, to: &mut Record<'a>, pc: &mut PriorityController) {
+    fn apply<'a, RawValue: RawValueLike + ?Sized + 'a>(
+        &self,
+        key: &'a str,
+        value: &'a RawValue,
+        to: &mut Record<'a, RawValue>,
+        pc: &mut PriorityController,
+    ) {
         self.blocks[0].apply(self, key, value, to, pc, true);
     }
 
     #[inline(always)]
-    fn apply_each<'a, 'i, I>(&self, items: I, to: &mut Record<'a>)
+    fn apply_each<'a, 'i, I, RawValue: RawValueLike + ?Sized + 'a>(&self, items: I, to: &mut Record<'a, RawValue>)
     where
         I: IntoIterator<Item = &'i (&'a str, &'a RawValue)>,
         'a: 'i,
@@ -311,8 +316,12 @@ impl ParserSettings {
     }
 
     #[inline(always)]
-    fn apply_each_ctx<'a, 'i, I>(&self, items: I, to: &mut Record<'a>, pc: &mut PriorityController)
-    where
+    fn apply_each_ctx<'a, 'i, I, RawValue: RawValueLike + ?Sized>(
+        &self,
+        items: I,
+        to: &mut Record<'a, RawValue>,
+        pc: &mut PriorityController,
+    ) where
         I: IntoIterator<Item = &'i (&'a str, &'a RawValue)>,
         'a: 'i,
     {
@@ -335,7 +344,7 @@ impl ParserSettingsBlock {
         ps: &ParserSettings,
         key: &'a str,
         value: &'a RawValue,
-        to: &mut Record<'a>,
+        to: &mut Record<'a, RawValue>,
         pc: &mut PriorityController,
         is_root: bool,
     ) {
@@ -370,11 +379,11 @@ impl ParserSettingsBlock {
     }
 
     #[inline(always)]
-    fn apply_each_ctx<'a, 'i, I, RawValue: ?Sized + 'a>(
+    fn apply_each_ctx<'a, 'i, I, RawValue: RawValueLike + ?Sized + 'a>(
         &self,
         ps: &ParserSettings,
         items: I,
-        to: &mut Record<'a>,
+        to: &mut Record<'a, RawValue>,
         ctx: &mut PriorityController,
         is_root: bool,
     ) where
@@ -442,7 +451,7 @@ impl FieldSettings {
         &self,
         ps: &ParserSettings,
         value: &'a RawValue,
-        to: &mut Record<'a>,
+        to: &mut Record<'a, RawValue>,
     ) {
         match *self {
             Self::Time => {
@@ -496,7 +505,7 @@ impl FieldSettings {
         &self,
         ps: &ParserSettings,
         value: &'a RawValue,
-        to: &mut Record<'a>,
+        to: &mut Record<'a, RawValue>,
         ctx: &mut PriorityController,
     ) {
         match *self {
@@ -538,7 +547,10 @@ impl Parser {
         Self { settings }
     }
 
-    pub fn parse<'a, RawValue: ?Sized>(&self, record: RawRecord<'a, RawValue>) -> Record<'a> {
+    pub fn parse<'a, RawValue: RawValueLike + ?Sized + 'a>(
+        &self,
+        record: RawRecord<'a, RawValue>,
+    ) -> Record<'a, RawValue> {
         let fields = record.fields();
         let count = fields.size_hint().1.unwrap_or(0);
         let mut record = Record::<'a>::with_capacity(count);
@@ -890,7 +902,7 @@ impl FieldFilter {
 }
 
 impl RecordFilter for FieldFilter {
-    fn apply<'a>(&self, record: &'a Record<'a>) -> bool {
+    fn apply<'a, RawValue: RawValueLike + ?Sized + 'a>(&self, record: &'a Record<'a, RawValue>) -> bool {
         match &self.key {
             FieldFilterKey::Predefined(kind) => match kind {
                 FieldKind::Time => {
@@ -963,7 +975,7 @@ impl FieldFilterSet {
 
 impl RecordFilter for FieldFilterSet {
     #[inline(always)]
-    fn apply<'a>(&self, record: &'a Record<'a>) -> bool {
+    fn apply<'a, RawValue: RawValueLike + ?Sized>(&self, record: &'a Record<'a, RawValue>) -> bool {
         self.0.iter().all(|field| field.apply(record))
     }
 }
@@ -986,7 +998,7 @@ impl Filter {
 }
 
 impl RecordFilter for Filter {
-    fn apply<'a>(&self, record: &'a Record<'a>) -> bool {
+    fn apply<'a, RawValue: RawValueLike + ?Sized>(&self, record: &'a Record<'a, RawValue>) -> bool {
         if self.since.is_some() || self.until.is_some() {
             if let Some(ts) = record.ts.as_ref().and_then(|ts| ts.parse()) {
                 if let Some(since) = self.since {

@@ -8,6 +8,7 @@ use wildmatch::WildMatch;
 // local imports
 use crate::error::Result;
 use crate::level::RelaxedLevel;
+use crate::logformat::RawValueLike;
 use crate::model::{
     FieldFilter, FieldFilterKey, Level, NumericOp, Record, RecordFilter, UnaryBoolOp, ValueMatchPolicy,
 };
@@ -49,7 +50,7 @@ impl Query {
 }
 
 impl RecordFilter for Query {
-    fn apply<'a>(&self, record: &'a Record<'a>) -> bool {
+    fn apply<'a, RawValue: RawValueLike + ?Sized + 'a>(&self, record: &'a Record<'a, RawValue>) -> bool {
         self.filter.apply(record)
     }
 }
@@ -242,7 +243,7 @@ struct Or {
 }
 
 impl RecordFilter for Or {
-    fn apply<'a>(&self, record: &'a Record<'a>) -> bool {
+    fn apply<'a, RawValue: RawValueLike + ?Sized + 'a>(&self, record: &'a Record<'a, RawValue>) -> bool {
         self.lhs.apply(record) || self.rhs.apply(record)
     }
 }
@@ -261,7 +262,7 @@ struct And {
 }
 
 impl RecordFilter for And {
-    fn apply<'a>(&self, record: &'a Record<'a>) -> bool {
+    fn apply<'a, RawValue: RawValueLike + ?Sized + 'a>(&self, record: &'a Record<'a, RawValue>) -> bool {
         self.lhs.apply(record) && self.rhs.apply(record)
     }
 }
@@ -279,7 +280,7 @@ struct Not {
 }
 
 impl RecordFilter for Not {
-    fn apply<'a>(&self, record: &'a Record<'a>) -> bool {
+    fn apply<'a, RawValue: RawValueLike + ?Sized + 'a>(&self, record: &'a Record<'a, RawValue>) -> bool {
         !self.arg.apply(record)
     }
 }
@@ -301,7 +302,7 @@ impl<F: Fn(Level) -> bool + Send + Sync + 'static> LevelFilter<F> {
 }
 
 impl<F: Fn(Level) -> bool> RecordFilter for LevelFilter<F> {
-    fn apply<'a>(&self, record: &'a Record<'a>) -> bool {
+    fn apply<'a, RawValue: RawValueLike + ?Sized + 'a>(&self, record: &'a Record<'a, RawValue>) -> bool {
         record.level.map(&self.f).unwrap_or(false)
     }
 }
