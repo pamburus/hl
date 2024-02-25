@@ -196,7 +196,7 @@ struct Opt {
     tail: u64,
 
     /// Synchronization interval for live streaming mode enabled by --follow option.
-    #[arg(long, default_value = "100", overrides_with = "sync-interval-ms")]
+    #[arg(long, default_value = "100", overrides_with = "sync_interval_ms")]
     sync_interval_ms: u64,
 
     /// Output file.
