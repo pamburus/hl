@@ -28,7 +28,6 @@ use crossbeam_channel::RecvError;
 use crossbeam_utils::thread;
 use itertools::izip;
 use serde::{Deserialize, Serialize};
-use serde_json as json;
 use sha2::{Digest, Sha256};
 
 // local imports
@@ -129,6 +128,7 @@ pub struct Indexer {
     dir: PathBuf,
     parser: Parser,
     delimiter: Delimiter,
+    allow_prefix: bool,
 }
 
 impl Indexer {
@@ -140,6 +140,7 @@ impl Indexer {
         dir: PathBuf,
         fields: &PredefinedFields,
         delimiter: Delimiter,
+        allow_prefix: bool,
     ) -> Self {
         Self {
             concurrency,
@@ -148,6 +149,7 @@ impl Indexer {
             dir,
             parser: Parser::new(ParserSettings::new(&fields, empty(), false)),
             delimiter,
+            allow_prefix,
         }
     }
 
@@ -347,36 +349,37 @@ impl Indexer {
             let data = strip(data, b'\r');
             let mut ts = None;
             if data.len() != 0 {
-                let prefix = data.split(|c| *c == b'{').next().unwrap();
-                let data = &data[prefix.len()..];
-                match json::from_slice::<RawRecord>(data) {
-                    Ok(rec) => {
-                        let rec = self.parser.parse(rec);
-                        let mut flags = 0;
-                        match rec.level {
-                            Some(Level::Debug) => {
-                                flags |= schema::FLAG_LEVEL_DEBUG;
+                let mut stream = RawRecord::parser().allow_prefix(self.allow_prefix).parse(data);
+                while let Some(item) = stream.next() {
+                    match item {
+                        Ok(ar) => {
+                            let rec = self.parser.parse(ar.record);
+                            let mut flags = 0;
+                            match rec.level {
+                                Some(Level::Debug) => {
+                                    flags |= schema::FLAG_LEVEL_DEBUG;
+                                }
+                                Some(Level::Info) => {
+                                    flags |= schema::FLAG_LEVEL_INFO;
+                                }
+                                Some(Level::Warning) => {
+                                    flags |= schema::FLAG_LEVEL_WARNING;
+                                }
+                                Some(Level::Error) => {
+                                    flags |= schema::FLAG_LEVEL_ERROR;
+                                }
+                                None => (),
                             }
-                            Some(Level::Info) => {
-                                flags |= schema::FLAG_LEVEL_INFO;
+                            ts = rec.ts.and_then(|ts| ts.unix_utc()).map(|ts| ts.into());
+                            if ts < prev_ts {
+                                sorted = false;
                             }
-                            Some(Level::Warning) => {
-                                flags |= schema::FLAG_LEVEL_WARNING;
-                            }
-                            Some(Level::Error) => {
-                                flags |= schema::FLAG_LEVEL_ERROR;
-                            }
-                            None => (),
+                            prev_ts = ts;
+                            stat.add_valid(ts, flags);
                         }
-                        ts = rec.ts.and_then(|ts| ts.unix_utc()).map(|ts| ts.into());
-                        if ts < prev_ts {
-                            sorted = false;
+                        _ => {
+                            stat.add_invalid();
                         }
-                        prev_ts = ts;
-                        stat.add_valid(ts, flags);
-                    }
-                    _ => {
-                        stat.add_invalid();
                     }
                 }
             }

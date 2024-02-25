@@ -76,6 +76,8 @@ pub enum Error {
     UnsupportedFormatForIndexing { path: PathBuf, format: String },
     #[error("failed to parse json: {0}")]
     JsonParseError(#[from] serde_json::Error),
+    #[error("failed to parse logfmt: {0}")]
+    LogfmtParseError(#[from] crate::logfmt::error::Error),
     #[error(transparent)]
     TryFromIntError(#[from] TryFromIntError),
     #[error(transparent)]

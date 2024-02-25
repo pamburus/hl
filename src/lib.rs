@@ -24,6 +24,7 @@ mod eseq;
 mod filtering;
 mod formatting;
 mod fsmon;
+mod logfmt;
 mod model;
 mod pool;
 mod replay;
