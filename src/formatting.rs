@@ -2,7 +2,7 @@
 use std::sync::Arc;
 
 // third-party imports
-use json::{de::Read, de::StrRead, value::RawValue};
+use json::{de::Read, de::StrRead};
 use serde_json as json;
 
 // local imports
@@ -171,7 +171,7 @@ impl RecordFormatter {
             let mut some_fields_hidden = false;
             for (k, v) in rec.fields() {
                 if !self.hide_empty_fields
-                    || match v.get() {
+                    || match *v {
                         r#""""# | "null" | "{}" | "[]" => false,
                         _ => true,
                     }
@@ -218,43 +218,41 @@ impl RecordFormatter {
         &self,
         s: &mut S,
         key: &str,
-        value: &RawValue,
+        value: &str,
         filter: Option<&IncludeExcludeKeyFilter>,
     ) -> bool {
         let mut fv = FieldFormatter::new(self);
         fv.format(s, key, value, filter, IncludeExcludeSetting::Unspecified)
     }
 
-    fn format_value<S: StylingPush<Buf>>(&self, s: &mut S, value: &RawValue) {
+    fn format_value<S: StylingPush<Buf>>(&self, s: &mut S, value: &str) {
         let mut fv = FieldFormatter::new(self);
         fv.format_value(s, value, None, IncludeExcludeSetting::Unspecified);
     }
 
-    fn format_message<S: StylingPush<Buf>>(&self, s: &mut S, value: &RawValue) {
-        match value.get().as_bytes()[0] {
+    fn format_message<S: StylingPush<Buf>>(&self, s: &mut S, value: &str) {
+        match value.as_bytes()[0] {
             b'"' => {
-                s.element(Element::Message, |s| {
-                    s.batch(|buf| format_str_unescaped(buf, value.get()))
-                });
+                s.element(Element::Message, |s| s.batch(|buf| format_str_unescaped(buf, value)));
             }
             b'0'..=b'9' | b'-' | b'+' | b'.' => {
                 s.element(Element::Number, |s| {
-                    s.batch(|buf| buf.extend_from_slice(value.get().as_bytes()))
+                    s.batch(|buf| buf.extend_from_slice(value.as_bytes()))
                 });
             }
             b't' | b'f' => {
                 s.element(Element::Boolean, |s| {
-                    s.batch(|buf| buf.extend_from_slice(value.get().as_bytes()))
+                    s.batch(|buf| buf.extend_from_slice(value.as_bytes()))
                 });
             }
             b'n' => {
                 s.element(Element::Null, |s| {
-                    s.batch(|buf| buf.extend_from_slice(value.get().as_bytes()))
+                    s.batch(|buf| buf.extend_from_slice(value.as_bytes()))
                 });
             }
             b'{' => {
                 s.element(Element::Object, |s| {
-                    let item = json::from_str::<model::Object>(value.get()).unwrap();
+                    let item = json::from_str::<model::Object>(value).unwrap();
                     s.batch(|buf| buf.push(b'{'));
                     let mut has_some = false;
                     for (k, v) in item.fields.iter() {
@@ -269,7 +267,7 @@ impl RecordFormatter {
                 });
             }
             b'[' => {
-                let item = json::from_str::<model::Array<256>>(value.get()).unwrap();
+                let item = json::from_str::<model::Array<256>>(value).unwrap();
                 let is_byte_string = item
                     .iter()
                     .map(|&v| {
@@ -307,7 +305,7 @@ impl RecordFormatter {
                             } else {
                                 first = false;
                             }
-                            self.format_value(s, v);
+                            self.format_value(s, v.get());
                         }
                         s.batch(|buf| buf.push(b']'));
                     });
@@ -315,7 +313,7 @@ impl RecordFormatter {
             }
             _ => {
                 s.element(Element::Message, |s| {
-                    s.batch(|buf| buf.extend_from_slice(value.get().as_bytes()))
+                    s.batch(|buf| buf.extend_from_slice(value.as_bytes()))
                 });
             }
         };
@@ -350,7 +348,7 @@ impl<'a> FieldFormatter<'a> {
         &mut self,
         s: &mut S,
         key: &str,
-        value: &'a RawValue,
+        value: &'a str,
         filter: Option<&IncludeExcludeKeyFilter>,
         setting: IncludeExcludeSetting,
     ) -> bool {
@@ -381,7 +379,7 @@ impl<'a> FieldFormatter<'a> {
             self.format_value(s, value, filter, setting);
         } else {
             s.element(Element::String, |s| {
-                s.batch(|buf| buf.extend_from_slice(value.get().as_bytes()))
+                s.batch(|buf| buf.extend_from_slice(value.as_bytes()))
             });
         }
         true
@@ -390,37 +388,37 @@ impl<'a> FieldFormatter<'a> {
     fn format_value<S: StylingPush<Buf>>(
         &mut self,
         s: &mut S,
-        value: &'a RawValue,
+        value: &'a str,
         filter: Option<&IncludeExcludeKeyFilter>,
         setting: IncludeExcludeSetting,
     ) {
-        match value.get().as_bytes()[0] {
+        match value.as_bytes()[0] {
             b'"' => {
                 s.element(Element::String, |s| {
                     s.batch(|buf| {
                         buf.extend_from_slice(self.rf.cfg.punctuation.string_opening_quote.as_bytes());
-                        format_str_unescaped(buf, value.get());
+                        format_str_unescaped(buf, value);
                         buf.extend_from_slice(self.rf.cfg.punctuation.string_closing_quote.as_bytes());
                     })
                 });
             }
             b'0'..=b'9' | b'-' | b'+' | b'.' => {
                 s.element(Element::Number, |s| {
-                    s.batch(|buf| buf.extend_from_slice(value.get().as_bytes()))
+                    s.batch(|buf| buf.extend_from_slice(value.as_bytes()))
                 });
             }
             b't' | b'f' => {
                 s.element(Element::Boolean, |s| {
-                    s.batch(|buf| buf.extend_from_slice(value.get().as_bytes()))
+                    s.batch(|buf| buf.extend_from_slice(value.as_bytes()))
                 });
             }
             b'n' => {
                 s.element(Element::Null, |s| {
-                    s.batch(|buf| buf.extend_from_slice(value.get().as_bytes()))
+                    s.batch(|buf| buf.extend_from_slice(value.as_bytes()))
                 });
             }
             b'{' => {
-                let item = json::from_str::<model::Object>(value.get()).unwrap();
+                let item = json::from_str::<model::Object>(value).unwrap();
                 s.element(Element::Object, |s| {
                     s.batch(|buf| buf.push(b'{'));
                     let mut some_fields_hidden = false;
@@ -440,7 +438,7 @@ impl<'a> FieldFormatter<'a> {
             }
             b'[' => {
                 s.element(Element::Array, |s| {
-                    let item = json::from_str::<model::Array<32>>(value.get()).unwrap();
+                    let item = json::from_str::<model::Array<32>>(value).unwrap();
                     s.batch(|buf| buf.push(b'['));
                     let mut first = true;
                     for v in item.iter() {
@@ -449,14 +447,14 @@ impl<'a> FieldFormatter<'a> {
                         } else {
                             first = false;
                         }
-                        self.format_value(s, v, None, IncludeExcludeSetting::Unspecified);
+                        self.format_value(s, v.get(), None, IncludeExcludeSetting::Unspecified);
                     }
                     s.batch(|buf| buf.push(b']'));
                 });
             }
             _ => {
                 s.element(Element::String, |s| {
-                    s.batch(|buf| buf.extend_from_slice(value.get().as_bytes()))
+                    s.batch(|buf| buf.extend_from_slice(value.as_bytes()))
                 });
             }
         };

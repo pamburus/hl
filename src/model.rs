@@ -28,22 +28,22 @@ pub use level::Level;
 pub struct Record<'a> {
     pub prefix: Option<&'a [u8]>,
     pub ts: Option<Timestamp<'a>>,
-    pub message: Option<&'a RawValue>,
+    pub message: Option<&'a str>,
     pub level: Option<Level>,
     pub logger: Option<&'a str>,
     pub caller: Option<Caller<'a>>,
     pub(crate) fields: RecordFields<'a>,
-    pub(crate) predefined: heapless::Vec<(&'a str, &'a RawValue), MAX_PREDEFINED_FIELDS>,
+    pub(crate) predefined: heapless::Vec<(&'a str, &'a str), MAX_PREDEFINED_FIELDS>,
 }
 
 impl<'a> Record<'a> {
     #[inline(always)]
-    pub fn fields(&self) -> impl Iterator<Item = &(&'a str, &'a RawValue)> {
+    pub fn fields(&self) -> impl Iterator<Item = &(&'a str, &'a str)> {
         self.fields.head.iter().chain(self.fields.tail.iter())
     }
 
     #[inline(always)]
-    pub fn fields_for_search(&self) -> impl Iterator<Item = &(&'a str, &'a RawValue)> {
+    pub fn fields_for_search(&self) -> impl Iterator<Item = &(&'a str, &'a str)> {
         self.fields().chain(self.predefined.iter())
     }
 
@@ -80,8 +80,8 @@ impl<'a> Record<'a> {
 }
 
 pub struct RecordFields<'a> {
-    pub(crate) head: heapless::Vec<(&'a str, &'a RawValue), RECORD_EXTRA_CAPACITY>,
-    pub(crate) tail: Vec<(&'a str, &'a RawValue)>,
+    pub(crate) head: heapless::Vec<(&'a str, &'a str), RECORD_EXTRA_CAPACITY>,
+    pub(crate) tail: Vec<(&'a str, &'a str)>,
 }
 
 // ---
@@ -300,14 +300,14 @@ impl ParserSettings {
     }
 
     #[inline(always)]
-    fn apply<'a>(&self, key: &'a str, value: &'a RawValue, to: &mut Record<'a>, pc: &mut PriorityController) {
+    fn apply<'a>(&self, key: &'a str, value: &'a str, to: &mut Record<'a>, pc: &mut PriorityController) {
         self.blocks[0].apply(self, key, value, to, pc, true);
     }
 
     #[inline(always)]
     fn apply_each<'a, 'i, I>(&self, items: I, to: &mut Record<'a>)
     where
-        I: IntoIterator<Item = &'i (&'a str, &'a RawValue)>,
+        I: IntoIterator<Item = &'i (&'a str, &'a str)>,
         'a: 'i,
     {
         let mut pc = PriorityController::default();
@@ -317,7 +317,7 @@ impl ParserSettings {
     #[inline(always)]
     fn apply_each_ctx<'a, 'i, I>(&self, items: I, to: &mut Record<'a>, pc: &mut PriorityController)
     where
-        I: IntoIterator<Item = &'i (&'a str, &'a RawValue)>,
+        I: IntoIterator<Item = &'i (&'a str, &'a str)>,
         'a: 'i,
     {
         for (key, value) in items {
@@ -338,7 +338,7 @@ impl ParserSettingsBlock {
         &self,
         ps: &ParserSettings,
         key: &'a str,
-        value: &'a RawValue,
+        value: &'a str,
         to: &mut Record<'a>,
         pc: &mut PriorityController,
         is_root: bool,
@@ -382,7 +382,7 @@ impl ParserSettingsBlock {
         ctx: &mut PriorityController,
         is_root: bool,
     ) where
-        I: IntoIterator<Item = &'i (&'a str, &'a RawValue)>,
+        I: IntoIterator<Item = &'i (&'a str, &'a str)>,
         'a: 'i,
     {
         for (key, value) in items {
@@ -442,10 +442,10 @@ enum FieldSettings {
 }
 
 impl FieldSettings {
-    fn apply<'a>(&self, ps: &ParserSettings, value: &'a RawValue, to: &mut Record<'a>) {
+    fn apply<'a>(&self, ps: &ParserSettings, value: &'a str, to: &mut Record<'a>) {
         match *self {
             Self::Time => {
-                let s = value.get();
+                let s = value;
                 let s = if s.as_bytes()[0] == b'"' { &s[1..s.len() - 1] } else { s };
                 let ts = Timestamp::new(s, None);
                 if ps.pre_parse_time {
@@ -455,19 +455,19 @@ impl FieldSettings {
                 }
             }
             Self::Level(i) => {
-                to.level = json::from_str(value.get())
+                to.level = json::from_str(value)
                     .ok()
                     .and_then(|x: &'a str| ps.level[i].get(x).cloned());
             }
-            Self::Logger => to.logger = json::from_str(value.get()).ok(),
+            Self::Logger => to.logger = json::from_str(value).ok(),
             Self::Message => to.message = Some(value),
-            Self::Caller => to.caller = json::from_str(value.get()).ok().map(|x| Caller::Text(x)),
+            Self::Caller => to.caller = json::from_str(value).ok().map(|x| Caller::Text(x)),
             Self::CallerFile => match &mut to.caller {
                 None => {
-                    to.caller = json::from_str(value.get()).ok().map(|x| Caller::FileLine(x, ""));
+                    to.caller = json::from_str(value).ok().map(|x| Caller::FileLine(x, ""));
                 }
                 Some(Caller::FileLine(file, _)) => {
-                    if let Some(value) = json::from_str(value.get()).ok() {
+                    if let Some(value) = json::from_str(value).ok() {
                         *file = value
                     }
                 }
@@ -475,12 +475,12 @@ impl FieldSettings {
             },
             Self::CallerLine => match &mut to.caller {
                 None => {
-                    to.caller = Some(Caller::FileLine("", value.get()));
+                    to.caller = Some(Caller::FileLine("", value));
                 }
                 Some(Caller::FileLine(_, line)) => {
-                    if value.get().bytes().next().map_or(false, |x| x.is_ascii_digit()) {
-                        *line = value.get()
-                    } else if let Some(value) = json::from_str(value.get()).ok() {
+                    if value.bytes().next().map_or(false, |x| x.is_ascii_digit()) {
+                        *line = value
+                    } else if let Some(value) = json::from_str(value).ok() {
                         *line = value
                     }
                 }
@@ -491,16 +491,10 @@ impl FieldSettings {
     }
 
     #[inline(always)]
-    fn apply_ctx<'a>(
-        &self,
-        ps: &ParserSettings,
-        value: &'a RawValue,
-        to: &mut Record<'a>,
-        ctx: &mut PriorityController,
-    ) {
+    fn apply_ctx<'a>(&self, ps: &ParserSettings, value: &'a str, to: &mut Record<'a>, ctx: &mut PriorityController) {
         match *self {
             Self::Nested(nested) => {
-                let s = value.get();
+                let s = value;
                 if s.len() > 0 && s.as_bytes()[0] == b'{' {
                     if let Ok(record) = json::from_str::<RawRecord>(s) {
                         ps.blocks[nested].apply_each_ctx(ps, record.fields(), to, ctx, false);
@@ -555,13 +549,13 @@ pub struct RawRecord<'a> {
 }
 
 pub struct RawRecordFields<'a> {
-    head: heapless::Vec<(&'a str, &'a RawValue), RAW_RECORD_FIELDS_CAPACITY>,
-    tail: Vec<(&'a str, &'a RawValue)>,
+    head: heapless::Vec<(&'a str, &'a str), RAW_RECORD_FIELDS_CAPACITY>,
+    tail: Vec<(&'a str, &'a str)>,
 }
 
 impl<'a> RawRecord<'a> {
     #[inline(always)]
-    pub fn fields(&self) -> impl Iterator<Item = &(&'a str, &'a RawValue)> {
+    pub fn fields(&self) -> impl Iterator<Item = &(&'a str, &'a str)> {
         self.fields.head.iter().chain(self.fields.tail.iter())
     }
 }
@@ -602,7 +596,8 @@ impl<'de: 'a, 'a> Visitor<'de> for RawRecordVisitor<'a> {
             true => Vec::with_capacity(count - RAW_RECORD_FIELDS_CAPACITY),
         };
         while let Some(Some(key)) = access.next_key::<&'a str>().ok() {
-            match head.push((key, access.next_value()?)) {
+            let value: &RawValue = access.next_value()?;
+            match head.push((key, value.get())) {
                 Ok(_) => {}
                 Err(value) => tail.push(value),
             }
@@ -867,23 +862,23 @@ impl FieldFilter {
         }
     }
 
-    fn match_value_partial(&self, subkey: KeyMatcher, value: &RawValue) -> bool {
-        let bytes = value.get().as_bytes();
+    fn match_value_partial(&self, subkey: KeyMatcher, value: &str) -> bool {
+        let bytes = value.as_bytes();
         if bytes[0] != b'{' {
             return false;
         }
 
-        let item = json::from_str::<Object>(value.get()).unwrap();
+        let item = json::from_str::<Object>(value).unwrap();
         for (k, v) in item.fields.iter() {
             match subkey.match_key(*k) {
                 None => {
                     continue;
                 }
                 Some(KeyMatch::Full) => {
-                    return self.match_value(Some(v.get()), v.get().starts_with('"'));
+                    return self.match_value(Some(v), v.starts_with('"'));
                 }
                 Some(KeyMatch::Partial(subkey)) => {
-                    return self.match_value_partial(subkey, *v);
+                    return self.match_value_partial(subkey, v);
                 }
             }
         }
@@ -904,7 +899,7 @@ impl RecordFilter for FieldFilter {
                 }
                 FieldKind::Message => {
                     if let Some(message) = record.message {
-                        self.match_value(Some(message.get()), true)
+                        self.match_value(Some(message), true)
                     } else {
                         false
                     }
@@ -930,8 +925,8 @@ impl RecordFilter for FieldFilter {
                     match self.match_custom_key(*k) {
                         None => {}
                         Some(KeyMatch::Full) => {
-                            let escaped = v.get().starts_with('"');
-                            if self.match_value(Some(v.get()), escaped) {
+                            let escaped = v.starts_with('"');
+                            if self.match_value(Some(v), escaped) {
                                 return true;
                             }
                         }
@@ -1025,7 +1020,7 @@ impl RecordFilter for Filter {
 // ---
 
 pub struct Object<'a> {
-    pub fields: heapless::Vec<(&'a str, &'a RawValue), 32>,
+    pub fields: heapless::Vec<(&'a str, &'a str), 32>,
 }
 
 struct ObjectVisitor<'a> {
