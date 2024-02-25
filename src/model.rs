@@ -32,15 +32,14 @@ pub struct Record<'a> {
     pub level: Option<Level>,
     pub logger: Option<&'a str>,
     pub caller: Option<Caller<'a>>,
-    pub(crate) extra: heapless::Vec<(&'a str, &'a RawValue), RECORD_EXTRA_CAPACITY>,
-    pub(crate) extrax: Vec<(&'a str, &'a RawValue)>,
+    pub(crate) fields: RecordFields<'a>,
     pub(crate) predefined: heapless::Vec<(&'a str, &'a RawValue), MAX_PREDEFINED_FIELDS>,
 }
 
 impl<'a> Record<'a> {
     #[inline(always)]
     pub fn fields(&self) -> impl Iterator<Item = &(&'a str, &'a RawValue)> {
-        self.extra.iter().chain(self.extrax.iter())
+        self.fields.head.iter().chain(self.fields.tail.iter())
     }
 
     #[inline(always)]
@@ -56,8 +55,7 @@ impl<'a> Record<'a> {
     #[inline(always)]
     pub fn with_prefix(mut self, prefix: &'a [u8]) -> Self {
         self.prefix = Some(prefix);
-
-        return self;
+        self
     }
 
     fn with_capacity(capacity: usize) -> Self {
@@ -68,15 +66,22 @@ impl<'a> Record<'a> {
             level: None,
             logger: None,
             caller: None,
-            extra: heapless::Vec::new(),
-            extrax: if capacity > RECORD_EXTRA_CAPACITY {
-                Vec::with_capacity(capacity - RECORD_EXTRA_CAPACITY)
-            } else {
-                Vec::new()
+            fields: RecordFields {
+                head: heapless::Vec::new(),
+                tail: if capacity > RECORD_EXTRA_CAPACITY {
+                    Vec::with_capacity(capacity - RECORD_EXTRA_CAPACITY)
+                } else {
+                    Vec::new()
+                },
             },
             predefined: heapless::Vec::new(),
         }
     }
+}
+
+pub struct RecordFields<'a> {
+    pub(crate) head: heapless::Vec<(&'a str, &'a RawValue), RECORD_EXTRA_CAPACITY>,
+    pub(crate) tail: Vec<(&'a str, &'a RawValue)>,
 }
 
 // ---
@@ -362,9 +367,9 @@ impl ParserSettingsBlock {
                 return;
             }
         }
-        match to.extra.push((key, value)) {
+        match to.fields.head.push((key, value)) {
             Ok(_) => {}
-            Err(value) => to.extrax.push(value),
+            Err(value) => to.fields.tail.push(value),
         }
     }
 
