@@ -9,6 +9,7 @@ use serde_json as json;
 use crate::datefmt;
 use crate::filtering::IncludeExcludeSetting;
 use crate::fmtx;
+use crate::fmtx::Push;
 use crate::model;
 use crate::settings::Formatting;
 use crate::theme;
@@ -61,6 +62,7 @@ pub struct RecordFormatter {
     hide_empty_fields: bool,
     fields: Arc<IncludeExcludeKeyFilter>,
     cfg: Formatting,
+    nl_indent: String,
 }
 
 impl RecordFormatter {
@@ -80,6 +82,7 @@ impl RecordFormatter {
             hide_empty_fields,
             fields,
             cfg,
+            nl_indent: "".into(),
         }
     }
 
@@ -398,9 +401,19 @@ impl<'a> FieldFormatter<'a> {
             b'"' => {
                 s.element(Element::String, |s| {
                     s.batch(|buf| {
-                        buf.extend_from_slice(self.rf.cfg.punctuation.string_opening_quote.as_bytes());
-                        format_str_unescaped(buf, value.get());
-                        buf.extend_from_slice(self.rf.cfg.punctuation.string_closing_quote.as_bytes());
+                        if value.get().contains("\\n") {
+                            let mut scratch = Vec::new();
+                            scratch.push(b' ');
+                            format_str_unescaped(&mut scratch, value.get());
+                            let mut nli = NewLineIndenter::new(buf, &self.rf.nl_indent);
+                            nli.push(b'\n');
+                            nli.extend_from_slice(&scratch[1..]);
+                            nli.push(b'\n');
+                        } else {
+                            buf.extend_from_slice(self.rf.cfg.punctuation.string_opening_quote.as_bytes());
+                            format_str_unescaped(buf, value.get());
+                            buf.extend_from_slice(self.rf.cfg.punctuation.string_closing_quote.as_bytes());
+                        }
                     })
                 });
             }
@@ -460,6 +473,30 @@ impl<'a> FieldFormatter<'a> {
                 });
             }
         };
+    }
+}
+
+struct NewLineIndenter<'a, B: fmtx::Push<u8> + 'a> {
+    buf: &'a mut B,
+    indent: &'a str,
+}
+
+impl<'a, B: fmtx::Push<u8> + 'a> NewLineIndenter<'a, B> {
+    fn new(buf: &'a mut B, indent: &'a str) -> Self {
+        Self { buf, indent }
+    }
+}
+
+impl<'a, B: fmtx::Push<u8> + 'a> fmtx::Push<u8> for NewLineIndenter<'a, B> {
+    fn push(&mut self, value: u8) {
+        self.buf.push(value);
+        if value == b'\n' {
+            self.buf.extend_from_slice(self.indent.as_bytes());
+        }
+    }
+
+    fn extend_from_slice(&mut self, values: &[u8]) {
+        values.iter().for_each(|x| self.push(*x));
     }
 }
 
