@@ -537,14 +537,18 @@ impl Parser {
 // ---
 
 pub struct RawRecord<'a> {
-    fields: heapless::Vec<(&'a str, &'a RawValue), RAW_RECORD_FIELDS_CAPACITY>,
-    fieldsx: Vec<(&'a str, &'a RawValue)>,
+    fields: RawRecordFields<'a>,
+}
+
+pub struct RawRecordFields<'a> {
+    head: heapless::Vec<(&'a str, &'a RawValue), RAW_RECORD_FIELDS_CAPACITY>,
+    tail: Vec<(&'a str, &'a RawValue)>,
 }
 
 impl<'a> RawRecord<'a> {
     #[inline(always)]
     pub fn fields(&self) -> impl Iterator<Item = &(&'a str, &'a RawValue)> {
-        self.fields.iter().chain(self.fieldsx.iter())
+        self.fields.head.iter().chain(self.fields.tail.iter())
     }
 }
 
@@ -577,20 +581,22 @@ impl<'de: 'a, 'a> Visitor<'de> for RawRecordVisitor<'a> {
     }
 
     fn visit_map<M: MapAccess<'de>>(self, mut access: M) -> std::result::Result<Self::Value, M::Error> {
-        let mut fields = heapless::Vec::new();
+        let mut head = heapless::Vec::new();
         let count = access.size_hint().unwrap_or(0);
-        let mut fieldsx = match count > RAW_RECORD_FIELDS_CAPACITY {
+        let mut tail = match count > RAW_RECORD_FIELDS_CAPACITY {
             false => Vec::new(),
             true => Vec::with_capacity(count - RAW_RECORD_FIELDS_CAPACITY),
         };
         while let Some(Some(key)) = access.next_key::<&'a str>().ok() {
-            match fields.push((key, access.next_value()?)) {
+            match head.push((key, access.next_value()?)) {
                 Ok(_) => {}
-                Err(value) => fieldsx.push(value),
+                Err(value) => tail.push(value),
             }
         }
 
-        Ok(RawRecord { fields, fieldsx })
+        Ok(RawRecord {
+            fields: RawRecordFields { head, tail },
+        })
     }
 }
 
