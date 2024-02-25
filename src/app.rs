@@ -36,7 +36,7 @@ use crate::index::{Indexer, Timestamp};
 use crate::input::{BlockLine, InputHolder, InputReference, Input};
 use crate::model::{Filter, Parser, ParserSettings, RawRecord, Record, RecordFilter, RecordWithSourceConstructor};
 use crate::query::Query;
-use crate::scanning::{BufFactory, Scanner, Segment, SegmentBuf, SegmentBufFactory};
+use crate::scanning::{BufFactory, Delimit, Delimiter, Scanner, SearchExt, Segment, SegmentBuf, SegmentBufFactory};
 use crate::serdex::StreamDeserializerWithOffsets;
 use crate::settings::{Fields, Formatting};
 use crate::theme::{Element, StylingPush, Theme};
@@ -68,6 +68,7 @@ pub struct Options {
     pub dump_index: bool,
     pub app_dirs: Option<AppDirs>,
     pub tail: u64,
+    pub delimiter: Delimiter,
 }
 
 impl Options {
@@ -135,7 +136,7 @@ impl App {
             // spawn reader thread
             let reader = scope.spawn(closure!(clone sfi, |_| -> Result<()> {
                 let mut tx = StripedSender::new(txi);
-                let scanner = Scanner::new(sfi, b'\n');
+                let scanner = Scanner::new(sfi, &self.options.delimiter);
                 for (i, mut input) in inputs.into_iter().enumerate() {
                     for item in scanner.items(&mut input.stream).with_max_segment_size(self.options.max_message_size.into()) {
                         if tx.send((i, item?)).is_none() {
@@ -204,6 +205,7 @@ impl App {
             NonZeroU32::try_from(self.options.max_message_size)?.try_into()?,
             cache_dir,
             &self.options.fields.settings.predefined,
+            self.options.delimiter.clone(),
         );
 
         let input_badges = self.input_badges(inputs.iter().map(|x| &x.reference));
@@ -403,7 +405,7 @@ impl App {
             let mut readers = Vec::with_capacity(m);
             for (i, input_ref) in inputs.into_iter().enumerate() {
                 let reader = scope.spawn(closure!(clone sfi, clone txi, |_| -> Result<()> {
-                    let scanner = Scanner::new(sfi.clone(), b'\n');
+                    let scanner = Scanner::new(sfi.clone(), &self.options.delimiter);
                     let mut meta = None;
                     if let InputReference::File(filename) = &input_ref { 
                         meta = Some(fs::metadata(filename)?);
@@ -703,6 +705,7 @@ impl App {
         let options = SegmentProcessorOptions{
             allow_prefix: self.options.allow_prefix, 
             allow_unparsed_data: self.options.filter.is_empty() && self.options.query.is_none(),
+            delimiter: self.options.delimiter.clone(),
         };
         
         SegmentProcessor::new(parser, self.formatter(), self.options.filter_and_query(), options)
@@ -721,6 +724,7 @@ pub trait SegmentProcess {
 pub struct SegmentProcessorOptions {
     pub allow_prefix: bool,
     pub allow_unparsed_data: bool,
+    pub delimiter: Delimiter,
 }
 
 // ---
@@ -753,7 +757,7 @@ impl<'a, Formatter: RecordWithSourceFormatter, Filter: RecordFilter> SegmentProc
     where
         O: RecordObserver,
     {
-        for data in rtrim(data, b'\n').split(|c| *c == b'\n') {
+        for data in self.options.delimiter.clone().into_searcher().split(data) {
             if data.len() == 0 {
                 continue;
             }
@@ -923,14 +927,6 @@ impl<T> StripedSender<T> {
 }
 
 // ---
-
-fn rtrim<'a>(s: &'a [u8], c: u8) -> &'a [u8] {
-    if s.len() > 0 && s[s.len() - 1] == c {
-        &s[..s.len() - 1]
-    } else {
-        s
-    }
-}
 
 fn common_prefix_len<'a, V, I>(items: &'a Vec<I>) -> usize
 where

@@ -28,6 +28,7 @@ use hl::signal::SignalHandler;
 use hl::theme::{Theme, ThemeOrigin};
 use hl::timeparse::parse_time;
 use hl::timezone::Tz;
+use hl::Delimiter;
 use hl::{IncludeExcludeKeyFilter, KeyMatchOptions};
 
 // ---
@@ -202,6 +203,10 @@ struct Opt {
     /// Output file.
     #[arg(long, short = 'o', overrides_with = "output")]
     output: Option<String>,
+
+    /// Log message delimiter, [NUL, CR, LF, CRLF] or any custom string.
+    #[arg(long, overrides_with = "delimiter")]
+    delimiter: Option<String>,
 
     /// Dump index metadata and exit.
     #[arg(long)]
@@ -389,6 +394,25 @@ fn run() -> Result<()> {
         }
     }
 
+    let mut delimiter = Delimiter::default();
+    if let Some(d) = opt.delimiter {
+        delimiter = match d.to_lowercase().as_str() {
+            "nul" => Delimiter::Byte(0),
+            "lf" => Delimiter::Byte(b'\n'),
+            "cr" => Delimiter::Byte(b'\r'),
+            "crlf" => Delimiter::default(),
+            _ => {
+                if d.len() == 1 {
+                    Delimiter::Byte(d.as_bytes()[0])
+                } else if d.len() > 1 {
+                    Delimiter::Str(d)
+                } else {
+                    Delimiter::default()
+                }
+            }
+        };
+    }
+
     // Create app.
     let app = hl::App::new(hl::Options {
         theme: Arc::new(theme),
@@ -421,6 +445,7 @@ fn run() -> Result<()> {
         dump_index: opt.dump_index,
         app_dirs: Some(app_dirs),
         tail: opt.tail,
+        delimiter,
     });
 
     // Configure input.
