@@ -2,14 +2,14 @@
 use std::sync::Arc;
 
 // third-party imports
-use json::{de::Read, de::StrRead, value::RawValue};
+use json::{de::Read, de::StrRead};
 use serde_json as json;
 
 // local imports
 use crate::datefmt;
 use crate::filtering::IncludeExcludeSetting;
 use crate::fmtx;
-use crate::model;
+use crate::model::{self, RawValue};
 use crate::settings::Formatting;
 use crate::theme;
 use crate::IncludeExcludeKeyFilter;
@@ -161,9 +161,9 @@ impl RecordFormatter {
             //
             // message text
             //
-            if let Some(text) = rec.message {
+            if let Some(text) = &rec.message {
                 s.batch(|buf| buf.push(b' '));
-                s.element(Element::Message, |s| self.format_message(s, text));
+                s.element(Element::Message, |s| self.format_message(s, *text));
             }
             //
             // fields
@@ -176,7 +176,7 @@ impl RecordFormatter {
                         _ => true,
                     }
                 {
-                    some_fields_hidden |= !self.format_field(s, k, v, Some(&self.fields));
+                    some_fields_hidden |= !self.format_field(s, k, *v, Some(&self.fields));
                 }
             }
             if some_fields_hidden {
@@ -214,23 +214,23 @@ impl RecordFormatter {
         });
     }
 
-    fn format_field<S: StylingPush<Buf>>(
+    fn format_field<'a, S: StylingPush<Buf>>(
         &self,
         s: &mut S,
         key: &str,
-        value: &RawValue,
+        value: RawValue<'a>,
         filter: Option<&IncludeExcludeKeyFilter>,
     ) -> bool {
         let mut fv = FieldFormatter::new(self);
         fv.format(s, key, value, filter, IncludeExcludeSetting::Unspecified)
     }
 
-    fn format_value<S: StylingPush<Buf>>(&self, s: &mut S, value: &RawValue) {
+    fn format_value<'a, S: StylingPush<Buf>>(&self, s: &mut S, value: RawValue<'a>) {
         let mut fv = FieldFormatter::new(self);
         fv.format_value(s, value, None, IncludeExcludeSetting::Unspecified);
     }
 
-    fn format_message<S: StylingPush<Buf>>(&self, s: &mut S, value: &RawValue) {
+    fn format_message<'a, S: StylingPush<Buf>>(&self, s: &mut S, value: RawValue<'a>) {
         match value.get().as_bytes()[0] {
             b'"' => {
                 s.element(Element::Message, |s| {
@@ -258,7 +258,7 @@ impl RecordFormatter {
                     s.batch(|buf| buf.push(b'{'));
                     let mut has_some = false;
                     for (k, v) in item.fields.iter() {
-                        has_some |= self.format_field(s, k, v, None)
+                        has_some |= self.format_field(s, k, *v, None)
                     }
                     s.batch(|buf| {
                         if has_some {
@@ -307,7 +307,7 @@ impl RecordFormatter {
                             } else {
                                 first = false;
                             }
-                            self.format_value(s, v);
+                            self.format_value(s, *v);
                         }
                         s.batch(|buf| buf.push(b']'));
                     });
@@ -350,7 +350,7 @@ impl<'a> FieldFormatter<'a> {
         &mut self,
         s: &mut S,
         key: &str,
-        value: &'a RawValue,
+        value: RawValue<'a>,
         filter: Option<&IncludeExcludeKeyFilter>,
         setting: IncludeExcludeSetting,
     ) -> bool {
@@ -390,7 +390,7 @@ impl<'a> FieldFormatter<'a> {
     fn format_value<S: StylingPush<Buf>>(
         &mut self,
         s: &mut S,
-        value: &'a RawValue,
+        value: RawValue<'a>,
         filter: Option<&IncludeExcludeKeyFilter>,
         setting: IncludeExcludeSetting,
     ) {
@@ -425,7 +425,7 @@ impl<'a> FieldFormatter<'a> {
                     s.batch(|buf| buf.push(b'{'));
                     let mut some_fields_hidden = false;
                     for (k, v) in item.fields.iter() {
-                        some_fields_hidden |= !self.format(s, k, v, filter, setting);
+                        some_fields_hidden |= !self.format(s, k, *v, filter, setting);
                     }
                     if some_fields_hidden {
                         s.element(Element::Ellipsis, |s| s.batch(|buf| buf.extend_from_slice(b" ...")));
@@ -449,7 +449,7 @@ impl<'a> FieldFormatter<'a> {
                         } else {
                             first = false;
                         }
-                        self.format_value(s, v, None, IncludeExcludeSetting::Unspecified);
+                        self.format_value(s, *v, None, IncludeExcludeSetting::Unspecified);
                     }
                     s.batch(|buf| buf.push(b']'));
                 });
@@ -482,8 +482,6 @@ mod tests {
     use crate::{error::Error, settings::Punctuation};
     use chrono::{Offset, Utc};
     use datefmt::LinuxDateFormat;
-    use json::value::RawValue;
-    use serde_json as json;
 
     fn format(rec: &Record) -> Result<String, Error> {
         let formatter = RecordFormatter::new(
@@ -509,13 +507,13 @@ mod tests {
             format(&Record {
                 prefix: None,
                 ts: Some(Timestamp::new("2000-01-02T03:04:05.123Z", None)),
-                message: Some(RawValue::from_string(r#""tm""#.into()).unwrap().as_ref()),
+                message: Some(RawValue::new(r#""tm""#)),
                 level: Some(Level::Debug),
                 logger: Some("tl"),
                 caller: Some(Caller::Text("tc")),
                 fields: RecordFields{
                     head: heapless::Vec::from_slice(&[
-                        ("ka", RawValue::from_string(r#"{"va":{"kb":42}}"#.into()).unwrap().as_ref()),
+                        ("ka", RawValue::new(r#"{"va":{"kb":42}}"#)),
                     ]).unwrap(),
                     tail: Vec::default(),
                 },

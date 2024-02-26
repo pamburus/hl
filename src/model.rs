@@ -6,7 +6,6 @@ use std::marker::PhantomData;
 
 // third-party imports
 use chrono::{DateTime, Utc};
-use json::value::RawValue;
 use regex::Regex;
 use serde::de::{Deserialize, Deserializer, MapAccess, SeqAccess, Visitor};
 use serde_json as json;
@@ -25,25 +24,51 @@ pub use level::Level;
 
 // ---
 
+#[derive(Clone, Copy)]
+pub struct RawValue<'a> {
+    value: &'a str,
+}
+
+impl<'a> RawValue<'a> {
+    #[inline]
+    pub fn new(value: &'a str) -> Self {
+        Self { value }
+    }
+
+    #[inline]
+    pub fn get(&self) -> &'a str {
+        self.value
+    }
+}
+
+impl<'a> From<&'a json::value::RawValue> for RawValue<'a> {
+    #[inline(always)]
+    fn from(value: &'a json::value::RawValue) -> Self {
+        Self::new(value.get())
+    }
+}
+
+// ---
+
 pub struct Record<'a> {
     pub prefix: Option<&'a [u8]>,
     pub ts: Option<Timestamp<'a>>,
-    pub message: Option<&'a RawValue>,
+    pub message: Option<RawValue<'a>>,
     pub level: Option<Level>,
     pub logger: Option<&'a str>,
     pub caller: Option<Caller<'a>>,
     pub(crate) fields: RecordFields<'a>,
-    pub(crate) predefined: heapless::Vec<(&'a str, &'a RawValue), MAX_PREDEFINED_FIELDS>,
+    pub(crate) predefined: heapless::Vec<(&'a str, RawValue<'a>), MAX_PREDEFINED_FIELDS>,
 }
 
 impl<'a> Record<'a> {
     #[inline(always)]
-    pub fn fields(&self) -> impl Iterator<Item = &(&'a str, &'a RawValue)> {
+    pub fn fields(&self) -> impl Iterator<Item = &(&'a str, RawValue<'a>)> {
         self.fields.head.iter().chain(self.fields.tail.iter())
     }
 
     #[inline(always)]
-    pub fn fields_for_search(&self) -> impl Iterator<Item = &(&'a str, &'a RawValue)> {
+    pub fn fields_for_search(&self) -> impl Iterator<Item = &(&'a str, RawValue<'a>)> {
         self.fields().chain(self.predefined.iter())
     }
 
@@ -80,8 +105,8 @@ impl<'a> Record<'a> {
 }
 
 pub struct RecordFields<'a> {
-    pub(crate) head: heapless::Vec<(&'a str, &'a RawValue), RECORD_EXTRA_CAPACITY>,
-    pub(crate) tail: Vec<(&'a str, &'a RawValue)>,
+    pub(crate) head: heapless::Vec<(&'a str, RawValue<'a>), RECORD_EXTRA_CAPACITY>,
+    pub(crate) tail: Vec<(&'a str, RawValue<'a>)>,
 }
 
 // ---
@@ -300,14 +325,14 @@ impl ParserSettings {
     }
 
     #[inline(always)]
-    fn apply<'a>(&self, key: &'a str, value: &'a RawValue, to: &mut Record<'a>, pc: &mut PriorityController) {
+    fn apply<'a>(&self, key: &'a str, value: RawValue<'a>, to: &mut Record<'a>, pc: &mut PriorityController) {
         self.blocks[0].apply(self, key, value, to, pc, true);
     }
 
     #[inline(always)]
     fn apply_each<'a, 'i, I>(&self, items: I, to: &mut Record<'a>)
     where
-        I: IntoIterator<Item = &'i (&'a str, &'a RawValue)>,
+        I: IntoIterator<Item = &'i (&'a str, RawValue<'a>)>,
         'a: 'i,
     {
         let mut pc = PriorityController::default();
@@ -317,11 +342,11 @@ impl ParserSettings {
     #[inline(always)]
     fn apply_each_ctx<'a, 'i, I>(&self, items: I, to: &mut Record<'a>, pc: &mut PriorityController)
     where
-        I: IntoIterator<Item = &'i (&'a str, &'a RawValue)>,
+        I: IntoIterator<Item = &'i (&'a str, RawValue<'a>)>,
         'a: 'i,
     {
         for (key, value) in items {
-            self.apply(key, value, to, pc)
+            self.apply(key, *value, to, pc)
         }
     }
 }
@@ -338,7 +363,7 @@ impl ParserSettingsBlock {
         &self,
         ps: &ParserSettings,
         key: &'a str,
-        value: &'a RawValue,
+        value: RawValue<'a>,
         to: &mut Record<'a>,
         pc: &mut PriorityController,
         is_root: bool,
@@ -382,11 +407,11 @@ impl ParserSettingsBlock {
         ctx: &mut PriorityController,
         is_root: bool,
     ) where
-        I: IntoIterator<Item = &'i (&'a str, &'a RawValue)>,
+        I: IntoIterator<Item = &'i (&'a str, RawValue<'a>)>,
         'a: 'i,
     {
         for (key, value) in items {
-            self.apply(ps, key, value, to, ctx, is_root)
+            self.apply(ps, key, *value, to, ctx, is_root)
         }
     }
 }
@@ -442,7 +467,7 @@ enum FieldSettings {
 }
 
 impl FieldSettings {
-    fn apply<'a>(&self, ps: &ParserSettings, value: &'a RawValue, to: &mut Record<'a>) {
+    fn apply<'a>(&self, ps: &ParserSettings, value: RawValue<'a>, to: &mut Record<'a>) {
         match *self {
             Self::Time => {
                 let s = value.get();
@@ -494,7 +519,7 @@ impl FieldSettings {
     fn apply_ctx<'a>(
         &self,
         ps: &ParserSettings,
-        value: &'a RawValue,
+        value: RawValue<'a>,
         to: &mut Record<'a>,
         ctx: &mut PriorityController,
     ) {
@@ -555,13 +580,13 @@ pub struct RawRecord<'a> {
 }
 
 pub struct RawRecordFields<'a> {
-    head: heapless::Vec<(&'a str, &'a RawValue), RAW_RECORD_FIELDS_CAPACITY>,
-    tail: Vec<(&'a str, &'a RawValue)>,
+    head: heapless::Vec<(&'a str, RawValue<'a>), RAW_RECORD_FIELDS_CAPACITY>,
+    tail: Vec<(&'a str, RawValue<'a>)>,
 }
 
 impl<'a> RawRecord<'a> {
     #[inline(always)]
-    pub fn fields(&self) -> impl Iterator<Item = &(&'a str, &'a RawValue)> {
+    pub fn fields(&self) -> impl Iterator<Item = &(&'a str, RawValue<'a>)> {
         self.fields.head.iter().chain(self.fields.tail.iter())
     }
 }
@@ -602,7 +627,8 @@ impl<'de: 'a, 'a> Visitor<'de> for RawRecordVisitor<'a> {
             true => Vec::with_capacity(count - RAW_RECORD_FIELDS_CAPACITY),
         };
         while let Some(Some(key)) = access.next_key::<&'a str>().ok() {
-            match head.push((key, access.next_value()?)) {
+            let value: &json::value::RawValue = access.next_value()?;
+            match head.push((key, value.into())) {
                 Ok(_) => {}
                 Err(value) => tail.push(value),
             }
@@ -865,7 +891,7 @@ impl FieldFilter {
         }
     }
 
-    fn match_value_partial(&self, subkey: KeyMatcher, value: &RawValue) -> bool {
+    fn match_value_partial<'a>(&self, subkey: KeyMatcher, value: RawValue<'a>) -> bool {
         let bytes = value.get().as_bytes();
         if bytes[0] != b'{' {
             return false;
@@ -1023,7 +1049,7 @@ impl RecordFilter for Filter {
 // ---
 
 pub struct Object<'a> {
-    pub fields: heapless::Vec<(&'a str, &'a RawValue), 32>,
+    pub fields: heapless::Vec<(&'a str, RawValue<'a>), 32>,
 }
 
 struct ObjectVisitor<'a> {
@@ -1045,8 +1071,8 @@ impl<'de: 'a, 'a> Visitor<'de> for ObjectVisitor<'a> {
     fn visit_map<A: MapAccess<'de>>(self, mut access: A) -> std::result::Result<Self::Value, A::Error> {
         let mut fields = heapless::Vec::new();
         while let Some(key) = access.next_key::<&'a str>()? {
-            let value = access.next_value()?;
-            fields.push((key, value)).ok();
+            let value: &json::value::RawValue = access.next_value()?;
+            fields.push((key, value.into())).ok();
         }
 
         Ok(Object { fields })
@@ -1063,13 +1089,13 @@ impl<'de: 'a, 'a> Deserialize<'de> for Object<'a> {
 }
 
 pub struct Array<'a, const N: usize> {
-    items: heapless::Vec<&'a RawValue, N>,
-    more: Vec<&'a RawValue>,
+    items: heapless::Vec<RawValue<'a>, N>,
+    more: Vec<RawValue<'a>>,
 }
 
 impl<'a, const N: usize> Array<'a, N> {
     #[inline(always)]
-    pub fn iter(&self) -> impl Iterator<Item = &&'a RawValue> {
+    pub fn iter(&self) -> impl Iterator<Item = &RawValue<'a>> {
         self.items.iter().chain(self.more.iter())
     }
 }
@@ -1093,7 +1119,8 @@ impl<'de: 'a, 'a, const N: usize> Visitor<'de> for ArrayVisitor<'a, N> {
     fn visit_seq<A: SeqAccess<'de>>(self, mut access: A) -> std::result::Result<Self::Value, A::Error> {
         let mut items = heapless::Vec::new();
         let mut more = Vec::new();
-        while let Some(item) = access.next_element()? {
+        while let Some(item) = access.next_element::<&json::value::RawValue>()? {
+            let item = item.into();
             match items.push(item) {
                 Ok(()) => {}
                 Err(item) => more.push(item),
