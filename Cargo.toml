@@ -4,7 +4,7 @@ categories = ["command-line-utilities"]
 description = "Utility for viewing json-formatted log files."
 keywords = ["cli", "human", "log"]
 name = "hl"
-version = "0.25.3-alpha.5"
+version = "0.25.3"
 edition = "2021"
 build = "build.rs"
 
@@ -71,6 +71,7 @@ criterion = "0"
 stats_alloc = "0"
 regex = "1"
 wildmatch = "2"
+wildflower = "0"
 
 [profile.release]
 debug = false
@@ -91,7 +92,11 @@ name = "ts-format"
 harness = false
 
 [[bench]]
-name = "wildcard"
+name = "wildmatch"
+harness = false
+
+[[bench]]
+name = "wildflower"
 harness = false
 
 [[bench]]
@@ -100,6 +105,10 @@ harness = false
 
 [[bench]]
 name = "parse-and-format"
+harness = false
+
+[[bench]]
+name = "string"
 harness = false
 
 [[bench]]
