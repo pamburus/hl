@@ -10,7 +10,7 @@ use json::value::RawValue;
 use regex::Regex;
 use serde::de::{Deserialize, Deserializer, MapAccess, SeqAccess, Visitor};
 use serde_json as json;
-use wildmatch::WildMatch;
+use wildflower::Pattern;
 
 // local imports
 use crate::error::{Error, Result};
@@ -203,12 +203,12 @@ impl RecordFilter for RecordFilterNone {
 
 // ---
 
-#[derive(Default, Debug)]
+#[derive(Default)]
 pub struct ParserSettings {
     pre_parse_time: bool,
     level: Vec<HashMap<String, Level>>,
     blocks: Vec<ParserSettingsBlock>,
-    ignore: Vec<WildMatch>,
+    ignore: Vec<Pattern<String>>,
 }
 
 impl ParserSettings {
@@ -221,7 +221,7 @@ impl ParserSettings {
             pre_parse_time,
             level: Vec::new(),
             blocks: vec![ParserSettingsBlock::default()],
-            ignore: ignore.into_iter().map(|x| WildMatch::new(x)).collect(),
+            ignore: ignore.into_iter().map(|x| Pattern::new(x.to_string())).collect(),
         };
 
         result.init(predefined);
@@ -673,13 +673,12 @@ pub enum NumericOp {
 
 // ---
 
-#[derive(Debug)]
 pub enum ValueMatchPolicy {
     Exact(String),
     SubString(String),
     RegularExpression(Regex),
     In(Vec<String>),
-    WildCard(WildMatch),
+    WildCard(Pattern<String>),
     Numerically(NumericOp),
 }
 
@@ -755,7 +754,6 @@ impl FieldFilterKey<String> {
 
 // ---
 
-#[derive(Debug)]
 pub struct FieldFilter {
     key: FieldFilterKey<String>,
     match_policy: ValueMatchPolicy,
@@ -939,7 +937,7 @@ impl RecordFilter for FieldFilter {
 
 // ---
 
-#[derive(Debug, Default)]
+#[derive(Default)]
 pub struct FieldFilterSet(Vec<FieldFilter>);
 
 impl FieldFilterSet {
@@ -961,7 +959,7 @@ impl RecordFilter for FieldFilterSet {
 
 // ---
 
-#[derive(Debug, Default)]
+#[derive(Default)]
 pub struct Filter {
     pub fields: FieldFilterSet,
     pub level: Option<Level>,

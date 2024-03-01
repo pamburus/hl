@@ -3,7 +3,7 @@ use closure::closure;
 use pest::{iterators::Pair, Parser};
 use pest_derive::Parser;
 use serde_json as json;
-use wildmatch::WildMatch;
+use wildflower::Pattern;
 
 // local imports
 use crate::error::Result;
@@ -120,7 +120,7 @@ fn field_filter(pair: Pair<Rule>) -> Result<Query> {
             (ValueMatchPolicy::Exact(parse_string(rhs)?), op == Rule::op_not_equal)
         }
         (Rule::op_like | Rule::op_not_like, Rule::string) => (
-            ValueMatchPolicy::WildCard(WildMatch::new(parse_string(rhs)?.as_str())),
+            ValueMatchPolicy::WildCard(Pattern::new(parse_string(rhs)?.to_string())),
             op == Rule::op_not_like,
         ),
         (Rule::op_contain | Rule::op_not_contain, Rule::string) => (
