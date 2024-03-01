@@ -4,7 +4,7 @@ categories = ["command-line-utilities"]
 description = "Utility for viewing json-formatted log files."
 keywords = ["cli", "human", "log"]
 name = "hl"
-version = "0.25.3"
+version = "0.25.4-alpha.1"
 edition = "2021"
 build = "build.rs"
 
@@ -58,7 +58,7 @@ shellwords = "1"
 signal-hook = "0"
 snap = "1"
 thiserror = "1"
-wildmatch = "2"
+wildflower = "0"
 winapi = {version = "0", features = ["handleapi"]}
 wyhash = "0"
 
