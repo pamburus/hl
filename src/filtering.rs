@@ -1,10 +1,14 @@
-use std::{collections::HashMap, hash::Hash};
+use indexmap::{Equivalent, IndexMap};
+use std::{
+    hash::{Hash, Hasher},
+    str::FromStr,
+};
 use wildflower::{Pattern, WILDCARD_MANY_CHAR, WILDCARD_SINGLE_CHAR};
 
 // ---
 
-pub trait KeyNormalize: Clone {
-    fn normalize(&self, byte: u8) -> u8;
+pub trait KeyNormalize {
+    fn normalize(c: char) -> char;
 }
 
 // ---
@@ -14,7 +18,7 @@ pub struct NoNormalizing {}
 
 impl KeyNormalize for NoNormalizing {
     #[inline]
-    fn normalize(&self, byte: u8) -> u8 {
+    fn normalize(byte: char) -> char {
         byte
     }
 }
@@ -26,11 +30,13 @@ pub struct DefaultNormalizing {}
 
 impl KeyNormalize for DefaultNormalizing {
     #[inline]
-    fn normalize(&self, byte: u8) -> u8 {
-        if byte == b'_' {
-            b'-'
+    fn normalize(c: char) -> char {
+        if c == '_' {
+            '-'
+        } else if c < 128 as char {
+            c.to_ascii_lowercase()
         } else {
-            byte.to_ascii_lowercase()
+            c
         }
     }
 }
@@ -62,17 +68,17 @@ impl Default for IncludeExcludeSetting {
 
 // ---
 
-#[derive(PartialEq, Eq, Clone)]
+#[derive(PartialEq, Eq, Clone, Copy)]
 pub struct MatchOptions<N: KeyNormalize> {
     pub delimiter: u8,
-    pub norm: N,
+    _marker: std::marker::PhantomData<N>,
 }
 
 impl<N: KeyNormalize + Default> Default for MatchOptions<N> {
     fn default() -> Self {
         Self {
             delimiter: b'.',
-            norm: N::default(),
+            _marker: std::marker::PhantomData,
         }
     }
 }
@@ -81,16 +87,20 @@ impl<N: KeyNormalize + Default> Default for MatchOptions<N> {
 
 #[derive(Default)]
 pub struct IncludeExcludeKeyFilter<N: KeyNormalize> {
-    children: HashMap<Key, IncludeExcludeKeyFilter<N>>,
+    children: IndexMap<NormalizedKey<N>, IncludeExcludeKeyFilter<N>>,
     patterns: Vec<(Pattern<String>, IncludeExcludeKeyFilter<N>)>,
     options: MatchOptions<N>,
     setting: IncludeExcludeSetting,
 }
 
-impl<N: KeyNormalize> IncludeExcludeKeyFilter<N> {
+impl<N: KeyNormalize + Clone> IncludeExcludeKeyFilter<N> {
     pub fn new(options: MatchOptions<N>) -> Self {
+        if options.delimiter >= 128 {
+            panic!("delimiter must be an ASCII character");
+        }
+
         Self {
-            children: HashMap::new(),
+            children: IndexMap::new(),
             patterns: Vec::new(),
             options,
             setting: IncludeExcludeSetting::default(),
@@ -101,10 +111,13 @@ impl<N: KeyNormalize> IncludeExcludeKeyFilter<N> {
         let (head, tail) = self.split(key);
 
         if Self::is_pattern(&head) {
-            return self.add_pattern(head, tail);
+            return self.add_pattern(head.to_normalized(), tail);
         }
 
-        let child = self.children.entry(head).or_insert(Self::new(self.options.clone()));
+        let child = self
+            .children
+            .entry(head.to_normalized())
+            .or_insert(Self::new(self.options.clone()));
         match tail {
             None => child,
             Some(tail) => child.entry(tail),
@@ -128,9 +141,9 @@ impl<N: KeyNormalize> IncludeExcludeKeyFilter<N> {
         }
 
         if self.patterns.len() != 0 {
-            let head = head.as_str();
+            let head = head.to_optimized_string();
             for (pattern, child) in self.patterns.iter().rev() {
-                if pattern.matches(head) {
+                if pattern.matches(head.as_ref()) {
                     return found(child);
                 }
             }
@@ -167,26 +180,23 @@ impl<N: KeyNormalize> IncludeExcludeKeyFilter<N> {
         self.children.len() == 0 && self.patterns.len() == 0
     }
 
-    fn split<'a>(&self, key: &'a str) -> (Key, Option<&'a str>) {
-        let bytes = key.as_bytes();
-        let n = bytes.iter().take_while(|&&x| x != self.options.delimiter).count();
-        let head = bytes[..n].iter().map(|&x| self.options.norm.normalize(x));
-        let head = if n <= 64 {
-            Key::Short(head.collect())
-        } else {
-            Key::Long(head.collect())
-        };
-        let tail = if n == key.len() { None } else { Some(&key[n + 1..]) };
-        (head, tail)
+    fn split<'a>(&self, key: &'a str) -> (Key<&'a str, N>, Option<&'a str>) {
+        let mut parts = key.splitn(2, self.options.delimiter as char);
+        let head = parts.next().unwrap();
+        let tail = parts.next();
+        (Key::new(head), tail)
     }
 
-    fn is_pattern(key: &Key) -> bool {
-        let b = key.as_bytes();
-        b.contains(&(WILDCARD_MANY_CHAR as u8)) || b.contains(&(WILDCARD_SINGLE_CHAR as u8))
+    fn is_pattern(key: &Key<&str, N>) -> bool {
+        key.inner().contains(WILDCARD_MANY_CHAR) || key.inner().contains(WILDCARD_SINGLE_CHAR)
     }
 
-    fn add_pattern<'a>(&'a mut self, key: Key, tail: Option<&'a str>) -> &'a mut IncludeExcludeKeyFilter<N> {
-        let pattern = Pattern::new(key.to_string());
+    fn add_pattern<'a>(
+        &'a mut self,
+        key: NormalizedKey<N>,
+        tail: Option<&'a str>,
+    ) -> &'a mut IncludeExcludeKeyFilter<N> {
+        let pattern = Pattern::new(key.into_inner());
         self.children.retain(|k, _| !pattern.matches(k.as_str()));
         let item = match self.patterns.iter().position(|(p, _)| p == &pattern) {
             Some(i) => &mut self.patterns[i].1,
@@ -204,35 +214,182 @@ impl<N: KeyNormalize> IncludeExcludeKeyFilter<N> {
 
 // ---
 
-#[derive(PartialEq, Eq, Hash, Debug)]
-enum Key {
-    Short(heapless::Vec<u8, 64>),
-    Long(Vec<u8>),
+struct NormalizedKey<N> {
+    value: String,
+    _marker: std::marker::PhantomData<N>,
 }
 
-impl PartialEq<&str> for Key {
-    fn eq(&self, other: &&str) -> bool {
-        match self {
-            Key::Short(v) => v == other.as_bytes(),
-            Key::Long(v) => v.as_slice() == other.as_bytes(),
-        }
-    }
-}
-
-impl Key {
-    fn as_bytes(&self) -> &[u8] {
-        match self {
-            Key::Short(v) => v.as_ref(),
-            Key::Long(v) => v.as_slice(),
-        }
+impl<N> NormalizedKey<N> {
+    fn into_inner(self) -> String {
+        self.value
     }
 
     fn as_str(&self) -> &str {
-        std::str::from_utf8(self.as_bytes()).unwrap()
+        &self.value
+    }
+}
+
+impl<N> PartialEq for NormalizedKey<N>
+where
+    N: KeyNormalize,
+{
+    fn eq(&self, other: &Self) -> bool {
+        self.value == other.value
+    }
+}
+
+impl<S, N> PartialEq<Key<S, N>> for NormalizedKey<N>
+where
+    S: AsRef<str>,
+    N: KeyNormalize,
+{
+    fn eq(&self, other: &Key<S, N>) -> bool {
+        self.value
+            .chars()
+            .zip(other.value.as_ref().chars())
+            .all(|(a, b)| a == N::normalize(b))
+    }
+}
+
+impl<N> Eq for NormalizedKey<N> where N: KeyNormalize {}
+
+impl<N> std::hash::Hash for NormalizedKey<N>
+where
+    N: KeyNormalize,
+{
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.value.hash(state);
+    }
+}
+
+// ---
+
+struct Key<S, N> {
+    value: S,
+    _marker: std::marker::PhantomData<N>,
+}
+
+impl<S, N> Key<S, N>
+where
+    S: AsRef<str>,
+    N: KeyNormalize + Clone,
+{
+    fn new(value: S) -> Self {
+        Self {
+            value,
+            _marker: std::marker::PhantomData,
+        }
     }
 
-    fn to_string(&self) -> String {
-        self.as_str().to_string()
+    fn inner(&self) -> &S {
+        &self.value
+    }
+
+    fn to_string(&self) -> String
+    where
+        S: AsRef<str>,
+        N: KeyNormalize,
+    {
+        self.value.as_ref().chars().map(|c| N::normalize(c)).collect()
+    }
+
+    fn to_optimized_string(&self) -> OptimizedString
+    where
+        S: AsRef<str>,
+        N: KeyNormalize,
+    {
+        if self.value.as_ref().len() <= 64 {
+            let mut s = heapless::String::new();
+            for c in self.value.as_ref().chars() {
+                if !s.push(N::normalize(c)).is_ok() {
+                    return OptimizedString::Long(self.to_string());
+                }
+            }
+            OptimizedString::Short(s)
+        } else {
+            OptimizedString::Long(self.to_string())
+        }
+    }
+
+    fn to_normalized(&self) -> NormalizedKey<N>
+    where
+        S: AsRef<str>,
+        N: KeyNormalize,
+    {
+        NormalizedKey {
+            value: self.to_string(),
+            _marker: std::marker::PhantomData,
+        }
+    }
+}
+
+impl<S1, S2, N> PartialEq<Key<S1, N>> for Key<S2, N>
+where
+    S1: AsRef<str>,
+    S2: AsRef<str>,
+    N: KeyNormalize,
+{
+    fn eq(&self, other: &Key<S1, N>) -> bool {
+        self.value
+            .as_ref()
+            .chars()
+            .zip(other.value.as_ref().chars())
+            .all(|(a, b)| N::normalize(a) == N::normalize(b))
+    }
+}
+
+impl<S, N> Eq for Key<S, N>
+where
+    S: AsRef<str>,
+    N: KeyNormalize,
+{
+}
+
+impl<S, N> Equivalent<NormalizedKey<N>> for Key<S, N>
+where
+    N: KeyNormalize,
+    S: AsRef<str>,
+{
+    fn equivalent(&self, other: &NormalizedKey<N>) -> bool {
+        *other == *self
+    }
+}
+
+impl<S, N> Hash for Key<S, N>
+where
+    S: AsRef<str>,
+    N: KeyNormalize,
+{
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        for c in self.value.as_ref().chars() {
+            N::normalize(c).hash(state)
+        }
+    }
+}
+
+// ---
+
+enum OptimizedString {
+    Short(heapless::String<64>),
+    Long(String),
+}
+
+impl AsRef<str> for OptimizedString {
+    fn as_ref(&self) -> &str {
+        match self {
+            OptimizedString::Short(s) => s.as_str(),
+            OptimizedString::Long(s) => s.as_str(),
+        }
+    }
+}
+
+impl From<&str> for OptimizedString {
+    fn from(s: &str) -> Self {
+        if s.len() <= 64 {
+            OptimizedString::Short(heapless::String::from_str(s).unwrap())
+        } else {
+            OptimizedString::Long(s.into())
+        }
     }
 }
 

@@ -4,7 +4,7 @@ categories = ["command-line-utilities"]
 description = "Utility for viewing json-formatted log files."
 keywords = ["cli", "human", "log"]
 name = "hl"
-version = "0.26.1-alpha.1"
+version = "0.26.1-alpha.2"
 edition = "2021"
 build = "build.rs"
 
@@ -39,6 +39,7 @@ heapless = "0"
 hex = "0"
 htp = { git = "https://github.com/pamburus/htp.git" }
 humantime = "2"
+indexmap = "2"
 itertools = "0.12"
 itoa = { version = "1", default-features = false }
 notify = { version = "6", features = ["macos_kqueue"] }
