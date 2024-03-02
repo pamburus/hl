@@ -8,11 +8,15 @@ use std::marker::PhantomData;
 use chrono::{DateTime, Utc};
 use regex::Regex;
 use serde::de::{Deserialize, Deserializer, MapAccess, SeqAccess, Visitor};
-use serde_json as json;
+use serde_json::{
+    self as json,
+    de::{Read, StrRead},
+};
 use wildflower::Pattern;
 
 // local imports
 use crate::error::{Error, Result};
+use crate::fmtx::Push;
 use crate::level;
 use crate::settings::PredefinedFields;
 use crate::timestamp::Timestamp;
@@ -25,27 +29,131 @@ pub use level::Level;
 // ---
 
 #[derive(Clone, Copy)]
-pub struct RawValue<'a> {
-    value: &'a str,
+pub enum RawValue<'a> {
+    Json(&'a str),
 }
 
 impl<'a> RawValue<'a> {
     #[inline]
-    pub fn new(value: &'a str) -> Self {
-        Self { value }
+    pub fn kind(&self) -> ValueKind {
+        match self {
+            Self::Json(value) => {
+                let bytes = value.as_bytes();
+                if bytes.len() == 0 {
+                    return ValueKind::Null;
+                }
+                match bytes[0] {
+                    b'"' => ValueKind::String,
+                    b'0'..=b'9' | b'-' | b'+' | b'.' => ValueKind::Number,
+                    b'{' => ValueKind::Object,
+                    b'[' => ValueKind::Array,
+                    b't' | b'f' => ValueKind::Boolean,
+                    _ => ValueKind::Null,
+                }
+            }
+        }
     }
 
     #[inline]
-    pub fn get(&self) -> &'a str {
-        self.value
+    pub fn is_empty(&self) -> bool {
+        match self {
+            Self::Json(value) => match *value {
+                r#""""# | "null" | "{}" | "[]" => false,
+                _ => true,
+            },
+        }
+    }
+
+    #[inline]
+    pub fn raw_str(&self) -> &'a str {
+        match self {
+            Self::Json(value) => value,
+        }
+    }
+
+    #[inline]
+    pub fn format_as_json_str<B: Push<u8>>(&self, buf: &mut B) {
+        match self {
+            Self::Json(value) => buf.extend_from_slice(value.as_bytes()),
+        }
+    }
+
+    #[inline]
+    pub fn format_as_str(&self, buf: &mut Vec<u8>) {
+        match self {
+            Self::Json(value) => {
+                let mut reader = StrRead::new(&value[1..]);
+                reader.parse_str_raw(buf).unwrap();
+            }
+        }
+    }
+
+    #[inline]
+    pub fn parse_object(&self) -> Result<Object<'a>> {
+        match self {
+            Self::Json(value) => json::from_str::<Object>(value).map_err(Error::JsonParseError),
+        }
+    }
+
+    #[inline]
+    pub fn parse_array<const N: usize>(&self) -> Result<Array<'a, N>> {
+        match self {
+            Self::Json(value) => json::from_str::<Array<N>>(value).map_err(Error::JsonParseError),
+        }
+    }
+
+    #[inline]
+    pub fn parse<T: Deserialize<'a>>(&self) -> Result<T> {
+        match self {
+            Self::Json(value) => json::from_str(value).map_err(Error::JsonParseError),
+        }
+    }
+
+    #[inline]
+    pub fn is_byte_code(&self) -> bool {
+        match self {
+            Self::Json(value) => {
+                let v = value.as_bytes();
+                match v.len() {
+                    1 => v[0].is_ascii_digit(),
+                    2 => v[0].is_ascii_digit() && v[1].is_ascii_digit(),
+                    3 => &b"100"[..] <= v && v <= &b"255"[..],
+                    _ => false,
+                }
+            }
+        }
+    }
+
+    #[inline]
+    pub fn parse_byte_code(&self) -> u8 {
+        match self {
+            Self::Json(value) => match value.as_bytes() {
+                [a] => a - b'0',
+                [a, b] => (a - b'0') * 10 + (b - b'0'),
+                [a, b, c] => (a - b'0') * 100 + (b - b'0') * 10 + (c - b'0'),
+                _ => 0,
+            },
+        }
     }
 }
 
 impl<'a> From<&'a json::value::RawValue> for RawValue<'a> {
     #[inline(always)]
     fn from(value: &'a json::value::RawValue) -> Self {
-        Self::new(value.get())
+        Self::Json(value.get())
     }
+}
+
+// ---
+
+#[derive(Clone, Debug, Copy, PartialEq, Eq)]
+pub enum ValueKind {
+    String,
+    Number,
+    Object,
+    Array,
+    Boolean,
+    Null,
 }
 
 // ---
@@ -470,7 +578,7 @@ impl FieldSettings {
     fn apply<'a>(&self, ps: &ParserSettings, value: RawValue<'a>, to: &mut Record<'a>) {
         match *self {
             Self::Time => {
-                let s = value.get();
+                let s = value.raw_str();
                 let s = if s.as_bytes()[0] == b'"' { &s[1..s.len() - 1] } else { s };
                 let ts = Timestamp::new(s, None);
                 if ps.pre_parse_time {
@@ -480,19 +588,17 @@ impl FieldSettings {
                 }
             }
             Self::Level(i) => {
-                to.level = json::from_str(value.get())
-                    .ok()
-                    .and_then(|x: &'a str| ps.level[i].get(x).cloned());
+                to.level = value.parse().ok().and_then(|x: &'a str| ps.level[i].get(x).cloned());
             }
-            Self::Logger => to.logger = json::from_str(value.get()).ok(),
+            Self::Logger => to.logger = value.parse().ok(),
             Self::Message => to.message = Some(value),
-            Self::Caller => to.caller = json::from_str(value.get()).ok().map(|x| Caller::Text(x)),
+            Self::Caller => to.caller = value.parse().ok().map(|x| Caller::Text(x)),
             Self::CallerFile => match &mut to.caller {
                 None => {
-                    to.caller = json::from_str(value.get()).ok().map(|x| Caller::FileLine(x, ""));
+                    to.caller = value.parse().ok().map(|x| Caller::FileLine(x, ""));
                 }
                 Some(Caller::FileLine(file, _)) => {
-                    if let Some(value) = json::from_str(value.get()).ok() {
+                    if let Some(value) = value.parse().ok() {
                         *file = value
                     }
                 }
@@ -500,15 +606,17 @@ impl FieldSettings {
             },
             Self::CallerLine => match &mut to.caller {
                 None => {
-                    to.caller = Some(Caller::FileLine("", value.get()));
+                    to.caller = Some(Caller::FileLine("", value.raw_str()));
                 }
-                Some(Caller::FileLine(_, line)) => {
-                    if value.get().bytes().next().map_or(false, |x| x.is_ascii_digit()) {
-                        *line = value.get()
-                    } else if let Some(value) = json::from_str(value.get()).ok() {
-                        *line = value
+                Some(Caller::FileLine(_, line)) => match value.kind() {
+                    ValueKind::Number => *line = value.raw_str(),
+                    ValueKind::String => {
+                        if let Some(value) = value.parse().ok() {
+                            *line = value
+                        }
                     }
-                }
+                    _ => {}
+                },
                 _ => {}
             },
             Self::Nested(_) => {}
@@ -524,14 +632,14 @@ impl FieldSettings {
         ctx: &mut PriorityController,
     ) {
         match *self {
-            Self::Nested(nested) => {
-                let s = value.get();
-                if s.len() > 0 && s.as_bytes()[0] == b'{' {
-                    if let Ok(record) = json::from_str::<RawRecord>(s) {
+            Self::Nested(nested) => match value.kind() {
+                ValueKind::Object => {
+                    if let Ok(record) = value.parse::<RawRecord>() {
                         ps.blocks[nested].apply_each_ctx(ps, record.fields(), to, ctx, false);
                     }
                 }
-            }
+                _ => {}
+            },
             _ => self.apply(ps, value, to),
         }
     }
@@ -892,19 +1000,18 @@ impl FieldFilter {
     }
 
     fn match_value_partial<'a>(&self, subkey: KeyMatcher, value: RawValue<'a>) -> bool {
-        let bytes = value.get().as_bytes();
-        if bytes[0] != b'{' {
+        if value.kind() != ValueKind::Object {
             return false;
         }
 
-        let item = json::from_str::<Object>(value.get()).unwrap();
+        let item = value.parse_object().unwrap();
         for (k, v) in item.fields.iter() {
             match subkey.match_key(*k) {
                 None => {
                     continue;
                 }
                 Some(KeyMatch::Full) => {
-                    return self.match_value(Some(v.get()), v.get().starts_with('"'));
+                    return self.match_value(Some(v.raw_str()), v.kind() == ValueKind::String);
                 }
                 Some(KeyMatch::Partial(subkey)) => {
                     return self.match_value_partial(subkey, *v);
@@ -928,7 +1035,7 @@ impl RecordFilter for FieldFilter {
                 }
                 FieldKind::Message => {
                     if let Some(message) = record.message {
-                        self.match_value(Some(message.get()), true)
+                        self.match_value(Some(message.raw_str()), true)
                     } else {
                         false
                     }
@@ -954,8 +1061,8 @@ impl RecordFilter for FieldFilter {
                     match self.match_custom_key(*k) {
                         None => {}
                         Some(KeyMatch::Full) => {
-                            let escaped = v.get().starts_with('"');
-                            if self.match_value(Some(v.get()), escaped) {
+                            let escaped = v.kind() == ValueKind::String;
+                            if self.match_value(Some(v.raw_str()), escaped) {
                                 return true;
                             }
                         }

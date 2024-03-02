@@ -1,22 +1,16 @@
 // std imports
 use std::sync::Arc;
 
-// third-party imports
-use json::{de::Read, de::StrRead};
-use serde_json as json;
-
 // local imports
-use crate::datefmt;
-use crate::filtering::IncludeExcludeSetting;
-use crate::fmtx;
-use crate::model::{self, RawValue};
-use crate::settings::Formatting;
-use crate::theme;
-use crate::IncludeExcludeKeyFilter;
-use datefmt::DateTimeFormatter;
-use fmtx::{aligned_left, centered};
-use model::{Caller, Level};
-use theme::{Element, StylingPush, Theme};
+use crate::{
+    datefmt::DateTimeFormatter,
+    filtering::IncludeExcludeSetting,
+    fmtx::{aligned_left, centered},
+    model::{self, Caller, Level, RawValue, ValueKind},
+    settings::Formatting,
+    theme::{Element, StylingPush, Theme},
+    IncludeExcludeKeyFilter,
+};
 
 // ---
 
@@ -170,12 +164,7 @@ impl RecordFormatter {
             //
             let mut some_fields_hidden = false;
             for (k, v) in rec.fields() {
-                if !self.hide_empty_fields
-                    || match v.get() {
-                        r#""""# | "null" | "{}" | "[]" => false,
-                        _ => true,
-                    }
-                {
+                if !self.hide_empty_fields || v.is_empty() {
                     some_fields_hidden |= !self.format_field(s, k, *v, Some(&self.fields));
                 }
             }
@@ -231,30 +220,22 @@ impl RecordFormatter {
     }
 
     fn format_message<'a, S: StylingPush<Buf>>(&self, s: &mut S, value: RawValue<'a>) {
-        match value.get().as_bytes()[0] {
-            b'"' => {
-                s.element(Element::Message, |s| {
-                    s.batch(|buf| format_str_unescaped(buf, value.get()))
-                });
+        match value.kind() {
+            ValueKind::String => {
+                s.element(Element::Message, |s| s.batch(|buf| value.format_as_str(buf)));
             }
-            b'0'..=b'9' | b'-' | b'+' | b'.' => {
-                s.element(Element::Number, |s| {
-                    s.batch(|buf| buf.extend_from_slice(value.get().as_bytes()))
-                });
+            ValueKind::Number => {
+                s.element(Element::Number, |s| s.batch(|buf| value.format_as_json_str(buf)));
             }
-            b't' | b'f' => {
-                s.element(Element::Boolean, |s| {
-                    s.batch(|buf| buf.extend_from_slice(value.get().as_bytes()))
-                });
+            ValueKind::Boolean => {
+                s.element(Element::Boolean, |s| s.batch(|buf| value.format_as_json_str(buf)));
             }
-            b'n' => {
-                s.element(Element::Null, |s| {
-                    s.batch(|buf| buf.extend_from_slice(value.get().as_bytes()))
-                });
+            ValueKind::Null => {
+                s.element(Element::Null, |s| s.batch(|buf| value.format_as_json_str(buf)));
             }
-            b'{' => {
+            ValueKind::Object => {
                 s.element(Element::Object, |s| {
-                    let item = json::from_str::<model::Object>(value.get()).unwrap();
+                    let item = value.parse_object().unwrap();
                     s.batch(|buf| buf.push(b'{'));
                     let mut has_some = false;
                     for (k, v) in item.fields.iter() {
@@ -268,21 +249,18 @@ impl RecordFormatter {
                     });
                 });
             }
-            b'[' => {
-                let item = json::from_str::<model::Array<256>>(value.get()).unwrap();
+            ValueKind::Array => {
+                let item = value.parse_array::<256>().unwrap();
                 let is_byte_string = item
                     .iter()
-                    .map(|&v| {
-                        let v = v.get().as_bytes();
-                        only_digits(v) && (v.len() < 3 || (v.len() == 3 && v <= &b"255"[..]))
-                    })
+                    .map(|&v| v.is_byte_code())
                     .position(|x| x == false)
                     .is_none();
                 if is_byte_string {
                     s.batch(|buf| buf.extend_from_slice(b"b'"));
                     s.element(Element::Message, |s| {
                         for item in item.iter() {
-                            let b = atoi::atoi::<u8>(item.get().as_bytes()).unwrap();
+                            let b = item.parse_byte_code();
                             if b >= 32 {
                                 s.batch(|buf| buf.push(b));
                             } else {
@@ -309,14 +287,9 @@ impl RecordFormatter {
                             }
                             self.format_value(s, *v);
                         }
-                        s.batch(|buf| buf.push(b']'));
+                        s.batch(|buf| buf.push(b']'))
                     });
                 }
-            }
-            _ => {
-                s.element(Element::Message, |s| {
-                    s.batch(|buf| buf.extend_from_slice(value.get().as_bytes()))
-                });
             }
         };
     }
@@ -326,13 +299,6 @@ impl RecordWithSourceFormatter for RecordFormatter {
     fn format_record(&self, buf: &mut Buf, rec: model::RecordWithSource) {
         RecordFormatter::format_record(self, buf, rec.record)
     }
-}
-
-// ---
-
-fn format_str_unescaped(buf: &mut Buf, s: &str) {
-    let mut reader = StrRead::new(&s[1..]);
-    reader.parse_str_raw(buf).unwrap();
 }
 
 // ---
@@ -380,9 +346,7 @@ impl<'a> FieldFormatter<'a> {
         if self.rf.unescape_fields {
             self.format_value(s, value, filter, setting);
         } else {
-            s.element(Element::String, |s| {
-                s.batch(|buf| buf.extend_from_slice(value.get().as_bytes()))
-            });
+            s.element(Element::String, |s| s.batch(|buf| value.format_as_json_str(buf)));
         }
         true
     }
@@ -394,33 +358,27 @@ impl<'a> FieldFormatter<'a> {
         filter: Option<&IncludeExcludeKeyFilter>,
         setting: IncludeExcludeSetting,
     ) {
-        match value.get().as_bytes()[0] {
-            b'"' => {
+        match value.kind() {
+            ValueKind::String => {
                 s.element(Element::String, |s| {
                     s.batch(|buf| {
                         buf.extend_from_slice(self.rf.cfg.punctuation.string_opening_quote.as_bytes());
-                        format_str_unescaped(buf, value.get());
+                        value.format_as_str(buf);
                         buf.extend_from_slice(self.rf.cfg.punctuation.string_closing_quote.as_bytes());
                     })
                 });
             }
-            b'0'..=b'9' | b'-' | b'+' | b'.' => {
-                s.element(Element::Number, |s| {
-                    s.batch(|buf| buf.extend_from_slice(value.get().as_bytes()))
-                });
+            ValueKind::Number => {
+                s.element(Element::Number, |s| s.batch(|buf| value.format_as_json_str(buf)));
             }
-            b't' | b'f' => {
-                s.element(Element::Boolean, |s| {
-                    s.batch(|buf| buf.extend_from_slice(value.get().as_bytes()))
-                });
+            ValueKind::Boolean => {
+                s.element(Element::Boolean, |s| s.batch(|buf| value.format_as_json_str(buf)));
             }
-            b'n' => {
-                s.element(Element::Null, |s| {
-                    s.batch(|buf| buf.extend_from_slice(value.get().as_bytes()))
-                });
+            ValueKind::Null => {
+                s.element(Element::Null, |s| s.batch(|buf| value.format_as_json_str(buf)));
             }
-            b'{' => {
-                let item = json::from_str::<model::Object>(value.get()).unwrap();
+            ValueKind::Object => {
+                let item = value.parse_object().unwrap();
                 s.element(Element::Object, |s| {
                     s.batch(|buf| buf.push(b'{'));
                     let mut some_fields_hidden = false;
@@ -438,9 +396,9 @@ impl<'a> FieldFormatter<'a> {
                     });
                 });
             }
-            b'[' => {
+            ValueKind::Array => {
                 s.element(Element::Array, |s| {
-                    let item = json::from_str::<model::Array<32>>(value.get()).unwrap();
+                    let item = value.parse_array::<32>().unwrap();
                     s.batch(|buf| buf.push(b'['));
                     let mut first = true;
                     for v in item.iter() {
@@ -454,17 +412,8 @@ impl<'a> FieldFormatter<'a> {
                     s.batch(|buf| buf.push(b']'));
                 });
             }
-            _ => {
-                s.element(Element::String, |s| {
-                    s.batch(|buf| buf.extend_from_slice(value.get().as_bytes()))
-                });
-            }
         };
     }
-}
-
-fn only_digits(b: &[u8]) -> bool {
-    b.iter().position(|&b| !b.is_ascii_digit()).is_none()
 }
 
 const HEXDIGIT: [u8; 16] = [
@@ -474,6 +423,7 @@ const HEXDIGIT: [u8; 16] = [
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::datefmt::LinuxDateFormat;
     use crate::model::{Record, RecordFields};
     use crate::theme::Theme;
     use crate::themecfg::testing;
@@ -481,7 +431,6 @@ mod tests {
     use crate::timezone::Tz;
     use crate::{error::Error, settings::Punctuation};
     use chrono::{Offset, Utc};
-    use datefmt::LinuxDateFormat;
 
     fn format(rec: &Record) -> Result<String, Error> {
         let formatter = RecordFormatter::new(
@@ -507,13 +456,13 @@ mod tests {
             format(&Record {
                 prefix: None,
                 ts: Some(Timestamp::new("2000-01-02T03:04:05.123Z", None)),
-                message: Some(RawValue::new(r#""tm""#)),
+                message: Some(RawValue::Json(r#""tm""#)),
                 level: Some(Level::Debug),
                 logger: Some("tl"),
                 caller: Some(Caller::Text("tc")),
                 fields: RecordFields{
                     head: heapless::Vec::from_slice(&[
-                        ("ka", RawValue::new(r#"{"va":{"kb":42}}"#)),
+                        ("ka", RawValue::Json(r#"{"va":{"kb":42}}"#)),
                     ]).unwrap(),
                     tail: Vec::default(),
                 },
