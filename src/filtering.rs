@@ -1,4 +1,5 @@
 use std::{collections::HashMap, hash::Hash};
+use wildflower::{Pattern, WILDCARD_MANY_CHAR, WILDCARD_SINGLE_CHAR};
 
 // ---
 
@@ -81,6 +82,7 @@ impl<N: KeyNormalize + Default> Default for MatchOptions<N> {
 #[derive(Default)]
 pub struct IncludeExcludeKeyFilter<N: KeyNormalize> {
     children: HashMap<Key, IncludeExcludeKeyFilter<N>>,
+    patterns: Vec<(Pattern<String>, IncludeExcludeKeyFilter<N>)>,
     options: MatchOptions<N>,
     setting: IncludeExcludeSetting,
 }
@@ -89,13 +91,19 @@ impl<N: KeyNormalize> IncludeExcludeKeyFilter<N> {
     pub fn new(options: MatchOptions<N>) -> Self {
         Self {
             children: HashMap::new(),
+            patterns: Vec::new(),
             options,
             setting: IncludeExcludeSetting::default(),
         }
     }
 
-    pub fn entry<'a>(&'a mut self, key: &str) -> &'a mut IncludeExcludeKeyFilter<N> {
+    pub fn entry<'a>(&'a mut self, key: &'a str) -> &'a mut IncludeExcludeKeyFilter<N> {
         let (head, tail) = self.split(key);
+
+        if Self::is_pattern(&head) {
+            return self.add_pattern(head, tail);
+        }
+
         let child = self.children.entry(head).or_insert(Self::new(self.options.clone()));
         match tail {
             None => child,
@@ -104,18 +112,31 @@ impl<N: KeyNormalize> IncludeExcludeKeyFilter<N> {
     }
 
     pub fn get<'a>(&'a self, key: &str) -> Option<&'a IncludeExcludeKeyFilter<N>> {
-        if self.children.len() == 0 {
+        if self.leaf() {
             return None;
         }
 
         let (head, tail) = self.split(key);
-        match self.children.get(&head) {
-            Some(child) => match tail {
-                None => Some(child),
-                Some(tail) => self.get(tail),
-            },
-            None => None,
+
+        let found = |child: &'a Self| match tail {
+            None => Some(child),
+            Some(tail) => child.get(tail),
+        };
+
+        if let Some(child) = self.children.get(&head) {
+            return found(child);
         }
+
+        if self.patterns.len() != 0 {
+            let head = head.as_str();
+            for (pattern, child) in self.patterns.iter().rev() {
+                if pattern.matches(head) {
+                    return found(child);
+                }
+            }
+        }
+
+        None
     }
 
     pub fn include(&mut self) -> &mut Self {
@@ -143,7 +164,7 @@ impl<N: KeyNormalize> IncludeExcludeKeyFilter<N> {
     }
 
     pub fn leaf(&self) -> bool {
-        self.children.len() == 0
+        self.children.len() == 0 && self.patterns.len() == 0
     }
 
     fn split<'a>(&self, key: &'a str) -> (Key, Option<&'a str>) {
@@ -157,6 +178,27 @@ impl<N: KeyNormalize> IncludeExcludeKeyFilter<N> {
         };
         let tail = if n == key.len() { None } else { Some(&key[n + 1..]) };
         (head, tail)
+    }
+
+    fn is_pattern(key: &Key) -> bool {
+        let b = key.as_bytes();
+        b.contains(&(WILDCARD_MANY_CHAR as u8)) || b.contains(&(WILDCARD_SINGLE_CHAR as u8))
+    }
+
+    fn add_pattern<'a>(&'a mut self, key: Key, tail: Option<&'a str>) -> &'a mut IncludeExcludeKeyFilter<N> {
+        let pattern = Pattern::new(key.to_string());
+        self.children.retain(|k, _| !pattern.matches(k.as_str()));
+        let item = match self.patterns.iter().position(|(p, _)| p == &pattern) {
+            Some(i) => &mut self.patterns[i].1,
+            None => {
+                self.patterns.push((pattern, Self::new(self.options.clone())));
+                &mut self.patterns.last_mut().unwrap().1
+            }
+        };
+        match tail {
+            None => item,
+            Some(tail) => item.entry(tail),
+        }
     }
 }
 
@@ -174,6 +216,23 @@ impl PartialEq<&str> for Key {
             Key::Short(v) => v == other.as_bytes(),
             Key::Long(v) => v.as_slice() == other.as_bytes(),
         }
+    }
+}
+
+impl Key {
+    fn as_bytes(&self) -> &[u8] {
+        match self {
+            Key::Short(v) => v.as_ref(),
+            Key::Long(v) => v.as_slice(),
+        }
+    }
+
+    fn as_str(&self) -> &str {
+        std::str::from_utf8(self.as_bytes()).unwrap()
+    }
+
+    fn to_string(&self) -> String {
+        self.as_str().to_string()
     }
 }
 

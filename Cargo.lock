@@ -738,7 +738,7 @@ checksum = "7f24254aa9a54b5c858eaee2f5bccdb46aaf0e486a595ed5fd8f86ba55232a70"
 
 [[package]]
 name = "hl"
-version = "0.25.4-alpha.1"
+version = "0.26.0"
 dependencies = [
  "atoi",
  "bincode",
@@ -1775,8 +1775,7 @@ dependencies = [
 [[package]]
 name = "wildflower"
 version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4138ac28620aa128f691374fdcd36fe5cfc51346f22c51be13887df1146e156e"
+source = "git+https://github.com/pamburus/wildflower.git#9f2ac078689b735bec7e07fbd39cb156237a20a3"
 dependencies = [
  "stable_deref_trait",
  "yoke",
