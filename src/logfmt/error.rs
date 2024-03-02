@@ -20,7 +20,12 @@ pub enum Error {
     ExpectedMapEnd,
     ExpectedEnum,
     Syntax,
+    InvalidEscape,
+    LoneLeadingSurrogateInHexEscape,
+    UnexpectedEndOfHexEscape,
+    InvalidUnicodeCodePoint,
     TrailingCharacters,
+    UnexpectedControlCharacter,
     Custom(String),
 }
 
@@ -41,7 +46,12 @@ impl fmt::Display for Error {
             Self::ExpectedMapEnd => f.write_str("expected map end"),
             Self::ExpectedEnum => f.write_str("expected enum"),
             Self::Syntax => f.write_str("syntax error"),
+            Self::InvalidEscape => f.write_str("invalid escape sequence"),
+            Self::LoneLeadingSurrogateInHexEscape => f.write_str("lone leading surrogate in hex escape"),
+            Self::UnexpectedEndOfHexEscape => f.write_str("unexpected end of hex escape"),
+            Self::InvalidUnicodeCodePoint => f.write_str("invalid unicode code point"),
             Self::TrailingCharacters => f.write_str("trailing characters"),
+            Self::UnexpectedControlCharacter => f.write_str("unexpected control character"),
             Self::Custom(msg) => f.write_str(msg),
         }
     }

@@ -1,4 +1,7 @@
-use std::ops::{AddAssign, MulAssign, Neg};
+use std::{
+    ops::{AddAssign, Deref, MulAssign, Neg},
+    str,
+};
 
 use serde::de::{self, DeserializeSeed, EnumAccess, IntoDeserializer, MapAccess, SeqAccess, VariantAccess, Visitor};
 use serde::Deserialize;
@@ -10,6 +13,7 @@ pub struct Deserializer<'de> {
     // This string starts with the input data and characters are truncated off
     // the beginning as data is parsed.
     input: &'de str,
+    scratch: Vec<u8>,
 }
 
 impl<'de> Deserializer<'de> {
@@ -18,7 +22,10 @@ impl<'de> Deserializer<'de> {
     // `serde_json::from_str(...)` while advanced use cases that require a
     // deserializer can make one with `serde_json::Deserializer::from_str(...)`.
     pub fn from_str(input: &'de str) -> Self {
-        Deserializer { input }
+        Deserializer {
+            input,
+            scratch: Vec::new(),
+        }
     }
 }
 
@@ -108,22 +115,137 @@ impl<'de> Deserializer<'de> {
         unimplemented!()
     }
 
-    // Parse a string until the next '"' character.
-    //
-    // Makes no attempt to handle escape sequences. What did you expect? This is
-    // example code!
-    fn parse_string(&mut self) -> Result<&'de str> {
-        if self.next_char()? != '"' {
-            return Err(Error::ExpectedString);
+    fn parse_string<'s>(&'s mut self) -> Result<Reference<'de, 's, str>> {
+        if self.peek_char()? != '"' {
+            let (i, w) = match self.input.find(' ') {
+                Some(len) => (len, 1),
+                None => (self.input.len(), 0),
+            };
+            let s = &self.input[..i];
+            self.input = &self.input[i + w..];
+            return Ok(Reference::Borrowed(s));
         }
-        match self.input.find('"') {
-            Some(len) => {
-                let s = &self.input[..len];
-                self.input = &self.input[len + 1..];
-                Ok(s)
+
+        self.next_char()?;
+        self.scratch.clear();
+        let mut start = 0;
+        let mut i = 0;
+        let slice = self.input.as_bytes();
+
+        loop {
+            while i < slice.len() && !ESCAPE[slice[i] as usize] {
+                i += 1;
             }
-            None => Err(Error::Eof),
+            if i == slice.len() {
+                return Err(Error::Eof);
+            }
+            match slice[i] {
+                b'"' => {
+                    if self.scratch.is_empty() {
+                        let borrowed = &self.input[start..i];
+                        self.input = &self.input[i + 1..];
+                        return Ok(Reference::Borrowed(borrowed));
+                    }
+
+                    self.scratch.extend_from_slice(&slice[start..i]);
+                    self.input = &self.input[i + 1..];
+                    return Ok(Reference::Copied(unsafe { str::from_utf8_unchecked(&self.scratch) }));
+                }
+                b'\\' => {
+                    self.scratch.extend_from_slice(&slice[start..i]);
+                    i += 1;
+                    self.parse_escape()?;
+                    start = i;
+                }
+                _ => {
+                    self.input = &self.input[i + 1..];
+                    return Err(Error::UnexpectedControlCharacter);
+                }
+            }
         }
+    }
+
+    fn parse_escape(&mut self) -> Result<()> {
+        let ch = self.next_char()?;
+
+        match ch {
+            '"' => self.scratch.push(b'"'),
+            '\\' => self.scratch.push(b'\\'),
+            '/' => self.scratch.push(b'/'),
+            'b' => self.scratch.push(b'\x08'),
+            'f' => self.scratch.push(b'\x0c'),
+            'n' => self.scratch.push(b'\n'),
+            'r' => self.scratch.push(b'\r'),
+            't' => self.scratch.push(b'\t'),
+            'u' => {
+                let c = match self.decode_hex_escape()? {
+                    0xDC00..=0xDFFF => {
+                        return Err(Error::LoneLeadingSurrogateInHexEscape);
+                    }
+
+                    n1 @ 0xD800..=0xDBFF => {
+                        if self.peek_char()? == '\\' {
+                            self.next_char()?;
+                        } else {
+                            return Err(Error::UnexpectedEndOfHexEscape);
+                        }
+
+                        if self.peek_char()? == 'u' {
+                            self.next_char()?;
+                        } else {
+                            return Err(Error::UnexpectedEndOfHexEscape);
+                        }
+
+                        let n2 = self.decode_hex_escape()?;
+
+                        if n2 < 0xDC00 || n2 > 0xDFFF {
+                            return Err(Error::LoneLeadingSurrogateInHexEscape);
+                        }
+
+                        let n = (((n1 - 0xD800) as u32) << 10 | (n2 - 0xDC00) as u32) + 0x1_0000;
+
+                        match char::from_u32(n) {
+                            Some(c) => c,
+                            None => {
+                                return Err(Error::InvalidUnicodeCodePoint);
+                            }
+                        }
+                    }
+
+                    n => char::from_u32(n as u32).unwrap(),
+                };
+
+                self.scratch.extend_from_slice(c.encode_utf8(&mut [0_u8; 4]).as_bytes());
+            }
+            _ => {
+                return Err(Error::InvalidEscape);
+            }
+        }
+
+        Ok(())
+    }
+
+    fn decode_hex_escape(&mut self) -> Result<u16> {
+        if self.input.len() < 4 {
+            self.input = &self.input[self.input.len()..];
+            return Err(Error::Eof);
+        }
+
+        let mut n = 0;
+        for i in 0..4 {
+            let ch = decode_hex_val(self.input.as_bytes()[i]);
+            match ch {
+                None => {
+                    self.input = &self.input[i..];
+                    return Err(Error::InvalidEscape);
+                }
+                Some(val) => {
+                    n = (n << 4) + val;
+                }
+            }
+        }
+        self.input = &self.input[4..];
+        Ok(n)
     }
 }
 
@@ -260,7 +382,10 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
     where
         V: Visitor<'de>,
     {
-        visitor.visit_borrowed_str(self.parse_string()?)
+        match self.parse_string()? {
+            Reference::Borrowed(b) => visitor.visit_borrowed_str(b),
+            Reference::Copied(c) => visitor.visit_str(c),
+        }
     }
 
     fn deserialize_string<V>(self, visitor: V) -> Result<V::Value>
@@ -625,7 +750,89 @@ impl<'de, 'a> VariantAccess<'de> for Enum<'a, 'de> {
     }
 }
 
-////////////////////////////////////////////////////////////////////////////////
+pub enum Reference<'b, 'c, T>
+where
+    T: ?Sized + 'static,
+{
+    Borrowed(&'b T),
+    Copied(&'c T),
+}
+
+impl<'b, 'c, T> Deref for Reference<'b, 'c, T>
+where
+    T: ?Sized + 'static,
+{
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        match *self {
+            Reference::Borrowed(b) => b,
+            Reference::Copied(c) => c,
+        }
+    }
+}
+
+fn decode_hex_val(val: u8) -> Option<u16> {
+    let n = HEX[val as usize] as u16;
+    if n == 255 {
+        None
+    } else {
+        Some(n)
+    }
+}
+
+// Lookup table of bytes that must be escaped. A value of true at index i means
+// that byte i requires an escape sequence in the input.
+static ESCAPE: [bool; 256] = {
+    const CT: bool = true; // control character \x00..=\x1F
+    const QU: bool = true; // quote \x22
+    const BS: bool = true; // backslash \x5C
+    const __: bool = false; // allow unescaped
+    [
+        //   1   2   3   4   5   6   7   8   9   A   B   C   D   E   F
+        CT, CT, CT, CT, CT, CT, CT, CT, CT, CT, CT, CT, CT, CT, CT, CT, // 0
+        CT, CT, CT, CT, CT, CT, CT, CT, CT, CT, CT, CT, CT, CT, CT, CT, // 1
+        __, __, QU, __, __, __, __, __, __, __, __, __, __, __, __, __, // 2
+        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // 3
+        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // 4
+        __, __, __, __, __, __, __, __, __, __, __, __, BS, __, __, __, // 5
+        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // 6
+        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // 7
+        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // 8
+        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // 9
+        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // A
+        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // B
+        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // C
+        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // D
+        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // E
+        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // F
+    ]
+};
+
+static HEX: [u8; 256] = {
+    const __: u8 = 255; // not a hex digit
+    [
+        //   1   2   3   4   5   6   7   8   9   A   B   C   D   E   F
+        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // 0
+        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // 1
+        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // 2
+        00, 01, 02, 03, 04, 05, 06, 07, 08, 09, __, __, __, __, __, __, // 3
+        __, 10, 11, 12, 13, 14, 15, __, __, __, __, __, __, __, __, __, // 4
+        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // 5
+        __, 10, 11, 12, 13, 14, 15, __, __, __, __, __, __, __, __, __, // 6
+        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // 7
+        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // 8
+        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // 9
+        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // A
+        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // B
+        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // C
+        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // D
+        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // E
+        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // F
+    ]
+};
+
+// ---
 
 #[test]
 fn test_struct() {
