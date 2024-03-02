@@ -13,6 +13,7 @@ pub struct Deserializer<'de> {
     // This string starts with the input data and characters are truncated off
     // the beginning as data is parsed.
     input: &'de str,
+    index: usize,
     scratch: Vec<u8>,
 }
 
@@ -24,6 +25,7 @@ impl<'de> Deserializer<'de> {
     pub fn from_str(input: &'de str) -> Self {
         Deserializer {
             input,
+            index: 0,
             scratch: Vec::new(),
         }
     }
@@ -40,7 +42,7 @@ where
 {
     let mut deserializer = Deserializer::from_str(s);
     let t = T::deserialize(&mut deserializer)?;
-    if deserializer.input.is_empty() {
+    if deserializer.tail().is_empty() {
         Ok(t)
     } else {
         Err(Error::TrailingCharacters)
@@ -53,23 +55,27 @@ where
 impl<'de> Deserializer<'de> {
     // Look at the first character in the input without consuming it.
     fn peek_char(&mut self) -> Result<char> {
-        self.input.chars().next().ok_or(Error::Eof)
+        if let Some(ch) = self.tail().chars().next() {
+            Ok(ch)
+        } else {
+            Err(Error::Eof)
+        }
     }
 
     // Consume the first character in the input.
     fn next_char(&mut self) -> Result<char> {
         let ch = self.peek_char()?;
-        self.input = &self.input[ch.len_utf8()..];
+        self.advance(ch.len_utf8());
         Ok(ch)
     }
 
     // Parse the JSON identifier `true` or `false`.
     fn parse_bool(&mut self) -> Result<bool> {
-        if self.input.starts_with("true") {
-            self.input = &self.input["true".len()..];
+        if self.tail().starts_with("true") {
+            self.advance(4);
             Ok(true)
-        } else if self.input.starts_with("false") {
-            self.input = &self.input["false".len()..];
+        } else if self.tail().starts_with("false") {
+            self.advance(5);
             Ok(false)
         } else {
             Err(Error::ExpectedBoolean)
@@ -92,9 +98,9 @@ impl<'de> Deserializer<'de> {
             }
         };
         loop {
-            match self.input.chars().next() {
+            match self.tail().chars().next() {
                 Some(ch @ '0'..='9') => {
-                    self.input = &self.input[1..];
+                    self.advance(1);
                     int *= T::from(10);
                     int += T::from(ch as u8 - b'0');
                 }
@@ -117,48 +123,48 @@ impl<'de> Deserializer<'de> {
 
     fn parse_string<'s>(&'s mut self) -> Result<Reference<'de, 's, str>> {
         if self.peek_char()? != '"' {
-            let (i, w) = match self.input.find(' ') {
-                Some(len) => (len, 1),
-                None => (self.input.len(), 0),
+            let i = match self.tail().find(|c| c == ' ' || c == '=') {
+                Some(len) => len,
+                None => self.input.len(),
             };
-            let s = &self.input[..i];
-            self.input = &self.input[i + w..];
+            let s = &self.tail()[..i];
+            self.advance(i);
             return Ok(Reference::Borrowed(s));
         }
 
         self.next_char()?;
         self.scratch.clear();
-        let mut start = 0;
-        let mut i = 0;
-        let slice = self.input.as_bytes();
+        let mut start = self.index;
 
         loop {
-            while i < slice.len() && !ESCAPE[slice[i] as usize] {
-                i += 1;
+            while self.index < self.input.len() && !ESCAPE[self.input.as_bytes()[self.index] as usize] {
+                self.advance(1);
             }
-            if i == slice.len() {
+            if self.index == self.input.len() {
                 return Err(Error::Eof);
             }
-            match slice[i] {
+            match self.input.as_bytes()[self.index] {
                 b'"' => {
                     if self.scratch.is_empty() {
-                        let borrowed = &self.input[start..i];
-                        self.input = &self.input[i + 1..];
+                        let borrowed = &self.input[start..self.index];
+                        self.advance(1);
                         return Ok(Reference::Borrowed(borrowed));
                     }
 
-                    self.scratch.extend_from_slice(&slice[start..i]);
-                    self.input = &self.input[i + 1..];
+                    self.scratch
+                        .extend_from_slice(&self.input.as_bytes()[start..self.index]);
+                    self.advance(1);
                     return Ok(Reference::Copied(unsafe { str::from_utf8_unchecked(&self.scratch) }));
                 }
                 b'\\' => {
-                    self.scratch.extend_from_slice(&slice[start..i]);
-                    i += 1;
+                    self.scratch
+                        .extend_from_slice(&self.input.as_bytes()[start..self.index]);
+                    self.advance(1);
                     self.parse_escape()?;
-                    start = i;
+                    start = self.index;
                 }
                 _ => {
-                    self.input = &self.input[i + 1..];
+                    self.advance(1);
                     return Err(Error::UnexpectedControlCharacter);
                 }
             }
@@ -246,6 +252,16 @@ impl<'de> Deserializer<'de> {
         }
         self.input = &self.input[4..];
         Ok(n)
+    }
+
+    #[inline]
+    fn tail(&self) -> &'de str {
+        &self.input[self.index..]
+    }
+
+    #[inline]
+    fn advance(&mut self, n: usize) {
+        self.index += n;
     }
 }
 
@@ -472,7 +488,7 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
         // Parse the opening bracket of the sequence.
         if self.next_char()? == '[' {
             // Give the visitor access to each element of the sequence.
-            let value = visitor.visit_seq(CommaSeparated::new(self))?;
+            let value = visitor.visit_seq(SpaceSeparated::new(self))?;
             // Parse the closing bracket of the sequence.
             if self.next_char()? == ']' {
                 Ok(value)
@@ -513,9 +529,9 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
         V: Visitor<'de>,
     {
         // Parse the opening brace of the map.
-        if self.next_char()? == '{' {
+        if self.peek_char()? == '{' {
             // Give the visitor access to each entry of the map.
-            let value = visitor.visit_map(CommaSeparated::new(self))?;
+            let value = visitor.visit_map(SpaceSeparated::new(self))?;
             // Parse the closing brace of the map.
             if self.next_char()? == '}' {
                 Ok(value)
@@ -523,7 +539,7 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
                 Err(Error::ExpectedMapEnd)
             }
         } else {
-            Err(Error::ExpectedMap)
+            Ok(visitor.visit_map(SpaceSeparated::new(self))?)
         }
     }
 
@@ -601,23 +617,20 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
     }
 }
 
-// In order to handle commas correctly when deserializing a JSON array or map,
-// we need to track whether we are on the first element or past the first
-// element.
-struct CommaSeparated<'a, 'de: 'a> {
+struct SpaceSeparated<'a, 'de: 'a> {
     de: &'a mut Deserializer<'de>,
     first: bool,
 }
 
-impl<'a, 'de> CommaSeparated<'a, 'de> {
+impl<'a, 'de> SpaceSeparated<'a, 'de> {
     fn new(de: &'a mut Deserializer<'de>) -> Self {
-        CommaSeparated { de, first: true }
+        SpaceSeparated { de, first: true }
     }
 }
 
 // `SeqAccess` is provided to the `Visitor` to give it the ability to iterate
 // through elements of the sequence.
-impl<'de, 'a> SeqAccess<'de> for CommaSeparated<'a, 'de> {
+impl<'de, 'a> SeqAccess<'de> for SpaceSeparated<'a, 'de> {
     type Error = Error;
 
     fn next_element_seed<T>(&mut self, seed: T) -> Result<Option<T::Value>>
@@ -629,8 +642,8 @@ impl<'de, 'a> SeqAccess<'de> for CommaSeparated<'a, 'de> {
             return Ok(None);
         }
         // Comma is required before every element except the first.
-        if !self.first && self.de.next_char()? != ',' {
-            return Err(Error::ExpectedArrayComma);
+        if !self.first && self.de.next_char()? != ' ' {
+            return Err(Error::ExpectedArrayDelimiter);
         }
         self.first = false;
         // Deserialize an array element.
@@ -640,7 +653,7 @@ impl<'de, 'a> SeqAccess<'de> for CommaSeparated<'a, 'de> {
 
 // `MapAccess` is provided to the `Visitor` to give it the ability to iterate
 // through entries of the map.
-impl<'de, 'a> MapAccess<'de> for CommaSeparated<'a, 'de> {
+impl<'de, 'a> MapAccess<'de> for SpaceSeparated<'a, 'de> {
     type Error = Error;
 
     fn next_key_seed<K>(&mut self, seed: K) -> Result<Option<K::Value>>
@@ -648,12 +661,12 @@ impl<'de, 'a> MapAccess<'de> for CommaSeparated<'a, 'de> {
         K: DeserializeSeed<'de>,
     {
         // Check if there are no more entries.
-        if self.de.peek_char()? == '}' {
+        if self.de.tail().len() == 0 || self.de.peek_char()? == '}' {
             return Ok(None);
         }
         // Comma is required before every entry except the first.
-        if !self.first && self.de.next_char()? != ',' {
-            return Err(Error::ExpectedMapComma);
+        if !self.first && self.de.next_char()? != ' ' {
+            return Err(Error::ExpectedMapDelimiter);
         }
         self.first = false;
         // Deserialize a map key.
@@ -667,8 +680,8 @@ impl<'de, 'a> MapAccess<'de> for CommaSeparated<'a, 'de> {
         // It doesn't make a difference whether the colon is parsed at the end
         // of `next_key_seed` or at the beginning of `next_value_seed`. In this
         // case the code is a bit simpler having it here.
-        if self.de.next_char()? != ':' {
-            return Err(Error::ExpectedMapColon);
+        if self.de.next_char()? != '=' {
+            return Err(Error::ExpectedMapKeyValueDelimiter);
         }
         // Deserialize a map value.
         seed.deserialize(&mut *self.de)
@@ -703,10 +716,10 @@ impl<'de, 'a> EnumAccess<'de> for Enum<'a, 'de> {
         // the key of the map.
         let val = seed.deserialize(&mut *self.de)?;
         // Parse the colon separating map key from value.
-        if self.de.next_char()? == ':' {
+        if self.de.next_char()? == '=' {
             Ok((val, self))
         } else {
-            Err(Error::ExpectedMapColon)
+            Err(Error::ExpectedMapKeyValueDelimiter)
         }
     }
 }
@@ -839,13 +852,23 @@ fn test_struct() {
     #[derive(Deserialize, PartialEq, Debug)]
     struct Test {
         int: u32,
-        seq: Vec<String>,
+        str1: String,
+        str2: String,
     }
 
-    let j = r#"{"int":1,"seq":["a","b"]}"#;
+    let j = r#"int=42 str1=a str2="b c""#;
     let expected = Test {
-        int: 1,
-        seq: vec!["a".to_owned(), "b".to_owned()],
+        int: 42,
+        str1: "a".to_string(),
+        str2: "b c".to_string(),
+    };
+    assert_eq!(expected, from_str(j).unwrap());
+
+    let j = r#"int=0 str1="b=c" str2="a\nb""#;
+    let expected = Test {
+        int: 0,
+        str1: "b=c".to_string(),
+        str2: "a\nb".to_string(),
     };
     assert_eq!(expected, from_str(j).unwrap());
 }
