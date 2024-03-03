@@ -204,6 +204,7 @@ impl App {
             cache_dir,
             &self.options.fields.settings.predefined,
             self.options.delimiter.clone(),
+            self.options.allow_prefix,
         );
 
         let input_badges = self.input_badges(inputs.iter().map(|x| &x.reference));
@@ -578,6 +579,7 @@ impl App {
                 &self.options.buffer_size,
                 &self.options.max_message_size,
                 &self.options.fields.settings.predefined,
+                &self.options.allow_prefix,
             ),
         )?;
         Ok(hasher.finalize().into())
