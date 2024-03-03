@@ -766,19 +766,19 @@ impl<'a, Formatter: RecordWithSourceFormatter, Filter: RecordFilter> SegmentProc
     where
         O: RecordObserver,
     {
-        for data in self.options.delimiter.clone().into_searcher().split(data) {
-            if data.len() == 0 {
+        for line in self.options.delimiter.clone().into_searcher().split(data) {
+            if line.len() == 0 {
                 continue;
             }
 
             let extra_prefix = if self.options.allow_prefix {
-                data.split(|c| *c == b'{').next().unwrap()
+                line.split(|c| *c == b'{').next().unwrap()
             } else {
                 b""
             };
 
             let xn = extra_prefix.len();
-            let json_data = &data[xn..];
+            let json_data = &line[xn..];
             let stream = json::Deserializer::from_slice(json_data).into_iter::<RawRecord>();
             let mut stream = StreamDeserializerWithOffsets(stream);
             let mut parsed_some = false;
@@ -788,21 +788,27 @@ impl<'a, Formatter: RecordWithSourceFormatter, Filter: RecordFilter> SegmentProc
                     buf.push(b'\n');
                 }
                 parsed_some = true;
-                let record = self.parser.parse(record).with_prefix(extra_prefix);
+                let record = self.parser.parse(record);
                 if record.matches(&self.filter) {
                     let begin = buf.len();
                     buf.extend(prefix.as_bytes());
+                    buf.extend(extra_prefix);
+                    if let Some(back) = extra_prefix.last() {
+                        if *back != b' ' {
+                            buf.push(b' ');
+                        }
+                    }
                     self.formatter
-                        .format_record(buf, record.with_source(&data[offsets.start..xn + offsets.end]));
+                        .format_record(buf, record.with_source(&line[xn + offsets.start..xn + offsets.end]));
                     let end = buf.len();
                     observer.observe_record(&record, begin..end);
                     produced_some = true;
                 }
             }
             let remainder = if parsed_some {
-                &data[xn + stream.0.byte_offset()..]
+                &line[xn + stream.0.byte_offset()..]
             } else {
-                data
+                line
             };
             if remainder.len() != 0 && self.show_unparsed() {
                 if !parsed_some {

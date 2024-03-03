@@ -89,15 +89,6 @@ impl RecordFormatter {
     }
 
     pub fn format_record(&self, buf: &mut Buf, rec: &model::Record) {
-        if let Some(prefix) = rec.prefix {
-            if prefix.len() != 0 {
-                buf.extend_from_slice(prefix);
-                if prefix[prefix.len() - 1] != b' ' {
-                    buf.push(b' ');
-                }
-            }
-        }
-
         self.theme.apply(buf, &rec.level, |s| {
             //
             // time
@@ -507,7 +498,6 @@ mod tests {
     fn test_nested_objects() {
         assert_eq!(
             format(&Record {
-                prefix: None,
                 ts: Some(Timestamp::new("2000-01-02T03:04:05.123Z", None)),
                 message: Some(RawValue::from_string(r#""tm""#.into()).unwrap().as_ref()),
                 level: Some(Level::Debug),
