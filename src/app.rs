@@ -32,7 +32,9 @@ use crate::formatting::{RawRecordFormatter, RecordFormatter, RecordWithSourceFor
 use crate::fsmon::{self, EventKind};
 use crate::index::{Indexer, Timestamp};
 use crate::input::{BlockLine, Input, InputHolder, InputReference};
-use crate::model::{Filter, Parser, ParserSettings, RawRecord, Record, RecordFilter, RecordWithSourceConstructor};
+use crate::model::{
+    Filter, LogfmtRawRecord, Parser, ParserSettings, RawRecord, Record, RecordFilter, RecordWithSourceConstructor,
+};
 use crate::query::Query;
 use crate::scanning::{BufFactory, Delimit, Delimiter, Scanner, SearchExt, Segment, SegmentBuf, SegmentBufFactory};
 use crate::serdex::StreamDeserializerWithOffsets;
@@ -778,8 +780,31 @@ impl<'a, Formatter: RecordWithSourceFormatter, Filter: RecordFilter> SegmentProc
             };
 
             let xn = extra_prefix.len();
-            let json_data = &line[xn..];
-            let stream = json::Deserializer::from_slice(json_data).into_iter::<RawRecord>();
+            let data = &line[xn..];
+
+            if data.first().map(|&x| x == b'{') == Some(false) {
+                let Some(record) = crate::logfmt::from_str::<LogfmtRawRecord>(std::str::from_utf8(line).unwrap()).ok()
+                else {
+                    if self.show_unparsed() {
+                        buf.extend(prefix.as_bytes());
+                        buf.extend_from_slice(line);
+                        buf.push(b'\n');
+                    }
+                    continue;
+                };
+                let record = self.parser.parse(record.0);
+                if record.matches(&self.filter) {
+                    let begin = buf.len();
+                    buf.extend(prefix.as_bytes());
+                    self.formatter.format_record(buf, record.with_source(&line));
+                    let end = buf.len();
+                    observer.observe_record(&record, begin..end);
+                    buf.push(b'\n');
+                }
+                continue;
+            }
+
+            let stream = json::Deserializer::from_slice(data).into_iter::<RawRecord>();
             let mut stream = StreamDeserializerWithOffsets(stream);
             let mut parsed_some = false;
             let mut produced_some = false;
@@ -793,10 +818,8 @@ impl<'a, Formatter: RecordWithSourceFormatter, Filter: RecordFilter> SegmentProc
                     let begin = buf.len();
                     buf.extend(prefix.as_bytes());
                     buf.extend(extra_prefix);
-                    if let Some(back) = extra_prefix.last() {
-                        if *back != b' ' {
-                            buf.push(b' ');
-                        }
+                    if extra_prefix.last().map(|&x| x == b' ') == Some(false) {
+                        buf.push(b' ');
                     }
                     self.formatter
                         .format_record(buf, record.with_source(&line[xn + offsets.start..xn + offsets.end]));

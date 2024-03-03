@@ -18,6 +18,7 @@ use wildflower::Pattern;
 use crate::error::{Error, Result};
 use crate::fmtx::Push;
 use crate::level;
+use crate::logfmt;
 use crate::settings::PredefinedFields;
 use crate::timestamp::Timestamp;
 use crate::types::FieldKind;
@@ -31,6 +32,7 @@ pub use level::Level;
 #[derive(Clone, Copy)]
 pub enum RawValue<'a> {
     Json(&'a str),
+    Logfmt(&'a str),
 }
 
 impl<'a> RawValue<'a> {
@@ -43,12 +45,19 @@ impl<'a> RawValue<'a> {
                     return ValueKind::Null;
                 }
                 match bytes[0] {
-                    b'"' => ValueKind::String,
+                    b'"' => ValueKind::QuotedString,
                     b'0'..=b'9' | b'-' | b'+' | b'.' => ValueKind::Number,
                     b'{' => ValueKind::Object,
                     b'[' => ValueKind::Array,
                     b't' | b'f' => ValueKind::Boolean,
                     _ => ValueKind::Null,
+                }
+            }
+            Self::Logfmt(value) => {
+                if !value.is_empty() && value.as_bytes()[0] == b'"' {
+                    ValueKind::QuotedString
+                } else {
+                    ValueKind::String
                 }
             }
         }
@@ -61,6 +70,7 @@ impl<'a> RawValue<'a> {
                 r#""""# | "null" | "{}" | "[]" => false,
                 _ => true,
             },
+            Self::Logfmt(value) => value.is_empty(),
         }
     }
 
@@ -68,6 +78,7 @@ impl<'a> RawValue<'a> {
     pub fn raw_str(&self) -> &'a str {
         match self {
             Self::Json(value) => value,
+            Self::Logfmt(value) => value,
         }
     }
 
@@ -75,6 +86,18 @@ impl<'a> RawValue<'a> {
     pub fn format_as_json_str<B: Push<u8>>(&self, buf: &mut B) {
         match self {
             Self::Json(value) => buf.extend_from_slice(value.as_bytes()),
+            Self::Logfmt(value) => {
+                if value.is_empty() {
+                    buf.push(b'"');
+                    buf.push(b'"');
+                } else if value.as_bytes()[0] == b'"' {
+                    buf.extend_from_slice(value.as_bytes());
+                } else {
+                    buf.push(b'"');
+                    buf.extend_from_slice(value.as_bytes());
+                    buf.push(b'"');
+                }
+            }
         }
     }
 
@@ -85,6 +108,9 @@ impl<'a> RawValue<'a> {
                 let mut reader = StrRead::new(&value[1..]);
                 reader.parse_str_raw(buf).unwrap();
             }
+            Self::Logfmt(value) => {
+                buf.extend_from_slice(value.as_bytes());
+            }
         }
     }
 
@@ -92,6 +118,7 @@ impl<'a> RawValue<'a> {
     pub fn parse_object(&self) -> Result<Object<'a>> {
         match self {
             Self::Json(value) => json::from_str::<Object>(value).map_err(Error::JsonParseError),
+            Self::Logfmt(value) => logfmt::from_str::<Object>(value).map_err(Error::LogfmtParseError),
         }
     }
 
@@ -99,6 +126,7 @@ impl<'a> RawValue<'a> {
     pub fn parse_array<const N: usize>(&self) -> Result<Array<'a, N>> {
         match self {
             Self::Json(value) => json::from_str::<Array<N>>(value).map_err(Error::JsonParseError),
+            Self::Logfmt(value) => logfmt::from_str::<Array<N>>(value).map_err(Error::LogfmtParseError),
         }
     }
 
@@ -106,6 +134,7 @@ impl<'a> RawValue<'a> {
     pub fn parse<T: Deserialize<'a>>(&self) -> Result<T> {
         match self {
             Self::Json(value) => json::from_str(value).map_err(Error::JsonParseError),
+            Self::Logfmt(value) => logfmt::from_str(value).map_err(Error::LogfmtParseError),
         }
     }
 
@@ -121,6 +150,7 @@ impl<'a> RawValue<'a> {
                     _ => false,
                 }
             }
+            Self::Logfmt(_) => false,
         }
     }
 
@@ -133,6 +163,7 @@ impl<'a> RawValue<'a> {
                 [a, b, c] => (a - b'0') * 100 + (b - b'0') * 10 + (c - b'0'),
                 _ => 0,
             },
+            Self::Logfmt(_) => 0,
         }
     }
 }
@@ -144,11 +175,19 @@ impl<'a> From<&'a json::value::RawValue> for RawValue<'a> {
     }
 }
 
+impl<'a> From<&'a logfmt::raw::RawValue> for RawValue<'a> {
+    #[inline(always)]
+    fn from(value: &'a logfmt::raw::RawValue) -> Self {
+        Self::Logfmt(value.get())
+    }
+}
+
 // ---
 
 #[derive(Clone, Debug, Copy, PartialEq, Eq)]
 pub enum ValueKind {
     String,
+    QuotedString,
     Number,
     Object,
     Array,
@@ -696,7 +735,7 @@ impl<'de: 'a, 'a> Deserialize<'de> for RawRecord<'a> {
     where
         D: Deserializer<'de>,
     {
-        Ok(deserializer.deserialize_map(RawRecordVisitor::new())?)
+        Ok(deserializer.deserialize_map(RawRecordVisitor::<json::value::RawValue>::new())?)
     }
 }
 
@@ -753,14 +792,16 @@ where
 
 // ---
 
-pub struct LogfmtRawRecord<'a>(RawRecord<'a>);
+pub struct LogfmtRawRecord<'a>(pub RawRecord<'a>);
 
 impl<'de: 'a, 'a> Deserialize<'de> for LogfmtRawRecord<'a> {
     fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
     where
         D: Deserializer<'de>,
     {
-        Ok(Self(deserializer.deserialize_map(RawRecordVisitor::new())?))
+        Ok(Self(
+            deserializer.deserialize_map(RawRecordVisitor::<logfmt::raw::RawValue>::new())?,
+        ))
     }
 }
 
@@ -1077,7 +1118,7 @@ impl RecordFilter for FieldFilter {
                     match self.match_custom_key(*k) {
                         None => {}
                         Some(KeyMatch::Full) => {
-                            let escaped = v.kind() == ValueKind::String;
+                            let escaped = v.kind() == ValueKind::QuotedString;
                             if self.match_value(Some(v.raw_str()), escaped) {
                                 return true;
                             }
