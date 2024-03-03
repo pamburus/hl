@@ -21,7 +21,6 @@ use crossbeam_channel::{self as channel, Receiver, RecvError, RecvTimeoutError, 
 use crossbeam_utils::thread;
 use itertools::{izip, Itertools};
 use platform_dirs::AppDirs;
-use serde_json as json;
 use sha2::{Digest, Sha256};
 use std::num::{NonZeroU32, NonZeroUsize};
 
@@ -35,7 +34,6 @@ use crate::input::{BlockLine, Input, InputHolder, InputReference};
 use crate::model::{Filter, Parser, ParserSettings, RawRecord, Record, RecordFilter, RecordWithSourceConstructor};
 use crate::query::Query;
 use crate::scanning::{BufFactory, Delimit, Delimiter, Scanner, SearchExt, Segment, SegmentBuf, SegmentBufFactory};
-use crate::serdex::StreamDeserializerWithOffsets;
 use crate::settings::{Fields, Formatting};
 use crate::theme::{Element, StylingPush, Theme};
 use crate::timezone::Tz;
@@ -206,6 +204,7 @@ impl App {
             cache_dir,
             &self.options.fields.settings.predefined,
             self.options.delimiter.clone(),
+            self.options.allow_prefix,
         );
 
         let input_badges = self.input_badges(inputs.iter().map(|x| &x.reference));
@@ -580,6 +579,7 @@ impl App {
                 &self.options.buffer_size,
                 &self.options.max_message_size,
                 &self.options.fields.settings.predefined,
+                &self.options.allow_prefix,
             ),
         )?;
         Ok(hasher.finalize().into())
@@ -771,45 +771,31 @@ impl<'a, Formatter: RecordWithSourceFormatter, Filter: RecordFilter> SegmentProc
                 continue;
             }
 
-            let extra_prefix = if self.options.allow_prefix {
-                line.split(|c| *c == b'{').next().unwrap()
-            } else {
-                b""
-            };
-
-            let xn = extra_prefix.len();
-            let json_data = &line[xn..];
-            let stream = json::Deserializer::from_slice(json_data).into_iter::<RawRecord>();
-            let mut stream = StreamDeserializerWithOffsets(stream);
+            let mut stream = RawRecord::parser().allow_prefix(self.options.allow_prefix).parse(line);
             let mut parsed_some = false;
             let mut produced_some = false;
-            while let Some(Ok((record, offsets))) = stream.next() {
+            let mut last_offset = 0;
+            while let Some(Ok(ar)) = stream.next() {
+                last_offset = ar.offsets.end;
                 if parsed_some {
                     buf.push(b'\n');
                 }
                 parsed_some = true;
-                let record = self.parser.parse(record);
+                let record = self.parser.parse(ar.record);
                 if record.matches(&self.filter) {
                     let begin = buf.len();
                     buf.extend(prefix.as_bytes());
-                    buf.extend(extra_prefix);
-                    if let Some(back) = extra_prefix.last() {
-                        if *back != b' ' {
-                            buf.push(b' ');
-                        }
+                    buf.extend(ar.prefix);
+                    if ar.prefix.last().map(|&x| x == b' ') == Some(false) {
+                        buf.push(b' ');
                     }
-                    self.formatter
-                        .format_record(buf, record.with_source(&line[xn + offsets.start..xn + offsets.end]));
+                    self.formatter.format_record(buf, record.with_source(ar.source));
                     let end = buf.len();
                     observer.observe_record(&record, begin..end);
                     produced_some = true;
                 }
             }
-            let remainder = if parsed_some {
-                &line[xn + stream.0.byte_offset()..]
-            } else {
-                line
-            };
+            let remainder = if parsed_some { &line[last_offset..] } else { line };
             if remainder.len() != 0 && self.show_unparsed() {
                 if !parsed_some {
                     buf.extend(prefix.as_bytes());
