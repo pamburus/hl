@@ -1,5 +1,5 @@
 // std imports
-use std::cmp::{Reverse, max};
+use std::cmp::{max, Reverse};
 use std::collections::BTreeMap;
 use std::convert::{TryFrom, TryInto};
 use std::fs;
@@ -9,7 +9,7 @@ use std::ops::Range;
 use std::path::PathBuf;
 use std::rc::Rc;
 use std::sync::Arc;
-use std::time::{Duration,Instant};
+use std::time::{Duration, Instant};
 
 // unix-only std imports
 #[cfg(unix)]
@@ -17,7 +17,7 @@ use std::os::unix::fs::MetadataExt;
 
 // third-party imports
 use closure::closure;
-use crossbeam_channel::{self as channel, Receiver, RecvError, Sender, RecvTimeoutError};
+use crossbeam_channel::{self as channel, Receiver, RecvError, RecvTimeoutError, Sender};
 use crossbeam_utils::thread;
 use itertools::{izip, Itertools};
 use platform_dirs::AppDirs;
@@ -26,14 +26,12 @@ use sha2::{Digest, Sha256};
 use std::num::{NonZeroU32, NonZeroUsize};
 
 // local imports
-use crate::{error::*, QueryNone};
 use crate::datefmt::{DateTimeFormat, DateTimeFormatter};
 use crate::fmtx::aligned_left;
-use crate::formatting::{RecordFormatter, RecordWithSourceFormatter, RawRecordFormatter};
+use crate::formatting::{RawRecordFormatter, RecordFormatter, RecordWithSourceFormatter};
 use crate::fsmon::{self, EventKind};
-use crate::IncludeExcludeKeyFilter;
 use crate::index::{Indexer, Timestamp};
-use crate::input::{BlockLine, InputHolder, InputReference, Input};
+use crate::input::{BlockLine, Input, InputHolder, InputReference};
 use crate::model::{Filter, Parser, ParserSettings, RawRecord, Record, RecordFilter, RecordWithSourceConstructor};
 use crate::query::Query;
 use crate::scanning::{BufFactory, Delimit, Delimiter, Scanner, SearchExt, Segment, SegmentBuf, SegmentBufFactory};
@@ -41,6 +39,8 @@ use crate::serdex::StreamDeserializerWithOffsets;
 use crate::settings::{Fields, Formatting};
 use crate::theme::{Element, StylingPush, Theme};
 use crate::timezone::Tz;
+use crate::IncludeExcludeKeyFilter;
+use crate::{error::*, QueryNone};
 
 // TODO: merge Options to Settings and replace Options with Settings.
 
@@ -72,10 +72,10 @@ pub struct Options {
 }
 
 impl Options {
-    fn filter_and_query<'a>(&'a self) -> Box<dyn RecordFilter +'a> {
+    fn filter_and_query<'a>(&'a self) -> Box<dyn RecordFilter + 'a> {
         match (self.filter.is_empty(), &self.query) {
-            (true, None) =>  Box::new(QueryNone{}),
-            (false, None) =>  Box::new(&self.filter),
+            (true, None) => Box::new(QueryNone {}),
+            (false, None) => Box::new(&self.filter),
             (true, Some(query)) => Box::new(query),
             (false, Some(query)) => Box::new((&self.filter).and(query)),
         }
@@ -108,7 +108,7 @@ impl App {
 
     pub fn run(&self, inputs: Vec<InputHolder>, output: &mut Output) -> Result<()> {
         if self.options.follow {
-            self.follow(inputs.into_iter().map(|x|x.reference).collect(), output)
+            self.follow(inputs.into_iter().map(|x| x.reference).collect(), output)
         } else if self.options.sort {
             self.sort(inputs, output)
         } else {
@@ -257,13 +257,13 @@ impl App {
                             return None;
                         }
                         if let Some((ts_min, ts_max)) = src.stat.ts_min_max {
-                            if let Some(until) = self.options.filter.until  {
+                            if let Some(until) = self.options.filter.until {
                                 if ts_min > until.into() {
                                     return None;
                                 }
                             }
-                            if let Some(since) = self.options.filter.since  {
-                                if ts_max < since.into(){
+                            if let Some(since) = self.options.filter.since {
+                                if ts_max < since.into() {
                                     return None;
                                 }
                             }
@@ -302,15 +302,20 @@ impl App {
                             if line.len() == 0 {
                                 continue;
                             }
-                            processor.process(line.bytes(), &mut buf, "", &mut |record: &Record, location: Range<usize>|{ 
-                                if let Some(ts) = &record.ts {
-                                    if let Some(unix_ts) = ts.unix_utc() {
-                                        items.push((unix_ts.into(), location));
-                                    } else {
-                                        eprintln!("skipped message because timestamp cannot be parsed: {:#?}", ts)
+                            processor.process(
+                                line.bytes(),
+                                &mut buf,
+                                "",
+                                &mut |record: &Record, location: Range<usize>| {
+                                    if let Some(ts) = &record.ts {
+                                        if let Some(unix_ts) = ts.unix_utc() {
+                                            items.push((unix_ts.into(), location));
+                                        } else {
+                                            eprintln!("skipped message because timestamp cannot be parsed: {:#?}", ts)
+                                        }
                                     }
-                                }
-                            });  
+                                },
+                            );
                         }
 
                         let buf = Arc::new(buf);
@@ -407,7 +412,7 @@ impl App {
                 let reader = scope.spawn(closure!(clone sfi, clone txi, |_| -> Result<()> {
                     let scanner = Scanner::new(sfi.clone(), &self.options.delimiter);
                     let mut meta = None;
-                    if let InputReference::File(filename) = &input_ref { 
+                    if let InputReference::File(filename) = &input_ref {
                         meta = Some(fs::metadata(filename)?);
                     }
                     let mut input = Some(input_ref.open_tail(self.options.tail)?);
@@ -494,7 +499,7 @@ impl App {
             let merger = scope.spawn(move |_| -> Result<()> {
                 type Key = (Timestamp, usize, usize, usize); // (ts, input, block, offset)
                 type Line = (Rc<Vec<u8>>, Range<usize>, Instant); // (buf, location, instant)
-               
+
                 let mut window = BTreeMap::<Key,Line>::new();
                 let mut last_ts: Option<Timestamp> = None;
                 let mut prev_ts: Option<Timestamp> = None;
@@ -590,16 +595,18 @@ impl App {
 
     fn formatter(&self) -> Box<dyn RecordWithSourceFormatter> {
         if self.options.raw {
-            Box::new(RawRecordFormatter{})
+            Box::new(RawRecordFormatter {})
         } else {
-            Box::new(RecordFormatter::new(
-                self.options.theme.clone(),
-                DateTimeFormatter::new(self.options.time_format.clone(), self.options.time_zone),
-                self.options.hide_empty_fields,
-                self.options.fields.filter.clone(),
-                self.options.formatting.clone(),
+            Box::new(
+                RecordFormatter::new(
+                    self.options.theme.clone(),
+                    DateTimeFormatter::new(self.options.time_format.clone(), self.options.time_zone),
+                    self.options.hide_empty_fields,
+                    self.options.fields.filter.clone(),
+                    self.options.formatting.clone(),
+                )
+                .with_field_unescaping(!self.options.raw_fields),
             )
-            .with_field_unescaping(!self.options.raw_fields))
         }
     }
 
@@ -701,13 +708,13 @@ impl App {
         Some(result)
     }
 
-    fn new_segment_processor<'a>(&'a self, parser: &'a Parser) -> impl SegmentProcess+'a {
-        let options = SegmentProcessorOptions{
-            allow_prefix: self.options.allow_prefix, 
+    fn new_segment_processor<'a>(&'a self, parser: &'a Parser) -> impl SegmentProcess + 'a {
+        let options = SegmentProcessorOptions {
+            allow_prefix: self.options.allow_prefix,
             allow_unparsed_data: self.options.filter.is_empty() && self.options.query.is_none(),
             delimiter: self.options.delimiter.clone(),
         };
-        
+
         SegmentProcessor::new(parser, self.formatter(), self.options.filter_and_query(), options)
     }
 }
@@ -752,7 +759,9 @@ impl<'a, Formatter: RecordWithSourceFormatter, Filter: RecordFilter> SegmentProc
     }
 }
 
-impl<'a, Formatter: RecordWithSourceFormatter, Filter: RecordFilter> SegmentProcess for SegmentProcessor<'a, Formatter, Filter> {
+impl<'a, Formatter: RecordWithSourceFormatter, Filter: RecordFilter> SegmentProcess
+    for SegmentProcessor<'a, Formatter, Filter>
+{
     fn process<O>(&mut self, data: &[u8], buf: &mut Vec<u8>, prefix: &str, observer: &mut O)
     where
         O: RecordObserver,
@@ -761,13 +770,13 @@ impl<'a, Formatter: RecordWithSourceFormatter, Filter: RecordFilter> SegmentProc
             if data.len() == 0 {
                 continue;
             }
-            
+
             let extra_prefix = if self.options.allow_prefix {
-                data.split(|c|*c==b'{').next().unwrap() 
-            }  else {
-                b""  
+                data.split(|c| *c == b'{').next().unwrap()
+            } else {
+                b""
             };
-            
+
             let xn = extra_prefix.len();
             let json_data = &data[xn..];
             let stream = json::Deserializer::from_slice(json_data).into_iter::<RawRecord>();
@@ -783,14 +792,19 @@ impl<'a, Formatter: RecordWithSourceFormatter, Filter: RecordFilter> SegmentProc
                 if record.matches(&self.filter) {
                     let begin = buf.len();
                     buf.extend(prefix.as_bytes());
-                    self.formatter.format_record(buf, record.with_source(&data[offsets.start..xn+offsets.end]));
+                    self.formatter
+                        .format_record(buf, record.with_source(&data[offsets.start..xn + offsets.end]));
                     let end = buf.len();
                     observer.observe_record(&record, begin..end);
                     produced_some = true;
                 }
             }
-            let remainder = if parsed_some { &data[xn+stream.0.byte_offset()..] } else { data };
-            if remainder.len() != 0 && self.show_unparsed()  {
+            let remainder = if parsed_some {
+                &data[xn + stream.0.byte_offset()..]
+            } else {
+                data
+            };
+            if remainder.len() != 0 && self.show_unparsed() {
                 if !parsed_some {
                     buf.extend(prefix.as_bytes());
                 }
