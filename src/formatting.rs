@@ -216,13 +216,13 @@ impl RecordFormatter {
                 s.element(Element::Message, |s| s.batch(|buf| value.format_as_str(buf)));
             }
             ValueKind::Number => {
-                s.element(Element::Number, |s| s.batch(|buf| value.format_as_json_str(buf)));
+                s.element(Element::Number, |s| s.batch(|buf| value.format_readable(buf)));
             }
             ValueKind::Boolean => {
-                s.element(Element::Boolean, |s| s.batch(|buf| value.format_as_json_str(buf)));
+                s.element(Element::Boolean, |s| s.batch(|buf| value.format_readable(buf)));
             }
             ValueKind::Null => {
-                s.element(Element::Null, |s| s.batch(|buf| value.format_as_json_str(buf)));
+                s.element(Element::Null, |s| s.batch(|buf| value.format_readable(buf)));
             }
             ValueKind::Object => {
                 s.element(Element::Object, |s| {
@@ -358,13 +358,13 @@ impl<'a> FieldFormatter<'a> {
                 });
             }
             ValueKind::Number => {
-                s.element(Element::Number, |s| s.batch(|buf| value.format_as_json_str(buf)));
+                s.element(Element::Number, |s| s.batch(|buf| value.format_readable(buf)));
             }
             ValueKind::Boolean => {
-                s.element(Element::Boolean, |s| s.batch(|buf| value.format_as_json_str(buf)));
+                s.element(Element::Boolean, |s| s.batch(|buf| value.format_readable(buf)));
             }
             ValueKind::Null => {
-                s.element(Element::Null, |s| s.batch(|buf| value.format_as_json_str(buf)));
+                s.element(Element::Null, |s| s.batch(|buf| value.format_readable(buf)));
             }
             ValueKind::Object => {
                 let item = value.parse_object().unwrap();

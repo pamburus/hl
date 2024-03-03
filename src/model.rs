@@ -56,8 +56,31 @@ impl<'a> RawValue<'a> {
                 }
             }
             Self::Logfmt(value) => {
+                let looks_like_number = || {
+                    let mut s = value.get();
+                    let mut n_dots = 0;
+                    if s.starts_with('-') {
+                        s = &s[1..];
+                    }
+                    s.len() < 40
+                        && s.as_bytes().iter().all(|&x| {
+                            if x == b'.' {
+                                n_dots += 1;
+                                n_dots <= 1
+                            } else {
+                                x.is_ascii_digit()
+                            }
+                        })
+                };
+
                 if !value.get().is_empty() && value.get().as_bytes()[0] == b'"' {
                     ValueKind::QuotedString
+                } else if value.get() == "false" || value.get() == "true" {
+                    ValueKind::Boolean
+                } else if value.get() == "null" {
+                    ValueKind::Null
+                } else if looks_like_number() {
+                    ValueKind::Number
                 } else {
                     ValueKind::String
                 }
@@ -114,6 +137,26 @@ impl<'a> RawValue<'a> {
                 logfmt::de::Deserializer::from_str(value.get())
                     .parse_str_to_buf(buf)
                     .unwrap();
+            }
+        }
+    }
+
+    #[inline]
+    pub fn format_readable(&self, buf: &mut Vec<u8>) {
+        match self {
+            Self::Json(value) => {
+                if value.get().as_bytes().first() == Some(&b'"') {
+                    self.format_as_str(buf)
+                } else {
+                    buf.extend_from_slice(value.get().as_bytes());
+                }
+            }
+            Self::Logfmt(value) => {
+                if value.get().as_bytes().first() == Some(&b'"') {
+                    self.format_as_str(buf)
+                } else {
+                    buf.extend_from_slice(value.get().as_bytes());
+                }
             }
         }
     }
