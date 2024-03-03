@@ -865,7 +865,7 @@ impl<'a> RawRecordIterator<'a> for RawRecordLogfmtStream<'a> {
         }
 
         self.done = true;
-        match logfmt::from_str::<LogfmtRawRecord>(std::str::from_utf8(self.line).unwrap()) {
+        match logfmt::from_slice::<LogfmtRawRecord>(self.line) {
             Ok(record) => Some(Ok(AnnotatedRawRecord {
                 prefix: self.prefix,
                 record: record.0,

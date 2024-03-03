@@ -9,13 +9,17 @@ use serde::Deserialize;
 use super::error::{Error, Result};
 
 pub struct Deserializer<'de> {
-    input: &'de str,
+    input: &'de [u8],
     index: usize,
     scratch: Vec<u8>,
 }
 
 impl<'de> Deserializer<'de> {
     pub fn from_str(input: &'de str) -> Self {
+        Self::from_slice(input.as_bytes())
+    }
+
+    pub fn from_slice(input: &'de [u8]) -> Self {
         Deserializer {
             input,
             index: 0,
@@ -28,7 +32,14 @@ pub fn from_str<'a, T>(s: &'a str) -> Result<T>
 where
     T: Deserialize<'a>,
 {
-    let mut deserializer = Deserializer::from_str(s);
+    from_slice(s.as_bytes())
+}
+
+pub fn from_slice<'a, T>(s: &'a [u8]) -> Result<T>
+where
+    T: Deserialize<'a>,
+{
+    let mut deserializer = Deserializer::from_slice(s);
     let t = T::deserialize(&mut deserializer)?;
     if deserializer.tail().is_empty() {
         Ok(t)
@@ -38,25 +49,29 @@ where
 }
 
 impl<'de> Deserializer<'de> {
-    fn peek_char(&mut self) -> Result<char> {
-        if let Some(ch) = self.tail().chars().next() {
-            Ok(ch)
+    fn peek(&mut self) -> Option<u8> {
+        if self.index < self.input.len() {
+            Some(self.input[self.index])
         } else {
-            Err(Error::Eof)
+            None
         }
     }
 
-    fn next_char(&mut self) -> Result<char> {
-        let ch = self.peek_char()?;
-        self.advance(ch.len_utf8());
-        Ok(ch)
+    fn next(&mut self) -> Option<u8> {
+        if self.index < self.input.len() {
+            let ch = self.input[self.index];
+            self.index += 1;
+            Some(ch)
+        } else {
+            None
+        }
     }
 
     fn parse_bool(&mut self) -> Result<bool> {
-        if self.tail().starts_with("true") {
+        if self.tail().starts_with(b"true") {
             self.advance(4);
             Ok(true)
-        } else if self.tail().starts_with("false") {
+        } else if self.tail().starts_with(b"false") {
             self.advance(5);
             Ok(false)
         } else {
@@ -68,15 +83,15 @@ impl<'de> Deserializer<'de> {
     where
         T: AddAssign<T> + MulAssign<T> + From<u8>,
     {
-        let mut int = match self.next_char()? {
-            ch @ '0'..='9' => T::from(ch as u8 - b'0'),
+        let mut int = match self.next() {
+            Some(ch @ b'0'..=b'9') => T::from(ch - b'0'),
             _ => {
                 return Err(Error::ExpectedInteger);
             }
         };
         loop {
-            match self.tail().chars().next() {
-                Some(ch @ '0'..='9') => {
+            match self.peek() {
+                Some(ch @ b'0'..=b'9') => {
                     self.advance(1);
                     int *= T::from(10);
                     int += T::from(ch as u8 - b'0');
@@ -96,17 +111,18 @@ impl<'de> Deserializer<'de> {
     }
 
     fn parse_string<'s>(&'s mut self, ignore: bool) -> Result<Reference<'de, 's, str>> {
-        if self.peek_char()? != '"' {
-            let i = match self.tail().find(|c| c == ' ' || c == '=') {
+        if self.peek().map(|x| x == b'"') == Some(false) {
+            // TODO: implement validation
+            let i = match self.tail().iter().position(|&c| c == b' ' || c == b'=') {
                 Some(len) => len,
                 None => self.input.len(),
             };
             let s = &self.tail()[..i];
             self.advance(i);
-            return Ok(Reference::Borrowed(s));
+            return Ok(Reference::Borrowed(str::from_utf8(s).unwrap()));
         }
 
-        self.next_char()?;
+        self.next();
         let mut no_escapes = true;
         if !ignore {
             self.scratch.clear();
@@ -114,37 +130,37 @@ impl<'de> Deserializer<'de> {
         let mut start = self.index;
 
         loop {
-            while self.index < self.input.len() && !ESCAPE[self.input.as_bytes()[self.index] as usize] {
+            while self.index < self.input.len() && !ESCAPE[self.input[self.index] as usize] {
                 self.advance(1);
             }
             if self.index == self.input.len() {
                 return Err(Error::Eof);
             }
-            match self.input.as_bytes()[self.index] {
+            match self.input[self.index] {
                 b'"' => {
                     if no_escapes {
                         let borrowed = &self.input[start..self.index];
                         self.advance(1);
-                        return Ok(Reference::Borrowed(borrowed));
+                        return Ok(Reference::Borrowed(unsafe { str::from_utf8_unchecked(borrowed) }));
                     }
 
                     if !ignore {
-                        self.scratch
-                            .extend_from_slice(&self.input.as_bytes()[start..self.index]);
+                        self.scratch.extend_from_slice(&self.input[start..self.index]);
                     }
                     self.advance(1);
 
                     return if !ignore {
                         Ok(Reference::Copied(unsafe { str::from_utf8_unchecked(&self.scratch) }))
                     } else {
-                        Ok(Reference::Borrowed(&self.input[self.index..self.index]))
+                        Ok(Reference::Borrowed(unsafe {
+                            str::from_utf8_unchecked(&self.input[self.index..self.index])
+                        }))
                     };
                 }
                 b'\\' => {
                     no_escapes = false;
                     if !ignore {
-                        self.scratch
-                            .extend_from_slice(&self.input.as_bytes()[start..self.index]);
+                        self.scratch.extend_from_slice(&self.input[start..self.index]);
                     }
                     self.advance(1);
                     self.parse_escape(ignore)?;
@@ -159,32 +175,34 @@ impl<'de> Deserializer<'de> {
     }
 
     fn parse_escape(&mut self, ignore: bool) -> Result<()> {
-        let ch = self.next_char()?;
+        let Some(ch) = self.next() else {
+            return Err(Error::Eof);
+        };
 
         match ch {
-            '"' => self.scratch.push(b'"'),
-            '\\' => self.scratch.push(b'\\'),
-            '/' => self.scratch.push(b'/'),
-            'b' => self.scratch.push(b'\x08'),
-            'f' => self.scratch.push(b'\x0c'),
-            'n' => self.scratch.push(b'\n'),
-            'r' => self.scratch.push(b'\r'),
-            't' => self.scratch.push(b'\t'),
-            'u' => {
+            b'"' => self.scratch.push(b'"'),
+            b'\\' => self.scratch.push(b'\\'),
+            b'/' => self.scratch.push(b'/'),
+            b'b' => self.scratch.push(b'\x08'),
+            b'f' => self.scratch.push(b'\x0c'),
+            b'n' => self.scratch.push(b'\n'),
+            b'r' => self.scratch.push(b'\r'),
+            b't' => self.scratch.push(b'\t'),
+            b'u' => {
                 let c = match self.decode_hex_escape()? {
                     0xDC00..=0xDFFF => {
                         return Err(Error::LoneLeadingSurrogateInHexEscape);
                     }
 
                     n1 @ 0xD800..=0xDBFF => {
-                        if self.peek_char()? == '\\' {
-                            self.next_char()?;
+                        if self.peek() == Some(b'\\') {
+                            self.next();
                         } else {
                             return Err(Error::UnexpectedEndOfHexEscape);
                         }
 
-                        if self.peek_char()? == 'u' {
-                            self.next_char()?;
+                        if self.peek() == Some(b'u') {
+                            self.next();
                         } else {
                             return Err(Error::UnexpectedEndOfHexEscape);
                         }
@@ -227,7 +245,9 @@ impl<'de> Deserializer<'de> {
         let start_index = self.index;
         self.ignore_value()?;
         let raw = &self.input[start_index..self.index];
-        visitor.visit_map(super::raw::BorrowedRawDeserializer { raw_value: Some(raw) })
+        visitor.visit_map(super::raw::BorrowedRawDeserializer {
+            raw_value: Some(unsafe { str::from_utf8_unchecked(raw) }),
+        })
     }
 
     fn ignore_value(&mut self) -> Result<()> {
@@ -242,7 +262,7 @@ impl<'de> Deserializer<'de> {
 
         let mut n = 0;
         for i in 0..4 {
-            let ch = decode_hex_val(self.input.as_bytes()[i]);
+            let ch = decode_hex_val(self.input[i]);
             match ch {
                 None => {
                     self.input = &self.input[i..];
@@ -258,7 +278,7 @@ impl<'de> Deserializer<'de> {
     }
 
     #[inline]
-    fn tail(&self) -> &'de str {
+    fn tail(&self) -> &'de [u8] {
         &self.input[self.index..]
     }
 
@@ -397,7 +417,7 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
     where
         V: Visitor<'de>,
     {
-        if self.input.starts_with("null") {
+        if self.input.starts_with(b"null") {
             self.input = &self.input["null".len()..];
             visitor.visit_none()
         } else {
@@ -409,7 +429,7 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
     where
         V: Visitor<'de>,
     {
-        if self.input.starts_with("null") {
+        if self.input.starts_with(b"null") {
             self.input = &self.input["null".len()..];
             visitor.visit_unit()
         } else {
@@ -439,9 +459,9 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
     where
         V: Visitor<'de>,
     {
-        if self.next_char()? == '[' {
+        if self.next() == Some(b'[') {
             let value = visitor.visit_seq(SpaceSeparated::new(self))?;
-            if self.next_char()? == ']' {
+            if self.next() == Some(b']') {
                 Ok(value)
             } else {
                 Err(Error::ExpectedArrayEnd)
@@ -469,9 +489,9 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
     where
         V: Visitor<'de>,
     {
-        if self.peek_char()? == '{' {
+        if self.peek() == Some(b'{') {
             let value = visitor.visit_map(SpaceSeparated::new(self))?;
-            if self.next_char()? == '}' {
+            if self.next() == Some(b'}') {
                 Ok(value)
             } else {
                 Err(Error::ExpectedMapEnd)
@@ -502,11 +522,11 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
     where
         V: Visitor<'de>,
     {
-        if self.peek_char()? == '"' {
+        if self.peek() == Some(b'"') {
             visitor.visit_enum(self.parse_string(false)?.into_deserializer())
-        } else if self.next_char()? == '{' {
+        } else if self.next() == Some(b'{') {
             let value = visitor.visit_enum(Enum::new(self))?;
-            if self.next_char()? == '}' {
+            if self.next() == Some(b'}') {
                 Ok(value)
             } else {
                 Err(Error::ExpectedMapEnd)
@@ -549,10 +569,10 @@ impl<'de, 'a> SeqAccess<'de> for SpaceSeparated<'a, 'de> {
     where
         T: DeserializeSeed<'de>,
     {
-        if self.de.peek_char()? == ']' {
+        if self.de.peek() == Some(b']') {
             return Ok(None);
         }
-        if !self.first && self.de.next_char()? != ' ' {
+        if !self.first && self.de.next() != Some(b' ') {
             return Err(Error::ExpectedArrayDelimiter);
         }
         self.first = false;
@@ -567,10 +587,10 @@ impl<'de, 'a> MapAccess<'de> for SpaceSeparated<'a, 'de> {
     where
         K: DeserializeSeed<'de>,
     {
-        if self.de.tail().len() == 0 || self.de.peek_char()? == '}' {
+        if self.de.tail().len() == 0 || self.de.peek() == Some(b'}') {
             return Ok(None);
         }
-        if !self.first && self.de.next_char()? != ' ' {
+        if !self.first && self.de.next() != Some(b' ') {
             return Err(Error::ExpectedMapDelimiter);
         }
         self.first = false;
@@ -581,7 +601,7 @@ impl<'de, 'a> MapAccess<'de> for SpaceSeparated<'a, 'de> {
     where
         V: DeserializeSeed<'de>,
     {
-        if self.de.next_char()? != '=' {
+        if self.de.next() != Some(b'=') {
             return Err(Error::ExpectedMapKeyValueDelimiter);
         }
         seed.deserialize(&mut *self.de)
@@ -607,7 +627,7 @@ impl<'de, 'a> EnumAccess<'de> for Enum<'a, 'de> {
         V: DeserializeSeed<'de>,
     {
         let val = seed.deserialize(&mut *self.de)?;
-        if self.de.next_char()? == '=' {
+        if self.de.next() == Some(b'=') {
             Ok((val, self))
         } else {
             Err(Error::ExpectedMapKeyValueDelimiter)
