@@ -47,13 +47,17 @@ impl<'de> Deserializer<'de> {
     pub fn from_slice(input: &'de [u8]) -> Self {
         Deserializer {
             scratch: Vec::new(),
-            parser: Parser { input, index: 0 },
+            parser: Parser {
+                input,
+                index: 0,
+                key: true,
+            },
         }
     }
 
     #[inline]
     pub fn parse_str_to_buf(&mut self, buf: &mut Vec<u8>) -> Result<()> {
-        match self.parser.parse_string(buf, false) {
+        match self.parser.parse_value(buf, false) {
             Ok(Reference::Borrowed(b)) => {
                 buf.extend(b.as_bytes());
                 Ok(())
@@ -285,20 +289,11 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
     }
 
     #[inline]
-    fn deserialize_seq<V>(self, visitor: V) -> Result<V::Value>
+    fn deserialize_seq<V>(self, _visitor: V) -> Result<V::Value>
     where
         V: Visitor<'de>,
     {
-        if self.parser.next() == Some(b'[') {
-            let value = visitor.visit_seq(SpaceSeparated::new(self))?;
-            if self.parser.next() == Some(b']') {
-                Ok(value)
-            } else {
-                Err(Error::ExpectedArrayEnd)
-            }
-        } else {
-            Err(Error::ExpectedArray)
-        }
+        unimplemented!()
     }
 
     #[inline]
@@ -322,16 +317,7 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
     where
         V: Visitor<'de>,
     {
-        if self.parser.peek() == Some(b'{') {
-            let value = visitor.visit_map(SpaceSeparated::new(self))?;
-            if self.parser.next() == Some(b'}') {
-                Ok(value)
-            } else {
-                Err(Error::ExpectedMapEnd)
-            }
-        } else {
-            Ok(visitor.visit_map(SpaceSeparated::new(self))?)
-        }
+        Ok(visitor.visit_map(KeyValueSequence::new(self))?)
     }
 
     #[inline]
@@ -393,6 +379,7 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
 struct Parser<'de> {
     input: &'de [u8],
     index: usize,
+    key: bool,
 }
 
 impl<'de> Parser<'de> {
@@ -460,18 +447,113 @@ impl<'de> Parser<'de> {
         unimplemented!()
     }
 
-    fn parse_string<'s>(&'s mut self, scratch: &'s mut Vec<u8>, ignore: bool) -> Result<Reference<'de, 's, str>> {
-        if self.peek().map(|x| x == b'"') == Some(false) {
-            // TODO: implement validation
-            let i = match self.tail().iter().position(|&c| c == b' ' || c == b'=') {
-                Some(len) => len,
-                None => self.tail().len(),
-            };
-            let s = &self.tail()[..i];
+    fn skip_garbage(&mut self) {
+        if let Some(i) = self.tail().iter().position(|&c| c > b' ') {
             self.advance(i);
-            return Ok(Reference::Borrowed(str::from_utf8(s).unwrap()));
+        } else {
+            self.index = self.input.len();
+        }
+    }
+
+    fn parse_string<'s>(&'s mut self, scratch: &'s mut Vec<u8>, ignore: bool) -> Result<Reference<'de, 's, str>> {
+        if self.key {
+            self.key = false;
+            self.parse_key().map(Reference::Borrowed)
+        } else {
+            self.parse_value(scratch, ignore)
+        }
+    }
+
+    fn parse_key(&mut self) -> Result<&'de str> {
+        self.skip_garbage();
+
+        let start = self.index;
+        let mut unicode = false;
+
+        while self.index < self.input.len() {
+            let c = self.input[self.index];
+            match c {
+                b'=' => {
+                    break;
+                }
+                b'"' => {
+                    return Err(Error::ExpectedKey);
+                }
+                b'\x00'..=b' ' => {
+                    self.key = true;
+                    break;
+                }
+                b'\x80'..=b'\xFF' => {
+                    unicode = true;
+                    self.index += 1;
+                }
+                _ => {
+                    self.index += 1;
+                }
+            }
         }
 
+        if self.index == start {
+            return Err(Error::ExpectedKey);
+        }
+
+        let s = &self.input[start..self.index];
+        self.next();
+
+        if unicode {
+            return Ok(str::from_utf8(s).map_err(|_| Error::InvalidUnicodeCodePoint)?);
+        }
+
+        Ok(unsafe { str::from_utf8_unchecked(s) })
+    }
+
+    fn parse_value<'s>(&'s mut self, scratch: &'s mut Vec<u8>, ignore: bool) -> Result<Reference<'de, 's, str>> {
+        match self.peek() {
+            Some(b'"') => self.parse_quoted_value(scratch, ignore),
+            _ => self.parse_unquoted_value().map(Reference::Borrowed),
+        }
+    }
+
+    fn parse_unquoted_value(&mut self) -> Result<&'de str> {
+        self.skip_garbage();
+
+        let start = self.index;
+        let mut unicode = false;
+
+        while self.index < self.input.len() {
+            let c = self.input[self.index];
+            match c {
+                b'\x00'..=b' ' => {
+                    break;
+                }
+                b'"' | b'=' => {
+                    return Err(Error::UnexpectedByte(c));
+                }
+                b'\x80'..=b'\xFF' => {
+                    unicode = true;
+                    self.index += 1;
+                }
+                _ => {
+                    self.index += 1;
+                }
+            }
+        }
+
+        self.key = true;
+        if self.index == start {
+            return Ok("");
+        }
+
+        let s = &self.input[start..self.index];
+
+        if unicode {
+            return Ok(str::from_utf8(s).map_err(|_| Error::InvalidUnicodeCodePoint)?);
+        }
+
+        Ok(unsafe { str::from_utf8_unchecked(s) })
+    }
+
+    fn parse_quoted_value<'s>(&'s mut self, scratch: &'s mut Vec<u8>, ignore: bool) -> Result<Reference<'de, 's, str>> {
         self.next();
         let mut no_escapes = true;
         let mut start = self.index;
@@ -485,6 +567,7 @@ impl<'de> Parser<'de> {
             }
             match self.input[self.index] {
                 b'"' => {
+                    self.key = true;
                     if no_escapes {
                         let borrowed = &self.input[start..self.index];
                         self.advance(1);
@@ -638,49 +721,37 @@ impl<'de> Parser<'de> {
 
 // ---
 
-struct SpaceSeparated<'a, 'de: 'a> {
+struct KeyValueSequence<'a, 'de: 'a> {
     de: &'a mut Deserializer<'de>,
-    first: bool,
 }
 
-impl<'a, 'de> SpaceSeparated<'a, 'de> {
+impl<'a, 'de> KeyValueSequence<'a, 'de> {
     fn new(de: &'a mut Deserializer<'de>) -> Self {
-        SpaceSeparated { de, first: true }
+        KeyValueSequence { de }
     }
 }
 
-impl<'de, 'a> SeqAccess<'de> for SpaceSeparated<'a, 'de> {
+impl<'de, 'a> SeqAccess<'de> for KeyValueSequence<'a, 'de> {
     type Error = Error;
 
-    fn next_element_seed<T>(&mut self, seed: T) -> Result<Option<T::Value>>
+    fn next_element_seed<T>(&mut self, _seed: T) -> Result<Option<T::Value>>
     where
         T: DeserializeSeed<'de>,
     {
-        if self.de.parser.peek() == Some(b']') {
-            return Ok(None);
-        }
-        if !self.first && self.de.parser.next() != Some(b' ') {
-            return Err(Error::ExpectedArrayDelimiter);
-        }
-        self.first = false;
-        seed.deserialize(&mut *self.de).map(Some)
+        unimplemented!()
     }
 }
 
-impl<'de, 'a> MapAccess<'de> for SpaceSeparated<'a, 'de> {
+impl<'de, 'a> MapAccess<'de> for KeyValueSequence<'a, 'de> {
     type Error = Error;
 
     fn next_key_seed<K>(&mut self, seed: K) -> Result<Option<K::Value>>
     where
         K: DeserializeSeed<'de>,
     {
-        if self.de.parser.tail().len() == 0 || self.de.parser.peek() == Some(b'}') {
+        if self.de.parser.tail().len() == 0 {
             return Ok(None);
         }
-        if !self.first && self.de.parser.next() != Some(b' ') {
-            return Err(Error::ExpectedMapDelimiter);
-        }
-        self.first = false;
         seed.deserialize(&mut *self.de).map(Some)
     }
 
@@ -689,9 +760,6 @@ impl<'de, 'a> MapAccess<'de> for SpaceSeparated<'a, 'de> {
     where
         V: DeserializeSeed<'de>,
     {
-        if self.de.parser.next() != Some(b'=') {
-            return Err(Error::ExpectedMapKeyValueDelimiter);
-        }
         seed.deserialize(&mut *self.de)
     }
 }

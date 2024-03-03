@@ -19,6 +19,7 @@ pub enum Error {
     ExpectedMapKeyValueDelimiter,
     ExpectedMapEnd,
     ExpectedEnum,
+    ExpectedKey,
     Syntax,
     InvalidEscape,
     LoneLeadingSurrogateInHexEscape,
@@ -26,6 +27,7 @@ pub enum Error {
     InvalidUnicodeCodePoint,
     TrailingCharacters,
     UnexpectedControlCharacter,
+    UnexpectedByte(u8),
     Custom(String),
 }
 
@@ -45,6 +47,7 @@ impl fmt::Display for Error {
             Self::ExpectedMapKeyValueDelimiter => f.write_str("expected equal sign"),
             Self::ExpectedMapEnd => f.write_str("expected map end"),
             Self::ExpectedEnum => f.write_str("expected enum"),
+            Self::ExpectedKey => f.write_str("expected key"),
             Self::Syntax => f.write_str("syntax error"),
             Self::InvalidEscape => f.write_str("invalid escape sequence"),
             Self::LoneLeadingSurrogateInHexEscape => f.write_str("lone leading surrogate in hex escape"),
@@ -52,6 +55,7 @@ impl fmt::Display for Error {
             Self::InvalidUnicodeCodePoint => f.write_str("invalid unicode code point"),
             Self::TrailingCharacters => f.write_str("trailing characters"),
             Self::UnexpectedControlCharacter => f.write_str("unexpected control character"),
+            Self::UnexpectedByte(byte) => write!(f, "unexpected byte: {}", byte),
             Self::Custom(msg) => f.write_str(msg),
         }
     }
