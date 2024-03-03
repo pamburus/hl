@@ -702,18 +702,29 @@ impl<'de: 'a, 'a> Deserialize<'de> for RawRecord<'a> {
 
 // ---
 
-struct RawRecordVisitor<'a> {
-    marker: PhantomData<fn() -> RawRecord<'a>>,
+struct RawRecordVisitor<'a, RV>
+where
+    RV: ?Sized + 'a,
+{
+    marker: PhantomData<fn() -> (RawRecord<'a>, &'a RV)>,
 }
 
-impl<'a> RawRecordVisitor<'a> {
+impl<'a, RV> RawRecordVisitor<'a, RV>
+where
+    RV: ?Sized + 'a,
+{
     #[inline(always)]
     fn new() -> Self {
         Self { marker: PhantomData }
     }
 }
 
-impl<'de: 'a, 'a> Visitor<'de> for RawRecordVisitor<'a> {
+impl<'de: 'a, 'a, RV> Visitor<'de> for RawRecordVisitor<'a, RV>
+where
+    RV: ?Sized + 'a,
+    &'a RV: Deserialize<'de> + 'a,
+    RawValue<'a>: std::convert::From<&'a RV>,
+{
     type Value = RawRecord<'a>;
     fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
         formatter.write_str("object json")
@@ -727,7 +738,7 @@ impl<'de: 'a, 'a> Visitor<'de> for RawRecordVisitor<'a> {
             true => Vec::with_capacity(count - RAW_RECORD_FIELDS_CAPACITY),
         };
         while let Some(Some(key)) = access.next_key::<&'a str>().ok() {
-            let value: &json::value::RawValue = access.next_value()?;
+            let value: &RV = access.next_value()?;
             match head.push((key, value.into())) {
                 Ok(_) => {}
                 Err(value) => tail.push(value),
@@ -737,6 +748,19 @@ impl<'de: 'a, 'a> Visitor<'de> for RawRecordVisitor<'a> {
         Ok(RawRecord {
             fields: RawRecordFields { head, tail },
         })
+    }
+}
+
+// ---
+
+pub struct LogfmtRawRecord<'a>(RawRecord<'a>);
+
+impl<'de: 'a, 'a> Deserialize<'de> for LogfmtRawRecord<'a> {
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        Ok(Self(deserializer.deserialize_map(RawRecordVisitor::new())?))
     }
 }
 
