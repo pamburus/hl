@@ -110,6 +110,7 @@ impl InputReference {
 
             prev_pos = pos;
         }
+        file.seek(SeekFrom::Start(pos as u64))?;
         Ok(())
     }
 }
