@@ -7,6 +7,7 @@ use serde::de::{self, DeserializeSeed, EnumAccess, IntoDeserializer, MapAccess, 
 use serde::Deserialize;
 
 pub mod error;
+pub mod raw;
 use error::{Error, Result};
 
 pub struct Deserializer<'de> {
@@ -121,7 +122,7 @@ impl<'de> Deserializer<'de> {
         unimplemented!()
     }
 
-    fn parse_string<'s>(&'s mut self) -> Result<Reference<'de, 's, str>> {
+    fn parse_string<'s>(&'s mut self, ignore: bool) -> Result<Reference<'de, 's, str>> {
         if self.peek_char()? != '"' {
             let i = match self.tail().find(|c| c == ' ' || c == '=') {
                 Some(len) => len,
@@ -133,7 +134,10 @@ impl<'de> Deserializer<'de> {
         }
 
         self.next_char()?;
-        self.scratch.clear();
+        let mut no_escapes = true;
+        if !ignore {
+            self.scratch.clear();
+        }
         let mut start = self.index;
 
         loop {
@@ -145,22 +149,32 @@ impl<'de> Deserializer<'de> {
             }
             match self.input.as_bytes()[self.index] {
                 b'"' => {
-                    if self.scratch.is_empty() {
+                    if no_escapes {
                         let borrowed = &self.input[start..self.index];
                         self.advance(1);
                         return Ok(Reference::Borrowed(borrowed));
                     }
 
-                    self.scratch
-                        .extend_from_slice(&self.input.as_bytes()[start..self.index]);
+                    if !ignore {
+                        self.scratch
+                            .extend_from_slice(&self.input.as_bytes()[start..self.index]);
+                    }
                     self.advance(1);
-                    return Ok(Reference::Copied(unsafe { str::from_utf8_unchecked(&self.scratch) }));
+
+                    return if !ignore {
+                        Ok(Reference::Copied(unsafe { str::from_utf8_unchecked(&self.scratch) }))
+                    } else {
+                        Ok(Reference::Borrowed(&self.input[self.index..self.index]))
+                    };
                 }
                 b'\\' => {
-                    self.scratch
-                        .extend_from_slice(&self.input.as_bytes()[start..self.index]);
+                    no_escapes = false;
+                    if !ignore {
+                        self.scratch
+                            .extend_from_slice(&self.input.as_bytes()[start..self.index]);
+                    }
                     self.advance(1);
-                    self.parse_escape()?;
+                    self.parse_escape(ignore)?;
                     start = self.index;
                 }
                 _ => {
@@ -171,7 +185,7 @@ impl<'de> Deserializer<'de> {
         }
     }
 
-    fn parse_escape(&mut self) -> Result<()> {
+    fn parse_escape(&mut self, ignore: bool) -> Result<()> {
         let ch = self.next_char()?;
 
         match ch {
@@ -221,7 +235,9 @@ impl<'de> Deserializer<'de> {
                     n => char::from_u32(n as u32).unwrap(),
                 };
 
-                self.scratch.extend_from_slice(c.encode_utf8(&mut [0_u8; 4]).as_bytes());
+                if !ignore {
+                    self.scratch.extend_from_slice(c.encode_utf8(&mut [0_u8; 4]).as_bytes());
+                }
             }
             _ => {
                 return Err(Error::InvalidEscape);
@@ -229,6 +245,20 @@ impl<'de> Deserializer<'de> {
         }
 
         Ok(())
+    }
+
+    fn deserialize_raw_value<V>(&mut self, visitor: V) -> Result<V::Value>
+    where
+        V: de::Visitor<'de>,
+    {
+        let start_index = self.index;
+        self.ignore_value()?;
+        let raw = &self.input[start_index..self.index];
+        visitor.visit_map(raw::BorrowedRawDeserializer { raw_value: Some(raw) })
+    }
+
+    fn ignore_value(&mut self) -> Result<()> {
+        self.parse_string(true).map(|_| ())
     }
 
     fn decode_hex_escape(&mut self) -> Result<u16> {
@@ -275,16 +305,7 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
     where
         V: Visitor<'de>,
     {
-        match self.peek_char()? {
-            'n' => self.deserialize_unit(visitor),
-            't' | 'f' => self.deserialize_bool(visitor),
-            '"' => self.deserialize_str(visitor),
-            '0'..='9' => self.deserialize_u64(visitor),
-            '-' => self.deserialize_i64(visitor),
-            '[' => self.deserialize_seq(visitor),
-            '{' => self.deserialize_map(visitor),
-            _ => Err(Error::Syntax),
-        }
+        self.deserialize_str(visitor)
     }
 
     // Uses the `parse_bool` parsing function defined above to read the JSON
@@ -398,7 +419,7 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
     where
         V: Visitor<'de>,
     {
-        match self.parse_string()? {
+        match self.parse_string(false)? {
             Reference::Borrowed(b) => visitor.visit_borrowed_str(b),
             Reference::Copied(c) => visitor.visit_str(c),
         }
@@ -471,10 +492,14 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
     // As is done here, serializers are encouraged to treat newtype structs as
     // insignificant wrappers around the data they contain. That means not
     // parsing anything other than the contained value.
-    fn deserialize_newtype_struct<V>(self, _name: &'static str, visitor: V) -> Result<V::Value>
+    fn deserialize_newtype_struct<V>(self, name: &'static str, visitor: V) -> Result<V::Value>
     where
         V: Visitor<'de>,
     {
+        if name == raw::TOKEN {
+            return self.deserialize_raw_value(visitor);
+        }
+
         visitor.visit_newtype_struct(self)
     }
 
@@ -572,7 +597,7 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
     {
         if self.peek_char()? == '"' {
             // Visit a unit variant.
-            visitor.visit_enum(self.parse_string()?.into_deserializer())
+            visitor.visit_enum(self.parse_string(false)?.into_deserializer())
         } else if self.next_char()? == '{' {
             // Visit a newtype variant, tuple variant, or struct variant.
             let value = visitor.visit_enum(Enum::new(self))?;
@@ -848,7 +873,7 @@ static HEX: [u8; 256] = {
 // ---
 
 #[test]
-fn test_struct() {
+fn test_struct_no_escape() {
     #[derive(Deserialize, PartialEq, Debug)]
     struct Test {
         int: u32,
@@ -863,6 +888,16 @@ fn test_struct() {
         str2: "b c".to_string(),
     };
     assert_eq!(expected, from_str(j).unwrap());
+}
+
+#[test]
+fn test_struct_escape() {
+    #[derive(Deserialize, PartialEq, Debug)]
+    struct Test {
+        int: u32,
+        str1: String,
+        str2: String,
+    }
 
     let j = r#"int=0 str1="b=c" str2="a\nb""#;
     let expected = Test {
@@ -872,30 +907,19 @@ fn test_struct() {
     };
     assert_eq!(expected, from_str(j).unwrap());
 }
-
 #[test]
-fn test_enum() {
-    #[derive(Deserialize, PartialEq, Debug)]
-    enum E {
-        Unit,
-        Newtype(u32),
-        Tuple(u32, u32),
-        Struct { a: u32 },
+fn test_raw() {
+    #[derive(Deserialize)]
+    struct Test<'a> {
+        int: u32,
+        str1: String,
+        #[serde(borrow)]
+        str2: &'a raw::RawValue,
     }
 
-    let j = r#""Unit""#;
-    let expected = E::Unit;
-    assert_eq!(expected, from_str(j).unwrap());
-
-    let j = r#"{"Newtype":1}"#;
-    let expected = E::Newtype(1);
-    assert_eq!(expected, from_str(j).unwrap());
-
-    let j = r#"{"Tuple":[1,2]}"#;
-    let expected = E::Tuple(1, 2);
-    assert_eq!(expected, from_str(j).unwrap());
-
-    let j = r#"{"Struct":{"a":1}}"#;
-    let expected = E::Struct { a: 1 };
-    assert_eq!(expected, from_str(j).unwrap());
+    let j = r#"int=42 str1=a str2="b \nc""#;
+    let parsed: Test = from_str(j).unwrap();
+    assert_eq!(parsed.int, 42);
+    assert_eq!(parsed.str1, "a");
+    assert_eq!(parsed.str2.get(), r#""b \nc""#);
 }
