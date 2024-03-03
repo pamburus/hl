@@ -8,26 +8,6 @@ use serde::Deserialize;
 
 use super::error::{Error, Result};
 
-pub struct Deserializer<'de> {
-    input: &'de [u8],
-    index: usize,
-    scratch: Vec<u8>,
-}
-
-impl<'de> Deserializer<'de> {
-    pub fn from_str(input: &'de str) -> Self {
-        Self::from_slice(input.as_bytes())
-    }
-
-    pub fn from_slice(input: &'de [u8]) -> Self {
-        Deserializer {
-            input,
-            index: 0,
-            scratch: Vec::new(),
-        }
-    }
-}
-
 pub fn from_str<'a, T>(s: &'a str) -> Result<T>
 where
     T: Deserialize<'a>,
@@ -41,250 +21,73 @@ where
 {
     let mut deserializer = Deserializer::from_slice(s);
     let t = T::deserialize(&mut deserializer)?;
-    if deserializer.tail().is_empty() {
+    if deserializer.parser.tail().is_empty() {
         Ok(t)
     } else {
         Err(Error::TrailingCharacters)
     }
 }
 
+// ---
+
+pub struct Deserializer<'de> {
+    scratch: Vec<u8>,
+    parser: Parser<'de>,
+}
+
 impl<'de> Deserializer<'de> {
-    fn peek(&mut self) -> Option<u8> {
-        if self.index < self.input.len() {
-            Some(self.input[self.index])
-        } else {
-            None
+    pub fn from_str(input: &'de str) -> Self {
+        Self::from_slice(input.as_bytes())
+    }
+
+    pub fn from_slice(input: &'de [u8]) -> Self {
+        Deserializer {
+            scratch: Vec::new(),
+            parser: Parser { input, index: 0 },
         }
     }
 
-    fn next(&mut self) -> Option<u8> {
-        if self.index < self.input.len() {
-            let ch = self.input[self.index];
-            self.index += 1;
-            Some(ch)
-        } else {
-            None
+    pub fn parse_str_to_buf(&mut self, buf: &mut Vec<u8>) -> Result<()> {
+        match self.parser.parse_string(buf, false) {
+            Ok(Reference::Borrowed(b)) => {
+                buf.extend(b.as_bytes());
+                Ok(())
+            }
+            Ok(Reference::Copied(_)) => Ok(()),
+            Err(e) => Err(e),
         }
     }
+}
 
+impl<'de> Deserializer<'de> {
     fn parse_bool(&mut self) -> Result<bool> {
-        if self.tail().starts_with(b"true") {
-            self.advance(4);
-            Ok(true)
-        } else if self.tail().starts_with(b"false") {
-            self.advance(5);
-            Ok(false)
-        } else {
-            Err(Error::ExpectedBoolean)
-        }
+        self.parser.parse_bool()
     }
 
     fn parse_unsigned<T>(&mut self) -> Result<T>
     where
         T: AddAssign<T> + MulAssign<T> + From<u8>,
     {
-        let mut int = match self.next() {
-            Some(ch @ b'0'..=b'9') => T::from(ch - b'0'),
-            _ => {
-                return Err(Error::ExpectedInteger);
-            }
-        };
-        loop {
-            match self.peek() {
-                Some(ch @ b'0'..=b'9') => {
-                    self.advance(1);
-                    int *= T::from(10);
-                    int += T::from(ch as u8 - b'0');
-                }
-                _ => {
-                    return Ok(int);
-                }
-            }
-        }
+        self.parser.parse_unsigned()
     }
 
     fn parse_signed<T>(&mut self) -> Result<T>
     where
         T: Neg<Output = T> + AddAssign<T> + MulAssign<T> + From<i8>,
     {
-        unimplemented!()
+        self.parser.parse_signed()
     }
 
     fn parse_string<'s>(&'s mut self, ignore: bool) -> Result<Reference<'de, 's, str>> {
-        if self.peek().map(|x| x == b'"') == Some(false) {
-            // TODO: implement validation
-            let i = match self.tail().iter().position(|&c| c == b' ' || c == b'=') {
-                Some(len) => len,
-                None => self.input.len(),
-            };
-            let s = &self.tail()[..i];
-            self.advance(i);
-            return Ok(Reference::Borrowed(str::from_utf8(s).unwrap()));
-        }
-
-        self.next();
-        let mut no_escapes = true;
-        if !ignore {
-            self.scratch.clear();
-        }
-        let mut start = self.index;
-
-        loop {
-            while self.index < self.input.len() && !ESCAPE[self.input[self.index] as usize] {
-                self.advance(1);
-            }
-            if self.index == self.input.len() {
-                return Err(Error::Eof);
-            }
-            match self.input[self.index] {
-                b'"' => {
-                    if no_escapes {
-                        let borrowed = &self.input[start..self.index];
-                        self.advance(1);
-                        return Ok(Reference::Borrowed(unsafe { str::from_utf8_unchecked(borrowed) }));
-                    }
-
-                    if !ignore {
-                        self.scratch.extend_from_slice(&self.input[start..self.index]);
-                    }
-                    self.advance(1);
-
-                    return if !ignore {
-                        Ok(Reference::Copied(unsafe { str::from_utf8_unchecked(&self.scratch) }))
-                    } else {
-                        Ok(Reference::Borrowed(unsafe {
-                            str::from_utf8_unchecked(&self.input[self.index..self.index])
-                        }))
-                    };
-                }
-                b'\\' => {
-                    no_escapes = false;
-                    if !ignore {
-                        self.scratch.extend_from_slice(&self.input[start..self.index]);
-                    }
-                    self.advance(1);
-                    self.parse_escape(ignore)?;
-                    start = self.index;
-                }
-                _ => {
-                    self.advance(1);
-                    return Err(Error::UnexpectedControlCharacter);
-                }
-            }
-        }
-    }
-
-    fn parse_escape(&mut self, ignore: bool) -> Result<()> {
-        let Some(ch) = self.next() else {
-            return Err(Error::Eof);
-        };
-
-        match ch {
-            b'"' => self.scratch.push(b'"'),
-            b'\\' => self.scratch.push(b'\\'),
-            b'/' => self.scratch.push(b'/'),
-            b'b' => self.scratch.push(b'\x08'),
-            b'f' => self.scratch.push(b'\x0c'),
-            b'n' => self.scratch.push(b'\n'),
-            b'r' => self.scratch.push(b'\r'),
-            b't' => self.scratch.push(b'\t'),
-            b'u' => {
-                let c = match self.decode_hex_escape()? {
-                    0xDC00..=0xDFFF => {
-                        return Err(Error::LoneLeadingSurrogateInHexEscape);
-                    }
-
-                    n1 @ 0xD800..=0xDBFF => {
-                        if self.peek() == Some(b'\\') {
-                            self.next();
-                        } else {
-                            return Err(Error::UnexpectedEndOfHexEscape);
-                        }
-
-                        if self.peek() == Some(b'u') {
-                            self.next();
-                        } else {
-                            return Err(Error::UnexpectedEndOfHexEscape);
-                        }
-
-                        let n2 = self.decode_hex_escape()?;
-
-                        if n2 < 0xDC00 || n2 > 0xDFFF {
-                            return Err(Error::LoneLeadingSurrogateInHexEscape);
-                        }
-
-                        let n = (((n1 - 0xD800) as u32) << 10 | (n2 - 0xDC00) as u32) + 0x1_0000;
-
-                        match char::from_u32(n) {
-                            Some(c) => c,
-                            None => {
-                                return Err(Error::InvalidUnicodeCodePoint);
-                            }
-                        }
-                    }
-
-                    n => char::from_u32(n as u32).unwrap(),
-                };
-
-                if !ignore {
-                    self.scratch.extend_from_slice(c.encode_utf8(&mut [0_u8; 4]).as_bytes());
-                }
-            }
-            _ => {
-                return Err(Error::InvalidEscape);
-            }
-        }
-
-        Ok(())
+        self.scratch.clear();
+        self.parser.parse_string(&mut self.scratch, ignore)
     }
 
     fn deserialize_raw_value<V>(&mut self, visitor: V) -> Result<V::Value>
     where
         V: de::Visitor<'de>,
     {
-        let start_index = self.index;
-        self.ignore_value()?;
-        let raw = &self.input[start_index..self.index];
-        visitor.visit_map(super::raw::BorrowedRawDeserializer {
-            raw_value: Some(unsafe { str::from_utf8_unchecked(raw) }),
-        })
-    }
-
-    fn ignore_value(&mut self) -> Result<()> {
-        self.parse_string(true).map(|_| ())
-    }
-
-    fn decode_hex_escape(&mut self) -> Result<u16> {
-        if self.input.len() < 4 {
-            self.input = &self.input[self.input.len()..];
-            return Err(Error::Eof);
-        }
-
-        let mut n = 0;
-        for i in 0..4 {
-            let ch = decode_hex_val(self.input[i]);
-            match ch {
-                None => {
-                    self.input = &self.input[i..];
-                    return Err(Error::InvalidEscape);
-                }
-                Some(val) => {
-                    n = (n << 4) + val;
-                }
-            }
-        }
-        self.input = &self.input[4..];
-        Ok(n)
-    }
-
-    #[inline]
-    fn tail(&self) -> &'de [u8] {
-        &self.input[self.index..]
-    }
-
-    #[inline]
-    fn advance(&mut self, n: usize) {
-        self.index += n;
+        self.parser.deserialize_raw_value(visitor)
     }
 }
 
@@ -417,8 +220,8 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
     where
         V: Visitor<'de>,
     {
-        if self.input.starts_with(b"null") {
-            self.input = &self.input["null".len()..];
+        if self.parser.input.starts_with(b"null") {
+            self.parser.input = &self.parser.input["null".len()..];
             visitor.visit_none()
         } else {
             visitor.visit_some(self)
@@ -429,8 +232,8 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
     where
         V: Visitor<'de>,
     {
-        if self.input.starts_with(b"null") {
-            self.input = &self.input["null".len()..];
+        if self.parser.input.starts_with(b"null") {
+            self.parser.input = &self.parser.input["null".len()..];
             visitor.visit_unit()
         } else {
             Err(Error::ExpectedNull)
@@ -459,9 +262,9 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
     where
         V: Visitor<'de>,
     {
-        if self.next() == Some(b'[') {
+        if self.parser.next() == Some(b'[') {
             let value = visitor.visit_seq(SpaceSeparated::new(self))?;
-            if self.next() == Some(b']') {
+            if self.parser.next() == Some(b']') {
                 Ok(value)
             } else {
                 Err(Error::ExpectedArrayEnd)
@@ -489,9 +292,9 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
     where
         V: Visitor<'de>,
     {
-        if self.peek() == Some(b'{') {
+        if self.parser.peek() == Some(b'{') {
             let value = visitor.visit_map(SpaceSeparated::new(self))?;
-            if self.next() == Some(b'}') {
+            if self.parser.next() == Some(b'}') {
                 Ok(value)
             } else {
                 Err(Error::ExpectedMapEnd)
@@ -522,11 +325,11 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
     where
         V: Visitor<'de>,
     {
-        if self.peek() == Some(b'"') {
+        if self.parser.peek() == Some(b'"') {
             visitor.visit_enum(self.parse_string(false)?.into_deserializer())
-        } else if self.next() == Some(b'{') {
+        } else if self.parser.next() == Some(b'{') {
             let value = visitor.visit_enum(Enum::new(self))?;
-            if self.next() == Some(b'}') {
+            if self.parser.next() == Some(b'}') {
                 Ok(value)
             } else {
                 Err(Error::ExpectedMapEnd)
@@ -551,6 +354,253 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
     }
 }
 
+// ---
+
+struct Parser<'de> {
+    input: &'de [u8],
+    index: usize,
+}
+
+impl<'de> Parser<'de> {
+    fn peek(&mut self) -> Option<u8> {
+        if self.index < self.input.len() {
+            Some(self.input[self.index])
+        } else {
+            None
+        }
+    }
+
+    fn next(&mut self) -> Option<u8> {
+        if self.index < self.input.len() {
+            let ch = self.input[self.index];
+            self.index += 1;
+            Some(ch)
+        } else {
+            None
+        }
+    }
+
+    fn parse_bool(&mut self) -> Result<bool> {
+        if self.tail().starts_with(b"true") {
+            self.advance(4);
+            Ok(true)
+        } else if self.tail().starts_with(b"false") {
+            self.advance(5);
+            Ok(false)
+        } else {
+            Err(Error::ExpectedBoolean)
+        }
+    }
+
+    fn parse_unsigned<T>(&mut self) -> Result<T>
+    where
+        T: AddAssign<T> + MulAssign<T> + From<u8>,
+    {
+        let mut int = match self.next() {
+            Some(ch @ b'0'..=b'9') => T::from(ch - b'0'),
+            _ => {
+                return Err(Error::ExpectedInteger);
+            }
+        };
+        loop {
+            match self.peek() {
+                Some(ch @ b'0'..=b'9') => {
+                    self.advance(1);
+                    int *= T::from(10);
+                    int += T::from(ch as u8 - b'0');
+                }
+                _ => {
+                    return Ok(int);
+                }
+            }
+        }
+    }
+
+    fn parse_signed<T>(&mut self) -> Result<T>
+    where
+        T: Neg<Output = T> + AddAssign<T> + MulAssign<T> + From<i8>,
+    {
+        unimplemented!()
+    }
+
+    fn parse_string<'s>(&'s mut self, scratch: &'s mut Vec<u8>, ignore: bool) -> Result<Reference<'de, 's, str>> {
+        if self.peek().map(|x| x == b'"') == Some(false) {
+            // TODO: implement validation
+            let i = match self.tail().iter().position(|&c| c == b' ' || c == b'=') {
+                Some(len) => len,
+                None => self.input.len(),
+            };
+            let s = &self.tail()[..i];
+            self.advance(i);
+            return Ok(Reference::Borrowed(str::from_utf8(s).unwrap()));
+        }
+
+        self.next();
+        let mut no_escapes = true;
+        let mut start = self.index;
+
+        loop {
+            while self.index < self.input.len() && !ESCAPE[self.input[self.index] as usize] {
+                self.advance(1);
+            }
+            if self.index == self.input.len() {
+                return Err(Error::Eof);
+            }
+            match self.input[self.index] {
+                b'"' => {
+                    if no_escapes {
+                        let borrowed = &self.input[start..self.index];
+                        self.advance(1);
+                        return Ok(Reference::Borrowed(unsafe { str::from_utf8_unchecked(borrowed) }));
+                    }
+
+                    if !ignore {
+                        scratch.extend_from_slice(&self.input[start..self.index]);
+                    }
+                    self.advance(1);
+
+                    return if !ignore {
+                        Ok(Reference::Copied(unsafe { str::from_utf8_unchecked(scratch) }))
+                    } else {
+                        Ok(Reference::Borrowed(unsafe {
+                            str::from_utf8_unchecked(&self.input[self.index..self.index])
+                        }))
+                    };
+                }
+                b'\\' => {
+                    no_escapes = false;
+                    if !ignore {
+                        scratch.extend_from_slice(&self.input[start..self.index]);
+                    }
+                    self.advance(1);
+                    self.parse_escape(scratch, ignore)?;
+                    start = self.index;
+                }
+                _ => {
+                    self.advance(1);
+                    return Err(Error::UnexpectedControlCharacter);
+                }
+            }
+        }
+    }
+
+    fn parse_escape(&mut self, scratch: &mut Vec<u8>, ignore: bool) -> Result<()> {
+        let Some(ch) = self.next() else {
+            return Err(Error::Eof);
+        };
+
+        match ch {
+            b'"' => scratch.push(b'"'),
+            b'\\' => scratch.push(b'\\'),
+            b'/' => scratch.push(b'/'),
+            b'b' => scratch.push(b'\x08'),
+            b'f' => scratch.push(b'\x0c'),
+            b'n' => scratch.push(b'\n'),
+            b'r' => scratch.push(b'\r'),
+            b't' => scratch.push(b'\t'),
+            b'u' => {
+                let c = match self.decode_hex_escape()? {
+                    0xDC00..=0xDFFF => {
+                        return Err(Error::LoneLeadingSurrogateInHexEscape);
+                    }
+
+                    n1 @ 0xD800..=0xDBFF => {
+                        if self.peek() == Some(b'\\') {
+                            self.next();
+                        } else {
+                            return Err(Error::UnexpectedEndOfHexEscape);
+                        }
+
+                        if self.peek() == Some(b'u') {
+                            self.next();
+                        } else {
+                            return Err(Error::UnexpectedEndOfHexEscape);
+                        }
+
+                        let n2 = self.decode_hex_escape()?;
+
+                        if n2 < 0xDC00 || n2 > 0xDFFF {
+                            return Err(Error::LoneLeadingSurrogateInHexEscape);
+                        }
+
+                        let n = (((n1 - 0xD800) as u32) << 10 | (n2 - 0xDC00) as u32) + 0x1_0000;
+
+                        match char::from_u32(n) {
+                            Some(c) => c,
+                            None => {
+                                return Err(Error::InvalidUnicodeCodePoint);
+                            }
+                        }
+                    }
+
+                    n => char::from_u32(n as u32).unwrap(),
+                };
+
+                if !ignore {
+                    scratch.extend_from_slice(c.encode_utf8(&mut [0_u8; 4]).as_bytes());
+                }
+            }
+            _ => {
+                return Err(Error::InvalidEscape);
+            }
+        }
+
+        Ok(())
+    }
+
+    fn deserialize_raw_value<V>(&mut self, visitor: V) -> Result<V::Value>
+    where
+        V: de::Visitor<'de>,
+    {
+        let start_index = self.index;
+        self.ignore_value()?;
+        let raw = &self.input[start_index..self.index];
+        visitor.visit_map(super::raw::BorrowedRawDeserializer {
+            raw_value: Some(unsafe { str::from_utf8_unchecked(raw) }),
+        })
+    }
+
+    fn ignore_value(&mut self) -> Result<()> {
+        let mut scratch = Vec::new();
+        self.parse_string(&mut scratch, true).map(|_| ())
+    }
+
+    fn decode_hex_escape(&mut self) -> Result<u16> {
+        if self.input.len() < 4 {
+            self.input = &self.input[self.input.len()..];
+            return Err(Error::Eof);
+        }
+
+        let mut n = 0;
+        for i in 0..4 {
+            let ch = decode_hex_val(self.input[i]);
+            match ch {
+                None => {
+                    self.input = &self.input[i..];
+                    return Err(Error::InvalidEscape);
+                }
+                Some(val) => {
+                    n = (n << 4) + val;
+                }
+            }
+        }
+        self.input = &self.input[4..];
+        Ok(n)
+    }
+
+    #[inline]
+    fn tail(&self) -> &'de [u8] {
+        &self.input[self.index..]
+    }
+
+    #[inline]
+    fn advance(&mut self, n: usize) {
+        self.index += n;
+    }
+}
+
+// ---
+
 struct SpaceSeparated<'a, 'de: 'a> {
     de: &'a mut Deserializer<'de>,
     first: bool,
@@ -569,10 +619,10 @@ impl<'de, 'a> SeqAccess<'de> for SpaceSeparated<'a, 'de> {
     where
         T: DeserializeSeed<'de>,
     {
-        if self.de.peek() == Some(b']') {
+        if self.de.parser.peek() == Some(b']') {
             return Ok(None);
         }
-        if !self.first && self.de.next() != Some(b' ') {
+        if !self.first && self.de.parser.next() != Some(b' ') {
             return Err(Error::ExpectedArrayDelimiter);
         }
         self.first = false;
@@ -587,10 +637,10 @@ impl<'de, 'a> MapAccess<'de> for SpaceSeparated<'a, 'de> {
     where
         K: DeserializeSeed<'de>,
     {
-        if self.de.tail().len() == 0 || self.de.peek() == Some(b'}') {
+        if self.de.parser.tail().len() == 0 || self.de.parser.peek() == Some(b'}') {
             return Ok(None);
         }
-        if !self.first && self.de.next() != Some(b' ') {
+        if !self.first && self.de.parser.next() != Some(b' ') {
             return Err(Error::ExpectedMapDelimiter);
         }
         self.first = false;
@@ -601,7 +651,7 @@ impl<'de, 'a> MapAccess<'de> for SpaceSeparated<'a, 'de> {
     where
         V: DeserializeSeed<'de>,
     {
-        if self.de.next() != Some(b'=') {
+        if self.de.parser.next() != Some(b'=') {
             return Err(Error::ExpectedMapKeyValueDelimiter);
         }
         seed.deserialize(&mut *self.de)
@@ -627,7 +677,7 @@ impl<'de, 'a> EnumAccess<'de> for Enum<'a, 'de> {
         V: DeserializeSeed<'de>,
     {
         let val = seed.deserialize(&mut *self.de)?;
-        if self.de.next() == Some(b'=') {
+        if self.de.parser.next() == Some(b'=') {
             Ok((val, self))
         } else {
             Err(Error::ExpectedMapKeyValueDelimiter)

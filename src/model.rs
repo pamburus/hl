@@ -111,7 +111,9 @@ impl<'a> RawValue<'a> {
                 reader.parse_str_raw(buf).unwrap();
             }
             Self::Logfmt(value) => {
-                buf.extend_from_slice(value.get().as_bytes());
+                logfmt::de::Deserializer::from_str(value.get())
+                    .parse_str_to_buf(buf)
+                    .unwrap();
             }
         }
     }
