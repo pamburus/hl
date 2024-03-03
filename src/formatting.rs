@@ -412,14 +412,18 @@ const HEXDIGIT: [u8; 16] = [
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::datefmt::LinuxDateFormat;
-    use crate::model::{Record, RecordFields};
-    use crate::theme::Theme;
-    use crate::themecfg::testing;
-    use crate::timestamp::Timestamp;
-    use crate::timezone::Tz;
-    use crate::{error::Error, settings::Punctuation};
+    use crate::{
+        datefmt::LinuxDateFormat,
+        error::Error,
+        model::{Record, RecordFields},
+        settings::Punctuation,
+        theme::Theme,
+        themecfg::testing,
+        timestamp::Timestamp,
+        timezone::Tz,
+    };
     use chrono::{Offset, Utc};
+    use serde_json as json;
 
     fn format(rec: &Record) -> Result<String, Error> {
         let formatter = RecordFormatter::new(
@@ -439,18 +443,22 @@ mod tests {
         Ok(String::from_utf8(buf)?)
     }
 
+    fn json_raw_value(s: &str) -> Box<json::value::RawValue> {
+        json::value::RawValue::from_string(s.into()).unwrap()
+    }
+
     #[test]
     fn test_nested_objects() {
         assert_eq!(
             format(&Record {
                 ts: Some(Timestamp::new("2000-01-02T03:04:05.123Z", None)),
-                message: Some(RawValue::Json(r#""tm""#)),
+                message: Some(RawValue::Json(&json_raw_value(r#""tm""#))),
                 level: Some(Level::Debug),
                 logger: Some("tl"),
                 caller: Some(Caller::Text("tc")),
                 fields: RecordFields{
                     head: heapless::Vec::from_slice(&[
-                        ("ka", RawValue::Json(r#"{"va":{"kb":42}}"#)),
+                        ("ka", RawValue::Json(&json_raw_value(r#"{"va":{"kb":42}}"#))),
                     ]).unwrap(),
                     tail: Vec::default(),
                 },
