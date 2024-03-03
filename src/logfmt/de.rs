@@ -428,7 +428,7 @@ impl<'de> Parser<'de> {
             // TODO: implement validation
             let i = match self.tail().iter().position(|&c| c == b' ' || c == b'=') {
                 Some(len) => len,
-                None => self.input.len(),
+                None => self.tail().len(),
             };
             let s = &self.tail()[..i];
             self.advance(i);
