@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use std::fmt;
 use std::iter::IntoIterator;
 use std::marker::PhantomData;
+use std::ops::Range;
 
 // third-party imports
 use chrono::{DateTime, Utc};
@@ -19,6 +20,7 @@ use crate::error::{Error, Result};
 use crate::fmtx::Push;
 use crate::level;
 use crate::logfmt;
+use crate::serdex::StreamDeserializerWithOffsets;
 use crate::settings::PredefinedFields;
 use crate::timestamp::Timestamp;
 use crate::types::FieldKind;
@@ -724,9 +726,13 @@ pub struct RawRecordFields<'a> {
 }
 
 impl<'a> RawRecord<'a> {
-    #[inline(always)]
+    #[inline]
     pub fn fields(&self) -> impl Iterator<Item = &(&'a str, RawValue<'a>)> {
         self.fields.head.iter().chain(self.fields.tail.iter())
+    }
+
+    pub fn parser() -> RawRecordParser {
+        RawRecordParser::new()
     }
 }
 
@@ -736,6 +742,138 @@ impl<'de: 'a, 'a> Deserialize<'de> for RawRecord<'a> {
         D: Deserializer<'de>,
     {
         Ok(deserializer.deserialize_map(RawRecordVisitor::<json::value::RawValue>::new())?)
+    }
+}
+
+// ---
+
+pub struct RawRecordParser {
+    allow_prefix: bool,
+}
+
+impl RawRecordParser {
+    pub fn new() -> Self {
+        Self { allow_prefix: false }
+    }
+
+    pub fn allow_prefix(self, value: bool) -> Self {
+        Self { allow_prefix: value }
+    }
+
+    pub fn parse<'a>(&self, line: &'a [u8]) -> RawRecordStream<impl RawRecordIterator<'a>, impl RawRecordIterator<'a>> {
+        let prefix = if self.allow_prefix {
+            line.split(|c| *c == b'{').next().unwrap()
+        } else {
+            b""
+        };
+
+        let xn = prefix.len();
+        let data = &line[xn..];
+
+        if data.first().map(|&x| x == b'{') == Some(false) {
+            RawRecordStream::Logfmt(RawRecordLogfmtStream {
+                line,
+                prefix,
+                done: false,
+            })
+        } else {
+            RawRecordStream::Json(RawRecordJsonStream {
+                line,
+                prefix,
+                delegate: StreamDeserializerWithOffsets(json::Deserializer::from_slice(data).into_iter::<RawRecord>()),
+            })
+        }
+    }
+}
+
+// ---
+
+pub enum RawRecordStream<Json, Logfmt> {
+    Json(Json),
+    Logfmt(Logfmt),
+}
+
+impl<'a, Json, Logfmt> RawRecordStream<Json, Logfmt>
+where
+    Json: RawRecordIterator<'a>,
+    Logfmt: RawRecordIterator<'a>,
+{
+    pub fn next(&mut self) -> Option<Result<AnnotatedRawRecord<'a>>> {
+        match self {
+            Self::Json(stream) => stream.next(),
+            Self::Logfmt(stream) => stream.next(),
+        }
+    }
+}
+
+// ---
+
+pub trait RawRecordIterator<'a> {
+    fn next(&mut self) -> Option<Result<AnnotatedRawRecord<'a>>>;
+}
+
+// ---
+
+pub struct AnnotatedRawRecord<'a> {
+    pub prefix: &'a [u8],
+    pub record: RawRecord<'a>,
+    pub source: &'a [u8],
+    pub offsets: Range<usize>,
+}
+
+// ---
+
+struct RawRecordJsonStream<'a, 'de, R> {
+    line: &'a [u8],
+    prefix: &'a [u8],
+    delegate: StreamDeserializerWithOffsets<'de, R, RawRecord<'a>>,
+}
+
+impl<'a, 'de: 'a, R> RawRecordIterator<'a> for RawRecordJsonStream<'a, 'de, R>
+where
+    R: serde_json::de::Read<'de>,
+{
+    fn next(&mut self) -> Option<Result<AnnotatedRawRecord<'a>>> {
+        let pl = self.prefix.len();
+        self.delegate.next().map(|res| {
+            res.map(|(record, range)| {
+                let range = range.start + pl..range.end + pl;
+                AnnotatedRawRecord {
+                    prefix: self.prefix,
+                    record,
+                    source: &self.line[range.start..range.end],
+                    offsets: range,
+                }
+            })
+            .map_err(Error::JsonParseError)
+        })
+    }
+}
+
+// ---
+
+struct RawRecordLogfmtStream<'a> {
+    line: &'a [u8],
+    prefix: &'a [u8],
+    done: bool,
+}
+
+impl<'a> RawRecordIterator<'a> for RawRecordLogfmtStream<'a> {
+    fn next(&mut self) -> Option<Result<AnnotatedRawRecord<'a>>> {
+        if self.done {
+            return None;
+        }
+
+        self.done = true;
+        match logfmt::from_str::<LogfmtRawRecord>(std::str::from_utf8(self.line).unwrap()) {
+            Ok(record) => Some(Ok(AnnotatedRawRecord {
+                prefix: self.prefix,
+                record: record.0,
+                source: self.line,
+                offsets: 0..self.line.len(),
+            })),
+            Err(err) => Some(Err(err.into())),
+        }
     }
 }
 
