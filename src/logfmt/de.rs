@@ -506,9 +506,6 @@ impl<'de> Parser<'de> {
                 b'=' => {
                     break;
                 }
-                b'"' => {
-                    return Err(Error::ExpectedKey);
-                }
                 b'\x00'..=b' ' => {
                     self.key = true;
                     break;
@@ -517,8 +514,11 @@ impl<'de> Parser<'de> {
                     unicode = true;
                     self.index += 1;
                 }
-                _ => {
+                b'a'..=b'z' | b'A'..=b'Z' | b'0'..=b'9' | b'_' | b'-' | b'.' => {
                     self.index += 1;
+                }
+                _ => {
+                    return Err(Error::UnexpectedByte(c));
                 }
             }
         }
