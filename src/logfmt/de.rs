@@ -50,7 +50,7 @@ impl<'de> Deserializer<'de> {
             parser: Parser {
                 input,
                 index: 0,
-                key: true,
+                key: false,
             },
         }
     }
@@ -407,11 +407,9 @@ impl<'de> Parser<'de> {
     fn parse_bool(&mut self) -> Result<bool> {
         if self.tail().starts_with(b"true") {
             self.advance(4);
-            self.key = !self.key;
             Ok(true)
         } else if self.tail().starts_with(b"false") {
             self.advance(5);
-            self.key = !self.key;
             Ok(false)
         } else {
             Err(Error::ExpectedBoolean)
@@ -436,7 +434,6 @@ impl<'de> Parser<'de> {
                     int += T::from(ch - b'0');
                 }
                 _ => {
-                    self.key = !self.key;
                     return Ok(int);
                 }
             }
@@ -467,7 +464,6 @@ impl<'de> Parser<'de> {
                     int += T::from((ch - b'0') as i8);
                 }
                 _ => {
-                    self.key = !self.key;
                     if negative {
                         int = -int;
                     }
@@ -487,7 +483,6 @@ impl<'de> Parser<'de> {
 
     fn parse_string<'s>(&'s mut self, scratch: &'s mut Vec<u8>, ignore: bool) -> Result<Reference<'de, 's, str>> {
         if self.key {
-            self.key = false;
             self.parse_key().map(Reference::Borrowed)
         } else {
             self.parse_value(scratch, ignore)
@@ -507,7 +502,6 @@ impl<'de> Parser<'de> {
                     break;
                 }
                 b'\x00'..=b' ' => {
-                    self.key = true;
                     break;
                 }
                 b'\x80'..=b'\xFF' => {
@@ -569,7 +563,6 @@ impl<'de> Parser<'de> {
             }
         }
 
-        self.key = true;
         if self.index == start {
             return Ok("");
         }
@@ -597,7 +590,6 @@ impl<'de> Parser<'de> {
             }
             match self.input[self.index] {
                 b'"' => {
-                    self.key = true;
                     if no_escapes {
                         let borrowed = &self.input[start..self.index];
                         self.advance(1);
@@ -782,7 +774,11 @@ impl<'de, 'a> MapAccess<'de> for KeyValueSequence<'a, 'de> {
         if self.de.parser.tail().len() == 0 {
             return Ok(None);
         }
-        seed.deserialize(&mut *self.de).map(Some)
+
+        self.de.parser.key = true;
+        let result = seed.deserialize(&mut *self.de).map(Some);
+        self.de.parser.key = false;
+        result
     }
 
     #[inline]
