@@ -483,16 +483,20 @@ impl<'de> Parser<'de> {
 
     fn parse_string<'s>(&'s mut self, scratch: &'s mut Vec<u8>, ignore: bool) -> Result<Reference<'de, 's, str>> {
         if self.key {
-            self.parse_key().map(Reference::Borrowed)
+            if let Some(key) = self.parse_key()? {
+                Ok(Reference::Borrowed(key))
+            } else {
+                Err(Error::ExpectedKey)
+            }
         } else {
             self.parse_value(scratch, ignore)
         }
     }
 
-    fn parse_key(&mut self) -> Result<&'de str> {
+    fn parse_key(&mut self) -> Result<Option<&'de str>> {
         self.skip_garbage();
 
-        let start = self.index;
+        let mut start = self.index;
         let mut unicode = false;
 
         while self.index < self.input.len() {
@@ -502,13 +506,15 @@ impl<'de> Parser<'de> {
                     break;
                 }
                 b'\x00'..=b' ' => {
-                    break;
+                    self.index += 1;
+                    self.skip_garbage();
+                    start = self.index;
                 }
                 b'\x80'..=b'\xFF' => {
                     unicode = true;
                     self.index += 1;
                 }
-                b'a'..=b'z' | b'A'..=b'Z' | b'0'..=b'9' | b'_' | b'-' | b'.' => {
+                b'a'..=b'z' | b'A'..=b'Z' | b'0'..=b'9' | b'_' | b'-' | b'.' | b':' => {
                     self.index += 1;
                 }
                 _ => {
@@ -521,14 +527,18 @@ impl<'de> Parser<'de> {
             return Err(Error::ExpectedKey);
         }
 
+        if self.index == self.input.len() {
+            return Ok(None);
+        }
+
         let s = &self.input[start..self.index];
         self.next();
 
         if unicode {
-            return Ok(str::from_utf8(s).map_err(|_| Error::InvalidUnicodeCodePoint)?);
+            return Ok(Some(str::from_utf8(s).map_err(|_| Error::InvalidUnicodeCodePoint)?));
         }
 
-        Ok(unsafe { str::from_utf8_unchecked(s) })
+        Ok(Some(unsafe { str::from_utf8_unchecked(s) }))
     }
 
     fn parse_value<'s>(&'s mut self, scratch: &'s mut Vec<u8>, ignore: bool) -> Result<Reference<'de, 's, str>> {
