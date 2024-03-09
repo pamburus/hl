@@ -364,24 +364,42 @@ pub enum ValueKind {
 
 // ---
 
-pub struct Record<'a> {
+pub trait AnyRecord<'a> {
+    type RawValue: AnyRawValue<'a> + 'a;
+
+    fn ts(&self) -> Option<Timestamp<'a>>;
+    fn message(&self) -> Option<Self::RawValue>;
+    fn level(&self) -> Option<Level>;
+    fn logger(&self) -> Option<&'a str>;
+    fn caller(&self) -> Option<Caller<'a>>;
+    fn fields(&'a self) -> impl Iterator<Item = &(&'a str, Self::RawValue)>;
+    fn fields_for_search(&'a self) -> impl Iterator<Item = &(&'a str, Self::RawValue)>;
+    fn matches<F: RecordFilter>(&self, filter: F) -> bool;
+}
+
+// ---
+
+pub struct CustomRecord<'a, RawValue> {
     pub ts: Option<Timestamp<'a>>,
-    pub message: Option<RawValue<'a>>,
+    pub message: Option<RawValue>,
     pub level: Option<Level>,
     pub logger: Option<&'a str>,
     pub caller: Option<Caller<'a>>,
-    pub(crate) fields: RecordFields<'a>,
-    pub(crate) predefined: heapless::Vec<(&'a str, RawValue<'a>), MAX_PREDEFINED_FIELDS>,
+    pub(crate) fields: RecordFields<'a, RawValue>,
+    pub(crate) predefined: heapless::Vec<(&'a str, RawValue), MAX_PREDEFINED_FIELDS>,
 }
 
-impl<'a> Record<'a> {
+impl<'a, RawValue> CustomRecord<'a, RawValue>
+where
+    RawValue: AnyRawValue<'a>,
+{
     #[inline(always)]
-    pub fn fields(&self) -> impl Iterator<Item = &(&'a str, RawValue<'a>)> {
+    pub fn fields(&self) -> impl Iterator<Item = &(&'a str, RawValue)> {
         self.fields.head.iter().chain(self.fields.tail.iter())
     }
 
     #[inline(always)]
-    pub fn fields_for_search(&self) -> impl Iterator<Item = &(&'a str, RawValue<'a>)> {
+    pub fn fields_for_search(&self) -> impl Iterator<Item = &(&'a str, RawValue)> {
         self.fields().chain(self.predefined.iter())
     }
 
@@ -410,9 +428,62 @@ impl<'a> Record<'a> {
     }
 }
 
-pub struct RecordFields<'a> {
-    pub(crate) head: heapless::Vec<(&'a str, RawValue<'a>), RECORD_EXTRA_CAPACITY>,
-    pub(crate) tail: Vec<(&'a str, RawValue<'a>)>,
+impl<'a, RawValue> AnyRecord<'a> for CustomRecord<'a, RawValue>
+where
+    RawValue: AnyRawValue<'a> + 'a,
+{
+    type RawValue = RawValue;
+
+    #[inline(always)]
+    fn ts(&self) -> Option<Timestamp<'a>> {
+        self.ts
+    }
+
+    #[inline(always)]
+    fn message(&self) -> Option<RawValue> {
+        self.message
+    }
+
+    #[inline(always)]
+    fn level(&self) -> Option<Level> {
+        self.level
+    }
+
+    #[inline(always)]
+    fn logger(&self) -> Option<&'a str> {
+        self.logger
+    }
+
+    #[inline(always)]
+    fn caller(&self) -> Option<Caller<'a>> {
+        self.caller
+    }
+
+    #[inline(always)]
+    fn fields(&'a self) -> impl Iterator<Item = &(&'a str, Self::RawValue)> {
+        self.fields()
+    }
+
+    #[inline(always)]
+    fn fields_for_search(&'a self) -> impl Iterator<Item = &(&'a str, Self::RawValue)> {
+        self.fields_for_search()
+    }
+
+    #[inline(always)]
+    fn matches<F: RecordFilter>(&self, filter: F) -> bool {
+        self.matches(filter)
+    }
+}
+
+// ---
+
+pub type Record<'a> = CustomRecord<'a, RawValue<'a>>;
+
+// ---
+
+pub struct RecordFields<'a, RawValue> {
+    pub(crate) head: heapless::Vec<(&'a str, RawValue), RECORD_EXTRA_CAPACITY>,
+    pub(crate) tail: Vec<(&'a str, RawValue)>,
 }
 
 // ---
