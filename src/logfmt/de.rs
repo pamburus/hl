@@ -497,18 +497,15 @@ impl<'de> Parser<'de> {
 
         while self.index < self.input.len() {
             let c = self.input[self.index];
-            match c {
-                b'=' => {
+            match KEY[c as usize] {
+                KeyCh::EQ_SIGN => {
                     break;
                 }
-                b'\x00'..=b' ' => {
-                    break;
-                }
-                b'\x80'..=b'\xFF' => {
+                KeyCh::UNICODE => {
                     unicode = true;
                     self.index += 1;
                 }
-                b'a'..=b'z' | b'A'..=b'Z' | b'0'..=b'9' | b'_' | b'-' | b'.' => {
+                KeyCh::ALLOWED => {
                     self.index += 1;
                 }
                 _ => {
@@ -932,6 +929,41 @@ static HEX: [u8; 256] = {
         __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // D
         __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // E
         __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // F
+    ]
+};
+
+struct KeyCh;
+
+impl KeyCh {
+    const NOT_ALLOWED: u8 = 255;
+    const ALLOWED: u8 = 0;
+    const EQ_SIGN: u8 = 1;
+    const UNICODE: u8 = 2;
+}
+
+static KEY: [u8; 256] = {
+    const NA: u8 = KeyCh::NOT_ALLOWED;
+    const __: u8 = KeyCh::ALLOWED;
+    const EQ: u8 = KeyCh::EQ_SIGN;
+    const UC: u8 = KeyCh::UNICODE;
+    [
+        //   1   2   3   4   5   6   7   8   9   A   B   C   D   E   F
+        NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, // 0
+        NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, // 1
+        NA, __, NA, __, __, __, __, NA, NA, NA, __, __, NA, __, __, __, // 2
+        __, __, __, __, __, __, __, __, __, __, __, NA, NA, EQ, NA, __, // 3
+        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // 4
+        __, __, __, __, __, __, __, __, __, __, __, NA, NA, NA, NA, __, // 5
+        NA, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // 6
+        __, __, __, __, __, __, __, __, __, __, __, NA, NA, NA, __, NA, // 7
+        UC, UC, UC, UC, UC, UC, UC, UC, UC, UC, UC, UC, UC, UC, UC, UC, // 8
+        UC, UC, UC, UC, UC, UC, UC, UC, UC, UC, UC, UC, UC, UC, UC, UC, // 9
+        UC, UC, UC, UC, UC, UC, UC, UC, UC, UC, UC, UC, UC, UC, UC, UC, // A
+        UC, UC, UC, UC, UC, UC, UC, UC, UC, UC, UC, UC, UC, UC, UC, UC, // B
+        UC, UC, UC, UC, UC, UC, UC, UC, UC, UC, UC, UC, UC, UC, UC, UC, // C
+        UC, UC, UC, UC, UC, UC, UC, UC, UC, UC, UC, UC, UC, UC, UC, UC, // D
+        UC, UC, UC, UC, UC, UC, UC, UC, UC, UC, UC, UC, UC, UC, UC, UC, // E
+        UC, UC, UC, UC, UC, UC, UC, UC, UC, UC, UC, UC, UC, UC, UC, UC, // F
     ]
 };
 
