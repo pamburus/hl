@@ -674,11 +674,12 @@ pub struct RawRecordFields<'a> {
 }
 
 impl<'a> RawRecord<'a> {
-    #[inline]
+    #[inline(always)]
     pub fn fields(&self) -> impl Iterator<Item = &(&'a str, RawValue<'a>)> {
         self.fields.head.iter().chain(self.fields.tail.iter())
     }
 
+    #[inline(always)]
     pub fn parser() -> RawRecordParser {
         RawRecordParser::new()
     }
@@ -700,16 +701,24 @@ pub struct RawRecordParser {
 }
 
 impl RawRecordParser {
+    #[inline(always)]
     pub fn new() -> Self {
         Self { allow_prefix: false }
     }
 
+    #[inline(always)]
     pub fn allow_prefix(self, value: bool) -> Self {
         Self { allow_prefix: value }
     }
 
-    pub fn parse<'a>(&self, line: &'a [u8]) -> RawRecordStream<impl RawRecordIterator<'a>> {
-        let prefix = if self.allow_prefix && line.last() == Some(&b'}') {
+    #[inline(always)]
+    pub fn parse<'a: 'de, 'de>(
+        &self,
+        line: &'a [u8],
+    ) -> RawRecordStream<RawRecordJsonStream<'a, 'de, impl serde_json::de::Read<'de>>> {
+        let prefix = if self.allow_prefix
+        /*&& line.last() == Some(&b'}')*/
+        {
             line.split(|c| *c == b'{').next().unwrap()
         } else {
             b""
@@ -718,8 +727,7 @@ impl RawRecordParser {
         let xn = prefix.len();
         let data = &line[xn..];
 
-        RawRecordStream::Json(RawRecordJsonStream {
-            line,
+        RawRecordStream(RawRecordJsonStream {
             prefix,
             delegate: StreamDeserializerWithOffsets(json::Deserializer::from_slice(data).into_iter::<RawRecord>()),
         })
@@ -728,17 +736,16 @@ impl RawRecordParser {
 
 // ---
 
-pub enum RawRecordStream<Json> {
-    Json(Json),
-}
+pub struct RawRecordStream<Json>(Json);
 
 impl<'a, Json> RawRecordStream<Json>
 where
     Json: RawRecordIterator<'a>,
 {
+    #[inline(always)]
     pub fn next(&mut self) -> Option<Result<AnnotatedRawRecord<'a>>> {
         match self {
-            Self::Json(stream) => stream.next(),
+            Self(stream) => stream.next(),
         }
     }
 }
@@ -754,14 +761,12 @@ pub trait RawRecordIterator<'a> {
 pub struct AnnotatedRawRecord<'a> {
     pub prefix: &'a [u8],
     pub record: RawRecord<'a>,
-    pub source: &'a [u8],
     pub offsets: Range<usize>,
 }
 
 // ---
 
-struct RawRecordJsonStream<'a, 'de, R> {
-    line: &'a [u8],
+pub struct RawRecordJsonStream<'a, 'de, R> {
     prefix: &'a [u8],
     delegate: StreamDeserializerWithOffsets<'de, R, RawRecord<'a>>,
 }
@@ -770,6 +775,7 @@ impl<'a, 'de: 'a, R> RawRecordIterator<'a> for RawRecordJsonStream<'a, 'de, R>
 where
     R: serde_json::de::Read<'de>,
 {
+    #[inline(always)]
     fn next(&mut self) -> Option<Result<AnnotatedRawRecord<'a>>> {
         let pl = self.prefix.len();
         self.delegate.next().map(|res| {
@@ -778,7 +784,6 @@ where
                 AnnotatedRawRecord {
                     prefix: self.prefix,
                     record,
-                    source: &self.line[range.start..range.end],
                     offsets: range,
                 }
             })
