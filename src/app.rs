@@ -789,7 +789,7 @@ impl<'a, Formatter: RecordWithSourceFormatter, Filter: RecordFilter> SegmentProc
                     if ar.prefix.last().map(|&x| x == b' ') == Some(false) {
                         buf.push(b' ');
                     }
-                    self.formatter.format_record(buf, record.with_source(ar.source));
+                    self.formatter.format_record(buf, record.with_source(&line[ar.offsets]));
                     let end = buf.len();
                     observer.observe_record(&record, begin..end);
                     produced_some = true;
