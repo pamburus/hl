@@ -452,13 +452,13 @@ mod tests {
         assert_eq!(
             format(&Record {
                 ts: Some(Timestamp::new("2000-01-02T03:04:05.123Z", None)),
-                message: Some(RawValue::Json(&json_raw_value(r#""tm""#))),
+                message: Some(RawValue::from(&json_raw_value(r#""tm""#))),
                 level: Some(Level::Debug),
                 logger: Some("tl"),
                 caller: Some(Caller::Text("tc")),
                 fields: RecordFields{
                     head: heapless::Vec::from_slice(&[
-                        ("ka", RawValue::Json(&json_raw_value(r#"{"va":{"kb":42}}"#))),
+                        ("ka", RawValue::from(&json_raw_value(r#"{"va":{"kb":42}}"#))),
                     ]).unwrap(),
                     tail: Vec::default(),
                 },

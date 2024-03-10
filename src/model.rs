@@ -46,97 +46,100 @@ pub trait AnyRawValue<'a> {
 }
 
 #[derive(Clone, Copy)]
-pub enum RawValue<'a> {
-    Json(&'a json::value::RawValue),
-    Logfmt(&'a logfmt::raw::RawValue),
+enum RawValueImpl<'a> {
+    Json(JsonRawValue<'a>),
+    Logfmt(LogfmtRawValue<'a>),
 }
+
+#[derive(Clone, Copy)]
+pub struct RawValue<'a>(RawValueImpl<'a>);
 
 impl<'a> RawValue<'a> {
     #[inline(always)]
     pub fn kind(&self) -> ValueKind {
-        match self {
-            Self::Json(value) => JsonRawValue(value).kind(),
-            Self::Logfmt(value) => LogfmtRawValue(value).kind(),
+        match self.0 {
+            RawValueImpl::Json(value) => value.kind(),
+            RawValueImpl::Logfmt(value) => value.kind(),
         }
     }
 
     #[inline(always)]
     pub fn is_empty(&self) -> bool {
-        match self {
-            Self::Json(value) => JsonRawValue(value).is_empty(),
-            Self::Logfmt(value) => LogfmtRawValue(value).is_empty(),
+        match self.0 {
+            RawValueImpl::Json(value) => value.is_empty(),
+            RawValueImpl::Logfmt(value) => value.is_empty(),
         }
     }
 
     #[inline(always)]
     pub fn raw_str(&self) -> &'a str {
-        match self {
-            Self::Json(value) => JsonRawValue(value).raw_str(),
-            Self::Logfmt(value) => LogfmtRawValue(value).raw_str(),
+        match self.0 {
+            RawValueImpl::Json(value) => value.raw_str(),
+            RawValueImpl::Logfmt(value) => value.raw_str(),
         }
     }
 
     #[inline(always)]
     pub fn format_as_json_str<B: Push<u8>>(&self, buf: &mut B) {
-        match self {
-            Self::Json(value) => JsonRawValue(value).format_as_json_str(buf),
-            Self::Logfmt(value) => LogfmtRawValue(value).format_as_json_str(buf),
+        match self.0 {
+            RawValueImpl::Json(value) => value.format_as_json_str(buf),
+            RawValueImpl::Logfmt(value) => value.format_as_json_str(buf),
         }
     }
 
     #[inline(always)]
     pub fn format_as_str(&self, buf: &mut Vec<u8>) {
-        match self {
-            Self::Json(value) => JsonRawValue(value).format_as_str(buf),
-            Self::Logfmt(value) => LogfmtRawValue(value).format_as_str(buf),
+        match self.0 {
+            RawValueImpl::Json(value) => value.format_as_str(buf),
+            RawValueImpl::Logfmt(value) => value.format_as_str(buf),
         }
     }
 
     #[inline(always)]
     pub fn format_readable(&self, buf: &mut Vec<u8>) {
-        match self {
-            Self::Json(value) => JsonRawValue(value).format_readable(buf),
-            Self::Logfmt(value) => LogfmtRawValue(value).format_readable(buf),
+        match self.0 {
+            RawValueImpl::Json(value) => value.format_readable(buf),
+            RawValueImpl::Logfmt(value) => value.format_readable(buf),
         }
     }
 
     #[inline(always)]
     pub fn parse_object(&self) -> Result<Object<'a>> {
-        match self {
-            Self::Json(value) => JsonRawValue(value).parse_object(),
-            Self::Logfmt(value) => LogfmtRawValue(value).parse_object(),
+        match self.0 {
+            RawValueImpl::Json(value) => value.parse_object(),
+            RawValueImpl::Logfmt(value) => value.parse_object(),
         }
     }
 
     #[inline(always)]
     pub fn parse_array<const N: usize>(&self) -> Result<Array<'a, N>> {
-        match self {
-            Self::Json(value) => JsonRawValue(value).parse_array(),
-            Self::Logfmt(value) => LogfmtRawValue(value).parse_array(),
+        match self.0 {
+            RawValueImpl::Json(value) => value.parse_array(),
+            RawValueImpl::Logfmt(value) => value.parse_array(),
         }
     }
 
     #[inline(always)]
     pub fn parse<T: Deserialize<'a>>(&self) -> Result<T> {
-        match self {
-            Self::Json(value) => JsonRawValue(value).parse(),
-            Self::Logfmt(value) => LogfmtRawValue(value).parse(),
+        match self.0 {
+            RawValueImpl::Json(value) => value.parse(),
+            RawValueImpl::Logfmt(value) => value.parse(),
         }
     }
 
     #[inline(always)]
     pub fn is_byte_code(&self) -> bool {
-        match self {
-            Self::Json(value) => JsonRawValue(value).is_byte_code(),
-            Self::Logfmt(value) => LogfmtRawValue(value).is_byte_code(),
+        match self.0 {
+            RawValueImpl::Json(value) => value.is_byte_code(),
+            RawValueImpl::Logfmt(value) => value.is_byte_code(),
         }
     }
 
     #[inline(always)]
     pub fn parse_byte_code(&self) -> u8 {
-        match self {
-            Self::Json(value) => JsonRawValue(value).parse_byte_code(),
-            Self::Logfmt(value) => LogfmtRawValue(value).parse_byte_code(),
+        match self.0 {
+            RawValueImpl::Json(value) => value.parse_byte_code(),
+            RawValueImpl::Logfmt(value) => value.parse_byte_code(),
         }
     }
 }
@@ -144,19 +147,27 @@ impl<'a> RawValue<'a> {
 impl<'a> From<&'a json::value::RawValue> for RawValue<'a> {
     #[inline(always)]
     fn from(value: &'a json::value::RawValue) -> Self {
-        Self::Json(value)
+        Self(RawValueImpl::Json(JsonRawValue(value)))
+    }
+}
+
+impl<'a> From<&'a Box<json::value::RawValue>> for RawValue<'a> {
+    #[inline(always)]
+    fn from(value: &'a Box<json::value::RawValue>) -> Self {
+        Self(RawValueImpl::Json(JsonRawValue(&value)))
     }
 }
 
 impl<'a> From<&'a logfmt::raw::RawValue> for RawValue<'a> {
     #[inline(always)]
     fn from(value: &'a logfmt::raw::RawValue) -> Self {
-        Self::Logfmt(value)
+        Self(RawValueImpl::Logfmt(LogfmtRawValue(value)))
     }
 }
 
 // ---
 
+#[derive(Clone, Copy)]
 struct JsonRawValue<'a>(&'a json::value::RawValue);
 
 impl<'a> AnyRawValue<'a> for JsonRawValue<'a> {
@@ -248,6 +259,7 @@ impl<'a> AnyRawValue<'a> for JsonRawValue<'a> {
 
 // ---
 
+#[derive(Clone, Copy)]
 struct LogfmtRawValue<'a>(&'a logfmt::raw::RawValue);
 
 impl<'a> AnyRawValue<'a> for LogfmtRawValue<'a> {
