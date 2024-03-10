@@ -31,6 +31,20 @@ pub use level::Level;
 
 // ---
 
+pub trait AnyRawValue<'a> {
+    fn kind(&self) -> ValueKind;
+    fn is_empty(&self) -> bool;
+    fn raw_str(&self) -> &'a str;
+    fn format_as_json_str<B: Push<u8>>(&self, buf: &mut B);
+    fn format_as_str(&self, buf: &mut Vec<u8>);
+    fn format_readable(&self, buf: &mut Vec<u8>);
+    fn parse_object(&self) -> Result<Object<'a>>;
+    fn parse_array<const N: usize>(&self) -> Result<Array<'a, N>>;
+    fn parse<T: Deserialize<'a>>(&self) -> Result<T>;
+    fn is_byte_code(&self) -> bool;
+    fn parse_byte_code(&self) -> u8;
+}
+
 #[derive(Clone, Copy)]
 pub enum RawValue<'a> {
     Json(&'a json::value::RawValue),
@@ -38,179 +52,91 @@ pub enum RawValue<'a> {
 }
 
 impl<'a> RawValue<'a> {
-    #[inline]
+    #[inline(always)]
     pub fn kind(&self) -> ValueKind {
         match self {
-            Self::Json(value) => {
-                let bytes = value.get().as_bytes();
-                if bytes.len() == 0 {
-                    return ValueKind::Null;
-                }
-                match bytes[0] {
-                    b'"' => ValueKind::QuotedString,
-                    b'0'..=b'9' | b'-' | b'+' | b'.' => ValueKind::Number,
-                    b'{' => ValueKind::Object,
-                    b'[' => ValueKind::Array,
-                    b't' | b'f' => ValueKind::Boolean,
-                    _ => ValueKind::Null,
-                }
-            }
-            Self::Logfmt(value) => {
-                let looks_like_number = || {
-                    let mut s = value.get();
-                    let mut n_dots = 0;
-                    if s.starts_with('-') {
-                        s = &s[1..];
-                    }
-                    s.len() < 40
-                        && s.as_bytes().iter().all(|&x| {
-                            if x == b'.' {
-                                n_dots += 1;
-                                n_dots <= 1
-                            } else {
-                                x.is_ascii_digit()
-                            }
-                        })
-                };
-
-                if !value.get().is_empty() && value.get().as_bytes()[0] == b'"' {
-                    ValueKind::QuotedString
-                } else if value.get() == "false" || value.get() == "true" {
-                    ValueKind::Boolean
-                } else if value.get() == "null" {
-                    ValueKind::Null
-                } else if looks_like_number() {
-                    ValueKind::Number
-                } else {
-                    ValueKind::String
-                }
-            }
+            Self::Json(value) => JsonRawValue(value).kind(),
+            Self::Logfmt(value) => LogfmtRawValue(value).kind(),
         }
     }
 
-    #[inline]
+    #[inline(always)]
     pub fn is_empty(&self) -> bool {
         match self {
-            Self::Json(value) => match value.get() {
-                r#""""# | "null" | "{}" | "[]" => false,
-                _ => true,
-            },
-            Self::Logfmt(value) => value.get().is_empty(),
+            Self::Json(value) => JsonRawValue(value).is_empty(),
+            Self::Logfmt(value) => LogfmtRawValue(value).is_empty(),
         }
     }
 
-    #[inline]
+    #[inline(always)]
     pub fn raw_str(&self) -> &'a str {
         match self {
-            Self::Json(value) => value.get(),
-            Self::Logfmt(value) => value.get(),
+            Self::Json(value) => JsonRawValue(value).raw_str(),
+            Self::Logfmt(value) => LogfmtRawValue(value).raw_str(),
         }
     }
 
-    #[inline]
+    #[inline(always)]
     pub fn format_as_json_str<B: Push<u8>>(&self, buf: &mut B) {
         match self {
-            Self::Json(value) => buf.extend_from_slice(value.get().as_bytes()),
-            Self::Logfmt(value) => {
-                if value.get().is_empty() {
-                    buf.push(b'"');
-                    buf.push(b'"');
-                } else if value.get().as_bytes()[0] == b'"' {
-                    buf.extend_from_slice(value.get().as_bytes());
-                } else {
-                    buf.push(b'"');
-                    buf.extend_from_slice(value.get().as_bytes());
-                    buf.push(b'"');
-                }
-            }
+            Self::Json(value) => JsonRawValue(value).format_as_json_str(buf),
+            Self::Logfmt(value) => LogfmtRawValue(value).format_as_json_str(buf),
         }
     }
 
-    #[inline]
+    #[inline(always)]
     pub fn format_as_str(&self, buf: &mut Vec<u8>) {
         match self {
-            Self::Json(value) => {
-                let mut reader = StrRead::new(&value.get()[1..]);
-                reader.parse_str_raw(buf).unwrap();
-            }
-            Self::Logfmt(value) => {
-                logfmt::de::Deserializer::from_str(value.get())
-                    .parse_str_to_buf(buf)
-                    .unwrap();
-            }
+            Self::Json(value) => JsonRawValue(value).format_as_str(buf),
+            Self::Logfmt(value) => LogfmtRawValue(value).format_as_str(buf),
         }
     }
 
-    #[inline]
+    #[inline(always)]
     pub fn format_readable(&self, buf: &mut Vec<u8>) {
         match self {
-            Self::Json(value) => {
-                if value.get().as_bytes().first() == Some(&b'"') {
-                    self.format_as_str(buf)
-                } else {
-                    buf.extend_from_slice(value.get().as_bytes());
-                }
-            }
-            Self::Logfmt(value) => {
-                if value.get().as_bytes().first() == Some(&b'"') {
-                    self.format_as_str(buf)
-                } else {
-                    buf.extend_from_slice(value.get().as_bytes());
-                }
-            }
+            Self::Json(value) => JsonRawValue(value).format_readable(buf),
+            Self::Logfmt(value) => LogfmtRawValue(value).format_readable(buf),
         }
     }
 
-    #[inline]
+    #[inline(always)]
     pub fn parse_object(&self) -> Result<Object<'a>> {
         match self {
-            Self::Json(value) => json::from_str::<Object>(value.get()).map_err(Error::JsonParseError),
-            Self::Logfmt(value) => logfmt::from_str::<Object>(value.get()).map_err(Error::LogfmtParseError),
+            Self::Json(value) => JsonRawValue(value).parse_object(),
+            Self::Logfmt(value) => LogfmtRawValue(value).parse_object(),
         }
     }
 
-    #[inline]
+    #[inline(always)]
     pub fn parse_array<const N: usize>(&self) -> Result<Array<'a, N>> {
         match self {
-            Self::Json(value) => json::from_str::<Array<N>>(value.get()).map_err(Error::JsonParseError),
-            Self::Logfmt(value) => logfmt::from_str::<Array<N>>(value.get()).map_err(Error::LogfmtParseError),
+            Self::Json(value) => JsonRawValue(value).parse_array(),
+            Self::Logfmt(value) => LogfmtRawValue(value).parse_array(),
         }
     }
 
-    #[inline]
+    #[inline(always)]
     pub fn parse<T: Deserialize<'a>>(&self) -> Result<T> {
         match self {
-            Self::Json(value) => json::from_str(value.get()).map_err(Error::JsonParseError),
-            Self::Logfmt(value) => logfmt::from_str(value.get()).map_err(Error::LogfmtParseError),
+            Self::Json(value) => JsonRawValue(value).parse(),
+            Self::Logfmt(value) => LogfmtRawValue(value).parse(),
         }
     }
 
-    #[inline]
+    #[inline(always)]
     pub fn is_byte_code(&self) -> bool {
         match self {
-            Self::Json(value) => {
-                let v = value.get().as_bytes();
-                match v.len() {
-                    1 => v[0].is_ascii_digit(),
-                    2 => v[0].is_ascii_digit() && v[1].is_ascii_digit(),
-                    3 => &b"100"[..] <= v && v <= &b"255"[..],
-                    _ => false,
-                }
-            }
-            Self::Logfmt(_) => false,
+            Self::Json(value) => JsonRawValue(value).is_byte_code(),
+            Self::Logfmt(value) => LogfmtRawValue(value).is_byte_code(),
         }
     }
 
-    #[inline]
+    #[inline(always)]
     pub fn parse_byte_code(&self) -> u8 {
         match self {
-            Self::Json(value) => match value.get().as_bytes() {
-                [a] => a - b'0',
-                [a, b] => (a - b'0') * 10 + (b - b'0'),
-                [a, b, c] => (a - b'0') * 100 + (b - b'0') * 10 + (c - b'0'),
-                _ => 0,
-            },
-            Self::Logfmt(_) => 0,
+            Self::Json(value) => JsonRawValue(value).parse_byte_code(),
+            Self::Logfmt(value) => LogfmtRawValue(value).parse_byte_code(),
         }
     }
 }
@@ -226,6 +152,200 @@ impl<'a> From<&'a logfmt::raw::RawValue> for RawValue<'a> {
     #[inline(always)]
     fn from(value: &'a logfmt::raw::RawValue) -> Self {
         Self::Logfmt(value)
+    }
+}
+
+// ---
+
+struct JsonRawValue<'a>(&'a json::value::RawValue);
+
+impl<'a> AnyRawValue<'a> for JsonRawValue<'a> {
+    #[inline]
+    fn kind(&self) -> ValueKind {
+        let bytes = self.0.get().as_bytes();
+        if bytes.len() == 0 {
+            return ValueKind::Null;
+        }
+        match bytes[0] {
+            b'"' => ValueKind::QuotedString,
+            b'0'..=b'9' | b'-' | b'+' | b'.' => ValueKind::Number,
+            b'{' => ValueKind::Object,
+            b'[' => ValueKind::Array,
+            b't' | b'f' => ValueKind::Boolean,
+            _ => ValueKind::Null,
+        }
+    }
+
+    #[inline]
+    fn is_empty(&self) -> bool {
+        match self.0.get() {
+            r#""""# | "null" | "{}" | "[]" => false,
+            _ => true,
+        }
+    }
+
+    #[inline]
+    fn raw_str(&self) -> &'a str {
+        self.0.get()
+    }
+
+    #[inline]
+    fn format_as_json_str<B: Push<u8>>(&self, buf: &mut B) {
+        buf.extend_from_slice(self.0.get().as_bytes())
+    }
+
+    #[inline]
+    fn format_as_str(&self, buf: &mut Vec<u8>) {
+        let mut reader = StrRead::new(&self.0.get()[1..]);
+        reader.parse_str_raw(buf).unwrap();
+    }
+
+    #[inline]
+    fn format_readable(&self, buf: &mut Vec<u8>) {
+        if self.0.get().as_bytes().first() == Some(&b'"') {
+            self.format_as_str(buf)
+        } else {
+            buf.extend_from_slice(self.0.get().as_bytes());
+        }
+    }
+
+    #[inline]
+    fn parse_object(&self) -> Result<Object<'a>> {
+        json::from_str::<Object>(self.0.get()).map_err(Error::JsonParseError)
+    }
+
+    #[inline]
+    fn parse_array<const N: usize>(&self) -> Result<Array<'a, N>> {
+        json::from_str::<Array<N>>(self.0.get()).map_err(Error::JsonParseError)
+    }
+
+    #[inline]
+    fn parse<T: Deserialize<'a>>(&self) -> Result<T> {
+        json::from_str(self.0.get()).map_err(Error::JsonParseError)
+    }
+
+    #[inline]
+    fn is_byte_code(&self) -> bool {
+        let v = self.0.get().as_bytes();
+        match v.len() {
+            1 => v[0].is_ascii_digit(),
+            2 => v[0].is_ascii_digit() && v[1].is_ascii_digit(),
+            3 => &b"100"[..] <= v && v <= &b"255"[..],
+            _ => false,
+        }
+    }
+
+    #[inline]
+    fn parse_byte_code(&self) -> u8 {
+        match self.0.get().as_bytes() {
+            [a] => a - b'0',
+            [a, b] => (a - b'0') * 10 + (b - b'0'),
+            [a, b, c] => (a - b'0') * 100 + (b - b'0') * 10 + (c - b'0'),
+            _ => 0,
+        }
+    }
+}
+
+// ---
+
+struct LogfmtRawValue<'a>(&'a logfmt::raw::RawValue);
+
+impl<'a> AnyRawValue<'a> for LogfmtRawValue<'a> {
+    #[inline]
+    fn kind(&self) -> ValueKind {
+        let looks_like_number = || {
+            let mut s = self.0.get();
+            let mut n_dots = 0;
+            if s.starts_with('-') {
+                s = &s[1..];
+            }
+            s.len() < 40
+                && s.as_bytes().iter().all(|&x| {
+                    if x == b'.' {
+                        n_dots += 1;
+                        n_dots <= 1
+                    } else {
+                        x.is_ascii_digit()
+                    }
+                })
+        };
+
+        if !self.0.get().is_empty() && self.0.get().as_bytes()[0] == b'"' {
+            ValueKind::QuotedString
+        } else if self.0.get() == "false" || self.0.get() == "true" {
+            ValueKind::Boolean
+        } else if self.0.get() == "null" {
+            ValueKind::Null
+        } else if looks_like_number() {
+            ValueKind::Number
+        } else {
+            ValueKind::String
+        }
+    }
+
+    #[inline]
+    fn is_empty(&self) -> bool {
+        self.0.get().is_empty()
+    }
+
+    #[inline]
+    fn raw_str(&self) -> &'a str {
+        self.0.get()
+    }
+
+    #[inline]
+    fn format_as_json_str<B: Push<u8>>(&self, buf: &mut B) {
+        if self.0.get().is_empty() {
+            buf.push(b'"');
+            buf.push(b'"');
+        } else if self.0.get().as_bytes()[0] == b'"' {
+            buf.extend_from_slice(self.0.get().as_bytes());
+        } else {
+            buf.push(b'"');
+            buf.extend_from_slice(self.0.get().as_bytes());
+            buf.push(b'"');
+        }
+    }
+
+    #[inline]
+    fn format_as_str(&self, buf: &mut Vec<u8>) {
+        logfmt::de::Deserializer::from_str(self.0.get())
+            .parse_str_to_buf(buf)
+            .unwrap();
+    }
+
+    #[inline]
+    fn format_readable(&self, buf: &mut Vec<u8>) {
+        if self.0.get().as_bytes().first() == Some(&b'"') {
+            self.format_as_str(buf)
+        } else {
+            buf.extend_from_slice(self.0.get().as_bytes());
+        }
+    }
+
+    #[inline]
+    fn parse_object(&self) -> Result<Object<'a>> {
+        logfmt::from_str::<Object>(self.0.get()).map_err(Error::LogfmtParseError)
+    }
+
+    #[inline]
+    fn parse_array<const N: usize>(&self) -> Result<Array<'a, N>> {
+        logfmt::from_str::<Array<N>>(self.0.get()).map_err(Error::LogfmtParseError)
+    }
+
+    #[inline]
+    fn parse<T: Deserialize<'a>>(&self) -> Result<T> {
+        logfmt::from_str(self.0.get()).map_err(Error::LogfmtParseError)
+    }
+
+    #[inline]
+    fn is_byte_code(&self) -> bool {
+        false
+    }
+
+    #[inline]
+    fn parse_byte_code(&self) -> u8 {
+        0
     }
 }
 
