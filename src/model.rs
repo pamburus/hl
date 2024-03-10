@@ -3,18 +3,23 @@ use std::collections::HashMap;
 use std::fmt;
 use std::iter::IntoIterator;
 use std::marker::PhantomData;
+use std::ops::Range;
 
 // third-party imports
 use chrono::{DateTime, Utc};
-use json::value::RawValue;
 use regex::Regex;
 use serde::de::{Deserialize, Deserializer, MapAccess, SeqAccess, Visitor};
-use serde_json as json;
+use serde_json::{
+    self as json,
+    de::{Read, StrRead},
+};
 use wildflower::Pattern;
 
 // local imports
 use crate::error::{Error, Result};
+use crate::fmtx::Push;
 use crate::level;
+use crate::serdex::StreamDeserializerWithOffsets;
 use crate::settings::PredefinedFields;
 use crate::timestamp::Timestamp;
 use crate::types::FieldKind;
@@ -25,25 +30,141 @@ pub use level::Level;
 
 // ---
 
+#[derive(Clone, Copy)]
+pub struct RawValue<'a>(&'a json::value::RawValue);
+
+impl<'a> RawValue<'a> {
+    #[inline]
+    pub fn kind(&self) -> ValueKind {
+        let bytes = self.0.get().as_bytes();
+        if bytes.len() == 0 {
+            return ValueKind::Null;
+        }
+        match bytes[0] {
+            b'"' => ValueKind::QuotedString,
+            b'0'..=b'9' | b'-' | b'+' | b'.' => ValueKind::Number,
+            b'{' => ValueKind::Object,
+            b'[' => ValueKind::Array,
+            b't' | b'f' => ValueKind::Boolean,
+            _ => ValueKind::Null,
+        }
+    }
+
+    #[inline]
+    pub fn is_empty(&self) -> bool {
+        match self.0.get() {
+            r#""""# | "null" | "{}" | "[]" => false,
+            _ => true,
+        }
+    }
+
+    #[inline]
+    pub fn raw_str(&self) -> &'a str {
+        self.0.get()
+    }
+
+    #[inline]
+    pub fn get(&self) -> &'a str {
+        self.0.get()
+    }
+
+    #[inline]
+    pub fn format_as_json_str<B: Push<u8>>(&self, buf: &mut B) {
+        buf.extend_from_slice(self.0.get().as_bytes())
+    }
+
+    #[inline]
+    pub fn format_as_str(&self, buf: &mut Vec<u8>) {
+        let mut reader = StrRead::new(&self.0.get()[1..]);
+        reader.parse_str_raw(buf).unwrap();
+    }
+
+    #[inline]
+    pub fn format_readable(&self, buf: &mut Vec<u8>) {
+        if self.0.get().as_bytes().first() == Some(&b'"') {
+            self.format_as_str(buf)
+        } else {
+            buf.extend_from_slice(self.0.get().as_bytes());
+        }
+    }
+
+    #[inline]
+    pub fn parse_object(&self) -> Result<Object<'a>> {
+        json::from_str::<Object>(self.0.get()).map_err(Error::JsonParseError)
+    }
+
+    #[inline]
+    pub fn parse_array<const N: usize>(&self) -> Result<Array<'a, N>> {
+        json::from_str::<Array<N>>(self.0.get()).map_err(Error::JsonParseError)
+    }
+
+    #[inline]
+    pub fn parse<T: Deserialize<'a>>(&self) -> Result<T> {
+        json::from_str(self.0.get()).map_err(Error::JsonParseError)
+    }
+
+    #[inline]
+    pub fn is_byte_code(&self) -> bool {
+        let v = self.0.get().as_bytes();
+        match v.len() {
+            1 => v[0].is_ascii_digit(),
+            2 => v[0].is_ascii_digit() && v[1].is_ascii_digit(),
+            3 => &b"100"[..] <= v && v <= &b"255"[..],
+            _ => false,
+        }
+    }
+
+    #[inline]
+    pub fn parse_byte_code(&self) -> u8 {
+        match self.0.get().as_bytes() {
+            [a] => a - b'0',
+            [a, b] => (a - b'0') * 10 + (b - b'0'),
+            [a, b, c] => (a - b'0') * 100 + (b - b'0') * 10 + (c - b'0'),
+            _ => 0,
+        }
+    }
+}
+
+impl<'a> From<&'a json::value::RawValue> for RawValue<'a> {
+    #[inline(always)]
+    fn from(value: &'a json::value::RawValue) -> Self {
+        Self(value)
+    }
+}
+
+// ---
+
+#[derive(Clone, Debug, Copy, PartialEq, Eq)]
+pub enum ValueKind {
+    String,
+    QuotedString,
+    Number,
+    Object,
+    Array,
+    Boolean,
+    Null,
+}
+
+// ---
+
 pub struct Record<'a> {
     pub ts: Option<Timestamp<'a>>,
-    pub message: Option<&'a RawValue>,
+    pub message: Option<RawValue<'a>>,
     pub level: Option<Level>,
     pub logger: Option<&'a str>,
     pub caller: Option<Caller<'a>>,
-    pub(crate) extra: heapless::Vec<(&'a str, &'a RawValue), RECORD_EXTRA_CAPACITY>,
-    pub(crate) extrax: Vec<(&'a str, &'a RawValue)>,
-    pub(crate) predefined: heapless::Vec<(&'a str, &'a RawValue), MAX_PREDEFINED_FIELDS>,
+    pub(crate) fields: RecordFields<'a>,
+    pub(crate) predefined: heapless::Vec<(&'a str, RawValue<'a>), MAX_PREDEFINED_FIELDS>,
 }
 
 impl<'a> Record<'a> {
     #[inline(always)]
-    pub fn fields(&self) -> impl Iterator<Item = &(&'a str, &'a RawValue)> {
-        self.extra.iter().chain(self.extrax.iter())
+    pub fn fields(&self) -> impl Iterator<Item = &(&'a str, RawValue<'a>)> {
+        self.fields.head.iter().chain(self.fields.tail.iter())
     }
 
     #[inline(always)]
-    pub fn fields_for_search(&self) -> impl Iterator<Item = &(&'a str, &'a RawValue)> {
+    pub fn fields_for_search(&self) -> impl Iterator<Item = &(&'a str, RawValue<'a>)> {
         self.fields().chain(self.predefined.iter())
     }
 
@@ -59,15 +180,22 @@ impl<'a> Record<'a> {
             level: None,
             logger: None,
             caller: None,
-            extra: heapless::Vec::new(),
-            extrax: if capacity > RECORD_EXTRA_CAPACITY {
-                Vec::with_capacity(capacity - RECORD_EXTRA_CAPACITY)
-            } else {
-                Vec::new()
+            fields: RecordFields {
+                head: heapless::Vec::new(),
+                tail: if capacity > RECORD_EXTRA_CAPACITY {
+                    Vec::with_capacity(capacity - RECORD_EXTRA_CAPACITY)
+                } else {
+                    Vec::new()
+                },
             },
             predefined: heapless::Vec::new(),
         }
     }
+}
+
+pub struct RecordFields<'a> {
+    pub(crate) head: heapless::Vec<(&'a str, RawValue<'a>), RECORD_EXTRA_CAPACITY>,
+    pub(crate) tail: Vec<(&'a str, RawValue<'a>)>,
 }
 
 // ---
@@ -286,14 +414,14 @@ impl ParserSettings {
     }
 
     #[inline(always)]
-    fn apply<'a>(&self, key: &'a str, value: &'a RawValue, to: &mut Record<'a>, pc: &mut PriorityController) {
+    fn apply<'a>(&self, key: &'a str, value: RawValue<'a>, to: &mut Record<'a>, pc: &mut PriorityController) {
         self.blocks[0].apply(self, key, value, to, pc, true);
     }
 
     #[inline(always)]
     fn apply_each<'a, 'i, I>(&self, items: I, to: &mut Record<'a>)
     where
-        I: IntoIterator<Item = &'i (&'a str, &'a RawValue)>,
+        I: IntoIterator<Item = &'i (&'a str, RawValue<'a>)>,
         'a: 'i,
     {
         let mut pc = PriorityController::default();
@@ -303,11 +431,11 @@ impl ParserSettings {
     #[inline(always)]
     fn apply_each_ctx<'a, 'i, I>(&self, items: I, to: &mut Record<'a>, pc: &mut PriorityController)
     where
-        I: IntoIterator<Item = &'i (&'a str, &'a RawValue)>,
+        I: IntoIterator<Item = &'i (&'a str, RawValue<'a>)>,
         'a: 'i,
     {
         for (key, value) in items {
-            self.apply(key, value, to, pc)
+            self.apply(key, *value, to, pc)
         }
     }
 }
@@ -324,7 +452,7 @@ impl ParserSettingsBlock {
         &self,
         ps: &ParserSettings,
         key: &'a str,
-        value: &'a RawValue,
+        value: RawValue<'a>,
         to: &mut Record<'a>,
         pc: &mut PriorityController,
         is_root: bool,
@@ -353,9 +481,9 @@ impl ParserSettingsBlock {
                 return;
             }
         }
-        match to.extra.push((key, value)) {
+        match to.fields.head.push((key, value)) {
             Ok(_) => {}
-            Err(value) => to.extrax.push(value),
+            Err(value) => to.fields.tail.push(value),
         }
     }
 
@@ -368,11 +496,11 @@ impl ParserSettingsBlock {
         ctx: &mut PriorityController,
         is_root: bool,
     ) where
-        I: IntoIterator<Item = &'i (&'a str, &'a RawValue)>,
+        I: IntoIterator<Item = &'i (&'a str, RawValue<'a>)>,
         'a: 'i,
     {
         for (key, value) in items {
-            self.apply(ps, key, value, to, ctx, is_root)
+            self.apply(ps, key, *value, to, ctx, is_root)
         }
     }
 }
@@ -428,7 +556,7 @@ enum FieldSettings {
 }
 
 impl FieldSettings {
-    fn apply<'a>(&self, ps: &ParserSettings, value: &'a RawValue, to: &mut Record<'a>) {
+    fn apply<'a>(&self, ps: &ParserSettings, value: RawValue<'a>, to: &mut Record<'a>) {
         match *self {
             Self::Time => {
                 let s = value.get();
@@ -480,7 +608,7 @@ impl FieldSettings {
     fn apply_ctx<'a>(
         &self,
         ps: &ParserSettings,
-        value: &'a RawValue,
+        value: RawValue<'a>,
         to: &mut Record<'a>,
         ctx: &mut PriorityController,
     ) {
@@ -537,14 +665,22 @@ impl Parser {
 // ---
 
 pub struct RawRecord<'a> {
-    fields: heapless::Vec<(&'a str, &'a RawValue), RAW_RECORD_FIELDS_CAPACITY>,
-    fieldsx: Vec<(&'a str, &'a RawValue)>,
+    fields: RawRecordFields<'a>,
+}
+
+pub struct RawRecordFields<'a> {
+    head: heapless::Vec<(&'a str, RawValue<'a>), RAW_RECORD_FIELDS_CAPACITY>,
+    tail: Vec<(&'a str, RawValue<'a>)>,
 }
 
 impl<'a> RawRecord<'a> {
-    #[inline(always)]
-    pub fn fields(&self) -> impl Iterator<Item = &(&'a str, &'a RawValue)> {
-        self.fields.iter().chain(self.fieldsx.iter())
+    #[inline]
+    pub fn fields(&self) -> impl Iterator<Item = &(&'a str, RawValue<'a>)> {
+        self.fields.head.iter().chain(self.fields.tail.iter())
+    }
+
+    pub fn parser() -> RawRecordParser {
+        RawRecordParser::new()
     }
 }
 
@@ -553,44 +689,152 @@ impl<'de: 'a, 'a> Deserialize<'de> for RawRecord<'a> {
     where
         D: Deserializer<'de>,
     {
-        Ok(deserializer.deserialize_map(RawRecordVisitor::new())?)
+        Ok(deserializer.deserialize_map(RawRecordVisitor::<json::value::RawValue>::new())?)
     }
 }
 
 // ---
 
-struct RawRecordVisitor<'a> {
-    marker: PhantomData<fn() -> RawRecord<'a>>,
+pub struct RawRecordParser {
+    allow_prefix: bool,
 }
 
-impl<'a> RawRecordVisitor<'a> {
+impl RawRecordParser {
+    pub fn new() -> Self {
+        Self { allow_prefix: false }
+    }
+
+    pub fn allow_prefix(self, value: bool) -> Self {
+        Self { allow_prefix: value }
+    }
+
+    pub fn parse<'a>(&self, line: &'a [u8]) -> RawRecordStream<impl RawRecordIterator<'a>> {
+        let prefix = if self.allow_prefix && line.last() == Some(&b'}') {
+            line.split(|c| *c == b'{').next().unwrap()
+        } else {
+            b""
+        };
+
+        let xn = prefix.len();
+        let data = &line[xn..];
+
+        RawRecordStream::Json(RawRecordJsonStream {
+            line,
+            prefix,
+            delegate: StreamDeserializerWithOffsets(json::Deserializer::from_slice(data).into_iter::<RawRecord>()),
+        })
+    }
+}
+
+// ---
+
+pub enum RawRecordStream<Json> {
+    Json(Json),
+}
+
+impl<'a, Json> RawRecordStream<Json>
+where
+    Json: RawRecordIterator<'a>,
+{
+    pub fn next(&mut self) -> Option<Result<AnnotatedRawRecord<'a>>> {
+        match self {
+            Self::Json(stream) => stream.next(),
+        }
+    }
+}
+
+// ---
+
+pub trait RawRecordIterator<'a> {
+    fn next(&mut self) -> Option<Result<AnnotatedRawRecord<'a>>>;
+}
+
+// ---
+
+pub struct AnnotatedRawRecord<'a> {
+    pub prefix: &'a [u8],
+    pub record: RawRecord<'a>,
+    pub source: &'a [u8],
+    pub offsets: Range<usize>,
+}
+
+// ---
+
+struct RawRecordJsonStream<'a, 'de, R> {
+    line: &'a [u8],
+    prefix: &'a [u8],
+    delegate: StreamDeserializerWithOffsets<'de, R, RawRecord<'a>>,
+}
+
+impl<'a, 'de: 'a, R> RawRecordIterator<'a> for RawRecordJsonStream<'a, 'de, R>
+where
+    R: serde_json::de::Read<'de>,
+{
+    fn next(&mut self) -> Option<Result<AnnotatedRawRecord<'a>>> {
+        let pl = self.prefix.len();
+        self.delegate.next().map(|res| {
+            res.map(|(record, range)| {
+                let range = range.start + pl..range.end + pl;
+                AnnotatedRawRecord {
+                    prefix: self.prefix,
+                    record,
+                    source: &self.line[range.start..range.end],
+                    offsets: range,
+                }
+            })
+            .map_err(Error::JsonParseError)
+        })
+    }
+}
+
+// ---
+
+struct RawRecordVisitor<'a, RV>
+where
+    RV: ?Sized + 'a,
+{
+    marker: PhantomData<fn() -> (RawRecord<'a>, &'a RV)>,
+}
+
+impl<'a, RV> RawRecordVisitor<'a, RV>
+where
+    RV: ?Sized + 'a,
+{
     #[inline(always)]
     fn new() -> Self {
         Self { marker: PhantomData }
     }
 }
 
-impl<'de: 'a, 'a> Visitor<'de> for RawRecordVisitor<'a> {
+impl<'de: 'a, 'a, RV> Visitor<'de> for RawRecordVisitor<'a, RV>
+where
+    RV: ?Sized + 'a,
+    &'a RV: Deserialize<'de> + 'a,
+    RawValue<'a>: std::convert::From<&'a RV>,
+{
     type Value = RawRecord<'a>;
     fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
         formatter.write_str("object json")
     }
 
     fn visit_map<M: MapAccess<'de>>(self, mut access: M) -> std::result::Result<Self::Value, M::Error> {
-        let mut fields = heapless::Vec::new();
+        let mut head = heapless::Vec::new();
         let count = access.size_hint().unwrap_or(0);
-        let mut fieldsx = match count > RAW_RECORD_FIELDS_CAPACITY {
+        let mut tail = match count > RAW_RECORD_FIELDS_CAPACITY {
             false => Vec::new(),
             true => Vec::with_capacity(count - RAW_RECORD_FIELDS_CAPACITY),
         };
         while let Some(Some(key)) = access.next_key::<&'a str>().ok() {
-            match fields.push((key, access.next_value()?)) {
+            let value: &RV = access.next_value()?;
+            match head.push((key, value.into())) {
                 Ok(_) => {}
-                Err(value) => fieldsx.push(value),
+                Err(value) => tail.push(value),
             }
         }
 
-        Ok(RawRecord { fields, fieldsx })
+        Ok(RawRecord {
+            fields: RawRecordFields { head, tail },
+        })
     }
 }
 
@@ -845,20 +1089,19 @@ impl FieldFilter {
         }
     }
 
-    fn match_value_partial(&self, subkey: KeyMatcher, value: &RawValue) -> bool {
-        let bytes = value.get().as_bytes();
-        if bytes[0] != b'{' {
+    fn match_value_partial<'a>(&self, subkey: KeyMatcher, value: RawValue<'a>) -> bool {
+        if value.kind() != ValueKind::Object {
             return false;
         }
 
-        let item = json::from_str::<Object>(value.get()).unwrap();
+        let item = value.parse_object().unwrap();
         for (k, v) in item.fields.iter() {
             match subkey.match_key(*k) {
                 None => {
                     continue;
                 }
                 Some(KeyMatch::Full) => {
-                    return self.match_value(Some(v.get()), v.get().starts_with('"'));
+                    return self.match_value(Some(v.raw_str()), v.kind() == ValueKind::String);
                 }
                 Some(KeyMatch::Partial(subkey)) => {
                     return self.match_value_partial(subkey, *v);
@@ -882,7 +1125,7 @@ impl RecordFilter for FieldFilter {
                 }
                 FieldKind::Message => {
                     if let Some(message) = record.message {
-                        self.match_value(Some(message.get()), true)
+                        self.match_value(Some(message.raw_str()), true)
                     } else {
                         false
                     }
@@ -908,8 +1151,8 @@ impl RecordFilter for FieldFilter {
                     match self.match_custom_key(*k) {
                         None => {}
                         Some(KeyMatch::Full) => {
-                            let escaped = v.get().starts_with('"');
-                            if self.match_value(Some(v.get()), escaped) {
+                            let escaped = v.kind() == ValueKind::QuotedString;
+                            if self.match_value(Some(v.raw_str()), escaped) {
                                 return true;
                             }
                         }
@@ -1003,7 +1246,7 @@ impl RecordFilter for Filter {
 // ---
 
 pub struct Object<'a> {
-    pub fields: heapless::Vec<(&'a str, &'a RawValue), 32>,
+    pub fields: heapless::Vec<(&'a str, RawValue<'a>), 32>,
 }
 
 struct ObjectVisitor<'a> {
@@ -1025,8 +1268,8 @@ impl<'de: 'a, 'a> Visitor<'de> for ObjectVisitor<'a> {
     fn visit_map<A: MapAccess<'de>>(self, mut access: A) -> std::result::Result<Self::Value, A::Error> {
         let mut fields = heapless::Vec::new();
         while let Some(key) = access.next_key::<&'a str>()? {
-            let value = access.next_value()?;
-            fields.push((key, value)).ok();
+            let value: &json::value::RawValue = access.next_value()?;
+            fields.push((key, value.into())).ok();
         }
 
         Ok(Object { fields })
@@ -1043,13 +1286,13 @@ impl<'de: 'a, 'a> Deserialize<'de> for Object<'a> {
 }
 
 pub struct Array<'a, const N: usize> {
-    items: heapless::Vec<&'a RawValue, N>,
-    more: Vec<&'a RawValue>,
+    items: heapless::Vec<RawValue<'a>, N>,
+    more: Vec<RawValue<'a>>,
 }
 
 impl<'a, const N: usize> Array<'a, N> {
     #[inline(always)]
-    pub fn iter(&self) -> impl Iterator<Item = &&'a RawValue> {
+    pub fn iter(&self) -> impl Iterator<Item = &RawValue<'a>> {
         self.items.iter().chain(self.more.iter())
     }
 }
@@ -1073,7 +1316,8 @@ impl<'de: 'a, 'a, const N: usize> Visitor<'de> for ArrayVisitor<'a, N> {
     fn visit_seq<A: SeqAccess<'de>>(self, mut access: A) -> std::result::Result<Self::Value, A::Error> {
         let mut items = heapless::Vec::new();
         let mut more = Vec::new();
-        while let Some(item) = access.next_element()? {
+        while let Some(item) = access.next_element::<&json::value::RawValue>()? {
+            let item = item.into();
             match items.push(item) {
                 Ok(()) => {}
                 Err(item) => more.push(item),
