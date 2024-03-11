@@ -24,6 +24,7 @@ mod eseq;
 mod filtering;
 mod formatting;
 mod fsmon;
+mod jsonstr;
 mod logfmt;
 mod model;
 mod pool;
