@@ -1,5 +1,5 @@
 // third-party imports
-use chrono::{DateTime, FixedOffset, NaiveDateTime};
+use chrono::{DateTime, Duration, FixedOffset, NaiveDateTime};
 
 // ---
 
@@ -20,18 +20,44 @@ impl<'a> Timestamp<'a> {
             return parsed;
         }
 
-        if let Ok(ts) = self.0.parse::<i64>() {
-            let (ts, nsec) = if ts < 100000000000 {
-                (ts, 0)
-            } else if ts < 100000000000000 {
-                (ts / 1000, (ts % 1000) * 1000000)
-            } else {
-                (ts / 1000000, (ts % 1000000) * 1000)
-            };
-            let ts = NaiveDateTime::from_timestamp_opt(ts, nsec as u32)?;
-            Some(DateTime::from_naive_utc_and_offset(ts, FixedOffset::east_opt(0)?))
-        } else if let Ok(ts) = self.0.parse() {
+        if let Ok(ts) = self.0.parse() {
             Some(ts)
+        } else if let Some(nt) = guess_number_type(self.0.as_bytes()) {
+            let ts = match nt {
+                NumberType::Integer => self.0.parse::<i64>().ok().and_then(|ts| match ts {
+                    Self::TS_UNIX_AUTO_S_MIN..=Self::TS_UNIX_AUTO_S_MAX => NaiveDateTime::from_timestamp_opt(ts, 0),
+                    Self::TS_UNIX_AUTO_MS_MIN..=Self::TS_UNIX_AUTO_MS_MAX => NaiveDateTime::from_timestamp_millis(ts),
+                    Self::TS_UNIX_AUTO_US_MIN..=Self::TS_UNIX_AUTO_US_MAX => NaiveDateTime::from_timestamp_micros(ts),
+                    _ => NaiveDateTime::from_timestamp_nanos(ts),
+                }),
+                NumberType::Float => self.0.bytes().position(|b| b == b'.').and_then(|i| {
+                    let whole = self.0[..i].parse::<i64>().ok()?;
+                    let fractional = self.0[i..].parse::<f64>().ok()?;
+                    match whole {
+                        Self::TS_UNIX_AUTO_S_MIN..=Self::TS_UNIX_AUTO_S_MAX => {
+                            let ns = (fractional * 1e9).round() as u32;
+                            let (whole, ns) = if whole < 0 {
+                                (whole - 1, 1_000_000_000 - ns)
+                            } else {
+                                (whole, ns)
+                            };
+                            NaiveDateTime::from_timestamp_opt(whole, ns)
+                        }
+                        Self::TS_UNIX_AUTO_MS_MIN..=Self::TS_UNIX_AUTO_MS_MAX => {
+                            let ns = (fractional * 1e6).round() as i64;
+                            let ns = if whole < 0 { -ns } else { ns };
+                            NaiveDateTime::from_timestamp_millis(whole).map(|ts| ts + Duration::nanoseconds(ns))
+                        }
+                        Self::TS_UNIX_AUTO_US_MIN..=Self::TS_UNIX_AUTO_US_MAX => {
+                            let ns = (fractional * 1e3).round() as i64;
+                            let ns = if whole < 0 { -ns } else { ns };
+                            NaiveDateTime::from_timestamp_micros(whole).map(|ts| ts + Duration::nanoseconds(ns))
+                        }
+                        _ => NaiveDateTime::from_timestamp_nanos(whole),
+                    }
+                }),
+            };
+            ts.and_then(|ts| Some(DateTime::from_naive_utc_and_offset(ts, FixedOffset::east_opt(0)?)))
         } else {
             NaiveDateTime::parse_from_str(self.0, "%Y-%m-%d %H:%M:%S%.f")
                 .ok()
@@ -47,6 +73,13 @@ impl<'a> Timestamp<'a> {
         self.parse()
             .and_then(|ts| Some((ts.timestamp(), ts.timestamp_subsec_nanos())))
     }
+
+    const TS_UNIX_AUTO_S_MIN: i64 = -62135596800;
+    const TS_UNIX_AUTO_S_MAX: i64 = 253402300799;
+    const TS_UNIX_AUTO_MS_MIN: i64 = Self::TS_UNIX_AUTO_S_MIN * 1000;
+    const TS_UNIX_AUTO_MS_MAX: i64 = Self::TS_UNIX_AUTO_S_MAX * 1000;
+    const TS_UNIX_AUTO_US_MIN: i64 = Self::TS_UNIX_AUTO_MS_MIN * 1000;
+    const TS_UNIX_AUTO_US_MAX: i64 = Self::TS_UNIX_AUTO_MS_MAX * 1000;
 }
 
 // ---
@@ -395,6 +428,34 @@ pub mod rfc3339 {
 
 fn only_digits(b: &[u8]) -> bool {
     b.iter().map(|&b| b.is_ascii_digit()).position(|x| x == false).is_none()
+}
+
+fn guess_number_type(b: &[u8]) -> Option<NumberType> {
+    if b.len() == 0 {
+        return None;
+    }
+
+    let b = if b[0] == b'-' || b[0] == b'+' { &b[1..] } else { b };
+    let mut dots = 0;
+    let mut check = |b| match b {
+        b'.' => {
+            dots += 1;
+            dots <= 1
+        }
+        b'0'..=b'9' => true,
+        _ => return false,
+    };
+
+    match (b.iter().map(|b| check(*b)).position(|x| x == false).is_none(), dots) {
+        (true, 0) => Some(NumberType::Integer),
+        (true, 1) => Some(NumberType::Float),
+        _ => None,
+    }
+}
+
+enum NumberType {
+    Integer,
+    Float,
 }
 
 // ---
