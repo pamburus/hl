@@ -128,6 +128,7 @@ impl<'a> RawValue<'a> {
 
     #[inline]
     pub fn format_as_str(&self, buf: &mut Vec<u8>) {
+        let begin = buf.len();
         match self {
             Self::Json(value) => {
                 let mut reader = StrRead::new(&value.get()[1..]);
@@ -138,6 +139,9 @@ impl<'a> RawValue<'a> {
                     .parse_str_to_buf(buf)
                     .unwrap();
             }
+        }
+        if let Some(end) = buf[begin..].iter().rposition(|&b| !b.is_ascii_whitespace()) {
+            buf.truncate(begin + end + 1);
         }
     }
 
