@@ -426,7 +426,7 @@ impl RecordFilter for RecordFilterNone {
 #[derive(Default)]
 pub struct ParserSettings {
     pre_parse_time: bool,
-    level: Vec<HashMap<String, Level>>,
+    level: Vec<(HashMap<String, Level>, Option<Level>)>,
     blocks: Vec<ParserSettingsBlock>,
     ignore: Vec<Pattern<String>>,
 }
@@ -465,7 +465,7 @@ impl ParserSettings {
                 }
             }
             let k = self.level.len();
-            self.level.push(mapping.clone());
+            self.level.push((mapping.clone(), variant.level));
             self.build_block(0, &variant.names, FieldSettings::Level(k), j);
             j += variant.names.len();
         }
@@ -621,7 +621,7 @@ struct PriorityController {
 
 impl PriorityController {
     #[inline(always)]
-    fn prioritize<F: FnOnce(&mut Self) -> ()>(&mut self, kind: FieldKind, priority: usize, update: F) -> bool {
+    fn prioritize<F: FnOnce(&mut Self) -> bool>(&mut self, kind: FieldKind, priority: usize, update: F) -> bool {
         let p = match kind {
             FieldKind::Time => &mut self.time,
             FieldKind::Level => &mut self.level,
@@ -634,8 +634,7 @@ impl PriorityController {
 
         if p.is_none() || Some(priority) <= *p {
             *p = Some(priority);
-            update(self);
-            true
+            update(self)
         } else {
             false
         }
@@ -657,7 +656,7 @@ enum FieldSettings {
 }
 
 impl FieldSettings {
-    fn apply<'a>(&self, ps: &ParserSettings, value: RawValue<'a>, to: &mut Record<'a>) {
+    fn apply<'a>(&self, ps: &ParserSettings, value: RawValue<'a>, to: &mut Record<'a>) -> bool {
         match *self {
             Self::Time => {
                 let s = value.raw_str();
@@ -668,44 +667,71 @@ impl FieldSettings {
                 } else {
                     to.ts = Some(ts);
                 }
+                true
             }
             Self::Level(i) => {
                 let value = match value.kind() {
                     ValueKind::QuotedString => value.parse().ok().unwrap_or_else(|| value.raw_str()),
                     _ => value.raw_str(),
                 };
-                to.level = ps.level[i].get(value).cloned();
+                if let Some(level) = ps.level[i].0.get(value) {
+                    to.level = Some(*level);
+                    true
+                } else {
+                    to.level = ps.level[i].1;
+                    false
+                }
             }
-            Self::Logger => to.logger = value.parse().ok(),
-            Self::Message => to.message = Some(value),
-            Self::Caller => to.caller = value.parse().ok().map(|x| Caller::Text(x)),
+            Self::Logger => {
+                to.logger = value.parse().ok();
+                true
+            }
+            Self::Message => {
+                to.message = Some(value);
+                true
+            }
+            Self::Caller => {
+                to.caller = value.parse().ok().map(|x| Caller::Text(x));
+                true
+            }
             Self::CallerFile => match &mut to.caller {
                 None => {
                     to.caller = value.parse().ok().map(|x| Caller::FileLine(x, ""));
+                    to.caller.is_some()
                 }
                 Some(Caller::FileLine(file, _)) => {
                     if let Some(value) = value.parse().ok() {
-                        *file = value
+                        *file = value;
+                        true
+                    } else {
+                        false
                     }
                 }
-                _ => {}
+                _ => false,
             },
             Self::CallerLine => match &mut to.caller {
                 None => {
                     to.caller = Some(Caller::FileLine("", value.raw_str()));
+                    true
                 }
                 Some(Caller::FileLine(_, line)) => match value.kind() {
-                    ValueKind::Number => *line = value.raw_str(),
+                    ValueKind::Number => {
+                        *line = value.raw_str();
+                        true
+                    }
                     ValueKind::String => {
                         if let Some(value) = value.parse().ok() {
-                            *line = value
+                            *line = value;
+                            true
+                        } else {
+                            false
                         }
                     }
-                    _ => {}
+                    _ => false,
                 },
-                _ => {}
+                _ => false,
             },
-            Self::Nested(_) => {}
+            Self::Nested(_) => false,
         }
     }
 
@@ -716,15 +742,18 @@ impl FieldSettings {
         value: RawValue<'a>,
         to: &mut Record<'a>,
         ctx: &mut PriorityController,
-    ) {
+    ) -> bool {
         match *self {
             Self::Nested(nested) => match value.kind() {
                 ValueKind::Object => {
                     if let Ok(record) = value.parse::<RawRecord>() {
                         ps.blocks[nested].apply_each_ctx(ps, record.fields(), to, ctx, false);
+                        true
+                    } else {
+                        false
                     }
                 }
-                _ => {}
+                _ => false,
             },
             _ => self.apply(ps, value, to),
         }

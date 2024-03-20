@@ -94,8 +94,9 @@ pub struct LevelField {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct LevelFieldVariant {
     pub names: Vec<String>,
-    #[serde(serialize_with = "ordered_map_serialize")]
+    #[serde(default, serialize_with = "ordered_map_serialize")]
     pub values: HashMap<Level, Vec<String>>,
+    pub level: Option<Level>,
 }
 
 // ---

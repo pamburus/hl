@@ -1,10 +1,3 @@
-# Time format, see https://man7.org/linux/man-pages/man1/date.1.html for details.
-time-format: '%b %d %T.%3N'
-
-# Time zone name, see column "TZ identifier" at
-# https://en.wikipedia.org/wiki/List_of_tz_database_time_zones page.
-time-zone: UTC
-
 # Settings for fields processing.
 fields:
   # Configuration of the predefined set of fields.
@@ -34,28 +27,3 @@ fields:
   # List of exact field names to hide.
   hide:
     - log
-
-# Formatting settings.
-formatting:
-  punctuation:
-    logger-name-separator: ':'
-    field-key-value-separator: '='
-    string-opening-quote: "'"
-    string-closing-quote: "'"
-    source-location-separator: '@ '
-    hidden-fields-indicator: ' ...'
-    level-left-separator: '|'
-    level-right-separator: '|'
-    input-number-prefix: '#'
-    input-number-left-separator: ''
-    input-number-right-separator: ' | '
-    input-name-left-separator: ''
-    input-name-right-separator: ' | '
-    input-name-clipping: '...'
-    input-name-common-part: '...'
-
-# Number of processing threads, configured automatically based on CPU count if not specified.
-concurrency: ~
-
-# Currently selected theme.
-theme: universal
