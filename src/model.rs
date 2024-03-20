@@ -666,7 +666,11 @@ impl FieldSettings {
                 }
             }
             Self::Level(i) => {
-                to.level = value.parse().ok().and_then(|x: &'a str| ps.level[i].get(x).cloned());
+                let value = match value.kind() {
+                    ValueKind::QuotedString => value.parse().ok().unwrap_or_else(|| value.raw_str()),
+                    _ => value.raw_str(),
+                };
+                to.level = ps.level[i].get(value).cloned();
             }
             Self::Logger => to.logger = value.parse().ok(),
             Self::Message => to.message = Some(value),
