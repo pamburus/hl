@@ -195,7 +195,8 @@ pub struct Styler<'a, B: Push<u8>> {
 }
 
 impl<'a, B: Push<u8>> Styler<'a, B> {
-    fn reset(&mut self) {
+    #[inline(always)]
+    pub fn reset(&mut self) {
         if let Some(style) = self.pack.reset {
             self.pack.styles[style].apply(self.buf)
         }

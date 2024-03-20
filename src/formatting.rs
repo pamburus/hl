@@ -149,6 +149,8 @@ impl RecordFormatter {
             if let Some(text) = &rec.message {
                 s.batch(|buf| buf.push(b' '));
                 s.element(Element::Message, |s| self.format_message(s, *text));
+            } else {
+                s.reset();
             }
             //
             // fields
