@@ -36,7 +36,7 @@ impl<'a> Timestamp<'a> {
                     match whole {
                         Self::TS_UNIX_AUTO_S_MIN..=Self::TS_UNIX_AUTO_S_MAX => {
                             let ns = (fractional * 1e9).round() as u32;
-                            let (whole, ns) = if whole < 0 {
+                            let (whole, ns) = if whole < 0 && ns > 0 {
                                 (whole - 1, 1_000_000_000 - ns)
                             } else {
                                 (whole, ns)
