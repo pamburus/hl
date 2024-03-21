@@ -184,6 +184,13 @@ High performance and convenient features are the main goals.
     ```
     Displays only messages where the `provider` field contains the `string` sub-string.
 
+- Command
+
+    ```
+    $ hl example.log -f 'provider!~=string'
+    ```
+    Displays only messages where the `provider` field does not contain the `string` sub-string.
+
 
 ### Performing complex queries
 
