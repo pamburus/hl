@@ -461,7 +461,7 @@ Options:
   -C, --concurrency <CONCURRENCY>                        Number of processing threads [env: HL_CONCURRENCY=]
   -f, --filter <FILTER>                                  Filtering by field values in one of forms [k=v, k~=v, k~~=v, 'k!=v', 'k!~=v', 'k!~~=v'] where ~ does substring match and ~~ does regular expression match
   -q, --query <QUERY>                                    Custom query, accepts expressions from --filter and supports '(', ')', 'and', 'or', 'not', 'in', 'contain', 'like', '<', '>', '<=', '>=', etc
-  -h, --hide <HIDE>                                      Hide or unhide fields with the specified keys, prefix with ! to unhide, specify !* to unhide all
+  -h, --hide <HIDE>                                      Hide or reveal fields with the specified keys, prefix with ! to reveal, specify '!*' to reveal all
   -l, --level <LEVEL>                                    Filtering by level [env: HL_LEVEL=]
       --since <SINCE>                                    Filtering by timestamp >= the value (--time-zone and --local options are honored)
       --until <UNTIL>                                    Filtering by timestamp <= the value (--time-zone and --local options are honored)
