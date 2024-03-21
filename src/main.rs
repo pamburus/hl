@@ -114,7 +114,7 @@ struct Opt {
     #[arg(short, long, number_of_values = 1)]
     query: Vec<String>,
     //
-    /// Hide or unhide fields with the specified keys, prefix with ! to unhide, specify !* to unhide all.
+    /// Hide or reveal fields with the specified keys, prefix with ! to reveal, specify '!*' to reveal all.
     #[arg(long, short = 'h', number_of_values = 1)]
     hide: Vec<String>,
     //
