@@ -134,8 +134,10 @@ pub struct Field {
 // ---
 
 #[derive(Clone, Debug, Default, Deserialize)]
+#[serde(rename_all = "kebab-case")]
 pub struct Formatting {
     pub punctuation: Punctuation,
+    pub add_quotes: bool,
 }
 
 // ---
