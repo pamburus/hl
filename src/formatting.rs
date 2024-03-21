@@ -214,7 +214,7 @@ impl RecordFormatter {
 
     fn format_message<'a, S: StylingPush<Buf>>(&self, s: &mut S, value: RawValue<'a>) {
         match value.kind() {
-            ValueKind::QuotedString | ValueKind::String => {
+            ValueKind::String(_) => {
                 s.element(Element::Message, |s| s.batch(|buf| value.format_as_str(buf)));
             }
             ValueKind::Number => {
@@ -352,7 +352,7 @@ impl<'a> FieldFormatter<'a> {
         setting: IncludeExcludeSetting,
     ) {
         match value.kind() {
-            ValueKind::String | ValueKind::QuotedString => {
+            ValueKind::String(_) => {
                 s.element(Element::String, |s| {
                     s.batch(|buf| {
                         value.format_as_str(buf);
