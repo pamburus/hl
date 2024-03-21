@@ -28,6 +28,7 @@ use crate::types::FieldKind;
 // ---
 
 pub use level::Level;
+use ValueKindString::*;
 
 // ---
 
@@ -47,7 +48,7 @@ impl<'a> RawValue<'a> {
                     return ValueKind::Null;
                 }
                 match bytes[0] {
-                    b'"' => ValueKind::QuotedString,
+                    b'"' => ValueKind::String(Quoted),
                     b'0'..=b'9' | b'-' | b'+' | b'.' => ValueKind::Number,
                     b'{' => ValueKind::Object,
                     b'[' => ValueKind::Array,
@@ -74,7 +75,7 @@ impl<'a> RawValue<'a> {
                 };
 
                 if !value.get().is_empty() && value.get().as_bytes()[0] == b'"' {
-                    ValueKind::QuotedString
+                    ValueKind::String(Quoted)
                 } else if value.get() == "false" || value.get() == "true" {
                     ValueKind::Boolean
                 } else if value.get() == "null" {
@@ -82,7 +83,7 @@ impl<'a> RawValue<'a> {
                 } else if looks_like_number() {
                     ValueKind::Number
                 } else {
-                    ValueKind::String
+                    ValueKind::String(Unquoted)
                 }
             }
         }
@@ -237,13 +238,18 @@ impl<'a> From<&'a logfmt::raw::RawValue> for RawValue<'a> {
 
 #[derive(Clone, Debug, Copy, PartialEq, Eq)]
 pub enum ValueKind {
-    String,
-    QuotedString,
+    String(ValueKindString),
     Number,
     Object,
     Array,
     Boolean,
     Null,
+}
+
+#[derive(Clone, Debug, Copy, PartialEq, Eq)]
+pub enum ValueKindString {
+    Quoted,
+    Unquoted,
 }
 
 // ---
@@ -671,7 +677,7 @@ impl FieldSettings {
             }
             Self::Level(i) => {
                 let value = match value.kind() {
-                    ValueKind::QuotedString => value.parse().ok().unwrap_or_else(|| value.raw_str()),
+                    ValueKind::String(Quoted) => value.parse().ok().unwrap_or_else(|| value.raw_str()),
                     _ => value.raw_str(),
                 };
                 if let Some(level) = ps.level[i].0.get(value) {
@@ -719,7 +725,7 @@ impl FieldSettings {
                         *line = value.raw_str();
                         true
                     }
-                    ValueKind::String => {
+                    ValueKind::String(Unquoted) => {
                         if let Some(value) = value.parse().ok() {
                             *line = value;
                             true
@@ -1294,7 +1300,7 @@ impl FieldFilter {
                     continue;
                 }
                 Some(KeyMatch::Full) => {
-                    return self.match_value(Some(v.raw_str()), v.kind() == ValueKind::String);
+                    return self.match_value(Some(v.raw_str()), v.kind() == ValueKind::String(Unquoted));
                 }
                 Some(KeyMatch::Partial(subkey)) => {
                     return self.match_value_partial(subkey, *v);
@@ -1344,7 +1350,7 @@ impl RecordFilter for FieldFilter {
                     match self.match_custom_key(*k) {
                         None => {}
                         Some(KeyMatch::Full) => {
-                            let escaped = v.kind() == ValueKind::QuotedString;
+                            let escaped = v.kind() == ValueKind::String(Quoted);
                             if self.match_value(Some(v.raw_str()), escaped) {
                                 return true;
                             }
