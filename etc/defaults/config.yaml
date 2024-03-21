@@ -52,6 +52,7 @@ fields:
 
 # Formatting settings.
 formatting:
+  add-quotes: false
   punctuation:
     logger-name-separator: ':'
     field-key-value-separator: '='

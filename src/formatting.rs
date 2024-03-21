@@ -355,7 +355,15 @@ impl<'a> FieldFormatter<'a> {
             ValueKind::String(_) => {
                 s.element(Element::String, |s| {
                     s.batch(|buf| {
+                        if self.rf.cfg.add_quotes {
+                            buf.extend_from_slice(self.rf.cfg.punctuation.string_opening_quote.as_bytes())
+                        }
+
                         value.format_as_str(buf);
+
+                        if self.rf.cfg.add_quotes {
+                            buf.extend_from_slice(self.rf.cfg.punctuation.string_closing_quote.as_bytes())
+                        }
                     })
                 });
             }
@@ -437,6 +445,7 @@ mod tests {
             false,
             Arc::new(IncludeExcludeKeyFilter::default()),
             Formatting {
+                add_quotes: false,
                 punctuation: Punctuation::test_default(),
             },
         );
