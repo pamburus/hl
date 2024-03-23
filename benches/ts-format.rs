@@ -13,7 +13,7 @@ fn ignore<T>(t: T) {
 
 fn benchmark(c: &mut Criterion) {
     let mut c = c.benchmark_group("ts-format");
-    let tsr = Timestamp::new("2020-06-27T00:48:30.466249792+00:00", None);
+    let tsr = Timestamp::new("2020-06-27T00:48:30.466249792+00:00");
     let ts = tsr.parse().unwrap();
     let tsn = ts.naive_local();
     let tz = |secs| Tz::FixedOffset(FixedOffset::east_opt(secs).unwrap());
