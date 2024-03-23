@@ -1,15 +1,18 @@
 // std imports
-use std::cmp::{max, Reverse};
-use std::collections::BTreeMap;
-use std::convert::{TryFrom, TryInto};
-use std::fs;
-use std::io::{BufWriter, Write};
-use std::iter::repeat;
-use std::ops::Range;
-use std::path::PathBuf;
-use std::rc::Rc;
-use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::{
+    cmp::{max, Reverse},
+    collections::BTreeMap,
+    convert::{TryFrom, TryInto},
+    fs,
+    io::{BufWriter, Write},
+    iter::repeat,
+    num::NonZeroUsize,
+    ops::Range,
+    path::PathBuf,
+    rc::Rc,
+    sync::Arc,
+    time::{Duration, Instant},
+};
 
 // unix-only std imports
 #[cfg(unix)]
@@ -21,24 +24,25 @@ use crossbeam_channel::{self as channel, Receiver, RecvError, RecvTimeoutError, 
 use crossbeam_utils::thread;
 use itertools::{izip, Itertools};
 use platform_dirs::AppDirs;
-use sha2::{Digest, Sha256};
-use std::num::{NonZeroU32, NonZeroUsize};
+use serde::{Deserialize, Serialize};
 
 // local imports
-use crate::datefmt::{DateTimeFormat, DateTimeFormatter};
-use crate::fmtx::aligned_left;
-use crate::formatting::{RawRecordFormatter, RecordFormatter, RecordWithSourceFormatter};
-use crate::fsmon::{self, EventKind};
-use crate::index::{Indexer, Timestamp};
-use crate::input::{BlockLine, Input, InputHolder, InputReference};
-use crate::model::{Filter, Parser, ParserSettings, RawRecord, Record, RecordFilter, RecordWithSourceConstructor};
-use crate::query::Query;
-use crate::scanning::{BufFactory, Delimit, Delimiter, Scanner, SearchExt, Segment, SegmentBuf, SegmentBufFactory};
-use crate::settings::{Fields, Formatting};
-use crate::theme::{Element, StylingPush, Theme};
-use crate::timezone::Tz;
-use crate::IncludeExcludeKeyFilter;
-use crate::{error::*, QueryNone};
+use crate::{
+    datefmt::{DateTimeFormat, DateTimeFormatter},
+    fmtx::aligned_left,
+    formatting::{RawRecordFormatter, RecordFormatter, RecordWithSourceFormatter},
+    fsmon::{self, EventKind},
+    index::{Indexer, IndexerSettings, Timestamp},
+    input::{BlockLine, Input, InputHolder, InputReference},
+    model::{Filter, Parser, ParserSettings, RawRecord, Record, RecordFilter, RecordWithSourceConstructor},
+    query::Query,
+    scanning::{BufFactory, Delimit, Delimiter, Scanner, SearchExt, Segment, SegmentBuf, SegmentBufFactory},
+    settings::{Fields, Formatting},
+    theme::{Element, StylingPush, Theme},
+    timezone::Tz,
+    IncludeExcludeKeyFilter,
+    {error::*, QueryNone},
+};
 
 // TODO: merge Options to Settings and replace Options with Settings.
 
@@ -64,9 +68,11 @@ pub struct Options {
     pub sync_interval: Duration,
     pub input_info: Option<InputInfo>,
     pub dump_index: bool,
+    pub debug: bool,
     pub app_dirs: Option<AppDirs>,
     pub tail: u64,
     pub delimiter: Delimiter,
+    pub unix_ts_unit: Option<UnixTimestampUnit>,
 }
 
 impl Options {
@@ -92,6 +98,35 @@ pub enum InputInfo {
     Compact,
     Minimal,
 }
+
+// ---
+
+#[derive(Eq, PartialEq, Copy, Clone, Debug, Serialize, Deserialize)]
+pub enum UnixTimestampUnit {
+    Seconds,
+    Milliseconds,
+    Microseconds,
+    Nanoseconds,
+}
+
+impl UnixTimestampUnit {
+    pub fn guess(ts: i64) -> Self {
+        match ts {
+            Self::TS_UNIX_AUTO_S_MIN..=Self::TS_UNIX_AUTO_S_MAX => Self::Seconds,
+            Self::TS_UNIX_AUTO_MS_MIN..=Self::TS_UNIX_AUTO_MS_MAX => Self::Milliseconds,
+            Self::TS_UNIX_AUTO_US_MIN..=Self::TS_UNIX_AUTO_US_MAX => Self::Microseconds,
+            _ => Self::Nanoseconds,
+        }
+    }
+
+    const TS_UNIX_AUTO_S_MIN: i64 = -62135596800;
+    const TS_UNIX_AUTO_S_MAX: i64 = 253402300799;
+    const TS_UNIX_AUTO_MS_MIN: i64 = Self::TS_UNIX_AUTO_S_MIN * 1000;
+    const TS_UNIX_AUTO_MS_MAX: i64 = Self::TS_UNIX_AUTO_S_MAX * 1000;
+    const TS_UNIX_AUTO_US_MIN: i64 = Self::TS_UNIX_AUTO_MS_MIN * 1000;
+    const TS_UNIX_AUTO_US_MAX: i64 = Self::TS_UNIX_AUTO_MS_MAX * 1000;
+}
+// ---
 
 pub struct App {
     options: Options,
@@ -188,7 +223,15 @@ impl App {
 
     fn sort(&self, inputs: Vec<InputHolder>, output: &mut Output) -> Result<()> {
         let mut output = BufWriter::new(output);
-        let param_hash = hex::encode(self.parameters_hash()?);
+        let indexer_settings = IndexerSettings::new(
+            self.options.buffer_size.try_into()?,
+            self.options.max_message_size.try_into()?,
+            &self.options.fields.settings.predefined,
+            self.options.delimiter.clone(),
+            self.options.allow_prefix,
+            self.options.unix_ts_unit,
+        );
+        let param_hash = hex::encode(indexer_settings.hash()?);
         let cache_dir = self
             .options
             .app_dirs
@@ -197,16 +240,8 @@ impl App {
             .unwrap_or_else(|| PathBuf::from(".cache"))
             .join(param_hash);
         fs::create_dir_all(&cache_dir)?;
-        let indexer = Indexer::new(
-            self.options.concurrency,
-            NonZeroU32::try_from(self.options.buffer_size)?.try_into()?,
-            NonZeroU32::try_from(self.options.max_message_size)?.try_into()?,
-            cache_dir,
-            &self.options.fields.settings.predefined,
-            self.options.delimiter.clone(),
-            self.options.allow_prefix,
-        );
 
+        let indexer = Indexer::new(self.options.concurrency, cache_dir, indexer_settings);
         let input_badges = self.input_badges(inputs.iter().map(|x| &x.reference));
 
         let inputs = inputs
@@ -309,8 +344,11 @@ impl App {
                                     if let Some(ts) = &record.ts {
                                         if let Some(unix_ts) = ts.unix_utc() {
                                             items.push((unix_ts.into(), location));
-                                        } else {
-                                            eprintln!("skipped message because timestamp cannot be parsed: {:#?}", ts)
+                                        } else if self.options.debug {
+                                            eprintln!(
+                                                "skipped a message because its timestamp could not be parsed: {:#?}",
+                                                ts.raw()
+                                            )
                                         }
                                     }
                                 },
@@ -571,25 +609,12 @@ impl App {
         Ok(())
     }
 
-    fn parameters_hash(&self) -> Result<[u8; 32]> {
-        let mut hasher = Sha256::new();
-        bincode::serialize_into(
-            &mut hasher,
-            &(
-                &self.options.buffer_size,
-                &self.options.max_message_size,
-                &self.options.fields.settings.predefined,
-                &self.options.allow_prefix,
-            ),
-        )?;
-        Ok(hasher.finalize().into())
-    }
-
     fn parser(&self) -> Parser {
         Parser::new(ParserSettings::new(
             &self.options.fields.settings.predefined,
             &self.options.fields.settings.ignore,
             self.options.filter.since.is_some() || self.options.filter.until.is_some() || self.options.follow,
+            self.options.unix_ts_unit,
         ))
     }
 

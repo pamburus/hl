@@ -462,7 +462,7 @@ mod tests {
     fn test_nested_objects() {
         assert_eq!(
             format(&Record {
-                ts: Some(Timestamp::new("2000-01-02T03:04:05.123Z", None)),
+                ts: Some(Timestamp::new("2000-01-02T03:04:05.123Z")),
                 message: Some(RawValue::Json(&json_raw_value(r#""tm""#))),
                 level: Some(Level::Debug),
                 logger: Some("tl"),

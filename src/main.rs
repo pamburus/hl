@@ -1,11 +1,13 @@
 // std imports
-use std::convert::TryFrom;
-use std::default::Default;
-use std::io::{stdin, stdout, IsTerminal};
-use std::path::PathBuf;
-use std::process;
-use std::sync::Arc;
-use std::time::Duration;
+use std::{
+    convert::TryFrom,
+    default::Default,
+    io::{stdin, stdout, IsTerminal},
+    path::PathBuf,
+    process,
+    sync::Arc,
+    time::Duration,
+};
 
 // third-party imports
 use chrono::Utc;
@@ -17,19 +19,20 @@ use platform_dirs::AppDirs;
 use std::num::NonZeroUsize;
 
 // local imports
-use hl::datefmt::LinuxDateFormat;
-use hl::error::*;
-use hl::input::InputReference;
-use hl::level::{LevelValueParser, RelaxedLevel};
-use hl::output::{OutputStream, Pager};
-use hl::query::Query;
-use hl::settings::Settings;
-use hl::signal::SignalHandler;
-use hl::theme::{Theme, ThemeOrigin};
-use hl::timeparse::parse_time;
-use hl::timezone::Tz;
-use hl::Delimiter;
-use hl::{IncludeExcludeKeyFilter, KeyMatchOptions};
+use hl::{
+    datefmt::LinuxDateFormat,
+    error::*,
+    input::InputReference,
+    level::{LevelValueParser, RelaxedLevel},
+    output::{OutputStream, Pager},
+    query::Query,
+    settings::Settings,
+    signal::SignalHandler,
+    theme::{Theme, ThemeOrigin},
+    timeparse::parse_time,
+    timezone::Tz,
+    Delimiter, {IncludeExcludeKeyFilter, KeyMatchOptions},
+};
 
 // ---
 
@@ -45,21 +48,20 @@ struct Opt {
     #[arg(long, default_value = "auto", env = "HL_COLOR", overrides_with = "color")]
     #[arg(value_enum)]
     color: ColorOption,
-    //
+
     /// Handful alias for --color=always, overrides --color option.
     #[arg(short)]
     color_always: bool,
-    //
+
     /// Output paging options.
     #[arg(long, default_value = "auto", env = "HL_PAGING", overrides_with = "paging")]
     #[arg(value_enum)]
     paging: PagingOption,
-    //
+
     /// Handful alias for --paging=never, overrides --paging option.
     #[arg(short = 'P')]
     paging_never: bool,
-    //
-    //
+
     /// Color theme.
     #[arg(
         long,
@@ -68,23 +70,23 @@ struct Opt {
         overrides_with="theme",
     )]
     theme: String,
-    //
+
     /// Output raw JSON messages instead of formatter messages, it can be useful for applying filters and saving results in original format.
     #[arg(short, long, overrides_with = "raw")]
     raw: bool,
-    //
+
     /// Disable raw JSON messages output, overrides --raw option.
     #[arg(long, overrides_with = "raw")]
     _no_raw: bool,
-    //
+
     /// Disable unescaping and prettifying of field values.
     #[arg(long, overrides_with = "raw_fields")]
     raw_fields: bool,
-    //
+
     /// Allow non-JSON prefixes before JSON messages.
     #[arg(long, env = "HL_ALLOW_PREFIX", overrides_with = "allow_prefix")]
     allow_prefix: bool,
-    //
+
     /// Number of interrupts to ignore, i.e. Ctrl-C (SIGINT).
     #[arg(
         long,
@@ -93,44 +95,44 @@ struct Opt {
         overrides_with = "interrupt_ignore_count"
     )]
     interrupt_ignore_count: usize,
-    //
+
     /// Buffer size.
     #[arg(long, default_value = "256 KiB", env="HL_BUFFER_SIZE",  value_parser = parse_non_zero_size, overrides_with="buffer_size")]
     buffer_size: NonZeroUsize,
-    //
+
     /// Maximum message size.
     #[arg(long, default_value = "64 MiB", env="HL_MAX_MESSAGE_SIZE",  value_parser = parse_non_zero_size, overrides_with="max_message_size")]
     max_message_size: NonZeroUsize,
-    //
+
     /// Number of processing threads.
     #[arg(long, short = 'C', env = "HL_CONCURRENCY", overrides_with = "concurrency")]
     concurrency: Option<usize>,
-    //
+
     /// Filtering by field values in one of forms [k=v, k~=v, k~~=v, 'k!=v', 'k!~=v', 'k!~~=v'] where ~ does substring match and ~~ does regular expression match.
     #[arg(short, long, number_of_values = 1)]
     filter: Vec<String>,
-    //
+
     /// Custom query, accepts expressions from --filter and supports '(', ')', 'and', 'or', 'not', 'in', 'contain', 'like', '<', '>', '<=', '>=', etc.
     #[arg(short, long, number_of_values = 1)]
     query: Vec<String>,
-    //
+
     /// Hide or reveal fields with the specified keys, prefix with ! to reveal, specify '!*' to reveal all.
     #[arg(long, short = 'h', number_of_values = 1)]
     hide: Vec<String>,
-    //
+
     /// Filtering by level.
     #[arg(short, long, env = "HL_LEVEL", overrides_with="level", ignore_case=true, value_parser = LevelValueParser)]
     #[arg(value_enum)]
     level: Option<RelaxedLevel>,
-    //
+
     /// Filtering by timestamp >= the value (--time-zone and --local options are honored).
     #[arg(long, allow_hyphen_values = true, overrides_with = "since")]
     since: Option<String>,
-    //
+
     /// Filtering by timestamp <= the value (--time-zone and --local options are honored).
     #[arg(long, allow_hyphen_values = true, overrides_with = "until")]
     until: Option<String>,
-    //
+
     /// Time format, see https://man7.org/linux/man-pages/man1/date.1.html.
     #[arg(
         short,
@@ -140,23 +142,32 @@ struct Opt {
         overrides_with = "time_format",
     )]
     time_format: String,
-    //
+
     /// Time zone name, see column "TZ identifier" at https://en.wikipedia.org/wiki/List_of_tz_database_time_zones.
     #[arg(long, short = 'Z', env="HL_TIME_ZONE", default_value = &CONFIG.time_zone.name(), overrides_with="time_zone")]
     time_zone: chrono_tz::Tz,
-    //
+
     /// Use local time zone, overrides --time-zone option.
     #[arg(long, short = 'L', overrides_with = "local")]
     local: bool,
-    //
+
     /// Disable local time zone, overrides --local option.
     #[arg(long, overrides_with = "local")]
     _no_local: bool,
-    //
+
+    /// Unix timestamp unit, [auto, s, ms, us, ns].
+    #[arg(
+        long,
+        default_value = "auto",
+        overrides_with = "unix_timestamp_unit",
+        env = "HL_UNIX_TIMESTAMP_UNIT"
+    )]
+    unix_timestamp_unit: UnixTimestampUnit,
+
     /// Files to process
     #[arg(name = "FILE")]
     files: Vec<PathBuf>,
-    //
+
     /// Hide empty fields, applies for null, string, object and array fields only.
     #[arg(
         long,
@@ -165,7 +176,7 @@ struct Opt {
         overrides_with = "hide_empty_fields"
     )]
     hide_empty_fields: bool,
-    //
+
     /// Show empty fields, overrides --hide-empty-fields option.
     #[arg(
         long,
@@ -179,7 +190,7 @@ struct Opt {
     #[arg(long, default_value = "auto", overrides_with = "input_info")]
     #[arg(value_enum)]
     input_info: InputInfoOption,
-    //
+
     /// List available themes and exit.
     #[arg(long)]
     list_themes: bool,
@@ -212,7 +223,10 @@ struct Opt {
     #[arg(long)]
     dump_index: bool,
 
-    //
+    /// Print debug error messages that can help with troubleshooting.
+    #[arg(long)]
+    debug: bool,
+
     /// Print help.
     #[arg(long, default_value_t = false, action = ArgAction::SetTrue)]
     help: bool,
@@ -239,6 +253,15 @@ enum InputInfoOption {
     Full,
     Compact,
     Minimal,
+}
+
+#[derive(ValueEnum, Debug, Clone, Copy)]
+enum UnixTimestampUnit {
+    Auto,
+    S,
+    Ms,
+    Us,
+    Ns,
 }
 
 // ---
@@ -443,9 +466,17 @@ fn run() -> Result<()> {
             InputInfoOption::Minimal => Some(hl::app::InputInfo::Minimal),
         },
         dump_index: opt.dump_index,
+        debug: opt.debug,
         app_dirs: Some(app_dirs),
         tail: opt.tail,
         delimiter,
+        unix_ts_unit: match opt.unix_timestamp_unit {
+            UnixTimestampUnit::Auto => None,
+            UnixTimestampUnit::S => Some(hl::app::UnixTimestampUnit::Seconds),
+            UnixTimestampUnit::Ms => Some(hl::app::UnixTimestampUnit::Milliseconds),
+            UnixTimestampUnit::Us => Some(hl::app::UnixTimestampUnit::Microseconds),
+            UnixTimestampUnit::Ns => Some(hl::app::UnixTimestampUnit::Nanoseconds),
+        },
     });
 
     // Configure input.
