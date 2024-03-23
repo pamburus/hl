@@ -1,9 +1,5 @@
 // std imports
-use std::collections::HashMap;
-use std::fmt;
-use std::iter::IntoIterator;
-use std::marker::PhantomData;
-use std::ops::Range;
+use std::{collections::HashMap, fmt, iter::IntoIterator, marker::PhantomData, ops::Range};
 
 // third-party imports
 use chrono::{DateTime, Utc};
@@ -16,14 +12,16 @@ use serde_json::{
 use wildflower::Pattern;
 
 // local imports
-use crate::error::{Error, Result};
-use crate::fmtx::Push;
-use crate::level;
-use crate::logfmt;
-use crate::serdex::StreamDeserializerWithOffsets;
-use crate::settings::PredefinedFields;
-use crate::timestamp::Timestamp;
-use crate::types::FieldKind;
+use crate::{
+    app::UnixTimestampUnit,
+    error::{Error, Result},
+    fmtx::Push,
+    level, logfmt,
+    serdex::StreamDeserializerWithOffsets,
+    settings::PredefinedFields,
+    timestamp::Timestamp,
+    types::FieldKind,
+};
 
 // ---
 
@@ -432,6 +430,7 @@ impl RecordFilter for RecordFilterNone {
 #[derive(Default)]
 pub struct ParserSettings {
     pre_parse_time: bool,
+    unix_ts_unit: Option<UnixTimestampUnit>,
     level: Vec<(HashMap<String, Level>, Option<Level>)>,
     blocks: Vec<ParserSettingsBlock>,
     ignore: Vec<Pattern<String>>,
@@ -442,9 +441,11 @@ impl ParserSettings {
         predefined: &PredefinedFields,
         ignore: I,
         pre_parse_time: bool,
+        unix_ts_unit: Option<UnixTimestampUnit>,
     ) -> Self {
         let mut result = Self {
             pre_parse_time,
+            unix_ts_unit,
             level: Vec::new(),
             blocks: vec![ParserSettingsBlock::default()],
             ignore: ignore.into_iter().map(|x| Pattern::new(x.to_string())).collect(),
@@ -667,9 +668,9 @@ impl FieldSettings {
             Self::Time => {
                 let s = value.raw_str();
                 let s = if s.as_bytes()[0] == b'"' { &s[1..s.len() - 1] } else { s };
-                let ts = Timestamp::new(s, None);
+                let ts = Timestamp::new(s).with_unix_unit(ps.unix_ts_unit);
                 if ps.pre_parse_time {
-                    to.ts = Some(Timestamp::new(ts.raw(), Some(ts.parse())));
+                    to.ts = Some(ts.preparsed())
                 } else {
                     to.ts = Some(ts);
                 }

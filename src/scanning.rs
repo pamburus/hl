@@ -8,6 +8,7 @@ use std::sync::Arc;
 
 // third-party imports
 use crossbeam_queue::SegQueue;
+use serde::{Deserialize, Serialize};
 
 // local imports
 use crate::error::*;
@@ -36,7 +37,7 @@ impl<D: Delimit> Scanner<D> {
 // ---
 
 /// Defines a token delimiter for Scanner.
-#[derive(Clone)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum Delimiter {
     Byte(u8),
     Bytes(Vec<u8>),

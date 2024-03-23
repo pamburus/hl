@@ -1,40 +1,71 @@
 // third-party imports
 use chrono::{DateTime, Duration, FixedOffset, NaiveDateTime};
 
+// local imports
+use crate::app::UnixTimestampUnit;
+
 // ---
 
 #[derive(Debug)]
-pub struct Timestamp<'a>(&'a str, Option<Option<DateTime<FixedOffset>>>);
+pub struct Timestamp<'a> {
+    raw: &'a str,
+    parsed: Option<Option<DateTime<FixedOffset>>>,
+    unix_unit: Option<UnixTimestampUnit>,
+}
 
 impl<'a> Timestamp<'a> {
-    pub fn new(value: &'a str, parsed: Option<Option<DateTime<FixedOffset>>>) -> Self {
-        Self(value, parsed)
+    pub fn new(value: &'a str) -> Self {
+        Self {
+            raw: value,
+            parsed: None,
+            unix_unit: None,
+        }
     }
 
     pub fn raw(&self) -> &'a str {
-        self.0
+        self.raw
+    }
+
+    pub fn preparsed(&self) -> Self {
+        Self {
+            raw: self.raw,
+            parsed: Some(self.parse()),
+            unix_unit: self.unix_unit,
+        }
+    }
+
+    pub fn with_unix_unit(&self, unit: Option<UnixTimestampUnit>) -> Self {
+        Self {
+            raw: self.raw,
+            parsed: if unit == self.unix_unit { self.parsed } else { None },
+            unix_unit: unit,
+        }
     }
 
     pub fn parse(&self) -> Option<DateTime<FixedOffset>> {
-        if let Some(parsed) = self.1 {
+        if let Some(parsed) = self.parsed {
             return parsed;
         }
 
-        if let Ok(ts) = self.0.parse() {
+        if let Ok(ts) = self.raw.parse() {
             Some(ts)
-        } else if let Some(nt) = guess_number_type(self.0.as_bytes()) {
-            let ts = match nt {
-                NumberType::Integer => self.0.parse::<i64>().ok().and_then(|ts| match ts {
-                    Self::TS_UNIX_AUTO_S_MIN..=Self::TS_UNIX_AUTO_S_MAX => NaiveDateTime::from_timestamp_opt(ts, 0),
-                    Self::TS_UNIX_AUTO_MS_MIN..=Self::TS_UNIX_AUTO_MS_MAX => NaiveDateTime::from_timestamp_millis(ts),
-                    Self::TS_UNIX_AUTO_US_MIN..=Self::TS_UNIX_AUTO_US_MAX => NaiveDateTime::from_timestamp_micros(ts),
-                    _ => NaiveDateTime::from_timestamp_nanos(ts),
+        } else if let Some(nt) = guess_number_type(self.raw.as_bytes()) {
+            let ts = match (nt, self.unix_unit) {
+                (NumberType::Integer, unit) => self.raw.parse::<i64>().ok().and_then(|ts| {
+                    let unit = unit.unwrap_or_else(|| UnixTimestampUnit::guess(ts));
+                    match unit {
+                        UnixTimestampUnit::Seconds => NaiveDateTime::from_timestamp_opt(ts, 0),
+                        UnixTimestampUnit::Milliseconds => NaiveDateTime::from_timestamp_millis(ts),
+                        UnixTimestampUnit::Microseconds => NaiveDateTime::from_timestamp_micros(ts),
+                        _ => NaiveDateTime::from_timestamp_nanos(ts),
+                    }
                 }),
-                NumberType::Float => self.0.bytes().position(|b| b == b'.').and_then(|i| {
-                    let whole = self.0[..i].parse::<i64>().ok()?;
-                    let fractional = self.0[i..].parse::<f64>().ok()?;
-                    match whole {
-                        Self::TS_UNIX_AUTO_S_MIN..=Self::TS_UNIX_AUTO_S_MAX => {
+                (NumberType::Float, unit) => self.raw.bytes().position(|b| b == b'.').and_then(|i| {
+                    let whole = self.raw[..i].parse::<i64>().ok()?;
+                    let fractional = self.raw[i..].parse::<f64>().ok()?;
+                    let unit = unit.unwrap_or_else(|| UnixTimestampUnit::guess(whole));
+                    match unit {
+                        UnixTimestampUnit::Seconds => {
                             let ns = (fractional * 1e9).round() as u32;
                             let (whole, ns) = if whole < 0 && ns > 0 {
                                 (whole - 1, 1_000_000_000 - ns)
@@ -43,12 +74,12 @@ impl<'a> Timestamp<'a> {
                             };
                             NaiveDateTime::from_timestamp_opt(whole, ns)
                         }
-                        Self::TS_UNIX_AUTO_MS_MIN..=Self::TS_UNIX_AUTO_MS_MAX => {
+                        UnixTimestampUnit::Milliseconds => {
                             let ns = (fractional * 1e6).round() as i64;
                             let ns = if whole < 0 { -ns } else { ns };
                             NaiveDateTime::from_timestamp_millis(whole).map(|ts| ts + Duration::nanoseconds(ns))
                         }
-                        Self::TS_UNIX_AUTO_US_MIN..=Self::TS_UNIX_AUTO_US_MAX => {
+                        UnixTimestampUnit::Microseconds => {
                             let ns = (fractional * 1e3).round() as i64;
                             let ns = if whole < 0 { -ns } else { ns };
                             NaiveDateTime::from_timestamp_micros(whole).map(|ts| ts + Duration::nanoseconds(ns))
@@ -59,27 +90,20 @@ impl<'a> Timestamp<'a> {
             };
             ts.and_then(|ts| Some(DateTime::from_naive_utc_and_offset(ts, FixedOffset::east_opt(0)?)))
         } else {
-            NaiveDateTime::parse_from_str(self.0, "%Y-%m-%d %H:%M:%S%.f")
+            NaiveDateTime::parse_from_str(self.raw, "%Y-%m-%d %H:%M:%S%.f")
                 .ok()
                 .map(|ts| ts.and_utc().into())
         }
     }
 
     pub fn as_rfc3339(&self) -> Option<rfc3339::Timestamp> {
-        rfc3339::Timestamp::parse(self.0)
+        rfc3339::Timestamp::parse(self.raw)
     }
 
     pub fn unix_utc(&self) -> Option<(i64, u32)> {
         self.parse()
             .and_then(|ts| Some((ts.timestamp(), ts.timestamp_subsec_nanos())))
     }
-
-    const TS_UNIX_AUTO_S_MIN: i64 = -62135596800;
-    const TS_UNIX_AUTO_S_MAX: i64 = 253402300799;
-    const TS_UNIX_AUTO_MS_MIN: i64 = Self::TS_UNIX_AUTO_S_MIN * 1000;
-    const TS_UNIX_AUTO_MS_MAX: i64 = Self::TS_UNIX_AUTO_S_MAX * 1000;
-    const TS_UNIX_AUTO_US_MIN: i64 = Self::TS_UNIX_AUTO_MS_MIN * 1000;
-    const TS_UNIX_AUTO_US_MAX: i64 = Self::TS_UNIX_AUTO_MS_MAX * 1000;
 }
 
 // ---
@@ -467,7 +491,7 @@ mod tests {
     #[test]
     fn test_parse() {
         let test = |s, unix_timestamp, tz| {
-            let ts = Timestamp(s, None).parse().unwrap();
+            let ts = Timestamp::new(s).parse().unwrap();
             assert_eq!(ts.timestamp(), unix_timestamp);
             assert_eq!(ts.timezone().local_minus_utc(), tz);
         };

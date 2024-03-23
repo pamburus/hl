@@ -10,15 +10,18 @@
 //
 
 // std imports
-use std::cmp::{max, min};
-use std::convert::{TryFrom, TryInto};
-use std::fmt::{self, Display};
-use std::fs::File;
-use std::io::{Read, Write};
-use std::iter::empty;
-use std::path::{Path, PathBuf};
-use std::sync::Arc;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::{
+    cmp::{max, min},
+    convert::{TryFrom, TryInto},
+    fmt::{self, Display},
+    fs::File,
+    io::{Read, Write},
+    iter::empty,
+    num::NonZeroU32,
+    path::{Path, PathBuf},
+    sync::Arc,
+    time::{SystemTime, UNIX_EPOCH},
+};
 
 // third-party imports
 use capnp::{message, serialize::read_message};
@@ -31,13 +34,16 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
 // local imports
-use crate::error::{Error, Result};
-use crate::index_capnp as schema;
-use crate::input::Input;
-use crate::level::Level;
-use crate::model::{Parser, ParserSettings, RawRecord};
-use crate::scanning::{Delimiter, Scanner, Segment, SegmentBuf, SegmentBufFactory};
-use crate::settings::PredefinedFields;
+use crate::{
+    app::UnixTimestampUnit,
+    error::{Error, Result},
+    index_capnp as schema,
+    input::Input,
+    level::Level,
+    model::{Parser, ParserSettings, RawRecord},
+    scanning::{Delimiter, Scanner, Segment, SegmentBuf, SegmentBufFactory},
+    settings::PredefinedFields,
+};
 
 // types
 pub type Writer = dyn Write + Send + Sync;
@@ -120,6 +126,53 @@ impl std::ops::Sub for Timestamp {
 
 // ---
 
+pub struct IndexerSettings<'a> {
+    buffer_size: NonZeroU32,
+    max_message_size: NonZeroU32,
+    fields: &'a PredefinedFields,
+    delimiter: Delimiter,
+    allow_prefix: bool,
+    unix_ts_unit: Option<UnixTimestampUnit>,
+}
+
+impl<'a> IndexerSettings<'a> {
+    pub fn new(
+        buffer_size: NonZeroU32,
+        max_message_size: NonZeroU32,
+        fields: &'a PredefinedFields,
+        delimiter: Delimiter,
+        allow_prefix: bool,
+        unix_ts_unit: Option<UnixTimestampUnit>,
+    ) -> Self {
+        Self {
+            buffer_size,
+            max_message_size,
+            fields,
+            delimiter,
+            allow_prefix,
+            unix_ts_unit,
+        }
+    }
+
+    pub fn hash(&self) -> Result<[u8; 32]> {
+        let mut hasher = Sha256::new();
+        bincode::serialize_into(
+            &mut hasher,
+            &(
+                &self.buffer_size,
+                &self.max_message_size,
+                &self.fields,
+                &self.delimiter,
+                &self.allow_prefix,
+                &self.unix_ts_unit,
+            ),
+        )?;
+        Ok(hasher.finalize().into())
+    }
+}
+
+// ---
+
 /// Allows log files indexing to enable message sorting.
 pub struct Indexer {
     concurrency: usize,
@@ -133,23 +186,20 @@ pub struct Indexer {
 
 impl Indexer {
     /// Returns a new Indexer with the given parameters.
-    pub fn new(
-        concurrency: usize,
-        buffer_size: u32,
-        max_message_size: u32,
-        dir: PathBuf,
-        fields: &PredefinedFields,
-        delimiter: Delimiter,
-        allow_prefix: bool,
-    ) -> Self {
+    pub fn new(concurrency: usize, dir: PathBuf, settings: IndexerSettings<'_>) -> Self {
         Self {
             concurrency,
-            buffer_size,
-            max_message_size,
+            buffer_size: settings.buffer_size.into(),
+            max_message_size: settings.max_message_size.into(),
             dir,
-            parser: Parser::new(ParserSettings::new(&fields, empty(), false)),
-            delimiter,
-            allow_prefix,
+            parser: Parser::new(ParserSettings::new(
+                &settings.fields,
+                empty(),
+                false,
+                settings.unix_ts_unit,
+            )),
+            delimiter: settings.delimiter,
+            allow_prefix: settings.allow_prefix,
         }
     }
 
