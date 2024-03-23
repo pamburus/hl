@@ -7,7 +7,7 @@ help:
 
 ## Build debug target
 build:
-	@cargo build
+	@cargo build --benches
 .PHONY: build
 
 ## Build release target

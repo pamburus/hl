@@ -22,22 +22,22 @@ fn benchmark(c: &mut Criterion) {
         b.iter(|| assert!(re.is_match(rfc3339)));
     });
     c.bench_function("as_rfc3339", |b| {
-        let ts = Timestamp::new(rfc3339, None);
+        let ts = Timestamp::new(rfc3339);
         b.iter(|| assert!(ts.as_rfc3339().is_some()));
     });
     c.bench_function("parse unix", |b| {
-        let ts = Timestamp::new(unix, None);
+        let ts = Timestamp::new(unix);
         b.iter(|| assert!(ts.parse().is_some()))
     });
     c.bench_function("parse unix microseconds", |b| {
-        let ts = Timestamp::new(unix_us, None);
+        let ts = Timestamp::new(unix_us);
         b.iter(|| assert!(ts.parse().is_some()))
     });
 
     let mut c1 = None;
     let mut n1 = 0;
     c.bench_function("parse rfc3339", |b| {
-        let ts = Timestamp::new(rfc3339, None);
+        let ts = Timestamp::new(rfc3339);
         let reg = Region::new(&GLOBAL);
         b.iter(|| {
             n1 += 1;
