@@ -38,12 +38,12 @@ levels:
     level-inner:
       foreground: cyan
   warning:
-    level-inner:
+    level:
       foreground: yellow
-      modes: [bold]
+      modes: [reverse]
   error:
     time:
       foreground: bright-red
-    level-inner:
+    level:
       foreground: bright-red
-      modes: [bold]
+      modes: [reverse]
