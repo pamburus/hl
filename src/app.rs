@@ -126,6 +126,7 @@ impl UnixTimestampUnit {
     const TS_UNIX_AUTO_US_MIN: i64 = Self::TS_UNIX_AUTO_MS_MIN * 1000;
     const TS_UNIX_AUTO_US_MAX: i64 = Self::TS_UNIX_AUTO_MS_MAX * 1000;
 }
+
 // ---
 
 pub struct App {
