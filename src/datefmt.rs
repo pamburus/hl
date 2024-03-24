@@ -41,10 +41,9 @@ impl DateTimeFormatter {
 
     pub fn max_length(&self) -> usize {
         let mut counter = Counter::new();
-        let ts = NaiveDateTime::from_timestamp_opt(1654041600, 999_999_999).unwrap();
-        let offset = self.tz.offset_from_utc_datetime(&ts);
-        let tts = DateTime::<Tz>::from_naive_utc_and_offset(ts, offset);
-        self.format(&mut counter, tts.with_timezone(&offset.fix()));
+        let ts = DateTime::from_timestamp(1654041600, 999_999_999).unwrap().naive_utc();
+        let ts = DateTime::from_naive_utc_and_offset(ts, self.tz.offset_from_utc_date(&ts.date()).fix());
+        self.format(&mut counter, ts);
         counter.result()
     }
 }
@@ -451,7 +450,7 @@ where
                 f.numeric(value, width, flags);
             }
             Item::UnixTimestamp(flags) => {
-                f.numeric(dt.timestamp(), 10, flags);
+                f.numeric(dt.and_utc().timestamp(), 10, flags);
             }
             Item::TimeZoneOffset((flags, precision)) => {
                 let secs = dto.offset().fix().local_minus_utc();
@@ -659,7 +658,7 @@ where
             }
             Item::UnixTimestamp(flags) => {
                 if let Some(dt) = dt() {
-                    f.numeric(dt.timestamp(), 10, flags);
+                    f.numeric(dt.and_utc().timestamp(), 10, flags);
                 }
             }
             Item::TimeZoneOffset((_, precision)) => {

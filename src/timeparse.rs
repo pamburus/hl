@@ -49,9 +49,9 @@ fn rfc3339(s: &str, tz: &Tz) -> Option<DateTime<Tz>> {
 fn rfc3339_weak(s: &str, tz: &Tz) -> Option<DateTime<Tz>> {
     let time = DateTime::<Utc>::from(humantime::parse_rfc3339_weak(s).ok()?).with_timezone(tz);
     let fix1 = time.offset().fix().local_minus_utc();
-    let time = time - Duration::seconds(fix1 as i64);
+    let time = time - Duration::try_seconds(fix1 as i64)?;
     let fix2 = time.offset().fix().local_minus_utc();
-    let time = time - Duration::seconds((fix2 - fix1) as i64);
+    let time = time - Duration::try_seconds((fix2 - fix1) as i64)?;
     Some(time)
 }
 
@@ -230,7 +230,7 @@ fn use_custom_format(s: &str, format: &DateTimeFormat, now: &DateTime<Tz>, tz: &
     let initial_offset = (if has_offset { result } else { now }).offset().fix();
     let result = smart_adjust(&result, &now, has_year, has_month, has_day).unwrap_or(result);
     let shift = initial_offset.local_minus_utc() - result.offset().fix().local_minus_utc();
-    Some(result + Duration::seconds(shift as i64))
+    Some(result + Duration::try_seconds(shift as i64)?)
 }
 
 fn smart_adjust(
