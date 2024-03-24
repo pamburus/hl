@@ -1,5 +1,5 @@
 # hl
-A fast and powerful log viewer that translates JSON logs into a pretty human-readable format.
+A fast and powerful log viewer and processor that translates JSON or logfmt logs into a pretty human-readable format.
 High performance and convenient features are the main goals.
 
 ## Features overview
@@ -12,7 +12,7 @@ High performance and convenient features are the main goals.
     * RFC-3339 timestamp format.
     * Current configured timestamp output format with the `-t` option or environment variable.
     * Human friendly shortcuts like `today`, `yesterday`, `friday` or relative offsets like `-3h` or `-14d`.
-* Quick and easy [hiding and unhiding](#hiding-or-showing-selected-fields) of fields with the `-h` option.
+* Quick and easy [hiding and revealing](#hiding-or-revealing-selected-fields) of fields with the `-h` option.
 * Hide empty fields with the `-E` flag.
 * Lightning fast [message sorting](#sorting-messages-chronologically) with automatic indexing for local files using the `-s` flag.
     * Handles ~1 GiB/s for the first scan and allows fast filtering by timestamp range and level without scanning the data afterwards.
@@ -264,7 +264,7 @@ High performance and convenient features are the main goals.
     Displays only messages that occurred before 6 PM local time on June 1, 2021, and shows timestamps in local time.
 
 
-### Hiding or showing selected fields
+### Hiding or revealing selected fields
 
 - Command
 
