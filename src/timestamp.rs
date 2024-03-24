@@ -54,10 +54,10 @@ impl<'a> Timestamp<'a> {
                 (NumberType::Integer, unit) => self.raw.parse::<i64>().ok().and_then(|ts| {
                     let unit = unit.unwrap_or_else(|| UnixTimestampUnit::guess(ts));
                     match unit {
-                        UnixTimestampUnit::Seconds => NaiveDateTime::from_timestamp_opt(ts, 0),
-                        UnixTimestampUnit::Milliseconds => NaiveDateTime::from_timestamp_millis(ts),
-                        UnixTimestampUnit::Microseconds => NaiveDateTime::from_timestamp_micros(ts),
-                        _ => NaiveDateTime::from_timestamp_nanos(ts),
+                        UnixTimestampUnit::Seconds => DateTime::from_timestamp(ts, 0),
+                        UnixTimestampUnit::Milliseconds => DateTime::from_timestamp_millis(ts),
+                        UnixTimestampUnit::Microseconds => DateTime::from_timestamp_micros(ts),
+                        _ => Some(DateTime::from_timestamp_nanos(ts)),
                     }
                 }),
                 (NumberType::Float, unit) => self.raw.bytes().position(|b| b == b'.').and_then(|i| {
@@ -72,23 +72,23 @@ impl<'a> Timestamp<'a> {
                             } else {
                                 (whole, ns)
                             };
-                            NaiveDateTime::from_timestamp_opt(whole, ns)
+                            DateTime::from_timestamp(whole, ns)
                         }
                         UnixTimestampUnit::Milliseconds => {
                             let ns = (fractional * 1e6).round() as i64;
                             let ns = if whole < 0 { -ns } else { ns };
-                            NaiveDateTime::from_timestamp_millis(whole).map(|ts| ts + Duration::nanoseconds(ns))
+                            DateTime::from_timestamp_millis(whole).map(|ts| ts + Duration::nanoseconds(ns))
                         }
                         UnixTimestampUnit::Microseconds => {
                             let ns = (fractional * 1e3).round() as i64;
                             let ns = if whole < 0 { -ns } else { ns };
-                            NaiveDateTime::from_timestamp_micros(whole).map(|ts| ts + Duration::nanoseconds(ns))
+                            DateTime::from_timestamp_micros(whole).map(|ts| ts + Duration::nanoseconds(ns))
                         }
-                        _ => NaiveDateTime::from_timestamp_nanos(whole),
+                        _ => Some(DateTime::from_timestamp_nanos(whole)),
                     }
                 }),
             };
-            ts.and_then(|ts| Some(DateTime::from_naive_utc_and_offset(ts, FixedOffset::east_opt(0)?)))
+            ts.map(|ts| ts.into())
         } else {
             NaiveDateTime::parse_from_str(self.raw, "%Y-%m-%d %H:%M:%S%.f")
                 .ok()
