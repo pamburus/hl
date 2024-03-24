@@ -35,7 +35,7 @@ use sha2::{Digest, Sha256};
 
 // local imports
 use crate::{
-    app::UnixTimestampUnit,
+    app::{InputFormat, UnixTimestampUnit},
     error::{Error, Result},
     index_capnp as schema,
     input::Input,
@@ -133,6 +133,7 @@ pub struct IndexerSettings<'a> {
     delimiter: Delimiter,
     allow_prefix: bool,
     unix_ts_unit: Option<UnixTimestampUnit>,
+    format: Option<InputFormat>,
 }
 
 impl<'a> IndexerSettings<'a> {
@@ -143,6 +144,7 @@ impl<'a> IndexerSettings<'a> {
         delimiter: Delimiter,
         allow_prefix: bool,
         unix_ts_unit: Option<UnixTimestampUnit>,
+        format: Option<InputFormat>,
     ) -> Self {
         Self {
             buffer_size,
@@ -151,6 +153,7 @@ impl<'a> IndexerSettings<'a> {
             delimiter,
             allow_prefix,
             unix_ts_unit,
+            format,
         }
     }
 
@@ -165,6 +168,7 @@ impl<'a> IndexerSettings<'a> {
                 &self.delimiter,
                 &self.allow_prefix,
                 &self.unix_ts_unit,
+                &self.format,
             ),
         )?;
         Ok(hasher.finalize().into())
@@ -182,6 +186,7 @@ pub struct Indexer {
     parser: Parser,
     delimiter: Delimiter,
     allow_prefix: bool,
+    format: Option<InputFormat>,
 }
 
 impl Indexer {
@@ -200,6 +205,7 @@ impl Indexer {
             )),
             delimiter: settings.delimiter,
             allow_prefix: settings.allow_prefix,
+            format: settings.format,
         }
     }
 
@@ -399,7 +405,10 @@ impl Indexer {
             let data = strip(data, b'\r');
             let mut ts = None;
             if data.len() != 0 {
-                let mut stream = RawRecord::parser().allow_prefix(self.allow_prefix).parse(data);
+                let mut stream = RawRecord::parser()
+                    .allow_prefix(self.allow_prefix)
+                    .format(self.format)
+                    .parse(data);
                 while let Some(item) = stream.next() {
                     match item {
                         Ok(ar) => {

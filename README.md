@@ -480,6 +480,7 @@ Options:
       --sync-interval-ms <SYNC_INTERVAL_MS>              Synchronization interval for live streaming mode enabled by --follow option [default: 100]
   -o, --output <OUTPUT>                                  Output file
       --delimiter <DELIMITER>                            Log message delimiter, [NUL, CR, LF, CRLF] or any custom string
+      --input-format <INPUT_FORMAT>                      Input format [env: HL_INPUT_FORMAT=] [default: auto] [possible values: auto, json, logfmt]
       --dump-index                                       Dump index metadata and exit
       --debug                                            Print debug error messages that can help with troubleshooting
       --help                                             Print help
