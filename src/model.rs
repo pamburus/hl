@@ -13,7 +13,7 @@ use wildflower::Pattern;
 
 // local imports
 use crate::{
-    app::UnixTimestampUnit,
+    app::{InputFormat, UnixTimestampUnit},
     error::{Error, Result},
     fmtx::Push,
     level, logfmt,
@@ -842,17 +842,29 @@ impl<'de: 'a, 'a> Deserialize<'de> for RawRecord<'a> {
 
 pub struct RawRecordParser {
     allow_prefix: bool,
+    format: Option<InputFormat>,
 }
 
 impl RawRecordParser {
     #[inline]
     pub fn new() -> Self {
-        Self { allow_prefix: false }
+        Self {
+            allow_prefix: false,
+            format: None,
+        }
     }
 
     #[inline]
     pub fn allow_prefix(self, value: bool) -> Self {
-        Self { allow_prefix: value }
+        Self {
+            allow_prefix: value,
+            ..self
+        }
+    }
+
+    #[inline]
+    pub fn format(self, format: Option<InputFormat>) -> Self {
+        Self { format, ..self }
     }
 
     #[inline]
@@ -866,17 +878,24 @@ impl RawRecordParser {
         let xn = prefix.len();
         let data = &line[xn..];
 
-        if data.first().map(|&x| x == b'{') == Some(false) {
-            RawRecordStream::Logfmt(RawRecordLogfmtStream {
+        let format = self.format.unwrap_or_else(|| {
+            if data.first().map(|&x| x == b'{') == Some(false) {
+                InputFormat::Logfmt
+            } else {
+                InputFormat::Json
+            }
+        });
+
+        match format {
+            InputFormat::Json => RawRecordStream::Json(RawRecordJsonStream {
+                prefix,
+                delegate: StreamDeserializerWithOffsets(json::Deserializer::from_slice(data).into_iter::<RawRecord>()),
+            }),
+            InputFormat::Logfmt => RawRecordStream::Logfmt(RawRecordLogfmtStream {
                 line,
                 prefix,
                 done: false,
-            })
-        } else {
-            RawRecordStream::Json(RawRecordJsonStream {
-                prefix,
-                delegate: StreamDeserializerWithOffsets(json::Deserializer::from_slice(data).into_iter::<RawRecord>()),
-            })
+            }),
         }
     }
 }

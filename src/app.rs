@@ -67,6 +67,7 @@ pub struct Options {
     pub follow: bool,
     pub sync_interval: Duration,
     pub input_info: Option<InputInfo>,
+    pub input_format: Option<InputFormat>,
     pub dump_index: bool,
     pub debug: bool,
     pub app_dirs: Option<AppDirs>,
@@ -97,6 +98,12 @@ pub enum InputInfo {
     Full,
     Compact,
     Minimal,
+}
+
+#[derive(Eq, PartialEq, Copy, Clone, Debug, Serialize, Deserialize)]
+pub enum InputFormat {
+    Json,
+    Logfmt,
 }
 
 // ---
@@ -231,6 +238,7 @@ impl App {
             self.options.delimiter.clone(),
             self.options.allow_prefix,
             self.options.unix_ts_unit,
+            self.options.input_format,
         );
         let param_hash = hex::encode(indexer_settings.hash()?);
         let cache_dir = self
@@ -739,6 +747,7 @@ impl App {
             allow_prefix: self.options.allow_prefix,
             allow_unparsed_data: self.options.filter.is_empty() && self.options.query.is_none(),
             delimiter: self.options.delimiter.clone(),
+            input_format: self.options.input_format,
         };
 
         SegmentProcessor::new(parser, self.formatter(), self.options.filter_and_query(), options)
@@ -758,6 +767,7 @@ pub struct SegmentProcessorOptions {
     pub allow_prefix: bool,
     pub allow_unparsed_data: bool,
     pub delimiter: Delimiter,
+    pub input_format: Option<InputFormat>,
 }
 
 // ---
@@ -797,7 +807,10 @@ impl<'a, Formatter: RecordWithSourceFormatter, Filter: RecordFilter> SegmentProc
                 continue;
             }
 
-            let mut stream = RawRecord::parser().allow_prefix(self.options.allow_prefix).parse(line);
+            let mut stream = RawRecord::parser()
+                .allow_prefix(self.options.allow_prefix)
+                .format(self.options.input_format)
+                .parse(line);
             let mut parsed_some = false;
             let mut produced_some = false;
             let mut last_offset = 0;

@@ -220,6 +220,15 @@ struct Opt {
     #[arg(long, overrides_with = "delimiter")]
     delimiter: Option<String>,
 
+    /// Input format.
+    #[arg(
+        long,
+        env = "HL_INPUT_FORMAT",
+        default_value = "auto",
+        overrides_with = "input_format"
+    )]
+    input_format: InputFormat,
+
     /// Dump index metadata and exit.
     #[arg(long)]
     dump_index: bool,
@@ -254,6 +263,13 @@ enum InputInfoOption {
     Full,
     Compact,
     Minimal,
+}
+
+#[derive(ValueEnum, Debug, Clone, Copy)]
+enum InputFormat {
+    Auto,
+    Json,
+    Logfmt,
 }
 
 #[derive(ValueEnum, Debug, Clone, Copy)]
@@ -465,6 +481,11 @@ fn run() -> Result<()> {
             InputInfoOption::Full => Some(app::InputInfo::Full),
             InputInfoOption::Compact => Some(app::InputInfo::Compact),
             InputInfoOption::Minimal => Some(app::InputInfo::Minimal),
+        },
+        input_format: match opt.input_format {
+            InputFormat::Auto => None,
+            InputFormat::Json => Some(app::InputFormat::Json),
+            InputFormat::Logfmt => Some(app::InputFormat::Logfmt),
         },
         dump_index: opt.dump_index,
         debug: opt.debug,
