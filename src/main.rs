@@ -20,6 +20,7 @@ use std::num::NonZeroUsize;
 
 // local imports
 use hl::{
+    app,
     datefmt::LinuxDateFormat,
     error::*,
     input::InputReference,
@@ -155,7 +156,7 @@ struct Opt {
     #[arg(long, overrides_with = "local")]
     _no_local: bool,
 
-    /// Unix timestamp unit, [auto, s, ms, us, ns].
+    /// Unix timestamp unit.
     #[arg(
         long,
         default_value = "auto",
@@ -459,11 +460,11 @@ fn run() -> Result<()> {
         follow: opt.follow,
         sync_interval: Duration::from_millis(opt.sync_interval_ms),
         input_info: match opt.input_info {
-            InputInfoOption::Auto => Some(hl::app::InputInfo::Auto),
+            InputInfoOption::Auto => Some(app::InputInfo::Auto),
             InputInfoOption::None => None,
-            InputInfoOption::Full => Some(hl::app::InputInfo::Full),
-            InputInfoOption::Compact => Some(hl::app::InputInfo::Compact),
-            InputInfoOption::Minimal => Some(hl::app::InputInfo::Minimal),
+            InputInfoOption::Full => Some(app::InputInfo::Full),
+            InputInfoOption::Compact => Some(app::InputInfo::Compact),
+            InputInfoOption::Minimal => Some(app::InputInfo::Minimal),
         },
         dump_index: opt.dump_index,
         debug: opt.debug,
@@ -472,10 +473,10 @@ fn run() -> Result<()> {
         delimiter,
         unix_ts_unit: match opt.unix_timestamp_unit {
             UnixTimestampUnit::Auto => None,
-            UnixTimestampUnit::S => Some(hl::app::UnixTimestampUnit::Seconds),
-            UnixTimestampUnit::Ms => Some(hl::app::UnixTimestampUnit::Milliseconds),
-            UnixTimestampUnit::Us => Some(hl::app::UnixTimestampUnit::Microseconds),
-            UnixTimestampUnit::Ns => Some(hl::app::UnixTimestampUnit::Nanoseconds),
+            UnixTimestampUnit::S => Some(app::UnixTimestampUnit::Seconds),
+            UnixTimestampUnit::Ms => Some(app::UnixTimestampUnit::Milliseconds),
+            UnixTimestampUnit::Us => Some(app::UnixTimestampUnit::Microseconds),
+            UnixTimestampUnit::Ns => Some(app::UnixTimestampUnit::Nanoseconds),
         },
     });
 

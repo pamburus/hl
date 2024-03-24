@@ -469,7 +469,7 @@ Options:
   -Z, --time-zone <TIME_ZONE>                            Time zone name, see column "TZ identifier" at https://en.wikipedia.org/wiki/List_of_tz_database_time_zones [env: HL_TIME_ZONE=] [default: UTC]
   -L, --local                                            Use local time zone, overrides --time-zone option
       --no-local                                         Disable local time zone, overrides --local option
-      --unix-timestamp-unit <UNIX_TIMESTAMP_UNIT>        Unix timestamp unit, [auto, s, ms, us, ns] [env: HL_UNIX_TIMESTAMP_UNIT=] [default: auto] [possible values: auto, s, ms, us, ns]
+      --unix-timestamp-unit <UNIX_TIMESTAMP_UNIT>        Unix timestamp unit [env: HL_UNIX_TIMESTAMP_UNIT=] [default: auto] [possible values: auto, s, ms, us, ns]
   -e, --hide-empty-fields                                Hide empty fields, applies for null, string, object and array fields only [env: HL_HIDE_EMPTY_FIELDS=]
   -E, --show-empty-fields                                Show empty fields, overrides --hide-empty-fields option [env: HL_SHOW_EMPTY_FIELDS=]
       --input-info <INPUT_INFO>                          Show input number and/or input filename before each message [default: auto] [possible values: auto, none, full, compact, minimal]
