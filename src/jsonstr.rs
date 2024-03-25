@@ -4,44 +4,57 @@ use crate::error::{Error, Result};
 
 pub trait Handler {
     fn push(&mut self, b: u8);
+    fn push_char(&mut self, c: char);
     fn extend(&mut self, s: &str);
 }
 
-struct Parser<'a> {
-    input: &'a [u8],
+pub trait AsBytes {
+    fn as_bytes(&self) -> &[u8];
+}
+
+struct Parser<S> {
+    input: S,
     index: usize,
 }
 
-impl Parser<'_> {
+impl<S> Parser<S>
+where
+    S: AsBytes,
+{
+    pub fn new(input: S) -> Self {
+        Parser { input, index: 0 }
+    }
+
     fn parse<H: Handler>(&mut self, handler: &mut H) -> Result<()> {
         self.next();
         let mut no_escapes = true;
         let mut start = self.index;
+        let input = self.input.as_bytes();
 
         loop {
-            while self.index < self.input.len() && !ESCAPE[self.input[self.index] as usize] {
+            while self.index < input.len() && !ESCAPE[input[self.index] as usize] {
                 self.index += 1;
             }
-            if self.index == self.input.len() {
+            if self.index == input.len() {
                 return Err(Error::JsonParseError(()));
             }
-            match self.input[self.index] {
+            match input[self.index] {
                 b'"' => {
                     if no_escapes {
-                        let borrowed = &self.input[start..self.index];
+                        let borrowed = &input[start..self.index];
                         self.index += 1;
                         handler.extend(unsafe { str::from_utf8_unchecked(borrowed) });
                         return Ok(());
                     }
 
-                    handler.extend(unsafe { str::from_utf8_unchecked(&self.input[start..self.index]) });
+                    handler.extend(unsafe { str::from_utf8_unchecked(&input[start..self.index]) });
                     self.index += 1;
 
                     return Ok(());
                 }
                 b'\\' => {
                     no_escapes = false;
-                    handler.extend(unsafe { str::from_utf8_unchecked(&self.input[start..self.index]) });
+                    handler.extend(unsafe { str::from_utf8_unchecked(&input[start..self.index]) });
                     self.index += 1;
                     self.parse_escape(handler)?;
                     start = self.index;
@@ -106,7 +119,7 @@ impl Parser<'_> {
                     n => char::from_u32(n as u32).unwrap(),
                 };
 
-                handler.extend(c.encode_utf8(&mut [0_u8; 4]));
+                handler.push_char(c);
             }
             _ => {
                 return Err(Error::InvalidEscape);
@@ -117,17 +130,19 @@ impl Parser<'_> {
     }
 
     fn decode_hex_escape(&mut self) -> Result<u16> {
-        if self.input.len() < 4 {
-            self.input = &self.input[self.input.len()..];
+        let input = &self.input.as_bytes()[self.index..];
+
+        if input.len() < 4 {
+            self.index = input.len();
             return Err(Error::Eof);
         }
 
         let mut n = 0;
         for i in 0..4 {
-            let ch = decode_hex_val(self.input[i]);
+            let ch = decode_hex_val(input[i]);
             match ch {
                 None => {
-                    self.input = &self.input[i..];
+                    self.index += i;
                     return Err(Error::InvalidEscape);
                 }
                 Some(val) => {
@@ -135,14 +150,15 @@ impl Parser<'_> {
                 }
             }
         }
-        self.input = &self.input[4..];
+        self.index += 4;
         Ok(n)
     }
 
     #[inline]
     fn peek(&mut self) -> Option<u8> {
-        if self.index < self.input.len() {
-            Some(self.input[self.index])
+        let input = self.input.as_bytes();
+        if self.index < input.len() {
+            Some(input[self.index])
         } else {
             None
         }
@@ -150,8 +166,9 @@ impl Parser<'_> {
 
     #[inline]
     fn next(&mut self) -> Option<u8> {
-        if self.index < self.input.len() {
-            let ch = self.input[self.index];
+        let input = self.input.as_bytes();
+        if self.index < input.len() {
+            let ch = input[self.index];
             self.index += 1;
             Some(ch)
         } else {
