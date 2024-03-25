@@ -705,17 +705,19 @@ impl<'de> Parser<'de> {
     }
 
     fn decode_hex_escape(&mut self) -> Result<u16> {
-        if self.input.len() < 4 {
-            self.input = &self.input[self.input.len()..];
+        let tail = self.tail();
+
+        if tail.len() < 4 {
+            self.index += tail.len();
             return Err(Error::Eof);
         }
 
         let mut n = 0;
         for i in 0..4 {
-            let ch = decode_hex_val(self.input[i]);
+            let ch = decode_hex_val(tail[i]);
             match ch {
                 None => {
-                    self.input = &self.input[i..];
+                    self.index += i;
                     return Err(Error::InvalidEscape);
                 }
                 Some(val) => {
@@ -723,7 +725,7 @@ impl<'de> Parser<'de> {
                 }
             }
         }
-        self.input = &self.input[4..];
+        self.index += 4;
         Ok(n)
     }
 
@@ -1004,6 +1006,25 @@ fn test_struct_escape() {
     };
     assert_eq!(expected, from_str(j).unwrap());
 }
+
+#[test]
+fn test_hex_escape() {
+    #[derive(Deserialize, PartialEq, Debug)]
+    struct Test {
+        int: u32,
+        str1: String,
+        str2: String,
+    }
+
+    let j = r#"int=0 str1="\u001b[3m" str2="a""#;
+    let expected = Test {
+        int: 0,
+        str1: "\x1b[3m".to_string(),
+        str2: "a".to_string(),
+    };
+    assert_eq!(expected, from_str(j).unwrap());
+}
+
 #[test]
 fn test_raw() {
     #[derive(Deserialize)]
