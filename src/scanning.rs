@@ -280,10 +280,11 @@ impl<'a, 'b, S: Search> Iterator for SplitIter<'a, 'b, S> {
         let range = self.searcher.search_l(buf, true);
         if let Some(range) = range {
             self.pos += range.end;
-            return Some(&buf[..range.start]);
+            Some(&buf[..range.start])
+        } else {
+            self.pos = self.buf.len();
+            Some(buf)
         }
-
-        None
     }
 }
 
@@ -836,6 +837,25 @@ impl<'a, 'b, D: Delimit> Iterator for ScannerJumboIter<'a, 'b, D> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_empty() {
+        let searcher = b'/'.into_searcher();
+        let buf = b"";
+        let mut iter = searcher.split(buf);
+
+        assert_eq!(iter.next(), None);
+    }
+
+    #[test]
+    fn test_no_delim() {
+        let searcher = b'/'.into_searcher();
+        let buf = b"some";
+        let mut iter = searcher.split(buf);
+
+        assert_eq!(iter.next(), Some(&b"some"[..]));
+        assert_eq!(iter.next(), None);
+    }
 
     #[test]
     fn test_split_iter() {
