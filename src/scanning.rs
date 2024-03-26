@@ -397,7 +397,7 @@ impl Search for SmartNewLineSearcher {
     }
 
     fn search_l(&self, buf: &[u8], edge: bool) -> Option<Range<usize>> {
-        if buf.len() < 2 {
+        if buf.len() == 0 {
             return None;
         }
 
@@ -844,6 +844,26 @@ mod tests {
         let buf = b"";
         let mut iter = searcher.split(buf);
 
+        assert_eq!(iter.next(), None);
+    }
+
+    #[test]
+    fn test_only_delim() {
+        let searcher = b'/'.into_searcher();
+        let buf = b"/";
+        let mut iter = searcher.split(buf);
+
+        assert_eq!(iter.next(), Some(&b""[..]));
+        assert_eq!(iter.next(), None);
+    }
+
+    #[test]
+    fn test_only_delim_auto() {
+        let searcher = SmartNewLine.into_searcher();
+        let buf = b"\n";
+        let mut iter = searcher.split(buf);
+
+        assert_eq!(iter.next(), Some(&b""[..]));
         assert_eq!(iter.next(), None);
     }
 
