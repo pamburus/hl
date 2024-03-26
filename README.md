@@ -329,6 +329,8 @@ High performance and convenient features are the main goals.
     | Linux   | ~/.config/hl/config.yaml                      |
     | Windows | %USERPROFILE%\AppData\Roaming\hl\config.yaml  |
 
+- The path to the configuration file can be overridden using the HL_CONFIG environment variable.
+
 - All parameters in the configuration file are optional and can be omitted. In this case, default values are used.
 
 #### Default configuration file
@@ -340,16 +342,16 @@ High performance and convenient features are the main goals.
 
 - Many parameters that are defined in command line arguments and configuration files can also be specified by environment variables.
 
-#### Precedence of configuration sources
+#### Precedence of configuration sources (from lowest priority to highest priority)
 * Configuration file
 * Environment variables
 * Command-line arguments
 
 #### Examples
-* `HL_TIME_FORMAT='%y-%m-%d %T.%3N'` overrides time format specified in configuration file.
-* `HL_TIME_ZONE=Europe/Berlin` overrides time zone specified in configuration file.
-* `HL_CONCURRENCY=4` overrides concurrency limit specified in configuration file.
-* `HL_PAGING=never` specified default value for paging option but it may be overridden by command-line arguments.
+* `HL_TIME_FORMAT='%y-%m-%d %T.%3N'` overrides the time format specified in the configuration file.
+* `HL_TIME_ZONE=Europe/Berlin` overrides the time zone specified in the configuration file.
+* `HL_CONCURRENCY=4` overrides the concurrency limit specified in the configuration file.
+* `HL_PAGING=never` specifies the default value for the paging option, but it can be overridden by command line arguments.
 
 
 ### Themes
