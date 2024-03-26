@@ -878,20 +878,23 @@ impl RawRecordParser {
         let xn = prefix.len();
         let data = &line[xn..];
 
-        let format = self.format.unwrap_or_else(|| {
-            if data.first().map(|&x| x == b'{') == Some(false) {
-                InputFormat::Logfmt
+        let format = self.format.or_else(|| {
+            if data.len() == 0 {
+                None
+            } else if data[0] == b'{' {
+                Some(InputFormat::Json)
             } else {
-                InputFormat::Json
+                Some(InputFormat::Logfmt)
             }
         });
 
         match format {
-            InputFormat::Json => RawRecordStream::Json(RawRecordJsonStream {
+            None => RawRecordStream::Empty,
+            Some(InputFormat::Json) => RawRecordStream::Json(RawRecordJsonStream {
                 prefix,
                 delegate: StreamDeserializerWithOffsets(json::Deserializer::from_slice(data).into_iter::<RawRecord>()),
             }),
-            InputFormat::Logfmt => RawRecordStream::Logfmt(RawRecordLogfmtStream {
+            Some(InputFormat::Logfmt) => RawRecordStream::Logfmt(RawRecordLogfmtStream {
                 line,
                 prefix,
                 done: false,
@@ -903,6 +906,7 @@ impl RawRecordParser {
 // ---
 
 pub enum RawRecordStream<Json, Logfmt> {
+    Empty,
     Json(Json),
     Logfmt(Logfmt),
 }
@@ -915,6 +919,7 @@ where
     #[inline]
     pub fn next(&mut self) -> Option<Result<AnnotatedRawRecord<'a>>> {
         match self {
+            Self::Empty => None,
             Self::Json(stream) => stream.next(),
             Self::Logfmt(stream) => stream.next(),
         }
@@ -1560,3 +1565,37 @@ impl<'de: 'a, 'a, const N: usize> Deserialize<'de> for Array<'a, N> {
 const RECORD_EXTRA_CAPACITY: usize = 32;
 const MAX_PREDEFINED_FIELDS: usize = 8;
 const RAW_RECORD_FIELDS_CAPACITY: usize = RECORD_EXTRA_CAPACITY + MAX_PREDEFINED_FIELDS;
+
+// ---
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_raw_record_parser_empty_line() {
+        let parser = RawRecordParser::new();
+        let stream = parser.parse(b"");
+        let mut stream = match stream {
+            s @ RawRecordStream::Empty => s,
+            _ => panic!(),
+        };
+
+        assert_eq!(stream.next().is_none(), true);
+    }
+
+    #[test]
+    fn test_raw_record_parser_empty_object() {
+        let parser = RawRecordParser::new();
+        let stream = parser.parse(b"{}");
+        let mut stream = match stream {
+            RawRecordStream::Json(s) => s,
+            _ => panic!(),
+        };
+
+        let rec = stream.next().unwrap().unwrap();
+        assert_eq!(rec.prefix, b"");
+        assert_eq!(rec.record.fields.head.len(), 0);
+        assert_eq!(rec.record.fields.tail.len(), 0);
+    }
+}
