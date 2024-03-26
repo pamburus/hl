@@ -19,9 +19,9 @@ elements:
   ellipsis:
     modes: [faint]
   object:
-    foreground: yellow
+    modes: [bold]
   array:
-    foreground: yellow
+    modes: [bold]
   string:
     foreground: default
   number:
