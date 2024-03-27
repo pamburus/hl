@@ -3,14 +3,95 @@ use std::str;
 use crate::error::{Error, Result};
 
 pub trait Handler {
-    fn push(&mut self, b: u8);
-    fn push_char(&mut self, c: char);
-    fn extend(&mut self, s: &str);
+    fn handle(&mut self, token: Token<'_>) -> Result<()>;
 }
+
+// ---
+
+pub enum Token<'a> {
+    Char(char),
+    Sequence(&'a str),
+}
+
+// ---
+
+pub struct Builder {
+    buffer: Vec<u8>,
+}
+
+impl Builder {
+    pub fn new() -> Self {
+        Builder { buffer: Vec::new() }
+    }
+
+    pub fn into_string(self) -> String {
+        unsafe { String::from_utf8_unchecked(self.buffer) }
+    }
+
+    pub fn into_bytes(self) -> Vec<u8> {
+        self.buffer
+    }
+
+    pub fn clear(&mut self) {
+        self.buffer.clear();
+    }
+
+    pub fn as_str(&self) -> &str {
+        unsafe { str::from_utf8_unchecked(&self.buffer) }
+    }
+
+    pub fn as_bytes(&self) -> &[u8] {
+        &self.buffer
+    }
+}
+
+impl Handler for Builder {
+    fn handle(&mut self, token: Token<'_>) -> Result<()> {
+        match token {
+            Token::Char(ch) => match ch {
+                ..='\x7F' => self.buffer.push(ch as u8),
+                _ => {
+                    let s = ch.encode_utf8(&mut [0; 4]);
+                    self.buffer.extend_from_slice(s.as_bytes());
+                }
+            },
+            Token::Sequence(s) => self.buffer.extend(s.as_bytes()),
+        }
+        Ok(())
+    }
+}
+
+// ---
 
 pub trait AsBytes {
     fn as_bytes(&self) -> &[u8];
 }
+
+impl AsBytes for str {
+    fn as_bytes(&self) -> &[u8] {
+        self.as_bytes()
+    }
+}
+
+impl AsBytes for String {
+    fn as_bytes(&self) -> &[u8] {
+        self.as_bytes()
+    }
+}
+
+impl AsBytes for [u8] {
+    fn as_bytes(&self) -> &[u8] {
+        self
+    }
+}
+
+impl AsBytes for Vec<u8> {
+    fn as_bytes(&self) -> &[u8] {
+        self.as_slice()
+    }
+}
+
+// ---
 
 struct Parser<S> {
     input: S,
@@ -26,6 +107,10 @@ where
     }
 
     fn parse<H: Handler>(&mut self, handler: &mut H) -> Result<()> {
+        let extend = |s: &[u8]| {
+            handler.handle(Token::Sequence(unsafe { str::from_utf8_unchecked(s) }));
+        };
+
         self.next();
         let mut no_escapes = true;
         let mut start = self.index;
@@ -43,18 +128,18 @@ where
                     if no_escapes {
                         let borrowed = &input[start..self.index];
                         self.index += 1;
-                        handler.extend(unsafe { str::from_utf8_unchecked(borrowed) });
+                        extend(borrowed);
                         return Ok(());
                     }
 
-                    handler.extend(unsafe { str::from_utf8_unchecked(&input[start..self.index]) });
+                    extend(&input[start..self.index]);
                     self.index += 1;
 
                     return Ok(());
                 }
                 b'\\' => {
                     no_escapes = false;
-                    handler.extend(unsafe { str::from_utf8_unchecked(&input[start..self.index]) });
+                    extend(&input[start..self.index]);
                     self.index += 1;
                     self.parse_escape(handler)?;
                     start = self.index;
@@ -68,19 +153,23 @@ where
     }
 
     fn parse_escape<H: Handler>(&mut self, handler: &mut H) -> Result<()> {
+        let push = |ch| {
+            handler.handle(Token::Char(ch));
+        };
+
         let Some(ch) = self.next() else {
             return Err(Error::Eof);
         };
 
         match ch {
-            b'"' => handler.push(b'"'),
-            b'\\' => handler.push(b'\\'),
-            b'/' => handler.push(b'/'),
-            b'b' => handler.push(b'\x08'),
-            b'f' => handler.push(b'\x0c'),
-            b'n' => handler.push(b'\n'),
-            b'r' => handler.push(b'\r'),
-            b't' => handler.push(b'\t'),
+            b'"' => push('"'),
+            b'\\' => push('\\'),
+            b'/' => push('/'),
+            b'b' => push('\x08'),
+            b'f' => push('\x0c'),
+            b'n' => push('\n'),
+            b'r' => push('\r'),
+            b't' => push('\t'),
             b'u' => {
                 let c = match self.decode_hex_escape()? {
                     0xDC00..=0xDFFF => {
@@ -119,7 +208,7 @@ where
                     n => char::from_u32(n as u32).unwrap(),
                 };
 
-                handler.push_char(c);
+                push(c);
             }
             _ => {
                 return Err(Error::InvalidEscape);
