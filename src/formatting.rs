@@ -157,7 +157,7 @@ impl RecordFormatter {
             //
             let mut some_fields_hidden = false;
             for (k, v) in rec.fields() {
-                if !self.hide_empty_fields || v.is_empty() {
+                if !self.hide_empty_fields || !v.is_empty() {
                     some_fields_hidden |= !self.format_field(s, k, *v, Some(&self.fields));
                 }
             }
