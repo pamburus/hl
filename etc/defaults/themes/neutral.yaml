@@ -9,6 +9,7 @@ elements:
     modes: [faint, italic]
   level:
     foreground: default
+    modes: [faint]
   message:
     foreground: default
     modes: [bold]
@@ -33,22 +34,24 @@ elements:
 levels:
   debug:
     level-inner:
-      foreground: bright-magenta
+      foreground: default
   info:
     level-inner:
-      foreground: cyan
+      foreground: green
   warning:
-    level:
+    time:
       foreground: yellow
-      modes: [reverse]
+    level-inner:
+      foreground: bright-yellow
+    message:
+      foreground: yellow
   error:
     time:
       foreground: bright-red
     message:
       foreground: bright-red
-    level:
+    level-inner:
       foreground: bright-red
-      modes: [reverse]
 indicators:
   sync:
     synced:
