@@ -13,7 +13,7 @@ pub fn from_str<'a, T>(s: &'a str) -> Result<T>
 where
     T: Deserialize<'a>,
 {
-    from_slice(s.as_bytes())
+    unsafe { from_slice_unchecked(s.as_bytes()) }
 }
 
 #[inline]
@@ -21,7 +21,15 @@ pub fn from_slice<'a, T>(s: &'a [u8]) -> Result<T>
 where
     T: Deserialize<'a>,
 {
-    let mut deserializer = Deserializer::from_slice(s);
+    from_str(str::from_utf8(s).map_err(Error::InvalidUtf8)?)
+}
+
+#[inline]
+pub unsafe fn from_slice_unchecked<'a, T>(s: &'a [u8]) -> Result<T>
+where
+    T: Deserialize<'a>,
+{
+    let mut deserializer = Deserializer::from_slice_unchecked(s);
     let t = T::deserialize(&mut deserializer)?;
     if deserializer.parser.tail().is_empty() {
         Ok(t)
@@ -40,11 +48,16 @@ pub struct Deserializer<'de> {
 impl<'de> Deserializer<'de> {
     #[inline]
     pub fn from_str(input: &'de str) -> Self {
-        Self::from_slice(input.as_bytes())
+        unsafe { Self::from_slice_unchecked(input.as_bytes()) }
     }
 
     #[inline]
-    pub fn from_slice(input: &'de [u8]) -> Self {
+    pub fn from_slice(input: &'de [u8]) -> Result<Self> {
+        Ok(Self::from_str(str::from_utf8(input).map_err(Error::InvalidUtf8)?))
+    }
+
+    #[inline]
+    pub unsafe fn from_slice_unchecked(input: &'de [u8]) -> Self {
         Deserializer {
             scratch: Vec::new(),
             parser: Parser {
