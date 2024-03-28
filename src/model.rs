@@ -91,8 +91,8 @@ impl<'a> RawValue<'a> {
     pub fn is_empty(&self) -> bool {
         match self {
             Self::Json(value) => match value.get() {
-                r#""""# | "null" | "{}" | "[]" => false,
-                _ => true,
+                r#""""# | "null" | "{}" | "[]" => true,
+                _ => false,
             },
             Self::Logfmt(value) => value.get().is_empty(),
         }
