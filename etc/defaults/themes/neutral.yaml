@@ -26,7 +26,7 @@ elements:
   string:
     foreground: default
   number:
-    foreground: bright-blue
+    foreground: default
   boolean:
     foreground: yellow
   'null':
@@ -45,11 +45,13 @@ levels:
       foreground: bright-yellow
     message:
       foreground: yellow
+      modes: [bold]
   error:
     time:
       foreground: bright-red
     message:
       foreground: bright-red
+      modes: [bold]
     level-inner:
       foreground: bright-red
 indicators:
