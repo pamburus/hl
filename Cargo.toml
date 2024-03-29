@@ -4,7 +4,7 @@ categories = ["command-line-utilities"]
 description = "Utility for viewing json-formatted log files."
 keywords = ["cli", "human", "log"]
 name = "hl"
-version = "0.27.3-alpha.1"
+version = "0.27.3-alpha.2"
 edition = "2021"
 build = "build.rs"
 
@@ -58,7 +58,7 @@ shellwords = "1"
 signal-hook = "0"
 snap = "1"
 thiserror = "1"
-wildflower = { git = "https://github.com/pamburus/wildflower.git" }
+wildflower = { git = "https://github.com/cassaundra/wildflower.git" }
 winapi = {version = "0", features = ["handleapi"]}
 wyhash = "0"
 

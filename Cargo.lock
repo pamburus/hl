@@ -738,7 +738,7 @@ checksum = "7f24254aa9a54b5c858eaee2f5bccdb46aaf0e486a595ed5fd8f86ba55232a70"
 
 [[package]]
 name = "hl"
-version = "0.27.3-alpha.1"
+version = "0.27.3-alpha.2"
 dependencies = [
  "atoi",
  "bincode",
@@ -1775,7 +1775,7 @@ dependencies = [
 [[package]]
 name = "wildflower"
 version = "0.3.0"
-source = "git+https://github.com/pamburus/wildflower.git#caae0131bbe168099c7a34045e1e2a3c3a0d05c3"
+source = "git+https://github.com/cassaundra/wildflower.git#41e1c6912f50905f7046bc834627a481a9f5fbc1"
 dependencies = [
  "stable_deref_trait",
  "yoke",
