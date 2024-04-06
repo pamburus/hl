@@ -1,0 +1,73 @@
+[window]
+decorations = "full"
+opacity = 1
+
+[window.dimensions]
+columns = 160
+lines = 39
+
+[window.padding]
+x = 6
+y = 4
+
+[colors]
+draw_bold_text_with_bright_colors = true
+
+#
+# Colors (Light)
+#
+
+[colors.primary]
+background = "#fffeff"
+foreground = "#101418"
+bright_foreground = "#000000"
+dim_foreground = "#676f78"
+
+[colors.normal]
+black = "#101418"
+red = "#c91b00"
+green = "#00c200"
+yellow = "#c7c400"
+blue = "#0225c7"
+magenta = "#c930c7"
+cyan = "#00c5c7"
+white = "#c7c7c7"
+
+[colors.bright]
+black = "#676f78"
+red = "#ff6d67"
+green = "#5ff967"
+yellow = "#fefb67"
+blue = "#6871ff"
+magenta = "#ff76ff"
+cyan = "#5ffdff"
+white = "#fffeff"
+
+# /
+
+[env]
+COLORTERM = "truecolor"
+TERM = "xterm-256color"
+
+[font]
+size = 12.0
+
+[font.bold]
+family = "MesloLGS NF"
+style = "Bold"
+
+[font.italic]
+family = "MesloLGS NF"
+style = "Italic"
+
+[font.normal]
+family = "MesloLGS NF"
+style = "Regular"
+
+[font.glyph_offset]
+x = 0
+y = 0
+
+[font.offset]
+x = 0
+y = 0

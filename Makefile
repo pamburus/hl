@@ -39,3 +39,17 @@ usage: build
 clean:
 	@cargo clean
 .PHONY: clean
+
+## Create screenshot
+screenshot: build
+	@defaults write org.alacritty NSRequiresAquaSystemAppearance -bool yes
+	@contrib/bin/screenshot.sh light prometheus.log
+	@defaults write org.alacritty NSRequiresAquaSystemAppearance -bool no
+	@contrib/bin/screenshot.sh dark prometheus.log
+	@defaults delete org.alacritty NSRequiresAquaSystemAppearance
+.PHONY: screenshot
+
+## Install dependencies needed for contribution
+contrib:
+	@$(SHELL) contrib/bin/setup.sh
+.PHONY: contrib

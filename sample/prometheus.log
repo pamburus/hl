@@ -1,0 +1,33 @@
+{"caller":"main.go:539","duration":"15d","level":"info","msg":"No time or size retention was set so using the default time retention","ts":"2023-12-07T20:07:05.949Z"}
+{"caller":"main.go:583","level":"info","mode":"server","msg":"Starting Prometheus Server","ts":"2023-12-07T20:07:05.949Z","version":"(version=2.48.0, branch=HEAD, revision=6d80b30990bc297d95b5c844e118c4011fad8054)"}
+{"build_context":"(go=go1.21.4, platform=linux/arm64, user=root@26117804242c, date=20231116-04:38:59, tags=netgo,builtinassets,stringlabels)","caller":"main.go:588","level":"info","ts":"2023-12-07T20:07:05.949Z"}
+{"caller":"main.go:589","host_details":"(Linux 6.5.11-linuxkit #1 SMP PREEMPT Mon Dec  4 11:30:00 UTC 2023 aarch64 b2ed53d333d7 (none))","level":"info","ts":"2023-12-07T20:07:05.949Z"}
+{"caller":"main.go:590","fd_limits":"(soft=1048576, hard=1048576)","level":"info","ts":"2023-12-07T20:07:05.949Z"}
+{"caller":"main.go:591","level":"info","ts":"2023-12-07T20:07:05.949Z","vm_limits":"(soft=unlimited, hard=unlimited)"}
+{"address":"0.0.0.0:9090","caller":"web.go:566","component":"web","level":"info","msg":"Start listening for connections","ts":"2023-12-07T20:07:05.949Z"}
+{"caller":"main.go:1024","level":"info","msg":"Starting TSDB ...","ts":"2023-12-07T20:07:05.950Z"}
+{"address":"[::]:9090","caller":"tls_config.go:274","component":"web","level":"info","msg":"Listening on","ts":"2023-12-07T20:07:05.950Z"}
+{"address":"[::]:9090","caller":"tls_config.go:277","component":"web","http2":false,"level":"info","msg":"TLS is disabled.","ts":"2023-12-07T20:07:05.950Z"}
+{"caller":"head.go:601","component":"tsdb","level":"info","msg":"Replaying on-disk memory mappable chunks if any","ts":"2023-12-07T20:07:05.952Z"}
+{"caller":"head.go:682","component":"tsdb","duration":"1.416µs","level":"info","msg":"On-disk memory mappable chunks replay completed","ts":"2023-12-07T20:07:05.952Z"}
+{"caller":"head.go:690","component":"tsdb","level":"info","msg":"Replaying WAL, this may take a while","ts":"2023-12-07T20:07:05.952Z"}
+{"caller":"head.go:761","component":"tsdb","level":"info","maxSegment":0,"msg":"WAL segment loaded","segment":0,"ts":"2023-12-07T20:07:05.952Z"}
+{"caller":"head.go:798","checkpoint_replay_duration":"16.875µs","component":"tsdb","level":"info","msg":"WAL replay completed","total_replay_duration":"186.042µs","ts":"2023-12-07T20:07:05.952Z","wal_replay_duration":"154.083µs","wbl_replay_duration":"42ns"}
+{"caller":"main.go:1045","fs_type":"EXT4_SUPER_MAGIC","level":"info","ts":"2023-12-07T20:07:05.953Z"}
+{"caller":"main.go:1048","level":"info","msg":"TSDB started","ts":"2023-12-07T20:07:05.953Z"}
+{"caller":"main.go:1229","filename":"/etc/prometheus/prometheus.yml","level":"info","msg":"Loading configuration file","ts":"2023-12-07T20:07:05.953Z"}
+{"caller":"main.go:1266","db_storage":"1.041µs","filename":"/etc/prometheus/prometheus.yml","level":"info","msg":"Completed loading of configuration file","notify":"11.5µs","notify_sd":"7.375µs","query_engine":"792ns","remote_storage":"1µs","rules":"1.375µs","scrape":"146.917µs","scrape_sd":"10.584µs","totalDuration":"660.75µs","tracing":"6.5µs","ts":"2023-12-07T20:07:05.953Z","web_handler":"417ns"}
+{"caller":"main.go:1009","level":"info","msg":"Server is ready to receive web requests.","ts":"2023-12-07T20:07:05.953Z"}
+{"caller":"manager.go:1012","component":"rule manager","level":"info","msg":"Starting rule manager...","ts":"2023-12-07T20:07:05.953Z"}
+{"caller":"main.go:859","level":"warn","msg":"Received SIGTERM, exiting gracefully...","ts":"2023-12-07T20:11:30.732Z"}
+{"caller":"main.go:883","level":"info","msg":"Stopping scrape discovery manager...","ts":"2023-12-07T20:11:30.732Z"}
+{"caller":"main.go:897","level":"info","msg":"Stopping notify discovery manager...","ts":"2023-12-07T20:11:30.732Z"}
+{"caller":"manager.go:1026","component":"rule manager","level":"info","msg":"Stopping rule manager...","ts":"2023-12-07T20:11:30.732Z"}
+{"caller":"manager.go:1036","component":"rule manager","level":"info","msg":"Rule manager stopped","ts":"2023-12-07T20:11:30.732Z"}
+{"caller":"main.go:934","level":"info","msg":"Stopping scrape manager...","ts":"2023-12-07T20:11:30.732Z"}
+{"caller":"main.go:893","level":"info","msg":"Notify discovery manager stopped","ts":"2023-12-07T20:11:30.732Z"}
+{"caller":"main.go:879","level":"info","msg":"Scrape discovery manager stopped","ts":"2023-12-07T20:11:30.732Z"}
+{"caller":"main.go:926","level":"info","msg":"Scrape manager stopped","ts":"2023-12-07T20:11:30.733Z"}
+{"caller":"notifier.go:604","component":"notifier","level":"info","msg":"Stopping notification manager...","ts":"2023-12-07T20:11:30.735Z"}
+{"caller":"main.go:1155","level":"info","msg":"Notifier manager stopped","ts":"2023-12-07T20:11:30.735Z"}
+{"caller":"main.go:1167","level":"info","msg":"See you next time!","ts":"2023-12-07T20:11:30.735Z"}
