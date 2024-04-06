@@ -64,8 +64,10 @@ High performance and convenient features are the main goals.
 
 ### Screenshot
 
-![screenshot-light](doc/screenshot-light.png#gh-light-mode-only)
-![screenshot-dark](doc/screenshot-dark.png#gh-dark-mode-only)
+![screenshot-light](https://github.com/pamburus/hl-extra/raw/f1dd31cbcae4f373cafc70db85ce76b2ff60a577/screenshot/universal/light.png#gh-light-mode-only)
+![screenshot-dark](https://github.com/pamburus/hl-extra/raw/f1dd31cbcae4f373cafc70db85ce76b2ff60a577/screenshot/universal/dark.png#gh-dark-mode-only)
+
+See other [screenshots](https://github.com/pamburus/hl-extra/tree/f1dd31cbcae4f373cafc70db85ce76b2ff60a577/screenshot#readme)
 
 
 ## Features and usage

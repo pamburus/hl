@@ -6,6 +6,7 @@ ALACRITTY=/Applications/Alacritty.app/Contents/MacOS/alacritty
 HL_SRC=$(cd $(dirname ${0:?})/../.. && pwd)
 MODE=${1:?}
 SAMPLE=${2:?}
+THEME=${3:?}
 TITLE="hl ${SAMPLE:?}"
 
 HL_CONFIG= "${ALACRITTY:?}" \
@@ -14,11 +15,13 @@ HL_CONFIG= "${ALACRITTY:?}" \
     --hold \
     -e \
         "${HL_SRC:?}"/target/debug/hl \
+        --theme ${THEME:?} \
         -P \
         "${HL_SRC:?}"/sample/${SAMPLE:?} &
 
-sleep 1
+sleep 0.5
 
-screencapture -l$(GetWindowID Alacritty "${TITLE:?}") "${HL_SRC:?}"/doc/screenshot-${MODE:?}.png
+mkdir -p "${HL_SRC:?}"/extra/screenshot/${THEME:?}
+screencapture -l$(GetWindowID Alacritty "${TITLE:?}") "${HL_SRC:?}"/extra/screenshot/${THEME:?}/${MODE:?}.png
 
 kill $!

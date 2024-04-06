@@ -1,0 +1,3 @@
+[submodule "extra"]
+	path = extra
+	url = ../hl-extra.git
