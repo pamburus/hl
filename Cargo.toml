@@ -4,7 +4,7 @@ categories = ["command-line-utilities"]
 description = "Utility for viewing json-formatted log files."
 keywords = ["cli", "human", "log"]
 name = "hl"
-version = "0.27.3-alpha.5"
+version = "0.27.3-alpha.6"
 edition = "2021"
 build = "build.rs"
 
@@ -19,12 +19,16 @@ sha2 = "0"
 [dependencies]
 atoi = "2"
 bincode = "1"
-bitmask = "0" 
+bitmask = "0"
 bytefmt = "0"
 capnp = "0.19"
-chrono = { version = "0.4", default-features = false, features = ["clock", "serde", "std"] }
+chrono = { version = "0.4", default-features = false, features = [
+    "clock",
+    "serde",
+    "std",
+] }
 chrono-tz = { version = "0", features = ["serde"] }
-clap = {version = "4", features = ["wrap_help", "derive", "env"]}
+clap = { version = "4", features = ["wrap_help", "derive", "env"] }
 closure = "0"
 collection_macros = "0"
 config = "0"
@@ -59,7 +63,7 @@ signal-hook = "0"
 snap = "1"
 thiserror = "1"
 wildflower = { git = "https://github.com/cassaundra/wildflower.git" }
-winapi = {version = "0", features = ["handleapi"]}
+winapi = { version = "0", features = ["handleapi"] }
 wyhash = "0"
 
 [target.'cfg(target_os = "macos")'.dependencies]

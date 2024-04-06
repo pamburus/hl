@@ -11,7 +11,7 @@ elements:
   level:
     foreground: 139
   message:
-    foreground: 255
+    foreground: default
   field:
     foreground: 60
   key:
@@ -44,13 +44,11 @@ levels:
     level-inner:
       foreground: 214
     message:
-      foreground: bright-white
-      modes: [underline]
+      foreground: yellow
   error:
     time:
       foreground: 202
     level-inner:
       foreground: 202
     message:
-      foreground: bright-white
-      modes: [underline]
+      foreground: bright-red

@@ -10,8 +10,9 @@ elements:
     modes: [italic]
   level:
     foreground: default
+    modes: [faint]
   message:
-    foreground: bright-white
+    foreground: default
   field:
     foreground: bright-black
   key:
