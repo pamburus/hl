@@ -19,7 +19,7 @@ elements:
     foreground: *gray
     modes: [italic]
   level:
-    foreground: *light-gray
+    foreground: *gray
   message:
     foreground: *white
   field:

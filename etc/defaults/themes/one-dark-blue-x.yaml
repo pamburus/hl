@@ -9,8 +9,9 @@ elements:
     modes: [faint, italic]
   level:
     foreground: default
+    modes: [faint]
   message:
-    foreground: bright-white
+    foreground: default
   field:
     modes: [faint]
   key:
