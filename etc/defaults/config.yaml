@@ -58,17 +58,17 @@ formatting:
     field-key-value-separator: '='
     string-opening-quote: "'"
     string-closing-quote: "'"
-    source-location-separator: '@ '
+    source-location-separator: '→ '
     hidden-fields-indicator: ' ...'
-    level-left-separator: '|'
-    level-right-separator: '|'
+    level-left-separator: '│'
+    level-right-separator: '│'
     input-number-prefix: '#'
     input-number-left-separator: ''
-    input-number-right-separator: ' | '
+    input-number-right-separator: ' │ '
     input-name-left-separator: ''
-    input-name-right-separator: ' | '
-    input-name-clipping: '...'
-    input-name-common-part: '...'
+    input-name-right-separator: ' │ '
+    input-name-clipping: '··'
+    input-name-common-part: '··'
 
 # Number of processing threads, configured automatically based on CPU count if not specified.
 concurrency: ~
