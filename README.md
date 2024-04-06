@@ -64,7 +64,8 @@ High performance and convenient features are the main goals.
 
 ### Screenshot
 
-![screenshot](doc/screenshot.png)
+![screenshot-light](doc/screenshot-light.png#gh-light-mode-only)
+![screenshot-dark](doc/screenshot-dark.png#gh-dark-mode-only)
 
 
 ## Features and usage
