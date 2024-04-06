@@ -9,6 +9,7 @@ elements:
     modes: [faint, italic]
   level:
     foreground: default
+    modes: [faint]
   message:
     foreground: default
     modes: [bold]

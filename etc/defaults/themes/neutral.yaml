@@ -28,7 +28,7 @@ elements:
   number:
     foreground: default
   boolean:
-    foreground: yellow
+    foreground: default
   'null':
     foreground: bright-red
 levels:
