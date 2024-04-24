@@ -7,17 +7,13 @@ use std::{
 use chrono::{DateTime, Utc};
 use regex::Regex;
 use serde::de::{Deserialize, Deserializer, MapAccess, SeqAccess, Visitor};
-use serde_json::{
-    self as json,
-    de::{Read, StrRead},
-};
+use serde_json::{self as json};
 use wildflower::Pattern;
 
 // local imports
 use crate::{
     app::{InputFormat, UnixTimestampUnit},
     error::{Error, Result},
-    fmtx::Push,
     level, logfmt,
     serdex::StreamDeserializerWithOffsets,
     settings::PredefinedFields,
@@ -29,240 +25,127 @@ use encstr::{AnyEncodedString, EncodedString};
 // ---
 
 pub use level::Level;
-use ValueKindString::*;
 
 // ---
 
 #[derive(Clone, Copy)]
 pub enum RawValue<'a> {
-    EncodedString(EncodedString<'a>),
-    Json(&'a json::value::RawValue),
-    Logfmt(&'a logfmt::raw::RawValue),
+    String(EncodedString<'a>),
+    Null,
+    Boolean(bool),
+    Number(&'a str),
+    Object(RawObject<'a>),
+    Array(RawArray<'a>),
 }
 
 impl<'a> RawValue<'a> {
     #[inline]
-    pub fn kind(&self) -> ValueKind {
-        match self {
-            Self::EncodedString(EncodedString::Json(_)) => ValueKind::String(Quoted),
-            Self::EncodedString(EncodedString::Raw(value)) => match value.source().as_bytes() {
-                [b'"', ..] => ValueKind::String(Quoted),
-                _ => ValueKind::String(Unquoted),
-            },
-            Self::Json(value) => {
-                let bytes = value.get().as_bytes();
-                if bytes.len() == 0 {
-                    return ValueKind::Null;
-                }
-                match bytes[0] {
-                    b'"' => ValueKind::String(Quoted),
-                    b'0'..=b'9' | b'-' | b'+' | b'.' => ValueKind::Number,
-                    b'{' => ValueKind::Object,
-                    b'[' => ValueKind::Array,
-                    b't' | b'f' => ValueKind::Boolean,
-                    _ => ValueKind::Null,
-                }
+    pub fn auto(value: &'a str) -> Self {
+        let looks_like_number = || {
+            let mut s = value;
+            let mut n_dots = 0;
+            if s.starts_with('-') {
+                s = &s[1..];
             }
-            Self::Logfmt(value) => {
-                let looks_like_number = || {
-                    let mut s = value.get();
-                    let mut n_dots = 0;
-                    if s.starts_with('-') {
-                        s = &s[1..];
+            s.len() < 40
+                && s.as_bytes().iter().all(|&x| {
+                    if x == b'.' {
+                        n_dots += 1;
+                        n_dots <= 1
+                    } else {
+                        x.is_ascii_digit()
                     }
-                    s.len() < 40
-                        && s.as_bytes().iter().all(|&x| {
-                            if x == b'.' {
-                                n_dots += 1;
-                                n_dots <= 1
-                            } else {
-                                x.is_ascii_digit()
-                            }
-                        })
-                };
+                })
+        };
 
-                if !value.get().is_empty() && value.get().as_bytes()[0] == b'"' {
-                    ValueKind::String(Quoted)
-                } else if value.get() == "false" || value.get() == "true" {
-                    ValueKind::Boolean
-                } else if value.get() == "null" {
-                    ValueKind::Null
-                } else if looks_like_number() {
-                    ValueKind::Number
-                } else {
-                    ValueKind::String(Unquoted)
-                }
-            }
+        match value.as_bytes() {
+            [b'"', ..] => Self::String(EncodedString::Json(value.into())),
+            b"false" => Self::Boolean(false),
+            b"true" => Self::Boolean(true),
+            b"null" => Self::Null,
+            _ if looks_like_number() => Self::Number(value),
+            _ => Self::String(EncodedString::Raw(value.into())),
         }
     }
 
-    #[inline]
+    #[inline(always)]
     pub fn is_empty(&self) -> bool {
         match self {
-            Self::EncodedString(EncodedString::Json(string)) => string.source() == r#""""#,
-            Self::EncodedString(EncodedString::Raw(string)) => string.source().is_empty(),
-            Self::Json(value) => match value.get() {
-                r#""""# | "null" | "{}" | "[]" => true,
-                _ => false,
-            },
-            Self::Logfmt(value) => value.get().is_empty(),
+            Self::String(value) => value.is_empty(),
+            Self::Null => true,
+            Self::Boolean(_) => false,
+            Self::Number(_) => false,
+            Self::Object(value) => value.is_empty(),
+            Self::Array(value) => value.is_empty(),
         }
     }
 
     #[inline(always)]
     pub fn raw_str(&self) -> &'a str {
         match self {
-            Self::EncodedString(value) => value.source(),
-            Self::Json(value) => value.get(),
-            Self::Logfmt(value) => value.get(),
+            Self::String(value) => value.source(),
+            Self::Null => "null",
+            Self::Boolean(true) => "true",
+            Self::Boolean(false) => "false",
+            Self::Number(value) => value,
+            Self::Object(value) => value.get(),
+            Self::Array(value) => value.get(),
         }
     }
 
     #[inline(always)]
-    pub fn encoded_str(&self) -> EncodedString<'a> {
-        match self {
-            Self::EncodedString(value) => *value,
-            Self::Json(value) => EncodedString::raw(value.get()),
-            Self::Logfmt(value) => EncodedString::raw(value.get()),
-        }
-    }
-
-    #[inline]
-    pub fn format_as_json_str<B: Push<u8>>(&self, buf: &mut B) {
-        match self {
-            Self::EncodedString(EncodedString::Json(value)) => {
-                buf.extend_from_slice(value.source().as_bytes());
-            }
-            Self::EncodedString(EncodedString::Raw(value)) => {
-                let s = value.source();
-                if s.is_empty() {
-                    buf.push(b'"');
-                    buf.push(b'"');
-                } else if s.as_bytes()[0] == b'"' {
-                    buf.extend_from_slice(s.as_bytes());
-                } else {
-                    buf.push(b'"');
-                    buf.extend_from_slice(s.as_bytes());
-                    buf.push(b'"');
-                }
-            }
-            Self::Json(value) => buf.extend_from_slice(value.get().as_bytes()),
-            Self::Logfmt(value) => {
-                if value.get().is_empty() {
-                    buf.push(b'"');
-                    buf.push(b'"');
-                } else if value.get().as_bytes()[0] == b'"' {
-                    buf.extend_from_slice(value.get().as_bytes());
-                } else {
-                    buf.push(b'"');
-                    buf.extend_from_slice(value.get().as_bytes());
-                    buf.push(b'"');
-                }
-            }
-        }
-    }
-
-    #[inline]
-    pub fn format_as_str(&self, buf: &mut Vec<u8>) {
-        match self {
-            Self::EncodedString(value) => {
-                value.decode(buf).unwrap();
-            }
-            Self::Json(value) => {
-                let mut reader = StrRead::new(&value.get()[1..]);
-                reader.parse_str_raw(buf).unwrap();
-            }
-            Self::Logfmt(value) => {
-                logfmt::de::Deserializer::from_str(value.get())
-                    .parse_str_to_buf(buf)
-                    .unwrap();
-            }
-        }
-    }
-
-    #[inline]
     pub fn format_readable(&self, buf: &mut Vec<u8>) {
         match self {
-            Self::EncodedString(value) => {
-                value.decode(buf).unwrap();
-            }
-            Self::Json(value) => {
-                if value.get().as_bytes().first() == Some(&b'"') {
-                    self.format_as_str(buf)
-                } else {
-                    buf.extend_from_slice(value.get().as_bytes());
-                }
-            }
-            Self::Logfmt(value) => {
-                if value.get().as_bytes().first() == Some(&b'"') {
-                    self.format_as_str(buf)
-                } else {
-                    buf.extend_from_slice(value.get().as_bytes());
-                }
-            }
-        }
-    }
-
-    #[inline]
-    pub fn parse_object(&self) -> Result<Object<'a>> {
-        match self {
-            Self::EncodedString(_) => panic!("invalid raw value usage"),
-            Self::Json(value) => json::from_str::<Object>(value.get()).map_err(Error::JsonParseError),
-            Self::Logfmt(value) => logfmt::from_str::<Object>(value.get()).map_err(Error::LogfmtParseError),
-        }
-    }
-
-    #[inline]
-    pub fn parse_array<const N: usize>(&self) -> Result<Array<'a, N>> {
-        match self {
-            Self::EncodedString(_) => panic!("invalid raw value usage"),
-            Self::Json(value) => json::from_str::<Array<N>>(value.get()).map_err(Error::JsonParseError),
-            Self::Logfmt(value) => logfmt::from_str::<Array<N>>(value.get()).map_err(Error::LogfmtParseError),
+            Self::String(value) => value.decode(buf).unwrap(),
+            Self::Null => buf.extend(b"null"),
+            Self::Boolean(true) => buf.extend(b"true"),
+            Self::Boolean(false) => buf.extend(b"false"),
+            Self::Number(value) => buf.extend(value.as_bytes()),
+            Self::Object(_) => buf.extend(b"{?}"),
+            Self::Array(_) => buf.extend(b"[?]"),
         }
     }
 
     #[inline]
     pub fn parse<T: Deserialize<'a>>(&self) -> Result<T> {
-        match self {
-            Self::EncodedString(EncodedString::Json(value)) => {
-                json::from_str(value.source()).map_err(Error::JsonParseError)
-            }
-            Self::EncodedString(EncodedString::Raw(value)) => {
-                logfmt::from_str(value.source()).map_err(Error::LogfmtParseError)
-            }
-            Self::Json(value) => json::from_str(value.get()).map_err(Error::JsonParseError),
-            Self::Logfmt(value) => logfmt::from_str(value.get()).map_err(Error::LogfmtParseError),
+        let (s, is_json) = match self {
+            Self::String(EncodedString::Json(value)) => (value.source(), true),
+            Self::String(EncodedString::Raw(value)) => (value.source(), false),
+            Self::Object(value) => (value.get(), true),
+            Self::Array(value) => (value.get(), true),
+            Self::Null => ("null", true),
+            Self::Boolean(true) => ("true", true),
+            Self::Boolean(false) => ("false", true),
+            Self::Number(value) => (*value, false),
+        };
+
+        if is_json {
+            json::from_str(s).map_err(Error::JsonParseError)
+        } else {
+            logfmt::from_str(s).map_err(Error::LogfmtParseError)
         }
     }
 
-    #[inline]
+    #[inline(always)]
     pub fn is_byte_code(&self) -> bool {
-        match self {
-            Self::EncodedString(_) => false,
-            Self::Json(value) => {
-                let v = value.get().as_bytes();
-                match v.len() {
-                    1 => v[0].is_ascii_digit(),
-                    2 => v[0].is_ascii_digit() && v[1].is_ascii_digit(),
-                    3 => &b"100"[..] <= v && v <= &b"255"[..],
-                    _ => false,
-                }
-            }
-            Self::Logfmt(_) => false,
+        let s = self.raw_str();
+        let v = s.as_bytes();
+        match v.len() {
+            1 => v[0].is_ascii_digit(),
+            2 => v[0].is_ascii_digit() && v[1].is_ascii_digit(),
+            3 => &b"100"[..] <= v && v <= &b"255"[..],
+            _ => false,
         }
     }
 
-    #[inline]
+    #[inline(always)]
     pub fn parse_byte_code(&self) -> u8 {
-        match self {
-            Self::EncodedString(_) => 0,
-            Self::Json(value) => match value.get().as_bytes() {
-                [a] => a - b'0',
-                [a, b] => (a - b'0') * 10 + (b - b'0'),
-                [a, b, c] => (a - b'0') * 100 + (b - b'0') * 10 + (c - b'0'),
-                _ => 0,
-            },
-            Self::Logfmt(_) => 0,
+        let s = self.raw_str();
+        match s.as_bytes() {
+            [a] => a - b'0',
+            [a, b] => (a - b'0') * 10 + (b - b'0'),
+            [a, b, c] => (a - b'0') * 100 + (b - b'0') * 10 + (c - b'0'),
+            _ => 0,
         }
     }
 }
@@ -270,10 +153,15 @@ impl<'a> RawValue<'a> {
 impl<'a> From<&'a json::value::RawValue> for RawValue<'a> {
     #[inline(always)]
     fn from(value: &'a json::value::RawValue) -> Self {
-        if value.get().as_bytes()[0] == b'"' {
-            Self::EncodedString(EncodedString::Json(value.get().into()))
-        } else {
-            Self::Json(value)
+        match value.get().as_bytes()[0] {
+            b'"' => Self::String(EncodedString::Json(value.get().into())),
+            b'0'..=b'9' | b'-' | b'+' | b'.' => Self::Number(value.get()),
+            b'{' => Self::from(RawObject::Json(value)),
+            b'[' => Self::from(RawArray::Json(value)),
+            b't' => Self::Boolean(true),
+            b'f' => Self::Boolean(false),
+            b'n' => Self::Null,
+            _ => Self::String(EncodedString::raw(value.get())),
         }
     }
 }
@@ -282,29 +170,97 @@ impl<'a> From<&'a logfmt::raw::RawValue> for RawValue<'a> {
     #[inline(always)]
     fn from(value: &'a logfmt::raw::RawValue) -> Self {
         if value.get().as_bytes()[0] == b'"' {
-            Self::EncodedString(EncodedString::Json(value.get().into()))
+            Self::String(EncodedString::Json(value.get().into()))
         } else {
-            Self::Logfmt(value)
+            Self::String(EncodedString::Raw(value.get().into()))
         }
+    }
+}
+
+impl<'a> From<RawObject<'a>> for RawValue<'a> {
+    #[inline(always)]
+    fn from(value: RawObject<'a>) -> Self {
+        Self::Object(value)
+    }
+}
+
+impl<'a> From<RawArray<'a>> for RawValue<'a> {
+    #[inline(always)]
+    fn from(value: RawArray<'a>) -> Self {
+        Self::Array(value)
     }
 }
 
 // ---
 
-#[derive(Clone, Debug, Copy, PartialEq, Eq)]
-pub enum ValueKind {
-    String(ValueKindString),
-    Number,
-    Object,
-    Array,
-    Boolean,
-    Null,
+#[derive(Clone, Copy)]
+pub enum RawObject<'a> {
+    Json(&'a json::value::RawValue),
 }
 
-#[derive(Clone, Debug, Copy, PartialEq, Eq)]
-pub enum ValueKindString {
-    Quoted,
-    Unquoted,
+impl<'a> RawObject<'a> {
+    #[inline(always)]
+    pub fn get(&self) -> &'a str {
+        match self {
+            Self::Json(value) => value.get(),
+        }
+    }
+
+    #[inline(always)]
+    pub fn parse(&self) -> Result<Object<'a>> {
+        match self {
+            Self::Json(value) => json::from_str::<Object>(value.get()).map_err(Error::JsonParseError),
+        }
+    }
+
+    #[inline(always)]
+    pub fn is_empty(&self) -> bool {
+        match self {
+            Self::Json(value) => json_match(value, "{}"),
+        }
+    }
+}
+
+impl<'a> From<&'a json::value::RawValue> for RawObject<'a> {
+    #[inline(always)]
+    fn from(value: &'a json::value::RawValue) -> Self {
+        Self::Json(value)
+    }
+}
+
+// ---
+
+#[derive(Clone, Copy)]
+pub enum RawArray<'a> {
+    Json(&'a json::value::RawValue),
+}
+
+impl<'a> RawArray<'a> {
+    #[inline(always)]
+    pub fn get(&self) -> &'a str {
+        match self {
+            Self::Json(value) => value.get(),
+        }
+    }
+
+    #[inline(always)]
+    pub fn parse<const N: usize>(&self) -> Result<Array<'a, N>> {
+        json::from_str::<Array<N>>(self.get()).map_err(Error::JsonParseError)
+    }
+
+    #[inline(always)]
+    pub fn is_empty(&self) -> bool {
+        match self {
+            Self::Json(value) => json_match(value, "[]"),
+        }
+    }
+}
+
+impl<'a> From<&'a json::value::RawValue> for RawArray<'a> {
+    #[inline(always)]
+    fn from(value: &'a json::value::RawValue) -> Self {
+        Self::Json(value)
+    }
 }
 
 // ---
@@ -734,10 +690,7 @@ impl FieldSettings {
                 true
             }
             Self::Level(i) => {
-                let value = match value.kind() {
-                    ValueKind::String(Quoted) => value.parse().ok().unwrap_or_else(|| value.raw_str()),
-                    _ => value.raw_str(),
-                };
+                let value = value.parse().ok().unwrap_or_else(|| value.raw_str());
                 if let Some(level) = ps.level[i].0.get(value) {
                     to.level = Some(*level);
                     true
@@ -778,12 +731,12 @@ impl FieldSettings {
                     to.caller = Some(Caller::FileLine("", value.raw_str()));
                     true
                 }
-                Some(Caller::FileLine(_, line)) => match value.kind() {
-                    ValueKind::Number => {
-                        *line = value.raw_str();
+                Some(Caller::FileLine(_, line)) => match value {
+                    RawValue::Number(value) => {
+                        *line = value;
                         true
                     }
-                    ValueKind::String(Unquoted) => {
+                    RawValue::String(_) => {
                         if let Some(value) = value.parse().ok() {
                             *line = value;
                             true
@@ -808,9 +761,9 @@ impl FieldSettings {
         ctx: &mut PriorityController,
     ) -> bool {
         match *self {
-            Self::Nested(nested) => match value.kind() {
-                ValueKind::Object => {
-                    if let Ok(record) = value.parse::<RawRecord>() {
+            Self::Nested(nested) => match value {
+                RawValue::Object(value) => {
+                    if let Ok(record) = json::from_str::<RawRecord>(value.get()) {
                         ps.blocks[nested].apply_each_ctx(ps, record.fields(), to, ctx, false);
                         true
                     } else {
@@ -1440,21 +1393,20 @@ impl FieldFilter {
     }
 
     fn match_value_partial<'a>(&self, subkey: KeyMatcher, value: RawValue<'a>) -> bool {
-        if value.kind() != ValueKind::Object {
-            return false;
-        }
-
-        let item = value.parse_object().unwrap();
-        for (k, v) in item.fields.iter() {
-            match subkey.match_key(*k) {
-                None => {
-                    continue;
-                }
-                Some(KeyMatch::Full) => {
-                    return self.match_value(Some(v.raw_str()), v.kind() == ValueKind::String(Unquoted));
-                }
-                Some(KeyMatch::Partial(subkey)) => {
-                    return self.match_value_partial(subkey, *v);
+        if let RawValue::Object(value) = value {
+            let item = value.parse().unwrap();
+            for (k, v) in item.fields.iter() {
+                match subkey.match_key(*k) {
+                    None => {
+                        continue;
+                    }
+                    Some(KeyMatch::Full) => {
+                        let s = v.raw_str();
+                        return self.match_value(Some(s), s.starts_with('"'));
+                    }
+                    Some(KeyMatch::Partial(subkey)) => {
+                        return self.match_value_partial(subkey, *v);
+                    }
                 }
             }
         }
@@ -1501,7 +1453,8 @@ impl RecordFilter for FieldFilter {
                     match self.match_custom_key(*k) {
                         None => {}
                         Some(KeyMatch::Full) => {
-                            let escaped = v.kind() == ValueKind::String(Quoted);
+                            let s = v.raw_str();
+                            let escaped = s.starts_with('"');
                             if self.match_value(Some(v.raw_str()), escaped) {
                                 return true;
                             }
@@ -1684,6 +1637,23 @@ impl<'de: 'a, 'a, const N: usize> Deserialize<'de> for Array<'a, N> {
     {
         Ok(deserializer.deserialize_seq(ArrayVisitor::new())?)
     }
+}
+
+// ---
+
+#[inline(always)]
+fn is_json_ws(c: u8) -> bool {
+    matches!(c, b' ' | b'\t' | b'\n' | b'\r')
+}
+
+#[inline(always)]
+fn json_match(value: &json::value::RawValue, s: &str) -> bool {
+    value
+        .get()
+        .as_bytes()
+        .iter()
+        .filter(|&b| !is_json_ws(*b))
+        .eq(s.as_bytes().iter())
 }
 
 // ---

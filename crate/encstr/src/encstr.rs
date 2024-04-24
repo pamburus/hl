@@ -49,6 +49,14 @@ impl<'a> EncodedString<'a> {
             EncodedString::Raw(string) => string.source(),
         }
     }
+
+    #[inline(always)]
+    pub fn is_empty(&self) -> bool {
+        match self {
+            EncodedString::Json(string) => string.is_empty(),
+            EncodedString::Raw(string) => string.is_empty(),
+        }
+    }
 }
 
 impl<'a> AnyEncodedString<'a> for EncodedString<'a> {
