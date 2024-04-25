@@ -1,0 +1,9 @@
+[package]
+description = "Encoded string"
+name = "encstr"
+workspace = "../.."
+repository.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+version.workspace = true

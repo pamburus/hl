@@ -590,6 +590,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "edd0f118536f44f5ccd48bcb8b111bdc3de888b58c74639dfb034a357d0f206d"
 
 [[package]]
+name = "encstr"
+version = "0.28.0-alpha.3"
+
+[[package]]
 name = "enum-map"
 version = "2.7.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -738,7 +742,7 @@ checksum = "7f24254aa9a54b5c858eaee2f5bccdb46aaf0e486a595ed5fd8f86ba55232a70"
 
 [[package]]
 name = "hl"
-version = "0.28.0-alpha.2"
+version = "0.28.0-alpha.3"
 dependencies = [
  "atoi",
  "bincode",
@@ -758,6 +762,7 @@ dependencies = [
  "crossbeam-queue",
  "crossbeam-utils",
  "derive_deref",
+ "encstr",
  "enum-map",
  "flate2",
  "generic-array",

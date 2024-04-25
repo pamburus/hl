@@ -137,7 +137,6 @@ pub struct Field {
 #[serde(rename_all = "kebab-case")]
 pub struct Formatting {
     pub punctuation: Punctuation,
-    pub add_quotes: bool,
 }
 
 // ---

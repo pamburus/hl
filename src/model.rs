@@ -24,6 +24,7 @@ use crate::{
     timestamp::Timestamp,
     types::FieldKind,
 };
+use encstr::{AnyEncodedString, EncodedString};
 
 // ---
 
@@ -34,6 +35,7 @@ use ValueKindString::*;
 
 #[derive(Clone, Copy)]
 pub enum RawValue<'a> {
+    EncodedString(EncodedString<'a>),
     Json(&'a json::value::RawValue),
     Logfmt(&'a logfmt::raw::RawValue),
 }
@@ -42,6 +44,11 @@ impl<'a> RawValue<'a> {
     #[inline]
     pub fn kind(&self) -> ValueKind {
         match self {
+            Self::EncodedString(EncodedString::Json(_)) => ValueKind::String(Quoted),
+            Self::EncodedString(EncodedString::Raw(value)) => match value.source().as_bytes() {
+                [b'"', ..] => ValueKind::String(Quoted),
+                _ => ValueKind::String(Unquoted),
+            },
             Self::Json(value) => {
                 let bytes = value.get().as_bytes();
                 if bytes.len() == 0 {
@@ -92,6 +99,8 @@ impl<'a> RawValue<'a> {
     #[inline]
     pub fn is_empty(&self) -> bool {
         match self {
+            Self::EncodedString(EncodedString::Json(string)) => string.source() == r#""""#,
+            Self::EncodedString(EncodedString::Raw(string)) => string.source().is_empty(),
             Self::Json(value) => match value.get() {
                 r#""""# | "null" | "{}" | "[]" => true,
                 _ => false,
@@ -100,17 +109,43 @@ impl<'a> RawValue<'a> {
         }
     }
 
-    #[inline]
+    #[inline(always)]
     pub fn raw_str(&self) -> &'a str {
         match self {
+            Self::EncodedString(value) => value.source(),
             Self::Json(value) => value.get(),
             Self::Logfmt(value) => value.get(),
+        }
+    }
+
+    #[inline(always)]
+    pub fn encoded_str(&self) -> EncodedString<'a> {
+        match self {
+            Self::EncodedString(value) => *value,
+            Self::Json(value) => EncodedString::raw(value.get()),
+            Self::Logfmt(value) => EncodedString::raw(value.get()),
         }
     }
 
     #[inline]
     pub fn format_as_json_str<B: Push<u8>>(&self, buf: &mut B) {
         match self {
+            Self::EncodedString(EncodedString::Json(value)) => {
+                buf.extend_from_slice(value.source().as_bytes());
+            }
+            Self::EncodedString(EncodedString::Raw(value)) => {
+                let s = value.source();
+                if s.is_empty() {
+                    buf.push(b'"');
+                    buf.push(b'"');
+                } else if s.as_bytes()[0] == b'"' {
+                    buf.extend_from_slice(s.as_bytes());
+                } else {
+                    buf.push(b'"');
+                    buf.extend_from_slice(s.as_bytes());
+                    buf.push(b'"');
+                }
+            }
             Self::Json(value) => buf.extend_from_slice(value.get().as_bytes()),
             Self::Logfmt(value) => {
                 if value.get().is_empty() {
@@ -129,8 +164,10 @@ impl<'a> RawValue<'a> {
 
     #[inline]
     pub fn format_as_str(&self, buf: &mut Vec<u8>) {
-        let begin = buf.len();
         match self {
+            Self::EncodedString(value) => {
+                value.decode(buf).unwrap();
+            }
             Self::Json(value) => {
                 let mut reader = StrRead::new(&value.get()[1..]);
                 reader.parse_str_raw(buf).unwrap();
@@ -141,14 +178,14 @@ impl<'a> RawValue<'a> {
                     .unwrap();
             }
         }
-        if let Some(end) = buf[begin..].iter().rposition(|&b| !b.is_ascii_whitespace()) {
-            buf.truncate(begin + end + 1);
-        }
     }
 
     #[inline]
     pub fn format_readable(&self, buf: &mut Vec<u8>) {
         match self {
+            Self::EncodedString(value) => {
+                value.decode(buf).unwrap();
+            }
             Self::Json(value) => {
                 if value.get().as_bytes().first() == Some(&b'"') {
                     self.format_as_str(buf)
@@ -169,6 +206,7 @@ impl<'a> RawValue<'a> {
     #[inline]
     pub fn parse_object(&self) -> Result<Object<'a>> {
         match self {
+            Self::EncodedString(_) => panic!("invalid raw value usage"),
             Self::Json(value) => json::from_str::<Object>(value.get()).map_err(Error::JsonParseError),
             Self::Logfmt(value) => logfmt::from_str::<Object>(value.get()).map_err(Error::LogfmtParseError),
         }
@@ -177,6 +215,7 @@ impl<'a> RawValue<'a> {
     #[inline]
     pub fn parse_array<const N: usize>(&self) -> Result<Array<'a, N>> {
         match self {
+            Self::EncodedString(_) => panic!("invalid raw value usage"),
             Self::Json(value) => json::from_str::<Array<N>>(value.get()).map_err(Error::JsonParseError),
             Self::Logfmt(value) => logfmt::from_str::<Array<N>>(value.get()).map_err(Error::LogfmtParseError),
         }
@@ -185,6 +224,12 @@ impl<'a> RawValue<'a> {
     #[inline]
     pub fn parse<T: Deserialize<'a>>(&self) -> Result<T> {
         match self {
+            Self::EncodedString(EncodedString::Json(value)) => {
+                json::from_str(value.source()).map_err(Error::JsonParseError)
+            }
+            Self::EncodedString(EncodedString::Raw(value)) => {
+                logfmt::from_str(value.source()).map_err(Error::LogfmtParseError)
+            }
             Self::Json(value) => json::from_str(value.get()).map_err(Error::JsonParseError),
             Self::Logfmt(value) => logfmt::from_str(value.get()).map_err(Error::LogfmtParseError),
         }
@@ -193,6 +238,7 @@ impl<'a> RawValue<'a> {
     #[inline]
     pub fn is_byte_code(&self) -> bool {
         match self {
+            Self::EncodedString(_) => false,
             Self::Json(value) => {
                 let v = value.get().as_bytes();
                 match v.len() {
@@ -209,6 +255,7 @@ impl<'a> RawValue<'a> {
     #[inline]
     pub fn parse_byte_code(&self) -> u8 {
         match self {
+            Self::EncodedString(_) => 0,
             Self::Json(value) => match value.get().as_bytes() {
                 [a] => a - b'0',
                 [a, b] => (a - b'0') * 10 + (b - b'0'),
@@ -223,14 +270,22 @@ impl<'a> RawValue<'a> {
 impl<'a> From<&'a json::value::RawValue> for RawValue<'a> {
     #[inline(always)]
     fn from(value: &'a json::value::RawValue) -> Self {
-        Self::Json(value)
+        if value.get().as_bytes()[0] == b'"' {
+            Self::EncodedString(EncodedString::Json(value.get().into()))
+        } else {
+            Self::Json(value)
+        }
     }
 }
 
 impl<'a> From<&'a logfmt::raw::RawValue> for RawValue<'a> {
     #[inline(always)]
     fn from(value: &'a logfmt::raw::RawValue) -> Self {
-        Self::Logfmt(value)
+        if value.get().as_bytes()[0] == b'"' {
+            Self::EncodedString(EncodedString::Json(value.get().into()))
+        } else {
+            Self::Logfmt(value)
+        }
     }
 }
 
