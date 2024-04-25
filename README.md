@@ -13,7 +13,7 @@ High performance and convenient features are the main goals.
     * Current configured timestamp output format with the `-t` option or environment variable.
     * Human friendly shortcuts like `today`, `yesterday`, `friday` or relative offsets like `-3h` or `-14d`.
 * Quick and easy [hiding and revealing](#hiding-or-revealing-selected-fields) of fields with the `-h` option.
-* Hide empty fields with the `-E` flag.
+* Hide empty fields with the `-e` flag.
 * Lightning fast [message sorting](#sorting-messages-chronologically) with automatic indexing for local files using the `-s` flag.
     * Handles ~1 GiB/s for the first scan and allows fast filtering by timestamp range and level without scanning the data afterwards.
     * Works fast with hundreds of local files containing hundreds of gigabytes of data.
