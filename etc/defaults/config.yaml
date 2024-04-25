@@ -68,6 +68,7 @@ formatting:
     input-name-right-separator: ' │ '
     input-name-clipping: '··'
     input-name-common-part: '··'
+    array-separator: ' '
 
 # Number of processing threads, configured automatically based on CPU count if not specified.
 concurrency: ~

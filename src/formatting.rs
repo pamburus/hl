@@ -259,7 +259,7 @@ impl RecordFormatter {
                     .position(|x| x == false)
                     .is_none();
                 if is_byte_string {
-                    s.batch(|buf| buf.extend_from_slice(b"b'"));
+                    s.batch(|buf| buf.extend(b"b'"));
                     s.element(Element::Message, |s| {
                         for item in item.iter() {
                             let b = item.parse_byte_code();
@@ -283,7 +283,7 @@ impl RecordFormatter {
                         let mut first = true;
                         for v in item.iter() {
                             if !first {
-                                s.batch(|buf| buf.push(b','));
+                                s.batch(|buf| buf.extend(self.cfg.punctuation.array_separator.as_bytes()));
                             } else {
                                 first = false;
                             }
@@ -393,7 +393,9 @@ impl<'a> FieldFormatter<'a> {
                         some_fields_hidden |= !self.format(s, k, *v, filter, setting);
                     }
                     if some_fields_hidden {
-                        s.element(Element::Ellipsis, |s| s.batch(|buf| buf.extend_from_slice(b" ...")));
+                        s.element(Element::Ellipsis, |s| {
+                            s.batch(|buf| buf.extend(self.rf.cfg.punctuation.hidden_fields_indicator.as_bytes()))
+                        });
                     }
                     s.batch(|buf| {
                         if item.fields.len() != 0 {
@@ -410,7 +412,7 @@ impl<'a> FieldFormatter<'a> {
                     let mut first = true;
                     for v in item.iter() {
                         if !first {
-                            s.batch(|buf| buf.push(b','));
+                            s.batch(|buf| buf.extend(self.rf.cfg.punctuation.array_separator.as_bytes()));
                         } else {
                             first = false;
                         }

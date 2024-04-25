@@ -159,6 +159,7 @@ pub struct Punctuation {
     pub input_name_right_separator: String,
     pub input_name_clipping: String,
     pub input_name_common_part: String,
+    pub array_separator: String,
 }
 
 impl Default for Punctuation {
@@ -179,6 +180,7 @@ impl Default for Punctuation {
             input_name_right_separator: " | ".into(),
             input_name_clipping: "...".into(),
             input_name_common_part: "...".into(),
+            array_separator: " ".into(),
         }
     }
 }
@@ -202,6 +204,7 @@ impl Punctuation {
             input_name_right_separator: " | ".into(),
             input_name_clipping: "...".into(),
             input_name_common_part: "...".into(),
+            array_separator: ",".into(),
         }
     }
 }
