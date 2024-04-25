@@ -9,7 +9,7 @@ use wildflower::Pattern;
 use crate::error::Result;
 use crate::level::RelaxedLevel;
 use crate::model::{
-    FieldFilter, FieldFilterKey, Level, NumericOp, Record, RecordFilter, UnaryBoolOp, ValueMatchPolicy,
+    FieldFilter, FieldFilterKey, Level, Number, NumericOp, Record, RecordFilter, UnaryBoolOp, ValueMatchPolicy,
 };
 use crate::types::FieldKind;
 
@@ -191,14 +191,14 @@ fn parse_string_set(pair: Pair<Rule>) -> Result<Vec<String>> {
     inner.map(|p| parse_string(p)).collect::<Result<Vec<_>>>()
 }
 
-fn parse_number(pair: Pair<Rule>) -> Result<f64> {
+fn parse_number(pair: Pair<Rule>) -> Result<Number> {
     assert_eq!(pair.as_rule(), Rule::number);
 
     let inner = pair.as_str();
     Ok(inner.parse()?)
 }
 
-fn parse_number_set(pair: Pair<Rule>) -> Result<Vec<f64>> {
+fn parse_number_set(pair: Pair<Rule>) -> Result<Vec<Number>> {
     assert_eq!(pair.as_rule(), Rule::number_set);
 
     let inner = pair.into_inner();

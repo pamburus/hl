@@ -105,7 +105,7 @@ simple_string = @{ simple_char+ }
 simple_char   = @{ (LETTER | NUMBER | "@" | "." | "_" | "-" | ":" | "/" | "!" | "#" | "%" | "$" | "*" | "+" | "?") }
 
 number = @{
-    "-"? ~ ("0" | ASCII_NONZERO_DIGIT ~ ASCII_DIGIT*) ~ ("." ~ ASCII_DIGIT*)? ~ (^"e" ~ ("+" | "-")? ~ ASCII_DIGIT+)?
+    "-"? ~ ("0" | ASCII_NONZERO_DIGIT ~ ASCII_DIGIT{,19}) ~ ("." ~ ASCII_DIGIT{,19})? ~ (^"e" ~ ("+" | "-")? ~ ASCII_DIGIT{1, 4})?
 }
 
 ws = _{ (" " | "\t" | "\r" | "\n") }
