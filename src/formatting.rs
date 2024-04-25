@@ -6,11 +6,12 @@ use crate::{
     datefmt::DateTimeFormatter,
     filtering::IncludeExcludeSetting,
     fmtx::{aligned_left, centered},
-    model::{self, Caller, Level, RawValue, ValueKind},
+    model::{self, Caller, Level, RawValue},
     settings::Formatting,
     theme::{Element, StylingPush, Theme},
     IncludeExcludeKeyFilter,
 };
+use encstr::EncodedString;
 
 // relative imports
 use string::{Format, MessageFormatAuto, ValueFormatAuto};
@@ -216,26 +217,27 @@ impl RecordFormatter {
     }
 
     fn format_message<'a, S: StylingPush<Buf>>(&self, s: &mut S, value: RawValue<'a>) {
-        match value.kind() {
-            ValueKind::String(_) => {
+        match value {
+            RawValue::String(value) => {
                 s.element(Element::Message, |s| {
-                    s.batch(|buf| {
-                        buf.with_auto_trim(|buf| MessageFormatAuto::new(value.encoded_str()).format(buf).unwrap())
-                    })
+                    s.batch(|buf| buf.with_auto_trim(|buf| MessageFormatAuto::new(value).format(buf).unwrap()))
                 });
             }
-            ValueKind::Number => {
-                s.element(Element::Number, |s| s.batch(|buf| value.format_readable(buf)));
+            RawValue::Number(value) => {
+                s.element(Element::Number, |s| s.batch(|buf| buf.extend(value.as_bytes())));
             }
-            ValueKind::Boolean => {
-                s.element(Element::Boolean, |s| s.batch(|buf| value.format_readable(buf)));
+            RawValue::Boolean(true) => {
+                s.element(Element::Boolean, |s| s.batch(|buf| buf.extend(b"true")));
             }
-            ValueKind::Null => {
-                s.element(Element::Null, |s| s.batch(|buf| value.format_readable(buf)));
+            RawValue::Boolean(false) => {
+                s.element(Element::Boolean, |s| s.batch(|buf| buf.extend(b"false")));
             }
-            ValueKind::Object => {
+            RawValue::Null => {
+                s.element(Element::Boolean, |s| s.batch(|buf| buf.extend(b"null")));
+            }
+            RawValue::Object(value) => {
                 s.element(Element::Object, |s| {
-                    let item = value.parse_object().unwrap();
+                    let item = value.parse().unwrap();
                     s.batch(|buf| buf.push(b'{'));
                     let mut has_some = false;
                     for (k, v) in item.fields.iter() {
@@ -249,8 +251,8 @@ impl RecordFormatter {
                     });
                 });
             }
-            ValueKind::Array => {
-                let item = value.parse_array::<256>().unwrap();
+            RawValue::Array(value) => {
+                let item = value.parse::<256>().unwrap();
                 let is_byte_string = item
                     .iter()
                     .map(|&v| v.is_byte_code())
@@ -346,7 +348,9 @@ impl<'a> FieldFormatter<'a> {
         if self.rf.unescape_fields {
             self.format_value(s, value, filter, setting);
         } else {
-            s.element(Element::String, |s| s.batch(|buf| value.format_as_json_str(buf)));
+            s.element(Element::String, |s| {
+                s.batch(|buf| buf.extend(value.raw_str().as_bytes()))
+            });
         }
         true
     }
@@ -358,25 +362,30 @@ impl<'a> FieldFormatter<'a> {
         filter: Option<&IncludeExcludeKeyFilter>,
         setting: IncludeExcludeSetting,
     ) {
-        match value.kind() {
-            ValueKind::String(_) => {
+        let value = match value {
+            RawValue::String(EncodedString::Raw(value)) => RawValue::auto(value.as_str()),
+            _ => value,
+        };
+        match value {
+            RawValue::String(value) => {
                 s.element(Element::String, |s| {
-                    s.batch(|buf| {
-                        buf.with_auto_trim(|buf| ValueFormatAuto::new(value.encoded_str()).format(buf).unwrap())
-                    })
+                    s.batch(|buf| buf.with_auto_trim(|buf| ValueFormatAuto::new(value).format(buf).unwrap()))
                 });
             }
-            ValueKind::Number => {
-                s.element(Element::Number, |s| s.batch(|buf| value.format_readable(buf)));
+            RawValue::Number(value) => {
+                s.element(Element::Number, |s| s.batch(|buf| buf.extend(value.as_bytes())));
             }
-            ValueKind::Boolean => {
-                s.element(Element::Boolean, |s| s.batch(|buf| value.format_readable(buf)));
+            RawValue::Boolean(true) => {
+                s.element(Element::Boolean, |s| s.batch(|buf| buf.extend(b"true")));
             }
-            ValueKind::Null => {
-                s.element(Element::Null, |s| s.batch(|buf| value.format_readable(buf)));
+            RawValue::Boolean(false) => {
+                s.element(Element::Boolean, |s| s.batch(|buf| buf.extend(b"false")));
             }
-            ValueKind::Object => {
-                let item = value.parse_object().unwrap();
+            RawValue::Null => {
+                s.element(Element::Null, |s| s.batch(|buf| buf.extend(b"null")));
+            }
+            RawValue::Object(value) => {
+                let item = value.parse().unwrap();
                 s.element(Element::Object, |s| {
                     s.batch(|buf| buf.push(b'{'));
                     let mut some_fields_hidden = false;
@@ -394,9 +403,9 @@ impl<'a> FieldFormatter<'a> {
                     });
                 });
             }
-            ValueKind::Array => {
+            RawValue::Array(value) => {
                 s.element(Element::Array, |s| {
-                    let item = value.parse_array::<32>().unwrap();
+                    let item = value.parse::<32>().unwrap();
                     s.batch(|buf| buf.push(b'['));
                     let mut first = true;
                     for v in item.iter() {
@@ -756,7 +765,7 @@ mod tests {
     use crate::{
         datefmt::LinuxDateFormat,
         error::Error,
-        model::{Record, RecordFields},
+        model::{RawObject, Record, RecordFields},
         settings::Punctuation,
         theme::Theme,
         themecfg::testing,
@@ -794,13 +803,13 @@ mod tests {
         assert_eq!(
             format(&Record {
                 ts: Some(Timestamp::new("2000-01-02T03:04:05.123Z")),
-                message: Some(RawValue::EncodedString(EncodedString::json(r#""tm""#))),
+                message: Some(RawValue::String(EncodedString::json(r#""tm""#))),
                 level: Some(Level::Debug),
                 logger: Some("tl"),
                 caller: Some(Caller::Text("tc")),
                 fields: RecordFields{
                     head: heapless::Vec::from_slice(&[
-                        ("ka", RawValue::Json(&json_raw_value(r#"{"va":{"kb":42}}"#))),
+                        ("ka", RawValue::from(RawObject::Json(&json_raw_value(r#"{"va":{"kb":42}}"#)))),
                     ]).unwrap(),
                     tail: Vec::default(),
                 },

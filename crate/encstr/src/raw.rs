@@ -11,6 +11,20 @@ impl<'a> RawString<'a> {
     pub fn new(value: &'a str) -> Self {
         Self(value)
     }
+
+    #[inline(always)]
+    pub fn as_str(&self) -> &'a str {
+        self.0
+    }
+}
+
+impl<'a> std::ops::Deref for RawString<'a> {
+    type Target = &'a str;
+
+    #[inline(always)]
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
 }
 
 impl<'a> AnyEncodedString<'a> for RawString<'a> {
