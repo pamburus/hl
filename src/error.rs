@@ -93,6 +93,8 @@ pub enum Error {
     LevelParseError(#[from] level::ParseError),
     #[error(transparent)]
     ParseFloatError(#[from] ParseFloatError),
+    #[error(transparent)]
+    ParseIntError(#[from] ParseIntError),
 }
 
 /// SizeParseError is an error which may occur when parsing size.
