@@ -1,5 +1,7 @@
 // std imports
-use std::{collections::HashMap, fmt, iter::IntoIterator, marker::PhantomData, ops::Range};
+use std::{
+    cmp::Ordering, collections::HashMap, fmt, iter::IntoIterator, marker::PhantomData, ops::Range, str::FromStr,
+};
 
 // third-party imports
 use chrono::{DateTime, Utc};
@@ -1120,14 +1122,83 @@ impl<'a> KeyMatcher<'a> {
 // ---
 
 #[derive(Debug)]
+pub enum Number {
+    Integer(i128),
+    Float(f64),
+}
+
+impl FromStr for Number {
+    type Err = Error;
+
+    #[inline]
+    fn from_str(s: &str) -> Result<Self> {
+        if s.contains('.') {
+            Ok(Self::Float(s.parse().map_err(|e| Error::from(e))?))
+        } else {
+            Ok(Self::Integer(s.parse().map_err(|e| Error::from(e))?))
+        }
+    }
+}
+
+impl PartialEq<Number> for Number {
+    #[inline(always)]
+    fn eq(&self, other: &Number) -> bool {
+        match self {
+            Self::Integer(a) => match other {
+                Self::Integer(b) => a == b,
+                Self::Float(b) => (*a as f64) == *b,
+            },
+            Self::Float(a) => match other {
+                Self::Integer(b) => *a == (*b as f64),
+                Self::Float(b) => a == b,
+            },
+        }
+    }
+}
+
+impl Eq for Number {}
+
+impl From<i128> for Number {
+    #[inline(always)]
+    fn from(value: i128) -> Self {
+        Self::Integer(value)
+    }
+}
+
+impl From<f64> for Number {
+    #[inline(always)]
+    fn from(value: f64) -> Self {
+        Self::Float(value)
+    }
+}
+
+impl PartialOrd<Number> for Number {
+    #[inline(always)]
+    fn partial_cmp(&self, other: &Number) -> Option<Ordering> {
+        match self {
+            Self::Integer(a) => match other {
+                Self::Integer(b) => a.partial_cmp(b),
+                Self::Float(b) => (*a as f64).partial_cmp(b),
+            },
+            Self::Float(a) => match other {
+                Self::Integer(b) => a.partial_cmp(&(*b as f64)),
+                Self::Float(b) => a.partial_cmp(b),
+            },
+        }
+    }
+}
+
+// ---
+
+#[derive(Debug)]
 pub enum NumericOp {
-    Eq(f64),
-    Ne(f64),
-    Gt(f64),
-    Ge(f64),
-    Lt(f64),
-    Le(f64),
-    In(Vec<f64>),
+    Eq(Number),
+    Ne(Number),
+    Gt(Number),
+    Ge(Number),
+    Lt(Number),
+    Le(Number),
+    In(Vec<Number>),
 }
 
 // ---
@@ -1150,7 +1221,7 @@ impl ValueMatchPolicy {
             Self::In(patterns) => patterns.iter().any(|pattern| subject == pattern),
             Self::WildCard(pattern) => pattern.matches(subject),
             Self::Numerically(op) => {
-                if let Some(value) = subject.parse::<f64>().ok() {
+                if let Some(value) = subject.parse::<Number>().ok() {
                     match op {
                         NumericOp::Eq(pattern) => value == *pattern,
                         NumericOp::Ne(pattern) => value != *pattern,
