@@ -20,7 +20,7 @@ use hl::{
 fn benchmark(c: &mut Criterion) {
     let mut c = c.benchmark_group("parse-and-format");
     for (name, record) in [("kibana-record-01", KIBANA_RECORD_01)] {
-        for theme in ["classic", "one-dark-green-truecolor", "dmt"] {
+        for theme in ["universal", "classic"] {
             c.bench_function(format!("{}/{}", name, theme), |b| {
                 let settings = Settings::default();
                 let parser = Parser::new(ParserSettings::new(&settings.fields.predefined, empty(), false, None));

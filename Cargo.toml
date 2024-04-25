@@ -1,12 +1,24 @@
-[package]
+[workspace]
+members = [".", "crate/encstr"]
+
+[workspace.package]
+repository = "https://github.com/pamburus/hl"
 authors = ["Pavel Ivanov <mr.pavel.ivanov@gmail.com>"]
-categories = ["command-line-utilities"]
-description = "Utility for viewing json-formatted log files."
-keywords = ["cli", "human", "log"]
-name = "hl"
-version = "0.28.0-alpha.2"
+version = "0.28.0-alpha.3"
 edition = "2021"
+license = "MIT"
+
+[package]
+name = "hl"
+description = "Utility for viewing json-formatted log files"
+categories = ["command-line-utilities"]
+keywords = ["cli", "human", "log"]
 build = "build.rs"
+repository.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+version.workspace = true
 
 [build-dependencies]
 capnpc = "0.19"
@@ -65,6 +77,7 @@ thiserror = "1"
 wildflower = { git = "https://github.com/cassaundra/wildflower.git" }
 winapi = { version = "0", features = ["handleapi"] }
 wyhash = "0"
+encstr = { path = "crate/encstr" }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 kqueue = "1"
@@ -116,4 +129,9 @@ harness = false
 
 [[bench]]
 name = "json"
+harness = false
+
+[[bench]]
+name = "encstr"
+path = "benches/encstr/benches.rs"
 harness = false
