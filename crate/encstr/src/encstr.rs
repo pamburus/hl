@@ -25,7 +25,7 @@ pub trait AnyEncodedString<'a> {
 
 // ---
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Eq, PartialEq, Debug)]
 pub enum EncodedString<'a> {
     Json(super::json::JsonEncodedString<'a>),
     Raw(super::raw::RawString<'a>),

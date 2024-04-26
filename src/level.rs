@@ -11,10 +11,26 @@ use clap::{
 };
 use enum_map::Enum;
 use serde::{Deserialize, Serialize};
+use strum::{AsRefStr, EnumIter};
 
 // ---
 
-#[derive(ValueEnum, Clone, Copy, Debug, Deserialize, Serialize, Eq, Hash, Ord, PartialEq, PartialOrd, Enum)]
+#[derive(
+    ValueEnum,
+    Clone,
+    Copy,
+    Debug,
+    Deserialize,
+    Serialize,
+    Eq,
+    Hash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+    Enum,
+    EnumIter,
+    AsRefStr,
+)]
 #[serde(rename_all = "kebab-case")]
 pub enum Level {
     Error,

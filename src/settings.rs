@@ -8,6 +8,7 @@ use config::{Config, File, FileFormat};
 use derive_deref::Deref;
 use platform_dirs::AppDirs;
 use serde::{Deserialize, Serialize, Serializer};
+use strum::IntoEnumIterator;
 
 // local imports
 use crate::error::Error;
@@ -65,7 +66,7 @@ pub struct Fields {
 
 // ---
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Default)]
 #[serde(rename_all = "kebab-case")]
 pub struct PredefinedFields {
     pub time: TimeField,
@@ -82,11 +83,33 @@ pub struct PredefinedFields {
 #[derive(Debug, Serialize, Deserialize, Deref)]
 pub struct TimeField(pub Field);
 
+impl Default for TimeField {
+    fn default() -> Self {
+        Self(Field {
+            names: vec!["time".into()],
+        })
+    }
+}
+
 // ---
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct LevelField {
     pub variants: Vec<LevelFieldVariant>,
+}
+
+impl Default for LevelField {
+    fn default() -> Self {
+        Self {
+            variants: vec![LevelFieldVariant {
+                names: vec!["level".into()],
+                values: Level::iter()
+                    .map(|level| (level, vec![level.as_ref().into()]))
+                    .collect(),
+                level: None,
+            }],
+        }
+    }
 }
 
 // ---
@@ -104,25 +127,65 @@ pub struct LevelFieldVariant {
 #[derive(Debug, Serialize, Deserialize, Deref)]
 pub struct MessageField(Field);
 
+impl Default for MessageField {
+    fn default() -> Self {
+        Self(Field {
+            names: vec!["msg".into()],
+        })
+    }
+}
+
 // ---
 
 #[derive(Debug, Serialize, Deserialize, Deref)]
 pub struct LoggerField(Field);
+
+impl Default for LoggerField {
+    fn default() -> Self {
+        Self(Field {
+            names: vec!["logger".into()],
+        })
+    }
+}
 
 // ---
 
 #[derive(Debug, Serialize, Deserialize, Deref)]
 pub struct CallerField(Field);
 
+impl Default for CallerField {
+    fn default() -> Self {
+        Self(Field {
+            names: vec!["caller".into()],
+        })
+    }
+}
+
 // ---
 
 #[derive(Debug, Serialize, Deserialize, Deref)]
 pub struct CallerFileField(Field);
 
+impl Default for CallerFileField {
+    fn default() -> Self {
+        Self(Field {
+            names: vec!["file".into()],
+        })
+    }
+}
+
 // ---
 
 #[derive(Debug, Serialize, Deserialize, Deref)]
 pub struct CallerLineField(Field);
+
+impl Default for CallerLineField {
+    fn default() -> Self {
+        Self(Field {
+            names: vec!["line".into()],
+        })
+    }
+}
 
 // ---
 

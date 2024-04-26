@@ -28,7 +28,7 @@ pub use level::Level;
 
 // ---
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Eq, PartialEq, Debug)]
 pub enum RawValue<'a> {
     String(EncodedString<'a>),
     Null,
@@ -114,8 +114,8 @@ impl<'a> RawValue<'a> {
             Self::Object(value) => (value.get(), true),
             Self::Array(value) => (value.get(), true),
             Self::Null => ("null", true),
-            Self::Boolean(true) => ("true", true),
-            Self::Boolean(false) => ("false", true),
+            Self::Boolean(true) => ("true", false),
+            Self::Boolean(false) => ("false", false),
             Self::Number(value) => (*value, false),
         };
 
@@ -193,7 +193,7 @@ impl<'a> From<RawArray<'a>> for RawValue<'a> {
 
 // ---
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub enum RawObject<'a> {
     Json(&'a json::value::RawValue),
 }
@@ -228,9 +228,18 @@ impl<'a> From<&'a json::value::RawValue> for RawObject<'a> {
     }
 }
 
+impl PartialEq for RawObject<'_> {
+    #[inline(always)]
+    fn eq(&self, other: &Self) -> bool {
+        self.get() == other.get()
+    }
+}
+
+impl Eq for RawObject<'_> {}
+
 // ---
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub enum RawArray<'a> {
     Json(&'a json::value::RawValue),
 }
@@ -262,6 +271,15 @@ impl<'a> From<&'a json::value::RawValue> for RawArray<'a> {
         Self::Json(value)
     }
 }
+
+impl PartialEq for RawArray<'_> {
+    #[inline(always)]
+    fn eq(&self, other: &Self) -> bool {
+        self.get() == other.get()
+    }
+}
+
+impl Eq for RawArray<'_> {}
 
 // ---
 
@@ -440,7 +458,6 @@ impl RecordFilter for RecordFilterNone {
 
 // ---
 
-#[derive(Default)]
 pub struct ParserSettings {
     pre_parse_time: bool,
     unix_ts_unit: Option<UnixTimestampUnit>,
@@ -558,6 +575,13 @@ impl ParserSettings {
         for (key, value) in items {
             self.apply(key, *value, to, pc)
         }
+    }
+}
+
+impl Default for ParserSettings {
+    #[inline]
+    fn default() -> Self {
+        Self::new(&PredefinedFields::default(), Vec::new(), false, None)
     }
 }
 
@@ -821,11 +845,6 @@ pub struct RawRecord<'a> {
     fields: RawRecordFields<'a>,
 }
 
-pub struct RawRecordFields<'a> {
-    head: heapless::Vec<(&'a str, RawValue<'a>), RAW_RECORD_FIELDS_CAPACITY>,
-    tail: Vec<(&'a str, RawValue<'a>)>,
-}
-
 impl<'a> RawRecord<'a> {
     #[inline]
     pub fn fields(&self) -> impl Iterator<Item = &(&'a str, RawValue<'a>)> {
@@ -846,6 +865,13 @@ impl<'de: 'a, 'a> Deserialize<'de> for RawRecord<'a> {
     {
         Ok(deserializer.deserialize_map(RawRecordVisitor::<json::value::RawValue>::new())?)
     }
+}
+
+// ---
+
+pub struct RawRecordFields<'a> {
+    head: heapless::Vec<(&'a str, RawValue<'a>), RAW_RECORD_FIELDS_CAPACITY>,
+    tail: Vec<(&'a str, RawValue<'a>)>,
 }
 
 // ---
@@ -1667,6 +1693,7 @@ const RAW_RECORD_FIELDS_CAPACITY: usize = RECORD_EXTRA_CAPACITY + MAX_PREDEFINED
 #[cfg(test)]
 mod tests {
     use super::*;
+    use maplit::hashmap;
 
     #[test]
     fn test_raw_record_parser_empty_line() {
@@ -1693,5 +1720,284 @@ mod tests {
         assert_eq!(rec.prefix, b"");
         assert_eq!(rec.record.fields.head.len(), 0);
         assert_eq!(rec.record.fields.tail.len(), 0);
+    }
+
+    #[test]
+    fn test_raw_value_auto() {
+        let value = RawValue::auto("123");
+        assert_eq!(value, RawValue::Number("123"));
+
+        let value = RawValue::auto("-123");
+        assert_eq!(value, RawValue::Number("-123"));
+
+        let value = RawValue::auto("123.0");
+        assert_eq!(value, RawValue::Number("123.0"));
+
+        let value = RawValue::auto("true");
+        assert_eq!(value, RawValue::Boolean(true));
+
+        let value = RawValue::auto("false");
+        assert_eq!(value, RawValue::Boolean(false));
+
+        let value = RawValue::auto("null");
+        assert_eq!(value, RawValue::Null);
+
+        let value = RawValue::auto(r#""123""#);
+        assert_eq!(value, RawValue::String(EncodedString::json(r#""123""#)));
+
+        let value = RawValue::auto(r#"something"#);
+        assert_eq!(value, RawValue::String(EncodedString::raw(r#"something"#)));
+    }
+
+    #[test]
+    fn test_raw_value_is_empty() {
+        let value = RawValue::Number("0");
+        assert_eq!(value.is_empty(), false);
+
+        let value = RawValue::Number("123");
+        assert_eq!(value.is_empty(), false);
+
+        let value = RawValue::String(EncodedString::raw(""));
+        assert_eq!(value.is_empty(), true);
+
+        let value = RawValue::String(EncodedString::raw("aa"));
+        assert_eq!(value.is_empty(), false);
+
+        let value = RawValue::String(EncodedString::json(r#""""#));
+        assert_eq!(value.is_empty(), true);
+
+        let value = RawValue::String(EncodedString::json(r#""aa""#));
+        assert_eq!(value.is_empty(), false);
+
+        let value = RawValue::Boolean(true);
+        assert_eq!(value.is_empty(), false);
+
+        let value = RawValue::Null;
+        assert_eq!(value.is_empty(), true);
+
+        let value = RawValue::Object(RawObject::Json(json::from_str("{}").unwrap()));
+        assert_eq!(value.is_empty(), true);
+
+        let value = RawValue::Object(RawObject::Json(json::from_str(r#"{"a":1}"#).unwrap()));
+        assert_eq!(value.is_empty(), false);
+
+        let value = RawValue::Array(RawArray::Json(json::from_str("[]").unwrap()));
+        assert_eq!(value.is_empty(), true);
+
+        let value = RawValue::Array(RawArray::Json(json::from_str(r#"[1]"#).unwrap()));
+        assert_eq!(value.is_empty(), false);
+    }
+
+    #[test]
+    fn test_raw_value_raw_str() {
+        let value = RawValue::Number("123");
+        assert_eq!(value.raw_str(), "123");
+
+        let value = RawValue::String(EncodedString::raw("123"));
+        assert_eq!(value.raw_str(), "123");
+
+        let value = RawValue::String(EncodedString::json(r#""123""#));
+        assert_eq!(value.raw_str(), r#""123""#);
+
+        let value = RawValue::Boolean(true);
+        assert_eq!(value.raw_str(), "true");
+
+        let value = RawValue::Null;
+        assert_eq!(value.raw_str(), "null");
+
+        let value = RawValue::Object(RawObject::Json(json::from_str("{}").unwrap()));
+        assert_eq!(value.raw_str(), "{}");
+
+        let value = RawValue::Array(RawArray::Json(json::from_str("[]").unwrap()));
+        assert_eq!(value.raw_str(), "[]");
+    }
+
+    #[test]
+    fn test_raw_value_parse() {
+        let value = RawValue::Number("123");
+        assert_eq!(value.parse::<i64>().unwrap(), 123);
+        assert_eq!(value.parse::<&str>().unwrap(), "123");
+
+        let value = RawValue::String(EncodedString::raw("123"));
+        assert_eq!(value.parse::<i64>().unwrap(), 123);
+        assert_eq!(value.parse::<&str>().unwrap(), "123");
+
+        let value = RawValue::String(EncodedString::json(r#""123""#));
+        assert_eq!(value.parse::<&str>().unwrap(), "123");
+
+        let value = RawValue::Boolean(true);
+        assert_eq!(value.parse::<bool>().unwrap(), true);
+        assert_eq!(value.parse::<&str>().unwrap(), "true");
+
+        let value = RawValue::Boolean(false);
+        assert_eq!(value.parse::<bool>().unwrap(), false);
+        assert_eq!(value.parse::<&str>().unwrap(), "false");
+
+        let value = RawValue::Null;
+        assert_eq!(value.parse::<()>().unwrap(), ());
+
+        let value = RawValue::Object(RawObject::Json(json::from_str(r#"{"a":123}"#).unwrap()));
+        assert_eq!(value.parse::<HashMap<_, _>>().unwrap(), hashmap! {"a" => 123});
+
+        let value = RawValue::Array(RawArray::Json(json::from_str("[1,42]").unwrap()));
+        assert_eq!(value.parse::<Vec<i64>>().unwrap(), vec![1, 42]);
+    }
+
+    #[test]
+    fn test_raw_value_object() {
+        let v1 = RawObject::Json(json::from_str(r#"{"a":123}"#).unwrap());
+        let v2 = RawObject::Json(json::from_str(r#"{"a":42}"#).unwrap());
+        assert_eq!(RawValue::Object(v1), RawValue::Object(v1));
+        assert_ne!(RawValue::Object(v1), RawValue::Object(v2));
+        assert_ne!(RawValue::Object(v1), RawValue::Number("42"));
+    }
+
+    #[test]
+    fn test_raw_value_array() {
+        let v1 = RawArray::Json(json::from_str(r#"[42]"#).unwrap());
+        let v2 = RawArray::Json(json::from_str(r#"[43]"#).unwrap());
+        assert_eq!(RawValue::Array(v1), RawValue::Array(v1));
+        assert_ne!(RawValue::Array(v1), RawValue::Array(v2));
+        assert_ne!(RawValue::Array(v1), RawValue::Number("42"));
+    }
+
+    #[test]
+    fn test_field_filter_json_str_simple() {
+        let filter = FieldFilter::parse("mod=test").unwrap();
+        let record = parse(r#"{"mod":"test"}"#);
+        assert_eq!(filter.apply(&record), true);
+        let record = parse(r#"{"mod":"test2"}"#);
+        assert_eq!(filter.apply(&record), false);
+        let record = parse(r#"{"mod":"\"test\""}"#);
+        assert_eq!(filter.apply(&record), false);
+    }
+
+    #[test]
+    fn test_field_filter_json_str_empty() {
+        let filter = FieldFilter::parse("mod=").unwrap();
+        let record = parse(r#"{"mod":""}"#);
+        assert_eq!(filter.apply(&record), true);
+        let record = parse(r#"{"mod":"t"}"#);
+        assert_eq!(filter.apply(&record), false);
+        let record = parse(r#"{"v":""}"#);
+        assert_eq!(filter.apply(&record), false);
+    }
+
+    #[test]
+    fn test_field_filter_json_str_quoted() {
+        let filter = FieldFilter::parse(r#"mod="test""#).unwrap();
+        let record = parse(r#"{"mod":"test"}"#);
+        assert_eq!(filter.apply(&record), false);
+        let record = parse(r#"{"mod":"test2"}"#);
+        assert_eq!(filter.apply(&record), false);
+        let record = parse(r#"{"mod":"\"test\""}"#);
+        assert_eq!(filter.apply(&record), true);
+    }
+
+    #[test]
+    fn test_field_filter_json_str_escaped() {
+        let filter = FieldFilter::parse("mod=te st").unwrap();
+        let record = parse(r#"{"mod":"te st"}"#);
+        assert_eq!(filter.apply(&record), true);
+        let record = parse(r#"{"mod":"test"}"#);
+        assert_eq!(filter.apply(&record), false);
+        let record = parse(r#"{"mod":"te\u0020st"}"#);
+        assert_eq!(filter.apply(&record), true);
+    }
+
+    #[test]
+    fn test_field_filter_json_int() {
+        let filter = FieldFilter::parse("v=42").unwrap();
+        let record = parse(r#"{"v":42}"#);
+        assert_eq!(filter.apply(&record), true);
+        let record = parse(r#"{"v":"42"}"#);
+        assert_eq!(filter.apply(&record), true);
+        let record = parse(r#"{"v":423}"#);
+        assert_eq!(filter.apply(&record), false);
+        let record = parse(r#"{"v":"423"}"#);
+        assert_eq!(filter.apply(&record), false);
+    }
+
+    #[test]
+    fn test_field_filter_json_int_escaped() {
+        let filter = FieldFilter::parse("v=42").unwrap();
+        let record = parse(r#"{"v":42}"#);
+        assert_eq!(filter.apply(&record), true);
+        let record = parse(r#"{"v":"4\u0032"}"#);
+        assert_eq!(filter.apply(&record), true);
+    }
+
+    #[test]
+    fn test_field_filter_logfmt_str_simple() {
+        let filter = FieldFilter::parse("mod=test").unwrap();
+        let record = parse("mod=test");
+        assert_eq!(filter.apply(&record), true);
+        let record = parse("mod=test2");
+        assert_eq!(filter.apply(&record), false);
+        let record = parse(r#"mod="test""#);
+        assert_eq!(filter.apply(&record), true);
+        let record = parse(r#"mod="\"test\"""#);
+        assert_eq!(filter.apply(&record), false);
+    }
+
+    #[test]
+    fn test_field_filter_logfmt_str_empty() {
+        let filter = FieldFilter::parse("mod=").unwrap();
+        let record = parse(r#"mod="""#);
+        assert_eq!(filter.apply(&record), true);
+        let record = parse("mod=t");
+        assert_eq!(filter.apply(&record), false);
+    }
+
+    #[test]
+    fn test_field_filter_logfmt_str_quoted() {
+        let filter = FieldFilter::parse(r#"mod="test""#).unwrap();
+        let record = parse("mod=test");
+        assert_eq!(filter.apply(&record), false);
+        let record = parse(r#"mod=test2"#);
+        assert_eq!(filter.apply(&record), false);
+        let record = parse(r#"mod="test""#);
+        assert_eq!(filter.apply(&record), false);
+        let record = parse(r#"mod="\"test\"""#);
+        assert_eq!(filter.apply(&record), true);
+    }
+
+    #[test]
+    fn test_field_filter_logfmt_str_escaped() {
+        let filter = FieldFilter::parse("mod=te st").unwrap();
+        let record = parse(r#"mod="te st""#);
+        assert_eq!(filter.apply(&record), true);
+        let record = parse(r#"mod=test"#);
+        assert_eq!(filter.apply(&record), false);
+        let record = parse(r#"mod="te\u0020st""#);
+        assert_eq!(filter.apply(&record), true);
+    }
+
+    #[test]
+    fn test_field_filter_logfmt_int() {
+        let filter = FieldFilter::parse("v=42").unwrap();
+        let record = parse(r#"v=42"#);
+        assert_eq!(filter.apply(&record), true);
+        let record = parse(r#"v="42""#);
+        assert_eq!(filter.apply(&record), true);
+        let record = parse(r#"v=423"#);
+        assert_eq!(filter.apply(&record), false);
+        let record = parse(r#"v="423""#);
+        assert_eq!(filter.apply(&record), false);
+    }
+
+    #[test]
+    fn test_field_filter_logfmt_int_escaped() {
+        let filter = FieldFilter::parse("v=42").unwrap();
+        let record = parse(r#"v=42"#);
+        assert_eq!(filter.apply(&record), true);
+        let record = parse(r#"v="4\u0032""#);
+        assert_eq!(filter.apply(&record), true);
+    }
+
+    fn parse(s: &str) -> Record {
+        let raw = RawRecord::parser().parse(s.as_bytes()).next().unwrap().unwrap().record;
+        let parser = Parser::new(ParserSettings::default());
+        parser.parse(raw)
     }
 }
