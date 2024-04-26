@@ -1,0 +1,29 @@
+name: Coverage
+
+on: [push]
+jobs:
+  test:
+    name: coverage
+    runs-on: ubuntu-latest
+    container:
+      image: xd009642/tarpaulin:develop-nightly
+      options: --security-opt seccomp=unconfined
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+
+      - name: Generate code coverage
+        run: |
+          cargo tarpaulin \
+            --verbose \
+            --all-features \
+            --locked \
+            --workspace \
+            --timeout 120 \
+            --exclude-files 'src/*_capnp.rs' \
+            --out xml
+
+      - name: Upload coverage to codecov.io
+        uses: codecov/codecov-action@v4
+        env: 
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}

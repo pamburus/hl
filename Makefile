@@ -1,7 +1,11 @@
 .DEFAULT_GOAL := build
 
+# Local variables
 THEMES = $(notdir $(basename $(wildcard etc/defaults/themes/*.yaml)))
 SCREENSHOT_SAMPLE = prometheus.log
+
+# Exported variables
+export RUST_BACKTRACE=1
 
 ## Print help
 help:
@@ -58,3 +62,14 @@ screenshot-%: build
 contrib:
 	@$(SHELL) contrib/bin/setup.sh
 .PHONY: contrib
+
+## Collect coverage
+coverage:
+	@cargo tarpaulin \
+		--skip-clean \
+		--workspace \
+		--locked \
+		--out Lcov \
+		--output-dir target/coverage \
+		--target-dir target/coverage \
+		--exclude-files 'src/*_capnp.rs'
