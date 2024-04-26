@@ -153,14 +153,14 @@ impl<'a> RawValue<'a> {
 impl<'a> From<&'a json::value::RawValue> for RawValue<'a> {
     #[inline(always)]
     fn from(value: &'a json::value::RawValue) -> Self {
-        match value.get().as_bytes()[0] {
-            b'"' => Self::String(EncodedString::Json(value.get().into())),
-            b'0'..=b'9' | b'-' | b'+' | b'.' => Self::Number(value.get()),
-            b'{' => Self::from(RawObject::Json(value)),
-            b'[' => Self::from(RawArray::Json(value)),
-            b't' => Self::Boolean(true),
-            b'f' => Self::Boolean(false),
-            b'n' => Self::Null,
+        match value.get().as_bytes() {
+            [b'"', ..] => Self::String(EncodedString::Json(value.get().into())),
+            [b'0'..=b'9' | b'-' | b'+' | b'.', ..] => Self::Number(value.get()),
+            [b'{', ..] => Self::from(RawObject::Json(value)),
+            [b'[', ..] => Self::from(RawArray::Json(value)),
+            [b't', ..] => Self::Boolean(true),
+            [b'f', ..] => Self::Boolean(false),
+            [b'n', ..] => Self::Null,
             _ => Self::String(EncodedString::raw(value.get())),
         }
     }
@@ -169,7 +169,7 @@ impl<'a> From<&'a json::value::RawValue> for RawValue<'a> {
 impl<'a> From<&'a logfmt::raw::RawValue> for RawValue<'a> {
     #[inline(always)]
     fn from(value: &'a logfmt::raw::RawValue) -> Self {
-        if value.get().as_bytes()[0] == b'"' {
+        if let [b'"', ..] = value.get().as_bytes() {
             Self::String(EncodedString::Json(value.get().into()))
         } else {
             Self::String(EncodedString::Raw(value.get().into()))
