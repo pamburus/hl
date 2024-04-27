@@ -1,5 +1,7 @@
 // public modules
 pub mod app;
+pub mod cli;
+pub mod config;
 pub mod datefmt;
 pub mod error;
 pub mod fmtx;

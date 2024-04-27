@@ -67,9 +67,7 @@ contrib:
 coverage:
 	@cargo tarpaulin \
 		--skip-clean \
-		--workspace \
 		--locked \
 		--out Lcov \
 		--output-dir target/coverage \
-		--target-dir target/coverage \
-		--exclude-files 'src/*_capnp.rs'
+		--target-dir target/coverage

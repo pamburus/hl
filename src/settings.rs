@@ -57,7 +57,7 @@ impl Default for Settings {
 
 // ---
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Fields {
     pub predefined: PredefinedFields,
     pub ignore: Vec<String>,
@@ -66,7 +66,7 @@ pub struct Fields {
 
 // ---
 
-#[derive(Debug, Serialize, Deserialize, Default)]
+#[derive(Debug, Serialize, Deserialize, Default, Clone)]
 #[serde(rename_all = "kebab-case")]
 pub struct PredefinedFields {
     pub time: TimeField,
@@ -80,7 +80,7 @@ pub struct PredefinedFields {
 
 // ---
 
-#[derive(Debug, Serialize, Deserialize, Deref)]
+#[derive(Debug, Serialize, Deserialize, Deref, Clone)]
 pub struct TimeField(pub Field);
 
 impl Default for TimeField {
@@ -93,7 +93,7 @@ impl Default for TimeField {
 
 // ---
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct LevelField {
     pub variants: Vec<LevelFieldVariant>,
 }
@@ -114,7 +114,7 @@ impl Default for LevelField {
 
 // ---
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct LevelFieldVariant {
     pub names: Vec<String>,
     #[serde(default, serialize_with = "ordered_map_serialize")]
@@ -124,7 +124,7 @@ pub struct LevelFieldVariant {
 
 // ---
 
-#[derive(Debug, Serialize, Deserialize, Deref)]
+#[derive(Debug, Serialize, Deserialize, Deref, Clone)]
 pub struct MessageField(Field);
 
 impl Default for MessageField {
@@ -137,7 +137,7 @@ impl Default for MessageField {
 
 // ---
 
-#[derive(Debug, Serialize, Deserialize, Deref)]
+#[derive(Debug, Serialize, Deserialize, Deref, Clone)]
 pub struct LoggerField(Field);
 
 impl Default for LoggerField {
@@ -150,7 +150,7 @@ impl Default for LoggerField {
 
 // ---
 
-#[derive(Debug, Serialize, Deserialize, Deref)]
+#[derive(Debug, Serialize, Deserialize, Deref, Clone)]
 pub struct CallerField(Field);
 
 impl Default for CallerField {
@@ -163,7 +163,7 @@ impl Default for CallerField {
 
 // ---
 
-#[derive(Debug, Serialize, Deserialize, Deref)]
+#[derive(Debug, Serialize, Deserialize, Deref, Clone)]
 pub struct CallerFileField(Field);
 
 impl Default for CallerFileField {
@@ -176,7 +176,7 @@ impl Default for CallerFileField {
 
 // ---
 
-#[derive(Debug, Serialize, Deserialize, Deref)]
+#[derive(Debug, Serialize, Deserialize, Deref, Clone)]
 pub struct CallerLineField(Field);
 
 impl Default for CallerLineField {
@@ -189,7 +189,7 @@ impl Default for CallerLineField {
 
 // ---
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Field {
     pub names: Vec<String>,
 }

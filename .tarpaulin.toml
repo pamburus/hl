@@ -1,0 +1,4 @@
+[coverage]
+workspace = true
+all-features = true
+exclude-files = ["src/*_capnp.rs", "src/cli.rs", "src/config.rs", "src/main.rs"]

@@ -16,11 +16,8 @@ jobs:
         run: |
           cargo tarpaulin \
             --verbose \
-            --all-features \
             --locked \
-            --workspace \
             --timeout 120 \
-            --exclude-files 'src/*_capnp.rs' \
             --out xml
 
       - name: Upload coverage to codecov.io
