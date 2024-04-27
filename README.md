@@ -1,4 +1,5 @@
-# hl
+# hl [![Build Status][ci-img]][ci] [![Coverage Status][cov-img]][cov]
+
 A fast and powerful log viewer and processor that translates JSON or logfmt logs into a pretty human-readable format.
 High performance and convenient features are the main goals.
 
@@ -527,3 +528,9 @@ Options:
             $ time fblog -d example.log >/dev/null
             fblog -d example.log > /dev/null  130.64s user 14.70s system 99% cpu 2:25.98 total
             ```
+
+
+[ci-img]: https://github.com/pamburus/hl/actions/workflows/ci.yml/badge.svg
+[ci]: https://github.com/pamburus/hl/actions/workflows/ci.yml
+[cov-img]: https://codecov.io/gh/pamburus/hl/graph/badge.svg?token=464MN13408
+[cov]: https://codecov.io/gh/pamburus/hl
