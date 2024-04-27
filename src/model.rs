@@ -1455,7 +1455,7 @@ impl RecordFilter for FieldFilter {
                         Some(KeyMatch::Full) => {
                             let s = v.raw_str();
                             let escaped = s.starts_with('"');
-                            if self.match_value(Some(v.raw_str()), escaped) {
+                            if self.match_value(Some(s), escaped) {
                                 return true;
                             }
                         }
