@@ -17,3 +17,7 @@ fi
 if [ ! -x "$(command -v GetWindowID)" ]; then
     brew install smokris/getwindowid/getwindowid
 fi
+
+if [ ! -x "$(command -v cargo-tarpaulin)" ]; then
+    cargo install cargo-tarpaulin
+fi
