@@ -4,7 +4,7 @@ members = [".", "crate/encstr"]
 [workspace.package]
 repository = "https://github.com/pamburus/hl"
 authors = ["Pavel Ivanov <mr.pavel.ivanov@gmail.com>"]
-version = "0.28.0-alpha.9"
+version = "0.28.0-beta.1"
 edition = "2021"
 license = "MIT"
 
@@ -41,6 +41,7 @@ chrono = { version = "0.4", default-features = false, features = [
 ] }
 chrono-tz = { version = "0", features = ["serde"] }
 clap = { version = "4", features = ["wrap_help", "derive", "env"] }
+clap_complete = "4"
 closure = "0"
 collection_macros = "0"
 config = "0"

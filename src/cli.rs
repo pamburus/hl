@@ -2,7 +2,8 @@
 use std::path::PathBuf;
 
 // third-party imports
-use clap::{ArgAction, Parser, ValueEnum};
+use clap::{value_parser, ArgAction, Parser, ValueEnum};
+use clap_complete::Shell;
 use std::num::NonZeroUsize;
 
 // local imports
@@ -209,6 +210,10 @@ pub struct Opt {
     /// Print debug error messages that can help with troubleshooting.
     #[arg(long)]
     pub debug: bool,
+
+    /// Print shell auto-completion script and exit.
+    #[arg(long, value_parser = value_parser!(Shell))]
+    pub shell_completions: Option<Shell>,
 
     /// Print help.
     #[arg(long, default_value_t = false, action = ArgAction::SetTrue)]
