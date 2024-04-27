@@ -3,7 +3,7 @@ use super::*;
 
 // ---
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Eq, PartialEq, Debug)]
 pub struct RawString<'a>(&'a str);
 
 impl<'a> RawString<'a> {

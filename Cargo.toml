@@ -4,7 +4,7 @@ members = [".", "crate/encstr"]
 [workspace.package]
 repository = "https://github.com/pamburus/hl"
 authors = ["Pavel Ivanov <mr.pavel.ivanov@gmail.com>"]
-version = "0.28.0-alpha.7"
+version = "0.28.0-alpha.8"
 edition = "2021"
 license = "MIT"
 
@@ -73,6 +73,7 @@ sha2 = "0"
 shellwords = "1"
 signal-hook = "0"
 snap = "1"
+strum = { version = "0", features = ["derive"] }
 thiserror = "1"
 wildflower = { git = "https://github.com/cassaundra/wildflower.git" }
 winapi = { version = "0", features = ["handleapi"] }
@@ -85,6 +86,7 @@ kqueue = "1"
 [dev-dependencies]
 byte-strings = "0"
 criterion = "0"
+maplit = "1"
 stats_alloc = "0"
 regex = "1"
 wildmatch = "2"

@@ -6,7 +6,7 @@ use super::*;
 
 // ---
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Eq, PartialEq, Debug)]
 pub struct JsonEncodedString<'a>(&'a str);
 
 impl<'a> JsonEncodedString<'a> {
