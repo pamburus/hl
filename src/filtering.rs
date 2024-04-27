@@ -13,7 +13,7 @@ pub trait KeyNormalize: Clone {
 pub struct NoNormalizing {}
 
 impl KeyNormalize for NoNormalizing {
-    #[inline]
+    #[inline(always)]
     fn normalize(&self, byte: u8) -> u8 {
         byte
     }
@@ -25,7 +25,7 @@ impl KeyNormalize for NoNormalizing {
 pub struct DefaultNormalizing {}
 
 impl KeyNormalize for DefaultNormalizing {
-    #[inline]
+    #[inline(always)]
     fn normalize(&self, byte: u8) -> u8 {
         if byte == b'_' {
             b'-'
@@ -45,6 +45,7 @@ pub enum IncludeExcludeSetting {
 }
 
 impl IncludeExcludeSetting {
+    #[inline(always)]
     pub fn apply(&self, other: Self) -> Self {
         match other {
             Self::Unspecified => *self,
@@ -55,6 +56,7 @@ impl IncludeExcludeSetting {
 }
 
 impl Default for IncludeExcludeSetting {
+    #[inline(always)]
     fn default() -> Self {
         Self::Unspecified
     }
@@ -69,6 +71,7 @@ pub struct MatchOptions<N: KeyNormalize> {
 }
 
 impl<N: KeyNormalize + Default> Default for MatchOptions<N> {
+    #[inline(always)]
     fn default() -> Self {
         Self {
             delimiter: b'.',
@@ -139,30 +142,36 @@ impl<N: KeyNormalize> IncludeExcludeKeyFilter<N> {
         None
     }
 
+    #[inline(always)]
     pub fn include(&mut self) -> &mut Self {
         self.setting = IncludeExcludeSetting::Include;
         self
     }
 
+    #[inline(always)]
     pub fn included(mut self) -> Self {
         self.setting = IncludeExcludeSetting::Include;
         self
     }
 
+    #[inline(always)]
     pub fn exclude(&mut self) -> &mut Self {
         self.setting = IncludeExcludeSetting::Exclude;
         self
     }
 
+    #[inline(always)]
     pub fn excluded(mut self) -> Self {
         self.setting = IncludeExcludeSetting::Exclude;
         self
     }
 
+    #[inline(always)]
     pub fn setting(&self) -> IncludeExcludeSetting {
         self.setting.clone()
     }
 
+    #[inline(always)]
     pub fn leaf(&self) -> bool {
         self.children.len() == 0 && self.patterns.len() == 0
     }
@@ -220,6 +229,7 @@ impl PartialEq<&str> for Key {
 }
 
 impl Key {
+    #[inline(always)]
     fn as_bytes(&self) -> &[u8] {
         match self {
             Key::Short(v) => v.as_ref(),
@@ -227,10 +237,12 @@ impl Key {
         }
     }
 
+    #[inline(always)]
     fn as_str(&self) -> &str {
         std::str::from_utf8(self.as_bytes()).unwrap()
     }
 
+    #[inline(always)]
     fn to_string(&self) -> String {
         self.as_str().to_string()
     }
