@@ -35,8 +35,16 @@ fn run() -> Result<()> {
     let app_dirs = config::app_dirs();
     let settings = config::get();
     let opt = cli::Opt::parse();
+
     if opt.help {
         return cli::Opt::command().print_help().map_err(Error::Io);
+    }
+
+    if let Some(shell) = opt.shell_completions {
+        let mut cmd = cli::Opt::command();
+        let name = cmd.get_name().to_string();
+        clap_complete::generate(shell, &mut cmd, name, &mut stdout());
+        return Ok(());
     }
 
     let color_supported = if stdout().is_terminal() {

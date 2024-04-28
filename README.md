@@ -477,7 +477,7 @@ Options:
   -l, --level <LEVEL>                                    Filtering by level [env: HL_LEVEL=]
       --since <SINCE>                                    Filtering by timestamp >= the value (--time-zone and --local options are honored)
       --until <UNTIL>                                    Filtering by timestamp <= the value (--time-zone and --local options are honored)
-  -t, --time-format <TIME_FORMAT>                        Time format, see https://man7.org/linux/man-pages/man1/date.1.html [env: HL_TIME_FORMAT=] [default: "%y-%m-%d %T.%3N"]
+  -t, --time-format <TIME_FORMAT>                        Time format, see https://man7.org/linux/man-pages/man1/date.1.html [env: HL_TIME_FORMAT=] [default: "%Y-%m-%d %T.%3N"]
   -Z, --time-zone <TIME_ZONE>                            Time zone name, see column "TZ identifier" at https://en.wikipedia.org/wiki/List_of_tz_database_time_zones [env: HL_TIME_ZONE=] [default: UTC]
   -L, --local                                            Use local time zone, overrides --time-zone option
       --no-local                                         Disable local time zone, overrides --local option
@@ -495,6 +495,7 @@ Options:
       --input-format <INPUT_FORMAT>                      Input format [env: HL_INPUT_FORMAT=] [default: auto] [possible values: auto, json, logfmt]
       --dump-index                                       Dump index metadata and exit
       --debug                                            Print debug error messages that can help with troubleshooting
+      --shell-completions <SHELL_COMPLETIONS>            Print shell auto-completion script and exit [possible values: bash, elvish, fish, powershell, zsh]
       --help                                             Print help
   -V, --version                                          Print version
 ```
