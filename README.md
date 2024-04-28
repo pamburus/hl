@@ -35,18 +35,22 @@ High performance and convenient features are the main goals.
 
 ## Installation options
 
-* Download latest release from [download page](https://github.com/pamburus/hl/releases/latest)
-
-* Download and extract using `curl` and `tar` on Linux
+* Install using [homebrew](https://brew.sh) on macOS or Linux
 
     ```
-    curl -sSfL https://github.com/pamburus/hl/releases/latest/download/hl-linux-x86_64-musl.tar.gz | tar xz
+    brew install pamburus/tap/hl
     ```
 
 * Download and extract using `curl` and `tar` on macOS
 
     ```
     curl -sSfL https://github.com/pamburus/hl/releases/latest/download/hl-macos.tar.gz | tar xz
+    ```
+
+* Download and extract using `curl` and `tar` on Linux
+
+    ```
+    curl -sSfL https://github.com/pamburus/hl/releases/latest/download/hl-linux-x86_64-musl.tar.gz | tar xz
     ```
 
 * Install [AUR package](https://aur.archlinux.org/packages/hl-log-viewer-bin) on Arch Linux
@@ -60,6 +64,8 @@ High performance and convenient features are the main goals.
     ```
     cargo install --locked --git https://github.com/pamburus/hl.git
     ```
+
+* Download latest release from [download page](https://github.com/pamburus/hl/releases/latest)
 
 ## Examples
 
