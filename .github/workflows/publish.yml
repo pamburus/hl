@@ -6,9 +6,9 @@ on:
       - 'v*.*.*'
 
 jobs:
-  publish:
-    name: Publish for ${{ matrix.name }}
-    runs-on: ${{ matrix.os }}
+  build:
+    name: Build for ${{ matrix.name }}
+    runs-on: ${{ matrix.runner }}
 
     env:
       CARGO: cargo
@@ -26,14 +26,15 @@ jobs:
           - windows-x86
         include:
           - name: linux-x86-gnu
-            os: ubuntu-latest
+            runner: ubuntu-latest
             family: linux
             arch: x86_64
             target: x86_64-unknown-linux-gnu
             archiver: tar.gz
             asset: hl-linux-x86_64-gnu.tar.gz
+            skip: true
           - name: linux-x86-musl
-            os: ubuntu-latest
+            runner: ubuntu-latest
             family: linux
             arch: x86_64
             target: x86_64-unknown-linux-musl
@@ -41,15 +42,16 @@ jobs:
             asset: hl-linux-x86_64-musl.tar.gz
             cross: true
           - name: linux-arm-gnu
-            os: ubuntu-latest
+            runner: ubuntu-latest
             family: linux
             arch: aarch64
             target: aarch64-unknown-linux-gnu
             archiver: tar.gz
             asset: hl-linux-arm64-gnu.tar.gz
             cross: true
+            skip: true
           - name: linux-arm-musl
-            os: ubuntu-latest
+            runner: ubuntu-latest
             family: linux
             arch: aarch64
             target: aarch64-unknown-linux-musl
@@ -57,21 +59,21 @@ jobs:
             asset: hl-linux-arm64-musl.tar.gz
             cross: true
           - name: macos-x86
-            os: macos-latest
+            runner: macos-latest
             family: macos
             arch: x86_64
             target: x86_64-apple-darwin
             archiver: tar.gz
             asset: hl-macos-x86_64.tar.gz
           - name: macos-arm
-            os: macos-latest
+            runner: macos-latest
             family: macos
             arch: aarch64
             target: aarch64-apple-darwin
             archiver: tar.gz
             asset: hl-macos-arm64.tar.gz
           - name: macos-universal
-            os: macos-latest
+            runner: macos-latest
             family: macos
             arch: '{aarch64,x86_64}'
             target: '{aarch64,x86_64}-apple-darwin'
@@ -79,7 +81,7 @@ jobs:
             asset: hl-macos.tar.gz
             universal: true
           - name: windows-x86
-            os: windows-latest
+            runner: windows-latest
             family: windows
             arch: x86_64
             target: x86_64-pc-windows-msvc
@@ -87,7 +89,7 @@ jobs:
             asset: hl-windows.zip
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
@@ -128,9 +130,39 @@ jobs:
         if: matrix.archiver == 'tar.gz' && matrix.universal == true
         run: tar -C ./target -cz -f ${{ matrix.asset }} hl
 
+      - name: Store artifact
+        if: matrix.skip != true
+        uses: actions/upload-artifact@v4
+        with:
+          name: hl-${{ matrix.arch }}-${{ matrix.family }}
+          path: target/${{ matrix.target }}/release/hl${{ matrix.family == 'windows' && '.exe' || '' }}
+          retention-days: 1
+
       - name: Upload binaries to release
+        if: startsWith(github.ref, 'refs/tags/v')
         uses: svenstaro/upload-release-action@v2
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           file: ${{ matrix.asset }}
           tag: ${{ github.ref }}
+
+  publish:
+    name: Publish
+    needs: [build]
+    runs-on: ubuntu-22.04
+    steps:
+    - name: Checkout Git repo
+      uses: actions/checkout@v4
+    - uses: actions/download-artifact@v4
+      with:
+        path: artifacts
+    - name: Set up Go
+      uses: actions/setup-go@v5
+    - name: Run GoReleaser
+      uses: goreleaser/goreleaser-action@v5
+      with:
+        distribution: goreleaser
+        version: latest
+        args: release --clean --skip=validate
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

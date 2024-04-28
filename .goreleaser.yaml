@@ -1,0 +1,51 @@
+project_name: hl
+builds:
+  - main: build/goreleaser/stub.go
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    binary: hl
+    ignore:
+      - goos: windows
+        goarch: arm64
+    hooks:
+      post:
+        - ./.goreleaser-hook.sh {{ .Arch }} {{ .Os }} {{ .ProjectName }}
+checksum:
+  name_template: "checksums.txt"
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+brews:
+  - name: hl
+    repository:
+      owner: pamburus
+      name: homebrew-tap
+      branch: main
+      pull_request:
+        enabled: true
+        draft: true
+    url_template: "https://github.com/pamburus/hl/releases/download/{{ .Tag }}/{{ .ArtifactName }}"
+    commit_author:
+      name: Pavel Ivanov
+      email: mr.pavel.ivanov@gmail.com
+    commit_msg_template: "Brew formula update for {{ .ProjectName }} version {{ .Tag }}"
+    directory: Formula
+    homepage: "https://github.com/pamburus/hl"
+    description: "Log viewer for JSON and logfmt logs"
+    license: "MIT"
+    skip_upload: auto
+    custom_block: |
+      head "https://github.com/pamburus/hl.git"
+    test: |
+      system "#{bin}/hl --version"
+    install: |
+      system "cargo", "install", *std_cargo_args
+      generate_completions_from_executable(bin/"hl", "--shell-completions")
