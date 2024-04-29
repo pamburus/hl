@@ -165,6 +165,6 @@ jobs:
       with:
         distribution: goreleaser
         version: latest
-        args: release --clean --skip=validate
+        args: release --clean --skip=validate --snapshot
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
