@@ -85,9 +85,15 @@ fn run() -> Result<()> {
                 ThemeOrigin::Stock => "stock",
                 ThemeOrigin::Custom => "custom",
             };
-            println!("{}:", origin);
+            if stdout().is_terminal() {
+                println!("{}:", origin);
+            }
             for (name, _) in group {
-                println!("  {}", name);
+                if stdout().is_terminal() {
+                    println!("  - {}", name);
+                } else {
+                    println!("{}", name);
+                }
             }
         }
         return Ok(());
