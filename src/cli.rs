@@ -15,7 +15,7 @@ use crate::{
 
 // ---
 
-/// JSON log converter to human readable representation.
+/// JSON and logfmt log converter to human readable representation.
 #[derive(Parser)]
 #[clap(version, disable_help_flag = true)]
 pub struct Opt {
@@ -46,11 +46,11 @@ pub struct Opt {
     )]
     pub theme: String,
 
-    /// Output raw JSON messages instead of formatter messages, it can be useful for applying filters and saving results in original format.
+    /// Output raw source messages instead of formatter messages, it can be useful for applying filters and saving results in original format.
     #[arg(short, long, overrides_with = "raw")]
     pub raw: bool,
 
-    /// Disable raw JSON messages output, overrides --raw option.
+    /// Disable raw source messages output, overrides --raw option.
     #[arg(long, overrides_with = "raw")]
     _no_raw: bool,
 

@@ -241,9 +241,9 @@ See other [screenshots](https://github.com/pamburus/hl-extra/tree/90be58af2fb91d
     
 - Notes
 
-    * Special field names that are reserved for filtering by predefined fields regardless of the actual JSON field names used to load the corresponding value: `level`, `message`, `caller` and `logger`.
-    * To address a JSON field with one of these names instead of predefined fields, add a period before its name, i.e., `.level` will perform a match against the "level" JSON field.
-    * To address a JSON field by its exact name, use a JSON-formatted string, i.e. `-q '".level" = info'`.
+    * Special field names that are reserved for filtering by predefined fields regardless of the actual source field names used to load the corresponding value: `level`, `message`, `caller` and `logger`.
+    * To address a source field with one of these names instead of predefined fields, add a period before its name, i.e., `.level` will perform a match against the "level" source field.
+    * To address a source field by its exact name, use a JSON-formatted string, i.e. `-q '".level" = info'`.
     * To specify special characters in field values, also use a JSON-formatted string, i.e. 
         ```
         $ hl my-service.log -q 'message contain "Error:\nSomething unexpected happened"'
@@ -450,7 +450,7 @@ See other [screenshots](https://github.com/pamburus/hl-extra/tree/90be58af2fb91d
 ### Complete set of options and flags
 
 ```
-JSON log converter to human readable representation
+JSON and logfmt log converter to human readable representation
 
 Usage: hl [OPTIONS] [FILE]...
 
@@ -463,8 +463,8 @@ Options:
       --paging <PAGING>                                  Output paging options [env: HL_PAGING=] [default: auto] [possible values: auto, always, never]
   -P                                                     Handful alias for --paging=never, overrides --paging option
       --theme <THEME>                                    Color theme [env: HL_THEME=] [default: universal]
-  -r, --raw                                              Output raw JSON messages instead of formatter messages, it can be useful for applying filters and saving results in original format
-      --no-raw                                           Disable raw JSON messages output, overrides --raw option
+  -r, --raw                                              Output raw source messages instead of formatter messages, it can be useful for applying filters and saving results in original format
+      --no-raw                                           Disable raw source messages output, overrides --raw option
       --raw-fields                                       Disable unescaping and prettifying of field values
       --allow-prefix                                     Allow non-JSON prefixes before JSON messages [env: HL_ALLOW_PREFIX=]
       --interrupt-ignore-count <INTERRUPT_IGNORE_COUNT>  Number of interrupts to ignore, i.e. Ctrl-C (SIGINT) [env: HL_INTERRUPT_IGNORE_COUNT=] [default: 3]
@@ -477,7 +477,7 @@ Options:
   -l, --level <LEVEL>                                    Filtering by level [env: HL_LEVEL=]
       --since <SINCE>                                    Filtering by timestamp >= the value (--time-zone and --local options are honored)
       --until <UNTIL>                                    Filtering by timestamp <= the value (--time-zone and --local options are honored)
-  -t, --time-format <TIME_FORMAT>                        Time format, see https://man7.org/linux/man-pages/man1/date.1.html [env: HL_TIME_FORMAT=] [default: "%Y-%m-%d %T.%3N"]
+  -t, --time-format <TIME_FORMAT>                        Time format, see https://man7.org/linux/man-pages/man1/date.1.html [env: HL_TIME_FORMAT=] [default: "%b %d %T.%3N"]
   -Z, --time-zone <TIME_ZONE>                            Time zone name, see column "TZ identifier" at https://en.wikipedia.org/wiki/List_of_tz_database_time_zones [env: HL_TIME_ZONE=] [default: UTC]
   -L, --local                                            Use local time zone, overrides --time-zone option
       --no-local                                         Disable local time zone, overrides --local option
