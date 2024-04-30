@@ -99,7 +99,7 @@ fn run() -> Result<()> {
     let time_format = LinuxDateFormat::new(&opt.time_format).compile();
     // Configure filter.
     let filter = hl::Filter {
-        fields: hl::FieldFilterSet::new(opt.filter)?,
+        fields: hl::FieldFilterSet::new(&opt.filter)?,
         level: opt.level.map(|x| x.into()),
         since: if let Some(v) = &opt.since {
             Some(parse_time(v, &tz, &time_format)?.with_timezone(&Utc))
@@ -142,7 +142,7 @@ fn run() -> Result<()> {
     let buffer_size = std::cmp::min(max_message_size, opt.buffer_size);
 
     let mut query: Option<Query> = None;
-    for q in opt.query {
+    for q in &opt.query {
         let right = Query::parse(&q)?;
         if let Some(left) = query {
             query = Some(left.and(right));
