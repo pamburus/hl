@@ -20,13 +20,9 @@ use crate::{
 #[clap(version, disable_help_flag = true)]
 pub struct Opt {
     /// Color output options.
-    #[arg(long, default_value = "auto", env = "HL_COLOR", overrides_with = "color")]
+    #[arg(long, short, default_value = "auto", env = "HL_COLOR", overrides_with = "color", default_missing_value = "always", num_args = 0..=1)]
     #[arg(value_enum)]
     pub color: ColorOption,
-
-    /// Handful alias for --color=always, overrides --color option.
-    #[arg(short)]
-    pub color_always: bool,
 
     /// Output paging options.
     #[arg(long, default_value = "auto", env = "HL_PAGING", overrides_with = "paging")]

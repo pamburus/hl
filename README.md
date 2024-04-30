@@ -458,8 +458,7 @@ Arguments:
   [FILE]...  Files to process
 
 Options:
-      --color <COLOR>                                    Color output options [env: HL_COLOR=] [default: auto] [possible values: auto, always, never]
-  -c                                                     Handful alias for --color=always, overrides --color option
+  -c, --color [<COLOR>]                                  Color output options [env: HL_COLOR=] [default: auto] [possible values: auto, always, never]
       --paging <PAGING>                                  Output paging options [env: HL_PAGING=] [default: auto] [possible values: auto, always, never]
   -P                                                     Handful alias for --paging=never, overrides --paging option
       --theme <THEME>                                    Color theme [env: HL_THEME=] [default: universal]
