@@ -9,10 +9,15 @@ use crate::settings::Settings;
 
 pub const APP_NAME: &str = "hl";
 
-static CONFIG: Lazy<Settings> = Lazy::new(|| load());
+static CONFIG: Lazy<Settings> = Lazy::new(load);
+static DEFAULT: Lazy<Settings> = Lazy::new(Settings::default);
 
 pub fn get() -> &'static Settings {
     &CONFIG
+}
+
+pub fn default() -> &'static Settings {
+    &DEFAULT
 }
 
 pub fn app_dirs() -> AppDirs {

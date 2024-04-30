@@ -20,13 +20,28 @@ use crate::{
 #[clap(version, disable_help_flag = true)]
 pub struct Opt {
     /// Color output options.
-    #[arg(long, short, default_value = "auto", env = "HL_COLOR", overrides_with = "color", default_missing_value = "always", num_args = 0..=1)]
-    #[arg(value_enum)]
+    #[arg(
+        long,
+        short,
+        default_value = "auto",
+        env = "HL_COLOR",
+        overrides_with = "color",
+        default_missing_value = "always",
+        num_args = 0..=1,
+        value_name = "WHEN",
+        value_enum
+    )]
     pub color: ColorOption,
 
     /// Output paging options.
-    #[arg(long, default_value = "auto", env = "HL_PAGING", overrides_with = "paging")]
-    #[arg(value_enum)]
+    #[arg(
+        long,
+        default_value = "auto",
+        env = "HL_PAGING",
+        overrides_with = "paging",
+        value_name = "WHEN",
+        value_enum
+    )]
     pub paging: PagingOption,
 
     /// Handful alias for --paging=never, overrides --paging option.
@@ -38,7 +53,7 @@ pub struct Opt {
         long,
         default_value_t = config::get().theme.clone(),
         env = "HL_THEME",
-        overrides_with="theme",
+        overrides_with="theme"
     )]
     pub theme: String,
 
@@ -63,20 +78,41 @@ pub struct Opt {
         long,
         default_value = "3",
         env = "HL_INTERRUPT_IGNORE_COUNT",
-        overrides_with = "interrupt_ignore_count"
+        overrides_with = "interrupt_ignore_count",
+        value_name = "N"
     )]
     pub interrupt_ignore_count: usize,
 
     /// Buffer size.
-    #[arg(long, default_value = "256 KiB", env="HL_BUFFER_SIZE",  value_parser = parse_non_zero_size, overrides_with="buffer_size")]
+    #[arg(
+        long,
+        default_value = "256 KiB",
+        env="HL_BUFFER_SIZE",
+        value_parser = parse_non_zero_size,
+        overrides_with="buffer_size",
+        value_name = "SIZE"
+    )]
     pub buffer_size: NonZeroUsize,
 
     /// Maximum message size.
-    #[arg(long, default_value = "64 MiB", env="HL_MAX_MESSAGE_SIZE",  value_parser = parse_non_zero_size, overrides_with="max_message_size")]
+    #[arg(
+        long,
+        default_value = "64 MiB",
+        env="HL_MAX_MESSAGE_SIZE",
+        value_parser = parse_non_zero_size,
+        overrides_with="max_message_size",
+        value_name = "SIZE"
+    )]
     pub max_message_size: NonZeroUsize,
 
     /// Number of processing threads.
-    #[arg(long, short = 'C', env = "HL_CONCURRENCY", overrides_with = "concurrency")]
+    #[arg(
+        long,
+        short = 'C',
+        env = "HL_CONCURRENCY",
+        overrides_with = "concurrency",
+        value_name = "N"
+    )]
     pub concurrency: Option<usize>,
 
     /// Filtering by field values in one of forms [k=v, k~=v, k~~=v, 'k!=v', 'k!~=v', 'k!~~=v'] where ~ does substring match and ~~ does regular expression match.
@@ -88,7 +124,7 @@ pub struct Opt {
     pub query: Vec<String>,
 
     /// Hide or reveal fields with the specified keys, prefix with ! to reveal, specify '!*' to reveal all.
-    #[arg(long, short = 'h', number_of_values = 1)]
+    #[arg(long, short = 'h', number_of_values = 1, value_name = "KEY")]
     pub hide: Vec<String>,
 
     /// Filtering by level.
@@ -97,11 +133,11 @@ pub struct Opt {
     pub level: Option<RelaxedLevel>,
 
     /// Filtering by timestamp >= the value (--time-zone and --local options are honored).
-    #[arg(long, allow_hyphen_values = true, overrides_with = "since")]
+    #[arg(long, allow_hyphen_values = true, overrides_with = "since", value_name = "TIME")]
     pub since: Option<String>,
 
     /// Filtering by timestamp <= the value (--time-zone and --local options are honored).
-    #[arg(long, allow_hyphen_values = true, overrides_with = "until")]
+    #[arg(long, allow_hyphen_values = true, overrides_with = "until", value_name = "TIME")]
     pub until: Option<String>,
 
     /// Time format, see https://man7.org/linux/man-pages/man1/date.1.html.
@@ -111,11 +147,19 @@ pub struct Opt {
         env="HL_TIME_FORMAT",
         default_value_t = config::get().time_format.clone(),
         overrides_with = "time_format",
+        value_name = "FORMAT",
     )]
     pub time_format: String,
 
     /// Time zone name, see column "TZ identifier" at https://en.wikipedia.org/wiki/List_of_tz_database_time_zones.
-    #[arg(long, short = 'Z', env="HL_TIME_ZONE", default_value = config::get().time_zone.name(), overrides_with="time_zone")]
+    #[arg(
+        long,
+        short = 'Z',
+        env="HL_TIME_ZONE",
+        default_value = config::get().time_zone.name(),
+        overrides_with="time_zone",
+        value_name = "TZ"
+    )]
     pub time_zone: chrono_tz::Tz,
 
     /// Use local time zone, overrides --time-zone option.
@@ -131,7 +175,8 @@ pub struct Opt {
         long,
         default_value = "auto",
         overrides_with = "unix_timestamp_unit",
-        env = "HL_UNIX_TIMESTAMP_UNIT"
+        env = "HL_UNIX_TIMESTAMP_UNIT",
+        value_name = "UNIT"
     )]
     pub unix_timestamp_unit: UnixTimestampUnit,
 
@@ -158,7 +203,7 @@ pub struct Opt {
     pub show_empty_fields: bool,
 
     /// Show input number and/or input filename before each message.
-    #[arg(long, default_value = "auto", overrides_with = "input_info")]
+    #[arg(long, default_value = "auto", overrides_with = "input_info", value_name = "VARIANT")]
     #[arg(value_enum)]
     pub input_info: InputInfoOption,
 
@@ -175,15 +220,20 @@ pub struct Opt {
     pub follow: bool,
 
     /// Number of last messages to preload from each file in --follow mode.
-    #[arg(long, default_value = "10", overrides_with = "tail")]
+    #[arg(long, default_value = "10", overrides_with = "tail", value_name = "N")]
     pub tail: u64,
 
     /// Synchronization interval for live streaming mode enabled by --follow option.
-    #[arg(long, default_value = "100", overrides_with = "sync_interval_ms")]
+    #[arg(
+        long,
+        default_value = "100",
+        overrides_with = "sync_interval_ms",
+        value_name = "MILLISECONDS"
+    )]
     pub sync_interval_ms: u64,
 
     /// Output file.
-    #[arg(long, short = 'o', overrides_with = "output")]
+    #[arg(long, short = 'o', overrides_with = "output", value_name = "FILE")]
     pub output: Option<String>,
 
     /// Log message delimiter, [NUL, CR, LF, CRLF] or any custom string.
@@ -195,7 +245,8 @@ pub struct Opt {
         long,
         env = "HL_INPUT_FORMAT",
         default_value = "auto",
-        overrides_with = "input_format"
+        overrides_with = "input_format",
+        value_name = "FORMAT"
     )]
     pub input_format: InputFormat,
 
@@ -208,7 +259,7 @@ pub struct Opt {
     pub debug: bool,
 
     /// Print shell auto-completion script and exit.
-    #[arg(long, value_parser = value_parser!(Shell))]
+    #[arg(long, value_parser = value_parser!(Shell), value_name = "SHELL")]
     pub shell_completions: Option<Shell>,
 
     /// Print help.
