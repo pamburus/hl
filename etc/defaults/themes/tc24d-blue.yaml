@@ -1,0 +1,63 @@
+palette:
+  - &default '#abb2bf'
+  - &strong '#cfd7e5'
+  - &red '#e06c75'
+  - &gray '#636d83'
+  - &blue '#61afef'
+  - &yellow '#d19a66'
+  - &cyan '#56b6c2'
+  - &magenta '#c678dd'
+  - &green '#98c379'
+
+elements:
+  input:
+    foreground: *gray
+  time:
+    foreground: *gray
+  logger:
+    foreground: *gray
+  caller:
+    foreground: *gray
+    modes: [italic]
+  level:
+    foreground: *gray
+  message:
+    foreground: *strong
+    modes: [bold]
+  field:
+    foreground: *gray
+  key:
+    foreground: *blue
+  ellipsis:
+    foreground: *gray
+  object:
+    foreground: *strong
+    modes: [bold]
+  array:
+    foreground: *strong
+    modes: [bold]
+  string:
+    foreground: *default
+  number:
+    foreground: *green
+  boolean:
+    foreground: *yellow
+  'null':
+    foreground: *red
+levels:
+  debug:
+    level-inner:
+      foreground: *magenta
+  info:
+    level-inner:
+      foreground: *cyan
+  warning:
+    level:
+      foreground: *yellow
+      modes: [reverse]
+  error:
+    time:
+      foreground: *red
+    level:
+      foreground: *red
+      modes: [reverse]
