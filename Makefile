@@ -39,7 +39,7 @@ bench:
 
 ## Show usage of the binary
 usage: build
-	@env -i ./target/debug/hl --help
+	@env -i HL_CONFIG= ./target/debug/hl --help
 .PHONY: usage
 
 ## Clean build artifacts
