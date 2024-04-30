@@ -59,7 +59,12 @@ fn run() -> Result<()> {
     };
 
     // Configure color scheme.
-    let use_colors = match opt.color {
+    let color = if opt.color_always {
+        cli::ColorOption::Always
+    } else {
+        opt.color
+    };
+    let use_colors = match color {
         cli::ColorOption::Auto => stdout().is_terminal() && color_supported,
         cli::ColorOption::Always => true,
         cli::ColorOption::Never => false,

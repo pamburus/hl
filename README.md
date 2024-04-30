@@ -475,7 +475,8 @@ Filtering Options:
   -q, --query <QUERY>    Filter using query, accepts expressions from --filter and supports '(', ')', 'and', 'or', 'not', 'in', 'contain', 'like', '<', '>', '<=', '>=', etc
 
 Output Options:
-  -c, --color [<WHEN>]        Color output control [env: HL_COLOR=] [default: auto] [possible values: auto, always, never]
+      --color [<WHEN>]        Color output control [env: HL_COLOR=] [default: auto] [possible values: auto, always, never]
+  -c                          Handful alias for --color=always, overrides --color option
       --theme <THEME>         Color theme [env: HL_THEME=] [default: universal]
   -r, --raw                   Output raw source messages instead of formatted messages, which can be useful for applying filters and saving results in their original format
       --no-raw                Disable raw source messages output, overrides --raw option
