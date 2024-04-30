@@ -8,7 +8,7 @@ elements:
   caller:
     foreground: bright-black
   level:
-    foreground: magenta
+    foreground: default
   message:
     foreground: bright-white
   field:
@@ -31,10 +31,10 @@ elements:
     foreground: yellow
 levels:
   debug:
-    level:
+    level-inner:
       foreground: magenta
   info:
-    level:
+    level-inner:
       foreground: cyan
   warning:
     level:
