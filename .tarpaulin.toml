@@ -5,6 +5,7 @@ exclude-files = [
     "src/*_capnp.rs",
     "src/cli.rs",
     "src/config.rs",
+    "src/console.rs",
     "src/main.rs",
     "src/themecfg.rs",
 ]
