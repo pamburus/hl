@@ -374,6 +374,12 @@ See other [screenshots](https://github.com/pamburus/hl-extra/tree/90be58af2fb91d
 * Using environment variable, i.e. `HL_THEME=classic`, overrides the value specified in configuration file.
 * Using command-line argument, i.e. `--theme classic`, overrides all other values.
 
+#### Selecting themes with preview
+To select themes with preview [fzf](https://github.com/junegunn/fzf) tool can be used like this:
+```bash
+hl --list-themes | fzf --preview-window="top,80%" --preview="head -n 100 example.log | hl -c --theme {}"
+```
+
 #### Custom themes
 - Custom themes are automatically loaded when found in a predefined platform-specific location.
 

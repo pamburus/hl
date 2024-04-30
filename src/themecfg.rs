@@ -63,8 +63,17 @@ impl Theme {
             result.insert(name, ThemeOrigin::Stock.into());
         }
 
-        for name in Self::custom_names(app_dirs)? {
-            result.insert(name?, ThemeOrigin::Custom.into());
+        if let Ok(names) = Self::custom_names(app_dirs) {
+            for name in names {
+                match name {
+                    Ok(name) => {
+                        result.insert(name, ThemeOrigin::Custom.into());
+                    }
+                    Err(e) => {
+                        eprintln!("failed to list custom theme: {}", e);
+                    }
+                }
+            }
         }
 
         Ok(result)
