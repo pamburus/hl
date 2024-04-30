@@ -4,13 +4,13 @@ members = [".", "crate/encstr"]
 [workspace.package]
 repository = "https://github.com/pamburus/hl"
 authors = ["Pavel Ivanov <mr.pavel.ivanov@gmail.com>"]
-version = "0.28.1-alpha.5"
+version = "0.28.1-alpha.6"
 edition = "2021"
 license = "MIT"
 
 [package]
 name = "hl"
-description = "Utility for viewing json-formatted log files"
+description = "JSON and logfmt log converter to human readable representation"
 categories = ["command-line-utilities"]
 keywords = ["cli", "human", "log"]
 build = "build.rs"

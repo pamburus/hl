@@ -458,45 +458,53 @@ Arguments:
   [FILE]...  Files to process
 
 Options:
-  -c, --color [<WHEN>]                   Color output options [env: HL_COLOR=] [default: auto] [possible values: auto, always, never]
-      --paging <WHEN>                    Output paging options [env: HL_PAGING=] [default: auto] [possible values: auto, always, never]
-  -P                                     Handful alias for --paging=never, overrides --paging option
-      --theme <THEME>                    Color theme [env: HL_THEME=] [default: universal]
-  -r, --raw                              Output raw source messages instead of formatter messages, it can be useful for applying filters and saving results in original format
-      --no-raw                           Disable raw source messages output, overrides --raw option
-      --raw-fields                       Disable unescaping and prettifying of field values
-      --allow-prefix                     Allow non-JSON prefixes before JSON messages [env: HL_ALLOW_PREFIX=]
-      --interrupt-ignore-count <N>       Number of interrupts to ignore, i.e. Ctrl-C (SIGINT) [env: HL_INTERRUPT_IGNORE_COUNT=] [default: 3]
-      --buffer-size <SIZE>               Buffer size [env: HL_BUFFER_SIZE=] [default: "256 KiB"]
-      --max-message-size <SIZE>          Maximum message size [env: HL_MAX_MESSAGE_SIZE=] [default: "64 MiB"]
-  -C, --concurrency <N>                  Number of processing threads [env: HL_CONCURRENCY=]
-  -f, --filter <FILTER>                  Filtering by field values in one of forms [k=v, k~=v, k~~=v, 'k!=v', 'k!~=v', 'k!~~=v'] where ~ does substring match and ~~ does regular expression match
-  -q, --query <QUERY>                    Custom query, accepts expressions from --filter and supports '(', ')', 'and', 'or', 'not', 'in', 'contain', 'like', '<', '>', '<=', '>=', etc
-  -h, --hide <KEY>                       Hide or reveal fields with the specified keys, prefix with ! to reveal, specify '!*' to reveal all
-  -l, --level <LEVEL>                    Filtering by level [env: HL_LEVEL=]
-      --since <TIME>                     Filtering by timestamp >= the value (--time-zone and --local options are honored)
-      --until <TIME>                     Filtering by timestamp <= the value (--time-zone and --local options are honored)
-  -t, --time-format <FORMAT>             Time format, see https://man7.org/linux/man-pages/man1/date.1.html [env: HL_TIME_FORMAT=] [default: "%b %d %T.%3N"]
-  -Z, --time-zone <TZ>                   Time zone name, see column "TZ identifier" at https://en.wikipedia.org/wiki/List_of_tz_database_time_zones [env: HL_TIME_ZONE=] [default: UTC]
-  -L, --local                            Use local time zone, overrides --time-zone option
-      --no-local                         Disable local time zone, overrides --local option
-      --unix-timestamp-unit <UNIT>       Unix timestamp unit [env: HL_UNIX_TIMESTAMP_UNIT=] [default: auto] [possible values: auto, s, ms, us, ns]
-  -e, --hide-empty-fields                Hide empty fields, applies for null, string, object and array fields only [env: HL_HIDE_EMPTY_FIELDS=]
-  -E, --show-empty-fields                Show empty fields, overrides --hide-empty-fields option [env: HL_SHOW_EMPTY_FIELDS=]
-      --input-info <VARIANT>             Show input number and/or input filename before each message [default: auto] [possible values: auto, none, full, compact, minimal]
-      --list-themes                      List available themes and exit
   -s, --sort                             Sort messages chronologically
   -F, --follow                           Follow input streams and sort messages chronologically during time frame set by --sync-interval-ms option
       --tail <N>                         Number of last messages to preload from each file in --follow mode [default: 10]
       --sync-interval-ms <MILLISECONDS>  Synchronization interval for live streaming mode enabled by --follow option [default: 100]
-  -o, --output <FILE>                    Output file
-      --delimiter <DELIMITER>            Log message delimiter, [NUL, CR, LF, CRLF] or any custom string
-      --input-format <FORMAT>            Input format [env: HL_INPUT_FORMAT=] [default: auto] [possible values: auto, json, logfmt]
-      --dump-index                       Dump index metadata and exit
-      --debug                            Print debug error messages that can help with troubleshooting
-      --shell-completions <SHELL>        Print shell auto-completion script and exit [possible values: bash, elvish, fish, powershell, zsh]
+      --paging <WHEN>                    Control pager usage (HL_PAGER or PAGER) [env: HL_PAGING=] [default: auto] [possible values: auto, always, never]
+  -P                                     Handful alias for --paging=never, overrides --paging option
       --help                             Print help
   -V, --version                          Print version
+
+Filtering Options:
+  -l, --level <LEVEL>    Filter messages by level [env: HL_LEVEL=]
+      --since <TIME>     Filter messages by timestamp >= <TIME> (--time-zone and --local options are honored)
+      --until <TIME>     Filter messages by timestamp <= <TIME> (--time-zone and --local options are honored)
+  -f, --filter <FILTER>  Filter messages by field values [k=v, k~=v, k~~=v, 'k!=v', 'k!~=v', 'k!~~=v'] where ~ does substring match and ~~ does regular expression match
+  -q, --query <QUERY>    Filter using query, accepts expressions from --filter and supports '(', ')', 'and', 'or', 'not', 'in', 'contain', 'like', '<', '>', '<=', '>=', etc
+
+Output Options:
+  -c, --color [<WHEN>]        Color output control [env: HL_COLOR=] [default: auto] [possible values: auto, always, never]
+      --theme <THEME>         Color theme [env: HL_THEME=] [default: universal]
+  -r, --raw                   Output raw source messages instead of formatted messages, which can be useful for applying filters and saving results in their original format
+      --no-raw                Disable raw source messages output, overrides --raw option
+      --raw-fields            Output field values as is, without unescaping or prettifying
+  -h, --hide <KEY>            Hide or reveal fields with the specified keys, prefix with ! to reveal, specify '!*' to reveal all
+  -t, --time-format <FORMAT>  Time format, see https://man7.org/linux/man-pages/man1/date.1.html [env: HL_TIME_FORMAT=] [default: "%b %d %T.%3N"]
+  -Z, --time-zone <TZ>        Time zone name, see column "TZ identifier" at https://en.wikipedia.org/wiki/List_of_tz_database_time_zones [env: HL_TIME_ZONE=] [default: UTC]
+  -L, --local                 Use local time zone, overrides --time-zone option
+      --no-local              Disable local time zone, overrides --local option
+  -e, --hide-empty-fields     Hide empty fields, applies for null, string, object and array fields only [env: HL_HIDE_EMPTY_FIELDS=]
+  -E, --show-empty-fields     Show empty fields, overrides --hide-empty-fields option [env: HL_SHOW_EMPTY_FIELDS=]
+      --input-info <VARIANT>  Show input number and/or input filename before each message [default: auto] [possible values: auto, none, full, compact, minimal]
+  -o, --output <FILE>         Output file
+
+Input Options:
+      --input-format <FORMAT>       Input format [env: HL_INPUT_FORMAT=] [default: auto] [possible values: auto, json, logfmt]
+      --unix-timestamp-unit <UNIT>  Unix timestamp unit [env: HL_UNIX_TIMESTAMP_UNIT=] [default: auto] [possible values: auto, s, ms, us, ns]
+      --allow-prefix                Allow non-JSON prefixes before JSON messages [env: HL_ALLOW_PREFIX=]
+      --delimiter <DELIMITER>       Log message delimiter, [NUL, CR, LF, CRLF] or any custom string
+
+Advanced Options:
+      --interrupt-ignore-count <N>  Number of interrupts to ignore, i.e. Ctrl-C (SIGINT) [env: HL_INTERRUPT_IGNORE_COUNT=] [default: 3]
+      --buffer-size <SIZE>          Buffer size [env: HL_BUFFER_SIZE=] [default: "256 KiB"]
+      --max-message-size <SIZE>     Maximum message size [env: HL_MAX_MESSAGE_SIZE=] [default: "64 MiB"]
+  -C, --concurrency <N>             Number of processing threads [env: HL_CONCURRENCY=]
+      --shell-completions <SHELL>   Print shell auto-completion script and exit [possible values: bash, elvish, fish, powershell, zsh]
+      --list-themes                 Print available themes and exit
+      --dump-index                  Print debug index metadata (in --sort mode) and exit
+      --debug                       Print debug error messages that can help with troubleshooting
 ```
 
 ## Performance
