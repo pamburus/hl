@@ -206,7 +206,7 @@ impl<'a> RawObject<'a> {
         }
     }
 
-    #[inline(always)]
+    #[inline]
     pub fn parse(&self) -> Result<Object<'a>> {
         match self {
             Self::Json(value) => json::from_str::<Object>(value.get()).map_err(Error::JsonParseError),

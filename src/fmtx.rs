@@ -11,12 +11,91 @@ impl<T> Push<T> for Vec<T>
 where
     T: Clone,
 {
+    #[inline]
     fn push(&mut self, value: T) {
         Vec::push(self, value)
     }
 
+    #[inline]
     fn extend_from_slice(&mut self, values: &[T]) {
         Vec::extend_from_slice(self, values)
+    }
+}
+
+// ---
+
+#[derive(Default)]
+pub struct OptimizedBuf<T, const N: usize> {
+    pub head: heapless::Vec<T, N>,
+    pub tail: Vec<T>,
+}
+
+impl<T, const N: usize> OptimizedBuf<T, N>
+where
+    T: Clone,
+{
+    #[inline]
+    pub fn new() -> Self {
+        Self {
+            head: heapless::Vec::new(),
+            tail: Vec::new(),
+        }
+    }
+
+    #[inline]
+    pub fn len(&self) -> usize {
+        self.head.len() + self.tail.len()
+    }
+
+    #[inline]
+    pub fn clear(&mut self) {
+        self.head.clear();
+        self.tail.clear();
+    }
+
+    #[inline]
+    pub fn truncate(&mut self, len: usize) {
+        if len <= self.head.len() {
+            self.head.truncate(len);
+            self.tail.clear();
+        } else {
+            self.tail.truncate(len - self.head.len());
+        }
+    }
+
+    #[inline]
+    pub fn push(&mut self, value: T) {
+        if self.head.len() < N {
+            self.head.push(value).ok();
+        } else {
+            self.tail.push(value);
+        }
+    }
+
+    #[inline]
+    pub fn extend_from_slice(&mut self, values: &[T]) {
+        if self.head.len() + values.len() <= N {
+            self.head.extend_from_slice(values).ok();
+        } else {
+            let n = N - self.head.len();
+            self.head.extend_from_slice(&values[..n]).ok();
+            self.tail.extend_from_slice(&values[n..]);
+        }
+    }
+}
+
+impl<T, const N: usize> Push<T> for OptimizedBuf<T, N>
+where
+    T: Clone,
+{
+    #[inline]
+    fn push(&mut self, value: T) {
+        OptimizedBuf::push(self, value)
+    }
+
+    #[inline]
+    fn extend_from_slice(&mut self, values: &[T]) {
+        OptimizedBuf::extend_from_slice(self, values)
     }
 }
 
@@ -27,20 +106,24 @@ pub struct Counter {
 }
 
 impl Counter {
+    #[inline]
     pub fn new() -> Self {
         Self { value: 0 }
     }
 
+    #[inline]
     pub fn result(&self) -> usize {
         self.value
     }
 }
 
 impl<T> Push<T> for Counter {
+    #[inline]
     fn push(&mut self, _: T) {
         self.value += 1
     }
 
+    #[inline]
     fn extend_from_slice(&mut self, values: &[T]) {
         self.value += values.len()
     }
@@ -65,6 +148,7 @@ pub struct Padding<T> {
 }
 
 impl<T> Padding<T> {
+    #[inline]
     pub fn new(pad: T, width: usize) -> Self {
         Self { pad, width }
     }
@@ -79,6 +163,7 @@ pub struct Adjustment<T> {
 }
 
 impl<T> Adjustment<T> {
+    #[inline]
     pub fn new(alignment: Alignment, padding: Padding<T>) -> Self {
         Self { alignment, padding }
     }
@@ -101,6 +186,7 @@ where
     T: Clone,
     O: Push<T>,
 {
+    #[inline]
     fn new(out: &'a mut O, adjustment: Option<Adjustment<T>>) -> Self {
         if let Some(adjustment) = adjustment {
             match adjustment.alignment {
@@ -114,6 +200,7 @@ where
         }
     }
 
+    #[inline]
     fn push(&mut self, value: T) {
         match self {
             Self::Disabled(ref mut aligner) => aligner.push(value),
@@ -122,6 +209,7 @@ where
         }
     }
 
+    #[inline]
     fn extend_from_slice(&mut self, values: &[T]) {
         match self {
             Self::Disabled(ref mut aligner) => aligner.extend_from_slice(values),
@@ -136,10 +224,12 @@ where
     T: Clone,
     B: Push<T>,
 {
+    #[inline]
     fn push(&mut self, value: T) {
         Aligner::push(self, value)
     }
 
+    #[inline]
     fn extend_from_slice(&mut self, values: &[T]) {
         Aligner::extend_from_slice(self, values)
     }
@@ -152,6 +242,7 @@ pub struct DisabledAligner<'a, O> {
 }
 
 impl<'a, O> DisabledAligner<'a, O> {
+    #[inline]
     pub fn new(out: &'a mut O) -> Self {
         Self { out }
     }
@@ -162,10 +253,12 @@ where
     T: Clone,
     O: Push<T>,
 {
+    #[inline]
     fn push(&mut self, value: T) {
         self.out.push(value)
     }
 
+    #[inline]
     fn extend_from_slice(&mut self, values: &[T]) {
         self.out.extend_from_slice(values)
     }
@@ -188,10 +281,12 @@ where
     T: Clone,
     O: Push<T>,
 {
+    #[inline]
     pub fn new(out: &'a mut O, padding: Padding<T>) -> Self {
         Self { out, padding, cur: 0 }
     }
 
+    #[inline]
     pub fn push(&mut self, value: T) {
         if self.cur < self.padding.width {
             self.out.push(value);
@@ -199,6 +294,7 @@ where
         }
     }
 
+    #[inline]
     pub fn extend_from_slice(&mut self, values: &[T]) {
         if self.cur < self.padding.width {
             let n = min(self.padding.width - self.cur, values.len());
@@ -213,10 +309,12 @@ where
     T: Clone,
     O: Push<T>,
 {
+    #[inline]
     fn push(&mut self, value: T) {
         UnbufferedAligner::push(self, value)
     }
 
+    #[inline]
     fn extend_from_slice(&mut self, values: &[T]) {
         UnbufferedAligner::extend_from_slice(self, values)
     }
@@ -227,6 +325,7 @@ where
     T: Clone,
     O: Push<T>,
 {
+    #[inline]
     fn drop(&mut self) {
         for _ in self.cur..self.padding.width {
             self.out.push(self.padding.pad.clone());
@@ -252,6 +351,7 @@ where
     T: Clone,
     O: Push<T>,
 {
+    #[inline]
     fn new(out: &'a mut O, padding: Padding<T>, alignment: Alignment) -> Self {
         Self {
             out,
@@ -265,6 +365,7 @@ where
         }
     }
 
+    #[inline]
     pub fn push(&mut self, value: T) {
         match self.buf {
             AlignerBuffer::Static(ref mut buf) => {
@@ -280,6 +381,7 @@ where
         }
     }
 
+    #[inline]
     pub fn extend_from_slice(&mut self, values: &[T]) {
         match self.buf {
             AlignerBuffer::Static(ref mut buf) => {
@@ -299,10 +401,12 @@ where
     T: Clone,
     O: Push<T>,
 {
+    #[inline]
     fn push(&mut self, value: T) {
         BufferedAligner::push(self, value)
     }
 
+    #[inline]
     fn extend_from_slice(&mut self, values: &[T]) {
         BufferedAligner::extend_from_slice(self, values)
     }
@@ -313,6 +417,7 @@ where
     T: Clone,
     O: Push<T>,
 {
+    #[inline]
     fn drop(&mut self) {
         let buf = match &self.buf {
             AlignerBuffer::Static(buf) => &buf[..],
@@ -342,6 +447,7 @@ enum AlignerBuffer<T> {
 
 // ---
 
+#[inline]
 pub fn aligned<'a, T, O, F>(out: &'a mut O, adjustment: Option<Adjustment<T>>, f: F)
 where
     T: Clone,
@@ -351,6 +457,7 @@ where
     f(Aligner::new(out, adjustment));
 }
 
+#[inline]
 pub fn aligned_left<'a, T, O, F>(out: &'a mut O, width: usize, pad: T, f: F)
 where
     T: Clone,
@@ -360,6 +467,7 @@ where
     f(UnbufferedAligner::new(out, Padding::new(pad, width)));
 }
 
+#[inline]
 pub fn centered<'a, T, O, F>(out: &'a mut O, width: usize, pad: T, f: F)
 where
     T: Clone,
@@ -367,4 +475,80 @@ where
     F: FnOnce(BufferedAligner<'a, T, O>),
 {
     f(BufferedAligner::new(out, Padding::new(pad, width), Alignment::Center));
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_optimized_buf_push() {
+        let mut buf = OptimizedBuf::<u8, 4>::new();
+        assert_eq!(buf.len(), 0);
+        buf.push(1);
+        assert_eq!(buf.len(), 1);
+        buf.push(2);
+        assert_eq!(buf.len(), 2);
+        buf.push(3);
+        assert_eq!(buf.len(), 3);
+        buf.push(4);
+        assert_eq!(buf.len(), 4);
+        buf.push(5);
+        assert_eq!(buf.len(), 5);
+        assert_eq!(buf.head.as_slice(), &[1, 2, 3, 4]);
+        assert_eq!(buf.tail.as_slice(), &[5]);
+    }
+
+    #[test]
+    fn test_optimized_buf_extend() {
+        let mut buf = OptimizedBuf::<u8, 4>::new();
+        assert_eq!(buf.len(), 0);
+        buf.extend_from_slice(&[]);
+        assert_eq!(buf.len(), 0);
+        buf.extend_from_slice(&[1]);
+        assert_eq!(buf.len(), 1);
+        buf.extend_from_slice(&[2, 3]);
+        assert_eq!(buf.len(), 3);
+        buf.extend_from_slice(&[4, 5, 6]);
+        assert_eq!(buf.len(), 6);
+        assert_eq!(buf.head.as_slice(), &[1, 2, 3, 4]);
+        assert_eq!(buf.tail.as_slice(), &[5, 6]);
+    }
+
+    #[test]
+    fn test_optimized_buf_truncate() {
+        let mut buf = OptimizedBuf::<u8, 4>::new();
+        assert_eq!(buf.len(), 0);
+        buf.extend_from_slice(&[1, 2, 3, 4, 5, 6, 7]);
+        assert_eq!(buf.len(), 7);
+        buf.truncate(8);
+        assert_eq!(buf.len(), 7);
+        assert_eq!(buf.head.as_slice(), &[1, 2, 3, 4]);
+        assert_eq!(buf.tail.as_slice(), &[5, 6, 7]);
+        buf.truncate(7);
+        assert_eq!(buf.len(), 7);
+        assert_eq!(buf.head.as_slice(), &[1, 2, 3, 4]);
+        assert_eq!(buf.tail.as_slice(), &[5, 6, 7]);
+        buf.truncate(6);
+        assert_eq!(buf.len(), 6);
+        assert_eq!(buf.head.as_slice(), &[1, 2, 3, 4]);
+        assert_eq!(buf.tail.as_slice(), &[5, 6]);
+        buf.truncate(4);
+        assert_eq!(buf.len(), 4);
+        assert_eq!(buf.head.as_slice(), &[1, 2, 3, 4]);
+        assert_eq!(buf.tail.len(), 0);
+        buf.truncate(4);
+        buf.extend_from_slice(&[8, 9]);
+        assert_eq!(buf.len(), 6);
+        assert_eq!(buf.head.as_slice(), &[1, 2, 3, 4]);
+        assert_eq!(buf.tail.as_slice(), &[8, 9]);
+        buf.truncate(3);
+        assert_eq!(buf.len(), 3);
+        assert_eq!(buf.head.as_slice(), &[1, 2, 3]);
+        assert_eq!(buf.tail.len(), 0);
+        buf.truncate(0);
+        assert_eq!(buf.len(), 0);
+        assert_eq!(buf.head.len(), 0);
+        assert_eq!(buf.tail.len(), 0);
+    }
 }

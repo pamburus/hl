@@ -488,6 +488,7 @@ Output Options:
       --no-raw                Disable raw source messages output, overrides --raw option
       --raw-fields            Output field values as is, without unescaping or prettifying
   -h, --hide <KEY>            Hide or reveal fields with the specified keys, prefix with ! to reveal, specify '!*' to reveal all
+      --flatten <WHEN>        Whether to flatten objects [env: HL_FLATTEN=] [default: always] [possible values: never, always]
   -t, --time-format <FORMAT>  Time format, see https://man7.org/linux/man-pages/man1/date.1.html [env: HL_TIME_FORMAT=] [default: "%b %d %T.%3N"]
   -Z, --time-zone <TZ>        Time zone name, see column "TZ identifier" at https://en.wikipedia.org/wiki/List_of_tz_database_time_zones [env: HL_TIME_ZONE=] [default: UTC]
   -L, --local                 Use local time zone, overrides --time-zone option
