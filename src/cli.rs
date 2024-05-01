@@ -104,7 +104,7 @@ pub struct Opt {
         long,
         default_value = "auto",
         env = "HL_COLOR",
-        overrides_with_all = ["color", "color_always"],
+        overrides_with_all = ["color", "color_always", "color_never"],
         default_missing_value = "always",
         num_args = 0..=1,
         value_name = "WHEN",
@@ -116,10 +116,18 @@ pub struct Opt {
     /// Handful alias for --color=always, overrides --color option.
     #[arg(
         short,
-        overrides_with_all = ["color", "color_always"],
+        overrides_with_all = ["color", "color_always", "color_never"],
         help_heading = heading::OUTPUT
     )]
     pub color_always: bool,
+
+    /// Handful alias for --color=never, overrides --color option.
+    #[arg(
+        long = "no-color",
+        overrides_with_all = ["color", "color_always", "color_never"],
+        help_heading = heading::OUTPUT
+    )]
+    pub color_never: bool,
 
     /// Color theme.
     #[arg(

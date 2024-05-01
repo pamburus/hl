@@ -61,6 +61,8 @@ fn run() -> Result<()> {
     // Configure color scheme.
     let color = if opt.color_always {
         cli::ColorOption::Always
+    } else if opt.color_never {
+        cli::ColorOption::Never
     } else {
         opt.color
     };
