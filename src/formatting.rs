@@ -5,7 +5,7 @@ use std::sync::Arc;
 use crate::{
     datefmt::DateTimeFormatter,
     filtering::IncludeExcludeSetting,
-    fmtx::{aligned_left, centered},
+    fmtx::{aligned_left, centered, Push},
     model::{self, Caller, Level, RawValue},
     settings::Formatting,
     theme::{Element, StylingPush, Theme},
@@ -337,10 +337,7 @@ impl<'a> FieldFormatter<'a> {
         }
         s.space();
         s.element(Element::Key, |s| {
-            for b in key.as_bytes() {
-                let b = if *b == b'_' { b'-' } else { *b };
-                s.batch(|buf| buf.push(b));
-            }
+            s.batch(|buf| key.key_prettify(buf));
         });
         s.element(Element::Field, |s| {
             s.batch(|buf| buf.extend_from_slice(self.rf.cfg.punctuation.field_key_value_separator.as_bytes()));
@@ -425,6 +422,8 @@ impl<'a> FieldFormatter<'a> {
     }
 }
 
+// ---
+
 pub trait WithAutoTrim {
     fn with_auto_trim<F>(&mut self, f: F)
     where
@@ -444,6 +443,28 @@ impl WithAutoTrim for Vec<u8> {
         }
     }
 }
+
+// ---
+
+pub trait KeyPrettify {
+    fn key_prettify<B: Push<u8>>(&self, buf: &mut B);
+}
+
+impl KeyPrettify for str {
+    #[inline(always)]
+    fn key_prettify<B: Push<u8>>(&self, buf: &mut B) {
+        let bytes = self.as_bytes();
+        let mut i = 0;
+        while let Some(pos) = bytes[i..].iter().position(|&b| b == b'_') {
+            buf.extend_from_slice(&bytes[i..i + pos]);
+            buf.push(b'-');
+            i += pos + 1;
+        }
+        buf.extend_from_slice(&bytes[i..])
+    }
+}
+
+// ---
 
 const HEXDIGIT: [u8; 16] = [
     b'0', b'1', b'2', b'3', b'4', b'5', b'6', b'7', b'8', b'9', b'a', b'b', b'c', b'd', b'e', b'f',
