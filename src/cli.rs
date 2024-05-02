@@ -19,7 +19,7 @@ use crate::{
 #[derive(Args)]
 pub struct BootstrapArgs {
     /// Configuration file path.
-    #[arg(long, overrides_with = "config", value_name = "FILE")]
+    #[arg(long, overrides_with = "config", value_name = "FILE", env = "HL_CONFIG")]
     pub config: Option<String>,
 }
 

@@ -32,18 +32,11 @@ pub struct Settings {
 
 impl Settings {
     pub fn load(filename: &str) -> Result<Self, Error> {
-        let err = |cause| Error::Config {
-            cause,
-            filename: filename.to_string(),
-        };
-
         Ok(Config::builder()
             .add_source(File::from_str(DEFAULT_SETTINGS, FileFormat::Yaml))
-            .add_source(File::with_name(filename).required(false))
-            .build()
-            .map_err(err)?
-            .try_deserialize()
-            .map_err(err)?)
+            .add_source(File::with_name(filename))
+            .build()?
+            .try_deserialize()?)
     }
 }
 
