@@ -35,7 +35,7 @@ fn run() -> Result<()> {
         Ok(bootstrap) => bootstrap,
         Err(err) => err.exit(),
     };
-    let settings = config::load(bootstrap.args.config.unwrap_or_default())?;
+    let settings = config::load(bootstrap.args.config)?;
     config::initialize(settings.clone());
 
     let opt = cli::Opt::parse();

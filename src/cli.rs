@@ -20,7 +20,7 @@ use crate::{
 pub struct BootstrapArgs {
     /// Configuration file path.
     #[arg(long, overrides_with = "config", value_name = "FILE", env = "HL_CONFIG", default_value = default_config_path(), num_args=1)]
-    pub config: Option<String>,
+    pub config: String,
 }
 
 /// JSON and logfmt log converter to human readable representation.
@@ -57,6 +57,10 @@ impl BootstrapOpt {
                 (b"--config", _) => {
                     result.push(arg);
                     follow_up = true;
+                }
+                ([b'-'], true) => {
+                    result.push(arg);
+                    follow_up = false;
                 }
                 ([b'-', ..], true) => {
                     follow_up = false;
