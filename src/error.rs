@@ -95,6 +95,14 @@ pub enum Error {
     ParseFloatError(#[from] ParseFloatError),
     #[error(transparent)]
     ParseIntError(#[from] ParseIntError),
+    #[error("failed to detect application directories")]
+    AppDirs,
+}
+
+impl Error {
+    pub fn log(&self) {
+        eprintln!("{} {}", Color::LightRed.bold().paint("error:"), self);
+    }
 }
 
 /// SizeParseError is an error which may occur when parsing size.
@@ -134,3 +142,14 @@ pub struct InvalidLevelError {
 pub type Result<T> = std::result::Result<T, Error>;
 
 pub const HILITE: Color = Color::Yellow;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_log() {
+        let err = Error::Io(std::io::Error::new(std::io::ErrorKind::Other, "test"));
+        err.log();
+    }
+}

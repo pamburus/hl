@@ -2,7 +2,7 @@
 use std::path::PathBuf;
 
 // third-party imports
-use clap::{value_parser, ArgAction, Parser, ValueEnum};
+use clap::{value_parser, ArgAction, Args, Parser, ValueEnum};
 use clap_complete::Shell;
 use std::num::NonZeroUsize;
 
@@ -16,10 +16,76 @@ use crate::{
 
 // ---
 
+#[derive(Args)]
+pub struct BootstrapArgs {
+    /// Configuration file path.
+    #[arg(long, overrides_with = "config", value_name = "FILE", env = "HL_CONFIG", default_value = default_config_path(), num_args=1)]
+    pub config: String,
+}
+
+/// JSON and logfmt log converter to human readable representation.
+#[derive(Parser)]
+#[clap(version, disable_help_flag = true)]
+pub struct BootstrapOpt {
+    #[command(flatten)]
+    pub args: BootstrapArgs,
+}
+
+impl BootstrapOpt {
+    pub fn parse() -> Self {
+        Self::parse_from(Self::args())
+    }
+
+    pub fn args() -> Vec<String> {
+        let mut args = std::env::args();
+        let Some(first) = args.next() else {
+            return vec![];
+        };
+
+        let mut result = vec![first];
+        let mut follow_up = false;
+
+        while let Some(arg) = args.next() {
+            match (arg.as_bytes(), follow_up) {
+                (b"--", _) => {
+                    break;
+                }
+                ([b'-', b'-', b'c', b'o', b'n', b'f', b'i', b'g', b'=', ..], _) => {
+                    result.push(arg);
+                    follow_up = false;
+                }
+                (b"--config", _) => {
+                    result.push(arg);
+                    follow_up = true;
+                }
+                ([b'-'], true) => {
+                    result.push(arg);
+                    follow_up = false;
+                }
+                ([b'-', ..], true) => {
+                    follow_up = false;
+                }
+                (_, true) => {
+                    result.push(arg);
+                    follow_up = false;
+                }
+                _ => {}
+            }
+        }
+
+        result
+    }
+}
+
+// ---
+
 /// JSON and logfmt log converter to human readable representation.
 #[derive(Parser)]
 #[clap(version, disable_help_flag = true)]
 pub struct Opt {
+    #[command(flatten)]
+    pub bootstrap: BootstrapArgs,
+
     /// Sort messages chronologically.
     #[arg(long, short = 's', overrides_with = "sort")]
     pub sort: bool,
@@ -125,7 +191,7 @@ pub struct Opt {
     /// Color theme.
     #[arg(
         long,
-        default_value_t = config::get().theme.clone(),
+        default_value_t = config::global::get().theme.clone(),
         env = "HL_THEME",
         overrides_with="theme",
         help_heading = heading::OUTPUT
@@ -160,7 +226,7 @@ pub struct Opt {
         env = "HL_FLATTEN",
         value_name = "WHEN",
         value_enum,
-        default_value_t = config::get().formatting.flatten.as_ref().map(|x| match x{
+        default_value_t = config::global::get().formatting.flatten.as_ref().map(|x| match x{
             settings::FlattenOption::Never => FlattenOption::Never,
             settings::FlattenOption::Always => FlattenOption::Always,
         }).unwrap_or(FlattenOption::Always),
@@ -174,7 +240,7 @@ pub struct Opt {
         short,
         long,
         env="HL_TIME_FORMAT",
-        default_value_t = config::get().time_format.clone(),
+        default_value_t = config::global::get().time_format.clone(),
         overrides_with = "time_format",
         value_name = "FORMAT",
         help_heading = heading::OUTPUT
@@ -186,7 +252,7 @@ pub struct Opt {
         long,
         short = 'Z',
         env="HL_TIME_ZONE",
-        default_value = config::get().time_zone.name(),
+        default_value = config::global::get().time_zone.name(),
         overrides_with="time_zone",
         value_name = "TZ",
         help_heading = heading::OUTPUT
@@ -406,5 +472,13 @@ fn parse_non_zero_size(s: &str) -> std::result::Result<NonZeroUsize, NonZeroSize
         Ok(NonZeroUsize::from(value))
     } else {
         Err(NonZeroSizeParseError::ZeroSize)
+    }
+}
+
+fn default_config_path() -> clap::builder::OsStr {
+    if let Some(dirs) = config::app_dirs() {
+        dirs.config_dir.join("config.yaml").into_os_string().into()
+    } else {
+        "".into()
     }
 }

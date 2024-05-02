@@ -12,7 +12,6 @@ use std::{
 use chrono::Utc;
 use clap::{CommandFactory, Parser};
 use itertools::Itertools;
-use nu_ansi_term::Color;
 
 // local imports
 use hl::{
@@ -32,10 +31,10 @@ use hl::{
 // ---
 
 fn run() -> Result<()> {
-    let app_dirs = config::app_dirs();
-    let settings = config::get();
-    let opt = cli::Opt::parse();
+    let settings = config::load(cli::BootstrapOpt::parse().args.config)?;
+    config::global::initialize(settings.clone());
 
+    let opt = cli::Opt::parse();
     if opt.help {
         return cli::Opt::command().print_help().map_err(Error::Io);
     }
@@ -69,6 +68,8 @@ fn run() -> Result<()> {
         cli::ColorOption::Always => true,
         cli::ColorOption::Never => false,
     };
+
+    let app_dirs = config::app_dirs().ok_or(Error::AppDirs)?;
     let theme = if use_colors {
         let theme = &opt.theme;
         Theme::load(&app_dirs, theme)?
@@ -130,7 +131,7 @@ fn run() -> Result<()> {
     let all = || IncludeExcludeKeyFilter::new(KeyMatchOptions::default());
     let none = || all().excluded();
     let mut fields = all();
-    for (i, key) in config::get().fields.hide.iter().chain(&opt.hide).enumerate() {
+    for (i, key) in settings.fields.hide.iter().chain(&opt.hide).enumerate() {
         if key == "*" {
             fields = none();
         } else if key == "!*" {
@@ -310,7 +311,7 @@ fn run() -> Result<()> {
 
 fn main() {
     if let Err(err) = run() {
-        eprintln!("{}: {}", Color::Red.paint("error"), err);
+        err.log();
         process::exit(1);
     }
 }

@@ -6,7 +6,7 @@ use std::include_str;
 use chrono_tz::Tz;
 use config::{Config, File, FileFormat};
 use derive_deref::Deref;
-use platform_dirs::AppDirs;
+use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize, Serializer};
 use strum::IntoEnumIterator;
 
@@ -16,11 +16,12 @@ use crate::level::Level;
 
 // ---
 
-static DEFAULT_SETTINGS: &str = include_str!("../etc/defaults/config.yaml");
+static DEFAULT_SETTINGS_RAW: &str = include_str!("../etc/defaults/config.yaml");
+static DEFAULT_SETTINGS: Lazy<Settings> = Lazy::new(|| Settings::load_from_str("", FileFormat::Yaml));
 
 // ---
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 #[serde(rename_all = "kebab-case")]
 pub struct Settings {
     pub fields: Fields,
@@ -32,26 +33,34 @@ pub struct Settings {
 }
 
 impl Settings {
-    pub fn load(app_dirs: &AppDirs) -> Result<Self, Error> {
-        let filename = std::env::var("HL_CONFIG")
-            .unwrap_or_else(|_| app_dirs.config_dir.join("config.yaml").to_string_lossy().to_string());
-
+    pub fn load(filename: &str) -> Result<Self, Error> {
         Ok(Config::builder()
-            .add_source(File::from_str(DEFAULT_SETTINGS, FileFormat::Yaml))
-            .add_source(File::with_name(&filename).required(false))
+            .add_source(File::from_str(DEFAULT_SETTINGS_RAW, FileFormat::Yaml))
+            .add_source(File::with_name(filename))
             .build()?
             .try_deserialize()?)
+    }
+
+    pub fn load_from_str(value: &str, format: FileFormat) -> Self {
+        Config::builder()
+            .add_source(File::from_str(DEFAULT_SETTINGS_RAW, FileFormat::Yaml))
+            .add_source(File::from_str(value, format))
+            .build()
+            .unwrap()
+            .try_deserialize()
+            .unwrap()
     }
 }
 
 impl Default for Settings {
     fn default() -> Self {
-        Config::builder()
-            .add_source(File::from_str(DEFAULT_SETTINGS, FileFormat::Yaml))
-            .build()
-            .unwrap()
-            .try_deserialize()
-            .unwrap()
+        DEFAULT_SETTINGS.clone()
+    }
+}
+
+impl Default for &'static Settings {
+    fn default() -> Self {
+        &DEFAULT_SETTINGS
     }
 }
 
@@ -80,7 +89,7 @@ pub struct PredefinedFields {
 
 // ---
 
-#[derive(Debug, Serialize, Deserialize, Deref, Clone)]
+#[derive(Debug, Serialize, Deserialize, Deref, Clone, PartialEq, Eq)]
 pub struct TimeField(pub Field);
 
 impl Default for TimeField {
@@ -189,7 +198,7 @@ impl Default for CallerLineField {
 
 // ---
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
 pub struct Field {
     pub names: Vec<String>,
 }
@@ -291,4 +300,37 @@ where
 {
     let ordered: BTreeMap<_, _> = value.iter().collect();
     ordered.serialize(serializer)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_default_settings() {
+        let test = |settings: &Settings| {
+            assert_eq!(settings.concurrency, None);
+            assert_eq!(settings.time_format, "%b %d %T.%3N");
+            assert_eq!(settings.time_zone, chrono_tz::UTC);
+            assert_eq!(settings.theme, "universal");
+        };
+
+        let settings: &'static Settings = Default::default();
+        test(settings);
+        test(&Settings::default());
+    }
+
+    #[test]
+    fn test_load_settings_k8s() {
+        let settings = Settings::load("etc/defaults/config-k8s.yaml").unwrap();
+        assert_eq!(
+            settings.fields.predefined.time,
+            TimeField(Field {
+                names: vec!["ts".into()]
+            })
+        );
+        assert_eq!(settings.time_format, "%b %d %T.%3N");
+        assert_eq!(settings.time_zone, chrono_tz::UTC);
+        assert_eq!(settings.theme, "universal");
+    }
 }
