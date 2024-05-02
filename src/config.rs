@@ -33,16 +33,10 @@ pub fn default() -> &'static Settings {
 }
 
 /// Load settings from the given file or the default configuration file per platform.
-pub fn load(path: Option<String>) -> Result<Settings> {
-    let path = match path {
-        Some(path) => path,
-        None => match app_dirs() {
-            Some(app_dirs) => app_dirs.config_dir.join("config.yaml").to_string_lossy().to_string(),
-            None => {
-                return Ok(Default::default());
-            }
-        },
-    };
+pub fn load(path: String) -> Result<Settings> {
+    if path.is_empty() {
+        return Ok(Default::default());
+    }
 
     Settings::load(&path)
 }
