@@ -12,29 +12,34 @@ use crate::{error::Result, settings::Settings};
 
 pub const APP_NAME: &str = "hl";
 
-static INITIAL: Mutex<Option<Settings>> = Mutex::new(None);
-static DEFAULT: Lazy<Settings> = Lazy::new(Settings::default);
-static CURRENT: Lazy<Settings> = Lazy::new(|| INITIAL.lock().unwrap().take().unwrap_or(default().clone()));
+static PENDING: Mutex<Option<Settings>> = Mutex::new(None);
+static RESOLVED: Lazy<Settings> = Lazy::new(|| PENDING.lock().unwrap().take().unwrap_or_default());
 
-pub fn set(settings: Settings) {
-    *INITIAL.lock().unwrap() = Some(settings);
+/// Call initialize before any calls to get otherwise it will have no effect.
+pub fn initialize(settings: Settings) {
+    *PENDING.lock().unwrap() = Some(settings);
 }
 
+/// Get the resolved settings.
+/// If initialized was called before, then a clone of those settings will be returned.
+/// Otherwise, the default settings will be returned.
 pub fn get() -> &'static Settings {
-    &CURRENT
+    &RESOLVED
 }
 
+/// Get the default settings.
 pub fn default() -> &'static Settings {
-    &DEFAULT
+    Default::default()
 }
 
+/// Load settings from the given file or the default configuration file per platform.
 pub fn load(path: Option<String>) -> Result<Settings> {
     let path = match path {
         Some(path) => path,
         None => match app_dirs() {
             Some(app_dirs) => app_dirs.config_dir.join("config.yaml").to_string_lossy().to_string(),
             None => {
-                return Ok(default().clone());
+                return Ok(Default::default());
             }
         },
     };
@@ -42,6 +47,7 @@ pub fn load(path: Option<String>) -> Result<Settings> {
     Settings::load(&path)
 }
 
+/// Get the application platform-specific directories.
 pub fn app_dirs() -> Option<AppDirs> {
     AppDirs::new(Some(APP_NAME), true)
 }

@@ -6,6 +6,7 @@ use std::include_str;
 use chrono_tz::Tz;
 use config::{Config, File, FileFormat};
 use derive_deref::Deref;
+use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize, Serializer};
 use strum::IntoEnumIterator;
 
@@ -15,7 +16,8 @@ use crate::level::Level;
 
 // ---
 
-static DEFAULT_SETTINGS: &str = include_str!("../etc/defaults/config.yaml");
+static DEFAULT_SETTINGS_RAW: &str = include_str!("../etc/defaults/config.yaml");
+static DEFAULT_SETTINGS: Lazy<Settings> = Lazy::new(Settings::load_default);
 
 // ---
 
@@ -33,21 +35,31 @@ pub struct Settings {
 impl Settings {
     pub fn load(filename: &str) -> Result<Self, Error> {
         Ok(Config::builder()
-            .add_source(File::from_str(DEFAULT_SETTINGS, FileFormat::Yaml))
+            .add_source(File::from_str(DEFAULT_SETTINGS_RAW, FileFormat::Yaml))
             .add_source(File::with_name(filename))
             .build()?
             .try_deserialize()?)
+    }
+
+    fn load_default() -> Self {
+        Config::builder()
+            .add_source(File::from_str(DEFAULT_SETTINGS_RAW, FileFormat::Yaml))
+            .build()
+            .unwrap()
+            .try_deserialize()
+            .unwrap()
     }
 }
 
 impl Default for Settings {
     fn default() -> Self {
-        Config::builder()
-            .add_source(File::from_str(DEFAULT_SETTINGS, FileFormat::Yaml))
-            .build()
-            .unwrap()
-            .try_deserialize()
-            .unwrap()
+        DEFAULT_SETTINGS.clone()
+    }
+}
+
+impl Default for &'static Settings {
+    fn default() -> Self {
+        &DEFAULT_SETTINGS
     }
 }
 
@@ -287,4 +299,18 @@ where
 {
     let ordered: BTreeMap<_, _> = value.iter().collect();
     ordered.serialize(serializer)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_default_settings() {
+        let settings = Settings::default();
+        assert_eq!(settings.concurrency, None);
+        assert_eq!(settings.time_format, "%b %d %T.%3N");
+        assert_eq!(settings.time_zone, chrono_tz::UTC);
+        assert_eq!(settings.theme, "universal");
+    }
 }

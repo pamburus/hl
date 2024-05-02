@@ -34,7 +34,7 @@ fn run() -> Result<()> {
     let bootstrap =
         cli::BootstrapOpt::from_arg_matches(&cli::BootstrapOpt::command().ignore_errors(true).get_matches()).unwrap();
     let settings = config::load(bootstrap.args.config)?;
-    config::set(settings.clone());
+    config::initialize(settings.clone());
 
     let opt = cli::Opt::parse();
     if opt.help {
