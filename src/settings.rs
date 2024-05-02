@@ -20,7 +20,7 @@ static DEFAULT_SETTINGS: &str = include_str!("../etc/defaults/config.yaml");
 
 // ---
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 #[serde(rename_all = "kebab-case")]
 pub struct Settings {
     pub fields: Fields,
@@ -36,11 +36,18 @@ impl Settings {
         let filename = std::env::var("HL_CONFIG")
             .unwrap_or_else(|_| app_dirs.config_dir.join("config.yaml").to_string_lossy().to_string());
 
+        let err = |cause| Error::Config {
+            cause,
+            filename: filename.clone(),
+        };
+
         Ok(Config::builder()
             .add_source(File::from_str(DEFAULT_SETTINGS, FileFormat::Yaml))
             .add_source(File::with_name(&filename).required(false))
-            .build()?
-            .try_deserialize()?)
+            .build()
+            .map_err(err)?
+            .try_deserialize()
+            .map_err(err)?)
     }
 }
 

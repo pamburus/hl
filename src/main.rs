@@ -12,7 +12,6 @@ use std::{
 use chrono::Utc;
 use clap::{CommandFactory, Parser};
 use itertools::Itertools;
-use nu_ansi_term::Color;
 
 // local imports
 use hl::{
@@ -33,7 +32,7 @@ use hl::{
 
 fn run() -> Result<()> {
     let app_dirs = config::app_dirs();
-    let settings = config::get();
+    let settings = config::load()?;
     let opt = cli::Opt::parse();
 
     if opt.help {
@@ -310,7 +309,7 @@ fn run() -> Result<()> {
 
 fn main() {
     if let Err(err) = run() {
-        eprintln!("{}: {}", Color::Red.paint("error"), err);
+        hl::error::log(&err);
         process::exit(1);
     }
 }

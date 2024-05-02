@@ -22,8 +22,8 @@ pub enum Error {
     SizeParseError(#[from] SizeParseError),
     #[error(transparent)]
     NonZeroSizeParseError(#[from] NonZeroSizeParseError),
-    #[error("failed to load configuration: {0}")]
-    Config(#[from] ConfigError),
+    #[error("failed to load configuration from {filename:?}: {cause:?}")]
+    Config { cause: ConfigError, filename: String },
     #[error(transparent)]
     Infallible(#[from] std::convert::Infallible),
     #[error(transparent)]
@@ -134,3 +134,7 @@ pub struct InvalidLevelError {
 pub type Result<T> = std::result::Result<T, Error>;
 
 pub const HILITE: Color = Color::Yellow;
+
+pub fn log(err: &Error) {
+    eprintln!("{}: {}", Color::LightRed.paint("error"), err);
+}
