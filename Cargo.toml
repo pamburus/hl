@@ -40,7 +40,7 @@ chrono = { version = "0.4", default-features = false, features = [
     "std",
 ] }
 chrono-tz = { version = "0", features = ["serde"] }
-clap = { version = "4", features = ["wrap_help", "derive", "env"] }
+clap = { version = "4", features = ["wrap_help", "derive", "env", "string"] }
 clap_complete = "4"
 closure = "0"
 collection_macros = "0"

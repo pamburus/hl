@@ -19,8 +19,8 @@ use crate::{
 #[derive(Args)]
 pub struct BootstrapArgs {
     /// Configuration file path.
-    #[arg(long, overrides_with = "config", value_name = "FILE", env = "HL_CONFIG", default_value_t = default_config_path())]
-    pub config: String,
+    #[arg(long, overrides_with = "config", value_name = "FILE", env = "HL_CONFIG", default_value = default_config_path(), num_args=1)]
+    pub config: Option<String>,
 }
 
 /// JSON and logfmt log converter to human readable representation.
@@ -29,6 +29,48 @@ pub struct BootstrapArgs {
 pub struct BootstrapOpt {
     #[command(flatten)]
     pub args: BootstrapArgs,
+}
+
+impl BootstrapOpt {
+    pub fn parse() -> clap::error::Result<Self> {
+        Self::try_parse_from(Self::args())
+    }
+
+    pub fn args() -> Vec<String> {
+        let mut args = std::env::args();
+        let Some(first) = args.next() else {
+            return vec![];
+        };
+
+        let mut result = vec![first];
+        let mut follow_up = false;
+
+        while let Some(arg) = args.next() {
+            match (arg.as_bytes(), follow_up) {
+                (b"--", _) => {
+                    break;
+                }
+                ([b'-', b'-', b'c', b'o', b'n', b'f', b'i', b'g', b'=', ..], _) => {
+                    result.push(arg);
+                    follow_up = false;
+                }
+                (b"--config", _) => {
+                    result.push(arg);
+                    follow_up = true;
+                }
+                ([b'-', ..], true) => {
+                    follow_up = false;
+                }
+                (_, true) => {
+                    result.push(arg);
+                    follow_up = false;
+                }
+                _ => {}
+            }
+        }
+
+        result
+    }
 }
 
 // ---
@@ -429,9 +471,9 @@ fn parse_non_zero_size(s: &str) -> std::result::Result<NonZeroUsize, NonZeroSize
     }
 }
 
-fn default_config_path() -> String {
+fn default_config_path() -> clap::builder::OsStr {
     if let Some(dirs) = config::app_dirs() {
-        dirs.config_dir.join("config.yaml").to_string_lossy().to_string()
+        dirs.config_dir.join("config.yaml").into_os_string().into()
     } else {
         "".into()
     }

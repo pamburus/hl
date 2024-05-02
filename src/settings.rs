@@ -17,7 +17,7 @@ use crate::level::Level;
 // ---
 
 static DEFAULT_SETTINGS_RAW: &str = include_str!("../etc/defaults/config.yaml");
-static DEFAULT_SETTINGS: Lazy<Settings> = Lazy::new(Settings::load_default);
+static DEFAULT_SETTINGS: Lazy<Settings> = Lazy::new(|| Settings::load_from_str("", FileFormat::Yaml));
 
 // ---
 
@@ -41,9 +41,10 @@ impl Settings {
             .try_deserialize()?)
     }
 
-    fn load_default() -> Self {
+    pub fn load_from_str(value: &str, format: FileFormat) -> Self {
         Config::builder()
             .add_source(File::from_str(DEFAULT_SETTINGS_RAW, FileFormat::Yaml))
+            .add_source(File::from_str(value, format))
             .build()
             .unwrap()
             .try_deserialize()

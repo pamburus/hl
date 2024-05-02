@@ -10,7 +10,7 @@ use std::{
 
 // third-party imports
 use chrono::Utc;
-use clap::{CommandFactory, FromArgMatches, Parser};
+use clap::{CommandFactory, Parser};
 use itertools::Itertools;
 
 // local imports
@@ -31,9 +31,11 @@ use hl::{
 // ---
 
 fn run() -> Result<()> {
-    let bootstrap =
-        cli::BootstrapOpt::from_arg_matches(&cli::BootstrapOpt::command().ignore_errors(true).get_matches()).unwrap();
-    let settings = config::load(bootstrap.args.config)?;
+    let bootstrap = match cli::BootstrapOpt::parse() {
+        Ok(bootstrap) => bootstrap,
+        Err(err) => err.exit(),
+    };
+    let settings = config::load(bootstrap.args.config.unwrap_or_default())?;
     config::initialize(settings.clone());
 
     let opt = cli::Opt::parse();

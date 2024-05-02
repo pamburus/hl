@@ -138,5 +138,5 @@ pub type Result<T> = std::result::Result<T, Error>;
 pub const HILITE: Color = Color::Yellow;
 
 pub fn log(err: &Error) {
-    eprintln!("{}: {}", Color::LightRed.paint("error"), err);
+    eprintln!("{} {}", Color::LightRed.bold().paint("error:"), err);
 }
