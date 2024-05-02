@@ -3,18 +3,21 @@ use crossbeam_queue::SegQueue;
 
 // ---
 
+#[allow(dead_code)]
 pub trait Pool<T>: Checkout<T> + Checkin<T> {}
 
 impl<T, U: Checkout<T> + Checkin<T>> Pool<T> for U {}
 
 // ---
 
+#[allow(dead_code)]
 pub trait Checkout<T> {
     fn checkout(&self) -> T;
 }
 
 // ---
 
+#[allow(dead_code)]
 pub trait Checkin<T> {
     fn checkin(&self, item: T);
 }

@@ -27,6 +27,12 @@ install:
 	@cargo install --path . --locked
 .PHONY: install
 
+## Install versioned binary
+install-versioned:
+	@cargo install --path . --locked
+	@cp ${HOME}/.cargo/bin/hl ${HOME}/.cargo/bin/$$(${HOME}/.cargo/bin/hl --version | tr ' ' '-')
+.PHONY: install-versioned
+
 ## Run tests
 test:
 	@cargo test
