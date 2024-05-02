@@ -464,6 +464,7 @@ Arguments:
   [FILE]...  Files to process
 
 Options:
+      --config <FILE>                    Configuration file path [env: HL_CONFIG=] [default: ~/.config/hl/config.yaml]
   -s, --sort                             Sort messages chronologically
   -F, --follow                           Follow input streams and sort messages chronologically during time frame set by --sync-interval-ms option
       --tail <N>                         Number of last messages to preload from each file in --follow mode [default: 10]
