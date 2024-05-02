@@ -101,6 +101,16 @@ impl Options {
     fn with_raw_fields(self, raw_fields: bool) -> Self {
         Self { raw_fields, ..self }
     }
+
+    #[cfg(test)]
+    fn with_raw(self, raw: bool) -> Self {
+        Self { raw, ..self }
+    }
+
+    #[cfg(test)]
+    fn with_input_info(self, input_info: Option<InputInfo>) -> Self {
+        Self { input_info, ..self }
+    }
 }
 
 #[derive(Default)]
@@ -160,7 +170,10 @@ pub struct App {
 pub type Output = dyn Write + Send + Sync;
 
 impl App {
-    pub fn new(options: Options) -> Self {
+    pub fn new(mut options: Options) -> Self {
+        if options.raw && options.input_info == Some(InputInfo::Auto) {
+            options.input_info = None
+        }
         Self { options }
     }
 
@@ -1130,6 +1143,23 @@ mod tests {
         assert_eq!(
             std::str::from_utf8(&output).unwrap(),
             "2023-12-07 20:07:05.949 |INF| xy duration=\"15d\" @ main.go:539\n",
+        );
+    }
+
+    #[test]
+    fn test_cat_raw_multiple_inputs() {
+        let input1 =
+            r#"{"caller":"main.go:539","duration":"15d","level":"info","ts":"2023-12-07T20:07:05.949Z","msg":"xy"}"#;
+        let input2 =
+            r#"{"caller":"main.go:539","duration":"15d","level":"info","ts":"2023-12-07T20:07:06.944Z","msg":"xy"}"#;
+        let mut output = Vec::new();
+        let mut ff = IncludeExcludeKeyFilter::new(MatchOptions::default());
+        ff.entry("duration").exclude();
+        let app = App::new(options().with_input_info(Some(InputInfo::Auto)).with_raw(true));
+        app.run(vec![input(input1), input(input2)], &mut output).unwrap();
+        assert_eq!(
+            std::str::from_utf8(&output).unwrap(),
+            format!("{}\n{}\n", input1, input2),
         );
     }
 
