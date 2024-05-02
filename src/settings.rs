@@ -6,7 +6,6 @@ use std::include_str;
 use chrono_tz::Tz;
 use config::{Config, File, FileFormat};
 use derive_deref::Deref;
-use platform_dirs::AppDirs;
 use serde::{Deserialize, Serialize, Serializer};
 use strum::IntoEnumIterator;
 
@@ -32,18 +31,15 @@ pub struct Settings {
 }
 
 impl Settings {
-    pub fn load(app_dirs: &AppDirs) -> Result<Self, Error> {
-        let filename = std::env::var("HL_CONFIG")
-            .unwrap_or_else(|_| app_dirs.config_dir.join("config.yaml").to_string_lossy().to_string());
-
+    pub fn load(filename: &str) -> Result<Self, Error> {
         let err = |cause| Error::Config {
             cause,
-            filename: filename.clone(),
+            filename: filename.to_string(),
         };
 
         Ok(Config::builder()
             .add_source(File::from_str(DEFAULT_SETTINGS, FileFormat::Yaml))
-            .add_source(File::with_name(&filename).required(false))
+            .add_source(File::with_name(filename).required(false))
             .build()
             .map_err(err)?
             .try_deserialize()

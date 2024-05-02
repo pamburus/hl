@@ -10,7 +10,7 @@ use std::{
 
 // third-party imports
 use chrono::Utc;
-use clap::{CommandFactory, Parser};
+use clap::{CommandFactory, FromArgMatches, Parser};
 use itertools::Itertools;
 
 // local imports
@@ -31,13 +31,22 @@ use hl::{
 // ---
 
 fn run() -> Result<()> {
-    let app_dirs = config::app_dirs();
-    let settings = config::load()?;
-    let opt = cli::Opt::parse();
+    let bootstrap =
+        cli::BootstrapOpt::from_arg_matches(&cli::BootstrapOpt::command().ignore_errors(true).get_matches()).unwrap();
+    let settings = config::load(bootstrap.args.config)?;
+    config::set(settings.clone());
 
+    let opt = cli::Opt::parse();
     if opt.help {
         return cli::Opt::command().print_help().map_err(Error::Io);
     }
+
+    let app_dirs = match config::app_dirs() {
+        Some(app_dirs) => app_dirs,
+        None => {
+            return Err(Error::AppDirs);
+        }
+    };
 
     if let Some(shell) = opt.shell_completions {
         let mut cmd = cli::Opt::command();

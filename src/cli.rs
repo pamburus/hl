@@ -2,7 +2,7 @@
 use std::path::PathBuf;
 
 // third-party imports
-use clap::{value_parser, ArgAction, Parser, ValueEnum};
+use clap::{value_parser, ArgAction, Args, Parser, ValueEnum};
 use clap_complete::Shell;
 use std::num::NonZeroUsize;
 
@@ -16,10 +16,30 @@ use crate::{
 
 // ---
 
+#[derive(Args)]
+pub struct BootstrapArgs {
+    /// Configuration file path.
+    #[arg(long, overrides_with = "config", value_name = "FILE")]
+    pub config: Option<String>,
+}
+
+/// JSON and logfmt log converter to human readable representation.
+#[derive(Parser)]
+#[clap(version, disable_help_flag = true)]
+pub struct BootstrapOpt {
+    #[command(flatten)]
+    pub args: BootstrapArgs,
+}
+
+// ---
+
 /// JSON and logfmt log converter to human readable representation.
 #[derive(Parser)]
 #[clap(version, disable_help_flag = true)]
 pub struct Opt {
+    #[command(flatten)]
+    pub bootstrap: BootstrapArgs,
+
     /// Sort messages chronologically.
     #[arg(long, short = 's', overrides_with = "sort")]
     pub sort: bool,

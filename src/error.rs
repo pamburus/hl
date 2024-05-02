@@ -95,6 +95,8 @@ pub enum Error {
     ParseFloatError(#[from] ParseFloatError),
     #[error(transparent)]
     ParseIntError(#[from] ParseIntError),
+    #[error("failed to detect application directories")]
+    AppDirs,
 }
 
 /// SizeParseError is an error which may occur when parsing size.
