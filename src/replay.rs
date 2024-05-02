@@ -610,6 +610,7 @@ impl<F: ReaderFactory, C: Cache> RewindingReaderBuilder<F, C> {
 
 // ---
 
+#[allow(dead_code)]
 trait ReadSeek: Read + Seek {}
 
 impl<T: Read + Seek> ReadSeek for T {}
