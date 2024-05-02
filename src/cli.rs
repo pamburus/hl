@@ -11,6 +11,7 @@ use crate::{
     config,
     error::*,
     level::{LevelValueParser, RelaxedLevel},
+    settings,
 };
 
 // ---
@@ -152,6 +153,21 @@ pub struct Opt {
         help_heading = heading::OUTPUT
     )]
     pub hide: Vec<String>,
+
+    /// Whether to flatten objects.
+    #[arg(
+        long,
+        env = "HL_FLATTEN",
+        value_name = "WHEN",
+        value_enum,
+        default_value_t = config::get().formatting.flatten.as_ref().map(|x| match x{
+            settings::FlattenOption::Never => FlattenOption::Never,
+            settings::FlattenOption::Always => FlattenOption::Always,
+        }).unwrap_or(FlattenOption::Always),
+        overrides_with = "flatten",
+        help_heading = heading::OUTPUT
+    )]
+    pub flatten: FlattenOption,
 
     /// Time format, see https://man7.org/linux/man-pages/man1/date.1.html.
     #[arg(
@@ -358,6 +374,12 @@ pub enum UnixTimestampUnit {
     Ms,
     Us,
     Ns,
+}
+
+#[derive(ValueEnum, Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FlattenOption {
+    Never,
+    Always,
 }
 
 mod heading {

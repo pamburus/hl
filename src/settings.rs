@@ -57,7 +57,7 @@ impl Default for Settings {
 
 // ---
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, Default)]
 pub struct Fields {
     pub predefined: PredefinedFields,
     pub ignore: Vec<String>,
@@ -86,7 +86,7 @@ pub struct TimeField(pub Field);
 impl Default for TimeField {
     fn default() -> Self {
         Self(Field {
-            names: vec!["time".into()],
+            names: vec!["time".into(), "ts".into()],
         })
     }
 }
@@ -104,7 +104,7 @@ impl Default for LevelField {
             variants: vec![LevelFieldVariant {
                 names: vec!["level".into()],
                 values: Level::iter()
-                    .map(|level| (level, vec![level.as_ref().into()]))
+                    .map(|level| (level, vec![level.as_ref().to_lowercase().into()]))
                     .collect(),
                 level: None,
             }],
@@ -200,6 +200,16 @@ pub struct Field {
 #[serde(rename_all = "kebab-case")]
 pub struct Formatting {
     pub punctuation: Punctuation,
+    pub flatten: Option<FlattenOption>,
+}
+
+// ---
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum FlattenOption {
+    Never,
+    Always,
 }
 
 // ---
@@ -229,7 +239,7 @@ impl Default for Punctuation {
     fn default() -> Self {
         Self {
             logger_name_separator: ":".into(),
-            field_key_value_separator: ":".into(),
+            field_key_value_separator: "=".into(),
             string_opening_quote: "'".into(),
             string_closing_quote: "'".into(),
             source_location_separator: "@ ".into(),
@@ -253,7 +263,7 @@ impl Punctuation {
     pub fn test_default() -> Self {
         Self {
             logger_name_separator: ":".into(),
-            field_key_value_separator: ":".into(),
+            field_key_value_separator: "=".into(),
             string_opening_quote: "'".into(),
             string_closing_quote: "'".into(),
             source_location_separator: "@ ".into(),

@@ -74,6 +74,7 @@ pub struct Options {
     pub tail: u64,
     pub delimiter: Delimiter,
     pub unix_ts_unit: Option<UnixTimestampUnit>,
+    pub flatten: bool,
 }
 
 impl Options {
@@ -85,8 +86,24 @@ impl Options {
             (false, Some(query)) => Box::new((&self.filter).and(query)),
         }
     }
+
+    #[cfg(test)]
+    fn with_theme(self, theme: Arc<Theme>) -> Self {
+        Self { theme, ..self }
+    }
+
+    #[cfg(test)]
+    fn with_fields(self, fields: FieldOptions) -> Self {
+        Self { fields, ..self }
+    }
+
+    #[cfg(test)]
+    fn with_raw_fields(self, raw_fields: bool) -> Self {
+        Self { raw_fields, ..self }
+    }
 }
 
+#[derive(Default)]
 pub struct FieldOptions {
     pub filter: Arc<IncludeExcludeKeyFilter>,
     pub settings: Fields,
@@ -639,7 +656,8 @@ impl App {
                     self.options.fields.filter.clone(),
                     self.options.formatting.clone(),
                 )
-                .with_field_unescaping(!self.options.raw_fields),
+                .with_field_unescaping(!self.options.raw_fields)
+                .with_flatten(self.options.flatten),
             )
         }
     }
@@ -995,5 +1013,162 @@ where
             }
         }
         i += 1;
+    }
+}
+
+// ---
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use std::io::Cursor;
+
+    use chrono_tz::UTC;
+
+    use crate::{filtering::MatchOptions, themecfg::testing, LinuxDateFormat};
+
+    #[test]
+    fn test_common_prefix_len() {
+        let items = vec!["abc", "abcd", "ab", "ab"];
+        assert_eq!(common_prefix_len(&items), 2);
+    }
+
+    #[test]
+    fn test_cat_empty() {
+        let input = input("");
+        let mut output = Vec::new();
+        let app = App::new(options());
+        app.run(vec![input], &mut output).unwrap();
+        assert_eq!(std::str::from_utf8(&output).unwrap(), "");
+    }
+
+    #[test]
+    fn test_cat_one_line() {
+        let input = input(
+            r#"{"caller":"main.go:539","duration":"15d","level":"info","msg":"No time or size retention was set so using the default time retention","ts":"2023-12-07T20:07:05.949Z"}"#,
+        );
+        let mut output = Vec::new();
+        let app = App::new(options());
+        app.run(vec![input], &mut output).unwrap();
+        assert_eq!(
+            std::str::from_utf8(&output).unwrap(),
+            "2023-12-07 20:07:05.949 |INF| No time or size retention was set so using the default time retention duration=15d @ main.go:539\n",
+        );
+    }
+
+    #[test]
+    fn test_cat_with_theme() {
+        let input = input(
+            r#"{"caller":"main.go:539","duration":"15d","level":"info","msg":"No time or size retention was set so using the default time retention","ts":"2023-12-07T20:07:05.949Z"}"#,
+        );
+        let mut output = Vec::new();
+        let app = App::new(options().with_theme(theme()));
+        app.run(vec![input], &mut output).unwrap();
+        assert_eq!(
+            std::str::from_utf8(&output).unwrap(),
+            "\u{1b}[0;2;3m2023-12-07 20:07:05.949 \u{1b}[0;36m|INF| \u{1b}[0;1;39mNo time or size retention was set so using the default time retention \u{1b}[0;32mduration\u{1b}[0;2m=\u{1b}[0;39m15d\u{1b}[0;2;3m @ main.go:539\u{1b}[0m\n",
+        );
+    }
+
+    #[test]
+    fn test_cat_no_msg() {
+        let input =
+            input(r#"{"caller":"main.go:539","duration":"15d","level":"info","ts":"2023-12-07T20:07:05.949Z"}"#);
+        let mut output = Vec::new();
+        let app = App::new(options().with_theme(theme()));
+        app.run(vec![input], &mut output).unwrap();
+        assert_eq!(
+            std::str::from_utf8(&output).unwrap(),
+            "\u{1b}[0;2;3m2023-12-07 20:07:05.949 \u{1b}[0;36m|INF|\u{1b}[0m \u{1b}[0;32mduration\u{1b}[0;2m=\u{1b}[0;39m15d\u{1b}[0;2;3m @ main.go:539\u{1b}[0m\n",
+        );
+    }
+
+    #[test]
+    fn test_cat_msg_array() {
+        let input = input(
+            r#"{"caller":"main.go:539","duration":"15d","level":"info","ts":"2023-12-07T20:07:05.949Z","msg":["x","y"]}"#,
+        );
+        let mut output = Vec::new();
+        let app = App::new(options().with_theme(theme()));
+        app.run(vec![input], &mut output).unwrap();
+        assert_eq!(
+            std::str::from_utf8(&output).unwrap(),
+            "\u{1b}[0;2;3m2023-12-07 20:07:05.949 \u{1b}[0;36m|INF| \u{1b}[0;32mmsg\u{1b}[0;2m=\u{1b}[0;93m[\u{1b}[0;39mx\u{1b}[0;93m \u{1b}[0;39my\u{1b}[0;93m] \u{1b}[0;32mduration\u{1b}[0;2m=\u{1b}[0;39m15d\u{1b}[0;2;3m @ main.go:539\u{1b}[0m\n",
+        );
+    }
+
+    #[test]
+    fn test_cat_field_exclude() {
+        let input = input(
+            r#"{"caller":"main.go:539","duration":"15d","level":"info","ts":"2023-12-07T20:07:05.949Z","msg":"xy"}"#,
+        );
+        let mut output = Vec::new();
+        let mut ff = IncludeExcludeKeyFilter::new(MatchOptions::default());
+        ff.entry("duration").exclude();
+        let app = App::new(options().with_fields(FieldOptions {
+            filter: Arc::new(ff),
+            ..FieldOptions::default()
+        }));
+        app.run(vec![input], &mut output).unwrap();
+        assert_eq!(
+            std::str::from_utf8(&output).unwrap(),
+            "2023-12-07 20:07:05.949 |INF| xy ... @ main.go:539\n",
+        );
+    }
+
+    #[test]
+    fn test_cat_raw_fields() {
+        let input = input(
+            r#"{"caller":"main.go:539","duration":"15d","level":"info","ts":"2023-12-07T20:07:05.949Z","msg":"xy"}"#,
+        );
+        let mut output = Vec::new();
+        let mut ff = IncludeExcludeKeyFilter::new(MatchOptions::default());
+        ff.entry("duration").exclude();
+        let app = App::new(options().with_raw_fields(true));
+        app.run(vec![input], &mut output).unwrap();
+        assert_eq!(
+            std::str::from_utf8(&output).unwrap(),
+            "2023-12-07 20:07:05.949 |INF| xy duration=\"15d\" @ main.go:539\n",
+        );
+    }
+
+    fn input<S: Into<String>>(s: S) -> InputHolder {
+        InputHolder::new(InputReference::File("-".into()), Some(Box::new(Cursor::new(s.into()))))
+    }
+
+    fn options() -> Options {
+        Options {
+            theme: Arc::new(Theme::none()),
+            time_format: LinuxDateFormat::new("%Y-%m-%d %T.%3N").compile(),
+            raw: false,
+            raw_fields: false,
+            allow_prefix: false,
+            buffer_size: NonZeroUsize::new(4096).unwrap(),
+            max_message_size: NonZeroUsize::new(4096 * 1024).unwrap(),
+            concurrency: 1,
+            filter: Filter::default(),
+            query: None,
+            fields: FieldOptions::default(),
+            formatting: Formatting::default(),
+            time_zone: Tz::IANA(UTC),
+            hide_empty_fields: false,
+            sort: false,
+            follow: false,
+            sync_interval: Duration::from_secs(1),
+            input_info: None,
+            input_format: None,
+            dump_index: false,
+            debug: false,
+            app_dirs: None,
+            tail: 0,
+            delimiter: Delimiter::default(),
+            unix_ts_unit: None,
+            flatten: false,
+        }
+    }
+
+    fn theme() -> Arc<Theme> {
+        Arc::new(Theme::from(testing::theme().unwrap()))
     }
 }

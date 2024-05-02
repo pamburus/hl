@@ -5,7 +5,7 @@ use std::sync::Arc;
 use crate::{
     datefmt::DateTimeFormatter,
     filtering::IncludeExcludeSetting,
-    fmtx::{aligned_left, centered, Push},
+    fmtx::{aligned_left, centered, OptimizedBuf, Push},
     model::{self, Caller, Level, RawValue},
     settings::Formatting,
     theme::{Element, StylingPush, Theme},
@@ -57,6 +57,7 @@ pub struct RecordFormatter {
     ts_formatter: DateTimeFormatter,
     ts_width: usize,
     hide_empty_fields: bool,
+    flatten: bool,
     fields: Arc<IncludeExcludeKeyFilter>,
     cfg: Formatting,
 }
@@ -76,6 +77,7 @@ impl RecordFormatter {
             ts_formatter,
             ts_width,
             hide_empty_fields,
+            flatten: false,
             fields,
             cfg,
         }
@@ -86,7 +88,14 @@ impl RecordFormatter {
         self
     }
 
+    pub fn with_flatten(mut self, value: bool) -> Self {
+        self.flatten = value;
+        self
+    }
+
     pub fn format_record(&self, buf: &mut Buf, rec: &model::Record) {
+        let mut fs = FormattingState::new(self.flatten && self.unescape_fields);
+
         self.theme.apply(buf, &rec.level, |s| {
             //
             // time
@@ -150,9 +159,8 @@ impl RecordFormatter {
             //
             // message text
             //
-            if let Some(text) = &rec.message {
-                s.batch(|buf| buf.push(b' '));
-                s.element(Element::Message, |s| self.format_message(s, *text));
+            if let Some(value) = &rec.message {
+                self.format_message(s, &mut fs, *value);
             } else {
                 s.reset();
             }
@@ -162,7 +170,7 @@ impl RecordFormatter {
             let mut some_fields_hidden = false;
             for (k, v) in rec.fields() {
                 if !self.hide_empty_fields || !v.is_empty() {
-                    some_fields_hidden |= !self.format_field(s, k, *v, Some(&self.fields));
+                    some_fields_hidden |= !self.format_field(s, k, *v, &mut fs, Some(&self.fields));
                 }
             }
             if some_fields_hidden {
@@ -200,106 +208,99 @@ impl RecordFormatter {
         });
     }
 
+    #[inline]
     fn format_field<'a, S: StylingPush<Buf>>(
         &self,
         s: &mut S,
         key: &str,
         value: RawValue<'a>,
+        fs: &mut FormattingState,
         filter: Option<&IncludeExcludeKeyFilter>,
     ) -> bool {
         let mut fv = FieldFormatter::new(self);
-        fv.format(s, key, value, filter, IncludeExcludeSetting::Unspecified)
+        fv.format(s, key, value, fs, filter, IncludeExcludeSetting::Unspecified)
     }
 
-    fn format_value<'a, S: StylingPush<Buf>>(&self, s: &mut S, value: RawValue<'a>) {
-        let mut fv = FieldFormatter::new(self);
-        fv.format_value(s, value, None, IncludeExcludeSetting::Unspecified);
-    }
-
-    fn format_message<'a, S: StylingPush<Buf>>(&self, s: &mut S, value: RawValue<'a>) {
+    #[inline]
+    fn format_message<'a, S: StylingPush<Buf>>(&self, s: &mut S, fs: &mut FormattingState, value: RawValue<'a>) {
         match value {
             RawValue::String(value) => {
-                s.element(Element::Message, |s| {
-                    s.batch(|buf| buf.with_auto_trim(|buf| MessageFormatAuto::new(value).format(buf).unwrap()))
-                });
-            }
-            RawValue::Number(value) => {
-                s.element(Element::Number, |s| s.batch(|buf| buf.extend(value.as_bytes())));
-            }
-            RawValue::Boolean(true) => {
-                s.element(Element::Boolean, |s| s.batch(|buf| buf.extend(b"true")));
-            }
-            RawValue::Boolean(false) => {
-                s.element(Element::Boolean, |s| s.batch(|buf| buf.extend(b"false")));
-            }
-            RawValue::Null => {
-                s.element(Element::Boolean, |s| s.batch(|buf| buf.extend(b"null")));
-            }
-            RawValue::Object(value) => {
-                s.element(Element::Object, |s| {
-                    let item = value.parse().unwrap();
-                    s.batch(|buf| buf.push(b'{'));
-                    let mut has_some = false;
-                    for (k, v) in item.fields.iter() {
-                        has_some |= self.format_field(s, k, *v, None)
-                    }
-                    s.batch(|buf| {
-                        if has_some {
-                            buf.push(b' ');
-                        }
-                        buf.push(b'}');
-                    });
-                });
-            }
-            RawValue::Array(value) => {
-                let item = value.parse::<256>().unwrap();
-                let is_byte_string = item
-                    .iter()
-                    .map(|&v| v.is_byte_code())
-                    .position(|x| x == false)
-                    .is_none();
-                if is_byte_string {
-                    s.batch(|buf| buf.extend(b"b'"));
+                if !value.is_empty() {
+                    s.space();
                     s.element(Element::Message, |s| {
-                        for item in item.iter() {
-                            let b = item.parse_byte_code();
-                            if b >= 32 {
-                                s.batch(|buf| buf.push(b));
-                            } else {
-                                s.element(Element::String, |s| {
-                                    s.batch(|buf| {
-                                        buf.push(b'\\');
-                                        buf.push(HEXDIGIT[(b >> 4) as usize]);
-                                        buf.push(HEXDIGIT[(b & 0xF) as usize]);
-                                    })
-                                });
-                            }
-                        }
-                    });
-                    s.batch(|buf| buf.push(b'\''));
-                } else {
-                    s.element(Element::Array, |s| {
-                        s.batch(|buf| buf.push(b'['));
-                        let mut first = true;
-                        for v in item.iter() {
-                            if !first {
-                                s.batch(|buf| buf.extend(self.cfg.punctuation.array_separator.as_bytes()));
-                            } else {
-                                first = false;
-                            }
-                            self.format_value(s, *v);
-                        }
-                        s.batch(|buf| buf.push(b']'))
+                        s.batch(|buf| buf.with_auto_trim(|buf| MessageFormatAuto::new(value).format(buf).unwrap()))
                     });
                 }
+                false
             }
+            _ => self.format_field(s, "msg", value, fs, Some(self.fields.as_ref())),
         };
     }
 }
 
 impl RecordWithSourceFormatter for RecordFormatter {
+    #[inline]
     fn format_record(&self, buf: &mut Buf, rec: model::RecordWithSource) {
         RecordFormatter::format_record(self, buf, rec.record)
+    }
+}
+
+// ---
+
+struct FormattingState {
+    key_prefix: KeyPrefix,
+    flatten: bool,
+}
+
+impl FormattingState {
+    #[inline]
+    fn new(flatten: bool) -> Self {
+        Self {
+            key_prefix: KeyPrefix::default(),
+            flatten,
+        }
+    }
+}
+
+// ---
+
+#[derive(Default)]
+struct KeyPrefix {
+    value: OptimizedBuf<u8, 256>,
+}
+
+impl KeyPrefix {
+    #[inline]
+    fn len(&self) -> usize {
+        self.value.len()
+    }
+
+    #[inline]
+    fn format<B: Push<u8>>(&self, buf: &mut B) {
+        buf.extend_from_slice(&self.value.head);
+        buf.extend_from_slice(&self.value.tail);
+    }
+
+    #[inline]
+    fn push(&mut self, key: &str) -> usize {
+        let len = self.len();
+        if len != 0 {
+            self.value.push(b'.');
+        }
+        key.key_prettify(&mut self.value);
+        self.len() - len
+    }
+
+    #[inline]
+    fn pop(&mut self, n: usize) {
+        if n != 0 {
+            let len = self.len();
+            if n >= len {
+                self.value.clear();
+            } else {
+                self.value.truncate(len - n);
+            }
+        }
     }
 }
 
@@ -319,6 +320,7 @@ impl<'a> FieldFormatter<'a> {
         s: &mut S,
         key: &str,
         value: RawValue<'a>,
+        fs: &mut FormattingState,
         filter: Option<&IncludeExcludeKeyFilter>,
         setting: IncludeExcludeSetting,
     ) -> bool {
@@ -335,20 +337,15 @@ impl<'a> FieldFormatter<'a> {
         if setting == IncludeExcludeSetting::Exclude && leaf {
             return false;
         }
-        s.space();
-        s.element(Element::Key, |s| {
-            s.batch(|buf| key.key_prettify(buf));
-        });
-        s.element(Element::Field, |s| {
-            s.batch(|buf| buf.extend_from_slice(self.rf.cfg.punctuation.field_key_value_separator.as_bytes()));
-        });
+        let ffv = self.begin(s, key, value, fs);
         if self.rf.unescape_fields {
-            self.format_value(s, value, filter, setting);
+            self.format_value(s, value, fs, filter, setting);
         } else {
             s.element(Element::String, |s| {
                 s.batch(|buf| buf.extend(value.raw_str().as_bytes()))
             });
         }
+        self.end(fs, ffv);
         true
     }
 
@@ -356,6 +353,7 @@ impl<'a> FieldFormatter<'a> {
         &mut self,
         s: &mut S,
         value: RawValue<'a>,
+        fs: &mut FormattingState,
         filter: Option<&IncludeExcludeKeyFilter>,
         setting: IncludeExcludeSetting,
     ) {
@@ -384,22 +382,26 @@ impl<'a> FieldFormatter<'a> {
             RawValue::Object(value) => {
                 let item = value.parse().unwrap();
                 s.element(Element::Object, |s| {
-                    s.batch(|buf| buf.push(b'{'));
+                    if !fs.flatten {
+                        s.batch(|buf| buf.push(b'{'));
+                    }
                     let mut some_fields_hidden = false;
                     for (k, v) in item.fields.iter() {
-                        some_fields_hidden |= !self.format(s, k, *v, filter, setting);
+                        some_fields_hidden |= !self.format(s, k, *v, fs, filter, setting);
                     }
                     if some_fields_hidden {
                         s.element(Element::Ellipsis, |s| {
                             s.batch(|buf| buf.extend(self.rf.cfg.punctuation.hidden_fields_indicator.as_bytes()))
                         });
                     }
-                    s.batch(|buf| {
-                        if item.fields.len() != 0 {
-                            buf.push(b' ');
-                        }
-                        buf.push(b'}');
-                    });
+                    if !fs.flatten {
+                        s.batch(|buf| {
+                            if item.fields.len() != 0 {
+                                buf.push(b' ');
+                            }
+                            buf.push(b'}');
+                        });
+                    }
                 });
             }
             RawValue::Array(value) => {
@@ -413,12 +415,58 @@ impl<'a> FieldFormatter<'a> {
                         } else {
                             first = false;
                         }
-                        self.format_value(s, *v, None, IncludeExcludeSetting::Unspecified);
+                        self.format_value(s, *v, fs, None, IncludeExcludeSetting::Unspecified);
                     }
                     s.batch(|buf| buf.push(b']'));
                 });
             }
         };
+    }
+
+    #[inline(always)]
+    fn begin<S: StylingPush<Buf>>(
+        &mut self,
+        s: &mut S,
+        key: &str,
+        value: RawValue<'a>,
+        fs: &mut FormattingState,
+    ) -> FormattedFieldVariant {
+        if fs.flatten && matches!(value, RawValue::Object(_)) {
+            return FormattedFieldVariant::Flattened(fs.key_prefix.push(key));
+        }
+
+        let variant = FormattedFieldVariant::Normal { flatten: fs.flatten };
+
+        s.space();
+        s.element(Element::Key, |s| {
+            s.batch(|buf| {
+                if fs.flatten {
+                    fs.flatten = false;
+                    if fs.key_prefix.len() != 0 {
+                        fs.key_prefix.format(buf);
+                        buf.push(b'.');
+                    }
+                }
+                key.key_prettify(buf);
+            });
+        });
+        s.element(Element::Field, |s| {
+            s.batch(|buf| buf.extend(self.rf.cfg.punctuation.field_key_value_separator.as_bytes()));
+        });
+
+        variant
+    }
+
+    #[inline]
+    fn end(&mut self, fs: &mut FormattingState, v: FormattedFieldVariant) {
+        match v {
+            FormattedFieldVariant::Normal { flatten } => {
+                fs.flatten = flatten;
+            }
+            FormattedFieldVariant::Flattened(n) => {
+                fs.key_prefix.pop(n);
+            }
+        }
     }
 }
 
@@ -446,12 +494,12 @@ impl WithAutoTrim for Vec<u8> {
 
 // ---
 
-pub trait KeyPrettify {
+trait KeyPrettify {
     fn key_prettify<B: Push<u8>>(&self, buf: &mut B);
 }
 
 impl KeyPrettify for str {
-    #[inline(always)]
+    #[inline]
     fn key_prettify<B: Push<u8>>(&self, buf: &mut B) {
         let bytes = self.as_bytes();
         let mut i = 0;
@@ -466,9 +514,12 @@ impl KeyPrettify for str {
 
 // ---
 
-const HEXDIGIT: [u8; 16] = [
-    b'0', b'1', b'2', b'3', b'4', b'5', b'6', b'7', b'8', b'9', b'a', b'b', b'c', b'd', b'e', b'f',
-];
+enum FormattedFieldVariant {
+    Normal { flatten: bool },
+    Flattened(usize),
+}
+
+// ---
 
 pub mod string {
     // workspace imports
@@ -787,7 +838,6 @@ mod tests {
     use super::*;
     use crate::{
         datefmt::LinuxDateFormat,
-        error::Error,
         model::{RawObject, Record, RecordFields},
         settings::Punctuation,
         theme::Theme,
@@ -799,9 +849,31 @@ mod tests {
     use encstr::EncodedString;
     use serde_json as json;
 
-    fn format(rec: &Record) -> Result<String, Error> {
-        let formatter = RecordFormatter::new(
-            Arc::new(Theme::from(testing::theme()?)),
+    trait FormatToVec {
+        fn format_to_vec(&self, rec: &Record) -> Vec<u8>;
+    }
+
+    trait FormatToString {
+        fn format_to_string(&self, rec: &Record) -> String;
+    }
+
+    impl FormatToVec for RecordFormatter {
+        fn format_to_vec(&self, rec: &Record) -> Vec<u8> {
+            let mut buf = Vec::new();
+            self.format_record(&mut buf, rec);
+            buf
+        }
+    }
+
+    impl FormatToString for RecordFormatter {
+        fn format_to_string(&self, rec: &Record) -> String {
+            String::from_utf8(self.format_to_vec(rec)).unwrap()
+        }
+    }
+
+    fn formatter() -> RecordFormatter {
+        RecordFormatter::new(
+            Arc::new(Theme::from(testing::theme().unwrap())),
             DateTimeFormatter::new(
                 LinuxDateFormat::new("%y-%m-%d %T.%3N").compile(),
                 Tz::FixedOffset(Utc.fix()),
@@ -810,11 +882,13 @@ mod tests {
             Arc::new(IncludeExcludeKeyFilter::default()),
             Formatting {
                 punctuation: Punctuation::test_default(),
+                flatten: None,
             },
-        );
-        let mut buf = Vec::new();
-        formatter.format_record(&mut buf, rec);
-        Ok(String::from_utf8(buf)?)
+        )
+    }
+
+    fn format(rec: &Record) -> String {
+        formatter().format_to_string(rec)
     }
 
     fn json_raw_value(s: &str) -> Box<json::value::RawValue> {
@@ -823,22 +897,28 @@ mod tests {
 
     #[test]
     fn test_nested_objects() {
+        let ka = json_raw_value(r#"{"va":{"kb":42,"kc":43}}"#);
+        let rec = Record {
+            ts: Some(Timestamp::new("2000-01-02T03:04:05.123Z")),
+            message: Some(RawValue::String(EncodedString::json(r#""tm""#))),
+            level: Some(Level::Debug),
+            logger: Some("tl"),
+            caller: Some(Caller::Text("tc")),
+            fields: RecordFields {
+                head: heapless::Vec::from_slice(&[("k_a", RawValue::from(RawObject::Json(&ka)))]).unwrap(),
+                tail: Vec::default(),
+            },
+            predefined: heapless::Vec::default(),
+        };
+
         assert_eq!(
-            format(&Record {
-                ts: Some(Timestamp::new("2000-01-02T03:04:05.123Z")),
-                message: Some(RawValue::String(EncodedString::json(r#""tm""#))),
-                level: Some(Level::Debug),
-                logger: Some("tl"),
-                caller: Some(Caller::Text("tc")),
-                fields: RecordFields{
-                    head: heapless::Vec::from_slice(&[
-                        ("ka", RawValue::from(RawObject::Json(&json_raw_value(r#"{"va":{"kb":42}}"#)))),
-                    ]).unwrap(),
-                    tail: Vec::default(),
-                },
-                predefined: heapless::Vec::default(),
-            }).unwrap(),
-            String::from("\u{1b}[0;2;3m00-01-02 03:04:05.123 \u{1b}[0;36m|\u{1b}[0;95mDBG\u{1b}[0;36m|\u{1b}[0;2;3m \u{1b}[0;2;4mtl:\u{1b}[0;2;3m \u{1b}[0;1;39mtm \u{1b}[0;32mka\u{1b}[0;2m:\u{1b}[0;33m{ \u{1b}[0;32mva\u{1b}[0;2m:\u{1b}[0;33m{ \u{1b}[0;32mkb\u{1b}[0;2m:\u{1b}[0;94m42\u{1b}[0;33m } }\u{1b}[0;2;3m @ tc\u{1b}[0m"),
+            &format(&rec),
+            "\u{1b}[0;2;3m00-01-02 03:04:05.123 \u{1b}[0;36m|\u{1b}[0;95mDBG\u{1b}[0;36m|\u{1b}[0;2;3m \u{1b}[0;2;4mtl: \u{1b}[0;1;39mtm \u{1b}[0;32mk-a\u{1b}[0;2m=\u{1b}[0;33m{ \u{1b}[0;32mva\u{1b}[0;2m=\u{1b}[0;33m{ \u{1b}[0;32mkb\u{1b}[0;2m=\u{1b}[0;94m42 \u{1b}[0;32mkc\u{1b}[0;2m=\u{1b}[0;94m43\u{1b}[0;33m } }\u{1b}[0;2;3m @ tc\u{1b}[0m",
+        );
+
+        assert_eq!(
+            &formatter().with_flatten(true).format_to_string(&rec),
+            "\u{1b}[0;2;3m00-01-02 03:04:05.123 \u{1b}[0;36m|\u{1b}[0;95mDBG\u{1b}[0;36m|\u{1b}[0;2;3m \u{1b}[0;2;4mtl: \u{1b}[0;1;39mtm \u{1b}[0;32mk-a.va.kb\u{1b}[0;2m=\u{1b}[0;94m42 \u{1b}[0;32mk-a.va.kc\u{1b}[0;2m=\u{1b}[0;94m43\u{1b}[0;2;3m @ tc\u{1b}[0m",
         );
     }
 }

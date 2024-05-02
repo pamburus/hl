@@ -227,6 +227,7 @@ fn run() -> Result<()> {
             cli::UnixTimestampUnit::Us => Some(app::UnixTimestampUnit::Microseconds),
             cli::UnixTimestampUnit::Ns => Some(app::UnixTimestampUnit::Nanoseconds),
         },
+        flatten: opt.flatten != cli::FlattenOption::Never,
     });
 
     // Configure input.

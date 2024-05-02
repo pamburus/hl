@@ -224,7 +224,7 @@ impl<'a, B: Push<u8>> Styler<'a, B> {
 }
 
 impl<'a, B: Push<u8>> StylingPush<B> for Styler<'a, B> {
-    #[inline(always)]
+    #[inline]
     fn element<R, F: FnOnce(&mut Self) -> R>(&mut self, element: Element, f: F) -> R {
         let style = self.current;
         self.set(element);
@@ -232,11 +232,13 @@ impl<'a, B: Push<u8>> StylingPush<B> for Styler<'a, B> {
         self.set_style(style);
         result
     }
-    #[inline(always)]
+
+    #[inline]
     fn space(&mut self) {
         self.buf.push(b' ');
     }
-    #[inline(always)]
+
+    #[inline]
     fn batch<F: FnOnce(&mut B)>(&mut self, f: F) {
         self.sync();
         f(self.buf)
