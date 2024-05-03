@@ -1,6 +1,12 @@
 // std imports
 use std::{
-    cmp::Ordering, collections::HashMap, fmt, iter::IntoIterator, marker::PhantomData, ops::Range, str::FromStr,
+    cmp::Ordering,
+    collections::{HashMap, HashSet},
+    fmt,
+    iter::IntoIterator,
+    marker::PhantomData,
+    ops::Range,
+    str::FromStr,
 };
 
 // third-party imports
@@ -1241,7 +1247,7 @@ pub enum ValueMatchPolicy {
     Exact(String),
     SubString(String),
     RegularExpression(Regex),
-    In(Vec<String>),
+    In(HashSet<String>),
     WildCard(Pattern<String>),
     Numerically(NumericOp),
 }
@@ -1252,7 +1258,7 @@ impl ValueMatchPolicy {
             Self::Exact(pattern) => subject == pattern,
             Self::SubString(pattern) => subject.contains(pattern),
             Self::RegularExpression(pattern) => pattern.is_match(subject),
-            Self::In(patterns) => patterns.iter().any(|pattern| subject == pattern),
+            Self::In(patterns) => patterns.contains(subject),
             Self::WildCard(pattern) => pattern.matches(subject),
             Self::Numerically(op) => {
                 if let Some(value) = subject.parse::<Number>().ok() {

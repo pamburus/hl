@@ -70,6 +70,24 @@ pub enum Error {
         #[source]
         source: io::Error,
     },
+    #[error("failed to read file '{}': {source}", HILITE.paint(.path))]
+    FailedToReadFile {
+        path: String,
+        #[source]
+        source: io::Error,
+    },
+    #[error("failed to load file '{}': {source}", HILITE.paint(.path))]
+    FailedToLoadFile {
+        path: String,
+        #[source]
+        source: Box<Error>,
+    },
+    #[error("failed to parse json line {}: {source}", HILITE.paint(.line.to_string()))]
+    FailedToParseJsonLine {
+        line: usize,
+        #[source]
+        source: serde_json::Error,
+    },
     #[error("invalid index header")]
     InvalidIndexHeader,
     #[error("requested sorting of messages in {} file '{}' that is not currently supported", HILITE.paint(.format), HILITE.paint(.path.to_string_lossy()))]
@@ -87,7 +105,7 @@ pub enum Error {
         #[source]
         source: mpsc::RecvTimeoutError,
     },
-    #[error(transparent)]
+    #[error("failed to parse query:\n{0}")]
     QueryParseError(#[from] pest::error::Error<crate::query::Rule>),
     #[error(transparent)]
     LevelParseError(#[from] level::ParseError),

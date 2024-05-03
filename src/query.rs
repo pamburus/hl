@@ -1,3 +1,6 @@
+// std imports
+use std::io::{BufRead, BufReader, Read};
+
 // third-party imports
 use closure::closure;
 use pest::{iterators::Pair, Parser};
@@ -6,7 +9,7 @@ use serde_json as json;
 use wildflower::Pattern;
 
 // local imports
-use crate::error::Result;
+use crate::error::{Error, Result};
 use crate::level::RelaxedLevel;
 use crate::model::{
     FieldFilter, FieldFilterKey, Level, Number, NumericOp, Record, RecordFilter, UnaryBoolOp, ValueMatchPolicy,
@@ -24,8 +27,8 @@ pub struct Query {
 }
 
 impl Query {
-    pub fn parse(str: &str) -> Result<Self> {
-        let mut pairs = QueryParser::parse(Rule::input, str)?;
+    pub fn parse(str: impl AsRef<str>) -> Result<Self> {
+        let mut pairs = QueryParser::parse(Rule::input, str.as_ref())?;
         Ok(expression(pairs.next().unwrap())?)
     }
 
@@ -113,9 +116,10 @@ fn field_filter(pair: Pair<Rule>) -> Result<Query> {
     let rhs = inner.next().unwrap();
 
     let (match_policy, negated) = match (op, rhs.as_rule()) {
-        (Rule::op_in | Rule::op_not_in, Rule::string_set) => {
-            (ValueMatchPolicy::In(parse_string_set(rhs)?), op == Rule::op_not_in)
-        }
+        (Rule::op_in | Rule::op_not_in, Rule::string_set) => (
+            ValueMatchPolicy::In(parse_string_set(rhs)?.into_iter().collect()),
+            op == Rule::op_not_in,
+        ),
         (Rule::op_equal | Rule::op_not_equal, Rule::string) => {
             (ValueMatchPolicy::Exact(parse_string(rhs)?), op == Rule::op_not_equal)
         }
@@ -187,8 +191,50 @@ fn parse_string(pair: Pair<Rule>) -> Result<String> {
 fn parse_string_set(pair: Pair<Rule>) -> Result<Vec<String>> {
     assert_eq!(pair.as_rule(), Rule::string_set);
 
+    let inner = pair.into_inner().next().unwrap();
+    Ok(match inner.as_rule() {
+        Rule::string_set_literal => parse_string_set_literal(inner)?,
+        Rule::string_set_file => parse_string_set_file(inner)?,
+        _ => unreachable!(),
+    })
+}
+
+fn parse_string_set_literal(pair: Pair<Rule>) -> Result<Vec<String>> {
+    assert_eq!(pair.as_rule(), Rule::string_set_literal);
+
     let inner = pair.into_inner();
     inner.map(|p| parse_string(p)).collect::<Result<Vec<_>>>()
+}
+
+fn parse_string_set_file(pair: Pair<Rule>) -> Result<Vec<String>> {
+    assert_eq!(pair.as_rule(), Rule::string_set_file);
+
+    let inner = pair.into_inner().next().unwrap();
+    let filename = parse_string(inner)?;
+    let stream: Box<dyn Read> = if filename == "-" {
+        Box::new(std::io::stdin())
+    } else {
+        Box::new(std::fs::File::open(&filename).map_err(|e| Error::FailedToReadFile {
+            path: filename.clone(),
+            source: e,
+        })?)
+    };
+    BufReader::new(stream)
+        .lines()
+        .enumerate()
+        .map(|(i, line)| {
+            let line = line?;
+            if line.starts_with('"') {
+                json::from_str(line.as_str()).map_err(|e| Error::FailedToParseJsonLine { line: i + 1, source: e })
+            } else {
+                Ok(line.to_owned())
+            }
+        })
+        .collect::<Result<Vec<_>>>()
+        .map_err(|e| Error::FailedToLoadFile {
+            path: filename.clone(),
+            source: Box::new(e),
+        })
 }
 
 fn parse_number(pair: Pair<Rule>) -> Result<Number> {
@@ -465,6 +511,54 @@ mod tests {
         assert_eq!(record.matches(&query), false);
         let record = parse(r#"{"x":1}"#);
         assert_eq!(record.matches(&query), false);
+    }
+
+    #[test]
+    fn query_in_set_file_valid() {
+        let query = Query::parse("v in @src/testing/assets/query/set-valid").unwrap();
+        let record = parse(r#"{"v":"line"}"#);
+        assert_eq!(record.matches(&query), false);
+        let record = parse(r#"{"v":"line1"}"#);
+        assert_eq!(record.matches(&query), true);
+        let record = parse(r#"{"v":"line2"}"#);
+        assert_eq!(record.matches(&query), true);
+        let record = parse(r#"{"v":"line3"}"#);
+        assert_eq!(record.matches(&query), true);
+        let record = parse(r#"{"v":"line4"}"#);
+        assert_eq!(record.matches(&query), false);
+    }
+
+    #[test]
+    fn query_in_set_file_invalid() {
+        let filename = "src/testing/assets/query/set-invalid";
+        let result = Query::parse(format!("v in @{}", filename));
+        assert!(result.is_err());
+        let err = result.err().unwrap();
+        if let Error::FailedToLoadFile { path, source } = &err {
+            assert_eq!(path, filename);
+            if let Error::FailedToParseJsonLine { line, source } = &**source {
+                assert_eq!(line, &2);
+                assert!(source.is_eof());
+            } else {
+                panic!("unexpected error: {:?}", err);
+            }
+        } else {
+            panic!("unexpected error: {:?}", err);
+        }
+    }
+
+    #[test]
+    fn query_in_set_file_not_found() {
+        let filename = "src/testing/assets/query/set-not-found";
+        let result = Query::parse(format!("v in @{}", filename));
+        assert!(result.is_err());
+        let err = result.err().unwrap();
+        if let Error::FailedToReadFile { path, source } = &err {
+            assert_eq!(path, filename);
+            assert!(source.kind() == std::io::ErrorKind::NotFound);
+        } else {
+            panic!("unexpected error: {:?}", err);
+        }
     }
 
     fn parse(s: &str) -> Record {
