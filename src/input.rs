@@ -155,7 +155,10 @@ pub struct Input {
 
 impl Input {
     pub fn new(reference: InputReference, stream: InputStream) -> Self {
-        Self { reference, stream }
+        Self {
+            reference: reference.clone(),
+            stream: Box::new(WrappedInputStream { reference, stream }),
+        }
     }
 
     pub fn open(path: &PathBuf) -> io::Result<Self> {
@@ -168,6 +171,24 @@ impl Input {
             _ => Box::new(stream),
         };
         Ok(Self::new(InputReference::File(path.clone()), stream))
+    }
+}
+
+// ---
+
+pub struct WrappedInputStream {
+    reference: InputReference,
+    stream: InputStream,
+}
+
+impl Read for WrappedInputStream {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        self.stream.read(buf).map_err(|e| {
+            io::Error::new(
+                e.kind(),
+                format!("failed to read {}: {}", self.reference.description(), e),
+            )
+        })
     }
 }
 
@@ -489,5 +510,32 @@ trait AsInputStream {
 impl<T: Read + Send + Sync + 'static> AsInputStream for T {
     fn as_input_stream(self) -> InputStream {
         Box::new(self)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::ErrorKind;
+    use std::io::Read;
+
+    #[test]
+    fn test_input_read_error() {
+        let reference = InputReference::File(PathBuf::from("test.log"));
+        let mut input = Input::new(reference, Box::new(FailingReader));
+        let mut buf = [0; 128];
+        let result = input.stream.read(&mut buf);
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert_eq!(err.kind(), ErrorKind::Other);
+        assert_eq!(err.to_string().contains("test.log"), true);
+    }
+
+    struct FailingReader;
+
+    impl Read for FailingReader {
+        fn read(&mut self, _buf: &mut [u8]) -> std::io::Result<usize> {
+            Err(std::io::Error::new(std::io::ErrorKind::Other, "read error"))
+        }
     }
 }
