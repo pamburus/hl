@@ -71,9 +71,5 @@ contrib:
 
 ## Collect coverage
 coverage:
-	@cargo tarpaulin \
-		--skip-clean \
-		--locked \
-		--out Lcov \
-		--output-dir target/coverage \
-		--target-dir target/coverage
+	@contrib/bin/coverage.sh
+.PHONY: coverage
