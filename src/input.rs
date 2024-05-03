@@ -50,6 +50,18 @@ impl InputReference {
             match self {
                 InputReference::Stdin => None,
                 InputReference::File(path) => {
+                    let meta = std::fs::metadata(path).map_err(|e| {
+                        io::Error::new(
+                            e.kind(),
+                            format!("failed to get information on {}: {}", self.description(), e),
+                        )
+                    })?;
+                    if meta.is_dir() {
+                        return Err(io::Error::new(
+                            io::ErrorKind::InvalidInput,
+                            format!("{} is a directory", self.description()),
+                        ));
+                    }
                     Some(Box::new(File::open(path).map_err(|e| {
                         io::Error::new(e.kind(), format!("failed to open {}: {}", self.description(), e))
                     })?))
@@ -529,6 +541,27 @@ mod tests {
         let err = result.unwrap_err();
         assert_eq!(err.kind(), ErrorKind::Other);
         assert_eq!(err.to_string().contains("test.log"), true);
+    }
+
+    #[test]
+    fn test_input_hold_error_is_dir() {
+        let reference = InputReference::File(PathBuf::from("."));
+        let result = reference.hold();
+        assert!(result.is_err());
+        let err = result.err().unwrap();
+        assert_eq!(err.kind(), ErrorKind::InvalidInput);
+        assert_eq!(err.to_string().contains("is a directory"), true);
+    }
+
+    #[test]
+    fn test_input_hold_error_not_found() {
+        let filename = "?????????????";
+        let reference = InputReference::File(PathBuf::from(filename));
+        let result = reference.hold();
+        assert!(result.is_err());
+        let err = result.err().unwrap();
+        assert_eq!(err.kind(), ErrorKind::NotFound);
+        assert_eq!(err.to_string().contains(filename), true);
     }
 
     struct FailingReader;
