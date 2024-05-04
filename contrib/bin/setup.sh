@@ -22,4 +22,6 @@ if [ ! -x "$(command -v rustfilt)" ]; then
     cargo install rustfilt
 fi
 
-rustup component add llvm-tools-preview
+if [ ! -x "$(command -v $(rustc --print sysroot)/lib/rustlib/$(rustc -vV | sed -n 's|host: ||p')/bin/llvm-profdata)" ]; then
+    rustup component add llvm-tools-preview
+fi
