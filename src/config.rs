@@ -6,7 +6,10 @@ use once_cell::sync::Lazy;
 use platform_dirs::AppDirs;
 
 // local imports
-use crate::{error::Result, settings::Settings};
+use crate::{
+    error::Result,
+    settings::{Settings, SourceFile},
+};
 
 // ---
 
@@ -18,12 +21,25 @@ pub fn default() -> &'static Settings {
 }
 
 /// Load settings from the given file or the default configuration file per platform.
-pub fn load(path: String) -> Result<Settings> {
-    if path.is_empty() {
+pub fn load(path: Option<&str>) -> Result<Settings> {
+    let mut default = None;
+    let (filename, required) = path.map(|p| (p, true)).unwrap_or_else(|| {
+        (
+            if let Some(dirs) = app_dirs() {
+                default = Some(dirs.config_dir.join("config.yaml").to_string_lossy().to_string());
+                default.as_deref().unwrap()
+            } else {
+                ""
+            },
+            false,
+        )
+    });
+
+    if filename.is_empty() {
         return Ok(Default::default());
     }
 
-    Settings::load(&path)
+    Settings::load(SourceFile::new(filename).required(required).into())
 }
 
 /// Get the application platform-specific directories.
@@ -47,5 +63,35 @@ pub mod global {
     /// Otherwise, the default settings will be returned.
     pub fn get() -> &'static Settings {
         &RESOLVED
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::settings::Settings;
+
+    #[test]
+    fn test_default() {
+        assert_eq!(default().theme, "universal");
+    }
+
+    #[test]
+    fn test_load_empty_filename() {
+        let settings = super::load(Some("")).unwrap();
+        assert_eq!(settings, Settings::default());
+    }
+
+    #[test]
+    fn test_load_k8s() {
+        let settings = super::load(Some("etc/defaults/config-k8s.yaml")).unwrap();
+        assert_eq!(settings.fields.predefined.time.0.names, &["ts"]);
+        assert_eq!(settings.fields.predefined.message.0.names, &["msg"]);
+        assert_eq!(settings.fields.predefined.level.variants.len(), 2);
+    }
+
+    #[test]
+    fn test_load_auto() {
+        super::load(None).unwrap();
     }
 }
