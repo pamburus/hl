@@ -13,33 +13,33 @@ help:
 .PHONY: help
 
 ## Build debug target
-build:
+build: contrib-build
 	@cargo build --benches
 .PHONY: build
 
 ## Build release target
-build-release:
+build-release: contrib-build
 	@cargo build --release --locked
 .PHONY: build-release
 
 ## Install binary
-install:
+install: contrib-build
 	@cargo install --path . --locked
 .PHONY: install
 
 ## Install versioned binary
-install-versioned:
+install-versioned: contrib-build
 	@cargo install --path . --locked
 	@cp ${HOME}/.cargo/bin/hl ${HOME}/.cargo/bin/$$(${HOME}/.cargo/bin/hl --version | tr ' ' '-')
 .PHONY: install-versioned
 
 ## Run tests
-test:
+test: contrib-build
 	@cargo test
 .PHONY: test
 
 ## Run benchmarks
-bench:
+bench: contrib-build
 	@cargo bench
 .PHONY: bench
 
@@ -49,14 +49,14 @@ usage: build
 .PHONY: usage
 
 ## Clean build artifacts
-clean:
+clean: contrib-build
 	@cargo clean
 .PHONY: clean
 
 ## Create screenshots
 screenshots: build $(THEMES:%=screenshot-%)
 
-screenshot-%: build
+screenshot-%: build contrib-screenshots
 	@defaults write org.alacritty NSRequiresAquaSystemAppearance -bool yes
 	@contrib/bin/screenshot.sh light $(SCREENSHOT_SAMPLE) $*
 	@defaults write org.alacritty NSRequiresAquaSystemAppearance -bool no
@@ -64,12 +64,16 @@ screenshot-%: build
 	@defaults delete org.alacritty NSRequiresAquaSystemAppearance
 .PHONY: screenshot-%
 
-## Install dependencies needed for contribution
-contrib:
-	@$(SHELL) contrib/bin/setup.sh
-.PHONY: contrib
-
 ## Collect coverage
 coverage:
-	@contrib/bin/coverage.sh
+	@contrib/bin/setup.sh coverage
+	@build/ci/coverage.sh
 .PHONY: coverage
+
+contrib-build:
+	@contrib/bin/setup.sh build
+.PHONY: contrib-build
+
+contrib-screenshots:
+	@contrib/bin/setup.sh screenshots
+.PHONY: contrib-screenshots
