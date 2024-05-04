@@ -4,7 +4,7 @@ members = [".", "crate/encstr"]
 [workspace.package]
 repository = "https://github.com/pamburus/hl"
 authors = ["Pavel Ivanov <mr.pavel.ivanov@gmail.com>"]
-version = "0.29.0-alpha.13"
+version = "0.29.0-alpha.14"
 edition = "2021"
 license = "MIT"
 
@@ -32,6 +32,7 @@ sha2 = "0"
 atoi = "2"
 bincode = "1"
 bitmask = "0"
+bitmask-enum = "2"
 bytefmt = "0"
 capnp = "0.19"
 chrono = { version = "0.4", default-features = false, features = [

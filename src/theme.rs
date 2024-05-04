@@ -29,6 +29,7 @@ pub trait StylingPush<B: Push<u8>> {
 
 // ---
 
+#[derive(Default)]
 pub struct Theme {
     packs: EnumMap<Level, StylePack>,
     default: StylePack,
@@ -37,11 +38,7 @@ pub struct Theme {
 
 impl Theme {
     pub fn none() -> Self {
-        Self {
-            packs: EnumMap::default(),
-            default: StylePack::default(),
-            indicators: IndicatorPack::default(),
-        }
+        Self::default()
     }
 
     pub fn load(app_dirs: &AppDirs, name: &str) -> Result<Self> {
