@@ -47,6 +47,8 @@ function merge() {
 function report() {
     ${LLVM_BIN:?}/llvm-cov \
         report \
+        --show-region-summary=false \
+        --show-branch-summary=false \
         --summary-only \
         "${LLVM_COV_FLAGS[@]}"
 }
@@ -56,7 +58,7 @@ function export() {
         export \
         --format="lcov" \
         "${LLVM_COV_FLAGS[@]}" \
-    > target/coverage.lcov
+    > target/lcov.info
 }
 
 clean; test; merge; report; export

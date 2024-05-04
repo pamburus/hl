@@ -10,14 +10,6 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install llvm-tools-preview
-        run: |
-          rustup component add llvm-tools-preview
-      
-      - name: Install rustfilt
-        run: |
-          cargo install rustfilt
-
       - name: Generate code coverage
         run: |
           make coverage
