@@ -94,9 +94,7 @@ pub struct TimeField(pub Field);
 
 impl Default for TimeField {
     fn default() -> Self {
-        Self(Field {
-            names: vec!["time".into(), "ts".into()],
-        })
+        Self(Field::new(vec!["time".into(), "ts".into()]))
     }
 }
 
@@ -104,12 +102,14 @@ impl Default for TimeField {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct LevelField {
+    pub show: FieldShowOption,
     pub variants: Vec<LevelFieldVariant>,
 }
 
 impl Default for LevelField {
     fn default() -> Self {
         Self {
+            show: FieldShowOption::default(),
             variants: vec![LevelFieldVariant {
                 names: vec!["level".into()],
                 values: Level::iter()
@@ -138,9 +138,7 @@ pub struct MessageField(Field);
 
 impl Default for MessageField {
     fn default() -> Self {
-        Self(Field {
-            names: vec!["msg".into()],
-        })
+        Self(Field::new(vec!["msg".into()]))
     }
 }
 
@@ -151,9 +149,7 @@ pub struct LoggerField(Field);
 
 impl Default for LoggerField {
     fn default() -> Self {
-        Self(Field {
-            names: vec!["logger".into()],
-        })
+        Self(Field::new(vec!["logger".into()]))
     }
 }
 
@@ -164,9 +160,7 @@ pub struct CallerField(Field);
 
 impl Default for CallerField {
     fn default() -> Self {
-        Self(Field {
-            names: vec!["caller".into()],
-        })
+        Self(Field::new(vec!["caller".into()]))
     }
 }
 
@@ -177,9 +171,7 @@ pub struct CallerFileField(Field);
 
 impl Default for CallerFileField {
     fn default() -> Self {
-        Self(Field {
-            names: vec!["file".into()],
-        })
+        Self(Field::new(vec!["file".into()]))
     }
 }
 
@@ -190,9 +182,7 @@ pub struct CallerLineField(Field);
 
 impl Default for CallerLineField {
     fn default() -> Self {
-        Self(Field {
-            names: vec!["line".into()],
-        })
+        Self(Field::new(vec!["line".into()]))
     }
 }
 
@@ -201,6 +191,17 @@ impl Default for CallerLineField {
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
 pub struct Field {
     pub names: Vec<String>,
+    #[serde(default)]
+    pub show: FieldShowOption,
+}
+
+impl Field {
+    pub fn new(names: Vec<String>) -> Self {
+        Self {
+            names,
+            show: FieldShowOption::Auto,
+        }
+    }
 }
 
 // ---
@@ -219,6 +220,21 @@ pub struct Formatting {
 pub enum FlattenOption {
     Never,
     Always,
+}
+
+// ---
+
+#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
+#[serde(rename_all = "kebab-case")]
+pub enum FieldShowOption {
+    Auto,
+    Always,
+}
+
+impl Default for FieldShowOption {
+    fn default() -> Self {
+        Self::Auto
+    }
 }
 
 // ---
@@ -326,7 +342,8 @@ mod tests {
         assert_eq!(
             settings.fields.predefined.time,
             TimeField(Field {
-                names: vec!["ts".into()]
+                names: vec!["ts".into()],
+                show: FieldShowOption::Auto,
             })
         );
         assert_eq!(settings.time_format, "%b %d %T.%3N");
