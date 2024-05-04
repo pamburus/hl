@@ -5,6 +5,7 @@ set -e
 export RUSTFLAGS="-C instrument-coverage"
 export CARGO_TARGET_DIR="target/coverage"
 export LLVM_PROFILE_FILE="target/coverage/test-%m-%p.profraw"
+export MAIN_EXECUTABLE="target/coverage/debug/hl"
 
 LLVM_BIN=$(rustc --print sysroot)/lib/rustlib/$(rustc -vV | sed -n 's|host: ||p')/bin
 
@@ -19,6 +20,7 @@ IGNORE=(
 )
 
 function executables() {
+    echo ${MAIN_EXECUTABLE:?}
     cargo test --tests --no-run --message-format=json \
     | jq -r 'select(.profile.test == true) | .filenames[]' \
     | grep -v dSYM -
@@ -36,6 +38,14 @@ function clean() {
 
 function test() {
     cargo test --tests
+    cargo build
+    ${MAIN_EXECUTABLE:?} > /dev/null
+    ${MAIN_EXECUTABLE:?} --config= --help > /dev/null
+    ${MAIN_EXECUTABLE:?} --config=etc/defaults/config-k8s.yaml > /dev/null
+    ${MAIN_EXECUTABLE:?} --config=etc/defaults/config-ecs.yaml > /dev/null
+    ${MAIN_EXECUTABLE:?} --shell-completions bash > /dev/null
+    ${MAIN_EXECUTABLE:?} --list-themes > /dev/null
+    echo "" | ${MAIN_EXECUTABLE:?} --concurrency 4 > /dev/null
 } 
 
 function merge() {

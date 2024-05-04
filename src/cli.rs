@@ -19,8 +19,14 @@ use crate::{
 #[derive(Args)]
 pub struct BootstrapArgs {
     /// Configuration file path.
-    #[arg(long, overrides_with = "config", value_name = "FILE", env = "HL_CONFIG", default_value = default_config_path(), num_args=1)]
-    pub config: String,
+    #[arg(
+        long,
+        overrides_with = "config",
+        value_name = "FILE",
+        env = "HL_CONFIG",
+        num_args = 1
+    )]
+    pub config: Option<String>,
 }
 
 /// JSON and logfmt log converter to human readable representation.
@@ -472,13 +478,5 @@ fn parse_non_zero_size(s: &str) -> std::result::Result<NonZeroUsize, NonZeroSize
         Ok(NonZeroUsize::from(value))
     } else {
         Err(NonZeroSizeParseError::ZeroSize)
-    }
-}
-
-fn default_config_path() -> clap::builder::OsStr {
-    if let Some(dirs) = config::app_dirs() {
-        dirs.config_dir.join("config.yaml").into_os_string().into()
-    } else {
-        "".into()
     }
 }

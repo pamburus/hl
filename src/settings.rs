@@ -17,11 +17,11 @@ use crate::level::Level;
 // ---
 
 static DEFAULT_SETTINGS_RAW: &str = include_str!("../etc/defaults/config.yaml");
-static DEFAULT_SETTINGS: Lazy<Settings> = Lazy::new(|| Settings::load_from_str("", FileFormat::Yaml));
+static DEFAULT_SETTINGS: Lazy<Settings> = Lazy::new(|| Settings::load(Source::Str("", FileFormat::Yaml)).unwrap());
 
 // ---
 
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Deserialize, Clone, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub struct Settings {
     pub fields: Fields,
@@ -33,22 +33,15 @@ pub struct Settings {
 }
 
 impl Settings {
-    pub fn load(filename: &str) -> Result<Self, Error> {
-        Ok(Config::builder()
-            .add_source(File::from_str(DEFAULT_SETTINGS_RAW, FileFormat::Yaml))
-            .add_source(File::with_name(filename))
-            .build()?
-            .try_deserialize()?)
-    }
-
-    pub fn load_from_str(value: &str, format: FileFormat) -> Self {
-        Config::builder()
-            .add_source(File::from_str(DEFAULT_SETTINGS_RAW, FileFormat::Yaml))
-            .add_source(File::from_str(value, format))
-            .build()
-            .unwrap()
-            .try_deserialize()
-            .unwrap()
+    pub fn load(source: Source) -> Result<Self, Error> {
+        let builder = Config::builder().add_source(File::from_str(DEFAULT_SETTINGS_RAW, FileFormat::Yaml));
+        let builder = match source {
+            Source::File(SourceFile { filename, required }) => {
+                builder.add_source(File::with_name(filename).required(required))
+            }
+            Source::Str(value, format) => builder.add_source(File::from_str(value, format)),
+        };
+        Ok(builder.build()?.try_deserialize()?)
     }
 }
 
@@ -66,7 +59,40 @@ impl Default for &'static Settings {
 
 // ---
 
-#[derive(Debug, Serialize, Deserialize, Clone, Default)]
+pub enum Source<'a> {
+    File(SourceFile<'a>),
+    Str(&'a str, FileFormat),
+}
+
+impl<'a> From<SourceFile<'a>> for Source<'a> {
+    fn from(file: SourceFile<'a>) -> Self {
+        Self::File(file)
+    }
+}
+
+// ---
+
+pub struct SourceFile<'a> {
+    filename: &'a str,
+    required: bool,
+}
+
+impl<'a> SourceFile<'a> {
+    pub fn new(filename: &'a str) -> Self {
+        Self {
+            filename,
+            required: true,
+        }
+    }
+
+    pub fn required(self, required: bool) -> Self {
+        Self { required, ..self }
+    }
+}
+
+// ---
+
+#[derive(Debug, Serialize, Deserialize, Clone, Default, PartialEq, Eq)]
 pub struct Fields {
     pub predefined: PredefinedFields,
     pub ignore: Vec<String>,
@@ -75,7 +101,7 @@ pub struct Fields {
 
 // ---
 
-#[derive(Debug, Serialize, Deserialize, Default, Clone)]
+#[derive(Debug, Serialize, Deserialize, Default, Clone, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub struct PredefinedFields {
     pub time: TimeField,
@@ -100,7 +126,7 @@ impl Default for TimeField {
 
 // ---
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 pub struct LevelField {
     pub show: FieldShowOption,
     pub variants: Vec<LevelFieldVariant>,
@@ -123,7 +149,7 @@ impl Default for LevelField {
 
 // ---
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 pub struct LevelFieldVariant {
     pub names: Vec<String>,
     #[serde(default, serialize_with = "ordered_map_serialize")]
@@ -133,8 +159,8 @@ pub struct LevelFieldVariant {
 
 // ---
 
-#[derive(Debug, Serialize, Deserialize, Deref, Clone)]
-pub struct MessageField(Field);
+#[derive(Debug, Serialize, Deserialize, Deref, Clone, PartialEq, Eq)]
+pub struct MessageField(pub Field);
 
 impl Default for MessageField {
     fn default() -> Self {
@@ -144,7 +170,7 @@ impl Default for MessageField {
 
 // ---
 
-#[derive(Debug, Serialize, Deserialize, Deref, Clone)]
+#[derive(Debug, Serialize, Deserialize, Deref, Clone, PartialEq, Eq)]
 pub struct LoggerField(Field);
 
 impl Default for LoggerField {
@@ -155,7 +181,7 @@ impl Default for LoggerField {
 
 // ---
 
-#[derive(Debug, Serialize, Deserialize, Deref, Clone)]
+#[derive(Debug, Serialize, Deserialize, Deref, Clone, PartialEq, Eq)]
 pub struct CallerField(Field);
 
 impl Default for CallerField {
@@ -166,7 +192,7 @@ impl Default for CallerField {
 
 // ---
 
-#[derive(Debug, Serialize, Deserialize, Deref, Clone)]
+#[derive(Debug, Serialize, Deserialize, Deref, Clone, PartialEq, Eq)]
 pub struct CallerFileField(Field);
 
 impl Default for CallerFileField {
@@ -177,7 +203,7 @@ impl Default for CallerFileField {
 
 // ---
 
-#[derive(Debug, Serialize, Deserialize, Deref, Clone)]
+#[derive(Debug, Serialize, Deserialize, Deref, Clone, PartialEq, Eq)]
 pub struct CallerLineField(Field);
 
 impl Default for CallerLineField {
@@ -206,7 +232,7 @@ impl Field {
 
 // ---
 
-#[derive(Clone, Debug, Default, Deserialize)]
+#[derive(Clone, Debug, Default, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub struct Formatting {
     pub punctuation: Punctuation,
@@ -215,7 +241,7 @@ pub struct Formatting {
 
 // ---
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub enum FlattenOption {
     Never,
@@ -239,7 +265,7 @@ impl Default for FieldShowOption {
 
 // ---
 
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Deserialize, Clone, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub struct Punctuation {
     pub logger_name_separator: String,
@@ -338,7 +364,7 @@ mod tests {
 
     #[test]
     fn test_load_settings_k8s() {
-        let settings = Settings::load("etc/defaults/config-k8s.yaml").unwrap();
+        let settings = Settings::load(SourceFile::new("etc/defaults/config-k8s.yaml").into()).unwrap();
         assert_eq!(
             settings.fields.predefined.time,
             TimeField(Field {

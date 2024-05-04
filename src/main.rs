@@ -31,7 +31,7 @@ use hl::{
 // ---
 
 fn run() -> Result<()> {
-    let settings = config::load(cli::BootstrapOpt::parse().args.config)?;
+    let settings = config::load(cli::BootstrapOpt::parse().args.config.as_deref())?;
     config::global::initialize(settings.clone());
 
     let opt = cli::Opt::parse();
