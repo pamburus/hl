@@ -289,6 +289,7 @@ impl Eq for RawArray<'_> {}
 
 // ---
 
+#[derive(Default)]
 pub struct Record<'a> {
     pub ts: Option<Timestamp<'a>>,
     pub message: Option<RawValue<'a>>,
@@ -335,6 +336,7 @@ impl<'a> Record<'a> {
     }
 }
 
+#[derive(Default)]
 pub struct RecordFields<'a> {
     pub(crate) head: heapless::Vec<(&'a str, RawValue<'a>), RECORD_EXTRA_CAPACITY>,
     pub(crate) tail: Vec<(&'a str, RawValue<'a>)>,

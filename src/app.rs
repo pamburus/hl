@@ -37,7 +37,7 @@ use crate::{
     model::{Filter, Parser, ParserSettings, RawRecord, Record, RecordFilter, RecordWithSourceConstructor},
     query::Query,
     scanning::{BufFactory, Delimit, Delimiter, Scanner, SearchExt, Segment, SegmentBuf, SegmentBufFactory},
-    settings::{Fields, Formatting},
+    settings::{FieldShowOption, Fields, Formatting},
     theme::{Element, StylingPush, Theme},
     timezone::Tz,
     IncludeExcludeKeyFilter,
@@ -670,7 +670,9 @@ impl App {
                     self.options.formatting.clone(),
                 )
                 .with_field_unescaping(!self.options.raw_fields)
-                .with_flatten(self.options.flatten),
+                .with_flatten(self.options.flatten)
+                .with_always_show_time(self.options.fields.settings.predefined.time.show == FieldShowOption::Always)
+                .with_always_show_level(self.options.fields.settings.predefined.level.show == FieldShowOption::Always),
             )
         }
     }

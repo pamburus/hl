@@ -58,6 +58,8 @@ pub struct RecordFormatter {
     ts_width: usize,
     hide_empty_fields: bool,
     flatten: bool,
+    always_show_time: bool,
+    always_show_level: bool,
     fields: Arc<IncludeExcludeKeyFilter>,
     cfg: Formatting,
 }
@@ -78,6 +80,8 @@ impl RecordFormatter {
             ts_width,
             hide_empty_fields,
             flatten: false,
+            always_show_time: false,
+            always_show_level: false,
             fields,
             cfg,
         }
@@ -93,6 +97,16 @@ impl RecordFormatter {
         self
     }
 
+    pub fn with_always_show_time(mut self, value: bool) -> Self {
+        self.always_show_time = value;
+        self
+    }
+
+    pub fn with_always_show_level(mut self, value: bool) -> Self {
+        self.always_show_level = value;
+        self
+    }
+
     pub fn format_record(&self, buf: &mut Buf, rec: &model::Record) {
         let mut fs = FormattingState::new(self.flatten && self.unescape_fields);
 
@@ -100,9 +114,10 @@ impl RecordFormatter {
             //
             // time
             //
-            s.element(Element::Time, |s| {
-                s.batch(|buf| {
-                    if let Some(ts) = &rec.ts {
+            if let Some(ts) = &rec.ts {
+                fs.add_element(|| {});
+                s.element(Element::Time, |s| {
+                    s.batch(|buf| {
                         aligned_left(buf, self.ts_width, b' ', |mut buf| {
                             if ts
                                 .as_rfc3339()
@@ -116,39 +131,46 @@ impl RecordFormatter {
                                 }
                             }
                         });
-                    } else {
-                        centered(buf, self.ts_width, b' ', |mut buf| {
-                            buf.extend_from_slice(b"---");
+                    })
+                });
+            } else if self.always_show_time {
+                fs.add_element(|| {});
+                s.element(Element::Time, |s| {
+                    s.batch(|buf| {
+                        centered(buf, self.ts_width, b'-', |mut buf| {
+                            buf.extend_from_slice(b"-");
                         });
-                    }
-                })
-            });
+                    })
+                });
+            }
+
             //
             // level
             //
-            s.space();
-            s.element(Element::Level, |s| {
-                s.batch(|buf| {
-                    buf.extend_from_slice(self.cfg.punctuation.level_left_separator.as_bytes());
-                });
-                s.element(Element::LevelInner, |s| {
+            let level = match rec.level {
+                Some(Level::Debug) => Some(b"DBG"),
+                Some(Level::Info) => Some(b"INF"),
+                Some(Level::Warning) => Some(b"WRN"),
+                Some(Level::Error) => Some(b"ERR"),
+                _ => None,
+            };
+            let level = level.or_else(|| self.always_show_level.then(|| b"(?)"));
+            if let Some(level) = level {
+                fs.add_element(|| s.space());
+                s.element(Element::Level, |s| {
                     s.batch(|buf| {
-                        buf.extend_from_slice(match rec.level {
-                            Some(Level::Debug) => b"DBG",
-                            Some(Level::Info) => b"INF",
-                            Some(Level::Warning) => b"WRN",
-                            Some(Level::Error) => b"ERR",
-                            _ => b"(?)",
-                        })
-                    })
+                        buf.extend_from_slice(self.cfg.punctuation.level_left_separator.as_bytes());
+                    });
+                    s.element(Element::LevelInner, |s| s.batch(|buf| buf.extend_from_slice(level)));
+                    s.batch(|buf| buf.extend_from_slice(self.cfg.punctuation.level_right_separator.as_bytes()));
                 });
-                s.batch(|buf| buf.extend_from_slice(self.cfg.punctuation.level_right_separator.as_bytes()));
-            });
+            }
+
             //
             // logger
             //
             if let Some(logger) = rec.logger {
-                s.batch(|buf| buf.push(b' '));
+                fs.add_element(|| s.batch(|buf| buf.push(b' ')));
                 s.element(Element::Logger, |s| {
                     s.element(Element::LoggerInner, |s| {
                         s.batch(|buf| buf.extend_from_slice(logger.as_bytes()))
@@ -226,8 +248,10 @@ impl RecordFormatter {
         match value {
             RawValue::String(value) => {
                 if !value.is_empty() {
-                    s.reset();
-                    s.space();
+                    fs.add_element(|| {
+                        s.reset();
+                        s.space();
+                    });
                     s.element(Element::Message, |s| {
                         s.batch(|buf| buf.with_auto_trim(|buf| MessageFormatAuto::new(value).format(buf).unwrap()))
                     });
@@ -251,6 +275,7 @@ impl RecordWithSourceFormatter for RecordFormatter {
 struct FormattingState {
     key_prefix: KeyPrefix,
     flatten: bool,
+    empty: bool,
 }
 
 impl FormattingState {
@@ -259,6 +284,15 @@ impl FormattingState {
         Self {
             key_prefix: KeyPrefix::default(),
             flatten,
+            empty: true,
+        }
+    }
+
+    fn add_element(&mut self, add_space: impl FnOnce()) {
+        if self.empty {
+            self.empty = false;
+        } else {
+            add_space();
         }
     }
 }
@@ -438,7 +472,7 @@ impl<'a> FieldFormatter<'a> {
 
         let variant = FormattedFieldVariant::Normal { flatten: fs.flatten };
 
-        s.space();
+        fs.add_element(|| s.space());
         s.element(Element::Key, |s| {
             s.batch(|buf| {
                 if fs.flatten {
@@ -920,6 +954,53 @@ mod tests {
         assert_eq!(
             &formatter().with_flatten(true).format_to_string(&rec),
             "\u{1b}[0;2;3m00-01-02 03:04:05.123 \u{1b}[0;36m|\u{1b}[0;95mDBG\u{1b}[0;36m|\u{1b}[0;2;3m \u{1b}[0;2;4mtl:\u{1b}[0m \u{1b}[0;1;39mtm \u{1b}[0;32mk-a.va.kb\u{1b}[0;2m=\u{1b}[0;94m42 \u{1b}[0;32mk-a.va.kc\u{1b}[0;2m=\u{1b}[0;94m43\u{1b}[0;2;3m @ tc\u{1b}[0m",
+        );
+    }
+
+    #[test]
+    fn test_timestamp_none() {
+        let rec = Record {
+            message: Some(RawValue::String(EncodedString::json(r#""tm""#))),
+            level: Some(Level::Error),
+            ..Default::default()
+        };
+
+        assert_eq!(&format(&rec), "\u{1b}[0;7;91m|ERR|\u{1b}[0m \u{1b}[0;1;39mtm\u{1b}[0m");
+    }
+
+    #[test]
+    fn test_timestamp_none_always_show() {
+        let rec = Record {
+            message: Some(RawValue::String(EncodedString::json(r#""tm""#))),
+            ..Default::default()
+        };
+
+        assert_eq!(
+            &formatter().with_always_show_time(true).format_to_string(&rec),
+            "\u{1b}[0;2;3m---------------------\u{1b}[0m \u{1b}[0;1;39mtm\u{1b}[0m",
+        );
+    }
+
+    #[test]
+    fn test_level_none() {
+        let rec = Record {
+            message: Some(RawValue::String(EncodedString::json(r#""tm""#))),
+            ..Default::default()
+        };
+
+        assert_eq!(&format(&rec), "\u{1b}[0;1;39mtm\u{1b}[0m",);
+    }
+
+    #[test]
+    fn test_level_none_always_show() {
+        let rec = Record {
+            message: Some(RawValue::String(EncodedString::json(r#""tm""#))),
+            ..Default::default()
+        };
+
+        assert_eq!(
+            &formatter().with_always_show_level(true).format_to_string(&rec),
+            "\u{1b}[0;36m|(?)|\u{1b}[0m \u{1b}[0;1;39mtm\u{1b}[0m",
         );
     }
 }

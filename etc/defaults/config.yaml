@@ -10,6 +10,7 @@ fields:
   # Configuration of the predefined set of fields.
   predefined:
     time:
+      show: auto
       names:
         [
           ts,
@@ -24,6 +25,7 @@ fields:
     logger:
       names: [logger, LOGGER, Logger]
     level:
+      show: auto
       variants:
         - names: [level, LEVEL, Level]
           values:
