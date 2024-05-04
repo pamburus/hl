@@ -150,6 +150,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5da9b3d9f6f585199287a473f4f8dfab6566cf827d15c00c219f53c645687ead"
 
 [[package]]
+name = "bitmask-enum"
+version = "2.2.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9990737a6d5740ff51cdbbc0f0503015cb30c390f6623968281eb214a520cfc0"
+dependencies = [
+ "quote",
+ "syn 2.0.60",
+]
+
+[[package]]
 name = "block-buffer"
 version = "0.10.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -601,7 +611,7 @@ checksum = "edd0f118536f44f5ccd48bcb8b111bdc3de888b58c74639dfb034a357d0f206d"
 
 [[package]]
 name = "encstr"
-version = "0.29.0-alpha.13"
+version = "0.29.0-alpha.14"
 
 [[package]]
 name = "enum-map"
@@ -758,11 +768,12 @@ checksum = "7f24254aa9a54b5c858eaee2f5bccdb46aaf0e486a595ed5fd8f86ba55232a70"
 
 [[package]]
 name = "hl"
-version = "0.29.0-alpha.13"
+version = "0.29.0-alpha.14"
 dependencies = [
  "atoi",
  "bincode",
  "bitmask",
+ "bitmask-enum",
  "byte-strings",
  "bytefmt",
  "capnp",

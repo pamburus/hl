@@ -87,24 +87,29 @@ impl RecordFormatter {
         }
     }
 
-    pub fn with_field_unescaping(mut self, value: bool) -> Self {
-        self.unescape_fields = value;
-        self
+    pub fn with_field_unescaping(self, unescape_fields: bool) -> Self {
+        Self {
+            unescape_fields,
+            ..self
+        }
     }
 
-    pub fn with_flatten(mut self, value: bool) -> Self {
-        self.flatten = value;
-        self
+    pub fn with_flatten(self, flatten: bool) -> Self {
+        Self { flatten, ..self }
     }
 
-    pub fn with_always_show_time(mut self, value: bool) -> Self {
-        self.always_show_time = value;
-        self
+    pub fn with_always_show_time(self, value: bool) -> Self {
+        Self {
+            always_show_time: value,
+            ..self
+        }
     }
 
-    pub fn with_always_show_level(mut self, value: bool) -> Self {
-        self.always_show_level = value;
-        self
+    pub fn with_always_show_level(self, value: bool) -> Self {
+        Self {
+            always_show_level: value,
+            ..self
+        }
     }
 
     pub fn format_record(&self, buf: &mut Buf, rec: &model::Record) {
@@ -260,6 +265,11 @@ impl RecordFormatter {
             }
             _ => self.format_field(s, "msg", value, fs, Some(self.fields.as_ref())),
         };
+    }
+
+    #[cfg(test)]
+    fn with_theme(self, theme: Arc<Theme>) -> Self {
+        Self { theme, ..self }
     }
 }
 
@@ -561,7 +571,7 @@ pub mod string {
     use encstr::{AnyEncodedString, Appender, Result};
 
     // third-party imports
-    use bitmask::bitmask;
+    use bitmask_enum::bitmask;
 
     // ---
 
@@ -588,8 +598,6 @@ pub mod string {
     {
         #[inline(always)]
         fn format(&self, buf: &mut Vec<u8>) -> Result<()> {
-            use CharGroup::*;
-
             if self.string.is_empty() {
                 buf.extend(r#""""#.as_bytes());
                 return Ok(());
@@ -598,25 +606,35 @@ pub mod string {
             let begin = buf.len();
             ValueFormatRaw::new(self.string).format(buf)?;
 
-            let mut groups: CharGroups = CharGroups::none();
+            let mut mask = Mask::none();
 
             buf[begin..].iter().map(|&c| CHAR_GROUPS[c as usize]).for_each(|group| {
-                groups.set(group);
+                mask |= group;
             });
 
             let first = buf[begin];
-            if groups.is_none() && first != b'[' && first != b'{' {
+            if mask.is_none() && first != b'[' && first != b'{' {
                 return Ok(());
             }
 
             buf.truncate(begin);
 
-            if groups & (DoubleQuote | SingleQuote | ExtendedSpace | Control) == DoubleQuote.into() {
-                return ValueFormatSingleQuoted::new(self.string).format(buf);
-            }
+            match mask & (Mask::DoubleQuote | Mask::SingleQuote | Mask::ExtendedSpace | Mask::Control | Mask::Backslash)
+            {
+                Mask::DoubleQuote => {
+                    return ValueFormatSingleQuoted::new(self.string).format(buf);
+                }
+                Mask::SingleQuote => {
+                    return ValueFormatDoubleQuoted::new(self.string).format(buf);
+                }
+                _ => (),
+            };
 
-            let mask = groups & (DoubleQuote | SingleQuote | ExtendedSpace | Control | Backtick);
-            if mask.intersects(DoubleQuote | SingleQuote | ExtendedSpace) && !mask.intersects(Control | Backtick) {
+            let mask =
+                mask & (Mask::DoubleQuote | Mask::SingleQuote | Mask::ExtendedSpace | Mask::Control | Mask::Backtick);
+            if mask.intersects(Mask::DoubleQuote | Mask::SingleQuote | Mask::ExtendedSpace)
+                && !mask.intersects(Mask::Control | Mask::Backtick)
+            {
                 return ValueFormatBacktickQuoted::new(self.string).format(buf);
             }
 
@@ -821,16 +839,16 @@ pub mod string {
 
     // ---
 
-    static CHAR_GROUPS: [CharGroup; 256] = {
-        const CT: CharGroup = CharGroup::Control; // 0x00..0x1F
-        const DQ: CharGroup = CharGroup::DoubleQuote; // 0x22
-        const SQ: CharGroup = CharGroup::SingleQuote; // 0x27
-        const BS: CharGroup = CharGroup::Backslash; // 0x5C
-        const BT: CharGroup = CharGroup::Backtick; // 0x60
-        const SP: CharGroup = CharGroup::Space; // 0x20
-        const XS: CharGroup = CharGroup::ExtendedSpace; // 0x09, 0x0A, 0x0D
-        const EQ: CharGroup = CharGroup::EqualSign; // 0x3D
-        const __: CharGroup = CharGroup::Nothing;
+    static CHAR_GROUPS: [Mask; 256] = {
+        const CT: Mask = Mask::Control; // 0x00..0x1F
+        const DQ: Mask = Mask::DoubleQuote; // 0x22
+        const SQ: Mask = Mask::SingleQuote; // 0x27
+        const BS: Mask = Mask::Backslash; // 0x5C
+        const BT: Mask = Mask::Backtick; // 0x60
+        const SP: Mask = Mask::Space; // 0x20
+        const XS: Mask = Mask::ExtendedSpace; // 0x09, 0x0A, 0x0D
+        const EQ: Mask = Mask::EqualSign; // 0x3D
+        const __: Mask = Mask::none();
         [
             //   1   2   3   4   5   6   7   8   9   A   B   C   D   E   F
             CT, CT, CT, CT, CT, CT, CT, CT, CT, XS, XS, CT, CT, XS, CT, CT, // 0
@@ -852,19 +870,16 @@ pub mod string {
         ]
     };
 
-    bitmask! {
-        #[derive(Debug)]
-        pub mask CharGroups: u8 where flags CharGroup {
-            Nothing       = 0b00000000,
-            Control       = 0b00000001,
-            DoubleQuote   = 0b00000010,
-            SingleQuote   = 0b00000100,
-            Backslash     = 0b00001000,
-            Backtick      = 0b00010000,
-            Space         = 0b00100000,
-            ExtendedSpace = 0b01000000,
-            EqualSign     = 0b10000000,
-        }
+    #[bitmask(u8)]
+    enum Mask {
+        Control,
+        DoubleQuote,
+        SingleQuote,
+        Backslash,
+        Backtick,
+        Space,
+        ExtendedSpace,
+        EqualSign,
     }
 }
 
@@ -926,6 +941,10 @@ mod tests {
         formatter().format_to_string(rec)
     }
 
+    fn format_no_color(rec: &Record) -> String {
+        formatter().with_theme(Default::default()).format_to_string(rec)
+    }
+
     fn json_raw_value(s: &str) -> Box<json::value::RawValue> {
         json::value::RawValue::from_string(s.into()).unwrap()
     }
@@ -941,9 +960,9 @@ mod tests {
             caller: Some(Caller::Text("tc")),
             fields: RecordFields {
                 head: heapless::Vec::from_slice(&[("k_a", RawValue::from(RawObject::Json(&ka)))]).unwrap(),
-                tail: Vec::default(),
+                ..Default::default()
             },
-            predefined: heapless::Vec::default(),
+            ..Default::default()
         };
 
         assert_eq!(
@@ -1000,7 +1019,175 @@ mod tests {
 
         assert_eq!(
             &formatter().with_always_show_level(true).format_to_string(&rec),
-            "\u{1b}[0;36m|(?)|\u{1b}[0m \u{1b}[0;1;39mtm\u{1b}[0m",
+            "\u{1b}[0;36m|(?)|\u{1b}[0m \u{1b}[0;1;39mtm\u{1b}[0m"
         );
+    }
+
+    #[test]
+    fn test_string_value_raw() {
+        let rec = Record {
+            fields: RecordFields {
+                head: heapless::Vec::from_slice(&[("k", RawValue::String(EncodedString::raw("v")))]).unwrap(),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+
+        assert_eq!(&format_no_color(&rec), "k=v");
+    }
+
+    #[test]
+    fn test_string_value_json_simple() {
+        let rec = Record {
+            fields: RecordFields {
+                head: heapless::Vec::from_slice(&[("k", RawValue::String(EncodedString::json(r#""some-value""#)))])
+                    .unwrap(),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+
+        assert_eq!(&format_no_color(&rec), r#"k=some-value"#);
+    }
+
+    #[test]
+    fn test_string_value_json_with_space() {
+        let rec = Record {
+            fields: RecordFields {
+                head: heapless::Vec::from_slice(&[("k", RawValue::String(EncodedString::json(r#""some value""#)))])
+                    .unwrap(),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+
+        assert_eq!(&format_no_color(&rec), r#"k="some value""#);
+    }
+
+    #[test]
+    fn test_string_value_json_with_space_and_double_quotes() {
+        let rec = Record {
+            fields: RecordFields {
+                head: heapless::Vec::from_slice(&[("k", RawValue::String(EncodedString::json(r#""some \"value\"""#)))])
+                    .unwrap(),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+
+        assert_eq!(&format_no_color(&rec), r#"k='some "value"'"#);
+    }
+
+    #[test]
+    fn test_string_value_json_with_space_and_single_quotes() {
+        let rec = Record {
+            fields: RecordFields {
+                head: heapless::Vec::from_slice(&[("k", RawValue::String(EncodedString::json(r#""some 'value'""#)))])
+                    .unwrap(),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+
+        assert_eq!(&format_no_color(&rec), r#"k="some 'value'""#);
+    }
+
+    #[test]
+    fn test_string_value_json_with_space_and_backticks() {
+        let rec = Record {
+            fields: RecordFields {
+                head: heapless::Vec::from_slice(&[("k", RawValue::String(EncodedString::json(r#""some `value`""#)))])
+                    .unwrap(),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+
+        assert_eq!(&format_no_color(&rec), r#"k="some `value`""#);
+    }
+
+    #[test]
+    fn test_string_value_json_with_space_and_double_and_single_quotes() {
+        let rec = Record {
+            fields: RecordFields {
+                head: heapless::Vec::from_slice(&[(
+                    "k",
+                    RawValue::String(EncodedString::json(r#""some \"value\" from 'source'""#)),
+                )])
+                .unwrap(),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+
+        assert_eq!(&format_no_color(&rec), r#"k=`some "value" from 'source'`"#);
+    }
+
+    #[test]
+    fn test_string_value_json_with_backslash() {
+        let rec = Record {
+            fields: RecordFields {
+                head: heapless::Vec::from_slice(&[(
+                    "k",
+                    RawValue::String(EncodedString::json(r#""some-\\\"value\\\"""#)),
+                )])
+                .unwrap(),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+
+        assert_eq!(&format_no_color(&rec), r#"k=`some-\"value\"`"#);
+    }
+
+    #[test]
+    fn test_string_value_json_with_space_and_double_and_single_quotes_and_backticks() {
+        let rec = Record {
+            fields: RecordFields {
+                head: heapless::Vec::from_slice(&[(
+                    "k",
+                    RawValue::String(EncodedString::json(r#""some \"value\" from 'source' with `sauce`""#)),
+                )])
+                .unwrap(),
+                tail: Default::default(),
+            },
+            ..Default::default()
+        };
+
+        assert_eq!(
+            &format_no_color(&rec),
+            r#"k="some \"value\" from 'source' with `sauce`""#
+        );
+    }
+
+    #[test]
+    fn test_string_value_json_with_extended_space() {
+        let rec = Record {
+            fields: RecordFields {
+                head: heapless::Vec::from_slice(&[("k", RawValue::String(EncodedString::json(r#""some\tvalue""#)))])
+                    .unwrap(),
+                tail: Default::default(),
+            },
+            ..Default::default()
+        };
+
+        assert_eq!(&format_no_color(&rec), "k=`some\tvalue`");
+    }
+
+    #[test]
+    fn test_string_value_json_with_control_characters() {
+        let rec = Record {
+            fields: RecordFields {
+                head: heapless::Vec::from_slice(&[(
+                    "k",
+                    RawValue::String(EncodedString::json(r#""some-\u001b[1mvalue\u001b[0m""#)),
+                )])
+                .unwrap(),
+                tail: Default::default(),
+            },
+            ..Default::default()
+        };
+
+        assert_eq!(&format_no_color(&rec), r#"k="some-\u001b[1mvalue\u001b[0m""#);
     }
 }
