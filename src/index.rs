@@ -442,6 +442,8 @@ impl Indexer {
                         }
                     }
                 }
+            } else {
+                stat.add_invalid();
             }
             lines.push((ts.or(prev_ts), i as u32, offset));
             offset += data_len as u32 + 1;

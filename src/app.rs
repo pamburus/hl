@@ -108,6 +108,11 @@ impl Options {
     }
 
     #[cfg(test)]
+    fn with_sort(self, sort: bool) -> Self {
+        Self { sort, ..self }
+    }
+
+    #[cfg(test)]
     fn with_input_info(self, input_info: Option<InputInfo>) -> Self {
         Self { input_info, ..self }
     }
@@ -1178,8 +1183,29 @@ mod tests {
         assert_eq!(std::str::from_utf8(&output).unwrap(), format!("{}\n\n{}\n", L1, L2),);
     }
 
+    #[test]
+    fn test_sort_with_blank_lines() {
+        let input = input(concat!(
+            r#"{"level":"debug","ts":"2024-01-25T19:10:20.435369+01:00","msg":"m2"}"#,
+            "\n\r\n",
+            r#"{"level":"debug","ts":"2024-01-25T19:09:16.860711+01:00","msg":"m1"}"#,
+            "\n",
+        ));
+
+        let mut output = Vec::new();
+        let app = App::new(options().with_sort(true));
+        app.run(vec![input], &mut output).unwrap();
+        assert_eq!(
+            std::str::from_utf8(&output).unwrap(),
+            concat!(
+                "2024-01-25 18:09:16.860 |DBG| m1\n",
+                "2024-01-25 18:10:20.435 |DBG| m2\n",
+            ),
+        );
+    }
+
     fn input<S: Into<String>>(s: S) -> InputHolder {
-        InputHolder::new(InputReference::File("-".into()), Some(Box::new(Cursor::new(s.into()))))
+        InputHolder::new(InputReference::Stdin, Some(Box::new(Cursor::new(s.into()))))
     }
 
     fn options() -> Options {
