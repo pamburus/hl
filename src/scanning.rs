@@ -404,7 +404,7 @@ impl Search for SmartNewLineSearcher {
         let b = if edge { 0 } else { 1 };
 
         buf[b..].iter().position(|x| *x == b'\n').and_then(|i| {
-            if i > 0 && buf[i] == b'\r' {
+            if i > 0 && buf[i - 1] == b'\r' {
                 Some(b + i - 1..b + i + 1)
             } else {
                 Some(b + i..b + i + 1)
@@ -864,6 +864,21 @@ mod tests {
         let mut iter = searcher.split(buf);
 
         assert_eq!(iter.next(), Some(&b""[..]));
+        assert_eq!(iter.next(), None);
+    }
+
+    #[test]
+    fn test_delim_combo_auto() {
+        let searcher = SmartNewLine.into_searcher();
+        let buf = b"a\n\r\nb\naaaa\n\r\nbbbb\n";
+        let mut iter = searcher.split(buf);
+
+        assert_eq!(iter.next(), Some(&b"a"[..]));
+        assert_eq!(iter.next(), Some(&b""[..]));
+        assert_eq!(iter.next(), Some(&b"b"[..]));
+        assert_eq!(iter.next(), Some(&b"aaaa"[..]));
+        assert_eq!(iter.next(), Some(&b""[..]));
+        assert_eq!(iter.next(), Some(&b"bbbb"[..]));
         assert_eq!(iter.next(), None);
     }
 

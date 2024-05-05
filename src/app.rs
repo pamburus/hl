@@ -837,6 +837,7 @@ impl<'a, Formatter: RecordWithSourceFormatter, Filter: RecordFilter> SegmentProc
     {
         for line in self.options.delimiter.clone().into_searcher().split(data) {
             if line.len() == 0 {
+                buf.push(b'\n');
                 continue;
             }
 
@@ -1163,6 +1164,18 @@ mod tests {
             std::str::from_utf8(&output).unwrap(),
             format!("{}\n{}\n", input1, input2),
         );
+    }
+
+    #[test]
+    fn test_smart_delim_combo() {
+        const L1: &str = r#"{}"#;
+        const L2: &str = r#"{}"#;
+
+        let input = input(format!("{}\n\r\n{}\n", L1, L2));
+        let mut output = Vec::new();
+        let app = App::new(options().with_raw(true));
+        app.run(vec![input], &mut output).unwrap();
+        assert_eq!(std::str::from_utf8(&output).unwrap(), format!("{}\n\n{}\n", L1, L2),);
     }
 
     fn input<S: Into<String>>(s: S) -> InputHolder {
