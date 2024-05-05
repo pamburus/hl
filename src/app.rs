@@ -32,7 +32,7 @@ use crate::{
     fmtx::aligned_left,
     formatting::{RawRecordFormatter, RecordFormatter, RecordWithSourceFormatter},
     fsmon::{self, EventKind},
-    index::{Indexer, IndexerSettings, Timestamp},
+    index::{DirStorage, Indexer, IndexerSettings, Timestamp},
     input::{BlockLine, Input, InputHolder, InputReference},
     model::{Filter, Parser, ParserSettings, RawRecord, Record, RecordFilter, RecordWithSourceConstructor},
     query::Query,
@@ -280,7 +280,11 @@ impl App {
             .join(param_hash);
         fs::create_dir_all(&cache_dir)?;
 
-        let indexer = Indexer::new(self.options.concurrency, cache_dir, indexer_settings);
+        let indexer = Indexer::new(
+            self.options.concurrency,
+            Box::new(DirStorage::new(cache_dir)),
+            indexer_settings,
+        );
         let input_badges = self.input_badges(inputs.iter().map(|x| &x.reference));
 
         let inputs = inputs

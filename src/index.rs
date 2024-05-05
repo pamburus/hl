@@ -18,7 +18,7 @@ use std::{
     io::{Read, Write},
     iter::empty,
     num::NonZeroU32,
-    path::{Path, PathBuf},
+    path::PathBuf,
     sync::Arc,
     time::{SystemTime, UNIX_EPOCH},
 };
@@ -126,6 +126,51 @@ impl std::ops::Sub for Timestamp {
 
 // ---
 
+pub trait Storage {
+    fn open(&self, path: &PathBuf) -> Result<Option<Box<Reader>>>;
+    fn create(&self, path: &PathBuf) -> Result<Box<Writer>>;
+}
+
+// ---
+
+pub struct DirStorage {
+    dir: PathBuf,
+}
+
+impl DirStorage {
+    pub fn new(dir: PathBuf) -> Self {
+        Self { dir }
+    }
+}
+
+impl Storage for DirStorage {
+    fn open(&self, path: &PathBuf) -> Result<Option<Box<Reader>>> {
+        let file = match File::open(self.dir.join(path)) {
+            Ok(file) => file,
+            Err(err) => {
+                if err.kind() == std::io::ErrorKind::NotFound {
+                    return Ok(None);
+                }
+                return Err(Error::FailedToOpenFileForReading {
+                    path: self.dir.join(path),
+                    source: err,
+                });
+            }
+        };
+        Ok(Some(Box::new(file)))
+    }
+
+    fn create(&self, path: &PathBuf) -> Result<Box<Writer>> {
+        let file = File::open(self.dir.join(path)).map_err(|err| Error::FailedToOpenFileForWriting {
+            path: self.dir.join(path),
+            source: err,
+        })?;
+        Ok(Box::new(file))
+    }
+}
+
+// ---
+
 pub struct IndexerSettings<'a> {
     buffer_size: NonZeroU32,
     max_message_size: NonZeroU32,
@@ -182,7 +227,7 @@ pub struct Indexer {
     concurrency: usize,
     buffer_size: u32,
     max_message_size: u32,
-    dir: PathBuf,
+    storage: Box<dyn Storage + Sync>,
     parser: Parser,
     delimiter: Delimiter,
     allow_prefix: bool,
@@ -191,12 +236,12 @@ pub struct Indexer {
 
 impl Indexer {
     /// Returns a new Indexer with the given parameters.
-    pub fn new(concurrency: usize, dir: PathBuf, settings: IndexerSettings<'_>) -> Self {
+    pub fn new(concurrency: usize, storage: Box<dyn Storage + Sync>, settings: IndexerSettings<'_>) -> Self {
         Self {
             concurrency,
             buffer_size: settings.buffer_size.into(),
             max_message_size: settings.max_message_size.into(),
-            dir,
+            storage,
             parser: Parser::new(ParserSettings::new(
                 &settings.fields,
                 empty(),
@@ -216,18 +261,9 @@ impl Indexer {
         let source_path = std::fs::canonicalize(source_path)?;
         let meta = source_path.metadata()?;
         let hash = hex::encode(sha256(source_path.to_string_lossy().as_bytes()));
-        let index_path = self.dir.join(PathBuf::from(hash));
+        let index_path = PathBuf::from(hash);
         let mut existing_index = None;
-        if Path::new(&index_path).exists() {
-            let mut file = match File::open(&index_path) {
-                Ok(file) => file,
-                Err(err) => {
-                    return Err(Error::FailedToOpenFileForReading {
-                        path: index_path.clone(),
-                        source: err,
-                    });
-                }
-            };
+        if let Some(mut file) = self.storage.open(&index_path)? {
             if let Ok(index) = Index::load(&mut file) {
                 if meta.len() == index.source().size && ts(meta.modified()?) == index.source().modified {
                     return Ok(index);
@@ -274,15 +310,7 @@ impl Indexer {
                 });
             }
         };
-        let mut output = match File::create(&index_path) {
-            Ok(output) => output,
-            Err(err) => {
-                return Err(Error::FailedToOpenFileForWriting {
-                    path: index_path.clone(),
-                    source: err,
-                });
-            }
-        };
+        let mut output = self.storage.create(&index_path)?;
         self.process_file(
             &source_path,
             (&metadata).try_into()?,
@@ -1014,7 +1042,7 @@ mod tests {
         use std::io::Cursor;
         let indexer = Indexer::new(
             1,
-            PathBuf::from("/tmp/cache"),
+            Box::new(DirStorage::new(PathBuf::from("/tmp/cache"))),
             IndexerSettings::new(
                 NonZeroU32::new(1024).unwrap(),
                 NonZeroU32::new(1024).unwrap(),
@@ -1076,7 +1104,7 @@ mod tests {
         use std::io::Cursor;
         let indexer = Indexer::new(
             1,
-            PathBuf::from("/tmp/cache"),
+            Box::new(DirStorage::new(PathBuf::from("/tmp/cache"))),
             IndexerSettings::new(
                 NonZeroU32::new(1024).unwrap(),
                 NonZeroU32::new(1024).unwrap(),
