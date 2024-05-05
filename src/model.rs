@@ -1076,7 +1076,7 @@ where
             false => Vec::new(),
             true => Vec::with_capacity(count - RAW_RECORD_FIELDS_CAPACITY),
         };
-        while let Some(Some(key)) = access.next_key::<&'a str>().ok() {
+        while let Some(key) = access.next_key::<&'a str>()? {
             let value: &RV = access.next_value()?;
             match head.push((key, value.into())) {
                 Ok(_) => {}
