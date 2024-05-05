@@ -39,7 +39,7 @@ fn benchmark(c: &mut Criterion) {
                     SegmentProcessor::new(&parser, &formatter, &filter, SegmentProcessorOptions::default());
                 let mut buf = Vec::new();
                 b.iter(|| {
-                    processor.process(record, &mut buf, "", &mut RecordIgnorer {});
+                    processor.process(record, &mut buf, "", None, &mut RecordIgnorer {});
                     buf.clear();
                 });
             });
