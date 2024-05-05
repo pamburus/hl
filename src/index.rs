@@ -401,10 +401,12 @@ impl Indexer {
         let mut prev_ts = None;
         let mut lines = Vec::<(Option<Timestamp>, u32, u32)>::with_capacity(segment.data().len() / 512);
         let mut offset = 0;
-        for (i, data) in rtrim(segment.data(), b'\n').split(|c| *c == b'\n').enumerate() {
+        let mut i = 0;
+        for data in rtrim(segment.data(), b'\n').split(|c| *c == b'\n') {
             let data_len = data.len();
             let data = strip(data, b'\r');
             let mut ts = None;
+            let mut rel = 0;
             if data.len() != 0 {
                 let mut stream = RawRecord::parser()
                     .allow_prefix(self.allow_prefix)
@@ -434,18 +436,25 @@ impl Indexer {
                             if ts < prev_ts {
                                 sorted = false;
                             }
-                            prev_ts = ts;
                             stat.add_valid(ts, flags);
+                            lines.push((ts.or(prev_ts), i as u32, offset + ar.offsets.start as u32));
+                            rel = ar.offsets.end;
+                            i += 1;
+                            prev_ts = ts;
                         }
                         _ => {
                             stat.add_invalid();
+                            lines.push((ts.or(prev_ts), i as u32, offset + rel as u32));
+                            i += 1;
+                            break;
                         }
                     }
                 }
             } else {
                 stat.add_invalid();
+                lines.push((ts.or(prev_ts), i as u32, offset));
+                i += 1;
             }
-            lines.push((ts.or(prev_ts), i as u32, offset));
             offset += data_len as u32 + 1;
         }
         let chronology = if sorted {

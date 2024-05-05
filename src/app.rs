@@ -231,7 +231,7 @@ impl App {
                         match segment {
                             Segment::Complete(segment) => {
                                 let mut buf = bfo.new_buf();
-                                processor.process(segment.data(), &mut buf, prefix, &mut RecordIgnorer{});
+                                processor.process(segment.data(), &mut buf, prefix, None, &mut RecordIgnorer{});
                                 sfi.recycle(segment);
                                 if let Err(_) = txo.send((i, buf.into())) {
                                     break;
@@ -384,6 +384,7 @@ impl App {
                                 line.bytes(),
                                 &mut buf,
                                 "",
+                                Some(1),
                                 &mut |record: &Record, location: Range<usize>| {
                                     if let Some(ts) = &record.ts {
                                         if let Some(unix_ts) = ts.unix_utc() {
@@ -562,7 +563,7 @@ impl App {
                             Segment::Complete(segment) => {
                                 let mut buf = bfo.new_buf();
                                 let mut index_builder = TimestampIndexBuilder{result: TimestampIndex::new(j)};
-                                processor.process(segment.data(), &mut buf, prefix, &mut index_builder);
+                                processor.process(segment.data(), &mut buf, prefix, None, &mut index_builder);
                                 sfi.recycle(segment);
                                 if txo.send((i, buf, index_builder.result)).is_err() {
                                     return;
@@ -795,7 +796,14 @@ impl App {
 // ---
 
 pub trait SegmentProcess {
-    fn process<O: RecordObserver>(&mut self, data: &[u8], buf: &mut Vec<u8>, prefix: &str, observer: &mut O);
+    fn process<O: RecordObserver>(
+        &mut self,
+        data: &[u8],
+        buf: &mut Vec<u8>,
+        prefix: &str,
+        limit: Option<usize>,
+        observer: &mut O,
+    );
 }
 
 // ---
@@ -836,10 +844,13 @@ impl<'a, Formatter: RecordWithSourceFormatter, Filter: RecordFilter> SegmentProc
 impl<'a, Formatter: RecordWithSourceFormatter, Filter: RecordFilter> SegmentProcess
     for SegmentProcessor<'a, Formatter, Filter>
 {
-    fn process<O>(&mut self, data: &[u8], buf: &mut Vec<u8>, prefix: &str, observer: &mut O)
+    fn process<O>(&mut self, data: &[u8], buf: &mut Vec<u8>, prefix: &str, limit: Option<usize>, observer: &mut O)
     where
         O: RecordObserver,
     {
+        let mut i = 0;
+        let limit = limit.unwrap_or(usize::MAX);
+
         for line in self.options.delimiter.clone().into_searcher().split(data) {
             if line.len() == 0 {
                 buf.push(b'\n');
@@ -854,6 +865,7 @@ impl<'a, Formatter: RecordWithSourceFormatter, Filter: RecordFilter> SegmentProc
             let mut produced_some = false;
             let mut last_offset = 0;
             while let Some(Ok(ar)) = stream.next() {
+                i += 1;
                 last_offset = ar.offsets.end;
                 if parsed_some {
                     buf.push(b'\n');
@@ -871,6 +883,9 @@ impl<'a, Formatter: RecordWithSourceFormatter, Filter: RecordFilter> SegmentProc
                     let end = buf.len();
                     observer.observe_record(&record, begin..end);
                     produced_some = true;
+                }
+                if i >= limit {
+                    break;
                 }
             }
             let remainder = if parsed_some { &line[last_offset..] } else { line };
@@ -1201,6 +1216,44 @@ mod tests {
                 "2024-01-25 18:09:16.860 |DBG| m1\n",
                 "2024-01-25 18:10:20.435 |DBG| m2\n",
             ),
+        );
+    }
+
+    #[test]
+    fn test_sort_with_clingy_lines() {
+        let input = input(concat!(
+            r#"{"level":"debug","ts":"2024-01-25T19:10:20.435369+01:00","msg":"m2"}"#,
+            r#"{"level":"debug","ts":"2024-01-25T19:09:16.860711+01:00","msg":"m1"}"#,
+            "\n",
+        ));
+
+        let mut output = Vec::new();
+        let app = App::new(options().with_sort(true));
+        app.run(vec![input], &mut output).unwrap();
+        assert_eq!(
+            std::str::from_utf8(&output).unwrap(),
+            concat!(
+                "2024-01-25 18:09:16.860 |DBG| m1\n",
+                "2024-01-25 18:10:20.435 |DBG| m2\n",
+            ),
+        );
+    }
+
+    #[test]
+    fn test_sort_with_clingy_and_invalid_lines() {
+        let input = input(concat!(
+            r#"{"level":"debug","ts":"2024-01-25T19:10:20.435369+01:00","msg":"m2"}"#,
+            r#"{invalid}"#,
+            r#"{"level":"debug","ts":"2024-01-25T19:09:16.860711+01:00","msg":"m1"}"#,
+            "\n",
+        ));
+
+        let mut output = Vec::new();
+        let app = App::new(options().with_sort(true));
+        app.run(vec![input], &mut output).unwrap();
+        assert_eq!(
+            std::str::from_utf8(&output).unwrap(),
+            "2024-01-25 18:10:20.435 |DBG| m2\n",
         );
     }
 
