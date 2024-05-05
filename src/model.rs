@@ -968,6 +968,15 @@ where
             Self::Logfmt(stream) => stream.next(),
         }
     }
+
+    #[inline]
+    pub fn collect_vec(&mut self) -> Vec<Result<AnnotatedRawRecord<'a>>> {
+        let mut result = Vec::new();
+        while let Some(item) = self.next() {
+            result.push(item);
+        }
+        result
+    }
 }
 
 // ---
@@ -1701,6 +1710,7 @@ const RAW_RECORD_FIELDS_CAPACITY: usize = RECORD_EXTRA_CAPACITY + MAX_PREDEFINED
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::logfmt;
     use maplit::hashmap;
 
     #[test]
@@ -2003,9 +2013,25 @@ mod tests {
         assert_eq!(filter.apply(&record), true);
     }
 
+    #[test]
+    fn test_parse_single_word() {
+        let result = try_parse("test");
+        assert!(result.is_err());
+        assert!(matches!(
+            result.err(),
+            Some(Error::LogfmtParseError(logfmt::Error::ExpectedKeyValueDelimiter))
+        ));
+    }
+
     fn parse(s: &str) -> Record {
-        let raw = RawRecord::parser().parse(s.as_bytes()).next().unwrap().unwrap().record;
+        try_parse(s).unwrap()
+    }
+
+    fn try_parse(s: &str) -> Result<Record> {
+        let items = RawRecord::parser().parse(s.as_bytes()).collect_vec();
+        assert_eq!(items.len(), 1);
+        let raw = items.into_iter().next().unwrap()?.record;
         let parser = Parser::new(ParserSettings::default());
-        parser.parse(raw)
+        Ok(parser.parse(raw))
     }
 }
