@@ -141,7 +141,7 @@ impl InputHolder {
 
     pub fn open(self) -> io::Result<Input> {
         match self.reference {
-            InputReference::Stdin => Ok(Input::new(self.reference, Box::new(stdin()))),
+            InputReference::Stdin => Ok(Input::new(self.reference.clone(), self.stdin())),
             InputReference::File(path) => match self.stream {
                 Some(stream) => Input::open_stream(&path, stream),
                 None => Input::open(&path),
@@ -151,12 +151,18 @@ impl InputHolder {
 
     pub fn index(self, indexer: &Indexer) -> Result<IndexedInput> {
         match self.reference {
-            InputReference::Stdin => IndexedInput::open_sequential(self.reference.clone(), Box::new(stdin()), indexer),
+            InputReference::Stdin => IndexedInput::open_sequential(self.reference.clone(), self.stdin(), indexer),
             InputReference::File(path) => match self.stream {
                 Some(stream) => IndexedInput::open_stream(&path, stream, indexer),
                 None => IndexedInput::open(&path, indexer),
             },
         }
+    }
+
+    fn stdin(self) -> InputStream {
+        self.stream
+            .map(|s| Box::new(ReadSeekToRead(s)) as InputStream)
+            .unwrap_or_else(|| Box::new(stdin()))
     }
 }
 
@@ -514,6 +520,17 @@ where
 pub trait ReadSeek: Read + Seek {}
 
 impl<T: Read + Seek> ReadSeek for T {}
+
+pub struct ReadSeekToRead<T>(T);
+
+impl<T> Read for ReadSeekToRead<T>
+where
+    T: ReadSeek,
+{
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        self.0.read(buf)
+    }
+}
 
 trait AsInputStream {
     fn as_input_stream(self) -> InputStream;

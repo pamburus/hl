@@ -611,7 +611,7 @@ checksum = "edd0f118536f44f5ccd48bcb8b111bdc3de888b58c74639dfb034a357d0f206d"
 
 [[package]]
 name = "encstr"
-version = "0.29.2-alpha.3"
+version = "0.29.2-alpha.4"
 
 [[package]]
 name = "enum-map"
@@ -768,7 +768,7 @@ checksum = "7f24254aa9a54b5c858eaee2f5bccdb46aaf0e486a595ed5fd8f86ba55232a70"
 
 [[package]]
 name = "hl"
-version = "0.29.2-alpha.3"
+version = "0.29.2-alpha.4"
 dependencies = [
  "atoi",
  "bincode",
