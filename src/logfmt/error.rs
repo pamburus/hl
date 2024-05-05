@@ -4,22 +4,15 @@ use serde::de;
 
 pub type Result<T> = std::result::Result<T, Error>;
 
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Error {
     Eof,
     ExpectedBoolean,
     ExpectedInteger,
     ExpectedNull,
     ExpectedString,
-    ExpectedArray,
-    ExpectedArrayDelimiter,
-    ExpectedArrayEnd,
-    ExpectedMap,
-    ExpectedMapDelimiter,
-    ExpectedMapKeyValueDelimiter,
-    ExpectedMapEnd,
-    ExpectedEnum,
     ExpectedKey,
+    ExpectedKeyValueDelimiter,
     Syntax,
     InvalidEscape,
     LoneLeadingSurrogateInHexEscape,
@@ -40,15 +33,8 @@ impl fmt::Display for Error {
             Self::ExpectedInteger => f.write_str("expected integer"),
             Self::ExpectedNull => f.write_str("expected null"),
             Self::ExpectedString => f.write_str("expected string"),
-            Self::ExpectedArray => f.write_str("expected array"),
-            Self::ExpectedArrayDelimiter => f.write_str("expected space or array end"),
-            Self::ExpectedArrayEnd => f.write_str("expected array end"),
-            Self::ExpectedMap => f.write_str("expected map"),
-            Self::ExpectedMapDelimiter => f.write_str("expected space or map end"),
-            Self::ExpectedMapKeyValueDelimiter => f.write_str("expected equal sign"),
-            Self::ExpectedMapEnd => f.write_str("expected map end"),
-            Self::ExpectedEnum => f.write_str("expected enum"),
             Self::ExpectedKey => f.write_str("expected key"),
+            Self::ExpectedKeyValueDelimiter => f.write_str("expected key-value delimiter"),
             Self::Syntax => f.write_str("syntax error"),
             Self::InvalidEscape => f.write_str("invalid escape sequence"),
             Self::LoneLeadingSurrogateInHexEscape => f.write_str("lone leading surrogate in hex escape"),

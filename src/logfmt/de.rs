@@ -3,7 +3,7 @@ use std::{
     str,
 };
 
-use serde::de::{self, DeserializeSeed, EnumAccess, IntoDeserializer, MapAccess, SeqAccess, VariantAccess, Visitor};
+use serde::de::{self, DeserializeSeed, IntoDeserializer, MapAccess, SeqAccess, Visitor};
 use serde::Deserialize;
 
 use super::error::{Error, Result};
@@ -356,18 +356,7 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
     where
         V: Visitor<'de>,
     {
-        if self.parser.peek() == Some(b'"') {
-            visitor.visit_enum(self.parse_string(false)?.into_deserializer())
-        } else if self.parser.next() == Some(b'{') {
-            let value = visitor.visit_enum(Enum::new(self))?;
-            if self.parser.next() == Some(b'}') {
-                Ok(value)
-            } else {
-                Err(Error::ExpectedMapEnd)
-            }
-        } else {
-            Err(Error::ExpectedEnum)
-        }
+        visitor.visit_enum(self.parse_string(false)?.into_deserializer())
     }
 
     #[inline]
@@ -532,7 +521,9 @@ impl<'de> Parser<'de> {
         }
 
         let s = &self.input[start..self.index];
-        self.next();
+        if self.next() != Some(b'=') {
+            return Err(Error::ExpectedKeyValueDelimiter);
+        }
 
         if unicode {
             return Ok(str::from_utf8(s).map_err(|_| Error::InvalidUnicodeCodePoint)?);
@@ -802,67 +793,6 @@ impl<'de, 'a> MapAccess<'de> for KeyValueSequence<'a, 'de> {
     }
 }
 
-struct Enum<'a, 'de: 'a> {
-    de: &'a mut Deserializer<'de>,
-}
-
-impl<'a, 'de> Enum<'a, 'de> {
-    #[inline]
-    fn new(de: &'a mut Deserializer<'de>) -> Self {
-        Enum { de }
-    }
-}
-
-impl<'de, 'a> EnumAccess<'de> for Enum<'a, 'de> {
-    type Error = Error;
-    type Variant = Self;
-
-    #[inline]
-    fn variant_seed<V>(self, seed: V) -> Result<(V::Value, Self::Variant)>
-    where
-        V: DeserializeSeed<'de>,
-    {
-        let val = seed.deserialize(&mut *self.de)?;
-        if self.de.parser.next() == Some(b'=') {
-            Ok((val, self))
-        } else {
-            Err(Error::ExpectedMapKeyValueDelimiter)
-        }
-    }
-}
-
-impl<'de, 'a> VariantAccess<'de> for Enum<'a, 'de> {
-    type Error = Error;
-
-    fn unit_variant(self) -> Result<()> {
-        Err(Error::ExpectedString)
-    }
-
-    #[inline]
-    fn newtype_variant_seed<T>(self, seed: T) -> Result<T::Value>
-    where
-        T: DeserializeSeed<'de>,
-    {
-        seed.deserialize(self.de)
-    }
-
-    #[inline]
-    fn tuple_variant<V>(self, _len: usize, visitor: V) -> Result<V::Value>
-    where
-        V: Visitor<'de>,
-    {
-        de::Deserializer::deserialize_seq(self.de, visitor)
-    }
-
-    #[inline]
-    fn struct_variant<V>(self, _fields: &'static [&'static str], visitor: V) -> Result<V::Value>
-    where
-        V: Visitor<'de>,
-    {
-        de::Deserializer::deserialize_map(self.de, visitor)
-    }
-}
-
 pub enum Reference<'b, 'c, T>
 where
     T: ?Sized + 'static,
@@ -984,73 +914,117 @@ static KEY: [u8; 256] = {
 
 // ---
 
-#[test]
-fn test_struct_no_escape() {
-    #[derive(Deserialize, PartialEq, Debug)]
-    struct Test {
-        int: u32,
-        str1: String,
-        str2: String,
+#[cfg(test)]
+mod tests {
+    use super::{super::raw::RawValue, *};
+    use std::collections::HashMap;
+
+    #[test]
+    fn test_struct_no_escape() {
+        #[derive(Deserialize, PartialEq, Debug)]
+        struct Test {
+            int: u32,
+            str1: String,
+            str2: String,
+        }
+
+        let j = r#"int=42 str1=a str2="b c""#;
+        let expected = Test {
+            int: 42,
+            str1: "a".to_string(),
+            str2: "b c".to_string(),
+        };
+        assert_eq!(expected, from_str(j).unwrap());
     }
 
-    let j = r#"int=42 str1=a str2="b c""#;
-    let expected = Test {
-        int: 42,
-        str1: "a".to_string(),
-        str2: "b c".to_string(),
-    };
-    assert_eq!(expected, from_str(j).unwrap());
-}
+    #[test]
+    fn test_struct_escape() {
+        #[derive(Deserialize, PartialEq, Debug)]
+        struct Test {
+            int: u32,
+            str1: String,
+            str2: String,
+        }
 
-#[test]
-fn test_struct_escape() {
-    #[derive(Deserialize, PartialEq, Debug)]
-    struct Test {
-        int: u32,
-        str1: String,
-        str2: String,
+        let j = r#"int=0 str1="b=c" str2="a\nb""#;
+        let expected = Test {
+            int: 0,
+            str1: "b=c".to_string(),
+            str2: "a\nb".to_string(),
+        };
+        assert_eq!(expected, from_str(j).unwrap());
     }
 
-    let j = r#"int=0 str1="b=c" str2="a\nb""#;
-    let expected = Test {
-        int: 0,
-        str1: "b=c".to_string(),
-        str2: "a\nb".to_string(),
-    };
-    assert_eq!(expected, from_str(j).unwrap());
-}
+    #[test]
+    fn test_hex_escape() {
+        #[derive(Deserialize, PartialEq, Debug)]
+        struct Test {
+            int: u32,
+            str1: String,
+            str2: String,
+        }
 
-#[test]
-fn test_hex_escape() {
-    #[derive(Deserialize, PartialEq, Debug)]
-    struct Test {
-        int: u32,
-        str1: String,
-        str2: String,
+        let j = r#"int=0 str1="\u001b[3m" str2="a""#;
+        let expected = Test {
+            int: 0,
+            str1: "\x1b[3m".to_string(),
+            str2: "a".to_string(),
+        };
+        assert_eq!(expected, from_str(j).unwrap());
     }
 
-    let j = r#"int=0 str1="\u001b[3m" str2="a""#;
-    let expected = Test {
-        int: 0,
-        str1: "\x1b[3m".to_string(),
-        str2: "a".to_string(),
-    };
-    assert_eq!(expected, from_str(j).unwrap());
-}
+    #[test]
+    fn test_raw() {
+        #[derive(Deserialize)]
+        struct Test<'a> {
+            int: i32,
+            str1: String,
+            #[serde(borrow)]
+            str2: &'a RawValue,
+        }
 
-#[test]
-fn test_raw() {
-    #[derive(Deserialize)]
-    struct Test<'a> {
-        int: i32,
-        str1: String,
-        #[serde(borrow)]
-        str2: &'a super::raw::RawValue,
+        let j = r#"int=-42 str1=a str2="b \nc""#;
+        let parsed: Test = from_str(j).unwrap();
+        assert_eq!(parsed.int, -42);
+        assert_eq!(parsed.str1, "a");
+        assert_eq!(parsed.str2.get(), r#""b \nc""#);
     }
 
-    let j = r#"int=-42 str1=a str2="b \nc""#;
-    let parsed: Test = from_str(j).unwrap();
-    assert_eq!(parsed.int, -42);
-    assert_eq!(parsed.str1, "a");
-    assert_eq!(parsed.str2.get(), r#""b \nc""#);
+    #[test]
+    fn test_single_word() {
+        let result = from_str::<HashMap<String, String>>(r#"word"#);
+        assert_eq!(result, Err(Error::ExpectedKeyValueDelimiter));
+        assert_eq!(result.unwrap_err().to_string(), "expected key-value delimiter");
+    }
+
+    #[test]
+    fn test_raw_enum() {
+        #[derive(Deserialize, PartialEq, Debug)]
+        enum TestEnum {
+            A,
+            B,
+            C,
+        }
+
+        let val: TestEnum = from_str("B").unwrap();
+        assert_eq!(val, TestEnum::B);
+    }
+
+    #[test]
+    fn test_raw_struct_with_enum() {
+        #[derive(Deserialize, PartialEq, Debug)]
+        enum TestEnum {
+            A,
+            B,
+            C,
+        }
+
+        #[derive(Deserialize, PartialEq, Debug)]
+        struct TestStruct {
+            v: TestEnum,
+        }
+
+        let val: TestStruct = from_str("v=B").unwrap();
+        assert_eq!(val, TestStruct { v: TestEnum::B });
+    }
 }

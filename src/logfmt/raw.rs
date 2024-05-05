@@ -110,7 +110,7 @@ impl<'de: 'a, 'a> Deserialize<'de> for &'a RawValue {
             type Value = &'de RawValue;
 
             fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-                write!(formatter, "any valid JSON value")
+                write!(formatter, "any valid logfmt value")
             }
 
             fn visit_map<V>(self, mut visitor: V) -> Result<Self::Value, V::Error>
