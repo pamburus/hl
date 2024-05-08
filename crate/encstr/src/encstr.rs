@@ -233,7 +233,7 @@ where
 impl Handler for &mut Vec<u8> {
     #[inline(always)]
     fn handle(&mut self, token: Token<'_>) -> Option<()> {
-        Appender::new(self).handle(token)
+        RawAppender::new(self).handle(token)
     }
 }
 
@@ -314,38 +314,7 @@ impl Builder {
 impl Handler for Builder {
     #[inline(always)]
     fn handle(&mut self, token: Token<'_>) -> Option<()> {
-        Appender::new(&mut self.buffer).handle(token)
-    }
-}
-
-// ---
-
-pub struct Appender<'a> {
-    buffer: &'a mut Vec<u8>,
-}
-
-impl<'a> Appender<'a> {
-    #[inline(always)]
-    pub fn new(buffer: &'a mut Vec<u8>) -> Self {
-        Self { buffer }
-    }
-}
-
-impl<'a> Handler for Appender<'a> {
-    #[inline(always)]
-    fn handle(&mut self, token: Token<'_>) -> Option<()> {
-        match token {
-            Token::Char(ch) => match ch {
-                ..='\x7F' => self.buffer.push(ch as u8),
-                _ => {
-                    let mut buf = [0; 4];
-                    let s = ch.encode_utf8(&mut buf);
-                    self.buffer.extend(s.as_bytes());
-                }
-            },
-            Token::Sequence(s) => self.buffer.extend(s.as_bytes()),
-        }
-        Some(())
+        RawAppender::new(&mut self.buffer).handle(token)
     }
 }
 

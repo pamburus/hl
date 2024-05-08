@@ -35,12 +35,12 @@ install-versioned: contrib-build
 
 ## Run tests
 test: contrib-build
-	@cargo test
+	@cargo test --workspace
 .PHONY: test
 
 ## Run benchmarks
 bench: contrib-build
-	@cargo bench
+	@cargo bench --workspace
 .PHONY: bench
 
 ## Show usage of the binary

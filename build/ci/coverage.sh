@@ -21,7 +21,7 @@ IGNORE=(
 
 function executables() {
     echo ${MAIN_EXECUTABLE:?}
-    cargo test --tests --no-run --message-format=json \
+    cargo test --workspace --tests --no-run --message-format=json \
     | jq -r 'select(.profile.test == true) | .filenames[]' \
     | grep -v dSYM -
 }
@@ -33,11 +33,13 @@ LLVM_COV_FLAGS=(
 )
 
 function clean() {
-    rm -f ${LLVM_PROFILE_PATTERN:?}
+    rm -f \
+        ${LLVM_PROFILE_PATTERN:?} \
+        crate/encstr/${LLVM_PROFILE_PATTERN:?}
 }
 
 function test() {
-    cargo test --tests
+    cargo test --tests --workspace
     cargo build
     ${MAIN_EXECUTABLE:?} > /dev/null
     ${MAIN_EXECUTABLE:?} --config= --help > /dev/null
@@ -50,8 +52,10 @@ function test() {
 
 function merge() {
     ${LLVM_BIN:?}/llvm-profdata merge \
-        -sparse ${LLVM_PROFILE_PATTERN:?} \
-        -o ${PROFDATA_FILE:?}
+        -o ${PROFDATA_FILE:?} \
+        -sparse \
+        ${LLVM_PROFILE_PATTERN:?} \
+        crate/encstr/${LLVM_PROFILE_PATTERN:?}
 }
 
 function report() {

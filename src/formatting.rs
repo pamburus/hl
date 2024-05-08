@@ -568,7 +568,7 @@ enum FormattedFieldVariant {
 
 pub mod string {
     // workspace imports
-    use encstr::{AnyEncodedString, Appender, Result};
+    use encstr::{AnyEncodedString, JsonAppender, Result};
 
     // third-party imports
     use bitmask_enum::bitmask;
@@ -617,27 +617,31 @@ pub mod string {
                 return Ok(());
             }
 
-            buf.truncate(begin);
-
-            match mask & (Mask::DoubleQuote | Mask::SingleQuote | Mask::ExtendedSpace | Mask::Control | Mask::Backslash)
-            {
-                Mask::DoubleQuote => {
-                    return ValueFormatSingleQuoted::new(self.string).format(buf);
-                }
-                Mask::SingleQuote => {
-                    return ValueFormatDoubleQuoted::new(self.string).format(buf);
-                }
-                _ => (),
-            };
-
-            let mask =
-                mask & (Mask::DoubleQuote | Mask::SingleQuote | Mask::ExtendedSpace | Mask::Control | Mask::Backtick);
-            if mask.intersects(Mask::DoubleQuote | Mask::SingleQuote | Mask::ExtendedSpace)
-                && !mask.intersects(Mask::Control | Mask::Backtick)
-            {
-                return ValueFormatBacktickQuoted::new(self.string).format(buf);
+            if !mask.intersects(Mask::DoubleQuote | Mask::Control | Mask::Backslash) {
+                buf.push(b'"');
+                buf.push(b'"');
+                buf[begin..].rotate_right(1);
+                return Ok(());
             }
 
+            if !mask.intersects(Mask::SingleQuote | Mask::Control | Mask::Backslash) {
+                buf.push(b'\'');
+                buf.push(b'\'');
+                buf[begin..].rotate_right(1);
+                return Ok(());
+            }
+
+            const Z: Mask = Mask::none();
+            const XS: Mask = Mask::Control.or(Mask::ExtendedSpace);
+
+            if matches!(mask.and(Mask::Backtick.or(XS)), Z | XS) {
+                buf.push(b'`');
+                buf.push(b'`');
+                buf[begin..].rotate_right(1);
+                return Ok(());
+            }
+
+            buf.truncate(begin);
             ValueFormatDoubleQuoted::new(self.string).format(buf)
         }
     }
@@ -684,68 +688,7 @@ pub mod string {
     {
         #[inline]
         fn format(&self, buf: &mut Vec<u8>) -> Result<()> {
-            if self.string.source().len() == 0 {
-                buf.push(b'"');
-            } else if self.string.source().as_bytes()[0] == b'"' {
-                buf.extend(self.string.source().as_bytes());
-            } else {
-                buf.push(b'"');
-                self.string.decode(Appender::new(buf))?;
-                buf.push(b'"');
-            }
-            Ok(())
-        }
-    }
-
-    // ---
-
-    pub struct ValueFormatSingleQuoted<S> {
-        string: S,
-    }
-
-    impl<S> ValueFormatSingleQuoted<S> {
-        #[inline(always)]
-        pub fn new(string: S) -> Self {
-            Self { string }
-        }
-    }
-
-    impl<'a, S> Format for ValueFormatSingleQuoted<S>
-    where
-        S: AnyEncodedString<'a>,
-    {
-        #[inline(always)]
-        fn format(&self, buf: &mut Vec<u8>) -> Result<()> {
-            buf.push(b'\'');
-            self.string.decode(Appender::new(buf))?;
-            buf.push(b'\'');
-            Ok(())
-        }
-    }
-
-    // ---
-
-    pub struct ValueFormatBacktickQuoted<S> {
-        string: S,
-    }
-
-    impl<S> ValueFormatBacktickQuoted<S> {
-        #[inline(always)]
-        pub fn new(string: S) -> Self {
-            Self { string }
-        }
-    }
-
-    impl<'a, S> Format for ValueFormatBacktickQuoted<S>
-    where
-        S: AnyEncodedString<'a>,
-    {
-        #[inline(always)]
-        fn format(&self, buf: &mut Vec<u8>) -> Result<()> {
-            buf.push(b'`');
-            self.string.decode(Appender::new(buf))?;
-            buf.push(b'`');
-            Ok(())
+            self.string.format_json(buf)
         }
     }
 
@@ -824,15 +767,25 @@ pub mod string {
     {
         #[inline]
         fn format(&self, buf: &mut Vec<u8>) -> Result<()> {
-            if self.string.source().len() == 0 {
-                buf.push(b'"');
-            } else if self.string.source().as_bytes()[0] == b'"' {
-                buf.extend(self.string.source().as_bytes());
-            } else {
-                buf.push(b'"');
-                self.string.decode(Appender::new(buf))?;
-                buf.push(b'"');
-            }
+            self.string.format_json(buf)
+        }
+    }
+
+    // ---
+
+    trait EncodedStringExt {
+        fn format_json(&self, buf: &mut Vec<u8>) -> Result<()>;
+    }
+
+    impl<'a, S> EncodedStringExt for S
+    where
+        S: AnyEncodedString<'a>,
+    {
+        #[inline]
+        fn format_json(&self, buf: &mut Vec<u8>) -> Result<()> {
+            buf.push(b'"');
+            self.decode(JsonAppender::new(buf))?;
+            buf.push(b'"');
             Ok(())
         }
     }
@@ -846,7 +799,7 @@ pub mod string {
         const BS: Mask = Mask::Backslash; // 0x5C
         const BT: Mask = Mask::Backtick; // 0x60
         const SP: Mask = Mask::Space; // 0x20
-        const XS: Mask = Mask::ExtendedSpace; // 0x09, 0x0A, 0x0D
+        const XS: Mask = Mask::Control.or(Mask::ExtendedSpace); // 0x09, 0x0A, 0x0D
         const EQ: Mask = Mask::EqualSign; // 0x3D
         const __: Mask = Mask::none();
         [
@@ -1189,5 +1142,33 @@ mod tests {
         };
 
         assert_eq!(&format_no_color(&rec), r#"k="some-\u001b[1mvalue\u001b[0m""#);
+    }
+
+    #[test]
+    fn test_string_value_json_with_control_characters_and_quotes() {
+        let rec = Record {
+            fields: RecordFields {
+                head: heapless::Vec::from_slice(&[(
+                    "k",
+                    RawValue::String(EncodedString::json(r#""some-\u001b[1m\"value\"\u001b[0m""#)),
+                )])
+                .unwrap(),
+                tail: Default::default(),
+            },
+            ..Default::default()
+        };
+
+        assert_eq!(&format_no_color(&rec), r#"k="some-\u001b[1m\"value\"\u001b[0m""#);
+    }
+
+    #[test]
+    fn test_message_double_quoted() {
+        let rec = Record {
+            message: Some(RawValue::String(EncodedString::raw(r#""hello, world""#))),
+            ..Default::default()
+        };
+
+        let result = format_no_color(&rec);
+        assert_eq!(&result, r#""\"hello, world\"""#, "{}", result);
     }
 }

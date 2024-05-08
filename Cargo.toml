@@ -4,7 +4,7 @@ members = [".", "crate/encstr"]
 [workspace.package]
 repository = "https://github.com/pamburus/hl"
 authors = ["Pavel Ivanov <mr.pavel.ivanov@gmail.com>"]
-version = "0.29.3-alpha.1"
+version = "0.29.3"
 edition = "2021"
 license = "MIT"
 
@@ -133,6 +133,10 @@ harness = false
 
 [[bench]]
 name = "json"
+harness = false
+
+[[bench]]
+name = "mem"
 harness = false
 
 [[bench]]
