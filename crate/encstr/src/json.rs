@@ -49,6 +49,68 @@ impl<'a> From<&'a str> for JsonEncodedString<'a> {
 
 // ---
 
+// ---
+
+pub struct Appender<'a> {
+    buffer: &'a mut Vec<u8>,
+}
+
+impl<'a> Appender<'a> {
+    #[inline(always)]
+    pub fn new(buffer: &'a mut Vec<u8>) -> Self {
+        Self { buffer }
+    }
+}
+
+impl<'a> Handler for Appender<'a> {
+    #[inline(always)]
+    fn handle(&mut self, token: Token<'_>) -> Option<()> {
+        match token {
+            Token::Char(ch) => match ch {
+                ..='\x7f' => {
+                    let ch = ch as u8;
+                    if !ESCAPE[ch as usize] {
+                        self.buffer.push(ch);
+                    } else {
+                        self.buffer.push(b'\\');
+                        match ch {
+                            b'\x08' => self.buffer.push(b'b'),
+                            b'\x0c' => self.buffer.push(b'f'),
+                            b'\n' => self.buffer.push(b'n'),
+                            b'\r' => self.buffer.push(b'r'),
+                            b'\t' => self.buffer.push(b't'),
+                            b'\\' | b'"' => self.buffer.push(ch),
+                            _ => {
+                                self.buffer.extend(b"u00");
+                                self.buffer.push(HEX[((ch & 0xf0) >> 4) as usize]);
+                                self.buffer.push(HEX[(ch & 0x0f) as usize]);
+                            }
+                        }
+                    }
+                }
+                _ => {
+                    let mut buf = [0; 4];
+                    let s = ch.encode_utf8(&mut buf);
+                    self.buffer.extend(s.as_bytes());
+                }
+            },
+            Token::Sequence(s) => {
+                let mut ss = s.as_bytes();
+                while let Some(pos) = ss.iter().position(|x| matches!(x, b'"' | b'\\')) {
+                    self.buffer.extend(&ss[..pos]);
+                    self.buffer.push(b'\\');
+                    self.buffer.push(ss[pos]);
+                    ss = &ss[pos + 1..];
+                }
+                self.buffer.extend(ss);
+            }
+        }
+        Some(())
+    }
+}
+
+// ---
+
 struct Parser<'a> {
     input: &'a str,
     index: usize,
@@ -287,7 +349,7 @@ impl<'a> Iterator for Tokens<'a> {
 
 #[inline(always)]
 fn decode_hex_val(val: u8) -> Option<u16> {
-    let n = HEX[val as usize] as u16;
+    let n = UNHEX[val as usize] as u16;
     if n == 255 {
         None
     } else {
@@ -325,7 +387,11 @@ static ESCAPE: [bool; 256] = {
     ]
 };
 
-static HEX: [u8; 256] = {
+static HEX: [u8; 16] = [
+    b'0', b'1', b'2', b'3', b'4', b'5', b'6', b'7', b'8', b'9', b'a', b'b', b'c', b'd', b'e', b'f',
+];
+
+static UNHEX: [u8; 256] = {
     const __: u8 = 255; // not a hex digit
     [
         //   1   2   3   4   5   6   7   8   9   A   B   C   D   E   F
@@ -412,6 +478,15 @@ mod tests {
     }
 
     #[test]
+    fn test_tokens_escape_b() {
+        let mut tokens = Tokens::new(&r#""00 \b""#);
+        assert_eq!(tokens.next(), Some(Ok(Token::Sequence("00 "))));
+        assert_eq!(tokens.next(), Some(Ok(Token::Char('\x08'))));
+        assert_eq!(tokens.next(), None);
+        assert_eq!(tokens.next(), None);
+    }
+
+    #[test]
     fn test_tokens_control() {
         let mut tokens = Tokens::new(&r#""hello, \x00world""#);
         assert_eq!(tokens.next(), Some(Ok(Token::Sequence("hello, "))));
@@ -439,5 +514,46 @@ mod tests {
         let mut tokens = Tokens::new(&r#""hello, \ud800""#);
         assert_eq!(tokens.next(), Some(Ok(Token::Sequence("hello, "))));
         assert_eq!(tokens.next(), Some(Err(Error::UnexpectedEndOfHexEscape)));
+    }
+
+    #[test]
+    fn test_append_esc_q() {
+        let mut tokens = Tokens::new(&r#""hello\u002c \"world\"""#);
+        let mut buffer = Vec::new();
+        let mut appender = Appender::new(&mut buffer);
+        while let Some(Ok(token)) = tokens.next() {
+            appender.handle(token);
+        }
+        assert_eq!(buffer, "hello, \\\"world\\\"".as_bytes());
+    }
+
+    #[test]
+    fn test_append_esc_bfnrt() {
+        let mut tokens = Tokens::new(r#""00 \b\f\n\r\t""#);
+        let mut buffer = Vec::new();
+        let mut appender = Appender::new(&mut buffer);
+        while let Some(Ok(token)) = tokens.next() {
+            appender.handle(token);
+        }
+        assert_eq!(buffer, r#"00 \b\f\n\r\t"#.as_bytes());
+    }
+
+    #[test]
+    fn test_append_esc_unicode() {
+        let mut tokens = Tokens::new(r#""00 ∞ \u2023""#);
+        let mut buffer = Vec::new();
+        let mut appender = Appender::new(&mut buffer);
+        while let Some(Ok(token)) = tokens.next() {
+            appender.handle(token);
+        }
+        assert_eq!(buffer, r#"00 ∞ ‣"#.as_bytes(), "{:?}", String::from_utf8_lossy(&buffer));
+    }
+
+    #[test]
+    fn test_append_sequence_with_quotes() {
+        let mut buffer = Vec::new();
+        let mut appender = Appender::new(&mut buffer);
+        appender.handle(Token::Sequence(r#"hello, "world""#));
+        assert_eq!(buffer, r#"hello, \"world\""#.as_bytes());
     }
 }

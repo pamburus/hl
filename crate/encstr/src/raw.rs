@@ -74,15 +74,56 @@ impl<'a> Iterator for Tokens<'a> {
 
 // ---
 
+pub struct Appender<'a> {
+    buffer: &'a mut Vec<u8>,
+}
+
+impl<'a> Appender<'a> {
+    #[inline(always)]
+    pub fn new(buffer: &'a mut Vec<u8>) -> Self {
+        Self { buffer }
+    }
+}
+
+impl<'a> Handler for Appender<'a> {
+    #[inline(always)]
+    fn handle(&mut self, token: Token<'_>) -> Option<()> {
+        match token {
+            Token::Char(ch) => match ch {
+                ..='\x7f' => self.buffer.push(ch as u8),
+                _ => {
+                    let mut buf = [0; 4];
+                    let s = ch.encode_utf8(&mut buf);
+                    self.buffer.extend(s.as_bytes());
+                }
+            },
+            Token::Sequence(s) => self.buffer.extend(s.as_bytes()),
+        }
+        Some(())
+    }
+}
+
+// ---
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn raw_string() {
+    fn test_raw_string() {
         let mut result = Builder::new();
-        let string = RawString::new("hello, world!");
+        let string = RawString::new("hello, world!¡");
         string.decode(&mut result).unwrap();
-        assert_eq!(result.as_str(), "hello, world!");
+        assert_eq!(result.as_str(), "hello, world!¡");
+    }
+
+    #[test]
+    fn test_appender() {
+        let mut buffer = Vec::new();
+        let mut appender = Appender::new(&mut buffer);
+        appender.handle(Token::Sequence("hello ")).unwrap();
+        appender.handle(Token::Char('•')).unwrap();
+        appender.handle(Token::Sequence(" world")).unwrap();
+        assert_eq!(std::str::from_utf8(&buffer).unwrap(), "hello • world");
     }
 }
