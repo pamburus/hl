@@ -1044,4 +1044,14 @@ mod tests {
             ]
         )
     }
+
+    #[test]
+    fn test_buf_factory_recycle() {
+        let factory = BufFactory::new(10);
+        let mut buf = factory.new_buf();
+        buf.extend_from_slice(b"test");
+        factory.recycle(buf);
+        let buf = factory.new_buf();
+        assert_eq!(buf, b"");
+    }
 }

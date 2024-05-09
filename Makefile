@@ -55,6 +55,7 @@ clean: contrib-build
 
 ## Create screenshots
 screenshots: build $(THEMES:%=screenshot-%)
+.PHONY: screenshots
 
 screenshot-%: build contrib-screenshots
 	@defaults write org.alacritty NSRequiresAquaSystemAppearance -bool yes
