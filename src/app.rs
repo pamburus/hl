@@ -113,6 +113,11 @@ impl Options {
     }
 
     #[cfg(test)]
+    fn with_filter(self, filter: Filter) -> Self {
+        Self { filter, ..self }
+    }
+
+    #[cfg(test)]
     fn with_input_info(self, input_info: Option<InputInfo>) -> Self {
         Self { input_info, ..self }
     }
@@ -853,7 +858,9 @@ impl<'a, Formatter: RecordWithSourceFormatter, Filter: RecordFilter> SegmentProc
 
         for line in self.options.delimiter.clone().into_searcher().split(data) {
             if line.len() == 0 {
-                buf.push(b'\n');
+                if self.show_unparsed() {
+                    buf.push(b'\n');
+                }
                 continue;
             }
 
@@ -1062,7 +1069,7 @@ mod tests {
 
     use chrono_tz::UTC;
 
-    use crate::{filtering::MatchOptions, themecfg::testing, LinuxDateFormat};
+    use crate::{filtering::MatchOptions, model::FieldFilterSet, themecfg::testing, LinuxDateFormat};
 
     #[test]
     fn test_common_prefix_len() {
@@ -1216,6 +1223,27 @@ mod tests {
                 "2024-01-25 18:09:16.860 |DBG| m1\n",
                 "2024-01-25 18:10:20.435 |DBG| m2\n",
             ),
+        );
+    }
+
+    #[test]
+    fn test_filter_with_blank_lines() {
+        let input = input(concat!(
+            r#"{"level":"debug","ts":"2024-01-25T19:10:20.435369+01:00","msg":"m2"}"#,
+            "\n\r\n",
+            r#"{"level":"debug","ts":"2024-01-25T19:09:16.860711+01:00","msg":"m1"}"#,
+            "\n",
+        ));
+
+        let mut output = Vec::new();
+        let app = App::new(options().with_filter(Filter {
+            fields: FieldFilterSet::new(["msg=m2"]).unwrap(),
+            ..Default::default()
+        }));
+        app.run(vec![input], &mut output).unwrap();
+        assert_eq!(
+            std::str::from_utf8(&output).unwrap(),
+            "2024-01-25 18:10:20.435 |DBG| m2\n",
         );
     }
 
