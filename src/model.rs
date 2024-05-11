@@ -32,6 +32,30 @@ use encstr::{AnyEncodedString, EncodedString};
 
 pub use level::Level;
 
+pub const MAX_NUMBER_LEN: usize = 39;
+
+// ---
+
+pub fn looks_like_number(value: &[u8]) -> bool {
+    if value.len() == 0 || value.len() > MAX_NUMBER_LEN {
+        return false;
+    }
+
+    let mut s = value;
+    let mut n_dots = 0;
+    if s[0] == b'-' {
+        s = &s[1..];
+    }
+    s.iter().all(|&x| {
+        if x == b'.' {
+            n_dots += 1;
+            n_dots <= 1
+        } else {
+            x.is_ascii_digit()
+        }
+    })
+}
+
 // ---
 
 #[derive(Clone, Copy, Eq, PartialEq, Debug)]
@@ -47,29 +71,12 @@ pub enum RawValue<'a> {
 impl<'a> RawValue<'a> {
     #[inline]
     pub fn auto(value: &'a str) -> Self {
-        let looks_like_number = || {
-            let mut s = value;
-            let mut n_dots = 0;
-            if s.starts_with('-') {
-                s = &s[1..];
-            }
-            s.len() < 40
-                && s.as_bytes().iter().all(|&x| {
-                    if x == b'.' {
-                        n_dots += 1;
-                        n_dots <= 1
-                    } else {
-                        x.is_ascii_digit()
-                    }
-                })
-        };
-
         match value.as_bytes() {
             [b'"', ..] => Self::String(EncodedString::Json(value.into())),
             b"false" => Self::Boolean(false),
             b"true" => Self::Boolean(true),
             b"null" => Self::Null,
-            _ if looks_like_number() => Self::Number(value),
+            _ if looks_like_number(value.as_bytes()) => Self::Number(value),
             _ => Self::String(EncodedString::Raw(value.into())),
         }
     }
@@ -156,11 +163,18 @@ impl<'a> RawValue<'a> {
     }
 }
 
+impl<'a> From<EncodedString<'a>> for RawValue<'a> {
+    #[inline]
+    fn from(value: EncodedString<'a>) -> Self {
+        Self::String(value)
+    }
+}
+
 impl<'a> From<&'a json::value::RawValue> for RawValue<'a> {
     #[inline(always)]
     fn from(value: &'a json::value::RawValue) -> Self {
         match value.get().as_bytes() {
-            [b'"', ..] => Self::String(EncodedString::Json(value.get().into())),
+            [b'"', ..] => Self::from(EncodedString::Json(value.get().into())),
             [b'0'..=b'9' | b'-' | b'+' | b'.', ..] => Self::Number(value.get()),
             [b'{', ..] => Self::from(RawObject::Json(value)),
             [b'[', ..] => Self::from(RawArray::Json(value)),
@@ -176,9 +190,9 @@ impl<'a> From<&'a logfmt::raw::RawValue> for RawValue<'a> {
     #[inline(always)]
     fn from(value: &'a logfmt::raw::RawValue) -> Self {
         if let [b'"', ..] = value.get().as_bytes() {
-            Self::String(EncodedString::Json(value.get().into()))
+            Self::from(EncodedString::Json(value.get().into()))
         } else {
-            Self::String(EncodedString::Raw(value.get().into()))
+            Self::from(EncodedString::Raw(value.get().into()))
         }
     }
 }
