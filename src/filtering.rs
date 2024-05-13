@@ -86,6 +86,7 @@ impl<N: KeyNormalize + Default> Default for MatchOptions<N> {
 pub struct IncludeExcludeKeyFilter<N: KeyNormalize> {
     children: HashMap<Key, IncludeExcludeKeyFilter<N>>,
     patterns: Vec<(Pattern<String>, IncludeExcludeKeyFilter<N>)>,
+    fallback: Option<Box<IncludeExcludeKeyFilter<N>>>,
     options: MatchOptions<N>,
     setting: IncludeExcludeSetting,
 }
@@ -95,6 +96,7 @@ impl<N: KeyNormalize> IncludeExcludeKeyFilter<N> {
         Self {
             children: HashMap::new(),
             patterns: Vec::new(),
+            fallback: None,
             options,
             setting: IncludeExcludeSetting::default(),
         }
@@ -107,6 +109,7 @@ impl<N: KeyNormalize> IncludeExcludeKeyFilter<N> {
             return self.add_pattern(head, tail);
         }
 
+        self.set_fallback(self.setting);
         let child = self.children.entry(head).or_insert(Self::new(self.options.clone()));
         match tail {
             None => child,
@@ -116,7 +119,11 @@ impl<N: KeyNormalize> IncludeExcludeKeyFilter<N> {
 
     pub fn get<'a>(&'a self, key: &str) -> Option<&'a IncludeExcludeKeyFilter<N>> {
         if self.leaf() {
-            return None;
+            return if self.setting == IncludeExcludeSetting::Unspecified {
+                None
+            } else {
+                Some(self)
+            };
         }
 
         let (head, tail) = self.split(key);
@@ -139,30 +146,32 @@ impl<N: KeyNormalize> IncludeExcludeKeyFilter<N> {
             }
         }
 
-        None
+        self.fallback.as_deref()
     }
 
     #[inline(always)]
     pub fn include(&mut self) -> &mut Self {
         self.setting = IncludeExcludeSetting::Include;
+        self.update_fallback();
         self
     }
 
     #[inline(always)]
     pub fn included(mut self) -> Self {
-        self.setting = IncludeExcludeSetting::Include;
+        self.include();
         self
     }
 
     #[inline(always)]
     pub fn exclude(&mut self) -> &mut Self {
         self.setting = IncludeExcludeSetting::Exclude;
+        self.update_fallback();
         self
     }
 
     #[inline(always)]
     pub fn excluded(mut self) -> Self {
-        self.setting = IncludeExcludeSetting::Exclude;
+        self.exclude();
         self
     }
 
@@ -201,12 +210,34 @@ impl<N: KeyNormalize> IncludeExcludeKeyFilter<N> {
             Some(i) => &mut self.patterns[i].1,
             None => {
                 self.patterns.push((pattern, Self::new(self.options.clone())));
+                self.update_fallback();
                 &mut self.patterns.last_mut().unwrap().1
             }
         };
         match tail {
             None => item,
             Some(tail) => item.entry(tail),
+        }
+    }
+
+    fn update_fallback(&mut self) {
+        if self.setting == IncludeExcludeSetting::Unspecified || self.leaf() {
+            self.fallback = None;
+        } else {
+            self.set_fallback(self.setting);
+        }
+    }
+
+    fn set_fallback(&mut self, setting: IncludeExcludeSetting) {
+        if setting == IncludeExcludeSetting::Unspecified {
+            self.fallback = None;
+        } else {
+            let mut fallback = self
+                .fallback
+                .take()
+                .unwrap_or_else(|| Box::new(Self::new(self.options.clone())));
+            fallback.setting = setting;
+            self.fallback = Some(fallback);
         }
     }
 }
@@ -259,14 +290,114 @@ mod tests {
         let mut filter = IncludeExcludeKeyFilter::new(MatchOptions::<DefaultNormalizing>::default());
         filter.entry("a").exclude();
         filter.entry("a.b").include();
+        filter.entry("c.d").include();
+        filter.entry("c.d.e").exclude();
+        filter.entry("c.d.g*").exclude();
 
-        let x = filter.get("x");
-        assert!(x.is_none(), "x should be none");
+        assert!(filter.get("x").is_none());
 
         let a = filter.get("a").unwrap();
         assert_eq!(a.setting(), IncludeExcludeSetting::Exclude);
 
-        let b = a.get("b").unwrap();
-        assert_eq!(b.setting(), IncludeExcludeSetting::Include);
+        let ab = a.get("b").unwrap();
+        assert_eq!(ab.setting(), IncludeExcludeSetting::Include);
+
+        let ab = filter.get("a.b").unwrap();
+        assert_eq!(ab.setting(), IncludeExcludeSetting::Include);
+
+        let ac = filter.get("a.c").unwrap();
+        assert_eq!(ac.setting(), IncludeExcludeSetting::Exclude);
+
+        let c = filter.get("c").unwrap();
+        assert_eq!(c.setting(), IncludeExcludeSetting::Unspecified);
+
+        let cd = c.get("d").unwrap();
+        assert_eq!(cd.setting(), IncludeExcludeSetting::Include);
+
+        let cd = filter.get("c.d").unwrap();
+        assert_eq!(cd.setting(), IncludeExcludeSetting::Include);
+
+        assert!(c.get("e").is_none());
+        assert!(filter.get("c.e").is_none());
+
+        let cde = cd.get("e").unwrap();
+        assert_eq!(cde.setting(), IncludeExcludeSetting::Exclude);
+
+        let cde = filter.get("c.d.e").unwrap();
+        assert_eq!(cde.setting(), IncludeExcludeSetting::Exclude);
+
+        let cde = filter.get("c.d.e").unwrap();
+        assert_eq!(cde.setting(), IncludeExcludeSetting::Exclude);
+
+        let cdf = cd.get("f").unwrap();
+        assert_eq!(cdf.setting(), IncludeExcludeSetting::Include);
+
+        let cdf = filter.get("c.d.f").unwrap();
+        assert_eq!(cdf.setting(), IncludeExcludeSetting::Include);
+
+        let cdef = filter.get("c.d.e.f").unwrap();
+        assert_eq!(cdef.setting(), IncludeExcludeSetting::Exclude);
+
+        let cdg = filter.get("c.d.g").unwrap();
+        assert_eq!(cdg.setting(), IncludeExcludeSetting::Exclude);
+
+        let cdg2 = filter.get("c.d.g2").unwrap();
+        assert_eq!(cdg2.setting(), IncludeExcludeSetting::Exclude);
+
+        let filter = filter.excluded();
+
+        assert_eq!(filter.get("x").unwrap().setting(), IncludeExcludeSetting::Exclude);
+
+        let a = filter.get("a").unwrap();
+        assert_eq!(a.setting(), IncludeExcludeSetting::Exclude);
+
+        let ab = a.get("b").unwrap();
+        assert_eq!(ab.setting(), IncludeExcludeSetting::Include);
+
+        let ab = filter.get("a.b").unwrap();
+        assert_eq!(ab.setting(), IncludeExcludeSetting::Include);
+
+        let ac = filter.get("a.c").unwrap();
+        assert_eq!(ac.setting(), IncludeExcludeSetting::Exclude);
+
+        let c = filter.get("c").unwrap();
+        assert_eq!(c.setting(), IncludeExcludeSetting::Unspecified);
+
+        let cd = c.get("d").unwrap();
+        assert_eq!(cd.setting(), IncludeExcludeSetting::Include);
+
+        let cd = filter.get("c.d").unwrap();
+        assert_eq!(cd.setting(), IncludeExcludeSetting::Include);
+
+        assert!(c.get("e").is_none());
+        assert!(filter.get("c.e").is_none());
+
+        let cde = cd.get("e").unwrap();
+        assert_eq!(cde.setting(), IncludeExcludeSetting::Exclude);
+
+        let cde = filter.get("c.d.e").unwrap();
+        assert_eq!(cde.setting(), IncludeExcludeSetting::Exclude);
+
+        let cde = filter.get("c.d.e").unwrap();
+        assert_eq!(cde.setting(), IncludeExcludeSetting::Exclude);
+
+        let cdf = cd.get("f").unwrap();
+        assert_eq!(cdf.setting(), IncludeExcludeSetting::Include);
+
+        let cdf = filter.get("c.d.f").unwrap();
+        assert_eq!(cdf.setting(), IncludeExcludeSetting::Include);
+
+        let cdef = filter.get("c.d.e.f").unwrap();
+        assert_eq!(cdef.setting(), IncludeExcludeSetting::Exclude);
+
+        let cdg = filter.get("c.d.g").unwrap();
+        assert_eq!(cdg.setting(), IncludeExcludeSetting::Exclude);
+
+        let cdg2 = filter.get("c.d.g2").unwrap();
+        assert_eq!(cdg2.setting(), IncludeExcludeSetting::Exclude);
+
+        let filter = filter.included();
+
+        assert_eq!(filter.get("x").unwrap().setting(), IncludeExcludeSetting::Include);
     }
 }
