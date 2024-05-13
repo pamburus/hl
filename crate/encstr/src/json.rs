@@ -60,6 +60,24 @@ impl<'a> Appender<'a> {
     pub fn new(buffer: &'a mut Vec<u8>) -> Self {
         Self { buffer }
     }
+
+    #[inline]
+    fn handle_escape(&mut self, ch: u8) {
+        self.buffer.push(b'\\');
+        match ch {
+            b'\x08' => self.buffer.push(b'b'),
+            b'\x0c' => self.buffer.push(b'f'),
+            b'\n' => self.buffer.push(b'n'),
+            b'\r' => self.buffer.push(b'r'),
+            b'\t' => self.buffer.push(b't'),
+            b'\\' | b'"' => self.buffer.push(ch),
+            _ => {
+                self.buffer.extend(b"u00");
+                self.buffer.push(HEX[((ch & 0xf0) >> 4) as usize]);
+                self.buffer.push(HEX[(ch & 0x0f) as usize]);
+            }
+        }
+    }
 }
 
 impl<'a> Handler for Appender<'a> {
@@ -72,20 +90,7 @@ impl<'a> Handler for Appender<'a> {
                     if !ESCAPE[ch as usize] {
                         self.buffer.push(ch);
                     } else {
-                        self.buffer.push(b'\\');
-                        match ch {
-                            b'\x08' => self.buffer.push(b'b'),
-                            b'\x0c' => self.buffer.push(b'f'),
-                            b'\n' => self.buffer.push(b'n'),
-                            b'\r' => self.buffer.push(b'r'),
-                            b'\t' => self.buffer.push(b't'),
-                            b'\\' | b'"' => self.buffer.push(ch),
-                            _ => {
-                                self.buffer.extend(b"u00");
-                                self.buffer.push(HEX[((ch & 0xf0) >> 4) as usize]);
-                                self.buffer.push(HEX[(ch & 0x0f) as usize]);
-                            }
-                        }
+                        self.handle_escape(ch);
                     }
                 }
                 _ => {
@@ -96,10 +101,9 @@ impl<'a> Handler for Appender<'a> {
             },
             Token::Sequence(s) => {
                 let mut ss = s.as_bytes();
-                while let Some(pos) = ss.iter().position(|x| matches!(x, b'"' | b'\\')) {
+                while let Some(pos) = ss.iter().position(|x| matches!(x, 0..=0x1f | b'"' | b'\\')) {
                     self.buffer.extend(&ss[..pos]);
-                    self.buffer.push(b'\\');
-                    self.buffer.push(ss[pos]);
+                    self.handle_escape(ss[pos]);
                     ss = &ss[pos + 1..];
                 }
                 self.buffer.extend(ss);
