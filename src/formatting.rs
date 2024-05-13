@@ -573,6 +573,9 @@ pub mod string {
     // third-party imports
     use bitmask_enum::bitmask;
 
+    // local imports
+    use crate::model::{looks_like_number, MAX_NUMBER_LEN};
+
     // ---
 
     pub trait Format {
@@ -612,8 +615,26 @@ pub mod string {
                 mask |= group;
             });
 
-            let first = buf[begin];
-            if mask.is_none() && first != b'[' && first != b'{' {
+            let plain = if (mask & (Mask::Other | Mask::Digit | Mask::Dot | Mask::Minus).not()).is_none() {
+                if mask == Mask::Digit {
+                    buf[begin..].len() > MAX_NUMBER_LEN
+                } else if !mask.contains(Mask::Other) {
+                    !looks_like_number(&buf[begin..])
+                } else {
+                    !matches!(
+                        buf[begin..],
+                        [b'{', ..]
+                            | [b'[', ..]
+                            | [b't', b'r', b'u', b'e']
+                            | [b'f', b'a', b'l', b's', b'e']
+                            | [b'n', b'u', b'l', b'l']
+                    )
+                }
+            } else {
+                false
+            };
+
+            if plain {
                 return Ok(());
             }
 
@@ -801,13 +822,16 @@ pub mod string {
         const SP: Mask = Mask::Space; // 0x20
         const XS: Mask = Mask::Control.or(Mask::ExtendedSpace); // 0x09, 0x0A, 0x0D
         const EQ: Mask = Mask::EqualSign; // 0x3D
-        const __: Mask = Mask::none();
+        const HY: Mask = Mask::Minus; // Hyphen, 0x2D
+        const DO: Mask = Mask::Dot; // Dot, 0x2E
+        const DD: Mask = Mask::Digit; // Decimal digit, 0x30..0x39
+        const __: Mask = Mask::Other;
         [
             //   1   2   3   4   5   6   7   8   9   A   B   C   D   E   F
             CT, CT, CT, CT, CT, CT, CT, CT, CT, XS, XS, CT, CT, XS, CT, CT, // 0
             CT, CT, CT, CT, CT, CT, CT, CT, CT, CT, CT, CT, CT, CT, CT, CT, // 1
-            SP, __, DQ, __, __, __, __, SQ, __, __, __, __, __, __, __, __, // 2
-            __, __, __, __, __, __, __, __, __, __, __, __, __, EQ, __, __, // 3
+            SP, __, DQ, __, __, __, __, SQ, __, __, __, __, __, HY, DO, __, // 2
+            DD, DD, DD, DD, DD, DD, DD, DD, DD, DD, __, __, __, EQ, __, __, // 3
             __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // 4
             __, __, __, __, __, __, __, __, __, __, __, __, BS, __, __, __, // 5
             BT, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // 6
@@ -823,16 +847,20 @@ pub mod string {
         ]
     };
 
-    #[bitmask(u8)]
+    #[bitmask(u16)]
     enum Mask {
-        Control,
-        DoubleQuote,
-        SingleQuote,
-        Backslash,
-        Backtick,
-        Space,
-        ExtendedSpace,
-        EqualSign,
+        Control,       // 1
+        DoubleQuote,   // 2
+        SingleQuote,   // 4
+        Backslash,     // 8
+        Backtick,      // 16
+        Space,         // 32
+        ExtendedSpace, // 64
+        EqualSign,     // 128
+        Digit,         // 256
+        Minus,         // 512
+        Dot,           // 1024
+        Other,         // 2048
     }
 }
 
@@ -900,6 +928,22 @@ mod tests {
 
     fn json_raw_value(s: &str) -> Box<json::value::RawValue> {
         json::value::RawValue::from_string(s.into()).unwrap()
+    }
+
+    trait RecordExt<'a> {
+        fn from_fields(fields: &[(&'a str, RawValue<'a>)]) -> Record<'a>;
+    }
+
+    impl<'a> RecordExt<'a> for Record<'a> {
+        fn from_fields(fields: &[(&'a str, RawValue<'a>)]) -> Record<'a> {
+            Record {
+                fields: RecordFields {
+                    head: heapless::Vec::from_slice(fields).unwrap(),
+                    ..Default::default()
+                },
+                ..Default::default()
+            }
+        }
     }
 
     #[test]
@@ -978,135 +1022,64 @@ mod tests {
 
     #[test]
     fn test_string_value_raw() {
-        let rec = Record {
-            fields: RecordFields {
-                head: heapless::Vec::from_slice(&[("k", RawValue::String(EncodedString::raw("v")))]).unwrap(),
-                ..Default::default()
-            },
-            ..Default::default()
-        };
-
+        let v = "v";
+        let rec = Record::from_fields(&[("k", EncodedString::raw(&v).into())]);
         assert_eq!(&format_no_color(&rec), "k=v");
     }
 
     #[test]
     fn test_string_value_json_simple() {
-        let rec = Record {
-            fields: RecordFields {
-                head: heapless::Vec::from_slice(&[("k", RawValue::String(EncodedString::json(r#""some-value""#)))])
-                    .unwrap(),
-                ..Default::default()
-            },
-            ..Default::default()
-        };
-
+        let v = r#""some-value""#;
+        let rec = Record::from_fields(&[("k", EncodedString::json(&v).into())]);
         assert_eq!(&format_no_color(&rec), r#"k=some-value"#);
     }
 
     #[test]
     fn test_string_value_json_with_space() {
-        let rec = Record {
-            fields: RecordFields {
-                head: heapless::Vec::from_slice(&[("k", RawValue::String(EncodedString::json(r#""some value""#)))])
-                    .unwrap(),
-                ..Default::default()
-            },
-            ..Default::default()
-        };
-
+        let v = r#""some value""#;
+        let rec = Record::from_fields(&[("k", EncodedString::json(&v).into())]);
         assert_eq!(&format_no_color(&rec), r#"k="some value""#);
     }
 
     #[test]
     fn test_string_value_json_with_space_and_double_quotes() {
-        let rec = Record {
-            fields: RecordFields {
-                head: heapless::Vec::from_slice(&[("k", RawValue::String(EncodedString::json(r#""some \"value\"""#)))])
-                    .unwrap(),
-                ..Default::default()
-            },
-            ..Default::default()
-        };
-
+        let v = r#""some \"value\"""#;
+        let rec = Record::from_fields(&[("k", EncodedString::json(&v).into())]);
         assert_eq!(&format_no_color(&rec), r#"k='some "value"'"#);
     }
 
     #[test]
     fn test_string_value_json_with_space_and_single_quotes() {
-        let rec = Record {
-            fields: RecordFields {
-                head: heapless::Vec::from_slice(&[("k", RawValue::String(EncodedString::json(r#""some 'value'""#)))])
-                    .unwrap(),
-                ..Default::default()
-            },
-            ..Default::default()
-        };
-
+        let v = r#""some 'value'""#;
+        let rec = Record::from_fields(&[("k", EncodedString::json(&v).into())]);
         assert_eq!(&format_no_color(&rec), r#"k="some 'value'""#);
     }
 
     #[test]
     fn test_string_value_json_with_space_and_backticks() {
-        let rec = Record {
-            fields: RecordFields {
-                head: heapless::Vec::from_slice(&[("k", RawValue::String(EncodedString::json(r#""some `value`""#)))])
-                    .unwrap(),
-                ..Default::default()
-            },
-            ..Default::default()
-        };
-
+        let v = r#""some `value`""#;
+        let rec = Record::from_fields(&[("k", EncodedString::json(&v).into())]);
         assert_eq!(&format_no_color(&rec), r#"k="some `value`""#);
     }
 
     #[test]
     fn test_string_value_json_with_space_and_double_and_single_quotes() {
-        let rec = Record {
-            fields: RecordFields {
-                head: heapless::Vec::from_slice(&[(
-                    "k",
-                    RawValue::String(EncodedString::json(r#""some \"value\" from 'source'""#)),
-                )])
-                .unwrap(),
-                ..Default::default()
-            },
-            ..Default::default()
-        };
-
+        let v = r#""some \"value\" from 'source'""#;
+        let rec = Record::from_fields(&[("k", EncodedString::json(&v).into())]);
         assert_eq!(&format_no_color(&rec), r#"k=`some "value" from 'source'`"#);
     }
 
     #[test]
     fn test_string_value_json_with_backslash() {
-        let rec = Record {
-            fields: RecordFields {
-                head: heapless::Vec::from_slice(&[(
-                    "k",
-                    RawValue::String(EncodedString::json(r#""some-\\\"value\\\"""#)),
-                )])
-                .unwrap(),
-                ..Default::default()
-            },
-            ..Default::default()
-        };
-
+        let v = r#""some-\\\"value\\\"""#;
+        let rec = Record::from_fields(&[("k", EncodedString::json(&v).into())]);
         assert_eq!(&format_no_color(&rec), r#"k=`some-\"value\"`"#);
     }
 
     #[test]
     fn test_string_value_json_with_space_and_double_and_single_quotes_and_backticks() {
-        let rec = Record {
-            fields: RecordFields {
-                head: heapless::Vec::from_slice(&[(
-                    "k",
-                    RawValue::String(EncodedString::json(r#""some \"value\" from 'source' with `sauce`""#)),
-                )])
-                .unwrap(),
-                tail: Default::default(),
-            },
-            ..Default::default()
-        };
-
+        let v = r#""some \"value\" from 'source' with `sauce`""#;
+        let rec = Record::from_fields(&[("k", EncodedString::json(&v).into())]);
         assert_eq!(
             &format_no_color(&rec),
             r#"k="some \"value\" from 'source' with `sauce`""#
@@ -1115,50 +1088,57 @@ mod tests {
 
     #[test]
     fn test_string_value_json_with_extended_space() {
-        let rec = Record {
-            fields: RecordFields {
-                head: heapless::Vec::from_slice(&[("k", RawValue::String(EncodedString::json(r#""some\tvalue""#)))])
-                    .unwrap(),
-                tail: Default::default(),
-            },
-            ..Default::default()
-        };
-
+        let v = r#""some\tvalue""#;
+        let rec = Record::from_fields(&[("k", EncodedString::json(&v).into())]);
         assert_eq!(&format_no_color(&rec), "k=`some\tvalue`");
     }
 
     #[test]
     fn test_string_value_json_with_control_characters() {
-        let rec = Record {
-            fields: RecordFields {
-                head: heapless::Vec::from_slice(&[(
-                    "k",
-                    RawValue::String(EncodedString::json(r#""some-\u001b[1mvalue\u001b[0m""#)),
-                )])
-                .unwrap(),
-                tail: Default::default(),
-            },
-            ..Default::default()
-        };
-
-        assert_eq!(&format_no_color(&rec), r#"k="some-\u001b[1mvalue\u001b[0m""#);
+        let v = r#""some-\u001b[1mvalue\u001b[0m""#;
+        let rec = Record::from_fields(&[("k", EncodedString::json(&v).into())]);
+        assert_eq!(format_no_color(&rec), format!(r#"k={}"#, v));
     }
 
     #[test]
     fn test_string_value_json_with_control_characters_and_quotes() {
-        let rec = Record {
-            fields: RecordFields {
-                head: heapless::Vec::from_slice(&[(
-                    "k",
-                    RawValue::String(EncodedString::json(r#""some-\u001b[1m\"value\"\u001b[0m""#)),
-                )])
-                .unwrap(),
-                tail: Default::default(),
-            },
-            ..Default::default()
-        };
+        let v = r#""some-\u001b[1m\"value\"\u001b[0m""#;
+        let rec = Record::from_fields(&[("k", EncodedString::json(&v).into())]);
+        assert_eq!(format_no_color(&rec), format!(r#"k={}"#, v));
+    }
 
-        assert_eq!(&format_no_color(&rec), r#"k="some-\u001b[1m\"value\"\u001b[0m""#);
+    #[test]
+    fn test_string_value_json_ambiguous() {
+        for v in ["true", "false", "null", "{}", "[]"] {
+            let v = format!(r#""{}""#, v);
+            let rec = Record::from_fields(&[("k", EncodedString::json(&v).into())]);
+            assert_eq!(format_no_color(&rec), format!(r#"k={}"#, v));
+        }
+    }
+
+    #[test]
+    fn test_string_value_json_number() {
+        for v in ["42", "42.42", "-42", "-42.42"] {
+            let v = format!(r#""{}""#, v);
+            let rec = Record::from_fields(&[("k", EncodedString::json(&v).into())]);
+            assert_eq!(format_no_color(&rec), format!(r#"k={}"#, v));
+        }
+        for v in [
+            "42128731867381927389172983718293789127389172938712983718927",
+            "42.128731867381927389172983718293789127389172938712983718927",
+        ] {
+            let qv = format!(r#""{}""#, v);
+            let rec = Record::from_fields(&[("k", EncodedString::json(&qv).into())]);
+            assert_eq!(format_no_color(&rec), format!(r#"k={}"#, v));
+        }
+    }
+
+    #[test]
+    fn test_string_value_json_version() {
+        let v = "1.1.0";
+        let qv = format!(r#""{}""#, v);
+        let rec = Record::from_fields(&[("k", EncodedString::json(&qv).into())]);
+        assert_eq!(format_no_color(&rec), format!(r#"k={}"#, v));
     }
 
     #[test]
