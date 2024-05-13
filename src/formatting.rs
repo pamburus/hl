@@ -738,11 +738,45 @@ pub mod string {
 
             let begin = buf.len();
             MessageFormatRaw::new(self.string).format(buf)?;
-            if buf[begin..].starts_with(b"\"") || buf[begin..].contains(&b'=') {
-                buf.truncate(begin);
-                MessageFormatDoubleQuoted::new(self.string).format(buf)?;
+
+            let mut mask = Mask::none();
+
+            buf[begin..].iter().map(|&c| CHAR_GROUPS[c as usize]).for_each(|group| {
+                mask |= group;
+            });
+
+            if !mask.intersects(Mask::EqualSign | Mask::Control | Mask::Backslash)
+                && !matches!(buf[begin..], [b'"', ..] | [b'\'', ..] | [b'`', ..])
+            {
+                return Ok(());
             }
-            Ok(())
+
+            if !mask.intersects(Mask::DoubleQuote | Mask::Control | Mask::Backslash) {
+                buf.push(b'"');
+                buf.push(b'"');
+                buf[begin..].rotate_right(1);
+                return Ok(());
+            }
+
+            if !mask.intersects(Mask::SingleQuote | Mask::Control | Mask::Backslash) {
+                buf.push(b'\'');
+                buf.push(b'\'');
+                buf[begin..].rotate_right(1);
+                return Ok(());
+            }
+
+            const Z: Mask = Mask::none();
+            const XS: Mask = Mask::Control.or(Mask::ExtendedSpace);
+
+            if matches!(mask.and(Mask::Backtick.or(XS)), Z | XS) {
+                buf.push(b'`');
+                buf.push(b'`');
+                buf[begin..].rotate_right(1);
+                return Ok(());
+            }
+
+            buf.truncate(begin);
+            MessageFormatDoubleQuoted::new(self.string).format(buf)
         }
     }
 
@@ -1268,6 +1302,39 @@ mod tests {
         };
 
         let result = format_no_color(&rec);
-        assert_eq!(&result, r#""\"hello, world\"""#, "{}", result);
+        assert_eq!(&result, r#"'"hello, world"'"#, "{}", result);
+    }
+
+    #[test]
+    fn test_message_single_quoted() {
+        let rec = Record {
+            message: Some(EncodedString::raw(r#"'hello, world'"#).into()),
+            ..Default::default()
+        };
+
+        let result = format_no_color(&rec);
+        assert_eq!(&result, r#""'hello, world'""#, "{}", result);
+    }
+
+    #[test]
+    fn test_message_single_and_double_quoted() {
+        let rec = Record {
+            message: Some(EncodedString::raw(r#"'hello, "world"'"#).into()),
+            ..Default::default()
+        };
+
+        let result = format_no_color(&rec);
+        assert_eq!(&result, r#"`'hello, "world"'`"#, "{}", result);
+    }
+
+    #[test]
+    fn test_message_control_chars() {
+        let rec = Record {
+            message: Some(EncodedString::raw("hello, \x1b[33mworld\x1b[0m").into()),
+            ..Default::default()
+        };
+
+        let result = format_no_color(&rec);
+        assert_eq!(&result, r#""hello, \u001b[33mworld\u001b[0m""#, "{}", result);
     }
 }
