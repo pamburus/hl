@@ -1288,6 +1288,51 @@ mod tests {
         );
     }
 
+    #[test]
+    fn test_hide_by_prefix() {
+        let input = input(concat!(
+            r#"level=debug time=2024-01-25T19:10:20.435369+01:00 msg=m1 a.b.c=10 a.b.d=20 a.c.b=11"#,
+            "\n",
+        ));
+
+        let mut filter = IncludeExcludeKeyFilter::new(MatchOptions::default());
+        filter.entry("a.b").exclude();
+
+        let mut output = Vec::new();
+        let app = App::new(options().with_fields(FieldOptions {
+            filter: Arc::new(filter),
+            ..FieldOptions::default()
+        }));
+        app.run(vec![input], &mut output).unwrap();
+        assert_eq!(
+            std::str::from_utf8(&output).unwrap(),
+            "2024-01-25 18:10:20.435 |DBG| m1 a.c.b=11 ...\n",
+        );
+    }
+
+    #[test]
+    fn test_hide_by_prefix_and_reveal_child() {
+        let input = input(concat!(
+            r#"level=debug time=2024-01-25T19:10:20.435369+01:00 msg=m1 a.b.c=10 a.b.d=20 a.c.b=11"#,
+            "\n",
+        ));
+
+        let mut filter = IncludeExcludeKeyFilter::new(MatchOptions::default());
+        filter.entry("a.b").exclude();
+        filter.entry("a.b.d").include();
+
+        let mut output = Vec::new();
+        let app = App::new(options().with_fields(FieldOptions {
+            filter: Arc::new(filter),
+            ..FieldOptions::default()
+        }));
+        app.run(vec![input], &mut output).unwrap();
+        assert_eq!(
+            std::str::from_utf8(&output).unwrap(),
+            "2024-01-25 18:10:20.435 |DBG| m1 a.b.d=20 a.c.b=11 ...\n",
+        );
+    }
+
     fn input<S: Into<String>>(s: S) -> InputHolder {
         InputHolder::new(InputReference::Stdin, Some(Box::new(Cursor::new(s.into()))))
     }
