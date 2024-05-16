@@ -81,7 +81,7 @@ fn run() -> Result<()> {
         let themes = Theme::list(&app_dirs)?
             .into_iter()
             .sorted_by_key(|(name, info)| (info.origin, name.clone()));
-        for (origin, group) in themes.group_by(|(_, info)| info.origin).into_iter() {
+        for (origin, group) in themes.chunk_by(|(_, info)| info.origin).into_iter() {
             let origin = match origin {
                 ThemeOrigin::Stock => "stock",
                 ThemeOrigin::Custom => "custom",
