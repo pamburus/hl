@@ -4,7 +4,7 @@ members = [".", "crate/encstr"]
 [workspace.package]
 repository = "https://github.com/pamburus/hl"
 authors = ["Pavel Ivanov <mr.pavel.ivanov@gmail.com>"]
-version = "0.29.4"
+version = "0.29.5-alpha.1"
 edition = "2021"
 license = "MIT"
 
@@ -22,14 +22,12 @@ version.workspace = true
 
 [build-dependencies]
 capnpc = "0.19"
-generic-array = "0"
 hex = "0"
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["raw_value"] }
 sha2 = "0"
 
 [dependencies]
-atoi = "2"
 bincode = "1"
 bitmask = "0"
 bitmask-enum = "2"
@@ -52,12 +50,11 @@ crossbeam-utils = "0"
 derive_deref = "1"
 enum-map = "2"
 flate2 = "1"
-generic-array = "0"
 heapless = "0"
 hex = "0"
 htp = { git = "https://github.com/pamburus/htp.git" }
 humantime = "2"
-itertools = "0.12"
+itertools = "0.13"
 itoa = { version = "1", default-features = false }
 notify = { version = "6", features = ["macos_kqueue"] }
 nu-ansi-term = "0"
