@@ -513,6 +513,7 @@ Advanced Options:
       --max-message-size <SIZE>     Maximum message size [env: HL_MAX_MESSAGE_SIZE=] [default: "64 MiB"]
   -C, --concurrency <N>             Number of processing threads [env: HL_CONCURRENCY=]
       --shell-completions <SHELL>   Print shell auto-completion script and exit [possible values: bash, elvish, fish, powershell, zsh]
+      --man-page                    Print man page and exit
       --list-themes                 Print available themes and exit
       --dump-index                  Print debug index metadata (in --sort mode) and exit
       --debug                       Print debug error messages that can help with troubleshooting

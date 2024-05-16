@@ -385,8 +385,17 @@ pub struct Opt {
     pub concurrency: Option<usize>,
 
     /// Print shell auto-completion script and exit.
-    #[arg(long, value_parser = value_parser!(Shell), value_name = "SHELL", help_heading = heading::ADVANCED)]
+    #[arg(
+        long,
+        value_parser = value_parser!(Shell),
+        value_name = "SHELL",
+        help_heading = heading::ADVANCED,
+    )]
     pub shell_completions: Option<Shell>,
+
+    /// Print man page and exit.
+    #[arg(long, help_heading = heading::ADVANCED)]
+    pub man_page: bool,
 
     /// Print available themes and exit.
     #[arg(long, help_heading = heading::ADVANCED)]
