@@ -1284,6 +1284,21 @@ mod tests {
     }
 
     #[test]
+    fn test_string_value_json_hyphen() {
+        let v = "-";
+        let qv = format!(r#""{}""#, v);
+        let rec = Record::from_fields(&[("k", EncodedString::json(&qv).into())]);
+        assert_eq!(format_no_color(&rec), format!(r#"k={}"#, v));
+    }
+
+    #[test]
+    fn test_string_value_raw_hyphen() {
+        let v = "-";
+        let rec = Record::from_fields(&[("k", EncodedString::raw(&v).into())]);
+        assert_eq!(format_no_color(&rec), format!(r#"k={}"#, v));
+    }
+
+    #[test]
     fn test_message_empty() {
         let rec = Record {
             message: Some(EncodedString::raw("").into()),
