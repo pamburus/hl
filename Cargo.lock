@@ -352,6 +352,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "98cc8fbded0c607b7ba9dd60cd98df59af97e84d24e49c8557331cfc26d301ce"
 
 [[package]]
+name = "clap_mangen"
+version = "0.2.20"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e1dd95b5ebb5c1c54581dd6346f3ed6a79a3eef95dd372fc2ac13d535535300e"
+dependencies = [
+ "clap",
+ "roff",
+]
+
+[[package]]
 name = "closure"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -602,7 +612,7 @@ checksum = "edd0f118536f44f5ccd48bcb8b111bdc3de888b58c74639dfb034a357d0f206d"
 
 [[package]]
 name = "encstr"
-version = "0.29.5-alpha.1"
+version = "0.29.5-alpha.2"
 
 [[package]]
 name = "enum-map"
@@ -759,7 +769,7 @@ checksum = "7f24254aa9a54b5c858eaee2f5bccdb46aaf0e486a595ed5fd8f86ba55232a70"
 
 [[package]]
 name = "hl"
-version = "0.29.5-alpha.1"
+version = "0.29.5-alpha.2"
 dependencies = [
  "bincode",
  "bitmask",
@@ -772,6 +782,7 @@ dependencies = [
  "chrono-tz",
  "clap",
  "clap_complete",
+ "clap_mangen",
  "closure",
  "collection_macros",
  "config",
@@ -1361,6 +1372,12 @@ name = "regex-syntax"
 version = "0.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "adad44e29e4c806119491a7f06f03de4d1af22c3a680dd47f1e6e179439d1f56"
+
+[[package]]
+name = "roff"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b833d8d034ea094b1ea68aa6d5c740e0d04bad9d16568d08ba6f76823a114316"
 
 [[package]]
 name = "ron"

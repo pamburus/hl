@@ -22,10 +22,21 @@ build-release: contrib-build
 	@cargo build --release --locked
 .PHONY: build-release
 
-## Install binary
-install: contrib-build
+## Install binary and man pages
+install: contrib-build install-man-pages
 	@cargo install --path . --locked
 .PHONY: install
+
+## Install man pages
+install-man-pages: ~/share/man/man1/hl.1
+	@echo $$(tput setaf 3)NOTE:$$(tput sgr0) ensure $$(tput setaf 2)~/share/man$$(tput sgr0) is added to $$(tput setaf 2)MANPATH$$(tput sgr0) environment variable
+.PHONY: install-man-pages
+
+~/share/man/man1/hl.1: contrib-build | ~/share/man/man1
+	@HL_CONFIG= cargo run --release --locked -- --man-page >$@
+
+~/share/man/man1:
+	@mkdir -p $@
 
 ## Install versioned binary
 install-versioned: contrib-build

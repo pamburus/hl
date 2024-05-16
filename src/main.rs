@@ -46,6 +46,12 @@ fn run() -> Result<()> {
         return Ok(());
     }
 
+    if opt.man_page {
+        let man = clap_mangen::Man::new(cli::Opt::command());
+        man.render(&mut stdout())?;
+        return Ok(());
+    }
+
     let color_supported = if stdout().is_terminal() {
         if let Err(err) = hl::enable_ansi_support() {
             eprintln!("failed to enable ansi support: {}", err);

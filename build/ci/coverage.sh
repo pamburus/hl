@@ -46,6 +46,7 @@ function test() {
     ${MAIN_EXECUTABLE:?} --config=etc/defaults/config-k8s.yaml > /dev/null
     ${MAIN_EXECUTABLE:?} --config=etc/defaults/config-ecs.yaml > /dev/null
     ${MAIN_EXECUTABLE:?} --shell-completions bash > /dev/null
+    ${MAIN_EXECUTABLE:?} --man-page > /dev/null
     ${MAIN_EXECUTABLE:?} --list-themes > /dev/null
     echo "" | ${MAIN_EXECUTABLE:?} --concurrency 4 > /dev/null
 } 
