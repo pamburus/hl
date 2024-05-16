@@ -46,14 +46,15 @@ pub fn looks_like_number(value: &[u8]) -> bool {
     if s[0] == b'-' {
         s = &s[1..];
     }
-    s.iter().all(|&x| {
-        if x == b'.' {
-            n_dots += 1;
-            n_dots <= 1
-        } else {
-            x.is_ascii_digit()
-        }
-    })
+    s.len() != 0
+        && s.iter().all(|&x| {
+            if x == b'.' {
+                n_dots += 1;
+                n_dots <= 1
+            } else {
+                x.is_ascii_digit()
+            }
+        })
 }
 
 // ---
