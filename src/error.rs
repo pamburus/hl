@@ -10,6 +10,9 @@ use config::ConfigError;
 use nu_ansi_term::Color;
 use thiserror::Error;
 
+// other local crates
+use serde_logfmt::logfmt;
+
 // local imports
 use crate::level;
 
@@ -95,7 +98,7 @@ pub enum Error {
     #[error("failed to parse json: {0}")]
     JsonParseError(#[from] serde_json::Error),
     #[error("failed to parse logfmt: {0}")]
-    LogfmtParseError(#[from] crate::logfmt::error::Error),
+    LogfmtParseError(#[from] logfmt::error::Error),
     #[error(transparent)]
     TryFromIntError(#[from] TryFromIntError),
     #[error(transparent)]

@@ -35,7 +35,7 @@ LLVM_COV_FLAGS=(
 function clean() {
     rm -f \
         ${LLVM_PROFILE_PATTERN:?} \
-        crate/encstr/${LLVM_PROFILE_PATTERN:?}
+        crate/**/${LLVM_PROFILE_PATTERN:?}
 }
 
 function test() {
@@ -56,7 +56,7 @@ function merge() {
         -o ${PROFDATA_FILE:?} \
         -sparse \
         ${LLVM_PROFILE_PATTERN:?} \
-        crate/encstr/${LLVM_PROFILE_PATTERN:?}
+        crate/**/${LLVM_PROFILE_PATTERN:?}
 }
 
 function report() {

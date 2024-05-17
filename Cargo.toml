@@ -4,7 +4,7 @@ members = [".", "crate/encstr"]
 [workspace.package]
 repository = "https://github.com/pamburus/hl"
 authors = ["Pavel Ivanov <mr.pavel.ivanov@gmail.com>"]
-version = "0.29.5-alpha.2"
+version = "0.29.5-alpha.3"
 edition = "2021"
 license = "MIT"
 
@@ -49,6 +49,7 @@ crossbeam-channel = "0"
 crossbeam-queue = "0"
 crossbeam-utils = "0"
 derive_deref = "1"
+encstr = { path = "./crate/encstr" }
 enum-map = "2"
 flate2 = "1"
 heapless = "0"
@@ -68,6 +69,7 @@ regex = "1"
 rust-embed = "8"
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["raw_value"] }
+serde-logfmt = { path = "./crate/serde-logfmt" }
 serde_yaml = "0"
 sha2 = "0"
 shellwords = "1"
@@ -78,7 +80,6 @@ thiserror = "1"
 wildflower = { git = "https://github.com/cassaundra/wildflower.git" }
 winapi-util = { version = "0" }
 wyhash = "0"
-encstr = { path = "crate/encstr" }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 kqueue = "1"
