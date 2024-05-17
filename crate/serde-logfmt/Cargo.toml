@@ -1,9 +1,12 @@
 [package]
-description = "Encoded string"
-name = "encstr"
+description = "Logfmt decoding based on serde"
+name = "serde-logfmt"
 version = "0.1.0"
 workspace = "../.."
 repository.workspace = true
 edition.workspace = true
 authors.workspace = true
 license.workspace = true
+
+[dependencies]
+serde = { version = "1.0", features = ["derive"] }

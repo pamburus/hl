@@ -16,17 +16,20 @@ use serde::de::{Deserialize, Deserializer, MapAccess, SeqAccess, Visitor};
 use serde_json::{self as json};
 use wildflower::Pattern;
 
+// other local crates
+use encstr::{AnyEncodedString, EncodedString};
+use serde_logfmt::logfmt;
+
 // local imports
 use crate::{
     app::{InputFormat, UnixTimestampUnit},
     error::{Error, Result},
-    level, logfmt,
+    level,
     serdex::StreamDeserializerWithOffsets,
     settings::PredefinedFields,
     timestamp::Timestamp,
     types::FieldKind,
 };
-use encstr::{AnyEncodedString, EncodedString};
 
 // ---
 
@@ -1725,8 +1728,8 @@ const RAW_RECORD_FIELDS_CAPACITY: usize = RECORD_EXTRA_CAPACITY + MAX_PREDEFINED
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::logfmt;
     use maplit::hashmap;
+    use serde_logfmt::logfmt;
 
     #[test]
     fn test_raw_record_parser_empty_line() {
