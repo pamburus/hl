@@ -1863,7 +1863,7 @@ dependencies = [
 [[package]]
 name = "wildflower"
 version = "0.3.0"
-source = "git+https://github.com/cassaundra/wildflower.git#41e1c6912f50905f7046bc834627a481a9f5fbc1"
+source = "git+https://github.com/cassaundra/wildflower.git#f7428c1b8aecccda1cf3f9f9b2e2721e04bb538c"
 dependencies = [
  "stable_deref_trait",
  "yoke",
