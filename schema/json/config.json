@@ -1,0 +1,289 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+        "time-format": {
+            "type": "string"
+        },
+        "time-zone": {
+            "type": "string"
+        },
+        "fields": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+                "predefined": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                        "time": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "properties": {
+                                "show": {
+                                    "type": "string"
+                                },
+                                "names": {
+                                    "type": "array",
+                                    "items": {
+                                        "type": "string"
+                                    }
+                                }
+                            },
+                            "required": [
+                                "names"
+                            ]
+                        },
+                        "logger": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "properties": {
+                                "names": {
+                                    "type": "array",
+                                    "items": {
+                                        "type": "string"
+                                    }
+                                }
+                            },
+                            "required": [
+                                "names"
+                            ]
+                        },
+                        "level": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "properties": {
+                                "show": {
+                                    "type": "string"
+                                },
+                                "variants": {
+                                    "type": "array",
+                                    "items": {
+                                        "type": "object",
+                                        "additionalProperties": false,
+                                        "properties": {
+                                            "names": {
+                                                "type": "array",
+                                                "items": {
+                                                    "type": "string"
+                                                }
+                                            },
+                                            "values": {
+                                                "type": "object",
+                                                "additionalProperties": false,
+                                                "properties": {
+                                                    "debug": {
+                                                        "type": "array",
+                                                        "items": {
+                                                            "type": [
+                                                                "string",
+                                                                "integer"
+                                                            ]
+                                                        }
+                                                    },
+                                                    "info": {
+                                                        "type": "array",
+                                                        "items": {
+                                                            "type": [
+                                                                "string",
+                                                                "integer"
+                                                            ]
+                                                        }
+                                                    },
+                                                    "warning": {
+                                                        "type": "array",
+                                                        "items": {
+                                                            "type": [
+                                                                "string",
+                                                                "integer"
+                                                            ]
+                                                        }
+                                                    },
+                                                    "error": {
+                                                        "type": "array",
+                                                        "items": {
+                                                            "type": [
+                                                                "string",
+                                                                "integer"
+                                                            ]
+                                                        }
+                                                    }
+                                                }
+                                            },
+                                            "level": {
+                                                "type": "string",
+                                                "enum": [
+                                                    "debug",
+                                                    "info",
+                                                    "warning",
+                                                    "error"
+                                                ]
+                                            }
+                                        },
+                                        "required": [
+                                            "names"
+                                        ]
+                                    }
+                                }
+                            },
+                            "required": [
+                                "variants"
+                            ]
+                        },
+                        "message": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "properties": {
+                                "names": {
+                                    "type": "array",
+                                    "items": {
+                                        "type": "string"
+                                    }
+                                }
+                            },
+                            "required": [
+                                "names"
+                            ]
+                        },
+                        "caller": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "properties": {
+                                "names": {
+                                    "type": "array",
+                                    "items": {
+                                        "type": "string"
+                                    }
+                                }
+                            },
+                            "required": [
+                                "names"
+                            ]
+                        },
+                        "caller-file": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "properties": {
+                                "names": {
+                                    "type": "array",
+                                    "items": {
+                                        "type": "string"
+                                    }
+                                }
+                            },
+                            "required": [
+                                "names"
+                            ]
+                        },
+                        "caller-line": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "properties": {
+                                "names": {
+                                    "type": "array",
+                                    "items": {
+                                        "type": "string"
+                                    }
+                                }
+                            },
+                            "required": [
+                                "names"
+                            ]
+                        }
+                    }
+                },
+                "ignore": {
+                    "type": "array",
+                    "items": [
+                        {
+                            "type": "string"
+                        }
+                    ]
+                },
+                "hide": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "formatting": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+                "flatten": {
+                    "type": "string",
+                    "enum": [
+                        "never",
+                        "always"
+                    ]
+                },
+                "punctuation": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                        "logger-name-separator": {
+                            "type": "string"
+                        },
+                        "field-key-value-separator": {
+                            "type": "string"
+                        },
+                        "string-opening-quote": {
+                            "type": "string"
+                        },
+                        "string-closing-quote": {
+                            "type": "string"
+                        },
+                        "source-location-separator": {
+                            "type": "string"
+                        },
+                        "hidden-fields-indicator": {
+                            "type": "string"
+                        },
+                        "level-left-separator": {
+                            "type": "string"
+                        },
+                        "level-right-separator": {
+                            "type": "string"
+                        },
+                        "input-number-prefix": {
+                            "type": "string"
+                        },
+                        "input-number-left-separator": {
+                            "type": "string"
+                        },
+                        "input-number-right-separator": {
+                            "type": "string"
+                        },
+                        "input-name-left-separator": {
+                            "type": "string"
+                        },
+                        "input-name-right-separator": {
+                            "type": "string"
+                        },
+                        "input-name-clipping": {
+                            "type": "string"
+                        },
+                        "input-name-common-part": {
+                            "type": "string"
+                        },
+                        "array-separator": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "concurrency": {
+            "type": [
+                "integer",
+                "null"
+            ]
+        },
+        "theme": {
+            "type": "string"
+        }
+    }
+}

@@ -1,3 +1,5 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/pamburus/hl/master/schema/json/config.json
+
 # Time format, see https://man7.org/linux/man-pages/man1/date.1.html for details.
 time-format: '%b %d %T.%3N'
 
