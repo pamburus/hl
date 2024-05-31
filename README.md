@@ -554,7 +554,7 @@ Advanced Options:
             $ time fblog -d example.log >/dev/null
             fblog -d example.log > /dev/null  132.12s user 14.39s system 99% cpu 2:27.61 total
             ```
-
+    * See [#132](https://github.com/pamburus/hl/issues/132) for how to repeat measurements
 
 [ci-img]: https://github.com/pamburus/hl/actions/workflows/ci.yml/badge.svg
 [ci]: https://github.com/pamburus/hl/actions/workflows/ci.yml
