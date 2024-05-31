@@ -258,7 +258,7 @@ impl RecordFormatter {
                         s.space();
                     });
                     s.element(Element::Message, |s| {
-                        s.batch(|buf| buf.with_auto_trim(|buf| MessageFormatAuto::new(value).format(buf).unwrap()))
+                        s.batch(|buf| MessageFormatAuto::new(value).format(buf).unwrap())
                     });
                 }
                 false
@@ -518,22 +518,25 @@ impl<'a> FieldFormatter<'a> {
 // ---
 
 pub trait WithAutoTrim {
-    fn with_auto_trim<F>(&mut self, f: F)
+    fn with_auto_trim<F, R>(&mut self, f: F) -> R
     where
-        F: FnOnce(&mut Self);
+        F: FnOnce(&mut Self) -> R;
 }
 
 impl WithAutoTrim for Vec<u8> {
     #[inline(always)]
-    fn with_auto_trim<F>(&mut self, f: F)
+    fn with_auto_trim<F, R>(&mut self, f: F) -> R
     where
-        F: FnOnce(&mut Self),
+        F: FnOnce(&mut Self) -> R,
     {
         let begin = self.len();
-        f(self);
+        let result = f(self);
         if let Some(end) = self[begin..].iter().rposition(|&b| !b.is_ascii_whitespace()) {
             self.truncate(begin + end + 1);
+        } else {
+            self.truncate(begin);
         }
+        result
     }
 }
 
@@ -574,7 +577,10 @@ pub mod string {
     use bitmask_enum::bitmask;
 
     // local imports
-    use crate::model::{looks_like_number, MAX_NUMBER_LEN};
+    use crate::{
+        formatting::WithAutoTrim,
+        model::{looks_like_number, MAX_NUMBER_LEN},
+    };
 
     // ---
 
@@ -737,7 +743,7 @@ pub mod string {
             }
 
             let begin = buf.len();
-            MessageFormatRaw::new(self.string).format(buf)?;
+            buf.with_auto_trim(|buf| MessageFormatRaw::new(self.string).format(buf))?;
 
             let mut mask = Mask::none();
 
@@ -1351,5 +1357,16 @@ mod tests {
 
         let result = format_no_color(&rec);
         assert_eq!(&result, r#""hello, \u001b[33mworld\u001b[0m""#, "{}", result);
+    }
+
+    #[test]
+    fn test_message_spaces_only() {
+        let rec = Record {
+            message: Some(EncodedString::raw("    ").into()),
+            ..Default::default()
+        };
+
+        let result = format_no_color(&rec);
+        assert_eq!(&result, r#""#, "{}", result);
     }
 }
