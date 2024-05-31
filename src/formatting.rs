@@ -593,36 +593,58 @@ pub mod string {
 
     // ---
 
+    pub trait Read {
+        fn read(&self, buf: &mut Vec<u8>) -> Result<()>;
+        fn is_empty(&self) -> bool;
+    }
+
+    impl<'a, S> Read for S
+    where
+        S: AnyEncodedString<'a>,
+    {
+        #[inline]
+        fn read(&self, buf: &mut Vec<u8>) -> Result<()> {
+            self.decode(buf)
+        }
+
+        #[inline]
+        fn is_empty(&self) -> bool {
+            self.is_empty()
+        }
+    }
+
+    // ---
+
     pub trait Format {
         fn format(&self, buf: &mut Vec<u8>) -> Result<()>;
     }
 
     // ---
 
-    pub struct ValueFormatAuto<S> {
-        string: S,
+    pub struct ValueFormatAuto<I> {
+        input: I,
     }
 
-    impl<S> ValueFormatAuto<S> {
+    impl<I> ValueFormatAuto<I> {
         #[inline(always)]
-        pub fn new(string: S) -> Self {
-            Self { string }
+        pub fn new(input: I) -> Self {
+            Self { input }
         }
     }
 
-    impl<'a, S> Format for ValueFormatAuto<S>
+    impl<I> Format for ValueFormatAuto<I>
     where
-        S: AnyEncodedString<'a> + Clone + Copy,
+        I: Read + EncodedStringExt + Clone + Copy,
     {
         #[inline(always)]
         fn format(&self, buf: &mut Vec<u8>) -> Result<()> {
-            if self.string.is_empty() {
+            if self.input.is_empty() {
                 buf.extend(r#""""#.as_bytes());
                 return Ok(());
             }
 
             let begin = buf.len();
-            ValueFormatRaw::new(self.string).format(buf)?;
+            self.input.read(buf)?;
 
             let mut mask = Mask::none();
 
@@ -678,81 +700,81 @@ pub mod string {
             }
 
             buf.truncate(begin);
-            ValueFormatDoubleQuoted::new(self.string).format(buf)
+            ValueFormatDoubleQuoted::new(self.input).format(buf)
         }
     }
 
     // ---
 
-    pub struct ValueFormatRaw<S> {
-        string: S,
+    pub struct ValueFormatRaw<I> {
+        input: I,
     }
 
-    impl<S> ValueFormatRaw<S> {
+    impl<I> ValueFormatRaw<I> {
         #[inline(always)]
-        pub fn new(string: S) -> Self {
-            Self { string }
+        pub fn new(input: I) -> Self {
+            Self { input }
         }
     }
 
-    impl<'a, S> Format for ValueFormatRaw<S>
+    impl<I> Format for ValueFormatRaw<I>
     where
-        S: AnyEncodedString<'a>,
+        I: Read,
     {
         #[inline(always)]
         fn format(&self, buf: &mut Vec<u8>) -> Result<()> {
-            self.string.decode(buf)
+            self.input.read(buf)
         }
     }
 
     // ---
 
-    pub struct ValueFormatDoubleQuoted<S> {
-        string: S,
+    pub struct ValueFormatDoubleQuoted<I> {
+        input: I,
     }
 
-    impl<S> ValueFormatDoubleQuoted<S> {
+    impl<I> ValueFormatDoubleQuoted<I> {
         #[inline(always)]
-        pub fn new(string: S) -> Self {
-            Self { string }
+        pub fn new(input: I) -> Self {
+            Self { input }
         }
     }
 
-    impl<'a, S> Format for ValueFormatDoubleQuoted<S>
+    impl<I> Format for ValueFormatDoubleQuoted<I>
     where
-        S: AnyEncodedString<'a>,
+        I: Read + EncodedStringExt,
     {
         #[inline]
         fn format(&self, buf: &mut Vec<u8>) -> Result<()> {
-            self.string.format_json(buf)
+            self.input.format_json(buf)
         }
     }
 
     // ---
 
-    pub struct MessageFormatAuto<S> {
-        string: S,
+    pub struct MessageFormatAuto<I> {
+        input: I,
     }
 
-    impl<S> MessageFormatAuto<S> {
+    impl<I> MessageFormatAuto<I> {
         #[inline(always)]
-        pub fn new(string: S) -> Self {
-            Self { string }
+        pub fn new(input: I) -> Self {
+            Self { input }
         }
     }
 
-    impl<'a, S> Format for MessageFormatAuto<S>
+    impl<I> Format for MessageFormatAuto<I>
     where
-        S: AnyEncodedString<'a> + Clone + Copy,
+        I: Read + EncodedStringExt + Clone + Copy,
     {
         #[inline(always)]
         fn format(&self, buf: &mut Vec<u8>) -> Result<()> {
-            if self.string.is_empty() {
+            if self.input.is_empty() {
                 return Ok(());
             }
 
             let begin = buf.len();
-            buf.with_auto_trim(|buf| MessageFormatRaw::new(self.string).format(buf))?;
+            buf.with_auto_trim(|buf| MessageFormatRaw::new(self.input).format(buf))?;
 
             let mut mask = Mask::none();
 
@@ -791,53 +813,53 @@ pub mod string {
             }
 
             buf.truncate(begin);
-            MessageFormatDoubleQuoted::new(self.string).format(buf)
+            MessageFormatDoubleQuoted::new(self.input).format(buf)
         }
     }
 
     // ---
 
-    pub struct MessageFormatRaw<S> {
-        string: S,
+    pub struct MessageFormatRaw<I> {
+        input: I,
     }
 
-    impl<S> MessageFormatRaw<S> {
+    impl<I> MessageFormatRaw<I> {
         #[inline(always)]
-        pub fn new(string: S) -> Self {
-            Self { string }
+        pub fn new(input: I) -> Self {
+            Self { input }
         }
     }
 
-    impl<'a, S> Format for MessageFormatRaw<S>
+    impl<I> Format for MessageFormatRaw<I>
     where
-        S: AnyEncodedString<'a>,
+        I: Read,
     {
         #[inline(always)]
         fn format(&self, buf: &mut Vec<u8>) -> Result<()> {
-            self.string.decode(buf)
+            self.input.read(buf)
         }
     }
 
     // ---
 
-    pub struct MessageFormatDoubleQuoted<S> {
-        string: S,
+    pub struct MessageFormatDoubleQuoted<I> {
+        input: I,
     }
 
-    impl<S> MessageFormatDoubleQuoted<S> {
+    impl<I> MessageFormatDoubleQuoted<I> {
         #[inline(always)]
-        pub fn new(string: S) -> Self {
-            Self { string }
+        pub fn new(input: I) -> Self {
+            Self { input }
         }
     }
 
-    impl<'a, S> Format for MessageFormatDoubleQuoted<S>
+    impl<I> Format for MessageFormatDoubleQuoted<I>
     where
-        S: AnyEncodedString<'a>,
+        I: EncodedStringExt,
     {
         #[inline]
         fn format(&self, buf: &mut Vec<u8>) -> Result<()> {
-            self.string.format_json(buf)
+            self.input.format_json(buf)
         }
     }
 
