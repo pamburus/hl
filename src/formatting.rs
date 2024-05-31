@@ -409,7 +409,7 @@ impl<'a> FieldFormatter<'a> {
         match value {
             RawValue::String(value) => {
                 s.element(Element::String, |s| {
-                    s.batch(|buf| buf.with_auto_trim(|buf| ValueFormatAuto::new(value).format(buf).unwrap()))
+                    s.batch(|buf| ValueFormatAuto::new(value).format(buf).unwrap())
                 });
             }
             RawValue::Number(value) => {
