@@ -75,6 +75,7 @@ pub struct Options {
     pub delimiter: Delimiter,
     pub unix_ts_unit: Option<UnixTimestampUnit>,
     pub flatten: bool,
+    pub show_trailing_whitespace: bool,
 }
 
 impl Options {
@@ -683,7 +684,8 @@ impl App {
                 .with_field_unescaping(!self.options.raw_fields)
                 .with_flatten(self.options.flatten)
                 .with_always_show_time(self.options.fields.settings.predefined.time.show == FieldShowOption::Always)
-                .with_always_show_level(self.options.fields.settings.predefined.level.show == FieldShowOption::Always),
+                .with_always_show_level(self.options.fields.settings.predefined.level.show == FieldShowOption::Always)
+                .with_show_trailing_whitespace(self.options.show_trailing_whitespace),
             )
         }
     }
@@ -1365,6 +1367,7 @@ mod tests {
             delimiter: Delimiter::default(),
             unix_ts_unit: None,
             flatten: false,
+            show_trailing_whitespace: false,
         }
     }
 

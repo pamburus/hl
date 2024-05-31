@@ -60,6 +60,7 @@ pub struct RecordFormatter {
     flatten: bool,
     always_show_time: bool,
     always_show_level: bool,
+    show_trailing_whitespace: bool,
     fields: Arc<IncludeExcludeKeyFilter>,
     cfg: Formatting,
 }
@@ -82,6 +83,7 @@ impl RecordFormatter {
             flatten: false,
             always_show_time: false,
             always_show_level: false,
+            show_trailing_whitespace: false,
             fields,
             cfg,
         }
@@ -108,6 +110,13 @@ impl RecordFormatter {
     pub fn with_always_show_level(self, value: bool) -> Self {
         Self {
             always_show_level: value,
+            ..self
+        }
+    }
+
+    pub fn with_show_trailing_whitespace(self, value: bool) -> Self {
+        Self {
+            show_trailing_whitespace: value,
             ..self
         }
     }

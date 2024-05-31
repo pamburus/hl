@@ -293,6 +293,15 @@ pub struct Opt {
     )]
     pub show_empty_fields: bool,
 
+    /// Show trailing whitespace.
+    #[arg(
+        long,
+        env = "HL_SHOW_TRAILING_WHITESPACE",
+        overrides_with = "show_trailing_whitespace",
+        help_heading = heading::OUTPUT
+    )]
+    pub show_trailing_whitespace: bool,
+
     /// Show input number and/or input filename before each message.
     #[arg(
         long,

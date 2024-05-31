@@ -235,6 +235,7 @@ fn run() -> Result<()> {
             cli::UnixTimestampUnit::Ns => Some(app::UnixTimestampUnit::Nanoseconds),
         },
         flatten: opt.flatten != cli::FlattenOption::Never,
+        show_trailing_whitespace: opt.show_trailing_whitespace,
     });
 
     // Configure input.
