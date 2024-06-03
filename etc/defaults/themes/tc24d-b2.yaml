@@ -1,4 +1,7 @@
-palette:
+# yaml-language-server: $schema=https://raw.githubusercontent.com/pamburus/hl/master/schema/json/theme.schema.json
+$schema: https://raw.githubusercontent.com/pamburus/hl/master/schema/json/theme.schema.json
+
+$palette:
   - &default '#abb2bf'
   - &strong '#cfd7e5'
   - &red '#e06c75'
@@ -60,3 +63,13 @@ levels:
       foreground: *red
     message:
       foreground: *red
+indicators:
+  sync:
+    synced:
+      text: ' '
+    failed:
+      text: '!'
+      inner:
+        style:
+          foreground: *yellow
+          modes: [bold]

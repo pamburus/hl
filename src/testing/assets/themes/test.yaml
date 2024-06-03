@@ -1,3 +1,6 @@
+# yaml-language-server: $schema=../../../../schema/json/theme.schema.json
+$schema: ../../../../schema/json/theme.schema.json
+
 elements:
   input:
     modes: [faint]
