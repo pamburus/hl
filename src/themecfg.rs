@@ -13,7 +13,11 @@ use derive_deref::Deref;
 use enum_map::Enum;
 use platform_dirs::AppDirs;
 use rust_embed::RustEmbed;
-use serde::Deserialize;
+use serde::{
+    de::{MapAccess, Visitor},
+    Deserialize, Deserializer,
+};
+use serde_yaml as yaml;
 
 // local imports
 use crate::{error::*, level::Level};
@@ -92,12 +96,12 @@ impl Theme {
     }
 
     fn from_buf(data: &[u8]) -> Result<Self> {
-        Ok(serde_yaml::from_str(std::str::from_utf8(data)?)?)
+        Ok(yaml::from_str(std::str::from_utf8(data)?)?)
     }
 
     fn load_from(dir: PathBuf, filename: &str) -> Result<Self> {
         let f = std::fs::File::open(dir.join(filename))?;
-        Ok(serde_yaml::from_reader(f)?)
+        Ok(yaml::from_reader(f)?)
     }
 
     fn filename(name: &str) -> String {
@@ -157,8 +161,7 @@ pub enum ThemeOrigin {
 
 // ---
 
-#[derive(Clone, Debug, Default, Deserialize, Deref)]
-#[serde(rename_all = "kebab-case")]
+#[derive(Clone, Debug, Default, Deref)]
 pub struct StylePack(HashMap<Element, Style>);
 
 impl StylePack {
@@ -179,6 +182,49 @@ impl StylePack {
 impl<I: Into<HashMap<Element, Style>>> From<I> for StylePack {
     fn from(i: I) -> Self {
         Self(i.into())
+    }
+}
+
+impl<'de> Deserialize<'de> for StylePack {
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        Ok(deserializer.deserialize_map(StylePackDeserializeVisitor::new())?)
+    }
+}
+
+// ---
+
+struct StylePackDeserializeVisitor {}
+
+impl StylePackDeserializeVisitor {
+    #[inline]
+    fn new() -> Self {
+        Self {}
+    }
+}
+
+impl<'de> Visitor<'de> for StylePackDeserializeVisitor {
+    type Value = StylePack;
+
+    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+        formatter.write_str("style pack object")
+    }
+
+    fn visit_map<A: MapAccess<'de>>(self, mut access: A) -> std::result::Result<Self::Value, A::Error> {
+        let mut items = HashMap::new();
+
+        while let Some(key) = access.next_key::<yaml::Value>()? {
+            if let Ok(key) = yaml::from_value(key) {
+                let value: Style = access.next_value()?;
+                items.insert(key, value);
+            } else {
+                _ = access.next_value::<yaml::Value>()?;
+            }
+        }
+
+        Ok(StylePack(items))
     }
 }
 
@@ -225,7 +271,7 @@ pub struct Style {
 
 // ---
 
-#[derive(Clone, Copy, Debug, Deserialize)]
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub enum Mode {
     Bold,
@@ -241,7 +287,7 @@ pub enum Mode {
 
 // ---
 
-#[derive(Clone, Copy, Debug, Deserialize)]
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 #[serde(untagged)]
 pub enum Color {
@@ -252,7 +298,7 @@ pub enum Color {
 
 // ---
 
-#[derive(Clone, Copy, Debug, Deserialize)]
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub enum PlainColor {
     Default,
@@ -432,10 +478,52 @@ mod tests {
     use super::*;
 
     #[test]
+    fn test_load_from() {
+        let theme = Theme::load_from("src/testing/assets/themes".into(), "test.yaml").unwrap();
+        assert_ne!(theme.elements.len(), 0);
+    }
+
+    #[test]
     fn test_rgb() {
         let a = RGB::from_str("#102030").unwrap();
         assert_eq!(a, RGB(16, 32, 48));
         let b: RGB = serde_json::from_str(r##""#102030""##).unwrap();
         assert_eq!(b, RGB(16, 32, 48));
+    }
+
+    #[test]
+    fn test_style_pack() {
+        assert_eq!(StylePack::default().clone().len(), 0);
+
+        let yaml = r##"
+            input:
+              foreground: red
+              background: blue
+              modes:
+                - bold
+                - faint
+            message:
+              foreground: green
+              modes:
+                - italic
+                - underline
+            unexpected: {}
+        "##;
+        let pack: StylePack = yaml::from_str(yaml).unwrap();
+        assert_eq!(pack.0.len(), 2);
+        assert_eq!(pack.0[&Element::Input].foreground, Some(Color::Plain(PlainColor::Red)));
+        assert_eq!(pack.0[&Element::Input].background, Some(Color::Plain(PlainColor::Blue)));
+        assert_eq!(pack.0[&Element::Input].modes, vec![Mode::Bold, Mode::Faint]);
+        assert_eq!(
+            pack.0[&Element::Message].foreground,
+            Some(Color::Plain(PlainColor::Green))
+        );
+        assert_eq!(pack.0[&Element::Message].background, None);
+        assert_eq!(pack.0[&Element::Message].modes, vec![Mode::Italic, Mode::Underline]);
+
+        assert!(yaml::from_str::<StylePack>("invalid")
+            .unwrap_err()
+            .to_string()
+            .ends_with("expected style pack object"));
     }
 }
