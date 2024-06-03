@@ -1,0 +1,47 @@
+<html lang="en-US">
+<head>
+<meta charset="utf-8">
+<title>test screenshot emulation</title>
+<style>
+body {
+  background-color: #282c34e0;
+  color: white;
+}
+.shadow {
+  filter: drop-shadow(0px 0px 0.5px rgba(255, 255, 255, 0.66)) drop-shadow(0px 10px 10px rgba(0, 0, 0, 0.66));
+}
+</style>
+</head>
+
+<!-- <img class="shadow" src="https://cdn.sstatic.net/Sites/stackoverflow/company/img/logos/so/so-logo.svg" width="25%" /> -->
+
+<svg viewBox="0 0 1920 1080">
+  <filter id="shadow" width="200%" height="200%">
+    <feDropShadow dx="3" dy="3" stdDeviation="25" flood-color="#000000" flood-opacity="0.66" />
+  </filter>
+
+  <g fill="none" stroke="#a8a8a7" stroke-width="1" filter="url(#shadow)">
+    <defs>
+      <linearGradient id="headerHighlight" x1="0%" x2="0%" y1="0%" y2="100%">
+        <stop offset="0%" stop-color="#707070" />
+        <stop offset="100%" stop-color="#000000" />
+      </linearGradient>
+    </defs>
+    <clipPath id="headerClip1">
+      <rect width="90%" height="50%" x="5%" y="54" rx="15" ry="15" />
+    </clipPath>
+    <mask id="headerHighlightMask">
+      <rect width="90%" height="50%" x="5%" y="55" rx="15" ry="15" />
+    </mask>
+    <rect width="90%" height="50%" x="5%" y="54" rx="14" ry="14" fill="#282c34" stroke="#000000" stroke-width="1" />
+    <rect width="90%" height="40" x="5%" y="54" rx="0" ry="0" fill="#383837" stroke="#000000" stroke-width="1" clip-path="url(#headerClip1)" />
+    <rect width="89.8%" height="30" x="5.1%" y="54" rx="0" ry="0" fill="url(#headerHighlight)" stroke="url(#headerHighlight)" stroke-width="1" mask="url(#headerHighlightMask)" />
+    <svg x=5% y=5%> 
+      <circle cx="20" cy="20" r="8" fill="#fe5f57" stroke="none" />
+      <circle cx="50" cy="20" r="8" fill="#fdbd2f" stroke="none" />
+      <circle cx="80" cy="20" r="8" fill="#61c554" stroke="none" />
+    </svg>
+  </g>
+</svg>
+
+<img src="/Users/pamburus/src/rust/hl/extra/screenshot/universal/dark.png" width="100%" alt="dark">
