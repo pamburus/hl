@@ -3,6 +3,11 @@
     "type": "object",
     "additionalProperties": false,
     "properties": {
+        "$schema": {
+            "type": "string",
+            "format": "uri",
+            "title": "JSON Schema URI"
+        },
         "time-format": {
             "type": "string"
         },
