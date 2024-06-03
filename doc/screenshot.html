@@ -10,17 +10,16 @@ body {
 .shadow {
   filter: drop-shadow(0px 0px 0.5px rgba(255, 255, 255, 0.66)) drop-shadow(0px 10px 10px rgba(0, 0, 0, 0.66));
 }
+.megashadow {
+  filter: drop-shadow(4px 4px 24px rgba(0, 0, 0, 0.66));
+}
 </style>
 </head>
 
 <!-- <img class="shadow" src="https://cdn.sstatic.net/Sites/stackoverflow/company/img/logos/so/so-logo.svg" width="25%" /> -->
 
-<svg viewBox="0 0 1920 960">
-  <filter id="shadow" width="200%" height="200%">
-    <feDropShadow dx="3" dy="3" stdDeviation="25" flood-color="#000000" flood-opacity="0.66" />
-  </filter>
-
-  <g fill="none" filter="url(#shadow)">
+<svg class="megashadow" viewBox="0 0 1920 960">
+  <g fill="none">
     <svg width="1804" height="804" x="58" y="54">
       <defs>
         <linearGradient id="headerHighlight" x1="0%" x2="0%" y1="0%" y2="100%">
@@ -36,8 +35,7 @@ body {
       </mask>
       <rect width="1800" height="800" x="2" y="1" rx="12" ry="12" fill="#292c33" stroke="#000000" stroke-width=".5" />
       <rect width="1800" height="30" x="2" y="1" rx="0" ry="0" fill="#383837" stroke="#000000" stroke-width=".5" clip-path="url(#headerClip1)" />
-      <!--<rect width="1796" height="20" x="4" y="1" rx="0" ry="0" fill="url(#headerHighlight)" stroke="url(#headerHighlight)" stroke-width="1" mask="url(#headerHighlightMask)" />-->
-      <rect width="1798" height="798" x="3" y="2" rx="11" ry="11" stroke="#ffffff30" stroke-width="0.5" />
+      <rect width="1798" height="798" x="3" y="2" rx="11" ry="11" stroke="#ffffff60" stroke-width="0.5" />
       <svg x="2" y="2"> 
         <circle cx="14" cy="15" r="6" fill="#fe5f57" stroke="none" />
         <circle cx="34" cy="15" r="6" fill="#fdbd2f" stroke="none" />
