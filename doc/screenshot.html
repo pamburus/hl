@@ -20,26 +20,28 @@ body {
     <feDropShadow dx="3" dy="3" stdDeviation="25" flood-color="#000000" flood-opacity="0.66" />
   </filter>
 
-  <g fill="none" stroke="#a8a8a7" stroke-width="1" filter="url(#shadow)">
+  <g fill="none" filter="url(#shadow)">
     <defs>
       <linearGradient id="headerHighlight" x1="0%" x2="0%" y1="0%" y2="100%">
         <stop offset="0%" stop-color="#707070" />
         <stop offset="100%" stop-color="#000000" />
       </linearGradient>
     </defs>
-    <clipPath id="headerClip1">
-      <rect width="90%" height="50%" x="5%" y="54" rx="13" ry="13" />
-    </clipPath>
-    <mask id="headerHighlightMask">
-      <rect width="90%" height="50%" x="5%" y="55" rx="13" ry="13" />
-    </mask>
-    <rect width="90%" height="50%" x="5%" y="54" rx="12" ry="12" fill="#292c33" stroke="#000000" stroke-width="0.5pt" />
-    <rect width="90%" height="30" x="5%" y="54" rx="0" ry="0" fill="#383837" stroke="#000000" stroke-width="0.5pt" clip-path="url(#headerClip1)" />
-    <rect width="89.8%" height="20" x="5.1%" y="54" rx="0" ry="0" fill="url(#headerHighlight)" stroke="url(#headerHighlight)" stroke-width="1" mask="url(#headerHighlightMask)" />
-    <svg x=5% y=54> 
-      <circle cx="14" cy="15" r="6" fill="#fe5f57" stroke="none" />
-      <circle cx="34" cy="15" r="6" fill="#fdbd2f" stroke="none" />
-      <circle cx="54" cy="15" r="6" fill="#61c554" stroke="none" />
+    <svg width="95%" height="80%" x="2.5%" y="54">
+      <clipPath id="headerClip1">
+        <rect width="99%" height="99%" x="0.5%" y="1" rx="13" ry="13" />
+      </clipPath>
+      <mask id="headerHighlightMask">
+        <rect width="99%" height="99%" x="0.5%" y="2" rx="13" ry="13" stroke="#a8a8a7" stroke-width="1" />
+      </mask>
+      <rect width="99%" height="99%" x="0.5%" y="1" rx="12" ry="12" fill="#292c33" stroke="#000000" stroke-width=".5" />
+      <rect width="99%" height="30" x="0.5%" y="1" rx="0" ry="0" fill="#383837" stroke="#000000" stroke-width=".5" clip-path="url(#headerClip1)" />
+      <rect width="98.8%" height="20" x="0.6%" y="1" rx="0" ry="0" fill="url(#headerHighlight)" stroke="url(#headerHighlight)" stroke-width="1" mask="url(#headerHighlightMask)" />
+      <svg x="0.5%" y="1"> 
+        <circle cx="14" cy="15" r="6" fill="#fe5f57" stroke="none" />
+        <circle cx="34" cy="15" r="6" fill="#fdbd2f" stroke="none" />
+        <circle cx="54" cy="15" r="6" fill="#61c554" stroke="none" />
+      </svg>
     </svg>
   </g>
 </svg>
