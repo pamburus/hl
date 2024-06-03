@@ -1,3 +1,6 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/pamburus/hl/master/schema/json/theme.schema.json
+$schema: https://raw.githubusercontent.com/pamburus/hl/master/schema/json/theme.schema.json
+
 elements:
   input:
     modes: [faint]
@@ -48,3 +51,13 @@ levels:
     level:
       foreground: bright-red
       modes: [reverse]
+indicators:
+  sync:
+    synced:
+      text: ' '
+    failed:
+      text: '!'
+      inner:
+        style:
+          foreground: 'yellow'
+          modes: [bold]

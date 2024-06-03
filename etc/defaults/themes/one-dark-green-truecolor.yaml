@@ -1,13 +1,16 @@
-palette:
-  - &light-gray '#ABB2BF'
-  - &red '#E06C75'
-  - &gray '#636D83'
-  - &white '#CFD7E5'
-  - &blue '#61AFEF'
-  - &yellow '#D19A66'
-  - &cyan '#56B6C2'
-  - &magenta '#C678DD'
-  - &green '#98C379'
+# yaml-language-server: $schema=https://raw.githubusercontent.com/pamburus/hl/master/schema/json/theme.schema.json
+$schema: https://raw.githubusercontent.com/pamburus/hl/master/schema/json/theme.schema.json
+
+$palette:
+  - &red '#e06c75'
+  - &gray '#636d83'
+  - &white '#cfd7e5'
+  - &blue '#61afef'
+  - &yellow '#d19a66'
+  - &cyan '#56b6c2'
+  - &magenta '#c678dd'
+  - &green '#98c379'
+
 elements:
   input:
     foreground: bright-black
