@@ -1,4 +1,5 @@
-# yaml-language-server: $schema=https://raw.githubusercontent.com/pamburus/hl/master/schema/json/config.json
+# yaml-language-server: $schema=https://raw.githubusercontent.com/pamburus/hl/master/schema/json/config.schema.json
+$schema: https://raw.githubusercontent.com/pamburus/hl/master/schema/json/config.schema.json
 
 # Settings for fields processing.
 fields:
