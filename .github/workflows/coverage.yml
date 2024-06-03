@@ -1,6 +1,11 @@
 name: Coverage
 
-on: [push]
+on:
+  push:
+    branches: [master, release/*]
+  pull_request:
+    branches: ['*']
+
 jobs:
   test:
     name: coverage
