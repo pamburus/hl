@@ -33,6 +33,7 @@ bitmask = "0"
 bitmask-enum = "2"
 bytefmt = "0"
 capnp = "0.19"
+case_insensitive_hashmap = "1"
 chrono = { version = "0.4", default-features = false, features = [
     "clock",
     "serde",
