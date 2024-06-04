@@ -103,7 +103,8 @@ mod tests {
             variant.values,
             hashmap! {
                 Level::Debug => vec!["dbg".to_owned()],
-                Level::Info => vec!["INF".to_owned()],
+                // TODO: replace `"inf"` with `"INF"` when https://github.com/mehcode/config-rs/issues/568 is fixed
+                Level::Info => vec!["inf".to_owned()],
                 Level::Warning => vec!["wrn".to_owned()],
                 Level::Error => vec!["ERR".to_owned()],
             }
