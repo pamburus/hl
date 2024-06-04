@@ -4,7 +4,7 @@
 <title>test screenshot emulation</title>
 <style>
 body {
-  background-color: #282c34f0;
+  background-color: #282c3400;
   color: white;
 }
 .shadow {
@@ -13,36 +13,136 @@ body {
 .megashadow {
   filter: drop-shadow(4px 4px 24px rgba(0, 0, 0, 0.66));
 }
+.terminal {
+  overflow: auto;
+  margin: 106px 80px;
+  width: 1268px;
+  height: 672px;
+  line-height: 120%;
+}
+
+.terminal .shell {
+  color: #32d132;
+  user-select: none;
+  pointer-events: none;
+}
+.terminal .cmd {
+  color: #419df3;
+}
+.terminal .hl {
+  color: #00ffff;
+  font-weight: bold;
+}
+.terminal .arg {
+  color: white;
+}
+.terminal .str {
+  color: #ffba24;
+}
+.terminal .pipe, .terminal .punct {
+  color: #a2be00;
+}
+.terminal .flag {
+  color: #ff7167;
+}
+.terminal .esc {
+  color: #d558f5;
+  font-weight: bold;
+}
+.terminal .caret {
+  background-color: white;
+  user-select: none;
+}
+.hero {
+  margin: 72px 72px;
+  position: absolute;
+  top: 0;
+  z-index: -1;
+}
+.output {
+}
 </style>
 </head>
 
 <!-- <img class="shadow" src="https://cdn.sstatic.net/Sites/stackoverflow/company/img/logos/so/so-logo.svg" width="25%" /> -->
 
-<svg class="megashadow" viewBox="0 0 1280 640">
+<svg class="hero megashadow" width="1284px" height="724px">
   <g fill="none">
-    <svg width="1124" height="804" x="58" y="54">
-      <defs>
-        <linearGradient id="headerHighlight" x1="0%" x2="0%" y1="0%" y2="100%">
-          <stop offset="0%" stop-color="#707070" />
-          <stop offset="100%" stop-color="#000000" />
-        </linearGradient>
-      </defs>
-      <clipPath id="headerClip1">
-        <rect width="1120" height="480" x="2" y="1" rx="13" ry="13" />
-      </clipPath>
-      <mask id="headerHighlightMask">
-        <rect width="1120" height="480" x="2" y="2" rx="13" ry="13" stroke="#a8a8a7" stroke-width="1" />
-      </mask>
-      <rect width="1120" height="480" x="2" y="1" rx="12" ry="12" fill="#292c33" stroke="#000000" stroke-width=".5" />
-      <rect width="1120" height="30" x="2" y="1" rx="0" ry="0" fill="#383837" stroke="#000000" stroke-width=".5" clip-path="url(#headerClip1)" />
-      <rect width="1118" height="478" x="3" y="2" rx="11" ry="11" stroke="#ffffff60" stroke-width="0.5" />
-      <svg x="2" y="2"> 
-        <circle cx="14" cy="15" r="6" fill="#fe5f57" stroke="none" />
-        <circle cx="34" cy="15" r="6" fill="#fdbd2f" stroke="none" />
-        <circle cx="54" cy="15" r="6" fill="#61c554" stroke="none" />
-      </svg>
+    <defs>
+      <linearGradient id="headerHighlight" x1="0%" x2="0%" y1="0%" y2="100%">
+        <stop offset="0%" stop-color="#707070" />
+        <stop offset="100%" stop-color="#000000" />
+      </linearGradient>
+    </defs>
+    <clipPath id="headerClip1">
+      <rect width="1280" height="720" x="2" y="1" rx="13" ry="13" />
+    </clipPath>
+    <mask id="headerHighlightMask">
+      <rect width="1280" height="720" x="2" y="2" rx="13" ry="13" stroke="#a8a8a7" stroke-width="1" />
+    </mask>
+    <rect width="1280" height="720" x="2" y="1" rx="12" ry="12" fill="#292c33" stroke="#000000" stroke-width=".5" />
+    <rect width="1280" height="30" x="2" y="1" rx="0" ry="0" fill="#383837" stroke="#000000" stroke-width=".5" clip-path="url(#headerClip1)" />
+    <rect width="1278" height="718" x="3" y="2" rx="11" ry="11" stroke="#ffffff60" stroke-width="0.5" />
+    <svg x="2" y="2"> 
+      <circle cx="14" cy="15" r="6" fill="#fe5f57" stroke="none" />
+      <circle cx="34" cy="15" r="6" fill="#fdbd2f" stroke="none" />
+      <circle cx="54" cy="15" r="6" fill="#61c554" stroke="none" />
     </svg>
   </g>
 </svg>
+
+<body>
+<pre class="terminal output">
+<span class='shell'>&gt; </span><span class='cmd'>target/release/hl</span> <span class='flag'>--theme</span> <span class='arg'>tc24d-b2</span> <span class='flag'>-P</span> <span class='arg'>~/Downloads/prometheus/prometheus.log</span>
+<span style='color:#636d83'>2023-12-07 20:07:05.949 │</span><span style='color:#56b6c2'>INF</span><span style='color:#636d83'>│</span> <span style='color:#cfd7e5'>No time or size retention was set so using the default time retention </span><span style='color:#61afef'>duration</span><span style='color:#636d83'>=</span><span style='color:#abb2bf'>15d</span><i><span style='color:#636d83'> → main.go:539</span></i>
+<span style='color:#636d83'>2023-12-07 20:07:05.949 │</span><span style='color:#56b6c2'>INF</span><span style='color:#636d83'>│</span> <span style='color:#cfd7e5'>Starting Prometheus Server </span><span style='color:#61afef'>mode</span><span style='color:#636d83'>=</span><span style='color:#abb2bf'>server </span><span style='color:#61afef'>version</span><span style='color:#636d83'>=</span><span style='color:#abb2bf'>&quot;(version=2.48.0, branch=HEAD, revision=6d80b30990bc297d95b5c844e118c4011fad8054)&quot;</span><i><span style='color:#636d83'> → main.go:583</span></i>
+<span style='color:#636d83'>2023-12-07 20:07:05.949 │</span><span style='color:#56b6c2'>INF</span><span style='color:#636d83'>│</span> <span style='color:#61afef'>build-context</span><span style='color:#636d83'>=</span><span style='color:#abb2bf'>&quot;(go=go1.21.4, platform=linux/arm64, user=root@26117804242c, date=20231116-04:38:59, tags=netgo,builtinassets,stringlabels)&quot;</span><i><span style='color:#636d83'> → main.go:588</span></i>
+<span style='color:#636d83'>2023-12-07 20:07:05.949 │</span><span style='color:#56b6c2'>INF</span><span style='color:#636d83'>│</span> <span style='color:#61afef'>host-details</span><span style='color:#636d83'>=</span><span style='color:#abb2bf'>&quot;(Linux 6.5.11-linuxkit #1 SMP PREEMPT Mon Dec  4 11:30:00 UTC 2023 aarch64 b2ed53d333d7 (none))&quot;</span><i><span style='color:#636d83'> → main.go:589</span></i>
+<span style='color:#636d83'>2023-12-07 20:07:05.949 │</span><span style='color:#56b6c2'>INF</span><span style='color:#636d83'>│</span> <span style='color:#61afef'>fd-limits</span><span style='color:#636d83'>=</span><span style='color:#abb2bf'>&quot;(soft=1048576, hard=1048576)&quot;</span><i><span style='color:#636d83'> → main.go:590</span></i>
+<span style='color:#636d83'>2023-12-07 20:07:05.949 │</span><span style='color:#56b6c2'>INF</span><span style='color:#636d83'>│</span> <span style='color:#61afef'>vm-limits</span><span style='color:#636d83'>=</span><span style='color:#abb2bf'>&quot;(soft=unlimited, hard=unlimited)&quot;</span><i><span style='color:#636d83'> → main.go:591</span></i>
+<span style='color:#636d83'>2023-12-07 20:07:05.949 │</span><span style='color:#56b6c2'>INF</span><span style='color:#636d83'>│</span> <span style='color:#cfd7e5'>Start listening for connections </span><span style='color:#61afef'>address</span><span style='color:#636d83'>=</span><span style='color:#abb2bf'>0.0.0.0:9090 </span><span style='color:#61afef'>component</span><span style='color:#636d83'>=</span><span style='color:#abb2bf'>web</span><i><span style='color:#636d83'> → web.go:566</span></i>
+<span style='color:#636d83'>2023-12-07 20:07:05.950 │</span><span style='color:#56b6c2'>INF</span><span style='color:#636d83'>│</span> <span style='color:#cfd7e5'>Starting TSDB ...</span><i><span style='color:#636d83'> → main.go:1024</span></i>
+<span style='color:#636d83'>2023-12-07 20:07:05.950 │</span><span style='color:#56b6c2'>INF</span><span style='color:#636d83'>│</span> <span style='color:#cfd7e5'>Listening on </span><span style='color:#61afef'>address</span><span style='color:#636d83'>=</span><span style='color:#abb2bf'>&quot;[::]:9090&quot; </span><span style='color:#61afef'>component</span><span style='color:#636d83'>=</span><span style='color:#abb2bf'>web</span><i><span style='color:#636d83'> → tls_config.go:274</span></i>
+<span style='color:#636d83'>2023-12-07 20:07:05.950 │</span><span style='color:#56b6c2'>INF</span><span style='color:#636d83'>│</span> <span style='color:#cfd7e5'>TLS is disabled. </span><span style='color:#61afef'>address</span><span style='color:#636d83'>=</span><span style='color:#abb2bf'>&quot;[::]:9090&quot; </span><span style='color:#61afef'>component</span><span style='color:#636d83'>=</span><span style='color:#abb2bf'>web </span><span style='color:#61afef'>http2</span><span style='color:#636d83'>=</span><span style='color:#f4a460'>false</span><i><span style='color:#636d83'> → tls_config.go:277</span></i>
+<span style='color:#636d83'>2023-12-07 20:07:05.952 │</span><span style='color:#56b6c2'>INF</span><span style='color:#636d83'>│</span> <span style='color:#cfd7e5'>Replaying on-disk memory mappable chunks if any </span><span style='color:#61afef'>component</span><span style='color:#636d83'>=</span><span style='color:#abb2bf'>tsdb</span><i><span style='color:#636d83'> → head.go:601</span></i>
+<span style='color:#636d83'>2023-12-07 20:07:05.952 │</span><span style='color:#56b6c2'>INF</span><span style='color:#636d83'>│</span> <span style='color:#cfd7e5'>On-disk memory mappable chunks replay completed </span><span style='color:#61afef'>component</span><span style='color:#636d83'>=</span><span style='color:#abb2bf'>tsdb </span><span style='color:#61afef'>duration</span><span style='color:#636d83'>=</span><span style='color:#abb2bf'>1.416µs</span><i><span style='color:#636d83'> → head.go:682</span></i>
+<span style='color:#636d83'>2023-12-07 20:07:05.952 │</span><span style='color:#56b6c2'>INF</span><span style='color:#636d83'>│</span> <span style='color:#cfd7e5'>Replaying WAL, this may take a while </span><span style='color:#61afef'>component</span><span style='color:#636d83'>=</span><span style='color:#abb2bf'>tsdb</span><i><span style='color:#636d83'> → head.go:690</span></i>
+<span style='color:#636d83'>2023-12-07 20:07:05.952 │</span><span style='color:#56b6c2'>INF</span><span style='color:#636d83'>│</span> <span style='color:#cfd7e5'>WAL segment loaded </span><span style='color:#61afef'>component</span><span style='color:#636d83'>=</span><span style='color:#abb2bf'>tsdb </span><span style='color:#61afef'>maxSegment</span><span style='color:#636d83'>=</span><span style='color:#98c379'>0 </span><span style='color:#61afef'>segment</span><span style='color:#636d83'>=</span><span style='color:#98c379'>0</span><i><span style='color:#636d83'> → head.go:761</span></i>
+<span style='color:#636d83'>2023-12-07 20:07:05.952 │</span><span style='color:#56b6c2'>INF</span><span style='color:#636d83'>│</span> <span style='color:#cfd7e5'>WAL replay completed </span><span style='color:#61afef'>checkpoint-replay-duration</span><span style='color:#636d83'>=</span><span style='color:#abb2bf'>16.875µs </span><span style='color:#61afef'>component</span><span style='color:#636d83'>=</span><span style='color:#abb2bf'>tsdb </span><span style='color:#61afef'>total-replay-duration</span><span style='color:#636d83'>=</span><span style='color:#abb2bf'>186.042µs </span><span style='color:#61afef'>wal-replay-duration</span><span style='color:#636d83'>=</span><span style='color:#abb2bf'>154.083µs </span><span style='color:#61afef'>wbl-replay-duration</span><span style='color:#636d83'>=</span><span style='color:#abb2bf'>42ns</span><i><span style='color:#636d83'> → head.go:798</span></i>
+<span style='color:#636d83'>2023-12-07 20:07:05.953 │</span><span style='color:#56b6c2'>INF</span><span style='color:#636d83'>│</span> <span style='color:#61afef'>fs-type</span><span style='color:#636d83'>=</span><span style='color:#abb2bf'>EXT4_SUPER_MAGIC</span><i><span style='color:#636d83'> → main.go:1045</span></i>
+<span style='color:#636d83'>2023-12-07 20:07:05.953 │</span><span style='color:#56b6c2'>INF</span><span style='color:#636d83'>│</span> <span style='color:#cfd7e5'>TSDB started</span><i><span style='color:#636d83'> → main.go:1048</span></i>
+<span style='color:#636d83'>2023-12-07 20:07:05.953 │</span><span style='color:#56b6c2'>INF</span><span style='color:#636d83'>│</span> <span style='color:#cfd7e5'>Loading configuration file </span><span style='color:#61afef'>filename</span><span style='color:#636d83'>=</span><span style='color:#abb2bf'>/etc/prometheus/prometheus.yml</span><i><span style='color:#636d83'> → main.go:1229</span></i>
+<span style='color:#636d83'>2023-12-07 20:07:05.953 │</span><span style='color:#56b6c2'>INF</span><span style='color:#636d83'>│</span> <span style='color:#cfd7e5'>Completed loading of configuration file</span><i><span style='color:#636d83'> → main.go:1266</span></i><span style='color:#cfd7e5'>
+                       </span> <span style='color:#636d83'>│</span><span style='color:#56b6c2'> - </span><span style='color:#636d83'>│</span>   <span style='color:#636d83'>&gt; </span><span style='color:#61afef'>db-storage</span><span style='color:#636d83'>=</span><span style='color:#abb2bf'>1.041µs</span><span style='color:#636d83'>
+                       </span> <span style='color:#636d83'>│</span><span style='color:#56b6c2'> - </span><span style='color:#636d83'>│</span>   <span style='color:#636d83'>&gt; </span><span style='color:#61afef'>filename</span><span style='color:#636d83'>=</span><span style='color:#abb2bf'>/etc/prometheus/prometheus.yml</span><span style='color:#636d83'>
+                       </span> <span style='color:#636d83'>│</span><span style='color:#56b6c2'> - </span><span style='color:#636d83'>│</span>   <span style='color:#636d83'>&gt; </span><span style='color:#61afef'>notify</span><span style='color:#636d83'>=</span><span style='color:#abb2bf'>11.5µs</span><span style='color:#636d83'>
+                       </span> <span style='color:#636d83'>│</span><span style='color:#56b6c2'> - </span><span style='color:#636d83'>│</span>   <span style='color:#636d83'>&gt; </span><span style='color:#61afef'>notify-sd</span><span style='color:#636d83'>=</span><span style='color:#abb2bf'>7.375µs</span><span style='color:#636d83'>
+                       </span> <span style='color:#636d83'>│</span><span style='color:#56b6c2'> - </span><span style='color:#636d83'>│</span>   <span style='color:#636d83'>&gt; </span><span style='color:#61afef'>query-engine</span><span style='color:#636d83'>=</span><span style='color:#abb2bf'>792ns</span><span style='color:#636d83'>
+                       </span> <span style='color:#636d83'>│</span><span style='color:#56b6c2'> - </span><span style='color:#636d83'>│</span>   <span style='color:#636d83'>&gt; </span><span style='color:#61afef'>remote-storage</span><span style='color:#636d83'>=</span><span style='color:#abb2bf'>1µs</span><span style='color:#636d83'>
+                       </span> <span style='color:#636d83'>│</span><span style='color:#56b6c2'> - </span><span style='color:#636d83'>│</span>   <span style='color:#636d83'>&gt; </span><span style='color:#61afef'>rules</span><span style='color:#636d83'>=</span><span style='color:#abb2bf'>1.375µs</span><span style='color:#636d83'>
+                       </span> <span style='color:#636d83'>│</span><span style='color:#56b6c2'> - </span><span style='color:#636d83'>│</span>   <span style='color:#636d83'>&gt; </span><span style='color:#61afef'>scrape</span><span style='color:#636d83'>=</span><span style='color:#abb2bf'>146.917µs</span><span style='color:#636d83'>
+                       </span> <span style='color:#636d83'>│</span><span style='color:#56b6c2'> - </span><span style='color:#636d83'>│</span>   <span style='color:#636d83'>&gt; </span><span style='color:#61afef'>scrape-sd</span><span style='color:#636d83'>=</span><span style='color:#abb2bf'>10.584µs</span><span style='color:#636d83'>
+                       </span> <span style='color:#636d83'>│</span><span style='color:#56b6c2'> - </span><span style='color:#636d83'>│</span>   <span style='color:#636d83'>&gt; </span><span style='color:#61afef'>totalDuration</span><span style='color:#636d83'>=</span><span style='color:#abb2bf'>660.75µs</span><span style='color:#636d83'>
+                       </span> <span style='color:#636d83'>│</span><span style='color:#56b6c2'> - </span><span style='color:#636d83'>│</span>   <span style='color:#636d83'>&gt; </span><span style='color:#61afef'>tracing</span><span style='color:#636d83'>=</span><span style='color:#abb2bf'>6.5µs</span><span style='color:#636d83'>
+                       </span> <span style='color:#636d83'>│</span><span style='color:#56b6c2'> - </span><span style='color:#636d83'>│</span>   <span style='color:#636d83'>&gt; </span><span style='color:#61afef'>web-handler</span><span style='color:#636d83'>=</span><span style='color:#abb2bf'>417ns</span>
+<span style='color:#636d83'>2023-12-07 20:07:05.953 │</span><span style='color:#56b6c2'>INF</span><span style='color:#636d83'>│</span> <span style='color:#cfd7e5'>Server is ready to receive web requests.</span><i><span style='color:#636d83'> → main.go:1009</span></i>
+<span style='color:#636d83'>2023-12-07 20:07:05.953 │</span><span style='color:#56b6c2'>INF</span><span style='color:#636d83'>│</span> <span style='color:#cfd7e5'>Starting rule manager... </span><span style='color:#61afef'>component</span><span style='color:#636d83'>=</span><span style='color:#abb2bf'>&quot;rule manager&quot;</span><i><span style='color:#636d83'> → manager.go:1012</span></i>
+<span style='color:#636d83'>2023-12-07 20:11:30.732 │</span><span style='color:#f4a460'>WRN</span><span style='color:#636d83'>│</span> <span style='color:#f4a460'>Received SIGTERM, exiting gracefully...</span><i><span style='color:#636d83'> → main.go:859</span></i>
+<span style='color:#636d83'>2023-12-07 20:11:30.732 │</span><span style='color:#56b6c2'>INF</span><span style='color:#636d83'>│</span> <span style='color:#cfd7e5'>Stopping scrape discovery manager...</span><i><span style='color:#636d83'> → main.go:883</span></i>
+<span style='color:#636d83'>2023-12-07 20:11:30.732 │</span><span style='color:#56b6c2'>INF</span><span style='color:#636d83'>│</span> <span style='color:#cfd7e5'>Stopping notify discovery manager...</span><i><span style='color:#636d83'> → main.go:897</span></i>
+<span style='color:#636d83'>2023-12-07 20:11:30.732 │</span><span style='color:#56b6c2'>INF</span><span style='color:#636d83'>│</span> <span style='color:#cfd7e5'>Stopping rule manager... </span><span style='color:#61afef'>component</span><span style='color:#636d83'>=</span><span style='color:#abb2bf'>&quot;rule manager&quot;</span><i><span style='color:#636d83'> → manager.go:1026</span></i>
+<span style='color:#636d83'>2023-12-07 20:11:30.732 │</span><span style='color:#56b6c2'>INF</span><span style='color:#636d83'>│</span> <span style='color:#cfd7e5'>Rule manager stopped </span><span style='color:#61afef'>component</span><span style='color:#636d83'>=</span><span style='color:#abb2bf'>&quot;rule manager&quot;</span><i><span style='color:#636d83'> → manager.go:1036</span></i>
+<span style='color:#636d83'>2023-12-07 20:11:30.732 │</span><span style='color:#56b6c2'>INF</span><span style='color:#636d83'>│</span> <span style='color:#cfd7e5'>Stopping scrape manager...</span><i><span style='color:#636d83'> → main.go:934</span></i>
+<span style='color:#636d83'>2023-12-07 20:11:30.732 │</span><span style='color:#56b6c2'>INF</span><span style='color:#636d83'>│</span> <span style='color:#cfd7e5'>Notify discovery manager stopped</span><i><span style='color:#636d83'> → main.go:893</span></i>
+<span style='color:#636d83'>2023-12-07 20:11:30.732 │</span><span style='color:#56b6c2'>INF</span><span style='color:#636d83'>│</span> <span style='color:#cfd7e5'>Scrape discovery manager stopped</span><i><span style='color:#636d83'> → main.go:879</span></i>
+<span style='color:#636d83'>2023-12-07 20:11:30.733 │</span><span style='color:#56b6c2'>INF</span><span style='color:#636d83'>│</span> <span style='color:#cfd7e5'>Scrape manager stopped</span><i><span style='color:#636d83'> → main.go:926</span></i>
+<span style='color:#636d83'>2023-12-07 20:11:30.735 │</span><span style='color:#56b6c2'>INF</span><span style='color:#636d83'>│</span> <span style='color:#cfd7e5'>Stopping notification manager... </span><span style='color:#61afef'>component</span><span style='color:#636d83'>=</span><span style='color:#abb2bf'>notifier</span><i><span style='color:#636d83'> → notifier.go:604</span></i>
+<span style='color:#636d83'>2023-12-07 20:11:30.735 │</span><span style='color:#56b6c2'>INF</span><span style='color:#636d83'>│</span> <span style='color:#cfd7e5'>Notifier manager stopped</span><i><span style='color:#636d83'> → main.go:1155</span></i>
+<span style='color:#636d83'>2023-12-07 20:11:30.735 │</span><span style='color:#56b6c2'>INF</span><span style='color:#636d83'>│</span> <span style='color:#cfd7e5'>See you next time!</span><i><span style='color:#636d83'> → main.go:1167</span></i>
+<span class='shell'>&gt; </span><span class='caret'> </span>
+</pre>
+
+</body>
+</html>
 
 <!-- <img src="/Users/pamburus/src/rust/hl/extra/screenshot/universal/dark.png" style="width: 50%"> -->
