@@ -10,7 +10,6 @@ use std::{
 };
 
 // third-party imports
-use case_insensitive_hashmap::CaseInsensitiveHashMap;
 use chrono::{DateTime, Utc};
 use regex::Regex;
 use serde::de::{Deserialize, Deserializer, MapAccess, SeqAccess, Visitor};
@@ -488,7 +487,7 @@ impl RecordFilter for RecordFilterNone {
 pub struct ParserSettings {
     pre_parse_time: bool,
     unix_ts_unit: Option<UnixTimestampUnit>,
-    level: Vec<(CaseInsensitiveHashMap<Level>, Option<Level>)>,
+    level: Vec<(HashMap<String, Level>, Option<Level>)>,
     blocks: Vec<ParserSettingsBlock>,
     ignore: Vec<Pattern<String>>,
 }
@@ -522,7 +521,7 @@ impl ParserSettings {
 
         let mut j = 0;
         for variant in &pf.level.variants {
-            let mut mapping = CaseInsensitiveHashMap::new();
+            let mut mapping = HashMap::new();
             for (level, values) in &variant.values {
                 for value in values {
                     mapping.insert(value.clone(), level.clone());
