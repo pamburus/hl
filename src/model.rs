@@ -14,6 +14,7 @@ use chrono::{DateTime, Utc};
 use regex::Regex;
 use serde::de::{Deserialize, Deserializer, MapAccess, SeqAccess, Visitor};
 use serde_json::{self as json};
+use titlecase::titlecase;
 use wildflower::Pattern;
 
 // other local crates
@@ -525,6 +526,9 @@ impl ParserSettings {
             for (level, values) in &variant.values {
                 for value in values {
                     mapping.insert(value.clone(), level.clone());
+                    mapping.insert(value.to_lowercase(), level.clone());
+                    mapping.insert(value.to_uppercase(), level.clone());
+                    mapping.insert(titlecase(value), level.clone());
                 }
             }
             let k = self.level.len();

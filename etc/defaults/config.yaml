@@ -32,10 +32,10 @@ fields:
       variants:
         - names: [level, LEVEL, Level]
           values:
-            debug: [debug, Debug]
-            info: [info, information, Information]
-            warning: [warning, Warning, warn]
-            error: [error, Error, err, fatal, critical, panic]
+            debug: [debug]
+            info: [info, information]
+            warning: [warning, warn]
+            error: [error, err, fatal, critical, panic]
         - names: [PRIORITY]
           values:
             debug: [7]
