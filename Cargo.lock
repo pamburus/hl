@@ -822,6 +822,7 @@ dependencies = [
  "stats_alloc",
  "strum",
  "thiserror",
+ "titlecase",
  "wildflower",
  "wildmatch",
  "winapi-util",
@@ -1702,6 +1703,16 @@ checksum = "be4d6b5f19ff7664e8c98d03e2139cb510db9b0a60b55f8e8709b689d939b6bc"
 dependencies = [
  "serde",
  "serde_json",
+]
+
+[[package]]
+name = "titlecase"
+version = "3.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "acc5e312c2e5385c8d3d31487041ca8ceaec09a8a1174bdfa9c6418c5f6b36fa"
+dependencies = [
+ "regex",
+ "wasm-bindgen",
 ]
 
 [[package]]

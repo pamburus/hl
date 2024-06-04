@@ -77,6 +77,7 @@ signal-hook = "0"
 snap = "1"
 strum = { version = "0", features = ["derive"] }
 thiserror = "1"
+titlecase = "3"
 wildflower = { git = "https://github.com/cassaundra/wildflower.git" }
 winapi-util = { version = "0" }
 wyhash = "0"
