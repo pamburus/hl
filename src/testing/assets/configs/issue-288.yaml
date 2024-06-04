@@ -1,0 +1,11 @@
+fields:
+  predefined:
+    level:
+      show: auto
+      variants:
+        - names: [level]
+          values:
+            debug: [dbg]
+            info: [INF]
+            warning: [wrn]
+            error: [ERR]

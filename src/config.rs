@@ -69,7 +69,10 @@ pub mod global {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::settings::Settings;
+
+    use maplit::hashmap;
+
+    use crate::{level::Level, settings::Settings};
 
     #[test]
     fn test_default() {
@@ -88,6 +91,23 @@ mod tests {
         assert_eq!(settings.fields.predefined.time.0.names, &["ts"]);
         assert_eq!(settings.fields.predefined.message.0.names, &["msg"]);
         assert_eq!(settings.fields.predefined.level.variants.len(), 2);
+    }
+
+    #[test]
+    fn test_issue_288() {
+        let settings = super::load(Some("src/testing/assets/configs/issue-288.yaml")).unwrap();
+        assert_eq!(settings.fields.predefined.level.variants.len(), 1);
+        let variant = &settings.fields.predefined.level.variants[0];
+        assert_eq!(variant.names, vec!["level".to_owned()]);
+        assert_eq!(
+            variant.values,
+            hashmap! {
+                Level::Debug => vec!["dbg".to_owned()],
+                Level::Info => vec!["INF".to_owned()],
+                Level::Warning => vec!["wrn".to_owned()],
+                Level::Error => vec!["ERR".to_owned()],
+            }
+        );
     }
 
     #[test]

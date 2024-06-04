@@ -1066,13 +1066,20 @@ where
 
 #[cfg(test)]
 mod tests {
+    // super imports
     use super::*;
 
+    // std imports
     use std::io::Cursor;
 
+    // third-party imports
     use chrono_tz::UTC;
+    use maplit::hashmap;
 
-    use crate::{filtering::MatchOptions, model::FieldFilterSet, themecfg::testing, LinuxDateFormat};
+    // local imports
+    use crate::{
+        filtering::MatchOptions, level::Level, model::FieldFilterSet, settings, themecfg::testing, LinuxDateFormat,
+    };
 
     #[test]
     fn test_common_prefix_len() {
@@ -1330,6 +1337,43 @@ mod tests {
         assert_eq!(
             std::str::from_utf8(&output).unwrap(),
             "2024-01-25 18:10:20.435 |DBG| m1 a.b.d=20 a.c.b=11 ...\n",
+        );
+    }
+
+    #[test]
+    fn test_issue_288_t1() {
+        let input = input(concat!(
+            r#"time="2024-06-04 17:14:35.190733+0200" level=INF msg="An INFO log message" logger=aLogger caller=aCaller"#,
+            "\n",
+        ));
+
+        let mut output = Vec::new();
+        let app = App::new(options().with_fields(FieldOptions {
+            settings: Fields {
+                predefined: settings::PredefinedFields {
+                    level: settings::LevelField {
+                        variants: vec![settings::LevelFieldVariant {
+                            names: vec!["level".to_string()],
+                            values: hashmap! {
+                                Level::Debug => vec!["dbg".to_string()],
+                                Level::Info => vec!["INF".to_string()],
+                                Level::Warning => vec!["wrn".to_string()],
+                                Level::Error => vec!["ERR".to_string()],
+                            },
+                            level: None,
+                        }],
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                },
+                ..Default::default()
+            },
+            ..Default::default()
+        }));
+        app.run(vec![input], &mut output).unwrap();
+        assert_eq!(
+            std::str::from_utf8(&output).unwrap(),
+            "2024-06-04 15:14:35.190 |INF| aLogger: An INFO log message @ aCaller\n",
         );
     }
 
