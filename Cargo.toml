@@ -44,7 +44,7 @@ clap_complete = "4"
 clap_mangen = "0"
 closure = "0"
 collection_macros = "0"
-config = "0"
+config = { version = "0", features = ["yaml", "json", "toml"] }
 crossbeam-channel = "0"
 crossbeam-queue = "0"
 crossbeam-utils = "0"
