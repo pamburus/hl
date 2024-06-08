@@ -15,9 +15,21 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+
       - name: Build
-        run: cargo build --verbose --benches
+        run: cargo build --verbose --benches --workspace
+
       - name: Run tests
-        run: cargo test --verbose
+        run: cargo test --verbose --workspace
+
       - name: Run executable
         run: cargo run
+
+      - name: Install latest nightly
+        uses: actions-rs/toolchain@v1
+        with:
+            toolchain: nightly
+            components: rustfmt
+
+      - name: Check formatting
+        run: cargo +nightly fmt --verbose --all --check

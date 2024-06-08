@@ -14,7 +14,9 @@ pub fn enable_ansi_support() -> Result<(), ConsoleError> {
     use winapi_util::console::Console;
 
     let mut console = Console::stdout().map_err(ConsoleError::FailedToGetStandardOutputHandle)?;
-    console.set_virtual_terminal_processing(true).map_err(ConsoleError::FailedToSetConsoleMode)?;
+    console
+        .set_virtual_terminal_processing(true)
+        .map_err(ConsoleError::FailedToSetConsoleMode)?;
 
     Ok(())
 }
