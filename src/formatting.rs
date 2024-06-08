@@ -1660,4 +1660,32 @@ mod tests {
         let result = format_no_color(&rec);
         assert_eq!(&result, r#""#, "{}", result);
     }
+
+    #[test]
+    fn test_expand_with_hidden() {
+        let formatter = RecordFormatter::new(settings().with(|s| {
+            let mut fields = IncludeExcludeKeyFilter::default();
+            fields.entry("b").exclude();
+            s.theme = Default::default();
+            s.expand = ExpandOption::Always;
+            s.fields = fields.into();
+        }));
+
+        let rec = Record {
+            message: Some(EncodedString::raw("m").into()),
+            fields: RecordFields {
+                head: heapless::Vec::from_slice(&[
+                    ("a", EncodedString::raw("1").into()),
+                    ("b", EncodedString::raw("2").into()),
+                    ("c", EncodedString::raw("3").into()),
+                ])
+                .unwrap(),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+
+        let result = formatter.format_to_string(&rec);
+        assert_eq!(&result, "m\n  > a=1\n  > c=3\n  > ...", "{}", result);
+    }
 }
