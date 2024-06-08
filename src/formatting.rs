@@ -746,36 +746,36 @@ pub mod string {
             let begin = buf.len();
             buf.with_auto_trim(|buf| MessageFormatRaw::new(self.string).format(buf))?;
 
-            let mut mask = Mask::none();
+            let mut mask = Mask::EMPTY;
 
             buf[begin..].iter().map(|&c| CHAR_GROUPS[c as usize]).for_each(|group| {
                 mask |= group;
             });
 
-            if !mask.intersects(Mask::EqualSign | Mask::Control | Mask::Backslash)
+            if !mask.intersects(bits!(Flag::{EqualSign | Control | Backslash}))
                 && !matches!(buf[begin..], [b'"', ..] | [b'\'', ..] | [b'`', ..])
             {
                 return Ok(());
             }
 
-            if !mask.intersects(Mask::DoubleQuote | Mask::Control | Mask::Backslash) {
+            if !mask.intersects(bits!(Flag::{DoubleQuote | Control | Backslash})) {
                 buf.push(b'"');
                 buf.push(b'"');
                 buf[begin..].rotate_right(1);
                 return Ok(());
             }
 
-            if !mask.intersects(Mask::SingleQuote | Mask::Control | Mask::Backslash) {
+            if !mask.intersects(bits!(Flag::{SingleQuote | Control | Backslash})) {
                 buf.push(b'\'');
                 buf.push(b'\'');
                 buf[begin..].rotate_right(1);
                 return Ok(());
             }
 
-            const Z: Mask = Mask::none();
-            const XS: Mask = Mask::Control.or(Mask::ExtendedSpace);
+            const Z: Mask = Mask::EMPTY;
+            const XS: Mask = bits!(Flag::{Control | ExtendedSpace});
 
-            if matches!(mask.and(Mask::Backtick.or(XS)), Z | XS) {
+            if matches!(mask & (bits!(Flag::{Backtick}) | XS), Z | XS) {
                 buf.push(b'`');
                 buf.push(b'`');
                 buf[begin..].rotate_right(1);
