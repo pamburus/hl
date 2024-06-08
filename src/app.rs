@@ -31,7 +31,7 @@ use crate::{
     datefmt::{DateTimeFormat, DateTimeFormatter},
     error::*,
     fmtx::aligned_left,
-    formatting::{RawRecordFormatter, RecordFormatter, RecordWithSourceFormatter},
+    formatting::{RawRecordFormatter, RecordFormatter, RecordFormatterSettings, RecordWithSourceFormatter},
     fsmon::{self, EventKind},
     index::{Indexer, IndexerSettings, Timestamp},
     input::{BlockLine, Input, InputHolder, InputReference},
@@ -647,20 +647,18 @@ impl App {
         if self.options.raw {
             Box::new(RawRecordFormatter {})
         } else {
-            Box::new(
-                RecordFormatter::new(
-                    self.options.theme.clone(),
-                    DateTimeFormatter::new(self.options.time_format.clone(), self.options.time_zone),
-                    self.options.hide_empty_fields,
-                    self.options.fields.filter.clone(),
-                    self.options.formatting.clone(),
-                )
-                .with_field_unescaping(!self.options.raw_fields)
-                .with_flatten(self.options.flatten)
-                .with_expand(self.options.expand)
-                .with_always_show_time(self.options.fields.settings.predefined.time.show == FieldShowOption::Always)
-                .with_always_show_level(self.options.fields.settings.predefined.level.show == FieldShowOption::Always),
-            )
+            Box::new(RecordFormatter::new(RecordFormatterSettings {
+                theme: self.options.theme.clone(),
+                ts_formatter: DateTimeFormatter::new(self.options.time_format.clone(), self.options.time_zone),
+                hide_empty_fields: self.options.hide_empty_fields,
+                fields: self.options.fields.filter.clone(),
+                unescape_fields: !self.options.raw_fields,
+                flatten: self.options.flatten,
+                expand: self.options.expand,
+                always_show_time: self.options.fields.settings.predefined.time.show == FieldShowOption::Always,
+                always_show_level: self.options.fields.settings.predefined.level.show == FieldShowOption::Always,
+                punctuation: self.options.formatting.punctuation.clone().into(),
+            }))
         }
     }
 

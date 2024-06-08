@@ -6,11 +6,11 @@ use encstr::EncodedString;
 
 // local imports
 use crate::{
-    datefmt::DateTimeFormatter,
+    datefmt::{DateTimeFormatter, TextWidth},
     filtering::IncludeExcludeSetting,
     fmtx::{aligned_left, centered, OptimizedBuf, Push},
     model::{self, Caller, Level, RawValue},
-    settings::{ExpandOption, FlattenOption, Formatting},
+    settings::{ExpandOption, FlattenOption, Formatting, Punctuation},
     theme::{Element, StylingPush, Theme},
     IncludeExcludeKeyFilter,
 };
@@ -53,70 +53,83 @@ impl RecordWithSourceFormatter for Box<dyn RecordWithSourceFormatter> {
 
 // ---
 
+pub struct RecordFormatterSettings {
+    pub theme: Arc<Theme>,
+    pub unescape_fields: bool,
+    pub ts_formatter: DateTimeFormatter,
+    pub hide_empty_fields: bool,
+    pub flatten: bool,
+    pub expand: ExpandOption,
+    pub always_show_time: bool,
+    pub always_show_level: bool,
+    pub fields: Arc<IncludeExcludeKeyFilter>,
+    pub punctuation: Arc<Punctuation>,
+}
+
+impl RecordFormatterSettings {
+    pub fn with<F>(mut self, f: F) -> Self
+    where
+        F: FnOnce(&mut Self),
+    {
+        f(&mut self);
+        self
+    }
+}
+
+impl From<Formatting> for RecordFormatterSettings {
+    fn from(cfg: Formatting) -> Self {
+        Self {
+            theme: Arc::new(Theme::default()),
+            unescape_fields: true,
+            ts_formatter: DateTimeFormatter::default(),
+            hide_empty_fields: false,
+            flatten: cfg.flatten.map(|x| x == FlattenOption::Always).unwrap_or(false),
+            expand: cfg.expand.unwrap_or_default(),
+            always_show_time: false,
+            always_show_level: false,
+            fields: Arc::new(IncludeExcludeKeyFilter::default()),
+            punctuation: Arc::new(cfg.punctuation.into()),
+        }
+    }
+}
+
+impl Default for RecordFormatterSettings {
+    fn default() -> Self {
+        Formatting::default().into()
+    }
+}
+
+// ---
+
 pub struct RecordFormatter {
     theme: Arc<Theme>,
     unescape_fields: bool,
     ts_formatter: DateTimeFormatter,
-    ts_width: (usize, usize),
     hide_empty_fields: bool,
     flatten: bool,
     expand: ExpandOption,
     always_show_time: bool,
     always_show_level: bool,
     fields: Arc<IncludeExcludeKeyFilter>,
-    cfg: Formatting,
+    punctuation: Arc<Punctuation>,
+    ts_width: TextWidth,
 }
 
 impl RecordFormatter {
-    pub fn new(
-        theme: Arc<Theme>,
-        ts_formatter: DateTimeFormatter,
-        hide_empty_fields: bool,
-        fields: Arc<IncludeExcludeKeyFilter>,
-        cfg: Formatting,
-    ) -> Self {
-        let ts_width = ts_formatter.max_length();
-        RecordFormatter {
-            theme,
-            unescape_fields: true,
-            ts_formatter,
+    pub fn new(settings: RecordFormatterSettings) -> Self {
+        let ts_width = settings.ts_formatter.max_width();
+        Self {
+            theme: settings.theme,
+            unescape_fields: settings.unescape_fields,
+            ts_formatter: settings.ts_formatter,
+            hide_empty_fields: settings.hide_empty_fields,
+            flatten: settings.flatten,
+            expand: settings.expand,
+            always_show_time: settings.always_show_time,
+            always_show_level: settings.always_show_level,
+            fields: settings.fields,
+            punctuation: settings.punctuation,
             ts_width,
-            hide_empty_fields,
-            flatten: cfg.flatten.map(|x| x == FlattenOption::Always).unwrap_or(false),
-            expand: cfg.expand.unwrap_or_default(),
-            always_show_time: false,
-            always_show_level: false,
-            fields,
-            cfg,
-        }
-    }
-
-    pub fn with_field_unescaping(self, unescape_fields: bool) -> Self {
-        Self {
-            unescape_fields,
-            ..self
-        }
-    }
-
-    pub fn with_flatten(self, flatten: bool) -> Self {
-        Self { flatten, ..self }
-    }
-
-    pub fn with_expand(self, expand: ExpandOption) -> Self {
-        Self { expand, ..self }
-    }
-
-    pub fn with_always_show_time(self, value: bool) -> Self {
-        Self {
-            always_show_time: value,
-            ..self
-        }
-    }
-
-    pub fn with_always_show_level(self, value: bool) -> Self {
-        Self {
-            always_show_level: value,
-            ..self
         }
     }
 
@@ -133,11 +146,11 @@ impl RecordFormatter {
             // time
             //
             if let Some(ts) = &rec.ts {
-                fs.ts_width = self.ts_width.1;
+                fs.ts_width = self.ts_width.chars;
                 fs.add_element(|| {});
                 s.element(Element::Time, |s| {
                     s.batch(|buf| {
-                        aligned_left(buf, self.ts_width.0, b' ', |mut buf| {
+                        aligned_left(buf, self.ts_width.bytes, b' ', |mut buf| {
                             if ts
                                 .as_rfc3339()
                                 .and_then(|ts| self.ts_formatter.reformat_rfc3339(&mut buf, ts))
@@ -153,11 +166,11 @@ impl RecordFormatter {
                     })
                 });
             } else if self.always_show_time {
-                fs.ts_width = self.ts_width.1;
+                fs.ts_width = self.ts_width.chars;
                 fs.add_element(|| {});
                 s.element(Element::Time, |s| {
                     s.batch(|buf| {
-                        centered(buf, self.ts_width.0, b'-', |mut buf| {
+                        centered(buf, self.ts_width.bytes, b'-', |mut buf| {
                             buf.extend_from_slice(b"-");
                         });
                     })
@@ -189,7 +202,7 @@ impl RecordFormatter {
                     s.element(Element::LoggerInner, |s| {
                         s.batch(|buf| buf.extend_from_slice(logger.as_bytes()))
                     });
-                    s.batch(|buf| buf.extend_from_slice(self.cfg.punctuation.logger_name_separator.as_bytes()));
+                    s.batch(|buf| buf.extend_from_slice(self.punctuation.logger_name_separator.as_bytes()));
                 });
             }
             //
@@ -235,7 +248,7 @@ impl RecordFormatter {
                     self.expand(s, &mut fs);
                 }
                 s.element(Element::Ellipsis, |s| {
-                    s.batch(|buf| buf.extend_from_slice(self.cfg.punctuation.hidden_fields_indicator.as_bytes()))
+                    s.batch(|buf| buf.extend_from_slice(self.punctuation.hidden_fields_indicator.as_bytes()))
                 });
             }
             //
@@ -293,7 +306,7 @@ impl RecordFormatter {
         s.element(Element::Caller, |s| {
             s.batch(|buf| {
                 buf.push(b' ');
-                buf.extend_from_slice(self.cfg.punctuation.source_location_separator.as_bytes())
+                buf.extend_from_slice(self.punctuation.source_location_separator.as_bytes())
             });
             s.element(Element::CallerInner, |s| {
                 s.batch(|buf| {
@@ -367,10 +380,10 @@ impl RecordFormatter {
         fs.add_element(|| s.space());
         s.element(Element::Level, |s| {
             s.batch(|buf| {
-                buf.extend_from_slice(self.cfg.punctuation.level_left_separator.as_bytes());
+                buf.extend_from_slice(self.punctuation.level_left_separator.as_bytes());
             });
             s.element(Element::LevelInner, |s| s.batch(|buf| buf.extend_from_slice(level)));
-            s.batch(|buf| buf.extend_from_slice(self.cfg.punctuation.level_right_separator.as_bytes()));
+            s.batch(|buf| buf.extend_from_slice(self.punctuation.level_right_separator.as_bytes()));
         });
     }
 
@@ -418,17 +431,19 @@ impl RecordFormatter {
             });
         });
     }
-
-    #[cfg(test)]
-    fn with_theme(self, theme: Arc<Theme>) -> Self {
-        Self { theme, ..self }
-    }
 }
 
 impl RecordWithSourceFormatter for RecordFormatter {
     #[inline]
     fn format_record(&self, buf: &mut Buf, prefix_range: Range<usize>, rec: model::RecordWithSource) {
         RecordFormatter::format_record(self, buf, prefix_range, rec.record)
+    }
+}
+
+impl From<RecordFormatterSettings> for RecordFormatter {
+    #[inline]
+    fn from(settings: RecordFormatterSettings) -> Self {
+        RecordFormatter::new(settings)
     }
 }
 
@@ -608,7 +623,7 @@ impl<'a> FieldFormatter<'a> {
                             self.rf.expand(s, fs);
                         }
                         s.element(Element::Ellipsis, |s| {
-                            s.batch(|buf| buf.extend(self.rf.cfg.punctuation.hidden_fields_indicator.as_bytes()))
+                            s.batch(|buf| buf.extend(self.rf.punctuation.hidden_fields_indicator.as_bytes()))
                         });
                     } else {
                         fs.some_fields_hidden = true;
@@ -634,7 +649,7 @@ impl<'a> FieldFormatter<'a> {
                 let mut first = true;
                 for v in item.iter() {
                     if !first {
-                        s.batch(|buf| buf.extend(self.rf.cfg.punctuation.array_separator.as_bytes()));
+                        s.batch(|buf| buf.extend(self.rf.punctuation.array_separator.as_bytes()));
                     } else {
                         first = false;
                     }
@@ -684,7 +699,7 @@ impl<'a> FieldFormatter<'a> {
         let sep = if fs.expand.unwrap_or(false) && matches!(value, RawValue::Object(o) if !o.is_empty()) {
             b":"
         } else {
-            self.rf.cfg.punctuation.field_key_value_separator.as_bytes()
+            self.rf.punctuation.field_key_value_separator.as_bytes()
         };
         s.element(Element::Field, |s| {
             s.batch(|buf| buf.extend(sep));
@@ -1188,21 +1203,38 @@ mod tests {
         }
     }
 
-    fn formatter() -> RecordFormatter {
-        RecordFormatter::new(
-            Arc::new(Theme::from(testing::theme().unwrap())),
-            DateTimeFormatter::new(
+    fn settings() -> RecordFormatterSettings {
+        RecordFormatterSettings {
+            theme: Arc::new(Theme::from(testing::theme().unwrap())),
+            ts_formatter: DateTimeFormatter::new(
                 LinuxDateFormat::new("%y-%m-%d %T.%3N").compile(),
                 Tz::FixedOffset(Utc.fix()),
             ),
-            false,
-            Arc::new(IncludeExcludeKeyFilter::default()),
-            Formatting {
-                punctuation: Punctuation::test_default(),
-                flatten: None,
-                expand: None,
-            },
-        )
+            always_show_time: false,
+            punctuation: Arc::new(Punctuation {
+                logger_name_separator: ":".into(),
+                field_key_value_separator: "=".into(),
+                string_opening_quote: "'".into(),
+                string_closing_quote: "'".into(),
+                source_location_separator: "@ ".into(),
+                hidden_fields_indicator: " ...".into(),
+                level_left_separator: "|".into(),
+                level_right_separator: "|".into(),
+                input_number_prefix: "#".into(),
+                input_number_left_separator: "".into(),
+                input_number_right_separator: " | ".into(),
+                input_name_left_separator: "".into(),
+                input_name_right_separator: " | ".into(),
+                input_name_clipping: "...".into(),
+                input_name_common_part: "...".into(),
+                array_separator: ",".into(),
+            }),
+            ..Default::default()
+        }
+    }
+
+    fn formatter() -> RecordFormatter {
+        settings().into()
     }
 
     fn format(rec: &Record) -> String {
@@ -1210,7 +1242,8 @@ mod tests {
     }
 
     fn format_no_color(rec: &Record) -> String {
-        formatter().with_theme(Default::default()).format_to_string(rec)
+        let formatter = RecordFormatter::new(settings().with(|s| s.theme = Default::default()));
+        formatter.format_to_string(rec)
     }
 
     fn json_raw_value(s: &str) -> Box<json::value::RawValue> {
@@ -1250,12 +1283,13 @@ mod tests {
         };
 
         assert_eq!(
-            &format(&rec),
+            format(&rec),
             "\u{1b}[0;2;3m00-01-02 03:04:05.123 \u{1b}[0;36m|\u{1b}[0;95mDBG\u{1b}[0;36m|\u{1b}[0;2;3m \u{1b}[0;2;4mtl:\u{1b}[0m \u{1b}[0;1;39mtm \u{1b}[0;32mk-a\u{1b}[0;2m=\u{1b}[0;33m{ \u{1b}[0;32mva\u{1b}[0;2m=\u{1b}[0;33m{ \u{1b}[0;32mkb\u{1b}[0;2m=\u{1b}[0;94m42 \u{1b}[0;32mkc\u{1b}[0;2m=\u{1b}[0;94m43\u{1b}[0;33m } }\u{1b}[0;2;3m @ tc\u{1b}[0m",
         );
 
+        let formatter = RecordFormatter::new(settings().with(|s| s.flatten = true));
         assert_eq!(
-            &formatter().with_flatten(true).format_to_string(&rec),
+            formatter.format_to_string(&rec),
             "\u{1b}[0;2;3m00-01-02 03:04:05.123 \u{1b}[0;36m|\u{1b}[0;95mDBG\u{1b}[0;36m|\u{1b}[0;2;3m \u{1b}[0;2;4mtl:\u{1b}[0m \u{1b}[0;1;39mtm \u{1b}[0;32mk-a.va.kb\u{1b}[0;2m=\u{1b}[0;94m42 \u{1b}[0;32mk-a.va.kc\u{1b}[0;2m=\u{1b}[0;94m43\u{1b}[0;2;3m @ tc\u{1b}[0m",
         );
     }
@@ -1278,8 +1312,9 @@ mod tests {
             ..Default::default()
         };
 
+        let formatter = RecordFormatter::new(settings().with(|s| s.always_show_time = true));
         assert_eq!(
-            &formatter().with_always_show_time(true).format_to_string(&rec),
+            formatter.format_to_string(&rec),
             "\u{1b}[0;2;3m---------------------\u{1b}[0m \u{1b}[0;1;39mtm\u{1b}[0m",
         );
     }
@@ -1291,7 +1326,7 @@ mod tests {
             ..Default::default()
         };
 
-        assert_eq!(&format(&rec), "\u{1b}[0;1;39mtm\u{1b}[0m",);
+        assert_eq!(format(&rec), "\u{1b}[0;1;39mtm\u{1b}[0m",);
     }
 
     #[test]
@@ -1301,8 +1336,9 @@ mod tests {
             ..Default::default()
         };
 
+        let formatter = RecordFormatter::new(settings().with(|s| s.always_show_level = true));
         assert_eq!(
-            &formatter().with_always_show_level(true).format_to_string(&rec),
+            formatter.format_to_string(&rec),
             "\u{1b}[0;36m|(?)|\u{1b}[0m \u{1b}[0;1;39mtm\u{1b}[0m"
         );
     }
