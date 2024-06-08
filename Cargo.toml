@@ -4,7 +4,7 @@ members = [".", "crate/encstr"]
 [workspace.package]
 repository = "https://github.com/pamburus/hl"
 authors = ["Pavel Ivanov <mr.pavel.ivanov@gmail.com>"]
-version = "0.29.7-alpha.1"
+version = "0.29.7-alpha.2"
 edition = "2021"
 license = "MIT"
 
@@ -29,8 +29,6 @@ sha2 = "0"
 
 [dependencies]
 bincode = "1"
-bitmask = "0"
-bitmask-enum = "2"
 bytefmt = "0"
 capnp = "0.19"
 chrono = { version = "0.4", default-features = false, features = [
@@ -51,6 +49,8 @@ crossbeam-utils = "0"
 derive_deref = "1"
 encstr = { path = "./crate/encstr" }
 enum-map = "2"
+enumset = "1"
+enumset-ext = { path = "./crate/enumset-ext" }
 flate2 = "1"
 heapless = "0"
 hex = "0"

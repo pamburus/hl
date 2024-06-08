@@ -1,6 +1,9 @@
 // std imports
 use std::sync::Arc;
 
+// workspace imports
+use encstr::EncodedString;
+
 // local imports
 use crate::{
     datefmt::DateTimeFormatter,
@@ -11,7 +14,6 @@ use crate::{
     theme::{Element, StylingPush, Theme},
     IncludeExcludeKeyFilter,
 };
-use encstr::EncodedString;
 
 // relative imports
 use string::{Format, MessageFormatAuto, ValueFormatAuto};
@@ -570,11 +572,12 @@ enum FormattedFieldVariant {
 // ---
 
 pub mod string {
+    // third-party imports
+    use enumset::{enum_set as mask, EnumSet, EnumSetType};
+
     // workspace imports
     use encstr::{AnyEncodedString, JsonAppender, Result};
-
-    // third-party imports
-    use bitmask_enum::bitmask;
+    use enumset_ext::EnumSetExt;
 
     // local imports
     use crate::{
@@ -615,16 +618,16 @@ pub mod string {
             let begin = buf.len();
             buf.with_auto_trim(|buf| ValueFormatRaw::new(self.string).format(buf))?;
 
-            let mut mask = Mask::none();
+            let mut mask = Mask::EMPTY;
 
             buf[begin..].iter().map(|&c| CHAR_GROUPS[c as usize]).for_each(|group| {
                 mask |= group;
             });
 
-            let plain = if (mask & (Mask::Other | Mask::Digit | Mask::Dot | Mask::Minus).not()).is_none() {
-                if mask == Mask::Digit {
+            let plain = if (mask & !(Flag::Other | Flag::Digit | Flag::Dot | Flag::Minus)).is_empty() {
+                if mask == Flag::Digit {
                     buf[begin..].len() > MAX_NUMBER_LEN
-                } else if !mask.contains(Mask::Other) {
+                } else if !mask.contains(Flag::Other) {
                     !looks_like_number(&buf[begin..])
                 } else {
                     !matches!(
@@ -644,24 +647,24 @@ pub mod string {
                 return Ok(());
             }
 
-            if !mask.intersects(Mask::DoubleQuote | Mask::Control | Mask::Backslash) {
+            if !mask.intersects(Flag::DoubleQuote | Flag::Control | Flag::Backslash) {
                 buf.push(b'"');
                 buf.push(b'"');
                 buf[begin..].rotate_right(1);
                 return Ok(());
             }
 
-            if !mask.intersects(Mask::SingleQuote | Mask::Control | Mask::Backslash) {
+            if !mask.intersects(Flag::SingleQuote | Flag::Control | Flag::Backslash) {
                 buf.push(b'\'');
                 buf.push(b'\'');
                 buf[begin..].rotate_right(1);
                 return Ok(());
             }
 
-            const Z: Mask = Mask::none();
-            const XS: Mask = Mask::Control.or(Mask::ExtendedSpace);
+            const Z: Mask = Mask::EMPTY;
+            const XS: Mask = mask!(Flag::Control | Flag::ExtendedSpace);
 
-            if matches!(mask.and(Mask::Backtick.or(XS)), Z | XS) {
+            if matches!(mask & (Flag::Backtick | XS), Z | XS) {
                 buf.push(b'`');
                 buf.push(b'`');
                 buf[begin..].rotate_right(1);
@@ -745,36 +748,36 @@ pub mod string {
             let begin = buf.len();
             buf.with_auto_trim(|buf| MessageFormatRaw::new(self.string).format(buf))?;
 
-            let mut mask = Mask::none();
+            let mut mask = Mask::EMPTY;
 
             buf[begin..].iter().map(|&c| CHAR_GROUPS[c as usize]).for_each(|group| {
                 mask |= group;
             });
 
-            if !mask.intersects(Mask::EqualSign | Mask::Control | Mask::Backslash)
+            if !mask.intersects(Flag::EqualSign | Flag::Control | Flag::Backslash)
                 && !matches!(buf[begin..], [b'"', ..] | [b'\'', ..] | [b'`', ..])
             {
                 return Ok(());
             }
 
-            if !mask.intersects(Mask::DoubleQuote | Mask::Control | Mask::Backslash) {
+            if !mask.intersects(Flag::DoubleQuote | Flag::Control | Flag::Backslash) {
                 buf.push(b'"');
                 buf.push(b'"');
                 buf[begin..].rotate_right(1);
                 return Ok(());
             }
 
-            if !mask.intersects(Mask::SingleQuote | Mask::Control | Mask::Backslash) {
+            if !mask.intersects(Flag::SingleQuote | Flag::Control | Flag::Backslash) {
                 buf.push(b'\'');
                 buf.push(b'\'');
                 buf[begin..].rotate_right(1);
                 return Ok(());
             }
 
-            const Z: Mask = Mask::none();
-            const XS: Mask = Mask::Control.or(Mask::ExtendedSpace);
+            const Z: Mask = Mask::EMPTY;
+            const XS: Mask = mask!(Flag::Control | Flag::ExtendedSpace);
 
-            if matches!(mask.and(Mask::Backtick.or(XS)), Z | XS) {
+            if matches!(mask & (Flag::Backtick | XS), Z | XS) {
                 buf.push(b'`');
                 buf.push(b'`');
                 buf[begin..].rotate_right(1);
@@ -854,18 +857,18 @@ pub mod string {
     // ---
 
     static CHAR_GROUPS: [Mask; 256] = {
-        const CT: Mask = Mask::Control; // 0x00..0x1F
-        const DQ: Mask = Mask::DoubleQuote; // 0x22
-        const SQ: Mask = Mask::SingleQuote; // 0x27
-        const BS: Mask = Mask::Backslash; // 0x5C
-        const BT: Mask = Mask::Backtick; // 0x60
-        const SP: Mask = Mask::Space; // 0x20
-        const XS: Mask = Mask::Control.or(Mask::ExtendedSpace); // 0x09, 0x0A, 0x0D
-        const EQ: Mask = Mask::EqualSign; // 0x3D
-        const HY: Mask = Mask::Minus; // Hyphen, 0x2D
-        const DO: Mask = Mask::Dot; // Dot, 0x2E
-        const DD: Mask = Mask::Digit; // Decimal digit, 0x30..0x39
-        const __: Mask = Mask::Other;
+        const CT: Mask = mask!(Flag::Control); // 0x00..0x1F
+        const DQ: Mask = mask!(Flag::DoubleQuote); // 0x22
+        const SQ: Mask = mask!(Flag::SingleQuote); // 0x27
+        const BS: Mask = mask!(Flag::Backslash); // 0x5C
+        const BT: Mask = mask!(Flag::Backtick); // 0x60
+        const SP: Mask = mask!(Flag::Space); // 0x20
+        const XS: Mask = mask!(Flag::Control | Flag::ExtendedSpace); // 0x09, 0x0A, 0x0D
+        const EQ: Mask = mask!(Flag::EqualSign); // 0x3D
+        const HY: Mask = mask!(Flag::Minus); // Hyphen, 0x2D
+        const DO: Mask = mask!(Flag::Dot); // Dot, 0x2E
+        const DD: Mask = mask!(Flag::Digit); // Decimal digit, 0x30..0x39
+        const __: Mask = mask!(Flag::Other);
         [
             //   1   2   3   4   5   6   7   8   9   A   B   C   D   E   F
             CT, CT, CT, CT, CT, CT, CT, CT, CT, XS, XS, CT, CT, XS, CT, CT, // 0
@@ -887,21 +890,23 @@ pub mod string {
         ]
     };
 
-    #[bitmask(u16)]
-    enum Mask {
-        Control,       // 1
-        DoubleQuote,   // 2
-        SingleQuote,   // 4
-        Backslash,     // 8
-        Backtick,      // 16
-        Space,         // 32
-        ExtendedSpace, // 64
-        EqualSign,     // 128
-        Digit,         // 256
-        Minus,         // 512
-        Dot,           // 1024
-        Other,         // 2048
+    #[derive(EnumSetType)]
+    enum Flag {
+        Control,
+        DoubleQuote,
+        SingleQuote,
+        Backslash,
+        Backtick,
+        Space,
+        ExtendedSpace,
+        EqualSign,
+        Digit,
+        Minus,
+        Dot,
+        Other,
     }
+
+    type Mask = EnumSet<Flag>;
 }
 
 #[cfg(test)]
