@@ -1,3 +1,4 @@
-# enum_discrim_align_threshold = 8
+enum_discrim_align_threshold = 32
 max_width = 120
 hard_tabs = false
+ignore = ["*_capnp.rs"]
