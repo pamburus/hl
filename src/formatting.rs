@@ -574,7 +574,7 @@ pub mod string {
     use encstr::{AnyEncodedString, JsonAppender, Result};
 
     // third-party imports
-    use bitmask_enum::bitmask;
+    use enumflags2::{bitflags, make_bitflags as bits, BitFlags};
 
     // local imports
     use crate::{
@@ -615,16 +615,16 @@ pub mod string {
             let begin = buf.len();
             buf.with_auto_trim(|buf| ValueFormatRaw::new(self.string).format(buf))?;
 
-            let mut mask = Mask::none();
+            let mut mask = Mask::EMPTY;
 
             buf[begin..].iter().map(|&c| CHAR_GROUPS[c as usize]).for_each(|group| {
                 mask |= group;
             });
 
-            let plain = if (mask & (Mask::Other | Mask::Digit | Mask::Dot | Mask::Minus).not()).is_none() {
-                if mask == Mask::Digit {
+            let plain = if (mask & !bits!(Flag::{Other | Digit | Dot | Minus})) == Mask::EMPTY {
+                if mask == bits!(Flag::{Digit}) {
                     buf[begin..].len() > MAX_NUMBER_LEN
-                } else if !mask.contains(Mask::Other) {
+                } else if !mask.contains(Flag::Other) {
                     !looks_like_number(&buf[begin..])
                 } else {
                     !matches!(
@@ -644,24 +644,25 @@ pub mod string {
                 return Ok(());
             }
 
-            if !mask.intersects(Mask::DoubleQuote | Mask::Control | Mask::Backslash) {
+            if !mask.intersects(bits!(Flag::{DoubleQuote | Control | Backslash})) {
                 buf.push(b'"');
                 buf.push(b'"');
                 buf[begin..].rotate_right(1);
                 return Ok(());
             }
 
-            if !mask.intersects(Mask::SingleQuote | Mask::Control | Mask::Backslash) {
+            if !mask.intersects(bits!(Flag::{SingleQuote | Control | Backslash})) {
                 buf.push(b'\'');
                 buf.push(b'\'');
                 buf[begin..].rotate_right(1);
                 return Ok(());
             }
 
-            const Z: Mask = Mask::none();
-            const XS: Mask = Mask::Control.or(Mask::ExtendedSpace);
+            const Z: Mask = Mask::EMPTY;
+            const XS: Mask = bits!(Flag::{Control | ExtendedSpace});
 
-            if matches!(mask.and(Mask::Backtick.or(XS)), Z | XS) {
+            // TODO: fix this after https://github.com/meithecatte/enumflags2/issues/60
+            if matches!(mask & (bits!(Flag::{Backtick}) | XS), Z | XS) {
                 buf.push(b'`');
                 buf.push(b'`');
                 buf[begin..].rotate_right(1);
@@ -854,18 +855,18 @@ pub mod string {
     // ---
 
     static CHAR_GROUPS: [Mask; 256] = {
-        const CT: Mask = Mask::Control; // 0x00..0x1F
-        const DQ: Mask = Mask::DoubleQuote; // 0x22
-        const SQ: Mask = Mask::SingleQuote; // 0x27
-        const BS: Mask = Mask::Backslash; // 0x5C
-        const BT: Mask = Mask::Backtick; // 0x60
-        const SP: Mask = Mask::Space; // 0x20
-        const XS: Mask = Mask::Control.or(Mask::ExtendedSpace); // 0x09, 0x0A, 0x0D
-        const EQ: Mask = Mask::EqualSign; // 0x3D
-        const HY: Mask = Mask::Minus; // Hyphen, 0x2D
-        const DO: Mask = Mask::Dot; // Dot, 0x2E
-        const DD: Mask = Mask::Digit; // Decimal digit, 0x30..0x39
-        const __: Mask = Mask::Other;
+        const CT: Mask = bits!(Flag::{Control}); // 0x00..0x1F
+        const DQ: Mask = bits!(Flag::{DoubleQuote}); // 0x22
+        const SQ: Mask = bits!(Flag::{SingleQuote}); // 0x27
+        const BS: Mask = bits!(Flag::{Backslash}); // 0x5C
+        const BT: Mask = bits!(Flag::{Backtick}); // 0x60
+        const SP: Mask = bits!(Flag::{Space}); // 0x20
+        const XS: Mask = bits!(Flag::{Control|ExtendedSpace}); // 0x09, 0x0A, 0x0D
+        const EQ: Mask = bits!(Flag::{EqualSign}); // 0x3D
+        const HY: Mask = bits!(Flag::{Minus}); // Hyphen, 0x2D
+        const DO: Mask = bits!(Flag::{Dot}); // Dot, 0x2E
+        const DD: Mask = bits!(Flag::{Digit}); // Decimal digit, 0x30..0x39
+        const __: Mask = bits!(Flag::{Other});
         [
             //   1   2   3   4   5   6   7   8   9   A   B   C   D   E   F
             CT, CT, CT, CT, CT, CT, CT, CT, CT, XS, XS, CT, CT, XS, CT, CT, // 0
@@ -887,21 +888,25 @@ pub mod string {
         ]
     };
 
-    #[bitmask(u16)]
-    enum Mask {
-        Control,       // 1
-        DoubleQuote,   // 2
-        SingleQuote,   // 4
-        Backslash,     // 8
-        Backtick,      // 16
-        Space,         // 32
-        ExtendedSpace, // 64
-        EqualSign,     // 128
-        Digit,         // 256
-        Minus,         // 512
-        Dot,           // 1024
-        Other,         // 2048
+    #[bitflags]
+    #[repr(u16)]
+    #[derive(Copy, Clone, Debug, PartialEq)]
+    enum Flag {
+        Control       = 0x0001, // 1
+        DoubleQuote   = 0x0002, // 2
+        SingleQuote   = 0x0004, // 4
+        Backslash     = 0x0008, // 8
+        Backtick      = 0x0010, // 16
+        Space         = 0x0020, // 32
+        ExtendedSpace = 0x0040, // 64
+        EqualSign     = 0x0080, // 128
+        Digit         = 0x0100, // 256
+        Minus         = 0x0200, // 512
+        Dot           = 0x0400, // 1024
+        Other         = 0x0800, // 2048
     }
+
+    type Mask = BitFlags<Flag>;
 }
 
 #[cfg(test)]
