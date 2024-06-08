@@ -94,14 +94,14 @@ fn use_custom_format(s: &str, format: &DateTimeFormat, now: &DateTime<Tz>, tz: &
                 has_month = true;
             }
             Item::MonthShort(flags) => {
-                if flags != Flags::none() {
+                if flags != Flags::EMPTY {
                     return unsupported();
                 }
                 add_format_item(&mut buf, b"b", flags)?;
                 has_month = true;
             }
             Item::MonthLong(flags) => {
-                if flags != Flags::none() {
+                if flags != Flags::EMPTY {
                     return unsupported();
                 }
                 add_format_item(&mut buf, b"B", flags)?;
@@ -122,13 +122,13 @@ fn use_custom_format(s: &str, format: &DateTimeFormat, now: &DateTime<Tz>, tz: &
                 add_format_item(&mut buf, item, flags & !(Flag::FromSunday | Flag::FromZero))?;
             }
             Item::WeekdayShort(flags) => {
-                if flags != Flags::none() {
+                if flags != Flags::EMPTY {
                     return unsupported();
                 }
                 add_format_item(&mut buf, b"a", flags)?;
             }
             Item::WeekdayLong(flags) => {
-                if flags != Flags::none() {
+                if flags != Flags::EMPTY {
                     return unsupported();
                 }
                 add_format_item(&mut buf, b"A", flags)?;
@@ -156,7 +156,7 @@ fn use_custom_format(s: &str, format: &DateTimeFormat, now: &DateTime<Tz>, tz: &
             }
             Item::AmPm(flags) => {
                 let item = if flags.contains(Flag::LowerCase) { b"p" } else { b"P" };
-                add_format_item(&mut buf, item, Flags::none())?;
+                add_format_item(&mut buf, item, Flags::EMPTY)?;
                 has_ampm = true;
             }
             Item::Minute(flags) => {
@@ -172,7 +172,7 @@ fn use_custom_format(s: &str, format: &DateTimeFormat, now: &DateTime<Tz>, tz: &
                     unsupported();
                 }
                 buf.pop();
-                add_format_item(&mut buf, b".f", Flags::none())?;
+                add_format_item(&mut buf, b".f", Flags::EMPTY)?;
             }
             Item::UnixTimestamp(flags) => {
                 add_format_item(&mut buf, b"s", flags)?;
@@ -277,11 +277,9 @@ fn add_format_item(buf: &mut Vec<u8>, item: &[u8], flags: Flags) -> Option<()> {
     buf.push(b'%');
     if flags.intersects(Flag::SpacePadding) {
         buf.push(b'_');
-    }
-    if flags.intersects(Flag::ZeroPadding) {
+    } else if flags.intersects(Flag::ZeroPadding) {
         buf.push(b'0');
-    }
-    if flags.intersects(Flag::NoPadding) {
+    } else if flags.intersects(Flag::NoPadding) {
         buf.push(b'-');
     }
     buf.extend_from_slice(item);

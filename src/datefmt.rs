@@ -1,8 +1,8 @@
 use std::cmp::{max, min, PartialOrd};
 
-use bitmask::bitmask;
 use chrono::{DateTime, Datelike, FixedOffset, NaiveDateTime, Offset, TimeZone, Timelike};
 use chrono_tz::OffsetName;
+use enumflags2::{bitflags, BitFlags};
 
 use crate::fmtx::{aligned_left, Alignment, Counter, Push};
 use crate::timestamp::rfc3339;
@@ -50,21 +50,25 @@ impl DateTimeFormatter {
 
 // ---
 
-bitmask! {
-    #[derive(Debug)]
-    pub mask Flags: u8 where flags Flag {
-        SpacePadding  = 0b00000001,
-        ZeroPadding   = 0b00000010,
-        NoPadding     = 0b00000011,
-        UpperCase     = 0b00000100,
-        LowerCase     = 0b00001000,
-        FromZero      = 0b00010000,
-        FromSunday    = 0b00100000,
-        NoDelimiters  = 0b01000000,
-    }
+#[bitflags]
+#[repr(u8)]
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub enum Flag {
+    SpacePadding = 0b00000001,
+    ZeroPadding  = 0b00000010,
+    NoPadding    = 0b00000100,
+    UpperCase    = 0b00001000,
+    LowerCase    = 0b00010000,
+    FromZero     = 0b00100000,
+    FromSunday   = 0b01000000,
+    NoDelimiters = 0b10000000,
 }
 
+pub type Flags = BitFlags<Flag>;
+
 use Flag::*;
+
+// ---
 
 type Precision = u8;
 type Width = u8;
@@ -128,7 +132,7 @@ impl<'a> LinuxDateFormat<'a> {
             jump: b"",
             pad_counter: 0,
             pad: b' ',
-            flags: Flags::none(),
+            flags: Flags::EMPTY,
         }
     }
 
@@ -179,19 +183,19 @@ impl<'a> LinuxDateFormat<'a> {
         let (width, b) = self.parse_width(b);
         let (tzf, b) = self.parse_tz_format(b);
         let b = self.skip_modifier(b);
-        self.flags = Flags::none();
+        self.flags = Flags::EMPTY;
         let with_padding = |default| {
             if flags.intersects(SpacePadding | ZeroPadding) {
                 flags
             } else {
-                flags | (default & (SpacePadding | ZeroPadding))
+                flags | (Flags::from(default) & (SpacePadding | ZeroPadding))
             }
         };
         let with_case = |default| {
             if flags.intersects(UpperCase | LowerCase) {
                 flags
             } else {
-                flags | (default & (UpperCase | LowerCase))
+                flags | (Flags::from(default) & (UpperCase | LowerCase))
             }
         };
         let mut pad = |min_width, pad, zero, jump, value| {
@@ -282,17 +286,17 @@ impl<'a> LinuxDateFormat<'a> {
         let mut flags = self.flags;
         loop {
             match b {
-                Some(b'-') => flags.set(NoPadding),
+                Some(b'-') => flags |= NoPadding,
                 Some(b'_') => {
-                    flags.set(SpacePadding);
-                    flags.unset(ZeroPadding);
+                    flags.set(SpacePadding, true);
+                    flags.set(ZeroPadding, false);
                 }
                 Some(b'0') => {
-                    flags.unset(SpacePadding);
-                    flags.set(ZeroPadding);
+                    flags.set(SpacePadding, false);
+                    flags.set(ZeroPadding, true);
                 }
-                Some(b'^') => flags.set(UpperCase),
-                Some(b'#') => flags.set(LowerCase),
+                Some(b'^') => flags.set(UpperCase, true),
+                Some(b'#') => flags.set(LowerCase, true),
                 _ => break,
             }
             b = self.pop()
@@ -461,13 +465,13 @@ where
                     if !flags.contains(NoDelimiters) {
                         f.char(b':');
                     }
-                    f.numeric(secs / 60 % 60, 2, Flags::none());
+                    f.numeric(secs / 60 % 60, 2, Flags::EMPTY);
                 }
                 if precision == 0 || precision > 2 {
                     if !flags.contains(NoDelimiters) {
                         f.char(b':');
                     }
-                    f.numeric(secs % 60, 2, Flags::none());
+                    f.numeric(secs % 60, 2, Flags::EMPTY);
                 }
             }
             Item::TimeZoneName((flags, width)) => {
@@ -1062,6 +1066,6 @@ mod tests {
 
     #[test]
     fn test_compile_offset() {
-        assert_eq!(format("%:z"), vec![Item::TimeZoneOffset((Flags::none(), 2))]);
+        assert_eq!(format("%:z"), vec![Item::TimeZoneOffset((Flags::EMPTY, 2))]);
     }
 }
