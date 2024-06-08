@@ -263,6 +263,7 @@ impl<'a> LinuxDateFormat<'a> {
             Some(b't') => Some(Item::Char(b' ')),
             Some(b'T') => self.jump(b"%H:%M:%S", 8, width),
             Some(b'u') => pad(1, b'0', b'0', b"%u", Some(Item::WeekdayNumeric(flags))),
+            Some(b'U') => pad(2, b'0', b'0', b"%U", Some(Item::IsoWeek(flags | FromZero | FromSunday))),
             Some(b'V') => pad(2, b'0', b'0', b"%V", Some(Item::IsoWeek(flags))),
             Some(b'w') => pad(
                 1,

@@ -124,14 +124,30 @@ fn use_custom_format(s: &str, format: &DateTimeFormat, now: &DateTime<Tz>, tz: &
             Item::YearDay(_) => {
                 return unsupported();
             }
-            Item::IsoWeek(_) => {
-                return unsupported();
+            Item::IsoWeek(flags) => {
+                if !flags.contains(Flag::ZeroPadding) {
+                    return unsupported();
+                }
+                let item = if flags.contains(Flag::FromZero) {
+                    if flags.contains(Flag::FromSunday) {
+                        b"U"
+                    } else {
+                        b"W"
+                    }
+                } else {
+                    if flags.contains(Flag::FromSunday) {
+                        return unsupported();
+                    } else {
+                        b"V"
+                    }
+                };
+                add_format_item(&mut buf, item, flags & !(Flag::FromSunday | Flag::FromZero))?;
             }
-            Item::IsoYear(_) => {
-                return unsupported();
+            Item::IsoYear(flags) => {
+                add_format_item(&mut buf, b"G", flags)?;
             }
-            Item::IsoYearShort(_) => {
-                return unsupported();
+            Item::IsoYearShort(flags) => {
+                add_format_item(&mut buf, b"g", flags)?;
             }
             Item::Hour(flags) => {
                 add_format_item(&mut buf, b"H", flags)?;
