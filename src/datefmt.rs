@@ -1,9 +1,15 @@
+// std imports
 use std::cmp::{max, min, PartialOrd};
 
-use bitmask::bitmask;
+// third-party imports
 use chrono::{DateTime, Datelike, FixedOffset, NaiveDateTime, Offset, TimeZone, Timelike};
 use chrono_tz::OffsetName;
+use enumset::{enum_set as mask, EnumSet, EnumSetType};
 
+// workspace imports
+use enumset_ext::EnumSetExt;
+
+// local imports
 use crate::fmtx::{aligned_left, Alignment, Counter, Push};
 use crate::timestamp::rfc3339;
 use crate::timezone::Tz;
@@ -50,21 +56,25 @@ impl DateTimeFormatter {
 
 // ---
 
-bitmask! {
-    #[derive(Debug)]
-    pub mask Flags: u8 where flags Flag {
-        SpacePadding  = 0b00000001,
-        ZeroPadding   = 0b00000010,
-        NoPadding     = 0b00000011,
-        UpperCase     = 0b00000100,
-        LowerCase     = 0b00001000,
-        FromZero      = 0b00010000,
-        FromSunday    = 0b00100000,
-        NoDelimiters  = 0b01000000,
-    }
+#[derive(EnumSetType, Debug)]
+pub enum Flag {
+    SpacePadding,
+    ZeroPadding,
+    NoPadding,
+    UpperCase,
+    LowerCase,
+    FromZero,
+    FromSunday,
+    NoDelimiters,
 }
 
 use Flag::*;
+
+pub type Flags = EnumSet<Flag>;
+
+const PADDING: Flags = mask!(SpacePadding | ZeroPadding | NoPadding);
+
+// ---
 
 type Precision = u8;
 type Width = u8;
@@ -128,7 +138,7 @@ impl<'a> LinuxDateFormat<'a> {
             jump: b"",
             pad_counter: 0,
             pad: b' ',
-            flags: Flags::none(),
+            flags: Flags::EMPTY,
         }
     }
 
@@ -179,12 +189,12 @@ impl<'a> LinuxDateFormat<'a> {
         let (width, b) = self.parse_width(b);
         let (tzf, b) = self.parse_tz_format(b);
         let b = self.skip_modifier(b);
-        self.flags = Flags::none();
+        self.flags = Flags::EMPTY;
         let with_padding = |default| {
-            if flags.intersects(SpacePadding | ZeroPadding) {
+            if flags.intersects(PADDING) {
                 flags
             } else {
-                flags | (default & (SpacePadding | ZeroPadding))
+                flags | (default & PADDING)
             }
         };
         let with_case = |default| {
@@ -282,17 +292,21 @@ impl<'a> LinuxDateFormat<'a> {
         let mut flags = self.flags;
         loop {
             match b {
-                Some(b'-') => flags.set(NoPadding),
+                Some(b'-') => {
+                    flags.insert(NoPadding);
+                }
                 Some(b'_') => {
-                    flags.set(SpacePadding);
-                    flags.unset(ZeroPadding);
+                    flags.insert(SpacePadding);
                 }
                 Some(b'0') => {
-                    flags.unset(SpacePadding);
-                    flags.set(ZeroPadding);
+                    flags.insert(ZeroPadding);
                 }
-                Some(b'^') => flags.set(UpperCase),
-                Some(b'#') => flags.set(LowerCase),
+                Some(b'^') => {
+                    flags.insert(UpperCase);
+                }
+                Some(b'#') => {
+                    flags.insert(LowerCase);
+                }
                 _ => break,
             }
             b = self.pop()
@@ -461,13 +475,13 @@ where
                     if !flags.contains(NoDelimiters) {
                         f.char(b':');
                     }
-                    f.numeric(secs / 60 % 60, 2, Flags::none());
+                    f.numeric(secs / 60 % 60, 2, Flags::EMPTY);
                 }
                 if precision == 0 || precision > 2 {
                     if !flags.contains(NoDelimiters) {
                         f.char(b':');
                     }
-                    f.numeric(secs % 60, 2, Flags::none());
+                    f.numeric(secs % 60, 2, Flags::EMPTY);
                 }
             }
             Item::TimeZoneName((flags, width)) => {
@@ -1056,12 +1070,50 @@ const AM_PM: [[&str; 2]; 3] = [["AM", "PM"], ["AM", "PM"], ["am", "pm"]];
 mod tests {
     use super::*;
 
+    use chrono_tz::UTC;
+
     fn format(s: &str) -> DateTimeFormat {
         LinuxDateFormat::new(s).compile()
     }
 
+    fn utc(year: i32, month: u32, day: u32, hour: u32, min: u32, sec: u32) -> DateTime<Tz> {
+        Tz::IANA(UTC)
+            .with_ymd_and_hms(year, month, day, hour, min, sec)
+            .unwrap()
+    }
+
+    fn f(fmt: &str, dt: DateTime<Tz>) -> String {
+        let mut buf = Vec::new();
+        format_date(&mut buf, dt, &format(fmt));
+        String::from_utf8(buf).unwrap()
+    }
+
     #[test]
     fn test_compile_offset() {
-        assert_eq!(format("%:z"), vec![Item::TimeZoneOffset((Flags::none(), 2))]);
+        assert_eq!(format("%:z"), vec![Item::TimeZoneOffset((Flags::EMPTY, 2))]);
+    }
+
+    #[test]
+    fn test_linux_date_format() {
+        assert_eq!(
+            f("%Y-%m-%d %H:%M:%S %z", utc(2020, 1, 1, 12, 0, 0)),
+            "2020-01-01 12:00:00 +0000"
+        );
+        assert_eq!(
+            f("%Y-%m-%d %H:%M:%S %::z", utc(2020, 1, 1, 12, 0, 0)),
+            "2020-01-01 12:00:00 +00:00:00"
+        );
+        assert_eq!(
+            f("%Y-%m-%d %H:%M:%S %Z", utc(2020, 1, 1, 12, 0, 0)),
+            "2020-01-01 12:00:00 UTC"
+        );
+        assert_eq!(f("%s", utc(2020, 1, 1, 12, 0, 0)), "1577880000");
+        assert_eq!(f("%e", utc(2020, 1, 1, 12, 0, 0)), " 1");
+        assert_eq!(f("%3e", utc(2020, 1, 1, 12, 0, 0)), "  1");
+        assert_eq!(f("%02e", utc(2020, 1, 1, 12, 0, 0)), "01");
+        assert_eq!(f("%p", utc(2020, 1, 1, 12, 0, 0)), "PM");
+        assert_eq!(f("%P", utc(2020, 1, 1, 12, 0, 0)), "pm");
+        assert_eq!(f("%^P", utc(2020, 1, 1, 12, 0, 0)), "PM");
+        assert_eq!(f("%#p", utc(2020, 1, 1, 12, 0, 0)), "pm");
     }
 }

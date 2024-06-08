@@ -2,6 +2,9 @@
 use chrono::{DateTime, Datelike, Duration, NaiveDateTime, Offset, Utc};
 use humantime::parse_duration;
 
+// workspace imports
+use enumset_ext::EnumSetExt;
+
 // local imports
 use crate::datefmt::{DateTimeFormat, Flag, Flags, Item};
 use crate::error::*;
@@ -87,23 +90,14 @@ fn use_custom_format(s: &str, format: &DateTimeFormat, now: &DateTime<Tz>, tz: &
                 return unsupported();
             }
             Item::MonthNumeric(flags) => {
-                if flags.intersects(Flag::FromZero) {
-                    return unsupported();
-                }
                 add_format_item(&mut buf, b"m", flags)?;
                 has_month = true;
             }
             Item::MonthShort(flags) => {
-                if flags != Flags::none() {
-                    return unsupported();
-                }
                 add_format_item(&mut buf, b"b", flags)?;
                 has_month = true;
             }
             Item::MonthLong(flags) => {
-                if flags != Flags::none() {
-                    return unsupported();
-                }
                 add_format_item(&mut buf, b"B", flags)?;
                 has_month = true;
             }
@@ -112,7 +106,7 @@ fn use_custom_format(s: &str, format: &DateTimeFormat, now: &DateTime<Tz>, tz: &
                 has_day = true;
             }
             Item::WeekdayNumeric(flags) => {
-                let item = if flags.contains(Flag::FromSunday | Flag::FromZero) {
+                let item = if flags.includes(Flag::FromSunday | Flag::FromZero) {
                     b"w"
                 } else if !flags.intersects(Flag::FromSunday | Flag::FromZero) {
                     b"u"
@@ -122,15 +116,9 @@ fn use_custom_format(s: &str, format: &DateTimeFormat, now: &DateTime<Tz>, tz: &
                 add_format_item(&mut buf, item, flags & !(Flag::FromSunday | Flag::FromZero))?;
             }
             Item::WeekdayShort(flags) => {
-                if flags != Flags::none() {
-                    return unsupported();
-                }
                 add_format_item(&mut buf, b"a", flags)?;
             }
             Item::WeekdayLong(flags) => {
-                if flags != Flags::none() {
-                    return unsupported();
-                }
                 add_format_item(&mut buf, b"A", flags)?;
             }
             Item::YearDay(_) => {
@@ -156,7 +144,7 @@ fn use_custom_format(s: &str, format: &DateTimeFormat, now: &DateTime<Tz>, tz: &
             }
             Item::AmPm(flags) => {
                 let item = if flags.contains(Flag::LowerCase) { b"p" } else { b"P" };
-                add_format_item(&mut buf, item, Flags::none())?;
+                add_format_item(&mut buf, item, Flags::EMPTY)?;
                 has_ampm = true;
             }
             Item::Minute(flags) => {
@@ -172,7 +160,7 @@ fn use_custom_format(s: &str, format: &DateTimeFormat, now: &DateTime<Tz>, tz: &
                     unsupported();
                 }
                 buf.pop();
-                add_format_item(&mut buf, b".f", Flags::none())?;
+                add_format_item(&mut buf, b".f", Flags::EMPTY)?;
             }
             Item::UnixTimestamp(flags) => {
                 add_format_item(&mut buf, b"s", flags)?;
@@ -202,13 +190,16 @@ fn use_custom_format(s: &str, format: &DateTimeFormat, now: &DateTime<Tz>, tz: &
         buf.extend_from_slice(b" %d");
         extra.extend_from_slice(b" %d");
     }
-    if !has_ampm {
-        buf.extend_from_slice(b" %p");
-        extra.extend_from_slice(b" %p");
-    }
     if !has_hour {
-        buf.extend_from_slice(b" %H");
-        extra.extend_from_slice(b" 00");
+        if has_ampm {
+            buf.extend_from_slice(b" %I");
+            extra.extend_from_slice(b" 12");
+            buf.extend_from_slice(b" %p");
+            extra.extend_from_slice(b" %p");
+        } else {
+            buf.extend_from_slice(b" %H");
+            extra.extend_from_slice(b" 00");
+        }
     }
     if !has_minute {
         buf.extend_from_slice(b" %M");
@@ -274,29 +265,29 @@ fn smart_adjust(
 }
 
 fn add_format_item(buf: &mut Vec<u8>, item: &[u8], flags: Flags) -> Option<()> {
+    if flags.intersects(Flag::UpperCase | Flag::LowerCase | Flag::FromZero | Flag::FromSunday) {
+        return None;
+    }
+
     buf.push(b'%');
-    if flags.intersects(Flag::SpacePadding) {
+    if flags.contains(Flag::SpacePadding) {
         buf.push(b'_');
-    }
-    if flags.intersects(Flag::ZeroPadding) {
+    } else if flags.contains(Flag::ZeroPadding) {
         buf.push(b'0');
-    }
-    if flags.intersects(Flag::NoPadding) {
+    } else if flags.contains(Flag::NoPadding) {
         buf.push(b'-');
     }
     buf.extend_from_slice(item);
 
-    if flags.intersects(Flag::UpperCase | Flag::LowerCase | Flag::FromZero | Flag::FromSunday) {
-        None
-    } else {
-        Some(())
-    }
+    Some(())
 }
 
 #[cfg(test)]
 mod tests {
+    // std imports
     use chrono::{FixedOffset, TimeZone};
 
+    // local imports
     use super::*;
     use crate::datefmt::LinuxDateFormat;
 
@@ -406,11 +397,70 @@ mod tests {
         let tz = Tz::IANA(chrono_tz::Europe::Belgrade);
         let ts = |s| ts(s, &tz);
         let format = format("%y-%m-%d %T.%3N %Z");
-        println!("{:?}", format);
 
         assert_eq!(
             use_custom_format("22-10-29 01:32:16.810", &format, &ts("2022-10-30T14:00:00+01:00"), &tz),
             Some(ts("2022-10-29T01:32:16.810+02:00"))
+        );
+    }
+
+    #[test]
+    fn test_use_custom_format_unsupported() {
+        let tz = Tz::FixedOffset(Utc.fix());
+        let ts = |s| ts(s, &tz);
+        let now = &ts("2022-10-30T14:00:00+01:00");
+
+        assert_eq!(use_custom_format("1", &format("%q"), now, &tz), None);
+        assert_eq!(use_custom_format("1", &format("%C"), now, &tz), None);
+        assert_eq!(use_custom_format("1", &format("%w"), now, &tz), None);
+        assert_eq!(use_custom_format("1", &format("%j"), now, &tz), None);
+        assert_eq!(use_custom_format("1", &format("%V"), now, &tz), None);
+        assert_eq!(use_custom_format("1", &format("%G"), now, &tz), None);
+        assert_eq!(use_custom_format("1", &format("%g"), now, &tz), None);
+        assert_eq!(use_custom_format("1", &format("%N"), now, &tz), None);
+        assert_eq!(
+            use_custom_format(
+                "1",
+                &vec![Item::WeekdayNumeric(Flags::only(Flag::FromSunday))],
+                now,
+                &tz
+            ),
+            None
+        );
+    }
+
+    #[test]
+    fn test_use_custom_format_weekday() {
+        let tz = Tz::FixedOffset(Utc.fix());
+        let ts = |s| ts(s, &tz);
+        let now = &ts("2022-10-31T14:00:00+00:00");
+
+        assert_eq!(
+            use_custom_format("1", &format("%w"), now, &tz),
+            Some(ts("2022-10-31T00:00:00+00:00"))
+        );
+        assert_eq!(
+            use_custom_format(" 1", &format("%_2w"), now, &tz),
+            Some(ts("2022-10-31T00:00:00+00:00"))
+        );
+        assert_eq!(
+            use_custom_format("01", &format("%02w"), now, &tz),
+            Some(ts("2022-10-31T00:00:00+00:00"))
+        );
+        assert_eq!(
+            use_custom_format("1 ", &format("%-2w"), now, &tz),
+            Some(ts("2022-10-31T00:00:00+00:00"))
+        );
+        assert_eq!(use_custom_format("2", &format("%w"), now, &tz), None);
+
+        assert_eq!(
+            use_custom_format("1", &format("%u"), now, &tz),
+            Some(ts("2022-10-31T00:00:00+00:00"))
+        );
+
+        assert_eq!(
+            use_custom_format("1 pm", &format("%w %p"), now, &tz),
+            Some(ts("2022-10-31T12:00:00+00:00"))
         );
     }
 
