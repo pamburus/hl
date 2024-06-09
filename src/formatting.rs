@@ -346,7 +346,7 @@ impl RecordFormatter {
             RawValue::String(value) => {
                 if !value.is_empty() {
                     if value.source().len() > 192 {
-                        fs.expand = Some(true);
+                        fs.expand = Some(fs.expand.unwrap_or(true));
                     }
                     fs.add_element(|| {
                         s.reset();
@@ -365,7 +365,7 @@ impl RecordFormatter {
                     });
                     if result.is_err() {
                         fs.format_message_as_field = true;
-                        fs.expand = Some(true);
+                        fs.expand = Some(fs.expand.unwrap_or(true));
                     }
                 }
             }
