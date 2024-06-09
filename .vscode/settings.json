@@ -1,0 +1,9 @@
+{
+    "rust-analyzer.rustfmt.extraArgs": [
+        "+nightly"
+    ],
+    "coverage-gutters.coverageBaseDir": "target",
+    "coverage-gutters.coverageFileNames": [
+        "lcov.info"
+    ],
+}
