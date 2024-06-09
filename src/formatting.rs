@@ -11,6 +11,7 @@ use crate::{
     fmtx::{aligned_left, centered, OptimizedBuf, Push},
     model::{self, Caller, Level, RawValue},
     settings::{ExpandOption, FlattenOption, Formatting, Punctuation},
+    syntax::EXPANDED_KEY_HEADER,
     theme::{Element, StylingPush, Theme},
     IncludeExcludeKeyFilter,
 };
@@ -264,6 +265,7 @@ impl RecordFormatter {
                 if fs.expand == Some(true) {
                     self.expand(s, &mut fs);
                 }
+                fs.add_element(|| s.batch(|buf| buf.push(b' ')));
                 s.element(Element::Ellipsis, |s| {
                     s.batch(|buf| buf.extend_from_slice(self.punctuation.hidden_fields_indicator.as_bytes()))
                 });
@@ -452,7 +454,8 @@ impl RecordFormatter {
 
         s.element(Element::Bullet, |s| {
             s.batch(|buf| {
-                buf.extend_from_slice(b">");
+                buf.extend(EXPANDED_KEY_HEADER.as_bytes());
+                fs.dirty = false;
             });
         });
     }
@@ -1372,6 +1375,7 @@ mod tests {
         datefmt::LinuxDateFormat,
         model::{RawObject, Record, RecordFields},
         settings::Punctuation,
+        syntax::*,
         theme::Theme,
         themecfg::testing,
         timestamp::Timestamp,
@@ -1438,7 +1442,7 @@ mod tests {
                 string_opening_quote: "'".into(),
                 string_closing_quote: "'".into(),
                 source_location_separator: "@ ".into(),
-                hidden_fields_indicator: " ...".into(),
+                hidden_fields_indicator: "...".into(),
                 level_left_separator: "|".into(),
                 level_right_separator: "|".into(),
                 input_number_prefix: "#".into(),
@@ -1686,14 +1690,28 @@ mod tests {
     fn test_string_value_json_extended_space() {
         let v = r#""some\tvalue""#;
         let rec = Record::from_fields(&[("k", EncodedString::json(&v).into())]);
-        assert_eq!(&format_no_color(&rec), "\n  > k=|=\n     \tsome\tvalue");
+        assert_eq!(
+            format_no_color(&rec),
+            format!(
+                "\n  > k={header}\n    {indent}some\tvalue",
+                header = EXPANDED_VALUE_HEADER,
+                indent = EXPANDED_VALUE_INDENT,
+            )
+        );
     }
 
     #[test]
     fn test_string_value_raw_extended_space() {
         let v = "some\tvalue";
         let rec = Record::from_fields(&[("k", EncodedString::raw(&v).into())]);
-        assert_eq!(&format_no_color(&rec), "\n  > k=|=\n     \tsome\tvalue");
+        assert_eq!(
+            format_no_color(&rec),
+            format!(
+                "\n  > k={header}\n    {indent}some\tvalue",
+                header = EXPANDED_VALUE_HEADER,
+                indent = EXPANDED_VALUE_INDENT,
+            )
+        );
     }
 
     #[test]
@@ -1976,7 +1994,17 @@ mod tests {
         );
         assert_eq!(
             formatter.format_to_string(&rec("", "some\nmultiline\ntext")),
-            concat!("\n", "  > a=|=\n", "     \tsome\n", "     \tmultiline\n", "     \ttext")
+            format!(
+                concat!(
+                    "\n",
+                    "  > a={header}\n",
+                    "    {indent}some\n",
+                    "    {indent}multiline\n",
+                    "    {indent}text"
+                ),
+                header = EXPANDED_VALUE_HEADER,
+                indent = EXPANDED_VALUE_INDENT
+            )
         );
     }
 }

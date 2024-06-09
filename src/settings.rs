@@ -316,7 +316,7 @@ impl Default for Punctuation {
             string_opening_quote: "'".into(),
             string_closing_quote: "'".into(),
             source_location_separator: "@ ".into(),
-            hidden_fields_indicator: " ...".into(),
+            hidden_fields_indicator: "...".into(),
             level_left_separator: "|".into(),
             level_right_separator: "|".into(),
             input_number_prefix: "#".into(),

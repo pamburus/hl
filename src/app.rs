@@ -1058,6 +1058,7 @@ mod tests {
         level::Level,
         model::FieldFilterSet,
         settings::{self, ExpandOption},
+        syntax::*,
         themecfg::{self, testing},
         LinuxDateFormat,
     };
@@ -1465,12 +1466,16 @@ mod tests {
         app.run(vec![input], &mut output).unwrap();
 
         let actual = std::str::from_utf8(&output).unwrap();
-        let expected = concat!(
-            "2024-01-25 18:10:20.435 |DBG| hello @ src1\n",
-            "                        | - |   > a=|=\n",
-            "                        | - |      \tline one\n",
-            "                        | - |      \tline two\n",
-            "                        | - |      \tline three\n",
+        let expected = format!(
+            concat!(
+                "2024-01-25 18:10:20.435 |DBG| hello @ src1\n",
+                "                        | - |   > a={header}\n",
+                "                        | - |     {indent}line one\n",
+                "                        | - |     {indent}line two\n",
+                "                        | - |     {indent}line three\n",
+            ),
+            header = EXPANDED_VALUE_HEADER,
+            indent = EXPANDED_VALUE_INDENT,
         );
 
         assert_eq!(actual, expected, "\nactual:\n{}expected:\n{}", actual, expected);
@@ -1499,12 +1504,16 @@ mod tests {
         app.run(vec![input], &mut output).unwrap();
 
         let actual = std::str::from_utf8(&output).unwrap();
-        let expected = concat!(
-            "|DBG| hello @ src1\n",
-            "| - |   > a=|=\n",
-            "| - |      \tline one\n",
-            "| - |      \tline two\n",
-            "| - |      \tline three\n",
+        let expected = format!(
+            concat!(
+                "|DBG| hello @ src1\n",
+                "| - |   > a={header}\n",
+                "| - |     {indent}line one\n",
+                "| - |     {indent}line two\n",
+                "| - |     {indent}line three\n",
+            ),
+            header = EXPANDED_VALUE_HEADER,
+            indent = EXPANDED_VALUE_INDENT,
         );
 
         assert_eq!(actual, expected, "\nactual:\n{}expected:\n{}", actual, expected);

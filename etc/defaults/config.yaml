@@ -64,7 +64,7 @@ formatting:
     string-opening-quote: "'"
     string-closing-quote: "'"
     source-location-separator: '→ '
-    hidden-fields-indicator: ' ...'
+    hidden-fields-indicator: '...'
     level-left-separator: '│'
     level-right-separator: '│'
     input-number-prefix: '#'

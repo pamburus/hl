@@ -10,7 +10,9 @@ use crate::{
     error::*,
     eseq::{Brightness, Color, ColorCode, Mode, Sequence, StyleCode},
     fmtx::Push,
-    level, themecfg,
+    level,
+    syntax::*,
+    themecfg,
 };
 
 // ---
@@ -385,7 +387,7 @@ impl From<&themecfg::Style> for ExpandedValuePrefix {
 impl Default for ExpandedValuePrefix {
     fn default() -> Self {
         Self {
-            value: "   \t".to_string(),
+            value: " ".repeat(EXPANDED_KEY_HEADER.len()) + EXPANDED_VALUE_INDENT,
         }
     }
 }
@@ -407,7 +409,7 @@ impl From<&themecfg::Style> for ExpandedValueSuffix {
 impl Default for ExpandedValueSuffix {
     fn default() -> Self {
         Self {
-            value: "|=".to_string(),
+            value: EXPANDED_VALUE_HEADER.to_string(),
         }
     }
 }
