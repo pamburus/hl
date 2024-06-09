@@ -1710,4 +1710,21 @@ mod tests {
         let result = formatter.format_to_string(rec.with_source(source));
         assert_eq!(&result, "m\n  > a=1\n  > c=3\n  > ...", "{}", result);
     }
+
+    #[test]
+    fn test_caller_file_line() {
+        let format = |file, line| {
+            let rec = Record {
+                message: Some(EncodedString::raw("m").into()),
+                caller: Some(Caller::FileLine(file, line)),
+                ..Default::default()
+            };
+
+            format_no_color(&rec)
+        };
+
+        assert_eq!(format("f", "42"), r#"m @ f:42"#);
+        assert_eq!(format("f", ""), r#"m @ f"#);
+        assert_eq!(format("", "42"), r#"m @ :42"#);
+    }
 }
