@@ -16,7 +16,7 @@ use crate::{
 };
 
 // relative imports
-use string::{Format, MessageFormatAuto, ValueFormatAuto};
+use string::{ExtendedSpaceAction, Format, MessageFormatAuto, ValueFormatAuto};
 
 // ---
 
@@ -237,13 +237,27 @@ impl RecordFormatter {
             //
             if fs.format_message_as_field {
                 if let Some(value) = &rec.message {
-                    self.format_field(s, "msg", *value, &mut fs, Some(self.fields.as_ref()));
+                    _ = self.format_field(s, "msg", *value, &mut fs, None);
                 }
             }
             let mut some_fields_hidden = false;
             for (k, v) in rec.fields() {
-                if !self.hide_empty_fields || !v.is_empty() {
-                    some_fields_hidden |= !self.format_field(s, k, *v, &mut fs, Some(&self.fields));
+                for _ in 0..2 {
+                    if !self.hide_empty_fields || !v.is_empty() {
+                        let begin = s.batch(|buf| buf.len());
+                        match self.format_field(s, k, *v, &mut fs, Some(&self.fields)) {
+                            FieldFormatResult::Ok => {}
+                            FieldFormatResult::Hidden => {
+                                some_fields_hidden = true;
+                            }
+                            FieldFormatResult::ExpansionNeeded => {
+                                s.batch(|buf| buf.truncate(begin));
+                                fs.expand = Some(true);
+                                continue;
+                            }
+                        }
+                        break;
+                    }
                 }
             }
             if some_fields_hidden || fs.some_fields_hidden {
@@ -338,7 +352,7 @@ impl RecordFormatter {
         value: RawValue<'a>,
         fs: &mut FormattingState,
         filter: Option<&IncludeExcludeKeyFilter>,
-    ) -> bool {
+    ) -> FieldFormatResult {
         let mut fv = FieldFormatter::new(self);
         fv.format(s, key, value, fs, filter, IncludeExcludeSetting::Unspecified)
     }
@@ -358,13 +372,21 @@ impl RecordFormatter {
                     let prefix = if fs.expand.unwrap_or(true) {
                         Some(|buf: &mut Vec<u8>| {
                             buf.extend(b"...");
-                            None
+                            0
                         })
                     } else {
                         None
                     };
                     let result = s.element(Element::Message, |s| {
-                        s.batch(|buf| MessageFormatAuto::new(value, prefix).format(buf))
+                        s.batch(|buf| {
+                            MessageFormatAuto::new(value)
+                                .on_extended_space(if let Some(prefix) = prefix {
+                                    ExtendedSpaceAction::Expand(prefix)
+                                } else {
+                                    ExtendedSpaceAction::FormatWithBacktick
+                                })
+                                .format(buf)
+                        })
                     });
                     if result.is_err() {
                         fs.format_message_as_field = true;
@@ -538,7 +560,7 @@ impl<'a> FieldFormatter<'a> {
         fs: &mut FormattingState,
         filter: Option<&IncludeExcludeKeyFilter>,
         setting: IncludeExcludeSetting,
-    ) -> bool {
+    ) -> FieldFormatResult {
         let (filter, setting, leaf) = match filter {
             Some(filter) => {
                 let setting = setting.apply(filter.setting());
@@ -550,18 +572,26 @@ impl<'a> FieldFormatter<'a> {
             None => (None, setting, true),
         };
         if setting == IncludeExcludeSetting::Exclude && leaf {
-            return false;
+            return FieldFormatResult::Hidden;
         }
+
         let ffv = self.begin(s, key, value, fs);
-        if self.rf.unescape_fields {
-            self.format_value(s, value, fs, filter, setting);
+
+        let result = if self.rf.unescape_fields {
+            self.format_value(s, value, fs, filter, setting)
         } else {
             s.element(Element::String, |s| {
                 s.batch(|buf| buf.extend(value.raw_str().as_bytes()))
             });
-        }
+            ValueFormatResult::Ok
+        };
+
         self.end(fs, ffv);
-        true
+
+        match result {
+            ValueFormatResult::Ok => FieldFormatResult::Ok,
+            ValueFormatResult::ExpansionNeeded => FieldFormatResult::ExpansionNeeded,
+        }
     }
 
     fn format_value<S: StylingPush<Buf>>(
@@ -571,29 +601,28 @@ impl<'a> FieldFormatter<'a> {
         fs: &mut FormattingState,
         filter: Option<&IncludeExcludeKeyFilter>,
         setting: IncludeExcludeSetting,
-    ) {
+    ) -> ValueFormatResult {
         let value = match value {
             RawValue::String(EncodedString::Raw(value)) => RawValue::auto(value.as_str()),
             _ => value,
         };
         match value {
             RawValue::String(value) => {
-                let prefix = if fs.expand.unwrap_or(false) {
-                    Some(|buf: &mut Vec<u8>| {
-                        buf.extend(self.rf.theme.expanded_value_suffix.value.as_bytes());
-                        buf.push(b'\n');
-                        let prefix = fs.expansion_prefix.clone().unwrap_or(fs.prefix.clone());
-                        let l0 = buf.len();
-                        buf.extend_from_within(prefix);
-                        buf.extend(self.rf.theme.expanded_value_prefix.value.as_bytes());
-                        buf.len() - l0
+                let result = s.element(Element::String, |s| {
+                    s.batch(|buf| {
+                        ValueFormatAuto::new(value)
+                            .on_extended_space(match fs.expand {
+                                Some(true) => ExtendedSpaceAction::Expand(|buf: &mut Vec<u8>| self.add_prefix(buf, fs)),
+                                Some(false) => ExtendedSpaceAction::FormatWithBacktick,
+                                None => ExtendedSpaceAction::Abort,
+                            })
+                            .format(buf)
+                            .unwrap()
                     })
-                } else {
-                    None
-                };
-                s.element(Element::String, |s| {
-                    s.batch(|buf| ValueFormatAuto::new(value, prefix).format(buf).unwrap())
                 });
+                if result.aborted {
+                    return ValueFormatResult::ExpansionNeeded;
+                }
             }
             RawValue::Number(value) => {
                 s.element(Element::Number, |s| s.batch(|buf| buf.extend(value.as_bytes())));
@@ -617,7 +646,15 @@ impl<'a> FieldFormatter<'a> {
                 let mut some_fields_hidden = false;
                 for (k, v) in item.fields.iter() {
                     if !self.rf.hide_empty_fields || !v.is_empty() {
-                        some_fields_hidden |= !self.format(s, k, *v, fs, filter, setting);
+                        match self.format(s, k, *v, fs, filter, setting) {
+                            FieldFormatResult::Ok => {}
+                            FieldFormatResult::Hidden => {
+                                some_fields_hidden = true;
+                            }
+                            FieldFormatResult::ExpansionNeeded => {
+                                return ValueFormatResult::ExpansionNeeded;
+                            }
+                        }
                     }
                 }
                 if some_fields_hidden {
@@ -656,7 +693,7 @@ impl<'a> FieldFormatter<'a> {
                     } else {
                         first = false;
                     }
-                    self.format_value(s, *v, fs, None, IncludeExcludeSetting::Unspecified);
+                    _ = self.format_value(s, *v, fs, None, IncludeExcludeSetting::Unspecified);
                 }
                 s.element(Element::Array, |s| {
                     s.batch(|buf| buf.push(b']'));
@@ -664,6 +701,17 @@ impl<'a> FieldFormatter<'a> {
                 fs.expand = xb;
             }
         };
+        ValueFormatResult::Ok
+    }
+
+    fn add_prefix(&self, buf: &mut Vec<u8>, fs: &FormattingState) -> usize {
+        buf.extend(self.rf.theme.expanded_value_suffix.value.as_bytes());
+        buf.push(b'\n');
+        let prefix = fs.expansion_prefix.clone().unwrap_or(fs.prefix.clone());
+        let l0 = buf.len();
+        buf.extend_from_within(prefix);
+        buf.extend(self.rf.theme.expanded_value_prefix.value.as_bytes());
+        buf.len() - l0
     }
 
     #[inline(always)]
@@ -770,6 +818,19 @@ impl KeyPrettify for str {
     }
 }
 
+#[must_use]
+enum ValueFormatResult {
+    Ok,
+    ExpansionNeeded,
+}
+
+#[must_use]
+enum FieldFormatResult {
+    Ok,
+    Hidden,
+    ExpansionNeeded,
+}
+
 // ---
 
 enum FormattedFieldVariant {
@@ -813,7 +874,7 @@ pub mod string {
     // ---
 
     pub trait Format {
-        fn format(&self, buf: &mut Vec<u8>) -> Result<()>;
+        fn format(&self, buf: &mut Vec<u8>) -> Result<FormatResult>;
     }
 
     pub trait Analyze {
@@ -833,15 +894,89 @@ pub mod string {
 
     // ---
 
-    pub struct ValueFormatAuto<S, P> {
-        string: S,
-        prefix: Option<P>,
+    pub enum ExtendedSpaceAction<P = ()> {
+        FormatWithBacktick,
+        Expand(P),
+        Escape,
+        Abort,
     }
 
-    impl<S, P> ValueFormatAuto<S, P> {
+    impl<P> ExtendedSpaceAction<P> {
         #[inline]
-        pub fn new(string: S, prefix: Option<P>) -> Self {
-            Self { string, prefix }
+        pub fn map_expand<P2, F>(&self, f: F) -> ExtendedSpaceAction<P2>
+        where
+            F: FnOnce(&P) -> P2,
+        {
+            match self {
+                Self::Expand(prefix) => ExtendedSpaceAction::Expand(f(prefix)),
+                Self::FormatWithBacktick => ExtendedSpaceAction::FormatWithBacktick,
+                Self::Escape => ExtendedSpaceAction::Escape,
+                Self::Abort => ExtendedSpaceAction::Abort,
+            }
+        }
+    }
+
+    pub enum FormatStyle {
+        Plain,
+        DoubleQuoted,
+        SingleQuoted,
+        Backticked,
+        Expanded,
+    }
+
+    pub struct FormatResult {
+        pub analysis: Option<Mask>,
+        pub style: FormatStyle,
+        pub aborted: bool,
+    }
+
+    impl From<FormatStyle> for FormatResult {
+        #[inline]
+        fn from(style: FormatStyle) -> Self {
+            Self {
+                analysis: None,
+                style,
+                aborted: false,
+            }
+        }
+    }
+
+    // ---
+
+    pub struct ValueFormatAuto<S, P = ()> {
+        string: S,
+        xs_action: ExtendedSpaceAction<P>,
+    }
+
+    impl<S> ValueFormatAuto<S, ()> {
+        #[inline]
+        pub fn new(string: S) -> Self {
+            Self {
+                string,
+                xs_action: ExtendedSpaceAction::FormatWithBacktick,
+            }
+        }
+
+        #[inline]
+        pub fn on_extended_space<P>(self, action: ExtendedSpaceAction<P>) -> ValueFormatAuto<S, P> {
+            ValueFormatAuto::<S, P> {
+                xs_action: action,
+                string: self.string,
+            }
+        }
+    }
+
+    impl<'a, S> Format for ValueFormatAuto<S, ()>
+    where
+        S: AnyEncodedString<'a> + Clone + Copy,
+    {
+        #[inline]
+        fn format(&self, buf: &mut Vec<u8>) -> Result<FormatResult> {
+            ValueFormatAuto {
+                string: self.string,
+                xs_action: self.xs_action.map_expand(|_| |_: &mut Vec<u8>| 0),
+            }
+            .format(buf)
         }
     }
 
@@ -851,10 +986,13 @@ pub mod string {
         P: Fn(&mut Vec<u8>) -> usize,
     {
         #[inline]
-        fn format(&self, buf: &mut Vec<u8>) -> Result<()> {
+        fn format(&self, buf: &mut Vec<u8>) -> Result<FormatResult> {
             if self.string.is_empty() {
                 buf.extend(r#""""#.as_bytes());
-                return Ok(());
+                return Ok(FormatResult {
+                    analysis: Some(Mask::EMPTY),
+                    ..FormatStyle::DoubleQuoted.into()
+                });
             }
 
             let begin = buf.len();
@@ -882,41 +1020,64 @@ pub mod string {
             };
 
             if plain {
-                return Ok(());
+                return Ok(FormatResult {
+                    analysis: Some(mask),
+                    ..FormatStyle::Plain.into()
+                });
             }
 
             if !mask.intersects(Flag::DoubleQuote | Flag::Control | Flag::Backslash) {
                 buf.push(b'"');
                 buf.push(b'"');
                 buf[begin..].rotate_right(1);
-                return Ok(());
+                return Ok(FormatResult {
+                    analysis: Some(mask),
+                    ..FormatStyle::DoubleQuoted.into()
+                });
             }
 
             if !mask.intersects(Flag::SingleQuote | Flag::Control | Flag::Backslash) {
                 buf.push(b'\'');
                 buf.push(b'\'');
                 buf[begin..].rotate_right(1);
-                return Ok(());
+                return Ok(FormatResult {
+                    analysis: Some(mask),
+                    ..FormatStyle::SingleQuoted.into()
+                });
             }
 
             const Z: Mask = Mask::EMPTY;
             const XS: Mask = mask!(Flag::Control | Flag::ExtendedSpace);
             const BTXS: Mask = mask!(Flag::Control | Flag::ExtendedSpace | Flag::Backtick);
 
-            match (mask & BTXS, &self.prefix) {
-                (Z, _) | (XS, None) => {
+            match (mask & BTXS, &self.xs_action) {
+                (Z, _) | (XS, ExtendedSpaceAction::FormatWithBacktick) => {
                     buf.push(b'`');
                     buf.push(b'`');
                     buf[begin..].rotate_right(1);
-                    Ok(())
+                    Ok(FormatResult {
+                        analysis: Some(mask),
+                        ..FormatStyle::Backticked.into()
+                    })
                 }
-                (XS | BTXS, Some(prefix)) => {
+                (XS | BTXS, ExtendedSpaceAction::Expand(prefix)) => {
                     let l0 = buf.len();
                     let pl = prefix(buf);
                     let n = buf.len() - l0;
                     buf[begin..].rotate_right(n);
                     prefix_lines_within(buf, begin + n.., 1.., (begin + n - pl)..(begin + n));
-                    Ok(())
+                    Ok(FormatResult {
+                        analysis: Some(mask),
+                        ..FormatStyle::Expanded.into()
+                    })
+                }
+                (XS | BTXS, ExtendedSpaceAction::Abort) => {
+                    buf.truncate(begin);
+                    Ok(FormatResult {
+                        analysis: Some(mask),
+                        style: FormatStyle::Plain,
+                        aborted: true,
+                    })
                 }
                 _ => {
                     buf.truncate(begin);
@@ -944,8 +1105,9 @@ pub mod string {
         S: AnyEncodedString<'a>,
     {
         #[inline(always)]
-        fn format(&self, buf: &mut Vec<u8>) -> Result<()> {
-            Ok(self.string.decode(buf)?)
+        fn format(&self, buf: &mut Vec<u8>) -> Result<FormatResult> {
+            self.string.decode(buf)?;
+            Ok(FormatStyle::Plain.into())
         }
     }
 
@@ -967,34 +1129,60 @@ pub mod string {
         S: AnyEncodedString<'a>,
     {
         #[inline]
-        fn format(&self, buf: &mut Vec<u8>) -> Result<()> {
-            self.string.format_json(buf)
+        fn format(&self, buf: &mut Vec<u8>) -> Result<FormatResult> {
+            self.string.format_json(buf)?;
+            Ok(FormatStyle::DoubleQuoted.into())
         }
     }
 
     // ---
 
-    pub struct MessageFormatAuto<S, P> {
+    pub struct MessageFormatAuto<S, P = ()> {
         string: S,
-        prefix: Option<P>,
+        xs_action: ExtendedSpaceAction<P>,
     }
 
-    impl<S, P> MessageFormatAuto<S, P> {
-        #[inline(always)]
-        pub fn new(string: S, prefix: Option<P>) -> Self {
-            Self { string, prefix }
+    impl<S> MessageFormatAuto<S, ()> {
+        #[inline]
+        pub fn new(string: S) -> Self {
+            Self {
+                string,
+                xs_action: ExtendedSpaceAction::Escape,
+            }
+        }
+
+        #[inline]
+        pub fn on_extended_space<P>(self, action: ExtendedSpaceAction<P>) -> MessageFormatAuto<S, P> {
+            MessageFormatAuto::<S, P> {
+                xs_action: action,
+                string: self.string,
+            }
+        }
+    }
+
+    impl<'a, S> Format for MessageFormatAuto<S, ()>
+    where
+        S: AnyEncodedString<'a> + Clone + Copy,
+    {
+        #[inline]
+        fn format(&self, buf: &mut Vec<u8>) -> Result<FormatResult> {
+            MessageFormatAuto {
+                string: self.string,
+                xs_action: self.xs_action.map_expand(|_| |_: &mut Vec<u8>| 0),
+            }
+            .format(buf)
         }
     }
 
     impl<'a, S, P> Format for MessageFormatAuto<S, P>
     where
         S: AnyEncodedString<'a> + Clone + Copy,
-        P: Fn(&mut Vec<u8>) -> Option<usize>,
+        P: Fn(&mut Vec<u8>) -> usize,
     {
-        #[inline(always)]
-        fn format(&self, buf: &mut Vec<u8>) -> Result<()> {
+        #[inline]
+        fn format(&self, buf: &mut Vec<u8>) -> Result<FormatResult> {
             if self.string.is_empty() {
-                return Ok(());
+                return Ok(FormatStyle::Plain.into());
             }
 
             let begin = buf.len();
@@ -1005,42 +1193,42 @@ pub mod string {
             if !mask.intersects(Flag::EqualSign | Flag::Control | Flag::Backslash)
                 && !matches!(buf[begin..], [b'"', ..] | [b'\'', ..] | [b'`', ..])
             {
-                return Ok(());
+                return Ok(FormatStyle::Plain.into());
             }
 
             if !mask.intersects(Flag::DoubleQuote | Flag::Control | Flag::Backslash) {
                 buf.push(b'"');
                 buf.push(b'"');
                 buf[begin..].rotate_right(1);
-                return Ok(());
+                return Ok(FormatStyle::DoubleQuoted.into());
             }
 
             if !mask.intersects(Flag::SingleQuote | Flag::Control | Flag::Backslash) {
                 buf.push(b'\'');
                 buf.push(b'\'');
                 buf[begin..].rotate_right(1);
-                return Ok(());
+                return Ok(FormatStyle::SingleQuoted.into());
             }
 
             const Z: Mask = Mask::EMPTY;
             const XS: Mask = mask!(Flag::Control | Flag::ExtendedSpace);
             const BTXS: Mask = mask!(Flag::Control | Flag::ExtendedSpace | Flag::Backtick);
 
-            match (mask & BTXS, &self.prefix) {
-                (Z, _) | (XS, None) => {
+            match (mask & BTXS, &self.xs_action) {
+                (Z, _) | (XS, ExtendedSpaceAction::FormatWithBacktick) => {
                     buf.push(b'`');
                     buf.push(b'`');
                     buf[begin..].rotate_right(1);
-                    Ok(())
+                    Ok(FormatStyle::Backticked.into())
                 }
-                (XS | BTXS, Some(prefix)) => {
+                (XS | BTXS, ExtendedSpaceAction::Expand(prefix)) => {
                     let l0 = buf.len();
                     let pl = prefix(buf);
                     let n = buf.len() - l0;
-                    if let Some(pl) = pl {
+                    if pl != 0 {
                         buf[begin..].rotate_right(n);
                         prefix_lines_within(buf, begin + n.., 1.., (begin + n - pl)..(begin + n));
-                        Ok(())
+                        Ok(FormatStyle::Expanded.into())
                     } else {
                         buf.copy_within(l0.., begin);
                         buf.truncate(begin + n);
@@ -1073,8 +1261,9 @@ pub mod string {
         S: AnyEncodedString<'a>,
     {
         #[inline(always)]
-        fn format(&self, buf: &mut Vec<u8>) -> Result<()> {
-            Ok(self.string.decode(buf)?)
+        fn format(&self, buf: &mut Vec<u8>) -> Result<FormatResult> {
+            self.string.decode(buf)?;
+            Ok(FormatStyle::Plain.into())
         }
     }
 
@@ -1096,8 +1285,9 @@ pub mod string {
         S: AnyEncodedString<'a>,
     {
         #[inline]
-        fn format(&self, buf: &mut Vec<u8>) -> Result<()> {
-            self.string.format_json(buf)
+        fn format(&self, buf: &mut Vec<u8>) -> Result<FormatResult> {
+            self.string.format_json(buf)?;
+            Ok(FormatStyle::DoubleQuoted.into())
         }
     }
 
@@ -1496,14 +1686,14 @@ mod tests {
     fn test_string_value_json_extended_space() {
         let v = r#""some\tvalue""#;
         let rec = Record::from_fields(&[("k", EncodedString::json(&v).into())]);
-        assert_eq!(&format_no_color(&rec), "k=`some\tvalue`");
+        assert_eq!(&format_no_color(&rec), "\n  > k=|\n    | some\tvalue");
     }
 
     #[test]
     fn test_string_value_raw_extended_space() {
         let v = "some\tvalue";
         let rec = Record::from_fields(&[("k", EncodedString::raw(&v).into())]);
-        assert_eq!(&format_no_color(&rec), "k=`some\tvalue`");
+        assert_eq!(&format_no_color(&rec), "\n  > k=|\n    | some\tvalue");
     }
 
     #[test]
@@ -1786,7 +1976,7 @@ mod tests {
         );
         assert_eq!(
             formatter.format_to_string(&rec("", "some\nmultiline\ntext")),
-            "a=`some\nmultiline\ntext`"
+            "\n  > a=|\n    | some\n    | multiline\n    | text"
         );
     }
 }

@@ -1136,8 +1136,8 @@ mod tests {
         });
         app.run(vec![input], &mut output).unwrap();
         let actual = std::str::from_utf8(&output).unwrap();
-        let expected = "\u{1b}[0;2;3m2023-12-07 20:07:05.949 \u{1b}[0;36m|INF| \u{1b}[0;32mmsg\u{1b}[0;2m=\u{1b}[0;93m[\u{1b}[0;39mx\u{1b}[0;2;3m \u{1b}[0;39my\u{1b}[0;93m] \u{1b}[0;32mduration\u{1b}[0;2m=\u{1b}[0;39m15d\u{1b}[0;2;3m @ main.go:539\u{1b}[0m\n";
-        assert_eq!(actual, expected,);
+        let expected = "\u{1b}[0;2;3m2023-12-07 20:07:05.949 \u{1b}[0;36m|INF| \u{1b}[0;32mmsg\u{1b}[0;2m=\u{1b}[0;93m[\u{1b}[0;39mx\u{1b}[0;2;3m \u{1b}[0;39my\u{1b}[0;93m]\u{1b}[0;2;3m \u{1b}[0;32mduration\u{1b}[0;2m=\u{1b}[0;39m15d\u{1b}[0;2;3m @ main.go:539\u{1b}[0m\n";
+        assert_eq!(actual, expected);
     }
 
     #[test]
