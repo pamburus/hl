@@ -1467,10 +1467,10 @@ mod tests {
         let actual = std::str::from_utf8(&output).unwrap();
         let expected = concat!(
             "2024-01-25 18:10:20.435 |DBG| hello @ src1\n",
-            "                        | - |   > a=|\n",
-            "                        | - |     | line one\n",
-            "                        | - |     | line two\n",
-            "                        | - |     | line three\n",
+            "                        | - |   > a=|=\n",
+            "                        | - |      \tline one\n",
+            "                        | - |      \tline two\n",
+            "                        | - |      \tline three\n",
         );
 
         assert_eq!(actual, expected, "\nactual:\n{}expected:\n{}", actual, expected);
@@ -1501,10 +1501,10 @@ mod tests {
         let actual = std::str::from_utf8(&output).unwrap();
         let expected = concat!(
             "|DBG| hello @ src1\n",
-            "| - |   > a=|\n",
-            "| - |     | line one\n",
-            "| - |     | line two\n",
-            "| - |     | line three\n",
+            "| - |   > a=|=\n",
+            "| - |      \tline one\n",
+            "| - |      \tline two\n",
+            "| - |      \tline three\n",
         );
 
         assert_eq!(actual, expected, "\nactual:\n{}expected:\n{}", actual, expected);

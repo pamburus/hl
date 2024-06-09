@@ -385,7 +385,7 @@ impl From<&themecfg::Style> for ExpandedValuePrefix {
 impl Default for ExpandedValuePrefix {
     fn default() -> Self {
         Self {
-            value: "  | ".to_string(),
+            value: "   \t".to_string(),
         }
     }
 }
@@ -406,7 +406,9 @@ impl From<&themecfg::Style> for ExpandedValueSuffix {
 
 impl Default for ExpandedValueSuffix {
     fn default() -> Self {
-        Self { value: "|".to_string() }
+        Self {
+            value: "|=".to_string(),
+        }
     }
 }
 

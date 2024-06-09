@@ -1686,14 +1686,14 @@ mod tests {
     fn test_string_value_json_extended_space() {
         let v = r#""some\tvalue""#;
         let rec = Record::from_fields(&[("k", EncodedString::json(&v).into())]);
-        assert_eq!(&format_no_color(&rec), "\n  > k=|\n    | some\tvalue");
+        assert_eq!(&format_no_color(&rec), "\n  > k=|=\n     \tsome\tvalue");
     }
 
     #[test]
     fn test_string_value_raw_extended_space() {
         let v = "some\tvalue";
         let rec = Record::from_fields(&[("k", EncodedString::raw(&v).into())]);
-        assert_eq!(&format_no_color(&rec), "\n  > k=|\n    | some\tvalue");
+        assert_eq!(&format_no_color(&rec), "\n  > k=|=\n     \tsome\tvalue");
     }
 
     #[test]
@@ -1976,7 +1976,7 @@ mod tests {
         );
         assert_eq!(
             formatter.format_to_string(&rec("", "some\nmultiline\ntext")),
-            "\n  > a=|\n    | some\n    | multiline\n    | text"
+            concat!("\n", "  > a=|=\n", "     \tsome\n", "     \tmultiline\n", "     \ttext")
         );
     }
 }
