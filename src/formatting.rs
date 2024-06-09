@@ -11,7 +11,7 @@ use crate::{
     fmtx::{aligned_left, centered, OptimizedBuf, Push},
     model::{self, Caller, Level, RawValue},
     settings::{ExpandOption, FlattenOption, Formatting, Punctuation},
-    syntax::{EXPANDED_KEY_HEADER, EXPANDED_MESSAGE_HEADER},
+    syntax::*,
     theme::{Element, StylingPush, Theme},
     IncludeExcludeKeyFilter,
 };
@@ -161,13 +161,13 @@ impl RecordFormatter {
             // level
             //
             let level = match rec.level {
-                Some(Level::Debug) => Some(b"DBG"),
-                Some(Level::Info) => Some(b"INF"),
-                Some(Level::Warning) => Some(b"WRN"),
-                Some(Level::Error) => Some(b"ERR"),
+                Some(Level::Debug) => Some(LEVEL_DEBUG.as_bytes()),
+                Some(Level::Info) => Some(LEVEL_INFO.as_bytes()),
+                Some(Level::Warning) => Some(LEVEL_WARNING.as_bytes()),
+                Some(Level::Error) => Some(LEVEL_ERROR.as_bytes()),
                 _ => None,
             };
-            let level = level.or_else(|| self.cfg.always_show_level.then(|| b"(?)"));
+            let level = level.or_else(|| self.cfg.always_show_level.then(|| LEVEL_UNKNOWN.as_bytes()));
             if let Some(level) = level {
                 fs.has_level = true;
                 self.format_level(s, &mut fs, level);
@@ -183,6 +183,7 @@ impl RecordFormatter {
                         s.batch(|buf| buf.extend_from_slice(logger.as_bytes()))
                     });
                     s.batch(|buf| buf.extend_from_slice(self.cfg.punctuation.logger_name_separator.as_bytes()));
+                    fs.first_line_used = true;
                 });
             }
             //
@@ -190,6 +191,7 @@ impl RecordFormatter {
             //
             if let Some(value) = &rec.message {
                 self.format_message(s, &mut fs, *value);
+                fs.first_line_used = true;
             } else {
                 s.reset();
             }
@@ -210,6 +212,7 @@ impl RecordFormatter {
                 if let Some(caller) = &rec.caller {
                     self.format_caller(s, caller);
                     caller_formatted = true;
+                    fs.first_line_used = true;
                 };
             }
             //
@@ -224,14 +227,14 @@ impl RecordFormatter {
             for (k, v) in rec.fields() {
                 for _ in 0..2 {
                     if !self.cfg.hide_empty_fields || !v.is_empty() {
-                        let begin = s.batch(|buf| buf.len());
+                        let cp = fs.checkpoint(s);
                         match self.format_field(s, k, *v, &mut fs, Some(&self.cfg.fields)) {
                             FieldFormatResult::Ok => {}
                             FieldFormatResult::Hidden => {
                                 some_fields_hidden = true;
                             }
                             FieldFormatResult::ExpansionNeeded => {
-                                s.batch(|buf| buf.truncate(begin));
+                                fs.restore(s, cp);
                                 fs.expand = Some(true);
                                 continue;
                             }
@@ -388,7 +391,13 @@ impl RecordFormatter {
     }
 
     fn expand<S: StylingPush<Buf>>(&self, s: &mut S, fs: &mut FormattingState) {
-        let mut begin = 0;
+        let mut begin = fs.prefix.start;
+
+        if !fs.first_line_used {
+            fs.add_element(|| s.space());
+            s.batch(|buf| buf.extend(EXPANDED_MESSAGE_HEADER.as_bytes()));
+            fs.first_line_used = true;
+        }
 
         s.reset();
         s.batch(|buf| {
@@ -399,7 +408,7 @@ impl RecordFormatter {
 
         fs.dirty = false;
         if fs.ts_width != 0 {
-            fs.add_element(|| {});
+            fs.dirty = true;
             s.element(Element::Time, |s| {
                 s.batch(|buf| {
                     aligned_left(buf, fs.ts_width, b' ', |_| {});
@@ -408,7 +417,7 @@ impl RecordFormatter {
         }
 
         if fs.has_level {
-            self.format_level(s, fs, b" - ");
+            self.format_level(s, fs, LEVEL_EXPANDED.as_bytes());
             s.reset();
         }
 
@@ -461,6 +470,7 @@ struct FormattingState {
     ts_width: usize,
     has_level: bool,
     depth: usize,
+    first_line_used: bool,
     some_fields_hidden: bool,
     format_message_as_field: bool,
 }
@@ -473,6 +483,33 @@ impl FormattingState {
             add_space();
         }
     }
+
+    fn checkpoint<S: StylingPush<Buf>>(&self, s: &mut S) -> Checkpoint {
+        Checkpoint {
+            dirty: self.dirty,
+            depth: self.depth,
+            first_line_used: self.first_line_used,
+            buf_len: s.batch(|buf| buf.len()),
+        }
+    }
+
+    fn restore<S: StylingPush<Buf>>(&mut self, s: &mut S, cp: Checkpoint) {
+        s.batch(|buf| {
+            buf.truncate(cp.buf_len);
+        });
+        self.dirty = cp.dirty;
+        self.depth = cp.depth;
+        self.first_line_used = cp.first_line_used;
+    }
+}
+
+// ---
+
+struct Checkpoint {
+    dirty: bool,
+    depth: usize,
+    first_line_used: bool,
+    buf_len: usize,
 }
 
 // ---
@@ -1165,7 +1202,10 @@ pub mod string {
             let mask = buf[begin..].analyze();
 
             if !mask.intersects(Flag::EqualSign | Flag::Control | Flag::Backslash)
-                && !matches!(buf[begin..], [b'"', ..] | [b'\'', ..] | [b'`', ..])
+                && !matches!(
+                    buf[begin..],
+                    [b'"', ..] | [b'\'', ..] | [b'`', ..] | [b' ', b' ', b'>', ..]
+                )
             {
                 return Ok(FormatStyle::Plain.into());
             }
@@ -1340,7 +1380,6 @@ mod tests {
         datefmt::LinuxDateFormat,
         model::{RawObject, Record, RecordFields},
         settings::Punctuation,
-        syntax::*,
         theme::Theme,
         themecfg::testing,
         timestamp::Timestamp,
@@ -1397,7 +1436,7 @@ mod tests {
         RecordFormatterSettings {
             theme: Arc::new(Theme::from(testing::theme().unwrap())),
             ts_formatter: DateTimeFormatter::new(
-                LinuxDateFormat::new("%y-%m-%d %T.%3N").compile(),
+                LinuxDateFormat::new("%Y-%m-%d %T.%3N").compile(),
                 Tz::FixedOffset(Utc.fix()),
             ),
             always_show_time: false,
@@ -1474,13 +1513,13 @@ mod tests {
 
         assert_eq!(
             format(&rec),
-            "\u{1b}[0;2;3m00-01-02 03:04:05.123 \u{1b}[0;36m|\u{1b}[0;95mDBG\u{1b}[0;36m|\u{1b}[0;2;3m \u{1b}[0;2;4mtl:\u{1b}[0m \u{1b}[0;1;39mtm \u{1b}[0;32mk-a\u{1b}[0;2m=\u{1b}[0;33m{ \u{1b}[0;32mva\u{1b}[0;2m=\u{1b}[0;33m{ \u{1b}[0;32mkb\u{1b}[0;2m=\u{1b}[0;94m42 \u{1b}[0;32mkc\u{1b}[0;2m=\u{1b}[0;94m43\u{1b}[0;33m } }\u{1b}[0;2;3m @ tc\u{1b}[0m",
+            "\u{1b}[0;2;3m2000-01-02 03:04:05.123 \u{1b}[0;36m|\u{1b}[0;95mDBG\u{1b}[0;36m|\u{1b}[0;2;3m \u{1b}[0;2;4mtl:\u{1b}[0m \u{1b}[0;1;39mtm \u{1b}[0;32mk-a\u{1b}[0;2m=\u{1b}[0;33m{ \u{1b}[0;32mva\u{1b}[0;2m=\u{1b}[0;33m{ \u{1b}[0;32mkb\u{1b}[0;2m=\u{1b}[0;94m42 \u{1b}[0;32mkc\u{1b}[0;2m=\u{1b}[0;94m43\u{1b}[0;33m } }\u{1b}[0;2;3m @ tc\u{1b}[0m",
         );
 
         let formatter = RecordFormatter::new(settings().with(|s| s.flatten = true));
         assert_eq!(
             formatter.format_to_string(&rec),
-            "\u{1b}[0;2;3m00-01-02 03:04:05.123 \u{1b}[0;36m|\u{1b}[0;95mDBG\u{1b}[0;36m|\u{1b}[0;2;3m \u{1b}[0;2;4mtl:\u{1b}[0m \u{1b}[0;1;39mtm \u{1b}[0;32mk-a.va.kb\u{1b}[0;2m=\u{1b}[0;94m42 \u{1b}[0;32mk-a.va.kc\u{1b}[0;2m=\u{1b}[0;94m43\u{1b}[0;2;3m @ tc\u{1b}[0m",
+            "\u{1b}[0;2;3m2000-01-02 03:04:05.123 \u{1b}[0;36m|\u{1b}[0;95mDBG\u{1b}[0;36m|\u{1b}[0;2;3m \u{1b}[0;2;4mtl:\u{1b}[0m \u{1b}[0;1;39mtm \u{1b}[0;32mk-a.va.kb\u{1b}[0;2m=\u{1b}[0;94m42 \u{1b}[0;32mk-a.va.kc\u{1b}[0;2m=\u{1b}[0;94m43\u{1b}[0;2;3m @ tc\u{1b}[0m",
         );
     }
 
@@ -1505,7 +1544,7 @@ mod tests {
         let formatter = RecordFormatter::new(settings().with(|s| s.always_show_time = true));
         assert_eq!(
             formatter.format_to_string(&rec),
-            "\u{1b}[0;2;3m---------------------\u{1b}[0m \u{1b}[0;1;39mtm\u{1b}[0m",
+            "\u{1b}[0;2;3m-----------------------\u{1b}[0m \u{1b}[0;1;39mtm\u{1b}[0m",
         );
     }
 
@@ -1658,9 +1697,10 @@ mod tests {
         assert_eq!(
             format_no_color(&rec),
             format!(
-                "\n  > k={header}\n    {indent}some\tvalue",
-                header = EXPANDED_VALUE_HEADER,
-                indent = EXPANDED_VALUE_INDENT,
+                "{mh}\n  > k={vh}\n    {vi}some\tvalue",
+                mh = EXPANDED_MESSAGE_HEADER,
+                vh = EXPANDED_VALUE_HEADER,
+                vi = EXPANDED_VALUE_INDENT,
             )
         );
     }
@@ -1672,9 +1712,10 @@ mod tests {
         assert_eq!(
             format_no_color(&rec),
             format!(
-                "\n  > k={header}\n    {indent}some\tvalue",
-                header = EXPANDED_VALUE_HEADER,
-                indent = EXPANDED_VALUE_INDENT,
+                "{mh}\n  > k={vh}\n    {vi}some\tvalue",
+                mh = EXPANDED_MESSAGE_HEADER,
+                vh = EXPANDED_VALUE_HEADER,
+                vi = EXPANDED_VALUE_INDENT,
             )
         );
     }
@@ -1986,6 +2027,37 @@ mod tests {
                 mh = EXPANDED_MESSAGE_HEADER,
                 vh = EXPANDED_VALUE_HEADER,
                 vi = EXPANDED_VALUE_INDENT,
+            )
+        );
+    }
+
+    #[test]
+    fn test_expand_without_message() {
+        let rec = |f, ts| Record {
+            ts,
+            fields: RecordFields {
+                head: heapless::Vec::from_slice(&[("a", EncodedString::raw(f).into())]).unwrap(),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+
+        let ts = Timestamp::new("2000-01-02T03:04:05.123Z");
+
+        let formatter = RecordFormatter::new(settings().with(|s| {
+            s.theme = Default::default();
+            s.expand = ExpandOption::Always;
+        }));
+
+        assert_eq!(
+            formatter.format_to_string(&rec("1", None)),
+            format!("{mh}\n  > a=1", mh = EXPANDED_MESSAGE_HEADER)
+        );
+        assert_eq!(
+            formatter.format_to_string(&rec("1", Some(ts))),
+            format!(
+                concat!("2000-01-02 03:04:05.123 {mh}\n", "                          > a=1"),
+                mh = EXPANDED_MESSAGE_HEADER
             )
         );
     }

@@ -1414,11 +1414,15 @@ mod tests {
         app.run(vec![input], &mut output).unwrap();
         assert_eq!(
             std::str::from_utf8(&output).unwrap(),
-            concat!(
-                "2024-01-25 18:10:20.435 |DBG| m1 @ src1\n",
-                "                        | - |   > a.b.c=10\n",
-                "                        | - |   > a.b.d=20\n",
-                "                        | - |   > a.c.b=11\n"
+            format!(
+                concat!(
+                    "2024-01-25 18:10:20.435 |{ld}| m1 @ src1\n",
+                    "                        |{lx}|   > a.b.c=10\n",
+                    "                        |{lx}|   > a.b.d=20\n",
+                    "                        |{lx}|   > a.c.b=11\n"
+                ),
+                ld = LEVEL_DEBUG,
+                lx = LEVEL_EXPANDED,
             ),
         );
     }
@@ -1468,14 +1472,16 @@ mod tests {
         let actual = std::str::from_utf8(&output).unwrap();
         let expected = format!(
             concat!(
-                "2024-01-25 18:10:20.435 |DBG| hello @ src1\n",
-                "                        | - |   > a={header}\n",
-                "                        | - |     {indent}line one\n",
-                "                        | - |     {indent}line two\n",
-                "                        | - |     {indent}line three\n",
+                "2024-01-25 18:10:20.435 |{ld}| hello @ src1\n",
+                "                        |{lx}|   > a={vh}\n",
+                "                        |{lx}|     {vi}line one\n",
+                "                        |{lx}|     {vi}line two\n",
+                "                        |{lx}|     {vi}line three\n",
             ),
-            header = EXPANDED_VALUE_HEADER,
-            indent = EXPANDED_VALUE_INDENT,
+            ld = LEVEL_DEBUG,
+            lx = LEVEL_EXPANDED,
+            vh = EXPANDED_VALUE_HEADER,
+            vi = EXPANDED_VALUE_INDENT,
         );
 
         assert_eq!(actual, expected, "\nactual:\n{}expected:\n{}", actual, expected);
@@ -1506,14 +1512,16 @@ mod tests {
         let actual = std::str::from_utf8(&output).unwrap();
         let expected = format!(
             concat!(
-                "|DBG| hello @ src1\n",
-                "| - |   > a={header}\n",
-                "| - |     {indent}line one\n",
-                "| - |     {indent}line two\n",
-                "| - |     {indent}line three\n",
+                "|{ld}| hello @ src1\n",
+                "|{lx}|   > a={vh}\n",
+                "|{lx}|     {vi}line one\n",
+                "|{lx}|     {vi}line two\n",
+                "|{lx}|     {vi}line three\n",
             ),
-            header = EXPANDED_VALUE_HEADER,
-            indent = EXPANDED_VALUE_INDENT,
+            ld = LEVEL_DEBUG,
+            lx = LEVEL_EXPANDED,
+            vh = EXPANDED_VALUE_HEADER,
+            vi = EXPANDED_VALUE_INDENT,
         );
 
         assert_eq!(actual, expected, "\nactual:\n{}expected:\n{}", actual, expected);
