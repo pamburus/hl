@@ -11,7 +11,7 @@ use crate::{
     fmtx::{aligned_left, centered, OptimizedBuf, Push},
     model::{self, Caller, Level, RawValue},
     settings::{ExpandOption, FlattenOption, Formatting, Punctuation},
-    syntax::EXPANDED_KEY_HEADER,
+    syntax::{EXPANDED_KEY_HEADER, EXPANDED_MESSAGE_HEADER},
     theme::{Element, StylingPush, Theme},
     IncludeExcludeKeyFilter,
 };
@@ -371,29 +371,23 @@ impl RecordFormatter {
                         s.reset();
                         s.space();
                     });
-                    let prefix = if fs.expand.unwrap_or(true) {
-                        Some(|buf: &mut Vec<u8>| {
-                            buf.extend(b"...");
-                            0
-                        })
-                    } else {
-                        None
-                    };
-                    let result = s.element(Element::Message, |s| {
+                    s.element(Element::Message, |s| {
                         s.batch(|buf| {
-                            MessageFormatAuto::new(value)
-                                .on_extended_space(if let Some(prefix) = prefix {
-                                    ExtendedSpaceAction::Expand(prefix)
+                            let result = MessageFormatAuto::new(value)
+                                .on_extended_space::<()>(if fs.expand.unwrap_or(true) {
+                                    ExtendedSpaceAction::Abort
                                 } else {
                                     ExtendedSpaceAction::FormatWithBacktick
                                 })
                                 .format(buf)
+                                .unwrap();
+                            if result.aborted {
+                                buf.extend(EXPANDED_MESSAGE_HEADER.as_bytes());
+                                fs.format_message_as_field = true;
+                                fs.expand = Some(true);
+                            }
                         })
                     });
-                    if result.is_err() {
-                        fs.format_message_as_field = true;
-                        fs.expand = Some(fs.expand.unwrap_or(true));
-                    }
                 }
             }
             _ => {
@@ -866,8 +860,6 @@ pub mod string {
     pub enum Error {
         #[error(transparent)]
         ParseError(#[from] encstr::Error),
-        #[error("truncated multiline message")]
-        TruncatedMultilineMessage,
     }
 
     // ---
@@ -1224,19 +1216,13 @@ pub mod string {
                     buf[begin..].rotate_right(1);
                     Ok(FormatStyle::Backticked.into())
                 }
-                (XS | BTXS, ExtendedSpaceAction::Expand(prefix)) => {
-                    let l0 = buf.len();
-                    let pl = prefix(buf);
-                    let n = buf.len() - l0;
-                    if pl != 0 {
-                        buf[begin..].rotate_right(n);
-                        prefix_lines_within(buf, begin + n.., 1.., (begin + n - pl)..(begin + n));
-                        Ok(FormatStyle::Expanded.into())
-                    } else {
-                        buf.copy_within(l0.., begin);
-                        buf.truncate(begin + n);
-                        Err(Error::TruncatedMultilineMessage)
-                    }
+                (XS | BTXS, ExtendedSpaceAction::Abort) => {
+                    buf.truncate(begin);
+                    Ok(FormatResult {
+                        analysis: Some(mask),
+                        style: FormatStyle::Plain,
+                        aborted: true,
+                    })
                 }
                 _ => {
                     buf.truncate(begin);
@@ -2004,6 +1990,23 @@ mod tests {
                 ),
                 header = EXPANDED_VALUE_HEADER,
                 indent = EXPANDED_VALUE_INDENT
+            )
+        );
+
+        assert_eq!(
+            formatter.format_to_string(&rec("some\nmultiline\ntext", "1")),
+            format!(
+                concat!(
+                    "{mh}\n",
+                    "  > msg={vh}\n",
+                    "    {vi}some\n",
+                    "    {vi}multiline\n",
+                    "    {vi}text\n",
+                    "  > a=1"
+                ),
+                mh = EXPANDED_MESSAGE_HEADER,
+                vh = EXPANDED_VALUE_HEADER,
+                vi = EXPANDED_VALUE_INDENT,
             )
         );
     }
