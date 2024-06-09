@@ -816,6 +816,21 @@ pub mod string {
         fn format(&self, buf: &mut Vec<u8>) -> Result<()>;
     }
 
+    pub trait Analyze {
+        fn analyze(&self) -> Mask;
+    }
+
+    impl Analyze for [u8] {
+        #[inline]
+        fn analyze(&self) -> Mask {
+            let mut mask = Mask::EMPTY;
+            self.iter().map(|&c| CHAR_GROUPS[c as usize]).for_each(|group| {
+                mask |= group;
+            });
+            mask
+        }
+    }
+
     // ---
 
     pub struct ValueFormatAuto<S, P> {
@@ -845,11 +860,7 @@ pub mod string {
             let begin = buf.len();
             buf.with_auto_trim(|buf| ValueFormatRaw::new(self.string).format(buf))?;
 
-            let mut mask = Mask::EMPTY;
-
-            buf[begin..].iter().map(|&c| CHAR_GROUPS[c as usize]).for_each(|group| {
-                mask |= group;
-            });
+            let mask = buf[begin..].analyze();
 
             let plain = if (mask & !(Flag::Other | Flag::Digit | Flag::Dot | Flag::Minus)).is_empty() {
                 if mask == Flag::Digit {
@@ -989,11 +1000,7 @@ pub mod string {
             let begin = buf.len();
             buf.with_auto_trim(|buf| MessageFormatRaw::new(self.string).format(buf))?;
 
-            let mut mask = Mask::EMPTY;
-
-            buf[begin..].iter().map(|&c| CHAR_GROUPS[c as usize]).for_each(|group| {
-                mask |= group;
-            });
+            let mask = buf[begin..].analyze();
 
             if !mask.intersects(Flag::EqualSign | Flag::Control | Flag::Backslash)
                 && !matches!(buf[begin..], [b'"', ..] | [b'\'', ..] | [b'`', ..])
@@ -1150,7 +1157,7 @@ pub mod string {
     };
 
     #[derive(EnumSetType)]
-    enum Flag {
+    pub enum Flag {
         Control,
         DoubleQuote,
         SingleQuote,
@@ -1165,7 +1172,7 @@ pub mod string {
         Other,
     }
 
-    type Mask = EnumSet<Flag>;
+    pub type Mask = EnumSet<Flag>;
 }
 
 #[cfg(test)]
