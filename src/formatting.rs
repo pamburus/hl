@@ -1179,26 +1179,47 @@ mod tests {
     };
     use chrono::{Offset, Utc};
     use encstr::EncodedString;
+    use model::RecordWithSourceConstructor;
     use serde_json as json;
 
-    trait FormatToVec {
-        fn format_to_vec(&self, rec: &Record) -> Vec<u8>;
+    trait FormatToVec<R> {
+        fn format_to_vec(&self, rec: R) -> Vec<u8>;
     }
 
-    trait FormatToString {
-        fn format_to_string(&self, rec: &Record) -> String;
+    trait FormatToString<R> {
+        fn format_to_string(&self, rec: R) -> String;
     }
 
-    impl FormatToVec for RecordFormatter {
-        fn format_to_vec(&self, rec: &Record) -> Vec<u8> {
+    impl<'a> FormatToVec<&'a Record<'a>> for RecordFormatter {
+        fn format_to_vec(&self, rec: &'a Record<'a>) -> Vec<u8> {
             let mut buf = Vec::new();
             self.format_record(&mut buf, 0..0, rec);
             buf
         }
     }
 
-    impl FormatToString for RecordFormatter {
-        fn format_to_string(&self, rec: &Record) -> String {
+    impl<'a> FormatToString<&'a Record<'a>> for RecordFormatter {
+        fn format_to_string(&self, rec: &'a Record<'a>) -> String {
+            String::from_utf8(self.format_to_vec(rec)).unwrap()
+        }
+    }
+
+    impl<'a, T> FormatToVec<model::RecordWithSource<'a>> for T
+    where
+        T: RecordWithSourceFormatter,
+    {
+        fn format_to_vec(&self, rec: model::RecordWithSource<'a>) -> Vec<u8> {
+            let mut buf = Vec::new();
+            (&self).format_record(&mut buf, 0..0, rec);
+            buf
+        }
+    }
+
+    impl<'a, T> FormatToString<model::RecordWithSource<'a>> for T
+    where
+        T: RecordWithSourceFormatter,
+    {
+        fn format_to_string(&self, rec: model::RecordWithSource<'a>) -> String {
             String::from_utf8(self.format_to_vec(rec)).unwrap()
         }
     }
@@ -1671,6 +1692,7 @@ mod tests {
             s.fields = fields.into();
         }));
 
+        let source = b"m a=1 b=2 c=3";
         let rec = Record {
             message: Some(EncodedString::raw("m").into()),
             fields: RecordFields {
@@ -1685,7 +1707,7 @@ mod tests {
             ..Default::default()
         };
 
-        let result = formatter.format_to_string(&rec);
+        let result = formatter.format_to_string(rec.with_source(source));
         assert_eq!(&result, "m\n  > a=1\n  > c=3\n  > ...", "{}", result);
     }
 }
