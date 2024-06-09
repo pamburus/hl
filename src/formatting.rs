@@ -103,46 +103,25 @@ impl Default for RecordFormatterSettings {
 // ---
 
 pub struct RecordFormatter {
-    theme: Arc<Theme>,
-    unescape_fields: bool,
-    ts_formatter: DateTimeFormatter,
-    hide_empty_fields: bool,
-    flatten: bool,
-    expand: ExpandOption,
-    always_show_time: bool,
-    always_show_level: bool,
-    fields: Arc<IncludeExcludeKeyFilter>,
-    punctuation: Arc<Punctuation>,
+    cfg: RecordFormatterSettings,
     ts_width: TextWidth,
 }
 
 impl RecordFormatter {
-    pub fn new(settings: RecordFormatterSettings) -> Self {
-        let ts_width = settings.ts_formatter.max_width();
-        Self {
-            theme: settings.theme,
-            unescape_fields: settings.unescape_fields,
-            ts_formatter: settings.ts_formatter,
-            hide_empty_fields: settings.hide_empty_fields,
-            flatten: settings.flatten,
-            expand: settings.expand,
-            always_show_time: settings.always_show_time,
-            always_show_level: settings.always_show_level,
-            fields: settings.fields,
-            punctuation: settings.punctuation,
-            ts_width,
-        }
+    pub fn new(cfg: RecordFormatterSettings) -> Self {
+        let ts_width = cfg.ts_formatter.max_width();
+        Self { cfg, ts_width }
     }
 
     pub fn format_record(&self, buf: &mut Buf, prefix_range: Range<usize>, rec: &model::Record) {
         let mut fs = FormattingState {
-            flatten: self.flatten && self.unescape_fields,
-            expand: self.expand.into(),
+            flatten: self.cfg.flatten && self.cfg.unescape_fields,
+            expand: self.cfg.expand.into(),
             prefix: prefix_range,
             ..Default::default()
         };
 
-        self.theme.apply(buf, &rec.level, |s| {
+        self.cfg.theme.apply(buf, &rec.level, |s| {
             //
             // time
             //
@@ -154,11 +133,11 @@ impl RecordFormatter {
                         aligned_left(buf, self.ts_width.bytes, b' ', |mut buf| {
                             if ts
                                 .as_rfc3339()
-                                .and_then(|ts| self.ts_formatter.reformat_rfc3339(&mut buf, ts))
+                                .and_then(|ts| self.cfg.ts_formatter.reformat_rfc3339(&mut buf, ts))
                                 .is_none()
                             {
                                 if let Some(ts) = ts.parse() {
-                                    self.ts_formatter.format(&mut buf, ts);
+                                    self.cfg.ts_formatter.format(&mut buf, ts);
                                 } else {
                                     buf.extend_from_slice(ts.raw().as_bytes());
                                 }
@@ -166,7 +145,7 @@ impl RecordFormatter {
                         });
                     })
                 });
-            } else if self.always_show_time {
+            } else if self.cfg.always_show_time {
                 fs.ts_width = self.ts_width.chars;
                 fs.add_element(|| {});
                 s.element(Element::Time, |s| {
@@ -188,7 +167,7 @@ impl RecordFormatter {
                 Some(Level::Error) => Some(b"ERR"),
                 _ => None,
             };
-            let level = level.or_else(|| self.always_show_level.then(|| b"(?)"));
+            let level = level.or_else(|| self.cfg.always_show_level.then(|| b"(?)"));
             if let Some(level) = level {
                 fs.has_level = true;
                 self.format_level(s, &mut fs, level);
@@ -203,7 +182,7 @@ impl RecordFormatter {
                     s.element(Element::LoggerInner, |s| {
                         s.batch(|buf| buf.extend_from_slice(logger.as_bytes()))
                     });
-                    s.batch(|buf| buf.extend_from_slice(self.punctuation.logger_name_separator.as_bytes()));
+                    s.batch(|buf| buf.extend_from_slice(self.cfg.punctuation.logger_name_separator.as_bytes()));
                 });
             }
             //
@@ -216,7 +195,7 @@ impl RecordFormatter {
             }
 
             fs.expand = fs.expand.or_else(|| {
-                if self.complexity(rec, Some(&self.fields)) >= 128 {
+                if self.complexity(rec, Some(&self.cfg.fields)) >= 128 {
                     Some(true)
                 } else {
                     None
@@ -244,9 +223,9 @@ impl RecordFormatter {
             let mut some_fields_hidden = false;
             for (k, v) in rec.fields() {
                 for _ in 0..2 {
-                    if !self.hide_empty_fields || !v.is_empty() {
+                    if !self.cfg.hide_empty_fields || !v.is_empty() {
                         let begin = s.batch(|buf| buf.len());
-                        match self.format_field(s, k, *v, &mut fs, Some(&self.fields)) {
+                        match self.format_field(s, k, *v, &mut fs, Some(&self.cfg.fields)) {
                             FieldFormatResult::Ok => {}
                             FieldFormatResult::Hidden => {
                                 some_fields_hidden = true;
@@ -267,7 +246,7 @@ impl RecordFormatter {
                 }
                 fs.add_element(|| s.batch(|buf| buf.push(b' ')));
                 s.element(Element::Ellipsis, |s| {
-                    s.batch(|buf| buf.extend_from_slice(self.punctuation.hidden_fields_indicator.as_bytes()))
+                    s.batch(|buf| buf.extend_from_slice(self.cfg.punctuation.hidden_fields_indicator.as_bytes()))
                 });
             }
             //
@@ -289,7 +268,7 @@ impl RecordFormatter {
         result += rec.logger.map(|x| x.len() / 2).unwrap_or(0);
         for (key, value) in rec.fields() {
             if value.is_empty() {
-                if self.hide_empty_fields {
+                if self.cfg.hide_empty_fields {
                     continue;
                 }
                 result += 4;
@@ -325,7 +304,7 @@ impl RecordFormatter {
         s.element(Element::Caller, |s| {
             s.batch(|buf| {
                 buf.push(b' ');
-                buf.extend_from_slice(self.punctuation.source_location_separator.as_bytes())
+                buf.extend_from_slice(self.cfg.punctuation.source_location_separator.as_bytes())
             });
             s.element(Element::CallerInner, |s| {
                 s.batch(|buf| {
@@ -401,10 +380,10 @@ impl RecordFormatter {
         fs.add_element(|| s.space());
         s.element(Element::Level, |s| {
             s.batch(|buf| {
-                buf.extend_from_slice(self.punctuation.level_left_separator.as_bytes());
+                buf.extend_from_slice(self.cfg.punctuation.level_left_separator.as_bytes());
             });
             s.element(Element::LevelInner, |s| s.batch(|buf| buf.extend_from_slice(level)));
-            s.batch(|buf| buf.extend_from_slice(self.punctuation.level_right_separator.as_bytes()));
+            s.batch(|buf| buf.extend_from_slice(self.cfg.punctuation.level_right_separator.as_bytes()));
         });
     }
 
@@ -574,7 +553,7 @@ impl<'a> FieldFormatter<'a> {
 
         let ffv = self.begin(s, key, value, fs);
 
-        let result = if self.rf.unescape_fields {
+        let result = if self.rf.cfg.unescape_fields {
             self.format_value(s, value, fs, filter, setting)
         } else {
             s.element(Element::String, |s| {
@@ -642,7 +621,7 @@ impl<'a> FieldFormatter<'a> {
                 }
                 let mut some_fields_hidden = false;
                 for (k, v) in item.fields.iter() {
-                    if !self.rf.hide_empty_fields || !v.is_empty() {
+                    if !self.rf.cfg.hide_empty_fields || !v.is_empty() {
                         match self.format(s, k, *v, fs, filter, setting) {
                             FieldFormatResult::Ok => {}
                             FieldFormatResult::Hidden => {
@@ -660,7 +639,7 @@ impl<'a> FieldFormatter<'a> {
                             self.rf.expand(s, fs);
                         }
                         s.element(Element::Ellipsis, |s| {
-                            s.batch(|buf| buf.extend(self.rf.punctuation.hidden_fields_indicator.as_bytes()))
+                            s.batch(|buf| buf.extend(self.rf.cfg.punctuation.hidden_fields_indicator.as_bytes()))
                         });
                     } else {
                         fs.some_fields_hidden = true;
@@ -686,7 +665,7 @@ impl<'a> FieldFormatter<'a> {
                 let mut first = true;
                 for v in item.iter() {
                     if !first {
-                        s.batch(|buf| buf.extend(self.rf.punctuation.array_separator.as_bytes()));
+                        s.batch(|buf| buf.extend(self.rf.cfg.punctuation.array_separator.as_bytes()));
                     } else {
                         first = false;
                     }
@@ -702,12 +681,12 @@ impl<'a> FieldFormatter<'a> {
     }
 
     fn add_prefix(&self, buf: &mut Vec<u8>, fs: &FormattingState) -> usize {
-        buf.extend(self.rf.theme.expanded_value_suffix.value.as_bytes());
+        buf.extend(self.rf.cfg.theme.expanded_value_suffix.value.as_bytes());
         buf.push(b'\n');
         let prefix = fs.expansion_prefix.clone().unwrap_or(fs.prefix.clone());
         let l0 = buf.len();
         buf.extend_from_within(prefix);
-        buf.extend(self.rf.theme.expanded_value_prefix.value.as_bytes());
+        buf.extend(self.rf.cfg.theme.expanded_value_prefix.value.as_bytes());
         buf.len() - l0
     }
 
@@ -747,7 +726,7 @@ impl<'a> FieldFormatter<'a> {
         let sep = if fs.expand.unwrap_or(false) && matches!(value, RawValue::Object(o) if !o.is_empty()) {
             b":"
         } else {
-            self.rf.punctuation.field_key_value_separator.as_bytes()
+            self.rf.cfg.punctuation.field_key_value_separator.as_bytes()
         };
         s.element(Element::Field, |s| {
             s.batch(|buf| buf.extend(sep));
