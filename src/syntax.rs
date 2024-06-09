@@ -8,4 +8,4 @@ pub const LEVEL_DEBUG: &str = "DBG";
 pub const LEVEL_WARNING: &str = "WRN";
 pub const LEVEL_ERROR: &str = "ERR";
 pub const LEVEL_UNKNOWN: &str = "(?)";
-pub const LEVEL_EXPANDED: &str = " * ";
+pub const LEVEL_EXPANDED: &str = " - ";

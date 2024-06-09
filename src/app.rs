@@ -657,7 +657,7 @@ impl App {
                 expand: self.options.expand,
                 always_show_time: self.options.fields.settings.predefined.time.show == FieldShowOption::Always,
                 always_show_level: self.options.fields.settings.predefined.level.show == FieldShowOption::Always,
-                punctuation: self.options.formatting.punctuation.clone().into(),
+                ..RecordFormatterSettings::from(self.options.formatting.clone())
             }))
         }
     }

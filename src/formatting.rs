@@ -21,6 +21,11 @@ use string::{ExtendedSpaceAction, Format, MessageFormatAuto, ValueFormatAuto};
 
 // ---
 
+const DEFAULT_EXPAND_ALL_THRESHOLD: usize = 128;
+const DEFAULT_EXPAND_MESSAGE_THRESHOLD: usize = 192;
+
+// ---
+
 type Buf = Vec<u8>;
 
 // ---
@@ -63,6 +68,8 @@ pub struct RecordFormatterSettings {
     pub expand: ExpandOption,
     pub always_show_time: bool,
     pub always_show_level: bool,
+    pub expand_all_threshold: usize,
+    pub expand_message_threshold: usize,
     pub fields: Arc<IncludeExcludeKeyFilter>,
     pub punctuation: Arc<Punctuation>,
 }
@@ -88,6 +95,12 @@ impl From<Formatting> for RecordFormatterSettings {
             expand: cfg.expand.unwrap_or_default(),
             always_show_time: false,
             always_show_level: false,
+            expand_all_threshold: cfg.expansion.thresholds.global.unwrap_or(DEFAULT_EXPAND_ALL_THRESHOLD),
+            expand_message_threshold: cfg
+                .expansion
+                .thresholds
+                .message
+                .unwrap_or(DEFAULT_EXPAND_MESSAGE_THRESHOLD),
             fields: Arc::new(IncludeExcludeKeyFilter::default()),
             punctuation: Arc::new(cfg.punctuation.into()),
         }
@@ -197,7 +210,7 @@ impl RecordFormatter {
             }
 
             fs.expand = fs.expand.or_else(|| {
-                if self.complexity(rec, Some(&self.cfg.fields)) >= 128 {
+                if self.complexity(rec, Some(&self.cfg.fields)) >= self.cfg.expand_all_threshold {
                     Some(true)
                 } else {
                     None
@@ -346,7 +359,7 @@ impl RecordFormatter {
         match value {
             RawValue::String(value) => {
                 if !value.is_empty() {
-                    if value.source().len() > 192 {
+                    if value.source().len() > self.cfg.expand_message_threshold {
                         fs.expand = Some(fs.expand.unwrap_or(true));
                     }
                     fs.add_element(|| {
@@ -1990,9 +2003,10 @@ mod tests {
         let formatter = RecordFormatter::new(settings().with(|s| {
             s.theme = Default::default();
             s.expand = ExpandOption::Auto;
+            s.expand_message_threshold = 64;
         }));
 
-        let lorem_ipsum = "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.";
+        let lorem_ipsum = "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.";
 
         assert_eq!(
             formatter.format_to_string(&rec(lorem_ipsum, "1")),

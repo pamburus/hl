@@ -238,6 +238,20 @@ pub struct Formatting {
     pub punctuation: Punctuation,
     pub flatten: Option<FlattenOption>,
     pub expand: Option<ExpandOption>,
+    pub expansion: ExpansionOptions,
+}
+
+#[derive(Clone, Debug, Default, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub struct ExpansionOptions {
+    pub thresholds: ExpansionThresholds,
+}
+
+#[derive(Clone, Debug, Default, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub struct ExpansionThresholds {
+    pub global: Option<usize>,
+    pub message: Option<usize>,
 }
 
 // ---

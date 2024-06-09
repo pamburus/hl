@@ -225,6 +225,32 @@
                         "always"
                     ]
                 },
+                "expand": {
+                    "type": "string",
+                    "enum": [
+                        "auto",
+                        "never",
+                        "always"
+                    ]
+                },
+                "expansion": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                        "thresholds": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "properties": {
+                                "global": {
+                                    "type": "integer"
+                                },
+                                "message": {
+                                    "type": "integer"
+                                }
+                            }
+                        }
+                    }
+                },
                 "punctuation": {
                     "type": "object",
                     "additionalProperties": false,
