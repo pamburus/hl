@@ -214,10 +214,13 @@ impl RecordFormatter {
                 s.reset();
             }
 
-            fs.expand = Some(
-                fs.expand
-                    .unwrap_or_else(|| self.complexity(rec, Some(&self.fields)) >= 128),
-            );
+            fs.expand = fs.expand.or_else(|| {
+                if self.complexity(rec, Some(&self.fields)) >= 128 {
+                    Some(true)
+                } else {
+                    None
+                }
+            });
 
             //
             // caller in expanded mode
@@ -1726,5 +1729,57 @@ mod tests {
         assert_eq!(format("f", "42"), r#"m @ f:42"#);
         assert_eq!(format("f", ""), r#"m @ f"#);
         assert_eq!(format("", "42"), r#"m @ :42"#);
+    }
+
+    #[test]
+    fn test_expand_no_filter() {
+        let rec = Record {
+            message: Some(EncodedString::raw("m").into()),
+            fields: RecordFields {
+                head: heapless::Vec::from_slice(&[
+                    ("a", EncodedString::raw("1").into()),
+                    ("b", EncodedString::raw("2").into()),
+                    ("c", EncodedString::raw("3").into()),
+                ])
+                .unwrap(),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+
+        let formatter = RecordFormatter::new(settings().with(|s| {
+            s.theme = Default::default();
+            s.expand = ExpandOption::Auto;
+        }));
+
+        assert_eq!(formatter.format_to_string(&rec), r#"m a=1 b=2 c=3"#);
+    }
+
+    #[test]
+    fn test_expand_message() {
+        let rec = |m, f| Record {
+            message: Some(EncodedString::raw(m).into()),
+            fields: RecordFields {
+                head: heapless::Vec::from_slice(&[("a", EncodedString::raw(f).into())]).unwrap(),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+
+        let formatter = RecordFormatter::new(settings().with(|s| {
+            s.theme = Default::default();
+            s.expand = ExpandOption::Auto;
+        }));
+
+        let lorem_ipsum = "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.";
+
+        assert_eq!(
+            formatter.format_to_string(&rec(lorem_ipsum, "1")),
+            lorem_ipsum.to_owned() + "\n  > a=1"
+        );
+        assert_eq!(
+            formatter.format_to_string(&rec("", "some\nmultiline\ntext")),
+            "a=`some\nmultiline\ntext`"
+        );
     }
 }
