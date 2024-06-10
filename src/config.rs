@@ -26,7 +26,7 @@ pub fn load(path: Option<&str>) -> Result<Settings> {
     let (filename, required) = path.map(|p| (p, true)).unwrap_or_else(|| {
         (
             if let Some(dirs) = app_dirs() {
-                default = Some(dirs.config_dir.join("config.yaml").to_string_lossy().to_string());
+                default = Some(dirs.config_dir.join("config").to_string_lossy().to_string());
                 default.as_deref().unwrap()
             } else {
                 ""
