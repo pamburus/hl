@@ -16,14 +16,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Build
-        run: cargo build --verbose --benches --workspace
+      - name: Validate configs
+        uses: cardinalby/schema-validator-action@v3
+        with:
+          file: 'etc/defaults/config*.yaml'
+          schema: 'schema/json/config.schema.json'
 
-      - name: Run tests
-        run: cargo test --verbose --workspace
-
-      - name: Run executable
-        run: cargo run
+      - name: Validate themes
+        uses: cardinalby/schema-validator-action@v3
+        with:
+          file: 'etc/defaults/themes/*.yaml|src/testing/assets/themes/*.yaml'
+          schema: 'schema/json/theme.schema.json'
 
       - name: Install latest nightly
         uses: actions-rs/toolchain@v1
@@ -33,3 +36,12 @@ jobs:
 
       - name: Check formatting
         run: cargo +nightly fmt --verbose --all --check
+
+      - name: Build
+        run: cargo build --verbose --benches --workspace
+
+      - name: Run tests
+        run: cargo test --verbose --workspace
+
+      - name: Run executable
+        run: cargo run
