@@ -1,5 +1,5 @@
 # yaml-language-server: $schema=../../../../schema/json/theme.schema.json
-$schema: ../../../../schema/json/theme.schema.json
+$schema: https://raw.githubusercontent.com/pamburus/hl/master/schema/json/theme.schema.json
 
 elements:
   input:
