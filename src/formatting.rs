@@ -1024,26 +1024,27 @@ pub mod string {
 
             let mask = buf[begin..].analyze();
 
-            let plain = if (mask & !(Flag::Other | Flag::Digit | Flag::Dot | Flag::Minus)).is_empty() {
-                if mask == Flag::Digit {
-                    buf[begin..].len() > MAX_NUMBER_LEN
-                } else if !mask.contains(Flag::Other) {
-                    !looks_like_number(&buf[begin..])
-                } else {
-                    !matches!(
-                        buf[begin..],
-                        [b'{', ..]
-                            | [b'[', ..]
-                            | [b't', b'r', b'u', b'e']
-                            | [b'f', b'a', b'l', b's', b'e']
-                            | [b'n', b'u', b'l', b'l']
-                    )
-                }
-            } else {
-                false
+            const NON_PLAIN: Mask = mask!(Flag::DoubleQuote | Flag::Control | Flag::Backslash | Flag::Space);
+            const POSITIVE_INTEGER: Mask = mask!(Flag::Digit);
+            const NUMBER: Mask = mask!(Flag::Digit | Flag::Dot | Flag::Minus);
+
+            let confusing = || {
+                matches!(
+                    buf[begin..],
+                    [b'{', ..]
+                        | [b'[', ..]
+                        | [b't', b'r', b'u', b'e']
+                        | [b'f', b'a', b'l', b's', b'e']
+                        | [b'n', b'u', b'l', b'l']
+                )
             };
 
-            if plain {
+            let like_number = || {
+                (mask == POSITIVE_INTEGER && buf[begin..].len() <= MAX_NUMBER_LEN)
+                    || (!mask.intersects(!NUMBER) && looks_like_number(&buf[begin..]))
+            };
+
+            if !mask.intersects(NON_PLAIN) && !like_number() && !confusing() {
                 return Ok(FormatResult {
                     analysis: Some(mask),
                     ..FormatStyle::Plain.into()
@@ -1206,7 +1207,11 @@ pub mod string {
         #[inline]
         fn format(&self, buf: &mut Vec<u8>) -> Result<FormatResult> {
             if self.string.is_empty() {
-                return Ok(FormatStyle::Plain.into());
+                buf.extend(r#""""#.as_bytes());
+                return Ok(FormatResult {
+                    analysis: Some(Mask::EMPTY),
+                    ..FormatStyle::DoubleQuoted.into()
+                });
             }
 
             let begin = buf.len();
@@ -1214,12 +1219,19 @@ pub mod string {
 
             let mask = buf[begin..].analyze();
 
-            if !mask.intersects(Flag::EqualSign | Flag::Control | Flag::Backslash)
-                && !matches!(
-                    buf[begin..],
-                    [b'"', ..] | [b'\'', ..] | [b'`', ..] | [b' ', b' ', b'>', ..]
-                )
-            {
+            const NON_PLAIN: Mask = mask!(
+                Flag::EqualSign
+                    | Flag::Control
+                    | Flag::Backslash
+                    | Flag::Colon
+                    | Flag::Tilde
+                    | Flag::AngleBrackets
+                    | Flag::DoubleQuote
+                    | Flag::SingleQuote
+                    | Flag::Backtick
+            );
+
+            if !mask.intersects(NON_PLAIN) {
                 return Ok(FormatStyle::Plain.into());
             }
 
@@ -1343,19 +1355,25 @@ pub mod string {
         const XS: Mask = mask!(Flag::Control | Flag::ExtendedSpace); // 0x09, 0x0A, 0x0D
         const EQ: Mask = mask!(Flag::EqualSign); // 0x3D
         const HY: Mask = mask!(Flag::Minus); // Hyphen, 0x2D
-        const DO: Mask = mask!(Flag::Dot); // Dot, 0x2E
+        const DT: Mask = mask!(Flag::Dot); // Dot, 0x2E
         const DD: Mask = mask!(Flag::Digit); // Decimal digit, 0x30..0x39
+        const CL: Mask = mask!(Flag::Colon); // Colon, 0x3A
+        const TL: Mask = mask!(Flag::Tilde); // Tilde, 0x7E
+        const PA: Mask = mask!(Flag::Parantheses); // 0x28, 0x29
+        const BK: Mask = mask!(Flag::Brackets); // 0x5B, 0x5D
+        const BR: Mask = mask!(Flag::Braces); // 0x7B, 0x7D
+        const AB: Mask = mask!(Flag::AngleBrackets); // 0x3C, 0x3E
         const __: Mask = mask!(Flag::Other);
         [
             //   1   2   3   4   5   6   7   8   9   A   B   C   D   E   F
             CT, CT, CT, CT, CT, CT, CT, CT, CT, XS, XS, CT, CT, XS, CT, CT, // 0
             CT, CT, CT, CT, CT, CT, CT, CT, CT, CT, CT, CT, CT, CT, CT, CT, // 1
-            SP, __, DQ, __, __, __, __, SQ, __, __, __, __, __, HY, DO, __, // 2
-            DD, DD, DD, DD, DD, DD, DD, DD, DD, DD, __, __, __, EQ, __, __, // 3
-            __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // 4
-            __, __, __, __, __, __, __, __, __, __, __, __, BS, __, __, __, // 5
+            SP, __, DQ, __, __, __, __, SQ, __, __, __, __, __, HY, DT, __, // 2
+            DD, DD, DD, DD, DD, DD, DD, DD, DD, DD, CL, __, AB, EQ, AB, __, // 3
+            __, __, __, __, __, __, __, __, PA, PA, __, __, __, __, __, __, // 4
+            __, __, __, __, __, __, __, __, __, __, __, BK, BS, BK, __, __, // 5
             BT, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // 6
-            __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // 7
+            __, __, __, __, __, __, __, __, __, __, __, BR, __, BR, TL, __, // 7
             __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // 8
             __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // 9
             __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // A
@@ -1380,6 +1398,12 @@ pub mod string {
         Digit,
         Minus,
         Dot,
+        Colon,
+        Tilde,
+        Parantheses,
+        Brackets,
+        Braces,
+        AngleBrackets,
         Other,
     }
 
@@ -2074,5 +2098,34 @@ mod tests {
                 mh = EXPANDED_MESSAGE_HEADER
             )
         );
+    }
+
+    #[test]
+    fn test_format_uuid() {
+        let rec = |value| Record {
+            fields: RecordFields {
+                head: heapless::Vec::from_slice(&[("a", EncodedString::raw(value).into())]).unwrap(),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+
+        assert_eq!(
+            format_no_color(&rec("243e020d-11d6-42f6-b4cd-b4586057b9a2")),
+            "a=243e020d-11d6-42f6-b4cd-b4586057b9a2"
+        );
+    }
+
+    #[test]
+    fn test_format_int_string() {
+        let rec = |value| Record {
+            fields: RecordFields {
+                head: heapless::Vec::from_slice(&[("a", EncodedString::json(value).into())]).unwrap(),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+
+        assert_eq!(format_no_color(&rec(r#""243""#)), r#"a="243""#);
     }
 }
