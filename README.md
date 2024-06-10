@@ -335,11 +335,11 @@ See other [screenshots](https://github.com/pamburus/hl-extra/tree/90be58af2fb91d
 
 - Configuration file is automatically loaded if found in a predefined platform-specific location.
 
-    | OS      | Location                                      |
-    | ------- | --------------------------------------------- | 
-    | macOS   | ~/.config/hl/config.yaml                      |
-    | Linux   | ~/.config/hl/config.yaml                      |
-    | Windows | %USERPROFILE%\AppData\Roaming\hl\config.yaml  |
+    | OS      | Location                                                  |
+    | ------- | --------------------------------------------------------- | 
+    | macOS   | ~/.config/hl/config.{yaml,toml,json}                      |
+    | Linux   | ~/.config/hl/config.{yaml,toml,json}                      |
+    | Windows | %USERPROFILE%\AppData\Roaming\hl\config.{yaml,toml,json}  |
 
 - The path to the configuration file can be overridden using the HL_CONFIG environment variable.
 
