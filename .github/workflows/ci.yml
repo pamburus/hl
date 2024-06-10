@@ -16,17 +16,23 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Validate configs
+      - name: Validate YAML configs
         uses: cardinalby/schema-validator-action@v3
         with:
           file: 'etc/defaults/config*.yaml'
           schema: 'schema/json/config.schema.json'
 
-      - name: Validate themes
+      - name: Validate YAML themes
         uses: cardinalby/schema-validator-action@v3
         with:
-          file: 'etc/defaults/themes/*.yaml|src/testing/assets/themes/*.yaml'
+          file: 'etc/defaults/themes/*.yaml'
           schema: 'schema/json/theme.schema.json'
+
+      - name: Setup taplo
+        uses: uncenter/setup-taplo@v1
+
+      - name: Validate TOML configs and themes
+        run: taplo check
 
       - name: Install latest nightly
         uses: actions-rs/toolchain@v1

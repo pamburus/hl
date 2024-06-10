@@ -120,12 +120,20 @@ setup_screenshot_tools() {
     setup_alacritty
 }
 
+setup_taplo() {
+    setup_cargo
+    if [ ! -x "$(command -v taplo)" ]; then
+        cargo install taplo-cli --locked --features lsp
+    fi
+}
+
 # --- main ---
 
 while [ $# -gt 0 ]; do
     case $1 in
         build)
             setup_cargo
+            setup_taplo
             ;;
         coverage)
             setup_coverage_tools
