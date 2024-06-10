@@ -43,12 +43,21 @@ pub enum Error {
     UnrecognizedTime(String),
     #[error("unknown theme {name:?}, use any of {known:?}")]
     UnknownTheme { name: String, known: Vec<String> },
+    #[error("failed to load theme {}: {source}", HILITE.paint(.filename))]
+    FailedToLoadTheme {
+        name: String,
+        filename: String,
+        #[source]
+        source: Box<Error>,
+    },
     #[error("failed to parse utf-8 string: {0}")]
     Utf8Error(#[from] std::str::Utf8Error),
     #[error("failed to construct utf-8 string from bytes: {0}")]
     FromUtf8Error(#[from] std::string::FromUtf8Error),
     #[error("failed to parse yaml: {0}")]
     YamlError(#[from] serde_yaml::Error),
+    #[error(transparent)]
+    TomlError(#[from] toml::de::Error),
     #[error("failed to parse json: {0}")]
     WrongFieldFilter(String),
     #[error("wrong regular expression: {0}")]

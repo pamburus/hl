@@ -16,14 +16,19 @@ help:
 .PHONY: help
 
 ## Run continuous integration tests
-ci: check-fmt test build
+ci: check-fmt check-schema test build
 	@cargo run -- --version
 .PHONY: ci
 
 ## Run code formatting tests
-check-fmt:
+check-fmt: contrib-build
 	@cargo +nightly fmt --all -- --check
 .PHONY: check-fmt
+
+## Run schema validation tests
+check-schema: contrib-build
+	@taplo check
+.PHONY: check-schema
 
 ## Automatically format code
 fmt:

@@ -4,7 +4,7 @@ use std::{
     convert::TryFrom,
     fmt::{self, Write},
     io::ErrorKind,
-    path::{Path, PathBuf},
+    path::{Component, Path, PathBuf},
     str::{self, FromStr},
 };
 
@@ -17,7 +17,9 @@ use serde::{
     de::{MapAccess, Visitor},
     Deserialize, Deserializer,
 };
+use serde_json as json;
 use serde_yaml as yaml;
+use strum::{EnumIter, IntoEnumIterator};
 
 // local imports
 use crate::{error::*, level::Level};
@@ -34,10 +36,9 @@ pub struct Theme {
 
 impl Theme {
     pub fn load(app_dirs: &AppDirs, name: &str) -> Result<Self> {
-        let filename = Self::filename(name);
-        match Self::load_from(Self::themes_dir(app_dirs), &filename) {
+        match Self::load_from(&Self::themes_dir(app_dirs), name) {
             Err(Error::Io(e)) => match e.kind() {
-                ErrorKind::NotFound => match Self::load_embedded::<Assets>(name, &filename) {
+                ErrorKind::NotFound => match Self::load_embedded::<Assets>(name) {
                     Err(Error::UnknownTheme { name, mut known }) => {
                         if let Some(names) = Self::custom_names(app_dirs).ok() {
                             known.extend(names.into_iter().filter_map(|n| n.ok()));
@@ -57,7 +58,7 @@ impl Theme {
     }
 
     pub fn embedded(name: &str) -> Result<Self> {
-        Self::load_embedded::<Assets>(name, &Self::filename(name))
+        Self::load_embedded::<Assets>(name)
     }
 
     pub fn list(app_dirs: &AppDirs) -> Result<HashMap<String, ThemeInfo>> {
@@ -74,7 +75,7 @@ impl Theme {
                         result.insert(name, ThemeOrigin::Custom.into());
                     }
                     Err(e) => {
-                        eprintln!("failed to list custom theme: {}", e);
+                        eprintln!("failed to list custom themes: {}", e);
                     }
                 }
             }
@@ -83,29 +84,62 @@ impl Theme {
         Ok(result)
     }
 
-    fn load_embedded<S: RustEmbed>(name: &str, filename: &str) -> Result<Self> {
-        Self::from_buf(
-            S::get(&filename)
-                .ok_or_else(|| Error::UnknownTheme {
-                    name: name.to_string(),
-                    known: Self::embedded_names().into_iter().collect(),
-                })?
-                .data
-                .as_ref(),
-        )
+    fn load_embedded<S: RustEmbed>(name: &str) -> Result<Self> {
+        for format in Format::iter() {
+            let filename = Self::filename(name, format);
+            if let Some(file) = S::get(&filename) {
+                return Self::from_buf(file.data.as_ref(), format);
+            }
+        }
+
+        Err(Error::UnknownTheme {
+            name: name.to_string(),
+            known: Self::embedded_names().into_iter().collect(),
+        })
     }
 
-    fn from_buf(data: &[u8]) -> Result<Self> {
-        Ok(yaml::from_str(std::str::from_utf8(data)?)?)
+    fn from_buf(data: &[u8], format: Format) -> Result<Self> {
+        let s = std::str::from_utf8(data)?;
+        match format {
+            Format::Yaml => Ok(yaml::from_str(s)?),
+            Format::Toml => Ok(toml::from_str(s)?),
+            Format::Json => Ok(json::from_str(s)?),
+        }
     }
 
-    fn load_from(dir: PathBuf, filename: &str) -> Result<Self> {
-        let f = std::fs::File::open(dir.join(filename))?;
-        Ok(yaml::from_reader(f)?)
+    fn load_from(dir: &PathBuf, name: &str) -> Result<Self> {
+        for format in Format::iter() {
+            let filename = Self::filename(name, format);
+            let path = PathBuf::from(&filename);
+            let path = if matches!(path.components().next(), Some(Component::ParentDir | Component::CurDir)) {
+                path
+            } else {
+                dir.join(&filename)
+            };
+            match std::fs::read(&path) {
+                Ok(data) => {
+                    return Self::from_buf(&data, format).map_err(|e| Error::FailedToLoadTheme {
+                        name: name.to_string(),
+                        filename: path.display().to_string(),
+                        source: Box::new(e),
+                    });
+                }
+                Err(e) => match e.kind() {
+                    ErrorKind::NotFound => continue,
+                    _ => return Err(e.into()),
+                },
+            }
+        }
+
+        Err(std::io::Error::new(ErrorKind::NotFound, "theme file not found").into())
     }
 
-    fn filename(name: &str) -> String {
-        format!("{}.{}", name, Self::EXTENSION)
+    fn filename(name: &str, format: Format) -> String {
+        if Self::strip_extension(&name, format).is_some() {
+            return name.to_string();
+        }
+
+        format!("{}.{}", name, format.extension())
     }
 
     fn themes_dir(app_dirs: &AppDirs) -> PathBuf {
@@ -113,7 +147,7 @@ impl Theme {
     }
 
     fn embedded_names() -> impl IntoIterator<Item = String> {
-        Assets::iter().filter_map(|a| Self::strip_extension(&a).map(|n| n.to_string()))
+        Assets::iter().filter_map(|a| Self::strip_known_extension(&a).map(|n| n.to_string()))
     }
 
     fn custom_names(app_dirs: &AppDirs) -> Result<impl IntoIterator<Item = Result<String>>> {
@@ -126,16 +160,44 @@ impl Theme {
                     .path()
                     .file_name()
                     .and_then(|n| n.to_str())
-                    .and_then(|a| Self::strip_extension(&a).map(|n| n.to_string())))
+                    .and_then(|a| Self::strip_known_extension(&a).map(|n| n.to_string())))
             })
             .filter_map(|x| x.transpose()))
     }
 
-    fn strip_extension(filename: &str) -> Option<&str> {
-        filename.strip_suffix(Self::EXTENSION).and_then(|r| r.strip_suffix("."))
+    fn strip_extension(filename: &str, format: Format) -> Option<&str> {
+        filename
+            .strip_suffix(format.extension())
+            .and_then(|r| r.strip_suffix("."))
     }
 
-    const EXTENSION: &'static str = "yaml";
+    fn strip_known_extension(filename: &str) -> Option<&str> {
+        for format in Format::iter() {
+            if let Some(name) = Self::strip_extension(filename, format) {
+                return Some(name);
+            }
+        }
+        None
+    }
+}
+
+// ---
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash, EnumIter)]
+pub enum Format {
+    Yaml,
+    Toml,
+    Json,
+}
+
+impl Format {
+    pub fn extension(&self) -> &str {
+        match self {
+            Self::Yaml => "yaml",
+            Self::Toml => "toml",
+            Self::Json => "json",
+        }
+    }
 }
 
 // ---
@@ -469,7 +531,7 @@ pub mod testing {
     struct Assets;
 
     pub fn theme() -> Result<Theme> {
-        Theme::load_embedded::<Assets>("test", &Theme::filename("test"))
+        Theme::load_embedded::<Assets>("test")
     }
 }
 
@@ -478,9 +540,44 @@ mod tests {
     use super::*;
 
     #[test]
+    fn test_load() {
+        let app_dirs = AppDirs {
+            config_dir: PathBuf::from("src/testing/assets"),
+            cache_dir: Default::default(),
+            data_dir: Default::default(),
+            state_dir: Default::default(),
+        };
+        assert_ne!(Theme::load(&app_dirs, "test").unwrap().elements.len(), 0);
+        assert_ne!(Theme::load(&app_dirs, "universal").unwrap().elements.len(), 0);
+        assert!(Theme::load(&app_dirs, "non-existent").is_err());
+        assert!(Theme::load(&app_dirs, "invalid").is_err());
+        assert!(Theme::load(&app_dirs, "invalid-type").is_err());
+    }
+
+    #[test]
     fn test_load_from() {
-        let theme = Theme::load_from("src/testing/assets/themes".into(), "test.yaml").unwrap();
-        assert_ne!(theme.elements.len(), 0);
+        let path = PathBuf::from("etc/defaults/themes");
+        assert_ne!(Theme::load_from(&path, "universal").unwrap().elements.len(), 0);
+
+        let path = PathBuf::from("src/testing/assets/themes");
+        assert_ne!(Theme::load_from(&path, "test").unwrap().elements.len(), 0);
+        assert_ne!(Theme::load_from(&path, "test.toml").unwrap().elements.len(), 0);
+        assert_ne!(
+            Theme::load_from(&path, "./src/testing/assets/themes/test.toml")
+                .unwrap()
+                .elements
+                .len(),
+            0
+        );
+        assert!(Theme::load_from(&path, "non-existent").is_err());
+        assert!(Theme::load_from(&path, "invalid").is_err());
+        assert!(Theme::load_from(&path, "invalid-type").is_err());
+    }
+
+    #[test]
+    fn test_embedded() {
+        assert_ne!(Theme::embedded("universal").unwrap().elements.len(), 0);
+        assert!(Theme::embedded("non-existent").is_err());
     }
 
     #[test]
