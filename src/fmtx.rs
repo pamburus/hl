@@ -448,33 +448,33 @@ enum AlignerBuffer<T> {
 // ---
 
 #[inline]
-pub fn aligned<'a, T, O, F>(out: &'a mut O, adjustment: Option<Adjustment<T>>, f: F)
+pub fn aligned<'a, T, O, R, F>(out: &'a mut O, adjustment: Option<Adjustment<T>>, f: F) -> R
 where
     T: Clone,
     O: Push<T>,
-    F: FnOnce(Aligner<'a, T, O>),
+    F: FnOnce(Aligner<'a, T, O>) -> R,
 {
-    f(Aligner::new(out, adjustment));
+    f(Aligner::new(out, adjustment))
 }
 
 #[inline]
-pub fn aligned_left<'a, T, O, F>(out: &'a mut O, width: usize, pad: T, f: F)
+pub fn aligned_left<'a, T, O, R, F>(out: &'a mut O, width: usize, pad: T, f: F) -> R
 where
     T: Clone,
     O: Push<T>,
-    F: FnOnce(UnbufferedAligner<'a, T, O>),
+    F: FnOnce(UnbufferedAligner<'a, T, O>) -> R,
 {
-    f(UnbufferedAligner::new(out, Padding::new(pad, width)));
+    f(UnbufferedAligner::new(out, Padding::new(pad, width)))
 }
 
 #[inline]
-pub fn centered<'a, T, O, F>(out: &'a mut O, width: usize, pad: T, f: F)
+pub fn centered<'a, T, O, R, F>(out: &'a mut O, width: usize, pad: T, f: F) -> R
 where
     T: Clone,
     O: Push<T>,
-    F: FnOnce(BufferedAligner<'a, T, O>),
+    F: FnOnce(BufferedAligner<'a, T, O>) -> R,
 {
-    f(BufferedAligner::new(out, Padding::new(pad, width), Alignment::Center));
+    f(BufferedAligner::new(out, Padding::new(pad, width), Alignment::Center))
 }
 
 #[cfg(test)]

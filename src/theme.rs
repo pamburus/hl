@@ -241,6 +241,23 @@ impl<'a, B: Push<u8>> Styler<'a, B> {
     }
 }
 
+impl<'a> Styler<'a, Vec<u8>> {
+    #[inline]
+    pub fn transact<F: FnOnce(&mut Self) -> bool>(&mut self, f: F) -> bool {
+        let current = self.current;
+        let synced = self.synced;
+        let n = self.buf.len();
+        if f(self) {
+            true
+        } else {
+            self.buf.truncate(n);
+            self.current = current;
+            self.synced = synced;
+            false
+        }
+    }
+}
+
 impl<'a, B: Push<u8>> StylingPush<B> for Styler<'a, B> {
     #[inline]
     fn element<R, F: FnOnce(&mut Self) -> R>(&mut self, element: Element, f: F) -> R {

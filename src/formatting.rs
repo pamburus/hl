@@ -12,7 +12,7 @@ use crate::{
     model::{self, Caller, Level, RawValue},
     settings::{ExpandOption, FlattenOption, Formatting, Punctuation},
     syntax::*,
-    theme::{Element, StylingPush, Theme},
+    theme::{Element, Styler, StylingPush, Theme},
     IncludeExcludeKeyFilter,
 };
 
@@ -138,36 +138,15 @@ impl RecordFormatter {
             //
             // time
             //
-            if let Some(ts) = &rec.ts {
-                fs.ts_width = self.ts_width.chars;
-                fs.add_element(|| {});
-                s.element(Element::Time, |s| {
-                    s.batch(|buf| {
-                        aligned_left(buf, self.ts_width.bytes, b' ', |mut buf| {
-                            if ts
-                                .as_rfc3339()
-                                .and_then(|ts| self.cfg.ts_formatter.reformat_rfc3339(&mut buf, ts))
-                                .is_none()
-                            {
-                                if let Some(ts) = ts.parse() {
-                                    self.cfg.ts_formatter.format(&mut buf, ts);
-                                } else {
-                                    buf.extend_from_slice(ts.raw().as_bytes());
-                                }
-                            }
-                        });
-                    })
-                });
-            } else if self.cfg.always_show_time {
-                fs.ts_width = self.ts_width.chars;
-                fs.add_element(|| {});
-                s.element(Element::Time, |s| {
-                    s.batch(|buf| {
-                        centered(buf, self.ts_width.bytes, b'-', |mut buf| {
-                            buf.extend_from_slice(b"-");
-                        });
-                    })
-                });
+            if !fs.transact(s, |fs, s| self.format_timestamp(rec, fs, s)) {
+                if let Some(ts) = &rec.ts {
+                    fs.x_fields
+                        .push(("ts", RawValue::String(EncodedString::raw(ts.raw()))))
+                        .ok();
+                }
+                if self.cfg.always_show_time {
+                    self.format_timestamp_stub(&mut fs, s);
+                }
             }
 
             //
@@ -178,7 +157,7 @@ impl RecordFormatter {
                 Some(Level::Info) => Some(LEVEL_INFO.as_bytes()),
                 Some(Level::Warning) => Some(LEVEL_WARNING.as_bytes()),
                 Some(Level::Error) => Some(LEVEL_ERROR.as_bytes()),
-                _ => None,
+                None => None,
             };
             let level = level.or_else(|| self.cfg.always_show_level.then(|| LEVEL_UNKNOWN.as_bytes()));
             if let Some(level) = level {
@@ -203,8 +182,11 @@ impl RecordFormatter {
             // message text
             //
             if let Some(value) = &rec.message {
-                self.format_message(s, &mut fs, *value);
-                fs.first_line_used = true;
+                if fs.transact(s, |fs, s| self.format_message(s, fs, *value)) {
+                    fs.first_line_used = true;
+                } else {
+                    fs.x_fields.push(("msg", *value)).ok();
+                }
             } else {
                 s.reset();
             }
@@ -231,13 +213,9 @@ impl RecordFormatter {
             //
             // fields
             //
-            if fs.format_message_as_field {
-                if let Some(value) = &rec.message {
-                    _ = self.format_field(s, "msg", *value, &mut fs, None);
-                }
-            }
             let mut some_fields_hidden = false;
-            for (k, v) in rec.fields() {
+            let x_fields = std::mem::take(&mut fs.x_fields);
+            for (k, v) in x_fields.iter().chain(rec.fields()) {
                 for _ in 0..2 {
                     if !self.cfg.hide_empty_fields || !v.is_empty() {
                         let cp = fs.checkpoint(s);
@@ -273,6 +251,48 @@ impl RecordFormatter {
                     self.format_caller(s, caller);
                 };
             }
+        });
+    }
+
+    #[inline]
+    #[must_use]
+    fn format_timestamp<S: StylingPush<Buf>>(&self, rec: &model::Record, fs: &mut FormattingState, s: &mut S) -> bool {
+        let Some(ts) = &rec.ts else {
+            return false;
+        };
+
+        fs.ts_width = self.ts_width.chars;
+        fs.add_element(|| {});
+        s.element(Element::Time, |s| {
+            s.batch(|buf| {
+                aligned_left(buf, self.ts_width.bytes, b' ', |mut buf| {
+                    if ts
+                        .as_rfc3339()
+                        .and_then(|ts| self.cfg.ts_formatter.reformat_rfc3339(&mut buf, ts))
+                        .is_some()
+                    {
+                        true
+                    } else if let Some(ts) = ts.parse() {
+                        self.cfg.ts_formatter.format(&mut buf, ts);
+                        true
+                    } else {
+                        false
+                    }
+                })
+            })
+        })
+    }
+
+    #[inline]
+    fn format_timestamp_stub<S: StylingPush<Buf>>(&self, fs: &mut FormattingState, s: &mut S) {
+        fs.ts_width = self.ts_width.chars;
+        fs.add_element(|| {});
+        s.element(Element::Time, |s| {
+            s.batch(|buf| {
+                centered(buf, self.ts_width.chars, b'-', |mut buf| {
+                    buf.extend_from_slice(b"-");
+                });
+            })
         });
     }
 
@@ -316,7 +336,7 @@ impl RecordFormatter {
     }
 
     #[inline]
-    fn format_caller(&self, s: &mut crate::theme::Styler<Vec<u8>>, caller: &Caller) {
+    fn format_caller(&self, s: &mut Styler<Buf>, caller: &Caller) {
         s.element(Element::Caller, |s| {
             s.batch(|buf| {
                 buf.push(b' ');
@@ -355,7 +375,13 @@ impl RecordFormatter {
     }
 
     #[inline]
-    fn format_message<'a, S: StylingPush<Buf>>(&self, s: &mut S, fs: &mut FormattingState, value: RawValue<'a>) {
+    #[must_use]
+    fn format_message<'a, S: StylingPush<Buf>>(
+        &self,
+        s: &mut S,
+        fs: &mut FormattingState,
+        value: RawValue<'a>,
+    ) -> bool {
         match value {
             RawValue::String(value) => {
                 if !value.is_empty() {
@@ -378,17 +404,19 @@ impl RecordFormatter {
                                 .unwrap();
                             if result.aborted {
                                 buf.extend(EXPANDED_MESSAGE_HEADER.as_bytes());
-                                fs.format_message_as_field = true;
                                 fs.expand = Some(true);
+                                false
+                            } else {
+                                true
                             }
                         })
-                    });
+                    })
+                } else {
+                    true
                 }
             }
-            _ => {
-                fs.format_message_as_field = true;
-            }
-        };
+            _ => false,
+        }
     }
 
     #[inline]
@@ -473,7 +501,7 @@ impl From<RecordFormatterSettings> for RecordFormatter {
 // ---
 
 #[derive(Default)]
-struct FormattingState {
+struct FormattingState<'a> {
     flatten: bool,
     expand: Option<bool>,
     prefix: Range<usize>,
@@ -485,16 +513,29 @@ struct FormattingState {
     depth: usize,
     first_line_used: bool,
     some_fields_hidden: bool,
-    format_message_as_field: bool,
+    x_fields: heapless::Vec<(&'a str, RawValue<'a>), 5>,
 }
 
-impl FormattingState {
+impl<'a> FormattingState<'a> {
     fn add_element(&mut self, add_space: impl FnOnce()) {
         if !self.dirty {
             self.dirty = true;
         } else {
             add_space();
         }
+    }
+
+    fn transact(&mut self, s: &mut Styler<Buf>, f: impl FnOnce(&mut Self, &mut Styler<Buf>) -> bool) -> bool {
+        let dirty = self.dirty;
+        let depth = self.depth;
+        let first_line_used = self.first_line_used;
+        let result = s.transact(|s| f(self, s));
+        if !result {
+            self.dirty = dirty;
+            self.depth = depth;
+            self.first_line_used = first_line_used;
+        }
+        result
     }
 
     fn checkpoint<S: StylingPush<Buf>>(&self, s: &mut S) -> Checkpoint {
@@ -2127,5 +2168,20 @@ mod tests {
         };
 
         assert_eq!(format_no_color(&rec(r#""243""#)), r#"a="243""#);
+    }
+
+    #[test]
+    fn test_format_unparsable_time() {
+        let rec = |ts, msg| Record {
+            ts: Some(Timestamp::new(ts)),
+            level: Some(Level::Info),
+            message: Some(EncodedString::raw(msg).into()),
+            ..Default::default()
+        };
+
+        assert_eq!(
+            format_no_color(&rec("some-unparsable-time", "some-msg")),
+            "|INF| some-msg ts=some-unparsable-time"
+        );
     }
 }
