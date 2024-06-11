@@ -405,7 +405,6 @@ impl RecordFormatter {
                                 .format(buf)
                                 .unwrap();
                             if result.aborted {
-                                buf.extend(EXPANDED_MESSAGE_HEADER.as_bytes());
                                 fs.expand = Some(true);
                                 false
                             } else {
@@ -438,7 +437,9 @@ impl RecordFormatter {
 
         if !fs.first_line_used {
             fs.add_element(|| s.space());
-            s.batch(|buf| buf.extend(EXPANDED_MESSAGE_HEADER.as_bytes()));
+            s.element(Element::Message, |s| {
+                s.batch(|buf| buf.extend(EXPANDED_MESSAGE_HEADER.as_bytes()));
+            });
             fs.first_line_used = true;
         }
 
@@ -2072,7 +2073,7 @@ mod tests {
             ..Default::default()
         };
 
-        let formatter = RecordFormatter::new(settings().with(|s| {
+        let mut formatter = RecordFormatter::new(settings().with(|s| {
             s.theme = Default::default();
             s.expand = ExpandOption::Auto;
             s.expand_message_threshold = 64;
@@ -2109,6 +2110,25 @@ mod tests {
                     "    {vi}multiline\n",
                     "    {vi}text\n",
                     "  > a=1"
+                ),
+                mh = EXPANDED_MESSAGE_HEADER,
+                vh = EXPANDED_VALUE_HEADER,
+                vi = EXPANDED_VALUE_INDENT,
+            )
+        );
+
+        formatter.cfg.theme = settings().theme;
+
+        assert_eq!(
+            formatter.format_to_string(&rec("some\nmultiline\ntext", "1")),
+            format!(
+                concat!(
+                    "\u{1b}[0;1;39m{mh}\u{1b}[0m\n",
+                    "  \u{1b}[0;2m> \u{1b}[0;32mmsg\u{1b}[0;2m=\u{1b}[0;39m\u{1b}[0;2m{vh}\u{1b}[0m\n",
+                    "  \u{1b}[0;2m  {vi}\u{1b}[0msome\n",
+                    "  \u{1b}[0;2m  {vi}\u{1b}[0mmultiline\n",
+                    "  \u{1b}[0;2m  {vi}\u{1b}[0mtext\u{1b}[0m\n",
+                    "  \u{1b}[0;2m> \u{1b}[0;32ma\u{1b}[0;2m=\u{1b}[0;94m1\u{1b}[0m"
                 ),
                 mh = EXPANDED_MESSAGE_HEADER,
                 vh = EXPANDED_VALUE_HEADER,
