@@ -213,19 +213,21 @@ impl RecordFormatter {
             for (k, v) in x_fields.iter().chain(rec.fields()) {
                 for _ in 0..2 {
                     if !self.cfg.hide_empty_fields || !v.is_empty() {
-                        let cp = fs.checkpoint(s);
-                        match self.format_field(s, k, *v, &mut fs, Some(&self.cfg.fields)) {
-                            FieldFormatResult::Ok => {}
-                            FieldFormatResult::Hidden => {
-                                some_fields_hidden = true;
+                        if fs.transact(s, |fs, s| {
+                            match self.format_field(s, k, *v, fs, Some(&self.cfg.fields)) {
+                                FieldFormatResult::Ok => true,
+                                FieldFormatResult::Hidden => {
+                                    some_fields_hidden = true;
+                                    true
+                                }
+                                FieldFormatResult::ExpansionNeeded => {
+                                    fs.expand = Some(true);
+                                    false
+                                }
                             }
-                            FieldFormatResult::ExpansionNeeded => {
-                                fs.restore(s, cp);
-                                fs.expand = Some(true);
-                                continue;
-                            }
+                        }) {
+                            break;
                         }
-                        break;
                     }
                 }
             }
@@ -533,24 +535,6 @@ impl<'a> FormattingStateWithRec<'a> {
         }
         result
     }
-
-    fn checkpoint<S: StylingPush<Buf>>(&self, s: &mut S) -> Checkpoint {
-        Checkpoint {
-            dirty: self.dirty,
-            depth: self.depth,
-            first_line_used: self.first_line_used,
-            buf_len: s.batch(|buf| buf.len()),
-        }
-    }
-
-    fn restore<S: StylingPush<Buf>>(&mut self, s: &mut S, cp: Checkpoint) {
-        s.batch(|buf| {
-            buf.truncate(cp.buf_len);
-        });
-        self.dirty = cp.dirty;
-        self.depth = cp.depth;
-        self.first_line_used = cp.first_line_used;
-    }
 }
 
 impl<'a> Deref for FormattingStateWithRec<'a> {
@@ -586,15 +570,6 @@ struct FormattingState<'a> {
     some_fields_hidden: bool,
     caller_formatted: bool,
     x_fields: heapless::Vec<(&'a str, RawValue<'a>), 5>,
-}
-
-// ---
-
-struct Checkpoint {
-    dirty: bool,
-    depth: usize,
-    first_line_used: bool,
-    buf_len: usize,
 }
 
 // ---
@@ -1096,7 +1071,8 @@ pub mod string {
 
             let mask = buf[begin..].analyze();
 
-            const NON_PLAIN: Mask = mask!(Flag::DoubleQuote | Flag::Control | Flag::Backslash | Flag::Space);
+            const NON_PLAIN: Mask =
+                mask!(Flag::DoubleQuote | Flag::Control | Flag::Backslash | Flag::Space | Flag::EqualSign);
             const POSITIVE_INTEGER: Mask = mask!(Flag::Digit);
             const NUMBER: Mask = mask!(Flag::Digit | Flag::Dot | Flag::Minus);
 
@@ -2214,5 +2190,19 @@ mod tests {
             format_no_color(&rec("some-unparsable-time", "some-msg")),
             "|INF| some-msg ts=some-unparsable-time"
         );
+    }
+
+    #[test]
+    fn test_format_value_with_eq() {
+        let rec = |value| Record {
+            fields: RecordFields {
+                head: heapless::Vec::from_slice(&[("a", EncodedString::raw(value).into())]).unwrap(),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+
+        assert_eq!(format_no_color(&rec("x=y")), r#"a="x=y""#);
+        assert_eq!(format_no_color(&rec("|=>")), r#"a="|=>""#);
     }
 }
