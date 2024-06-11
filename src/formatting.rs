@@ -1,5 +1,8 @@
 // std imports
-use std::{ops::Range, sync::Arc};
+use std::{
+    ops::{Deref, DerefMut, Range},
+    sync::Arc,
+};
 
 // workspace imports
 use encstr::EncodedString;
@@ -127,11 +130,14 @@ impl RecordFormatter {
     }
 
     pub fn format_record(&self, buf: &mut Buf, prefix_range: Range<usize>, rec: &model::Record) {
-        let mut fs = FormattingState {
-            flatten: self.cfg.flatten && self.cfg.unescape_fields,
-            expand: self.cfg.expand.into(),
-            prefix: prefix_range,
-            ..Default::default()
+        let mut fs = FormattingStateWithRec {
+            rec,
+            fs: FormattingState {
+                flatten: self.cfg.flatten && self.cfg.unescape_fields,
+                expand: self.cfg.expand.into(),
+                prefix: prefix_range,
+                ..Default::default()
+            },
         };
 
         self.cfg.theme.apply(buf, &rec.level, |s| {
@@ -200,17 +206,6 @@ impl RecordFormatter {
             });
 
             //
-            // caller in expanded mode
-            //
-            let mut caller_formatted = false;
-            if fs.expand.unwrap_or(false) {
-                if let Some(caller) = &rec.caller {
-                    self.format_caller(s, caller);
-                    caller_formatted = true;
-                    fs.first_line_used = true;
-                };
-            }
-            //
             // fields
             //
             let mut some_fields_hidden = false;
@@ -244,9 +239,9 @@ impl RecordFormatter {
                 });
             }
             //
-            // caller in non-expanded mode
+            // caller
             //
-            if !caller_formatted {
+            if !fs.caller_formatted {
                 if let Some(caller) = &rec.caller {
                     self.format_caller(s, caller);
                 };
@@ -256,7 +251,12 @@ impl RecordFormatter {
 
     #[inline]
     #[must_use]
-    fn format_timestamp<S: StylingPush<Buf>>(&self, rec: &model::Record, fs: &mut FormattingState, s: &mut S) -> bool {
+    fn format_timestamp<S: StylingPush<Buf>>(
+        &self,
+        rec: &model::Record,
+        fs: &mut FormattingStateWithRec,
+        s: &mut S,
+    ) -> bool {
         let Some(ts) = &rec.ts else {
             return false;
         };
@@ -284,7 +284,7 @@ impl RecordFormatter {
     }
 
     #[inline]
-    fn format_timestamp_stub<S: StylingPush<Buf>>(&self, fs: &mut FormattingState, s: &mut S) {
+    fn format_timestamp_stub<S: StylingPush<Buf>>(&self, fs: &mut FormattingStateWithRec, s: &mut S) {
         fs.ts_width = self.ts_width.chars;
         fs.add_element(|| {});
         s.element(Element::Time, |s| {
@@ -336,7 +336,7 @@ impl RecordFormatter {
     }
 
     #[inline]
-    fn format_caller(&self, s: &mut Styler<Buf>, caller: &Caller) {
+    fn format_caller<S: StylingPush<Buf>>(&self, s: &mut S, caller: &Caller) {
         s.element(Element::Caller, |s| {
             s.batch(|buf| {
                 buf.push(b' ');
@@ -367,7 +367,7 @@ impl RecordFormatter {
         s: &mut S,
         key: &str,
         value: RawValue<'a>,
-        fs: &mut FormattingState,
+        fs: &mut FormattingStateWithRec,
         filter: Option<&IncludeExcludeKeyFilter>,
     ) -> FieldFormatResult {
         let mut fv = FieldFormatter::new(self);
@@ -379,7 +379,7 @@ impl RecordFormatter {
     fn format_message<'a, S: StylingPush<Buf>>(
         &self,
         s: &mut S,
-        fs: &mut FormattingState,
+        fs: &mut FormattingStateWithRec,
         value: RawValue<'a>,
     ) -> bool {
         match value {
@@ -420,7 +420,7 @@ impl RecordFormatter {
     }
 
     #[inline]
-    fn format_level<S: StylingPush<Buf>>(&self, s: &mut S, fs: &mut FormattingState, level: &[u8]) {
+    fn format_level<S: StylingPush<Buf>>(&self, s: &mut S, fs: &mut FormattingStateWithRec, level: &[u8]) {
         fs.add_element(|| s.space());
         s.element(Element::Level, |s| {
             s.batch(|buf| {
@@ -431,13 +431,20 @@ impl RecordFormatter {
         });
     }
 
-    fn expand<S: StylingPush<Buf>>(&self, s: &mut S, fs: &mut FormattingState) {
+    fn expand<S: StylingPush<Buf>>(&self, s: &mut S, fs: &mut FormattingStateWithRec) {
         let mut begin = fs.prefix.start;
 
         if !fs.first_line_used {
             fs.add_element(|| s.space());
             s.batch(|buf| buf.extend(EXPANDED_MESSAGE_HEADER.as_bytes()));
             fs.first_line_used = true;
+        }
+
+        if !fs.caller_formatted {
+            if let Some(caller) = &fs.rec.caller {
+                self.format_caller(s, caller);
+            };
+            fs.caller_formatted = true;
         }
 
         s.reset();
@@ -500,23 +507,12 @@ impl From<RecordFormatterSettings> for RecordFormatter {
 
 // ---
 
-#[derive(Default)]
-struct FormattingState<'a> {
-    flatten: bool,
-    expand: Option<bool>,
-    prefix: Range<usize>,
-    expansion_prefix: Option<Range<usize>>,
-    key_prefix: KeyPrefix,
-    dirty: bool,
-    ts_width: usize,
-    has_level: bool,
-    depth: usize,
-    first_line_used: bool,
-    some_fields_hidden: bool,
-    x_fields: heapless::Vec<(&'a str, RawValue<'a>), 5>,
+struct FormattingStateWithRec<'a> {
+    fs: FormattingState<'a>,
+    rec: &'a model::Record<'a>,
 }
 
-impl<'a> FormattingState<'a> {
+impl<'a> FormattingStateWithRec<'a> {
     fn add_element(&mut self, add_space: impl FnOnce()) {
         if !self.dirty {
             self.dirty = true;
@@ -555,6 +551,41 @@ impl<'a> FormattingState<'a> {
         self.depth = cp.depth;
         self.first_line_used = cp.first_line_used;
     }
+}
+
+impl<'a> Deref for FormattingStateWithRec<'a> {
+    type Target = FormattingState<'a>;
+
+    #[inline(always)]
+    fn deref(&self) -> &FormattingState<'a> {
+        &self.fs
+    }
+}
+
+impl<'a> DerefMut for FormattingStateWithRec<'a> {
+    #[inline(always)]
+    fn deref_mut(&mut self) -> &mut FormattingState<'a> {
+        &mut self.fs
+    }
+}
+
+// ---
+
+#[derive(Default)]
+struct FormattingState<'a> {
+    flatten: bool,
+    expand: Option<bool>,
+    prefix: Range<usize>,
+    expansion_prefix: Option<Range<usize>>,
+    key_prefix: KeyPrefix,
+    dirty: bool,
+    ts_width: usize,
+    has_level: bool,
+    depth: usize,
+    first_line_used: bool,
+    some_fields_hidden: bool,
+    caller_formatted: bool,
+    x_fields: heapless::Vec<(&'a str, RawValue<'a>), 5>,
 }
 
 // ---
@@ -624,7 +655,7 @@ impl<'a> FieldFormatter<'a> {
         s: &mut S,
         key: &str,
         value: RawValue<'a>,
-        fs: &mut FormattingState,
+        fs: &mut FormattingStateWithRec,
         filter: Option<&IncludeExcludeKeyFilter>,
         setting: IncludeExcludeSetting,
     ) -> FieldFormatResult {
@@ -665,7 +696,7 @@ impl<'a> FieldFormatter<'a> {
         &mut self,
         s: &mut S,
         value: RawValue<'a>,
-        fs: &mut FormattingState,
+        fs: &mut FormattingStateWithRec,
         filter: Option<&IncludeExcludeKeyFilter>,
         setting: IncludeExcludeSetting,
     ) -> ValueFormatResult {
@@ -771,7 +802,7 @@ impl<'a> FieldFormatter<'a> {
         ValueFormatResult::Ok
     }
 
-    fn add_prefix(&self, buf: &mut Vec<u8>, fs: &FormattingState) -> usize {
+    fn add_prefix(&self, buf: &mut Vec<u8>, fs: &FormattingStateWithRec) -> usize {
         buf.extend(self.rf.cfg.theme.expanded_value_suffix.value.as_bytes());
         buf.push(b'\n');
         let prefix = fs.expansion_prefix.clone().unwrap_or(fs.prefix.clone());
@@ -787,7 +818,7 @@ impl<'a> FieldFormatter<'a> {
         s: &mut S,
         key: &str,
         value: RawValue<'a>,
-        fs: &mut FormattingState,
+        fs: &mut FormattingStateWithRec,
     ) -> FormattedFieldVariant {
         if fs.flatten && matches!(value, RawValue::Object(_)) {
             return FormattedFieldVariant::Flattened(fs.key_prefix.push(key));
@@ -827,7 +858,7 @@ impl<'a> FieldFormatter<'a> {
     }
 
     #[inline]
-    fn end(&mut self, fs: &mut FormattingState, v: FormattedFieldVariant) {
+    fn end(&mut self, fs: &mut FormattingStateWithRec, v: FormattedFieldVariant) {
         match v {
             FormattedFieldVariant::Normal { flatten } => {
                 fs.depth -= 1;
