@@ -2329,4 +2329,12 @@ mod tests {
         vf.format(&mut buf).unwrap();
         assert_eq!(buf, b"test");
     }
+
+    #[test]
+    fn test_message_format_auto_empty() {
+        let vf = string::MessageFormatAuto::new(EncodedString::raw(""));
+        let mut buf = Vec::new();
+        vf.format(&mut buf).unwrap();
+        assert_eq!(buf, br#""""#);
+    }
 }
