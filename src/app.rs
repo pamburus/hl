@@ -30,7 +30,7 @@ use serde::{Deserialize, Serialize};
 use crate::{
     datefmt::{DateTimeFormat, DateTimeFormatter},
     error::*,
-    fmtx::aligned_left,
+    fmtx::{aligned, Adjustment, Alignment, Padding},
     formatting::{RawRecordFormatter, RecordFormatter, RecordFormatterSettings, RecordWithSourceFormatter},
     fsmon::{self, EventKind},
     index::{Indexer, IndexerSettings, Timestamp},
@@ -730,10 +730,20 @@ impl App {
                         s.batch(|buf| buf.extend(opt.input_number_left_separator.as_bytes()));
                         s.element(Element::InputNumberInner, |s| {
                             s.batch(|buf| {
-                                aligned_left(buf, num_width + 1, b' ', |mut buf| {
-                                    buf.extend_from_slice(opt.input_number_prefix.as_bytes());
-                                    buf.extend_from_slice(format!("{}", i).as_bytes());
-                                });
+                                aligned(
+                                    buf,
+                                    Some(Adjustment {
+                                        alignment: Alignment::Right,
+                                        padding: Padding {
+                                            pad: b' ',
+                                            width: num_width + 1,
+                                        },
+                                    }),
+                                    |mut buf| {
+                                        buf.extend_from_slice(opt.input_number_prefix.as_bytes());
+                                        buf.extend_from_slice(format!("{}", i).as_bytes());
+                                    },
+                                );
                                 buf.extend(opt.input_name_left_separator.as_bytes());
                             });
                         });
@@ -1561,6 +1571,39 @@ mod tests {
         assert_eq!(
             std::str::from_utf8(&output).unwrap(),
             concat!(r#"|DBG| hello @ src1"#, "\n")
+        );
+    }
+
+    #[test]
+    fn test_input_badges() {
+        let inputs = (1..12)
+            .into_iter()
+            .map(|i| input(format!("msg=hello input={}\n", i)))
+            .collect_vec();
+
+        let app = App::new(Options {
+            input_info: Some(InputInfo::Minimal),
+            ..options()
+        });
+
+        let mut output = Vec::new();
+        app.run(inputs, &mut output).unwrap();
+
+        assert_eq!(
+            std::str::from_utf8(&output).unwrap(),
+            concat!(
+                " #0 | hello input=1\n",
+                " #1 | hello input=2\n",
+                " #2 | hello input=3\n",
+                " #3 | hello input=4\n",
+                " #4 | hello input=5\n",
+                " #5 | hello input=6\n",
+                " #6 | hello input=7\n",
+                " #7 | hello input=8\n",
+                " #8 | hello input=9\n",
+                " #9 | hello input=10\n",
+                "#10 | hello input=11\n",
+            )
         );
     }
 

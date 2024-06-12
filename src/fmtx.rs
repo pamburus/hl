@@ -201,7 +201,7 @@ where
     }
 
     #[inline]
-    fn push(&mut self, value: T) {
+    pub fn push(&mut self, value: T) {
         match self {
             Self::Disabled(ref mut aligner) => aligner.push(value),
             Self::Unbuffered(ref mut aligner) => aligner.push(value),
@@ -210,7 +210,7 @@ where
     }
 
     #[inline]
-    fn extend_from_slice(&mut self, values: &[T]) {
+    pub fn extend_from_slice(&mut self, values: &[T]) {
         match self {
             Self::Disabled(ref mut aligner) => aligner.extend_from_slice(values),
             Self::Unbuffered(ref mut aligner) => aligner.extend_from_slice(values),
