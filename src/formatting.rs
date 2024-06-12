@@ -822,7 +822,7 @@ impl<'a> FieldFormatter<'a> {
         });
 
         let sep = if fs.expand.unwrap_or(false) && matches!(value, RawValue::Object(o) if !o.is_empty()) {
-            b":"
+            EXPANDED_OBJECT_HEADER.as_bytes()
         } else {
             self.rf.cfg.punctuation.field_key_value_separator.as_bytes()
         };
@@ -1997,9 +1997,105 @@ mod tests {
         let formatter = RecordFormatter::new(settings().with(|s| {
             let mut fields = IncludeExcludeKeyFilter::default();
             fields.entry("b").exclude();
+            fields.entry("c").entry("z").exclude();
             s.theme = Default::default();
+            s.flatten = false;
             s.expand = ExpandOption::Always;
             s.fields = fields.into();
+        }));
+
+        let source = br#"{"msg":"m","a":1,"b":2,"c:{"x":10,"y":20,"z":30},"d":4}"#;
+        let obj = json_raw_value(r#"{"x":10,"y":20,"z":30}"#);
+        let rec = Record {
+            message: Some(EncodedString::raw("m").into()),
+            fields: RecordFields {
+                head: heapless::Vec::from_slice(&[
+                    ("a", EncodedString::raw("1").into()),
+                    ("b", EncodedString::raw("2").into()),
+                    ("c", RawObject::Json(&obj).into()),
+                    ("d", EncodedString::raw("4").into()),
+                ])
+                .unwrap(),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+
+        let result = formatter.format_to_string(rec.with_source(source));
+        assert_eq!(
+            &result,
+            "m\n  > a=1\n  > c:\n    > x=10\n    > y=20\n    > ...\n  > d=4\n  > ..."
+        );
+    }
+
+    #[test]
+    fn test_expand_with_hidden_and_flatten() {
+        let formatter = RecordFormatter::new(settings().with(|s| {
+            let mut fields = IncludeExcludeKeyFilter::default();
+            fields.entry("c").entry("z").exclude();
+            s.theme = Default::default();
+            s.flatten = true;
+            s.expand = ExpandOption::Always;
+            s.fields = fields.into();
+        }));
+
+        let obj = json_raw_value(r#"{"x":10,"y":20,"z":30}"#);
+        let rec = Record {
+            message: Some(EncodedString::raw("m").into()),
+            fields: RecordFields {
+                head: heapless::Vec::from_slice(&[
+                    ("a", EncodedString::raw("1").into()),
+                    ("b", EncodedString::raw("2").into()),
+                    ("c", RawObject::Json(&obj).into()),
+                    ("d", EncodedString::raw("4").into()),
+                ])
+                .unwrap(),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+
+        let result = formatter.format_to_string(&rec);
+        assert_eq!(&result, "m\n  > a=1\n  > b=2\n  > c.x=10\n  > c.y=20\n  > d=4\n  > ...");
+    }
+
+    #[test]
+    fn test_expand_object() {
+        let formatter = RecordFormatter::new(settings().with(|s| {
+            s.theme = Default::default();
+            s.flatten = false;
+            s.expand = ExpandOption::Auto;
+        }));
+
+        let obj = json_raw_value(r#"{"x":10,"y":"some\nmultiline\nvalue","z":30}"#);
+        let rec = Record {
+            message: Some(EncodedString::raw("m").into()),
+            fields: RecordFields {
+                head: heapless::Vec::from_slice(&[
+                    ("a", EncodedString::raw("1").into()),
+                    ("b", EncodedString::raw("2").into()),
+                    ("c", RawObject::Json(&obj).into()),
+                    ("d", EncodedString::raw("4").into()),
+                ])
+                .unwrap(),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+
+        let result = formatter.format_to_string(&rec);
+        assert_eq!(
+            &result,
+            "m a=1 b=2\n  > c:\n    > x=10\n    > y=|=>\n       \tsome\n       \tmultiline\n       \tvalue\n    > z=30\n  > d=4"
+        );
+    }
+
+    #[test]
+    fn test_expand_all_threshold() {
+        let formatter = RecordFormatter::new(settings().with(|s| {
+            s.theme = Default::default();
+            s.expand = ExpandOption::Auto;
+            s.expand_all_threshold = 2;
         }));
 
         let source = b"m a=1 b=2 c=3";
@@ -2018,7 +2114,7 @@ mod tests {
         };
 
         let result = formatter.format_to_string(rec.with_source(source));
-        assert_eq!(&result, "m\n  > a=1\n  > c=3\n  > ...", "{}", result);
+        assert_eq!(&result, "m\n  > a=1\n  > b=2\n  > c=3", "{}", result);
     }
 
     #[test]
@@ -2224,5 +2320,13 @@ mod tests {
 
         assert_eq!(format_no_color(&rec("x=y")), r#"a="x=y""#);
         assert_eq!(format_no_color(&rec("|=>")), r#"a="|=>""#);
+    }
+
+    #[test]
+    fn test_value_format_auto() {
+        let vf = string::ValueFormatAuto::new(EncodedString::raw("test"));
+        let mut buf = Vec::new();
+        vf.format(&mut buf).unwrap();
+        assert_eq!(buf, b"test");
     }
 }
