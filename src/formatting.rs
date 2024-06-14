@@ -13,7 +13,7 @@ use crate::{
     filtering::IncludeExcludeSetting,
     fmtx::{aligned_left, centered, OptimizedBuf, Push},
     model::{self, Caller, Level, RawValue},
-    settings::{ExpandOption, FlattenOption, Formatting, Punctuation},
+    settings::{self, ExpandOption, FlattenOption, Formatting, Punctuation},
     syntax::*,
     theme::{Element, Styler, StylingPush, Theme},
     IncludeExcludeKeyFilter,
@@ -26,6 +26,7 @@ use string::{ExtendedSpaceAction, Format, MessageFormatAuto, ValueFormatAuto};
 
 const DEFAULT_EXPAND_ALL_THRESHOLD: usize = 128;
 const DEFAULT_EXPAND_MESSAGE_THRESHOLD: usize = 192;
+const DEFAULT_EXPAND_FIELD_THRESHOLD: usize = 64;
 
 // ---
 
@@ -62,17 +63,84 @@ impl RecordWithSourceFormatter for Box<dyn RecordWithSourceFormatter> {
 
 // ---
 
+pub struct Expansion {
+    pub mode: ExpandOption,
+    pub thresholds: ExpansionThresholds,
+}
+
+impl Expansion {
+    pub fn with_mode(mut self, mode: ExpandOption) -> Self {
+        self.mode = mode;
+        self
+    }
+}
+
+impl Default for Expansion {
+    fn default() -> Self {
+        Self {
+            mode: ExpandOption::Auto,
+            thresholds: Default::default(),
+        }
+    }
+}
+
+impl From<ExpandOption> for Expansion {
+    fn from(mode: ExpandOption) -> Self {
+        Self {
+            mode,
+            ..Default::default()
+        }
+    }
+}
+
+impl From<settings::ExpansionOptions> for Expansion {
+    fn from(options: settings::ExpansionOptions) -> Self {
+        Self {
+            mode: options.mode.unwrap_or_default(),
+            thresholds: options.thresholds.into(),
+        }
+    }
+}
+
+// ---
+
+pub struct ExpansionThresholds {
+    pub global: usize,
+    pub message: usize,
+    pub field: usize,
+}
+
+impl Default for ExpansionThresholds {
+    fn default() -> Self {
+        Self {
+            global: DEFAULT_EXPAND_ALL_THRESHOLD,
+            message: DEFAULT_EXPAND_MESSAGE_THRESHOLD,
+            field: DEFAULT_EXPAND_FIELD_THRESHOLD,
+        }
+    }
+}
+
+impl From<settings::ExpansionThresholds> for ExpansionThresholds {
+    fn from(options: settings::ExpansionThresholds) -> Self {
+        Self {
+            global: options.global.unwrap_or(DEFAULT_EXPAND_ALL_THRESHOLD),
+            message: options.message.unwrap_or(DEFAULT_EXPAND_MESSAGE_THRESHOLD),
+            field: options.field.unwrap_or(DEFAULT_EXPAND_FIELD_THRESHOLD),
+        }
+    }
+}
+
+// ---
+
 pub struct RecordFormatterSettings {
     pub theme: Arc<Theme>,
     pub unescape_fields: bool,
     pub ts_formatter: DateTimeFormatter,
     pub hide_empty_fields: bool,
     pub flatten: bool,
-    pub expand: ExpandOption,
     pub always_show_time: bool,
     pub always_show_level: bool,
-    pub expand_all_threshold: usize,
-    pub expand_message_threshold: usize,
+    pub expansion: Expansion,
     pub fields: Arc<IncludeExcludeKeyFilter>,
     pub punctuation: Arc<Punctuation>,
 }
@@ -95,15 +163,9 @@ impl From<Formatting> for RecordFormatterSettings {
             ts_formatter: DateTimeFormatter::default(),
             hide_empty_fields: false,
             flatten: cfg.flatten.map(|x| x == FlattenOption::Always).unwrap_or(false),
-            expand: cfg.expand.unwrap_or_default(),
             always_show_time: false,
             always_show_level: false,
-            expand_all_threshold: cfg.expansion.thresholds.global.unwrap_or(DEFAULT_EXPAND_ALL_THRESHOLD),
-            expand_message_threshold: cfg
-                .expansion
-                .thresholds
-                .message
-                .unwrap_or(DEFAULT_EXPAND_MESSAGE_THRESHOLD),
+            expansion: cfg.expansion.into(),
             fields: Arc::new(IncludeExcludeKeyFilter::default()),
             punctuation: Arc::new(cfg.punctuation.into()),
         }
@@ -134,7 +196,7 @@ impl RecordFormatter {
             rec,
             fs: FormattingState {
                 flatten: self.cfg.flatten && self.cfg.unescape_fields,
-                expand: self.cfg.expand.into(),
+                expand: self.cfg.expansion.mode.into(),
                 prefix: prefix_range,
                 ..Default::default()
             },
@@ -198,7 +260,7 @@ impl RecordFormatter {
             }
 
             fs.expand = fs.expand.or_else(|| {
-                if self.complexity(rec, Some(&self.cfg.fields)) >= self.cfg.expand_all_threshold {
+                if self.complexity(rec, Some(&self.cfg.fields)) >= self.cfg.expansion.thresholds.global {
                     Some(true)
                 } else {
                     None
@@ -387,7 +449,7 @@ impl RecordFormatter {
         match value {
             RawValue::String(value) => {
                 if !value.is_empty() {
-                    if value.source().len() > self.cfg.expand_message_threshold {
+                    if value.source().len() > self.cfg.expansion.thresholds.message {
                         fs.expand = Some(fs.expand.unwrap_or(true));
                     }
                     fs.add_element(|| {
@@ -2000,7 +2062,7 @@ mod tests {
             fields.entry("c").entry("z").exclude();
             s.theme = Default::default();
             s.flatten = false;
-            s.expand = ExpandOption::Always;
+            s.expansion.mode = ExpandOption::Always;
             s.fields = fields.into();
         }));
 
@@ -2035,7 +2097,7 @@ mod tests {
             fields.entry("c").entry("z").exclude();
             s.theme = Default::default();
             s.flatten = true;
-            s.expand = ExpandOption::Always;
+            s.expansion.mode = ExpandOption::Always;
             s.fields = fields.into();
         }));
 
@@ -2064,7 +2126,7 @@ mod tests {
         let formatter = RecordFormatter::new(settings().with(|s| {
             s.theme = Default::default();
             s.flatten = false;
-            s.expand = ExpandOption::Auto;
+            s.expansion.mode = ExpandOption::Auto;
         }));
 
         let obj = json_raw_value(r#"{"x":10,"y":"some\nmultiline\nvalue","z":30}"#);
@@ -2094,8 +2156,8 @@ mod tests {
     fn test_expand_all_threshold() {
         let formatter = RecordFormatter::new(settings().with(|s| {
             s.theme = Default::default();
-            s.expand = ExpandOption::Auto;
-            s.expand_all_threshold = 2;
+            s.expansion.mode = ExpandOption::Auto;
+            s.expansion.thresholds.global = 2;
         }));
 
         let source = b"m a=1 b=2 c=3";
@@ -2152,7 +2214,7 @@ mod tests {
 
         let formatter = RecordFormatter::new(settings().with(|s| {
             s.theme = Default::default();
-            s.expand = ExpandOption::Auto;
+            s.expansion.mode = ExpandOption::Auto;
         }));
 
         assert_eq!(formatter.format_to_string(&rec), r#"m a=1 b=2 c=3"#);
@@ -2171,8 +2233,8 @@ mod tests {
 
         let mut formatter = RecordFormatter::new(settings().with(|s| {
             s.theme = Default::default();
-            s.expand = ExpandOption::Auto;
-            s.expand_message_threshold = 64;
+            s.expansion.mode = ExpandOption::Auto;
+            s.expansion.thresholds.message = 64;
         }));
 
         let lorem_ipsum = "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.";
@@ -2248,7 +2310,7 @@ mod tests {
 
         let formatter = RecordFormatter::new(settings().with(|s| {
             s.theme = Default::default();
-            s.expand = ExpandOption::Always;
+            s.expansion.mode = ExpandOption::Always;
         }));
 
         assert_eq!(

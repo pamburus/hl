@@ -297,7 +297,7 @@ pub struct Opt {
         env = "HL_EXPAND",
         value_name = "WHEN",
         value_enum,
-        default_value_t = config::global::get().formatting.expand.into(),
+        default_value_t = config::global::get().formatting.expansion.mode.into(),
         overrides_with = "expand",
         default_missing_value = "always",
         help_heading = heading::OUTPUT,

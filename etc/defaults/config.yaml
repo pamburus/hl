@@ -58,11 +58,12 @@ fields:
 # Formatting settings.
 formatting:
   flatten: always
-  expand: auto
   expansion:
+    mode: auto
     thresholds:
       global: 128
       message: 192
+      field: 64
   punctuation:
     logger-name-separator: ':'
     field-key-value-separator: '='

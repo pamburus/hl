@@ -31,7 +31,7 @@ use crate::{
     datefmt::{DateTimeFormat, DateTimeFormatter},
     error::*,
     fmtx::{aligned, Adjustment, Alignment, Padding},
-    formatting::{RawRecordFormatter, RecordFormatter, RecordFormatterSettings, RecordWithSourceFormatter},
+    formatting::{Expansion, RawRecordFormatter, RecordFormatter, RecordFormatterSettings, RecordWithSourceFormatter},
     fsmon::{self, EventKind},
     index::{Indexer, IndexerSettings, Timestamp},
     input::{BlockLine, Input, InputHolder, InputReference},
@@ -654,7 +654,8 @@ impl App {
                 fields: self.options.fields.filter.clone(),
                 unescape_fields: !self.options.raw_fields,
                 flatten: self.options.flatten,
-                expand: self.options.expand,
+                expansion: Expansion::from(self.options.formatting.expansion.clone())
+                    .with_mode(self.options.expand.into()),
                 always_show_time: self.options.fields.settings.predefined.time.show == FieldShowOption::Always,
                 always_show_level: self.options.fields.settings.predefined.level.show == FieldShowOption::Always,
                 ..RecordFormatterSettings::from(self.options.formatting.clone())

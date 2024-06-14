@@ -225,18 +225,18 @@
                         "always"
                     ]
                 },
-                "expand": {
-                    "type": "string",
-                    "enum": [
-                        "auto",
-                        "never",
-                        "always"
-                    ]
-                },
                 "expansion": {
                     "type": "object",
                     "additionalProperties": false,
                     "properties": {
+                        "mode": {
+                            "type": "string",
+                            "enum": [
+                                "auto",
+                                "never",
+                                "always"
+                            ]
+                        },
                         "thresholds": {
                             "type": "object",
                             "additionalProperties": false,
@@ -245,6 +245,9 @@
                                     "type": "integer"
                                 },
                                 "message": {
+                                    "type": "integer"
+                                },
+                                "field": {
                                     "type": "integer"
                                 }
                             }
