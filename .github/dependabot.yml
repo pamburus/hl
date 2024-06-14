@@ -7,5 +7,6 @@ version: 2
 updates:
   - package-ecosystem: "cargo" # See documentation for possible values
     directory: "/" # Location of package manifests
+    dependency-type: all # Which dependencies to update: all, direct, or indirect
     schedule:
       interval: "daily"
