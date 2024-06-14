@@ -1,7 +1,13 @@
-#[derive(Default)]
 pub struct Vec<T, const N: usize> {
     head: heapless::Vec<T, N>,
     tail: std::vec::Vec<T>,
+}
+
+impl<T, const N: usize> Default for Vec<T, N> {
+    #[inline]
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl<T, const N: usize> Vec<T, N> {

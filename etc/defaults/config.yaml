@@ -1,4 +1,4 @@
-# yaml-language-server: $schema=https://raw.githubusercontent.com/pamburus/hl/master/schema/json/config.schema.json
+# yaml-language-server: $schema=../../schema/json/config.schema.json
 $schema: https://raw.githubusercontent.com/pamburus/hl/master/schema/json/config.schema.json
 
 # Time format, see https://man7.org/linux/man-pages/man1/date.1.html for details.
@@ -61,9 +61,9 @@ formatting:
   expansion:
     mode: auto
     thresholds:
-      global: 128
+      global: 1024
       message: 192
-      field: 64
+      field: 128
   punctuation:
     logger-name-separator: ':'
     field-key-value-separator: '='

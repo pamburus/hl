@@ -24,7 +24,7 @@ use string::{ExtendedSpaceAction, Format, MessageFormatAuto, ValueFormatAuto};
 
 // ---
 
-const DEFAULT_EXPAND_ALL_THRESHOLD: usize = 128;
+const DEFAULT_EXPAND_ALL_THRESHOLD: usize = 1024;
 const DEFAULT_EXPAND_MESSAGE_THRESHOLD: usize = 192;
 const DEFAULT_EXPAND_FIELD_THRESHOLD: usize = 64;
 
@@ -208,7 +208,7 @@ impl RecordFormatter {
             //
             if !fs.transact(s, |fs, s| self.format_timestamp(rec, fs, s)) {
                 if let Some(ts) = &rec.ts {
-                    fs.x_fields
+                    fs.extra_fields
                         .push(("ts", RawValue::String(EncodedString::raw(ts.raw()))))
                         .ok();
                 }
@@ -253,7 +253,11 @@ impl RecordFormatter {
                 if fs.transact(s, |fs, s| self.format_message(s, fs, *value)) {
                     fs.first_line_used = true;
                 } else {
-                    fs.x_fields.push(("msg", *value)).ok();
+                    if fs.expand == Some(true) {
+                        fs.expanded_fields.push(("msg", *value));
+                    } else {
+                        fs.extra_fields.push(("msg", *value)).ok();
+                    }
                 }
             } else {
                 s.reset();
@@ -271,7 +275,7 @@ impl RecordFormatter {
             // fields
             //
             let mut some_fields_hidden = false;
-            let x_fields = std::mem::take(&mut fs.x_fields);
+            let x_fields = std::mem::take(&mut fs.extra_fields);
             for (k, v) in x_fields.iter().chain(rec.fields()) {
                 for _ in 0..2 {
                     if !self.cfg.hide_empty_fields || !v.is_empty() {
@@ -283,7 +287,7 @@ impl RecordFormatter {
                                     true
                                 }
                                 FieldFormatResult::ExpansionNeeded => {
-                                    fs.expand = Some(true);
+                                    fs.expanded_fields.push((k, *v));
                                     false
                                 }
                             }
@@ -293,6 +297,18 @@ impl RecordFormatter {
                     }
                 }
             }
+
+            //
+            // expanded fields
+            //
+            if fs.expanded_fields.len() != 0 {
+                fs.expand = Some(true);
+                let x_fields = std::mem::take(&mut fs.extra_fields);
+                for (k, v) in x_fields.iter() {
+                    _ = self.format_field(s, k, *v, &mut fs, None);
+                }
+            }
+
             if some_fields_hidden || fs.some_fields_hidden {
                 if fs.expand == Some(true) {
                     self.expand(s, &mut fs);
@@ -302,6 +318,7 @@ impl RecordFormatter {
                     s.batch(|buf| buf.extend_from_slice(self.cfg.punctuation.hidden_fields_indicator.as_bytes()))
                 });
             }
+
             //
             // caller
             //
@@ -632,7 +649,8 @@ struct FormattingState<'a> {
     first_line_used: bool,
     some_fields_hidden: bool,
     caller_formatted: bool,
-    x_fields: heapless::Vec<(&'a str, RawValue<'a>), 5>,
+    extra_fields: heapless::Vec<(&'a str, RawValue<'a>), 4>,
+    expanded_fields: heapopt::Vec<(&'a str, RawValue<'a>), 32>,
 }
 
 // ---
@@ -709,6 +727,10 @@ impl<'a> FieldFormatter<'a> {
         };
         if setting == IncludeExcludeSetting::Exclude && leaf {
             return FieldFormatResult::Hidden;
+        }
+
+        if fs.expand.is_none() && value.raw_str().len() > self.rf.cfg.expansion.thresholds.field {
+            return FieldFormatResult::ExpansionNeeded;
         }
 
         let ffv = self.begin(s, key, value, fs);
