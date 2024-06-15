@@ -62,6 +62,7 @@ formatting:
     mode: auto
     thresholds:
       global: 1024
+      cumulative: 192
       message: 192
       field: 128
   punctuation:

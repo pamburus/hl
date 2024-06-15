@@ -251,6 +251,7 @@ pub struct ExpansionOptions {
 #[serde(rename_all = "kebab-case")]
 pub struct ExpansionThresholds {
     pub global: Option<usize>,
+    pub cumulative: Option<usize>,
     pub message: Option<usize>,
     pub field: Option<usize>,
 }

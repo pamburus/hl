@@ -24,7 +24,8 @@ use string::{ExtendedSpaceAction, Format, MessageFormatAuto, ValueFormatAuto};
 
 // ---
 
-const DEFAULT_EXPAND_ALL_THRESHOLD: usize = 1024;
+const DEFAULT_EXPAND_ALL_THRESHOLD: usize = 512;
+const DEFAULT_EXPAND_CUMULATIVE_THRESHOLD: usize = 256;
 const DEFAULT_EXPAND_MESSAGE_THRESHOLD: usize = 192;
 const DEFAULT_EXPAND_FIELD_THRESHOLD: usize = 64;
 
@@ -106,6 +107,7 @@ impl From<settings::ExpansionOptions> for Expansion {
 
 pub struct ExpansionThresholds {
     pub global: usize,
+    pub cumulative: usize,
     pub message: usize,
     pub field: usize,
 }
@@ -114,6 +116,7 @@ impl Default for ExpansionThresholds {
     fn default() -> Self {
         Self {
             global: DEFAULT_EXPAND_ALL_THRESHOLD,
+            cumulative: DEFAULT_EXPAND_CUMULATIVE_THRESHOLD,
             message: DEFAULT_EXPAND_MESSAGE_THRESHOLD,
             field: DEFAULT_EXPAND_FIELD_THRESHOLD,
         }
@@ -124,6 +127,7 @@ impl From<settings::ExpansionThresholds> for ExpansionThresholds {
     fn from(options: settings::ExpansionThresholds) -> Self {
         Self {
             global: options.global.unwrap_or(DEFAULT_EXPAND_ALL_THRESHOLD),
+            cumulative: options.cumulative.unwrap_or(DEFAULT_EXPAND_CUMULATIVE_THRESHOLD),
             message: options.message.unwrap_or(DEFAULT_EXPAND_MESSAGE_THRESHOLD),
             field: options.field.unwrap_or(DEFAULT_EXPAND_FIELD_THRESHOLD),
         }
@@ -243,6 +247,7 @@ impl RecordFormatter {
                         s.batch(|buf| buf.extend_from_slice(logger.as_bytes()))
                     });
                     s.batch(|buf| buf.extend_from_slice(self.cfg.punctuation.logger_name_separator.as_bytes()));
+                    fs.complexity += logger.len() + 4;
                     fs.first_line_used = true;
                 });
             }
@@ -251,20 +256,20 @@ impl RecordFormatter {
             //
             if let Some(value) = &rec.message {
                 if fs.transact(s, |fs, s| self.format_message(s, fs, *value)) {
+                    fs.complexity += 4;
                     fs.first_line_used = true;
                 } else {
-                    if fs.expand == Some(true) {
-                        fs.expanded_fields.push(("msg", *value));
-                    } else {
-                        fs.extra_fields.push(("msg", *value)).ok();
-                    }
+                    self.add_field_to_expand(s, &mut fs, "msg", *value, Some(&self.cfg.fields));
                 }
             } else {
                 s.reset();
             }
 
             fs.expand = fs.expand.or_else(|| {
-                if self.complexity(rec, Some(&self.cfg.fields)) >= self.cfg.expansion.thresholds.global {
+                let thresholds = &self.cfg.expansion.thresholds;
+                if fs.complexity >= thresholds.cumulative {
+                    Some(true)
+                } else if self.complexity(fs.complexity, rec, Some(&self.cfg.fields)) >= thresholds.global {
                     Some(true)
                 } else {
                     None
@@ -277,23 +282,18 @@ impl RecordFormatter {
             let mut some_fields_hidden = false;
             let x_fields = std::mem::take(&mut fs.extra_fields);
             for (k, v) in x_fields.iter().chain(rec.fields()) {
-                for _ in 0..2 {
-                    if !self.cfg.hide_empty_fields || !v.is_empty() {
-                        if fs.transact(s, |fs, s| {
-                            match self.format_field(s, k, *v, fs, Some(&self.cfg.fields)) {
-                                FieldFormatResult::Ok => true,
-                                FieldFormatResult::Hidden => {
-                                    some_fields_hidden = true;
-                                    true
-                                }
-                                FieldFormatResult::ExpansionNeeded => {
-                                    fs.expanded_fields.push((k, *v));
-                                    false
-                                }
+                if !self.cfg.hide_empty_fields || !v.is_empty() {
+                    if !fs.transact(s, |fs, s| {
+                        match self.format_field(s, k, *v, fs, Some(&self.cfg.fields)) {
+                            FieldFormatResult::Ok => true,
+                            FieldFormatResult::Hidden => {
+                                some_fields_hidden = true;
+                                true
                             }
-                        }) {
-                            break;
+                            FieldFormatResult::ExpansionNeeded => false,
                         }
+                    }) {
+                        self.add_field_to_expand(s, &mut fs, k, *v, Some(&self.cfg.fields));
                     }
                 }
             }
@@ -301,12 +301,8 @@ impl RecordFormatter {
             //
             // expanded fields
             //
-            if fs.expanded_fields.len() != 0 {
-                fs.expand = Some(true);
-                let x_fields = std::mem::take(&mut fs.extra_fields);
-                for (k, v) in x_fields.iter() {
-                    _ = self.format_field(s, k, *v, &mut fs, None);
-                }
+            if fs.fields_to_expand.len() != 0 {
+                self.expand(s, &mut fs);
             }
 
             if some_fields_hidden || fs.some_fields_hidden {
@@ -378,8 +374,8 @@ impl RecordFormatter {
     }
 
     #[inline]
-    fn complexity(&self, rec: &model::Record, filter: Option<&IncludeExcludeKeyFilter>) -> usize {
-        let mut result = 0;
+    fn complexity(&self, initial: usize, rec: &model::Record, filter: Option<&IncludeExcludeKeyFilter>) -> usize {
+        let mut result = initial;
         result += rec.message.map(|x| x.raw_str().len() / 8).unwrap_or(0);
         result += rec.predefined.len();
         result += rec.logger.map(|x| x.len() / 2).unwrap_or(0);
@@ -487,6 +483,9 @@ impl RecordFormatter {
                                 fs.expand = Some(true);
                                 false
                             } else {
+                                if let Some(analysis) = result.analysis {
+                                    fs.complexity += analysis.complexity;
+                                }
                                 true
                             }
                         })
@@ -512,6 +511,10 @@ impl RecordFormatter {
     }
 
     fn expand<S: StylingPush<Buf>>(&self, s: &mut S, fs: &mut FormattingStateWithRec) {
+        if fs.last_expansion_point == Some(s.batch(|buf| buf.len())) {
+            return;
+        }
+
         let mut begin = fs.prefix.start;
 
         if !fs.first_line_used {
@@ -568,8 +571,37 @@ impl RecordFormatter {
             s.batch(|buf| {
                 buf.extend(EXPANDED_KEY_HEADER.as_bytes());
                 fs.dirty = false;
+                fs.last_expansion_point = Some(buf.len());
             });
         });
+
+        if fs.expand != Some(true) {
+            fs.expand = Some(true);
+            let fields_to_expand = std::mem::take(&mut fs.fields_to_expand);
+            for (k, v) in fields_to_expand.iter() {
+                _ = self.format_field(s, k, *v, fs, None);
+            }
+        }
+    }
+
+    fn add_field_to_expand<'a, S: StylingPush<Buf>>(
+        &self,
+        s: &mut S,
+        fs: &mut FormattingStateWithRec<'a>,
+        key: &'a str,
+        value: RawValue<'a>,
+        filter: Option<&IncludeExcludeKeyFilter>,
+    ) {
+        if fs.expand == Some(true) {
+            self.expand(s, fs);
+            return;
+        }
+
+        if let Err((key, value)) = fs.fields_to_expand.push((key, value)) {
+            fs.expand = Some(true);
+            self.expand(s, fs);
+            _ = self.format_field(s, key, value, fs, filter);
+        }
     }
 }
 
@@ -607,11 +639,13 @@ impl<'a> FormattingStateWithRec<'a> {
         let dirty = self.dirty;
         let depth = self.depth;
         let first_line_used = self.first_line_used;
+        let complexity = self.complexity;
         let result = s.transact(|s| f(self, s));
         if !result {
             self.dirty = dirty;
             self.depth = depth;
             self.first_line_used = first_line_used;
+            self.complexity = complexity;
         }
         result
     }
@@ -649,8 +683,10 @@ struct FormattingState<'a> {
     first_line_used: bool,
     some_fields_hidden: bool,
     caller_formatted: bool,
+    complexity: usize,
     extra_fields: heapless::Vec<(&'a str, RawValue<'a>), 4>,
-    expanded_fields: heapopt::Vec<(&'a str, RawValue<'a>), 32>,
+    fields_to_expand: heapless::Vec<(&'a str, RawValue<'a>), 32>,
+    last_expansion_point: Option<usize>,
 }
 
 // ---
@@ -735,6 +771,8 @@ impl<'a> FieldFormatter<'a> {
 
         let ffv = self.begin(s, key, value, fs);
 
+        fs.complexity += key.len() + 4;
+
         let result = if self.rf.cfg.unescape_fields {
             self.format_value(s, value, fs, filter, setting)
         } else {
@@ -774,27 +812,43 @@ impl<'a> FieldFormatter<'a> {
                                 Some(false) => ExtendedSpaceAction::FormatWithBacktick,
                                 None => ExtendedSpaceAction::Abort,
                             })
+                            .with_complexity_limit(if fs.expand.is_none() {
+                                Some(std::cmp::min(
+                                    self.rf.cfg.expansion.thresholds.field,
+                                    self.rf.cfg.expansion.thresholds.cumulative
+                                        - std::cmp::min(self.rf.cfg.expansion.thresholds.cumulative, fs.complexity),
+                                ))
+                            } else {
+                                None
+                            })
                             .format(buf)
                             .unwrap()
                     })
                 });
                 if result.aborted {
                     return ValueFormatResult::ExpansionNeeded;
+                } else if let Some(analysis) = result.analysis {
+                    fs.complexity += analysis.complexity;
                 }
             }
             RawValue::Number(value) => {
                 s.element(Element::Number, |s| s.batch(|buf| buf.extend(value.as_bytes())));
+                fs.complexity += value.len();
             }
             RawValue::Boolean(true) => {
                 s.element(Element::Boolean, |s| s.batch(|buf| buf.extend(b"true")));
+                fs.complexity += 4;
             }
             RawValue::Boolean(false) => {
                 s.element(Element::Boolean, |s| s.batch(|buf| buf.extend(b"false")));
+                fs.complexity += 5;
             }
             RawValue::Null => {
                 s.element(Element::Null, |s| s.batch(|buf| buf.extend(b"null")));
+                fs.complexity += 4;
             }
             RawValue::Object(value) => {
+                fs.complexity += 4;
                 let item = value.parse().unwrap();
                 if !fs.flatten && (!fs.expand.unwrap_or(false) || value.is_empty()) {
                     s.element(Element::Object, |s| {
@@ -839,6 +893,7 @@ impl<'a> FieldFormatter<'a> {
                 }
             }
             RawValue::Array(value) => {
+                fs.complexity += 4;
                 let xb = fs.expand.replace(false);
                 let item = value.parse::<32>().unwrap();
                 s.element(Element::Array, |s| {
@@ -1034,17 +1089,21 @@ pub mod string {
     }
 
     pub trait Analyze {
-        fn analyze(&self) -> Mask;
+        fn analyze(&self) -> Analysis;
     }
 
     impl Analyze for [u8] {
         #[inline]
-        fn analyze(&self) -> Mask {
-            let mut mask = Mask::EMPTY;
-            self.iter().map(|&c| CHAR_GROUPS[c as usize]).for_each(|group| {
-                mask |= group;
-            });
-            mask
+        fn analyze(&self) -> Analysis {
+            let mut chars = Mask::EMPTY;
+            let mut complexity = 0;
+            self.iter()
+                .map(|&c| (CHAR_GROUPS[c as usize], COMPLEXITY[c as usize]))
+                .for_each(|(group, cc)| {
+                    chars |= group;
+                    complexity += cc;
+                });
+            Analysis { chars, complexity }
         }
     }
 
@@ -1081,7 +1140,7 @@ pub mod string {
     }
 
     pub struct FormatResult {
-        pub analysis: Option<Mask>,
+        pub analysis: Option<Analysis>,
         pub style: FormatStyle,
         pub aborted: bool,
     }
@@ -1099,9 +1158,27 @@ pub mod string {
 
     // ---
 
+    pub struct Analysis {
+        pub chars: Mask,
+        pub complexity: usize,
+    }
+
+    impl Analysis {
+        #[inline]
+        pub fn empty() -> Self {
+            Self {
+                chars: Mask::EMPTY,
+                complexity: 2,
+            }
+        }
+    }
+
+    // ---
+
     pub struct ValueFormatAuto<S, P = ()> {
         string: S,
         xs_action: ExtendedSpaceAction<P>,
+        complexity_limit: Option<usize>,
     }
 
     impl<S> ValueFormatAuto<S, ()> {
@@ -1110,6 +1187,7 @@ pub mod string {
             Self {
                 string,
                 xs_action: ExtendedSpaceAction::FormatWithBacktick,
+                complexity_limit: None,
             }
         }
 
@@ -1118,6 +1196,17 @@ pub mod string {
             ValueFormatAuto::<S, P> {
                 xs_action: action,
                 string: self.string,
+                complexity_limit: self.complexity_limit,
+            }
+        }
+    }
+
+    impl<S, P> ValueFormatAuto<S, P> {
+        #[inline]
+        pub fn with_complexity_limit(self, limit: Option<usize>) -> Self {
+            Self {
+                complexity_limit: limit,
+                ..self
             }
         }
     }
@@ -1131,6 +1220,7 @@ pub mod string {
             ValueFormatAuto {
                 string: self.string,
                 xs_action: self.xs_action.map_expand(|_| |_: &mut Vec<u8>| 0),
+                complexity_limit: self.complexity_limit,
             }
             .format(buf)
         }
@@ -1146,7 +1236,7 @@ pub mod string {
             if self.string.is_empty() {
                 buf.extend(r#""""#.as_bytes());
                 return Ok(FormatResult {
-                    analysis: Some(Mask::EMPTY),
+                    analysis: Some(Analysis::empty()),
                     ..FormatStyle::DoubleQuoted.into()
                 });
             }
@@ -1154,7 +1244,18 @@ pub mod string {
             let begin = buf.len();
             buf.with_auto_trim(|buf| ValueFormatRaw::new(self.string).format(buf))?;
 
-            let mask = buf[begin..].analyze();
+            let analysis = buf[begin..].analyze();
+            let mask = analysis.chars;
+
+            if let Some(limit) = self.complexity_limit {
+                if analysis.complexity > limit {
+                    return Ok(FormatResult {
+                        analysis: Some(analysis),
+                        style: FormatStyle::Plain,
+                        aborted: true,
+                    });
+                }
+            }
 
             const NON_PLAIN: Mask =
                 mask!(Flag::DoubleQuote | Flag::Control | Flag::Backslash | Flag::Space | Flag::EqualSign);
@@ -1179,7 +1280,7 @@ pub mod string {
 
             if !mask.intersects(NON_PLAIN) && !like_number() && !confusing() {
                 return Ok(FormatResult {
-                    analysis: Some(mask),
+                    analysis: Some(analysis),
                     ..FormatStyle::Plain.into()
                 });
             }
@@ -1189,7 +1290,7 @@ pub mod string {
                 buf.push(b'"');
                 buf[begin..].rotate_right(1);
                 return Ok(FormatResult {
-                    analysis: Some(mask),
+                    analysis: Some(analysis),
                     ..FormatStyle::DoubleQuoted.into()
                 });
             }
@@ -1199,7 +1300,7 @@ pub mod string {
                 buf.push(b'\'');
                 buf[begin..].rotate_right(1);
                 return Ok(FormatResult {
-                    analysis: Some(mask),
+                    analysis: Some(analysis),
                     ..FormatStyle::SingleQuoted.into()
                 });
             }
@@ -1214,7 +1315,7 @@ pub mod string {
                     buf.push(b'`');
                     buf[begin..].rotate_right(1);
                     Ok(FormatResult {
-                        analysis: Some(mask),
+                        analysis: Some(analysis),
                         ..FormatStyle::Backticked.into()
                     })
                 }
@@ -1225,14 +1326,14 @@ pub mod string {
                     buf[begin..].rotate_right(n);
                     prefix_lines_within(buf, begin + n.., 1.., (begin + n - pl)..(begin + n));
                     Ok(FormatResult {
-                        analysis: Some(mask),
+                        analysis: Some(analysis),
                         ..FormatStyle::Expanded.into()
                     })
                 }
                 (XS | BTXS, ExtendedSpaceAction::Abort) => {
                     buf.truncate(begin);
                     Ok(FormatResult {
-                        analysis: Some(mask),
+                        analysis: Some(analysis),
                         style: FormatStyle::Plain,
                         aborted: true,
                     })
@@ -1342,7 +1443,7 @@ pub mod string {
             if self.string.is_empty() {
                 buf.extend(r#""""#.as_bytes());
                 return Ok(FormatResult {
-                    analysis: Some(Mask::EMPTY),
+                    analysis: Some(Analysis::empty()),
                     ..FormatStyle::DoubleQuoted.into()
                 });
             }
@@ -1350,7 +1451,8 @@ pub mod string {
             let begin = buf.len();
             buf.with_auto_trim(|buf| MessageFormatRaw::new(self.string).format(buf))?;
 
-            let mask = buf[begin..].analyze();
+            let analysis = buf[begin..].analyze();
+            let mask = analysis.chars;
 
             const NON_PLAIN: Mask = mask!(
                 Flag::EqualSign
@@ -1396,7 +1498,7 @@ pub mod string {
                 (XS | BTXS, ExtendedSpaceAction::Abort) => {
                     buf.truncate(begin);
                     Ok(FormatResult {
-                        analysis: Some(mask),
+                        analysis: Some(analysis),
                         style: FormatStyle::Plain,
                         aborted: true,
                     })
@@ -1507,6 +1609,34 @@ pub mod string {
             __, __, __, __, __, __, __, __, __, __, __, BK, BS, BK, __, __, // 5
             BT, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // 6
             __, __, __, __, __, __, __, __, __, __, __, BR, __, BR, TL, __, // 7
+            __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // 8
+            __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // 9
+            __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // A
+            __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // B
+            __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // C
+            __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // D
+            __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // E
+            __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // F
+        ]
+    };
+
+    static COMPLEXITY: [usize; 256] = {
+        const XS: usize = 32;
+        const CT: usize = 64;
+        const QU: usize = 4;
+        const EQ: usize = 4;
+        const BS: usize = 16;
+        const __: usize = 1;
+        [
+            //   1   2   3   4   5   6   7   8   9   A   B   C   D   E   F
+            CT, CT, CT, CT, CT, CT, CT, CT, CT, XS, XS, CT, CT, XS, CT, CT, // 0
+            CT, CT, CT, CT, CT, CT, CT, CT, CT, CT, CT, CT, CT, CT, CT, CT, // 1
+            __, __, QU, __, __, __, __, QU, __, __, __, __, __, __, __, __, // 2
+            __, __, __, __, __, __, __, __, __, __, __, __, __, EQ, __, __, // 3
+            __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // 4
+            __, __, __, __, __, __, __, __, __, __, __, __, BS, __, __, __, // 5
+            __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // 6
+            __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // 7
             __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // 8
             __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // 9
             __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // A

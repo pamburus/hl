@@ -244,6 +244,9 @@
                                 "global": {
                                     "type": "integer"
                                 },
+                                "cumulative": {
+                                    "type": "integer"
+                                },
                                 "message": {
                                     "type": "integer"
                                 },
