@@ -1,5 +1,5 @@
 // std imports
-use std::sync::Mutex;
+use std::{path::PathBuf, sync::Mutex};
 
 // third-party imports
 use once_cell::sync::Lazy;
@@ -22,11 +22,16 @@ pub fn default() -> &'static Settings {
 
 /// Load settings from the given file or the default configuration file per platform.
 pub fn load(path: Option<&str>) -> Result<Settings> {
+    load_from_file_or_dir(path, app_dirs().map(|dirs| dirs.config_dir))
+}
+
+/// Load settings from the given file or the default configuration file at the specified dir.
+fn load_from_file_or_dir(path: Option<&str>, dir: Option<PathBuf>) -> Result<Settings> {
     let mut default = None;
     let (filename, required) = path.map(|p| (p, true)).unwrap_or_else(|| {
         (
-            if let Some(dirs) = app_dirs() {
-                default = Some(dirs.config_dir.join("config").to_string_lossy().to_string());
+            if let Some(dir) = dir {
+                default = Some(dir.join("config").to_string_lossy().to_string());
                 default.as_deref().unwrap()
             } else {
                 ""
@@ -113,6 +118,6 @@ mod tests {
 
     #[test]
     fn test_load_auto() {
-        super::load(None).unwrap();
+        super::load_from_file_or_dir(None, Some("./etc/defaults".into())).unwrap();
     }
 }
