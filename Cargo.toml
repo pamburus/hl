@@ -4,7 +4,7 @@ members = [".", "crate/encstr"]
 [workspace.package]
 repository = "https://github.com/pamburus/hl"
 authors = ["Pavel Ivanov <mr.pavel.ivanov@gmail.com>"]
-version = "0.29.7"
+version = "0.30.0-alpha.1"
 edition = "2021"
 license = "MIT"
 
@@ -49,11 +49,13 @@ enumset = "1"
 enumset-ext = { path = "./crate/enumset-ext" }
 flate2 = "1"
 heapless = "0"
+heapopt = { path = "./crate/heapopt" }
 hex = "0"
 htp = { git = "https://github.com/pamburus/htp.git" }
 humantime = "2"
 itertools = "0.13"
 itoa = { version = "1", default-features = false }
+mline = { path = "./crate/mline" }
 notify = { version = "6", features = ["macos_kqueue"] }
 nu-ansi-term = "0"
 num_cpus = "1"

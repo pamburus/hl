@@ -10,7 +10,7 @@ use enumset::{enum_set as mask, EnumSet, EnumSetType};
 use enumset_ext::EnumSetExt;
 
 // local imports
-use crate::fmtx::{aligned_left, Alignment, Counter, Push};
+use crate::fmtx::{aligned_left, Alignment, Push};
 use crate::timestamp::rfc3339;
 use crate::timezone::Tz;
 
@@ -45,12 +45,12 @@ impl DateTimeFormatter {
         }
     }
 
-    pub fn max_length(&self) -> usize {
-        let mut counter = Counter::new();
+    pub fn max_length(&self) -> (usize, usize) {
+        let mut buf = Vec::new();
         let ts = DateTime::from_timestamp(1654041600, 999_999_999).unwrap().naive_utc();
         let ts = DateTime::from_naive_utc_and_offset(ts, self.tz.offset_from_utc_date(&ts.date()).fix());
-        self.format(&mut counter, ts);
-        counter.result()
+        self.format(&mut buf, ts);
+        (buf.len(), std::str::from_utf8(&buf).unwrap().chars().count())
     }
 }
 

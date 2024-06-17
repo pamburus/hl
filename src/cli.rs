@@ -232,10 +232,7 @@ pub struct Opt {
         env = "HL_FLATTEN",
         value_name = "WHEN",
         value_enum,
-        default_value_t = config::global::get().formatting.flatten.as_ref().map(|x| match x{
-            settings::FlattenOption::Never => FlattenOption::Never,
-            settings::FlattenOption::Always => FlattenOption::Always,
-        }).unwrap_or(FlattenOption::Always),
+        default_value_t = config::global::get().formatting.flatten.into(),
         overrides_with = "flatten",
         help_heading = heading::OUTPUT
     )]
@@ -292,6 +289,20 @@ pub struct Opt {
         help_heading = heading::OUTPUT
     )]
     pub show_empty_fields: bool,
+
+    /// Whether to expand fields and messages.
+    #[arg(
+        long,
+        short = 'x',
+        env = "HL_EXPAND",
+        value_name = "WHEN",
+        value_enum,
+        default_value_t = config::global::get().formatting.expand.into(),
+        overrides_with = "expand",
+        default_missing_value = "always",
+        help_heading = heading::OUTPUT,
+    )]
+    pub expand: ExpandOption,
 
     /// Show input number and/or input filename before each message.
     #[arg(
@@ -457,10 +468,69 @@ pub enum UnixTimestampUnit {
     Ns,
 }
 
-#[derive(ValueEnum, Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(ValueEnum, Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum FlattenOption {
     Never,
+    #[default]
     Always,
+}
+
+impl From<settings::FlattenOption> for FlattenOption {
+    fn from(value: settings::FlattenOption) -> Self {
+        match value {
+            settings::FlattenOption::Never => Self::Never,
+            settings::FlattenOption::Always => Self::Always,
+        }
+    }
+}
+
+impl From<Option<settings::FlattenOption>> for FlattenOption {
+    fn from(value: Option<settings::FlattenOption>) -> Self {
+        value.map(|x| x.into()).unwrap_or_default()
+    }
+}
+
+impl Into<settings::FlattenOption> for FlattenOption {
+    fn into(self) -> settings::FlattenOption {
+        match self {
+            Self::Never => settings::FlattenOption::Never,
+            Self::Always => settings::FlattenOption::Always,
+        }
+    }
+}
+
+#[derive(ValueEnum, Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum ExpandOption {
+    #[default]
+    Auto,
+    Never,
+    Always,
+}
+
+impl From<settings::ExpandOption> for ExpandOption {
+    fn from(value: settings::ExpandOption) -> Self {
+        match value {
+            settings::ExpandOption::Auto => Self::Auto,
+            settings::ExpandOption::Never => Self::Never,
+            settings::ExpandOption::Always => Self::Always,
+        }
+    }
+}
+
+impl From<Option<settings::ExpandOption>> for ExpandOption {
+    fn from(value: Option<settings::ExpandOption>) -> Self {
+        Self::from(value.unwrap_or_default())
+    }
+}
+
+impl Into<settings::ExpandOption> for ExpandOption {
+    fn into(self) -> settings::ExpandOption {
+        match self {
+            Self::Auto => settings::ExpandOption::Auto,
+            Self::Never => settings::ExpandOption::Never,
+            Self::Always => settings::ExpandOption::Always,
+        }
+    }
 }
 
 mod heading {
@@ -487,5 +557,71 @@ fn parse_non_zero_size(s: &str) -> std::result::Result<NonZeroUsize, NonZeroSize
         Ok(NonZeroUsize::from(value))
     } else {
         Err(NonZeroSizeParseError::ZeroSize)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_flatten_option() {
+        assert_eq!(FlattenOption::from(None), FlattenOption::Always);
+        assert_eq!(
+            FlattenOption::from(Some(settings::FlattenOption::Never)),
+            FlattenOption::Never
+        );
+        assert_eq!(
+            FlattenOption::from(Some(settings::FlattenOption::Always)),
+            FlattenOption::Always
+        );
+        assert_eq!(
+            FlattenOption::from(settings::FlattenOption::Never),
+            FlattenOption::Never
+        );
+        assert_eq!(
+            FlattenOption::from(settings::FlattenOption::Always),
+            FlattenOption::Always
+        );
+        assert_eq!(
+            Into::<settings::FlattenOption>::into(FlattenOption::Never),
+            settings::FlattenOption::Never
+        );
+        assert_eq!(
+            Into::<settings::FlattenOption>::into(FlattenOption::Always),
+            settings::FlattenOption::Always
+        );
+    }
+
+    #[test]
+    fn test_expand_option() {
+        assert_eq!(ExpandOption::from(None), ExpandOption::Auto);
+        assert_eq!(
+            ExpandOption::from(Some(settings::ExpandOption::Auto)),
+            ExpandOption::Auto
+        );
+        assert_eq!(
+            ExpandOption::from(Some(settings::ExpandOption::Never)),
+            ExpandOption::Never
+        );
+        assert_eq!(
+            ExpandOption::from(Some(settings::ExpandOption::Always)),
+            ExpandOption::Always
+        );
+        assert_eq!(ExpandOption::from(settings::ExpandOption::Auto), ExpandOption::Auto);
+        assert_eq!(ExpandOption::from(settings::ExpandOption::Never), ExpandOption::Never);
+        assert_eq!(ExpandOption::from(settings::ExpandOption::Always), ExpandOption::Always);
+        assert_eq!(
+            Into::<settings::ExpandOption>::into(ExpandOption::Auto),
+            settings::ExpandOption::Auto
+        );
+        assert_eq!(
+            Into::<settings::ExpandOption>::into(ExpandOption::Never),
+            settings::ExpandOption::Never
+        );
+        assert_eq!(
+            Into::<settings::ExpandOption>::into(ExpandOption::Always),
+            settings::ExpandOption::Always
+        );
     }
 }

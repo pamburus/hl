@@ -34,6 +34,10 @@ elements:
     foreground: yellow
   'null':
     foreground: bright-red
+  bullet:
+    modes: [faint]
+  value-expansion:
+    modes: [faint]
 levels:
   debug:
     level-inner:

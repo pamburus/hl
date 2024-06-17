@@ -237,15 +237,37 @@ impl Field {
 pub struct Formatting {
     pub punctuation: Punctuation,
     pub flatten: Option<FlattenOption>,
+    pub expand: Option<ExpandOption>,
 }
 
 // ---
 
-#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq, Copy)]
 #[serde(rename_all = "kebab-case")]
 pub enum FlattenOption {
     Never,
     Always,
+}
+
+// ---
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq, Copy, Default)]
+#[serde(rename_all = "kebab-case")]
+pub enum ExpandOption {
+    #[default]
+    Auto,
+    Never,
+    Always,
+}
+
+impl Into<Option<bool>> for ExpandOption {
+    fn into(self) -> Option<bool> {
+        match self {
+            Self::Auto => None,
+            Self::Never => Some(false),
+            Self::Always => Some(true),
+        }
+    }
 }
 
 // ---
