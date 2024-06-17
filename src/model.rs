@@ -316,17 +316,17 @@ pub struct Record<'a> {
     pub logger: Option<&'a str>,
     pub caller: Option<Caller<'a>>,
     pub(crate) fields: RecordFields<'a>,
-    pub(crate) predefined: heapless::Vec<(&'a str, RawValue<'a>), MAX_PREDEFINED_FIELDS>,
+    pub(crate) predefined: heapless::Vec<Field<'a>, MAX_PREDEFINED_FIELDS>,
 }
 
 impl<'a> Record<'a> {
     #[inline(always)]
-    pub fn fields(&self) -> impl Iterator<Item = &(&'a str, RawValue<'a>)> {
+    pub fn fields(&self) -> impl Iterator<Item = &Field<'a>> {
         self.fields.head.iter().chain(self.fields.tail.iter())
     }
 
     #[inline(always)]
-    pub fn fields_for_search(&self) -> impl Iterator<Item = &(&'a str, RawValue<'a>)> {
+    pub fn fields_for_search(&self) -> impl Iterator<Item = &Field<'a>> {
         self.fields().chain(self.predefined.iter())
     }
 
@@ -357,8 +357,30 @@ impl<'a> Record<'a> {
 
 #[derive(Default)]
 pub struct RecordFields<'a> {
-    pub(crate) head: heapless::Vec<(&'a str, RawValue<'a>), RECORD_EXTRA_CAPACITY>,
-    pub(crate) tail: Vec<(&'a str, RawValue<'a>)>,
+    pub(crate) head: heapless::Vec<Field<'a>, RECORD_EXTRA_CAPACITY>,
+    pub(crate) tail: Vec<Field<'a>>,
+}
+
+// ---
+
+#[derive(Clone, Debug)]
+pub struct Field<'a> {
+    pub key: &'a str,
+    pub value: RawValue<'a>,
+}
+
+impl<'a> Field<'a> {
+    #[inline]
+    pub fn new(key: &'a str, value: RawValue<'a>) -> Self {
+        Self { key, value }
+    }
+}
+
+impl<'a> From<(&'a str, RawValue<'a>)> for Field<'a> {
+    #[inline]
+    fn from(value: (&'a str, RawValue<'a>)) -> Self {
+        Self::new(value.0, value.1)
+    }
 }
 
 // ---
@@ -645,7 +667,7 @@ impl ParserSettingsBlock {
             None => false,
         };
         if is_root && done {
-            to.predefined.push((key, value)).ok();
+            to.predefined.push(Field { key, value }).ok();
         }
         if done || !is_root {
             return;
@@ -656,7 +678,7 @@ impl ParserSettingsBlock {
                 return;
             }
         }
-        match to.fields.head.push((key, value)) {
+        match to.fields.head.push(Field { key, value }) {
             Ok(_) => {}
             Err(value) => to.fields.tail.push(value),
         }
@@ -1521,18 +1543,18 @@ impl RecordFilter for FieldFilter {
                 _ => true,
             },
             FieldFilterKey::Custom(_) => {
-                for (k, v) in record.fields_for_search() {
-                    match self.match_custom_key(*k) {
+                for Field { key, value } in record.fields_for_search() {
+                    match self.match_custom_key(*key) {
                         None => {}
                         Some(KeyMatch::Full) => {
-                            let s = v.raw_str();
+                            let s = value.raw_str();
                             let escaped = s.starts_with('"');
                             if self.match_value(Some(s), escaped) {
                                 return true;
                             }
                         }
                         Some(KeyMatch::Partial(subkey)) => {
-                            if self.match_value_partial(subkey, *v) {
+                            if self.match_value_partial(subkey, *value) {
                                 return true;
                             }
                         }

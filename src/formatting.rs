@@ -12,7 +12,7 @@ use crate::{
     datefmt::{DateTimeFormatter, TextWidth},
     filtering::IncludeExcludeSetting,
     fmtx::{aligned_left, centered, OptimizedBuf, Push},
-    model::{self, Caller, Level, RawValue},
+    model::{self, Caller, Field, Level, RawValue},
     settings::{self, ExpandOption, FlattenOption, Formatting, Punctuation},
     syntax::*,
     theme::{Element, Styler, StylingPush, Theme},
@@ -213,7 +213,7 @@ impl RecordFormatter {
             if fs.transact(s, |fs, s| self.format_timestamp(rec, fs, s)).is_err() {
                 if let Some(ts) = &rec.ts {
                     fs.extra_fields
-                        .push(("ts", RawValue::String(EncodedString::raw(ts.raw()))))
+                        .push(Field::new("ts", RawValue::String(EncodedString::raw(ts.raw()))))
                         .ok();
                 }
                 if self.cfg.always_show_time {
@@ -261,7 +261,12 @@ impl RecordFormatter {
                         fs.first_line_used = true;
                     }
                     Err(analysis) => {
-                        self.add_field_to_expand(s, &mut fs, "msg", *value, Some(&self.cfg.fields));
+                        self.add_field_to_expand(
+                            s,
+                            &mut fs,
+                            AnalyzedField::new("msg", *value, analysis),
+                            Some(&self.cfg.fields),
+                        );
                     }
                 }
             } else {
@@ -283,11 +288,11 @@ impl RecordFormatter {
             // fields
             //
             let mut some_fields_hidden = false;
-            let x_fields = std::mem::take(&mut fs.extra_fields);
-            for (k, v) in x_fields.iter().chain(rec.fields()) {
-                if !self.cfg.hide_empty_fields || !v.is_empty() {
+            let extra_fields = std::mem::take(&mut fs.extra_fields);
+            for Field { key, value } in extra_fields.iter().chain(rec.fields()) {
+                if !self.cfg.hide_empty_fields || !value.is_empty() {
                     let result = fs.transact(s, |fs, s| {
-                        match self.format_field(s, k, *v, fs, Some(&self.cfg.fields)) {
+                        match self.format_field(s, key, *value, fs, Some(&self.cfg.fields), None) {
                             FieldFormatResult::Ok => Ok(()),
                             FieldFormatResult::Hidden => {
                                 some_fields_hidden = true;
@@ -297,7 +302,12 @@ impl RecordFormatter {
                         }
                     });
                     if let Err(analysis) = result {
-                        self.add_field_to_expand(s, &mut fs, k, *v, Some(&self.cfg.fields));
+                        self.add_field_to_expand(
+                            s,
+                            &mut fs,
+                            AnalyzedField::new(key, *value, analysis),
+                            Some(&self.cfg.fields),
+                        );
                     }
                 }
             }
@@ -383,7 +393,7 @@ impl RecordFormatter {
         result += rec.message.map(|x| x.raw_str().len() / 8).unwrap_or(0);
         result += rec.predefined.len();
         result += rec.logger.map(|x| x.len() / 2).unwrap_or(0);
-        for (key, value) in rec.fields() {
+        for Field { key, value } in rec.fields() {
             if value.is_empty() {
                 if self.cfg.hide_empty_fields {
                     continue;
@@ -450,9 +460,10 @@ impl RecordFormatter {
         value: RawValue<'a>,
         fs: &mut FormattingStateWithRec,
         filter: Option<&IncludeExcludeKeyFilter>,
+        analysis: Option<Analysis>,
     ) -> FieldFormatResult {
         let mut fv = FieldFormatter::new(self);
-        fv.format(s, key, value, fs, filter, IncludeExcludeSetting::Unspecified)
+        fv.format(s, key, value, fs, filter, IncludeExcludeSetting::Unspecified, analysis)
     }
 
     #[inline]
@@ -582,8 +593,8 @@ impl RecordFormatter {
         if fs.expand != Some(true) {
             fs.expand = Some(true);
             let fields_to_expand = std::mem::take(&mut fs.fields_to_expand);
-            for (k, v) in fields_to_expand.iter() {
-                _ = self.format_field(s, k, *v, fs, None);
+            for field in fields_to_expand.into_iter() {
+                _ = self.format_field(s, field.key, field.value, fs, None, field.analysis);
             }
         }
     }
@@ -592,8 +603,7 @@ impl RecordFormatter {
         &self,
         s: &mut S,
         fs: &mut FormattingStateWithRec<'a>,
-        key: &'a str,
-        value: RawValue<'a>,
+        field: AnalyzedField<'a>,
         filter: Option<&IncludeExcludeKeyFilter>,
     ) {
         if fs.expand == Some(true) {
@@ -601,10 +611,10 @@ impl RecordFormatter {
             return;
         }
 
-        if let Err((key, value)) = fs.fields_to_expand.push((key, value)) {
+        if let Err(field) = fs.fields_to_expand.push(field) {
             fs.expand = Some(true);
             self.expand(s, fs);
-            _ = self.format_field(s, key, value, fs, filter);
+            _ = self.format_field(s, field.key, field.value, fs, filter, field.analysis);
         }
     }
 }
@@ -691,9 +701,33 @@ struct FormattingState<'a> {
     some_fields_hidden: bool,
     caller_formatted: bool,
     complexity: usize,
-    extra_fields: heapless::Vec<(&'a str, RawValue<'a>), 4>,
-    fields_to_expand: heapless::Vec<(&'a str, RawValue<'a>), 32>,
+    extra_fields: heapless::Vec<Field<'a>, 4>,
+    fields_to_expand: heapless::Vec<AnalyzedField<'a>, 32>,
     last_expansion_point: Option<usize>,
+}
+
+// ---
+
+pub struct AnalyzedField<'a> {
+    pub key: &'a str,
+    pub value: RawValue<'a>,
+    pub analysis: Option<Analysis>,
+}
+
+impl<'a> AnalyzedField<'a> {
+    pub fn new(key: &'a str, value: RawValue<'a>, analysis: Option<Analysis>) -> Self {
+        Self { key, value, analysis }
+    }
+
+    pub fn field(&self) -> Field<'a> {
+        Field::new(self.key, self.value)
+    }
+}
+
+impl<'a> From<Field<'a>> for AnalyzedField<'a> {
+    fn from(field: Field<'a>) -> Self {
+        Self::new(field.key, field.value, None)
+    }
 }
 
 // ---
@@ -757,6 +791,7 @@ impl<'a> FieldFormatter<'a> {
         fs: &mut FormattingStateWithRec,
         filter: Option<&IncludeExcludeKeyFilter>,
         setting: IncludeExcludeSetting,
+        analysis: Option<Analysis>,
     ) -> FieldFormatResult {
         let (filter, setting, leaf) = match filter {
             Some(filter) => {
@@ -773,7 +808,7 @@ impl<'a> FieldFormatter<'a> {
         }
 
         if fs.expand.is_none() && value.raw_str().len() > self.rf.cfg.expansion.thresholds.field {
-            return FieldFormatResult::ExpansionNeeded(None);
+            return FieldFormatResult::ExpansionNeeded(analysis);
         }
 
         let ffv = self.begin(s, key, value, fs);
@@ -781,7 +816,7 @@ impl<'a> FieldFormatter<'a> {
         fs.complexity += key.len() + 4;
 
         let result = if self.rf.cfg.unescape_fields {
-            self.format_value(s, value, fs, filter, setting)
+            self.format_value(s, value, fs, filter, setting, analysis)
         } else {
             s.element(Element::String, |s| {
                 s.batch(|buf| buf.extend(value.raw_str().as_bytes()))
@@ -804,6 +839,7 @@ impl<'a> FieldFormatter<'a> {
         fs: &mut FormattingStateWithRec,
         filter: Option<&IncludeExcludeKeyFilter>,
         setting: IncludeExcludeSetting,
+        analysis: Option<Analysis>,
     ) -> ValueFormatResult {
         let value = match value {
             RawValue::String(EncodedString::Raw(value)) => RawValue::auto(value.as_str()),
@@ -811,6 +847,16 @@ impl<'a> FieldFormatter<'a> {
         };
         match value {
             RawValue::String(value) => {
+                let complexity_limit = if fs.expand.is_none() {
+                    Some(std::cmp::min(
+                        self.rf.cfg.expansion.thresholds.field,
+                        self.rf.cfg.expansion.thresholds.cumulative
+                            - std::cmp::min(self.rf.cfg.expansion.thresholds.cumulative, fs.complexity),
+                    ))
+                } else {
+                    None
+                };
+
                 let result = s.element(Element::String, |s| {
                     s.batch(|buf| {
                         ValueFormatAuto::new(value)
@@ -819,15 +865,8 @@ impl<'a> FieldFormatter<'a> {
                                 Some(false) => ExtendedSpaceAction::FormatWithBacktick,
                                 None => ExtendedSpaceAction::Abort,
                             })
-                            .with_complexity_limit(if fs.expand.is_none() {
-                                Some(std::cmp::min(
-                                    self.rf.cfg.expansion.thresholds.field,
-                                    self.rf.cfg.expansion.thresholds.cumulative
-                                        - std::cmp::min(self.rf.cfg.expansion.thresholds.cumulative, fs.complexity),
-                                ))
-                            } else {
-                                None
-                            })
+                            .with_complexity_limit(complexity_limit)
+                            .with_analysis(analysis)
                             .format(buf)
                             .unwrap()
                     })
@@ -865,13 +904,13 @@ impl<'a> FieldFormatter<'a> {
                 let mut some_fields_hidden = false;
                 for (k, v) in item.fields.iter() {
                     if !self.rf.cfg.hide_empty_fields || !v.is_empty() {
-                        match self.format(s, k, *v, fs, filter, setting) {
+                        match self.format(s, k, *v, fs, filter, setting, None) {
                             FieldFormatResult::Ok => {}
                             FieldFormatResult::Hidden => {
                                 some_fields_hidden = true;
                             }
-                            FieldFormatResult::ExpansionNeeded(analysis) => {
-                                return ValueFormatResult::ExpansionNeeded(analysis);
+                            FieldFormatResult::ExpansionNeeded(_) => {
+                                return ValueFormatResult::ExpansionNeeded(None);
                             }
                         }
                     }
@@ -913,7 +952,7 @@ impl<'a> FieldFormatter<'a> {
                     } else {
                         first = false;
                     }
-                    _ = self.format_value(s, *v, fs, None, IncludeExcludeSetting::Unspecified);
+                    _ = self.format_value(s, *v, fs, None, IncludeExcludeSetting::Unspecified, None);
                 }
                 s.element(Element::Array, |s| {
                     s.batch(|buf| buf.push(b']'));
@@ -1165,6 +1204,7 @@ pub mod string {
 
     // ---
 
+    #[derive(Clone, Copy)]
     pub struct Analysis {
         pub chars: Mask,
         pub complexity: usize,
@@ -1186,6 +1226,7 @@ pub mod string {
         string: S,
         xs_action: ExtendedSpaceAction<P>,
         complexity_limit: Option<usize>,
+        analysis: Option<Analysis>,
     }
 
     impl<S> ValueFormatAuto<S, ()> {
@@ -1195,6 +1236,7 @@ pub mod string {
                 string,
                 xs_action: ExtendedSpaceAction::FormatWithBacktick,
                 complexity_limit: None,
+                analysis: None,
             }
         }
 
@@ -1204,6 +1246,7 @@ pub mod string {
                 xs_action: action,
                 string: self.string,
                 complexity_limit: self.complexity_limit,
+                analysis: self.analysis,
             }
         }
     }
@@ -1215,6 +1258,11 @@ pub mod string {
                 complexity_limit: limit,
                 ..self
             }
+        }
+
+        #[inline]
+        pub fn with_analysis(self, analysis: Option<Analysis>) -> Self {
+            Self { analysis, ..self }
         }
     }
 
@@ -1228,6 +1276,7 @@ pub mod string {
                 string: self.string,
                 xs_action: self.xs_action.map_expand(|_| |_: &mut Vec<u8>| 0),
                 complexity_limit: self.complexity_limit,
+                analysis: self.analysis,
             }
             .format(buf)
         }
@@ -1249,9 +1298,15 @@ pub mod string {
             }
 
             let begin = buf.len();
-            buf.with_auto_trim(|buf| ValueFormatRaw::new(self.string).format(buf))?;
+            let format_raw = |buf: &mut Vec<u8>| buf.with_auto_trim(|buf| ValueFormatRaw::new(self.string).format(buf));
 
-            let analysis = buf[begin..].analyze();
+            let analysis = if let Some(analysis) = self.analysis {
+                analysis
+            } else {
+                format_raw(buf)?;
+                buf[begin..].analyze()
+            };
+
             let mask = analysis.chars;
 
             if let Some(limit) = self.complexity_limit {
@@ -1286,6 +1341,9 @@ pub mod string {
             };
 
             if !mask.intersects(NON_PLAIN) && !like_number() && !confusing() {
+                if buf.len() == begin {
+                    format_raw(buf)?;
+                }
                 return Ok(FormatResult {
                     analysis: Some(analysis),
                     ..FormatStyle::Plain.into()
@@ -1293,9 +1351,15 @@ pub mod string {
             }
 
             if !mask.intersects(Flag::DoubleQuote | Flag::Control | Flag::Backslash) {
-                buf.push(b'"');
-                buf.push(b'"');
-                buf[begin..].rotate_right(1);
+                if buf.len() != begin {
+                    buf.push(b'"');
+                    buf.push(b'"');
+                    buf[begin..].rotate_right(1);
+                } else {
+                    buf.push(b'"');
+                    format_raw(buf)?;
+                    buf.push(b'"');
+                }
                 return Ok(FormatResult {
                     analysis: Some(analysis),
                     ..FormatStyle::DoubleQuoted.into()
@@ -1303,9 +1367,15 @@ pub mod string {
             }
 
             if !mask.intersects(Flag::SingleQuote | Flag::Control | Flag::Backslash) {
-                buf.push(b'\'');
-                buf.push(b'\'');
-                buf[begin..].rotate_right(1);
+                if buf.len() != begin {
+                    buf.push(b'\'');
+                    buf.push(b'\'');
+                    buf[begin..].rotate_right(1);
+                } else {
+                    buf.push(b'\'');
+                    format_raw(buf)?;
+                    buf.push(b'\'');
+                }
                 return Ok(FormatResult {
                     analysis: Some(analysis),
                     ..FormatStyle::SingleQuoted.into()
@@ -1318,15 +1388,24 @@ pub mod string {
 
             match (mask & BTXS, &self.xs_action) {
                 (Z, _) | (XS, ExtendedSpaceAction::FormatWithBacktick) => {
-                    buf.push(b'`');
-                    buf.push(b'`');
-                    buf[begin..].rotate_right(1);
+                    if buf.len() != begin {
+                        buf.push(b'`');
+                        buf.push(b'`');
+                        buf[begin..].rotate_right(1);
+                    } else {
+                        buf.push(b'`');
+                        format_raw(buf)?;
+                        buf.push(b'`');
+                    }
                     Ok(FormatResult {
                         analysis: Some(analysis),
                         ..FormatStyle::Backticked.into()
                     })
                 }
                 (XS | BTXS, ExtendedSpaceAction::Expand(prefix)) => {
+                    if buf.len() == begin {
+                        format_raw(buf)?;
+                    }
                     let l0 = buf.len();
                     let pl = prefix(buf);
                     let n = buf.len() - l0;
@@ -1787,11 +1866,11 @@ mod tests {
     }
 
     trait RecordExt<'a> {
-        fn from_fields(fields: &[(&'a str, RawValue<'a>)]) -> Record<'a>;
+        fn from_fields(fields: &[Field<'a>]) -> Record<'a>;
     }
 
     impl<'a> RecordExt<'a> for Record<'a> {
-        fn from_fields(fields: &[(&'a str, RawValue<'a>)]) -> Record<'a> {
+        fn from_fields(fields: &[Field<'a>]) -> Record<'a> {
             Record {
                 fields: RecordFields {
                     head: heapless::Vec::from_slice(fields).unwrap(),
@@ -1812,7 +1891,7 @@ mod tests {
             logger: Some("tl"),
             caller: Some(Caller::Text("tc")),
             fields: RecordFields {
-                head: heapless::Vec::from_slice(&[("k_a", RawValue::from(RawObject::Json(&ka)))]).unwrap(),
+                head: heapless::Vec::from_slice(&[Field::new("k_a", RawValue::from(RawObject::Json(&ka)))]).unwrap(),
                 ..Default::default()
             },
             ..Default::default()
@@ -1882,105 +1961,105 @@ mod tests {
     #[test]
     fn test_string_value_raw() {
         let v = "v";
-        let rec = Record::from_fields(&[("k", EncodedString::raw(&v).into())]);
+        let rec = Record::from_fields(&[Field::new("k", EncodedString::raw(&v).into())]);
         assert_eq!(&format_no_color(&rec), "k=v");
     }
 
     #[test]
     fn test_string_value_json_simple() {
         let v = r#""some-value""#;
-        let rec = Record::from_fields(&[("k", EncodedString::json(&v).into())]);
+        let rec = Record::from_fields(&[Field::new("k", EncodedString::json(&v).into())]);
         assert_eq!(&format_no_color(&rec), r#"k=some-value"#);
     }
 
     #[test]
     fn test_string_value_json_space() {
         let v = r#""some value""#;
-        let rec = Record::from_fields(&[("k", EncodedString::json(&v).into())]);
+        let rec = Record::from_fields(&[Field::new("k", EncodedString::json(&v).into())]);
         assert_eq!(&format_no_color(&rec), r#"k="some value""#);
     }
 
     #[test]
     fn test_string_value_raw_space() {
         let v = r#"some value"#;
-        let rec = Record::from_fields(&[("k", EncodedString::raw(&v).into())]);
+        let rec = Record::from_fields(&[Field::new("k", EncodedString::raw(&v).into())]);
         assert_eq!(&format_no_color(&rec), r#"k="some value""#);
     }
 
     #[test]
     fn test_string_value_json_space_and_double_quotes() {
         let v = r#""some \"value\"""#;
-        let rec = Record::from_fields(&[("k", EncodedString::json(&v).into())]);
+        let rec = Record::from_fields(&[Field::new("k", EncodedString::json(&v).into())]);
         assert_eq!(&format_no_color(&rec), r#"k='some "value"'"#);
     }
 
     #[test]
     fn test_string_value_raw_space_and_double_quotes() {
         let v = r#"some "value""#;
-        let rec = Record::from_fields(&[("k", EncodedString::raw(&v).into())]);
+        let rec = Record::from_fields(&[Field::new("k", EncodedString::raw(&v).into())]);
         assert_eq!(&format_no_color(&rec), r#"k='some "value"'"#);
     }
 
     #[test]
     fn test_string_value_json_space_and_single_quotes() {
         let v = r#""some 'value'""#;
-        let rec = Record::from_fields(&[("k", EncodedString::json(&v).into())]);
+        let rec = Record::from_fields(&[Field::new("k", EncodedString::json(&v).into())]);
         assert_eq!(&format_no_color(&rec), r#"k="some 'value'""#);
     }
 
     #[test]
     fn test_string_value_raw_space_and_single_quotes() {
         let v = r#"some 'value'"#;
-        let rec = Record::from_fields(&[("k", EncodedString::raw(&v).into())]);
+        let rec = Record::from_fields(&[Field::new("k", EncodedString::raw(&v).into())]);
         assert_eq!(&format_no_color(&rec), r#"k="some 'value'""#);
     }
 
     #[test]
     fn test_string_value_json_space_and_backticks() {
         let v = r#""some `value`""#;
-        let rec = Record::from_fields(&[("k", EncodedString::json(&v).into())]);
+        let rec = Record::from_fields(&[Field::new("k", EncodedString::json(&v).into())]);
         assert_eq!(&format_no_color(&rec), r#"k="some `value`""#);
     }
 
     #[test]
     fn test_string_value_raw_space_and_backticks() {
         let v = r#"some `value`"#;
-        let rec = Record::from_fields(&[("k", EncodedString::raw(&v).into())]);
+        let rec = Record::from_fields(&[Field::new("k", EncodedString::raw(&v).into())]);
         assert_eq!(&format_no_color(&rec), r#"k="some `value`""#);
     }
 
     #[test]
     fn test_string_value_json_space_and_double_and_single_quotes() {
         let v = r#""some \"value\" from 'source'""#;
-        let rec = Record::from_fields(&[("k", EncodedString::json(&v).into())]);
+        let rec = Record::from_fields(&[Field::new("k", EncodedString::json(&v).into())]);
         assert_eq!(&format_no_color(&rec), r#"k=`some "value" from 'source'`"#);
     }
 
     #[test]
     fn test_string_value_raw_space_and_double_and_single_quotes() {
         let v = r#"some "value" from 'source'"#;
-        let rec = Record::from_fields(&[("k", EncodedString::raw(&v).into())]);
+        let rec = Record::from_fields(&[Field::new("k", EncodedString::raw(&v).into())]);
         assert_eq!(&format_no_color(&rec), r#"k=`some "value" from 'source'`"#);
     }
 
     #[test]
     fn test_string_value_json_backslash() {
         let v = r#""some-\\\"value\\\"""#;
-        let rec = Record::from_fields(&[("k", EncodedString::json(&v).into())]);
+        let rec = Record::from_fields(&[Field::new("k", EncodedString::json(&v).into())]);
         assert_eq!(&format_no_color(&rec), r#"k=`some-\"value\"`"#);
     }
 
     #[test]
     fn test_string_value_raw_backslash() {
         let v = r#"some-\"value\""#;
-        let rec = Record::from_fields(&[("k", EncodedString::raw(&v).into())]);
+        let rec = Record::from_fields(&[Field::new("k", EncodedString::raw(&v).into())]);
         assert_eq!(&format_no_color(&rec), r#"k=`some-\"value\"`"#);
     }
 
     #[test]
     fn test_string_value_json_space_and_double_and_single_quotes_and_backticks() {
         let v = r#""some \"value\" from 'source' with `sauce`""#;
-        let rec = Record::from_fields(&[("k", EncodedString::json(&v).into())]);
+        let rec = Record::from_fields(&[Field::new("k", EncodedString::json(&v).into())]);
         assert_eq!(
             &format_no_color(&rec),
             r#"k="some \"value\" from 'source' with `sauce`""#
@@ -1990,7 +2069,7 @@ mod tests {
     #[test]
     fn test_string_value_raw_space_and_double_and_single_quotes_and_backticks() {
         let v = r#"some "value" from 'source' with `sauce`"#;
-        let rec = Record::from_fields(&[("k", EncodedString::raw(&v).into())]);
+        let rec = Record::from_fields(&[Field::new("k", EncodedString::raw(&v).into())]);
         assert_eq!(
             &format_no_color(&rec),
             r#"k="some \"value\" from 'source' with `sauce`""#
@@ -2000,7 +2079,7 @@ mod tests {
     #[test]
     fn test_string_value_json_extended_space() {
         let v = r#""some\tvalue""#;
-        let rec = Record::from_fields(&[("k", EncodedString::json(&v).into())]);
+        let rec = Record::from_fields(&[Field::new("k", EncodedString::json(&v).into())]);
         assert_eq!(
             format_no_color(&rec),
             format!(
@@ -2015,7 +2094,7 @@ mod tests {
     #[test]
     fn test_string_value_raw_extended_space() {
         let v = "some\tvalue";
-        let rec = Record::from_fields(&[("k", EncodedString::raw(&v).into())]);
+        let rec = Record::from_fields(&[Field::new("k", EncodedString::raw(&v).into())]);
         assert_eq!(
             format_no_color(&rec),
             format!(
@@ -2030,13 +2109,13 @@ mod tests {
     #[test]
     fn test_string_value_json_control_chars() {
         let v = r#""some-\u001b[1mvalue\u001b[0m""#;
-        let rec = Record::from_fields(&[("k", EncodedString::json(&v).into())]);
+        let rec = Record::from_fields(&[Field::new("k", EncodedString::json(&v).into())]);
         assert_eq!(format_no_color(&rec), format!(r#"k={}"#, v));
     }
 
     #[test]
     fn test_string_value_raw_control_chars() {
-        let rec = Record::from_fields(&[("k", EncodedString::raw("some-\x1b[1mvalue\x1b[0m").into())]);
+        let rec = Record::from_fields(&[Field::new("k", EncodedString::raw("some-\x1b[1mvalue\x1b[0m").into())]);
 
         let result = format_no_color(&rec);
         assert_eq!(&result, r#"k="some-\u001b[1mvalue\u001b[0m""#, "{}", result);
@@ -2045,14 +2124,14 @@ mod tests {
     #[test]
     fn test_string_value_json_control_chars_and_quotes() {
         let v = r#""some-\u001b[1m\"value\"\u001b[0m""#;
-        let rec = Record::from_fields(&[("k", EncodedString::json(&v).into())]);
+        let rec = Record::from_fields(&[Field::new("k", EncodedString::json(&v).into())]);
         assert_eq!(format_no_color(&rec), format!(r#"k={}"#, v));
     }
 
     #[test]
     fn test_string_value_raw_control_chars_and_quotes() {
         let v = "some-\x1b[1m\"value\"\x1b[0m";
-        let rec = Record::from_fields(&[("k", EncodedString::raw(&v).into())]);
+        let rec = Record::from_fields(&[Field::new("k", EncodedString::raw(&v).into())]);
         assert_eq!(format_no_color(&rec), r#"k="some-\u001b[1m\"value\"\u001b[0m""#);
     }
 
@@ -2060,7 +2139,7 @@ mod tests {
     fn test_string_value_json_ambiguous() {
         for v in ["true", "false", "null", "{}", "[]"] {
             let v = format!(r#""{}""#, v);
-            let rec = Record::from_fields(&[("k", EncodedString::json(&v).into())]);
+            let rec = Record::from_fields(&[Field::new("k", EncodedString::json(&v).into())]);
             assert_eq!(format_no_color(&rec), format!(r#"k={}"#, v));
         }
     }
@@ -2068,11 +2147,11 @@ mod tests {
     #[test]
     fn test_string_value_raw_ambiguous() {
         for v in ["true", "false", "null"] {
-            let rec = Record::from_fields(&[("k", EncodedString::raw(&v).into())]);
+            let rec = Record::from_fields(&[Field::new("k", EncodedString::raw(&v).into())]);
             assert_eq!(format_no_color(&rec), format!(r#"k={}"#, v));
         }
         for v in ["{}", "[]"] {
-            let rec = Record::from_fields(&[("k", EncodedString::raw(&v).into())]);
+            let rec = Record::from_fields(&[Field::new("k", EncodedString::raw(&v).into())]);
             assert_eq!(format_no_color(&rec), format!(r#"k="{}""#, v));
         }
     }
@@ -2081,7 +2160,7 @@ mod tests {
     fn test_string_value_json_number() {
         for v in ["42", "42.42", "-42", "-42.42"] {
             let v = format!(r#""{}""#, v);
-            let rec = Record::from_fields(&[("k", EncodedString::json(&v).into())]);
+            let rec = Record::from_fields(&[Field::new("k", EncodedString::json(&v).into())]);
             assert_eq!(format_no_color(&rec), format!(r#"k={}"#, v));
         }
         for v in [
@@ -2089,7 +2168,7 @@ mod tests {
             "42.128731867381927389172983718293789127389172938712983718927",
         ] {
             let qv = format!(r#""{}""#, v);
-            let rec = Record::from_fields(&[("k", EncodedString::json(&qv).into())]);
+            let rec = Record::from_fields(&[Field::new("k", EncodedString::json(&qv).into())]);
             assert_eq!(format_no_color(&rec), format!(r#"k={}"#, v));
         }
     }
@@ -2097,14 +2176,14 @@ mod tests {
     #[test]
     fn test_string_value_raw_number() {
         for v in ["42", "42.42", "-42", "-42.42"] {
-            let rec = Record::from_fields(&[("k", EncodedString::raw(&v).into())]);
+            let rec = Record::from_fields(&[Field::new("k", EncodedString::raw(&v).into())]);
             assert_eq!(format_no_color(&rec), format!(r#"k={}"#, v));
         }
         for v in [
             "42128731867381927389172983718293789127389172938712983718927",
             "42.128731867381927389172983718293789127389172938712983718927",
         ] {
-            let rec = Record::from_fields(&[("k", EncodedString::raw(&v).into())]);
+            let rec = Record::from_fields(&[Field::new("k", EncodedString::raw(&v).into())]);
             assert_eq!(format_no_color(&rec), format!(r#"k={}"#, v));
         }
     }
@@ -2113,14 +2192,14 @@ mod tests {
     fn test_string_value_json_version() {
         let v = "1.1.0";
         let qv = format!(r#""{}""#, v);
-        let rec = Record::from_fields(&[("k", EncodedString::json(&qv).into())]);
+        let rec = Record::from_fields(&[Field::new("k", EncodedString::json(&qv).into())]);
         assert_eq!(format_no_color(&rec), format!(r#"k={}"#, v));
     }
 
     #[test]
     fn test_string_value_raw_version() {
         let v = "1.1.0";
-        let rec = Record::from_fields(&[("k", EncodedString::raw(&v).into())]);
+        let rec = Record::from_fields(&[Field::new("k", EncodedString::raw(&v).into())]);
         assert_eq!(format_no_color(&rec), format!(r#"k={}"#, v));
     }
 
@@ -2128,14 +2207,14 @@ mod tests {
     fn test_string_value_json_hyphen() {
         let v = "-";
         let qv = format!(r#""{}""#, v);
-        let rec = Record::from_fields(&[("k", EncodedString::json(&qv).into())]);
+        let rec = Record::from_fields(&[Field::new("k", EncodedString::json(&qv).into())]);
         assert_eq!(format_no_color(&rec), format!(r#"k={}"#, v));
     }
 
     #[test]
     fn test_string_value_raw_hyphen() {
         let v = "-";
-        let rec = Record::from_fields(&[("k", EncodedString::raw(&v).into())]);
+        let rec = Record::from_fields(&[Field::new("k", EncodedString::raw(&v).into())]);
         assert_eq!(format_no_color(&rec), format!(r#"k={}"#, v));
     }
 
@@ -2143,7 +2222,7 @@ mod tests {
     fn test_string_value_trailing_space() {
         let input = "test message\n";
         let golden = r#""test message""#;
-        let rec = Record::from_fields(&[("k", EncodedString::raw(&input).into())]);
+        let rec = Record::from_fields(&[Field::new("k", EncodedString::raw(&input).into())]);
         assert_eq!(format_no_color(&rec), format!(r#"k={}"#, golden));
     }
 
@@ -2231,10 +2310,10 @@ mod tests {
             message: Some(EncodedString::raw("m").into()),
             fields: RecordFields {
                 head: heapless::Vec::from_slice(&[
-                    ("a", EncodedString::raw("1").into()),
-                    ("b", EncodedString::raw("2").into()),
-                    ("c", RawObject::Json(&obj).into()),
-                    ("d", EncodedString::raw("4").into()),
+                    ("a", EncodedString::raw("1").into()).into(),
+                    ("b", EncodedString::raw("2").into()).into(),
+                    ("c", RawObject::Json(&obj).into()).into(),
+                    ("d", EncodedString::raw("4").into()).into(),
                 ])
                 .unwrap(),
                 ..Default::default()
@@ -2265,10 +2344,10 @@ mod tests {
             message: Some(EncodedString::raw("m").into()),
             fields: RecordFields {
                 head: heapless::Vec::from_slice(&[
-                    ("a", EncodedString::raw("1").into()),
-                    ("b", EncodedString::raw("2").into()),
-                    ("c", RawObject::Json(&obj).into()),
-                    ("d", EncodedString::raw("4").into()),
+                    ("a", EncodedString::raw("1").into()).into(),
+                    ("b", EncodedString::raw("2").into()).into(),
+                    ("c", RawObject::Json(&obj).into()).into(),
+                    ("d", EncodedString::raw("4").into()).into(),
                 ])
                 .unwrap(),
                 ..Default::default()
@@ -2293,10 +2372,10 @@ mod tests {
             message: Some(EncodedString::raw("m").into()),
             fields: RecordFields {
                 head: heapless::Vec::from_slice(&[
-                    ("a", EncodedString::raw("1").into()),
-                    ("b", EncodedString::raw("2").into()),
-                    ("c", RawObject::Json(&obj).into()),
-                    ("d", EncodedString::raw("4").into()),
+                    ("a", EncodedString::raw("1").into()).into(),
+                    ("b", EncodedString::raw("2").into()).into(),
+                    ("c", RawObject::Json(&obj).into()).into(),
+                    ("d", EncodedString::raw("4").into()).into(),
                 ])
                 .unwrap(),
                 ..Default::default()
@@ -2324,9 +2403,9 @@ mod tests {
             message: Some(EncodedString::raw("m").into()),
             fields: RecordFields {
                 head: heapless::Vec::from_slice(&[
-                    ("a", EncodedString::raw("1").into()),
-                    ("b", EncodedString::raw("2").into()),
-                    ("c", EncodedString::raw("3").into()),
+                    ("a", EncodedString::raw("1").into()).into(),
+                    ("b", EncodedString::raw("2").into()).into(),
+                    ("c", EncodedString::raw("3").into()).into(),
                 ])
                 .unwrap(),
                 ..Default::default()
@@ -2361,9 +2440,9 @@ mod tests {
             message: Some(EncodedString::raw("m").into()),
             fields: RecordFields {
                 head: heapless::Vec::from_slice(&[
-                    ("a", EncodedString::raw("1").into()),
-                    ("b", EncodedString::raw("2").into()),
-                    ("c", EncodedString::raw("3").into()),
+                    ("a", EncodedString::raw("1").into()).into(),
+                    ("b", EncodedString::raw("2").into()).into(),
+                    ("c", EncodedString::raw("3").into()).into(),
                 ])
                 .unwrap(),
                 ..Default::default()
@@ -2384,7 +2463,7 @@ mod tests {
         let rec = |m, f| Record {
             message: Some(EncodedString::raw(m).into()),
             fields: RecordFields {
-                head: heapless::Vec::from_slice(&[("a", EncodedString::raw(f).into())]).unwrap(),
+                head: heapless::Vec::from_slice(&[Field::new("a", EncodedString::raw(f).into())]).unwrap(),
                 ..Default::default()
             },
             ..Default::default()
@@ -2459,7 +2538,7 @@ mod tests {
         let rec = |f, ts| Record {
             ts,
             fields: RecordFields {
-                head: heapless::Vec::from_slice(&[("a", EncodedString::raw(f).into())]).unwrap(),
+                head: heapless::Vec::from_slice(&[Field::new("a", EncodedString::raw(f).into())]).unwrap(),
                 ..Default::default()
             },
             ..Default::default()
@@ -2489,7 +2568,7 @@ mod tests {
     fn test_format_uuid() {
         let rec = |value| Record {
             fields: RecordFields {
-                head: heapless::Vec::from_slice(&[("a", EncodedString::raw(value).into())]).unwrap(),
+                head: heapless::Vec::from_slice(&[Field::new("a", EncodedString::raw(value).into())]).unwrap(),
                 ..Default::default()
             },
             ..Default::default()
@@ -2505,7 +2584,7 @@ mod tests {
     fn test_format_int_string() {
         let rec = |value| Record {
             fields: RecordFields {
-                head: heapless::Vec::from_slice(&[("a", EncodedString::json(value).into())]).unwrap(),
+                head: heapless::Vec::from_slice(&[Field::new("a", EncodedString::json(value).into())]).unwrap(),
                 ..Default::default()
             },
             ..Default::default()
@@ -2533,7 +2612,7 @@ mod tests {
     fn test_format_value_with_eq() {
         let rec = |value| Record {
             fields: RecordFields {
-                head: heapless::Vec::from_slice(&[("a", EncodedString::raw(value).into())]).unwrap(),
+                head: heapless::Vec::from_slice(&[Field::new("a", EncodedString::raw(value).into())]).unwrap(),
                 ..Default::default()
             },
             ..Default::default()
