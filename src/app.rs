@@ -29,19 +29,19 @@ use serde::{Deserialize, Serialize};
 // local imports
 use crate::{
     datefmt::{DateTimeFormat, DateTimeFormatter},
-    fmtx::aligned_left,
-    formatting::{RawRecordFormatter, RecordFormatter, RecordWithSourceFormatter},
+    error::*,
+    fmtx::{aligned, Adjustment, Alignment, Padding},
+    formatting::{Expansion, RawRecordFormatter, RecordFormatter, RecordFormatterSettings, RecordWithSourceFormatter},
     fsmon::{self, EventKind},
     index::{Indexer, IndexerSettings, Timestamp},
     input::{BlockLine, Input, InputHolder, InputReference},
     model::{Filter, Parser, ParserSettings, RawRecord, Record, RecordFilter, RecordWithSourceConstructor},
     query::Query,
     scanning::{BufFactory, Delimit, Delimiter, Scanner, SearchExt, Segment, SegmentBuf, SegmentBufFactory},
-    settings::{FieldShowOption, Fields, Formatting},
+    settings::{ExpandOption, FieldShowOption, Fields, Formatting},
     theme::{Element, StylingPush, Theme},
     timezone::Tz,
-    IncludeExcludeKeyFilter,
-    {error::*, QueryNone},
+    IncludeExcludeKeyFilter, QueryNone,
 };
 
 // TODO: merge Options to Settings and replace Options with Settings.
@@ -75,6 +75,7 @@ pub struct Options {
     pub delimiter: Delimiter,
     pub unix_ts_unit: Option<UnixTimestampUnit>,
     pub flatten: bool,
+    pub expand: ExpandOption,
 }
 
 impl Options {
@@ -85,41 +86,6 @@ impl Options {
             (true, Some(query)) => Box::new(query),
             (false, Some(query)) => Box::new((&self.filter).and(query)),
         }
-    }
-
-    #[cfg(test)]
-    fn with_theme(self, theme: Arc<Theme>) -> Self {
-        Self { theme, ..self }
-    }
-
-    #[cfg(test)]
-    fn with_fields(self, fields: FieldOptions) -> Self {
-        Self { fields, ..self }
-    }
-
-    #[cfg(test)]
-    fn with_raw_fields(self, raw_fields: bool) -> Self {
-        Self { raw_fields, ..self }
-    }
-
-    #[cfg(test)]
-    fn with_raw(self, raw: bool) -> Self {
-        Self { raw, ..self }
-    }
-
-    #[cfg(test)]
-    fn with_sort(self, sort: bool) -> Self {
-        Self { sort, ..self }
-    }
-
-    #[cfg(test)]
-    fn with_filter(self, filter: Filter) -> Self {
-        Self { filter, ..self }
-    }
-
-    #[cfg(test)]
-    fn with_input_info(self, input_info: Option<InputInfo>) -> Self {
-        Self { input_info, ..self }
     }
 }
 
@@ -376,7 +342,7 @@ impl App {
             // spawn worker threads
             let mut workers = Vec::with_capacity(n);
             for (rxp, txw) in izip!(rxp, txw) {
-                workers.push(scope.spawn(closure!(ref parser, |_| -> Result<()> {
+                workers.push(scope.spawn(closure!(ref parser, ref input_badges, |_| -> Result<()> {
                     let mut processor = self.new_segment_processor(&parser);
                     for (block, ts_min, i, j) in rxp.iter() {
                         let mut buf = Vec::with_capacity(2 * usize::try_from(block.size())?);
@@ -385,10 +351,11 @@ impl App {
                             if line.len() == 0 {
                                 continue;
                             }
+                            let prefix = input_badges.as_ref().map(|b| b[i].as_str()).unwrap_or("");
                             processor.process(
                                 line.bytes(),
                                 &mut buf,
-                                "",
+                                prefix,
                                 Some(1),
                                 &mut |record: &Record, location: Range<usize>| {
                                     if let Some(ts) = &record.ts {
@@ -453,9 +420,6 @@ impl App {
                     if tso >= tsi && !done {
                         continue;
                     }
-                    if let Some(badges) = &input_badges {
-                        output.write_all(&badges[item.2].as_bytes())?;
-                    }
                     output.write_all((item.0).1.bytes())?;
                     output.write_all(&[b'\n'])?;
                     match item.1.next() {
@@ -481,13 +445,24 @@ impl App {
     }
 
     fn follow(&self, inputs: Vec<InputReference>, output: &mut Output) -> Result<()> {
-        let input_badges = self.input_badges(inputs.iter());
+        let si = &self.options.theme.indicators.sync;
+        let si_width = max(si.synced.width, si.failed.width);
+        let si_synced = si.synced.value.to_owned() + &repeat(' ').take(si_width - si.synced.width).collect::<String>();
+        let si_failed = si.failed.value.to_owned() + &repeat(' ').take(si_width - si.failed.width).collect::<String>();
+        let si_placeholder = repeat(' ').take(si_width).collect::<String>();
+        let mut input_badges = self.input_badges(inputs.iter());
+        if let Some(badges) = &mut input_badges {
+            for i in 0..badges.len() {
+                badges[i] = format!("{}{}", si_placeholder, badges[i]);
+            }
+        }
 
         let m = inputs.len();
         let n = self.options.concurrency;
         let parser = self.parser();
         let sfi = Arc::new(SegmentBufFactory::new(self.options.buffer_size.try_into()?));
         let bfo = BufFactory::new(self.options.buffer_size.try_into()?);
+
         thread::scope(|scope| -> Result<()> {
             // prepare receive/transmit channels for input data
             let (txi, rxi) = channel::bounded(1);
@@ -560,10 +535,10 @@ impl App {
             // spawn processing threads
             let mut workers = Vec::with_capacity(n);
             for _ in 0..n {
-                let worker = scope.spawn(closure!(ref bfo, ref parser, ref sfi, ref input_badges, clone rxi, clone txo, |_| {
+                let worker = scope.spawn(closure!(ref bfo, ref parser, ref sfi, ref input_badges, ref si_placeholder, clone rxi, clone txo, |_| {
                     let mut processor = self.new_segment_processor(&parser);
                     for (i, j, segment) in rxi.iter() {
-                        let prefix = input_badges.as_ref().map(|b|b[i].as_str()).unwrap_or("");
+                        let prefix = input_badges.as_ref().map(|b|b[i].as_str()).unwrap_or(si_placeholder);
                         match segment {
                             Segment::Complete(segment) => {
                                 let mut buf = bfo.new_buf();
@@ -601,14 +576,14 @@ impl App {
                         }
                         if let Some(entry) = window.pop_first() {
                             let sync_indicator = if prev_ts.map(|ts| ts <= entry.0.0).unwrap_or(true) {
-                                &self.options.theme.indicators.sync.synced
+                                &si_synced
                             } else {
-                                &self.options.theme.indicators.sync.failed
+                                &si_failed
                             };
                             prev_ts = Some(entry.0.0);
                             mem_usage -= entry.1.1.end - entry.1.1.start;
-                            output.write_all(sync_indicator.value.as_bytes())?;
-                            output.write_all(&entry.1.0[entry.1.1.clone()])?;
+                            output.write_all(sync_indicator.as_bytes())?;
+                            output.write_all(&entry.1.0[entry.1.1.clone()][si_width..])?;
                             output.write_all(&[b'\n'])?;
                         }
                     }
@@ -672,19 +647,19 @@ impl App {
         if self.options.raw {
             Box::new(RawRecordFormatter {})
         } else {
-            Box::new(
-                RecordFormatter::new(
-                    self.options.theme.clone(),
-                    DateTimeFormatter::new(self.options.time_format.clone(), self.options.time_zone),
-                    self.options.hide_empty_fields,
-                    self.options.fields.filter.clone(),
-                    self.options.formatting.clone(),
-                )
-                .with_field_unescaping(!self.options.raw_fields)
-                .with_flatten(self.options.flatten)
-                .with_always_show_time(self.options.fields.settings.predefined.time.show == FieldShowOption::Always)
-                .with_always_show_level(self.options.fields.settings.predefined.level.show == FieldShowOption::Always),
-            )
+            Box::new(RecordFormatter::new(RecordFormatterSettings {
+                theme: self.options.theme.clone(),
+                ts_formatter: DateTimeFormatter::new(self.options.time_format.clone(), self.options.time_zone),
+                hide_empty_fields: self.options.hide_empty_fields,
+                fields: self.options.fields.filter.clone(),
+                unescape_fields: !self.options.raw_fields,
+                flatten: self.options.flatten,
+                expansion: Expansion::from(self.options.formatting.expansion.clone())
+                    .with_mode(self.options.expand.into()),
+                always_show_time: self.options.fields.settings.predefined.time.show == FieldShowOption::Always,
+                always_show_level: self.options.fields.settings.predefined.level.show == FieldShowOption::Always,
+                ..RecordFormatterSettings::from(self.options.formatting.clone())
+            }))
         }
     }
 
@@ -756,10 +731,20 @@ impl App {
                         s.batch(|buf| buf.extend(opt.input_number_left_separator.as_bytes()));
                         s.element(Element::InputNumberInner, |s| {
                             s.batch(|buf| {
-                                aligned_left(buf, num_width + 1, b' ', |mut buf| {
-                                    buf.extend_from_slice(opt.input_number_prefix.as_bytes());
-                                    buf.extend_from_slice(format!("{}", i).as_bytes());
-                                });
+                                aligned(
+                                    buf,
+                                    Some(Adjustment {
+                                        alignment: Alignment::Right,
+                                        padding: Padding {
+                                            pad: b' ',
+                                            width: num_width + 1,
+                                        },
+                                    }),
+                                    |mut buf| {
+                                        buf.extend_from_slice(opt.input_number_prefix.as_bytes());
+                                        buf.extend_from_slice(format!("{}", i).as_bytes());
+                                    },
+                                );
                                 buf.extend(opt.input_name_left_separator.as_bytes());
                             });
                         });
@@ -886,7 +871,9 @@ impl<'a, Formatter: RecordWithSourceFormatter, Filter: RecordFilter> SegmentProc
                     if ar.prefix.last().map(|&x| x == b' ') == Some(false) {
                         buf.push(b' ');
                     }
-                    self.formatter.format_record(buf, record.with_source(&line[ar.offsets]));
+                    let prefix_range = begin..buf.len();
+                    self.formatter
+                        .format_record(buf, prefix_range, record.with_source(&line[ar.offsets]));
                     let end = buf.len();
                     observer.observe_record(&record, begin..end);
                     produced_some = true;
@@ -1078,7 +1065,13 @@ mod tests {
 
     // local imports
     use crate::{
-        filtering::MatchOptions, level::Level, model::FieldFilterSet, settings, themecfg::testing, LinuxDateFormat,
+        filtering::MatchOptions,
+        level::Level,
+        model::FieldFilterSet,
+        settings::{self, ExpandOption},
+        syntax::*,
+        themecfg::{self, testing},
+        LinuxDateFormat,
     };
 
     #[test]
@@ -1116,7 +1109,10 @@ mod tests {
             r#"{"caller":"main.go:539","duration":"15d","level":"warning","msg":"No time or size retention was set so using the default time retention","ts":"2023-12-07T20:07:05.949Z"}"#,
         );
         let mut output = Vec::new();
-        let app = App::new(options().with_theme(theme()));
+        let app = App::new(Options {
+            theme: theme(),
+            ..options()
+        });
         app.run(vec![input], &mut output).unwrap();
         assert_eq!(
             std::str::from_utf8(&output).unwrap(),
@@ -1129,7 +1125,10 @@ mod tests {
         let input =
             input(r#"{"caller":"main.go:539","duration":"15d","level":"info","ts":"2023-12-07T20:07:05.949Z"}"#);
         let mut output = Vec::new();
-        let app = App::new(options().with_theme(theme()));
+        let app = App::new(Options {
+            theme: theme(),
+            ..options()
+        });
         app.run(vec![input], &mut output).unwrap();
         assert_eq!(
             std::str::from_utf8(&output).unwrap(),
@@ -1143,12 +1142,14 @@ mod tests {
             r#"{"caller":"main.go:539","duration":"15d","level":"info","ts":"2023-12-07T20:07:05.949Z","msg":["x","y"]}"#,
         );
         let mut output = Vec::new();
-        let app = App::new(options().with_theme(theme()));
+        let app = App::new(Options {
+            theme: theme(),
+            ..options()
+        });
         app.run(vec![input], &mut output).unwrap();
-        assert_eq!(
-            std::str::from_utf8(&output).unwrap(),
-            "\u{1b}[0;2;3m2023-12-07 20:07:05.949 \u{1b}[0;36m|INF| \u{1b}[0;32mmsg\u{1b}[0;2m=\u{1b}[0;93m[\u{1b}[0;39mx\u{1b}[0;93m \u{1b}[0;39my\u{1b}[0;93m] \u{1b}[0;32mduration\u{1b}[0;2m=\u{1b}[0;39m15d\u{1b}[0;2;3m @ main.go:539\u{1b}[0m\n",
-        );
+        let actual = std::str::from_utf8(&output).unwrap();
+        let expected = "\u{1b}[0;2;3m2023-12-07 20:07:05.949 \u{1b}[0;36m|INF| \u{1b}[0;32mmsg\u{1b}[0;2m=\u{1b}[0;93m[\u{1b}[0;39mx\u{1b}[0;2;3m \u{1b}[0;39my\u{1b}[0;93m] \u{1b}[0;32mduration\u{1b}[0;2m=\u{1b}[0;39m15d\u{1b}[0;2;3m @ main.go:539\u{1b}[0m\n";
+        assert_eq!(actual, expected);
     }
 
     #[test]
@@ -1159,10 +1160,13 @@ mod tests {
         let mut output = Vec::new();
         let mut ff = IncludeExcludeKeyFilter::new(MatchOptions::default());
         ff.entry("duration").exclude();
-        let app = App::new(options().with_fields(FieldOptions {
-            filter: Arc::new(ff),
-            ..FieldOptions::default()
-        }));
+        let app = App::new(Options {
+            fields: FieldOptions {
+                filter: Arc::new(ff),
+                ..FieldOptions::default()
+            },
+            ..options()
+        });
         app.run(vec![input], &mut output).unwrap();
         assert_eq!(
             std::str::from_utf8(&output).unwrap(),
@@ -1178,7 +1182,10 @@ mod tests {
         let mut output = Vec::new();
         let mut ff = IncludeExcludeKeyFilter::new(MatchOptions::default());
         ff.entry("duration").exclude();
-        let app = App::new(options().with_raw_fields(true));
+        let app = App::new(Options {
+            raw_fields: true,
+            ..options()
+        });
         app.run(vec![input], &mut output).unwrap();
         assert_eq!(
             std::str::from_utf8(&output).unwrap(),
@@ -1195,7 +1202,11 @@ mod tests {
         let mut output = Vec::new();
         let mut ff = IncludeExcludeKeyFilter::new(MatchOptions::default());
         ff.entry("duration").exclude();
-        let app = App::new(options().with_input_info(Some(InputInfo::Auto)).with_raw(true));
+        let app = App::new(Options {
+            input_info: Some(InputInfo::Auto),
+            raw: true,
+            ..options()
+        });
         app.run(vec![input(input1), input(input2)], &mut output).unwrap();
         assert_eq!(
             std::str::from_utf8(&output).unwrap(),
@@ -1210,7 +1221,7 @@ mod tests {
 
         let input = input(format!("{}\n\r\n{}\n", L1, L2));
         let mut output = Vec::new();
-        let app = App::new(options().with_raw(true));
+        let app = App::new(Options { raw: true, ..options() });
         app.run(vec![input], &mut output).unwrap();
         assert_eq!(std::str::from_utf8(&output).unwrap(), format!("{}\n\n{}\n", L1, L2),);
     }
@@ -1225,7 +1236,10 @@ mod tests {
         ));
 
         let mut output = Vec::new();
-        let app = App::new(options().with_sort(true));
+        let app = App::new(Options {
+            sort: true,
+            ..options()
+        });
         app.run(vec![input], &mut output).unwrap();
         assert_eq!(
             std::str::from_utf8(&output).unwrap(),
@@ -1246,10 +1260,13 @@ mod tests {
         ));
 
         let mut output = Vec::new();
-        let app = App::new(options().with_filter(Filter {
-            fields: FieldFilterSet::new(["msg=m2"]).unwrap(),
-            ..Default::default()
-        }));
+        let app = App::new(Options {
+            filter: Filter {
+                fields: FieldFilterSet::new(["msg=m2"]).unwrap(),
+                ..Default::default()
+            },
+            ..options()
+        });
         app.run(vec![input], &mut output).unwrap();
         assert_eq!(
             std::str::from_utf8(&output).unwrap(),
@@ -1266,7 +1283,10 @@ mod tests {
         ));
 
         let mut output = Vec::new();
-        let app = App::new(options().with_sort(true));
+        let app = App::new(Options {
+            sort: true,
+            ..options()
+        });
         app.run(vec![input], &mut output).unwrap();
         assert_eq!(
             std::str::from_utf8(&output).unwrap(),
@@ -1287,7 +1307,10 @@ mod tests {
         ));
 
         let mut output = Vec::new();
-        let app = App::new(options().with_sort(true));
+        let app = App::new(Options {
+            sort: true,
+            ..options()
+        });
         app.run(vec![input], &mut output).unwrap();
         assert_eq!(
             std::str::from_utf8(&output).unwrap(),
@@ -1306,10 +1329,13 @@ mod tests {
         filter.entry("a.b").exclude();
 
         let mut output = Vec::new();
-        let app = App::new(options().with_fields(FieldOptions {
-            filter: Arc::new(filter),
-            ..FieldOptions::default()
-        }));
+        let app = App::new(Options {
+            fields: FieldOptions {
+                filter: Arc::new(filter),
+                ..FieldOptions::default()
+            },
+            ..options()
+        });
         app.run(vec![input], &mut output).unwrap();
         assert_eq!(
             std::str::from_utf8(&output).unwrap(),
@@ -1329,10 +1355,13 @@ mod tests {
         filter.entry("a.b.d").include();
 
         let mut output = Vec::new();
-        let app = App::new(options().with_fields(FieldOptions {
-            filter: Arc::new(filter),
-            ..FieldOptions::default()
-        }));
+        let app = App::new(Options {
+            fields: FieldOptions {
+                filter: Arc::new(filter),
+                ..FieldOptions::default()
+            },
+            ..options()
+        });
         app.run(vec![input], &mut output).unwrap();
         assert_eq!(
             std::str::from_utf8(&output).unwrap(),
@@ -1348,32 +1377,234 @@ mod tests {
         ));
 
         let mut output = Vec::new();
-        let app = App::new(options().with_fields(FieldOptions {
-            settings: Fields {
-                predefined: settings::PredefinedFields {
-                    level: settings::LevelField {
-                        variants: vec![settings::LevelFieldVariant {
-                            names: vec!["level".to_string()],
-                            values: hashmap! {
-                                Level::Debug => vec!["dbg".to_string()],
-                                Level::Info => vec!["INF".to_string()],
-                                Level::Warning => vec!["wrn".to_string()],
-                                Level::Error => vec!["ERR".to_string()],
-                            },
-                            level: None,
-                        }],
+        let app = App::new(Options {
+            fields: FieldOptions {
+                settings: Fields {
+                    predefined: settings::PredefinedFields {
+                        level: settings::LevelField {
+                            variants: vec![settings::LevelFieldVariant {
+                                names: vec!["level".to_string()],
+                                values: hashmap! {
+                                    Level::Debug => vec!["dbg".to_string()],
+                                    Level::Info => vec!["INF".to_string()],
+                                    Level::Warning => vec!["wrn".to_string()],
+                                    Level::Error => vec!["ERR".to_string()],
+                                },
+                                level: None,
+                            }],
+                            ..Default::default()
+                        },
                         ..Default::default()
                     },
                     ..Default::default()
                 },
                 ..Default::default()
             },
-            ..Default::default()
-        }));
+            ..options()
+        });
         app.run(vec![input], &mut output).unwrap();
         assert_eq!(
             std::str::from_utf8(&output).unwrap(),
             "2024-06-04 15:14:35.190 |INF| aLogger: An INFO log message @ aCaller\n",
+        );
+    }
+
+    #[test]
+    fn test_expand_always() {
+        let input = input(concat!(
+            r#"level=debug time=2024-01-25T19:10:20.435369+01:00 msg=m1 a.b.c=10 a.b.d=20 a.c.b=11 caller=src1"#,
+            "\n",
+        ));
+
+        let mut output = Vec::new();
+        let app = App::new(Options {
+            expand: ExpandOption::Always,
+            ..options()
+        });
+
+        app.run(vec![input], &mut output).unwrap();
+        assert_eq!(
+            std::str::from_utf8(&output).unwrap(),
+            format!(
+                concat!(
+                    "2024-01-25 18:10:20.435 |{ld}| m1 @ src1\n",
+                    "                        |{lx}|   > a.b.c=10\n",
+                    "                        |{lx}|   > a.b.d=20\n",
+                    "                        |{lx}|   > a.c.b=11\n"
+                ),
+                ld = LEVEL_DEBUG,
+                lx = LEVEL_EXPANDED,
+            ),
+        );
+    }
+
+    #[test]
+    fn test_expand_never() {
+        let input = input(concat!(
+            r#"level=debug time=2024-01-25T19:10:20.435369+01:00 msg="some long long long long message" caller=src1 a=long-long-long-value-1 b=long-long-long-value-2 c=long-long-long-value-3 d=long-long-long-value-4 e=long-long-long-value-5 f=long-long-long-value-6 g=long-long-long-value-7 h=long-long-long-value-8 i=long-long-long-value-9 j=long-long-long-value-10 k=long-long-long-value-11 l=long-long-long-value-12 m=long-long-long-value-13 n=long-long-long-value-14 o=long-long-long-value-15 p=long-long-long-value-16 q=long-long-long-value-17 r=long-long-long-value-18 s=long-long-long-value-19 t=long-long-long-value-20 u=long-long-long-value-21 v=long-long-long-value-22 w=long-long-long-value-23 x=long-long-long-value-24 w=long-long-long-value-26 z=long-long-long-value-26"#,
+            "\n",
+        ));
+
+        let mut output = Vec::new();
+        let app = App::new(Options {
+            expand: ExpandOption::Never,
+            ..options()
+        });
+
+        app.run(vec![input], &mut output).unwrap();
+        assert_eq!(
+            std::str::from_utf8(&output).unwrap(),
+            "2024-01-25 18:10:20.435 |DBG| some long long long long message a=long-long-long-value-1 b=long-long-long-value-2 c=long-long-long-value-3 d=long-long-long-value-4 e=long-long-long-value-5 f=long-long-long-value-6 g=long-long-long-value-7 h=long-long-long-value-8 i=long-long-long-value-9 j=long-long-long-value-10 k=long-long-long-value-11 l=long-long-long-value-12 m=long-long-long-value-13 n=long-long-long-value-14 o=long-long-long-value-15 p=long-long-long-value-16 q=long-long-long-value-17 r=long-long-long-value-18 s=long-long-long-value-19 t=long-long-long-value-20 u=long-long-long-value-21 v=long-long-long-value-22 w=long-long-long-value-23 x=long-long-long-value-24 w=long-long-long-value-26 z=long-long-long-value-26 @ src1\n",
+        );
+    }
+
+    #[test]
+    fn test_expand_value_with_time() {
+        let input = input(concat!(
+            r#"level=debug time=2024-01-25T19:10:20.435369+01:00 msg=hello caller=src1 a="line one\nline two\nline three\n""#,
+            "\n",
+        ));
+
+        let mut output = Vec::new();
+        let app = App::new(Options {
+            expand: ExpandOption::Always,
+            theme: Theme::from(themecfg::Theme {
+                elements: themecfg::StylePack(hashmap! {
+                    Element::ValueExpansion => themecfg::Style::default(),
+                }),
+                ..Default::default()
+            })
+            .into(),
+            ..options()
+        });
+
+        app.run(vec![input], &mut output).unwrap();
+
+        let actual = std::str::from_utf8(&output).unwrap();
+        let expected = format!(
+            concat!(
+                "2024-01-25 18:10:20.435 |{ld}| hello @ src1\n",
+                "                        |{lx}|   > a={vh}\n",
+                "                        |{lx}|     {vi}line one\n",
+                "                        |{lx}|     {vi}line two\n",
+                "                        |{lx}|     {vi}line three\n",
+            ),
+            ld = LEVEL_DEBUG,
+            lx = LEVEL_EXPANDED,
+            vh = EXPANDED_VALUE_HEADER,
+            vi = EXPANDED_VALUE_INDENT,
+        );
+
+        assert_eq!(actual, expected, "\nactual:\n{}expected:\n{}", actual, expected);
+    }
+
+    #[test]
+    fn test_expand_value_without_time() {
+        let input = input(concat!(
+            r#"level=debug msg=hello caller=src1 a="line one\nline two\nline three\n""#,
+            "\n",
+        ));
+
+        let mut output = Vec::new();
+        let app = App::new(Options {
+            expand: ExpandOption::Always,
+            theme: Theme::from(themecfg::Theme {
+                elements: themecfg::StylePack(hashmap! {
+                    Element::ValueExpansion => themecfg::Style::default(),
+                }),
+                ..Default::default()
+            })
+            .into(),
+            ..options()
+        });
+
+        app.run(vec![input], &mut output).unwrap();
+
+        let actual = std::str::from_utf8(&output).unwrap();
+        let expected = format!(
+            concat!(
+                "|{ld}| hello @ src1\n",
+                "|{lx}|   > a={vh}\n",
+                "|{lx}|     {vi}line one\n",
+                "|{lx}|     {vi}line two\n",
+                "|{lx}|     {vi}line three\n",
+            ),
+            ld = LEVEL_DEBUG,
+            lx = LEVEL_EXPANDED,
+            vh = EXPANDED_VALUE_HEADER,
+            vi = EXPANDED_VALUE_INDENT,
+        );
+
+        assert_eq!(actual, expected, "\nactual:\n{}expected:\n{}", actual, expected);
+    }
+
+    #[test]
+    fn test_expand_empty_values() {
+        let input = input(concat!(r#"level=debug msg=hello caller=src1 a="" b="" c="""#, "\n",));
+
+        let mut output = Vec::new();
+        let app = App::new(Options {
+            expand: ExpandOption::Auto,
+            ..options()
+        });
+
+        app.run(vec![input], &mut output).unwrap();
+
+        assert_eq!(
+            std::str::from_utf8(&output).unwrap(),
+            concat!(r#"|DBG| hello a="" b="" c="" @ src1"#, "\n")
+        );
+    }
+
+    #[test]
+    fn test_expand_empty_hidden_values() {
+        let input = input(concat!(r#"level=debug msg=hello caller=src1 a="" b="" c="""#, "\n",));
+
+        let mut output = Vec::new();
+        let app = App::new(Options {
+            expand: ExpandOption::Auto,
+            hide_empty_fields: true,
+            ..options()
+        });
+
+        app.run(vec![input], &mut output).unwrap();
+
+        assert_eq!(
+            std::str::from_utf8(&output).unwrap(),
+            concat!(r#"|DBG| hello @ src1"#, "\n")
+        );
+    }
+
+    #[test]
+    fn test_input_badges() {
+        let inputs = (1..12)
+            .into_iter()
+            .map(|i| input(format!("msg=hello input={}\n", i)))
+            .collect_vec();
+
+        let app = App::new(Options {
+            input_info: Some(InputInfo::Minimal),
+            ..options()
+        });
+
+        let mut output = Vec::new();
+        app.run(inputs, &mut output).unwrap();
+
+        assert_eq!(
+            std::str::from_utf8(&output).unwrap(),
+            concat!(
+                " #0 | hello input=1\n",
+                " #1 | hello input=2\n",
+                " #2 | hello input=3\n",
+                " #3 | hello input=4\n",
+                " #4 | hello input=5\n",
+                " #5 | hello input=6\n",
+                " #6 | hello input=7\n",
+                " #7 | hello input=8\n",
+                " #8 | hello input=9\n",
+                " #9 | hello input=10\n",
+                "#10 | hello input=11\n",
+            )
         );
     }
 
@@ -1409,6 +1640,7 @@ mod tests {
             delimiter: Delimiter::default(),
             unix_ts_unit: None,
             flatten: false,
+            expand: Default::default(),
         }
     }
 

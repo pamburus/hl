@@ -225,6 +225,38 @@
                         "always"
                     ]
                 },
+                "expansion": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                        "mode": {
+                            "type": "string",
+                            "enum": [
+                                "auto",
+                                "never",
+                                "always"
+                            ]
+                        },
+                        "thresholds": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "properties": {
+                                "global": {
+                                    "type": "integer"
+                                },
+                                "cumulative": {
+                                    "type": "integer"
+                                },
+                                "message": {
+                                    "type": "integer"
+                                },
+                                "field": {
+                                    "type": "integer"
+                                }
+                            }
+                        }
+                    }
+                },
                 "punctuation": {
                     "type": "object",
                     "additionalProperties": false,

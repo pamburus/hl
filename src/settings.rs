@@ -237,15 +237,53 @@ impl Field {
 pub struct Formatting {
     pub punctuation: Punctuation,
     pub flatten: Option<FlattenOption>,
+    pub expansion: ExpansionOptions,
+}
+
+#[derive(Clone, Debug, Default, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub struct ExpansionOptions {
+    pub mode: Option<ExpandOption>,
+    pub thresholds: ExpansionThresholds,
+}
+
+#[derive(Clone, Debug, Default, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub struct ExpansionThresholds {
+    pub global: Option<usize>,
+    pub cumulative: Option<usize>,
+    pub message: Option<usize>,
+    pub field: Option<usize>,
 }
 
 // ---
 
-#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq, Copy)]
 #[serde(rename_all = "kebab-case")]
 pub enum FlattenOption {
     Never,
     Always,
+}
+
+// ---
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq, Copy, Default)]
+#[serde(rename_all = "kebab-case")]
+pub enum ExpandOption {
+    #[default]
+    Auto,
+    Never,
+    Always,
+}
+
+impl Into<Option<bool>> for ExpandOption {
+    fn into(self) -> Option<bool> {
+        match self {
+            Self::Auto => None,
+            Self::Never => Some(false),
+            Self::Always => Some(true),
+        }
+    }
 }
 
 // ---
@@ -294,7 +332,7 @@ impl Default for Punctuation {
             string_opening_quote: "'".into(),
             string_closing_quote: "'".into(),
             source_location_separator: "@ ".into(),
-            hidden_fields_indicator: " ...".into(),
+            hidden_fields_indicator: "...".into(),
             level_left_separator: "|".into(),
             level_right_separator: "|".into(),
             input_number_prefix: "#".into(),
