@@ -816,6 +816,17 @@ impl<'a> FieldFormatter<'a> {
             RawValue::String(EncodedString::Raw(value)) => RawValue::auto(value.as_str()),
             _ => value,
         };
+
+        let complexity_limit = if fs.expand.is_none() {
+            Some(std::cmp::min(
+                self.rf.cfg.expansion.thresholds.field,
+                self.rf.cfg.expansion.thresholds.cumulative
+                    - std::cmp::min(self.rf.cfg.expansion.thresholds.cumulative, fs.complexity),
+            ))
+        } else {
+            None
+        };
+
         match value {
             RawValue::String(value) => {
                 let result = s.element(Element::String, |s| {
@@ -826,15 +837,7 @@ impl<'a> FieldFormatter<'a> {
                                 Some(false) => ExtendedSpaceAction::FormatWithBacktick,
                                 None => ExtendedSpaceAction::Abort,
                             })
-                            .with_complexity_limit(if fs.expand.is_none() {
-                                Some(std::cmp::min(
-                                    self.rf.cfg.expansion.thresholds.field,
-                                    self.rf.cfg.expansion.thresholds.cumulative
-                                        - std::cmp::min(self.rf.cfg.expansion.thresholds.cumulative, fs.complexity),
-                                ))
-                            } else {
-                                None
-                            })
+                            .with_complexity_limit(complexity_limit)
                             .format(buf)
                             .unwrap()
                     })
@@ -867,7 +870,15 @@ impl<'a> FieldFormatter<'a> {
                 fs.complexity += 4;
             }
             RawValue::Object(value) => {
-                fs.complexity += 4;
+                const FIXED_COMPLEXITY: usize = 4;
+
+                if let Some(limit) = complexity_limit {
+                    if FIXED_COMPLEXITY + value.get().len() > limit {
+                        return ValueFormatResult::ExpansionNeeded;
+                    }
+                }
+
+                fs.complexity += FIXED_COMPLEXITY;
                 let item = value.parse().unwrap();
                 if !fs.flatten && (!fs.expand.unwrap_or(false) || value.is_empty()) {
                     s.element(Element::Object, |s| {
@@ -912,7 +923,15 @@ impl<'a> FieldFormatter<'a> {
                 }
             }
             RawValue::Array(value) => {
-                fs.complexity += 4;
+                const FIXED_COMPLEXITY: usize = 4;
+
+                if let Some(limit) = complexity_limit {
+                    if FIXED_COMPLEXITY + value.get().len() > limit {
+                        return ValueFormatResult::ExpansionNeeded;
+                    }
+                }
+
+                fs.complexity += FIXED_COMPLEXITY;
                 let xb = fs.expand.replace(false);
                 let item = value.parse::<32>().unwrap();
                 s.element(Element::Array, |s| {
@@ -933,6 +952,7 @@ impl<'a> FieldFormatter<'a> {
                 fs.expand = xb;
             }
         };
+
         ValueFormatResult::Ok
     }
 
