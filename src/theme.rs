@@ -243,18 +243,20 @@ impl<'a, B: Push<u8>> Styler<'a, B> {
 
 impl<'a> Styler<'a, Vec<u8>> {
     #[inline]
-    pub fn transact<F: FnOnce(&mut Self) -> bool>(&mut self, f: F) -> bool {
+    pub fn transact<R, E, F>(&mut self, f: F) -> std::result::Result<R, E>
+    where
+        F: FnOnce(&mut Self) -> std::result::Result<R, E>,
+    {
         let current = self.current;
         let synced = self.synced;
         let n = self.buf.len();
-        if f(self) {
-            true
-        } else {
+        let result = f(self);
+        if result.is_err() {
             self.buf.truncate(n);
             self.current = current;
             self.synced = synced;
-            false
         }
+        result
     }
 }
 

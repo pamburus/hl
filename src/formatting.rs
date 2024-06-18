@@ -20,7 +20,7 @@ use crate::{
 };
 
 // relative imports
-use string::{ExtendedSpaceAction, Format, MessageFormatAuto, ValueFormatAuto};
+use string::{Analysis, ExtendedSpaceAction, Format, MessageFormatAuto, ValueFormatAuto};
 
 // ---
 
@@ -210,7 +210,7 @@ impl RecordFormatter {
             //
             // time
             //
-            if !fs.transact(s, |fs, s| self.format_timestamp(rec, fs, s)) {
+            if fs.transact(s, |fs, s| self.format_timestamp(rec, fs, s)).is_err() {
                 if let Some(ts) = &rec.ts {
                     fs.extra_fields
                         .push(("ts", RawValue::String(EncodedString::raw(ts.raw()))))
@@ -255,11 +255,14 @@ impl RecordFormatter {
             // message text
             //
             if let Some(value) = &rec.message {
-                if fs.transact(s, |fs, s| self.format_message(s, fs, *value)) {
-                    fs.complexity += 4;
-                    fs.first_line_used = true;
-                } else {
-                    self.add_field_to_expand(s, &mut fs, "msg", *value, Some(&self.cfg.fields));
+                match fs.transact(s, |fs, s| self.format_message(s, fs, *value)) {
+                    Ok(()) => {
+                        fs.complexity += 4;
+                        fs.first_line_used = true;
+                    }
+                    Err(_) => {
+                        self.add_field_to_expand(s, &mut fs, "msg", *value, Some(&self.cfg.fields));
+                    }
                 }
             } else {
                 s.reset();
@@ -283,16 +286,17 @@ impl RecordFormatter {
             let x_fields = std::mem::take(&mut fs.extra_fields);
             for (k, v) in x_fields.iter().chain(rec.fields()) {
                 if !self.cfg.hide_empty_fields || !v.is_empty() {
-                    if !fs.transact(s, |fs, s| {
+                    let result = fs.transact(s, |fs, s| {
                         match self.format_field(s, k, *v, fs, Some(&self.cfg.fields)) {
-                            FieldFormatResult::Ok => true,
+                            FieldFormatResult::Ok => Ok(()),
                             FieldFormatResult::Hidden => {
                                 some_fields_hidden = true;
-                                true
+                                Ok(())
                             }
-                            FieldFormatResult::ExpansionNeeded => false,
+                            FieldFormatResult::ExpansionNeeded => Err(()),
                         }
-                    }) {
+                    });
+                    if let Err(_) = result {
                         self.add_field_to_expand(s, &mut fs, k, *v, Some(&self.cfg.fields));
                     }
                 }
@@ -333,9 +337,9 @@ impl RecordFormatter {
         rec: &model::Record,
         fs: &mut FormattingStateWithRec,
         s: &mut S,
-    ) -> bool {
+    ) -> Result<(), ()> {
         let Some(ts) = &rec.ts else {
-            return false;
+            return Err(());
         };
 
         fs.ts_width = self.ts_width.chars;
@@ -348,12 +352,12 @@ impl RecordFormatter {
                         .and_then(|ts| self.cfg.ts_formatter.reformat_rfc3339(&mut buf, ts))
                         .is_some()
                     {
-                        true
+                        Ok(())
                     } else if let Some(ts) = ts.parse() {
                         self.cfg.ts_formatter.format(&mut buf, ts);
-                        true
+                        Ok(())
                     } else {
-                        false
+                        Err(())
                     }
                 })
             })
@@ -458,7 +462,7 @@ impl RecordFormatter {
         s: &mut S,
         fs: &mut FormattingStateWithRec,
         value: RawValue<'a>,
-    ) -> bool {
+    ) -> Result<(), Option<Analysis>> {
         match value {
             RawValue::String(value) => {
                 if !value.is_empty() {
@@ -484,20 +488,20 @@ impl RecordFormatter {
                                     if let Some(analysis) = analysis {
                                         fs.complexity += analysis.complexity;
                                     }
-                                    true
+                                    Ok(())
                                 }
                                 string::FormatResult::Aborted => {
                                     fs.expand = Some(true);
-                                    false
+                                    Err(None)
                                 }
                             }
                         })
                     })
                 } else {
-                    true
+                    Ok(())
                 }
             }
-            _ => false,
+            _ => Err(None),
         }
     }
 
@@ -638,13 +642,16 @@ impl<'a> FormattingStateWithRec<'a> {
         }
     }
 
-    fn transact(&mut self, s: &mut Styler<Buf>, f: impl FnOnce(&mut Self, &mut Styler<Buf>) -> bool) -> bool {
+    fn transact<R, E, F>(&mut self, s: &mut Styler<Buf>, f: F) -> Result<R, E>
+    where
+        F: FnOnce(&mut Self, &mut Styler<Buf>) -> Result<R, E>,
+    {
         let dirty = self.dirty;
         let depth = self.depth;
         let first_line_used = self.first_line_used;
         let complexity = self.complexity;
         let result = s.transact(|s| f(self, s));
-        if !result {
+        if result.is_err() {
             self.dirty = dirty;
             self.depth = depth;
             self.first_line_used = first_line_used;
