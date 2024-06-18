@@ -20,7 +20,7 @@ use crate::{
 };
 
 // relative imports
-use string::{Analysis, ExtendedSpaceAction, Format, MessageFormatAuto, ValueFormatAuto};
+use string::{ExtendedSpaceAction, Format, MessageFormatAuto, ValueFormatAuto};
 
 // ---
 
@@ -260,8 +260,11 @@ impl RecordFormatter {
                         fs.complexity += 4;
                         fs.first_line_used = true;
                     }
-                    Err(_) => {
+                    Err(MessageFormatError::ExpansionNeeded) => {
                         self.add_field_to_expand(s, &mut fs, "msg", *value, Some(&self.cfg.fields));
+                    }
+                    Err(MessageFormatError::FormattingAsFieldNeeded) => {
+                        fs.extra_fields.push(("msg", *value)).ok();
                     }
                 }
             } else {
@@ -462,7 +465,7 @@ impl RecordFormatter {
         s: &mut S,
         fs: &mut FormattingStateWithRec,
         value: RawValue<'a>,
-    ) -> Result<(), Option<Analysis>> {
+    ) -> Result<(), MessageFormatError> {
         match value {
             RawValue::String(value) => {
                 if !value.is_empty() {
@@ -492,7 +495,7 @@ impl RecordFormatter {
                                 }
                                 string::FormatResult::Aborted => {
                                     fs.expand = Some(true);
-                                    Err(None)
+                                    Err(MessageFormatError::ExpansionNeeded)
                                 }
                             }
                         })
@@ -501,7 +504,7 @@ impl RecordFormatter {
                     Ok(())
                 }
             }
-            _ => Err(None),
+            _ => Err(MessageFormatError::FormattingAsFieldNeeded),
         }
     }
 
@@ -599,12 +602,13 @@ impl RecordFormatter {
         value: RawValue<'a>,
         filter: Option<&IncludeExcludeKeyFilter>,
     ) {
-        if fs.expand == Some(true) {
-            self.expand(s, fs);
-            return;
-        }
+        let result = if fs.expand == Some(true) {
+            Err((key, value))
+        } else {
+            fs.fields_to_expand.push((key, value))
+        };
 
-        if let Err((key, value)) = fs.fields_to_expand.push((key, value)) {
+        if let Err((key, value)) = result {
             fs.expand = Some(true);
             self.expand(s, fs);
             _ = self.format_field(s, key, value, fs, filter);
@@ -1057,6 +1061,10 @@ enum FieldFormatResult {
     Ok,
     Hidden,
     ExpansionNeeded,
+}
+enum MessageFormatError {
+    ExpansionNeeded,
+    FormattingAsFieldNeeded,
 }
 
 // ---
@@ -2271,7 +2279,7 @@ mod tests {
         let result = formatter.format_to_string(&rec);
         assert_eq!(
             &result,
-            "m a=1 b=2\n  > c:\n    > x=10\n    > y=|=>\n       \tsome\n       \tmultiline\n       \tvalue\n    > z=30\n  > d=4"
+            "m a=1 b=2 d=4\n  > c:\n    > x=10\n    > y=|=>\n       \tsome\n       \tmultiline\n       \tvalue\n    > z=30"
         );
     }
 
