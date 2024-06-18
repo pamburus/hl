@@ -304,7 +304,7 @@ impl RecordFormatter {
                             FieldFormatResult::ExpansionNeeded => Err(()),
                         }
                     });
-                    if let Err(_) = result {
+                    if let Err(()) = result {
                         self.add_field_to_expand(s, &mut fs, k, *v, Some(&self.cfg.fields));
                     }
                 }
