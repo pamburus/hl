@@ -339,7 +339,6 @@ impl RecordFormatter {
     }
 
     #[inline]
-    #[must_use]
     fn format_timestamp<S: StylingPush<Buf>>(
         &self,
         rec: &model::Record,
@@ -464,7 +463,6 @@ impl RecordFormatter {
     }
 
     #[inline]
-    #[must_use]
     fn format_message<'a, S: StylingPush<Buf>>(
         &self,
         s: &mut S,
