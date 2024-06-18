@@ -2416,7 +2416,7 @@ mod tests {
                     "  \u{1b}[0;2m> \u{1b}[0;32mmsg\u{1b}[0;2m=\u{1b}[0;39m\u{1b}[0;2m{vh}\u{1b}[0m\n",
                     "  \u{1b}[0;2m  {vi}\u{1b}[0msome\n",
                     "  \u{1b}[0;2m  {vi}\u{1b}[0mmultiline\n",
-                    "  \u{1b}[0;2m  {vi}\u{1b}[0mtext\u{1b}[0m\n",
+                    "  \u{1b}[0;2m  {vi}\u{1b}[0mtext\u{1b}[0;2m\u{1b}[0m\n",
                     "  \u{1b}[0;2m> \u{1b}[0;32ma\u{1b}[0;2m=\u{1b}[0;94m1\u{1b}[0m"
                 ),
                 mh = EXPANDED_MESSAGE_HEADER,
