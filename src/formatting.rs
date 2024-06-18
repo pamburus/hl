@@ -1601,10 +1601,10 @@ pub mod string {
 
     static COMPLEXITY: [usize; 256] = {
         const XS: usize = 32;
-        const CT: usize = 64;
+        const CT: usize = 8;
         const QU: usize = 4;
         const EQ: usize = 4;
-        const BS: usize = 16;
+        const BS: usize = 8;
         const __: usize = 1;
         [
             //   1   2   3   4   5   6   7   8   9   A   B   C   D   E   F
