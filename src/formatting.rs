@@ -291,7 +291,12 @@ impl RecordFormatter {
                 if !self.cfg.hide_empty_fields || !v.is_empty() {
                     let result = fs.transact(s, |fs, s| {
                         match self.format_field(s, k, *v, fs, Some(&self.cfg.fields)) {
-                            FieldFormatResult::Ok => Ok(()),
+                            FieldFormatResult::Ok => {
+                                if fs.expand != Some(true) {
+                                    fs.first_line_used = true;
+                                }
+                                Ok(())
+                            }
                             FieldFormatResult::Hidden => {
                                 some_fields_hidden = true;
                                 Ok(())
@@ -493,10 +498,7 @@ impl RecordFormatter {
                                     }
                                     Ok(())
                                 }
-                                string::FormatResult::Aborted => {
-                                    fs.expand = Some(true);
-                                    Err(MessageFormatError::ExpansionNeeded)
-                                }
+                                string::FormatResult::Aborted => Err(MessageFormatError::ExpansionNeeded),
                             }
                         })
                     })
@@ -2413,14 +2415,12 @@ mod tests {
             formatter.format_to_string(&rec("some\nmultiline\ntext", "1")),
             format!(
                 concat!(
-                    "{mh}\n",
+                    "a=1\n",
                     "  > msg={vh}\n",
                     "    {vi}some\n",
                     "    {vi}multiline\n",
-                    "    {vi}text\n",
-                    "  > a=1"
+                    "    {vi}text",
                 ),
-                mh = EXPANDED_MESSAGE_HEADER,
                 vh = EXPANDED_VALUE_HEADER,
                 vi = EXPANDED_VALUE_INDENT,
             )
@@ -2432,14 +2432,12 @@ mod tests {
             formatter.format_to_string(&rec("some\nmultiline\ntext", "1")),
             format!(
                 concat!(
-                    "\u{1b}[0;1;39m{mh}\u{1b}[0m\n",
+                    "\u{1b}[0;32ma\u{1b}[0;2m=\u{1b}[0;94m1\u{1b}[0;32m\u{1b}[0m\n",
                     "  \u{1b}[0;2m> \u{1b}[0;32mmsg\u{1b}[0;2m=\u{1b}[0;39m\u{1b}[0;2m{vh}\u{1b}[0m\n",
                     "  \u{1b}[0;2m  {vi}\u{1b}[0msome\n",
                     "  \u{1b}[0;2m  {vi}\u{1b}[0mmultiline\n",
-                    "  \u{1b}[0;2m  {vi}\u{1b}[0mtext\u{1b}[0;2m\u{1b}[0m\n",
-                    "  \u{1b}[0;2m> \u{1b}[0;32ma\u{1b}[0;2m=\u{1b}[0;94m1\u{1b}[0m"
+                    "  \u{1b}[0;2m  {vi}\u{1b}[0mtext\u{1b}[0m",
                 ),
-                mh = EXPANDED_MESSAGE_HEADER,
                 vh = EXPANDED_VALUE_HEADER,
                 vi = EXPANDED_VALUE_INDENT,
             )
