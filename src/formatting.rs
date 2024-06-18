@@ -475,7 +475,7 @@ impl RecordFormatter {
             RawValue::String(value) => {
                 if !value.is_empty() {
                     if value.source().len() > self.cfg.expansion.thresholds.message {
-                        fs.expand = Some(fs.expand.unwrap_or(true));
+                        return Err(MessageFormatError::ExpansionNeeded);
                     }
                     fs.add_element(|| {
                         s.reset();
@@ -2394,7 +2394,7 @@ mod tests {
 
         assert_eq!(
             formatter.format_to_string(&rec(lorem_ipsum, "1")),
-            lorem_ipsum.to_owned() + "\n  > a=1"
+            format!("a=1\n  > msg=\"{}\"", lorem_ipsum)
         );
         assert_eq!(
             formatter.format_to_string(&rec("", "some\nmultiline\ntext")),
