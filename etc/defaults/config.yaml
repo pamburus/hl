@@ -6,7 +6,7 @@ time-format: '%b %d %T.%3N'
 
 # Time zone name, see column "TZ identifier" at
 # https://en.wikipedia.org/wiki/List_of_tz_database_time_zones page.
-time-zone: UTC
+time-zone: 'UTC'
 
 # Settings for fields processing.
 fields:
