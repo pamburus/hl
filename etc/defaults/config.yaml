@@ -16,36 +16,36 @@ fields:
       show: auto
       names:
         [
-          ts,
-          TS,
-          time,
-          TIME,
-          Time,
-          Timestamp,
-          _SOURCE_REALTIME_TIMESTAMP,
-          __REALTIME_TIMESTAMP,
+          'ts',
+          'TS',
+          'time',
+          'TIME',
+          'Time',
+          'Timestamp',
+          '_SOURCE_REALTIME_TIMESTAMP',
+          '__REALTIME_TIMESTAMP',
         ]
     logger:
-      names: [logger, LOGGER, Logger]
+      names: ['logger', 'LOGGER', 'Logger']
     level:
       show: auto
       variants:
-        - names: [level, LEVEL, Level]
+        - names: ['level', 'LEVEL', 'Level']
           values:
-            debug: [debug]
-            info: [info, information]
-            warning: [warning, warn]
-            error: [error, err, fatal, critical, panic]
-        - names: [PRIORITY]
+            debug: ['debug']
+            info: ['info', 'information']
+            warning: ['warning', 'warn']
+            error: ['error', 'err', 'fatal', 'critical', 'panic']
+        - names: ['PRIORITY']
           values:
             debug: [7]
             info: [6]
             warning: [5, 4]
             error: [3, 2, 1]
     message:
-      names: [msg, message, MESSAGE, Message]
+      names: ['msg', 'message', 'MESSAGE', 'Message']
     caller:
-      names: [caller, CALLER, Caller]
+      names: ['caller', 'CALLER', 'Caller']
     caller-file:
       names: []
     caller-line:
@@ -80,4 +80,4 @@ formatting:
 concurrency: ~
 
 # Currently selected theme.
-theme: universal
+theme: 'universal'
