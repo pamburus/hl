@@ -38,7 +38,7 @@ use crate::{
     model::{Filter, Parser, ParserSettings, RawRecord, Record, RecordFilter, RecordWithSourceConstructor},
     query::Query,
     scanning::{BufFactory, Delimit, Delimiter, Scanner, SearchExt, Segment, SegmentBuf, SegmentBufFactory},
-    settings::{ExpandOption, FieldShowOption, Fields, Formatting},
+    settings::{ExpansionMode, FieldShowOption, Fields, Formatting},
     theme::{Element, StylingPush, Theme},
     timezone::Tz,
     IncludeExcludeKeyFilter, QueryNone,
@@ -75,7 +75,7 @@ pub struct Options {
     pub delimiter: Delimiter,
     pub unix_ts_unit: Option<UnixTimestampUnit>,
     pub flatten: bool,
-    pub expand: ExpandOption,
+    pub expand: ExpansionMode,
 }
 
 impl Options {
@@ -1068,7 +1068,7 @@ mod tests {
         filtering::MatchOptions,
         level::Level,
         model::FieldFilterSet,
-        settings::{self, ExpandOption},
+        settings::{self, ExpansionMode},
         syntax::*,
         themecfg::{self, testing},
         LinuxDateFormat,
@@ -1418,7 +1418,7 @@ mod tests {
 
         let mut output = Vec::new();
         let app = App::new(Options {
-            expand: ExpandOption::Always,
+            expand: ExpansionMode::Always,
             ..options()
         });
 
@@ -1447,7 +1447,7 @@ mod tests {
 
         let mut output = Vec::new();
         let app = App::new(Options {
-            expand: ExpandOption::Never,
+            expand: ExpansionMode::Never,
             ..options()
         });
 
@@ -1467,7 +1467,7 @@ mod tests {
 
         let mut output = Vec::new();
         let app = App::new(Options {
-            expand: ExpandOption::Always,
+            expand: ExpansionMode::Always,
             theme: Theme::from(themecfg::Theme {
                 elements: themecfg::StylePack(hashmap! {
                     Element::ValueExpansion => themecfg::Style::default(),
@@ -1507,7 +1507,7 @@ mod tests {
 
         let mut output = Vec::new();
         let app = App::new(Options {
-            expand: ExpandOption::Always,
+            expand: ExpansionMode::Always,
             theme: Theme::from(themecfg::Theme {
                 elements: themecfg::StylePack(hashmap! {
                     Element::ValueExpansion => themecfg::Style::default(),
@@ -1544,7 +1544,7 @@ mod tests {
 
         let mut output = Vec::new();
         let app = App::new(Options {
-            expand: ExpandOption::Auto,
+            expand: ExpansionMode::Auto,
             ..options()
         });
 
@@ -1562,7 +1562,7 @@ mod tests {
 
         let mut output = Vec::new();
         let app = App::new(Options {
-            expand: ExpandOption::Auto,
+            expand: ExpansionMode::Auto,
             hide_empty_fields: true,
             ..options()
         });

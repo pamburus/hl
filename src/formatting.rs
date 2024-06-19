@@ -13,7 +13,7 @@ use crate::{
     filtering::IncludeExcludeSetting,
     fmtx::{aligned_left, centered, OptimizedBuf, Push},
     model::{self, Caller, Level, RawValue},
-    settings::{self, ExpandOption, FlattenOption, Formatting, Punctuation},
+    settings::{self, ExpansionMode, FlattenOption, Formatting, MultilineExpansion, Punctuation},
     syntax::*,
     theme::{Element, Styler, StylingPush, Theme},
     IncludeExcludeKeyFilter,
@@ -65,12 +65,13 @@ impl RecordWithSourceFormatter for Box<dyn RecordWithSourceFormatter> {
 // ---
 
 pub struct Expansion {
-    pub mode: ExpandOption,
+    pub mode: ExpansionMode,
+    pub multiline: MultilineExpansion,
     pub thresholds: ExpansionThresholds,
 }
 
 impl Expansion {
-    pub fn with_mode(mut self, mode: ExpandOption) -> Self {
+    pub fn with_mode(mut self, mode: ExpansionMode) -> Self {
         self.mode = mode;
         self
     }
@@ -79,14 +80,15 @@ impl Expansion {
 impl Default for Expansion {
     fn default() -> Self {
         Self {
-            mode: ExpandOption::Auto,
+            mode: ExpansionMode::Auto,
+            multiline: Default::default(),
             thresholds: Default::default(),
         }
     }
 }
 
-impl From<ExpandOption> for Expansion {
-    fn from(mode: ExpandOption) -> Self {
+impl From<ExpansionMode> for Expansion {
+    fn from(mode: ExpansionMode) -> Self {
         Self {
             mode,
             ..Default::default()
@@ -98,6 +100,7 @@ impl From<settings::ExpansionOptions> for Expansion {
     fn from(options: settings::ExpansionOptions) -> Self {
         Self {
             mode: options.mode.unwrap_or_default(),
+            multiline: options.multiline.unwrap_or_default(),
             thresholds: options.thresholds.into(),
         }
     }
@@ -482,11 +485,15 @@ impl RecordFormatter {
                     s.element(Element::Message, |s| {
                         s.batch(|buf| {
                             let result = MessageFormatAuto::new(value)
-                                .on_extended_space::<()>(if fs.expand.unwrap_or(true) {
-                                    ExtendedSpaceAction::Abort
-                                } else {
-                                    ExtendedSpaceAction::FormatWithBacktick
-                                })
+                                .on_extended_space::<()>(
+                                    match (fs.expand.unwrap_or(true), self.cfg.expansion.multiline) {
+                                        (_, MultilineExpansion::Disabled) | (false, MultilineExpansion::Standard) => {
+                                            ExtendedSpaceAction::Escape
+                                        }
+                                        (true, MultilineExpansion::Standard) => ExtendedSpaceAction::Abort,
+                                        (_, MultilineExpansion::Inline) => ExtendedSpaceAction::Inline,
+                                    },
+                                )
                                 .format(buf)
                                 .unwrap();
                             match result {
@@ -834,8 +841,15 @@ impl<'a> FieldFormatter<'a> {
                         ValueFormatAuto::new(value)
                             .on_extended_space(match fs.expand {
                                 Some(true) => ExtendedSpaceAction::Expand(|buf: &mut Vec<u8>| self.add_prefix(buf, fs)),
-                                Some(false) => ExtendedSpaceAction::FormatWithBacktick,
-                                None => ExtendedSpaceAction::Abort,
+                                Some(false) => match self.rf.cfg.expansion.multiline {
+                                    MultilineExpansion::Inline => ExtendedSpaceAction::Inline,
+                                    _ => ExtendedSpaceAction::Escape,
+                                },
+                                None => match self.rf.cfg.expansion.multiline {
+                                    MultilineExpansion::Standard => ExtendedSpaceAction::Abort,
+                                    MultilineExpansion::Disabled => ExtendedSpaceAction::Escape,
+                                    MultilineExpansion::Inline => ExtendedSpaceAction::Inline,
+                                },
                             })
                             .with_complexity_limit(complexity_limit)
                             .format(buf)
@@ -1153,7 +1167,7 @@ pub mod string {
     // ---
 
     pub enum ExtendedSpaceAction<P = ()> {
-        FormatWithBacktick,
+        Inline,
         Expand(P),
         Escape,
         Abort,
@@ -1167,7 +1181,7 @@ pub mod string {
         {
             match self {
                 Self::Expand(prefix) => ExtendedSpaceAction::Expand(f(prefix)),
-                Self::FormatWithBacktick => ExtendedSpaceAction::FormatWithBacktick,
+                Self::Inline => ExtendedSpaceAction::Inline,
                 Self::Escape => ExtendedSpaceAction::Escape,
                 Self::Abort => ExtendedSpaceAction::Abort,
             }
@@ -1218,7 +1232,7 @@ pub mod string {
         pub fn new(string: S) -> Self {
             Self {
                 string,
-                xs_action: ExtendedSpaceAction::FormatWithBacktick,
+                xs_action: ExtendedSpaceAction::Inline,
                 complexity_limit: None,
             }
         }
@@ -1326,7 +1340,7 @@ pub mod string {
             const BTXS: Mask = mask!(Flag::Control | Flag::ExtendedSpace | Flag::Backtick);
 
             match (mask & BTXS, &self.xs_action) {
-                (Z, _) | (XS, ExtendedSpaceAction::FormatWithBacktick) => {
+                (Z, _) | (XS, ExtendedSpaceAction::Inline) => {
                     buf.push(b'`');
                     buf.push(b'`');
                     buf[begin..].rotate_right(1);
@@ -1492,7 +1506,7 @@ pub mod string {
             const BTXS: Mask = mask!(Flag::Control | Flag::ExtendedSpace | Flag::Backtick);
 
             match (mask & BTXS, &self.xs_action) {
-                (Z, _) | (XS, ExtendedSpaceAction::FormatWithBacktick) => {
+                (Z, _) | (XS, ExtendedSpaceAction::Inline) => {
                     buf.push(b'`');
                     buf.push(b'`');
                     buf[begin..].rotate_right(1);
@@ -2213,7 +2227,7 @@ mod tests {
             fields.entry("c").entry("z").exclude();
             s.theme = Default::default();
             s.flatten = false;
-            s.expansion.mode = ExpandOption::Always;
+            s.expansion.mode = ExpansionMode::Always;
             s.fields = fields.into();
         }));
 
@@ -2248,7 +2262,7 @@ mod tests {
             fields.entry("c").entry("z").exclude();
             s.theme = Default::default();
             s.flatten = true;
-            s.expansion.mode = ExpandOption::Always;
+            s.expansion.mode = ExpansionMode::Always;
             s.fields = fields.into();
         }));
 
@@ -2277,7 +2291,7 @@ mod tests {
         let formatter = RecordFormatter::new(settings().with(|s| {
             s.theme = Default::default();
             s.flatten = false;
-            s.expansion.mode = ExpandOption::Auto;
+            s.expansion.mode = ExpansionMode::Auto;
         }));
 
         let obj = json_raw_value(r#"{"x":10,"y":"some\nmultiline\nvalue","z":30}"#);
@@ -2307,7 +2321,7 @@ mod tests {
     fn test_expand_all_threshold() {
         let formatter = RecordFormatter::new(settings().with(|s| {
             s.theme = Default::default();
-            s.expansion.mode = ExpandOption::Auto;
+            s.expansion.mode = ExpansionMode::Auto;
             s.expansion.thresholds.global = 2;
         }));
 
@@ -2365,7 +2379,7 @@ mod tests {
 
         let formatter = RecordFormatter::new(settings().with(|s| {
             s.theme = Default::default();
-            s.expansion.mode = ExpandOption::Auto;
+            s.expansion.mode = ExpansionMode::Auto;
         }));
 
         assert_eq!(formatter.format_to_string(&rec), r#"m a=1 b=2 c=3"#);
@@ -2384,7 +2398,7 @@ mod tests {
 
         let mut formatter = RecordFormatter::new(settings().with(|s| {
             s.theme = Default::default();
-            s.expansion.mode = ExpandOption::Auto;
+            s.expansion.mode = ExpansionMode::Auto;
             s.expansion.thresholds.message = 64;
         }));
 
@@ -2457,7 +2471,7 @@ mod tests {
 
         let formatter = RecordFormatter::new(settings().with(|s| {
             s.theme = Default::default();
-            s.expansion.mode = ExpandOption::Always;
+            s.expansion.mode = ExpansionMode::Always;
         }));
 
         assert_eq!(

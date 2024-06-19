@@ -60,6 +60,7 @@ formatting:
   flatten: always
   expansion:
     mode: auto
+    multiline: standard
     thresholds:
       global: 1024
       cumulative: 192

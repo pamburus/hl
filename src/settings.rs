@@ -243,7 +243,8 @@ pub struct Formatting {
 #[derive(Clone, Debug, Default, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub struct ExpansionOptions {
-    pub mode: Option<ExpandOption>,
+    pub mode: Option<ExpansionMode>,
+    pub multiline: Option<MultilineExpansion>,
     pub thresholds: ExpansionThresholds,
 }
 
@@ -254,6 +255,17 @@ pub struct ExpansionThresholds {
     pub cumulative: Option<usize>,
     pub message: Option<usize>,
     pub field: Option<usize>,
+}
+
+// ---
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq, Copy, Default)]
+#[serde(rename_all = "kebab-case")]
+pub enum MultilineExpansion {
+    #[default]
+    Standard,
+    Disabled,
+    Inline,
 }
 
 // ---
@@ -269,14 +281,14 @@ pub enum FlattenOption {
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq, Copy, Default)]
 #[serde(rename_all = "kebab-case")]
-pub enum ExpandOption {
+pub enum ExpansionMode {
     #[default]
     Auto,
     Never,
     Always,
 }
 
-impl Into<Option<bool>> for ExpandOption {
+impl Into<Option<bool>> for ExpansionMode {
     fn into(self) -> Option<bool> {
         match self {
             Self::Auto => None,

@@ -507,28 +507,28 @@ pub enum ExpandOption {
     Always,
 }
 
-impl From<settings::ExpandOption> for ExpandOption {
-    fn from(value: settings::ExpandOption) -> Self {
+impl From<settings::ExpansionMode> for ExpandOption {
+    fn from(value: settings::ExpansionMode) -> Self {
         match value {
-            settings::ExpandOption::Auto => Self::Auto,
-            settings::ExpandOption::Never => Self::Never,
-            settings::ExpandOption::Always => Self::Always,
+            settings::ExpansionMode::Auto => Self::Auto,
+            settings::ExpansionMode::Never => Self::Never,
+            settings::ExpansionMode::Always => Self::Always,
         }
     }
 }
 
-impl From<Option<settings::ExpandOption>> for ExpandOption {
-    fn from(value: Option<settings::ExpandOption>) -> Self {
+impl From<Option<settings::ExpansionMode>> for ExpandOption {
+    fn from(value: Option<settings::ExpansionMode>) -> Self {
         Self::from(value.unwrap_or_default())
     }
 }
 
-impl Into<settings::ExpandOption> for ExpandOption {
-    fn into(self) -> settings::ExpandOption {
+impl Into<settings::ExpansionMode> for ExpandOption {
+    fn into(self) -> settings::ExpansionMode {
         match self {
-            Self::Auto => settings::ExpandOption::Auto,
-            Self::Never => settings::ExpandOption::Never,
-            Self::Always => settings::ExpandOption::Always,
+            Self::Auto => settings::ExpansionMode::Auto,
+            Self::Never => settings::ExpansionMode::Never,
+            Self::Always => settings::ExpansionMode::Always,
         }
     }
 }
@@ -597,31 +597,34 @@ mod tests {
     fn test_expand_option() {
         assert_eq!(ExpandOption::from(None), ExpandOption::Auto);
         assert_eq!(
-            ExpandOption::from(Some(settings::ExpandOption::Auto)),
+            ExpandOption::from(Some(settings::ExpansionMode::Auto)),
             ExpandOption::Auto
         );
         assert_eq!(
-            ExpandOption::from(Some(settings::ExpandOption::Never)),
+            ExpandOption::from(Some(settings::ExpansionMode::Never)),
             ExpandOption::Never
         );
         assert_eq!(
-            ExpandOption::from(Some(settings::ExpandOption::Always)),
+            ExpandOption::from(Some(settings::ExpansionMode::Always)),
             ExpandOption::Always
         );
-        assert_eq!(ExpandOption::from(settings::ExpandOption::Auto), ExpandOption::Auto);
-        assert_eq!(ExpandOption::from(settings::ExpandOption::Never), ExpandOption::Never);
-        assert_eq!(ExpandOption::from(settings::ExpandOption::Always), ExpandOption::Always);
+        assert_eq!(ExpandOption::from(settings::ExpansionMode::Auto), ExpandOption::Auto);
+        assert_eq!(ExpandOption::from(settings::ExpansionMode::Never), ExpandOption::Never);
         assert_eq!(
-            Into::<settings::ExpandOption>::into(ExpandOption::Auto),
-            settings::ExpandOption::Auto
+            ExpandOption::from(settings::ExpansionMode::Always),
+            ExpandOption::Always
         );
         assert_eq!(
-            Into::<settings::ExpandOption>::into(ExpandOption::Never),
-            settings::ExpandOption::Never
+            Into::<settings::ExpansionMode>::into(ExpandOption::Auto),
+            settings::ExpansionMode::Auto
         );
         assert_eq!(
-            Into::<settings::ExpandOption>::into(ExpandOption::Always),
-            settings::ExpandOption::Always
+            Into::<settings::ExpansionMode>::into(ExpandOption::Never),
+            settings::ExpansionMode::Never
+        );
+        assert_eq!(
+            Into::<settings::ExpansionMode>::into(ExpandOption::Always),
+            settings::ExpansionMode::Always
         );
     }
 }

@@ -237,6 +237,14 @@
                                 "always"
                             ]
                         },
+                        "multiline": {
+                            "type": "string",
+                            "enum": [
+                                "standard",
+                                "disabled",
+                                "inline"
+                            ]
+                        },
                         "thresholds": {
                             "type": "object",
                             "additionalProperties": false,
