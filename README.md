@@ -385,11 +385,11 @@ hl --list-themes | fzf --preview-window="top,80%" --preview="head -n 100 example
 #### Custom themes
 - Custom themes are automatically loaded when found in a predefined platform-specific location.
 
-    | OS      | Location                                       |
-    | ------- | ---------------------------------------------- | 
-    | macOS   | ~/.config/hl/themes/*.yaml                     |
-    | Linux   | ~/.config/hl/themes/*.yaml                     |
-    | Windows | %USERPROFILE%\AppData\Roaming\hl\themes\*.yaml |
+    | OS      | Location                                                   |
+    | ------- | ---------------------------------------------------------- | 
+    | macOS   | ~/.config/hl/themes/*.{yaml,toml,json}                     |
+    | Linux   | ~/.config/hl/themes/*.{yaml,toml,json}                     |
+    | Windows | %USERPROFILE%\AppData\Roaming\hl\themes\*.{yaml,toml,json} |
 
 - Format description
   - Section `elements` contains styles for predefined elements.
