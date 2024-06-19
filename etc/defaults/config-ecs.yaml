@@ -8,25 +8,25 @@ fields:
     time:
       names: ['@timestamp']
     logger:
-      names: [log.logger]
+      names: ['log.logger']
     level:
       variants:
-        - names: [log.level]
+        - names: ['log.level']
           values:
-            debug: [debug, dbg, d]
-            info: [info, inf, i, informational]
-            warning: [warning, warn, wrn, w]
-            error: [error, err, fatal, critical, panic, e]
+            debug: ['debug', 'dbg', 'd']
+            info: ['info', 'inf', 'i', 'informational']
+            warning: ['warning', 'warn', 'wrn', 'w']
+            error: ['error', 'err', 'fatal', 'critical', 'panic', 'e']
     message:
-      names: [message]
+      names: ['message']
     caller:
       names: []
     caller-file:
-      names: [log.origin.file.name]
+      names: ['log.origin.file.name']
     caller-line:
-      names: [log.origin.file.line]
+      names: ['log.origin.file.line']
   # List of wildcard field names to ignore.
   ignore: ['_*']
   # List of exact field names to hide.
   hide:
-    - log
+    - 'log'
