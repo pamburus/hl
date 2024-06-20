@@ -59,13 +59,29 @@ fields:
 formatting:
   flatten: always
   expansion:
-    mode: auto
-    multiline: standard
-    thresholds:
-      global: 1024
-      cumulative: 192
-      message: 192
-      field: 128
+    mode: moderately
+    profiles:
+      slightly:
+        multiline: standard
+        thresholds:
+          global: 2048
+          cumulative: 512
+          message: 256
+          field: 128
+      moderately:
+        multiline: standard
+        thresholds:
+          global: 1024
+          cumulative: 256
+          message: 192
+          field: 64
+      extensively:
+        multiline: standard
+        thresholds:
+          global: 768
+          cumulative: 192
+          message: 128
+          field: 48
   punctuation:
     logger-name-separator: ':'
     field-key-value-separator: '='

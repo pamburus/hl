@@ -501,17 +501,23 @@ impl Into<settings::FlattenOption> for FlattenOption {
 
 #[derive(ValueEnum, Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum ExpandOption {
-    #[default]
-    Auto,
     Never,
+    Inline,
+    Slightly,
+    #[default]
+    Moderately,
+    Extensively,
     Always,
 }
 
 impl From<settings::ExpansionMode> for ExpandOption {
     fn from(value: settings::ExpansionMode) -> Self {
         match value {
-            settings::ExpansionMode::Auto => Self::Auto,
             settings::ExpansionMode::Never => Self::Never,
+            settings::ExpansionMode::Inline => Self::Inline,
+            settings::ExpansionMode::Slightly => Self::Slightly,
+            settings::ExpansionMode::Moderately => Self::Moderately,
+            settings::ExpansionMode::Extensively => Self::Extensively,
             settings::ExpansionMode::Always => Self::Always,
         }
     }
@@ -526,8 +532,11 @@ impl From<Option<settings::ExpansionMode>> for ExpandOption {
 impl Into<settings::ExpansionMode> for ExpandOption {
     fn into(self) -> settings::ExpansionMode {
         match self {
-            Self::Auto => settings::ExpansionMode::Auto,
             Self::Never => settings::ExpansionMode::Never,
+            Self::Inline => settings::ExpansionMode::Inline,
+            Self::Slightly => settings::ExpansionMode::Slightly,
+            Self::Moderately => settings::ExpansionMode::Moderately,
+            Self::Extensively => settings::ExpansionMode::Extensively,
             Self::Always => settings::ExpansionMode::Always,
         }
     }
@@ -595,10 +604,10 @@ mod tests {
 
     #[test]
     fn test_expand_option() {
-        assert_eq!(ExpandOption::from(None), ExpandOption::Auto);
+        assert_eq!(ExpandOption::from(None), ExpandOption::Moderately);
         assert_eq!(
-            ExpandOption::from(Some(settings::ExpansionMode::Auto)),
-            ExpandOption::Auto
+            ExpandOption::from(Some(settings::ExpansionMode::Moderately)),
+            ExpandOption::Moderately
         );
         assert_eq!(
             ExpandOption::from(Some(settings::ExpansionMode::Never)),
@@ -608,15 +617,18 @@ mod tests {
             ExpandOption::from(Some(settings::ExpansionMode::Always)),
             ExpandOption::Always
         );
-        assert_eq!(ExpandOption::from(settings::ExpansionMode::Auto), ExpandOption::Auto);
+        assert_eq!(
+            ExpandOption::from(settings::ExpansionMode::Moderately),
+            ExpandOption::Moderately
+        );
         assert_eq!(ExpandOption::from(settings::ExpansionMode::Never), ExpandOption::Never);
         assert_eq!(
             ExpandOption::from(settings::ExpansionMode::Always),
             ExpandOption::Always
         );
         assert_eq!(
-            Into::<settings::ExpansionMode>::into(ExpandOption::Auto),
-            settings::ExpansionMode::Auto
+            Into::<settings::ExpansionMode>::into(ExpandOption::Moderately),
+            settings::ExpansionMode::Moderately
         );
         assert_eq!(
             Into::<settings::ExpansionMode>::into(ExpandOption::Never),

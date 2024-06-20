@@ -24,10 +24,26 @@ use string::{ExtendedSpaceAction, Format, MessageFormatAuto, ValueFormatAuto};
 
 // ---
 
-const DEFAULT_EXPAND_ALL_THRESHOLD: usize = 1024;
-const DEFAULT_EXPAND_CUMULATIVE_THRESHOLD: usize = 256;
-const DEFAULT_EXPAND_MESSAGE_THRESHOLD: usize = 192;
-const DEFAULT_EXPAND_FIELD_THRESHOLD: usize = 64;
+const DEFAULT_EXPAND_SLIGHTLY_THRESHOLDS: ExpansionThresholds = ExpansionThresholds {
+    global: 2048,
+    cumulative: 512,
+    message: 256,
+    field: 128,
+};
+
+const DEFAULT_EXPAND_MODERATELY_THRESHOLDS: ExpansionThresholds = ExpansionThresholds {
+    global: 1024,
+    cumulative: 256,
+    message: 192,
+    field: 64,
+};
+
+const DEFAULT_EXPAND_EXTENSIVELY_THRESHOLDS: ExpansionThresholds = ExpansionThresholds {
+    global: 768,
+    cumulative: 192,
+    message: 128,
+    field: 48,
+};
 
 // ---
 
@@ -64,10 +80,10 @@ impl RecordWithSourceFormatter for Box<dyn RecordWithSourceFormatter> {
 
 // ---
 
+#[derive(Clone, Debug, Default)]
 pub struct Expansion {
     pub mode: ExpansionMode,
-    pub multiline: MultilineExpansion,
-    pub thresholds: ExpansionThresholds,
+    pub profiles: ExpansionProfiles,
 }
 
 impl Expansion {
@@ -75,15 +91,9 @@ impl Expansion {
         self.mode = mode;
         self
     }
-}
 
-impl Default for Expansion {
-    fn default() -> Self {
-        Self {
-            mode: ExpansionMode::Auto,
-            multiline: Default::default(),
-            thresholds: Default::default(),
-        }
+    pub fn profile(&self) -> &ExpansionProfile {
+        self.profiles.resolve(self.mode)
     }
 }
 
@@ -100,14 +110,204 @@ impl From<settings::ExpansionOptions> for Expansion {
     fn from(options: settings::ExpansionOptions) -> Self {
         Self {
             mode: options.mode.unwrap_or_default(),
-            multiline: options.multiline.unwrap_or_default(),
-            thresholds: options.thresholds.into(),
+            profiles: options.profiles.into(),
         }
     }
 }
 
 // ---
 
+#[derive(Clone, Debug, Default)]
+pub struct ExpansionProfiles {
+    pub slightly: ExpansionProfileSlightly,
+    pub moderately: ExpansionProfileModerately,
+    pub extensively: ExpansionProfileExtensively,
+}
+
+impl ExpansionProfiles {
+    pub fn resolve(&self, mode: ExpansionMode) -> &ExpansionProfile {
+        match mode {
+            ExpansionMode::Never => &ExpansionProfile::NEVER,
+            ExpansionMode::Always => &ExpansionProfile::ALWAYS,
+            ExpansionMode::Inline => &ExpansionProfile::INLINE,
+            ExpansionMode::Slightly => &self.slightly,
+            ExpansionMode::Moderately => &self.moderately,
+            ExpansionMode::Extensively => &self.extensively,
+        }
+    }
+}
+
+impl From<settings::ExpansionProfiles> for ExpansionProfiles {
+    fn from(options: settings::ExpansionProfiles) -> Self {
+        Self {
+            slightly: options.slightly.into(),
+            moderately: options.moderately.into(),
+            extensively: options.extensively.into(),
+        }
+    }
+}
+
+// ---
+
+#[derive(Clone, Debug)]
+pub struct ExpansionProfileSlightly(ExpansionProfile);
+
+impl From<settings::ExpansionProfile> for ExpansionProfileSlightly {
+    fn from(options: settings::ExpansionProfile) -> Self {
+        Self(Self::default().0.updated(options))
+    }
+}
+
+impl Deref for ExpansionProfileSlightly {
+    type Target = ExpansionProfile;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl DerefMut for ExpansionProfileSlightly {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+impl Default for ExpansionProfileSlightly {
+    fn default() -> Self {
+        Self(ExpansionProfile {
+            multiline: MultilineExpansion::Standard,
+            thresholds: DEFAULT_EXPAND_SLIGHTLY_THRESHOLDS,
+        })
+    }
+}
+
+// ---
+
+#[derive(Clone, Debug)]
+pub struct ExpansionProfileModerately(ExpansionProfile);
+
+impl From<settings::ExpansionProfile> for ExpansionProfileModerately {
+    fn from(options: settings::ExpansionProfile) -> Self {
+        Self(Self::default().0.updated(options))
+    }
+}
+
+impl Deref for ExpansionProfileModerately {
+    type Target = ExpansionProfile;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl DerefMut for ExpansionProfileModerately {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+impl Default for ExpansionProfileModerately {
+    fn default() -> Self {
+        Self(ExpansionProfile {
+            multiline: MultilineExpansion::Standard,
+            thresholds: DEFAULT_EXPAND_MODERATELY_THRESHOLDS,
+        })
+    }
+}
+
+// ---
+
+#[derive(Clone, Debug)]
+pub struct ExpansionProfileExtensively(ExpansionProfile);
+
+impl From<settings::ExpansionProfile> for ExpansionProfileExtensively {
+    fn from(options: settings::ExpansionProfile) -> Self {
+        Self(Self::default().0.updated(options))
+    }
+}
+
+impl Deref for ExpansionProfileExtensively {
+    type Target = ExpansionProfile;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl DerefMut for ExpansionProfileExtensively {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+impl Default for ExpansionProfileExtensively {
+    fn default() -> Self {
+        Self(ExpansionProfile {
+            multiline: MultilineExpansion::Standard,
+            thresholds: DEFAULT_EXPAND_EXTENSIVELY_THRESHOLDS,
+        })
+    }
+}
+
+// ---
+
+#[derive(Clone, Debug)]
+pub struct ExpansionProfile {
+    pub multiline: MultilineExpansion,
+    pub thresholds: ExpansionThresholds,
+}
+
+impl ExpansionProfile {
+    pub const NEVER: Self = Self {
+        multiline: MultilineExpansion::Disabled,
+        thresholds: ExpansionThresholds {
+            global: usize::MAX,
+            cumulative: usize::MAX,
+            message: usize::MAX,
+            field: usize::MAX,
+        },
+    };
+
+    pub const ALWAYS: Self = Self {
+        multiline: MultilineExpansion::Standard,
+        thresholds: ExpansionThresholds {
+            global: 0,
+            cumulative: 0,
+            message: 256,
+            field: 0,
+        },
+    };
+
+    pub const INLINE: Self = Self {
+        multiline: MultilineExpansion::Inline,
+        thresholds: ExpansionThresholds {
+            global: usize::MAX,
+            cumulative: usize::MAX,
+            message: usize::MAX,
+            field: usize::MAX,
+        },
+    };
+
+    fn update(&mut self, options: settings::ExpansionProfile) {
+        self.multiline = options.multiline.unwrap_or(self.multiline);
+        self.thresholds.update(&options.thresholds);
+    }
+
+    fn updated(mut self, options: settings::ExpansionProfile) -> Self {
+        self.update(options);
+        self
+    }
+}
+
+impl Default for &ExpansionProfile {
+    fn default() -> Self {
+        &ExpansionProfile::NEVER
+    }
+}
+
+// ---
+
+#[derive(Clone, Debug)]
 pub struct ExpansionThresholds {
     pub global: usize,
     pub cumulative: usize,
@@ -115,25 +315,12 @@ pub struct ExpansionThresholds {
     pub field: usize,
 }
 
-impl Default for ExpansionThresholds {
-    fn default() -> Self {
-        Self {
-            global: DEFAULT_EXPAND_ALL_THRESHOLD,
-            cumulative: DEFAULT_EXPAND_CUMULATIVE_THRESHOLD,
-            message: DEFAULT_EXPAND_MESSAGE_THRESHOLD,
-            field: DEFAULT_EXPAND_FIELD_THRESHOLD,
-        }
-    }
-}
-
-impl From<settings::ExpansionThresholds> for ExpansionThresholds {
-    fn from(options: settings::ExpansionThresholds) -> Self {
-        Self {
-            global: options.global.unwrap_or(DEFAULT_EXPAND_ALL_THRESHOLD),
-            cumulative: options.cumulative.unwrap_or(DEFAULT_EXPAND_CUMULATIVE_THRESHOLD),
-            message: options.message.unwrap_or(DEFAULT_EXPAND_MESSAGE_THRESHOLD),
-            field: options.field.unwrap_or(DEFAULT_EXPAND_FIELD_THRESHOLD),
-        }
+impl ExpansionThresholds {
+    fn update(&mut self, options: &settings::ExpansionThresholds) {
+        self.global = options.global.unwrap_or(self.global);
+        self.cumulative = options.cumulative.unwrap_or(self.cumulative);
+        self.message = options.message.unwrap_or(self.message);
+        self.field = options.field.unwrap_or(self.field);
     }
 }
 
@@ -203,7 +390,7 @@ impl RecordFormatter {
             rec,
             fs: FormattingState {
                 flatten: self.cfg.flatten && self.cfg.unescape_fields,
-                expand: self.cfg.expansion.mode.into(),
+                expansion: self.cfg.expansion.profile(),
                 prefix: prefix_range,
                 ..Default::default()
             },
@@ -274,16 +461,17 @@ impl RecordFormatter {
                 s.reset();
             }
 
-            fs.expand = fs.expand.or_else(|| {
-                let thresholds = &self.cfg.expansion.thresholds;
-                if fs.complexity >= thresholds.cumulative {
-                    Some(true)
-                } else if self.complexity(fs.complexity, rec, Some(&self.cfg.fields)) >= thresholds.global {
-                    Some(true)
-                } else {
-                    None
+            match (fs.expansion.thresholds.global, fs.expansion.thresholds.cumulative) {
+                (0, 0) => {}
+                (usize::MAX, usize::MAX) => {}
+                (global, cumulative) => {
+                    if fs.complexity >= cumulative {
+                        fs.expanded = true;
+                    } else if self.complexity(fs.complexity, rec, Some(&self.cfg.fields)) >= global {
+                        fs.expanded = true;
+                    }
                 }
-            });
+            }
 
             //
             // fields
@@ -295,7 +483,7 @@ impl RecordFormatter {
                     let result = fs.transact(s, |fs, s| {
                         match self.format_field(s, k, *v, fs, Some(&self.cfg.fields)) {
                             FieldFormatResult::Ok => {
-                                if fs.expand != Some(true) {
+                                if !fs.expanded {
                                     fs.first_line_used = true;
                                 }
                                 Ok(())
@@ -321,7 +509,7 @@ impl RecordFormatter {
             }
 
             if some_fields_hidden || fs.some_fields_hidden {
-                if fs.expand == Some(true) {
+                if fs.expanded {
                     self.expand(s, &mut fs);
                 }
                 fs.add_element(|| s.batch(|buf| buf.push(b' ')));
@@ -475,7 +663,7 @@ impl RecordFormatter {
         match value {
             RawValue::String(value) => {
                 if !value.is_empty() {
-                    if value.source().len() > self.cfg.expansion.thresholds.message {
+                    if value.source().len() > fs.expansion.thresholds.message {
                         return Err(MessageFormatError::ExpansionNeeded);
                     }
                     fs.add_element(|| {
@@ -485,15 +673,12 @@ impl RecordFormatter {
                     s.element(Element::Message, |s| {
                         s.batch(|buf| {
                             let result = MessageFormatAuto::new(value)
-                                .on_extended_space::<()>(
-                                    match (fs.expand.unwrap_or(true), self.cfg.expansion.multiline) {
-                                        (_, MultilineExpansion::Disabled) | (false, MultilineExpansion::Standard) => {
-                                            ExtendedSpaceAction::Escape
-                                        }
-                                        (true, MultilineExpansion::Standard) => ExtendedSpaceAction::Abort,
-                                        (_, MultilineExpansion::Inline) => ExtendedSpaceAction::Inline,
-                                    },
-                                )
+                                .on_extended_space::<()>(match (fs.expanded, fs.expansion.multiline) {
+                                    (true, _) => ExtendedSpaceAction::Abort,
+                                    (false, MultilineExpansion::Disabled) => ExtendedSpaceAction::Escape,
+                                    (false, MultilineExpansion::Standard) => ExtendedSpaceAction::Abort,
+                                    (false, MultilineExpansion::Inline) => ExtendedSpaceAction::Inline,
+                                })
                                 .format(buf)
                                 .unwrap();
                             match result {
@@ -592,11 +777,11 @@ impl RecordFormatter {
             });
         });
 
-        if fs.expand != Some(true) {
-            fs.expand = Some(true);
+        if !fs.expanded {
+            fs.expanded = true;
             let fields_to_expand = std::mem::take(&mut fs.fields_to_expand);
             for (k, v) in fields_to_expand.iter() {
-                _ = self.format_field(s, k, *v, fs, None);
+                _ = self.format_field(s, k, *v, fs, Some(&self.cfg.fields));
             }
         }
     }
@@ -609,14 +794,14 @@ impl RecordFormatter {
         value: RawValue<'a>,
         filter: Option<&IncludeExcludeKeyFilter>,
     ) {
-        let result = if fs.expand == Some(true) {
+        let result = if fs.expanded {
             Err((key, value))
         } else {
             fs.fields_to_expand.push((key, value))
         };
 
         if let Err((key, value)) = result {
-            fs.expand = Some(true);
+            fs.expanded = true;
             self.expand(s, fs);
             _ = self.format_field(s, key, value, fs, filter);
         }
@@ -693,7 +878,8 @@ impl<'a> DerefMut for FormattingStateWithRec<'a> {
 #[derive(Default)]
 struct FormattingState<'a> {
     flatten: bool,
-    expand: Option<bool>,
+    expansion: &'a ExpansionProfile,
+    expanded: bool,
     prefix: Range<usize>,
     expansion_prefix: Option<Range<usize>>,
     key_prefix: KeyPrefix,
@@ -786,7 +972,7 @@ impl<'a> FieldFormatter<'a> {
             return FieldFormatResult::Hidden;
         }
 
-        if fs.expand.is_none() && value.raw_str().len() > self.rf.cfg.expansion.thresholds.field {
+        if !fs.expanded && value.raw_str().len() > fs.expansion.thresholds.field {
             return FieldFormatResult::ExpansionNeeded;
         }
 
@@ -824,11 +1010,10 @@ impl<'a> FieldFormatter<'a> {
             _ => value,
         };
 
-        let complexity_limit = if fs.expand.is_none() {
+        let complexity_limit = if !fs.expanded {
             Some(std::cmp::min(
-                self.rf.cfg.expansion.thresholds.field,
-                self.rf.cfg.expansion.thresholds.cumulative
-                    - std::cmp::min(self.rf.cfg.expansion.thresholds.cumulative, fs.complexity),
+                fs.expansion.thresholds.field,
+                fs.expansion.thresholds.cumulative - std::cmp::min(fs.expansion.thresholds.cumulative, fs.complexity),
             ))
         } else {
             None
@@ -839,17 +1024,11 @@ impl<'a> FieldFormatter<'a> {
                 let result = s.element(Element::String, |s| {
                     s.batch(|buf| {
                         ValueFormatAuto::new(value)
-                            .on_extended_space(match fs.expand {
-                                Some(true) => ExtendedSpaceAction::Expand(|buf: &mut Vec<u8>| self.add_prefix(buf, fs)),
-                                Some(false) => match self.rf.cfg.expansion.multiline {
-                                    MultilineExpansion::Inline => ExtendedSpaceAction::Inline,
-                                    _ => ExtendedSpaceAction::Escape,
-                                },
-                                None => match self.rf.cfg.expansion.multiline {
-                                    MultilineExpansion::Standard => ExtendedSpaceAction::Abort,
-                                    MultilineExpansion::Disabled => ExtendedSpaceAction::Escape,
-                                    MultilineExpansion::Inline => ExtendedSpaceAction::Inline,
-                                },
+                            .on_extended_space(match (fs.expanded, fs.expansion.multiline) {
+                                (true, _) => ExtendedSpaceAction::Expand(|buf: &mut Vec<u8>| self.add_prefix(buf, fs)),
+                                (false, MultilineExpansion::Inline) => ExtendedSpaceAction::Inline,
+                                (false, MultilineExpansion::Disabled) => ExtendedSpaceAction::Escape,
+                                (false, MultilineExpansion::Standard) => ExtendedSpaceAction::Abort,
                             })
                             .with_complexity_limit(complexity_limit)
                             .format(buf)
@@ -894,7 +1073,7 @@ impl<'a> FieldFormatter<'a> {
 
                 fs.complexity += FIXED_COMPLEXITY;
                 let item = value.parse().unwrap();
-                if !fs.flatten && (!fs.expand.unwrap_or(false) || value.is_empty()) {
+                if !fs.flatten && (!fs.expanded || value.is_empty()) {
                     s.element(Element::Object, |s| {
                         s.batch(|buf| buf.push(b'{'));
                     });
@@ -915,7 +1094,7 @@ impl<'a> FieldFormatter<'a> {
                 }
                 if some_fields_hidden {
                     if !fs.flatten {
-                        if fs.expand.unwrap_or(false) {
+                        if fs.expanded {
                             self.rf.expand(s, fs);
                         }
                         s.element(Element::Ellipsis, |s| {
@@ -925,7 +1104,7 @@ impl<'a> FieldFormatter<'a> {
                         fs.some_fields_hidden = true;
                     }
                 }
-                if !fs.flatten && (!fs.expand.unwrap_or(false) || value.is_empty()) {
+                if !fs.flatten && (!fs.expanded || value.is_empty()) {
                     s.element(Element::Object, |s| {
                         s.batch(|buf| {
                             if item.fields.len() != 0 {
@@ -946,7 +1125,7 @@ impl<'a> FieldFormatter<'a> {
                 }
 
                 fs.complexity += FIXED_COMPLEXITY;
-                let xb = fs.expand.replace(false);
+                let xb = std::mem::replace(&mut fs.expanded, false);
                 let item = value.parse::<32>().unwrap();
                 s.element(Element::Array, |s| {
                     s.batch(|buf| buf.push(b'['));
@@ -963,7 +1142,7 @@ impl<'a> FieldFormatter<'a> {
                 s.element(Element::Array, |s| {
                     s.batch(|buf| buf.push(b']'));
                 });
-                fs.expand = xb;
+                fs.expanded = xb;
             }
         };
 
@@ -994,7 +1173,7 @@ impl<'a> FieldFormatter<'a> {
 
         let variant = FormattedFieldVariant::Normal { flatten: fs.flatten };
 
-        if fs.expand.unwrap_or(false) {
+        if fs.expanded {
             self.rf.expand(s, fs);
         }
         fs.depth += 1;
@@ -1013,7 +1192,7 @@ impl<'a> FieldFormatter<'a> {
             });
         });
 
-        let sep = if fs.expand.unwrap_or(false) && matches!(value, RawValue::Object(o) if !o.is_empty()) {
+        let sep = if fs.expanded && matches!(value, RawValue::Object(o) if !o.is_empty()) {
             EXPANDED_OBJECT_HEADER.as_bytes()
         } else {
             self.rf.cfg.punctuation.field_key_value_separator.as_bytes()
@@ -2291,7 +2470,7 @@ mod tests {
         let formatter = RecordFormatter::new(settings().with(|s| {
             s.theme = Default::default();
             s.flatten = false;
-            s.expansion.mode = ExpansionMode::Auto;
+            s.expansion.mode = ExpansionMode::default();
         }));
 
         let obj = json_raw_value(r#"{"x":10,"y":"some\nmultiline\nvalue","z":30}"#);
@@ -2318,11 +2497,11 @@ mod tests {
     }
 
     #[test]
-    fn test_expand_all_threshold() {
+    fn test_expand_global_threshold() {
         let formatter = RecordFormatter::new(settings().with(|s| {
             s.theme = Default::default();
-            s.expansion.mode = ExpansionMode::Auto;
-            s.expansion.thresholds.global = 2;
+            s.expansion.mode = ExpansionMode::Extensively;
+            s.expansion.profiles.extensively.thresholds.global = 2;
         }));
 
         let source = b"m a=1 b=2 c=3";
@@ -2379,7 +2558,7 @@ mod tests {
 
         let formatter = RecordFormatter::new(settings().with(|s| {
             s.theme = Default::default();
-            s.expansion.mode = ExpansionMode::Auto;
+            s.expansion.mode = ExpansionMode::default();
         }));
 
         assert_eq!(formatter.format_to_string(&rec), r#"m a=1 b=2 c=3"#);
@@ -2398,8 +2577,8 @@ mod tests {
 
         let mut formatter = RecordFormatter::new(settings().with(|s| {
             s.theme = Default::default();
-            s.expansion.mode = ExpansionMode::Auto;
-            s.expansion.thresholds.message = 64;
+            s.expansion.mode = ExpansionMode::Moderately;
+            s.expansion.profiles.moderately.thresholds.message = 64;
         }));
 
         let lorem_ipsum = "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.";

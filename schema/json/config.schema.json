@@ -1,210 +1,51 @@
 {
     "$schema": "http://json-schema.org/draft-07/schema#",
-    "type": "object",
-    "additionalProperties": false,
-    "properties": {
-        "$schema": {
-            "type": "string",
-            "format": "uri",
-            "title": "JSON Schema URI"
-        },
-        "time-format": {
-            "type": "string"
-        },
-        "time-zone": {
-            "type": "string"
+    "$ref": "#/definitions/config",
+    "definitions": {
+        "config": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+                "$schema": {
+                    "type": "string",
+                    "format": "uri",
+                    "title": "JSON Schema URI"
+                },
+                "time-format": {
+                    "type": "string"
+                },
+                "time-zone": {
+                    "type": "string"
+                },
+                "fields": {
+                    "$ref": "#/definitions/fields"
+                },
+                "formatting": {
+                    "$ref": "#/definitions/formatting"
+                },
+                "concurrency": {
+                    "type": [
+                        "integer",
+                        "null"
+                    ]
+                },
+                "theme": {
+                    "type": "string"
+                }
+            }
         },
         "fields": {
             "type": "object",
             "additionalProperties": false,
             "properties": {
                 "predefined": {
-                    "type": "object",
-                    "additionalProperties": false,
-                    "properties": {
-                        "time": {
-                            "type": "object",
-                            "additionalProperties": false,
-                            "properties": {
-                                "show": {
-                                    "type": "string"
-                                },
-                                "names": {
-                                    "type": "array",
-                                    "items": {
-                                        "type": "string"
-                                    }
-                                }
-                            },
-                            "required": [
-                                "names"
-                            ]
-                        },
-                        "logger": {
-                            "type": "object",
-                            "additionalProperties": false,
-                            "properties": {
-                                "names": {
-                                    "type": "array",
-                                    "items": {
-                                        "type": "string"
-                                    }
-                                }
-                            },
-                            "required": [
-                                "names"
-                            ]
-                        },
-                        "level": {
-                            "type": "object",
-                            "additionalProperties": false,
-                            "properties": {
-                                "show": {
-                                    "type": "string"
-                                },
-                                "variants": {
-                                    "type": "array",
-                                    "items": {
-                                        "type": "object",
-                                        "additionalProperties": false,
-                                        "properties": {
-                                            "names": {
-                                                "type": "array",
-                                                "items": {
-                                                    "type": "string"
-                                                }
-                                            },
-                                            "values": {
-                                                "type": "object",
-                                                "additionalProperties": false,
-                                                "properties": {
-                                                    "debug": {
-                                                        "type": "array",
-                                                        "items": {
-                                                            "type": [
-                                                                "string",
-                                                                "integer"
-                                                            ]
-                                                        }
-                                                    },
-                                                    "info": {
-                                                        "type": "array",
-                                                        "items": {
-                                                            "type": [
-                                                                "string",
-                                                                "integer"
-                                                            ]
-                                                        }
-                                                    },
-                                                    "warning": {
-                                                        "type": "array",
-                                                        "items": {
-                                                            "type": [
-                                                                "string",
-                                                                "integer"
-                                                            ]
-                                                        }
-                                                    },
-                                                    "error": {
-                                                        "type": "array",
-                                                        "items": {
-                                                            "type": [
-                                                                "string",
-                                                                "integer"
-                                                            ]
-                                                        }
-                                                    }
-                                                }
-                                            },
-                                            "level": {
-                                                "type": "string",
-                                                "enum": [
-                                                    "debug",
-                                                    "info",
-                                                    "warning",
-                                                    "error"
-                                                ]
-                                            }
-                                        },
-                                        "required": [
-                                            "names"
-                                        ]
-                                    }
-                                }
-                            },
-                            "required": [
-                                "variants"
-                            ]
-                        },
-                        "message": {
-                            "type": "object",
-                            "additionalProperties": false,
-                            "properties": {
-                                "names": {
-                                    "type": "array",
-                                    "items": {
-                                        "type": "string"
-                                    }
-                                }
-                            },
-                            "required": [
-                                "names"
-                            ]
-                        },
-                        "caller": {
-                            "type": "object",
-                            "additionalProperties": false,
-                            "properties": {
-                                "names": {
-                                    "type": "array",
-                                    "items": {
-                                        "type": "string"
-                                    }
-                                }
-                            },
-                            "required": [
-                                "names"
-                            ]
-                        },
-                        "caller-file": {
-                            "type": "object",
-                            "additionalProperties": false,
-                            "properties": {
-                                "names": {
-                                    "type": "array",
-                                    "items": {
-                                        "type": "string"
-                                    }
-                                }
-                            },
-                            "required": [
-                                "names"
-                            ]
-                        },
-                        "caller-line": {
-                            "type": "object",
-                            "additionalProperties": false,
-                            "properties": {
-                                "names": {
-                                    "type": "array",
-                                    "items": {
-                                        "type": "string"
-                                    }
-                                }
-                            },
-                            "required": [
-                                "names"
-                            ]
-                        }
-                    }
+                    "$ref": "#/definitions/predefined-fields"
                 },
                 "ignore": {
                     "type": "array",
-                    "items": [
-                        {
-                            "type": "string"
-                        }
-                    ]
+                    "items": {
+                        "type": "string"
+                    }
                 },
                 "hide": {
                     "type": "array",
@@ -212,6 +53,158 @@
                         "type": "string"
                     }
                 }
+            }
+        },
+        "predefined-fields": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+                "time": {
+                    "$ref": "#/definitions/predefined-field-time"
+                },
+                "logger": {
+                    "$ref": "#/definitions/predefined-field-logger"
+                },
+                "level": {
+                    "$ref": "#/definitions/predefined-field-level"
+                },
+                "message": {
+                    "$ref": "#/definitions/predefined-field-message"
+                },
+                "caller": {
+                    "$ref": "#/definitions/predefined-field-caller"
+                },
+                "caller-file": {
+                    "$ref": "#/definitions/predefined-field-caller-file"
+                },
+                "caller-line": {
+                    "$ref": "#/definitions/predefined-field-caller-line"
+                }
+            }
+        },
+        "predefined-field-time": {
+            "properties": {
+                "show": {
+                    "type": "string",
+                    "enum": [
+                        "auto",
+                        "never",
+                        "always"
+                    ]
+                },
+                "names": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            },
+            "required": [
+                "names"
+            ]
+        },
+        "predefined-field-logger": {
+            "$ref": "#/definitions/predefined-field"
+        },
+        "predefined-field-level": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+                "show": {
+                    "type": "string",
+                    "enum": [
+                        "auto",
+                        "never",
+                        "always"
+                    ]
+                },
+                "variants": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                            "names": {
+                                "type": "array",
+                                "items": {
+                                    "type": "string"
+                                }
+                            },
+                            "values": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "properties": {
+                                    "debug": {
+                                        "$ref": "#/definitions/level-values"
+                                    },
+                                    "info": {
+                                        "$ref": "#/definitions/level-values"
+                                    },
+                                    "warning": {
+                                        "$ref": "#/definitions/level-values"
+                                    },
+                                    "error": {
+                                        "$ref": "#/definitions/level-values"
+                                    }
+                                }
+                            },
+                            "level": {
+                                "$ref": "#/definitions/level"
+                            }
+                        },
+                        "required": [
+                            "names"
+                        ]
+                    }
+                }
+            },
+            "required": [
+                "variants"
+            ]
+        },
+        "predefined-field-message": {
+            "$ref": "#/definitions/predefined-field"
+        },
+        "predefined-field-caller": {
+            "$ref": "#/definitions/predefined-field"
+        },
+        "predefined-field-caller-file": {
+            "$ref": "#/definitions/predefined-field"
+        },
+        "predefined-field-caller-line": {
+            "$ref": "#/definitions/predefined-field"
+        },
+        "predefined-field": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+                "names": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            },
+            "required": [
+                "names"
+            ]
+        },
+        "level": {
+            "type": "string",
+            "enum": [
+                "debug",
+                "info",
+                "warning",
+                "error"
+            ]
+        },
+        "level-values": {
+            "type": "array",
+            "items": {
+                "type": [
+                    "string",
+                    "integer"
+                ]
             }
         },
         "formatting": {
@@ -226,109 +219,146 @@
                     ]
                 },
                 "expansion": {
-                    "type": "object",
-                    "additionalProperties": false,
-                    "properties": {
-                        "mode": {
-                            "type": "string",
-                            "enum": [
-                                "auto",
-                                "never",
-                                "always"
-                            ]
-                        },
-                        "multiline": {
-                            "type": "string",
-                            "enum": [
-                                "standard",
-                                "disabled",
-                                "inline"
-                            ]
-                        },
-                        "thresholds": {
-                            "type": "object",
-                            "additionalProperties": false,
-                            "properties": {
-                                "global": {
-                                    "type": "integer"
-                                },
-                                "cumulative": {
-                                    "type": "integer"
-                                },
-                                "message": {
-                                    "type": "integer"
-                                },
-                                "field": {
-                                    "type": "integer"
-                                }
-                            }
-                        }
-                    }
+                    "$ref": "#/definitions/expansion"
                 },
                 "punctuation": {
-                    "type": "object",
-                    "additionalProperties": false,
-                    "properties": {
-                        "logger-name-separator": {
-                            "type": "string"
-                        },
-                        "field-key-value-separator": {
-                            "type": "string"
-                        },
-                        "string-opening-quote": {
-                            "type": "string"
-                        },
-                        "string-closing-quote": {
-                            "type": "string"
-                        },
-                        "source-location-separator": {
-                            "type": "string"
-                        },
-                        "hidden-fields-indicator": {
-                            "type": "string"
-                        },
-                        "level-left-separator": {
-                            "type": "string"
-                        },
-                        "level-right-separator": {
-                            "type": "string"
-                        },
-                        "input-number-prefix": {
-                            "type": "string"
-                        },
-                        "input-number-left-separator": {
-                            "type": "string"
-                        },
-                        "input-number-right-separator": {
-                            "type": "string"
-                        },
-                        "input-name-left-separator": {
-                            "type": "string"
-                        },
-                        "input-name-right-separator": {
-                            "type": "string"
-                        },
-                        "input-name-clipping": {
-                            "type": "string"
-                        },
-                        "input-name-common-part": {
-                            "type": "string"
-                        },
-                        "array-separator": {
-                            "type": "string"
-                        }
-                    }
+                    "$ref": "#/definitions/punctuation"
                 }
             }
         },
-        "concurrency": {
-            "type": [
-                "integer",
-                "null"
+        "punctuation": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+                "logger-name-separator": {
+                    "type": "string"
+                },
+                "field-key-value-separator": {
+                    "type": "string"
+                },
+                "string-opening-quote": {
+                    "type": "string"
+                },
+                "string-closing-quote": {
+                    "type": "string"
+                },
+                "source-location-separator": {
+                    "type": "string"
+                },
+                "hidden-fields-indicator": {
+                    "type": "string"
+                },
+                "level-left-separator": {
+                    "type": "string"
+                },
+                "level-right-separator": {
+                    "type": "string"
+                },
+                "input-number-prefix": {
+                    "type": "string"
+                },
+                "input-number-left-separator": {
+                    "type": "string"
+                },
+                "input-number-right-separator": {
+                    "type": "string"
+                },
+                "input-name-left-separator": {
+                    "type": "string"
+                },
+                "input-name-right-separator": {
+                    "type": "string"
+                },
+                "input-name-clipping": {
+                    "type": "string"
+                },
+                "input-name-common-part": {
+                    "type": "string"
+                },
+                "array-separator": {
+                    "type": "string"
+                }
+            }
+        },
+        "expansion": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+                "mode": {
+                    "$ref": "#/definitions/expansion-mode"
+                },
+                "profiles": {
+                    "$ref": "#/definitions/expansion-profiles"
+                }
+            }
+        },
+        "expansion-mode": {
+            "type": "string",
+            "enum": [
+                "never",
+                "inline",
+                "slightly",
+                "moderately",
+                "extensively",
+                "always"
             ]
         },
-        "theme": {
-            "type": "string"
+        "expansion-profiles": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+                "slightly": {
+                    "$ref": "#/definitions/expansion-profile"
+                },
+                "moderately": {
+                    "$ref": "#/definitions/expansion-profile"
+                },
+                "extensively": {
+                    "$ref": "#/definitions/expansion-profile"
+                }
+            }
+        },
+        "expansion-profile": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+                "multiline": {
+                    "$ref": "#/definitions/expansion-multiline"
+                },
+                "thresholds": {
+                    "$ref": "#/definitions/expansion-thresholds"
+                }
+            }
+        },
+        "expansion-multiline": {
+            "type": "string",
+            "enum": [
+                "standard",
+                "disabled",
+                "inline"
+            ]
+        },
+        "expansion-thresholds": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+                "global": {
+                    "$ref": "#/definitions/expansion-threshold"
+                },
+                "cumulative": {
+                    "$ref": "#/definitions/expansion-threshold"
+                },
+                "message": {
+                    "$ref": "#/definitions/expansion-threshold"
+                },
+                "field": {
+                    "$ref": "#/definitions/expansion-threshold"
+                }
+            }
+        },
+        "expansion-threshold": {
+            "type": "integer",
+            "minimum": 0
         }
     }
 }

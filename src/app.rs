@@ -1543,10 +1543,7 @@ mod tests {
         let input = input(concat!(r#"level=debug msg=hello caller=src1 a="" b="" c="""#, "\n",));
 
         let mut output = Vec::new();
-        let app = App::new(Options {
-            expand: ExpansionMode::Auto,
-            ..options()
-        });
+        let app = App::new(options());
 
         app.run(vec![input], &mut output).unwrap();
 
@@ -1562,7 +1559,6 @@ mod tests {
 
         let mut output = Vec::new();
         let app = App::new(Options {
-            expand: ExpansionMode::Auto,
             hide_empty_fields: true,
             ..options()
         });

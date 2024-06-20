@@ -1,6 +1,8 @@
 // std imports
-use std::collections::{BTreeMap, HashMap};
-use std::include_str;
+use std::{
+    collections::{BTreeMap, HashMap},
+    include_str,
+};
 
 // third-party imports
 use chrono_tz::Tz;
@@ -11,8 +13,7 @@ use serde::{Deserialize, Serialize, Serializer};
 use strum::IntoEnumIterator;
 
 // local imports
-use crate::error::Error;
-use crate::level::Level;
+use crate::{error::Error, level::Level};
 
 // ---
 
@@ -92,7 +93,7 @@ impl<'a> SourceFile<'a> {
 
 // ---
 
-#[derive(Debug, Serialize, Deserialize, Clone, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 pub struct Fields {
     pub predefined: PredefinedFields,
     pub ignore: Vec<String>,
@@ -101,7 +102,7 @@ pub struct Fields {
 
 // ---
 
-#[derive(Debug, Serialize, Deserialize, Default, Clone, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct PredefinedFields {
     pub time: TimeField,
@@ -115,7 +116,7 @@ pub struct PredefinedFields {
 
 // ---
 
-#[derive(Debug, Serialize, Deserialize, Deref, Clone, PartialEq, Eq)]
+#[derive(Clone, Debug, Deref, Deserialize, Eq, PartialEq, Serialize)]
 pub struct TimeField(pub Field);
 
 impl Default for TimeField {
@@ -126,7 +127,7 @@ impl Default for TimeField {
 
 // ---
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct LevelField {
     pub show: FieldShowOption,
     pub variants: Vec<LevelFieldVariant>,
@@ -149,7 +150,7 @@ impl Default for LevelField {
 
 // ---
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct LevelFieldVariant {
     pub names: Vec<String>,
     #[serde(default, serialize_with = "ordered_map_serialize")]
@@ -159,7 +160,7 @@ pub struct LevelFieldVariant {
 
 // ---
 
-#[derive(Debug, Serialize, Deserialize, Deref, Clone, PartialEq, Eq)]
+#[derive(Clone, Debug, Deref, Deserialize, Eq, PartialEq, Serialize)]
 pub struct MessageField(pub Field);
 
 impl Default for MessageField {
@@ -170,7 +171,7 @@ impl Default for MessageField {
 
 // ---
 
-#[derive(Debug, Serialize, Deserialize, Deref, Clone, PartialEq, Eq)]
+#[derive(Clone, Debug, Deref, Deserialize, Eq, PartialEq, Serialize)]
 pub struct LoggerField(Field);
 
 impl Default for LoggerField {
@@ -181,7 +182,7 @@ impl Default for LoggerField {
 
 // ---
 
-#[derive(Debug, Serialize, Deserialize, Deref, Clone, PartialEq, Eq)]
+#[derive(Clone, Debug, Deref, Deserialize, Eq, PartialEq, Serialize)]
 pub struct CallerField(Field);
 
 impl Default for CallerField {
@@ -192,7 +193,7 @@ impl Default for CallerField {
 
 // ---
 
-#[derive(Debug, Serialize, Deserialize, Deref, Clone, PartialEq, Eq)]
+#[derive(Clone, Debug, Deref, Deserialize, Eq, PartialEq, Serialize)]
 pub struct CallerFileField(Field);
 
 impl Default for CallerFileField {
@@ -203,7 +204,7 @@ impl Default for CallerFileField {
 
 // ---
 
-#[derive(Debug, Serialize, Deserialize, Deref, Clone, PartialEq, Eq)]
+#[derive(Clone, Debug, Deref, Deserialize, Eq, PartialEq, Serialize)]
 pub struct CallerLineField(Field);
 
 impl Default for CallerLineField {
@@ -232,7 +233,7 @@ impl Field {
 
 // ---
 
-#[derive(Clone, Debug, Default, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq)]
 #[serde(rename_all = "kebab-case")]
 pub struct Formatting {
     pub punctuation: Punctuation,
@@ -240,15 +241,86 @@ pub struct Formatting {
     pub expansion: ExpansionOptions,
 }
 
-#[derive(Clone, Debug, Default, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq)]
 #[serde(rename_all = "kebab-case")]
 pub struct ExpansionOptions {
     pub mode: Option<ExpansionMode>,
+    pub profiles: ExpansionProfiles,
+}
+
+impl ExpansionOptions {
+    pub fn profile(&self) -> Option<&ExpansionProfile> {
+        self.mode.map(|mode| self.profiles.resolve(mode))
+    }
+}
+
+// ---
+
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq)]
+#[serde(rename_all = "kebab-case")]
+pub struct ExpansionProfiles {
+    pub slightly: ExpansionProfile,
+    pub moderately: ExpansionProfile,
+    pub extensively: ExpansionProfile,
+}
+
+impl ExpansionProfiles {
+    pub fn resolve(&self, mode: ExpansionMode) -> &ExpansionProfile {
+        match mode {
+            ExpansionMode::Never => &ExpansionProfile::NEVER,
+            ExpansionMode::Inline => &ExpansionProfile::INLINE,
+            ExpansionMode::Slightly => &self.slightly,
+            ExpansionMode::Moderately => &self.moderately,
+            ExpansionMode::Extensively => &self.extensively,
+            ExpansionMode::Always => &ExpansionProfile::ALWAYS,
+        }
+    }
+}
+
+// ---
+
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq)]
+#[serde(rename_all = "kebab-case")]
+pub struct ExpansionProfile {
     pub multiline: Option<MultilineExpansion>,
     pub thresholds: ExpansionThresholds,
 }
 
-#[derive(Clone, Debug, Default, Deserialize, PartialEq, Eq)]
+impl ExpansionProfile {
+    const NEVER: Self = Self {
+        multiline: Some(MultilineExpansion::Disabled),
+        thresholds: ExpansionThresholds {
+            global: Some(usize::MAX),
+            cumulative: Some(usize::MAX),
+            message: Some(usize::MAX),
+            field: Some(usize::MAX),
+        },
+    };
+
+    const INLINE: Self = Self {
+        multiline: Some(MultilineExpansion::Inline),
+        thresholds: ExpansionThresholds {
+            global: Some(usize::MAX),
+            cumulative: Some(usize::MAX),
+            message: Some(usize::MAX),
+            field: Some(usize::MAX),
+        },
+    };
+
+    const ALWAYS: Self = Self {
+        multiline: Some(MultilineExpansion::Standard),
+        thresholds: ExpansionThresholds {
+            global: Some(0),
+            cumulative: Some(0),
+            message: Some(0),
+            field: Some(0),
+        },
+    };
+}
+
+// ---
+
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq)]
 #[serde(rename_all = "kebab-case")]
 pub struct ExpansionThresholds {
     pub global: Option<usize>,
@@ -259,7 +331,7 @@ pub struct ExpansionThresholds {
 
 // ---
 
-#[derive(Clone, Debug, Deserialize, PartialEq, Eq, Copy, Default)]
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq)]
 #[serde(rename_all = "kebab-case")]
 pub enum MultilineExpansion {
     #[default]
@@ -270,7 +342,7 @@ pub enum MultilineExpansion {
 
 // ---
 
-#[derive(Clone, Debug, Deserialize, PartialEq, Eq, Copy)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
 #[serde(rename_all = "kebab-case")]
 pub enum FlattenOption {
     Never,
@@ -279,28 +351,21 @@ pub enum FlattenOption {
 
 // ---
 
-#[derive(Clone, Debug, Deserialize, PartialEq, Eq, Copy, Default)]
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq)]
 #[serde(rename_all = "kebab-case")]
 pub enum ExpansionMode {
-    #[default]
-    Auto,
     Never,
+    Inline,
+    Slightly,
+    #[default]
+    Moderately,
+    Extensively,
     Always,
-}
-
-impl Into<Option<bool>> for ExpansionMode {
-    fn into(self) -> Option<bool> {
-        match self {
-            Self::Auto => None,
-            Self::Never => Some(false),
-            Self::Always => Some(true),
-        }
-    }
 }
 
 // ---
 
-#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum FieldShowOption {
     Auto,
@@ -315,7 +380,7 @@ impl Default for FieldShowOption {
 
 // ---
 
-#[derive(Debug, Deserialize, Clone, PartialEq, Eq)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
 #[serde(rename_all = "kebab-case")]
 pub struct Punctuation {
     pub logger_name_separator: String,
