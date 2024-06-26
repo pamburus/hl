@@ -294,15 +294,15 @@ pub struct Opt {
     #[arg(
         long,
         short = 'x',
-        env = "HL_EXPAND",
-        value_name = "WHEN",
+        env = "HL_EXPANSION",
+        value_name = "MODE",
         value_enum,
         default_value_t = config::global::get().formatting.expansion.mode.into(),
-        overrides_with = "expand",
+        overrides_with = "expansion",
         default_missing_value = "always",
         help_heading = heading::OUTPUT,
     )]
-    pub expand: ExpandOption,
+    pub expansion: ExpansionOption,
 
     /// Show input number and/or input filename before each message.
     #[arg(
@@ -500,43 +500,43 @@ impl Into<settings::FlattenOption> for FlattenOption {
 }
 
 #[derive(ValueEnum, Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum ExpandOption {
+pub enum ExpansionOption {
     Never,
     Inline,
-    Slightly,
+    Low,
     #[default]
-    Moderately,
-    Extensively,
+    Medium,
+    High,
     Always,
 }
 
-impl From<settings::ExpansionMode> for ExpandOption {
+impl From<settings::ExpansionMode> for ExpansionOption {
     fn from(value: settings::ExpansionMode) -> Self {
         match value {
             settings::ExpansionMode::Never => Self::Never,
             settings::ExpansionMode::Inline => Self::Inline,
-            settings::ExpansionMode::Slightly => Self::Slightly,
-            settings::ExpansionMode::Moderately => Self::Moderately,
-            settings::ExpansionMode::Extensively => Self::Extensively,
+            settings::ExpansionMode::Low => Self::Low,
+            settings::ExpansionMode::Medium => Self::Medium,
+            settings::ExpansionMode::High => Self::High,
             settings::ExpansionMode::Always => Self::Always,
         }
     }
 }
 
-impl From<Option<settings::ExpansionMode>> for ExpandOption {
+impl From<Option<settings::ExpansionMode>> for ExpansionOption {
     fn from(value: Option<settings::ExpansionMode>) -> Self {
         Self::from(value.unwrap_or_default())
     }
 }
 
-impl Into<settings::ExpansionMode> for ExpandOption {
+impl Into<settings::ExpansionMode> for ExpansionOption {
     fn into(self) -> settings::ExpansionMode {
         match self {
             Self::Never => settings::ExpansionMode::Never,
             Self::Inline => settings::ExpansionMode::Inline,
-            Self::Slightly => settings::ExpansionMode::Slightly,
-            Self::Moderately => settings::ExpansionMode::Moderately,
-            Self::Extensively => settings::ExpansionMode::Extensively,
+            Self::Low => settings::ExpansionMode::Low,
+            Self::Medium => settings::ExpansionMode::Medium,
+            Self::High => settings::ExpansionMode::High,
             Self::Always => settings::ExpansionMode::Always,
         }
     }
@@ -603,39 +603,42 @@ mod tests {
     }
 
     #[test]
-    fn test_expand_option() {
-        assert_eq!(ExpandOption::from(None), ExpandOption::Moderately);
+    fn test_expansion_option() {
+        assert_eq!(ExpansionOption::from(None), ExpansionOption::Medium);
         assert_eq!(
-            ExpandOption::from(Some(settings::ExpansionMode::Moderately)),
-            ExpandOption::Moderately
+            ExpansionOption::from(Some(settings::ExpansionMode::Medium)),
+            ExpansionOption::Medium
         );
         assert_eq!(
-            ExpandOption::from(Some(settings::ExpansionMode::Never)),
-            ExpandOption::Never
+            ExpansionOption::from(Some(settings::ExpansionMode::Never)),
+            ExpansionOption::Never
         );
         assert_eq!(
-            ExpandOption::from(Some(settings::ExpansionMode::Always)),
-            ExpandOption::Always
+            ExpansionOption::from(Some(settings::ExpansionMode::Always)),
+            ExpansionOption::Always
         );
         assert_eq!(
-            ExpandOption::from(settings::ExpansionMode::Moderately),
-            ExpandOption::Moderately
-        );
-        assert_eq!(ExpandOption::from(settings::ExpansionMode::Never), ExpandOption::Never);
-        assert_eq!(
-            ExpandOption::from(settings::ExpansionMode::Always),
-            ExpandOption::Always
+            ExpansionOption::from(settings::ExpansionMode::Medium),
+            ExpansionOption::Medium
         );
         assert_eq!(
-            Into::<settings::ExpansionMode>::into(ExpandOption::Moderately),
-            settings::ExpansionMode::Moderately
+            ExpansionOption::from(settings::ExpansionMode::Never),
+            ExpansionOption::Never
         );
         assert_eq!(
-            Into::<settings::ExpansionMode>::into(ExpandOption::Never),
+            ExpansionOption::from(settings::ExpansionMode::Always),
+            ExpansionOption::Always
+        );
+        assert_eq!(
+            Into::<settings::ExpansionMode>::into(ExpansionOption::Medium),
+            settings::ExpansionMode::Medium
+        );
+        assert_eq!(
+            Into::<settings::ExpansionMode>::into(ExpansionOption::Never),
             settings::ExpansionMode::Never
         );
         assert_eq!(
-            Into::<settings::ExpansionMode>::into(ExpandOption::Always),
+            Into::<settings::ExpansionMode>::into(ExpansionOption::Always),
             settings::ExpansionMode::Always
         );
     }

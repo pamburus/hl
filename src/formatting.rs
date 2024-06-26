@@ -24,21 +24,21 @@ use string::{ExtendedSpaceAction, Format, MessageFormatAuto, ValueFormatAuto};
 
 // ---
 
-const DEFAULT_EXPAND_SLIGHTLY_THRESHOLDS: ExpansionThresholds = ExpansionThresholds {
+const DEFAULT_EXPANSION_LOW_THRESHOLDS: ExpansionThresholds = ExpansionThresholds {
     global: 2048,
     cumulative: 512,
     message: 256,
     field: 128,
 };
 
-const DEFAULT_EXPAND_MODERATELY_THRESHOLDS: ExpansionThresholds = ExpansionThresholds {
+const DEFAULT_EXPANSION_MEDIUM_THRESHOLDS: ExpansionThresholds = ExpansionThresholds {
     global: 1024,
     cumulative: 256,
     message: 192,
     field: 64,
 };
 
-const DEFAULT_EXPAND_EXTENSIVELY_THRESHOLDS: ExpansionThresholds = ExpansionThresholds {
+const DEFAULT_EXPANSION_HIGH_THRESHOLDS: ExpansionThresholds = ExpansionThresholds {
     global: 768,
     cumulative: 192,
     message: 128,
@@ -119,9 +119,9 @@ impl From<settings::ExpansionOptions> for Expansion {
 
 #[derive(Clone, Debug, Default)]
 pub struct ExpansionProfiles {
-    pub slightly: ExpansionProfileSlightly,
-    pub moderately: ExpansionProfileModerately,
-    pub extensively: ExpansionProfileExtensively,
+    pub low: ExpansionProfileLow,
+    pub medium: ExpansionProfileMedium,
+    pub high: ExpansionProfileHigh,
 }
 
 impl ExpansionProfiles {
@@ -130,9 +130,9 @@ impl ExpansionProfiles {
             ExpansionMode::Never => &ExpansionProfile::NEVER,
             ExpansionMode::Always => &ExpansionProfile::ALWAYS,
             ExpansionMode::Inline => &ExpansionProfile::INLINE,
-            ExpansionMode::Slightly => &self.slightly,
-            ExpansionMode::Moderately => &self.moderately,
-            ExpansionMode::Extensively => &self.extensively,
+            ExpansionMode::Low => &self.low,
+            ExpansionMode::Medium => &self.medium,
+            ExpansionMode::High => &self.high,
         }
     }
 }
@@ -140,9 +140,9 @@ impl ExpansionProfiles {
 impl From<settings::ExpansionProfiles> for ExpansionProfiles {
     fn from(options: settings::ExpansionProfiles) -> Self {
         Self {
-            slightly: options.slightly.into(),
-            moderately: options.moderately.into(),
-            extensively: options.extensively.into(),
+            low: options.low.into(),
+            medium: options.medium.into(),
+            high: options.high.into(),
         }
     }
 }
@@ -150,15 +150,15 @@ impl From<settings::ExpansionProfiles> for ExpansionProfiles {
 // ---
 
 #[derive(Clone, Debug)]
-pub struct ExpansionProfileSlightly(ExpansionProfile);
+pub struct ExpansionProfileLow(ExpansionProfile);
 
-impl From<settings::ExpansionProfile> for ExpansionProfileSlightly {
+impl From<settings::ExpansionProfile> for ExpansionProfileLow {
     fn from(options: settings::ExpansionProfile) -> Self {
         Self(Self::default().0.updated(options))
     }
 }
 
-impl Deref for ExpansionProfileSlightly {
+impl Deref for ExpansionProfileLow {
     type Target = ExpansionProfile;
 
     fn deref(&self) -> &Self::Target {
@@ -166,17 +166,17 @@ impl Deref for ExpansionProfileSlightly {
     }
 }
 
-impl DerefMut for ExpansionProfileSlightly {
+impl DerefMut for ExpansionProfileLow {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
     }
 }
 
-impl Default for ExpansionProfileSlightly {
+impl Default for ExpansionProfileLow {
     fn default() -> Self {
         Self(ExpansionProfile {
             multiline: MultilineExpansion::Standard,
-            thresholds: DEFAULT_EXPAND_SLIGHTLY_THRESHOLDS,
+            thresholds: DEFAULT_EXPANSION_LOW_THRESHOLDS,
         })
     }
 }
@@ -184,15 +184,15 @@ impl Default for ExpansionProfileSlightly {
 // ---
 
 #[derive(Clone, Debug)]
-pub struct ExpansionProfileModerately(ExpansionProfile);
+pub struct ExpansionProfileMedium(ExpansionProfile);
 
-impl From<settings::ExpansionProfile> for ExpansionProfileModerately {
+impl From<settings::ExpansionProfile> for ExpansionProfileMedium {
     fn from(options: settings::ExpansionProfile) -> Self {
         Self(Self::default().0.updated(options))
     }
 }
 
-impl Deref for ExpansionProfileModerately {
+impl Deref for ExpansionProfileMedium {
     type Target = ExpansionProfile;
 
     fn deref(&self) -> &Self::Target {
@@ -200,17 +200,17 @@ impl Deref for ExpansionProfileModerately {
     }
 }
 
-impl DerefMut for ExpansionProfileModerately {
+impl DerefMut for ExpansionProfileMedium {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
     }
 }
 
-impl Default for ExpansionProfileModerately {
+impl Default for ExpansionProfileMedium {
     fn default() -> Self {
         Self(ExpansionProfile {
             multiline: MultilineExpansion::Standard,
-            thresholds: DEFAULT_EXPAND_MODERATELY_THRESHOLDS,
+            thresholds: DEFAULT_EXPANSION_MEDIUM_THRESHOLDS,
         })
     }
 }
@@ -218,15 +218,15 @@ impl Default for ExpansionProfileModerately {
 // ---
 
 #[derive(Clone, Debug)]
-pub struct ExpansionProfileExtensively(ExpansionProfile);
+pub struct ExpansionProfileHigh(ExpansionProfile);
 
-impl From<settings::ExpansionProfile> for ExpansionProfileExtensively {
+impl From<settings::ExpansionProfile> for ExpansionProfileHigh {
     fn from(options: settings::ExpansionProfile) -> Self {
         Self(Self::default().0.updated(options))
     }
 }
 
-impl Deref for ExpansionProfileExtensively {
+impl Deref for ExpansionProfileHigh {
     type Target = ExpansionProfile;
 
     fn deref(&self) -> &Self::Target {
@@ -234,17 +234,17 @@ impl Deref for ExpansionProfileExtensively {
     }
 }
 
-impl DerefMut for ExpansionProfileExtensively {
+impl DerefMut for ExpansionProfileHigh {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
     }
 }
 
-impl Default for ExpansionProfileExtensively {
+impl Default for ExpansionProfileHigh {
     fn default() -> Self {
         Self(ExpansionProfile {
             multiline: MultilineExpansion::Standard,
-            thresholds: DEFAULT_EXPAND_EXTENSIVELY_THRESHOLDS,
+            thresholds: DEFAULT_EXPANSION_HIGH_THRESHOLDS,
         })
     }
 }
@@ -2500,8 +2500,8 @@ mod tests {
     fn test_expand_global_threshold() {
         let formatter = RecordFormatter::new(settings().with(|s| {
             s.theme = Default::default();
-            s.expansion.mode = ExpansionMode::Extensively;
-            s.expansion.profiles.extensively.thresholds.global = 2;
+            s.expansion.mode = ExpansionMode::High;
+            s.expansion.profiles.high.thresholds.global = 2;
         }));
 
         let source = b"m a=1 b=2 c=3";
@@ -2577,8 +2577,8 @@ mod tests {
 
         let mut formatter = RecordFormatter::new(settings().with(|s| {
             s.theme = Default::default();
-            s.expansion.mode = ExpansionMode::Moderately;
-            s.expansion.profiles.moderately.thresholds.message = 64;
+            s.expansion.mode = ExpansionMode::Medium;
+            s.expansion.profiles.medium.thresholds.message = 64;
         }));
 
         let lorem_ipsum = "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.";

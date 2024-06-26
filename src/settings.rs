@@ -259,9 +259,9 @@ impl ExpansionOptions {
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq)]
 #[serde(rename_all = "kebab-case")]
 pub struct ExpansionProfiles {
-    pub slightly: ExpansionProfile,
-    pub moderately: ExpansionProfile,
-    pub extensively: ExpansionProfile,
+    pub low: ExpansionProfile,
+    pub medium: ExpansionProfile,
+    pub high: ExpansionProfile,
 }
 
 impl ExpansionProfiles {
@@ -269,9 +269,9 @@ impl ExpansionProfiles {
         match mode {
             ExpansionMode::Never => &ExpansionProfile::NEVER,
             ExpansionMode::Inline => &ExpansionProfile::INLINE,
-            ExpansionMode::Slightly => &self.slightly,
-            ExpansionMode::Moderately => &self.moderately,
-            ExpansionMode::Extensively => &self.extensively,
+            ExpansionMode::Low => &self.low,
+            ExpansionMode::Medium => &self.medium,
+            ExpansionMode::High => &self.high,
             ExpansionMode::Always => &ExpansionProfile::ALWAYS,
         }
     }
@@ -356,10 +356,10 @@ pub enum FlattenOption {
 pub enum ExpansionMode {
     Never,
     Inline,
-    Slightly,
+    Low,
     #[default]
-    Moderately,
-    Extensively,
+    Medium,
+    High,
     Always,
 }
 

@@ -297,9 +297,9 @@
             "enum": [
                 "never",
                 "inline",
-                "slightly",
-                "moderately",
-                "extensively",
+                "low",
+                "medium",
+                "high",
                 "always"
             ]
         },
@@ -307,13 +307,13 @@
             "type": "object",
             "additionalProperties": false,
             "properties": {
-                "slightly": {
+                "low": {
                     "$ref": "#/definitions/expansion-profile"
                 },
-                "moderately": {
+                "medium": {
                     "$ref": "#/definitions/expansion-profile"
                 },
-                "extensively": {
+                "high": {
                     "$ref": "#/definitions/expansion-profile"
                 }
             }

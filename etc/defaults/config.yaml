@@ -57,30 +57,54 @@ fields:
 
 # Formatting settings.
 formatting:
+  # Whether to flatten nested objects [never|auto|always].
   flatten: always
   expansion:
-    mode: moderately
+    # Field expansion mode [never|inline|low|medium|high|always].
+    mode: medium
+    # Field expansion setting profiles for all modes except [never,inline,always].
     profiles:
-      slightly:
+      # Field expansion settings for the low mode.
+      low:
+        # Multiline field expansion mode [standard|disabled|inline].
         multiline: standard
+        # Various complexity thresholds for field expansion.
         thresholds:
+          # Threshold of overall draft log record complexity that triggers expansion of all fields.
           global: 2048
+          # Threshold of cumulative complexity of all fields on the first line that triggers expansion of remaining fields.
           cumulative: 512
+          # Threshold of message field's complexity that triggers its expansion.
           message: 256
+          # Threshold of any other field's complexity that triggers its expansion.
           field: 128
-      moderately:
+      # Field expansion settings for the medium mode.
+      medium:
+        # Multiline field expansion mode [standard|disabled|inline].
         multiline: standard
+        # Various complexity thresholds for field expansion.
         thresholds:
+          # Threshold of overall draft log record complexity that triggers expansion of all fields.
           global: 1024
+          # Threshold of cumulative complexity of all fields on the first line that triggers expansion of remaining fields.
           cumulative: 256
+          # Threshold of message field's complexity that triggers its expansion.
           message: 192
+          # Threshold of any other field's complexity that triggers its expansion.
           field: 64
-      extensively:
+      # Field expansion settings for the high mode.
+      high:
+        # Multiline field expansion mode [standard|disabled|inline].
         multiline: standard
+        # Various complexity thresholds for field expansion.
         thresholds:
+          # Threshold of overall draft log record complexity that triggers expansion of all fields.
           global: 768
+          # Threshold of cumulative complexity of all fields on the first line that triggers expansion of remaining fields.
           cumulative: 192
+          # Threshold of message field's complexity that triggers its expansion.
           message: 128
+          # Threshold of any other field's complexity that triggers its expansion.
           field: 48
   punctuation:
     logger-name-separator: ':'
