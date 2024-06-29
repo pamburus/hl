@@ -2741,4 +2741,54 @@ mod tests {
         assert_eq!(buf, br#""""#);
         assert_eq!(result.is_ok(), true);
     }
+
+    #[test]
+    fn test_expand_inline() {
+        let rec = |value| Record {
+            fields: RecordFields {
+                head: heapless::Vec::from_slice(&[("a", EncodedString::raw(value).into())]).unwrap(),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+
+        let formatter = RecordFormatter::new(settings().with(|s| {
+            s.theme = Default::default();
+            s.expansion.mode = ExpansionMode::Inline;
+        }));
+
+        assert_eq!(
+            formatter.format_to_string(&rec("some single-line message")),
+            r#"a="some single-line message""#
+        );
+        assert_eq!(
+            formatter.format_to_string(&rec("some\nmultiline\nmessage")),
+            "a=`some\nmultiline\nmessage`"
+        );
+    }
+
+    #[test]
+    fn test_expand_low() {
+        let rec = |value| Record {
+            fields: RecordFields {
+                head: heapless::Vec::from_slice(&[("a", EncodedString::raw(value).into())]).unwrap(),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+
+        let formatter = RecordFormatter::new(settings().with(|s| {
+            s.theme = Default::default();
+            s.expansion.mode = ExpansionMode::Low;
+        }));
+
+        assert_eq!(
+            formatter.format_to_string(&rec("some single-line message")),
+            r#"a="some single-line message""#
+        );
+        assert_eq!(
+            formatter.format_to_string(&rec("some\nmultiline\nmessage")),
+            "~\n  > a=|=>\n     \tsome\n     \tmultiline\n     \tmessage"
+        );
+    }
 }
