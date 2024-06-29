@@ -25,21 +25,21 @@ use string::{ExtendedSpaceAction, Format, MessageFormatAuto, ValueFormatAuto};
 // ---
 
 const DEFAULT_EXPANSION_LOW_THRESHOLDS: ExpansionThresholds = ExpansionThresholds {
-    global: 2048,
+    global: 4096,
     cumulative: 512,
     message: 256,
     field: 128,
 };
 
 const DEFAULT_EXPANSION_MEDIUM_THRESHOLDS: ExpansionThresholds = ExpansionThresholds {
-    global: 1024,
+    global: 2048,
     cumulative: 256,
     message: 192,
     field: 64,
 };
 
 const DEFAULT_EXPANSION_HIGH_THRESHOLDS: ExpansionThresholds = ExpansionThresholds {
-    global: 768,
+    global: 1024,
     cumulative: 192,
     message: 128,
     field: 48,
@@ -94,15 +94,6 @@ impl Expansion {
 
     pub fn profile(&self) -> &ExpansionProfile {
         self.profiles.resolve(self.mode)
-    }
-}
-
-impl From<ExpansionMode> for Expansion {
-    fn from(mode: ExpansionMode) -> Self {
-        Self {
-            mode,
-            ..Default::default()
-        }
     }
 }
 
@@ -456,6 +447,7 @@ impl RecordFormatter {
                     Err(MessageFormatError::FormattingAsFieldNeeded) => {
                         fs.extra_fields.push(("msg", *value)).ok();
                     }
+                    Err(MessageFormatError::EmptyMessage) => {}
                 }
             } else {
                 s.reset();
@@ -578,9 +570,9 @@ impl RecordFormatter {
     #[inline]
     fn complexity(&self, initial: usize, rec: &model::Record, filter: Option<&IncludeExcludeKeyFilter>) -> usize {
         let mut result = initial;
-        result += rec.message.map(|x| x.raw_str().len() / 8).unwrap_or(0);
+        result += rec.message.map(|x| x.raw_str().len()).unwrap_or(0);
         result += rec.predefined.len();
-        result += rec.logger.map(|x| x.len() / 2).unwrap_or(0);
+        result += rec.logger.map(|x| x.len()).unwrap_or(0);
         for (key, value) in rec.fields() {
             if value.is_empty() {
                 if self.cfg.hide_empty_fields {
@@ -606,9 +598,9 @@ impl RecordFormatter {
 
             result += key.len();
             result += if matches!(value, RawValue::Object(_)) {
-                4 + value.raw_str().len() / 2
+                4 + value.raw_str().len() * 2
             } else {
-                2 + value.raw_str().len() / 4
+                2 + value.raw_str().len()
             };
         }
         result
@@ -693,7 +685,7 @@ impl RecordFormatter {
                         })
                     })
                 } else {
-                    Ok(())
+                    Err(MessageFormatError::EmptyMessage)
                 }
             }
             _ => Err(MessageFormatError::FormattingAsFieldNeeded),
@@ -1278,6 +1270,7 @@ enum FieldFormatResult {
 enum MessageFormatError {
     ExpansionNeeded,
     FormattingAsFieldNeeded,
+    EmptyMessage,
 }
 
 // ---
@@ -2591,12 +2584,13 @@ mod tests {
             formatter.format_to_string(&rec("", "some\nmultiline\ntext")),
             format!(
                 concat!(
-                    "\n",
+                    "{mh}\n",
                     "  > a={header}\n",
                     "    {indent}some\n",
                     "    {indent}multiline\n",
                     "    {indent}text"
                 ),
+                mh = EXPANDED_MESSAGE_HEADER,
                 header = EXPANDED_VALUE_HEADER,
                 indent = EXPANDED_VALUE_INDENT
             )
@@ -2780,6 +2774,10 @@ mod tests {
         let formatter = RecordFormatter::new(settings().with(|s| {
             s.theme = Default::default();
             s.expansion.mode = ExpansionMode::Low;
+            s.expansion.profiles.low.thresholds.global = 1024;
+            s.expansion.profiles.low.thresholds.cumulative = 1024;
+            s.expansion.profiles.low.thresholds.field = 1024;
+            s.expansion.profiles.low.thresholds.message = 1024;
         }));
 
         assert_eq!(
@@ -2789,6 +2787,110 @@ mod tests {
         assert_eq!(
             formatter.format_to_string(&rec("some\nmultiline\nmessage")),
             "~\n  > a=|=>\n     \tsome\n     \tmultiline\n     \tmessage"
+        );
+    }
+
+    #[test]
+    fn test_expand_cumulative() {
+        let rec = |msg, v1, v2, v3| Record {
+            message: Some(EncodedString::raw(msg).into()),
+            fields: RecordFields {
+                head: heapless::Vec::from_slice(&[
+                    ("a", EncodedString::raw(v1).into()),
+                    ("b", EncodedString::raw(v2).into()),
+                    ("c", EncodedString::raw(v3).into()),
+                ])
+                .unwrap(),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+
+        let formatter = RecordFormatter::new(settings().with(|s| {
+            s.theme = Default::default();
+            s.expansion.mode = ExpansionMode::High;
+            s.expansion.profiles.high.thresholds.global = 1024;
+            s.expansion.profiles.high.thresholds.cumulative = 32;
+            s.expansion.profiles.high.thresholds.field = 1024;
+            s.expansion.profiles.high.thresholds.message = 1024;
+        }));
+
+        assert_eq!(
+            formatter.format_to_string(&rec("", "v1", "v2", "v3")),
+            r#"a=v1 b=v2 c=v3"#
+        );
+        assert_eq!(
+            formatter.format_to_string(&rec("m", "v1", "v2", "v3")),
+            r#"m a=v1 b=v2 c=v3"#
+        );
+        assert_eq!(
+            formatter.format_to_string(&rec("", "long-v1", "long-v2", "long-v3")),
+            "a=long-v1 b=long-v2\n  > c=long-v3"
+        );
+        assert_eq!(
+            formatter.format_to_string(&rec("m", "long-v1", "long-v2", "long-v3")),
+            "m a=long-v1 b=long-v2\n  > c=long-v3"
+        );
+        assert_eq!(
+            formatter.format_to_string(&rec(
+                "some long long long long long long message",
+                "long-v1",
+                "long-v2",
+                "long-v3"
+            )),
+            "some long long long long long long message\n  > a=long-v1\n  > b=long-v2\n  > c=long-v3"
+        );
+    }
+
+    #[test]
+    fn test_expand_global() {
+        let rec = |msg, v1, v2, v3| Record {
+            message: Some(EncodedString::raw(msg).into()),
+            fields: RecordFields {
+                head: heapless::Vec::from_slice(&[
+                    ("a", EncodedString::raw(v1).into()),
+                    ("b", EncodedString::raw(v2).into()),
+                    ("c", EncodedString::raw(v3).into()),
+                ])
+                .unwrap(),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+
+        let formatter = RecordFormatter::new(settings().with(|s| {
+            s.theme = Default::default();
+            s.expansion.mode = ExpansionMode::High;
+            s.expansion.profiles.high.thresholds.global = 24;
+            s.expansion.profiles.high.thresholds.cumulative = 1024;
+            s.expansion.profiles.high.thresholds.field = 1024;
+            s.expansion.profiles.high.thresholds.message = 1024;
+        }));
+
+        assert_eq!(
+            formatter.format_to_string(&rec("", "v1", "v2", "v3")),
+            r#"a=v1 b=v2 c=v3"#
+        );
+        assert_eq!(
+            formatter.format_to_string(&rec("m", "v1", "v2", "v3")),
+            r#"m a=v1 b=v2 c=v3"#
+        );
+        assert_eq!(
+            formatter.format_to_string(&rec("", "long-v1", "long-v2", "long-v3")),
+            "~\n  > a=long-v1\n  > b=long-v2\n  > c=long-v3"
+        );
+        assert_eq!(
+            formatter.format_to_string(&rec("m", "long-v1", "long-v2", "long-v3")),
+            "m\n  > a=long-v1\n  > b=long-v2\n  > c=long-v3"
+        );
+        assert_eq!(
+            formatter.format_to_string(&rec(
+                "some long long long long long long message",
+                "long-v1",
+                "long-v2",
+                "long-v3"
+            )),
+            "some long long long long long long message\n  > a=long-v1\n  > b=long-v2\n  > c=long-v3"
         );
     }
 }
