@@ -10,7 +10,7 @@ use config::{Config, File, FileFormat};
 use derive_deref::Deref;
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize, Serializer};
-use strum::IntoEnumIterator;
+use strum::{Display, IntoEnumIterator};
 
 // local imports
 use crate::{error::Error, level::Level};
@@ -351,8 +351,9 @@ pub enum FlattenOption {
 
 // ---
 
-#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, Deserialize, Display, Eq, PartialEq)]
 #[serde(rename_all = "kebab-case")]
+#[strum(serialize_all = "kebab-case")]
 pub enum ExpansionMode {
     Never,
     Inline,

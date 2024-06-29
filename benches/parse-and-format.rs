@@ -9,6 +9,8 @@ use criterion::{criterion_group, criterion_main, Criterion};
 // local imports
 use hl::{
     app::{RecordIgnorer, SegmentProcess, SegmentProcessorOptions},
+    formatting::Expansion,
+    settings::ExpansionMode,
     timezone::Tz,
     DateTimeFormatter, Filter, LinuxDateFormat, Parser, ParserSettings, RecordFormatter, RecordFormatterSettings,
     SegmentProcessor, Settings, Theme,
@@ -19,27 +21,33 @@ use hl::{
 fn benchmark(c: &mut Criterion) {
     let mut c = c.benchmark_group("parse-and-format");
     for (name, record) in [("kibana-record-01", KIBANA_RECORD_01)] {
-        for theme in ["universal", "classic"] {
-            c.bench_function(format!("{}/{}", name, theme), |b| {
-                let settings = Settings::default();
-                let parser = Parser::new(ParserSettings::new(&settings.fields.predefined, empty(), false, None));
-                let formatter = RecordFormatter::new(RecordFormatterSettings {
-                    theme: Arc::new(Theme::embedded(theme).unwrap()),
-                    ts_formatter: DateTimeFormatter::new(
-                        LinuxDateFormat::new("%b %d %T.%3N").compile(),
-                        Tz::FixedOffset(Utc.fix()),
-                    ),
-                    ..Default::default()
+        for expansion in [ExpansionMode::Inline, ExpansionMode::Medium] {
+            for theme in ["universal", "classic"] {
+                c.bench_function(format!("{}/expansion-{}/theme-{}", name, expansion, theme), |b| {
+                    let settings = Settings::default();
+                    let parser = Parser::new(ParserSettings::new(&settings.fields.predefined, empty(), false, None));
+                    let formatter = RecordFormatter::new(RecordFormatterSettings {
+                        theme: Arc::new(Theme::embedded(theme).unwrap()),
+                        ts_formatter: DateTimeFormatter::new(
+                            LinuxDateFormat::new("%b %d %T.%3N").compile(),
+                            Tz::FixedOffset(Utc.fix()),
+                        ),
+                        expansion: Expansion {
+                            mode: expansion,
+                            ..Default::default()
+                        },
+                        ..Default::default()
+                    });
+                    let filter = Filter::default();
+                    let mut processor =
+                        SegmentProcessor::new(&parser, &formatter, &filter, SegmentProcessorOptions::default());
+                    let mut buf = Vec::new();
+                    b.iter(|| {
+                        processor.process(record, &mut buf, "", None, &mut RecordIgnorer {});
+                        buf.clear();
+                    });
                 });
-                let filter = Filter::default();
-                let mut processor =
-                    SegmentProcessor::new(&parser, &formatter, &filter, SegmentProcessorOptions::default());
-                let mut buf = Vec::new();
-                b.iter(|| {
-                    processor.process(record, &mut buf, "", None, &mut RecordIgnorer {});
-                    buf.clear();
-                });
-            });
+            }
         }
     }
 }
