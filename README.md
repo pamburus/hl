@@ -498,6 +498,7 @@ Output Options:
       --no-local              Disable local time zone, overrides --local option
   -e, --hide-empty-fields     Hide empty fields, applies for null, string, object and array fields only [env: HL_HIDE_EMPTY_FIELDS=]
   -E, --show-empty-fields     Show empty fields, overrides --hide-empty-fields option [env: HL_SHOW_EMPTY_FIELDS=]
+  -x, --expansion <MODE>      Whether to expand fields and messages [env: HL_EXPANSION=] [default: medium] [possible values: never, inline, low, medium, high, always]
       --input-info <VARIANT>  Show input number and/or input filename before each message [default: auto] [possible values: auto, none, full, compact, minimal]
   -o, --output <FILE>         Output file
 

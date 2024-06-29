@@ -77,7 +77,7 @@ formatting:
           # Threshold of message field's complexity that triggers its expansion.
           message: 256
           # Threshold of any other field's complexity that triggers its expansion.
-          field: 128
+          field: 256
       # Field expansion settings for the medium mode.
       medium:
         # Multiline field expansion mode [standard|disabled|inline].
@@ -91,7 +91,7 @@ formatting:
           # Threshold of message field's complexity that triggers its expansion.
           message: 192
           # Threshold of any other field's complexity that triggers its expansion.
-          field: 64
+          field: 192
       # Field expansion settings for the high mode.
       high:
         # Multiline field expansion mode [standard|disabled|inline].
@@ -101,11 +101,11 @@ formatting:
           # Threshold of overall draft log record complexity that triggers expansion of all fields.
           global: 1024
           # Threshold of cumulative complexity of all fields on the first line that triggers expansion of remaining fields.
-          cumulative: 192
+          cumulative: 128
           # Threshold of message field's complexity that triggers its expansion.
           message: 128
           # Threshold of any other field's complexity that triggers its expansion.
-          field: 48
+          field: 128
   punctuation:
     logger-name-separator: ':'
     field-key-value-separator: '='
