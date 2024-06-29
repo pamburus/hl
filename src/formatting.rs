@@ -459,7 +459,7 @@ impl RecordFormatter {
                 (global, cumulative) => {
                     if fs.complexity >= cumulative {
                         fs.expanded = true;
-                    } else if self.complexity(fs.complexity, rec, Some(&self.cfg.fields)) >= global {
+                    } else if self.rough_complexity(fs.complexity, rec, Some(&self.cfg.fields)) >= global {
                         fs.expanded = true;
                     }
                 }
@@ -568,7 +568,7 @@ impl RecordFormatter {
     }
 
     #[inline]
-    fn complexity(&self, initial: usize, rec: &model::Record, filter: Option<&IncludeExcludeKeyFilter>) -> usize {
+    fn rough_complexity(&self, initial: usize, rec: &model::Record, filter: Option<&IncludeExcludeKeyFilter>) -> usize {
         let mut result = initial;
         result += rec.message.map(|x| x.raw_str().len()).unwrap_or(0);
         result += rec.predefined.len();
@@ -596,12 +596,8 @@ impl RecordFormatter {
                 continue;
             }
 
-            result += key.len();
-            result += if matches!(value, RawValue::Object(_)) {
-                4 + value.raw_str().len() * 2
-            } else {
-                2 + value.raw_str().len()
-            };
+            result += 2 + key.len();
+            result += value.rough_complexity();
         }
         result
     }
@@ -793,7 +789,6 @@ impl RecordFormatter {
         };
 
         if let Err((key, value)) = result {
-            fs.expanded = true;
             self.expand(s, fs);
             _ = self.format_field(s, key, value, fs, filter);
         }
@@ -884,9 +879,11 @@ struct FormattingState<'a> {
     caller_formatted: bool,
     complexity: usize,
     extra_fields: heapless::Vec<(&'a str, RawValue<'a>), 4>,
-    fields_to_expand: heapless::Vec<(&'a str, RawValue<'a>), 32>,
+    fields_to_expand: heapless::Vec<(&'a str, RawValue<'a>), MAX_FIELDS_TO_EXPAND_ON_HOLD>,
     last_expansion_point: Option<usize>,
 }
+
+const MAX_FIELDS_TO_EXPAND_ON_HOLD: usize = 32;
 
 // ---
 
@@ -1055,15 +1052,13 @@ impl<'a> FieldFormatter<'a> {
                 fs.complexity += 4;
             }
             RawValue::Object(value) => {
-                const FIXED_COMPLEXITY: usize = 4;
-
                 if let Some(limit) = complexity_limit {
-                    if FIXED_COMPLEXITY + value.get().len() > limit {
+                    if value.rough_complexity() > limit {
                         return ValueFormatResult::ExpansionNeeded;
                     }
                 }
 
-                fs.complexity += FIXED_COMPLEXITY;
+                fs.complexity += 4;
                 let item = value.parse().unwrap();
                 if !fs.flatten && (!fs.expanded || value.is_empty()) {
                     s.element(Element::Object, |s| {
@@ -1108,15 +1103,13 @@ impl<'a> FieldFormatter<'a> {
                 }
             }
             RawValue::Array(value) => {
-                const FIXED_COMPLEXITY: usize = 4;
-
                 if let Some(limit) = complexity_limit {
-                    if FIXED_COMPLEXITY + value.get().len() > limit {
+                    if value.rough_complexity() > limit {
                         return ValueFormatResult::ExpansionNeeded;
                     }
                 }
 
-                fs.complexity += FIXED_COMPLEXITY;
+                fs.complexity += 4;
                 let xb = std::mem::replace(&mut fs.expanded, false);
                 let item = value.parse::<32>().unwrap();
                 s.element(Element::Array, |s| {
@@ -1863,7 +1856,7 @@ mod tests {
     use super::*;
     use crate::{
         datefmt::LinuxDateFormat,
-        model::{RawObject, Record, RecordFields},
+        model::{RawObject, Record, RecordFields, RECORD_EXTRA_CAPACITY},
         settings::Punctuation,
         theme::Theme,
         themecfg::testing,
@@ -1872,6 +1865,7 @@ mod tests {
     };
     use chrono::{Offset, Utc};
     use encstr::EncodedString;
+    use itertools::Itertools;
     use model::RecordWithSourceConstructor;
     use serde_json as json;
 
@@ -2737,7 +2731,7 @@ mod tests {
     }
 
     #[test]
-    fn test_expand_inline() {
+    fn test_expand_mode_inline() {
         let rec = |value| Record {
             fields: RecordFields {
                 head: heapless::Vec::from_slice(&[("a", EncodedString::raw(value).into())]).unwrap(),
@@ -2762,7 +2756,7 @@ mod tests {
     }
 
     #[test]
-    fn test_expand_low() {
+    fn test_expand_mode_low() {
         let rec = |value| Record {
             fields: RecordFields {
                 head: heapless::Vec::from_slice(&[("a", EncodedString::raw(value).into())]).unwrap(),
@@ -2791,7 +2785,7 @@ mod tests {
     }
 
     #[test]
-    fn test_expand_cumulative() {
+    fn test_expansion_threshold_cumulative() {
         let rec = |msg, v1, v2, v3| Record {
             message: Some(EncodedString::raw(msg).into()),
             fields: RecordFields {
@@ -2843,7 +2837,7 @@ mod tests {
     }
 
     #[test]
-    fn test_expand_global() {
+    fn test_expansion_threshold_global() {
         let rec = |msg, v1, v2, v3| Record {
             message: Some(EncodedString::raw(msg).into()),
             fields: RecordFields {
@@ -2861,7 +2855,7 @@ mod tests {
         let formatter = RecordFormatter::new(settings().with(|s| {
             s.theme = Default::default();
             s.expansion.mode = ExpansionMode::High;
-            s.expansion.profiles.high.thresholds.global = 24;
+            s.expansion.profiles.high.thresholds.global = 28;
             s.expansion.profiles.high.thresholds.cumulative = 1024;
             s.expansion.profiles.high.thresholds.field = 1024;
             s.expansion.profiles.high.thresholds.message = 1024;
@@ -2891,6 +2885,112 @@ mod tests {
                 "long-v3"
             )),
             "some long long long long long long message\n  > a=long-v1\n  > b=long-v2\n  > c=long-v3"
+        );
+    }
+
+    #[test]
+    fn test_expansion_threshold_field() {
+        let rec = |value| Record {
+            fields: RecordFields {
+                head: heapless::Vec::from_slice(&[("a", value)]).unwrap(),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+
+        let formatter = RecordFormatter::new(settings().with(|s| {
+            s.theme = Default::default();
+            s.expansion.mode = ExpansionMode::High;
+            s.expansion.profiles.high.thresholds.global = 1024;
+            s.expansion.profiles.high.thresholds.cumulative = 1024;
+            s.expansion.profiles.high.thresholds.field = 48;
+            s.expansion.profiles.high.thresholds.message = 1024;
+            s.flatten = false;
+        }));
+
+        let array = json_raw_value("[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16]");
+        let object = json_raw_value(r#"{"a":"v1","b":"v2","c":"v3","d":"v4","e":"v5","f":"v6"}"#);
+
+        assert_eq!(
+            formatter.format_to_string(&rec(EncodedString::raw("v").into())),
+            r#"a=v"#
+        );
+        assert_eq!(
+            formatter.format_to_string(&rec(RawValue::Array(array.as_ref().into()))),
+            "~\n  > a=[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16]"
+        );
+        assert_eq!(
+            formatter.format_to_string(&rec(RawValue::Object(object.as_ref().into()))),
+            "~\n  > a:\n    > a=v1\n    > b=v2\n    > c=v3\n    > d=v4\n    > e=v5\n    > f=v6"
+        );
+    }
+
+    #[test]
+    fn test_expansion_nested_field() {
+        let rec = |value| Record {
+            fields: RecordFields {
+                head: heapless::Vec::from_slice(&[("a", value)]).unwrap(),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+
+        let formatter = RecordFormatter::new(settings().with(|s| {
+            s.theme = Default::default();
+            s.expansion.mode = ExpansionMode::High;
+            s.expansion.profiles.high.thresholds.global = 1024;
+            s.expansion.profiles.high.thresholds.cumulative = 1024;
+            s.expansion.profiles.high.thresholds.field = 1024;
+            s.expansion.profiles.high.thresholds.message = 1024;
+            s.hide_empty_fields = true;
+            s.flatten = false;
+        }));
+
+        let object =
+            json_raw_value(r#"{"a":"v1","b":"v2","c":{"c":"v3","d":"v4\nwith second line","e":"v5","f":"v6","g":""}}"#);
+
+        assert_eq!(
+            formatter.format_to_string(&rec(RawValue::Object(object.as_ref().into()))),
+            "~\n  > a:\n    > a=v1\n    > b=v2\n    > c:\n      > c=v3\n      > d=|=>\n         \tv4\n         \twith second line\n      > e=v5\n      > f=v6"
+        );
+    }
+
+    #[test]
+    fn test_add_field_to_expand() {
+        const N: usize = RECORD_EXTRA_CAPACITY;
+        const M: usize = MAX_FIELDS_TO_EXPAND_ON_HOLD + 2;
+        let kvs = (0..M)
+            .map(|i| (format!("k{}", i).to_owned(), format!("some\nvalue #{}", i).to_owned()))
+            .collect_vec();
+        let rec = Record {
+            message: Some(EncodedString::raw("m").into()),
+            fields: RecordFields {
+                head: heapless::Vec::from_iter(
+                    kvs[..N]
+                        .iter()
+                        .map(|(k, v)| (k.as_str(), EncodedString::raw(v.as_str()).into())),
+                ),
+                tail: Vec::from_iter(
+                    kvs[N..]
+                        .iter()
+                        .map(|(k, v)| (k.as_str(), EncodedString::raw(v.as_str()).into())),
+                ),
+            },
+            ..Default::default()
+        };
+
+        let formatter = RecordFormatter::new(settings().with(|s| {
+            s.theme = Default::default();
+            s.expansion.mode = ExpansionMode::Medium;
+            s.expansion.profiles.medium.thresholds.global = 1024;
+            s.expansion.profiles.medium.thresholds.cumulative = 320;
+            s.expansion.profiles.medium.thresholds.field = 1024;
+            s.expansion.profiles.medium.thresholds.message = 1024;
+        }));
+
+        assert_eq!(
+            formatter.format_to_string(&rec),
+            "m\n  > k0=|=>\n     \tsome\n     \tvalue #0\n  > k1=|=>\n     \tsome\n     \tvalue #1\n  > k2=|=>\n     \tsome\n     \tvalue #2\n  > k3=|=>\n     \tsome\n     \tvalue #3\n  > k4=|=>\n     \tsome\n     \tvalue #4\n  > k5=|=>\n     \tsome\n     \tvalue #5\n  > k6=|=>\n     \tsome\n     \tvalue #6\n  > k7=|=>\n     \tsome\n     \tvalue #7\n  > k8=|=>\n     \tsome\n     \tvalue #8\n  > k9=|=>\n     \tsome\n     \tvalue #9\n  > k10=|=>\n     \tsome\n     \tvalue #10\n  > k11=|=>\n     \tsome\n     \tvalue #11\n  > k12=|=>\n     \tsome\n     \tvalue #12\n  > k13=|=>\n     \tsome\n     \tvalue #13\n  > k14=|=>\n     \tsome\n     \tvalue #14\n  > k15=|=>\n     \tsome\n     \tvalue #15\n  > k16=|=>\n     \tsome\n     \tvalue #16\n  > k17=|=>\n     \tsome\n     \tvalue #17\n  > k18=|=>\n     \tsome\n     \tvalue #18\n  > k19=|=>\n     \tsome\n     \tvalue #19\n  > k20=|=>\n     \tsome\n     \tvalue #20\n  > k21=|=>\n     \tsome\n     \tvalue #21\n  > k22=|=>\n     \tsome\n     \tvalue #22\n  > k23=|=>\n     \tsome\n     \tvalue #23\n  > k24=|=>\n     \tsome\n     \tvalue #24\n  > k25=|=>\n     \tsome\n     \tvalue #25\n  > k26=|=>\n     \tsome\n     \tvalue #26\n  > k27=|=>\n     \tsome\n     \tvalue #27\n  > k28=|=>\n     \tsome\n     \tvalue #28\n  > k29=|=>\n     \tsome\n     \tvalue #29\n  > k30=|=>\n     \tsome\n     \tvalue #30\n  > k31=|=>\n     \tsome\n     \tvalue #31\n  > k32=|=>\n     \tsome\n     \tvalue #32\n  > k33=|=>\n     \tsome\n     \tvalue #33"
         );
     }
 }
