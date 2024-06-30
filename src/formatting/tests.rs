@@ -1466,7 +1466,7 @@ fn test_expansion_threshold_cumulative() {
     );
     assert_eq!(
         formatter.format_to_string(&rec("", "long-v1", "long-v2", "long-v3")),
-        "a=long-v1 b=long-v2\n  > c=long-v3"
+        "a=long-v1 b=long-v2 c=long-v3"
     );
     assert_eq!(
         formatter.format_to_string(&rec("m", "long-v1", "long-v2", "long-v3")),
