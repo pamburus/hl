@@ -526,7 +526,10 @@ impl RecordFormatter {
                         .ok();
                 } else if self.always_show_time {
                     self.format_timestamp_stub(&mut fs, s);
+                    fs.complexity += 1 + self.ts_width.chars;
                 }
+            } else {
+                fs.complexity += 1 + self.ts_width.chars;
             }
 
             //
@@ -543,6 +546,7 @@ impl RecordFormatter {
             let level = level.or(self.always_show_level.then_some(LEVEL_UNKNOWN.as_bytes()));
             if let Some(level) = level {
                 fs.has_level = true;
+                fs.complexity += 3 + level.len();
                 self.format_level(s, &mut fs, level);
                 // fs.add_element(|| s.space());
                 // s.element(Element::Level, |s| {
@@ -564,9 +568,14 @@ impl RecordFormatter {
                         s.batch(|buf| buf.extend_from_slice(logger.as_bytes()))
                     });
                     s.batch(|buf| buf.extend_from_slice(self.punctuation.logger_name_separator.as_bytes()));
-                    fs.complexity += logger.len() + 4;
+                    fs.complexity += 2 + logger.len();
                     fs.first_line_used = true;
                 });
+            }
+
+            // include caller into cumulative complexity calculation
+            if !rec.caller.is_empty() {
+                fs.complexity += 3 + rec.caller.name.len() + 1 + rec.caller.file.len() + 1 + rec.caller.line.len();
             }
 
             //
@@ -575,7 +584,7 @@ impl RecordFormatter {
             if let Some(value) = &rec.message {
                 match fs.transact(s, |fs, s| self.format_message(s, fs, *value)) {
                     Ok(()) => {
-                        fs.complexity += 4;
+                        fs.complexity += 2;
                         fs.first_line_used = true;
                     }
                     Err(MessageFormatError::ExpansionNeeded) => {
@@ -1122,7 +1131,7 @@ impl<'a> FieldFormatter<'a> {
 
         let ffv = self.begin(s, key, value, fs);
 
-        fs.complexity += key.len() + 4;
+        fs.complexity += key.len() + 2;
 
         let result = if self.rf.unescape_fields {
             self.format_value(s, value, fs, filter, setting)
