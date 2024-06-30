@@ -417,7 +417,10 @@ impl RecordFormatter {
                 }
                 if self.cfg.always_show_time {
                     self.format_timestamp_stub(&mut fs, s);
+                    fs.complexity += 1 + self.ts_width.chars;
                 }
+            } else {
+                fs.complexity += 1 + self.ts_width.chars;
             }
 
             //
@@ -434,6 +437,7 @@ impl RecordFormatter {
             let level = level.or_else(|| self.cfg.always_show_level.then(|| LEVEL_UNKNOWN.as_bytes()));
             if let Some(level) = level {
                 fs.has_level = true;
+                fs.complexity += 3 + level.len();
                 self.format_level(s, &mut fs, level);
             }
 
@@ -447,17 +451,26 @@ impl RecordFormatter {
                         s.batch(|buf| buf.extend_from_slice(logger.as_bytes()))
                     });
                     s.batch(|buf| buf.extend_from_slice(self.cfg.punctuation.logger_name_separator.as_bytes()));
-                    fs.complexity += logger.len() + 4;
+                    fs.complexity += 2 + logger.len();
                     fs.first_line_used = true;
                 });
             }
+
+            // include caller into cumulative complexity calculation
+            if let Some(caller) = &rec.caller {
+                fs.complexity += 3 + match caller {
+                    Caller::Text(text) => text.len(),
+                    Caller::FileLine(file, line) => file.len() + line.len() + 1,
+                };
+            }
+
             //
             // message text
             //
             if let Some(value) = &rec.message {
                 match fs.transact(s, |fs, s| self.format_message(s, fs, *value)) {
                     Ok(()) => {
-                        fs.complexity += 4;
+                        fs.complexity += 2;
                         fs.first_line_used = true;
                     }
                     Err(MessageFormatError::ExpansionNeeded) => {
@@ -987,7 +1000,7 @@ impl<'a> FieldFormatter<'a> {
 
         let ffv = self.begin(s, key, value, fs);
 
-        fs.complexity += key.len() + 4;
+        fs.complexity += key.len() + 2;
 
         let result = if self.rf.cfg.unescape_fields {
             self.format_value(s, value, fs, filter, setting)
@@ -2820,7 +2833,7 @@ mod tests {
         );
         assert_eq!(
             formatter.format_to_string(&rec("", "long-v1", "long-v2", "long-v3")),
-            "a=long-v1 b=long-v2\n  > c=long-v3"
+            "a=long-v1 b=long-v2 c=long-v3"
         );
         assert_eq!(
             formatter.format_to_string(&rec("m", "long-v1", "long-v2", "long-v3")),
