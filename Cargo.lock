@@ -796,6 +796,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "heapopt"
+version = "0.1.0"
+dependencies = [
+ "heapless",
+]
+
+[[package]]
 name = "heck"
 version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -815,7 +822,7 @@ checksum = "7f24254aa9a54b5c858eaee2f5bccdb46aaf0e486a595ed5fd8f86ba55232a70"
 
 [[package]]
 name = "hl"
-version = "0.29.7"
+version = "0.30.0-alpha.1"
 dependencies = [
  "bincode",
  "byte-strings",
@@ -841,6 +848,7 @@ dependencies = [
  "enumset-ext",
  "flate2",
  "heapless",
+ "heapopt",
  "hex",
  "htp",
  "humantime",
@@ -848,6 +856,7 @@ dependencies = [
  "itoa",
  "kqueue",
  "maplit",
+ "mline",
  "notify",
  "nu-ansi-term",
  "num_cpus",
@@ -1110,6 +1119,14 @@ dependencies = [
  "log",
  "wasi",
  "windows-sys 0.48.0",
+]
+
+[[package]]
+name = "mline"
+version = "0.1.0"
+dependencies = [
+ "heapopt",
+ "itertools 0.13.0",
 ]
 
 [[package]]
