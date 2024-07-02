@@ -1,15 +1,10 @@
-use std::io::Write;
+use std::{hint::black_box, io::Write};
 
 use chrono::{format::strftime::StrftimeItems, Datelike, FixedOffset, Timelike};
 use criterion::{criterion_group, criterion_main, Criterion};
 
 use hl::datefmt::{DateTimeFormatter, LinuxDateFormat};
 use hl::{timestamp::Timestamp, timezone::Tz};
-
-#[inline(never)]
-fn ignore<T>(t: T) {
-    drop(t)
-}
 
 fn benchmark(c: &mut Criterion) {
     let mut c = c.benchmark_group("ts-format");
@@ -19,7 +14,7 @@ fn benchmark(c: &mut Criterion) {
     let tz = |secs| Tz::FixedOffset(FixedOffset::east_opt(secs).unwrap());
     c.bench_function("chrono conversion to naive local", |b| {
         b.iter(|| {
-            ignore(ts.naive_local());
+            black_box(ts.naive_local());
         });
     });
     c.bench_function("datefmt format utc [%y-%m-%d %T.%N]", |b| {
@@ -27,7 +22,7 @@ fn benchmark(c: &mut Criterion) {
         let format = LinuxDateFormat::new("%y-%m-%d %T.%N").compile();
         let formatter = DateTimeFormatter::new(format, tz(0));
         b.iter(|| {
-            formatter.format(&mut buf, ts);
+            black_box(formatter.format(&mut buf, ts));
             buf.clear();
         });
     });
@@ -36,7 +31,7 @@ fn benchmark(c: &mut Criterion) {
         let format = LinuxDateFormat::new("%y-%m-%d %T.%N").compile();
         let formatter = DateTimeFormatter::new(format, tz(3 * 3600));
         b.iter(|| {
-            formatter.format(&mut buf, ts);
+            black_box(formatter.format(&mut buf, ts));
             buf.clear();
         });
     });
@@ -45,7 +40,7 @@ fn benchmark(c: &mut Criterion) {
         let format = LinuxDateFormat::new("%b %d %T.%N").compile();
         let formatter = DateTimeFormatter::new(format, tz(0));
         b.iter(|| {
-            formatter.format(&mut buf, ts);
+            black_box(formatter.format(&mut buf, ts));
             buf.clear();
         });
     });
@@ -54,7 +49,7 @@ fn benchmark(c: &mut Criterion) {
         let format = LinuxDateFormat::new("%b %d %T.%N").compile();
         let formatter = DateTimeFormatter::new(format, tz(3 * 3600));
         b.iter(|| {
-            formatter.format(&mut buf, ts);
+            black_box(formatter.format(&mut buf, ts));
             buf.clear();
         });
     });
@@ -64,7 +59,7 @@ fn benchmark(c: &mut Criterion) {
         let formatter = DateTimeFormatter::new(format, tz(0));
         let tsr = tsr.as_rfc3339().unwrap();
         b.iter(|| {
-            formatter.reformat_rfc3339(&mut buf, tsr.clone());
+            black_box(formatter.reformat_rfc3339(&mut buf, tsr.clone()));
             buf.clear();
         });
     });
@@ -74,7 +69,7 @@ fn benchmark(c: &mut Criterion) {
         let formatter = DateTimeFormatter::new(format, tz(0));
         let tsr = tsr.as_rfc3339().unwrap();
         b.iter(|| {
-            formatter.reformat_rfc3339(&mut buf, tsr.clone());
+            black_box(formatter.reformat_rfc3339(&mut buf, tsr.clone()));
             buf.clear();
         });
     });
@@ -84,20 +79,20 @@ fn benchmark(c: &mut Criterion) {
         let formatter = DateTimeFormatter::new(format, tz(0));
         let tsr = tsr.as_rfc3339().unwrap();
         b.iter(|| {
-            formatter.reformat_rfc3339(&mut buf, tsr.clone());
+            black_box(formatter.reformat_rfc3339(&mut buf, tsr.clone()));
             buf.clear();
         });
     });
     c.bench_function("calling chrono date-time methods", |b| {
         b.iter(|| {
             assert!(
-                tsn.year() as i64
-                    + tsn.month() as i64
-                    + tsn.day() as i64
-                    + tsn.hour() as i64
-                    + tsn.minute() as i64
-                    + tsn.second() as i64
-                    + tsn.nanosecond() as i64
+                black_box(tsn.year()) as i64
+                    + black_box(tsn.month()) as i64
+                    + black_box(tsn.day()) as i64
+                    + black_box(tsn.hour()) as i64
+                    + black_box(tsn.minute()) as i64
+                    + black_box(tsn.second()) as i64
+                    + black_box(tsn.nanosecond()) as i64
                     != 0
             );
         });
@@ -106,7 +101,7 @@ fn benchmark(c: &mut Criterion) {
     c.bench_function("chrono format", |b| {
         let mut buf = Vec::<u8>::with_capacity(4096);
         b.iter(|| {
-            assert!(write!(&mut buf, "{}", ts.format_with_items(items.clone())).is_ok());
+            assert!(black_box(write!(&mut buf, "{}", ts.format_with_items(items.clone()))).is_ok());
             buf.clear();
         });
     });
