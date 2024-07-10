@@ -11,3 +11,314 @@ updates:
       interval: "daily"
     allow:
       - dependency-type: all # Which dependencies to update: all, direct, or indirect
+    groups:
+      anstyle-sec:
+        applies-to: security-updates
+        patterns:
+          - "anstyle"
+          - "anstyle-*"
+      anstyle-ver:
+        applies-to: version-updates
+        patterns:
+          - "anstyle"
+          - "anstyle-*"
+      byte-strings-sec:
+        applies-to: security-updates
+        patterns:
+          - "byte-strings"
+          - "byte-strings-*"
+      byte-strings-ver:
+        applies-to: version-updates
+        patterns:
+          - "byte-strings"
+          - "byte-strings-*"
+      capnp-sec:
+        applies-to: security-updates
+        patterns:
+          - "capnp"
+          - "capnpc"
+      capnp-ver:
+        applies-to: version-updates
+        patterns:
+          - "capnp"
+          - "capnpc"
+      chrono-sec:
+        applies-to: security-updates
+        patterns:
+          - "chrono"
+          - "chrono-*"
+      chrono-ver:
+        applies-to: version-updates
+        patterns:
+          - "chrono"
+          - "chrono-*"
+      ciborium-sec:
+        applies-to: security-updates
+        patterns:
+          - "ciborium"
+          - "ciborium-*"
+      ciborium-ver:
+        applies-to: version-updates
+        patterns:
+          - "ciborium"
+          - "ciborium-*"
+      clap-sec:
+        applies-to: security-updates
+        patterns:
+          - "clap"
+          - "clap_*"
+      clap-ver:
+        applies-to: version-updates
+        patterns:
+          - "clap"
+          - "clap_*"
+      const-random-sec:
+        applies-to: security-updates
+        patterns:
+          - "const-random"
+          - "const-random-*"
+      const-random-ver:
+        applies-to: version-updates
+        patterns:
+          - "const-random"
+          - "const-random-*"
+      criterion-sec:
+        applies-to: security-updates
+        patterns:
+          - "criterion"
+          - "criterion-*"
+      criterion-ver:
+        applies-to: version-updates
+        patterns:
+          - "criterion"
+          - "criterion-*"
+      crossbeam-sec:
+        applies-to: security-updates
+        patterns:
+          - "crossbeam"
+          - "crossbeam-*"
+      crossbeam-ver:
+        applies-to: version-updates
+        patterns:
+          - "crossbeam"
+          - "crossbeam-*"
+      darling-sec:
+        applies-to: security-updates
+        patterns:
+          - "darling"
+          - "darling_*"
+      darling-ver:
+        applies-to: version-updates
+        patterns:
+          - "darling"
+          - "darling_*"
+      enum-map-sec:
+        applies-to: security-updates
+        patterns:
+          - "enum-map"
+          - "enum-map-*"
+      enum-map-ver:
+        applies-to: version-updates
+        patterns:
+          - "enum-map"
+          - "enum-map-*"
+      enumset-sec:
+        applies-to: security-updates
+        patterns:
+          - "enumset"
+          - "enumset-*"
+          - "enumset_*"
+      enumset-ver:
+        applies-to: version-updates
+        patterns:
+          - "enumset"
+          - "enumset-*"
+          - "enumset_*"
+      iana-time-zone-sec:
+        applies-to: security-updates
+        patterns:
+          - "iana-time-zone"
+          - "iana-time-zone-*"
+      iana-time-zone-ver:
+        applies-to: version-updates
+        patterns:
+          - "iana-time-zone"
+          - "iana-time-zone-*"
+      inotify-sec:
+        applies-to: security-updates
+        patterns:
+          - "inotify"
+          - "inotify-*"
+      inotify-ver:
+        applies-to: version-updates
+        patterns:
+          - "inotify"
+          - "inotify-*"
+      is-terminal-sec:
+        applies-to: security-updates
+        patterns:
+          - "is-terminal"
+          - "is-terminal-*"
+          - "is_terminal_*"
+      is-terminal-ver:
+        applies-to: version-updates
+        patterns:
+          - "is-terminal"
+          - "is-terminal-*"
+          - "is_terminal_*"
+      kqueue-sec:
+        applies-to: security-updates
+        patterns:
+          - "kqueue"
+          - "kqueue-*"
+      kqueue-ver:
+        applies-to: version-updates
+        patterns:
+          - "kqueue"
+          - "kqueue-*"
+      pest-sec:
+        applies-to: security-updates
+        patterns:
+          - "pest"
+          - "pest_*"
+      pest-ver:
+        applies-to: version-updates
+        patterns:
+          - "pest"
+          - "pest_*"
+      phf-sec:
+        applies-to: security-updates
+        patterns:
+          - "phf"
+          - "phf_*"
+      phf-ver:
+        applies-to: version-updates
+        patterns:
+          - "phf"
+          - "phf_*"
+      plotters-sec:
+        applies-to: security-updates
+        patterns:
+          - "plotters"
+          - "plotters-*"
+      plotters-ver:
+        applies-to: version-updates
+        patterns:
+          - "plotters"
+          - "plotters-*"
+      rand-sec:
+        applies-to: security-updates
+        patterns:
+          - "rand"
+          - "rand_*"
+      rand-ver:
+        applies-to: version-updates
+        patterns:
+          - "rand"
+          - "rand_*"
+      rayon-sec:
+        applies-to: security-updates
+        patterns:
+          - "rayon"
+          - "rayon-*"
+      rayon-ver:
+        applies-to: version-updates
+        patterns:
+          - "rayon"
+          - "rayon-*"
+      redox-sec:
+        applies-to: security-updates
+        patterns:
+          - "redox_*"
+      redox-ver:
+        applies-to: version-updates
+        patterns:
+          - "redox_*"
+      regex-sec:
+        applies-to: security-updates
+        patterns:
+          - "regex"
+          - "regex-*"
+      regex-ver:
+        applies-to: version-updates
+        patterns:
+          - "regex"
+          - "regex-*"
+      rust-embed-sec:
+        applies-to: security-updates
+        patterns:
+          - "rust-embed"
+          - "rust-embed-*"
+      rust-embed-ver:
+        applies-to: version-updates
+        patterns:
+          - "rust-embed"
+          - "rust-embed-*"
+      strum-sec:
+        applies-to: security-updates
+        patterns:
+          - "strum"
+          - "strum_*" 
+      strum-ver:
+        applies-to: version-updates
+        patterns:
+          - "strum"
+          - "strum_*"
+      thiserror-sec:
+        applies-to: security-updates
+        patterns:
+          - "thiserror"
+          - "thiserror-*" 
+      thiserror-ver:
+        applies-to: version-updates
+        patterns:
+          - "thiserror"
+          - "thiserror-*"
+      toml-sec:
+        applies-to: security-updates
+        patterns:
+          - "toml"
+          - "toml_*"
+      toml-ver:
+        applies-to: version-updates
+        patterns:
+          - "toml"
+          - "toml_*"
+      unicode-sec:
+        applies-to: security-updates
+        patterns:
+          - "unicode-*"
+      unicode-ver:
+        applies-to: version-updates
+        patterns:
+          - "unicode-*"
+      wasm-sec:
+        applies-to: security-updates
+        patterns:
+          - "wasi"
+          - "wasm-*"
+      wasm-ver:
+        applies-to: version-updates
+        patterns:
+          - "wasi"
+          - "wasm-*"
+      winapi-sec:
+        applies-to: security-updates
+        patterns:
+          - "winapi"
+          - "winapi-*"
+      winapi-ver:
+        applies-to: version-updates
+        patterns:
+          - "winapi"
+          - "winapi-*"
+      windows-sec:
+        applies-to: security-updates
+        patterns:
+          - "windows-*"
+          - "windows_*"
+      windows-ver:
+        applies-to: version-updates
+        patterns:
+          - "windows-*"
+          - "windows_*"
