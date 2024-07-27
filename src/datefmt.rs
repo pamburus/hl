@@ -138,7 +138,7 @@ impl<'a> LinuxDateFormat<'a> {
             jump: b"",
             pad_counter: 0,
             pad: b' ',
-            flags: Flags::EMPTY,
+            flags: Flags::empty(),
         }
     }
 
@@ -189,7 +189,7 @@ impl<'a> LinuxDateFormat<'a> {
         let (width, b) = self.parse_width(b);
         let (tzf, b) = self.parse_tz_format(b);
         let b = self.skip_modifier(b);
-        self.flags = Flags::EMPTY;
+        self.flags = Flags::empty();
         let with_padding = |default| {
             if flags.intersects(PADDING) {
                 flags
@@ -475,13 +475,13 @@ where
                     if !flags.contains(NoDelimiters) {
                         f.char(b':');
                     }
-                    f.numeric(secs / 60 % 60, 2, Flags::EMPTY);
+                    f.numeric(secs / 60 % 60, 2, Flags::empty());
                 }
                 if precision == 0 || precision > 2 {
                     if !flags.contains(NoDelimiters) {
                         f.char(b':');
                     }
-                    f.numeric(secs % 60, 2, Flags::EMPTY);
+                    f.numeric(secs % 60, 2, Flags::empty());
                 }
             }
             Item::TimeZoneName((flags, width)) => {

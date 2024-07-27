@@ -144,7 +144,7 @@ fn use_custom_format(s: &str, format: &DateTimeFormat, now: &DateTime<Tz>, tz: &
             }
             Item::AmPm(flags) => {
                 let item = if flags.contains(Flag::LowerCase) { b"p" } else { b"P" };
-                add_format_item(&mut buf, item, Flags::EMPTY)?;
+                add_format_item(&mut buf, item, Flags::empty())?;
                 has_ampm = true;
             }
             Item::Minute(flags) => {
@@ -160,7 +160,7 @@ fn use_custom_format(s: &str, format: &DateTimeFormat, now: &DateTime<Tz>, tz: &
                     unsupported();
                 }
                 buf.pop();
-                add_format_item(&mut buf, b".f", Flags::EMPTY)?;
+                add_format_item(&mut buf, b".f", Flags::empty())?;
             }
             Item::UnixTimestamp(flags) => {
                 add_format_item(&mut buf, b"s", flags)?;
