@@ -618,7 +618,7 @@ pub mod string {
             let begin = buf.len();
             buf.with_auto_trim(|buf| ValueFormatRaw::new(self.string).format(buf))?;
 
-            let mut mask = Mask::EMPTY;
+            let mut mask = Mask::empty();
 
             buf[begin..].iter().map(|&c| CHAR_GROUPS[c as usize]).for_each(|group| {
                 mask |= group;
@@ -661,7 +661,7 @@ pub mod string {
                 return Ok(());
             }
 
-            const Z: Mask = Mask::EMPTY;
+            const Z: Mask = Mask::empty();
             const XS: Mask = mask!(Flag::Control | Flag::ExtendedSpace);
 
             if matches!(mask & (Flag::Backtick | XS), Z | XS) {
@@ -748,7 +748,7 @@ pub mod string {
             let begin = buf.len();
             buf.with_auto_trim(|buf| MessageFormatRaw::new(self.string).format(buf))?;
 
-            let mut mask = Mask::EMPTY;
+            let mut mask = Mask::empty();
 
             buf[begin..].iter().map(|&c| CHAR_GROUPS[c as usize]).for_each(|group| {
                 mask |= group;
@@ -774,7 +774,7 @@ pub mod string {
                 return Ok(());
             }
 
-            const Z: Mask = Mask::EMPTY;
+            const Z: Mask = Mask::empty();
             const XS: Mask = mask!(Flag::Control | Flag::ExtendedSpace);
 
             if matches!(mask & (Flag::Backtick | XS), Z | XS) {
