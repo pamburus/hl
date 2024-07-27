@@ -224,7 +224,7 @@ pub enum ThemeOrigin {
 // ---
 
 #[derive(Clone, Debug, Default, Deref)]
-pub struct StylePack(HashMap<Element, Style>);
+pub struct StylePack(pub HashMap<Element, Style>);
 
 impl StylePack {
     pub fn items(&self) -> &HashMap<Element, Style> {
@@ -318,6 +318,8 @@ pub enum Element {
     Boolean,
     Null,
     Ellipsis,
+    Bullet,
+    ValueExpansion,
 }
 
 // ---
@@ -446,22 +448,12 @@ impl Default for SyncIndicatorPack {
     fn default() -> Self {
         Self {
             synced: Indicator {
-                outer: IndicatorStyle::default(),
-                inner: IndicatorStyle::default(),
                 text: " ".into(),
+                ..Default::default()
             },
             failed: Indicator {
-                outer: IndicatorStyle::default(),
-                inner: IndicatorStyle {
-                    prefix: String::default(),
-                    suffix: String::default(),
-                    style: Style {
-                        modes: vec![Mode::Bold],
-                        background: None,
-                        foreground: Some(Color::Plain(PlainColor::Yellow)),
-                    },
-                },
                 text: "!".into(),
+                ..Default::default()
             },
         }
     }
