@@ -23,11 +23,11 @@ use closure::closure;
 use crossbeam_channel::{self as channel, Receiver, RecvError, RecvTimeoutError, Sender};
 use crossbeam_utils::thread;
 use itertools::{izip, Itertools};
-use platform_dirs::AppDirs;
 use serde::{Deserialize, Serialize};
 
 // local imports
 use crate::{
+    appdirs::AppDirs,
     datefmt::{DateTimeFormat, DateTimeFormatter},
     fmtx::aligned_left,
     formatting::{RawRecordFormatter, RecordFormatter, RecordWithSourceFormatter},

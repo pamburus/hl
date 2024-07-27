@@ -3,10 +3,10 @@ use std::{borrow::Borrow, collections::HashMap, vec::Vec};
 
 // third-party imports
 use enum_map::EnumMap;
-use platform_dirs::AppDirs;
 
 // local imports
 use crate::{
+    appdirs::AppDirs,
     error::*,
     eseq::{Brightness, Color, ColorCode, Mode, Sequence, StyleCode},
     fmtx::Push,

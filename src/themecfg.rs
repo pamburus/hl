@@ -11,7 +11,6 @@ use std::{
 // third-party imports
 use derive_deref::Deref;
 use enum_map::Enum;
-use platform_dirs::AppDirs;
 use rust_embed::RustEmbed;
 use serde::{
     de::{MapAccess, Visitor},
@@ -22,7 +21,7 @@ use serde_yaml as yaml;
 use strum::{EnumIter, IntoEnumIterator};
 
 // local imports
-use crate::{error::*, level::Level};
+use crate::{appdirs::AppDirs, error::*, level::Level};
 
 // ---
 
@@ -544,8 +543,6 @@ mod tests {
         let app_dirs = AppDirs {
             config_dir: PathBuf::from("src/testing/assets"),
             cache_dir: Default::default(),
-            data_dir: Default::default(),
-            state_dir: Default::default(),
         };
         assert_ne!(Theme::load(&app_dirs, "test").unwrap().elements.len(), 0);
         assert_ne!(Theme::load(&app_dirs, "universal").unwrap().elements.len(), 0);
