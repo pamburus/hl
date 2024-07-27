@@ -1090,7 +1090,7 @@ mod tests {
 
     #[test]
     fn test_compile_offset() {
-        assert_eq!(format("%:z"), vec![Item::TimeZoneOffset((Flags::EMPTY, 2))]);
+        assert_eq!(format("%:z"), vec![Item::TimeZoneOffset((Flags::empty(), 2))]);
     }
 
     #[test]
