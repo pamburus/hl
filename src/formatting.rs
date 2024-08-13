@@ -202,7 +202,7 @@ impl RecordFormatter {
                     some_fields_hidden |= !self.format_field(s, k, *v, &mut fs, Some(&self.fields));
                 }
             }
-            if some_fields_hidden {
+            if some_fields_hidden || (fs.some_nested_fields_hidden && fs.flatten) {
                 s.element(Element::Ellipsis, |s| {
                     s.batch(|buf| buf.extend_from_slice(self.cfg.punctuation.hidden_fields_indicator.as_bytes()))
                 });
@@ -288,6 +288,7 @@ struct FormattingState {
     key_prefix: KeyPrefix,
     flatten: bool,
     empty: bool,
+    some_nested_fields_hidden: bool,
 }
 
 impl FormattingState {
@@ -297,6 +298,7 @@ impl FormattingState {
             key_prefix: KeyPrefix::default(),
             flatten,
             empty: true,
+            some_nested_fields_hidden: false,
         }
     }
 
@@ -436,12 +438,12 @@ impl<'a> FieldFormatter<'a> {
                     for (k, v) in item.fields.iter() {
                         some_fields_hidden |= !self.format(s, k, *v, fs, filter, setting);
                     }
-                    if some_fields_hidden {
-                        s.element(Element::Ellipsis, |s| {
-                            s.batch(|buf| buf.extend(self.rf.cfg.punctuation.hidden_fields_indicator.as_bytes()))
-                        });
-                    }
                     if !fs.flatten {
+                        if some_fields_hidden {
+                            s.element(Element::Ellipsis, |s| {
+                                s.batch(|buf| buf.extend(self.rf.cfg.punctuation.hidden_fields_indicator.as_bytes()))
+                            });
+                        }
                         s.batch(|buf| {
                             if item.fields.len() != 0 {
                                 buf.push(b' ');
@@ -449,6 +451,7 @@ impl<'a> FieldFormatter<'a> {
                             buf.push(b'}');
                         });
                     }
+                    fs.some_nested_fields_hidden |= some_fields_hidden;
                 });
             }
             RawValue::Array(value) => {
@@ -1381,5 +1384,41 @@ mod tests {
 
         let result = format_no_color(&rec);
         assert_eq!(&result, r#""#, "{}", result);
+    }
+
+    #[test]
+    fn test_nested_hidden_fields_flatten() {
+        let val = json_raw_value(r#"{"b":{"c":{"d":1,"e":2},"f":3}}"#);
+        let rec = Record::from_fields(&[("a", RawObject::Json(&val).into())]);
+        let mut fields = IncludeExcludeKeyFilter::default();
+        let b = fields.entry("a").entry("b");
+        b.exclude();
+        b.entry("c").entry("d").include();
+        let formatter = RecordFormatter {
+            flatten: true,
+            theme: Default::default(),
+            fields: Arc::new(fields),
+            ..formatter()
+        };
+
+        assert_eq!(&formatter.format_to_string(&rec), "a.b.c.d=1 ...");
+    }
+
+    #[test]
+    fn test_nested_hidden_fields_no_flatten() {
+        let val = json_raw_value(r#"{"b":{"c":{"d":1,"e":2},"f":3}}"#);
+        let rec = Record::from_fields(&[("a", RawObject::Json(&val).into())]);
+        let mut fields = IncludeExcludeKeyFilter::default();
+        let b = fields.entry("a").entry("b");
+        b.exclude();
+        b.entry("c").entry("d").include();
+        let formatter = RecordFormatter {
+            flatten: false,
+            theme: Default::default(),
+            fields: Arc::new(fields),
+            ..formatter()
+        };
+
+        assert_eq!(&formatter.format_to_string(&rec), "a={ b={ c={ d=1 ... } ... } }");
     }
 }
