@@ -295,13 +295,17 @@ updates:
       wasm-sec:
         applies-to: security-updates
         patterns:
+          - "js-sys"
           - "wasi"
           - "wasm-*"
+          - "web-sys"
       wasm-ver:
         applies-to: version-updates
         patterns:
+          - "js-sys"
           - "wasi"
           - "wasm-*"
+          - "web-sys"
       winapi-sec:
         applies-to: security-updates
         patterns:
