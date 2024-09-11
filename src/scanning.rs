@@ -812,6 +812,9 @@ impl<'a, 'b, D: Delimit> Iterator for ScannerJumboIter<'a, 'b, D> {
                         if self.can_complete() {
                             return self.complete();
                         }
+                        if placement == PartialPlacement::Last {
+                            break;
+                        }
                     }
                     next @ Some(_) => {
                         self.next = next;
@@ -824,7 +827,7 @@ impl<'a, 'b, D: Delimit> Iterator for ScannerJumboIter<'a, 'b, D> {
                         break;
                     }
                 };
-                if total > self.max_segment_size {
+                if total >= self.max_segment_size {
                     break;
                 }
             }
@@ -1041,6 +1044,28 @@ mod tests {
                 Segment::Complete(b"very\r\n".into()),
                 Segment::Complete(b"large\n".into()),
                 Segment::Complete(b"x/".into()),
+            ]
+        )
+    }
+
+    #[test]
+    fn test_jumbo_smart_new_line_2() {
+        let sf = Arc::new(SegmentBufFactory::new(3));
+        let scanner = Scanner::new(sf.clone(), SmartNewLine);
+        let mut data = std::io::Cursor::new(b"test token\r\neof\r\n");
+        let tokens = scanner
+            .items(&mut data)
+            .with_max_segment_size(9)
+            .collect::<Result<Vec<_>>>()
+            .unwrap();
+        assert_eq!(
+            tokens,
+            vec![
+                Segment::Incomplete(b"tes".into(), PartialPlacement::First),
+                Segment::Incomplete(b"t t".into(), PartialPlacement::Next),
+                Segment::Incomplete(b"oke".into(), PartialPlacement::Next),
+                Segment::Incomplete(b"n\r\n".into(), PartialPlacement::Last),
+                Segment::Complete(b"eof\r\n".into()),
             ]
         )
     }
