@@ -1341,6 +1341,51 @@ mod tests {
     }
 
     #[test]
+    fn test_incomplete_segment() {
+        let input = input(concat!(
+            "level=debug time=2024-01-25T19:10:20.435369+01:00 msg=m1 a.b.c=10 a.b.d=20 a.c.b=11\n",
+            "level=debug time=2024-01-25T19:10:21.764733+01:00 msg=m2 x=2\n"
+        ));
+
+        let mut output = Vec::new();
+        let app = App::new(Options {
+            buffer_size: NonZeroUsize::new(32).unwrap(),
+            max_message_size: NonZeroUsize::new(64).unwrap(),
+            ..options()
+        });
+        app.run(vec![input], &mut output).unwrap();
+        assert_eq!(
+            std::str::from_utf8(&output).unwrap(),
+            concat!(
+                "level=debug time=2024-01-25T19:10:20.435369+01:00 msg=m1 a.b.c=10 a.b.d=20 a.c.b=11\n",
+                "2024-01-25 18:10:21.764 |DBG| m2 x=2\n",
+            )
+        );
+    }
+
+    #[test]
+    fn test_incomplete_segment_sorted() {
+        let data = concat!(
+            "level=debug time=2024-01-25T19:10:20.435369+01:00 msg=m1 a.b.c=10 a.b.d=20 a.c.b=11\n",
+            "level=debug time=2024-01-25T19:10:21.764733+01:00 msg=m2 x=2\n",
+        );
+        let input = input(data);
+
+        let mut output = Vec::new();
+        let app = App::new(Options {
+            buffer_size: NonZeroUsize::new(16).unwrap(),
+            max_message_size: NonZeroUsize::new(64).unwrap(),
+            sort: true,
+            ..options()
+        });
+        app.run(vec![input], &mut output).unwrap();
+        assert_eq!(
+            std::str::from_utf8(&output).unwrap(),
+            "2024-01-25 18:10:21.764 |DBG| m2 x=2\n"
+        );
+    }
+
+    #[test]
     fn test_issue_288_t1() {
         let input = input(concat!(
             r#"time="2024-06-04 17:14:35.190733+0200" level=INF msg="An INFO log message" logger=aLogger caller=aCaller"#,

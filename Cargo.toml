@@ -4,7 +4,7 @@ members = [".", "crate/encstr"]
 [workspace.package]
 repository = "https://github.com/pamburus/hl"
 authors = ["Pavel Ivanov <mr.pavel.ivanov@gmail.com>"]
-version = "0.29.8"
+version = "0.29.9-alpha.1"
 edition = "2021"
 license = "MIT"
 
@@ -21,7 +21,7 @@ license.workspace = true
 version.workspace = true
 
 [build-dependencies]
-capnpc = "0.19"
+capnpc = "0"
 hex = "0"
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["raw_value"] }
@@ -30,8 +30,8 @@ sha2 = "0"
 [dependencies]
 bincode = "1"
 bytefmt = "0"
-capnp = "0.19"
-chrono = { version = "0.4", default-features = false, features = ["clock", "serde", "std"] }
+capnp = "0"
+chrono = { version = "0", default-features = false, features = ["clock", "serde", "std"] }
 chrono-tz = { version = "0", features = ["serde"] }
 clap = { version = "4", features = ["wrap_help", "derive", "env", "string"] }
 clap_complete = "4"
