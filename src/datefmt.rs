@@ -486,7 +486,7 @@ where
             }
             Item::TimeZoneName((flags, width)) => {
                 let offset = dto.offset();
-                let name = offset.abbreviation();
+                let name = offset.abbreviation().unwrap_or("(?)");
                 let width = if width != 0 { width as usize } else { name.len() };
                 aligned_left(f.buf, width, b' ', |mut buf| {
                     let mut f = Formatter::new(&mut buf);
