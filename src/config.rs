@@ -3,10 +3,10 @@ use std::sync::Mutex;
 
 // third-party imports
 use once_cell::sync::Lazy;
-use platform_dirs::AppDirs;
 
 // local imports
 use crate::{
+    appdirs::AppDirs,
     error::Result,
     settings::{Settings, SourceFile},
 };
@@ -44,8 +44,10 @@ pub fn load(path: Option<&str>) -> Result<Settings> {
 
 /// Get the application platform-specific directories.
 pub fn app_dirs() -> Option<AppDirs> {
-    AppDirs::new(Some(APP_NAME), true)
+    AppDirs::new(APP_NAME)
 }
+
+// ---
 
 pub mod global {
     use super::*;
