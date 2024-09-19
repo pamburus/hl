@@ -52,7 +52,7 @@ function test() {
 } 
 
 function merge() {
-    ${LLVM_BIN:?}/llvm-profdata merge \
+    "${LLVM_BIN:?}/llvm-profdata" merge \
         -o ${PROFDATA_FILE:?} \
         -sparse \
         ${LLVM_PROFILE_PATTERN:?} \
@@ -60,7 +60,7 @@ function merge() {
 }
 
 function report() {
-    ${LLVM_BIN:?}/llvm-cov \
+    "${LLVM_BIN:?}/llvm-cov" \
         report \
         --show-region-summary=false \
         --show-branch-summary=false \
@@ -68,12 +68,12 @@ function report() {
         "${LLVM_COV_FLAGS[@]}"
 }
 
-function export() {
-    ${LLVM_BIN:?}/llvm-cov \
+function publish() {
+    "${LLVM_BIN:?}/llvm-cov" \
         export \
         --format="lcov" \
         "${LLVM_COV_FLAGS[@]}" \
     > target/lcov.info
 }
 
-clean; test; merge; report; export
+clean; test; merge; report; publish

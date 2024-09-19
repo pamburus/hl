@@ -567,7 +567,7 @@ mod tests {
 
     #[test]
     fn test_input_hold_error_not_found() {
-        let filename = "?????????????";
+        let filename = "AKBNIJGHERHBNMCKJABHSDJ";
         let reference = InputReference::File(PathBuf::from(filename));
         let result = reference.hold();
         assert!(result.is_err());
