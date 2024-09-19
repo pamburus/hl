@@ -21,6 +21,7 @@ pub mod timezone;
 pub mod types;
 
 // private modules
+mod appdirs;
 mod console;
 mod eseq;
 mod filtering;
