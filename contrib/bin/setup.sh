@@ -11,6 +11,7 @@ while :; do
             echo "Setups:"
             echo "  build"
             echo "  coverage"
+            echo "  schema"
             echo "  screenshots"
             exit 1
             ;;
@@ -67,6 +68,14 @@ rust_is_required() {
 setup_cargo() {
     if [ ! -x "$(command -v cargo)" ]; then
         rust_is_required
+    fi
+}
+
+setup_cargo_nightly() {
+    setup_cargo
+    if ! (rustup toolchain list | grep -q nightly); then
+        echo installing nightly toolchain
+        rustup toolchain install nightly
     fi
 }
 
@@ -133,6 +142,11 @@ while [ $# -gt 0 ]; do
     case $1 in
         build)
             setup_cargo
+            ;;
+        build-nightly)
+            setup_cargo_nightly
+            ;;
+        schema)
             setup_taplo
             ;;
         coverage)
