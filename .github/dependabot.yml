@@ -277,11 +277,15 @@ updates:
       toml-sec:
         applies-to: security-updates
         patterns:
+          - "serde_spanned"
+          - "serde_toml"
           - "toml"
           - "toml_*"
       toml-ver:
         applies-to: version-updates
         patterns:
+          - "serde_spanned"
+          - "serde_toml"
           - "toml"
           - "toml_*"
       unicode-sec:
