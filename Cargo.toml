@@ -66,7 +66,7 @@ regex = "1"
 rust-embed = "8"
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["raw_value"] }
-serde_yaml = "0"
+serde_yml = "0"
 serde-logfmt = { path = "./crate/serde-logfmt" }
 sha2 = "0"
 shellwords = "1"

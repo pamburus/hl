@@ -17,7 +17,7 @@ use serde::{
     Deserialize, Deserializer,
 };
 use serde_json as json;
-use serde_yaml as yaml;
+use serde_yml as yaml;
 use strum::{EnumIter, IntoEnumIterator};
 
 // local imports
