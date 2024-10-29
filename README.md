@@ -85,8 +85,8 @@ See other [screenshots](https://github.com/pamburus/hl-extra/tree/90be58af2fb91d
 
     Command
 
-    ```
-    $ hl $(ls -tr /var/log/example/*.log)
+    ```sh
+    hl $(ls -tr /var/log/example/*.log)
     ```
     Concatenates and humanizes all `*.log` files found in `/var/log/example/`.
 
@@ -96,8 +96,8 @@ See other [screenshots](https://github.com/pamburus/hl-extra/tree/90be58af2fb91d
 
     Command
 
-    ```
-    $ hl $(ls -tr /var/log/example/*.{log,log.gz})
+    ```sh
+    hl $(ls -tr /var/log/example/*.{log,log.gz})
     ```
     Concatenates and humanizes all `*.log` and `*.log.gz` files found in `/var/log/example/`.
 
@@ -107,8 +107,8 @@ See other [screenshots](https://github.com/pamburus/hl-extra/tree/90be58af2fb91d
 
     Command
 
-    ```
-    $ hl example.log
+    ```sh
+    hl example.log
     ```
     Automatically opens `less` pager with default parameters.
 
@@ -116,8 +116,8 @@ See other [screenshots](https://github.com/pamburus/hl-extra/tree/90be58af2fb91d
     
     Command
 
-    ```
-    $ LESS=-SR hl example.log
+    ```sh
+    LESS=-SR hl example.log
     ```
     Opens `less` pager with disabled line wrapping.
 
@@ -125,8 +125,8 @@ See other [screenshots](https://github.com/pamburus/hl-extra/tree/90be58af2fb91d
     
     Command
 
-    ```
-    $ PAGER=bat hl example.log
+    ```sh
+    PAGER=bat hl example.log
     ```
     Opens `bat` pager.
 
@@ -136,8 +136,8 @@ See other [screenshots](https://github.com/pamburus/hl-extra/tree/90be58af2fb91d
 
     Command 
 
-    ```
-    $ hl -l e
+    ```sh
+    hl -l e
     ```
 
     Displays only error log level messages.
@@ -146,8 +146,8 @@ See other [screenshots](https://github.com/pamburus/hl-extra/tree/90be58af2fb91d
 
     Command 
 
-    ```
-    $ hl -l w
+    ```sh
+    hl -l w
     ```
     Displays only warning and error log level messages.
 
@@ -155,8 +155,8 @@ See other [screenshots](https://github.com/pamburus/hl-extra/tree/90be58af2fb91d
 
     Command 
 
-    ```
-    $ hl -l i
+    ```sh
+    hl -l i
     ```
     Displays all log messages except debug level messages.
 
@@ -164,8 +164,8 @@ See other [screenshots](https://github.com/pamburus/hl-extra/tree/90be58af2fb91d
 
 - Command
 
-    ```
-    $ tail -f example.log | hl -P
+    ```sh
+    tail -f example.log | hl -P
     ```
     Tracks changes in the example.log file and displays them immediately.
     Flag `-P` disables automatic using of pager in this case.
@@ -175,29 +175,29 @@ See other [screenshots](https://github.com/pamburus/hl-extra/tree/90be58af2fb91d
 
 - Command
 
-    ```
-    $ hl example.log --filter component=tsdb
+    ```sh
+    hl example.log --filter component=tsdb
     ```
     Displays only messages where the `component` field has the value `tsdb`.
 
 - Command
 
-    ```
-    $ hl example.log -f component!=tsdb -f component!=uninteresting
+    ```sh
+    hl example.log -f component!=tsdb -f component!=uninteresting
     ```
     Displays only messages where the `component` field has a value other than `tsdb` or `uninteresting`.
 
 - Command
 
-    ```
-    $ hl example.log -f provider~=string
+    ```sh
+    hl example.log -f provider~=string
     ```
     Displays only messages where the `provider` field contains the `string` sub-string.
 
 - Command
 
-    ```
-    $ hl example.log -f 'provider!~=string'
+    ```sh
+    hl example.log -f 'provider!~=string'
     ```
     Displays only messages where the `provider` field does not contain the `string` sub-string.
 
@@ -206,15 +206,15 @@ See other [screenshots](https://github.com/pamburus/hl-extra/tree/90be58af2fb91d
 
 - Command
 
-    ```
-    $ hl my-service.log --query 'level > info or status-code >= 400 or duration > 0.5'
+    ```sh
+    hl my-service.log --query 'level > info or status-code >= 400 or duration > 0.5'
     ```
     Displays messages that either have a level higher than info (i.e. warning or error) or have a status code field with a numeric value >= 400 or a duration field with a numeric value >= 0.5.
 
 - Command
 
-    ```
-    $ hl my-service.log -q '(request in (95c72499d9ec, 9697f7aa134f, bc3451d0ad60)) or (method != GET)'
+    ```sh
+    hl my-service.log -q '(request in (95c72499d9ec, 9697f7aa134f, bc3451d0ad60)) or (method != GET)'
     ```
     Displays all messages that have the 'request' field with one of these values, or the 'method' field with a value other than 'GET'.
 
@@ -256,22 +256,22 @@ See other [screenshots](https://github.com/pamburus/hl-extra/tree/90be58af2fb91d
 
 - Command
 
-    ```
-    $ hl example.log --since 'Jun 19 11:22:33' --until yesterday
+    ```sh
+    hl example.log --since 'Jun 19 11:22:33' --until yesterday
     ```
     Displays only messages that occurred after Jun 19 11:22:33 UTC of the current year (or the previous year if the current date is less than Jun 19 11:22:33) and before yesterday midnight.
 
 - Command
 
-    ```
-    $ hl example.log --since -3d
+    ```sh
+    hl example.log --since -3d
     ```
     Displays only messages from the past 72 hours.
 
 - Command
 
-    ```
-    $ hl example.log --until '2021-06-01 18:00:00' --local
+    ```sh
+    hl example.log --until '2021-06-01 18:00:00' --local
     ```
     Displays only messages that occurred before 6 PM local time on June 1, 2021, and shows timestamps in local time.
 
@@ -280,24 +280,24 @@ See other [screenshots](https://github.com/pamburus/hl-extra/tree/90be58af2fb91d
 
 - Command
 
-    ```
-    $ hl example.log --hide provider
+    ```sh
+    hl example.log --hide provider
     ```
     Hides field `provider`.
 
 
 - Command
 
-    ```
-    $ hl example.log --hide '*' --hide '!provider'
+    ```sh
+    hl example.log --hide '*' --hide '!provider'
     ```
     Hides all fields except `provider`.
 
 
 - Command
 
-    ```
-    $ hl example.log -h headers -h body -h '!headers.content-type'
+    ```sh
+    hl example.log -h headers -h body -h '!headers.content-type'
     ```
     Hides fields `headers` and `body` but shows a single sub-field `content-type` inside field `headers`.
 
@@ -306,8 +306,8 @@ See other [screenshots](https://github.com/pamburus/hl-extra/tree/90be58af2fb91d
 
 - Command
 
-    ```
-    $ hl -s *.log
+    ```sh
+    hl -s *.log
     ```
     Displays log messages from all log files in the current directory sorted in chronological order.
 
@@ -316,15 +316,15 @@ See other [screenshots](https://github.com/pamburus/hl-extra/tree/90be58af2fb91d
 
 - Command
 
-    ```
-    $ hl --sync-interval-ms 500 -F <(kubectl logs -l app=my-app-1 -f) <(kubectl logs -l app=my-app-2 -f)
+    ```sh
+    hl --sync-interval-ms 500 -F <(kubectl logs -l app=my-app-1 -f) <(kubectl logs -l app=my-app-2 -f)
     ```
     Runs without a pager in follow mode by merging messages from the outputs of these 2 commands and sorting them chronologically within a custom 500ms interval.
 
 - Command
 
-    ```
-    $ hl -F --tail 100 app1.log app2.log app3.log
+    ```sh
+    hl -F --tail 100 app1.log app2.log app3.log
     ```
     Runs without a pager in follow mode, following the changes in three log files in the current directory and sorting them chronologically at a default interval of 100ms.
     Preloads 100 lines from the end of each file before filtering.
