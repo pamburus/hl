@@ -104,13 +104,14 @@ mod imp {
         let mut added = HashSet::<&PathBuf>::new();
         let mut synced = true;
 
+        let flags = FilterFlag::NOTE_FFNOP
+            | FilterFlag::NOTE_DELETE
+            | FilterFlag::NOTE_WRITE
+            | FilterFlag::NOTE_RENAME
+            | FilterFlag::NOTE_EXTEND;
+
         loop {
             for path in &paths {
-                let flags = FilterFlag::NOTE_FFNOP
-                    | FilterFlag::NOTE_DELETE
-                    | FilterFlag::NOTE_WRITE
-                    | FilterFlag::NOTE_RENAME
-                    | FilterFlag::NOTE_EXTEND;
                 if watcher.add_filename(path, EventFilter::EVFILT_VNODE, flags).is_ok() {
                     added.insert(path);
                     if !synced {
@@ -153,6 +154,10 @@ mod imp {
                                 Event::new(EventKind::Modify(ModifyKind::Data(DataChange::Size))).add_path(path)
                             }
                             Vnode::Rename => {
+                                if added.contains(&path) {
+                                    watcher.remove_filename(&path, EventFilter::EVFILT_VNODE)?;
+                                    added.remove(&path);
+                                }
                                 Event::new(EventKind::Modify(ModifyKind::Name(RenameMode::Any))).add_path(path)
                             }
                             Vnode::Link => Event::new(EventKind::Create(CreateKind::Any)).add_path(path),
