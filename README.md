@@ -37,31 +37,31 @@ High performance and convenient features are the main goals.
 
 * Install using [homebrew](https://brew.sh) on macOS or Linux
 
-    ```
+    ```sh
     brew install pamburus/tap/hl
     ```
 
 * Download and extract using `curl` and `tar` on macOS
 
-    ```
+    ```sh
     curl -sSfL https://github.com/pamburus/hl/releases/latest/download/hl-macos.tar.gz | tar xz
     ```
 
 * Download and extract using `curl` and `tar` on Linux
 
-    ```
+    ```sh
     curl -sSfL https://github.com/pamburus/hl/releases/latest/download/hl-linux-x86_64-musl.tar.gz | tar xz
     ```
 
 * Install [AUR package](https://aur.archlinux.org/packages/hl-log-viewer-bin) on Arch Linux
 
-    ```
+    ```sh
     yay -S hl-log-viewer-bin
     ```
 
 * Install using [cargo](https://www.rust-lang.org/tools/install)
 
-    ```
+    ```sh
     cargo install --locked --git https://github.com/pamburus/hl.git
     ```
 
@@ -86,9 +86,9 @@ See other [screenshots](https://github.com/pamburus/hl-extra/tree/90be58af2fb91d
     Command
 
     ```sh
-    hl $(ls -tr /var/log/example/*.log)
+    hl *.log
     ```
-    Concatenates and humanizes all `*.log` files found in `/var/log/example/`.
+    Concatenates and displays all `*.log` files found in the current directory.
 
 ### Support for gzipped log files
 
@@ -99,18 +99,18 @@ See other [screenshots](https://github.com/pamburus/hl-extra/tree/90be58af2fb91d
     ```sh
     hl $(ls -tr /var/log/example/*.{log,log.gz})
     ```
-    Concatenates and humanizes all `*.log` and `*.log.gz` files found in `/var/log/example/`.
+    Concatenates and displays all `*.log` and `*.log.gz` files found in `/var/log/example/`.
 
 ### Automatic usage of pager
 
-- Use default pager with default parameters
+- Use the default pager with the default parameters
 
     Command
 
     ```sh
     hl example.log
     ```
-    Automatically opens `less` pager with default parameters.
+    Automatically opens `less` pager with the default parameters.
 
 - Override options for default pager
     
@@ -126,9 +126,9 @@ See other [screenshots](https://github.com/pamburus/hl-extra/tree/90be58af2fb91d
     Command
 
     ```sh
-    PAGER=bat hl example.log
+    PAGER="most -w" hl example.log
     ```
-    Opens `bat` pager.
+    Opens `most` pager with `-w` option.
 
 ### Quick filtering by log level
 
