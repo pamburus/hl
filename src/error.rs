@@ -143,10 +143,10 @@ pub enum SizeParseError {
     #[error(transparent)]
     TryFromIntError(#[from] TryFromIntError),
     #[error(
-        "invalid size {0:?}, use {:?} or {:?} format for IEC units or {:?} format for SI units",
-        "64K",
-        "64KiB",
-        "64KB"
+        "invalid size {0:?}, use {iec0:?} or {iec1:?} format for IEC units or {si:?} format for SI units",
+        iec0 = "64K",
+        iec1 = "64KiB",
+        si = "64KB"
     )]
     InvalidSize(String),
 }
