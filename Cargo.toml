@@ -73,7 +73,7 @@ shellwords = "1"
 signal-hook = "0"
 snap = "1"
 strum = { version = "0", features = ["derive"] }
-thiserror = "1"
+thiserror = "2"
 titlecase = "3"
 toml = "0"
 wildflower = { git = "https://github.com/cassaundra/wildflower.git" }
