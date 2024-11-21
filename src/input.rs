@@ -9,7 +9,7 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
 // third-party imports
-use flate2::bufread::GzDecoder;
+use deko::bufread::AnyDecoder;
 use nu_ansi_term::Color;
 
 // local imports
@@ -184,10 +184,7 @@ impl Input {
     }
 
     pub fn open_stream(path: &PathBuf, stream: Box<dyn ReadSeek + Send + Sync>) -> io::Result<Self> {
-        let stream: InputStream = match path.extension().map(|x| x.to_str()) {
-            Some(Some("gz")) => Box::new(GzDecoder::new(BufReader::new(stream))),
-            _ => Box::new(stream),
-        };
+        let stream: InputStream = Box::new(AnyDecoder::new(BufReader::new(stream)));
         Ok(Self::new(InputReference::File(path.clone()), stream))
     }
 }
