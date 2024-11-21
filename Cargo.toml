@@ -42,6 +42,7 @@ config = { version = "0", features = ["yaml", "json", "toml"] }
 crossbeam-channel = "0"
 crossbeam-queue = "0"
 crossbeam-utils = "0"
+deko = "0"
 derive_deref = "1"
 dirs = "5"
 dirs-sys = "0"
