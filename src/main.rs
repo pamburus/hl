@@ -266,7 +266,7 @@ fn run() -> Result<()> {
         inputs.push(InputReference::Stdin);
     }
 
-    if opt.sort || opt.follow {
+    if opt.sort {
         for input in &inputs {
             if let InputReference::File(path) = input {
                 if let Some(Some(ext)) = path.extension().map(|x| x.to_str()) {

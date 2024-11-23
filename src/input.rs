@@ -2,14 +2,14 @@
 use std::cmp::min;
 use std::convert::TryInto;
 use std::fs::File;
-use std::io::{self, stdin, BufReader, Read, Seek, SeekFrom};
+use std::io::{self, stdin, BufReader, Cursor, Read, Seek, SeekFrom};
 use std::mem::size_of_val;
 use std::ops::Range;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
 // third-party imports
-use deko::bufread::AnyDecoder;
+use deko::{bufread::AnyDecoder, Format};
 use nu_ansi_term::Color;
 
 // local imports
@@ -80,8 +80,16 @@ impl InputReference {
             Self::File(path) => {
                 let mut file = File::open(path)
                     .map_err(|e| io::Error::new(e.kind(), format!("failed to open {}: {}", self.description(), e)))?;
-                Self::seek_tail(&mut file, n).ok();
-                Ok(Input::new(self.clone(), Box::new(file)))
+                let mut buf = vec![0; 8];
+                let bl = file.read(&mut buf)?;
+                buf.truncate(bl);
+                let stream: InputStream = if AnyDecoder::new(Cursor::new(&buf)).kind()? == Format::Verbatim {
+                    Self::seek_tail(&mut file, n).ok();
+                    Box::new(file)
+                } else {
+                    Box::new(AnyDecoder::new(BufReader::new(Cursor::new(buf).chain(file))))
+                };
+                Ok(Input::new(self.clone(), stream))
             }
         }
     }
