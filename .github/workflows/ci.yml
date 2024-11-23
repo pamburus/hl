@@ -43,6 +43,9 @@ jobs:
       - name: Check formatting
         run: cargo +nightly fmt --verbose --all --check
 
+      - name: markdownlint-cli2-action
+        uses: DavidAnson/markdownlint-cli2-action@v18.0.0
+
       - name: Build
         run: cargo build --verbose --benches --workspace
 
