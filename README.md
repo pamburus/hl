@@ -10,15 +10,15 @@ High performance and convenient features are the main goals.
 * Log record [filtering by field key/value pairs](#filtering-by-field-values) with the `-f` option with support for hierarchical keys.
 * Quick and easy [filtering by level](#quick-filtering-by-log-level) with the `-l` option.
 * Quick and easy [filtering by timestamp range](#filtering-by-time-range) using the `--since` and `--until` options and intuitive formats:
-    * RFC-3339 timestamp format.
-    * Current configured timestamp output format with the `-t` option or environment variable.
-    * Human friendly shortcuts like `today`, `yesterday`, `friday` or relative offsets like `-3h` or `-14d`.
+  * RFC-3339 timestamp format.
+  * Current configured timestamp output format with the `-t` option or environment variable.
+  * Human friendly shortcuts like `today`, `yesterday`, `friday` or relative offsets like `-3h` or `-14d`.
 * Quick and easy [hiding and revealing](#hiding-or-revealing-selected-fields) of fields with the `-h` option.
 * Hide empty fields with the `-e` flag.
 * Lightning fast [message sorting](#sorting-messages-chronologically) with automatic indexing for local files using the `-s` flag.
-    * Handles ~1 GiB/s for the first scan and allows fast filtering by timestamp range and level without scanning the data afterwards.
-    * Works fast with hundreds of local files containing hundreds of gigabytes of data.
-    * Reindexes large, growing files at lightning speed, skipping unmodified blocks, ~10 GiB/s.
+  * Handles ~1 GiB/s for the first scan and allows fast filtering by timestamp range and level without scanning the data afterwards.
+  * Works fast with hundreds of local files containing hundreds of gigabytes of data.
+  * Reindexes large, growing files at lightning speed, skipping unmodified blocks, ~10 GiB/s.
 * [Follow mode](#sorting-messages-chronologically-with-following-the-changes) with live message sorting by timestamp from different sources using the `-F` flag and preview of several recent messages with the `--tail` option.
 * Custom complex [queries](#performing-complex-queries) that can include and/or conditions and much more.
 * Non-JSON prefixes with `--allow-prefix` flag.
@@ -76,65 +76,69 @@ High performance and convenient features are the main goals.
 
 See other [screenshots](https://github.com/pamburus/hl-extra/tree/90be58af2fb91d5b5e7ce3b74c3b567611379c40/screenshot#readme)
 
-
 ## Features and usage
 
 ### Concatenation of multiple log files
 
-- Concatenate all log files
+* Concatenate all log files
 
     Command
 
     ```sh
     hl *.log
     ```
+
     Concatenates and displays all `*.log` files found in the current directory.
 
 ### Support for gzipped log files
 
-- Concatenate all log files including gzipped log files
+* Concatenate all log files including gzipped log files
 
     Command
 
     ```sh
     hl $(ls -tr /var/log/example/*.{log,log.gz})
     ```
+
     Concatenates and displays all `*.log` and `*.log.gz` files found in `/var/log/example/`.
 
 ### Automatic usage of pager
 
-- Use the default pager with the default parameters
+* Use the default pager with the default parameters
 
     Command
 
     ```sh
     hl example.log
     ```
+
     Automatically opens `less` pager with the default parameters.
 
-- Override options for default pager
-    
+* Override options for default pager
+
     Command
 
     ```sh
     LESS=-SR hl example.log
     ```
+
     Opens `less` pager with disabled line wrapping.
 
-- Use custom pager
-    
+* Use custom pager
+
     Command
 
     ```sh
     PAGER="most -w" hl example.log
     ```
+
     Opens `most` pager with `-w` option.
 
 ### Quick filtering by log level
 
-- Errors only
+* Errors only
 
-    Command 
+    Command
 
     ```sh
     hl -l e
@@ -142,260 +146,275 @@ See other [screenshots](https://github.com/pamburus/hl-extra/tree/90be58af2fb91d
 
     Displays only error log level messages.
 
-- Errors and warnings
+* Errors and warnings
 
-    Command 
+    Command
 
     ```sh
     hl -l w
     ```
+
     Displays only warning and error log level messages.
 
-- Errors, warnings and informational
+* Errors, warnings and informational
 
-    Command 
+    Command
 
     ```sh
     hl -l i
     ```
+
     Displays all log messages except debug level messages.
 
 ### Using live log streaming
 
-- Command
+* Command
 
     ```sh
     tail -f example.log | hl -P
     ```
+
     Tracks changes in the example.log file and displays them immediately.
     Flag `-P` disables automatic using of pager in this case.
 
-
 ### Filtering by field values
 
-- Command
+* Command
 
     ```sh
     hl example.log --filter component=tsdb
     ```
+
     Displays only messages where the `component` field has the value `tsdb`.
 
-- Command
+* Command
 
     ```sh
     hl example.log -f component!=tsdb -f component!=uninteresting
     ```
+
     Displays only messages where the `component` field has a value other than `tsdb` or `uninteresting`.
 
-- Command
+* Command
 
     ```sh
     hl example.log -f provider~=string
     ```
+
     Displays only messages where the `provider` field contains the `string` sub-string.
 
-- Command
+* Command
 
     ```sh
     hl example.log -f 'provider!~=string'
     ```
-    Displays only messages where the `provider` field does not contain the `string` sub-string.
 
+    Displays only messages where the `provider` field does not contain the `string` sub-string.
 
 ### Performing complex queries
 
-- Command
+* Command
 
     ```sh
     hl my-service.log --query 'level > info or status-code >= 400 or duration > 0.5'
     ```
+
     Displays messages that either have a level higher than info (i.e. warning or error) or have a status code field with a numeric value >= 400 or a duration field with a numeric value >= 0.5.
 
-- Command
+* Command
 
     ```sh
     hl my-service.log -q '(request in (95c72499d9ec, 9697f7aa134f, bc3451d0ad60)) or (method != GET)'
     ```
+
     Displays all messages that have the 'request' field with one of these values, or the 'method' field with a value other than 'GET'.
 
-- Complete set of supported operators
+* Complete set of supported operators
 
-    * Logical operators
-        * Logical conjunction - `and`, `&&`
-        * Logical disjunction - `or`, `||`
-        * Logical negation - `not`, `!`
-    * Comparison operators
-        * Equal - `eq`, `=`
-        * Not equal - `ne`, `!=`
-        * Greater than - `gt`, `>`
-        * Greater or equal - `ge`, `>=`
-        * Less than - `lt`, `<`
-        * Less or equal - `le`, `<=`
-    * String matching operators
-        * Sub-string check - (`contain`, `~=`), (`not contain`, `!~=`)
-        * Wildcard match - (`like`), (`not like`)
-            * Wildcard characters are: `*` for zero or more characters and `?` for a single character
-        * Regular expression match - (`match`, `~~=`), (`not match`, `!~~=`)
-    * Operators with sets
-        * Test if value is one of the values in a set - `in (v1, v2)`, `not in (v1, v2)`
-        * Test if value is one of the values in a set loaded from a file - `in @filename`, `not in @filename`, assuming that each element is a line in the file, which can be either a simple string or a JSON string
-        * Test if value is one of the values in a set loaded stdin - `in @-`, `not in @-`
-    
-- Notes
+  * Logical operators
+    * Logical conjunction - `and`, `&&`
+    * Logical disjunction - `or`, `||`
+    * Logical negation - `not`, `!`
+  * Comparison operators
+    * Equal - `eq`, `=`
+    * Not equal - `ne`, `!=`
+    * Greater than - `gt`, `>`
+    * Greater or equal - `ge`, `>=`
+    * Less than - `lt`, `<`
+    * Less or equal - `le`, `<=`
+  * String matching operators
+    * Sub-string check - (`contain`, `~=`), (`not contain`, `!~=`)
+    * Wildcard match - (`like`), (`not like`)
+      * Wildcard characters are: `*` for zero or more characters and `?` for a single character
+    * Regular expression match - (`match`, `~~=`), (`not match`, `!~~=`)
+  * Operators with sets
+    * Test if value is one of the values in a set - `in (v1, v2)`, `not in (v1, v2)`
+    * Test if value is one of the values in a set loaded from a file - `in @filename`, `not in @filename`, assuming that each element is a line in the file, which can be either a simple string or a JSON string
+    * Test if value is one of the values in a set loaded stdin - `in @-`, `not in @-`
 
-    * Special field names that are reserved for filtering by predefined fields regardless of the actual source field names used to load the corresponding value: `level`, `message`, `caller` and `logger`.
-    * To address a source field with one of these names instead of predefined fields, add a period before its name, i.e., `.level` will perform a match against the "level" source field.
-    * To address a source field by its exact name, use a JSON-formatted string, i.e. `-q '".level" = info'`.
-    * To specify special characters in field values, also use a JSON-formatted string, i.e. 
-        ```
-        $ hl my-service.log -q 'message contain "Error:\nSomething unexpected happened"'
-        ```
+* Notes
 
+  * Special field names that are reserved for filtering by predefined fields regardless of the actual source field names used to load the corresponding value: `level`, `message`, `caller` and `logger`.
+  * To address a source field with one of these names instead of predefined fields, add a period before its name, i.e., `.level` will perform a match against the "level" source field.
+  * To address a source field by its exact name, use a JSON-formatted string, i.e. `-q '".level" = info'`.
+  * To specify special characters in field values, also use a JSON-formatted string, i.e.
+
+    ```sh
+    hl my-service.log -q 'message contain "Error:\nSomething unexpected happened"'
+    ```
 
 ### Filtering by time range
 
-- Command
+* Command
 
     ```sh
     hl example.log --since 'Jun 19 11:22:33' --until yesterday
     ```
+
     Displays only messages that occurred after Jun 19 11:22:33 UTC of the current year (or the previous year if the current date is less than Jun 19 11:22:33) and before yesterday midnight.
 
-- Command
+* Command
 
     ```sh
     hl example.log --since -3d
     ```
+
     Displays only messages from the past 72 hours.
 
-- Command
+* Command
 
     ```sh
     hl example.log --until '2021-06-01 18:00:00' --local
     ```
-    Displays only messages that occurred before 6 PM local time on June 1, 2021, and shows timestamps in local time.
 
+    Displays only messages that occurred before 6 PM local time on June 1, 2021, and shows timestamps in local time.
 
 ### Hiding or revealing selected fields
 
-- Command
+* Command
 
     ```sh
     hl example.log --hide provider
     ```
+
     Hides field `provider`.
 
-
-- Command
+* Command
 
     ```sh
     hl example.log --hide '*' --hide '!provider'
     ```
+
     Hides all fields except `provider`.
 
-
-- Command
+* Command
 
     ```sh
     hl example.log -h headers -h body -h '!headers.content-type'
     ```
-    Hides fields `headers` and `body` but shows a single sub-field `content-type` inside field `headers`.
 
+    Hides fields `headers` and `body` but shows a single sub-field `content-type` inside field `headers`.
 
 ### Sorting messages chronologically
 
-- Command
+* Command
 
     ```sh
     hl -s *.log
     ```
-    Displays log messages from all log files in the current directory sorted in chronological order.
 
+    Displays log messages from all log files in the current directory sorted in chronological order.
 
 ### Sorting messages chronologically with following the changes
 
-- Command
+* Command
 
     ```sh
     hl --sync-interval-ms 500 -F <(kubectl logs -l app=my-app-1 -f) <(kubectl logs -l app=my-app-2 -f)
     ```
+
     Runs without a pager in follow mode by merging messages from the outputs of these 2 commands and sorting them chronologically within a custom 500ms interval.
 
-- Command
+* Command
 
     ```sh
     hl -F --tail 100 app1.log app2.log app3.log
     ```
+
     Runs without a pager in follow mode, following the changes in three log files in the current directory and sorting them chronologically at a default interval of 100ms.
     Preloads 100 lines from the end of each file before filtering.
 
-
-
 ### Configuration files
 
-- Configuration file is automatically loaded if found in a predefined platform-specific location.
+* Configuration file is automatically loaded if found in a predefined platform-specific location.
 
     | OS      | Location                                                  |
-    | ------- | --------------------------------------------------------- | 
+    | ------- | --------------------------------------------------------- |
     | macOS   | ~/.config/hl/config.{yaml,toml,json}                      |
     | Linux   | ~/.config/hl/config.{yaml,toml,json}                      |
     | Windows | %USERPROFILE%\AppData\Roaming\hl\config.{yaml,toml,json}  |
 
-- The path to the configuration file can be overridden using the HL_CONFIG environment variable.
+* The path to the configuration file can be overridden using the HL_CONFIG environment variable.
 
-- All parameters in the configuration file are optional and can be omitted. In this case, default values are used.
+* All parameters in the configuration file are optional and can be omitted. In this case, default values are used.
 
 #### Default configuration file
 
-- [config.yaml](etc/defaults/config.yaml)
-
+* [config.yaml](etc/defaults/config.yaml)
 
 ### Environment variables
 
-- Many parameters that are defined in command line arguments and configuration files can also be specified by environment variables.
+* Many parameters that are defined in command line arguments and configuration files can also be specified by environment variables.
 
 #### Precedence of configuration sources (from lowest priority to highest priority)
+
 * Configuration file
 * Environment variables
 * Command-line arguments
 
-#### Examples
+#### Environment variables examples
+
 * `HL_TIME_FORMAT='%y-%m-%d %T.%3N'` overrides the time format specified in the configuration file.
 * `HL_TIME_ZONE=Europe/Berlin` overrides the time zone specified in the configuration file.
 * `HL_CONCURRENCY=4` overrides the concurrency limit specified in the configuration file.
 * `HL_PAGING=never` specifies the default value for the paging option, but it can be overridden by command line arguments.
 
-
 ### Themes
 
 #### Stock themes
-- [themes](etc/defaults/themes/)
+
+* [themes](etc/defaults/themes/)
 
 #### Selecting current theme
+
 * Using `theme` value in the configuration file.
 * Using environment variable, i.e. `HL_THEME=classic`, overrides the value specified in configuration file.
 * Using command-line argument, i.e. `--theme classic`, overrides all other values.
 
 #### Selecting themes with preview
+
 To select themes with preview [fzf](https://github.com/junegunn/fzf) tool can be used like this:
+
 ```bash
 hl --list-themes | fzf --preview-window="top,80%" --preview="head -n 100 example.log | hl -c --theme {}"
 ```
 
 #### Custom themes
-- Custom themes are automatically loaded when found in a predefined platform-specific location.
+
+* Custom themes are automatically loaded when found in a predefined platform-specific location.
 
     | OS      | Location                                                   |
-    | ------- | ---------------------------------------------------------- | 
+    | ------- | ---------------------------------------------------------- |
     | macOS   | ~/.config/hl/themes/*.{yaml,toml,json}                     |
     | Linux   | ~/.config/hl/themes/*.{yaml,toml,json}                     |
     | Windows | %USERPROFILE%\AppData\Roaming\hl\themes\*.{yaml,toml,json} |
 
-- Format description
-  - Section `elements` contains styles for predefined elements.
-  - Section `levels` contains optional overrides for styles defined in `elements` sections per logging level, which are [`debug`, `info`, `warning`, `error`].
-  - Each element style contains optional `background`, `foreground` and `modes` parameters.
-  - Example
+* Format description
+  * Section `elements` contains styles for predefined elements.
+  * Section `levels` contains optional overrides for styles defined in `elements` sections per logging level, which are [`debug`, `info`, `warning`, `error`].
+  * Each element style contains optional `background`, `foreground` and `modes` parameters.
+  * Example
+
     ```yaml
     elements:
         <element>:
@@ -409,55 +428,56 @@ hl --list-themes | fzf --preview-window="top,80%" --preview="head -n 100 example
                 background: <color>
                 modes: [<mode>, <mode>, ...]
     ```
-  - Color format is one of
-    - Keyword `default` specifies default color defined by the terminal.
-    - ASCII basic color name, one of
-      - `black`
-      - `red`
-      - `green`
-      - `yellow`
-      - `blue`
-      - `magenta`
-      - `cyan`
-      - `white`
-      - `bright-black`
-      - `bright-red`
-      - `bright-green`
-      - `bright-yellow`
-      - `bright-blue`
-      - `bright-magenta`
-      - `bright-cyan`
-      - `bright-white`
-    - 256-color palette code, from `0` to `255`.
-    - RGB color in hex web color format, i.e. `#FFFF00` for bright yellow color.
-  - Modes is a list of additional styles, each of them is one of
-    - `bold`
-    - `faint`
-    - `italic`
-    - `underline`
-    - `slow-blink`
-    - `rapid-blink`
-    - `reverse`
-    - `conceal`
-    - `crossed-out`
 
+  * Color format is one of
+    * Keyword `default` specifies default color defined by the terminal.
+    * ASCII basic color name, one of
+      * `black`
+      * `red`
+      * `green`
+      * `yellow`
+      * `blue`
+      * `magenta`
+      * `cyan`
+      * `white`
+      * `bright-black`
+      * `bright-red`
+      * `bright-green`
+      * `bright-yellow`
+      * `bright-blue`
+      * `bright-magenta`
+      * `bright-cyan`
+      * `bright-white`
+    * 256-color palette code, from `0` to `255`.
+    * RGB color in hex web color format, i.e. `#FFFF00` for bright yellow color.
+  * Modes is a list of additional styles, each of them is one of
+    * `bold`
+    * `faint`
+    * `italic`
+    * `underline`
+    * `slow-blink`
+    * `rapid-blink`
+    * `reverse`
+    * `conceal`
+    * `crossed-out`
 
 ### Used terminal color schemes
 
 #### iTerm2
+
 * [One Dark Neo](https://gist.github.com/pamburus/0ad130f2af9ab03a97f2a9f7b4f18c68/746ca7103726d43b767f2111799d3cb5ec08adbb)
 * Built-in "Light Background" color scheme
 
 #### Alacritty
+
 * [One Dark Neo](https://gist.github.com/pamburus/e27ebf60aa17d126f5c879f06112edd6/a1e66d34a65b883f1cb8ec28820cc0c53233e3aa#file-alacritty-yml-L904)
   * Note: It is recommended to use `draw_bold_text_with_bright_colors: true` setting
 * [Light](https://gist.github.com/pamburus/e27ebf60aa17d126f5c879f06112edd6/a1e66d34a65b883f1cb8ec28820cc0c53233e3aa#file-alacritty-yml-L875)
   * Note: It is recommended to use `draw_bold_text_with_bright_colors: false` setting
 
-
 ### Complete set of options and flags
 
-```
+```text
 JSON and logfmt log converter to human readable representation
 
 Usage: hl [OPTIONS] [FILE]...
@@ -524,37 +544,46 @@ Advanced Options:
 ![performance chart](doc/performance-chart.svg)
 
 * MacBook Pro (16-inch, 2021)
-    * **CPU**:   Apple M1 Max CPU
-    * **OS**:    macOS Sonoma 14.4.1
-    * **Data**:  ~ **2.3 GiB** log file, **6 000 000** lines
-        * [hl](https://github.com/pamburus/hl) **v0.28.0** ~ *1.4 seconds*
-            ```
-            $ time hl example.log -c -o /dev/null
-            hl example.log -c -o /dev/null  11.74s user 0.53s system 885% cpu 1.386 total
-            ```
-        * [hlogf](https://github.com/ssgreg/hlogf) **v1.4.1** ~ *8.5 seconds*
-            ```
-            $ time hlogf example.log --color always >/dev/null
-            hlogf example.log --color always > /dev/null  6.93s user 1.79s system 99% cpu 8.757 total
-            ```
-        * [humanlog](https://github.com/humanlogio/humanlog) **v0.7.6** ~ *77 seconds*
-            ```
-            $ time humanlog <example.log --color always >/dev/null
-            humanlog> reading stdin...
-            humanlog --color always < example.log > /dev/null  80.02s user 4.71s system 109% cpu 1:17.11 total
-            ```
-        * [fblog](https://github.com/brocode/fblog) **v4.9.0** ~ *36 seconds*
-            ```
-            $ time fblog example.log >/dev/null
-            fblog example.log > /dev/null  32.48s user 2.03s system 97% cpu 35.526 total
-            ```
+  * **CPU**:   Apple M1 Max CPU
+  * **OS**:    macOS Sonoma 14.4.1
+  * **Data**:  ~ **2.3 GiB** log file, **6 000 000** lines
+    * [hl](https://github.com/pamburus/hl) **v0.28.0** ~ *1.4 seconds*
 
-        * [fblog](https://github.com/brocode/fblog) with `-d` flag **v4.9.0** ~ *148 seconds*
-            ```
-            $ time fblog -d example.log >/dev/null
-            fblog -d example.log > /dev/null  132.12s user 14.39s system 99% cpu 2:27.61 total
-            ```
-    * See [#132](https://github.com/pamburus/hl/issues/132) for how to repeat measurements
+        ```sh
+        $ time hl example.log -c -o /dev/null
+        hl example.log -c -o /dev/null  11.74s user 0.53s system 885% cpu 1.386 total
+        ```
+
+    * [hlogf](https://github.com/ssgreg/hlogf) **v1.4.1** ~ *8.5 seconds*
+
+        ```sh
+        $ time hlogf example.log --color always >/dev/null
+        hlogf example.log --color always > /dev/null  6.93s user 1.79s system 99% cpu 8.757 total
+        ```
+
+    * [humanlog](https://github.com/humanlogio/humanlog) **v0.7.6** ~ *77 seconds*
+
+        ```sh
+        $ time humanlog <example.log --color always >/dev/null
+        humanlog> reading stdin...
+        humanlog --color always < example.log > /dev/null  80.02s user 4.71s system 109% cpu 1:17.11 total
+        ```
+
+    * [fblog](https://github.com/brocode/fblog) **v4.9.0** ~ *36 seconds*
+
+        ```sh
+        $ time fblog example.log >/dev/null
+        fblog example.log > /dev/null  32.48s user 2.03s system 97% cpu 35.526 total
+        ```
+
+    * [fblog](https://github.com/brocode/fblog) with `-d` flag **v4.9.0** ~ *148 seconds*
+
+        ```sh
+        $ time fblog -d example.log >/dev/null
+        fblog -d example.log > /dev/null  132.12s user 14.39s system 99% cpu 2:27.61 total
+        ```
+
+  * See [#132](https://github.com/pamburus/hl/issues/132) for how to repeat measurements
 
 [ci-img]: https://github.com/pamburus/hl/actions/workflows/ci.yml/badge.svg
 [ci]: https://github.com/pamburus/hl/actions/workflows/ci.yml
