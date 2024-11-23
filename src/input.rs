@@ -13,7 +13,7 @@ use flate2::bufread::GzDecoder;
 use nu_ansi_term::Color;
 
 // local imports
-use crate::error::{Error::UnsupportedFormatForIndexing, Result};
+use crate::error::Result;
 use crate::index::{Index, Indexer, SourceBlock};
 use crate::iox::ReadFill;
 use crate::pool::SQPool;
@@ -232,13 +232,6 @@ impl IndexedInput {
     }
 
     pub fn open_stream(path: &PathBuf, mut stream: Box<dyn ReadSeek + Send + Sync>, indexer: &Indexer) -> Result<Self> {
-        if let Some(Some("gz")) = path.extension().map(|x| x.to_str()) {
-            return Err(UnsupportedFormatForIndexing {
-                path: path.clone(),
-                format: "gzip".into(),
-            });
-        }
-
         if stream.seek(SeekFrom::Current(0)).is_err() {
             return Self::open_sequential(
                 InputReference::File(path.clone()),
