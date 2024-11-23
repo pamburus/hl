@@ -219,7 +219,7 @@ impl App {
                 let mut tx = StripedSender::new(txi);
                 let scanner = Scanner::new(sfi, &self.options.delimiter);
                 for (i, mut input) in inputs.into_iter().enumerate() {
-                    for item in scanner.items(&mut input.stream).with_max_segment_size(self.options.max_message_size.into()) {
+                    for item in scanner.items(&mut input.stream.as_sequential()).with_max_segment_size(self.options.max_message_size.into()) {
                         if tx.send((i, item?)).is_none() {
                             break;
                         }
@@ -502,11 +502,11 @@ impl App {
                     if let InputReference::File(filename) = &input_ref {
                         meta = Some(fs::metadata(filename)?);
                     }
-                    let mut input = Some(input_ref.open_tail(self.options.tail)?);
+                    let mut input = Some(input_ref.open()?.tail(self.options.tail)?);
                     let is_file = |meta: &Option<fs::Metadata>| meta.as_ref().map(|m|m.is_file()).unwrap_or(false);
                     let process = |input: &mut Option<Input>, is_file: bool| {
                         if let Some(input) = input {
-                            for (j, item) in scanner.items(&mut input.stream).with_max_segment_size(self.options.max_message_size.into()).enumerate() {
+                            for (j, item) in scanner.items(&mut input.stream.as_sequential()).with_max_segment_size(self.options.max_message_size.into()).enumerate() {
                                 if txi.send((i, j, item?)).is_err() {
                                     break;
                                 }

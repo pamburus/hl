@@ -11,10 +11,7 @@ pub struct TeeReader<R: Read, W: Write> {
 impl<R: Read, W: Write> TeeReader<R, W> {
     #[inline]
     pub fn new(reader: R, writer: W) -> TeeReader<R, W> {
-        TeeReader {
-            reader: reader,
-            writer: writer,
-        }
+        TeeReader { reader, writer }
     }
 
     #[inline]
