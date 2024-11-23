@@ -49,6 +49,10 @@ function test() {
     ${MAIN_EXECUTABLE:?} --man-page > /dev/null
     ${MAIN_EXECUTABLE:?} --list-themes > /dev/null
     echo "" | ${MAIN_EXECUTABLE:?} --concurrency 4 > /dev/null
+    if ${MAIN_EXECUTABLE:?} -s test.log.gz 2>/dev/null > /dev/null; then
+        echo "Expected combination of options `-s 1234.log.gz` to fail"
+        exit 1
+    fi
 } 
 
 function merge() {
