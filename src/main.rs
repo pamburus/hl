@@ -12,7 +12,6 @@ use std::{
 use chrono::Utc;
 use clap::{CommandFactory, Parser};
 use itertools::Itertools;
-use phf::phf_map;
 
 // local imports
 use hl::{
@@ -27,14 +26,6 @@ use hl::{
     timeparse::parse_time,
     timezone::Tz,
     Delimiter, {IncludeExcludeKeyFilter, KeyMatchOptions},
-};
-
-// supported compression formats
-const COMPRESSION_FORMATS: phf::Map<&str, &str> = phf_map! {
-    "bz2" => "bzip2",
-    "gz" => "gzip",
-    "xz" => "xz",
-    "zst" => "zstd"
 };
 
 // ---
@@ -264,21 +255,6 @@ fn run() -> Result<()> {
             return cmd.print_help().map_err(Error::Io);
         }
         inputs.push(InputReference::Stdin);
-    }
-
-    if opt.sort || opt.follow {
-        for input in &inputs {
-            if let InputReference::File(path) = input {
-                if let Some(Some(ext)) = path.extension().map(|x| x.to_str()) {
-                    if let Some(&format) = COMPRESSION_FORMATS.get(ext) {
-                        return Err(Error::UnsupportedFormatForIndexing {
-                            path: path.clone(),
-                            format: format.into(),
-                        });
-                    }
-                }
-            }
-        }
     }
 
     let inputs = inputs
