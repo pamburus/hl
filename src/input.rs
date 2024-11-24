@@ -1,8 +1,54 @@
+/*
+
+    Variants of input sources and their holders:
+    1. Pipe (stdin, bash substitution, etc.) - Sequential access
+    2. File - Random access (unless not seekable or compressed)
+
+    Variants of compressions:
+    1. raw (uncompressed) - Random access
+    2. gzip (zlib) - Sequential access
+    3. bzip2 - Sequential access
+    4. xz - Sequential access
+    5. zstd - Sequential access (unless multiple frames of small size)
+
+    Variants of access:
+    1. Sequential
+    2. Random
+
+    Variants of initial positioning:
+    1. Head
+    2. Tail (last n lines)
+    2.1. Tail for sequential access - Skip HEAD
+    2.2. Tail for random access - Read blocks from END until n lines are found
+
+    Algorithm:
+    1. Check if pipe or file
+        1.1. If pipe, go to opening with sequential access (2)
+        1.2. If file, go to opening with random access (3)
+    2. Open with sequential access
+        2.1. Use AnyDecoder to decode compressed files
+        2.2. Go to initial positioning (4)
+    3. Open with random access - check if compressed or seekable
+        3.1. Try to seek to get current position
+            3.1.1. If not seekable, go to opening with sequential access (2)
+        3.2. Open with AnyDecoder to decode compressed files
+            3.2.1. If compressed (except zstd-framed), go to opening with sequential access (2.2)
+            3.2.2. If uncompressed (or zstd-framed) and seekable, open with random access
+    4. Initial positioning
+        4.1. Head - do nothing
+        4.2. Tail
+            4.2.1. Tail for sequential access - read from start to the end and keep last n lines
+            4.2.2. Tail for random access - read blocks from the end until n lines are found
+
+
+
+*/
+
 // std imports
 use std::cmp::min;
 use std::convert::TryInto;
 use std::fs::File;
-use std::io::{self, stdin, BufReader, Cursor, Read, Seek, SeekFrom};
+use std::io::{self, stdin, BufRead, BufReader, Cursor, Read, Seek, SeekFrom};
 use std::mem::size_of_val;
 use std::ops::Range;
 use std::path::PathBuf;
@@ -15,18 +61,14 @@ use nu_ansi_term::Color;
 // local imports
 use crate::error::Result;
 use crate::index::{Index, Indexer, SourceBlock};
-use crate::iox::ReadFill;
 use crate::pool::SQPool;
 use crate::replay::{ReplayBufCreator, ReplayBufReader};
 use crate::tee::TeeReader;
 
 // ---
 
-pub type InputStream = Box<dyn Read + Send + Sync>;
-pub type InputStreamFactory = Box<dyn FnOnce() -> Box<dyn Read> + Send + Sync>;
-
-pub type InputSeekStream = Box<Mutex<dyn ReadSeek + Send + Sync>>;
-
+pub type SequentialStream = Box<dyn Read + Send + Sync>;
+pub type RandomAccessStream = Box<dyn ReadSeek + Send + Sync>;
 pub type BufPool = SQPool<Vec<u8>>;
 
 // ---
@@ -74,25 +116,25 @@ impl InputReference {
         self.hold()?.open()
     }
 
-    pub fn open_tail(&self, n: u64) -> io::Result<Input> {
-        match self {
-            Self::Stdin => self.open(),
-            Self::File(path) => {
-                let mut file = File::open(path)
-                    .map_err(|e| io::Error::new(e.kind(), format!("failed to open {}: {}", self.description(), e)))?;
-                let mut buf = vec![0; 8];
-                let bl = file.read(&mut buf)?;
-                buf.truncate(bl);
-                let stream: InputStream = if AnyDecoder::new(Cursor::new(&buf)).kind()? == Format::Verbatim {
-                    Self::seek_tail(&mut file, n).ok();
-                    Box::new(file)
-                } else {
-                    Box::new(AnyDecoder::new(BufReader::new(Cursor::new(buf).chain(file))))
-                };
-                Ok(Input::new(self.clone(), stream))
-            }
-        }
-    }
+    // pub fn open_tail(&self, n: u64) -> io::Result<Input> {
+    //     match self {
+    //         Self::Stdin => self.open(),
+    //         Self::File(path) => {
+    //             let mut file = File::open(path)
+    //                 .map_err(|e| io::Error::new(e.kind(), format!("failed to open {}: {}", self.description(), e)))?;
+    //             let mut buf = vec![0; 8];
+    //             let bl = file.read(&mut buf)?;
+    //             buf.truncate(bl);
+    //             let stream: SequentialStream = if AnyDecoder::new(Cursor::new(&buf)).kind()? == Format::Verbatim {
+    //                 Self::seek_tail(&mut file, n).ok();
+    //                 Box::new(file)
+    //             } else {
+    //                 Box::new(AnyDecoder::new(BufReader::new(Cursor::new(buf).chain(file))))
+    //             };
+    //             Ok(Input::new(self.clone(), stream))
+    //         }
+    //     }
+    // }
 
     pub fn description(&self) -> String {
         match self {
@@ -149,7 +191,7 @@ impl InputHolder {
 
     pub fn open(self) -> io::Result<Input> {
         match self.reference {
-            InputReference::Stdin => Ok(Input::new(self.reference.clone(), self.stdin())),
+            InputReference::Stdin => Ok(Input::new(self.reference.clone(), Stream::Sequential(self.stdin()))),
             InputReference::File(path) => match self.stream {
                 Some(stream) => Input::open_stream(&path, stream),
                 None => Input::open(&path),
@@ -167,23 +209,28 @@ impl InputHolder {
         }
     }
 
-    fn stdin(self) -> InputStream {
+    fn stdin(self) -> SequentialStream {
         self.stream
-            .map(|s| Box::new(ReadSeekToRead(s)) as InputStream)
+            .map(|s| Box::new(ReadSeekToRead(s)) as SequentialStream)
             .unwrap_or_else(|| Box::new(decode(stdin())))
     }
 }
 
 pub struct Input {
     pub reference: InputReference,
-    pub stream: InputStream,
+    pub stream: Stream,
 }
 
 impl Input {
-    pub fn new(reference: InputReference, stream: InputStream) -> Self {
+    pub fn new(reference: InputReference, stream: Stream) -> Self {
         Self {
             reference: reference.clone(),
-            stream: Box::new(WrappedInputStream { reference, stream }),
+            stream: match stream {
+                Stream::Sequential(stream) => Stream::Sequential(Box::new(WrappedInputStream { reference, stream })),
+                Stream::RandomAccess(stream) => {
+                    Stream::RandomAccess(Box::new(WrappedInputStream { reference, stream }))
+                }
+            },
         }
     }
 
@@ -192,19 +239,65 @@ impl Input {
     }
 
     pub fn open_stream(path: &PathBuf, stream: Box<dyn ReadSeek + Send + Sync>) -> io::Result<Self> {
-        let stream: InputStream = Box::new(AnyDecoder::new(BufReader::new(stream)));
+        let stream: SequentialStream = Box::new(AnyDecoder::new(BufReader::new(stream)));
         Ok(Self::new(InputReference::File(path.clone()), stream))
     }
 }
 
 // ---
 
-pub struct WrappedInputStream {
-    reference: InputReference,
-    stream: InputStream,
+pub enum Stream {
+    Sequential(SequentialStream),
+    RandomAccess(RandomAccessStream),
 }
 
-impl Read for WrappedInputStream {
+impl Stream {
+    pub fn verified(self) -> Self {
+        match self {
+            Self::Sequential(stream) => Self::Sequential(stream),
+            Self::RandomAccess(stream) => {
+                let mut stream = stream;
+                if stream.seek(SeekFrom::Current(0)).is_err() {
+                    Self::Sequential(Box::new(stream))
+                } else {
+                    Self::RandomAccess(stream)
+                }
+            }
+        }
+    }
+
+    pub fn decoded(self) -> Self {
+        match self {
+            Self::Sequential(stream) => Self::Sequential(Box::new(AnyDecoder::new(BufReader::new(stream)))),
+            Self::RandomAccess(mut stream) => {
+                if let Some(pos) = stream.seek(SeekFrom::Current(0)).ok() {
+                    let mut dec = AnyDecoder::new(BufReader::new(&mut stream));
+                    if dec.kind().ok() == Some(Format::Verbatim) {
+                        stream.seek(SeekFrom::Start(pos)).ok();
+                        return Self::RandomAccess(stream);
+                    }
+                }
+                Self::Sequential(Box::new(ReadSeekToRead(stream)))
+            }
+        }
+    }
+
+    pub fn sequential(self) -> SequentialStream {
+        match self {
+            Self::Sequential(stream) => stream,
+            Self::RandomAccess(stream) => Box::new(ReadSeekToRead(stream)),
+        }
+    }
+}
+
+// ---
+
+pub struct WrappedInputStream<R> {
+    reference: InputReference,
+    stream: R,
+}
+
+impl<R: Read> Read for WrappedInputStream<R> {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         self.stream.read(buf).map_err(|e| {
             io::Error::new(
@@ -215,19 +308,30 @@ impl Read for WrappedInputStream {
     }
 }
 
+impl<R: Seek> Seek for WrappedInputStream<R> {
+    fn seek(&mut self, pos: SeekFrom) -> io::Result<u64> {
+        self.stream.seek(pos).map_err(|e| {
+            io::Error::new(
+                e.kind(),
+                format!("failed to seek {}: {}", self.reference.description(), e),
+            )
+        })
+    }
+}
+
 // ---
 
 pub struct IndexedInput {
     pub reference: InputReference,
-    pub stream: InputSeekStream,
+    pub stream: Mutex<RandomAccessStream>,
     pub index: Index,
 }
 
 impl IndexedInput {
-    pub fn new(reference: InputReference, stream: InputSeekStream, index: Index) -> Self {
+    pub fn new(reference: InputReference, stream: RandomAccessStream, index: Index) -> Self {
         Self {
             reference,
-            stream,
+            stream: Mutex::new(stream),
             index,
         }
     }
@@ -236,7 +340,7 @@ impl IndexedInput {
         InputReference::File(path.clone()).hold()?.index(indexer)
     }
 
-    pub fn open_stream(path: &PathBuf, mut stream: Box<dyn ReadSeek + Send + Sync>, indexer: &Indexer) -> Result<Self> {
+    pub fn open_stream(path: &PathBuf, mut stream: RandomAccessStream, indexer: &Indexer) -> Result<Self> {
         if !Self::is_seekable(&mut stream) {
             return Self::open_sequential(
                 InputReference::File(path.clone()),
@@ -246,14 +350,10 @@ impl IndexedInput {
         }
 
         let index = indexer.index(&path)?;
-        Ok(Self::new(
-            InputReference::File(path.clone()),
-            Box::new(Mutex::new(stream)),
-            index,
-        ))
+        Ok(Self::new(InputReference::File(path.clone()), stream, index))
     }
 
-    pub fn open_sequential(reference: InputReference, stream: InputStream, indexer: &Indexer) -> Result<Self> {
+    pub fn open_sequential(reference: InputReference, stream: SequentialStream, indexer: &Indexer) -> Result<Self> {
         let mut tee = TeeReader::new(stream, ReplayBufCreator::new());
         let index = indexer.index_from_stream(&mut tee)?;
         let buf = tee.into_writer().result()?;
@@ -522,6 +622,7 @@ where
 // ---
 
 pub trait ReadSeek: Read + Seek {}
+pub trait BufReadSeek: BufRead + Seek {}
 
 impl<T: Read + Seek> ReadSeek for T {}
 
@@ -537,11 +638,11 @@ where
 }
 
 trait AsInputStream {
-    fn as_input_stream(self) -> InputStream;
+    fn as_input_stream(self) -> SequentialStream;
 }
 
 impl<T: Read + Send + Sync + 'static> AsInputStream for T {
-    fn as_input_stream(self) -> InputStream {
+    fn as_input_stream(self) -> SequentialStream {
         Box::new(self)
     }
 }
