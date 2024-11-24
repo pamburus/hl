@@ -35,13 +35,16 @@ jobs:
         run: taplo check
 
       - name: Install latest nightly
-        uses: actions-rs/toolchain@v1
+        uses: dtolnay/rust-toolchain@v1
         with:
             toolchain: nightly
             components: rustfmt
 
       - name: Check formatting
         run: cargo +nightly fmt --verbose --all --check
+
+      - name: markdownlint-cli2-action
+        uses: DavidAnson/markdownlint-cli2-action@v18.0.0
 
       - name: Build
         run: cargo build --verbose --benches --workspace
