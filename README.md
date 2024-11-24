@@ -90,17 +90,17 @@ See other [screenshots](https://github.com/pamburus/hl-extra/tree/90be58af2fb91d
 
     Concatenates and displays all `*.log` files found in the current directory.
 
-### Support for gzipped log files
+### Support for compressed (bzip2, gzip, xz, zstd) log files
 
-* Concatenate all log files including gzipped log files
+* Concatenate all log files including compressed log files
 
     Command
 
     ```sh
-    hl $(ls -tr /var/log/example/*.{log,log.gz})
+    hl $(ls -tr /var/log/example/*.{log,log.gz,log.zst,s})
     ```
 
-    Concatenates and displays all `*.log` and `*.log.gz` files found in `/var/log/example/`.
+    Concatenates and displays all `*.log`, `*.log.gz`, `*.log.zst` and `*.s` (will detect compression) files found in `/var/log/example/`.
 
 ### Automatic usage of pager
 
