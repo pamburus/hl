@@ -566,6 +566,24 @@ mod tests {
         assert_eq!(err.to_string().contains(filename), true);
     }
 
+    #[test]
+    fn test_input_gzip() {
+        use std::io::Cursor;
+        let data = Cursor::new(
+            // echo '' | gzip -cf | od -A n -t u1 -w40| sed -e 's/^  *//; s/  */, /g'
+            vec![31, 139, 8, 0, 0, 0, 0, 0, 0, 3, 227, 2, 0, 147, 6, 215, 50, 1, 0, 0, 0],
+        );
+        let mut input = Input::open_stream(&PathBuf::from("test.log.gz"), Box::new(data)).unwrap();
+        let mut buf = [0; 32];
+        let result = input.stream.read(&mut buf);
+        assert!(result.is_ok());
+        let got = result.unwrap();
+        if got != 1 {
+            println!("got {}, wanted 1", got);
+        }
+        assert!(got == 1);
+    }
+
     struct FailingReader;
 
     impl Read for FailingReader {
