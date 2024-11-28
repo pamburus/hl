@@ -239,10 +239,53 @@ impl Indexer {
         self.build_index(&source_path, &index_path, existing_index)
     }
 
+    /// Builds index for the given file represended by a stream.
+    ///
+    /// The stream may be an uncompressed representation of the file.
+    pub fn index_stream(
+        &self,
+        stream: &mut Reader,
+        source_path: Option<&PathBuf>,
+        meta: Option<std::fs::Metadata>,
+    ) -> Result<Index> {
+        let Some(source_path) = source_path else {
+            return self.index_in_memory(stream);
+        };
+
+        let source_path = std::fs::canonicalize(source_path)?;
+        let meta = match meta {
+            Some(meta) => meta,
+            None => source_path.metadata()?,
+        };
+        let hash = hex::encode(sha256(source_path.to_string_lossy().as_bytes()));
+        let index_path = self.dir.join(PathBuf::from(hash));
+        let mut existing_index = None;
+
+        if Path::new(&index_path).exists() {
+            let mut file = match File::open(&index_path) {
+                Ok(file) => file,
+                Err(err) => {
+                    return Err(Error::FailedToOpenFileForReading {
+                        path: index_path.clone(),
+                        source: err,
+                    });
+                }
+            };
+            if let Ok(index) = Index::load(&mut file) {
+                if meta.len() == index.source().size && ts(meta.modified()?) == index.source().modified {
+                    return Ok(index);
+                }
+                existing_index = Some(index)
+            }
+        }
+
+        self.build_index_from_stream(stream, &source_path, &index_path, meta, existing_index)
+    }
+
     /// Builds index for the given stream.
     ///
     /// Builds the index and returns it.
-    pub fn index_from_stream(&self, input: &mut Reader) -> Result<Index> {
+    pub fn index_in_memory(&self, input: &mut Reader) -> Result<Index> {
         self.process_file(
             &PathBuf::from("<none>"),
             Metadata {
@@ -256,7 +299,7 @@ impl Indexer {
     }
 
     fn build_index(&self, source_path: &PathBuf, index_path: &PathBuf, existing_index: Option<Index>) -> Result<Index> {
-        let mut input = match Input::open(&source_path) {
+        let mut input = match File::open(&source_path) {
             Ok(input) => input,
             Err(err) => {
                 return Err(Error::FailedToOpenFileForReading {
@@ -265,6 +308,7 @@ impl Indexer {
                 });
             }
         };
+
         let metadata = match std::fs::metadata(&source_path) {
             Ok(metadata) => metadata,
             Err(err) => {
@@ -274,6 +318,18 @@ impl Indexer {
                 });
             }
         };
+
+        self.build_index_from_stream(&mut input, source_path, index_path, metadata, existing_index)
+    }
+
+    fn build_index_from_stream(
+        &self,
+        stream: &mut Reader,
+        source_path: &PathBuf,
+        index_path: &PathBuf,
+        metadata: std::fs::Metadata,
+        existing_index: Option<Index>,
+    ) -> Result<Index> {
         let mut output = match File::create(&index_path) {
             Ok(output) => output,
             Err(err) => {
@@ -283,10 +339,11 @@ impl Indexer {
                 });
             }
         };
+
         self.process_file(
             &source_path,
             (&metadata).try_into()?,
-            &mut input.stream,
+            stream,
             &mut output,
             existing_index,
         )

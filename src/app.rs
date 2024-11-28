@@ -218,8 +218,8 @@ impl App {
             let reader = scope.spawn(closure!(clone sfi, |_| -> Result<()> {
                 let mut tx = StripedSender::new(txi);
                 let scanner = Scanner::new(sfi, &self.options.delimiter);
-                for (i, mut input) in inputs.into_iter().enumerate() {
-                    for item in scanner.items(&mut input.stream).with_max_segment_size(self.options.max_message_size.into()) {
+                for (i, input) in inputs.into_iter().enumerate() {
+                    for item in scanner.items(&mut input.stream.sequential()).with_max_segment_size(self.options.max_message_size.into()) {
                         if tx.send((i, item?)).is_none() {
                             break;
                         }
@@ -506,7 +506,7 @@ impl App {
                     let is_file = |meta: &Option<fs::Metadata>| meta.as_ref().map(|m|m.is_file()).unwrap_or(false);
                     let process = |input: &mut Option<Input>, is_file: bool| {
                         if let Some(input) = input {
-                            for (j, item) in scanner.items(&mut input.stream).with_max_segment_size(self.options.max_message_size.into()).enumerate() {
+                            for (j, item) in scanner.items(&mut input.stream.sequential()).with_max_segment_size(self.options.max_message_size.into()).enumerate() {
                                 if txi.send((i, j, item?)).is_err() {
                                     break;
                                 }

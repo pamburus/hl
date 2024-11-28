@@ -52,6 +52,7 @@ use std::io::{self, stdin, BufRead, BufReader, Cursor, Read, Seek, SeekFrom};
 use std::mem::size_of_val;
 use std::ops::Range;
 use std::path::PathBuf;
+use std::str::FromStr;
 use std::sync::{Arc, Mutex};
 
 // third-party imports
@@ -67,8 +68,8 @@ use crate::tee::TeeReader;
 
 // ---
 
-pub type SequentialStream = Box<dyn Read + Send + Sync>;
-pub type RandomAccessStream = Box<dyn ReadSeekMetadata + Send + Sync>;
+pub type SequentialStream = Box<dyn ReadMeta + Send + Sync>;
+pub type RandomAccessStream = Box<dyn ReadSeekMeta + Send + Sync>;
 pub type BufPool = SQPool<Vec<u8>>;
 
 // ---
@@ -185,8 +186,26 @@ impl InputReference {
 
 // ---
 
-pub trait MetadataHolder {
-    fn metadata(&self) -> io::Result<Option<Metadata>>;
+pub trait Meta {
+    fn metadata_opt(&self) -> io::Result<Option<Metadata>>;
+}
+
+impl Meta for std::fs::File {
+    fn metadata_opt(&self) -> io::Result<Option<Metadata>> {
+        self.metadata().map(Some)
+    }
+}
+
+impl Meta for std::io::Stdin {
+    fn metadata_opt(&self) -> io::Result<Option<Metadata>> {
+        Ok(None)
+    }
+}
+
+impl<T> Meta for Cursor<T> {
+    fn metadata_opt(&self) -> io::Result<Option<Metadata>> {
+        Ok(None)
+    }
 }
 
 // ---
@@ -195,12 +214,12 @@ pub trait MetadataHolder {
 /// It can be used to ensure the input file is not suddenly deleting while it is needed.
 pub struct InputHolder {
     pub reference: InputReference,
-    pub stream: Option<Box<dyn ReadSeekMetadata + Send + Sync>>,
+    pub stream: Option<Box<dyn ReadSeekMeta + Send + Sync>>,
 }
 
 impl InputHolder {
     /// Creates a new input holder.
-    pub fn new(reference: InputReference, stream: Option<Box<dyn ReadSeekMetadata + Send + Sync>>) -> Self {
+    pub fn new(reference: InputReference, stream: Option<Box<dyn ReadSeekMeta + Send + Sync>>) -> Self {
         Self { reference, stream }
     }
 
@@ -212,7 +231,7 @@ impl InputHolder {
 
     /// Indexes the input file and returns IndexedInput that can be used to access the data in random order.
     pub fn index(self, indexer: &Indexer) -> Result<IndexedInput> {
-        self.open()?.index(indexer)
+        self.open()?.indexed(indexer)
         // match self.reference {
         //     InputReference::Stdin => IndexedInput::open_sequential(self.reference.clone(), self.stdin(), indexer),
         //     InputReference::File(path) => match self.stream {
@@ -237,7 +256,7 @@ impl InputHolder {
 
     fn stdin(self) -> SequentialStream {
         self.stream
-            .map(|s| Box::new(ReadSeekToRead(s)) as SequentialStream)
+            .map(|s| Box::new(ReadSeekMetaToReadSeek(s)) as SequentialStream)
             .unwrap_or_else(|| Box::new(stdin()))
     }
 }
@@ -252,10 +271,11 @@ impl Input {
     fn new(reference: InputReference, stream: Stream) -> Self {
         Self {
             reference: reference.clone(),
-            stream: stream.verified().decoded().with_context_errors(reference),
+            stream: stream.verified().decoded().tagged(reference),
         }
     }
 
+    /// Indexes the input file and returns IndexedInput that can be used to access the data in random order.
     pub fn indexed(self, indexer: &Indexer) -> Result<IndexedInput> {
         IndexedInput::from_stream(self.reference, self.stream, indexer)
     }
@@ -301,7 +321,10 @@ impl Stream {
     /// Decodes the stream if needed.
     pub fn decoded(self) -> Self {
         match self {
-            Self::Sequential(stream) => Self::Sequential(Box::new(AnyDecoder::new(BufReader::new(stream)))),
+            Self::Sequential(stream) => {
+                let meta = stream.metadata_opt().ok().flatten();
+                Self::Sequential(Box::new(AnyDecoder::new(BufReader::new(stream)).with_metadata(meta)))
+            }
             Self::RandomAccess(mut stream) => {
                 if let Some(pos) = stream.seek(SeekFrom::Current(0)).ok() {
                     let mut dec = AnyDecoder::new(BufReader::new(&mut stream));
@@ -310,7 +333,7 @@ impl Stream {
                         return Self::RandomAccess(stream);
                     }
                 }
-                Self::Sequential(Box::new(ReadSeekToRead(stream)))
+                Self::Sequential(Box::new(ReadSeekMetaToReadSeek(stream)))
             }
         }
     }
@@ -319,27 +342,24 @@ impl Stream {
     pub fn sequential(self) -> SequentialStream {
         match self {
             Self::Sequential(stream) => stream,
-            Self::RandomAccess(stream) => Box::new(ReadSeekToRead(stream)),
-        }
-    }
-
-    pub fn random(self) -> RandomAccessStream {
-        match self {
-            Self::Sequential(stream) => {
-                let mut tee = TeeReader::new(stream, ReplayBufCreator::new());
-                let index = indexer.index_from_stream(&mut tee)?;
-                let buf = tee.into_writer().result()?;
-                Ok(Box::new(Mutex::new(ReplayBufReader::new(buf))))
-            }
-            Self::RandomAccess(stream) => stream,
+            Self::RandomAccess(stream) => Box::new(ReadSeekMetaToReadSeek(stream)),
         }
     }
 
     /// Adds context to the returned errors.
-    pub fn with_context_errors(self, reference: InputReference) -> Self {
+    pub fn tagged(self, reference: InputReference) -> Self {
         match self {
             Self::Sequential(stream) => Self::Sequential(Box::new(TaggedStream { reference, stream })),
             Self::RandomAccess(stream) => Self::RandomAccess(Box::new(TaggedStream { reference, stream })),
+        }
+    }
+}
+
+impl Read for Stream {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        match self {
+            Self::Sequential(stream) => stream.read(buf),
+            Self::RandomAccess(stream) => stream.read(buf),
         }
     }
 }
@@ -374,6 +394,12 @@ impl<R: Seek> Seek for TaggedStream<R> {
     }
 }
 
+impl<R: Meta> Meta for TaggedStream<R> {
+    fn metadata_opt(&self) -> io::Result<Option<Metadata>> {
+        self.stream.metadata_opt()
+    }
+}
+
 // ---
 
 pub struct IndexedInput {
@@ -405,7 +431,7 @@ impl IndexedInput {
     fn from_stream(reference: InputReference, stream: Stream, indexer: &Indexer) -> Result<Self> {
         match stream {
             Stream::Sequential(stream) => Self::from_sequential_stream(reference, stream, indexer),
-            Stream::RandomAccess(stream) => Self::from_random_access_stream(path, stream, indexer),
+            Stream::RandomAccess(stream) => Self::from_random_access_stream(reference, stream, indexer),
         }
     }
 
@@ -414,25 +440,26 @@ impl IndexedInput {
         mut stream: RandomAccessStream,
         indexer: &Indexer,
     ) -> Result<Self> {
-        let index = indexer.index(&path)?;
-        return Self::new(reference, stream, indexer.index_from_stream(&mut stream)?);
-        if !Self::is_seekable(&mut stream) {
-            return Self::open_sequential(
-                InputReference::File(path.clone()),
-                Box::new(decode(stream).as_input_stream()),
-                indexer,
-            );
-        }
-
-        let index = indexer.index(&path)?;
-        Ok(Self::new(InputReference::File(path.clone()), stream, index))
+        let pos = stream.seek(SeekFrom::Current(0))?;
+        let meta = stream.metadata_opt()?;
+        let index = indexer.index_stream(
+            &mut stream,
+            match &reference {
+                InputReference::File(path) => Some(path),
+                _ => None,
+            },
+            meta,
+        )?;
+        stream.seek(SeekFrom::Start(pos))?;
+        Ok(Self::new(reference, stream, index))
     }
 
     fn from_sequential_stream(reference: InputReference, stream: SequentialStream, indexer: &Indexer) -> Result<Self> {
+        let meta = stream.metadata_opt()?;
         let mut tee = TeeReader::new(stream, ReplayBufCreator::new());
-        let index = indexer.index_from_stream(&mut tee)?;
+        let index = indexer.index_stream(&mut tee)?;
         let buf = tee.into_writer().result()?;
-        Ok(IndexedInput::new(
+        Ok(Self::new(
             reference,
             Box::new(Mutex::new(ReplayBufReader::new(buf))),
             index,
@@ -444,7 +471,7 @@ impl IndexedInput {
             return false;
         };
 
-        let seekable = decode(ReadSeekToRead(&mut stream)).kind().ok() == Some(Format::Verbatim);
+        let seekable = decode(ReadSeekMetaToReadSeek(&mut stream)).kind().ok() == Some(Format::Verbatim);
         stream.seek(SeekFrom::Start(pos)).ok();
 
         seekable
@@ -692,21 +719,43 @@ where
 // ---
 
 pub trait ReadSeek: Read + Seek {}
-pub trait ReadSeekMetadata: ReadSeek + MetadataHolder {}
+pub trait ReadSeekMeta: ReadSeek + Meta {}
+pub trait ReadMeta: Read + Meta {}
 pub trait BufReadSeek: BufRead + Seek {}
 
 impl<T: Read + Seek> ReadSeek for T {}
 
-pub struct ReadSeekToRead<T>(T);
+impl<T: Read + Seek + Meta> ReadSeekMeta for T {}
 
-impl<T> Read for ReadSeekToRead<T>
-where
-    T: ReadSeek,
-{
+impl<T: Read + Meta> ReadMeta for T {}
+
+impl<T: Meta + ?Sized> Meta for Box<T> {
+    fn metadata_opt(&self) -> io::Result<Option<Metadata>> {
+        self.as_ref().metadata_opt()
+    }
+}
+
+pub struct ReadSeekMetaToReadSeek<T>(T);
+
+impl<T: Read> Read for ReadSeekMetaToReadSeek<T> {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         self.0.read(buf)
     }
 }
+
+impl<T: Seek> Seek for ReadSeekMetaToReadSeek<T> {
+    fn seek(&mut self, pos: SeekFrom) -> io::Result<u64> {
+        self.0.seek(pos)
+    }
+}
+
+impl<T: Meta> Meta for ReadSeekMetaToReadSeek<T> {
+    fn metadata_opt(&self) -> io::Result<Option<Metadata>> {
+        self.0.metadata_opt()
+    }
+}
+
+// ---
 
 trait AsInputStream {
     fn as_input_stream(self) -> SequentialStream;
@@ -715,6 +764,51 @@ trait AsInputStream {
 impl<T: Read + Send + Sync + 'static> AsInputStream for T {
     fn as_input_stream(self) -> SequentialStream {
         Box::new(self)
+    }
+}
+
+// ---
+
+trait WithMeta {
+    fn with_metadata(self, meta: Option<Metadata>) -> WithMetadata<Self>
+    where
+        Self: Sized;
+}
+
+impl<T> WithMeta for T {
+    fn with_metadata(self, meta: Option<Metadata>) -> WithMetadata<Self> {
+        WithMetadata::new(self, meta)
+    }
+}
+
+// ---
+
+struct WithMetadata<T> {
+    inner: T,
+    meta: Option<Metadata>,
+}
+
+impl<T> WithMetadata<T> {
+    fn new(inner: T, meta: Option<Metadata>) -> Self {
+        Self { inner, meta }
+    }
+}
+
+impl<T: Read> Read for WithMetadata<T> {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        self.inner.read(buf)
+    }
+}
+
+impl<T: Seek> Seek for WithMetadata<T> {
+    fn seek(&mut self, pos: SeekFrom) -> io::Result<u64> {
+        self.inner.seek(pos)
+    }
+}
+
+impl<T: Meta> Meta for WithMetadata<T> {
+    fn metadata_opt(&self) -> io::Result<Option<Metadata>> {
+        Ok(self.meta.clone())
     }
 }
 
@@ -733,9 +827,9 @@ mod tests {
     #[test]
     fn test_input_read_error() {
         let reference = InputReference::File(PathBuf::from("test.log"));
-        let mut input = Input::new(reference, Box::new(FailingReader));
+        let input = Input::new(reference, Stream::Sequential(Box::new(FailingReader)));
         let mut buf = [0; 128];
-        let result = input.stream.read(&mut buf);
+        let result = input.stream.sequential().read(&mut buf);
         assert!(result.is_err());
         let err = result.unwrap_err();
         assert_eq!(err.kind(), ErrorKind::Other);
