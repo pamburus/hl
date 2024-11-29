@@ -9,7 +9,7 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
 // third-party imports
-use flate2::bufread::GzDecoder;
+use deko::bufread::AnyDecoder;
 use nu_ansi_term::Color;
 
 // local imports
@@ -184,10 +184,7 @@ impl Input {
     }
 
     pub fn open_stream(path: &PathBuf, stream: Box<dyn ReadSeek + Send + Sync>) -> io::Result<Self> {
-        let stream: InputStream = match path.extension().map(|x| x.to_str()) {
-            Some(Some("gz")) => Box::new(GzDecoder::new(BufReader::new(stream))),
-            _ => Box::new(stream),
-        };
+        let stream: InputStream = Box::new(AnyDecoder::new(BufReader::new(stream)));
         Ok(Self::new(InputReference::File(path.clone()), stream))
     }
 }
@@ -567,6 +564,21 @@ mod tests {
         let err = result.err().unwrap();
         assert_eq!(err.kind(), ErrorKind::NotFound);
         assert_eq!(err.to_string().contains(filename), true);
+    }
+
+    #[test]
+    fn test_input_gzip() {
+        use std::io::Cursor;
+        let data = Cursor::new(
+            // echo 'test' | gzip -cf | xxd -p | sed 's/\(..\)/\\x\1/g'
+            b"\x1f\x8b\x08\x00\x9e\xdd\x48\x67\x00\x03\x2b\x49\x2d\x2e\xe1\x02\x00\xc6\x35\xb9\x3b\x05\x00\x00\x00",
+        );
+        let mut input = Input::open_stream(&PathBuf::from("test.log.gz"), Box::new(data)).unwrap();
+        let mut buf = Vec::new();
+        let result = input.stream.read_to_end(&mut buf);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), 5);
+        assert_eq!(buf, b"test\n");
     }
 
     struct FailingReader;
