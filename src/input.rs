@@ -570,18 +570,15 @@ mod tests {
     fn test_input_gzip() {
         use std::io::Cursor;
         let data = Cursor::new(
-            // echo '' | gzip -cf | od -A n -t u1 -w40| sed -e 's/^  *//; s/  */, /g'
-            vec![31, 139, 8, 0, 0, 0, 0, 0, 0, 3, 227, 2, 0, 147, 6, 215, 50, 1, 0, 0, 0],
+            // echo 'test' | gzip -cf | xxd -p | sed 's/\(..\)/\\x\1/g'
+            b"\x1f\x8b\x08\x00\x9e\xdd\x48\x67\x00\x03\x2b\x49\x2d\x2e\xe1\x02\x00\xc6\x35\xb9\x3b\x05\x00\x00\x00",
         );
         let mut input = Input::open_stream(&PathBuf::from("test.log.gz"), Box::new(data)).unwrap();
-        let mut buf = [0; 32];
-        let result = input.stream.read(&mut buf);
+        let mut buf = Vec::new();
+        let result = input.stream.read_to_end(&mut buf);
         assert!(result.is_ok());
-        let got = result.unwrap();
-        if got != 1 {
-            println!("got {}, wanted 1", got);
-        }
-        assert!(got == 1);
+        assert_eq!(result.unwrap(), 5);
+        assert_eq!(buf, b"test\n");
     }
 
     struct FailingReader;
