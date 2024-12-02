@@ -170,7 +170,7 @@ impl InputHolder {
     fn stdin(self) -> InputStream {
         self.stream
             .map(|s| Box::new(ReadSeekToRead(s)) as InputStream)
-            .unwrap_or_else(|| Box::new(stdin()))
+            .unwrap_or_else(|| Box::new(decode(stdin())))
     }
 }
 
@@ -237,10 +237,10 @@ impl IndexedInput {
     }
 
     pub fn open_stream(path: &PathBuf, mut stream: Box<dyn ReadSeek + Send + Sync>, indexer: &Indexer) -> Result<Self> {
-        if stream.seek(SeekFrom::Current(0)).is_err() {
+        if !Self::is_seekable(&mut stream) {
             return Self::open_sequential(
                 InputReference::File(path.clone()),
-                Box::new(stream.as_input_stream()),
+                Box::new(decode(stream).as_input_stream()),
                 indexer,
             );
         }
@@ -267,6 +267,17 @@ impl IndexedInput {
     pub fn into_blocks(self) -> Blocks<IndexedInput, impl Iterator<Item = usize>> {
         let n = self.index.source().blocks.len();
         Blocks::new(Arc::new(self), (0..n).into_iter())
+    }
+
+    fn is_seekable<R: ReadSeek + Send + Sync>(mut stream: R) -> bool {
+        let Ok(pos) = stream.seek(SeekFrom::Current(0)) else {
+            return false;
+        };
+
+        let seekable = decode(ReadSeekToRead(&mut stream)).kind().ok() == Some(Format::Verbatim);
+        stream.seek(SeekFrom::Start(pos)).ok();
+
+        seekable
     }
 }
 
@@ -533,6 +544,12 @@ impl<T: Read + Send + Sync + 'static> AsInputStream for T {
     fn as_input_stream(self) -> InputStream {
         Box::new(self)
     }
+}
+
+// ---
+
+fn decode<R: Read + Send + Sync>(input: R) -> AnyDecoder<BufReader<R>> {
+    AnyDecoder::new(BufReader::new(input))
 }
 
 #[cfg(test)]

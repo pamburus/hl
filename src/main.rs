@@ -30,12 +30,7 @@ use hl::{
 };
 
 // supported compression formats
-const COMPRESSION_FORMATS: phf::Map<&str, &str> = phf_map! {
-    "bz2" => "bzip2",
-    "gz" => "gzip",
-    "xz" => "xz",
-    "zst" => "zstd"
-};
+const COMPRESSION_FORMATS: phf::Map<&str, &str> = phf_map! {};
 
 // ---
 
