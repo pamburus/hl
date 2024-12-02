@@ -52,7 +52,6 @@ use std::io::{self, stdin, BufRead, BufReader, Cursor, Read, Seek, SeekFrom};
 use std::mem::size_of_val;
 use std::ops::Range;
 use std::path::PathBuf;
-use std::str::FromStr;
 use std::sync::{Arc, Mutex};
 
 // third-party imports
@@ -62,6 +61,7 @@ use nu_ansi_term::Color;
 // local imports
 use crate::error::Result;
 use crate::index::{Index, Indexer, SourceBlock};
+use crate::iox::ReadFill;
 use crate::pool::SQPool;
 use crate::replay::{ReplayBufCreator, ReplayBufReader};
 use crate::tee::TeeReader;
@@ -150,44 +150,63 @@ impl InputReference {
         }
     }
 
-    fn seek_tail(file: &mut File, lines: u64) -> io::Result<()> {
-        const BUF_SIZE: usize = 64 * 1024;
-        let mut scratch = [0; BUF_SIZE];
-        let mut count: u64 = 0;
-        let mut prev_pos = file.seek(SeekFrom::End(0))?;
-        let mut pos = prev_pos;
-        while pos > 0 {
-            pos -= min(BUF_SIZE as u64, pos);
-            pos = file.seek(SeekFrom::Start(pos))?;
-            if pos == prev_pos {
-                break;
-            }
-            let bn = min(BUF_SIZE, (prev_pos - pos) as usize);
-            let buf = scratch[..bn].as_mut();
-
-            file.read_exact(buf)?;
-
-            for i in (0..bn).rev() {
-                if buf[i] == b'\n' {
-                    if count == lines {
-                        file.seek(SeekFrom::Start(pos + i as u64 + 1))?;
-                        return Ok(());
-                    }
-                    count += 1;
-                }
-            }
-
-            prev_pos = pos;
+    fn path(&self) -> Option<&PathBuf> {
+        match self {
+            Self::Stdin => None,
+            Self::File(path) => Some(path),
         }
-        file.seek(SeekFrom::Start(pos as u64))?;
-        Ok(())
     }
+
+    // fn seek_tail(file: &mut File, lines: u64) -> io::Result<()> {
+    //     const BUF_SIZE: usize = 64 * 1024;
+    //     let mut scratch = [0; BUF_SIZE];
+    //     let mut count: u64 = 0;
+    //     let mut prev_pos = file.seek(SeekFrom::End(0))?;
+    //     let mut pos = prev_pos;
+    //     while pos > 0 {
+    //         pos -= min(BUF_SIZE as u64, pos);
+    //         pos = file.seek(SeekFrom::Start(pos))?;
+    //         if pos == prev_pos {
+    //             break;
+    //         }
+    //         let bn = min(BUF_SIZE, (prev_pos - pos) as usize);
+    //         let buf = scratch[..bn].as_mut();
+
+    //         file.read_exact(buf)?;
+
+    //         for i in (0..bn).rev() {
+    //             if buf[i] == b'\n' {
+    //                 if count == lines {
+    //                     file.seek(SeekFrom::Start(pos + i as u64 + 1))?;
+    //                     return Ok(());
+    //                 }
+    //                 count += 1;
+    //             }
+    //         }
+
+    //         prev_pos = pos;
+    //     }
+    //     file.seek(SeekFrom::Start(pos as u64))?;
+    //     Ok(())
+    // }
 }
 
 // ---
 
 pub trait Meta {
     fn metadata_opt(&self) -> io::Result<Option<Metadata>>;
+}
+
+impl<T: Meta> Meta for &T {
+    fn metadata_opt(&self) -> io::Result<Option<Metadata>> {
+        (*self).metadata_opt()
+    }
+}
+
+impl<T: Meta> Meta for &mut T {
+    fn metadata_opt(&self) -> io::Result<Option<Metadata>> {
+        (**self).metadata_opt()
+    }
 }
 
 impl Meta for std::fs::File {
@@ -205,6 +224,12 @@ impl Meta for std::io::Stdin {
 impl<T> Meta for Cursor<T> {
     fn metadata_opt(&self) -> io::Result<Option<Metadata>> {
         Ok(None)
+    }
+}
+
+impl<T: Meta> Meta for Mutex<T> {
+    fn metadata_opt(&self) -> io::Result<Option<Metadata>> {
+        self.lock().unwrap().metadata_opt()
     }
 }
 
@@ -244,7 +269,7 @@ impl InputHolder {
     fn stream(self) -> io::Result<Stream> {
         Ok(match &self.reference {
             InputReference::Stdin => match self.stream {
-                Some(stream) => Stream::Sequential(Stream::RandomAccess(stream).sequential()),
+                Some(stream) => Stream::Sequential(Stream::RandomAccess(stream).into_sequential()),
                 None => Stream::Sequential(self.stdin()),
             },
             InputReference::File(_) => match self.stream {
@@ -289,6 +314,47 @@ impl Input {
     /// Opens the stdin for reading.
     pub fn stdin() -> io::Result<Self> {
         InputReference::Stdin.open()
+    }
+
+    pub fn tail(mut self, lines: u64) -> io::Result<Self> {
+        match &mut self.stream {
+            Stream::Sequential(_) => (),
+            Stream::RandomAccess(stream) => Self::seek_tail(stream, lines)?,
+        }
+        Ok(self)
+    }
+
+    fn seek_tail(stream: &mut RandomAccessStream, lines: u64) -> io::Result<()> {
+        const BUF_SIZE: usize = 64 * 1024;
+        let mut scratch = [0; BUF_SIZE];
+        let mut count: u64 = 0;
+        let mut prev_pos = stream.seek(SeekFrom::End(0))?;
+        let mut pos = prev_pos;
+        while pos > 0 {
+            pos -= min(BUF_SIZE as u64, pos);
+            pos = stream.seek(SeekFrom::Start(pos))?;
+            if pos == prev_pos {
+                break;
+            }
+            let bn = min(BUF_SIZE, (prev_pos - pos) as usize);
+            let buf = scratch[..bn].as_mut();
+
+            stream.read_exact(buf)?;
+
+            for i in (0..bn).rev() {
+                if buf[i] == b'\n' {
+                    if count == lines {
+                        stream.seek(SeekFrom::Start(pos + i as u64 + 1))?;
+                        return Ok(());
+                    }
+                    count += 1;
+                }
+            }
+
+            prev_pos = pos;
+        }
+        stream.seek(SeekFrom::Start(pos as u64))?;
+        Ok(())
     }
 }
 
@@ -339,7 +405,15 @@ impl Stream {
     }
 
     /// Converts the stream to a sequential stream.
-    pub fn sequential(self) -> SequentialStream {
+    pub fn as_sequential<'a>(&'a mut self) -> Box<dyn ReadMeta + Send + Sync + 'a> {
+        match self {
+            Self::Sequential(stream) => Box::new(stream),
+            Self::RandomAccess(stream) => Box::new(ReadSeekMetaToReadSeek(stream)),
+        }
+    }
+
+    /// Converts the stream to a sequential stream.
+    pub fn into_sequential(self) -> SequentialStream {
         match self {
             Self::Sequential(stream) => stream,
             Self::RandomAccess(stream) => Box::new(ReadSeekMetaToReadSeek(stream)),
@@ -402,6 +476,28 @@ impl<R: Meta> Meta for TaggedStream<R> {
 
 // ---
 
+struct RandomAccessStreamMutex<T: ReadSeekMeta + Send + Sync>(Mutex<T>);
+
+impl<T: ReadSeekMeta + Send + Sync> Read for RandomAccessStreamMutex<T> {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        self.0.lock().unwrap().read(buf)
+    }
+}
+
+impl<T: ReadSeekMeta + Send + Sync> Seek for RandomAccessStreamMutex<T> {
+    fn seek(&mut self, pos: SeekFrom) -> io::Result<u64> {
+        self.0.lock().unwrap().seek(pos)
+    }
+}
+
+impl<T: ReadSeekMeta + Send + Sync> Meta for RandomAccessStreamMutex<T> {
+    fn metadata_opt(&self) -> io::Result<Option<Metadata>> {
+        self.0.lock().unwrap().metadata_opt()
+    }
+}
+
+// ---
+
 pub struct IndexedInput {
     pub reference: InputReference,
     pub stream: Mutex<RandomAccessStream>,
@@ -457,25 +553,27 @@ impl IndexedInput {
     fn from_sequential_stream(reference: InputReference, stream: SequentialStream, indexer: &Indexer) -> Result<Self> {
         let meta = stream.metadata_opt()?;
         let mut tee = TeeReader::new(stream, ReplayBufCreator::new());
-        let index = indexer.index_stream(&mut tee)?;
+        let index = indexer.index_stream(&mut tee, reference.path(), meta.clone())?;
         let buf = tee.into_writer().result()?;
         Ok(Self::new(
             reference,
-            Box::new(Mutex::new(ReplayBufReader::new(buf))),
+            Box::new(RandomAccessStreamMutex(Mutex::new(
+                ReplayBufReader::new(buf).with_metadata(meta),
+            ))),
             index,
         ))
     }
 
-    fn is_seekable<R: ReadSeek + Send + Sync>(mut stream: R) -> bool {
-        let Ok(pos) = stream.seek(SeekFrom::Current(0)) else {
-            return false;
-        };
+    // fn is_seekable<R: ReadSeek + Send + Sync>(mut stream: R) -> bool {
+    //     let Ok(pos) = stream.seek(SeekFrom::Current(0)) else {
+    //         return false;
+    //     };
 
-        let seekable = decode(ReadSeekMetaToReadSeek(&mut stream)).kind().ok() == Some(Format::Verbatim);
-        stream.seek(SeekFrom::Start(pos)).ok();
+    //     let seekable = decode(ReadSeekMetaToReadSeek(&mut stream)).kind().ok() == Some(Format::Verbatim);
+    //     stream.seek(SeekFrom::Start(pos)).ok();
 
-        seekable
-    }
+    //     seekable
+    // }
 }
 
 // ---
@@ -757,15 +855,15 @@ impl<T: Meta> Meta for ReadSeekMetaToReadSeek<T> {
 
 // ---
 
-trait AsInputStream {
-    fn as_input_stream(self) -> SequentialStream;
-}
+// trait AsInputStream {
+//     fn as_input_stream(self) -> SequentialStream;
+// }
 
-impl<T: Read + Send + Sync + 'static> AsInputStream for T {
-    fn as_input_stream(self) -> SequentialStream {
-        Box::new(self)
-    }
-}
+// impl<T: ReadMeta + Send + Sync + 'static> AsInputStream for T {
+//     fn as_input_stream(self) -> SequentialStream {
+//         Box::new(self)
+//     }
+// }
 
 // ---
 
@@ -806,7 +904,7 @@ impl<T: Seek> Seek for WithMetadata<T> {
     }
 }
 
-impl<T: Meta> Meta for WithMetadata<T> {
+impl<T> Meta for WithMetadata<T> {
     fn metadata_opt(&self) -> io::Result<Option<Metadata>> {
         Ok(self.meta.clone())
     }
@@ -814,9 +912,9 @@ impl<T: Meta> Meta for WithMetadata<T> {
 
 // ---
 
-fn decode<R: Read + Send + Sync>(input: R) -> AnyDecoder<BufReader<R>> {
-    AnyDecoder::new(BufReader::new(input))
-}
+// fn decode<R: Read + Send + Sync>(input: R) -> AnyDecoder<BufReader<R>> {
+//     AnyDecoder::new(BufReader::new(input))
+// }
 
 #[cfg(test)]
 mod tests {
@@ -829,7 +927,7 @@ mod tests {
         let reference = InputReference::File(PathBuf::from("test.log"));
         let input = Input::new(reference, Stream::Sequential(Box::new(FailingReader)));
         let mut buf = [0; 128];
-        let result = input.stream.sequential().read(&mut buf);
+        let result = input.stream.into_sequential().read(&mut buf);
         assert!(result.is_err());
         let err = result.unwrap_err();
         assert_eq!(err.kind(), ErrorKind::Other);
@@ -864,9 +962,9 @@ mod tests {
             // echo 'test' | gzip -cf | xxd -p | sed 's/\(..\)/\\x\1/g'
             b"\x1f\x8b\x08\x00\x9e\xdd\x48\x67\x00\x03\x2b\x49\x2d\x2e\xe1\x02\x00\xc6\x35\xb9\x3b\x05\x00\x00\x00",
         );
-        let mut input = Input::open_stream(&PathBuf::from("test.log.gz"), Box::new(data)).unwrap();
+        let mut stream = Stream::Sequential(Box::new(data));
         let mut buf = Vec::new();
-        let result = input.stream.read_to_end(&mut buf);
+        let result = stream.read_to_end(&mut buf);
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), 5);
         assert_eq!(buf, b"test\n");
@@ -877,6 +975,12 @@ mod tests {
     impl Read for FailingReader {
         fn read(&mut self, _buf: &mut [u8]) -> std::io::Result<usize> {
             Err(std::io::Error::new(std::io::ErrorKind::Other, "read error"))
+        }
+    }
+
+    impl Meta for FailingReader {
+        fn metadata_opt(&self) -> std::io::Result<Option<std::fs::Metadata>> {
+            Ok(None)
         }
     }
 }

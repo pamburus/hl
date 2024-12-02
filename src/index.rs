@@ -38,7 +38,6 @@ use crate::{
     app::{InputFormat, UnixTimestampUnit},
     error::{Error, Result},
     index_capnp as schema,
-    input::Input,
     level::Level,
     model::{Parser, ParserSettings, RawRecord},
     scanning::{Delimiter, Scanner, Segment, SegmentBuf, SegmentBufFactory},
