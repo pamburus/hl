@@ -281,7 +281,7 @@ impl InputHolder {
 
     fn stdin(self) -> SequentialStream {
         self.stream
-            .map(|s| Box::new(ReadSeekMetaToReadSeek(s)) as SequentialStream)
+            .map(|s| Box::new(StreamOver(s)) as SequentialStream)
             .unwrap_or_else(|| Box::new(stdin()))
     }
 }
@@ -413,10 +413,10 @@ impl Stream {
     }
 
     /// Converts the stream to a sequential stream.
-    pub fn as_sequential<'a>(&'a mut self) -> Box<dyn ReadMeta + Send + Sync + 'a> {
+    pub fn as_sequential<'a>(&'a mut self) -> StreamOver<&'a mut (dyn ReadMeta + Send + Sync)> {
         match self {
-            Self::Sequential(stream) => Box::new(stream),
-            Self::RandomAccess(stream) => Box::new(stream),
+            Self::Sequential(stream) => StreamOver(stream),
+            Self::RandomAccess(stream) => StreamOver(stream),
         }
     }
 
@@ -424,7 +424,7 @@ impl Stream {
     pub fn into_sequential(self) -> SequentialStream {
         match self {
             Self::Sequential(stream) => stream,
-            Self::RandomAccess(stream) => Box::new(ReadSeekMetaToReadSeek(stream)),
+            Self::RandomAccess(stream) => Box::new(StreamOver(stream)),
         }
     }
 
@@ -841,21 +841,21 @@ impl<T: Meta + ?Sized> Meta for Box<T> {
     }
 }
 
-pub struct ReadSeekMetaToReadSeek<T>(T);
+pub struct StreamOver<T>(T);
 
-impl<T: Read> Read for ReadSeekMetaToReadSeek<T> {
+impl<T: Read> Read for StreamOver<T> {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         self.0.read(buf)
     }
 }
 
-impl<T: Seek> Seek for ReadSeekMetaToReadSeek<T> {
+impl<T: Seek> Seek for StreamOver<T> {
     fn seek(&mut self, pos: SeekFrom) -> io::Result<u64> {
         self.0.seek(pos)
     }
 }
 
-impl<T: Meta> Meta for ReadSeekMetaToReadSeek<T> {
+impl<T: Meta> Meta for StreamOver<T> {
     fn metadata_opt(&self) -> io::Result<Option<Metadata>> {
         self.0.metadata_opt()
     }
