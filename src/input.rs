@@ -443,6 +443,7 @@ impl IndexedInput {
         let meta = stream.metadata()?;
         let mut tee = TeeReader::new(stream, ReplayBufCreator::new());
         let index = indexer.index_stream(&mut tee, reference.path(), meta.clone())?;
+        std::io::copy(&mut tee, &mut io::sink())?;
         let buf = tee.into_writer().result()?;
         Ok(Self::new(
             reference,
