@@ -393,13 +393,21 @@ impl Stream {
             }
             Self::RandomAccess(mut stream) => {
                 if let Some(pos) = stream.seek(SeekFrom::Current(0)).ok() {
-                    let mut dec = AnyDecoder::new(BufReader::new(&mut stream));
-                    if dec.kind().ok() == Some(Format::Verbatim) {
-                        stream.seek(SeekFrom::Start(pos)).ok();
-                        return Self::RandomAccess(stream);
+                    let meta = stream.metadata_opt().ok().flatten();
+                    let kind = AnyDecoder::new(BufReader::new(&mut stream)).kind().ok();
+                    stream.seek(SeekFrom::Start(pos)).ok();
+                    match kind {
+                        Some(Format::Verbatim) => {
+                            return Self::RandomAccess(stream);
+                        }
+                        Some(_) => {
+                            let dec = AnyDecoder::new(BufReader::new(stream));
+                            return Self::Sequential(Box::new(dec.with_metadata(meta)));
+                        }
+                        None => (),
                     }
                 }
-                Self::Sequential(Box::new(ReadSeekMetaToReadSeek(stream)))
+                Self::Sequential(Box::new(stream))
             }
         }
     }
@@ -408,7 +416,7 @@ impl Stream {
     pub fn as_sequential<'a>(&'a mut self) -> Box<dyn ReadMeta + Send + Sync + 'a> {
         match self {
             Self::Sequential(stream) => Box::new(stream),
-            Self::RandomAccess(stream) => Box::new(ReadSeekMetaToReadSeek(stream)),
+            Self::RandomAccess(stream) => Box::new(stream),
         }
     }
 
