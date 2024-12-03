@@ -194,42 +194,42 @@ impl InputReference {
 // ---
 
 pub trait Meta {
-    fn metadata_opt(&self) -> io::Result<Option<Metadata>>;
+    fn metadata(&self) -> io::Result<Option<Metadata>>;
 }
 
 impl<T: Meta> Meta for &T {
-    fn metadata_opt(&self) -> io::Result<Option<Metadata>> {
-        (*self).metadata_opt()
+    fn metadata(&self) -> io::Result<Option<Metadata>> {
+        (*self).metadata()
     }
 }
 
 impl<T: Meta> Meta for &mut T {
-    fn metadata_opt(&self) -> io::Result<Option<Metadata>> {
-        (**self).metadata_opt()
+    fn metadata(&self) -> io::Result<Option<Metadata>> {
+        (**self).metadata()
     }
 }
 
 impl Meta for std::fs::File {
-    fn metadata_opt(&self) -> io::Result<Option<Metadata>> {
+    fn metadata(&self) -> io::Result<Option<Metadata>> {
         self.metadata().map(Some)
     }
 }
 
 impl Meta for std::io::Stdin {
-    fn metadata_opt(&self) -> io::Result<Option<Metadata>> {
+    fn metadata(&self) -> io::Result<Option<Metadata>> {
         Ok(None)
     }
 }
 
 impl<T> Meta for Cursor<T> {
-    fn metadata_opt(&self) -> io::Result<Option<Metadata>> {
+    fn metadata(&self) -> io::Result<Option<Metadata>> {
         Ok(None)
     }
 }
 
 impl<T: Meta> Meta for Mutex<T> {
-    fn metadata_opt(&self) -> io::Result<Option<Metadata>> {
-        self.lock().unwrap().metadata_opt()
+    fn metadata(&self) -> io::Result<Option<Metadata>> {
+        self.lock().unwrap().metadata()
     }
 }
 
@@ -388,12 +388,12 @@ impl Stream {
     pub fn decoded(self) -> Self {
         match self {
             Self::Sequential(stream) => {
-                let meta = stream.metadata_opt().ok().flatten();
+                let meta = stream.metadata().ok().flatten();
                 Self::Sequential(Box::new(AnyDecoder::new(BufReader::new(stream)).with_metadata(meta)))
             }
             Self::RandomAccess(mut stream) => {
                 if let Some(pos) = stream.seek(SeekFrom::Current(0)).ok() {
-                    let meta = stream.metadata_opt().ok().flatten();
+                    let meta = stream.metadata().ok().flatten();
                     let kind = AnyDecoder::new(BufReader::new(&mut stream)).kind().ok();
                     stream.seek(SeekFrom::Start(pos)).ok();
                     match kind {
@@ -477,8 +477,8 @@ impl<R: Seek> Seek for TaggedStream<R> {
 }
 
 impl<R: Meta> Meta for TaggedStream<R> {
-    fn metadata_opt(&self) -> io::Result<Option<Metadata>> {
-        self.stream.metadata_opt()
+    fn metadata(&self) -> io::Result<Option<Metadata>> {
+        self.stream.metadata()
     }
 }
 
@@ -499,8 +499,8 @@ impl<T: ReadSeekMeta + Send + Sync> Seek for RandomAccessStreamMutex<T> {
 }
 
 impl<T: ReadSeekMeta + Send + Sync> Meta for RandomAccessStreamMutex<T> {
-    fn metadata_opt(&self) -> io::Result<Option<Metadata>> {
-        self.0.lock().unwrap().metadata_opt()
+    fn metadata(&self) -> io::Result<Option<Metadata>> {
+        self.0.lock().unwrap().metadata()
     }
 }
 
@@ -545,7 +545,7 @@ impl IndexedInput {
         indexer: &Indexer,
     ) -> Result<Self> {
         let pos = stream.seek(SeekFrom::Current(0))?;
-        let meta = stream.metadata_opt()?;
+        let meta = stream.metadata()?;
         let index = indexer.index_stream(
             &mut stream,
             match &reference {
@@ -559,7 +559,7 @@ impl IndexedInput {
     }
 
     fn from_sequential_stream(reference: InputReference, stream: SequentialStream, indexer: &Indexer) -> Result<Self> {
-        let meta = stream.metadata_opt()?;
+        let meta = stream.metadata()?;
         let mut tee = TeeReader::new(stream, ReplayBufCreator::new());
         let index = indexer.index_stream(&mut tee, reference.path(), meta.clone())?;
         let buf = tee.into_writer().result()?;
@@ -836,8 +836,8 @@ impl<T: Read + Seek + Meta> ReadSeekMeta for T {}
 impl<T: Read + Meta> ReadMeta for T {}
 
 impl<T: Meta + ?Sized> Meta for Box<T> {
-    fn metadata_opt(&self) -> io::Result<Option<Metadata>> {
-        self.as_ref().metadata_opt()
+    fn metadata(&self) -> io::Result<Option<Metadata>> {
+        self.as_ref().metadata()
     }
 }
 
@@ -856,8 +856,8 @@ impl<T: Seek> Seek for StreamOver<T> {
 }
 
 impl<T: Meta> Meta for StreamOver<T> {
-    fn metadata_opt(&self) -> io::Result<Option<Metadata>> {
-        self.0.metadata_opt()
+    fn metadata(&self) -> io::Result<Option<Metadata>> {
+        self.0.metadata()
     }
 }
 
@@ -913,7 +913,7 @@ impl<T: Seek> Seek for WithMetadata<T> {
 }
 
 impl<T> Meta for WithMetadata<T> {
-    fn metadata_opt(&self) -> io::Result<Option<Metadata>> {
+    fn metadata(&self) -> io::Result<Option<Metadata>> {
         Ok(self.meta.clone())
     }
 }
@@ -987,7 +987,7 @@ mod tests {
     }
 
     impl Meta for FailingReader {
-        fn metadata_opt(&self) -> std::io::Result<Option<std::fs::Metadata>> {
+        fn metadata(&self) -> std::io::Result<Option<std::fs::Metadata>> {
             Ok(None)
         }
     }
