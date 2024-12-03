@@ -1,49 +1,3 @@
-/*
-
-    Variants of input sources and their holders:
-    1. Pipe (stdin, bash substitution, etc.) - Sequential access
-    2. File - Random access (unless not seekable or compressed)
-
-    Variants of compressions:
-    1. raw (uncompressed) - Random access
-    2. gzip (zlib) - Sequential access
-    3. bzip2 - Sequential access
-    4. xz - Sequential access
-    5. zstd - Sequential access (unless multiple frames of small size)
-
-    Variants of access:
-    1. Sequential
-    2. Random
-
-    Variants of initial positioning:
-    1. Head
-    2. Tail (last n lines)
-    2.1. Tail for sequential access - Skip HEAD
-    2.2. Tail for random access - Read blocks from END until n lines are found
-
-    Algorithm:
-    1. Check if pipe or file
-        1.1. If pipe, go to opening with sequential access (2)
-        1.2. If file, go to opening with random access (3)
-    2. Open with sequential access
-        2.1. Use AnyDecoder to decode compressed files
-        2.2. Go to initial positioning (4)
-    3. Open with random access - check if compressed or seekable
-        3.1. Try to seek to get current position
-            3.1.1. If not seekable, go to opening with sequential access (2)
-        3.2. Open with AnyDecoder to decode compressed files
-            3.2.1. If compressed (except zstd-framed), go to opening with sequential access (2.2)
-            3.2.2. If uncompressed (or zstd-framed) and seekable, open with random access
-    4. Initial positioning
-        4.1. Head - do nothing
-        4.2. Tail
-            4.2.1. Tail for sequential access - read from start to the end and keep last n lines
-            4.2.2. Tail for random access - read blocks from the end until n lines are found
-
-
-
-*/
-
 // std imports
 use std::cmp::min;
 use std::convert::TryInto;
@@ -122,26 +76,6 @@ impl InputReference {
         self.hold()?.open()
     }
 
-    // pub fn open_tail(&self, n: u64) -> io::Result<Input> {
-    //     match self {
-    //         Self::Stdin => self.open(),
-    //         Self::File(path) => {
-    //             let mut file = File::open(path)
-    //                 .map_err(|e| io::Error::new(e.kind(), format!("failed to open {}: {}", self.description(), e)))?;
-    //             let mut buf = vec![0; 8];
-    //             let bl = file.read(&mut buf)?;
-    //             buf.truncate(bl);
-    //             let stream: SequentialStream = if AnyDecoder::new(Cursor::new(&buf)).kind()? == Format::Verbatim {
-    //                 Self::seek_tail(&mut file, n).ok();
-    //                 Box::new(file)
-    //             } else {
-    //                 Box::new(AnyDecoder::new(BufReader::new(Cursor::new(buf).chain(file))))
-    //             };
-    //             Ok(Input::new(self.clone(), stream))
-    //         }
-    //     }
-    // }
-
     /// Returns a description of the input reference.
     pub fn description(&self) -> String {
         match self {
@@ -156,43 +90,11 @@ impl InputReference {
             Self::File(path) => Some(path),
         }
     }
-
-    // fn seek_tail(file: &mut File, lines: u64) -> io::Result<()> {
-    //     const BUF_SIZE: usize = 64 * 1024;
-    //     let mut scratch = [0; BUF_SIZE];
-    //     let mut count: u64 = 0;
-    //     let mut prev_pos = file.seek(SeekFrom::End(0))?;
-    //     let mut pos = prev_pos;
-    //     while pos > 0 {
-    //         pos -= min(BUF_SIZE as u64, pos);
-    //         pos = file.seek(SeekFrom::Start(pos))?;
-    //         if pos == prev_pos {
-    //             break;
-    //         }
-    //         let bn = min(BUF_SIZE, (prev_pos - pos) as usize);
-    //         let buf = scratch[..bn].as_mut();
-
-    //         file.read_exact(buf)?;
-
-    //         for i in (0..bn).rev() {
-    //             if buf[i] == b'\n' {
-    //                 if count == lines {
-    //                     file.seek(SeekFrom::Start(pos + i as u64 + 1))?;
-    //                     return Ok(());
-    //                 }
-    //                 count += 1;
-    //             }
-    //         }
-
-    //         prev_pos = pos;
-    //     }
-    //     file.seek(SeekFrom::Start(pos as u64))?;
-    //     Ok(())
-    // }
 }
 
 // ---
 
+/// Meta information about the input.
 pub trait Meta {
     fn metadata(&self) -> io::Result<Option<Metadata>>;
 }
@@ -257,13 +159,6 @@ impl InputHolder {
     /// Indexes the input file and returns IndexedInput that can be used to access the data in random order.
     pub fn index(self, indexer: &Indexer) -> Result<IndexedInput> {
         self.open()?.indexed(indexer)
-        // match self.reference {
-        //     InputReference::Stdin => IndexedInput::open_sequential(self.reference.clone(), self.stdin(), indexer),
-        //     InputReference::File(path) => match self.stream {
-        //         Some(stream) => IndexedInput::open_stream(&path, stream, indexer),
-        //         None => IndexedInput::open(&path, indexer),
-        //     },
-        // }
     }
 
     fn stream(self) -> io::Result<Stream> {
@@ -571,17 +466,6 @@ impl IndexedInput {
             index,
         ))
     }
-
-    // fn is_seekable<R: ReadSeek + Send + Sync>(mut stream: R) -> bool {
-    //     let Ok(pos) = stream.seek(SeekFrom::Current(0)) else {
-    //         return false;
-    //     };
-
-    //     let seekable = decode(ReadSeekMetaToReadSeek(&mut stream)).kind().ok() == Some(Format::Verbatim);
-    //     stream.seek(SeekFrom::Start(pos)).ok();
-
-    //     seekable
-    // }
 }
 
 // ---
@@ -863,18 +747,6 @@ impl<T: Meta> Meta for StreamOver<T> {
 
 // ---
 
-// trait AsInputStream {
-//     fn as_input_stream(self) -> SequentialStream;
-// }
-
-// impl<T: ReadMeta + Send + Sync + 'static> AsInputStream for T {
-//     fn as_input_stream(self) -> SequentialStream {
-//         Box::new(self)
-//     }
-// }
-
-// ---
-
 trait WithMeta {
     fn with_metadata(self, meta: Option<Metadata>) -> WithMetadata<Self>
     where
@@ -919,10 +791,6 @@ impl<T> Meta for WithMetadata<T> {
 }
 
 // ---
-
-// fn decode<R: Read + Send + Sync>(input: R) -> AnyDecoder<BufReader<R>> {
-//     AnyDecoder::new(BufReader::new(input))
-// }
 
 #[cfg(test)]
 mod tests {
