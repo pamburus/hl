@@ -4,7 +4,7 @@ use std::convert::TryInto;
 use std::fs::{File, Metadata};
 use std::io::{self, stdin, BufRead, BufReader, Cursor, Read, Seek, SeekFrom};
 use std::mem::size_of_val;
-use std::ops::Range;
+use std::ops::{Deref, Range};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
@@ -349,6 +349,14 @@ pub struct TaggedStream<R> {
     stream: R,
 }
 
+impl<R> Deref for TaggedStream<R> {
+    type Target = R;
+
+    fn deref(&self) -> &Self::Target {
+        &self.stream
+    }
+}
+
 impl<R: Read> Read for TaggedStream<R> {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         self.stream.read(buf).map_err(|e| {
@@ -374,28 +382,6 @@ impl<R: Seek> Seek for TaggedStream<R> {
 impl<R: Meta> Meta for TaggedStream<R> {
     fn metadata(&self) -> io::Result<Option<Metadata>> {
         self.stream.metadata()
-    }
-}
-
-// ---
-
-struct RandomAccessStreamMutex<T: ReadSeekMeta + Send + Sync>(Mutex<T>);
-
-impl<T: ReadSeekMeta + Send + Sync> Read for RandomAccessStreamMutex<T> {
-    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-        self.0.lock().unwrap().read(buf)
-    }
-}
-
-impl<T: ReadSeekMeta + Send + Sync> Seek for RandomAccessStreamMutex<T> {
-    fn seek(&mut self, pos: SeekFrom) -> io::Result<u64> {
-        self.0.lock().unwrap().seek(pos)
-    }
-}
-
-impl<T: ReadSeekMeta + Send + Sync> Meta for RandomAccessStreamMutex<T> {
-    fn metadata(&self) -> io::Result<Option<Metadata>> {
-        self.0.lock().unwrap().metadata()
     }
 }
 
@@ -460,9 +446,7 @@ impl IndexedInput {
         let buf = tee.into_writer().result()?;
         Ok(Self::new(
             reference,
-            Box::new(RandomAccessStreamMutex(Mutex::new(
-                ReplayBufReader::new(buf).with_metadata(meta),
-            ))),
+            Box::new(ReplayBufReader::new(buf).with_metadata(meta)),
             index,
         ))
     }
