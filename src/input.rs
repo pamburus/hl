@@ -962,7 +962,7 @@ mod tests {
             // echo 'test' | gzip -cf | xxd -p | sed 's/\(..\)/\\x\1/g'
             b"\x1f\x8b\x08\x00\x9e\xdd\x48\x67\x00\x03\x2b\x49\x2d\x2e\xe1\x02\x00\xc6\x35\xb9\x3b\x05\x00\x00\x00",
         );
-        let mut stream = Stream::Sequential(Box::new(data));
+        let mut stream = Stream::Sequential(Box::new(data)).verified().decoded();
         let mut buf = Vec::new();
         let result = stream.read_to_end(&mut buf);
         assert!(result.is_ok());
