@@ -84,6 +84,7 @@ impl InputReference {
         }
     }
 
+    #[inline]
     fn path(&self) -> Option<&PathBuf> {
         match self {
             Self::Stdin => None,
@@ -100,36 +101,42 @@ pub trait Meta {
 }
 
 impl<T: Meta> Meta for &T {
+    #[inline]
     fn metadata(&self) -> io::Result<Option<Metadata>> {
         (*self).metadata()
     }
 }
 
 impl<T: Meta> Meta for &mut T {
+    #[inline]
     fn metadata(&self) -> io::Result<Option<Metadata>> {
         (**self).metadata()
     }
 }
 
 impl Meta for std::fs::File {
+    #[inline]
     fn metadata(&self) -> io::Result<Option<Metadata>> {
         self.metadata().map(Some)
     }
 }
 
 impl Meta for std::io::Stdin {
+    #[inline]
     fn metadata(&self) -> io::Result<Option<Metadata>> {
         Ok(None)
     }
 }
 
 impl<T> Meta for Cursor<T> {
+    #[inline]
     fn metadata(&self) -> io::Result<Option<Metadata>> {
         Ok(None)
     }
 }
 
 impl<T: Meta> Meta for Mutex<T> {
+    #[inline]
     fn metadata(&self) -> io::Result<Option<Metadata>> {
         self.lock().unwrap().metadata()
     }
@@ -333,6 +340,7 @@ impl Stream {
 }
 
 impl Read for Stream {
+    #[inline]
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         match self {
             Self::Sequential(stream) => stream.read(buf),
@@ -352,6 +360,7 @@ pub struct TaggedStream<R> {
 impl<R> Deref for TaggedStream<R> {
     type Target = R;
 
+    #[inline]
     fn deref(&self) -> &Self::Target {
         &self.stream
     }
@@ -380,6 +389,7 @@ impl<R: Seek> Seek for TaggedStream<R> {
 }
 
 impl<R: Meta> Meta for TaggedStream<R> {
+    #[inline]
     fn metadata(&self) -> io::Result<Option<Metadata>> {
         self.stream.metadata()
     }
@@ -394,6 +404,7 @@ pub struct IndexedInput {
 }
 
 impl IndexedInput {
+    #[inline]
     fn new(reference: InputReference, stream: RandomAccessStream, index: Index) -> Self {
         Self {
             reference,
@@ -413,6 +424,7 @@ impl IndexedInput {
         Blocks::new(Arc::new(self), (0..n).into_iter())
     }
 
+    #[inline]
     fn from_stream(reference: InputReference, stream: Stream, indexer: &Indexer) -> Result<Self> {
         match stream {
             Stream::Sequential(stream) => Self::from_sequential_stream(reference, stream, indexer),
@@ -461,6 +473,7 @@ pub struct Blocks<I, II> {
 }
 
 impl<II: Iterator<Item = usize>> Blocks<IndexedInput, II> {
+    #[inline]
     pub fn new(input: Arc<IndexedInput>, indexes: II) -> Self {
         Self { input, indexes }
     }
@@ -476,18 +489,22 @@ impl<II: Iterator<Item = usize>> Blocks<IndexedInput, II> {
 impl<II: Iterator<Item = usize>> Iterator for Blocks<IndexedInput, II> {
     type Item = Block<IndexedInput>;
 
+    #[inline]
     fn next(&mut self) -> Option<Self::Item> {
         self.indexes.next().map(|i| Block::new(self.input.clone(), i))
     }
 
+    #[inline]
     fn size_hint(&self) -> (usize, Option<usize>) {
         self.indexes.size_hint()
     }
 
+    #[inline]
     fn count(self) -> usize {
         self.indexes.count()
     }
 
+    #[inline]
     fn nth(&mut self, n: usize) -> Option<Self::Item> {
         self.indexes.nth(n).map(|i| Block::new(self.input.clone(), i))
     }
@@ -502,6 +519,7 @@ pub struct Block<I> {
 }
 
 impl Block<IndexedInput> {
+    #[inline]
     pub fn new(input: Arc<IndexedInput>, index: usize) -> Self {
         Self {
             input,
@@ -510,6 +528,7 @@ impl Block<IndexedInput> {
         }
     }
 
+    #[inline]
     pub fn with_buf_pool(self, buf_pool: Arc<BufPool>) -> Self {
         Self {
             input: self.input,
@@ -518,22 +537,27 @@ impl Block<IndexedInput> {
         }
     }
 
+    #[inline]
     pub fn into_lines(self) -> Result<BlockLines<IndexedInput>> {
         BlockLines::new(self)
     }
 
+    #[inline]
     pub fn offset(&self) -> u64 {
         self.source_block().offset
     }
 
+    #[inline]
     pub fn size(&self) -> u32 {
         self.source_block().size
     }
 
+    #[inline]
     pub fn source_block(&self) -> &SourceBlock {
         &self.input.index.source().blocks[self.index]
     }
 
+    #[inline]
     pub fn lines_valid(&self) -> u64 {
         self.source_block().stat.lines_valid
     }
@@ -611,11 +635,13 @@ impl Iterator for BlockLines<IndexedInput> {
         Some(BlockLine::new(self.buf.clone(), offset..offset + l))
     }
 
+    #[inline]
     fn size_hint(&self) -> (usize, Option<usize>) {
         let count = self.total - self.current;
         (count, Some(count))
     }
 
+    #[inline]
     fn count(self) -> usize {
         self.size_hint().0
     }
@@ -629,18 +655,22 @@ pub struct BlockLine {
 }
 
 impl BlockLine {
+    #[inline]
     pub fn new(buf: Arc<Vec<u8>>, range: Range<usize>) -> Self {
         Self { buf, range }
     }
 
+    #[inline]
     pub fn bytes(&self) -> &[u8] {
         &self.buf[self.range.clone()]
     }
 
+    #[inline]
     pub fn offset(&self) -> usize {
         self.range.start
     }
 
+    #[inline]
     pub fn len(&self) -> usize {
         self.range.end - self.range.start
     }
@@ -654,6 +684,7 @@ pub struct ConcatReader<I> {
 }
 
 impl<I> ConcatReader<I> {
+    #[inline]
     pub fn new(iter: I) -> Self {
         Self { iter, item: None }
     }
@@ -705,6 +736,7 @@ impl<T: Read + Seek + Meta> ReadSeekMeta for T {}
 impl<T: Read + Meta> ReadMeta for T {}
 
 impl<T: Meta + ?Sized> Meta for Box<T> {
+    #[inline]
     fn metadata(&self) -> io::Result<Option<Metadata>> {
         self.as_ref().metadata()
     }
@@ -712,19 +744,31 @@ impl<T: Meta + ?Sized> Meta for Box<T> {
 
 pub struct StreamOver<T>(T);
 
+impl<T> Deref for StreamOver<T> {
+    type Target = T;
+
+    #[inline]
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
 impl<T: Read> Read for StreamOver<T> {
+    #[inline]
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         self.0.read(buf)
     }
 }
 
 impl<T: Seek> Seek for StreamOver<T> {
+    #[inline]
     fn seek(&mut self, pos: SeekFrom) -> io::Result<u64> {
         self.0.seek(pos)
     }
 }
 
 impl<T: Meta> Meta for StreamOver<T> {
+    #[inline]
     fn metadata(&self) -> io::Result<Option<Metadata>> {
         self.0.metadata()
     }
@@ -739,6 +783,7 @@ trait WithMeta {
 }
 
 impl<T> WithMeta for T {
+    #[inline]
     fn with_metadata(self, meta: Option<Metadata>) -> WithMetadata<Self> {
         WithMetadata::new(self, meta)
     }
