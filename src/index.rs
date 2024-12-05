@@ -260,6 +260,10 @@ impl Indexer {
         let index_path = self.dir.join(PathBuf::from(hash));
         let mut existing_index = None;
 
+        log::debug!("canonical source path: {}", source_path.display());
+        log::debug!("index file path:       {}", index_path.display());
+        log::debug!("source meta: size={} modified={:?}", meta.len(), ts(meta.modified()?));
+
         if Path::new(&index_path).exists() {
             let mut file = match File::open(&index_path) {
                 Ok(file) => file,
@@ -271,6 +275,11 @@ impl Indexer {
                 }
             };
             if let Ok(index) = Index::load(&mut file) {
+                log::debug!(
+                    "index stuff: size={} modified={:?}",
+                    index.source().size,
+                    index.source().modified
+                );
                 if meta.len() == index.source().size && ts(meta.modified()?) == index.source().modified {
                     return Ok(index);
                 }

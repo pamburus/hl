@@ -50,6 +50,7 @@ encstr = { path = "./crate/encstr" }
 enum-map = "2"
 enumset = "1"
 enumset-ext = { path = "./crate/enumset-ext" }
+env_logger = "0"
 flate2 = "1"
 heapless = "0"
 hex = "0"
@@ -57,6 +58,7 @@ htp = { git = "https://github.com/pamburus/htp.git" }
 humantime = "2"
 itertools = "0.13"
 itoa = { version = "1", default-features = false }
+log= "0"
 notify = { version = "7", features = ["macos_kqueue"] }
 nu-ansi-term = "0"
 num_cpus = "1"
