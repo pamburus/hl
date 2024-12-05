@@ -11,6 +11,7 @@ use std::{
 // third-party imports
 use chrono::Utc;
 use clap::{CommandFactory, Parser};
+use env_logger::fmt::TimestampPrecision;
 use itertools::Itertools;
 
 // local imports
@@ -37,6 +38,13 @@ fn run() -> Result<()> {
     let opt = cli::Opt::parse_from(wild::args());
     if opt.help {
         return cli::Opt::command().print_help().map_err(Error::Io);
+    }
+
+    if opt.debug {
+        env_logger::builder()
+            .format_timestamp(Some(TimestampPrecision::Micros))
+            .init();
+        log::debug!("logging initialized");
     }
 
     if let Some(shell) = opt.shell_completions {
@@ -257,6 +265,8 @@ fn run() -> Result<()> {
         inputs.push(InputReference::Stdin);
     }
 
+    let n = inputs.len();
+    log::debug!("hold {n} inputs");
     let inputs = inputs
         .into_iter()
         .map(|input| input.hold().map_err(Error::Io))
@@ -288,6 +298,8 @@ fn run() -> Result<()> {
             }
         }
     };
+
+    log::debug!("run the app");
 
     // Run the app.
     let run = || match app.run(inputs, output.as_mut()) {
