@@ -295,15 +295,19 @@ impl Stream {
             }
             Self::RandomAccess(mut stream) => {
                 if let Some(pos) = stream.seek(SeekFrom::Current(0)).ok() {
+                    log::debug!("detecting format of random access stream");
                     let meta = stream.metadata().ok().flatten();
                     let kind = AnyDecoder::new(BufReader::new(&mut stream)).kind().ok();
+                    log::debug!("format detected: {:?}", &kind);
                     stream.seek(SeekFrom::Start(pos)).ok();
                     match kind {
                         Some(Format::Verbatim) => {
                             return Self::RandomAccess(stream);
                         }
                         Some(_) => {
+                            log::debug!("creating decoder");
                             let dec = AnyDecoder::new(BufReader::new(stream));
+                            log::debug!("decoder created");
                             return Self::Sequential(Box::new(dec.with_metadata(meta)));
                         }
                         None => (),
@@ -452,10 +456,13 @@ impl IndexedInput {
     }
 
     fn from_sequential_stream(reference: InputReference, stream: SequentialStream, indexer: &Indexer) -> Result<Self> {
+        log::info!("indexing {}", reference.description());
         let meta = stream.metadata()?;
         let mut tee = TeeReader::new(stream, ReplayBufCreator::new());
         let index = indexer.index_stream(&mut tee, reference.path(), meta.clone())?;
+        log::debug!("loading into memory");
         std::io::copy(&mut tee, &mut io::sink())?;
+        log::debug!("done");
         let buf = tee.into_writer().result()?;
         Ok(Self::new(
             reference,
