@@ -17,7 +17,7 @@ use crate::error::Result;
 use crate::index::{Index, Indexer, SourceBlock};
 use crate::iox::ReadFill;
 use crate::pool::SQPool;
-use crate::replay::{ReplayBufCreator, ReplayBufReader};
+use crate::replay::{ReplayBufCreator, ReplayBufReader, ReplaySeekReader};
 use crate::tee::TeeReader;
 
 // ---
@@ -460,15 +460,13 @@ impl IndexedInput {
         let meta = stream.metadata()?;
         let mut tee = TeeReader::new(stream, ReplayBufCreator::new());
         let index = indexer.index_stream(&mut tee, reference.path(), meta.clone())?;
-        log::debug!("loading into memory");
-        std::io::copy(&mut tee, &mut io::sink())?;
-        log::debug!("done");
-        let buf = tee.into_writer().result()?;
-        Ok(Self::new(
-            reference,
-            Box::new(ReplayBufReader::new(buf).with_metadata(meta)),
-            index,
-        ))
+        let stream: RandomAccessStream = if tee.processed() == 0 {
+            Box::new(ReplaySeekReader::new(tee.into_reader()).with_metadata(meta))
+        } else {
+            let buf = tee.into_writer().result()?;
+            Box::new(ReplayBufReader::new(buf).with_metadata(meta))
+        };
+        Ok(Self::new(reference, stream, index))
     }
 }
 
