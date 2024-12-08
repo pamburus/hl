@@ -279,30 +279,12 @@ impl<FS: FileSystem + Sync> Indexer<FS> {
     ///
     /// Builds the index, saves it to disk and returns it.
     pub fn index(&self, source_path: &PathBuf) -> Result<Index> {
-        let source_path = self.fs.canonicalize(source_path)?;
-        let meta = source_path.metadata()?;
-        let hash = hex::encode(sha256(source_path.to_string_lossy().as_bytes()));
-        let index_path = self.dir.join(PathBuf::from(hash));
-        let mut existing_index = None;
-        if self.fs.exists(&index_path)? {
-            let mut file = match self.fs.open(&index_path) {
-                Ok(file) => file,
-                Err(err) => {
-                    return Err(Error::FailedToOpenFileForReading {
-                        path: index_path.clone(),
-                        source: err,
-                    });
-                }
-            };
-            if let Ok(index) = Index::load(&mut file) {
-                if meta.len() == index.source().size && ts(meta.modified()?) == index.source().modified {
-                    return Ok(index);
-                }
-                existing_index = Some(index)
-            }
+        let (source_path, _, index_path, index, actual) = self.prepare(source_path, None)?;
+        if actual {
+            return Ok(index.unwrap());
         }
 
-        self.build_index(&source_path, &index_path, existing_index)
+        self.build_index(&source_path, &index_path, index)
     }
 
     /// Builds index for the given file represended by a stream.
@@ -318,6 +300,33 @@ impl<FS: FileSystem + Sync> Indexer<FS> {
             return self.index_in_memory(stream);
         };
 
+        let (source_path, meta, index_path, index, actual) = self.prepare(source_path, meta)?;
+        if actual {
+            return Ok(index.unwrap());
+        }
+
+        self.build_index_from_stream(stream, &source_path, &index_path, meta, index)
+    }
+
+    /// Builds an in-memory index for the given stream.
+    pub fn index_in_memory(&self, input: &mut Reader) -> Result<Index> {
+        self.process_file(
+            &PathBuf::from("<none>"),
+            Metadata {
+                len: 0,
+                modified: (0, 0),
+            },
+            input,
+            &mut io::sink(),
+            None,
+        )
+    }
+
+    fn prepare(
+        &self,
+        source_path: &PathBuf,
+        meta: Option<fs::Metadata>,
+    ) -> Result<(PathBuf, fs::Metadata, PathBuf, Option<Index>, bool)> {
         let source_path = self.fs.canonicalize(source_path)?;
         let meta = match meta {
             Some(meta) => meta,
@@ -326,6 +335,7 @@ impl<FS: FileSystem + Sync> Indexer<FS> {
         let hash = hex::encode(sha256(source_path.to_string_lossy().as_bytes()));
         let index_path = self.dir.join(PathBuf::from(hash));
         let mut existing_index = None;
+        let mut actual = false;
 
         log::debug!("canonical source path: {}", source_path.display());
         log::debug!("index file path:       {}", index_path.display());
@@ -348,27 +358,12 @@ impl<FS: FileSystem + Sync> Indexer<FS> {
                     index.source().modified
                 );
                 if meta.len() == index.source().size && ts(meta.modified()?) == index.source().modified {
-                    return Ok(index);
+                    actual = true;
                 }
-                existing_index = Some(index)
+                existing_index = Some(index);
             }
         }
-
-        self.build_index_from_stream(stream, &source_path, &index_path, meta, existing_index)
-    }
-
-    /// Builds an in-memory index for the given stream.
-    pub fn index_in_memory(&self, input: &mut Reader) -> Result<Index> {
-        self.process_file(
-            &PathBuf::from("<none>"),
-            Metadata {
-                len: 0,
-                modified: (0, 0),
-            },
-            input,
-            &mut io::sink(),
-            None,
-        )
+        Ok((source_path, meta, index_path, existing_index, actual))
     }
 
     fn build_index(&self, source_path: &PathBuf, index_path: &PathBuf, existing_index: Option<Index>) -> Result<Index> {
@@ -382,7 +377,7 @@ impl<FS: FileSystem + Sync> Indexer<FS> {
             }
         };
 
-        let metadata = match self.fs.metadata(&source_path) {
+        let meta = match self.fs.metadata(&source_path) {
             Ok(metadata) => metadata,
             Err(err) => {
                 return Err(Error::FailedToGetFileMetadata {
@@ -392,7 +387,7 @@ impl<FS: FileSystem + Sync> Indexer<FS> {
             }
         };
 
-        self.build_index_from_stream(&mut input, source_path, index_path, metadata, existing_index)
+        self.build_index_from_stream(&mut input, source_path, index_path, meta, existing_index)
     }
 
     fn build_index_from_stream(
