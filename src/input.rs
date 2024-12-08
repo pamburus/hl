@@ -1,12 +1,14 @@
 // std imports
-use std::cmp::min;
-use std::convert::TryInto;
-use std::fs::{File, Metadata};
-use std::io::{self, stdin, BufRead, BufReader, Cursor, Read, Seek, SeekFrom};
-use std::mem::size_of_val;
-use std::ops::{Deref, Range};
-use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
+use std::{
+    cmp::min,
+    convert::TryInto,
+    fs::{File, Metadata},
+    io::{self, stdin, BufRead, BufReader, Cursor, Read, Seek, SeekFrom},
+    mem::size_of_val,
+    ops::{Deref, Range},
+    path::PathBuf,
+    sync::{Arc, Mutex},
+};
 
 // third-party imports
 use deko::{bufread::AnyDecoder, Format};
@@ -29,16 +31,10 @@ pub type BufPool = SQPool<Vec<u8>>;
 // ---
 
 /// A reference to an input file or stdin.
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub enum InputReference {
     Stdin,
     File(PathBuf),
-}
-
-impl Into<io::Result<InputHolder>> for InputReference {
-    fn into(self) -> io::Result<InputHolder> {
-        self.hold()
-    }
 }
 
 impl InputReference {
@@ -230,15 +226,12 @@ impl Input {
         const BUF_SIZE: usize = 64 * 1024;
         let mut scratch = [0; BUF_SIZE];
         let mut count: u64 = 0;
-        let mut prev_pos = stream.seek(SeekFrom::End(0))?;
-        let mut pos = prev_pos;
-        while pos > 0 {
-            pos -= min(BUF_SIZE as u64, pos);
+        let mut pos = stream.seek(SeekFrom::End(0))?;
+        while pos != 0 {
+            let n = min(BUF_SIZE as u64, pos);
+            pos -= n;
             pos = stream.seek(SeekFrom::Start(pos))?;
-            if pos == prev_pos {
-                break;
-            }
-            let bn = min(BUF_SIZE, (prev_pos - pos) as usize);
+            let bn = n as usize;
             let buf = scratch[..bn].as_mut();
 
             stream.read_exact(buf)?;
@@ -252,8 +245,6 @@ impl Input {
                     count += 1;
                 }
             }
-
-            prev_pos = pos;
         }
         stream.seek(SeekFrom::Start(pos as u64))?;
         Ok(())
@@ -349,6 +340,16 @@ impl Read for Stream {
         match self {
             Self::Sequential(stream) => stream.read(buf),
             Self::RandomAccess(stream) => stream.read(buf),
+        }
+    }
+}
+
+impl Meta for Stream {
+    #[inline]
+    fn metadata(&self) -> io::Result<Option<Metadata>> {
+        match self {
+            Self::Sequential(stream) => stream.metadata(),
+            Self::RandomAccess(stream) => stream.metadata(),
         }
     }
 }
@@ -829,9 +830,122 @@ impl<T> Meta for WithMetadata<T> {
 
 #[cfg(test)]
 mod tests {
+    use itertools::Itertools;
+
+    use crate::index::IndexerSettings;
+
     use super::*;
     use std::io::ErrorKind;
     use std::io::Read;
+
+    #[test]
+    fn test_input_reference() {
+        let reference = InputReference::Stdin;
+        assert_eq!(reference.description(), "<stdin>");
+        assert_eq!(reference.path(), None);
+        let input = reference.open().unwrap();
+        assert_eq!(input.reference, reference);
+        let reference = InputReference::File(PathBuf::from("test.log"));
+        assert_eq!(reference.description(), "file '\u{1b}[33mtest.log\u{1b}[0m'");
+        assert_eq!(reference.path(), Some(&PathBuf::from("test.log")));
+    }
+
+    #[test]
+    fn test_input_holder() {
+        let reference = InputReference::File(PathBuf::from("sample/test.log"));
+        let holder = InputHolder::new(reference, None);
+        let mut stream = holder.stream().unwrap();
+        let mut buf = Vec::new();
+        let n = stream.read_to_end(&mut buf).unwrap();
+        assert!(matches!(stream, Stream::RandomAccess(_)));
+        let stream = stream.as_sequential();
+        let meta = stream.metadata().unwrap();
+        assert_eq!(meta.is_some(), true);
+        assert_eq!(n, 70);
+        assert_eq!(
+            buf,
+            br#"{"ts":"2024-10-01T01:02:03Z","level":"info","msg":"some test message"}"#
+        );
+    }
+
+    #[test]
+    fn test_input() {
+        let input = Input::stdin().unwrap();
+        assert!(matches!(input.stream, Stream::Sequential(_)));
+        assert_eq!(input.reference.description(), "<stdin>");
+        let input = Input::open(&PathBuf::from("sample/prometheus.log")).unwrap();
+        assert!(matches!(input.stream, Stream::RandomAccess(_)));
+        assert_eq!(
+            input.reference.description(),
+            "file '\u{1b}[33msample/prometheus.log\u{1b}[0m'"
+        );
+    }
+
+    #[test]
+    fn test_input_tail() {
+        let input = Input::stdin().unwrap().tail(1).unwrap();
+        assert!(matches!(input.stream, Stream::Sequential(_)));
+
+        for &(filename, requested, expected) in &[
+            ("sample/test.log", 1, 1),
+            ("sample/test.log", 2, 1),
+            ("sample/prometheus.log", 2, 2),
+        ] {
+            let input = Input::open(&PathBuf::from(filename)).unwrap().tail(requested).unwrap();
+            let mut buf = Vec::new();
+            let n = input.stream.into_sequential().read_to_end(&mut buf).unwrap();
+            assert!(n > 0);
+            assert_eq!(buf.lines().count(), expected);
+        }
+    }
+
+    #[test]
+    fn test_stream() {
+        let stream = Stream::Sequential(Box::new(Cursor::new(b"test")));
+        let stream = stream.verified().decoded().tagged(InputReference::Stdin);
+        assert!(matches!(stream, Stream::Sequential(_)));
+        let mut buf = Vec::new();
+        let n = stream.into_sequential().read_to_end(&mut buf).unwrap();
+        assert_eq!(n, 4);
+        assert_eq!(buf, b"test");
+
+        let stream = Stream::RandomAccess(Box::new(UnseekableReader(Cursor::new(b"test"))));
+        let stream = stream.tagged(InputReference::Stdin).verified();
+        assert!(matches!(stream, Stream::Sequential(_)));
+        let mut buf = Vec::new();
+        let n = stream.into_sequential().read_to_end(&mut buf).unwrap();
+        assert_eq!(n, 4);
+        assert_eq!(buf, b"test");
+
+        let stream = Stream::RandomAccess(Box::new(UnseekableReader(Cursor::new(b"test"))));
+        assert!(matches!(stream.metadata(), Ok(None)));
+        let stream = stream.tagged(InputReference::Stdin).decoded();
+        assert!(matches!(stream, Stream::Sequential(_)));
+        assert!(matches!(stream.metadata(), Ok(None)));
+        let mut buf = Vec::new();
+        let n = stream.into_sequential().read_to_end(&mut buf).unwrap();
+        assert_eq!(n, 4);
+        assert_eq!(buf, b"test");
+
+        // echo 't' | gzip -cf | xxd -p | sed 's/\(..\)/\\x\1/g'
+        let data = b"\x1f\x8b\x08\x00\x03\x87\x55\x67\x00\x03\x2b\xe1\x02\x00\x13\x47\x5f\xea\x02\x00\x00\x00";
+        let stream = Stream::RandomAccess(Box::new(Cursor::new(data).with_metadata(None)));
+        let stream = stream.tagged(InputReference::Stdin).decoded();
+        assert!(matches!(stream, Stream::Sequential(_)));
+        let mut buf = Vec::new();
+        let n = stream.into_sequential().read_to_end(&mut buf).unwrap();
+        assert_eq!(n, 2);
+        assert_eq!(buf, b"t\n");
+
+        let stream = Stream::RandomAccess(Box::new(FailingReader));
+        let stream = stream.tagged(InputReference::Stdin).decoded();
+        assert!(matches!(stream, Stream::Sequential(_)));
+        let mut buf = [0; 128];
+        let result = stream.into_sequential().read(&mut buf);
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert_eq!(err.kind(), ErrorKind::Other);
+    }
 
     #[test]
     fn test_input_read_error() {
@@ -881,6 +995,23 @@ mod tests {
         assert_eq!(buf, b"test\n");
     }
 
+    #[test]
+    fn test_indexed_input() {
+        let data = br#"{"ts":"2024-10-01T01:02:03Z","level":"info","msg":"some test message"}\n"#;
+        let stream = Stream::RandomAccess(Box::new(Cursor::new(data)));
+        let indexer = Indexer::new(1, PathBuf::new(), IndexerSettings::default());
+        let input = IndexedInput::from_stream(InputReference::Stdin, stream, &indexer).unwrap();
+        let mut blocks = input.into_blocks().collect_vec();
+        assert_eq!(blocks.len(), 1);
+        let block = blocks.drain(..).next().unwrap();
+        assert_eq!(block.lines_valid(), 1);
+        let mut lines = block.into_lines().unwrap().collect_vec();
+        let line = lines.drain(..).next().unwrap();
+        assert_eq!(line.bytes(), data);
+    }
+
+    // ---
+
     struct FailingReader;
 
     impl Read for FailingReader {
@@ -889,7 +1020,40 @@ mod tests {
         }
     }
 
+    impl Seek for FailingReader {
+        fn seek(&mut self, from: SeekFrom) -> std::io::Result<u64> {
+            match from {
+                SeekFrom::Start(0) => Ok(0),
+                SeekFrom::Current(0) => Ok(0),
+                SeekFrom::End(0) => Ok(0),
+                _ => Err(std::io::Error::new(std::io::ErrorKind::Other, "seek error")),
+            }
+        }
+    }
+
     impl Meta for FailingReader {
+        fn metadata(&self) -> std::io::Result<Option<std::fs::Metadata>> {
+            Ok(None)
+        }
+    }
+
+    // ---
+
+    struct UnseekableReader<R>(R);
+
+    impl<R: Read> Read for UnseekableReader<R> {
+        fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+            self.0.read(buf)
+        }
+    }
+
+    impl<R> Seek for UnseekableReader<R> {
+        fn seek(&mut self, _: SeekFrom) -> std::io::Result<u64> {
+            Err(std::io::Error::new(std::io::ErrorKind::Other, "seek error"))
+        }
+    }
+
+    impl<R> Meta for UnseekableReader<R> {
         fn metadata(&self) -> std::io::Result<Option<std::fs::Metadata>> {
             Ok(None)
         }

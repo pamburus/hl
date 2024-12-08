@@ -12,12 +12,12 @@
 // std imports
 use std::{
     cmp::{max, min},
-    convert::{TryFrom, TryInto},
+    convert::{Into, TryFrom, TryInto},
     fmt::{self, Display},
     fs::File,
     io::{Read, Write},
     iter::empty,
-    num::NonZeroU32,
+    num::{NonZero, NonZeroU32},
     path::{Path, PathBuf},
     sync::Arc,
     time::{SystemTime, UNIX_EPOCH},
@@ -29,7 +29,9 @@ use closure::closure;
 use crossbeam_channel as channel;
 use crossbeam_channel::RecvError;
 use crossbeam_utils::thread;
+use derive_more::{Deref, From};
 use itertools::izip;
+use nonzero_ext::nonzero;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
@@ -125,9 +127,10 @@ impl std::ops::Sub for Timestamp {
 
 // ---
 
+#[derive(Default)]
 pub struct IndexerSettings<'a> {
-    buffer_size: NonZeroU32,
-    max_message_size: NonZeroU32,
+    buffer_size: BufferSize,
+    max_message_size: MessageSize,
     fields: &'a PredefinedFields,
     delimiter: Delimiter,
     allow_prefix: bool,
@@ -137,8 +140,8 @@ pub struct IndexerSettings<'a> {
 
 impl<'a> IndexerSettings<'a> {
     pub fn new(
-        buffer_size: NonZeroU32,
-        max_message_size: NonZeroU32,
+        buffer_size: BufferSize,
+        max_message_size: MessageSize,
         fields: &'a PredefinedFields,
         delimiter: Delimiter,
         allow_prefix: bool,
@@ -171,6 +174,64 @@ impl<'a> IndexerSettings<'a> {
             ),
         )?;
         Ok(hasher.finalize().into())
+    }
+}
+
+#[derive(Deref, From, Serialize, Deserialize)]
+pub struct BufferSize(NonZeroU32);
+
+impl Default for BufferSize {
+    fn default() -> Self {
+        Self(nonzero!(4 * 1024u32))
+    }
+}
+
+impl TryFrom<NonZero<usize>> for BufferSize {
+    type Error = std::num::TryFromIntError;
+
+    fn try_from(value: NonZero<usize>) -> std::result::Result<Self, Self::Error> {
+        Ok(Self(value.try_into()?))
+    }
+}
+
+impl From<BufferSize> for NonZeroU32 {
+    fn from(value: BufferSize) -> NonZeroU32 {
+        value.0.into()
+    }
+}
+
+impl From<BufferSize> for u32 {
+    fn from(value: BufferSize) -> u32 {
+        value.0.into()
+    }
+}
+
+#[derive(Deref, From, Serialize, Deserialize)]
+pub struct MessageSize(NonZeroU32);
+
+impl Default for MessageSize {
+    fn default() -> Self {
+        Self(nonzero!(64 * 1024u32))
+    }
+}
+
+impl TryFrom<NonZero<usize>> for MessageSize {
+    type Error = std::num::TryFromIntError;
+
+    fn try_from(value: NonZero<usize>) -> std::result::Result<Self, Self::Error> {
+        Ok(Self(value.try_into()?))
+    }
+}
+
+impl From<MessageSize> for NonZeroU32 {
+    fn from(value: MessageSize) -> NonZeroU32 {
+        value.0.into()
+    }
+}
+
+impl From<MessageSize> for u32 {
+    fn from(value: MessageSize) -> u32 {
+        value.0.into()
     }
 }
 
@@ -290,9 +351,7 @@ impl Indexer {
         self.build_index_from_stream(stream, &source_path, &index_path, meta, existing_index)
     }
 
-    /// Builds index for the given stream.
-    ///
-    /// Builds the index and returns it.
+    /// Builds an in-memory index for the given stream.
     pub fn index_in_memory(&self, input: &mut Reader) -> Result<Index> {
         self.process_file(
             &PathBuf::from("<none>"),
@@ -1092,8 +1151,8 @@ mod tests {
             1,
             PathBuf::from("/tmp/cache"),
             IndexerSettings::new(
-                NonZeroU32::new(1024).unwrap(),
-                NonZeroU32::new(1024).unwrap(),
+                BufferSize::from(nonzero!(1024u32)),
+                MessageSize::from(nonzero!(1024u32)),
                 &PredefinedFields::default(),
                 Delimiter::default(),
                 false,
@@ -1154,8 +1213,8 @@ mod tests {
             1,
             PathBuf::from("/tmp/cache"),
             IndexerSettings::new(
-                NonZeroU32::new(1024).unwrap(),
-                NonZeroU32::new(1024).unwrap(),
+                BufferSize::from(nonzero!(1024u32)),
+                MessageSize::from(nonzero!(1024u32)),
                 &PredefinedFields::default(),
                 Delimiter::default(),
                 false,
