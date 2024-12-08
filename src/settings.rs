@@ -5,7 +5,7 @@ use std::include_str;
 // third-party imports
 use chrono_tz::Tz;
 use config::{Config, File, FileFormat};
-use derive_deref::Deref;
+use derive_more::Deref;
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize, Serializer};
 use strum::IntoEnumIterator;
@@ -111,6 +111,13 @@ pub struct PredefinedFields {
     pub caller: CallerField,
     pub caller_file: CallerFileField,
     pub caller_line: CallerLineField,
+}
+
+impl Default for &PredefinedFields {
+    fn default() -> Self {
+        static DEFAULT: Lazy<PredefinedFields> = Lazy::new(|| PredefinedFields::default());
+        &DEFAULT
+    }
 }
 
 // ---
