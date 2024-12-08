@@ -10,15 +10,17 @@
 //
 
 // std imports
+#[cfg(test)]
+use mockall::{automock, predicate::*};
 use std::{
     cmp::{max, min},
     convert::{Into, TryFrom, TryInto},
     fmt::{self, Display},
-    fs::File,
-    io::{Read, Write},
+    fs::{self, File},
+    io::{self, Read, Seek, Write},
     iter::empty,
     num::{NonZero, NonZeroU32},
-    path::{Path, PathBuf},
+    path::PathBuf,
     sync::Arc,
     time::{SystemTime, UNIX_EPOCH},
 };
@@ -128,7 +130,8 @@ impl std::ops::Sub for Timestamp {
 // ---
 
 #[derive(Default)]
-pub struct IndexerSettings<'a> {
+pub struct IndexerSettings<'a, FS: FileSystem> {
+    fs: FS,
     buffer_size: BufferSize,
     max_message_size: MessageSize,
     fields: &'a PredefinedFields,
@@ -138,7 +141,7 @@ pub struct IndexerSettings<'a> {
     format: Option<InputFormat>,
 }
 
-impl<'a> IndexerSettings<'a> {
+impl<'a, FS: FileSystem + Default> IndexerSettings<'a, FS> {
     pub fn new(
         buffer_size: BufferSize,
         max_message_size: MessageSize,
@@ -149,6 +152,7 @@ impl<'a> IndexerSettings<'a> {
         format: Option<InputFormat>,
     ) -> Self {
         Self {
+            fs: FS::default(),
             buffer_size,
             max_message_size,
             fields,
@@ -238,7 +242,8 @@ impl From<MessageSize> for u32 {
 // ---
 
 /// Allows log files indexing to enable message sorting.
-pub struct Indexer {
+pub struct Indexer<FS = RealFileSystem> {
+    fs: FS,
     concurrency: usize,
     buffer_size: u32,
     max_message_size: u32,
@@ -249,10 +254,11 @@ pub struct Indexer {
     format: Option<InputFormat>,
 }
 
-impl Indexer {
+impl<FS: FileSystem + Sync> Indexer<FS> {
     /// Returns a new Indexer with the given parameters.
-    pub fn new(concurrency: usize, dir: PathBuf, settings: IndexerSettings<'_>) -> Self {
+    pub fn new(concurrency: usize, dir: PathBuf, settings: IndexerSettings<'_, FS>) -> Self {
         Self {
+            fs: settings.fs,
             concurrency,
             buffer_size: settings.buffer_size.into(),
             max_message_size: settings.max_message_size.into(),
@@ -273,13 +279,13 @@ impl Indexer {
     ///
     /// Builds the index, saves it to disk and returns it.
     pub fn index(&self, source_path: &PathBuf) -> Result<Index> {
-        let source_path = std::fs::canonicalize(source_path)?;
+        let source_path = self.fs.canonicalize(source_path)?;
         let meta = source_path.metadata()?;
         let hash = hex::encode(sha256(source_path.to_string_lossy().as_bytes()));
         let index_path = self.dir.join(PathBuf::from(hash));
         let mut existing_index = None;
-        if Path::new(&index_path).exists() {
-            let mut file = match File::open(&index_path) {
+        if self.fs.exists(&index_path)? {
+            let mut file = match self.fs.open(&index_path) {
                 Ok(file) => file,
                 Err(err) => {
                     return Err(Error::FailedToOpenFileForReading {
@@ -306,16 +312,16 @@ impl Indexer {
         &self,
         stream: &mut Reader,
         source_path: Option<&PathBuf>,
-        meta: Option<std::fs::Metadata>,
+        meta: Option<fs::Metadata>,
     ) -> Result<Index> {
         let Some(source_path) = source_path else {
             return self.index_in_memory(stream);
         };
 
-        let source_path = std::fs::canonicalize(source_path)?;
+        let source_path = self.fs.canonicalize(source_path)?;
         let meta = match meta {
             Some(meta) => meta,
-            None => source_path.metadata()?,
+            None => self.fs.metadata(&source_path)?,
         };
         let hash = hex::encode(sha256(source_path.to_string_lossy().as_bytes()));
         let index_path = self.dir.join(PathBuf::from(hash));
@@ -325,8 +331,8 @@ impl Indexer {
         log::debug!("index file path:       {}", index_path.display());
         log::debug!("source meta: size={} modified={:?}", meta.len(), ts(meta.modified()?));
 
-        if Path::new(&index_path).exists() {
-            let mut file = match File::open(&index_path) {
+        if self.fs.exists(&index_path)? {
+            let mut file = match self.fs.open(&index_path) {
                 Ok(file) => file,
                 Err(err) => {
                     return Err(Error::FailedToOpenFileForReading {
@@ -360,13 +366,13 @@ impl Indexer {
                 modified: (0, 0),
             },
             input,
-            &mut std::io::sink(),
+            &mut io::sink(),
             None,
         )
     }
 
     fn build_index(&self, source_path: &PathBuf, index_path: &PathBuf, existing_index: Option<Index>) -> Result<Index> {
-        let mut input = match File::open(&source_path) {
+        let mut input = match self.fs.open(&source_path) {
             Ok(input) => input,
             Err(err) => {
                 return Err(Error::FailedToOpenFileForReading {
@@ -376,7 +382,7 @@ impl Indexer {
             }
         };
 
-        let metadata = match std::fs::metadata(&source_path) {
+        let metadata = match self.fs.metadata(&source_path) {
             Ok(metadata) => metadata,
             Err(err) => {
                 return Err(Error::FailedToGetFileMetadata {
@@ -394,10 +400,10 @@ impl Indexer {
         stream: &mut Reader,
         source_path: &PathBuf,
         index_path: &PathBuf,
-        metadata: std::fs::Metadata,
+        metadata: fs::Metadata,
         existing_index: Option<Index>,
     ) -> Result<Index> {
-        let mut output = match File::create(&index_path) {
+        let mut output = match self.fs.create(&index_path) {
             Ok(output) => output,
             Err(err) => {
                 return Err(Error::FailedToOpenFileForWriting {
@@ -626,6 +632,50 @@ impl Indexer {
                 }
             })
         })
+    }
+}
+
+// ---
+
+pub trait ReadSeek: Read + Seek {}
+
+impl<T: Read + Seek> ReadSeek for T {}
+
+// ---
+
+#[cfg_attr(test, automock)]
+pub trait FileSystem {
+    fn canonicalize(&self, path: &PathBuf) -> io::Result<PathBuf>;
+    fn metadata(&self, path: &PathBuf) -> io::Result<fs::Metadata>;
+    fn exists(&self, path: &PathBuf) -> io::Result<bool>;
+    fn open(&self, path: &PathBuf) -> io::Result<Box<dyn ReadSeek + Send + Sync>>;
+    fn create(&self, path: &PathBuf) -> io::Result<Box<dyn Write + Send + Sync>>;
+}
+
+// ---
+
+#[derive(Default)]
+pub struct RealFileSystem;
+
+impl FileSystem for RealFileSystem {
+    fn canonicalize(&self, path: &PathBuf) -> io::Result<PathBuf> {
+        fs::canonicalize(path)
+    }
+
+    fn metadata(&self, path: &PathBuf) -> io::Result<fs::Metadata> {
+        fs::metadata(path)
+    }
+
+    fn exists(&self, path: &PathBuf) -> io::Result<bool> {
+        fs::exists(path)
+    }
+
+    fn open(&self, path: &PathBuf) -> io::Result<Box<dyn ReadSeek + Send + Sync>> {
+        Ok(Box::new(File::open(path)?))
+    }
+
+    fn create(&self, path: &PathBuf) -> io::Result<Box<dyn Write + Send + Sync>> {
+        Ok(Box::new(File::create(path)?))
     }
 }
 
@@ -1042,10 +1092,10 @@ struct Metadata {
     modified: (i64, u32),
 }
 
-impl TryFrom<&std::fs::Metadata> for Metadata {
-    type Error = std::io::Error;
+impl TryFrom<&fs::Metadata> for Metadata {
+    type Error = io::Error;
 
-    fn try_from(value: &std::fs::Metadata) -> std::io::Result<Self> {
+    fn try_from(value: &fs::Metadata) -> io::Result<Self> {
         Ok(Self {
             len: value.len(),
             modified: ts(value.modified()?),
@@ -1146,19 +1196,16 @@ mod tests {
 
     #[test]
     fn test_process_file_success() {
-        use std::io::Cursor;
+        use io::Cursor;
         let indexer = Indexer::new(
             1,
             PathBuf::from("/tmp/cache"),
-            IndexerSettings::new(
-                BufferSize::from(nonzero!(1024u32)),
-                MessageSize::from(nonzero!(1024u32)),
-                &PredefinedFields::default(),
-                Delimiter::default(),
-                false,
-                None,
-                None,
-            ),
+            IndexerSettings {
+                fs: MockFileSystem::new(),
+                buffer_size: nonzero!(1024u32).into(),
+                max_message_size: nonzero!(1024u32).into(),
+                ..Default::default()
+            },
         );
         let data = concat!(
             "ts=2023-12-04T10:01:07.091243+01:00 msg=msg1\n",
@@ -1208,19 +1255,17 @@ mod tests {
 
     #[test]
     fn test_process_file_error() {
-        use std::io::Cursor;
+        use io::Cursor;
+        let fs = MockFileSystem::new();
         let indexer = Indexer::new(
             1,
             PathBuf::from("/tmp/cache"),
-            IndexerSettings::new(
-                BufferSize::from(nonzero!(1024u32)),
-                MessageSize::from(nonzero!(1024u32)),
-                &PredefinedFields::default(),
-                Delimiter::default(),
-                false,
-                None,
-                None,
-            ),
+            IndexerSettings {
+                fs,
+                buffer_size: nonzero!(1024u32).into(),
+                max_message_size: nonzero!(1024u32).into(),
+                ..Default::default()
+            },
         );
         let mut input = FailingReader;
         let mut output = Cursor::new(Vec::new());
@@ -1238,11 +1283,13 @@ mod tests {
         assert_eq!(output.into_inner().len(), 0);
     }
 
+    // ---
+
     struct FailingReader;
 
     impl Read for FailingReader {
-        fn read(&mut self, _: &mut [u8]) -> std::io::Result<usize> {
-            Err(std::io::Error::new(std::io::ErrorKind::Other, "read error"))
+        fn read(&mut self, _: &mut [u8]) -> io::Result<usize> {
+            Err(io::Error::new(io::ErrorKind::Other, "read error"))
         }
     }
 }
