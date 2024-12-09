@@ -30,40 +30,76 @@ pub type BufPool = SQPool<Vec<u8>>;
 
 // ---
 
+/// The path to an input file.
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct Path {
+    pub original: PathBuf,
+    pub canonical: PathBuf,
+}
+
+impl Path {
+    pub fn new(original: PathBuf) -> io::Result<Self> {
+        let canonical = std::fs::canonicalize(&original).map_err(|e| {
+            io::Error::new(
+                e.kind(),
+                format!(
+                    "failed to resolve canonical path for {}: {}",
+                    original.to_string_lossy(),
+                    e
+                ),
+            )
+        })?;
+
+        Ok(Self { original, canonical })
+    }
+}
+
+impl TryFrom<PathBuf> for Path {
+    type Error = io::Error;
+
+    fn try_from(original: PathBuf) -> io::Result<Self> {
+        Self::new(original)
+    }
+}
+
+// ---
+
 /// A reference to an input file or stdin.
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub enum InputReference {
     Stdin,
-    File(PathBuf),
+    File(Path),
 }
 
 impl InputReference {
     /// Preliminarily opens the input file to ensure it exists and is readable
     /// and protect it from being suddenly deleted while we need it.
     pub fn hold(&self) -> io::Result<InputHolder> {
-        Ok(InputHolder::new(
-            self.clone(),
-            match self {
-                InputReference::Stdin => None,
-                InputReference::File(path) => {
-                    let meta = std::fs::metadata(path).map_err(|e| {
-                        io::Error::new(
-                            e.kind(),
-                            format!("failed to get information on {}: {}", self.description(), e),
-                        )
-                    })?;
-                    if meta.is_dir() {
-                        return Err(io::Error::new(
-                            io::ErrorKind::InvalidInput,
-                            format!("{} is a directory", self.description()),
-                        ));
-                    }
-                    Some(Box::new(File::open(path).map_err(|e| {
-                        io::Error::new(e.kind(), format!("failed to open {}: {}", self.description(), e))
-                    })?))
+        let (reference, stream): (_, Option<Box<dyn ReadSeekMeta + Send + Sync>>) = match self {
+            Self::Stdin => (self.clone(), None),
+            Self::File(path) => {
+                let meta = std::fs::metadata(&path.canonical).map_err(|e| {
+                    io::Error::new(
+                        e.kind(),
+                        format!("failed to get information on {}: {}", self.description(), e),
+                    )
+                })?;
+                if meta.is_dir() {
+                    return Err(io::Error::new(
+                        io::ErrorKind::InvalidInput,
+                        format!("{} is a directory", self.description()),
+                    ));
                 }
-            },
-        ))
+                let stream =
+                    Box::new(File::open(&path.canonical).map_err(|e| {
+                        io::Error::new(e.kind(), format!("failed to open {}: {}", self.description(), e))
+                    })?);
+
+                (InputReference::File(path.clone()), Some(stream))
+            }
+        };
+
+        Ok(InputHolder::new(reference, stream))
     }
 
     /// Completely opens the input for reading.
