@@ -499,8 +499,8 @@ impl App {
                 let reader = scope.spawn(closure!(clone sfi, clone txi, |_| -> Result<()> {
                     let scanner = Scanner::new(sfi.clone(), &self.options.delimiter);
                     let mut meta = None;
-                    if let InputReference::File(filename) = &input_ref {
-                        meta = Some(fs::metadata(filename)?);
+                    if let InputReference::File(path) = &input_ref {
+                        meta = Some(fs::metadata(&path.canonical)?);
                     }
                     let mut input = Some(input_ref.open()?.tail(self.options.tail)?);
                     let is_file = |meta: &Option<fs::Metadata>| meta.as_ref().map(|m|m.is_file()).unwrap_or(false);
@@ -516,14 +516,14 @@ impl App {
                             Ok(false)
                         }
                     };
-                    if let InputReference::File(filename) = &input_ref {
+                    if let InputReference::File(path) = &input_ref {
                         if process(&mut input, is_file(&meta))? {
                             return Ok(())
                         }
-                        fsmon::run(vec![filename.clone()], |event| {
+                        fsmon::run(vec![path.canonical.clone()], |event| {
                             match event.kind {
                                 EventKind::Modify(_) | EventKind::Create(_) | EventKind::Any | EventKind::Other => {
-                                    if let (Some(old_meta), Ok(new_meta)) = (&meta, fs::metadata(&filename)) {
+                                    if let (Some(old_meta), Ok(new_meta)) = (&meta, fs::metadata(&path.canonical)) {
                                         if old_meta.len() > new_meta.len() {
                                             input = None;
                                         }
@@ -691,7 +691,7 @@ impl App {
     fn input_badges<'a, I: IntoIterator<Item = &'a InputReference>>(&self, inputs: I) -> Option<Vec<String>> {
         let name = |input: &InputReference| match input {
             InputReference::Stdin => "<stdin>".to_owned(),
-            InputReference::File(path) => path.to_string_lossy().to_string(),
+            InputReference::File(path) => path.original.to_string_lossy().to_string(),
         };
 
         let mut badges = inputs.into_iter().map(|x| name(x).chars().collect_vec()).collect_vec();

@@ -245,18 +245,18 @@ fn run() -> Result<()> {
         flatten: opt.flatten != cli::FlattenOption::Never,
     });
 
-    // Configure input.
+    // Configure the input.
     let mut inputs = opt
         .files
         .iter()
         .map(|x| {
             if x.to_str() == Some("-") {
-                InputReference::Stdin
+                Ok::<_, std::io::Error>(InputReference::Stdin)
             } else {
-                InputReference::File(x.clone())
+                Ok(InputReference::File(x.clone().try_into()?))
             }
         })
-        .collect::<Vec<_>>();
+        .collect::<std::result::Result<Vec<_>, _>>()?;
     if inputs.len() == 0 {
         if stdin().is_terminal() {
             let mut cmd = cli::Opt::command();

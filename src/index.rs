@@ -16,7 +16,7 @@ use std::{
     cmp::{max, min},
     convert::{Into, TryFrom, TryInto},
     fmt::{self, Display},
-    fs::{self, File},
+    fs::{self},
     io::{self, Read, Seek, Write},
     iter::empty,
     num::{NonZero, NonZeroU32},
@@ -279,7 +279,8 @@ impl<FS: FileSystem + Sync> Indexer<FS> {
     ///
     /// Builds the index, saves it to disk and returns it.
     pub fn index(&self, source_path: &PathBuf) -> Result<Index> {
-        let (source_path, _, index_path, index, actual) = self.prepare(source_path, None)?;
+        let (source_path, source) = self.open_source(source_path)?;
+        let (index_path, index, actual) = self.prepare(&source_path, &source.metadata()?)?;
         if actual {
             return Ok(index.unwrap());
         }
@@ -290,22 +291,14 @@ impl<FS: FileSystem + Sync> Indexer<FS> {
     /// Builds index for the given file represended by a stream.
     ///
     /// The stream may be an uncompressed representation of the file.
-    pub fn index_stream(
-        &self,
-        stream: &mut Reader,
-        source_path: Option<&PathBuf>,
-        meta: Option<fs::Metadata>,
-    ) -> Result<Index> {
-        let Some(source_path) = source_path else {
-            return self.index_in_memory(stream);
-        };
-
-        let (source_path, meta, index_path, index, actual) = self.prepare(source_path, meta)?;
+    /// The source_path parameter must be the canonical path of the file.
+    pub fn index_stream(&self, stream: &mut Reader, source_path: &PathBuf, meta: &fs::Metadata) -> Result<Index> {
+        let (index_path, index, actual) = self.prepare(source_path, meta)?;
         if actual {
             return Ok(index.unwrap());
         }
 
-        self.build_index_from_stream(stream, &source_path, &index_path, meta, index)
+        self.build_index_from_stream(stream, &source_path, meta, &index_path, index)
     }
 
     /// Builds an in-memory index for the given stream.
@@ -322,23 +315,16 @@ impl<FS: FileSystem + Sync> Indexer<FS> {
         )
     }
 
-    fn prepare(
-        &self,
-        source_path: &PathBuf,
-        meta: Option<fs::Metadata>,
-    ) -> Result<(PathBuf, fs::Metadata, PathBuf, Option<Index>, bool)> {
-        let source_path = self.fs.canonicalize(source_path)?;
-        let meta = match meta {
-            Some(meta) => meta,
-            None => self.fs.metadata(&source_path)?,
-        };
+    fn prepare(&self, source_path: &PathBuf, meta: &fs::Metadata) -> Result<(PathBuf, Option<Index>, bool)> {
+        assert_eq!(source_path, &self.fs.canonicalize(source_path)?);
+
         let hash = hex::encode(sha256(source_path.to_string_lossy().as_bytes()));
         let index_path = self.dir.join(PathBuf::from(hash));
         let mut existing_index = None;
         let mut actual = false;
 
-        log::debug!("canonical source path: {}", source_path.display());
-        log::debug!("index file path:       {}", index_path.display());
+        log::debug!("source path:     {}", source_path.display());
+        log::debug!("index file path: {}", index_path.display());
         log::debug!("source meta: size={} modified={:?}", meta.len(), ts(meta.modified()?));
 
         if self.fs.exists(&index_path)? {
@@ -363,7 +349,7 @@ impl<FS: FileSystem + Sync> Indexer<FS> {
                 existing_index = Some(index);
             }
         }
-        Ok((source_path, meta, index_path, existing_index, actual))
+        Ok((index_path, existing_index, actual))
     }
 
     fn build_index(&self, source_path: &PathBuf, index_path: &PathBuf, existing_index: Option<Index>) -> Result<Index> {
@@ -387,15 +373,15 @@ impl<FS: FileSystem + Sync> Indexer<FS> {
             }
         };
 
-        self.build_index_from_stream(&mut input, source_path, index_path, meta, existing_index)
+        self.build_index_from_stream(&mut input, source_path, &meta, index_path, existing_index)
     }
 
     fn build_index_from_stream(
         &self,
         stream: &mut Reader,
         source_path: &PathBuf,
+        meta: &fs::Metadata,
         index_path: &PathBuf,
-        metadata: fs::Metadata,
         existing_index: Option<Index>,
     ) -> Result<Index> {
         let mut output = match self.fs.create(&index_path) {
@@ -408,13 +394,7 @@ impl<FS: FileSystem + Sync> Indexer<FS> {
             }
         };
 
-        self.process_file(
-            &source_path,
-            (&metadata).try_into()?,
-            stream,
-            &mut output,
-            existing_index,
-        )
+        self.process_file(&source_path, meta.try_into()?, stream, &mut output, existing_index)
     }
 
     fn process_file(
@@ -628,13 +608,37 @@ impl<FS: FileSystem + Sync> Indexer<FS> {
             })
         })
     }
+
+    fn open_source(&self, source_path: &PathBuf) -> io::Result<(PathBuf, Box<dyn ReadOnlyFile + Send + Sync>)> {
+        let source_path = self.fs.canonicalize(source_path)?;
+        let result = self.fs.open(&source_path)?;
+        Ok((source_path, result))
+    }
 }
 
 // ---
 
-pub trait ReadSeek: Read + Seek {}
+pub trait Meta {
+    fn metadata(&self) -> io::Result<fs::Metadata>;
+}
 
-impl<T: Read + Seek> ReadSeek for T {}
+impl Meta for fs::File {
+    fn metadata(&self) -> io::Result<fs::Metadata> {
+        self.metadata()
+    }
+}
+
+// ---
+
+pub trait ReadOnlyFile: Read + Seek + Meta {}
+
+impl<T: Read + Seek + Meta> ReadOnlyFile for T {}
+
+// ---
+
+pub trait File: ReadOnlyFile + Write {}
+
+impl<T: ReadOnlyFile + Write> File for T {}
 
 // ---
 
@@ -643,8 +647,8 @@ pub trait FileSystem {
     fn canonicalize(&self, path: &PathBuf) -> io::Result<PathBuf>;
     fn metadata(&self, path: &PathBuf) -> io::Result<fs::Metadata>;
     fn exists(&self, path: &PathBuf) -> io::Result<bool>;
-    fn open(&self, path: &PathBuf) -> io::Result<Box<dyn ReadSeek + Send + Sync>>;
-    fn create(&self, path: &PathBuf) -> io::Result<Box<dyn Write + Send + Sync>>;
+    fn open(&self, path: &PathBuf) -> io::Result<Box<dyn ReadOnlyFile + Send + Sync>>;
+    fn create(&self, path: &PathBuf) -> io::Result<Box<dyn File + Send + Sync>>;
 }
 
 // ---
@@ -665,12 +669,12 @@ impl FileSystem for RealFileSystem {
         fs::exists(path)
     }
 
-    fn open(&self, path: &PathBuf) -> io::Result<Box<dyn ReadSeek + Send + Sync>> {
-        Ok(Box::new(File::open(path)?))
+    fn open(&self, path: &PathBuf) -> io::Result<Box<dyn ReadOnlyFile + Send + Sync>> {
+        Ok(Box::new(fs::File::open(path)?))
     }
 
-    fn create(&self, path: &PathBuf) -> io::Result<Box<dyn Write + Send + Sync>> {
-        Ok(Box::new(File::create(path)?))
+    fn create(&self, path: &PathBuf) -> io::Result<Box<dyn File + Send + Sync>> {
+        Ok(Box::new(fs::File::create(path)?))
     }
 }
 

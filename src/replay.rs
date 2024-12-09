@@ -26,6 +26,7 @@ type Buf = Vec<u8>;
 
 // ---
 
+/// A trait that allows caching data for a given key.
 pub trait Cache {
     type Key: Copy + Clone + Eq + PartialEq + Ord + PartialOrd + Hash;
 
@@ -42,6 +43,7 @@ impl<C: Cache> Cache for &mut C {
 
 // ---
 
+/// A buffer that holds compressed segments of continuous data.
 pub struct ReplayBuf {
     segment_size: NonZeroUsize,
     segments: Vec<CompressedBuf>,
@@ -82,22 +84,26 @@ impl ReplayBufRead for ReplayBuf {
 
 // ---
 
+/// A creator for ReplayBuf.
 pub struct ReplayBufCreator {
     buf: ReplayBuf,
     scratch: ReusableBuf,
 }
 
 impl ReplayBufCreator {
+    /// Create a new ReplayBufCreator with the default options.
     pub fn new() -> Self {
         Self::build().done()
     }
 
+    /// Create a builder for ReplayBufCreator with the default options.
     pub fn build() -> ReplayBufCreatorBuilder {
         ReplayBufCreatorBuilder {
             segment_size: DEFAULT_SEGMENT_SIZE.unwrap(),
         }
     }
 
+    /// Returns the created ReplayBuf.
     pub fn result(mut self) -> Result<ReplayBuf> {
         self.flush()?;
         Ok(self.buf)
@@ -145,17 +151,20 @@ impl Write for ReplayBufCreator {
 
 // ---
 
+/// A builder for ReplayBufCreator.
 pub struct ReplayBufCreatorBuilder {
     segment_size: NonZeroUsize,
 }
 
 impl ReplayBufCreatorBuilder {
+    /// Set the segment size for the ReplayBuf.
     #[allow(dead_code)]
     pub fn segment_size(mut self, segment_size: NonZeroUsize) -> Self {
         self.segment_size = segment_size;
         self
     }
 
+    /// Create a new ReplayBufCreator with the current configuration.
     pub fn done(self) -> ReplayBufCreator {
         ReplayBufCreator {
             buf: ReplayBuf::new(self.segment_size),
@@ -166,6 +175,7 @@ impl ReplayBufCreatorBuilder {
 
 // ---
 
+/// A trait that allows reading from a ReplayBuf.
 pub trait ReplayBufRead {
     fn segment_size(&self) -> NonZeroUsize;
     fn size(&self) -> usize;
@@ -188,6 +198,7 @@ impl<B: ReplayBufRead> ReplayBufRead for &B {
 
 // ---
 
+/// A Read implementation that reads from a ReplayBuf.
 pub struct ReplayBufReader<B, C> {
     buf: B,
     cache: C,
@@ -195,10 +206,12 @@ pub struct ReplayBufReader<B, C> {
 }
 
 impl<B: ReplayBufRead> ReplayBufReader<B, MinimalCache<usize>> {
+    /// Create a new ReplayBufReader with a default cache.
     pub fn new(buf: B) -> Self {
         Self::build(buf).done()
     }
 
+    /// Create a builder for ReplayBufReader with a default cache.
     pub fn build(buf: B) -> ReplayBufReaderBuilder<B, MinimalCache<usize>> {
         ReplayBufReaderBuilder {
             buf,
@@ -281,6 +294,7 @@ impl<B: ReplayBufRead, C: Cache<Key = usize>> Seek for ReplayBufReader<B, C> {
 
 // ---
 
+/// A builder for ReplayBufReader.
 pub struct ReplayBufReaderBuilder<B, C> {
     buf: B,
     cache: C,
@@ -288,6 +302,7 @@ pub struct ReplayBufReaderBuilder<B, C> {
 }
 
 impl<B: ReplayBufRead, C: Cache> ReplayBufReaderBuilder<B, C> {
+    /// Set the cache to use for uncompressed segments read from ReplayBuf.
     #[allow(dead_code)]
     pub fn cache<C2: Cache>(self, cache: C2) -> ReplayBufReaderBuilder<B, C2> {
         ReplayBufReaderBuilder {
@@ -297,11 +312,13 @@ impl<B: ReplayBufRead, C: Cache> ReplayBufReaderBuilder<B, C> {
         }
     }
 
+    /// Set the position to start reading from.
     #[allow(dead_code)]
     pub fn position(self, position: usize) -> Self {
         Self { position, ..self }
     }
 
+    /// Create a new ReplayBufReader with the current configuration.
     pub fn done(self) -> ReplayBufReader<B, C> {
         ReplayBufReader {
             buf: self.buf,
@@ -313,6 +330,9 @@ impl<B: ReplayBufRead, C: Cache> ReplayBufReaderBuilder<B, C> {
 
 // ---
 
+/// A Read + Seek implementation that reads from a Read source and caches the
+/// data in a ReplayBuf. It supports seeking to any position and reading from there. It is useful
+/// for reading from a source that does not support seeking, but where seeking is required.
 pub struct ReplaySeekReader<R, C> {
     r: R,
     w: ReplayBufCreator,
@@ -322,10 +342,12 @@ pub struct ReplaySeekReader<R, C> {
 }
 
 impl<R: Read> ReplaySeekReader<R, LruCache<usize>> {
+    /// Create a new ReplaySeekReader with a default LRU cache.
     pub fn new(r: R) -> Self {
         Self::build(r).done()
     }
 
+    /// Create a builder for ReplaySeekReader with a default LRU cache.
     pub fn build(r: R) -> ReplaySeekReaderBuilder<R, LruCache<usize>> {
         ReplaySeekReaderBuilder {
             r,
@@ -428,6 +450,7 @@ impl<R: Read, C: Cache<Key = usize>> Seek for ReplaySeekReader<R, C> {
 
 // ---
 
+/// A builder for ReplaySeekReader.
 pub struct ReplaySeekReaderBuilder<R, C> {
     r: R,
     w: ReplayBufCreatorBuilder,
@@ -435,6 +458,7 @@ pub struct ReplaySeekReaderBuilder<R, C> {
 }
 
 impl<R: Read, C: Cache> ReplaySeekReaderBuilder<R, C> {
+    /// Set the cache to use for uncompressed segments read from ReplayBuf.
     #[allow(dead_code)]
     pub fn cache<C2: Cache>(self, cache: C2) -> ReplaySeekReaderBuilder<R, C2> {
         ReplaySeekReaderBuilder {
@@ -444,12 +468,14 @@ impl<R: Read, C: Cache> ReplaySeekReaderBuilder<R, C> {
         }
     }
 
+    /// Set the segment size for the ReplayBuf.
     #[allow(dead_code)]
     pub fn segment_size(mut self, segment_size: NonZeroUsize) -> Self {
         self.w.segment_size = segment_size;
         self
     }
 
+    /// Create a new ReplaySeekReader with the current configuration.
     pub fn done(self) -> ReplaySeekReader<R, C> {
         ReplaySeekReader {
             r: self.r,
@@ -463,16 +489,19 @@ impl<R: Read, C: Cache> ReplaySeekReaderBuilder<R, C> {
 
 // ---
 
+/// A buffer that can be compressed and decompressed in segments.
 #[derive(Default)]
 pub struct CompressedBuf(Vec<u8>);
 
 impl CompressedBuf {
+    /// Create a new CompressedBuf from the given data.
     pub fn new(data: &[u8]) -> Result<Self> {
         let mut encoded = Vec::new();
         FrameEncoder::new(&mut encoded).write_all(data)?;
         Ok(Self(encoded))
     }
 
+    /// Decode the compressed data into the given buffer.
     pub fn decode(&self, buf: &mut [u8]) -> Result<usize> {
         FrameDecoder::new(&self.0[..]).read_fill(buf)
     }
@@ -547,6 +576,7 @@ impl ReusableBuf {
 
 // ---
 
+/// Minimal cache implementation that caches a single value.
 pub struct MinimalCache<Key> {
     data: Option<(Key, Buf)>,
 }
@@ -576,6 +606,7 @@ impl<Key> Default for MinimalCache<Key> {
 
 // ---
 
+/// LRU cache implementation that caches up to a given number of values.
 pub struct LruCache<Key> {
     limit: usize,
     data: BTreeMap<(Instant, Key), Buf>,
@@ -584,6 +615,7 @@ pub struct LruCache<Key> {
 
 #[allow(dead_code)]
 impl<Key: Ord + PartialOrd> LruCache<Key> {
+    /// Create a new LruCache with the given limit.
     pub fn new(limit: usize) -> Self {
         Self {
             limit,

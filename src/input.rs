@@ -15,7 +15,7 @@ use deko::{bufread::AnyDecoder, Format};
 use nu_ansi_term::Color;
 
 // local imports
-use crate::error::Result;
+use crate::error::{Result, HILITE};
 use crate::index::{Index, Indexer, SourceBlock};
 use crate::iox::ReadFill;
 use crate::pool::SQPool;
@@ -30,40 +30,85 @@ pub type BufPool = SQPool<Vec<u8>>;
 
 // ---
 
+/// The path to an input file.
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct Path {
+    pub original: PathBuf,
+    pub canonical: PathBuf,
+}
+
+impl Path {
+    /// Resolves the canonical path for the given path.
+    pub fn new(original: PathBuf) -> io::Result<Self> {
+        let canonical = std::fs::canonicalize(&original).map_err(|e| {
+            io::Error::new(
+                e.kind(),
+                format!(
+                    "failed to resolve path for '{}': {}",
+                    HILITE.paint(original.to_string_lossy()),
+                    e
+                ),
+            )
+        })?;
+
+        Ok(Self { original, canonical })
+    }
+
+    /// Creates an ephemeral path.
+    pub fn ephemeral(original: PathBuf) -> Self {
+        Self {
+            original: original.clone(),
+            canonical: original,
+        }
+    }
+}
+
+impl TryFrom<PathBuf> for Path {
+    type Error = io::Error;
+
+    fn try_from(original: PathBuf) -> io::Result<Self> {
+        Self::new(original)
+    }
+}
+
+// ---
+
 /// A reference to an input file or stdin.
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub enum InputReference {
     Stdin,
-    File(PathBuf),
+    File(Path),
 }
 
 impl InputReference {
     /// Preliminarily opens the input file to ensure it exists and is readable
     /// and protect it from being suddenly deleted while we need it.
     pub fn hold(&self) -> io::Result<InputHolder> {
-        Ok(InputHolder::new(
-            self.clone(),
-            match self {
-                InputReference::Stdin => None,
-                InputReference::File(path) => {
-                    let meta = std::fs::metadata(path).map_err(|e| {
-                        io::Error::new(
-                            e.kind(),
-                            format!("failed to get information on {}: {}", self.description(), e),
-                        )
-                    })?;
-                    if meta.is_dir() {
-                        return Err(io::Error::new(
-                            io::ErrorKind::InvalidInput,
-                            format!("{} is a directory", self.description()),
-                        ));
-                    }
-                    Some(Box::new(File::open(path).map_err(|e| {
-                        io::Error::new(e.kind(), format!("failed to open {}: {}", self.description(), e))
-                    })?))
+        let (reference, stream): (_, Option<Box<dyn ReadSeekMeta + Send + Sync>>) = match self {
+            Self::Stdin => (self.clone(), None),
+            Self::File(path) => {
+                let meta = std::fs::metadata(&path.canonical).map_err(|e| {
+                    io::Error::new(
+                        e.kind(),
+                        format!("failed to get information on {}: {}", self.description(), e),
+                    )
+                })?;
+                if meta.is_dir() {
+                    return Err(io::Error::new(
+                        io::ErrorKind::InvalidInput,
+                        format!("{} is a directory", self.description()),
+                    ));
                 }
-            },
-        ))
+                let stream =
+                    Box::new(File::open(&path.canonical).map_err(|e| {
+                        io::Error::new(e.kind(), format!("failed to open {}: {}", self.description(), e))
+                    })?);
+
+                (InputReference::File(path.clone()), Some(stream))
+            }
+        };
+
+        Ok(InputHolder::new(reference, stream))
     }
 
     /// Completely opens the input for reading.
@@ -76,7 +121,7 @@ impl InputReference {
     pub fn description(&self) -> String {
         match self {
             Self::Stdin => "<stdin>".into(),
-            Self::File(filename) => format!("file '{}'", Color::Yellow.paint(filename.to_string_lossy())),
+            Self::File(path) => format!("file '{}'", Color::Yellow.paint(path.original.to_string_lossy())),
         }
     }
 
@@ -84,7 +129,7 @@ impl InputReference {
     fn path(&self) -> Option<&PathBuf> {
         match self {
             Self::Stdin => None,
-            Self::File(path) => Some(path),
+            Self::File(path) => Some(&path.canonical),
         }
     }
 }
@@ -206,7 +251,7 @@ impl Input {
     /// Opens the file for reading.
     /// This includes decoding compressed files if needed.
     pub fn open(path: &PathBuf) -> io::Result<Self> {
-        InputReference::File(path.clone()).open()
+        InputReference::File(path.clone().try_into()?).open()
     }
 
     /// Opens the stdin for reading.
@@ -420,7 +465,7 @@ impl IndexedInput {
 
     /// Opens the input file and indexes it.
     pub fn open(path: &PathBuf, indexer: &Indexer) -> Result<Self> {
-        InputReference::File(path.clone()).hold()?.index(indexer)
+        InputReference::File(path.clone().try_into()?).hold()?.index(indexer)
     }
 
     /// Converts the input to blocks.
@@ -429,45 +474,65 @@ impl IndexedInput {
         Blocks::new(Arc::new(self), (0..n).into_iter())
     }
 
-    #[inline]
     fn from_stream(reference: InputReference, stream: Stream, indexer: &Indexer) -> Result<Self> {
-        match stream {
-            Stream::Sequential(stream) => Self::from_sequential_stream(reference, stream, indexer),
-            Stream::RandomAccess(stream) => Self::from_random_access_stream(reference, stream, indexer),
+        let (stream, index) = Self::index_stream(&reference, stream, indexer)?;
+        Ok(Self::new(reference, stream, index))
+    }
+
+    fn index_stream(
+        reference: &InputReference,
+        stream: Stream,
+        indexer: &Indexer,
+    ) -> Result<(RandomAccessStream, Index)> {
+        log::info!("indexing {}", reference.description());
+
+        if let (Some(path), Some(meta)) = (reference.path(), stream.metadata()?) {
+            match stream {
+                Stream::Sequential(stream) => Self::index_sequential_stream(path, &meta, stream, indexer),
+                Stream::RandomAccess(stream) => Self::index_random_access_stream(path, &meta, stream, indexer),
+            }
+        } else {
+            let mut tee = TeeReader::new(stream, ReplayBufCreator::new());
+            let index = indexer.index_in_memory(&mut tee)?;
+            let buf = tee.into_writer().result()?;
+            let stream = Box::new(ReplayBufReader::new(buf).with_metadata(None));
+
+            Ok((stream, index))
         }
     }
 
-    fn from_random_access_stream(
-        reference: InputReference,
+    fn index_random_access_stream(
+        path: &PathBuf,
+        meta: &Metadata,
         mut stream: RandomAccessStream,
         indexer: &Indexer,
-    ) -> Result<Self> {
+    ) -> Result<(RandomAccessStream, Index)> {
         let pos = stream.seek(SeekFrom::Current(0))?;
-        let meta = stream.metadata()?;
-        let index = indexer.index_stream(
-            &mut stream,
-            match &reference {
-                InputReference::File(path) => Some(path),
-                _ => None,
-            },
-            meta,
-        )?;
+        let index = indexer.index_stream(&mut stream, path, meta)?;
+
         stream.seek(SeekFrom::Start(pos))?;
-        Ok(Self::new(reference, stream, index))
+
+        Ok((stream, index))
     }
 
-    fn from_sequential_stream(reference: InputReference, stream: SequentialStream, indexer: &Indexer) -> Result<Self> {
-        log::info!("indexing {}", reference.description());
-        let meta = stream.metadata()?;
+    fn index_sequential_stream(
+        path: &PathBuf,
+        meta: &Metadata,
+        stream: SequentialStream,
+        indexer: &Indexer,
+    ) -> Result<(RandomAccessStream, Index)> {
         let mut tee = TeeReader::new(stream, ReplayBufCreator::new());
-        let index = indexer.index_stream(&mut tee, reference.path(), meta.clone())?;
+        let index = indexer.index_stream(&mut tee, path, meta)?;
+        let meta = meta.clone();
+
         let stream: RandomAccessStream = if tee.processed() == 0 {
-            Box::new(ReplaySeekReader::new(tee.into_reader()).with_metadata(meta))
+            Box::new(ReplaySeekReader::new(tee.into_reader()).with_metadata(Some(meta)))
         } else {
             let buf = tee.into_writer().result()?;
-            Box::new(ReplayBufReader::new(buf).with_metadata(meta))
+            Box::new(ReplayBufReader::new(buf).with_metadata(Some(meta)))
         };
-        Ok(Self::new(reference, stream, index))
+
+        Ok((stream, index))
     }
 }
 
@@ -845,14 +910,14 @@ mod tests {
         assert_eq!(reference.path(), None);
         let input = reference.open().unwrap();
         assert_eq!(input.reference, reference);
-        let reference = InputReference::File(PathBuf::from("test.log"));
+        let reference = InputReference::File(Path::ephemeral(PathBuf::from("test.log")));
         assert_eq!(reference.description(), "file '\u{1b}[33mtest.log\u{1b}[0m'");
         assert_eq!(reference.path(), Some(&PathBuf::from("test.log")));
     }
 
     #[test]
     fn test_input_holder() {
-        let reference = InputReference::File(PathBuf::from("sample/test.log"));
+        let reference = InputReference::File(Path::ephemeral(PathBuf::from("sample/test.log")));
         let holder = InputHolder::new(reference, None);
         let mut stream = holder.stream().unwrap();
         let mut buf = Vec::new();
@@ -949,7 +1014,7 @@ mod tests {
 
     #[test]
     fn test_input_read_error() {
-        let reference = InputReference::File(PathBuf::from("test.log"));
+        let reference = InputReference::File(Path::ephemeral(PathBuf::from("test.log")));
         let input = Input::new(reference, Stream::Sequential(Box::new(FailingReader)));
         let mut buf = [0; 128];
         let result = input.stream.into_sequential().read(&mut buf);
@@ -961,7 +1026,7 @@ mod tests {
 
     #[test]
     fn test_input_hold_error_is_dir() {
-        let reference = InputReference::File(PathBuf::from("."));
+        let reference = InputReference::File(Path::ephemeral(PathBuf::from(".")));
         let result = reference.hold();
         assert!(result.is_err());
         let err = result.err().unwrap();
@@ -972,7 +1037,7 @@ mod tests {
     #[test]
     fn test_input_hold_error_not_found() {
         let filename = "AKBNIJGHERHBNMCKJABHSDJ";
-        let reference = InputReference::File(PathBuf::from(filename));
+        let reference = InputReference::File(Path::ephemeral(PathBuf::from(filename)));
         let result = reference.hold();
         assert!(result.is_err());
         let err = result.err().unwrap();
