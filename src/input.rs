@@ -2,11 +2,11 @@
 use std::{
     cmp::min,
     convert::TryInto,
-    fs::{File, Metadata},
-    io::{self, stdin, BufRead, BufReader, Cursor, Read, Seek, SeekFrom},
+    fs::{self, File, Metadata},
+    io::{self, stdin, BufRead, BufReader, Cursor, Read, Seek, SeekFrom, Write},
     mem::size_of_val,
     ops::{Deref, Range},
-    path::PathBuf,
+    path::{Path, PathBuf},
     sync::{Arc, Mutex},
 };
 
@@ -15,12 +15,15 @@ use deko::{bufread::AnyDecoder, Format};
 use nu_ansi_term::Color;
 
 // local imports
-use crate::error::Result;
-use crate::index::{Index, Indexer, SourceBlock};
-use crate::iox::ReadFill;
-use crate::pool::SQPool;
-use crate::replay::{ReplayBufCreator, ReplayBufReader, ReplaySeekReader};
-use crate::tee::TeeReader;
+use crate::{
+    error::{Result, HILITE},
+    index::{Index, Indexer, SourceBlock, SourceMetadata},
+    iox::ReadFill,
+    pool::SQPool,
+    replay::{ReplayBufCreator, ReplayBufReader, ReplaySeekReader},
+    tee::TeeReader,
+    vfs::{FileSystem, LocalFileSystem},
+};
 
 // ---
 
@@ -30,40 +33,95 @@ pub type BufPool = SQPool<Vec<u8>>;
 
 // ---
 
+/// The path to an input file.
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct InputPath {
+    pub original: PathBuf,
+    pub canonical: PathBuf,
+}
+
+impl InputPath {
+    /// Creates a new input path.
+    pub fn new(original: PathBuf, canonical: PathBuf) -> Self {
+        Self { original, canonical }
+    }
+
+    /// Resolves the canonical path for the given path.
+    pub fn resolve(original: PathBuf) -> io::Result<Self> {
+        Self::resolve_with_fs(original, LocalFileSystem)
+    }
+
+    /// Resolves the canonical path for the given path using the specified file system.
+    pub fn resolve_with_fs<FS: FileSystem>(original: PathBuf, fs: FS) -> io::Result<Self> {
+        let canonical = fs.canonicalize(&original).map_err(|e| {
+            io::Error::new(
+                e.kind(),
+                format!(
+                    "failed to resolve path for '{}': {}",
+                    HILITE.paint(original.to_string_lossy()),
+                    e
+                ),
+            )
+        })?;
+
+        Ok(Self { original, canonical })
+    }
+
+    /// Creates an ephemeral path.
+    pub fn ephemeral(original: PathBuf) -> Self {
+        Self {
+            original: original.clone(),
+            canonical: original,
+        }
+    }
+}
+
+impl TryFrom<PathBuf> for InputPath {
+    type Error = io::Error;
+
+    fn try_from(original: PathBuf) -> io::Result<Self> {
+        Self::resolve(original)
+    }
+}
+
+// ---
+
 /// A reference to an input file or stdin.
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub enum InputReference {
     Stdin,
-    File(PathBuf),
+    File(InputPath),
 }
 
 impl InputReference {
     /// Preliminarily opens the input file to ensure it exists and is readable
     /// and protect it from being suddenly deleted while we need it.
     pub fn hold(&self) -> io::Result<InputHolder> {
-        Ok(InputHolder::new(
-            self.clone(),
-            match self {
-                InputReference::Stdin => None,
-                InputReference::File(path) => {
-                    let meta = std::fs::metadata(path).map_err(|e| {
-                        io::Error::new(
-                            e.kind(),
-                            format!("failed to get information on {}: {}", self.description(), e),
-                        )
-                    })?;
-                    if meta.is_dir() {
-                        return Err(io::Error::new(
-                            io::ErrorKind::InvalidInput,
-                            format!("{} is a directory", self.description()),
-                        ));
-                    }
-                    Some(Box::new(File::open(path).map_err(|e| {
-                        io::Error::new(e.kind(), format!("failed to open {}: {}", self.description(), e))
-                    })?))
+        let (reference, stream): (_, Option<Box<dyn ReadSeekMeta + Send + Sync>>) = match self {
+            Self::Stdin => (self.clone(), None),
+            Self::File(path) => {
+                let meta = fs::metadata(&path.canonical).map_err(|e| {
+                    io::Error::new(
+                        e.kind(),
+                        format!("failed to get information on {}: {}", self.description(), e),
+                    )
+                })?;
+                if meta.is_dir() {
+                    return Err(io::Error::new(
+                        io::ErrorKind::InvalidInput,
+                        format!("{} is a directory", self.description()),
+                    ));
                 }
-            },
-        ))
+                let stream =
+                    Box::new(File::open(&path.canonical).map_err(|e| {
+                        io::Error::new(e.kind(), format!("failed to open {}: {}", self.description(), e))
+                    })?);
+
+                (InputReference::File(path.clone()), Some(stream))
+            }
+        };
+
+        Ok(InputHolder::new(reference, stream))
     }
 
     /// Completely opens the input for reading.
@@ -76,7 +134,7 @@ impl InputReference {
     pub fn description(&self) -> String {
         match self {
             Self::Stdin => "<stdin>".into(),
-            Self::File(filename) => format!("file '{}'", Color::Yellow.paint(filename.to_string_lossy())),
+            Self::File(path) => format!("file '{}'", Color::Yellow.paint(path.original.to_string_lossy())),
         }
     }
 
@@ -84,7 +142,7 @@ impl InputReference {
     fn path(&self) -> Option<&PathBuf> {
         match self {
             Self::Stdin => None,
-            Self::File(path) => Some(path),
+            Self::File(path) => Some(&path.canonical),
         }
     }
 }
@@ -110,14 +168,14 @@ impl<T: Meta> Meta for &mut T {
     }
 }
 
-impl Meta for std::fs::File {
+impl Meta for fs::File {
     #[inline]
     fn metadata(&self) -> io::Result<Option<Metadata>> {
         self.metadata().map(Some)
     }
 }
 
-impl Meta for std::io::Stdin {
+impl Meta for io::Stdin {
     #[inline]
     fn metadata(&self) -> io::Result<Option<Metadata>> {
         Ok(None)
@@ -160,7 +218,11 @@ impl InputHolder {
     }
 
     /// Indexes the input file and returns IndexedInput that can be used to access the data in random order.
-    pub fn index(self, indexer: &Indexer) -> Result<IndexedInput> {
+    pub fn index<FS>(self, indexer: &Indexer<FS>) -> Result<IndexedInput>
+    where
+        FS: FileSystem + Sync,
+        FS::Metadata: SourceMetadata,
+    {
         self.open()?.indexed(indexer)
     }
 
@@ -199,14 +261,18 @@ impl Input {
     }
 
     /// Indexes the input file and returns IndexedInput that can be used to access the data in random order.
-    pub fn indexed(self, indexer: &Indexer) -> Result<IndexedInput> {
+    pub fn indexed<FS>(self, indexer: &Indexer<FS>) -> Result<IndexedInput>
+    where
+        FS: FileSystem + Sync,
+        FS::Metadata: SourceMetadata,
+    {
         IndexedInput::from_stream(self.reference, self.stream, indexer)
     }
 
     /// Opens the file for reading.
     /// This includes decoding compressed files if needed.
     pub fn open(path: &PathBuf) -> io::Result<Self> {
-        InputReference::File(path.clone()).open()
+        InputReference::File(path.clone().try_into()?).open()
     }
 
     /// Opens the stdin for reading.
@@ -419,8 +485,14 @@ impl IndexedInput {
     }
 
     /// Opens the input file and indexes it.
-    pub fn open(path: &PathBuf, indexer: &Indexer) -> Result<Self> {
-        InputReference::File(path.clone()).hold()?.index(indexer)
+    pub fn open<FS>(path: &Path, indexer: &Indexer<FS>) -> Result<Self>
+    where
+        FS: FileSystem + Sync,
+        FS::Metadata: SourceMetadata,
+    {
+        InputReference::File(PathBuf::from(path).try_into()?)
+            .hold()?
+            .index(indexer)
     }
 
     /// Converts the input to blocks.
@@ -429,45 +501,81 @@ impl IndexedInput {
         Blocks::new(Arc::new(self), (0..n).into_iter())
     }
 
-    #[inline]
-    fn from_stream(reference: InputReference, stream: Stream, indexer: &Indexer) -> Result<Self> {
-        match stream {
-            Stream::Sequential(stream) => Self::from_sequential_stream(reference, stream, indexer),
-            Stream::RandomAccess(stream) => Self::from_random_access_stream(reference, stream, indexer),
+    fn from_stream<FS>(reference: InputReference, stream: Stream, indexer: &Indexer<FS>) -> Result<Self>
+    where
+        FS: FileSystem + Sync,
+        FS::Metadata: SourceMetadata,
+    {
+        let (stream, index) = Self::index_stream(&reference, stream, indexer)?;
+        Ok(Self::new(reference, stream, index))
+    }
+
+    fn index_stream<FS>(
+        reference: &InputReference,
+        stream: Stream,
+        indexer: &Indexer<FS>,
+    ) -> Result<(RandomAccessStream, Index)>
+    where
+        FS: FileSystem + Sync,
+        FS::Metadata: SourceMetadata,
+    {
+        log::info!("indexing {}", reference.description());
+
+        if let (Some(path), Some(meta)) = (reference.path(), stream.metadata()?) {
+            match stream {
+                Stream::Sequential(stream) => Self::index_sequential_stream(path, &meta, stream, indexer),
+                Stream::RandomAccess(stream) => Self::index_random_access_stream(path, &meta, stream, indexer),
+            }
+        } else {
+            let mut tee = TeeReader::new(stream, ReplayBufCreator::new());
+            let index = indexer.index_in_memory(&mut tee)?;
+            let buf = tee.into_writer().result()?;
+            let stream = Box::new(ReplayBufReader::new(buf).with_metadata(None));
+
+            Ok((stream, index))
         }
     }
 
-    fn from_random_access_stream(
-        reference: InputReference,
+    fn index_random_access_stream<FS>(
+        path: &Path,
+        meta: &Metadata,
         mut stream: RandomAccessStream,
-        indexer: &Indexer,
-    ) -> Result<Self> {
+        indexer: &Indexer<FS>,
+    ) -> Result<(RandomAccessStream, Index)>
+    where
+        FS: FileSystem + Sync,
+        FS::Metadata: SourceMetadata,
+    {
         let pos = stream.seek(SeekFrom::Current(0))?;
-        let meta = stream.metadata()?;
-        let index = indexer.index_stream(
-            &mut stream,
-            match &reference {
-                InputReference::File(path) => Some(path),
-                _ => None,
-            },
-            meta,
-        )?;
+        let index = indexer.index_stream(&mut stream, path, meta)?;
+
         stream.seek(SeekFrom::Start(pos))?;
-        Ok(Self::new(reference, stream, index))
+
+        Ok((stream, index))
     }
 
-    fn from_sequential_stream(reference: InputReference, stream: SequentialStream, indexer: &Indexer) -> Result<Self> {
-        log::info!("indexing {}", reference.description());
-        let meta = stream.metadata()?;
+    fn index_sequential_stream<FS>(
+        path: &PathBuf,
+        meta: &Metadata,
+        stream: SequentialStream,
+        indexer: &Indexer<FS>,
+    ) -> Result<(RandomAccessStream, Index)>
+    where
+        FS: FileSystem + Sync,
+        FS::Metadata: SourceMetadata,
+    {
         let mut tee = TeeReader::new(stream, ReplayBufCreator::new());
-        let index = indexer.index_stream(&mut tee, reference.path(), meta.clone())?;
+        let index = indexer.index_stream(&mut tee, path, meta)?;
+        let meta = meta.clone();
+
         let stream: RandomAccessStream = if tee.processed() == 0 {
-            Box::new(ReplaySeekReader::new(tee.into_reader()).with_metadata(meta))
+            Box::new(ReplaySeekReader::new(tee.into_reader()).with_metadata(Some(meta)))
         } else {
             let buf = tee.into_writer().result()?;
-            Box::new(ReplayBufReader::new(buf).with_metadata(meta))
+            Box::new(ReplayBufReader::new(buf).with_metadata(Some(meta)))
         };
-        Ok(Self::new(reference, stream, index))
+
+        Ok((stream, index))
     }
 }
 
@@ -803,24 +911,40 @@ struct WithMetadata<T> {
 }
 
 impl<T> WithMetadata<T> {
+    #[inline]
     fn new(inner: T, meta: Option<Metadata>) -> Self {
         Self { inner, meta }
     }
 }
 
 impl<T: Read> Read for WithMetadata<T> {
+    #[inline]
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         self.inner.read(buf)
     }
 }
 
+impl<T: Write> Write for WithMetadata<T> {
+    #[inline]
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        self.inner.write(buf)
+    }
+
+    #[inline]
+    fn flush(&mut self) -> io::Result<()> {
+        self.inner.flush()
+    }
+}
+
 impl<T: Seek> Seek for WithMetadata<T> {
+    #[inline]
     fn seek(&mut self, pos: SeekFrom) -> io::Result<u64> {
         self.inner.seek(pos)
     }
 }
 
 impl<T> Meta for WithMetadata<T> {
+    #[inline]
     fn metadata(&self) -> io::Result<Option<Metadata>> {
         Ok(self.meta.clone())
     }
@@ -830,13 +954,16 @@ impl<T> Meta for WithMetadata<T> {
 
 #[cfg(test)]
 mod tests {
-    use itertools::Itertools;
-
-    use crate::index::IndexerSettings;
-
     use super::*;
-    use std::io::ErrorKind;
-    use std::io::Read;
+    use io::Read;
+
+    use itertools::Itertools;
+    use nonzero_ext::nonzero;
+
+    use crate::{
+        index::IndexerSettings,
+        vfs::{self, LocalFileSystem},
+    };
 
     #[test]
     fn test_input_reference() {
@@ -845,14 +972,14 @@ mod tests {
         assert_eq!(reference.path(), None);
         let input = reference.open().unwrap();
         assert_eq!(input.reference, reference);
-        let reference = InputReference::File(PathBuf::from("test.log"));
+        let reference = InputReference::File(InputPath::ephemeral(PathBuf::from("test.log")));
         assert_eq!(reference.description(), "file '\u{1b}[33mtest.log\u{1b}[0m'");
         assert_eq!(reference.path(), Some(&PathBuf::from("test.log")));
     }
 
     #[test]
     fn test_input_holder() {
-        let reference = InputReference::File(PathBuf::from("sample/test.log"));
+        let reference = InputReference::File(InputPath::ephemeral(PathBuf::from("sample/test.log")));
         let holder = InputHolder::new(reference, None);
         let mut stream = holder.stream().unwrap();
         let mut buf = Vec::new();
@@ -861,11 +988,8 @@ mod tests {
         let stream = stream.as_sequential();
         let meta = stream.metadata().unwrap();
         assert_eq!(meta.is_some(), true);
-        assert_eq!(n, 70);
-        assert_eq!(
-            buf,
-            br#"{"ts":"2024-10-01T01:02:03Z","level":"info","msg":"some test message"}"#
-        );
+        assert_eq!(n, 147);
+        assert_eq!(buf.len(), n);
     }
 
     #[test]
@@ -888,7 +1012,8 @@ mod tests {
 
         for &(filename, requested, expected) in &[
             ("sample/test.log", 1, 1),
-            ("sample/test.log", 2, 1),
+            ("sample/test.log", 2, 2),
+            ("sample/test.log", 3, 2),
             ("sample/prometheus.log", 2, 2),
         ] {
             let input = Input::open(&PathBuf::from(filename)).unwrap().tail(requested).unwrap();
@@ -944,39 +1069,39 @@ mod tests {
         let result = stream.into_sequential().read(&mut buf);
         assert!(result.is_err());
         let err = result.unwrap_err();
-        assert_eq!(err.kind(), ErrorKind::Other);
+        assert_eq!(err.kind(), io::ErrorKind::Other);
     }
 
     #[test]
     fn test_input_read_error() {
-        let reference = InputReference::File(PathBuf::from("test.log"));
+        let reference = InputReference::File(InputPath::ephemeral(PathBuf::from("test.log")));
         let input = Input::new(reference, Stream::Sequential(Box::new(FailingReader)));
         let mut buf = [0; 128];
         let result = input.stream.into_sequential().read(&mut buf);
         assert!(result.is_err());
         let err = result.unwrap_err();
-        assert_eq!(err.kind(), ErrorKind::Other);
+        assert_eq!(err.kind(), io::ErrorKind::Other);
         assert_eq!(err.to_string().contains("test.log"), true);
     }
 
     #[test]
     fn test_input_hold_error_is_dir() {
-        let reference = InputReference::File(PathBuf::from("."));
+        let reference = InputReference::File(InputPath::ephemeral(PathBuf::from(".")));
         let result = reference.hold();
         assert!(result.is_err());
         let err = result.err().unwrap();
-        assert_eq!(err.kind(), ErrorKind::InvalidInput);
+        assert_eq!(err.kind(), io::ErrorKind::InvalidInput);
         assert_eq!(err.to_string().contains("is a directory"), true);
     }
 
     #[test]
     fn test_input_hold_error_not_found() {
         let filename = "AKBNIJGHERHBNMCKJABHSDJ";
-        let reference = InputReference::File(PathBuf::from(filename));
+        let reference = InputReference::File(InputPath::ephemeral(PathBuf::from(filename)));
         let result = reference.hold();
         assert!(result.is_err());
         let err = result.err().unwrap();
-        assert_eq!(err.kind(), ErrorKind::NotFound);
+        assert_eq!(err.kind(), io::ErrorKind::NotFound);
         assert_eq!(err.to_string().contains(filename), true);
     }
 
@@ -996,10 +1121,10 @@ mod tests {
     }
 
     #[test]
-    fn test_indexed_input() {
+    fn test_indexed_input_stdin() {
         let data = br#"{"ts":"2024-10-01T01:02:03Z","level":"info","msg":"some test message"}\n"#;
         let stream = Stream::RandomAccess(Box::new(Cursor::new(data)));
-        let indexer = Indexer::new(1, PathBuf::new(), IndexerSettings::default());
+        let indexer = Indexer::<LocalFileSystem>::new(1, PathBuf::new(), IndexerSettings::default());
         let input = IndexedInput::from_stream(InputReference::Stdin, stream, &indexer).unwrap();
         let mut blocks = input.into_blocks().collect_vec();
         assert_eq!(blocks.len(), 1);
@@ -1010,29 +1135,93 @@ mod tests {
         assert_eq!(line.bytes(), data);
     }
 
+    #[test]
+    fn test_indexed_input_file_random_access() {
+        let fs = Arc::new(vfs::mem::FileSystem::new());
+
+        for _ in 0..2 {
+            let path = PathBuf::from("sample/test.log");
+            let indexer = Indexer::new(
+                1,
+                PathBuf::from("."),
+                IndexerSettings {
+                    fs: fs.clone(),
+                    buffer_size: nonzero!(64u32).into(),
+                    ..Default::default()
+                },
+            );
+            let input = IndexedInput::open(&path, &indexer).unwrap();
+            let mut blocks = input.into_blocks().sorted().collect_vec();
+            assert_eq!(blocks.len(), 2);
+            assert_eq!(blocks[0].lines_valid(), 1);
+            assert_eq!(blocks[0].size(), 74);
+            assert_eq!(blocks[1].lines_valid(), 1);
+            assert_eq!(blocks[1].size(), 73);
+            let lines = blocks.pop().unwrap().into_lines().unwrap().collect_vec();
+            assert_eq!(lines.len(), 1);
+            assert_eq!(lines[0].len(), 73);
+            let lines = blocks.pop().unwrap().into_lines().unwrap().collect_vec();
+            assert_eq!(lines.len(), 1);
+            assert_eq!(lines[0].len(), 74);
+        }
+    }
+
+    #[test]
+    fn test_indexed_input_sequential_access() {
+        let fs = Arc::new(vfs::mem::FileSystem::new());
+
+        for _ in 0..2 {
+            let path = PathBuf::from("sample/test.log");
+            let indexer = Indexer::new(
+                1,
+                PathBuf::from("/tmp/cache"),
+                IndexerSettings {
+                    fs: fs.clone(),
+                    buffer_size: nonzero!(64u32).into(),
+                    ..Default::default()
+                },
+            );
+            let reference = InputReference::File(InputPath::resolve_with_fs(path.clone(), &fs).unwrap());
+            let stream = Stream::Sequential(Box::new(File::open(&path).unwrap()));
+            let input = IndexedInput::from_stream(reference, stream, &indexer).unwrap();
+            let mut blocks = input.into_blocks().sorted().collect_vec();
+            assert_eq!(blocks.len(), 2);
+            assert_eq!(blocks[0].lines_valid(), 1);
+            assert_eq!(blocks[0].size(), 74);
+            assert_eq!(blocks[1].lines_valid(), 1);
+            assert_eq!(blocks[1].size(), 73);
+            let lines = blocks.pop().unwrap().into_lines().unwrap().collect_vec();
+            assert_eq!(lines.len(), 1);
+            assert_eq!(lines[0].len(), 73);
+            let lines = blocks.pop().unwrap().into_lines().unwrap().collect_vec();
+            assert_eq!(lines.len(), 1);
+            assert_eq!(lines[0].len(), 74);
+        }
+    }
+
     // ---
 
     struct FailingReader;
 
     impl Read for FailingReader {
-        fn read(&mut self, _buf: &mut [u8]) -> std::io::Result<usize> {
-            Err(std::io::Error::new(std::io::ErrorKind::Other, "read error"))
+        fn read(&mut self, _buf: &mut [u8]) -> io::Result<usize> {
+            Err(io::Error::new(io::ErrorKind::Other, "read error"))
         }
     }
 
     impl Seek for FailingReader {
-        fn seek(&mut self, from: SeekFrom) -> std::io::Result<u64> {
+        fn seek(&mut self, from: SeekFrom) -> io::Result<u64> {
             match from {
                 SeekFrom::Start(0) => Ok(0),
                 SeekFrom::Current(0) => Ok(0),
                 SeekFrom::End(0) => Ok(0),
-                _ => Err(std::io::Error::new(std::io::ErrorKind::Other, "seek error")),
+                _ => Err(io::Error::new(io::ErrorKind::Other, "seek error")),
             }
         }
     }
 
     impl Meta for FailingReader {
-        fn metadata(&self) -> std::io::Result<Option<std::fs::Metadata>> {
+        fn metadata(&self) -> std::io::Result<Option<Metadata>> {
             Ok(None)
         }
     }
@@ -1042,19 +1231,19 @@ mod tests {
     struct UnseekableReader<R>(R);
 
     impl<R: Read> Read for UnseekableReader<R> {
-        fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
             self.0.read(buf)
         }
     }
 
     impl<R> Seek for UnseekableReader<R> {
-        fn seek(&mut self, _: SeekFrom) -> std::io::Result<u64> {
-            Err(std::io::Error::new(std::io::ErrorKind::Other, "seek error"))
+        fn seek(&mut self, _: SeekFrom) -> io::Result<u64> {
+            Err(io::Error::new(io::ErrorKind::Other, "seek error"))
         }
     }
 
     impl<R> Meta for UnseekableReader<R> {
-        fn metadata(&self) -> std::io::Result<Option<std::fs::Metadata>> {
+        fn metadata(&self) -> io::Result<Option<Metadata>> {
             Ok(None)
         }
     }

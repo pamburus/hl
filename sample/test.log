@@ -1,1 +1,2 @@
-{"ts":"2024-10-01T01:02:03Z","level":"info","msg":"some test message"}
+{"ts":"2024-10-01T01:02:04Z","level":"info","msg":"latest test message"}
+{"ts":"2024-10-01T01:02:03Z","level":"info","msg":"earlier test message"}
