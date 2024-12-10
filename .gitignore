@@ -1,6 +1,10 @@
 /.vscode
-/target
 /*.log
+/*.log.bz2
+/*.log.gz
+/*.log.xz
+/*.log.zst
+/target
 
 # devenv
 .direnv
