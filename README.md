@@ -65,13 +65,16 @@ High performance and convenient features are the main goals.
     cargo install --locked --git https://github.com/pamburus/hl.git
     ```
 
-* Run by using [nix](https://nixos.org/download/)
+* Run using [nix](https://nixos.org/download/)
 
   ```sh
   nix run github:pamburus/hl
   ```
 
 * Install the package by using [nix-flakes](https://wiki.nixos.org/wiki/Flakes)
+
+<details>
+<summary>Example how to update nix configuration</summary>
 
   ```nix
   {
@@ -98,6 +101,8 @@ High performance and convenient features are the main goals.
       };
   }
   ```
+
+</details>
 
 * Download latest release from [download page](https://github.com/pamburus/hl/releases/latest)
 
