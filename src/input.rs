@@ -15,12 +15,14 @@ use deko::{bufread::AnyDecoder, Format};
 use nu_ansi_term::Color;
 
 // local imports
-use crate::error::{Result, HILITE};
-use crate::index::{Index, Indexer, SourceBlock};
-use crate::iox::ReadFill;
-use crate::pool::SQPool;
-use crate::replay::{ReplayBufCreator, ReplayBufReader, ReplaySeekReader};
-use crate::tee::TeeReader;
+use crate::{
+    error::{Result, HILITE},
+    index::{Index, Indexer, SourceBlock},
+    iox::ReadFill,
+    pool::SQPool,
+    replay::{ReplayBufCreator, ReplayBufReader, ReplaySeekReader},
+    tee::TeeReader,
+};
 
 // ---
 
