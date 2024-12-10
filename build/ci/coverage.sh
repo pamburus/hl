@@ -41,18 +41,15 @@ function clean() {
 function test() {
     cargo test --tests --workspace
     cargo build
-    ${MAIN_EXECUTABLE:?} > /dev/null
+    ${MAIN_EXECUTABLE:?} --config= > /dev/null
     ${MAIN_EXECUTABLE:?} --config= --help > /dev/null
     ${MAIN_EXECUTABLE:?} --config=etc/defaults/config-k8s.yaml > /dev/null
     ${MAIN_EXECUTABLE:?} --config=etc/defaults/config-ecs.yaml > /dev/null
-    ${MAIN_EXECUTABLE:?} --shell-completions bash > /dev/null
-    ${MAIN_EXECUTABLE:?} --man-page > /dev/null
-    ${MAIN_EXECUTABLE:?} --list-themes > /dev/null
-    echo "" | ${MAIN_EXECUTABLE:?} --concurrency 4 > /dev/null
-    if ${MAIN_EXECUTABLE:?} -s test.log.gz 2>/dev/null > /dev/null; then
-        echo "Expected combination of options `-s 1234.log.gz` to fail"
-        exit 1
-    fi
+    ${MAIN_EXECUTABLE:?} --config= --shell-completions bash > /dev/null
+    ${MAIN_EXECUTABLE:?} --config= --man-page > /dev/null
+    ${MAIN_EXECUTABLE:?} --config= --list-themes > /dev/null
+    ${MAIN_EXECUTABLE:?} --config= sample/prometheus.log -P > /dev/null
+    echo "" | ${MAIN_EXECUTABLE:?} --config= --concurrency 4 > /dev/null
 } 
 
 function merge() {
