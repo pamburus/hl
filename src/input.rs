@@ -897,9 +897,11 @@ impl<T> Meta for WithMetadata<T> {
 
 #[cfg(test)]
 mod tests {
+    use std::time::{Duration, SystemTime};
+
     use itertools::Itertools;
 
-    use crate::index::IndexerSettings;
+    use crate::index::{IndexerSettings, MockFileSystem, MockSourceMetadata};
 
     use super::*;
     use io::Read;
@@ -1074,6 +1076,30 @@ mod tests {
         let mut lines = block.into_lines().unwrap().collect_vec();
         let line = lines.drain(..).next().unwrap();
         assert_eq!(line.bytes(), data);
+    }
+
+    #[test]
+    fn test_indexed_input_file_random_access() {
+        let ts = SystemTime::from(SystemTime::UNIX_EPOCH + Duration::from_secs(1704067200));
+        let mut meta = MockSourceMetadata::new();
+        meta.expect_len().return_const(70);
+        meta.expect_modified().returning(|| Ok(ts));
+
+        let mut fs = MockFileSystem::new();
+        fs.expect_canonicalize()
+            .returning(|path| Ok(std::path::Path::new("/tmp").join(path)));
+        fs.expect_metadata().returning(|_| Ok(meta));
+
+        let path = PathBuf::from("sample/test.log");
+        let indexer = Indexer::new(1, PathBuf::new(), IndexerSettings::default());
+        let input = IndexedInput::open(&path, &indexer).unwrap();
+        let mut blocks = input.into_blocks().collect_vec();
+        assert_eq!(blocks.len(), 1);
+        let block = blocks.drain(..).next().unwrap();
+        assert_eq!(block.lines_valid(), 1);
+        let mut lines = block.into_lines().unwrap().collect_vec();
+        let line = lines.drain(..).next().unwrap();
+        assert_eq!(line.len(), 70);
     }
 
     // ---

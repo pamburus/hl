@@ -643,12 +643,30 @@ impl<T: ReadOnlyFile + Write> File for T {}
 // ---
 
 #[cfg_attr(test, automock)]
-pub trait FileSystem {
+pub trait FileSystem<M: SourceMetadata = fs::Metadata> {
     fn canonicalize(&self, path: &PathBuf) -> io::Result<PathBuf>;
-    fn metadata(&self, path: &PathBuf) -> io::Result<fs::Metadata>;
+    fn metadata(&self, path: &PathBuf) -> io::Result<M>;
     fn exists(&self, path: &PathBuf) -> io::Result<bool>;
     fn open(&self, path: &PathBuf) -> io::Result<Box<dyn ReadOnlyFile + Send + Sync>>;
     fn create(&self, path: &PathBuf) -> io::Result<Box<dyn File + Send + Sync>>;
+}
+
+#[cfg_attr(test, automock)]
+pub trait SourceMetadata {
+    fn len(&self) -> u64;
+    fn modified(&self) -> io::Result<SystemTime>;
+}
+
+impl SourceMetadata for fs::Metadata {
+    #[inline]
+    fn len(&self) -> u64 {
+        self.len()
+    }
+
+    #[inline]
+    fn modified(&self) -> io::Result<SystemTime> {
+        self.modified()
+    }
 }
 
 // ---
@@ -657,22 +675,27 @@ pub trait FileSystem {
 pub struct RealFileSystem;
 
 impl FileSystem for RealFileSystem {
+    #[inline]
     fn canonicalize(&self, path: &PathBuf) -> io::Result<PathBuf> {
         fs::canonicalize(path)
     }
 
+    #[inline]
     fn metadata(&self, path: &PathBuf) -> io::Result<fs::Metadata> {
         fs::metadata(path)
     }
 
+    #[inline]
     fn exists(&self, path: &PathBuf) -> io::Result<bool> {
         fs::exists(path)
     }
 
+    #[inline]
     fn open(&self, path: &PathBuf) -> io::Result<Box<dyn ReadOnlyFile + Send + Sync>> {
         Ok(Box::new(fs::File::open(path)?))
     }
 
+    #[inline]
     fn create(&self, path: &PathBuf) -> io::Result<Box<dyn File + Send + Sync>> {
         Ok(Box::new(fs::File::create(path)?))
     }
