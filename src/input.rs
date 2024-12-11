@@ -2,7 +2,7 @@
 use std::{
     cmp::min,
     convert::TryInto,
-    fs::{File, Metadata},
+    fs::{self, File, Metadata},
     io::{self, stdin, BufRead, BufReader, Cursor, Read, Seek, SeekFrom},
     mem::size_of_val,
     ops::{Deref, Range},
@@ -34,15 +34,15 @@ pub type BufPool = SQPool<Vec<u8>>;
 
 /// The path to an input file.
 #[derive(Clone, PartialEq, Eq, Debug)]
-pub struct Path {
+pub struct InputPath {
     pub original: PathBuf,
     pub canonical: PathBuf,
 }
 
-impl Path {
+impl InputPath {
     /// Resolves the canonical path for the given path.
     pub fn new(original: PathBuf) -> io::Result<Self> {
-        let canonical = std::fs::canonicalize(&original).map_err(|e| {
+        let canonical = fs::canonicalize(&original).map_err(|e| {
             io::Error::new(
                 e.kind(),
                 format!(
@@ -65,7 +65,7 @@ impl Path {
     }
 }
 
-impl TryFrom<PathBuf> for Path {
+impl TryFrom<PathBuf> for InputPath {
     type Error = io::Error;
 
     fn try_from(original: PathBuf) -> io::Result<Self> {
@@ -79,7 +79,7 @@ impl TryFrom<PathBuf> for Path {
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub enum InputReference {
     Stdin,
-    File(Path),
+    File(InputPath),
 }
 
 impl InputReference {
@@ -89,7 +89,7 @@ impl InputReference {
         let (reference, stream): (_, Option<Box<dyn ReadSeekMeta + Send + Sync>>) = match self {
             Self::Stdin => (self.clone(), None),
             Self::File(path) => {
-                let meta = std::fs::metadata(&path.canonical).map_err(|e| {
+                let meta = fs::metadata(&path.canonical).map_err(|e| {
                     io::Error::new(
                         e.kind(),
                         format!("failed to get information on {}: {}", self.description(), e),
@@ -157,14 +157,14 @@ impl<T: Meta> Meta for &mut T {
     }
 }
 
-impl Meta for std::fs::File {
+impl Meta for fs::File {
     #[inline]
     fn metadata(&self) -> io::Result<Option<Metadata>> {
         self.metadata().map(Some)
     }
 }
 
-impl Meta for std::io::Stdin {
+impl Meta for io::Stdin {
     #[inline]
     fn metadata(&self) -> io::Result<Option<Metadata>> {
         Ok(None)
@@ -902,8 +902,7 @@ mod tests {
     use crate::index::IndexerSettings;
 
     use super::*;
-    use std::io::ErrorKind;
-    use std::io::Read;
+    use io::Read;
 
     #[test]
     fn test_input_reference() {
@@ -912,14 +911,14 @@ mod tests {
         assert_eq!(reference.path(), None);
         let input = reference.open().unwrap();
         assert_eq!(input.reference, reference);
-        let reference = InputReference::File(Path::ephemeral(PathBuf::from("test.log")));
+        let reference = InputReference::File(InputPath::ephemeral(PathBuf::from("test.log")));
         assert_eq!(reference.description(), "file '\u{1b}[33mtest.log\u{1b}[0m'");
         assert_eq!(reference.path(), Some(&PathBuf::from("test.log")));
     }
 
     #[test]
     fn test_input_holder() {
-        let reference = InputReference::File(Path::ephemeral(PathBuf::from("sample/test.log")));
+        let reference = InputReference::File(InputPath::ephemeral(PathBuf::from("sample/test.log")));
         let holder = InputHolder::new(reference, None);
         let mut stream = holder.stream().unwrap();
         let mut buf = Vec::new();
@@ -1011,39 +1010,39 @@ mod tests {
         let result = stream.into_sequential().read(&mut buf);
         assert!(result.is_err());
         let err = result.unwrap_err();
-        assert_eq!(err.kind(), ErrorKind::Other);
+        assert_eq!(err.kind(), io::ErrorKind::Other);
     }
 
     #[test]
     fn test_input_read_error() {
-        let reference = InputReference::File(Path::ephemeral(PathBuf::from("test.log")));
+        let reference = InputReference::File(InputPath::ephemeral(PathBuf::from("test.log")));
         let input = Input::new(reference, Stream::Sequential(Box::new(FailingReader)));
         let mut buf = [0; 128];
         let result = input.stream.into_sequential().read(&mut buf);
         assert!(result.is_err());
         let err = result.unwrap_err();
-        assert_eq!(err.kind(), ErrorKind::Other);
+        assert_eq!(err.kind(), io::ErrorKind::Other);
         assert_eq!(err.to_string().contains("test.log"), true);
     }
 
     #[test]
     fn test_input_hold_error_is_dir() {
-        let reference = InputReference::File(Path::ephemeral(PathBuf::from(".")));
+        let reference = InputReference::File(InputPath::ephemeral(PathBuf::from(".")));
         let result = reference.hold();
         assert!(result.is_err());
         let err = result.err().unwrap();
-        assert_eq!(err.kind(), ErrorKind::InvalidInput);
+        assert_eq!(err.kind(), io::ErrorKind::InvalidInput);
         assert_eq!(err.to_string().contains("is a directory"), true);
     }
 
     #[test]
     fn test_input_hold_error_not_found() {
         let filename = "AKBNIJGHERHBNMCKJABHSDJ";
-        let reference = InputReference::File(Path::ephemeral(PathBuf::from(filename)));
+        let reference = InputReference::File(InputPath::ephemeral(PathBuf::from(filename)));
         let result = reference.hold();
         assert!(result.is_err());
         let err = result.err().unwrap();
-        assert_eq!(err.kind(), ErrorKind::NotFound);
+        assert_eq!(err.kind(), io::ErrorKind::NotFound);
         assert_eq!(err.to_string().contains(filename), true);
     }
 
@@ -1063,7 +1062,7 @@ mod tests {
     }
 
     #[test]
-    fn test_indexed_input() {
+    fn test_indexed_input_stdin() {
         let data = br#"{"ts":"2024-10-01T01:02:03Z","level":"info","msg":"some test message"}\n"#;
         let stream = Stream::RandomAccess(Box::new(Cursor::new(data)));
         let indexer = Indexer::new(1, PathBuf::new(), IndexerSettings::default());
@@ -1082,24 +1081,24 @@ mod tests {
     struct FailingReader;
 
     impl Read for FailingReader {
-        fn read(&mut self, _buf: &mut [u8]) -> std::io::Result<usize> {
-            Err(std::io::Error::new(std::io::ErrorKind::Other, "read error"))
+        fn read(&mut self, _buf: &mut [u8]) -> io::Result<usize> {
+            Err(io::Error::new(io::ErrorKind::Other, "read error"))
         }
     }
 
     impl Seek for FailingReader {
-        fn seek(&mut self, from: SeekFrom) -> std::io::Result<u64> {
+        fn seek(&mut self, from: SeekFrom) -> io::Result<u64> {
             match from {
                 SeekFrom::Start(0) => Ok(0),
                 SeekFrom::Current(0) => Ok(0),
                 SeekFrom::End(0) => Ok(0),
-                _ => Err(std::io::Error::new(std::io::ErrorKind::Other, "seek error")),
+                _ => Err(io::Error::new(io::ErrorKind::Other, "seek error")),
             }
         }
     }
 
     impl Meta for FailingReader {
-        fn metadata(&self) -> std::io::Result<Option<std::fs::Metadata>> {
+        fn metadata(&self) -> std::io::Result<Option<Metadata>> {
             Ok(None)
         }
     }
@@ -1109,19 +1108,19 @@ mod tests {
     struct UnseekableReader<R>(R);
 
     impl<R: Read> Read for UnseekableReader<R> {
-        fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
             self.0.read(buf)
         }
     }
 
     impl<R> Seek for UnseekableReader<R> {
-        fn seek(&mut self, _: SeekFrom) -> std::io::Result<u64> {
-            Err(std::io::Error::new(std::io::ErrorKind::Other, "seek error"))
+        fn seek(&mut self, _: SeekFrom) -> io::Result<u64> {
+            Err(io::Error::new(io::ErrorKind::Other, "seek error"))
         }
     }
 
     impl<R> Meta for UnseekableReader<R> {
-        fn metadata(&self) -> std::io::Result<Option<std::fs::Metadata>> {
+        fn metadata(&self) -> io::Result<Option<Metadata>> {
             Ok(None)
         }
     }
