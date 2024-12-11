@@ -32,7 +32,7 @@ use crate::{
     fmtx::aligned_left,
     formatting::{RawRecordFormatter, RecordFormatter, RecordWithSourceFormatter},
     fsmon::{self, EventKind},
-    index::{Indexer, IndexerSettings, Timestamp},
+    index::{Indexer, IndexerSettings, RealFileSystem, Timestamp},
     input::{BlockLine, Input, InputHolder, InputReference},
     model::{Filter, Parser, ParserSettings, RawRecord, Record, RecordFilter, RecordWithSourceConstructor},
     query::Query,
@@ -271,7 +271,7 @@ impl App {
 
     fn sort(&self, inputs: Vec<InputHolder>, output: &mut Output) -> Result<()> {
         let mut output = BufWriter::new(output);
-        let indexer_settings = IndexerSettings::new(
+        let indexer_settings = IndexerSettings::<RealFileSystem>::new(
             self.options.buffer_size.try_into()?,
             self.options.max_message_size.try_into()?,
             &self.options.fields.settings.predefined,

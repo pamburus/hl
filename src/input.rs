@@ -17,7 +17,7 @@ use nu_ansi_term::Color;
 // local imports
 use crate::{
     error::{Result, HILITE},
-    index::{Index, Indexer, SourceBlock},
+    index::{FileSystem, Index, Indexer, SourceBlock},
     iox::ReadFill,
     pool::SQPool,
     replay::{ReplayBufCreator, ReplayBufReader, ReplaySeekReader},
@@ -207,7 +207,7 @@ impl InputHolder {
     }
 
     /// Indexes the input file and returns IndexedInput that can be used to access the data in random order.
-    pub fn index(self, indexer: &Indexer) -> Result<IndexedInput> {
+    pub fn index<FS: FileSystem + Sync>(self, indexer: &Indexer<FS>) -> Result<IndexedInput> {
         self.open()?.indexed(indexer)
     }
 
@@ -246,7 +246,7 @@ impl Input {
     }
 
     /// Indexes the input file and returns IndexedInput that can be used to access the data in random order.
-    pub fn indexed(self, indexer: &Indexer) -> Result<IndexedInput> {
+    pub fn indexed<FS: FileSystem + Sync>(self, indexer: &Indexer<FS>) -> Result<IndexedInput> {
         IndexedInput::from_stream(self.reference, self.stream, indexer)
     }
 
@@ -466,7 +466,7 @@ impl IndexedInput {
     }
 
     /// Opens the input file and indexes it.
-    pub fn open(path: &PathBuf, indexer: &Indexer) -> Result<Self> {
+    pub fn open<FS: FileSystem + Sync>(path: &PathBuf, indexer: &Indexer<FS>) -> Result<Self> {
         InputReference::File(path.clone().try_into()?).hold()?.index(indexer)
     }
 
@@ -476,15 +476,19 @@ impl IndexedInput {
         Blocks::new(Arc::new(self), (0..n).into_iter())
     }
 
-    fn from_stream(reference: InputReference, stream: Stream, indexer: &Indexer) -> Result<Self> {
+    fn from_stream<FS: FileSystem + Sync>(
+        reference: InputReference,
+        stream: Stream,
+        indexer: &Indexer<FS>,
+    ) -> Result<Self> {
         let (stream, index) = Self::index_stream(&reference, stream, indexer)?;
         Ok(Self::new(reference, stream, index))
     }
 
-    fn index_stream(
+    fn index_stream<FS: FileSystem + Sync>(
         reference: &InputReference,
         stream: Stream,
-        indexer: &Indexer,
+        indexer: &Indexer<FS>,
     ) -> Result<(RandomAccessStream, Index)> {
         log::info!("indexing {}", reference.description());
 
@@ -503,11 +507,11 @@ impl IndexedInput {
         }
     }
 
-    fn index_random_access_stream(
+    fn index_random_access_stream<FS: FileSystem + Sync>(
         path: &PathBuf,
         meta: &Metadata,
         mut stream: RandomAccessStream,
-        indexer: &Indexer,
+        indexer: &Indexer<FS>,
     ) -> Result<(RandomAccessStream, Index)> {
         let pos = stream.seek(SeekFrom::Current(0))?;
         let index = indexer.index_stream(&mut stream, path, meta)?;
@@ -517,11 +521,11 @@ impl IndexedInput {
         Ok((stream, index))
     }
 
-    fn index_sequential_stream(
+    fn index_sequential_stream<FS: FileSystem + Sync>(
         path: &PathBuf,
         meta: &Metadata,
         stream: SequentialStream,
-        indexer: &Indexer,
+        indexer: &Indexer<FS>,
     ) -> Result<(RandomAccessStream, Index)> {
         let mut tee = TeeReader::new(stream, ReplayBufCreator::new());
         let index = indexer.index_stream(&mut tee, path, meta)?;
@@ -897,11 +901,14 @@ impl<T> Meta for WithMetadata<T> {
 
 #[cfg(test)]
 mod tests {
-    use std::time::{Duration, SystemTime};
+    use std::{
+        str::FromStr,
+        time::{Duration, SystemTime},
+    };
 
     use itertools::Itertools;
 
-    use crate::index::{IndexerSettings, MockFileSystem, MockSourceMetadata};
+    use crate::index::{IndexerSettings, MockFileSystem, MockSourceMetadata, RealFileSystem};
 
     use super::*;
     use io::Read;
@@ -1067,7 +1074,7 @@ mod tests {
     fn test_indexed_input_stdin() {
         let data = br#"{"ts":"2024-10-01T01:02:03Z","level":"info","msg":"some test message"}\n"#;
         let stream = Stream::RandomAccess(Box::new(Cursor::new(data)));
-        let indexer = Indexer::new(1, PathBuf::new(), IndexerSettings::default());
+        let indexer = Indexer::<RealFileSystem>::new(1, PathBuf::new(), IndexerSettings::default());
         let input = IndexedInput::from_stream(InputReference::Stdin, stream, &indexer).unwrap();
         let mut blocks = input.into_blocks().collect_vec();
         assert_eq!(blocks.len(), 1);
@@ -1080,18 +1087,37 @@ mod tests {
 
     #[test]
     fn test_indexed_input_file_random_access() {
-        let ts = SystemTime::from(SystemTime::UNIX_EPOCH + Duration::from_secs(1704067200));
-        let mut meta = MockSourceMetadata::new();
-        meta.expect_len().return_const(70);
-        meta.expect_modified().returning(|| Ok(ts));
+        use crate::index::Meta;
+
+        let meta = || {
+            let ts = SystemTime::from(SystemTime::UNIX_EPOCH + Duration::from_secs(1704067200));
+            let mut meta = MockSourceMetadata::new();
+            meta.expect_len().return_const(70u64);
+            meta.expect_modified().returning(move || Ok(ts));
+            meta
+        };
 
         let mut fs = MockFileSystem::new();
+        let mut index_file = Vec::new();
         fs.expect_canonicalize()
             .returning(|path| Ok(std::path::Path::new("/tmp").join(path)));
-        fs.expect_metadata().returning(|_| Ok(meta));
+        fs.expect_metadata().returning(move |_| Ok(meta()));
+        fs.expect_exists().once().returning(|_| Ok(false));
+        fs.expect_create()
+            .returning(move |_| Ok(Box::new(Cursor::new(&mut index_file))));
+        let index_file_path =
+            PathBuf::from_str("a4c307cfc85cdccafeded6cb95e594cf32e24bf3aca066fd0be834ebc66bd0fc").unwrap();
+        fs.expect_exists().returning(move |x| Ok(x == &index_file_path));
 
         let path = PathBuf::from("sample/test.log");
-        let indexer = Indexer::new(1, PathBuf::new(), IndexerSettings::default());
+        let indexer = Indexer::new(
+            1,
+            PathBuf::new(),
+            IndexerSettings {
+                fs,
+                ..Default::default()
+            },
+        );
         let input = IndexedInput::open(&path, &indexer).unwrap();
         let mut blocks = input.into_blocks().collect_vec();
         assert_eq!(blocks.len(), 1);
