@@ -5,3 +5,6 @@
 /*.log.xz
 /*.log.zst
 /target
+
+# devenv
+.direnv
