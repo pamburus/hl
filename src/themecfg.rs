@@ -9,7 +9,7 @@ use std::{
 };
 
 // third-party imports
-use derive_deref::Deref;
+use derive_more::Deref;
 use enum_map::Enum;
 use rust_embed::RustEmbed;
 use serde::{

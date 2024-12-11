@@ -32,6 +32,14 @@ pub trait Cache {
     fn cache<F: FnOnce() -> Result<Buf>>(&mut self, key: Self::Key, f: F) -> Result<&[u8]>;
 }
 
+impl<C: Cache> Cache for &mut C {
+    type Key = C::Key;
+
+    fn cache<F: FnOnce() -> Result<Buf>>(&mut self, key: Self::Key, f: F) -> Result<&[u8]> {
+        (**self).cache(key, f)
+    }
+}
+
 // ---
 
 pub struct ReplayBuf {
@@ -58,6 +66,20 @@ impl TryFrom<ReplayBufCreator> for ReplayBuf {
     }
 }
 
+impl ReplayBufRead for ReplayBuf {
+    fn size(&self) -> usize {
+        self.size
+    }
+
+    fn segment_size(&self) -> NonZeroUsize {
+        self.segment_size
+    }
+
+    fn segments(&self) -> &Vec<CompressedBuf> {
+        &self.segments
+    }
+}
+
 // ---
 
 pub struct ReplayBufCreator {
@@ -67,7 +89,7 @@ pub struct ReplayBufCreator {
 
 impl ReplayBufCreator {
     pub fn new() -> Self {
-        Self::build().result()
+        Self::build().done()
     }
 
     pub fn build() -> ReplayBufCreatorBuilder {
@@ -112,17 +134,12 @@ impl Write for ReplayBufCreator {
 
     fn flush(&mut self) -> Result<()> {
         if self.scratch.len() != 0 {
-            let buf = self.scratch.clear();
+            let buf = self.scratch.bytes();
             self.buf.segments.push(CompressedBuf::try_from(buf)?);
             self.buf.size += buf.len();
+            self.scratch.clear();
         }
         Ok(())
-    }
-}
-
-impl From<ReplayBufCreatorBuilder> for ReplayBufCreator {
-    fn from(builder: ReplayBufCreatorBuilder) -> Self {
-        builder.result()
     }
 }
 
@@ -139,7 +156,7 @@ impl ReplayBufCreatorBuilder {
         self
     }
 
-    pub fn result(self) -> ReplayBufCreator {
+    pub fn done(self) -> ReplayBufCreator {
         ReplayBufCreator {
             buf: ReplayBuf::new(self.segment_size),
             scratch: ReusableBuf::new(self.segment_size.get()),
@@ -149,18 +166,40 @@ impl ReplayBufCreatorBuilder {
 
 // ---
 
-pub struct ReplayBufReader<C> {
-    buf: ReplayBuf,
+pub trait ReplayBufRead {
+    fn segment_size(&self) -> NonZeroUsize;
+    fn size(&self) -> usize;
+    fn segments(&self) -> &Vec<CompressedBuf>;
+}
+
+impl<B: ReplayBufRead> ReplayBufRead for &B {
+    fn segment_size(&self) -> NonZeroUsize {
+        (**self).segment_size()
+    }
+
+    fn size(&self) -> usize {
+        (**self).size()
+    }
+
+    fn segments(&self) -> &Vec<CompressedBuf> {
+        (**self).segments()
+    }
+}
+
+// ---
+
+pub struct ReplayBufReader<B, C> {
+    buf: B,
     cache: C,
     position: usize,
 }
 
-impl ReplayBufReader<MinimalCache<usize>> {
-    pub fn new(buf: ReplayBuf) -> Self {
-        Self::build(buf).result()
+impl<B: ReplayBufRead> ReplayBufReader<B, MinimalCache<usize>> {
+    pub fn new(buf: B) -> Self {
+        Self::build(buf).done()
     }
 
-    pub fn build(buf: ReplayBuf) -> ReplayBufReaderBuilder<MinimalCache<usize>> {
+    pub fn build(buf: B) -> ReplayBufReaderBuilder<B, MinimalCache<usize>> {
         ReplayBufReaderBuilder {
             buf,
             cache: MinimalCache::new(),
@@ -169,47 +208,47 @@ impl ReplayBufReader<MinimalCache<usize>> {
     }
 }
 
-impl<C: Cache<Key = usize>> ReplayBufReader<C> {
+impl<B: ReplayBufRead, C: Cache<Key = usize>> ReplayBufReader<B, C> {
     #[inline(always)]
     fn segment_size(&self) -> NonZeroUsize {
-        self.buf.segment_size
+        self.buf.segment_size()
     }
 
     fn segment(&mut self, index: usize) -> Result<&[u8]> {
-        if index >= self.buf.segments.len() {
-            panic!("logic error")
-        }
+        assert!(index < self.buf.segments().len());
         let ss = self.segment_size().get();
-        let data = &mut self.buf.segments;
+        let data = self.buf.segments();
         self.cache.cache(index, || {
             let mut buf = vec![0; ss];
-            data[index].decode(&mut buf)?;
+            let n = data[index].decode(&mut buf)?;
+            buf.truncate(n);
+            assert!(n == ss || index == data.len() - 1);
             Ok(buf)
         })
     }
 
     fn from_start(&self, offset: u64) -> Option<usize> {
-        usize::try_from(offset).ok().filter(|&v| v <= self.buf.size)
+        usize::try_from(offset).ok().filter(|&v| v <= self.buf.size())
     }
 
     fn from_current(&self, offset: i64) -> Option<usize> {
         usize::try_from(i64::try_from(self.position).ok()?.checked_add(offset)?)
             .ok()
-            .filter(|&v| v <= self.buf.size)
+            .filter(|&v| v <= self.buf.size())
     }
 
-    fn from_end(&mut self, offset: i64) -> Option<usize> {
-        usize::try_from(i64::try_from(self.buf.size).ok()?.checked_add(offset)?)
+    fn from_end(&self, offset: i64) -> Option<usize> {
+        usize::try_from(i64::try_from(self.buf.size()).ok()?.checked_add(offset)?)
             .ok()
-            .filter(|&v| v <= self.buf.size)
+            .filter(|&v| v <= self.buf.size())
     }
 }
 
-impl<C: Cache<Key = usize>> Read for ReplayBufReader<C> {
+impl<B: ReplayBufRead, C: Cache<Key = usize>> Read for ReplayBufReader<B, C> {
     fn read(&mut self, buf: &mut [u8]) -> Result<usize> {
         let mut i = 0;
         let ss = self.segment_size().get();
-        loop {
+        while self.position < self.buf.size() {
             let segment = self.position / self.segment_size();
             let offset = self.position % self.segment_size();
             let data = self.segment(segment)?;
@@ -222,10 +261,11 @@ impl<C: Cache<Key = usize>> Read for ReplayBufReader<C> {
                 return Ok(i);
             }
         }
+        Ok(i)
     }
 }
 
-impl<C: Cache<Key = usize>> Seek for ReplayBufReader<C> {
+impl<B: ReplayBufRead, C: Cache<Key = usize>> Seek for ReplayBufReader<B, C> {
     fn seek(&mut self, pos: SeekFrom) -> Result<u64> {
         let pos = match pos {
             SeekFrom::Start(pos) => self.from_start(pos),
@@ -233,29 +273,23 @@ impl<C: Cache<Key = usize>> Seek for ReplayBufReader<C> {
             SeekFrom::End(pos) => self.from_end(pos),
         };
         let pos = pos.ok_or_else(|| Error::new(ErrorKind::InvalidInput, "position out of range"))?;
-        let pos = min(pos, self.buf.size);
+        let pos = min(pos, self.buf.size());
         self.position = pos;
         u64::try_from(pos).map_err(|e| Error::new(ErrorKind::InvalidInput, e))
     }
 }
 
-impl<C: Cache> From<ReplayBufReaderBuilder<C>> for ReplayBufReader<C> {
-    fn from(builder: ReplayBufReaderBuilder<C>) -> Self {
-        builder.result()
-    }
-}
-
 // ---
 
-pub struct ReplayBufReaderBuilder<C> {
-    buf: ReplayBuf,
+pub struct ReplayBufReaderBuilder<B, C> {
+    buf: B,
     cache: C,
     position: usize,
 }
 
-impl<C: Cache> ReplayBufReaderBuilder<C> {
+impl<B: ReplayBufRead, C: Cache> ReplayBufReaderBuilder<B, C> {
     #[allow(dead_code)]
-    pub fn cache<C2: Cache>(self, cache: C2) -> ReplayBufReaderBuilder<C2> {
+    pub fn cache<C2: Cache>(self, cache: C2) -> ReplayBufReaderBuilder<B, C2> {
         ReplayBufReaderBuilder {
             buf: self.buf,
             cache,
@@ -264,16 +298,165 @@ impl<C: Cache> ReplayBufReaderBuilder<C> {
     }
 
     #[allow(dead_code)]
-    pub fn position(mut self, position: usize) -> Self {
-        self.position = position;
-        self
+    pub fn position(self, position: usize) -> Self {
+        Self { position, ..self }
     }
 
-    pub fn result(self) -> ReplayBufReader<C> {
+    pub fn done(self) -> ReplayBufReader<B, C> {
         ReplayBufReader {
             buf: self.buf,
             cache: self.cache,
             position: self.position,
+        }
+    }
+}
+
+// ---
+
+pub struct ReplaySeekReader<R, C> {
+    r: R,
+    w: ReplayBufCreator,
+    cache: C,
+    position: usize,
+    drained: bool,
+}
+
+impl<R: Read> ReplaySeekReader<R, LruCache<usize>> {
+    pub fn new(r: R) -> Self {
+        Self::build(r).done()
+    }
+
+    pub fn build(r: R) -> ReplaySeekReaderBuilder<R, LruCache<usize>> {
+        ReplaySeekReaderBuilder {
+            r,
+            w: ReplayBufCreator::build(),
+            cache: LruCache::default(),
+        }
+    }
+}
+
+impl<R: Read, C: Cache> ReplaySeekReader<R, C> {
+    fn end(&self) -> usize {
+        self.w.buf.size + self.w.scratch.len()
+    }
+
+    fn from_start(&self, offset: u64) -> Option<usize> {
+        usize::try_from(offset).ok()
+    }
+
+    fn from_current(&self, offset: i64) -> Option<usize> {
+        usize::try_from(i64::try_from(self.position).ok()?.checked_add(offset)?).ok()
+    }
+
+    fn from_end(&self, offset: i64) -> Option<usize> {
+        usize::try_from(i64::try_from(self.end()).ok()?.checked_add(offset)?).ok()
+    }
+}
+
+impl<R: Read, C: Cache<Key = usize>> Read for ReplaySeekReader<R, C> {
+    fn read(&mut self, buf: &mut [u8]) -> Result<usize> {
+        if self.position == self.end() {
+            if self.drained {
+                return Ok(0);
+            }
+            let n = self.r.read(buf)?;
+            self.w.write_all(&buf[..n])?;
+            self.position += n;
+            if n == 0 {
+                self.w.flush()?;
+                self.drained = true;
+            }
+            return Ok(n);
+        }
+
+        if self.position < self.w.buf.size {
+            let mut reader = ReplayBufReader {
+                buf: &self.w.buf,
+                cache: &mut self.cache,
+                position: self.position,
+            };
+            let n = reader.read(buf)?;
+            self.position += n;
+            assert!(self.position <= self.w.buf.size);
+            return Ok(n);
+        }
+
+        let offset = self.position - self.w.buf.size;
+        assert!(offset < self.w.scratch.len());
+        let n = min(self.w.scratch.len() - offset, buf.len());
+        buf[..n].copy_from_slice(&self.w.scratch.bytes()[offset..offset + n]);
+        self.position += n;
+
+        return Ok(n);
+    }
+}
+
+impl<R: Read, C: Cache<Key = usize>> Seek for ReplaySeekReader<R, C> {
+    fn seek(&mut self, pos: SeekFrom) -> Result<u64> {
+        let pos = match pos {
+            SeekFrom::Start(pos) => self.from_start(pos),
+            SeekFrom::Current(pos) => self.from_current(pos),
+            SeekFrom::End(pos) => {
+                if !self.drained {
+                    let old = self.position;
+                    let result = std::io::copy(self, &mut std::io::sink());
+                    self.position = old;
+                    result?;
+                    assert!(self.drained);
+                }
+                self.from_end(pos)
+            }
+        };
+        let pos = pos.filter(|&v| !self.drained || v <= self.w.buf.size);
+        let pos = pos.ok_or_else(|| Error::new(ErrorKind::InvalidInput, "position out of range"))?;
+
+        if pos > self.end() {
+            let n = pos - self.end();
+            let old = self.position;
+            self.position = self.end();
+            let result = std::io::copy(&mut self.take(n as u64), &mut std::io::sink());
+            self.position = old;
+            result?;
+        }
+
+        assert!(pos <= self.end());
+        self.position = pos;
+
+        Ok(pos as u64)
+    }
+}
+
+// ---
+
+pub struct ReplaySeekReaderBuilder<R, C> {
+    r: R,
+    w: ReplayBufCreatorBuilder,
+    cache: C,
+}
+
+impl<R: Read, C: Cache> ReplaySeekReaderBuilder<R, C> {
+    #[allow(dead_code)]
+    pub fn cache<C2: Cache>(self, cache: C2) -> ReplaySeekReaderBuilder<R, C2> {
+        ReplaySeekReaderBuilder {
+            r: self.r,
+            w: self.w,
+            cache,
+        }
+    }
+
+    #[allow(dead_code)]
+    pub fn segment_size(mut self, segment_size: NonZeroUsize) -> Self {
+        self.w.segment_size = segment_size;
+        self
+    }
+
+    pub fn done(self) -> ReplaySeekReader<R, C> {
+        ReplaySeekReader {
+            r: self.r,
+            w: self.w.done(),
+            cache: self.cache,
+            position: 0,
+            drained: false,
         }
     }
 }
@@ -290,8 +473,8 @@ impl CompressedBuf {
         Ok(Self(encoded))
     }
 
-    pub fn decode(&self, buf: &mut [u8]) -> Result<()> {
-        FrameDecoder::new(&self.0[..]).read_exact(buf)
+    pub fn decode(&self, buf: &mut [u8]) -> Result<usize> {
+        FrameDecoder::new(&self.0[..]).read_fill(buf)
     }
 }
 
@@ -385,6 +568,12 @@ impl<Key: Copy + Clone + Eq + PartialEq + Ord + PartialOrd + Hash> Cache for Min
     }
 }
 
+impl<Key> Default for MinimalCache<Key> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 // ---
 
 pub struct LruCache<Key> {
@@ -436,6 +625,12 @@ impl<Key: Copy + Clone + Eq + PartialEq + Ord + PartialOrd + Hash> Cache for Lru
     }
 }
 
+impl<Key: Ord + PartialOrd> Default for LruCache<Key> {
+    fn default() -> Self {
+        Self::new(4)
+    }
+}
+
 // ---
 
 pub trait ReaderFactory {
@@ -468,7 +663,7 @@ pub struct RewindingReader<F: ReaderFactory, C> {
 impl<F: ReaderFactory> RewindingReader<F, MinimalCache<u64>> {
     #[allow(dead_code)]
     pub fn new(factory: F) -> Result<Self> {
-        Self::build(factory).result()
+        Self::build(factory).done()
     }
 
     pub fn build(factory: F) -> RewindingReaderBuilder<F, MinimalCache<u64>> {
@@ -595,7 +790,7 @@ impl<F: ReaderFactory, C: Cache> RewindingReaderBuilder<F, C> {
         self
     }
 
-    pub fn result(self) -> Result<RewindingReader<F, C>> {
+    pub fn done(self) -> Result<RewindingReader<F, C>> {
         Ok(RewindingReader {
             inner: self.factory.new_reader()?,
             factory: self.factory,
@@ -620,10 +815,55 @@ impl<T: Read + Seek> ReadSeek for T {}
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::{io::Cursor, str};
+    use core::str;
+    use nonzero_ext::nonzero;
+    use std::{io::Cursor, num::NonZero};
 
     fn dual<'a>(b: &[u8]) -> (&str, &[u8]) {
         (str::from_utf8(b).unwrap(), b)
+    }
+
+    #[test]
+    fn test_replay_buf() {
+        let mut w = ReplayBufCreator::build().segment_size(nonzero!(4 as usize)).done();
+        w.write_all(b"Lorem ipsum dolor sit amet.").unwrap();
+        w.flush().unwrap();
+        w.flush().unwrap();
+        let r = ReplayBuf::try_from(w).unwrap();
+
+        assert_eq!(r.segment_size().get(), 4);
+        assert_eq!(r.size(), 27);
+        assert_eq!(r.segments().len(), 7);
+
+        let mut buf = vec![0; 27];
+        let n = r.segments()[0].decode(&mut buf).unwrap();
+        buf.truncate(n);
+        assert_eq!(n, 4);
+        assert_eq!(dual(&buf), dual(b"Lore"));
+    }
+
+    #[test]
+    fn test_replay_buf_reader() {
+        let data = b"Lorem ipsum dolor sit amet.";
+        let mut creator = ReplayBufCreator::new();
+        creator.write_all(data).unwrap();
+        let buf = ReplayBuf::try_from(creator).unwrap();
+        let mut r = ReplayBufReader::build(buf)
+            .cache(MinimalCache::default())
+            .position(6)
+            .done();
+
+        let pos = r.seek(SeekFrom::Current(0)).unwrap();
+        assert_eq!(pos, 6);
+        let mut buf = vec![0; 11];
+        r.read_exact(&mut buf).unwrap();
+        assert_eq!(dual(&buf), dual(b"ipsum dolor"));
+
+        let pos = r.seek(SeekFrom::End(-9)).unwrap();
+        assert_eq!(pos, 18);
+        let mut buf = vec![];
+        r.read_to_end(&mut buf).unwrap();
+        assert_eq!(dual(&buf), dual(b"sit amet."));
     }
 
     fn test_rewinding_reader<F: FnOnce(usize, &str) -> Box<dyn ReadSeek>>(f: F) {
@@ -670,9 +910,19 @@ mod tests {
             Box::new(
                 RewindingReader::build(move || Ok(Cursor::new(data.clone())))
                     .block_size(block_size.try_into().unwrap())
-                    .result()
+                    .done()
                     .unwrap(),
             )
+        });
+    }
+
+    #[test]
+    fn test_rewinding_reader_new() {
+        test_rewinding_reader(|block_size, data| {
+            let data = data.as_bytes().to_vec();
+            let mut r = RewindingReader::new(move || Ok(Cursor::new(data.clone()))).unwrap();
+            r.block_size = NonZero::try_from(block_size as u64).unwrap();
+            Box::new(r)
         });
     }
 
@@ -684,9 +934,58 @@ mod tests {
                 RewindingReader::build(move || Ok(Cursor::new(data.clone())))
                     .block_size(block_size.try_into().unwrap())
                     .cache(LruCache::new(3))
-                    .result()
+                    .done()
                     .unwrap(),
             )
         });
+    }
+
+    #[test]
+    fn test_replay_seek_reader() {
+        let data = b"Lorem ipsum dolor sit amet.";
+        let s = |buf| str::from_utf8(buf).unwrap();
+        let mut r = ReplaySeekReader::build(Cursor::new(data))
+            .segment_size(nonzero!(4 as usize))
+            .done();
+
+        let pos = r.seek(SeekFrom::Start(6)).unwrap();
+        assert_eq!(pos, 6);
+        let mut buf = vec![0; 5];
+        r.read_exact(&mut buf).unwrap();
+        assert_eq!(s(&buf), "ipsum");
+
+        let pos = r.seek(SeekFrom::Current(7)).unwrap();
+        assert_eq!(pos, 18);
+        let mut buf = vec![0; 3];
+        r.read_exact(&mut buf).unwrap();
+        assert_eq!(s(&buf), "sit");
+
+        let pos = r.seek(SeekFrom::Current(-9)).unwrap();
+        assert_eq!(pos, 12);
+        let mut buf = vec![0; 5];
+        r.read_exact(&mut buf).unwrap();
+        assert_eq!(s(&buf), "dolor");
+
+        let pos = r.seek(SeekFrom::End(-5)).unwrap();
+        assert_eq!(pos, 22);
+        let mut buf = vec![];
+        r.read_to_end(&mut buf).unwrap();
+        assert_eq!(s(&buf), "amet.");
+
+        let pos = r.seek(SeekFrom::End(0)).unwrap();
+        assert_eq!(pos, 27);
+        let mut buf = vec![];
+        r.read_to_end(&mut buf).unwrap();
+        assert_eq!(s(&buf), "");
+
+        let mut r = ReplaySeekReader::new(Cursor::new(data));
+        let pos = r.seek(SeekFrom::End(0)).unwrap();
+        assert_eq!(pos, 27);
+
+        let mut r = ReplaySeekReader::build(Cursor::new(data))
+            .cache(MinimalCache::default())
+            .done();
+        let pos = r.seek(SeekFrom::End(-7)).unwrap();
+        assert_eq!(pos, 20);
     }
 }

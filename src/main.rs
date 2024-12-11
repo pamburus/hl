@@ -11,8 +11,8 @@ use std::{
 // third-party imports
 use chrono::Utc;
 use clap::{CommandFactory, Parser};
+use env_logger::fmt::TimestampPrecision;
 use itertools::Itertools;
-use phf::phf_map;
 
 // local imports
 use hl::{
@@ -29,14 +29,6 @@ use hl::{
     Delimiter, {IncludeExcludeKeyFilter, KeyMatchOptions},
 };
 
-// supported compression formats
-const COMPRESSION_FORMATS: phf::Map<&str, &str> = phf_map! {
-    "bz2" => "bzip2",
-    "gz" => "gzip",
-    "xz" => "xz",
-    "zst" => "zstd"
-};
-
 // ---
 
 fn run() -> Result<()> {
@@ -46,6 +38,13 @@ fn run() -> Result<()> {
     let opt = cli::Opt::parse();
     if opt.help {
         return cli::Opt::command().print_help().map_err(Error::Io);
+    }
+
+    if opt.debug {
+        env_logger::builder()
+            .format_timestamp(Some(TimestampPrecision::Micros))
+            .init();
+        log::debug!("logging initialized");
     }
 
     if let Some(shell) = opt.shell_completions {
@@ -266,21 +265,8 @@ fn run() -> Result<()> {
         inputs.push(InputReference::Stdin);
     }
 
-    if opt.sort || opt.follow {
-        for input in &inputs {
-            if let InputReference::File(path) = input {
-                if let Some(Some(ext)) = path.extension().map(|x| x.to_str()) {
-                    if let Some(&format) = COMPRESSION_FORMATS.get(ext) {
-                        return Err(Error::UnsupportedFormatForIndexing {
-                            path: path.clone(),
-                            format: format.into(),
-                        });
-                    }
-                }
-            }
-        }
-    }
-
+    let n = inputs.len();
+    log::debug!("hold {n} inputs");
     let inputs = inputs
         .into_iter()
         .map(|input| input.hold().map_err(Error::Io))
@@ -312,6 +298,8 @@ fn run() -> Result<()> {
             }
         }
     };
+
+    log::debug!("run the app");
 
     // Run the app.
     let run = || match app.run(inputs, output.as_mut()) {
