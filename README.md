@@ -79,8 +79,8 @@ High performance and convenient features are the main goals.
 
 * Install the package using [nix-flakes](https://wiki.nixos.org/wiki/Flakes)
 
-<details>
-<summary>Example how to update nix configuration</summary>
+  <details>
+  <summary>Example how to update nix configuration</summary>
 
   ```nix
   {
@@ -108,7 +108,7 @@ High performance and convenient features are the main goals.
   }
   ```
 
-</details>
+  </details>
 
 * Download latest release from [download page](https://github.com/pamburus/hl/releases/latest)
 
