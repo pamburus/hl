@@ -65,6 +65,51 @@ High performance and convenient features are the main goals.
     cargo install --locked --git https://github.com/pamburus/hl.git
     ```
 
+* Run using [nix](https://nixos.org/download/)
+
+  ```sh
+  nix run github:pamburus/hl
+  ```
+
+  or install with [nix profile](https://nix.dev/manual/nix/2.22/command-ref/new-cli/nix3-profile-install):
+
+  ```sh
+  nix profile install github:pamburus/hl
+  ```
+
+* Install the package using [nix-flakes](https://wiki.nixos.org/wiki/Flakes)
+
+  <details>
+  <summary>Example how to update nix configuration</summary>
+
+  ```nix
+  {
+      inputs = {
+          nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+          hl.url = "github:pamburus/hl";
+      };
+      outputs = {nixpkgs, hl, ...}:
+      let
+          system = "x86_64-linux";
+      in
+      {
+          # this is just an example!
+          nixosConfigurations.yourHost = nixpkgs.lib.nixosSystem {
+              inherit system;
+              modules = [
+                  ({...}: {
+                    environment.systemPackages = [
+                      hl.packages.${system}
+                    ];
+                  })
+              ];
+          };
+      };
+  }
+  ```
+
+  </details>
+
 * Download latest release from [download page](https://github.com/pamburus/hl/releases/latest)
 
 ## Examples
