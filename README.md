@@ -77,7 +77,7 @@ High performance and convenient features are the main goals.
   nix profile install github:pamburus/hl
   ```
 
-* Install the package by using [nix-flakes](https://wiki.nixos.org/wiki/Flakes)
+* Install the package using [nix-flakes](https://wiki.nixos.org/wiki/Flakes)
 
 <details>
 <summary>Example how to update nix configuration</summary>
