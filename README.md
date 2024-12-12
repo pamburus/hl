@@ -71,7 +71,7 @@ High performance and convenient features are the main goals.
   nix run github:pamburus/hl
   ```
 
-  or with [nix profile](https://nix.dev/manual/nix/2.22/command-ref/new-cli/nix3-profile-install):
+  or install with [nix profile](https://nix.dev/manual/nix/2.22/command-ref/new-cli/nix3-profile-install):
 
   ```sh
   nix profile install github:pamburus/hl
