@@ -1,5 +1,5 @@
 // std imports
-use std::path::PathBuf;
+use std::{path::PathBuf, time::Duration};
 
 // local imports
 use crate::error::Result;
@@ -124,7 +124,7 @@ mod imp {
             watcher.watch()?;
 
             while synced {
-                let event = if let Some(event) = watcher.poll(None) {
+                let event = if let Some(event) = watcher.poll(Some(Duration::from_secs(1))) {
                     event
                 } else {
                     continue;

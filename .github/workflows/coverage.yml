@@ -4,7 +4,7 @@ on:
   push:
     branches: [master, release/*]
   pull_request:
-    branches: ['*']
+    branches: [master, release/*]
 
 jobs:
   test:
