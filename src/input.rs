@@ -907,6 +907,13 @@ impl<T> Meta for WithMetadata<T> {
     }
 }
 
+impl<T> crate::index::Meta for WithMetadata<T> {
+    fn metadata(&self) -> io::Result<Metadata> {
+        // TODO: remove Option from Metadata
+        Ok(self.meta.clone().unwrap())
+    }
+}
+
 // ---
 
 #[cfg(test)]
@@ -1106,13 +1113,12 @@ mod tests {
         };
 
         let mut fs = MockFileSystem::new();
-        let mut index_file = Vec::new();
         fs.expect_canonicalize()
             .returning(|path| Ok(std::path::Path::new("/tmp").join(path)));
         fs.expect_metadata().returning(move |_| Ok(meta()));
         fs.expect_exists().once().returning(|_| Ok(false));
         fs.expect_create()
-            .returning(move |_| Ok(Box::new(Cursor::new(&mut index_file).with_metadata(None))));
+            .returning(move |_| Ok(Box::new(Cursor::new(Vec::new()).with_metadata(None))));
         let index_file_path =
             PathBuf::from_str("a4c307cfc85cdccafeded6cb95e594cf32e24bf3aca066fd0be834ebc66bd0fc").unwrap();
         fs.expect_exists().returning(move |x| Ok(x == &index_file_path));

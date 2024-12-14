@@ -660,6 +660,14 @@ pub trait File: ReadOnlyFile + Write {}
 
 impl<T: ReadOnlyFile + Write> File for T {}
 
+pub trait SimpleFile: SimpleReadOnlyFile + Write {}
+
+impl<T: SimpleReadOnlyFile + Write> SimpleFile for T {}
+
+pub trait SimpleReadOnlyFile: Read + Seek {}
+
+impl<T: Read + Seek> SimpleReadOnlyFile for T {}
+
 #[cfg(test)]
 mock! {
     MockFile {}
