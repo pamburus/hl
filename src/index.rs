@@ -142,8 +142,9 @@ pub struct IndexerSettings<'a, FS> {
     pub format: Option<InputFormat>,
 }
 
-impl<'a, FS: FileSystem + Default> IndexerSettings<'a, FS> {
+impl<'a, FS: FileSystem> IndexerSettings<'a, FS> {
     pub fn new(
+        fs: FS,
         buffer_size: BufferSize,
         max_message_size: MessageSize,
         fields: &'a PredefinedFields,
@@ -153,7 +154,7 @@ impl<'a, FS: FileSystem + Default> IndexerSettings<'a, FS> {
         format: Option<InputFormat>,
     ) -> Self {
         Self {
-            fs: FS::default(),
+            fs,
             buffer_size,
             max_message_size,
             fields,
@@ -255,7 +256,10 @@ pub struct Indexer<FS = RealFileSystem> {
     format: Option<InputFormat>,
 }
 
-impl<FS: FileSystem + Sync> Indexer<FS> {
+impl<FS: FileSystem + Sync> Indexer<FS>
+where
+    FS::Metadata: SourceMetadata,
+{
     /// Returns a new Indexer with the given parameters.
     pub fn new(concurrency: usize, dir: PathBuf, settings: IndexerSettings<'_, FS>) -> Self {
         Self {
@@ -281,7 +285,7 @@ impl<FS: FileSystem + Sync> Indexer<FS> {
     /// Builds the index, saves it to disk and returns it.
     pub fn index(&self, source_path: &PathBuf) -> Result<Index> {
         let (source_path, mut stream) = self.open_source(source_path)?;
-        let meta = stream.metadata()?.try_into()?;
+        let meta = Metadata::from(&stream.metadata()?)?;
         let (index_path, index, actual) = self.prepare(&source_path, &meta)?;
         if actual {
             return Ok(index.unwrap());
@@ -588,7 +592,10 @@ impl<FS: FileSystem + Sync> Indexer<FS> {
         })
     }
 
-    fn open_source(&self, source_path: &PathBuf) -> io::Result<(PathBuf, Box<dyn ReadOnlyFile + Send + Sync>)> {
+    fn open_source(
+        &self,
+        source_path: &PathBuf,
+    ) -> io::Result<(PathBuf, Box<dyn ReadOnlyFile<Metadata = FS::Metadata> + Send + Sync>)> {
         let source_path = self.fs.canonicalize(source_path)?;
         let result = self.fs.open(&source_path)?;
         Ok((source_path, result))
@@ -1030,7 +1037,7 @@ struct Metadata {
 }
 
 impl Metadata {
-    pub fn new<M: SourceMetadata>(source: &M) -> io::Result<Self> {
+    pub fn from<M: SourceMetadata>(source: &M) -> io::Result<Self> {
         Ok(Self {
             len: source.len(),
             modified: ts(source.modified()?),
@@ -1042,7 +1049,7 @@ impl TryFrom<&fs::Metadata> for Metadata {
     type Error = io::Error;
 
     fn try_from(value: &fs::Metadata) -> io::Result<Self> {
-        Self::new(value)
+        Self::from(value)
     }
 }
 
@@ -1050,7 +1057,7 @@ impl TryFrom<fs::Metadata> for Metadata {
     type Error = io::Error;
 
     fn try_from(value: fs::Metadata) -> io::Result<Self> {
-        Self::new(&value)
+        Self::from(&value)
     }
 }
 
@@ -1059,7 +1066,7 @@ impl TryFrom<&MockSourceMetadata> for Metadata {
     type Error = io::Error;
 
     fn try_from(value: &MockSourceMetadata) -> io::Result<Self> {
-        Self::new(value)
+        Self::from(value)
     }
 }
 

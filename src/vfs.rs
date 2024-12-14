@@ -12,38 +12,42 @@ use mockall::mock;
 // ---
 
 pub trait FileSystem {
-    type Metadata;
+    type Metadata: 'static;
 
     fn canonicalize(&self, path: &PathBuf) -> io::Result<PathBuf>;
     fn metadata(&self, path: &PathBuf) -> io::Result<Self::Metadata>;
     fn exists(&self, path: &PathBuf) -> io::Result<bool>;
-    fn open(&self, path: &PathBuf) -> io::Result<Box<dyn ReadOnlyFile + Send + Sync>>;
-    fn create(&self, path: &PathBuf) -> io::Result<Box<dyn File + Send + Sync>>;
+    fn open(&self, path: &PathBuf) -> io::Result<Box<dyn ReadOnlyFile<Metadata = Self::Metadata> + Send + Sync>>;
+    fn create(&self, path: &PathBuf) -> io::Result<Box<dyn File<Metadata = Self::Metadata> + Send + Sync>>;
 }
 
 #[cfg(test)]
 mock! {
     pub FileSystem<M> {}
 
-    impl<M> FileSystem for FileSystem<M> {
+    impl<M:'static> FileSystem for FileSystem<M> {
         type Metadata = M;
 
         fn canonicalize(&self, path: &PathBuf) -> io::Result<PathBuf>;
         fn metadata(&self, path: &PathBuf) -> io::Result<M>;
         fn exists(&self, path: &PathBuf) -> io::Result<bool>;
-        fn open(&self, path: &PathBuf) -> io::Result<Box<dyn ReadOnlyFile + Send + Sync>>;
-        fn create(&self, path: &PathBuf) -> io::Result<Box<dyn File + Send + Sync>>;
+        fn open(&self, path: &PathBuf) -> io::Result<Box<dyn ReadOnlyFile<Metadata=M> + Send + Sync>>;
+        fn create(&self, path: &PathBuf) -> io::Result<Box<dyn File<Metadata=M> + Send + Sync>>;
     }
 }
 
 // ---
 
 pub trait Meta {
-    fn metadata(&self) -> io::Result<fs::Metadata>;
+    type Metadata;
+
+    fn metadata(&self) -> io::Result<Self::Metadata>;
 }
 
 impl Meta for fs::File {
-    fn metadata(&self) -> io::Result<fs::Metadata> {
+    type Metadata = fs::Metadata;
+
+    fn metadata(&self) -> io::Result<Self::Metadata> {
         self.metadata()
     }
 }
@@ -56,18 +60,20 @@ impl<T: Read + Seek + Meta> ReadOnlyFile for T {}
 
 #[cfg(test)]
 mock! {
-    pub ReadOnlyFile {}
+    pub ReadOnlyFile<M> {}
 
-    impl Read for ReadOnlyFile {
+    impl<M> Read for ReadOnlyFile<M> {
         fn read(&mut self, buf: &mut [u8]) -> io::Result<usize>;
     }
 
-    impl Seek for ReadOnlyFile {
+    impl<M> Seek for ReadOnlyFile<M> {
         fn seek(&mut self, pos: io::SeekFrom) -> io::Result<u64>;
     }
 
-    impl Meta for ReadOnlyFile {
-        fn metadata(&self) -> io::Result<fs::Metadata>;
+    impl<M> Meta for ReadOnlyFile<M> {
+        type Metadata = M;
+
+        fn metadata(&self) -> io::Result<M>;
     }
 }
 
@@ -79,21 +85,23 @@ impl<T: ReadOnlyFile + Write> File for T {}
 
 #[cfg(test)]
 mock! {
-    pub File {}
+    pub File<M> {}
 
-    impl Read for File {
+    impl<M> Read for File<M> {
         fn read(&mut self, buf: &mut [u8]) -> io::Result<usize>;
     }
 
-    impl Seek for File {
+    impl<M> Seek for File<M> {
         fn seek(&mut self, pos: io::SeekFrom) -> io::Result<u64>;
     }
 
-    impl Meta for File {
-        fn metadata(&self) -> io::Result<fs::Metadata>;
+    impl<M> Meta for File<M> {
+        type Metadata = M;
+
+        fn metadata(&self) -> io::Result<M>;
     }
 
-    impl Write for File {
+    impl<M> Write for File<M> {
         fn write(&mut self, buf: &[u8]) -> io::Result<usize>;
         fn flush(&mut self) -> io::Result<()>;
     }
@@ -123,12 +131,12 @@ impl FileSystem for RealFileSystem {
     }
 
     #[inline]
-    fn open(&self, path: &PathBuf) -> io::Result<Box<dyn ReadOnlyFile + Send + Sync>> {
+    fn open(&self, path: &PathBuf) -> io::Result<Box<dyn ReadOnlyFile<Metadata = Self::Metadata> + Send + Sync>> {
         Ok(Box::new(fs::File::open(path)?))
     }
 
     #[inline]
-    fn create(&self, path: &PathBuf) -> io::Result<Box<dyn File + Send + Sync>> {
+    fn create(&self, path: &PathBuf) -> io::Result<Box<dyn File<Metadata = Self::Metadata> + Send + Sync>> {
         Ok(Box::new(fs::File::create(path)?))
     }
 }

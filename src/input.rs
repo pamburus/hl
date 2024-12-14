@@ -17,7 +17,7 @@ use nu_ansi_term::Color;
 // local imports
 use crate::{
     error::{Result, HILITE},
-    index::{Index, Indexer, SourceBlock},
+    index::{Index, Indexer, SourceBlock, SourceMetadata},
     iox::ReadFill,
     pool::SQPool,
     replay::{ReplayBufCreator, ReplayBufReader, ReplaySeekReader},
@@ -208,7 +208,11 @@ impl InputHolder {
     }
 
     /// Indexes the input file and returns IndexedInput that can be used to access the data in random order.
-    pub fn index<FS: FileSystem + Sync>(self, indexer: &Indexer<FS>) -> Result<IndexedInput> {
+    pub fn index<FS>(self, indexer: &Indexer<FS>) -> Result<IndexedInput>
+    where
+        FS: FileSystem + Sync,
+        FS::Metadata: SourceMetadata,
+    {
         self.open()?.indexed(indexer)
     }
 
@@ -247,7 +251,11 @@ impl Input {
     }
 
     /// Indexes the input file and returns IndexedInput that can be used to access the data in random order.
-    pub fn indexed<FS: FileSystem + Sync>(self, indexer: &Indexer<FS>) -> Result<IndexedInput> {
+    pub fn indexed<FS>(self, indexer: &Indexer<FS>) -> Result<IndexedInput>
+    where
+        FS: FileSystem + Sync,
+        FS::Metadata: SourceMetadata,
+    {
         IndexedInput::from_stream(self.reference, self.stream, indexer)
     }
 
@@ -467,7 +475,11 @@ impl IndexedInput {
     }
 
     /// Opens the input file and indexes it.
-    pub fn open<FS: FileSystem + Sync>(path: &PathBuf, indexer: &Indexer<FS>) -> Result<Self> {
+    pub fn open<FS>(path: &PathBuf, indexer: &Indexer<FS>) -> Result<Self>
+    where
+        FS: FileSystem + Sync,
+        FS::Metadata: SourceMetadata,
+    {
         InputReference::File(path.clone().try_into()?).hold()?.index(indexer)
     }
 
@@ -477,20 +489,24 @@ impl IndexedInput {
         Blocks::new(Arc::new(self), (0..n).into_iter())
     }
 
-    fn from_stream<FS: FileSystem + Sync>(
-        reference: InputReference,
-        stream: Stream,
-        indexer: &Indexer<FS>,
-    ) -> Result<Self> {
+    fn from_stream<FS>(reference: InputReference, stream: Stream, indexer: &Indexer<FS>) -> Result<Self>
+    where
+        FS: FileSystem + Sync,
+        FS::Metadata: SourceMetadata,
+    {
         let (stream, index) = Self::index_stream(&reference, stream, indexer)?;
         Ok(Self::new(reference, stream, index))
     }
 
-    fn index_stream<FS: FileSystem + Sync>(
+    fn index_stream<FS>(
         reference: &InputReference,
         stream: Stream,
         indexer: &Indexer<FS>,
-    ) -> Result<(RandomAccessStream, Index)> {
+    ) -> Result<(RandomAccessStream, Index)>
+    where
+        FS: FileSystem + Sync,
+        FS::Metadata: SourceMetadata,
+    {
         log::info!("indexing {}", reference.description());
 
         if let (Some(path), Some(meta)) = (reference.path(), stream.metadata()?) {
@@ -508,12 +524,16 @@ impl IndexedInput {
         }
     }
 
-    fn index_random_access_stream<FS: FileSystem + Sync>(
+    fn index_random_access_stream<FS>(
         path: &PathBuf,
         meta: &Metadata,
         mut stream: RandomAccessStream,
         indexer: &Indexer<FS>,
-    ) -> Result<(RandomAccessStream, Index)> {
+    ) -> Result<(RandomAccessStream, Index)>
+    where
+        FS: FileSystem + Sync,
+        FS::Metadata: SourceMetadata,
+    {
         let pos = stream.seek(SeekFrom::Current(0))?;
         let index = indexer.index_stream(&mut stream, path, meta)?;
 
@@ -522,12 +542,16 @@ impl IndexedInput {
         Ok((stream, index))
     }
 
-    fn index_sequential_stream<FS: FileSystem + Sync>(
+    fn index_sequential_stream<FS>(
         path: &PathBuf,
         meta: &Metadata,
         stream: SequentialStream,
         indexer: &Indexer<FS>,
-    ) -> Result<(RandomAccessStream, Index)> {
+    ) -> Result<(RandomAccessStream, Index)>
+    where
+        FS: FileSystem + Sync,
+        FS::Metadata: SourceMetadata,
+    {
         let mut tee = TeeReader::new(stream, ReplayBufCreator::new());
         let index = indexer.index_stream(&mut tee, path, meta)?;
         let meta = meta.clone();
