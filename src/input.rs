@@ -17,11 +17,12 @@ use nu_ansi_term::Color;
 // local imports
 use crate::{
     error::{Result, HILITE},
-    index::{FileSystem, Index, Indexer, SourceBlock},
+    index::{Index, Indexer, SourceBlock},
     iox::ReadFill,
     pool::SQPool,
     replay::{ReplayBufCreator, ReplayBufReader, ReplaySeekReader},
     tee::TeeReader,
+    vfs::FileSystem,
 };
 
 // ---
@@ -918,7 +919,10 @@ mod tests {
 
     use itertools::Itertools;
 
-    use crate::index::{IndexerSettings, MockFile, MockFileSystem, MockSourceMetadata, RealFileSystem};
+    use crate::{
+        index::{IndexerSettings, MockSourceMetadata},
+        vfs::{MockFile, MockFileSystem, RealFileSystem},
+    };
 
     use super::*;
     use io::Read;

@@ -32,7 +32,7 @@ use crate::{
     fmtx::aligned_left,
     formatting::{RawRecordFormatter, RecordFormatter, RecordWithSourceFormatter},
     fsmon::{self, EventKind},
-    index::{Indexer, IndexerSettings, RealFileSystem, Timestamp},
+    index::{Indexer, IndexerSettings, Timestamp},
     input::{BlockLine, Input, InputHolder, InputReference},
     model::{Filter, Parser, ParserSettings, RawRecord, Record, RecordFilter, RecordWithSourceConstructor},
     query::Query,
@@ -40,6 +40,7 @@ use crate::{
     settings::{FieldShowOption, Fields, Formatting},
     theme::{Element, StylingPush, Theme},
     timezone::Tz,
+    vfs::RealFileSystem,
     IncludeExcludeKeyFilter,
     {error::*, QueryNone},
 };

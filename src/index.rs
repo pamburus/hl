@@ -11,13 +11,13 @@
 
 // std imports
 #[cfg(test)]
-use mockall::{automock, mock, predicate::*};
+use mockall::{automock, predicate::*};
 use std::{
     cmp::{max, min},
     convert::{Into, TryFrom, TryInto},
     fmt::{self, Display},
     fs::{self},
-    io::{self, Read, Seek, Write},
+    io::{self, Read, Write},
     iter::empty,
     num::{NonZero, NonZeroU32},
     path::PathBuf,
@@ -46,6 +46,7 @@ use crate::{
     model::{Parser, ParserSettings, RawRecord},
     scanning::{Delimiter, Scanner, Segment, SegmentBuf, SegmentBufFactory},
     settings::PredefinedFields,
+    vfs::{FileSystem, ReadOnlyFile, RealFileSystem},
 };
 
 // types
@@ -354,30 +355,6 @@ impl<FS: FileSystem + Sync> Indexer<FS> {
         Ok((index_path, existing_index, actual))
     }
 
-    // fn build_index(&self, source_path: &PathBuf, index_path: &PathBuf, existing_index: Option<Index>) -> Result<Index> {
-    //     let mut input = match self.fs.open(&source_path) {
-    //         Ok(input) => input,
-    //         Err(err) => {
-    //             return Err(Error::FailedToOpenFileForReading {
-    //                 path: source_path.clone(),
-    //                 source: err,
-    //             });
-    //         }
-    //     };
-
-    //     let meta = match self.fs.metadata(&source_path) {
-    //         Ok(metadata) => metadata,
-    //         Err(err) => {
-    //             return Err(Error::FailedToGetFileMetadata {
-    //                 path: source_path.clone(),
-    //                 source: err,
-    //             });
-    //         }
-    //     };
-
-    //     self.build_index_from_stream(&mut input, source_path, &meta, index_path, existing_index)
-    // }
-
     fn build_index_from_stream(
         &self,
         stream: &mut Reader,
@@ -621,81 +598,6 @@ impl<FS: FileSystem + Sync> Indexer<FS> {
 // ---
 
 #[cfg_attr(test, automock)]
-pub trait Meta {
-    fn metadata(&self) -> io::Result<fs::Metadata>;
-}
-
-impl Meta for fs::File {
-    fn metadata(&self) -> io::Result<fs::Metadata> {
-        self.metadata()
-    }
-}
-
-// ---
-
-pub trait ReadOnlyFile: Read + Seek + Meta {}
-
-impl<T: Read + Seek + Meta> ReadOnlyFile for T {}
-
-#[cfg(test)]
-mock! {
-    pub ReadOnlyFile {}
-
-    impl Read for ReadOnlyFile {
-        fn read(&mut self, buf: &mut [u8]) -> io::Result<usize>;
-    }
-
-    impl Seek for ReadOnlyFile {
-        fn seek(&mut self, pos: io::SeekFrom) -> io::Result<u64>;
-    }
-
-    impl Meta for ReadOnlyFile {
-        fn metadata(&self) -> io::Result<fs::Metadata>;
-    }
-}
-
-// ---
-
-pub trait File: ReadOnlyFile + Write {}
-
-impl<T: ReadOnlyFile + Write> File for T {}
-
-#[cfg(test)]
-mock! {
-    pub File {}
-
-    impl Read for File {
-        fn read(&mut self, buf: &mut [u8]) -> io::Result<usize>;
-    }
-
-    impl Seek for File {
-        fn seek(&mut self, pos: io::SeekFrom) -> io::Result<u64>;
-    }
-
-    impl Meta for File {
-        fn metadata(&self) -> io::Result<fs::Metadata>;
-    }
-
-    impl Write for File {
-        fn write(&mut self, buf: &[u8]) -> io::Result<usize>;
-        fn flush(&mut self) -> io::Result<()>;
-    }
-}
-
-// ---
-
-#[cfg_attr(test, automock(type Metadata=MockSourceMetadata;))]
-pub trait FileSystem {
-    type Metadata;
-
-    fn canonicalize(&self, path: &PathBuf) -> io::Result<PathBuf>;
-    fn metadata(&self, path: &PathBuf) -> io::Result<Self::Metadata>;
-    fn exists(&self, path: &PathBuf) -> io::Result<bool>;
-    fn open(&self, path: &PathBuf) -> io::Result<Box<dyn ReadOnlyFile + Send + Sync>>;
-    fn create(&self, path: &PathBuf) -> io::Result<Box<dyn File + Send + Sync>>;
-}
-
-#[cfg_attr(test, automock)]
 pub trait SourceMetadata {
     fn len(&self) -> u64;
     fn modified(&self) -> io::Result<SystemTime>;
@@ -710,40 +612,6 @@ impl SourceMetadata for fs::Metadata {
     #[inline]
     fn modified(&self) -> io::Result<SystemTime> {
         self.modified()
-    }
-}
-
-// ---
-
-#[derive(Default)]
-pub struct RealFileSystem;
-
-impl FileSystem for RealFileSystem {
-    type Metadata = fs::Metadata;
-
-    #[inline]
-    fn canonicalize(&self, path: &PathBuf) -> io::Result<PathBuf> {
-        fs::canonicalize(path)
-    }
-
-    #[inline]
-    fn metadata(&self, path: &PathBuf) -> io::Result<fs::Metadata> {
-        fs::metadata(path)
-    }
-
-    #[inline]
-    fn exists(&self, path: &PathBuf) -> io::Result<bool> {
-        fs::exists(path)
-    }
-
-    #[inline]
-    fn open(&self, path: &PathBuf) -> io::Result<Box<dyn ReadOnlyFile + Send + Sync>> {
-        Ok(Box::new(fs::File::open(path)?))
-    }
-
-    #[inline]
-    fn create(&self, path: &PathBuf) -> io::Result<Box<dyn File + Send + Sync>> {
-        Ok(Box::new(fs::File::create(path)?))
     }
 }
 
@@ -1286,6 +1154,8 @@ const CURRENT_VERSION: u64 = 1;
 mod tests {
     use super::*;
 
+    use crate::vfs::MockFileSystem;
+
     #[test]
     fn test_process_file_success() {
         use io::Cursor;
@@ -1293,7 +1163,7 @@ mod tests {
             1,
             PathBuf::from("/tmp/cache"),
             IndexerSettings {
-                fs: MockFileSystem::new(),
+                fs: MockFileSystem::<MockSourceMetadata>::new(),
                 buffer_size: nonzero!(1024u32).into(),
                 max_message_size: nonzero!(1024u32).into(),
                 ..Default::default()
@@ -1348,7 +1218,7 @@ mod tests {
     #[test]
     fn test_process_file_error() {
         use io::Cursor;
-        let fs = MockFileSystem::new();
+        let fs = MockFileSystem::<MockSourceMetadata>::new();
         let indexer = Indexer::new(
             1,
             PathBuf::from("/tmp/cache"),
