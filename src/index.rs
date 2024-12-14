@@ -639,17 +639,17 @@ impl<T: Read + Seek + Meta> ReadOnlyFile for T {}
 
 #[cfg(test)]
 mock! {
-    MockReadOnlyFile {}
+    pub ReadOnlyFile {}
 
-    impl Read for MockReadOnlyFile {
+    impl Read for ReadOnlyFile {
         fn read(&mut self, buf: &mut [u8]) -> io::Result<usize>;
     }
 
-    impl Seek for MockReadOnlyFile {
+    impl Seek for ReadOnlyFile {
         fn seek(&mut self, pos: io::SeekFrom) -> io::Result<u64>;
     }
 
-    impl Meta for MockReadOnlyFile {
+    impl Meta for ReadOnlyFile {
         fn metadata(&self) -> io::Result<fs::Metadata>;
     }
 }
@@ -670,21 +670,21 @@ impl<T: Read + Seek> SimpleReadOnlyFile for T {}
 
 #[cfg(test)]
 mock! {
-    MockFile {}
+    pub File {}
 
-    impl Read for MockFile {
+    impl Read for File {
         fn read(&mut self, buf: &mut [u8]) -> io::Result<usize>;
     }
 
-    impl Seek for MockFile {
+    impl Seek for File {
         fn seek(&mut self, pos: io::SeekFrom) -> io::Result<u64>;
     }
 
-    impl Meta for MockFile {
+    impl Meta for File {
         fn metadata(&self) -> io::Result<fs::Metadata>;
     }
 
-    impl Write for MockFile {
+    impl Write for File {
         fn write(&mut self, buf: &[u8]) -> io::Result<usize>;
         fn flush(&mut self) -> io::Result<()>;
     }
