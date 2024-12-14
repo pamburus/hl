@@ -11,7 +11,7 @@
 
 // std imports
 #[cfg(test)]
-use mockall::{automock, predicate::*};
+use mockall::{automock, mock, predicate::*};
 use std::{
     cmp::{max, min},
     convert::{Into, TryFrom, TryInto},
@@ -633,17 +633,54 @@ impl Meta for fs::File {
 
 // ---
 
-#[cfg_attr(test, automock)]
 pub trait ReadOnlyFile: Read + Seek + Meta {}
 
 impl<T: Read + Seek + Meta> ReadOnlyFile for T {}
 
+#[cfg(test)]
+mock! {
+    MockReadOnlyFile {}
+
+    impl Read for MockReadOnlyFile {
+        fn read(&mut self, buf: &mut [u8]) -> io::Result<usize>;
+    }
+
+    impl Seek for MockReadOnlyFile {
+        fn seek(&mut self, pos: io::SeekFrom) -> io::Result<u64>;
+    }
+
+    impl Meta for MockReadOnlyFile {
+        fn metadata(&self) -> io::Result<fs::Metadata>;
+    }
+}
+
 // ---
 
-#[cfg_attr(test, automock)]
 pub trait File: ReadOnlyFile + Write {}
 
 impl<T: ReadOnlyFile + Write> File for T {}
+
+#[cfg(test)]
+mock! {
+    MockFile {}
+
+    impl Read for MockFile {
+        fn read(&mut self, buf: &mut [u8]) -> io::Result<usize>;
+    }
+
+    impl Seek for MockFile {
+        fn seek(&mut self, pos: io::SeekFrom) -> io::Result<u64>;
+    }
+
+    impl Meta for MockFile {
+        fn metadata(&self) -> io::Result<fs::Metadata>;
+    }
+
+    impl Write for MockFile {
+        fn write(&mut self, buf: &[u8]) -> io::Result<usize>;
+        fn flush(&mut self) -> io::Result<()>;
+    }
+}
 
 // ---
 

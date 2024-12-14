@@ -3,7 +3,7 @@ use std::{
     cmp::min,
     convert::TryInto,
     fs::{self, File, Metadata},
-    io::{self, stdin, BufRead, BufReader, Cursor, Read, Seek, SeekFrom},
+    io::{self, stdin, BufRead, BufReader, Cursor, Read, Seek, SeekFrom, Write},
     mem::size_of_val,
     ops::{Deref, Range},
     path::PathBuf,
@@ -885,6 +885,16 @@ impl<T: Read> Read for WithMetadata<T> {
     }
 }
 
+impl<T: Write> Write for WithMetadata<T> {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        self.inner.write(buf)
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        self.inner.flush()
+    }
+}
+
 impl<T: Seek> Seek for WithMetadata<T> {
     fn seek(&mut self, pos: SeekFrom) -> io::Result<u64> {
         self.inner.seek(pos)
@@ -1087,8 +1097,6 @@ mod tests {
 
     #[test]
     fn test_indexed_input_file_random_access() {
-        use crate::index::Meta;
-
         let meta = || {
             let ts = SystemTime::from(SystemTime::UNIX_EPOCH + Duration::from_secs(1704067200));
             let mut meta = MockSourceMetadata::new();
@@ -1104,7 +1112,7 @@ mod tests {
         fs.expect_metadata().returning(move |_| Ok(meta()));
         fs.expect_exists().once().returning(|_| Ok(false));
         fs.expect_create()
-            .returning(move |_| Ok(Box::new(Cursor::new(&mut index_file))));
+            .returning(move |_| Ok(Box::new(Cursor::new(&mut index_file).with_metadata(None))));
         let index_file_path =
             PathBuf::from_str("a4c307cfc85cdccafeded6cb95e594cf32e24bf3aca066fd0be834ebc66bd0fc").unwrap();
         fs.expect_exists().returning(move |x| Ok(x == &index_file_path));
