@@ -622,6 +622,19 @@ impl SourceMetadata for fs::Metadata {
     }
 }
 
+#[cfg(test)]
+impl SourceMetadata for crate::vfs::mem::Metadata {
+    #[inline]
+    fn len(&self) -> u64 {
+        self.len as u64
+    }
+
+    #[inline]
+    fn modified(&self) -> io::Result<SystemTime> {
+        Ok(self.modified)
+    }
+}
+
 // ---
 
 // Contains index information for a single source file.

@@ -936,20 +936,15 @@ impl<T> Meta for WithMetadata<T> {
 
 #[cfg(test)]
 mod tests {
-    use std::{
-        str::FromStr,
-        time::{Duration, SystemTime},
-    };
+    use super::*;
+    use io::Read;
 
     use itertools::Itertools;
 
     use crate::{
-        index::{IndexerSettings, MockSourceMetadata},
-        vfs::{MockFile, MockFileSystem, RealFileSystem},
+        index::IndexerSettings,
+        vfs::{self, RealFileSystem},
     };
-
-    use super::*;
-    use io::Read;
 
     #[test]
     fn test_input_reference() {
@@ -1125,34 +1120,12 @@ mod tests {
 
     #[test]
     fn test_indexed_input_file_random_access() {
-        let meta = || {
-            let ts = SystemTime::from(SystemTime::UNIX_EPOCH + Duration::from_secs(1704067200));
-            let mut meta = MockSourceMetadata::new();
-            meta.expect_len().return_const(70u64);
-            meta.expect_modified().returning(move || Ok(ts));
-            meta
-        };
-
-        let index_file = || {
-            let mut f = MockFile::new();
-            f.expect_write().returning(|x| Ok(x.len()));
-            Box::new(f)
-        };
-
-        let mut fs = MockFileSystem::new();
-        fs.expect_canonicalize()
-            .returning(|path| Ok(std::path::Path::new("/tmp").join(path)));
-        fs.expect_metadata().returning(move |_| Ok(meta()));
-        fs.expect_exists().once().returning(|_| Ok(false));
-        fs.expect_create().once().returning(move |_| Ok(index_file()));
-        let index_file_path =
-            PathBuf::from_str("a4c307cfc85cdccafeded6cb95e594cf32e24bf3aca066fd0be834ebc66bd0fc").unwrap();
-        fs.expect_exists().returning(move |x| Ok(x == &index_file_path));
+        let fs = vfs::mem::FileSystem::new();
 
         let path = PathBuf::from("sample/test.log");
         let indexer = Indexer::new(
             1,
-            PathBuf::new(),
+            PathBuf::from("."),
             IndexerSettings {
                 fs,
                 ..Default::default()
