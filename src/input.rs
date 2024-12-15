@@ -943,7 +943,7 @@ mod tests {
 
     use crate::{
         index::IndexerSettings,
-        vfs::{self, RealFileSystem},
+        vfs::{self, LocalFileSystem},
     };
 
     #[test]
@@ -1107,7 +1107,7 @@ mod tests {
     fn test_indexed_input_stdin() {
         let data = br#"{"ts":"2024-10-01T01:02:03Z","level":"info","msg":"some test message"}\n"#;
         let stream = Stream::RandomAccess(Box::new(Cursor::new(data)));
-        let indexer = Indexer::<RealFileSystem>::new(1, PathBuf::new(), IndexerSettings::default());
+        let indexer = Indexer::<LocalFileSystem>::new(1, PathBuf::new(), IndexerSettings::default());
         let input = IndexedInput::from_stream(InputReference::Stdin, stream, &indexer).unwrap();
         let mut blocks = input.into_blocks().collect_vec();
         assert_eq!(blocks.len(), 1);

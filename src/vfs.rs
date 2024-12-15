@@ -110,9 +110,9 @@ mock! {
 // ---
 
 #[derive(Default)]
-pub struct RealFileSystem;
+pub struct LocalFileSystem;
 
-impl FileSystem for RealFileSystem {
+impl FileSystem for LocalFileSystem {
     type Metadata = fs::Metadata;
 
     #[inline]

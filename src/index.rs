@@ -46,7 +46,7 @@ use crate::{
     model::{Parser, ParserSettings, RawRecord},
     scanning::{Delimiter, Scanner, Segment, SegmentBuf, SegmentBufFactory},
     settings::PredefinedFields,
-    vfs::{FileSystem, ReadOnlyFile, RealFileSystem},
+    vfs::{FileSystem, LocalFileSystem, ReadOnlyFile},
 };
 
 // types
@@ -244,7 +244,7 @@ impl From<MessageSize> for u32 {
 // ---
 
 /// Allows log files indexing to enable message sorting.
-pub struct Indexer<FS = RealFileSystem> {
+pub struct Indexer<FS = LocalFileSystem> {
     fs: FS,
     concurrency: usize,
     buffer_size: u32,

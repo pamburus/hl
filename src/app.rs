@@ -40,7 +40,7 @@ use crate::{
     settings::{FieldShowOption, Fields, Formatting},
     theme::{Element, StylingPush, Theme},
     timezone::Tz,
-    vfs::RealFileSystem,
+    vfs::LocalFileSystem,
     IncludeExcludeKeyFilter,
     {error::*, QueryNone},
 };
@@ -273,7 +273,7 @@ impl App {
     fn sort(&self, inputs: Vec<InputHolder>, output: &mut Output) -> Result<()> {
         let mut output = BufWriter::new(output);
         let indexer_settings = IndexerSettings::new(
-            RealFileSystem,
+            LocalFileSystem,
             self.options.buffer_size.try_into()?,
             self.options.max_message_size.try_into()?,
             &self.options.fields.settings.predefined,
