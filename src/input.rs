@@ -1120,25 +1120,27 @@ mod tests {
 
     #[test]
     fn test_indexed_input_file_random_access() {
-        let fs = vfs::mem::FileSystem::new();
+        let fs = Arc::new(vfs::mem::FileSystem::new());
 
-        let path = PathBuf::from("sample/test.log");
-        let indexer = Indexer::new(
-            1,
-            PathBuf::from("."),
-            IndexerSettings {
-                fs,
-                ..Default::default()
-            },
-        );
-        let input = IndexedInput::open(&path, &indexer).unwrap();
-        let mut blocks = input.into_blocks().collect_vec();
-        assert_eq!(blocks.len(), 1);
-        let block = blocks.drain(..).next().unwrap();
-        assert_eq!(block.lines_valid(), 1);
-        let mut lines = block.into_lines().unwrap().collect_vec();
-        let line = lines.drain(..).next().unwrap();
-        assert_eq!(line.len(), 70);
+        for _ in 0..2 {
+            let path = PathBuf::from("sample/test.log");
+            let indexer = Indexer::new(
+                1,
+                PathBuf::from("."),
+                IndexerSettings {
+                    fs: fs.clone(),
+                    ..Default::default()
+                },
+            );
+            let input = IndexedInput::open(&path, &indexer).unwrap();
+            let mut blocks = input.into_blocks().collect_vec();
+            assert_eq!(blocks.len(), 1);
+            let block = blocks.drain(..).next().unwrap();
+            assert_eq!(block.lines_valid(), 1);
+            let mut lines = block.into_lines().unwrap().collect_vec();
+            let line = lines.drain(..).next().unwrap();
+            assert_eq!(line.len(), 70);
+        }
     }
 
     // ---

@@ -36,6 +36,36 @@ mock! {
     }
 }
 
+#[cfg(test)]
+impl<T: std::ops::Deref<Target = U>, U: FileSystem> FileSystem for T {
+    type Metadata = U::Metadata;
+
+    #[inline]
+    fn canonicalize(&self, path: &Path) -> io::Result<PathBuf> {
+        (**self).canonicalize(path)
+    }
+
+    #[inline]
+    fn metadata(&self, path: &Path) -> io::Result<Self::Metadata> {
+        (**self).metadata(path)
+    }
+
+    #[inline]
+    fn exists(&self, path: &Path) -> io::Result<bool> {
+        (**self).exists(path)
+    }
+
+    #[inline]
+    fn open(&self, path: &Path) -> io::Result<Box<dyn ReadOnlyFile<Metadata = Self::Metadata> + Send + Sync>> {
+        (**self).open(path)
+    }
+
+    #[inline]
+    fn create(&self, path: &Path) -> io::Result<Box<dyn File<Metadata = Self::Metadata> + Send + Sync>> {
+        (**self).create(path)
+    }
+}
+
 // ---
 
 pub trait Meta {
@@ -146,6 +176,7 @@ impl FileSystem for LocalFileSystem {
 #[cfg(test)]
 pub mod mem {
     use super::{Meta, ReadOnlyFile};
+
     use std::{
         collections::HashMap,
         io::{self, Read, Seek, Write},
@@ -153,6 +184,8 @@ pub mod mem {
         sync::{Arc, RwLock},
         time::SystemTime,
     };
+
+    use clean_path::Clean;
 
     // ---
 
@@ -289,7 +322,7 @@ pub mod mem {
         type Metadata = Metadata;
 
         fn canonicalize(&self, path: &Path) -> io::Result<PathBuf> {
-            Ok(PathBuf::from("/tmp").join(path))
+            Ok(PathBuf::from("/tmp").join(path).clean())
         }
 
         fn metadata(&self, path: &Path) -> io::Result<Self::Metadata> {
