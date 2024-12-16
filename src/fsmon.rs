@@ -1,5 +1,5 @@
 // std imports
-use std::{path::PathBuf, time::Duration};
+use std::path::PathBuf;
 
 // local imports
 use crate::error::Result;
@@ -89,7 +89,7 @@ mod imp {
 
 #[cfg(target_os = "macos")]
 mod imp {
-    use std::collections::HashSet;
+    use std::{collections::HashSet, time::Duration};
 
     use kqueue::{EventData, EventFilter, FilterFlag, Ident, Vnode, Watcher};
     use notify::event::{CreateKind, DataChange, MetadataKind, ModifyKind, RemoveKind, RenameMode};
