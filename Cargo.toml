@@ -4,7 +4,7 @@ members = [".", "crate/encstr"]
 [workspace.package]
 repository = "https://github.com/pamburus/hl"
 authors = ["Pavel Ivanov <mr.pavel.ivanov@gmail.com>"]
-version = "0.30.0-alpha.2"
+version = "0.30.0-alpha.3"
 edition = "2021"
 license = "MIT"
 
@@ -78,6 +78,7 @@ strum = { version = "0", features = ["derive"] }
 thiserror = "2"
 titlecase = "3"
 toml = "0"
+wild = "2"
 wildflower = { git = "https://github.com/cassaundra/wildflower.git" }
 winapi-util = { version = "0" }
 wyhash = "0"
