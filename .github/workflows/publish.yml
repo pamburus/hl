@@ -92,7 +92,7 @@ jobs:
             arch: aarch64
             target: aarch64-pc-windows-msvc
             archiver: 7z
-            asset: hl-windows.zip
+            asset: hl-windows-arm64.zip
 
     steps:
       - uses: actions/checkout@v4
