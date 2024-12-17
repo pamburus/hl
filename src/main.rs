@@ -34,7 +34,7 @@ fn run() -> Result<()> {
     let settings = config::load(cli::BootstrapOpt::parse().args.config.as_deref())?;
     config::global::initialize(settings.clone());
 
-    let opt = cli::Opt::parse();
+    let opt = cli::Opt::parse_from(wild::args());
     if opt.help {
         return cli::Opt::command().print_help().map_err(Error::Io);
     }
