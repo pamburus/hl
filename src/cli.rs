@@ -43,7 +43,7 @@ impl BootstrapOpt {
     }
 
     pub fn args() -> Vec<String> {
-        let mut args = std::env::args();
+        let mut args = wild::args();
         let Some(first) = args.next() else {
             return vec![];
         };
