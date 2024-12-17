@@ -24,6 +24,7 @@ jobs:
           - macos-arm
           - macos-universal
           - windows-x86
+          - windows-arm
         include:
           - name: linux-x86-gnu
             os: ubuntu-latest
@@ -83,6 +84,13 @@ jobs:
             family: windows
             arch: x86_64
             target: x86_64-pc-windows-msvc
+            archiver: 7z
+            asset: hl-windows.zip
+          - name: windows-arm
+            os: windows-latest
+            family: windows
+            arch: aarch64
+            target: aarch64-pc-windows-msvc
             archiver: 7z
             asset: hl-windows.zip
 
