@@ -22,6 +22,7 @@ pub fn default() -> &'static Settings {
 
 /// Load settings from the given file or the default configuration file per platform.
 pub fn load(path: Option<&str>) -> Result<Settings> {
+    let mut system = Vec::new();
     let mut default = None;
     let (filename, required) = path.map(|p| (p, true)).unwrap_or_else(|| {
         (
