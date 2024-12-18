@@ -33,6 +33,7 @@ mod replay;
 mod scanning;
 mod serdex;
 mod tee;
+mod vfs;
 
 // conditional public modules
 #[cfg_attr(unix, path = "signal_unix.rs")]

@@ -6,14 +6,16 @@ use std::io::{Read, Result, Write};
 pub struct TeeReader<R: Read, W: Write> {
     reader: R,
     writer: W,
+    processed: usize,
 }
 
 impl<R: Read, W: Write> TeeReader<R, W> {
     #[inline]
     pub fn new(reader: R, writer: W) -> TeeReader<R, W> {
         TeeReader {
-            reader: reader,
-            writer: writer,
+            reader,
+            writer,
+            processed: 0,
         }
     }
 
@@ -34,12 +36,18 @@ impl<R: Read, W: Write> TeeReader<R, W> {
     pub fn into(self) -> (R, W) {
         (self.reader, self.writer)
     }
+
+    #[inline]
+    pub fn processed(&self) -> usize {
+        self.processed
+    }
 }
 
 impl<R: Read, W: Write> Read for TeeReader<R, W> {
     fn read(&mut self, buf: &mut [u8]) -> Result<usize> {
         let n = self.reader.read(buf)?;
         self.writer.write_all(&buf[..n])?;
+        self.processed += n;
         Ok(n)
     }
 }

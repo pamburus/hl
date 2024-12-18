@@ -4,7 +4,7 @@ members = [".", "crate/encstr"]
 [workspace.package]
 repository = "https://github.com/pamburus/hl"
 authors = ["Pavel Ivanov <mr.pavel.ivanov@gmail.com>"]
-version = "0.30.0-alpha.3"
+version = "0.30.0-alpha.4"
 edition = "2021"
 license = "MIT"
 
@@ -43,13 +43,14 @@ crossbeam-channel = "0"
 crossbeam-queue = "0"
 crossbeam-utils = "0"
 deko = "0"
-derive_deref = "1"
+derive_more = {version="1", features = ["deref", "from"]}
 dirs = "5"
 dirs-sys = "0"
 encstr = { path = "./crate/encstr" }
 enum-map = "2"
 enumset = "1"
 enumset-ext = { path = "./crate/enumset-ext" }
+env_logger = "0"
 flate2 = "1"
 heapless = "0"
 hex = "0"
@@ -57,13 +58,14 @@ htp = { git = "https://github.com/pamburus/htp.git" }
 humantime = "2"
 itertools = "0.13"
 itoa = { version = "1", default-features = false }
+log = "0"
+nonzero_ext = "0"
 notify = { version = "7", features = ["macos_kqueue"] }
 nu-ansi-term = "0"
 num_cpus = "1"
 once_cell = "1"
 pest = "2"
 pest_derive = "2"
-phf = { version = "0", features = ["macros"] }
 regex = "1"
 rust-embed = "8"
 serde = { version = "1", features = ["derive"] }
@@ -88,8 +90,10 @@ kqueue = "1"
 
 [dev-dependencies]
 byte-strings = "0"
+clean-path = "0"
 criterion = "0"
 maplit = "1"
+mockall = "0"
 stats_alloc = "0"
 regex = "1"
 wildmatch = "2"
