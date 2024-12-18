@@ -4,7 +4,7 @@ members = [".", "crate/encstr"]
 [workspace.package]
 repository = "https://github.com/pamburus/hl"
 authors = ["Pavel Ivanov <mr.pavel.ivanov@gmail.com>"]
-version = "0.30.0-alpha.4"
+version = "0.30.0-alpha.5"
 edition = "2021"
 license = "MIT"
 
@@ -58,6 +58,7 @@ htp = { git = "https://github.com/pamburus/htp.git" }
 humantime = "2"
 itertools = "0.13"
 itoa = { version = "1", default-features = false }
+known-folders = "1"
 log = "0"
 nonzero_ext = "0"
 notify = { version = "7", features = ["macos_kqueue"] }

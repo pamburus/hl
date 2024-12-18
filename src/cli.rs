@@ -19,14 +19,8 @@ use crate::{
 #[derive(Args)]
 pub struct BootstrapArgs {
     /// Configuration file path.
-    #[arg(
-        long,
-        overrides_with = "config",
-        value_name = "FILE",
-        env = "HL_CONFIG",
-        num_args = 1
-    )]
-    pub config: Option<String>,
+    #[arg(long, value_name = "FILE", env = "HL_CONFIG", num_args = 1)]
+    pub config: Vec<String>,
 }
 
 /// JSON and logfmt log converter to human readable representation.
@@ -133,8 +127,8 @@ pub struct Opt {
         short,
         long,
         env = "HL_LEVEL",
-        overrides_with="level",
-        ignore_case=true,
+        overrides_with = "level",
+        ignore_case = true,
         value_parser = LevelValueParser,
         value_enum,
         help_heading = heading::FILTERING
@@ -164,12 +158,12 @@ pub struct Opt {
     /// Filter messages by field values
     /// [k=v, k~=v, k~~=v, 'k!=v', 'k!~=v', 'k!~~=v']
     /// where ~ does substring match and ~~ does regular expression match.
-    #[arg(short, long, number_of_values = 1, help_heading = heading::FILTERING)]
+    #[arg(short, long, num_args = 1, help_heading = heading::FILTERING)]
     pub filter: Vec<String>,
 
     /// Filter using query, accepts expressions from --filter
     /// and supports '(', ')', 'and', 'or', 'not', 'in', 'contain', 'like', '<', '>', '<=', '>=', etc.
-    #[arg(short, long, number_of_values = 1, help_heading = heading::FILTERING)]
+    #[arg(short, long, num_args = 1, help_heading = heading::FILTERING)]
     pub query: Vec<String>,
 
     /// Color output control.
@@ -220,7 +214,7 @@ pub struct Opt {
     #[arg(
         long,
         short = 'h',
-        number_of_values = 1,
+        num_args = 1,
         value_name = "KEY",
         help_heading = heading::OUTPUT
     )]
@@ -404,10 +398,6 @@ pub struct Opt {
     /// Print debug index metadata (in --sort mode) and exit.
     #[arg(long, requires = "sort", help_heading = heading::ADVANCED)]
     pub dump_index: bool,
-
-    /// Print debug error messages that can help with troubleshooting.
-    #[arg(long, help_heading = heading::ADVANCED)]
-    pub debug: bool,
 
     /// Print help.
     #[arg(long, default_value_t = false, action = ArgAction::SetTrue)]

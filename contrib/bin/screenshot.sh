@@ -9,12 +9,13 @@ SAMPLE=${2:?}
 THEME=${3:?}
 TITLE="hl ${SAMPLE:?}"
 
-HL_CONFIG= "${ALACRITTY:?}" \
+"${ALACRITTY:?}" \
     --config-file "${HL_SRC:?}"/contrib/etc/alacritty/${MODE:?}.toml \
     -T "${TITLE:?}" \
     --hold \
     -e \
         "${HL_SRC:?}"/target/debug/hl \
+        --config - \
         --theme ${THEME:?} \
         -P \
         "${HL_SRC:?}"/sample/${SAMPLE:?} &

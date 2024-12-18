@@ -11,7 +11,7 @@ use std::{
 // third-party imports
 use chrono::Utc;
 use clap::{CommandFactory, Parser};
-use env_logger::fmt::TimestampPrecision;
+use env_logger::{self as logger, fmt::TimestampPrecision};
 use itertools::Itertools;
 
 // local imports
@@ -22,6 +22,7 @@ use hl::{
     input::InputReference,
     output::{OutputStream, Pager},
     query::Query,
+    settings::Settings,
     signal::SignalHandler,
     theme::{Theme, ThemeOrigin},
     timeparse::parse_time,
@@ -29,22 +30,40 @@ use hl::{
     Delimiter, {IncludeExcludeKeyFilter, KeyMatchOptions},
 };
 
+const HL_DEBUG_LOG: &str = "HL_DEBUG_LOG";
+
 // ---
 
-fn run() -> Result<()> {
-    let settings = config::load(cli::BootstrapOpt::parse().args.config.as_deref())?;
+fn bootstrap() -> Result<Settings> {
+    if std::env::var(HL_DEBUG_LOG).is_ok() {
+        logger::Builder::from_env(HL_DEBUG_LOG)
+            .format_timestamp(Some(TimestampPrecision::Micros))
+            .init();
+        log::debug!("logging initialized");
+    }
+
+    let opt = cli::BootstrapOpt::parse().args;
+
+    let (offset, no_default_configs) = opt
+        .config
+        .iter()
+        .rposition(|x| x == "" || x == "-")
+        .map(|x| (x + 1, true))
+        .unwrap_or_default();
+    let configs = &opt.config[offset..];
+
+    let settings = config::at(configs).no_default(no_default_configs).load()?;
     config::global::initialize(settings.clone());
+
+    Ok(settings)
+}
+
+fn run() -> Result<()> {
+    let settings = bootstrap()?;
 
     let opt = cli::Opt::parse_from(wild::args());
     if opt.help {
         return cli::Opt::command().print_help().map_err(Error::Io);
-    }
-
-    if opt.debug {
-        env_logger::builder()
-            .format_timestamp(Some(TimestampPrecision::Micros))
-            .init();
-        log::debug!("logging initialized");
     }
 
     if let Some(shell) = opt.shell_completions {
@@ -231,7 +250,6 @@ fn run() -> Result<()> {
             cli::InputFormat::Logfmt => Some(app::InputFormat::Logfmt),
         },
         dump_index: opt.dump_index,
-        debug: opt.debug,
         app_dirs: Some(app_dirs),
         tail: opt.tail,
         delimiter,

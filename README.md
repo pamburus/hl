@@ -391,15 +391,27 @@ See other [screenshots](https://github.com/pamburus/hl-extra/tree/90be58af2fb91d
 
 ### Configuration files
 
-* Configuration file is automatically loaded if found in a predefined platform-specific location.
+* Configuration files are automatically loaded if found in predefined platform-specific locations.
 
-    | OS      | Location                                                  |
-    | ------- | --------------------------------------------------------- |
-    | macOS   | ~/.config/hl/config.{yaml,toml,json}                      |
-    | Linux   | ~/.config/hl/config.{yaml,toml,json}                      |
-    | Windows | %USERPROFILE%\AppData\Roaming\hl\config.{yaml,toml,json}  |
+    | OS      | System-Wide Location                     | User Profile Location                                    |
+    | ------- | ---------------------------------------- |  ------------------------------------------------------- |
+    | macOS   | /etc/hl/config.{yaml,toml,json}          | ~/.config/hl/config.{yaml,toml,json}                     |
+    | Linux   | /etc/hl/config.{yaml,toml,json}          | ~/.config/hl/config.{yaml,toml,json}                     |
+    | Windows | %PROGRAMDATA%\hl\config.{yaml,toml,json} | %USERPROFILE%\AppData\Roaming\hl\config.{yaml,toml,json} |
 
-* The path to the configuration file can be overridden using the HL_CONFIG environment variable.
+* The path to the configuration file can be overridden using the `HL_CONFIG` environment variable or the `--config` command-line option.
+
+    The order in which the configuration files are searched and loaded is as follows:
+    1. **The system-wide location.**
+    2. **The user profile location.**
+    3. **The location specified by the `HL_CONFIG` environment variable** (unless the `--config` option is used).
+    4. **The locations specified by the `--config` option** (can be specified multiple times).
+
+    If a configuration file is found in multiple locations, the file in each subsequent location overrides only the parameters it contains.
+
+    If `HL_CONFIG` or `--config` specifies `-` or an empty string, all default locations and any locations specified by previous `--config` options are discarded. The search for the configuration file locations starts over.
+
+    To disable loading of configuration files and use the built-in defaults, `--config -` can be used.
 
 * All parameters in the configuration file are optional and can be omitted. In this case, default values are used.
 
@@ -581,7 +593,6 @@ Advanced Options:
       --man-page                    Print man page and exit
       --list-themes                 Print available themes and exit
       --dump-index                  Print debug index metadata (in --sort mode) and exit
-      --debug                       Print debug error messages that can help with troubleshooting
 ```
 
 ## Performance
