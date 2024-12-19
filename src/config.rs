@@ -1,5 +1,8 @@
 // std imports
-use std::sync::Mutex;
+use std::{
+    path::{Path, PathBuf},
+    sync::Mutex,
+};
 
 // third-party imports
 use once_cell::sync::Lazy;
@@ -8,7 +11,7 @@ use once_cell::sync::Lazy;
 use crate::{
     appdirs::AppDirs,
     error::Result,
-    settings::{Settings, SourceFile},
+    settings::{Settings, Source, SourceFile},
 };
 
 // ---
@@ -20,28 +23,86 @@ pub fn default() -> &'static Settings {
     Default::default()
 }
 
-/// Load settings from the given file or the default configuration file per platform.
-pub fn load(path: Option<&str>) -> Result<Settings> {
-    let mut system = Vec::new();
-    let mut default = None;
-    let (filename, required) = path.map(|p| (p, true)).unwrap_or_else(|| {
-        (
-            if let Some(dirs) = app_dirs() {
-                default = Some(dirs.config_dir.join("config").to_string_lossy().to_string());
-                default.as_deref().unwrap()
-            } else {
-                ""
-            },
-            false,
-        )
-    });
+/// Load settings from the given file.
+pub fn at<P>(path: P) -> Loader
+where
+    P: AsRef<Path>,
+{
+    Loader::new(Some(path.as_ref().into()))
+}
 
-    if filename.is_empty() {
-        return Ok(Default::default());
+/// Load settings from the given file or the default configuration file per platform.
+pub fn optional_at<P>(path: Option<P>) -> Loader
+where
+    P: AsRef<Path>,
+{
+    Loader::new(path.map(|path| path.as_ref().into()))
+}
+
+/// Load settings from the default configuration file per platform.
+pub fn load() -> Result<Settings> {
+    Loader::new(None).load()
+}
+
+// ---
+
+pub struct Loader {
+    path: Option<PathBuf>,
+    no_extra: bool,
+    dirs: Option<AppDirs>,
+}
+
+impl Loader {
+    fn new(path: Option<PathBuf>) -> Self {
+        Self {
+            path,
+            no_extra: false,
+            dirs: app_dirs(),
+        }
     }
 
-    Settings::load(SourceFile::new(filename).required(required).into())
+    pub fn no_extra(mut self, val: bool) -> Self {
+        self.no_extra = val;
+        self
+    }
+
+    pub fn load(self) -> Result<Settings> {
+        if self.no_extra {
+            Settings::load(self.custom())
+        } else {
+            Settings::load(self.system().chain(self.user()).chain(self.custom()))
+        }
+    }
+
+    fn system(&self) -> impl Iterator<Item = Source> {
+        self.dirs
+            .as_ref()
+            .map(|dirs| dirs.system_config_dirs.clone())
+            .unwrap_or_default()
+            .into_iter()
+            .map(|dir| SourceFile::new(&Self::config(&dir)).required(false).into())
+    }
+
+    fn user(&self) -> impl Iterator<Item = Source> {
+        self.dirs
+            .as_ref()
+            .map(|dirs| SourceFile::new(&Self::config(&dirs.config_dir)).required(false).into())
+            .into_iter()
+    }
+
+    fn custom(&self) -> impl Iterator<Item = Source> {
+        self.path
+            .as_ref()
+            .map(|path| SourceFile::new(path).required(true).into())
+            .into_iter()
+    }
+
+    fn config(dir: &Path) -> PathBuf {
+        dir.join("config")
+    }
 }
+
+// ---
 
 /// Get the application platform-specific directories.
 pub fn app_dirs() -> Option<AppDirs> {
@@ -75,7 +136,7 @@ mod tests {
 
     use maplit::hashmap;
 
-    use crate::{level::Level, settings::Settings};
+    use crate::level::Level;
 
     #[test]
     fn test_default() {
@@ -83,14 +144,8 @@ mod tests {
     }
 
     #[test]
-    fn test_load_empty_filename() {
-        let settings = super::load(Some("")).unwrap();
-        assert_eq!(settings, Settings::default());
-    }
-
-    #[test]
     fn test_load_k8s() {
-        let settings = super::load(Some("etc/defaults/config-k8s.yaml")).unwrap();
+        let settings = super::at("etc/defaults/config-k8s.yaml").load().unwrap();
         assert_eq!(settings.fields.predefined.time.0.names, &["ts"]);
         assert_eq!(settings.fields.predefined.message.0.names, &["msg"]);
         assert_eq!(settings.fields.predefined.level.variants.len(), 2);
@@ -98,7 +153,7 @@ mod tests {
 
     #[test]
     fn test_issue_288() {
-        let settings = super::load(Some("src/testing/assets/configs/issue-288.yaml")).unwrap();
+        let settings = super::at("src/testing/assets/configs/issue-288.yaml").load().unwrap();
         assert_eq!(settings.fields.predefined.level.variants.len(), 1);
         let variant = &settings.fields.predefined.level.variants[0];
         assert_eq!(variant.names, vec!["level".to_owned()]);
@@ -116,6 +171,6 @@ mod tests {
 
     #[test]
     fn test_load_auto() {
-        super::load(None).unwrap();
+        super::load().unwrap();
     }
 }

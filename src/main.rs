@@ -32,7 +32,9 @@ use hl::{
 // ---
 
 fn run() -> Result<()> {
-    let settings = config::load(cli::BootstrapOpt::parse().args.config.as_deref())?;
+    let args = cli::BootstrapOpt::parse().args;
+    let config = args.config.filter(|x| x.as_os_str().len() != 0);
+    let settings = config::optional_at(config).no_extra(args.no_config).load()?;
     config::global::initialize(settings.clone());
 
     let opt = cli::Opt::parse_from(wild::args());

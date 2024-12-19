@@ -21,12 +21,16 @@ pub struct BootstrapArgs {
     /// Configuration file path.
     #[arg(
         long,
-        overrides_with = "config",
+        overrides_with_all = ["config", "no_config"],
         value_name = "FILE",
         env = "HL_CONFIG",
         num_args = 1
     )]
-    pub config: Option<String>,
+    pub config: Option<PathBuf>,
+
+    /// Disable configuration files at default locations.
+    #[arg(long, overrides_with_all = ["config", "no_config"], env = "HL_NO_CONFIG")]
+    pub no_config: bool,
 }
 
 /// JSON and logfmt log converter to human readable representation.
@@ -133,8 +137,8 @@ pub struct Opt {
         short,
         long,
         env = "HL_LEVEL",
-        overrides_with="level",
-        ignore_case=true,
+        overrides_with = "level",
+        ignore_case = true,
         value_parser = LevelValueParser,
         value_enum,
         help_heading = heading::FILTERING

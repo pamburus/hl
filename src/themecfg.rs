@@ -543,6 +543,7 @@ mod tests {
         let app_dirs = AppDirs {
             config_dir: PathBuf::from("src/testing/assets"),
             cache_dir: Default::default(),
+            system_config_dirs: Default::default(),
         };
         assert_ne!(Theme::load(&app_dirs, "test").unwrap().elements.len(), 0);
         assert_ne!(Theme::load(&app_dirs, "universal").unwrap().elements.len(), 0);
