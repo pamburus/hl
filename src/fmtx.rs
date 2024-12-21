@@ -201,7 +201,7 @@ where
     }
 
     #[inline]
-    fn push(&mut self, value: T) {
+    pub fn push(&mut self, value: T) {
         match self {
             Self::Disabled(ref mut aligner) => aligner.push(value),
             Self::Unbuffered(ref mut aligner) => aligner.push(value),
@@ -210,7 +210,7 @@ where
     }
 
     #[inline]
-    fn extend_from_slice(&mut self, values: &[T]) {
+    pub fn extend_from_slice(&mut self, values: &[T]) {
         match self {
             Self::Disabled(ref mut aligner) => aligner.extend_from_slice(values),
             Self::Unbuffered(ref mut aligner) => aligner.extend_from_slice(values),
@@ -448,33 +448,33 @@ enum AlignerBuffer<T> {
 // ---
 
 #[inline]
-pub fn aligned<'a, T, O, F>(out: &'a mut O, adjustment: Option<Adjustment<T>>, f: F)
+pub fn aligned<'a, T, O, R, F>(out: &'a mut O, adjustment: Option<Adjustment<T>>, f: F) -> R
 where
     T: Clone,
     O: Push<T>,
-    F: FnOnce(Aligner<'a, T, O>),
+    F: FnOnce(Aligner<'a, T, O>) -> R,
 {
-    f(Aligner::new(out, adjustment));
+    f(Aligner::new(out, adjustment))
 }
 
 #[inline]
-pub fn aligned_left<'a, T, O, F>(out: &'a mut O, width: usize, pad: T, f: F)
+pub fn aligned_left<'a, T, O, R, F>(out: &'a mut O, width: usize, pad: T, f: F) -> R
 where
     T: Clone,
     O: Push<T>,
-    F: FnOnce(UnbufferedAligner<'a, T, O>),
+    F: FnOnce(UnbufferedAligner<'a, T, O>) -> R,
 {
-    f(UnbufferedAligner::new(out, Padding::new(pad, width)));
+    f(UnbufferedAligner::new(out, Padding::new(pad, width)))
 }
 
 #[inline]
-pub fn centered<'a, T, O, F>(out: &'a mut O, width: usize, pad: T, f: F)
+pub fn centered<'a, T, O, R, F>(out: &'a mut O, width: usize, pad: T, f: F) -> R
 where
     T: Clone,
     O: Push<T>,
-    F: FnOnce(BufferedAligner<'a, T, O>),
+    F: FnOnce(BufferedAligner<'a, T, O>) -> R,
 {
-    f(BufferedAligner::new(out, Padding::new(pad, width), Alignment::Center));
+    f(BufferedAligner::new(out, Padding::new(pad, width), Alignment::Center))
 }
 
 #[cfg(test)]
