@@ -1,6 +1,9 @@
 // std imports
-use std::collections::{BTreeMap, HashMap};
-use std::include_str;
+use std::{
+    collections::{BTreeMap, HashMap},
+    include_str,
+    path::{Path, PathBuf},
+};
 
 // third-party imports
 use chrono_tz::Tz;
@@ -17,7 +20,7 @@ use crate::level::Level;
 // ---
 
 static DEFAULT_SETTINGS_RAW: &str = include_str!("../etc/defaults/config.yaml");
-static DEFAULT_SETTINGS: Lazy<Settings> = Lazy::new(|| Settings::load(Source::Str("", FileFormat::Yaml)).unwrap());
+static DEFAULT_SETTINGS: Lazy<Settings> = Lazy::new(|| Settings::load([Source::string("", FileFormat::Yaml)]).unwrap());
 
 // ---
 
@@ -33,14 +36,26 @@ pub struct Settings {
 }
 
 impl Settings {
-    pub fn load(source: Source) -> Result<Self, Error> {
-        let builder = Config::builder().add_source(File::from_str(DEFAULT_SETTINGS_RAW, FileFormat::Yaml));
-        let builder = match source {
-            Source::File(SourceFile { filename, required }) => {
-                builder.add_source(File::with_name(filename).required(required))
-            }
-            Source::Str(value, format) => builder.add_source(File::from_str(value, format)),
-        };
+    pub fn load<I>(sources: I) -> Result<Self, Error>
+    where
+        I: IntoIterator<Item = Source>,
+    {
+        let mut builder = Config::builder().add_source(File::from_str(DEFAULT_SETTINGS_RAW, FileFormat::Yaml));
+
+        for source in sources {
+            builder = match source {
+                Source::File(SourceFile { filename, required }) => {
+                    log::debug!(
+                        "added configuration file {} search path: {}",
+                        if required { "required" } else { "optional" },
+                        filename.display(),
+                    );
+                    builder.add_source(File::from(filename.as_path()).required(required))
+                }
+                Source::String(value, format) => builder.add_source(File::from_str(&value, format)),
+            };
+        }
+
         Ok(builder.build()?.try_deserialize()?)
     }
 }
@@ -59,28 +74,40 @@ impl Default for &'static Settings {
 
 // ---
 
-pub enum Source<'a> {
-    File(SourceFile<'a>),
-    Str(&'a str, FileFormat),
+pub enum Source {
+    File(SourceFile),
+    String(String, FileFormat),
 }
 
-impl<'a> From<SourceFile<'a>> for Source<'a> {
-    fn from(file: SourceFile<'a>) -> Self {
+impl Source {
+    pub fn string<S>(value: S, format: FileFormat) -> Self
+    where
+        S: Into<String>,
+    {
+        Self::String(value.into(), format)
+    }
+}
+
+impl From<SourceFile> for Source {
+    fn from(file: SourceFile) -> Self {
         Self::File(file)
     }
 }
 
 // ---
 
-pub struct SourceFile<'a> {
-    filename: &'a str,
+pub struct SourceFile {
+    filename: PathBuf,
     required: bool,
 }
 
-impl<'a> SourceFile<'a> {
-    pub fn new(filename: &'a str) -> Self {
+impl SourceFile {
+    pub fn new<P>(filename: P) -> Self
+    where
+        P: AsRef<Path>,
+    {
         Self {
-            filename,
+            filename: filename.as_ref().into(),
             required: true,
         }
     }
@@ -371,7 +398,7 @@ mod tests {
 
     #[test]
     fn test_load_settings_k8s() {
-        let settings = Settings::load(SourceFile::new("etc/defaults/config-k8s.yaml").into()).unwrap();
+        let settings = Settings::load([SourceFile::new("etc/defaults/config-k8s.yaml").into()]).unwrap();
         assert_eq!(
             settings.fields.predefined.time,
             TimeField(Field {

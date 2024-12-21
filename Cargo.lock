@@ -958,7 +958,7 @@ checksum = "7f24254aa9a54b5c858eaee2f5bccdb46aaf0e486a595ed5fd8f86ba55232a70"
 
 [[package]]
 name = "hl"
-version = "0.30.0-alpha.4"
+version = "0.30.0-alpha.5"
 dependencies = [
  "bincode",
  "byte-strings",
@@ -994,6 +994,7 @@ dependencies = [
  "humantime",
  "itertools 0.13.0",
  "itoa",
+ "known-folders",
  "kqueue",
  "log",
  "maplit",
@@ -1181,6 +1182,15 @@ dependencies = [
  "pest",
  "pest_derive",
  "serde",
+]
+
+[[package]]
+name = "known-folders"
+version = "1.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b7d9a1740cc8b46e259a0eb787d79d855e79ff10b9855a5eba58868d5da7927c"
+dependencies = [
+ "windows-sys 0.59.0",
 ]
 
 [[package]]

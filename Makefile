@@ -55,7 +55,7 @@ install-man-pages: ~/share/man/man1/hl.1
 	@echo $$(tput setaf 3)NOTE:$$(tput sgr0) ensure $$(tput setaf 2)~/share/man$$(tput sgr0) is added to $$(tput setaf 2)MANPATH$$(tput sgr0) environment variable
 
 ~/share/man/man1/hl.1: contrib-build | ~/share/man/man1
-	@HL_CONFIG= cargo run --release --locked -- --man-page >"$@"
+	cargo run --release --locked -- --config - --man-page >"$@"
 
 ~/share/man/man1:
 	@mkdir -p "$@"
@@ -79,7 +79,7 @@ bench: contrib-build
 ## Show usage of the binary
 .PHONY: usage
 usage: build
-	@env -i HL_CONFIG= ./target/debug/hl --help
+	@./target/debug/hl --config - --help
 
 ## Clean build artifacts
 .PHONY: clean

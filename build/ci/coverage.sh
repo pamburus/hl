@@ -41,15 +41,15 @@ function clean() {
 function test() {
     cargo test --tests --workspace
     cargo build
-    ${MAIN_EXECUTABLE:?} --config= > /dev/null
-    ${MAIN_EXECUTABLE:?} --config= --help > /dev/null
-    ${MAIN_EXECUTABLE:?} --config=etc/defaults/config-k8s.yaml > /dev/null
-    ${MAIN_EXECUTABLE:?} --config=etc/defaults/config-ecs.yaml > /dev/null
-    ${MAIN_EXECUTABLE:?} --config= --shell-completions bash > /dev/null
-    ${MAIN_EXECUTABLE:?} --config= --man-page > /dev/null
-    ${MAIN_EXECUTABLE:?} --config= --list-themes > /dev/null
-    ${MAIN_EXECUTABLE:?} --config= sample/prometheus.log -P > /dev/null
-    echo "" | ${MAIN_EXECUTABLE:?} --config= --concurrency 4 > /dev/null
+    ${MAIN_EXECUTABLE:?} --config - > /dev/null
+    ${MAIN_EXECUTABLE:?} --config - --help > /dev/null
+    ${MAIN_EXECUTABLE:?} --config - --config=etc/defaults/config-k8s.yaml > /dev/null
+    ${MAIN_EXECUTABLE:?} --config - --config=etc/defaults/config-ecs.yaml > /dev/null
+    ${MAIN_EXECUTABLE:?} --config - --shell-completions bash > /dev/null
+    ${MAIN_EXECUTABLE:?} --config - --man-page > /dev/null
+    ${MAIN_EXECUTABLE:?} --config - --list-themes > /dev/null
+    ${MAIN_EXECUTABLE:?} --config - sample/prometheus.log -P > /dev/null
+    echo "" | ${MAIN_EXECUTABLE:?} --config - --concurrency 4 > /dev/null
 } 
 
 function merge() {

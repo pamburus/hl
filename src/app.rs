@@ -70,7 +70,6 @@ pub struct Options {
     pub input_info: Option<InputInfo>,
     pub input_format: Option<InputFormat>,
     pub dump_index: bool,
-    pub debug: bool,
     pub app_dirs: Option<AppDirs>,
     pub tail: u64,
     pub delimiter: Delimiter,
@@ -396,8 +395,8 @@ impl App {
                                     if let Some(ts) = &record.ts {
                                         if let Some(unix_ts) = ts.unix_utc() {
                                             items.push((unix_ts.into(), location));
-                                        } else if self.options.debug {
-                                            eprintln!(
+                                        } else {
+                                            log::warn!(
                                                 "skipped a message because its timestamp could not be parsed: {:#?}",
                                                 ts.raw()
                                             )
@@ -1450,7 +1449,6 @@ mod tests {
             input_info: None,
             input_format: None,
             dump_index: false,
-            debug: false,
             app_dirs: None,
             tail: 0,
             delimiter: Delimiter::default(),
