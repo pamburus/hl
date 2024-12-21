@@ -19,7 +19,7 @@ use crate::{
     error::{Result, HILITE},
     index::{Index, Indexer, SourceBlock, SourceMetadata},
     iox::ReadFill,
-    pool::SQPool,
+    pool::{AutoPool, NoPool, SQPool},
     replay::{ReplayBufCreator, ReplayBufReader, ReplaySeekReader},
     tee::TeeReader,
     vfs::{FileSystem, LocalFileSystem},
@@ -496,9 +496,9 @@ impl IndexedInput {
     }
 
     /// Converts the input to blocks.
-    pub fn into_blocks(self) -> Blocks<IndexedInput, impl Iterator<Item = usize>> {
+    pub fn into_blocks(self) -> Blocks<IndexedInput, impl Iterator<Item = usize>, impl AutoPool<Vec<u8>>> {
         let n = self.index.source().blocks.len();
-        Blocks::new(Arc::new(self), (0..n).into_iter())
+        Blocks::with_pool(Arc::new(self), (0..n).into_iter(), Arc::new(crate::pool::SQPool::new()))
     }
 
     fn from_stream<FS>(reference: InputReference, stream: Stream, indexer: &Indexer<FS>) -> Result<Self>
@@ -581,31 +581,61 @@ impl IndexedInput {
 
 // ---
 
-pub struct Blocks<I, II> {
+pub struct Blocks<I, II, P = NoPool> {
     input: Arc<I>,
     indexes: II,
+    pool: Arc<P>,
 }
 
-impl<II: Iterator<Item = usize>> Blocks<IndexedInput, II> {
+impl<II, P> Blocks<IndexedInput, II, P>
+where
+    II: Iterator<Item = usize>,
+    P: Default,
+{
     #[inline]
     pub fn new(input: Arc<IndexedInput>, indexes: II) -> Self {
-        Self { input, indexes }
+        Self {
+            input,
+            indexes,
+            pool: Default::default(),
+        }
     }
+}
 
-    pub fn sorted(self) -> Blocks<IndexedInput, impl Iterator<Item = usize>> {
+impl<II, P> Blocks<IndexedInput, II, P>
+where
+    II: Iterator<Item = usize>,
+{
+    #[inline]
+    pub fn with_pool(input: Arc<IndexedInput>, indexes: II, pool: Arc<P>) -> Self {
+        Self { input, indexes, pool }
+    }
+}
+
+impl<II, P> Blocks<IndexedInput, II, P>
+where
+    II: Iterator<Item = usize>,
+{
+    pub fn sorted(self) -> Blocks<IndexedInput, impl Iterator<Item = usize>, P> {
         let (input, indexes) = (self.input, self.indexes);
         let mut indexes: Vec<_> = indexes.collect();
         indexes.sort_by_key(|&i| input.index.source().blocks[i].stat.ts_min_max);
-        Blocks::new(input, indexes.into_iter())
+        Blocks::with_pool(input, indexes.into_iter(), self.pool)
     }
 }
 
-impl<II: Iterator<Item = usize>> Iterator for Blocks<IndexedInput, II> {
-    type Item = Block<IndexedInput>;
+impl<II, P> Iterator for Blocks<IndexedInput, II, P>
+where
+    II: Iterator<Item = usize>,
+    P: crate::pool::AutoPool<Vec<u8>>,
+{
+    type Item = Block<IndexedInput, P>;
 
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
-        self.indexes.next().map(|i| Block::new(self.input.clone(), i))
+        self.indexes
+            .next()
+            .map(|i| Block::new(self.input.clone(), i, self.pool.clone()))
     }
 
     #[inline]
@@ -620,40 +650,24 @@ impl<II: Iterator<Item = usize>> Iterator for Blocks<IndexedInput, II> {
 
     #[inline]
     fn nth(&mut self, n: usize) -> Option<Self::Item> {
-        self.indexes.nth(n).map(|i| Block::new(self.input.clone(), i))
+        self.indexes
+            .nth(n)
+            .map(|i| Block::new(self.input.clone(), i, self.pool.clone()))
     }
 }
 
 // ---
 
-pub struct Block<I> {
+pub struct Block<I, P = NoPool> {
     input: Arc<I>,
     index: usize,
-    buf_pool: Option<Arc<BufPool>>,
+    pool: Arc<P>,
 }
 
-impl Block<IndexedInput> {
+impl<P> Block<IndexedInput, P> {
     #[inline]
-    pub fn new(input: Arc<IndexedInput>, index: usize) -> Self {
-        Self {
-            input,
-            index,
-            buf_pool: None,
-        }
-    }
-
-    #[inline]
-    pub fn with_buf_pool(self, buf_pool: Arc<BufPool>) -> Self {
-        Self {
-            input: self.input,
-            index: self.index,
-            buf_pool: Some(buf_pool),
-        }
-    }
-
-    #[inline]
-    pub fn into_lines(self) -> Result<BlockLines<IndexedInput>> {
-        BlockLines::new(self)
+    pub fn new(input: Arc<IndexedInput>, index: usize, pool: Arc<P>) -> Self {
+        Self { input, index, pool }
     }
 
     #[inline]
@@ -677,37 +691,46 @@ impl Block<IndexedInput> {
     }
 }
 
+impl<P> Block<IndexedInput, P>
+where
+    P: crate::pool::AutoPool<Vec<u8>>,
+{
+    #[inline]
+    pub fn into_lines(self) -> Result<BlockLines<Self, P::Guard>> {
+        BlockLines::new(self)
+    }
+}
+
 // ---
 
-pub struct BlockLines<I> {
-    block: Block<I>,
-    buf: Arc<Vec<u8>>,
+pub struct BlockLines<B, G> {
+    block: B,
+    buf: Arc<G>,
     total: usize,
     current: usize,
     byte: usize,
     jump: usize,
 }
 
-impl BlockLines<IndexedInput> {
-    pub fn new(mut block: Block<IndexedInput>) -> Result<Self> {
+impl<P> BlockLines<Block<IndexedInput, P>, P::Guard>
+where
+    P: crate::pool::AutoPool<Vec<u8>>,
+{
+    pub fn new(mut block: Block<IndexedInput, P>) -> Result<Self> {
         let (buf, total) = {
             let block = &mut block;
-            let mut buf = if let Some(pool) = &block.buf_pool {
-                pool.check_out() // TODO: implement check-in
-            } else {
-                Vec::new()
-            };
+            let mut buf = block.pool.auto_check_out();
             let source_block = block.source_block();
             buf.resize(source_block.size.try_into()?, 0);
             let mut stream = block.input.stream.lock().unwrap();
             stream.seek(SeekFrom::Start(source_block.offset))?;
-            stream.read_fill(&mut buf)?;
+            stream.read_fill(buf.as_mut())?;
             let total = (source_block.stat.lines_valid + source_block.stat.lines_invalid).try_into()?;
             (buf, total)
         };
         Ok(Self {
             block,
-            buf: Arc::new(buf), // TODO: optimize allocations
+            buf: Arc::new(buf),
             total,
             current: 0,
             byte: 0,
@@ -716,8 +739,11 @@ impl BlockLines<IndexedInput> {
     }
 }
 
-impl Iterator for BlockLines<IndexedInput> {
-    type Item = BlockLine;
+impl<P> Iterator for BlockLines<Block<IndexedInput, P>, P::Guard>
+where
+    P: crate::pool::AutoPool<Vec<u8>>,
+{
+    type Item = BlockLine<P::Guard>;
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.current >= self.total {
@@ -763,20 +789,23 @@ impl Iterator for BlockLines<IndexedInput> {
 
 // ---
 
-pub struct BlockLine {
-    buf: Arc<Vec<u8>>,
+pub struct BlockLine<B> {
+    buf: Arc<B>,
     range: Range<usize>,
 }
 
-impl BlockLine {
+impl<B> BlockLine<B>
+where
+    B: AsRef<Vec<u8>>,
+{
     #[inline]
-    pub fn new(buf: Arc<Vec<u8>>, range: Range<usize>) -> Self {
+    pub fn new(buf: Arc<B>, range: Range<usize>) -> Self {
         Self { buf, range }
     }
 
     #[inline]
     pub fn bytes(&self) -> &[u8] {
-        &self.buf[self.range.clone()]
+        &self.buf.as_ref().as_ref()[self.range.clone()]
     }
 
     #[inline]

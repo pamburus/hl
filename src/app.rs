@@ -983,7 +983,7 @@ struct OutputBlock {
 }
 
 impl OutputBlock {
-    pub fn into_lines(self) -> impl Iterator<Item = (Timestamp, BlockLine)> {
+    pub fn into_lines(self) -> impl Iterator<Item = (Timestamp, BlockLine<Vec<u8>>)> {
         let buf = self.buf;
         self.items
             .into_iter()

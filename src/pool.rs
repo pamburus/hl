@@ -1,3 +1,9 @@
+// stdlib imports
+use std::{
+    ops::{Deref, DerefMut},
+    sync::Arc,
+};
+
 // third-party imports
 use crossbeam_queue::SegQueue;
 
@@ -7,6 +13,55 @@ use crossbeam_queue::SegQueue;
 pub trait Pool<T>: CheckOut<T> + CheckIn<T> {}
 
 impl<T, U: CheckOut<T> + CheckIn<T>> Pool<T> for U {}
+
+// ---
+
+pub trait AutoPool<T>: CheckIn<T> {
+    type Guard: Deref<Target = T> + DerefMut<Target = T> + AsRef<T> + AsMut<T>;
+
+    fn auto_check_out(self: &Arc<Self>) -> Self::Guard;
+}
+
+pub struct NoPool<F = DefaultFactory> {
+    f: F,
+}
+
+impl<F> NoPool<F> {
+    #[inline]
+    pub fn new(f: F) -> Self {
+        Self { f }
+    }
+}
+
+impl<F> Default for NoPool<F>
+where
+    F: Default,
+{
+    #[inline]
+    fn default() -> Self {
+        Self { f: Default::default() }
+    }
+}
+
+impl<T, F> AutoPool<T> for NoPool<F>
+where
+    F: Factory<T>,
+{
+    type Guard = NoGuard<T>;
+
+    #[inline]
+    fn auto_check_out(self: &Arc<Self>) -> Self::Guard {
+        NoGuard(self.f.new())
+    }
+}
+
+impl<T, F> CheckIn<T> for NoPool<F>
+where
+    F: Factory<T>,
+{
+    #[inline(always)]
+    fn check_in(&self, _item: T) {}
+}
 
 // ---
 
@@ -56,6 +111,7 @@ where
 
 // ---
 
+#[derive(Default, Clone, Copy)]
 pub struct DefaultFactory;
 
 impl<T: Default> Factory<T> for DefaultFactory {
@@ -173,5 +229,124 @@ where
     #[inline(always)]
     fn check_in(&self, item: T) {
         self.check_in(item)
+    }
+}
+
+impl<T, F, R> AutoPool<T> for SQPool<T, F, R>
+where
+    F: Factory<T>,
+    R: Recycler<T>,
+{
+    type Guard = Guard<T, SQPool<T, F, R>>;
+
+    #[inline]
+    fn auto_check_out(self: &Arc<Self>) -> Self::Guard {
+        Guard::new(self.check_out(), Arc::clone(self))
+    }
+}
+
+// ---
+
+pub struct Guard<T, P>
+where
+    P: CheckIn<T>,
+{
+    item: Option<T>,
+    pool: Arc<P>,
+}
+
+impl<T, P> Guard<T, P>
+where
+    P: CheckIn<T>,
+{
+    #[inline]
+    fn new(item: T, pool: Arc<P>) -> Self {
+        Guard { item: Some(item), pool }
+    }
+}
+
+impl<T, P> Deref for Guard<T, P>
+where
+    P: CheckIn<T>,
+{
+    type Target = T;
+
+    #[inline]
+    fn deref(&self) -> &Self::Target {
+        self.item.as_ref().unwrap()
+    }
+}
+
+impl<T, P> DerefMut for Guard<T, P>
+where
+    P: CheckIn<T>,
+{
+    #[inline]
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        self.item.as_mut().unwrap()
+    }
+}
+
+impl<T, P> AsRef<T> for Guard<T, P>
+where
+    P: CheckIn<T>,
+{
+    #[inline]
+    fn as_ref(&self) -> &T {
+        self.item.as_ref().unwrap()
+    }
+}
+
+impl<T, P> AsMut<T> for Guard<T, P>
+where
+    P: CheckIn<T>,
+{
+    #[inline]
+    fn as_mut(&mut self) -> &mut T {
+        self.item.as_mut().unwrap()
+    }
+}
+
+impl<T, P> Drop for Guard<T, P>
+where
+    P: CheckIn<T>,
+{
+    #[inline]
+    fn drop(&mut self) {
+        self.pool.check_in(self.item.take().unwrap())
+    }
+}
+
+// ---
+
+pub struct NoGuard<T>(T);
+
+impl<T> Deref for NoGuard<T> {
+    type Target = T;
+
+    #[inline]
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl<T> DerefMut for NoGuard<T> {
+    #[inline]
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+impl<T> AsRef<T> for NoGuard<T> {
+    #[inline]
+    fn as_ref(&self) -> &T {
+        &self.0
+    }
+}
+
+impl<T> AsMut<T> for NoGuard<T> {
+    #[inline]
+    fn as_mut(&mut self) -> &mut T {
+        &mut self.0
     }
 }
