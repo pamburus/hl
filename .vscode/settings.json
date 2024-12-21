@@ -6,4 +6,43 @@
     "coverage-gutters.coverageFileNames": [
         "lcov.info"
     ],
+    "cSpell.ignoreRegExpList": [
+        "/\"[^\"]*\\\\u{1b}\\[[^\"]*\"/g",
+        "/r#\".*\\\\u001b\\[.*\"#/g",
+        "/\"[^\"]*\\\\x1b\\[[^\"]*\"/g"
+    ],
+    "cSpell.words": [
+        "AKBNIJGHERHBNMCKJABHSDJ",
+        "amet",
+        "ampm",
+        "april",
+        "bfnrt",
+        "bytefmt",
+        "cdef",
+        "cpus",
+        "Deque",
+        "EVFILT",
+        "february",
+        "FFNOP",
+        "friday",
+        "ibuf",
+        "itoa",
+        "january",
+        "july",
+        "june",
+        "naaaa",
+        "nbbbb",
+        "november",
+        "october",
+        "orem",
+        "psum",
+        "saturday",
+        "stty",
+        "thursday",
+        "tuesday",
+        "unexp",
+        "unhex",
+        "wednesday",
+        "wyhash"
+    ]
 }
