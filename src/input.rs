@@ -19,7 +19,6 @@ use crate::{
     error::{Result, HILITE},
     index::{Index, Indexer, SourceBlock, SourceMetadata},
     iox::ReadFill,
-    pool::SQPool,
     replay::{ReplayBufCreator, ReplayBufReader, ReplaySeekReader},
     tee::TeeReader,
     vfs::{FileSystem, LocalFileSystem},
@@ -29,7 +28,6 @@ use crate::{
 
 pub type SequentialStream = Box<dyn ReadMeta + Send + Sync>;
 pub type RandomAccessStream = Box<dyn ReadSeekMeta + Send + Sync>;
-pub type BufPool = SQPool<Vec<u8>>;
 
 // ---
 
@@ -629,26 +627,12 @@ impl<II: Iterator<Item = usize>> Iterator for Blocks<IndexedInput, II> {
 pub struct Block<I> {
     input: Arc<I>,
     index: usize,
-    buf_pool: Option<Arc<BufPool>>,
 }
 
 impl Block<IndexedInput> {
     #[inline]
     pub fn new(input: Arc<IndexedInput>, index: usize) -> Self {
-        Self {
-            input,
-            index,
-            buf_pool: None,
-        }
-    }
-
-    #[inline]
-    pub fn with_buf_pool(self, buf_pool: Arc<BufPool>) -> Self {
-        Self {
-            input: self.input,
-            index: self.index,
-            buf_pool: Some(buf_pool),
-        }
+        Self { input, index }
     }
 
     #[inline]
@@ -692,11 +676,7 @@ impl BlockLines<IndexedInput> {
     pub fn new(mut block: Block<IndexedInput>) -> Result<Self> {
         let (buf, total) = {
             let block = &mut block;
-            let mut buf = if let Some(pool) = &block.buf_pool {
-                pool.check_out() // TODO: implement check-in
-            } else {
-                Vec::new()
-            };
+            let mut buf = Vec::new();
             let source_block = block.source_block();
             buf.resize(source_block.size.try_into()?, 0);
             let mut stream = block.input.stream.lock().unwrap();
@@ -707,7 +687,7 @@ impl BlockLines<IndexedInput> {
         };
         Ok(Self {
             block,
-            buf: Arc::new(buf), // TODO: optimize allocations
+            buf: Arc::new(buf),
             total,
             current: 0,
             byte: 0,
