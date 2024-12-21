@@ -693,7 +693,7 @@ impl BlockLines<IndexedInput> {
         let (buf, total) = {
             let block = &mut block;
             let mut buf = if let Some(pool) = &block.buf_pool {
-                pool.checkout() // TODO: implement checkin
+                pool.check_out() // TODO: implement check-in
             } else {
                 Vec::new()
             };

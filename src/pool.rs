@@ -4,22 +4,22 @@ use crossbeam_queue::SegQueue;
 // ---
 
 #[allow(dead_code)]
-pub trait Pool<T>: Checkout<T> + Checkin<T> {}
+pub trait Pool<T>: CheckOut<T> + CheckIn<T> {}
 
-impl<T, U: Checkout<T> + Checkin<T>> Pool<T> for U {}
+impl<T, U: CheckOut<T> + CheckIn<T>> Pool<T> for U {}
 
 // ---
 
 #[allow(dead_code)]
-pub trait Checkout<T> {
-    fn checkout(&self) -> T;
+pub trait CheckOut<T> {
+    fn check_out(&self) -> T;
 }
 
 // ---
 
 #[allow(dead_code)]
-pub trait Checkin<T> {
-    fn checkin(&self, item: T);
+pub trait CheckIn<T> {
+    fn check_in(&self, item: T);
 }
 
 // ---
@@ -141,7 +141,7 @@ where
     }
     /// Returns a new or recycled T.
     #[inline(always)]
-    pub fn checkout(&self) -> T {
+    pub fn check_out(&self) -> T {
         match self.recycled.pop() {
             Some(item) => item,
             None => self.factory.new(),
@@ -149,29 +149,29 @@ where
     }
     /// Recycles the given T.
     #[inline(always)]
-    pub fn checkin(&self, item: T) {
+    pub fn check_in(&self, item: T) {
         self.recycled.push(self.recycler.recycle(item))
     }
 }
 
-impl<T, F, R> Checkout<T> for SQPool<T, F, R>
+impl<T, F, R> CheckOut<T> for SQPool<T, F, R>
 where
     F: Factory<T>,
     R: Recycler<T>,
 {
     #[inline(always)]
-    fn checkout(&self) -> T {
-        self.checkout()
+    fn check_out(&self) -> T {
+        self.check_out()
     }
 }
 
-impl<T, F, R> Checkin<T> for SQPool<T, F, R>
+impl<T, F, R> CheckIn<T> for SQPool<T, F, R>
 where
     F: Factory<T>,
     R: Recycler<T>,
 {
     #[inline(always)]
-    fn checkin(&self, item: T) {
-        self.checkin(item)
+    fn check_in(&self, item: T) {
+        self.check_in(item)
     }
 }
