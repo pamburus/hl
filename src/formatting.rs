@@ -1496,8 +1496,9 @@ pub mod string {
                 }
             }
 
-            const NON_PLAIN: Mask =
-                mask!(Flag::DoubleQuote | Flag::Control | Flag::Backslash | Flag::Space | Flag::EqualSign);
+            const NON_PLAIN: Mask = mask!(
+                Flag::DoubleQuote | Flag::SingleQuote | Flag::Control | Flag::Backslash | Flag::Space | Flag::EqualSign
+            );
             const POSITIVE_INTEGER: Mask = mask!(Flag::Digit);
             const NUMBER: Mask = mask!(Flag::Digit | Flag::Dot | Flag::Minus);
 
@@ -1671,19 +1672,20 @@ pub mod string {
             let analysis = buf[begin..].analyze();
             let mask = analysis.chars;
 
-            const NON_PLAIN: Mask = mask!(
-                Flag::EqualSign
-                    | Flag::Control
-                    | Flag::Backslash
-                    | Flag::Colon
-                    | Flag::Tilde
-                    | Flag::AngleBrackets
-                    | Flag::DoubleQuote
-                    | Flag::SingleQuote
-                    | Flag::Backtick
+            const NOT_PLAIN: Mask = mask!(
+                Flag::EqualSign | Flag::Control | Flag::Backslash // | Flag::Colon
+                                                                  // | Flag::Tilde
+                                                                  // | Flag::AngleBrackets
+                                                                  // | Flag::DoubleQuote
+                                                                  // | Flag::SingleQuote
+                                                                  // | Flag::Backtick
             );
 
-            if !mask.intersects(NON_PLAIN) {
+            if !mask.intersects(NOT_PLAIN)
+                && (begin == buf.len()
+                    || !CHAR_GROUPS[buf[begin] as usize]
+                        .intersects(Flag::DoubleQuote | Flag::SingleQuote | Flag::Backtick))
+            {
                 return Ok(FormatResult::Ok(Some(analysis)));
             }
 
