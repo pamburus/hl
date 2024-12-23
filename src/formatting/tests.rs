@@ -1463,6 +1463,6 @@ fn test_complex_message_expansion() {
 
     assert_eq!(
         &result,
-        "~\n  > msg=|=>\n     \t<Settings source=\"X\" type=\"Y\" version=\"1\">\n     \t</Settings> level=info\n  > ts=2024-06-05T04:25:29Z"
+        "~\n  > msg=|=>\n     \t<Settings source=\"X\" type=\"Y\" version=\"1\">\n     \t</Settings>\n  > level=info\n  > ts=2024-06-05T04:25:29Z"
     );
 }
