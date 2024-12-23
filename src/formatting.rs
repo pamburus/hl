@@ -936,7 +936,7 @@ impl RecordFormatter {
             });
         });
 
-        if !fs.expanded {
+        if fs.fields_to_expand.len() != 0 {
             fs.expanded = true;
             let fields_to_expand = std::mem::take(&mut fs.fields_to_expand);
             for (k, v) in fields_to_expand.iter() {

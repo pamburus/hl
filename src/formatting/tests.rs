@@ -1629,3 +1629,36 @@ fn test_add_field_to_expand() {
         "m\n  > k0=|=>\n     \tsome\n     \tvalue #0\n  > k1=|=>\n     \tsome\n     \tvalue #1\n  > k2=|=>\n     \tsome\n     \tvalue #2\n  > k3=|=>\n     \tsome\n     \tvalue #3\n  > k4=|=>\n     \tsome\n     \tvalue #4\n  > k5=|=>\n     \tsome\n     \tvalue #5\n  > k6=|=>\n     \tsome\n     \tvalue #6\n  > k7=|=>\n     \tsome\n     \tvalue #7\n  > k8=|=>\n     \tsome\n     \tvalue #8\n  > k9=|=>\n     \tsome\n     \tvalue #9\n  > k10=|=>\n     \tsome\n     \tvalue #10\n  > k11=|=>\n     \tsome\n     \tvalue #11\n  > k12=|=>\n     \tsome\n     \tvalue #12\n  > k13=|=>\n     \tsome\n     \tvalue #13\n  > k14=|=>\n     \tsome\n     \tvalue #14\n  > k15=|=>\n     \tsome\n     \tvalue #15\n  > k16=|=>\n     \tsome\n     \tvalue #16\n  > k17=|=>\n     \tsome\n     \tvalue #17\n  > k18=|=>\n     \tsome\n     \tvalue #18\n  > k19=|=>\n     \tsome\n     \tvalue #19\n  > k20=|=>\n     \tsome\n     \tvalue #20\n  > k21=|=>\n     \tsome\n     \tvalue #21\n  > k22=|=>\n     \tsome\n     \tvalue #22\n  > k23=|=>\n     \tsome\n     \tvalue #23\n  > k24=|=>\n     \tsome\n     \tvalue #24\n  > k25=|=>\n     \tsome\n     \tvalue #25\n  > k26=|=>\n     \tsome\n     \tvalue #26\n  > k27=|=>\n     \tsome\n     \tvalue #27\n  > k28=|=>\n     \tsome\n     \tvalue #28\n  > k29=|=>\n     \tsome\n     \tvalue #29\n  > k30=|=>\n     \tsome\n     \tvalue #30\n  > k31=|=>\n     \tsome\n     \tvalue #31\n  > k32=|=>\n     \tsome\n     \tvalue #32\n  > k33=|=>\n     \tsome\n     \tvalue #33"
     );
 }
+
+#[test]
+fn test_complex_message_expansion() {
+    let rec = Record {
+        message: Some(EncodedString::json(r#""<Settings source=\"X\" type=\"Y\" version=\"1\">\n</Settings>""#).into()),
+        fields: RecordFields::from_slice(&[
+            ("level", EncodedString::raw("info").into()),
+            ("ts", EncodedString::raw("2024-06-05T04:25:29Z").into()),
+        ]),
+        ..Default::default()
+    };
+
+    let mut expansion = Expansion::from(ExpansionMode::High);
+    expansion.profiles.high.thresholds.cumulative = 32;
+    expansion.profiles.high.thresholds.field = 1024;
+    expansion.profiles.high.thresholds.global = 10;
+    expansion.profiles.high.thresholds.message = 1024;
+
+    let formatter = RecordFormatterBuilder {
+        theme: Default::default(),
+        flatten: true,
+        expansion: Some(expansion),
+        ..formatter()
+    }
+    .build();
+
+    let result = formatter.format_to_string(&rec);
+
+    assert_eq!(
+        &result,
+        "~\n  > msg=|=>\n     \t<Settings source=\"X\" type=\"Y\" version=\"1\">\n     \t</Settings> level=info\n  > ts=2024-06-05T04:25:29Z"
+    );
+}
