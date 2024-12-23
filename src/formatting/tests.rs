@@ -381,7 +381,7 @@ fn test_string_value_json_number() {
     ] {
         let qv = format!(r#""{}""#, v);
         let rec = Record::from_fields(&[("k", EncodedString::json(&qv).into())]);
-        assert_eq!(format_no_color(&rec), format!(r#"k={}"#, v));
+        assert_eq!(format_no_color_inline(&rec), format!(r#"k={}"#, v));
     }
 }
 
@@ -396,7 +396,7 @@ fn test_string_value_raw_number() {
         "42.128731867381927389172983718293789127389172938712983718927",
     ] {
         let rec = Record::from_fields(&[("k", EncodedString::raw(v).into())]);
-        assert_eq!(format_no_color(&rec), format!(r#"k={}"#, v));
+        assert_eq!(format_no_color_inline(&rec), format!(r#"k={}"#, v));
     }
 }
 
