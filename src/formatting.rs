@@ -1143,13 +1143,15 @@ impl<'a> FieldFormatter<'a> {
             return FieldFormatResult::Hidden;
         }
 
-        if !fs.expanded && value.raw_str().len() > fs.expansion.thresholds.field {
+        let key_complexity = key.len() + 2;
+
+        if !fs.expanded && key_complexity + value.raw_str().len() + 2 > fs.expansion.thresholds.field {
             return FieldFormatResult::ExpansionNeeded;
         }
 
         let ffv = self.begin(s, key, value, fs);
 
-        fs.complexity += key.len() + 2;
+        fs.complexity += key_complexity;
 
         let result = if self.rf.unescape_fields {
             self.format_value(s, value, fs, filter, setting)
@@ -1694,6 +1696,11 @@ pub mod string {
             xsa: ExtendedSpaceAction<'a>,
         ) -> Result<FormatResult> {
             if input.is_empty() {
+                if let Some(limit) = self.complexity_limit {
+                    if limit < 2 {
+                        return Ok(FormatResult::Aborted);
+                    }
+                }
                 buf.extend(r#""""#.as_bytes());
                 return Ok(FormatResult::Ok(Some(Analysis::empty())));
             }
