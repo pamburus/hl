@@ -796,7 +796,7 @@ impl RecordFormatter {
             });
         });
 
-        if !fs.expanded {
+        if fs.fields_to_expand.len() != 0 {
             fs.expanded = true;
             let fields_to_expand = std::mem::take(&mut fs.fields_to_expand);
             for (k, v) in fields_to_expand.iter() {
@@ -3106,5 +3106,36 @@ mod tests {
         });
 
         assert_eq!(&formatter.format_to_string(&rec), "a={ b={ c={ d=1 ... } ... } }");
+    }
+
+    #[test]
+    fn test_complex_message_expansion() {
+        let rec = Record {
+            message: Some(
+                EncodedString::json(r#""<Settings source=\"X\" type=\"Y\" version=\"1\">\n</Settings>""#).into(),
+            ),
+            fields: RecordFields {
+                head: heapless::Vec::from_slice(&[
+                    ("level", EncodedString::raw("info").into()),
+                    ("ts", EncodedString::raw("2024-06-05T04:25:29Z").into()),
+                ])
+                .unwrap(),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        let formatter = RecordFormatter::new(settings().with(|s| {
+            s.theme = Default::default();
+            s.flatten = true;
+            s.expansion.mode = ExpansionMode::High;
+            s.expansion.profiles.high.thresholds.cumulative = 32;
+            s.expansion.profiles.high.thresholds.field = 1024;
+            s.expansion.profiles.high.thresholds.global = 10;
+            s.expansion.profiles.high.thresholds.message = 1024;
+        }));
+
+        let result = formatter.format_to_string(&rec);
+
+        assert_eq!(&result, "~\n  > msg=|=>\n     \t<Settings source=\"X\" type=\"Y\" version=\"1\">\n     \t</Settings> level=info\n  > ts=2024-06-05T04:25:29Z");
     }
 }
