@@ -130,6 +130,12 @@
         },
         "ellipsis": {
           "$ref": "#/$defs/style"
+        },
+        "bullet": {
+          "$ref": "#/definitions/style"
+        },
+        "value-expansion": {
+          "$ref": "#/definitions/style"
         }
       },
       "required": [],

@@ -16,8 +16,14 @@ use crate::{
     level::{InfallibleLevel, Level},
     model::FieldFilterSet,
     scanning::{BufFactory, PartialPlacement, Segment, SegmentBuf, SegmentBufFactory},
-    settings::{self, AsciiMode, DisplayVariant, MessageFormat, MessageFormatting},
+    settings::{self, AsciiMode, DisplayVariant, ExpansionMode, MessageFormat, MessageFormatting},
+    syntax::*,
+    themecfg,
 };
+
+fn theme() -> Arc<Theme> {
+    Sample::sample()
+}
 
 #[test]
 fn test_common_prefix_len() {
@@ -418,25 +424,27 @@ fn test_issue_176_complex_span_json() {
     ));
     let mut output = Vec::new();
     let app = App::new(
-        options().with_fields(FieldOptions {
-            settings: Fields {
-                predefined: settings::PredefinedFields {
-                    logger: settings::Field {
-                        names: vec!["span.name".to_string()],
-                        show: FieldShowOption::Always,
-                    }
-                    .into(),
-                    caller: settings::Field {
-                        names: vec!["span.source".to_string()],
-                        show: FieldShowOption::Always,
-                    }
-                    .into(),
+        options()
+            .with_expansion(ExpansionMode::Never)
+            .with_fields(FieldOptions {
+                settings: Fields {
+                    predefined: settings::PredefinedFields {
+                        logger: settings::Field {
+                            names: vec!["span.name".to_string()],
+                            show: FieldShowOption::Always,
+                        }
+                        .into(),
+                        caller: settings::Field {
+                            names: vec!["span.source".to_string()],
+                            show: FieldShowOption::Always,
+                        }
+                        .into(),
+                        ..Default::default()
+                    },
                     ..Default::default()
                 },
                 ..Default::default()
-            },
-            ..Default::default()
-        }),
+            }),
     );
     app.run(vec![input], &mut output).unwrap();
     assert_eq!(
@@ -564,6 +572,7 @@ fn options() -> Options {
         unix_ts_unit: None,
         flatten: false,
         ascii: AsciiMode::Off,
+        expand: Default::default(),
     }
 }
 
@@ -593,12 +602,12 @@ fn test_ascii_mode_handling() {
 
     // Test ASCII mode
     let mut buf_ascii = Vec::new();
-    formatter_ascii.format_record(&mut buf_ascii, &record);
+    formatter_ascii.format_record(&mut buf_ascii, 0..0, &record);
     let result_ascii = String::from_utf8(buf_ascii).unwrap();
 
     // Test Unicode mode
     let mut buf_utf8 = Vec::new();
-    formatter_utf8.format_record(&mut buf_utf8, &record);
+    formatter_utf8.format_record(&mut buf_utf8, 0..0, &record);
     let result_utf8 = String::from_utf8(buf_utf8).unwrap();
 
     // Verify that the ASCII mode uses ASCII arrows
@@ -685,8 +694,196 @@ fn test_input_badges_with_ascii_mode() {
     assert_ne!(badges_a, badges_u, "ASCII and Unicode badges should be different");
 }
 
-fn theme() -> Arc<Theme> {
-    Sample::sample()
+#[test]
+fn test_expand_always() {
+    let input = input(concat!(
+        r#"level=debug time=2024-01-25T19:10:20.435369+01:00 msg=m1 a.b.c=10 a.b.d=20 a.c.b=11 caller=src1"#,
+        "\n",
+    ));
+
+    let mut output = Vec::new();
+    let app = App::new(Options {
+        expand: ExpansionMode::Always,
+        ..options()
+    });
+
+    app.run(vec![input], &mut output).unwrap();
+    assert_eq!(
+        std::str::from_utf8(&output).unwrap(),
+        format!(
+            concat!(
+                "2024-01-25 18:10:20.435 |{ld}| m1 @ src1\n",
+                "                        |{lx}|   > a.b.c=10\n",
+                "                        |{lx}|   > a.b.d=20\n",
+                "                        |{lx}|   > a.c.b=11\n"
+            ),
+            ld = LEVEL_DEBUG,
+            lx = LEVEL_EXPANDED,
+        ),
+    );
+}
+
+#[test]
+fn test_expand_never() {
+    let input = input(concat!(
+        r#"level=debug time=2024-01-25T19:10:20.435369+01:00 msg="some long long long long message" caller=src1 a=long-long-long-value-1 b=long-long-long-value-2 c=long-long-long-value-3 d=long-long-long-value-4 e=long-long-long-value-5 f=long-long-long-value-6 g=long-long-long-value-7 h=long-long-long-value-8 i=long-long-long-value-9 j=long-long-long-value-10 k=long-long-long-value-11 l=long-long-long-value-12 m=long-long-long-value-13 n=long-long-long-value-14 o=long-long-long-value-15 p=long-long-long-value-16 q=long-long-long-value-17 r=long-long-long-value-18 s=long-long-long-value-19 t=long-long-long-value-20 u=long-long-long-value-21 v=long-long-long-value-22 w=long-long-long-value-23 x=long-long-long-value-24 w=long-long-long-value-26 z=long-long-long-value-26"#,
+        "\n",
+    ));
+
+    let mut output = Vec::new();
+    let app = App::new(Options {
+        expand: ExpansionMode::Never,
+        ..options()
+    });
+
+    app.run(vec![input], &mut output).unwrap();
+    assert_eq!(
+        std::str::from_utf8(&output).unwrap(),
+        "2024-01-25 18:10:20.435 |DBG| some long long long long message a=long-long-long-value-1 b=long-long-long-value-2 c=long-long-long-value-3 d=long-long-long-value-4 e=long-long-long-value-5 f=long-long-long-value-6 g=long-long-long-value-7 h=long-long-long-value-8 i=long-long-long-value-9 j=long-long-long-value-10 k=long-long-long-value-11 l=long-long-long-value-12 m=long-long-long-value-13 n=long-long-long-value-14 o=long-long-long-value-15 p=long-long-long-value-16 q=long-long-long-value-17 r=long-long-long-value-18 s=long-long-long-value-19 t=long-long-long-value-20 u=long-long-long-value-21 v=long-long-long-value-22 w=long-long-long-value-23 x=long-long-long-value-24 w=long-long-long-value-26 z=long-long-long-value-26 @ src1\n",
+    );
+}
+
+#[test]
+fn test_expand_value_with_time() {
+    let input = input(concat!(
+        r#"level=debug time=2024-01-25T19:10:20.435369+01:00 msg=hello caller=src1 a="line one\nline two\nline three\n""#,
+        "\n",
+    ));
+
+    let mut output = Vec::new();
+    let app = App::new(Options {
+        expand: ExpansionMode::Always,
+        theme: Theme::from(themecfg::Theme {
+            elements: themecfg::StylePack::new(hashmap! {
+                Element::ValueExpansion => themecfg::Style::default(),
+            }),
+            ..Default::default()
+        })
+        .into(),
+        ..options()
+    });
+
+    app.run(vec![input], &mut output).unwrap();
+
+    let actual = std::str::from_utf8(&output).unwrap();
+    let expected = format!(
+        concat!(
+            "2024-01-25 18:10:20.435 |{ld}| hello @ src1\n",
+            "                        |{lx}|   > a={vh}\n",
+            "                        |{lx}|     {vi}line one\n",
+            "                        |{lx}|     {vi}line two\n",
+            "                        |{lx}|     {vi}line three\n",
+        ),
+        ld = LEVEL_DEBUG,
+        lx = LEVEL_EXPANDED,
+        vh = EXPANDED_VALUE_HEADER,
+        vi = EXPANDED_VALUE_INDENT,
+    );
+
+    assert_eq!(actual, expected, "\nactual:\n{}expected:\n{}", actual, expected);
+}
+
+#[test]
+fn test_expand_value_without_time() {
+    let input = input(concat!(
+        r#"level=debug msg=hello caller=src1 a="line one\nline two\nline three\n""#,
+        "\n",
+    ));
+
+    let mut output = Vec::new();
+    let app = App::new(Options {
+        expand: ExpansionMode::Always,
+        theme: Theme::from(themecfg::Theme {
+            elements: themecfg::StylePack::new(hashmap! {
+                Element::ValueExpansion => themecfg::Style::default(),
+            }),
+            ..Default::default()
+        })
+        .into(),
+        ..options()
+    });
+
+    app.run(vec![input], &mut output).unwrap();
+
+    let actual = std::str::from_utf8(&output).unwrap();
+    let expected = format!(
+        concat!(
+            "|{ld}| hello @ src1\n",
+            "|{lx}|   > a={vh}\n",
+            "|{lx}|     {vi}line one\n",
+            "|{lx}|     {vi}line two\n",
+            "|{lx}|     {vi}line three\n",
+        ),
+        ld = LEVEL_DEBUG,
+        lx = LEVEL_EXPANDED,
+        vh = EXPANDED_VALUE_HEADER,
+        vi = EXPANDED_VALUE_INDENT,
+    );
+
+    assert_eq!(actual, expected, "\nactual:\n{}expected:\n{}", actual, expected);
+}
+
+#[test]
+fn test_expand_empty_values() {
+    let input = input(concat!(r#"level=debug msg=hello caller=src1 a="" b="" c="""#, "\n",));
+
+    let mut output = Vec::new();
+    let app = App::new(options());
+
+    app.run(vec![input], &mut output).unwrap();
+
+    assert_eq!(
+        std::str::from_utf8(&output).unwrap(),
+        concat!(r#"|DBG| hello a="" b="" c="" @ src1"#, "\n")
+    );
+}
+
+#[test]
+fn test_expand_empty_hidden_values() {
+    let input = input(concat!(r#"level=debug msg=hello caller=src1 a="" b="" c="""#, "\n",));
+
+    let mut output = Vec::new();
+    let app = App::new(Options {
+        hide_empty_fields: true,
+        ..options()
+    });
+
+    app.run(vec![input], &mut output).unwrap();
+
+    assert_eq!(
+        std::str::from_utf8(&output).unwrap(),
+        concat!(r#"|DBG| hello @ src1"#, "\n")
+    );
+}
+
+#[test]
+fn test_input_badges() {
+    let inputs = (1..12).map(|i| input(format!("msg=hello input={}\n", i))).collect_vec();
+
+    let app = App::new(Options {
+        input_info: InputInfo::Minimal.into(),
+        ..options()
+    });
+
+    let mut output = Vec::new();
+    app.run(inputs, &mut output).unwrap();
+
+    assert_eq!(
+        std::str::from_utf8(&output).unwrap(),
+        concat!(
+            " #0 | hello input=1\n",
+            " #1 | hello input=2\n",
+            " #2 | hello input=3\n",
+            " #3 | hello input=4\n",
+            " #4 | hello input=5\n",
+            " #5 | hello input=6\n",
+            " #6 | hello input=7\n",
+            " #7 | hello input=8\n",
+            " #8 | hello input=9\n",
+            " #9 | hello input=10\n",
+            "#10 | hello input=11\n",
+        )
+    );
 }
 
 #[test]
