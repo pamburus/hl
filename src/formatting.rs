@@ -1405,6 +1405,24 @@ mod tests {
     }
 
     #[test]
+    fn test_nested_hidden_fields_group_unhide() {
+        let val = json_raw_value(r#"{"b":{"c":{"d":1,"e":2},"f":3}}"#);
+        let rec = Record::from_fields(&[("a", RawObject::Json(&val).into())]);
+        let mut fields = IncludeExcludeKeyFilter::default();
+        fields.entry("a.b.c").exclude();
+        fields.entry("a.b.c.e").include();
+        fields.entry("a.b.c").exclude();
+        let formatter = RecordFormatter {
+            flatten: true,
+            theme: Default::default(),
+            fields: Arc::new(fields),
+            ..formatter()
+        };
+
+        assert_eq!(&formatter.format_to_string(&rec), "a.b.f=3 ...");
+    }
+
+    #[test]
     fn test_nested_hidden_fields_no_flatten() {
         let val = json_raw_value(r#"{"b":{"c":{"d":1,"e":2},"f":3}}"#);
         let rec = Record::from_fields(&[("a", RawObject::Json(&val).into())]);
