@@ -151,7 +151,7 @@ impl<N: KeyNormalize> IncludeExcludeKeyFilter<N> {
 
     #[inline(always)]
     pub fn include(&mut self) -> &mut Self {
-        self.setting = IncludeExcludeSetting::Include;
+        self.reset(IncludeExcludeSetting::Include);
         self.update_fallback();
         self
     }
@@ -164,7 +164,7 @@ impl<N: KeyNormalize> IncludeExcludeKeyFilter<N> {
 
     #[inline(always)]
     pub fn exclude(&mut self) -> &mut Self {
-        self.setting = IncludeExcludeSetting::Exclude;
+        self.reset(IncludeExcludeSetting::Exclude);
         self.update_fallback();
         self
     }
@@ -239,6 +239,13 @@ impl<N: KeyNormalize> IncludeExcludeKeyFilter<N> {
             fallback.setting = setting;
             self.fallback = Some(fallback);
         }
+    }
+
+    fn reset(&mut self, setting: IncludeExcludeSetting) {
+        self.children.clear();
+        self.patterns.clear();
+        self.fallback = None;
+        self.setting = setting;
     }
 }
 
@@ -352,25 +359,25 @@ mod tests {
         assert_eq!(a.setting(), IncludeExcludeSetting::Exclude);
 
         let ab = a.get("b").unwrap();
-        assert_eq!(ab.setting(), IncludeExcludeSetting::Include);
+        assert_eq!(ab.setting(), IncludeExcludeSetting::Exclude);
 
         let ab = filter.get("a.b").unwrap();
-        assert_eq!(ab.setting(), IncludeExcludeSetting::Include);
+        assert_eq!(ab.setting(), IncludeExcludeSetting::Exclude);
 
         let ac = filter.get("a.c").unwrap();
         assert_eq!(ac.setting(), IncludeExcludeSetting::Exclude);
 
         let c = filter.get("c").unwrap();
-        assert_eq!(c.setting(), IncludeExcludeSetting::Unspecified);
+        assert_eq!(c.setting(), IncludeExcludeSetting::Exclude);
 
         let cd = c.get("d").unwrap();
-        assert_eq!(cd.setting(), IncludeExcludeSetting::Include);
+        assert_eq!(cd.setting(), IncludeExcludeSetting::Exclude);
 
         let cd = filter.get("c.d").unwrap();
-        assert_eq!(cd.setting(), IncludeExcludeSetting::Include);
+        assert_eq!(cd.setting(), IncludeExcludeSetting::Exclude);
 
-        assert!(c.get("e").is_none());
-        assert!(filter.get("c.e").is_none());
+        assert_eq!(c.get("e").unwrap().setting(), IncludeExcludeSetting::Exclude);
+        assert_eq!(filter.get("c.e").unwrap().setting(), IncludeExcludeSetting::Exclude);
 
         let cde = cd.get("e").unwrap();
         assert_eq!(cde.setting(), IncludeExcludeSetting::Exclude);
@@ -382,10 +389,10 @@ mod tests {
         assert_eq!(cde.setting(), IncludeExcludeSetting::Exclude);
 
         let cdf = cd.get("f").unwrap();
-        assert_eq!(cdf.setting(), IncludeExcludeSetting::Include);
+        assert_eq!(cdf.setting(), IncludeExcludeSetting::Exclude);
 
         let cdf = filter.get("c.d.f").unwrap();
-        assert_eq!(cdf.setting(), IncludeExcludeSetting::Include);
+        assert_eq!(cdf.setting(), IncludeExcludeSetting::Exclude);
 
         let cdef = filter.get("c.d.e.f").unwrap();
         assert_eq!(cdef.setting(), IncludeExcludeSetting::Exclude);
