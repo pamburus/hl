@@ -52,7 +52,7 @@ impl Query {
 }
 
 impl RecordFilter for Query {
-    fn apply<'a>(&self, record: &'a Record<'a>) -> bool {
+    fn apply<'a>(&self, record: &Record<'a>) -> bool {
         self.filter.apply(record)
     }
 }
@@ -288,7 +288,7 @@ struct Or {
 }
 
 impl RecordFilter for Or {
-    fn apply<'a>(&self, record: &'a Record<'a>) -> bool {
+    fn apply<'a>(&self, record: &Record<'a>) -> bool {
         self.lhs.apply(record) || self.rhs.apply(record)
     }
 }
@@ -307,7 +307,7 @@ struct And {
 }
 
 impl RecordFilter for And {
-    fn apply<'a>(&self, record: &'a Record<'a>) -> bool {
+    fn apply<'a>(&self, record: &Record<'a>) -> bool {
         self.lhs.apply(record) && self.rhs.apply(record)
     }
 }
@@ -325,7 +325,7 @@ struct Not {
 }
 
 impl RecordFilter for Not {
-    fn apply<'a>(&self, record: &'a Record<'a>) -> bool {
+    fn apply<'a>(&self, record: &Record<'a>) -> bool {
         !self.arg.apply(record)
     }
 }
@@ -347,7 +347,7 @@ impl<F: Fn(Level) -> bool + Send + Sync + 'static> LevelFilter<F> {
 }
 
 impl<F: Fn(Level) -> bool> RecordFilter for LevelFilter<F> {
-    fn apply<'a>(&self, record: &'a Record<'a>) -> bool {
+    fn apply<'a>(&self, record: &Record<'a>) -> bool {
         record.level.map(&self.f).unwrap_or(false)
     }
 }
@@ -407,6 +407,61 @@ mod tests {
         assert_eq!(pi1.next().unwrap().as_rule(), Rule::expr_and);
         assert_eq!(pi1.next().unwrap().as_rule(), Rule::primary);
         assert_eq!(pi1.next(), None);
+    }
+
+    #[test]
+    fn test_query_or() {
+        let queries = [
+            Query::parse(".a=1").unwrap().or(Query::parse(".b=2").unwrap()),
+            Query::parse(".a=1 or .b=2").unwrap(),
+        ];
+
+        for query in &queries {
+            let record = parse(r#"{"a":1}"#);
+            assert_eq!(record.matches(&query), true);
+            let record = parse(r#"{"b":2}"#);
+            assert_eq!(record.matches(&query), true);
+            let record = parse(r#"{"c":3}"#);
+            assert_eq!(record.matches(&query), false);
+        }
+    }
+
+    #[test]
+    fn test_query_and() {
+        let queries = [
+            Query::parse(".a=1").unwrap().and(Query::parse(".b=2").unwrap()),
+            Query::parse(".a=1 and .b=2").unwrap(),
+        ];
+
+        for query in &queries {
+            let record = parse(r#"{"a":1,"b":2}"#);
+            assert_eq!(record.matches(&query), true);
+            let record = parse(r#"{"a":1,"b":3}"#);
+            assert_eq!(record.matches(&query), false);
+            let record = parse(r#"{"a":2,"b":2}"#);
+            assert_eq!(record.matches(&query), false);
+        }
+    }
+
+    #[test]
+    fn test_query_not() {
+        let queries = [Query::parse(".a=1").unwrap().not(), Query::parse("not .a=1").unwrap()];
+
+        for query in &queries {
+            let record = parse(r#"{"a":1}"#);
+            assert_eq!(record.matches(&query), false);
+            let record = parse(r#"{"a":2}"#);
+            assert_eq!(record.matches(&query), true);
+        }
+    }
+
+    #[test]
+    fn test_query_level() {
+        let query = Query::parse("level=info").unwrap();
+        let record = parse(r#"{"level":"info"}"#);
+        assert_eq!(record.matches(&query), true);
+        let record = parse(r#"{"level":"error"}"#);
+        assert_eq!(record.matches(&query), false);
     }
 
     #[test]

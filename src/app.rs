@@ -915,7 +915,7 @@ impl<'a, Formatter: RecordWithSourceFormatter, Filter: RecordFilter> SegmentProc
 // ---
 
 pub trait RecordObserver {
-    fn observe_record<'a>(&mut self, record: &'a Record<'a>, location: Range<usize>);
+    fn observe_record<'a>(&mut self, record: &Record<'a>, location: Range<usize>);
 }
 
 // ---
@@ -924,7 +924,7 @@ pub struct RecordIgnorer {}
 
 impl RecordObserver for RecordIgnorer {
     #[inline]
-    fn observe_record<'a>(&mut self, _: &'a Record<'a>, _: Range<usize>) {}
+    fn observe_record<'a>(&mut self, _: &Record<'a>, _: Range<usize>) {}
 }
 
 // ---
@@ -935,7 +935,7 @@ struct TimestampIndexBuilder {
 
 impl RecordObserver for TimestampIndexBuilder {
     #[inline]
-    fn observe_record<'a>(&mut self, record: &'a Record<'a>, location: Range<usize>) {
+    fn observe_record<'a>(&mut self, record: &Record<'a>, location: Range<usize>) {
         if let Some(ts) = record.ts.as_ref().and_then(|ts| ts.unix_utc()).map(|ts| ts.into()) {
             self.result.lines.push(TimestampIndexLine { location, ts });
         }
@@ -946,7 +946,7 @@ impl RecordObserver for TimestampIndexBuilder {
 
 impl<T: FnMut(&Record, Range<usize>)> RecordObserver for T {
     #[inline]
-    fn observe_record<'b>(&mut self, record: &'b Record<'b>, location: Range<usize>) {
+    fn observe_record<'a>(&mut self, record: &Record<'a>, location: Range<usize>) {
         self(record, location)
     }
 }

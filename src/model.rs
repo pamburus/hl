@@ -363,8 +363,8 @@ pub struct RecordFields<'a> {
 
 // ---
 
-pub trait RecordWithSourceConstructor {
-    fn with_source<'a>(&'a self, source: &'a [u8]) -> RecordWithSource<'a>;
+pub trait RecordWithSourceConstructor<'r, 's> {
+    fn with_source(&'r self, source: &'s [u8]) -> RecordWithSource<'r, 's>;
 }
 
 // ---
@@ -376,21 +376,21 @@ pub enum Caller<'a> {
 
 // ---
 
-pub struct RecordWithSource<'a> {
-    pub record: &'a Record<'a>,
-    pub source: &'a [u8],
+pub struct RecordWithSource<'r, 's> {
+    pub record: &'r Record<'s>,
+    pub source: &'s [u8],
 }
 
-impl<'a> RecordWithSource<'a> {
+impl<'r, 's> RecordWithSource<'r, 's> {
     #[inline(always)]
-    pub fn new(record: &'a Record<'a>, source: &'a [u8]) -> Self {
+    pub fn new(record: &'r Record<'s>, source: &'s [u8]) -> Self {
         Self { record, source }
     }
 }
 
-impl RecordWithSourceConstructor for Record<'_> {
+impl<'r, 's> RecordWithSourceConstructor<'r, 's> for Record<'s> {
     #[inline(always)]
-    fn with_source<'a>(&'a self, source: &'a [u8]) -> RecordWithSource<'a> {
+    fn with_source(&'r self, source: &'s [u8]) -> RecordWithSource<'r, 's> {
         RecordWithSource::new(self, source)
     }
 }
@@ -398,7 +398,7 @@ impl RecordWithSourceConstructor for Record<'_> {
 // ---
 
 pub trait RecordFilter {
-    fn apply<'a>(&self, record: &'a Record<'a>) -> bool;
+    fn apply<'a>(&self, record: &Record<'a>) -> bool;
 
     #[inline(always)]
     fn and<F>(self, rhs: F) -> RecordFilterAnd<Self, F>
@@ -421,21 +421,28 @@ pub trait RecordFilter {
 
 impl<T: RecordFilter + ?Sized> RecordFilter for Box<T> {
     #[inline(always)]
-    fn apply<'a>(&self, record: &'a Record<'a>) -> bool {
+    fn apply<'a>(&self, record: &Record<'a>) -> bool {
         (**self).apply(record)
     }
 }
 
 impl<T: RecordFilter> RecordFilter for &T {
     #[inline(always)]
-    fn apply<'a>(&self, record: &'a Record<'a>) -> bool {
+    fn apply<'a>(&self, record: &Record<'a>) -> bool {
         (**self).apply(record)
+    }
+}
+
+impl RecordFilter for Level {
+    #[inline]
+    fn apply<'a>(&self, record: &Record<'a>) -> bool {
+        record.level.map_or(false, |x| x <= *self)
     }
 }
 
 impl<T: RecordFilter> RecordFilter for Option<T> {
     #[inline(always)]
-    fn apply<'a>(&self, record: &'a Record<'a>) -> bool {
+    fn apply<'a>(&self, record: &Record<'a>) -> bool {
         if let Some(filter) = self {
             filter.apply(record)
         } else {
@@ -453,7 +460,7 @@ pub struct RecordFilterAnd<L: RecordFilter, R: RecordFilter> {
 
 impl<L: RecordFilter, R: RecordFilter> RecordFilter for RecordFilterAnd<L, R> {
     #[inline(always)]
-    fn apply<'a>(&self, record: &'a Record<'a>) -> bool {
+    fn apply<'a>(&self, record: &Record<'a>) -> bool {
         self.lhs.apply(record) && self.rhs.apply(record)
     }
 }
@@ -467,7 +474,7 @@ pub struct RecordFilterOr<L: RecordFilter, R: RecordFilter> {
 
 impl<L: RecordFilter, R: RecordFilter> RecordFilter for RecordFilterOr<L, R> {
     #[inline(always)]
-    fn apply<'a>(&self, record: &'a Record<'a>) -> bool {
+    fn apply<'a>(&self, record: &Record<'a>) -> bool {
         self.lhs.apply(record) || self.rhs.apply(record)
     }
 }
@@ -478,7 +485,7 @@ pub struct RecordFilterNone;
 
 impl RecordFilter for RecordFilterNone {
     #[inline(always)]
-    fn apply<'a>(&self, _: &'a Record<'a>) -> bool {
+    fn apply<'a>(&self, _: &Record<'a>) -> bool {
         true
     }
 }
@@ -1487,7 +1494,7 @@ impl FieldFilter {
 }
 
 impl RecordFilter for FieldFilter {
-    fn apply<'a>(&self, record: &'a Record<'a>) -> bool {
+    fn apply<'a>(&self, record: &Record<'a>) -> bool {
         match &self.key {
             FieldFilterKey::Predefined(kind) => match kind {
                 FieldKind::Time => {
@@ -1561,7 +1568,7 @@ impl FieldFilterSet {
 
 impl RecordFilter for FieldFilterSet {
     #[inline(always)]
-    fn apply<'a>(&self, record: &'a Record<'a>) -> bool {
+    fn apply<'a>(&self, record: &Record<'a>) -> bool {
         self.0.iter().all(|field| field.apply(record))
     }
 }
@@ -1584,7 +1591,7 @@ impl Filter {
 }
 
 impl RecordFilter for Filter {
-    fn apply<'a>(&self, record: &'a Record<'a>) -> bool {
+    fn apply<'a>(&self, record: &Record<'a>) -> bool {
         if self.since.is_some() || self.until.is_some() {
             if let Some(ts) = record.ts.as_ref().and_then(|ts| ts.parse()) {
                 if let Some(since) = self.since {
@@ -1739,6 +1746,7 @@ const RAW_RECORD_FIELDS_CAPACITY: usize = RECORD_EXTRA_CAPACITY + MAX_PREDEFINED
 #[cfg(test)]
 mod tests {
     use super::*;
+    use chrono::TimeZone;
     use maplit::hashmap;
     use serde_logfmt::logfmt;
 
@@ -2050,6 +2058,172 @@ mod tests {
             result.err(),
             Some(Error::LogfmtParseError(logfmt::Error::ExpectedKeyValueDelimiter))
         ));
+    }
+
+    #[test]
+    fn test_record_filter_empty() {
+        let filter = Filter::default();
+        let record = parse(r#"{"v":42}"#);
+        assert_eq!(filter.apply(&record), true);
+    }
+
+    #[test]
+    fn test_record_filter_level() {
+        let filter = Filter {
+            level: Some(Level::Error),
+            ..Default::default()
+        };
+        let record = parse(r#"{"level":"error"}"#);
+        assert_eq!(filter.apply(&record), true);
+        let record = parse(r#"{"level":"info"}"#);
+        assert_eq!(filter.apply(&record), false);
+
+        let filter = Level::Error;
+        let record = parse(r#"{"level":"error"}"#);
+        assert_eq!(filter.apply(&record), true);
+        let record = parse(r#"{"level":"info"}"#);
+        assert_eq!(filter.apply(&record), false);
+
+        let filter = Some(Level::Info);
+        let record = parse(r#"{"level":"info"}"#);
+        assert_eq!(filter.apply(&record), true);
+        let record = parse(r#"{"level":"error"}"#);
+        assert_eq!(filter.apply(&record), true);
+        let record = parse(r#"{"level":"debug"}"#);
+        assert_eq!(filter.apply(&record), false);
+
+        let filter: Option<Level> = None;
+        let record = parse(r#"{"level":"info"}"#);
+        assert_eq!(filter.apply(&record), true);
+        let record = parse(r#"{"level":"error"}"#);
+        assert_eq!(filter.apply(&record), true);
+    }
+
+    #[test]
+    fn test_record_filter_since() {
+        let filter = Filter {
+            since: Some(Utc.with_ymd_and_hms(2021, 1, 1, 0, 0, 0).unwrap()),
+            ..Default::default()
+        };
+        let record = parse(r#"{"ts":"2021-01-01T00:00:00Z"}"#);
+        assert_eq!(filter.apply(&record), true);
+        let record = parse(r#"{"ts":"2020-01-01T00:00:00Z"}"#);
+        assert_eq!(filter.apply(&record), false);
+    }
+
+    #[test]
+    fn test_record_filter_until() {
+        let filter = Filter {
+            until: Some(Utc.with_ymd_and_hms(2021, 1, 1, 0, 0, 0).unwrap()),
+            ..Default::default()
+        };
+        let record = parse(r#"{"ts":"2021-01-01T00:00:00Z"}"#);
+        assert_eq!(filter.apply(&record), true);
+        let record = parse(r#"{"ts":"2022-01-01T00:00:00Z"}"#);
+        assert_eq!(filter.apply(&record), false);
+    }
+
+    #[test]
+    fn test_record_filter_fields() {
+        let filter = Filter {
+            fields: FieldFilterSet::new(&["mod=test", "v=42"]).unwrap(),
+            ..Default::default()
+        };
+        let record = parse(r#"{"mod":"test","v":42}"#);
+        assert_eq!(filter.apply(&record), true);
+        let record = parse(r#"{"mod":"test","v":43}"#);
+        assert_eq!(filter.apply(&record), false);
+        let record = parse(r#"{"mod":"test2","v":42}"#);
+        assert_eq!(filter.apply(&record), false);
+    }
+
+    #[test]
+    fn test_record_filter_all() {
+        let filter = Filter {
+            level: Some(Level::Error),
+            since: Some(Utc.with_ymd_and_hms(2021, 1, 1, 0, 0, 0).unwrap()),
+            until: Some(Utc.with_ymd_and_hms(2021, 1, 2, 0, 0, 0).unwrap()),
+            fields: FieldFilterSet::new(&["mod=test", "v=42"]).unwrap(),
+        };
+        let record = parse(r#"{"level":"error","ts":"2021-01-01T00:00:00Z","mod":"test","v":42}"#);
+        assert_eq!(filter.apply(&record), true);
+        let record = parse(r#"{"level":"info","ts":"2021-01-01T00:00:00Z","mod":"test","v":42}"#);
+        assert_eq!(filter.apply(&record), false);
+        let record = parse(r#"{"level":"error","ts":"2021-01-01T00:00:00Z","mod":"test","v":43}"#);
+        assert_eq!(filter.apply(&record), false);
+        let record = parse(r#"{"level":"error","ts":"2021-01-01T00:00:00Z","mod":"test2","v":42}"#);
+        assert_eq!(filter.apply(&record), false);
+    }
+
+    #[test]
+    fn test_record_filter_or() {
+        let filter = FieldFilter::parse("mod=test")
+            .unwrap()
+            .or(FieldFilter::parse("v=42").unwrap());
+        let record = parse(r#"{"mod":"test","v":42}"#);
+        assert_eq!(filter.apply(&record), true);
+        let record = parse(r#"{"mod":"test","v":43}"#);
+        assert_eq!(filter.apply(&record), true);
+        let record = parse(r#"{"mod":"test2","v":42}"#);
+        assert_eq!(filter.apply(&record), true);
+        let record = parse(r#"{"mod":"test2","v":43}"#);
+        assert_eq!(filter.apply(&record), false);
+    }
+
+    #[test]
+    fn test_record_filter_and() {
+        let filter = FieldFilter::parse("mod=test")
+            .unwrap()
+            .and(FieldFilter::parse("v=42").unwrap());
+        let record = parse(r#"{"mod":"test","v":42}"#);
+        assert_eq!(filter.apply(&record), true);
+        let record = parse(r#"{"mod":"test","v":43}"#);
+        assert_eq!(filter.apply(&record), false);
+        let record = parse(r#"{"mod":"test2","v":42}"#);
+        assert_eq!(filter.apply(&record), false);
+        let record = parse(r#"{"mod":"test2","v":43}"#);
+        assert_eq!(filter.apply(&record), false);
+    }
+
+    #[test]
+    fn test_field_filter_key_match() {
+        let filter = FieldFilter::parse("mod.test=42").unwrap();
+        let record = parse(r#"{"mod.test":42}"#);
+        assert_eq!(filter.apply(&record), true);
+        let record = parse(r#"{"mod":{"test":42}}"#);
+        assert_eq!(filter.apply(&record), true);
+        let record = parse(r#"{"mod":{"test":43}}"#);
+        assert_eq!(filter.apply(&record), false);
+        let record = parse(r#"{"mod":{"test":42,"test2":42}}"#);
+        assert_eq!(filter.apply(&record), true);
+    }
+
+    #[test]
+    fn test_field_filter_key_match_partial() {
+        let filter = FieldFilter::parse("mod.test=42").unwrap();
+        let record = parse(r#"{"mod.test":42}"#);
+        assert_eq!(filter.apply(&record), true);
+        let record = parse(r#"{"mod.test2":42}"#);
+        assert_eq!(filter.apply(&record), false);
+        let record = parse(r#"{"mod":{"test":42}}"#);
+        assert_eq!(filter.apply(&record), true);
+        let record = parse(r#"{"mod":{"test2":42}}"#);
+        assert_eq!(filter.apply(&record), false);
+        let record = parse(r#"{"mod":{"test":42,"test2":42}}"#);
+        assert_eq!(filter.apply(&record), true);
+    }
+
+    #[test]
+    fn test_field_filter_key_match_partial_nested() {
+        let filter = FieldFilter::parse("mod.test=42").unwrap();
+        let record = parse(r#"{"mod":{"test":42}}"#);
+        assert_eq!(filter.apply(&record), true);
+        let record = parse(r#"{"mod":{"test2":42}}"#);
+        assert_eq!(filter.apply(&record), false);
+        let record = parse(r#"{"mod":{"test":42,"test2":42}}"#);
+        assert_eq!(filter.apply(&record), true);
+        let record = parse(r#"{"mod":{"test":42,"test2":42,"test3":42}}"#);
+        assert_eq!(filter.apply(&record), true);
     }
 
     fn parse(s: &str) -> Record {
