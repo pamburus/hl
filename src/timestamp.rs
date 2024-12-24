@@ -1,3 +1,6 @@
+// stdlib imports
+use std::cell::OnceCell;
+
 // third-party imports
 use chrono::{DateTime, Duration, FixedOffset, NaiveDateTime};
 
@@ -9,7 +12,7 @@ use crate::app::UnixTimestampUnit;
 #[derive(Debug)]
 pub struct Timestamp<'a> {
     raw: &'a str,
-    parsed: Option<Option<DateTime<FixedOffset>>>,
+    parsed: OnceCell<Option<DateTime<FixedOffset>>>,
     unix_unit: Option<UnixTimestampUnit>,
 }
 
@@ -17,7 +20,7 @@ impl<'a> Timestamp<'a> {
     pub fn new(value: &'a str) -> Self {
         Self {
             raw: value,
-            parsed: None,
+            parsed: OnceCell::new(),
             unix_unit: None,
         }
     }
@@ -26,27 +29,27 @@ impl<'a> Timestamp<'a> {
         self.raw
     }
 
-    pub fn preparsed(&self) -> Self {
+    pub fn with_unix_unit(self, unit: Option<UnixTimestampUnit>) -> Self {
         Self {
             raw: self.raw,
-            parsed: Some(self.parse()),
-            unix_unit: self.unix_unit,
-        }
-    }
-
-    pub fn with_unix_unit(&self, unit: Option<UnixTimestampUnit>) -> Self {
-        Self {
-            raw: self.raw,
-            parsed: if unit == self.unix_unit { self.parsed } else { None },
+            parsed: if unit == self.unix_unit {
+                self.parsed
+            } else {
+                OnceCell::new()
+            },
             unix_unit: unit,
         }
     }
 
-    pub fn parse(&self) -> Option<DateTime<FixedOffset>> {
-        if let Some(parsed) = self.parsed {
-            return parsed;
-        }
+    pub fn parsed(&self) -> &Option<DateTime<FixedOffset>> {
+        self.parsed.get_or_init(|| self.reparse())
+    }
 
+    pub fn parse(&self) -> Option<DateTime<FixedOffset>> {
+        *self.parsed()
+    }
+
+    fn reparse(&self) -> Option<DateTime<FixedOffset>> {
         if let Ok(ts) = self.raw.parse() {
             Some(ts)
         } else if let Some(nt) = guess_number_type(self.raw.as_bytes()) {
@@ -101,7 +104,7 @@ impl<'a> Timestamp<'a> {
     }
 
     pub fn unix_utc(&self) -> Option<(i64, u32)> {
-        self.parse()
+        self.parsed()
             .and_then(|ts| Some((ts.timestamp(), ts.timestamp_subsec_nanos())))
     }
 }
@@ -490,12 +493,42 @@ mod tests {
 
     #[test]
     fn test_parse() {
-        let test = |s, unix_timestamp, tz| {
-            let ts = Timestamp::new(s).parse().unwrap();
+        let test = |s, unit, unix_timestamp, nanos, tz| {
+            let ts = Timestamp::new(s).with_unix_unit(unit).parse().unwrap();
             assert_eq!(ts.timestamp(), unix_timestamp);
             assert_eq!(ts.timezone().local_minus_utc(), tz);
+            assert_eq!(ts.timestamp_subsec_nanos(), nanos);
         };
-        test("2020-08-21 07:20:48", 1597994448, 0);
+        test("2020-08-21 07:20:48", None, 1597994448, 0, 0);
+        test("1597994448", None, 1597994448, 0, 0);
+        test("1597994448123", None, 1597994448, 123000000, 0);
+        test("1597994448123456", None, 1597994448, 123456000, 0);
+        test("1597994448123456789", None, 1597994448, 123456789, 0);
+        test("1597994448.123", None, 1597994448, 123000000, 0);
+        test("1597994448.123456", None, 1597994448, 123456000, 0);
+        test("1597994448.123456789", None, 1597994448, 123456789, 0);
+        test("-1.123456789", None, -2, 1000000000 - 123456789, 0);
+        test(
+            "1597994448123.456789",
+            Some(UnixTimestampUnit::Milliseconds),
+            1597994448,
+            123456789,
+            0,
+        );
+        test(
+            "1597994448123456.789",
+            Some(UnixTimestampUnit::Microseconds),
+            1597994448,
+            123456789,
+            0,
+        );
+        test(
+            "1597994448123456789.0",
+            Some(UnixTimestampUnit::Nanoseconds),
+            1597994448,
+            123456789,
+            0,
+        );
     }
 
     #[test]

@@ -268,12 +268,7 @@ where
             buffer_size: settings.buffer_size.into(),
             max_message_size: settings.max_message_size.into(),
             dir,
-            parser: Parser::new(ParserSettings::new(
-                &settings.fields,
-                empty(),
-                false,
-                settings.unix_ts_unit,
-            )),
+            parser: Parser::new(ParserSettings::new(&settings.fields, empty(), settings.unix_ts_unit)),
             delimiter: settings.delimiter,
             allow_prefix: settings.allow_prefix,
             format: settings.format,
