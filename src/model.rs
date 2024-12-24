@@ -493,7 +493,6 @@ impl RecordFilter for RecordFilterNone {
 // ---
 
 pub struct ParserSettings {
-    pre_parse_time: bool,
     unix_ts_unit: Option<UnixTimestampUnit>,
     level: Vec<(HashMap<String, Level>, Option<Level>)>,
     blocks: Vec<ParserSettingsBlock>,
@@ -504,11 +503,9 @@ impl ParserSettings {
     pub fn new<'a, I: IntoIterator<Item = &'a String>>(
         predefined: &PredefinedFields,
         ignore: I,
-        pre_parse_time: bool,
         unix_ts_unit: Option<UnixTimestampUnit>,
     ) -> Self {
         let mut result = Self {
-            pre_parse_time,
             unix_ts_unit,
             level: Vec::new(),
             blocks: vec![ParserSettingsBlock::default()],
@@ -618,7 +615,7 @@ impl ParserSettings {
 impl Default for ParserSettings {
     #[inline]
     fn default() -> Self {
-        Self::new(&PredefinedFields::default(), Vec::new(), false, None)
+        Self::new(&PredefinedFields::default(), Vec::new(), None)
     }
 }
 
@@ -743,11 +740,7 @@ impl FieldSettings {
                 let s = value.raw_str();
                 let s = if s.as_bytes()[0] == b'"' { &s[1..s.len() - 1] } else { s };
                 let ts = Timestamp::new(s).with_unix_unit(ps.unix_ts_unit);
-                if ps.pre_parse_time {
-                    to.ts = Some(ts.preparsed())
-                } else {
-                    to.ts = Some(ts);
-                }
+                to.ts = Some(ts);
                 true
             }
             Self::Level(i) => {

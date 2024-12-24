@@ -664,7 +664,6 @@ impl App {
         Parser::new(ParserSettings::new(
             &self.options.fields.settings.predefined,
             &self.options.fields.settings.ignore,
-            self.options.filter.since.is_some() || self.options.filter.until.is_some() || self.options.follow,
             self.options.unix_ts_unit,
         ))
     }

@@ -23,7 +23,7 @@ fn benchmark(c: &mut Criterion) {
         for theme in ["universal", "classic"] {
             c.bench_function(format!("{}/{}", name, theme), |b| {
                 let settings = Settings::default();
-                let parser = Parser::new(ParserSettings::new(&settings.fields.predefined, empty(), false, None));
+                let parser = Parser::new(ParserSettings::new(&settings.fields.predefined, empty(), None));
                 let formatter = RecordFormatter::new(
                     Arc::new(Theme::embedded(theme).unwrap()),
                     DateTimeFormatter::new(
