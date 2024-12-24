@@ -48,6 +48,16 @@ impl<T, const N: usize> Vec<T, N> {
         v
     }
 
+    /// Creates a new vector from the given slice.
+    #[inline]
+    pub fn from_iter<I: IntoIterator<Item = T>>(src: I) -> Self {
+        let mut iter = src.into_iter();
+        Self {
+            head: heapless::Vec::from_iter(iter.by_ref().take(N)),
+            tail: std::vec::Vec::from_iter(iter),
+        }
+    }
+
     /// Returns the number of elements in the vector.
     #[inline]
     pub fn len(&self) -> usize {

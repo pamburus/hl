@@ -15,6 +15,7 @@ pub mod level;
 pub mod output;
 pub mod query;
 pub mod settings;
+pub mod syntax;
 pub mod theme;
 pub mod themecfg;
 pub mod timeparse;
