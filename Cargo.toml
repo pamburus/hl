@@ -81,6 +81,7 @@ known-folders = "1"
 log = "0.4"
 logos = "0.16"
 memchr = "2"
+mline = { path = "./crate/mline" }
 nonzero_ext = "0.3"
 notify = { version = "8", features = ["macos_kqueue"] }
 num_cpus = "1"

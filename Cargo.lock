@@ -1173,6 +1173,7 @@ dependencies = [
  "logos",
  "maplit",
  "memchr",
+ "mline",
  "mockall",
  "nonzero_ext",
  "notify",
@@ -1518,6 +1519,14 @@ dependencies = [
  "log",
  "wasi",
  "windows-sys 0.61.2",
+]
+
+[[package]]
+name = "mline"
+version = "0.1.0"
+dependencies = [
+ "heapopt",
+ "itertools 0.13.0",
 ]
 
 [[package]]

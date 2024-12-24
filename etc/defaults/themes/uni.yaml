@@ -40,6 +40,10 @@ elements:
     foreground: red
   "null":
     foreground: bright-red
+  bullet:
+    modes: [faint]
+  value-expansion:
+    modes: [faint]
 levels:
   trace:
     level-inner:

@@ -83,6 +83,7 @@ fields:
 formatting:
   # Flatten nested fields by joining them with a dot. Options: [always, never].
   flatten: always
+
   message:
     # Message format [auto-quoted, always-quoted, always-double-quoted, delimited, raw]:
     # * "auto-quoted"          • Automatically enables or disables message quotation to improve clarity or avoid ambiguities.
@@ -92,6 +93,54 @@ formatting:
     #                            See [formatting.punctuation.message-delimiter] setting.
     # * "raw"                  • Always prints messages without any quotes, escaping or delimiters.
     format: delimited
+
+  expansion:
+    # Field expansion mode [never|inline|low|medium|high|always].
+    mode: medium
+    # Field expansion setting profiles for all modes except [never,inline,always].
+    profiles:
+      # Field expansion settings for the low mode.
+      low:
+        # Multiline field expansion mode [standard|disabled|inline].
+        multiline: standard
+        # Various complexity thresholds for field expansion.
+        thresholds:
+          # Threshold of overall draft log record complexity that triggers expansion of all fields.
+          global: 4096
+          # Threshold of cumulative complexity of all fields on the first line that triggers expansion of remaining fields.
+          cumulative: 512
+          # Threshold of message field's complexity that triggers its expansion.
+          message: 256
+          # Threshold of any other field's complexity that triggers its expansion.
+          field: 256
+      # Field expansion settings for the medium mode.
+      medium:
+        # Multiline field expansion mode [standard|disabled|inline].
+        multiline: standard
+        # Various complexity thresholds for field expansion.
+        thresholds:
+          # Threshold of overall draft log record complexity that triggers expansion of all fields.
+          global: 2048
+          # Threshold of cumulative complexity of all fields on the first line that triggers expansion of remaining fields.
+          cumulative: 256
+          # Threshold of message field's complexity that triggers its expansion.
+          message: 192
+          # Threshold of any other field's complexity that triggers its expansion.
+          field: 192
+      # Field expansion settings for the high mode.
+      high:
+        # Multiline field expansion mode [standard|disabled|inline].
+        multiline: standard
+        # Various complexity thresholds for field expansion.
+        thresholds:
+          # Threshold of overall draft log record complexity that triggers expansion of all fields.
+          global: 1024
+          # Threshold of cumulative complexity of all fields on the first line that triggers expansion of remaining fields.
+          cumulative: 128
+          # Threshold of message field's complexity that triggers its expansion.
+          message: 128
+          # Threshold of any other field's complexity that triggers its expansion.
+          field: 128
 
   # Punctuation settings.
   # Each item here is either a string or an object with keys "ascii" and "unicode".
@@ -106,7 +155,7 @@ formatting:
       ascii: "-> "
       unicode: "→ "
     caller-name-file-separator: " @ "
-    hidden-fields-indicator: " ..."
+    hidden-fields-indicator: "..."
     level-left-separator: "["
     level-right-separator: "]"
     input-number-prefix: "#"

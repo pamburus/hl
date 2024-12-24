@@ -139,7 +139,7 @@ impl From<Mode> for StyleCode {
 
 // ---
 
-#[derive(Clone, Eq, PartialEq, Debug)]
+#[derive(Clone, Eq, PartialEq, Debug, Default)]
 pub struct Sequence {
     buf: Vec<u8>,
 }

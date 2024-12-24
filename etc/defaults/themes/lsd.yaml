@@ -38,6 +38,10 @@ elements:
     foreground: yellow
   "null":
     foreground: yellow
+  bullet:
+    foreground: bright-black
+  value-expansion:
+    foreground: bright-black
 levels:
   trace:
     level-inner:
@@ -58,3 +62,13 @@ levels:
       foreground: red
     level-inner:
       foreground: bright-red
+indicators:
+  sync:
+    synced:
+      text: ' '
+    failed:
+      text: '!'
+      inner:
+        style:
+          foreground: 'yellow'
+          modes: [bold]
