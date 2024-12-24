@@ -316,6 +316,7 @@ fn run() -> Result<()> {
         },
         flatten: opt.flatten != cli::FlattenOption::Never,
         ascii,
+        expand: opt.expansion.into(),
     });
 
     // Configure the input.

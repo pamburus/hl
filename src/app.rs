@@ -33,15 +33,17 @@ use crate::{
     datefmt::{DateTimeFormat, DateTimeFormatter},
     error::*,
     filtering::{MatchOptions, NoNormalizing},
-    fmtx::aligned_left,
-    formatting::{DynRecordWithSourceFormatter, RawRecordFormatter, RecordFormatterBuilder, RecordWithSourceFormatter},
+    fmtx::{Adjustment, Alignment, Padding, aligned},
+    formatting::{
+        DynRecordWithSourceFormatter, Expansion, RawRecordFormatter, RecordFormatterBuilder, RecordWithSourceFormatter,
+    },
     fsmon::{self, EventKind},
     index::{Indexer, IndexerSettings, Timestamp},
     input::{BlockLine, Input, InputHolder, InputReference},
     model::{Filter, Parser, ParserSettings, RawRecord, Record, RecordFilter, RecordWithSourceConstructor},
     query::Query,
     scanning::{BufFactory, Delimit, Delimiter, Scanner, SearchExt, Segment, SegmentBuf, SegmentBufFactory},
-    settings::{AsciiMode, FieldShowOption, Fields, Formatting, InputInfo, ResolvedPunctuation},
+    settings::{AsciiMode, ExpansionMode, FieldShowOption, Fields, Formatting, InputInfo, ResolvedPunctuation},
     theme::{Element, StylingPush, Theme},
     timezone::Tz,
     vfs::LocalFileSystem,
@@ -81,6 +83,7 @@ pub struct Options {
     pub unix_ts_unit: Option<UnixTimestampUnit>,
     pub flatten: bool,
     pub ascii: AsciiMode,
+    pub expand: ExpansionMode,
 }
 
 impl Options {
@@ -117,6 +120,11 @@ impl Options {
     #[cfg(test)]
     fn with_input_info(self, input_info: InputInfoSet) -> Self {
         Self { input_info, ..self }
+    }
+
+    #[cfg(test)]
+    fn with_expansion(self, expand: ExpansionMode) -> Self {
+        Self { expand, ..self }
     }
 }
 
@@ -424,7 +432,7 @@ impl App {
             // spawn worker threads
             let mut workers = Vec::with_capacity(n);
             for (rxp, txw) in izip!(rxp, txw) {
-                workers.push(scope.spawn(closure!(ref parser, |_| -> Result<()> {
+                workers.push(scope.spawn(closure!(ref parser, ref input_badges, |_| -> Result<()> {
                     let mut processor = self.new_segment_processor(parser);
                     for (block, ts_min, i, j) in rxp.iter() {
                         let mut buf = Vec::with_capacity(2 * usize::try_from(block.size())?);
@@ -433,10 +441,11 @@ impl App {
                             if line.is_empty() {
                                 continue;
                             }
+                            let prefix = input_badges.as_ref().map(|b| b[i].as_str()).unwrap_or("");
                             processor.process(
                                 line.bytes(),
                                 &mut buf,
-                                "",
+                                prefix,
                                 Some(1),
                                 &mut |record: &Record, location: Range<usize>| {
                                     if let Some(ts) = &record.ts {
@@ -501,9 +510,6 @@ impl App {
                     if tso >= tsi && !done {
                         continue;
                     }
-                    if let Some(badges) = &input_badges {
-                        output.write_all(badges[item.2].as_bytes())?;
-                    }
                     output.write_all((item.0).1.bytes())?;
                     output.write_all(b"\n")?;
                     match item.1.next() {
@@ -529,13 +535,24 @@ impl App {
     }
 
     fn follow(&self, inputs: Vec<InputReference>, output: &mut Output) -> Result<()> {
-        let input_badges = self.input_badges(inputs.iter());
+        let si = &self.options.theme.indicators.sync;
+        let si_width = max(si.synced.width, si.failed.width);
+        let si_synced = si.synced.value.to_owned() + &" ".repeat(si_width - si.synced.width);
+        let si_failed = si.failed.value.to_owned() + &" ".repeat(si_width - si.failed.width);
+        let si_placeholder = " ".repeat(si_width);
+        let mut input_badges = self.input_badges(inputs.iter());
+        if let Some(badges) = &mut input_badges {
+            for badge in badges.iter_mut() {
+                *badge = format!("{}{}", si_placeholder, badge);
+            }
+        }
 
         let m = inputs.len();
         let n = self.options.concurrency;
         let parser = self.parser();
         let sfi = Arc::new(SegmentBufFactory::new(self.options.buffer_size.into()));
         let bfo = BufFactory::new(self.options.buffer_size.into());
+
         thread::scope(|scope| -> Result<()> {
             // prepare receive/transmit channels for input data
             let (txi, rxi) = channel::bounded(1);
@@ -608,10 +625,10 @@ impl App {
             // spawn processing threads
             let mut workers = Vec::with_capacity(n);
             for _ in 0..n {
-                let worker = scope.spawn(closure!(ref bfo, ref parser, ref sfi, ref input_badges, clone rxi, clone txo, |_| {
+                let worker = scope.spawn(closure!(ref bfo, ref parser, ref sfi, ref input_badges, ref si_placeholder, clone rxi, clone txo, |_| {
                     let mut processor = self.new_segment_processor(parser);
                     for (i, j, segment) in rxi.iter() {
-                        let prefix = input_badges.as_ref().map(|b|b[i].as_str()).unwrap_or("");
+                        let prefix = input_badges.as_ref().map(|b|b[i].as_str()).unwrap_or(si_placeholder);
                         match segment {
                             Segment::Complete(segment) => {
                                 let mut buf = bfo.new_buf();
@@ -649,14 +666,14 @@ impl App {
                         }
                         if let Some(entry) = window.pop_first() {
                             let sync_indicator = if prev_ts.map(|ts| ts <= entry.0.0).unwrap_or(true) {
-                                &self.options.theme.indicators.sync.synced
+                                &si_synced
                             } else {
-                                &self.options.theme.indicators.sync.failed
+                                &si_failed
                             };
                             prev_ts = Some(entry.0.0);
                             mem_usage -= entry.1.1.end - entry.1.1.start;
-                            output.write_all(sync_indicator.value.as_bytes())?;
-                            output.write_all(&entry.1.0[entry.1.1.clone()])?;
+                            output.write_all(sync_indicator.as_bytes())?;
+                            output.write_all(&entry.1.0[entry.1.1.clone()][si_width..])?;
                             output.write_all(b"\n")?;
                         }
                     }
@@ -785,10 +802,20 @@ impl App {
                         s.batch(|buf| buf.extend(opt.input_number_left_separator.as_bytes()));
                         s.element(Element::InputNumberInner, |s| {
                             s.batch(|buf| {
-                                aligned_left(buf, num_width + 1, b' ', |mut buf| {
-                                    buf.extend_from_slice(opt.input_number_prefix.as_bytes());
-                                    buf.extend_from_slice(format!("{}", i).as_bytes());
-                                });
+                                aligned(
+                                    buf,
+                                    Some(Adjustment {
+                                        alignment: Alignment::Right,
+                                        padding: Padding {
+                                            pad: b' ',
+                                            width: num_width + 1,
+                                        },
+                                    }),
+                                    |mut buf| {
+                                        buf.extend_from_slice(opt.input_number_prefix.as_bytes());
+                                        buf.extend_from_slice(format!("{}", i).as_bytes());
+                                    },
+                                );
                                 buf.extend(opt.input_name_left_separator.as_bytes());
                             });
                         });
@@ -850,9 +877,11 @@ impl App {
                     .with_raw_fields(options.raw_fields)
                     .with_flatten(options.flatten)
                     .with_ascii(options.ascii)
+                    .with_expansion(Expansion::from(options.formatting.expansion.clone()).with_mode(options.expand))
                     .with_always_show_time(options.fields.settings.predefined.time.show == FieldShowOption::Always)
                     .with_always_show_level(options.fields.settings.predefined.level.show == FieldShowOption::Always)
                     .with_punctuation(punctuation)
+                    .with_expansion(Expansion::from(options.formatting.expansion.clone()).with_mode(options.expand))
                     .build(),
             )
         }
@@ -964,7 +993,9 @@ impl<'a, Formatter: RecordWithSourceFormatter, Filter: RecordFilter> SegmentProc
                     if ar.prefix.last().map(|&x| x == b' ') == Some(false) {
                         buf.push(b' ');
                     }
-                    self.formatter.format_record(buf, record.with_source(&line[ar.offsets]));
+                    let prefix_range = begin..buf.len();
+                    self.formatter
+                        .format_record(buf, prefix_range, record.with_source(&line[ar.offsets]));
                     let end = buf.len();
                     observer.observe_record(&record, begin..end);
                     produced_some = true;

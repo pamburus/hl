@@ -390,6 +390,7 @@ impl FromStr for InputInfo {
 #[serde(rename_all = "kebab-case")]
 pub struct Formatting {
     pub flatten: Option<FlattenOption>,
+    pub expansion: ExpansionOptions,
     pub message: MessageFormatting,
     pub punctuation: Punctuation,
 }
@@ -399,12 +400,129 @@ impl Sample for Formatting {
     fn sample() -> Self {
         Self {
             flatten: None,
+            expansion: ExpansionOptions::default(),
             message: MessageFormatting {
                 format: MessageFormat::AutoQuoted,
             },
             punctuation: Punctuation::sample(),
         }
     }
+}
+
+// ---
+
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq)]
+#[serde(rename_all = "kebab-case")]
+pub struct ExpansionOptions {
+    pub mode: Option<ExpansionMode>,
+    pub profiles: ExpansionProfiles,
+}
+
+impl ExpansionOptions {
+    pub fn profile(&self) -> Option<&ExpansionProfile> {
+        self.mode.map(|mode| self.profiles.resolve(mode))
+    }
+}
+
+// ---
+
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq)]
+#[serde(rename_all = "kebab-case")]
+pub struct ExpansionProfiles {
+    pub low: ExpansionProfile,
+    pub medium: ExpansionProfile,
+    pub high: ExpansionProfile,
+}
+
+impl ExpansionProfiles {
+    pub fn resolve(&self, mode: ExpansionMode) -> &ExpansionProfile {
+        match mode {
+            ExpansionMode::Never => &ExpansionProfile::NEVER,
+            ExpansionMode::Inline => &ExpansionProfile::INLINE,
+            ExpansionMode::Low => &self.low,
+            ExpansionMode::Medium => &self.medium,
+            ExpansionMode::High => &self.high,
+            ExpansionMode::Always => &ExpansionProfile::ALWAYS,
+        }
+    }
+}
+
+// ---
+
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq)]
+#[serde(rename_all = "kebab-case")]
+pub struct ExpansionProfile {
+    pub multiline: Option<MultilineExpansion>,
+    pub thresholds: ExpansionThresholds,
+}
+
+impl ExpansionProfile {
+    pub const NEVER: Self = Self {
+        multiline: Some(MultilineExpansion::Disabled),
+        thresholds: ExpansionThresholds {
+            global: Some(usize::MAX),
+            cumulative: Some(usize::MAX),
+            message: Some(usize::MAX),
+            field: Some(usize::MAX),
+        },
+    };
+
+    pub const INLINE: Self = Self {
+        multiline: Some(MultilineExpansion::Inline),
+        thresholds: ExpansionThresholds {
+            global: Some(usize::MAX),
+            cumulative: Some(usize::MAX),
+            message: Some(usize::MAX),
+            field: Some(usize::MAX),
+        },
+    };
+
+    pub const ALWAYS: Self = Self {
+        multiline: Some(MultilineExpansion::Standard),
+        thresholds: ExpansionThresholds {
+            global: Some(0),
+            cumulative: Some(0),
+            message: Some(0),
+            field: Some(0),
+        },
+    };
+}
+
+// ---
+
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq)]
+#[serde(rename_all = "kebab-case")]
+pub struct ExpansionThresholds {
+    pub global: Option<usize>,
+    pub cumulative: Option<usize>,
+    pub message: Option<usize>,
+    pub field: Option<usize>,
+}
+
+// ---
+
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq)]
+#[serde(rename_all = "kebab-case")]
+pub enum MultilineExpansion {
+    #[default]
+    Standard,
+    Disabled,
+    Inline,
+}
+
+// ---
+
+#[derive(Clone, Copy, Debug, Default, Deserialize, Display, Eq, PartialEq)]
+#[serde(rename_all = "kebab-case")]
+#[strum(serialize_all = "kebab-case")]
+pub enum ExpansionMode {
+    Never,
+    Inline,
+    Low,
+    #[default]
+    Medium,
+    High,
+    Always,
 }
 
 // ---
@@ -518,7 +636,7 @@ impl Default for Punctuation {
             string_closing_quote: "'".into(),
             source_location_separator: "@ ".into(),
             caller_name_file_separator: " ".into(),
-            hidden_fields_indicator: " ...".into(),
+            hidden_fields_indicator: "...".into(),
             level_left_separator: "|".into(),
             level_right_separator: "|".into(),
             input_number_prefix: "#".into(),
@@ -544,7 +662,7 @@ impl Sample for Punctuation {
             string_closing_quote: "'".into(),
             source_location_separator: DisplayVariant::ascii("-> ").unicode("→ "),
             caller_name_file_separator: " @ ".into(),
-            hidden_fields_indicator: DisplayVariant::ascii(" ...").unicode(" …"),
+            hidden_fields_indicator: DisplayVariant::ascii("...").unicode("…"),
             level_left_separator: "|".into(),
             level_right_separator: "|".into(),
             input_number_prefix: "#".into(),

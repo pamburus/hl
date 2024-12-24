@@ -764,6 +764,7 @@ Output Options:
   -E, --show-empty-fields     Show empty fields, overrides --hide-empty-fields option [env: HL_SHOW_EMPTY_FIELDS=]
       --input-info <LAYOUTS>  Input number and filename layouts [default: auto] [possible values: auto, none, minimal, compact, full]
       --ascii [<WHEN>]        Whether to restrict punctuation to ASCII characters only [env: HL_ASCII=] [default: auto] [possible values: auto, never, always]
+  -x, --expansion <MODE>      Whether to expand fields and messages [env: HL_EXPANSION=] [default: medium] [possible values: never, inline, low, medium, high, always]
   -o, --output <FILE>         Output file
 
 Input Options:
