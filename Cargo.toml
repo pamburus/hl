@@ -61,6 +61,7 @@ itertools = "0.14"
 itoa = { version = "1", default-features = false }
 known-folders = "1"
 log = "0"
+mline = { path = "./crate/mline" }
 nonzero_ext = "0"
 notify = { version = "7", features = ["macos_kqueue"] }
 nu-ansi-term = "0"

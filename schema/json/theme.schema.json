@@ -114,6 +114,12 @@
                 },
                 "ellipsis": {
                     "$ref": "#/definitions/style"
+                },
+                "bullet": {
+                    "$ref": "#/definitions/style"
+                },
+                "value-expansion": {
+                    "$ref": "#/definitions/style"
                 }
             },
             "required": [],
