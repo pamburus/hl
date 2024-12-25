@@ -1,6 +1,8 @@
-{ lib
-, rustPlatform
-,
+{ 
+  lib,
+  stdenv,
+  rustPlatform,
+  installShellFiles,
 }:
 let
   cargoToml = builtins.fromTOML (builtins.readFile ../Cargo.toml);
@@ -20,6 +22,19 @@ rustPlatform.buildRustPackage {
       "wildflower-0.3.0" = "sha256-vv+ppiCrtEkCWab53eutfjHKrHZj+BEAprV5by8plzE=";
     };
   };
+
+  nativeBuildInputs = [ installShellFiles ];
+
+  postInstall = ''
+    installShellCompletion --cmd hl \
+      --bash <($out/bin/hl --shell-completions bash) \
+      --fish <($out/bin/hl --shell-completions fish) \
+      --zsh <($out/bin/hl --shell-completions zsh)
+    $out/bin/hl --man-page >hl.1
+    installManPage hl.1
+  '';
+
+  doCheck = false;
 
   meta = {
     description = cargoToml.package.description;
