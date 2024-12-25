@@ -1,4 +1,4 @@
-name: CI
+name: ci
 
 on:
   push:
@@ -10,7 +10,7 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  build:
+  test:
     runs-on: ubuntu-latest
 
     steps:
@@ -54,3 +54,32 @@ jobs:
 
       - name: Run executable
         run: cargo run
+
+  coverage:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Generate code coverage
+        run: |
+          make coverage
+
+      - name: Upload coverage to codecov.io
+        uses: codecov/codecov-action@v4
+        env: 
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+
+  test-nix:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: cachix/install-nix-action@v30
+
+      - name: Run nix flake check
+        run: nix flake check --print-build-logs
+
+      - name: Run nix build
+        run: nix build --print-build-logs
