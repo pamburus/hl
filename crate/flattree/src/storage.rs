@@ -17,8 +17,8 @@ pub trait Storage {
     fn clear(&mut self);
 }
 
-impl<T> Storage for Vec<Item<T>> {
-    type Value = T;
+impl<V> Storage for Vec<Item<V>> {
+    type Value = V;
 
     #[inline]
     fn len(&self) -> usize {
@@ -26,17 +26,17 @@ impl<T> Storage for Vec<Item<T>> {
     }
 
     #[inline]
-    fn get(&self, index: usize) -> Option<&Item<T>> {
+    fn get(&self, index: usize) -> Option<&Item<V>> {
         self.as_slice().get(index)
     }
 
     #[inline]
-    fn get_mut(&mut self, index: usize) -> Option<&mut Item<T>> {
+    fn get_mut(&mut self, index: usize) -> Option<&mut Item<V>> {
         self.as_mut_slice().get_mut(index)
     }
 
     #[inline]
-    fn push(&mut self, item: Item<T>) {
+    fn push(&mut self, item: Item<V>) {
         Vec::push(self, item)
     }
 

@@ -6,18 +6,18 @@ use crate::storage::Storage;
 
 // ---
 
-pub struct FlatTree<T, S = Vec<Item<T>>>
+pub struct FlatTree<V, S = Vec<Item<V>>>
 where
-    S: Storage<Value = T>,
+    S: Storage<Value = V>,
 {
     storage: S,
     ld: usize,
-    _marker: PhantomData<T>,
+    _marker: PhantomData<V>,
 }
 
-impl<T, S> FlatTree<T, S>
+impl<V, S> FlatTree<V, S>
 where
-    S: Storage<Value = T> + Default,
+    S: Storage<Value = V> + Default,
 {
     #[inline]
     pub fn build() -> FlatTreeBuilder<S> {
@@ -25,9 +25,9 @@ where
     }
 }
 
-impl<T, S> FlatTree<T, S>
+impl<V, S> FlatTree<V, S>
 where
-    S: Storage<Value = T>,
+    S: Storage<Value = V>,
 {
     #[inline]
     pub fn build_with_storage(mut storage: S) -> FlatTreeBuilder<S> {
@@ -46,7 +46,7 @@ where
     }
 
     #[inline]
-    fn node(&self, index: usize) -> Node<'_, T, S> {
+    fn node(&self, index: usize) -> Node<'_, V, S> {
         Node {
             tree: self,
             index,
@@ -55,28 +55,28 @@ where
     }
 
     #[inline]
-    fn item(&self, index: usize) -> &Item<T> {
+    fn item(&self, index: usize) -> &Item<V> {
         self.storage.get(index).unwrap()
     }
 }
 
 // ---
 
-pub struct Node<'t, T, S>
+pub struct Node<'t, V, S>
 where
-    S: Storage<Value = T>,
+    S: Storage<Value = V>,
 {
-    tree: &'t FlatTree<T, S>,
+    tree: &'t FlatTree<V, S>,
     index: usize,
-    item: &'t Item<T>,
+    item: &'t Item<V>,
 }
 
-impl<'t, T, S> Node<'t, T, S>
+impl<'t, V, S> Node<'t, V, S>
 where
-    S: Storage<Value = T>,
+    S: Storage<Value = V>,
 {
     #[inline]
-    pub fn value(&self) -> &T {
+    pub fn value(&self) -> &V {
         &self.item.value
     }
 
@@ -309,16 +309,16 @@ struct NodeBuilderSnapshot {
 // ---
 
 #[derive(Debug, Clone)]
-pub struct Item<T> {
-    value: T,
+pub struct Item<V> {
+    value: V,
     parent: Option<usize>, // index of parent
     lf: usize,             // length (flat) - nubmer of direct and indirect children
     ld: usize,             // length (direct) - number of direct children
 }
 
-impl<T> Item<T> {
+impl<V> Item<V> {
     #[inline]
-    fn new(value: T) -> Self {
+    fn new(value: V) -> Self {
         Self {
             value,
             parent: None,
@@ -334,11 +334,11 @@ impl<T> Item<T> {
 mod tests {
     use super::*;
 
-    fn collect<'t, T, S, I>(nodes: I) -> Vec<T>
+    fn collect<'t, V, S, I>(nodes: I) -> Vec<V>
     where
-        I: Iterator<Item = Node<'t, T, S>> + 't,
-        S: Storage<Value = T> + 't,
-        T: Copy + 'static,
+        I: Iterator<Item = Node<'t, V, S>> + 't,
+        S: Storage<Value = V> + 't,
+        V: Copy + 'static,
     {
         nodes.map(|n| *n.value()).collect()
     }
@@ -368,8 +368,6 @@ mod tests {
         assert_eq!(*node.value(), 3);
         let children = collect(node.children());
         assert_eq!(children, [4, 5, 6]);
-
-        println!("tree: {:#?}", tree.storage);
 
         let node = tree.node(2);
         assert_eq!(*node.value(), 3);
