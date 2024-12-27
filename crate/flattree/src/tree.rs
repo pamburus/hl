@@ -1,6 +1,9 @@
 // std imports
 use std::marker::PhantomData;
 
+// third-party imports
+use derive_where::derive_where;
+
 // local imports
 use crate::storage::Storage;
 
@@ -67,6 +70,7 @@ where
 
 // ---
 
+#[derive_where(Clone, Copy)]
 pub struct Roots<'t, V, S>
 where
     S: Storage<Value = V>,
@@ -87,6 +91,11 @@ where
     pub fn is_empty(&self) -> bool {
         self.tree.is_empty()
     }
+
+    #[inline]
+    pub fn iter(&self) -> RootsIterator<'t, V, S> {
+        self.into_iter()
+    }
 }
 
 impl<'t, V, S> IntoIterator for Roots<'t, V, S>
@@ -105,6 +114,7 @@ where
             } else {
                 None
             },
+            i: 0,
         }
     }
 }
@@ -117,6 +127,7 @@ where
 {
     tree: &'t FlatTree<V, S>,
     node: Option<(usize, Node<'t, V, S>)>,
+    i: usize,
 }
 
 impl<'t, V, S> Iterator for RootsIterator<'t, V, S>
@@ -128,6 +139,7 @@ where
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
         if let Some((index, node)) = self.node.take() {
+            self.i += 1;
             let index = index + node.item.lf + 1;
             self.node = if index < self.tree.flat_len() {
                 Some((index, self.tree.node(index)))
@@ -139,10 +151,22 @@ where
             None
         }
     }
+
+    #[inline]
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let n = self.tree.ld.checked_sub(self.i);
+        (n.unwrap_or(0), n)
+    }
+
+    #[inline]
+    fn count(self) -> usize {
+        self.size_hint().0
+    }
 }
 
 // ---
 
+#[derive_where(Clone, Copy)]
 pub struct Node<'t, V, S>
 where
     S: Storage<Value = V>,
@@ -460,6 +484,7 @@ mod tests {
         assert_eq!(tree.roots().len(), 4);
         let roots = collect(tree.roots());
         assert_eq!(roots, [1, 2, 3, 9]);
+        assert_eq!(tree.roots().iter().count(), 4);
     }
 
     #[test]
