@@ -8,7 +8,7 @@ pub struct FlatTree<T, S = Vec<Item<T>>>
 where
     S: Storage<Value = T>,
 {
-    s: S,
+    storage: S,
     _marker: PhantomData<T>,
 }
 
@@ -44,7 +44,7 @@ where
 
     pub fn root<'b>(&'b mut self) -> NodeBuilder<'b, Self> {
         NodeBuilder {
-            b: self,
+            builder: self,
             parent: None,
             ld: 0,
         }
@@ -52,7 +52,7 @@ where
 
     pub fn done(self) -> FlatTree<S::Value, S> {
         FlatTree {
-            s: self.storage,
+            storage: self.storage,
             _marker: PhantomData,
         }
     }
@@ -65,12 +65,14 @@ where
     pub fn build(mut self, value: S::Value, f: impl FnOnce(NodeBuilder<'_, Self>) -> NodeBuilder<'_, Self>) -> Self {
         let index = self.storage.len();
         self = self.add(value);
+
         f(NodeBuilder {
-            b: &mut self,
+            builder: &mut self,
             parent: Some(index),
             ld: 0,
         })
         .end();
+
         self
     }
 
@@ -91,20 +93,8 @@ where
 
 // ---
 
-pub trait Build
-where
-    Self: Sized,
-{
-    type Storage: Storage;
-
-    fn add(self, value: <<Self as Build>::Storage as Storage>::Value) -> Self;
-    fn build(self, value: <<Self as Build>::Storage as Storage>::Value, f: impl FnOnce(Self) -> Self) -> Self;
-}
-
-// ---
-
-pub struct NodeBuilder<'b, TB> {
-    b: &'b mut TB,
+pub struct NodeBuilder<'b, B> {
+    builder: &'b mut B,
     parent: Option<usize>,
     ld: usize,
 }
@@ -113,8 +103,8 @@ impl<'b, S> NodeBuilder<'b, FlatTreeBuilder<S>>
 where
     S: Storage,
 {
-    pub fn add(&mut self, value: S::Value) -> &mut Self {
-        self.b.storage.push(Item {
+    pub fn add(mut self, value: S::Value) -> Self {
+        self.builder.storage.push(Item {
             parent: self.parent,
             ..Item::new(value)
         });
@@ -122,16 +112,34 @@ where
         self
     }
 
+    #[inline]
+    pub fn build(mut self, value: S::Value, f: impl FnOnce(Self) -> Self) -> Self {
+        let index = self.builder.storage.len();
+        self = self.add(value);
+
+        let (snapshot, b) = self.snapshot();
+
+        let child = NodeBuilder {
+            builder: b,
+            parent: Some(index),
+            ld: 0,
+        };
+
+        let b = f(child).end();
+
+        (snapshot, b).into()
+    }
+
     fn end(self) -> &'b mut FlatTreeBuilder<S> {
         if let Some(index) = self.parent {
-            let lf = self.b.storage.len() - index;
+            let lf = self.builder.storage.len() - index;
             let ld = self.ld;
-            self.b.update(index, |item| {
+            self.builder.update(index, |item| {
                 item.lf = lf;
                 item.ld = ld;
             })
         } else {
-            self.b
+            self.builder
         }
     }
 
@@ -141,39 +149,8 @@ where
                 parent: self.parent,
                 ld: self.ld,
             },
-            self.b,
+            self.builder,
         )
-    }
-}
-
-impl<'b, S> Build for NodeBuilder<'b, FlatTreeBuilder<S>>
-where
-    S: Storage,
-{
-    type Storage = S;
-
-    #[inline]
-    fn add(mut self, value: S::Value) -> Self {
-        NodeBuilder::add(&mut self, value);
-        self
-    }
-
-    #[inline]
-    fn build(mut self, value: S::Value, f: impl FnOnce(Self) -> Self) -> Self {
-        let index = self.b.storage.len();
-        NodeBuilder::add(&mut self, value);
-
-        let (snapshot, b) = self.snapshot();
-
-        let child = NodeBuilder {
-            b,
-            parent: Some(index),
-            ld: 0,
-        };
-
-        let b = f(child).end();
-
-        (snapshot, b).into()
     }
 }
 
@@ -182,9 +159,9 @@ where
     S: Storage,
 {
     #[inline]
-    fn from((state, b): (NodeBuilderSnapshot, &'b mut FlatTreeBuilder<S>)) -> Self {
+    fn from((state, builder): (NodeBuilderSnapshot, &'b mut FlatTreeBuilder<S>)) -> Self {
         Self {
-            b,
+            builder,
             parent: state.parent,
             ld: state.ld,
         }
@@ -228,7 +205,7 @@ mod tests {
             .add(2)
             .build(3, |b| b.add(4).add(5).build(6, |b| b.add(7).add(8)));
         let tree = builder.done();
-        assert_eq!(tree.s.len(), 8);
+        assert_eq!(tree.storage.len(), 8);
     }
 
     #[test]
@@ -239,6 +216,6 @@ mod tests {
             .build(3, |b| b.add(4).add(5).build(6, |b| b.add(7).add(8)))
             .add(9)
             .done();
-        assert_eq!(tree.s.len(), 9);
+        assert_eq!(tree.storage.len(), 9);
     }
 }
