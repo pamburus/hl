@@ -204,10 +204,10 @@ where
     }
 
     #[inline]
-    pub fn children(&self) -> SiblingsIterator<'t, V, S> {
-        SiblingsIterator {
+    pub fn children(&self) -> Children<'t, V, S> {
+        Children {
             tree: self.tree,
-            next: self.index + 1,
+            index: self.index,
             n: self.item.children,
         }
     }
@@ -218,6 +218,55 @@ where
         let start = self.index + 1;
         let end = self.index + self.item.len;
         (start..end).map(move |index| tree.node(index))
+    }
+}
+
+// ---
+
+#[derive_where(Clone, Copy)]
+pub struct Children<'t, V, S>
+where
+    S: Storage<Value = V>,
+{
+    tree: &'t FlatTree<V, S>,
+    index: usize,
+    n: usize,
+}
+
+impl<'t, V, S> Children<'t, V, S>
+where
+    S: Storage<Value = V>,
+{
+    #[inline]
+    pub fn len(&self) -> usize {
+        self.n
+    }
+
+    #[inline]
+    pub fn is_empty(&self) -> bool {
+        self.n == 0
+    }
+
+    #[inline]
+    pub fn iter(&self) -> SiblingsIterator<'t, V, S> {
+        self.into_iter()
+    }
+}
+
+impl<'t, V, S> IntoIterator for Children<'t, V, S>
+where
+    S: Storage<Value = V>,
+{
+    type Item = Node<'t, V, S>;
+    type IntoIter = SiblingsIterator<'t, V, S>;
+
+    #[inline]
+    fn into_iter(self) -> Self::IntoIter {
+        SiblingsIterator {
+            tree: self.tree,
+            next: self.index + 1,
+            n: self.n,
+        }
     }
 }
 
@@ -455,6 +504,7 @@ mod tests {
 
         let node = tree.node(2);
         assert_eq!(*node.value(), 3);
+        assert_eq!(node.children().len(), 3);
         let children = collect(node.children());
         assert_eq!(children, [4, 5, 6]);
 
