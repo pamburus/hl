@@ -139,7 +139,7 @@ where
         }
 
         let node = self.tree.node(self.next);
-        self.next += node.item.lf + 1;
+        self.next += node.item.len;
         self.n -= 1;
 
         Some(node)
@@ -195,7 +195,7 @@ where
 
     #[inline]
     pub fn next(&self) -> Option<Self> {
-        let index = self.index + self.item.lf + 1;
+        let index = self.index + self.item.len;
         if index < self.tree.flat_len() {
             Some(self.tree.node(index))
         } else {
@@ -207,12 +207,12 @@ where
     pub fn children(&self) -> impl Iterator<Item = Self> + 't {
         let tree = self.tree;
         let start = self.index + 1;
-        let end = start + self.item.lf;
+        let end = self.index + self.item.len;
         let mut index = start;
         std::iter::from_fn(move || {
             if index < end {
                 let node = tree.node(index);
-                index += node.item.lf + 1;
+                index += node.item.len;
                 Some(node)
             } else {
                 None
@@ -224,7 +224,7 @@ where
     pub fn descendants(&self) -> impl Iterator<Item = Self> + 't {
         let tree = self.tree;
         let start = self.index + 1;
-        let end = start + self.item.lf;
+        let end = self.index + self.item.len;
         (start..end).map(move |index| tree.node(index))
     }
 }
@@ -233,7 +233,7 @@ where
 
 pub struct FlatTreeBuilder<S> {
     storage: S,
-    ld: usize,
+    roots: usize,
 }
 
 impl<S> FlatTreeBuilder<S>
@@ -242,7 +242,7 @@ where
 {
     #[inline]
     pub fn new(storage: S) -> Self {
-        Self { storage, ld: 0 }
+        Self { storage, roots: 0 }
     }
 
     #[inline]
@@ -250,7 +250,7 @@ where
         NodeBuilder {
             builder: self,
             index: None,
-            ld: 0,
+            children: 0,
         }
     }
 
@@ -258,7 +258,7 @@ where
     pub fn done(self) -> FlatTree<S::Value, S> {
         FlatTree {
             storage: self.storage,
-            roots: self.ld,
+            roots: self.roots,
             _marker: PhantomData,
         }
     }
@@ -266,7 +266,7 @@ where
     #[inline]
     pub fn add(mut self, value: S::Value) -> Self {
         self.storage.push(Item::new(value));
-        self.ld += 1;
+        self.roots += 1;
         self
     }
 
@@ -278,7 +278,7 @@ where
         f(NodeBuilder {
             builder: &mut self,
             index: Some(index),
-            ld: 0,
+            children: 0,
         })
         .end();
 
@@ -309,7 +309,7 @@ where
 {
     builder: &'b mut FlatTreeBuilder<S>,
     index: Option<usize>,
-    ld: usize,
+    children: usize,
 }
 
 impl<'b, S> NodeBuilder<'b, S>
@@ -322,9 +322,9 @@ where
             parent: self.index,
             ..Item::new(value)
         });
-        self.ld += 1;
+        self.children += 1;
         if self.index.is_none() {
-            self.builder.ld += 1;
+            self.builder.roots += 1;
         }
         self
     }
@@ -339,7 +339,7 @@ where
         let child = NodeBuilder {
             builder: b,
             index: Some(index),
-            ld: 0,
+            children: 0,
         };
 
         let b = f(child).end();
@@ -356,14 +356,14 @@ where
     #[inline]
     fn close(&mut self) {
         if let Some(index) = self.index {
-            let lf = self.builder.storage.len() - index - 1;
-            let ld = self.ld;
+            let len = self.builder.storage.len() - index;
+            let children = self.children;
             self.builder.update(index, |item| {
-                item.lf = lf;
-                item.ld = ld;
+                item.len = len;
+                item.children = children;
             });
         } else {
-            self.builder.ld = self.ld;
+            self.builder.roots = self.children;
         }
     }
 
@@ -375,7 +375,7 @@ where
         (
             NodeBuilderSnapshot {
                 parent: self.index,
-                ld: self.ld,
+                children: self.children,
             },
             self.builder,
         )
@@ -391,7 +391,7 @@ where
         Self {
             builder,
             index: state.parent,
-            ld: state.ld,
+            children: state.children,
         }
     }
 }
@@ -400,7 +400,7 @@ where
 
 struct NodeBuilderSnapshot {
     parent: Option<usize>,
-    ld: usize,
+    children: usize,
 }
 
 // ---
@@ -409,8 +409,8 @@ struct NodeBuilderSnapshot {
 pub struct Item<V> {
     value: V,
     parent: Option<usize>, // index of parent
-    lf: usize,             // length (flat) - nubmer of direct and indirect children
-    ld: usize,             // length (direct) - number of direct children
+    len: usize,            // length (flat) - number of items including this item, its direct and indirect children
+    children: usize,       // number of direct children
 }
 
 impl<V> Item<V> {
@@ -419,8 +419,8 @@ impl<V> Item<V> {
         Self {
             value,
             parent: None,
-            lf: 0,
-            ld: 0,
+            len: 1,
+            children: 0,
         }
     }
 }
