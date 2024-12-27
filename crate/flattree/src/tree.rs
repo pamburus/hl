@@ -4,13 +4,13 @@ pub struct FlatTree<S>
 where
     S: StorageType,
 {
-    s: S::Storage<Item<S::Value>>,
+    s: S::Storage,
 }
 
 impl<S> FlatTree<S>
 where
     S: StorageType,
-    S::Storage<Item<S::Value>>: Default,
+    S::Storage: Default,
 {
     pub fn build() -> FlatTreeBuilder<S> {
         FlatTreeBuilder::new(Default::default())
@@ -21,7 +21,7 @@ impl<S> FlatTree<S>
 where
     S: StorageType,
 {
-    pub fn build_with(storage: S::Storage<Item<S::Value>>) -> FlatTreeBuilder<S> {
+    pub fn build_with(storage: S::Storage) -> FlatTreeBuilder<S> {
         FlatTreeBuilder::new(storage)
     }
 }
@@ -30,14 +30,14 @@ pub struct FlatTreeBuilder<S>
 where
     S: StorageType,
 {
-    s: S::Storage<Item<S::Value>>,
+    s: S::Storage,
 }
 
 impl<S> FlatTreeBuilder<S>
 where
     S: StorageType,
 {
-    pub fn new(storage: S::Storage<Item<S::Value>>) -> Self {
+    pub fn new(storage: S::Storage) -> Self {
         Self { s: storage }
     }
 
