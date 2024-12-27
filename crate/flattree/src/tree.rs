@@ -56,17 +56,20 @@ where
         FlatTree { s: self.s }
     }
 
-    pub fn add(&mut self, value: D::Value) -> &mut Self {
+    pub fn add(mut self, value: D::Value) -> Self {
         self.s.push(Item::new(value));
         self
     }
 
-    pub fn build(&mut self, value: D::Value, f: impl FnOnce(&mut Self) -> &mut Self) -> &mut Self {
+    pub fn build(mut self, value: D::Value, f: impl FnOnce(NodeBuilder<'_, Self>) -> NodeBuilder<'_, Self>) -> Self {
         let index = self.s.len();
-        self.add(value);
-        f(self).update(index, |item| {
-            item.parent = None;
-        });
+        self = self.add(value);
+        f(NodeBuilder {
+            b: &mut self,
+            parent: Some(index),
+            ld: 0,
+        })
+        .end();
         self
     }
 
@@ -219,6 +222,16 @@ mod tests {
             .add(2)
             .build(3, |b| b.add(4).add(5).build(6, |b| b.add(7).add(8)));
         let tree = builder.done();
+        assert_eq!(tree.s.len(), 8);
+    }
+
+    #[test]
+    fn test2() {
+        let tree = FlatTree::<usize>::build()
+            .add(1)
+            .add(2)
+            .build(3, |b| b.add(4).add(5).build(6, |b| b.add(7).add(8)))
+            .done();
         assert_eq!(tree.s.len(), 8);
     }
 }
