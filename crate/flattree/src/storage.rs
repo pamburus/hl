@@ -4,7 +4,7 @@ use std::vec::Vec;
 // local imports
 use crate::tree::Item;
 
-pub trait Storage: Default {
+pub trait Storage {
     type Value;
 
     fn len(&self) -> usize;
