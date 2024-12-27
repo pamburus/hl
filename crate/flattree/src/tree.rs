@@ -1,3 +1,4 @@
+// local imports
 use crate::{
     domain::{DefaultDomain, Domain},
     storage::Storage,
@@ -191,6 +192,7 @@ struct NodeBuilderSnapshot {
     ld: usize,
 }
 
+#[derive(Debug, Clone)]
 pub struct Item<T> {
     value: T,
     parent: Option<usize>, // index of parent
@@ -231,7 +233,8 @@ mod tests {
             .add(1)
             .add(2)
             .build(3, |b| b.add(4).add(5).build(6, |b| b.add(7).add(8)))
+            .add(9)
             .done();
-        assert_eq!(tree.s.len(), 8);
+        assert_eq!(tree.s.len(), 9);
     }
 }
