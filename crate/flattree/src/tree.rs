@@ -93,7 +93,7 @@ where
     }
 
     #[inline]
-    pub fn iter(&self) -> RootsIterator<'t, V, S> {
+    pub fn iter(&self) -> SiblingsIterator<'t, V, S> {
         self.into_iter()
     }
 }
@@ -103,11 +103,11 @@ where
     S: Storage<Value = V>,
 {
     type Item = Node<'t, V, S>;
-    type IntoIter = RootsIterator<'t, V, S>;
+    type IntoIter = SiblingsIterator<'t, V, S>;
 
     #[inline]
     fn into_iter(self) -> Self::IntoIter {
-        RootsIterator {
+        SiblingsIterator {
             tree: self.tree,
             next: 0,
             n: self.tree.roots,
@@ -117,7 +117,7 @@ where
 
 // ---
 
-pub struct RootsIterator<'t, V, S>
+pub struct SiblingsIterator<'t, V, S>
 where
     S: Storage<Value = V>,
 {
@@ -126,7 +126,7 @@ where
     n: usize,
 }
 
-impl<'t, V, S> Iterator for RootsIterator<'t, V, S>
+impl<'t, V, S> Iterator for SiblingsIterator<'t, V, S>
 where
     S: Storage<Value = V>,
 {
@@ -204,20 +204,12 @@ where
     }
 
     #[inline]
-    pub fn children(&self) -> impl Iterator<Item = Self> + 't {
-        let tree = self.tree;
-        let start = self.index + 1;
-        let end = self.index + self.item.len;
-        let mut index = start;
-        std::iter::from_fn(move || {
-            if index < end {
-                let node = tree.node(index);
-                index += node.item.len;
-                Some(node)
-            } else {
-                None
-            }
-        })
+    pub fn children(&self) -> SiblingsIterator<'t, V, S> {
+        SiblingsIterator {
+            tree: self.tree,
+            next: self.index + 1,
+            n: self.item.children,
+        }
     }
 
     #[inline]
