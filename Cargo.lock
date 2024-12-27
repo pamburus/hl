@@ -845,6 +845,9 @@ dependencies = [
 [[package]]
 name = "flattree"
 version = "0.1.0"
+dependencies = [
+ "derive-where",
+]
 
 [[package]]
 name = "fnv"
