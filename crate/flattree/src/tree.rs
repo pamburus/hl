@@ -36,6 +36,11 @@ where
     }
 
     #[inline]
+    pub fn roots(&self) -> Roots<'_, V, S> {
+        Roots { tree: self }
+    }
+
+    #[inline]
     pub fn flat_len(&self) -> usize {
         self.storage.len()
     }
@@ -57,6 +62,82 @@ where
     #[inline]
     fn item(&self, index: usize) -> &Item<V> {
         self.storage.get(index).unwrap()
+    }
+}
+
+// ---
+
+pub struct Roots<'t, V, S>
+where
+    S: Storage<Value = V>,
+{
+    tree: &'t FlatTree<V, S>,
+}
+
+impl<'t, V, S> Roots<'t, V, S>
+where
+    S: Storage<Value = V>,
+{
+    #[inline]
+    pub fn len(&self) -> usize {
+        self.tree.ld
+    }
+
+    #[inline]
+    pub fn is_empty(&self) -> bool {
+        self.tree.is_empty()
+    }
+}
+
+impl<'t, V, S> IntoIterator for Roots<'t, V, S>
+where
+    S: Storage<Value = V>,
+{
+    type Item = Node<'t, V, S>;
+    type IntoIter = RootsIterator<'t, V, S>;
+
+    #[inline]
+    fn into_iter(self) -> Self::IntoIter {
+        RootsIterator {
+            tree: self.tree,
+            node: if !self.tree.is_empty() {
+                Some((0, self.tree.node(0)))
+            } else {
+                None
+            },
+        }
+    }
+}
+
+// ---
+
+pub struct RootsIterator<'t, V, S>
+where
+    S: Storage<Value = V>,
+{
+    tree: &'t FlatTree<V, S>,
+    node: Option<(usize, Node<'t, V, S>)>,
+}
+
+impl<'t, V, S> Iterator for RootsIterator<'t, V, S>
+where
+    S: Storage<Value = V>,
+{
+    type Item = Node<'t, V, S>;
+
+    #[inline]
+    fn next(&mut self) -> Option<Self::Item> {
+        if let Some((index, node)) = self.node.take() {
+            let index = index + node.item.lf + 1;
+            self.node = if index < self.tree.flat_len() {
+                Some((index, self.tree.node(index)))
+            } else {
+                None
+            };
+            Some(node)
+        } else {
+            None
+        }
     }
 }
 
@@ -336,11 +417,11 @@ mod tests {
 
     fn collect<'t, V, S, I>(nodes: I) -> Vec<V>
     where
-        I: Iterator<Item = Node<'t, V, S>> + 't,
+        I: IntoIterator<Item = Node<'t, V, S>> + 't,
         S: Storage<Value = V> + 't,
         V: Copy + 'static,
     {
-        nodes.map(|n| *n.value()).collect()
+        nodes.into_iter().map(|n| *n.value()).collect()
     }
 
     #[test]
@@ -375,10 +456,14 @@ mod tests {
         assert_eq!(*next.value(), 9);
         let next = next.next();
         assert!(next.is_none());
+
+        assert_eq!(tree.roots().len(), 4);
+        let roots = collect(tree.roots());
+        assert_eq!(roots, [1, 2, 3, 9]);
     }
 
     #[test]
-    fn test_tree_roots() {
+    fn test_tree_builder_roots() {
         let mut builder = FlatTree::<usize>::build();
         builder
             .roots()
@@ -388,5 +473,8 @@ mod tests {
         let tree = builder.done();
         assert_eq!(tree.storage.len(), 8);
         assert_eq!(tree.ld, 3);
+
+        let roots = collect(tree.roots());
+        assert_eq!(roots, [1, 2, 3]);
     }
 }
