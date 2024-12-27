@@ -44,13 +44,22 @@ where
     }
 
     #[inline]
-    pub fn flat_len(&self) -> usize {
-        self.storage.len()
+    pub fn nodes(&self) -> Nodes<'_, V, S> {
+        Nodes {
+            tree: self,
+            start: 0,
+            end: self.len(),
+        }
     }
 
     #[inline]
     pub fn is_empty(&self) -> bool {
         self.storage.is_empty()
+    }
+
+    #[inline]
+    fn len(&self) -> usize {
+        self.storage.len()
     }
 
     #[inline]
@@ -112,6 +121,94 @@ where
             next: 0,
             n: self.tree.roots,
         }
+    }
+}
+
+// ---
+
+#[derive_where(Clone, Copy)]
+pub struct Nodes<'t, V, S>
+where
+    S: Storage<Value = V>,
+{
+    tree: &'t FlatTree<V, S>,
+    start: usize,
+    end: usize,
+}
+
+impl<'t, V, S> Nodes<'t, V, S>
+where
+    S: Storage<Value = V>,
+{
+    #[inline]
+    pub fn len(&self) -> usize {
+        self.end - self.start
+    }
+
+    #[inline]
+    pub fn is_empty(&self) -> bool {
+        self.start == self.end
+    }
+
+    #[inline]
+    pub fn iter(&self) -> NodesIterator<'t, V, S> {
+        self.into_iter()
+    }
+}
+
+impl<'t, V, S> IntoIterator for Nodes<'t, V, S>
+where
+    S: Storage<Value = V>,
+{
+    type Item = Node<'t, V, S>;
+    type IntoIter = NodesIterator<'t, V, S>;
+
+    #[inline]
+    fn into_iter(self) -> Self::IntoIter {
+        NodesIterator {
+            tree: self.tree,
+            next: self.start,
+            end: self.end,
+        }
+    }
+}
+
+pub struct NodesIterator<'t, V, S>
+where
+    S: Storage<Value = V>,
+{
+    tree: &'t FlatTree<V, S>,
+    next: usize,
+    end: usize,
+}
+
+impl<'t, V, S> Iterator for NodesIterator<'t, V, S>
+where
+    S: Storage<Value = V>,
+{
+    type Item = Node<'t, V, S>;
+
+    #[inline]
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.next >= self.end {
+            return None;
+        }
+
+        let node = self.tree.node(self.next);
+        self.next += 1;
+
+        Some(node)
+    }
+
+    #[inline]
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let n = self.end - self.next;
+        (n, Some(n))
+    }
+
+    #[inline]
+    fn count(self) -> usize {
+        self.end - self.next
     }
 }
 
@@ -196,7 +293,7 @@ where
     #[inline]
     pub fn next(&self) -> Option<Self> {
         let index = self.index + self.item.len;
-        if index < self.tree.flat_len() {
+        if index < self.tree.len() {
             Some(self.tree.node(index))
         } else {
             None
@@ -213,11 +310,12 @@ where
     }
 
     #[inline]
-    pub fn descendants(&self) -> impl Iterator<Item = Self> + 't {
-        let tree = self.tree;
-        let start = self.index + 1;
-        let end = self.index + self.item.len;
-        (start..end).map(move |index| tree.node(index))
+    pub fn descendants(&self) -> Nodes<'t, V, S> {
+        Nodes {
+            tree: self.tree,
+            start: self.index + 1,
+            end: self.index + self.item.len,
+        }
     }
 }
 
@@ -515,10 +613,20 @@ mod tests {
         let next = next.next();
         assert!(next.is_none());
 
+        let node = tree.node(2);
+        let descendants = node.descendants();
+        assert_eq!(descendants.len(), 5);
+        assert_eq!(collect(descendants), [4, 5, 6, 7, 8]);
+
         assert_eq!(tree.roots().len(), 4);
         let roots = collect(tree.roots());
         assert_eq!(roots, [1, 2, 3, 9]);
         assert_eq!(tree.roots().iter().count(), 4);
+
+        assert_eq!(tree.nodes().len(), 9);
+        assert_eq!(tree.nodes().iter().count(), 9);
+        let nodes = collect(tree.nodes());
+        assert_eq!(nodes, [1, 2, 3, 4, 5, 6, 7, 8, 9]);
     }
 
     #[test]
