@@ -98,7 +98,7 @@ where
 
     #[inline]
     pub fn next(&self) -> Option<Self> {
-        let index = self.index + self.item.lf;
+        let index = self.index + self.item.lf + 1;
         if index < self.tree.flat_len() {
             Some(self.tree.node(index))
         } else {
@@ -110,12 +110,12 @@ where
     pub fn children(&self) -> impl Iterator<Item = Self> + 't {
         let tree = self.tree;
         let start = self.index + 1;
-        let end = self.index + self.item.lf;
+        let end = start + self.item.lf;
         let mut index = start;
         std::iter::from_fn(move || {
             if index < end {
                 let node = tree.node(index);
-                index += node.item.lf;
+                index += node.item.lf + 1;
                 Some(node)
             } else {
                 None
@@ -127,7 +127,7 @@ where
     pub fn descendants(&self) -> impl Iterator<Item = Self> + 't {
         let tree = self.tree;
         let start = self.index + 1;
-        let end = self.index + self.item.lf;
+        let end = start + self.item.lf;
         (start..end).map(move |index| tree.node(index))
     }
 }
@@ -259,7 +259,7 @@ where
     #[inline]
     fn close(&mut self) {
         if let Some(index) = self.index {
-            let lf = self.builder.storage.len() - index;
+            let lf = self.builder.storage.len() - index - 1;
             let ld = self.ld;
             self.builder.update(index, |item| {
                 item.lf = lf;
@@ -322,7 +322,7 @@ impl<T> Item<T> {
         Self {
             value,
             parent: None,
-            lf: 1,
+            lf: 0,
             ld: 0,
         }
     }
