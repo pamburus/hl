@@ -1,19 +1,6 @@
 // stdlib imports
 use std::vec::Vec;
 
-// local imports
-use crate::tree::Item;
-
-pub trait StorageType {
-    type Value;
-    type Storage: Storage<Item<Self::Value>>;
-}
-
-impl<T> StorageType for Vec<T> {
-    type Value = T;
-    type Storage = Vec<Item<T>>;
-}
-
 pub trait Storage<T>: Default {
     fn len(&self) -> usize;
     fn is_empty(&self) -> bool {
