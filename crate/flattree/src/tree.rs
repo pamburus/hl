@@ -14,7 +14,7 @@ where
     S: Storage<Value = V>,
 {
     storage: S,
-    ld: usize,
+    roots: usize,
     _marker: PhantomData<V>,
 }
 
@@ -84,7 +84,7 @@ where
 {
     #[inline]
     pub fn len(&self) -> usize {
-        self.tree.ld
+        self.tree.roots
     }
 
     #[inline]
@@ -109,12 +109,8 @@ where
     fn into_iter(self) -> Self::IntoIter {
         RootsIterator {
             tree: self.tree,
-            node: if !self.tree.is_empty() {
-                Some((0, self.tree.node(0)))
-            } else {
-                None
-            },
-            i: 0,
+            next: 0,
+            n: self.tree.roots,
         }
     }
 }
@@ -126,8 +122,8 @@ where
     S: Storage<Value = V>,
 {
     tree: &'t FlatTree<V, S>,
-    node: Option<(usize, Node<'t, V, S>)>,
-    i: usize,
+    next: usize,
+    n: usize,
 }
 
 impl<'t, V, S> Iterator for RootsIterator<'t, V, S>
@@ -138,29 +134,25 @@ where
 
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
-        if let Some((index, node)) = self.node.take() {
-            self.i += 1;
-            let index = index + node.item.lf + 1;
-            self.node = if index < self.tree.flat_len() {
-                Some((index, self.tree.node(index)))
-            } else {
-                None
-            };
-            Some(node)
-        } else {
-            None
+        if self.n == 0 {
+            return None;
         }
+
+        let node = self.tree.node(self.next);
+        self.next += node.item.lf + 1;
+        self.n -= 1;
+
+        Some(node)
     }
 
     #[inline]
     fn size_hint(&self) -> (usize, Option<usize>) {
-        let n = self.tree.ld.checked_sub(self.i);
-        (n.unwrap_or(0), n)
+        (self.n, Some(self.n))
     }
 
     #[inline]
     fn count(self) -> usize {
-        self.size_hint().0
+        self.n
     }
 }
 
@@ -266,7 +258,7 @@ where
     pub fn done(self) -> FlatTree<S::Value, S> {
         FlatTree {
             storage: self.storage,
-            ld: self.ld,
+            roots: self.ld,
             _marker: PhantomData,
         }
     }
@@ -457,7 +449,7 @@ mod tests {
             .add(9)
             .done();
         assert_eq!(tree.storage.len(), 9);
-        assert_eq!(tree.ld, 4);
+        assert_eq!(tree.roots, 4);
 
         let node = tree.node(0);
         assert_eq!(*node.value(), 1);
@@ -497,7 +489,7 @@ mod tests {
             .build(3, |b| b.add(4).add(5).build(6, |b| b.add(7).add(8)));
         let tree = builder.done();
         assert_eq!(tree.storage.len(), 8);
-        assert_eq!(tree.ld, 3);
+        assert_eq!(tree.roots, 3);
 
         let roots = collect(tree.roots());
         assert_eq!(roots, [1, 2, 3]);
