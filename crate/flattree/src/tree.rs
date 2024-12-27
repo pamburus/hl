@@ -1,43 +1,46 @@
-use crate::storage::{Storage, StorageType};
+use crate::{
+    domain::{DefaultDomain, Domain},
+    storage::Storage,
+};
 
-pub struct FlatTree<S>
+pub struct FlatTree<T, D = DefaultDomain<T>>
 where
-    S: StorageType,
+    D: Domain<Value = T>,
 {
-    s: S::Storage,
+    s: D::Storage,
 }
 
-impl<S> FlatTree<S>
+impl<T, D> FlatTree<T, D>
 where
-    S: StorageType,
-    S::Storage: Default,
+    D: Domain<Value = T>,
+    D::Storage: Default,
 {
-    pub fn build() -> FlatTreeBuilder<S> {
+    pub fn build() -> FlatTreeBuilder<D> {
         FlatTreeBuilder::new(Default::default())
     }
 }
 
-impl<S> FlatTree<S>
+impl<T, D> FlatTree<T, D>
 where
-    S: StorageType,
+    D: Domain<Value = T>,
 {
-    pub fn build_with(storage: S::Storage) -> FlatTreeBuilder<S> {
+    pub fn build_with(storage: D::Storage) -> FlatTreeBuilder<D> {
         FlatTreeBuilder::new(storage)
     }
 }
 
-pub struct FlatTreeBuilder<S>
+pub struct FlatTreeBuilder<D>
 where
-    S: StorageType,
+    D: Domain,
 {
-    s: S::Storage,
+    s: D::Storage,
 }
 
-impl<S> FlatTreeBuilder<S>
+impl<D> FlatTreeBuilder<D>
 where
-    S: StorageType,
+    D: Domain,
 {
-    pub fn new(storage: S::Storage) -> Self {
+    pub fn new(storage: D::Storage) -> Self {
         Self { s: storage }
     }
 
@@ -49,38 +52,47 @@ where
         }
     }
 
-    pub fn done(self) -> FlatTree<S> {
+    pub fn done(self) -> FlatTree<D::Value, D> {
         FlatTree { s: self.s }
     }
 
-    pub fn add(&mut self, value: S::Value) -> &mut Self {
+    pub fn add(&mut self, value: D::Value) -> &mut Self {
         self.s.push(Item::new(value));
         self
     }
 
-    fn update(&mut self, index: usize, f: impl FnOnce(&mut Item<S::Value>)) -> &mut Self {
+    pub fn build(&mut self, value: D::Value, f: impl FnOnce(&mut Self) -> &mut Self) -> &mut Self {
+        let index = self.s.len();
+        self.add(value);
+        f(self).update(index, |item| {
+            item.parent = None;
+        });
+        self
+    }
+
+    fn update(&mut self, index: usize, f: impl FnOnce(&mut Item<D::Value>)) -> &mut Self {
         f(self.s.get_mut(index).unwrap());
         self
     }
 }
 
-impl<S> From<FlatTreeBuilder<S>> for FlatTree<S>
+impl<T, D> From<FlatTreeBuilder<D>> for FlatTree<T, D>
 where
-    S: StorageType,
+    D: Domain<Value = T>,
 {
-    fn from(builder: FlatTreeBuilder<S>) -> Self {
+    fn from(builder: FlatTreeBuilder<D>) -> Self {
         builder.done()
     }
 }
 
 // ---
 
-pub trait Build<S: StorageType>
+pub trait Build<D: Domain>
 where
     Self: Sized,
 {
-    fn add(self, value: S::Value) -> Self;
-    fn build(self, value: S::Value, f: impl FnOnce(Self) -> Self) -> Self;
+    fn add(self, value: D::Value) -> Self;
+    fn build(self, value: D::Value, f: impl FnOnce(Self) -> Self) -> Self;
 }
 
 // ---
@@ -91,11 +103,11 @@ pub struct NodeBuilder<'b, TB> {
     ld: usize,
 }
 
-impl<'b, S> NodeBuilder<'b, FlatTreeBuilder<S>>
+impl<'b, D> NodeBuilder<'b, FlatTreeBuilder<D>>
 where
-    S: StorageType,
+    D: Domain,
 {
-    pub fn add(&mut self, value: S::Value) -> &mut Self {
+    pub fn add(&mut self, value: D::Value) -> &mut Self {
         self.b.s.push(Item {
             parent: self.parent,
             ..Item::new(value)
@@ -104,7 +116,7 @@ where
         self
     }
 
-    fn end(self) -> &'b mut FlatTreeBuilder<S> {
+    fn end(self) -> &'b mut FlatTreeBuilder<D> {
         if let Some(index) = self.parent {
             let lf = self.b.s.len() - index;
             let ld = self.ld;
@@ -117,7 +129,7 @@ where
         }
     }
 
-    fn snapshot(self) -> (NodeBuilderSnapshot, &'b mut FlatTreeBuilder<S>) {
+    fn snapshot(self) -> (NodeBuilderSnapshot, &'b mut FlatTreeBuilder<D>) {
         (
             NodeBuilderSnapshot {
                 parent: self.parent,
@@ -128,18 +140,18 @@ where
     }
 }
 
-impl<'b, S> Build<S> for NodeBuilder<'b, FlatTreeBuilder<S>>
+impl<'b, D> Build<D> for NodeBuilder<'b, FlatTreeBuilder<D>>
 where
-    S: StorageType,
+    D: Domain,
 {
     #[inline]
-    fn add(mut self, value: S::Value) -> Self {
+    fn add(mut self, value: D::Value) -> Self {
         NodeBuilder::add(&mut self, value);
         self
     }
 
     #[inline]
-    fn build(mut self, value: S::Value, f: impl FnOnce(Self) -> Self) -> Self {
+    fn build(mut self, value: D::Value, f: impl FnOnce(Self) -> Self) -> Self {
         let index = self.b.s.len();
         NodeBuilder::add(&mut self, value);
 
@@ -157,12 +169,12 @@ where
     }
 }
 
-impl<'b, S> From<(NodeBuilderSnapshot, &'b mut FlatTreeBuilder<S>)> for NodeBuilder<'b, FlatTreeBuilder<S>>
+impl<'b, D> From<(NodeBuilderSnapshot, &'b mut FlatTreeBuilder<D>)> for NodeBuilder<'b, FlatTreeBuilder<D>>
 where
-    S: StorageType,
+    D: Domain,
 {
     #[inline]
-    fn from((state, b): (NodeBuilderSnapshot, &'b mut FlatTreeBuilder<S>)) -> Self {
+    fn from((state, b): (NodeBuilderSnapshot, &'b mut FlatTreeBuilder<D>)) -> Self {
         Self {
             b,
             parent: state.parent,
@@ -199,8 +211,8 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test() {
-        let mut builder = FlatTree::<Vec<_>>::build();
+    fn test1() {
+        let mut builder = FlatTree::<usize>::build();
         builder
             .root()
             .add(1)
