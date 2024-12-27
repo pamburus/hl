@@ -1,43 +1,42 @@
 // stdlib imports
 use std::vec::Vec;
 
-pub trait Storage<T>: Default {
+// local imports
+use crate::tree::Item;
+
+pub trait Storage: Default {
+    type Value;
+
     fn len(&self) -> usize;
     fn is_empty(&self) -> bool {
         self.len() == 0
     }
-    fn get(&self, index: usize) -> Option<&T>;
-    fn get_mut(&mut self, index: usize) -> Option<&mut T>;
-    fn set(&mut self, index: usize, item: T) -> Option<T>;
-    fn push(&mut self, item: T);
+    fn get(&self, index: usize) -> Option<&Item<Self::Value>>;
+    fn get_mut(&mut self, index: usize) -> Option<&mut Item<Self::Value>>;
+    fn push(&mut self, item: Item<Self::Value>);
     fn clear(&mut self);
 }
 
-impl<T> Storage<T> for Vec<T> {
+impl<T> Storage for Vec<Item<T>> {
+    type Value = T;
+
     #[inline]
     fn len(&self) -> usize {
         Vec::len(self)
     }
 
     #[inline]
-    fn get(&self, index: usize) -> Option<&T> {
+    fn get(&self, index: usize) -> Option<&Item<T>> {
         self.as_slice().get(index)
     }
 
     #[inline]
-    fn get_mut(&mut self, index: usize) -> Option<&mut T> {
+    fn get_mut(&mut self, index: usize) -> Option<&mut Item<T>> {
         self.as_mut_slice().get_mut(index)
     }
 
     #[inline]
-    fn set(&mut self, index: usize, item: T) -> Option<T> {
-        self.as_mut_slice()
-            .get_mut(index)
-            .map(|old| std::mem::replace(old, item))
-    }
-
-    #[inline]
-    fn push(&mut self, item: T) {
+    fn push(&mut self, item: Item<T>) {
         Vec::push(self, item)
     }
 
@@ -61,8 +60,6 @@ mod tests {
         assert!(!storage.is_empty());
         assert_eq!(storage.get(0), Some(&1));
         assert_eq!(storage.get_mut(0), Some(&mut 1));
-        assert_eq!(storage.set(0, 2), Some(1));
-        assert_eq!(storage.get(0), Some(&2));
         storage.clear();
         assert_eq!(storage.len(), 0);
         assert!(storage.is_empty());
