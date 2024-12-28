@@ -1009,6 +1009,7 @@ dependencies = [
  "env_logger",
  "flate2",
  "heapless",
+ "heapopt",
  "hex",
  "htp",
  "humantime",
