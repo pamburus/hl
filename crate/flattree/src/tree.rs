@@ -280,7 +280,7 @@ where
     }
 
     #[inline]
-    pub fn parents(&self) -> impl Iterator<Item = Self> + 't {
+    pub fn ancestors(&self) -> impl Iterator<Item = Self> + 't {
         let tree = self.tree;
         let mut item = self.item;
         std::iter::from_fn(move || {
@@ -597,7 +597,7 @@ mod tests {
 
         let node = tree.node(6);
         assert_eq!(*node.value(), 7);
-        let parents = collect(node.parents());
+        let parents = collect(node.ancestors());
         assert_eq!(parents, [6, 3]);
 
         let node = tree.node(2);
