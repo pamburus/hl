@@ -39,6 +39,11 @@ where
     }
 
     #[inline]
+    pub fn storage(&self) -> &S {
+        &self.storage
+    }
+
+    #[inline]
     pub fn roots(&self) -> Roots<'_, V, S> {
         Roots { tree: self }
     }
