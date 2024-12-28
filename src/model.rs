@@ -882,20 +882,22 @@ impl<'de: 'a, 'a> Deserialize<'de> for RawRecord<'a> {
     where
         D: Deserializer<'de>,
     {
-        Ok(deserializer.deserialize_map(RawRecordBuilder::<json::value::RawValue>::new())?)
+        let mut builder = FlatTree::build();
+        deserializer.deserialize_map(RawRecordNodeParser::<json::value::RawValue>::new(builder.roots()))?;
+        Ok(RawRecord { fields: builder.done() })
     }
 }
 
 // ---
 
 pub type RawRecordFields<'a> = FlatTree<RawRecordItem<'a>, RawRecordStorage<'a>>; // heapopt::Vec<(&'a str, RawValue<'a>), RAW_RECORD_FIELDS_CAPACITY>;
-pub type RawRecordItem<'a> = (&'a str, RawValue<'a>);
+type RawRecordItem<'a> = (&'a str, RawValue<'a>);
 type RawRecordNodeBuilder<'a, 'b> = flattree::NodeBuilder<'b, RawRecordStorage<'a>>;
 
-#[derive(Deref, DerefMut)]
-pub struct RawRecordStorage<'a>(RawRecordStorageInner<'a>);
+#[derive(Deref, DerefMut, Default)]
+struct RawRecordStorage<'a>(RawRecordStorageInner<'a>);
 
-pub type RawRecordStorageInner<'a> = heapopt::Vec<flattree::Item<RawRecordItem<'a>>, RAW_RECORD_FIELDS_CAPACITY>;
+type RawRecordStorageInner<'a> = heapopt::Vec<flattree::Item<RawRecordItem<'a>>, RAW_RECORD_FIELDS_CAPACITY>;
 
 impl<'a> flattree::Storage for RawRecordStorage<'a> {
     type Value = RawRecordItem<'a>;
@@ -1088,7 +1090,7 @@ impl<'a> RawRecordIterator<'a> for RawRecordLogfmtStream<'a> {
 
 // ---
 
-struct RawRecordBuilder<'a, 'b, RV>
+struct RawRecordNodeParser<'a, 'b, RV>
 where
     RV: ?Sized + 'a,
 {
@@ -1096,12 +1098,12 @@ where
     marker: PhantomData<fn() -> &'a RV>,
 }
 
-impl<'a, 'b, RV> RawRecordBuilder<'a, 'b, RV>
+impl<'a, 'b, RV> RawRecordNodeParser<'a, 'b, RV>
 where
     RV: ?Sized + 'a,
 {
     #[inline(always)]
-    fn new(node: flattree::NodeBuilder<'b, RawRecordStorage<'a>>) -> Self {
+    fn new(node: RawRecordNodeBuilder<'a, 'b>) -> Self {
         Self {
             node,
             marker: PhantomData,
@@ -1109,7 +1111,7 @@ where
     }
 }
 
-impl<'de: 'a, 'a, 'b, RV> Visitor<'de> for RawRecordBuilder<'a, 'b, RV>
+impl<'de: 'a, 'a, 'b, RV> Visitor<'de> for RawRecordNodeParser<'a, 'b, RV>
 where
     RV: ?Sized + 'a,
     &'a RV: Deserialize<'de> + 'a,
@@ -1121,14 +1123,14 @@ where
         formatter.write_str("json object")
     }
 
-    fn visit_map<M: MapAccess<'de>>(mut self, mut access: M) -> std::result::Result<Self::Value, M::Error> {
-        while let Some((key, value)) = access.next_entry::<&'a str, &RV>()? {
+    fn visit_map<M: MapAccess<'de>>(mut self, mut map: M) -> std::result::Result<Self::Value, M::Error> {
+        while let Some((key, value)) = map.next_entry::<&'a str, &RV>()? {
             let value = value.into();
             match value {
-                RawValue::Object(_) => {
+                RawValue::Object(obj) => {
                     self.node = self
                         .node
-                        .build((key, value), |node| access.next_value_seed(RawRecordBuilder::new(node)));
+                        .build((key, value), |node| map.next_value_seed(RawRecordNodeParser::new(node)));
                 }
                 _ => {
                     self.node = self.node.add((key, value));
@@ -1150,9 +1152,9 @@ impl<'de: 'a, 'a> Deserialize<'de> for LogfmtRawRecord<'a> {
     where
         D: Deserializer<'de>,
     {
-        Ok(Self(
-            deserializer.deserialize_map(RawRecordBuilder::<logfmt::raw::RawValue>::new())?,
-        ))
+        let mut builder = FlatTree::build();
+        deserializer.deserialize_map(RawRecordNodeParser::<logfmt::raw::RawValue>::new(builder.roots()))?;
+        Ok(Self(RawRecord { fields: builder.done() }))
     }
 }
 
