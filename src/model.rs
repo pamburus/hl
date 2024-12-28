@@ -883,7 +883,7 @@ impl<'de: 'a, 'a> Deserialize<'de> for RawRecord<'a> {
         D: Deserializer<'de>,
     {
         let mut builder = FlatTree::build();
-        deserializer.deserialize_map(RawRecordRootParser::<json::value::RawValue>::new(builder.roots()))?;
+        deserializer.deserialize_map(RawRecordRootParser::<json::value::RawValue>::new(&mut builder))?;
         Ok(RawRecord { fields: builder.done() })
     }
 }
@@ -1166,40 +1166,38 @@ where
 
 // ---
 
-struct RawRecordRootParser<'a, 'b, RV>
+struct RawRecordRootParser<'a, RV>
 where
     RV: ?Sized + 'a,
 {
-    tree: RawRecordRootBuilder<'a, 'b>,
     marker: PhantomData<fn() -> &'a RV>,
 }
 
-impl<'a, 'b, RV> RawRecordRootParser<'a, 'b, RV>
+impl<'a, RV> RawRecordRootParser<'a, RV>
 where
     RV: ?Sized + 'a,
 {
     #[inline(always)]
-    fn new(tree: RawRecordRootBuilder<'a, 'b>) -> Self {
-        Self {
-            tree,
-            marker: PhantomData,
-        }
+    fn new() -> Self {
+        Self { marker: PhantomData }
     }
 }
 
-impl<'de: 'a, 'a, 'b, RV> Visitor<'de> for RawRecordRootParser<'a, 'b, RV>
+impl<'de: 'a, 'a, RV> Visitor<'de> for RawRecordRootParser<'a, RV>
 where
     RV: ?Sized + 'a,
     &'a RV: Deserialize<'de> + 'a,
     RawValue<'a>: From<&'a RV>,
 {
-    type Value = ();
+    type Value = RawRecord<'a>;
 
     fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
         formatter.write_str("json object")
     }
 
     fn visit_map<M: MapAccess<'de>>(mut self, mut map: M) -> std::result::Result<Self::Value, M::Error> {
+        let mut tree = FlatTree::build();
+
         while let Some((key, value)) = map.next_entry::<&'a str, &RV>()? {
             let value = value.into();
             match value {
@@ -1209,12 +1207,12 @@ where
                         .build((key, value), |node| map.next_value_seed(RawRecordRootParser::new(node)));
                 }
                 _ => {
-                    self.node = self.node.add((key, value));
+                    tree.add((key, value));
                 }
             }
         }
 
-        Ok(())
+        Ok(RawRecord { fields: tree.done() })
     }
 }
 
@@ -1228,9 +1226,7 @@ impl<'de: 'a, 'a> Deserialize<'de> for LogfmtRawRecord<'a> {
     where
         D: Deserializer<'de>,
     {
-        let mut builder = FlatTree::build();
-        deserializer.deserialize_map(RawRecordRootParser::<logfmt::raw::RawValue>::new(builder.roots()))?;
-        Ok(Self(RawRecord { fields: builder.done() }))
+        Ok(deserializer.deserialize_map(RawRecordRootParser::<logfmt::raw::RawValue>::new())?)
     }
 }
 
