@@ -8,7 +8,8 @@ license.workspace = true
 
 [dependencies]
 derive-where = "1"
-heapless = "0"
+heapless = { git = "https://github.com/pamburus/heapless.git", branch = "feature/indexmap/merged" }
+indexmap = "2"
 
 [dev-dependencies]
 more-asserts = "0"
