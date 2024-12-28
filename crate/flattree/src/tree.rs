@@ -5,41 +5,42 @@ use std::marker::PhantomData;
 use derive_where::derive_where;
 
 // local imports
-use crate::storage::Storage;
+use crate::storage::{Storage, StorageType, VecStorage};
 
 // ---
 
-pub struct FlatTree<V, S = Vec<Item<V>>>
+pub struct FlatTree<V, S = VecStorage>
 where
-    S: Storage<Value = V>,
+    S: StorageType<V>,
 {
-    storage: S,
+    storage: S::Storage,
     roots: usize,
     _marker: PhantomData<V>,
 }
 
 impl<V, S> FlatTree<V, S>
 where
-    S: Storage<Value = V> + Default,
+    S: StorageType<V>,
+    S::Storage: Default,
 {
     #[inline]
-    pub fn build() -> FlatTreeBuilder<S> {
+    pub fn build() -> FlatTreeBuilder<V, S> {
         FlatTreeBuilder::new(Default::default())
     }
 }
 
 impl<V, S> FlatTree<V, S>
 where
-    S: Storage<Value = V>,
+    S: StorageType<V>,
 {
     #[inline]
-    pub fn build_with_storage(mut storage: S) -> FlatTreeBuilder<S> {
+    pub fn build_with_storage(mut storage: S::Storage) -> FlatTreeBuilder<V, S> {
         storage.clear();
         FlatTreeBuilder::new(storage)
     }
 
     #[inline]
-    pub fn storage(&self) -> &S {
+    pub fn storage(&self) -> &S::Storage {
         &self.storage
     }
 
@@ -87,14 +88,14 @@ where
 #[derive_where(Clone, Copy)]
 pub struct Roots<'t, V, S>
 where
-    S: Storage<Value = V>,
+    S: StorageType<V>,
 {
     tree: &'t FlatTree<V, S>,
 }
 
 impl<'t, V, S> Roots<'t, V, S>
 where
-    S: Storage<Value = V>,
+    S: StorageType<V>,
 {
     #[inline]
     pub fn len(&self) -> usize {
@@ -114,7 +115,7 @@ where
 
 impl<'t, V, S> IntoIterator for Roots<'t, V, S>
 where
-    S: Storage<Value = V>,
+    S: StorageType<V>,
 {
     type Item = Node<'t, V, S>;
     type IntoIter = SiblingsIterator<'t, V, S>;
@@ -134,7 +135,7 @@ where
 #[derive_where(Clone, Copy)]
 pub struct Nodes<'t, V, S>
 where
-    S: Storage<Value = V>,
+    S: StorageType<V>,
 {
     tree: &'t FlatTree<V, S>,
     start: usize,
@@ -143,7 +144,7 @@ where
 
 impl<'t, V, S> Nodes<'t, V, S>
 where
-    S: Storage<Value = V>,
+    S: StorageType<V>,
 {
     #[inline]
     pub fn len(&self) -> usize {
@@ -163,7 +164,7 @@ where
 
 impl<'t, V, S> IntoIterator for Nodes<'t, V, S>
 where
-    S: Storage<Value = V>,
+    S: StorageType<V>,
 {
     type Item = Node<'t, V, S>;
     type IntoIter = NodesIterator<'t, V, S>;
@@ -180,7 +181,7 @@ where
 
 pub struct NodesIterator<'t, V, S>
 where
-    S: Storage<Value = V>,
+    S: StorageType<V>,
 {
     tree: &'t FlatTree<V, S>,
     next: usize,
@@ -189,7 +190,7 @@ where
 
 impl<'t, V, S> Iterator for NodesIterator<'t, V, S>
 where
-    S: Storage<Value = V>,
+    S: StorageType<V>,
 {
     type Item = Node<'t, V, S>;
 
@@ -221,7 +222,7 @@ where
 
 pub struct SiblingsIterator<'t, V, S>
 where
-    S: Storage<Value = V>,
+    S: StorageType<V>,
 {
     tree: &'t FlatTree<V, S>,
     next: usize,
@@ -230,7 +231,7 @@ where
 
 impl<'t, V, S> Iterator for SiblingsIterator<'t, V, S>
 where
-    S: Storage<Value = V>,
+    S: StorageType<V>,
 {
     type Item = Node<'t, V, S>;
 
@@ -263,7 +264,7 @@ where
 #[derive_where(Clone, Copy)]
 pub struct Node<'t, V, S>
 where
-    S: Storage<Value = V>,
+    S: StorageType<V>,
 {
     tree: &'t FlatTree<V, S>,
     index: usize,
@@ -272,7 +273,7 @@ where
 
 impl<'t, V, S> Node<'t, V, S>
 where
-    S: Storage<Value = V>,
+    S: StorageType<V>,
 {
     #[inline]
     pub fn value(&self) -> &V {
@@ -329,7 +330,7 @@ where
 #[derive_where(Clone, Copy)]
 pub struct Children<'t, V, S>
 where
-    S: Storage<Value = V>,
+    S: StorageType<V>,
 {
     tree: &'t FlatTree<V, S>,
     index: usize,
@@ -338,7 +339,7 @@ where
 
 impl<'t, V, S> Children<'t, V, S>
 where
-    S: Storage<Value = V>,
+    S: StorageType<V>,
 {
     #[inline]
     pub fn len(&self) -> usize {
@@ -358,7 +359,7 @@ where
 
 impl<'t, V, S> IntoIterator for Children<'t, V, S>
 where
-    S: Storage<Value = V>,
+    S: StorageType<V>,
 {
     type Item = Node<'t, V, S>;
     type IntoIter = SiblingsIterator<'t, V, S>;
@@ -375,22 +376,30 @@ where
 
 // ---
 
-pub struct FlatTreeBuilder<S> {
-    storage: S,
+pub struct FlatTreeBuilder<V, S>
+where
+    S: StorageType<V>,
+{
+    storage: S::Storage,
     roots: usize,
+    _marker: PhantomData<V>,
 }
 
-impl<S> FlatTreeBuilder<S>
+impl<V, S> FlatTreeBuilder<V, S>
 where
-    S: Storage,
+    S: StorageType<V>,
 {
     #[inline]
-    pub fn new(storage: S) -> Self {
-        Self { storage, roots: 0 }
+    pub fn new(storage: S::Storage) -> Self {
+        Self {
+            storage,
+            roots: 0,
+            _marker: PhantomData,
+        }
     }
 
     #[inline]
-    pub fn roots<'b>(&'b mut self) -> NodeBuilder<'b, S> {
+    pub fn roots<'b>(&'b mut self) -> NodeBuilder<'b, V, S> {
         NodeBuilder {
             builder: self,
             index: None,
@@ -399,7 +408,7 @@ where
     }
 
     #[inline]
-    pub fn done(self) -> FlatTree<S::Value, S> {
+    pub fn done(self) -> FlatTree<V, S> {
         FlatTree {
             storage: self.storage,
             roots: self.roots,
@@ -408,14 +417,14 @@ where
     }
 
     #[inline]
-    pub fn add(mut self, value: S::Value) -> Self {
+    pub fn add(mut self, value: V) -> Self {
         self.storage.push(Item::new(value));
         self.roots += 1;
         self
     }
 
     #[inline]
-    pub fn build(mut self, value: S::Value, f: impl FnOnce(NodeBuilder<'_, S>) -> NodeBuilder<'_, S>) -> Self {
+    pub fn build(mut self, value: V, f: impl FnOnce(NodeBuilder<'_, V, S>) -> NodeBuilder<'_, V, S>) -> Self {
         let index = self.storage.len();
         self = self.add(value);
 
@@ -430,38 +439,38 @@ where
     }
 
     #[inline]
-    fn update(&mut self, index: usize, f: impl FnOnce(&mut Item<S::Value>)) -> &mut Self {
+    fn update(&mut self, index: usize, f: impl FnOnce(&mut Item<V>)) -> &mut Self {
         f(self.storage.get_mut(index).unwrap());
         self
     }
 }
 
-impl<T, S> From<FlatTreeBuilder<S>> for FlatTree<T, S>
+impl<V, S> From<FlatTreeBuilder<V, S>> for FlatTree<V, S>
 where
-    S: Storage<Value = T>,
+    S: StorageType<V>,
 {
-    fn from(builder: FlatTreeBuilder<S>) -> Self {
+    fn from(builder: FlatTreeBuilder<V, S>) -> Self {
         builder.done()
     }
 }
 
 // ---
 
-pub struct NodeBuilder<'b, S>
+pub struct NodeBuilder<'b, V, S>
 where
-    S: Storage,
+    S: StorageType<V>,
 {
-    builder: &'b mut FlatTreeBuilder<S>,
+    builder: &'b mut FlatTreeBuilder<V, S>,
     index: Option<usize>,
     children: usize,
 }
 
-impl<'b, S> NodeBuilder<'b, S>
+impl<'b, V, S> NodeBuilder<'b, V, S>
 where
-    S: Storage,
+    S: StorageType<V>,
 {
     #[inline]
-    pub fn add(mut self, value: S::Value) -> Self {
+    pub fn add(mut self, value: V) -> Self {
         self.builder.storage.push(Item {
             parent: self.index,
             ..Item::new(value)
@@ -474,7 +483,7 @@ where
     }
 
     #[inline]
-    pub fn build(mut self, value: S::Value, f: impl FnOnce(Self) -> Self) -> Self {
+    pub fn build(mut self, value: V, f: impl FnOnce(Self) -> Self) -> Self {
         let index = self.builder.storage.len();
         self = self.add(value);
 
@@ -492,7 +501,7 @@ where
     }
 
     #[inline]
-    fn end(mut self) -> &'b mut FlatTreeBuilder<S> {
+    fn end(mut self) -> &'b mut FlatTreeBuilder<V, S> {
         self.close();
         self.builder
     }
@@ -512,7 +521,7 @@ where
     }
 
     #[inline]
-    fn snapshot(self) -> (NodeBuilderSnapshot, &'b mut FlatTreeBuilder<S>)
+    fn snapshot(self) -> (NodeBuilderSnapshot, &'b mut FlatTreeBuilder<V, S>)
     where
         Self: 'b,
     {
@@ -526,12 +535,12 @@ where
     }
 }
 
-impl<'b, S> From<(NodeBuilderSnapshot, &'b mut FlatTreeBuilder<S>)> for NodeBuilder<'b, S>
+impl<'b, V, S> From<(NodeBuilderSnapshot, &'b mut FlatTreeBuilder<V, S>)> for NodeBuilder<'b, V, S>
 where
-    S: Storage,
+    S: StorageType<V>,
 {
     #[inline]
-    fn from((state, builder): (NodeBuilderSnapshot, &'b mut FlatTreeBuilder<S>)) -> Self {
+    fn from((state, builder): (NodeBuilderSnapshot, &'b mut FlatTreeBuilder<V, S>)) -> Self {
         Self {
             builder,
             index: state.parent,
@@ -578,7 +587,7 @@ mod tests {
     fn collect<'t, V, S, I>(nodes: I) -> Vec<V>
     where
         I: IntoIterator<Item = Node<'t, V, S>> + 't,
-        S: Storage<Value = V> + 't,
+        S: StorageType<V> + 't,
         V: Copy + 'static,
     {
         nodes.into_iter().map(|n| *n.value()).collect()
