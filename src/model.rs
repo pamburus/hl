@@ -879,7 +879,7 @@ impl<'de: 'a, 'a> Deserialize<'de> for RawRecord<'a> {
     where
         D: Deserializer<'de>,
     {
-        Ok(deserializer.deserialize_map(RawRecordVisitor::<json::value::RawValue>::new())?)
+        Ok(deserializer.deserialize_map(RawRecordBuilder::<json::value::RawValue>::new())?)
     }
 }
 
@@ -1055,14 +1055,14 @@ impl<'a> RawRecordIterator<'a> for RawRecordLogfmtStream<'a> {
 
 // ---
 
-struct RawRecordVisitor<'a, RV>
+struct RawRecordBuilder<'a, RV>
 where
     RV: ?Sized + 'a,
 {
-    marker: PhantomData<fn() -> (RawRecord<'a>, &'a RV)>,
+    marker: PhantomData<fn() -> &'a RV>,
 }
 
-impl<'a, RV> RawRecordVisitor<'a, RV>
+impl<'a, RV> RawRecordBuilder<'a, RV>
 where
     RV: ?Sized + 'a,
 {
@@ -1072,22 +1072,22 @@ where
     }
 }
 
-impl<'de: 'a, 'a, RV> Visitor<'de> for RawRecordVisitor<'a, RV>
+impl<'de: 'a, 'a, RV> Visitor<'de> for RawRecordBuilder<'a, RV>
 where
     RV: ?Sized + 'a,
     &'a RV: Deserialize<'de> + 'a,
     RawValue<'a>: std::convert::From<&'a RV>,
 {
     type Value = RawRecord<'a>;
+
     fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-        formatter.write_str("object json")
+        formatter.write_str("json object")
     }
 
     fn visit_map<M: MapAccess<'de>>(self, mut access: M) -> std::result::Result<Self::Value, M::Error> {
         let mut fields = heapopt::Vec::with_capacity(access.size_hint().unwrap_or(0));
 
-        while let Some(key) = access.next_key::<&'a str>()? {
-            let value: &RV = access.next_value()?;
+        while let Some((key, value)) = access.next_entry::<&'a str, &RV>()? {
             fields.push((key, value.into()));
         }
 
@@ -1106,7 +1106,7 @@ impl<'de: 'a, 'a> Deserialize<'de> for LogfmtRawRecord<'a> {
         D: Deserializer<'de>,
     {
         Ok(Self(
-            deserializer.deserialize_map(RawRecordVisitor::<logfmt::raw::RawValue>::new())?,
+            deserializer.deserialize_map(RawRecordBuilder::<logfmt::raw::RawValue>::new())?,
         ))
     }
 }
