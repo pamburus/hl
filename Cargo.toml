@@ -1,5 +1,12 @@
 [workspace]
-members = [".", "crate/encstr", "crate/heapopt"]
+members = [
+    ".", 
+    "crate/encstr",
+    "crate/enumset-ext", 
+    "crate/flattree", 
+    "crate/heapopt", 
+    "crate/serde-logfmt",
+]
 
 [workspace.package]
 repository = "https://github.com/pamburus/hl"
