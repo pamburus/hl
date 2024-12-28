@@ -5,7 +5,7 @@ High performance and convenient features are the main goals.
 
 ## Features overview
 
-* [Automatic usage](#automatic-usage-of-pager) of the [less](https://github.com/vbwagner/less) pager by default for convenience.
+* [Automatic usage](#automatic-usage-of-pager) of the [less](https://greenwoodsoftware.com/less/) pager by default for convenience.
 * Log streaming with the `-P` flag that disables the pager.
 * Log record [filtering by field key/value pairs](#filtering-by-field-values) with the `-f` option with support for hierarchical keys.
 * Quick and easy [filtering by level](#quick-filtering-by-log-level) with the `-l` option.
