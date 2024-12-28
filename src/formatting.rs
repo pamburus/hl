@@ -326,8 +326,8 @@ impl KeyPrefix {
 
     #[inline]
     fn format<B: Push<u8>>(&self, buf: &mut B) {
-        buf.extend_from_slice(&self.value.head);
-        buf.extend_from_slice(&self.value.tail);
+        buf.extend_from_slice(&self.value.as_slices().0);
+        buf.extend_from_slice(&self.value.as_slices().1);
     }
 
     #[inline]
@@ -985,10 +985,7 @@ mod tests {
     impl<'a> RecordExt<'a> for Record<'a> {
         fn from_fields(fields: &[(&'a str, RawValue<'a>)]) -> Record<'a> {
             Record {
-                fields: RecordFields {
-                    head: heapless::Vec::from_slice(fields).unwrap(),
-                    ..Default::default()
-                },
+                fields: RecordFields::from_slice(fields),
                 ..Default::default()
             }
         }
@@ -1003,10 +1000,7 @@ mod tests {
             level: Some(Level::Debug),
             logger: Some("tl"),
             caller: Some(Caller::Text("tc")),
-            fields: RecordFields {
-                head: heapless::Vec::from_slice(&[("k_a", RawValue::from(RawObject::Json(&ka)))]).unwrap(),
-                ..Default::default()
-            },
+            fields: RecordFields::from_slice(&[("k_a", RawValue::from(RawObject::Json(&ka)))]),
             ..Default::default()
         };
 

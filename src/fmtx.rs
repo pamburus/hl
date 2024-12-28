@@ -24,65 +24,7 @@ where
 
 // ---
 
-#[derive(Default)]
-pub struct OptimizedBuf<T, const N: usize> {
-    pub head: heapless::Vec<T, N>,
-    pub tail: Vec<T>,
-}
-
-impl<T, const N: usize> OptimizedBuf<T, N>
-where
-    T: Clone,
-{
-    #[inline]
-    pub fn new() -> Self {
-        Self {
-            head: heapless::Vec::new(),
-            tail: Vec::new(),
-        }
-    }
-
-    #[inline]
-    pub fn len(&self) -> usize {
-        self.head.len() + self.tail.len()
-    }
-
-    #[inline]
-    pub fn clear(&mut self) {
-        self.head.clear();
-        self.tail.clear();
-    }
-
-    #[inline]
-    pub fn truncate(&mut self, len: usize) {
-        if len <= self.head.len() {
-            self.head.truncate(len);
-            self.tail.clear();
-        } else {
-            self.tail.truncate(len - self.head.len());
-        }
-    }
-
-    #[inline]
-    pub fn push(&mut self, value: T) {
-        if self.head.len() < N {
-            self.head.push(value).ok();
-        } else {
-            self.tail.push(value);
-        }
-    }
-
-    #[inline]
-    pub fn extend_from_slice(&mut self, values: &[T]) {
-        if self.head.len() + values.len() <= N {
-            self.head.extend_from_slice(values).ok();
-        } else {
-            let n = N - self.head.len();
-            self.head.extend_from_slice(&values[..n]).ok();
-            self.tail.extend_from_slice(&values[n..]);
-        }
-    }
-}
+pub type OptimizedBuf<T, const N: usize> = heapopt::Vec<T, N>;
 
 impl<T, const N: usize> Push<T> for OptimizedBuf<T, N>
 where
@@ -495,8 +437,8 @@ mod tests {
         assert_eq!(buf.len(), 4);
         buf.push(5);
         assert_eq!(buf.len(), 5);
-        assert_eq!(buf.head.as_slice(), &[1, 2, 3, 4]);
-        assert_eq!(buf.tail.as_slice(), &[5]);
+        assert_eq!(buf.as_slices().0, &[1, 2, 3, 4]);
+        assert_eq!(buf.as_slices().1, &[5]);
     }
 
     #[test]
@@ -511,8 +453,8 @@ mod tests {
         assert_eq!(buf.len(), 3);
         buf.extend_from_slice(&[4, 5, 6]);
         assert_eq!(buf.len(), 6);
-        assert_eq!(buf.head.as_slice(), &[1, 2, 3, 4]);
-        assert_eq!(buf.tail.as_slice(), &[5, 6]);
+        assert_eq!(buf.as_slices().0, &[1, 2, 3, 4]);
+        assert_eq!(buf.as_slices().1, &[5, 6]);
     }
 
     #[test]
@@ -523,32 +465,32 @@ mod tests {
         assert_eq!(buf.len(), 7);
         buf.truncate(8);
         assert_eq!(buf.len(), 7);
-        assert_eq!(buf.head.as_slice(), &[1, 2, 3, 4]);
-        assert_eq!(buf.tail.as_slice(), &[5, 6, 7]);
+        assert_eq!(buf.as_slices().0, &[1, 2, 3, 4]);
+        assert_eq!(buf.as_slices().1, &[5, 6, 7]);
         buf.truncate(7);
         assert_eq!(buf.len(), 7);
-        assert_eq!(buf.head.as_slice(), &[1, 2, 3, 4]);
-        assert_eq!(buf.tail.as_slice(), &[5, 6, 7]);
+        assert_eq!(buf.as_slices().0, &[1, 2, 3, 4]);
+        assert_eq!(buf.as_slices().1, &[5, 6, 7]);
         buf.truncate(6);
         assert_eq!(buf.len(), 6);
-        assert_eq!(buf.head.as_slice(), &[1, 2, 3, 4]);
-        assert_eq!(buf.tail.as_slice(), &[5, 6]);
+        assert_eq!(buf.as_slices().0, &[1, 2, 3, 4]);
+        assert_eq!(buf.as_slices().1, &[5, 6]);
         buf.truncate(4);
         assert_eq!(buf.len(), 4);
-        assert_eq!(buf.head.as_slice(), &[1, 2, 3, 4]);
-        assert_eq!(buf.tail.len(), 0);
+        assert_eq!(buf.as_slices().0, &[1, 2, 3, 4]);
+        assert_eq!(buf.as_slices().1.len(), 0);
         buf.truncate(4);
         buf.extend_from_slice(&[8, 9]);
         assert_eq!(buf.len(), 6);
-        assert_eq!(buf.head.as_slice(), &[1, 2, 3, 4]);
-        assert_eq!(buf.tail.as_slice(), &[8, 9]);
+        assert_eq!(buf.as_slices().0, &[1, 2, 3, 4]);
+        assert_eq!(buf.as_slices().1, &[8, 9]);
         buf.truncate(3);
         assert_eq!(buf.len(), 3);
-        assert_eq!(buf.head.as_slice(), &[1, 2, 3]);
-        assert_eq!(buf.tail.len(), 0);
+        assert_eq!(buf.as_slices().0, &[1, 2, 3]);
+        assert_eq!(buf.as_slices().1.len(), 0);
         buf.truncate(0);
         assert_eq!(buf.len(), 0);
-        assert_eq!(buf.head.len(), 0);
-        assert_eq!(buf.tail.len(), 0);
+        assert_eq!(buf.as_slices().0.len(), 0);
+        assert_eq!(buf.as_slices().1.len(), 0);
     }
 }

@@ -1,0 +1,14 @@
+[package]
+name = "heapopt"
+version = "0.1.0"
+repository.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+derive-where = "1"
+heapless = "0"
+
+[dev-dependencies]
+more-asserts = "0"

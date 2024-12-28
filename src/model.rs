@@ -322,7 +322,7 @@ pub struct Record<'a> {
 impl<'a> Record<'a> {
     #[inline(always)]
     pub fn fields(&self) -> impl Iterator<Item = &(&'a str, RawValue<'a>)> {
-        self.fields.head.iter().chain(self.fields.tail.iter())
+        self.fields.iter()
     }
 
     #[inline(always)]
@@ -342,24 +342,13 @@ impl<'a> Record<'a> {
             level: None,
             logger: None,
             caller: None,
-            fields: RecordFields {
-                head: heapless::Vec::new(),
-                tail: if capacity > RECORD_EXTRA_CAPACITY {
-                    Vec::with_capacity(capacity - RECORD_EXTRA_CAPACITY)
-                } else {
-                    Vec::new()
-                },
-            },
+            fields: RecordFields::with_capacity(capacity),
             predefined: heapless::Vec::new(),
         }
     }
 }
 
-#[derive(Default)]
-pub struct RecordFields<'a> {
-    pub(crate) head: heapless::Vec<(&'a str, RawValue<'a>), RECORD_EXTRA_CAPACITY>,
-    pub(crate) tail: Vec<(&'a str, RawValue<'a>)>,
-}
+pub type RecordFields<'a> = heapopt::Vec<(&'a str, RawValue<'a>), RECORD_EXTRA_CAPACITY>;
 
 // ---
 
@@ -660,10 +649,7 @@ impl ParserSettingsBlock {
                 return;
             }
         }
-        match to.fields.head.push((key, value)) {
-            Ok(_) => {}
-            Err(value) => to.fields.tail.push(value),
-        }
+        to.fields.push((key, value));
     }
 
     #[inline(always)]
@@ -899,17 +885,7 @@ impl<'de: 'a, 'a> Deserialize<'de> for RawRecord<'a> {
 
 // ---
 
-pub struct RawRecordFields<'a> {
-    head: heapless::Vec<(&'a str, RawValue<'a>), RAW_RECORD_FIELDS_CAPACITY>,
-    tail: Vec<(&'a str, RawValue<'a>)>,
-}
-
-impl<'a> RawRecordFields<'a> {
-    #[inline]
-    pub fn iter(&self) -> impl Iterator<Item = &(&'a str, RawValue<'a>)> {
-        self.head.iter().chain(self.tail.iter())
-    }
-}
+pub type RawRecordFields<'a> = heapopt::Vec<(&'a str, RawValue<'a>), RAW_RECORD_FIELDS_CAPACITY>;
 
 // ---
 
@@ -1108,23 +1084,14 @@ where
     }
 
     fn visit_map<M: MapAccess<'de>>(self, mut access: M) -> std::result::Result<Self::Value, M::Error> {
-        let mut head = heapless::Vec::new();
-        let count = access.size_hint().unwrap_or(0);
-        let mut tail = match count > RAW_RECORD_FIELDS_CAPACITY {
-            false => Vec::new(),
-            true => Vec::with_capacity(count - RAW_RECORD_FIELDS_CAPACITY),
-        };
+        let mut fields = heapopt::Vec::with_capacity(access.size_hint().unwrap_or(0));
+
         while let Some(key) = access.next_key::<&'a str>()? {
             let value: &RV = access.next_value()?;
-            match head.push((key, value.into())) {
-                Ok(_) => {}
-                Err(value) => tail.push(value),
-            }
+            fields.push((key, value.into()));
         }
 
-        Ok(RawRecord {
-            fields: RawRecordFields { head, tail },
-        })
+        Ok(RawRecord { fields })
     }
 }
 
@@ -1766,8 +1733,8 @@ mod tests {
 
         let rec = stream.next().unwrap().unwrap();
         assert_eq!(rec.prefix, b"");
-        assert_eq!(rec.record.fields.head.len(), 0);
-        assert_eq!(rec.record.fields.tail.len(), 0);
+        assert_eq!(rec.record.fields.as_slices().0.len(), 0);
+        assert_eq!(rec.record.fields.as_slices().1.len(), 0);
     }
 
     #[test]

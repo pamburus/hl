@@ -632,6 +632,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "derive-where"
+version = "1.2.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "62d671cc41a825ebabc75757b62d3d168c577f9149b2d49ece1dad1f72119d25"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "derive_more"
 version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -933,6 +944,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "heapopt"
+version = "0.1.0"
+dependencies = [
+ "derive-where",
+ "heapless",
+ "more-asserts",
+]
+
+[[package]]
 name = "heck"
 version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -989,6 +1009,7 @@ dependencies = [
  "env_logger",
  "flate2",
  "heapless",
+ "heapopt",
  "hex",
  "htp",
  "humantime",
@@ -1327,6 +1348,12 @@ dependencies = [
  "quote",
  "syn",
 ]
+
+[[package]]
+name = "more-asserts"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1fafa6961cabd9c63bcd77a45d7e3b7f3b552b70417831fb0f56db717e72407e"
 
 [[package]]
 name = "nonzero_ext"
