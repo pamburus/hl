@@ -944,11 +944,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "heapless"
+version = "0.8.0"
+source = "git+https://github.com/pamburus/heapless.git?branch=feature%2Findexmap%2Fmerged#a8d98ebf6d236b804961d97e10a6d35b7d29b54f"
+dependencies = [
+ "hash32",
+ "stable_deref_trait",
+]
+
+[[package]]
 name = "heapopt"
 version = "0.1.0"
 dependencies = [
  "derive-where",
- "heapless",
+ "heapless 0.8.0 (git+https://github.com/pamburus/heapless.git?branch=feature%2Findexmap%2Fmerged)",
+ "indexmap",
  "more-asserts",
 ]
 
@@ -1008,7 +1018,7 @@ dependencies = [
  "enumset-ext",
  "env_logger",
  "flate2",
- "heapless",
+ "heapless 0.8.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "heapopt",
  "hex",
  "htp",
