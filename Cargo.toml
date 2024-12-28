@@ -1,10 +1,17 @@
 [workspace]
-members = [".", "crate/encstr", "crate/heapopt"]
+members = [
+    ".", 
+    "crate/encstr",
+    "crate/enumset-ext", 
+    "crate/flattree", 
+    "crate/heapopt", 
+    "crate/serde-logfmt",
+]
 
 [workspace.package]
 repository = "https://github.com/pamburus/hl"
 authors = ["Pavel Ivanov <mr.pavel.ivanov@gmail.com>"]
-version = "0.30.1"
+version = "0.31.0-alpha.1"
 edition = "2021"
 license = "MIT"
 
@@ -43,7 +50,7 @@ crossbeam-channel = "0"
 crossbeam-queue = "0"
 crossbeam-utils = "0"
 deko = "0"
-derive_more = {version="1", features = ["deref", "from"]}
+derive_more = {version="1", features = ["deref", "deref_mut", "from"]}
 dirs = "5"
 dirs-sys = "0"
 encstr = { path = "./crate/encstr" }
@@ -52,6 +59,7 @@ enumset = "1"
 enumset-ext = { path = "./crate/enumset-ext" }
 env_logger = "0"
 flate2 = "1"
+flattree = { path = "./crate/flattree" }
 heapless = "0"
 heapopt = { path = "./crate/heapopt" }
 hex = "0"

@@ -6,10 +6,14 @@ use std::{
     ops::{Index, IndexMut},
 };
 
+// third-party imports
+use derive_where::derive_where;
+
 // ---
 
 /// An ordered hash map that can store up to `N` elements on the stack.
-#[derive(Default, Clone, Debug)]
+#[derive(Clone, Debug)]
+#[derive_where(Default)]
 pub struct IndexMap<K, V, const N: usize> {
     pub head: heapless::FnvIndexMap<K, V, N>,
     pub tail: indexmap::IndexMap<K, V>,
