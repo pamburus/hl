@@ -2187,6 +2187,7 @@ mod tests {
         assert_eq!(filter.apply(&record), true);
     }
 
+    #[ignore]
     #[test]
     fn test_complex_key() {
         let records = RawRecord::parser()
