@@ -275,7 +275,7 @@ where
     S: Storage<Value = V>,
 {
     #[inline]
-    pub fn value(&self) -> &V {
+    pub fn value(&self) -> &'t V {
         &self.item.value
     }
 

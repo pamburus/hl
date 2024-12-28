@@ -1025,6 +1025,7 @@ dependencies = [
  "enumset-ext",
  "env_logger",
  "flate2",
+ "flattree",
  "heapless 0.8.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "heapopt",
  "hex",

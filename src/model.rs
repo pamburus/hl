@@ -12,6 +12,7 @@ use std::{
 
 // third-party imports
 use chrono::{DateTime, Utc};
+use derive_more::{Deref, DerefMut};
 use regex::Regex;
 use serde::de::{Deserialize, Deserializer, MapAccess, SeqAccess, Visitor};
 use serde_json::{self as json};
@@ -20,6 +21,7 @@ use wildflower::Pattern;
 
 // other local crates
 use encstr::{AnyEncodedString, EncodedString};
+use flattree::FlatTree;
 use serde_logfmt::logfmt;
 
 // local imports
@@ -865,7 +867,7 @@ pub struct RawRecord<'a> {
 impl<'a> RawRecord<'a> {
     #[inline]
     pub fn fields(&self) -> impl Iterator<Item = &(&'a str, RawValue<'a>)> {
-        self.fields.iter()
+        self.fields.roots().iter().map(|x| x.value())
     }
 
     #[inline]
@@ -886,7 +888,37 @@ impl<'de: 'a, 'a> Deserialize<'de> for RawRecord<'a> {
 
 // ---
 
-pub type RawRecordFields<'a> = heapopt::Vec<(&'a str, RawValue<'a>), RAW_RECORD_FIELDS_CAPACITY>;
+pub type RawRecordFields<'a> = FlatTree<RawRecordItem<'a>, RawRecordStorage<'a>>; // heapopt::Vec<(&'a str, RawValue<'a>), RAW_RECORD_FIELDS_CAPACITY>;
+pub type RawRecordItem<'a> = (&'a str, RawValue<'a>);
+type RawRecordNodeBuilder<'a, 'b> = flattree::NodeBuilder<'b, RawRecordStorage<'a>>;
+
+#[derive(Deref, DerefMut)]
+pub struct RawRecordStorage<'a>(RawRecordStorageInner<'a>);
+
+pub type RawRecordStorageInner<'a> = heapopt::Vec<flattree::Item<RawRecordItem<'a>>, RAW_RECORD_FIELDS_CAPACITY>;
+
+impl<'a> flattree::Storage for RawRecordStorage<'a> {
+    type Value = RawRecordItem<'a>;
+
+    fn len(&self) -> usize {
+        RawRecordStorageInner::len(&**self)
+    }
+
+    fn get(&self, index: usize) -> Option<&flattree::Item<Self::Value>> {
+        RawRecordStorageInner::get(&**self, index)
+    }
+
+    fn get_mut(&mut self, index: usize) -> Option<&mut flattree::Item<Self::Value>> {
+        RawRecordStorageInner::get_mut(&mut **self, index)
+    }
+    fn push(&mut self, item: flattree::Item<Self::Value>) {
+        RawRecordStorageInner::push(&mut **self, item)
+    }
+
+    fn clear(&mut self) {
+        RawRecordStorageInner::clear(&mut **self)
+    }
+}
 
 // ---
 
@@ -1056,43 +1088,55 @@ impl<'a> RawRecordIterator<'a> for RawRecordLogfmtStream<'a> {
 
 // ---
 
-struct RawRecordBuilder<'a, RV>
+struct RawRecordBuilder<'a, 'b, RV>
 where
     RV: ?Sized + 'a,
 {
+    node: RawRecordNodeBuilder<'a, 'b>,
     marker: PhantomData<fn() -> &'a RV>,
 }
 
-impl<'a, RV> RawRecordBuilder<'a, RV>
+impl<'a, 'b, RV> RawRecordBuilder<'a, 'b, RV>
 where
     RV: ?Sized + 'a,
 {
     #[inline(always)]
-    fn new() -> Self {
-        Self { marker: PhantomData }
+    fn new(node: flattree::NodeBuilder<'b, RawRecordStorage<'a>>) -> Self {
+        Self {
+            node,
+            marker: PhantomData,
+        }
     }
 }
 
-impl<'de: 'a, 'a, RV> Visitor<'de> for RawRecordBuilder<'a, RV>
+impl<'de: 'a, 'a, 'b, RV> Visitor<'de> for RawRecordBuilder<'a, 'b, RV>
 where
     RV: ?Sized + 'a,
     &'a RV: Deserialize<'de> + 'a,
     RawValue<'a>: From<&'a RV>,
 {
-    type Value = RawRecord<'a>;
+    type Value = ();
 
     fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
         formatter.write_str("json object")
     }
 
-    fn visit_map<M: MapAccess<'de>>(self, mut access: M) -> std::result::Result<Self::Value, M::Error> {
-        let mut fields = heapopt::Vec::with_capacity(access.size_hint().unwrap_or(0));
-
+    fn visit_map<M: MapAccess<'de>>(mut self, mut access: M) -> std::result::Result<Self::Value, M::Error> {
         while let Some((key, value)) = access.next_entry::<&'a str, &RV>()? {
-            fields.push((key, value.into()));
+            let value = value.into();
+            match value {
+                RawValue::Object(_) => {
+                    self.node = self
+                        .node
+                        .build((key, value), |node| access.next_value_seed(RawRecordBuilder::new(node)));
+                }
+                _ => {
+                    self.node = self.node.add((key, value));
+                }
+            }
         }
 
-        Ok(RawRecord { fields })
+        Ok(())
     }
 }
 
