@@ -2,6 +2,7 @@
 use std::{
     cmp::Ordering,
     collections::{HashMap, HashSet},
+    convert::From,
     fmt,
     iter::IntoIterator,
     marker::PhantomData,
@@ -1076,7 +1077,7 @@ impl<'de: 'a, 'a, RV> Visitor<'de> for RawRecordBuilder<'a, RV>
 where
     RV: ?Sized + 'a,
     &'a RV: Deserialize<'de> + 'a,
-    RawValue<'a>: std::convert::From<&'a RV>,
+    RawValue<'a>: From<&'a RV>,
 {
     type Value = RawRecord<'a>;
 
@@ -2191,6 +2192,19 @@ mod tests {
         assert_eq!(filter.apply(&record), true);
         let record = parse(r#"{"mod":{"test":42,"test2":42,"test3":42}}"#);
         assert_eq!(filter.apply(&record), true);
+    }
+
+    #[test]
+    fn test_complex_key() {
+        let records = RawRecord::parser()
+            .parse(br#"{"\u001b[32mtst\u001b[m":42}"#)
+            .collect_vec();
+        assert_eq!(records.len(), 1);
+        let record = records.into_iter().next().unwrap().unwrap();
+        assert_eq!(record.record.fields.as_slices().0.len(), 1);
+        assert_eq!(record.record.fields.as_slices().1.len(), 0);
+        assert_eq!(record.record.fields.as_slices().0[0].0, "\u{1b}[32mtst\u{1b}[m");
+        assert_eq!(record.record.fields.as_slices().0[0].1, RawValue::Number("42"));
     }
 
     fn parse(s: &str) -> Record {
