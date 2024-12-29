@@ -5,20 +5,23 @@ use std::{
     fs::{self, File, Metadata},
     io::{self, stdin, BufRead, BufReader, Cursor, Read, Seek, SeekFrom, Write},
     mem::size_of_val,
-    ops::{Deref, Range},
+    ops::Range,
     path::{Path, PathBuf},
     sync::{Arc, Mutex},
 };
 
 // third-party imports
 use deko::{bufread::AnyDecoder, Format};
+use derive_more::{Deref, DerefMut};
 use nu_ansi_term::Color;
+use once_cell::sync::Lazy;
 
 // local imports
 use crate::{
     error::{Result, HILITE},
     index::{Index, Indexer, SourceBlock, SourceMetadata},
     iox::ReadFill,
+    pool::{AutoPool, Guard, SQPool},
     replay::{ReplayBufCreator, ReplayBufReader, ReplaySeekReader},
     tee::TeeReader,
     vfs::{FileSystem, LocalFileSystem},
@@ -663,9 +666,30 @@ impl Block<IndexedInput> {
 
 // ---
 
+type BufPool = SQPool<Vec<u8>>;
+
+#[derive(Deref, DerefMut)]
+pub struct Buf(Guard<Vec<u8>, BufPool>);
+
+impl Buf {
+    pub fn new() -> Self {
+        let mut buf = BUF_POOL.auto_check_out();
+        buf.clear();
+        Self(buf)
+    }
+
+    pub fn with_capacity(n: usize) -> Self {
+        let mut buf = Self::new();
+        buf.reserve(n);
+        buf
+    }
+}
+
+static BUF_POOL: Lazy<Arc<BufPool>> = Lazy::new(|| Arc::new(BufPool::new()));
+
 pub struct BlockLines<I> {
     block: Block<I>,
-    buf: Arc<Vec<u8>>,
+    buf: Arc<Buf>,
     total: usize,
     current: usize,
     byte: usize,
@@ -676,7 +700,7 @@ impl BlockLines<IndexedInput> {
     pub fn new(mut block: Block<IndexedInput>) -> Result<Self> {
         let (buf, total) = {
             let block = &mut block;
-            let mut buf = Vec::new();
+            let mut buf = Buf::new();
             let source_block = block.source_block();
             buf.resize(source_block.size.try_into()?, 0);
             let mut stream = block.input.stream.lock().unwrap();
@@ -744,13 +768,13 @@ impl Iterator for BlockLines<IndexedInput> {
 // ---
 
 pub struct BlockLine {
-    buf: Arc<Vec<u8>>,
+    buf: Arc<Buf>,
     range: Range<usize>,
 }
 
 impl BlockLine {
     #[inline]
-    pub fn new(buf: Arc<Vec<u8>>, range: Range<usize>) -> Self {
+    pub fn new(buf: Arc<Buf>, range: Range<usize>) -> Self {
         Self { buf, range }
     }
 
