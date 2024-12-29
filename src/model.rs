@@ -1589,7 +1589,7 @@ impl RecordFilter for Filter {
 // ---
 
 pub struct Object<'a> {
-    pub fields: heapless::Vec<(&'a str, RawValue<'a>), 32>,
+    pub fields: heapopt::Vec<(&'a str, RawValue<'a>), 32>,
 }
 
 struct ObjectVisitor<'a> {
@@ -1610,10 +1610,10 @@ impl<'de: 'a, 'a> Visitor<'de> for ObjectVisitor<'a> {
 
     #[inline]
     fn visit_map<A: MapAccess<'de>>(self, mut access: A) -> std::result::Result<Self::Value, A::Error> {
-        let mut fields = heapless::Vec::new();
+        let mut fields = heapopt::Vec::new();
         while let Some(key) = access.next_key::<&'a str>()? {
             let value: &json::value::RawValue = access.next_value()?;
-            fields.push((key, value.into())).ok();
+            fields.push((key, value.into()));
         }
 
         Ok(Object { fields })
@@ -1631,14 +1631,13 @@ impl<'de: 'a, 'a> Deserialize<'de> for Object<'a> {
 }
 
 pub struct Array<'a, const N: usize> {
-    items: heapless::Vec<RawValue<'a>, N>,
-    more: Vec<RawValue<'a>>,
+    items: heapopt::Vec<RawValue<'a>, N>,
 }
 
 impl<'a, const N: usize> Array<'a, N> {
     #[inline]
     pub fn iter(&self) -> impl Iterator<Item = &RawValue<'a>> {
-        self.items.iter().chain(self.more.iter())
+        self.items.iter()
     }
 }
 
@@ -1660,16 +1659,11 @@ impl<'de: 'a, 'a, const N: usize> Visitor<'de> for ArrayVisitor<'a, N> {
 
     #[inline]
     fn visit_seq<A: SeqAccess<'de>>(self, mut access: A) -> std::result::Result<Self::Value, A::Error> {
-        let mut items = heapless::Vec::new();
-        let mut more = Vec::new();
+        let mut items = heapopt::Vec::new();
         while let Some(item) = access.next_element::<&json::value::RawValue>()? {
-            let item = item.into();
-            match items.push(item) {
-                Ok(()) => {}
-                Err(item) => more.push(item),
-            }
+            items.push(item.into());
         }
-        Ok(Array { items, more })
+        Ok(Array { items })
     }
 }
 
