@@ -803,7 +803,9 @@ impl FieldSettings {
         match *self {
             Self::Nested(nested) => match value {
                 RawValue::Object(value) => {
-                    if let Ok(record) = json::from_str::<RawRecord>(value.get()) {
+                    let mut record = RawRecord::default();
+                    let mut deserializer = json::Deserializer::from_str(value.get());
+                    if let Ok(_) = RawRecord::deserialize_in_place(&mut deserializer, &mut record) {
                         ps.blocks[nested].apply_each_ctx(ps, record.fields(), to, ctx, false);
                         true
                     } else {
@@ -857,6 +859,7 @@ impl Parser {
 
 // ---
 
+#[derive(Default)]
 pub struct RawRecord<'a> {
     fields: RawRecordFields<'a>,
 }
@@ -879,7 +882,17 @@ impl<'de: 'a, 'a> Deserialize<'de> for RawRecord<'a> {
     where
         D: Deserializer<'de>,
     {
-        Ok(deserializer.deserialize_map(RawRecordBuilder::<json::value::RawValue>::new())?)
+        let mut target = Self::default();
+        Self::deserialize_in_place(deserializer, &mut target)?;
+        Ok(target)
+    }
+
+    #[inline]
+    fn deserialize_in_place<D>(deserializer: D, target: &mut Self) -> std::result::Result<(), D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        Ok(deserializer.deserialize_map(RawRecordBuilder::<json::value::RawValue>::new(target))?)
     }
 }
 
@@ -1055,48 +1068,54 @@ impl<'a> RawRecordIterator<'a> for RawRecordLogfmtStream<'a> {
 
 // ---
 
-struct RawRecordBuilder<'a, RV>
+struct RawRecordBuilder<'a, 'r, RV>
 where
     RV: ?Sized + 'a,
 {
+    target: &'r mut RawRecord<'a>,
     marker: PhantomData<fn() -> &'a RV>,
 }
 
-impl<'a, RV> RawRecordBuilder<'a, RV>
+impl<'a, 'r, RV> RawRecordBuilder<'a, 'r, RV>
 where
     RV: ?Sized + 'a,
 {
     #[inline(always)]
-    fn new() -> Self {
-        Self { marker: PhantomData }
+    fn new(target: &'r mut RawRecord<'a>) -> Self {
+        Self {
+            target,
+            marker: PhantomData,
+        }
     }
 }
 
-impl<'de: 'a, 'a, RV> Visitor<'de> for RawRecordBuilder<'a, RV>
+impl<'de: 'a, 'a, 'r, RV> Visitor<'de> for RawRecordBuilder<'a, 'r, RV>
 where
     RV: ?Sized + 'a,
     &'a RV: Deserialize<'de> + 'a,
     RawValue<'a>: std::convert::From<&'a RV>,
 {
-    type Value = RawRecord<'a>;
+    type Value = ();
 
     fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
         formatter.write_str("json object")
     }
 
     fn visit_map<M: MapAccess<'de>>(self, mut access: M) -> std::result::Result<Self::Value, M::Error> {
-        let mut fields = heapopt::Vec::with_capacity(access.size_hint().unwrap_or(0));
+        self.target.fields.clear();
+        self.target.fields.reserve(access.size_hint().unwrap_or(0));
 
         while let Some((key, value)) = access.next_entry::<&'a str, &RV>()? {
-            fields.push((key, value.into()));
+            self.target.fields.push((key, value.into()));
         }
 
-        Ok(RawRecord { fields })
+        Ok(())
     }
 }
 
 // ---
 
+#[derive(Default)]
 pub struct LogfmtRawRecord<'a>(pub RawRecord<'a>);
 
 impl<'de: 'a, 'a> Deserialize<'de> for LogfmtRawRecord<'a> {
@@ -1105,9 +1124,17 @@ impl<'de: 'a, 'a> Deserialize<'de> for LogfmtRawRecord<'a> {
     where
         D: Deserializer<'de>,
     {
-        Ok(Self(
-            deserializer.deserialize_map(RawRecordBuilder::<logfmt::raw::RawValue>::new())?,
-        ))
+        let mut target = Self::default();
+        Self::deserialize_in_place(deserializer, &mut target)?;
+        Ok(target)
+    }
+
+    #[inline]
+    fn deserialize_in_place<D>(deserializer: D, target: &mut Self) -> std::result::Result<(), D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        deserializer.deserialize_map(RawRecordBuilder::<logfmt::raw::RawValue>::new(&mut target.0))
     }
 }
 
