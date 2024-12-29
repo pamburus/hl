@@ -619,6 +619,6 @@ mod tests {
     fn parse(s: &str) -> Record {
         let raw = RawRecord::parser().parse(s.as_bytes()).next().unwrap().unwrap().record;
         let parser = RecordParser::new(ParserSettings::default());
-        parser.parse(raw)
+        parser.parse(&raw)
     }
 }

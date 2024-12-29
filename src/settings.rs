@@ -8,7 +8,7 @@ use std::{
 // third-party imports
 use chrono_tz::Tz;
 use config::{Config, File, FileFormat};
-use derive_more::Deref;
+use derive_more::{Deref, From};
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize, Serializer};
 use strum::IntoEnumIterator;
@@ -193,7 +193,7 @@ pub struct LevelFieldVariant {
 
 // ---
 
-#[derive(Debug, Serialize, Deserialize, Deref, Clone, PartialEq, Eq)]
+#[derive(Debug, Serialize, Deserialize, Deref, Clone, PartialEq, Eq, From)]
 pub struct MessageField(pub Field);
 
 impl Default for MessageField {
@@ -204,7 +204,7 @@ impl Default for MessageField {
 
 // ---
 
-#[derive(Debug, Serialize, Deserialize, Deref, Clone, PartialEq, Eq)]
+#[derive(Debug, Serialize, Deserialize, Deref, Clone, PartialEq, Eq, From)]
 pub struct LoggerField(Field);
 
 impl Default for LoggerField {
@@ -215,7 +215,7 @@ impl Default for LoggerField {
 
 // ---
 
-#[derive(Debug, Serialize, Deserialize, Deref, Clone, PartialEq, Eq)]
+#[derive(Debug, Serialize, Deserialize, Deref, Clone, PartialEq, Eq, From)]
 pub struct CallerField(Field);
 
 impl Default for CallerField {
@@ -226,7 +226,7 @@ impl Default for CallerField {
 
 // ---
 
-#[derive(Debug, Serialize, Deserialize, Deref, Clone, PartialEq, Eq)]
+#[derive(Debug, Serialize, Deserialize, Deref, Clone, PartialEq, Eq, From)]
 pub struct CallerFileField(Field);
 
 impl Default for CallerFileField {
@@ -237,7 +237,7 @@ impl Default for CallerFileField {
 
 // ---
 
-#[derive(Debug, Serialize, Deserialize, Deref, Clone, PartialEq, Eq)]
+#[derive(Debug, Serialize, Deserialize, Deref, Clone, PartialEq, Eq, From)]
 pub struct CallerLineField(Field);
 
 impl Default for CallerLineField {

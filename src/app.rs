@@ -878,7 +878,7 @@ impl<'a, Formatter: RecordWithSourceFormatter, Filter: RecordFilter> SegmentProc
                     buf.push(b'\n');
                 }
                 parsed_some = true;
-                let record = self.parser.parse(ar.record);
+                let record = self.parser.parse(&ar.record);
                 if record.matches(&self.filter) {
                     let begin = buf.len();
                     buf.extend(prefix.as_bytes());

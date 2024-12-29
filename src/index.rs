@@ -498,7 +498,7 @@ where
                 while let Some(item) = stream.next() {
                     match item {
                         Ok(ar) => {
-                            let rec = self.parser.parse(ar.record);
+                            let rec = self.parser.parse(&ar.record);
                             let mut flags = 0;
                             match rec.level {
                                 Some(Level::Debug) => {

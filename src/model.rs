@@ -2,6 +2,7 @@
 use std::{
     cmp::Ordering,
     collections::{HashMap, HashSet},
+    convert::From,
     fmt,
     iter::IntoIterator,
     marker::PhantomData,
@@ -234,7 +235,14 @@ impl<'a> RawObject<'a> {
     #[inline]
     pub fn parse(&self) -> Result<Object<'a>> {
         match self {
-            Self::Json(value) => json::from_str::<Object>(value.get()).map_err(Error::JsonParseError),
+            Self::Json(value) => Object::from_json(value.get()),
+        }
+    }
+
+    #[inline]
+    pub fn parse_into(&self, target: &mut Object<'a>) -> Result<()> {
+        match self {
+            Self::Json(value) => target.set_from_json(value.get()),
         }
     }
 
@@ -279,7 +287,12 @@ impl<'a> RawArray<'a> {
 
     #[inline]
     pub fn parse<const N: usize>(&self) -> Result<Array<'a, N>> {
-        json::from_str::<Array<N>>(self.get()).map_err(Error::JsonParseError)
+        Array::from_json(self.get())
+    }
+
+    #[inline]
+    pub fn parse_into<const N: usize>(&self, target: &mut Array<'a, N>) -> Result<()> {
+        target.set_from_json(self.get())
     }
 
     #[inline]
@@ -803,8 +816,9 @@ impl FieldSettings {
         match *self {
             Self::Nested(nested) => match value {
                 RawValue::Object(value) => {
-                    if let Ok(record) = json::from_str::<RawRecord>(value.get()) {
-                        ps.blocks[nested].apply_each_ctx(ps, record.fields(), to, ctx, false);
+                    let mut object = Object::default();
+                    if value.parse_into(&mut object).is_ok() {
+                        ps.blocks[nested].apply_each_ctx(ps, object.fields.iter(), to, ctx, false);
                         true
                     } else {
                         false
@@ -844,7 +858,7 @@ impl Parser {
     }
 
     #[inline]
-    pub fn parse<'a>(&self, record: RawRecord<'a>) -> Record<'a> {
+    pub fn parse<'a>(&self, record: &RawRecord<'a>) -> Record<'a> {
         let fields = record.fields();
         let count = fields.size_hint().1.unwrap_or(0);
         let mut record = Record::<'a>::with_capacity(count);
@@ -857,6 +871,7 @@ impl Parser {
 
 // ---
 
+#[derive(Default)]
 pub struct RawRecord<'a> {
     fields: RawRecordFields<'a>,
 }
@@ -873,19 +888,32 @@ impl<'a> RawRecord<'a> {
     }
 }
 
-impl<'de: 'a, 'a> Deserialize<'de> for RawRecord<'a> {
+impl<'a> Deserialize<'a> for RawRecord<'a> {
     #[inline]
     fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
     where
-        D: Deserializer<'de>,
+        D: Deserializer<'a>,
     {
-        Ok(deserializer.deserialize_map(RawRecordBuilder::<json::value::RawValue>::new())?)
+        let mut target = Self::default();
+        Self::deserialize_in_place(deserializer, &mut target)?;
+        Ok(target)
+    }
+
+    #[inline]
+    fn deserialize_in_place<D>(deserializer: D, target: &mut Self) -> std::result::Result<(), D::Error>
+    where
+        D: Deserializer<'a>,
+    {
+        const N: usize = RAW_RECORD_FIELDS_CAPACITY;
+        Ok(deserializer.deserialize_map(ObjectVisitor::<json::value::RawValue, N>::new(&mut target.fields))?)
     }
 }
 
 // ---
 
-pub type RawRecordFields<'a> = heapopt::Vec<(&'a str, RawValue<'a>), RAW_RECORD_FIELDS_CAPACITY>;
+pub type RawRecordFields<'a> = ObjectFields<'a, RAW_RECORD_FIELDS_CAPACITY>;
+
+type ObjectFields<'a, const N: usize> = heapopt::Vec<(&'a str, RawValue<'a>), N>;
 
 // ---
 
@@ -1000,14 +1028,14 @@ pub struct AnnotatedRawRecord<'a> {
 
 // ---
 
-struct RawRecordJsonStream<'a, 'de, R> {
+struct RawRecordJsonStream<'a, R> {
     prefix: &'a [u8],
-    delegate: StreamDeserializerWithOffsets<'de, R, RawRecord<'a>>,
+    delegate: StreamDeserializerWithOffsets<'a, R, RawRecord<'a>>,
 }
 
-impl<'a, 'de: 'a, R> RawRecordIterator<'a> for RawRecordJsonStream<'a, 'de, R>
+impl<'a, R> RawRecordIterator<'a> for RawRecordJsonStream<'a, R>
 where
-    R: serde_json::de::Read<'de>,
+    R: serde_json::de::Read<'a>,
 {
     #[inline]
     fn next(&mut self) -> Option<Result<AnnotatedRawRecord<'a>>> {
@@ -1055,60 +1083,75 @@ impl<'a> RawRecordIterator<'a> for RawRecordLogfmtStream<'a> {
 
 // ---
 
-struct RawRecordBuilder<'a, RV>
+struct ObjectVisitor<'a, 't, RV, const N: usize>
 where
     RV: ?Sized + 'a,
 {
-    marker: PhantomData<fn() -> &'a RV>,
+    target: &'t mut ObjectFields<'a, N>,
+    marker: PhantomData<fn(RV) -> RV>,
 }
 
-impl<'a, RV> RawRecordBuilder<'a, RV>
+impl<'a, 't, RV, const N: usize> ObjectVisitor<'a, 't, RV, N>
 where
     RV: ?Sized + 'a,
 {
     #[inline]
-    fn new() -> Self {
-        Self { marker: PhantomData }
+    fn new(target: &'t mut ObjectFields<'a, N>) -> Self {
+        Self {
+            target,
+            marker: PhantomData,
+        }
     }
 }
 
-impl<'de: 'a, 'a, RV> Visitor<'de> for RawRecordBuilder<'a, RV>
+impl<'a, 'r, RV, const N: usize> Visitor<'a> for ObjectVisitor<'a, 'r, RV, N>
 where
     RV: ?Sized + 'a,
-    &'a RV: Deserialize<'de> + 'a,
-    RawValue<'a>: std::convert::From<&'a RV>,
+    &'a RV: Deserialize<'a> + 'a,
+    RawValue<'a>: From<&'a RV>,
 {
-    type Value = RawRecord<'a>;
+    type Value = ();
 
     fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
         formatter.write_str("json object")
     }
 
     #[inline]
-    fn visit_map<M: MapAccess<'de>>(self, mut access: M) -> std::result::Result<Self::Value, M::Error> {
-        let mut fields = heapopt::Vec::with_capacity(access.size_hint().unwrap_or(0));
+    fn visit_map<M: MapAccess<'a>>(self, mut access: M) -> std::result::Result<Self::Value, M::Error> {
+        self.target.clear();
+        self.target.reserve(access.size_hint().unwrap_or(0));
 
         while let Some((key, value)) = access.next_entry::<&'a str, &RV>()? {
-            fields.push((key, value.into()));
+            self.target.push((key, value.into()));
         }
 
-        Ok(RawRecord { fields })
+        Ok(())
     }
 }
 
 // ---
 
+#[derive(Default)]
 pub struct LogfmtRawRecord<'a>(pub RawRecord<'a>);
 
-impl<'de: 'a, 'a> Deserialize<'de> for LogfmtRawRecord<'a> {
+impl<'a> Deserialize<'a> for LogfmtRawRecord<'a> {
     #[inline]
     fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
     where
-        D: Deserializer<'de>,
+        D: Deserializer<'a>,
     {
-        Ok(Self(
-            deserializer.deserialize_map(RawRecordBuilder::<logfmt::raw::RawValue>::new())?,
-        ))
+        let mut target = Self::default();
+        Self::deserialize_in_place(deserializer, &mut target)?;
+        Ok(target)
+    }
+
+    #[inline]
+    fn deserialize_in_place<D>(deserializer: D, target: &mut Self) -> std::result::Result<(), D::Error>
+    where
+        D: Deserializer<'a>,
+    {
+        const N: usize = RAW_RECORD_FIELDS_CAPACITY;
+        deserializer.deserialize_map(ObjectVisitor::<logfmt::raw::RawValue, N>::new(&mut target.0.fields))
     }
 }
 
@@ -1434,7 +1477,8 @@ impl FieldFilter {
 
     fn match_value_partial<'a>(&self, subkey: KeyMatcher, value: RawValue<'a>) -> bool {
         if let RawValue::Object(value) = value {
-            let item = value.parse().unwrap();
+            let mut item = Object::default();
+            value.parse_into(&mut item).ok();
             for (k, v) in item.fields.iter() {
                 match subkey.match_key(*k) {
                     None => {
@@ -1588,49 +1632,29 @@ impl RecordFilter for Filter {
 
 // ---
 
-pub struct Object<'a> {
-    pub fields: heapopt::Vec<(&'a str, RawValue<'a>), 32>,
+#[derive(Default)]
+pub struct Object<'a, const N: usize = 32> {
+    pub fields: heapopt::Vec<(&'a str, RawValue<'a>), N>,
 }
 
-struct ObjectVisitor<'a> {
-    marker: PhantomData<fn() -> Object<'a>>,
-}
-impl<'a> ObjectVisitor<'a> {
+impl<'a, const N: usize> Object<'a, N> {
     #[inline]
-    fn new() -> Self {
-        Self { marker: PhantomData }
-    }
-}
-
-impl<'de: 'a, 'a> Visitor<'de> for ObjectVisitor<'a> {
-    type Value = Object<'a>;
-    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-        formatter.write_str("object json")
+    pub fn from_json(s: &'a str) -> Result<Self> {
+        let mut result = Self::default();
+        result.set_from_json(s)?;
+        Ok(result)
     }
 
     #[inline]
-    fn visit_map<A: MapAccess<'de>>(self, mut access: A) -> std::result::Result<Self::Value, A::Error> {
-        let mut fields = heapopt::Vec::new();
-        while let Some(key) = access.next_key::<&'a str>()? {
-            let value: &json::value::RawValue = access.next_value()?;
-            fields.push((key, value.into()));
-        }
-
-        Ok(Object { fields })
+    pub fn set_from_json(&mut self, s: &'a str) -> Result<()> {
+        let visitor = ObjectVisitor::<json::value::RawValue, N>::new(&mut self.fields);
+        let mut deserializer = json::Deserializer::from_str(s);
+        deserializer.deserialize_map(visitor).map_err(Error::JsonParseError)
     }
 }
 
-impl<'de: 'a, 'a> Deserialize<'de> for Object<'a> {
-    #[inline]
-    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        Ok(deserializer.deserialize_map(ObjectVisitor::new())?)
-    }
-}
-
-pub struct Array<'a, const N: usize> {
+#[derive(Default)]
+pub struct Array<'a, const N: usize = 32> {
     items: heapopt::Vec<RawValue<'a>, N>,
 }
 
@@ -1639,41 +1663,61 @@ impl<'a, const N: usize> Array<'a, N> {
     pub fn iter(&self) -> impl Iterator<Item = &RawValue<'a>> {
         self.items.iter()
     }
-}
 
-struct ArrayVisitor<'a, const N: usize> {
-    marker: PhantomData<fn() -> Array<'a, N>>,
-}
-impl<'a, const N: usize> ArrayVisitor<'a, N> {
     #[inline]
-    fn new() -> Self {
-        Self { marker: PhantomData }
-    }
-}
-
-impl<'de: 'a, 'a, const N: usize> Visitor<'de> for ArrayVisitor<'a, N> {
-    type Value = Array<'a, N>;
-    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-        formatter.write_str("object json")
+    pub fn from_json(s: &'a str) -> Result<Self> {
+        let mut result = Self::default();
+        result.set_from_json(s)?;
+        Ok(result)
     }
 
     #[inline]
-    fn visit_seq<A: SeqAccess<'de>>(self, mut access: A) -> std::result::Result<Self::Value, A::Error> {
-        let mut items = heapopt::Vec::new();
-        while let Some(item) = access.next_element::<&json::value::RawValue>()? {
-            items.push(item.into());
+    pub fn set_from_json(&mut self, s: &'a str) -> Result<()> {
+        let visitor = ArrayVisitor::<json::value::RawValue, N>::new(&mut self.items);
+        let mut deserializer = json::Deserializer::from_str(s);
+        deserializer.deserialize_seq(visitor).map_err(Error::JsonParseError)
+    }
+}
+
+struct ArrayVisitor<'a, 't, RV, const N: usize>
+where
+    RV: ?Sized + 'a,
+{
+    target: &'t mut heapopt::Vec<RawValue<'a>, N>,
+    marker: PhantomData<fn(RV) -> RV>,
+}
+impl<'a, 't, RV, const N: usize> ArrayVisitor<'a, 't, RV, N>
+where
+    RV: ?Sized + 'a,
+{
+    #[inline]
+    fn new(target: &'t mut heapopt::Vec<RawValue<'a>, N>) -> Self {
+        Self {
+            target,
+            marker: PhantomData,
         }
-        Ok(Array { items })
     }
 }
 
-impl<'de: 'a, 'a, const N: usize> Deserialize<'de> for Array<'a, N> {
+impl<'a, 't, RV, const N: usize> Visitor<'a> for ArrayVisitor<'a, 't, RV, N>
+where
+    RV: ?Sized + 'a,
+    &'a RV: Deserialize<'a> + 'a,
+    RawValue<'a>: From<&'a RV>,
+{
+    type Value = ();
+
+    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+        formatter.write_str("json array")
+    }
+
     #[inline]
-    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        Ok(deserializer.deserialize_seq(ArrayVisitor::new())?)
+    fn visit_seq<A: SeqAccess<'a>>(self, mut access: A) -> std::result::Result<Self::Value, A::Error> {
+        while let Some(item) = access.next_element::<&RV>()? {
+            self.target.push(item.into());
+        }
+
+        Ok(())
     }
 }
 
@@ -1705,9 +1749,12 @@ const RAW_RECORD_FIELDS_CAPACITY: usize = RECORD_EXTRA_CAPACITY + MAX_PREDEFINED
 #[cfg(test)]
 mod tests {
     use super::*;
+
     use chrono::TimeZone;
     use maplit::hashmap;
     use serde_logfmt::logfmt;
+
+    use crate::settings::{Field, FieldShowOption};
 
     #[test]
     fn test_raw_record_parser_empty_line() {
@@ -2192,6 +2239,56 @@ mod tests {
         assert_eq!(filter.apply(&record), true);
     }
 
+    #[test]
+    fn test_raw_object() {
+        let obj = RawObject::Json(json::from_str(r#"{"a":1,"b":2}"#).unwrap());
+        let obj = obj.parse().unwrap();
+        assert_eq!(obj.fields.len(), 2);
+        assert_eq!(obj.fields[0].0, "a");
+        assert_eq!(obj.fields[1].0, "b");
+    }
+
+    #[test]
+    fn test_raw_array() {
+        let arr = RawArray::Json(json::from_str(r#"[1,2]"#).unwrap());
+        let arr = arr.parse::<2>().unwrap();
+        assert_eq!(arr.items.len(), 2);
+        assert_eq!(arr.items[0].raw_str(), "1");
+        assert_eq!(arr.items[1].raw_str(), "2");
+    }
+
+    #[test]
+    fn test_array_parser_invalid_type() {
+        let arr = RawArray::Json(json::from_str(r#"12"#).unwrap());
+        let result = arr.parse::<2>();
+        assert!(matches!(result, Err(Error::JsonParseError(_))));
+    }
+
+    #[test]
+    fn test_nested_predefined_fields() {
+        let predefined = PredefinedFields {
+            message: Field {
+                names: vec!["some.deep.message".into()],
+                show: FieldShowOption::Always,
+            }
+            .into(),
+            ..Default::default()
+        };
+        let settings = ParserSettings::new(&predefined, [], None);
+        let parser = Parser::new(settings);
+
+        let cases: &[(&[u8], Option<&str>)] = &[
+            (br#"{"some":{"deep":{"message":"test"}}}"#, Some(r#""test""#)),
+            (br#"{"some":{"deep":[{"message":"test"}]}}"#, None),
+        ];
+
+        for (input, expected) in cases.iter() {
+            let record = RawRecord::parser().parse(*input).next().unwrap().unwrap();
+            let record = parser.parse(&record.record);
+            assert_eq!(record.message.map(|x| x.raw_str()), *expected);
+        }
+    }
+
     fn parse(s: &str) -> Record {
         try_parse(s).unwrap()
     }
@@ -2201,6 +2298,6 @@ mod tests {
         assert_eq!(items.len(), 1);
         let raw = items.into_iter().next().unwrap()?.record;
         let parser = Parser::new(ParserSettings::default());
-        Ok(parser.parse(raw))
+        Ok(parser.parse(&raw))
     }
 }
