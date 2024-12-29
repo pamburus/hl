@@ -1801,7 +1801,7 @@ fn json_match(value: &json::value::RawValue, s: &str) -> bool {
 
 // ---
 
-const RECORD_EXTRA_CAPACITY: usize = 32;
+const RECORD_EXTRA_CAPACITY: usize = 64;
 const MAX_PREDEFINED_FIELDS: usize = 8;
 const RAW_RECORD_FIELDS_CAPACITY: usize = RECORD_EXTRA_CAPACITY + MAX_PREDEFINED_FIELDS;
 
