@@ -900,21 +900,26 @@ type RawRecordStorageInner<'a> = heapopt::Vec<flattree::Item<RawRecordItem<'a>>,
 impl<'a> flattree::Storage for RawRecordStorage<'a> {
     type Value = RawRecordItem<'a>;
 
+    #[inline]
     fn len(&self) -> usize {
         RawRecordStorageInner::len(&**self)
     }
 
+    #[inline]
     fn get(&self, index: usize) -> Option<&flattree::Item<Self::Value>> {
         RawRecordStorageInner::get(&**self, index)
     }
 
+    #[inline]
     fn get_mut(&mut self, index: usize) -> Option<&mut flattree::Item<Self::Value>> {
         RawRecordStorageInner::get_mut(&mut **self, index)
     }
+    #[inline]
     fn push(&mut self, item: flattree::Item<Self::Value>) {
         RawRecordStorageInner::push(&mut **self, item)
     }
 
+    #[inline]
     fn clear(&mut self) {
         RawRecordStorageInner::clear(&mut **self)
     }
@@ -1127,12 +1132,14 @@ where
         let key = self.key;
         let value = <&'a RV>::deserialize(deserializer)?.into();
 
-        Ok(match value {
-            RawValue::Object(obj) => self.node.build((key, value), |node| match obj {
-                RawObject::Json(value) => value.deserialize_map(Self::new(node, key)).unwrap(), // TODO: handle errors
-            }),
-            _ => self.node.add((key, value)),
-        })
+        Ok(self.node.add((key, value)))
+
+        // Ok(match value {
+        //     RawValue::Object(obj) => self.node.build((key, value), |node| match obj {
+        //         RawObject::Json(value) => value.deserialize_map(Self::new(node, key)).unwrap(), // TODO: handle errors
+        //     }),
+        //     _ => self.node.add((key, value)),
+        // })
     }
 }
 
@@ -1801,7 +1808,7 @@ fn json_match(value: &json::value::RawValue, s: &str) -> bool {
 
 // ---
 
-const RECORD_EXTRA_CAPACITY: usize = 64;
+const RECORD_EXTRA_CAPACITY: usize = 32;
 const MAX_PREDEFINED_FIELDS: usize = 8;
 const RAW_RECORD_FIELDS_CAPACITY: usize = RECORD_EXTRA_CAPACITY + MAX_PREDEFINED_FIELDS;
 

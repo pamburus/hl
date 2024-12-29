@@ -440,6 +440,7 @@ impl<T, S> From<FlatTreeBuilder<S>> for FlatTree<T, S>
 where
     S: Storage<Value = T>,
 {
+    #[inline]
     fn from(builder: FlatTreeBuilder<S>) -> Self {
         builder.done()
     }
