@@ -28,6 +28,7 @@ mod filtering;
 mod formatting;
 mod fsmon;
 mod model;
+mod pool;
 mod replay;
 mod scanning;
 mod serdex;
