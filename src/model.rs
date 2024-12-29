@@ -10,12 +10,14 @@ use std::{
     str::FromStr,
 };
 
+use bincode::de;
 // third-party imports
 use chrono::{DateTime, Utc};
 use derive_more::{Deref, DerefMut};
 use regex::Regex;
 use serde::de::{Deserialize, DeserializeSeed, Deserializer, MapAccess, SeqAccess, Visitor};
 use serde_json::{self as json};
+use serde_yml::with::nested_singleton_map::deserialize;
 use titlecase::titlecase;
 use wildflower::Pattern;
 
@@ -882,9 +884,7 @@ impl<'de: 'a, 'a> Deserialize<'de> for RawRecord<'a> {
     where
         D: Deserializer<'de>,
     {
-        let mut builder = FlatTree::build();
-        deserializer.deserialize_map(RawRecordRootParser::<json::value::RawValue>::new(&mut builder))?;
-        Ok(RawRecord { fields: builder.done() })
+        Ok(deserializer.deserialize_map(RawRecordRootParser::<json::value::RawValue>::new())?)
     }
 }
 
@@ -892,7 +892,7 @@ impl<'de: 'a, 'a> Deserialize<'de> for RawRecord<'a> {
 
 pub type RawRecordFields<'a> = FlatTree<RawRecordItem<'a>, RawRecordStorage<'a>>; // heapopt::Vec<(&'a str, RawValue<'a>), RAW_RECORD_FIELDS_CAPACITY>;
 type RawRecordItem<'a> = (&'a str, RawValue<'a>);
-type RawRecordRootBuilder<'a, 'b> = flattree::FlatTreeBuilder<RawRecordStorage<'a>>;
+type RawRecordRootBuilder<'a> = flattree::FlatTreeBuilder<RawRecordStorage<'a>>;
 type RawRecordNodeBuilder<'a, 'b> = flattree::NodeBuilder<'b, RawRecordStorage<'a>>;
 
 #[derive(Deref, DerefMut, Default)]
@@ -1091,76 +1091,72 @@ impl<'a> RawRecordIterator<'a> for RawRecordLogfmtStream<'a> {
 
 // ---
 
-// Seed structure carrying mutable FlatTree and current node ID
-struct FlatTreeNodeValueSeed<'a, 'b> {
+struct RawRecordFieldsSeed<'a, 'b, RV>
+where
+    RV: ?Sized,
+{
     node: RawRecordNodeBuilder<'a, 'b>,
     key: &'a str,
+    _marker: PhantomData<fn() -> RV>,
 }
 
-impl<'de, 'a, 'b> DeserializeSeed<'de> for FlatTreeNodeValueSeed<'a, 'b> {
-    type Value = ();
-
-    fn deserialize<D>(self, deserializer: D) -> Result<Self::Value, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        deserializer.deserialize_any(FlatTreeNodeParser { seed: self })?;
-        self.node.add((self.key, value));
-        Ok(())
-    }
-}
-
-// ---
-
-struct RawRecordNodeParser<'a, 'b, RV>
+impl<'a, 'b, RV> RawRecordFieldsSeed<'a, 'b, RV>
 where
-    RV: ?Sized + 'a,
+    RV: ?Sized,
 {
-    node: RawRecordNodeBuilder<'a, 'b>,
-    marker: PhantomData<fn() -> &'a RV>,
-}
-
-impl<'a, 'b, RV> RawRecordNodeParser<'a, 'b, RV>
-where
-    RV: ?Sized + 'a,
-    &'a RV: Deserialize<'a>,
-{
-    #[inline(always)]
-    fn new(node: RawRecordNodeBuilder<'a, 'b>) -> Self {
+    #[inline]
+    fn new(node: RawRecordNodeBuilder<'a, 'b>, key: &'a str) -> Self {
         Self {
             node,
-            marker: PhantomData,
+            key,
+            _marker: PhantomData,
         }
     }
 }
 
-impl<'de: 'a, 'a, 'b, RV> Visitor<'de> for RawRecordNodeParser<'a, 'b, RV>
+impl<'de: 'a, 'a, 'b, RV> DeserializeSeed<'de> for RawRecordFieldsSeed<'a, 'b, RV>
 where
     RV: ?Sized + 'a,
-    &'a RV: Deserialize<'de>,
+    &'a RV: Deserialize<'de> + 'a,
+    RawValue<'a>: From<&'a RV>,
 {
-    type Value = ();
+    type Value = RawRecordNodeBuilder<'a, 'b>;
+
+    #[inline]
+    fn deserialize<D>(self, deserializer: D) -> std::result::Result<Self::Value, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let key = self.key;
+        let value = <&'a RV>::deserialize(deserializer)?.into();
+
+        Ok(match value {
+            RawValue::Object(obj) => self.node.build((key, value), |node| match obj {
+                RawObject::Json(value) => value.deserialize_map(Self::new(node, key.clone())).unwrap(), // TODO: handle errors
+            }),
+            _ => self.node.add((key, value)),
+        })
+    }
+}
+
+impl<'de: 'a, 'a, 'b, RV> Visitor<'de> for RawRecordFieldsSeed<'a, 'b, RV>
+where
+    RV: ?Sized + 'a,
+    &'a RV: Deserialize<'de> + 'a,
+    RawValue<'a>: From<&'a RV>,
+{
+    type Value = RawRecordNodeBuilder<'a, 'b>;
 
     fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
         formatter.write_str("json object")
     }
 
     fn visit_map<M: MapAccess<'de>>(mut self, mut map: M) -> std::result::Result<Self::Value, M::Error> {
-        while let Some((key, value)) = map.next_entry::<&'a str, &RV>()? {
-            let value = value.into();
-            match value {
-                RawValue::Object(obj) => {
-                    self.node = self
-                        .node
-                        .build((key, value), |node| map.next_value_seed(RawRecordNodeParser::new(node)));
-                }
-                _ => {
-                    self.node = self.node.add((key, value));
-                }
-            }
+        while let Some(key) = map.next_key::<&'a str>()? {
+            self.node = map.next_value_seed(RawRecordFieldsSeed::new(self.node, key))?;
         }
 
-        Ok(())
+        Ok(self.node)
     }
 }
 
@@ -1195,21 +1191,11 @@ where
         formatter.write_str("json object")
     }
 
-    fn visit_map<M: MapAccess<'de>>(mut self, mut map: M) -> std::result::Result<Self::Value, M::Error> {
+    fn visit_map<M: MapAccess<'de>>(self, mut map: M) -> std::result::Result<Self::Value, M::Error> {
         let mut tree = FlatTree::build();
 
-        while let Some((key, value)) = map.next_entry::<&'a str, &RV>()? {
-            let value = value.into();
-            match value {
-                RawValue::Object(obj) => {
-                    self.node = self
-                        .node
-                        .build((key, value), |node| map.next_value_seed(RawRecordRootParser::new(node)));
-                }
-                _ => {
-                    tree.add((key, value));
-                }
-            }
+        while let Some(key) = map.next_key::<&'a str>()? {
+            map.next_value_seed(RawRecordFieldsSeed::new(tree.roots(), key))?;
         }
 
         Ok(RawRecord { fields: tree.done() })
@@ -1226,7 +1212,9 @@ impl<'de: 'a, 'a> Deserialize<'de> for LogfmtRawRecord<'a> {
     where
         D: Deserializer<'de>,
     {
-        Ok(deserializer.deserialize_map(RawRecordRootParser::<logfmt::raw::RawValue>::new())?)
+        Ok(Self(
+            deserializer.deserialize_map(RawRecordRootParser::<logfmt::raw::RawValue>::new())?,
+        ))
     }
 }
 
