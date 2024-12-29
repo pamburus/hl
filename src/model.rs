@@ -10,14 +10,12 @@ use std::{
     str::FromStr,
 };
 
-use bincode::de;
 // third-party imports
 use chrono::{DateTime, Utc};
 use derive_more::{Deref, DerefMut};
 use regex::Regex;
 use serde::de::{Deserialize, DeserializeSeed, Deserializer, MapAccess, SeqAccess, Visitor};
 use serde_json::{self as json};
-use serde_yml::with::nested_singleton_map::deserialize;
 use titlecase::titlecase;
 use wildflower::Pattern;
 
@@ -878,11 +876,11 @@ impl<'a> RawRecord<'a> {
     }
 }
 
-impl<'de: 'a, 'a> Deserialize<'de> for RawRecord<'a> {
+impl<'a> Deserialize<'a> for RawRecord<'a> {
     #[inline]
     fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
     where
-        D: Deserializer<'de>,
+        D: Deserializer<'a>,
     {
         Ok(deserializer.deserialize_map(RawRecordRootParser::<json::value::RawValue>::new())?)
     }
@@ -892,11 +890,10 @@ impl<'de: 'a, 'a> Deserialize<'de> for RawRecord<'a> {
 
 pub type RawRecordFields<'a> = FlatTree<RawRecordItem<'a>, RawRecordStorage<'a>>; // heapopt::Vec<(&'a str, RawValue<'a>), RAW_RECORD_FIELDS_CAPACITY>;
 type RawRecordItem<'a> = (&'a str, RawValue<'a>);
-type RawRecordRootBuilder<'a> = flattree::FlatTreeBuilder<RawRecordStorage<'a>>;
 type RawRecordNodeBuilder<'a, 'b> = flattree::NodeBuilder<'b, RawRecordStorage<'a>>;
 
 #[derive(Deref, DerefMut, Default)]
-struct RawRecordStorage<'a>(RawRecordStorageInner<'a>);
+pub struct RawRecordStorage<'a>(RawRecordStorageInner<'a>);
 
 type RawRecordStorageInner<'a> = heapopt::Vec<flattree::Item<RawRecordItem<'a>>, RAW_RECORD_FIELDS_CAPACITY>;
 
@@ -1041,9 +1038,9 @@ struct RawRecordJsonStream<'a, 'de, R> {
     delegate: StreamDeserializerWithOffsets<'de, R, RawRecord<'a>>,
 }
 
-impl<'a, 'de: 'a, R> RawRecordIterator<'a> for RawRecordJsonStream<'a, 'de, R>
+impl<'a, R> RawRecordIterator<'a> for RawRecordJsonStream<'a, 'a, R>
 where
-    R: serde_json::de::Read<'de>,
+    R: serde_json::de::Read<'a>,
 {
     #[inline]
     fn next(&mut self) -> Option<Result<AnnotatedRawRecord<'a>>> {
@@ -1114,10 +1111,10 @@ where
     }
 }
 
-impl<'de: 'a, 'a, 'b, RV> DeserializeSeed<'de> for RawRecordFieldsSeed<'a, 'b, RV>
+impl<'a, 'b, RV> DeserializeSeed<'a> for RawRecordFieldsSeed<'a, 'b, RV>
 where
     RV: ?Sized + 'a,
-    &'a RV: Deserialize<'de> + 'a,
+    &'a RV: Deserialize<'a> + 'a,
     RawValue<'a>: From<&'a RV>,
 {
     type Value = RawRecordNodeBuilder<'a, 'b>;
@@ -1125,24 +1122,24 @@ where
     #[inline]
     fn deserialize<D>(self, deserializer: D) -> std::result::Result<Self::Value, D::Error>
     where
-        D: Deserializer<'de>,
+        D: Deserializer<'a>,
     {
         let key = self.key;
         let value = <&'a RV>::deserialize(deserializer)?.into();
 
         Ok(match value {
             RawValue::Object(obj) => self.node.build((key, value), |node| match obj {
-                RawObject::Json(value) => value.deserialize_map(Self::new(node, key.clone())).unwrap(), // TODO: handle errors
+                RawObject::Json(value) => value.deserialize_map(Self::new(node, key)).unwrap(), // TODO: handle errors
             }),
             _ => self.node.add((key, value)),
         })
     }
 }
 
-impl<'de: 'a, 'a, 'b, RV> Visitor<'de> for RawRecordFieldsSeed<'a, 'b, RV>
+impl<'a, 'b, RV> Visitor<'a> for RawRecordFieldsSeed<'a, 'b, RV>
 where
     RV: ?Sized + 'a,
-    &'a RV: Deserialize<'de> + 'a,
+    &'a RV: Deserialize<'a> + 'a,
     RawValue<'a>: From<&'a RV>,
 {
     type Value = RawRecordNodeBuilder<'a, 'b>;
@@ -1151,7 +1148,7 @@ where
         formatter.write_str("json object")
     }
 
-    fn visit_map<M: MapAccess<'de>>(mut self, mut map: M) -> std::result::Result<Self::Value, M::Error> {
+    fn visit_map<M: MapAccess<'a>>(mut self, mut map: M) -> std::result::Result<Self::Value, M::Error> {
         while let Some(key) = map.next_key::<&'a str>()? {
             self.node = map.next_value_seed(RawRecordFieldsSeed::new(self.node, key))?;
         }
@@ -1179,10 +1176,10 @@ where
     }
 }
 
-impl<'de: 'a, 'a, RV> Visitor<'de> for RawRecordRootParser<'a, RV>
+impl<'a, RV> Visitor<'a> for RawRecordRootParser<'a, RV>
 where
     RV: ?Sized + 'a,
-    &'a RV: Deserialize<'de> + 'a,
+    &'a RV: Deserialize<'a> + 'a,
     RawValue<'a>: From<&'a RV>,
 {
     type Value = RawRecord<'a>;
@@ -1191,7 +1188,7 @@ where
         formatter.write_str("json object")
     }
 
-    fn visit_map<M: MapAccess<'de>>(self, mut map: M) -> std::result::Result<Self::Value, M::Error> {
+    fn visit_map<M: MapAccess<'a>>(self, mut map: M) -> std::result::Result<Self::Value, M::Error> {
         let mut tree = FlatTree::build();
 
         while let Some(key) = map.next_key::<&'a str>()? {
@@ -1206,11 +1203,11 @@ where
 
 pub struct LogfmtRawRecord<'a>(pub RawRecord<'a>);
 
-impl<'de: 'a, 'a> Deserialize<'de> for LogfmtRawRecord<'a> {
+impl<'a> Deserialize<'a> for LogfmtRawRecord<'a> {
     #[inline]
     fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
     where
-        D: Deserializer<'de>,
+        D: Deserializer<'a>,
     {
         Ok(Self(
             deserializer.deserialize_map(RawRecordRootParser::<logfmt::raw::RawValue>::new())?,
@@ -1708,13 +1705,13 @@ impl<'a> ObjectVisitor<'a> {
     }
 }
 
-impl<'de: 'a, 'a> Visitor<'de> for ObjectVisitor<'a> {
+impl<'a> Visitor<'a> for ObjectVisitor<'a> {
     type Value = Object<'a>;
     fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
         formatter.write_str("object json")
     }
 
-    fn visit_map<A: MapAccess<'de>>(self, mut access: A) -> std::result::Result<Self::Value, A::Error> {
+    fn visit_map<A: MapAccess<'a>>(self, mut access: A) -> std::result::Result<Self::Value, A::Error> {
         let mut fields = heapless::Vec::new();
         while let Some(key) = access.next_key::<&'a str>()? {
             let value: &json::value::RawValue = access.next_value()?;
@@ -1725,10 +1722,10 @@ impl<'de: 'a, 'a> Visitor<'de> for ObjectVisitor<'a> {
     }
 }
 
-impl<'de: 'a, 'a> Deserialize<'de> for Object<'a> {
+impl<'a> Deserialize<'a> for Object<'a> {
     fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
     where
-        D: Deserializer<'de>,
+        D: Deserializer<'a>,
     {
         Ok(deserializer.deserialize_map(ObjectVisitor::new())?)
     }
@@ -1840,8 +1837,8 @@ mod tests {
 
         let rec = stream.next().unwrap().unwrap();
         assert_eq!(rec.prefix, b"");
-        assert_eq!(rec.record.fields.as_slices().0.len(), 0);
-        assert_eq!(rec.record.fields.as_slices().1.len(), 0);
+        assert_eq!(rec.record.fields.storage().as_slices().0.len(), 0);
+        assert_eq!(rec.record.fields.storage().as_slices().1.len(), 0);
     }
 
     #[test]
@@ -2308,10 +2305,11 @@ mod tests {
             .collect_vec();
         assert_eq!(records.len(), 1);
         let record = records.into_iter().next().unwrap().unwrap();
-        assert_eq!(record.record.fields.as_slices().0.len(), 1);
-        assert_eq!(record.record.fields.as_slices().1.len(), 0);
-        assert_eq!(record.record.fields.as_slices().0[0].0, "\u{1b}[32mtst\u{1b}[m");
-        assert_eq!(record.record.fields.as_slices().0[0].1, RawValue::Number("42"));
+        assert_eq!(record.record.fields.roots().len(), 1);
+        assert_eq!(
+            record.record.fields.roots().iter().next().unwrap().value(),
+            &("\u{1b}[32mtst\u{1b}[m", RawValue::Number("42")),
+        );
     }
 
     fn parse(s: &str) -> Record {
