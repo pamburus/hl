@@ -429,7 +429,8 @@ impl<'a> FieldFormatter<'a> {
                 s.element(Element::Null, |s| s.batch(|buf| buf.extend(b"null")));
             }
             RawValue::Object(value) => {
-                let item = value.parse().unwrap();
+                let mut item = model::Object::default();
+                value.parse_into(&mut item).ok();
                 s.element(Element::Object, |s| {
                     if !fs.flatten {
                         s.batch(|buf| buf.push(b'{'));
@@ -456,7 +457,8 @@ impl<'a> FieldFormatter<'a> {
             }
             RawValue::Array(value) => {
                 s.element(Element::Array, |s| {
-                    let item = value.parse::<32>().unwrap();
+                    let mut item = model::Array::default();
+                    value.parse_into::<32>(&mut item).ok();
                     s.batch(|buf| buf.push(b'['));
                     let mut first = true;
                     for v in item.iter() {
