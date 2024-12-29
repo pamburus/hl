@@ -86,7 +86,7 @@ impl<'a> RawValue<'a> {
         }
     }
 
-    #[inline(always)]
+    #[inline]
     pub fn is_empty(&self) -> bool {
         match self {
             Self::String(value) => value.is_empty(),
@@ -98,7 +98,7 @@ impl<'a> RawValue<'a> {
         }
     }
 
-    #[inline(always)]
+    #[inline]
     pub fn raw_str(&self) -> &'a str {
         match self {
             Self::String(value) => value.source(),
@@ -111,7 +111,7 @@ impl<'a> RawValue<'a> {
         }
     }
 
-    #[inline(always)]
+    #[inline]
     pub fn format_readable(&self, buf: &mut Vec<u8>) {
         match self {
             Self::String(value) => value.decode(buf).unwrap(),
@@ -144,7 +144,7 @@ impl<'a> RawValue<'a> {
         }
     }
 
-    #[inline(always)]
+    #[inline]
     pub fn is_byte_code(&self) -> bool {
         let s = self.raw_str();
         let v = s.as_bytes();
@@ -156,7 +156,7 @@ impl<'a> RawValue<'a> {
         }
     }
 
-    #[inline(always)]
+    #[inline]
     pub fn parse_byte_code(&self) -> u8 {
         let s = self.raw_str();
         match s.as_bytes() {
@@ -176,7 +176,7 @@ impl<'a> From<EncodedString<'a>> for RawValue<'a> {
 }
 
 impl<'a> From<&'a json::value::RawValue> for RawValue<'a> {
-    #[inline(always)]
+    #[inline]
     fn from(value: &'a json::value::RawValue) -> Self {
         match value.get().as_bytes() {
             [b'"', ..] => Self::from(EncodedString::Json(value.get().into())),
@@ -192,7 +192,7 @@ impl<'a> From<&'a json::value::RawValue> for RawValue<'a> {
 }
 
 impl<'a> From<&'a logfmt::raw::RawValue> for RawValue<'a> {
-    #[inline(always)]
+    #[inline]
     fn from(value: &'a logfmt::raw::RawValue) -> Self {
         if let [b'"', ..] = value.get().as_bytes() {
             Self::from(EncodedString::Json(value.get().into()))
@@ -203,14 +203,14 @@ impl<'a> From<&'a logfmt::raw::RawValue> for RawValue<'a> {
 }
 
 impl<'a> From<RawObject<'a>> for RawValue<'a> {
-    #[inline(always)]
+    #[inline]
     fn from(value: RawObject<'a>) -> Self {
         Self::Object(value)
     }
 }
 
 impl<'a> From<RawArray<'a>> for RawValue<'a> {
-    #[inline(always)]
+    #[inline]
     fn from(value: RawArray<'a>) -> Self {
         Self::Array(value)
     }
@@ -224,7 +224,7 @@ pub enum RawObject<'a> {
 }
 
 impl<'a> RawObject<'a> {
-    #[inline(always)]
+    #[inline]
     pub fn get(&self) -> &'a str {
         match self {
             Self::Json(value) => value.get(),
@@ -238,7 +238,7 @@ impl<'a> RawObject<'a> {
         }
     }
 
-    #[inline(always)]
+    #[inline]
     pub fn is_empty(&self) -> bool {
         match self {
             Self::Json(value) => json_match(value, "{}"),
@@ -247,14 +247,14 @@ impl<'a> RawObject<'a> {
 }
 
 impl<'a> From<&'a json::value::RawValue> for RawObject<'a> {
-    #[inline(always)]
+    #[inline]
     fn from(value: &'a json::value::RawValue) -> Self {
         Self::Json(value)
     }
 }
 
 impl PartialEq for RawObject<'_> {
-    #[inline(always)]
+    #[inline]
     fn eq(&self, other: &Self) -> bool {
         self.get() == other.get()
     }
@@ -270,19 +270,19 @@ pub enum RawArray<'a> {
 }
 
 impl<'a> RawArray<'a> {
-    #[inline(always)]
+    #[inline]
     pub fn get(&self) -> &'a str {
         match self {
             Self::Json(value) => value.get(),
         }
     }
 
-    #[inline(always)]
+    #[inline]
     pub fn parse<const N: usize>(&self) -> Result<Array<'a, N>> {
         json::from_str::<Array<N>>(self.get()).map_err(Error::JsonParseError)
     }
 
-    #[inline(always)]
+    #[inline]
     pub fn is_empty(&self) -> bool {
         match self {
             Self::Json(value) => json_match(value, "[]"),
@@ -291,14 +291,14 @@ impl<'a> RawArray<'a> {
 }
 
 impl<'a> From<&'a json::value::RawValue> for RawArray<'a> {
-    #[inline(always)]
+    #[inline]
     fn from(value: &'a json::value::RawValue) -> Self {
         Self::Json(value)
     }
 }
 
 impl PartialEq for RawArray<'_> {
-    #[inline(always)]
+    #[inline]
     fn eq(&self, other: &Self) -> bool {
         self.get() == other.get()
     }
@@ -320,17 +320,17 @@ pub struct Record<'a> {
 }
 
 impl<'a> Record<'a> {
-    #[inline(always)]
+    #[inline]
     pub fn fields(&self) -> impl Iterator<Item = &(&'a str, RawValue<'a>)> {
         self.fields.iter()
     }
 
-    #[inline(always)]
+    #[inline]
     pub fn fields_for_search(&self) -> impl Iterator<Item = &(&'a str, RawValue<'a>)> {
         self.fields().chain(self.predefined.iter())
     }
 
-    #[inline(always)]
+    #[inline]
     pub fn matches<F: RecordFilter>(&self, filter: F) -> bool {
         filter.apply(self)
     }
@@ -371,14 +371,14 @@ pub struct RecordWithSource<'r, 's> {
 }
 
 impl<'r, 's> RecordWithSource<'r, 's> {
-    #[inline(always)]
+    #[inline]
     pub fn new(record: &'r Record<'s>, source: &'s [u8]) -> Self {
         Self { record, source }
     }
 }
 
 impl<'r, 's> RecordWithSourceConstructor<'r, 's> for Record<'s> {
-    #[inline(always)]
+    #[inline]
     fn with_source(&'r self, source: &'s [u8]) -> RecordWithSource<'r, 's> {
         RecordWithSource::new(self, source)
     }
@@ -389,7 +389,7 @@ impl<'r, 's> RecordWithSourceConstructor<'r, 's> for Record<'s> {
 pub trait RecordFilter {
     fn apply<'a>(&self, record: &Record<'a>) -> bool;
 
-    #[inline(always)]
+    #[inline]
     fn and<F>(self, rhs: F) -> RecordFilterAnd<Self, F>
     where
         Self: Sized,
@@ -398,7 +398,7 @@ pub trait RecordFilter {
         RecordFilterAnd { lhs: self, rhs }
     }
 
-    #[inline(always)]
+    #[inline]
     fn or<F>(self, rhs: F) -> RecordFilterOr<Self, F>
     where
         Self: Sized,
@@ -409,14 +409,14 @@ pub trait RecordFilter {
 }
 
 impl<T: RecordFilter + ?Sized> RecordFilter for Box<T> {
-    #[inline(always)]
+    #[inline]
     fn apply<'a>(&self, record: &Record<'a>) -> bool {
         (**self).apply(record)
     }
 }
 
 impl<T: RecordFilter> RecordFilter for &T {
-    #[inline(always)]
+    #[inline]
     fn apply<'a>(&self, record: &Record<'a>) -> bool {
         (**self).apply(record)
     }
@@ -430,7 +430,7 @@ impl RecordFilter for Level {
 }
 
 impl<T: RecordFilter> RecordFilter for Option<T> {
-    #[inline(always)]
+    #[inline]
     fn apply<'a>(&self, record: &Record<'a>) -> bool {
         if let Some(filter) = self {
             filter.apply(record)
@@ -448,7 +448,7 @@ pub struct RecordFilterAnd<L: RecordFilter, R: RecordFilter> {
 }
 
 impl<L: RecordFilter, R: RecordFilter> RecordFilter for RecordFilterAnd<L, R> {
-    #[inline(always)]
+    #[inline]
     fn apply<'a>(&self, record: &Record<'a>) -> bool {
         self.lhs.apply(record) && self.rhs.apply(record)
     }
@@ -462,7 +462,7 @@ pub struct RecordFilterOr<L: RecordFilter, R: RecordFilter> {
 }
 
 impl<L: RecordFilter, R: RecordFilter> RecordFilter for RecordFilterOr<L, R> {
-    #[inline(always)]
+    #[inline]
     fn apply<'a>(&self, record: &Record<'a>) -> bool {
         self.lhs.apply(record) || self.rhs.apply(record)
     }
@@ -473,7 +473,7 @@ impl<L: RecordFilter, R: RecordFilter> RecordFilter for RecordFilterOr<L, R> {
 pub struct RecordFilterNone;
 
 impl RecordFilter for RecordFilterNone {
-    #[inline(always)]
+    #[inline]
     fn apply<'a>(&self, _: &Record<'a>) -> bool {
         true
     }
@@ -574,12 +574,12 @@ impl ParserSettings {
         }
     }
 
-    #[inline(always)]
+    #[inline]
     fn apply<'a>(&self, key: &'a str, value: RawValue<'a>, to: &mut Record<'a>, pc: &mut PriorityController) {
         self.blocks[0].apply(self, key, value, to, pc, true);
     }
 
-    #[inline(always)]
+    #[inline]
     fn apply_each<'a, 'i, I>(&self, items: I, to: &mut Record<'a>)
     where
         I: IntoIterator<Item = &'i (&'a str, RawValue<'a>)>,
@@ -589,7 +589,7 @@ impl ParserSettings {
         self.apply_each_ctx(items, to, &mut pc);
     }
 
-    #[inline(always)]
+    #[inline]
     fn apply_each_ctx<'a, 'i, I>(&self, items: I, to: &mut Record<'a>, pc: &mut PriorityController)
     where
         I: IntoIterator<Item = &'i (&'a str, RawValue<'a>)>,
@@ -652,7 +652,7 @@ impl ParserSettingsBlock {
         to.fields.push((key, value));
     }
 
-    #[inline(always)]
+    #[inline]
     fn apply_each_ctx<'a, 'i, I>(
         &self,
         ps: &ParserSettings,
@@ -684,7 +684,7 @@ struct PriorityController {
 }
 
 impl PriorityController {
-    #[inline(always)]
+    #[inline]
     fn prioritize<F: FnOnce(&mut Self) -> bool>(&mut self, kind: FieldKind, priority: usize, update: F) -> bool {
         let p = match kind {
             FieldKind::Time => &mut self.time,
@@ -792,7 +792,7 @@ impl FieldSettings {
         }
     }
 
-    #[inline(always)]
+    #[inline]
     fn apply_ctx<'a>(
         &self,
         ps: &ParserSettings,
@@ -816,7 +816,7 @@ impl FieldSettings {
         }
     }
 
-    #[inline(always)]
+    #[inline]
     fn kind(&self) -> Option<FieldKind> {
         match self {
             Self::Time => Some(FieldKind::Time),
@@ -1066,7 +1066,7 @@ impl<'a, RV> RawRecordBuilder<'a, RV>
 where
     RV: ?Sized + 'a,
 {
-    #[inline(always)]
+    #[inline]
     fn new() -> Self {
         Self { marker: PhantomData }
     }
@@ -1084,6 +1084,7 @@ where
         formatter.write_str("json object")
     }
 
+    #[inline]
     fn visit_map<M: MapAccess<'de>>(self, mut access: M) -> std::result::Result<Self::Value, M::Error> {
         let mut fields = heapopt::Vec::with_capacity(access.size_hint().unwrap_or(0));
 
@@ -1127,7 +1128,7 @@ pub struct KeyMatcher<'a> {
 }
 
 impl<'a> KeyMatcher<'a> {
-    #[inline(always)]
+    #[inline]
     pub fn new(key: &'a str) -> Self {
         Self { key }
     }
@@ -1156,7 +1157,7 @@ impl<'a> KeyMatcher<'a> {
         }
     }
 
-    #[inline(always)]
+    #[inline]
     fn norm(c: char) -> char {
         if c == '_' {
             '-'
@@ -1188,7 +1189,7 @@ impl FromStr for Number {
 }
 
 impl PartialEq<Number> for Number {
-    #[inline(always)]
+    #[inline]
     fn eq(&self, other: &Number) -> bool {
         match self {
             Self::Integer(a) => match other {
@@ -1206,21 +1207,21 @@ impl PartialEq<Number> for Number {
 impl Eq for Number {}
 
 impl From<i128> for Number {
-    #[inline(always)]
+    #[inline]
     fn from(value: i128) -> Self {
         Self::Integer(value)
     }
 }
 
 impl From<f64> for Number {
-    #[inline(always)]
+    #[inline]
     fn from(value: f64) -> Self {
         Self::Float(value)
     }
 }
 
 impl PartialOrd<Number> for Number {
-    #[inline(always)]
+    #[inline]
     fn partial_cmp(&self, other: &Number) -> Option<Ordering> {
         match self {
             Self::Integer(a) => match other {
@@ -1295,7 +1296,7 @@ pub(crate) enum UnaryBoolOp {
 }
 
 impl UnaryBoolOp {
-    #[inline(always)]
+    #[inline]
     fn apply(self, value: bool) -> bool {
         match self {
             Self::None => value,
@@ -1305,7 +1306,7 @@ impl UnaryBoolOp {
 }
 
 impl Default for UnaryBoolOp {
-    #[inline(always)]
+    #[inline]
     fn default() -> Self {
         Self::None
     }
@@ -1320,7 +1321,7 @@ pub enum FieldFilterKey<S> {
 }
 
 impl FieldFilterKey<String> {
-    #[inline(always)]
+    #[inline]
     pub fn borrowed(&self) -> FieldFilterKey<&str> {
         match self {
             FieldFilterKey::Predefined(kind) => FieldFilterKey::Predefined(*kind),
@@ -1399,7 +1400,7 @@ impl FieldFilter {
         })
     }
 
-    #[inline(always)]
+    #[inline]
     fn match_custom_key<'a>(&'a self, key: &str) -> Option<KeyMatch<'a>> {
         if let FieldFilterKey::Custom(k) = &self.key {
             if self.flat_key && k.len() != key.len() {
@@ -1527,7 +1528,7 @@ impl FieldFilterSet {
 }
 
 impl RecordFilter for FieldFilterSet {
-    #[inline(always)]
+    #[inline]
     fn apply<'a>(&self, record: &Record<'a>) -> bool {
         self.0.iter().all(|field| field.apply(record))
     }
@@ -1544,7 +1545,7 @@ pub struct Filter {
 }
 
 impl Filter {
-    #[inline(always)]
+    #[inline]
     pub fn is_empty(&self) -> bool {
         self.fields.0.is_empty() && self.level.is_none() && self.since.is_none() && self.until.is_none()
     }
@@ -1595,7 +1596,7 @@ struct ObjectVisitor<'a> {
     marker: PhantomData<fn() -> Object<'a>>,
 }
 impl<'a> ObjectVisitor<'a> {
-    #[inline(always)]
+    #[inline]
     fn new() -> Self {
         Self { marker: PhantomData }
     }
@@ -1607,6 +1608,7 @@ impl<'de: 'a, 'a> Visitor<'de> for ObjectVisitor<'a> {
         formatter.write_str("object json")
     }
 
+    #[inline]
     fn visit_map<A: MapAccess<'de>>(self, mut access: A) -> std::result::Result<Self::Value, A::Error> {
         let mut fields = heapless::Vec::new();
         while let Some(key) = access.next_key::<&'a str>()? {
@@ -1619,6 +1621,7 @@ impl<'de: 'a, 'a> Visitor<'de> for ObjectVisitor<'a> {
 }
 
 impl<'de: 'a, 'a> Deserialize<'de> for Object<'a> {
+    #[inline]
     fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
     where
         D: Deserializer<'de>,
@@ -1633,7 +1636,7 @@ pub struct Array<'a, const N: usize> {
 }
 
 impl<'a, const N: usize> Array<'a, N> {
-    #[inline(always)]
+    #[inline]
     pub fn iter(&self) -> impl Iterator<Item = &RawValue<'a>> {
         self.items.iter().chain(self.more.iter())
     }
@@ -1643,7 +1646,7 @@ struct ArrayVisitor<'a, const N: usize> {
     marker: PhantomData<fn() -> Array<'a, N>>,
 }
 impl<'a, const N: usize> ArrayVisitor<'a, N> {
-    #[inline(always)]
+    #[inline]
     fn new() -> Self {
         Self { marker: PhantomData }
     }
@@ -1655,6 +1658,7 @@ impl<'de: 'a, 'a, const N: usize> Visitor<'de> for ArrayVisitor<'a, N> {
         formatter.write_str("object json")
     }
 
+    #[inline]
     fn visit_seq<A: SeqAccess<'de>>(self, mut access: A) -> std::result::Result<Self::Value, A::Error> {
         let mut items = heapless::Vec::new();
         let mut more = Vec::new();
@@ -1670,6 +1674,7 @@ impl<'de: 'a, 'a, const N: usize> Visitor<'de> for ArrayVisitor<'a, N> {
 }
 
 impl<'de: 'a, 'a, const N: usize> Deserialize<'de> for Array<'a, N> {
+    #[inline]
     fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
     where
         D: Deserializer<'de>,
@@ -1680,12 +1685,12 @@ impl<'de: 'a, 'a, const N: usize> Deserialize<'de> for Array<'a, N> {
 
 // ---
 
-#[inline(always)]
+#[inline]
 fn is_json_ws(c: u8) -> bool {
     matches!(c, b' ' | b'\t' | b'\n' | b'\r')
 }
 
-#[inline(always)]
+#[inline]
 fn json_match(value: &json::value::RawValue, s: &str) -> bool {
     value
         .get()
