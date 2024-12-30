@@ -8,7 +8,7 @@ use crate::{error::Result, parse::parse_value, token::Lexer};
 
 #[derive(Default, Debug)]
 pub struct Container<'s> {
-    pub(crate) inner: ContainerInner<'s>,
+    pub inner: ContainerInner<'s>,
 }
 
 impl<'s> Container<'s> {
@@ -21,19 +21,23 @@ impl<'s> Container<'s> {
         while let Some(_) = parse_value(lexer, container.inner.metaroot())? {}
         Ok(container)
     }
+
+    pub fn nodes(&self) -> tree::Nodes<Node<'s>> {
+        self.inner.nodes()
+    }
 }
 
 // ---
 
-pub(crate) trait Build<'s>: tree::Build<Value = Node<'s>> {}
+pub trait Build<'s>: tree::Build<Value = Node<'s>> {}
 
 impl<'s, T: tree::Build<Value = Node<'s>>> Build<'s> for T {}
 
-pub(crate) trait BuildExt<'s>: Build<'s> {
+pub trait BuildExt<'s>: Build<'s> {
     fn add_scalar(self, source: &'s str, kind: ScalarKind) -> Self;
-    fn add_object(self, source: &'s str, f: impl FnOnce(Self::Child) -> Result<Self::Child>) -> Result<Self>;
-    fn add_array(self, source: &'s str, f: impl FnOnce(Self::Child) -> Result<Self::Child>) -> Result<Self>;
-    fn add_field(self, source: &'s str, f: impl FnOnce(Self::Child) -> Result<Self::Child>) -> Result<Self>;
+    fn add_object(self, f: impl FnOnce(Self::Child) -> Result<Self::Child>) -> Result<Self>;
+    fn add_array(self, f: impl FnOnce(Self::Child) -> Result<Self::Child>) -> Result<Self>;
+    fn add_field(self, f: impl FnOnce(Self::Child) -> Result<Self::Child>) -> Result<Self>;
     fn add_key(self, source: &'s str, kind: StringKind) -> Self;
 }
 
@@ -45,16 +49,16 @@ where
         self.push(Node::new(NodeKind::Scalar(kind), source))
     }
 
-    fn add_object(self, source: &'s str, f: impl FnOnce(Self::Child) -> Result<Self::Child>) -> Result<Self> {
-        self.build_e(Node::new(NodeKind::Object, source), f)
+    fn add_object(self, f: impl FnOnce(Self::Child) -> Result<Self::Child>) -> Result<Self> {
+        self.build_e(Node::new(NodeKind::Object, ""), f)
     }
 
-    fn add_array(self, source: &'s str, f: impl FnOnce(Self::Child) -> Result<Self::Child>) -> Result<Self> {
-        self.build_e(Node::new(NodeKind::Array, source), f)
+    fn add_array(self, f: impl FnOnce(Self::Child) -> Result<Self::Child>) -> Result<Self> {
+        self.build_e(Node::new(NodeKind::Array, ""), f)
     }
 
-    fn add_field(self, source: &'s str, f: impl FnOnce(Self::Child) -> Result<Self::Child>) -> Result<Self> {
-        self.build_e(Node::new(NodeKind::Field, source), f)
+    fn add_field(self, f: impl FnOnce(Self::Child) -> Result<Self::Child>) -> Result<Self> {
+        self.build_e(Node::new(NodeKind::Field, ""), f)
     }
 
     fn add_key(self, source: &'s str, kind: StringKind) -> Self {
@@ -64,12 +68,12 @@ where
 
 // ---
 
-pub(crate) type ContainerInner<'s> = FlatTree<Node<'s>>;
+pub type ContainerInner<'s> = FlatTree<Node<'s>>;
 
 // ---
 
 #[derive(Debug)]
-pub(crate) struct Node<'s> {
+pub struct Node<'s> {
     kind: NodeKind,
     source: &'s str,
 }
@@ -81,7 +85,7 @@ impl<'s> Node<'s> {
 }
 
 #[derive(Debug)]
-pub(crate) enum NodeKind {
+pub enum NodeKind {
     Scalar(ScalarKind),
     Array,
     Object,
@@ -90,7 +94,7 @@ pub(crate) enum NodeKind {
 }
 
 #[derive(Debug)]
-pub(crate) enum ScalarKind {
+pub enum ScalarKind {
     Null,
     Bool(bool),
     Number,
@@ -98,7 +102,7 @@ pub(crate) enum ScalarKind {
 }
 
 #[derive(Debug)]
-pub(crate) enum StringKind {
+pub enum StringKind {
     Plain,
     Escaped,
 }

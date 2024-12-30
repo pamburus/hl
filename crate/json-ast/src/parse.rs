@@ -20,8 +20,8 @@ fn parse_value_token<'s, T: Build<'s>>(lexer: &mut Lexer<'s>, target: T, token: 
 
     match token {
         Token::Bool(b) => Ok(target.add_scalar(source, ScalarKind::Bool(b))),
-        Token::BraceOpen => target.add_object(source, |target| parse_object(lexer, target)),
-        Token::BracketOpen => target.add_array(source, |target| parse_array(lexer, target)),
+        Token::BraceOpen => target.add_object(|target| parse_object(lexer, target)),
+        Token::BracketOpen => target.add_array(|target| parse_array(lexer, target)),
         Token::Null => Ok(target.add_scalar(source, ScalarKind::Null)),
         Token::Number(_) => Ok(target.add_scalar(source, ScalarKind::Number)),
         Token::PlainString(_) => Ok(target.add_scalar(source, ScalarKind::String(StringKind::Plain))),
@@ -63,7 +63,7 @@ fn parse_object<'s, T: Build<'s>>(lexer: &mut Lexer<'s>, mut target: T) -> Resul
     let span = lexer.span();
 
     let insert = |lexer: &mut Lexer<'s>, target: T, kind| {
-        target.add_field(lexer.slice(), |mut target| {
+        target.add_field(|mut target| {
             target = target.add_key(lexer.slice(), kind);
 
             match lexer.next() {
