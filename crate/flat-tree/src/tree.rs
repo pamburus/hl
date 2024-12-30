@@ -245,7 +245,7 @@ where
 // ---
 
 #[derive_where(Clone, Copy)]
-pub struct Nodes<'t, V, S>
+pub struct Nodes<'t, V, S = DefaultStorage<V>>
 where
     S: Storage<Value = V>,
 {
