@@ -40,3 +40,7 @@ pub enum Token<'s> {
     #[token(",")]
     Comma,
 }
+
+pub fn lexer<'s>(source: &'s str) -> Lexer<'s> {
+    Token::lexer(source)
+}
