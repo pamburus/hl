@@ -1,5 +1,5 @@
 // std imports
-use std::{env, fs};
+use std::{env, fs, process::ExitCode};
 
 // external imports
 use ariadne;
@@ -9,7 +9,7 @@ use logos::Logos;
 
 use json_ast::{token::Token, value::parse_value};
 
-fn main() {
+fn main() -> ExitCode {
     let filename = env::args().nth(1).expect("Expected file argument");
     let src = fs::read_to_string(&filename).expect("Failed to read file");
 
@@ -17,8 +17,12 @@ fn main() {
 
     loop {
         match parse_value(&mut lexer) {
-            Ok(Some(value)) => println!("{:#?}", value),
-            Ok(None) => break,
+            Ok(Some(value)) => {
+                println!("{:#?}", value);
+            }
+            Ok(None) => {
+                return ExitCode::SUCCESS;
+            }
             Err((msg, span)) => {
                 use ariadne::{ColorGenerator, Label, Report, ReportKind, Source};
 
@@ -32,6 +36,8 @@ fn main() {
                     .finish()
                     .eprint((&filename, Source::from(&src)))
                     .unwrap();
+
+                return ExitCode::FAILURE;
             }
         }
     }

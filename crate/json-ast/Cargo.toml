@@ -10,3 +10,4 @@ license.workspace = true
 [dependencies]
 logos = "0"
 ariadne = "0"
+flat-tree = { path = "../flat-tree" }
