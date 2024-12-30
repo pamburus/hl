@@ -1,0 +1,12 @@
+[package]
+name = "json-ast"
+version = "0.1.0"
+workspace = "../.."
+repository.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+logos = "0"
+ariadne = "0"
