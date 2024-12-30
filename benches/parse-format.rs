@@ -12,16 +12,17 @@ use hl::{
     settings,
     timezone::Tz,
     DateTimeFormatter, Filter, IncludeExcludeKeyFilter, LinuxDateFormat, Parser, ParserSettings, RecordFormatter,
-    SegmentProcessor, Settings, Theme,
+    RecordWithSource, RecordWithSourceFormatter, SegmentProcessor, Settings, Theme,
 };
 
 // ---
 
 fn benchmark(c: &mut Criterion) {
-    let mut c = c.benchmark_group("parse-and-format");
+    let mut group = c.benchmark_group("parse-format");
+
     for (name, record) in [("kibana-record-01", KIBANA_RECORD_01)] {
         for theme in ["universal", "classic"] {
-            c.bench_function(format!("{}/{}", name, theme), |b| {
+            group.bench_function(format!("parse-and-format/{}/{}", name, theme), |b| {
                 let settings = Settings::default();
                 let parser = Parser::new(ParserSettings::new(&settings.fields.predefined, empty(), None));
                 let formatter = RecordFormatter::new(
@@ -45,6 +46,30 @@ fn benchmark(c: &mut Criterion) {
             });
         }
     }
+
+    for (name, record) in [("kibana-record-01", KIBANA_RECORD_01)] {
+        for theme in ["universal", "classic"] {
+            group.bench_function(format!("parse-only/{}/{}", name, theme), |b| {
+                let settings = Settings::default();
+                let parser = Parser::new(ParserSettings::new(&settings.fields.predefined, empty(), None));
+                let filter = Filter::default();
+                let mut processor =
+                    SegmentProcessor::new(&parser, NoFormatter, &filter, SegmentProcessorOptions::default());
+                let mut buf = Vec::new();
+                b.iter(|| {
+                    processor.process(record, &mut buf, "", None, &mut RecordIgnorer {});
+                    buf.clear();
+                });
+            });
+        }
+    }
+}
+
+struct NoFormatter;
+
+impl RecordWithSourceFormatter for NoFormatter {
+    #[inline]
+    fn format_record(&self, _: &mut Vec<u8>, _: RecordWithSource) {}
 }
 
 // ---

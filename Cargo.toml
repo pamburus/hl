@@ -94,10 +94,12 @@ kqueue = "1"
 byte-strings = "0"
 clean-path = "0"
 criterion = "0"
+json-ast = { path = "./crate/json-ast" }
+logos = "0"
 maplit = "1"
 mockall = "0"
-stats_alloc = "0"
 regex = "1"
+stats_alloc = "0"
 wildmatch = "2"
 rstest = "0"
 
@@ -132,7 +134,7 @@ name = "theme"
 harness = false
 
 [[bench]]
-name = "parse-and-format"
+name = "parse-format"
 harness = false
 
 [[bench]]
@@ -150,4 +152,9 @@ harness = false
 [[bench]]
 name = "encstr"
 path = "benches/encstr/benches.rs"
+harness = false
+
+[[bench]]
+name = "json-ast"
+path = "benches/json-ast/benches.rs"
 harness = false
