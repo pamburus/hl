@@ -30,8 +30,9 @@ fn container(c: &mut Criterion) {
 
     let mut iterations = 0;
     let mut allocs = Stats::default();
+    let test = "parse-to-container/kibana";
 
-    group.bench_function("k8s", |b| {
+    group.bench_function(test, |b| {
         let mut container = Container::new();
         container.reserve(512);
 
@@ -47,7 +48,25 @@ fn container(c: &mut Criterion) {
         });
     });
 
-    println!("allocations per {:?} iterations: {:#?}", iterations, allocs);
+    println!("{}: allocations per {:?} iterations: {:#?}", test, iterations, allocs);
+
+    let mut iterations = 0;
+    let mut allocs = Stats::default();
+    let test = "drain-tokens/kibana";
+
+    group.bench_function(test, |b| {
+        b.iter(|| {
+            let reg = Region::new(&GLOBAL);
+
+            let mut lexer = Token::lexer(KIBANA_REC_1);
+            while let Some(_) = black_box(lexer.next()) {}
+
+            add_stat(&mut allocs, &reg.change());
+            iterations += 1;
+        });
+    });
+
+    println!("{}: allocations per {:?} iterations: {:#?}", test, iterations, allocs);
 
     group.finish();
 }

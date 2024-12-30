@@ -1,20 +1,22 @@
 // local imports
 use crate::{
-    container::{Build, BuildExt, ScalarKind, StringKind},
+    container::{Build, BuildExt, ScalarKind},
     error::Result,
     token::{Lexer, Token},
 };
 
 // ---
 
+#[inline]
 pub(crate) fn parse_value<'s, T: Build<'s>>(lexer: &mut Lexer<'s>, target: T) -> Result<Option<T>> {
     if let Some(token) = lexer.next() {
-        parse_value_token(lexer, target, token?).map(Some)
+        parse_value_token(lexer, target, token.refine(lexer)?).map(Some)
     } else {
         Ok(None)
     }
 }
 
+#[inline]
 fn parse_value_token<'s, T: Build<'s>>(lexer: &mut Lexer<'s>, target: T, token: Token<'s>) -> Result<T> {
     let source = lexer.slice();
 
@@ -24,8 +26,7 @@ fn parse_value_token<'s, T: Build<'s>>(lexer: &mut Lexer<'s>, target: T, token: 
         Token::BracketOpen => target.add_array(|target| parse_array(lexer, target)),
         Token::Null => Ok(target.add_scalar(source, ScalarKind::Null)),
         Token::Number(_) => Ok(target.add_scalar(source, ScalarKind::Number)),
-        Token::PlainString(_) => Ok(target.add_scalar(source, ScalarKind::String(StringKind::Plain))),
-        Token::EscapedString(_) => Ok(target.add_scalar(source, ScalarKind::String(StringKind::Escaped))),
+        Token::String(s) => Ok(target.add_scalar(source, ScalarKind::String(s.into()))),
         _ => Err(("unexpected token here (context: value)", lexer.span())),
     }
 }
@@ -34,13 +35,14 @@ fn parse_value_token<'s, T: Build<'s>>(lexer: &mut Lexer<'s>, target: T, token: 
 /// a valid terminator is found.
 ///
 /// > NOTE: we assume '[' was consumed.
+#[inline]
 fn parse_array<'s, T: Build<'s>>(lexer: &mut Lexer<'s>, mut target: T) -> Result<T> {
     let span = lexer.span();
     let mut awaits_comma = false;
     let mut awaits_value = false;
 
     while let Some(token) = lexer.next() {
-        let token = token?;
+        let token = token.refine(lexer)?;
         match token {
             Token::BracketClose if !awaits_value => return Ok(target),
             Token::Comma if awaits_comma => awaits_value = true,
@@ -58,26 +60,9 @@ fn parse_array<'s, T: Build<'s>>(lexer: &mut Lexer<'s>, mut target: T) -> Result
 /// a valid terminator is found.
 ///
 /// > NOTE: we assume '{' was consumed.
+#[inline]
 fn parse_object<'s, T: Build<'s>>(lexer: &mut Lexer<'s>, mut target: T) -> Result<T> {
-    // let mut map = HashMap::new();
     let span = lexer.span();
-
-    let insert = |lexer: &mut Lexer<'s>, target: T, kind| {
-        target.add_field(|mut target| {
-            target = target.add_key(lexer.slice(), kind);
-
-            match lexer.next() {
-                Some(Ok(Token::Colon)) => (),
-                _ => return Err(("unexpected token here, expecting ':'", lexer.span())),
-            }
-
-            let Some(target) = parse_value(lexer, target)? else {
-                return Err(("unexpected end of stream while expecting value", lexer.span()));
-            };
-
-            Ok(target)
-        })
-    };
 
     enum Awaits {
         Key,
@@ -87,19 +72,29 @@ fn parse_object<'s, T: Build<'s>>(lexer: &mut Lexer<'s>, mut target: T) -> Resul
     let mut awaits = Awaits::Key;
 
     while let Some(token) = lexer.next() {
-        match (token?, &mut awaits) {
+        match (token.refine(lexer)?, &mut awaits) {
             (Token::BraceClose, Awaits::Key | Awaits::Comma) => {
                 return Ok(target);
             }
             (Token::Comma, Awaits::Comma) => {
                 awaits = Awaits::Key;
             }
-            (Token::PlainString(_), Awaits::Key) => {
-                target = insert(lexer, target, StringKind::Plain)?;
-                awaits = Awaits::Comma;
-            }
-            (Token::EscapedString(_), Awaits::Key) => {
-                target = insert(lexer, target, StringKind::Escaped)?;
+            (Token::String(s), Awaits::Key) => {
+                target = target.add_field(|mut target| {
+                    target = target.add_key(lexer.slice(), s.into());
+
+                    match lexer.next() {
+                        Some(Ok(Token::Colon)) => (),
+                        _ => return Err(("unexpected token here, expecting ':'", lexer.span())),
+                    }
+
+                    let Some(target) = parse_value(lexer, target)? else {
+                        return Err(("unexpected end of stream while expecting value", lexer.span()));
+                    };
+
+                    Ok(target)
+                })?;
+
                 awaits = Awaits::Comma;
             }
             _ => {
@@ -109,4 +104,21 @@ fn parse_object<'s, T: Build<'s>>(lexer: &mut Lexer<'s>, mut target: T) -> Resul
     }
 
     Err(("unmatched opening brace defined here", span))
+}
+
+// ---
+
+trait RefineErr {
+    type Output;
+
+    fn refine(self, lexer: &Lexer) -> Result<Self::Output>;
+}
+
+impl<T> RefineErr for std::result::Result<T, ()> {
+    type Output = T;
+
+    #[inline]
+    fn refine(self, lexer: &Lexer) -> Result<T> {
+        self.map_err(|_| ("unexpected characters or end of stream", lexer.span()))
+    }
 }
