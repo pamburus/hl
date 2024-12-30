@@ -14,10 +14,10 @@ pub enum Token<'s> {
     Number(&'s str),
 
     #[regex(r#""[^"\\]*""#, |lex| lex.slice(), priority = 5)]
-    RawString(&'s str),
+    PlainString(&'s str),
 
     #[regex(r#""([^"\\]|\\["\\bnfrt]|u[a-fA-F0-9]{4})*""#, |lex| lex.slice(), priority = 4)]
-    EncodedString(&'s str),
+    EscapedString(&'s str),
 
     #[token("{")]
     BraceOpen,
