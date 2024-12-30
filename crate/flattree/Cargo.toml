@@ -1,0 +1,12 @@
+[package]
+description = "Read-only flat tree data structure"
+name = "flattree"
+version = "0.1.0"
+workspace = "../.."
+repository.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+derive-where = "1"

@@ -12,14 +12,16 @@ use std::{
 
 // third-party imports
 use chrono::{DateTime, Utc};
+use derive_more::{Deref, DerefMut};
 use regex::Regex;
-use serde::de::{Deserialize, Deserializer, MapAccess, SeqAccess, Visitor};
+use serde::de::{Deserialize, DeserializeSeed, Deserializer, MapAccess, SeqAccess, Visitor};
 use serde_json::{self as json};
 use titlecase::titlecase;
 use wildflower::Pattern;
 
 // other local crates
 use encstr::{AnyEncodedString, EncodedString};
+use flattree::FlatTree;
 use serde_logfmt::logfmt;
 
 // local imports
@@ -170,7 +172,7 @@ impl<'a> RawValue<'a> {
 }
 
 impl<'a> From<EncodedString<'a>> for RawValue<'a> {
-    #[inline]
+    #[inline(always)]
     fn from(value: EncodedString<'a>) -> Self {
         Self::String(value)
     }
@@ -232,7 +234,7 @@ impl<'a> RawObject<'a> {
         }
     }
 
-    #[inline]
+    #[inline(always)]
     pub fn parse(&self) -> Result<Object<'a>> {
         match self {
             Self::Json(value) => Object::from_json(value.get()),
@@ -436,7 +438,7 @@ impl<T: RecordFilter> RecordFilter for &T {
 }
 
 impl RecordFilter for Level {
-    #[inline]
+    #[inline(always)]
     fn apply<'a>(&self, record: &Record<'a>) -> bool {
         record.level.map_or(false, |x| x <= *self)
     }
@@ -615,7 +617,7 @@ impl ParserSettings {
 }
 
 impl Default for ParserSettings {
-    #[inline]
+    #[inline(always)]
     fn default() -> Self {
         Self::new(&PredefinedFields::default(), Vec::new(), None)
     }
@@ -877,12 +879,12 @@ pub struct RawRecord<'a> {
 }
 
 impl<'a> RawRecord<'a> {
-    #[inline]
+    #[inline(always)]
     pub fn fields(&self) -> impl Iterator<Item = &(&'a str, RawValue<'a>)> {
-        self.fields.iter()
+        self.fields.roots().iter().map(|x| x.value())
     }
 
-    #[inline]
+    #[inline(always)]
     pub fn parser() -> RawRecordParser {
         RawRecordParser::new()
     }
@@ -905,15 +907,57 @@ impl<'a> Deserialize<'a> for RawRecord<'a> {
         D: Deserializer<'a>,
     {
         const N: usize = RAW_RECORD_FIELDS_CAPACITY;
-        Ok(deserializer.deserialize_map(ObjectVisitor::<json::value::RawValue, N>::new(&mut target.fields))?)
+        Ok(deserializer.deserialize_map(ObjectRootVisitor::<json::value::RawValue, N>::new(&mut target.fields))?)
     }
 }
 
 // ---
 
-pub type RawRecordFields<'a> = ObjectFields<'a, RAW_RECORD_FIELDS_CAPACITY>;
+// pub type RawRecordFields<'a> = ObjectFields<'a, RAW_RECORD_FIELDS_CAPACITY>;
+pub type RawRecordFields<'a> = ObjectRootFields<'a, RAW_RECORD_FIELDS_CAPACITY>;
+type ObjectRootFields<'a, const N: usize> = FlatTree<ObjectField<'a>, ObjectStorage<'a, N>>;
 
-type ObjectFields<'a, const N: usize> = heapopt::Vec<(&'a str, RawValue<'a>), N>;
+type ObjectFields<'a, const N: usize> = heapopt::Vec<ObjectField<'a>, N>;
+type ObjectField<'a> = (&'a str, RawValue<'a>);
+
+#[derive(Deref, DerefMut, Default)]
+pub struct ObjectStorage<'a, const N: usize>(ObjectStorageInner<'a, N>);
+// type RawRecordStorage<'a> = ObjectStorage<'a, RAW_RECORD_FIELDS_CAPACITY>;
+
+type ObjectStorageInner<'a, const N: usize> = heapopt::Vec<flattree::Item<ObjectField<'a>>, N>;
+
+impl<'a, const N: usize> flattree::Storage for ObjectStorage<'a, N> {
+    type Value = ObjectField<'a>;
+
+    #[inline(always)]
+    fn len(&self) -> usize {
+        ObjectStorageInner::len(&**self)
+    }
+
+    #[inline(always)]
+    fn get(&self, index: usize) -> Option<&flattree::Item<Self::Value>> {
+        ObjectStorageInner::get(&**self, index)
+    }
+
+    #[inline(always)]
+    fn get_mut(&mut self, index: usize) -> Option<&mut flattree::Item<Self::Value>> {
+        ObjectStorageInner::get_mut(&mut **self, index)
+    }
+    #[inline(always)]
+    fn push(&mut self, item: flattree::Item<Self::Value>) {
+        ObjectStorageInner::push(&mut **self, item)
+    }
+
+    #[inline(always)]
+    fn clear(&mut self) {
+        ObjectStorageInner::clear(&mut **self)
+    }
+
+    #[inline(always)]
+    fn reserve(&mut self, additional: usize) {
+        ObjectStorageInner::reserve(&mut **self, additional)
+    }
+}
 
 // ---
 
@@ -923,7 +967,7 @@ pub struct RawRecordParser {
 }
 
 impl RawRecordParser {
-    #[inline]
+    #[inline(always)]
     pub fn new() -> Self {
         Self {
             allow_prefix: false,
@@ -931,7 +975,7 @@ impl RawRecordParser {
         }
     }
 
-    #[inline]
+    #[inline(always)]
     pub fn allow_prefix(self, value: bool) -> Self {
         Self {
             allow_prefix: value,
@@ -939,7 +983,7 @@ impl RawRecordParser {
         }
     }
 
-    #[inline]
+    #[inline(always)]
     pub fn format(self, format: Option<InputFormat>) -> Self {
         Self { format, ..self }
     }
@@ -993,7 +1037,7 @@ where
     Json: RawRecordIterator<'a>,
     Logfmt: RawRecordIterator<'a>,
 {
-    #[inline]
+    #[inline(always)]
     pub fn next(&mut self) -> Option<Result<AnnotatedRawRecord<'a>>> {
         match self {
             Self::Empty => None,
@@ -1002,7 +1046,7 @@ where
         }
     }
 
-    #[inline]
+    #[inline(always)]
     pub fn collect_vec(&mut self) -> Vec<Result<AnnotatedRawRecord<'a>>> {
         let mut result = Vec::new();
         while let Some(item) = self.next() {
@@ -1035,6 +1079,7 @@ struct RawRecordJsonStream<'a, R> {
 
 impl<'a, R> RawRecordIterator<'a> for RawRecordJsonStream<'a, R>
 where
+    R: serde_json::de::Read<'a>,
     R: serde_json::de::Read<'a>,
 {
     #[inline]
@@ -1131,6 +1176,59 @@ where
 
 // ---
 
+struct ObjectRootVisitor<'a, 't, RV, const N: usize>
+where
+    RV: ?Sized + 'a,
+{
+    target: &'t mut ObjectRootFields<'a, N>,
+    marker: PhantomData<fn(RV) -> RV>,
+}
+
+impl<'a, 't, RV, const N: usize> ObjectRootVisitor<'a, 't, RV, N>
+where
+    RV: ?Sized + 'a,
+{
+    #[inline]
+    fn new(target: &'t mut ObjectRootFields<'a, N>) -> Self {
+        Self {
+            target,
+            marker: PhantomData,
+        }
+    }
+}
+
+impl<'a, 'r, RV, const N: usize> Visitor<'a> for ObjectRootVisitor<'a, 'r, RV, N>
+where
+    RV: ?Sized + 'a,
+    &'a RV: Deserialize<'a> + 'a,
+    RawValue<'a>: From<&'a RV>,
+{
+    type Value = ();
+
+    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+        formatter.write_str("json object")
+    }
+
+    #[inline]
+    fn visit_map<M: MapAccess<'a>>(self, mut map: M) -> std::result::Result<Self::Value, M::Error> {
+        self.target.clear();
+        self.target.reserve(map.size_hint().unwrap_or(0));
+
+        // while let Some((key, value)) = map.next_entry::<&'a str, &RV>()? {
+        //     self.target.push((key, value.into()));
+        // }
+
+        let mut target = self.target;
+        while let Some(key) = map.next_key::<&'a str>()? {
+            target = map.next_value_seed(ObjectNodeVisitor::<_, _, N>::new(target, key))?;
+        }
+
+        Ok(())
+    }
+}
+
+// ---
+
 #[derive(Default)]
 pub struct LogfmtRawRecord<'a>(pub RawRecord<'a>);
 
@@ -1138,6 +1236,7 @@ impl<'a> Deserialize<'a> for LogfmtRawRecord<'a> {
     #[inline]
     fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
     where
+        D: Deserializer<'a>,
         D: Deserializer<'a>,
     {
         let mut target = Self::default();
@@ -1151,7 +1250,85 @@ impl<'a> Deserialize<'a> for LogfmtRawRecord<'a> {
         D: Deserializer<'a>,
     {
         const N: usize = RAW_RECORD_FIELDS_CAPACITY;
-        deserializer.deserialize_map(ObjectVisitor::<logfmt::raw::RawValue, N>::new(&mut target.0.fields))
+        deserializer.deserialize_map(ObjectRootVisitor::<logfmt::raw::RawValue, N>::new(&mut target.0.fields))
+    }
+}
+
+// ---
+
+struct ObjectNodeVisitor<'a, B, RV, const N: usize>
+where
+    RV: ?Sized,
+{
+    node: B,
+    key: &'a str,
+    _marker: PhantomData<fn(RV) -> RV>,
+}
+
+impl<'a, B, RV, const N: usize> ObjectNodeVisitor<'a, B, RV, N>
+where
+    RV: ?Sized,
+{
+    #[inline]
+    fn new(node: B, key: &'a str) -> Self {
+        Self {
+            node,
+            key,
+            _marker: PhantomData,
+        }
+    }
+}
+
+impl<'a, B, RV, const N: usize> DeserializeSeed<'a> for ObjectNodeVisitor<'a, B, RV, N>
+where
+    RV: ?Sized + 'a,
+    &'a RV: Deserialize<'a> + 'a,
+    RawValue<'a>: From<&'a RV>,
+    B: flattree::tree::Build<Value = ObjectField<'a>>,
+{
+    type Value = B;
+
+    #[inline]
+    fn deserialize<D>(self, deserializer: D) -> std::result::Result<Self::Value, D::Error>
+    where
+        D: Deserializer<'a>,
+    {
+        let key = self.key;
+        let value = <&'a RV>::deserialize(deserializer)?.into();
+
+        // Ok(self.node.push((key, value)))
+
+        Ok(match value {
+            RawValue::Object(obj) => self.node.build((key, value), |node| match obj {
+                RawObject::Json(value) => value
+                    .deserialize_map(ObjectNodeVisitor::<B::Child, RV, N>::new(node, key))
+                    .unwrap(), // TODO: handle errors
+            }),
+            _ => self.node.push((key, value)),
+        })
+    }
+}
+
+impl<'a, B, RV, const N: usize> Visitor<'a> for ObjectNodeVisitor<'a, B, RV, N>
+where
+    RV: ?Sized + 'a,
+    &'a RV: Deserialize<'a> + 'a,
+    RawValue<'a>: From<&'a RV>,
+    B: flattree::tree::Build<Value = ObjectField<'a>>,
+{
+    type Value = B;
+
+    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+        formatter.write_str("json object")
+    }
+
+    #[inline]
+    fn visit_map<M: MapAccess<'a>>(mut self, mut map: M) -> std::result::Result<Self::Value, M::Error> {
+        while let Some(key) = map.next_key::<&'a str>()? {
+            self.node = map.next_value_seed(ObjectNodeVisitor::<B, RV, N>::new(self.node, key))?;
+        }
+
+        Ok(self.node)
     }
 }
 
@@ -1779,8 +1956,8 @@ mod tests {
 
         let rec = stream.next().unwrap().unwrap();
         assert_eq!(rec.prefix, b"");
-        assert_eq!(rec.record.fields.as_slices().0.len(), 0);
-        assert_eq!(rec.record.fields.as_slices().1.len(), 0);
+        assert_eq!(rec.record.fields.storage().as_slices().0.len(), 0);
+        assert_eq!(rec.record.fields.storage().as_slices().1.len(), 0);
     }
 
     #[test]
@@ -2287,6 +2464,21 @@ mod tests {
             let record = parser.parse(&record.record);
             assert_eq!(record.message.map(|x| x.raw_str()), *expected);
         }
+    }
+
+    #[ignore]
+    #[test]
+    fn test_complex_key() {
+        let records = RawRecord::parser()
+            .parse(br#"{"\u001b[32mtst\u001b[m":42}"#)
+            .collect_vec();
+        assert_eq!(records.len(), 1);
+        let record = records.into_iter().next().unwrap().unwrap();
+        assert_eq!(record.record.fields.roots().len(), 1);
+        assert_eq!(
+            record.record.fields.roots().iter().next().unwrap().value(),
+            &("\u{1b}[32mtst\u{1b}[m", RawValue::Number("42")),
+        );
     }
 
     fn parse(s: &str) -> Record {
