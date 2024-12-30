@@ -19,9 +19,50 @@ pub enum Value<'s> {
     Null,
     Bool(bool),
     Number(&'s str),
-    String(&'s str),
+    String(String<'s>),
     Array(Vec<Value<'s>>),
-    Object(HashMap<&'s str, Value<'s>>),
+    Object(HashMap<String<'s>, Value<'s>>),
+}
+
+impl<'s> From<String<'s>> for Value<'s> {
+    #[inline]
+    fn from(s: String<'s>) -> Self {
+        Value::String(s)
+    }
+}
+
+impl<'s> From<bool> for Value<'s> {
+    #[inline]
+    fn from(b: bool) -> Self {
+        Value::Bool(b)
+    }
+}
+
+#[derive(PartialEq, Eq, Hash)]
+pub enum String<'s> {
+    Raw(&'s str),
+    Encoded(&'s str),
+}
+
+impl<'s> std::fmt::Debug for String<'s> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Raw(s) => write!(f, "{:?}", s),
+            Self::Encoded(s) => write!(f, "{:?}", s),
+        }
+    }
+}
+
+impl<'s> String<'s> {
+    #[inline]
+    pub fn from_raw_token(s: &'s str) -> Self {
+        Self::Raw(&s[1..s.len() - 1])
+    }
+
+    #[inline]
+    pub fn from_encoded_token(s: &'s str) -> Self {
+        Self::Encoded(s)
+    }
 }
 
 /// Parse a token stream into a JSON value.
@@ -33,7 +74,8 @@ pub fn parse_value<'s>(lexer: &mut Lexer<'s, Token<'s>>) -> Result<Option<Value<
             Ok(Token::BracketOpen) => parse_array(lexer),
             Ok(Token::Null) => Ok(Value::Null),
             Ok(Token::Number(n)) => Ok(Value::Number(n)),
-            Ok(Token::String(s)) => Ok(Value::String(s)),
+            Ok(Token::RawString(s)) => Ok(Value::String(String::from_raw_token(s))),
+            Ok(Token::EncodedString(s)) => Ok(Value::String(String::from_encoded_token(s))),
             _ => Err(("unexpected token here (context: value)", lexer.span())),
         }
         .map(Some)
@@ -78,8 +120,12 @@ fn parse_array<'s>(lexer: &mut Lexer<'s, Token<'s>>) -> Result<Value<'s>> {
                 array.push(Value::Number(n));
                 awaits_value = false;
             }
-            Ok(Token::String(s)) if !awaits_comma => {
-                array.push(Value::String(s));
+            Ok(Token::RawString(s)) if !awaits_comma => {
+                array.push(Value::String(String::from_raw_token(s)));
+                awaits_value = false;
+            }
+            Ok(Token::EncodedString(s)) if !awaits_comma => {
+                array.push(Value::String(String::from_encoded_token(s)));
                 awaits_value = false;
             }
             _ => return Err(("unexpected token here (context: array)", lexer.span())),
@@ -99,25 +145,41 @@ fn parse_object<'s>(lexer: &mut Lexer<'s, Token<'s>>) -> Result<Value<'s>> {
     let mut awaits_comma = false;
     let mut awaits_key = false;
 
+    let mut insert = |lexer: &mut Lexer<'s, Token<'s>>, key: String<'s>| {
+        match lexer.next() {
+            Some(Ok(Token::Colon)) => (),
+            _ => return Err(("unexpected token here, expecting ':'", lexer.span())),
+        }
+        if let Some(value) = parse_value(lexer)? {
+            map.insert(key, value);
+        } else {
+            return Err(("unexpected end of stream while expecting value", lexer.span()));
+        }
+        Ok(())
+    };
+
     while let Some(token) = lexer.next() {
         match token {
-            Ok(Token::BraceClose) if !awaits_key => return Ok(Value::Object(map)),
-            Ok(Token::Comma) if awaits_comma => awaits_key = true,
-            Ok(Token::String(key)) if !awaits_comma => {
-                match lexer.next() {
-                    Some(Ok(Token::Colon)) => (),
-                    _ => return Err(("unexpected token here, expecting ':'", lexer.span())),
-                }
-                if let Some(value) = parse_value(lexer)? {
-                    map.insert(key, value);
-                    awaits_key = false;
-                } else {
-                    return Err(("unexpected end of stream while expecting value", lexer.span()));
-                }
+            Ok(Token::BraceClose) if !awaits_key => {
+                return Ok(Value::Object(map));
             }
-            _ => return Err(("unexpected token here (context: object)", lexer.span())),
+            Ok(Token::Comma) if awaits_comma => {
+                awaits_key = true;
+            }
+            Ok(Token::RawString(key)) if !awaits_comma => {
+                insert(lexer, String::from_raw_token(key))?;
+                awaits_key = false;
+            }
+            Ok(Token::EncodedString(key)) if !awaits_comma => {
+                insert(lexer, String::from_encoded_token(key))?;
+                awaits_key = false;
+            }
+            _ => {
+                return Err(("unexpected token here (context: object)", lexer.span()));
+            }
         }
         awaits_comma = !awaits_key;
     }
+
     Err(("unmatched opening brace defined here", span))
 }
