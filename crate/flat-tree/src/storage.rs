@@ -1,23 +1,26 @@
 // stdlib imports
-use std::vec::Vec;
+use std::{fmt::Debug, vec::Vec};
 
 // local imports
 use crate::tree::Item;
 
-pub trait Storage {
+pub trait Storage: Debug {
     type Value;
 
     fn len(&self) -> usize;
-    fn is_empty(&self) -> bool {
-        self.len() == 0
-    }
     fn get(&self, index: usize) -> Option<&Item<Self::Value>>;
     fn get_mut(&mut self, index: usize) -> Option<&mut Item<Self::Value>>;
     fn push(&mut self, item: Item<Self::Value>);
     fn clear(&mut self);
+    fn reserve(&mut self, additional: usize);
+
+    #[inline]
+    fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
 }
 
-impl<V> Storage for Vec<Item<V>> {
+impl<V: Debug> Storage for Vec<Item<V>> {
     type Value = V;
 
     #[inline]
@@ -43,6 +46,11 @@ impl<V> Storage for Vec<Item<V>> {
     #[inline]
     fn clear(&mut self) {
         Vec::clear(self)
+    }
+
+    #[inline]
+    fn reserve(&mut self, additional: usize) {
+        Vec::reserve(self, additional)
     }
 }
 

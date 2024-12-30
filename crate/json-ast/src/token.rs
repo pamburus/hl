@@ -1,8 +1,11 @@
 // external imports
 use logos::Logos;
 
+pub type Lexer<'s> = logos::Lexer<'s, Token<'s>>;
+
 #[derive(Logos, Debug, PartialEq)]
 #[logos(skip r"[ \t\r\n\f]+")]
+#[logos(error = crate::error::Error)]
 pub enum Token<'s> {
     #[token("null")]
     Null,
