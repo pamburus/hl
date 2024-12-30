@@ -2,7 +2,11 @@
 use flat_tree::{tree, FlatTree};
 
 // local imports
-use crate::{error::Result, parse::parse_value, token::Lexer};
+use crate::{
+    error::Result,
+    parse::parse_value,
+    token::{self, Lexer},
+};
 
 // ---
 
@@ -12,29 +16,35 @@ pub struct Container<'s> {
 }
 
 impl<'s> Container<'s> {
+    #[inline]
     pub fn new() -> Self {
         Self::default()
     }
 
+    #[inline]
     pub fn parse(lexer: &mut Lexer<'s>) -> Result<Self> {
         let mut container = Self::new();
         container.extend(lexer)?;
         Ok(container)
     }
 
+    #[inline]
     pub fn extend(&mut self, lexer: &mut Lexer<'s>) -> Result<()> {
         while let Some(_) = parse_value(lexer, self.inner.metaroot())? {}
         Ok(())
     }
 
+    #[inline]
     pub fn nodes(&self) -> tree::Nodes<Node<'s>> {
         self.inner.nodes()
     }
 
+    #[inline]
     pub fn clear(&mut self) {
         self.inner.clear();
     }
 
+    #[inline]
     pub fn reserve(&mut self, additional: usize) {
         self.inner.reserve(additional);
     }
@@ -58,22 +68,27 @@ impl<'s, T> BuildExt<'s> for T
 where
     T: Build<'s>,
 {
+    #[inline]
     fn add_scalar(self, source: &'s str, kind: ScalarKind) -> Self {
         self.push(Node::new(NodeKind::Scalar(kind), source))
     }
 
+    #[inline]
     fn add_object(self, f: impl FnOnce(Self::Child) -> Result<Self::Child>) -> Result<Self> {
         self.build_e(Node::new(NodeKind::Object, ""), f)
     }
 
+    #[inline]
     fn add_array(self, f: impl FnOnce(Self::Child) -> Result<Self::Child>) -> Result<Self> {
         self.build_e(Node::new(NodeKind::Array, ""), f)
     }
 
+    #[inline]
     fn add_field(self, f: impl FnOnce(Self::Child) -> Result<Self::Child>) -> Result<Self> {
         self.build_e(Node::new(NodeKind::Field, ""), f)
     }
 
+    #[inline]
     fn add_key(self, source: &'s str, kind: StringKind) -> Self {
         self.push(Node::new(NodeKind::Key(kind), source))
     }
@@ -92,6 +107,7 @@ pub struct Node<'s> {
 }
 
 impl<'s> Node<'s> {
+    #[inline]
     pub fn new(kind: NodeKind, source: &'s str) -> Self {
         Self { kind, source }
     }
@@ -120,6 +136,16 @@ pub enum StringKind {
     Escaped,
 }
 
+impl<'s> From<token::String<'s>> for StringKind {
+    #[inline]
+    fn from(s: token::String<'s>) -> Self {
+        match s {
+            token::String::Plain(_) => Self::Plain,
+            token::String::Escaped(_) => Self::Escaped,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -129,14 +155,5 @@ mod tests {
         let mut lexer = Lexer::new(r#"{"key": "value"}"#);
         let container = Container::parse(&mut lexer).unwrap();
         assert_eq!(container.nodes().len(), 4);
-    }
-
-    #[bench]
-    fn bench_container(b: &mut test::Bencher) {
-        let mut lexer = Lexer::new(r#"{"key": "value"}"#);
-        b.iter(|| {
-            let container = Container::parse(&mut lexer).unwrap();
-            assert_eq!(container.nodes().len(), 4);
-        });
     }
 }
