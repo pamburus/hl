@@ -17,6 +17,7 @@ fn main() -> ExitCode {
 
     match Container::parse(&mut lexer) {
         Ok(value) => {
+            println!("len: {}", value.nodes().len());
             println!("{:#?}", value);
         }
         Err((msg, span)) => {
