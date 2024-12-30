@@ -2,16 +2,12 @@
 use std::collections::HashMap;
 
 // external imports
-use logos::{Lexer, Span};
+use logos::Lexer;
 
 // lopcal imports
-use crate::token::Token;
+use crate::{error::Result, token::Token};
 
 // ---
-
-type Error = (&'static str, Span);
-
-type Result<T> = std::result::Result<T, Error>;
 
 /// Represent any valid JSON value.
 #[derive(Debug)]
@@ -37,6 +33,8 @@ impl<'s> From<bool> for Value<'s> {
         Value::Bool(b)
     }
 }
+
+// ---
 
 #[derive(PartialEq, Eq, Hash)]
 pub enum String<'s> {
@@ -64,6 +62,8 @@ impl<'s> String<'s> {
         Self::Encoded(s)
     }
 }
+
+// ---
 
 /// Parse a token stream into a JSON value.
 pub fn parse_value<'s>(lexer: &mut Lexer<'s, Token<'s>>) -> Result<Option<Value<'s>>> {

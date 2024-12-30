@@ -1,5 +1,5 @@
 // std imports
-use std::marker::PhantomData;
+use std::{marker::PhantomData, result::Result};
 
 // third-party imports
 use derive_where::derive_where;
@@ -9,7 +9,11 @@ use crate::storage::Storage;
 
 // ---
 
-pub struct FlatTree<V, S = Vec<Item<V>>>
+pub type DefaultStorage<V> = Vec<Item<V>>;
+
+#[derive_where(Default; S: Default)]
+#[derive_where(Debug)]
+pub struct FlatTree<V, S = DefaultStorage<V>>
 where
     S: Storage<Value = V>,
 {
@@ -23,8 +27,8 @@ where
     S: Storage<Value = V> + Default,
 {
     #[inline]
-    pub fn build() -> FlatTreeBuilder<S> {
-        FlatTreeBuilder::new(Default::default())
+    pub fn new() -> Self {
+        Self::with_storage(Default::default())
     }
 }
 
@@ -33,9 +37,13 @@ where
     S: Storage<Value = V>,
 {
     #[inline]
-    pub fn build_with_storage(mut storage: S) -> FlatTreeBuilder<S> {
+    pub fn with_storage(mut storage: S) -> Self {
         storage.clear();
-        FlatTreeBuilder::new(storage)
+        Self {
+            storage,
+            roots: 0,
+            _marker: PhantomData,
+        }
     }
 
     #[inline]
@@ -44,12 +52,12 @@ where
     }
 
     #[inline]
-    pub fn roots(&self) -> Roots<'_, V, S> {
+    pub fn roots(&self) -> Roots<V, S> {
         Roots { tree: self }
     }
 
     #[inline]
-    pub fn nodes(&self) -> Nodes<'_, V, S> {
+    pub fn nodes(&self) -> Nodes<V, S> {
         Nodes {
             tree: self,
             start: 0,
@@ -63,12 +71,67 @@ where
     }
 
     #[inline]
+    pub fn clear(&mut self) {
+        self.storage.clear();
+        self.roots = 0;
+    }
+
+    #[inline]
+    pub fn reserve(&mut self, additional: usize) {
+        self.storage.reserve(additional);
+    }
+
+    #[inline]
+    pub fn metaroot(&mut self) -> NodeBuilder<V, S> {
+        NodeBuilder {
+            tree: self,
+            index: None,
+            children: 0,
+        }
+    }
+
+    #[inline]
+    pub fn with_node(mut self, value: S::Value) -> Self {
+        (&mut self).push(value);
+        self
+    }
+
+    #[inline]
+    pub fn with_composite_node(
+        mut self,
+        value: S::Value,
+        f: impl FnOnce(NodeBuilder<V, S>) -> NodeBuilder<V, S>,
+    ) -> Self {
+        (&mut self).build(value, f);
+        self
+    }
+
+    #[inline]
+    pub fn push(&mut self, value: S::Value) -> &mut Self {
+        Build::push(self, value)
+    }
+
+    #[inline]
+    pub fn build(&mut self, value: S::Value, f: impl FnOnce(NodeBuilder<V, S>) -> NodeBuilder<V, S>) -> &mut Self {
+        Build::build(self, value, f)
+    }
+
+    #[inline]
+    pub fn build_e<E>(
+        &mut self,
+        value: S::Value,
+        f: impl FnOnce(NodeBuilder<V, S>) -> Result<NodeBuilder<V, S>, E>,
+    ) -> Result<&mut Self, E> {
+        Build::build_e(self, value, f)
+    }
+
+    #[inline]
     fn len(&self) -> usize {
         self.storage.len()
     }
 
     #[inline]
-    fn node(&self, index: usize) -> Node<'_, V, S> {
+    fn node(&self, index: usize) -> Node<V, S> {
         Node {
             tree: self,
             index,
@@ -79,6 +142,56 @@ where
     #[inline]
     fn item(&self, index: usize) -> &Item<V> {
         self.storage.get(index).unwrap()
+    }
+
+    #[inline]
+    fn update(&mut self, index: usize, f: impl FnOnce(&mut Item<S::Value>)) -> &mut Self {
+        f(self.storage.get_mut(index).unwrap());
+        self
+    }
+}
+
+impl<'t, V, S> Build for &'t mut FlatTree<V, S>
+where
+    S: Storage<Value = V>,
+{
+    type Value = V;
+    type Storage = S;
+    type Child = NodeBuilder<'t, V, S>;
+
+    #[inline]
+    fn push(self, value: S::Value) -> Self {
+        self.storage.push(Item::new(value));
+        self.roots += 1;
+        self
+    }
+
+    #[inline]
+    fn build_e<E>(mut self, value: S::Value, f: impl FnOnce(Self::Child) -> Result<Self::Child, E>) -> Result<Self, E> {
+        let index = self.storage.len();
+        self = self.push(value);
+
+        let child = NodeBuilder {
+            tree: self,
+            index: Some(index),
+            children: 0,
+        };
+
+        Ok(f(child)?.end())
+    }
+}
+
+// ---
+
+pub trait Build: Sized {
+    type Value;
+    type Storage: Storage<Value = Self::Value>;
+    type Child: Build<Value = Self::Value, Storage = Self::Storage>;
+
+    fn push(self, value: Self::Value) -> Self;
+    fn build_e<E>(self, value: Self::Value, f: impl FnOnce(Self::Child) -> Result<Self::Child, E>) -> Result<Self, E>;
+    fn build(self, value: Self::Value, f: impl FnOnce(Self::Child) -> Self::Child) -> Self {
+        self.build_e(value, |child| Ok::<_, ()>(f(child))).unwrap()
     }
 }
 
@@ -375,166 +488,117 @@ where
 
 // ---
 
-pub struct FlatTreeBuilder<S> {
-    storage: S,
-    roots: usize,
-}
-
-impl<S> FlatTreeBuilder<S>
+pub struct NodeBuilder<'t, V, S = DefaultStorage<V>>
 where
-    S: Storage,
+    S: Storage<Value = V>,
 {
-    #[inline]
-    pub fn new(storage: S) -> Self {
-        Self { storage, roots: 0 }
-    }
-
-    #[inline]
-    pub fn roots<'b>(&'b mut self) -> NodeBuilder<'b, S> {
-        NodeBuilder {
-            builder: self,
-            index: None,
-            children: 0,
-        }
-    }
-
-    #[inline]
-    pub fn done(self) -> FlatTree<S::Value, S> {
-        FlatTree {
-            storage: self.storage,
-            roots: self.roots,
-            _marker: PhantomData,
-        }
-    }
-
-    #[inline]
-    pub fn add(mut self, value: S::Value) -> Self {
-        self.storage.push(Item::new(value));
-        self.roots += 1;
-        self
-    }
-
-    #[inline]
-    pub fn build(mut self, value: S::Value, f: impl FnOnce(NodeBuilder<'_, S>) -> NodeBuilder<'_, S>) -> Self {
-        let index = self.storage.len();
-        self = self.add(value);
-
-        f(NodeBuilder {
-            builder: &mut self,
-            index: Some(index),
-            children: 0,
-        })
-        .end();
-
-        self
-    }
-
-    #[inline]
-    fn update(&mut self, index: usize, f: impl FnOnce(&mut Item<S::Value>)) -> &mut Self {
-        f(self.storage.get_mut(index).unwrap());
-        self
-    }
-}
-
-impl<T, S> From<FlatTreeBuilder<S>> for FlatTree<T, S>
-where
-    S: Storage<Value = T>,
-{
-    #[inline]
-    fn from(builder: FlatTreeBuilder<S>) -> Self {
-        builder.done()
-    }
-}
-
-// ---
-
-pub struct NodeBuilder<'b, S>
-where
-    S: Storage,
-{
-    builder: &'b mut FlatTreeBuilder<S>,
+    tree: &'t mut FlatTree<V, S>,
     index: Option<usize>,
     children: usize,
 }
 
-impl<'b, S> NodeBuilder<'b, S>
+impl<'t, V, S> NodeBuilder<'t, V, S>
 where
-    S: Storage,
+    S: Storage<Value = V>,
 {
     #[inline]
-    pub fn add(mut self, value: S::Value) -> Self {
-        self.builder.storage.push(Item {
+    pub fn push(mut self, value: S::Value) -> Self {
+        self.tree.storage.push(Item {
             parent: self.index,
             ..Item::new(value)
         });
         self.children += 1;
         if self.index.is_none() {
-            self.builder.roots += 1;
+            self.tree.roots += 1;
         }
         self
     }
 
     #[inline]
-    pub fn build(mut self, value: S::Value, f: impl FnOnce(Self) -> Self) -> Self {
-        let index = self.builder.storage.len();
-        self = self.add(value);
+    pub fn build(self, value: S::Value, f: impl FnOnce(Self) -> Self) -> Self {
+        Build::build(self, value, f)
+    }
 
-        let (snapshot, b) = self.snapshot();
+    #[inline]
+    pub fn build_e<E>(mut self, value: S::Value, f: impl FnOnce(Self) -> Result<Self, E>) -> Result<Self, E> {
+        let index = self.tree.storage.len();
+        self = self.push(value);
+
+        let (snapshot, tree) = self.snapshot();
 
         let child = NodeBuilder {
-            builder: b,
+            tree,
             index: Some(index),
             children: 0,
         };
 
-        let b = f(child).end();
+        let tree = f(child)?.end();
 
-        (snapshot, b).into()
+        Ok((snapshot, tree).into())
     }
 
     #[inline]
-    fn end(mut self) -> &'b mut FlatTreeBuilder<S> {
+    fn end(mut self) -> &'t mut FlatTree<S::Value, S> {
         self.close();
-        self.builder
+        self.tree
     }
 
     #[inline]
     fn close(&mut self) {
         if let Some(index) = self.index {
-            let len = self.builder.storage.len() - index;
+            let len = self.tree.storage.len() - index;
             let children = self.children;
-            self.builder.update(index, |item| {
+            self.tree.update(index, |item| {
                 item.len = len;
                 item.children = children;
             });
         } else {
-            self.builder.roots = self.children;
+            self.tree.roots = self.children;
         }
     }
 
     #[inline]
-    fn snapshot(self) -> (NodeBuilderSnapshot, &'b mut FlatTreeBuilder<S>)
+    fn snapshot(self) -> (NodeBuilderSnapshot, &'t mut FlatTree<S::Value, S>)
     where
-        Self: 'b,
+        Self: 't,
     {
         (
             NodeBuilderSnapshot {
                 parent: self.index,
                 children: self.children,
             },
-            self.builder,
+            self.tree,
         )
     }
 }
 
-impl<'b, S> From<(NodeBuilderSnapshot, &'b mut FlatTreeBuilder<S>)> for NodeBuilder<'b, S>
+impl<'t, V, S> Build for NodeBuilder<'t, V, S>
 where
-    S: Storage,
+    S: Storage<Value = V>,
+{
+    type Value = V;
+    type Storage = S;
+    type Child = Self;
+
+    #[inline]
+    fn push(self, value: S::Value) -> Self {
+        self.push(value)
+    }
+
+    #[inline]
+    fn build_e<E>(self, value: S::Value, f: impl FnOnce(Self) -> Result<Self, E>) -> Result<Self, E> {
+        self.build_e(value, f)
+    }
+}
+
+impl<'t, V, S> From<(NodeBuilderSnapshot, &'t mut FlatTree<V, S>)> for NodeBuilder<'t, V, S>
+where
+    S: Storage<Value = V>,
 {
     #[inline]
-    fn from((state, builder): (NodeBuilderSnapshot, &'b mut FlatTreeBuilder<S>)) -> Self {
+    fn from((state, tree): (NodeBuilderSnapshot, &'t mut FlatTree<S::Value, S>)) -> Self {
         Self {
-            builder,
+            tree,
             index: state.parent,
             children: state.children,
         }
@@ -568,6 +632,16 @@ impl<V> Item<V> {
             children: 0,
         }
     }
+
+    #[inline]
+    pub fn parent(&self) -> Option<usize> {
+        self.parent
+    }
+
+    #[inline]
+    pub fn value(&self) -> &V {
+        &self.value
+    }
 }
 
 // ---
@@ -587,12 +661,11 @@ mod tests {
 
     #[test]
     fn test_tree() {
-        let tree = FlatTree::<i32>::build()
-            .add(1)
-            .add(2)
-            .build(3, |b| b.add(4).add(5).build(6, |b| b.add(7).add(8)))
-            .add(9)
-            .done();
+        let tree = FlatTree::<i32>::new()
+            .with_node(1)
+            .with_node(2)
+            .with_composite_node(3, |b| b.push(4).push(5).build(6, |b| b.push(7).push(8)))
+            .with_node(9);
         assert_eq!(tree.storage.len(), 9);
         assert_eq!(tree.roots, 4);
 
@@ -636,14 +709,12 @@ mod tests {
     }
 
     #[test]
-    fn test_tree_builder_roots() {
-        let mut builder = FlatTree::<usize>::build();
-        builder
-            .roots()
-            .add(1)
-            .add(2)
-            .build(3, |b| b.add(4).add(5).build(6, |b| b.add(7).add(8)));
-        let tree = builder.done();
+    fn test_tree_ref() {
+        let mut tree = FlatTree::<usize>::new();
+        let tree = &mut tree;
+        tree.push(1)
+            .push(2)
+            .build(3, |b| b.push(4).push(5).build(6, |b| b.push(7).push(8)));
         assert_eq!(tree.storage.len(), 8);
         assert_eq!(tree.roots, 3);
 
