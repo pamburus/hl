@@ -40,14 +40,14 @@ impl<'s> From<bool> for Value<'s> {
 
 #[derive(PartialEq, Eq, Hash)]
 pub enum String<'s> {
-    Raw(&'s str),
+    Decoded(&'s str),
     Encoded(&'s str),
 }
 
 impl<'s> std::fmt::Debug for String<'s> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Raw(s) => write!(f, "{:?}", s),
+            Self::Decoded(s) => write!(f, "{:?}", s),
             Self::Encoded(s) => write!(f, "{:?}", s),
         }
     }
@@ -55,12 +55,12 @@ impl<'s> std::fmt::Debug for String<'s> {
 
 impl<'s> String<'s> {
     #[inline]
-    pub fn from_raw_token(s: &'s str) -> Self {
-        Self::Raw(&s[1..s.len() - 1])
+    pub fn from_plain(s: &'s str) -> Self {
+        Self::Decoded(&s[1..s.len() - 1])
     }
 
     #[inline]
-    pub fn from_encoded_token(s: &'s str) -> Self {
+    pub fn from_escaped(s: &'s str) -> Self {
         Self::Encoded(s)
     }
 }
@@ -74,8 +74,8 @@ pub fn parse_value<'s>(lexer: &mut Lexer<'s, Token<'s>>) -> Result<Option<Value<
             Ok(Token::BracketOpen) => parse_array(lexer),
             Ok(Token::Null) => Ok(Value::Null),
             Ok(Token::Number(n)) => Ok(Value::Number(n)),
-            Ok(Token::RawString(s)) => Ok(Value::String(String::from_raw_token(s))),
-            Ok(Token::EncodedString(s)) => Ok(Value::String(String::from_encoded_token(s))),
+            Ok(Token::PlainString(s)) => Ok(Value::String(String::from_plain(s))),
+            Ok(Token::EscapedString(s)) => Ok(Value::String(String::from_escaped(s))),
             _ => Err(("unexpected token here (context: value)", lexer.span())),
         }
         .map(Some)
@@ -120,12 +120,12 @@ fn parse_array<'s>(lexer: &mut Lexer<'s, Token<'s>>) -> Result<Value<'s>> {
                 array.push(Value::Number(n));
                 awaits_value = false;
             }
-            Ok(Token::RawString(s)) if !awaits_comma => {
-                array.push(Value::String(String::from_raw_token(s)));
+            Ok(Token::PlainString(s)) if !awaits_comma => {
+                array.push(Value::String(String::from_plain(s)));
                 awaits_value = false;
             }
-            Ok(Token::EncodedString(s)) if !awaits_comma => {
-                array.push(Value::String(String::from_encoded_token(s)));
+            Ok(Token::EscapedString(s)) if !awaits_comma => {
+                array.push(Value::String(String::from_escaped(s)));
                 awaits_value = false;
             }
             _ => return Err(("unexpected token here (context: array)", lexer.span())),
@@ -166,12 +166,12 @@ fn parse_object<'s>(lexer: &mut Lexer<'s, Token<'s>>) -> Result<Value<'s>> {
             Ok(Token::Comma) if awaits_comma => {
                 awaits_key = true;
             }
-            Ok(Token::RawString(key)) if !awaits_comma => {
-                insert(lexer, String::from_raw_token(key))?;
+            Ok(Token::PlainString(key)) if !awaits_comma => {
+                insert(lexer, String::from_plain(key))?;
                 awaits_key = false;
             }
-            Ok(Token::EncodedString(key)) if !awaits_comma => {
-                insert(lexer, String::from_encoded_token(key))?;
+            Ok(Token::EscapedString(key)) if !awaits_comma => {
+                insert(lexer, String::from_escaped(key))?;
                 awaits_key = false;
             }
             _ => {
