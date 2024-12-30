@@ -1,5 +1,5 @@
 use criterion::criterion_main;
 
-mod container;
+mod all;
 
-criterion_main!(container::benches);
+criterion_main!(all::benches);
