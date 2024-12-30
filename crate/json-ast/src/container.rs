@@ -18,12 +18,25 @@ impl<'s> Container<'s> {
 
     pub fn parse(lexer: &mut Lexer<'s>) -> Result<Self> {
         let mut container = Self::new();
-        while let Some(_) = parse_value(lexer, container.inner.metaroot())? {}
+        container.extend(lexer)?;
         Ok(container)
+    }
+
+    pub fn extend(&mut self, lexer: &mut Lexer<'s>) -> Result<()> {
+        while let Some(_) = parse_value(lexer, self.inner.metaroot())? {}
+        Ok(())
     }
 
     pub fn nodes(&self) -> tree::Nodes<Node<'s>> {
         self.inner.nodes()
+    }
+
+    pub fn clear(&mut self) {
+        self.inner.clear();
+    }
+
+    pub fn reserve(&mut self, additional: usize) {
+        self.inner.reserve(additional);
     }
 }
 
@@ -105,4 +118,25 @@ pub enum ScalarKind {
 pub enum StringKind {
     Plain,
     Escaped,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_container() {
+        let mut lexer = Lexer::new(r#"{"key": "value"}"#);
+        let container = Container::parse(&mut lexer).unwrap();
+        assert_eq!(container.nodes().len(), 4);
+    }
+
+    #[bench]
+    fn bench_container(b: &mut test::Bencher) {
+        let mut lexer = Lexer::new(r#"{"key": "value"}"#);
+        b.iter(|| {
+            let container = Container::parse(&mut lexer).unwrap();
+            assert_eq!(container.nodes().len(), 4);
+        });
+    }
 }
