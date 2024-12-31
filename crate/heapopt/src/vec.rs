@@ -143,6 +143,9 @@ impl<T, const N: usize> Vec<T, N> {
     #[inline]
     pub fn push(&mut self, value: T) {
         if let Err(value) = self.head.push(value) {
+            if self.tail.capacity() == 0 {
+                self.tail.reserve(N);
+            }
             self.tail.push(value);
         }
     }
