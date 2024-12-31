@@ -22,11 +22,13 @@ pub mod types;
 
 // private modules
 mod appdirs;
+mod ast;
 mod console;
 mod eseq;
 mod filtering;
 mod formatting;
 mod fsmon;
+mod json;
 mod model;
 mod replay;
 mod scanning;
