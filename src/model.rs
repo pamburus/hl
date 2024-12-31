@@ -18,7 +18,7 @@ use serde_json::{self as json};
 use titlecase::titlecase;
 use wildflower::Pattern;
 
-// other local crates
+// workspace imports
 use encstr::{AnyEncodedString, EncodedString};
 use serde_logfmt::logfmt;
 

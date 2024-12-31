@@ -1,3 +1,14 @@
+// std imports
+use std::collections::HashMap;
+
+// third-party imports
+use titlecase::titlecase;
+use wildflower::Pattern;
+
+// workspace imports
+use encstr::EncodedString;
+
+// local imports
 use crate::{
     app::UnixTimestampUnit,
     ast,
@@ -5,10 +16,12 @@ use crate::{
     settings::PredefinedFields,
     timestamp::Timestamp,
 };
-use encstr::EncodedString;
-use std::collections::HashMap;
+
+// ---
 
 const MAX_PREDEFINED_FIELDS: usize = 8;
+
+// ---
 
 pub struct Record<'s> {
     pub ts: Option<Timestamp<'s>>,
@@ -74,16 +87,6 @@ impl<'s> RecordFieldsIter<'s> {
     fn new(inner: ast::SiblingsIter<'s>) -> Self {
         Self { inner }
     }
-
-    fn field(node: ast::Node<'s>) -> Field<'s> {
-        let ast::Value::Key(key) = node.value() else {
-            panic!("expected key node, got {:?}", node.value());
-        };
-        Field {
-            key: key.source(),
-            value: node.children().iter().next().unwrap().into(),
-        }
-    }
 }
 
 impl<'s> Iterator for RecordFieldsIter<'s> {
@@ -91,7 +94,7 @@ impl<'s> Iterator for RecordFieldsIter<'s> {
 
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
-        self.inner.next().map(Self::field)
+        self.inner.next().map(Field::from_node)
     }
 }
 
@@ -131,7 +134,7 @@ pub struct Array<'s> {
 }
 
 impl<'s> Array<'s> {
-    pub fn new(inner: ast::Node<'s>) -> Self {
+    fn new(inner: ast::Node<'s>) -> Self {
         Self { inner }
     }
 }
@@ -143,6 +146,38 @@ impl<'s> From<Array<'s>> for Value<'s> {
     }
 }
 
+impl<'s> IntoIterator for Array<'s> {
+    type Item = Value<'s>;
+    type IntoIter = ArrayIter<'s>;
+
+    #[inline]
+    fn into_iter(self) -> Self::IntoIter {
+        ArrayIter::new(self.inner.children().iter())
+    }
+}
+
+// ---
+
+struct ArrayIter<'s> {
+    inner: ast::SiblingsIter<'s>,
+}
+
+impl<'s> ArrayIter<'s> {
+    #[inline]
+    fn new(inner: ast::SiblingsIter<'s>) -> Self {
+        Self { inner }
+    }
+}
+
+impl<'s> Iterator for ArrayIter<'s> {
+    type Item = Value<'s>;
+
+    #[inline]
+    fn next(&mut self) -> Option<Self::Item> {
+        self.inner.next().map(Value::from)
+    }
+}
+
 // ---
 
 #[derive(Debug, Clone, Copy)]
@@ -151,7 +186,7 @@ pub struct Object<'s> {
 }
 
 impl<'s> Object<'s> {
-    pub fn new(inner: ast::Node<'s>) -> Self {
+    fn new(inner: ast::Node<'s>) -> Self {
         Self { inner }
     }
 }
@@ -163,12 +198,63 @@ impl<'s> From<Object<'s>> for Value<'s> {
     }
 }
 
+impl<'s> IntoIterator for Object<'s> {
+    type Item = Field<'s>;
+    type IntoIter = ObjectIter<'s>;
+
+    #[inline]
+    fn into_iter(self) -> Self::IntoIter {
+        ObjectIter::new(self.inner.children().iter())
+    }
+}
+
+// ---
+
+struct ObjectIter<'s> {
+    inner: ast::SiblingsIter<'s>,
+}
+
+impl<'s> ObjectIter<'s> {
+    #[inline]
+    fn new(inner: ast::SiblingsIter<'s>) -> Self {
+        Self { inner }
+    }
+}
+
+impl<'s> Iterator for ObjectIter<'s> {
+    type Item = Field<'s>;
+
+    #[inline]
+    fn next(&mut self) -> Option<Self::Item> {
+        self.inner.next().map(Field::from_node)
+    }
+}
+
 // ---
 
 #[derive(Debug, Clone, Copy)]
 pub struct Field<'s> {
     pub key: &'s str,
     pub value: Value<'s>,
+}
+
+impl<'s> Field<'s> {
+    #[inline]
+    pub fn new(key: &'s str, value: Value<'s>) -> Self {
+        Self { key, value }
+    }
+
+    #[inline]
+    fn from_node(node: ast::Node<'s>) -> Self {
+        let ast::Value::Key(key) = node.value() else {
+            panic!("expected key node, got {:?}", node.value());
+        };
+
+        Field {
+            key: key.source(),
+            value: node.children().iter().next().unwrap().into(),
+        }
+    }
 }
 
 // ---
@@ -388,14 +474,14 @@ impl ParserSettings {
     }
 
     #[inline]
-    fn apply<'a>(&self, key: &'a str, value: RawValue<'a>, to: &mut Record<'a>, pc: &mut PriorityController) {
+    fn apply<'a>(&self, key: &'a str, value: Value<'a>, to: &mut Record<'a>, pc: &mut PriorityController) {
         self.blocks[0].apply(self, key, value, to, pc, true);
     }
 
     #[inline]
     fn apply_each<'a, 'i, I>(&self, items: I, to: &mut Record<'a>)
     where
-        I: IntoIterator<Item = &'i (&'a str, RawValue<'a>)>,
+        I: IntoIterator<Item = &'i (&'a str, Value<'a>)>,
         'a: 'i,
     {
         let mut pc = PriorityController::default();
@@ -405,7 +491,7 @@ impl ParserSettings {
     #[inline]
     fn apply_each_ctx<'a, 'i, I>(&self, items: I, to: &mut Record<'a>, pc: &mut PriorityController)
     where
-        I: IntoIterator<Item = &'i (&'a str, RawValue<'a>)>,
+        I: IntoIterator<Item = &'i (&'a str, Value<'a>)>,
         'a: 'i,
     {
         for (key, value) in items {
@@ -433,7 +519,7 @@ impl ParserSettingsBlock {
         &self,
         ps: &ParserSettings,
         key: &'a str,
-        value: RawValue<'a>,
+        value: Value<'a>,
         to: &mut Record<'a>,
         pc: &mut PriorityController,
         is_root: bool,
@@ -451,7 +537,7 @@ impl ParserSettingsBlock {
             None => false,
         };
         if is_root && done {
-            to.predefined.push((key, value)).ok();
+            to.predefined.push(Field::new(key, value)).ok();
         }
         if done || !is_root {
             return;
@@ -462,7 +548,7 @@ impl ParserSettingsBlock {
                 return;
             }
         }
-        to.fields.push((key, value));
+        to.fields.push(Field::new(key, value));
     }
 
     #[inline]
