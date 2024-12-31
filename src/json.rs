@@ -45,11 +45,11 @@ pub enum String<'s> {
     Escaped(&'s str),
 }
 
-impl<'s> Into<ast::String> for String<'s> {
-    fn into(self) -> ast::String {
+impl<'s> Into<ast::String<'s>> for String<'s> {
+    fn into(self) -> ast::String<'s> {
         match self {
-            String::Plain(_) => ast::String::Plain,
-            String::Escaped(_) => ast::String::Escaped,
+            String::Plain(s) => ast::String::raw(&s[1..s.len() - 1]),
+            String::Escaped(s) => ast::String::json(s),
         }
     }
 }
@@ -108,15 +108,13 @@ pub mod parse {
 
     #[inline]
     fn parse_value_token<'s, T: Build<'s>>(lexer: &mut Lexer<'s>, target: T, token: Token<'s>) -> Result<T> {
-        let source = lexer.slice();
-
         match token {
-            Token::Bool(b) => Ok(target.add_scalar(source, Scalar::Bool(b))),
+            Token::Bool(b) => Ok(target.add_scalar(Scalar::Bool(b))),
             Token::BraceOpen => target.add_object(|target| parse_object(lexer, target)),
             Token::BracketOpen => target.add_array(|target| parse_array(lexer, target)),
-            Token::Null => Ok(target.add_scalar(source, Scalar::Null)),
-            Token::Number(_) => Ok(target.add_scalar(source, Scalar::Number)),
-            Token::String(s) => Ok(target.add_scalar(source, Scalar::String(s.into()))),
+            Token::Null => Ok(target.add_scalar(Scalar::Null)),
+            Token::Number(s) => Ok(target.add_scalar(Scalar::Number(s))),
+            Token::String(s) => Ok(target.add_scalar(Scalar::String(s.into()))),
             _ => Err(("unexpected token here (context: value)", lexer.span())),
         }
     }
@@ -170,7 +168,7 @@ pub mod parse {
                     awaits = Awaits::Key;
                 }
                 (Token::String(s), Awaits::Key) => {
-                    target = target.add_field(lexer.slice(), s.into(), |target| {
+                    target = target.add_field(s.into(), |target| {
                         match lexer.next() {
                             Some(Ok(Token::Colon)) => (),
                             _ => return Err(("unexpected token here, expecting ':'", lexer.span())),

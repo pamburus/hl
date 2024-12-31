@@ -220,7 +220,7 @@ where
     }
 
     #[inline]
-    pub fn iter(&self) -> SiblingsIterator<'t, V, S> {
+    pub fn iter(&self) -> SiblingsIter<'t, V, S> {
         self.into_iter()
     }
 }
@@ -230,11 +230,11 @@ where
     S: Storage<Value = V>,
 {
     type Item = Node<'t, V, S>;
-    type IntoIter = SiblingsIterator<'t, V, S>;
+    type IntoIter = SiblingsIter<'t, V, S>;
 
     #[inline]
     fn into_iter(self) -> Self::IntoIter {
-        SiblingsIterator {
+        SiblingsIter {
             tree: self.tree,
             next: 0,
             n: self.tree.roots,
@@ -269,7 +269,7 @@ where
     }
 
     #[inline]
-    pub fn iter(&self) -> NodesIterator<'t, V, S> {
+    pub fn iter(&self) -> NodesIter<'t, V, S> {
         self.into_iter()
     }
 }
@@ -279,11 +279,11 @@ where
     S: Storage<Value = V>,
 {
     type Item = Node<'t, V, S>;
-    type IntoIter = NodesIterator<'t, V, S>;
+    type IntoIter = NodesIter<'t, V, S>;
 
     #[inline]
     fn into_iter(self) -> Self::IntoIter {
-        NodesIterator {
+        NodesIter {
             tree: self.tree,
             next: self.start,
             end: self.end,
@@ -291,7 +291,7 @@ where
     }
 }
 
-pub struct NodesIterator<'t, V, S>
+pub struct NodesIter<'t, V, S>
 where
     S: Storage<Value = V>,
 {
@@ -300,7 +300,7 @@ where
     end: usize,
 }
 
-impl<'t, V, S> Iterator for NodesIterator<'t, V, S>
+impl<'t, V, S> Iterator for NodesIter<'t, V, S>
 where
     S: Storage<Value = V>,
 {
@@ -332,7 +332,7 @@ where
 
 // ---
 
-pub struct SiblingsIterator<'t, V, S>
+pub struct SiblingsIter<'t, V, S = DefaultStorage<V>>
 where
     S: Storage<Value = V>,
 {
@@ -341,7 +341,7 @@ where
     n: usize,
 }
 
-impl<'t, V, S> Iterator for SiblingsIterator<'t, V, S>
+impl<'t, V, S> Iterator for SiblingsIter<'t, V, S>
 where
     S: Storage<Value = V>,
 {
@@ -374,7 +374,7 @@ where
 // ---
 
 #[derive_where(Clone, Copy)]
-pub struct Node<'t, V, S>
+pub struct Node<'t, V, S = DefaultStorage<V>>
 where
     S: Storage<Value = V>,
 {
@@ -437,6 +437,21 @@ where
     }
 }
 
+impl<'s, V, S> std::fmt::Debug for Node<'s, V, S>
+where
+    S: Storage<Value = V>,
+    V: std::fmt::Debug,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Node")
+            .field("value", self.value())
+            .field("parent", &self.item.parent)
+            .field("len", &self.item.len)
+            .field("children", &self.item.children)
+            .finish()
+    }
+}
+
 // ---
 
 #[derive_where(Clone, Copy)]
@@ -464,7 +479,7 @@ where
     }
 
     #[inline]
-    pub fn iter(&self) -> SiblingsIterator<'t, V, S> {
+    pub fn iter(&self) -> SiblingsIter<'t, V, S> {
         self.into_iter()
     }
 }
@@ -474,11 +489,11 @@ where
     S: Storage<Value = V>,
 {
     type Item = Node<'t, V, S>;
-    type IntoIter = SiblingsIterator<'t, V, S>;
+    type IntoIter = SiblingsIter<'t, V, S>;
 
     #[inline]
     fn into_iter(self) -> Self::IntoIter {
-        SiblingsIterator {
+        SiblingsIter {
             tree: self.tree,
             next: self.index + 1,
             n: self.n,
