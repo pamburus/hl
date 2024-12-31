@@ -16,14 +16,14 @@ use crate::{
 
 // ---
 
-pub struct ParserSettings {
+pub struct Settings {
     unix_ts_unit: Option<UnixTimestampUnit>,
     level: Vec<(HashMap<String, Level>, Option<Level>)>,
     blocks: Vec<ParserSettingsBlock>,
     ignore: Vec<Pattern<String>>,
 }
 
-impl ParserSettings {
+impl Settings {
     pub fn new<'a, I: IntoIterator<Item = &'a String>>(
         predefined: &PredefinedFields,
         ignore: I,
@@ -136,7 +136,7 @@ impl ParserSettings {
     }
 }
 
-impl Default for ParserSettings {
+impl Default for Settings {
     #[inline]
     fn default() -> Self {
         Self::new(&PredefinedFields::default(), Vec::new(), None)
@@ -153,7 +153,7 @@ struct ParserSettingsBlock {
 impl ParserSettingsBlock {
     fn apply<'a>(
         &self,
-        ps: &ParserSettings,
+        ps: &Settings,
         key: &'a str,
         value: Value<'a>,
         to: &mut Record<'a>,
@@ -190,7 +190,7 @@ impl ParserSettingsBlock {
     #[inline]
     fn apply_each_ctx<'a, 'i, I>(
         &self,
-        ps: &ParserSettings,
+        ps: &Settings,
         items: I,
         to: &mut Record<'a>,
         ctx: &mut PriorityController,
@@ -255,7 +255,7 @@ enum FieldSettings {
 }
 
 impl FieldSettings {
-    fn apply<'a>(&self, ps: &ParserSettings, value: RawValue<'a>, to: &mut Record<'a>) -> bool {
+    fn apply<'a>(&self, ps: &Settings, value: RawValue<'a>, to: &mut Record<'a>) -> bool {
         match *self {
             Self::Time => {
                 let s = value.raw_str();
@@ -330,7 +330,7 @@ impl FieldSettings {
     #[inline]
     fn apply_ctx<'a>(
         &self,
-        ps: &ParserSettings,
+        ps: &Settings,
         value: RawValue<'a>,
         to: &mut Record<'a>,
         ctx: &mut PriorityController,
