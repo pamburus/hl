@@ -51,6 +51,7 @@ enum-map = "2"
 enumset = "1"
 enumset-ext = { path = "./crate/enumset-ext" }
 env_logger = "0"
+flat-tree = { path = "./crate/flat-tree" }
 flate2 = "1"
 heapless = "0"
 heapopt = { path = "./crate/heapopt" }
@@ -61,6 +62,7 @@ itertools = "0.14"
 itoa = { version = "1", default-features = false }
 known-folders = "1"
 log = "0"
+logos = "0"
 nonzero_ext = "0"
 notify = { version = "7", features = ["macos_kqueue"] }
 nu-ansi-term = "0"
