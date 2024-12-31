@@ -1030,6 +1030,7 @@ dependencies = [
  "enumset",
  "enumset-ext",
  "env_logger",
+ "flat-tree",
  "flate2",
  "heapless",
  "heapopt",
