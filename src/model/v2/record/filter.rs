@@ -3,50 +3,50 @@ use crate::model::Level;
 
 // ---
 
-pub trait RecordFilter {
+pub trait Filter {
     fn apply<'a>(&self, record: &Record<'a>) -> bool;
 
     #[inline]
-    fn and<F>(self, rhs: F) -> RecordFilterAnd<Self, F>
+    fn and<F>(self, rhs: F) -> And<Self, F>
     where
         Self: Sized,
-        F: RecordFilter,
+        F: Filter,
     {
-        RecordFilterAnd { lhs: self, rhs }
+        And { lhs: self, rhs }
     }
 
     #[inline]
-    fn or<F>(self, rhs: F) -> RecordFilterOr<Self, F>
+    fn or<F>(self, rhs: F) -> Or<Self, F>
     where
         Self: Sized,
-        F: RecordFilter,
+        F: Filter,
     {
-        RecordFilterOr { lhs: self, rhs }
+        Or { lhs: self, rhs }
     }
 }
 
-impl<T: RecordFilter + ?Sized> RecordFilter for Box<T> {
+impl<T: Filter + ?Sized> Filter for Box<T> {
     #[inline]
     fn apply<'a>(&self, record: &Record<'a>) -> bool {
         (**self).apply(record)
     }
 }
 
-impl<T: RecordFilter> RecordFilter for &T {
+impl<T: Filter> Filter for &T {
     #[inline]
     fn apply<'a>(&self, record: &Record<'a>) -> bool {
         (**self).apply(record)
     }
 }
 
-impl RecordFilter for Level {
+impl Filter for Level {
     #[inline]
     fn apply<'a>(&self, record: &Record<'a>) -> bool {
         record.level.map_or(false, |x| x <= *self)
     }
 }
 
-impl<T: RecordFilter> RecordFilter for Option<T> {
+impl<T: Filter> Filter for Option<T> {
     #[inline]
     fn apply<'a>(&self, record: &Record<'a>) -> bool {
         if let Some(filter) = self {
@@ -59,12 +59,12 @@ impl<T: RecordFilter> RecordFilter for Option<T> {
 
 // ---
 
-pub struct RecordFilterAnd<L: RecordFilter, R: RecordFilter> {
+pub struct And<L: Filter, R: Filter> {
     lhs: L,
     rhs: R,
 }
 
-impl<L: RecordFilter, R: RecordFilter> RecordFilter for RecordFilterAnd<L, R> {
+impl<L: Filter, R: Filter> Filter for And<L, R> {
     #[inline]
     fn apply<'a>(&self, record: &Record<'a>) -> bool {
         self.lhs.apply(record) && self.rhs.apply(record)
@@ -73,12 +73,12 @@ impl<L: RecordFilter, R: RecordFilter> RecordFilter for RecordFilterAnd<L, R> {
 
 // ---
 
-pub struct RecordFilterOr<L: RecordFilter, R: RecordFilter> {
+pub struct Or<L: Filter, R: Filter> {
     lhs: L,
     rhs: R,
 }
 
-impl<L: RecordFilter, R: RecordFilter> RecordFilter for RecordFilterOr<L, R> {
+impl<L: Filter, R: Filter> Filter for Or<L, R> {
     #[inline]
     fn apply<'a>(&self, record: &Record<'a>) -> bool {
         self.lhs.apply(record) || self.rhs.apply(record)
@@ -87,9 +87,9 @@ impl<L: RecordFilter, R: RecordFilter> RecordFilter for RecordFilterOr<L, R> {
 
 // ---
 
-pub struct RecordFilterNone;
+pub struct Pass;
 
-impl RecordFilter for RecordFilterNone {
+impl Filter for Pass {
     #[inline]
     fn apply<'a>(&self, _: &Record<'a>) -> bool {
         true

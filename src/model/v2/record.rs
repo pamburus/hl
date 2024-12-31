@@ -1,16 +1,15 @@
 // local imports
-use self::filter::RecordFilter;
-use super::value::*;
+pub use self::filter::Filter;
+use super::{ast, value::*};
 use crate::{
-    ast,
     model::{Caller, Level},
     timestamp::Timestamp,
 };
 
 // ---
 
+pub mod build;
 pub mod filter;
-pub mod parse;
 
 // ---
 
@@ -24,13 +23,13 @@ pub struct Record<'s> {
     pub level: Option<Level>,
     pub logger: Option<&'s str>,
     pub caller: Option<Caller<'s>>,
-    pub fields: RecordFields<'s>,
+    pub fields: Fields<'s>,
     predefined: heapless::Vec<Field<'s>, MAX_PREDEFINED_FIELDS>,
 }
 
 impl<'s> Record<'s> {
     #[inline]
-    pub fn new(fields: RecordFields<'s>) -> Self {
+    pub fn new(fields: Fields<'s>) -> Self {
         Self {
             ts: None,
             message: None,
@@ -48,43 +47,43 @@ impl<'s> Record<'s> {
     }
 
     #[inline]
-    pub fn matches<F: RecordFilter>(&self, filter: F) -> bool {
+    pub fn matches<F: Filter>(&self, filter: F) -> bool {
         filter.apply(self)
     }
 }
 
 // ---
 
-pub struct RecordFields<'s> {
+pub struct Fields<'s> {
     inner: ast::Children<'s>,
 }
 
-impl<'s> RecordFields<'s> {
+impl<'s> Fields<'s> {
     #[inline]
     fn new(inner: ast::Children<'s>) -> Self {
         Self { inner }
     }
 
     #[inline]
-    pub fn iter(&self) -> RecordFieldsIter<'s> {
-        RecordFieldsIter::new(self.inner.iter())
+    pub fn iter(&self) -> FieldsIter<'s> {
+        FieldsIter::new(self.inner.iter())
     }
 }
 
 // ---
 
-struct RecordFieldsIter<'s> {
+struct FieldsIter<'s> {
     inner: ast::SiblingsIter<'s>,
 }
 
-impl<'s> RecordFieldsIter<'s> {
+impl<'s> FieldsIter<'s> {
     #[inline]
     fn new(inner: ast::SiblingsIter<'s>) -> Self {
         Self { inner }
     }
 }
 
-impl<'s> Iterator for RecordFieldsIter<'s> {
+impl<'s> Iterator for FieldsIter<'s> {
     type Item = Field<'s>;
 
     #[inline]

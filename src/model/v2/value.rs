@@ -2,7 +2,7 @@
 use encstr::EncodedString;
 
 // local imports
-use crate::ast;
+use super::ast;
 
 // ---
 
