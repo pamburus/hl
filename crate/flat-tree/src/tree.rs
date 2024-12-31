@@ -440,7 +440,7 @@ where
 // ---
 
 #[derive_where(Clone, Copy)]
-pub struct Children<'t, V, S>
+pub struct Children<'t, V, S = DefaultStorage<V>>
 where
     S: Storage<Value = V>,
 {

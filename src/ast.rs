@@ -48,6 +48,7 @@ impl<'s> Container<'s> {
 // ---
 
 pub trait Build<'s>: tree::Build<Value = Node<'s>> {}
+pub type Children<'s> = tree::Children<'s, Node<'s>>;
 
 impl<'s, T: tree::Build<Value = Node<'s>>> Build<'s> for T {}
 
