@@ -2,17 +2,90 @@
 use std::collections::HashMap;
 
 // third-party imports
+use derive_more::{Deref, DerefMut};
 use titlecase::titlecase;
 use wildflower::Pattern;
 
 // local imports
-use super::*;
+use super::{
+    super::ast::{self, BuildExt, Scalar},
+    *,
+};
 use crate::{
     app::UnixTimestampUnit,
     model::{Caller, Level},
     settings::PredefinedFields,
     timestamp::Timestamp,
+    types::FieldKind,
 };
+
+// ---
+
+#[derive(Deref, DerefMut)]
+pub struct Builder<'s, T> {
+    #[deref]
+    #[deref_mut]
+    core: Core<'s>,
+    target: T,
+}
+
+#[derive(Clone, Copy)]
+struct Core<'s> {
+    settings: &'s Settings,
+}
+
+impl<'s, T> Builder<'s, T>
+where
+    T: BuildExt<'s>,
+{
+    pub fn new(settings: &'s Settings, target: T) -> Self {
+        Self {
+            core: Core { settings },
+            target,
+        }
+    }
+
+    fn child(core: Core<'s>, target: T::Child) -> Builder<'s, T::Child> {
+        Builder { core, target }
+    }
+}
+
+impl<'s, T> BuildExt<'s> for Builder<'s, T>
+where
+    T: BuildExt<'s>,
+{
+    type Child = Builder<'s, T::Child>;
+
+    fn add_scalar(mut self, scalar: Scalar<'s>) -> Self {
+        self.target = self.target.add_scalar(scalar);
+        self
+    }
+
+    fn add_object(mut self, f: impl FnOnce(Self::Child) -> ast::Result<Self::Child>) -> ast::Result<Self> {
+        self.target = self
+            .target
+            .add_object(|target| Ok(f(Self::child(self.core, target))?.target))?;
+        Ok(self)
+    }
+
+    fn add_array(mut self, f: impl FnOnce(Self::Child) -> ast::Result<Self::Child>) -> ast::Result<Self> {
+        self.target = self
+            .target
+            .add_array(|target| Ok(f(Self::child(self.core, target))?.target))?;
+        Ok(self)
+    }
+
+    fn add_field(
+        mut self,
+        key: ast::String<'s>,
+        f: impl FnOnce(Self::Child) -> ast::Result<Self::Child>,
+    ) -> ast::Result<Self> {
+        self.target = self
+            .target
+            .add_field(key, |target| Ok(f(Self::child(self.core, target))?.target))?;
+        Ok(self)
+    }
+}
 
 // ---
 
