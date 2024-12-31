@@ -12,7 +12,7 @@ pub mod error {
     pub type Result<T> = std::result::Result<T, Error>;
 }
 
-use error::Result;
+pub use error::Result;
 
 #[derive(Default, Debug)]
 pub struct Container<'s> {
@@ -53,7 +53,9 @@ pub type Children<'s> = tree::Children<'s, Value<'s>>;
 
 impl<'s, T: tree::Build<Value = Value<'s>>> Build<'s> for T {}
 
-pub trait BuildExt<'s>: Build<'s> {
+pub trait BuildExt<'s> where Self: Sized {
+    type Child: BuildExt<'s>;
+
     fn add_scalar(self, scalar: Scalar<'s>) -> Self;
     fn add_object(self, f: impl FnOnce(Self::Child) -> Result<Self::Child>) -> Result<Self>;
     fn add_array(self, f: impl FnOnce(Self::Child) -> Result<Self::Child>) -> Result<Self>;
@@ -64,6 +66,8 @@ impl<'s, T> BuildExt<'s> for T
 where
     T: Build<'s>,
 {
+    type Child = T::Child;
+
     #[inline]
     fn add_scalar(self, scalar: Scalar<'s>) -> Self {
         self.push(Value::Scalar(scalar))
