@@ -560,7 +560,7 @@ impl ParserSettingsBlock {
         ctx: &mut PriorityController,
         is_root: bool,
     ) where
-        I: IntoIterator<Item = &'i (&'a str, RawValue<'a>)>,
+        I: IntoIterator<Item = &'i (&'a str, Value<'a>)>,
         'a: 'i,
     {
         for (key, value) in items {

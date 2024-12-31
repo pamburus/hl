@@ -179,6 +179,11 @@ where
 
         Ok(f(child)?.end())
     }
+
+    #[inline]
+    fn reserve(&mut self, additional: usize) {
+        self.storage.reserve(additional);
+    }
 }
 
 // ---
@@ -193,6 +198,7 @@ pub trait Build: Sized {
     fn build(self, value: Self::Value, f: impl FnOnce(Self::Child) -> Self::Child) -> Self {
         self.build_e(value, |child| Ok::<_, ()>(f(child))).unwrap()
     }
+    fn reserve(&mut self, _additional: usize) {}
 }
 
 // ---
@@ -603,6 +609,11 @@ where
     #[inline]
     fn build_e<E>(self, value: S::Value, f: impl FnOnce(Self) -> Result<Self, E>) -> Result<Self, E> {
         self.build_e(value, f)
+    }
+
+    #[inline]
+    fn reserve(&mut self, additional: usize) {
+        self.tree.reserve(additional);
     }
 }
 
