@@ -1,7 +1,7 @@
 // external imports
 use logos::Logos;
 
-use crate::ast;
+use crate::model::v2::ast;
 
 #[derive(Logos, Debug, PartialEq)]
 #[logos(skip r"[ \t\r\n\f]+")]
@@ -80,9 +80,8 @@ pub mod error {
 }
 
 pub mod parse {
-    use super::error::*;
-    use super::*;
-    use crate::ast::{Build, BuildExt, Container, Scalar};
+    use super::{error::*, *};
+    use crate::model::v2::ast::{Build, BuildExt, Container, Scalar};
 
     #[inline]
     pub fn parse<'s>(lexer: &mut Lexer<'s>) -> Result<Container<'s>> {
