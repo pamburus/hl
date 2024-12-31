@@ -25,7 +25,7 @@ mod appdirs;
 mod console;
 mod eseq;
 mod filtering;
-mod format;
+// mod format;
 mod formatting;
 mod fsmon;
 mod model;

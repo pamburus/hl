@@ -91,6 +91,18 @@ where
     }
 
     #[inline]
+    pub fn builder(&mut self) -> Builder<V, S> {
+        let children = self.roots;
+
+        Builder {
+            tree: self,
+            index: None,
+            children,
+            dirty: false,
+        }
+    }
+
+    #[inline]
     pub fn with_node(mut self, value: S::Value) -> Self {
         (&mut self).push(value);
         self
@@ -108,7 +120,9 @@ where
 
     #[inline]
     pub fn push(&mut self, value: S::Value) -> &mut Self {
-        Build::push(self, value)
+        self.storage.push(Item::new(value));
+        self.roots += 1;
+        self
     }
 
     #[inline]
@@ -199,6 +213,20 @@ pub trait Build: Sized {
         self.build_e(value, |child| Ok::<_, ()>(f(child))).unwrap()
     }
     fn reserve(&mut self, _additional: usize) {}
+}
+
+// ---
+
+pub trait FlatBuild: Sized {
+    type Value;
+    type Storage: Storage<Value = Self::Value>;
+
+    fn add(&mut self, value: Self::Value) -> &mut Self;
+    fn open(&mut self, value: Self::Value) -> &mut Self;
+    fn close(&mut self) -> &mut Self;
+    fn reserve(&mut self, _additional: usize) -> &mut Self {
+        self
+    }
 }
 
 // ---
@@ -640,6 +668,121 @@ struct NodeBuilderSnapshot {
 
 // ---
 
+pub struct Builder<'t, V, S = DefaultStorage<V>>
+where
+    S: Storage<Value = V>,
+{
+    tree: &'t mut FlatTree<V, S>,
+    index: Option<usize>,
+    children: usize,
+    dirty: bool,
+}
+
+impl<'t, V, S> Builder<'t, V, S>
+where
+    S: Storage<Value = V>,
+{
+    #[inline]
+    pub fn push(&mut self, value: S::Value) -> usize {
+        let index = self.tree.len();
+        self.tree.storage.push(Item {
+            parent: self.index,
+            ..Item::new(value)
+        });
+        self.children += 1;
+        if self.index.is_none() {
+            self.tree.roots += 1;
+        }
+        self.dirty = true;
+        index
+    }
+
+    #[inline]
+    fn sync(&mut self) {
+        if !self.dirty {
+            return;
+        }
+
+        if let Some(index) = self.index {
+            let len = self.tree.storage.len() - index;
+            self.tree.update(index, |item| {
+                item.len = len;
+                item.children = self.children;
+            });
+        } else {
+            self.tree.roots = self.children;
+        }
+
+        self.dirty = false;
+    }
+
+    #[inline]
+    fn close(&mut self) -> &mut Self {
+        if let Some(index) = self.index {
+            self.sync();
+            self.index = self.tree.item(index).parent;
+            if let Some(parent) = self.index {
+                self.dirty = self.children != 0;
+                self.children = self.tree.item(parent).children;
+            }
+        }
+        self
+    }
+
+    #[inline]
+    fn flush(&mut self) {
+        while let Some(index) = self.index {
+            self.sync();
+            self.index = self.tree.item(index).parent;
+        }
+    }
+}
+
+impl<'t, V, S> FlatBuild for Builder<'t, V, S>
+where
+    S: Storage<Value = V>,
+{
+    type Value = V;
+    type Storage = S;
+
+    #[inline]
+    fn add(&mut self, value: S::Value) -> &mut Self {
+        self.push(value);
+        self
+    }
+
+    #[inline]
+    fn open(&mut self, value: S::Value) -> &mut Self {
+        let index = Some(self.push(value));
+        self.sync();
+        self.index = index;
+        self.children = 0;
+        self
+    }
+
+    #[inline]
+    fn close(&mut self) -> &mut Self {
+        self.close()
+    }
+
+    #[inline]
+    fn reserve(&mut self, additional: usize) -> &mut Self {
+        self.tree.reserve(additional);
+        self
+    }
+}
+
+impl<'t, V, S> Drop for Builder<'t, V, S>
+where
+    S: Storage<Value = V>,
+{
+    fn drop(&mut self) {
+        self.flush();
+    }
+}
+
+// ---
+
 #[derive(Debug, Clone)]
 pub struct Item<V> {
     value: V,
@@ -746,5 +889,63 @@ mod tests {
 
         let roots = collect(tree.roots());
         assert_eq!(roots, [1, 2, 3]);
+    }
+
+    #[test]
+    fn test_flat_build() {
+        let mut tree = FlatTree::<i32>::new().with_node(1).with_node(2);
+        let mut builder = tree.builder();
+        builder
+            .open(3)
+            .add(4)
+            .add(5)
+            .open(6)
+            .add(7)
+            .add(8)
+            .close()
+            .close()
+            .add(9);
+        drop(builder);
+
+        assert_eq!(tree.storage.len(), 9);
+        assert_eq!(tree.roots, 4);
+
+        let node = tree.node(0);
+        assert_eq!(*node.value(), 1);
+        let descendants = collect(node.descendants());
+        assert_eq!(descendants, []);
+
+        let node = tree.node(6);
+        assert_eq!(*node.value(), 7);
+        let parents = collect(node.ancestors());
+        assert_eq!(parents, [6, 3]);
+
+        let node = tree.node(2);
+        assert_eq!(*node.value(), 3);
+        assert_eq!(node.children().len(), 3);
+        let children = collect(node.children());
+        assert_eq!(children, [4, 5, 6]);
+
+        let node = tree.node(2);
+        assert_eq!(*node.value(), 3);
+        let next = node.next().unwrap();
+        assert_eq!(*next.value(), 9);
+        let next = next.next();
+        assert!(next.is_none());
+
+        let node = tree.node(2);
+        let descendants = node.descendants();
+        assert_eq!(descendants.len(), 5);
+        assert_eq!(collect(descendants), [4, 5, 6, 7, 8]);
+
+        assert_eq!(tree.roots().len(), 4);
+        let roots = collect(tree.roots());
+        assert_eq!(roots, [1, 2, 3, 9]);
+        assert_eq!(tree.roots().iter().count(), 4);
+
+        assert_eq!(tree.nodes().len(), 9);
+        assert_eq!(tree.nodes().iter().count(), 9);
+        let nodes = collect(tree.nodes());
+        assert_eq!(nodes, [1, 2, 3, 4, 5, 6, 7, 8, 9]);
     }
 }

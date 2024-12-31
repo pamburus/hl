@@ -4,7 +4,7 @@ use flat_tree::{tree, FlatTree};
 // local imports
 use crate::{
     error::Result,
-    parse::parse_value,
+    parse::{parse_value, parse_value_flat},
     token::{self, Lexer},
 };
 
@@ -35,6 +35,12 @@ impl<'s> Container<'s> {
     }
 
     #[inline]
+    pub fn extend_flat(&mut self, lexer: &mut Lexer<'s>) -> Result<()> {
+        while let Some(_) = parse_value_flat(lexer, &mut self.inner.builder())? {}
+        Ok(())
+    }
+
+    #[inline]
     pub fn nodes(&self) -> tree::Nodes<Node<'s>> {
         self.inner.nodes()
     }
@@ -53,8 +59,10 @@ impl<'s> Container<'s> {
 // ---
 
 pub trait Build<'s>: tree::Build<Value = Node<'s>> {}
-
 impl<'s, T: tree::Build<Value = Node<'s>>> Build<'s> for T {}
+
+pub trait FlatBuild<'s>: tree::FlatBuild<Value = Node<'s>> {}
+impl<'s, T: tree::FlatBuild<Value = Node<'s>>> FlatBuild<'s> for T {}
 
 pub trait BuildExt<'s>: Build<'s> {
     fn add_scalar(self, source: &'s str, kind: ScalarKind) -> Self;
@@ -91,6 +99,56 @@ where
     #[inline]
     fn add_key(self, source: &'s str, kind: StringKind) -> Self {
         self.push(Node::new(NodeKind::Key(kind), source))
+    }
+}
+
+pub trait FlatBuildExt<'s>: FlatBuild<'s> {
+    fn scalar(&mut self, source: &'s str, kind: ScalarKind) -> &mut Self;
+    fn array_begin(&mut self) -> &mut Self;
+    fn array_end(&mut self) -> &mut Self;
+    fn object_begin(&mut self) -> &mut Self;
+    fn object_end(&mut self) -> &mut Self;
+    fn field_begin(&mut self, source: &'s str, kind: StringKind) -> &mut Self;
+    fn field_end(&mut self) -> &mut Self;
+}
+
+impl<'s, T> FlatBuildExt<'s> for T
+where
+    T: FlatBuild<'s>,
+{
+    #[inline]
+    fn scalar(&mut self, source: &'s str, kind: ScalarKind) -> &mut Self {
+        self.add(Node::new(NodeKind::Scalar(kind), source))
+    }
+
+    #[inline]
+    fn array_begin(&mut self) -> &mut Self {
+        self.open(Node::new(NodeKind::Array, ""))
+    }
+
+    #[inline]
+    fn array_end(&mut self) -> &mut Self {
+        self.close()
+    }
+
+    #[inline]
+    fn object_begin(&mut self) -> &mut Self {
+        self.open(Node::new(NodeKind::Object, ""))
+    }
+
+    #[inline]
+    fn field_begin(&mut self, source: &'s str, kind: StringKind) -> &mut Self {
+        self.add(Node::new(NodeKind::Key(kind), source))
+    }
+
+    #[inline]
+    fn field_end(&mut self) -> &mut Self {
+        self.close()
+    }
+
+    #[inline]
+    fn object_end(&mut self) -> &mut Self {
+        self.close()
     }
 }
 
