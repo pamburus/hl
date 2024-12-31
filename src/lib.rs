@@ -30,7 +30,6 @@ mod formatting;
 mod fsmon;
 mod json;
 mod model;
-mod model_v2;
 mod replay;
 mod scanning;
 mod serdex;
