@@ -1,3 +1,4 @@
+use encstr::EncodedString;
 use flat_tree::{tree, FlatTree};
 use std::ops::Range;
 
@@ -25,7 +26,7 @@ impl<'s> Container<'s> {
     }
 
     #[inline]
-    pub fn nodes(&self) -> tree::Nodes<Node<'s>> {
+    pub fn nodes(&self) -> tree::Nodes<Value<'s>> {
         self.inner.nodes()
     }
 
@@ -40,28 +41,23 @@ impl<'s> Container<'s> {
     }
 
     #[inline]
-    pub fn metaroot(&mut self) -> tree::NodeBuilder<Node<'s>> {
+    pub fn metaroot(&mut self) -> tree::NodeBuilder<Value<'s>> {
         self.inner.metaroot()
     }
 }
 
 // ---
 
-pub trait Build<'s>: tree::Build<Value = Node<'s>> {}
-pub type Children<'s> = tree::Children<'s, Node<'s>>;
+pub trait Build<'s>: tree::Build<Value = Value<'s>> {}
+pub type Children<'s> = tree::Children<'s, Value<'s>>;
 
-impl<'s, T: tree::Build<Value = Node<'s>>> Build<'s> for T {}
+impl<'s, T: tree::Build<Value = Value<'s>>> Build<'s> for T {}
 
 pub trait BuildExt<'s>: Build<'s> {
-    fn add_scalar(self, source: &'s str, kind: Scalar) -> Self;
+    fn add_scalar(self, scalar: Scalar<'s>) -> Self;
     fn add_object(self, f: impl FnOnce(Self::Child) -> Result<Self::Child>) -> Result<Self>;
     fn add_array(self, f: impl FnOnce(Self::Child) -> Result<Self::Child>) -> Result<Self>;
-    fn add_field(
-        self,
-        key: &'s str,
-        key_kind: String,
-        f: impl FnOnce(Self::Child) -> Result<Self::Child>,
-    ) -> Result<Self>;
+    fn add_field(self, key: String<'s>, f: impl FnOnce(Self::Child) -> Result<Self::Child>) -> Result<Self>;
 }
 
 impl<'s, T> BuildExt<'s> for T
@@ -69,68 +65,47 @@ where
     T: Build<'s>,
 {
     #[inline]
-    fn add_scalar(self, source: &'s str, kind: Scalar) -> Self {
-        self.push(Node::new(NodeKind::Scalar(kind), source))
+    fn add_scalar(self, scalar: Scalar<'s>) -> Self {
+        self.push(Value::Scalar(scalar))
     }
 
     #[inline]
     fn add_object(self, f: impl FnOnce(Self::Child) -> Result<Self::Child>) -> Result<Self> {
-        self.build_e(Node::new(NodeKind::Object, ""), f)
+        self.build_e(Value::Object, f)
     }
 
     #[inline]
     fn add_array(self, f: impl FnOnce(Self::Child) -> Result<Self::Child>) -> Result<Self> {
-        self.build_e(Node::new(NodeKind::Array, ""), f)
+        self.build_e(Value::Array, f)
     }
 
     #[inline]
-    fn add_field(
-        self,
-        key: &'s str,
-        key_kind: String,
-        f: impl FnOnce(Self::Child) -> Result<Self::Child>,
-    ) -> Result<Self> {
-        self.build_e(Node::new(NodeKind::Field(key_kind), key), f)
+    fn add_field(self, key: String<'s>, f: impl FnOnce(Self::Child) -> Result<Self::Child>) -> Result<Self> {
+        self.build_e(Value::Key(key), f)
     }
 }
 
 // ---
 
-pub type ContainerInner<'s> = FlatTree<Node<'s>>;
+pub type ContainerInner<'s> = FlatTree<Value<'s>>;
+pub type SiblingsIter<'s> = tree::SiblingsIter<'s, Value<'s>>;
+pub type Node<'s> = tree::Node<'s, Value<'s>>;
+pub type String<'s> = EncodedString<'s>;
 
 // ---
 
-#[derive(Debug)]
-pub struct Node<'s> {
-    kind: NodeKind,
-    source: &'s str,
-}
-
-impl<'s> Node<'s> {
-    #[inline]
-    pub fn new(kind: NodeKind, source: &'s str) -> Self {
-        Self { kind, source }
-    }
-}
-
-#[derive(Debug)]
-pub enum NodeKind {
-    Scalar(Scalar),
+#[derive(Debug, Clone, Copy)]
+pub enum Value<'s> {
+    Scalar(Scalar<'s>),
     Array,
     Object,
-    Field(String),
+    Key(String<'s>),
 }
 
-#[derive(Debug)]
-pub enum Scalar {
+#[derive(Debug, Clone, Copy)]
+pub enum Scalar<'s> {
     Null,
     Bool(bool),
-    Number,
-    String(String),
-}
-
-#[derive(Debug)]
-pub enum String {
-    Plain,
-    Escaped,
+    Number(&'s str),
+    String(String<'s>),
 }

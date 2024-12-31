@@ -5,22 +5,24 @@ use crate::{
     settings::PredefinedFields,
     timestamp::Timestamp,
 };
+use encstr::EncodedString;
+use std::collections::HashMap;
 
 const MAX_PREDEFINED_FIELDS: usize = 8;
 
-pub struct Record<'a> {
-    pub ts: Option<Timestamp<'a>>,
-    pub message: Option<Value<'a>>,
+pub struct Record<'s> {
+    pub ts: Option<Timestamp<'s>>,
+    pub message: Option<Value<'s>>,
     pub level: Option<Level>,
-    pub logger: Option<&'a str>,
-    pub caller: Option<Caller<'a>>,
-    pub fields: RecordFields<'a>,
-    predefined: heapless::Vec<(&'a str, Value<'a>), MAX_PREDEFINED_FIELDS>,
+    pub logger: Option<&'s str>,
+    pub caller: Option<Caller<'s>>,
+    pub fields: RecordFields<'s>,
+    predefined: heapless::Vec<Field<'s>, MAX_PREDEFINED_FIELDS>,
 }
 
-impl<'a> Record<'a> {
+impl<'s> Record<'s> {
     #[inline]
-    pub fn new(fields: RecordFields<'a>) -> Self {
+    pub fn new(fields: RecordFields<'s>) -> Self {
         Self {
             ts: None,
             message: None,
@@ -33,8 +35,8 @@ impl<'a> Record<'a> {
     }
 
     #[inline]
-    pub fn fields_for_search(&self) -> impl Iterator<Item = &(&'a str, Value<'a>)> {
-        self.fields.values().chain(self.predefined.iter())
+    pub fn fields_for_search<'r>(&'r self) -> impl Iterator<Item = Field<'s>> + 'r {
+        self.fields.iter().chain(self.predefined.iter().copied())
     }
 
     #[inline]
@@ -43,7 +45,131 @@ impl<'a> Record<'a> {
     }
 }
 
-pub type RecordFields<'a> = ast::Children<'a>;
+// ---
+
+pub struct RecordFields<'s> {
+    inner: ast::Children<'s>,
+}
+
+impl<'s> RecordFields<'s> {
+    #[inline]
+    fn new(inner: ast::Children<'s>) -> Self {
+        Self { inner }
+    }
+
+    #[inline]
+    pub fn iter(&self) -> RecordFieldsIter<'s> {
+        RecordFieldsIter::new(self.inner.iter())
+    }
+}
+
+// ---
+
+struct RecordFieldsIter<'s> {
+    inner: ast::SiblingsIter<'s>,
+}
+
+impl<'s> RecordFieldsIter<'s> {
+    #[inline]
+    fn new(inner: ast::SiblingsIter<'s>) -> Self {
+        Self { inner }
+    }
+
+    fn field(node: ast::Node<'s>) -> Field<'s> {
+        let ast::Value::Key(key) = node.value() else {
+            panic!("expected key node, got {:?}", node.value());
+        };
+        Field {
+            key: key.source(),
+            value: node.children().iter().next().unwrap().into(),
+        }
+    }
+}
+
+impl<'s> Iterator for RecordFieldsIter<'s> {
+    type Item = Field<'s>;
+
+    #[inline]
+    fn next(&mut self) -> Option<Self::Item> {
+        self.inner.next().map(Self::field)
+    }
+}
+
+// ---
+
+#[derive(Debug, Clone, Copy)]
+pub enum Value<'s> {
+    Null,
+    Bool(bool),
+    Number(&'s str),
+    String(EncodedString<'s>),
+    Array(Array<'s>),
+    Object(Object<'s>),
+}
+
+impl<'s> From<ast::Node<'s>> for Value<'s> {
+    fn from(node: ast::Node<'s>) -> Self {
+        match *node.value() {
+            ast::Value::Scalar(scalar) => match scalar {
+                ast::Scalar::Null => Self::Null,
+                ast::Scalar::Bool(b) => Self::Bool(b),
+                ast::Scalar::Number(s) => Self::Number(s),
+                ast::Scalar::String(s) => Self::String(s.into()),
+            },
+            ast::Value::Array => Self::Array(Array::new(node)),
+            ast::Value::Object => Self::Object(Object::new(node)),
+            _ => panic!("expected scalar, array or object node, got {:?}", node),
+        }
+    }
+}
+
+// ---
+
+#[derive(Debug, Clone, Copy)]
+pub struct Array<'s> {
+    inner: ast::Node<'s>,
+}
+
+impl<'s> Array<'s> {
+    pub fn new(inner: ast::Node<'s>) -> Self {
+        Self { inner }
+    }
+}
+
+impl<'s> From<Array<'s>> for Value<'s> {
+    #[inline]
+    fn from(a: Array<'s>) -> Self {
+        Value::Array(a)
+    }
+}
+
+// ---
+
+#[derive(Debug, Clone, Copy)]
+pub struct Object<'s> {
+    inner: ast::Node<'s>,
+}
+
+impl<'s> Object<'s> {
+    pub fn new(inner: ast::Node<'s>) -> Self {
+        Self { inner }
+    }
+}
+
+impl<'s> From<Object<'s>> for Value<'s> {
+    #[inline]
+    fn from(o: Object<'s>) -> Self {
+        Value::Object(o)
+    }
+}
+
+// ---
+
+#[derive(Debug, Clone, Copy)]
+pub struct Field<'s> {
+    pub key: &'s str,
+    pub value: Value<'s>,
+}
 
 // ---
 
