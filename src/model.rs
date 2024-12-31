@@ -35,6 +35,8 @@ use crate::{
 
 // ---
 
+pub mod v2;
+
 pub use level::Level;
 
 pub const MAX_NUMBER_LEN: usize = 39;
