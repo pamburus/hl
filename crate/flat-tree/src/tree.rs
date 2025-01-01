@@ -108,7 +108,7 @@ where
 
     #[inline]
     pub fn push(&mut self, value: S::Value) -> &mut Self {
-        Build::push(self, value)
+        Push::push(self, value)
     }
 
     #[inline]
@@ -122,7 +122,7 @@ where
         value: S::Value,
         f: impl FnOnce(NodeBuilder<V, S>) -> Result<NodeBuilder<V, S>, E>,
     ) -> Result<&mut Self, E> {
-        Build::build_e(self, value, f)
+        BuildE::build_e(self, value, f)
     }
 
     #[inline]
@@ -151,22 +151,39 @@ where
     }
 }
 
-impl<'t, V, S> Build for &'t mut FlatTree<V, S>
+impl<'t, V, S> Push for &'t mut FlatTree<V, S>
 where
     S: Storage<Value = V>,
 {
     type Value = V;
-    type Child = NodeBuilder<'t, V, S>;
 
     #[inline]
-    fn push(self, value: S::Value) -> Self {
+    fn push(self, value: V) -> Self {
         self.storage.push(Item::new(value));
         self.roots += 1;
         self
     }
+}
+
+impl<'t, V, S> Reserve for &'t mut FlatTree<V, S>
+where
+    S: Storage<Value = V>,
+{
+    #[inline]
+    fn reserve(&mut self, additional: usize) {
+        self.storage.reserve(additional);
+    }
+}
+
+impl<'t, V, S> BuildE for &'t mut FlatTree<V, S>
+where
+    S: Storage<Value = V>,
+    Self: Push<Value = V>,
+{
+    type Child = NodeBuilder<'t, V, S>;
 
     #[inline]
-    fn build_e<E>(mut self, value: S::Value, f: impl FnOnce(Self::Child) -> Result<Self::Child, E>) -> Result<Self, E> {
+    fn build_e<E>(mut self, value: V, f: impl FnOnce(Self::Child) -> Result<Self::Child, E>) -> Result<Self, E> {
         let index = self.storage.len();
         self = self.push(value);
 
@@ -178,31 +195,47 @@ where
 
         Ok(f(child)?.end())
     }
-
-    #[inline]
-    fn reserve(&mut self, additional: usize) {
-        self.storage.reserve(additional);
-    }
 }
 
 // ---
 
-pub trait Build: Sized {
+pub trait Reserve {
+    fn reserve(&mut self, _additional: usize) {}
+}
+
+pub trait Push: Reserve {
     type Value;
-    type Child: Build<Value = Self::Value>;
 
     fn push(self, value: Self::Value) -> Self;
+}
+
+pub trait Build: Push {
+    type Child: Build<Value = Self::Value>;
+
+    fn build(self, value: Self::Value, f: impl FnOnce(Self::Child) -> Self::Child) -> Self;
+}
+
+// ---
+
+pub trait BuildE: Push + Sized {
+    type Child: BuildE<Value = Self::Value>;
+
     fn build_e<E>(self, value: Self::Value, f: impl FnOnce(Self::Child) -> Result<Self::Child, E>) -> Result<Self, E>;
+}
+
+impl<T: BuildE> Build for T {
+    type Child = T::Child;
+
+    #[inline]
     fn build(self, value: Self::Value, f: impl FnOnce(Self::Child) -> Self::Child) -> Self {
-        self.build_e(value, |child| Ok::<_, ()>(f(child))).unwrap()
+        unsafe { BuildE::build_e(self, value, |b| Ok::<_, ()>(f(b))).unwrap_unchecked() }
     }
-    fn reserve(&mut self, _additional: usize) {}
 }
 
 // ---
 
 #[derive_where(Clone, Copy)]
-pub struct Roots<'t, V, S>
+pub struct Roots<'t, V, S = DefaultStorage<V>>
 where
     S: Storage<Value = V>,
 {
@@ -539,21 +572,8 @@ where
     }
 
     #[inline]
-    pub fn build_e<E>(mut self, value: S::Value, f: impl FnOnce(Self) -> Result<Self, E>) -> Result<Self, E> {
-        let index = self.tree.storage.len();
-        self = self.push(value);
-
-        let (snapshot, tree) = self.snapshot();
-
-        let child = NodeBuilder {
-            tree,
-            index: Some(index),
-            children: 0,
-        };
-
-        let tree = f(child)?.end();
-
-        Ok((snapshot, tree).into())
+    pub fn build_e<E>(self, value: S::Value, f: impl FnOnce(Self) -> Result<Self, E>) -> Result<Self, E> {
+        BuildE::build_e(self, value, f)
     }
 
     #[inline]
@@ -591,26 +611,50 @@ where
     }
 }
 
-impl<'t, V, S> Build for NodeBuilder<'t, V, S>
+impl<'t, V, S> Push for NodeBuilder<'t, V, S>
 where
     S: Storage<Value = V>,
 {
     type Value = V;
-    type Child = Self;
 
     #[inline]
     fn push(self, value: S::Value) -> Self {
         self.push(value)
     }
+}
 
-    #[inline]
-    fn build_e<E>(self, value: S::Value, f: impl FnOnce(Self) -> Result<Self, E>) -> Result<Self, E> {
-        self.build_e(value, f)
-    }
-
+impl<'t, V, S> Reserve for NodeBuilder<'t, V, S>
+where
+    S: Storage<Value = V>,
+{
     #[inline]
     fn reserve(&mut self, additional: usize) {
         self.tree.reserve(additional);
+    }
+}
+
+impl<'t, V, S> BuildE for NodeBuilder<'t, V, S>
+where
+    S: Storage<Value = V>,
+{
+    type Child = Self;
+
+    #[inline]
+    fn build_e<E>(mut self, value: V, f: impl FnOnce(Self) -> Result<Self, E>) -> Result<Self, E> {
+        let index = self.tree.storage.len();
+        self = self.push(value);
+
+        let (snapshot, tree) = self.snapshot();
+
+        let child = NodeBuilder {
+            tree,
+            index: Some(index),
+            children: 0,
+        };
+
+        let tree = f(child)?.end();
+
+        Ok((snapshot, tree).into())
     }
 }
 

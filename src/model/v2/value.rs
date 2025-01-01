@@ -66,7 +66,7 @@ impl<'s> IntoIterator for Array<'s> {
 
 // ---
 
-struct ArrayIter<'s> {
+pub struct ArrayIter<'s> {
     inner: ast::SiblingsIter<'s>,
 }
 
@@ -118,7 +118,7 @@ impl<'s> IntoIterator for Object<'s> {
 
 // ---
 
-struct ObjectIter<'s> {
+pub struct ObjectIter<'s> {
     inner: ast::SiblingsIter<'s>,
 }
 

@@ -26,6 +26,11 @@ impl<'s> Container<'s> {
     }
 
     #[inline]
+    pub fn roots(&self) -> tree::Roots<Value<'s>> {
+        self.inner.roots()
+    }
+
+    #[inline]
     pub fn nodes(&self) -> tree::Nodes<Value<'s>> {
         self.inner.nodes()
     }
@@ -48,10 +53,10 @@ impl<'s> Container<'s> {
 
 // ---
 
-pub trait Build<'s>: tree::Build<Value = Value<'s>> {}
+pub trait Build<'s>: tree::BuildE<Value = Value<'s>> {}
 pub type Children<'s> = tree::Children<'s, Value<'s>>;
 
-impl<'s, T: tree::Build<Value = Value<'s>>> Build<'s> for T {}
+impl<'s, T: tree::BuildE<Value = Value<'s>>> Build<'s> for T {}
 
 pub trait BuildExt<'s>
 where
@@ -69,7 +74,7 @@ where
 
 impl<'s, T> BuildExt<'s> for T
 where
-    T: Build<'s>,
+    T: tree::BuildE<Value = Value<'s>>,
 {
     type Child = T::Child;
 
