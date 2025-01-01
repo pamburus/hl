@@ -2,7 +2,7 @@
 use encstr::EncodedString;
 
 // local imports
-use super::ast;
+use super::ast::{self, Composite};
 
 // ---
 
@@ -25,9 +25,11 @@ impl<'s> From<ast::Node<'s>> for Value<'s> {
                 ast::Scalar::Number(s) => Self::Number(s),
                 ast::Scalar::String(s) => Self::String(s.into()),
             },
-            ast::Value::Array => Self::Array(Array::new(node)),
-            ast::Value::Object => Self::Object(Object::new(node)),
-            _ => panic!("expected scalar, array or object node, got {:?}", node),
+            ast::Value::Composite(composite) => match composite {
+                ast::Composite::Array => Self::Array(Array::new(node)),
+                ast::Composite::Object => Self::Object(Object::new(node)),
+                ast::Composite::Field(_) => panic!("expected scalar, array or object node, got {:?}", node),
+            },
         }
     }
 }
@@ -152,8 +154,8 @@ impl<'s> Field<'s> {
 
     #[inline]
     pub(super) fn from_node(node: ast::Node<'s>) -> Self {
-        let ast::Value::Key(key) = node.value() else {
-            panic!("expected key node, got {:?}", node.value());
+        let ast::Value::Composite(Composite::Field(key)) = node.value() else {
+            panic!("expected field node, got {:?}", node.value());
         };
 
         Field {
