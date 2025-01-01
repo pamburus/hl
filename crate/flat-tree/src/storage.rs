@@ -4,6 +4,8 @@ use std::{fmt::Debug, vec::Vec};
 // local imports
 use crate::tree::Item;
 
+pub type DefaultStorage<V> = Vec<Item<V>>;
+
 pub trait Storage: Debug {
     type Value;
 

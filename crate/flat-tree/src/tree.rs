@@ -5,11 +5,10 @@ use std::{marker::PhantomData, result::Result};
 use derive_where::derive_where;
 
 // local imports
-use crate::storage::Storage;
+pub use super::build::*;
+use super::storage::{DefaultStorage, Storage};
 
 // ---
-
-pub type DefaultStorage<V> = Vec<Item<V>>;
 
 #[derive_where(Default; S: Default)]
 #[derive_where(Debug)]
@@ -102,7 +101,7 @@ where
         value: S::Value,
         f: impl FnOnce(NodeBuilder<V, S>) -> NodeBuilder<V, S>,
     ) -> Self {
-        (&mut self).build(value, f);
+        Build::build(&mut self, value, f);
         self
     }
 
@@ -194,41 +193,6 @@ where
         };
 
         Ok(f(child)?.end())
-    }
-}
-
-// ---
-
-pub trait Reserve {
-    fn reserve(&mut self, _additional: usize) {}
-}
-
-pub trait Push: Reserve {
-    type Value;
-
-    fn push(self, value: Self::Value) -> Self;
-}
-
-pub trait Build: Push {
-    type Child: Build<Value = Self::Value>;
-
-    fn build(self, value: Self::Value, f: impl FnOnce(Self::Child) -> Self::Child) -> Self;
-}
-
-// ---
-
-pub trait BuildE: Push + Sized {
-    type Child: BuildE<Value = Self::Value>;
-
-    fn build_e<E>(self, value: Self::Value, f: impl FnOnce(Self::Child) -> Result<Self::Child, E>) -> Result<Self, E>;
-}
-
-impl<T: BuildE> Build for T {
-    type Child = T::Child;
-
-    #[inline]
-    fn build(self, value: Self::Value, f: impl FnOnce(Self::Child) -> Self::Child) -> Self {
-        unsafe { BuildE::build_e(self, value, |b| Ok::<_, ()>(f(b))).unwrap_unchecked() }
     }
 }
 
