@@ -57,7 +57,7 @@ heapopt = { path = "./crate/heapopt" }
 hex = "0"
 htp = { git = "https://github.com/pamburus/htp.git" }
 humantime = "2"
-itertools = "0.13"
+itertools = "0.14"
 itoa = { version = "1", default-features = false }
 known-folders = "1"
 log = "0"
