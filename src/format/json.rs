@@ -81,7 +81,7 @@ pub mod error {
 
 pub mod parse {
     use super::{error::*, *};
-    use crate::model::v2::ast::{Build, BuildExt, Container, Scalar};
+    use crate::model::v2::ast::{Build, BuildExt, Composite, Container, Scalar};
 
     #[inline]
     pub fn parse<'s>(lexer: &mut Lexer<'s>) -> Result<Container<'s>> {
@@ -109,8 +109,8 @@ pub mod parse {
     fn parse_value_token<'s, T: Build<'s>>(lexer: &mut Lexer<'s>, target: T, token: Token<'s>) -> Result<T> {
         match token {
             Token::Bool(b) => Ok(target.add_scalar(Scalar::Bool(b))),
-            Token::BraceOpen => target.add_object(|target| parse_object(lexer, target)),
-            Token::BracketOpen => target.add_array(|target| parse_array(lexer, target)),
+            Token::BraceOpen => target.add_composite(Composite::Object, |target| parse_object(lexer, target)),
+            Token::BracketOpen => target.add_composite(Composite::Array, |target| parse_array(lexer, target)),
             Token::Null => Ok(target.add_scalar(Scalar::Null)),
             Token::Number(s) => Ok(target.add_scalar(Scalar::Number(s))),
             Token::String(s) => Ok(target.add_scalar(Scalar::String(s.into()))),
@@ -167,7 +167,7 @@ pub mod parse {
                     awaits = Awaits::Key;
                 }
                 (Token::String(s), Awaits::Key) => {
-                    target = target.add_field(s.into(), |target| {
+                    target = target.add_composite(Composite::Field(s.into()), |target| {
                         match lexer.next() {
                             Some(Ok(Token::Colon)) => (),
                             _ => return Err(("unexpected token here, expecting ':'", lexer.span())),

@@ -8,7 +8,7 @@ use wildflower::Pattern;
 
 // local imports
 use super::{
-    super::ast::{self, BuildExt, Scalar},
+    super::ast::{self, BuildExt, Composite, Scalar},
     *,
 };
 use crate::{
@@ -56,33 +56,21 @@ where
 {
     type Child = Builder<'s, T::Child>;
 
+    #[inline]
     fn add_scalar(mut self, scalar: Scalar<'s>) -> Self {
         self.target = self.target.add_scalar(scalar);
         self
     }
 
-    fn add_object(mut self, f: impl FnOnce(Self::Child) -> ast::Result<Self::Child>) -> ast::Result<Self> {
-        self.target = self
-            .target
-            .add_object(|target| Ok(f(Self::child(self.core, target))?.target))?;
-        Ok(self)
-    }
-
-    fn add_array(mut self, f: impl FnOnce(Self::Child) -> ast::Result<Self::Child>) -> ast::Result<Self> {
-        self.target = self
-            .target
-            .add_array(|target| Ok(f(Self::child(self.core, target))?.target))?;
-        Ok(self)
-    }
-
-    fn add_field(
+    #[inline]
+    fn add_composite(
         mut self,
-        key: ast::String<'s>,
+        composite: Composite<'s>,
         f: impl FnOnce(Self::Child) -> ast::Result<Self::Child>,
     ) -> ast::Result<Self> {
         self.target = self
             .target
-            .add_field(key, |target| Ok(f(Self::child(self.core, target))?.target))?;
+            .add_composite(composite, |target| Ok(f(Self::child(self.core, target))?.target))?;
         Ok(self)
     }
 }
