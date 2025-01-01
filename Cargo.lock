@@ -621,9 +621,9 @@ dependencies = [
 
 [[package]]
 name = "deko"
-version = "0.3.0"
+version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5bff3b57fb369f868304544042ee430a00cc597e59c52d70f42a42c7876f6c9b"
+checksum = "79090f96b34402b7ebe46979a49f3d1ee291912bc6afecf875643a4da03948ca"
 dependencies = [
  "bzip2",
  "flate2",
