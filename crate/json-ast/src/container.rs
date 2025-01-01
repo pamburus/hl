@@ -52,11 +52,16 @@ impl<'s> Container<'s> {
 
 // ---
 
-pub trait Build<'s>: tree::Build<Value = Node<'s>> {}
+pub trait Build<'s>: tree::BuildE<Value = Node<'s>> {}
 
-impl<'s, T: tree::Build<Value = Node<'s>>> Build<'s> for T {}
+impl<'s, T: tree::BuildE<Value = Node<'s>>> Build<'s> for T {}
 
-pub trait BuildExt<'s>: Build<'s> {
+pub trait BuildExt<'s>
+where
+    Self: Sized,
+{
+    type Child: BuildExt<'s>;
+
     fn add_scalar(self, source: &'s str, kind: ScalarKind) -> Self;
     fn add_object(self, f: impl FnOnce(Self::Child) -> Result<Self::Child>) -> Result<Self>;
     fn add_array(self, f: impl FnOnce(Self::Child) -> Result<Self::Child>) -> Result<Self>;
@@ -68,6 +73,8 @@ impl<'s, T> BuildExt<'s> for T
 where
     T: Build<'s>,
 {
+    type Child = T::Child;
+
     #[inline]
     fn add_scalar(self, source: &'s str, kind: ScalarKind) -> Self {
         self.push(Node::new(NodeKind::Scalar(kind), source))
