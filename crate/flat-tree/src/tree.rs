@@ -156,7 +156,6 @@ where
     S: Storage<Value = V>,
 {
     type Value = V;
-    type Storage = S;
     type Child = NodeBuilder<'t, V, S>;
 
     #[inline]
@@ -190,8 +189,7 @@ where
 
 pub trait Build: Sized {
     type Value;
-    type Storage: Storage<Value = Self::Value>;
-    type Child: Build<Value = Self::Value, Storage = Self::Storage>;
+    type Child: Build<Value = Self::Value>;
 
     fn push(self, value: Self::Value) -> Self;
     fn build_e<E>(self, value: Self::Value, f: impl FnOnce(Self::Child) -> Result<Self::Child, E>) -> Result<Self, E>;
@@ -598,7 +596,6 @@ where
     S: Storage<Value = V>,
 {
     type Value = V;
-    type Storage = S;
     type Child = Self;
 
     #[inline]
