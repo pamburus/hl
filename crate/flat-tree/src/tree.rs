@@ -1,5 +1,5 @@
 // std imports
-use std::{marker::PhantomData, result::Result};
+use std::marker::PhantomData;
 
 // third-party imports
 use derive_where::derive_where;
@@ -112,17 +112,16 @@ where
     }
 
     #[inline]
-    pub fn build(&mut self, value: S::Value, f: impl FnOnce(NodeBuilder<V, S>) -> NodeBuilder<V, S>) -> &mut Self {
-        Build::build(self, value, f)
-    }
-
-    #[inline]
-    pub fn build_e<E>(
-        &mut self,
+    pub fn build<'s, R, F>(
+        &'s mut self,
         value: S::Value,
-        f: impl FnOnce(NodeBuilder<V, S>) -> Result<NodeBuilder<V, S>, E>,
-    ) -> Result<&mut Self, E> {
-        BuildE::build_e(self, value, f)
+        f: F,
+    ) -> BuildOutput<F, R, &'s mut Self, NodeBuilder<'s, V, S>>
+    where
+        F: FnOnce(NodeBuilder<'s, V, S>) -> R,
+        R: BuildFnResult<F, R, &'s mut Self, NodeBuilder<'s, V, S>>,
+    {
+        Build::build(self, value, f)
     }
 
     #[inline]
@@ -175,7 +174,7 @@ where
     }
 }
 
-impl<'t, V, S> BuildE for &'t mut FlatTree<V, S>
+impl<'t, V, S> Build for &'t mut FlatTree<V, S>
 where
     S: Storage<Value = V>,
 {
@@ -185,7 +184,11 @@ where
     type WithoutAttachment = Self;
 
     #[inline]
-    fn build_e<E>(mut self, value: V, f: impl FnOnce(Self::Child) -> Result<Self::Child, E>) -> Result<Self, E> {
+    fn build<R, F>(mut self, value: V, f: F) -> BuildOutput<F, R, Self, Self::Child>
+    where
+        F: FnOnce(Self::Child) -> R,
+        R: BuildFnResult<F, R, Self, Self::Child>,
+    {
         let index = self.storage.len();
         self = self.push(value);
 
@@ -196,12 +199,14 @@ where
             children: 0,
         };
 
-        Ok(f(child)?.end().0)
+        let result = f(child).into_result().map(|child| child.end().0);
+
+        R::finalize(result)
     }
 
     #[inline]
     fn attach<A>(self, attachment: A) -> Self::WithAttachment<A> {
-        BuildE::attach(self.metaroot(), attachment)
+        Build::attach(self.metaroot(), attachment)
     }
 
     #[inline]
@@ -547,13 +552,12 @@ where
     }
 
     #[inline]
-    pub fn build(self, value: S::Value, f: impl FnOnce(Self) -> Self) -> Self {
+    fn build<R, F>(self, value: S::Value, f: F) -> BuildOutput<F, R, Self, Self>
+    where
+        F: FnOnce(Self) -> R,
+        R: BuildFnResult<F, R, Self, Self>,
+    {
         Build::build(self, value, f)
-    }
-
-    #[inline]
-    pub fn build_e<E>(self, value: S::Value, f: impl FnOnce(Self) -> Result<Self, E>) -> Result<Self, E> {
-        BuildE::build_e(self, value, f)
     }
 
     #[inline]
@@ -612,7 +616,7 @@ where
     }
 }
 
-impl<'t, V, S, A> BuildE for NodeBuilder<'t, V, S, A>
+impl<'t, V, S, A> Build for NodeBuilder<'t, V, S, A>
 where
     S: Storage<Value = V>,
     A: BuildAttachment,
@@ -623,7 +627,11 @@ where
     type WithoutAttachment = NodeBuilder<'t, V, S, A::Parent>;
 
     #[inline]
-    fn build_e<E>(mut self, value: V, f: impl FnOnce(Self) -> Result<Self, E>) -> Result<Self, E> {
+    fn build<R, F>(mut self, value: V, f: F) -> BuildOutput<F, R, Self, Self>
+    where
+        F: FnOnce(Self::Child) -> R,
+        R: BuildFnResult<F, R, Self, Self>,
+    {
         let index = self.tree.storage.len();
         self = self.push(value);
 
@@ -636,9 +644,12 @@ where
             children: 0,
         };
 
-        let (tree, attachment) = f(child)?.end();
+        let result = f(child).into_result().map(|child| {
+            let (tree, attachment) = child.end();
+            NodeBuilder::from((snapshot, attachment, tree))
+        });
 
-        Ok((snapshot, attachment, tree).into())
+        R::finalize(result)
     }
 
     #[inline]
@@ -765,6 +776,8 @@ impl BuildAttachment for NoAttachment {
 
 #[cfg(test)]
 mod tests {
+    use core::panic;
+
     use super::*;
 
     fn collect<'t, V, S, I>(nodes: I) -> Vec<V>
@@ -778,6 +791,27 @@ mod tests {
 
     #[test]
     fn test_tree() {
+        let mut tree = FlatTree::<i32>::new()
+            .with_node(1)
+            .with_node(2)
+            .with_composite_node(3, |b| b.push(4).push(5).push(6))
+            .with_node(9);
+
+        let x = tree.metaroot();
+        x.build(10, |b| b.push(11).push(12).build(13, |b| b.push(14).push(15)));
+
+        let x = tree.metaroot();
+        let r = x.build(11, |b| {
+            b.push(12).push(13).build(14, |b| {
+                b.push(15).push(16);
+                Err("some error")
+            })
+        });
+        match r {
+            Ok(_) => panic!("expected error"),
+            Err(e) => assert_eq!(e, "some error"),
+        }
+
         let tree = FlatTree::<i32>::new()
             .with_node(1)
             .with_node(2)

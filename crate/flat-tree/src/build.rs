@@ -1,5 +1,5 @@
 // std imports
-use std::result::Result;
+use std::{convert::Infallible, result::Result};
 
 // ---
 
@@ -13,52 +13,80 @@ pub trait Push: Reserve {
     fn push(self, value: Self::Value) -> Self;
 }
 
+// ---
+
 pub trait Build: Push + Sized {
     type Child: Build<Value = Self::Value>;
     type Attachment: BuildAttachment;
     type WithAttachment<V>: Build<Attachment = AttachmentChild<Self::Attachment, V>>;
     type WithoutAttachment: Build<Attachment = AttachmentParent<Self::Attachment>>;
 
-    fn build(self, value: Self::Value, f: impl FnOnce(Self::Child) -> Self::Child) -> Self;
+    fn build<R, F>(self, value: Self::Value, f: F) -> BuildOutput<F, R, Self, Self::Child>
+    where
+        F: FnOnce(Self::Child) -> R,
+        R: BuildFnResult<F, R, Self, Self::Child>;
 
     fn attach<V>(self, attachment: V) -> Self::WithAttachment<V>;
     fn detach(self) -> (Self::WithoutAttachment, AttachmentValue<Self::Attachment>);
-}
-
-impl<T: BuildE> Build for T {
-    type Child = T::Child;
-    type Attachment = T::Attachment;
-    type WithAttachment<V> = T::WithAttachment<V>;
-    type WithoutAttachment = T::WithoutAttachment;
-
-    #[inline]
-    fn build(self, value: Self::Value, f: impl FnOnce(Self::Child) -> Self::Child) -> Self {
-        unsafe { BuildE::build_e::<()>(self, value, |b| Ok(f(b))).unwrap_unchecked() }
-    }
-
-    #[inline]
-    fn attach<V>(self, attachment: V) -> Self::WithAttachment<V> {
-        BuildE::attach(self, attachment)
-    }
-
-    #[inline]
-    fn detach(self) -> (Self::WithoutAttachment, AttachmentValue<Self::Attachment>) {
-        BuildE::detach(self)
-    }
 }
 
 // ---
 
-pub trait BuildE: Push + Sized {
-    type Child: BuildE<Value = Self::Value>;
-    type Attachment: BuildAttachment;
-    type WithAttachment<V>: BuildE<Attachment = AttachmentChild<Self::Attachment, V>>;
-    type WithoutAttachment: BuildE<Attachment = AttachmentParent<Self::Attachment>>;
+pub type BuildOutput<F, R, B, C> = <R as BuildFnResult<F, R, B, C>>::Output;
 
-    fn build_e<E>(self, value: Self::Value, f: impl FnOnce(Self::Child) -> Result<Self::Child, E>) -> Result<Self, E>;
+// ---
 
-    fn attach<V>(self, attachment: V) -> Self::WithAttachment<V>;
-    fn detach(self) -> (Self::WithoutAttachment, AttachmentValue<Self::Attachment>);
+pub trait BuildFnResult<F, R, B, C>
+where
+    F: FnOnce(C) -> R,
+    B: Build,
+    C: Build,
+{
+    type Error;
+    type Output;
+
+    fn into_result(self) -> Result<C, Self::Error>;
+    fn finalize(result: Result<B, Self::Error>) -> Self::Output;
+}
+
+impl<F, B, C> BuildFnResult<F, C, B, C> for C
+where
+    F: FnOnce(C) -> C,
+    B: Build,
+    C: Build,
+{
+    type Error = Infallible;
+    type Output = B;
+
+    #[inline]
+    fn into_result(self) -> Result<C, Infallible> {
+        Ok(self)
+    }
+
+    #[inline]
+    fn finalize(result: Result<B, Infallible>) -> B {
+        result.unwrap()
+    }
+}
+
+impl<F, B, C, E> BuildFnResult<F, Result<C, E>, B, C> for Result<C, E>
+where
+    F: FnOnce(C) -> Result<C, E>,
+    B: Build,
+    C: Build,
+{
+    type Error = E;
+    type Output = Result<B, E>;
+
+    #[inline]
+    fn into_result(self) -> Result<C, E> {
+        self
+    }
+
+    #[inline]
+    fn finalize(result: Result<B, E>) -> Result<B, E> {
+        result
+    }
 }
 
 // ---
@@ -72,6 +100,6 @@ pub trait BuildAttachment {
     fn split(self) -> (Self::Parent, Self::Value);
 }
 
-pub type AttachmentParent<A: BuildAttachment> = <A as BuildAttachment>::Parent;
-pub type AttachmentValue<A: BuildAttachment> = <A as BuildAttachment>::Value;
-pub type AttachmentChild<A: BuildAttachment, V> = <A as BuildAttachment>::Child<V>;
+pub type AttachmentParent<A> = <A as BuildAttachment>::Parent;
+pub type AttachmentValue<A> = <A as BuildAttachment>::Value;
+pub type AttachmentChild<A, V> = <A as BuildAttachment>::Child<V>;
