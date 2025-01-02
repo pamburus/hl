@@ -16,7 +16,7 @@ pub trait Push: Reserve {
 // ---
 
 pub trait Build: Push + Sized {
-    type Child: Build<Value = Self::Value>;
+    type Child: Build<Value = Self::Value, Attachment = Self::Attachment>;
     type Attachment: BuildAttachment;
     type WithAttachment<V>: Build<Value = Self::Value, Attachment = AttachmentChild<Self::Attachment, V>>;
     type WithoutAttachment: Build<Value = Self::Value, Attachment = AttachmentParent<Self::Attachment>>;

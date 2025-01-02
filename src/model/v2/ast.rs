@@ -66,17 +66,15 @@ pub trait Build<'s>
 where
     Self: Sized,
 {
-    type Child: Build<'s>;
+    type Child: Build<'s, Attachment = Self::Attachment>;
     type Attachment: BuildAttachment;
     type WithAttachment<V>: Build<'s, Attachment = AttachmentChild<Self::Attachment, V>>;
     type WithoutAttachment: Build<'s, Attachment = AttachmentParent<Self::Attachment>>;
 
     fn add_scalar(self, scalar: Scalar<'s>) -> Self;
-    fn add_composite(
-        self,
-        composite: Composite<'s>,
-        f: impl FnOnce(Self::Child) -> Result<Self::Child>,
-    ) -> Result<Self>;
+    fn add_composite<F>(self, composite: Composite<'s>, f: F) -> Result<Self>
+    where
+        F: FnOnce(Self::Child) -> Result<Self::Child>;
 
     fn attach<V>(self, attachment: V) -> Self::WithAttachment<V>;
     fn detach(self) -> (Self::WithoutAttachment, AttachmentValue<Self::Attachment>);
@@ -97,11 +95,10 @@ where
     }
 
     #[inline]
-    fn add_composite(
-        self,
-        composite: Composite<'s>,
-        f: impl FnOnce(Self::Child) -> Result<Self::Child>,
-    ) -> Result<Self> {
+    fn add_composite<F>(self, composite: Composite<'s>, f: F) -> Result<Self>
+    where
+        F: FnOnce(Self::Child) -> Result<Self::Child>,
+    {
         let result = self
             .inner
             .build(composite.into(), |b| f(Builder::new(b)).map(|b| b.inner))?;
