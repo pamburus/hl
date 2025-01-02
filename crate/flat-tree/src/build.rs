@@ -36,12 +36,7 @@ pub type BuildOutput<F, R, B, C> = <R as BuildFnResult<F, R, B, C>>::Output;
 
 // ---
 
-pub trait BuildFnResult<F, R, B, C>
-where
-    F: FnOnce(C) -> R,
-    B: Build,
-    C: Build,
-{
+pub trait BuildFnResult<F, R, B, C> {
     type Error;
     type Output;
 
