@@ -110,19 +110,19 @@ where
         Push::push(self, value)
     }
 
-    #[inline]
-    pub fn build(&mut self, value: S::Value, f: impl FnOnce(NodeBuilder<V, S>) -> NodeBuilder<V, S>) -> &mut Self {
-        Build::build(self, value, f)
-    }
+    // #[inline]
+    // pub fn build(&mut self, value: S::Value, f: impl FnOnce(NodeBuilder<V, S>) -> NodeBuilder<V, S>) -> &mut Self {
+    //     Build::build(self, value, f)
+    // }
 
-    #[inline]
-    pub fn build_e<E>(
-        &mut self,
-        value: S::Value,
-        f: impl FnOnce(NodeBuilder<V, S>) -> Result<NodeBuilder<V, S>, E>,
-    ) -> Result<&mut Self, E> {
-        BuildE::build_e(self, value, f)
-    }
+    // #[inline]
+    // pub fn build_e<E>(
+    //     &mut self,
+    //     value: S::Value,
+    //     f: impl FnOnce(NodeBuilder<V, S>) -> Result<NodeBuilder<V, S>, E>,
+    // ) -> Result<&mut Self, E> {
+    //     BuildE::build_e(self, value, f)
+    // }
 
     #[inline]
     fn len(&self) -> usize {
@@ -174,7 +174,7 @@ where
     }
 }
 
-impl<'t, V, S> BuildE for &'t mut FlatTree<V, S>
+impl<'t, V, S> FromChild for &'t mut FlatTree<V, S>
 where
     S: Storage<Value = V>,
     Self: Push<Value = V>,
@@ -182,7 +182,17 @@ where
     type Child = NodeBuilder<'t, V, S>;
 
     #[inline]
-    fn build_e<E>(mut self, value: V, f: impl FnOnce(Self::Child) -> Result<Self::Child, E>) -> Result<Self, E> {
+    fn from_child(child: Self::Child) -> Self {
+        child.end()
+    }
+}
+
+impl<'t, V, S> Build for &'t mut FlatTree<V, S>
+where
+    S: Storage<Value = V>,
+{
+    #[inline]
+    fn build<C: BuildComposite<Self::Child>>(mut self, value: Self::Value, composite: C) -> C::Output {
         let index = self.storage.len();
         self = self.push(value);
 
@@ -192,7 +202,7 @@ where
             children: 0,
         };
 
-        Ok(f(child)?.end())
+        composite.build(child)
     }
 }
 
@@ -530,15 +540,15 @@ where
         self
     }
 
-    #[inline]
-    pub fn build(self, value: S::Value, f: impl FnOnce(Self) -> Self) -> Self {
-        Build::build(self, value, f)
-    }
+    // #[inline]
+    // pub fn build(self, value: S::Value, f: impl FnOnce(Self) -> Self) -> Self {
+    //     Build::build(self, value, f)
+    // }
 
-    #[inline]
-    pub fn build_e<E>(self, value: S::Value, f: impl FnOnce(Self) -> Result<Self, E>) -> Result<Self, E> {
-        BuildE::build_e(self, value, f)
-    }
+    // #[inline]
+    // pub fn build_e<E>(self, value: S::Value, f: impl FnOnce(Self) -> Result<Self, E>) -> Result<Self, E> {
+    //     BuildE::build_e(self, value, f)
+    // }
 
     #[inline]
     fn end(mut self) -> &'t mut FlatTree<S::Value, S> {
@@ -597,28 +607,42 @@ where
     }
 }
 
-impl<'t, V, S> BuildE for NodeBuilder<'t, V, S>
+impl<'t, V, S> FromChild for NodeBuilder<'t, V, S>
 where
     S: Storage<Value = V>,
+    Self: Push<Value = V>,
 {
     type Child = Self;
 
     #[inline]
-    fn build_e<E>(mut self, value: V, f: impl FnOnce(Self) -> Result<Self, E>) -> Result<Self, E> {
-        let index = self.tree.storage.len();
-        self = self.push(value);
+    fn from_child(child: Self::Child) -> Self {
+        child
+    }
+}
 
-        let (snapshot, tree) = self.snapshot();
+impl<'t, V, S> Build for NodeBuilder<'t, V, S>
+where
+    S: Storage<Value = V>,
+{
+    #[inline]
+    fn build<C: BuildComposite<Self::Child>>(self, value: Self::Value, composite: C) -> C::Output {
+        panic!("not implemented")
+        // let index = self.tree.storage.len();
+        // self = self.push(value);
 
-        let child = NodeBuilder {
-            tree,
-            index: Some(index),
-            children: 0,
-        };
+        // let (snapshot, tree) = self.snapshot();
 
-        let tree = f(child)?.end();
+        // let child = NodeBuilder {
+        //     tree,
+        //     index: Some(index),
+        //     children: 0,
+        // };
 
-        Ok((snapshot, tree).into())
+        // let output = composite.build(child);
+        // let child = output.map_extracted();
+        // // let tree = f(child)?.end();
+
+        // Ok((snapshot, tree).into())
     }
 }
 

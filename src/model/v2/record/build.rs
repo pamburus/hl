@@ -21,10 +21,7 @@ use crate::{
 
 // ---
 
-#[derive(Deref, DerefMut)]
 pub struct Builder<'s, T> {
-    #[deref]
-    #[deref_mut]
     core: Core<'s>,
     target: T,
 }
@@ -78,12 +75,13 @@ where
 // ---
 
 pub struct Settings {
-    unix_ts_unit: Option<UnixTimestampUnit>,
-    level: Vec<(HashMap<String, Level>, Option<Level>)>,
-    blocks: Vec<ParserSettingsBlock>,
-    ignore: Vec<Pattern<String>>,
+    // unix_ts_unit: Option<UnixTimestampUnit>,
+    // level: Vec<(HashMap<String, Level>, Option<Level>)>,
+    // blocks: Vec<ParserSettingsBlock>,
+    // ignore: Vec<Pattern<String>>,
 }
 
+/*
 impl Settings {
     pub fn new<'a, I: IntoIterator<Item = &'a String>>(
         predefined: &PredefinedFields,
@@ -427,5 +425,24 @@ impl FieldSettings {
         }
     }
 }
-
+*/
 // ---
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_builder() {
+        let settings = Settings {};
+        let mut container = ast::Container::default();
+        let b = Builder::new(&settings, container.metaroot());
+        b.add_scalar(Scalar::Bool(true))
+            .add_composite(Composite::Array, |b| Ok(b.add_scalar(Scalar::Bool(false))))
+            .unwrap();
+
+        let x: &str = "true".into();
+
+        assert_eq!(container.nodes().len(), 3);
+    }
+}

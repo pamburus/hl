@@ -1,4 +1,4 @@
-mod build;
+pub mod build;
 pub mod storage;
 pub mod tree;
 

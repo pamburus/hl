@@ -89,7 +89,7 @@ where
         composite: Composite<'s>,
         f: impl FnOnce(Self::Child) -> Result<Self::Child>,
     ) -> Result<Self> {
-        self.build_e(composite.into(), f)
+        self.build(composite.into(), f)
     }
 }
 
