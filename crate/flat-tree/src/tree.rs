@@ -84,6 +84,7 @@ where
     pub fn metaroot(&mut self) -> NodeBuilder<V, S> {
         NodeBuilder {
             tree: self,
+            attachment: NoAttachment,
             index: None,
             children: 0,
         }
@@ -178,27 +179,34 @@ impl<'t, V, S> BuildE for &'t mut FlatTree<V, S>
 where
     S: Storage<Value = V>,
 {
-    type Child = NodeBuilder<'t, V, S>;
+    type Child = NodeBuilder<'t, V, S, Self::Attachment>;
+    type Attachment = NoAttachment;
+    type WithAttachment<A> = NodeBuilder<'t, V, S, BuilderAttachment<Self::Attachment, A>>;
+    type WithoutAttachment = Self;
 
     #[inline]
-    fn build_es<E, ST>(
-        mut self,
-        value: V,
-        state: ST,
-        f: impl FnOnce(BuilderAndState<Self::Child, ST>) -> Result<BuilderAndState<Self::Child, ST>, E>,
-    ) -> Result<BuilderAndState<Self, ST>, E> {
+    fn build_e<E>(mut self, value: V, f: impl FnOnce(Self::Child) -> Result<Self::Child, E>) -> Result<Self, E> {
         let index = self.storage.len();
         self = self.push(value);
 
         let child = NodeBuilder {
             tree: self,
+            attachment: NoAttachment,
             index: Some(index),
             children: 0,
         };
 
-        let (result, state) = f(BuilderAndState::new(child, state))?.split();
+        Ok(f(child)?.end().0)
+    }
 
-        Ok(BuilderAndState::new(result.end(), state))
+    #[inline]
+    fn attach<A>(self, attachment: A) -> Self::WithAttachment<A> {
+        BuildE::attach(self.metaroot(), attachment)
+    }
+
+    #[inline]
+    fn detach(self) -> (Self::WithoutAttachment, ()) {
+        (self, ())
     }
 }
 
@@ -510,18 +518,20 @@ where
 
 // ---
 
-pub struct NodeBuilder<'t, V, S = DefaultStorage<V>>
+pub struct NodeBuilder<'t, V, S = DefaultStorage<V>, A = NoAttachment>
 where
     S: Storage<Value = V>,
 {
     tree: &'t mut FlatTree<V, S>,
+    attachment: A,
     index: Option<usize>,
     children: usize,
 }
 
-impl<'t, V, S> NodeBuilder<'t, V, S>
+impl<'t, V, S, A> NodeBuilder<'t, V, S, A>
 where
     S: Storage<Value = V>,
+    A: BuildAttachment,
 {
     #[inline]
     pub fn push(mut self, value: S::Value) -> Self {
@@ -547,9 +557,9 @@ where
     }
 
     #[inline]
-    fn end(mut self) -> &'t mut FlatTree<S::Value, S> {
+    fn end(mut self) -> (&'t mut FlatTree<S::Value, S>, A) {
         self.close();
-        self.tree
+        (self.tree, self.attachment)
     }
 
     #[inline]
@@ -567,23 +577,22 @@ where
     }
 
     #[inline]
-    fn snapshot(self) -> (NodeBuilderSnapshot, &'t mut FlatTree<S::Value, S>)
-    where
-        Self: 't,
-    {
+    fn snapshot(self) -> (NodeBuilderSnapshot, A, &'t mut FlatTree<S::Value, S>) {
         (
             NodeBuilderSnapshot {
                 parent: self.index,
                 children: self.children,
             },
+            self.attachment,
             self.tree,
         )
     }
 }
 
-impl<'t, V, S> Push for NodeBuilder<'t, V, S>
+impl<'t, V, S, A> Push for NodeBuilder<'t, V, S, A>
 where
     S: Storage<Value = V>,
+    A: BuildAttachment,
 {
     type Value = V;
 
@@ -593,7 +602,7 @@ where
     }
 }
 
-impl<'t, V, S> Reserve for NodeBuilder<'t, V, S>
+impl<'t, V, S, A> Reserve for NodeBuilder<'t, V, S, A>
 where
     S: Storage<Value = V>,
 {
@@ -603,44 +612,68 @@ where
     }
 }
 
-impl<'t, V, S> BuildE for NodeBuilder<'t, V, S>
+impl<'t, V, S, A> BuildE for NodeBuilder<'t, V, S, A>
 where
     S: Storage<Value = V>,
+    A: BuildAttachment,
 {
     type Child = Self;
+    type Attachment = A;
+    type WithAttachment<AV> = NodeBuilder<'t, V, S, A::Child<AV>>;
+    type WithoutAttachment = NodeBuilder<'t, V, S, A::Parent>;
 
     #[inline]
-    fn build_es<E, ST>(
-        mut self,
-        value: V,
-        state: ST,
-        f: impl FnOnce(BuilderAndState<Self, ST>) -> Result<BuilderAndState<Self, ST>, E>,
-    ) -> Result<BuilderAndState<Self, ST>, E> {
+    fn build_e<E>(mut self, value: V, f: impl FnOnce(Self) -> Result<Self, E>) -> Result<Self, E> {
         let index = self.tree.storage.len();
         self = self.push(value);
 
-        let (snapshot, tree) = self.snapshot();
+        let (snapshot, attachment, tree) = self.snapshot();
 
         let child = NodeBuilder {
             tree,
+            attachment,
             index: Some(index),
             children: 0,
         };
 
-        let (result, state) = f(BuilderAndState::new(child, state))?.split();
+        let (tree, attachment) = f(child)?.end();
 
-        Ok(BuilderAndState::new((snapshot, result.end()).into(), state))
+        Ok((snapshot, attachment, tree).into())
+    }
+
+    #[inline]
+    fn attach<AV>(self, attachment: AV) -> Self::WithAttachment<AV> {
+        NodeBuilder {
+            tree: self.tree,
+            attachment: self.attachment.join(attachment),
+            index: self.index,
+            children: self.children,
+        }
+    }
+
+    #[inline]
+    fn detach(self) -> (Self::WithoutAttachment, AttachmentValue<A>) {
+        let (attachment, value) = self.attachment.split();
+        let builder = NodeBuilder {
+            tree: self.tree,
+            attachment,
+            index: self.index,
+            children: self.children,
+        };
+        (builder, value)
     }
 }
 
-impl<'t, V, S> From<(NodeBuilderSnapshot, &'t mut FlatTree<V, S>)> for NodeBuilder<'t, V, S>
+impl<'t, V, S, A> From<(NodeBuilderSnapshot, A, &'t mut FlatTree<V, S>)> for NodeBuilder<'t, V, S, A>
 where
     S: Storage<Value = V>,
+    A: BuildAttachment,
 {
     #[inline]
-    fn from((state, tree): (NodeBuilderSnapshot, &'t mut FlatTree<S::Value, S>)) -> Self {
+    fn from((state, attachment, tree): (NodeBuilderSnapshot, A, &'t mut FlatTree<S::Value, S>)) -> Self {
         Self {
             tree,
+            attachment,
             index: state.parent,
             children: state.children,
         }
@@ -683,6 +716,48 @@ impl<V> Item<V> {
     #[inline]
     pub fn value(&self) -> &V {
         &self.value
+    }
+}
+
+// ---
+
+pub struct BuilderAttachment<P, V> {
+    parent: P,
+    value: V,
+}
+
+impl<P, V> BuildAttachment for BuilderAttachment<P, V>
+where
+    P: BuildAttachment,
+{
+    type Parent = P;
+    type Child<V2> = BuilderAttachment<Self, V2>;
+    type Value = V;
+
+    fn join<V2>(self, value: V2) -> Self::Child<V2> {
+        BuilderAttachment { parent: self, value }
+    }
+
+    fn split(self) -> (Self::Parent, Self::Value) {
+        (self.parent, self.value)
+    }
+}
+
+// ---
+
+pub struct NoAttachment;
+
+impl BuildAttachment for NoAttachment {
+    type Parent = NoAttachment;
+    type Child<V> = BuilderAttachment<Self, V>;
+    type Value = ();
+
+    fn join<V>(self, value: V) -> Self::Child<V> {
+        BuilderAttachment { parent: self, value }
+    }
+
+    fn split(self) -> (Self::Parent, Self::Value) {
+        (self, ())
     }
 }
 
