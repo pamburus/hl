@@ -8,7 +8,7 @@ use wildflower::Pattern;
 
 // local imports
 use super::{
-    super::ast::{self, BuildExt, Composite, Scalar},
+    super::ast::{self, Build, Composite, Scalar},
     *,
 };
 use crate::{
@@ -33,7 +33,7 @@ struct Core<'s> {
 
 impl<'s, T> Builder<'s, T>
 where
-    T: BuildExt<'s>,
+    T: Build<'s>,
 {
     pub fn new(settings: &'s Settings, target: T) -> Self {
         Self {
@@ -47,9 +47,9 @@ where
     }
 }
 
-impl<'s, T> BuildExt<'s> for Builder<'s, T>
+impl<'s, T> Build<'s> for Builder<'s, T>
 where
-    T: BuildExt<'s>,
+    T: Build<'s>,
 {
     type Child = Builder<'s, T::Child>;
 
