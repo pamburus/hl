@@ -46,23 +46,23 @@ impl<'s> Container<'s> {
     }
 
     #[inline]
-    pub fn metaroot(&mut self) -> tree::NodeBuilder<Value<'s>> {
-        self.inner.metaroot()
+    pub fn metaroot(&mut self) -> Builder<tree::NodeBuilder<Value<'s>>> {
+        Builder::new(self.inner.metaroot())
     }
 }
 
 // ---
 
-pub trait Build<'s>: tree::BuildE<Value = Value<'s>> {}
+trait InnerBuild<'s>: tree::BuildE<Value = Value<'s>> {}
+impl<'s, T: tree::BuildE<Value = Value<'s>>> InnerBuild<'s> for T {}
+
 pub type Children<'s> = tree::Children<'s, Value<'s>>;
 
-impl<'s, T: tree::BuildE<Value = Value<'s>>> Build<'s> for T {}
-
-pub trait BuildExt<'s>
+pub trait Build<'s>
 where
     Self: Sized,
 {
-    type Child: BuildExt<'s>;
+    type Child: Build<'s>;
 
     fn add_scalar(self, scalar: Scalar<'s>) -> Self;
     fn add_composite(
@@ -72,15 +72,15 @@ where
     ) -> Result<Self>;
 }
 
-impl<'s, T> BuildExt<'s> for T
+impl<'s, T> Build<'s> for Builder<T>
 where
-    T: tree::BuildE<Value = Value<'s>>,
+    T: InnerBuild<'s>,
 {
-    type Child = T::Child;
+    type Child = Builder<T::Child>;
 
     #[inline]
     fn add_scalar(self, scalar: Scalar<'s>) -> Self {
-        self.push(Value::Scalar(scalar))
+        Builder::new(self.inner.push(Value::Scalar(scalar)))
     }
 
     #[inline]
@@ -89,7 +89,20 @@ where
         composite: Composite<'s>,
         f: impl FnOnce(Self::Child) -> Result<Self::Child>,
     ) -> Result<Self> {
-        self.build_e(composite.into(), f)
+        Ok(Builder::new(
+            self.inner
+                .build_e(composite.into(), |b| f(Builder::new(b)).map(|b| b.inner))?,
+        ))
+    }
+}
+
+pub struct Builder<B> {
+    inner: B,
+}
+
+impl<B> Builder<B> {
+    fn new(inner: B) -> Self {
+        Self { inner }
     }
 }
 
