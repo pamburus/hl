@@ -81,7 +81,7 @@ pub mod error {
 
 pub mod parse {
     use super::{error::*, *};
-    use crate::model::v2::ast::{Build, BuildExt, Composite, Container, Scalar};
+    use crate::model::v2::ast::{Build, Composite, Container, Scalar};
 
     #[inline]
     pub fn parse<'s>(lexer: &mut Lexer<'s>) -> Result<Container<'s>> {
