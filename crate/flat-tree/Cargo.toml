@@ -10,3 +10,4 @@ license.workspace = true
 
 [dependencies]
 derive-where = "1"
+derive_more = {version="1", features = ["deref", "deref_mut", "from"]}

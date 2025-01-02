@@ -177,12 +177,16 @@ where
 impl<'t, V, S> BuildE for &'t mut FlatTree<V, S>
 where
     S: Storage<Value = V>,
-    Self: Push<Value = V>,
 {
     type Child = NodeBuilder<'t, V, S>;
 
     #[inline]
-    fn build_e<E>(mut self, value: V, f: impl FnOnce(Self::Child) -> Result<Self::Child, E>) -> Result<Self, E> {
+    fn build_es<E, ST>(
+        mut self,
+        value: V,
+        state: ST,
+        f: impl FnOnce(BuilderAndState<Self::Child, ST>) -> Result<BuilderAndState<Self::Child, ST>, E>,
+    ) -> Result<BuilderAndState<Self, ST>, E> {
         let index = self.storage.len();
         self = self.push(value);
 
@@ -192,7 +196,9 @@ where
             children: 0,
         };
 
-        Ok(f(child)?.end())
+        let (result, state) = f(BuilderAndState::new(child, state))?.split();
+
+        Ok(BuilderAndState::new(result.end(), state))
     }
 }
 
@@ -604,7 +610,12 @@ where
     type Child = Self;
 
     #[inline]
-    fn build_e<E>(mut self, value: V, f: impl FnOnce(Self) -> Result<Self, E>) -> Result<Self, E> {
+    fn build_es<E, ST>(
+        mut self,
+        value: V,
+        state: ST,
+        f: impl FnOnce(BuilderAndState<Self, ST>) -> Result<BuilderAndState<Self, ST>, E>,
+    ) -> Result<BuilderAndState<Self, ST>, E> {
         let index = self.tree.storage.len();
         self = self.push(value);
 
@@ -616,9 +627,9 @@ where
             children: 0,
         };
 
-        let tree = f(child)?.end();
+        let (result, state) = f(BuilderAndState::new(child, state))?.split();
 
-        Ok((snapshot, tree).into())
+        Ok(BuilderAndState::new((snapshot, result.end()).into(), state))
     }
 }
 
