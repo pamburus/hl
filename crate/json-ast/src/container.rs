@@ -52,9 +52,9 @@ impl<'s> Container<'s> {
 
 // ---
 
-pub trait Build<'s>: tree::BuildE<Value = Node<'s>> {}
+pub trait Build<'s>: tree::Build<Value = Node<'s>> {}
 
-impl<'s, T: tree::BuildE<Value = Node<'s>>> Build<'s> for T {}
+impl<'s, T: tree::Build<Value = Node<'s>>> Build<'s> for T {}
 
 pub trait BuildExt<'s>
 where
@@ -82,17 +82,17 @@ where
 
     #[inline]
     fn add_object(self, f: impl FnOnce(Self::Child) -> Result<Self::Child>) -> Result<Self> {
-        self.build_e(Node::new(NodeKind::Object, ""), f)
+        self.build(Node::new(NodeKind::Object, ""), f)
     }
 
     #[inline]
     fn add_array(self, f: impl FnOnce(Self::Child) -> Result<Self::Child>) -> Result<Self> {
-        self.build_e(Node::new(NodeKind::Array, ""), f)
+        self.build(Node::new(NodeKind::Array, ""), f)
     }
 
     #[inline]
     fn add_field(self, f: impl FnOnce(Self::Child) -> Result<Self::Child>) -> Result<Self> {
-        self.build_e(Node::new(NodeKind::Field, ""), f)
+        self.build(Node::new(NodeKind::Field, ""), f)
     }
 
     #[inline]

@@ -52,6 +52,9 @@ where
     T: Build<'s>,
 {
     type Child = Builder<'s, T::Child>;
+    type Attachment = T::Attachment;
+    type WithAttachment<V> = Builder<'s, T::WithAttachment<V>>;
+    type WithoutAttachment = Builder<'s, T::WithoutAttachment>;
 
     #[inline]
     fn add_scalar(mut self, scalar: Scalar<'s>) -> Self {
@@ -70,6 +73,27 @@ where
             .add_composite(composite, |target| Ok(f(Self::child(self.core, target))?.target))?;
         Ok(self)
     }
+
+    #[inline]
+    fn attach<V>(self, attachment: V) -> Self::WithAttachment<V> {
+        Builder {
+            core: self.core,
+            target: self.target.attach(attachment),
+        }
+    }
+
+    #[inline]
+    fn detach(self) -> (Self::WithoutAttachment, ast::AttachmentValue<Self::Attachment>) {
+        let (target, value) = self.target.detach();
+        (
+            Builder {
+                core: self.core,
+                target,
+            },
+            value,
+        )
+    }
+}
 }
 
 // ---

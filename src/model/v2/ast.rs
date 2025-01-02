@@ -53,16 +53,23 @@ impl<'s> Container<'s> {
 
 // ---
 
-trait InnerBuild<'s>: tree::BuildE<Value = Value<'s>> {}
-impl<'s, T: tree::BuildE<Value = Value<'s>>> InnerBuild<'s> for T {}
+trait InnerBuild<'s>: tree::Build<Value = Value<'s>> {}
+impl<'s, T: tree::Build<Value = Value<'s>>> InnerBuild<'s> for T {}
+
+pub trait BuildAttachment: tree::BuildAttachment {}
+impl<A: tree::BuildAttachment> BuildAttachment for A {}
 
 pub type Children<'s> = tree::Children<'s, Value<'s>>;
+pub use tree::{AttachmentChild, AttachmentParent, AttachmentValue};
 
 pub trait Build<'s>
 where
     Self: Sized,
 {
     type Child: Build<'s>;
+    type Attachment: BuildAttachment;
+    type WithAttachment<V>: Build<'s, Attachment = AttachmentChild<Self::Attachment, V>>;
+    type WithoutAttachment: Build<'s, Attachment = AttachmentParent<Self::Attachment>>;
 
     fn add_scalar(self, scalar: Scalar<'s>) -> Self;
     fn add_composite(
@@ -70,6 +77,9 @@ where
         composite: Composite<'s>,
         f: impl FnOnce(Self::Child) -> Result<Self::Child>,
     ) -> Result<Self>;
+
+    fn attach<V>(self, attachment: V) -> Self::WithAttachment<V>;
+    fn detach(self) -> (Self::WithoutAttachment, AttachmentValue<Self::Attachment>);
 }
 
 impl<'s, T> Build<'s> for Builder<T>
@@ -77,6 +87,9 @@ where
     T: InnerBuild<'s>,
 {
     type Child = Builder<T::Child>;
+    type Attachment = T::Attachment;
+    type WithAttachment<V> = Builder<T::WithAttachment<V>>;
+    type WithoutAttachment = Builder<T::WithoutAttachment>;
 
     #[inline]
     fn add_scalar(self, scalar: Scalar<'s>) -> Self {
@@ -89,12 +102,23 @@ where
         composite: Composite<'s>,
         f: impl FnOnce(Self::Child) -> Result<Self::Child>,
     ) -> Result<Self> {
-        Ok(Builder::new(
-            self.inner
-                .build_e(composite.into(), |b| f(Builder::new(b)).map(|b| b.inner))?,
-        ))
+        let result = self
+            .inner
+            .build(composite.into(), |b| f(Builder::new(b)).map(|b| b.inner))?;
+        Ok(Builder::new(result))
+    }
+
+    fn attach<V>(self, attachment: V) -> Self::WithAttachment<V> {
+        Builder::new(self.inner.attach(attachment))
+    }
+
+    fn detach(self) -> (Self::WithoutAttachment, AttachmentValue<Self::Attachment>) {
+        let (parent, value) = self.inner.detach();
+        (Builder::new(parent), value)
     }
 }
+
+// ---
 
 pub struct Builder<B> {
     inner: B,
