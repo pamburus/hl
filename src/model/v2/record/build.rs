@@ -21,10 +21,7 @@ use crate::{
 
 // ---
 
-#[derive(Deref, DerefMut)]
 pub struct Builder<'s, T> {
-    #[deref]
-    #[deref_mut]
     core: Core<'s>,
     target: T,
 }
