@@ -1,5 +1,8 @@
 // local imports
-pub use self::filter::Filter;
+pub use self::{
+    build::{Builder, Settings},
+    filter::Filter,
+};
 use super::{ast, value::*};
 use crate::{
     model::{Caller, Level},
