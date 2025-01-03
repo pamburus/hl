@@ -645,7 +645,7 @@ impl ParserSettingsBlock {
             Some((field, priority)) => {
                 let kind = field.kind();
                 if let Some(kind) = kind {
-                    pc.prioritize(kind, *priority, |pc| field.apply_ctx(ps, value, to, pc))
+                    pc.prioritize(kind, *priority, |_| field.apply(ps, value, to))
                 } else {
                     field.apply_ctx(ps, value, to, pc);
                     false
