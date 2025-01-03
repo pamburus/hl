@@ -557,7 +557,7 @@ mod tests {
         let mut pc = PriorityController::default();
         let settings = Settings::new(&PredefinedFields::default()).with_ignore(["kubernetes", "agent"]);
         let mut record = RecordStem::new();
-        json::parse::parse_into(
+        json::parse_into(
             &mut json::Token::lexer(KIBANA_REC_1),
             Builder::new(&settings, &mut pc, &mut record, container.metaroot()),
         )

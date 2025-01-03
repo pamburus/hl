@@ -913,9 +913,8 @@ mod tests {
         datefmt::LinuxDateFormat,
         format,
         model::v2::{
-            ast,
+            ast::{self, Container, Scalar},
             record::{Fields as RecordFields, Record},
-            value::Object,
         },
         settings::Punctuation,
         theme::Theme,
@@ -925,26 +924,37 @@ mod tests {
     };
     use chrono::{Offset, Utc};
     use encstr::EncodedString;
-    use serde_json as json;
 
-    struct StaticValue {
-        container: ast::Container<'static>,
+    struct Parsed {
+        container: Container<'static>,
     }
 
-    impl StaticValue {
+    impl Parsed {
         fn json(s: &'static str) -> Self {
             Self {
                 container: format::json::parse(&mut format::json::Lexer::new(s)).unwrap(),
             }
         }
 
+        fn record<'s>(&'s self) -> Record<'s> {
+            self.container.record()
+        }
+
+        fn fields<'s>(&'s self) -> RecordFields<'s> {
+            RecordFields::new(self.node().children())
+        }
+
+        fn node<'s>(&'s self) -> ast::Node<'s> {
+            self.container.roots().iter().next().unwrap()
+        }
+
         fn value<'s>(&'s self) -> Value<'s> {
-            self.container.roots().iter().next().unwrap().into()
+            self.node().into()
         }
     }
 
-    impl<'s> From<&'s StaticValue> for Value<'s> {
-        fn from(value: &'s StaticValue) -> Value<'s> {
+    impl<'s> From<&'s Parsed> for Value<'s> {
+        fn from(value: &'s Parsed) -> Value<'s> {
             value.value()
         }
     }
@@ -995,22 +1005,32 @@ mod tests {
         formatter().with_theme(Default::default()).format_to_string(rec)
     }
 
-    fn fields_from_slice<'a>(fields: &[(&'a str, Value<'a>)]) -> RecordFields<'a> {
-        RecordFields::from_slice(fields)
+    trait ContainerExt<'a> {
+        fn from_fields(fields: &[(&'a str, ast::Scalar<'a>)]) -> Container<'a>;
+        fn record<'s>(&'s self) -> Record<'s>;
     }
 
-    // fn json_raw_value(s: &str) -> Box<json::value::Value> {
-    //     json::value::Value::from_string(s.into()).unwrap()
-    // }
+    impl<'a> ContainerExt<'a> for Container<'a> {
+        fn from_fields(fields: &[(&'a str, ast::Scalar<'a>)]) -> Container<'a> {
+            use ast::Build;
+            let mut container = Container::default();
+            container
+                .metaroot()
+                .add_composite(ast::Composite::Object, |mut b| {
+                    for (key, value) in fields {
+                        b = b.add_composite(ast::Composite::Field(EncodedString::raw(key)), |b| {
+                            Ok(b.add_scalar(*value))
+                        })?;
+                    }
+                    Ok(b)
+                })
+                .unwrap();
+            container
+        }
 
-    trait RecordExt<'a> {
-        fn from_fields(fields: &[(&'a str, Value<'a>)]) -> Record<'a>;
-    }
-
-    impl<'a> RecordExt<'a> for Record<'a> {
-        fn from_fields(fields: &[(&'a str, Value<'a>)]) -> Record<'a> {
+        fn record<'s>(&'s self) -> Record<'s> {
             Record {
-                fields: RecordFields::from_slice(fields),
+                fields: RecordFields::new(self.roots().iter().next().unwrap().children()),
                 ..Default::default()
             }
         }
@@ -1018,14 +1038,14 @@ mod tests {
 
     #[test]
     fn test_nested_objects() {
-        let ka = StaticValue::json(r#"{"va":{"kb":42,"kc":43}}"#);
+        let data = Parsed::json(r#"{"k-a":{"va":{"kb":42,"kc":43}}}"#);
         let rec = Record {
             ts: Some(Timestamp::new("2000-01-02T03:04:05.123Z")),
             message: Some(Value::String(EncodedString::json(r#""tm""#))),
             level: Some(Level::Debug),
             logger: Some("tl"),
             caller: Some(Caller::Text("tc")),
-            fields: RecordFields::from_slice(&[("k_a", Value::from(RawObject::Json(&ka)))]),
+            fields: data.fields(),
             ..Default::default()
         };
 
@@ -1090,107 +1110,113 @@ mod tests {
     #[test]
     fn test_string_value_raw() {
         let v = "v";
-        let rec = Record::from_fields(&[("k", EncodedString::raw(&v).into())]);
-        assert_eq!(&format_no_color(&rec), "k=v");
+        let container = Container::from_fields(&[("k", Scalar::String(EncodedString::raw(&v)))]);
+        assert_eq!(&format_no_color(&container.record()), "k=v");
     }
 
     #[test]
     fn test_string_value_json_simple() {
         let v = r#""some-value""#;
-        let rec = Record::from_fields(&[("k", EncodedString::json(&v).into())]);
-        assert_eq!(&format_no_color(&rec), r#"k=some-value"#);
+        let container = Container::from_fields(&[("k", Scalar::String(EncodedString::json(&v)))]);
+        assert_eq!(&format_no_color(&container.record()), r#"k=some-value"#);
     }
 
     #[test]
     fn test_string_value_json_space() {
         let v = r#""some value""#;
-        let rec = Record::from_fields(&[("k", EncodedString::json(&v).into())]);
-        assert_eq!(&format_no_color(&rec), r#"k="some value""#);
+        let container = Container::from_fields(&[("k", Scalar::String(EncodedString::json(&v)))]);
+        assert_eq!(&format_no_color(&container.record()), r#"k="some value""#);
     }
 
     #[test]
     fn test_string_value_raw_space() {
         let v = r#"some value"#;
-        let rec = Record::from_fields(&[("k", EncodedString::raw(&v).into())]);
-        assert_eq!(&format_no_color(&rec), r#"k="some value""#);
+        let container = Container::from_fields(&[("k", Scalar::String(EncodedString::raw(&v)))]);
+        assert_eq!(&format_no_color(&container.record()), r#"k="some value""#);
     }
 
     #[test]
     fn test_string_value_json_space_and_double_quotes() {
         let v = r#""some \"value\"""#;
-        let rec = Record::from_fields(&[("k", EncodedString::json(&v).into())]);
-        assert_eq!(&format_no_color(&rec), r#"k='some "value"'"#);
+        let container = Container::from_fields(&[("k", Scalar::String(EncodedString::json(&v)))]);
+        assert_eq!(&format_no_color(&container.record()), r#"k='some "value"'"#);
     }
 
     #[test]
     fn test_string_value_raw_space_and_double_quotes() {
         let v = r#"some "value""#;
-        let rec = Record::from_fields(&[("k", EncodedString::raw(&v).into())]);
-        assert_eq!(&format_no_color(&rec), r#"k='some "value"'"#);
+        let container = Container::from_fields(&[("k", Scalar::String(EncodedString::raw(&v)))]);
+        assert_eq!(&format_no_color(&container.record()), r#"k='some "value"'"#);
     }
 
     #[test]
     fn test_string_value_json_space_and_single_quotes() {
         let v = r#""some 'value'""#;
-        let rec = Record::from_fields(&[("k", EncodedString::json(&v).into())]);
-        assert_eq!(&format_no_color(&rec), r#"k="some 'value'""#);
+        let container = Container::from_fields(&[("k", Scalar::String(EncodedString::json(&v)))]);
+        assert_eq!(&format_no_color(&container.record()), r#"k="some 'value'""#);
     }
 
     #[test]
     fn test_string_value_raw_space_and_single_quotes() {
         let v = r#"some 'value'"#;
-        let rec = Record::from_fields(&[("k", EncodedString::raw(&v).into())]);
-        assert_eq!(&format_no_color(&rec), r#"k="some 'value'""#);
+        let container = Container::from_fields(&[("k", Scalar::String(EncodedString::raw(&v)))]);
+        assert_eq!(&format_no_color(&container.record()), r#"k="some 'value'""#);
     }
 
     #[test]
     fn test_string_value_json_space_and_backticks() {
         let v = r#""some `value`""#;
-        let rec = Record::from_fields(&[("k", EncodedString::json(&v).into())]);
-        assert_eq!(&format_no_color(&rec), r#"k="some `value`""#);
+        let container = Container::from_fields(&[("k", Scalar::String(EncodedString::json(&v)))]);
+        assert_eq!(&format_no_color(&container.record()), r#"k="some `value`""#);
     }
 
     #[test]
     fn test_string_value_raw_space_and_backticks() {
         let v = r#"some `value`"#;
-        let rec = Record::from_fields(&[("k", EncodedString::raw(&v).into())]);
-        assert_eq!(&format_no_color(&rec), r#"k="some `value`""#);
+        let container = Container::from_fields(&[("k", Scalar::String(EncodedString::raw(&v)))]);
+        assert_eq!(&format_no_color(&container.record()), r#"k="some `value`""#);
     }
 
     #[test]
     fn test_string_value_json_space_and_double_and_single_quotes() {
         let v = r#""some \"value\" from 'source'""#;
-        let rec = Record::from_fields(&[("k", EncodedString::json(&v).into())]);
-        assert_eq!(&format_no_color(&rec), r#"k=`some "value" from 'source'`"#);
+        let container = Container::from_fields(&[("k", Scalar::String(EncodedString::json(&v)))]);
+        assert_eq!(
+            &format_no_color(&container.record()),
+            r#"k=`some "value" from 'source'`"#
+        );
     }
 
     #[test]
     fn test_string_value_raw_space_and_double_and_single_quotes() {
         let v = r#"some "value" from 'source'"#;
-        let rec = Record::from_fields(&[("k", EncodedString::raw(&v).into())]);
-        assert_eq!(&format_no_color(&rec), r#"k=`some "value" from 'source'`"#);
+        let container = Container::from_fields(&[("k", Scalar::String(EncodedString::raw(&v)))]);
+        assert_eq!(
+            &format_no_color(&container.record()),
+            r#"k=`some "value" from 'source'`"#
+        );
     }
 
     #[test]
     fn test_string_value_json_backslash() {
         let v = r#""some-\\\"value\\\"""#;
-        let rec = Record::from_fields(&[("k", EncodedString::json(&v).into())]);
-        assert_eq!(&format_no_color(&rec), r#"k=`some-\"value\"`"#);
+        let container = Container::from_fields(&[("k", Scalar::String(EncodedString::json(&v)))]);
+        assert_eq!(&format_no_color(&container.record()), r#"k=`some-\"value\"`"#);
     }
 
     #[test]
     fn test_string_value_raw_backslash() {
         let v = r#"some-\"value\""#;
-        let rec = Record::from_fields(&[("k", EncodedString::raw(&v).into())]);
-        assert_eq!(&format_no_color(&rec), r#"k=`some-\"value\"`"#);
+        let container = Container::from_fields(&[("k", Scalar::String(EncodedString::raw(&v)))]);
+        assert_eq!(&format_no_color(&container.record()), r#"k=`some-\"value\"`"#);
     }
 
     #[test]
     fn test_string_value_json_space_and_double_and_single_quotes_and_backticks() {
         let v = r#""some \"value\" from 'source' with `sauce`""#;
-        let rec = Record::from_fields(&[("k", EncodedString::json(&v).into())]);
+        let container = Container::from_fields(&[("k", Scalar::String(EncodedString::json(&v)))]);
         assert_eq!(
-            &format_no_color(&rec),
+            &format_no_color(&container.record()),
             r#"k="some \"value\" from 'source' with `sauce`""#
         );
     }
@@ -1198,9 +1224,9 @@ mod tests {
     #[test]
     fn test_string_value_raw_space_and_double_and_single_quotes_and_backticks() {
         let v = r#"some "value" from 'source' with `sauce`"#;
-        let rec = Record::from_fields(&[("k", EncodedString::raw(&v).into())]);
+        let container = Container::from_fields(&[("k", Scalar::String(EncodedString::raw(&v)))]);
         assert_eq!(
-            &format_no_color(&rec),
+            &format_no_color(&container.record()),
             r#"k="some \"value\" from 'source' with `sauce`""#
         );
     }
@@ -1208,64 +1234,68 @@ mod tests {
     #[test]
     fn test_string_value_json_extended_space() {
         let v = r#""some\tvalue""#;
-        let rec = Record::from_fields(&[("k", EncodedString::json(&v).into())]);
-        assert_eq!(&format_no_color(&rec), "k=`some\tvalue`");
+        let container = Container::from_fields(&[("k", Scalar::String(EncodedString::json(&v)))]);
+        assert_eq!(&format_no_color(&container.record()), "k=`some\tvalue`");
     }
 
     #[test]
     fn test_string_value_raw_extended_space() {
         let v = "some\tvalue";
-        let rec = Record::from_fields(&[("k", EncodedString::raw(&v).into())]);
-        assert_eq!(&format_no_color(&rec), "k=`some\tvalue`");
+        let container = Container::from_fields(&[("k", Scalar::String(EncodedString::raw(&v)))]);
+        assert_eq!(&format_no_color(&container.record()), "k=`some\tvalue`");
     }
 
     #[test]
     fn test_string_value_json_control_chars() {
         let v = r#""some-\u001b[1mvalue\u001b[0m""#;
-        let rec = Record::from_fields(&[("k", EncodedString::json(&v).into())]);
-        assert_eq!(format_no_color(&rec), format!(r#"k={}"#, v));
+        let container = Container::from_fields(&[("k", Scalar::String(EncodedString::json(&v)))]);
+        assert_eq!(format_no_color(&container.record()), format!(r#"k={}"#, v));
     }
 
     #[test]
     fn test_string_value_raw_control_chars() {
-        let rec = Record::from_fields(&[("k", EncodedString::raw("some-\x1b[1mvalue\x1b[0m").into())]);
+        let container =
+            Container::from_fields(&[("k", Scalar::String(EncodedString::raw("some-\x1b[1mvalue\x1b[0m")))]);
 
-        let result = format_no_color(&rec);
+        let result = format_no_color(&container.record());
         assert_eq!(&result, r#"k="some-\u001b[1mvalue\u001b[0m""#, "{}", result);
     }
 
     #[test]
     fn test_string_value_json_control_chars_and_quotes() {
         let v = r#""some-\u001b[1m\"value\"\u001b[0m""#;
-        let rec = Record::from_fields(&[("k", EncodedString::json(&v).into())]);
-        assert_eq!(format_no_color(&rec), format!(r#"k={}"#, v));
+        let container = Container::from_fields(&[("k", Scalar::String(EncodedString::json(&v)))]);
+        assert_eq!(format_no_color(&container.record()), format!(r#"k={}"#, v));
     }
 
     #[test]
     fn test_string_value_raw_control_chars_and_quotes() {
         let v = "some-\x1b[1m\"value\"\x1b[0m";
-        let rec = Record::from_fields(&[("k", EncodedString::raw(&v).into())]);
-        assert_eq!(format_no_color(&rec), r#"k="some-\u001b[1m\"value\"\u001b[0m""#);
+        let container = Container::from_fields(&[("k", Scalar::String(EncodedString::raw(&v)))]);
+        assert_eq!(
+            format_no_color(&container.record()),
+            r#"k="some-\u001b[1m\"value\"\u001b[0m""#
+        );
     }
 
     #[test]
     fn test_string_value_json_ambiguous() {
         for v in ["true", "false", "null", "{}", "[]"] {
             let v = format!(r#""{}""#, v);
-            let rec = Record::from_fields(&[("k", EncodedString::json(&v).into())]);
-            assert_eq!(format_no_color(&rec), format!(r#"k={}"#, v));
+            let container = Container::from_fields(&[("k", Scalar::String(EncodedString::json(&v)))]);
+            assert_eq!(format_no_color(&container.record()), format!(r#"k={}"#, v));
         }
     }
 
     #[test]
     fn test_string_value_raw_ambiguous() {
         for v in ["true", "false", "null"] {
-            let rec = Record::from_fields(&[("k", EncodedString::raw(&v).into())]);
-            assert_eq!(format_no_color(&rec), format!(r#"k={}"#, v));
+            let container = Container::from_fields(&[("k", Scalar::String(EncodedString::raw(&v)))]);
+            assert_eq!(format_no_color(&container.record()), format!(r#"k="{}""#, v));
         }
         for v in ["{}", "[]"] {
-            let rec = Record::from_fields(&[("k", EncodedString::raw(&v).into())]);
-            assert_eq!(format_no_color(&rec), format!(r#"k="{}""#, v));
+            let container = Container::from_fields(&[("k", Scalar::String(EncodedString::raw(&v)))]);
+            assert_eq!(format_no_color(&container.record()), format!(r#"k="{}""#, v));
         }
     }
 
@@ -1273,31 +1303,31 @@ mod tests {
     fn test_string_value_json_number() {
         for v in ["42", "42.42", "-42", "-42.42"] {
             let v = format!(r#""{}""#, v);
-            let rec = Record::from_fields(&[("k", EncodedString::json(&v).into())]);
-            assert_eq!(format_no_color(&rec), format!(r#"k={}"#, v));
+            let container = Container::from_fields(&[("k", Scalar::String(EncodedString::json(&v)))]);
+            assert_eq!(format_no_color(&container.record()), format!(r#"k={}"#, v));
         }
         for v in [
             "42128731867381927389172983718293789127389172938712983718927",
             "42.128731867381927389172983718293789127389172938712983718927",
         ] {
             let qv = format!(r#""{}""#, v);
-            let rec = Record::from_fields(&[("k", EncodedString::json(&qv).into())]);
-            assert_eq!(format_no_color(&rec), format!(r#"k={}"#, v));
+            let container = Container::from_fields(&[("k", Scalar::String(EncodedString::json(&qv)))]);
+            assert_eq!(format_no_color(&container.record()), format!(r#"k={}"#, v));
         }
     }
 
     #[test]
     fn test_string_value_raw_number() {
         for v in ["42", "42.42", "-42", "-42.42"] {
-            let rec = Record::from_fields(&[("k", EncodedString::raw(&v).into())]);
-            assert_eq!(format_no_color(&rec), format!(r#"k={}"#, v));
+            let container = Container::from_fields(&[("k", Scalar::String(EncodedString::raw(&v)))]);
+            assert_eq!(format_no_color(&container.record()), format!(r#"k="{}""#, v));
         }
         for v in [
             "42128731867381927389172983718293789127389172938712983718927",
             "42.128731867381927389172983718293789127389172938712983718927",
         ] {
-            let rec = Record::from_fields(&[("k", EncodedString::raw(&v).into())]);
-            assert_eq!(format_no_color(&rec), format!(r#"k={}"#, v));
+            let container = Container::from_fields(&[("k", Scalar::String(EncodedString::raw(&v)))]);
+            assert_eq!(format_no_color(&container.record()), format!(r#"k={}"#, v));
         }
     }
 
@@ -1305,44 +1335,44 @@ mod tests {
     fn test_string_value_json_version() {
         let v = "1.1.0";
         let qv = format!(r#""{}""#, v);
-        let rec = Record::from_fields(&[("k", EncodedString::json(&qv).into())]);
-        assert_eq!(format_no_color(&rec), format!(r#"k={}"#, v));
+        let container = Container::from_fields(&[("k", Scalar::String(EncodedString::json(&qv)))]);
+        assert_eq!(format_no_color(&container.record()), format!(r#"k={}"#, v));
     }
 
     #[test]
     fn test_string_value_raw_version() {
         let v = "1.1.0";
-        let rec = Record::from_fields(&[("k", EncodedString::raw(&v).into())]);
-        assert_eq!(format_no_color(&rec), format!(r#"k={}"#, v));
+        let container = Container::from_fields(&[("k", Scalar::String(EncodedString::raw(&v)))]);
+        assert_eq!(format_no_color(&container.record()), format!(r#"k={}"#, v));
     }
 
     #[test]
     fn test_string_value_json_hyphen() {
         let v = "-";
         let qv = format!(r#""{}""#, v);
-        let rec = Record::from_fields(&[("k", EncodedString::json(&qv).into())]);
-        assert_eq!(format_no_color(&rec), format!(r#"k={}"#, v));
+        let container = Container::from_fields(&[("k", Scalar::String(EncodedString::json(&qv)))]);
+        assert_eq!(format_no_color(&container.record()), format!(r#"k={}"#, v));
     }
 
     #[test]
     fn test_string_value_raw_hyphen() {
         let v = "-";
-        let rec = Record::from_fields(&[("k", EncodedString::raw(&v).into())]);
-        assert_eq!(format_no_color(&rec), format!(r#"k={}"#, v));
+        let container = Container::from_fields(&[("k", Scalar::String(EncodedString::raw(&v)))]);
+        assert_eq!(format_no_color(&container.record()), format!(r#"k={}"#, v));
     }
 
     #[test]
     fn test_string_value_trailing_space() {
         let input = "test message\n";
         let golden = r#""test message""#;
-        let rec = Record::from_fields(&[("k", EncodedString::raw(&input).into())]);
-        assert_eq!(format_no_color(&rec), format!(r#"k={}"#, golden));
+        let container = Container::from_fields(&[("k", Scalar::String(EncodedString::raw(&input)))]);
+        assert_eq!(format_no_color(&container.record()), format!(r#"k={}"#, golden));
     }
 
     #[test]
     fn test_message_empty() {
         let rec = Record {
-            message: Some(EncodedString::raw("").into()),
+            message: Some(Scalar::String(EncodedString::raw("")).into()),
             ..Default::default()
         };
 
@@ -1353,7 +1383,7 @@ mod tests {
     #[test]
     fn test_message_double_quoted() {
         let rec = Record {
-            message: Some(EncodedString::raw(r#""hello, world""#).into()),
+            message: Some(Scalar::String(EncodedString::raw(r#""hello, world""#)).into()),
             ..Default::default()
         };
 
@@ -1364,7 +1394,7 @@ mod tests {
     #[test]
     fn test_message_single_quoted() {
         let rec = Record {
-            message: Some(EncodedString::raw(r#"'hello, world'"#).into()),
+            message: Some(Scalar::String(EncodedString::raw(r#"'hello, world'"#)).into()),
             ..Default::default()
         };
 
@@ -1375,7 +1405,7 @@ mod tests {
     #[test]
     fn test_message_single_and_double_quoted() {
         let rec = Record {
-            message: Some(EncodedString::raw(r#"'hello, "world"'"#).into()),
+            message: Some(Scalar::String(EncodedString::raw(r#"'hello, "world"'"#)).into()),
             ..Default::default()
         };
 
@@ -1386,7 +1416,7 @@ mod tests {
     #[test]
     fn test_message_control_chars() {
         let rec = Record {
-            message: Some(EncodedString::raw("hello, \x1b[33mworld\x1b[0m").into()),
+            message: Some(Scalar::String(EncodedString::raw("hello, \x1b[33mworld\x1b[0m")).into()),
             ..Default::default()
         };
 
@@ -1397,7 +1427,7 @@ mod tests {
     #[test]
     fn test_message_spaces_only() {
         let rec = Record {
-            message: Some(EncodedString::raw("    ").into()),
+            message: Some(Scalar::String(EncodedString::raw("    ")).into()),
             ..Default::default()
         };
 
@@ -1407,8 +1437,7 @@ mod tests {
 
     #[test]
     fn test_nested_hidden_fields_flatten() {
-        let val = json_raw_value(r#"{"b":{"c":{"d":1,"e":2},"f":3}}"#);
-        let rec = Record::from_fields(&[("a", RawObject::Json(&val).into())]);
+        let val = Parsed::json(r#"{"a":{"b":{"c":{"d":1,"e":2},"f":3}}}"#);
         let mut fields = IncludeExcludeKeyFilter::default();
         let b = fields.entry("a").entry("b");
         b.exclude();
@@ -1420,13 +1449,12 @@ mod tests {
             ..formatter()
         };
 
-        assert_eq!(&formatter.format_to_string(&rec), "a.b.c.d=1 ...");
+        assert_eq!(&formatter.format_to_string(&val.record()), "a.b.c.d=1 ...");
     }
 
     #[test]
     fn test_nested_hidden_fields_group_unhide() {
-        let val = json_raw_value(r#"{"b":{"c":{"d":1,"e":2},"f":3}}"#);
-        let rec = Record::from_fields(&[("a", RawObject::Json(&val).into())]);
+        let val = Parsed::json(r#"{"a":{"b":{"c":{"d":1,"e":2},"f":3}}}"#);
         let mut fields = IncludeExcludeKeyFilter::default();
         fields.entry("a.b.c").exclude();
         fields.entry("a.b.c.e").include();
@@ -1438,13 +1466,12 @@ mod tests {
             ..formatter()
         };
 
-        assert_eq!(&formatter.format_to_string(&rec), "a.b.f=3 ...");
+        assert_eq!(&formatter.format_to_string(&val.record()), "a.b.f=3 ...");
     }
 
     #[test]
     fn test_nested_hidden_fields_no_flatten() {
-        let val = json_raw_value(r#"{"b":{"c":{"d":1,"e":2},"f":3}}"#);
-        let rec = Record::from_fields(&[("a", RawObject::Json(&val).into())]);
+        let val = Parsed::json(r#"{"a":{"b":{"c":{"d":1,"e":2},"f":3}}}"#);
         let mut fields = IncludeExcludeKeyFilter::default();
         let b = fields.entry("a").entry("b");
         b.exclude();
@@ -1456,6 +1483,9 @@ mod tests {
             ..formatter()
         };
 
-        assert_eq!(&formatter.format_to_string(&rec), "a={ b={ c={ d=1 ... } ... } }");
+        assert_eq!(
+            &formatter.format_to_string(&val.record()),
+            "a={ b={ c={ d=1 ... } ... } }"
+        );
     }
 }
