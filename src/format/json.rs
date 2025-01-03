@@ -86,13 +86,15 @@ pub mod parse {
     #[inline]
     pub fn parse<'s>(lexer: &mut Lexer<'s>) -> Result<Container<'s>> {
         let mut container = Container::new();
-        parse_into(lexer, &mut container)?;
+        parse_into(lexer, container.metaroot())?;
         Ok(container)
     }
 
     #[inline]
-    pub fn parse_into<'s>(lexer: &mut Lexer<'s>, target: &mut Container<'s>) -> Result<()> {
-        while let Some(_) = parse_value(lexer, target.metaroot())? {}
+    pub fn parse_into<'s, T: Build<'s>>(lexer: &mut Lexer<'s>, mut target: T) -> Result<()> {
+        while let Some(t) = parse_value(lexer, target)? {
+            target = t;
+        }
         Ok(())
     }
 
