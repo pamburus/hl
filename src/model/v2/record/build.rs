@@ -34,7 +34,7 @@ pub struct Builder<'s, 'c, 't, T> {
 #[derive(Clone)]
 struct Core<'s, 't> {
     settings: &'s Settings,
-    block: &'s ParserSettingsBlock,
+    block: &'s SettingsBlock,
     field: Option<(EncodedString<'t>, FieldSettings)>,
     depth: usize,
 }
@@ -48,7 +48,12 @@ impl<'t, 's, 'c, T> Builder<'s, 'c, 't, T>
 where
     T: Build<'t>,
 {
-    fn new(settings: &'s Settings, pc: &'c mut PriorityController, record: &'c mut RecordStem<'t>, target: T) -> Self {
+    pub fn new(
+        settings: &'s Settings,
+        pc: &'c mut PriorityController,
+        record: &'c mut RecordStem<'t>,
+        target: T,
+    ) -> Self {
         Self {
             core: Core {
                 settings,
@@ -189,7 +194,7 @@ where
 pub struct Settings {
     unix_ts_unit: Option<UnixTimestampUnit>,
     level: Vec<(HashMap<String, Level>, Option<Level>)>,
-    blocks: Vec<ParserSettingsBlock>,
+    blocks: Vec<SettingsBlock>,
     ignore: Vec<Pattern<String>>,
 }
 
@@ -198,7 +203,7 @@ impl Settings {
         let mut result = Self {
             unix_ts_unit: None,
             level: Vec::new(),
-            blocks: vec![ParserSettingsBlock::default()],
+            blocks: vec![SettingsBlock::default()],
             ignore: Vec::new(),
         };
 
@@ -276,7 +281,7 @@ impl Settings {
                 })
                 .unwrap_or_else(|| {
                     let nest = self.blocks.len();
-                    self.blocks.push(ParserSettingsBlock::default());
+                    self.blocks.push(SettingsBlock::default());
                     self.blocks[n]
                         .fields
                         .insert(name.to_string(), (FieldSettings::Nested(nest), priority));
@@ -327,11 +332,11 @@ impl Default for Settings {
 // ---
 
 #[derive(Default, Debug)]
-struct ParserSettingsBlock {
+struct SettingsBlock {
     fields: HashMap<String, (FieldSettings, usize)>,
 }
 
-impl ParserSettingsBlock {
+impl SettingsBlock {
     fn apply<'a>(
         &self,
         ps: &Settings,
