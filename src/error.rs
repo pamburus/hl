@@ -104,6 +104,12 @@ pub enum Error {
     InvalidIndexHeader,
     #[error("failed to parse json: {0}")]
     JsonParseError(#[from] serde_json::Error),
+    #[error("failed to parse json input at {start}..{end}: {message}")]
+    FailedToParseJsonInput {
+        start: usize,
+        end: usize,
+        message: &'static str,
+    },
     #[error("failed to parse logfmt: {0}")]
     LogfmtParseError(#[from] logfmt::error::Error),
     #[error(transparent)]
