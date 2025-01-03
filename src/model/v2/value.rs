@@ -160,7 +160,7 @@ impl<'s> Field<'s> {
 
         Field {
             key: key.source(),
-            value: node.children().iter().next().unwrap().into(),
+            value: node.children().iter().next().map(|x| x.into()).unwrap_or(Value::Null),
         }
     }
 }
