@@ -5,6 +5,7 @@ use crate::{
     model::{Caller, Level},
     timestamp::Timestamp,
 };
+use once_cell::sync::Lazy;
 
 // ---
 
@@ -17,6 +18,7 @@ const MAX_PREDEFINED_FIELDS: usize = 8;
 
 // ---
 
+#[derive(Default)]
 pub struct Record<'s> {
     pub ts: Option<Timestamp<'s>>,
     pub message: Option<Value<'s>>,
@@ -24,7 +26,7 @@ pub struct Record<'s> {
     pub logger: Option<&'s str>,
     pub caller: Option<Caller<'s>>,
     pub fields: Fields<'s>,
-    predefined: heapless::Vec<Field<'s>, MAX_PREDEFINED_FIELDS>,
+    pub(crate) predefined: heapless::Vec<Field<'s>, MAX_PREDEFINED_FIELDS>,
 }
 
 impl<'s> Record<'s> {
@@ -92,13 +94,32 @@ pub struct Fields<'s> {
 
 impl<'s> Fields<'s> {
     #[inline]
-    fn new(inner: ast::Children<'s>) -> Self {
+    pub fn new(inner: ast::Children<'s>) -> Self {
         Self { inner }
     }
 
     #[inline]
     pub fn iter(&self) -> FieldsIter<'s> {
         FieldsIter::new(self.inner.iter())
+    }
+}
+
+impl Default for Fields<'static> {
+    #[inline]
+    fn default() -> Self {
+        static EMPTY: Lazy<ast::Container<'static>> = Lazy::new(|| {
+            use ast::Build;
+            let mut container = ast::Container::default();
+            container
+                .metaroot()
+                .add_composite(ast::Composite::Object, |b| Ok(b))
+                .unwrap();
+            container
+        });
+
+        Self {
+            inner: EMPTY.roots().iter().next().unwrap().children(),
+        }
     }
 }
 

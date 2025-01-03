@@ -18,6 +18,8 @@ use crate::{
 // relative imports
 use string::{Format, MessageFormatAuto, ValueFormatAuto};
 
+pub mod v2;
+
 // ---
 
 type Buf = Vec<u8>;
