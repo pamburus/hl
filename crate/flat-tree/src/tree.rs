@@ -91,22 +91,6 @@ where
     }
 
     #[inline]
-    pub fn with_node(mut self, value: S::Value) -> Self {
-        (&mut self).push(value);
-        self
-    }
-
-    #[inline]
-    pub fn with_composite_node<'s, R, F>(mut self, value: S::Value, f: F) -> Self
-    where
-        F: FnOnce(NodeBuilder<V, S>) -> R,
-        R: BuildFnResult<F, R, NodeBuilder<'s, V, S>, NodeBuilder<'s, V, S>>,
-    {
-        Build::build(self.metaroot(), value, f);
-        self
-    }
-
-    #[inline]
     pub fn push(&mut self, value: S::Value) -> &mut Self {
         Push::push(self, value)
     }
@@ -173,47 +157,6 @@ where
         self.storage.reserve(additional);
     }
 }
-
-// impl<'t, V, S> Build for &'t mut FlatTree<V, S>
-// where
-//     S: Storage<Value = V>,
-// {
-//     type Child = NodeBuilder<'t, V, S, Self::Attachment>;
-//     type Attachment = NoAttachment;
-//     type WithAttachment<A> = NodeBuilder<'t, V, S, BuilderAttachment<Self::Attachment, A>>;
-//     type WithoutAttachment = Self;
-
-//     #[inline]
-//     fn build<R, F>(mut self, value: V, f: F) -> BuildOutput<F, R, Self, Self::Child>
-//     where
-//         F: FnOnce(Self::Child) -> R,
-//         R: BuildFnResult<F, R, Self, Self::Child>,
-//     {
-//         let index = self.storage.len();
-//         self = self.push(value);
-
-//         let child = NodeBuilder {
-//             tree: self,
-//             attachment: NoAttachment,
-//             index: Some(index),
-//             children: 0,
-//         };
-
-//         let result = f(child).into_result().map(|child| child.end().0);
-
-//         R::finalize(result)
-//     }
-
-//     #[inline]
-//     fn attach<A>(self, attachment: A) -> Self::WithAttachment<A> {
-//         Build::attach(self.metaroot(), attachment)
-//     }
-
-//     #[inline]
-//     fn detach(self) -> (Self::WithoutAttachment, ()) {
-//         (self, ())
-//     }
-// }
 
 // ---
 
@@ -819,11 +762,8 @@ mod tests {
 
     #[test]
     fn test_tree() {
-        let mut tree = FlatTree::<i32>::new()
-            .with_node(1)
-            .with_node(2)
-            .with_composite_node(3, |b| b.push(4).push(5).push(6))
-            .with_node(9);
+        let mut tree = FlatTree::<i32>::new();
+        tree.push(1).push(2).build(3, |b| b.push(4).push(5).push(6)).push(9);
 
         let x = tree.metaroot();
         x.build(10, |b| b.push(11).push(12).build(13, |b| b.push(14).push(15)));
@@ -840,11 +780,11 @@ mod tests {
             Err(e) => assert_eq!(e, "some error"),
         }
 
-        let tree = FlatTree::<i32>::new()
-            .with_node(1)
-            .with_node(2)
-            .with_composite_node(3, |b| b.push(4).push(5).build(6, |b| b.push(7).push(8)))
-            .with_node(9);
+        let mut tree = FlatTree::<i32>::new();
+        tree.push(1)
+            .push(2)
+            .build(3, |b| b.push(4).push(5).build(6, |b| b.push(7).push(8)))
+            .push(9);
         assert_eq!(tree.storage.len(), 9);
         assert_eq!(tree.roots, 4);
 
