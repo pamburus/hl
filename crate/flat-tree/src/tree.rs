@@ -97,12 +97,12 @@ where
     }
 
     #[inline]
-    pub fn with_composite_node(
-        mut self,
-        value: S::Value,
-        f: impl FnOnce(NodeBuilder<V, S>) -> NodeBuilder<V, S>,
-    ) -> Self {
-        Build::build(&mut self, value, f);
+    pub fn with_composite_node<'s, R, F>(mut self, value: S::Value, f: F) -> Self
+    where
+        F: FnOnce(NodeBuilder<V, S>) -> R,
+        R: BuildFnResult<F, R, NodeBuilder<'s, V, S>, NodeBuilder<'s, V, S>>,
+    {
+        Build::build(self.metaroot(), value, f);
         self
     }
 
@@ -116,12 +116,12 @@ where
         &'s mut self,
         value: S::Value,
         f: F,
-    ) -> BuildOutput<F, R, &'s mut Self, NodeBuilder<'s, V, S>>
+    ) -> BuildOutput<F, R, NodeBuilder<'s, V, S>, NodeBuilder<'s, V, S>>
     where
         F: FnOnce(NodeBuilder<'s, V, S>) -> R,
-        R: BuildFnResult<F, R, &'s mut Self, NodeBuilder<'s, V, S>>,
+        R: BuildFnResult<F, R, NodeBuilder<'s, V, S>, NodeBuilder<'s, V, S>>,
     {
-        Build::build(self, value, f)
+        Build::build(self.metaroot(), value, f)
     }
 
     #[inline]
@@ -174,46 +174,46 @@ where
     }
 }
 
-impl<'t, V, S> Build for &'t mut FlatTree<V, S>
-where
-    S: Storage<Value = V>,
-{
-    type Child = NodeBuilder<'t, V, S, Self::Attachment>;
-    type Attachment = NoAttachment;
-    type WithAttachment<A> = NodeBuilder<'t, V, S, BuilderAttachment<Self::Attachment, A>>;
-    type WithoutAttachment = Self;
+// impl<'t, V, S> Build for &'t mut FlatTree<V, S>
+// where
+//     S: Storage<Value = V>,
+// {
+//     type Child = NodeBuilder<'t, V, S, Self::Attachment>;
+//     type Attachment = NoAttachment;
+//     type WithAttachment<A> = NodeBuilder<'t, V, S, BuilderAttachment<Self::Attachment, A>>;
+//     type WithoutAttachment = Self;
 
-    #[inline]
-    fn build<R, F>(mut self, value: V, f: F) -> BuildOutput<F, R, Self, Self::Child>
-    where
-        F: FnOnce(Self::Child) -> R,
-        R: BuildFnResult<F, R, Self, Self::Child>,
-    {
-        let index = self.storage.len();
-        self = self.push(value);
+//     #[inline]
+//     fn build<R, F>(mut self, value: V, f: F) -> BuildOutput<F, R, Self, Self::Child>
+//     where
+//         F: FnOnce(Self::Child) -> R,
+//         R: BuildFnResult<F, R, Self, Self::Child>,
+//     {
+//         let index = self.storage.len();
+//         self = self.push(value);
 
-        let child = NodeBuilder {
-            tree: self,
-            attachment: NoAttachment,
-            index: Some(index),
-            children: 0,
-        };
+//         let child = NodeBuilder {
+//             tree: self,
+//             attachment: NoAttachment,
+//             index: Some(index),
+//             children: 0,
+//         };
 
-        let result = f(child).into_result().map(|child| child.end().0);
+//         let result = f(child).into_result().map(|child| child.end().0);
 
-        R::finalize(result)
-    }
+//         R::finalize(result)
+//     }
 
-    #[inline]
-    fn attach<A>(self, attachment: A) -> Self::WithAttachment<A> {
-        Build::attach(self.metaroot(), attachment)
-    }
+//     #[inline]
+//     fn attach<A>(self, attachment: A) -> Self::WithAttachment<A> {
+//         Build::attach(self.metaroot(), attachment)
+//     }
 
-    #[inline]
-    fn detach(self) -> (Self::WithoutAttachment, ()) {
-        (self, ())
-    }
-}
+//     #[inline]
+//     fn detach(self) -> (Self::WithoutAttachment, ()) {
+//         (self, ())
+//     }
+// }
 
 // ---
 
@@ -787,6 +787,34 @@ mod tests {
         V: Copy + 'static,
     {
         nodes.into_iter().map(|n| *n.value()).collect()
+    }
+
+    #[test]
+    fn test_tree_attach() {
+        fn check(_: &NodeBuilder<i32>) {}
+
+        let mut tree = FlatTree::<i32>::new();
+        let builder = tree.metaroot();
+        check(&builder);
+        let (builder, attachment) = builder.attach("aaa").push(1).push(2).push(3).detach();
+        check(&builder);
+        assert_eq!(attachment, "aaa");
+    }
+
+    #[test]
+    fn test_tree_attach_nested() {
+        fn check(_: &NodeBuilder<i32>) {}
+
+        let mut tree = FlatTree::<i32>::new();
+        let builder = tree.metaroot();
+        check(&builder);
+        let (builder, attachment) = builder
+            .push(1)
+            .attach("aaa")
+            .build(2, |b| b.detach().0.push(3).attach("bbb"))
+            .detach();
+        check(&builder);
+        assert_eq!(attachment, "bbb");
     }
 
     #[test]

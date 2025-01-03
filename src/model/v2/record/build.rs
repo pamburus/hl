@@ -26,24 +26,29 @@ pub struct Builder<'s, T> {
     target: T,
 }
 
-#[derive(Clone, Copy)]
 struct Core<'s> {
     settings: &'s Settings,
+    pc: &'s mut PriorityController,
 }
 
 impl<'s, T> Builder<'s, T>
 where
     T: Build<'s>,
 {
-    pub fn new(settings: &'s Settings, target: T) -> Self {
+    fn new(settings: &'s Settings, pc: &'s mut PriorityController, target: T) -> Self {
         Self {
-            core: Core { settings },
+            core: Core { settings, pc },
             target,
         }
     }
 
-    fn child(core: Core<'s>, target: T::Child) -> Builder<'s, T::Child> {
-        Builder { core, target }
+    fn into_inner(self) -> T::WithAttachment<Core<'s>> {
+        self.target.attach(self.core)
+    }
+
+    fn from_inner(target: T::WithAttachment<Core<'s>>) -> Self {
+        let (target, core) = target.detach();
+        Self { core, target }
     }
 }
 
@@ -63,15 +68,16 @@ where
     }
 
     #[inline]
-    fn add_composite(
-        mut self,
-        composite: Composite<'s>,
-        f: impl FnOnce(Self::Child) -> ast::Result<Self::Child>,
-    ) -> ast::Result<Self> {
-        self.target = self
-            .target
-            .add_composite(composite, |target| Ok(f(Self::child(self.core, target))?.target))?;
-        Ok(self)
+    fn add_composite<F>(self, composite: Composite<'s>, f: F) -> ast::Result<Self>
+    where
+        F: FnOnce(Self::Child) -> ast::Result<Self::Child>,
+    {
+        let target = self.into_inner().add_composite(composite, |target| {
+            let target = f(Builder::from_inner(target))?;
+            Ok(target.into_inner())
+        })?;
+
+        Ok(Builder::from_inner(target))
     }
 
     #[inline]
@@ -94,9 +100,22 @@ where
         )
     }
 }
+
+pub struct Settings {}
+
+#[derive(Default)]
+struct PriorityController {
+    time: Option<usize>,
+    level: Option<usize>,
+    logger: Option<usize>,
+    message: Option<usize>,
+    caller: Option<usize>,
+    caller_file: Option<usize>,
+    caller_line: Option<usize>,
 }
 
 // ---
+/*
 
 pub struct Settings {
     unix_ts_unit: Option<UnixTimestampUnit>,
@@ -448,5 +467,24 @@ impl FieldSettings {
         }
     }
 }
+*/
 
 // ---
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_builder() {
+        let settings = Settings {};
+        let mut container = ast::Container::default();
+        let mut pc = PriorityController::default();
+        let b = Builder::new(&settings, &mut pc, container.metaroot());
+        b.add_scalar(Scalar::Bool(true))
+            .add_composite(Composite::Array, |b| Ok(b.add_scalar(Scalar::Bool(false))))
+            .unwrap();
+
+        assert_eq!(container.nodes().len(), 3);
+    }
+}
