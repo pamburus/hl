@@ -104,7 +104,7 @@ impl<'s> Fields<'s> {
 
 // ---
 
-struct FieldsIter<'s> {
+pub struct FieldsIter<'s> {
     inner: ast::SiblingsIter<'s>,
 }
 

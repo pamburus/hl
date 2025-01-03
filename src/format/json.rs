@@ -79,7 +79,9 @@ pub mod error {
     }
 }
 
-pub mod parse {
+pub use parse::{parse, parse_into};
+
+mod parse {
     use super::{error::*, *};
     use crate::model::v2::ast::{Build, Composite, Container, Scalar};
 
