@@ -373,6 +373,7 @@ pub trait RecordWithSourceConstructor<'r, 's> {
 
 // ---
 
+#[derive(Clone, Copy, Debug)]
 pub enum Caller<'a> {
     Text(&'a str),
     FileLine(&'a str, &'a str),
