@@ -9,14 +9,29 @@ use super::ast::{self, Composite};
 #[derive(Debug, Clone, Copy)]
 pub enum Value<'s> {
     Null,
-    Bool(bool),
+    Boolean(bool),
     Number(&'s str),
     String(EncodedString<'s>),
     Array(Array<'s>),
     Object(Object<'s>),
 }
 
+impl<'s> Value<'s> {
+    #[inline]
+    pub fn is_empty(&self) -> bool {
+        match self {
+            Self::Null => true,
+            Self::Boolean(_) => false,
+            Self::Number(s) => s.is_empty(),
+            Self::String(s) => s.is_empty(),
+            Self::Array(a) => a.len() == 0,
+            Self::Object(o) => o.len() == 0,
+        }
+    }
+}
+
 impl<'s> From<ast::Node<'s>> for Value<'s> {
+    #[inline]
     fn from(node: ast::Node<'s>) -> Self {
         match *node.value() {
             ast::Value::Scalar(scalar) => scalar.into(),
@@ -30,10 +45,11 @@ impl<'s> From<ast::Node<'s>> for Value<'s> {
 }
 
 impl<'s> From<ast::Scalar<'s>> for Value<'s> {
+    #[inline]
     fn from(value: ast::Scalar<'s>) -> Self {
         match value {
             ast::Scalar::Null => Self::Null,
-            ast::Scalar::Bool(b) => Self::Bool(b),
+            ast::Scalar::Bool(b) => Self::Boolean(b),
             ast::Scalar::Number(s) => Self::Number(s),
             ast::Scalar::String(s) => Self::String(s.into()),
         }
@@ -48,8 +64,19 @@ pub struct Array<'s> {
 }
 
 impl<'s> Array<'s> {
+    #[inline]
     fn new(inner: ast::Node<'s>) -> Self {
         Self { inner }
+    }
+
+    #[inline]
+    pub fn iter(&self) -> ArrayIter<'s> {
+        ArrayIter::new(self.inner.children().iter())
+    }
+
+    #[inline]
+    pub fn len(&self) -> usize {
+        self.inner.children().len()
     }
 }
 
@@ -108,6 +135,11 @@ impl<'s> Object<'s> {
     #[inline]
     pub fn iter(&self) -> ObjectIter<'s> {
         ObjectIter::new(self.inner.children().iter())
+    }
+
+    #[inline]
+    pub fn len(&self) -> usize {
+        self.inner.children().len()
     }
 }
 

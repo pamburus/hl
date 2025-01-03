@@ -427,8 +427,8 @@ impl FieldSettings {
             Value::String(s) => s.source().into(),
             Value::Number(s) => s.into(),
             Value::Null => "null".into(),
-            Value::Bool(true) => "true".into(),
-            Value::Bool(false) => "false".into(),
+            Value::Boolean(true) => "true".into(),
+            Value::Boolean(false) => "false".into(),
             _ => None,
         };
 
