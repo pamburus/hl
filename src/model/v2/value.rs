@@ -19,17 +19,23 @@ pub enum Value<'s> {
 impl<'s> From<ast::Node<'s>> for Value<'s> {
     fn from(node: ast::Node<'s>) -> Self {
         match *node.value() {
-            ast::Value::Scalar(scalar) => match scalar {
-                ast::Scalar::Null => Self::Null,
-                ast::Scalar::Bool(b) => Self::Bool(b),
-                ast::Scalar::Number(s) => Self::Number(s),
-                ast::Scalar::String(s) => Self::String(s.into()),
-            },
+            ast::Value::Scalar(scalar) => scalar.into(),
             ast::Value::Composite(composite) => match composite {
                 ast::Composite::Array => Self::Array(Array::new(node)),
                 ast::Composite::Object => Self::Object(Object::new(node)),
                 ast::Composite::Field(_) => panic!("expected scalar, array or object node, got {:?}", node),
             },
+        }
+    }
+}
+
+impl<'s> From<ast::Scalar<'s>> for Value<'s> {
+    fn from(value: ast::Scalar<'s>) -> Self {
+        match value {
+            ast::Scalar::Null => Self::Null,
+            ast::Scalar::Bool(b) => Self::Bool(b),
+            ast::Scalar::Number(s) => Self::Number(s),
+            ast::Scalar::String(s) => Self::String(s.into()),
         }
     }
 }
@@ -94,8 +100,14 @@ pub struct Object<'s> {
 }
 
 impl<'s> Object<'s> {
+    #[inline]
     fn new(inner: ast::Node<'s>) -> Self {
         Self { inner }
+    }
+
+    #[inline]
+    pub fn iter(&self) -> ObjectIter<'s> {
+        ObjectIter::new(self.inner.children().iter())
     }
 }
 

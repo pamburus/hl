@@ -1,5 +1,8 @@
 use encstr::EncodedString;
-use flat_tree::{tree, FlatTree};
+use flat_tree::{
+    tree::{self, NoAttachment},
+    FlatTree,
+};
 use std::ops::Range;
 
 // ---
@@ -110,10 +113,12 @@ where
         Ok(Builder::new(result))
     }
 
+    #[inline]
     fn attach<V>(self, attachment: V) -> Self::WithAttachment<V> {
         Builder::new(self.inner.attach(attachment))
     }
 
+    #[inline]
     fn detach(self) -> (Self::WithoutAttachment, AttachmentValue<Self::Attachment>) {
         let (parent, value) = self.inner.detach();
         (Builder::new(parent), value)
@@ -129,6 +134,51 @@ pub struct Builder<B> {
 impl<B> Builder<B> {
     fn new(inner: B) -> Self {
         Self { inner }
+    }
+}
+
+// ---
+
+pub struct Discarder<A = NoAttachment>(pub A);
+
+impl Default for Discarder<NoAttachment> {
+    #[inline]
+    fn default() -> Self {
+        Self(NoAttachment)
+    }
+}
+
+impl<'s, A> Build<'s> for Discarder<A>
+where
+    A: BuildAttachment,
+{
+    type Child = Self;
+    type Attachment = A;
+    type WithAttachment<V> = Discarder<AttachmentChild<A, V>>;
+    type WithoutAttachment = Discarder<AttachmentParent<A>>;
+
+    #[inline]
+    fn add_scalar(self, _: Scalar<'s>) -> Self {
+        self
+    }
+
+    #[inline]
+    fn add_composite<F>(self, _: Composite<'s>, _: F) -> Result<Self>
+    where
+        F: FnOnce(Self::Child) -> Result<Self::Child>,
+    {
+        Ok(self)
+    }
+
+    #[inline]
+    fn attach<V>(self, value: V) -> Self::WithAttachment<V> {
+        Discarder(self.0.join(value))
+    }
+
+    #[inline]
+    fn detach(self) -> (Self::WithoutAttachment, AttachmentValue<Self::Attachment>) {
+        let (attachment, value) = self.0.split();
+        (Discarder(attachment), value)
     }
 }
 
