@@ -932,7 +932,7 @@ mod tests {
     impl Parsed {
         fn json(s: &'static str) -> Self {
             Self {
-                container: format::json::parse(&mut format::json::Lexer::new(s)).unwrap(),
+                container: format::json::parse_all(&mut format::json::Lexer::new(s)).unwrap(),
             }
         }
 

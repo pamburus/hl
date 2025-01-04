@@ -32,6 +32,7 @@ use crate::{
     fmtx::aligned_left,
     formatting::{RawRecordFormatter, RecordFormatter, RecordWithSourceFormatter},
     fsmon::{self, EventKind},
+    types,
     index::{Indexer, IndexerSettings, Timestamp},
     input::{BlockLine, Input, InputHolder, InputReference},
     model::{Filter, Parser, ParserSettings, RawRecord, Record, RecordFilter, RecordWithSourceConstructor},
@@ -137,11 +138,7 @@ pub enum InputInfo {
     Minimal,
 }
 
-#[derive(Eq, PartialEq, Copy, Clone, Debug, Serialize, Deserialize)]
-pub enum InputFormat {
-    Json,
-    Logfmt,
-}
+pub type InputFormat = types::InputFormat;
 
 // ---
 
