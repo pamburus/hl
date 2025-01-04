@@ -20,6 +20,9 @@ use string::{Format, MessageFormatAuto, ValueFormatAuto};
 
 pub mod v2;
 
+#[cfg(test)]
+mod test;
+
 // ---
 
 type Buf = Vec<u8>;
