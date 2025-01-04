@@ -6,7 +6,7 @@ use crate::{
     formatting::v2::{RawRecordFormatter, RecordFormatter, RecordWithSourceFormatter},
     model::{
         v2::{
-            parse::ParserSetup,
+            parse::Parser,
             record::{Filter as RecordFilter, Record, RecordWithSourceConstructor},
         },
         Filter,
@@ -39,21 +39,16 @@ pub struct SegmentProcessorOptions {
 // ---
 
 pub struct SegmentProcessor<'a, Formatter, Filter> {
-    parser_setup: &'a ParserSetup,
+    parser: &'a Parser,
     formatter: Formatter,
     filter: Filter,
     options: SegmentProcessorOptions,
 }
 
 impl<'a, Formatter: RecordWithSourceFormatter, Filter: RecordFilter> SegmentProcessor<'a, Formatter, Filter> {
-    pub fn new(
-        parser: &'a ParserSetup,
-        formatter: Formatter,
-        filter: Filter,
-        options: SegmentProcessorOptions,
-    ) -> Self {
+    pub fn new(parser: &'a Parser, formatter: Formatter, filter: Filter, options: SegmentProcessorOptions) -> Self {
         Self {
-            parser_setup: parser,
+            parser,
             formatter,
             filter,
             options,
@@ -73,10 +68,11 @@ impl<'a, Formatter: RecordWithSourceFormatter, Filter: RecordFilter> SegmentProc
     where
         O: RecordObserver,
     {
-        let mut parser = self.parser_setup.new_parser();
-
         let mut i = 0;
         let limit = limit.unwrap_or(usize::MAX);
+
+        let mut state_container = self.parser.new_state();
+        let mut state = &mut state_container;
 
         for line in self.options.delimiter.clone().into_searcher().split(data) {
             if line.len() == 0 {
@@ -93,13 +89,20 @@ impl<'a, Formatter: RecordWithSourceFormatter, Filter: RecordFilter> SegmentProc
             let mut last_offset = 0;
             let mut offset = 0;
 
-            while let Ok(Some((record, span))) = parser.parse(crate::format::Json, &line[offset..]) {
+            loop {
+                let mut result = None;
+                (state, result) = self.parser.parse(state, crate::format::Json, &line[offset..]).unwrap();
+                let Some(span) = result else {
+                    break;
+                };
+                // while let Ok((state, Some(span))) = self.parser.parse(state, crate::format::Json, &line[offset..]) {
                 i += 1;
                 last_offset = span.end.clone();
                 if parsed_some {
                     buf.push(b'\n');
                 }
                 parsed_some = true;
+                let record = self.parser.make_record(state);
                 if record.matches(&self.filter) {
                     let begin = buf.len();
                     buf.extend(prefix.as_bytes());
@@ -113,6 +116,7 @@ impl<'a, Formatter: RecordWithSourceFormatter, Filter: RecordFilter> SegmentProc
                 if i >= limit {
                     break;
                 }
+
                 offset = span.end;
             }
 

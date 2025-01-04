@@ -21,7 +21,11 @@ impl Format for Json {
                 start: e.1.start,
                 end: e.1.end,
             })
-            .map(|x| x.map(|_| ParseOutput { span: lexer.span() }))
+            .map(|x| {
+                x.map(|_| ParseOutput {
+                    span: 0..lexer.span().end,
+                })
+            })
     }
 
     fn detect<'s>(&self, input: &'s [u8]) -> Option<bool> {
