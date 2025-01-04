@@ -163,3 +163,7 @@ harness = false
 name = "json-ast"
 path = "benches/json-ast/benches.rs"
 harness = false
+
+[[bench]]
+name = "flat-tree"
+harness = false

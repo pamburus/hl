@@ -88,6 +88,18 @@ where
     fn detach(self) -> (Self::WithoutAttachment, AttachmentValue<Self::Attachment>);
 }
 
+// ---
+
+pub struct Builder<B> {
+    inner: B,
+}
+
+impl<B> Builder<B> {
+    fn new(inner: B) -> Self {
+        Self { inner }
+    }
+}
+
 impl<'s, T> Build<'s> for Builder<T>
 where
     T: InnerBuild<'s>,
@@ -122,18 +134,6 @@ where
     fn detach(self) -> (Self::WithoutAttachment, AttachmentValue<Self::Attachment>) {
         let (parent, value) = self.inner.detach();
         (Builder::new(parent), value)
-    }
-}
-
-// ---
-
-pub struct Builder<B> {
-    inner: B,
-}
-
-impl<B> Builder<B> {
-    fn new(inner: B) -> Self {
-        Self { inner }
     }
 }
 
