@@ -46,6 +46,7 @@ pub enum String<'s> {
 }
 
 impl<'s> Into<ast::String<'s>> for String<'s> {
+    #[inline]
     fn into(self) -> ast::String<'s> {
         match self {
             String::Plain(s) => ast::String::raw(&s[1..s.len() - 1]),

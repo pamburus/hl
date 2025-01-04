@@ -25,7 +25,7 @@ mod appdirs;
 mod console;
 mod eseq;
 mod filtering;
-mod format;
+pub mod format;
 pub mod formatting;
 mod fsmon;
 pub mod model;
