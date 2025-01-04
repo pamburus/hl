@@ -1,10 +1,12 @@
 // std imports
 use std::collections::HashMap;
 
-use encstr::EncodedString;
 // third-party imports
 use titlecase::titlecase;
 use wildflower::Pattern;
+
+// workspace imports
+use encstr::EncodedString;
 
 // local imports
 use super::{
@@ -40,7 +42,7 @@ struct Core<'s, 't> {
 }
 
 struct Context<'c, 't> {
-    record: &'c mut RecordStem<'t>,
+    record: &'c mut Record<'t>,
     pc: &'c mut PriorityController,
 }
 
@@ -48,12 +50,7 @@ impl<'t, 's, 'c, T> Builder<'s, 'c, 't, T>
 where
     T: Build<'t>,
 {
-    pub fn new(
-        settings: &'s Settings,
-        pc: &'c mut PriorityController,
-        record: &'c mut RecordStem<'t>,
-        target: T,
-    ) -> Self {
+    pub fn new(settings: &'s Settings, pc: &'c mut PriorityController, record: &'c mut Record<'t>, target: T) -> Self {
         Self {
             core: Core {
                 settings,
@@ -294,12 +291,12 @@ impl Settings {
     }
 
     #[inline]
-    fn apply<'a>(&self, key: &'a str, value: Value<'a>, to: &mut RecordStem<'a>, pc: &mut PriorityController) -> bool {
+    fn apply<'a>(&self, key: &'a str, value: Value<'a>, to: &mut Record<'a>, pc: &mut PriorityController) -> bool {
         self.blocks[0].apply(self, key, value, to, pc, true)
     }
 
     #[inline]
-    fn apply_each<'a, 'i, I>(&self, items: I, to: &mut RecordStem<'a>)
+    fn apply_each<'a, 'i, I>(&self, items: I, to: &mut Record<'a>)
     where
         I: IntoIterator<Item = Field<'a>>,
         'a: 'i,
@@ -309,7 +306,7 @@ impl Settings {
     }
 
     #[inline]
-    fn apply_each_ctx<'a, 'i, I>(&self, items: I, to: &mut RecordStem<'a>, pc: &mut PriorityController)
+    fn apply_each_ctx<'a, 'i, I>(&self, items: I, to: &mut Record<'a>, pc: &mut PriorityController)
     where
         I: IntoIterator<Item = Field<'a>>,
         'a: 'i,
@@ -342,7 +339,7 @@ impl SettingsBlock {
         ps: &Settings,
         key: &'a str,
         value: Value<'a>,
-        to: &mut RecordStem<'a>,
+        to: &mut Record<'a>,
         pc: &mut PriorityController,
         is_root: bool,
     ) -> bool {
@@ -366,7 +363,7 @@ impl SettingsBlock {
     }
 
     #[inline]
-    fn apply_each_ctx<'a, 'i, I>(&self, ps: &Settings, fields: I, to: &mut RecordStem<'a>, ctx: &mut PriorityController)
+    fn apply_each_ctx<'a, 'i, I>(&self, ps: &Settings, fields: I, to: &mut Record<'a>, ctx: &mut PriorityController)
     where
         I: IntoIterator<Item = Field<'a>>,
         'a: 'i,
@@ -380,7 +377,7 @@ impl SettingsBlock {
 // ---
 
 #[derive(Default)]
-struct PriorityController {
+pub struct PriorityController {
     time: Option<usize>,
     level: Option<usize>,
     logger: Option<usize>,
@@ -410,6 +407,11 @@ impl PriorityController {
             false
         }
     }
+
+    #[inline]
+    fn reset(&mut self) {
+        *self = Default::default();
+    }
 }
 
 // ---
@@ -427,7 +429,7 @@ enum FieldSettings {
 }
 
 impl FieldSettings {
-    fn apply<'a>(&self, ps: &Settings, value: Value<'a>, to: &mut RecordStem<'a>) -> Option<()> {
+    fn apply<'a>(&self, ps: &Settings, value: Value<'a>, to: &mut Record<'a>) -> Option<()> {
         let as_text = |value: Value<'a>| match value {
             Value::String(s) => s.source().into(),
             Value::Number(s) => s.into(),
@@ -499,7 +501,7 @@ impl FieldSettings {
         &self,
         ps: &Settings,
         value: Value<'a>,
-        to: &mut RecordStem<'a>,
+        to: &mut Record<'a>,
         ctx: &mut PriorityController,
     ) -> bool {
         match *self {
@@ -548,7 +550,7 @@ mod tests {
         let settings = Settings::default();
         let mut container = ast::Container::default();
         let mut pc = PriorityController::default();
-        let mut record = RecordStem::new();
+        let mut record = Record::default();
         let b = Builder::new(&settings, &mut pc, &mut record, container.metaroot());
         b.add_scalar(Scalar::Bool(true))
             .add_composite(Composite::Array, |b| Ok(b.add_scalar(Scalar::Bool(false))))
@@ -561,13 +563,13 @@ mod tests {
         let mut container = ast::Container::default();
         let mut pc = PriorityController::default();
         let settings = Settings::new(&PredefinedFields::default()).with_ignore(["kubernetes", "agent"]);
-        let mut record = RecordStem::new();
-        json::parse_into(
+        let mut record = Record::default();
+        json::parse_all_into(
             &mut json::Token::lexer(KIBANA_REC_1),
             Builder::new(&settings, &mut pc, &mut record, container.metaroot()),
         )
         .unwrap();
-        println!("{:?}", record);
+        // println!("{:?}", record);
 
         assert_eq!(container.roots().len(), 1);
         assert_eq!(container.nodes().len(), 52);

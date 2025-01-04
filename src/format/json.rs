@@ -79,21 +79,21 @@ pub mod error {
     }
 }
 
-pub use parse::{parse, parse_into};
+pub use parse::{parse_all, parse_all_into, parse_value};
 
 mod parse {
     use super::{error::*, *};
     use crate::model::v2::ast::{Build, Composite, Container, Scalar};
 
     #[inline]
-    pub fn parse<'s>(lexer: &mut Lexer<'s>) -> Result<Container<'s>> {
+    pub fn parse_all<'s>(lexer: &mut Lexer<'s>) -> Result<Container<'s>> {
         let mut container = Container::new();
-        parse_into(lexer, container.metaroot())?;
+        parse_value(lexer, container.metaroot())?;
         Ok(container)
     }
 
     #[inline]
-    pub fn parse_into<'s, T: Build<'s>>(lexer: &mut Lexer<'s>, mut target: T) -> Result<()> {
+    pub fn parse_all_into<'s, T: Build<'s>>(lexer: &mut Lexer<'s>, mut target: T) -> Result<()> {
         while let Some(t) = parse_value(lexer, target)? {
             target = t;
         }
@@ -101,7 +101,7 @@ mod parse {
     }
 
     #[inline]
-    fn parse_value<'s, T: Build<'s>>(lexer: &mut Lexer<'s>, target: T) -> Result<Option<T>> {
+    pub fn parse_value<'s, T: Build<'s>>(lexer: &mut Lexer<'s>, target: T) -> Result<Option<T>> {
         if let Some(token) = lexer.next() {
             parse_value_token(lexer, target, token.refine(lexer)?).map(Some)
         } else {

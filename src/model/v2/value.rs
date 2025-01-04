@@ -28,6 +28,19 @@ impl<'s> Value<'s> {
             Self::Object(o) => o.len() == 0,
         }
     }
+
+    #[inline]
+    pub fn as_text(&self) -> Option<EncodedString<'s>> {
+        match self {
+            Self::Null => Some(EncodedString::raw("null")),
+            Self::Boolean(true) => Some(EncodedString::raw("true")),
+            Self::Boolean(false) => Some(EncodedString::raw("false")),
+            Self::Number(s) => Some(EncodedString::raw(s)),
+            Self::String(s) => Some(*s),
+            Self::Array(_) => None,
+            Self::Object(_) => None,
+        }
+    }
 }
 
 impl<'s> From<ast::Node<'s>> for Value<'s> {

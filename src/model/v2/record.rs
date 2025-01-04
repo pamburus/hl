@@ -59,38 +59,6 @@ impl<'s> Record<'s> {
 
 // ---
 
-#[derive(Default, Debug)]
-pub struct RecordStem<'s> {
-    pub ts: Option<Timestamp<'s>>,
-    pub message: Option<Value<'s>>,
-    pub level: Option<Level>,
-    pub logger: Option<&'s str>,
-    pub caller: Option<Caller<'s>>,
-    predefined: heapless::Vec<Field<'s>, MAX_PREDEFINED_FIELDS>,
-}
-
-impl<'s> RecordStem<'s> {
-    #[inline]
-    pub fn new() -> Self {
-        Default::default()
-    }
-
-    #[inline]
-    pub fn into_record(self, fields: Fields<'s>) -> Record<'s> {
-        Record {
-            ts: self.ts,
-            message: self.message,
-            level: self.level,
-            logger: self.logger,
-            caller: self.caller,
-            fields,
-            predefined: self.predefined,
-        }
-    }
-}
-
-// ---
-
 pub struct Fields<'s> {
     inner: ast::Children<'s>,
 }
