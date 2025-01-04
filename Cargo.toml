@@ -139,6 +139,10 @@ name = "parse-format"
 harness = false
 
 [[bench]]
+name = "parse-format-v2"
+harness = false
+
+[[bench]]
 name = "string"
 harness = false
 
