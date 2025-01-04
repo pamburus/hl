@@ -36,7 +36,7 @@ fn container(c: &mut Criterion) {
     let test = "parse-to-container/kibana";
 
     group.bench_function(test, |b| {
-        let mut container = ast::Container::default();
+        let mut container = ast::Container::new();
         container.reserve(512);
 
         b.iter(|| {

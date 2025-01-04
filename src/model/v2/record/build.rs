@@ -548,7 +548,7 @@ mod tests {
     #[test]
     fn test_builder() {
         let settings = Settings::default();
-        let mut container = ast::Container::default();
+        let mut container = ast::Container::new();
         let mut pc = PriorityController::default();
         let mut record = Record::default();
         let b = Builder::new(&settings, &mut pc, &mut record, container.metaroot());
@@ -560,7 +560,7 @@ mod tests {
 
     #[test]
     fn test_builder_json() {
-        let mut container = ast::Container::default();
+        let mut container = ast::Container::new();
         let mut pc = PriorityController::default();
         let settings = Settings::new(&PredefinedFields::default()).with_ignore(["kubernetes", "agent"]);
         let mut record = Record::default();
