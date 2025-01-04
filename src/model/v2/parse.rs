@@ -20,26 +20,22 @@ impl Parser {
         ParserState::default()
     }
 
-    pub fn parse<'s, F>(
-        &self,
-        state: &'s mut ParserState<'s>,
-        format: F,
-        input: &'s [u8],
-    ) -> Result<(&'s mut ParserState<'s>, Option<Span>)>
+    pub fn parse<'s, F>(&self, state: &mut ParserState<'s>, format: F, input: &'s [u8]) -> Result<Option<Span>>
     where
         F: Format,
     {
         state.container.clear();
+        state.container.reserve(128);
         let mut record = Record::default();
 
         let mut pc = PriorityController::default();
         let target = Builder::new(&self.settings, &mut pc, &mut record, state.container.metaroot());
 
         let Some(output) = format.parse(input, target)? else {
-            return Ok((state, None));
+            return Ok(None);
         };
 
-        Ok((state, Some(output.span)))
+        Ok(Some(output.span))
     }
 
     pub fn make_record<'s>(&self, state: &'s ParserState<'s>) -> Record<'s> {

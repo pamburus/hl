@@ -43,6 +43,7 @@ crossbeam-channel = "0"
 crossbeam-queue = "0"
 crossbeam-utils = "0"
 deko = "0"
+derive-where = "1"
 derive_more = {version="1", features = ["deref", "deref_mut", "from"]}
 dirs = "6"
 dirs-sys = "0"

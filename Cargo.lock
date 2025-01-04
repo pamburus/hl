@@ -1067,6 +1067,7 @@ dependencies = [
  "crossbeam-queue",
  "crossbeam-utils",
  "deko",
+ "derive-where",
  "derive_more",
  "dirs",
  "dirs-sys",

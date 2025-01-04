@@ -6,7 +6,7 @@ use crate::{
     formatting::v2::{RawRecordFormatter, RecordFormatter, RecordWithSourceFormatter},
     model::{
         v2::{
-            parse::Parser,
+            parse::{Parser, ParserState},
             record::{Filter as RecordFilter, Record, RecordWithSourceConstructor},
         },
         Filter,
@@ -71,8 +71,7 @@ impl<'a, Formatter: RecordWithSourceFormatter, Filter: RecordFilter> SegmentProc
         let mut i = 0;
         let limit = limit.unwrap_or(usize::MAX);
 
-        let mut state_container = self.parser.new_state();
-        let mut state = &mut state_container;
+        let mut state = self.parser.new_state();
 
         for line in self.options.delimiter.clone().into_searcher().split(data) {
             if line.len() == 0 {
@@ -91,7 +90,10 @@ impl<'a, Formatter: RecordWithSourceFormatter, Filter: RecordFilter> SegmentProc
 
             loop {
                 let mut result = None;
-                (state, result) = self.parser.parse(state, crate::format::Json, &line[offset..]).unwrap();
+                result = self
+                    .parser
+                    .parse(&mut state, crate::format::Json, &line[offset..])
+                    .unwrap();
                 let Some(span) = result else {
                     break;
                 };
@@ -102,7 +104,7 @@ impl<'a, Formatter: RecordWithSourceFormatter, Filter: RecordFilter> SegmentProc
                     buf.push(b'\n');
                 }
                 parsed_some = true;
-                let record = self.parser.make_record(state);
+                let record = self.parser.make_record(&state);
                 if record.matches(&self.filter) {
                     let begin = buf.len();
                     buf.extend(prefix.as_bytes());

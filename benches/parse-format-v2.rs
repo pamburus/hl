@@ -25,7 +25,7 @@ fn benchmark(c: &mut Criterion) {
     let mut group = c.benchmark_group("parse-format-v2");
 
     for (name, record) in [
-        ("kibana-record-01-json", KIBANA_RECORD_01_JSON),
+        ("kibana-record-01-json-x1024", KIBANA_RECORD_01_JSON.repeat(1024)),
         // ("kibana-record-01-logfmt", KIBANA_RECORD_01_LOGFMT),
     ] {
         for theme in ["universal"] {
@@ -51,7 +51,7 @@ fn benchmark(c: &mut Criterion) {
                     SegmentProcessor::new(&parser, &formatter, &filter, SegmentProcessorOptions::default());
                 let mut buf = Vec::new();
                 b.iter(|| {
-                    processor.process(record, &mut buf, "", None, &mut RecordIgnorer {});
+                    processor.process(&record, &mut buf, "", None, &mut RecordIgnorer {});
                     buf.clear();
                 });
             });
@@ -59,7 +59,7 @@ fn benchmark(c: &mut Criterion) {
     }
 
     for (name, record) in [
-        ("kibana-record-01-json", KIBANA_RECORD_01_JSON),
+        ("kibana-record-01-json-x1024", KIBANA_RECORD_01_JSON.repeat(1024)),
         // ("kibana-record-01-logfmt", KIBANA_RECORD_01_LOGFMT),
     ] {
         group.bench_function(format!("parse-only/{}", name), |b| {
@@ -70,7 +70,7 @@ fn benchmark(c: &mut Criterion) {
                 SegmentProcessor::new(&parser, NoFormatter, &filter, SegmentProcessorOptions::default());
             let mut buf = Vec::new();
             b.iter(|| {
-                processor.process(record, &mut buf, "", None, &mut RecordIgnorer {});
+                processor.process(&record, &mut buf, "", None, &mut RecordIgnorer {});
                 buf.clear();
             });
         });

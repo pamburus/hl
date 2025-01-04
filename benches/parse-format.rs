@@ -21,10 +21,10 @@ fn benchmark(c: &mut Criterion) {
     let mut group = c.benchmark_group("parse-format");
 
     for (name, record) in [
-        ("kibana-record-01-json", KIBANA_RECORD_01_JSON),
-        ("kibana-record-01-logfmt", KIBANA_RECORD_01_LOGFMT),
+        ("kibana-record-01-json-x1024", KIBANA_RECORD_01_JSON.repeat(1024)),
+        ("kibana-record-01-logfmt-x1024", KIBANA_RECORD_01_LOGFMT.repeat(1024)),
     ] {
-        for theme in ["universal", "classic"] {
+        for theme in ["universal"] {
             group.bench_function(format!("parse-and-format/{}/{}", name, theme), |b| {
                 let settings = Settings::default();
                 let parser = Parser::new(ParserSettings::new(&settings.fields.predefined, empty(), None));
@@ -47,7 +47,7 @@ fn benchmark(c: &mut Criterion) {
                     SegmentProcessor::new(&parser, &formatter, &filter, SegmentProcessorOptions::default());
                 let mut buf = Vec::new();
                 b.iter(|| {
-                    processor.process(record, &mut buf, "", None, &mut RecordIgnorer {});
+                    processor.process(&record, &mut buf, "", None, &mut RecordIgnorer {});
                     buf.clear();
                 });
             });
@@ -55,23 +55,21 @@ fn benchmark(c: &mut Criterion) {
     }
 
     for (name, record) in [
-        ("kibana-record-01-json", KIBANA_RECORD_01_JSON),
-        ("kibana-record-01-logfmt", KIBANA_RECORD_01_LOGFMT),
+        ("kibana-record-01-json-x1024", KIBANA_RECORD_01_JSON.repeat(1024)),
+        ("kibana-record-01-logfmt-x1024", KIBANA_RECORD_01_LOGFMT.repeat(1024)),
     ] {
-        for theme in ["universal", "classic"] {
-            group.bench_function(format!("parse-only/{}/{}", name, theme), |b| {
-                let settings = Settings::default();
-                let parser = Parser::new(ParserSettings::new(&settings.fields.predefined, empty(), None));
-                let filter = Filter::default();
-                let mut processor =
-                    SegmentProcessor::new(&parser, NoFormatter, &filter, SegmentProcessorOptions::default());
-                let mut buf = Vec::new();
-                b.iter(|| {
-                    processor.process(record, &mut buf, "", None, &mut RecordIgnorer {});
-                    buf.clear();
-                });
+        group.bench_function(format!("parse-only/{}/{}", name, "universal"), |b| {
+            let settings = Settings::default();
+            let parser = Parser::new(ParserSettings::new(&settings.fields.predefined, empty(), None));
+            let filter = Filter::default();
+            let mut processor =
+                SegmentProcessor::new(&parser, NoFormatter, &filter, SegmentProcessorOptions::default());
+            let mut buf = Vec::new();
+            b.iter(|| {
+                processor.process(&record, &mut buf, "", None, &mut RecordIgnorer {});
+                buf.clear();
             });
-        }
+        });
     }
 }
 
