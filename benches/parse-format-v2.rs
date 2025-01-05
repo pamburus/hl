@@ -26,7 +26,7 @@ fn benchmark(c: &mut Criterion) {
 
     for (name, record) in [
         ("kibana-record-01-json-x1024", KIBANA_RECORD_01_JSON.repeat(1024)),
-        // ("kibana-record-01-logfmt", KIBANA_RECORD_01_LOGFMT),
+        ("kibana-record-01-logfmt", KIBANA_RECORD_01_LOGFMT.repeat(1024)),
     ] {
         for theme in ["universal"] {
             group.bench_function(format!("parse-and-format/{}/{}", name, theme), |b| {
@@ -60,7 +60,7 @@ fn benchmark(c: &mut Criterion) {
 
     for (name, record) in [
         ("kibana-record-01-json-x1024", KIBANA_RECORD_01_JSON.repeat(1024)),
-        // ("kibana-record-01-logfmt", KIBANA_RECORD_01_LOGFMT),
+        ("kibana-record-01-logfmt", KIBANA_RECORD_01_LOGFMT.repeat(1024)),
     ] {
         group.bench_function(format!("parse-only/{}", name), |b| {
             let settings = Settings::default();

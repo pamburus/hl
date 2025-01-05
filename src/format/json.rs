@@ -17,7 +17,7 @@ pub enum Token<'s> {
     Number(&'s str),
 
     #[regex(r#""[^"\\\x00-\x1F]*""#, |lex| String::Plain(lex.slice()), priority = 5)]
-    #[regex(r#""([^"\\\x00-\x1F]|\\["\\bnfrt]|u[a-fA-F0-9]{4})*""#, |lex| String::Escaped(lex.slice()), priority = 4)]
+    #[regex(r#""([^"\\\x00-\x1F]|\\["\\bnfrt/]|u[a-fA-F0-9]{4})*""#, |lex| String::Escaped(lex.slice()), priority = 4)]
     String(String<'s>),
 
     #[token("{")]
@@ -89,7 +89,7 @@ mod parse {
     #[inline]
     pub fn parse_all<'s>(lexer: &mut Lexer<'s>) -> Result<Container<'s>> {
         let mut container = Container::new();
-        parse_value(lexer, container.metaroot())?;
+        parse_all_into(lexer, container.metaroot())?;
         Ok(container)
     }
 

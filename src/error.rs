@@ -110,6 +110,12 @@ pub enum Error {
         end: usize,
         message: &'static str,
     },
+    #[error("failed to parse logfmt input at {start}..{end}: {message}")]
+    FailedToParseLogfmtInput {
+        start: usize,
+        end: usize,
+        message: &'static str,
+    },
     #[error("failed to parse logfmt: {0}")]
     LogfmtParseError(#[from] logfmt::error::Error),
     #[error(transparent)]
