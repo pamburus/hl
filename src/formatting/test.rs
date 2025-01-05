@@ -42,7 +42,7 @@ fn test_parse_and_format() {
     let mut processor = SegmentProcessor::new(&parser, &formatter, &filter, SegmentProcessorOptions::default());
     let mut buf = Vec::new();
     processor.process(KIBANA_RECORD_01_JSON, &mut buf, "", None, &mut RecordIgnorer {});
-    buf.clear();
+    assert_ne!(buf.len(), 0);
 }
 
 // ---

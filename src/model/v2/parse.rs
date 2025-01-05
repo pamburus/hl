@@ -16,29 +16,46 @@ impl Parser {
         Self { settings }
     }
 
-    pub fn new_state(&self) -> ParserState {
-        ParserState::default()
+    pub fn new_unit<'p>(&'p self) -> Unit<'p, 'static> {
+        Unit::new(&self)
+    }
+}
+
+// ---
+
+pub struct Unit<'p, 's> {
+    parser: &'p Parser,
+    container: ast::Container<'s>,
+}
+
+impl<'p, 's> Unit<'p, 's> {
+    fn new(parser: &'p Parser) -> Self {
+        Self {
+            parser,
+            container: ast::Container::default(),
+        }
     }
 
-    pub fn parse<'s, F>(&self, state: &mut ParserState<'s>, format: F, input: &'s [u8]) -> Result<Option<Record<'s>>>
+    pub fn parse<F>(&mut self, format: F, input: &'s [u8]) -> Result<Option<Record<'s>>>
     where
         F: Format,
     {
-        state.container.clear();
-        state.container.reserve(128);
-        let mut record = Record::default();
+        self.container.clear();
+        self.container.reserve(128);
 
+        let mut record = Record::default();
         let mut pc = PriorityController::default();
-        let target = Builder::new(&self.settings, &mut pc, &mut record, state.container.metaroot());
+
+        let target = Builder::new(&self.parser.settings, &mut pc, &mut record, self.container.metaroot());
 
         let Some(output) = format.parse(input, target)? else {
             return Ok(None);
         };
 
-        if let Some(root) = state.container.roots().iter().next() {
+        if let Some(root) = self.container.roots().iter().next() {
             if let ast::Value::Composite(ast::Composite::Object) = root.value() {
                 record.span = output.span;
-                record.ast = std::mem::take(&mut state.container);
+                record.ast = std::mem::take(&mut self.container);
 
                 return Ok(Some(record));
             }
@@ -46,22 +63,10 @@ impl Parser {
 
         Ok(None)
     }
-}
 
-// ---
-
-#[derive(Default)]
-pub struct ParserState<'s> {
-    container: ast::Container<'s>,
-}
-
-impl<'s> ParserState<'s> {
     #[inline]
-    pub fn clear(&mut self) {
-        self.container.clear();
-    }
-
-    pub fn consume(&mut self, record: Record<'s>) {
+    pub fn recycle(&mut self, record: Record<'s>) {
         self.container = record.ast;
+        self.container.clear();
     }
 }

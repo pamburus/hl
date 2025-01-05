@@ -6,7 +6,7 @@ use crate::{
     formatting::v2::{RawRecordFormatter, RecordFormatter, RecordWithSourceFormatter},
     model::{
         v2::{
-            parse::{Parser, ParserState},
+            parse::{Parser, Unit as ParserUnit},
             record::{Filter as RecordFilter, Record, RecordWithSourceConstructor},
         },
         Filter,
@@ -15,10 +15,10 @@ use crate::{
     types::InputFormat,
 };
 
-pub trait SegmentProcess {
+pub trait SegmentProcess<'a> {
     fn process<O: RecordObserver>(
         &mut self,
-        data: &[u8],
+        data: &'a [u8],
         buf: &mut Vec<u8>,
         prefix: &str,
         limit: Option<usize>,
@@ -38,17 +38,17 @@ pub struct SegmentProcessorOptions {
 
 // ---
 
-pub struct SegmentProcessor<'a, Formatter, Filter> {
-    parser: &'a Parser,
+pub struct SegmentProcessor<'p, 'a, Formatter, Filter> {
+    parser: ParserUnit<'p, 'a>,
     formatter: Formatter,
     filter: Filter,
     options: SegmentProcessorOptions,
 }
 
-impl<'a, Formatter: RecordWithSourceFormatter, Filter: RecordFilter> SegmentProcessor<'a, Formatter, Filter> {
-    pub fn new(parser: &'a Parser, formatter: Formatter, filter: Filter, options: SegmentProcessorOptions) -> Self {
+impl<'p, Formatter: RecordWithSourceFormatter, Filter: RecordFilter> SegmentProcessor<'p, '_, Formatter, Filter> {
+    pub fn new(parser: &'p Parser, formatter: Formatter, filter: Filter, options: SegmentProcessorOptions) -> Self {
         Self {
-            parser,
+            parser: parser.new_unit(),
             formatter,
             filter,
             options,
@@ -61,17 +61,15 @@ impl<'a, Formatter: RecordWithSourceFormatter, Filter: RecordFilter> SegmentProc
     }
 }
 
-impl<'a, Formatter: RecordWithSourceFormatter, Filter: RecordFilter> SegmentProcess
-    for SegmentProcessor<'a, Formatter, Filter>
+impl<'p, 'a, Formatter: RecordWithSourceFormatter, Filter: RecordFilter> SegmentProcess<'a>
+    for SegmentProcessor<'p, 'a, Formatter, Filter>
 {
-    fn process<O>(&mut self, data: &[u8], buf: &mut Vec<u8>, prefix: &str, limit: Option<usize>, observer: &mut O)
+    fn process<O>(&mut self, data: &'a [u8], buf: &mut Vec<u8>, prefix: &str, limit: Option<usize>, observer: &mut O)
     where
         O: RecordObserver,
     {
         let mut i = 0;
         let limit = limit.unwrap_or(usize::MAX);
-
-        let mut state = self.parser.new_state();
 
         for line in self.options.delimiter.clone().into_searcher().split(data) {
             if line.len() == 0 {
@@ -88,13 +86,15 @@ impl<'a, Formatter: RecordWithSourceFormatter, Filter: RecordFilter> SegmentProc
             let mut last_offset = 0;
             let mut offset = 0;
 
-            while let Ok(Some(record)) = self.parser.parse(&mut state, crate::format::Auto, &line[offset..]) {
+            while let Ok(Some(record)) = self.parser.parse(crate::format::Auto, &line[offset..]) {
                 i += 1;
                 last_offset = record.span.end.clone();
+
                 if parsed_some {
                     buf.push(b'\n');
                 }
                 parsed_some = true;
+
                 if record.matches(&self.filter) {
                     let begin = buf.len();
                     buf.extend(prefix.as_bytes());
@@ -110,7 +110,8 @@ impl<'a, Formatter: RecordWithSourceFormatter, Filter: RecordFilter> SegmentProc
                 }
 
                 offset = record.span.end;
-                state.consume(record);
+
+                self.parser.recycle(record);
             }
 
             let remainder = if parsed_some { &line[last_offset..] } else { line };
