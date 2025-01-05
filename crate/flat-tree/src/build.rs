@@ -1,6 +1,9 @@
 // std imports
 use std::{convert::Infallible, result::Result};
 
+// local imports
+use super::OptIndex;
+
 // ---
 
 pub trait Reserve {
@@ -9,8 +12,12 @@ pub trait Reserve {
 
 pub trait Push: Reserve {
     type Value;
+    type Checkpoint;
 
     fn push(self, value: Self::Value) -> Self;
+
+    fn checkpoint(&self) -> Self::Checkpoint;
+    fn first_node_index(&self, checkpoint: &Self::Checkpoint) -> OptIndex;
 }
 
 // ---
