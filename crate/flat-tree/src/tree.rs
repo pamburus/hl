@@ -86,7 +86,6 @@ where
             tree: self,
             attachment: NoAttachment,
             index: None,
-            children: 0,
         }
     }
 
@@ -128,9 +127,8 @@ where
     }
 
     #[inline]
-    fn update(&mut self, index: usize, f: impl FnOnce(&mut Item<S::Value>)) -> &mut Self {
+    fn update(&mut self, index: usize, f: impl FnOnce(&mut Item<S::Value>)) {
         f(self.storage.get_mut(index).unwrap());
-        self
     }
 }
 
@@ -495,7 +493,6 @@ where
     tree: &'t mut FlatTree<V, S>,
     attachment: A,
     index: Option<usize>,
-    children: usize,
 }
 
 impl<'t, V, S, A> NodeBuilder<'t, V, S, A>
@@ -504,14 +501,14 @@ where
     A: BuildAttachment,
 {
     #[inline]
-    pub fn push(mut self, value: S::Value) -> Self {
+    pub fn push(self, value: S::Value) -> Self {
         self.tree.storage.push(Item {
             parent: self.index,
             ..Item::new(value)
         });
-        self.children += 1;
-        if self.index.is_none() {
-            self.tree.roots += 1;
+        match self.index {
+            Some(index) => self.tree.update(index, |item| item.children += 1),
+            None => self.tree.roots += 1,
         }
         self
     }
@@ -535,26 +532,15 @@ where
     fn close(&mut self) {
         if let Some(index) = self.index {
             let len = self.tree.storage.len() - index;
-            let children = self.children;
             self.tree.update(index, |item| {
                 item.len = len;
-                item.children = children;
             });
-        } else {
-            self.tree.roots = self.children;
         }
     }
 
     #[inline]
     fn snapshot(self) -> (NodeBuilderSnapshot, A, &'t mut FlatTree<S::Value, S>) {
-        (
-            NodeBuilderSnapshot {
-                parent: self.index,
-                children: self.children,
-            },
-            self.attachment,
-            self.tree,
-        )
+        (NodeBuilderSnapshot { parent: self.index }, self.attachment, self.tree)
     }
 }
 
@@ -606,7 +592,6 @@ where
             tree,
             attachment,
             index: Some(index),
-            children: 0,
         };
 
         let result = f(child).into_result().map(|child| {
@@ -623,7 +608,6 @@ where
             tree: self.tree,
             attachment: self.attachment.join(attachment),
             index: self.index,
-            children: self.children,
         }
     }
 
@@ -634,7 +618,6 @@ where
             tree: self.tree,
             attachment,
             index: self.index,
-            children: self.children,
         };
         (builder, value)
     }
@@ -651,7 +634,6 @@ where
             tree,
             attachment,
             index: state.parent,
-            children: state.children,
         }
     }
 }
@@ -660,7 +642,6 @@ where
 
 struct NodeBuilderSnapshot {
     parent: Option<usize>,
-    children: usize,
 }
 
 // ---
