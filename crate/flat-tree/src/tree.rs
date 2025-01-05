@@ -1,12 +1,12 @@
 // std imports
-use std::marker::PhantomData;
+use std::{fmt::Debug, marker::PhantomData};
 
 // third-party imports
 use derive_where::derive_where;
 
 // local imports
 pub use super::build::*;
-use super::storage::{DefaultStorage, Storage};
+use super::{DefaultStorage, Index, OptIndex, Storage};
 
 // ---
 
@@ -137,12 +137,26 @@ where
     S: Storage<Value = V>,
 {
     type Value = V;
+    type Checkpoint = Checkpoint;
 
     #[inline]
     fn push(self, value: V) -> Self {
+        if self.len() == usize::MAX - 1 {
+            panic!("tree is full");
+        }
         self.storage.push(Item::new(value));
         self.roots += 1;
         self
+    }
+
+    #[inline]
+    fn checkpoint(&self) -> Self::Checkpoint {
+        Checkpoint::new(self.len())
+    }
+
+    #[inline]
+    fn first_node_index(&self, checkpoint: &Self::Checkpoint) -> OptIndex {
+        checkpoint.first_node_index(self)
     }
 }
 
@@ -154,13 +168,6 @@ where
     fn reserve(&mut self, additional: usize) {
         self.storage.reserve(additional);
     }
-}
-
-// ---
-
-#[derive(Debug, Clone, Copy)]
-pub struct Index {
-    absolute: usize,
 }
 
 // ---
@@ -233,9 +240,8 @@ where
 
     #[inline]
     pub fn get(&self, index: Index) -> Option<Node<'t, V, S>> {
-        let index = index.absolute;
-        if (self.start..self.end).contains(&index) {
-            Some(self.tree.node(index))
+        if (self.start..self.end).contains(&index.0) {
+            Some(self.tree.node(index.0))
         } else {
             None
         }
@@ -372,12 +378,12 @@ where
 
     #[inline]
     pub fn index(&self) -> Index {
-        Index { absolute: self.index }
+        Index(self.index)
     }
 
     #[inline]
     pub fn parent(&self) -> Option<Self> {
-        self.item.parent.get().map(|index| self.tree.node(index))
+        self.item.parent.unfold().map(|index| self.tree.node(index.0))
     }
 
     #[inline]
@@ -385,7 +391,7 @@ where
         let tree = self.tree;
         let mut item = self.item;
         std::iter::from_fn(move || {
-            let node = tree.node(item.parent.get()?);
+            let node = tree.node(item.parent.unfold()?.0);
             item = node.item;
             Some(node)
         })
@@ -491,8 +497,8 @@ where
     S: Storage<Value = V>,
 {
     tree: &'t mut FlatTree<V, S>,
-    attachment: A,
     index: OptIndex,
+    attachment: A,
 }
 
 impl<'t, V, S, A> NodeBuilder<'t, V, S, A>
@@ -506,8 +512,8 @@ where
             parent: self.index,
             ..Item::new(value)
         });
-        match self.index.get() {
-            Some(index) => self.tree.update(index, |item| item.children += 1),
+        match self.index.unfold() {
+            Some(index) => self.tree.update(index.0, |item| item.children += 1),
             None => self.tree.roots += 1,
         }
         self
@@ -530,9 +536,9 @@ where
 
     #[inline]
     fn close(&mut self) {
-        if let Some(index) = self.index.get() {
-            let len = self.tree.storage.len() - index;
-            self.tree.update(index, |item| {
+        if let Some(index) = self.index.unfold() {
+            let len = self.tree.storage.len() - index.0;
+            self.tree.update(index.0, |item| {
                 item.len = len;
             });
         }
@@ -550,10 +556,21 @@ where
     A: BuildAttachment,
 {
     type Value = V;
+    type Checkpoint = Checkpoint;
 
     #[inline]
     fn push(self, value: S::Value) -> Self {
         self.push(value)
+    }
+
+    #[inline]
+    fn checkpoint(&self) -> Self::Checkpoint {
+        Checkpoint::new(self.tree.len())
+    }
+
+    #[inline]
+    fn first_node_index(&self, checkpoint: &Self::Checkpoint) -> OptIndex {
+        checkpoint.first_node_index(self.tree)
     }
 }
 
@@ -583,7 +600,7 @@ where
         F: FnOnce(Self::Child) -> R,
         R: BuildFnResult<F, R, Self, Self>,
     {
-        let index = self.tree.storage.len();
+        let index = Index(self.tree.storage.len());
         self = self.push(value);
 
         let (snapshot, attachment, tree) = self.snapshot();
@@ -606,8 +623,8 @@ where
     fn attach<AV>(self, attachment: AV) -> Self::WithAttachment<AV> {
         NodeBuilder {
             tree: self.tree,
-            attachment: self.attachment.join(attachment),
             index: self.index,
+            attachment: self.attachment.join(attachment),
         }
     }
 
@@ -616,8 +633,8 @@ where
         let (attachment, value) = self.attachment.split();
         let builder = NodeBuilder {
             tree: self.tree,
-            attachment,
             index: self.index,
+            attachment,
         };
         (builder, value)
     }
@@ -632,8 +649,30 @@ where
     fn from((state, attachment, tree): (NodeBuilderSnapshot, A, &'t mut FlatTree<S::Value, S>)) -> Self {
         Self {
             tree,
-            attachment,
             index: state.parent,
+            attachment,
+        }
+    }
+}
+
+// ---
+
+pub struct Checkpoint {
+    len: usize,
+}
+
+impl Checkpoint {
+    #[inline]
+    fn new(len: usize) -> Self {
+        Self { len }
+    }
+
+    #[inline]
+    fn first_node_index<V, S: Storage<Value = V>>(&self, tree: &FlatTree<V, S>) -> OptIndex {
+        if self.len < tree.storage.len() {
+            OptIndex::new(Some(Index(self.len)))
+        } else {
+            None.into()
         }
     }
 }
@@ -666,55 +705,13 @@ impl<V> Item<V> {
     }
 
     #[inline]
-    pub fn parent(&self) -> Option<usize> {
-        self.parent.get()
+    pub fn parent(&self) -> OptIndex {
+        self.parent
     }
 
     #[inline]
     pub fn value(&self) -> &V {
         &self.value
-    }
-}
-
-// ---
-
-#[derive(Debug, Clone, Copy)]
-struct OptIndex(usize);
-
-impl OptIndex {
-    #[inline]
-    fn new(index: Option<usize>) -> Self {
-        if let Some(index) = index {
-            if index == usize::MAX {
-                panic!("index overflow");
-            }
-            Self(index)
-        } else {
-            Self(usize::MAX)
-        }
-    }
-
-    #[inline]
-    fn get(self) -> Option<usize> {
-        if self.0 == usize::MAX {
-            None
-        } else {
-            Some(self.0)
-        }
-    }
-}
-
-impl Into<Option<usize>> for OptIndex {
-    #[inline]
-    fn into(self) -> Option<usize> {
-        self.get()
-    }
-}
-
-impl From<Option<usize>> for OptIndex {
-    #[inline]
-    fn from(index: Option<usize>) -> Self {
-        Self::new(index)
     }
 }
 
