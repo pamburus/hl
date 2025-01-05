@@ -36,7 +36,7 @@ pub struct Builder<'s, 'c, 't, T> {
 #[derive(Clone)]
 struct Core<'s, 't> {
     settings: &'s Settings,
-    block: &'s SettingsBlock,
+    block: Option<&'s SettingsBlock>,
     field: Option<(EncodedString<'t>, FieldSettings)>,
     depth: usize,
 }
@@ -54,7 +54,7 @@ where
         Self {
             core: Core {
                 settings,
-                block: &settings.blocks[0],
+                block: Some(&settings.blocks[0]),
                 field: None,
                 depth: 0,
             },
@@ -106,17 +106,21 @@ where
 
         match composite {
             Composite::Field(key) => {
-                if let Some((field, priority)) = core.block.fields.get(key.source()) {
-                    match field.kind() {
-                        FieldSettingsKind::Final(kind) => {
-                            if !self.ctx.pc.prioritize(kind, *priority, || true) {
-                                return Ok(self);
+                if let Some(block) = core.block {
+                    if let Some((field, priority)) = block.fields.get(key.source()) {
+                        match field.kind() {
+                            FieldSettingsKind::Final(kind) => {
+                                if !self.ctx.pc.prioritize(kind, *priority, || true) {
+                                    return Ok(self);
+                                }
+                                core.field = Some((key, *field));
                             }
-                            core.field = Some((key, *field));
+                            FieldSettingsKind::Nested(nested) => {
+                                core.block = Some(&core.settings.blocks[nested]);
+                            }
                         }
-                        FieldSettingsKind::Nested(nested) => {
-                            core.block = &core.settings.blocks[nested];
-                        }
+                    } else {
+                        core.block = None;
                     }
                 }
                 if core.depth == 1 {
