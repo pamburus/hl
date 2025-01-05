@@ -160,6 +160,13 @@ where
 
 // ---
 
+#[derive(Debug, Clone, Copy)]
+pub struct Index {
+    absolute: usize,
+}
+
+// ---
+
 #[derive_where(Clone, Copy)]
 pub struct Roots<'t, V, S = DefaultStorage<V>>
 where
@@ -224,6 +231,16 @@ where
     #[inline]
     pub fn len(&self) -> usize {
         self.end - self.start
+    }
+
+    #[inline]
+    pub fn get(&self, index: Index) -> Option<Node<'t, V, S>> {
+        let index = index.absolute;
+        if (self.start..self.end).contains(&index) {
+            Some(self.tree.node(index))
+        } else {
+            None
+        }
     }
 
     #[inline]
@@ -353,6 +370,11 @@ where
     #[inline]
     pub fn value(&self) -> &'t V {
         &self.item.value
+    }
+
+    #[inline]
+    pub fn index(&self) -> Index {
+        Index { absolute: self.index }
     }
 
     #[inline]
