@@ -92,7 +92,7 @@ impl<'a, Formatter: RecordWithSourceFormatter, Filter: RecordFilter> SegmentProc
                 let mut result = None;
                 result = self
                     .parser
-                    .parse(&mut state, crate::format::Json, &line[offset..])
+                    .parse(&mut state, crate::format::Auto, &line[offset..])
                     .unwrap();
                 let Some(span) = result else {
                     break;
