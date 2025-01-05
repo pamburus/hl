@@ -7,6 +7,7 @@ use derive_where::derive_where;
 // workspace imports
 use encstr::EncodedString;
 use flat_tree::{
+    storage::DefaultStorage,
     tree::{self, NoAttachment},
     FlatTree,
 };
@@ -198,15 +199,15 @@ pub type ContainerInner<'s> = FlatTree<Value<'s>, Storage<'s>>;
 pub type SiblingsIter<'s> = tree::SiblingsIter<'s, Value<'s>, Storage<'s>>;
 pub type Node<'s> = tree::Node<'s, Value<'s>, Storage<'s>>;
 pub type String<'s> = EncodedString<'s>;
-pub type Storage<'s> = InnerStorage<Value<'s>>;
+pub type Storage<'s> = DefaultStorage<Value<'s>>;
 
 #[derive(Debug)]
 #[derive_where(Default)]
-pub struct InnerStorage<V> {
+pub struct HeapOptStorage<V> {
     buf: heapopt::Vec<tree::Item<V>, PREALLOCATED_CAPACITY>,
 }
 
-impl<V: Debug> flat_tree::Storage for InnerStorage<V> {
+impl<V: Debug> flat_tree::Storage for HeapOptStorage<V> {
     type Value = V;
 
     #[inline]
