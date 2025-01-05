@@ -7,16 +7,16 @@ use super::ast::{self, Composite};
 // ---
 
 #[derive(Debug, Clone, Copy)]
-pub enum Value<'s> {
+pub enum Value<'r, 's> {
     Null,
     Boolean(bool),
     Number(&'s str),
     String(EncodedString<'s>),
-    Array(Array<'s>),
-    Object(Object<'s>),
+    Array(Array<'r, 's>),
+    Object(Object<'r, 's>),
 }
 
-impl<'s> Value<'s> {
+impl<'r, 's> Value<'r, 's> {
     #[inline]
     pub fn is_empty(&self) -> bool {
         match self {
@@ -43,9 +43,9 @@ impl<'s> Value<'s> {
     }
 }
 
-impl<'s> From<ast::Node<'s>> for Value<'s> {
+impl<'r, 's> From<ast::Node<'r, 's>> for Value<'r, 's> {
     #[inline]
-    fn from(node: ast::Node<'s>) -> Self {
+    fn from(node: ast::Node<'r, 's>) -> Self {
         match *node.value() {
             ast::Value::Scalar(scalar) => scalar.into(),
             ast::Value::Composite(composite) => match composite {
@@ -57,7 +57,7 @@ impl<'s> From<ast::Node<'s>> for Value<'s> {
     }
 }
 
-impl<'s> From<ast::Scalar<'s>> for Value<'s> {
+impl<'s> From<ast::Scalar<'s>> for Value<'_, 's> {
     #[inline]
     fn from(value: ast::Scalar<'s>) -> Self {
         match value {
@@ -69,21 +69,36 @@ impl<'s> From<ast::Scalar<'s>> for Value<'s> {
     }
 }
 
+impl<'r, 's> TryInto<ast::Scalar<'s>> for Value<'r, 's> {
+    type Error = Self;
+
+    #[inline]
+    fn try_into(self: Self) -> Result<ast::Scalar<'s>, Self> {
+        match self {
+            Self::Null => Ok(ast::Scalar::Null),
+            Self::Boolean(b) => Ok(ast::Scalar::Bool(b)),
+            Self::Number(s) => Ok(ast::Scalar::Number(s)),
+            Self::String(s) => Ok(ast::Scalar::String(s.into())),
+            _ => Err(self),
+        }
+    }
+}
+
 // ---
 
 #[derive(Debug, Clone, Copy)]
-pub struct Array<'s> {
-    inner: ast::Node<'s>,
+pub struct Array<'r, 's> {
+    inner: ast::Node<'r, 's>,
 }
 
-impl<'s> Array<'s> {
+impl<'r, 's> Array<'r, 's> {
     #[inline]
-    fn new(inner: ast::Node<'s>) -> Self {
+    fn new(inner: ast::Node<'r, 's>) -> Self {
         Self { inner }
     }
 
     #[inline]
-    pub fn iter(&self) -> ArrayIter<'s> {
+    pub fn iter(&self) -> ArrayIter<'r, 's> {
         ArrayIter::new(self.inner.children().iter())
     }
 
@@ -93,16 +108,16 @@ impl<'s> Array<'s> {
     }
 }
 
-impl<'s> From<Array<'s>> for Value<'s> {
+impl<'r, 's> From<Array<'r, 's>> for Value<'r, 's> {
     #[inline]
-    fn from(a: Array<'s>) -> Self {
+    fn from(a: Array<'r, 's>) -> Self {
         Value::Array(a)
     }
 }
 
-impl<'s> IntoIterator for Array<'s> {
-    type Item = Value<'s>;
-    type IntoIter = ArrayIter<'s>;
+impl<'r, 's> IntoIterator for Array<'r, 's> {
+    type Item = Value<'r, 's>;
+    type IntoIter = ArrayIter<'r, 's>;
 
     #[inline]
     fn into_iter(self) -> Self::IntoIter {
@@ -112,19 +127,19 @@ impl<'s> IntoIterator for Array<'s> {
 
 // ---
 
-pub struct ArrayIter<'s> {
-    inner: ast::SiblingsIter<'s>,
+pub struct ArrayIter<'r, 's> {
+    inner: ast::SiblingsIter<'r, 's>,
 }
 
-impl<'s> ArrayIter<'s> {
+impl<'r, 's> ArrayIter<'r, 's> {
     #[inline]
-    fn new(inner: ast::SiblingsIter<'s>) -> Self {
+    fn new(inner: ast::SiblingsIter<'r, 's>) -> Self {
         Self { inner }
     }
 }
 
-impl<'s> Iterator for ArrayIter<'s> {
-    type Item = Value<'s>;
+impl<'r, 's> Iterator for ArrayIter<'r, 's> {
+    type Item = Value<'r, 's>;
 
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
@@ -135,18 +150,18 @@ impl<'s> Iterator for ArrayIter<'s> {
 // ---
 
 #[derive(Debug, Clone, Copy)]
-pub struct Object<'s> {
-    inner: ast::Node<'s>,
+pub struct Object<'r, 's> {
+    inner: ast::Node<'r, 's>,
 }
 
-impl<'s> Object<'s> {
+impl<'r, 's> Object<'r, 's> {
     #[inline]
-    fn new(inner: ast::Node<'s>) -> Self {
+    fn new(inner: ast::Node<'r, 's>) -> Self {
         Self { inner }
     }
 
     #[inline]
-    pub fn iter(&self) -> ObjectIter<'s> {
+    pub fn iter(&self) -> ObjectIter<'r, 's> {
         ObjectIter::new(self.inner.children().iter())
     }
 
@@ -156,16 +171,16 @@ impl<'s> Object<'s> {
     }
 }
 
-impl<'s> From<Object<'s>> for Value<'s> {
+impl<'r, 's> From<Object<'r, 's>> for Value<'r, 's> {
     #[inline]
-    fn from(o: Object<'s>) -> Self {
+    fn from(o: Object<'r, 's>) -> Self {
         Value::Object(o)
     }
 }
 
-impl<'s> IntoIterator for Object<'s> {
-    type Item = Field<'s>;
-    type IntoIter = ObjectIter<'s>;
+impl<'r, 's> IntoIterator for Object<'r, 's> {
+    type Item = Field<'r, 's>;
+    type IntoIter = ObjectIter<'r, 's>;
 
     #[inline]
     fn into_iter(self) -> Self::IntoIter {
@@ -175,19 +190,19 @@ impl<'s> IntoIterator for Object<'s> {
 
 // ---
 
-pub struct ObjectIter<'s> {
-    inner: ast::SiblingsIter<'s>,
+pub struct ObjectIter<'r, 's> {
+    inner: ast::SiblingsIter<'r, 's>,
 }
 
-impl<'s> ObjectIter<'s> {
+impl<'r, 's> ObjectIter<'r, 's> {
     #[inline]
-    fn new(inner: ast::SiblingsIter<'s>) -> Self {
+    fn new(inner: ast::SiblingsIter<'r, 's>) -> Self {
         Self { inner }
     }
 }
 
-impl<'s> Iterator for ObjectIter<'s> {
-    type Item = Field<'s>;
+impl<'r, 's> Iterator for ObjectIter<'r, 's> {
+    type Item = Field<'r, 's>;
 
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
@@ -198,19 +213,19 @@ impl<'s> Iterator for ObjectIter<'s> {
 // ---
 
 #[derive(Debug, Clone, Copy)]
-pub struct Field<'s> {
+pub struct Field<'r, 's> {
     pub key: &'s str,
-    pub value: Value<'s>,
+    pub value: Value<'r, 's>,
 }
 
-impl<'s> Field<'s> {
+impl<'r, 's> Field<'r, 's> {
     #[inline]
-    pub fn new(key: &'s str, value: Value<'s>) -> Self {
+    pub fn new(key: &'s str, value: Value<'r, 's>) -> Self {
         Self { key, value }
     }
 
     #[inline]
-    pub(super) fn from_node(node: ast::Node<'s>) -> Self {
+    pub(super) fn from_node(node: ast::Node<'r, 's>) -> Self {
         let ast::Value::Composite(Composite::Field(key)) = node.value() else {
             panic!("expected field node, got {:?}", node.value());
         };

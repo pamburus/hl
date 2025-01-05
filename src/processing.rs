@@ -88,29 +88,19 @@ impl<'a, Formatter: RecordWithSourceFormatter, Filter: RecordFilter> SegmentProc
             let mut last_offset = 0;
             let mut offset = 0;
 
-            loop {
-                let mut result = None;
-                result = self
-                    .parser
-                    .parse(&mut state, crate::format::Auto, &line[offset..])
-                    .unwrap();
-                let Some(span) = result else {
-                    break;
-                };
-                // while let Ok((state, Some(span))) = self.parser.parse(state, crate::format::Json, &line[offset..]) {
+            while let Ok(Some(record)) = self.parser.parse(&mut state, crate::format::Auto, &line[offset..]) {
                 i += 1;
-                last_offset = span.end.clone();
+                last_offset = record.span.end.clone();
                 if parsed_some {
                     buf.push(b'\n');
                 }
                 parsed_some = true;
-                let record = self.parser.make_record(&state);
                 if record.matches(&self.filter) {
                     let begin = buf.len();
                     buf.extend(prefix.as_bytes());
-                    buf.extend(&line[offset..span.start]);
+                    buf.extend(&line[offset..record.span.start]);
                     self.formatter
-                        .format_record(buf, record.with_source(&line[span.clone()]));
+                        .format_record(buf, record.with_source(&line[record.span.clone()]));
                     let end = buf.len();
                     observer.observe_record(&record, begin..end);
                     produced_some = true;
@@ -119,7 +109,8 @@ impl<'a, Formatter: RecordWithSourceFormatter, Filter: RecordFilter> SegmentProc
                     break;
                 }
 
-                offset = span.end;
+                offset = record.span.end;
+                state.consume(record);
             }
 
             let remainder = if parsed_some { &line[last_offset..] } else { line };

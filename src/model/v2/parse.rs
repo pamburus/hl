@@ -20,7 +20,7 @@ impl Parser {
         ParserState::default()
     }
 
-    pub fn parse<'s, F>(&self, state: &mut ParserState<'s>, format: F, input: &'s [u8]) -> Result<Option<Span>>
+    pub fn parse<'s, F>(&self, state: &mut ParserState<'s>, format: F, input: &'s [u8]) -> Result<Option<Record<'s>>>
     where
         F: Format,
     {
@@ -35,23 +35,18 @@ impl Parser {
             return Ok(None);
         };
 
-        Ok(Some(output.span))
-    }
-
-    pub fn make_record<'s>(&self, state: &'s ParserState<'s>) -> Record<'s> {
-        let mut record = Record::default();
-
         if let Some(root) = state.container.roots().iter().next() {
             if let ast::Value::Composite(ast::Composite::Object) = root.value() {
-                record.fields = Fields::new(root.children());
+                record.span = output.span;
+                record.ast = std::mem::take(&mut state.container);
+
+                return Ok(Some(record));
             }
         }
 
-        record
+        Ok(None)
     }
 }
-
-type Span = std::ops::Range<usize>;
 
 // ---
 
@@ -60,9 +55,13 @@ pub struct ParserState<'s> {
     container: ast::Container<'s>,
 }
 
-impl ParserState<'_> {
+impl<'s> ParserState<'s> {
     #[inline]
     pub fn clear(&mut self) {
         self.container.clear();
+    }
+
+    pub fn consume(&mut self, record: Record<'s>) {
+        self.container = record.ast;
     }
 }
