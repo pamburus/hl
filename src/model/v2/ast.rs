@@ -13,7 +13,7 @@ use flat_tree::{
 
 // ---
 
-const DEFAULT_STORAGE_CAPACITY: usize = 128;
+const PREALLOCATED_CAPACITY: usize = 128;
 
 pub type Span = Range<usize>;
 
@@ -26,8 +26,8 @@ pub mod error {
 pub use error::Result;
 
 #[derive(Default, Debug)]
-pub struct Container<'s, const N: usize = DEFAULT_STORAGE_CAPACITY> {
-    pub inner: ContainerInner<'s, N>,
+pub struct Container<'s> {
+    pub inner: ContainerInner<'s>,
 }
 
 impl<'s> Container<'s> {
@@ -37,14 +37,14 @@ impl<'s> Container<'s> {
     }
 }
 
-impl<'s, const N: usize> Container<'s, N> {
+impl<'s> Container<'s> {
     #[inline]
-    pub fn roots(&self) -> tree::Roots<Value<'s>, Storage<'s, N>> {
+    pub fn roots(&self) -> tree::Roots<Value<'s>, Storage<'s>> {
         self.inner.roots()
     }
 
     #[inline]
-    pub fn nodes(&self) -> tree::Nodes<Value<'s>, Storage<'s, N>> {
+    pub fn nodes(&self) -> tree::Nodes<Value<'s>, Storage<'s>> {
         self.inner.nodes()
     }
 
@@ -59,7 +59,7 @@ impl<'s, const N: usize> Container<'s, N> {
     }
 
     #[inline]
-    pub fn metaroot(&mut self) -> Builder<tree::NodeBuilder<Value<'s>, Storage<'s, N>>> {
+    pub fn metaroot(&mut self) -> Builder<tree::NodeBuilder<Value<'s>, Storage<'s>>> {
         Builder::new(self.inner.metaroot())
     }
 }
@@ -72,7 +72,7 @@ impl<'s, T: tree::Build<Value = Value<'s>>> InnerBuild<'s> for T {}
 pub trait BuildAttachment: tree::BuildAttachment {}
 impl<A: tree::BuildAttachment> BuildAttachment for A {}
 
-pub type Children<'s, const N: usize = DEFAULT_STORAGE_CAPACITY> = tree::Children<'s, Value<'s>, Storage<'s, N>>;
+pub type Children<'s> = tree::Children<'s, Value<'s>, Storage<'s>>;
 pub use tree::{AttachmentChild, AttachmentParent, AttachmentValue};
 
 pub trait Build<'s>
@@ -194,20 +194,19 @@ where
 
 // ---
 
-pub type ContainerInner<'s, const N: usize = DEFAULT_STORAGE_CAPACITY> = FlatTree<Value<'s>, Storage<'s, N>>;
-pub type SiblingsIter<'s, const N: usize = DEFAULT_STORAGE_CAPACITY> =
-    tree::SiblingsIter<'s, Value<'s>, Storage<'s, N>>;
-pub type Node<'s, const N: usize = DEFAULT_STORAGE_CAPACITY> = tree::Node<'s, Value<'s>, Storage<'s, N>>;
+pub type ContainerInner<'s> = FlatTree<Value<'s>, Storage<'s>>;
+pub type SiblingsIter<'s> = tree::SiblingsIter<'s, Value<'s>, Storage<'s>>;
+pub type Node<'s> = tree::Node<'s, Value<'s>, Storage<'s>>;
 pub type String<'s> = EncodedString<'s>;
-pub type Storage<'s, const N: usize = DEFAULT_STORAGE_CAPACITY> = InnerStorage<Value<'s>, N>;
+pub type Storage<'s> = InnerStorage<Value<'s>>;
 
 #[derive(Debug)]
 #[derive_where(Default)]
-pub struct InnerStorage<V, const N: usize = DEFAULT_STORAGE_CAPACITY> {
-    buf: heapopt::Vec<tree::Item<V>, N>,
+pub struct InnerStorage<V> {
+    buf: heapopt::Vec<tree::Item<V>, PREALLOCATED_CAPACITY>,
 }
 
-impl<V: Debug, const N: usize> flat_tree::Storage for InnerStorage<V, N> {
+impl<V: Debug> flat_tree::Storage for InnerStorage<V> {
     type Value = V;
 
     #[inline]
