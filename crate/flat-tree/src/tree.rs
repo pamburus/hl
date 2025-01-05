@@ -85,7 +85,7 @@ where
         NodeBuilder {
             tree: self,
             attachment: NoAttachment,
-            index: None,
+            index: None.into(),
         }
     }
 
@@ -377,7 +377,7 @@ where
 
     #[inline]
     pub fn parent(&self) -> Option<Self> {
-        self.item.parent.map(|index| self.tree.node(index))
+        self.item.parent.get().map(|index| self.tree.node(index))
     }
 
     #[inline]
@@ -385,7 +385,7 @@ where
         let tree = self.tree;
         let mut item = self.item;
         std::iter::from_fn(move || {
-            let node = tree.node(item.parent?);
+            let node = tree.node(item.parent.get()?);
             item = node.item;
             Some(node)
         })
@@ -492,7 +492,7 @@ where
 {
     tree: &'t mut FlatTree<V, S>,
     attachment: A,
-    index: Option<usize>,
+    index: OptIndex,
 }
 
 impl<'t, V, S, A> NodeBuilder<'t, V, S, A>
@@ -506,7 +506,7 @@ where
             parent: self.index,
             ..Item::new(value)
         });
-        match self.index {
+        match self.index.get() {
             Some(index) => self.tree.update(index, |item| item.children += 1),
             None => self.tree.roots += 1,
         }
@@ -530,7 +530,7 @@ where
 
     #[inline]
     fn close(&mut self) {
-        if let Some(index) = self.index {
+        if let Some(index) = self.index.get() {
             let len = self.tree.storage.len() - index;
             self.tree.update(index, |item| {
                 item.len = len;
@@ -591,7 +591,7 @@ where
         let child = NodeBuilder {
             tree,
             attachment,
-            index: Some(index),
+            index: Some(index).into(),
         };
 
         let result = f(child).into_result().map(|child| {
@@ -641,7 +641,7 @@ where
 // ---
 
 struct NodeBuilderSnapshot {
-    parent: Option<usize>,
+    parent: OptIndex,
 }
 
 // ---
@@ -649,9 +649,9 @@ struct NodeBuilderSnapshot {
 #[derive(Debug, Clone)]
 pub struct Item<V> {
     value: V,
-    parent: Option<usize>, // index of parent
-    len: usize,            // length (flat) - number of items including this item, its direct and indirect children
-    children: usize,       // number of direct children
+    parent: OptIndex, // index of parent
+    len: usize,       // length (flat) - number of items including this item, its direct and indirect children
+    children: usize,  // number of direct children
 }
 
 impl<V> Item<V> {
@@ -659,7 +659,7 @@ impl<V> Item<V> {
     fn new(value: V) -> Self {
         Self {
             value,
-            parent: None,
+            parent: None.into(),
             len: 1,
             children: 0,
         }
@@ -667,12 +667,54 @@ impl<V> Item<V> {
 
     #[inline]
     pub fn parent(&self) -> Option<usize> {
-        self.parent
+        self.parent.get()
     }
 
     #[inline]
     pub fn value(&self) -> &V {
         &self.value
+    }
+}
+
+// ---
+
+#[derive(Debug, Clone, Copy)]
+struct OptIndex(usize);
+
+impl OptIndex {
+    #[inline]
+    fn new(index: Option<usize>) -> Self {
+        if let Some(index) = index {
+            if index == usize::MAX {
+                panic!("index overflow");
+            }
+            Self(index)
+        } else {
+            Self(usize::MAX)
+        }
+    }
+
+    #[inline]
+    fn get(self) -> Option<usize> {
+        if self.0 == usize::MAX {
+            None
+        } else {
+            Some(self.0)
+        }
+    }
+}
+
+impl Into<Option<usize>> for OptIndex {
+    #[inline]
+    fn into(self) -> Option<usize> {
+        self.get()
+    }
+}
+
+impl From<Option<usize>> for OptIndex {
+    #[inline]
+    fn from(index: Option<usize>) -> Self {
+        Self::new(index)
     }
 }
 
