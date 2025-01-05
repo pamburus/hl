@@ -1,9 +1,6 @@
 // std imports
 use std::sync::Arc;
 
-// workspace imports
-use encstr::EncodedString;
-
 // local imports
 use crate::{
     datefmt::DateTimeFormatter,
@@ -11,6 +8,7 @@ use crate::{
     fmtx::{aligned_left, centered, OptimizedBuf, Push},
     model::{
         v2::{
+            ast,
             record::{Record, RecordWithSource},
             value::Value,
         },
@@ -203,7 +201,7 @@ impl RecordFormatter {
             // fields
             //
             let mut some_fields_hidden = false;
-            for field in rec.fields.iter() {
+            for field in rec.fields() {
                 if !self.hide_empty_fields || !field.value.is_empty() {
                     some_fields_hidden |= !self.format_field(s, field.key, field.value, &mut fs, Some(&self.fields));
                 }
@@ -244,11 +242,11 @@ impl RecordFormatter {
     }
 
     #[inline]
-    fn format_field<'a, S: StylingPush<Buf>>(
+    fn format_field<S: StylingPush<Buf>>(
         &self,
         s: &mut S,
         key: &str,
-        value: Value<'a>,
+        value: Value,
         fs: &mut FormattingState,
         filter: Option<&IncludeExcludeKeyFilter>,
     ) -> bool {
@@ -257,7 +255,8 @@ impl RecordFormatter {
     }
 
     #[inline]
-    fn format_message<'a, S: StylingPush<Buf>>(&self, s: &mut S, fs: &mut FormattingState, value: Value<'a>) {
+    fn format_message<S: StylingPush<Buf>>(&self, s: &mut S, fs: &mut FormattingState, value: ast::Scalar) {
+        let value = value.into();
         match value {
             Value::String(value) => {
                 if !value.is_empty() {
@@ -374,7 +373,7 @@ impl<'a> FieldFormatter<'a> {
         &mut self,
         s: &mut S,
         key: &str,
-        value: Value<'a>,
+        value: Value,
         fs: &mut FormattingState,
         filter: Option<&IncludeExcludeKeyFilter>,
         setting: IncludeExcludeSetting,
@@ -401,7 +400,7 @@ impl<'a> FieldFormatter<'a> {
     fn format_value<S: StylingPush<Buf>>(
         &mut self,
         s: &mut S,
-        value: Value<'a>,
+        value: Value,
         fs: &mut FormattingState,
         filter: Option<&IncludeExcludeKeyFilter>,
         setting: IncludeExcludeSetting,
@@ -472,7 +471,7 @@ impl<'a> FieldFormatter<'a> {
         &mut self,
         s: &mut S,
         key: &str,
-        value: Value<'a>,
+        value: Value,
         fs: &mut FormattingState,
     ) -> FormattedFieldVariant {
         if fs.flatten && matches!(value, Value::Object(_)) {
@@ -936,25 +935,29 @@ mod tests {
             }
         }
 
-        fn record<'s>(&'s self) -> Record<'s> {
+        fn record(self) -> Record<'static> {
             self.container.record()
         }
 
-        fn fields<'s>(&'s self) -> RecordFields<'s> {
+        fn fields(&self) -> RecordFields {
             RecordFields::new(self.node().children())
         }
 
-        fn node<'s>(&'s self) -> ast::Node<'s> {
+        fn node(&self) -> ast::Node {
             self.container.roots().iter().next().unwrap()
         }
 
-        fn value<'s>(&'s self) -> Value<'s> {
+        fn value(&self) -> Value {
             self.node().into()
+        }
+
+        fn container(self) -> Container<'static> {
+            self.container
         }
     }
 
-    impl<'s> From<&'s Parsed> for Value<'s> {
-        fn from(value: &'s Parsed) -> Value<'s> {
+    impl<'r, 's> From<&'s Parsed> for Value<'r, 's> {
+        fn from(value: &'s Parsed) -> Value<'r, 's> {
             value.value()
         }
     }
@@ -1007,7 +1010,7 @@ mod tests {
 
     trait ContainerExt<'a> {
         fn from_fields(fields: &[(&'a str, ast::Scalar<'a>)]) -> Container<'a>;
-        fn record<'s>(&'s self) -> Record<'s>;
+        fn record(self) -> Record<'a>;
     }
 
     impl<'a> ContainerExt<'a> for Container<'a> {
@@ -1028,9 +1031,9 @@ mod tests {
             container
         }
 
-        fn record<'s>(&'s self) -> Record<'s> {
+        fn record(self) -> Record<'a> {
             Record {
-                fields: RecordFields::new(self.roots().iter().next().unwrap().children()),
+                ast: self,
                 ..Default::default()
             }
         }
@@ -1041,11 +1044,11 @@ mod tests {
         let data = Parsed::json(r#"{"k-a":{"va":{"kb":42,"kc":43}}}"#);
         let rec = Record {
             ts: Some(Timestamp::new("2000-01-02T03:04:05.123Z")),
-            message: Some(Value::String(EncodedString::json(r#""tm""#))),
+            message: Some(ast::Scalar::String(EncodedString::json(r#""tm""#))),
             level: Some(Level::Debug),
             logger: Some("tl"),
             caller: Some(Caller::Text("tc")),
-            fields: data.fields(),
+            ast: data.container(),
             ..Default::default()
         };
 
@@ -1063,7 +1066,7 @@ mod tests {
     #[test]
     fn test_timestamp_none() {
         let rec = Record {
-            message: Some(Value::String(EncodedString::json(r#""tm""#))),
+            message: Some(ast::Scalar::String(EncodedString::json(r#""tm""#))),
             level: Some(Level::Error),
             ..Default::default()
         };
@@ -1074,7 +1077,7 @@ mod tests {
     #[test]
     fn test_timestamp_none_always_show() {
         let rec = Record {
-            message: Some(Value::String(EncodedString::json(r#""tm""#))),
+            message: Some(ast::Scalar::String(EncodedString::json(r#""tm""#))),
             ..Default::default()
         };
 
@@ -1087,7 +1090,7 @@ mod tests {
     #[test]
     fn test_level_none() {
         let rec = Record {
-            message: Some(Value::String(EncodedString::json(r#""tm""#))),
+            message: Some(ast::Scalar::String(EncodedString::json(r#""tm""#))),
             ..Default::default()
         };
 
@@ -1097,7 +1100,7 @@ mod tests {
     #[test]
     fn test_level_none_always_show() {
         let rec = Record {
-            message: Some(Value::String(EncodedString::json(r#""tm""#))),
+            message: Some(ast::Scalar::String(EncodedString::json(r#""tm""#))),
             ..Default::default()
         };
 

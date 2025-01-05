@@ -5,12 +5,9 @@ use std::collections::HashMap;
 use titlecase::titlecase;
 use wildflower::Pattern;
 
-// workspace imports
-use encstr::EncodedString;
-
 // local imports
 use super::{
-    super::ast::{self, Build, Composite, Scalar},
+    super::ast::{self, Build, Composite, OptIndex, Scalar},
     *,
 };
 use crate::{
@@ -28,16 +25,16 @@ const MAX_DEPTH: usize = 64;
 // ---
 
 pub struct Builder<'s, 'c, 't, T> {
-    core: Core<'s, 't>,
+    core: Core<'s>,
     ctx: Context<'c, 't>,
     target: T,
 }
 
 #[derive(Clone)]
-struct Core<'s, 't> {
+struct Core<'s> {
     settings: &'s Settings,
     block: Option<&'s SettingsBlock>,
-    field: Option<(EncodedString<'t>, FieldSettings)>,
+    field: Option<FieldSettings>,
     depth: usize,
 }
 
@@ -67,7 +64,7 @@ where
         self.target.attach(self.ctx)
     }
 
-    fn from_inner(core: Core<'s, 't>, target: T::WithAttachment<Context<'c, 't>>) -> Self {
+    fn from_inner(core: Core<'s>, target: T::WithAttachment<Context<'c, 't>>) -> Self {
         let (target, ctx) = target.detach();
         Self { core, ctx, target }
     }
@@ -82,18 +79,24 @@ where
     type Attachment = T::Attachment;
     type WithAttachment<V> = Builder<'s, 'c, 't, T::WithAttachment<V>>;
     type WithoutAttachment = Builder<'s, 'c, 't, T::WithoutAttachment>;
+    type Checkpoint = T::Checkpoint;
 
     #[inline]
     fn add_scalar(mut self, scalar: Scalar<'t>) -> Self {
-        if let Some((key, settings)) = self.core.field.take() {
-            let value = scalar.into();
-            if settings.apply(self.core.settings, value, self.ctx.record).is_some() {
-                self.ctx.record.predefined.push(Field::new(key.source(), value)).ok();
-                return self;
+        let checkpoint = self.target.checkpoint();
+
+        self.target = self.target.add_scalar(scalar);
+
+        if let Some(settings) = self.core.field.take() {
+            if let Some(last) = self.target.first_node_index(&checkpoint).unfold() {
+                let value = scalar.into();
+                if settings.apply(self.core.settings, value, self.ctx.record).is_some() {
+                    self.ctx.record.predefined.push(last).ok();
+                    return self;
+                }
             }
         }
 
-        self.target = self.target.add_scalar(scalar);
         self
     }
 
@@ -113,7 +116,7 @@ where
                                 if !self.ctx.pc.prioritize(kind, *priority, || true) {
                                     return Ok(self);
                                 }
-                                core.field = Some((key, *field));
+                                core.field = Some(*field);
                             }
                             FieldSettingsKind::Nested(nested) => {
                                 core.block = Some(&core.settings.blocks[nested]);
@@ -165,6 +168,16 @@ where
         })?;
 
         Ok(Builder::from_inner(self_core, target))
+    }
+
+    #[inline]
+    fn checkpoint(&self) -> Self::Checkpoint {
+        self.target.checkpoint()
+    }
+
+    #[inline]
+    fn first_node_index(&self, checkpoint: &Self::Checkpoint) -> OptIndex {
+        self.target.first_node_index(checkpoint)
     }
 
     #[inline]
@@ -295,14 +308,20 @@ impl Settings {
     }
 
     #[inline]
-    fn apply<'a>(&self, key: &'a str, value: Value<'a>, to: &mut Record<'a>, pc: &mut PriorityController) -> bool {
+    fn apply<'r, 's>(
+        &self,
+        key: &'s str,
+        value: Value<'r, 's>,
+        to: &'r mut Record<'s>,
+        pc: &mut PriorityController,
+    ) -> bool {
         self.blocks[0].apply(self, key, value, to, pc, true)
     }
 
     #[inline]
-    fn apply_each<'a, 'i, I>(&self, items: I, to: &mut Record<'a>)
+    fn apply_each<'r, 'a, 'i, I>(&self, items: I, to: &'r mut Record<'a>)
     where
-        I: IntoIterator<Item = Field<'a>>,
+        I: IntoIterator<Item = Field<'r, 'a>>,
         'a: 'i,
     {
         let mut pc = PriorityController::default();
@@ -310,9 +329,9 @@ impl Settings {
     }
 
     #[inline]
-    fn apply_each_ctx<'a, 'i, I>(&self, items: I, to: &mut Record<'a>, pc: &mut PriorityController)
+    fn apply_each_ctx<'r, 'a, 'i, I>(&self, items: I, to: &'r mut Record<'a>, pc: &mut PriorityController)
     where
-        I: IntoIterator<Item = Field<'a>>,
+        I: IntoIterator<Item = Field<'r, 'a>>,
         'a: 'i,
     {
         for (i, field) in items.into_iter().enumerate() {
@@ -338,12 +357,12 @@ struct SettingsBlock {
 }
 
 impl SettingsBlock {
-    fn apply<'a>(
+    fn apply<'r, 's>(
         &self,
         ps: &Settings,
-        key: &'a str,
-        value: Value<'a>,
-        to: &mut Record<'a>,
+        key: &str,
+        value: Value<'r, 's>,
+        to: &'r mut Record<'s>,
         pc: &mut PriorityController,
         is_root: bool,
     ) -> bool {
@@ -360,16 +379,21 @@ impl SettingsBlock {
             None => false,
         };
         if is_root && done {
-            to.predefined.push(Field::new(key, value)).ok();
+            // to.predefined.push(Field::new(key, value)).ok();
         }
 
         !done
     }
 
     #[inline]
-    fn apply_each_ctx<'a, 'i, I>(&self, ps: &Settings, fields: I, to: &mut Record<'a>, ctx: &mut PriorityController)
-    where
-        I: IntoIterator<Item = Field<'a>>,
+    fn apply_each_ctx<'r, 'a, 'i, I>(
+        &self,
+        ps: &Settings,
+        fields: I,
+        to: &'r mut Record<'a>,
+        ctx: &mut PriorityController,
+    ) where
+        I: IntoIterator<Item = Field<'r, 'a>>,
         'a: 'i,
     {
         for field in fields {
@@ -433,8 +457,8 @@ enum FieldSettings {
 }
 
 impl FieldSettings {
-    fn apply<'a>(&self, ps: &Settings, value: Value<'a>, to: &mut Record<'a>) -> Option<()> {
-        let as_text = |value: Value<'a>| match value {
+    fn apply<'r, 's>(&self, ps: &Settings, value: Value<'r, 's>, to: &'r mut Record<'s>) -> Option<()> {
+        let as_text = |value: Value<'r, 's>| match value {
             Value::String(s) => s.source().into(),
             Value::Number(s) => s.into(),
             Value::Null => "null".into(),
@@ -465,10 +489,13 @@ impl FieldSettings {
                 to.logger = Some(as_text(value)?);
                 true
             }
-            Self::Message => {
-                to.message = Some(value);
-                true
-            }
+            Self::Message => match value.try_into() {
+                Ok(value) => {
+                    to.message = Some(value);
+                    true
+                }
+                Err(_) => false,
+            },
             Self::Caller => {
                 to.caller = Some(Caller::Text(as_text(value)?));
                 true
@@ -501,11 +528,11 @@ impl FieldSettings {
     }
 
     #[inline]
-    fn apply_ctx<'a>(
+    fn apply_ctx<'r, 's>(
         &self,
         ps: &Settings,
-        value: Value<'a>,
-        to: &mut Record<'a>,
+        value: Value<'r, 's>,
+        to: &'r mut Record<'s>,
         ctx: &mut PriorityController,
     ) -> bool {
         match *self {

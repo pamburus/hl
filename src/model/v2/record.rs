@@ -24,31 +24,35 @@ const MAX_PREDEFINED_FIELDS: usize = 8;
 #[derive(Default)]
 pub struct Record<'s> {
     pub ts: Option<Timestamp<'s>>,
-    pub message: Option<Value<'s>>,
+    pub message: Option<ast::Scalar<'s>>,
     pub level: Option<Level>,
     pub logger: Option<&'s str>,
     pub caller: Option<Caller<'s>>,
-    pub fields: Fields<'s>,
-    pub(crate) predefined: heapless::Vec<Field<'s>, MAX_PREDEFINED_FIELDS>,
+    pub span: std::ops::Range<usize>,
+    pub(crate) ast: ast::Container<'s>,
+    pub(crate) predefined: heapless::Vec<ast::Index, MAX_PREDEFINED_FIELDS>,
 }
 
 impl<'s> Record<'s> {
+    /// Returns an iterator over `Field` items for searching.
+    ///
+    /// The returned iterator borrows from `self` for the duration of the borrow.
+    /// The `Field` items have a lifetime tied to the borrow of `self`,
+    /// ensuring they do not outlive the `Record`.
     #[inline]
-    pub fn new(fields: Fields<'s>) -> Self {
-        Self {
-            ts: None,
-            message: None,
-            level: None,
-            logger: None,
-            caller: None,
-            fields,
-            predefined: heapless::Vec::new(),
-        }
+    pub fn fields_for_search<'r>(&'r self) -> Fields<'r, 's> {
+        self.ast
+            .roots()
+            .into_iter()
+            .next()
+            .map(|root| Fields::new(root.children()))
+            .unwrap_or_default()
     }
 
     #[inline]
-    pub fn fields_for_search<'r>(&'r self) -> impl Iterator<Item = Field<'s>> + 'r {
-        self.fields.iter().chain(self.predefined.iter().copied())
+    pub fn fields(&self) -> Fields<'_, 's> {
+        // TODO: implement filtering out predefined fields
+        self.fields_for_search()
     }
 
     #[inline]
@@ -57,25 +61,42 @@ impl<'s> Record<'s> {
     }
 }
 
-// ---
-
-pub struct Fields<'s> {
-    inner: ast::Children<'s>,
+impl<'s> From<Record<'s>> for ast::Container<'s> {
+    #[inline]
+    fn from(record: Record<'s>) -> Self {
+        record.ast
+    }
 }
 
-impl<'s> Fields<'s> {
+// ---
+
+pub struct Fields<'r, 's> {
+    inner: ast::Children<'r, 's>,
+}
+
+impl<'r, 's> Fields<'r, 's> {
     #[inline]
-    pub fn new(inner: ast::Children<'s>) -> Self {
+    pub fn new(inner: ast::Children<'r, 's>) -> Self {
         Self { inner }
     }
 
     #[inline]
-    pub fn iter(&self) -> FieldsIter<'s> {
+    pub fn iter(&'r self) -> FieldsIter<'r, 's> {
         FieldsIter::new(self.inner.iter())
     }
 }
 
-impl Default for Fields<'static> {
+impl<'r, 's> IntoIterator for Fields<'r, 's> {
+    type Item = Field<'r, 's>;
+    type IntoIter = FieldsIter<'r, 's>;
+
+    #[inline]
+    fn into_iter(self) -> Self::IntoIter {
+        FieldsIter::new(self.inner.iter())
+    }
+}
+
+impl Default for Fields<'_, '_> {
     #[inline]
     fn default() -> Self {
         static EMPTY: Lazy<ast::Container<'static>> = Lazy::new(|| {
@@ -96,19 +117,19 @@ impl Default for Fields<'static> {
 
 // ---
 
-pub struct FieldsIter<'s> {
-    inner: ast::SiblingsIter<'s>,
+pub struct FieldsIter<'r, 's> {
+    inner: ast::SiblingsIter<'r, 's>,
 }
 
-impl<'s> FieldsIter<'s> {
+impl<'r, 's> FieldsIter<'r, 's> {
     #[inline]
-    fn new(inner: ast::SiblingsIter<'s>) -> Self {
+    fn new(inner: ast::SiblingsIter<'r, 's>) -> Self {
         Self { inner }
     }
 }
 
-impl<'s> Iterator for FieldsIter<'s> {
-    type Item = Field<'s>;
+impl<'r, 's> Iterator for FieldsIter<'r, 's> {
+    type Item = Field<'r, 's>;
 
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {

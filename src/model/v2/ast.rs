@@ -73,7 +73,8 @@ impl<'s, T: tree::Build<Value = Value<'s>>> InnerBuild<'s> for T {}
 pub trait BuildAttachment: tree::BuildAttachment {}
 impl<A: tree::BuildAttachment> BuildAttachment for A {}
 
-pub type Children<'s> = tree::Children<'s, Value<'s>, Storage<'s>>;
+pub type Children<'c, 's> = tree::Children<'c, Value<'s>, Storage<'s>>;
+pub use flat_tree::{Index, OptIndex};
 pub use tree::{AttachmentChild, AttachmentParent, AttachmentValue};
 
 pub trait Build<'s>
@@ -89,14 +90,24 @@ where
         Child = <Self::Child as Build<'s>>::WithAttachment<V>,
     >;
     type WithoutAttachment: Build<'s, Attachment = AttachmentParent<Self::Attachment>>;
+    type Checkpoint;
 
     fn add_scalar(self, scalar: Scalar<'s>) -> Self;
     fn add_composite<F>(self, composite: Composite<'s>, f: F) -> Result<Self>
     where
         F: FnOnce(Self::Child) -> Result<Self::Child>;
 
+    fn checkpoint(&self) -> Self::Checkpoint;
+    fn first_node_index(&self, checkpoint: &Self::Checkpoint) -> OptIndex;
+
     fn attach<V>(self, attachment: V) -> Self::WithAttachment<V>;
     fn detach(self) -> (Self::WithoutAttachment, AttachmentValue<Self::Attachment>);
+}
+
+pub trait BuildCheckpoint<'s> {
+    type Builder: Build<'s>;
+
+    fn first_node_index(&self, builder: &Self::Builder) -> OptIndex;
 }
 
 // ---
@@ -119,6 +130,7 @@ where
     type Attachment = T::Attachment;
     type WithAttachment<V> = Builder<T::WithAttachment<V>>;
     type WithoutAttachment = Builder<T::WithoutAttachment>;
+    type Checkpoint = T::Checkpoint;
 
     #[inline]
     fn add_scalar(self, scalar: Scalar<'s>) -> Self {
@@ -134,6 +146,16 @@ where
             .inner
             .build(composite.into(), |b| f(Builder::new(b)).map(|b| b.inner))?;
         Ok(Builder::new(result))
+    }
+
+    #[inline]
+    fn checkpoint(&self) -> Self::Checkpoint {
+        self.inner.checkpoint()
+    }
+
+    #[inline]
+    fn first_node_index(&self, checkpoint: &Self::Checkpoint) -> OptIndex {
+        self.inner.first_node_index(checkpoint)
     }
 
     #[inline]
@@ -167,6 +189,7 @@ where
     type Attachment = A;
     type WithAttachment<V> = Discarder<AttachmentChild<A, V>>;
     type WithoutAttachment = Discarder<AttachmentParent<A>>;
+    type Checkpoint = ();
 
     #[inline]
     fn add_scalar(self, _: Scalar<'s>) -> Self {
@@ -179,6 +202,16 @@ where
         F: FnOnce(Self::Child) -> Result<Self::Child>,
     {
         Ok(self)
+    }
+
+    #[inline]
+    fn checkpoint(&self) -> Self::Checkpoint {
+        ()
+    }
+
+    #[inline]
+    fn first_node_index(&self, _: &Self::Checkpoint) -> OptIndex {
+        None.into()
     }
 
     #[inline]
@@ -196,8 +229,8 @@ where
 // ---
 
 pub type ContainerInner<'s> = FlatTree<Value<'s>, Storage<'s>>;
-pub type SiblingsIter<'s> = tree::SiblingsIter<'s, Value<'s>, Storage<'s>>;
-pub type Node<'s> = tree::Node<'s, Value<'s>, Storage<'s>>;
+pub type SiblingsIter<'c, 's> = tree::SiblingsIter<'c, Value<'s>, Storage<'s>>;
+pub type Node<'c, 's> = tree::Node<'c, Value<'s>, Storage<'s>>;
 pub type String<'s> = EncodedString<'s>;
 pub type Storage<'s> = DefaultStorage<Value<'s>>;
 
@@ -308,6 +341,18 @@ pub enum Scalar<'s> {
     Bool(bool),
     Number(&'s str),
     String(String<'s>),
+}
+
+impl<'s> Scalar<'s> {
+    pub fn as_text(&self) -> EncodedString<'s> {
+        match self {
+            Self::Null => EncodedString::raw("null"),
+            Self::Bool(true) => EncodedString::raw("true"),
+            Self::Bool(false) => EncodedString::raw("false"),
+            Self::Number(s) => EncodedString::raw(s),
+            Self::String(s) => *s,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy)]

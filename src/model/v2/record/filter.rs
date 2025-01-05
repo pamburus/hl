@@ -434,7 +434,7 @@ impl FieldFilter {
         }
     }
 
-    fn match_value_partial<'a>(&self, subkey: KeyMatcher, value: Value<'a>) -> bool {
+    fn match_value_partial(&self, subkey: KeyMatcher, value: Value) -> bool {
         if let Value::Object(value) = value {
             for field in value.iter() {
                 match subkey.match_key(field.key) {
@@ -467,7 +467,7 @@ impl Filter for FieldFilter {
                 }
                 FieldKind::Message => {
                     if let Some(message) = record.message {
-                        self.match_value(message.as_text())
+                        self.match_value(Some(message.as_text()))
                     } else {
                         false
                     }
