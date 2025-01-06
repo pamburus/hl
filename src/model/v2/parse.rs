@@ -23,12 +23,12 @@ impl Parser {
 
 // ---
 
-pub struct Unit<'p, 's> {
+pub struct Unit<'p, 'a> {
     parser: &'p Parser,
-    container: ast::Container<'s>,
+    container: ast::Container<'a>,
 }
 
-impl<'p, 's> Unit<'p, 's> {
+impl<'p, 'a> Unit<'p, 'a> {
     fn new(parser: &'p Parser) -> Self {
         Self {
             parser,
@@ -36,7 +36,7 @@ impl<'p, 's> Unit<'p, 's> {
         }
     }
 
-    pub fn parse<F>(&mut self, format: F, input: &'s [u8]) -> Result<Option<Record<'s>>>
+    pub fn parse<F>(&mut self, format: F, input: &'a [u8]) -> Result<Option<Record<'a>>>
     where
         F: Format,
     {
@@ -65,7 +65,7 @@ impl<'p, 's> Unit<'p, 's> {
     }
 
     #[inline]
-    pub fn recycle(&mut self, record: Record<'s>) {
+    pub fn recycle(&mut self, record: Record<'a>) {
         self.container = record.ast;
         self.container.clear();
     }
