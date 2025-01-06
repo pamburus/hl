@@ -224,7 +224,7 @@ impl Settings {
         result
     }
 
-    fn with_ignore<I>(mut self, ignore: I) -> Self
+    pub fn with_ignore<I>(mut self, ignore: I) -> Self
     where
         I: IntoIterator<Item: Into<String>>,
     {
@@ -232,7 +232,7 @@ impl Settings {
         self
     }
 
-    fn with_unix_timestamp_unit(mut self, unix_ts_unit: Option<UnixTimestampUnit>) -> Self {
+    pub fn with_unix_timestamp_unit(mut self, unix_ts_unit: Option<UnixTimestampUnit>) -> Self {
         self.unix_ts_unit = unix_ts_unit;
         self
     }

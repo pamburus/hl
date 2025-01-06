@@ -6,37 +6,54 @@ use crate::{error::Result, format::Format, model::v2::ast};
 
 // ---
 
-pub struct Parser {
-    settings: Settings,
+pub trait NewParser {
+    type Parser<'a, F: Format>: Parse<'a>;
+
+    fn new_parser<'a, F: Format>(self, format: F, input: &'a [u8]) -> Self::Parser<'a>;
 }
 
-impl Parser {
-    #[inline]
-    pub fn new(settings: Settings) -> Self {
-        Self { settings }
-    }
+impl<'s> NewParser for &'s Settings {
+    type Parser<'a, F: Format> = Parser<'s, 'a, F>;
 
-    pub fn new_unit<'p>(&'p self) -> Unit<'p, 'static> {
-        Unit::new(&self)
+    fn new_parser<'a, F: Format>(self, format: F, input: &'a [u8]) -> Parser {
+        Parser::new(self, format, input)
     }
 }
 
 // ---
 
-pub struct Unit<'p, 'a> {
-    parser: &'p Parser,
+pub trait Parse<'a>: Iterator<Item = Result<Record<'a>>> {
+    fn recycle(&mut self, record: Record<'a>);
+}
+
+// ---
+
+pub struct Parser<'s, 'a, F: Format> {
+    settings: &'s Settings,
+    format: F,
     container: ast::Container<'a>,
 }
 
-impl<'p, 'a> Unit<'p, 'a> {
-    fn new(parser: &'p Parser) -> Self {
+impl<'s, 'a, F> Parser<'s, 'a, F>
+where
+    F: Format,
+{
+    fn new(settings: &'s Settings, format: F, input: &'a [u8]) -> Self {
         Self {
-            parser,
+            settings,
+            format,
             container: ast::Container::default(),
         }
     }
+}
 
-    pub fn parse<F>(&mut self, format: F, input: &'a [u8]) -> Result<Option<Record<'a>>>
+impl<'s, 'a, F> Iterator for Parser<'s, 'a, F>
+where
+    F: Format,
+{
+    type Item = Result<Record<'a>>;
+
+    fn next(&mut self) -> Option<Result<Record<'a>>>
     where
         F: Format,
     {
@@ -46,10 +63,10 @@ impl<'p, 'a> Unit<'p, 'a> {
         let mut record = Record::default();
         let mut pc = PriorityController::default();
 
-        let target = Builder::new(&self.parser.settings, &mut pc, &mut record, self.container.metaroot());
+        let target = Builder::new(&self.settings, &mut pc, &mut record, self.container.metaroot());
 
-        let Some(output) = format.parse(input, target)? else {
-            return Ok(None);
+        let Some(output) = self.format.parse(input, target)? else {
+            return None;
         };
 
         if let Some(root) = self.container.roots().iter().next() {
@@ -57,15 +74,20 @@ impl<'p, 'a> Unit<'p, 'a> {
                 record.span = output.span;
                 record.ast = std::mem::take(&mut self.container);
 
-                return Ok(Some(record));
+                return Some(Ok(record));
             }
         }
 
-        Ok(None)
+        None
     }
+}
 
+impl<'s, 'a, F> Parse<'a> for Parser<'s, 'a, F>
+where
+    F: Format,
+{
     #[inline]
-    pub fn recycle(&mut self, record: Record<'a>) {
+    fn recycle(&mut self, record: Record<'a>) {
         self.container = record.ast;
         self.container.clear();
     }

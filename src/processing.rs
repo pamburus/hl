@@ -15,14 +15,14 @@ use crate::{
     types::InputFormat,
 };
 
-pub trait SegmentProcess<'a> {
-    fn process<O: RecordObserver>(
-        &mut self,
+pub trait SegmentProcess {
+    fn process<'s, 'a, 'b, 'o, O: RecordObserver>(
+        &'s mut self,
         data: &'a [u8],
-        buf: &mut Vec<u8>,
+        buf: &'b mut Vec<u8>,
         prefix: &str,
         limit: Option<usize>,
-        observer: &mut O,
+        observer: &'o mut O,
     );
 }
 
@@ -38,17 +38,17 @@ pub struct SegmentProcessorOptions {
 
 // ---
 
-pub struct SegmentProcessor<'p, 'a, Formatter, Filter> {
-    parser: ParserUnit<'p, 'a>,
+pub struct SegmentProcessor<'p, Formatter, Filter> {
+    parser: &'p Parser,
     formatter: Formatter,
     filter: Filter,
     options: SegmentProcessorOptions,
 }
 
-impl<'p, Formatter: RecordWithSourceFormatter, Filter: RecordFilter> SegmentProcessor<'p, '_, Formatter, Filter> {
+impl<'p, Formatter: RecordWithSourceFormatter, Filter: RecordFilter> SegmentProcessor<'p, Formatter, Filter> {
     pub fn new(parser: &'p Parser, formatter: Formatter, filter: Filter, options: SegmentProcessorOptions) -> Self {
         Self {
-            parser: parser.new_unit(),
+            parser,
             formatter,
             filter,
             options,
@@ -61,15 +61,23 @@ impl<'p, Formatter: RecordWithSourceFormatter, Filter: RecordFilter> SegmentProc
     }
 }
 
-impl<'p, 'a, Formatter: RecordWithSourceFormatter, Filter: RecordFilter> SegmentProcess<'a>
-    for SegmentProcessor<'p, 'a, Formatter, Filter>
+impl<'p, Formatter: RecordWithSourceFormatter, Filter: RecordFilter> SegmentProcess
+    for SegmentProcessor<'p, Formatter, Filter>
 {
-    fn process<O>(&mut self, data: &'a [u8], buf: &mut Vec<u8>, prefix: &str, limit: Option<usize>, observer: &mut O)
-    where
+    fn process<'s, 'a, 'b, 'o, O>(
+        &'s mut self,
+        data: &'a [u8],
+        buf: &'b mut Vec<u8>,
+        prefix: &str,
+        limit: Option<usize>,
+        observer: &'o mut O,
+    ) where
         O: RecordObserver,
     {
         let mut i = 0;
         let limit = limit.unwrap_or(usize::MAX);
+
+        let mut parser = self.parser.new_unit();
 
         for line in self.options.delimiter.clone().into_searcher().split(data) {
             if line.len() == 0 {
@@ -86,7 +94,7 @@ impl<'p, 'a, Formatter: RecordWithSourceFormatter, Filter: RecordFilter> Segment
             let mut last_offset = 0;
             let mut offset = 0;
 
-            while let Ok(Some(record)) = self.parser.parse(crate::format::Auto, &line[offset..]) {
+            while let Ok(Some(record)) = parser.parse(crate::format::Auto, &line[offset..]) {
                 i += 1;
                 last_offset = record.span.end.clone();
 
@@ -111,7 +119,7 @@ impl<'p, 'a, Formatter: RecordWithSourceFormatter, Filter: RecordFilter> Segment
 
                 offset = record.span.end;
 
-                self.parser.recycle(record);
+                parser.recycle(record);
             }
 
             let remainder = if parsed_some { &line[last_offset..] } else { line };

@@ -58,4 +58,4 @@ pub use console::enable_ansi_support;
 // public type aliases
 pub type IncludeExcludeKeyFilter = filtering::IncludeExcludeKeyFilter<DefaultNormalizing>;
 pub type KeyMatchOptions = filtering::MatchOptions<DefaultNormalizing>;
-pub type QueryNone = model::RecordFilterNone;
+pub type QueryNone = model::v2::compat::RecordFilterNone;

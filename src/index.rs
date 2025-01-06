@@ -43,7 +43,7 @@ use crate::{
     error::{Error, Result},
     index_capnp as schema,
     level::Level,
-    model::{Parser, ParserSettings, RawRecord},
+    model::v2::compat::{Parser, ParserSettings},
     scanning::{Delimiter, Scanner, Segment, SegmentBuf, SegmentBufFactory},
     settings::PredefinedFields,
     vfs::{FileRead, FileSystem, LocalFileSystem},
@@ -282,7 +282,7 @@ where
             buffer_size: settings.buffer_size.into(),
             max_message_size: settings.max_message_size.into(),
             dir,
-            parser: Parser::new(ParserSettings::new(&settings.fields, empty(), settings.unix_ts_unit)),
+            parser: Parser::new(ParserSettings::new(&settings.fields).with_unix_timestamp_unit(settings.unix_ts_unit)),
             delimiter: settings.delimiter,
             allow_prefix: settings.allow_prefix,
             format: settings.format,
@@ -499,6 +499,7 @@ where
         let mut lines = Vec::<(Option<Timestamp>, u32, u32)>::with_capacity(segment.data().len() / 512);
         let mut offset = 0;
         let mut i = 0;
+        let mut parser = self.parser.new_unit();
         for data in rtrim(segment.data(), b'\n').split(|c| *c == b'\n') {
             let data_len = data.len();
             let data = strip(data, b'\r');
