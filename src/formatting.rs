@@ -155,11 +155,12 @@ impl RecordFormatter {
             // level
             //
             let level = match rec.level {
-                Some(Level::Debug) => Some(b"DBG"),
-                Some(Level::Info) => Some(b"INF"),
-                Some(Level::Warning) => Some(b"WRN"),
                 Some(Level::Error) => Some(b"ERR"),
-                _ => None,
+                Some(Level::Warning) => Some(b"WRN"),
+                Some(Level::Info) => Some(b"INF"),
+                Some(Level::Debug) => Some(b"DBG"),
+                Some(Level::Trace) => Some(b"TRC"),
+                None => None,
             };
             let level = level.or_else(|| self.always_show_level.then(|| b"(?)"));
             if let Some(level) = level {
@@ -1026,6 +1027,20 @@ mod tests {
         };
 
         assert_eq!(&format(&rec), "\u{1b}[0;7;91m|ERR|\u{1b}[0m \u{1b}[0;1;39mtm\u{1b}[0m");
+    }
+
+    #[test]
+    fn test_level_trace() {
+        let rec = Record {
+            message: Some(RawValue::String(EncodedString::json(r#""tm""#))),
+            level: Some(Level::Trace),
+            ..Default::default()
+        };
+
+        assert_eq!(
+            &format(&rec),
+            "\u{1b}[0;36m|\u{1b}[0;2mTRC\u{1b}[0;36m|\u{1b}[0m \u{1b}[0;1;39mtm\u{1b}[0m"
+        );
     }
 
     #[test]

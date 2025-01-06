@@ -80,11 +80,12 @@ struct Hash {
 }
 
 # Various flags.
-const flagLevelDebug :UInt64    = 0x0000000000000001;
-const flagLevelInfo :UInt64     = 0x0000000000000002;
-const flagLevelWarning :UInt64  = 0x0000000000000004;
 const flagLevelError :UInt64    = 0x0000000000000008;
-const flagLevelMask :UInt64     = 0x00000000000000FF;
-const flagUnsorted :UInt64      = 0x0000000000000100;
-const flagHasTimestamps :UInt64 = 0x0000000000000200;
+const flagLevelWarning :UInt64  = 0x0000000000000020;
+const flagLevelInfo :UInt64     = 0x0000000000000100;
+const flagLevelDebug :UInt64    = 0x0000000000001000;
+const flagLevelTrace :UInt64    = 0x0000000000004000;
+const flagLevelMask :UInt64     = 0x000000000000FFFF;
+const flagUnsorted :UInt64      = 0x0000000000010000;
+const flagHasTimestamps :UInt64 = 0x0000000000020000;
 const flagBinary :UInt64        = 0x8000000000000000;

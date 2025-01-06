@@ -48,6 +48,9 @@ elements:
   'null':
     foreground: *red
 levels:
+  trace:
+    level-inner:
+      foreground: *gray
   debug:
     level-inner:
       foreground: *magenta

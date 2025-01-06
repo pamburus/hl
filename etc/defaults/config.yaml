@@ -32,16 +32,17 @@ fields:
       variants:
         - names: ['level', 'LEVEL', 'Level']
           values:
-            debug: ['debug']
-            info: ['info', 'information']
-            warning: ['warning', 'warn']
             error: ['error', 'err', 'fatal', 'critical', 'panic']
+            warning: ['warning', 'warn']
+            info: ['info', 'information']
+            debug: ['debug']
+            trace: ['trace']
         - names: ['PRIORITY']
           values:
-            debug: [7]
-            info: [6]
-            warning: [5, 4]
             error: [3, 2, 1]
+            warning: [5, 4]
+            info: [6]
+            debug: [7]
     message:
       names: ['msg', 'message', 'MESSAGE', 'Message']
     caller:

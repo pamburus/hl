@@ -35,6 +35,10 @@ elements:
   'null':
     foreground: bright-red
 levels:
+  trace:
+    level-inner:
+      foreground: white
+      modes: [faint]
   debug:
     level-inner:
       foreground: bright-magenta

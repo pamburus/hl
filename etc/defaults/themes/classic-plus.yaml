@@ -35,6 +35,9 @@ elements:
   'null':
     foreground: red
 levels:
+  trace:
+    level-inner:
+      foreground: bright-black
   debug:
     level-inner:
       foreground: magenta
