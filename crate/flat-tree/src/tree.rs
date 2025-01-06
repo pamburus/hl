@@ -657,6 +657,7 @@ where
 
 // ---
 
+#[derive(Debug, Clone)]
 pub struct Checkpoint {
     len: usize,
 }

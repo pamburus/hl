@@ -939,8 +939,8 @@ mod tests {
             self.container.record()
         }
 
-        fn fields(&self) -> RecordFields {
-            RecordFields::new(self.node().children())
+        fn fields(&self) -> RecordFields<()> {
+            RecordFields::new(self.node().children(), ())
         }
 
         fn node(&self) -> ast::Node {

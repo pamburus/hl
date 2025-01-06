@@ -81,15 +81,16 @@ pub trait Build<'s>
 where
     Self: Sized,
 {
-    type Child: Build<'s, Attachment = Self::Attachment>;
+    type Child: Build<'s, Checkpoint = Self::Checkpoint, Attachment = Self::Attachment>;
     type Attachment: BuildAttachment;
     type WithAttachment<V>: Build<
         's,
         Attachment = AttachmentChild<Self::Attachment, V>,
+        Checkpoint = Self::Checkpoint,
         WithoutAttachment = Self,
         Child = <Self::Child as Build<'s>>::WithAttachment<V>,
     >;
-    type WithoutAttachment: Build<'s, Attachment = AttachmentParent<Self::Attachment>>;
+    type WithoutAttachment: Build<'s, Checkpoint = Self::Checkpoint, Attachment = AttachmentParent<Self::Attachment>>;
     type Checkpoint;
 
     fn add_scalar(self, scalar: Scalar<'s>) -> Self;

@@ -40,19 +40,28 @@ impl<'s> Record<'s> {
     /// The `Field` items have a lifetime tied to the borrow of `self`,
     /// ensuring they do not outlive the `Record`.
     #[inline]
-    pub fn fields_for_search<'r>(&'r self) -> Fields<'r, 's> {
+    pub fn fields_for_search(&self) -> FieldsForSearch<'_, 's> {
         self.ast
             .roots()
             .into_iter()
             .next()
-            .map(|root| Fields::new(root.children()))
+            .map(|root| Fields::new(root.children(), ()))
             .unwrap_or_default()
     }
 
     #[inline]
-    pub fn fields(&self) -> Fields<'_, 's> {
-        // TODO: implement filtering out predefined fields
-        self.fields_for_search()
+    pub fn fields(&self) -> VisibleFields<'_, 's> {
+        self.ast
+            .roots()
+            .into_iter()
+            .next()
+            .map(|root| {
+                Fields::new(
+                    root.children(),
+                    PredefinedFieldFilter::new(self.predefined.iter().cloned()),
+                )
+            })
+            .unwrap_or_default()
     }
 
     #[inline]
@@ -70,33 +79,56 @@ impl<'s> From<Record<'s>> for ast::Container<'s> {
 
 // ---
 
-pub struct Fields<'r, 's> {
+pub type FieldsForSearch<'r, 's> = Fields<'r, 's, ()>;
+pub type VisibleFields<'r, 's> =
+    Fields<'r, 's, PredefinedFieldFilter<std::iter::Cloned<core::slice::Iter<'r, ast::Index>>>>;
+
+pub struct Fields<'r, 's, HFF> {
     inner: ast::Children<'r, 's>,
+    hff: HFF,
 }
 
-impl<'r, 's> Fields<'r, 's> {
+impl<'r, 's, HFF> Fields<'r, 's, HFF> {
     #[inline]
-    pub fn new(inner: ast::Children<'r, 's>) -> Self {
-        Self { inner }
-    }
-
-    #[inline]
-    pub fn iter(&'r self) -> FieldsIter<'r, 's> {
-        FieldsIter::new(self.inner.iter())
+    pub fn new(inner: ast::Children<'r, 's>, hff: HFF) -> Self {
+        Self { inner, hff }
     }
 }
 
-impl<'r, 's> IntoIterator for Fields<'r, 's> {
+impl<'r, 's, HFF> Fields<'r, 's, HFF>
+where
+    HFF: HiddenFieldFilter,
+{
+    #[inline]
+    pub fn iter(&'r self) -> FieldsIter<'r, 's, HFF> {
+        FieldsIter::new(self.inner.iter(), self.hff.clone())
+    }
+}
+
+impl<'r, 's, HFF> IntoIterator for Fields<'r, 's, HFF>
+where
+    HFF: HiddenFieldFilter,
+{
     type Item = Field<'r, 's>;
-    type IntoIter = FieldsIter<'r, 's>;
+    type IntoIter = FieldsIter<'r, 's, HFF>;
 
     #[inline]
     fn into_iter(self) -> Self::IntoIter {
-        FieldsIter::new(self.inner.iter())
+        FieldsIter::new(self.inner.into_iter(), self.hff)
     }
 }
 
-impl Default for Fields<'_, '_> {
+impl<'r, 's> IntoIterator for Fields<'r, 's, ()> {
+    type Item = Field<'r, 's>;
+    type IntoIter = FieldsIter<'r, 's, ()>;
+
+    #[inline]
+    fn into_iter(self) -> Self::IntoIter {
+        FieldsIter::new(self.inner.into_iter(), ())
+    }
+}
+
+impl<HFF: Default> Default for Fields<'_, '_, HFF> {
     #[inline]
     fn default() -> Self {
         static EMPTY: Lazy<ast::Container<'static>> = Lazy::new(|| {
@@ -111,29 +143,89 @@ impl Default for Fields<'_, '_> {
 
         Self {
             inner: EMPTY.roots().iter().next().unwrap().children(),
+            hff: Default::default(),
         }
     }
 }
 
 // ---
 
-pub struct FieldsIter<'r, 's> {
+pub struct FieldsIter<'r, 's, HFF> {
     inner: ast::SiblingsIter<'r, 's>,
+    hff: HFF,
 }
 
-impl<'r, 's> FieldsIter<'r, 's> {
+impl<'r, 's, HFF> FieldsIter<'r, 's, HFF> {
     #[inline]
-    fn new(inner: ast::SiblingsIter<'r, 's>) -> Self {
-        Self { inner }
+    fn new(inner: ast::SiblingsIter<'r, 's>, hff: HFF) -> Self {
+        Self { inner, hff }
     }
 }
 
-impl<'r, 's> Iterator for FieldsIter<'r, 's> {
+impl<'r, 's> Iterator for FieldsIter<'r, 's, ()> {
     type Item = Field<'r, 's>;
 
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
         self.inner.next().map(Field::from_node)
+    }
+}
+
+impl<'r, 's, HFF> Iterator for FieldsIter<'r, 's, HFF>
+where
+    HFF: HiddenFieldFilter,
+{
+    type Item = Field<'r, 's>;
+
+    #[inline]
+    fn next(&mut self) -> Option<Self::Item> {
+        while let Some(node) = self.inner.next() {
+            if !self.hff.is_hidden(node.index()) {
+                return Some(Field::from_node(node));
+            }
+        }
+        None
+    }
+}
+
+// ---
+
+pub trait HiddenFieldFilter: Clone {
+    fn is_hidden(&mut self, index: ast::Index) -> bool;
+}
+
+#[derive(Clone, Default)]
+pub struct PredefinedFieldFilter<I> {
+    head: Option<ast::Index>,
+    tail: I,
+}
+
+impl<I> PredefinedFieldFilter<I>
+where
+    I: Iterator<Item = ast::Index>,
+{
+    #[inline]
+    fn new(mut tail: I) -> Self {
+        let head = tail.next();
+        Self { head, tail }
+    }
+}
+
+impl<I> HiddenFieldFilter for PredefinedFieldFilter<I>
+where
+    I: Iterator<Item = ast::Index> + Clone,
+{
+    #[inline]
+    fn is_hidden(&mut self, index: ast::Index) -> bool {
+        let Some(head) = self.head else {
+            return false;
+        };
+        if head != index {
+            return false;
+        }
+
+        self.head = self.tail.next();
+        return true;
     }
 }
 
