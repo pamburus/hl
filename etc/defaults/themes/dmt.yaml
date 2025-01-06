@@ -35,6 +35,9 @@ elements:
   'null':
     foreground: 136
 levels:
+  trace:
+    level-inner:
+      foreground: bright-black
   debug:
     level-inner:
       foreground: 31

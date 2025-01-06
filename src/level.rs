@@ -37,6 +37,7 @@ pub enum Level {
     Warning,
     Info,
     Debug,
+    Trace,
 }
 
 // ---
@@ -127,6 +128,7 @@ impl LevelValueParser {
             (Level::Warning, &["warning", "warn", "wrn", "w"]),
             (Level::Info, &["info", "inf", "i"]),
             (Level::Debug, &["debug", "dbg", "d"]),
+            (Level::Trace, &["trace", "trc", "t"]),
         ]
     }
 }

@@ -13,10 +13,11 @@ fields:
       variants:
         - names: ['log.level']
           values:
-            debug: ['debug', 'dbg', 'd']
-            info: ['info', 'inf', 'i', 'informational']
-            warning: ['warning', 'warn', 'wrn', 'w']
             error: ['error', 'err', 'fatal', 'critical', 'panic', 'e']
+            warning: ['warning', 'warn', 'wrn', 'w']
+            info: ['info', 'inf', 'i', 'informational']
+            debug: ['debug', 'dbg', 'd']
+            trace: ['trace', 'trc', 't']
     message:
       names: ['message']
     caller:

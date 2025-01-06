@@ -468,7 +468,7 @@ hl --list-themes | fzf --preview-window="top,80%" --preview="head -n 100 example
 
 * Format description
   * Section `elements` contains styles for predefined elements.
-  * Section `levels` contains optional overrides for styles defined in `elements` sections per logging level, which are [`debug`, `info`, `warning`, `error`].
+  * Section `levels` contains optional overrides for styles defined in `elements` sections per logging level, which are [`trace`, `debug`, `info`, `warning`, `error`].
   * Each element style contains optional `background`, `foreground` and `modes` parameters.
   * Example
 

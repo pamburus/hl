@@ -46,6 +46,9 @@ foreground = "bright-green"
 [elements.null]
 foreground = "bright-red"
 
+[levels.trace.level-inner]
+modes = ["faint"]
+
 [levels.debug.level-inner]
 foreground = "bright-magenta"
 
