@@ -601,42 +601,42 @@ Advanced Options:
 
 * MacBook Pro (16-inch, 2021)
   * **CPU**:   Apple M1 Max CPU
-  * **OS**:    macOS Sonoma 14.4.1
+  * **OS**:    macOS Sequoia 15.2
   * **Data**:  ~ **2.3 GiB** log file, **6 000 000** lines
-    * [hl](https://github.com/pamburus/hl) **v0.28.0** ~ *1.4 seconds*
+    * [hl](https://github.com/pamburus/hl) **v0.30.2** ~ *1.1 seconds*
 
         ```sh
-        $ time hl example.log -c -o /dev/null
-        hl example.log -c -o /dev/null  11.74s user 0.53s system 885% cpu 1.386 total
+        $ time hl --config - example.log -c -o /dev/null
+        hl --config - example.log -c -o /dev/null  9.80s user 0.61s system 915% cpu 1.138 total
         ```
 
-    * [hlogf](https://github.com/ssgreg/hlogf) **v1.4.1** ~ *8.5 seconds*
+    * [hlogf](https://github.com/ssgreg/hlogf) **v1.4.1** ~ *8.7 seconds*
 
         ```sh
         $ time hlogf example.log --color always >/dev/null
-        hlogf example.log --color always > /dev/null  6.93s user 1.79s system 99% cpu 8.757 total
+        hlogf example.log --color always > /dev/null  6.85s user 1.94s system 100% cpu 8.738 total
         ```
 
-    * [humanlog](https://github.com/humanlogio/humanlog) **v0.7.6** ~ *77 seconds*
+    * [humanlog](https://github.com/humanlogio/humanlog) **v0.7.8** ~ *79 seconds*
 
         ```sh
         $ time humanlog <example.log --color always >/dev/null
         humanlog> reading stdin...
-        humanlog --color always < example.log > /dev/null  80.02s user 4.71s system 109% cpu 1:17.11 total
+        humanlog --color always < example.log > /dev/null  87.68s user 7.33s system 120% cpu 1:19.01 total
         ```
 
-    * [fblog](https://github.com/brocode/fblog) **v4.9.0** ~ *36 seconds*
+    * [fblog](https://github.com/brocode/fblog) **v4.13.1** ~ *34 seconds*
 
         ```sh
         $ time fblog example.log >/dev/null
-        fblog example.log > /dev/null  32.48s user 2.03s system 97% cpu 35.526 total
+        fblog example.log > /dev/null  31.32s user 2.22s system 99% cpu 33.553 total
         ```
 
-    * [fblog](https://github.com/brocode/fblog) with `-d` flag **v4.9.0** ~ *148 seconds*
+    * [fblog](https://github.com/brocode/fblog) with `-d` flag **v4.13.1** ~ *146 seconds*
 
         ```sh
         $ time fblog -d example.log >/dev/null
-        fblog -d example.log > /dev/null  132.12s user 14.39s system 99% cpu 2:27.61 total
+        fblog -d example.log > /dev/null  131.88s user 14.55s system 99% cpu 2:26.45 total
         ```
 
   * See [#132](https://github.com/pamburus/hl/issues/132) for how to repeat measurements
