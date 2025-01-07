@@ -162,7 +162,23 @@ impl FileSystem for LocalFileSystem {
     type Metadata = fs::Metadata;
 
     #[inline]
+    #[cfg(not(target_os = "linux"))]
     fn canonicalize(&self, path: &Path) -> io::Result<PathBuf> {
+        fs::canonicalize(path)
+    }
+
+    #[inline]
+    #[cfg(target_os = "linux")]
+    fn canonicalize(&self, path: &Path) -> io::Result<PathBuf> {
+        use std::os::unix::fs::FileTypeExt;
+        let meta = fs::metadata(path)?;
+        if meta.file_type().is_fifo()
+            || meta.file_type().is_socket()
+            || meta.file_type().is_block_device()
+            || meta.file_type().is_char_device()
+        {
+            return std::path::absolute(path);
+        }
         fs::canonicalize(path)
     }
 
