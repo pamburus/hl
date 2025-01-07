@@ -1,5 +1,5 @@
 // std imports
-use std::{convert::Infallible, result::Result};
+use std::result::Result;
 
 // local imports
 use super::OptIndex;
@@ -54,11 +54,9 @@ pub type BuildOutput<F, R, B, C> = <R as BuildFnResult<F, R, B, C>>::Output;
 // ---
 
 pub trait BuildFnResult<F, R, B, C> {
-    type Error;
     type Output;
 
-    fn into_result(self) -> Result<C, Self::Error>;
-    fn finalize(result: Result<B, Self::Error>) -> Self::Output;
+    fn transform<MF: FnOnce(C) -> B>(self, map: MF) -> Self::Output;
 }
 
 impl<F, B, C> BuildFnResult<F, C, B, C> for C
@@ -67,17 +65,11 @@ where
     B: Build,
     C: Build,
 {
-    type Error = Infallible;
     type Output = B;
 
     #[inline]
-    fn into_result(self) -> Result<C, Infallible> {
-        Ok(self)
-    }
-
-    #[inline]
-    fn finalize(result: Result<B, Infallible>) -> B {
-        result.unwrap()
+    fn transform<MF: FnOnce(C) -> B>(self, map: MF) -> Self::Output {
+        map(self)
     }
 }
 
@@ -87,17 +79,11 @@ where
     B: Build,
     C: Build,
 {
-    type Error = E;
     type Output = Result<B, E>;
 
     #[inline]
-    fn into_result(self) -> Result<C, E> {
-        self
-    }
-
-    #[inline]
-    fn finalize(result: Result<B, E>) -> Result<B, E> {
-        result
+    fn transform<MF: FnOnce(C) -> B>(self, map: MF) -> Self::Output {
+        self.map(map)
     }
 }
 
