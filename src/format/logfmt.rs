@@ -1,7 +1,7 @@
 // external imports
 use logos::Logos;
 
-use super::{Format, Parse, ParseOutput};
+use super::{Format, Parse, ParseError, ParseOutput, ParseResult};
 use crate::{error::Error, model::v2::ast};
 
 // ---
@@ -30,18 +30,25 @@ pub struct Parser<'s> {
 impl<'s> Parse<'s> for Parser<'s> {
     type Lexer = Lexer<'s>;
 
-    fn parse<T: ast::Build<'s>>(&mut self, target: T) -> super::Result<Option<ParseOutput>> {
-        parse_line(&mut self.lexer, target)
-            .map_err(|e| Error::FailedToParseLogfmtInput {
-                message: e.0,
-                start: e.1.start,
-                end: e.1.end,
-            })
-            .map(|x| {
-                x.map(|_| ParseOutput {
-                    span: 0..self.lexer.span().end,
-                })
-            })
+    fn parse<T: ast::Build<'s>>(&mut self, target: T) -> ParseResult<T> {
+        let start = self.lexer.span().start;
+
+        match parse_line(&mut self.lexer, target) {
+            (target, Ok(true)) => Some(Ok(ParseOutput {
+                span: start..self.lexer.span().end,
+                target,
+            })),
+            (_, Ok(false)) => None,
+            (target, Err(e)) => Some(Err(ParseError {
+                error: Error::FailedToParseLogfmtInput {
+                    message: e.0,
+                    start: e.1.start,
+                    end: e.1.end,
+                },
+                span: start..self.lexer.span().end,
+                target,
+            })),
+        }
     }
 
     fn into_lexer(self) -> Self::Lexer {
@@ -101,6 +108,8 @@ pub mod error {
 
     pub type Error = (&'static str, Span);
     pub type Result<T> = std::result::Result<T, Error>;
+    pub type ResultTuple<T, R = ()> = (T, std::result::Result<R, Error>);
+    pub type OptResultTuple<T> = ResultTuple<T, bool>;
 
     pub trait Refine {
         type Output;
@@ -130,89 +139,115 @@ mod parse {
     #[inline]
     pub fn parse_all<'s>(lexer: &mut Lexer<'s>) -> Result<Container<'s>> {
         let mut container = Container::new();
-        parse_all_into(lexer, container.metaroot())?;
+        parse_all_into(lexer, container.metaroot()).1?;
         Ok(container)
     }
 
     #[inline]
-    pub fn parse_all_into<'s, T: Build<'s>>(lexer: &mut Lexer<'s>, mut target: T) -> Result<()> {
-        while let Some(t) = parse_line(lexer, target)? {
-            target = t;
+    pub fn parse_all_into<'s, T: Build<'s>>(lexer: &mut Lexer<'s>, mut target: T) -> ResultTuple<T> {
+        loop {
+            match parse_line(lexer, target) {
+                (t, Ok(true)) => target = t,
+                (t, Ok(false)) => return (t, Ok(())),
+                (t, Err(e)) => return (t, Err(e)),
+            }
         }
-        Ok(())
     }
 
     #[inline]
-    pub fn parse_line<'s, T: Build<'s>>(lexer: &mut Lexer<'s>, target: T) -> Result<Option<T>> {
-        let (mut target, key) = parse_key(lexer, target)?;
-        let Some(key) = key else {
-            return Ok(None);
+    pub fn parse_line<'s, T: Build<'s>>(lexer: &mut Lexer<'s>, target: T) -> OptResultTuple<T> {
+        let (target, key) = parse_key(lexer, target);
+        let key = match key {
+            Ok(Some(key)) => key,
+            Ok(None) => return (target, Ok(false)),
+            Err(e) => return (target, Err(e)),
         };
 
-        target = target.add_composite(Composite::Object, |mut target| {
+        let (target, result) = target.add_composite(Composite::Object, |mut target| {
             let mut key = key;
             loop {
-                target = target.add_composite(Composite::Field(String::Plain(key).into()), |target| {
+                target = match target.add_composite(Composite::Field(String::Plain(key).into()), |target| {
                     parse_value(lexer, target)
-                })?;
+                }) {
+                    (target, Ok(())) => target,
+                    (target, Err(e)) => return (target, Err(e)),
+                };
 
                 let Some(token) = lexer.next() else {
                     break;
                 };
 
-                let token = token.refine(lexer)?;
+                let token = match token.refine(lexer) {
+                    Ok(token) => token,
+                    Err(e) => return (target, Err(e)),
+                };
                 if token == Token::Eol {
                     break;
                 }
                 let Token::Space = token else {
-                    return Err(("unexpected token here (context: line)", lexer.span()));
+                    return (target, Err(("unexpected token here (context: line)", lexer.span())));
                 };
 
-                let (next_target, next_key) = parse_key(lexer, target)?;
-                target = next_target;
-                if let Some(k) = next_key {
-                    key = k;
-                } else {
-                    break;
+                match parse_key(lexer, target) {
+                    (t, Ok(Some(k))) => {
+                        target = t;
+                        key = k;
+                    }
+                    (t, Ok(None)) => {
+                        target = t;
+                        break;
+                    }
+                    (t, Err(e)) => return (t, Err(e)),
                 }
             }
-            Ok(target)
-        })?;
+            (target, Ok(()))
+        });
 
-        return Ok(Some(target));
+        return (target, result.map(|_| true));
     }
 
     #[inline]
-    fn parse_key<'s, T: Build<'s>>(lexer: &mut Lexer<'s>, target: T) -> Result<(T, Option<&'s str>)> {
+    fn parse_key<'s, T: Build<'s>>(lexer: &mut Lexer<'s>, target: T) -> ResultTuple<T, Option<&'s str>> {
         loop {
             let Some(token) = lexer.next() else {
-                return Ok((target, None));
+                return (target, Ok(None));
             };
 
-            let token = token.refine(lexer)?;
+            let token = match token.refine(lexer) {
+                Ok(token) => token,
+                Err(e) => return (target, Err(e)),
+            };
             match token {
                 Token::Space => continue,
-                Token::Key(key) => return Ok((target, Some(key))),
-                _ => return Err(("expected key here", lexer.span())),
+                Token::Key(key) => return (target, Ok(Some(key))),
+                _ => return (target, Err(("expected key here", lexer.span()))),
             }
         }
     }
 
     #[inline]
-    fn parse_value<'s, T: Build<'s>>(lexer: &mut Lexer<'s>, target: T) -> Result<T> {
+    fn parse_value<'s, T: Build<'s>>(lexer: &mut Lexer<'s>, target: T) -> ResultTuple<T> {
         let Some(token) = lexer.next() else {
-            return Err(("unexpected end of stream while expecting field value", lexer.span()));
+            return (
+                target,
+                Err(("unexpected end of stream while expecting field value", lexer.span())),
+            );
         };
 
-        let token = token.refine(lexer)?;
+        let token = match token.refine(lexer) {
+            Ok(token) => token,
+            Err(e) => return (target, Err(e)),
+        };
 
-        Ok(match token {
+        let target = match token {
             Token::Null => target.add_scalar(Scalar::Null),
             Token::Bool(b) => target.add_scalar(Scalar::Bool(b)),
             Token::Number(s) => target.add_scalar(Scalar::Number(s)),
             Token::String(s) => target.add_scalar(Scalar::String(s.into())),
-            _ => return Err(("expected value here", lexer.span())),
-        })
+            _ => return (target, Err(("expected value here", lexer.span()))),
+        };
+
+        (target, Ok(()))
     }
 }
 

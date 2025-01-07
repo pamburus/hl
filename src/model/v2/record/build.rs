@@ -100,9 +100,9 @@ where
     }
 
     #[inline]
-    fn add_composite<F>(mut self, composite: Composite<'t>, f: F) -> ast::Result<Self>
+    fn add_composite<F>(mut self, composite: Composite<'t>, f: F) -> (Self, ast::Result<()>)
     where
-        F: FnOnce(Self::Child) -> ast::Result<Self::Child>,
+        F: FnOnce(Self::Child) -> (Self::Child, ast::Result<()>),
     {
         let mut core = self.core.clone();
 
@@ -113,7 +113,7 @@ where
                         match field.kind() {
                             FieldSettingsKind::Final(kind) => {
                                 if !self.ctx.pc.prioritize(kind, *priority, || true) {
-                                    return Ok(self);
+                                    return (self, Ok(()));
                                 }
                                 core.field = Some((self.target.checkpoint(), *field));
                             }
@@ -128,7 +128,7 @@ where
                 if core.depth == 1 {
                     for pattern in &core.settings.ignore {
                         if pattern.matches(key.source()) {
-                            return Ok(self);
+                            return (self, Ok(()));
                         }
                     }
                 }
@@ -142,7 +142,7 @@ where
                     self.target = self
                         .target
                         .add_scalar(Scalar::String(ast::String::raw("<!max depth exceeded!>")));
-                    return Ok(self);
+                    return (self, Ok(()));
                 }
             }
             Composite::Array => {
@@ -154,19 +154,19 @@ where
                     self.target = self
                         .target
                         .add_scalar(Scalar::String(ast::String::raw("<!max depth exceeded!>")));
-                    return Ok(self);
+                    return (self, Ok(()));
                 }
             }
         }
 
         let self_core = self.core.clone();
 
-        let target = self.into_inner().add_composite(composite, |target| {
-            let target = f(Builder::from_inner(core, target))?;
-            Ok(target.into_inner())
-        })?;
+        let (target, result) = self.into_inner().add_composite(composite, |target| {
+            let (target, result) = f(Builder::from_inner(core, target));
+            (target.into_inner(), result)
+        });
 
-        Ok(Builder::from_inner(self_core, target))
+        (Builder::from_inner(self_core, target), result)
     }
 
     #[inline]
@@ -583,7 +583,8 @@ mod tests {
         let mut record = Record::default();
         let b = Builder::new(&settings, &mut pc, &mut record, container.metaroot());
         b.add_scalar(Scalar::Bool(true))
-            .add_composite(Composite::Array, |b| Ok(b.add_scalar(Scalar::Bool(false))))
+            .add_composite(Composite::Array, |b| (b.add_scalar(Scalar::Bool(false)), Ok(())))
+            .1
             .unwrap();
         assert_eq!(container.nodes().len(), 3);
     }
@@ -598,6 +599,7 @@ mod tests {
             &mut json::Token::lexer(KIBANA_REC_1),
             Builder::new(&settings, &mut pc, &mut record, container.metaroot()),
         )
+        .1
         .unwrap();
 
         assert_eq!(container.roots().len(), 1);

@@ -94,9 +94,9 @@ where
     type Checkpoint;
 
     fn add_scalar(self, scalar: Scalar<'s>) -> Self;
-    fn add_composite<F>(self, composite: Composite<'s>, f: F) -> Result<Self>
+    fn add_composite<F>(self, composite: Composite<'s>, f: F) -> (Self, Result<()>)
     where
-        F: FnOnce(Self::Child) -> Result<Self::Child>;
+        F: FnOnce(Self::Child) -> (Self::Child, Result<()>);
 
     fn checkpoint(&self) -> Self::Checkpoint;
     fn first_node_index(&self, checkpoint: &Self::Checkpoint) -> OptIndex;
@@ -139,14 +139,15 @@ where
     }
 
     #[inline]
-    fn add_composite<F>(self, composite: Composite<'s>, f: F) -> Result<Self>
+    fn add_composite<F>(self, composite: Composite<'s>, f: F) -> (Self, Result<()>)
     where
-        F: FnOnce(Self::Child) -> Result<Self::Child>,
+        F: FnOnce(Self::Child) -> (Self::Child, Result<()>),
     {
-        let result = self
-            .inner
-            .build(composite.into(), |b| f(Builder::new(b)).map(|b| b.inner))?;
-        Ok(Builder::new(result))
+        let (b, result) = self.inner.build(composite.into(), |b| {
+            let (b, result) = f(Builder::new(b));
+            (b.inner, result)
+        });
+        (Builder::new(b), result)
     }
 
     #[inline]
@@ -198,11 +199,11 @@ where
     }
 
     #[inline]
-    fn add_composite<F>(self, _: Composite<'s>, _: F) -> Result<Self>
+    fn add_composite<F>(self, _: Composite<'s>, _: F) -> (Self, Result<()>)
     where
-        F: FnOnce(Self::Child) -> Result<Self::Child>,
+        F: FnOnce(Self::Child) -> (Self::Child, Result<()>),
     {
-        Ok(self)
+        (self, Ok(()))
     }
 
     #[inline]
@@ -372,7 +373,7 @@ mod tests {
         let mut container = Container::new();
         let root = container.metaroot();
         root.add_scalar(Scalar::Bool(true))
-            .add_composite(Composite::Array, |b| Ok(b.add_scalar(Scalar::Bool(false))))
+            .add_composite(Composite::Array, |b| (b.add_scalar(Scalar::Bool(false)), Ok(())))
             .unwrap();
         assert_eq!(container.roots().len(), 2);
     }
@@ -387,7 +388,7 @@ mod tests {
             .add_composite(Composite::Array, |b| {
                 let (b, attachment) = b.detach();
                 assert_eq!(attachment, "attachment");
-                Ok(b.add_scalar(Scalar::Bool(false)).attach("another attachment"))
+                (b.add_scalar(Scalar::Bool(false)).attach("another attachment"), Ok(()))
             })
             .unwrap()
             .detach()

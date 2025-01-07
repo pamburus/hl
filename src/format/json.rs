@@ -34,12 +34,12 @@ impl<'s> Parse<'s> for Parser<'s> {
         let start = self.lexer.span().start;
 
         match parse_value(&mut self.lexer, target) {
-            Some(Ok(target)) => Some(Ok(ParseOutput {
+            (target, Ok(true)) => Some(Ok(ParseOutput {
                 span: start..self.lexer.span().end,
                 target,
             })),
-            None => None,
-            Some(Err((target, e))) => Some(Err(ParseError {
+            (_, Ok(false)) => None,
+            (target, Err(e)) => Some(Err(ParseError {
                 error: Error::FailedToParseJsonInput {
                     message: e.0,
                     start: e.1.start,
@@ -117,6 +117,7 @@ pub mod error {
     use logos::Span;
 
     pub type Error = (&'static str, Span);
+    pub type Result<T> = std::result::Result<T, Error>;
     pub type ResultTuple<T, R = ()> = (T, std::result::Result<R, Error>);
     pub type OptResultTuple<T> = ResultTuple<T, bool>;
 
@@ -145,75 +146,89 @@ mod parse {
     #[inline]
     pub fn parse_all<'s>(lexer: &mut Lexer<'s>) -> Result<Container<'s>> {
         let mut container = Container::new();
-        parse_all_into(lexer, container.metaroot())?;
+        parse_all_into(lexer, container.metaroot()).1?;
         Ok(container)
     }
 
     #[inline]
-    pub fn parse_all_into<'s, T: Build<'s>>(lexer: &mut Lexer<'s>, mut target: T) -> Result<T> {
+    pub fn parse_all_into<'s, T: Build<'s>>(lexer: &mut Lexer<'s>, mut target: T) -> ResultTuple<T> {
         loop {
             match parse_value(lexer, target) {
-                Ok(Ok(t)) => target = t,
-                Err(t) => return Ok(t),
-                Ok(Err(e)) => return Err(e),
+                (t, Ok(true)) => target = t,
+                (t, Ok(false)) => return (t, Ok(())),
+                (t, Err(e)) => return (t, Err(e)),
             }
         }
     }
 
     #[inline]
-    pub fn parse_value<'s, T: Build<'s>>(lexer: &mut Lexer<'s>, target: T) -> OptResult<T> {
+    pub fn parse_value<'s, T: Build<'s>>(lexer: &mut Lexer<'s>, target: T) -> OptResultTuple<T> {
         if let Some(token) = lexer.next() {
             let token = match token.refine(lexer) {
                 Ok(token) => token,
-                Err(e) => return Ok(Err((target, e))),
+                Err(e) => return (target, Err(e)),
             };
-            Ok(parse_value_token(lexer, target, token))
+            match parse_value_token(lexer, target, token) {
+                (target, Ok(())) => (target, Ok(true)),
+                (target, Err(e)) => (target, Err(e)),
+            }
         } else {
-            Err(target)
+            (target, Ok(false))
         }
     }
 
     #[inline]
     fn parse_field_value<'s, T: Build<'s>>(lexer: &mut Lexer<'s>, target: T) -> ResultTuple<T> {
         match parse_value(lexer, target) {
-            Ok(result) => result,
-            Err(target) => Err((
+            (target, Ok(true)) => (target, Ok(())),
+            (target, Ok(false)) => (
                 target,
-                ("unexpected end of stream while expecting field value", lexer.span()),
-            )),
+                Err(("unexpected end of stream while expecting field value", lexer.span())),
+            ),
+            (target, Err(e)) => (target, Err(e)),
         }
     }
 
     #[inline]
     fn parse_value_token<'s, T: Build<'s>>(lexer: &mut Lexer<'s>, target: T, token: Token<'s>) -> ResultTuple<T> {
         match token {
-            Token::Bool(b) => Ok(target.add_scalar(Scalar::Bool(b))),
+            Token::Bool(b) => (target.add_scalar(Scalar::Bool(b)), Ok(())),
             Token::BraceOpen => {
                 let mut skipped = true;
-                let target = target.add_composite(Composite::Object, |target| {
+                let (target, result) = target.add_composite(Composite::Object, |target| {
                     skipped = false;
                     parse_object(lexer, target)
-                })?;
-                if skipped {
-                    parse_object(lexer, ast::Discarder::default()).map_err(|(_, e)| (target, e))?;
+                });
+                if let Err(e) = result {
+                    return (target, Err(e));
                 }
-                Ok(target)
+                if skipped {
+                    if let Err(e) = parse_object(lexer, ast::Discarder::default()).1 {
+                        return (target, Err(e));
+                    }
+                }
+                (target, Ok(()))
             }
             Token::BracketOpen => {
                 let mut skipped = true;
-                let target = target.add_composite(Composite::Array, |target| {
+                let (target, result) = target.add_composite(Composite::Array, |target| {
                     skipped = false;
                     parse_array(lexer, target)
-                })?;
-                if skipped {
-                    parse_array(lexer, ast::Discarder::default())?;
+                });
+                if let Err(e) = result {
+                    return (target, Err(e));
                 }
-                Ok(target)
+                if skipped {
+                    if let Err(e) = parse_array(lexer, ast::Discarder::default()).1 {
+                        return (target, Err(e));
+                    }
+                }
+                (target, Ok(()))
             }
-            Token::Null => Ok(target.add_scalar(Scalar::Null)),
-            Token::Number(s) => Ok(target.add_scalar(Scalar::Number(s))),
-            Token::String(s) => Ok(target.add_scalar(Scalar::String(s.into()))),
-            _ => Err((target, ("unexpected token here (context: value)", lexer.span()))),
+            Token::Null => (target.add_scalar(Scalar::Null), Ok(())),
+            Token::Number(s) => (target.add_scalar(Scalar::Number(s)), Ok(())),
+            Token::String(s) => (target.add_scalar(Scalar::String(s.into())), Ok(())),
+            _ => (target, Err(("unexpected token here (context: value)", lexer.span()))),
         }
     }
 
@@ -239,7 +254,10 @@ mod parse {
                 }
                 Token::Comma if awaits_comma => awaits_value = true,
                 _ => {
-                    target = parse_value_token(lexer, target, token)?;
+                    match parse_value_token(lexer, target, token) {
+                        (t, Ok(())) => target = t,
+                        result => return result,
+                    }
                     awaits_value = false;
                 }
             }
