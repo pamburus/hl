@@ -1,8 +1,11 @@
 // external imports
 use logos::Logos;
 
-use super::{Parse, ParseOutput};
-use crate::{error::Error, model::v2::ast};
+use super::{Parse, ParseError, ParseOutput, ParseResult};
+use crate::{
+    error::Error,
+    model::v2::ast,
+};
 
 // ---
 
@@ -12,7 +15,7 @@ impl super::Format for JsonFormat {
     type Lexer<'s> = Lexer<'s>;
     type Parser<'s> = Parser<'s>;
 
-    fn new_lexer<'a>(&self, input: &'a [u8]) -> super::Result<Self::Lexer<'a>> {
+    fn new_lexer<'a>(&self, input: &'a [u8]) -> Result<Self::Lexer<'a>> {
         Ok(Lexer::new(std::str::from_utf8(input)?))
     }
 
@@ -30,18 +33,35 @@ pub struct Parser<'s> {
 impl<'s> Parse<'s> for Parser<'s> {
     type Lexer = Lexer<'s>;
 
-    fn parse<T: ast::Build<'s>>(&mut self, target: T) -> super::Result<Option<ParseOutput>> {
-        parse_value(&mut self.lexer, target)
-            .map_err(|e| Error::FailedToParseJsonInput {
-                message: e.0,
-                start: e.1.start,
-                end: e.1.end,
+    fn parse<T: ast::Build<'s>>(&mut self, target: T) -> ParseResult<T> {
+        let start = self.lexer.span().start;
+
+        match parse_value(&mut self.lexer, target) {
+            Ok(Some(target)) => Ok(ParseOutput {
+                span: start..self.lexer.span().end,
+                target,
+            }),
+            Ok(None) => None,
+            Err(e) => Err(ParseError {
+                error: ParseError::FailedToParseJsonInput {
+                    message: e.0,
+                    start: e.1.start,
+                    end: e.1.end,
+                },
+                span: start..self.lexer.span().end,
+                target: 
+            }),
+        }
+        .map_err(|e| Error::FailedToParseJsonInput {
+            message: e.0,
+            start: e.1.start,
+            end: e.1.end,
+        })
+        .map(|x| {
+            x.map(|_| ParseOutput {
+                span: 0..self.lexer.span().end,
             })
-            .map(|x| {
-                x.map(|_| ParseOutput {
-                    span: 0..self.lexer.span().end,
-                })
-            })
+        })
     }
 
     fn into_lexer(self) -> Self::Lexer {
@@ -110,19 +130,19 @@ pub mod error {
     use logos::Span;
 
     pub type Error = (&'static str, Span);
-    pub type Result<T> = std::result::Result<T, Error>;
+    pub type Result<T> = std::result::Result<T, (T, Error)>;
 
     pub trait Refine {
         type Output;
 
-        fn refine(self, lexer: &Lexer) -> Result<Self::Output>;
+        fn refine(self, lexer: &Lexer) -> std::result::Result<Self::Output, Error>;
     }
 
     impl<T> Refine for std::result::Result<T, ()> {
         type Output = T;
 
         #[inline]
-        fn refine(self, lexer: &Lexer) -> Result<T> {
+        fn refine(self, lexer: &Lexer) -> std::result::Result<T, Error> {
             self.map_err(|_| ("unexpected characters or end of stream", lexer.span()))
         }
     }
@@ -150,11 +170,15 @@ mod parse {
     }
 
     #[inline]
-    pub fn parse_value<'s, T: Build<'s>>(lexer: &mut Lexer<'s>, target: T) -> Result<Option<T>> {
+    pub fn parse_value<'s, T: Build<'s>>(lexer: &mut Lexer<'s>, target: T) -> Option<Result<T>> {
         if let Some(token) = lexer.next() {
-            parse_value_token(lexer, target, token.refine(lexer)?).map(Some)
+            let token = match token.refine(lexer) {
+                Ok(token) => token,
+                Err(e) => return Some(Err((target, e))),
+            };
+            Some(parse_value_token(lexer, target, token))
         } else {
-            Ok(None)
+            None
         }
     }
 

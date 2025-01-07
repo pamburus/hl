@@ -87,7 +87,7 @@ impl<'s> Parse<'s> for Parser<'s> {
     type Lexer = Lexer<'s>;
 
     fn parse<T: ast::Build<'s>>(&mut self, target: T) -> super::Result<Option<ParseOutput>> {
-        let checkpoint = self.lexer.clone();
+        let lc = self.lexer.clone();
         let mut end = self.lexer.span().end;
 
         match Self::try_with(&mut self.lexer, target) {
@@ -95,7 +95,7 @@ impl<'s> Parse<'s> for Parser<'s> {
             Err(skip) => {
                 end = end.max(self.lexer.span().end);
                 for &choice in self.choices.iter().filter(|&&c| c != skip) {
-                    let mut lexer = checkpoint.clone().morph(choice);
+                    let mut lexer = lc.clone().morph(choice);
                     if let Ok(output) = Self::try_with(&mut lexer, target) {
                         self.lexer = lexer;
                         return Ok(output);
@@ -103,7 +103,7 @@ impl<'s> Parse<'s> for Parser<'s> {
                     end = end.max(self.lexer.span().end);
                 }
                 return Err(Error::FailedToAutoDetectInputFormat {
-                    start: checkpoint.span().start,
+                    start: lc.span().start,
                     end,
                 });
             }
