@@ -611,12 +611,10 @@ where
             index: Some(index).into(),
         };
 
-        let result = f(child).into_result().map(|child| {
+        f(child).transform(|child| {
             let (tree, attachment) = child.end();
             NodeBuilder::from((snapshot, attachment, tree))
-        });
-
-        R::finalize(result)
+        })
     }
 
     #[inline]
