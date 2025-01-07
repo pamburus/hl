@@ -2,10 +2,7 @@
 use logos::Logos;
 
 use super::{Parse, ParseError, ParseOutput, ParseResult};
-use crate::{
-    error::Error,
-    model::v2::ast,
-};
+use crate::{error::Error, model::v2::ast};
 
 // ---
 
@@ -15,7 +12,7 @@ impl super::Format for JsonFormat {
     type Lexer<'s> = Lexer<'s>;
     type Parser<'s> = Parser<'s>;
 
-    fn new_lexer<'a>(&self, input: &'a [u8]) -> Result<Self::Lexer<'a>> {
+    fn new_lexer<'a>(&self, input: &'a [u8]) -> super::Result<Self::Lexer<'a>> {
         Ok(Lexer::new(std::str::from_utf8(input)?))
     }
 
@@ -37,31 +34,21 @@ impl<'s> Parse<'s> for Parser<'s> {
         let start = self.lexer.span().start;
 
         match parse_value(&mut self.lexer, target) {
-            Ok(Some(target)) => Ok(ParseOutput {
+            Some(Ok(target)) => Some(Ok(ParseOutput {
                 span: start..self.lexer.span().end,
                 target,
-            }),
-            Ok(None) => None,
-            Err(e) => Err(ParseError {
-                error: ParseError::FailedToParseJsonInput {
+            })),
+            None => None,
+            Some(Err((target, e))) => Some(Err(ParseError {
+                error: Error::FailedToParseJsonInput {
                     message: e.0,
                     start: e.1.start,
                     end: e.1.end,
                 },
                 span: start..self.lexer.span().end,
-                target: 
-            }),
+                target,
+            })),
         }
-        .map_err(|e| Error::FailedToParseJsonInput {
-            message: e.0,
-            start: e.1.start,
-            end: e.1.end,
-        })
-        .map(|x| {
-            x.map(|_| ParseOutput {
-                span: 0..self.lexer.span().end,
-            })
-        })
     }
 
     fn into_lexer(self) -> Self::Lexer {
@@ -131,6 +118,7 @@ pub mod error {
 
     pub type Error = (&'static str, Span);
     pub type Result<T> = std::result::Result<T, (T, Error)>;
+    pub type OptResult<T> = std::result::Result<Result<T>, T>;
 
     pub trait Refine {
         type Output;
@@ -162,32 +150,37 @@ mod parse {
     }
 
     #[inline]
-    pub fn parse_all_into<'s, T: Build<'s>>(lexer: &mut Lexer<'s>, mut target: T) -> Result<()> {
-        while let Some(t) = parse_value(lexer, target)? {
-            target = t;
+    pub fn parse_all_into<'s, T: Build<'s>>(lexer: &mut Lexer<'s>, mut target: T) -> Result<T> {
+        loop {
+            match parse_value(lexer, target) {
+                Ok(Ok(t)) => target = t,
+                Err(t) => return Ok(t),
+                Ok(Err(e)) => return Err(e),
+            }
         }
-        Ok(())
     }
 
     #[inline]
-    pub fn parse_value<'s, T: Build<'s>>(lexer: &mut Lexer<'s>, target: T) -> Option<Result<T>> {
+    pub fn parse_value<'s, T: Build<'s>>(lexer: &mut Lexer<'s>, target: T) -> OptResult<T> {
         if let Some(token) = lexer.next() {
             let token = match token.refine(lexer) {
                 Ok(token) => token,
-                Err(e) => return Some(Err((target, e))),
+                Err(e) => return Ok(Err((target, e))),
             };
-            Some(parse_value_token(lexer, target, token))
+            Ok(parse_value_token(lexer, target, token))
         } else {
-            None
+            Err(target)
         }
     }
 
     #[inline]
     fn parse_field_value<'s, T: Build<'s>>(lexer: &mut Lexer<'s>, target: T) -> Result<T> {
-        if let Some(target) = parse_value(lexer, target)? {
-            Ok(target)
-        } else {
-            Err(("unexpected end of stream while expecting field value", lexer.span()))
+        match parse_value(lexer, target) {
+            Ok(result) => result,
+            Err(target) => Err((
+                target,
+                ("unexpected end of stream while expecting field value", lexer.span()),
+            )),
         }
     }
 
@@ -202,7 +195,7 @@ mod parse {
                     parse_object(lexer, target)
                 })?;
                 if skipped {
-                    parse_object(lexer, ast::Discarder::default())?;
+                    parse_object(lexer, ast::Discarder::default()).map_err(|(_, e)| (target, e))?;
                 }
                 Ok(target)
             }
@@ -220,7 +213,7 @@ mod parse {
             Token::Null => Ok(target.add_scalar(Scalar::Null)),
             Token::Number(s) => Ok(target.add_scalar(Scalar::Number(s))),
             Token::String(s) => Ok(target.add_scalar(Scalar::String(s.into()))),
-            _ => Err(("unexpected token here (context: value)", lexer.span())),
+            _ => Err((target, ("unexpected token here (context: value)", lexer.span()))),
         }
     }
 
