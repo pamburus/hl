@@ -1,4 +1,4 @@
-use super::{json, logfmt, Format, Parse, ParseOutput};
+use super::{json, logfmt, Format, Parse, ParseOutput, ParseResult};
 use crate::{error::Error, model::v2::ast};
 
 // ---
@@ -65,20 +65,18 @@ impl<'s> Parser<'s> {
         Self { choices, lexer }
     }
 
-    fn try_with<T: ast::Build<'s>>(lexer: &mut Lexer<'s>, target: T) -> Result<Option<ParseOutput>, Choice> {
+    fn try_with<T: ast::Build<'s>>(lexer: &mut Lexer<'s>, target: T) -> Result<Option<ParseOutput<T>>, (T, Choice)> {
         match lexer {
-            Lexer::Json(lexer) => {
-                if let Ok(result) = json::JsonFormat.parse_from_lexer(lexer, target) {
-                    return Ok(result);
-                }
-                Err(Choice::Json)
-            }
-            Lexer::Logfmt(lexer) => {
-                if let Ok(result) = logfmt::LogfmtFormat.parse_from_lexer(lexer, target) {
-                    return Ok(result);
-                }
-                Err(Choice::Logfmt)
-            }
+            Lexer::Json(lexer) => match json::JsonFormat.parse_from_lexer(lexer, target) {
+                Some(Ok(output)) => return Ok(Some(output)),
+                Some(Err(e)) => return Err((e.target, Choice::Json)),
+                None => return Ok(None),
+            },
+            Lexer::Logfmt(lexer) => match logfmt::LogfmtFormat.parse_from_lexer(lexer, target) {
+                Some(Ok(output)) => return Ok(Some(output)),
+                Some(Err(e)) => return Err((e.target, Choice::Logfmt)),
+                None => return Ok(None),
+            },
         }
     }
 }
@@ -86,26 +84,35 @@ impl<'s> Parser<'s> {
 impl<'s> Parse<'s> for Parser<'s> {
     type Lexer = Lexer<'s>;
 
-    fn parse<T: ast::Build<'s>>(&mut self, target: T) -> super::Result<Option<ParseOutput>> {
+    fn parse<T: ast::Build<'s>>(&mut self, target: T) -> ParseResult<T> {
         let lc = self.lexer.clone();
         let mut end = self.lexer.span().end;
 
         match Self::try_with(&mut self.lexer, target) {
-            Ok(output) => return Ok(output),
-            Err(skip) => {
+            Ok(Some(output)) => return Some(Ok(output)),
+            Ok(None) => return None,
+            Err((mut target, skip)) => {
                 end = end.max(self.lexer.span().end);
                 for &choice in self.choices.iter().filter(|&&c| c != skip) {
                     let mut lexer = lc.clone().morph(choice);
-                    if let Ok(output) = Self::try_with(&mut lexer, target) {
-                        self.lexer = lexer;
-                        return Ok(output);
+                    match Self::try_with(&mut lexer, target) {
+                        Ok(Some(output)) => {
+                            self.lexer = lexer;
+                            return Some(Ok(output));
+                        }
+                        Ok(None) => return None,
+                        Err((t, _)) => target = t,
                     }
                     end = end.max(self.lexer.span().end);
                 }
-                return Err(Error::FailedToAutoDetectInputFormat {
-                    start: lc.span().start,
-                    end,
-                });
+                return Some(Err(super::ParseError {
+                    error: Error::FailedToAutoDetectInputFormat {
+                        start: lc.span().start,
+                        end,
+                    },
+                    span: lc.span().start..end,
+                    target,
+                }));
             }
         }
     }

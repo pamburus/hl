@@ -35,64 +35,9 @@ pub trait Parse<'a> {
 
 // ---
 
-pub struct Auto;
-
-impl Format for Auto {
-    fn parse<'s, T: ast::Build<'s>>(&self, input: &'s [u8], target: T) -> ParseResult<T> {
-        if let Some(true) = Json.detect(input) {
-            return Json.parse(input, target);
-        }
-
-        return Logfmt.parse(input, target);
-    }
-}
-
-// ---
-
-pub struct Json;
-
-impl Format for Json {
-    fn parse<'s, T: ast::Build<'s>>(&self, input: &'s [u8], target: T) -> ParseResult<T> {
-        let mut lexer = json::Lexer::new(std::str::from_utf8(input)?);
-        json::parse_value(&mut lexer, target)
-            .map_err(|e| Error::FailedToParseJsonInput {
-                message: e.0,
-                start: e.1.start,
-                end: e.1.end,
-            })
-            .map(|x| {
-                x.map(|_| ParseOutput {
-                    span: 0..lexer.span().end,
-                })
-            })
-    }
-
-    fn detect<'s>(&self, input: &'s [u8]) -> Option<bool> {
-        Some(input.starts_with(b"{"))
-    }
-}
-
-// ---
-
-pub struct Logfmt;
-
-impl Format for Logfmt {
-    fn parse<'s, T: ast::Build<'s>>(&self, input: &'s [u8], target: T) -> ParseResult<T> {
-        let mut lexer = logfmt::Lexer::new(std::str::from_utf8(input)?);
-        logfmt::parse_line(&mut lexer, target)
-            .map_err(|e| Error::FailedToParseLogfmtInput {
-                message: e.0,
-                start: e.1.start,
-                end: e.1.end,
-            })
-            .map(|x| {
-                x.map(|target| ParseOutput {
-                    span: 0..lexer.span().end,
-                    target,
-                })
-            })
-    }
-}
+pub type Json = json::JsonFormat;
+pub type Logfmt = logfmt::LogfmtFormat;
+pub type Auto = auto::AutoFormat;
 
 // ---
 
