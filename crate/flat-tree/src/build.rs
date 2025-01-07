@@ -87,6 +87,20 @@ where
     }
 }
 
+impl<F, B, C, R> BuildFnResult<F, (C, R), B, C> for (C, R)
+where
+    F: FnOnce(C) -> (C, R),
+    B: Build,
+    C: Build,
+{
+    type Output = (B, R);
+
+    #[inline]
+    fn transform<MF: FnOnce(C) -> B>(self, map: MF) -> Self::Output {
+        (map(self.0), self.1)
+    }
+}
+
 // ---
 
 pub trait BuildAttachment {

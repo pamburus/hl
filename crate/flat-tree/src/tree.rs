@@ -881,4 +881,17 @@ mod tests {
         let roots = collect(tree.roots());
         assert_eq!(roots, [1, 2, 3]);
     }
+
+    #[test]
+    fn test_result_tuple() {
+        let mut tree = FlatTree::<usize>::new();
+        let b = tree.metaroot();
+        let (_, result) = b.push(1).build(2, |b| (b.push(3), true));
+        assert_eq!(tree.storage.len(), 3);
+        assert_eq!(tree.roots, 2);
+        assert_eq!(result, true);
+
+        let roots = collect(tree.roots());
+        assert_eq!(roots, [1, 2]);
+    }
 }

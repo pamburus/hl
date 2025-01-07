@@ -117,8 +117,8 @@ pub mod error {
     use logos::Span;
 
     pub type Error = (&'static str, Span);
-    pub type Result<T> = std::result::Result<T, (T, Error)>;
-    pub type OptResult<T> = std::result::Result<Result<T>, T>;
+    pub type ResultTuple<T, R = ()> = (T, std::result::Result<R, Error>);
+    pub type OptResultTuple<T> = ResultTuple<T, bool>;
 
     pub trait Refine {
         type Output;
@@ -174,7 +174,7 @@ mod parse {
     }
 
     #[inline]
-    fn parse_field_value<'s, T: Build<'s>>(lexer: &mut Lexer<'s>, target: T) -> Result<T> {
+    fn parse_field_value<'s, T: Build<'s>>(lexer: &mut Lexer<'s>, target: T) -> ResultTuple<T> {
         match parse_value(lexer, target) {
             Ok(result) => result,
             Err(target) => Err((
@@ -253,7 +253,7 @@ mod parse {
     ///
     /// > NOTE: we assume '{' was consumed.
     #[inline]
-    fn parse_object<'s, T: Build<'s>>(lexer: &mut Lexer<'s>, mut target: T) -> Result<T> {
+    fn parse_object<'s, T: Build<'s>>(lexer: &mut Lexer<'s>, mut target: T) -> ResultTuple<T> {
         let span = lexer.span();
 
         enum Awaits {
@@ -264,9 +264,14 @@ mod parse {
         let mut awaits = Awaits::Key;
 
         while let Some(token) = lexer.next() {
-            match (token.refine(lexer)?, &mut awaits) {
+            let token = match token.refine(lexer) {
+                Ok(token) => token,
+                Err(e) => return (target, Err(e)),
+            };
+
+            match (token, &mut awaits) {
                 (Token::BraceClose, Awaits::Key | Awaits::Comma) => {
-                    return Ok(target);
+                    return (target, Ok(()));
                 }
                 (Token::Comma, Awaits::Comma) => {
                     awaits = Awaits::Key;
@@ -274,11 +279,11 @@ mod parse {
                 (Token::String(s), Awaits::Key) => {
                     match lexer.next() {
                         Some(Ok(Token::Colon)) => (),
-                        _ => return Err(("unexpected token here, expecting ':'", lexer.span())),
+                        _ => return (target, Err(("unexpected token here, expecting ':'", lexer.span()))),
                     }
 
                     let mut skipped = true;
-                    target = target.add_composite(Composite::Field(s.into()), |target| {
+                    let (t, result) = target.add_composite(Composite::Field(s.into()), |target| {
                         skipped = false;
                         parse_field_value(lexer, target)
                     });
