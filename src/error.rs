@@ -116,6 +116,8 @@ pub enum Error {
         end: usize,
         message: &'static str,
     },
+    #[error("failed to automatically detect input format at {start}..{end}")]
+    FailedToAutoDetectInputFormat { start: usize, end: usize },
     #[error("failed to parse logfmt: {0}")]
     LogfmtParseError(#[from] logfmt::error::Error),
     #[error(transparent)]

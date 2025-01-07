@@ -1,9 +1,57 @@
 // external imports
 use logos::Logos;
 
-use crate::model::v2::ast;
+use super::{Parse, ParseOutput};
+use crate::{error::Error, model::v2::ast};
 
-#[derive(Logos, Debug, PartialEq)]
+// ---
+
+pub struct JsonFormat;
+
+impl super::Format for JsonFormat {
+    type Lexer<'s> = Lexer<'s>;
+    type Parser<'s> = Parser<'s>;
+
+    fn new_lexer<'a>(&self, input: &'a [u8]) -> super::Result<Self::Lexer<'a>> {
+        Ok(Lexer::new(std::str::from_utf8(input)?))
+    }
+
+    fn new_parser_from_lexer<'s>(&self, lexer: Self::Lexer<'s>) -> Self::Parser<'s> {
+        Parser { lexer }
+    }
+}
+
+// ---
+
+pub struct Parser<'s> {
+    lexer: Lexer<'s>,
+}
+
+impl<'s> Parse<'s> for Parser<'s> {
+    type Lexer = Lexer<'s>;
+
+    fn parse<T: ast::Build<'s>>(&mut self, target: T) -> super::Result<Option<ParseOutput>> {
+        parse_value(&mut self.lexer, target)
+            .map_err(|e| Error::FailedToParseJsonInput {
+                message: e.0,
+                start: e.1.start,
+                end: e.1.end,
+            })
+            .map(|x| {
+                x.map(|_| ParseOutput {
+                    span: 0..self.lexer.span().end,
+                })
+            })
+    }
+
+    fn into_lexer(self) -> Self::Lexer {
+        self.lexer
+    }
+}
+
+// ---
+
+#[derive(Logos, Debug, PartialEq, Clone)]
 #[logos(skip r"[ \t\r\n\f]+")]
 pub enum Token<'s> {
     #[token("null")]
@@ -39,7 +87,7 @@ pub enum Token<'s> {
     Comma,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum String<'s> {
     Plain(&'s str),
     Escaped(&'s str),

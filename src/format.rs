@@ -1,15 +1,43 @@
-use crate::{error::Error, error::Result, model::v2::ast};
+pub use crate::error::{Error, Result};
+use crate::model::v2::ast;
 
+pub mod auto;
 pub mod json;
 pub mod logfmt;
 
 pub trait Format {
-    fn parse<'s, T: ast::Build<'s>>(&self, input: &'s [u8], target: T) -> Result<Option<ParseOutput>>;
+    type Lexer<'a>: Clone;
+    type Parser<'a>: Parse<'a, Lexer = Self::Lexer<'a>>;
 
-    fn detect<'s>(&self, _input: &'s [u8]) -> Option<bool> {
-        None
+    fn new_lexer<'a>(&self, input: &'a [u8]) -> Result<Self::Lexer<'a>>;
+    fn new_parser_from_lexer<'a>(&self, lexer: Self::Lexer<'a>) -> Self::Parser<'a>;
+    fn new_parser<'a>(&self, input: &'a [u8]) -> Result<Self::Parser<'a>> {
+        Ok(self.new_parser_from_lexer(self.new_lexer(input)?))
+    }
+    fn parse_from_lexer<'a, T: ast::Build<'a>>(
+        &self,
+        lexer: &mut Self::Lexer<'a>,
+        target: T,
+    ) -> Result<Option<ParseOutput>> {
+        let mut parser = self.new_parser_from_lexer(lexer.clone());
+        let result = parser.parse(target);
+        *lexer = parser.into_lexer();
+        result
+    }
+    fn parse<'a, T: ast::Build<'a>>(&self, input: &'a [u8], target: T) -> Result<Option<ParseOutput>> {
+        let mut lexer = self.new_lexer(input)?;
+        self.parse_from_lexer(&mut lexer, target)
     }
 }
+
+pub trait Parse<'a> {
+    type Lexer: Clone;
+
+    fn parse<T: ast::Build<'a>>(&mut self, target: T) -> Result<Option<ParseOutput>>;
+    fn into_lexer(self) -> Self::Lexer;
+}
+
+// ---
 
 pub struct Auto;
 

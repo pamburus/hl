@@ -1,9 +1,57 @@
 // external imports
 use logos::Logos;
 
-use crate::model::v2::ast;
+use super::{Format, Parse, ParseOutput};
+use crate::{error::Error, model::v2::ast};
 
-#[derive(Logos, Debug, PartialEq)]
+// ---
+
+pub struct LogfmtFormat;
+
+impl Format for LogfmtFormat {
+    type Lexer<'s> = Lexer<'s>;
+    type Parser<'s> = Parser<'s>;
+
+    fn new_lexer<'a>(&self, input: &'a [u8]) -> super::Result<Self::Lexer<'a>> {
+        Ok(Lexer::new(std::str::from_utf8(input)?))
+    }
+
+    fn new_parser_from_lexer<'s>(&self, lexer: Self::Lexer<'s>) -> Self::Parser<'s> {
+        Parser { lexer }
+    }
+}
+
+// ---
+
+pub struct Parser<'s> {
+    lexer: Lexer<'s>,
+}
+
+impl<'s> Parse<'s> for Parser<'s> {
+    type Lexer = Lexer<'s>;
+
+    fn parse<T: ast::Build<'s>>(&mut self, target: T) -> super::Result<Option<ParseOutput>> {
+        parse_line(&mut self.lexer, target)
+            .map_err(|e| Error::FailedToParseLogfmtInput {
+                message: e.0,
+                start: e.1.start,
+                end: e.1.end,
+            })
+            .map(|x| {
+                x.map(|_| ParseOutput {
+                    span: 0..self.lexer.span().end,
+                })
+            })
+    }
+
+    fn into_lexer(self) -> Self::Lexer {
+        self.lexer
+    }
+}
+
+// ---
+
+#[derive(Logos, Debug, PartialEq, Clone)]
 pub enum Token<'s> {
     #[regex(r#"[^"\x00-\x20='(),;<>\[\]\\\^`{}|\x7F]+="#, |lex| &lex.slice()[..lex.slice().len()-1])]
     Key(&'s str),
@@ -22,11 +70,14 @@ pub enum Token<'s> {
     #[regex(r#""([^"\\\x00-\x1F]|\\["\\bnfrt/]|u[a-fA-F0-9]{4})*""#, |lex| String::Escaped(lex.slice()), priority = 4)]
     String(String<'s>),
 
-    #[regex(r#"[\x00-\x20]+"#)]
+    #[regex(r#"[\t ]+"#)]
     Space,
+
+    #[regex(r"\r\n|\r|\n")]
+    Eol,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum String<'s> {
     Plain(&'s str),
     Escaped(&'s str),
@@ -66,7 +117,6 @@ pub mod error {
                 Ok(value) => Ok(value),
                 Err(_) => Err(("unexpected characters or end of stream", lexer.span())),
             }
-            // self.map_err(|_| ("unexpected characters or end of stream", lexer.span()))
         }
     }
 }
@@ -111,6 +161,9 @@ mod parse {
                 };
 
                 let token = token.refine(lexer)?;
+                if token == Token::Eol {
+                    break;
+                }
                 let Token::Space = token else {
                     return Err(("unexpected token here (context: line)", lexer.span()));
                 };
