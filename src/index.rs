@@ -71,12 +71,14 @@ pub struct Timestamp {
 }
 
 impl Timestamp {
+    #[inline]
     pub fn add(mut self, interval: std::time::Duration) -> Self {
         self.sec += interval.as_secs() as i64;
         self.nsec += interval.subsec_nanos();
         self
     }
 
+    #[inline]
     pub fn sub(mut self, interval: std::time::Duration) -> Self {
         self.sec -= interval.as_secs() as i64;
         if self.nsec >= interval.subsec_nanos() {
@@ -96,6 +98,7 @@ impl Display for Timestamp {
 }
 
 impl From<(i64, u32)> for Timestamp {
+    #[inline]
     fn from(value: (i64, u32)) -> Self {
         Self {
             sec: value.0,
@@ -105,6 +108,7 @@ impl From<(i64, u32)> for Timestamp {
 }
 
 impl From<chrono::DateTime<chrono::Utc>> for Timestamp {
+    #[inline]
     fn from(value: chrono::DateTime<chrono::Utc>) -> Self {
         Self {
             sec: value.timestamp(),
@@ -116,6 +120,7 @@ impl From<chrono::DateTime<chrono::Utc>> for Timestamp {
 impl std::ops::Sub for Timestamp {
     type Output = std::time::Duration;
 
+    #[inline]
     fn sub(self, rhs: Self) -> Self::Output {
         let mut secs = (self.sec - rhs.sec) as u64;
         let nanos = if self.nsec >= rhs.nsec {
@@ -187,6 +192,7 @@ impl<'a, FS: FileSystem> IndexerSettings<'a, FS> {
 pub struct BufferSize(NonZeroU32);
 
 impl Default for BufferSize {
+    #[inline]
     fn default() -> Self {
         Self(nonzero!(4 * 1024u32))
     }
@@ -195,18 +201,21 @@ impl Default for BufferSize {
 impl TryFrom<NonZero<usize>> for BufferSize {
     type Error = std::num::TryFromIntError;
 
+    #[inline]
     fn try_from(value: NonZero<usize>) -> std::result::Result<Self, Self::Error> {
         Ok(Self(value.try_into()?))
     }
 }
 
 impl From<BufferSize> for NonZeroU32 {
+    #[inline]
     fn from(value: BufferSize) -> NonZeroU32 {
         value.0.into()
     }
 }
 
 impl From<BufferSize> for u32 {
+    #[inline]
     fn from(value: BufferSize) -> u32 {
         value.0.into()
     }
@@ -216,6 +225,7 @@ impl From<BufferSize> for u32 {
 pub struct MessageSize(NonZeroU32);
 
 impl Default for MessageSize {
+    #[inline]
     fn default() -> Self {
         Self(nonzero!(64 * 1024u32))
     }
@@ -224,18 +234,21 @@ impl Default for MessageSize {
 impl TryFrom<NonZero<usize>> for MessageSize {
     type Error = std::num::TryFromIntError;
 
+    #[inline]
     fn try_from(value: NonZero<usize>) -> std::result::Result<Self, Self::Error> {
         Ok(Self(value.try_into()?))
     }
 }
 
 impl From<MessageSize> for NonZeroU32 {
+    #[inline]
     fn from(value: MessageSize) -> NonZeroU32 {
         value.0.into()
     }
 }
 
 impl From<MessageSize> for u32 {
+    #[inline]
     fn from(value: MessageSize) -> u32 {
         value.0.into()
     }
@@ -878,6 +891,7 @@ pub struct SourceBlock {
 
 impl SourceBlock {
     /// Returns a new SourceBlock.
+    #[inline]
     pub fn new(offset: u64, size: u32, stat: Stat, chronology: Chronology, hash: Option<Hash>) -> Self {
         Self {
             offset,
@@ -889,6 +903,7 @@ impl SourceBlock {
     }
 
     /// Returns true if SourceBlock contains at least one line matching the given level or higher level.
+    #[inline]
     pub fn match_level(&self, level: Level) -> bool {
         let mut flags = 0;
         for &l in &[Level::Error, Level::Warning, Level::Info, Level::Debug] {
@@ -901,6 +916,7 @@ impl SourceBlock {
     }
 
     /// Returns true if this SourceBlock overlaps by time with other SourceBlock.
+    #[inline]
     pub fn overlaps_by_time(&self, other: &SourceBlock) -> bool {
         if let (Some(ts1), Some(ts2)) = (self.stat.ts_min_max, other.stat.ts_min_max) {
             (ts2.0 >= ts1.0 && ts2.0 <= ts1.1) || (ts2.1 >= ts1.0 && ts2.1 <= ts1.1)
@@ -923,6 +939,7 @@ pub struct Stat {
 
 impl Stat {
     /// New returns a new Stat.
+    #[inline]
     pub fn new() -> Self {
         Self {
             flags: 0,
@@ -933,6 +950,7 @@ impl Stat {
     }
 
     /// Adds information about a single valid line.
+    #[inline]
     pub fn add_valid(&mut self, ts: Option<Timestamp>, flags: u64) {
         self.ts_min_max = min_max_opt(self.ts_min_max, ts.and_then(|ts| Some((ts, ts))));
         self.flags |= flags;
@@ -943,11 +961,13 @@ impl Stat {
     }
 
     /// Counts a single invalid line.
+    #[inline]
     pub fn add_invalid(&mut self) {
         self.lines_invalid += 1;
     }
 
     /// Merges with other Stat.
+    #[inline]
     pub fn merge(&mut self, other: &Self) {
         self.lines_valid += other.lines_valid;
         self.lines_invalid += other.lines_invalid;
@@ -967,6 +987,7 @@ pub struct Chronology {
 }
 
 impl Default for Chronology {
+    #[inline]
     fn default() -> Self {
         Self {
             bitmap: Vec::new(),
@@ -1006,6 +1027,7 @@ struct Header {
 }
 
 impl Header {
+    #[inline]
     fn new() -> Self {
         Self {
             magic: VALID_MAGIC,
@@ -1015,14 +1037,17 @@ impl Header {
         }
     }
 
+    #[inline]
     fn load(reader: &mut Reader) -> Result<Self> {
         Ok(bincode::deserialize_from(reader)?)
     }
 
+    #[inline]
     fn is_valid(&self) -> bool {
         self.magic == VALID_MAGIC && self.version == CURRENT_VERSION
     }
 
+    #[inline]
     fn validate(&self) -> Result<()> {
         if self.is_valid() {
             Ok(())
@@ -1045,6 +1070,7 @@ struct Metadata {
 }
 
 impl Metadata {
+    #[inline]
     pub fn from<M: SourceMetadata>(source: &M) -> io::Result<Self> {
         Ok(Self {
             len: source.len(),
@@ -1056,6 +1082,7 @@ impl Metadata {
 impl TryFrom<&fs::Metadata> for Metadata {
     type Error = io::Error;
 
+    #[inline]
     fn try_from(value: &fs::Metadata) -> io::Result<Self> {
         Self::from(value)
     }
@@ -1064,6 +1091,7 @@ impl TryFrom<&fs::Metadata> for Metadata {
 impl TryFrom<fs::Metadata> for Metadata {
     type Error = io::Error;
 
+    #[inline]
     fn try_from(value: fs::Metadata) -> io::Result<Self> {
         Self::from(&value)
     }
@@ -1073,6 +1101,7 @@ impl TryFrom<fs::Metadata> for Metadata {
 impl TryFrom<&MockSourceMetadata> for Metadata {
     type Error = io::Error;
 
+    #[inline]
     fn try_from(value: &MockSourceMetadata) -> io::Result<Self> {
         Self::from(value)
     }
@@ -1090,6 +1119,7 @@ impl<T: fmt::Debug> fmt::Debug for AsHex<T> {
 
 // ---
 
+#[inline]
 fn min_max_opt<T: Ord>(v1: Option<(T, T)>, v2: Option<(T, T)>) -> Option<(T, T)> {
     match (v1, v2) {
         (Some(v1), Some(v2)) => Some((min(v1.0, v2.0), max(v1.1, v2.1))),
@@ -1099,6 +1129,7 @@ fn min_max_opt<T: Ord>(v1: Option<(T, T)>, v2: Option<(T, T)>) -> Option<(T, T)>
     }
 }
 
+#[inline]
 fn ts(ts: SystemTime) -> (i64, u32) {
     match ts.duration_since(UNIX_EPOCH) {
         Ok(ts) => (ts.as_secs() as i64, ts.subsec_nanos()),
@@ -1109,12 +1140,14 @@ fn ts(ts: SystemTime) -> (i64, u32) {
     }
 }
 
+#[inline]
 fn sha256(bytes: &[u8]) -> [u8; 32] {
     let mut hasher = Sha256::new();
     hasher.update(bytes);
     hasher.finalize().into()
 }
 
+#[inline]
 fn strip<'a>(slice: &'a [u8], ch: u8) -> &'a [u8] {
     let n = slice.len();
     if n == 0 {
@@ -1126,6 +1159,7 @@ fn strip<'a>(slice: &'a [u8], ch: u8) -> &'a [u8] {
     }
 }
 
+#[inline]
 fn level_to_flag(level: Level) -> u64 {
     match level {
         Level::Debug => schema::FLAG_LEVEL_DEBUG,
@@ -1135,6 +1169,7 @@ fn level_to_flag(level: Level) -> u64 {
     }
 }
 
+#[inline]
 fn rtrim<'a>(s: &'a [u8], c: u8) -> &'a [u8] {
     if s.len() > 0 && s[s.len() - 1] == c {
         &s[..s.len() - 1]
@@ -1167,7 +1202,11 @@ const CURRENT_VERSION: u64 = 1;
 
 #[cfg(test)]
 mod tests {
+    use schema::{FLAG_LEVEL_DEBUG, FLAG_LEVEL_ERROR, FLAG_LEVEL_INFO, FLAG_LEVEL_WARNING};
+
     use super::*;
+
+    use std::time::Duration;
 
     use crate::vfs::{self, MockFileSystem};
 
@@ -1289,6 +1328,116 @@ mod tests {
         let index2 = indexer.index(&PathBuf::from("test.log")).unwrap();
         assert_eq!(index2.source.size, index1.source.size);
         assert_eq!(index2.source.modified, index1.source.modified);
+    }
+
+    #[test]
+    fn test_timestamp() {
+        let ts = Timestamp::from((1701680467, 91243000));
+        assert_eq!(ts.sec, 1701680467);
+        assert_eq!(ts.nsec, 91243000);
+
+        let ts = ts.add(Duration::from_secs(1));
+        assert_eq!(ts.sec, 1701680468);
+        assert_eq!(ts.nsec, 91243000);
+
+        let ts = ts.add(Duration::from_nanos(1_000));
+        assert_eq!(ts.sec, 1701680468);
+        assert_eq!(ts.nsec, 91244000);
+
+        let ts = ts.add(Duration::from_nanos(1_000_000_000));
+        assert_eq!(ts.sec, 1701680469);
+        assert_eq!(ts.nsec, 91244000);
+
+        let ts = ts.sub(Duration::from_secs(1));
+        assert_eq!(ts.sec, 1701680468);
+        assert_eq!(ts.nsec, 91244000);
+
+        let ts = ts.sub(Duration::from_nanos(1_000));
+        assert_eq!(ts.sec, 1701680468);
+        assert_eq!(ts.nsec, 91243000);
+
+        let ts = ts.sub(Duration::from_nanos(900_000_000));
+        assert_eq!(ts.sec, 1701680467);
+        assert_eq!(ts.nsec, 191243000);
+
+        let ts2 = Timestamp::from((1701680467, 91243000));
+        let diff = ts - ts2;
+        assert_eq!(diff.as_nanos(), 100_000_000);
+
+        let ts2 = Timestamp::from((1701680466, 991243000));
+        let diff = ts - ts2;
+        assert_eq!(diff.as_nanos(), 200_000_000);
+
+        let ts = chrono::DateTime::<chrono::Utc>::from_timestamp_nanos(1_701_680_466_991_243_000);
+        let ts = Timestamp::from(ts);
+        assert_eq!(ts.sec, 1701680466);
+        assert_eq!(ts.nsec, 991243000);
+    }
+
+    #[test]
+    fn test_buffer_size() {
+        let bs = BufferSize(nonzero!(1024u32));
+        assert_eq!(bs.get(), 1024);
+        assert_eq!(NonZeroU32::from(bs), nonzero!(1024u32));
+    }
+
+    #[test]
+    fn test_message_size() {
+        let ms = MessageSize(nonzero!(1024u32));
+        assert_eq!(ms.get(), 1024);
+        assert_eq!(NonZeroU32::from(ms), nonzero!(1024u32));
+    }
+
+    #[test]
+    fn test_source_block() {
+        let block = SourceBlock::new(
+            0,
+            4096,
+            Stat {
+                flags: FLAG_LEVEL_DEBUG | FLAG_LEVEL_WARNING,
+                lines_valid: 128,
+                lines_invalid: 5,
+                ts_min_max: Some((
+                    Timestamp::from((1701680250, 91243000)),
+                    Timestamp::from((1701680467, 91633000)),
+                )),
+            },
+            Chronology::default(),
+            None,
+        );
+        assert_eq!(block.offset, 0);
+        assert_eq!(block.size, 4096);
+        assert_eq!(block.stat.flags, FLAG_LEVEL_DEBUG | FLAG_LEVEL_WARNING);
+        assert_eq!(block.match_level(Level::Debug), true);
+        assert_eq!(block.match_level(Level::Info), true);
+        assert_eq!(block.match_level(Level::Warning), true);
+        assert_eq!(block.match_level(Level::Error), false);
+
+        let mut other = SourceBlock::new(
+            4096,
+            4096,
+            Stat {
+                flags: FLAG_LEVEL_INFO | FLAG_LEVEL_ERROR,
+                lines_valid: 64,
+                lines_invalid: 2,
+                ts_min_max: Some((
+                    Timestamp::from((1701680467, 91242000)),
+                    Timestamp::from((1701680467, 91633000)),
+                )),
+            },
+            Chronology::default(),
+            None,
+        );
+        assert_eq!(block.overlaps_by_time(&other), true);
+
+        other.stat.ts_min_max = Some((
+            Timestamp::from((1701680467, 191633000)),
+            Timestamp::from((1701680468, 491633000)),
+        ));
+        assert_eq!(block.overlaps_by_time(&other), false);
+
+        other.stat.ts_min_max = None;
+        assert_eq!(block.overlaps_by_time(&other), false);
     }
 
     // ---
