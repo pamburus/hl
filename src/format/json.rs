@@ -185,7 +185,7 @@ mod parse {
     }
 
     #[inline]
-    fn parse_value_token<'s, T: Build<'s>>(lexer: &mut Lexer<'s>, target: T, token: Token<'s>) -> Result<T> {
+    fn parse_value_token<'s, T: Build<'s>>(lexer: &mut Lexer<'s>, target: T, token: Token<'s>) -> ResultTuple<T> {
         match token {
             Token::Bool(b) => Ok(target.add_scalar(Scalar::Bool(b))),
             Token::BraceOpen => {
@@ -222,15 +222,21 @@ mod parse {
     ///
     /// > NOTE: we assume '[' was consumed.
     #[inline]
-    fn parse_array<'s, T: Build<'s>>(lexer: &mut Lexer<'s>, mut target: T) -> Result<T> {
+    fn parse_array<'s, T: Build<'s>>(lexer: &mut Lexer<'s>, mut target: T) -> ResultTuple<T> {
         let span = lexer.span();
         let mut awaits_comma = false;
         let mut awaits_value = false;
 
         while let Some(token) = lexer.next() {
-            let token = token.refine(lexer)?;
+            let token = match token.refine(lexer) {
+                Ok(token) => token,
+                Err(e) => return (target, Err(e)),
+            };
+
             match token {
-                Token::BracketClose if !awaits_value => return Ok(target),
+                Token::BracketClose if !awaits_value => {
+                    return (target, Ok(()));
+                }
                 Token::Comma if awaits_comma => awaits_value = true,
                 _ => {
                     target = parse_value_token(lexer, target, token)?;
@@ -239,7 +245,7 @@ mod parse {
             }
             awaits_comma = !awaits_value;
         }
-        Err(("unmatched opening bracket defined here", span))
+        (target, Err(("unmatched opening bracket defined here", span)))
     }
 
     /// Parse a token stream into an object and return when
@@ -275,20 +281,27 @@ mod parse {
                     target = target.add_composite(Composite::Field(s.into()), |target| {
                         skipped = false;
                         parse_field_value(lexer, target)
-                    })?;
+                    });
+                    target = t;
+                    if let Err(e) = result {
+                        return (target, Err(e));
+                    }
 
                     if skipped {
-                        parse_field_value(lexer, ast::Discarder::default())?;
+                        match parse_field_value(lexer, ast::Discarder::default()).1 {
+                            Ok(_) => (),
+                            Err(e) => return (target, Err(e)),
+                        }
                     }
 
                     awaits = Awaits::Comma;
                 }
                 _ => {
-                    return Err(("unexpected token here (context: object)", lexer.span()));
+                    return (target, Err(("unexpected token here (context: object)", lexer.span())));
                 }
             }
         }
 
-        Err(("unmatched opening brace defined here", span))
+        (target, Err(("unmatched opening brace defined here", span)))
     }
 }
