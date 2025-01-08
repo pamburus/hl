@@ -1,5 +1,10 @@
 // std imports
-use std::{mem::ManuallyDrop, sync};
+use std::{
+    fmt::{self, Debug, Formatter},
+    mem::ManuallyDrop,
+    result::Result,
+    sync,
+};
 
 // third-party imports
 use derive_more::{Deref, DerefMut};
@@ -14,8 +19,8 @@ impl<T> Arc<T> {
         Arc(sync::Arc::new(ManuallyDrop::new(data)))
     }
 
-    pub fn deconstruct(self) -> Option<Deconstructed<T>> {
-        Deconstructed::new(self)
+    pub fn into_unique(self) -> Result<UniqueArc<T>, Self> {
+        UniqueArc::new(self)
     }
 }
 
@@ -27,28 +32,40 @@ impl<T> Deref for Arc<T> {
     }
 }
 
+impl<T: Debug> Debug for Arc<T> {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        f.debug_tuple("Arc").field(&**self).finish()
+    }
+}
+
 #[derive(Default, Deref, DerefMut)]
-pub struct Deconstructed<T> {
+pub struct UniqueArc<T> {
     #[deref]
     #[deref_mut]
     data: T,
     ptr: Arc<T>,
 }
 
-impl<T> Deconstructed<T> {
-    fn new(mut ptr: Arc<T>) -> Option<Self> {
+impl<T> UniqueArc<T> {
+    fn new(mut ptr: Arc<T>) -> Result<Self, Arc<T>> {
         match sync::Arc::get_mut(&mut ptr.0) {
-            Some(inner) => Some(Self {
-                data: unsafe { ManuallyDrop::take(inner) },
+            Some(inner) => Ok(Self {
+                data: unsafe { ManuallyDrop::take(inner) }, // Safety: we have exclusive access to the inner value and the value is never read
                 ptr,
             }),
-            None => None,
+            None => Err(ptr),
         }
     }
 
-    pub fn construct(mut self) -> Arc<T> {
+    pub fn share(mut self) -> Arc<T> {
         **sync::Arc::get_mut(&mut self.ptr.0).unwrap() = self.data;
         self.ptr
+    }
+}
+
+impl<T: Debug> Debug for UniqueArc<T> {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        f.debug_tuple("UniqueArc").field(&self.data).finish()
     }
 }
 
@@ -57,13 +74,13 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_deconstruct() {
+    fn test_unique_arc() {
         let arc = Arc::new(42);
-        assert!(arc.clone().deconstruct().is_none());
-        let mut deconstructed = arc.deconstruct().unwrap();
-        assert_eq!(deconstructed.data, 42);
-        *deconstructed = 43;
-        let arc = deconstructed.construct();
+        assert!(arc.clone().into_unique().is_err());
+        let mut unique = arc.into_unique().unwrap();
+        assert_eq!(unique.data, 42);
+        *unique = 43;
+        let arc = unique.share();
         assert_eq!(*arc, 43);
     }
 }
