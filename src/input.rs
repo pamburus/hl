@@ -7,21 +7,20 @@ use std::{
     mem::size_of_val,
     ops::Range,
     path::{Path, PathBuf},
-    sync::{Arc, Mutex},
+    sync::{Arc, LazyLock, Mutex},
 };
 
 // third-party imports
 use deko::{bufread::AnyDecoder, Format};
 use derive_more::{Deref, DerefMut};
 use nu_ansi_term::Color;
-use once_cell::sync::Lazy;
 
 // local imports
 use crate::{
     error::{Result, HILITE},
     index::{Index, Indexer, SourceBlock, SourceMetadata},
     iox::ReadFill,
-    pool::{AutoPool, Guard, SQPool},
+    pool::{Lease, Leased, SQPool},
     replay::{ReplayBufCreator, ReplayBufReader, ReplaySeekReader},
     tee::TeeReader,
     vfs::{FileSystem, LocalFileSystem},
@@ -669,11 +668,11 @@ impl Block<IndexedInput> {
 type BufPool = SQPool<Vec<u8>>;
 
 #[derive(Deref, DerefMut)]
-pub struct Buf(Guard<Vec<u8>, BufPool>);
+pub struct Buf(Leased<Vec<u8>, BufPool>);
 
 impl Buf {
     pub fn new() -> Self {
-        let mut buf = BUF_POOL.auto_check_out();
+        let mut buf = BUF_POOL.lease();
         buf.clear();
         Self(buf)
     }
@@ -685,7 +684,7 @@ impl Buf {
     }
 }
 
-static BUF_POOL: Lazy<Arc<BufPool>> = Lazy::new(|| Arc::new(BufPool::new()));
+static BUF_POOL: LazyLock<Arc<BufPool>> = LazyLock::new(|| Arc::new(BufPool::new()));
 
 pub struct BlockLines<I> {
     block: Block<I>,
