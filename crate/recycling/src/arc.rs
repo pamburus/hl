@@ -1,13 +1,30 @@
 // std imports
-use std::{mem::swap, sync::Arc};
+use std::{mem::ManuallyDrop, sync};
 
 // third-party imports
 use derive_more::{Deref, DerefMut};
 
 // ---
 
-pub fn deconstruct<T: Default>(arc: Arc<T>) -> Option<Deconstructed<T>> {
-    Deconstructed::new(arc)
+#[derive(Clone, Default)]
+pub struct Arc<T>(sync::Arc<ManuallyDrop<T>>);
+
+impl<T> Arc<T> {
+    pub fn new(data: T) -> Self {
+        Arc(sync::Arc::new(ManuallyDrop::new(data)))
+    }
+
+    pub fn deconstruct(self) -> Option<Deconstructed<T>> {
+        Deconstructed::new(self)
+    }
+}
+
+impl<T> Deref for Arc<T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        &**self.0
+    }
 }
 
 #[derive(Default, Deref, DerefMut)]
@@ -18,20 +35,19 @@ pub struct Deconstructed<T> {
     ptr: Arc<T>,
 }
 
-impl<T: Default> Deconstructed<T> {
-    pub fn new(mut ptr: Arc<T>) -> Option<Self> {
-        match Arc::get_mut(&mut ptr) {
-            Some(inner) => {
-                let mut data = T::default();
-                swap(inner, &mut data);
-                Some(Self { data, ptr })
-            }
+impl<T> Deconstructed<T> {
+    fn new(mut ptr: Arc<T>) -> Option<Self> {
+        match sync::Arc::get_mut(&mut ptr.0) {
+            Some(inner) => Some(Self {
+                data: unsafe { ManuallyDrop::take(inner) },
+                ptr,
+            }),
             None => None,
         }
     }
 
     pub fn construct(mut self) -> Arc<T> {
-        swap(Arc::get_mut(&mut self.ptr).unwrap(), &mut self.data);
+        **sync::Arc::get_mut(&mut self.ptr.0).unwrap() = self.data;
         self.ptr
     }
 }
@@ -39,14 +55,12 @@ impl<T: Default> Deconstructed<T> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::Arc;
 
     #[test]
     fn test_deconstruct() {
         let arc = Arc::new(42);
-        assert!(deconstruct(arc.clone()).is_none());
-        let mut deconstructed = deconstruct(arc).unwrap();
-        assert_eq!(*deconstructed.ptr, 0);
+        assert!(arc.clone().deconstruct().is_none());
+        let mut deconstructed = arc.deconstruct().unwrap();
         assert_eq!(deconstructed.data, 42);
         *deconstructed = 43;
         let arc = deconstructed.construct();
