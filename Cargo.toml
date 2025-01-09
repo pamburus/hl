@@ -1,5 +1,5 @@
 [workspace]
-members = [".", "crate/encstr", "crate/heapopt", "crate/recycling"]
+members = [".", "crate/encstr", "crate/heapopt", "crate/unique"]
 
 [workspace.package]
 repository = "https://github.com/pamburus/hl"
