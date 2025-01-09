@@ -18,10 +18,12 @@ impl<T, U: CheckOut<T> + CheckIn<T>> Pool<T> for U {}
 // ---
 
 pub trait Lease<T>: CheckIn<T> {
-    type Leased: Deref<Target = T> + DerefMut<Target = T>;
+    type Leased: LeaseHold<T>;
 
     fn lease(self: &Arc<Self>) -> Self::Leased;
 }
+
+pub trait LeaseHold<T>: Deref<Target = T> + DerefMut<Target = T> {}
 
 pub struct NoPool<F = DefaultFactory> {
     f: F,
@@ -269,6 +271,8 @@ where
     }
 }
 
+impl<T, P> LeaseHold<T> for Leased<T, P> where P: CheckIn<T> {}
+
 impl<T, P> Deref for Leased<T, P>
 where
     P: CheckIn<T>,
@@ -304,6 +308,8 @@ where
 // ---
 
 pub struct Granted<T>(T);
+
+impl<T> LeaseHold<T> for Granted<T> {}
 
 impl<T> Deref for Granted<T> {
     type Target = T;
