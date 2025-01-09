@@ -1042,6 +1042,7 @@ dependencies = [
  "thiserror 2.0.10",
  "titlecase",
  "toml",
+ "unique",
  "wild",
  "wildflower",
  "wildmatch",

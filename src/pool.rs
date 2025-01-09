@@ -8,6 +8,9 @@ use std::{
 // third-party imports
 use crossbeam_queue::SegQueue;
 
+// workspace imports
+use unique::arc::{IntoUnique, UniqueArc};
+
 // ---
 
 #[allow(dead_code)]
@@ -21,9 +24,99 @@ pub trait Lease<T>: CheckIn<T> {
     type Leased: LeaseHold<T>;
 
     fn lease(self: &Arc<Self>) -> Self::Leased;
+
+    // fn map<U, F, B>(self, forward: F, backward: B) -> MappedLease<T, Self, F, B>
+    // where
+    //     F: FnOnce(T) -> U,
+    //     B: FnOnce(U) -> Option<T>,
+    //     Self: Sized,
+    // {
+    //     MappedLease {
+    //         lease: self,
+    //         f: Some(f),
+    //     }
+    // }
 }
 
-pub trait LeaseHold<T>: Deref<Target = T> + DerefMut<Target = T> {}
+pub trait LeaseHold<T>: Deref<Target = T> + DerefMut<Target = T> {
+    type Pool: CheckIn<T>;
+
+    fn into_inner(self) -> (T, Self::Pool)
+    where
+        Self: Sized;
+}
+
+// ---
+
+pub trait LeaseShare<T>: LeaseHold<UniqueArc<T>> {
+    type Shared: SharedLeaseHold<Self>;
+
+    fn share(self) -> Self::Shared;
+}
+
+impl<T, H> LeaseShare<T> for H
+where
+    H: LeaseHold<UniqueArc<T>>,
+{
+    type Shared = SharedLeaseHolder<T, H::Pool>;
+
+    fn share(self) -> Self::Shared {
+        let (inner, pool) = self.into_inner();
+        SharedLeaseHolder {
+            ptr: ManuallyDrop::new(inner.share()),
+            pool,
+        }
+    }
+}
+
+// ---
+
+pub trait SharedLeaseHold<T>: Deref<Target = T> {
+    type Pool: CheckIn<UniqueArc<T>>;
+}
+
+// ---
+
+pub struct SharedLeaseHolder<T, P>
+where
+    P: CheckIn<UniqueArc<T>>,
+{
+    ptr: ManuallyDrop<Arc<T>>,
+    pool: P,
+}
+
+impl<T, P> SharedLeaseHold<T> for SharedLeaseHolder<T, P>
+where
+    P: CheckIn<UniqueArc<T>>,
+{
+    type Pool = P;
+}
+
+impl<T, P> Deref for SharedLeaseHolder<T, P>
+where
+    P: CheckIn<UniqueArc<T>>,
+{
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        return &**self.ptr;
+    }
+}
+
+impl<T, P> Drop for SharedLeaseHolder<T, P>
+where
+    P: CheckIn<UniqueArc<T>>,
+{
+    fn drop(&mut self) {
+        // Safety: we have exclusive access to the inner value and the pointer is valid as long as the Arc is alive
+        let ptr = unsafe { ManuallyDrop::take(&mut self.ptr) };
+        if let Some(ptr) = ptr.into_unique() {
+            self.pool.check_in(ptr);
+        }
+    }
+}
+
+// ---
 
 pub struct NoPool<F = DefaultFactory> {
     f: F,
@@ -255,7 +348,7 @@ where
     P: CheckIn<T>,
 {
     item: ManuallyDrop<T>,
-    pool: Arc<P>,
+    pool: P,
 }
 
 impl<T, P> Leased<T, P>
@@ -263,7 +356,7 @@ where
     P: CheckIn<T>,
 {
     #[inline]
-    fn new(item: T, pool: Arc<P>) -> Self {
+    fn new(item: T, pool: P) -> Self {
         Leased {
             item: ManuallyDrop::new(item),
             pool,
@@ -271,7 +364,25 @@ where
     }
 }
 
-impl<T, P> LeaseHold<T> for Leased<T, P> where P: CheckIn<T> {}
+impl<T, P> LeaseHold<T> for Leased<T, P>
+where
+    P: CheckIn<T>,
+{
+    type Pool = P;
+
+    #[inline]
+    fn into_inner(self) -> (T, Self::Pool) {
+        // Safety: we do not have any special fragile logic in the destructor,
+        // so we can safely deconstruct self into the inxner values.
+        unsafe {
+            let mut item = std::ptr::read(&self.item);
+            let pool = std::ptr::read(&self.pool);
+            std::mem::forget(self);
+
+            (ManuallyDrop::take(&mut item), pool)
+        }
+    }
+}
 
 impl<T, P> Deref for Leased<T, P>
 where
@@ -309,7 +420,14 @@ where
 
 pub struct Granted<T>(T);
 
-impl<T> LeaseHold<T> for Granted<T> {}
+impl<T: Default> LeaseHold<T> for Granted<T> {
+    type Pool = NoPool;
+
+    #[inline]
+    fn into_inner(self) -> (T, Self::Pool) {
+        (self.0, NoPool::default())
+    }
+}
 
 impl<T> Deref for Granted<T> {
     type Target = T;

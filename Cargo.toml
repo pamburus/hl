@@ -82,6 +82,7 @@ strum = { version = "0", features = ["derive"] }
 thiserror = "2"
 titlecase = "3"
 toml = "0"
+unique = { path = "./crate/unique" }
 wild = "2"
 wildflower = { git = "https://github.com/cassaundra/wildflower.git" }
 winapi-util = { version = "0" }
