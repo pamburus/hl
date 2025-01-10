@@ -668,7 +668,7 @@ impl Block<IndexedInput> {
 type BufPool = SQPool<Vec<u8>>;
 
 #[derive(Deref, DerefMut)]
-pub struct Buf(Leased<Vec<u8>, BufPool>);
+pub struct Buf(Leased<Vec<u8>, Arc<BufPool>>);
 
 impl Buf {
     pub fn new() -> Self {

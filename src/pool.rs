@@ -24,18 +24,6 @@ pub trait Lease<T>: CheckIn<T> {
     type Leased: LeaseHold<T>;
 
     fn lease(self: &Arc<Self>) -> Self::Leased;
-
-    // fn map<U, F, B>(self, forward: F, backward: B) -> MappedLease<T, Self, F, B>
-    // where
-    //     F: FnOnce(T) -> U,
-    //     B: FnOnce(U) -> Option<T>,
-    //     Self: Sized,
-    // {
-    //     MappedLease {
-    //         lease: self,
-    //         f: Some(f),
-    //     }
-    // }
 }
 
 pub trait LeaseHold<T>: Deref<Target = T> + DerefMut<Target = T> {
@@ -49,29 +37,14 @@ pub trait LeaseHold<T>: Deref<Target = T> + DerefMut<Target = T> {
 // ---
 
 pub trait LeaseShare<T>: LeaseHold<UniqueArc<T>> {
-    type Shared: SharedLeaseHold<Self>;
+    type Shared: SharedLeaseHold<T>;
 
     fn share(self) -> Self::Shared;
 }
 
-impl<T, H> LeaseShare<T> for H
-where
-    H: LeaseHold<UniqueArc<T>>,
-{
-    type Shared = SharedLeaseHolder<T, H::Pool>;
-
-    fn share(self) -> Self::Shared {
-        let (inner, pool) = self.into_inner();
-        SharedLeaseHolder {
-            ptr: ManuallyDrop::new(inner.share()),
-            pool,
-        }
-    }
-}
-
 // ---
 
-pub trait SharedLeaseHold<T>: Deref<Target = T> {
+pub trait SharedLeaseHold<T>: Deref<Target = T> + Clone {
     type Pool: CheckIn<UniqueArc<T>>;
 }
 
@@ -82,7 +55,19 @@ where
     P: CheckIn<UniqueArc<T>>,
 {
     ptr: ManuallyDrop<Arc<T>>,
-    pool: P,
+    pool: Arc<P>,
+}
+
+impl<T, P> Clone for SharedLeaseHolder<T, P>
+where
+    P: CheckIn<UniqueArc<T>>,
+{
+    fn clone(&self) -> Self {
+        Self {
+            ptr: ManuallyDrop::new(Arc::clone(&self.ptr)),
+            pool: Arc::clone(&self.pool),
+        }
+    }
 }
 
 impl<T, P> SharedLeaseHold<T> for SharedLeaseHolder<T, P>
@@ -141,6 +126,7 @@ where
 
 impl<T, F> Lease<T> for NoPool<F>
 where
+    T: Default,
     F: Factory<T>,
 {
     type Leased = Granted<T>;
@@ -171,6 +157,16 @@ pub trait CheckOut<T> {
 #[allow(dead_code)]
 pub trait CheckIn<T> {
     fn check_in(&self, item: T);
+}
+
+impl<T, P> CheckIn<T> for Arc<P>
+where
+    P: CheckIn<T>,
+{
+    #[inline]
+    fn check_in(&self, item: T) {
+        self.as_ref().check_in(item)
+    }
 }
 
 // ---
@@ -333,13 +329,17 @@ where
     F: Factory<T>,
     R: Recycler<T>,
 {
-    type Leased = Leased<T, SQPool<T, F, R>>;
+    type Leased = Leased<T, Arc<SQPool<T, F, R>>>;
 
     #[inline]
     fn lease(self: &Arc<Self>) -> Self::Leased {
         Leased::new(self.check_out(), Arc::clone(self))
     }
 }
+
+// ---
+
+type ArcSQPool<T, F, R> = SQPool<UniqueArc<T>, F, R>;
 
 // ---
 
@@ -380,6 +380,21 @@ where
             std::mem::forget(self);
 
             (ManuallyDrop::take(&mut item), pool)
+        }
+    }
+}
+
+impl<T, P> LeaseShare<T> for Leased<UniqueArc<T>, Arc<P>>
+where
+    P: CheckIn<UniqueArc<T>>,
+{
+    type Shared = SharedLeaseHolder<T, P>;
+
+    fn share(self) -> Self::Shared {
+        let (inner, pool) = self.into_inner();
+        SharedLeaseHolder {
+            ptr: ManuallyDrop::new(inner.share()),
+            pool,
         }
     }
 }
@@ -456,5 +471,42 @@ impl<T> AsMut<T> for Granted<T> {
     #[inline]
     fn as_mut(&mut self) -> &mut T {
         &mut self.0
+    }
+}
+
+// ---
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn test_pool() {
+        use super::*;
+
+        let pool = Arc::new(SQPool::new_with_factory(|| 42));
+        let mut leased = pool.lease();
+        assert_eq!(*leased, 42);
+        *leased = 43;
+        assert_eq!(*leased, 43);
+        drop(leased);
+
+        let leased = pool.lease();
+        assert_eq!(*leased, 43);
+        let mut leased = pool.lease();
+        assert_eq!(*leased, 42);
+        *leased = 44;
+        assert_eq!(*leased, 44);
+
+        let pool = Arc::new(ArcSQPool::new_with_factory(|| UniqueArc::new(42)));
+
+        let mut leased = pool.lease();
+        assert_eq!(**leased, 42);
+        **leased = 43;
+        assert_eq!(**leased, 43);
+
+        let shared = leased.share();
+        assert_eq!(*shared, 43);
+
+        let cloned = shared.clone();
+        assert_eq!(*cloned, 43);
     }
 }

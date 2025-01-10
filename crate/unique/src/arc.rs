@@ -14,7 +14,18 @@ pub struct UniqueArc<T> {
 }
 
 impl<T> UniqueArc<T> {
-    fn new(mut ptr: Arc<T>) -> Result<Self, Arc<T>> {
+    pub fn new(value: T) -> Self {
+        let ptr = Arc::new(value);
+        // Safety: we have exclusive access to the inner value and the pointer is valid as long as the Arc is alive
+        let data = unsafe { std::mem::transmute(Arc::as_ptr(&ptr)) };
+        Self { ptr, data }
+    }
+
+    pub fn share(self) -> Arc<T> {
+        self.ptr
+    }
+
+    fn from_arc(mut ptr: Arc<T>) -> Result<Self, Arc<T>> {
         match Arc::get_mut(&mut ptr) {
             Some(_) => Ok(Self {
                 // Safety: we have exclusive access to the inner value and the pointer is valid as long as the Arc is alive
@@ -24,18 +35,11 @@ impl<T> UniqueArc<T> {
             None => Err(ptr),
         }
     }
-
-    pub fn share(self) -> Arc<T> {
-        self.ptr
-    }
 }
 
 impl<T: Default> Default for UniqueArc<T> {
     fn default() -> Self {
-        let ptr = Arc::new(Default::default());
-        // Safety: we have exclusive access to the inner value and the pointer is valid as long as the Arc is alive
-        let data = unsafe { std::mem::transmute(Arc::as_ptr(&ptr)) };
-        Self { ptr, data }
+        Self::new(Default::default())
     }
 }
 
@@ -65,7 +69,7 @@ impl<T> TryFrom<Arc<T>> for UniqueArc<T> {
     type Error = Arc<T>;
 
     fn try_from(value: Arc<T>) -> Result<Self, Self::Error> {
-        Self::new(value)
+        Self::from_arc(value)
     }
 }
 
@@ -87,7 +91,7 @@ impl<T> IntoUnique for Arc<T> {
     type Item = T;
 
     fn into_unique(self) -> Option<UniqueArc<T>> {
-        UniqueArc::new(self).ok()
+        UniqueArc::from_arc(self).ok()
     }
 }
 
