@@ -1,5 +1,6 @@
 // stdlib imports
 use std::{
+    marker::PhantomData,
     mem::ManuallyDrop,
     ops::{Deref, DerefMut},
     sync::Arc,
@@ -13,73 +14,101 @@ use unique::arc::{IntoUnique, UniqueArc};
 
 // ---
 
-#[allow(dead_code)]
-pub trait Pool<T>: CheckOut<T> + CheckIn<T> {}
+pub trait Pool {
+    type Item;
 
-impl<T, U: CheckOut<T> + CheckIn<T>> Pool<T> for U {}
+    fn check_out(&self) -> Self::Item;
+    fn check_in(&self, item: Self::Item);
+}
+
+impl<P> Pool for Arc<P>
+where
+    P: Pool,
+{
+    type Item = P::Item;
+
+    #[inline]
+    fn check_in(&self, item: Self::Item) {
+        self.as_ref().check_in(item)
+    }
+
+    #[inline]
+    fn check_out(&self) -> Self::Item {
+        self.as_ref().check_out()
+    }
+}
 
 // ---
 
-pub trait Lease<T>: CheckIn<T> {
-    type Leased: LeaseHold<T>;
+pub trait Lease {
+    type Payload;
+    type Item;
+    type Pool: Pool<Item = Self::Item>;
+    type Leased: LeaseHold<Payload = Self::Payload>;
 
-    fn lease(self: &Arc<Self>) -> Self::Leased;
+    fn lease(&self) -> Self::Leased;
 }
 
-pub trait LeaseHold<T>: Deref<Target = T> + DerefMut<Target = T> {
-    type Pool: CheckIn<T>;
+pub trait LeaseHold: DerefMut {
+    type Payload;
+    type Item;
+    type Pool: Pool<Item = Self::Item>;
 
-    fn into_inner(self) -> (T, Self::Pool)
+    fn into_inner(self) -> (Self::Item, Self::Pool)
     where
         Self: Sized;
 }
 
 // ---
 
-pub trait LeaseShare<T>: LeaseHold<UniqueArc<T>> {
-    type Shared: SharedLeaseHold<T>;
+pub trait LeaseShare: LeaseHold {
+    type Shared: SharedLeaseHold<Payload = Self::Payload>;
 
     fn share(self) -> Self::Shared;
 }
 
 // ---
 
-pub trait SharedLeaseHold<T>: Deref<Target = T> + Clone {
-    type Pool: CheckIn<UniqueArc<T>>;
+pub trait SharedLeaseHold: Deref + Clone {
+    type Payload;
+    type Item: Deref<Target = Self::Payload>;
+    type Pool: Pool<Item = Self::Item>;
 }
 
 // ---
 
 pub struct SharedLeaseHolder<T, P>
 where
-    P: CheckIn<UniqueArc<T>>,
+    P: Pool<Item = UniqueArc<T>> + Clone,
 {
     ptr: ManuallyDrop<Arc<T>>,
-    pool: Arc<P>,
+    pool: P,
 }
 
 impl<T, P> Clone for SharedLeaseHolder<T, P>
 where
-    P: CheckIn<UniqueArc<T>>,
+    P: Pool<Item = UniqueArc<T>> + Clone,
 {
     fn clone(&self) -> Self {
         Self {
             ptr: ManuallyDrop::new(Arc::clone(&self.ptr)),
-            pool: Arc::clone(&self.pool),
+            pool: self.pool.clone(),
         }
     }
 }
 
-impl<T, P> SharedLeaseHold<T> for SharedLeaseHolder<T, P>
+impl<T, P> SharedLeaseHold for SharedLeaseHolder<T, P>
 where
-    P: CheckIn<UniqueArc<T>>,
+    P: Pool<Item = UniqueArc<T>> + Clone,
 {
+    type Payload = T;
+    type Item = UniqueArc<T>;
     type Pool = P;
 }
 
 impl<T, P> Deref for SharedLeaseHolder<T, P>
 where
-    P: CheckIn<UniqueArc<T>>,
+    P: Pool<Item = UniqueArc<T>> + Clone,
 {
     type Target = T;
 
@@ -90,7 +119,7 @@ where
 
 impl<T, P> Drop for SharedLeaseHolder<T, P>
 where
-    P: CheckIn<UniqueArc<T>>,
+    P: Pool<Item = UniqueArc<T>> + Clone,
 {
     fn drop(&mut self) {
         // Safety: we have exclusive access to the inner value and the pointer is valid as long as the Arc is alive
@@ -103,82 +132,28 @@ where
 
 // ---
 
-pub struct NoPool<F = DefaultFactory> {
-    f: F,
+pub trait AsPayload<T: ?Sized> {
+    fn as_payload(&self) -> &T;
 }
 
-impl<F> NoPool<F> {
-    #[inline]
-    pub fn new(f: F) -> Self {
-        Self { f }
-    }
-}
-
-impl<F> Default for NoPool<F>
-where
-    F: Default,
-{
-    #[inline]
-    fn default() -> Self {
-        Self { f: Default::default() }
-    }
-}
-
-impl<T, F> Lease<T> for NoPool<F>
-where
-    T: Default,
-    F: Factory<T>,
-{
-    type Leased = Granted<T>;
-
-    #[inline]
-    fn lease(self: &Arc<Self>) -> Self::Leased {
-        Granted(self.f.new())
-    }
-}
-
-impl<T, F> CheckIn<T> for NoPool<F>
-where
-    F: Factory<T>,
-{
-    #[inline]
-    fn check_in(&self, _item: T) {}
+pub trait AsPayloadMut<T: ?Sized> {
+    fn as_payload_mut(&mut self) -> &mut T;
 }
 
 // ---
 
-#[allow(dead_code)]
-pub trait CheckOut<T> {
-    fn check_out(&self) -> T;
+pub trait Factory {
+    type Item;
+
+    fn new(&self) -> Self::Item;
 }
 
-// ---
-
-#[allow(dead_code)]
-pub trait CheckIn<T> {
-    fn check_in(&self, item: T);
-}
-
-impl<T, P> CheckIn<T> for Arc<P>
-where
-    P: CheckIn<T>,
-{
-    #[inline]
-    fn check_in(&self, item: T) {
-        self.as_ref().check_in(item)
-    }
-}
-
-// ---
-
-pub trait Factory<T> {
-    fn new(&self) -> T;
-}
-
-impl<T, F> Factory<T> for F
+impl<T, F> Factory for F
 where
     F: Fn() -> T,
 {
+    type Item = T;
+
     #[inline]
     fn new(&self) -> T {
         self()
@@ -204,9 +179,11 @@ where
 // ---
 
 #[derive(Default, Clone, Copy)]
-pub struct DefaultFactory;
+pub struct DefaultFactory<T>(PhantomData<T>);
 
-impl<T: Default> Factory<T> for DefaultFactory {
+impl<T: Default> Factory for DefaultFactory<T> {
+    type Item = T;
+
     #[inline]
     fn new(&self) -> T {
         T::default()
@@ -227,9 +204,9 @@ impl<T> Recycler<T> for RecycleAsIs {
 // ---
 
 /// Constructs new items of type T using Factory F and recycles them using Recycler R on request.
-pub struct SQPool<T, F = DefaultFactory, R = RecycleAsIs>
+pub struct SQPool<T, F = DefaultFactory<T>, R = RecycleAsIs>
 where
-    F: Factory<T>,
+    F: Factory<Item = T>,
     R: Recycler<T>,
 {
     factory: F,
@@ -237,14 +214,14 @@ where
     recycled: SegQueue<T>,
 }
 
-impl<T> SQPool<T, DefaultFactory, RecycleAsIs>
+impl<T> SQPool<T, DefaultFactory<T>, RecycleAsIs>
 where
     T: Default,
 {
     /// Returns a new Pool with default factory.
-    pub fn new() -> SQPool<T, DefaultFactory, RecycleAsIs> {
+    pub fn new() -> SQPool<T, DefaultFactory<T>, RecycleAsIs> {
         SQPool {
-            factory: DefaultFactory,
+            factory: DefaultFactory(PhantomData),
             recycler: RecycleAsIs,
             recycled: SegQueue::new(),
         }
@@ -253,7 +230,7 @@ where
 
 impl<T, F> SQPool<T, F, RecycleAsIs>
 where
-    F: Factory<T>,
+    F: Factory<Item = T>,
 {
     /// Returns a new Pool with the given factory.
     pub fn new_with_factory(factory: F) -> SQPool<T, F, RecycleAsIs> {
@@ -267,11 +244,11 @@ where
 
 impl<T, F, R> SQPool<T, F, R>
 where
-    F: Factory<T>,
+    F: Factory<Item = T>,
     R: Recycler<T>,
 {
     /// Converts the Pool to a new Pool with the given factory.
-    pub fn with_factory<F2: Factory<T>>(self, factory: F2) -> SQPool<T, F2, R> {
+    pub fn with_factory<F2: Factory<Item = T>>(self, factory: F2) -> SQPool<T, F2, R> {
         SQPool {
             factory,
             recycler: self.recycler,
@@ -302,50 +279,135 @@ where
     }
 }
 
-impl<T, F, R> CheckOut<T> for SQPool<T, F, R>
+impl<T, F, R> Pool for SQPool<T, F, R>
 where
-    F: Factory<T>,
+    F: Factory<Item = T>,
     R: Recycler<T>,
 {
+    type Item = T;
+
     #[inline]
     fn check_out(&self) -> T {
         self.check_out()
     }
-}
 
-impl<T, F, R> CheckIn<T> for SQPool<T, F, R>
-where
-    F: Factory<T>,
-    R: Recycler<T>,
-{
     #[inline]
     fn check_in(&self, item: T) {
         self.check_in(item)
     }
 }
 
-impl<T, F, R> Lease<T> for SQPool<T, F, R>
+impl<T, F, R> Lease for Arc<SQPool<T, F, R>>
 where
-    F: Factory<T>,
+    F: Factory<Item = T>,
     R: Recycler<T>,
 {
-    type Leased = Leased<T, Arc<SQPool<T, F, R>>>;
+    type Payload = T;
+    type Item = T;
+    type Pool = Self;
+    type Leased = Leased<T, Self>;
 
     #[inline]
-    fn lease(self: &Arc<Self>) -> Self::Leased {
-        Leased::new(self.check_out(), Arc::clone(self))
+    fn lease(&self) -> Self::Leased {
+        Leased::new(self.check_out(), self.clone())
     }
 }
 
 // ---
 
-type ArcSQPool<T, F, R> = SQPool<UniqueArc<T>, F, R>;
+pub struct ArcSQPool<T, F = DefaultFactory<UniqueArc<T>>, R = RecycleAsIs>(SQPool<UniqueArc<T>, F, R>)
+where
+    F: Factory<Item = UniqueArc<T>>,
+    R: Recycler<UniqueArc<T>>;
+
+impl<T> ArcSQPool<T>
+where
+    T: Default,
+{
+    pub fn new() -> Self {
+        Self(SQPool::new())
+    }
+}
+
+impl<T, F> ArcSQPool<T, F, RecycleAsIs>
+where
+    F: Factory<Item = UniqueArc<T>>,
+{
+    /// Returns a new Pool with the given factory.
+    pub fn new_with_factory(factory: F) -> ArcSQPool<T, F, RecycleAsIs> {
+        Self(SQPool::new_with_factory(factory))
+    }
+}
+
+impl<T, F, R> ArcSQPool<T, F, R>
+where
+    F: Factory<Item = UniqueArc<T>>,
+    R: Recycler<UniqueArc<T>>,
+{
+    /// Converts the Pool to a new Pool with the given factory.
+    #[inline]
+    pub fn with_factory<F2: Factory<Item = UniqueArc<T>>>(self, factory: F2) -> ArcSQPool<T, F2, R> {
+        ArcSQPool(self.0.with_factory(factory))
+    }
+
+    /// Converts the Pool to a new Pool with the given recycle function.
+    #[inline]
+    pub fn with_recycler<R2: Recycler<UniqueArc<T>>>(self, recycler: R2) -> ArcSQPool<T, F, R2> {
+        ArcSQPool(self.0.with_recycler(recycler))
+    }
+
+    /// Returns a new or recycled item.
+    #[inline]
+    pub fn check_out(&self) -> UniqueArc<T> {
+        self.0.check_out()
+    }
+
+    /// Recycles the given item.
+    #[inline]
+    pub fn check_in(&self, item: UniqueArc<T>) {
+        self.0.check_in(item);
+    }
+}
+
+impl<T, F, R> Pool for ArcSQPool<T, F, R>
+where
+    F: Factory<Item = UniqueArc<T>>,
+    R: Recycler<UniqueArc<T>>,
+{
+    type Item = UniqueArc<T>;
+
+    #[inline]
+    fn check_out(&self) -> UniqueArc<T> {
+        self.check_out()
+    }
+
+    #[inline]
+    fn check_in(&self, item: UniqueArc<T>) {
+        self.check_in(item)
+    }
+}
+
+impl<T, F, R> Lease for Arc<ArcSQPool<T, F, R>>
+where
+    F: Factory<Item = UniqueArc<T>>,
+    R: Recycler<UniqueArc<T>>,
+{
+    type Payload = T;
+    type Item = UniqueArc<T>;
+    type Pool = ArcSQPool<T, F, R>;
+    type Leased = LeasedUnique<T, Arc<ArcSQPool<T, F, R>>>;
+
+    #[inline]
+    fn lease(&self) -> Self::Leased {
+        LeasedUnique::new(self.check_out(), Arc::clone(self))
+    }
+}
 
 // ---
 
 pub struct Leased<T, P>
 where
-    P: CheckIn<T>,
+    P: Pool<Item = T>,
 {
     item: ManuallyDrop<T>,
     pool: P,
@@ -353,7 +415,7 @@ where
 
 impl<T, P> Leased<T, P>
 where
-    P: CheckIn<T>,
+    P: Pool<Item = T>,
 {
     #[inline]
     fn new(item: T, pool: P) -> Self {
@@ -364,10 +426,32 @@ where
     }
 }
 
-impl<T, P> LeaseHold<T> for Leased<T, P>
+impl<T, P> AsPayload<T> for Leased<T, P>
 where
-    P: CheckIn<T>,
+    P: Pool<Item = T>,
 {
+    #[inline]
+    fn as_payload(&self) -> &T {
+        &*self.item
+    }
+}
+
+impl<T, P> AsPayloadMut<T> for Leased<T, P>
+where
+    P: Pool<Item = T>,
+{
+    #[inline]
+    fn as_payload_mut(&mut self) -> &mut T {
+        &mut *self.item
+    }
+}
+
+impl<T, P> LeaseHold for Leased<T, P>
+where
+    P: Pool<Item = T>,
+{
+    type Payload = T;
+    type Item = T;
     type Pool = P;
 
     #[inline]
@@ -384,9 +468,91 @@ where
     }
 }
 
-impl<T, P> LeaseShare<T> for Leased<UniqueArc<T>, Arc<P>>
+impl<T, P> Deref for Leased<T, P>
 where
-    P: CheckIn<UniqueArc<T>>,
+    P: Pool<Item = T>,
+{
+    type Target = T;
+
+    #[inline]
+    fn deref(&self) -> &Self::Target {
+        &*self.item
+    }
+}
+
+impl<T, P> DerefMut for Leased<T, P>
+where
+    P: Pool<Item = T>,
+{
+    #[inline]
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut *self.item
+    }
+}
+
+impl<T, P> Drop for Leased<T, P>
+where
+    P: Pool<Item = T>,
+{
+    #[inline]
+    fn drop(&mut self) {
+        self.pool.check_in(unsafe { ManuallyDrop::take(&mut self.item) })
+    }
+}
+
+// ---
+
+pub struct LeasedUnique<T, P>(Leased<UniqueArc<T>, P>)
+where
+    P: Pool<Item = UniqueArc<T>>;
+
+impl<T, P> LeasedUnique<T, P>
+where
+    P: Pool<Item = UniqueArc<T>>,
+{
+    #[inline]
+    fn new(item: UniqueArc<T>, pool: P) -> Self {
+        Self(Leased::new(item, pool))
+    }
+}
+
+impl<T, P> AsPayload<T> for LeasedUnique<T, P>
+where
+    P: Pool<Item = UniqueArc<T>>,
+{
+    #[inline]
+    fn as_payload(&self) -> &T {
+        &*self.0
+    }
+}
+
+impl<T, P> AsPayloadMut<T> for LeasedUnique<T, P>
+where
+    P: Pool<Item = UniqueArc<T>>,
+{
+    #[inline]
+    fn as_payload_mut(&mut self) -> &mut T {
+        &mut *self.0
+    }
+}
+
+impl<T, P> LeaseHold for LeasedUnique<T, P>
+where
+    P: Pool<Item = UniqueArc<T>>,
+{
+    type Payload = T;
+    type Item = UniqueArc<T>;
+    type Pool = P;
+
+    #[inline]
+    fn into_inner(self) -> (Self::Item, Self::Pool) {
+        self.0.into_inner()
+    }
+}
+
+impl<T, P> LeaseShare for LeasedUnique<T, P>
+where
+    P: Pool<Item = UniqueArc<T>> + Clone,
 {
     type Shared = SharedLeaseHolder<T, P>;
 
@@ -399,78 +565,25 @@ where
     }
 }
 
-impl<T, P> Deref for Leased<T, P>
+impl<T, P> Deref for LeasedUnique<T, P>
 where
-    P: CheckIn<T>,
+    P: Pool<Item = UniqueArc<T>>,
 {
     type Target = T;
 
     #[inline]
     fn deref(&self) -> &Self::Target {
-        &*self.item
+        &*self.as_payload()
     }
 }
 
-impl<T, P> DerefMut for Leased<T, P>
+impl<T, P> DerefMut for LeasedUnique<T, P>
 where
-    P: CheckIn<T>,
+    P: Pool<Item = UniqueArc<T>>,
 {
     #[inline]
     fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut *self.item
-    }
-}
-
-impl<T, P> Drop for Leased<T, P>
-where
-    P: CheckIn<T>,
-{
-    #[inline]
-    fn drop(&mut self) {
-        self.pool.check_in(unsafe { ManuallyDrop::take(&mut self.item) })
-    }
-}
-
-// ---
-
-pub struct Granted<T>(T);
-
-impl<T: Default> LeaseHold<T> for Granted<T> {
-    type Pool = NoPool;
-
-    #[inline]
-    fn into_inner(self) -> (T, Self::Pool) {
-        (self.0, NoPool::default())
-    }
-}
-
-impl<T> Deref for Granted<T> {
-    type Target = T;
-
-    #[inline]
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl<T> DerefMut for Granted<T> {
-    #[inline]
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
-    }
-}
-
-impl<T> AsRef<T> for Granted<T> {
-    #[inline]
-    fn as_ref(&self) -> &T {
-        &self.0
-    }
-}
-
-impl<T> AsMut<T> for Granted<T> {
-    #[inline]
-    fn as_mut(&mut self) -> &mut T {
-        &mut self.0
+        &mut *self.as_payload_mut()
     }
 }
 
@@ -499,9 +612,9 @@ mod tests {
         let pool = Arc::new(ArcSQPool::new_with_factory(|| UniqueArc::new(42)));
 
         let mut leased = pool.lease();
-        assert_eq!(**leased, 42);
-        **leased = 43;
-        assert_eq!(**leased, 43);
+        assert_eq!(*leased, 42);
+        *leased = 43;
+        assert_eq!(*leased, 43);
 
         let shared = leased.share();
         assert_eq!(*shared, 43);
