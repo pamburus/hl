@@ -89,6 +89,7 @@ impl<T, P> Clone for SharedLeaseHolder<T, P>
 where
     P: Pool<Item = UniqueArc<T>> + Clone,
 {
+    #[inline]
     fn clone(&self) -> Self {
         Self {
             ptr: ManuallyDrop::new(Arc::clone(&self.ptr)),
@@ -112,6 +113,7 @@ where
 {
     type Target = T;
 
+    #[inline]
     fn deref(&self) -> &Self::Target {
         return &**self.ptr;
     }
@@ -121,6 +123,7 @@ impl<T, P> Drop for SharedLeaseHolder<T, P>
 where
     P: Pool<Item = UniqueArc<T>> + Clone,
 {
+    #[inline]
     fn drop(&mut self) {
         // Safety: we have exclusive access to the inner value and the pointer is valid as long as the Arc is alive
         let ptr = unsafe { ManuallyDrop::take(&mut self.ptr) };
@@ -233,6 +236,7 @@ where
     F: Factory<Item = T>,
 {
     /// Returns a new Pool with the given factory.
+    #[inline]
     pub fn new_with_factory(factory: F) -> SQPool<T, F, RecycleAsIs> {
         SQPool {
             factory,
@@ -248,6 +252,7 @@ where
     R: Recycler<T>,
 {
     /// Converts the Pool to a new Pool with the given factory.
+    #[inline]
     pub fn with_factory<F2: Factory<Item = T>>(self, factory: F2) -> SQPool<T, F2, R> {
         SQPool {
             factory,
@@ -257,6 +262,7 @@ where
     }
 
     /// Converts the Pool to a new Pool with the given recycle function.
+    #[inline]
     pub fn with_recycler<R2: Recycler<T>>(self, recycler: R2) -> SQPool<T, F, R2> {
         SQPool {
             factory: self.factory,
@@ -264,6 +270,7 @@ where
             recycled: self.recycled,
         }
     }
+
     /// Returns a new or recycled T.
     #[inline]
     pub fn check_out(&self) -> T {
@@ -272,6 +279,7 @@ where
             None => self.factory.new(),
         }
     }
+
     /// Recycles the given T.
     #[inline]
     pub fn check_in(&self, item: T) {
@@ -334,6 +342,7 @@ where
     F: Factory<Item = UniqueArc<T>>,
 {
     /// Returns a new Pool with the given factory.
+    #[inline]
     pub fn new_with_factory(factory: F) -> ArcSQPool<T, F, RecycleAsIs> {
         Self(SQPool::new_with_factory(factory))
     }
@@ -556,6 +565,7 @@ where
 {
     type Shared = SharedLeaseHolder<T, P>;
 
+    #[inline]
     fn share(self) -> Self::Shared {
         let (inner, pool) = self.into_inner();
         SharedLeaseHolder {

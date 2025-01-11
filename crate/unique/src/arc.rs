@@ -15,16 +15,19 @@ pub struct UniqueArc<T> {
 }
 
 impl<T> UniqueArc<T> {
+    #[inline]
     pub fn new(value: T) -> Self {
         let ptr = Arc::new(value);
         // Safety: we have exclusive access to the inner value and the pointer is valid as long as the Arc is alive.
         unsafe { Self::from_arc_unchecked(ptr) }
     }
 
+    #[inline]
     pub fn share(self) -> Arc<T> {
         self.ptr
     }
 
+    #[inline]
     fn from_arc(mut ptr: Arc<T>) -> Result<Self, Arc<T>> {
         match Arc::get_mut(&mut ptr) {
             // Safety: we have exclusive access to the inner value and the pointer is valid as long as the Arc is alive.
@@ -33,6 +36,7 @@ impl<T> UniqueArc<T> {
         }
     }
 
+    #[inline]
     unsafe fn from_arc_unchecked(ptr: Arc<T>) -> Self {
         debug_assert_eq!(Arc::strong_count(&ptr), 1);
         debug_assert_eq!(Arc::weak_count(&ptr), 0);
@@ -47,6 +51,7 @@ unsafe impl<T: Send> Send for UniqueArc<T> {}
 unsafe impl<T: Sync> Sync for UniqueArc<T> {}
 
 impl<T: Default> Default for UniqueArc<T> {
+    #[inline]
     fn default() -> Self {
         Self::new(Default::default())
     }
@@ -55,6 +60,7 @@ impl<T: Default> Default for UniqueArc<T> {
 impl<T> Deref for UniqueArc<T> {
     type Target = T;
 
+    #[inline]
     fn deref(&self) -> &Self::Target {
         // Safety: we have exclusive access to the inner value and the pointer is valid as long as the Arc is alive.
         unsafe { self.data.as_ref() }
@@ -62,6 +68,7 @@ impl<T> Deref for UniqueArc<T> {
 }
 
 impl<T> DerefMut for UniqueArc<T> {
+    #[inline]
     fn deref_mut(&mut self) -> &mut Self::Target {
         // Safety: we have exclusive access to the inner value and the pointer is valid as long as the Arc is alive.
         unsafe { self.data.as_mut() }
@@ -77,12 +84,14 @@ impl<T: Debug> Debug for UniqueArc<T> {
 impl<T> TryFrom<Arc<T>> for UniqueArc<T> {
     type Error = Arc<T>;
 
+    #[inline]
     fn try_from(value: Arc<T>) -> Result<Self, Self::Error> {
         Self::from_arc(value)
     }
 }
 
 impl<T> From<UniqueArc<T>> for Arc<T> {
+    #[inline]
     fn from(value: UniqueArc<T>) -> Self {
         value.share()
     }
@@ -99,6 +108,7 @@ pub trait IntoUnique {
 impl<T> IntoUnique for Arc<T> {
     type Item = T;
 
+    #[inline]
     fn into_unique(self) -> Option<UniqueArc<T>> {
         UniqueArc::from_arc(self).ok()
     }

@@ -671,18 +671,21 @@ type BufPool = ArcSQPool<Vec<u8>>;
 pub struct BufMut(LeasedUnique<Vec<u8>, Arc<BufPool>>);
 
 impl BufMut {
+    #[inline]
     pub fn new() -> Self {
         let mut buf = BUF_POOL.lease();
         buf.clear();
         Self(buf)
     }
 
+    #[inline]
     pub fn with_capacity(n: usize) -> Self {
         let mut buf = Self::new();
         buf.reserve(n);
         buf
     }
 
+    #[inline]
     pub fn share(self) -> Buf {
         Buf(self.0.share())
     }
