@@ -24,11 +24,13 @@ pub struct Scanner<D> {
 
 impl<D: Delimit> Scanner<D> {
     /// Returns a new Scanner with the given parameters.
+    #[inline]
     pub fn new(sf: Arc<SegmentBufFactory>, delimiter: D) -> Self {
         Self { delimiter, sf }
     }
 
     /// Returns an iterator over segments found in the input.
+    #[inline]
     pub fn items<'a, 'b>(&'a self, input: &'b mut dyn Read) -> ScannerIter<'a, 'b, D> {
         return ScannerIter::new(self, input);
     }
@@ -47,48 +49,56 @@ pub enum Delimiter {
 }
 
 impl Default for Delimiter {
+    #[inline]
     fn default() -> Self {
         Self::SmartNewLine
     }
 }
 
 impl From<u8> for Delimiter {
+    #[inline]
     fn from(d: u8) -> Self {
         Self::Byte(d)
     }
 }
 
 impl From<Vec<u8>> for Delimiter {
+    #[inline]
     fn from(d: Vec<u8>) -> Self {
         Self::Bytes(d)
     }
 }
 
 impl From<&[u8]> for Delimiter {
+    #[inline]
     fn from(d: &[u8]) -> Self {
         Self::Bytes(d.into())
     }
 }
 
 impl From<char> for Delimiter {
+    #[inline]
     fn from(d: char) -> Self {
         Self::Char(d)
     }
 }
 
 impl From<&str> for Delimiter {
+    #[inline]
     fn from(d: &str) -> Self {
         Self::Str(d.into())
     }
 }
 
 impl From<String> for Delimiter {
+    #[inline]
     fn from(d: String) -> Self {
         Self::Str(d)
     }
 }
 
 impl From<SmartNewLine> for Delimiter {
+    #[inline]
     fn from(_: SmartNewLine) -> Self {
         Self::SmartNewLine
     }
@@ -97,6 +107,7 @@ impl From<SmartNewLine> for Delimiter {
 impl Delimit for Delimiter {
     type Searcher = Box<dyn Search>;
 
+    #[inline]
     fn into_searcher(self) -> Self::Searcher {
         match self {
             Self::Byte(b) => Box::new(b.into_searcher()),
@@ -120,6 +131,7 @@ pub trait Delimit: Clone {
 impl Delimit for u8 {
     type Searcher = u8;
 
+    #[inline]
     fn into_searcher(self) -> Self::Searcher {
         self
     }
@@ -128,6 +140,7 @@ impl Delimit for u8 {
 impl<'a> Delimit for &'a [u8] {
     type Searcher = SubStrSearcher<Self>;
 
+    #[inline]
     fn into_searcher(self) -> Self::Searcher {
         SubStrSearcher::new(self)
     }
@@ -136,6 +149,7 @@ impl<'a> Delimit for &'a [u8] {
 impl Delimit for char {
     type Searcher = SubStrSearcher<heapless::Vec<u8, 4>>;
 
+    #[inline]
     fn into_searcher(self) -> Self::Searcher {
         let mut buf = [0; 4];
         self.encode_utf8(&mut buf);
@@ -146,6 +160,7 @@ impl Delimit for char {
 impl<'a> Delimit for &'a str {
     type Searcher = SubStrSearcher<Self>;
 
+    #[inline]
     fn into_searcher(self) -> Self::Searcher {
         SubStrSearcher::new(self)
     }
@@ -154,6 +169,7 @@ impl<'a> Delimit for &'a str {
 impl<'a> Delimit for &'a String {
     type Searcher = SubStrSearcher<Self>;
 
+    #[inline]
     fn into_searcher(self) -> Self::Searcher {
         SubStrSearcher::new(self)
     }
@@ -162,6 +178,7 @@ impl<'a> Delimit for &'a String {
 impl Delimit for String {
     type Searcher = SubStrSearcher<Self>;
 
+    #[inline]
     fn into_searcher(self) -> Self::Searcher {
         SubStrSearcher::new(self)
     }
@@ -170,6 +187,7 @@ impl Delimit for String {
 impl Delimit for Vec<u8> {
     type Searcher = SubStrSearcher<Self>;
 
+    #[inline]
     fn into_searcher(self) -> Self::Searcher {
         SubStrSearcher::new(self)
     }
@@ -178,6 +196,7 @@ impl Delimit for Vec<u8> {
 impl Delimit for &Delimiter {
     type Searcher = Box<dyn Search>;
 
+    #[inline]
     fn into_searcher(self) -> Self::Searcher {
         self.clone().into_searcher()
     }
@@ -192,6 +211,7 @@ pub struct SmartNewLine;
 impl Delimit for SmartNewLine {
     type Searcher = SmartNewLineSearcher;
 
+    #[inline]
     fn into_searcher(self) -> Self::Searcher {
         Self::Searcher {}
     }
@@ -208,36 +228,44 @@ pub trait Search {
 }
 
 impl Search for u8 {
+    #[inline]
     fn search_r(&self, buf: &[u8], _: bool) -> Option<Range<usize>> {
         buf.iter().rposition(|x| x == self).map(|x| x..x + 1)
     }
 
+    #[inline]
     fn search_l(&self, buf: &[u8], _: bool) -> Option<Range<usize>> {
         buf.iter().position(|x| x == self).map(|x| x..x + 1)
     }
 
+    #[inline]
     fn partial_match_l(&self, _: &[u8]) -> Option<usize> {
         None
     }
 
+    #[inline]
     fn partial_match_r(&self, _: &[u8]) -> Option<usize> {
         None
     }
 }
 
 impl Search for Box<dyn Search> {
+    #[inline]
     fn search_r(&self, buf: &[u8], edge: bool) -> Option<Range<usize>> {
         self.as_ref().search_r(buf, edge)
     }
 
+    #[inline]
     fn search_l(&self, buf: &[u8], edge: bool) -> Option<Range<usize>> {
         self.as_ref().search_l(buf, edge)
     }
 
+    #[inline]
     fn partial_match_r(&self, buf: &[u8]) -> Option<usize> {
         self.as_ref().partial_match_r(buf)
     }
 
+    #[inline]
     fn partial_match_l(&self, buf: &[u8]) -> Option<usize> {
         self.as_ref().partial_match_l(buf)
     }
@@ -247,6 +275,7 @@ impl Search for Box<dyn Search> {
 
 // Extends Search with a split method.
 pub trait SearchExt: Search {
+    #[inline]
     fn split<'a, 'b>(&'a self, buf: &'b [u8]) -> SplitIter<'a, 'b, Self>
     where
         Self: Sized,
@@ -271,6 +300,7 @@ pub struct SplitIter<'a, 'b, S: Search + ?Sized> {
 impl<'a, 'b, S: Search> Iterator for SplitIter<'a, 'b, S> {
     type Item = &'b [u8];
 
+    #[inline]
     fn next(&mut self) -> Option<Self::Item> {
         if self.pos >= self.buf.len() {
             return None;
@@ -296,16 +326,19 @@ pub struct SubStrSearcher<D> {
 }
 
 impl<D: AsRef<[u8]>> SubStrSearcher<D> {
+    #[inline]
     pub fn new(delimiter: D) -> Self {
         Self { delimiter }
     }
 
+    #[inline]
     fn len(&self) -> usize {
         self.delimiter.as_ref().len()
     }
 }
 
 impl<D: AsRef<[u8]>> Search for SubStrSearcher<D> {
+    #[inline]
     fn search_r(&self, buf: &[u8], _edge: bool) -> Option<Range<usize>> {
         let needle = self.delimiter.as_ref();
         if needle.len() == 0 {
@@ -326,6 +359,7 @@ impl<D: AsRef<[u8]>> Search for SubStrSearcher<D> {
         }
     }
 
+    #[inline]
     fn search_l(&self, buf: &[u8], _edge: bool) -> Option<Range<usize>> {
         let needle = self.delimiter.as_ref();
         if needle.len() == 0 {
@@ -347,6 +381,7 @@ impl<D: AsRef<[u8]>> Search for SubStrSearcher<D> {
         }
     }
 
+    #[inline]
     fn partial_match_r(&self, buf: &[u8]) -> Option<usize> {
         if self.len() < 2 {
             return None;
@@ -363,6 +398,7 @@ impl<D: AsRef<[u8]>> Search for SubStrSearcher<D> {
         None
     }
 
+    #[inline]
     fn partial_match_l(&self, buf: &[u8]) -> Option<usize> {
         if self.len() < 2 {
             return None;
@@ -386,6 +422,7 @@ impl<D: AsRef<[u8]>> Search for SubStrSearcher<D> {
 pub struct SmartNewLineSearcher;
 
 impl Search for SmartNewLineSearcher {
+    #[inline]
     fn search_r(&self, buf: &[u8], _edge: bool) -> Option<Range<usize>> {
         buf.iter().rposition(|x| *x == b'\n').and_then(|i| {
             if i > 0 && buf[i - 1] == b'\r' {
@@ -396,6 +433,7 @@ impl Search for SmartNewLineSearcher {
         })
     }
 
+    #[inline]
     fn search_l(&self, buf: &[u8], edge: bool) -> Option<Range<usize>> {
         if buf.len() == 0 {
             return None;
@@ -412,6 +450,7 @@ impl Search for SmartNewLineSearcher {
         })
     }
 
+    #[inline]
     fn partial_match_r(&self, buf: &[u8]) -> Option<usize> {
         if buf.len() > 0 && buf[buf.len() - 1] == b'\r' {
             Some(buf.len() - 1)
@@ -420,6 +459,7 @@ impl Search for SmartNewLineSearcher {
         }
     }
 
+    #[inline]
     fn partial_match_l(&self, buf: &[u8]) -> Option<usize> {
         if buf.len() > 0 && buf[0] == b'\n' {
             Some(1)
@@ -440,26 +480,31 @@ pub struct SegmentBuf {
 
 impl SegmentBuf {
     /// Returns a reference to the contained data.
+    #[inline]
     pub fn data(&self) -> &[u8] {
         &self.buf[..self.size]
     }
 
     /// Returns data size.
+    #[inline]
     pub fn len(&self) -> usize {
         self.size
     }
 
     /// Transforms the SegmentBuf into inner Vec<u8>.
+    #[inline]
     pub fn into_inner(self) -> Vec<u8> {
         self.buf
     }
 
+    #[inline]
     fn new(capacity: usize) -> Self {
         let mut buf = Vec::with_capacity(capacity);
         buf.resize(capacity, 0);
         Self { buf, size: 0 }
     }
 
+    #[inline]
     fn zero() -> Self {
         Self {
             buf: Vec::new(),
@@ -467,16 +512,19 @@ impl SegmentBuf {
         }
     }
 
+    #[inline]
     fn reset(&mut self) {
         self.buf.resize(self.buf.capacity(), 0);
         self.size = 0;
     }
 
+    #[inline]
     fn resetted(mut self) -> Self {
         self.reset();
         self
     }
 
+    #[inline]
     fn replace(&mut self, mut other: Self) -> Self {
         std::mem::swap(self, &mut other);
         other
@@ -484,6 +532,7 @@ impl SegmentBuf {
 }
 
 impl PartialEq for SegmentBuf {
+    #[inline]
     fn eq(&self, other: &Self) -> bool {
         self.size == other.size && self.data().eq(other.data())
     }
@@ -500,6 +549,7 @@ impl std::fmt::Debug for SegmentBuf {
 }
 
 impl<T: AsRef<[u8]>> From<T> for SegmentBuf {
+    #[inline]
     fn from(data: T) -> Self {
         let size = data.as_ref().len();
         Self {
@@ -522,6 +572,7 @@ pub enum Segment {
 
 impl Segment {
     /// Returns a new Segment containing the given SegmentBuf.
+    #[inline]
     fn new(buf: SegmentBuf, placement: Option<PartialPlacement>) -> Self {
         if let Some(placement) = placement {
             Self::Incomplete(buf, placement)
@@ -559,6 +610,7 @@ impl SegmentBufFactory {
     }
 
     /// Returns a new or recycled SegmentBuf.
+    #[inline]
     pub fn new_segment(&self) -> SegmentBuf {
         match self.recycled.pop() {
             Some(buf) => buf.resetted(),
@@ -567,6 +619,7 @@ impl SegmentBufFactory {
     }
 
     /// Recycles the given SegmentBuf.
+    #[inline]
     pub fn recycle(&self, buf: SegmentBuf) {
         if buf.buf.capacity() == self.buf_size {
             self.recycled.push(buf);
@@ -584,6 +637,7 @@ pub struct BufFactory {
 
 impl BufFactory {
     /// Returns a new BufFactory with the given parameters.
+    #[inline]
     pub fn new(buf_size: usize) -> Self {
         return Self {
             buf_size,
@@ -592,6 +646,7 @@ impl BufFactory {
     }
 
     /// Returns a new or recycled buffer.
+    #[inline]
     pub fn new_buf(&self) -> Vec<u8> {
         match self.recycled.pop() {
             Some(mut buf) => {
@@ -603,6 +658,7 @@ impl BufFactory {
     }
 
     /// Recycles the given buffer.
+    #[inline]
     pub fn recycle(&self, buf: Vec<u8>) {
         self.recycled.push(buf);
     }
@@ -621,10 +677,12 @@ pub struct ScannerIter<'a, 'b, D: Delimit> {
 }
 
 impl<'a, 'b, D: Delimit> ScannerIter<'a, 'b, D> {
+    #[inline]
     pub fn with_max_segment_size(self, max_segment_size: usize) -> ScannerJumboIter<'a, 'b, D> {
         ScannerJumboIter::new(self, max_segment_size)
     }
 
+    #[inline]
     fn new(scanner: &'a Scanner<D>, input: &'b mut dyn Read) -> Self {
         return Self {
             scanner,
@@ -636,6 +694,7 @@ impl<'a, 'b, D: Delimit> ScannerIter<'a, 'b, D> {
         };
     }
 
+    #[inline]
     fn split(&mut self, full: bool, edge: bool) -> Option<(SegmentBuf, bool)> {
         if self.next.len() < 1 {
             return None;
@@ -656,7 +715,7 @@ impl<'a, 'b, D: Delimit> ScannerIter<'a, 'b, D> {
             .and_then(|(n, ok)| self.split_n(bs - n).map(|sb| (sb, ok)))
     }
 
-    #[inline(always)]
+    #[inline]
     fn split_n(&mut self, n: usize) -> Option<SegmentBuf> {
         let bs = self.next.len();
         if n == bs {
@@ -751,6 +810,7 @@ pub struct ScannerJumboIter<'a, 'b, D: Delimit> {
 }
 
 impl<'a, 'b, D: Delimit> ScannerJumboIter<'a, 'b, D> {
+    #[inline]
     fn new(inner: ScannerIter<'a, 'b, D>, max_segment_size: usize) -> Self {
         return Self {
             inner,
@@ -760,20 +820,24 @@ impl<'a, 'b, D: Delimit> ScannerJumboIter<'a, 'b, D> {
         };
     }
 
+    #[inline]
     fn push(&mut self, buf: SegmentBuf, placement: PartialPlacement) {
         self.fetched.push_back((buf, placement));
     }
 
+    #[inline]
     fn pop(&mut self) -> Option<(SegmentBuf, PartialPlacement)> {
         self.fetched.pop_front()
     }
 
+    #[inline]
     fn can_complete(&self) -> bool {
         self.fetched.len() > 0
             && self.fetched.front().map(|x| x.1) == Some(PartialPlacement::First)
             && self.fetched.back().map(|x| x.1) == Some(PartialPlacement::Last)
     }
 
+    #[inline]
     fn complete(&mut self) -> Option<Result<Segment>> {
         let buf = self
             .fetched
