@@ -2,6 +2,7 @@
 use std::{
     fmt::{self, Debug, Formatter},
     ops::{Deref, DerefMut},
+    ptr::NonNull,
     result::Result,
     sync::Arc,
 };
@@ -10,15 +11,14 @@ use std::{
 
 pub struct UniqueArc<T> {
     ptr: Arc<T>,
-    data: *mut T,
+    data: NonNull<T>,
 }
 
 impl<T> UniqueArc<T> {
     pub fn new(value: T) -> Self {
         let ptr = Arc::new(value);
-        // Safety: we have exclusive access to the inner value and the pointer is valid as long as the Arc is alive
-        let data = unsafe { std::mem::transmute(Arc::as_ptr(&ptr)) };
-        Self { ptr, data }
+        // Safety: we have exclusive access to the inner value and the pointer is valid as long as the Arc is alive.
+        unsafe { Self::from_arc_unchecked(ptr) }
     }
 
     pub fn share(self) -> Arc<T> {
@@ -27,15 +27,24 @@ impl<T> UniqueArc<T> {
 
     fn from_arc(mut ptr: Arc<T>) -> Result<Self, Arc<T>> {
         match Arc::get_mut(&mut ptr) {
-            Some(_) => Ok(Self {
-                // Safety: we have exclusive access to the inner value and the pointer is valid as long as the Arc is alive
-                data: unsafe { std::mem::transmute(Arc::as_ptr(&ptr)) },
-                ptr,
-            }),
+            // Safety: we have exclusive access to the inner value and the pointer is valid as long as the Arc is alive.
+            Some(_) => Ok(unsafe { Self::from_arc_unchecked(ptr) }),
             None => Err(ptr),
         }
     }
+
+    unsafe fn from_arc_unchecked(ptr: Arc<T>) -> Self {
+        debug_assert_eq!(Arc::strong_count(&ptr), 1);
+        debug_assert_eq!(Arc::weak_count(&ptr), 0);
+
+        let data = NonNull::new_unchecked(Arc::as_ptr(&ptr) as *mut T);
+        Self { data, ptr }
+    }
 }
+
+// Safety: we have exclusive access to the inner value and the pointer is valid as long as the Arc is alive.
+unsafe impl<T: Send> Send for UniqueArc<T> {}
+unsafe impl<T: Sync> Sync for UniqueArc<T> {}
 
 impl<T: Default> Default for UniqueArc<T> {
     fn default() -> Self {
@@ -47,15 +56,15 @@ impl<T> Deref for UniqueArc<T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
-        // Safety: we have exclusive access to the inner value and the pointer is valid as long as the Arc is alive
-        unsafe { &*self.data }
+        // Safety: we have exclusive access to the inner value and the pointer is valid as long as the Arc is alive.
+        unsafe { self.data.as_ref() }
     }
 }
 
 impl<T> DerefMut for UniqueArc<T> {
     fn deref_mut(&mut self) -> &mut Self::Target {
-        // Safety: we have exclusive access to the inner value and the pointer is valid as long as the Arc is alive
-        unsafe { &mut *self.data }
+        // Safety: we have exclusive access to the inner value and the pointer is valid as long as the Arc is alive.
+        unsafe { self.data.as_mut() }
     }
 }
 

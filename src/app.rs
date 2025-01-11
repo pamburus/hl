@@ -33,7 +33,7 @@ use crate::{
     formatting::{RawRecordFormatter, RecordFormatter, RecordWithSourceFormatter},
     fsmon::{self, EventKind},
     index::{Indexer, IndexerSettings, Timestamp},
-    input::{BlockLine, Buf, Input, InputHolder, InputReference},
+    input::{BlockLine, BufMut, Input, InputHolder, InputReference},
     model::{Filter, Parser, ParserSettings, RawRecord, Record, RecordFilter, RecordWithSourceConstructor},
     query::Query,
     scanning::{BufFactory, Delimit, Delimiter, Scanner, SearchExt, Segment, SegmentBuf, SegmentBufFactory},
@@ -380,7 +380,7 @@ impl App {
                 workers.push(scope.spawn(closure!(ref parser, |_| -> Result<()> {
                     let mut processor = self.new_segment_processor(&parser);
                     for (block, ts_min, i, j) in rxp.iter() {
-                        let mut buf = Buf::with_capacity(2 * usize::try_from(block.size())?);
+                        let mut buf = BufMut::with_capacity(2 * usize::try_from(block.size())?);
                         let mut items = Vec::with_capacity(2 * usize::try_from(block.lines_valid())?);
                         for line in block.into_lines()? {
                             if line.len() == 0 {
@@ -406,7 +406,7 @@ impl App {
                             );
                         }
 
-                        let buf = Arc::new(buf);
+                        let buf = buf.share();
                         if txw.send((OutputBlock { ts_min, buf, items }, i, j)).is_err() {
                             break;
                         }
@@ -977,7 +977,7 @@ struct TimestampIndexLine {
 
 struct OutputBlock {
     ts_min: crate::index::Timestamp,
-    buf: Arc<crate::input::Buf>,
+    buf: crate::input::Buf,
     items: Vec<(Timestamp, Range<usize>)>,
 }
 

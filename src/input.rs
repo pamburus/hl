@@ -20,7 +20,7 @@ use crate::{
     error::{Result, HILITE},
     index::{Index, Indexer, SourceBlock, SourceMetadata},
     iox::ReadFill,
-    pool::{Lease, Leased, SQPool},
+    pool::{ArcSQPool, Lease, LeaseShare, LeasedUnique, SharedLeaseHolder},
     replay::{ReplayBufCreator, ReplayBufReader, ReplaySeekReader},
     tee::TeeReader,
     vfs::{FileSystem, LocalFileSystem},
@@ -665,12 +665,12 @@ impl Block<IndexedInput> {
 
 // ---
 
-type BufPool = SQPool<Vec<u8>>;
+type BufPool = ArcSQPool<Vec<u8>>;
 
 #[derive(Deref, DerefMut)]
-pub struct Buf(Leased<Vec<u8>, Arc<BufPool>>);
+pub struct BufMut(LeasedUnique<Vec<u8>, Arc<BufPool>>);
 
-impl Buf {
+impl BufMut {
     pub fn new() -> Self {
         let mut buf = BUF_POOL.lease();
         buf.clear();
@@ -682,13 +682,20 @@ impl Buf {
         buf.reserve(n);
         buf
     }
+
+    pub fn share(self) -> Buf {
+        Buf(self.0.share())
+    }
 }
+
+#[derive(Deref, DerefMut, Clone)]
+pub struct Buf(SharedLeaseHolder<Vec<u8>, Arc<BufPool>>);
 
 static BUF_POOL: LazyLock<Arc<BufPool>> = LazyLock::new(|| Arc::new(BufPool::new()));
 
 pub struct BlockLines<I> {
     block: Block<I>,
-    buf: Arc<Buf>,
+    buf: Buf,
     total: usize,
     current: usize,
     byte: usize,
@@ -699,7 +706,7 @@ impl BlockLines<IndexedInput> {
     pub fn new(mut block: Block<IndexedInput>) -> Result<Self> {
         let (buf, total) = {
             let block = &mut block;
-            let mut buf = Buf::new();
+            let mut buf = BufMut::new();
             let source_block = block.source_block();
             buf.resize(source_block.size.try_into()?, 0);
             let mut stream = block.input.stream.lock().unwrap();
@@ -710,7 +717,7 @@ impl BlockLines<IndexedInput> {
         };
         Ok(Self {
             block,
-            buf: Arc::new(buf),
+            buf: buf.share(),
             total,
             current: 0,
             byte: 0,
@@ -767,13 +774,13 @@ impl Iterator for BlockLines<IndexedInput> {
 // ---
 
 pub struct BlockLine {
-    buf: Arc<Buf>,
+    buf: Buf,
     range: Range<usize>,
 }
 
 impl BlockLine {
     #[inline]
-    pub fn new(buf: Arc<Buf>, range: Range<usize>) -> Self {
+    pub fn new(buf: Buf, range: Range<usize>) -> Self {
         Self { buf, range }
     }
 
