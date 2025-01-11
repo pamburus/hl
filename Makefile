@@ -9,7 +9,7 @@ THEMES = $(notdir $(basename $(wildcard etc/defaults/themes/*.yaml)))
 SCREENSHOT_SAMPLE = prometheus.log
 
 # Exported variables
-export RUST_BACKTRACE=1
+export RUST_BACKTRACE=full
 
 # The list of files that are intentionally ignored while being tracked
 ignored-tracked-files = .vscode/settings.json
