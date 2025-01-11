@@ -74,7 +74,7 @@ pub enum Token<'s> {
     Number(&'s str),
 
     #[regex(r#"[^"\x00-\x20=]+"#, |lex| String::Plain(lex.slice()), priority = 5)]
-    #[regex(r#""([^"\\\x00-\x1F]|\\["\\bnfrt/]|u[a-fA-F0-9]{4})*""#, |lex| String::Escaped(lex.slice()), priority = 4)]
+    #[regex(r#""([^"\\\x00-\x1F]|\\(["\\bnfrt/]|u[a-fA-F0-9]{4}))*""#, |lex| String::Escaped(lex.slice()), priority = 4)]
     String(String<'s>),
 
     #[regex(r#"[\t ]+"#)]
