@@ -1,5 +1,13 @@
 [workspace]
-members = [".", "crate/encstr", "crate/heapopt", "crate/json-ast", "crate/flat-tree"]
+members = [
+    ".",
+    "crate/encstr",
+    "crate/heapopt",
+    "crate/json-ast",
+    "crate/flat-tree",
+    "crate/log-format",
+    "crate/log-format-json",
+]
 
 [workspace.package]
 repository = "https://github.com/pamburus/hl"
@@ -98,6 +106,8 @@ byte-strings = "0"
 clean-path = "0"
 criterion = "0"
 json-ast = { path = "./crate/json-ast" }
+log-format-json = { path = "./crate/log-format-json" }
+log-format = { path = "./crate/log-format" }
 logos = "0"
 maplit = "1"
 mockall = "0"
@@ -171,4 +181,9 @@ harness = false
 
 [[bench]]
 name = "flat-tree"
+harness = false
+
+[[bench]]
+name = "log-format-json"
+path = "benches/log-format-json/main.rs"
 harness = false
