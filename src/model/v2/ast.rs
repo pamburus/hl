@@ -373,7 +373,9 @@ mod tests {
         let mut container = Container::new();
         let root = container.metaroot();
         root.add_scalar(Scalar::Bool(true))
-            .add_composite(Composite::Array, |b| (b.add_scalar(Scalar::Bool(false)), Ok(())));
+            .add_composite(Composite::Array, |b| (b.add_scalar(Scalar::Bool(false)), Ok(())))
+            .1
+            .unwrap();
         assert_eq!(container.roots().len(), 2);
     }
 

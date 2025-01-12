@@ -8,10 +8,7 @@ use chrono::{Offset, Utc};
 // local imports
 use crate::{
     formatting::v2::RecordFormatter,
-    model::v2::{
-        parse::Parser,
-        record::{filter::CombinedFilter, Settings as ParserSettings},
-    },
+    model::v2::record::{filter::CombinedFilter, Settings as ParserSettings},
     processing::{RecordIgnorer, SegmentProcess, SegmentProcessor, SegmentProcessorOptions},
     settings,
     timezone::Tz,

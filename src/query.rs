@@ -357,10 +357,7 @@ impl<F: Fn(Level) -> bool> RecordFilter for LevelFilter<F> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::model::v2::{
-        compat::{Parser as RecordParser, ParserSettings},
-        parse::NewParser,
-    };
+    use crate::model::v2::{compat::ParserSettings, parse::NewParser};
 
     #[test]
     fn test_or_3() {

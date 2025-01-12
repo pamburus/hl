@@ -136,7 +136,9 @@ impl<HFF: Default> Default for Fields<'_, '_, HFF> {
             let mut container = ast::Container::default();
             container
                 .metaroot()
-                .add_composite(ast::Composite::Object, |b| (b, Ok(())));
+                .add_composite(ast::Composite::Object, |b| (b, Ok(())))
+                .1
+                .unwrap();
             container
         });
 
