@@ -8,3 +8,4 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
+attachment = { path = "../attachment" }
