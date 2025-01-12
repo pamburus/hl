@@ -1,6 +1,7 @@
 [workspace]
 members = [
     ".",
+    "crate/attachment",
     "crate/encstr",
     "crate/heapopt",
     "crate/json-ast",
