@@ -112,6 +112,9 @@ opt-level = 3
 codegen-units = 1
 lto = true
 
+[profile.dev]
+opt-level = 1
+
 [[bench]]
 name = "regex"
 harness = false
