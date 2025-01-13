@@ -1,7 +1,8 @@
-use upstream::Format;
+use upstream::{Build, Format};
 
 pub mod error;
 pub mod lexer;
+mod parse;
 mod token;
 
 #[cfg(test)]
@@ -20,5 +21,10 @@ impl Format for JsonFormat {
 
     fn lexer(s: &[u8]) -> Self::Lexer<'_> {
         Lexer::from_slice(s)
+    }
+
+    fn parse<B: Build>(s: &[u8], target: B) -> Result<B, B::Error> {
+        let lexer = Self::lexer(s);
+        result.map(|(_, target)| target)
     }
 }

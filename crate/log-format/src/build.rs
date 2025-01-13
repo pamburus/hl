@@ -1,19 +1,45 @@
-use attachment::Attach;
-
 use super::token::{Composite, Scalar};
 
-pub trait Build: Attach
+// ---
+
+pub trait Build
 where
     Self: Sized,
 {
-    type Child: Build<Attachment = Self::Attachment>;
+    type Child: Build<Error = Self::Error>;
     type Error;
 
     fn add_scalar(self, scalar: Scalar) -> Self;
-    fn add_composite<F>(self, composite: Composite, f: F) -> Result<((), Self), (Self::Error, Self)>
+    fn add_composite<F>(self, composite: Composite, f: F) -> HitchResult<(), Self::Error, Self>
     where
-        F: FnOnce(Self::Child) -> Result<((), Self::Child), (Self::Error, Self::Child)>;
+        F: FnOnce(Self::Child) -> HitchResult<(), Self::Error, Self::Child>;
 }
+
+// ---
+
+pub struct Discard;
+
+impl Build for Discard {
+    type Child = Discard;
+    type Error = Discard;
+
+    #[inline]
+    fn add_scalar(self, _: Scalar) -> Self {
+        self
+    }
+
+    #[inline]
+    fn add_composite<F>(self, _: Composite, _: F) -> HitchResult<(), Self::Error, Self>
+    where
+        F: FnOnce(Self::Child) -> HitchResult<(), Self::Error, Self::Child>,
+    {
+        Ok(((), self))
+    }
+}
+
+// ---
+
+pub type HitchResult<R, E, B> = Result<(R, B), (E, B)>;
 
 // ---
 
