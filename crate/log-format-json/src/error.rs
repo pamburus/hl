@@ -23,6 +23,9 @@ pub enum ErrorKind {
     #[default]
     InvalidToken,
     UnexpectedToken,
+    UnexpectedEof,
+    UnmatchedBrace,
+    UnmatchedBracket,
     DepthLimitExceeded,
 }
 
@@ -31,6 +34,9 @@ impl Display for ErrorKind {
         match self {
             Self::InvalidToken => write!(f, "invalid token"),
             Self::UnexpectedToken => write!(f, "unexpected token"),
+            Self::UnexpectedEof => write!(f, "unexpected end of stream"),
+            Self::UnmatchedBrace => write!(f, "unmatched opening brace"),
+            Self::UnmatchedBracket => write!(f, "unmatched opening bracket"),
             Self::DepthLimitExceeded => write!(f, "depth limit exceeded"),
         }
     }

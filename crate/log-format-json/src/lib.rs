@@ -1,4 +1,5 @@
-use upstream::{Build, Format};
+use logos::Logos;
+use upstream::{ast, Format};
 
 pub mod error;
 pub mod lexer;
@@ -17,14 +18,19 @@ pub use token::InnerToken;
 pub struct JsonFormat;
 
 impl Format for JsonFormat {
+    type Error = Error;
     type Lexer<'s> = Lexer<'s>;
 
-    fn lexer(s: &[u8]) -> Self::Lexer<'_> {
+    fn lexer<'s>(s: &'s [u8]) -> Self::Lexer<'s> {
         Lexer::from_slice(s)
     }
 
-    fn parse<B: Build>(s: &[u8], target: B) -> Result<B, B::Error> {
-        let lexer = Self::lexer(s);
-        result.map(|(_, target)| target)
+    fn parse<'s, B: ast::Build>(s: &'s [u8], target: B) -> Result<(bool, B), (B::Error, B)>
+    where
+        B: ast::Build,
+        B::Error: From<Self::Error>,
+    {
+        let mut lexer = InnerToken::lexer(s);
+        parse::parse_value(&mut lexer, target)
     }
 }
