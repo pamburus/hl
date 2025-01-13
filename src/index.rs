@@ -175,6 +175,7 @@ impl<'a, FS: FileSystem> IndexerSettings<'a, FS> {
         bincode::serialize_into(
             &mut hasher,
             &(
+                CURRENT_VERSION,
                 &self.buffer_size,
                 &self.max_message_size,
                 &self.fields,
