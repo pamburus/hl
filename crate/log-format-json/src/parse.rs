@@ -3,7 +3,7 @@ use super::{
     InnerToken,
 };
 use upstream::{
-    ast::Build,
+    ast::{Build, Discard},
     token::{Composite, Scalar},
 };
 
