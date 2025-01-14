@@ -23,14 +23,12 @@ pub trait Push: Reserve {
 // ---
 
 pub trait Build: Push + Sized {
-    type Child: Build<Value = Self::Value, Checkpoint = Self::Checkpoint, Attachment = Self::Attachment>;
     type Attachment: BuildAttachment;
     type WithAttachment<V>: Build<
         Value = Self::Value,
         Checkpoint = Self::Checkpoint,
         Attachment = AttachmentChild<Self::Attachment, V>,
         WithoutAttachment = Self,
-        Child = <Self::Child as Build>::WithAttachment<V>,
     >;
     type WithoutAttachment: Build<
         Value = Self::Value,
@@ -38,10 +36,10 @@ pub trait Build: Push + Sized {
         Attachment = AttachmentParent<Self::Attachment>,
     >;
 
-    fn build<R, F>(self, value: Self::Value, f: F) -> BuildOutput<F, R, Self, Self::Child>
+    fn build<R, F>(self, value: Self::Value, f: F) -> BuildOutput<F, R, Self>
     where
-        F: FnOnce(Self::Child) -> R,
-        R: BuildFnResult<F, R, Self, Self::Child>;
+        F: FnOnce(Self) -> R,
+        R: BuildFnResult<F, R, Self>;
 
     fn attach<V>(self, attachment: V) -> Self::WithAttachment<V>;
     fn detach(self) -> (Self::WithoutAttachment, AttachmentValue<Self::Attachment>);
@@ -49,54 +47,51 @@ pub trait Build: Push + Sized {
 
 // ---
 
-pub type BuildOutput<F, R, B, C> = <R as BuildFnResult<F, R, B, C>>::Output;
+pub type BuildOutput<F, R, B> = <R as BuildFnResult<F, R, B>>::Output;
 
 // ---
 
-pub trait BuildFnResult<F, R, B, C> {
+pub trait BuildFnResult<F, R, B> {
     type Output;
 
-    fn transform<MF: FnOnce(C) -> B>(self, map: MF) -> Self::Output;
+    fn transform<MF: FnOnce(B) -> B>(self, map: MF) -> Self::Output;
 }
 
-impl<F, B, C> BuildFnResult<F, C, B, C> for C
+impl<F, B> BuildFnResult<F, B, B> for B
 where
-    F: FnOnce(C) -> C,
+    F: FnOnce(B) -> B,
     B: Build,
-    C: Build,
 {
     type Output = B;
 
     #[inline]
-    fn transform<MF: FnOnce(C) -> B>(self, map: MF) -> Self::Output {
+    fn transform<MF: FnOnce(B) -> B>(self, map: MF) -> Self::Output {
         map(self)
     }
 }
 
-impl<F, B, C, E> BuildFnResult<F, Result<C, E>, B, C> for Result<C, E>
+impl<F, B, E> BuildFnResult<F, Result<B, E>, B> for Result<B, E>
 where
-    F: FnOnce(C) -> Result<C, E>,
+    F: FnOnce(B) -> Result<B, E>,
     B: Build,
-    C: Build,
 {
     type Output = Result<B, E>;
 
     #[inline]
-    fn transform<MF: FnOnce(C) -> B>(self, map: MF) -> Self::Output {
+    fn transform<MF: FnOnce(B) -> B>(self, map: MF) -> Self::Output {
         self.map(map)
     }
 }
 
-impl<F, B, C, R> BuildFnResult<F, (C, R), B, C> for (C, R)
+impl<F, B, R> BuildFnResult<F, (B, R), B> for (B, R)
 where
-    F: FnOnce(C) -> (C, R),
+    F: FnOnce(B) -> (B, R),
     B: Build,
-    C: Build,
 {
     type Output = (B, R);
 
     #[inline]
-    fn transform<MF: FnOnce(C) -> B>(self, map: MF) -> Self::Output {
+    fn transform<MF: FnOnce(B) -> B>(self, map: MF) -> Self::Output {
         (map(self.0), self.1)
     }
 }

@@ -95,14 +95,10 @@ where
     }
 
     #[inline]
-    pub fn build<'s, R, F>(
-        &'s mut self,
-        value: S::Value,
-        f: F,
-    ) -> BuildOutput<F, R, NodeBuilder<'s, V, S>, NodeBuilder<'s, V, S>>
+    pub fn build<'s, R, F>(&'s mut self, value: S::Value, f: F) -> BuildOutput<F, R, NodeBuilder<'s, V, S>>
     where
         F: FnOnce(NodeBuilder<'s, V, S>) -> R,
-        R: BuildFnResult<F, R, NodeBuilder<'s, V, S>, NodeBuilder<'s, V, S>>,
+        R: BuildFnResult<F, R, NodeBuilder<'s, V, S>>,
     {
         Build::build(self.metaroot(), value, f)
     }
@@ -520,10 +516,10 @@ where
     }
 
     #[inline]
-    fn build<R, F>(self, value: S::Value, f: F) -> BuildOutput<F, R, Self, Self>
+    fn build<R, F>(self, value: S::Value, f: F) -> BuildOutput<F, R, Self>
     where
         F: FnOnce(Self) -> R,
-        R: BuildFnResult<F, R, Self, Self>,
+        R: BuildFnResult<F, R, Self>,
     {
         Build::build(self, value, f)
     }
@@ -589,16 +585,15 @@ where
     S: Storage<Value = V>,
     A: BuildAttachment,
 {
-    type Child = Self;
     type Attachment = A;
     type WithAttachment<AV> = NodeBuilder<'t, V, S, A::Child<AV>>;
     type WithoutAttachment = NodeBuilder<'t, V, S, A::Parent>;
 
     #[inline]
-    fn build<R, F>(mut self, value: V, f: F) -> BuildOutput<F, R, Self, Self>
+    fn build<R, F>(mut self, value: V, f: F) -> BuildOutput<F, R, Self>
     where
-        F: FnOnce(Self::Child) -> R,
-        R: BuildFnResult<F, R, Self, Self>,
+        F: FnOnce(Self) -> R,
+        R: BuildFnResult<F, R, Self>,
     {
         let index = Index(self.tree.storage.len());
         self = self.push(value);

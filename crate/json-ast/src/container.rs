@@ -73,7 +73,7 @@ impl<'s, T> BuildExt<'s> for T
 where
     T: Build<'s>,
 {
-    type Child = T::Child;
+    type Child = T;
 
     #[inline]
     fn add_scalar(self, source: &'s str, kind: ScalarKind) -> Self {

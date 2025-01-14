@@ -127,7 +127,7 @@ impl<'s, T> Build<'s> for Builder<T>
 where
     T: InnerBuild<'s>,
 {
-    type Child = Builder<T::Child>;
+    type Child = Self;
     type Attachment = T::Attachment;
     type WithAttachment<V> = Builder<T::WithAttachment<V>>;
     type WithoutAttachment = Builder<T::WithoutAttachment>;
