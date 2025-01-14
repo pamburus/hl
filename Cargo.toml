@@ -44,7 +44,7 @@ crossbeam-queue = "0"
 crossbeam-utils = "0"
 deko = "0"
 derive_more = {version="1", features = ["deref", "from"]}
-dirs = "5"
+dirs = "6"
 dirs-sys = "0"
 encstr = { path = "./crate/encstr" }
 enum-map = "2"
