@@ -3,7 +3,7 @@ use super::{
     InnerToken,
 };
 use upstream::{
-    ast::{Build, Discard},
+    ast::Build,
     token::{Composite, Scalar},
 };
 
@@ -53,9 +53,7 @@ where
                 parse_object(lexer, target)
             })?;
             if skipped {
-                if let Err((e, _)) = parse_object(lexer, Discard::<T::Error>::new()) {
-                    return Err((e, target));
-                }
+                target = target.discard(|target| parse_object(lexer, target))?;
             }
             Ok(target)
         }
@@ -66,9 +64,7 @@ where
                 parse_array(lexer, target)
             })?;
             if skipped {
-                if let Err((e, _)) = parse_array(lexer, Discard::<T::Error>::new()) {
-                    return Err((e, target));
-                }
+                target = target.discard(|target| parse_array(lexer, target))?;
             }
             Ok(target)
         }
@@ -146,9 +142,7 @@ where
                 })?;
 
                 if skipped {
-                    if let Err((e, _)) = parse_field_value(lexer, Discard::<T::Error>::new()) {
-                        return Err((e, target));
-                    }
+                    target = target.discard(|target| parse_field_value(lexer, target))?;
                 }
 
                 awaits = Awaits::Comma;
