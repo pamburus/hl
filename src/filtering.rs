@@ -82,7 +82,6 @@ impl<N: KeyNormalize + Default> Default for MatchOptions<N> {
 
 // ---
 
-#[derive(Default)]
 pub struct IncludeExcludeKeyFilter<N: KeyNormalize> {
     children: HashMap<Key, IncludeExcludeKeyFilter<N>>,
     patterns: Vec<(Pattern<String>, IncludeExcludeKeyFilter<N>)>,
@@ -246,6 +245,16 @@ impl<N: KeyNormalize> IncludeExcludeKeyFilter<N> {
         self.patterns.clear();
         self.fallback = None;
         self.setting = setting;
+    }
+}
+
+impl<N> Default for IncludeExcludeKeyFilter<N>
+where
+    N: KeyNormalize + Default,
+{
+    #[inline]
+    fn default() -> Self {
+        Self::new(MatchOptions::default())
     }
 }
 

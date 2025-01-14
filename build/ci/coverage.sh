@@ -49,7 +49,7 @@ function test() {
     ${MAIN_EXECUTABLE:?} --config - --man-page > /dev/null
     ${MAIN_EXECUTABLE:?} --config - --list-themes > /dev/null
     ${MAIN_EXECUTABLE:?} --config - sample/prometheus.log -P > /dev/null
-    echo "" | ${MAIN_EXECUTABLE:?} --config - --concurrency 4 > /dev/null
+    echo "" | ${MAIN_EXECUTABLE:?} --config - --config=etc/defaults/config.yaml --concurrency 4 > /dev/null
 } 
 
 function merge() {

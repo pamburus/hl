@@ -1,6 +1,7 @@
 [package]
 name = "heapopt"
 version = "0.1.0"
+description = "Optimized collections for minimal heap usage"
 repository.workspace = true
 authors.workspace = true
 edition.workspace = true

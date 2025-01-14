@@ -46,6 +46,12 @@ foreground = "bright-green"
 [elements.null]
 foreground = "bright-red"
 
+[elements.bullet]
+modes = ["faint"]
+
+[elements.value-expansion]
+modes = ["faint"]
+
 [levels.trace.level-inner]
 modes = ["faint"]
 

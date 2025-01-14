@@ -44,6 +44,10 @@ elements:
     foreground: *red
   'null':
     foreground: *red
+  bullet:
+    foreground: *gray
+  value-expansion:
+    foreground: *gray
 levels:
   trace:
     level-inner:
@@ -66,3 +70,13 @@ levels:
       foreground: *red
     message:
       foreground: *red
+indicators:
+  sync:
+    synced:
+      text: ' '
+    failed:
+      text: '!'
+      inner:
+        style:
+          foreground: 'yellow'
+          modes: [bold]

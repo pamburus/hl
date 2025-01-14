@@ -32,6 +32,10 @@ elements:
     foreground: yellow
   'null':
     foreground: yellow
+  bullet:
+    foreground: bright-black
+  value-expansion:
+    foreground: bright-black
 levels:
   trace:
     level-inner:
@@ -50,3 +54,13 @@ levels:
     level:
       foreground: bright-red
       modes: [reverse]
+indicators:
+  sync:
+    synced:
+      text: ' '
+    failed:
+      text: '!'
+      inner:
+        style:
+          foreground: 'yellow'
+          modes: [bold]

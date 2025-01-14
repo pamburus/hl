@@ -3,16 +3,23 @@ use std::cmp::{max, min, PartialOrd};
 
 // third-party imports
 use chrono::{DateTime, Datelike, FixedOffset, NaiveDateTime, Offset, TimeZone, Timelike};
-use chrono_tz::OffsetName;
+use chrono_tz::{OffsetName, UTC};
 use enumset::{enum_set as mask, EnumSet, EnumSetType};
 
 // workspace imports
 use enumset_ext::EnumSetExt;
 
 // local imports
-use crate::fmtx::{aligned_left, Alignment, Counter, Push};
+use crate::fmtx::{aligned_left, Alignment, Push};
 use crate::timestamp::rfc3339;
 use crate::timezone::Tz;
+
+// ---
+
+pub struct TextWidth {
+    pub bytes: usize,
+    pub chars: usize,
+}
 
 // ---
 
@@ -45,12 +52,40 @@ impl DateTimeFormatter {
         }
     }
 
-    pub fn max_length(&self) -> usize {
-        let mut counter = Counter::new();
+    pub fn max_width(&self) -> TextWidth {
+        let mut buf = Vec::new();
         let ts = DateTime::from_timestamp(1654041600, 999_999_999).unwrap().naive_utc();
         let ts = DateTime::from_naive_utc_and_offset(ts, self.tz.offset_from_utc_date(&ts.date()).fix());
-        self.format(&mut counter, ts);
-        counter.result()
+
+        self.format(&mut buf, ts);
+
+        TextWidth {
+            bytes: buf.len(),
+            chars: std::str::from_utf8(&buf).unwrap().chars().count(),
+        }
+    }
+}
+
+impl Default for DateTimeFormatter {
+    fn default() -> Self {
+        Self {
+            format: vec![
+                Item::Year(Flags::empty()),
+                Item::Char(b'-'),
+                Item::MonthNumeric(Flags::empty()),
+                Item::Char(b'-'),
+                Item::Day(Flags::empty()),
+                Item::Char(b' '),
+                Item::Hour(Flags::empty()),
+                Item::Char(b':'),
+                Item::Minute(Flags::empty()),
+                Item::Char(b':'),
+                Item::Second(Flags::empty()),
+                Item::Char(b'.'),
+                Item::Nanosecond((Flags::empty(), 3)),
+            ],
+            tz: Tz::IANA(UTC),
+        }
     }
 }
 
