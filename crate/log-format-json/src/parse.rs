@@ -28,6 +28,25 @@ where
 }
 
 #[inline]
+pub fn parse_object<'s, T: Build>(lexer: &mut Lexer<'s>, target: T) -> Result<(bool, T), (T::Error, T)>
+where
+    T::Error: From<Error>,
+{
+    if let Some(token) = lexer.next() {
+        let token = match token {
+            Ok(token) => token,
+            Err(e) => return Err((lexer.make_error(e).into(), target)),
+        };
+        match token {
+            InnerToken::BraceOpen => parse_object_inner(lexer, target).map(|target| (true, target)),
+            _ => Err((lexer.make_error(ErrorKind::ExpectedObject).into(), target)),
+        }
+    } else {
+        Ok((false, target))
+    }
+}
+
+#[inline]
 fn parse_field_value<'s, T: Build>(lexer: &mut Lexer<'s>, target: T) -> Result<T, (T::Error, T)>
 where
     T::Error: From<Error>,
@@ -50,10 +69,10 @@ where
             let mut skipped = true;
             target = target.add_composite(Composite::Object, |target| {
                 skipped = false;
-                parse_object(lexer, target)
+                parse_object_inner(lexer, target)
             })?;
             if skipped {
-                target = target.discard(|target| parse_object(lexer, target))?;
+                target = target.discard(|target| parse_object_inner(lexer, target))?;
             }
             Ok(target)
         }
@@ -61,10 +80,10 @@ where
             let mut skipped = true;
             target = target.add_composite(Composite::Array, |target| {
                 skipped = false;
-                parse_array(lexer, target)
+                parse_array_inner(lexer, target)
             })?;
             if skipped {
-                target = target.discard(|target| parse_array(lexer, target))?;
+                target = target.discard(|target| parse_array_inner(lexer, target))?;
             }
             Ok(target)
         }
@@ -73,7 +92,7 @@ where
 }
 
 #[inline]
-fn parse_array<'s, T: Build>(lexer: &mut Lexer<'s>, mut target: T) -> Result<T, (T::Error, T)>
+fn parse_array_inner<'s, T: Build>(lexer: &mut Lexer<'s>, mut target: T) -> Result<T, (T::Error, T)>
 where
     T::Error: From<Error>,
 {
@@ -103,7 +122,7 @@ where
 }
 
 #[inline]
-fn parse_object<'s, T: Build>(lexer: &mut Lexer<'s>, mut target: T) -> Result<T, (T::Error, T)>
+fn parse_object_inner<'s, T: Build>(lexer: &mut Lexer<'s>, mut target: T) -> Result<T, (T::Error, T)>
 where
     T::Error: From<Error>,
 {

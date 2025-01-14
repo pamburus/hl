@@ -31,6 +31,6 @@ impl Format for JsonFormat {
         B::Error: From<Self::Error>,
     {
         let mut lexer = InnerToken::lexer(s);
-        parse::parse_value(&mut lexer, target)
+        parse::parse_object(&mut lexer, target)
     }
 }

@@ -22,6 +22,7 @@ impl Display for Error {
 pub enum ErrorKind {
     #[default]
     InvalidToken,
+    ExpectedObject,
     UnexpectedToken,
     UnexpectedEof,
     UnmatchedBrace,
@@ -33,6 +34,7 @@ impl Display for ErrorKind {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
             Self::InvalidToken => write!(f, "invalid token"),
+            Self::ExpectedObject => write!(f, "expected object"),
             Self::UnexpectedToken => write!(f, "unexpected token"),
             Self::UnexpectedEof => write!(f, "unexpected end of stream"),
             Self::UnmatchedBrace => write!(f, "unmatched opening brace"),
