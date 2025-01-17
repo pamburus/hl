@@ -62,7 +62,7 @@ itoa = { version = "1", default-features = false }
 known-folders = "1"
 log = "0"
 nonzero_ext = "0"
-notify = { version = "7", features = ["macos_kqueue"] }
+notify = { version = "8", features = ["macos_kqueue"] }
 nu-ansi-term = "0"
 num_cpus = "1"
 once_cell = "1"
