@@ -149,7 +149,7 @@ impl Default for &PredefinedFields {
 
 // ---
 
-#[derive(Debug, Serialize, Deserialize, Deref, Clone, PartialEq, Eq)]
+#[derive(Debug, Serialize, Deserialize, Deref, Clone, PartialEq, Eq, From)]
 pub struct TimeField(pub Field);
 
 impl Default for TimeField {
