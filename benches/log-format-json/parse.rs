@@ -3,12 +3,12 @@ use std::{hint::black_box, time::Duration};
 
 // third-party imports
 use criterion::*;
-use log_format::{ast::Discarder, Format};
-use stats_alloc::{Region, Stats};
-
+use flat_tree::FlatTree;
+use log_ast::ast;
+use log_format::{ast2::Discarder, Format};
 use log_format_json::{Error, JsonFormat};
 
-use super::{add_stat, GA, KIBANA_REC_1};
+use super::KIBANA_REC_1;
 
 criterion_group!(benches, parse);
 
@@ -17,22 +17,14 @@ fn parse(c: &mut Criterion) {
     group.warm_up_time(Duration::from_millis(250));
     group.measurement_time(Duration::from_secs(2));
 
-    let mut iterations = 0;
-    let mut allocs = Stats::default();
-    let test = "discard";
-
-    group.bench_function(test, |b| {
-        b.iter(|| {
-            let reg = Region::new(&GA);
-
-            black_box(JsonFormat::parse(KIBANA_REC_1, Discarder::<Error>::new())).unwrap();
-
-            add_stat(&mut allocs, &reg.change());
-            iterations += 1;
-        });
+    group.bench_function("discard", |b| {
+        b.iter(|| black_box(JsonFormat::parse(KIBANA_REC_1, Discarder::<Error>::new())).unwrap());
     });
 
-    println!("{}: allocations per {:?} iterations: {:#?}", test, iterations, allocs);
+    group.bench_function("ast", |b| {
+        let mut tree = FlatTree::new();
+        b.iter(|| black_box(JsonFormat::parse(KIBANA_REC_1, ast::Builder::new(tree.metaroot()))).unwrap());
+    });
 
     group.finish();
 }

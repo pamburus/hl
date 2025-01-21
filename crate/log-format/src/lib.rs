@@ -1,4 +1,4 @@
-pub mod ast;
+pub mod ast2;
 pub mod origin;
 pub mod span;
 pub mod token;
@@ -16,7 +16,7 @@ pub trait Format {
     fn lexer<'s>(s: &'s [u8]) -> Self::Lexer<'s>;
     fn parse<'s, B>(s: &'s [u8], target: B) -> Result<(bool, B), (B::Error, B)>
     where
-        B: ast::Build,
+        B: ast2::Build,
         B::Error: From<Self::Error>;
 }
 

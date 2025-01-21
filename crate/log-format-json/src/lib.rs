@@ -1,5 +1,5 @@
 use logos::Logos;
-use upstream::{ast, Format};
+use upstream::{ast2, Format};
 
 pub mod error;
 pub mod lexer;
@@ -25,9 +25,9 @@ impl Format for JsonFormat {
         Lexer::from_slice(s)
     }
 
-    fn parse<'s, B: ast::Build>(s: &'s [u8], target: B) -> Result<(bool, B), (B::Error, B)>
+    fn parse<'s, B>(s: &'s [u8], target: B) -> Result<(bool, B), (B::Error, B)>
     where
-        B: ast::Build,
+        B: ast2::Build,
         B::Error: From<Self::Error>,
     {
         let mut lexer = InnerToken::lexer(s);

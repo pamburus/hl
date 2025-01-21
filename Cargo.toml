@@ -6,6 +6,7 @@ members = [
     "crate/heapopt",
     "crate/json-ast",
     "crate/flat-tree",
+    "crate/log-ast",
     "crate/log-format",
     "crate/log-format-json",
 ]
@@ -107,6 +108,7 @@ byte-strings = "0"
 clean-path = "0"
 criterion = "0"
 json-ast = { path = "./crate/json-ast" }
+log-ast = { path = "./crate/log-ast" }
 log-format-json = { path = "./crate/log-format-json" }
 log-format = { path = "./crate/log-format" }
 logos = "0"

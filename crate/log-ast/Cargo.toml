@@ -1,7 +1,11 @@
 [package]
-name = "log-format"
+name = "log-ast"
 version = "0.1.0"
 repository.workspace = true
 authors.workspace = true
 edition.workspace = true
 license.workspace = true
+
+[dependencies]
+"flat-tree" = { path = "../flat-tree" }
+"log-format" = { path = "../log-format" }

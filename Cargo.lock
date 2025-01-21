@@ -1096,6 +1096,7 @@ dependencies = [
  "known-folders",
  "kqueue",
  "log",
+ "log-ast",
  "log-format",
  "log-format-json",
  "logos",
@@ -1362,11 +1363,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "04cbf5b083de1c7e0222a7a51dbfdba1cbe1c6ab0b15e29fff3f6c077fd9cd9f"
 
 [[package]]
-name = "log-format"
+name = "log-ast"
 version = "0.1.0"
 dependencies = [
- "attachment",
+ "flat-tree",
+ "log-format",
 ]
+
+[[package]]
+name = "log-format"
+version = "0.1.0"
 
 [[package]]
 name = "log-format-json"
