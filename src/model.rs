@@ -371,6 +371,7 @@ pub trait RecordWithSourceConstructor<'r, 's> {
 
 // ---
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Caller<'a> {
     Text(&'a str),
     FileLine(&'a str, &'a str),
@@ -737,10 +738,18 @@ impl FieldSettings {
         match *self {
             Self::Time => {
                 let s = value.raw_str();
-                let s = if s.as_bytes()[0] == b'"' { &s[1..s.len() - 1] } else { s };
-                let ts = Timestamp::new(s).with_unix_unit(ps.unix_ts_unit);
-                to.ts = Some(ts);
-                true
+                let s = if s.len() > 0 && s.as_bytes()[0] == b'"' {
+                    &s[1..s.len() - 1]
+                } else {
+                    s
+                };
+                if !s.is_empty() {
+                    let ts = Timestamp::new(s).with_unix_unit(ps.unix_ts_unit);
+                    to.ts = Some(ts);
+                    true
+                } else {
+                    false
+                }
             }
             Self::Level(i) => {
                 let value = value.parse().ok().unwrap_or_else(|| value.raw_str());
@@ -753,7 +762,7 @@ impl FieldSettings {
                 }
             }
             Self::Logger => {
-                to.logger = value.parse().ok();
+                to.logger = value.parse::<&str>().ok().filter(|s| !s.is_empty());
                 true
             }
             Self::Message => {
@@ -761,16 +770,24 @@ impl FieldSettings {
                 true
             }
             Self::Caller => {
-                to.caller = value.parse().ok().map(|x| Caller::Text(x));
+                to.caller = value
+                    .parse::<&str>()
+                    .ok()
+                    .filter(|x| !x.is_empty())
+                    .map(|x| Caller::Text(x));
                 true
             }
             Self::CallerFile => match &mut to.caller {
                 None => {
-                    to.caller = value.parse().ok().map(|x| Caller::FileLine(x, ""));
+                    to.caller = value
+                        .parse::<&str>()
+                        .ok()
+                        .filter(|x| !x.is_empty())
+                        .map(|x| Caller::FileLine(x, ""));
                     to.caller.is_some()
                 }
                 Some(Caller::FileLine(file, _)) => {
-                    if let Some(value) = value.parse().ok() {
+                    if let Some(value) = value.parse::<&str>().ok().filter(|x| !x.is_empty()) {
                         *file = value;
                         true
                     } else {
@@ -779,28 +796,26 @@ impl FieldSettings {
                 }
                 _ => false,
             },
-            Self::CallerLine => match &mut to.caller {
-                None => {
-                    to.caller = Some(Caller::FileLine("", value.raw_str()));
-                    true
-                }
-                Some(Caller::FileLine(_, line)) => match value {
-                    RawValue::Number(value) => {
-                        *line = value;
-                        true
-                    }
+            Self::CallerLine => {
+                let value = match value {
+                    RawValue::Number(value) => value,
                     RawValue::String(_) => {
-                        if let Some(value) = value.parse().ok() {
-                            *line = value;
-                            true
+                        if let Some(value) = value.parse::<&str>().ok().filter(|x| !x.is_empty()) {
+                            value
                         } else {
-                            false
+                            return false;
                         }
                     }
-                    _ => false,
-                },
-                _ => false,
-            },
+                    _ => return false,
+                };
+
+                match &mut to.caller {
+                    None => to.caller = Some(Caller::FileLine("", value)),
+                    Some(Caller::FileLine(_, line)) => *line = value,
+                    Some(Caller::Text(_)) => return false,
+                }
+                true
+            }
             Self::Nested(_) => false,
         }
     }
@@ -1749,6 +1764,7 @@ const RAW_RECORD_FIELDS_CAPACITY: usize = RECORD_EXTRA_CAPACITY + MAX_PREDEFINED
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rstest::rstest;
 
     use chrono::TimeZone;
     use maplit::hashmap;
@@ -2264,8 +2280,10 @@ mod tests {
         assert!(matches!(result, Err(Error::JsonParseError(_))));
     }
 
-    #[test]
-    fn test_nested_predefined_fields() {
+    #[rstest]
+    #[case(br#"{"some":{"deep":{"message":"test"}}}"#, Some(r#""test""#))]
+    #[case(br#"{"some":{"deep":[{"message":"test"}]}}"#, None)]
+    fn test_nested_predefined_fields(#[case] input: &[u8], #[case] expected: Option<&str>) {
         let predefined = PredefinedFields {
             message: Field {
                 names: vec!["some.deep.message".into()],
@@ -2277,16 +2295,113 @@ mod tests {
         let settings = ParserSettings::new(&predefined, [], None);
         let parser = Parser::new(settings);
 
-        let cases: &[(&[u8], Option<&str>)] = &[
-            (br#"{"some":{"deep":{"message":"test"}}}"#, Some(r#""test""#)),
-            (br#"{"some":{"deep":[{"message":"test"}]}}"#, None),
-        ];
+        let record = RawRecord::parser().parse(input).next().unwrap().unwrap();
+        let record = parser.parse(&record.record);
+        assert_eq!(record.message.map(|x| x.raw_str()), expected);
+    }
 
-        for (input, expected) in cases.iter() {
-            let record = RawRecord::parser().parse(*input).next().unwrap().unwrap();
-            let record = parser.parse(&record.record);
-            assert_eq!(record.message.map(|x| x.raw_str()), *expected);
+    #[rstest]
+    #[case(br#"{"ts":""}"#, None)]
+    #[case(br#"{"ts":"3"}"#, Some("3"))]
+    #[case(br#"ts="""#, None)]
+    #[case(br#"ts="#, None)]
+    #[case(br#"ts=1"#, Some("1"))]
+    #[case(br#"ts="2""#, Some("2"))]
+    fn test_timestamp(#[case] input: &[u8], #[case] expected: Option<&str>) {
+        let parser = Parser::new(ParserSettings::default());
+        let record = RawRecord::parser().parse(input).next().unwrap().unwrap();
+        let record = parser.parse(&record.record);
+        assert_eq!(record.ts.map(|x| x.raw()), expected);
+    }
+
+    #[rstest]
+    #[case(br#"{"level":""}"#, None)]
+    #[case(br#"{"level":"info"}"#, Some(Level::Info))]
+    #[case(br#"level="""#, None)]
+    #[case(br#"level="#, None)]
+    #[case(br#"level=info"#, Some(Level::Info))]
+    #[case(br#"level="info""#, Some(Level::Info))]
+    fn test_level(#[case] input: &[u8], #[case] expected: Option<Level>) {
+        let parser = Parser::new(ParserSettings::default());
+        let record = RawRecord::parser().parse(input).next().unwrap().unwrap();
+        let record = parser.parse(&record.record);
+        assert_eq!(record.level, expected);
+    }
+
+    #[rstest]
+    #[case(br#"{"logger":""}"#, None)]
+    #[case(br#"{"logger":"x"}"#, Some("x"))]
+    #[case(br#"logger="""#, None)]
+    #[case(br#"logger="#, None)]
+    #[case(br#"logger=x"#, Some("x"))]
+    #[case(br#"logger="x""#, Some("x"))]
+    fn test_logger(#[case] input: &[u8], #[case] expected: Option<&str>) {
+        let parser = Parser::new(ParserSettings::default());
+        let record = RawRecord::parser().parse(input).next().unwrap().unwrap();
+        let record = parser.parse(&record.record);
+        assert_eq!(record.logger, expected);
+    }
+
+    #[rstest]
+    #[case(br#"{"caller":""}"#, None)]
+    #[case(br#"{"caller":"x"}"#, Some(Caller::Text("x")))]
+    #[case(br#"caller="""#, None)]
+    #[case(br#"caller="#, None)]
+    #[case(br#"caller=x"#, Some(Caller::Text("x")))]
+    #[case(br#"caller="x""#, Some(Caller::Text("x")))]
+    fn test_caller(#[case] input: &[u8], #[case] expected: Option<Caller>) {
+        let parser = Parser::new(ParserSettings::default());
+        let record = RawRecord::parser().parse(input).next().unwrap().unwrap();
+        let record = parser.parse(&record.record);
+        assert_eq!(record.caller, expected);
+    }
+
+    #[rstest]
+    #[case(br#"{"file":""}"#, None)] // 1
+    #[case(br#"{"file":"x"}"#, Some(Caller::FileLine("x", "")))] // 2
+    #[case(br#"file="""#, None)] // 3
+    #[case(br#"file="#, None)] // 4
+    #[case(br#"file=x"#, Some(Caller::FileLine("x", "")))] // 5
+    #[case(br#"file="x""#, Some(Caller::FileLine("x", "")))] // 6
+    #[case(br#"{"line":""}"#, None)] // 7
+    #[case(br#"{"line":"8"}"#, Some(Caller::FileLine("", "8")))] // 8
+    #[case(br#"line="""#, None)] // 9
+    #[case(br#"line="#, None)] // 10
+    #[case(br#"line=11"#, Some(Caller::FileLine("", "11")))] // 11
+    #[case(br#"line="12""#, Some(Caller::FileLine("", "12")))] // 12
+    #[case(br#"{"file":"","line":""}"#, None)] // 13
+    #[case(br#"{"file":"x","line":"14"}"#, Some(Caller::FileLine("x", "14")))] // 14
+    #[case(br#"file="" line="""#, None)] // 15
+    #[case(br#"file= line="#, None)] // 16
+    #[case(br#"file=x line=17"#, Some(Caller::FileLine("x", "17")))] // 17
+    #[case(br#"file="x" line="18""#, Some(Caller::FileLine("x", "18")))] // 18
+    #[case(br#"{"file":"","line":"19"}"#, Some(Caller::FileLine("", "19")))] // 19
+    #[case(br#"{"file":"x","line":""}"#, Some(Caller::FileLine("x", "")))] // 20
+    #[case(br#"file="" line="21""#, Some(Caller::FileLine("", "21")))] // 21
+    #[case(br#"file= line=22"#, Some(Caller::FileLine("", "22")))] // 22
+    #[case(br#"file=x line="#, Some(Caller::FileLine("x", "")))] // 23
+    #[case(br#"file="x" line="#, Some(Caller::FileLine("x", "")))] // 24
+    #[case(br#"file="x" line=21 line=25"#, Some(Caller::FileLine("x", "25")))] // 25
+    #[case(br#"file=x line=26 file=y"#, Some(Caller::FileLine("y", "26")))] // 26
+    #[case(br#"{"file":123, "file": {}, "line":27}"#, Some(Caller::FileLine("123", "27")))] // 27
+    #[case(br#"{"caller":"a", "file": "b", "line":28}"#, Some(Caller::Text("a")))] // 28
+    #[case(br#"{"file": "b", "line":{}}"#, Some(Caller::FileLine("b", "")))] // 29
+    fn test_caller_file_line(#[case] input: &[u8], #[case] expected: Option<Caller>) {
+        let mut predefined = PredefinedFields::default();
+        predefined.caller_file = Field {
+            names: vec!["file".into()],
+            show: FieldShowOption::Always,
         }
+        .into();
+        predefined.caller_line = Field {
+            names: vec!["line".into()],
+            show: FieldShowOption::Always,
+        }
+        .into();
+        let parser = Parser::new(ParserSettings::new(&predefined, [], None));
+        let record = RawRecord::parser().parse(input).next().unwrap().unwrap();
+        let record = parser.parse(&record.record);
+        assert_eq!(record.caller, expected);
     }
 
     fn parse(s: &str) -> Record {
