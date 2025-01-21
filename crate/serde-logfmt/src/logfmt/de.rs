@@ -540,8 +540,6 @@ impl<'de> Parser<'de> {
     }
 
     fn parse_unquoted_value(&mut self) -> Result<&'de str> {
-        self.skip_garbage();
-
         let start = self.index;
         let mut unicode = false;
 
@@ -1026,5 +1024,25 @@ mod tests {
 
         let val: TestStruct = from_str("v=B").unwrap();
         assert_eq!(val, TestStruct { v: TestEnum::B });
+    }
+
+    #[test]
+    fn test_empty_value() {
+        #[derive(Deserialize, PartialEq, Debug)]
+        struct Test {
+            int: u32,
+            str1: String,
+            str2: String,
+            str3: String,
+        }
+
+        let j = r#"int=0 str1="" str2= str3="#;
+        let expected = Test {
+            int: 0,
+            str1: "".to_string(),
+            str2: "".to_string(),
+            str3: "".to_string(),
+        };
+        assert_eq!(expected, from_str(j).unwrap());
     }
 }
