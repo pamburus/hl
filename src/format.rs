@@ -21,7 +21,16 @@ pub trait Format {
         result
     }
     fn parse<'a, T: ast::Build<'a>>(&self, input: &'a [u8], target: T) -> ParseResult<T> {
-        let mut lexer = self.new_lexer(input)?;
+        let mut lexer = match self.new_lexer(input) {
+            Ok(lexer) => lexer,
+            Err(e) => {
+                return Some(Err(ParseError {
+                    error: e,
+                    span: 0..input.len(),
+                    target,
+                }))
+            }
+        };
         self.parse_from_lexer(&mut lexer, target)
     }
 }

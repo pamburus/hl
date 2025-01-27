@@ -23,7 +23,7 @@ use crate::{
 #[test]
 fn test_parse_and_format() {
     let settings = Settings::default();
-    let parser = Parser::new(ParserSettings::new(&settings.fields.predefined));
+    let parser = ParserSettings::new(&settings.fields.predefined);
     let formatter = RecordFormatter::new(
         Arc::new(Theme::embedded("universal").unwrap()),
         DateTimeFormatter::new(

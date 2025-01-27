@@ -125,7 +125,7 @@ impl<'s> Parse<'s> for Parser<'s> {
 // ---
 
 #[derive(Clone)]
-enum Lexer<'s> {
+pub enum Lexer<'s> {
     Json(json::Lexer<'s>),
     Logfmt(logfmt::Lexer<'s>),
 }

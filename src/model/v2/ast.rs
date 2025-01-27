@@ -373,8 +373,7 @@ mod tests {
         let mut container = Container::new();
         let root = container.metaroot();
         root.add_scalar(Scalar::Bool(true))
-            .add_composite(Composite::Array, |b| (b.add_scalar(Scalar::Bool(false)), Ok(())))
-            .unwrap();
+            .add_composite(Composite::Array, |b| (b.add_scalar(Scalar::Bool(false)), Ok(())));
         assert_eq!(container.roots().len(), 2);
     }
 
@@ -390,7 +389,7 @@ mod tests {
                 assert_eq!(attachment, "attachment");
                 (b.add_scalar(Scalar::Bool(false)).attach("another attachment"), Ok(()))
             })
-            .unwrap()
+            .0
             .detach()
             .1;
         assert_eq!(container.roots().len(), 2);

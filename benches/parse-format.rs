@@ -8,7 +8,7 @@ use criterion::{criterion_group, criterion_main, Criterion};
 
 // local imports
 use hl::{
-    app::{RecordIgnorer, SegmentProcess, SegmentProcessorOptions},
+    processing::{RecordIgnorer, SegmentProcess, SegmentProcessorOptions},
     settings,
     timezone::Tz,
     DateTimeFormatter, Filter, IncludeExcludeKeyFilter, LinuxDateFormat, Parser, ParserSettings, RecordFormatter,
@@ -27,7 +27,7 @@ fn benchmark(c: &mut Criterion) {
         for theme in ["universal"] {
             group.bench_function(format!("parse-and-format/{}/{}", name, theme), |b| {
                 let settings = Settings::default();
-                let parser = Parser::new(ParserSettings::new(&settings.fields.predefined, empty(), None));
+                let parser = ParserSettings::new(&settings.fields.predefined);
                 let formatter = RecordFormatter::new(
                     Arc::new(Theme::embedded(theme).unwrap()),
                     DateTimeFormatter::new(
@@ -60,7 +60,7 @@ fn benchmark(c: &mut Criterion) {
     ] {
         group.bench_function(format!("parse-only/{}/{}", name, "universal"), |b| {
             let settings = Settings::default();
-            let parser = Parser::new(ParserSettings::new(&settings.fields.predefined, empty(), None));
+            let parser = ParserSettings::new(&settings.fields.predefined);
             let filter = Filter::default();
             let mut processor =
                 SegmentProcessor::new(&parser, NoFormatter, &filter, SegmentProcessorOptions::default());

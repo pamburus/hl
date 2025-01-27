@@ -658,12 +658,10 @@ impl App {
         Ok(())
     }
 
-    fn parser(&self) -> Parser {
-        Parser::new(
-            ParserSettings::new(&self.options.fields.settings.predefined)
-                .with_ignore(&self.options.fields.settings.ignore)
-                .with_unix_timestamp_unit(self.options.unix_ts_unit),
-        )
+    fn parser(&self) -> ParserSettings {
+        ParserSettings::new(&self.options.fields.settings.predefined)
+            .with_ignore(&self.options.fields.settings.ignore)
+            .with_unix_timestamp_unit(self.options.unix_ts_unit)
     }
 
     fn formatter(&self) -> Box<dyn RecordWithSourceFormatter> {
@@ -784,7 +782,7 @@ impl App {
         Some(result)
     }
 
-    fn new_segment_processor<'s>(&'s self, parser: &'s Parser) -> impl SegmentProcess + 's {
+    fn new_segment_processor<'s>(&'s self, parser: &'s ParserSettings) -> impl SegmentProcess + 's {
         let options = SegmentProcessorOptions {
             allow_prefix: self.options.allow_prefix,
             allow_unparsed_data: self.options.filter.is_empty() && self.options.query.is_none(),
@@ -1078,7 +1076,8 @@ mod tests {
 
     // local imports
     use crate::{
-        filtering::MatchOptions, level::Level, model::FieldFilterSet, settings, themecfg::testing, LinuxDateFormat,
+        filtering::MatchOptions, level::Level, model::v2::compat::FieldFilterSet, settings, themecfg::testing,
+        LinuxDateFormat,
     };
 
     #[test]

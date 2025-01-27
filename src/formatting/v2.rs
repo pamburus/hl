@@ -1017,17 +1017,15 @@ mod tests {
         fn from_fields(fields: &[(&'a str, ast::Scalar<'a>)]) -> Container<'a> {
             use ast::Build;
             let mut container = Container::default();
-            container
-                .metaroot()
-                .add_composite(ast::Composite::Object, |mut b| {
-                    for (key, value) in fields {
-                        b = b.add_composite(ast::Composite::Field(EncodedString::raw(key)), |b| {
-                            Ok(b.add_scalar(*value))
-                        })?;
-                    }
-                    Ok(b)
-                })
-                .unwrap();
+            container.metaroot().add_composite(ast::Composite::Object, |mut b| {
+                for (key, value) in fields {
+                    let (bc, _) = b.add_composite(ast::Composite::Field(EncodedString::raw(key)), |b| {
+                        (b.add_scalar(*value), Ok(()))
+                    });
+                    b = bc;
+                }
+                (b, Ok(()))
+            });
             container
         }
 

@@ -6,7 +6,7 @@ use crate::{
     formatting::v2::{RawRecordFormatter, RecordFormatter, RecordWithSourceFormatter},
     model::{
         v2::{
-            parse::{Parser, Unit as ParserUnit},
+            parse::{NewParser, Parse, Parser, Settings as ParserSettings},
             record::{Filter as RecordFilter, Record, RecordWithSourceConstructor},
         },
         Filter,
@@ -39,14 +39,19 @@ pub struct SegmentProcessorOptions {
 // ---
 
 pub struct SegmentProcessor<'p, Formatter, Filter> {
-    parser: &'p Parser,
+    parser: &'p ParserSettings,
     formatter: Formatter,
     filter: Filter,
     options: SegmentProcessorOptions,
 }
 
 impl<'p, Formatter: RecordWithSourceFormatter, Filter: RecordFilter> SegmentProcessor<'p, Formatter, Filter> {
-    pub fn new(parser: &'p Parser, formatter: Formatter, filter: Filter, options: SegmentProcessorOptions) -> Self {
+    pub fn new(
+        parser: &'p ParserSettings,
+        formatter: Formatter,
+        filter: Filter,
+        options: SegmentProcessorOptions,
+    ) -> Self {
         Self {
             parser,
             formatter,
@@ -77,8 +82,6 @@ impl<'p, Formatter: RecordWithSourceFormatter, Filter: RecordFilter> SegmentProc
         let mut i = 0;
         let limit = limit.unwrap_or(usize::MAX);
 
-        let mut parser = self.parser.new_unit();
-
         for line in self.options.delimiter.clone().into_searcher().split(data) {
             if line.len() == 0 {
                 if self.show_unparsed() {
@@ -94,7 +97,12 @@ impl<'p, Formatter: RecordWithSourceFormatter, Filter: RecordFilter> SegmentProc
             let mut last_offset = 0;
             let mut offset = 0;
 
-            while let Ok(Some(record)) = parser.parse(crate::format::Auto, &line[offset..]) {
+            let mut parser = self
+                .parser
+                .new_parser(crate::format::Auto::default(), &line[offset..])
+                .unwrap();
+
+            while let Some(Ok(record)) = parser.next() {
                 i += 1;
                 last_offset = record.span.end.clone();
 

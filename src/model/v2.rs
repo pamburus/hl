@@ -16,10 +16,11 @@ pub mod compat {
     pub use super::{
         parse::{Parser, Settings as ParserSettings},
         record::{
-            filter::{CombinedFilter as Filter, Filter as RecordFilter},
-            Record, RecordWithSourceConstructor,
+            filter::{CombinedFilter as Filter, FieldFilterSet, Filter as RecordFilter},
+            Record, RecordWithSource, RecordWithSourceConstructor,
         },
     };
+    pub use crate::level::Level;
 
     pub type RecordFilterNone = super::record::filter::Pass;
 }

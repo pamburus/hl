@@ -45,7 +45,7 @@ fn container(c: &mut Criterion) {
             container.clear();
             let mut lexer = Token::lexer(KIBANA_REC_1);
 
-            black_box(parse_all_into(&mut lexer, container.metaroot())).unwrap();
+            black_box(parse_all_into(&mut lexer, container.metaroot())).1.unwrap();
 
             add_stat(&mut allocs, &reg.change());
             iterations += 1;

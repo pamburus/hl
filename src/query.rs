@@ -357,7 +357,10 @@ impl<F: Fn(Level) -> bool> RecordFilter for LevelFilter<F> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::model::v2::compat::{Parser as RecordParser, ParserSettings};
+    use crate::model::v2::{
+        compat::{Parser as RecordParser, ParserSettings},
+        parse::NewParser,
+    };
 
     #[test]
     fn test_or_3() {
@@ -617,8 +620,10 @@ mod tests {
     }
 
     fn parse(s: &str) -> Record {
-        let parser = RecordParser::new(ParserSettings::default());
-        let mut parser = parser.new_unit();
-        parser.parse(crate::format::Auto, s.as_bytes()).unwrap().unwrap()
+        let settings = ParserSettings::default();
+        let mut parser = settings
+            .new_parser(crate::format::Auto::default(), s.as_bytes())
+            .unwrap();
+        parser.next().unwrap().unwrap()
     }
 }
