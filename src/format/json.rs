@@ -108,11 +108,40 @@ pub mod parse {
     }
 
     #[inline]
+    fn parse_field_value<'s, T: Build<'s>>(lexer: &mut Lexer<'s>, target: T) -> Result<T> {
+        if let Some(target) = parse_value(lexer, target)? {
+            Ok(target)
+        } else {
+            Err(("unexpected end of stream while expecting field value", lexer.span()))
+        }
+    }
+
+    #[inline]
     fn parse_value_token<'s, T: Build<'s>>(lexer: &mut Lexer<'s>, target: T, token: Token<'s>) -> Result<T> {
         match token {
             Token::Bool(b) => Ok(target.add_scalar(Scalar::Bool(b))),
-            Token::BraceOpen => target.add_composite(Composite::Object, |target| parse_object(lexer, target)),
-            Token::BracketOpen => target.add_composite(Composite::Array, |target| parse_array(lexer, target)),
+            Token::BraceOpen => {
+                let mut skipped = true;
+                let target = target.add_composite(Composite::Object, |target| {
+                    skipped = false;
+                    parse_object(lexer, target)
+                })?;
+                if skipped {
+                    parse_object(lexer, ast::Discarder::default())?;
+                }
+                Ok(target)
+            }
+            Token::BracketOpen => {
+                let mut skipped = true;
+                let target = target.add_composite(Composite::Array, |target| {
+                    skipped = false;
+                    parse_array(lexer, target)
+                })?;
+                if skipped {
+                    parse_array(lexer, ast::Discarder::default())?;
+                }
+                Ok(target)
+            }
             Token::Null => Ok(target.add_scalar(Scalar::Null)),
             Token::Number(s) => Ok(target.add_scalar(Scalar::Number(s))),
             Token::String(s) => Ok(target.add_scalar(Scalar::String(s.into()))),
@@ -169,18 +198,20 @@ pub mod parse {
                     awaits = Awaits::Key;
                 }
                 (Token::String(s), Awaits::Key) => {
+                    match lexer.next() {
+                        Some(Ok(Token::Colon)) => (),
+                        _ => return Err(("unexpected token here, expecting ':'", lexer.span())),
+                    }
+
+                    let mut skipped = true;
                     target = target.add_composite(Composite::Field(s.into()), |target| {
-                        match lexer.next() {
-                            Some(Ok(Token::Colon)) => (),
-                            _ => return Err(("unexpected token here, expecting ':'", lexer.span())),
-                        }
-
-                        let Some(target) = parse_value(lexer, target)? else {
-                            return Err(("unexpected end of stream while expecting value", lexer.span()));
-                        };
-
-                        Ok(target)
+                        skipped = false;
+                        parse_field_value(lexer, target)
                     })?;
+
+                    if skipped {
+                        parse_field_value(lexer, ast::Discarder::default())?;
+                    }
 
                     awaits = Awaits::Comma;
                 }
