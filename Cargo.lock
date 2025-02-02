@@ -1099,6 +1099,7 @@ dependencies = [
  "log-ast",
  "log-format",
  "log-format-json",
+ "log-format-logfmt",
  "logos",
  "maplit",
  "mockall",
@@ -1376,6 +1377,14 @@ version = "0.1.0"
 
 [[package]]
 name = "log-format-json"
+version = "0.1.0"
+dependencies = [
+ "log-format",
+ "logos",
+]
+
+[[package]]
+name = "log-format-logfmt"
 version = "0.1.0"
 dependencies = [
  "log-format",

@@ -9,6 +9,7 @@ members = [
     "crate/log-ast",
     "crate/log-format",
     "crate/log-format-json",
+    "crate/log-format-logfmt",
 ]
 
 [workspace.package]
@@ -110,6 +111,7 @@ criterion = "0"
 json-ast = { path = "./crate/json-ast" }
 log-ast = { path = "./crate/log-ast" }
 log-format-json = { path = "./crate/log-format-json" }
+log-format-logfmt = { path = "./crate/log-format-logfmt" }
 log-format = { path = "./crate/log-format" }
 logos = "0"
 maplit = "1"
@@ -189,4 +191,9 @@ harness = false
 [[bench]]
 name = "log-format-json"
 path = "benches/log-format-json/main.rs"
+harness = false
+
+[[bench]]
+name = "log-format-logfmt"
+path = "benches/log-format-logfmt/main.rs"
 harness = false
