@@ -1,4 +1,3 @@
-use logos::Logos;
 use upstream::{ast, Format};
 
 pub mod error;

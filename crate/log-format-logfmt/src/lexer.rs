@@ -7,7 +7,7 @@ use super::{error::MakeError, token::Token, Error, ErrorKind};
 
 // ---
 
-pub type InnerLexer<'s> = logos::Lexer<'s, Token>;
+pub type InnerLexer<'s> = super::token::Lexer<'s>;
 
 impl<'s> MakeError for InnerLexer<'s> {
     #[inline]

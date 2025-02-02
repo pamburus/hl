@@ -24,6 +24,45 @@ pub trait Error: Display {
 
 // ---
 
+pub trait BuilderDetach {
+    type Output;
+    type Builder: Build;
+
+    fn detach(self) -> (Self::Output, Self::Builder);
+}
+
+impl<B, E> BuilderDetach for Result<B, (E, B)>
+where
+    B: Build,
+{
+    type Output = Result<(), E>;
+    type Builder = B;
+
+    fn detach(self) -> (Self::Output, Self::Builder) {
+        match self {
+            Ok(b) => (Ok(()), b),
+            Err((e, b)) => (Err(e), b),
+        }
+    }
+}
+
+impl<B, T, E> BuilderDetach for Result<(T, B), (E, B)>
+where
+    B: Build,
+{
+    type Output = Result<T, E>;
+    type Builder = B;
+
+    fn detach(self) -> (Self::Output, Self::Builder) {
+        match self {
+            Ok((t, b)) => (Ok(t), b),
+            Err((e, b)) => (Err(e), b),
+        }
+    }
+}
+
+// ---
+
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Default)]
 pub enum ErrorKind {
     #[default]

@@ -3,7 +3,6 @@ use std::{hint::black_box, time::Duration};
 
 // third-party imports
 use criterion::*;
-use logos::Logos;
 use stats_alloc::{Region, Stats};
 
 use super::{add_stat, GA, KIBANA_REC_1};

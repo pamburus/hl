@@ -9,3 +9,6 @@ license.workspace = true
 [dependencies]
 logos = "0"
 upstream = { path = "../log-format", package = "log-format" }
+
+[dev-dependencies]
+log-ast = { path = "../log-ast", package = "log-ast" }

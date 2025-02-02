@@ -1387,6 +1387,7 @@ dependencies = [
 name = "log-format-logfmt"
 version = "0.1.0"
 dependencies = [
+ "log-ast",
  "log-format",
  "logos",
 ]
