@@ -18,15 +18,18 @@ fn parse(c: &mut Criterion) {
     group.measurement_time(Duration::from_secs(2));
 
     group.bench_function("discard", |b| {
-        b.iter(|| black_box(LogfmtFormat::parse(KIBANA_REC_1, Discarder::new())).unwrap());
+        b.iter(|| black_box(LogfmtFormat::parse(black_box(KIBANA_REC_1), Discarder::new())).unwrap());
     });
 
     group.bench_function("ast", |b| {
         let mut tree = FlatTree::<ast::Value>::new();
         b.iter(|| {
-            black_box(LogfmtFormat::parse(KIBANA_REC_1, ast::Builder::new(tree.metaroot())))
-                .map_err(|x| x.0)
-                .unwrap();
+            black_box(LogfmtFormat::parse(
+                black_box(KIBANA_REC_1),
+                ast::Builder::new(tree.metaroot()),
+            ))
+            .map_err(|x| x.0)
+            .unwrap();
             tree.clear();
         });
     });

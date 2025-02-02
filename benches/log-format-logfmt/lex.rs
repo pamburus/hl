@@ -3,9 +3,8 @@ use std::{hint::black_box, time::Duration};
 
 // third-party imports
 use criterion::*;
-use stats_alloc::{Region, Stats};
 
-use super::{add_stat, GA, KIBANA_REC_1};
+use super::KIBANA_REC_1;
 
 use log_format_logfmt::{Lexer, Token};
 
@@ -16,41 +15,25 @@ fn lex(c: &mut Criterion) {
     group.warm_up_time(Duration::from_millis(250));
     group.measurement_time(Duration::from_secs(2));
 
-    let mut iterations = 0;
-    let mut allocs = Stats::default();
     let test = "drain-tokens/inner";
 
     group.bench_function(test, |b| {
         b.iter(|| {
-            let reg = Region::new(&GA);
-
-            let mut lexer = Token::lexer(KIBANA_REC_1);
-            while let Some(_) = black_box(lexer.next()) {}
-
-            add_stat(&mut allocs, &reg.change());
-            iterations += 1;
+            let mut lexer = Token::lexer(black_box(KIBANA_REC_1));
+            while let Some(_) = lexer.next() {}
+            black_box(lexer);
         });
     });
 
-    println!("{}: allocations per {:?} iterations: {:#?}", test, iterations, allocs);
-
-    let mut iterations = 0;
-    let mut allocs = Stats::default();
     let test = "drain-tokens/log-format";
 
     group.bench_function(test, |b| {
         b.iter(|| {
-            let reg = Region::new(&GA);
-
-            let mut lexer = Lexer::from_slice(KIBANA_REC_1);
-            while let Some(_) = black_box(lexer.next()) {}
-
-            add_stat(&mut allocs, &reg.change());
-            iterations += 1;
+            let mut lexer = Lexer::from_slice(black_box(KIBANA_REC_1));
+            while let Some(_) = lexer.next() {}
+            black_box(lexer);
         });
     });
-
-    println!("{}: allocations per {:?} iterations: {:#?}", test, iterations, allocs);
 
     group.finish();
 }
