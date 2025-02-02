@@ -1,13 +1,13 @@
 use upstream::{
     token::{Composite, Scalar},
-    Lex, Token,
+    Lex,
 };
 
-use super::{error::MakeError, token::InnerToken, Error, ErrorKind};
+use super::{error::MakeError, token::Token, Error, ErrorKind};
 
 // ---
 
-pub type InnerLexer<'s> = logos::Lexer<'s, InnerToken>;
+pub type InnerLexer<'s> = logos::Lexer<'s, Token>;
 
 impl<'s> MakeError for InnerLexer<'s> {
     #[inline]
@@ -48,39 +48,39 @@ impl<'s> Lex for Lexer<'s> {
 }
 
 impl<'s> Iterator for Lexer<'s> {
-    type Item = Result<Token, Error>;
+    type Item = Result<upstream::Token, Error>;
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.context == Context::FieldEnd {
             self.context = Context::ObjectDelimiter;
-            return Some(Ok(Token::CompositeEnd));
+            return Some(Ok(upstream::Token::CompositeEnd));
         }
 
         while let Some(token) = self.inner.next() {
             match token {
                 Ok(token) => match token {
-                    InnerToken::Scalar(scalar) => match self.context {
+                    Token::Scalar(scalar) => match self.context {
                         Context::ArrayBegin | Context::ArrayNext => {
                             self.context = Context::ArrayDelimiter;
-                            return Some(Ok(Token::Scalar(scalar)));
+                            return Some(Ok(upstream::Token::Scalar(scalar)));
                         }
                         Context::ObjectBegin | Context::ObjectNext => {
                             if let Scalar::String(s) = scalar {
                                 self.context = Context::FieldSeparator;
-                                return Some(Ok(Token::CompositeBegin(Composite::Field(s))));
+                                return Some(Ok(upstream::Token::CompositeBegin(Composite::Field(s))));
                             } else {
                                 return Some(Err(self.inner.make_error(ErrorKind::UnexpectedToken)));
                             }
                         }
                         Context::FieldValue => {
                             self.context = Context::FieldEnd;
-                            return Some(Ok(Token::Scalar(scalar)));
+                            return Some(Ok(upstream::Token::Scalar(scalar)));
                         }
                         _ => {
                             return Some(Err(self.inner.make_error(ErrorKind::UnexpectedToken)));
                         }
                     },
-                    InnerToken::Comma => match self.context {
+                    Token::Comma => match self.context {
                         Context::ArrayDelimiter => {
                             self.context = Context::ArrayNext;
                             continue;
@@ -93,7 +93,7 @@ impl<'s> Iterator for Lexer<'s> {
                             return Some(Err(self.inner.make_error(ErrorKind::UnexpectedToken)));
                         }
                     },
-                    InnerToken::Colon => match self.context {
+                    Token::Colon => match self.context {
                         Context::FieldSeparator => {
                             self.context = Context::FieldValue;
                             continue;
@@ -102,7 +102,7 @@ impl<'s> Iterator for Lexer<'s> {
                             return Some(Err(self.inner.make_error(ErrorKind::UnexpectedToken)));
                         }
                     },
-                    InnerToken::BraceOpen => match self.context {
+                    Token::BraceOpen => match self.context {
                         Context::Root
                         | Context::ArrayBegin
                         | Context::ArrayNext
@@ -111,9 +111,9 @@ impl<'s> Iterator for Lexer<'s> {
                             Some(()) => {
                                 self.context = Context::ObjectBegin;
                                 if self.stack.len() == 1 {
-                                    return Some(Ok(Token::EntryBegin));
+                                    return Some(Ok(upstream::Token::EntryBegin));
                                 }
-                                return Some(Ok(Token::CompositeBegin(Composite::Object)));
+                                return Some(Ok(upstream::Token::CompositeBegin(Composite::Object)));
                             }
                             None => return Some(Err(self.inner.make_error(ErrorKind::DepthLimitExceeded))),
                         },
@@ -121,7 +121,7 @@ impl<'s> Iterator for Lexer<'s> {
                             return Some(Err(self.inner.make_error(ErrorKind::UnexpectedToken)));
                         }
                     },
-                    InnerToken::BraceClose => match self.context {
+                    Token::BraceClose => match self.context {
                         Context::ObjectBegin | Context::ObjectDelimiter => match self.stack.pop() {
                             Some(false) => {
                                 self.context = match self.stack.peek() {
@@ -130,9 +130,9 @@ impl<'s> Iterator for Lexer<'s> {
                                     None => Context::Root,
                                 };
                                 if self.context == Context::Root {
-                                    return Some(Ok(Token::EntryEnd));
+                                    return Some(Ok(upstream::Token::EntryEnd));
                                 }
-                                return Some(Ok(Token::CompositeEnd));
+                                return Some(Ok(upstream::Token::CompositeEnd));
                             }
                             None | Some(true) => {
                                 return Some(Err(self.inner.make_error(ErrorKind::UnexpectedToken)));
@@ -142,11 +142,11 @@ impl<'s> Iterator for Lexer<'s> {
                             return Some(Err(self.inner.make_error(ErrorKind::UnexpectedToken)));
                         }
                     },
-                    InnerToken::BracketOpen => match self.context {
+                    Token::BracketOpen => match self.context {
                         Context::ArrayBegin | Context::ArrayNext | Context::FieldValue => match self.stack.push(true) {
                             Some(()) => {
                                 self.context = Context::ArrayBegin;
-                                return Some(Ok(Token::CompositeBegin(Composite::Array)));
+                                return Some(Ok(upstream::Token::CompositeBegin(Composite::Array)));
                             }
                             None => return Some(Err(self.inner.make_error(ErrorKind::DepthLimitExceeded))),
                         },
@@ -154,7 +154,7 @@ impl<'s> Iterator for Lexer<'s> {
                             return Some(Err(self.inner.make_error(ErrorKind::UnexpectedToken)));
                         }
                     },
-                    InnerToken::BracketClose => match self.context {
+                    Token::BracketClose => match self.context {
                         Context::ArrayBegin | Context::ArrayDelimiter => match self.stack.pop() {
                             Some(true) => {
                                 self.context = match self.stack.peek() {
@@ -162,7 +162,7 @@ impl<'s> Iterator for Lexer<'s> {
                                     Some(true) => Context::ArrayDelimiter,
                                     None => Context::Root,
                                 };
-                                return Some(Ok(Token::CompositeEnd));
+                                return Some(Ok(upstream::Token::CompositeEnd));
                             }
                             None | Some(false) => {
                                 return Some(Err(self.inner.make_error(ErrorKind::UnexpectedToken)));

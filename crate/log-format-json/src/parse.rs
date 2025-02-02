@@ -1,6 +1,6 @@
 use super::{
     error::{Error, ErrorKind, MakeError},
-    InnerToken,
+    Token,
 };
 use upstream::{
     ast::{Build, Discard},
@@ -9,7 +9,7 @@ use upstream::{
 
 // ---
 
-pub type Lexer<'s> = logos::Lexer<'s, InnerToken>;
+pub type Lexer<'s> = logos::Lexer<'s, Token>;
 
 #[inline]
 pub fn parse_value<'s, B: Build>(lexer: &mut Lexer<'s>, target: B) -> Result<(bool, B), (Error, B)> {
@@ -32,7 +32,7 @@ pub fn parse_object<'s, B: Build>(lexer: &mut Lexer<'s>, target: B) -> Result<(b
             Err(e) => return Err((lexer.make_error(e).into(), target)),
         };
         match token {
-            InnerToken::BraceOpen => parse_object_inner(lexer, target).map(|target| (true, target)),
+            Token::BraceOpen => parse_object_inner(lexer, target).map(|target| (true, target)),
             _ => Err((lexer.make_error(ErrorKind::ExpectedObject).into(), target)),
         }
     } else {
@@ -50,10 +50,10 @@ fn parse_field_value<'s, B: Build>(lexer: &mut Lexer<'s>, target: B) -> Result<B
 }
 
 #[inline]
-fn parse_value_token<'s, B: Build>(lexer: &mut Lexer<'s>, mut target: B, token: InnerToken) -> Result<B, (Error, B)> {
+fn parse_value_token<'s, B: Build>(lexer: &mut Lexer<'s>, mut target: B, token: Token) -> Result<B, (Error, B)> {
     match token {
-        InnerToken::Scalar(scalar) => Ok(target.add_scalar(scalar)),
-        InnerToken::BraceOpen => {
+        Token::Scalar(scalar) => Ok(target.add_scalar(scalar)),
+        Token::BraceOpen => {
             let mut skipped = true;
             target = target.add_composite(Composite::Object, |target| {
                 skipped = false;
@@ -64,7 +64,7 @@ fn parse_value_token<'s, B: Build>(lexer: &mut Lexer<'s>, mut target: B, token: 
             }
             Ok(target)
         }
-        InnerToken::BracketOpen => {
+        Token::BracketOpen => {
             let mut skipped = true;
             target = target.add_composite(Composite::Array, |target| {
                 skipped = false;
@@ -93,8 +93,8 @@ fn parse_array_inner<'s, B: Build>(lexer: &mut Lexer<'s>, mut target: B) -> Resu
         };
 
         match token {
-            InnerToken::BracketClose if !awaits_value => return Ok(target),
-            InnerToken::Comma if awaits_comma => awaits_value = true,
+            Token::BracketClose if !awaits_value => return Ok(target),
+            Token::Comma if awaits_comma => awaits_value = true,
             _ => {
                 target = parse_value_token(lexer, target, token)?;
                 awaits_value = false;
@@ -124,15 +124,15 @@ fn parse_object_inner<'s, B: Build>(lexer: &mut Lexer<'s>, mut target: B) -> Res
         };
 
         match (token, &mut awaits) {
-            (InnerToken::BraceClose, Awaits::Key | Awaits::Comma) => {
+            (Token::BraceClose, Awaits::Key | Awaits::Comma) => {
                 return Ok(target);
             }
-            (InnerToken::Comma, Awaits::Comma) => {
+            (Token::Comma, Awaits::Comma) => {
                 awaits = Awaits::Key;
             }
-            (InnerToken::Scalar(Scalar::String(s)), Awaits::Key) => {
+            (Token::Scalar(Scalar::String(s)), Awaits::Key) => {
                 match lexer.next() {
-                    Some(Ok(InnerToken::Colon)) => (),
+                    Some(Ok(Token::Colon)) => (),
                     _ => return Err((lexer.make_error(ErrorKind::UnexpectedToken).into(), target)),
                 }
 

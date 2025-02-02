@@ -1,6 +1,6 @@
 use super::{
     error::{Error, ErrorKind, MakeError},
-    token::InnerToken,
+    token::Token,
 };
 use upstream::{
     ast::Build,
@@ -10,7 +10,7 @@ use upstream::{
 
 // ---
 
-pub type Lexer<'s> = logos::Lexer<'s, InnerToken>;
+pub type Lexer<'s> = logos::Lexer<'s, Token>;
 
 #[inline]
 pub fn parse_line<'s, B: Build>(lexer: &mut Lexer<'s>, target: B) -> Result<(bool, B), (Error, B)> {
@@ -39,11 +39,11 @@ pub fn parse_line<'s, B: Build>(lexer: &mut Lexer<'s>, target: B) -> Result<(boo
                 Err(e) => return Err((lexer.make_error(e).into(), target)),
             };
 
-            if token == InnerToken::Eol {
+            if token == Token::Eol {
                 break;
             }
 
-            let InnerToken::Space = token else {
+            let Token::Space = token else {
                 return Err((lexer.make_error(ErrorKind::ExpectedSpace).into(), target));
             };
 
@@ -78,8 +78,8 @@ fn parse_key<'s, B: Build>(lexer: &mut Lexer<'s>, target: B) -> Result<(Option<S
         };
 
         match token {
-            InnerToken::Space => continue,
-            InnerToken::Key(key) => return Ok((Some(key), target)),
+            Token::Space => continue,
+            Token::Key(key) => return Ok((Some(key), target)),
             _ => return Err((lexer.make_error(ErrorKind::ExpectedKey).into(), target)),
         }
     }
@@ -97,7 +97,7 @@ fn parse_value<'s, B: Build>(lexer: &mut Lexer<'s>, target: B) -> Result<B, (Err
     };
 
     let target = match token {
-        InnerToken::Scalar(scalar) => target.add_scalar(scalar),
+        Token::Scalar(scalar) => target.add_scalar(scalar),
         _ => return Err((lexer.make_error(ErrorKind::UnexpectedEof).into(), target)),
     };
 

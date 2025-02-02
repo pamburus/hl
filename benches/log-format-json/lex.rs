@@ -8,7 +8,7 @@ use stats_alloc::{Region, Stats};
 
 use super::{add_stat, GA, KIBANA_REC_1};
 
-use log_format_json::{InnerToken, Lexer};
+use log_format_json::{Lexer, Token};
 
 criterion_group!(benches, lex);
 
@@ -25,7 +25,7 @@ fn lex(c: &mut Criterion) {
         b.iter(|| {
             let reg = Region::new(&GA);
 
-            let mut lexer = InnerToken::lexer(KIBANA_REC_1);
+            let mut lexer = Token::lexer(KIBANA_REC_1);
             while let Some(_) = black_box(lexer.next()) {}
 
             add_stat(&mut allocs, &reg.change());

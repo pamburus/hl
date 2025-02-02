@@ -10,7 +10,7 @@ use super::ErrorKind;
 #[derive(Logos, Debug, PartialEq, Clone)]
 #[logos(source = [u8])]
 #[logos(error = ErrorKind)]
-pub enum InnerToken {
+pub enum Token {
     #[regex(r#"[^"\x00-\x20='(),;<>\[\]\\\^`{}|\x7F]+="#, |lex| Span::from(0..lex.slice().len()-1))]
     Key(Span),
 

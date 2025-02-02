@@ -2,14 +2,14 @@ use std::mem::replace;
 
 use upstream::{
     token::{Composite, String},
-    Lex, Token,
+    Lex,
 };
 
-use super::{error::MakeError, token::InnerToken, Error, ErrorKind};
+use super::{error::MakeError, token::Token, Error, ErrorKind};
 
 // ---
 
-pub type InnerLexer<'s> = logos::Lexer<'s, InnerToken>;
+pub type InnerLexer<'s> = logos::Lexer<'s, Token>;
 
 impl<'s> MakeError for InnerLexer<'s> {
     #[inline]
@@ -25,7 +25,7 @@ impl<'s> MakeError for InnerLexer<'s> {
 
 pub struct Lexer<'s> {
     inner: InnerLexer<'s>,
-    next: Option<Result<InnerToken, ErrorKind>>,
+    next: Option<Result<Token, ErrorKind>>,
     context: Context,
 }
 
@@ -51,7 +51,7 @@ impl<'s> Lex for Lexer<'s> {
 }
 
 impl<'s> Iterator for Lexer<'s> {
-    type Item = Result<Token, Error>;
+    type Item = Result<upstream::Token, Error>;
 
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
@@ -61,26 +61,27 @@ impl<'s> Iterator for Lexer<'s> {
 
         if self.context == Context::Root {
             self.context = Context::Field;
-            return Some(Ok(Token::EntryBegin));
+            return Some(Ok(upstream::Token::EntryBegin));
         }
 
         while let Some(token) = replace(&mut self.next, self.inner.next()) {
             match token {
                 Ok(token) => match (token, self.context) {
-                    (InnerToken::Key(key), Context::Field) => {
-                        return Some(Ok(Token::CompositeBegin(Composite::Field(String::Plain(key)))));
+                    (Token::Key(key), Context::Field) => {
+                        let key = String::Plain(key);
+                        return Some(Ok(upstream::Token::CompositeBegin(Composite::Field(key))));
                     }
-                    (InnerToken::Scalar(scalar), Context::Field) => {
+                    (Token::Scalar(scalar), Context::Field) => {
                         self.context = Context::Delimiter;
-                        return Some(Ok(Token::Scalar(scalar)));
+                        return Some(Ok(upstream::Token::Scalar(scalar)));
                     }
-                    (InnerToken::Space, Context::Delimiter) => {
+                    (Token::Space, Context::Delimiter) => {
                         self.context = Context::Field;
                         continue;
                     }
-                    (InnerToken::Eol, _) => {
+                    (Token::Eol, _) => {
                         self.context = Context::Root;
-                        return Some(Ok(Token::EntryEnd));
+                        return Some(Ok(upstream::Token::EntryEnd));
                     }
                     _ => return Some(Err(self.inner.make_error(ErrorKind::UnexpectedToken))),
                 },

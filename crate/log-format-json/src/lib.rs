@@ -11,7 +11,7 @@ mod tests;
 
 pub use error::{Error, ErrorKind};
 pub use lexer::Lexer;
-pub use token::InnerToken;
+pub use token::Token;
 
 // ---
 
@@ -29,7 +29,7 @@ impl Format for JsonFormat {
     where
         B: ast::Build,
     {
-        let mut lexer = InnerToken::lexer(s);
+        let mut lexer = Token::lexer(s);
         parse::parse_object(&mut lexer, target)
     }
 }

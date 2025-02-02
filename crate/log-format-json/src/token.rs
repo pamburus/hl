@@ -11,7 +11,7 @@ use super::ErrorKind;
 #[logos(skip r"[ \t\r\n\f]+")]
 #[logos(source = [u8])]
 #[logos(error = ErrorKind)]
-pub enum InnerToken {
+pub enum Token {
     #[token("null", |_| Scalar::Null)]
     #[token("false", |_| Scalar::Bool(false))]
     #[token("true", |_| Scalar::Bool(true))]
