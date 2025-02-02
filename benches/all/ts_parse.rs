@@ -1,15 +1,12 @@
-// std imports
-use std::alloc::System;
-
 // third-party imports
-use criterion::{criterion_group, criterion_main, Criterion};
-use stats_alloc::{Region, StatsAlloc, INSTRUMENTED_SYSTEM};
+use criterion::{criterion_group, Criterion};
+use stats_alloc::Region;
 
 // local imports
+use super::GA;
 use hl::timestamp::Timestamp;
 
-#[global_allocator]
-static GLOBAL: &StatsAlloc<System> = &INSTRUMENTED_SYSTEM;
+criterion_group!(benches, benchmark);
 
 fn benchmark(c: &mut Criterion) {
     let mut c = c.benchmark_group("ts-parse");
@@ -38,7 +35,7 @@ fn benchmark(c: &mut Criterion) {
     let mut n1 = 0;
     c.bench_function("parse rfc3339", |b| {
         let ts = Timestamp::new(rfc3339);
-        let reg = Region::new(&GLOBAL);
+        let reg = Region::new(&GA);
         b.iter(|| {
             n1 += 1;
             assert!(ts.parse().is_some())
@@ -47,6 +44,3 @@ fn benchmark(c: &mut Criterion) {
     });
     println!("allocations at 1 ({:?} iterations): {:#?}", n1, c1);
 }
-
-criterion_group!(benches, benchmark);
-criterion_main!(benches);

@@ -1,13 +1,12 @@
-// std imports
-use std::alloc::System;
-
 // third-party imports
-use criterion::{criterion_group, criterion_main, Criterion};
+use criterion::{criterion_group, Criterion};
 use regex::Regex;
-use stats_alloc::{Region, StatsAlloc, INSTRUMENTED_SYSTEM};
+use stats_alloc::Region;
 
-#[global_allocator]
-static GLOBAL: &StatsAlloc<System> = &INSTRUMENTED_SYSTEM;
+// local imports
+use super::GA;
+
+criterion_group!(benches, benchmark);
 
 fn benchmark(c: &mut Criterion) {
     let mut c = c.benchmark_group("regex");
@@ -17,7 +16,7 @@ fn benchmark(c: &mut Criterion) {
     let mut c1 = None;
     let mut n1 = 0;
     c.bench_function("regex-short-match", |b| {
-        let reg = Region::new(&GLOBAL);
+        let reg = Region::new(&GA);
         b.iter(|| {
             assert_eq!(re.is_match("_TEST"), true);
             n1 += 1;
@@ -29,7 +28,7 @@ fn benchmark(c: &mut Criterion) {
     let mut c2 = None;
     let mut n2 = 0;
     c.bench_function("regex-long-match", |b| {
-        let reg = Region::new(&GLOBAL);
+        let reg = Region::new(&GA);
         b.iter(|| {
             assert_eq!(re.is_match("_TEST_SOME_VERY_VERY_LONG_NAME"), true);
             n2 += 1;
@@ -49,6 +48,3 @@ fn benchmark(c: &mut Criterion) {
         });
     });
 }
-
-criterion_group!(benches, benchmark);
-criterion_main!(benches);

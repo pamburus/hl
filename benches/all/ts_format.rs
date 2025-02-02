@@ -1,15 +1,12 @@
-use std::io::Write;
+use std::{hint::black_box, io::Write};
 
 use chrono::{format::strftime::StrftimeItems, Datelike, FixedOffset, Timelike};
-use criterion::{criterion_group, criterion_main, Criterion};
+use criterion::{criterion_group, Criterion};
 
 use hl::datefmt::{DateTimeFormatter, LinuxDateFormat};
 use hl::{timestamp::Timestamp, timezone::Tz};
 
-#[inline(never)]
-fn ignore<T>(t: T) {
-    drop(t)
-}
+criterion_group!(benches, benchmark);
 
 fn benchmark(c: &mut Criterion) {
     let mut c = c.benchmark_group("ts-format");
@@ -19,7 +16,7 @@ fn benchmark(c: &mut Criterion) {
     let tz = |secs| Tz::FixedOffset(FixedOffset::east_opt(secs).unwrap());
     c.bench_function("chrono conversion to naive local", |b| {
         b.iter(|| {
-            ignore(ts.naive_local());
+            black_box(ts.naive_local());
         });
     });
     c.bench_function("datefmt format utc [%y-%m-%d %T.%N]", |b| {
@@ -111,6 +108,3 @@ fn benchmark(c: &mut Criterion) {
         });
     });
 }
-
-criterion_group!(benches, benchmark);
-criterion_main!(benches);

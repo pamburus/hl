@@ -108,46 +108,5 @@ codegen-units = 1
 lto = true
 
 [[bench]]
-name = "regex"
-harness = false
-
-[[bench]]
-name = "ts-parse"
-harness = false
-
-[[bench]]
-name = "ts-format"
-harness = false
-
-[[bench]]
-name = "wildmatch"
-harness = false
-
-[[bench]]
-name = "wildflower"
-harness = false
-
-[[bench]]
-name = "theme"
-harness = false
-
-[[bench]]
-name = "parse-and-format"
-harness = false
-
-[[bench]]
-name = "string"
-harness = false
-
-[[bench]]
-name = "json"
-harness = false
-
-[[bench]]
-name = "mem"
-harness = false
-
-[[bench]]
-name = "encstr"
-path = "benches/encstr/benches.rs"
+name = "all"
 harness = false

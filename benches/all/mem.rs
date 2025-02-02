@@ -1,13 +1,8 @@
-// std imports
-use std::alloc::System;
-
 // third-party imports
-use criterion::{criterion_group, criterion_main, Criterion};
-use stats_alloc::{StatsAlloc, INSTRUMENTED_SYSTEM};
+use criterion::{criterion_group, Criterion};
 use std::hint::black_box;
 
-#[global_allocator]
-static GLOBAL: &StatsAlloc<System> = &INSTRUMENTED_SYSTEM;
+criterion_group!(benches, benchmark);
 
 fn benchmark(c: &mut Criterion) {
     let mut c = c.benchmark_group("mem");
@@ -55,6 +50,3 @@ fn benchmark(c: &mut Criterion) {
         });
     });
 }
-
-criterion_group!(benches, benchmark);
-criterion_main!(benches);

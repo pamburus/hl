@@ -1,14 +1,13 @@
-// std imports
-use std::alloc::System;
-
 // third-party imports
-use criterion::{criterion_group, criterion_main, Criterion};
-use stats_alloc::{Region, StatsAlloc, INSTRUMENTED_SYSTEM};
+use criterion::{criterion_group, Criterion};
+use stats_alloc::Region;
 use std::hint::black_box;
 use wildmatch::WildMatch;
 
-#[global_allocator]
-static GLOBAL: &StatsAlloc<System> = &INSTRUMENTED_SYSTEM;
+// local imports
+use super::GA;
+
+criterion_group!(benches, benchmark);
 
 fn benchmark(c: &mut Criterion) {
     let mut c = c.benchmark_group("wildmatch");
@@ -18,7 +17,7 @@ fn benchmark(c: &mut Criterion) {
     let mut n1 = 0;
     c.bench_function("wildmatch-short-match", |b| {
         let what = "_TEST";
-        let reg = Region::new(&GLOBAL);
+        let reg = Region::new(&GA);
         b.iter(|| {
             assert_eq!(black_box(&pattern).matches(black_box(&what)), true);
             n1 += 1;
@@ -31,7 +30,7 @@ fn benchmark(c: &mut Criterion) {
     let mut n2 = 0;
     c.bench_function("wildmatch-long-match", |b| {
         let what = "_TEST_SOME_VERY_VERY_LONG_NAME";
-        let reg = Region::new(&GLOBAL);
+        let reg = Region::new(&GA);
         b.iter(|| {
             assert_eq!(black_box(&pattern).matches(black_box(&what)), true);
             n2 += 1;
@@ -45,7 +44,7 @@ fn benchmark(c: &mut Criterion) {
     c.bench_function("wildmatch-long-prefix-match", |b| {
         let pattern = WildMatch::new(r"SOME_VERY_VERY_LONG_PREFIX_*");
         let what = "SOME_VERY_VERY_LONG_PREFIX_AND_SOMEWHAT";
-        let reg = Region::new(&GLOBAL);
+        let reg = Region::new(&GA);
         b.iter(|| {
             assert_eq!(black_box(&pattern).matches(black_box(&what)), true);
             n2 += 1;
@@ -67,6 +66,3 @@ fn benchmark(c: &mut Criterion) {
         });
     });
 }
-
-criterion_group!(benches, benchmark);
-criterion_main!(benches);
