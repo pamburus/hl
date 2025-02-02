@@ -91,9 +91,12 @@ wyhash = "0"
 kqueue = "1"
 
 [dev-dependencies]
+base32 = "0"
 byte-strings = "0"
 clean-path = "0"
+const-str = "0"
 criterion = "0"
+fnv = "1"
 maplit = "1"
 mockall = "0"
 stats_alloc = "0"

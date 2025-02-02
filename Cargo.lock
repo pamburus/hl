@@ -130,6 +130,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ace50bade8e6234aa140d9a2f552bbee1db4d353f69b8217bc503490fc1a9f26"
 
 [[package]]
+name = "base32"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "022dfe9eb35f19ebbcb51e0b40a5ab759f46ad60cadf7297e0bd085afb50e076"
+
+[[package]]
 name = "base64"
 version = "0.21.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -457,6 +463,12 @@ dependencies = [
  "once_cell",
  "tiny-keccak",
 ]
+
+[[package]]
+name = "const-str"
+version = "0.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4e189f88a8f10341a4fb111ecb7c73ac21efe7531584326349ad361ddd84ad50"
 
 [[package]]
 name = "convert_case"
@@ -1024,6 +1036,7 @@ checksum = "7f24254aa9a54b5c858eaee2f5bccdb46aaf0e486a595ed5fd8f86ba55232a70"
 name = "hl"
 version = "0.31.0-alpha.4"
 dependencies = [
+ "base32",
  "bincode",
  "byte-strings",
  "bytefmt",
@@ -1038,6 +1051,7 @@ dependencies = [
  "closure",
  "collection_macros",
  "config",
+ "const-str",
  "criterion",
  "crossbeam-channel",
  "crossbeam-queue",
@@ -1052,6 +1066,7 @@ dependencies = [
  "enumset-ext",
  "env_logger",
  "flate2",
+ "fnv",
  "heapless",
  "heapopt",
  "hex",
