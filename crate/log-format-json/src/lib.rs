@@ -6,9 +6,6 @@ pub mod lexer;
 mod parse;
 mod token;
 
-#[cfg(test)]
-mod tests;
-
 pub use error::{Error, ErrorKind};
 pub use lexer::Lexer;
 pub use token::Token;

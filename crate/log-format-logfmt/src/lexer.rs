@@ -1,5 +1,3 @@
-use std::mem::replace;
-
 use upstream::{
     token::{Composite, String},
     Lex,
@@ -55,41 +53,45 @@ impl<'s> Iterator for Lexer<'s> {
 
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
-        if self.next.is_none() {
-            return None;
-        }
-
-        if self.context == Context::Root {
-            self.context = Context::Field;
-            return Some(Ok(upstream::Token::EntryBegin));
-        }
-
-        while let Some(token) = replace(&mut self.next, self.inner.next()) {
-            match token {
-                Ok(token) => match (token, self.context) {
-                    (Token::Key(key), Context::Field) => {
-                        let key = String::Plain(key);
-                        return Some(Ok(upstream::Token::CompositeBegin(Composite::Field(key))));
-                    }
-                    (Token::Scalar(scalar), Context::Field) => {
-                        self.context = Context::Delimiter;
-                        return Some(Ok(upstream::Token::Scalar(scalar)));
-                    }
-                    (Token::Space, Context::Delimiter) => {
-                        self.context = Context::Field;
-                        continue;
-                    }
-                    (Token::Eol, _) => {
-                        self.context = Context::Root;
-                        return Some(Ok(upstream::Token::EntryEnd));
-                    }
-                    _ => return Some(Err(self.inner.make_error(ErrorKind::UnexpectedToken))),
-                },
-                Err(e) => return Some(Err(self.inner.make_error(e))),
+        match (&self.next, self.context) {
+            (&Some(Ok(Token::Key(key))), Context::Key) => {
+                let key = String::Plain(key);
+                self.context = Context::Value;
+                self.next = self.inner.next();
+                Some(Ok(upstream::Token::CompositeBegin(Composite::Field(key))))
             }
+            (&Some(Ok(Token::Value(scalar))), Context::Value) => {
+                self.context = Context::Delimiter;
+                self.next = self.inner.next();
+                Some(Ok(upstream::Token::Scalar(scalar)))
+            }
+            (None | Some(Ok(Token::Eol)), Context::Delimiter) => {
+                self.context = Context::Key;
+                Some(Ok(upstream::Token::CompositeEnd))
+            }
+            (Some(Ok(Token::Space)), Context::Delimiter) => {
+                self.context = Context::Key;
+                self.next = self.inner.next();
+                Some(Ok(upstream::Token::CompositeEnd))
+            }
+            (None | Some(Ok(Token::Eol)), Context::Key) => {
+                self.context = Context::Root;
+                self.next = self.inner.next();
+                Some(Ok(upstream::Token::EntryEnd))
+            }
+            (None, Context::Root) => None,
+            (Some(Ok(_)), Context::Root) => {
+                self.context = Context::Key;
+                Some(Ok(upstream::Token::EntryBegin))
+            }
+            (&Some(Err(e)), _) => {
+                self.next = self.inner.next();
+                Some(Err(self.inner.make_error(e)))
+            }
+            (Some(Ok(_)), Context::Key) => Some(Err(self.inner.make_error(ErrorKind::ExpectedKey))),
+            (None | Some(Ok(_)), Context::Value) => Some(Err(self.inner.make_error(ErrorKind::ExpectedValue))),
+            (Some(Ok(_)), Context::Delimiter) => Some(Err(self.inner.make_error(ErrorKind::ExpectedSpace))),
         }
-
-        None
     }
 }
 
@@ -98,6 +100,50 @@ impl<'s> Iterator for Lexer<'s> {
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum Context {
     Root,
-    Field,
+    Key,
+    Value,
     Delimiter,
+}
+
+// ---
+
+#[cfg(test)]
+mod tests {
+    use super::Lexer;
+    use upstream::token::{Composite::*, Scalar::*, String::*, Token::*};
+
+    macro_rules! next {
+        ($expression:expr) => {
+            (&mut $expression).next().unwrap().unwrap()
+        };
+    }
+
+    #[test]
+    fn test_trivial_line() {
+        let input = b"a=x";
+        let mut lexer = Lexer::from_slice(input);
+        assert_eq!(next!(lexer), EntryBegin);
+        assert_eq!(next!(lexer), CompositeBegin(Field(Plain((0..1).into()))));
+        assert_eq!(next!(lexer), Scalar(String(Plain((2..3).into()))));
+        assert_eq!(next!(lexer), CompositeEnd);
+        assert_eq!(next!(lexer), EntryEnd);
+        assert_eq!(lexer.next(), None);
+    }
+
+    #[test]
+    fn test_two_lines() {
+        let input = b"a=x\nb=y";
+        let mut lexer = Lexer::from_slice(input);
+        assert_eq!(next!(lexer), EntryBegin);
+        assert_eq!(next!(lexer), CompositeBegin(Field(Plain((0..1).into()))));
+        assert_eq!(next!(lexer), Scalar(String(Plain((2..3).into()))));
+        assert_eq!(next!(lexer), CompositeEnd);
+        assert_eq!(next!(lexer), EntryEnd);
+        assert_eq!(next!(lexer), EntryBegin);
+        assert_eq!(next!(lexer), CompositeBegin(Field(Plain((4..5).into()))));
+        assert_eq!(next!(lexer), Scalar(String(Plain((6..7).into()))));
+        assert_eq!(next!(lexer), CompositeEnd);
+        assert_eq!(next!(lexer), EntryEnd);
+        assert_eq!(lexer.next(), None);
+    }
 }

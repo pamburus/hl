@@ -97,7 +97,7 @@ fn parse_value<'s, B: Build>(lexer: &mut Lexer<'s>, target: B) -> Result<B, (Err
     };
 
     let target = match token {
-        Token::Scalar(scalar) => target.add_scalar(scalar),
+        Token::Value(scalar) => target.add_scalar(scalar),
         _ => return Err((lexer.make_error(ErrorKind::UnexpectedEof).into(), target)),
     };
 

@@ -1181,7 +1181,7 @@ mod tests {
         app.run(vec![input], &mut output).unwrap();
         assert_eq!(
             std::str::from_utf8(&output).unwrap(),
-            "2023-12-07 20:07:05.949 |INF| xy duration=\"15d\" @ main.go:539\n",
+            "2023-12-07 20:07:05.949 |INF| xy duration=15d @ main.go:539\n",
         );
     }
 

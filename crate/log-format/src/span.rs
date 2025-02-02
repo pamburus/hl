@@ -6,6 +6,14 @@ pub struct Span {
     pub end: usize,
 }
 
+impl Span {
+    #[inline]
+    pub fn cut_right(mut self, n: usize) -> Self {
+        self.end -= n;
+        self
+    }
+}
+
 impl Display for Span {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         write!(f, "{}..{}", self.start, self.end)
