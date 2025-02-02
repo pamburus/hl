@@ -13,7 +13,7 @@ use super::KIBANA_REC_1;
 criterion_group!(benches, parse);
 
 fn parse(c: &mut Criterion) {
-    let mut group = c.benchmark_group("parse-json");
+    let mut group = c.benchmark_group("json-parse");
     group.warm_up_time(Duration::from_millis(250));
     group.measurement_time(Duration::from_secs(2));
 

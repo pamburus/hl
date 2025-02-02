@@ -8,12 +8,12 @@ use stats_alloc::{Region, Stats};
 
 use super::{add_stat, GA, KIBANA_REC_1};
 
-use log_format_json::{InnerToken, Lexer};
+use log_format_logfmt::{InnerToken, Lexer};
 
-criterion_group!(benches, lexer);
+criterion_group!(benches, lex);
 
-fn lexer(c: &mut Criterion) {
-    let mut group = c.benchmark_group("lexer");
+fn lex(c: &mut Criterion) {
+    let mut group = c.benchmark_group("logfmt-lex");
     group.warm_up_time(Duration::from_millis(250));
     group.measurement_time(Duration::from_secs(2));
 

@@ -21,10 +21,12 @@ impl Format for LogfmtFormat {
     type Error = Error;
     type Lexer<'s> = Lexer<'s>;
 
+    #[inline]
     fn lexer<'s>(s: &'s [u8]) -> Self::Lexer<'s> {
         Lexer::from_slice(s)
     }
 
+    #[inline]
     fn parse<'s, B>(s: &'s [u8], target: B) -> Result<(bool, B), (Self::Error, B)>
     where
         B: ast::Build,
