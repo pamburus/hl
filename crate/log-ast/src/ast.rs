@@ -11,56 +11,10 @@ use log_format::{
     token::{Composite, Scalar, String},
 };
 
-use error::Error;
 pub use log_format::Span;
 pub use origin::Origin;
 
 // ---
-
-pub mod error {
-    pub use super::Span;
-    pub use log_format::ast2::ErrorKind;
-    use std::fmt::Display;
-
-    #[derive(Debug, Clone, Copy, Eq, PartialEq)]
-    pub struct Error {
-        pub kind: ErrorKind,
-        pub span: Span,
-    }
-
-    impl log_format::ast2::Error for Error {
-        #[inline]
-        fn kind(&self) -> ErrorKind {
-            self.kind
-        }
-
-        #[inline]
-        fn span(&self) -> Span {
-            self.span
-        }
-    }
-
-    impl Display for Error {
-        fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-            write!(f, "{} at {}", self.kind, self.span)
-        }
-    }
-
-    impl<E> From<E> for Error
-    where
-        E: log_format::ast2::Error,
-    {
-        #[inline]
-        fn from(kind: E) -> Self {
-            Self {
-                kind: kind.into(),
-                span: Span::default(),
-            }
-        }
-    }
-
-    pub type Result<T> = std::result::Result<T, Error>;
-}
 
 #[derive(Default, Debug)]
 pub struct Container {
@@ -127,9 +81,9 @@ where
     type Checkpoint;
 
     fn add_scalar(self, scalar: Scalar) -> Self;
-    fn add_composite<F>(self, composite: Composite, f: F) -> Result<Self, (Error, Self)>
+    fn add_composite<E, F>(self, composite: Composite, f: F) -> Result<Self, (E, Self)>
     where
-        F: FnOnce(Self) -> Result<Self, (Error, Self)>;
+        F: FnOnce(Self) -> Result<Self, (E, Self)>;
 
     fn checkpoint(&self) -> Self::Checkpoint;
     fn first_node_index(&self, checkpoint: &Self::Checkpoint) -> OptIndex;
@@ -171,9 +125,9 @@ where
     }
 
     #[inline]
-    fn add_composite<F>(self, composite: Composite, f: F) -> Result<Self, (Error, Self)>
+    fn add_composite<E, F>(self, composite: Composite, f: F) -> Result<Self, (E, Self)>
     where
-        F: FnOnce(Self) -> Result<Self, (Error, Self)>,
+        F: FnOnce(Self) -> Result<Self, (E, Self)>,
     {
         match self.inner.build(composite.into(), |b| match f(Builder::new(b)) {
             Ok(b) => Ok(b.inner),
@@ -210,17 +164,15 @@ impl<T> ast2::Build for Builder<T>
 where
     T: InnerBuild,
 {
-    type Error = Error;
-
     #[inline]
     fn add_scalar(self, scalar: Scalar) -> Self {
         Build::add_scalar(self, scalar)
     }
 
     #[inline]
-    fn add_composite<F>(self, composite: Composite, f: F) -> Result<Self, (Error, Self)>
+    fn add_composite<E, F>(self, composite: Composite, f: F) -> Result<Self, (E, Self)>
     where
-        F: FnOnce(Self) -> Result<Self, (Error, Self)>,
+        F: FnOnce(Self) -> Result<Self, (E, Self)>,
     {
         Build::add_composite(self, composite, f)
     }
@@ -252,9 +204,9 @@ where
     }
 
     #[inline]
-    fn add_composite<F>(self, _: Composite, f: F) -> Result<Self, (Error, Self)>
+    fn add_composite<E, F>(self, _: Composite, f: F) -> Result<Self, (E, Self)>
     where
-        F: FnOnce(Self) -> Result<Self, (Error, Self)>,
+        F: FnOnce(Self) -> Result<Self, (E, Self)>,
     {
         f(self)
     }
@@ -357,7 +309,7 @@ mod tests {
         let mut container = Container::new();
         let root = container.metaroot();
         root.add_scalar(Scalar::Bool(true))
-            .add_composite(Composite::Array, |b| Ok(b.add_scalar(Scalar::Bool(false))))
+            .add_composite::<(), _>(Composite::Array, |b| Ok(b.add_scalar(Scalar::Bool(false))))
             .map_err(|x| x.0)
             .unwrap();
         assert_eq!(container.roots().len(), 2);
@@ -370,7 +322,7 @@ mod tests {
         let attachment = root
             .add_scalar(Scalar::Bool(true))
             .attach("attachment")
-            .add_composite(Composite::Array, |b| {
+            .add_composite::<(), _>(Composite::Array, |b| {
                 let (b, attachment) = b.detach();
                 assert_eq!(attachment, "attachment");
                 Ok(b.add_scalar(Scalar::Bool(false)).attach("another attachment"))

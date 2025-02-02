@@ -6,7 +6,7 @@ use criterion::*;
 use flat_tree::FlatTree;
 use log_ast::ast;
 use log_format::{ast2::Discarder, Format};
-use log_format_json::{Error, JsonFormat};
+use log_format_json::JsonFormat;
 
 use super::KIBANA_REC_1;
 
@@ -18,12 +18,17 @@ fn parse(c: &mut Criterion) {
     group.measurement_time(Duration::from_secs(2));
 
     group.bench_function("discard", |b| {
-        b.iter(|| black_box(JsonFormat::parse(KIBANA_REC_1, Discarder::<Error>::new())).unwrap());
+        b.iter(|| black_box(JsonFormat::parse(KIBANA_REC_1, Discarder::new())).unwrap());
     });
 
     group.bench_function("ast", |b| {
-        let mut tree = FlatTree::new();
-        b.iter(|| black_box(JsonFormat::parse(KIBANA_REC_1, ast::Builder::new(tree.metaroot()))).unwrap());
+        let mut tree = FlatTree::<ast::Value>::new();
+        b.iter(|| {
+            black_box(JsonFormat::parse(KIBANA_REC_1, ast::Builder::new(tree.metaroot())))
+                .map_err(|x| x.0)
+                .unwrap();
+            tree.clear();
+        });
     });
 
     group.finish();

@@ -7,12 +7,12 @@ use std::fmt::Display;
 // ---
 
 pub trait Build: Sized {
-    type Error: Error;
+    // type Error: Error;
 
     fn add_scalar(self, scalar: Scalar) -> Self;
-    fn add_composite<F>(self, composite: Composite, f: F) -> Result<Self, (Self::Error, Self)>
+    fn add_composite<E, F>(self, composite: Composite, f: F) -> Result<Self, (E, Self)>
     where
-        F: FnOnce(Self) -> Result<Self, (Self::Error, Self)>;
+        F: FnOnce(Self) -> Result<Self, (E, Self)>;
 }
 
 // ---
@@ -49,9 +49,9 @@ impl Display for ErrorKind {
 // ---
 
 pub trait Discard: Build {
-    fn discard<F>(self, f: F) -> Result<Self, (Self::Error, Self)>
+    fn discard<E, F>(self, f: F) -> Result<Self, (E, Self)>
     where
-        F: FnOnce(Discarder<Self::Error>) -> Result<Discarder<Self::Error>, (Self::Error, Discarder<Self::Error>)>,
+        F: FnOnce(Discarder) -> Result<Discarder, (E, Discarder)>,
     {
         match f(Default::default()) {
             Ok(_) => Ok(self),
@@ -65,37 +65,32 @@ impl<T: Build + Sized> Discard for T {}
 // ---
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
-pub struct Discarder<E>(core::marker::PhantomData<fn(E) -> E>);
+pub struct Discarder;
 
-impl<E> Discarder<E> {
+impl Discarder {
     #[inline]
     pub fn new() -> Self {
-        Self(core::marker::PhantomData)
+        Discarder
     }
 }
 
-impl<E> Default for Discarder<E> {
+impl Default for Discarder {
     #[inline]
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<E> Build for Discarder<E>
-where
-    E: Error,
-{
-    type Error = E;
-
+impl Build for Discarder {
     #[inline]
     fn add_scalar(self, _: Scalar) -> Self {
         self
     }
 
     #[inline]
-    fn add_composite<F>(self, _: Composite, f: F) -> Result<Self, (Self::Error, Self)>
+    fn add_composite<E, F>(self, _: Composite, f: F) -> Result<Self, (E, Self)>
     where
-        F: FnOnce(Self) -> Result<Self, (Self::Error, Self)>,
+        F: FnOnce(Self) -> Result<Self, (E, Self)>,
     {
         f(self)
     }

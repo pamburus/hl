@@ -12,10 +12,7 @@ use upstream::{
 pub type Lexer<'s> = logos::Lexer<'s, InnerToken>;
 
 #[inline]
-pub fn parse_value<'s, T: Build>(lexer: &mut Lexer<'s>, target: T) -> Result<(bool, T), (T::Error, T)>
-where
-    T::Error: From<Error>,
-{
+pub fn parse_value<'s, B: Build>(lexer: &mut Lexer<'s>, target: B) -> Result<(bool, B), (Error, B)> {
     if let Some(token) = lexer.next() {
         let token = match token {
             Ok(token) => token,
@@ -28,10 +25,7 @@ where
 }
 
 #[inline]
-pub fn parse_object<'s, T: Build>(lexer: &mut Lexer<'s>, target: T) -> Result<(bool, T), (T::Error, T)>
-where
-    T::Error: From<Error>,
-{
+pub fn parse_object<'s, B: Build>(lexer: &mut Lexer<'s>, target: B) -> Result<(bool, B), (Error, B)> {
     if let Some(token) = lexer.next() {
         let token = match token {
             Ok(token) => token,
@@ -47,10 +41,7 @@ where
 }
 
 #[inline]
-fn parse_field_value<'s, T: Build>(lexer: &mut Lexer<'s>, target: T) -> Result<T, (T::Error, T)>
-where
-    T::Error: From<Error>,
-{
+fn parse_field_value<'s, B: Build>(lexer: &mut Lexer<'s>, target: B) -> Result<B, (Error, B)> {
     match parse_value(lexer, target) {
         Ok((true, target)) => Ok(target),
         Ok((false, target)) => Err((lexer.make_error(ErrorKind::UnexpectedToken).into(), target)),
@@ -59,10 +50,7 @@ where
 }
 
 #[inline]
-fn parse_value_token<'s, T: Build>(lexer: &mut Lexer<'s>, mut target: T, token: InnerToken) -> Result<T, (T::Error, T)>
-where
-    T::Error: From<Error>,
-{
+fn parse_value_token<'s, B: Build>(lexer: &mut Lexer<'s>, mut target: B, token: InnerToken) -> Result<B, (Error, B)> {
     match token {
         InnerToken::Scalar(scalar) => Ok(target.add_scalar(scalar)),
         InnerToken::BraceOpen => {
@@ -92,10 +80,7 @@ where
 }
 
 #[inline]
-fn parse_array_inner<'s, T: Build>(lexer: &mut Lexer<'s>, mut target: T) -> Result<T, (T::Error, T)>
-where
-    T::Error: From<Error>,
-{
+fn parse_array_inner<'s, B: Build>(lexer: &mut Lexer<'s>, mut target: B) -> Result<B, (Error, B)> {
     let span = lexer.span();
 
     let mut awaits_comma = false;
@@ -122,10 +107,7 @@ where
 }
 
 #[inline]
-fn parse_object_inner<'s, T: Build>(lexer: &mut Lexer<'s>, mut target: T) -> Result<T, (T::Error, T)>
-where
-    T::Error: From<Error>,
-{
+fn parse_object_inner<'s, B: Build>(lexer: &mut Lexer<'s>, mut target: B) -> Result<B, (Error, B)> {
     let span = lexer.span();
 
     enum Awaits {

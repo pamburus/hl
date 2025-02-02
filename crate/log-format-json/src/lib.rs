@@ -25,10 +25,9 @@ impl Format for JsonFormat {
         Lexer::from_slice(s)
     }
 
-    fn parse<'s, B>(s: &'s [u8], target: B) -> Result<(bool, B), (B::Error, B)>
+    fn parse<'s, B>(s: &'s [u8], target: B) -> Result<(bool, B), (Self::Error, B)>
     where
         B: ast2::Build,
-        B::Error: From<Self::Error>,
     {
         let mut lexer = InnerToken::lexer(s);
         parse::parse_object(&mut lexer, target)
