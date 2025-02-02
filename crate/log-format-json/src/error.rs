@@ -16,26 +16,6 @@ impl Display for Error {
     }
 }
 
-impl upstream::ast2::Error for Error {
-    #[inline]
-    fn kind(&self) -> upstream::ast2::ErrorKind {
-        match self.kind {
-            ErrorKind::InvalidToken => upstream::ast2::ErrorKind::InvalidToken,
-            ErrorKind::ExpectedObject => upstream::ast2::ErrorKind::UnexpectedToken,
-            ErrorKind::UnexpectedToken => upstream::ast2::ErrorKind::UnexpectedToken,
-            ErrorKind::UnexpectedEof => upstream::ast2::ErrorKind::UnexpectedEof,
-            ErrorKind::UnmatchedBrace => upstream::ast2::ErrorKind::UnmatchedTokenPair,
-            ErrorKind::UnmatchedBracket => upstream::ast2::ErrorKind::UnmatchedTokenPair,
-            ErrorKind::DepthLimitExceeded => upstream::ast2::ErrorKind::DepthLimitExceeded,
-        }
-    }
-
-    #[inline]
-    fn span(&self) -> Span {
-        self.span
-    }
-}
-
 // ---
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Default)]

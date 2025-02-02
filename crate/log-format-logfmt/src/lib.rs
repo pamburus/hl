@@ -1,5 +1,5 @@
 use logos::Logos;
-use upstream::{ast2, Format};
+use upstream::{ast, Format};
 
 pub mod error;
 pub mod lexer;
@@ -27,7 +27,7 @@ impl Format for LogfmtFormat {
 
     fn parse<'s, B>(s: &'s [u8], target: B) -> Result<(bool, B), (Self::Error, B)>
     where
-        B: ast2::Build,
+        B: ast::Build,
     {
         let mut lexer = InnerToken::lexer(s);
         parse::parse_line(&mut lexer, target)

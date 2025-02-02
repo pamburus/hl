@@ -3,7 +3,7 @@ use super::{
     token::InnerToken,
 };
 use upstream::{
-    ast2::Build,
+    ast::Build,
     token::{Composite, String},
     Span,
 };

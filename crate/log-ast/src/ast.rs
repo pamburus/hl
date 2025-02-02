@@ -7,7 +7,7 @@ use flat_tree::{
     FlatTree,
 };
 use log_format::{
-    ast2, origin,
+    ast, origin,
     token::{Composite, Scalar, String},
 };
 
@@ -160,7 +160,7 @@ where
     }
 }
 
-impl<T> ast2::Build for Builder<T>
+impl<T> ast::Build for Builder<T>
 where
     T: InnerBuild,
 {

@@ -5,7 +5,7 @@ use std::{hint::black_box, time::Duration};
 use criterion::*;
 use flat_tree::FlatTree;
 use log_ast::ast;
-use log_format::{ast2::Discarder, Format};
+use log_format::{ast::Discarder, Format};
 use log_format_json::JsonFormat;
 
 use super::KIBANA_REC_1;
