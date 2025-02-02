@@ -1,3 +1,5 @@
+use std::mem::replace;
+
 use upstream::{
     token::{Composite, String},
     Lex, Token,
@@ -23,14 +25,17 @@ impl<'s> MakeError for InnerLexer<'s> {
 
 pub struct Lexer<'s> {
     inner: InnerLexer<'s>,
+    next: Option<Result<InnerToken, ErrorKind>>,
     context: Context,
 }
 
 impl<'s> Lexer<'s> {
     #[inline]
-    pub fn new(inner: InnerLexer<'s>) -> Self {
+    pub fn new(mut inner: InnerLexer<'s>) -> Self {
+        let next = inner.next();
         Self {
             inner,
+            next,
             context: Context::Root,
         }
     }
@@ -50,12 +55,16 @@ impl<'s> Iterator for Lexer<'s> {
 
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
+        if self.next.is_none() {
+            return None;
+        }
+
         if self.context == Context::Root {
             self.context = Context::Field;
             return Some(Ok(Token::EntryBegin));
         }
 
-        while let Some(token) = self.inner.next() {
+        while let Some(token) = replace(&mut self.next, self.inner.next()) {
             match token {
                 Ok(token) => match (token, self.context) {
                     (InnerToken::Key(key), Context::Field) => {
