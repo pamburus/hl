@@ -14,9 +14,10 @@ use stats_alloc::{StatsAlloc, INSTRUMENTED_SYSTEM};
 static GA: &StatsAlloc<System> = &INSTRUMENTED_SYSTEM;
 
 mod encstr;
+mod hl;
 mod mem;
-mod parse_and_format;
 mod regex;
+mod samples;
 mod string;
 mod theme;
 mod ts_format;
@@ -27,7 +28,7 @@ mod wildmatch;
 criterion_main!(
     encstr::benches,
     mem::benches,
-    parse_and_format::benches,
+    hl::benches,
     regex::benches,
     string::benches,
     theme::benches,
