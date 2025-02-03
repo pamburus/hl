@@ -1,5 +1,5 @@
 // std imports
-use std::{hint::black_box, time::Duration};
+use std::time::Duration;
 
 // third-party imports
 use criterion::{criterion_group, BenchmarkId, Criterion, Throughput};
@@ -19,20 +19,20 @@ fn bench(c: &mut Criterion) {
         (vi, ve)
     };
 
-    for n in [512, 4096] {
+    for n in [512, 4096, 65536] {
         group.throughput(Throughput::Bytes(n as u64));
 
-        group.bench_function(BenchmarkId::new("rotate", n), |b| {
+        group.bench_function(BenchmarkId::new("rotate:1", n), |b| {
             let setup = || bufs(n).0;
             b.iter_with_setup(setup, |mut vi| {
-                black_box(&mut vi).rotate_right(1);
+                vi.rotate_right(1);
             });
         });
 
         group.bench_function(BenchmarkId::new("copy", n), |b| {
             let setup = || bufs(n);
             b.iter_with_setup(setup, |(vi, mut ve)| {
-                black_box(&mut ve).extend_from_slice(black_box(&vi.as_slice()));
+                ve.extend_from_slice(vi.as_slice());
             });
         });
     }
@@ -45,19 +45,19 @@ fn bench(c: &mut Criterion) {
         group.bench_function(BenchmarkId::new("find-single-value", n), |b| {
             let needle = 128;
             b.iter_with_setup(setup, |vi| {
-                black_box(vi.iter().position(|&x| x == needle));
+                vi.iter().position(|&x| x == needle);
             });
         });
 
         group.bench_function(BenchmarkId::new("find-one-of-two-values", n), |b| {
             b.iter_with_setup(setup, |vi| {
-                black_box(vi.iter().position(|&x| matches!(x, 128 | 192)));
+                vi.iter().position(|&x| matches!(x, 128 | 192));
             });
         });
 
         group.bench_function(BenchmarkId::new("find-one-of-four-values", n), |b| {
             b.iter_with_setup(setup, |vi| {
-                black_box(vi.iter().position(|&x| matches!(x, 128 | 192 | 224 | 240)));
+                vi.iter().position(|&x| matches!(x, 128 | 192 | 224 | 240));
             });
         });
     }
