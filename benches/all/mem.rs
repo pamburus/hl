@@ -23,16 +23,15 @@ fn bench(c: &mut Criterion) {
         group.throughput(Throughput::Bytes(n as u64));
 
         group.bench_function(BenchmarkId::new("rotate", n), |b| {
-            let (mut vi, _) = bufs(n);
-            b.iter(|| {
+            let setup = || bufs(n).0;
+            b.iter_with_setup(setup, |mut vi| {
                 black_box(&mut vi).rotate_right(1);
             });
         });
 
         group.bench_function(BenchmarkId::new("copy", n), |b| {
-            let (vi, mut ve) = bufs(n);
-            b.iter(|| {
-                ve.clear();
+            let setup = || bufs(n);
+            b.iter_with_setup(setup, |(vi, mut ve)| {
                 black_box(&mut ve).extend_from_slice(black_box(&vi.as_slice()));
             });
         });
