@@ -14,7 +14,6 @@ use stats_alloc::{StatsAlloc, INSTRUMENTED_SYSTEM};
 static GA: &StatsAlloc<System> = &INSTRUMENTED_SYSTEM;
 
 mod encstr;
-mod json;
 mod mem;
 mod parse_and_format;
 mod regex;
@@ -26,7 +25,6 @@ mod wildflower;
 mod wildmatch;
 
 criterion_main!(
-    json::benches,
     encstr::benches,
     mem::benches,
     parse_and_format::benches,
