@@ -1,26 +1,84 @@
 // std imports
-use std::collections::HashMap;
+use std::{collections::HashMap, hint::black_box};
 
 // third-party imports
 use collection_macros::hashmap;
-use criterion::{criterion_group, Criterion};
-use stats_alloc::Region;
+use const_str::concat as strcat;
+use criterion::Criterion;
 
 // local imports
-use super::GA;
+use super::super::ND;
 use hl::{
     theme::{Element, StylingPush, Theme},
     themecfg::{self, Color, Mode, Style},
     Level,
 };
 
-// ---
+const GROUP: &str = strcat!(super::GROUP, ND, "theme");
 
-criterion_group!(benches, benchmark);
+pub(crate) fn bench(c: &mut Criterion) {
+    let mut c = c.benchmark_group(GROUP);
 
-fn benchmark(c: &mut Criterion) {
-    let mut c = c.benchmark_group("theme");
-    let theme = Theme::from(&themecfg::Theme {
+    let theme = theme();
+    let fields = vec![
+        (b"key1", b"value1"),
+        (b"key2", b"value2"),
+        (b"key3", b"value3"),
+        (b"key4", b"value4"),
+        (b"key5", b"value5"),
+        (b"key6", b"value6"),
+        (b"key7", b"value7"),
+    ];
+
+    c.bench_function("apply", |b| {
+        let setup = || Vec::with_capacity(4096);
+        b.iter_with_setup(setup, |mut buf: Vec<u8>| {
+            black_box(&theme).apply(&mut buf, &Some(Level::Debug), |s| {
+                s.element(Element::Time, |s| {
+                    s.batch(|buf| buf.extend_from_slice(b"2020-01-01 00:00:00"))
+                });
+                s.batch(|buf| buf.push(b' '));
+                s.element(Element::Level, |s| {
+                    s.batch(|buf| buf.push(b'|'));
+                    s.element(Element::LevelInner, |s| s.batch(|buf| buf.extend_from_slice(b"INF")));
+                    s.batch(|buf| buf.push(b'|'))
+                });
+                s.batch(|buf| buf.push(b' '));
+                s.element(Element::Logger, |s| {
+                    s.element(Element::LoggerInner, |s| {
+                        s.batch(|buf| buf.extend_from_slice(b"logger"))
+                    });
+                    s.batch(|buf| buf.push(b':'))
+                });
+                s.batch(|buf| buf.push(b' '));
+                s.element(Element::Message, |s| {
+                    s.batch(|buf| {
+                        buf.extend_from_slice(b"hello!");
+                    })
+                });
+                for _ in 0..4 {
+                    for (key, value) in black_box(&fields) {
+                        s.element(Element::Field, |s| {
+                            s.batch(|buf| buf.push(b' '));
+                            s.element(Element::Key, |s| s.batch(|buf| buf.extend_from_slice(&key[..])));
+                            s.batch(|buf| buf.push(b'='));
+                            s.element(Element::String, |s| s.batch(|buf| buf.extend_from_slice(&value[..])));
+                        })
+                    }
+                }
+                s.element(Element::Caller, |s| {
+                    s.batch(|buf| buf.extend_from_slice(b" @ "));
+                    s.element(Element::CallerInner, |s| {
+                        s.batch(|buf| buf.extend_from_slice(b"caller"))
+                    })
+                })
+            })
+        })
+    });
+}
+
+fn theme() -> Theme {
+    Theme::from(&themecfg::Theme {
         elements: hashmap! {
             Element::Time => Style {
                 modes: Vec::default(),
@@ -96,67 +154,5 @@ fn benchmark(c: &mut Criterion) {
         .into(),
         levels: HashMap::new(),
         indicators: themecfg::IndicatorPack::default(),
-    });
-    let fields = vec![
-        (b"key1", b"value1"),
-        (b"key2", b"value2"),
-        (b"key3", b"value3"),
-        (b"key4", b"value4"),
-        (b"key5", b"value5"),
-        (b"key6", b"value6"),
-        (b"key7", b"value7"),
-    ];
-    let mut buf = Vec::with_capacity(8192);
-
-    let mut c1 = None;
-    let mut n1 = 0;
-    c.bench_function("theme", |b| {
-        let reg = Region::new(&GA);
-        b.iter(|| {
-            buf.clear();
-            theme.apply(&mut buf, &Some(Level::Debug), |s| {
-                s.element(Element::Time, |s| {
-                    s.batch(|buf| buf.extend_from_slice(b"2020-01-01 00:00:00"))
-                });
-                s.batch(|buf| buf.push(b' '));
-                s.element(Element::Level, |s| {
-                    s.batch(|buf| buf.push(b'|'));
-                    s.element(Element::LevelInner, |s| s.batch(|buf| buf.extend_from_slice(b"INF")));
-                    s.batch(|buf| buf.push(b'|'))
-                });
-                s.batch(|buf| buf.push(b' '));
-                s.element(Element::Logger, |s| {
-                    s.element(Element::LoggerInner, |s| {
-                        s.batch(|buf| buf.extend_from_slice(b"logger"))
-                    });
-                    s.batch(|buf| buf.push(b':'))
-                });
-                s.batch(|buf| buf.push(b' '));
-                s.element(Element::Message, |s| {
-                    s.batch(|buf| {
-                        buf.extend_from_slice(b"hello!");
-                    })
-                });
-                for _ in 0..4 {
-                    for (key, value) in &fields {
-                        s.element(Element::Field, |s| {
-                            s.batch(|buf| buf.push(b' '));
-                            s.element(Element::Key, |s| s.batch(|buf| buf.extend_from_slice(&key[..])));
-                            s.batch(|buf| buf.push(b'='));
-                            s.element(Element::String, |s| s.batch(|buf| buf.extend_from_slice(&value[..])));
-                        });
-                    }
-                }
-                s.element(Element::Caller, |s| {
-                    s.batch(|buf| buf.extend_from_slice(b" @ "));
-                    s.element(Element::CallerInner, |s| {
-                        s.batch(|buf| buf.extend_from_slice(b"caller"))
-                    });
-                });
-            });
-            n1 += 1;
-        });
-        c1 = Some(reg.change());
-    });
-    println!("allocations at 1 ({:?} iterations): {:#?}", n1, c1);
+    })
 }

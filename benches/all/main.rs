@@ -13,11 +13,12 @@ use stats_alloc::{StatsAlloc, INSTRUMENTED_SYSTEM};
 #[global_allocator]
 static GA: &StatsAlloc<System> = &INSTRUMENTED_SYSTEM;
 
+const ND: &str = ":"; // name delimiter
+
 mod encstr;
 mod hl;
 mod mem;
 mod samples;
-mod theme;
 mod ts_format;
 mod ts_parse;
 mod wildflower;
@@ -27,7 +28,6 @@ criterion_main!(
     encstr::benches,
     mem::benches,
     hl::benches,
-    theme::benches,
     ts_format::benches,
     ts_parse::benches,
     wildflower::benches,
