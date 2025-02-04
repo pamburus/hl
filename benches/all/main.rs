@@ -19,8 +19,6 @@ mod encstr;
 mod hl;
 mod mem;
 mod samples;
-mod ts_format;
-mod ts_parse;
 mod wildflower;
 mod wildmatch;
 
@@ -28,8 +26,6 @@ criterion_main!(
     encstr::benches,
     mem::benches,
     hl::benches,
-    ts_format::benches,
-    ts_parse::benches,
     wildflower::benches,
     wildmatch::benches
 );

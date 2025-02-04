@@ -7,7 +7,7 @@ use const_str::concat as strcat;
 use criterion::Criterion;
 
 // local imports
-use super::super::ND;
+use super::ND;
 use hl::{
     theme::{Element, StylingPush, Theme},
     themecfg::{self, Color, Mode, Style},
@@ -16,7 +16,7 @@ use hl::{
 
 const GROUP: &str = strcat!(super::GROUP, ND, "theme");
 
-pub(crate) fn bench(c: &mut Criterion) {
+pub(super) fn bench(c: &mut Criterion) {
     let mut c = c.benchmark_group(GROUP);
 
     let theme = theme();

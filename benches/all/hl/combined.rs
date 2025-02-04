@@ -7,7 +7,7 @@ use const_str::concat as strcat;
 use criterion::{BenchmarkId, Criterion, Throughput};
 
 // local imports
-use super::super::{hash, samples, ND};
+use super::{hash, samples, ND};
 use hl::{
     app::{RecordIgnorer, SegmentProcess, SegmentProcessorOptions},
     settings,
@@ -24,7 +24,7 @@ const SAMPLES: [(&str, &[u8]); 2] = [
     ("logfmt", samples::log::elk01::LOGFMT),
 ];
 
-pub(crate) fn bench(c: &mut Criterion) {
+pub(super) fn bench(c: &mut Criterion) {
     let mut c = c.benchmark_group(GROUP);
 
     for (format, input) in SAMPLES {
