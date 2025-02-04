@@ -16,9 +16,7 @@ static GA: &StatsAlloc<System> = &INSTRUMENTED_SYSTEM;
 mod encstr;
 mod hl;
 mod mem;
-mod regex;
 mod samples;
-mod string;
 mod theme;
 mod ts_format;
 mod ts_parse;
@@ -29,8 +27,6 @@ criterion_main!(
     encstr::benches,
     mem::benches,
     hl::benches,
-    regex::benches,
-    string::benches,
     theme::benches,
     ts_format::benches,
     ts_parse::benches,
