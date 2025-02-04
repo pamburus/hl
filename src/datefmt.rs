@@ -1116,4 +1116,32 @@ mod tests {
         assert_eq!(f("%^P", utc(2020, 1, 1, 12, 0, 0)), "PM");
         assert_eq!(f("%#p", utc(2020, 1, 1, 12, 0, 0)), "pm");
     }
+
+    #[test]
+    fn test_reformat_rfc3339() {
+        use crate::timestamp::Timestamp;
+
+        let tz = |secs| Tz::FixedOffset(FixedOffset::east_opt(secs).unwrap());
+        let tsr = Timestamp::new("2020-06-27T00:48:30.466249792+00:00");
+        let tsr = tsr.as_rfc3339().unwrap();
+
+        let zones = &[0];
+        let formats = &[("%y-%m-%d %T.%N"), ("%b %d %T.%N"), ("%Y-%m-%d %T.%N %:z")];
+
+        for tzv in zones {
+            for fmt in formats {
+                let setup = || {
+                    let buf = Vec::<u8>::with_capacity(128);
+                    let format = LinuxDateFormat::new(fmt).compile();
+                    let formatter = DateTimeFormatter::new(format, tz(*tzv));
+                    (formatter, buf, tsr.clone())
+                };
+                let payload = |(formatter, mut buf, tsr): (DateTimeFormatter, Vec<u8>, rfc3339::Timestamp)| {
+                    formatter.reformat_rfc3339(&mut buf, tsr);
+                    buf.len()
+                };
+                assert!(payload(setup()) != 0);
+            }
+        }
+    }
 }
