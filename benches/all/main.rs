@@ -19,16 +19,9 @@ mod encstr;
 mod hl;
 mod mem;
 mod samples;
-mod wildflower;
-mod wildmatch;
+mod wildcard;
 
-criterion_main!(
-    encstr::benches,
-    mem::benches,
-    hl::benches,
-    wildflower::benches,
-    wildmatch::benches
-);
+criterion_main!(encstr::benches, mem::benches, hl::benches, wildcard::benches);
 
 fn hash<T: Hash>(value: T) -> String {
     let mut hasher = FnvHasher::default();
