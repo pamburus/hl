@@ -18,8 +18,8 @@ pub(super) mod parsing {
 
     pub fn bench(c: &mut Criterion) {
         let mut c = c.benchmark_group(GROUP);
-        c.warm_up_time(Duration::from_secs(1));
-        c.measurement_time(Duration::from_secs(1));
+        c.warm_up_time(Duration::from_millis(250));
+        c.measurement_time(Duration::from_secs(2));
 
         let unix = "1596742694";
         let unix_us = "1596742694123654";

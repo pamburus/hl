@@ -1,5 +1,5 @@
 // std imports
-use std::{collections::HashMap, hint::black_box};
+use std::{collections::HashMap, hint::black_box, time::Duration};
 
 // third-party imports
 use collection_macros::hashmap;
@@ -18,6 +18,8 @@ const GROUP: &str = strcat!(super::GROUP, ND, "theme");
 
 pub(super) fn bench(c: &mut Criterion) {
     let mut c = c.benchmark_group(GROUP);
+    c.warm_up_time(Duration::from_millis(500));
+    c.measurement_time(Duration::from_secs(2));
 
     let theme = theme();
     let fields = vec![
