@@ -22,10 +22,12 @@ pub struct DateTimeFormatter {
 }
 
 impl DateTimeFormatter {
+    #[inline]
     pub fn new(format: Vec<Item>, tz: Tz) -> Self {
         Self { format, tz }
     }
 
+    #[inline]
     pub fn format<B>(&self, buf: &mut B, dt: DateTime<FixedOffset>)
     where
         B: Push<u8>,
@@ -33,6 +35,7 @@ impl DateTimeFormatter {
         format_date(buf, dt.with_timezone(&self.tz), &self.format)
     }
 
+    #[inline]
     pub fn reformat_rfc3339<'a, B>(&self, buf: &mut B, ts: rfc3339::Timestamp<'a>) -> Option<()>
     where
         B: Push<u8>,
@@ -45,6 +48,7 @@ impl DateTimeFormatter {
         }
     }
 
+    #[inline]
     pub fn max_length(&self) -> usize {
         let mut counter = Counter::new();
         let ts = DateTime::from_timestamp(1654041600, 999_999_999).unwrap().naive_utc();
