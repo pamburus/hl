@@ -10,8 +10,8 @@ const GROUP: &str = "mem";
 
 fn bench(c: &mut Criterion) {
     let mut group = c.benchmark_group(GROUP);
-    group.warm_up_time(Duration::from_millis(250));
-    group.measurement_time(Duration::from_secs(2));
+    group.warm_up_time(Duration::from_millis(1));
+    group.measurement_time(Duration::from_secs(5));
 
     let bufs = |size| {
         let vi: Vec<u8> = (0..size).into_iter().map(|x| x as u8).collect();
