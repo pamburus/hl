@@ -7,9 +7,6 @@ use criterion::{criterion_group, BatchSize, BenchmarkId, Criterion, Throughput};
 // local imports
 use super::hash;
 
-// mod wildflower;
-// mod wildmatch;
-
 criterion_group!(benches, bench);
 
 const GROUP: &str = "wildcard";
@@ -35,23 +32,23 @@ fn bench_with<Pattern: Wildcard>(c: &mut Criterion, title: &str) {
         ("long", "TEST_SOME_VERY_VERY_LONG_NAME", P27X, false),
     ];
 
-    for (name, needle, (pname, pattern), expected) in &variants {
+    for (name, input, (pname, pattern), expected) in &variants {
         let function = format!("{}:{}", title, "matches");
         let param = format!(
             "{}:{}:{}:{}:{}",
             name,
             pname,
             if *expected { "pos" } else { "neg" },
-            needle.len(),
-            hash((pattern, needle))
+            input.len(),
+            hash((pattern, input))
         );
         let pattern = Pattern::new(pattern);
-        let setup = || String::from(*needle);
-        let perform = |needle: String| black_box(&pattern).matches(&needle);
+        let setup = || String::from(*input);
+        let perform = |input: String| black_box(&pattern).matches(&input);
 
         assert_eq!(perform(setup()), *expected);
 
-        c.throughput(Throughput::Bytes(needle.len() as u64));
+        c.throughput(Throughput::Bytes(input.len() as u64));
         c.bench_function(BenchmarkId::new(function, param), |b| {
             b.iter_batched(setup, perform, BatchSize::SmallInput);
         });
@@ -66,24 +63,24 @@ trait Wildcard {
 }
 
 impl Wildcard for wildmatch::WildMatch {
-    #[inline]
+    #[inline(always)]
     fn new(pattern: &str) -> Self {
         Self::new(pattern)
     }
 
-    #[inline]
+    #[inline(always)]
     fn matches(&self, what: &str) -> bool {
         self.matches(what)
     }
 }
 
 impl Wildcard for wildflower::Pattern<&'static str> {
-    #[inline]
+    #[inline(always)]
     fn new(pattern: &'static str) -> Self {
         Self::new(pattern)
     }
 
-    #[inline]
+    #[inline(always)]
     fn matches(&self, what: &str) -> bool {
         self.matches(what)
     }
