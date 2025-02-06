@@ -39,70 +39,70 @@ fn bench_with<I: InputConstruct>(
     if title == "json" {
         group.bench_function(BenchmarkId::new("serde-json:parse-str", &param), |b| {
             let setup = || String::from(input);
-            let perform = |input: String| {
+            let routine = |input: String| {
                 let _: serde_json::Value = serde_json::from_str(&input).unwrap();
             };
-            b.iter_batched(setup, perform, batch_size);
+            b.iter_batched(setup, routine, batch_size);
         });
 
         group.bench_function(BenchmarkId::new("serde-json:parse-str-raw", &param), |b| {
             let setup = || (Vec::with_capacity(4096), String::from(input));
-            let perform = |(mut buf, input): (Vec<u8>, String)| {
+            let routine = |(mut buf, input): (Vec<u8>, String)| {
                 let mut reader = StrRead::new(&input[1..]);
                 reader.parse_str_raw(&mut buf).unwrap();
             };
-            b.iter_batched(setup, perform, batch_size);
+            b.iter_batched(setup, routine, batch_size);
         });
 
         group.bench_function(BenchmarkId::new("serde-json:ignore-str", &param), |b| {
             let setup = || String::from(input);
-            let perform = |input: String| {
+            let routine = |input: String| {
                 let mut reader = StrRead::new(&input[1..]);
                 reader.ignore_str().unwrap()
             };
-            b.iter_batched(setup, perform, batch_size);
+            b.iter_batched(setup, routine, batch_size);
         });
     }
 
     group.bench_function(BenchmarkId::new("decode:ignore", &param), |b| {
         let mut target = Ignorer;
         let setup = || String::from(input);
-        let perform = |input: String| {
+        let routine = |input: String| {
             let input = constructor.new_input(&input);
             input.decode(&mut target).unwrap()
         };
-        b.iter_batched(setup, perform, batch_size);
+        b.iter_batched(setup, routine, batch_size);
     });
 
     group.bench_function(BenchmarkId::new("decode:build", &param), |b| {
         let setup = || (Builder::with_capacity(4096), String::from(input));
-        let perform = |(mut buf, input): (Builder, String)| {
+        let routine = |(mut buf, input): (Builder, String)| {
             let input = constructor.new_input(&input);
             input.decode(&mut buf).unwrap()
         };
-        b.iter_batched(setup, perform, batch_size);
+        b.iter_batched(setup, routine, batch_size);
     });
 
     group.bench_function(BenchmarkId::new("tokens:ignore", &param), |b| {
         let setup = || String::from(input);
-        let perform = |input: String| {
+        let routine = |input: String| {
             let input = constructor.new_input(&input);
             for token in input.tokens() {
                 token.unwrap();
             }
         };
-        b.iter_batched(setup, perform, batch_size);
+        b.iter_batched(setup, routine, batch_size);
     });
 
     group.bench_function(BenchmarkId::new("tokens:build", &param), |b| {
         let setup = || (Builder::with_capacity(4096), String::from(input));
-        let perform = |(mut buf, input): (Builder, String)| {
+        let routine = |(mut buf, input): (Builder, String)| {
             let input = constructor.new_input(&input);
             for token in input.tokens() {
                 buf.handle(token.unwrap()).unwrap();
             }
         };
-        b.iter_batched(setup, perform, batch_size);
+        b.iter_batched(setup, routine, batch_size);
     });
 
     group.finish();
