@@ -2,7 +2,7 @@
 use std::time::Duration;
 
 // third-party imports
-use criterion::{criterion_group, BenchmarkId, Criterion, Throughput};
+use criterion::{criterion_group, BatchSize, BenchmarkId, Criterion, Throughput};
 
 criterion_group!(benches, bench);
 
@@ -19,46 +19,48 @@ fn bench(c: &mut Criterion) {
         (vi, ve)
     };
 
-    for n in [512, 4096, 65536] {
+    let variants = [
+        (512, BatchSize::SmallInput),
+        (4096, BatchSize::SmallInput),
+        (65536, BatchSize::LargeInput),
+    ];
+
+    for (n, batch) in variants {
         group.throughput(Throughput::Bytes(n as u64));
 
         group.bench_function(BenchmarkId::new("rotate:1", n), |b| {
             let setup = || bufs(n).0;
-            b.iter_with_setup(setup, |mut vi| {
-                vi.rotate_right(1);
-            });
+            b.iter_batched(setup, |mut vi| vi.rotate_right(1), batch);
         });
 
         group.bench_function(BenchmarkId::new("copy", n), |b| {
             let setup = || bufs(n);
-            b.iter_with_setup(setup, |(vi, mut ve)| {
-                ve.extend_from_slice(vi.as_slice());
-            });
+            b.iter_batched(setup, |(vi, mut ve)| ve.extend_from_slice(vi.as_slice()), batch);
         });
     }
 
-    for n in [4096] {
+    let variants = [(4096, BatchSize::SmallInput)];
+
+    for (n, batch) in variants {
         group.throughput(Throughput::Bytes(n as u64));
 
         let setup = || (0..n).into_iter().map(|x| (x * 256 / n) as u8).collect::<Vec<u8>>();
 
         group.bench_function(BenchmarkId::new("find-single-value", n), |b| {
             let needle = 128;
-            b.iter_with_setup(setup, |vi| {
-                vi.iter().position(|&x| x == needle);
-            });
+            b.iter_batched(setup, |vi| vi.iter().position(|&x| x == needle), batch);
         });
 
         group.bench_function(BenchmarkId::new("find-one-of-two-values", n), |b| {
-            b.iter_with_setup(setup, |vi| {
-                vi.iter().position(|&x| matches!(x, 128 | 192));
-            });
+            b.iter_batched(setup, |vi| vi.iter().position(|&x| matches!(x, 128 | 192)), batch);
         });
 
         group.bench_function(BenchmarkId::new("find-one-of-four-values", n), |b| {
-            b.iter_with_setup(setup, |vi| {
-                vi.iter().position(|&x| matches!(x, 128 | 192 | 224 | 240));
-            });
+            b.iter_batched(
+                setup,
+                |vi| vi.iter().position(|&x| matches!(x, 128 | 192 | 224 | 240)),
+                batch,
+            );
         });
     }
 
