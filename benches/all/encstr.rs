@@ -7,7 +7,7 @@ use serde_json::de::{Read, StrRead};
 
 // local imports
 use super::{hash, samples};
-use encstr::{json::JsonEncodedString, AnyEncodedString, Builder, Handler, Ignorer};
+use encstr::{json::JsonEncodedString, raw::RawString, AnyEncodedString, Builder, Handler, Ignorer};
 
 criterion_group!(benches, bench);
 
@@ -18,7 +18,7 @@ fn bench(c: &mut Criterion) {
         bench_with(c, "json", JsonEncodedString::new(input));
     }
     for input in [samples::str::query01::RAW] {
-        bench_with(c, "raw", JsonEncodedString::new(input));
+        bench_with(c, "raw", RawString::new(input));
     }
 }
 
