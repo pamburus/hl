@@ -18,8 +18,8 @@ fn bench(c: &mut Criterion) {
 
 fn bench_with<Pattern: Wildcard>(c: &mut Criterion, title: &str) {
     let mut c = c.benchmark_group(GROUP);
-    c.warm_up_time(Duration::from_millis(250));
-    c.measurement_time(Duration::from_secs(2));
+    c.warm_up_time(Duration::from_secs(1));
+    c.measurement_time(Duration::from_secs(3));
 
     const P1X: (&str, &str) = ("1x", "_*");
     const P27X: (&str, &str) = ("27x", "SOME_VERY_VERY_LONG_PREFIX_*");

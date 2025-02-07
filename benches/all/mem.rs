@@ -10,7 +10,7 @@ const GROUP: &str = "mem";
 
 fn bench(c: &mut Criterion) {
     let mut group = c.benchmark_group(GROUP);
-    group.warm_up_time(Duration::from_millis(1));
+    group.warm_up_time(Duration::from_secs(1));
     group.measurement_time(Duration::from_secs(5));
 
     let bufs = |size| {

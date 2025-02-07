@@ -18,8 +18,8 @@ const GROUP: &str = strcat!(super::GROUP, ND, "theme");
 
 pub(super) fn bench(c: &mut Criterion) {
     let mut c = c.benchmark_group(GROUP);
-    c.warm_up_time(Duration::from_millis(500));
-    c.measurement_time(Duration::from_secs(2));
+    c.warm_up_time(Duration::from_secs(1));
+    c.measurement_time(Duration::from_secs(3));
 
     let theme = theme();
     let fields = vec![

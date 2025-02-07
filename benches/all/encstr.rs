@@ -1,5 +1,5 @@
 // std imports
-use std::time::Duration;
+use std::{hint::black_box, time::Duration};
 
 // third-party imports
 use criterion::{criterion_group, BatchSize, BenchmarkId, Criterion, Throughput};
@@ -32,77 +32,98 @@ fn bench_with<I: InputConstruct>(
     let param = format!("{}:{}:{}", title, input.len(), hash(input));
 
     let mut group = c.benchmark_group(GROUP);
-    group.warm_up_time(Duration::from_millis(250));
-    group.measurement_time(Duration::from_secs(2));
+    group.warm_up_time(Duration::from_secs(1));
+    group.measurement_time(Duration::from_secs(5));
     group.throughput(Throughput::Bytes(input.len() as u64));
 
     if title == "json" {
         group.bench_function(BenchmarkId::new("serde-json:parse-str", &param), |b| {
             let setup = || String::from(input);
-            let routine = |input: String| {
-                let _: serde_json::Value = serde_json::from_str(&input).unwrap();
-            };
-            b.iter_batched(setup, routine, batch_size);
+            b.iter_batched_ref(
+                setup,
+                |input| {
+                    let _: serde_json::Value = serde_json::from_str(input).unwrap();
+                },
+                batch_size,
+            );
         });
 
         group.bench_function(BenchmarkId::new("serde-json:parse-str-raw", &param), |b| {
             let setup = || (Vec::with_capacity(4096), String::from(input));
-            let routine = |(mut buf, input): (Vec<u8>, String)| {
-                let mut reader = StrRead::new(&input[1..]);
-                reader.parse_str_raw(&mut buf).unwrap();
-            };
-            b.iter_batched(setup, routine, batch_size);
+            b.iter_batched_ref(
+                setup,
+                |(buf, input)| {
+                    let mut reader = black_box(StrRead::new(&input[1..]));
+                    reader.parse_str_raw(buf).unwrap();
+                },
+                batch_size,
+            );
         });
 
         group.bench_function(BenchmarkId::new("serde-json:ignore-str", &param), |b| {
             let setup = || String::from(input);
-            let routine = |input: String| {
-                let mut reader = StrRead::new(&input[1..]);
-                reader.ignore_str().unwrap()
-            };
-            b.iter_batched(setup, routine, batch_size);
+            b.iter_batched_ref(
+                setup,
+                |input| {
+                    let mut reader = black_box(StrRead::new(&input[1..]));
+                    reader.ignore_str().unwrap()
+                },
+                batch_size,
+            );
         });
     }
 
     group.bench_function(BenchmarkId::new("decode:ignore", &param), |b| {
         let mut target = Ignorer;
         let setup = || String::from(input);
-        let routine = |input: String| {
-            let input = constructor.new_input(&input);
-            input.decode(&mut target).unwrap()
-        };
-        b.iter_batched(setup, routine, batch_size);
+        b.iter_batched_ref(
+            setup,
+            |input| {
+                let input = black_box(constructor.new_input(input));
+                input.decode(&mut target).unwrap()
+            },
+            batch_size,
+        );
     });
 
     group.bench_function(BenchmarkId::new("decode:build", &param), |b| {
         let setup = || (Builder::with_capacity(4096), String::from(input));
-        let routine = |(mut buf, input): (Builder, String)| {
-            let input = constructor.new_input(&input);
-            input.decode(&mut buf).unwrap()
-        };
-        b.iter_batched(setup, routine, batch_size);
+        b.iter_batched_ref(
+            setup,
+            |(buf, input)| {
+                let input = black_box(constructor.new_input(input));
+                input.decode(buf).unwrap()
+            },
+            batch_size,
+        );
     });
 
     group.bench_function(BenchmarkId::new("tokens:ignore", &param), |b| {
         let setup = || String::from(input);
-        let routine = |input: String| {
-            let input = constructor.new_input(&input);
-            for token in input.tokens() {
-                token.unwrap();
-            }
-        };
-        b.iter_batched(setup, routine, batch_size);
+        b.iter_batched_ref(
+            setup,
+            |input| {
+                let input = black_box(constructor.new_input(input));
+                for token in input.tokens() {
+                    token.unwrap();
+                }
+            },
+            batch_size,
+        );
     });
 
     group.bench_function(BenchmarkId::new("tokens:build", &param), |b| {
         let setup = || (Builder::with_capacity(4096), String::from(input));
-        let routine = |(mut buf, input): (Builder, String)| {
-            let input = constructor.new_input(&input);
-            for token in input.tokens() {
-                buf.handle(token.unwrap()).unwrap();
-            }
-        };
-        b.iter_batched(setup, routine, batch_size);
+        b.iter_batched_ref(
+            setup,
+            |(buf, input)| {
+                let input = black_box(constructor.new_input(input));
+                for token in input.tokens() {
+                    buf.handle(token.unwrap()).unwrap();
+                }
+            },
+            batch_size,
+        );
     });
 
     group.finish();
