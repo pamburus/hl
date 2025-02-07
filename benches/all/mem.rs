@@ -28,12 +28,7 @@ fn bench(c: &mut Criterion) {
         (vi, ve)
     };
 
-    let variants = [
-        (512, BatchSize::SmallInput),
-        (4096, BatchSize::SmallInput),
-        (65536, BatchSize::LargeInput),
-        (1048576, BatchSize::LargeInput),
-    ];
+    let variants = [(512, BatchSize::SmallInput), (4096, BatchSize::SmallInput)];
 
     for (n, batch) in variants {
         group.throughput(Throughput::Bytes(n as u64));
