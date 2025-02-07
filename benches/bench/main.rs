@@ -15,13 +15,16 @@ static GA: &StatsAlloc<System> = &INSTRUMENTED_SYSTEM;
 
 const ND: &str = ":"; // name delimiter
 
-mod encstr;
-mod hl;
-mod mem;
+mod misc;
 mod samples;
-mod wildcard;
+mod ws;
 
-criterion_main!(encstr::benches, mem::benches, hl::benches, wildcard::benches);
+criterion_main!(
+    ws::encstr::benches,
+    ws::hl::benches,
+    misc::mem::benches,
+    misc::wildcard::benches,
+);
 
 fn hash<T: Hash>(value: T) -> String {
     let mut hasher = FnvHasher::default();

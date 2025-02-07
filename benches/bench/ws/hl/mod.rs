@@ -1,4 +1,5 @@
 // third-party imports
+use const_str::concat as strcat;
 use criterion::criterion_group;
 
 // local imports
@@ -16,4 +17,4 @@ criterion_group!(
     timestamp::formatting::bench
 );
 
-const GROUP: &str = "hl";
+const GROUP: &str = strcat!(super::GROUP, ND, "hl");

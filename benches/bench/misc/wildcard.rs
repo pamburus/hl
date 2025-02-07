@@ -2,14 +2,15 @@
 use std::{hint::black_box, time::Duration};
 
 // third-party imports
+use const_str::concat as strcat;
 use criterion::{criterion_group, BatchSize, BenchmarkId, Criterion, Throughput};
 
 // local imports
-use super::hash;
+use super::{hash, ND};
 
 criterion_group!(benches, bench);
 
-const GROUP: &str = "wildcard";
+const GROUP: &str = strcat!(super::GROUP, ND, "wildcard");
 
 fn bench(c: &mut Criterion) {
     bench_with::<wildmatch::WildMatch>(c, "wildmatch");
