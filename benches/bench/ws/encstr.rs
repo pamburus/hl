@@ -2,16 +2,17 @@
 use std::{hint::black_box, time::Duration};
 
 // third-party imports
+use const_str::concat as strcat;
 use criterion::{criterion_group, BatchSize, BenchmarkId, Criterion, Throughput};
 use serde_json::de::{Read, StrRead};
 
 // local imports
-use super::{hash, samples};
+use super::{hash, samples, ND};
 use encstr::{json::JsonEncodedString, raw::RawString, AnyEncodedString, Builder, Handler, Ignorer};
 
 criterion_group!(benches, bench);
 
-const GROUP: &str = "encstr";
+const GROUP: &str = strcat!(super::GROUP, ND, "encstr");
 
 fn bench(c: &mut Criterion) {
     for (input, batch) in [(samples::str::query01::JSON, BatchSize::SmallInput)] {

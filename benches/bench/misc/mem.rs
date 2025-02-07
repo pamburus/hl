@@ -2,12 +2,16 @@
 use std::time::Duration;
 
 // third-party imports
+use const_str::concat as strcat;
 use criterion::{criterion_group, BatchSize, BenchmarkId, Criterion, Throughput};
 use rand::random;
 
+// local imports
+use super::ND;
+
 criterion_group!(benches, bench);
 
-const GROUP: &str = "mem";
+const GROUP: &str = strcat!(super::GROUP, ND, "mem");
 
 fn bench(c: &mut Criterion) {
     let mut group = c.benchmark_group(GROUP);
