@@ -352,7 +352,7 @@ pub mod rfc3339 {
         #[inline]
         pub fn minute(&self) -> Option<Number<'a>> {
             if self.v.len() > 1 {
-                Some(Number { v: &self.v[4..5] })
+                Some(Number { v: &self.v[4..6] })
             } else {
                 None
             }
