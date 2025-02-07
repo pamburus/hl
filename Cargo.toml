@@ -112,5 +112,5 @@ codegen-units = 1
 lto = true
 
 [[bench]]
-name = "all"
+name = "bench"
 harness = false
