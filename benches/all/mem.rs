@@ -45,17 +45,18 @@ fn bench(c: &mut Criterion) {
         group.throughput(Throughput::Bytes(n as u64));
 
         let setup = || (0..n).into_iter().map(|x| (x * 256 / n) as u8).collect::<Vec<u8>>();
+        let param = |x| format!("{}:{}", n, x);
 
-        group.bench_function(BenchmarkId::new("find-single-value", n), |b| {
+        group.bench_function(BenchmarkId::new("position", param("single-value")), |b| {
             let needle = 128;
             b.iter_batched(setup, |vi| vi.iter().position(|&x| x == needle), batch);
         });
 
-        group.bench_function(BenchmarkId::new("find-one-of-two-values", n), |b| {
+        group.bench_function(BenchmarkId::new("position", param("one-of-two-values")), |b| {
             b.iter_batched(setup, |vi| vi.iter().position(|&x| matches!(x, 128 | 192)), batch);
         });
 
-        group.bench_function(BenchmarkId::new("find-one-of-four-values", n), |b| {
+        group.bench_function(BenchmarkId::new("position", param("one-of-four-values")), |b| {
             b.iter_batched(
                 setup,
                 |vi| vi.iter().position(|&x| matches!(x, 128 | 192 | 224 | 240)),

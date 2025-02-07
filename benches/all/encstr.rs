@@ -27,7 +27,7 @@ fn bench_with<I: InputConstruct>(
     title: &str,
     input: &'static str,
     constructor: I,
-    batch_size: BatchSize,
+    batch: BatchSize,
 ) {
     let param = format!("{}:{}:{}", title, input.len(), hash(input));
 
@@ -44,7 +44,7 @@ fn bench_with<I: InputConstruct>(
                 |input| {
                     let _: serde_json::Value = serde_json::from_str(input).unwrap();
                 },
-                batch_size,
+                batch,
             );
         });
 
@@ -56,7 +56,7 @@ fn bench_with<I: InputConstruct>(
                     let mut reader = black_box(StrRead::new(&input[1..]));
                     reader.parse_str_raw(buf).unwrap();
                 },
-                batch_size,
+                batch,
             );
         });
 
@@ -68,7 +68,7 @@ fn bench_with<I: InputConstruct>(
                     let mut reader = black_box(StrRead::new(&input[1..]));
                     reader.ignore_str().unwrap()
                 },
-                batch_size,
+                batch,
             );
         });
     }
@@ -82,7 +82,7 @@ fn bench_with<I: InputConstruct>(
                 let input = black_box(constructor.new_input(input));
                 input.decode(&mut target).unwrap()
             },
-            batch_size,
+            batch,
         );
     });
 
@@ -94,7 +94,7 @@ fn bench_with<I: InputConstruct>(
                 let input = black_box(constructor.new_input(input));
                 input.decode(buf).unwrap()
             },
-            batch_size,
+            batch,
         );
     });
 
@@ -108,7 +108,7 @@ fn bench_with<I: InputConstruct>(
                     token.unwrap();
                 }
             },
-            batch_size,
+            batch,
         );
     });
 
@@ -122,7 +122,7 @@ fn bench_with<I: InputConstruct>(
                     buf.handle(token.unwrap()).unwrap();
                 }
             },
-            batch_size,
+            batch,
         );
     });
 
