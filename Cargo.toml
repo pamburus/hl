@@ -4,7 +4,7 @@ members = [".", "crate/encstr", "crate/heapopt"]
 [workspace.package]
 repository = "https://github.com/pamburus/hl"
 authors = ["Pavel Ivanov <mr.pavel.ivanov@gmail.com>"]
-version = "0.31.0-alpha.5"
+version = "0.31.0-alpha.6"
 edition = "2021"
 license = "MIT"
 
@@ -91,12 +91,16 @@ wyhash = "0"
 kqueue = "1"
 
 [dev-dependencies]
+base32 = "0"
 byte-strings = "0"
 clean-path = "0"
+const-str = "0"
 criterion = "0"
+fnv = "1"
 maplit = "1"
 mockall = "0"
 stats_alloc = "0"
+rand = "0"
 regex = "1"
 wildmatch = "2"
 rstest = "0"
@@ -108,46 +112,5 @@ codegen-units = 1
 lto = true
 
 [[bench]]
-name = "regex"
-harness = false
-
-[[bench]]
-name = "ts-parse"
-harness = false
-
-[[bench]]
-name = "ts-format"
-harness = false
-
-[[bench]]
-name = "wildmatch"
-harness = false
-
-[[bench]]
-name = "wildflower"
-harness = false
-
-[[bench]]
-name = "theme"
-harness = false
-
-[[bench]]
-name = "parse-and-format"
-harness = false
-
-[[bench]]
-name = "string"
-harness = false
-
-[[bench]]
-name = "json"
-harness = false
-
-[[bench]]
-name = "mem"
-harness = false
-
-[[bench]]
-name = "encstr"
-path = "benches/encstr/benches.rs"
+name = "bench"
 harness = false

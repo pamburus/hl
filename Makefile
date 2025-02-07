@@ -74,7 +74,7 @@ test: contrib-build
 ## Run benchmarks
 .PHONY: bench
 bench: contrib-build
-	@cargo bench --workspace
+	@cargo bench --workspace --locked
 
 ## Show usage of the binary
 .PHONY: usage
