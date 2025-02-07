@@ -34,16 +34,16 @@ pub(super) mod parsing {
                 use regex::Regex;
                 let re = Regex::new(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-](\d{2}:\d{2}))?$").unwrap();
                 let setup = || input;
-                let perform = |input| re.is_match(input);
-                assert!(perform(setup()));
-                b.iter_batched(setup, perform, BatchSize::SmallInput);
+                let routine = |input| re.is_match(input);
+                assert!(routine(setup()));
+                b.iter_batched(setup, routine, BatchSize::SmallInput);
             });
 
             c.bench_function(BenchmarkId::new("as-rfc3339", name), |b| {
                 let setup = || Timestamp::new(input);
-                let perform = |ts: Timestamp| ts.as_rfc3339().is_some();
-                assert!(perform(setup()));
-                b.iter_batched(setup, perform, BatchSize::SmallInput);
+                let routine = |ts: Timestamp| ts.as_rfc3339().is_some();
+                assert!(routine(setup()));
+                b.iter_batched(setup, routine, BatchSize::SmallInput);
             });
         }
 
@@ -58,9 +58,9 @@ pub(super) mod parsing {
 
             c.bench_function(BenchmarkId::new("parse", name), |b| {
                 let setup = || Timestamp::new(input);
-                let perform = |ts: Timestamp| ts.parse();
-                assert!(perform(setup()).is_some());
-                b.iter_batched(setup, perform, BatchSize::SmallInput);
+                let routine = |ts: Timestamp| ts.parse();
+                assert!(routine(setup()).is_some());
+                b.iter_batched(setup, routine, BatchSize::SmallInput);
             });
         }
     }
@@ -94,13 +94,13 @@ pub mod formatting {
         let tz = |secs| Tz::FixedOffset(FixedOffset::east_opt(secs).unwrap());
 
         c.bench_function("chrono:naive-local", |b| {
-            let perform = |ts: DateTime<FixedOffset>| ts.naive_local();
-            b.iter_batched(ts, perform, BatchSize::SmallInput);
+            let routine = |ts: DateTime<FixedOffset>| ts.naive_local();
+            b.iter_batched(ts, routine, BatchSize::SmallInput);
         });
 
         c.bench_function("chrono:methods", |b| {
             let setup = || ts().naive_local();
-            let perform = |tsn: NaiveDateTime| {
+            let routine = |tsn: NaiveDateTime| {
                 tsn.year() as i64
                     + tsn.month() as i64
                     + tsn.day() as i64
@@ -109,8 +109,8 @@ pub mod formatting {
                     + tsn.second() as i64
                     + tsn.nanosecond() as i64
             };
-            assert!(perform(setup()) != 0);
-            b.iter_batched(setup, perform, BatchSize::SmallInput);
+            assert!(routine(setup()) != 0);
+            b.iter_batched(setup, routine, BatchSize::SmallInput);
         });
 
         let setup = || {
@@ -118,12 +118,12 @@ pub mod formatting {
             let buf = Vec::<u8>::with_capacity(128);
             (items, buf, ts())
         };
-        let perform = |(items, mut buf, ts): (StrftimeItems, Vec<u8>, DateTime<FixedOffset>)| {
+        let routine = |(items, mut buf, ts): (StrftimeItems, Vec<u8>, DateTime<FixedOffset>)| {
             write!(&mut buf, "{}", ts.format_with_items(items)).map(|_| buf.len())
         };
-        c.throughput(Throughput::Bytes(perform(setup()).unwrap() as u64));
+        c.throughput(Throughput::Bytes(routine(setup()).unwrap() as u64));
         c.bench_function(BenchmarkId::new("chrono:format-with-items", "ymdT3f"), |b| {
-            b.iter_batched(setup, perform, BatchSize::SmallInput);
+            b.iter_batched(setup, routine, BatchSize::SmallInput);
         });
 
         let zones = &[("utc", 0), ("cet", 3600)];
@@ -138,13 +138,13 @@ pub mod formatting {
                     let formatter = DateTimeFormatter::new(format, tz(*tzv));
                     (formatter, buf, ts())
                 };
-                let perform = |(formatter, mut buf, ts): (DateTimeFormatter, Vec<u8>, DateTime<FixedOffset>)| {
+                let routine = |(formatter, mut buf, ts): (DateTimeFormatter, Vec<u8>, DateTime<FixedOffset>)| {
                     formatter.format(&mut buf, ts);
                     buf.len()
                 };
-                c.throughput(Throughput::Bytes(perform(setup()) as u64));
+                c.throughput(Throughput::Bytes(routine(setup()) as u64));
                 c.bench_function(BenchmarkId::new("format", param), |b| {
-                    b.iter_batched(setup, perform, BatchSize::SmallInput);
+                    b.iter_batched(setup, routine, BatchSize::SmallInput);
                 });
             }
         }
@@ -167,13 +167,13 @@ pub mod formatting {
                     let formatter = DateTimeFormatter::new(format, tz(*tzv));
                     (formatter, buf, tsr.clone())
                 };
-                let perform = |(formatter, mut buf, tsr): (DateTimeFormatter, Vec<u8>, rfc3339::Timestamp)| {
+                let routine = |(formatter, mut buf, tsr): (DateTimeFormatter, Vec<u8>, rfc3339::Timestamp)| {
                     formatter.reformat_rfc3339(&mut buf, tsr);
                     buf.len()
                 };
-                c.throughput(Throughput::Bytes(perform(setup()) as u64));
+                c.throughput(Throughput::Bytes(routine(setup()) as u64));
                 c.bench_function(BenchmarkId::new("reformat-rfc3339", param), |b| {
-                    b.iter_batched(setup, perform, BatchSize::SmallInput);
+                    b.iter_batched(setup, routine, BatchSize::SmallInput);
                 });
             }
         }
