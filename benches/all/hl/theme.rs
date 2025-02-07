@@ -4,7 +4,7 @@ use std::{collections::HashMap, hint::black_box, time::Duration};
 // third-party imports
 use collection_macros::hashmap;
 use const_str::concat as strcat;
-use criterion::Criterion;
+use criterion::{BatchSize, Criterion};
 
 // local imports
 use super::ND;
@@ -22,60 +22,66 @@ pub(super) fn bench(c: &mut Criterion) {
     c.measurement_time(Duration::from_secs(3));
 
     let theme = theme();
-    let fields = vec![
-        (b"key1", b"value1"),
-        (b"key2", b"value2"),
-        (b"key3", b"value3"),
-        (b"key4", b"value4"),
-        (b"key5", b"value5"),
-        (b"key6", b"value6"),
-        (b"key7", b"value7"),
-    ];
+    let fields = || {
+        vec![
+            (b"key1", b"value1"),
+            (b"key2", b"value2"),
+            (b"key3", b"value3"),
+            (b"key4", b"value4"),
+            (b"key5", b"value5"),
+            (b"key6", b"value6"),
+            (b"key7", b"value7"),
+        ]
+    };
 
     c.bench_function("apply", |b| {
-        let setup = || Vec::with_capacity(4096);
-        b.iter_with_setup(setup, |mut buf: Vec<u8>| {
-            black_box(&theme).apply(&mut buf, &Some(Level::Debug), |s| {
-                s.element(Element::Time, |s| {
-                    s.batch(|buf| buf.extend_from_slice(b"2020-01-01 00:00:00"))
-                });
-                s.batch(|buf| buf.push(b' '));
-                s.element(Element::Level, |s| {
-                    s.batch(|buf| buf.push(b'|'));
-                    s.element(Element::LevelInner, |s| s.batch(|buf| buf.extend_from_slice(b"INF")));
-                    s.batch(|buf| buf.push(b'|'))
-                });
-                s.batch(|buf| buf.push(b' '));
-                s.element(Element::Logger, |s| {
-                    s.element(Element::LoggerInner, |s| {
-                        s.batch(|buf| buf.extend_from_slice(b"logger"))
+        let setup = || (Vec::with_capacity(1024), fields());
+        b.iter_batched_ref(
+            setup,
+            |(buf, fields)| {
+                black_box(&theme).apply(buf, &Some(Level::Debug), |s| {
+                    s.element(Element::Time, |s| {
+                        s.batch(|buf| buf.extend_from_slice(b"2020-01-01 00:00:00"))
                     });
-                    s.batch(|buf| buf.push(b':'))
-                });
-                s.batch(|buf| buf.push(b' '));
-                s.element(Element::Message, |s| {
-                    s.batch(|buf| {
-                        buf.extend_from_slice(b"hello!");
-                    })
-                });
-                for _ in 0..4 {
-                    for (key, value) in black_box(&fields) {
-                        s.element(Element::Field, |s| {
-                            s.batch(|buf| buf.push(b' '));
-                            s.element(Element::Key, |s| s.batch(|buf| buf.extend_from_slice(&key[..])));
-                            s.batch(|buf| buf.push(b'='));
-                            s.element(Element::String, |s| s.batch(|buf| buf.extend_from_slice(&value[..])));
+                    s.batch(|buf| buf.push(b' '));
+                    s.element(Element::Level, |s| {
+                        s.batch(|buf| buf.push(b'|'));
+                        s.element(Element::LevelInner, |s| s.batch(|buf| buf.extend_from_slice(b"INF")));
+                        s.batch(|buf| buf.push(b'|'))
+                    });
+                    s.batch(|buf| buf.push(b' '));
+                    s.element(Element::Logger, |s| {
+                        s.element(Element::LoggerInner, |s| {
+                            s.batch(|buf| buf.extend_from_slice(b"logger"))
+                        });
+                        s.batch(|buf| buf.push(b':'))
+                    });
+                    s.batch(|buf| buf.push(b' '));
+                    s.element(Element::Message, |s| {
+                        s.batch(|buf| {
+                            buf.extend_from_slice(b"hello!");
                         })
+                    });
+                    for _ in 0..4 {
+                        for (key, value) in fields.iter() {
+                            s.element(Element::Field, |s| {
+                                s.batch(|buf| buf.push(b' '));
+                                s.element(Element::Key, |s| s.batch(|buf| buf.extend_from_slice(&key[..])));
+                                s.batch(|buf| buf.push(b'='));
+                                s.element(Element::String, |s| s.batch(|buf| buf.extend_from_slice(&value[..])));
+                            })
+                        }
                     }
-                }
-                s.element(Element::Caller, |s| {
-                    s.batch(|buf| buf.extend_from_slice(b" @ "));
-                    s.element(Element::CallerInner, |s| {
-                        s.batch(|buf| buf.extend_from_slice(b"caller"))
+                    s.element(Element::Caller, |s| {
+                        s.batch(|buf| buf.extend_from_slice(b" @ "));
+                        s.element(Element::CallerInner, |s| {
+                            s.batch(|buf| buf.extend_from_slice(b"caller"))
+                        })
                     })
                 })
-            })
-        })
+            },
+            BatchSize::SmallInput,
+        )
     });
 }
 

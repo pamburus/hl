@@ -44,13 +44,13 @@ fn bench_with<Pattern: Wildcard>(c: &mut Criterion, title: &str) {
         );
         let pattern = Pattern::new(pattern);
         let setup = || String::from(*input);
-        let perform = |input: String| black_box(&pattern).matches(&input);
+        let routine = |input: String| black_box(&pattern).matches(&input);
 
-        assert_eq!(perform(setup()), *expected);
+        assert_eq!(routine(setup()), *expected);
 
         c.throughput(Throughput::Bytes(input.len() as u64));
         c.bench_function(BenchmarkId::new(function, param), |b| {
-            b.iter_batched(setup, perform, BatchSize::SmallInput);
+            b.iter_batched(setup, routine, BatchSize::SmallInput);
         });
     }
 }

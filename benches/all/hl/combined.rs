@@ -4,7 +4,7 @@ use std::{iter::empty, sync::Arc};
 // third-party imports
 use chrono::{Offset, Utc};
 use const_str::concat as strcat;
-use criterion::{BenchmarkId, Criterion, Throughput};
+use criterion::{BatchSize, BenchmarkId, Criterion, Throughput};
 
 // local imports
 use super::{hash, samples, ND};
@@ -47,15 +47,16 @@ pub(super) fn bench(c: &mut Criterion) {
         );
 
         c.bench_function(BenchmarkId::new("parse-and-format", param), |b| {
-            let setup = || {
-                let processor = SegmentProcessor::new(&parser, &formatter, &filter, SegmentProcessorOptions::default());
-                let buf = Vec::new();
-                (processor, buf)
-            };
+            let mut processor = SegmentProcessor::new(&parser, &formatter, &filter, SegmentProcessorOptions::default());
+            let setup = || Vec::with_capacity(4096);
 
-            b.iter_with_setup(setup, |(mut processor, mut buf)| {
-                processor.process(input, &mut buf, "", None, &mut RecordIgnorer {});
-            });
+            b.iter_batched_ref(
+                setup,
+                |buf| {
+                    processor.process(input, buf, "", None, &mut RecordIgnorer {});
+                },
+                BatchSize::SmallInput,
+            );
         });
     }
 }
