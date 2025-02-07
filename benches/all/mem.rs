@@ -3,6 +3,7 @@ use std::time::Duration;
 
 // third-party imports
 use criterion::{criterion_group, BatchSize, BenchmarkId, Criterion, Throughput};
+use rand::random;
 
 criterion_group!(benches, bench);
 
@@ -13,8 +14,16 @@ fn bench(c: &mut Criterion) {
     group.warm_up_time(Duration::from_secs(1));
     group.measurement_time(Duration::from_secs(5));
 
+    let seq = || {
+        move || {
+            let x: u8 = random();
+            x
+        }
+    };
+
     let bufs = |size| {
-        let vi: Vec<u8> = (0..size).into_iter().map(|x| x as u8).collect();
+        let next = seq();
+        let vi: Vec<u8> = (0..size).into_iter().map(|_| next()).collect();
         let ve: Vec<u8> = Vec::with_capacity(size);
         (vi, ve)
     };
@@ -23,6 +32,7 @@ fn bench(c: &mut Criterion) {
         (512, BatchSize::SmallInput),
         (4096, BatchSize::SmallInput),
         (65536, BatchSize::LargeInput),
+        (1048576, BatchSize::LargeInput),
     ];
 
     for (n, batch) in variants {
