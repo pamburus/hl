@@ -516,7 +516,7 @@ where
     }
 
     #[inline]
-    fn build<R, F>(self, value: S::Value, f: F) -> BuildOutput<F, R, Self>
+    pub fn build<R, F>(self, value: S::Value, f: F) -> BuildOutput<F, R, Self>
     where
         F: FnOnce(Self) -> R,
         R: BuildFnResult<F, R, Self>,
