@@ -1,5 +1,5 @@
 // workspace imports
-use super::{hash, samples, ND};
+use super::{hash, samples, BencherExt, ND};
 
 const GROUP: &str = "ws";
 

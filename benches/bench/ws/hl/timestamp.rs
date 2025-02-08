@@ -6,7 +6,7 @@ use const_str::concat as strcat;
 use criterion::{BatchSize, BenchmarkId, Criterion, Throughput};
 
 // local imports
-use super::ND;
+use super::{BencherExt, ND};
 use hl::timestamp::Timestamp;
 
 const GROUP: &str = strcat!(super::GROUP, ND, "timestamp");
@@ -36,14 +36,14 @@ pub(super) mod parsing {
                 let setup = || input;
                 let routine = |input| re.is_match(input);
                 assert!(routine(setup()));
-                b.iter_batched(setup, routine, BatchSize::SmallInput);
+                b.iter_batched_fixed(setup, routine, BatchSize::SmallInput);
             });
 
             c.bench_function(BenchmarkId::new("as-rfc3339", name), |b| {
                 let setup = || Timestamp::new(input);
                 let routine = |ts: Timestamp| ts.as_rfc3339().is_some();
                 assert!(routine(setup()));
-                b.iter_batched(setup, routine, BatchSize::SmallInput);
+                b.iter_batched_fixed(setup, routine, BatchSize::SmallInput);
             });
         }
 
@@ -60,7 +60,7 @@ pub(super) mod parsing {
                 let setup = || Timestamp::new(input);
                 let routine = |ts: Timestamp| ts.parse();
                 assert!(routine(setup()).is_some());
-                b.iter_batched(setup, routine, BatchSize::SmallInput);
+                b.iter_batched_fixed(setup, routine, BatchSize::SmallInput);
             });
         }
     }
@@ -95,7 +95,7 @@ pub mod formatting {
 
         c.bench_function("chrono:naive-local", |b| {
             let routine = |ts: DateTime<FixedOffset>| ts.naive_local();
-            b.iter_batched(ts, routine, BatchSize::SmallInput);
+            b.iter_batched_fixed(ts, routine, BatchSize::SmallInput);
         });
 
         c.bench_function("chrono:methods", |b| {
@@ -110,7 +110,7 @@ pub mod formatting {
                     + tsn.nanosecond() as i64
             };
             assert!(routine(setup()) != 0);
-            b.iter_batched(setup, routine, BatchSize::SmallInput);
+            b.iter_batched_fixed(setup, routine, BatchSize::SmallInput);
         });
 
         let setup = || {
@@ -123,7 +123,7 @@ pub mod formatting {
         };
         c.throughput(Throughput::Bytes(routine(setup()).unwrap() as u64));
         c.bench_function(BenchmarkId::new("chrono:format-with-items", "ymdT3f"), |b| {
-            b.iter_batched(setup, routine, BatchSize::SmallInput);
+            b.iter_batched_fixed(setup, routine, BatchSize::SmallInput);
         });
 
         let zones = &[("utc", 0), ("cet", 3600)];
@@ -144,7 +144,7 @@ pub mod formatting {
                 };
                 c.throughput(Throughput::Bytes(routine(setup()) as u64));
                 c.bench_function(BenchmarkId::new("format", param), |b| {
-                    b.iter_batched(setup, routine, BatchSize::SmallInput);
+                    b.iter_batched_fixed(setup, routine, BatchSize::SmallInput);
                 });
             }
         }
@@ -173,7 +173,7 @@ pub mod formatting {
                 };
                 c.throughput(Throughput::Bytes(routine(setup()) as u64));
                 c.bench_function(BenchmarkId::new("reformat-rfc3339", param), |b| {
-                    b.iter_batched(setup, routine, BatchSize::SmallInput);
+                    b.iter_batched_fixed(setup, routine, BatchSize::SmallInput);
                 });
             }
         }

@@ -7,7 +7,7 @@ use criterion::{criterion_group, BatchSize, BenchmarkId, Criterion, Throughput};
 use serde_json::de::{Read, StrRead};
 
 // local imports
-use super::{hash, samples, ND};
+use super::{hash, samples, BencherExt, ND};
 use encstr::{json::JsonEncodedString, raw::RawString, AnyEncodedString, Builder, Handler, Ignorer};
 
 criterion_group!(benches, bench);
@@ -40,7 +40,7 @@ fn bench_with<I: InputConstruct>(
     if title == "json" {
         group.bench_function(BenchmarkId::new("serde-json:parse-str", &param), |b| {
             let setup = || String::from(input);
-            b.iter_batched_ref(
+            b.iter_batched_ref_fixed(
                 setup,
                 |input| {
                     let _: serde_json::Value = serde_json::from_str(input).unwrap();
@@ -51,7 +51,7 @@ fn bench_with<I: InputConstruct>(
 
         group.bench_function(BenchmarkId::new("serde-json:parse-str-raw", &param), |b| {
             let setup = || (Vec::with_capacity(4096), String::from(input));
-            b.iter_batched_ref(
+            b.iter_batched_ref_fixed(
                 setup,
                 |(buf, input)| {
                     let mut reader = black_box(StrRead::new(&input[1..]));
@@ -63,7 +63,7 @@ fn bench_with<I: InputConstruct>(
 
         group.bench_function(BenchmarkId::new("serde-json:ignore-str", &param), |b| {
             let setup = || String::from(input);
-            b.iter_batched_ref(
+            b.iter_batched_ref_fixed(
                 setup,
                 |input| {
                     let mut reader = black_box(StrRead::new(&input[1..]));
@@ -77,7 +77,7 @@ fn bench_with<I: InputConstruct>(
     group.bench_function(BenchmarkId::new("decode:ignore", &param), |b| {
         let mut target = Ignorer;
         let setup = || String::from(input);
-        b.iter_batched_ref(
+        b.iter_batched_ref_fixed(
             setup,
             |input| {
                 let input = black_box(constructor.new_input(input));
@@ -89,7 +89,7 @@ fn bench_with<I: InputConstruct>(
 
     group.bench_function(BenchmarkId::new("decode:build", &param), |b| {
         let setup = || (Builder::with_capacity(4096), String::from(input));
-        b.iter_batched_ref(
+        b.iter_batched_ref_fixed(
             setup,
             |(buf, input)| {
                 let input = black_box(constructor.new_input(input));
@@ -101,7 +101,7 @@ fn bench_with<I: InputConstruct>(
 
     group.bench_function(BenchmarkId::new("tokens:ignore", &param), |b| {
         let setup = || String::from(input);
-        b.iter_batched_ref(
+        b.iter_batched_ref_fixed(
             setup,
             |input| {
                 let input = black_box(constructor.new_input(input));
@@ -115,7 +115,7 @@ fn bench_with<I: InputConstruct>(
 
     group.bench_function(BenchmarkId::new("tokens:build", &param), |b| {
         let setup = || (Builder::with_capacity(4096), String::from(input));
-        b.iter_batched_ref(
+        b.iter_batched_ref_fixed(
             setup,
             |(buf, input)| {
                 let input = black_box(constructor.new_input(input));

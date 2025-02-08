@@ -7,7 +7,7 @@ use const_str::concat as strcat;
 use criterion::{BatchSize, BenchmarkId, Criterion, Throughput};
 
 // local imports
-use super::{hash, samples, ND};
+use super::{hash, samples, BencherExt, ND};
 use hl::{
     app::{RecordIgnorer, SegmentProcess, SegmentProcessorOptions},
     settings,
@@ -50,7 +50,7 @@ pub(super) fn bench(c: &mut Criterion) {
             let mut processor = SegmentProcessor::new(&parser, &formatter, &filter, SegmentProcessorOptions::default());
             let setup = || Vec::with_capacity(4096);
 
-            b.iter_batched_ref(
+            b.iter_batched_ref_fixed(
                 setup,
                 |buf| {
                     processor.process(input, buf, "", None, &mut RecordIgnorer {});
