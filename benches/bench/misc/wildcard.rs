@@ -6,7 +6,7 @@ use const_str::concat as strcat;
 use criterion::{criterion_group, BatchSize, BenchmarkId, Criterion, Throughput};
 
 // local imports
-use super::{hash, ND};
+use super::{hash, BencherExt, ND};
 
 criterion_group!(benches, bench);
 
@@ -51,7 +51,7 @@ fn bench_with<Pattern: Wildcard>(c: &mut Criterion, title: &str) {
 
         c.throughput(Throughput::Bytes(input.len() as u64));
         c.bench_function(BenchmarkId::new(function, param), |b| {
-            b.iter_batched(setup, routine, BatchSize::SmallInput);
+            b.iter_batched_fixed(setup, routine, BatchSize::NumIterations(16384));
         });
     }
 }

@@ -7,7 +7,7 @@ use const_str::concat as strcat;
 use criterion::{BatchSize, Criterion};
 
 // local imports
-use super::ND;
+use super::{BencherExt, ND};
 use hl::{
     theme::{Element, StylingPush, Theme},
     themecfg::{self, Color, Mode, Style},
@@ -36,7 +36,7 @@ pub(super) fn bench(c: &mut Criterion) {
 
     c.bench_function("apply", |b| {
         let setup = || (Vec::with_capacity(1024), fields());
-        b.iter_batched_ref(
+        b.iter_batched_ref_fixed(
             setup,
             |(buf, fields)| {
                 black_box(&theme).apply(buf, &Some(Level::Debug), |s| {

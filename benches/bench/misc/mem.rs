@@ -7,7 +7,7 @@ use criterion::{criterion_group, BatchSize, BenchmarkId, Criterion, Throughput};
 use rand::random;
 
 // local imports
-use super::ND;
+use super::{BencherExt, ND};
 
 criterion_group!(benches, bench);
 
@@ -32,23 +32,27 @@ fn bench(c: &mut Criterion) {
         (vi, ve)
     };
 
-    let variants = [(512, BatchSize::SmallInput), (4096, BatchSize::SmallInput)];
+    let variants = [
+        (8, BatchSize::NumIterations(8192)),
+        (512, BatchSize::NumIterations(8192)),
+        (4096, BatchSize::NumIterations(8192)),
+    ];
 
     for (n, batch) in variants {
         group.throughput(Throughput::Bytes(n as u64));
 
         group.bench_function(BenchmarkId::new("rotate:1", n), |b| {
             let setup = || bufs(n).0;
-            b.iter_batched(setup, |mut vi| vi.rotate_right(1), batch);
+            b.iter_batched_ref_fixed(setup, |vi| vi.rotate_right(1), batch);
         });
 
         group.bench_function(BenchmarkId::new("copy", n), |b| {
             let setup = || bufs(n);
-            b.iter_batched(setup, |(vi, mut ve)| ve.extend_from_slice(vi.as_slice()), batch);
+            b.iter_batched_ref_fixed(setup, |(vi, ve)| ve.extend_from_slice(vi.as_slice()), batch);
         });
     }
 
-    let variants = [(4096, BatchSize::SmallInput)];
+    let variants = [(4096, BatchSize::NumIterations(8192))];
 
     for (n, batch) in variants {
         group.throughput(Throughput::Bytes(n as u64));
@@ -58,15 +62,15 @@ fn bench(c: &mut Criterion) {
 
         group.bench_function(BenchmarkId::new("position", param("single-value")), |b| {
             let needle = 128;
-            b.iter_batched(setup, |vi| vi.iter().position(|&x| x == needle), batch);
+            b.iter_batched_ref_fixed(setup, |vi| vi.iter().position(|&x| x == needle), batch);
         });
 
         group.bench_function(BenchmarkId::new("position", param("one-of-two-values")), |b| {
-            b.iter_batched(setup, |vi| vi.iter().position(|&x| matches!(x, 128 | 192)), batch);
+            b.iter_batched_ref_fixed(setup, |vi| vi.iter().position(|&x| matches!(x, 128 | 192)), batch);
         });
 
         group.bench_function(BenchmarkId::new("position", param("one-of-four-values")), |b| {
-            b.iter_batched(
+            b.iter_batched_ref_fixed(
                 setup,
                 |vi| vi.iter().position(|&x| matches!(x, 128 | 192 | 224 | 240)),
                 batch,
