@@ -1,6 +1,6 @@
 use upstream::{
     token::{Composite, Scalar},
-    Lex,
+    Lex, Span,
 };
 
 use super::{error::MakeError, token::Token, Error, ErrorKind};
@@ -21,6 +21,7 @@ impl<'s> MakeError for InnerLexer<'s> {
 
 // ---
 
+#[derive(Clone, Debug)]
 pub struct Lexer<'s> {
     inner: InnerLexer<'s>,
     stack: BitStack,
@@ -41,10 +42,25 @@ impl<'s> Lexer<'s> {
     pub fn from_slice(s: &'s [u8]) -> Self {
         Self::new(InnerLexer::new(s))
     }
+
+    #[inline]
+    pub fn span(&self) -> Span {
+        Lex::span(self)
+    }
 }
 
 impl<'s> Lex for Lexer<'s> {
     type Error = Error;
+
+    #[inline]
+    fn span(&self) -> Span {
+        self.inner.span().into()
+    }
+
+    #[inline]
+    fn bump(&mut self, n: usize) {
+        self.inner.bump(n);
+    }
 }
 
 impl<'s> Iterator for Lexer<'s> {
@@ -199,6 +215,7 @@ pub enum Context {
 
 // ---
 
+#[derive(Debug, Clone)]
 pub struct BitStack {
     bits: u128,
     len: u8,

@@ -1,8 +1,5 @@
-// std imports
-use std::sync::Arc;
-
 // workspace imports
-use upstream::{ast, Format, Lex};
+use upstream::{ast, Format};
 
 // conditional imports
 #[cfg(feature = "json")]
@@ -11,8 +8,12 @@ use log_format_json::JsonFormat;
 use log_format_logfmt::LogfmtFormat;
 
 pub mod error;
+pub mod format;
+pub mod lexer;
 
 pub use error::{Error, ErrorKind};
+pub use format::*;
+pub use lexer::*;
 
 // ---
 
@@ -50,8 +51,9 @@ impl Format for AutoFormat {
     type Error = Error;
     type Lexer<'s> = Lexer<'s>;
 
-    fn lexer<'s>(_: &'s [u8]) -> Self::Lexer<'s> {
-        Lexer(std::marker::PhantomData)
+    #[inline]
+    fn lexer<'s>(&self, input: &'s [u8]) -> Lexer<'s> {
+        Lexer::new(input, self.enabled.clone())
     }
 
     fn parse<'s, B>(&mut self, s: &'s [u8], mut target: B) -> Result<(bool, B), (Self::Error, B)>
@@ -104,63 +106,5 @@ impl Format for AutoFormat {
                 }
             }
         }
-    }
-}
-
-// ---
-
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub enum EnabledFormat {
-    #[cfg(feature = "json")]
-    Json,
-    #[cfg(feature = "logfmt")]
-    Logfmt,
-}
-
-// ---
-
-type EnabledFormatList = Arc<Vec<EnabledFormat>>;
-
-pub trait IntoEnabledFormatList {
-    fn into_enabled_format_list(self) -> EnabledFormatList;
-}
-
-impl IntoEnabledFormatList for &[EnabledFormat] {
-    fn into_enabled_format_list(self) -> EnabledFormatList {
-        Arc::new(self.to_vec())
-    }
-}
-
-impl IntoEnabledFormatList for Vec<EnabledFormat> {
-    fn into_enabled_format_list(self) -> EnabledFormatList {
-        Arc::new(self)
-    }
-}
-
-impl IntoEnabledFormatList for EnabledFormat {
-    fn into_enabled_format_list(self) -> EnabledFormatList {
-        Arc::new(vec![self])
-    }
-}
-
-impl IntoEnabledFormatList for EnabledFormatList {
-    fn into_enabled_format_list(self) -> EnabledFormatList {
-        self
-    }
-}
-
-// ---
-
-pub struct Lexer<'s>(std::marker::PhantomData<&'s ()>);
-
-impl<'s> Lex for Lexer<'s> {
-    type Error = Error;
-}
-
-impl<'s> Iterator for Lexer<'s> {
-    type Item = Result<upstream::Token, Error>;
-
-    fn next(&mut self) -> Option<Result<upstream::Token, Error>> {
-        None
     }
 }
