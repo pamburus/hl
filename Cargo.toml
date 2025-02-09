@@ -8,6 +8,7 @@ members = [
     "crate/flat-tree",
     "crate/log-ast",
     "crate/log-format",
+    "crate/log-format-auto",
     "crate/log-format-json",
     "crate/log-format-logfmt",
 ]
@@ -114,6 +115,7 @@ criterion = "0"
 fnv = "1"
 json-ast = { path = "./crate/json-ast" }
 log-ast = { path = "./crate/log-ast" }
+log-format-auto = { path = "./crate/log-format-auto" }
 log-format-json = { path = "./crate/log-format-json" }
 log-format-logfmt = { path = "./crate/log-format-logfmt" }
 log-format = { path = "./crate/log-format" }

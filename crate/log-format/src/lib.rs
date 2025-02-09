@@ -14,7 +14,7 @@ pub trait Format {
     type Lexer<'s>: Lex;
 
     fn lexer<'s>(s: &'s [u8]) -> Self::Lexer<'s>;
-    fn parse<B>(s: &[u8], target: B) -> Result<(bool, B), (Self::Error, B)>
+    fn parse<B>(&mut self, s: &[u8], target: B) -> Result<(bool, B), (Self::Error, B)>
     where
         B: ast::Build;
 }
