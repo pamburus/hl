@@ -22,7 +22,7 @@ impl Format for JsonFormat {
         Lexer::from_slice(s)
     }
 
-    fn parse<'s, B>(s: &'s [u8], target: B) -> Result<(bool, B), (Self::Error, B)>
+    fn parse<'s, B>(&mut self, s: &'s [u8], target: B) -> Result<(bool, B), (Self::Error, B)>
     where
         B: ast::Build,
     {
