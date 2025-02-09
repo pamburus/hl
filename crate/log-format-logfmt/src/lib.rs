@@ -23,7 +23,7 @@ impl Format for LogfmtFormat {
     }
 
     #[inline]
-    fn parse<'s, B>(s: &'s [u8], target: B) -> Result<(bool, B), (Self::Error, B)>
+    fn parse<'s, B>(&mut self, s: &'s [u8], target: B) -> Result<(bool, B), (Self::Error, B)>
     where
         B: ast::Build,
     {
