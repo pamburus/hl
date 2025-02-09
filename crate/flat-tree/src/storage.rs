@@ -14,6 +14,7 @@ pub trait Storage: Debug {
     fn get_mut(&mut self, index: usize) -> Option<&mut Item<Self::Value>>;
     fn push(&mut self, item: Item<Self::Value>);
     fn clear(&mut self);
+    fn truncate(&mut self, size: usize);
     fn reserve(&mut self, additional: usize);
 
     #[inline]
@@ -48,6 +49,11 @@ impl<V: Debug> Storage for Vec<Item<V>> {
     #[inline]
     fn clear(&mut self) {
         Vec::clear(self)
+    }
+
+    #[inline]
+    fn truncate(&mut self, size: usize) {
+        Vec::truncate(self, size)
     }
 
     #[inline]
