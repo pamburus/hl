@@ -1,0 +1,18 @@
+[package]
+name = "log-format-auto"
+version = "0.1.0"
+repository.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[features]
+default = ["json", "logfmt"]
+json = ["dep:log-format-json"]
+logfmt = ["dep:log-format-logfmt"]
+
+[dependencies]
+logos = "0"
+upstream = { path = "../log-format", package = "log-format" }
+log-format-json = { path = "../log-format-json", package = "log-format-json", optional = true }
+log-format-logfmt = { path = "../log-format-logfmt", package = "log-format-logfmt", optional = true }
