@@ -61,7 +61,7 @@ pub(super) fn bench(c: &mut Criterion) {
 
             b.iter_batched_ref(
                 setup,
-                |sample| LogfmtFormat::parse(&sample, Discarder::new()).unwrap(),
+                |sample| LogfmtFormat.parse(&sample, Discarder::new()).unwrap(),
                 BatchSize::SmallInput,
             );
         });
@@ -72,7 +72,8 @@ pub(super) fn bench(c: &mut Criterion) {
             b.iter_batched_ref(
                 setup,
                 |(tree, sample)| {
-                    LogfmtFormat::parse(&sample, ast::Builder::new(tree.metaroot()))
+                    LogfmtFormat
+                        .parse(&sample, ast::Builder::new(tree.metaroot()))
                         .map_err(|x| x.0)
                         .unwrap()
                         .0

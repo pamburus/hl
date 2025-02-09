@@ -62,7 +62,7 @@ pub(super) fn bench(c: &mut Criterion) {
 
             b.iter_batched_ref(
                 setup,
-                |sample| JsonFormat::parse(&sample, Discarder::new()).unwrap(),
+                |sample| JsonFormat.parse(&sample, Discarder::new()).unwrap(),
                 BatchSize::SmallInput,
             );
         });
@@ -73,7 +73,8 @@ pub(super) fn bench(c: &mut Criterion) {
             b.iter_batched_ref(
                 setup,
                 |(tree, sample)| {
-                    JsonFormat::parse(&sample, ast::Builder::new(tree.metaroot()))
+                    JsonFormat
+                        .parse(&sample, ast::Builder::new(tree.metaroot()))
                         .map_err(|x| x.0)
                         .unwrap()
                         .0

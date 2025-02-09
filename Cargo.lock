@@ -1164,6 +1164,7 @@ dependencies = [
  "log",
  "log-ast",
  "log-format",
+ "log-format-auto",
  "log-format-json",
  "log-format-logfmt",
  "logos",
@@ -1471,6 +1472,16 @@ dependencies = [
 [[package]]
 name = "log-format"
 version = "0.1.0"
+
+[[package]]
+name = "log-format-auto"
+version = "0.1.0"
+dependencies = [
+ "log-format",
+ "log-format-json",
+ "log-format-logfmt",
+ "logos",
+]
 
 [[package]]
 name = "log-format-json"
