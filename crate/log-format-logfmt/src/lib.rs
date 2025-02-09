@@ -18,7 +18,7 @@ impl Format for LogfmtFormat {
     type Lexer<'s> = Lexer<'s>;
 
     #[inline]
-    fn lexer<'s>(s: &'s [u8]) -> Self::Lexer<'s> {
+    fn lexer<'s>(&self, s: &'s [u8]) -> Self::Lexer<'s> {
         Lexer::from_slice(s)
     }
 
