@@ -6,12 +6,12 @@ use flat_tree::{
     FlatTree,
     tree::{self, NoAttachment},
 };
-use log_format::{
-    ast, origin,
-    token::{Composite, Scalar, String},
-};
+use log_format::{ast, origin};
 
-pub use log_format::Span;
+pub use log_format::{
+    token::{Composite, Scalar, String},
+    Span,
+};
 pub use origin::Origin;
 
 // ---
