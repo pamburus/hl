@@ -271,6 +271,11 @@ impl<V: Debug> flat_tree::Storage for HeapOptStorage<V> {
     }
 
     #[inline]
+    fn truncate(&mut self, size: usize) {
+        self.buf.truncate(size);
+    }
+
+    #[inline]
     fn reserve(&mut self, additional: usize) {
         self.buf.reserve(additional);
     }

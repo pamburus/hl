@@ -86,6 +86,7 @@ where
         F: FnOnce(Self) -> Result<Self, (E, Self)>;
 
     fn checkpoint(&self) -> Self::Checkpoint;
+    fn rollback(&mut self, checkpoint: &Self::Checkpoint);
     fn first_node_index(&self, checkpoint: &Self::Checkpoint) -> OptIndex;
 
     fn attach<V>(self, attachment: V) -> Self::WithAttachment<V>;
@@ -144,6 +145,11 @@ where
     }
 
     #[inline]
+    fn rollback(&mut self, checkpoint: &Self::Checkpoint) {
+        self.inner.rollback(checkpoint)
+    }
+
+    #[inline]
     fn first_node_index(&self, checkpoint: &Self::Checkpoint) -> OptIndex {
         self.inner.first_node_index(checkpoint)
     }
@@ -164,6 +170,8 @@ impl<T> ast::Build for Builder<T>
 where
     T: InnerBuild,
 {
+    type Checkpoint = T::Checkpoint;
+
     #[inline]
     fn add_scalar(self, scalar: Scalar) -> Self {
         Build::add_scalar(self, scalar)
@@ -175,6 +183,16 @@ where
         F: FnOnce(Self) -> Result<Self, (E, Self)>,
     {
         Build::add_composite(self, composite, f)
+    }
+
+    #[inline]
+    fn checkpoint(&self) -> Self::Checkpoint {
+        Build::checkpoint(self)
+    }
+
+    #[inline]
+    fn rollback(&mut self, checkpoint: &Self::Checkpoint) {
+        Build::rollback(self, checkpoint)
     }
 }
 
@@ -212,9 +230,10 @@ where
     }
 
     #[inline]
-    fn checkpoint(&self) -> Self::Checkpoint {
-        ()
-    }
+    fn checkpoint(&self) -> Self::Checkpoint {}
+
+    #[inline]
+    fn rollback(&mut self, _: &Self::Checkpoint) {}
 
     #[inline]
     fn first_node_index(&self, _: &Self::Checkpoint) -> OptIndex {
