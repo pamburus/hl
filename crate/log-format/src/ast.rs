@@ -7,12 +7,15 @@ use std::fmt::Display;
 // ---
 
 pub trait Build: Sized {
-    // type Error: Error;
+    type Checkpoint;
 
     fn add_scalar(self, scalar: Scalar) -> Self;
     fn add_composite<E, F>(self, composite: Composite, f: F) -> Result<Self, (E, Self)>
     where
         F: FnOnce(Self) -> Result<Self, (E, Self)>;
+
+    fn checkpoint(&self) -> Self::Checkpoint;
+    fn rollback(&mut self, checkpoint: &Self::Checkpoint);
 }
 
 // ---
@@ -121,6 +124,8 @@ impl Default for Discarder {
 }
 
 impl Build for Discarder {
+    type Checkpoint = ();
+
     #[inline]
     fn add_scalar(self, _: Scalar) -> Self {
         self
@@ -133,4 +138,10 @@ impl Build for Discarder {
     {
         f(self)
     }
+
+    #[inline]
+    fn checkpoint(&self) -> Self::Checkpoint {}
+
+    #[inline]
+    fn rollback(&mut self, _: &Self::Checkpoint) {}
 }
