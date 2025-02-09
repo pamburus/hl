@@ -7,6 +7,10 @@ use upstream::{
 
 use super::ErrorKind;
 
+// Token is a token in the logfmt format.
+// Key token must be followed by a Value token.
+// If the corresponding Value token is missing, and a space token appears,
+// the value is considered to be an empty string.
 #[derive(Debug, PartialEq, Clone)]
 pub enum Token {
     Key(Span),
@@ -18,32 +22,33 @@ pub enum Token {
 impl Token {
     #[inline]
     pub fn lexer<'s>(s: &'s [u8]) -> Lexer<'s> {
-        Lexer(Mode::M1(M1::lexer(s)))
+        Lexer(Mode::M1(T1::lexer(s)))
     }
 }
 
-impl From<M1> for Token {
+impl From<T1> for Token {
     #[inline]
-    fn from(lex: M1) -> Self {
-        match lex {
-            M1::Key(span) => Token::Key(span),
-            M1::Space => Token::Space,
-            M1::Eol => Token::Eol,
+    fn from(token: T1) -> Self {
+        match token {
+            T1::Key(span) => Token::Key(span),
+            T1::Space => Token::Space,
+            T1::Eol => Token::Eol,
         }
     }
 }
 
-impl From<M2> for Token {
+impl From<T2> for Token {
     #[inline]
-    fn from(lex: M2) -> Self {
-        match lex {
-            M2::Value(scalar) => Token::Value(scalar),
+    fn from(token: T2) -> Self {
+        match token {
+            T2::Value(scalar) => Token::Value(scalar),
         }
     }
 }
 
 // ---
 
+// Lexer allows to iterate over tokens in the input.
 pub struct Lexer<'s>(Mode<'s>);
 
 impl<'s> Lexer<'s> {
@@ -69,7 +74,7 @@ impl<'s> Iterator for Lexer<'s> {
         match &mut self.0 {
             Mode::M1(lexer) => match lexer.next() {
                 Some(Ok(token)) => {
-                    if let M1::Key(_) = token {
+                    if let T1::Key(_) = token {
                         self.0 = Mode::M2(lexer.clone().morph());
                     }
                     Some(Ok(Token::from(token)))
@@ -90,17 +95,21 @@ impl<'s> Iterator for Lexer<'s> {
     }
 }
 
+// Mode defines the current lexer mode.
+// The lexer starts in mode M1 and switches to mode M2 when it encounters a key.
+// The lexer switches back to mode M1 when it reaches the end of the value.
 enum Mode<'s> {
-    M1(logos::Lexer<'s, M1>),
-    M2(logos::Lexer<'s, M2>),
+    M1(logos::Lexer<'s, T1>),
+    M2(logos::Lexer<'s, T2>),
 }
 
 // ---
 
+// T1 is a token for mode M1.
 #[derive(Logos, Debug, PartialEq, Clone)]
 #[logos(source = [u8])]
 #[logos(error = ErrorKind)]
-enum M1 {
+enum T1 {
     #[regex(r#"[^"\x00-\x20='(),;<>\[\]\\\^`{}|\x7F]+="#, |lex| Span::from(lex.span()).cut_right(1))]
     Key(Span),
 
@@ -111,10 +120,11 @@ enum M1 {
     Eol,
 }
 
+// T2 is a token for mode M2.
 #[derive(Logos, Debug, PartialEq, Clone)]
 #[logos(source = [u8])]
 #[logos(error = ErrorKind)]
-enum M2 {
+enum T2 {
     #[token("null", |_| Scalar::Null)]
     #[token("false", |_| Scalar::Bool(false))]
     #[token("true", |_| Scalar::Bool(true))]
