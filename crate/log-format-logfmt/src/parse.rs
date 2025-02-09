@@ -4,7 +4,7 @@ use super::{
 };
 use upstream::{
     ast::Build,
-    token::{Composite, String},
+    token::{Composite, Scalar, String},
     Span,
 };
 
@@ -85,8 +85,14 @@ fn parse_key<'s, B: Build>(lexer: &mut Lexer<'s>, target: B) -> Result<(Option<S
 
 #[inline]
 fn parse_value<'s, B: Build>(lexer: &mut Lexer<'s>, target: B) -> Result<B, (Error, B)> {
+    let empty = |lexer: &mut Lexer<'s>, target: B| {
+        let mut span = lexer.span();
+        span.end = span.start;
+        return Ok(target.add_scalar(Scalar::String(upstream::String::Plain(span.into()))));
+    };
+
     let Some(token) = lexer.next() else {
-        return Err((lexer.make_error(ErrorKind::UnexpectedEof).into(), target));
+        return empty(lexer, target);
     };
 
     let token = match token {
@@ -96,7 +102,8 @@ fn parse_value<'s, B: Build>(lexer: &mut Lexer<'s>, target: B) -> Result<B, (Err
 
     let target = match token {
         Token::Value(scalar) => target.add_scalar(scalar),
-        _ => return Err((lexer.make_error(ErrorKind::UnexpectedEof).into(), target)),
+        Token::Space => return empty(lexer, target),
+        _ => return Err((lexer.make_error(ErrorKind::UnexpectedToken).into(), target)),
     };
 
     Ok(target)
