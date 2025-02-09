@@ -1,5 +1,5 @@
 use upstream::{
-    token::{Composite, String},
+    token::{Composite, Scalar, String},
     Lex,
 };
 
@@ -73,6 +73,13 @@ impl<'s> Iterator for Lexer<'s> {
                 self.context = Context::Key;
                 self.next = self.inner.next();
                 Some(Ok(upstream::Token::CompositeEnd))
+            }
+            (Some(Ok(Token::Space)), Context::Value) => {
+                self.context = Context::Key;
+                self.next = self.inner.next();
+                let mut span = self.inner.span();
+                span.end = span.start;
+                Some(Ok(upstream::Token::Scalar(Scalar::String(String::Plain(span.into())))))
             }
             (None | Some(Ok(Token::Eol)), Context::Key) => {
                 self.context = Context::Root;
