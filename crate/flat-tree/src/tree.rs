@@ -147,7 +147,13 @@ where
 
     #[inline]
     fn checkpoint(&self) -> Self::Checkpoint {
-        Checkpoint::new(self.len())
+        Checkpoint::new(self.len(), self.roots)
+    }
+
+    #[inline]
+    fn rollback(&mut self, checkpoint: &Self::Checkpoint) {
+        self.storage.truncate(checkpoint.len);
+        self.roots = checkpoint.roots;
     }
 
     #[inline]
@@ -561,7 +567,12 @@ where
 
     #[inline]
     fn checkpoint(&self) -> Self::Checkpoint {
-        Checkpoint::new(self.tree.len())
+        Checkpoint::new(self.tree.len(), self.tree.roots)
+    }
+
+    #[inline]
+    fn rollback(&mut self, checkpoint: &Self::Checkpoint) {
+        self.tree.rollback(checkpoint)
     }
 
     #[inline]
@@ -653,12 +664,13 @@ where
 #[derive(Debug, Clone)]
 pub struct Checkpoint {
     len: usize,
+    roots: usize,
 }
 
 impl Checkpoint {
     #[inline]
-    fn new(len: usize) -> Self {
-        Self { len }
+    fn new(len: usize, roots: usize) -> Self {
+        Self { len, roots }
     }
 
     #[inline]
