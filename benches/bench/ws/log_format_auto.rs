@@ -1,5 +1,5 @@
 // std imports
-use std::{time::Duration, vec::Vec};
+use std::{hint::black_box, time::Duration, vec::Vec};
 
 // third-party imports
 use const_str::concat as strcat;
@@ -32,6 +32,21 @@ pub(super) fn bench(c: &mut Criterion) {
         let param = format!("{}:{}:{}", name, sample.len(), hash(sample));
 
         group.throughput(Throughput::Bytes(sample.len() as u64));
+
+        group.bench_function(BenchmarkId::new("lex:drain", &param), |b| {
+            let setup = || (AutoFormat::default(), Vec::from(sample));
+
+            b.iter_batched_ref(
+                setup,
+                |(format, sample)| {
+                    let mut lexer = format.lexer(sample);
+                    while let Some(token) = black_box(lexer.next()) {
+                        token.unwrap();
+                    }
+                },
+                BatchSize::SmallInput,
+            );
+        });
 
         group.bench_function(BenchmarkId::new("parse:discard", &param), |b| {
             let setup = || (Vec::from(sample), AutoFormat::default());

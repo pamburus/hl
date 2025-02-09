@@ -49,6 +49,7 @@ impl From<T2> for Token {
 // ---
 
 // Lexer allows to iterate over tokens in the input.
+#[derive(Clone, Debug)]
 pub struct Lexer<'s>(Mode<'s>);
 
 impl<'s> Lexer<'s> {
@@ -62,6 +63,14 @@ impl<'s> Lexer<'s> {
         match &self.0 {
             Mode::M1(lexer) => lexer.span().into(),
             Mode::M2(lexer) => lexer.span().into(),
+        }
+    }
+
+    #[inline]
+    pub fn bump(&mut self, n: usize) {
+        match &mut self.0 {
+            Mode::M1(lexer) => lexer.bump(n),
+            Mode::M2(lexer) => lexer.bump(n),
         }
     }
 }
@@ -98,6 +107,7 @@ impl<'s> Iterator for Lexer<'s> {
 // Mode defines the current lexer mode.
 // The lexer starts in mode M1 and switches to mode M2 when it encounters a key.
 // The lexer switches back to mode M1 when it reaches the end of the value.
+#[derive(Clone, Debug)]
 enum Mode<'s> {
     M1(logos::Lexer<'s, T1>),
     M2(logos::Lexer<'s, T2>),
