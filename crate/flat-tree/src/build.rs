@@ -17,6 +17,7 @@ pub trait Push: Reserve {
     fn push(self, value: Self::Value) -> Self;
 
     fn checkpoint(&self) -> Self::Checkpoint;
+    fn rollback(&mut self, checkpoint: &Self::Checkpoint);
     fn first_node_index(&self, checkpoint: &Self::Checkpoint) -> OptIndex;
 }
 

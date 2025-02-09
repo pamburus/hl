@@ -59,6 +59,7 @@ impl Format for AutoFormat {
         B: ast::Build,
     {
         let initial = self.current;
+        let checkpoint = target.checkpoint();
 
         loop {
             let result = match self.enabled[self.current] {
@@ -69,28 +70,35 @@ impl Format for AutoFormat {
             };
 
             match result {
-                Ok(output) => return Ok(output),
+                Ok(output) => {
+                    return Ok(output);
+                }
                 Err((e, t)) => {
+                    target = t;
+
                     if self.enabled.len() == 1 {
-                        return Err((e, t));
+                        return Err((e, target));
                     }
+
                     if self.current == initial {
                         self.current = 0;
                     }
+
                     self.current += 1;
                     if self.current == initial {
                         self.current += 1;
                     }
-                    if self.current < self.enabled.len() {
-                        target = t;
-                    } else {
+
+                    target.rollback(&checkpoint);
+
+                    if self.current == self.enabled.len() {
                         self.current = 0;
                         return Err((
                             Error {
                                 kind: ErrorKind::CannotDetermineFormat(self.enabled.clone()),
                                 span: e.span,
                             },
-                            t,
+                            target,
                         ));
                     }
                 }
