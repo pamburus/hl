@@ -466,9 +466,9 @@ dependencies = [
 
 [[package]]
 name = "const-str"
-version = "0.6.1"
+version = "0.6.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4e189f88a8f10341a4fb111ecb7c73ac21efe7531584326349ad361ddd84ad50"
+checksum = "9e991226a70654b49d34de5ed064885f0bef0348a8e70018b8ff1ac80aa984a2"
 
 [[package]]
 name = "convert_case"
