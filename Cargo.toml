@@ -4,7 +4,7 @@ members = [".", "crate/encstr", "crate/heapopt"]
 [workspace.package]
 repository = "https://github.com/pamburus/hl"
 authors = ["Pavel Ivanov <mr.pavel.ivanov@gmail.com>"]
-version = "0.31.0-alpha.9"
+version = "0.31.0-alpha.10"
 edition = "2021"
 license = "MIT"
 
@@ -61,6 +61,7 @@ itertools = "0.14"
 itoa = { version = "1", default-features = false }
 known-folders = "1"
 log = "0"
+memchr = "2"
 nonzero_ext = "0"
 notify = { version = "8", features = ["macos_kqueue"] }
 nu-ansi-term = "0"
