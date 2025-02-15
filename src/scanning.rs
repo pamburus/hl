@@ -370,7 +370,7 @@ impl<D: AsRef<[u8]>> Search for SubStrSearcher<D> {
         let mut pos = 0;
         loop {
             if let Some(i) = buf[pos..].iter().position(|x| *x == b) {
-                pos = i;
+                pos += i;
             } else {
                 return None;
             }
@@ -960,7 +960,7 @@ mod tests {
     }
 
     #[test]
-    fn test_split_iter() {
+    fn test_split_iter_byte() {
         let searcher = b'/'.into_searcher();
         let buf = b"test/token/";
         let mut iter = searcher.split(buf);
@@ -968,6 +968,77 @@ mod tests {
         assert_eq!(iter.next(), Some(&b"test"[..]));
         assert_eq!(iter.next(), Some(&b"token"[..]));
         assert_eq!(iter.next(), None);
+    }
+
+    #[test]
+    fn test_split_iter_substr() {
+        let input = b"test/token/";
+
+        let searcher = SubStrSearcher::new(b"t/");
+        let mut iter = searcher.split(input);
+        assert_eq!(iter.next(), Some(&b"tes"[..]));
+        assert_eq!(iter.next(), Some(&b"token/"[..]));
+        assert_eq!(iter.next(), None);
+
+        let searcher = SubStrSearcher::new(b"/t");
+        let mut iter = searcher.split(input);
+        assert_eq!(iter.next(), Some(&b"test"[..]));
+        assert_eq!(iter.next(), Some(&b"oken/"[..]));
+        assert_eq!(iter.next(), None);
+    }
+
+    #[test]
+    fn test_substr_search_l() {
+        let input = b"test/token/";
+
+        let searcher = SubStrSearcher::new(b"t/");
+        assert_eq!(searcher.search_l(input, false), Some(3..5));
+        assert_eq!(searcher.search_l(input, true), Some(3..5));
+
+        let searcher = SubStrSearcher::new(b"/t");
+        assert_eq!(searcher.search_l(input, false), Some(4..6));
+        assert_eq!(searcher.search_l(input, true), Some(4..6));
+
+        let searcher = SubStrSearcher::new(b"n/");
+        assert_eq!(searcher.search_l(input, false), Some(9..11));
+        assert_eq!(searcher.search_l(input, true), Some(9..11));
+
+        let searcher = SubStrSearcher::new(b"te");
+        assert_eq!(searcher.search_l(input, false), Some(0..2));
+        assert_eq!(searcher.search_l(input, true), Some(0..2));
+
+        let searcher = SubStrSearcher::new(b"xt");
+        assert_eq!(searcher.search_l(input, false), None);
+        assert_eq!(searcher.search_l(input, true), None);
+
+        let searcher = SubStrSearcher::new(b"/x");
+        assert_eq!(searcher.search_l(input, false), None);
+        assert_eq!(searcher.search_l(input, true), None);
+    }
+
+    #[test]
+    fn test_substr_search_r() {
+        let input = b"test/token/";
+
+        let searcher = SubStrSearcher::new(b"t/");
+        assert_eq!(searcher.search_r(input, false), Some(3..5));
+        assert_eq!(searcher.search_r(input, true), Some(3..5));
+
+        let searcher = SubStrSearcher::new(b"/t");
+        assert_eq!(searcher.search_r(input, false), Some(4..6));
+        assert_eq!(searcher.search_r(input, true), Some(4..6));
+
+        let searcher = SubStrSearcher::new(b"n/");
+        assert_eq!(searcher.search_r(input, false), Some(9..11));
+        assert_eq!(searcher.search_r(input, true), Some(9..11));
+
+        let searcher = SubStrSearcher::new(b"te");
+        assert_eq!(searcher.search_r(input, false), Some(0..2));
+        assert_eq!(searcher.search_r(input, true), Some(0..2));
+
+        let searcher = SubStrSearcher::new(b"xt");
+        assert_eq!(searcher.search_r(input, false), None);
+        assert_eq!(searcher.search_r(input, true), None);
     }
 
     #[test]
