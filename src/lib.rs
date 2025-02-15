@@ -46,7 +46,7 @@ pub use filtering::DefaultNormalizing;
 pub use formatting::RecordFormatter;
 pub use model::{FieldFilterSet, Filter, Level, Parser, ParserSettings, RecordFilter};
 pub use query::Query;
-pub use scanning::Delimiter;
+pub use scanning::{Delimit, Delimiter, SearchExt};
 pub use settings::Settings;
 pub use theme::Theme;
 
