@@ -8,6 +8,7 @@ use std::sync::Arc;
 
 // third-party imports
 use crossbeam_queue::SegQueue;
+use memchr::{memchr, memrchr};
 use serde::{Deserialize, Serialize};
 
 // local imports
@@ -230,12 +231,12 @@ pub trait Search {
 impl Search for u8 {
     #[inline]
     fn search_r(&self, buf: &[u8], _: bool) -> Option<Range<usize>> {
-        buf.iter().rposition(|x| x == self).map(|x| x..x + 1)
+        memrchr(*self, buf).map(|x| x..x + 1)
     }
 
     #[inline]
     fn search_l(&self, buf: &[u8], _: bool) -> Option<Range<usize>> {
-        buf.iter().position(|x| x == self).map(|x| x..x + 1)
+        memchr(*self, buf).map(|x| x..x + 1)
     }
 
     #[inline]
@@ -348,7 +349,7 @@ impl<D: AsRef<[u8]>> Search for SubStrSearcher<D> {
         let b = needle[0];
         let mut pos = buf.len();
         loop {
-            if let Some(i) = buf[..pos].iter().rposition(|x| *x == b) {
+            if let Some(i) = memrchr(b, &buf[..pos]) {
                 pos = i;
             } else {
                 return None;
@@ -369,7 +370,7 @@ impl<D: AsRef<[u8]>> Search for SubStrSearcher<D> {
         let b = needle[0];
         let mut pos = 0;
         loop {
-            if let Some(i) = buf[pos..].iter().position(|x| *x == b) {
+            if let Some(i) = memchr(b, &buf[pos..]) {
                 pos += i;
             } else {
                 return None;
@@ -424,7 +425,7 @@ pub struct SmartNewLineSearcher;
 impl Search for SmartNewLineSearcher {
     #[inline]
     fn search_r(&self, buf: &[u8], _edge: bool) -> Option<Range<usize>> {
-        buf.iter().rposition(|x| *x == b'\n').and_then(|i| {
+        memrchr(b'\n', buf).and_then(|i| {
             if i > 0 && buf[i - 1] == b'\r' {
                 Some(i - 1..i + 1)
             } else {
@@ -441,7 +442,7 @@ impl Search for SmartNewLineSearcher {
 
         let b = if edge { 0 } else { 1 };
 
-        buf[b..].iter().position(|x| *x == b'\n').and_then(|i| {
+        memchr(b'\n', &buf[b..]).and_then(|i| {
             if i > 0 && buf[i - 1] == b'\r' {
                 Some(b + i - 1..b + i + 1)
             } else {

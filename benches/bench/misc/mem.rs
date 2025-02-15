@@ -4,6 +4,7 @@ use std::time::Duration;
 // third-party imports
 use const_str::concat as strcat;
 use criterion::{criterion_group, BatchSize, BenchmarkId, Criterion, Throughput};
+use memchr::{memchr, memchr2, memchr3};
 use rand::random;
 
 // local imports
@@ -69,12 +70,20 @@ fn bench(c: &mut Criterion) {
             b.iter_batched_ref_fixed(setup, |vi| vi.iter().position(|&x| matches!(x, 128 | 192)), batch);
         });
 
-        group.bench_function(BenchmarkId::new("position", param("one-of-four-values")), |b| {
-            b.iter_batched_ref_fixed(
-                setup,
-                |vi| vi.iter().position(|&x| matches!(x, 128 | 192 | 224 | 240)),
-                batch,
-            );
+        group.bench_function(BenchmarkId::new("position", param("one-of-three-values")), |b| {
+            b.iter_batched_ref_fixed(setup, |vi| vi.iter().position(|&x| matches!(x, 128 | 192 | 224)), batch);
+        });
+
+        group.bench_function(BenchmarkId::new("memchr", param("single-value")), |b| {
+            b.iter_batched_ref_fixed(setup, |vi| memchr(128, vi), batch);
+        });
+
+        group.bench_function(BenchmarkId::new("memchr", param("one-of-two-values")), |b| {
+            b.iter_batched_ref_fixed(setup, |vi| memchr2(128, 192, vi), batch);
+        });
+
+        group.bench_function(BenchmarkId::new("memchr", param("one-of-three-values")), |b| {
+            b.iter_batched_ref_fixed(setup, |vi| memchr3(128, 192, 224, vi), batch);
         });
     }
 

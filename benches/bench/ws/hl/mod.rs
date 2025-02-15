@@ -6,12 +6,14 @@ use criterion::criterion_group;
 use super::{hash, samples, BencherExt, ND};
 
 mod combined;
+mod delimiter;
 mod theme;
 mod timestamp;
 
 criterion_group!(
     benches,
     combined::bench,
+    delimiter::bench,
     theme::bench,
     timestamp::parsing::bench,
     timestamp::formatting::bench
