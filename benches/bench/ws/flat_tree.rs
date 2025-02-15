@@ -20,11 +20,12 @@ fn bench(c: &mut Criterion) {
     c.warm_up_time(Duration::from_secs(3));
     c.measurement_time(Duration::from_secs(5));
 
-    for n in [4, 64] {
-        c.bench_function(BenchmarkId::new("push:x4", format!("r{}", n)), |b| {
+    for reserve in [8, 64] {
+        c.throughput(Throughput::Elements(8));
+        c.bench_function(BenchmarkId::new("push:x8", format!("r{}", reserve)), |b| {
             let setup = || {
                 let mut container = FlatTree::<u64>::new();
-                container.reserve(n);
+                container.reserve(reserve);
                 container
             };
 
@@ -35,6 +36,10 @@ fn bench(c: &mut Criterion) {
                     container.push(43);
                     container.push(44);
                     container.push(45);
+                    container.push(46);
+                    container.push(47);
+                    container.push(48);
+                    container.push(49);
                 },
                 BatchSize::NumIterations(4096),
             );
