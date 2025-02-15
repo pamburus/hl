@@ -828,15 +828,19 @@ pub struct SegmentProcessor<'a, Formatter, Filter> {
     formatter: Formatter,
     filter: Filter,
     options: SegmentProcessorOptions,
+    delim: <Delimiter as Delimit>::Searcher,
 }
 
 impl<'a, Formatter: RecordWithSourceFormatter, Filter: RecordFilter> SegmentProcessor<'a, Formatter, Filter> {
     pub fn new(parser: &'a Parser, formatter: Formatter, filter: Filter, options: SegmentProcessorOptions) -> Self {
+        let delim = options.delimiter.clone().into_searcher();
+
         Self {
             parser,
             formatter,
             filter,
             options,
+            delim,
         }
     }
 
@@ -856,7 +860,7 @@ impl<'a, Formatter: RecordWithSourceFormatter, Filter: RecordFilter> SegmentProc
         let mut i = 0;
         let limit = limit.unwrap_or(usize::MAX);
 
-        for line in self.options.delimiter.clone().into_searcher().split(data) {
+        for line in self.delim.split(data) {
             if line.len() == 0 {
                 if self.show_unparsed() {
                     buf.push(b'\n');
