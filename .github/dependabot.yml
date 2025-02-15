@@ -32,6 +32,16 @@ updates:
         patterns:
           - "byte-strings"
           - "byte-strings-*"
+      bzip2-sec:
+        applies-to: security-updates
+        patterns:
+          - "bzip2"
+          - "bzip2-*"
+      bzip2-ver:
+        applies-to: version-updates
+        patterns:
+          - "bzip2"
+          - "bzip2-*"
       capnp-sec:
         applies-to: security-updates
         patterns:
@@ -268,7 +278,7 @@ updates:
         applies-to: security-updates
         patterns:
           - "strum"
-          - "strum_*" 
+          - "strum_*"
       strum-ver:
         applies-to: version-updates
         patterns:
@@ -278,7 +288,7 @@ updates:
         applies-to: security-updates
         patterns:
           - "thiserror"
-          - "thiserror-*" 
+          - "thiserror-*"
       thiserror-ver:
         applies-to: version-updates
         patterns:
