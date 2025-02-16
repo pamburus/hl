@@ -1,4 +1,4 @@
-use upstream::{ast, Format};
+use upstream::{ast, Format, Source};
 
 pub mod error;
 pub mod lexer;
@@ -18,12 +18,12 @@ impl Format for LogfmtFormat {
     type Lexer<'s> = Lexer<'s>;
 
     #[inline]
-    fn lexer<'s>(&self, s: &'s [u8]) -> Self::Lexer<'s> {
-        Lexer::from_slice(s)
+    fn lexer<'s>(&self, s: &'s Source) -> Self::Lexer<'s> {
+        Lexer::from_source(s)
     }
 
     #[inline]
-    fn parse<'s, B>(&mut self, s: &'s [u8], target: B) -> Result<(bool, B), (Self::Error, B)>
+    fn parse<B>(&mut self, s: &Source, target: B) -> Result<(bool, B), (Self::Error, B)>
     where
         B: ast::Build,
     {

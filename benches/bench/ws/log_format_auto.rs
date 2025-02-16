@@ -2,6 +2,7 @@
 use std::{hint::black_box, time::Duration, vec::Vec};
 
 // third-party imports
+use bytes::Bytes;
 use const_str::concat as strcat;
 use criterion::{criterion_group, BatchSize, BenchmarkId, Criterion, Throughput};
 
@@ -33,7 +34,7 @@ pub(super) fn bench(c: &mut Criterion) {
         group.throughput(Throughput::Bytes(sample.len() as u64));
 
         group.bench_function(BenchmarkId::new("lex:drain", &param), |b| {
-            let setup = || (AutoFormat::default(), Vec::from(sample));
+            let setup = || (AutoFormat::default(), Bytes::from(Vec::from(sample)).into());
 
             b.iter_batched_ref(
                 setup,
@@ -48,7 +49,7 @@ pub(super) fn bench(c: &mut Criterion) {
         });
 
         group.bench_function(BenchmarkId::new("parse:discard", &param), |b| {
-            let setup = || (Vec::from(sample), AutoFormat::default());
+            let setup = || (Bytes::from(Vec::from(sample)).into(), AutoFormat::default());
 
             b.iter_batched_ref(
                 setup,
@@ -58,7 +59,13 @@ pub(super) fn bench(c: &mut Criterion) {
         });
 
         group.bench_function(BenchmarkId::new("parse:ast", &param), |b| {
-            let setup = || (Container::with_capacity(160), Vec::from(sample), AutoFormat::default());
+            let setup = || {
+                (
+                    Container::with_capacity(160),
+                    Bytes::from(Vec::from(sample)).into(),
+                    AutoFormat::default(),
+                )
+            };
 
             b.iter_batched_ref(
                 setup,

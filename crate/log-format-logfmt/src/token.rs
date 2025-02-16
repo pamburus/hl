@@ -2,7 +2,7 @@ use logos::Logos;
 
 use upstream::{
     token::{Scalar, String},
-    Span,
+    Source, Span,
 };
 
 use super::ErrorKind;
@@ -21,7 +21,7 @@ pub enum Token {
 
 impl Token {
     #[inline]
-    pub fn lexer<'s>(s: &'s [u8]) -> Lexer<'s> {
+    pub fn lexer<'s>(s: &'s Source) -> Lexer<'s> {
         Lexer(Mode::M1(T1::lexer(s)))
     }
 }
@@ -54,7 +54,7 @@ pub struct Lexer<'s>(Mode<'s>);
 
 impl<'s> Lexer<'s> {
     #[inline]
-    pub fn new(s: &'s [u8]) -> Self {
+    pub fn new(s: &'s Source) -> Self {
         Token::lexer(s)
     }
 
@@ -117,7 +117,7 @@ enum Mode<'s> {
 
 // T1 is a token for mode M1.
 #[derive(Logos, Debug, PartialEq, Clone)]
-#[logos(source = [u8])]
+#[logos(source = Source)]
 #[logos(error = ErrorKind)]
 enum T1 {
     #[regex(r#"[^"\x00-\x20='(),;<>\[\]\\\^`{}|\x7F]+="#, |lex| Span::from(lex.span()).cut_right(1))]
@@ -132,7 +132,7 @@ enum T1 {
 
 // T2 is a token for mode M2.
 #[derive(Logos, Debug, PartialEq, Clone)]
-#[logos(source = [u8])]
+#[logos(source = Source)]
 #[logos(error = ErrorKind)]
 enum T2 {
     #[token("null", |_| Scalar::Null)]

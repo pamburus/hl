@@ -1,6 +1,7 @@
 use logos::Logos;
 
 use upstream::{
+    source::Source,
     token::{Scalar, String},
     Span,
 };
@@ -9,7 +10,7 @@ use super::ErrorKind;
 
 #[derive(Logos, Debug, PartialEq, Clone)]
 #[logos(skip r"[ \t\r\n\f]+")]
-#[logos(source = [u8])]
+#[logos(source = Source)]
 #[logos(error = ErrorKind)]
 pub enum Token {
     #[token("null", |_| Scalar::Null)]

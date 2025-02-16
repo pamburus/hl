@@ -121,8 +121,8 @@ mod tests {
 
     #[test]
     fn test_parse_line() {
-        let input = br#"a=1 b=2 c=3"#;
-        let mut lexer = Lexer::new(input);
+        let input = br#"a=1 b=2 c=3"#.into();
+        let mut lexer = Lexer::new(&input);
         let mut container = Container::new();
         assert_eq!(parse_line(&mut lexer, container.metaroot()).detach().0.unwrap(), true);
 

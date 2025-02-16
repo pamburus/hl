@@ -1,6 +1,6 @@
 use upstream::{
     token::{Composite, Scalar, String},
-    Lex, Span,
+    Lex, Source, Span,
 };
 
 use super::{error::MakeError, token::Token, Error, ErrorKind};
@@ -40,7 +40,7 @@ impl<'s> Lexer<'s> {
     }
 
     #[inline]
-    pub fn from_slice(s: &'s [u8]) -> Self {
+    pub fn from_source(s: &'s Source) -> Self {
         Self::new(InnerLexer::new(s))
     }
 
@@ -143,8 +143,8 @@ mod tests {
 
     #[test]
     fn test_trivial_line() {
-        let input = b"a=x";
-        let mut lexer = Lexer::from_slice(input);
+        let input = b"a=x".into();
+        let mut lexer = Lexer::from_source(&input);
         assert_eq!(next!(lexer), EntryBegin);
         assert_eq!(next!(lexer), CompositeBegin(Field(Plain((0..1).into()))));
         assert_eq!(next!(lexer), Scalar(String(Plain((2..3).into()))));
@@ -155,8 +155,8 @@ mod tests {
 
     #[test]
     fn test_two_lines() {
-        let input = b"a=x\nb=y";
-        let mut lexer = Lexer::from_slice(input);
+        let input = b"a=x\nb=y".into();
+        let mut lexer = Lexer::from_source(&input);
         assert_eq!(next!(lexer), EntryBegin);
         assert_eq!(next!(lexer), CompositeBegin(Field(Plain((0..1).into()))));
         assert_eq!(next!(lexer), Scalar(String(Plain((2..3).into()))));

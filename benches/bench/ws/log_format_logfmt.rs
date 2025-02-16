@@ -2,6 +2,7 @@
 use std::{hint::black_box, time::Duration, vec::Vec};
 
 // third-party imports
+use bytes::Bytes;
 use const_str::concat as strcat;
 use criterion::{criterion_group, BatchSize, BenchmarkId, Criterion, Throughput};
 
@@ -30,7 +31,7 @@ pub(super) fn bench(c: &mut Criterion) {
         group.throughput(Throughput::Bytes(sample.len() as u64));
 
         group.bench_function(BenchmarkId::new("lex:inner:drain", &param), |b| {
-            let setup = || Vec::from(sample);
+            let setup = || Bytes::from(Vec::from(sample)).into();
 
             b.iter_batched_ref(
                 setup,
@@ -43,12 +44,12 @@ pub(super) fn bench(c: &mut Criterion) {
         });
 
         group.bench_function(BenchmarkId::new("lex:log-format:drain", &param), |b| {
-            let setup = || Vec::from(sample);
+            let setup = || Bytes::from(Vec::from(sample)).into();
 
             b.iter_batched_ref(
                 setup,
                 |sample| {
-                    let mut lexer = Lexer::from_slice(sample);
+                    let mut lexer = Lexer::from_source(sample);
                     while let Some(_) = black_box(lexer.next()) {}
                 },
                 BatchSize::SmallInput,
@@ -56,23 +57,23 @@ pub(super) fn bench(c: &mut Criterion) {
         });
 
         group.bench_function(BenchmarkId::new("parse:discard", &param), |b| {
-            let setup = || Vec::from(sample);
+            let setup = || Bytes::from(Vec::from(sample)).into();
 
             b.iter_batched_ref(
                 setup,
-                |sample| LogfmtFormat.parse(&sample, Discarder::new()).unwrap(),
+                |sample| LogfmtFormat.parse(sample, Discarder::new()).unwrap(),
                 BatchSize::SmallInput,
             );
         });
 
         group.bench_function(BenchmarkId::new("parse:ast", &param), |b| {
-            let setup = || (Container::with_capacity(160), Vec::from(sample));
+            let setup = || (Container::with_capacity(160), Bytes::from(Vec::from(sample)).into());
 
             b.iter_batched_ref(
                 setup,
                 |(container, sample)| {
                     LogfmtFormat
-                        .parse(&sample, container.metaroot())
+                        .parse(sample, container.metaroot())
                         .map_err(|x| x.0)
                         .unwrap()
                         .0

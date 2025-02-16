@@ -6,9 +6,14 @@ authors.workspace = true
 edition.workspace = true
 license.workspace = true
 
+[features]
+default = ["bytes"]
+bytes = ["dep:bytes", "upstream/bytes"]
+
 [dependencies]
 logos = "0"
-upstream = { path = "../log-format", package = "log-format" }
+bytes = { version = "1", optional = true }
+upstream = { path = "../log-format", package = "log-format", features = ["logos"] }
 
 [dev-dependencies]
 log-ast = { path = "../log-ast", package = "log-ast" }

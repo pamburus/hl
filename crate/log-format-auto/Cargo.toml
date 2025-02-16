@@ -7,12 +7,14 @@ edition.workspace = true
 license.workspace = true
 
 [features]
-default = ["json", "logfmt"]
+default = ["json", "logfmt", "bytes"]
 json = ["dep:log-format-json"]
 logfmt = ["dep:log-format-logfmt"]
+bytes = ["dep:bytes", "upstream/bytes"]
 
 [dependencies]
 logos = "0"
-upstream = { path = "../log-format", package = "log-format" }
+bytes = { version = "1", optional = true }
+upstream = { path = "../log-format", package = "log-format", feature = ["logos"] }
 log-format-json = { path = "../log-format-json", package = "log-format-json", optional = true }
 log-format-logfmt = { path = "../log-format-logfmt", package = "log-format-logfmt", optional = true }

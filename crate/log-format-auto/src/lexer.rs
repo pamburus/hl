@@ -1,5 +1,5 @@
 // workspace imports
-use upstream::{Lex, Span, Token};
+use upstream::{Lex, Source, Span, Token};
 
 // local imports
 use crate::{EnabledFormat, EnabledFormatList, Error, ErrorKind};
@@ -8,7 +8,7 @@ use crate::{EnabledFormat, EnabledFormatList, Error, ErrorKind};
 
 #[derive(Clone, Debug)]
 pub struct Lexer<'s> {
-    input: &'s [u8],
+    input: &'s Source,
     enabled: EnabledFormatList,
     current: usize,
     candidate: Option<usize>,
@@ -19,7 +19,7 @@ pub struct Lexer<'s> {
 
 impl<'s> Lexer<'s> {
     #[inline]
-    pub(crate) fn new(input: &'s [u8], enabled: EnabledFormatList) -> Self {
+    pub(crate) fn new(input: &'s Source, enabled: EnabledFormatList) -> Self {
         // SAFETY: `enabled` is guaranteed to be non-empty by the `AutoFormat` constructor.
         let format = unsafe { *enabled.get_unchecked(0) };
 
@@ -143,13 +143,13 @@ pub enum LexerInner<'s> {
 
 impl<'s> LexerInner<'s> {
     #[inline]
-    fn new(input: &'s [u8], format: EnabledFormat) -> Self {
+    fn new(input: &'s Source, format: EnabledFormat) -> Self {
         match format {
             #[cfg(feature = "json")]
-            EnabledFormat::Json => Self::Json(log_format_json::Lexer::from_slice(input)),
+            EnabledFormat::Json => Self::Json(log_format_json::Lexer::from_source(input)),
 
             #[cfg(feature = "logfmt")]
-            EnabledFormat::Logfmt => Self::Logfmt(log_format_logfmt::Lexer::from_slice(input)),
+            EnabledFormat::Logfmt => Self::Logfmt(log_format_logfmt::Lexer::from_source(input)),
         }
     }
 
