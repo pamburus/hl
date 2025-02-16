@@ -8,6 +8,16 @@ pub struct Span {
 
 impl Span {
     #[inline]
+    pub fn new(start: usize, end: usize) -> Self {
+        Self { start, end }
+    }
+
+    #[inline]
+    pub fn with_end(end: usize) -> Self {
+        Self { start: 0, end }
+    }
+
+    #[inline]
     pub fn cut_right(mut self, n: usize) -> Self {
         self.end -= n;
         self
