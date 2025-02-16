@@ -7,7 +7,10 @@ use criterion::{criterion_group, BatchSize, BenchmarkId, Criterion, Throughput};
 use logos::Logos;
 
 // workspace imports
-use log_ast::{ast::Container, model::Segment};
+use log_ast::{
+    ast::Container,
+    model::{FormatExt, Segment},
+};
 use log_format::{ast::Discarder, Format};
 use log_format_json::{JsonFormat, Lexer, Token};
 
@@ -93,7 +96,7 @@ pub(super) fn bench(c: &mut Criterion) {
 
             b.iter_batched_ref(
                 setup,
-                |(segment, sample, format)| segment.set(sample.clone(), format).unwrap(),
+                |(segment, sample, format)| format.parse_entry_into(sample.clone(), segment).unwrap(),
                 BatchSize::SmallInput,
             );
         });

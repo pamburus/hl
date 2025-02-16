@@ -92,7 +92,7 @@ pub(super) fn bench(c: &mut Criterion) {
 
             b.iter_batched_ref(
                 setup,
-                |(segment, sample, format)| segment.set(sample.clone(), format).unwrap(),
+                |(segment, sample, format)| segment.set_to_first_entry(sample.clone(), format).unwrap(),
                 BatchSize::SmallInput,
             );
         });
