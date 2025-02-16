@@ -2,9 +2,9 @@ use super::{
     error::{Error, ErrorKind, MakeError},
     token::{Lexer, Token},
 };
-use bytes::Bytes;
 use upstream::{
     ast::Build,
+    source::ByteSlice,
     token::{Composite, Scalar, String},
 };
 
@@ -64,7 +64,7 @@ pub fn parse_line<'s, B: Build>(lexer: &mut Lexer<'s>, target: B) -> Result<(boo
 }
 
 #[inline]
-fn parse_key<'s, B: Build>(lexer: &mut Lexer<'s>, target: B) -> Result<(Option<Bytes>, B), (Error, B)> {
+fn parse_key<'s, B: Build>(lexer: &mut Lexer<'s>, target: B) -> Result<(Option<ByteSlice>, B), (Error, B)> {
     loop {
         let Some(token) = lexer.next() else {
             return Ok((None, target));
@@ -86,7 +86,7 @@ fn parse_key<'s, B: Build>(lexer: &mut Lexer<'s>, target: B) -> Result<(Option<B
 #[inline]
 fn parse_value<'s, B: Build>(lexer: &mut Lexer<'s>, target: B) -> Result<B, (Error, B)> {
     let empty = |lexer: &mut Lexer<'s>, target: B| {
-        let slice = lexer.slice().slice(..0);
+        let slice = lexer.slice().slice(0..0);
         return Ok(target.add_scalar(Scalar::String(upstream::String::Plain(slice))));
     };
 
@@ -115,7 +115,6 @@ mod tests {
     use upstream::{
         ast::BuilderDetach,
         token::{Composite::*, Scalar::*, String::*},
-        Span,
     };
 
     #[test]
@@ -131,30 +130,48 @@ mod tests {
         assert!(matches!(root.value(), Composite(Object)));
 
         let mut children = root.children().iter();
+
         let key = children.next().unwrap();
-        if let &Composite(Field(Plain(span))) = key.value() {
-            assert_eq!(span, Span::from(0..1));
+        if let &Composite(Field(Plain(slice))) = &key.value() {
+            assert_eq!(slice, b"a");
         } else {
             panic!("expected field key");
         }
+
         let value = key.children().iter().next().unwrap();
-        assert!(matches!(value.value(), Scalar(Number(Span { start: 2, end: 3 }))));
+        if let &Scalar(Number(slice)) = &value.value() {
+            assert_eq!(slice, b"1");
+        } else {
+            panic!("expected field value");
+        }
 
         let key = children.next().unwrap();
-        assert!(matches!(
-            key.value(),
-            Composite(Field(Plain(Span { start: 4, end: 5 })))
-        ));
+        if let &Composite(Field(Plain(slice))) = &key.value() {
+            assert_eq!(slice, b"b");
+        } else {
+            panic!("expected field key");
+        }
+
         let value = key.children().iter().next().unwrap();
-        assert!(matches!(value.value(), Scalar(Number(Span { start: 6, end: 7 }))));
+        if let &Scalar(Number(slice)) = &value.value() {
+            assert_eq!(slice, b"2");
+        } else {
+            panic!("expected field value");
+        }
 
         let key = children.next().unwrap();
-        assert!(matches!(
-            key.value(),
-            Composite(Field(Plain(Span { start: 8, end: 9 })))
-        ));
+        if let &Composite(Field(Plain(slice))) = &key.value() {
+            assert_eq!(slice, b"c");
+        } else {
+            panic!("expected field key");
+        }
+
         let value = key.children().iter().next().unwrap();
-        assert!(matches!(value.value(), Scalar(Number(Span { start: 10, end: 11 }))));
+        if let &Scalar(Number(slice)) = &value.value() {
+            assert_eq!(slice, b"3");
+        } else {
+            panic!("expected field value");
+        }
 
         assert!(children.next().is_none());
     }

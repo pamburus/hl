@@ -146,8 +146,8 @@ mod tests {
         let input = b"a=x".into();
         let mut lexer = Lexer::from_source(&input);
         assert_eq!(next!(lexer), EntryBegin);
-        assert_eq!(next!(lexer), CompositeBegin(Field(Plain((0..1).into()))));
-        assert_eq!(next!(lexer), Scalar(String(Plain((2..3).into()))));
+        assert_eq!(next!(lexer), CompositeBegin(Field(Plain("a".into()))));
+        assert_eq!(next!(lexer), Scalar(String(Plain("x".into()))));
         assert_eq!(next!(lexer), CompositeEnd);
         assert_eq!(next!(lexer), EntryEnd);
         assert_eq!(lexer.next(), None);
@@ -158,13 +158,13 @@ mod tests {
         let input = b"a=x\nb=y".into();
         let mut lexer = Lexer::from_source(&input);
         assert_eq!(next!(lexer), EntryBegin);
-        assert_eq!(next!(lexer), CompositeBegin(Field(Plain((0..1).into()))));
-        assert_eq!(next!(lexer), Scalar(String(Plain((2..3).into()))));
+        assert_eq!(next!(lexer), CompositeBegin(Field(Plain("a".into()))));
+        assert_eq!(next!(lexer), Scalar(String(Plain("x".into()))));
         assert_eq!(next!(lexer), CompositeEnd);
         assert_eq!(next!(lexer), EntryEnd);
         assert_eq!(next!(lexer), EntryBegin);
-        assert_eq!(next!(lexer), CompositeBegin(Field(Plain((4..5).into()))));
-        assert_eq!(next!(lexer), Scalar(String(Plain((6..7).into()))));
+        assert_eq!(next!(lexer), CompositeBegin(Field(Plain("b".into()))));
+        assert_eq!(next!(lexer), Scalar(String(Plain("y".into()))));
         assert_eq!(next!(lexer), CompositeEnd);
         assert_eq!(next!(lexer), EntryEnd);
         assert_eq!(lexer.next(), None);

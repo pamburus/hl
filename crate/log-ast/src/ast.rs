@@ -1,15 +1,12 @@
 // std imports
 use std::fmt::Debug;
 
-// third-party imports
-use bytes::Bytes;
-
 // workspace imports
 use flat_tree::{
     tree::{self, NoAttachment},
     FlatTree,
 };
-use log_format::{ast, origin};
+use log_format::{ast, origin, source::ByteSlice};
 
 pub use log_format::{
     token::{Composite, Scalar, String},
@@ -288,7 +285,7 @@ impl Value {
     }
 
     #[inline]
-    pub const fn number(s: Bytes) -> Self {
+    pub const fn number(s: ByteSlice) -> Self {
         Self::Scalar(Scalar::Number(s))
     }
 

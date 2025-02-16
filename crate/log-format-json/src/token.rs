@@ -1,8 +1,7 @@
-use bytes::Bytes;
 use logos::Logos;
 
 use upstream::{
-    source::Source,
+    source::{ByteSlice, Source},
     token::{Scalar, String},
 };
 
@@ -41,6 +40,6 @@ pub enum Token {
 }
 
 #[inline]
-fn unquote(s: Bytes) -> Bytes {
+fn unquote(s: ByteSlice) -> ByteSlice {
     s.slice(1..s.len() - 1)
 }

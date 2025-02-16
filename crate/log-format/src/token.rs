@@ -1,4 +1,4 @@
-use bytes::Bytes;
+use crate::source::ByteSlice;
 
 // Token is a token in the log format.
 // Each EntryBegin token must be followed by a sequence of tokens that ends with an EntryEnd token.
@@ -17,14 +17,14 @@ pub enum Token {
 pub enum Scalar {
     Null,
     Bool(bool),
-    Number(Bytes),
+    Number(ByteSlice),
     String(String),
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum String {
-    Plain(Bytes),
-    JsonEscaped(Bytes),
+    Plain(ByteSlice),
+    JsonEscaped(ByteSlice),
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]

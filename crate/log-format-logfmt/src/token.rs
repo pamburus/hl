@@ -1,7 +1,7 @@
-use bytes::Bytes;
 use logos::Logos;
 
 use upstream::{
+    source::ByteSlice,
     token::{Scalar, String},
     Source, Span,
 };
@@ -14,7 +14,7 @@ use super::ErrorKind;
 // the value is considered to be an empty string.
 #[derive(Debug, PartialEq, Clone)]
 pub enum Token {
-    Key(Bytes),
+    Key(ByteSlice),
     Value(Scalar),
     Space,
     Eol,
@@ -130,7 +130,7 @@ enum Mode<'s> {
 #[logos(error = ErrorKind)]
 enum T1 {
     #[regex(r#"[^"\x00-\x20='(),;<>\[\]\\\^`{}|\x7F]+="#, |lex| cut_right(lex.slice(), 1))]
-    Key(Bytes),
+    Key(ByteSlice),
 
     #[regex(r#"[\t ]+"#)]
     Space,
@@ -153,6 +153,6 @@ enum T2 {
     Value(Scalar),
 }
 
-fn cut_right(bytes: Bytes, n: usize) -> Bytes {
-    bytes.slice(..bytes.len() - n)
+fn cut_right(bytes: ByteSlice, n: usize) -> ByteSlice {
+    bytes.slice(0..bytes.len() - n)
 }

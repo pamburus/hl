@@ -1,3 +1,8 @@
+use std::{
+    ops::{Deref, Range},
+    sync::Arc,
+};
+
 #[cfg(not(feature = "bytes"))]
 pub type Source = [u8];
 
@@ -6,12 +11,20 @@ pub type Source = Bytes;
 
 #[cfg(feature = "bytes")]
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub struct Bytes(bytes::Bytes);
+pub struct Bytes(Arc<[u8]>);
 
 #[cfg(feature = "bytes")]
-impl From<bytes::Bytes> for Bytes {
+impl Bytes {
     #[inline]
-    fn from(bytes: bytes::Bytes) -> Self {
+    pub fn slice(&self, range: Range<usize>) -> ByteSlice {
+        ByteSlice(self.0.clone(), range)
+    }
+}
+
+#[cfg(feature = "bytes")]
+impl From<Arc<[u8]>> for Bytes {
+    #[inline]
+    fn from(bytes: Arc<[u8]>) -> Self {
         Self(bytes)
     }
 }
@@ -20,7 +33,7 @@ impl From<bytes::Bytes> for Bytes {
 impl From<&'static [u8]> for Bytes {
     #[inline]
     fn from(bytes: &'static [u8]) -> Self {
-        Self(bytes::Bytes::from_static(bytes))
+        Self(Arc::from(bytes))
     }
 }
 
@@ -28,7 +41,7 @@ impl From<&'static [u8]> for Bytes {
 impl<const N: usize> From<&'static [u8; N]> for Bytes {
     #[inline]
     fn from(bytes: &'static [u8; N]) -> Self {
-        Self(bytes::Bytes::from_static(bytes))
+        Self(Arc::from(&bytes[..]))
     }
 }
 
@@ -42,7 +55,7 @@ impl AsRef<[u8]> for Bytes {
 
 #[cfg(all(feature = "bytes", feature = "logos"))]
 impl logos::Source for Bytes {
-    type Slice<'a> = bytes::Bytes;
+    type Slice<'a> = ByteSlice;
 
     #[inline]
     fn len(&self) -> usize {
@@ -67,21 +80,84 @@ impl logos::Source for Bytes {
     }
 
     #[inline]
-    fn slice(&self, range: std::ops::Range<usize>) -> Option<Self::Slice<'_>> {
+    fn slice(&self, range: Range<usize>) -> Option<Self::Slice<'_>> {
         if range.end <= self.0.len() {
-            Some(self.0.slice(range))
+            Some(self.slice(range))
         } else {
             None
         }
     }
 
     #[inline]
-    unsafe fn slice_unchecked(&self, range: std::ops::Range<usize>) -> Self::Slice<'_> {
-        self.0.slice(range)
+    unsafe fn slice_unchecked(&self, range: Range<usize>) -> Self::Slice<'_> {
+        self.slice(range)
     }
 
     #[inline]
     fn is_boundary(&self, index: usize) -> bool {
         index <= self.0.len()
+    }
+}
+
+#[cfg(feature = "bytes")]
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct ByteSlice(Arc<[u8]>, Range<usize>);
+
+impl ByteSlice {
+    #[inline]
+    pub fn slice(&self, mut range: Range<usize>) -> ByteSlice {
+        range.start += self.1.start;
+        range.end += self.1.start;
+        ByteSlice(self.0.clone(), range)
+    }
+}
+
+impl Deref for ByteSlice {
+    type Target = [u8];
+
+    #[inline]
+    fn deref(&self) -> &Self::Target {
+        &self.0[self.1.clone()]
+    }
+}
+
+impl From<&str> for ByteSlice {
+    #[inline]
+    fn from(s: &str) -> Self {
+        Self::from(s.as_bytes())
+    }
+}
+
+impl From<&[u8]> for ByteSlice {
+    #[inline]
+    fn from(bytes: &[u8]) -> Self {
+        Self(Arc::from(bytes), 0..bytes.len())
+    }
+}
+
+impl<const N: usize> From<&[u8; N]> for ByteSlice {
+    #[inline]
+    fn from(bytes: &[u8; N]) -> Self {
+        Self(Arc::from(&bytes[..]), 0..bytes.len())
+    }
+}
+
+impl Default for ByteSlice {
+    fn default() -> Self {
+        Self::from(&[])
+    }
+}
+
+impl PartialEq<[u8]> for ByteSlice {
+    #[inline]
+    fn eq(&self, other: &[u8]) -> bool {
+        self.deref() == other
+    }
+}
+
+impl<const N: usize> PartialEq<[u8; N]> for ByteSlice {
+    #[inline]
+    fn eq(&self, other: &[u8; N]) -> bool {
+        self.deref() == other
     }
 }
