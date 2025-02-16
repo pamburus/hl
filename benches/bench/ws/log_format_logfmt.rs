@@ -6,8 +6,7 @@ use const_str::concat as strcat;
 use criterion::{criterion_group, BatchSize, BenchmarkId, Criterion, Throughput};
 
 // workspace imports
-use flat_tree::FlatTree;
-use log_ast::ast;
+use log_ast::ast::Container;
 use log_format::{ast::Discarder, Format};
 use log_format_logfmt::{Lexer, LogfmtFormat, Token};
 
@@ -67,13 +66,13 @@ pub(super) fn bench(c: &mut Criterion) {
         });
 
         group.bench_function(BenchmarkId::new("parse:ast", &param), |b| {
-            let setup = || (FlatTree::<ast::Value>::new(), Vec::from(sample));
+            let setup = || (Container::with_capacity(160), Vec::from(sample));
 
             b.iter_batched_ref(
                 setup,
-                |(tree, sample)| {
+                |(container, sample)| {
                     LogfmtFormat
-                        .parse(&sample, ast::Builder::new(tree.metaroot()))
+                        .parse(&sample, container.metaroot())
                         .map_err(|x| x.0)
                         .unwrap()
                         .0
