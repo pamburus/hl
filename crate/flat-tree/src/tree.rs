@@ -21,6 +21,17 @@ where
     _marker: PhantomData<V>,
 }
 
+impl<V: Debug> FlatTree<V> {
+    #[inline]
+    pub fn with_capacity(capacity: usize) -> Self {
+        Self {
+            storage: DefaultStorage::with_capacity(capacity),
+            roots: 0,
+            _marker: PhantomData,
+        }
+    }
+}
+
 impl<V, S> FlatTree<V, S>
 where
     S: Storage<Value = V> + Default,
