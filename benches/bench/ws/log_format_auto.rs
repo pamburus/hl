@@ -6,7 +6,7 @@ use const_str::concat as strcat;
 use criterion::{criterion_group, BatchSize, BenchmarkId, Criterion, Throughput};
 
 // workspace imports
-use log_ast::ast::{Container, Segment};
+use log_ast::{ast::Container, model::Segment};
 use log_format::{ast::Discarder, Format};
 use log_format_auto::AutoFormat;
 
