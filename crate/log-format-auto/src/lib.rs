@@ -1,5 +1,5 @@
 // workspace imports
-use upstream::{ast, Format};
+use upstream::{ast, Format, Span};
 
 // conditional imports
 #[cfg(feature = "json")]
@@ -56,7 +56,7 @@ impl Format for AutoFormat {
         Lexer::new(input, self.enabled.clone())
     }
 
-    fn parse<'s, B>(&mut self, s: &'s [u8], mut target: B) -> Result<(bool, B), (Self::Error, B)>
+    fn parse<'s, B>(&mut self, s: &'s [u8], mut target: B) -> Result<(Option<Span>, B), (Self::Error, B)>
     where
         B: ast::Build,
     {
