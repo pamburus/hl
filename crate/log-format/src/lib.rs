@@ -14,9 +14,7 @@ pub trait Format {
     type Lexer<'s>: Lex;
 
     fn lexer<'s>(&self, s: &'s [u8]) -> Self::Lexer<'s>;
-    fn parse<B>(&mut self, s: &[u8], target: B) -> Result<(bool, B), (Self::Error, B)>
-    where
-        B: ast::Build;
+    fn parse<B: ast::Build>(&mut self, s: &[u8], target: B) -> Result<(Option<Span>, B), (Self::Error, B)>;
 }
 
 pub trait Lex: Iterator<Item = Result<Token, Self::Error>> {
