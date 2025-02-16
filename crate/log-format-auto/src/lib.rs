@@ -58,7 +58,7 @@ impl Format for AutoFormat {
 
     fn parse<'s, B>(&mut self, s: &'s Source, mut target: B) -> Result<(bool, B), (Self::Error, B)>
     where
-        B: ast::Build,
+        B: ast::Build<'s>,
     {
         let initial = self.current;
         let checkpoint = target.checkpoint();

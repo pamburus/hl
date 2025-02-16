@@ -9,10 +9,10 @@ use upstream::{
 
 // ---
 
-pub type Lexer<'s> = logos::Lexer<'s, Token>;
+pub type Lexer<'s> = logos::Lexer<'s, Token<'s>>;
 
 #[inline]
-pub fn parse_value<'s, B: Build>(lexer: &mut Lexer<'s>, target: B) -> Result<(bool, B), (Error, B)> {
+pub fn parse_value<'s, B: Build<'s>>(lexer: &mut Lexer<'s>, target: B) -> Result<(bool, B), (Error, B)> {
     if let Some(token) = lexer.next() {
         let token = match token {
             Ok(token) => token,
@@ -25,7 +25,7 @@ pub fn parse_value<'s, B: Build>(lexer: &mut Lexer<'s>, target: B) -> Result<(bo
 }
 
 #[inline]
-pub fn parse_object<'s, B: Build>(lexer: &mut Lexer<'s>, target: B) -> Result<(bool, B), (Error, B)> {
+pub fn parse_object<'s, B: Build<'s>>(lexer: &mut Lexer<'s>, target: B) -> Result<(bool, B), (Error, B)> {
     if let Some(token) = lexer.next() {
         let token = match token {
             Ok(token) => token,
@@ -41,7 +41,7 @@ pub fn parse_object<'s, B: Build>(lexer: &mut Lexer<'s>, target: B) -> Result<(b
 }
 
 #[inline]
-fn parse_field_value<'s, B: Build>(lexer: &mut Lexer<'s>, target: B) -> Result<B, (Error, B)> {
+fn parse_field_value<'s, B: Build<'s>>(lexer: &mut Lexer<'s>, target: B) -> Result<B, (Error, B)> {
     match parse_value(lexer, target) {
         Ok((true, target)) => Ok(target),
         Ok((false, target)) => Err((lexer.make_error(ErrorKind::UnexpectedToken).into(), target)),
@@ -50,7 +50,11 @@ fn parse_field_value<'s, B: Build>(lexer: &mut Lexer<'s>, target: B) -> Result<B
 }
 
 #[inline]
-fn parse_value_token<'s, B: Build>(lexer: &mut Lexer<'s>, mut target: B, token: Token) -> Result<B, (Error, B)> {
+fn parse_value_token<'s, B: Build<'s>>(
+    lexer: &mut Lexer<'s>,
+    mut target: B,
+    token: Token<'s>,
+) -> Result<B, (Error, B)> {
     match token {
         Token::Scalar(scalar) => Ok(target.add_scalar(scalar)),
         Token::BraceOpen => {
@@ -80,7 +84,7 @@ fn parse_value_token<'s, B: Build>(lexer: &mut Lexer<'s>, mut target: B, token: 
 }
 
 #[inline]
-fn parse_array_inner<'s, B: Build>(lexer: &mut Lexer<'s>, mut target: B) -> Result<B, (Error, B)> {
+fn parse_array_inner<'s, B: Build<'s>>(lexer: &mut Lexer<'s>, mut target: B) -> Result<B, (Error, B)> {
     let span = lexer.span();
 
     let mut awaits_comma = false;
@@ -107,7 +111,7 @@ fn parse_array_inner<'s, B: Build>(lexer: &mut Lexer<'s>, mut target: B) -> Resu
 }
 
 #[inline]
-fn parse_object_inner<'s, B: Build>(lexer: &mut Lexer<'s>, mut target: B) -> Result<B, (Error, B)> {
+fn parse_object_inner<'s, B: Build<'s>>(lexer: &mut Lexer<'s>, mut target: B) -> Result<B, (Error, B)> {
     let span = lexer.span();
 
     enum Awaits {

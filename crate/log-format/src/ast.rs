@@ -6,11 +6,11 @@ use std::fmt::Display;
 
 // ---
 
-pub trait Build: Sized {
+pub trait Build<'s>: Sized {
     type Checkpoint;
 
-    fn add_scalar(self, scalar: Scalar) -> Self;
-    fn add_composite<E, F>(self, composite: Composite, f: F) -> Result<Self, (E, Self)>
+    fn add_scalar(self, scalar: Scalar<'s>) -> Self;
+    fn add_composite<E, F>(self, composite: Composite<'s>, f: F) -> Result<Self, (E, Self)>
     where
         F: FnOnce(Self) -> Result<Self, (E, Self)>;
 
@@ -27,16 +27,16 @@ pub trait Error: Display {
 
 // ---
 
-pub trait BuilderDetach {
+pub trait BuilderDetach<'s> {
     type Output;
-    type Builder: Build;
+    type Builder: Build<'s>;
 
     fn detach(self) -> (Self::Output, Self::Builder);
 }
 
-impl<B, E> BuilderDetach for Result<B, (E, B)>
+impl<'s, B, E> BuilderDetach<'s> for Result<B, (E, B)>
 where
-    B: Build,
+    B: Build<'s>,
 {
     type Output = Result<(), E>;
     type Builder = B;
@@ -49,9 +49,9 @@ where
     }
 }
 
-impl<B, T, E> BuilderDetach for Result<(T, B), (E, B)>
+impl<'s, B, T, E> BuilderDetach<'s> for Result<(T, B), (E, B)>
 where
-    B: Build,
+    B: Build<'s>,
 {
     type Output = Result<T, E>;
     type Builder = B;
@@ -90,7 +90,7 @@ impl Display for ErrorKind {
 
 // ---
 
-pub trait Discard: Build {
+pub trait Discard<'s>: Build<'s> {
     fn discard<E, F>(self, f: F) -> Result<Self, (E, Self)>
     where
         F: FnOnce(Discarder) -> Result<Discarder, (E, Discarder)>,
@@ -102,7 +102,7 @@ pub trait Discard: Build {
     }
 }
 
-impl<T: Build + Sized> Discard for T {}
+impl<'s, T: Build<'s> + Sized> Discard<'s> for T {}
 
 // ---
 
@@ -123,7 +123,7 @@ impl Default for Discarder {
     }
 }
 
-impl Build for Discarder {
+impl Build<'_> for Discarder {
     type Checkpoint = ();
 
     #[inline]

@@ -1,7 +1,7 @@
 use logos::Logos;
 
 use upstream::{
-    source::{ByteSlice, Source},
+    source::Source,
     token::{Scalar, String},
 };
 
@@ -11,14 +11,14 @@ use super::ErrorKind;
 #[logos(skip r"[ \t\r\n\f]+")]
 #[logos(source = Source)]
 #[logos(error = ErrorKind)]
-pub enum Token {
+pub enum Token<'s> {
     #[token("null", |_| Scalar::Null)]
     #[token("false", |_| Scalar::Bool(false))]
     #[token("true", |_| Scalar::Bool(true))]
     #[regex(r"-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?", |lex| Scalar::Number(lex.slice()))]
     #[regex(r#""[^"\\\x00-\x1F]*""#, |lex| Scalar::String(String::Plain(unquote(lex.slice()))), priority = 5)]
     #[regex(r#""([^"\\\x00-\x1F]|\\(["\\bnfrt/]|u[a-fA-F0-9]{4}))*""#, |lex| Scalar::String(String::JsonEscaped(lex.slice())), priority = 4)]
-    Scalar(Scalar),
+    Scalar(Scalar<'s>),
 
     #[token("{")]
     BraceOpen,
@@ -40,6 +40,6 @@ pub enum Token {
 }
 
 #[inline]
-fn unquote(s: ByteSlice) -> ByteSlice {
-    s.slice(1..s.len() - 1)
+fn unquote(s: &[u8]) -> &[u8] {
+    &s[1..s.len() - 1]
 }

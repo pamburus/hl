@@ -23,9 +23,9 @@ impl Format for LogfmtFormat {
     }
 
     #[inline]
-    fn parse<B>(&mut self, s: &Source, target: B) -> Result<(bool, B), (Self::Error, B)>
+    fn parse<'s, B>(&mut self, s: &'s Source, target: B) -> Result<(bool, B), (Self::Error, B)>
     where
-        B: ast::Build,
+        B: ast::Build<'s>,
     {
         let mut lexer = Token::lexer(s);
         parse::parse_line(&mut lexer, target)

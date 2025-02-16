@@ -1,3 +1,4 @@
+#[cfg(feature = "bytes")]
 use std::{
     ops::{Deref, Range},
     sync::Arc,
@@ -103,6 +104,7 @@ impl logos::Source for Bytes {
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct ByteSlice(Arc<[u8]>, Range<usize>);
 
+#[cfg(feature = "bytes")]
 impl ByteSlice {
     #[inline]
     pub fn slice(&self, mut range: Range<usize>) -> ByteSlice {
@@ -112,6 +114,7 @@ impl ByteSlice {
     }
 }
 
+#[cfg(feature = "bytes")]
 impl Deref for ByteSlice {
     type Target = [u8];
 
@@ -121,6 +124,7 @@ impl Deref for ByteSlice {
     }
 }
 
+#[cfg(feature = "bytes")]
 impl From<&str> for ByteSlice {
     #[inline]
     fn from(s: &str) -> Self {
@@ -128,6 +132,7 @@ impl From<&str> for ByteSlice {
     }
 }
 
+#[cfg(feature = "bytes")]
 impl From<&[u8]> for ByteSlice {
     #[inline]
     fn from(bytes: &[u8]) -> Self {
@@ -135,6 +140,7 @@ impl From<&[u8]> for ByteSlice {
     }
 }
 
+#[cfg(feature = "bytes")]
 impl<const N: usize> From<&[u8; N]> for ByteSlice {
     #[inline]
     fn from(bytes: &[u8; N]) -> Self {
@@ -142,12 +148,14 @@ impl<const N: usize> From<&[u8; N]> for ByteSlice {
     }
 }
 
+#[cfg(feature = "bytes")]
 impl Default for ByteSlice {
     fn default() -> Self {
         Self::from(&[])
     }
 }
 
+#[cfg(feature = "bytes")]
 impl PartialEq<[u8]> for ByteSlice {
     #[inline]
     fn eq(&self, other: &[u8]) -> bool {
@@ -155,6 +163,7 @@ impl PartialEq<[u8]> for ByteSlice {
     }
 }
 
+#[cfg(feature = "bytes")]
 impl<const N: usize> PartialEq<[u8; N]> for ByteSlice {
     #[inline]
     fn eq(&self, other: &[u8; N]) -> bool {

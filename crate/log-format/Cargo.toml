@@ -7,7 +7,7 @@ edition.workspace = true
 license.workspace = true
 
 [features]
-default = ["bytes", "logos"]
+default = ["logos"]
 bytes = ["dep:bytes"]
 logos = ["dep:logos"]
 

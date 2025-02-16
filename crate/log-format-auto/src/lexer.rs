@@ -63,7 +63,7 @@ impl<'s> Lexer<'s> {
     }
 }
 
-impl<'s> Lex for Lexer<'s> {
+impl<'s> Lex<'s> for Lexer<'s> {
     type Error = Error;
 
     #[inline]
@@ -90,10 +90,10 @@ impl<'s> Lex for Lexer<'s> {
 }
 
 impl<'s> Iterator for Lexer<'s> {
-    type Item = Result<Token, Error>;
+    type Item = Result<Token<'s>, Error>;
 
     #[inline]
-    fn next(&mut self) -> Option<Result<Token, Error>> {
+    fn next(&mut self) -> Option<Result<Token<'s>, Error>> {
         loop {
             let next: Result<_, Error> = match &mut self.inner {
                 #[cfg(feature = "json")]

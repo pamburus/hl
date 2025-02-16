@@ -13,6 +13,7 @@ use log_format_json::{JsonFormat, Lexer, Token};
 
 // local imports
 use super::{hash, samples, ND};
+use crate::BencherExt;
 
 criterion_group!(benches, bench);
 
@@ -31,7 +32,7 @@ pub(super) fn bench(c: &mut Criterion) {
         group.throughput(Throughput::Bytes(sample.len() as u64));
 
         group.bench_function(BenchmarkId::new("lex:inner:drain", &param), |b| {
-            let setup = || sample.into();
+            let setup = || Vec::from(sample);
 
             b.iter_batched_ref(
                 setup,
@@ -44,7 +45,7 @@ pub(super) fn bench(c: &mut Criterion) {
         });
 
         group.bench_function(BenchmarkId::new("lex:log-format:drain", &param), |b| {
-            let setup = || sample.into();
+            let setup = || Vec::from(sample);
 
             b.iter_batched_ref(
                 setup,
@@ -57,7 +58,7 @@ pub(super) fn bench(c: &mut Criterion) {
         });
 
         group.bench_function(BenchmarkId::new("parse:discard", &param), |b| {
-            let setup = || sample.into();
+            let setup = || Vec::from(sample);
 
             b.iter_batched_ref(
                 setup,
@@ -67,11 +68,11 @@ pub(super) fn bench(c: &mut Criterion) {
         });
 
         group.bench_function(BenchmarkId::new("parse:ast", &param), |b| {
-            let setup = || (Container::with_capacity(160), sample.into());
+            let setup = || (Container::with_capacity(160), Vec::from(sample));
 
-            b.iter_batched_ref(
+            b.iter_batched_fixed(
                 setup,
-                |(container, sample)| {
+                |(mut container, sample)| {
                     JsonFormat
                         .parse(&sample, container.metaroot())
                         .map_err(|x| x.0)

@@ -6,7 +6,7 @@ use flat_tree::{
     tree::{self, NoAttachment},
     FlatTree,
 };
-use log_format::{ast, origin, source::ByteSlice};
+use log_format::{ast, origin};
 
 pub use log_format::{
     token::{Composite, Scalar, String},
@@ -17,11 +17,11 @@ pub use origin::Origin;
 // ---
 
 #[derive(Default, Debug)]
-pub struct Container {
-    pub inner: ContainerInner,
+pub struct Container<'s> {
+    pub inner: ContainerInner<'s>,
 }
 
-impl Container {
+impl<'s> Container<'s> {
     #[inline]
     pub fn new() -> Self {
         Self::default()
@@ -35,7 +35,7 @@ impl Container {
     }
 }
 
-impl Container {
+impl<'s> Container<'s> {
     #[inline]
     pub fn roots(&self) -> tree::Roots<Value> {
         self.inner.roots()
@@ -57,38 +57,39 @@ impl Container {
     }
 
     #[inline]
-    pub fn metaroot(&mut self) -> Builder<tree::NodeBuilder<Value>> {
+    pub fn metaroot(&mut self) -> Builder<tree::NodeBuilder<Value<'s>>> {
         Builder::new(self.inner.metaroot())
     }
 }
 
 // ---
 
-trait InnerBuild: tree::Build<Value = Value> {}
-impl<T: tree::Build<Value = Value>> InnerBuild for T {}
+trait InnerBuild<'s>: tree::Build<Value = Value<'s>> {}
+impl<'s, T: tree::Build<Value = Value<'s>>> InnerBuild<'s> for T {}
 
 pub trait BuildAttachment: tree::BuildAttachment {}
 impl<A: tree::BuildAttachment> BuildAttachment for A {}
 
-pub type Children<'c> = tree::Children<'c, Value>;
+pub type Children<'s, 'c> = tree::Children<'c, Value<'s>>;
 pub use flat_tree::{Index, OptIndex};
 pub use tree::{AttachmentChild, AttachmentParent, AttachmentValue};
 
-pub trait Build
+pub trait Build<'s>
 where
     Self: Sized,
 {
     type Attachment: BuildAttachment;
     type WithAttachment<V>: Build<
+        's,
         Attachment = AttachmentChild<Self::Attachment, V>,
         Checkpoint = Self::Checkpoint,
         WithoutAttachment = Self,
     >;
-    type WithoutAttachment: Build<Checkpoint = Self::Checkpoint, Attachment = AttachmentParent<Self::Attachment>>;
+    type WithoutAttachment: Build<'s, Checkpoint = Self::Checkpoint, Attachment = AttachmentParent<Self::Attachment>>;
     type Checkpoint;
 
-    fn add_scalar(self, scalar: Scalar) -> Self;
-    fn add_composite<E, F>(self, composite: Composite, f: F) -> Result<Self, (E, Self)>
+    fn add_scalar(self, scalar: Scalar<'s>) -> Self;
+    fn add_composite<E, F>(self, composite: Composite<'s>, f: F) -> Result<Self, (E, Self)>
     where
         F: FnOnce(Self) -> Result<Self, (E, Self)>;
 
@@ -100,8 +101,8 @@ where
     fn detach(self) -> (Self::WithoutAttachment, AttachmentValue<Self::Attachment>);
 }
 
-pub trait BuildCheckpoint {
-    type Builder: Build;
+pub trait BuildCheckpoint<'s> {
+    type Builder: Build<'s>;
 
     fn first_node_index(&self, builder: &Self::Builder) -> OptIndex;
 }
@@ -118,9 +119,9 @@ impl<B> Builder<B> {
     }
 }
 
-impl<T> Build for Builder<T>
+impl<'s, T> Build<'s> for Builder<T>
 where
-    T: InnerBuild,
+    T: InnerBuild<'s>,
 {
     type Attachment = T::Attachment;
     type WithAttachment<V> = Builder<T::WithAttachment<V>>;
@@ -128,12 +129,12 @@ where
     type Checkpoint = T::Checkpoint;
 
     #[inline]
-    fn add_scalar(self, scalar: Scalar) -> Self {
+    fn add_scalar(self, scalar: Scalar<'s>) -> Self {
         Builder::new(self.inner.push(Value::Scalar(scalar)))
     }
 
     #[inline]
-    fn add_composite<E, F>(self, composite: Composite, f: F) -> Result<Self, (E, Self)>
+    fn add_composite<E, F>(self, composite: Composite<'s>, f: F) -> Result<Self, (E, Self)>
     where
         F: FnOnce(Self) -> Result<Self, (E, Self)>,
     {
@@ -173,19 +174,19 @@ where
     }
 }
 
-impl<T> ast::Build for Builder<T>
+impl<'s, T> ast::Build<'s> for Builder<T>
 where
-    T: InnerBuild,
+    T: InnerBuild<'s>,
 {
     type Checkpoint = T::Checkpoint;
 
     #[inline]
-    fn add_scalar(self, scalar: Scalar) -> Self {
+    fn add_scalar(self, scalar: Scalar<'s>) -> Self {
         Build::add_scalar(self, scalar)
     }
 
     #[inline]
-    fn add_composite<E, F>(self, composite: Composite, f: F) -> Result<Self, (E, Self)>
+    fn add_composite<E, F>(self, composite: Composite<'s>, f: F) -> Result<Self, (E, Self)>
     where
         F: FnOnce(Self) -> Result<Self, (E, Self)>,
     {
@@ -214,7 +215,7 @@ impl Default for Discarder<NoAttachment> {
     }
 }
 
-impl<A> Build for Discarder<A>
+impl<'s, A> Build<'s> for Discarder<A>
 where
     A: BuildAttachment,
 {
@@ -261,19 +262,19 @@ where
 
 // ---
 
-pub type ContainerInner = FlatTree<Value>;
-pub type SiblingsIter<'c> = tree::SiblingsIter<'c, Value>;
-pub type Node<'c> = tree::Node<'c, Value>;
+pub type ContainerInner<'s> = FlatTree<Value<'s>>;
+pub type SiblingsIter<'s, 'c> = tree::SiblingsIter<'c, Value<'s>>;
+pub type Node<'s, 'c> = tree::Node<'c, Value<'s>>;
 
 // ---
 
 #[derive(Debug, Clone)]
-pub enum Value {
-    Scalar(Scalar),
-    Composite(Composite),
+pub enum Value<'s> {
+    Scalar(Scalar<'s>),
+    Composite(Composite<'s>),
 }
 
-impl Value {
+impl<'s> Value<'s> {
     #[inline]
     pub const fn null() -> Self {
         Self::Scalar(Scalar::Null)
@@ -285,12 +286,12 @@ impl Value {
     }
 
     #[inline]
-    pub const fn number(s: ByteSlice) -> Self {
+    pub const fn number(s: &'s [u8]) -> Self {
         Self::Scalar(Scalar::Number(s))
     }
 
     #[inline]
-    pub const fn string(s: String) -> Self {
+    pub const fn string(s: String<'s>) -> Self {
         Self::Scalar(Scalar::String(s))
     }
 
@@ -305,21 +306,21 @@ impl Value {
     }
 
     #[inline]
-    pub const fn field(key: String) -> Self {
+    pub const fn field(key: String<'s>) -> Self {
         Self::Composite(Composite::Field(key))
     }
 }
 
-impl From<Scalar> for Value {
+impl<'s> From<Scalar<'s>> for Value<'s> {
     #[inline]
-    fn from(scalar: Scalar) -> Self {
+    fn from(scalar: Scalar<'s>) -> Self {
         Self::Scalar(scalar)
     }
 }
 
-impl From<Composite> for Value {
+impl<'s> From<Composite<'s>> for Value<'s> {
     #[inline]
-    fn from(composite: Composite) -> Self {
+    fn from(composite: Composite<'s>) -> Self {
         Self::Composite(composite)
     }
 }

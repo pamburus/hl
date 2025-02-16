@@ -24,7 +24,7 @@ impl<'s> MakeError for InnerLexer<'s> {
 #[derive(Clone, Debug)]
 pub struct Lexer<'s> {
     inner: InnerLexer<'s>,
-    next: Option<Result<Token, ErrorKind>>,
+    next: Option<Result<Token<'s>, ErrorKind>>,
     context: Context,
 }
 
@@ -50,7 +50,7 @@ impl<'s> Lexer<'s> {
     }
 }
 
-impl<'s> Lex for Lexer<'s> {
+impl<'s> Lex<'s> for Lexer<'s> {
     type Error = Error;
 
     #[inline]
@@ -65,7 +65,7 @@ impl<'s> Lex for Lexer<'s> {
 }
 
 impl<'s> Iterator for Lexer<'s> {
-    type Item = Result<upstream::Token, Error>;
+    type Item = Result<upstream::Token<'s>, Error>;
 
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
@@ -94,7 +94,7 @@ impl<'s> Iterator for Lexer<'s> {
             (Some(Ok(Token::Space)), Context::Value) => {
                 self.context = Context::Key;
                 self.next = self.inner.next();
-                let slice = self.inner.slice().slice(0..0);
+                let slice = &self.inner.slice()[0..0];
                 Some(Ok(upstream::Token::Scalar(Scalar::String(String::Plain(slice)))))
             }
             (None | Some(Ok(Token::Eol)), Context::Key) => {
@@ -143,11 +143,11 @@ mod tests {
 
     #[test]
     fn test_trivial_line() {
-        let input = b"a=x".into();
-        let mut lexer = Lexer::from_source(&input);
+        let input = b"a=x";
+        let mut lexer = Lexer::from_source(input);
         assert_eq!(next!(lexer), EntryBegin);
-        assert_eq!(next!(lexer), CompositeBegin(Field(Plain("a".into()))));
-        assert_eq!(next!(lexer), Scalar(String(Plain("x".into()))));
+        assert_eq!(next!(lexer), CompositeBegin(Field(Plain(b"a"))));
+        assert_eq!(next!(lexer), Scalar(String(Plain(b"x"))));
         assert_eq!(next!(lexer), CompositeEnd);
         assert_eq!(next!(lexer), EntryEnd);
         assert_eq!(lexer.next(), None);
@@ -155,16 +155,16 @@ mod tests {
 
     #[test]
     fn test_two_lines() {
-        let input = b"a=x\nb=y".into();
-        let mut lexer = Lexer::from_source(&input);
+        let input = b"a=x\nb=y";
+        let mut lexer = Lexer::from_source(input);
         assert_eq!(next!(lexer), EntryBegin);
-        assert_eq!(next!(lexer), CompositeBegin(Field(Plain("a".into()))));
-        assert_eq!(next!(lexer), Scalar(String(Plain("x".into()))));
+        assert_eq!(next!(lexer), CompositeBegin(Field(Plain(b"a"))));
+        assert_eq!(next!(lexer), Scalar(String(Plain(b"x"))));
         assert_eq!(next!(lexer), CompositeEnd);
         assert_eq!(next!(lexer), EntryEnd);
         assert_eq!(next!(lexer), EntryBegin);
-        assert_eq!(next!(lexer), CompositeBegin(Field(Plain("b".into()))));
-        assert_eq!(next!(lexer), Scalar(String(Plain("y".into()))));
+        assert_eq!(next!(lexer), CompositeBegin(Field(Plain(b"b"))));
+        assert_eq!(next!(lexer), Scalar(String(Plain(b"y"))));
         assert_eq!(next!(lexer), CompositeEnd);
         assert_eq!(next!(lexer), EntryEnd);
         assert_eq!(lexer.next(), None);

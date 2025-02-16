@@ -4,14 +4,13 @@ use super::{
 };
 use upstream::{
     ast::Build,
-    source::ByteSlice,
     token::{Composite, Scalar, String},
 };
 
 // ---
 
 #[inline]
-pub fn parse_line<'s, B: Build>(lexer: &mut Lexer<'s>, target: B) -> Result<(bool, B), (Error, B)> {
+pub fn parse_line<'s, B: Build<'s>>(lexer: &mut Lexer<'s>, target: B) -> Result<(bool, B), (Error, B)> {
     let (key, target) = match parse_key(lexer, target) {
         Ok((Some(key), target)) => (key, target),
         Ok((None, target)) => return Ok((false, target)),
@@ -64,7 +63,7 @@ pub fn parse_line<'s, B: Build>(lexer: &mut Lexer<'s>, target: B) -> Result<(boo
 }
 
 #[inline]
-fn parse_key<'s, B: Build>(lexer: &mut Lexer<'s>, target: B) -> Result<(Option<ByteSlice>, B), (Error, B)> {
+fn parse_key<'s, B: Build<'s>>(lexer: &mut Lexer<'s>, target: B) -> Result<(Option<&'s [u8]>, B), (Error, B)> {
     loop {
         let Some(token) = lexer.next() else {
             return Ok((None, target));
@@ -84,9 +83,9 @@ fn parse_key<'s, B: Build>(lexer: &mut Lexer<'s>, target: B) -> Result<(Option<B
 }
 
 #[inline]
-fn parse_value<'s, B: Build>(lexer: &mut Lexer<'s>, target: B) -> Result<B, (Error, B)> {
+fn parse_value<'s, B: Build<'s>>(lexer: &mut Lexer<'s>, target: B) -> Result<B, (Error, B)> {
     let empty = |lexer: &mut Lexer<'s>, target: B| {
-        let slice = lexer.slice().slice(0..0);
+        let slice = &lexer.slice()[0..0];
         return Ok(target.add_scalar(Scalar::String(upstream::String::Plain(slice))));
     };
 
@@ -119,8 +118,8 @@ mod tests {
 
     #[test]
     fn test_parse_line() {
-        let input = br#"a=1 b=2 c=3"#.into();
-        let mut lexer = Lexer::new(&input);
+        let input = br#"a=1 b=2 c=3"#;
+        let mut lexer = Lexer::new(input);
         let mut container = Container::new();
         assert_eq!(parse_line(&mut lexer, container.metaroot()).detach().0.unwrap(), true);
 
