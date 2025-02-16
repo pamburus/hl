@@ -1,6 +1,7 @@
-include = ["src/testing/assets/themes/test.toml", "Cargo.toml"]
+include = ["src/testing/assets/themes/test.toml", "Cargo.toml", "**/*.toml"]
 
 [formatting]
+align_entries = false
+column_width = 160
 indent = 4
 reorder_keys = false
-column_width = 112
