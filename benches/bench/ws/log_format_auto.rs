@@ -6,7 +6,10 @@ use const_str::concat as strcat;
 use criterion::{criterion_group, BatchSize, BenchmarkId, Criterion, Throughput};
 
 // workspace imports
-use log_ast::{ast::Container, model::Segment};
+use log_ast::{
+    ast::Container,
+    model::{FormatExt, Segment},
+};
 use log_format::{ast::Discarder, Format};
 use log_format_auto::AutoFormat;
 
@@ -78,7 +81,7 @@ pub(super) fn bench(c: &mut Criterion) {
 
             b.iter_batched_ref(
                 setup,
-                |(segment, sample, format)| segment.set_to_first_entry(sample.clone(), format).unwrap(),
+                |(segment, sample, format)| format.parse_into(sample.clone(), segment).1.unwrap(),
                 BatchSize::SmallInput,
             );
         });
