@@ -28,6 +28,7 @@ criterion_main!(
     ws::hl::benches,
     misc::fncall::benches,
     ws::json_ast::benches,
+    ws::log_ast::benches,
     ws::log_format_auto::benches,
     ws::log_format_json::benches,
     ws::log_format_logfmt::benches,
