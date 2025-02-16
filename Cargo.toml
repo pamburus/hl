@@ -56,7 +56,7 @@ crossbeam-queue = "0"
 crossbeam-utils = "0"
 deko = "0"
 derive-where = "1"
-derive_more = {version="2", features = ["deref", "deref_mut", "from"]}
+derive_more = { version = "2", features = ["deref", "deref_mut", "from"] }
 dirs = "6"
 dirs-sys = "0"
 encstr = { path = "./crate/encstr" }
