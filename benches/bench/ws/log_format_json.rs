@@ -96,7 +96,7 @@ pub(super) fn bench(c: &mut Criterion) {
 
             b.iter_batched_ref(
                 setup,
-                |(segment, sample, format)| format.parse_entry_into(sample.clone(), segment).unwrap(),
+                |(segment, sample, format)| format.parse_into(sample.clone(), segment).1.unwrap(),
                 BatchSize::SmallInput,
             );
         });

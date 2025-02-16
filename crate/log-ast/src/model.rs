@@ -1,15 +1,15 @@
 use super::ast::Container;
-use log_format::{Format, Span};
+use log_format::{ast::BuilderDetach, Format, Span};
 
 // ---
 
 pub trait FormatExt: Format {
     #[inline]
-    fn parse_entry_into<S>(&mut self, source: S, target: &mut Segment<S>) -> Result<Option<Span>, Self::Error>
+    fn parse_into<S>(&mut self, source: S, target: &mut Segment<S>) -> (Option<Span>, Result<(), Self::Error>)
     where
         S: AsRef<[u8]> + Default,
     {
-        target.set_to_first_entry(source, self)
+        target.set(source, self)
     }
 }
 
@@ -56,17 +56,25 @@ where
     }
 
     #[inline]
-    pub fn set_to_first_entry<F>(&mut self, buf: S, format: &mut F) -> Result<Option<Span>, F::Error>
+    pub fn set<F>(&mut self, buf: S, format: &mut F) -> (Option<Span>, Result<(), F::Error>)
     where
         F: Format + ?Sized,
     {
         self.container.clear();
-        let result = format
-            .parse(buf.as_ref(), self.container.metaroot())
-            .map(|(span, _)| span)
-            .map_err(|(e, _)| e);
+        let mut end = 0;
+        let mut target = self.container.metaroot();
+        let result = loop {
+            let result = format.parse(&buf.as_ref()[end..], target).detach();
+            target = result.1;
+            match result.0 {
+                Ok(Some(span)) => end += span.end,
+                Ok(None) => break Ok(()),
+                Err(e) => break Err(e),
+            }
+        };
         self.buf = Some(buf);
-        result
+        let span = if end != 0 { Some(Span::with_end(0)) } else { None };
+        (span, result)
     }
 
     #[inline]
@@ -76,7 +84,8 @@ where
         F: Format + ?Sized,
     {
         let mut segment = Segment::new().with_buf::<B2>();
-        segment.set_to_first_entry(buf, format)?;
+        let result = segment.set(buf, format);
+        result.1?;
         Ok(segment)
     }
 }
