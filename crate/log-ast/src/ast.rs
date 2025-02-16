@@ -26,6 +26,13 @@ impl Container {
     pub fn new() -> Self {
         Self::default()
     }
+
+    #[inline]
+    pub fn with_capacity(capacity: usize) -> Self {
+        Self {
+            inner: ContainerInner::with_capacity(capacity),
+        }
+    }
 }
 
 impl Container {
