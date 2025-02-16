@@ -1,3 +1,4 @@
+use bytes::Bytes;
 use logos::Logos;
 
 use upstream::{
@@ -13,7 +14,7 @@ use super::ErrorKind;
 // the value is considered to be an empty string.
 #[derive(Debug, PartialEq, Clone)]
 pub enum Token {
-    Key(Span),
+    Key(Bytes),
     Value(Scalar),
     Space,
     Eol,
@@ -30,7 +31,7 @@ impl From<T1> for Token {
     #[inline]
     fn from(token: T1) -> Self {
         match token {
-            T1::Key(span) => Token::Key(span),
+            T1::Key(bytes) => Token::Key(bytes),
             T1::Space => Token::Space,
             T1::Eol => Token::Eol,
         }
@@ -63,6 +64,14 @@ impl<'s> Lexer<'s> {
         match &self.0 {
             Mode::M1(lexer) => lexer.span().into(),
             Mode::M2(lexer) => lexer.span().into(),
+        }
+    }
+
+    #[inline]
+    pub fn slice(&self) -> <Source as logos::Source>::Slice<'_> {
+        match &self.0 {
+            Mode::M1(lexer) => lexer.slice(),
+            Mode::M2(lexer) => lexer.slice(),
         }
     }
 
@@ -120,8 +129,8 @@ enum Mode<'s> {
 #[logos(source = Source)]
 #[logos(error = ErrorKind)]
 enum T1 {
-    #[regex(r#"[^"\x00-\x20='(),;<>\[\]\\\^`{}|\x7F]+="#, |lex| Span::from(lex.span()).cut_right(1))]
-    Key(Span),
+    #[regex(r#"[^"\x00-\x20='(),;<>\[\]\\\^`{}|\x7F]+="#, |lex| cut_right(lex.slice(), 1))]
+    Key(Bytes),
 
     #[regex(r#"[\t ]+"#)]
     Space,
@@ -138,8 +147,12 @@ enum T2 {
     #[token("null", |_| Scalar::Null)]
     #[token("false", |_| Scalar::Bool(false))]
     #[token("true", |_| Scalar::Bool(true))]
-    #[regex(r"-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?", |lex| Scalar::Number(lex.span().into()), priority = 6)]
-    #[regex(r#"[^"\x00-\x20=]+"#, |lex| Scalar::String(String::Plain(lex.span().into())), priority = 5)]
-    #[regex(r#""([^"\\\x00-\x1F]|\\(["\\bnfrt/]|u[a-fA-F0-9]{4}))*""#, |lex| Scalar::String(String::JsonEscaped(lex.span().into())), priority = 4)]
+    #[regex(r"-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?", |lex| Scalar::Number(lex.slice()), priority = 6)]
+    #[regex(r#"[^"\x00-\x20=]+"#, |lex| Scalar::String(String::Plain(lex.slice())), priority = 5)]
+    #[regex(r#""([^"\\\x00-\x1F]|\\(["\\bnfrt/]|u[a-fA-F0-9]{4}))*""#, |lex| Scalar::String(String::JsonEscaped(lex.slice())), priority = 4)]
     Value(Scalar),
+}
+
+fn cut_right(bytes: Bytes, n: usize) -> Bytes {
+    bytes.slice(..bytes.len() - n)
 }

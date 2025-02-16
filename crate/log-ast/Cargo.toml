@@ -7,5 +7,6 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
-"flat-tree" = { path = "../flat-tree" }
-"log-format" = { path = "../log-format" }
+bytes = "1"
+flat-tree = { path = "../flat-tree" }
+log-format = { path = "../log-format" }

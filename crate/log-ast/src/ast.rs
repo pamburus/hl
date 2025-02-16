@@ -1,6 +1,9 @@
 // std imports
 use std::fmt::Debug;
 
+// third-party imports
+use bytes::Bytes;
+
 // workspace imports
 use flat_tree::{
     tree::{self, NoAttachment},
@@ -267,7 +270,7 @@ pub type Node<'c> = tree::Node<'c, Value>;
 
 // ---
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub enum Value {
     Scalar(Scalar),
     Composite(Composite),
@@ -285,7 +288,7 @@ impl Value {
     }
 
     #[inline]
-    pub const fn number(s: Span) -> Self {
+    pub const fn number(s: Bytes) -> Self {
         Self::Scalar(Scalar::Number(s))
     }
 

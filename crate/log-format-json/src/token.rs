@@ -1,9 +1,9 @@
+use bytes::Bytes;
 use logos::Logos;
 
 use upstream::{
     source::Source,
     token::{Scalar, String},
-    Span,
 };
 
 use super::ErrorKind;
@@ -16,9 +16,9 @@ pub enum Token {
     #[token("null", |_| Scalar::Null)]
     #[token("false", |_| Scalar::Bool(false))]
     #[token("true", |_| Scalar::Bool(true))]
-    #[regex(r"-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?", |lex| Scalar::Number(lex.span().into()))]
-    #[regex(r#""[^"\\\x00-\x1F]*""#, |lex| Scalar::String(String::Plain(unquote(lex.span().into()))), priority = 5)]
-    #[regex(r#""([^"\\\x00-\x1F]|\\(["\\bnfrt/]|u[a-fA-F0-9]{4}))*""#, |lex| Scalar::String(String::JsonEscaped(lex.span().into())), priority = 4)]
+    #[regex(r"-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?", |lex| Scalar::Number(lex.slice()))]
+    #[regex(r#""[^"\\\x00-\x1F]*""#, |lex| Scalar::String(String::Plain(unquote(lex.slice()))), priority = 5)]
+    #[regex(r#""([^"\\\x00-\x1F]|\\(["\\bnfrt/]|u[a-fA-F0-9]{4}))*""#, |lex| Scalar::String(String::JsonEscaped(lex.slice())), priority = 4)]
     Scalar(Scalar),
 
     #[token("{")]
@@ -41,6 +41,6 @@ pub enum Token {
 }
 
 #[inline]
-fn unquote(s: Span) -> Span {
-    (s.start + 1..s.end - 1).into()
+fn unquote(s: Bytes) -> Bytes {
+    s.slice(1..s.len() - 1)
 }

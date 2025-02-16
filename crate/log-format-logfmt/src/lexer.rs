@@ -69,15 +69,16 @@ impl<'s> Iterator for Lexer<'s> {
 
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
-        match (&self.next, self.context) {
-            (&Some(Ok(Token::Key(key))), Context::Key) => {
-                let key = String::Plain(key);
+        match (&mut self.next, self.context) {
+            (Some(Ok(Token::Key(key))), Context::Key) => {
+                let key = String::Plain(std::mem::take(key));
                 self.context = Context::Value;
                 self.next = self.inner.next();
                 Some(Ok(upstream::Token::CompositeBegin(Composite::Field(key))))
             }
-            (&Some(Ok(Token::Value(scalar))), Context::Value) => {
+            (Some(Ok(Token::Value(scalar))), Context::Value) => {
                 self.context = Context::Delimiter;
+                let scalar = std::mem::replace(scalar, Scalar::Null);
                 self.next = self.inner.next();
                 Some(Ok(upstream::Token::Scalar(scalar)))
             }
@@ -93,9 +94,8 @@ impl<'s> Iterator for Lexer<'s> {
             (Some(Ok(Token::Space)), Context::Value) => {
                 self.context = Context::Key;
                 self.next = self.inner.next();
-                let mut span = self.inner.span();
-                span.end = span.start;
-                Some(Ok(upstream::Token::Scalar(Scalar::String(String::Plain(span.into())))))
+                let slice = self.inner.slice().slice(0..0);
+                Some(Ok(upstream::Token::Scalar(Scalar::String(String::Plain(slice)))))
             }
             (None | Some(Ok(Token::Eol)), Context::Key) => {
                 self.context = Context::Root;
@@ -107,7 +107,7 @@ impl<'s> Iterator for Lexer<'s> {
                 self.context = Context::Key;
                 Some(Ok(upstream::Token::EntryBegin))
             }
-            (&Some(Err(e)), _) => {
+            (&mut Some(Err(e)), _) => {
                 self.next = self.inner.next();
                 Some(Err(self.inner.make_error(e)))
             }

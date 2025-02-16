@@ -2,10 +2,10 @@ use super::{
     error::{Error, ErrorKind, MakeError},
     token::{Lexer, Token},
 };
+use bytes::Bytes;
 use upstream::{
     ast::Build,
     token::{Composite, Scalar, String},
-    Span,
 };
 
 // ---
@@ -64,7 +64,7 @@ pub fn parse_line<'s, B: Build>(lexer: &mut Lexer<'s>, target: B) -> Result<(boo
 }
 
 #[inline]
-fn parse_key<'s, B: Build>(lexer: &mut Lexer<'s>, target: B) -> Result<(Option<Span>, B), (Error, B)> {
+fn parse_key<'s, B: Build>(lexer: &mut Lexer<'s>, target: B) -> Result<(Option<Bytes>, B), (Error, B)> {
     loop {
         let Some(token) = lexer.next() else {
             return Ok((None, target));
@@ -86,9 +86,8 @@ fn parse_key<'s, B: Build>(lexer: &mut Lexer<'s>, target: B) -> Result<(Option<S
 #[inline]
 fn parse_value<'s, B: Build>(lexer: &mut Lexer<'s>, target: B) -> Result<B, (Error, B)> {
     let empty = |lexer: &mut Lexer<'s>, target: B| {
-        let mut span = lexer.span();
-        span.end = span.start;
-        return Ok(target.add_scalar(Scalar::String(upstream::String::Plain(span.into()))));
+        let slice = lexer.slice().slice(..0);
+        return Ok(target.add_scalar(Scalar::String(upstream::String::Plain(slice))));
     };
 
     let Some(token) = lexer.next() else {
