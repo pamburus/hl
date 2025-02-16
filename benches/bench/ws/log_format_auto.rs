@@ -1,12 +1,12 @@
 // std imports
-use std::{hint::black_box, time::Duration, vec::Vec};
+use std::{hint::black_box, sync::Arc, time::Duration, vec::Vec};
 
 // third-party imports
 use const_str::concat as strcat;
 use criterion::{criterion_group, BatchSize, BenchmarkId, Criterion, Throughput};
 
 // workspace imports
-use log_ast::ast::Container;
+use log_ast::ast::{Container, Segment};
 use log_format::{ast::Discarder, Format};
 use log_format_auto::AutoFormat;
 
@@ -63,6 +63,22 @@ pub(super) fn bench(c: &mut Criterion) {
             b.iter_batched_ref(
                 setup,
                 |(container, sample, format)| format.parse(&sample, container.metaroot()).map_err(|x| x.0).unwrap().0,
+                BatchSize::SmallInput,
+            );
+        });
+
+        group.bench_function(BenchmarkId::new("parse:ast:segment", &param), |b| {
+            let setup = || {
+                (
+                    Segment::with_capacity(160).with_buf::<Arc<[u8]>>(),
+                    Arc::<[u8]>::from(Vec::from(sample)),
+                    AutoFormat::default(),
+                )
+            };
+
+            b.iter_batched_ref(
+                setup,
+                |(segment, sample, format)| segment.set(sample.clone(), format).unwrap(),
                 BatchSize::SmallInput,
             );
         });
