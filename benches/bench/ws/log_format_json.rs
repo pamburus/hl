@@ -7,7 +7,7 @@ use criterion::{criterion_group, BatchSize, BenchmarkId, Criterion, Throughput};
 use logos::Logos;
 
 // workspace imports
-use log_ast::ast::{Container, Segment};
+use log_ast::{ast::Container, model::Segment};
 use log_format::{ast::Discarder, Format};
 use log_format_json::{JsonFormat, Lexer, Token};
 
