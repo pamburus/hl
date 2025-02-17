@@ -910,9 +910,8 @@ mod tests {
     use super::*;
     use crate::{
         datefmt::LinuxDateFormat,
-        format,
         model::v2::{
-            ast::{self, Container, Scalar},
+            ast::{self, Container, Scalar, Segment},
             record::{Fields as RecordFields, Record},
         },
         settings::Punctuation,
@@ -923,19 +922,21 @@ mod tests {
     };
     use chrono::{Offset, Utc};
     use encstr::EncodedString;
+    use log_ast::model::FormatExt;
+    use log_format_json::JsonFormat;
 
     struct Parsed {
-        container: Container<'static>,
+        segment: Segment,
     }
 
     impl Parsed {
         fn json(s: &'static str) -> Self {
             Self {
-                container: format::json::parse_all(&mut format::json::Lexer::new(s)).unwrap(),
+                segment: JsonFormat.parse_segment(s, Container::new()).1.unwrap(),
             }
         }
 
-        fn record(self) -> Record<'static> {
+        fn record(self) -> Record {
             self.container.record()
         }
 

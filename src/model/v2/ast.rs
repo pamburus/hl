@@ -19,6 +19,7 @@ pub mod error {
 
 pub use error::Result;
 
+pub type Container = log_ast::ast::Container;
 pub type Segment = log_ast::model::Segment<Arc<str>>;
 
 // ---
