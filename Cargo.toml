@@ -4,7 +4,7 @@ members = [".", "crate/encstr", "crate/heapopt"]
 [workspace.package]
 repository = "https://github.com/pamburus/hl"
 authors = ["Pavel Ivanov <mr.pavel.ivanov@gmail.com>"]
-version = "0.31.0-alpha.10"
+version = "0.31.0-alpha.11"
 edition = "2021"
 license = "MIT"
 
@@ -43,7 +43,7 @@ crossbeam-channel = "0"
 crossbeam-queue = "0"
 crossbeam-utils = "0"
 deko = "0"
-derive_more = {version="2", features = ["deref", "from"]}
+derive_more = { version = "2", features = ["deref", "from"] }
 dirs = "6"
 dirs-sys = "0"
 encstr = { path = "./crate/encstr" }

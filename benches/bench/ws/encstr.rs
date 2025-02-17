@@ -15,10 +15,16 @@ criterion_group!(benches, bench);
 const GROUP: &str = strcat!(super::GROUP, ND, "encstr");
 
 fn bench(c: &mut Criterion) {
-    for (input, batch) in [(samples::str::query01::JSON, BatchSize::SmallInput)] {
+    for (input, batch) in [
+        (samples::str::query01::JSON, BatchSize::SmallInput),
+        (samples::str::ipsum01::JSON, BatchSize::SmallInput),
+    ] {
         bench_with(c, "json", input, Json, batch);
     }
-    for (input, batch) in [(samples::str::query01::RAW, BatchSize::SmallInput)] {
+    for (input, batch) in [
+        (samples::str::query01::RAW, BatchSize::SmallInput),
+        (samples::str::ipsum01::RAW, BatchSize::SmallInput),
+    ] {
         bench_with(c, "raw", input, Raw, batch);
     }
 }
