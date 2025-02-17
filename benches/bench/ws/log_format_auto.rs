@@ -73,7 +73,7 @@ pub(super) fn bench(c: &mut Criterion) {
         group.bench_function(BenchmarkId::new("parse:ast:segment", &param), |b| {
             let setup = || {
                 (
-                    Segment::with_capacity(160).with_buf::<Arc<[u8]>>(),
+                    Segment::with_capacity(160),
                     Arc::<[u8]>::from(Vec::from(sample)),
                     AutoFormat::default(),
                 )
