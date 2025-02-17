@@ -1,54 +1,44 @@
+// std imports
+use std::sync::Arc;
+
+use crossbeam_queue::SegQueue;
+// workspace imports
+use log_format::Format;
+
+// local imports
+use crate::{
+    error::Result,
+    format::{self},
+    model::v2::ast,
+};
+
+// re-exports
 pub use super::record::{
     build::{Builder, PriorityController, Settings},
     {Fields, Record},
 };
-use crate::{
-    error::Result,
-    format::{self, Format},
-    model::v2::ast,
-};
 
 // ---
 
-pub trait NewParser {
-    type Parser<'a, P: format::Parse<'a>>: Parse<'a>;
-
-    fn new_parser<'a, F: Format>(self, format: F, input: &'a [u8]) -> Result<Self::Parser<'a, F::Parser<'a>>>;
+pub struct Parser<F: Format> {
+    settings: Arc<Settings>,
+    format: F,
+    recycled: SegQueue<ast::Segment>,
 }
 
-impl<'s> NewParser for &'s Settings {
-    type Parser<'a, P: format::Parse<'a>> = Parser<'s, 'a, P>;
-
-    fn new_parser<'a, F: Format>(self, format: F, input: &'a [u8]) -> Result<Self::Parser<'a, F::Parser<'a>>> {
-        Ok(Parser::new(self, format.new_parser(input)?))
-    }
-}
-
-// ---
-
-pub trait Parse<'a>: Iterator<Item = Result<Record<'a>>> {
-    fn recycle(&mut self, record: Record<'a>);
-}
-
-// ---
-
-pub struct Parser<'s, 'a, P: format::Parse<'a>> {
-    settings: &'s Settings,
-    inner: P,
-    container: ast::Container<'a>,
-}
-
-impl<'s, 'a, P> Parser<'s, 'a, P>
+impl<F> Parser<F>
 where
-    P: format::Parse<'a>,
+    F: Format,
 {
-    pub fn new(settings: &'s Settings, inner: P) -> Self {
+    pub fn new(settings: Arc<Settings>, format: F) -> Self {
         Self {
             settings,
-            inner,
-            container: ast::Container::default(),
+            format,
+            segment: ast::Segment::with_capacity(1024),
         }
     }
+
+    pub fn parse(&mut self, segment: Arc<str>) -> impl Iterator<Record> {}
 }
 
 impl<'s, 'a, P> Iterator for Parser<'s, 'a, P>

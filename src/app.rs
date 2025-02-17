@@ -425,7 +425,7 @@ impl App {
                                 "",
                                 Some(1),
                                 &mut |record: &Record, location: Range<usize>| {
-                                    if let Some(ts) = &record.ts {
+                                    if let Some(ts) = record.ts() {
                                         if let Some(unix_ts) = ts.unix_utc() {
                                             items.push((unix_ts.into(), location));
                                         } else {
@@ -971,8 +971,8 @@ struct TimestampIndexBuilder {
 
 impl RecordObserver for TimestampIndexBuilder {
     #[inline]
-    fn observe_record<'a>(&mut self, record: &Record<'a>, location: Range<usize>) {
-        if let Some(ts) = record.ts.as_ref().and_then(|ts| ts.unix_utc()).map(|ts| ts.into()) {
+    fn observe_record<'a>(&mut self, record: &Record, location: Range<usize>) {
+        if let Some(ts) = record.ts().and_then(|ts| ts.unix_utc()).map(|ts| ts.into()) {
             self.result.lines.push(TimestampIndexLine { location, ts });
         }
     }
@@ -982,7 +982,7 @@ impl RecordObserver for TimestampIndexBuilder {
 
 impl<T: FnMut(&Record, Range<usize>)> RecordObserver for T {
     #[inline]
-    fn observe_record<'a>(&mut self, record: &Record<'a>, location: Range<usize>) {
+    fn observe_record<'a>(&mut self, record: &Record, location: Range<usize>) {
         self(record, location)
     }
 }
