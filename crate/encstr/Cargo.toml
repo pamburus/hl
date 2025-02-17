@@ -7,3 +7,6 @@ repository.workspace = true
 edition.workspace = true
 authors.workspace = true
 license.workspace = true
+
+[dependencies]
+memchr = "2"

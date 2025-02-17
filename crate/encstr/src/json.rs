@@ -12,6 +12,10 @@ pub struct JsonEncodedString<'a>(&'a str);
 impl<'a> JsonEncodedString<'a> {
     #[inline]
     pub fn new(value: &'a str) -> Self {
+        if value.len() < 2 || value.as_bytes()[0] != b'"' || value.as_bytes()[value.len() - 1] != b'"' {
+            panic!("invalid JSON encoded string");
+        }
+
         Self(value)
     }
 }
@@ -46,8 +50,6 @@ impl<'a> From<&'a str> for JsonEncodedString<'a> {
         Self::new(value)
     }
 }
-
-// ---
 
 // ---
 
@@ -131,32 +133,26 @@ impl<'a> Parser<'a> {
             |handler: &mut H, s: &[u8]| handler.handle(Token::Sequence(unsafe { str::from_utf8_unchecked(s) }));
 
         self.next();
-        let mut no_escapes = true;
         let mut start = self.index;
 
         loop {
-            while self.peek().map(|ch| ESCAPE[usize::from(ch)]) == Some(false) {
-                self.index += 1;
-            }
+            let tail = &self.input()[self.index..];
+
+            let pos = memchr::memchr2(b'"', b'\\', tail).unwrap_or_else(|| tail.len());
+
+            self.index += pos;
             if self.index == self.input().len() {
                 return Err(Error::Eof);
             }
-            match self.input()[self.index] {
-                b'"' => {
-                    if no_escapes {
-                        let borrowed = &self.input()[start..self.index];
-                        extend(&mut handler, borrowed);
-                        self.index += 1;
-                        return Ok(());
-                    }
 
-                    extend(&mut handler, &self.input()[start..self.index]);
+            match tail[pos] {
+                b'"' => {
+                    extend(&mut handler, &tail[..pos]);
                     self.index += 1;
 
                     return Ok(());
                 }
                 b'\\' => {
-                    no_escapes = false;
                     extend(&mut handler, &self.input()[start..self.index]);
                     self.index += 1;
                     handler.handle(Token::Char(self.parse_escape()?));
@@ -340,12 +336,10 @@ impl<'a> Iterator for Tokens<'a> {
         }
 
         let start = self.0.index;
-        let n = self.0.input()[start..]
-            .iter()
-            .position(|&ch| ESCAPE[ch as usize])
-            .unwrap_or(self.0.input().len() - start);
-        self.0.index += n;
-        let borrowed = &self.input()[start..self.0.index];
+        let tail = &self.0.input()[start..];
+        let pos = memchr::memchr2(b'"', b'\\', tail).unwrap_or_else(|| tail.len());
+        self.0.index += pos;
+        let borrowed = &tail[..pos];
         Some(Ok(Token::Sequence(unsafe { str::from_utf8_unchecked(borrowed) })))
     }
 }
@@ -560,5 +554,35 @@ mod tests {
         let mut appender = Appender::new(&mut buffer);
         appender.handle(Token::Sequence(r#"hello, "world""#));
         assert_eq!(buffer, r#"hello, \"world\""#.as_bytes());
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_invalid_json_string_empty() {
+        JsonEncodedString::new("");
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_invalid_json_single_quote() {
+        JsonEncodedString::new(r#"""#);
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_invalid_json_string_no_quotes() {
+        JsonEncodedString::new("hello, world");
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_invalid_json_string_no_closing_quote() {
+        JsonEncodedString::new(r#""hello, world"#);
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_invalid_json_string_no_opening_quote() {
+        JsonEncodedString::new(r#"hello, world""#);
     }
 }
