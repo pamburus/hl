@@ -1,4 +1,4 @@
-use std::{default::Default, ops::Range};
+use std::ops::Range;
 
 use flat_tree::tree;
 use log_format::{ast::BuilderDetach, Format, Span};
@@ -15,11 +15,11 @@ type Source = [u8];
 
 pub trait FormatExt: Format {
     #[inline]
-    fn parse_into<S>(&mut self, source: S, target: &mut Segment<S>) -> (Option<Span>, Result<(), Self::Error>)
+    fn parse_segment<S>(&mut self, source: S, container: Container) -> (Option<Span>, Result<Segment<S>, Self::Error>)
     where
         S: AsRef<Source>,
     {
-        target.set(source, self)
+        Segment::parse_to_container(source, self, container)
     }
 }
 
@@ -29,7 +29,7 @@ impl<F> FormatExt for F where F: Format {}
 
 #[derive(Debug)]
 pub struct Segment<S> {
-    source: Option<S>,
+    source: S,
     container: Container,
 }
 
@@ -38,86 +38,63 @@ where
     S: AsRef<Source>,
 {
     #[inline]
-    pub fn new() -> Self {
-        Default::default()
-    }
-
-    #[inline]
     pub fn entries(&self) -> Entries {
-        let source = self.source.as_ref().map(|x| x.as_ref());
+        let source = self.source.as_ref();
         Entries {
             source,
             roots: self.container.roots(),
         }
     }
 
-    #[inline]
-    pub fn with_capacity(capacity: usize) -> Self {
-        Self {
-            source: None,
-            container: Container::with_capacity(capacity),
-        }
+    pub fn source(&self) -> &Source {
+        self.source.as_ref()
     }
 
     #[inline]
-    pub fn build<F>(buf: S, format: &mut F) -> (Option<Span>, Result<Self, F::Error>)
+    pub fn parse<F>(source: S, format: &mut F) -> (Option<Span>, Result<Self, F::Error>)
     where
         F: Format + ?Sized,
     {
-        let mut segment = Segment::new();
-        let result = segment.set(buf, format);
-        (result.0, result.1.map(|_| segment))
+        Self::parse_to_container(source, format, Container::new())
     }
 
     #[inline]
-    pub fn set<F>(&mut self, buf: S, format: &mut F) -> (Option<Span>, Result<(), F::Error>)
+    pub fn parse_to_container<F>(
+        source: S,
+        format: &mut F,
+        mut container: Container,
+    ) -> (Option<Span>, Result<Self, F::Error>)
     where
         F: Format + ?Sized,
     {
-        self.container.clear();
+        container.clear();
         let mut end = 0;
-        let mut target = self.container.metaroot();
+        let mut target = container.metaroot();
         let result = loop {
-            let result = format.parse(&buf.as_ref().as_bytes()[end..], target).detach();
+            let result = format.parse(&source.as_ref().as_bytes()[end..], target).detach();
             target = result.1;
             match result.0 {
                 Ok(Some(span)) => end += span.end,
-                Ok(None) => break Ok(()),
+                Ok(None) => break Ok(Self { source, container }),
                 Err(e) => break Err(e),
             }
         };
-        self.source = Some(buf);
         let span = if end != 0 { Some(Span::with_end(end)) } else { None };
         (span, result)
     }
-
-    #[inline]
-    pub fn morph<B2, F>(self, buf: B2, format: &mut F) -> Result<Segment<B2>, F::Error>
-    where
-        B2: AsRef<Source>,
-        F: Format + ?Sized,
-    {
-        let mut segment = Segment::<B2>::new();
-        let result = segment.set(buf, format);
-        result.1?;
-        Ok(segment)
-    }
 }
 
-impl<S> Default for Segment<S> {
+impl<S> From<Segment<S>> for Container {
     #[inline]
-    fn default() -> Self {
-        Self {
-            source: None,
-            container: Container::new(),
-        }
+    fn from(segment: Segment<S>) -> Self {
+        segment.container
     }
 }
 
 // ---
 
 pub struct Entries<'s> {
-    source: Option<&'s Source>,
+    source: &'s Source,
     roots: tree::Roots<'s, ast::Value>,
 }
 
@@ -142,7 +119,7 @@ impl<'s> IntoIterator for Entries<'s> {
 }
 
 pub struct EntriesIter<'s> {
-    source: Option<&'s Source>,
+    source: &'s Source,
     items: tree::SiblingsIter<'s, ast::Value>,
 }
 
@@ -151,7 +128,7 @@ impl<'s> Iterator for EntriesIter<'s> {
 
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
-        let source = self.source?;
+        let source = self.source;
         self.items.next().map(|node| match node.value() {
             ast::Value::Composite(ast::Composite::Object) => Object::new(source, node),
             _ => panic!("unexpected root value: {:?}", node.value()),
@@ -351,11 +328,11 @@ mod tests {
 
     #[test]
     fn test_segment() {
-        let mut segment = Segment::new();
         let buf = r#"{"a":10}"#;
-        let result = segment.set(buf, &mut JsonFormat);
+        let result = Segment::parse(buf, &mut JsonFormat);
         assert_eq!(result.0, Some(Span::with_end(8)));
-        assert!(result.1.is_ok());
+
+        let segment = result.1.unwrap();
         assert_eq!(segment.entries().len(), 1);
         let entires = segment.entries().into_iter().collect::<Vec<_>>();
         assert_eq!(entires.len(), 1);
