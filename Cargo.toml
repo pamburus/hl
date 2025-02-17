@@ -80,6 +80,7 @@ itoa = { version = "1", default-features = false }
 known-folders = "1"
 log = "0.4"
 logos = "0.15"
+log-ast = { path = "./crate/log-ast" }
 memchr = "2"
 nonzero_ext = "0.3"
 notify = { version = "8", features = ["macos_kqueue"] }
