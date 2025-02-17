@@ -10,7 +10,7 @@ use super::*;
 pub struct JsonEncodedString<'a>(&'a str);
 
 impl<'a> JsonEncodedString<'a> {
-    #[inline(always)]
+    #[inline]
     pub fn new(value: &'a str) -> Self {
         Self(value)
     }
@@ -19,29 +19,29 @@ impl<'a> JsonEncodedString<'a> {
 impl<'a> AnyEncodedString<'a> for JsonEncodedString<'a> {
     type Tokens = Tokens<'a>;
 
-    #[inline(always)]
+    #[inline]
     fn tokens(&self) -> Self::Tokens {
         Tokens::new(self.0.as_ref())
     }
 
-    #[inline(always)]
+    #[inline]
     fn decode<H: Handler>(&self, handler: H) -> Result<()> {
         Parser::new(self.0.as_ref()).parse(handler)
     }
 
-    #[inline(always)]
+    #[inline]
     fn source(&self) -> &'a str {
         self.0
     }
 
-    #[inline(always)]
+    #[inline]
     fn is_empty(&self) -> bool {
         self.0 == r#""""#
     }
 }
 
 impl<'a> From<&'a str> for JsonEncodedString<'a> {
-    #[inline(always)]
+    #[inline]
     fn from(value: &'a str) -> Self {
         Self::new(value)
     }
@@ -56,7 +56,7 @@ pub struct Appender<'a> {
 }
 
 impl<'a> Appender<'a> {
-    #[inline(always)]
+    #[inline]
     pub fn new(buffer: &'a mut Vec<u8>) -> Self {
         Self { buffer }
     }
@@ -81,7 +81,7 @@ impl<'a> Appender<'a> {
 }
 
 impl<'a> Handler for Appender<'a> {
-    #[inline(always)]
+    #[inline]
     fn handle(&mut self, token: Token<'_>) -> Option<()> {
         match token {
             Token::Char(ch) => match ch {
@@ -121,7 +121,7 @@ struct Parser<'a> {
 }
 
 impl<'a> Parser<'a> {
-    #[inline(always)]
+    #[inline]
     pub fn new(input: &'a str) -> Self {
         Self { input, index: 0 }
     }
@@ -170,11 +170,12 @@ impl<'a> Parser<'a> {
         }
     }
 
-    #[inline(always)]
+    #[inline]
     fn input(&self) -> &'a [u8] {
         self.input.as_bytes()
     }
 
+    #[inline]
     fn parse_escape(&mut self) -> Result<char> {
         let Some(ch) = self.next() else {
             return Err(Error::Eof);
@@ -259,7 +260,7 @@ impl<'a> Parser<'a> {
         Ok(n)
     }
 
-    #[inline(always)]
+    #[inline]
     fn peek(&mut self) -> Option<u8> {
         let input = self.input();
         if self.index < input.len() {
@@ -269,7 +270,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    #[inline(always)]
+    #[inline]
     fn next(&mut self) -> Option<u8> {
         let input = self.input();
         if self.index < input.len() {
@@ -281,7 +282,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    #[inline(always)]
+    #[inline]
     fn empty(&self) -> bool {
         self.index >= self.input().len()
     }
@@ -292,19 +293,19 @@ impl<'a> Parser<'a> {
 pub struct Tokens<'a>(Parser<'a>);
 
 impl<'a> Tokens<'a> {
-    #[inline(always)]
+    #[inline]
     pub fn new(input: &'a str) -> Self {
         let mut parser = Parser::new(input);
         parser.next();
         Self(parser)
     }
 
-    #[inline(always)]
+    #[inline]
     fn input(&self) -> &'a [u8] {
         self.0.input.as_bytes()
     }
 
-    #[inline(always)]
+    #[inline]
     fn peek(&self) -> u8 {
         self.input()[self.0.index]
     }
@@ -351,7 +352,7 @@ impl<'a> Iterator for Tokens<'a> {
 
 // ---
 
-#[inline(always)]
+#[inline]
 fn decode_hex_val(val: u8) -> Option<u16> {
     let n = UNHEX[val as usize] as u16;
     if n == 255 {
