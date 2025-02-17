@@ -2,7 +2,6 @@
 description = "Encoded string"
 name = "encstr"
 version = "0.1.0"
-workspace = "../.."
 repository.workspace = true
 edition.workspace = true
 authors.workspace = true

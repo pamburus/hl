@@ -31,16 +31,18 @@ use crate::{
     datefmt::{DateTimeFormat, DateTimeFormatter},
     error::*,
     fmtx::aligned_left,
-    formatting::{RawRecordFormatter, RecordFormatter, RecordWithSourceFormatter},
+    formatting::v2::{RawRecordFormatter, RecordFormatter, RecordWithSourceFormatter},
     fsmon::{self, EventKind},
     index::{Indexer, IndexerSettings, Timestamp},
     input::{BlockLine, Input, InputHolder, InputReference},
-    model::{Filter, Parser, ParserSettings, RawRecord, Record, RecordFilter, RecordWithSourceConstructor},
+    model::v2::compat::{Filter, ParserSettings, Record, RecordFilter},
+    processing::{RecordIgnorer, RecordObserver, SegmentProcess, SegmentProcessor, SegmentProcessorOptions},
     query::Query,
-    scanning::{BufFactory, Delimit, Delimiter, Scanner, SearchExt, Segment, SegmentBuf, SegmentBufFactory},
+    scanning::{BufFactory, Delimiter, Scanner, Segment, SegmentBuf, SegmentBufFactory},
     settings::{FieldShowOption, Fields, Formatting},
     theme::{Element, StylingPush, Theme},
     timezone::Tz,
+    types,
     vfs::LocalFileSystem,
     IncludeExcludeKeyFilter,
 };
@@ -172,11 +174,7 @@ pub enum InputInfo {
     Minimal,
 }
 
-#[derive(Eq, PartialEq, Copy, Clone, Debug, Serialize, Deserialize)]
-pub enum InputFormat {
-    Json,
-    Logfmt,
-}
+pub type InputFormat = types::InputFormat;
 
 // ---
 
@@ -695,12 +693,10 @@ impl App {
         Ok(())
     }
 
-    fn parser(&self) -> Parser {
-        Parser::new(ParserSettings::new(
-            &self.options.fields.settings.predefined,
-            &self.options.fields.settings.ignore,
-            self.options.unix_ts_unit,
-        ))
+    fn parser(&self) -> ParserSettings {
+        ParserSettings::new(&self.options.fields.settings.predefined)
+            .with_ignore(&self.options.fields.settings.ignore)
+            .with_unix_timestamp_unit(self.options.unix_ts_unit)
     }
 
     fn formatter(&self) -> Box<dyn RecordWithSourceFormatter> {
@@ -821,7 +817,7 @@ impl App {
         Some(result)
     }
 
-    fn new_segment_processor<'a>(&'a self, parser: &'a Parser) -> impl SegmentProcess + 'a {
+    fn new_segment_processor<'s>(&'s self, parser: &'s ParserSettings) -> impl SegmentProcess + 's {
         let options = SegmentProcessorOptions {
             allow_prefix: self.options.allow_prefix,
             allow_unparsed_data: self.options.filter.is_empty(),
@@ -834,6 +830,7 @@ impl App {
 }
 
 // ---
+/*
 
 pub trait SegmentProcess {
     fn process<O: RecordObserver>(
@@ -847,6 +844,7 @@ pub trait SegmentProcess {
 }
 
 // ---
+
 
 #[derive(Default)]
 pub struct SegmentProcessorOptions {
@@ -964,7 +962,7 @@ impl RecordObserver for RecordIgnorer {
     #[inline]
     fn observe_record<'a>(&mut self, _: &Record<'a>, _: Range<usize>) {}
 }
-
+ */
 // ---
 
 struct TimestampIndexBuilder {
@@ -1119,7 +1117,7 @@ mod tests {
     use crate::{
         filtering::MatchOptions,
         level::{InfallibleLevel, Level},
-        model::FieldFilterSet,
+        model::v2::compat::FieldFilterSet,
         settings,
         themecfg::testing,
         LinuxDateFormat,
@@ -1226,7 +1224,7 @@ mod tests {
         app.run(vec![input], &mut output).unwrap();
         assert_eq!(
             std::str::from_utf8(&output).unwrap(),
-            "2023-12-07 20:07:05.949 |INF| xy duration=\"15d\" @ main.go:539\n",
+            "2023-12-07 20:07:05.949 |INF| xy duration=15d @ main.go:539\n",
         );
     }
 

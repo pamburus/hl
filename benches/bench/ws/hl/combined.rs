@@ -1,5 +1,5 @@
 // std imports
-use std::{iter::empty, sync::Arc};
+use std::sync::Arc;
 
 // third-party imports
 use chrono::{Offset, Utc};
@@ -9,10 +9,10 @@ use criterion::{BatchSize, BenchmarkId, Criterion, Throughput};
 // local imports
 use super::{hash, samples, BencherExt, ND};
 use hl::{
-    app::{RecordIgnorer, SegmentProcess, SegmentProcessorOptions},
+    processing::{RecordIgnorer, SegmentProcess, SegmentProcessorOptions},
     settings,
     timezone::Tz,
-    DateTimeFormatter, Filter, IncludeExcludeKeyFilter, LinuxDateFormat, Parser, ParserSettings, RecordFormatter,
+    DateTimeFormatter, Filter, IncludeExcludeKeyFilter, LinuxDateFormat, ParserSettings, RecordFormatter,
     SegmentProcessor, Settings, Theme,
 };
 
@@ -33,7 +33,7 @@ pub(super) fn bench(c: &mut Criterion) {
         c.throughput(Throughput::Bytes(input.len() as u64));
 
         let settings = Settings::default();
-        let parser = Parser::new(ParserSettings::new(&settings.fields.predefined, empty(), None));
+        let parser = ParserSettings::new(&settings.fields.predefined);
         let filter = Filter::default();
         let formatter = RecordFormatter::new(
             Arc::new(Theme::embedded(THEME).unwrap()),
