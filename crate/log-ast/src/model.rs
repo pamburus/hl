@@ -81,7 +81,7 @@ where
             }
         };
         self.source = Some(buf);
-        let span = if end != 0 { Some(Span::with_end(0)) } else { None };
+        let span = if end != 0 { Some(Span::with_end(end)) } else { None };
         (span, result)
     }
 
@@ -157,6 +157,7 @@ pub type Entry<'s> = Object<'s>;
 
 // ---
 
+#[derive(Debug, Clone)]
 pub enum Value<'s> {
     Null,
     Bool(bool),
@@ -166,6 +167,7 @@ pub enum Value<'s> {
     Object(Object<'s>),
 }
 
+#[derive(Debug, Clone)]
 pub struct Number<'s> {
     source: &'s [u8],
     span: Span,
@@ -188,6 +190,7 @@ impl<'s> Number<'s> {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct String<'s> {
     source: &'s [u8],
     span: Span,
@@ -210,6 +213,7 @@ impl<'s> String<'s> {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct Array<'s> {
     source: &'s [u8],
     node: Node<'s>,
@@ -222,7 +226,7 @@ impl<'s> Array<'s> {
     }
 }
 
-impl<'s> IntoIterator for Array<'s> {
+impl<'s> IntoIterator for &Array<'s> {
     type Item = Value<'s>;
     type IntoIter = ArrayIter<'s>;
 
@@ -249,6 +253,7 @@ impl<'s> Iterator for ArrayIter<'s> {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct Object<'s> {
     source: &'s [u8],
     node: Node<'s>,
@@ -261,7 +266,7 @@ impl<'s> Object<'s> {
     }
 }
 
-impl<'s> IntoIterator for Object<'s> {
+impl<'s> IntoIterator for &Object<'s> {
     type Item = (String<'s>, Value<'s>);
     type IntoIter = ObjectIter<'s>;
 
@@ -292,7 +297,7 @@ impl<'s> Iterator for ObjectIter<'s> {
                 },
                 _ => unreachable!(),
             };
-            let value = convert_value(self.source, node);
+            let value = convert_value(self.source, node.children().into_iter().next().unwrap());
             (key, value)
         })
     }
@@ -313,5 +318,33 @@ fn convert_value<'s>(source: &'s [u8], node: Node<'s>) -> Value<'s> {
             ast::Composite::Object => Value::Object(Object::new(source, node)),
             ast::Composite::Field(_) => unreachable!(),
         },
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use log_format_json::JsonFormat;
+
+    #[test]
+    fn test_segment() {
+        let mut segment = Segment::new();
+        let buf = br#"{"a":10}"#;
+        let result = segment.set(buf, &mut JsonFormat);
+        assert_eq!(result.0, Some(Span::with_end(8)));
+        assert!(result.1.is_ok());
+        assert_eq!(segment.entries().len(), 1);
+        let entires = segment.entries().into_iter().collect::<Vec<_>>();
+        assert_eq!(entires.len(), 1);
+        let fields = entires[0].into_iter().collect::<Vec<_>>();
+        assert_eq!(fields.len(), 1);
+        let (key, value) = &fields[0];
+        assert_eq!(key.text(), b"a");
+        match value {
+            Value::Number(number) => {
+                assert_eq!(number.text(), b"10");
+            }
+            _ => panic!("unexpected value: {:?}", value),
+        }
     }
 }

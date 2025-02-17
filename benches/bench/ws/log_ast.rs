@@ -42,19 +42,6 @@ pub(super) fn bench(c: &mut Criterion) {
 
         let container = setup().1;
 
-        c.throughput(Throughput::Elements(container.roots().len() as u64));
-        c.bench_function(BenchmarkId::new("roots", &param), |b| {
-            b.iter_batched_ref(
-                setup,
-                |(_, container)| {
-                    for root in container.roots() {
-                        let _ = black_box(root);
-                    }
-                },
-                BatchSize::SmallInput,
-            );
-        });
-
         c.throughput(Throughput::Elements(container.nodes().len() as u64));
         c.bench_function(BenchmarkId::new("traverse:fast", &param), |b| {
             b.iter_batched_ref(
@@ -87,19 +74,6 @@ pub(super) fn bench(c: &mut Criterion) {
             JsonFormat.parse_into(sample, &mut segment).1.unwrap();
             segment
         };
-
-        c.throughput(Throughput::Elements(setup().entries().len() as u64));
-        c.bench_function(BenchmarkId::new("segment:entries", &param), |b| {
-            b.iter_batched_ref(
-                setup,
-                |segment| {
-                    for entry in segment.entries() {
-                        let _ = black_box(entry);
-                    }
-                },
-                BatchSize::SmallInput,
-            );
-        });
 
         c.throughput(Throughput::Elements(
             segment_node_count::entries(setup().entries()) as u64
