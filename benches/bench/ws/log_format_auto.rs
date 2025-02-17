@@ -15,6 +15,7 @@ use log_format_auto::AutoFormat;
 
 // local imports
 use super::{hash, samples, ND};
+use crate::utf8;
 
 criterion_group!(benches, bench);
 
@@ -74,7 +75,7 @@ pub(super) fn bench(c: &mut Criterion) {
             let setup = || {
                 (
                     Segment::with_capacity(160),
-                    Arc::<[u8]>::from(Vec::from(sample)),
+                    Arc::<str>::from(utf8!(sample)),
                     AutoFormat::default(),
                 )
             };

@@ -7,11 +7,17 @@ use super::ast::{self, Container, Node, SiblingsIter};
 
 // ---
 
+#[cfg(not(feature = "bytes"))]
+type Source = str;
+
+#[cfg(feature = "bytes")]
+type Source = [u8];
+
 pub trait FormatExt: Format {
     #[inline]
     fn parse_into<S>(&mut self, source: S, target: &mut Segment<S>) -> (Option<Span>, Result<(), Self::Error>)
     where
-        S: AsRef<[u8]>,
+        S: AsRef<Source>,
     {
         target.set(source, self)
     }
@@ -29,7 +35,7 @@ pub struct Segment<S> {
 
 impl<S> Segment<S>
 where
-    S: AsRef<[u8]>,
+    S: AsRef<Source>,
 {
     #[inline]
     pub fn new() -> Self {
@@ -72,7 +78,7 @@ where
         let mut end = 0;
         let mut target = self.container.metaroot();
         let result = loop {
-            let result = format.parse(&buf.as_ref()[end..], target).detach();
+            let result = format.parse(&buf.as_ref().as_bytes()[end..], target).detach();
             target = result.1;
             match result.0 {
                 Ok(Some(span)) => end += span.end,
@@ -88,7 +94,7 @@ where
     #[inline]
     pub fn morph<B2, F>(self, buf: B2, format: &mut F) -> Result<Segment<B2>, F::Error>
     where
-        B2: AsRef<[u8]>,
+        B2: AsRef<Source>,
         F: Format + ?Sized,
     {
         let mut segment = Segment::<B2>::new();
@@ -111,7 +117,7 @@ impl<S> Default for Segment<S> {
 // ---
 
 pub struct Entries<'s> {
-    source: Option<&'s [u8]>,
+    source: Option<&'s Source>,
     roots: tree::Roots<'s, ast::Value>,
 }
 
@@ -136,7 +142,7 @@ impl<'s> IntoIterator for Entries<'s> {
 }
 
 pub struct EntriesIter<'s> {
-    source: Option<&'s [u8]>,
+    source: Option<&'s Source>,
     items: tree::SiblingsIter<'s, ast::Value>,
 }
 
@@ -169,13 +175,13 @@ pub enum Value<'s> {
 
 #[derive(Debug, Clone)]
 pub struct Number<'s> {
-    source: &'s [u8],
+    source: &'s Source,
     span: Span,
 }
 
 impl<'s> Number<'s> {
     #[inline]
-    fn new(source: &'s [u8], span: Span) -> Self {
+    fn new(source: &'s Source, span: Span) -> Self {
         Self { source, span }
     }
 
@@ -185,20 +191,20 @@ impl<'s> Number<'s> {
     }
 
     #[inline]
-    pub fn text(&self) -> &'s [u8] {
-        &self.source[Range::from(self.span)]
+    pub fn text(&self) -> &'s Source {
+        slice(self.source, self.span)
     }
 }
 
 #[derive(Debug, Clone)]
 pub struct String<'s> {
-    source: &'s [u8],
+    source: &'s Source,
     span: Span,
 }
 
 impl<'s> String<'s> {
     #[inline]
-    fn new(source: &'s [u8], span: Span) -> Self {
+    fn new(source: &'s Source, span: Span) -> Self {
         Self { source, span }
     }
 
@@ -208,20 +214,20 @@ impl<'s> String<'s> {
     }
 
     #[inline]
-    pub fn text(&self) -> &'s [u8] {
-        &self.source[Range::from(self.span)]
+    pub fn text(&self) -> &'s Source {
+        slice(self.source, self.span)
     }
 }
 
 #[derive(Debug, Clone)]
 pub struct Array<'s> {
-    source: &'s [u8],
+    source: &'s Source,
     node: Node<'s>,
 }
 
 impl<'s> Array<'s> {
     #[inline]
-    fn new(source: &'s [u8], node: Node<'s>) -> Self {
+    fn new(source: &'s Source, node: Node<'s>) -> Self {
         Self { source, node }
     }
 }
@@ -240,7 +246,7 @@ impl<'s> IntoIterator for &Array<'s> {
 }
 
 pub struct ArrayIter<'s> {
-    source: &'s [u8],
+    source: &'s Source,
     children: SiblingsIter<'s>,
 }
 
@@ -255,13 +261,13 @@ impl<'s> Iterator for ArrayIter<'s> {
 
 #[derive(Debug, Clone)]
 pub struct Object<'s> {
-    source: &'s [u8],
+    source: &'s Source,
     node: Node<'s>,
 }
 
 impl<'s> Object<'s> {
     #[inline]
-    fn new(source: &'s [u8], node: Node<'s>) -> Self {
+    fn new(source: &'s Source, node: Node<'s>) -> Self {
         Self { source, node }
     }
 }
@@ -280,7 +286,7 @@ impl<'s> IntoIterator for &Object<'s> {
 }
 
 pub struct ObjectIter<'s> {
-    source: &'s [u8],
+    source: &'s Source,
     children: SiblingsIter<'s>,
 }
 
@@ -304,7 +310,7 @@ impl<'s> Iterator for ObjectIter<'s> {
 }
 
 #[inline]
-fn convert_value<'s>(source: &'s [u8], node: Node<'s>) -> Value<'s> {
+fn convert_value<'s>(source: &'s Source, node: Node<'s>) -> Value<'s> {
     match node.value() {
         ast::Value::Scalar(scalar) => match scalar {
             ast::Scalar::Null => Value::Null,
@@ -321,6 +327,23 @@ fn convert_value<'s>(source: &'s [u8], node: Node<'s>) -> Value<'s> {
     }
 }
 
+#[inline]
+#[cfg(not(feature = "bytes"))]
+fn slice(source: &Source, span: Span) -> &Source {
+    // SAFETY: `span` is always within the bounds of `source`.
+    // This is guaranteed by the parser.
+    // The parser always returns valid spans.
+    // The parser is the only way to create a `Segment`.
+    // UTF-8 validation boundaries are also guaranteed by the parser.
+    unsafe { std::str::from_utf8_unchecked(&source.as_bytes()[Range::from(span)]) }
+}
+
+#[inline]
+#[cfg(feature = "bytes")]
+fn slice(source: &Source, span: Span) -> &Source {
+    source[Range::from(span)]
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -329,7 +352,7 @@ mod tests {
     #[test]
     fn test_segment() {
         let mut segment = Segment::new();
-        let buf = br#"{"a":10}"#;
+        let buf = r#"{"a":10}"#;
         let result = segment.set(buf, &mut JsonFormat);
         assert_eq!(result.0, Some(Span::with_end(8)));
         assert!(result.1.is_ok());
@@ -339,10 +362,10 @@ mod tests {
         let fields = entires[0].into_iter().collect::<Vec<_>>();
         assert_eq!(fields.len(), 1);
         let (key, value) = &fields[0];
-        assert_eq!(key.text(), b"a");
+        assert_eq!(key.text(), "a");
         match value {
             Value::Number(number) => {
-                assert_eq!(number.text(), b"10");
+                assert_eq!(number.text(), "10");
             }
             _ => panic!("unexpected value: {:?}", value),
         }
