@@ -24,8 +24,12 @@ mod ws;
 
 criterion_main!(
     ws::encstr::benches,
+    ws::flat_tree::benches,
     ws::hl::benches,
     misc::fncall::benches,
+    ws::json_ast::benches,
+    ws::log_format_json::benches,
+    ws::log_format_logfmt::benches,
     misc::mem::benches,
     misc::wildcard::benches,
 );
