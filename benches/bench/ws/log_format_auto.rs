@@ -6,16 +6,13 @@ use const_str::concat as strcat;
 use criterion::{criterion_group, BatchSize, BenchmarkId, Criterion, Throughput};
 
 // workspace imports
-use log_ast::{
-    ast::Container,
-    model::{FormatExt, Segment},
-};
+use log_ast::{ast::Container, model::FormatExt};
 use log_format::{ast::Discarder, Format};
 use log_format_auto::AutoFormat;
 
 // local imports
 use super::{hash, samples, ND};
-use crate::utf8;
+use crate::{utf8, BencherExt};
 
 criterion_group!(benches, bench);
 
@@ -74,15 +71,15 @@ pub(super) fn bench(c: &mut Criterion) {
         group.bench_function(BenchmarkId::new("parse:ast:segment", &param), |b| {
             let setup = || {
                 (
-                    Segment::with_capacity(160),
+                    Container::with_capacity(160),
                     Arc::<str>::from(utf8!(sample)),
                     AutoFormat::default(),
                 )
             };
 
-            b.iter_batched_ref(
+            b.iter_batched_fixed(
                 setup,
-                |(segment, sample, format)| format.parse_into(sample.clone(), segment).1.unwrap(),
+                |(container, sample, mut format)| format.parse_segment(sample.clone(), container).1.unwrap(),
                 BatchSize::SmallInput,
             );
         });
