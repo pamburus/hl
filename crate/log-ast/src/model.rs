@@ -1,5 +1,8 @@
-use super::ast::Container;
+use std::default::Default;
+
 use log_format::{ast::BuilderDetach, Format, Span};
+
+use super::ast::Container;
 
 // ---
 
@@ -7,7 +10,7 @@ pub trait FormatExt: Format {
     #[inline]
     fn parse_into<S>(&mut self, source: S, target: &mut Segment<S>) -> (Option<Span>, Result<(), Self::Error>)
     where
-        S: AsRef<[u8]> + Default,
+        S: AsRef<[u8]>,
     {
         target.set(source, self)
     }
@@ -15,15 +18,21 @@ pub trait FormatExt: Format {
 
 impl<F> FormatExt for F where F: Format {}
 
-pub struct Segment<B = [u8; 0]> {
+// ---
+
+#[derive(Debug)]
+pub struct Segment<B> {
     buf: Option<B>,
     container: Container,
 }
 
-impl Segment {
+impl<S> Segment<S>
+where
+    S: AsRef<[u8]>,
+{
     #[inline]
     pub fn new() -> Self {
-        Self::with_capacity(0)
+        Default::default()
     }
 
     #[inline]
@@ -33,26 +42,15 @@ impl Segment {
             container: Container::with_capacity(capacity),
         }
     }
-}
-
-impl<S> Segment<S>
-where
-    S: AsRef<[u8]> + Default,
-{
-    #[inline]
-    pub fn with_buf<B2: Default>(self) -> Segment<B2> {
-        Segment {
-            buf: Default::default(),
-            container: self.container,
-        }
-    }
 
     #[inline]
-    pub fn build<F>(buf: S, format: &mut F) -> Result<Self, F::Error>
+    pub fn build<F>(buf: S, format: &mut F) -> (Option<Span>, Result<Self, F::Error>)
     where
         F: Format + ?Sized,
     {
-        Segment::new().morph(buf, format)
+        let mut segment = Segment::new();
+        let result = segment.set(buf, format);
+        (result.0, result.1.map(|_| segment))
     }
 
     #[inline]
@@ -80,12 +78,22 @@ where
     #[inline]
     pub fn morph<B2, F>(self, buf: B2, format: &mut F) -> Result<Segment<B2>, F::Error>
     where
-        B2: AsRef<[u8]> + Default,
+        B2: AsRef<[u8]>,
         F: Format + ?Sized,
     {
-        let mut segment = Segment::new().with_buf::<B2>();
+        let mut segment = Segment::<B2>::new();
         let result = segment.set(buf, format);
         result.1?;
         Ok(segment)
+    }
+}
+
+impl<S> Default for Segment<S> {
+    #[inline]
+    fn default() -> Self {
+        Self {
+            buf: None,
+            container: Container::new(),
+        }
     }
 }
