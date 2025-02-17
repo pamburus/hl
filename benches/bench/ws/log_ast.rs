@@ -8,7 +8,7 @@ use criterion::{criterion_group, BatchSize, BenchmarkId, Criterion, Throughput};
 // workspace imports
 use log_ast::{
     ast::{Composite, Container, Node, Scalar, String, Value},
-    model::{self, FormatExt, Segment},
+    model::{self, FormatExt},
 };
 use log_format::Format;
 use log_format_json::JsonFormat;
@@ -71,9 +71,8 @@ pub(super) fn bench(c: &mut Criterion) {
 
         let setup = || {
             let sample = Arc::<str>::from(utf8!(sample));
-            let mut segment = Segment::with_capacity(160);
-            JsonFormat.parse_into(sample, &mut segment).1.unwrap();
-            segment
+            let container = Container::with_capacity(160);
+            JsonFormat.parse_segment(sample, container).1.unwrap()
         };
 
         c.throughput(Throughput::Elements(
