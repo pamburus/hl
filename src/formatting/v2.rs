@@ -1009,24 +1009,24 @@ mod tests {
     }
 
     trait ContainerExt<'a> {
-        fn from_fields(fields: &[(&'a str, ast::Scalar<'a>)]) -> Container<'a>;
+        fn from_fields(fields: &[(&'a str, ast::Scalar)]) -> Container<'a>;
         fn record(self) -> Record<'a>;
     }
 
     impl<'a> ContainerExt<'a> for Container<'a> {
-        fn from_fields(fields: &[(&'a str, ast::Scalar<'a>)]) -> Container<'a> {
-            use ast::Build;
+        fn from_fields(fields: &[(&'a str, ast::Scalar)]) -> Container<'a> {
+            use log_ast::ast::Build;
             let mut container = Container::default();
             container
                 .metaroot()
                 .add_composite(ast::Composite::Object, |mut b| {
                     for (key, value) in fields {
                         let (bc, _) = b.add_composite(ast::Composite::Field(EncodedString::raw(key)), |b| {
-                            (b.add_scalar(*value), Ok(()))
+                            Ok(b.add_scalar(*value))
                         });
                         b = bc;
                     }
-                    (b, Ok(()))
+                    Ok(b)
                 })
                 .1
                 .unwrap();

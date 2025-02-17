@@ -22,18 +22,25 @@ const MAX_PREDEFINED_FIELDS: usize = 8;
 // ---
 
 #[derive(Default)]
-pub struct Record<'s> {
-    pub ts: Option<Timestamp<'s>>,
-    pub message: Option<ast::Scalar<'s>>,
-    pub level: Option<Level>,
-    pub logger: Option<&'s str>,
-    pub caller: Option<Caller<'s>>,
-    pub span: std::ops::Range<usize>,
-    pub(crate) ast: ast::Container<'s>,
-    pub(crate) predefined: heapless::Vec<ast::Index, MAX_PREDEFINED_FIELDS>,
+pub struct Record {
+    ts: Option<TimestampSlot>,
+    message: Option<ast::Index>,
+    level: Option<Level>,
+    logger: Option<ast::Index>,
+    caller: Option<CallerSlot>,
+    span: std::ops::Range<usize>,
+    ast: ast::Segment,
+    predefined: heapless::Vec<ast::Index, MAX_PREDEFINED_FIELDS>,
 }
 
-impl<'s> Record<'s> {
+impl Record {
+    pub fn ts(&self) -> Option<Timestamp> {
+        match &self.ts {
+            Some(ts) => Some(Timestamp::with_slot(self.ast.nodes(ts.index).value().text(), &ts.slot)),
+            None => None,
+        }
+    }
+
     /// Returns an iterator over `Field` items for searching.
     ///
     /// The returned iterator borrows from `self` for the duration of the borrow.
@@ -70,11 +77,18 @@ impl<'s> Record<'s> {
     }
 }
 
-impl<'s> From<Record<'s>> for ast::Container<'s> {
+impl<'s> From<Record> for ast::Segment {
     #[inline]
-    fn from(record: Record<'s>) -> Self {
+    fn from(record: Record) -> Self {
         record.ast
     }
+}
+
+// ---
+
+struct TimestampSlot {
+    index: ast::Index,
+    inner: crate::timestamp::Slot,
 }
 
 // ---
