@@ -1,12 +1,15 @@
 // std imports
-use std::{hint::black_box, ops::Range, time::Duration, vec::Vec};
+use std::{hint::black_box, ops::Range, sync::Arc, time::Duration, vec::Vec};
 
 // third-party imports
 use const_str::concat as strcat;
 use criterion::{criterion_group, BatchSize, BenchmarkId, Criterion, Throughput};
 
 // workspace imports
-use log_ast::ast::{Composite, Container, Node, Scalar, String, Value};
+use log_ast::{
+    ast::{Composite, Container, Node, Scalar, String, Value},
+    model::{self, FormatExt, Segment},
+};
 use log_format::Format;
 use log_format_json::JsonFormat;
 
@@ -77,6 +80,37 @@ pub(super) fn bench(c: &mut Criterion) {
                 BatchSize::SmallInput,
             );
         });
+
+        let setup = || {
+            let sample = Arc::from(sample);
+            let mut segment = Segment::with_capacity(160);
+            JsonFormat.parse_into(sample, &mut segment).1.unwrap();
+            segment
+        };
+
+        c.throughput(Throughput::Elements(setup().entries().len() as u64));
+        c.bench_function(BenchmarkId::new("segment:entries", &param), |b| {
+            b.iter_batched_ref(
+                setup,
+                |segment| {
+                    for entry in segment.entries() {
+                        let _ = black_box(entry);
+                    }
+                },
+                BatchSize::SmallInput,
+            );
+        });
+
+        c.throughput(Throughput::Elements(
+            segment_node_count::entries(setup().entries()) as u64
+        ));
+        c.bench_function(BenchmarkId::new("segment:traverse:match:drain", &param), |b| {
+            b.iter_batched_ref(
+                setup,
+                |segment| segment_node_count::entries(segment.entries()),
+                BatchSize::SmallInput,
+            );
+        });
     }
 
     c.finish();
@@ -129,5 +163,46 @@ fn traverse_match_drain(sample: &[u8], node: Node) {
                 }
             }
         },
+    }
+}
+
+mod segment_node_count {
+    use super::*;
+
+    pub(super) fn entries<'s>(entries: model::Entries<'s>) -> usize {
+        entries.into_iter().map(object).sum()
+    }
+
+    pub(super) fn array<'s>(array: model::Array<'s>) -> usize {
+        array.into_iter().map(value).sum()
+    }
+
+    pub(super) fn object<'s>(object: model::Object<'s>) -> usize {
+        object.into_iter().map(field).sum()
+    }
+
+    pub(super) fn field<'s>(field: (model::String<'s>, model::Value<'s>)) -> usize {
+        black_box(field.0.text());
+        1 + value(field.1)
+    }
+
+    pub(super) fn value<'s>(value: model::Value<'s>) -> usize {
+        match value {
+            model::Value::Null => 1,
+            model::Value::Bool(v) => {
+                black_box(v);
+                1
+            }
+            model::Value::Number(n) => {
+                black_box(n.text());
+                1
+            }
+            model::Value::String(s) => {
+                black_box(s.text());
+                1
+            }
+            model::Value::Array(a) => array(a),
+            model::Value::Object(o) => object(o),
+        }
     }
 }
