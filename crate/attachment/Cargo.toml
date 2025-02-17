@@ -1,0 +1,10 @@
+[package]
+name = "attachment"
+version = "0.1.0"
+repository.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+derive_more = {version="1", features = ["deref", "deref_mut"]}

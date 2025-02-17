@@ -11,8 +11,8 @@ use wildflower::Pattern;
 // local imports
 use crate::error::{Error, Result};
 use crate::level::RelaxedLevel;
-use crate::model::{
-    FieldFilter, FieldFilterKey, Level, Number, NumericOp, Record, RecordFilter, UnaryBoolOp, ValueMatchPolicy,
+use crate::model::v2::{
+    compat::RecordFilter, FieldFilter, FieldFilterKey, Level, Number, NumericOp, Record, UnaryBoolOp, ValueMatchPolicy,
 };
 use crate::types::FieldKind;
 
@@ -357,7 +357,7 @@ impl<F: Fn(Level) -> bool> RecordFilter for LevelFilter<F> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::model::{Parser as RecordParser, ParserSettings, RawRecord};
+    use crate::model::v2::{compat::ParserSettings, parse::NewParser};
 
     #[test]
     fn test_or_3() {
@@ -617,8 +617,10 @@ mod tests {
     }
 
     fn parse(s: &str) -> Record {
-        let raw = RawRecord::parser().parse(s.as_bytes()).next().unwrap().unwrap().record;
-        let parser = RecordParser::new(ParserSettings::default());
-        parser.parse(&raw)
+        let settings = ParserSettings::default();
+        let mut parser = settings
+            .new_parser(crate::format::Auto::default(), s.as_bytes())
+            .unwrap();
+        parser.next().unwrap().unwrap()
     }
 }

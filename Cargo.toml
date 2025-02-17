@@ -1,5 +1,16 @@
 [workspace]
-members = [".", "crate/encstr", "crate/heapopt"]
+members = [
+    ".",
+    "crate/attachment",
+    "crate/encstr",
+    "crate/heapopt",
+    "crate/json-ast",
+    "crate/flat-tree",
+    "crate/log-ast",
+    "crate/log-format",
+    "crate/log-format-json",
+    "crate/log-format-logfmt",
+]
 
 [workspace.package]
 repository = "https://github.com/pamburus/hl"
@@ -43,7 +54,8 @@ crossbeam-channel = "0"
 crossbeam-queue = "0"
 crossbeam-utils = "0"
 deko = "0"
-derive_more = { version = "2", features = ["deref", "from"] }
+derive-where = "1"
+derive_more = { version = "2", features = ["deref", "deref_mut", "from"] }
 dirs = "6"
 dirs-sys = "0"
 encstr = { path = "./crate/encstr" }
@@ -51,6 +63,7 @@ enum-map = "2"
 enumset = "1"
 enumset-ext = { path = "./crate/enumset-ext" }
 env_logger = "0"
+flat-tree = { path = "./crate/flat-tree" }
 flate2 = "1"
 heapless = "0"
 heapopt = { path = "./crate/heapopt" }
@@ -61,6 +74,7 @@ itertools = "0.14"
 itoa = { version = "1", default-features = false }
 known-folders = "1"
 log = "0"
+logos = "0"
 memchr = "2"
 nonzero_ext = "0"
 notify = { version = "8", features = ["macos_kqueue"] }
@@ -98,11 +112,17 @@ clean-path = "0"
 const-str = "0"
 criterion = "0"
 fnv = "1"
+json-ast = { path = "./crate/json-ast" }
+log-ast = { path = "./crate/log-ast" }
+log-format-json = { path = "./crate/log-format-json" }
+log-format-logfmt = { path = "./crate/log-format-logfmt" }
+log-format = { path = "./crate/log-format" }
+logos = "0"
 maplit = "1"
 mockall = "0"
+regex = "1"
 stats_alloc = "0"
 rand = "0"
-regex = "1"
 wildmatch = "2"
 rstest = "0"
 
@@ -111,6 +131,9 @@ debug = false
 opt-level = 3
 codegen-units = 1
 lto = true
+
+[profile.dev]
+opt-level = 1
 
 [[bench]]
 name = "bench"
