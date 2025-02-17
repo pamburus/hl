@@ -16,6 +16,7 @@ use log_format_json::{JsonFormat, Lexer, Token};
 
 // local imports
 use super::{hash, samples, ND};
+use crate::utf8;
 
 criterion_group!(benches, bench);
 
@@ -86,13 +87,7 @@ pub(super) fn bench(c: &mut Criterion) {
         });
 
         group.bench_function(BenchmarkId::new("parse:ast:segment", &param), |b| {
-            let setup = || {
-                (
-                    Segment::with_capacity(160),
-                    Arc::<[u8]>::from(Vec::from(sample)),
-                    JsonFormat,
-                )
-            };
+            let setup = || (Segment::with_capacity(160), Arc::<str>::from(utf8!(sample)), JsonFormat);
 
             b.iter_batched_ref(
                 setup,

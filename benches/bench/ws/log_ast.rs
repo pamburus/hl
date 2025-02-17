@@ -15,6 +15,7 @@ use log_format_json::JsonFormat;
 
 // local imports
 use super::{hash, samples, ND};
+use crate::utf8;
 
 criterion_group!(benches, bench);
 
@@ -69,7 +70,7 @@ pub(super) fn bench(c: &mut Criterion) {
         });
 
         let setup = || {
-            let sample = Arc::from(sample);
+            let sample = Arc::<str>::from(utf8!(sample));
             let mut segment = Segment::with_capacity(160);
             JsonFormat.parse_into(sample, &mut segment).1.unwrap();
             segment
