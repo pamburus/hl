@@ -81,6 +81,8 @@ known-folders = "1"
 log = "0.4"
 logos = "0.15"
 log-ast = { path = "./crate/log-ast" }
+log-format = { path = "./crate/log-format" }
+log-format-auto = { path = "./crate/log-format-auto" }
 memchr = "2"
 nonzero_ext = "0.3"
 notify = { version = "8", features = ["macos_kqueue"] }

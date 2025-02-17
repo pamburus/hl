@@ -10,28 +10,23 @@ use crate::app::UnixTimestampUnit;
 // ---
 
 #[derive(Debug)]
-pub struct Timestamp<'a> {
-    raw: &'a str,
+pub struct Slot {
     parsed: OnceCell<Option<DateTime<FixedOffset>>>,
     unix_unit: Option<UnixTimestampUnit>,
 }
 
-impl<'a> Timestamp<'a> {
-    pub fn new(value: &'a str) -> Self {
+impl Slot {
+    #[inline]
+    pub fn new() -> Self {
         Self {
-            raw: value,
             parsed: OnceCell::new(),
             unix_unit: None,
         }
     }
 
-    pub fn raw(&self) -> &'a str {
-        self.raw
-    }
-
+    #[inline]
     pub fn with_unix_unit(self, unit: Option<UnixTimestampUnit>) -> Self {
         Self {
-            raw: self.raw,
             parsed: if unit == self.unix_unit {
                 self.parsed
             } else {
@@ -40,11 +35,44 @@ impl<'a> Timestamp<'a> {
             unix_unit: unit,
         }
     }
+}
 
-    pub fn parsed(&self) -> &Option<DateTime<FixedOffset>> {
-        self.parsed.get_or_init(|| self.reparse())
+#[derive(Debug)]
+pub struct Timestamp<'a, S = Slot> {
+    raw: &'a str,
+    slot: S,
+}
+
+impl<'a> Timestamp<'a> {
+    #[inline]
+    pub fn new(value: &'a str) -> Self {
+        Self {
+            raw: value,
+            slot: Slot::new(),
+        }
+    }
+}
+
+impl<'a, S> Timestamp<'a, S>
+where
+    S: AsRef<Slot>,
+{
+    #[inline]
+    pub fn with_slot(value: &'a str, slot: S) -> Self {
+        Self { raw: value, slot }
     }
 
+    #[inline]
+    pub fn raw(&self) -> &'a str {
+        self.raw
+    }
+
+    #[inline]
+    pub fn parsed(&self) -> &Option<DateTime<FixedOffset>> {
+        self.slot.as_ref().parsed.get_or_init(|| self.reparse())
+    }
+
+    #[inline]
     pub fn parse(&self) -> Option<DateTime<FixedOffset>> {
         *self.parsed()
     }
@@ -53,7 +81,7 @@ impl<'a> Timestamp<'a> {
         if let Ok(ts) = self.raw.parse() {
             Some(ts)
         } else if let Some(nt) = guess_number_type(self.raw.as_bytes()) {
-            let ts = match (nt, self.unix_unit) {
+            let ts = match (nt, self.slot.as_ref().unix_unit) {
                 (NumberType::Integer, unit) => self.raw.parse::<i64>().ok().and_then(|ts| {
                     let unit = unit.unwrap_or_else(|| UnixTimestampUnit::guess(ts));
                     match unit {
