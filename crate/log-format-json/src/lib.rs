@@ -27,7 +27,7 @@ impl Format for JsonFormat {
         B: ast::Build,
     {
         let mut lexer = Token::lexer(s);
-        parse::parse_object(&mut lexer, target).map(|(ok, target)| {
+        parse::parse_value(&mut lexer, target).map(|(ok, target)| {
             (
                 if ok {
                     Some(Span::with_end(lexer.span().end))
