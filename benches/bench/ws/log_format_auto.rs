@@ -79,7 +79,7 @@ pub(super) fn bench(c: &mut Criterion) {
 
             b.iter_batched_fixed(
                 setup,
-                |(container, sample, mut format)| format.parse_segment(sample.clone(), container).1.unwrap(),
+                |(container, sample, mut format)| format.parse_segment(sample.clone(), container).unwrap().unwrap(),
                 BatchSize::SmallInput,
             );
         });
