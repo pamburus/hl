@@ -1,23 +1,18 @@
-use std::ops::Range;
-
 use flat_tree::tree;
 use log_format::{ast::BuilderDetach, Format, Span};
 
-use super::ast::{self, Container, Node, SiblingsIter};
+use super::{
+    ast::{self, Container, Node, SiblingsIter},
+    source::Source,
+};
 
 // ---
 
-#[cfg(not(feature = "bytes"))]
-type Source = str;
-
-#[cfg(feature = "bytes")]
-type Source = [u8];
-
 pub trait FormatExt: Format {
     #[inline]
-    fn parse_segment<S>(&mut self, source: S, container: Container) -> (Option<Span>, Result<Segment<S>, Self::Error>)
+    fn parse_segment<S>(&mut self, source: S, container: Container) -> Result<Option<Segment<S>>, Self::Error>
     where
-        S: AsRef<Source>,
+        S: Source + Clone,
     {
         Segment::parse_to_container(source, self, container)
     }
@@ -30,28 +25,29 @@ impl<F> FormatExt for F where F: Format {}
 #[derive(Debug)]
 pub struct Segment<S> {
     source: S,
+    span: Span,
     container: Container,
 }
 
 impl<S> Segment<S>
 where
-    S: AsRef<Source>,
+    S: Source + Clone,
 {
     #[inline]
-    pub fn entries(&self) -> Entries {
-        let source = self.source.as_ref();
+    pub fn entries(&self) -> Entries<S::Ref<'_>> {
         Entries {
-            source,
+            source: self.source.as_ref(),
             roots: self.container.roots(),
         }
     }
 
-    pub fn source(&self) -> &Source {
-        self.source.as_ref()
+    #[inline]
+    pub fn source(&self) -> &S::Slice<'_> {
+        self.source.slice(self.span)
     }
 
     #[inline]
-    pub fn parse<F>(source: S, format: &mut F) -> (Option<Span>, Result<Self, F::Error>)
+    pub fn parse<F>(source: S, format: &mut F) -> Result<Option<Self>, F::Error>
     where
         F: Format + ?Sized,
     {
@@ -59,28 +55,31 @@ where
     }
 
     #[inline]
-    pub fn parse_to_container<F>(
-        source: S,
-        format: &mut F,
-        mut container: Container,
-    ) -> (Option<Span>, Result<Self, F::Error>)
+    pub fn parse_to_container<F>(source: S, format: &mut F, mut container: Container) -> Result<Option<Self>, F::Error>
     where
         F: Format + ?Sized,
     {
         container.clear();
         let mut end = 0;
         let mut target = container.metaroot();
-        let result = loop {
-            let result = format.parse(&source.as_ref().as_bytes()[end..], target).detach();
+        loop {
+            let result = format.parse(&source.bytes()[end..], target).detach();
             target = result.1;
             match result.0 {
                 Ok(Some(span)) => end += span.end,
-                Ok(None) => break Ok(Self { source, container }),
+                Ok(None) => {
+                    if end == 0 {
+                        break Ok(None);
+                    }
+                    break Ok(Some(Self {
+                        source,
+                        span: Span::with_end(end),
+                        container,
+                    }));
+                }
                 Err(e) => break Err(e),
             }
-        };
-        let span = if end != 0 { Some(Span::with_end(end)) } else { None };
-        (span, result)
+        }
     }
 }
 
@@ -93,21 +92,24 @@ impl<S> From<Segment<S>> for Container {
 
 // ---
 
-pub struct Entries<'s> {
-    source: &'s Source,
+pub struct Entries<'s, S> {
+    source: S,
     roots: tree::Roots<'s, ast::Value>,
 }
 
-impl<'s> Entries<'s> {
+impl<'s, S> Entries<'s, S> {
     #[inline]
     pub fn len(&self) -> usize {
         self.roots.len()
     }
 }
 
-impl<'s> IntoIterator for Entries<'s> {
-    type Item = Entry<'s>;
-    type IntoIter = EntriesIter<'s>;
+impl<'s, S> IntoIterator for Entries<'s, S>
+where
+    S: Source + Clone,
+{
+    type Item = Entry<'s, S>;
+    type IntoIter = EntriesIter<'s, S>;
 
     #[inline]
     fn into_iter(self) -> Self::IntoIter {
@@ -118,17 +120,20 @@ impl<'s> IntoIterator for Entries<'s> {
     }
 }
 
-pub struct EntriesIter<'s> {
-    source: &'s Source,
+pub struct EntriesIter<'s, S> {
+    source: S,
     items: tree::SiblingsIter<'s, ast::Value>,
 }
 
-impl<'s> Iterator for EntriesIter<'s> {
-    type Item = Entry<'s>;
+impl<'s, S> Iterator for EntriesIter<'s, S>
+where
+    S: Source + Clone,
+{
+    type Item = Entry<'s, S>;
 
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
-        let source = self.source;
+        let source = self.source.clone();
         self.items.next().map(|node| match node.value() {
             ast::Value::Composite(ast::Composite::Object) => Object::new(source, node),
             _ => panic!("unexpected root value: {:?}", node.value()),
@@ -136,29 +141,32 @@ impl<'s> Iterator for EntriesIter<'s> {
     }
 }
 
-pub type Entry<'s> = Object<'s>;
+pub type Entry<'s, S> = Object<'s, S>;
 
 // ---
 
 #[derive(Debug, Clone)]
-pub enum Value<'s> {
+pub enum Value<'s, S> {
     Null,
     Bool(bool),
-    Number(Number<'s>),
-    String(String<'s>),
-    Array(Array<'s>),
-    Object(Object<'s>),
+    Number(Number<S>),
+    String(String<S>),
+    Array(Array<'s, S>),
+    Object(Object<'s, S>),
 }
 
 #[derive(Debug, Clone)]
-pub struct Number<'s> {
-    source: &'s Source,
+pub struct Number<S> {
+    source: S,
     span: Span,
 }
 
-impl<'s> Number<'s> {
+impl<S> Number<S>
+where
+    S: Source,
+{
     #[inline]
-    fn new(source: &'s Source, span: Span) -> Self {
+    fn new(source: S, span: Span) -> Self {
         Self { source, span }
     }
 
@@ -168,20 +176,23 @@ impl<'s> Number<'s> {
     }
 
     #[inline]
-    pub fn text(&self) -> &'s Source {
-        slice(self.source, self.span)
+    pub fn text(&self) -> &S::Slice<'_> {
+        self.source.slice(self.span)
     }
 }
 
 #[derive(Debug, Clone)]
-pub struct String<'s> {
-    source: &'s Source,
+pub struct String<S> {
+    source: S,
     span: Span,
 }
 
-impl<'s> String<'s> {
+impl<S> String<S>
+where
+    S: Source,
+{
     #[inline]
-    fn new(source: &'s Source, span: Span) -> Self {
+    fn new(source: S, span: Span) -> Self {
         Self { source, span }
     }
 
@@ -191,103 +202,120 @@ impl<'s> String<'s> {
     }
 
     #[inline]
-    pub fn text(&self) -> &'s Source {
-        slice(self.source, self.span)
+    pub fn text(&self) -> &S::Slice<'_> {
+        self.source.slice(self.span)
     }
 }
 
 #[derive(Debug, Clone)]
-pub struct Array<'s> {
-    source: &'s Source,
+pub struct Array<'s, S> {
+    source: S,
     node: Node<'s>,
 }
 
-impl<'s> Array<'s> {
+impl<'s, S> Array<'s, S> {
     #[inline]
-    fn new(source: &'s Source, node: Node<'s>) -> Self {
+    fn new(source: S, node: Node<'s>) -> Self {
         Self { source, node }
     }
 }
 
-impl<'s> IntoIterator for &Array<'s> {
-    type Item = Value<'s>;
-    type IntoIter = ArrayIter<'s>;
+impl<'s, S> IntoIterator for &Array<'s, S>
+where
+    S: Source + Clone,
+{
+    type Item = Value<'s, S>;
+    type IntoIter = ArrayIter<'s, S>;
 
     #[inline]
     fn into_iter(self) -> Self::IntoIter {
         ArrayIter {
-            source: self.source,
+            source: self.source.clone(),
             children: self.node.children().into_iter(),
         }
     }
 }
 
-pub struct ArrayIter<'s> {
-    source: &'s Source,
+pub struct ArrayIter<'s, S> {
+    source: S,
     children: SiblingsIter<'s>,
 }
 
-impl<'s> Iterator for ArrayIter<'s> {
-    type Item = Value<'s>;
+impl<'s, S> Iterator for ArrayIter<'s, S>
+where
+    S: Source + Clone,
+{
+    type Item = Value<'s, S>;
 
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
-        self.children.next().map(|node| convert_value(self.source, node))
+        self.children
+            .next()
+            .map(|node| convert_value(self.source.clone(), node))
     }
 }
 
 #[derive(Debug, Clone)]
-pub struct Object<'s> {
-    source: &'s Source,
+pub struct Object<'s, S> {
+    source: S,
     node: Node<'s>,
 }
 
-impl<'s> Object<'s> {
+impl<'s, S> Object<'s, S> {
     #[inline]
-    fn new(source: &'s Source, node: Node<'s>) -> Self {
+    fn new(source: S, node: Node<'s>) -> Self {
         Self { source, node }
     }
 }
 
-impl<'s> IntoIterator for &Object<'s> {
-    type Item = (String<'s>, Value<'s>);
-    type IntoIter = ObjectIter<'s>;
+impl<'s, S> IntoIterator for &Object<'s, S>
+where
+    S: Source + Clone,
+{
+    type Item = (String<S>, Value<'s, S>);
+    type IntoIter = ObjectIter<'s, S>;
 
     #[inline]
     fn into_iter(self) -> Self::IntoIter {
         ObjectIter {
-            source: self.source,
+            source: self.source.clone(),
             children: self.node.children().into_iter(),
         }
     }
 }
 
-pub struct ObjectIter<'s> {
-    source: &'s Source,
+pub struct ObjectIter<'s, S> {
+    source: S,
     children: SiblingsIter<'s>,
 }
 
-impl<'s> Iterator for ObjectIter<'s> {
-    type Item = (String<'s>, Value<'s>);
+impl<'s, S> Iterator for ObjectIter<'s, S>
+where
+    S: Source + Clone,
+{
+    type Item = (String<S>, Value<'s, S>);
 
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
         self.children.next().map(|node| {
             let key = match node.value() {
                 ast::Value::Composite(ast::Composite::Field(key)) => match key {
-                    ast::String::Plain(span) => String::new(self.source, *span),
-                    ast::String::JsonEscaped(span) => String::new(self.source, *span),
+                    ast::String::Plain(span) => String::new(self.source.clone(), *span),
+                    ast::String::JsonEscaped(span) => String::new(self.source.clone(), *span),
                 },
                 _ => unreachable!(),
             };
-            let value = convert_value(self.source, node.children().into_iter().next().unwrap());
+            let value = convert_value(self.source.clone(), node.children().into_iter().next().unwrap());
             (key, value)
         })
     }
 }
 
 #[inline]
-fn convert_value<'s>(source: &'s Source, node: Node<'s>) -> Value<'s> {
+fn convert_value<'s, S>(source: S, node: Node<'s>) -> Value<'s, S>
+where
+    S: Source,
+{
     match node.value() {
         ast::Value::Scalar(scalar) => match scalar {
             ast::Scalar::Null => Value::Null,
@@ -304,23 +332,6 @@ fn convert_value<'s>(source: &'s Source, node: Node<'s>) -> Value<'s> {
     }
 }
 
-#[inline]
-#[cfg(not(feature = "bytes"))]
-fn slice(source: &Source, span: Span) -> &Source {
-    // SAFETY: `span` is always within the bounds of `source`.
-    // This is guaranteed by the parser.
-    // The parser always returns valid spans.
-    // The parser is the only way to create a `Segment`.
-    // UTF-8 validation boundaries are also guaranteed by the parser.
-    unsafe { std::str::from_utf8_unchecked(&source.as_bytes()[Range::from(span)]) }
-}
-
-#[inline]
-#[cfg(feature = "bytes")]
-fn slice(source: &Source, span: Span) -> &Source {
-    source[Range::from(span)]
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -329,10 +340,8 @@ mod tests {
     #[test]
     fn test_segment() {
         let buf = r#"{"a":10}"#;
-        let result = Segment::parse(buf, &mut JsonFormat);
-        assert_eq!(result.0, Some(Span::with_end(8)));
-
-        let segment = result.1.unwrap();
+        let segment = Segment::parse(buf, &mut JsonFormat).unwrap().unwrap();
+        assert_eq!(segment.source().len(), 8);
         assert_eq!(segment.entries().len(), 1);
         let entires = segment.entries().into_iter().collect::<Vec<_>>();
         assert_eq!(entires.len(), 1);
