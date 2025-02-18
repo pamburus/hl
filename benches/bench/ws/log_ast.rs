@@ -72,7 +72,7 @@ pub(super) fn bench(c: &mut Criterion) {
         let setup = || {
             let sample = Arc::<str>::from(utf8!(sample));
             let container = Container::with_capacity(160);
-            JsonFormat.parse_segment(sample, container).1.unwrap()
+            JsonFormat.parse_segment(sample, container).unwrap().unwrap()
         };
 
         c.throughput(Throughput::Elements(
@@ -142,25 +142,26 @@ fn traverse_match_drain(sample: &[u8], node: Node) {
 
 mod segment_node_count {
     use super::*;
+    use log_ast::source::Source;
 
-    pub(super) fn entries<'s>(entries: model::Entries<'s>) -> usize {
+    pub(super) fn entries<S: Source + Clone>(entries: model::Entries<S>) -> usize {
         entries.into_iter().map(object).sum()
     }
 
-    pub(super) fn array<'s>(array: model::Array<'s>) -> usize {
+    pub(super) fn array<S: Source + Clone>(array: model::Array<S>) -> usize {
         array.into_iter().map(value).sum()
     }
 
-    pub(super) fn object<'s>(object: model::Object<'s>) -> usize {
+    pub(super) fn object<S: Source + Clone>(object: model::Object<S>) -> usize {
         object.into_iter().map(field).sum()
     }
 
-    pub(super) fn field<'s>(field: (model::String<'s>, model::Value<'s>)) -> usize {
+    pub(super) fn field<S: Source + Clone>(field: (model::String<S>, model::Value<S>)) -> usize {
         black_box(field.0.text());
         1 + value(field.1)
     }
 
-    pub(super) fn value<'s>(value: model::Value<'s>) -> usize {
+    pub(super) fn value<S: Source + Clone>(value: model::Value<S>) -> usize {
         match value {
             model::Value::Null => 1,
             model::Value::Bool(v) => {
