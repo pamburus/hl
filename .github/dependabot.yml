@@ -350,3 +350,13 @@ updates:
         patterns:
           - "windows-*"
           - "windows_*"
+      zstd-sec:
+        applies-to: security-updates
+        patterns:
+          - "zstd"
+          - "zstd-*"
+      zstd-ver:
+        applies-to: version-updates
+        patterns:
+          - "zstd"
+          - "zstd-*"
