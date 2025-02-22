@@ -149,7 +149,7 @@ impl Theme {
         Assets::iter().filter_map(|a| Self::strip_known_extension(&a).map(|n| n.to_string()))
     }
 
-    fn custom_names(app_dirs: &AppDirs) -> Result<impl IntoIterator<Item = Result<String>>> {
+    fn custom_names(app_dirs: &AppDirs) -> Result<impl IntoIterator<Item = Result<String>> + use<>> {
         let path = Self::themes_dir(app_dirs);
         let dir = Path::new(&path);
         Ok(dir
