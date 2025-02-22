@@ -1220,11 +1220,7 @@ impl<'a> KeyMatcher<'a> {
 
     #[inline]
     fn norm(c: char) -> char {
-        if c == '_' {
-            '-'
-        } else {
-            c.to_ascii_lowercase()
-        }
+        if c == '_' { '-' } else { c.to_ascii_lowercase() }
     }
 }
 

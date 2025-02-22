@@ -1,16 +1,16 @@
 // std imports
-use std::cmp::{max, min, PartialOrd};
+use std::cmp::{PartialOrd, max, min};
 
 // third-party imports
 use chrono::{DateTime, Datelike, FixedOffset, NaiveDateTime, Offset, TimeZone, Timelike};
 use chrono_tz::OffsetName;
-use enumset::{enum_set as mask, EnumSet, EnumSetType};
+use enumset::{EnumSet, EnumSetType, enum_set as mask};
 
 // workspace imports
 use enumset_ext::EnumSetExt;
 
 // local imports
-use crate::fmtx::{aligned_left, Alignment, Counter, Push};
+use crate::fmtx::{Alignment, Counter, Push, aligned_left};
 use crate::timestamp::rfc3339;
 use crate::timezone::Tz;
 

@@ -3,7 +3,7 @@ use std::time::Duration;
 
 // third-party imports
 use const_str::concat as strcat;
-use criterion::{criterion_group, BatchSize, Criterion};
+use criterion::{BatchSize, Criterion, criterion_group};
 
 // local imports
 use super::{BencherExt, ND};
