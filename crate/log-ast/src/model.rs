@@ -63,7 +63,7 @@ where
         let mut end = 0;
         let mut target = container.metaroot();
         loop {
-            let result = format.parse(&source.as_ref()[end..], target).detach();
+            let result = format.parse(&source.bytes()[end..], target).detach();
             target = result.1;
             match result.0 {
                 Ok(Some(span)) => end += span.end,
