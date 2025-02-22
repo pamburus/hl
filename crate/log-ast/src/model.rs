@@ -34,9 +34,9 @@ where
     S: Source + Clone,
 {
     #[inline]
-    pub fn entries(&self) -> Entries<S> {
+    pub fn entries(&self) -> Entries<&S> {
         Entries {
-            source: self.source.clone(),
+            source: &self.source,
             roots: self.container.roots(),
         }
     }
