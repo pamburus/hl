@@ -1,5 +1,3 @@
-use std::ops::Range;
-
 use flat_tree::tree;
 use log_format::{ast::BuilderDetach, Format, Span};
 
@@ -44,7 +42,7 @@ where
     }
 
     #[inline]
-    pub fn source(&self) -> &S::Slice {
+    pub fn source(&self) -> &S::Slice<'_> {
         self.source.slice(self.span)
     }
 
@@ -178,7 +176,7 @@ where
     }
 
     #[inline]
-    pub fn text(&self) -> &S::Slice {
+    pub fn text(&self) -> &S::Slice<'_> {
         self.source.slice(self.span)
     }
 }
@@ -204,7 +202,7 @@ where
     }
 
     #[inline]
-    pub fn text(&self) -> &S::Slice {
+    pub fn text(&self) -> &S::Slice<'_> {
         self.source.slice(self.span)
     }
 }
@@ -343,9 +341,7 @@ mod tests {
     fn test_segment() {
         let buf = r#"{"a":10}"#;
         let segment = Segment::parse(buf, &mut JsonFormat).unwrap().unwrap();
-        assert_eq!(segment.source().len(), Some(Span::with_end(8)));
-
-        let segment = result.1.unwrap();
+        assert_eq!(segment.source().len(), 8);
         assert_eq!(segment.entries().len(), 1);
         let entires = segment.entries().into_iter().collect::<Vec<_>>();
         assert_eq!(entires.len(), 1);

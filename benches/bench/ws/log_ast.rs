@@ -72,7 +72,7 @@ pub(super) fn bench(c: &mut Criterion) {
         let setup = || {
             let sample = Arc::<str>::from(utf8!(sample));
             let container = Container::with_capacity(160);
-            JsonFormat.parse_segment(sample, container).1.unwrap()
+            JsonFormat.parse_segment(sample, container).unwrap().unwrap()
         };
 
         c.throughput(Throughput::Elements(
