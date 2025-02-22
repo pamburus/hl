@@ -19,14 +19,14 @@ jobs:
       - name: Validate YAML configs
         uses: cardinalby/schema-validator-action@v3
         with:
-          file: 'etc/defaults/config*.yaml'
-          schema: 'schema/json/config.schema.json'
+          file: "etc/defaults/config*.yaml"
+          schema: "schema/json/config.schema.json"
 
       - name: Validate YAML themes
         uses: cardinalby/schema-validator-action@v3
         with:
-          file: 'etc/defaults/themes/*.yaml'
-          schema: 'schema/json/theme.schema.json'
+          file: "etc/defaults/themes/*.yaml"
+          schema: "schema/json/theme.schema.json"
 
       - name: Setup taplo
         uses: uncenter/setup-taplo@v1
@@ -37,8 +37,8 @@ jobs:
       - name: Install latest nightly
         uses: dtolnay/rust-toolchain@v1
         with:
-            toolchain: nightly
-            components: rustfmt
+          toolchain: nightly
+          components: rustfmt
 
       - name: Check formatting
         run: cargo +nightly fmt --verbose --all --check
@@ -62,24 +62,38 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Install latest toolchain
+        uses: dtolnay/rust-toolchain@v1
+        with:
+          toolchain: stable
+
       - name: Generate code coverage
         run: |
           make coverage
 
       - name: Upload coverage to codecov.io
         uses: codecov/codecov-action@v4
-        env: 
+        env:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
   test-nix:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
-      - uses: cachix/install-nix-action@v30
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@v30
+
+      - name: Cache Nix store
+        uses: cachix/cachix-action@v15
+        with:
+          name: hl
+          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
 
       - name: Run nix flake check
-        run: nix flake check --print-build-logs
+        run: nix flake check --print-build-logs --all-systems
 
       - name: Run nix build
         run: nix build --print-build-logs
