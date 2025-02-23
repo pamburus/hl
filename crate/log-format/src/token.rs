@@ -27,6 +27,15 @@ pub enum String {
     JsonEscaped(Span),
 }
 
+impl String {
+    #[inline]
+    pub fn span(&self) -> Span {
+        match self {
+            Self::Plain(span) | Self::JsonEscaped(span) => *span,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum Composite {
     Array,
