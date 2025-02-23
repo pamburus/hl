@@ -5,10 +5,13 @@ use std::{collections::HashMap, env::var};
 use titlecase::titlecase;
 use wildflower::Pattern;
 
+// workspace imports
+use log_ast::ast::{Build, Value};
+
 // local imports
 use super::{
-    super::ast::{self, Build, Composite, OptIndex, Scalar},
-    *,
+    super::ast::{self, Composite, OptIndex, Scalar},
+    Record,
 };
 use crate::{
     app::UnixTimestampUnit,
@@ -24,9 +27,9 @@ const MAX_DEPTH: usize = 64;
 
 // ---
 
-pub struct Builder<'s, 'c, 't, T, CP = ()> {
+pub struct Builder<'s, 'c, T, CP = ()> {
     core: Core<'s, CP>,
-    ctx: Context<'c, 't>,
+    ctx: Context<'c>,
     target: T,
 }
 
@@ -38,16 +41,16 @@ struct Core<'s, CP> {
     depth: usize,
 }
 
-struct Context<'c, 't> {
-    record: &'c mut Record<'t>,
+struct Context<'c> {
+    record: &'c mut Record,
     pc: &'c mut PriorityController,
 }
 
-impl<'t, 's, 'c, T, CP> Builder<'s, 'c, 't, T, CP>
+impl<'s, 'c, T, CP> Builder<'s, 'c, T, CP>
 where
-    T: Build<'t>,
+    T: Build,
 {
-    pub fn new(settings: &'s Settings, pc: &'c mut PriorityController, record: &'c mut Record<'t>, target: T) -> Self {
+    pub fn new(settings: &'s Settings, pc: &'c mut PriorityController, record: &'c mut Record, target: T) -> Self {
         Self {
             core: Core {
                 settings,
@@ -60,30 +63,28 @@ where
         }
     }
 
-    fn into_inner(self) -> T::WithAttachment<Context<'c, 't>> {
+    fn into_inner(self) -> T::WithAttachment<Context<'c>> {
         self.target.attach(self.ctx)
     }
 
-    fn from_inner(core: Core<'s, CP>, target: T::WithAttachment<Context<'c, 't>>) -> Self {
+    fn from_inner(core: Core<'s, CP>, target: T::WithAttachment<Context<'c>>) -> Self {
         let (target, ctx) = target.detach();
         Self { core, ctx, target }
     }
 }
 
-impl<'t, 's, 'c, T> Build<'t> for Builder<'s, 'c, 't, T, T::Checkpoint>
+impl<'s, 'c, T> Build for Builder<'s, 'c, T, T::Checkpoint>
 where
-    T: Build<'t>,
-    't: 'c,
+    T: Build,
     T::Checkpoint: Clone,
 {
-    type Child = Builder<'s, 'c, 't, T::Child, T::Checkpoint>;
     type Attachment = T::Attachment;
-    type WithAttachment<V> = Builder<'s, 'c, 't, T::WithAttachment<V>, T::Checkpoint>;
-    type WithoutAttachment = Builder<'s, 'c, 't, T::WithoutAttachment, T::Checkpoint>;
+    type WithAttachment<V> = Builder<'s, 'c, T::WithAttachment<V>, T::Checkpoint>;
+    type WithoutAttachment = Builder<'s, 'c, T::WithoutAttachment, T::Checkpoint>;
     type Checkpoint = T::Checkpoint;
 
     #[inline]
-    fn add_scalar(mut self, scalar: Scalar<'t>) -> Self {
+    fn add_scalar(mut self, scalar: Scalar) -> Self {
         self.target = self.target.add_scalar(scalar);
 
         if let Some((checkpoint, settings)) = self.core.field.take() {
@@ -100,9 +101,9 @@ where
     }
 
     #[inline]
-    fn add_composite<F>(mut self, composite: Composite<'t>, f: F) -> (Self, ast::Result<()>)
+    fn add_composite<E, F>(mut self, composite: Composite, f: F) -> Result<Self, (E, Self)>
     where
-        F: FnOnce(Self::Child) -> (Self::Child, ast::Result<()>),
+        F: FnOnce(Self) -> Result<Self, (E, Self)>,
     {
         let mut core = self.core.clone();
 
@@ -167,6 +168,11 @@ where
         });
 
         (Builder::from_inner(self_core, target), result)
+    }
+
+    #[inline]
+    fn rollback(&mut self, checkpoint: &Self::Checkpoint) {
+        self.target.rollback(checkpoint);
     }
 
     #[inline]
@@ -311,20 +317,14 @@ impl Settings {
     }
 
     #[inline]
-    fn apply<'r, 's>(
-        &self,
-        key: &'s str,
-        value: Value<'r, 's>,
-        to: &'r mut Record<'s>,
-        pc: &mut PriorityController,
-    ) -> bool {
+    fn apply<'r, 's>(&self, key: &'s str, value: Value, to: &'r mut Record, pc: &mut PriorityController) -> bool {
         self.blocks[0].apply(self, key, value, to, pc, true)
     }
 
     #[inline]
-    fn apply_each<'r, 'a, 'i, I>(&self, items: I, to: &'r mut Record<'a>)
+    fn apply_each<'r, 'a, 'i, I>(&self, items: I, to: &'r mut Record)
     where
-        I: IntoIterator<Item = Field<'r, 'a>>,
+        I: IntoIterator<Item = Field<'r>>,
         'a: 'i,
     {
         let mut pc = PriorityController::default();
@@ -332,9 +332,9 @@ impl Settings {
     }
 
     #[inline]
-    fn apply_each_ctx<'r, 'a, 'i, I>(&self, items: I, to: &'r mut Record<'a>, pc: &mut PriorityController)
+    fn apply_each_ctx<'r, 'a, 'i, I>(&self, items: I, to: &'r mut Record, pc: &mut PriorityController)
     where
-        I: IntoIterator<Item = Field<'r, 'a>>,
+        I: IntoIterator<Item = Field<'r>>,
         'a: 'i,
     {
         for (i, field) in items.into_iter().enumerate() {
@@ -364,8 +364,8 @@ impl SettingsBlock {
         &self,
         ps: &Settings,
         key: &str,
-        value: Value<'r, 's>,
-        to: &'r mut Record<'s>,
+        value: Value,
+        to: &'r mut Record,
         pc: &mut PriorityController,
         is_root: bool,
     ) -> bool {
@@ -389,13 +389,8 @@ impl SettingsBlock {
     }
 
     #[inline]
-    fn apply_each_ctx<'r, 'a, 'i, I>(
-        &self,
-        ps: &Settings,
-        fields: I,
-        to: &'r mut Record<'a>,
-        ctx: &mut PriorityController,
-    ) where
+    fn apply_each_ctx<'r, 'a, 'i, I>(&self, ps: &Settings, fields: I, to: &'r mut Record, ctx: &mut PriorityController)
+    where
         I: IntoIterator<Item = Field<'r, 'a>>,
         'a: 'i,
     {
@@ -531,16 +526,10 @@ impl FieldSettings {
     }
 
     #[inline]
-    fn apply_ctx<'r, 's>(
-        &self,
-        ps: &Settings,
-        value: Value<'r, 's>,
-        to: &'r mut Record<'s>,
-        ctx: &mut PriorityController,
-    ) -> bool {
+    fn apply_ctx<'r, 's>(&self, ps: &Settings, value: Value, to: &'r mut Record, ctx: &mut PriorityController) -> bool {
         match *self {
             Self::Nested(nested) => match value {
-                Value::Object(value) => {
+                Value::Composite(Composite::Object(value)) => {
                     ps.blocks[nested].apply_each_ctx(ps, value.iter(), to, ctx);
                     true
                 }

@@ -957,8 +957,8 @@ mod tests {
         }
     }
 
-    impl<'r, 's> From<&'s Parsed> for Value<'r, 's> {
-        fn from(value: &'s Parsed) -> Value<'r, 's> {
+    impl<'r> From<&'r Parsed> for Value<'r> {
+        fn from(value: &'r Parsed) -> Value<'r> {
             value.value()
         }
     }
