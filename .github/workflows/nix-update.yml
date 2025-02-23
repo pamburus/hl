@@ -16,7 +16,7 @@ jobs:
         uses: cachix/install-nix-action@v30
 
       - name: Update flake.lock
-        run: nix flake update --update-all
+        run: nix flake update
 
       - name: Create pull request for flake.lock update
         uses: peter-evans/create-pull-request@v7
