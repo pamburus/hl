@@ -127,6 +127,11 @@ pub struct RawRecord {
 
 impl RawRecord {
     #[inline]
+    pub(super) fn new(ast: Arc<ast::Segment>, root: ast::Index, span: ast::Span) -> Self {
+        Self { ast, root, span }
+    }
+
+    #[inline]
     pub fn fields(&self) -> Fields<'_, ()> {
         self.ast.entry(self.root).unwrap().into_iter()
     }

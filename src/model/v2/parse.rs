@@ -1,8 +1,11 @@
 // std imports
 use std::sync::Arc;
 
+// third-party imports
 use crossbeam_queue::SegQueue;
+
 // workspace imports
+use log_ast::model::FormatExt;
 use log_format::Format;
 
 // local imports
@@ -15,7 +18,7 @@ use crate::{
 // re-exports
 pub use super::record::{
     build::{Builder, PriorityController, Settings},
-    {Fields, Record},
+    Fields, Record, RawRecord
 };
 
 // ---
@@ -38,10 +41,17 @@ where
         }
     }
 
-    pub fn parse(&mut self, segment: Arc<str>) -> impl Iterator<Record> {}
+    pub fn parse(&mut self, source: Arc<str>) -> impl Iterator<Record> {
+        ParsedSegment { source, parser: self }
+    }
 }
 
-impl<F> Iterator for Parser<F>
+pub struct ParsedSegment<'a, F: Format> {
+    source: Arc<str>,
+    parser: &'a Parser<F>,
+}
+
+impl<'a, F> Iterator for ParsedSegment<'a, F>
 where
     F: Format,
 {
@@ -53,6 +63,17 @@ where
             .recycled
             .pop()
             .unwrap_or_else(|| ast::Container::with_capacity(256));
+
+        let target = container.metaroot();
+        let index = target.next_index();
+
+        let segment = match self.parser.format.parse_segment(self.source.clone(), target) {
+            Ok(Some(segment)) => segment,
+            Ok(None) => return None,
+            Err(e) => Some(Err(e)),
+        };
+
+        let mut raw_record = RawRecord::new()
 
         let mut record = Record::default();
         let mut pc = PriorityController::default();
