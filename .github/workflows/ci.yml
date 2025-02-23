@@ -92,6 +92,8 @@ jobs:
 
       - name: Install Nix
         uses: cachix/install-nix-action@v30
+        with:
+          nix_path: nixpkgs=channel:nixos-unstable
 
       - name: Cache Nix store
         uses: cachix/cachix-action@v15
@@ -102,14 +104,17 @@ jobs:
       - name: Setup Rust cache
         uses: Swatinem/rust-cache@v2
 
-      - name: Add nixos-unstable channel
-        run: nix-channel --add https://nixos.org/channels/nixpkgs-unstable nixpkgs-unstable
+      # - name: Add nixos-unstable channel
+      #   run: nix-channel --add https://nixos.org/channels/nixpkgs-unstable nixpkgs-unstable
 
-      - name: Update nixos-unstable channel
-        run: nix-channel --update
+      # - name: Update nixos-unstable channel
+      #   run: nix-channel --update
+
+      - name: echo NIX_PATH
+        run: echo "NIX_PATH=$NIX_PATH"
 
       - name: Run nix flake check
         run: nix flake check --print-build-logs --all-systems
 
       - name: Run nix build
-        run: nix build --print-build-logs --file nix/ci.nix
+        run: nix build --print-build-logs --override-input nixpkgs channel:nixos-unstable
