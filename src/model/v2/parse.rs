@@ -34,29 +34,32 @@ where
         Self {
             settings,
             format,
-            segment: ast::Segment::with_capacity(1024),
+            recycled: SegQueue::new(),
         }
     }
 
     pub fn parse(&mut self, segment: Arc<str>) -> impl Iterator<Record> {}
 }
 
-impl<'s, 'a, P> Iterator for Parser<'s, 'a, P>
+impl<F> Iterator for Parser<F>
 where
-    P: format::Parse<'a>,
+    F: Format,
 {
-    type Item = Result<Record<'a>>;
+    type Item = Result<Record>;
 
-    fn next(&mut self) -> Option<Result<Record<'a>>> {
-        self.container.clear();
-        self.container.reserve(128);
+    fn next(&mut self) -> Option<Result<Record>> {
+        // TODO: implement recycling
+        let container = self
+            .recycled
+            .pop()
+            .unwrap_or_else(|| ast::Container::with_capacity(256));
 
         let mut record = Record::default();
         let mut pc = PriorityController::default();
 
-        let target = Builder::new(&self.settings, &mut pc, &mut record, self.container.metaroot());
+        // let target = Builder::new(&self.settings, &mut pc, &mut record, self.container.metaroot());
 
-        let Some(output) = self.inner.parse(target) else {
+        let Some(output) = self.format.parse(container) else {
             return None;
         };
         let span = match output {

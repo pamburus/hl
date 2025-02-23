@@ -20,7 +20,7 @@ use crate::{
 // ---
 
 pub trait Filter {
-    fn apply<'a>(&self, record: &Record<'a>) -> bool;
+    fn apply<'a>(&self, record: &Record) -> bool;
 
     #[inline]
     fn and<F>(self, rhs: F) -> And<Self, F>
@@ -43,7 +43,7 @@ pub trait Filter {
 
 impl<T: Filter + ?Sized> Filter for Box<T> {
     #[inline]
-    fn apply<'a>(&self, record: &Record<'a>) -> bool {
+    fn apply<'a>(&self, record: &Record) -> bool {
         (**self).apply(record)
     }
 }
@@ -57,21 +57,21 @@ impl<T: Filter + ?Sized> Filter for Arc<T> {
 
 impl<T: Filter> Filter for &T {
     #[inline]
-    fn apply<'a>(&self, record: &Record<'a>) -> bool {
+    fn apply<'a>(&self, record: &Record) -> bool {
         (**self).apply(record)
     }
 }
 
 impl Filter for Level {
     #[inline]
-    fn apply<'a>(&self, record: &Record<'a>) -> bool {
+    fn apply<'a>(&self, record: &Record) -> bool {
         record.level.map_or(false, |x| x <= *self)
     }
 }
 
 impl<T: Filter> Filter for Option<T> {
     #[inline]
-    fn apply<'a>(&self, record: &Record<'a>) -> bool {
+    fn apply<'a>(&self, record: &Record) -> bool {
         if let Some(filter) = self {
             filter.apply(record)
         } else {
@@ -89,7 +89,7 @@ pub struct And<L: Filter, R: Filter> {
 
 impl<L: Filter, R: Filter> Filter for And<L, R> {
     #[inline]
-    fn apply<'a>(&self, record: &Record<'a>) -> bool {
+    fn apply<'a>(&self, record: &Record) -> bool {
         self.lhs.apply(record) && self.rhs.apply(record)
     }
 }
@@ -103,7 +103,7 @@ pub struct Or<L: Filter, R: Filter> {
 
 impl<L: Filter, R: Filter> Filter for Or<L, R> {
     #[inline]
-    fn apply<'a>(&self, record: &Record<'a>) -> bool {
+    fn apply<'a>(&self, record: &Record) -> bool {
         self.lhs.apply(record) || self.rhs.apply(record)
     }
 }
@@ -114,7 +114,7 @@ pub struct Pass;
 
 impl Filter for Pass {
     #[inline]
-    fn apply<'a>(&self, _: &Record<'a>) -> bool {
+    fn apply<'a>(&self, _: &Record) -> bool {
         true
     }
 }
@@ -462,7 +462,7 @@ impl FieldFilter {
 }
 
 impl Filter for FieldFilter {
-    fn apply<'a>(&self, record: &Record<'a>) -> bool {
+    fn apply<'a>(&self, record: &Record) -> bool {
         match &self.key {
             FieldFilterKey::Predefined(kind) => match kind {
                 FieldKind::Time => {
@@ -534,7 +534,7 @@ impl FieldFilterSet {
 
 impl Filter for FieldFilterSet {
     #[inline]
-    fn apply<'a>(&self, record: &Record<'a>) -> bool {
+    fn apply<'a>(&self, record: &Record) -> bool {
         self.0.iter().all(|field| field.apply(record))
     }
 }
@@ -557,7 +557,7 @@ impl CombinedFilter {
 }
 
 impl Filter for CombinedFilter {
-    fn apply<'a>(&self, record: &Record<'a>) -> bool {
+    fn apply<'a>(&self, record: &Record) -> bool {
         if self.since.is_some() || self.until.is_some() {
             if let Some(ts) = record.ts.as_ref().and_then(|ts| ts.parse()) {
                 if let Some(since) = self.since {

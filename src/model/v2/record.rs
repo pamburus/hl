@@ -1,5 +1,11 @@
+// std imports
+use std::sync::Arc;
+
 // third-party imports
 use once_cell::sync::Lazy;
+
+// workspace imports
+use log_format::ast::BuilderDetach;
 
 // local imports
 pub use self::{
@@ -34,7 +40,7 @@ pub struct Record {
     logger: Option<ast::Index>,
     caller: Option<CallerSlot>,
     span: std::ops::Range<usize>,
-    ast: ast::Segment,
+    ast: Arc<ast::Segment>,
     predefined: heapless::Vec<ast::Index, MAX_PREDEFINED_FIELDS>,
 }
 
@@ -44,6 +50,22 @@ impl Record {
             Some(ts) => Some(Timestamp::with_slot(self.ast.nodes(ts.index).value().text(), &ts.slot)),
             None => None,
         }
+    }
+
+    pub fn message(&self) -> Option<String> {
+        self.message.map(|index| self.ast.nodes(index).value().text())
+    }
+
+    pub fn level(&self) -> Option<Level> {
+        self.level
+    }
+
+    pub fn logger(&self) -> Option<String> {
+        self.logger.map(|index| self.ast.nodes(index).value().text())
+    }
+
+    pub fn caller(&self) -> Option<Caller> {
+        self.caller.map(|x| x.caller(&self.ast))
     }
 
     /// Returns an iterator over `Field` items for searching.
@@ -80,6 +102,11 @@ impl Record {
     pub fn matches<F: Filter>(&self, filter: F) -> bool {
         filter.apply(self)
     }
+
+    #[inline]
+    pub fn source(&self) -> &str {
+        self.ast.source().slice(self.span.clone()).str()
+    }
 }
 
 impl<'s> From<Record> for ast::Segment {
@@ -91,9 +118,48 @@ impl<'s> From<Record> for ast::Segment {
 
 // ---
 
+#[derive(Clone)]
+pub struct RawRecord {
+    ast: Arc<ast::Segment>,
+    root: ast::Index,
+    span: ast::Span,
+}
+
+impl RawRecord {
+    #[inline]
+    pub fn fields(&self) -> Fields<'_, ()> {
+        self.ast.entry(self.root).unwrap().into_iter()
+    }
+
+    #[inline]
+    pub fn source(&self) -> &str {
+        self.ast.source().slice(self.span).str()
+    }
+}
+
+// ---
+
 struct TimestampSlot {
     index: ast::Index,
     inner: crate::timestamp::Slot,
+}
+
+// ---
+
+enum CallerSlot {
+    Text(ast::Index),
+    FileLine(ast::Index, ast::Index),
+}
+
+impl CallerSlot {
+    fn caller(&self, ast: &ast::Segment) -> Caller {
+        match self {
+            Self::Text(index) => Caller::Text(ast.nodes(*index).value().text()),
+            Self::FileLine(file, line) => {
+                Caller::FileLine(ast.nodes(*file).value().text(), ast.nodes(*line).value().text())
+            }
+        }
+    }
 }
 
 // ---
@@ -136,9 +202,9 @@ where
     }
 }
 
-impl<'r, 's> IntoIterator for Fields<'r, 's, ()> {
-    type Item = Field<'r, 's>;
-    type IntoIter = FieldsIter<'r, 's, ()>;
+impl<'r, 's> IntoIterator for Fields<'r, ()> {
+    type Item = Field<'r>;
+    type IntoIter = FieldsIter<'r, ()>;
 
     #[inline]
     fn into_iter(self) -> Self::IntoIter {
@@ -146,16 +212,17 @@ impl<'r, 's> IntoIterator for Fields<'r, 's, ()> {
     }
 }
 
-impl<HFF: Default> Default for Fields<'_, '_, HFF> {
+impl<HFF: Default> Default for Fields<'_, HFF> {
     #[inline]
     fn default() -> Self {
-        static EMPTY: Lazy<ast::Container<'static>> = Lazy::new(|| {
-            use ast::Build;
+        static EMPTY: Lazy<ast::Container> = Lazy::new(|| {
+            use log_ast::ast::Build;
             let mut container = ast::Container::default();
             container
                 .metaroot()
-                .add_composite(ast::Composite::Object, |b| (b, Ok(())))
-                .1
+                .add_composite(ast::Composite::Object, |b| Ok::<_, ((), _)>(b))
+                .detach()
+                .0
                 .unwrap();
             container
         });
@@ -174,15 +241,15 @@ pub struct FieldsIter<'r, HFF> {
     hff: HFF,
 }
 
-impl<'r, 's, HFF> FieldsIter<'r, 's, HFF> {
+impl<'r, 's, HFF> FieldsIter<'r, HFF> {
     #[inline]
-    fn new(inner: ast::SiblingsIter<'r, 's>, hff: HFF) -> Self {
+    fn new(inner: ObjectIter<'r>, hff: HFF) -> Self {
         Self { inner, hff }
     }
 }
 
-impl<'r, 's> Iterator for FieldsIter<'r, 's, ()> {
-    type Item = Field<'r, 's>;
+impl<'r, 's> Iterator for FieldsIter<'r, ()> {
+    type Item = Field<'r>;
 
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
@@ -190,11 +257,11 @@ impl<'r, 's> Iterator for FieldsIter<'r, 's, ()> {
     }
 }
 
-impl<'r, 's, HFF> Iterator for FieldsIter<'r, 's, HFF>
+impl<'r, 's, HFF> Iterator for FieldsIter<'r, HFF>
 where
     HFF: HiddenFieldFilter,
 {
-    type Item = Field<'r, 's>;
+    type Item = Field<'r>;
 
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
@@ -245,31 +312,5 @@ where
 
         self.head = self.tail.next();
         return true;
-    }
-}
-
-// ---
-
-pub trait RecordWithSourceConstructor<'r, 's> {
-    fn with_source(&'r self, source: &'s [u8]) -> RecordWithSource<'r, 's>;
-}
-// ---
-
-pub struct RecordWithSource<'r, 's> {
-    pub record: &'r Record<'s>,
-    pub source: &'s [u8],
-}
-
-impl<'r, 's> RecordWithSource<'r, 's> {
-    #[inline]
-    pub fn new(record: &'r Record<'s>, source: &'s [u8]) -> Self {
-        Self { record, source }
-    }
-}
-
-impl<'r, 's> RecordWithSourceConstructor<'r, 's> for Record<'s> {
-    #[inline]
-    fn with_source(&'r self, source: &'s [u8]) -> RecordWithSource<'r, 's> {
-        RecordWithSource::new(self, source)
     }
 }
