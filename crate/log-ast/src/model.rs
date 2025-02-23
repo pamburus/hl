@@ -333,7 +333,7 @@ impl<'s, S> IntoIterator for &Object<'s, S>
 where
     S: Source + Clone,
 {
-    type Item = (String<S>, Value<'s, S>);
+    type Item = Field<'s, S>;
     type IntoIter = ObjectIter<'s, S>;
 
     #[inline]
@@ -354,7 +354,7 @@ impl<'s, S> Iterator for ObjectIter<'s, S>
 where
     S: Source + Clone,
 {
-    type Item = (String<S>, Value<'s, S>);
+    type Item = Field<'s, S>;
 
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
@@ -364,8 +364,40 @@ where
                 _ => unreachable!(),
             };
             let value = convert_value(self.source.clone(), node.children().into_iter().next().unwrap());
-            (key, value)
+
+            Field::new(node.index(), key, value)
         })
+    }
+}
+
+pub struct Field<'s, S> {
+    index: ast::Index,
+    key: String<S>,
+    value: Value<'s, S>,
+}
+
+impl<'s, S> Field<'s, S>
+where
+    S: Source + Clone,
+{
+    #[inline]
+    fn new(index: ast::Index, key: String<S>, value: Value<'s, S>) -> Self {
+        Self { index, key, value }
+    }
+
+    #[inline]
+    pub fn index(&self) -> ast::Index {
+        self.index
+    }
+
+    #[inline]
+    pub fn key(&self) -> &String<S> {
+        &self.key
+    }
+
+    #[inline]
+    pub fn value(&self) -> &Value<'s, S> {
+        &self.value
     }
 }
 
@@ -404,13 +436,13 @@ mod tests {
         assert_eq!(entires.len(), 1);
         let fields = entires[0].into_iter().collect::<Vec<_>>();
         assert_eq!(fields.len(), 1);
-        let (key, value) = &fields[0];
-        assert_eq!(key.source(), "a");
-        match value {
+        let field = &fields[0];
+        assert_eq!(field.key().source(), "a");
+        match field.value() {
             Value::Number(number) => {
                 assert_eq!(number.source(), "10");
             }
-            _ => panic!("unexpected value: {:?}", value),
+            _ => panic!("unexpected value: {:?}", field.value()),
         }
     }
 }
