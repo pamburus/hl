@@ -144,23 +144,28 @@ mod segment_node_count {
     use super::*;
     use log_ast::source::Source;
 
+    #[inline]
     pub(super) fn entries<S: Source + Clone>(entries: model::Entries<S>) -> usize {
         entries.into_iter().map(object).sum()
     }
 
+    #[inline]
     pub(super) fn array<S: Source + Clone>(array: model::Array<S>) -> usize {
         array.into_iter().map(value).sum()
     }
 
+    #[inline]
     pub(super) fn object<S: Source + Clone>(object: model::Object<S>) -> usize {
         object.into_iter().map(field).sum()
     }
 
-    pub(super) fn field<S: Source + Clone>(field: (model::String<S>, model::Value<S>)) -> usize {
-        black_box(field.0.source());
-        1 + value(field.1)
+    #[inline]
+    pub(super) fn field<S: Source + Clone>(field: model::Field<S>) -> usize {
+        black_box(field.key().source());
+        1 + value(field.value().clone())
     }
 
+    #[inline]
     pub(super) fn value<S: Source + Clone>(value: model::Value<S>) -> usize {
         match value {
             model::Value::Null => 1,
