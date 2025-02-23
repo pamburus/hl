@@ -14,7 +14,11 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Rust cache
+        uses: Swatinem/rust-cache@v2
 
       - name: Validate YAML configs
         uses: cardinalby/schema-validator-action@v3
@@ -67,6 +71,9 @@ jobs:
         with:
           toolchain: stable
 
+      - name: Setup Rust cache
+        uses: Swatinem/rust-cache@v2
+
       - name: Generate code coverage
         run: |
           make coverage
@@ -91,6 +98,9 @@ jobs:
         with:
           name: hl
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
+
+      - name: Setup Rust cache
+        uses: Swatinem/rust-cache@v2
 
       - name: Run nix flake check
         run: nix flake check --print-build-logs --all-systems
