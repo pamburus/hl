@@ -47,17 +47,17 @@ where
     S: Source + Clone,
 {
     #[inline]
-    pub fn entries(&self) -> Entries<S::Ref<'_>> {
+    pub fn entries(&self) -> Entries<S> {
         Entries {
-            source: self.source.as_ref(),
+            segment: self,
             roots: self.container.roots(),
         }
     }
 
     #[inline]
-    pub fn entry(&self, index: ast::Index) -> Option<Entry<S::Ref<'_>>> {
+    pub fn entry(&self, index: ast::Index) -> Option<Entry<S>> {
         self.container.nodes().get(index).and_then(|node| match node.value() {
-            ast::Value::Composite(ast::Composite::Object) => Some(Object::new(self.source.as_ref(), node)),
+            ast::Value::Composite(ast::Composite::Object) => Some(Object::new(self, node)),
             _ => None,
         })
     }
@@ -136,7 +136,7 @@ impl<S> From<Segment<S>> for Container {
 // ---
 
 pub struct Entries<'s, S> {
-    source: S,
+    segment: &'s Segment<S>,
     roots: tree::Roots<'s, ast::Value>,
 }
 
@@ -157,14 +157,14 @@ where
     #[inline]
     fn into_iter(self) -> Self::IntoIter {
         EntriesIter {
-            source: self.source,
+            segment: self.segment,
             items: self.roots.into_iter(),
         }
     }
 }
 
 pub struct EntriesIter<'s, S> {
-    source: S,
+    segment: &'s Segment<S>,
     items: tree::SiblingsIter<'s, ast::Value>,
 }
 
@@ -176,9 +176,8 @@ where
 
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
-        let source = self.source.clone();
         self.items.next().map(|node| match node.value() {
-            ast::Value::Composite(ast::Composite::Object) => Object::new(source, node),
+            ast::Value::Composite(ast::Composite::Object) => Object::new(self.segment, node),
             _ => panic!("unexpected root value: {:?}", node.value()),
         })
     }
@@ -202,25 +201,25 @@ pub type Entry<'s, S> = Object<'s, S>;
 pub enum Value<'s, S> {
     Null,
     Bool(bool),
-    Number(Number<S>),
-    String(String<S>),
+    Number(Number<'s, S>),
+    String(String<'s, S>),
     Array(Array<'s, S>),
     Object(Object<'s, S>),
 }
 
 #[derive(Debug, Clone)]
-pub struct Number<S> {
-    source: S,
+pub struct Number<'s, S> {
+    segment: &'s Segment<S>,
     span: Span,
 }
 
-impl<S> Number<S>
+impl<'s, S> Number<'s, S>
 where
     S: Source,
 {
     #[inline]
-    fn new(source: S, span: Span) -> Self {
-        Self { source, span }
+    fn new(segment: &'s Segment<S>, span: Span) -> Self {
+        Self { segment, span }
     }
 
     #[inline]
@@ -230,23 +229,23 @@ where
 
     #[inline]
     pub fn source(&self) -> &S::Slice<'_> {
-        self.source.slice(self.span)
+        self.segment.source.slice(self.span)
     }
 }
 
 #[derive(Debug, Clone)]
-pub struct String<S> {
-    source: S,
+pub struct String<'s, S> {
+    segment: &'s Segment<S>,
     inner: ast::String,
 }
 
-impl<S> String<S>
+impl<'s, S> String<'s, S>
 where
     S: Source,
 {
     #[inline]
-    fn new(source: S, inner: ast::String) -> Self {
-        Self { source, inner }
+    fn new(segment: &'s Segment<S>, inner: ast::String) -> Self {
+        Self { segment, inner }
     }
 
     #[inline]
@@ -257,27 +256,27 @@ where
     #[inline]
     pub fn get(&self) -> Result<EncodedString, Utf8Error> {
         match &self.inner {
-            ast::String::Plain(span) => Ok(EncodedString::raw(self.source.slice(*span).str()?)),
-            ast::String::JsonEscaped(span) => Ok(EncodedString::json(self.source.slice(*span).str()?)),
+            ast::String::Plain(span) => Ok(EncodedString::raw(self.segment.source.slice(*span).str()?)),
+            ast::String::JsonEscaped(span) => Ok(EncodedString::json(self.segment.source.slice(*span).str()?)),
         }
     }
 
     #[inline]
     pub fn source(&self) -> &S::Slice<'_> {
-        self.source.slice(self.span())
+        self.segment.source.slice(self.span())
     }
 }
 
 #[derive(Debug, Clone)]
 pub struct Array<'s, S> {
-    source: S,
+    segment: &'s Segment<S>,
     node: Node<'s>,
 }
 
 impl<'s, S> Array<'s, S> {
     #[inline]
-    fn new(source: S, node: Node<'s>) -> Self {
-        Self { source, node }
+    fn new(segment: &'s Segment<S>, node: Node<'s>) -> Self {
+        Self { segment, node }
     }
 }
 
@@ -291,14 +290,14 @@ where
     #[inline]
     fn into_iter(self) -> Self::IntoIter {
         ArrayIter {
-            source: self.source.clone(),
+            segment: self.segment,
             children: self.node.children().into_iter(),
         }
     }
 }
 
 pub struct ArrayIter<'s, S> {
-    source: S,
+    segment: &'s Segment<S>,
     children: SiblingsIter<'s>,
 }
 
@@ -310,22 +309,20 @@ where
 
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
-        self.children
-            .next()
-            .map(|node| convert_value(self.source.clone(), node))
+        self.children.next().map(|node| convert_value(self.segment, node))
     }
 }
 
 #[derive(Debug, Clone)]
 pub struct Object<'s, S> {
-    source: S,
+    segment: &'s Segment<S>,
     node: Node<'s>,
 }
 
 impl<'s, S> Object<'s, S> {
     #[inline]
-    fn new(source: S, node: Node<'s>) -> Self {
-        Self { source, node }
+    fn new(segment: &'s Segment<S>, node: Node<'s>) -> Self {
+        Self { segment, node }
     }
 }
 
@@ -339,14 +336,14 @@ where
     #[inline]
     fn into_iter(self) -> Self::IntoIter {
         ObjectIter {
-            source: self.source.clone(),
+            segment: self.segment,
             children: self.node.children().into_iter(),
         }
     }
 }
 
 pub struct ObjectIter<'s, S> {
-    source: S,
+    segment: &'s Segment<S>,
     children: SiblingsIter<'s>,
 }
 
@@ -360,10 +357,10 @@ where
     fn next(&mut self) -> Option<Self::Item> {
         self.children.next().map(|node| {
             let key = match node.value() {
-                ast::Value::Composite(ast::Composite::Field(key)) => String::new(self.source.clone(), *key),
+                ast::Value::Composite(ast::Composite::Field(key)) => String::new(self.segment, *key),
                 _ => unreachable!(),
             };
-            let value = convert_value(self.source.clone(), node.children().into_iter().next().unwrap());
+            let value = convert_value(self.segment, node.children().into_iter().next().unwrap());
 
             Field::new(node.index(), key, value)
         })
@@ -372,7 +369,7 @@ where
 
 pub struct Field<'s, S> {
     index: ast::Index,
-    key: String<S>,
+    key: String<'s, S>,
     value: Value<'s, S>,
 }
 
@@ -381,7 +378,7 @@ where
     S: Source + Clone,
 {
     #[inline]
-    fn new(index: ast::Index, key: String<S>, value: Value<'s, S>) -> Self {
+    fn new(index: ast::Index, key: String<'s, S>, value: Value<'s, S>) -> Self {
         Self { index, key, value }
     }
 
@@ -402,7 +399,7 @@ where
 }
 
 #[inline]
-fn convert_value<'s, S>(source: S, node: Node<'s>) -> Value<'s, S>
+fn convert_value<'s, S>(segment: &'s Segment<S>, node: Node<'s>) -> Value<'s, S>
 where
     S: Source,
 {
@@ -410,12 +407,12 @@ where
         ast::Value::Scalar(scalar) => match scalar {
             ast::Scalar::Null => Value::Null,
             ast::Scalar::Bool(b) => Value::Bool(*b),
-            ast::Scalar::Number(span) => Value::Number(Number::new(source, *span)),
-            ast::Scalar::String(s) => Value::String(String::new(source, *s)),
+            ast::Scalar::Number(span) => Value::Number(Number::new(segment, *span)),
+            ast::Scalar::String(s) => Value::String(String::new(segment, *s)),
         },
         ast::Value::Composite(composite) => match composite {
-            ast::Composite::Array => Value::Array(Array::new(source, node)),
-            ast::Composite::Object => Value::Object(Object::new(source, node)),
+            ast::Composite::Array => Value::Array(Array::new(segment, node)),
+            ast::Composite::Object => Value::Object(Object::new(segment, node)),
             ast::Composite::Field(_) => unreachable!(),
         },
     }
