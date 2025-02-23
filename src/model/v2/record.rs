@@ -39,9 +39,8 @@ pub struct Record {
     level: Option<Level>,
     logger: Option<ast::Index>,
     caller: Option<CallerSlot>,
-    span: std::ops::Range<usize>,
-    ast: Arc<ast::Segment>,
-    predefined: heapless::Vec<ast::Index, MAX_PREDEFINED_FIELDS>,
+    ast: ast::Segment,
+    hidden: heapless::Vec<ast::Index, MAX_PREDEFINED_FIELDS>,
 }
 
 impl Record {
@@ -89,12 +88,7 @@ impl Record {
             .roots()
             .into_iter()
             .next()
-            .map(|root| {
-                Fields::new(
-                    root.children(),
-                    PredefinedFieldFilter::new(self.predefined.iter().cloned()),
-                )
-            })
+            .map(|root| Fields::new(root.children(), PredefinedFieldFilter::new(self.hidden.iter().cloned())))
             .unwrap_or_default()
     }
 
@@ -105,7 +99,7 @@ impl Record {
 
     #[inline]
     pub fn source(&self) -> &str {
-        self.ast.source().slice(self.span.clone()).str()
+        self.ast.source().str()
     }
 }
 
@@ -120,15 +114,14 @@ impl<'s> From<Record> for ast::Segment {
 
 #[derive(Clone)]
 pub struct RawRecord {
-    ast: Arc<ast::Segment>,
+    ast: ast::Segment,
     root: ast::Index,
-    span: ast::Span,
 }
 
 impl RawRecord {
     #[inline]
-    pub(super) fn new(ast: Arc<ast::Segment>, root: ast::Index, span: ast::Span) -> Self {
-        Self { ast, root, span }
+    pub(super) fn new(ast: ast::Segment, root: ast::Index) -> Self {
+        Self { ast, root }
     }
 
     #[inline]
@@ -138,7 +131,15 @@ impl RawRecord {
 
     #[inline]
     pub fn source(&self) -> &str {
-        self.ast.source().slice(self.span).str()
+        self.ast.source().str()
+    }
+
+    #[inline]
+    pub fn bake(self, settings: &Settings) -> Record {
+        let mut record = Record::default();
+        record.ast = Arc::new(self.ast);
+        record.span = self.ast.entry(self.root).unwrap().span();
+        record
     }
 }
 

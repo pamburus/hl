@@ -18,7 +18,7 @@ use crate::{
 // re-exports
 pub use super::record::{
     build::{Builder, PriorityController, Settings},
-    Fields, Record, RawRecord
+    Fields, RawRecord, Record,
 };
 
 // ---
@@ -42,16 +42,16 @@ where
     }
 
     pub fn parse(&mut self, source: Arc<str>) -> impl Iterator<Record> {
-        ParsedSegment { source, parser: self }
+        SegmentIter { source, parser: self }
     }
 }
 
-pub struct ParsedSegment<'a, F: Format> {
+pub struct SegmentIter<'a, F: Format> {
     source: Arc<str>,
     parser: &'a Parser<F>,
 }
 
-impl<'a, F> Iterator for ParsedSegment<'a, F>
+impl<'a, F> Iterator for SegmentIter<'a, F>
 where
     F: Format,
 {
@@ -67,13 +67,13 @@ where
         let target = container.metaroot();
         let index = target.next_index();
 
-        let segment = match self.parser.format.parse_segment(self.source.clone(), target) {
+        let segment = match self.parser.format.parse_entry(self.source.clone(), target) {
             Ok(Some(segment)) => segment,
             Ok(None) => return None,
             Err(e) => Some(Err(e)),
         };
 
-        let mut raw_record = RawRecord::new()
+        let mut raw_record = RawRecord::new(segment, index);
 
         let mut record = Record::default();
         let mut pc = PriorityController::default();
