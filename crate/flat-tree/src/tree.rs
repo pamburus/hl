@@ -168,6 +168,11 @@ where
     }
 
     #[inline]
+    fn next_index(&self) -> Index {
+        Index(self.len())
+    }
+
+    #[inline]
     fn first_node_index(&self, checkpoint: &Self::Checkpoint) -> OptIndex {
         checkpoint.first_node_index(self)
     }
@@ -584,6 +589,11 @@ where
     #[inline]
     fn rollback(&mut self, checkpoint: &Self::Checkpoint) {
         self.tree.rollback(checkpoint)
+    }
+
+    #[inline]
+    fn next_index(&self) -> Index {
+        self.tree.next_index()
     }
 
     #[inline]
