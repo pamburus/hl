@@ -1,14 +1,19 @@
+// third-party imports
+use once_cell::sync::Lazy;
+
 // local imports
 pub use self::{
     build::{Builder, Settings},
     filter::Filter,
 };
-use super::{ast, value::*};
+use super::{
+    ast::{self, ObjectIter},
+    value::*,
+};
 use crate::{
     model::{Caller, Level},
     timestamp::Timestamp,
 };
-use once_cell::sync::Lazy;
 
 // ---
 
@@ -47,7 +52,7 @@ impl Record {
     /// The `Field` items have a lifetime tied to the borrow of `self`,
     /// ensuring they do not outlive the `Record`.
     #[inline]
-    pub fn fields_for_search(&self) -> FieldsForSearch<'_, 's> {
+    pub fn fields_for_search(&self) -> SearchableFields {
         self.ast
             .roots()
             .into_iter()
@@ -57,7 +62,7 @@ impl Record {
     }
 
     #[inline]
-    pub fn fields(&self) -> VisibleFields<'_, 's> {
+    pub fn fields(&self) -> VisibleFields {
         self.ast
             .roots()
             .into_iter()
@@ -93,38 +98,37 @@ struct TimestampSlot {
 
 // ---
 
-pub type FieldsForSearch<'r, 's> = Fields<'r, 's, ()>;
-pub type VisibleFields<'r, 's> =
-    Fields<'r, 's, PredefinedFieldFilter<std::iter::Cloned<core::slice::Iter<'r, ast::Index>>>>;
+pub type SearchableFields<'r> = Fields<'r, ()>;
+pub type VisibleFields<'r> = Fields<'r, PredefinedFieldFilter<std::iter::Cloned<core::slice::Iter<'r, ast::Index>>>>;
 
-pub struct Fields<'r, 's, HFF> {
-    inner: ast::Children<'r, 's>,
+pub struct Fields<'r, HFF> {
+    inner: ObjectIter<'r>,
     hff: HFF,
 }
 
-impl<'r, 's, HFF> Fields<'r, 's, HFF> {
+impl<'r, HFF> Fields<'r, HFF> {
     #[inline]
-    pub fn new(inner: ast::Children<'r, 's>, hff: HFF) -> Self {
+    pub fn new(inner: ObjectIter<'r>, hff: HFF) -> Self {
         Self { inner, hff }
     }
 }
 
-impl<'r, 's, HFF> Fields<'r, 's, HFF>
+impl<'r, HFF> Fields<'r, HFF>
 where
     HFF: HiddenFieldFilter,
 {
     #[inline]
-    pub fn iter(&'r self) -> FieldsIter<'r, 's, HFF> {
+    pub fn iter(&'r self) -> FieldsIter<'r, HFF> {
         FieldsIter::new(self.inner.iter(), self.hff.clone())
     }
 }
 
-impl<'r, 's, HFF> IntoIterator for Fields<'r, 's, HFF>
+impl<'r, HFF> IntoIterator for Fields<'r, HFF>
 where
     HFF: HiddenFieldFilter,
 {
-    type Item = Field<'r, 's>;
-    type IntoIter = FieldsIter<'r, 's, HFF>;
+    type Item = Field<'r>;
+    type IntoIter = FieldsIter<'r, HFF>;
 
     #[inline]
     fn into_iter(self) -> Self::IntoIter {
@@ -165,8 +169,8 @@ impl<HFF: Default> Default for Fields<'_, '_, HFF> {
 
 // ---
 
-pub struct FieldsIter<'r, 's, HFF> {
-    inner: ast::SiblingsIter<'r, 's>,
+pub struct FieldsIter<'r, HFF> {
+    inner: ObjectIter<'r>,
     hff: HFF,
 }
 
