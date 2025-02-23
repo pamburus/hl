@@ -102,8 +102,14 @@ jobs:
       - name: Setup Rust cache
         uses: Swatinem/rust-cache@v2
 
+      - name: Add nixos-unstable channel
+        run: nix-channel --add https://nixos.org/channels/nixpkgs-unstable nixpkgs-unstable
+
+      - name: Update nixos-unstable channel
+        run: nix-channel --update
+
       - name: Run nix flake check
         run: nix flake check --print-build-logs --all-systems
 
       - name: Run nix build
-        run: nix build --print-build-logs
+        run: nix build --print-build-logs --file nix/ci.nix
