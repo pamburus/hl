@@ -178,6 +178,7 @@ where
     T: InnerBuild,
 {
     type Checkpoint = T::Checkpoint;
+    type Index = Index;
 
     #[inline]
     fn add_scalar(self, scalar: Scalar) -> Self {
@@ -200,6 +201,11 @@ where
     #[inline]
     fn rollback(&mut self, checkpoint: &Self::Checkpoint) {
         Build::rollback(self, checkpoint)
+    }
+
+    #[inline]
+    fn next_index(&self) -> Self::Index {
+        self.inner.next_index()
     }
 }
 

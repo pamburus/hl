@@ -8,6 +8,7 @@ use std::fmt::Display;
 
 pub trait Build: Sized {
     type Checkpoint;
+    type Index;
 
     fn add_scalar(self, scalar: Scalar) -> Self;
     fn add_composite<E, F>(self, composite: Composite, f: F) -> Result<Self, (E, Self)>
@@ -16,6 +17,7 @@ pub trait Build: Sized {
 
     fn checkpoint(&self) -> Self::Checkpoint;
     fn rollback(&mut self, checkpoint: &Self::Checkpoint);
+    fn next_index(&self) -> Self::Index;
 }
 
 // ---
@@ -125,6 +127,7 @@ impl Default for Discarder {
 
 impl Build for Discarder {
     type Checkpoint = ();
+    type Index = ();
 
     #[inline]
     fn add_scalar(self, _: Scalar) -> Self {
@@ -144,4 +147,7 @@ impl Build for Discarder {
 
     #[inline]
     fn rollback(&mut self, _: &Self::Checkpoint) {}
+
+    #[inline]
+    fn next_index(&self) -> Self::Index {}
 }

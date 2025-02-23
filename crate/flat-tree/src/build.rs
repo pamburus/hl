@@ -2,7 +2,7 @@
 use std::result::Result;
 
 // local imports
-use super::OptIndex;
+use super::{Index, OptIndex};
 
 // ---
 
@@ -18,6 +18,7 @@ pub trait Push: Reserve {
 
     fn checkpoint(&self) -> Self::Checkpoint;
     fn rollback(&mut self, checkpoint: &Self::Checkpoint);
+    fn next_index(&self) -> Index;
     fn first_node_index(&self, checkpoint: &Self::Checkpoint) -> OptIndex;
 }
 
