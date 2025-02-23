@@ -1,9 +1,14 @@
+// std imports
+use std::str::Utf8Error;
+
+// workspace imports
+use encstr::EncodedString;
 use flat_tree::tree;
 use log_format::{ast::BuilderDetach, Format, Span};
 
 use super::{
     ast::{self, Container, Node, SiblingsIter},
-    source::Source,
+    source::{Slice, Source},
 };
 
 // ---
@@ -176,7 +181,7 @@ where
     }
 
     #[inline]
-    pub fn text(&self) -> &S::Slice<'_> {
+    pub fn source(&self) -> &S::Slice<'_> {
         self.source.slice(self.span)
     }
 }
@@ -184,7 +189,7 @@ where
 #[derive(Debug, Clone)]
 pub struct String<S> {
     source: S,
-    span: Span,
+    inner: ast::String,
 }
 
 impl<S> String<S>
@@ -192,18 +197,26 @@ where
     S: Source,
 {
     #[inline]
-    fn new(source: S, span: Span) -> Self {
-        Self { source, span }
+    fn new(source: S, inner: ast::String) -> Self {
+        Self { source, inner }
     }
 
     #[inline]
     pub fn span(&self) -> Span {
-        self.span
+        self.inner.span()
     }
 
     #[inline]
-    pub fn text(&self) -> &S::Slice<'_> {
-        self.source.slice(self.span)
+    pub fn get(&self) -> Result<EncodedString, Utf8Error> {
+        match &self.inner {
+            ast::String::Plain(span) => Ok(EncodedString::raw(self.source.slice(*span).str()?)),
+            ast::String::JsonEscaped(span) => Ok(EncodedString::json(self.source.slice(*span).str()?)),
+        }
+    }
+
+    #[inline]
+    pub fn source(&self) -> &S::Slice<'_> {
+        self.source.slice(self.span())
     }
 }
 
@@ -299,10 +312,7 @@ where
     fn next(&mut self) -> Option<Self::Item> {
         self.children.next().map(|node| {
             let key = match node.value() {
-                ast::Value::Composite(ast::Composite::Field(key)) => match key {
-                    ast::String::Plain(span) => String::new(self.source.clone(), *span),
-                    ast::String::JsonEscaped(span) => String::new(self.source.clone(), *span),
-                },
+                ast::Value::Composite(ast::Composite::Field(key)) => String::new(self.source.clone(), *key),
                 _ => unreachable!(),
             };
             let value = convert_value(self.source.clone(), node.children().into_iter().next().unwrap());
@@ -321,8 +331,7 @@ where
             ast::Scalar::Null => Value::Null,
             ast::Scalar::Bool(b) => Value::Bool(*b),
             ast::Scalar::Number(span) => Value::Number(Number::new(source, *span)),
-            ast::Scalar::String(ast::String::Plain(span)) => Value::String(String::new(source, *span)),
-            ast::Scalar::String(ast::String::JsonEscaped(span)) => Value::String(String::new(source, *span)),
+            ast::Scalar::String(s) => Value::String(String::new(source, *s)),
         },
         ast::Value::Composite(composite) => match composite {
             ast::Composite::Array => Value::Array(Array::new(source, node)),
@@ -348,10 +357,10 @@ mod tests {
         let fields = entires[0].into_iter().collect::<Vec<_>>();
         assert_eq!(fields.len(), 1);
         let (key, value) = &fields[0];
-        assert_eq!(key.text(), "a");
+        assert_eq!(key.source(), "a");
         match value {
             Value::Number(number) => {
-                assert_eq!(number.text(), "10");
+                assert_eq!(number.source(), "10");
             }
             _ => panic!("unexpected value: {:?}", value),
         }
