@@ -19,8 +19,10 @@ pub mod error {
 
 pub use error::Result;
 
+pub type Source = Arc<str>;
+pub type SourceRef<'r> = <Arc<str> as log_ast::source::Source>::Ref<'r>;
 pub type Container = log_ast::ast::Container;
-pub type Segment = log_ast::model::Segment<Arc<str>>;
+pub type Segment = log_ast::model::Segment<Source>;
 
 // ---
 
@@ -37,6 +39,8 @@ pub type Value = log_ast::ast::Value;
 pub type Scalar = log_ast::ast::Scalar;
 pub type Composite = log_ast::ast::Composite;
 pub type String<'s> = EncodedString<'s>;
+pub type Object<'r> = log_ast::model::Object<'r, Source>;
+pub type ObjectIter<'r> = log_ast::model::ObjectIter<'r, Source>;
 
 #[cfg(test)]
 mod tests {

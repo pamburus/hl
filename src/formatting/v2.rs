@@ -121,11 +121,11 @@ impl RecordFormatter {
     pub fn format_record(&self, buf: &mut Buf, rec: &Record) {
         let mut fs = FormattingState::new(self.flatten && self.unescape_fields);
 
-        self.theme.apply(buf, &rec.level, |s| {
+        self.theme.apply(buf, &rec.level(), |s| {
             //
             // time
             //
-            if let Some(ts) = &rec.ts {
+            if let Some(ts) = &rec.ts() {
                 fs.add_element(|| {});
                 s.element(Element::Time, |s| {
                     s.batch(|buf| {
@@ -158,7 +158,7 @@ impl RecordFormatter {
             //
             // level
             //
-            let level = match rec.level {
+            let level = match rec.level() {
                 Some(Level::Debug) => Some(b"DBG"),
                 Some(Level::Info) => Some(b"INF"),
                 Some(Level::Warning) => Some(b"WRN"),
@@ -180,7 +180,7 @@ impl RecordFormatter {
             //
             // logger
             //
-            if let Some(logger) = rec.logger {
+            if let Some(logger) = rec.logger() {
                 fs.add_element(|| s.batch(|buf| buf.push(b' ')));
                 s.element(Element::Logger, |s| {
                     s.element(Element::LoggerInner, |s| {
@@ -192,7 +192,7 @@ impl RecordFormatter {
             //
             // message text
             //
-            if let Some(value) = &rec.message {
+            if let Some(value) = &rec.message() {
                 self.format_message(s, &mut fs, *value);
             } else {
                 s.reset();
@@ -214,7 +214,7 @@ impl RecordFormatter {
             //
             // caller
             //
-            if let Some(caller) = &rec.caller {
+            if let Some(caller) = &rec.caller() {
                 s.element(Element::Caller, |s| {
                     s.batch(|buf| {
                         buf.push(b' ');
@@ -952,7 +952,7 @@ mod tests {
             self.node().into()
         }
 
-        fn container(self) -> Container<'static> {
+        fn container(self) -> Container {
             self.container
         }
     }
@@ -1010,12 +1010,12 @@ mod tests {
     }
 
     trait ContainerExt<'a> {
-        fn from_fields(fields: &[(&'a str, ast::Scalar)]) -> Container<'a>;
-        fn record(self) -> Record<'a>;
+        fn from_fields(fields: &[(&'a str, ast::Scalar)]) -> Container;
+        fn record(self) -> Record;
     }
 
-    impl<'a> ContainerExt<'a> for Container<'a> {
-        fn from_fields(fields: &[(&'a str, ast::Scalar)]) -> Container<'a> {
+    impl<'a> ContainerExt<'a> for Container {
+        fn from_fields(fields: &[(&'a str, ast::Scalar)]) -> Container {
             use log_ast::ast::Build;
             let mut container = Container::default();
             container
@@ -1034,7 +1034,7 @@ mod tests {
             container
         }
 
-        fn record(self) -> Record<'a> {
+        fn record(self) -> Record {
             Record {
                 ast: self,
                 ..Default::default()
