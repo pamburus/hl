@@ -47,6 +47,14 @@ where
     }
 
     #[inline]
+    pub fn entry(&self, index: ast::Index) -> Option<Entry<S::Ref<'_>>> {
+        self.container.nodes().get(index).and_then(|node| match node.value() {
+            ast::Value::Composite(ast::Composite::Object) => Some(Object::new(self.source.as_ref(), node)),
+            _ => None,
+        })
+    }
+
+    #[inline]
     pub fn source(&self) -> &S::Slice<'_> {
         self.source.slice(self.span)
     }
@@ -143,6 +151,16 @@ where
             ast::Value::Composite(ast::Composite::Object) => Object::new(source, node),
             _ => panic!("unexpected root value: {:?}", node.value()),
         })
+    }
+
+    #[inline]
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.items.size_hint()
+    }
+
+    #[inline]
+    fn count(self) -> usize {
+        self.items.count()
     }
 }
 
