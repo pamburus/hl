@@ -1,18 +1,20 @@
-use std::ops::{Deref, Range};
+use std::{
+    ops::{Deref, Range},
+    str::Utf8Error,
+};
 
 use super::ast::Span;
 
-pub trait Source {
+pub trait Source: Slice {
     type Ref<'a>: Source
     where
         Self: 'a;
 
-    type Slice<'a>: AsRef<[u8]> + ?Sized
+    type Slice<'a>: Slice + ?Sized
     where
         Self: 'a;
 
     fn as_ref(&self) -> Self::Ref<'_>;
-    fn bytes(&self) -> &[u8];
     fn slice(&self, span: Span) -> &Self::Slice<'_>;
     unsafe fn slice_unchecked(&self, span: Span) -> &Self::Slice<'_>;
 }
@@ -23,11 +25,6 @@ impl Source for [u8] {
 
     #[inline]
     fn as_ref(&self) -> Self::Ref<'_> {
-        self
-    }
-
-    #[inline]
-    fn bytes(&self) -> &[u8] {
         self
     }
 
@@ -49,11 +46,6 @@ impl Source for str {
     #[inline]
     fn as_ref(&self) -> Self::Ref<'_> {
         self
-    }
-
-    #[inline]
-    fn bytes(&self) -> &[u8] {
-        self.as_bytes()
     }
 
     #[inline]
@@ -88,11 +80,6 @@ where
     }
 
     #[inline]
-    fn bytes(&self) -> &[u8] {
-        self.deref().bytes()
-    }
-
-    #[inline]
     fn slice(&self, span: Span) -> &Self::Slice<'_> {
         self.deref().slice(span)
     }
@@ -100,5 +87,68 @@ where
     #[inline]
     unsafe fn slice_unchecked(&self, span: Span) -> &Self::Slice<'_> {
         self.deref().slice_unchecked(span)
+    }
+}
+
+// ---
+
+pub trait Slice {
+    fn bytes(&self) -> &[u8];
+    fn str(&self) -> Result<&str, Utf8Error>;
+    unsafe fn str_unchecked(&self) -> &str;
+}
+
+impl Slice for [u8] {
+    #[inline]
+    fn bytes(&self) -> &[u8] {
+        self
+    }
+
+    #[inline]
+    fn str(&self) -> Result<&str, Utf8Error> {
+        std::str::from_utf8(self)
+    }
+
+    #[inline]
+    unsafe fn str_unchecked(&self) -> &str {
+        std::str::from_utf8_unchecked(self)
+    }
+}
+
+impl Slice for str {
+    #[inline]
+    fn bytes(&self) -> &[u8] {
+        self.as_bytes()
+    }
+
+    #[inline]
+    fn str(&self) -> Result<&str, Utf8Error> {
+        Ok(self)
+    }
+
+    #[inline]
+    unsafe fn str_unchecked(&self) -> &str {
+        self
+    }
+}
+
+impl<T> Slice for T
+where
+    T: Deref,
+    <T as Deref>::Target: Slice,
+{
+    #[inline]
+    fn bytes(&self) -> &[u8] {
+        self.deref().bytes()
+    }
+
+    #[inline]
+    fn str(&self) -> Result<&str, Utf8Error> {
+        self.deref().str()
+    }
+
+    #[inline]
+    unsafe fn str_unchecked(&self) -> &str {
+        self.deref().str_unchecked()
     }
 }

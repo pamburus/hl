@@ -157,7 +157,7 @@ mod segment_node_count {
     }
 
     pub(super) fn field<S: Source + Clone>(field: (model::String<S>, model::Value<S>)) -> usize {
-        black_box(field.0.text());
+        black_box(field.0.source());
         1 + value(field.1)
     }
 
@@ -169,11 +169,11 @@ mod segment_node_count {
                 1
             }
             model::Value::Number(n) => {
-                black_box(n.text());
+                black_box(n.source());
                 1
             }
             model::Value::String(s) => {
-                black_box(s.text());
+                black_box(s.source());
                 1
             }
             model::Value::Array(a) => array(a),
