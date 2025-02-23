@@ -15,6 +15,14 @@ use super::{
 
 pub trait FormatExt: Format {
     #[inline]
+    fn parse_entry<S>(&mut self, source: S, container: Container) -> Result<Option<Segment<S>>, Self::Error>
+    where
+        S: Source + Clone,
+    {
+        Segment::parse_entry_to_container(source, self, container)
+    }
+
+    #[inline]
     fn parse_segment<S>(&mut self, source: S, container: Container) -> Result<Option<Segment<S>>, Self::Error>
     where
         S: Source + Clone,
@@ -92,6 +100,28 @@ where
                 }
                 Err(e) => break Err(e),
             }
+        }
+    }
+
+    #[inline]
+    pub fn parse_entry_to_container<F>(
+        source: S,
+        format: &mut F,
+        mut container: Container,
+    ) -> Result<Option<Self>, F::Error>
+    where
+        F: Format + ?Sized,
+    {
+        let target = container.metaroot();
+        let result = format.parse(source.bytes(), target).detach();
+        match result.0 {
+            Ok(Some(span)) => Ok(Some(Self {
+                source,
+                span,
+                container,
+            })),
+            Ok(None) => Ok(None),
+            Err(e) => Err(e),
         }
     }
 }
