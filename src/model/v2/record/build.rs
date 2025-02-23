@@ -91,7 +91,7 @@ where
             if let Some(last) = self.target.first_node_index(&checkpoint).unfold() {
                 let value = scalar.into();
                 if settings.apply(self.core.settings, value, self.ctx.record).is_some() {
-                    self.ctx.record.predefined.push(last).ok();
+                    self.ctx.record.hidden.push(last).ok();
                     return self;
                 }
             }
@@ -602,7 +602,7 @@ mod tests {
         println!("{:?}", container);
 
         record.ast = container;
-        assert_eq!(record.predefined.len(), 5);
+        assert_eq!(record.hidden.len(), 5);
         assert_eq!(record.fields_for_search().into_iter().count(), 22);
         assert_eq!(record.fields().into_iter().count(), 17);
     }
