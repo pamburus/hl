@@ -7,11 +7,7 @@ use crate::{
     filtering::IncludeExcludeSetting,
     fmtx::{aligned_left, centered, OptimizedBuf, Push},
     model::{
-        v2::{
-            ast,
-            record::{Record, RecordWithSource},
-            value::Value,
-        },
+        v2::{ast, record::Record, value::Value},
         Caller, Level,
     },
     settings::Formatting,
@@ -28,29 +24,29 @@ type Buf = Vec<u8>;
 
 // ---
 
-pub trait RecordWithSourceFormatter {
-    fn format_record(&self, buf: &mut Buf, rec: RecordWithSource);
+pub trait AbstractRecordFormatter {
+    fn format_record(&self, buf: &mut Buf, rec: &Record);
 }
 
 pub struct RawRecordFormatter {}
 
-impl RecordWithSourceFormatter for RawRecordFormatter {
+impl AbstractRecordFormatter for RawRecordFormatter {
     #[inline(always)]
-    fn format_record(&self, buf: &mut Buf, rec: RecordWithSource) {
+    fn format_record(&self, buf: &mut Buf, rec: &Record) {
         buf.extend_from_slice(rec.source);
     }
 }
 
-impl<T: RecordWithSourceFormatter> RecordWithSourceFormatter for &T {
+impl<T: AbstractRecordFormatter> AbstractRecordFormatter for &T {
     #[inline(always)]
-    fn format_record(&self, buf: &mut Buf, rec: RecordWithSource) {
+    fn format_record(&self, buf: &mut Buf, rec: &Record) {
         (**self).format_record(buf, rec)
     }
 }
 
-impl RecordWithSourceFormatter for Box<dyn RecordWithSourceFormatter> {
+impl AbstractRecordFormatter for Box<dyn AbstractRecordFormatter> {
     #[inline(always)]
-    fn format_record(&self, buf: &mut Buf, rec: RecordWithSource) {
+    fn format_record(&self, buf: &mut Buf, rec: &Record) {
         (**self).format_record(buf, rec)
     }
 }
@@ -280,9 +276,9 @@ impl RecordFormatter {
     }
 }
 
-impl RecordWithSourceFormatter for RecordFormatter {
+impl AbstractRecordFormatter for RecordFormatter {
     #[inline]
-    fn format_record(&self, buf: &mut Buf, rec: RecordWithSource) {
+    fn format_record(&self, buf: &mut Buf, rec: &Record) {
         RecordFormatter::format_record(self, buf, rec.record)
     }
 }

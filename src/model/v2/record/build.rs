@@ -36,6 +36,7 @@ pub struct Builder<'s, 'c, T, CP = ()> {
 #[derive(Clone)]
 struct Core<'s, CP> {
     settings: &'s Settings,
+    source: &'s str,
     block: Option<&'s SettingsBlock>,
     field: Option<(CP, FieldSettings)>,
     depth: usize,
@@ -50,10 +51,17 @@ impl<'s, 'c, T, CP> Builder<'s, 'c, T, CP>
 where
     T: Build,
 {
-    pub fn new(settings: &'s Settings, pc: &'c mut PriorityController, record: &'c mut Record, target: T) -> Self {
+    pub fn new(
+        settings: &'s Settings,
+        source: &'s str,
+        pc: &'c mut PriorityController,
+        record: &'c mut Record,
+        target: T,
+    ) -> Self {
         Self {
             core: Core {
                 settings,
+                source,
                 block: Some(&settings.blocks[0]),
                 field: None,
                 depth: 0,

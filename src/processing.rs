@@ -3,7 +3,7 @@ use std::ops::Range;
 
 // local imports
 use crate::{
-    formatting::v2::{RawRecordFormatter, RecordFormatter, RecordWithSourceFormatter},
+    formatting::v2::{AbstractRecordFormatter, RawRecordFormatter, RecordFormatter},
     model::{
         v2::{
             parse::{NewParser, Parse, Parser, Settings as ParserSettings},
@@ -46,7 +46,7 @@ pub struct SegmentProcessor<'p, Formatter, Filter> {
     delim: <Delimiter as Delimit>::Searcher,
 }
 
-impl<'p, Formatter: RecordWithSourceFormatter, Filter: RecordFilter> SegmentProcessor<'p, Formatter, Filter> {
+impl<'p, Formatter: AbstractRecordFormatter, Filter: RecordFilter> SegmentProcessor<'p, Formatter, Filter> {
     pub fn new(
         parser: &'p ParserSettings,
         formatter: Formatter,
@@ -70,7 +70,7 @@ impl<'p, Formatter: RecordWithSourceFormatter, Filter: RecordFilter> SegmentProc
     }
 }
 
-impl<'p, Formatter: RecordWithSourceFormatter, Filter: RecordFilter> SegmentProcess
+impl<'p, Formatter: AbstractRecordFormatter, Filter: RecordFilter> SegmentProcess
     for SegmentProcessor<'p, Formatter, Filter>
 {
     fn process<'s, 'a, 'b, 'o, O>(

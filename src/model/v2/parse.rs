@@ -67,6 +67,17 @@ where
         let target = container.metaroot();
         let index = target.next_index();
 
+        let mut record = Record::default();
+        let mut pc = PriorityController::default();
+
+        let target = Builder::new(
+            &self.settings,
+            &*self.source,
+            &mut pc,
+            &mut record,
+            self.container.metaroot(),
+        );
+
         let segment = match self.parser.format.parse_entry(self.source.clone(), target) {
             Ok(Some(segment)) => segment,
             Ok(None) => return None,
@@ -74,11 +85,6 @@ where
         };
 
         let mut raw_record = RawRecord::new(segment, index);
-
-        let mut record = Record::default();
-        let mut pc = PriorityController::default();
-
-        // let target = Builder::new(&self.settings, &mut pc, &mut record, self.container.metaroot());
 
         let Some(output) = self.format.parse(container) else {
             return None;
