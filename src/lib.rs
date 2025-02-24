@@ -48,7 +48,7 @@ pub mod signal;
 pub use app::{App, FieldOptions, Options};
 pub use datefmt::{DateTimeFormatter, LinuxDateFormat};
 pub use filtering::DefaultNormalizing;
-pub use formatting::v2::{RecordFormatter, RecordWithSourceFormatter};
+pub use formatting::v2::{RecordFormatter, AbstractRecordFormatter};
 pub use model::v2::compat::{FieldFilterSet, Filter, Level, Parser, ParserSettings, RecordFilter, RecordWithSource};
 pub use processing::SegmentProcessor;
 pub use query::Query;

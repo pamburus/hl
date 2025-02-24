@@ -34,7 +34,7 @@ use crate::{
     datefmt::{DateTimeFormat, DateTimeFormatter},
     error::*,
     fmtx::aligned_left,
-    formatting::v2::{RawRecordFormatter, RecordFormatter, RecordWithSourceFormatter},
+    formatting::v2::{AbstractRecordFormatter, RawRecordFormatter, RecordFormatter},
     fsmon::{self, EventKind},
     index::{Indexer, IndexerSettings, Timestamp},
     input::{BlockLine, Input, InputHolder, InputReference},
@@ -696,7 +696,7 @@ impl App {
             .with_unix_timestamp_unit(self.options.unix_ts_unit)
     }
 
-    fn formatter(&self) -> Box<dyn RecordWithSourceFormatter> {
+    fn formatter(&self) -> Box<dyn AbstractRecordFormatter> {
         if self.options.raw {
             Box::new(RawRecordFormatter {})
         } else {
