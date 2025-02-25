@@ -145,18 +145,18 @@ where
     #[inline]
     fn push(&mut self, value: T) {
         match self {
-            Self::Disabled(ref mut aligner) => aligner.push(value),
-            Self::Unbuffered(ref mut aligner) => aligner.push(value),
-            Self::Buffered(ref mut aligner) => aligner.push(value),
+            Self::Disabled(aligner) => aligner.push(value),
+            Self::Unbuffered(aligner) => aligner.push(value),
+            Self::Buffered(aligner) => aligner.push(value),
         }
     }
 
     #[inline]
     fn extend_from_slice(&mut self, values: &[T]) {
         match self {
-            Self::Disabled(ref mut aligner) => aligner.extend_from_slice(values),
-            Self::Unbuffered(ref mut aligner) => aligner.extend_from_slice(values),
-            Self::Buffered(ref mut aligner) => aligner.extend_from_slice(values),
+            Self::Disabled(aligner) => aligner.extend_from_slice(values),
+            Self::Unbuffered(aligner) => aligner.extend_from_slice(values),
+            Self::Buffered(aligner) => aligner.extend_from_slice(values),
         }
     }
 }

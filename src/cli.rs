@@ -2,7 +2,7 @@
 use std::path::PathBuf;
 
 // third-party imports
-use clap::{value_parser, ArgAction, Args, Parser, ValueEnum};
+use clap::{ArgAction, Args, Parser, ValueEnum, value_parser};
 use clap_complete::Shell;
 use std::num::NonZeroUsize;
 

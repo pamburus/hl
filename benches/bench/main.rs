@@ -9,9 +9,9 @@ use std::{
 
 // third-party imports
 use base32::Alphabet;
-use criterion::{criterion_main, BatchSize, Bencher};
+use criterion::{BatchSize, Bencher, criterion_main};
 use fnv::FnvHasher;
-use stats_alloc::{StatsAlloc, INSTRUMENTED_SYSTEM};
+use stats_alloc::{INSTRUMENTED_SYSTEM, StatsAlloc};
 
 #[global_allocator]
 static GA: &StatsAlloc<System> = &INSTRUMENTED_SYSTEM;

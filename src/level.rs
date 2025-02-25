@@ -6,8 +6,8 @@ use std::result::Result;
 
 // third-party imports
 use clap::{
-    builder::{EnumValueParser, TypedValueParser, ValueParserFactory},
     ValueEnum,
+    builder::{EnumValueParser, TypedValueParser, ValueParserFactory},
 };
 use enum_map::Enum;
 use serde::{Deserialize, Serialize};

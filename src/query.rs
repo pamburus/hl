@@ -3,7 +3,7 @@ use std::io::{BufRead, BufReader, Read};
 
 // third-party imports
 use closure::closure;
-use pest::{iterators::Pair, Parser};
+use pest::{Parser, iterators::Pair};
 use pest_derive::Parser;
 use serde_json as json;
 use wildflower::Pattern;
