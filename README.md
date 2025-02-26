@@ -47,10 +47,16 @@ High performance and convenient features are the main goals.
     curl -sSfL https://github.com/pamburus/hl/releases/latest/download/hl-macos.tar.gz | tar xz
     ```
 
-* Download and extract using `curl` and `tar` on Linux
+* Download and extract using `curl` and `tar` on Linux (x86_64)
 
     ```sh
     curl -sSfL https://github.com/pamburus/hl/releases/latest/download/hl-linux-x86_64-musl.tar.gz | tar xz
+    ```
+
+* Download and extract using `curl` and `tar` on Linux (arm64/aarch64)
+
+    ```sh
+    curl -sSfL https://github.com/pamburus/hl/releases/latest/download/hl-linux-arm64-musl.tar.gz | tar xz
     ```
 
 * Install [AUR package](https://aur.archlinux.org/packages/hl-log-viewer-bin) on Arch Linux
