@@ -35,10 +35,10 @@ High performance and convenient features are the main goals.
 
 ## Installation options
 
-* Install using [homebrew](https://brew.sh) on macOS or Linux
+* Install using [homebrew](https://brew.sh) on macOS
 
     ```sh
-    brew install pamburus/tap/hl
+    brew install hl
     ```
 
 * Download and extract using `curl` and `tar` on macOS
