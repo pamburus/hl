@@ -225,8 +225,7 @@ fn run() -> Result<()> {
         buffer_size,
         max_message_size,
         concurrency,
-        filter,
-        query,
+        filter: app::AdvancedFilter::new(filter, query).into(),
         fields: hl::FieldOptions {
             settings: settings.fields.clone(),
             filter: Arc::new(fields),
