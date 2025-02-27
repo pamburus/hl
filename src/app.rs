@@ -29,6 +29,7 @@ use serde::{Deserialize, Serialize};
 use crate::{
     appdirs::AppDirs,
     datefmt::{DateTimeFormat, DateTimeFormatter},
+    error::*,
     fmtx::aligned_left,
     formatting::{RawRecordFormatter, RecordFormatter, RecordWithSourceFormatter},
     fsmon::{self, EventKind},
@@ -42,7 +43,6 @@ use crate::{
     timezone::Tz,
     vfs::LocalFileSystem,
     IncludeExcludeKeyFilter,
-    {error::*, QueryNone},
 };
 
 // TODO: merge Options to Settings and replace Options with Settings.
@@ -58,8 +58,7 @@ pub struct Options {
     pub buffer_size: NonZeroUsize,
     pub max_message_size: NonZeroUsize,
     pub concurrency: usize,
-    pub filter: Filter,
-    pub query: Option<Query>,
+    pub filter: Arc<AdvancedFilter>,
     pub fields: FieldOptions,
     pub formatting: Formatting,
     pub time_zone: Tz,
@@ -78,15 +77,6 @@ pub struct Options {
 }
 
 impl Options {
-    fn filter_and_query<'a>(&'a self) -> Box<dyn RecordFilter + 'a> {
-        match (self.filter.is_empty(), &self.query) {
-            (true, None) => Box::new(QueryNone {}),
-            (false, None) => Box::new(&self.filter),
-            (true, Some(query)) => Box::new(query),
-            (false, Some(query)) => Box::new((&self.filter).and(query)),
-        }
-    }
-
     #[cfg(test)]
     fn with_theme(self, theme: Arc<Theme>) -> Self {
         Self { theme, ..self }
@@ -113,13 +103,58 @@ impl Options {
     }
 
     #[cfg(test)]
-    fn with_filter(self, filter: Filter) -> Self {
+    fn with_filter(self, filter: Arc<AdvancedFilter>) -> Self {
         Self { filter, ..self }
     }
 
     #[cfg(test)]
     fn with_input_info(self, input_info: Option<InputInfo>) -> Self {
         Self { input_info, ..self }
+    }
+}
+
+#[derive(Default)]
+pub struct AdvancedFilter {
+    pub basic: Filter,
+    pub query: Option<Query>,
+}
+
+impl AdvancedFilter {
+    pub fn new(basic: Filter, query: Option<Query>) -> Self {
+        Self { basic, query }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.basic.is_empty() && self.query.is_none()
+    }
+}
+
+impl RecordFilter for AdvancedFilter {
+    #[inline]
+    fn apply<'a>(&self, record: &'a Record) -> bool {
+        self.basic.apply(record) && self.query.apply(record)
+    }
+}
+
+impl From<&Arc<AdvancedFilter>> for Query {
+    fn from(options: &Arc<AdvancedFilter>) -> Self {
+        if options.is_empty() {
+            Query::default()
+        } else {
+            Query::new(options.clone())
+        }
+    }
+}
+
+impl From<Filter> for AdvancedFilter {
+    fn from(filter: Filter) -> Self {
+        Self::new(filter, None)
+    }
+}
+
+impl From<Filter> for Arc<AdvancedFilter> {
+    fn from(filter: Filter) -> Self {
+        Self::new(filter.into())
     }
 }
 
@@ -341,17 +376,17 @@ impl App {
                             return None;
                         }
                         if let Some((ts_min, ts_max)) = src.stat.ts_min_max {
-                            if let Some(until) = self.options.filter.until {
+                            if let Some(until) = self.options.filter.basic.until {
                                 if ts_min > until.into() {
                                     return None;
                                 }
                             }
-                            if let Some(since) = self.options.filter.since {
+                            if let Some(since) = self.options.filter.basic.since {
                                 if ts_max < since.into() {
                                     return None;
                                 }
                             }
-                            if let Some(level) = self.options.filter.level {
+                            if let Some(level) = self.options.filter.basic.level {
                                 if !src.match_level(level) {
                                     return None;
                                 }
@@ -789,12 +824,12 @@ impl App {
     fn new_segment_processor<'a>(&'a self, parser: &'a Parser) -> impl SegmentProcess + 'a {
         let options = SegmentProcessorOptions {
             allow_prefix: self.options.allow_prefix,
-            allow_unparsed_data: self.options.filter.is_empty() && self.options.query.is_none(),
+            allow_unparsed_data: self.options.filter.is_empty(),
             delimiter: self.options.delimiter.clone(),
             input_format: self.options.input_format,
         };
 
-        SegmentProcessor::new(parser, self.formatter(), self.options.filter_and_query(), options)
+        SegmentProcessor::new(parser, self.formatter(), Query::from(&self.options.filter), options)
     }
 }
 
@@ -1250,10 +1285,15 @@ mod tests {
         ));
 
         let mut output = Vec::new();
-        let app = App::new(options().with_filter(Filter {
-            fields: FieldFilterSet::new(["msg=m2"]).unwrap(),
-            ..Default::default()
-        }));
+        let app = App::new(
+            options().with_filter(
+                Filter {
+                    fields: FieldFilterSet::new(["msg=m2"]).unwrap(),
+                    ..Default::default()
+                }
+                .into(),
+            ),
+        );
         app.run(vec![input], &mut output).unwrap();
         assert_eq!(
             std::str::from_utf8(&output).unwrap(),
@@ -1440,8 +1480,7 @@ mod tests {
             buffer_size: NonZeroUsize::new(4096).unwrap(),
             max_message_size: NonZeroUsize::new(4096 * 1024).unwrap(),
             concurrency: 1,
-            filter: Filter::default(),
-            query: None,
+            filter: Default::default(),
             fields: FieldOptions::default(),
             formatting: Formatting::default(),
             time_zone: Tz::IANA(UTC),

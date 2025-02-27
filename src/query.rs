@@ -1,5 +1,8 @@
 // std imports
-use std::io::{BufRead, BufReader, Read};
+use std::{
+    io::{BufRead, BufReader, Read},
+    sync::{Arc, LazyLock},
+};
 
 // third-party imports
 use closure::closure;
@@ -12,7 +15,8 @@ use wildflower::Pattern;
 use crate::error::{Error, Result};
 use crate::level::RelaxedLevel;
 use crate::model::{
-    FieldFilter, FieldFilterKey, Level, Number, NumericOp, Record, RecordFilter, UnaryBoolOp, ValueMatchPolicy,
+    FieldFilter, FieldFilterKey, Level, Number, NumericOp, Record, RecordFilter, RecordFilterNone, UnaryBoolOp,
+    ValueMatchPolicy,
 };
 use crate::types::FieldKind;
 
@@ -22,8 +26,9 @@ use crate::types::FieldKind;
 #[grammar = "query.pest"]
 pub struct QueryParser;
 
+#[derive(Clone)]
 pub struct Query {
-    filter: Box<dyn RecordFilter + Sync>,
+    filter: Arc<dyn RecordFilter + Sync + Send>,
 }
 
 impl Query {
@@ -44,16 +49,33 @@ impl Query {
         Query::new(Not { arg: self })
     }
 
-    fn new<F: RecordFilter + Sync + 'static>(filter: F) -> Self {
+    pub fn new<F: RecordFilter + Sync + Send + 'static>(filter: F) -> Self {
         Self {
-            filter: Box::new(filter),
+            filter: Arc::new(filter),
         }
     }
 }
 
 impl RecordFilter for Query {
+    #[inline]
     fn apply<'a>(&self, record: &Record<'a>) -> bool {
         self.filter.apply(record)
+    }
+}
+
+impl Default for Query {
+    #[inline]
+    fn default() -> Self {
+        <&Query>::default().clone()
+    }
+}
+
+impl Default for &'static Query {
+    #[inline]
+    fn default() -> Self {
+        static QUERY_NONE: LazyLock<Query> = LazyLock::new(|| Query::new(RecordFilterNone {}));
+
+        &QUERY_NONE
     }
 }
 
@@ -69,7 +91,7 @@ fn expression(pair: Pair<Rule>) -> Result<Query> {
     }
 }
 
-fn binary_op<Op: BinaryOp + Sync + 'static>(pair: Pair<Rule>) -> Result<Query> {
+fn binary_op<Op: BinaryOp + Sync + Send + 'static>(pair: Pair<Rule>) -> Result<Query> {
     let mut inner = pair.into_inner();
     let mut result = expression(inner.next().unwrap())?;
     for inner in inner {
@@ -288,6 +310,7 @@ struct Or {
 }
 
 impl RecordFilter for Or {
+    #[inline]
     fn apply<'a>(&self, record: &Record<'a>) -> bool {
         self.lhs.apply(record) || self.rhs.apply(record)
     }
@@ -307,6 +330,7 @@ struct And {
 }
 
 impl RecordFilter for And {
+    #[inline]
     fn apply<'a>(&self, record: &Record<'a>) -> bool {
         self.lhs.apply(record) && self.rhs.apply(record)
     }
@@ -325,6 +349,7 @@ struct Not {
 }
 
 impl RecordFilter for Not {
+    #[inline]
     fn apply<'a>(&self, record: &Record<'a>) -> bool {
         !self.arg.apply(record)
     }
@@ -347,6 +372,7 @@ impl<F: Fn(Level) -> bool + Send + Sync + 'static> LevelFilter<F> {
 }
 
 impl<F: Fn(Level) -> bool> RecordFilter for LevelFilter<F> {
+    #[inline]
     fn apply<'a>(&self, record: &Record<'a>) -> bool {
         record.level.map(&self.f).unwrap_or(false)
     }

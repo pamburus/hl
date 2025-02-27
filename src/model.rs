@@ -8,6 +8,7 @@ use std::{
     marker::PhantomData,
     ops::Range,
     str::FromStr,
+    sync::Arc,
 };
 
 // third-party imports
@@ -423,6 +424,13 @@ pub trait RecordFilter {
 }
 
 impl<T: RecordFilter + ?Sized> RecordFilter for Box<T> {
+    #[inline]
+    fn apply<'a>(&self, record: &Record<'a>) -> bool {
+        (**self).apply(record)
+    }
+}
+
+impl<T: RecordFilter + ?Sized> RecordFilter for Arc<T> {
     #[inline]
     fn apply<'a>(&self, record: &Record<'a>) -> bool {
         (**self).apply(record)
