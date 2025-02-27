@@ -350,6 +350,16 @@ updates:
         patterns:
           - "windows-*"
           - "windows_*"
+      zerofrom-sec:
+        applies-to: security-updates
+        patterns:
+          - "zerofrom"
+          - "zerofrom-*"
+      zerofrom-ver:
+        applies-to: version-updates
+        patterns:
+          - "zerofrom"
+          - "zerofrom-*"
       zstd-sec:
         applies-to: security-updates
         patterns:
