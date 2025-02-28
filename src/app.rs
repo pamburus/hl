@@ -1078,7 +1078,12 @@ mod tests {
 
     // local imports
     use crate::{
-        filtering::MatchOptions, level::Level, model::FieldFilterSet, settings, themecfg::testing, LinuxDateFormat,
+        filtering::MatchOptions,
+        level::{InfallibleLevel, Level},
+        model::FieldFilterSet,
+        settings,
+        themecfg::testing,
+        LinuxDateFormat,
     };
 
     #[test]
@@ -1397,13 +1402,13 @@ mod tests {
             settings: Fields {
                 predefined: settings::PredefinedFields {
                     level: settings::LevelField {
-                        variants: vec![settings::LevelFieldVariant {
+                        variants: vec![settings::RawLevelFieldVariant {
                             names: vec!["level".to_string()],
                             values: hashmap! {
-                                Level::Debug => vec!["dbg".to_string()],
-                                Level::Info => vec!["INF".to_string()],
-                                Level::Warning => vec!["wrn".to_string()],
-                                Level::Error => vec!["ERR".to_string()],
+                                InfallibleLevel::new(Level::Debug) => vec!["dbg".to_string()],
+                                InfallibleLevel::new(Level::Info) => vec!["INF".to_string()],
+                                InfallibleLevel::new(Level::Warning) => vec!["wrn".to_string()],
+                                InfallibleLevel::new(Level::Error) => vec!["ERR".to_string()],
                             },
                             level: None,
                         }],

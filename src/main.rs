@@ -11,7 +11,7 @@ use std::{
 // third-party imports
 use chrono::Utc;
 use clap::{CommandFactory, Parser};
-use env_logger::{self as logger, fmt::TimestampPrecision};
+use env_logger::{self as logger};
 use itertools::Itertools;
 
 // local imports
@@ -36,10 +36,13 @@ const HL_DEBUG_LOG: &str = "HL_DEBUG_LOG";
 
 fn bootstrap() -> Result<Settings> {
     if std::env::var(HL_DEBUG_LOG).is_ok() {
-        logger::Builder::from_env(HL_DEBUG_LOG)
-            .format_timestamp(Some(TimestampPrecision::Micros))
-            .init();
+        logger::Builder::from_env(HL_DEBUG_LOG).format_timestamp_micros().init();
         log::debug!("logging initialized");
+    } else {
+        logger::Builder::new()
+            .filter_level(log::LevelFilter::Warn)
+            .format_timestamp_millis()
+            .init()
     }
 
     let opt = cli::BootstrapOpt::parse().args;

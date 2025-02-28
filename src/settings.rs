@@ -1,6 +1,6 @@
 // std imports
 use std::{
-    collections::{BTreeMap, HashMap},
+    collections::{BTreeMap, HashMap, HashSet},
     include_str,
     path::{Path, PathBuf},
 };
@@ -15,7 +15,7 @@ use strum::IntoEnumIterator;
 
 // local imports
 use crate::error::Error;
-use crate::level::Level;
+use crate::level::{InfallibleLevel, Level};
 
 // ---
 
@@ -163,17 +163,17 @@ impl Default for TimeField {
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 pub struct LevelField {
     pub show: FieldShowOption,
-    pub variants: Vec<LevelFieldVariant>,
+    pub variants: Vec<RawLevelFieldVariant>,
 }
 
 impl Default for LevelField {
     fn default() -> Self {
         Self {
             show: FieldShowOption::default(),
-            variants: vec![LevelFieldVariant {
+            variants: vec![RawLevelFieldVariant {
                 names: vec!["level".into()],
                 values: Level::iter()
-                    .map(|level| (level, vec![level.as_ref().to_lowercase().into()]))
+                    .map(|level| (level.into(), vec![level.as_ref().to_lowercase().into()]))
                     .collect(),
                 level: None,
             }],
@@ -182,6 +182,56 @@ impl Default for LevelField {
 }
 
 // ---
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+pub struct RawLevelFieldVariant {
+    pub names: Vec<String>,
+    #[serde(default, serialize_with = "ordered_map_serialize")]
+    pub values: HashMap<InfallibleLevel, Vec<String>>,
+    pub level: Option<InfallibleLevel>,
+}
+
+impl RawLevelFieldVariant {
+    pub fn resolve(&self) -> Option<LevelFieldVariant> {
+        let mut unknowns = HashSet::new();
+        let mut values = HashMap::new();
+        let mut valid = true;
+
+        for (level, names) in &self.values {
+            match level {
+                InfallibleLevel::Valid(level) => {
+                    values.insert(level.clone(), names.clone());
+                }
+                InfallibleLevel::Invalid(name) => {
+                    unknowns.insert(name.clone());
+                }
+            }
+        }
+
+        let level = self.level.clone().and_then(|level| match level {
+            InfallibleLevel::Valid(level) => Some(level),
+            InfallibleLevel::Invalid(name) => {
+                unknowns.insert(name);
+                valid = false;
+                None
+            }
+        });
+
+        for name in unknowns {
+            log::warn!("unknown level: {:?}", name);
+        }
+
+        if valid && !values.is_empty() {
+            Some(LevelFieldVariant {
+                names: self.names.clone(),
+                values,
+                level,
+            })
+        } else {
+            None
+        }
+    }
+}
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 pub struct LevelFieldVariant {
@@ -409,5 +459,54 @@ mod tests {
         assert_eq!(settings.time_format, "%b %d %T.%3N");
         assert_eq!(settings.time_zone, chrono_tz::UTC);
         assert_eq!(settings.theme, "universal");
+    }
+
+    #[test]
+    fn test_unknown_level_values() {
+        let variant = RawLevelFieldVariant {
+            names: vec!["level".into()],
+            values: vec![
+                (InfallibleLevel::Valid(Level::Info), vec!["info".into()]),
+                (InfallibleLevel::Invalid("unknown".into()), vec!["unknown".into()]),
+            ]
+            .into_iter()
+            .collect(),
+            level: None,
+        };
+
+        assert_eq!(
+            variant.resolve(),
+            Some(LevelFieldVariant {
+                names: vec!["level".into()],
+                values: vec![(Level::Info, vec!["info".into()])].into_iter().collect(),
+                level: None,
+            })
+        );
+    }
+
+    #[test]
+    fn test_unknown_level_main() {
+        let variant = RawLevelFieldVariant {
+            names: vec!["level".into()],
+            values: vec![(InfallibleLevel::Valid(Level::Info), vec!["info".into()])]
+                .into_iter()
+                .collect(),
+            level: Some(InfallibleLevel::Invalid("unknown".into())),
+        };
+
+        assert_eq!(variant.resolve(), None);
+    }
+
+    #[test]
+    fn test_unknown_level_all_unknown() {
+        let variant = RawLevelFieldVariant {
+            names: vec!["level".into()],
+            values: vec![(InfallibleLevel::Invalid("unknown".into()), vec!["unknown".into()])]
+                .into_iter()
+                .collect(),
+            level: Some(InfallibleLevel::Valid(Level::Info)),
+        };
+
+        assert_eq!(variant.resolve(), None);
     }
 }
