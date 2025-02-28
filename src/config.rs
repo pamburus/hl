@@ -128,7 +128,7 @@ mod tests {
 
     use maplit::hashmap;
 
-    use crate::level::Level;
+    use crate::level::{InfallibleLevel, Level};
 
     #[test]
     fn test_default() {
@@ -152,11 +152,11 @@ mod tests {
         assert_eq!(
             variant.values,
             hashmap! {
-                Level::Debug => vec!["dbg".to_owned()],
+                InfallibleLevel::new(Level::Debug) => vec!["dbg".to_owned()],
                 // TODO: replace `"inf"` with `"INF"` when https://github.com/mehcode/config-rs/issues/568 is fixed
-                Level::Info => vec!["inf".to_owned()],
-                Level::Warning => vec!["wrn".to_owned()],
-                Level::Error => vec!["ERR".to_owned()],
+                InfallibleLevel::new(Level::Info) => vec!["inf".to_owned()],
+                InfallibleLevel::new(Level::Warning) => vec!["wrn".to_owned()],
+                InfallibleLevel::new(Level::Error) => vec!["ERR".to_owned()],
             }
         );
     }

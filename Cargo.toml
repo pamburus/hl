@@ -4,7 +4,7 @@ members = [".", "crate/encstr", "crate/heapopt"]
 [workspace.package]
 repository = "https://github.com/pamburus/hl"
 authors = ["Pavel Ivanov <mr.pavel.ivanov@gmail.com>"]
-version = "0.30.4-alpha.2"
+version = "0.30.4-alpha.3"
 edition = "2021"
 license = "MIT"
 
@@ -72,6 +72,7 @@ regex = "1"
 rust-embed = "8"
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["raw_value"] }
+serde_plain = "1"
 serde_yml = "0"
 serde-logfmt = { path = "./crate/serde-logfmt" }
 sha2 = "0"

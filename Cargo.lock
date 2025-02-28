@@ -1021,7 +1021,7 @@ checksum = "7f24254aa9a54b5c858eaee2f5bccdb46aaf0e486a595ed5fd8f86ba55232a70"
 
 [[package]]
 name = "hl"
-version = "0.30.4-alpha.2"
+version = "0.30.4-alpha.3"
 dependencies = [
  "bincode",
  "byte-strings",
@@ -1076,6 +1076,7 @@ dependencies = [
  "serde",
  "serde-logfmt",
  "serde_json",
+ "serde_plain",
  "serde_yml",
  "sha2",
  "shellwords",
@@ -1954,6 +1955,15 @@ dependencies = [
  "itoa",
  "memchr",
  "ryu",
+ "serde",
+]
+
+[[package]]
+name = "serde_plain"
+version = "1.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9ce1fc6db65a611022b23a0dec6975d63fb80a302cb3388835ff02c097258d50"
+dependencies = [
  "serde",
 ]
 
