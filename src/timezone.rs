@@ -13,6 +13,7 @@ pub enum TzOffset {
 }
 
 impl OffsetName for TzOffset {
+    #[inline]
     fn tz_id(&self) -> &str {
         match self {
             Self::Local(_) => "(Local)",
@@ -21,6 +22,7 @@ impl OffsetName for TzOffset {
         }
     }
 
+    #[inline]
     fn abbreviation(&self) -> Option<&str> {
         match self {
             Self::Local(_) => Some("(L)"),
@@ -31,6 +33,7 @@ impl OffsetName for TzOffset {
 }
 
 impl Offset for TzOffset {
+    #[inline]
     fn fix(&self) -> FixedOffset {
         match self {
             Self::Local(offset) => offset.fix(),
@@ -51,6 +54,7 @@ impl fmt::Display for TzOffset {
 }
 
 impl From<FixedOffset> for TzOffset {
+    #[inline]
     fn from(offset: FixedOffset) -> Self {
         TzOffset::Fixed(offset)
     }
@@ -66,6 +70,7 @@ pub enum Tz {
 }
 
 impl Tz {
+    #[inline]
     pub fn name(&self) -> Option<&str> {
         match self {
             Self::Local => None,
@@ -74,6 +79,7 @@ impl Tz {
         }
     }
 
+    #[inline]
     pub fn is_utc(&self) -> bool {
         match self {
             Self::Local => false,
@@ -87,6 +93,7 @@ impl TimeZone for Tz {
     type Offset = TzOffset;
 
     /// Reconstructs the time zone from the offset.
+    #[inline]
     fn from_offset(offset: &Self::Offset) -> Self {
         match offset {
             Self::Offset::Local(_) => Self::Local,
@@ -96,6 +103,7 @@ impl TimeZone for Tz {
     }
 
     /// Creates the offset(s) for given local `NaiveDate` if possible.
+    #[inline]
     fn offset_from_local_date(&self, local: &NaiveDate) -> LocalResult<Self::Offset> {
         match self {
             Self::Local => Local.offset_from_local_date(local).map(Self::Offset::Local),
@@ -105,6 +113,7 @@ impl TimeZone for Tz {
     }
 
     /// Creates the offset(s) for given local `NaiveDateTime` if possible.
+    #[inline]
     fn offset_from_local_datetime(&self, local: &NaiveDateTime) -> LocalResult<Self::Offset> {
         match self {
             Self::Local => Local.offset_from_local_datetime(local).map(Self::Offset::Local),
@@ -114,6 +123,7 @@ impl TimeZone for Tz {
     }
 
     /// Creates the offset for given UTC `NaiveDate`. This cannot fail.
+    #[inline]
     fn offset_from_utc_date(&self, utc: &NaiveDate) -> Self::Offset {
         match self {
             Self::Local => Self::Offset::Local(Local.offset_from_utc_date(utc)),
@@ -123,6 +133,7 @@ impl TimeZone for Tz {
     }
 
     /// Creates the offset for given UTC `NaiveDateTime`. This cannot fail.
+    #[inline]
     fn offset_from_utc_datetime(&self, utc: &NaiveDateTime) -> Self::Offset {
         match self {
             Self::Local => Self::Offset::Local(Local.offset_from_utc_datetime(utc)),
@@ -133,24 +144,28 @@ impl TimeZone for Tz {
 }
 
 impl From<Local> for Tz {
+    #[inline]
     fn from(_: Local) -> Self {
         Tz::Local
     }
 }
 
 impl From<Utc> for Tz {
+    #[inline]
     fn from(tz: Utc) -> Self {
         Tz::FixedOffset(tz.fix())
     }
 }
 
 impl From<FixedOffset> for Tz {
+    #[inline]
     fn from(tz: FixedOffset) -> Self {
         Tz::FixedOffset(tz)
     }
 }
 
 impl From<chrono_tz::Tz> for Tz {
+    #[inline]
     fn from(tz: chrono_tz::Tz) -> Self {
         Tz::IANA(tz)
     }

@@ -22,10 +22,12 @@ pub struct DateTimeFormatter {
 }
 
 impl DateTimeFormatter {
+    #[inline]
     pub fn new(format: Vec<Item>, tz: Tz) -> Self {
         Self { format, tz }
     }
 
+    #[inline]
     pub fn format<B>(&self, buf: &mut B, dt: DateTime<FixedOffset>)
     where
         B: Push<u8>,
@@ -33,6 +35,7 @@ impl DateTimeFormatter {
         format_date(buf, dt.with_timezone(&self.tz), &self.format)
     }
 
+    #[inline]
     pub fn reformat_rfc3339<'a, B>(&self, buf: &mut B, ts: rfc3339::Timestamp<'a>) -> Option<()>
     where
         B: Push<u8>,
@@ -45,6 +48,7 @@ impl DateTimeFormatter {
         }
     }
 
+    #[inline]
     pub fn max_length(&self) -> usize {
         let mut counter = Counter::new();
         let ts = DateTime::from_timestamp(1654041600, 999_999_999).unwrap().naive_utc();
@@ -1115,5 +1119,33 @@ mod tests {
         assert_eq!(f("%P", utc(2020, 1, 1, 12, 0, 0)), "pm");
         assert_eq!(f("%^P", utc(2020, 1, 1, 12, 0, 0)), "PM");
         assert_eq!(f("%#p", utc(2020, 1, 1, 12, 0, 0)), "pm");
+    }
+
+    #[test]
+    fn test_reformat_rfc3339() {
+        use crate::timestamp::Timestamp;
+
+        let tz = |secs| Tz::FixedOffset(FixedOffset::east_opt(secs).unwrap());
+        let tsr = Timestamp::new("2020-06-27T00:48:30.466249792+00:00");
+        let tsr = tsr.as_rfc3339().unwrap();
+
+        let zones = &[0];
+        let formats = &[("%y-%m-%d %T.%N"), ("%b %d %T.%N"), ("%Y-%m-%d %T.%N %:z")];
+
+        for tzv in zones {
+            for fmt in formats {
+                let setup = || {
+                    let buf = Vec::<u8>::with_capacity(128);
+                    let format = LinuxDateFormat::new(fmt).compile();
+                    let formatter = DateTimeFormatter::new(format, tz(*tzv));
+                    (formatter, buf, tsr.clone())
+                };
+                let payload = |(formatter, mut buf, tsr): (DateTimeFormatter, Vec<u8>, rfc3339::Timestamp)| {
+                    formatter.reformat_rfc3339(&mut buf, tsr);
+                    buf.len()
+                };
+                assert!(payload(setup()) != 0);
+            }
+        }
     }
 }
