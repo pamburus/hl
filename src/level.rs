@@ -42,6 +42,27 @@ pub enum Level {
 
 // ---
 
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[serde(untagged)]
+pub enum InfallibleLevel {
+    Valid(Level),
+    Invalid(String),
+}
+
+impl InfallibleLevel {
+    pub const fn new(level: Level) -> Self {
+        Self::Valid(level)
+    }
+}
+
+impl From<Level> for InfallibleLevel {
+    fn from(value: Level) -> Self {
+        InfallibleLevel::Valid(value)
+    }
+}
+
+// ---
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ParseError;
 
