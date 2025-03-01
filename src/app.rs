@@ -1,5 +1,6 @@
 // std imports
 use std::{
+    cell::OnceCell,
     cmp::{max, Reverse},
     collections::BTreeMap,
     convert::{TryFrom, TryInto},
@@ -31,11 +32,12 @@ use crate::{
     datefmt::{DateTimeFormat, DateTimeFormatter},
     error::*,
     fmtx::aligned_left,
+    format::Format,
     formatting::v2::{AbstractRecordFormatter, RawRecordFormatter, RecordFormatter},
     fsmon::{self, EventKind},
     index::{Indexer, IndexerSettings, Timestamp},
     input::{BlockLine, Input, InputHolder, InputReference},
-    model::v2::compat::{Filter, ParserSettings, Record, RecordFilter},
+    model::v2::compat::{Filter, Parser, ParserSettings, Record, RecordFilter},
     processing::{RecordIgnorer, RecordObserver, SegmentProcess, SegmentProcessor, SegmentProcessorOptions},
     query::Query,
     scanning::{BufFactory, Delimiter, Scanner, Segment, SegmentBuf, SegmentBufFactory},
@@ -76,6 +78,7 @@ pub struct Options {
     pub delimiter: Delimiter,
     pub unix_ts_unit: Option<UnixTimestampUnit>,
     pub flatten: bool,
+    filter_and_query: OnceCell<Arc<dyn RecordFilter>>,
 }
 
 impl Options {
@@ -817,7 +820,7 @@ impl App {
         Some(result)
     }
 
-    fn new_segment_processor<'s>(&'s self, parser: &'s ParserSettings) -> impl SegmentProcess + 's {
+    fn new_segment_processor<'s>(&'s self, parser: Parser<Format>) -> impl SegmentProcess + 's {
         let options = SegmentProcessorOptions {
             allow_prefix: self.options.allow_prefix,
             allow_unparsed_data: self.options.filter.is_empty(),
