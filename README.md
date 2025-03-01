@@ -92,6 +92,42 @@ High-performance log viewer and processor that transforms logs in JSON and logfm
 
 </details>
 
+### Windows
+
+* Install from [Scoop](https://scoop.sh)
+
+    ```sh
+    scoop bucket add pamburus https://github.com/pamburus/scoop-bucket.git
+    scoop install hl
+    ```
+
+> [!TIP]
+> It is recommended to use [Windows Terminal](https://aka.ms/terminal) for better experience.
+
+> [!TIP]
+> To make mouse scrolling work in the [less](https://www.greenwoodsoftware.com/less/) pager, set the `LESS` environment variable to `-R --mouse`.
+
+> [!IMPORTANT]
+> Currently, `hl` does not provide a built-in pager and relies on external pagers such as [less](https://www.greenwoodsoftware.com/less/).
+> However, the [build for Windows]([https://github.com/jftuga/less-Windows]) referenced on the original [download page](https://www.greenwoodsoftware.com/less/download.html) and distributed in the [WinGet](https://winget.run/pkg/jftuga/less) package manager does not work as expected.
+> The authors state that they have not tested or verified this build and suggest that you use it at your own risk.
+> Unfortunately, this build breaks some ANSI escape sequences and does not work properly with `hl` and many other programs that use ANSI escape sequences for colors and styles.
+> It is recommended to install [less](https://www.greenwoodsoftware.com/less/) from the [Scoop](https://scoop.sh) or [Chocolatey](https://chocolatey.org/) package manager.
+> If you are using [Scoop](https://scoop.sh) and install `hl` by running `scoop install hl`, it already installs [less](https://www.greenwoodsoftware.com/less/) automatically as a dependency. Just make sure you do not have any other conflicting installations by running `where less` in cmd or `Get-Command less` in powershell.
+
+* Download latest release from [download page](https://github.com/pamburus/hl/releases/latest)
+
+<details>
+<summary>Other options</summary>
+
+* Install using [cargo](https://www.rust-lang.org/tools/install)
+
+    ```sh
+    cargo install --locked --git https://github.com/pamburus/hl.git
+    ```
+
+</details>
+
 ### NixOS
 
 * Run using [nix](https://nixos.org/download/)
@@ -138,43 +174,6 @@ High-performance log viewer and processor that transforms logs in JSON and logfm
   ```
 
   </details>
-
-### Windows
-
-> [!IMPORTANT]
-> Currently, `hl` does not provide a built-in pager and relies on external pagers such as [less](https://www.greenwoodsoftware.com/less/).
-> However, the [build for Windows]([https://github.com/jftuga/less-Windows]) referenced on the original [download page](https://www.greenwoodsoftware.com/less/download.html) and distributed in the [WinGet](https://winget.run/pkg/jftuga/less) package manager does not work as expected.
-> The authors state that they have not tested or verified this build and suggest that you use it at your own risk.
-> Unfortunately, this build breaks some ANSI escape sequences and does not work properly with `hl` and many other programs that use ANSI escape sequences for colors and styles.
-> It is recommended to use [Scoop](https://scoop.sh) or [Chocolatey](https://chocolatey.org/) package manager and install [less](https://www.greenwoodsoftware.com/less/) from there.
->
-> * Install [less](https://scoop.sh/#/apps?q=less&id=e084d861765203aae2d64ada4e59ef350df0f25b) from [Scoop](https://scoop.sh):
->   ```sh
->   scoop install less
->   ```
->
-> * Install [less](https://community.chocolatey.org/packages/less/) from [Chocolatey](https://chocolatey.org/):
->   ```sh
->   choco install less
->   ```
->
-> It has been tested it in the Windows Terminal on Windows 11 and it works as expected.
-
-> [!TIP]
-> It is recommended to use [Windows Terminal](https://aka.ms/terminal) for better experience.
-
-* Download latest release from [download page](https://github.com/pamburus/hl/releases/latest)
-
-<details>
-<summary>Other options</summary>
-
-* Install using [cargo](https://www.rust-lang.org/tools/install)
-
-    ```sh
-    cargo install --locked --git https://github.com/pamburus/hl.git
-    ```
-
-</details>
 
 ## Examples
 

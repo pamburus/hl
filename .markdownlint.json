@@ -1,7 +1,6 @@
 {
     "MD013": false,
     "MD028": false,
-    "MD031": false,
     "MD033": {
         "allowed_elements": [
             "details",
