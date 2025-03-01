@@ -1,29 +1,28 @@
-# hl [![Build Status][ci-img]][ci] [![Coverage Status][cov-img]][cov]
+# hl [![Build Status][ci-img]][ci] [![Coverage Status][cov-img]][cov] [![Release][release-img]][release]
 
-A fast and powerful log viewer and processor that translates JSON or logfmt logs into a pretty human-readable format.
-High performance and convenient features are the main goals.
+High-performance log viewer and processor that transforms logs in JSON and logfmt formats into a human-readable output. Built with efficiency in mind, it enables quick parsing and analysis of large log files with minimal overhead.
 
 ## Features overview
 
-* [Automatic usage](#automatic-usage-of-pager) of the [less](https://greenwoodsoftware.com/less/) pager by default for convenience.
-* Log streaming with the `-P` flag that disables the pager.
-* Log record [filtering by field key/value pairs](#filtering-by-field-values) with the `-f` option with support for hierarchical keys.
-* Quick and easy [filtering by level](#quick-filtering-by-log-level) with the `-l` option.
-* Quick and easy [filtering by timestamp range](#filtering-by-time-range) using the `--since` and `--until` options and intuitive formats:
+* __[Automatic Pager Integration](#automatic-usage-of-pager)__: Automatically integrates with a pager for enhanced convenience, defaulting to [less](https://greenwoodsoftware.com/less/) if available, but fully supporting any compatible pager.
+* __Log Streaming Mode__: Enable log streaming with the `-P` flag, which disables the pager.
+* __[Field-Based Filtering](#filtering-by-field-values)__: Filter log records by key/value pairs using the `-f` option, with support for hierarchical keys.
+* __[Level Filtering](#quick-filtering-by-log-level)__: Easily filter logs by level with the `-l` option.
+* __[Timestamp Range Filtering](#filtering-by-time-range)__: Filter logs by timestamp range using the `--since` and `--until` options with intuitive formats:
   * RFC-3339 timestamp format.
-  * Current configured timestamp output format with the `-t` option or environment variable.
-  * Human friendly shortcuts like `today`, `yesterday`, `friday` or relative offsets like `-3h` or `-14d`.
-* Quick and easy [hiding and revealing](#hiding-or-revealing-selected-fields) of fields with the `-h` option.
-* Hide empty fields with the `-e` flag.
-* Lightning fast [message sorting](#sorting-messages-chronologically) with automatic indexing for local files using the `-s` flag.
-  * Handles ~1 GiB/s for the first scan and allows fast filtering by timestamp range and level without scanning the data afterwards.
-  * Works fast with hundreds of local files containing hundreds of gigabytes of data.
-  * Reindexes large, growing files at lightning speed, skipping unmodified blocks, ~10 GiB/s.
-* [Follow mode](#sorting-messages-chronologically-with-following-the-changes) with live message sorting by timestamp from different sources using the `-F` flag and preview of several recent messages with the `--tail` option.
-* Custom complex [queries](#performing-complex-queries) that can include and/or conditions and much more.
-* Non-JSON prefixes with `--allow-prefix` flag.
-* Displays timestamps in UTC by default and supports easy timezone switching with the `-Z` option and the `-L` flag for a local timezone.
-* Customizable via [configuration](#configuration-files) file and environment variables, supports easy [theme switching](#selecting-current-theme) and custom [themes](#custom-themes).
+  * Current configured timestamp output format (via the `-t` option or environment variable).
+  * User-friendly shortcuts like `today`, `yesterday`, `friday`, or relative offsets such as `-3h` or `-14d`.
+* __[Field Visibility Control](#hiding-or-revealing-selected-fields)__: Quickly hide or reveal specific fields using the `-h` option.
+* __Empty Field Hiding__: Automatically hide empty fields with the `-e` flag.
+* __[High-Speed Message Sorting](#sorting-messages-chronologically)__: Achieve lightning-fast message sorting with automatic indexing via the `-s` flag.
+  * Performs the initial scan at approximately 2 GiB/s, enabling rapid filtering by timestamp and level without re-scanning.
+  * Efficiently handles hundreds of local files totaling hundreds of gigabytes.
+  * Reindexes large, growing files at speeds up to roughly 10 GiB/s by skipping unmodified blocks.
+* __[Live Follow Mode](#sorting-messages-chronologically-with-following-the-changes)__: Use the `-F` flag for live, timestamp-sorted message updates across multiple sources, with a preview of recent messages via the `--tail` option.
+* __[Complex Query Support](#performing-complex-queries)__: Construct custom queries with logical conditions (AND/OR) and additional advanced filtering options.
+* __Non-JSON Prefix Handling__: Process logs with non-JSON prefixes using the `--allow-prefix` flag.
+* __Timezone Flexibility__: Displays timestamps in UTC by default while allowing effortless timezone switching with the `-Z` option or local timezone adjustments using the `-L` flag.
+* __Customizability and Themes__: Fully customizable through [configuration files](#configuration-files) and environment variables, with support for easy [theme switching](#selecting-current-theme) and custom [themes](#custom-themes).
 
 ## Performance comparison chart
 
@@ -35,11 +34,16 @@ High performance and convenient features are the main goals.
 
 ## Installation options
 
+### macOS
+
 * Install using [homebrew](https://brew.sh) on macOS
 
     ```sh
     brew install hl
     ```
+
+<details>
+<summary>Other options</summary>
 
 * Download and extract using `curl` and `tar` on macOS
 
@@ -47,16 +51,22 @@ High performance and convenient features are the main goals.
     curl -sSfL https://github.com/pamburus/hl/releases/latest/download/hl-macos.tar.gz | tar xz
     ```
 
+* Install using [cargo](https://www.rust-lang.org/tools/install)
+
+    ```sh
+    cargo install --locked --git https://github.com/pamburus/hl.git
+    ```
+
+* Download latest release from [download page](https://github.com/pamburus/hl/releases/latest)
+
+</details>
+
+### Linux
+
 * Download and extract using `curl` and `tar` on Linux (x86_64)
 
     ```sh
     curl -sSfL https://github.com/pamburus/hl/releases/latest/download/hl-linux-x86_64-musl.tar.gz | tar xz
-    ```
-
-* Download and extract using `curl` and `tar` on Linux (arm64/aarch64)
-
-    ```sh
-    curl -sSfL https://github.com/pamburus/hl/releases/latest/download/hl-linux-arm64-musl.tar.gz | tar xz
     ```
 
 * Install [AUR package](https://aur.archlinux.org/packages/hl-log-viewer-bin) on Arch Linux
@@ -65,11 +75,24 @@ High performance and convenient features are the main goals.
     yay -S hl-log-viewer-bin
     ```
 
+<details>
+<summary>Other options</summary>
+
+* Download and extract using `curl` and `tar` on Linux (arm64/aarch64)
+
+    ```sh
+    curl -sSfL https://github.com/pamburus/hl/releases/latest/download/hl-linux-arm64-musl.tar.gz | tar xz
+    ```
+
 * Install using [cargo](https://www.rust-lang.org/tools/install)
 
     ```sh
     cargo install --locked --git https://github.com/pamburus/hl.git
     ```
+
+</details>
+
+### NixOS
 
 * Run using [nix](https://nixos.org/download/)
 
@@ -116,7 +139,36 @@ High performance and convenient features are the main goals.
 
   </details>
 
+### Windows
+
+> [!IMPORTANT]
+> Currently, `hl` does not provide a built-in pager and relies on external pagers such as [less](https://www.greenwoodsoftware.com/less/).
+> However, the [build for Windows]([https://github.com/jftuga/less-Windows]) referenced on the original [download page](https://www.greenwoodsoftware.com/less/download.html) and distributed in the [WinGet](https://winget.run/pkg/jftuga/less) package manager does not work as expected.
+> The author states that he has not tested or verified this build and suggests that you use it at your own risk.
+> Unfortunately, this build breaks some ANSI escape sequences and does not work properly with `hl` and many other programs that use ANSI escape sequences for colors and styles.
+> It is recommended to use the [Chocolatey](https://chocolatey.org/) package manager and install less from [there](https://community.chocolatey.org/packages/less/).
+>
+> ```sh
+> choco install less
+> ```
+>
+> It has been tested it in the Windows Terminal on Windows 11 and it works as expected.
+
+> [!TIP]
+> It is recommended to use [Windows Terminal](https://aka.ms/terminal) for better experience.
+
 * Download latest release from [download page](https://github.com/pamburus/hl/releases/latest)
+
+<details>
+<summary>Other options</summary>
+
+* Install using [cargo](https://www.rust-lang.org/tools/install)
+
+    ```sh
+    cargo install --locked --git https://github.com/pamburus/hl.git
+    ```
+
+</details>
 
 ## Examples
 
@@ -408,10 +460,10 @@ See other [screenshots](https://github.com/pamburus/hl-extra/tree/90be58af2fb91d
 * The path to the configuration file can be overridden using the `HL_CONFIG` environment variable or the `--config` command-line option.
 
     The order in which the configuration files are searched and loaded is as follows:
-    1. **The system-wide location.**
-    2. **The user profile location.**
-    3. **The location specified by the `HL_CONFIG` environment variable** (unless the `--config` option is used).
-    4. **The locations specified by the `--config` option** (can be specified multiple times).
+    1. __The system-wide location.__
+    2. __The user profile location.__
+    3. __The location specified by the `HL_CONFIG` environment variable__ (unless the `--config` option is used).
+    4. __The locations specified by the `--config` option__ (can be specified multiple times).
 
     If a configuration file is found in multiple locations, the file in each subsequent location overrides only the parameters it contains.
 
@@ -606,24 +658,24 @@ Advanced Options:
 ![performance chart](doc/performance-chart.svg)
 
 * MacBook Pro (16-inch, 2021)
-  * **CPU**:   Apple M1 Max CPU
-  * **OS**:    macOS Sequoia 15.2
-  * **Data**:  ~ **2.3 GiB** log file, **6 000 000** lines
-    * [hl](https://github.com/pamburus/hl) **v0.30.2** ~ *1.1 seconds*
+  * __CPU__:   Apple M1 Max CPU
+  * __OS__:    macOS Sequoia 15.2
+  * __Data__:  ~ __2.3 GiB__ log file, __6 000 000__ lines
+    * [hl](https://github.com/pamburus/hl) __v0.30.2__ ~ *1.1 seconds*
 
         ```sh
         $ time hl --config - example.log -c -o /dev/null
         hl --config - example.log -c -o /dev/null  9.80s user 0.61s system 915% cpu 1.138 total
         ```
 
-    * [hlogf](https://github.com/ssgreg/hlogf) **v1.4.1** ~ *8.7 seconds*
+    * [hlogf](https://github.com/ssgreg/hlogf) __v1.4.1__ ~ *8.7 seconds*
 
         ```sh
         $ time hlogf example.log --color always >/dev/null
         hlogf example.log --color always > /dev/null  6.85s user 1.94s system 100% cpu 8.738 total
         ```
 
-    * [humanlog](https://github.com/humanlogio/humanlog) **v0.7.8** ~ *79 seconds*
+    * [humanlog](https://github.com/humanlogio/humanlog) __v0.7.8__ ~ *79 seconds*
 
         ```sh
         $ time humanlog <example.log --color always >/dev/null
@@ -631,14 +683,14 @@ Advanced Options:
         humanlog --color always < example.log > /dev/null  87.68s user 7.33s system 120% cpu 1:19.01 total
         ```
 
-    * [fblog](https://github.com/brocode/fblog) **v4.13.1** ~ *34 seconds*
+    * [fblog](https://github.com/brocode/fblog) __v4.13.1__ ~ *34 seconds*
 
         ```sh
         $ time fblog example.log >/dev/null
         fblog example.log > /dev/null  31.32s user 2.22s system 99% cpu 33.553 total
         ```
 
-    * [fblog](https://github.com/brocode/fblog) with `-d` flag **v4.13.1** ~ *146 seconds*
+    * [fblog](https://github.com/brocode/fblog) with `-d` flag __v4.13.1__ ~ *146 seconds*
 
         ```sh
         $ time fblog -d example.log >/dev/null
@@ -651,3 +703,5 @@ Advanced Options:
 [ci]: https://github.com/pamburus/hl/actions/workflows/ci.yml
 [cov-img]: https://codecov.io/gh/pamburus/hl/graph/badge.svg?token=464MN13408
 [cov]: https://codecov.io/gh/pamburus/hl
+[release-img]: https://img.shields.io/github/v/release/pamburus/hl?sort=semver
+[release]: https://github.com/pamburus/hl/releases/latest
