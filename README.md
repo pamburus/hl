@@ -146,11 +146,17 @@ High-performance log viewer and processor that transforms logs in JSON and logfm
 > However, the [build for Windows]([https://github.com/jftuga/less-Windows]) referenced on the original [download page](https://www.greenwoodsoftware.com/less/download.html) and distributed in the [WinGet](https://winget.run/pkg/jftuga/less) package manager does not work as expected.
 > The author states that he has not tested or verified this build and suggests that you use it at your own risk.
 > Unfortunately, this build breaks some ANSI escape sequences and does not work properly with `hl` and many other programs that use ANSI escape sequences for colors and styles.
-> It is recommended to use the [Chocolatey](https://chocolatey.org/) package manager and install less from [there](https://community.chocolatey.org/packages/less/).
+> It is recommended to use [Scoop](https://scoop.sh) or [Chocolatey](https://chocolatey.org/) package manager and install [less](https://www.greenwoodsoftware.com/less/) from there.
 >
-> ```sh
-> choco install less
-> ```
+> * Install [less](https://scoop.sh/#/apps?q=less&id=e084d861765203aae2d64ada4e59ef350df0f25b) from [Scoop](https://scoop.sh):
+>   ```sh
+>   scoop install less
+>   ```
+>
+> * Install [less](https://community.chocolatey.org/packages/less/) from [Chocolatey](https://chocolatey.org/):
+>   ```sh
+>   choco install less
+>   ```
 >
 > It has been tested it in the Windows Terminal on Windows 11 and it works as expected.
 
