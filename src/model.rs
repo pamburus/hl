@@ -27,7 +27,7 @@ use serde_logfmt::logfmt;
 use crate::{
     app::{InputFormat, UnixTimestampUnit},
     error::{Error, Result},
-    level,
+    level::{self},
     serdex::StreamDeserializerWithOffsets,
     settings::PredefinedFields,
     timestamp::Timestamp,
@@ -537,6 +537,10 @@ impl ParserSettings {
 
         let mut j = 0;
         for variant in &pf.level.variants {
+            let Some(variant) = variant.resolve() else {
+                continue;
+            };
+
             let mut mapping = HashMap::new();
             for (level, values) in &variant.values {
                 for value in values {

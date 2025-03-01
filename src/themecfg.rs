@@ -21,7 +21,7 @@ use serde_yml as yaml;
 use strum::{EnumIter, IntoEnumIterator};
 
 // local imports
-use crate::{appdirs::AppDirs, error::*, level::Level};
+use crate::{appdirs::AppDirs, error::*, level::InfallibleLevel};
 
 // ---
 
@@ -29,7 +29,7 @@ use crate::{appdirs::AppDirs, error::*, level::Level};
 #[serde(default)]
 pub struct Theme {
     pub elements: StylePack,
-    pub levels: HashMap<Level, StylePack>,
+    pub levels: HashMap<InfallibleLevel, StylePack>,
     pub indicators: IndicatorPack,
 }
 

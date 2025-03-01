@@ -10,7 +10,8 @@ use crate::{
     error::*,
     eseq::{Brightness, Color, ColorCode, Mode, Sequence, StyleCode},
     fmtx::Push,
-    level, themecfg,
+    level::{self, InfallibleLevel},
+    themecfg,
 };
 
 // ---
@@ -79,6 +80,13 @@ impl<S: Borrow<themecfg::Theme>> From<S> for Theme {
         let default = StylePack::load(&s.elements);
         let mut packs = EnumMap::default();
         for (level, pack) in &s.levels {
+            let level = match level {
+                InfallibleLevel::Valid(level) => level,
+                InfallibleLevel::Invalid(s) => {
+                    log::warn!("unknown level: {:?}", s);
+                    continue;
+                }
+            };
             packs[*level] = StylePack::load(&s.elements.clone().merged(pack.clone()));
         }
         Self {
@@ -357,5 +365,19 @@ mod tests {
         theme.apply(&mut buf, &Some(Level::Debug), |s| {
             s.element(Element::Message, |s| s.batch(|buf| buf.extend_from_slice(b"hello!")));
         });
+        assert_eq!(buf, b"hello!");
+    }
+
+    #[test]
+    fn test_unknown_level() {
+        let mut cfg = themecfg::Theme::default();
+        cfg.levels
+            .insert(InfallibleLevel::Invalid("unknown".to_string()), Default::default());
+        let theme = Theme::from(&cfg);
+        let mut buf = Vec::new();
+        theme.apply(&mut buf, &Some(Level::Debug), |s| {
+            s.element(Element::Message, |s| s.batch(|buf| buf.extend_from_slice(b"hello!")));
+        });
+        assert_eq!(buf, b"hello!");
     }
 }
