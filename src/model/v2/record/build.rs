@@ -463,7 +463,7 @@ enum FieldSettings {
 }
 
 impl FieldSettings {
-    fn apply<'r, 's>(&self, ps: &Settings, value: Value<'r, 's>, to: &'r mut Record<'s>) -> Option<()> {
+    fn apply<'r, 's>(&self, ps: &Settings, value: Value<'r, 's>, to: &'r mut Record) -> Option<()> {
         let as_text = |value: Value<'r, 's>| match value {
             Value::String(s) => s.source().into(),
             Value::Number(s) => s.into(),

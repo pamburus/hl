@@ -58,7 +58,7 @@ impl Query {
 
 impl RecordFilter for Query {
     #[inline]
-    fn apply<'a>(&self, record: &Record<'a>) -> bool {
+    fn apply(&self, record: &Record) -> bool {
         self.filter.apply(record)
     }
 }
@@ -311,7 +311,7 @@ struct Or {
 
 impl RecordFilter for Or {
     #[inline]
-    fn apply<'a>(&self, record: &Record<'a>) -> bool {
+    fn apply(&self, record: &Record) -> bool {
         self.lhs.apply(record) || self.rhs.apply(record)
     }
 }
@@ -331,7 +331,7 @@ struct And {
 
 impl RecordFilter for And {
     #[inline]
-    fn apply<'a>(&self, record: &Record<'a>) -> bool {
+    fn apply(&self, record: &Record) -> bool {
         self.lhs.apply(record) && self.rhs.apply(record)
     }
 }
@@ -350,7 +350,7 @@ struct Not {
 
 impl RecordFilter for Not {
     #[inline]
-    fn apply<'a>(&self, record: &Record<'a>) -> bool {
+    fn apply(&self, record: &Record) -> bool {
         !self.arg.apply(record)
     }
 }
@@ -373,8 +373,8 @@ impl<F: Fn(Level) -> bool + Send + Sync + 'static> LevelFilter<F> {
 
 impl<F: Fn(Level) -> bool> RecordFilter for LevelFilter<F> {
     #[inline]
-    fn apply<'a>(&self, record: &Record<'a>) -> bool {
-        record.level.map(&self.f).unwrap_or(false)
+    fn apply(&self, record: &Record) -> bool {
+        record.level().map(&self.f).unwrap_or(false)
     }
 }
 
@@ -383,7 +383,7 @@ impl<F: Fn(Level) -> bool> RecordFilter for LevelFilter<F> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::model::v2::{compat::ParserSettings, parse::NewParser};
+    use crate::model::v2::compat::ParserSettings;
 
     #[test]
     fn test_or_3() {
@@ -645,7 +645,7 @@ mod tests {
     fn parse(s: &str) -> Record {
         let settings = ParserSettings::default();
         let mut parser = settings
-            .new_parser(crate::format::Auto::default(), s.as_bytes())
+            .new_parser(crate::format::Format::default(), s.as_bytes())
             .unwrap();
         parser.next().unwrap().unwrap()
     }

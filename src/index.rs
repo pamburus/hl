@@ -18,7 +18,6 @@ use std::{
     fmt::{self, Display},
     fs::{self},
     io::{self, Read, Write},
-    iter::empty,
     num::{NonZero, NonZeroU32},
     path::{Path, PathBuf},
     sync::Arc,
@@ -43,10 +42,7 @@ use crate::{
     error::{Error, Result},
     index_capnp as schema,
     level::Level,
-    model::v2::{
-        compat::{Parser, ParserSettings},
-        parse::NewParser,
-    },
+    model::v2::compat::ParserSettings,
     scanning::{Delimiter, Scanner, Segment, SegmentBuf, SegmentBufFactory},
     settings::PredefinedFields,
     vfs::{FileRead, FileSystem, LocalFileSystem},
@@ -510,7 +506,7 @@ where
             let mut rel = 0;
             if data.len() != 0 {
                 // TODO: use format option
-                let mut parser = self.parser.new_parser(crate::format::Auto::default(), data).unwrap();
+                let mut parser = self.parser.new_parser(crate::format::Format::default(), data).unwrap();
                 while let Some(rec) = parser.next() {
                     match rec {
                         Ok(rec) => {

@@ -44,6 +44,10 @@ where
     pub fn parse(&mut self, source: Arc<str>) -> impl Iterator<Record> {
         SegmentIter { source, parser: self }
     }
+
+    pub fn recycle(&mut self, record: Record) {
+        self.recycled.push(record.into());
+    }
 }
 
 pub struct SegmentIter<'a, F: Format> {

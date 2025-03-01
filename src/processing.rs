@@ -3,11 +3,12 @@ use std::ops::Range;
 
 // local imports
 use crate::{
+    format::Format,
     formatting::v2::{AbstractRecordFormatter, RawRecordFormatter, RecordFormatter},
     model::{
         v2::{
-            parse::{NewParser, Parse, Parser, Settings as ParserSettings},
-            record::{Filter as RecordFilter, Record, RecordWithSourceConstructor},
+            parse::{Parser, Settings as ParserSettings},
+            record::{Filter as RecordFilter, Record},
         },
         Filter,
     },
@@ -38,21 +39,16 @@ pub struct SegmentProcessorOptions {
 
 // ---
 
-pub struct SegmentProcessor<'p, Formatter, Filter> {
-    parser: &'p ParserSettings,
+pub struct SegmentProcessor<Formatter, Filter> {
+    parser: Parser<Format>,
     formatter: Formatter,
     filter: Filter,
     options: SegmentProcessorOptions,
     delim: <Delimiter as Delimit>::Searcher,
 }
 
-impl<'p, Formatter: AbstractRecordFormatter, Filter: RecordFilter> SegmentProcessor<'p, Formatter, Filter> {
-    pub fn new(
-        parser: &'p ParserSettings,
-        formatter: Formatter,
-        filter: Filter,
-        options: SegmentProcessorOptions,
-    ) -> Self {
+impl<Formatter: AbstractRecordFormatter, Filter: RecordFilter> SegmentProcessor<Formatter, Filter> {
+    pub fn new(parser: Parser<Format>, formatter: Formatter, filter: Filter, options: SegmentProcessorOptions) -> Self {
         let delim = options.delimiter.clone().into_searcher();
 
         Self {
@@ -70,9 +66,7 @@ impl<'p, Formatter: AbstractRecordFormatter, Filter: RecordFilter> SegmentProces
     }
 }
 
-impl<'p, Formatter: AbstractRecordFormatter, Filter: RecordFilter> SegmentProcess
-    for SegmentProcessor<'p, Formatter, Filter>
-{
+impl<Formatter: AbstractRecordFormatter, Filter: RecordFilter> SegmentProcess for SegmentProcessor<Formatter, Filter> {
     fn process<'s, 'a, 'b, 'o, O>(
         &'s mut self,
         data: &'a [u8],
@@ -101,12 +95,9 @@ impl<'p, Formatter: AbstractRecordFormatter, Filter: RecordFilter> SegmentProces
             let mut last_offset = 0;
             let mut offset = 0;
 
-            let mut parser = self
-                .parser
-                .new_parser(crate::format::Auto::default(), &line[offset..])
-                .unwrap();
+            let mut records = self.parser.parse(&line[offset..]).unwrap();
 
-            while let Some(Ok(record)) = parser.next() {
+            while let Some(Ok(record)) = records.next() {
                 i += 1;
                 last_offset = record.span.end.clone();
 
@@ -131,7 +122,7 @@ impl<'p, Formatter: AbstractRecordFormatter, Filter: RecordFilter> SegmentProces
 
                 offset = record.span.end;
 
-                parser.recycle(record);
+                self.parser.recycle(record);
             }
 
             let remainder = if parsed_some { &line[last_offset..] } else { line };
@@ -153,7 +144,7 @@ impl<'p, Formatter: AbstractRecordFormatter, Filter: RecordFilter> SegmentProces
 // ---
 
 pub trait RecordObserver {
-    fn observe_record<'a>(&mut self, record: &Record<'a>, location: Range<usize>);
+    fn observe_record<'a>(&mut self, record: &Record, location: Range<usize>);
 }
 
 // ---
@@ -162,5 +153,5 @@ pub struct RecordIgnorer {}
 
 impl RecordObserver for RecordIgnorer {
     #[inline]
-    fn observe_record<'a>(&mut self, _: &Record<'a>, _: Range<usize>) {}
+    fn observe_record<'a>(&mut self, _: &Record, _: Range<usize>) {}
 }
