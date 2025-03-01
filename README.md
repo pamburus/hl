@@ -144,7 +144,7 @@ High-performance log viewer and processor that transforms logs in JSON and logfm
 > [!IMPORTANT]
 > Currently, `hl` does not provide a built-in pager and relies on external pagers such as [less](https://www.greenwoodsoftware.com/less/).
 > However, the [build for Windows]([https://github.com/jftuga/less-Windows]) referenced on the original [download page](https://www.greenwoodsoftware.com/less/download.html) and distributed in the [WinGet](https://winget.run/pkg/jftuga/less) package manager does not work as expected.
-> The author states that he has not tested or verified this build and suggests that you use it at your own risk.
+> The authors state that they have not tested or verified this build and suggest that you use it at your own risk.
 > Unfortunately, this build breaks some ANSI escape sequences and does not work properly with `hl` and many other programs that use ANSI escape sequences for colors and styles.
 > It is recommended to use [Scoop](https://scoop.sh) or [Chocolatey](https://chocolatey.org/) package manager and install [less](https://www.greenwoodsoftware.com/less/) from there.
 >
