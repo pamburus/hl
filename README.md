@@ -181,8 +181,9 @@ High-performance log viewer and processor that transforms logs in JSON and logfm
 
 ### Screenshot
 
-![screenshot-light](https://github.com/pamburus/hl-extra/raw/90be58af2fb91d5b5e7ce3b74c3b567611379c40/screenshot/universal/light.png#gh-light-mode-only)
-[![screenshot-dark](doc/screenshot4.svg#gh-dark-mode-only)](#screenshot)
+<!-- ![screenshot-light](https://github.com/pamburus/hl-extra/raw/90be58af2fb91d5b5e7ce3b74c3b567611379c40/screenshot/universal/light.png#gh-light-mode-only) -->
+[![screenshot-light](doc/screenshot-light.svg#gh-light-mode-only)](#gh-light-mode-only)
+[![screenshot-dark](doc/screenshot-dark.svg#gh-dark-mode-only)](#gh-dark-mode-only)
 See other [screenshots](https://github.com/pamburus/hl-extra/tree/90be58af2fb91d5b5e7ce3b74c3b567611379c40/screenshot#readme)
 
 ## Features and usage
