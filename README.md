@@ -1,5 +1,7 @@
 # hl [![Build Status][ci-img]][ci] [![Coverage Status][cov-img]][cov] [![Release][release-img]][release]
 
+[![banner](doc/banner.svg)](#screenshot)
+
 High-performance log viewer and processor that transforms logs in JSON and logfmt formats into a human-readable output. Built with efficiency in mind, it enables quick parsing and analysis of large log files with minimal overhead.
 
 ## Features overview
