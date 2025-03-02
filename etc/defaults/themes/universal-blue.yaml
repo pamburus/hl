@@ -32,12 +32,12 @@ elements:
     foreground: green
   boolean:
     foreground: yellow
-  'null':
+  "null":
     foreground: bright-red
 levels:
   trace:
     level-inner:
-      foreground: white
+      foreground: default
       modes: [faint]
   debug:
     level-inner:
@@ -58,10 +58,10 @@ levels:
 indicators:
   sync:
     synced:
-      text: ' '
+      text: " "
     failed:
-      text: '!'
+      text: "!"
       inner:
         style:
-          foreground: 'yellow'
+          foreground: "yellow"
           modes: [bold]

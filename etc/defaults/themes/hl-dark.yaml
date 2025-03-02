@@ -1,0 +1,57 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/pamburus/hl/master/schema/json/theme.schema.json
+$schema: https://raw.githubusercontent.com/pamburus/hl/master/schema/json/theme.schema.json
+
+elements:
+  input:
+    foreground: 30
+  time:
+    foreground: 30
+  logger:
+    foreground: 30
+  caller:
+    foreground: 30
+    modes: [italic]
+  level:
+    foreground: 30
+  message:
+    foreground: 195
+  field:
+    foreground: 30
+  key:
+    foreground: 111
+  ellipsis:
+    foreground: 30
+  object:
+    foreground: 255
+    modes: [bold]
+  array:
+    foreground: 255
+    modes: [bold]
+  string:
+    foreground: 116
+  number:
+    foreground: 42
+  boolean:
+    foreground: 186
+  "null":
+    foreground: 216
+levels:
+  trace:
+    level-inner:
+      foreground: 30
+  debug:
+    level-inner:
+      foreground: 170
+  info:
+    level-inner:
+      foreground: 146
+  warning:
+    level-inner:
+      foreground: 228
+    message:
+      foreground: 228
+  error:
+    level-inner:
+      foreground: 210
+    message:
+      foreground: 210

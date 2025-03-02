@@ -6,7 +6,7 @@ SHELL = /bin/bash
 
 # Local variables
 THEMES = $(notdir $(basename $(wildcard etc/defaults/themes/*.yaml)))
-SCREENSHOT_SAMPLE = prometheus.log
+SCREENSHOT_SAMPLE = cafe.log
 
 # Exported variables
 export RUST_BACKTRACE=1
@@ -91,11 +91,8 @@ clean: contrib-build
 screenshots: build $(THEMES:%=screenshot-%)
 
 screenshot-%: build contrib-screenshots
-	@defaults write org.alacritty NSRequiresAquaSystemAppearance -bool yes
 	@$(SHELL) contrib/bin/screenshot.sh light $(SCREENSHOT_SAMPLE) $*
-	@defaults write org.alacritty NSRequiresAquaSystemAppearance -bool no
 	@$(SHELL) contrib/bin/screenshot.sh dark $(SCREENSHOT_SAMPLE) $*
-	@defaults delete org.alacritty NSRequiresAquaSystemAppearance
 .PHONY: screenshot-%
 
 ## Collect coverage

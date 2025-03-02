@@ -3,60 +3,56 @@ $schema: https://raw.githubusercontent.com/pamburus/hl/master/schema/json/theme.
 
 elements:
   input:
-    modes: [faint]
+    foreground: "#a7aaad"
   time:
-    modes: [faint]
+    foreground: "#a7aaad"
   logger:
-    modes: [faint]
+    foreground: "#8a9199"
   caller:
-    modes: [faint, italic]
+    foreground: "#a7aaad"
+    modes: [italic]
   level:
-    foreground: default
-    modes: [faint]
+    foreground: "#a8caf1"
   message:
-    foreground: default
-    modes: [bold]
+    foreground: "#5c6166"
   field:
-    modes: [faint]
+    foreground: "#478acc"
   key:
-    modes: [faint]
+    foreground: "#478acc"
   ellipsis:
-    modes: [faint]
+    foreground: "#a7aaad"
   object:
     modes: [bold]
   array:
     modes: [bold]
   string:
-    foreground: default
+    foreground: "#5c6166"
   number:
-    foreground: default
+    foreground: "#6cbf43"
   boolean:
-    foreground: default
+    foreground: "#86b300"
   "null":
-    foreground: bright-red
+    foreground: "#ed9366"
 levels:
   trace:
     level-inner:
-      foreground: default
-      modes: [faint]
+      foreground: "#a7aaad"
   debug:
     level-inner:
-      foreground: default
+      foreground: "#a37acc"
   info:
     level-inner:
-      foreground: green
+      foreground: "#55b4d4"
   warning:
     level-inner:
-      foreground: bright-yellow
+      foreground: "#ffaa33"
     message:
-      foreground: yellow
-      modes: [bold]
+      foreground: "#ffaa33"
   error:
-    message:
-      foreground: bright-red
-      modes: [bold]
     level-inner:
-      foreground: bright-red
+      foreground: "#e65050"
+    message:
+      foreground: "#ff7383"
 indicators:
   sync:
     synced:
@@ -65,5 +61,5 @@ indicators:
       text: "!"
       inner:
         style:
-          foreground: "yellow"
+          foreground: "#ffaa33"
           modes: [bold]

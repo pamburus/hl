@@ -59,6 +59,13 @@ setup_get_window_id() {
     fi
 }
 
+setup_termframe() {
+    if [ ! -x "$(command -v termframe)" ]; then
+        brew tap pamburus/homebrew-tap
+        brew install termframe
+    fi
+}
+
 rust_is_required() {
     echo "Please install rust"
     echo "See https://doc.rust-lang.org/cargo/getting-started/installation.html"
@@ -125,8 +132,7 @@ setup_coverage_tools() {
 }
 
 setup_screenshot_tools() {
-    setup_get_window_id
-    setup_alacritty
+    setup_termframe
 }
 
 setup_taplo() {
