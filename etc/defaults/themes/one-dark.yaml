@@ -15,7 +15,6 @@ elements:
     foreground: "#476a8c"
   message:
     foreground: "#abb2bf"
-    modes: [bold]
   field:
     foreground: "#476a8c"
   key:
@@ -27,7 +26,7 @@ elements:
   array:
     modes: [bold]
   string:
-    foreground: "#abb2bf"
+    foreground: "#56b6c2"
   number:
     foreground: "#98c379"
   boolean:

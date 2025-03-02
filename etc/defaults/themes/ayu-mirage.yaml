@@ -14,8 +14,7 @@ elements:
   level:
     foreground: "#707a8c"
   message:
-    foreground: "#cccac2"
-    modes: [bold]
+    foreground: "#95e6cb"
   field:
     foreground: "#4e6c90"
   key:
