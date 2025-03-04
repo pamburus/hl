@@ -186,6 +186,12 @@ High-performance log viewer and processor that transforms logs in JSON and logfm
 [![screenshot-dark](doc/screenshot-dark.svg#gh-dark-mode-only)](#gh-dark-mode-only)
 See other [screenshots](https://github.com/pamburus/hl-extra/tree/90be58af2fb91d5b5e7ce3b74c3b567611379c40/screenshot#readme)
 
+![screenshot-test](doc/test-box-11.svg)
+
+![screenshot-test](doc/text-test.svg)
+
+![screenshot-test](doc/freeze-hl-2.svg)
+
 ## Features and usage
 
 ### Concatenation of multiple log files

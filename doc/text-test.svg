@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="400" height="150" font-size="24" text-anchor="middle">
+    <style>
+        @import url("https://fonts.googleapis.com/css?family=Roboto+Condensed:400,400i,700,700i");
+        @import url("https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700,700i");
+        @import url("https://fonts.googleapis.com/css?family=Anonymous+Pro:400,400i,700,700i");
+    </style>
+    <text font-family="Roboto Condensed" x="190" y="32.92">
+        This is a Roboto Condensed font
+    </text>
+    <text font-family="Open Sans" x="190" y="82.92">
+        This is a Open Sans font
+    </text>
+    <text font-family="Anonymous Pro" x="190" y="132.92">
+        This is a Anonymous Pro font
+    </text>
+</svg>
