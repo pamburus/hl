@@ -190,7 +190,7 @@ See other [screenshots](https://github.com/pamburus/hl-extra/tree/90be58af2fb91d
 
 ![screenshot-test](doc/text-test.svg)
 
-![screenshot-test](doc/freeze-hl-2.svg)
+![screenshot-test](doc/freeze-hl-5.svg)
 
 ## Features and usage
 

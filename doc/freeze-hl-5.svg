@@ -1,5 +1,6 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.0//EN" "http://www.w3.org/TR/2001/REC-SVG-20010904/DTD/svg10.dtd">
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.0//EN"
+    "http://www.w3.org/TR/2001/REC-SVG-20010904/DTD/svg10.dtd">
 <svg width="1280.00" height="572.00" xmlns="http://www.w3.org/2000/svg">
 <style>
 @font-face {
@@ -8,8 +9,1190 @@
 	font-weight: normal;
 	font-style: normal;
 }
-</style><rect width="1228.00" height="520.00" fill="#282830" rx="5.00" ry="5.00" filter="url(#shadow)" stroke="#505060" stroke-width="1.00" x="25.00px" y="25.00px"/>
-<g font-family="JetBrains Mono" font-size="12.00px" fill="#c4c4c4" clip-path="url(#terminalMask)">
-<text x="37.00px" y="66.40px" xml:space="preserve"><tspan xml:space="preserve" fill="#426d77">2023-12-07 20:07:05.949 </tspan><tspan xml:space="preserve" fill="#476a8c">│</tspan><tspan xml:space="preserve" fill="#56b6c2">INF</tspan><tspan xml:space="preserve" fill="#476a8c">│</tspan><tspan xml:space="preserve"> </tspan><tspan xml:space="preserve" fill="#abb2bf">No time or size retention was set so using the default time retention </tspan><tspan xml:space="preserve" fill="#61afef">duration</tspan><tspan xml:space="preserve" fill="#476a8c">=</tspan><tspan xml:space="preserve" fill="#56b6c2">15d</tspan><tspan xml:space="preserve" font-style="italic" fill="#426d77"> → main.go:539</tspan><tspan xml:space="preserve"/></text><text x="37.00px" y="80.80px" xml:space="preserve"><tspan xml:space="preserve" fill="#426d77">2023-12-07 20:07:05.949 </tspan><tspan xml:space="preserve" fill="#476a8c">│</tspan><tspan xml:space="preserve" fill="#56b6c2">INF</tspan><tspan xml:space="preserve" fill="#476a8c">│</tspan><tspan xml:space="preserve"> </tspan><tspan xml:space="preserve" fill="#abb2bf">Starting Prometheus Server </tspan><tspan xml:space="preserve" fill="#61afef">mode</tspan><tspan xml:space="preserve" fill="#476a8c">=</tspan><tspan xml:space="preserve" fill="#56b6c2">server </tspan><tspan xml:space="preserve" fill="#61afef">version</tspan><tspan xml:space="preserve" fill="#476a8c">=</tspan><tspan xml:space="preserve" fill="#56b6c2">&quot;(version=2.48.0, branch=HEAD, revision=6d80b30990bc297d95b5c844e118c4011fad8054)&quot;</tspan><tspan xml:space="preserve" font-style="italic" fill="#426d77"> → main.go:583</tspan><tspan xml:space="preserve"/></text><text x="37.00px" y="95.20px" xml:space="preserve"><tspan xml:space="preserve" fill="#426d77">2023-12-07 20:07:05.949 </tspan><tspan xml:space="preserve" fill="#476a8c">│</tspan><tspan xml:space="preserve" fill="#56b6c2">INF</tspan><tspan xml:space="preserve" fill="#476a8c">│</tspan><tspan xml:space="preserve"> </tspan><tspan xml:space="preserve" fill="#61afef">build-context</tspan><tspan xml:space="preserve" fill="#476a8c">=</tspan><tspan xml:space="preserve" fill="#56b6c2">&quot;(go=go1.21.4, platform=linux/arm64, user=root@26117804242c, date=20231116-04:38:59, tags=netgo,builtinassets,stringlabels)&quot;</tspan><tspan xml:space="preserve" font-style="italic" fill="#426d77"> → main.go:588</tspan><tspan xml:space="preserve"/></text><text x="37.00px" y="109.60px" xml:space="preserve"><tspan xml:space="preserve" fill="#426d77">2023-12-07 20:07:05.949 </tspan><tspan xml:space="preserve" fill="#476a8c">│</tspan><tspan xml:space="preserve" fill="#56b6c2">INF</tspan><tspan xml:space="preserve" fill="#476a8c">│</tspan><tspan xml:space="preserve"> </tspan><tspan xml:space="preserve" fill="#61afef">host-details</tspan><tspan xml:space="preserve" fill="#476a8c">=</tspan><tspan xml:space="preserve" fill="#56b6c2">&quot;(Linux 6.5.11-linuxkit #1 SMP PREEMPT Mon Dec  4 11:30:00 UTC 2023 aarch64 b2ed53d333d7 (none))&quot;</tspan><tspan xml:space="preserve" font-style="italic" fill="#426d77"> → main.go:589</tspan><tspan xml:space="preserve"/></text><text x="37.00px" y="124.00px" xml:space="preserve"><tspan xml:space="preserve" fill="#426d77">2023-12-07 20:07:05.949 </tspan><tspan xml:space="preserve" fill="#476a8c">│</tspan><tspan xml:space="preserve" fill="#56b6c2">INF</tspan><tspan xml:space="preserve" fill="#476a8c">│</tspan><tspan xml:space="preserve"> </tspan><tspan xml:space="preserve" fill="#61afef">fd-limits</tspan><tspan xml:space="preserve" fill="#476a8c">=</tspan><tspan xml:space="preserve" fill="#56b6c2">&quot;(soft=1048576, hard=1048576)&quot;</tspan><tspan xml:space="preserve" font-style="italic" fill="#426d77"> → main.go:590</tspan><tspan xml:space="preserve"/></text><text x="37.00px" y="138.40px" xml:space="preserve"><tspan xml:space="preserve" fill="#426d77">2023-12-07 20:07:05.949 </tspan><tspan xml:space="preserve" fill="#476a8c">│</tspan><tspan xml:space="preserve" fill="#56b6c2">INF</tspan><tspan xml:space="preserve" fill="#476a8c">│</tspan><tspan xml:space="preserve"> </tspan><tspan xml:space="preserve" fill="#61afef">vm-limits</tspan><tspan xml:space="preserve" fill="#476a8c">=</tspan><tspan xml:space="preserve" fill="#56b6c2">&quot;(soft=unlimited, hard=unlimited)&quot;</tspan><tspan xml:space="preserve" font-style="italic" fill="#426d77"> → main.go:591</tspan><tspan xml:space="preserve"/></text><text x="37.00px" y="152.80px" xml:space="preserve"><tspan xml:space="preserve" fill="#426d77">2023-12-07 20:07:05.949 </tspan><tspan xml:space="preserve" fill="#476a8c">│</tspan><tspan xml:space="preserve" fill="#56b6c2">INF</tspan><tspan xml:space="preserve" fill="#476a8c">│</tspan><tspan xml:space="preserve"> </tspan><tspan xml:space="preserve" fill="#abb2bf">Start listening for connections </tspan><tspan xml:space="preserve" fill="#61afef">address</tspan><tspan xml:space="preserve" fill="#476a8c">=</tspan><tspan xml:space="preserve" fill="#56b6c2">0.0.0.0:9090 </tspan><tspan xml:space="preserve" fill="#61afef">component</tspan><tspan xml:space="preserve" fill="#476a8c">=</tspan><tspan xml:space="preserve" fill="#56b6c2">web</tspan><tspan xml:space="preserve" font-style="italic" fill="#426d77"> → web.go:566</tspan><tspan xml:space="preserve"/></text><text x="37.00px" y="167.20px" xml:space="preserve"><tspan xml:space="preserve" fill="#426d77">2023-12-07 20:07:05.950 </tspan><tspan xml:space="preserve" fill="#476a8c">│</tspan><tspan xml:space="preserve" fill="#56b6c2">INF</tspan><tspan xml:space="preserve" fill="#476a8c">│</tspan><tspan xml:space="preserve"> </tspan><tspan xml:space="preserve" fill="#abb2bf">Starting TSDB ...</tspan><tspan xml:space="preserve" font-style="italic" fill="#426d77"> → main.go:1024</tspan><tspan xml:space="preserve"/></text><text x="37.00px" y="181.60px" xml:space="preserve"><tspan xml:space="preserve" fill="#426d77">2023-12-07 20:07:05.950 </tspan><tspan xml:space="preserve" fill="#476a8c">│</tspan><tspan xml:space="preserve" fill="#56b6c2">INF</tspan><tspan xml:space="preserve" fill="#476a8c">│</tspan><tspan xml:space="preserve"> </tspan><tspan xml:space="preserve" fill="#abb2bf">Listening on </tspan><tspan xml:space="preserve" fill="#61afef">address</tspan><tspan xml:space="preserve" fill="#476a8c">=</tspan><tspan xml:space="preserve" fill="#56b6c2">&quot;[::]:9090&quot; </tspan><tspan xml:space="preserve" fill="#61afef">component</tspan><tspan xml:space="preserve" fill="#476a8c">=</tspan><tspan xml:space="preserve" fill="#56b6c2">web</tspan><tspan xml:space="preserve" font-style="italic" fill="#426d77"> → tls_config.go:274</tspan><tspan xml:space="preserve"/></text><text x="37.00px" y="196.00px" xml:space="preserve"><tspan xml:space="preserve" fill="#426d77">2023-12-07 20:07:05.950 </tspan><tspan xml:space="preserve" fill="#476a8c">│</tspan><tspan xml:space="preserve" fill="#56b6c2">INF</tspan><tspan xml:space="preserve" fill="#476a8c">│</tspan><tspan xml:space="preserve"> </tspan><tspan xml:space="preserve" fill="#abb2bf">TLS is disabled. </tspan><tspan xml:space="preserve" fill="#61afef">address</tspan><tspan xml:space="preserve" fill="#476a8c">=</tspan><tspan xml:space="preserve" fill="#56b6c2">&quot;[::]:9090&quot; </tspan><tspan xml:space="preserve" fill="#61afef">component</tspan><tspan xml:space="preserve" fill="#476a8c">=</tspan><tspan xml:space="preserve" fill="#56b6c2">web </tspan><tspan xml:space="preserve" fill="#61afef">http2</tspan><tspan xml:space="preserve" fill="#476a8c">=</tspan><tspan xml:space="preserve" fill="#e5c07b">false</tspan><tspan xml:space="preserve" font-style="italic" fill="#426d77"> → tls_config.go:277</tspan><tspan xml:space="preserve"/></text><text x="37.00px" y="210.40px" xml:space="preserve"><tspan xml:space="preserve" fill="#426d77">2023-12-07 20:07:05.952 </tspan><tspan xml:space="preserve" fill="#476a8c">│</tspan><tspan xml:space="preserve" fill="#56b6c2">INF</tspan><tspan xml:space="preserve" fill="#476a8c">│</tspan><tspan xml:space="preserve"> </tspan><tspan xml:space="preserve" fill="#abb2bf">Replaying on-disk memory mappable chunks if any </tspan><tspan xml:space="preserve" fill="#61afef">component</tspan><tspan xml:space="preserve" fill="#476a8c">=</tspan><tspan xml:space="preserve" fill="#56b6c2">tsdb</tspan><tspan xml:space="preserve" font-style="italic" fill="#426d77"> → head.go:601</tspan><tspan xml:space="preserve"/></text><text x="37.00px" y="224.80px" xml:space="preserve"><tspan xml:space="preserve" fill="#426d77">2023-12-07 20:07:05.952 </tspan><tspan xml:space="preserve" fill="#476a8c">│</tspan><tspan xml:space="preserve" fill="#56b6c2">INF</tspan><tspan xml:space="preserve" fill="#476a8c">│</tspan><tspan xml:space="preserve"> </tspan><tspan xml:space="preserve" fill="#abb2bf">On-disk memory mappable chunks replay completed </tspan><tspan xml:space="preserve" fill="#61afef">component</tspan><tspan xml:space="preserve" fill="#476a8c">=</tspan><tspan xml:space="preserve" fill="#56b6c2">tsdb </tspan><tspan xml:space="preserve" fill="#61afef">duration</tspan><tspan xml:space="preserve" fill="#476a8c">=</tspan><tspan xml:space="preserve" fill="#56b6c2">1.416µs</tspan><tspan xml:space="preserve" font-style="italic" fill="#426d77"> → head.go:682</tspan><tspan xml:space="preserve"/></text><text x="37.00px" y="239.20px" xml:space="preserve"><tspan xml:space="preserve" fill="#426d77">2023-12-07 20:07:05.952 </tspan><tspan xml:space="preserve" fill="#476a8c">│</tspan><tspan xml:space="preserve" fill="#56b6c2">INF</tspan><tspan xml:space="preserve" fill="#476a8c">│</tspan><tspan xml:space="preserve"> </tspan><tspan xml:space="preserve" fill="#abb2bf">Replaying WAL, this may take a while </tspan><tspan xml:space="preserve" fill="#61afef">component</tspan><tspan xml:space="preserve" fill="#476a8c">=</tspan><tspan xml:space="preserve" fill="#56b6c2">tsdb</tspan><tspan xml:space="preserve" font-style="italic" fill="#426d77"> → head.go:690</tspan><tspan xml:space="preserve"/></text><text x="37.00px" y="253.60px" xml:space="preserve"><tspan xml:space="preserve" fill="#426d77">2023-12-07 20:07:05.952 </tspan><tspan xml:space="preserve" fill="#476a8c">│</tspan><tspan xml:space="preserve" fill="#56b6c2">INF</tspan><tspan xml:space="preserve" fill="#476a8c">│</tspan><tspan xml:space="preserve"> </tspan><tspan xml:space="preserve" fill="#abb2bf">WAL segment loaded </tspan><tspan xml:space="preserve" fill="#61afef">component</tspan><tspan xml:space="preserve" fill="#476a8c">=</tspan><tspan xml:space="preserve" fill="#56b6c2">tsdb </tspan><tspan xml:space="preserve" fill="#61afef">maxSegment</tspan><tspan xml:space="preserve" fill="#476a8c">=</tspan><tspan xml:space="preserve" fill="#98c379">0 </tspan><tspan xml:space="preserve" fill="#61afef">segment</tspan><tspan xml:space="preserve" fill="#476a8c">=</tspan><tspan xml:space="preserve" fill="#98c379">0</tspan><tspan xml:space="preserve" font-style="italic" fill="#426d77"> → head.go:761</tspan><tspan xml:space="preserve"/></text><text x="37.00px" y="268.00px" xml:space="preserve"><tspan xml:space="preserve" fill="#426d77">2023-12-07 20:07:05.952 </tspan><tspan xml:space="preserve" fill="#476a8c">│</tspan><tspan xml:space="preserve" fill="#56b6c2">INF</tspan><tspan xml:space="preserve" fill="#476a8c">│</tspan><tspan xml:space="preserve"> </tspan><tspan xml:space="preserve" fill="#abb2bf">WAL replay completed </tspan><tspan xml:space="preserve" fill="#61afef">checkpoint-replay-duration</tspan><tspan xml:space="preserve" fill="#476a8c">=</tspan><tspan xml:space="preserve" fill="#56b6c2">16.875µs </tspan><tspan xml:space="preserve" fill="#61afef">component</tspan><tspan xml:space="preserve" fill="#476a8c">=</tspan><tspan xml:space="preserve" fill="#56b6c2">tsdb </tspan><tspan xml:space="preserve" fill="#61afef">total-replay-duration</tspan><tspan xml:space="preserve" fill="#476a8c">=</tspan><tspan xml:space="preserve" fill="#56b6c2">186.042µs </tspan><tspan xml:space="preserve" fill="#61afef">wal-replay-duration</tspan><tspan xml:space="preserve" fill="#476a8c">=</tspan><tspan xml:space="preserve" fill="#56b6c2">154.083µs </tspan><tspan xml:space="preserve" fill="#61afef">wbl-replay-duration</tspan><tspan xml:space="preserve" fill="#476a8c">=</tspan><tspan xml:space="preserve" fill="#56b6c2">42ns</tspan><tspan xml:space="preserve" font-style="italic" fill="#426d77"> → head.go:798</tspan><tspan xml:space="preserve"/></text><text x="37.00px" y="282.40px" xml:space="preserve"><tspan xml:space="preserve" fill="#426d77">2023-12-07 20:07:05.953 </tspan><tspan xml:space="preserve" fill="#476a8c">│</tspan><tspan xml:space="preserve" fill="#56b6c2">INF</tspan><tspan xml:space="preserve" fill="#476a8c">│</tspan><tspan xml:space="preserve"> </tspan><tspan xml:space="preserve" fill="#61afef">fs-type</tspan><tspan xml:space="preserve" fill="#476a8c">=</tspan><tspan xml:space="preserve" fill="#56b6c2">EXT4_SUPER_MAGIC</tspan><tspan xml:space="preserve" font-style="italic" fill="#426d77"> → main.go:1045</tspan><tspan xml:space="preserve"/></text><text x="37.00px" y="296.80px" xml:space="preserve"><tspan xml:space="preserve" fill="#426d77">2023-12-07 20:07:05.953 </tspan><tspan xml:space="preserve" fill="#476a8c">│</tspan><tspan xml:space="preserve" fill="#56b6c2">INF</tspan><tspan xml:space="preserve" fill="#476a8c">│</tspan><tspan xml:space="preserve"> </tspan><tspan xml:space="preserve" fill="#abb2bf">TSDB started</tspan><tspan xml:space="preserve" font-style="italic" fill="#426d77"> → main.go:1048</tspan><tspan xml:space="preserve"/></text><text x="37.00px" y="311.20px" xml:space="preserve"><tspan xml:space="preserve" fill="#426d77">2023-12-07 20:07:05.953 </tspan><tspan xml:space="preserve" fill="#476a8c">│</tspan><tspan xml:space="preserve" fill="#56b6c2">INF</tspan><tspan xml:space="preserve" fill="#476a8c">│</tspan><tspan xml:space="preserve"> </tspan><tspan xml:space="preserve" fill="#abb2bf">Loading configuration file </tspan><tspan xml:space="preserve" fill="#61afef">filename</tspan><tspan xml:space="preserve" fill="#476a8c">=</tspan><tspan xml:space="preserve" fill="#56b6c2">/etc/prometheus/prometheus.yml</tspan><tspan xml:space="preserve" font-style="italic" fill="#426d77"> → main.go:1229</tspan><tspan xml:space="preserve"/></text><text x="37.00px" y="325.60px" xml:space="preserve"><tspan xml:space="preserve" fill="#426d77">2023-12-07 20:07:05.953 </tspan><tspan xml:space="preserve" fill="#476a8c">│</tspan><tspan xml:space="preserve" fill="#56b6c2">INF</tspan><tspan xml:space="preserve" fill="#476a8c">│</tspan><tspan xml:space="preserve"> </tspan><tspan xml:space="preserve" fill="#abb2bf">Completed loading of configuration file </tspan><tspan xml:space="preserve" fill="#61afef">db-storage</tspan><tspan xml:space="preserve" fill="#476a8c">=</tspan><tspan xml:space="preserve" fill="#56b6c2">1.041µs </tspan><tspan xml:space="preserve" fill="#61afef">filename</tspan><tspan xml:space="preserve" fill="#476a8c">=</tspan><tspan xml:space="preserve" fill="#56b6c2">/etc/prometheus/prometheus.yml </tspan><tspan xml:space="preserve" fill="#61afef">notify</tspan><tspan xml:space="preserve" fill="#476a8c">=</tspan><tspan xml:space="preserve" fill="#56b6c2">11.5µs </tspan><tspan xml:space="preserve" fill="#61afef">notify-sd</tspan><tspan xml:space="preserve" fill="#476a8c">=</tspan><tspan xml:space="preserve" fill="#56b6c2">7.375µs </tspan><tspan xml:space="preserve" fill="#61afef">query-engine</tspan><tspan xml:space="preserve" fill="#476a8c">=</tspan><tspan xml:space="preserve" fill="#56b6c2">792ns </tspan><tspan xml:space="preserve" fill="#61afef">remote-storage</tspan><tspan xml:space="preserve" fill="#476a8c">=</tspan><tspan xml:space="preserve" fill="#56b6c2">1µs </tspan><tspan xml:space="preserve" fill="#61afef">rules</tspan><tspan xml:space="preserve" fill="#476a8c">=</tspan><tspan xml:space="preserve" fill="#56b6c2">1.375µs </tspan><tspan xml:space="preserve" fill="#61afef">scrape</tspan><tspan xml:space="preserve" fill="#476a8c">=</tspan><tspan xml:space="preserve" fill="#56b6c2">146.917µs </tspan><tspan xml:space="preserve" fill="#61afef">scrape-sd</tspan><tspan xml:space="preserve" fill="#476a8c">=</tspan><tspan xml:space="preserve" fill="#56b6c2">10.584µs </tspan><tspan xml:space="preserve" fill="#61afef">totalDuration</tspan><tspan xml:space="preserve" fill="#476a8c">=</tspan><tspan xml:space="preserve" fill="#56b6c2">660.75µs </tspan><tspan xml:space="preserve" fill="#61afef">tracing</tspan><tspan xml:space="preserve" fill="#476a8c">=</tspan><tspan xml:space="preserve" fill="#56b6c2">6.5µs </tspan><tspan xml:space="preserve" fill="#61afef">web-handler</tspan><tspan xml:space="preserve" fill="#476a8c">=</tspan><tspan xml:space="preserve" fill="#56b6c2">417ns</tspan><tspan xml:space="preserve" font-style="italic" fill="#426d77"> → main.go:1266</tspan><tspan xml:space="preserve"/></text><text x="37.00px" y="340.00px" xml:space="preserve"><tspan xml:space="preserve" fill="#426d77">2023-12-07 20:07:05.953 </tspan><tspan xml:space="preserve" fill="#476a8c">│</tspan><tspan xml:space="preserve" fill="#56b6c2">INF</tspan><tspan xml:space="preserve" fill="#476a8c">│</tspan><tspan xml:space="preserve"> </tspan><tspan xml:space="preserve" fill="#abb2bf">Server is ready to receive web requests.</tspan><tspan xml:space="preserve" font-style="italic" fill="#426d77"> → main.go:1009</tspan><tspan xml:space="preserve"/></text><text x="37.00px" y="354.40px" xml:space="preserve"><tspan xml:space="preserve" fill="#426d77">2023-12-07 20:07:05.953 </tspan><tspan xml:space="preserve" fill="#476a8c">│</tspan><tspan xml:space="preserve" fill="#56b6c2">INF</tspan><tspan xml:space="preserve" fill="#476a8c">│</tspan><tspan xml:space="preserve"> </tspan><tspan xml:space="preserve" fill="#abb2bf">Starting rule manager... </tspan><tspan xml:space="preserve" fill="#61afef">component</tspan><tspan xml:space="preserve" fill="#476a8c">=</tspan><tspan xml:space="preserve" fill="#56b6c2">&quot;rule manager&quot;</tspan><tspan xml:space="preserve" font-style="italic" fill="#426d77"> → manager.go:1012</tspan><tspan xml:space="preserve"/></text><text x="37.00px" y="368.80px" xml:space="preserve"><tspan xml:space="preserve" fill="#426d77">2023-12-07 20:11:30.732 </tspan><tspan xml:space="preserve" fill="#476a8c">│</tspan><tspan xml:space="preserve" fill="#e5c07b">WRN</tspan><tspan xml:space="preserve" fill="#476a8c">│</tspan><tspan xml:space="preserve"> </tspan><tspan xml:space="preserve" fill="#abb2bf">Received SIGTERM, exiting gracefully...</tspan><tspan xml:space="preserve" font-style="italic" fill="#426d77"> → main.go:859</tspan><tspan xml:space="preserve"/></text><text x="37.00px" y="383.20px" xml:space="preserve"><tspan xml:space="preserve" fill="#426d77">2023-12-07 20:11:30.732 </tspan><tspan xml:space="preserve" fill="#476a8c">│</tspan><tspan xml:space="preserve" fill="#56b6c2">INF</tspan><tspan xml:space="preserve" fill="#476a8c">│</tspan><tspan xml:space="preserve"> </tspan><tspan xml:space="preserve" fill="#abb2bf">Stopping scrape discovery manager...</tspan><tspan xml:space="preserve" font-style="italic" fill="#426d77"> → main.go:883</tspan><tspan xml:space="preserve"/></text><text x="37.00px" y="397.60px" xml:space="preserve"><tspan xml:space="preserve" fill="#426d77">2023-12-07 20:11:30.732 </tspan><tspan xml:space="preserve" fill="#476a8c">│</tspan><tspan xml:space="preserve" fill="#56b6c2">INF</tspan><tspan xml:space="preserve" fill="#476a8c">│</tspan><tspan xml:space="preserve"> </tspan><tspan xml:space="preserve" fill="#abb2bf">Stopping notify discovery manager...</tspan><tspan xml:space="preserve" font-style="italic" fill="#426d77"> → main.go:897</tspan><tspan xml:space="preserve"/></text><text x="37.00px" y="412.00px" xml:space="preserve"><tspan xml:space="preserve" fill="#426d77">2023-12-07 20:11:30.732 </tspan><tspan xml:space="preserve" fill="#476a8c">│</tspan><tspan xml:space="preserve" fill="#56b6c2">INF</tspan><tspan xml:space="preserve" fill="#476a8c">│</tspan><tspan xml:space="preserve"> </tspan><tspan xml:space="preserve" fill="#abb2bf">Stopping rule manager... </tspan><tspan xml:space="preserve" fill="#61afef">component</tspan><tspan xml:space="preserve" fill="#476a8c">=</tspan><tspan xml:space="preserve" fill="#56b6c2">&quot;rule manager&quot;</tspan><tspan xml:space="preserve" font-style="italic" fill="#426d77"> → manager.go:1026</tspan><tspan xml:space="preserve"/></text><text x="37.00px" y="426.40px" xml:space="preserve"><tspan xml:space="preserve" fill="#426d77">2023-12-07 20:11:30.732 </tspan><tspan xml:space="preserve" fill="#476a8c">│</tspan><tspan xml:space="preserve" fill="#56b6c2">INF</tspan><tspan xml:space="preserve" fill="#476a8c">│</tspan><tspan xml:space="preserve"> </tspan><tspan xml:space="preserve" fill="#abb2bf">Rule manager stopped </tspan><tspan xml:space="preserve" fill="#61afef">component</tspan><tspan xml:space="preserve" fill="#476a8c">=</tspan><tspan xml:space="preserve" fill="#56b6c2">&quot;rule manager&quot;</tspan><tspan xml:space="preserve" font-style="italic" fill="#426d77"> → manager.go:1036</tspan><tspan xml:space="preserve"/></text><text x="37.00px" y="440.80px" xml:space="preserve"><tspan xml:space="preserve" fill="#426d77">2023-12-07 20:11:30.732 </tspan><tspan xml:space="preserve" fill="#476a8c">│</tspan><tspan xml:space="preserve" fill="#56b6c2">INF</tspan><tspan xml:space="preserve" fill="#476a8c">│</tspan><tspan xml:space="preserve"> </tspan><tspan xml:space="preserve" fill="#abb2bf">Stopping scrape manager...</tspan><tspan xml:space="preserve" font-style="italic" fill="#426d77"> → main.go:934</tspan><tspan xml:space="preserve"/></text><text x="37.00px" y="455.20px" xml:space="preserve"><tspan xml:space="preserve" fill="#426d77">2023-12-07 20:11:30.732 </tspan><tspan xml:space="preserve" fill="#476a8c">│</tspan><tspan xml:space="preserve" fill="#56b6c2">INF</tspan><tspan xml:space="preserve" fill="#476a8c">│</tspan><tspan xml:space="preserve"> </tspan><tspan xml:space="preserve" fill="#abb2bf">Notify discovery manager stopped</tspan><tspan xml:space="preserve" font-style="italic" fill="#426d77"> → main.go:893</tspan><tspan xml:space="preserve"/></text><text x="37.00px" y="469.60px" xml:space="preserve"><tspan xml:space="preserve" fill="#426d77">2023-12-07 20:11:30.732 </tspan><tspan xml:space="preserve" fill="#476a8c">│</tspan><tspan xml:space="preserve" fill="#56b6c2">INF</tspan><tspan xml:space="preserve" fill="#476a8c">│</tspan><tspan xml:space="preserve"> </tspan><tspan xml:space="preserve" fill="#abb2bf">Scrape discovery manager stopped</tspan><tspan xml:space="preserve" font-style="italic" fill="#426d77"> → main.go:879</tspan><tspan xml:space="preserve"/></text><text x="37.00px" y="484.00px" xml:space="preserve"><tspan xml:space="preserve" fill="#426d77">2023-12-07 20:11:30.733 </tspan><tspan xml:space="preserve" fill="#476a8c">│</tspan><tspan xml:space="preserve" fill="#56b6c2">INF</tspan><tspan xml:space="preserve" fill="#476a8c">│</tspan><tspan xml:space="preserve"> </tspan><tspan xml:space="preserve" fill="#abb2bf">Scrape manager stopped</tspan><tspan xml:space="preserve" font-style="italic" fill="#426d77"> → main.go:926</tspan><tspan xml:space="preserve"/></text><text x="37.00px" y="498.40px" xml:space="preserve"><tspan xml:space="preserve" fill="#426d77">2023-12-07 20:11:30.735 </tspan><tspan xml:space="preserve" fill="#476a8c">│</tspan><tspan xml:space="preserve" fill="#56b6c2">INF</tspan><tspan xml:space="preserve" fill="#476a8c">│</tspan><tspan xml:space="preserve"> </tspan><tspan xml:space="preserve" fill="#abb2bf">Stopping notification manager... </tspan><tspan xml:space="preserve" fill="#61afef">component</tspan><tspan xml:space="preserve" fill="#476a8c">=</tspan><tspan xml:space="preserve" fill="#56b6c2">notifier</tspan><tspan xml:space="preserve" font-style="italic" fill="#426d77"> → notifier.go:604</tspan><tspan xml:space="preserve"/></text><text x="37.00px" y="512.80px" xml:space="preserve"><tspan xml:space="preserve" fill="#426d77">2023-12-07 20:11:30.735 </tspan><tspan xml:space="preserve" fill="#476a8c">│</tspan><tspan xml:space="preserve" fill="#56b6c2">INF</tspan><tspan xml:space="preserve" fill="#476a8c">│</tspan><tspan xml:space="preserve"> </tspan><tspan xml:space="preserve" fill="#abb2bf">Notifier manager stopped</tspan><tspan xml:space="preserve" font-style="italic" fill="#426d77"> → main.go:1155</tspan><tspan xml:space="preserve"/></text><text x="37.00px" y="527.20px" xml:space="preserve"><tspan xml:space="preserve" fill="#426d77">2023-12-07 20:11:30.735 </tspan><tspan xml:space="preserve" fill="#476a8c">│</tspan><tspan xml:space="preserve" fill="#56b6c2">INF</tspan><tspan xml:space="preserve" fill="#476a8c">│</tspan><tspan xml:space="preserve"> </tspan><tspan xml:space="preserve" fill="#abb2bf">See you next time!</tspan><tspan xml:space="preserve" font-style="italic" fill="#426d77"> → main.go:1167</tspan><tspan xml:space="preserve"/></text>
+</style>
+<filter
+        color-interpolation-filters="sRGB"
+        filterUnits="userSpaceOnUse"
+        id="blur"
+    >
+  <feGaussianBlur in="SourceGraphic" result="Blur" stdDeviation="5" />
+</filter>
+<g filter="url(#blur)">
+<rect
+            width="1228.00"
+            height="520.00"
+            fill="black"
+            rx="10.00"
+            ry="10.00"
+            x="30.00px"
+            y="30.00px"
+            opacity="0.75"
+        />
+    </g>
+<rect
+        width="1228.00"
+        height="520.00"
+        fill="#282830"
+        rx="10.00"
+        ry="10.00"
+        stroke="#54575d"
+        stroke-width="1.00"
+        x="25.00px"
+        y="25.00px"
+    />
+<g
+        font-family="JetBrains Mono"
+        font-size="12.00px"
+        fill="#c4c4c4"
+        clip-path="url(#terminalMask)"
+    >
+<text x="37.00px" y="66.40px" xml:space="preserve"><tspan
+                xml:space="preserve"
+                fill="#426d77"
+            >2023-12-07 20:07:05.949 </tspan><tspan
+                xml:space="preserve"
+                fill="#476a8c"
+            >│</tspan><tspan
+                xml:space="preserve"
+                fill="#56b6c2"
+            >INF</tspan><tspan
+                xml:space="preserve"
+                fill="#476a8c"
+            >│</tspan><tspan xml:space="preserve"> </tspan><tspan
+                xml:space="preserve"
+                fill="#abb2bf"
+            >No time or size retention was set so using the default time retention </tspan><tspan
+                xml:space="preserve"
+                fill="#61afef"
+            >duration</tspan><tspan
+                xml:space="preserve"
+                fill="#476a8c"
+            >=</tspan><tspan
+                xml:space="preserve"
+                fill="#56b6c2"
+            >15d</tspan><tspan
+                xml:space="preserve"
+                font-style="italic"
+                fill="#426d77"
+            > → main.go:539</tspan><tspan xml:space="preserve" /></text><text
+            x="37.00px"
+            y="80.80px"
+            xml:space="preserve"
+        ><tspan
+                xml:space="preserve"
+                fill="#426d77"
+            >2023-12-07 20:07:05.949 </tspan><tspan
+                xml:space="preserve"
+                fill="#476a8c"
+            >│</tspan><tspan
+                xml:space="preserve"
+                fill="#56b6c2"
+            >INF</tspan><tspan
+                xml:space="preserve"
+                fill="#476a8c"
+            >│</tspan><tspan xml:space="preserve"> </tspan><tspan
+                xml:space="preserve"
+                fill="#abb2bf"
+            >Starting Prometheus Server </tspan><tspan
+                xml:space="preserve"
+                fill="#61afef"
+            >mode</tspan><tspan
+                xml:space="preserve"
+                fill="#476a8c"
+            >=</tspan><tspan
+                xml:space="preserve"
+                fill="#56b6c2"
+            >server </tspan><tspan
+                xml:space="preserve"
+                fill="#61afef"
+            >version</tspan><tspan
+                xml:space="preserve"
+                fill="#476a8c"
+            >=</tspan><tspan
+                xml:space="preserve"
+                fill="#56b6c2"
+            >&quot;(version=2.48.0, branch=HEAD, revision=6d80b30990bc297d95b5c844e118c4011fad8054)&quot;</tspan><tspan
+                xml:space="preserve"
+                font-style="italic"
+                fill="#426d77"
+            > → main.go:583</tspan><tspan xml:space="preserve" /></text><text
+            x="37.00px"
+            y="95.20px"
+            xml:space="preserve"
+        ><tspan
+                xml:space="preserve"
+                fill="#426d77"
+            >2023-12-07 20:07:05.949 </tspan><tspan
+                xml:space="preserve"
+                fill="#476a8c"
+            >│</tspan><tspan
+                xml:space="preserve"
+                fill="#56b6c2"
+            >INF</tspan><tspan
+                xml:space="preserve"
+                fill="#476a8c"
+            >│</tspan><tspan xml:space="preserve"> </tspan><tspan
+                xml:space="preserve"
+                fill="#61afef"
+            >build-context</tspan><tspan
+                xml:space="preserve"
+                fill="#476a8c"
+            >=</tspan><tspan
+                xml:space="preserve"
+                fill="#56b6c2"
+            >&quot;(go=go1.21.4, platform=linux/arm64, user=root@26117804242c, date=20231116-04:38:59, tags=netgo,builtinassets,stringlabels)&quot;</tspan><tspan
+                xml:space="preserve"
+                font-style="italic"
+                fill="#426d77"
+            > → main.go:588</tspan><tspan xml:space="preserve" /></text><text
+            x="37.00px"
+            y="109.60px"
+            xml:space="preserve"
+        ><tspan
+                xml:space="preserve"
+                fill="#426d77"
+            >2023-12-07 20:07:05.949 </tspan><tspan
+                xml:space="preserve"
+                fill="#476a8c"
+            >│</tspan><tspan
+                xml:space="preserve"
+                fill="#56b6c2"
+            >INF</tspan><tspan
+                xml:space="preserve"
+                fill="#476a8c"
+            >│</tspan><tspan xml:space="preserve"> </tspan><tspan
+                xml:space="preserve"
+                fill="#61afef"
+            >host-details</tspan><tspan
+                xml:space="preserve"
+                fill="#476a8c"
+            >=</tspan><tspan
+                xml:space="preserve"
+                fill="#56b6c2"
+            >&quot;(Linux 6.5.11-linuxkit #1 SMP PREEMPT Mon Dec  4 11:30:00 UTC 2023 aarch64 b2ed53d333d7 (none))&quot;</tspan><tspan
+                xml:space="preserve"
+                font-style="italic"
+                fill="#426d77"
+            > → main.go:589</tspan><tspan xml:space="preserve" /></text><text
+            x="37.00px"
+            y="124.00px"
+            xml:space="preserve"
+        ><tspan
+                xml:space="preserve"
+                fill="#426d77"
+            >2023-12-07 20:07:05.949 </tspan><tspan
+                xml:space="preserve"
+                fill="#476a8c"
+            >│</tspan><tspan
+                xml:space="preserve"
+                fill="#56b6c2"
+            >INF</tspan><tspan
+                xml:space="preserve"
+                fill="#476a8c"
+            >│</tspan><tspan xml:space="preserve"> </tspan><tspan
+                xml:space="preserve"
+                fill="#61afef"
+            >fd-limits</tspan><tspan
+                xml:space="preserve"
+                fill="#476a8c"
+            >=</tspan><tspan
+                xml:space="preserve"
+                fill="#56b6c2"
+            >&quot;(soft=1048576, hard=1048576)&quot;</tspan><tspan
+                xml:space="preserve"
+                font-style="italic"
+                fill="#426d77"
+            > → main.go:590</tspan><tspan xml:space="preserve" /></text><text
+            x="37.00px"
+            y="138.40px"
+            xml:space="preserve"
+        ><tspan
+                xml:space="preserve"
+                fill="#426d77"
+            >2023-12-07 20:07:05.949 </tspan><tspan
+                xml:space="preserve"
+                fill="#476a8c"
+            >│</tspan><tspan
+                xml:space="preserve"
+                fill="#56b6c2"
+            >INF</tspan><tspan
+                xml:space="preserve"
+                fill="#476a8c"
+            >│</tspan><tspan xml:space="preserve"> </tspan><tspan
+                xml:space="preserve"
+                fill="#61afef"
+            >vm-limits</tspan><tspan
+                xml:space="preserve"
+                fill="#476a8c"
+            >=</tspan><tspan
+                xml:space="preserve"
+                fill="#56b6c2"
+            >&quot;(soft=unlimited, hard=unlimited)&quot;</tspan><tspan
+                xml:space="preserve"
+                font-style="italic"
+                fill="#426d77"
+            > → main.go:591</tspan><tspan xml:space="preserve" /></text><text
+            x="37.00px"
+            y="152.80px"
+            xml:space="preserve"
+        ><tspan
+                xml:space="preserve"
+                fill="#426d77"
+            >2023-12-07 20:07:05.949 </tspan><tspan
+                xml:space="preserve"
+                fill="#476a8c"
+            >│</tspan><tspan
+                xml:space="preserve"
+                fill="#56b6c2"
+            >INF</tspan><tspan
+                xml:space="preserve"
+                fill="#476a8c"
+            >│</tspan><tspan xml:space="preserve"> </tspan><tspan
+                xml:space="preserve"
+                fill="#abb2bf"
+            >Start listening for connections </tspan><tspan
+                xml:space="preserve"
+                fill="#61afef"
+            >address</tspan><tspan
+                xml:space="preserve"
+                fill="#476a8c"
+            >=</tspan><tspan
+                xml:space="preserve"
+                fill="#56b6c2"
+            >0.0.0.0:9090 </tspan><tspan
+                xml:space="preserve"
+                fill="#61afef"
+            >component</tspan><tspan
+                xml:space="preserve"
+                fill="#476a8c"
+            >=</tspan><tspan
+                xml:space="preserve"
+                fill="#56b6c2"
+            >web</tspan><tspan
+                xml:space="preserve"
+                font-style="italic"
+                fill="#426d77"
+            > → web.go:566</tspan><tspan xml:space="preserve" /></text><text
+            x="37.00px"
+            y="167.20px"
+            xml:space="preserve"
+        ><tspan
+                xml:space="preserve"
+                fill="#426d77"
+            >2023-12-07 20:07:05.950 </tspan><tspan
+                xml:space="preserve"
+                fill="#476a8c"
+            >│</tspan><tspan
+                xml:space="preserve"
+                fill="#56b6c2"
+            >INF</tspan><tspan
+                xml:space="preserve"
+                fill="#476a8c"
+            >│</tspan><tspan xml:space="preserve"> </tspan><tspan
+                xml:space="preserve"
+                fill="#abb2bf"
+            >Starting TSDB ...</tspan><tspan
+                xml:space="preserve"
+                font-style="italic"
+                fill="#426d77"
+            > → main.go:1024</tspan><tspan xml:space="preserve" /></text><text
+            x="37.00px"
+            y="181.60px"
+            xml:space="preserve"
+        ><tspan
+                xml:space="preserve"
+                fill="#426d77"
+            >2023-12-07 20:07:05.950 </tspan><tspan
+                xml:space="preserve"
+                fill="#476a8c"
+            >│</tspan><tspan
+                xml:space="preserve"
+                fill="#56b6c2"
+            >INF</tspan><tspan
+                xml:space="preserve"
+                fill="#476a8c"
+            >│</tspan><tspan xml:space="preserve"> </tspan><tspan
+                xml:space="preserve"
+                fill="#abb2bf"
+            >Listening on </tspan><tspan
+                xml:space="preserve"
+                fill="#61afef"
+            >address</tspan><tspan
+                xml:space="preserve"
+                fill="#476a8c"
+            >=</tspan><tspan
+                xml:space="preserve"
+                fill="#56b6c2"
+            >&quot;[::]:9090&quot; </tspan><tspan
+                xml:space="preserve"
+                fill="#61afef"
+            >component</tspan><tspan
+                xml:space="preserve"
+                fill="#476a8c"
+            >=</tspan><tspan
+                xml:space="preserve"
+                fill="#56b6c2"
+            >web</tspan><tspan
+                xml:space="preserve"
+                font-style="italic"
+                fill="#426d77"
+            > → tls_config.go:274</tspan><tspan
+                xml:space="preserve"
+            /></text><text x="37.00px" y="196.00px" xml:space="preserve"><tspan
+                xml:space="preserve"
+                fill="#426d77"
+            >2023-12-07 20:07:05.950 </tspan><tspan
+                xml:space="preserve"
+                fill="#476a8c"
+            >│</tspan><tspan
+                xml:space="preserve"
+                fill="#56b6c2"
+            >INF</tspan><tspan
+                xml:space="preserve"
+                fill="#476a8c"
+            >│</tspan><tspan xml:space="preserve"> </tspan><tspan
+                xml:space="preserve"
+                fill="#abb2bf"
+            >TLS is disabled. </tspan><tspan
+                xml:space="preserve"
+                fill="#61afef"
+            >address</tspan><tspan
+                xml:space="preserve"
+                fill="#476a8c"
+            >=</tspan><tspan
+                xml:space="preserve"
+                fill="#56b6c2"
+            >&quot;[::]:9090&quot; </tspan><tspan
+                xml:space="preserve"
+                fill="#61afef"
+            >component</tspan><tspan
+                xml:space="preserve"
+                fill="#476a8c"
+            >=</tspan><tspan
+                xml:space="preserve"
+                fill="#56b6c2"
+            >web </tspan><tspan
+                xml:space="preserve"
+                fill="#61afef"
+            >http2</tspan><tspan
+                xml:space="preserve"
+                fill="#476a8c"
+            >=</tspan><tspan
+                xml:space="preserve"
+                fill="#e5c07b"
+            >false</tspan><tspan
+                xml:space="preserve"
+                font-style="italic"
+                fill="#426d77"
+            > → tls_config.go:277</tspan><tspan
+                xml:space="preserve"
+            /></text><text x="37.00px" y="210.40px" xml:space="preserve"><tspan
+                xml:space="preserve"
+                fill="#426d77"
+            >2023-12-07 20:07:05.952 </tspan><tspan
+                xml:space="preserve"
+                fill="#476a8c"
+            >│</tspan><tspan
+                xml:space="preserve"
+                fill="#56b6c2"
+            >INF</tspan><tspan
+                xml:space="preserve"
+                fill="#476a8c"
+            >│</tspan><tspan xml:space="preserve"> </tspan><tspan
+                xml:space="preserve"
+                fill="#abb2bf"
+            >Replaying on-disk memory mappable chunks if any </tspan><tspan
+                xml:space="preserve"
+                fill="#61afef"
+            >component</tspan><tspan
+                xml:space="preserve"
+                fill="#476a8c"
+            >=</tspan><tspan
+                xml:space="preserve"
+                fill="#56b6c2"
+            >tsdb</tspan><tspan
+                xml:space="preserve"
+                font-style="italic"
+                fill="#426d77"
+            > → head.go:601</tspan><tspan xml:space="preserve" /></text><text
+            x="37.00px"
+            y="224.80px"
+            xml:space="preserve"
+        ><tspan
+                xml:space="preserve"
+                fill="#426d77"
+            >2023-12-07 20:07:05.952 </tspan><tspan
+                xml:space="preserve"
+                fill="#476a8c"
+            >│</tspan><tspan
+                xml:space="preserve"
+                fill="#56b6c2"
+            >INF</tspan><tspan
+                xml:space="preserve"
+                fill="#476a8c"
+            >│</tspan><tspan xml:space="preserve"> </tspan><tspan
+                xml:space="preserve"
+                fill="#abb2bf"
+            >On-disk memory mappable chunks replay completed </tspan><tspan
+                xml:space="preserve"
+                fill="#61afef"
+            >component</tspan><tspan
+                xml:space="preserve"
+                fill="#476a8c"
+            >=</tspan><tspan
+                xml:space="preserve"
+                fill="#56b6c2"
+            >tsdb </tspan><tspan
+                xml:space="preserve"
+                fill="#61afef"
+            >duration</tspan><tspan
+                xml:space="preserve"
+                fill="#476a8c"
+            >=</tspan><tspan
+                xml:space="preserve"
+                fill="#56b6c2"
+            >1.416µs</tspan><tspan
+                xml:space="preserve"
+                font-style="italic"
+                fill="#426d77"
+            > → head.go:682</tspan><tspan xml:space="preserve" /></text><text
+            x="37.00px"
+            y="239.20px"
+            xml:space="preserve"
+        ><tspan
+                xml:space="preserve"
+                fill="#426d77"
+            >2023-12-07 20:07:05.952 </tspan><tspan
+                xml:space="preserve"
+                fill="#476a8c"
+            >│</tspan><tspan
+                xml:space="preserve"
+                fill="#56b6c2"
+            >INF</tspan><tspan
+                xml:space="preserve"
+                fill="#476a8c"
+            >│</tspan><tspan xml:space="preserve"> </tspan><tspan
+                xml:space="preserve"
+                fill="#abb2bf"
+            >Replaying WAL, this may take a while </tspan><tspan
+                xml:space="preserve"
+                fill="#61afef"
+            >component</tspan><tspan
+                xml:space="preserve"
+                fill="#476a8c"
+            >=</tspan><tspan
+                xml:space="preserve"
+                fill="#56b6c2"
+            >tsdb</tspan><tspan
+                xml:space="preserve"
+                font-style="italic"
+                fill="#426d77"
+            > → head.go:690</tspan><tspan xml:space="preserve" /></text><text
+            x="37.00px"
+            y="253.60px"
+            xml:space="preserve"
+        ><tspan
+                xml:space="preserve"
+                fill="#426d77"
+            >2023-12-07 20:07:05.952 </tspan><tspan
+                xml:space="preserve"
+                fill="#476a8c"
+            >│</tspan><tspan
+                xml:space="preserve"
+                fill="#56b6c2"
+            >INF</tspan><tspan
+                xml:space="preserve"
+                fill="#476a8c"
+            >│</tspan><tspan xml:space="preserve"> </tspan><tspan
+                xml:space="preserve"
+                fill="#abb2bf"
+            >WAL segment loaded </tspan><tspan
+                xml:space="preserve"
+                fill="#61afef"
+            >component</tspan><tspan
+                xml:space="preserve"
+                fill="#476a8c"
+            >=</tspan><tspan
+                xml:space="preserve"
+                fill="#56b6c2"
+            >tsdb </tspan><tspan
+                xml:space="preserve"
+                fill="#61afef"
+            >maxSegment</tspan><tspan
+                xml:space="preserve"
+                fill="#476a8c"
+            >=</tspan><tspan
+                xml:space="preserve"
+                fill="#98c379"
+            >0 </tspan><tspan
+                xml:space="preserve"
+                fill="#61afef"
+            >segment</tspan><tspan
+                xml:space="preserve"
+                fill="#476a8c"
+            >=</tspan><tspan xml:space="preserve" fill="#98c379">0</tspan><tspan
+                xml:space="preserve"
+                font-style="italic"
+                fill="#426d77"
+            > → head.go:761</tspan><tspan xml:space="preserve" /></text><text
+            x="37.00px"
+            y="268.00px"
+            xml:space="preserve"
+        ><tspan
+                xml:space="preserve"
+                fill="#426d77"
+            >2023-12-07 20:07:05.952 </tspan><tspan
+                xml:space="preserve"
+                fill="#476a8c"
+            >│</tspan><tspan
+                xml:space="preserve"
+                fill="#56b6c2"
+            >INF</tspan><tspan
+                xml:space="preserve"
+                fill="#476a8c"
+            >│</tspan><tspan xml:space="preserve"> </tspan><tspan
+                xml:space="preserve"
+                fill="#abb2bf"
+            >WAL replay completed </tspan><tspan
+                xml:space="preserve"
+                fill="#61afef"
+            >checkpoint-replay-duration</tspan><tspan
+                xml:space="preserve"
+                fill="#476a8c"
+            >=</tspan><tspan
+                xml:space="preserve"
+                fill="#56b6c2"
+            >16.875µs </tspan><tspan
+                xml:space="preserve"
+                fill="#61afef"
+            >component</tspan><tspan
+                xml:space="preserve"
+                fill="#476a8c"
+            >=</tspan><tspan
+                xml:space="preserve"
+                fill="#56b6c2"
+            >tsdb </tspan><tspan
+                xml:space="preserve"
+                fill="#61afef"
+            >total-replay-duration</tspan><tspan
+                xml:space="preserve"
+                fill="#476a8c"
+            >=</tspan><tspan
+                xml:space="preserve"
+                fill="#56b6c2"
+            >186.042µs </tspan><tspan
+                xml:space="preserve"
+                fill="#61afef"
+            >wal-replay-duration</tspan><tspan
+                xml:space="preserve"
+                fill="#476a8c"
+            >=</tspan><tspan
+                xml:space="preserve"
+                fill="#56b6c2"
+            >154.083µs </tspan><tspan
+                xml:space="preserve"
+                fill="#61afef"
+            >wbl-replay-duration</tspan><tspan
+                xml:space="preserve"
+                fill="#476a8c"
+            >=</tspan><tspan
+                xml:space="preserve"
+                fill="#56b6c2"
+            >42ns</tspan><tspan
+                xml:space="preserve"
+                font-style="italic"
+                fill="#426d77"
+            > → head.go:798</tspan><tspan xml:space="preserve" /></text><text
+            x="37.00px"
+            y="282.40px"
+            xml:space="preserve"
+        ><tspan
+                xml:space="preserve"
+                fill="#426d77"
+            >2023-12-07 20:07:05.953 </tspan><tspan
+                xml:space="preserve"
+                fill="#476a8c"
+            >│</tspan><tspan
+                xml:space="preserve"
+                fill="#56b6c2"
+            >INF</tspan><tspan
+                xml:space="preserve"
+                fill="#476a8c"
+            >│</tspan><tspan xml:space="preserve"> </tspan><tspan
+                xml:space="preserve"
+                fill="#61afef"
+            >fs-type</tspan><tspan
+                xml:space="preserve"
+                fill="#476a8c"
+            >=</tspan><tspan
+                xml:space="preserve"
+                fill="#56b6c2"
+            >EXT4_SUPER_MAGIC</tspan><tspan
+                xml:space="preserve"
+                font-style="italic"
+                fill="#426d77"
+            > → main.go:1045</tspan><tspan xml:space="preserve" /></text><text
+            x="37.00px"
+            y="296.80px"
+            xml:space="preserve"
+        ><tspan
+                xml:space="preserve"
+                fill="#426d77"
+            >2023-12-07 20:07:05.953 </tspan><tspan
+                xml:space="preserve"
+                fill="#476a8c"
+            >│</tspan><tspan
+                xml:space="preserve"
+                fill="#56b6c2"
+            >INF</tspan><tspan
+                xml:space="preserve"
+                fill="#476a8c"
+            >│</tspan><tspan xml:space="preserve"> </tspan><tspan
+                xml:space="preserve"
+                fill="#abb2bf"
+            >TSDB started</tspan><tspan
+                xml:space="preserve"
+                font-style="italic"
+                fill="#426d77"
+            > → main.go:1048</tspan><tspan xml:space="preserve" /></text><text
+            x="37.00px"
+            y="311.20px"
+            xml:space="preserve"
+        ><tspan
+                xml:space="preserve"
+                fill="#426d77"
+            >2023-12-07 20:07:05.953 </tspan><tspan
+                xml:space="preserve"
+                fill="#476a8c"
+            >│</tspan><tspan
+                xml:space="preserve"
+                fill="#56b6c2"
+            >INF</tspan><tspan
+                xml:space="preserve"
+                fill="#476a8c"
+            >│</tspan><tspan xml:space="preserve"> </tspan><tspan
+                xml:space="preserve"
+                fill="#abb2bf"
+            >Loading configuration file </tspan><tspan
+                xml:space="preserve"
+                fill="#61afef"
+            >filename</tspan><tspan
+                xml:space="preserve"
+                fill="#476a8c"
+            >=</tspan><tspan
+                xml:space="preserve"
+                fill="#56b6c2"
+            >/etc/prometheus/prometheus.yml</tspan><tspan
+                xml:space="preserve"
+                font-style="italic"
+                fill="#426d77"
+            > → main.go:1229</tspan><tspan xml:space="preserve" /></text><text
+            x="37.00px"
+            y="325.60px"
+            xml:space="preserve"
+        ><tspan
+                xml:space="preserve"
+                fill="#426d77"
+            >2023-12-07 20:07:05.953 </tspan><tspan
+                xml:space="preserve"
+                fill="#476a8c"
+            >│</tspan><tspan
+                xml:space="preserve"
+                fill="#56b6c2"
+            >INF</tspan><tspan
+                xml:space="preserve"
+                fill="#476a8c"
+            >│</tspan><tspan xml:space="preserve"> </tspan><tspan
+                xml:space="preserve"
+                fill="#abb2bf"
+            >Completed loading of configuration file </tspan><tspan
+                xml:space="preserve"
+                fill="#61afef"
+            >db-storage</tspan><tspan
+                xml:space="preserve"
+                fill="#476a8c"
+            >=</tspan><tspan
+                xml:space="preserve"
+                fill="#56b6c2"
+            >1.041µs </tspan><tspan
+                xml:space="preserve"
+                fill="#61afef"
+            >filename</tspan><tspan
+                xml:space="preserve"
+                fill="#476a8c"
+            >=</tspan><tspan
+                xml:space="preserve"
+                fill="#56b6c2"
+            >/etc/prometheus/prometheus.yml </tspan><tspan
+                xml:space="preserve"
+                fill="#61afef"
+            >notify</tspan><tspan
+                xml:space="preserve"
+                fill="#476a8c"
+            >=</tspan><tspan
+                xml:space="preserve"
+                fill="#56b6c2"
+            >11.5µs </tspan><tspan
+                xml:space="preserve"
+                fill="#61afef"
+            >notify-sd</tspan><tspan
+                xml:space="preserve"
+                fill="#476a8c"
+            >=</tspan><tspan
+                xml:space="preserve"
+                fill="#56b6c2"
+            >7.375µs </tspan><tspan
+                xml:space="preserve"
+                fill="#61afef"
+            >query-engine</tspan><tspan
+                xml:space="preserve"
+                fill="#476a8c"
+            >=</tspan><tspan
+                xml:space="preserve"
+                fill="#56b6c2"
+            >792ns </tspan><tspan
+                xml:space="preserve"
+                fill="#61afef"
+            >remote-storage</tspan><tspan
+                xml:space="preserve"
+                fill="#476a8c"
+            >=</tspan><tspan
+                xml:space="preserve"
+                fill="#56b6c2"
+            >1µs </tspan><tspan
+                xml:space="preserve"
+                fill="#61afef"
+            >rules</tspan><tspan
+                xml:space="preserve"
+                fill="#476a8c"
+            >=</tspan><tspan
+                xml:space="preserve"
+                fill="#56b6c2"
+            >1.375µs </tspan><tspan
+                xml:space="preserve"
+                fill="#61afef"
+            >scrape</tspan><tspan
+                xml:space="preserve"
+                fill="#476a8c"
+            >=</tspan><tspan
+                xml:space="preserve"
+                fill="#56b6c2"
+            >146.917µs </tspan><tspan
+                xml:space="preserve"
+                fill="#61afef"
+            >scrape-sd</tspan><tspan
+                xml:space="preserve"
+                fill="#476a8c"
+            >=</tspan><tspan
+                xml:space="preserve"
+                fill="#56b6c2"
+            >10.584µs </tspan><tspan
+                xml:space="preserve"
+                fill="#61afef"
+            >totalDuration</tspan><tspan
+                xml:space="preserve"
+                fill="#476a8c"
+            >=</tspan><tspan
+                xml:space="preserve"
+                fill="#56b6c2"
+            >660.75µs </tspan><tspan
+                xml:space="preserve"
+                fill="#61afef"
+            >tracing</tspan><tspan
+                xml:space="preserve"
+                fill="#476a8c"
+            >=</tspan><tspan
+                xml:space="preserve"
+                fill="#56b6c2"
+            >6.5µs </tspan><tspan
+                xml:space="preserve"
+                fill="#61afef"
+            >web-handler</tspan><tspan
+                xml:space="preserve"
+                fill="#476a8c"
+            >=</tspan><tspan
+                xml:space="preserve"
+                fill="#56b6c2"
+            >417ns</tspan><tspan
+                xml:space="preserve"
+                font-style="italic"
+                fill="#426d77"
+            > → main.go:1266</tspan><tspan xml:space="preserve" /></text><text
+            x="37.00px"
+            y="340.00px"
+            xml:space="preserve"
+        ><tspan
+                xml:space="preserve"
+                fill="#426d77"
+            >2023-12-07 20:07:05.953 </tspan><tspan
+                xml:space="preserve"
+                fill="#476a8c"
+            >│</tspan><tspan
+                xml:space="preserve"
+                fill="#56b6c2"
+            >INF</tspan><tspan
+                xml:space="preserve"
+                fill="#476a8c"
+            >│</tspan><tspan xml:space="preserve"> </tspan><tspan
+                xml:space="preserve"
+                fill="#abb2bf"
+            >Server is ready to receive web requests.</tspan><tspan
+                xml:space="preserve"
+                font-style="italic"
+                fill="#426d77"
+            > → main.go:1009</tspan><tspan xml:space="preserve" /></text><text
+            x="37.00px"
+            y="354.40px"
+            xml:space="preserve"
+        ><tspan
+                xml:space="preserve"
+                fill="#426d77"
+            >2023-12-07 20:07:05.953 </tspan><tspan
+                xml:space="preserve"
+                fill="#476a8c"
+            >│</tspan><tspan
+                xml:space="preserve"
+                fill="#56b6c2"
+            >INF</tspan><tspan
+                xml:space="preserve"
+                fill="#476a8c"
+            >│</tspan><tspan xml:space="preserve"> </tspan><tspan
+                xml:space="preserve"
+                fill="#abb2bf"
+            >Starting rule manager... </tspan><tspan
+                xml:space="preserve"
+                fill="#61afef"
+            >component</tspan><tspan
+                xml:space="preserve"
+                fill="#476a8c"
+            >=</tspan><tspan
+                xml:space="preserve"
+                fill="#56b6c2"
+            >&quot;rule manager&quot;</tspan><tspan
+                xml:space="preserve"
+                font-style="italic"
+                fill="#426d77"
+            > → manager.go:1012</tspan><tspan
+                xml:space="preserve"
+            /></text><text x="37.00px" y="368.80px" xml:space="preserve"><tspan
+                xml:space="preserve"
+                fill="#426d77"
+            >2023-12-07 20:11:30.732 </tspan><tspan
+                xml:space="preserve"
+                fill="#476a8c"
+            >│</tspan><tspan
+                xml:space="preserve"
+                fill="#e5c07b"
+            >WRN</tspan><tspan
+                xml:space="preserve"
+                fill="#476a8c"
+            >│</tspan><tspan xml:space="preserve"> </tspan><tspan
+                xml:space="preserve"
+                fill="#abb2bf"
+            >Received SIGTERM, exiting gracefully...</tspan><tspan
+                xml:space="preserve"
+                font-style="italic"
+                fill="#426d77"
+            > → main.go:859</tspan><tspan xml:space="preserve" /></text><text
+            x="37.00px"
+            y="383.20px"
+            xml:space="preserve"
+        ><tspan
+                xml:space="preserve"
+                fill="#426d77"
+            >2023-12-07 20:11:30.732 </tspan><tspan
+                xml:space="preserve"
+                fill="#476a8c"
+            >│</tspan><tspan
+                xml:space="preserve"
+                fill="#56b6c2"
+            >INF</tspan><tspan
+                xml:space="preserve"
+                fill="#476a8c"
+            >│</tspan><tspan xml:space="preserve"> </tspan><tspan
+                xml:space="preserve"
+                fill="#abb2bf"
+            >Stopping scrape discovery manager...</tspan><tspan
+                xml:space="preserve"
+                font-style="italic"
+                fill="#426d77"
+            > → main.go:883</tspan><tspan xml:space="preserve" /></text><text
+            x="37.00px"
+            y="397.60px"
+            xml:space="preserve"
+        ><tspan
+                xml:space="preserve"
+                fill="#426d77"
+            >2023-12-07 20:11:30.732 </tspan><tspan
+                xml:space="preserve"
+                fill="#476a8c"
+            >│</tspan><tspan
+                xml:space="preserve"
+                fill="#56b6c2"
+            >INF</tspan><tspan
+                xml:space="preserve"
+                fill="#476a8c"
+            >│</tspan><tspan xml:space="preserve"> </tspan><tspan
+                xml:space="preserve"
+                fill="#abb2bf"
+            >Stopping notify discovery manager...</tspan><tspan
+                xml:space="preserve"
+                font-style="italic"
+                fill="#426d77"
+            > → main.go:897</tspan><tspan xml:space="preserve" /></text><text
+            x="37.00px"
+            y="412.00px"
+            xml:space="preserve"
+        ><tspan
+                xml:space="preserve"
+                fill="#426d77"
+            >2023-12-07 20:11:30.732 </tspan><tspan
+                xml:space="preserve"
+                fill="#476a8c"
+            >│</tspan><tspan
+                xml:space="preserve"
+                fill="#56b6c2"
+            >INF</tspan><tspan
+                xml:space="preserve"
+                fill="#476a8c"
+            >│</tspan><tspan xml:space="preserve"> </tspan><tspan
+                xml:space="preserve"
+                fill="#abb2bf"
+            >Stopping rule manager... </tspan><tspan
+                xml:space="preserve"
+                fill="#61afef"
+            >component</tspan><tspan
+                xml:space="preserve"
+                fill="#476a8c"
+            >=</tspan><tspan
+                xml:space="preserve"
+                fill="#56b6c2"
+            >&quot;rule manager&quot;</tspan><tspan
+                xml:space="preserve"
+                font-style="italic"
+                fill="#426d77"
+            > → manager.go:1026</tspan><tspan
+                xml:space="preserve"
+            /></text><text x="37.00px" y="426.40px" xml:space="preserve"><tspan
+                xml:space="preserve"
+                fill="#426d77"
+            >2023-12-07 20:11:30.732 </tspan><tspan
+                xml:space="preserve"
+                fill="#476a8c"
+            >│</tspan><tspan
+                xml:space="preserve"
+                fill="#56b6c2"
+            >INF</tspan><tspan
+                xml:space="preserve"
+                fill="#476a8c"
+            >│</tspan><tspan xml:space="preserve"> </tspan><tspan
+                xml:space="preserve"
+                fill="#abb2bf"
+            >Rule manager stopped </tspan><tspan
+                xml:space="preserve"
+                fill="#61afef"
+            >component</tspan><tspan
+                xml:space="preserve"
+                fill="#476a8c"
+            >=</tspan><tspan
+                xml:space="preserve"
+                fill="#56b6c2"
+            >&quot;rule manager&quot;</tspan><tspan
+                xml:space="preserve"
+                font-style="italic"
+                fill="#426d77"
+            > → manager.go:1036</tspan><tspan
+                xml:space="preserve"
+            /></text><text x="37.00px" y="440.80px" xml:space="preserve"><tspan
+                xml:space="preserve"
+                fill="#426d77"
+            >2023-12-07 20:11:30.732 </tspan><tspan
+                xml:space="preserve"
+                fill="#476a8c"
+            >│</tspan><tspan
+                xml:space="preserve"
+                fill="#56b6c2"
+            >INF</tspan><tspan
+                xml:space="preserve"
+                fill="#476a8c"
+            >│</tspan><tspan xml:space="preserve"> </tspan><tspan
+                xml:space="preserve"
+                fill="#abb2bf"
+            >Stopping scrape manager...</tspan><tspan
+                xml:space="preserve"
+                font-style="italic"
+                fill="#426d77"
+            > → main.go:934</tspan><tspan xml:space="preserve" /></text><text
+            x="37.00px"
+            y="455.20px"
+            xml:space="preserve"
+        ><tspan
+                xml:space="preserve"
+                fill="#426d77"
+            >2023-12-07 20:11:30.732 </tspan><tspan
+                xml:space="preserve"
+                fill="#476a8c"
+            >│</tspan><tspan
+                xml:space="preserve"
+                fill="#56b6c2"
+            >INF</tspan><tspan
+                xml:space="preserve"
+                fill="#476a8c"
+            >│</tspan><tspan xml:space="preserve"> </tspan><tspan
+                xml:space="preserve"
+                fill="#abb2bf"
+            >Notify discovery manager stopped</tspan><tspan
+                xml:space="preserve"
+                font-style="italic"
+                fill="#426d77"
+            > → main.go:893</tspan><tspan xml:space="preserve" /></text><text
+            x="37.00px"
+            y="469.60px"
+            xml:space="preserve"
+        ><tspan
+                xml:space="preserve"
+                fill="#426d77"
+            >2023-12-07 20:11:30.732 </tspan><tspan
+                xml:space="preserve"
+                fill="#476a8c"
+            >│</tspan><tspan
+                xml:space="preserve"
+                fill="#56b6c2"
+            >INF</tspan><tspan
+                xml:space="preserve"
+                fill="#476a8c"
+            >│</tspan><tspan xml:space="preserve"> </tspan><tspan
+                xml:space="preserve"
+                fill="#abb2bf"
+            >Scrape discovery manager stopped</tspan><tspan
+                xml:space="preserve"
+                font-style="italic"
+                fill="#426d77"
+            > → main.go:879</tspan><tspan xml:space="preserve" /></text><text
+            x="37.00px"
+            y="484.00px"
+            xml:space="preserve"
+        ><tspan
+                xml:space="preserve"
+                fill="#426d77"
+            >2023-12-07 20:11:30.733 </tspan><tspan
+                xml:space="preserve"
+                fill="#476a8c"
+            >│</tspan><tspan
+                xml:space="preserve"
+                fill="#56b6c2"
+            >INF</tspan><tspan
+                xml:space="preserve"
+                fill="#476a8c"
+            >│</tspan><tspan xml:space="preserve"> </tspan><tspan
+                xml:space="preserve"
+                fill="#abb2bf"
+            >Scrape manager stopped</tspan><tspan
+                xml:space="preserve"
+                font-style="italic"
+                fill="#426d77"
+            > → main.go:926</tspan><tspan xml:space="preserve" /></text><text
+            x="37.00px"
+            y="498.40px"
+            xml:space="preserve"
+        ><tspan
+                xml:space="preserve"
+                fill="#426d77"
+            >2023-12-07 20:11:30.735 </tspan><tspan
+                xml:space="preserve"
+                fill="#476a8c"
+            >│</tspan><tspan
+                xml:space="preserve"
+                fill="#56b6c2"
+            >INF</tspan><tspan
+                xml:space="preserve"
+                fill="#476a8c"
+            >│</tspan><tspan xml:space="preserve"> </tspan><tspan
+                xml:space="preserve"
+                fill="#abb2bf"
+            >Stopping notification manager... </tspan><tspan
+                xml:space="preserve"
+                fill="#61afef"
+            >component</tspan><tspan
+                xml:space="preserve"
+                fill="#476a8c"
+            >=</tspan><tspan
+                xml:space="preserve"
+                fill="#56b6c2"
+            >notifier</tspan><tspan
+                xml:space="preserve"
+                font-style="italic"
+                fill="#426d77"
+            > → notifier.go:604</tspan><tspan
+                xml:space="preserve"
+            /></text><text x="37.00px" y="512.80px" xml:space="preserve"><tspan
+                xml:space="preserve"
+                fill="#426d77"
+            >2023-12-07 20:11:30.735 </tspan><tspan
+                xml:space="preserve"
+                fill="#476a8c"
+            >│</tspan><tspan
+                xml:space="preserve"
+                fill="#56b6c2"
+            >INF</tspan><tspan
+                xml:space="preserve"
+                fill="#476a8c"
+            >│</tspan><tspan xml:space="preserve"> </tspan><tspan
+                xml:space="preserve"
+                fill="#abb2bf"
+            >Notifier manager stopped</tspan><tspan
+                xml:space="preserve"
+                font-style="italic"
+                fill="#426d77"
+            > → main.go:1155</tspan><tspan xml:space="preserve" /></text><text
+            x="37.00px"
+            y="527.20px"
+            xml:space="preserve"
+        ><tspan
+                xml:space="preserve"
+                fill="#426d77"
+            >2023-12-07 20:11:30.735 </tspan><tspan
+                xml:space="preserve"
+                fill="#476a8c"
+            >│</tspan><tspan
+                xml:space="preserve"
+                fill="#56b6c2"
+            >INF</tspan><tspan
+                xml:space="preserve"
+                fill="#476a8c"
+            >│</tspan><tspan xml:space="preserve"> </tspan><tspan
+                xml:space="preserve"
+                fill="#abb2bf"
+            >See you next time!</tspan><tspan
+                xml:space="preserve"
+                font-style="italic"
+                fill="#426d77"
+            > → main.go:1167</tspan><tspan xml:space="preserve" /></text>
 </g>
-<svg x="25.00px" y="25.00px"><circle cx="13.50" cy="12.00" r="5.50" fill="#FF5A54"/><circle cx="32.50" cy="12.00" r="5.50" fill="#E6BF29"/><circle cx="51.50" cy="12.00" r="5.50" fill="#52C12B"/></svg><defs><filter id="shadow" filterUnits="userSpaceOnUse"><feGaussianBlur in="SourceAlpha" stdDeviation="5.00"/><feOffset result="offsetblur" dx="3.00" dy="3.00"/><feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs><defs><clipPath id="terminalMask"><rect x="25.00" y="25.00" width="1228.00" height="508.00"/></clipPath></defs></svg>
+<svg x="25.00px" y="25.00px"><circle
+            cx="13.50"
+            cy="12.00"
+            r="5.50"
+            fill="#FF5A54"
+        /><circle cx="32.50" cy="12.00" r="5.50" fill="#E6BF29" /><circle
+            cx="51.50"
+            cy="12.00"
+            r="5.50"
+            fill="#52C12B"
+        /></svg><defs><filter
+            id="shadow"
+            filterUnits="userSpaceOnUse"
+        ><feGaussianBlur in="SourceAlpha" stdDeviation="5.00" /><feOffset
+                result="offsetblur"
+                dx="3.00"
+                dy="3.00"
+            /><feMerge><feMergeNode /><feMergeNode
+                    in="SourceGraphic"
+                /></feMerge></filter></defs><defs><clipPath
+            id="terminalMask"
+        ><rect
+                x="25.00"
+                y="25.00"
+                width="1228.00"
+                height="508.00"
+            /></clipPath></defs></svg>
