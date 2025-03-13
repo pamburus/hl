@@ -1,6 +1,6 @@
 // std imports
 use std::process::exit;
-use std::thread::{spawn, JoinHandle};
+use std::thread::{JoinHandle, spawn};
 use std::time::{Duration, Instant};
 
 // third-party imports

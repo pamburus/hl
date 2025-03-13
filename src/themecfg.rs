@@ -13,8 +13,8 @@ use derive_more::Deref;
 use enum_map::Enum;
 use rust_embed::RustEmbed;
 use serde::{
-    de::{MapAccess, Visitor},
     Deserialize, Deserializer,
+    de::{MapAccess, Visitor},
 };
 use serde_json as json;
 use serde_yml as yaml;
@@ -616,9 +616,11 @@ mod tests {
         assert_eq!(pack.0[&Element::Message].background, None);
         assert_eq!(pack.0[&Element::Message].modes, vec![Mode::Italic, Mode::Underline]);
 
-        assert!(yaml::from_str::<StylePack>("invalid")
-            .unwrap_err()
-            .to_string()
-            .ends_with("expected style pack object"));
+        assert!(
+            yaml::from_str::<StylePack>("invalid")
+                .unwrap_err()
+                .to_string()
+                .ends_with("expected style pack object")
+        );
     }
 }

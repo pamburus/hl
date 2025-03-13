@@ -6,13 +6,13 @@ use encstr::EncodedString;
 
 // local imports
 use crate::{
+    IncludeExcludeKeyFilter,
     datefmt::DateTimeFormatter,
     filtering::IncludeExcludeSetting,
-    fmtx::{aligned_left, centered, OptimizedBuf, Push},
+    fmtx::{OptimizedBuf, Push, aligned_left, centered},
     model::{self, Caller, Level, RawValue},
     settings::Formatting,
     theme::{Element, StylingPush, Theme},
-    IncludeExcludeKeyFilter,
 };
 
 // relative imports
@@ -579,7 +579,7 @@ enum FormattedFieldVariant {
 
 pub mod string {
     // third-party imports
-    use enumset::{enum_set as mask, EnumSet, EnumSetType};
+    use enumset::{EnumSet, EnumSetType, enum_set as mask};
 
     // workspace imports
     use encstr::{AnyEncodedString, JsonAppender, Result};
@@ -588,7 +588,7 @@ pub mod string {
     // local imports
     use crate::{
         formatting::WithAutoTrim,
-        model::{looks_like_number, MAX_NUMBER_LEN},
+        model::{MAX_NUMBER_LEN, looks_like_number},
     };
 
     // ---

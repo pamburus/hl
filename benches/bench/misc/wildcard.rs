@@ -3,10 +3,10 @@ use std::{hint::black_box, time::Duration};
 
 // third-party imports
 use const_str::concat as strcat;
-use criterion::{criterion_group, BatchSize, BenchmarkId, Criterion, Throughput};
+use criterion::{BatchSize, BenchmarkId, Criterion, Throughput, criterion_group};
 
 // local imports
-use super::{hash, BencherExt, ND};
+use super::{BencherExt, ND, hash};
 
 criterion_group!(benches, bench);
 

@@ -333,11 +333,7 @@ pub mod rfc3339 {
 
         #[inline]
         pub fn sign(&self) -> Option<u8> {
-            if self.v.len() > 1 {
-                Some(self.v[0])
-            } else {
-                None
-            }
+            if self.v.len() > 1 { Some(self.v[0]) } else { None }
         }
 
         #[inline]

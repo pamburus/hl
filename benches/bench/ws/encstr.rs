@@ -3,12 +3,12 @@ use std::{hint::black_box, time::Duration};
 
 // third-party imports
 use const_str::concat as strcat;
-use criterion::{criterion_group, BatchSize, BenchmarkId, Criterion, Throughput};
+use criterion::{BatchSize, BenchmarkId, Criterion, Throughput, criterion_group};
 use serde_json::de::{Read, StrRead};
 
 // local imports
-use super::{hash, samples, BencherExt, ND};
-use encstr::{json::JsonEncodedString, raw::RawString, AnyEncodedString, Builder, Handler, Ignorer};
+use super::{BencherExt, ND, hash, samples};
+use encstr::{AnyEncodedString, Builder, Handler, Ignorer, json::JsonEncodedString, raw::RawString};
 
 criterion_group!(benches, bench);
 

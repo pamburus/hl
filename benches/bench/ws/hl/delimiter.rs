@@ -6,7 +6,7 @@ use const_str::concat as strcat;
 use criterion::{BatchSize, BenchmarkId, Criterion, Throughput};
 
 // local imports
-use super::{hash, samples, BencherExt, ND};
+use super::{BencherExt, ND, hash, samples};
 use hl::{Delimit, Delimiter, SearchExt};
 
 const GROUP: &str = strcat!(super::GROUP, ND, "delimiter");
