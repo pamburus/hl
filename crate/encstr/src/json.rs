@@ -349,11 +349,7 @@ impl<'a> Iterator for Tokens<'a> {
 #[inline]
 fn decode_hex_val(val: u8) -> Option<u16> {
     let n = UNHEX[val as usize] as u16;
-    if n == 255 {
-        None
-    } else {
-        Some(n)
-    }
+    if n == 255 { None } else { Some(n) }
 }
 
 // ---

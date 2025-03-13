@@ -1,7 +1,7 @@
 // std imports
 use std::{
     default::Default,
-    io::{stdin, stdout, IsTerminal},
+    io::{IsTerminal, stdin, stdout},
     path::PathBuf,
     process,
     sync::Arc,
@@ -16,7 +16,7 @@ use itertools::Itertools;
 
 // local imports
 use hl::{
-    app, cli, config,
+    Delimiter, app, cli, config,
     datefmt::LinuxDateFormat,
     error::*,
     input::InputReference,
@@ -27,7 +27,7 @@ use hl::{
     theme::{Theme, ThemeOrigin},
     timeparse::parse_time,
     timezone::Tz,
-    Delimiter, {IncludeExcludeKeyFilter, KeyMatchOptions},
+    {IncludeExcludeKeyFilter, KeyMatchOptions},
 };
 
 const HL_DEBUG_LOG: &str = "HL_DEBUG_LOG";

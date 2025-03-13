@@ -1,6 +1,6 @@
 // std imports
 use std::{
-    cmp::{max, Reverse},
+    cmp::{Reverse, max},
     collections::BTreeMap,
     convert::{TryFrom, TryInto},
     fs,
@@ -22,11 +22,12 @@ use std::os::unix::fs::MetadataExt;
 use closure::closure;
 use crossbeam_channel::{self as channel, Receiver, RecvError, RecvTimeoutError, Sender};
 use crossbeam_utils::thread;
-use itertools::{izip, Itertools};
+use itertools::{Itertools, izip};
 use serde::{Deserialize, Serialize};
 
 // local imports
 use crate::{
+    IncludeExcludeKeyFilter,
     appdirs::AppDirs,
     datefmt::{DateTimeFormat, DateTimeFormatter},
     error::*,
@@ -42,7 +43,6 @@ use crate::{
     theme::{Element, StylingPush, Theme},
     timezone::Tz,
     vfs::LocalFileSystem,
-    IncludeExcludeKeyFilter,
 };
 
 // TODO: merge Options to Settings and replace Options with Settings.
@@ -1117,12 +1117,12 @@ mod tests {
 
     // local imports
     use crate::{
+        LinuxDateFormat,
         filtering::MatchOptions,
         level::{InfallibleLevel, Level},
         model::FieldFilterSet,
         settings,
         themecfg::testing,
-        LinuxDateFormat,
     };
 
     #[test]
