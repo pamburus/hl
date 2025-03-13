@@ -3,7 +3,7 @@ use std::{
     cmp::min,
     convert::TryInto,
     fs::{self, File, Metadata},
-    io::{self, stdin, BufRead, BufReader, Cursor, Read, Seek, SeekFrom, Write},
+    io::{self, BufRead, BufReader, Cursor, Read, Seek, SeekFrom, Write, stdin},
     mem::size_of_val,
     ops::{Deref, Range},
     path::{Path, PathBuf},
@@ -11,12 +11,12 @@ use std::{
 };
 
 // third-party imports
-use deko::{bufread::AnyDecoder, Format};
+use deko::{Format, bufread::AnyDecoder};
 use nu_ansi_term::Color;
 
 // local imports
 use crate::{
-    error::{Result, HILITE},
+    error::{HILITE, Result},
     index::{Index, Indexer, SourceBlock, SourceMetadata},
     iox::ReadFill,
     replay::{ReplayBufCreator, ReplayBufReader, ReplaySeekReader},

@@ -1,7 +1,7 @@
 // std imports
 use std::{
     cmp::min,
-    collections::{btree_map::Entry as BTreeEntry, hash_map::Entry, BTreeMap, HashMap},
+    collections::{BTreeMap, HashMap, btree_map::Entry as BTreeEntry, hash_map::Entry},
     convert::{TryFrom, TryInto},
     hash::Hash,
     io::{Error, ErrorKind, Read, Result, Seek, SeekFrom, Write},

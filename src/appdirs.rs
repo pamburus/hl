@@ -61,7 +61,7 @@ mod sys {
 
     #[cfg(target_os = "windows")]
     pub(crate) fn system_config_dirs() -> Vec<PathBuf> {
-        use known_folders::{get_known_folder_path, KnownFolder};
+        use known_folders::{KnownFolder, get_known_folder_path};
 
         get_known_folder_path(KnownFolder::ProgramData).into_iter().collect()
     }
