@@ -19,7 +19,7 @@ elements:
   field:
     modes: [faint]
   key:
-    modes: [faint]
+    foreground: bright-blue
   ellipsis:
     modes: [faint]
   object:
@@ -29,9 +29,9 @@ elements:
   string:
     foreground: default
   number:
-    foreground: default
+    foreground: green
   boolean:
-    foreground: default
+    foreground: yellow
   "null":
     foreground: bright-red
 levels:
@@ -41,14 +41,15 @@ levels:
       modes: [faint]
   debug:
     level-inner:
-      foreground: default
+      foreground: bright-magenta
   info:
     level-inner:
-      foreground: green
+      foreground: cyan
   warning:
-    level-inner:
-      foreground: bright-yellow
     message:
+      foreground: yellow
+      modes: [bold]
+    level-inner:
       foreground: yellow
       modes: [bold]
   error:
@@ -57,6 +58,7 @@ levels:
       modes: [bold]
     level-inner:
       foreground: bright-red
+      modes: [bold]
 indicators:
   sync:
     synced:

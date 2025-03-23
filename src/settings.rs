@@ -438,7 +438,7 @@ mod tests {
             assert_eq!(settings.concurrency, None);
             assert_eq!(settings.time_format, "%b %d %T.%3N");
             assert_eq!(settings.time_zone, chrono_tz::UTC);
-            assert_eq!(settings.theme, "universal");
+            assert_eq!(settings.theme, "uni");
         };
 
         let settings: &'static Settings = Default::default();
@@ -458,7 +458,7 @@ mod tests {
         );
         assert_eq!(settings.time_format, "%b %d %T.%3N");
         assert_eq!(settings.time_zone, chrono_tz::UTC);
-        assert_eq!(settings.theme, "universal");
+        assert_eq!(settings.theme, "uni");
     }
 
     #[test]

@@ -132,7 +132,7 @@ mod tests {
 
     #[test]
     fn test_default() {
-        assert_eq!(default().theme, "universal");
+        assert_eq!(default().theme, "uni");
     }
 
     #[test]

@@ -1,0 +1,22 @@
+{"ts": "2025-03-22T08:00:00Z", "level": "info", "msg": "café opens for the day", "caller": "cafe/main.go:15", "logger": "cafe", "weather": "sunny", "temperature": 21}
+{"ts": "2025-03-22T08:05:12Z", "level": "info", "msg": "order received", "caller": "order/order.go:42", "logger": "order", "order": "345", "customer": "Alice", "dish": "Blueberry Pancakes", "table": 5}
+{"ts": "2025-03-22T08:06:30Z", "level": "debug", "msg": "chef starts preparing order", "caller": "kitchen/chef.go:87", "logger": "kitchen", "order": "345", "chef": "Gordon", "eta": "10m"}
+{"ts": "2025-03-22T08:16:45Z", "level": "info", "msg": "order completed", "caller": "kitchen/chef.go:95", "logger": "kitchen", "order": "345", "status": "ready", "presentation": "artful"}
+{"ts": "2025-03-22T08:17:10Z", "level": "info", "msg": "delivery dispatched", "caller": "delivery/dispatch.go:33", "logger": "delivery", "order": "345", "rider": "Marco", "eta": "5m"}
+{"ts": "2025-03-22T08:20:43Z", "level": "info", "msg": "customer feedback", "logger": "feedback", "order": "345", "customer": "Alice", "rating": 5, "feedback": "Exquisite taste!"}
+{"ts": "2025-03-22T08:29:23Z", "level": "info", "msg": "ingredient delivery received", "caller": "supply.go:50", "logger": "supply", "supplier": "Green Farms", "items": ["Eggs", "Flour", "Blueberries"]}
+{"ts": "2025-03-22T09:15:22Z", "level": "info", "msg": "new special launched", "caller": "menu/specials.go:75", "logger": "menu", "dish": "Lemon Tart", "chef": "Isabella", "critic-reviews": "positive"}
+{"ts": "2025-03-22T10:02:54Z", "level": "warning", "msg": "weather update", "caller": "weather/monitor.go:60", "logger": "weather", "weather": "drizzle", "customer-flow": "moderate", "location": "downtown"}
+{"ts": "2025-03-22T11:03:23Z", "level": "info", "msg": "café closing for break", "caller": "cafe/shutdown.go:20", "logger": "cafe", "reason": "staff-lunch", "duration": "30m"}
+{"ts": "2025-03-22T11:35:30Z", "level": "info", "msg": "café resumes service", "caller": "cafe/main.go:28", "logger": "cafe", "status": "open"}
+{"ts": "2025-03-22T11:41:32Z", "level": "debug", "msg": "system health check completed", "caller": "system/health.go:105", "logger": "system", "response-time": "200ms", "status": "ok"}
+{"ts": "2025-03-22T11:45:44Z", "level": "info", "msg": "order received", "caller": "order/order.go:48", "logger": "order", "order": "346", "customer": "Bob", "beverage": "Espresso", "size": "small", "table": 2}
+{"ts": "2025-03-22T11:47:20Z", "level": "info", "msg": "order received", "caller": "order/order.go:57", "logger": "order", "order": "347", "customer": "Lisa", "pastry": "Chocolate Croissant", "table": 3}
+{"ts": "2025-03-22T11:50:34Z", "level": "error", "msg": "kitchen error encountered", "caller": "kitchen/chef.go:110", "logger": "kitchen", "order": "347", "chef": "Marco", "error": "OvenMalfunction"}
+{"ts": "2025-03-22T11:52:53Z", "level": "warning", "msg": "order reassigned", "caller": "kitchen/assign.go:33", "logger": "kitchen", "order": "347", "chef": "Isabella", "previous-chef": "Marco"}
+{"ts": "2025-03-22T11:58:11Z", "level": "info", "msg": "order completed", "caller": "kitchen/chef.go:120", "logger": "kitchen", "order": "347", "status": "ready", "presentation": "delicate"}
+{"ts": "2025-03-22T12:01:26Z", "level": "info", "msg": "delivery dispatched", "caller": "delivery/dispatch.go:40", "logger": "delivery", "order": "346", "rider": "Liam", "eta": "3m"}
+{"ts": "2025-03-22T12:07:12Z", "level": "info", "msg": "maintenance initiated", "caller": "system/maintenance.go:75", "logger": "system", "type": "db-update", "expected-duration": "15m"}
+{"ts": "2025-03-22T12:19:23Z", "level": "info", "msg": "maintenance completed", "caller": "system/maintenance.go:90", "logger": "system", "type": "db-update", "duration": "12m", "status": "success"}
+{"ts": "2025-03-22T12:32:44Z", "level": "info", "msg": "order received", "caller": "order/order.go:95", "logger": "order", "order": "348", "customer": "Diana", "dish": "Vegan Salad", "table": 8}
+{"ts": "2025-03-22T13:11:33Z", "level": "info", "msg": "café closed", "caller": "cafe/shutdown.go:40", "logger": "cafe", "reason": "end-of-day", "duration": "overnight"}
