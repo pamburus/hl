@@ -25,3 +25,4 @@ jobs:
           branch: update-flake-lock
           title: "build(nix): update flake.lock"
           body: "This pull request updates the flake.lock file with the latest flake inputs."
+          sign-commits: true
