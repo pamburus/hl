@@ -5,13 +5,22 @@
 
 version: 2
 updates:
-  - package-ecosystem: "cargo" # See documentation for possible values
-    directory: "/" # Location of package manifests
+  - package-ecosystem: "cargo"
+    directory: "/"
     schedule:
-      interval: "daily"
+      interval: weekly
+      day: saturday
+      time: "06:00"
+      timezone: "Europe/Belgrade"
     allow:
-      - dependency-type: all # Which dependencies to update: all, direct, or indirect
+      - dependency-type: all
     groups:
+      patch-updates:
+        applies-to: version-updates
+        patterns:
+          - "*"
+        update-types:
+          - "patch"
       anstyle-sec:
         applies-to: security-updates
         patterns:
@@ -22,6 +31,9 @@ updates:
         patterns:
           - "anstyle"
           - "anstyle-*"
+        update-types:
+          - "major"
+          - "minor"
       byte-strings-sec:
         applies-to: security-updates
         patterns:
@@ -32,6 +44,9 @@ updates:
         patterns:
           - "byte-strings"
           - "byte-strings-*"
+        update-types:
+          - "major"
+          - "minor"
       bzip2-sec:
         applies-to: security-updates
         patterns:
@@ -42,6 +57,9 @@ updates:
         patterns:
           - "bzip2"
           - "bzip2-*"
+        update-types:
+          - "major"
+          - "minor"
       capnp-sec:
         applies-to: security-updates
         patterns:
@@ -52,6 +70,9 @@ updates:
         patterns:
           - "capnp"
           - "capnpc"
+        update-types:
+          - "major"
+          - "minor"
       chrono-sec:
         applies-to: security-updates
         patterns:
@@ -62,6 +83,9 @@ updates:
         patterns:
           - "chrono"
           - "chrono-*"
+        update-types:
+          - "major"
+          - "minor"
       ciborium-sec:
         applies-to: security-updates
         patterns:
@@ -72,6 +96,9 @@ updates:
         patterns:
           - "ciborium"
           - "ciborium-*"
+        update-types:
+          - "major"
+          - "minor"
       clap-sec:
         applies-to: security-updates
         patterns:
@@ -82,6 +109,9 @@ updates:
         patterns:
           - "clap"
           - "clap_*"
+        update-types:
+          - "major"
+          - "minor"
       const-random-sec:
         applies-to: security-updates
         patterns:
@@ -92,6 +122,9 @@ updates:
         patterns:
           - "const-random"
           - "const-random-*"
+        update-types:
+          - "major"
+          - "minor"
       criterion-sec:
         applies-to: security-updates
         patterns:
@@ -102,6 +135,9 @@ updates:
         patterns:
           - "criterion"
           - "criterion-*"
+        update-types:
+          - "major"
+          - "minor"
       crossbeam-sec:
         applies-to: security-updates
         patterns:
@@ -112,6 +148,9 @@ updates:
         patterns:
           - "crossbeam"
           - "crossbeam-*"
+        update-types:
+          - "major"
+          - "minor"
       darling-sec:
         applies-to: security-updates
         patterns:
@@ -122,6 +161,9 @@ updates:
         patterns:
           - "darling"
           - "darling_*"
+        update-types:
+          - "major"
+          - "minor"
       enum-map-sec:
         applies-to: security-updates
         patterns:
@@ -132,6 +174,9 @@ updates:
         patterns:
           - "enum-map"
           - "enum-map-*"
+        update-types:
+          - "major"
+          - "minor"
       enumset-sec:
         applies-to: security-updates
         patterns:
@@ -144,6 +189,9 @@ updates:
           - "enumset"
           - "enumset-*"
           - "enumset_*"
+        update-types:
+          - "major"
+          - "minor"
       iana-time-zone-sec:
         applies-to: security-updates
         patterns:
@@ -154,6 +202,9 @@ updates:
         patterns:
           - "iana-time-zone"
           - "iana-time-zone-*"
+        update-types:
+          - "major"
+          - "minor"
       inotify-sec:
         applies-to: security-updates
         patterns:
@@ -164,6 +215,9 @@ updates:
         patterns:
           - "inotify"
           - "inotify-*"
+        update-types:
+          - "major"
+          - "minor"
       is-terminal-sec:
         applies-to: security-updates
         patterns:
@@ -176,6 +230,9 @@ updates:
           - "is-terminal"
           - "is-terminal-*"
           - "is_terminal_*"
+        update-types:
+          - "major"
+          - "minor"
       kqueue-sec:
         applies-to: security-updates
         patterns:
@@ -186,6 +243,9 @@ updates:
         patterns:
           - "kqueue"
           - "kqueue-*"
+        update-types:
+          - "major"
+          - "minor"
       pest-sec:
         applies-to: security-updates
         patterns:
@@ -196,6 +256,9 @@ updates:
         patterns:
           - "pest"
           - "pest_*"
+        update-types:
+          - "major"
+          - "minor"
       phf-sec:
         applies-to: security-updates
         patterns:
@@ -206,6 +269,9 @@ updates:
         patterns:
           - "phf"
           - "phf_*"
+        update-types:
+          - "major"
+          - "minor"
       plotters-sec:
         applies-to: security-updates
         patterns:
@@ -216,6 +282,9 @@ updates:
         patterns:
           - "plotters"
           - "plotters-*"
+        update-types:
+          - "major"
+          - "minor"
       predicates-sec:
         applies-to: security-updates
         patterns:
@@ -226,6 +295,9 @@ updates:
         patterns:
           - "predicates"
           - "predicates-*"
+        update-types:
+          - "major"
+          - "minor"
       rand-sec:
         applies-to: security-updates
         patterns:
@@ -236,6 +308,9 @@ updates:
         patterns:
           - "rand"
           - "rand_*"
+        update-types:
+          - "major"
+          - "minor"
       rayon-sec:
         applies-to: security-updates
         patterns:
@@ -246,6 +321,9 @@ updates:
         patterns:
           - "rayon"
           - "rayon-*"
+        update-types:
+          - "major"
+          - "minor"
       redox-sec:
         applies-to: security-updates
         patterns:
@@ -254,6 +332,9 @@ updates:
         applies-to: version-updates
         patterns:
           - "redox_*"
+        update-types:
+          - "major"
+          - "minor"
       regex-sec:
         applies-to: security-updates
         patterns:
@@ -264,6 +345,9 @@ updates:
         patterns:
           - "regex"
           - "regex-*"
+        update-types:
+          - "major"
+          - "minor"
       rust-embed-sec:
         applies-to: security-updates
         patterns:
@@ -274,6 +358,9 @@ updates:
         patterns:
           - "rust-embed"
           - "rust-embed-*"
+        update-types:
+          - "major"
+          - "minor"
       strum-sec:
         applies-to: security-updates
         patterns:
@@ -284,6 +371,9 @@ updates:
         patterns:
           - "strum"
           - "strum_*"
+        update-types:
+          - "major"
+          - "minor"
       thiserror-sec:
         applies-to: security-updates
         patterns:
@@ -294,6 +384,9 @@ updates:
         patterns:
           - "thiserror"
           - "thiserror-*"
+        update-types:
+          - "major"
+          - "minor"
       toml-sec:
         applies-to: security-updates
         patterns:
@@ -308,6 +401,9 @@ updates:
           - "serde_toml"
           - "toml"
           - "toml_*"
+        update-types:
+          - "major"
+          - "minor"
       unicode-sec:
         applies-to: security-updates
         patterns:
@@ -316,6 +412,9 @@ updates:
         applies-to: version-updates
         patterns:
           - "unicode-*"
+        update-types:
+          - "major"
+          - "minor"
       wasm-sec:
         applies-to: security-updates
         patterns:
@@ -330,6 +429,9 @@ updates:
           - "wasi"
           - "wasm-*"
           - "web-sys"
+        update-types:
+          - "major"
+          - "minor"
       winapi-sec:
         applies-to: security-updates
         patterns:
@@ -340,6 +442,9 @@ updates:
         patterns:
           - "winapi"
           - "winapi-*"
+        update-types:
+          - "major"
+          - "minor"
       windows-sec:
         applies-to: security-updates
         patterns:
@@ -350,6 +455,9 @@ updates:
         patterns:
           - "windows-*"
           - "windows_*"
+        update-types:
+          - "major"
+          - "minor"
       zerofrom-sec:
         applies-to: security-updates
         patterns:
@@ -360,6 +468,9 @@ updates:
         patterns:
           - "zerofrom"
           - "zerofrom-*"
+        update-types:
+          - "major"
+          - "minor"
       zstd-sec:
         applies-to: security-updates
         patterns:
@@ -370,3 +481,6 @@ updates:
         patterns:
           - "zstd"
           - "zstd-*"
+        update-types:
+          - "major"
+          - "minor"
