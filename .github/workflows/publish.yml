@@ -6,8 +6,7 @@ on:
       - "v*.*.*"
 
 permissions:
-  contents: read
-  packages: write
+  contents: write
   issues: read
   actions: read
 
