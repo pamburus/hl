@@ -4,8 +4,8 @@ use core::{
 };
 use serde::{
     de::{
-        self, value::BorrowedStrDeserializer, Deserialize, DeserializeSeed, Deserializer, IntoDeserializer, MapAccess,
-        Unexpected, Visitor,
+        self, Deserialize, DeserializeSeed, Deserializer, IntoDeserializer, MapAccess, Unexpected, Visitor,
+        value::BorrowedStrDeserializer,
     },
     forward_to_deserialize_any,
     ser::{Serialize, SerializeStruct, Serializer},

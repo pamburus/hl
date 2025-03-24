@@ -6,7 +6,7 @@ use std::process::{Child, Command, ExitStatus, Stdio};
 
 #[cfg(unix)]
 use std::{
-    io::{stdin, IsTerminal},
+    io::{IsTerminal, stdin},
     os::unix::process::ExitStatusExt,
 };
 

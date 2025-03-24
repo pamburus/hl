@@ -3,7 +3,7 @@ use std::time::Duration;
 
 // third-party imports
 use const_str::concat as strcat;
-use criterion::{criterion_group, BatchSize, BenchmarkId, Criterion, Throughput};
+use criterion::{BatchSize, BenchmarkId, Criterion, Throughput, criterion_group};
 use memchr::{memchr, memchr2, memchr3};
 use rand::random;
 

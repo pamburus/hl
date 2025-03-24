@@ -145,18 +145,18 @@ where
     #[inline]
     fn push(&mut self, value: T) {
         match self {
-            Self::Disabled(ref mut aligner) => aligner.push(value),
-            Self::Unbuffered(ref mut aligner) => aligner.push(value),
-            Self::Buffered(ref mut aligner) => aligner.push(value),
+            Self::Disabled(aligner) => aligner.push(value),
+            Self::Unbuffered(aligner) => aligner.push(value),
+            Self::Buffered(aligner) => aligner.push(value),
         }
     }
 
     #[inline]
     fn extend_from_slice(&mut self, values: &[T]) {
         match self {
-            Self::Disabled(ref mut aligner) => aligner.extend_from_slice(values),
-            Self::Unbuffered(ref mut aligner) => aligner.extend_from_slice(values),
-            Self::Buffered(ref mut aligner) => aligner.extend_from_slice(values),
+            Self::Disabled(aligner) => aligner.extend_from_slice(values),
+            Self::Unbuffered(aligner) => aligner.extend_from_slice(values),
+            Self::Buffered(aligner) => aligner.extend_from_slice(values),
         }
     }
 }
@@ -492,5 +492,97 @@ mod tests {
         assert_eq!(buf.len(), 0);
         assert_eq!(buf.as_slices().0.len(), 0);
         assert_eq!(buf.as_slices().1.len(), 0);
+    }
+
+    #[test]
+    fn test_aligner_disabled() {
+        let mut buf = Vec::new();
+        aligned(&mut buf, None, |mut aligner| {
+            aligner.push(1);
+            aligner.push(2);
+            aligner.push(3);
+        });
+        assert_eq!(buf, vec![1, 2, 3]);
+
+        let mut buf = Vec::new();
+        aligned(&mut buf, None, |mut aligner| {
+            aligner.extend_from_slice(&[1, 2, 3]);
+        });
+        assert_eq!(buf, vec![1, 2, 3]);
+    }
+
+    #[test]
+    fn test_aligner_left() {
+        let mut buf = Vec::new();
+        aligned(
+            &mut buf,
+            Some(Adjustment::new(Alignment::Left, Padding::new(0, 5))),
+            |mut aligner| {
+                aligner.push(1);
+                aligner.push(2);
+                aligner.push(3);
+            },
+        );
+        assert_eq!(buf, vec![1, 2, 3, 0, 0]);
+
+        let mut buf = Vec::new();
+        aligned(
+            &mut buf,
+            Some(Adjustment::new(Alignment::Left, Padding::new(0, 5))),
+            |mut aligner| {
+                aligner.extend_from_slice(&[1, 2, 3]);
+            },
+        );
+        assert_eq!(buf, vec![1, 2, 3, 0, 0]);
+    }
+
+    #[test]
+    fn test_aligner_center() {
+        let mut buf = Vec::new();
+        aligned(
+            &mut buf,
+            Some(Adjustment::new(Alignment::Center, Padding::new(0, 5))),
+            |mut aligner| {
+                aligner.push(1);
+                aligner.push(2);
+                aligner.push(3);
+            },
+        );
+        assert_eq!(buf, vec![0, 1, 2, 3, 0]);
+
+        let mut buf = Vec::new();
+        aligned(
+            &mut buf,
+            Some(Adjustment::new(Alignment::Center, Padding::new(0, 5))),
+            |mut aligner| {
+                aligner.extend_from_slice(&[1, 2, 3]);
+            },
+        );
+        assert_eq!(buf, vec![0, 1, 2, 3, 0]);
+    }
+
+    #[test]
+    fn test_aligner_right() {
+        let mut buf = Vec::new();
+        aligned(
+            &mut buf,
+            Some(Adjustment::new(Alignment::Right, Padding::new(0, 5))),
+            |mut aligner| {
+                aligner.push(1);
+                aligner.push(2);
+                aligner.push(3);
+            },
+        );
+        assert_eq!(buf, vec![0, 0, 1, 2, 3]);
+
+        let mut buf = Vec::new();
+        aligned(
+            &mut buf,
+            Some(Adjustment::new(Alignment::Right, Padding::new(0, 5))),
+            |mut aligner| {
+                aligner.extend_from_slice(&[1, 2, 3]);
+            },
+        );
+        assert_eq!(buf, vec![0, 0, 1, 2, 3]);
     }
 }

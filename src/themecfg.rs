@@ -13,8 +13,8 @@ use derive_more::Deref;
 use enum_map::Enum;
 use rust_embed::RustEmbed;
 use serde::{
-    de::{MapAccess, Visitor},
     Deserialize, Deserializer,
+    de::{MapAccess, Visitor},
 };
 use serde_json as json;
 use serde_yml as yaml;
@@ -149,7 +149,7 @@ impl Theme {
         Assets::iter().filter_map(|a| Self::strip_known_extension(&a).map(|n| n.to_string()))
     }
 
-    fn custom_names(app_dirs: &AppDirs) -> Result<impl IntoIterator<Item = Result<String>>> {
+    fn custom_names(app_dirs: &AppDirs) -> Result<impl IntoIterator<Item = Result<String>> + use<>> {
         let path = Self::themes_dir(app_dirs);
         let dir = Path::new(&path);
         Ok(dir
@@ -616,9 +616,11 @@ mod tests {
         assert_eq!(pack.0[&Element::Message].background, None);
         assert_eq!(pack.0[&Element::Message].modes, vec![Mode::Italic, Mode::Underline]);
 
-        assert!(yaml::from_str::<StylePack>("invalid")
-            .unwrap_err()
-            .to_string()
-            .ends_with("expected style pack object"));
+        assert!(
+            yaml::from_str::<StylePack>("invalid")
+                .unwrap_err()
+                .to_string()
+                .ends_with("expected style pack object")
+        );
     }
 }

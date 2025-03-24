@@ -972,7 +972,10 @@ impl RawRecordParser {
     }
 
     #[inline]
-    pub fn parse<'a>(&self, line: &'a [u8]) -> RawRecordStream<impl RawRecordIterator<'a>, impl RawRecordIterator<'a>> {
+    pub fn parse<'a>(
+        &self,
+        line: &'a [u8],
+    ) -> RawRecordStream<impl RawRecordIterator<'a> + use<'a>, impl RawRecordIterator<'a> + use<'a>> {
         let prefix = if self.allow_prefix && line.last() == Some(&b'}') {
             line.split(|c| *c == b'{').next().unwrap()
         } else {
@@ -1229,11 +1232,7 @@ impl<'a> KeyMatcher<'a> {
 
     #[inline]
     fn norm(c: char) -> char {
-        if c == '_' {
-            '-'
-        } else {
-            c.to_ascii_lowercase()
-        }
+        if c == '_' { '-' } else { c.to_ascii_lowercase() }
     }
 }
 

@@ -333,11 +333,7 @@ pub mod rfc3339 {
 
         #[inline]
         pub fn sign(&self) -> Option<u8> {
-            if self.v.len() > 1 {
-                Some(self.v[0])
-            } else {
-                None
-            }
+            if self.v.len() > 1 { Some(self.v[0]) } else { None }
         }
 
         #[inline]
@@ -582,5 +578,28 @@ mod tests {
             "",
             "+03:00",
         );
+    }
+
+    #[test]
+    fn time_zone() {
+        let test = |s, tz| {
+            let ts = Timestamp::new(s).parse().unwrap();
+            assert_eq!(ts.timezone().local_minus_utc(), tz);
+        };
+        let test_rfc3339 = |s, sign, hour, minute| {
+            let ts = Timestamp::new(s);
+            let ts = ts.as_rfc3339().unwrap();
+            assert_eq!(ts.timezone().sign(), sign);
+            assert_eq!(ts.timezone().hour().map(|x| x.value()), hour);
+            assert_eq!(ts.timezone().minute().map(|x| x.value()), minute);
+        };
+
+        test("2020-08-21T07:20:48Z", 0);
+        test("2020-08-21T07:20:48+03:00", 3 * 3600);
+        test("2020-08-21T07:20:48-03:00", -3 * 3600);
+        test("2020-08-21T07:20:48+00:00", 0);
+        test_rfc3339("2020-08-21T07:20:48Z", None, None, None);
+        test_rfc3339("2020-08-21T07:20:48+03:00", Some(b'+'), Some(3), Some(0));
+        test_rfc3339("2020-08-21T07:20:48-03:00", Some(b'-'), Some(3), Some(0));
     }
 }

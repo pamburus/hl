@@ -9,9 +9,9 @@ use criterion::{BatchSize, Criterion};
 // local imports
 use super::{BencherExt, ND};
 use hl::{
+    Level,
     theme::{Element, StylingPush, Theme},
     themecfg::{self, Color, Mode, Style},
-    Level,
 };
 
 const GROUP: &str = strcat!(super::GROUP, ND, "theme");

@@ -73,12 +73,12 @@ pub mod formatting {
     use std::io::Write;
 
     // third-party imports
-    use chrono::{format::strftime::StrftimeItems, DateTime, Datelike, FixedOffset, NaiveDateTime, Timelike};
+    use chrono::{DateTime, Datelike, FixedOffset, NaiveDateTime, Timelike, format::strftime::StrftimeItems};
 
     // local imports
     use hl::datefmt::{DateTimeFormatter, LinuxDateFormat};
     use hl::{
-        timestamp::{rfc3339, Timestamp},
+        timestamp::{Timestamp, rfc3339},
         timezone::Tz,
     };
 

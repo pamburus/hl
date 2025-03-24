@@ -7,13 +7,13 @@ use const_str::concat as strcat;
 use criterion::{BatchSize, BenchmarkId, Criterion, Throughput};
 
 // local imports
-use super::{hash, samples, BencherExt, ND};
+use super::{BencherExt, ND, hash, samples};
 use hl::{
+    DateTimeFormatter, Filter, IncludeExcludeKeyFilter, LinuxDateFormat, Parser, ParserSettings, RecordFormatter,
+    SegmentProcessor, Settings, Theme,
     app::{RecordIgnorer, SegmentProcess, SegmentProcessorOptions},
     settings,
     timezone::Tz,
-    DateTimeFormatter, Filter, IncludeExcludeKeyFilter, LinuxDateFormat, Parser, ParserSettings, RecordFormatter,
-    SegmentProcessor, Settings, Theme,
 };
 
 const GROUP: &str = strcat!(super::GROUP, ND, "combined");

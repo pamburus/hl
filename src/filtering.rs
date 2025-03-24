@@ -27,11 +27,7 @@ pub struct DefaultNormalizing {}
 impl KeyNormalize for DefaultNormalizing {
     #[inline(always)]
     fn normalize(&self, byte: u8) -> u8 {
-        if byte == b'_' {
-            b'-'
-        } else {
-            byte.to_ascii_lowercase()
-        }
+        if byte == b'_' { b'-' } else { byte.to_ascii_lowercase() }
     }
 }
 

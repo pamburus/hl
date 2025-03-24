@@ -3,8 +3,8 @@ use std::{
     str,
 };
 
-use serde::de::{self, DeserializeSeed, IntoDeserializer, MapAccess, SeqAccess, Visitor};
 use serde::Deserialize;
+use serde::de::{self, DeserializeSeed, IntoDeserializer, MapAccess, SeqAccess, Visitor};
 
 use super::error::{Error, Result};
 
@@ -29,7 +29,7 @@ pub unsafe fn from_slice_unchecked<'a, T>(s: &'a [u8]) -> Result<T>
 where
     T: Deserialize<'a>,
 {
-    let mut deserializer = Deserializer::from_slice_unchecked(s);
+    let mut deserializer = unsafe { Deserializer::from_slice_unchecked(s) };
     let t = T::deserialize(&mut deserializer)?;
     if deserializer.parser.tail().is_empty() {
         Ok(t)
@@ -817,11 +817,7 @@ where
 #[inline]
 fn decode_hex_val(val: u8) -> Option<u16> {
     let n = HEX[val as usize] as u16;
-    if n == 255 {
-        None
-    } else {
-        Some(n)
-    }
+    if n == 255 { None } else { Some(n) }
 }
 
 // Lookup table of bytes that must be escaped. A value of true at index i means
