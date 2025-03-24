@@ -172,8 +172,7 @@ impl<'a, FS: FileSystem> IndexerSettings<'a, FS> {
 
     pub fn hash(&self) -> Result<[u8; 32]> {
         let mut hasher = Sha256::new();
-        bincode::serialize_into(
-            &mut hasher,
+        bincode::serde::encode_into_std_write(
             &(
                 CURRENT_VERSION,
                 &self.buffer_size,
@@ -184,6 +183,8 @@ impl<'a, FS: FileSystem> IndexerSettings<'a, FS> {
                 &self.unix_ts_unit,
                 &self.format,
             ),
+            &mut hasher,
+            bincode::config::legacy(),
         )?;
         Ok(hasher.finalize().into())
     }
@@ -1018,8 +1019,11 @@ impl Header {
     }
 
     #[inline]
-    fn load(reader: &mut Reader) -> Result<Self> {
-        Ok(bincode::deserialize_from(reader)?)
+    fn load(mut reader: &mut Reader) -> Result<Self> {
+        Ok(bincode::serde::decode_from_std_read(
+            &mut reader,
+            bincode::config::legacy(),
+        )?)
     }
 
     #[inline]
@@ -1036,8 +1040,9 @@ impl Header {
         }
     }
 
-    fn save(&self, writer: &mut Writer) -> Result<()> {
-        Ok(bincode::serialize_into(writer, &self)?)
+    fn save(&self, mut writer: &mut Writer) -> Result<()> {
+        bincode::serde::encode_into_std_write(&self, &mut writer, bincode::config::legacy())?;
+        Ok(())
     }
 }
 
