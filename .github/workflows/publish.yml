@@ -3,7 +3,13 @@ name: Publish
 on:
   push:
     tags:
-      - 'v*.*.*'
+      - "v*.*.*"
+
+permissions:
+  contents: read
+  packages: write
+  issues: read
+  actions: read
 
 jobs:
   publish:
@@ -74,8 +80,8 @@ jobs:
           - name: macos-universal
             os: macos-latest
             family: macos
-            arch: '{aarch64,x86_64}'
-            target: '{aarch64,x86_64}-apple-darwin'
+            arch: "{aarch64,x86_64}"
+            target: "{aarch64,x86_64}-apple-darwin"
             archiver: tar.gz
             asset: hl-macos.tar.gz
             universal: true
@@ -100,7 +106,7 @@ jobs:
       - uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
           toolchain: stable
-          rustflags: ''
+          rustflags: ""
 
       - name: Install Cross
         if: matrix.cross
