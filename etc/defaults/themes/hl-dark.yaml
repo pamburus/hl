@@ -47,9 +47,9 @@ levels:
       foreground: 146
   warning:
     level-inner:
-      foreground: 228
+      foreground: 215
     message:
-      foreground: 228
+      foreground: 215
   error:
     level-inner:
       foreground: 210
