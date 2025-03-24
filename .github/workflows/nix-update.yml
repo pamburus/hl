@@ -5,6 +5,11 @@ on:
     - cron: "0 0 * * 0" # Every Sunday at midnight
   workflow_dispatch:
 
+permissions:
+  contents: write
+  pull-requests: write
+  actions: write
+
 jobs:
   update-lock:
     runs-on: ubuntu-latest
