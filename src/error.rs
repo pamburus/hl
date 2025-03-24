@@ -32,7 +32,9 @@ pub enum Error {
     #[error(transparent)]
     Capnp(#[from] capnp::Error),
     #[error(transparent)]
-    Bincode(#[from] bincode::Error),
+    BincodeEncode(#[from] bincode::error::EncodeError),
+    #[error(transparent)]
+    BincodeDecode(#[from] bincode::error::DecodeError),
     #[error(transparent)]
     Boxed(#[from] Box<dyn std::error::Error + std::marker::Send>),
     #[error("file {filename:?} not found")]
