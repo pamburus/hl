@@ -8,6 +8,10 @@ time-format: "%b %d %T.%3N"
 # https://en.wikipedia.org/wiki/List_of_tz_database_time_zones page.
 time-zone: "UTC"
 
+# Which information about input file to display.
+# Possible values: [auto, none, minimal, compact, full].
+input-info: auto
+
 # Settings for fields processing.
 fields:
   # Configuration of the predefined set of fields.

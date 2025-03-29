@@ -14,6 +14,10 @@
         "time-zone": {
             "type": "string"
         },
+        "input-info": {
+            "type": "string",
+            "enum": ["auto", "none", "minimal", "compact", "full"]
+        },
         "fields": {
             "type": "object",
             "additionalProperties": false,
@@ -36,9 +40,7 @@
                                     }
                                 }
                             },
-                            "required": [
-                                "names"
-                            ]
+                            "required": ["names"]
                         },
                         "logger": {
                             "type": "object",
@@ -51,9 +53,7 @@
                                     }
                                 }
                             },
-                            "required": [
-                                "names"
-                            ]
+                            "required": ["names"]
                         },
                         "level": {
                             "type": "object",
@@ -136,15 +136,11 @@
                                                 ]
                                             }
                                         },
-                                        "required": [
-                                            "names"
-                                        ]
+                                        "required": ["names"]
                                     }
                                 }
                             },
-                            "required": [
-                                "variants"
-                            ]
+                            "required": ["variants"]
                         },
                         "message": {
                             "type": "object",
@@ -157,9 +153,7 @@
                                     }
                                 }
                             },
-                            "required": [
-                                "names"
-                            ]
+                            "required": ["names"]
                         },
                         "caller": {
                             "type": "object",
@@ -172,9 +166,7 @@
                                     }
                                 }
                             },
-                            "required": [
-                                "names"
-                            ]
+                            "required": ["names"]
                         },
                         "caller-file": {
                             "type": "object",
@@ -187,9 +179,7 @@
                                     }
                                 }
                             },
-                            "required": [
-                                "names"
-                            ]
+                            "required": ["names"]
                         },
                         "caller-line": {
                             "type": "object",
@@ -202,9 +192,7 @@
                                     }
                                 }
                             },
-                            "required": [
-                                "names"
-                            ]
+                            "required": ["names"]
                         }
                     }
                 },
@@ -230,10 +218,7 @@
             "properties": {
                 "flatten": {
                     "type": "string",
-                    "enum": [
-                        "never",
-                        "always"
-                    ]
+                    "enum": ["never", "always"]
                 },
                 "punctuation": {
                     "type": "object",
@@ -292,10 +277,7 @@
             }
         },
         "concurrency": {
-            "type": [
-                "integer",
-                "null"
-            ]
+            "type": ["integer", "null"]
         },
         "theme": {
             "type": "string"
