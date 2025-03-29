@@ -1,5 +1,5 @@
 // std imports
-use std::{borrow::Borrow, collections::HashMap, vec::Vec};
+use std::{borrow::Borrow, collections::HashMap, sync::Arc, vec::Vec};
 
 // third-party imports
 use enum_map::EnumMap;
@@ -50,7 +50,7 @@ impl Theme {
         Ok(themecfg::Theme::embedded(name)?.into())
     }
 
-    pub fn list(app_dirs: &AppDirs) -> Result<HashMap<String, ThemeInfo>> {
+    pub fn list(app_dirs: &AppDirs) -> Result<HashMap<Arc<str>, ThemeInfo>> {
         themecfg::Theme::list(app_dirs)
     }
 

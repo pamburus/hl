@@ -16,7 +16,9 @@ use itertools::Itertools;
 
 // local imports
 use hl::{
-    Delimiter, app, cli, config,
+    Delimiter, IncludeExcludeKeyFilter, KeyMatchOptions, app,
+    appdirs::AppDirs,
+    cli, config,
     datefmt::LinuxDateFormat,
     error::*,
     input::InputReference,
@@ -24,11 +26,13 @@ use hl::{
     query::Query,
     settings::Settings,
     signal::SignalHandler,
-    theme::{Theme, ThemeOrigin},
+    theme::Theme,
     timeparse::parse_time,
     timezone::Tz,
-    {IncludeExcludeKeyFilter, KeyMatchOptions},
 };
+
+// private modules
+mod help;
 
 const HL_DEBUG_LOG: &str = "HL_DEBUG_LOG";
 
@@ -82,6 +86,12 @@ fn run() -> Result<()> {
         return Ok(());
     }
 
+    let app_dirs = config::app_dirs().ok_or(Error::AppDirs)?;
+
+    if opt.list_themes {
+        return list_themes(&app_dirs);
+    }
+
     let color_supported = if stdout().is_terminal() {
         if let Err(err) = hl::enable_ansi_support() {
             eprintln!("failed to enable ansi support: {}", err);
@@ -105,36 +115,12 @@ fn run() -> Result<()> {
         cli::ColorOption::Never => false,
     };
 
-    let app_dirs = config::app_dirs().ok_or(Error::AppDirs)?;
     let theme = if use_colors {
         let theme = &opt.theme;
         Theme::load(&app_dirs, theme)?
     } else {
         Theme::none()
     };
-
-    if opt.list_themes {
-        let themes = Theme::list(&app_dirs)?
-            .into_iter()
-            .sorted_by_key(|(name, info)| (info.origin, name.clone()));
-        for (origin, group) in themes.chunk_by(|(_, info)| info.origin).into_iter() {
-            let origin = match origin {
-                ThemeOrigin::Stock => "stock",
-                ThemeOrigin::Custom => "custom",
-            };
-            if stdout().is_terminal() {
-                println!("{}:", origin);
-            }
-            for (name, _) in group {
-                if stdout().is_terminal() {
-                    println!("  - {}", name);
-                } else {
-                    println!("{}", name);
-                }
-            }
-        }
-        return Ok(());
-    }
 
     // Configure concurrency.
     let concurrency = match opt.concurrency.or(settings.concurrency) {
@@ -334,9 +320,33 @@ fn run() -> Result<()> {
     SignalHandler::run(interrupt_ignore_count, std::time::Duration::from_secs(1), run)
 }
 
+fn list_themes(app_dirs: &AppDirs) -> Result<()> {
+    let items = Theme::list(app_dirs)?;
+    let mut formatter = help::Formatter::new(stdout());
+    formatter.format_grouped_list(
+        items
+            .into_iter()
+            .sorted_by_key(|x| (x.1.origin, x.0.clone()))
+            .chunk_by(|x| x.1.origin)
+            .into_iter()
+            .map(|(origin, group)| (origin, group.map(|x| x.0))),
+    )?;
+    Ok(())
+}
+
 fn main() {
     if let Err(err) = run() {
-        err.log();
+        err.log(&AppInfo);
         process::exit(1);
+    }
+}
+
+struct AppInfo;
+
+impl AppInfoProvider for AppInfo {
+    fn usage_suggestion(&self, request: UsageRequest) -> Option<UsageResponse> {
+        match request {
+            UsageRequest::ListThemes => Some(("--list-themes".into(), "".into())),
+        }
     }
 }
