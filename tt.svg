@@ -1,0 +1,127 @@
+<svg height="452" width="1235.2" xmlns="http://www.w3.org/2000/svg">
+<g transform="translate(32,16)">
+<filter id="shadow">
+<feGaussianBlur stdDeviation="12"/>
+</filter>
+<rect fill="#000000c0" filter="url(#shadow)" height="388" rx="10" ry="10" width="1171.2" x="4" y="12"/>
+<rect fill="#fafafa" height="388" rx="10" ry="10" width="1171.2"/>
+<clipPath id="header">
+<rect height="28" width="1171.2"/>
+</clipPath>
+<rect clip-path="url(#header)" fill="#eef0f1" height="56" rx="10" ry="10" width="1171.2"/>
+<line stroke="#80808080" stroke-width="0.5" x1="0" x2="1171.2" y1="28" y2="28"/><text dominant-baseline="central" fill="#474747" font-family="system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Helvetica Neue, Arial, sans-serif" font-size="14" font-weight="bold" text-anchor="middle" x="585.6" y="14">./target/debug/hl --theme tt sample/cafe.log -P</text>
+<g>
+<circle cx="14" cy="14" fill="#ff5f56" r="6" stroke="#d85a51" stroke-width="0.5"/>
+<circle cx="34" cy="14" fill="#ffbd2e" r="6" stroke="#d19d36" stroke-width="0.5"/>
+<circle cx="54" cy="14" fill="#28c941" r="6" stroke="#39ac42" stroke-width="0.5"/>
+</g>
+<svg class="terminal" font-family="JetBrains Mono, Fira Code, Source Code Pro, Cascadia Code, Consolas, Menlo, Monaco, DejaVu Sans Mono, monospace" font-size="12" height="30em" width="97.6em" y="28">
+<svg fill="var(--fg)" x="0.8em" y="0.6em">
+<g>
+<svg height="28.8em" viewBox="0 0 96 28.8" width="96em">
+<g stroke-width="0.025">
+<path d="M14.4,9.6 H17.4 V10.8 H14.4 Z" fill="var(--c-3)" stroke="var(--c-3)"/>
+<path d="M14.4,16.8 H17.4 V18 H14.4 Z" fill="var(--c-1)" stroke="var(--c-1)"/>
+<path d="M14.4,18 H17.4 V19.2 H14.4 Z" fill="var(--c-3)" stroke="var(--c-3)"/>
+</g>
+</svg>
+<svg height="1.2em" overflow="hidden" width="96em" y="0em">
+<text xml:space="preserve" y="0.96em"><tspan opacity="0.5">2025-03-22 </tspan><tspan opacity="0.5">08:00:00.000 </tspan><tspan opacity="0.5">│</tspan><tspan fill="var(--c-6)">INF</tspan><tspan opacity="0.5">│ </tspan><tspan opacity="0.5">cafe:</tspan><tspan fill="var(--br-fg)" font-weight="bold" x="21.6em">café </tspan><tspan fill="var(--br-fg)" font-weight="bold">opens </tspan><tspan fill="var(--br-fg)" font-weight="bold">for </tspan><tspan fill="var(--br-fg)" font-weight="bold">the </tspan><tspan fill="var(--br-fg)" font-weight="bold">day </tspan><tspan fill="var(--c-12)">weather</tspan><tspan opacity="0.5">=</tspan><tspan>sunny </tspan><tspan fill="var(--c-12)">temperature</tspan><tspan opacity="0.5">=</tspan><tspan fill="var(--c-2)">21</tspan><tspan font-style="italic" opacity="0.5" x="52.8em">→ </tspan><tspan font-style="italic" opacity="0.5">cafe/main.go:15</tspan></text>
+</svg>
+<svg height="1.2em" overflow="hidden" width="96em" y="1.2em">
+<text xml:space="preserve" y="0.96em"><tspan opacity="0.5">2025-03-22 </tspan><tspan opacity="0.5">08:05:12.000 </tspan><tspan opacity="0.5">│</tspan><tspan fill="var(--c-6)">INF</tspan><tspan opacity="0.5">│ </tspan><tspan opacity="0.5">order:</tspan><tspan fill="var(--br-fg)" font-weight="bold" x="22.2em">order </tspan><tspan fill="var(--br-fg)" font-weight="bold">received </tspan><tspan fill="var(--c-12)">order</tspan><tspan opacity="0.5">=</tspan><tspan>"345" </tspan><tspan fill="var(--c-12)">customer</tspan><tspan opacity="0.5">=</tspan><tspan>Alice </tspan><tspan fill="var(--c-12)">dish</tspan><tspan opacity="0.5">=</tspan><tspan>"Blueberry </tspan><tspan>Pancakes" </tspan><tspan fill="var(--c-12)">table</tspan><tspan opacity="0.5">=</tspan><tspan fill="var(--c-2)">5</tspan><tspan font-style="italic" opacity="0.5" x="67.8em">→ </tspan><tspan font-style="italic" opacity="0.5">order/order.go:42</tspan></text>
+</svg>
+<svg height="1.2em" overflow="hidden" width="96em" y="2.4em">
+<text xml:space="preserve" y="0.96em"><tspan opacity="0.5">2025-03-22 </tspan><tspan opacity="0.5">08:06:30.000 </tspan><tspan opacity="0.5">│</tspan><tspan fill="var(--c-13)">DBG</tspan><tspan opacity="0.5">│ </tspan><tspan opacity="0.5">kitchen:</tspan><tspan fill="var(--br-fg)" font-weight="bold" x="23.4em">chef </tspan><tspan fill="var(--br-fg)" font-weight="bold">starts </tspan><tspan fill="var(--br-fg)" font-weight="bold">preparing </tspan><tspan fill="var(--br-fg)" font-weight="bold">order </tspan><tspan fill="var(--c-12)">order</tspan><tspan opacity="0.5">=</tspan><tspan>"345" </tspan><tspan fill="var(--c-12)">chef</tspan><tspan opacity="0.5">=</tspan><tspan>Gordon </tspan><tspan fill="var(--c-12)">eta</tspan><tspan opacity="0.5">=</tspan><tspan>10m</tspan><tspan font-style="italic" opacity="0.5" x="59.4em">→ </tspan><tspan font-style="italic" opacity="0.5">kitchen/chef.go:87</tspan></text>
+</svg>
+<svg height="1.2em" overflow="hidden" width="96em" y="3.6em">
+<text xml:space="preserve" y="0.96em"><tspan opacity="0.5">2025-03-22 </tspan><tspan opacity="0.5">08:16:45.000 </tspan><tspan opacity="0.5">│</tspan><tspan fill="var(--c-6)">INF</tspan><tspan opacity="0.5">│ </tspan><tspan opacity="0.5">kitchen:</tspan><tspan fill="var(--br-fg)" font-weight="bold" x="23.4em">order </tspan><tspan fill="var(--br-fg)" font-weight="bold">completed </tspan><tspan fill="var(--c-12)">order</tspan><tspan opacity="0.5">=</tspan><tspan>"345" </tspan><tspan fill="var(--c-12)">status</tspan><tspan opacity="0.5">=</tspan><tspan>ready </tspan><tspan fill="var(--c-12)">presentation</tspan><tspan opacity="0.5">=</tspan><tspan>artful</tspan><tspan font-style="italic" opacity="0.5" x="60em">→ </tspan><tspan font-style="italic" opacity="0.5">kitchen/chef.go:95</tspan></text>
+</svg>
+<svg height="1.2em" overflow="hidden" width="96em" y="4.8em">
+<text xml:space="preserve" y="0.96em"><tspan opacity="0.5">2025-03-22 </tspan><tspan opacity="0.5">08:17:10.000 </tspan><tspan opacity="0.5">│</tspan><tspan fill="var(--c-6)">INF</tspan><tspan opacity="0.5">│ </tspan><tspan opacity="0.5">delivery:</tspan><tspan fill="var(--br-fg)" font-weight="bold" x="24em">delivery </tspan><tspan fill="var(--br-fg)" font-weight="bold">dispatched </tspan><tspan fill="var(--c-12)">order</tspan><tspan opacity="0.5">=</tspan><tspan>"345" </tspan><tspan fill="var(--c-12)">rider</tspan><tspan opacity="0.5">=</tspan><tspan>Marco </tspan><tspan fill="var(--c-12)">eta</tspan><tspan opacity="0.5">=</tspan><tspan>5m</tspan><tspan font-style="italic" opacity="0.5" x="54.6em">→ </tspan><tspan font-style="italic" opacity="0.5">delivery/dispatch.go:33</tspan></text>
+</svg>
+<svg height="1.2em" overflow="hidden" width="96em" y="6em">
+<text xml:space="preserve" y="0.96em"><tspan opacity="0.5">2025-03-22 </tspan><tspan opacity="0.5">08:20:43.000 </tspan><tspan opacity="0.5">│</tspan><tspan fill="var(--c-6)">INF</tspan><tspan opacity="0.5">│ </tspan><tspan opacity="0.5">feedback:</tspan><tspan fill="var(--br-fg)" font-weight="bold" x="24em">customer </tspan><tspan fill="var(--br-fg)" font-weight="bold">feedback </tspan><tspan fill="var(--c-12)">order</tspan><tspan opacity="0.5">=</tspan><tspan>"345" </tspan><tspan fill="var(--c-12)">customer</tspan><tspan opacity="0.5">=</tspan><tspan>Alice </tspan><tspan fill="var(--c-12)">rating</tspan><tspan opacity="0.5">=</tspan><tspan fill="var(--c-2)">5 </tspan><tspan fill="var(--c-12)">feedback</tspan><tspan opacity="0.5">=</tspan><tspan>"Exquisite </tspan><tspan>taste!" </tspan></text>
+</svg>
+<svg height="1.2em" overflow="hidden" width="96em" y="7.2em">
+<text xml:space="preserve" y="0.96em"><tspan opacity="0.5">2025-03-22 </tspan><tspan opacity="0.5">08:29:23.000 </tspan><tspan opacity="0.5">│</tspan><tspan fill="var(--c-6)">INF</tspan><tspan opacity="0.5">│ </tspan><tspan opacity="0.5">supply:</tspan><tspan fill="var(--br-fg)" font-weight="bold" x="22.8em">ingredient </tspan><tspan fill="var(--br-fg)" font-weight="bold">delivery </tspan><tspan fill="var(--br-fg)" font-weight="bold">received </tspan><tspan fill="var(--c-12)">supplier</tspan><tspan opacity="0.5">=</tspan><tspan>"Green </tspan><tspan>Farms" </tspan><tspan fill="var(--c-12)">items</tspan><tspan opacity="0.5">=</tspan><tspan fill="var(--br-fg)" font-weight="bold">[</tspan><tspan>Eggs</tspan><tspan x="61.2em">Flour</tspan><tspan x="64.8em">Blueberries</tspan><tspan fill="var(--br-fg)" font-weight="bold">]</tspan><tspan font-style="italic" opacity="0.5" x="72.6em">→ </tspan><tspan font-style="italic" opacity="0.5">supply.go:50</tspan></text>
+</svg>
+<svg height="1.2em" overflow="hidden" width="96em" y="8.4em">
+<text xml:space="preserve" y="0.96em"><tspan opacity="0.5">2025-03-22 </tspan><tspan opacity="0.5">09:15:22.000 </tspan><tspan opacity="0.5">│</tspan><tspan fill="var(--c-6)">INF</tspan><tspan opacity="0.5">│ </tspan><tspan opacity="0.5">menu:</tspan><tspan fill="var(--br-fg)" font-weight="bold" x="21.6em">new </tspan><tspan fill="var(--br-fg)" font-weight="bold">special </tspan><tspan fill="var(--br-fg)" font-weight="bold">launched </tspan><tspan fill="var(--c-12)">dish</tspan><tspan opacity="0.5">=</tspan><tspan>"Lemon </tspan><tspan>Tart" </tspan><tspan fill="var(--c-12)">chef</tspan><tspan opacity="0.5">=</tspan><tspan>Isabella </tspan><tspan fill="var(--c-12)">critic-reviews</tspan><tspan opacity="0.5">=</tspan><tspan>positive</tspan><tspan font-style="italic" opacity="0.5" x="67.8em">→ </tspan><tspan font-style="italic" opacity="0.5">menu/specials.go:75</tspan></text>
+</svg>
+<svg height="1.2em" overflow="hidden" width="96em" y="9.6em">
+<text xml:space="preserve" y="0.96em"><tspan opacity="0.5">2025-03-22 </tspan><tspan opacity="0.5">10:02:54.000 </tspan><tspan fill="var(--bg)" font-weight="bold">│WRN│</tspan><tspan opacity="0.5" x="18em">weather:</tspan><tspan fill="var(--c-11)" font-weight="bold" x="23.4em">weather </tspan><tspan fill="var(--c-11)" font-weight="bold">update </tspan><tspan fill="var(--c-12)">weather</tspan><tspan opacity="0.5">=</tspan><tspan>drizzle </tspan><tspan fill="var(--c-12)">customer-flow</tspan><tspan opacity="0.5">=</tspan><tspan>moderate </tspan><tspan fill="var(--c-12)">location</tspan><tspan opacity="0.5">=</tspan><tspan>downtown</tspan><tspan font-style="italic" opacity="0.5" x="66.6em">→ </tspan><tspan font-style="italic" opacity="0.5">weather/monitor.go:60</tspan></text>
+</svg>
+<svg height="1.2em" overflow="hidden" width="96em" y="10.8em">
+<text xml:space="preserve" y="0.96em"><tspan opacity="0.5">2025-03-22 </tspan><tspan opacity="0.5">11:03:23.000 </tspan><tspan opacity="0.5">│</tspan><tspan fill="var(--c-6)">INF</tspan><tspan opacity="0.5">│ </tspan><tspan opacity="0.5">cafe:</tspan><tspan fill="var(--br-fg)" font-weight="bold" x="21.6em">café </tspan><tspan fill="var(--br-fg)" font-weight="bold">closing </tspan><tspan fill="var(--br-fg)" font-weight="bold">for </tspan><tspan fill="var(--br-fg)" font-weight="bold">break </tspan><tspan fill="var(--c-12)">reason</tspan><tspan opacity="0.5">=</tspan><tspan>staff-lunch </tspan><tspan fill="var(--c-12)">duration</tspan><tspan opacity="0.5">=</tspan><tspan>30m</tspan><tspan font-style="italic" opacity="0.5" x="54.6em">→ </tspan><tspan font-style="italic" opacity="0.5">cafe/shutdown.go:20</tspan></text>
+</svg>
+<svg height="1.2em" overflow="hidden" width="96em" y="12em">
+<text xml:space="preserve" y="0.96em"><tspan opacity="0.5">2025-03-22 </tspan><tspan opacity="0.5">11:35:30.000 </tspan><tspan opacity="0.5">│</tspan><tspan fill="var(--c-6)">INF</tspan><tspan opacity="0.5">│ </tspan><tspan opacity="0.5">cafe:</tspan><tspan fill="var(--br-fg)" font-weight="bold" x="21.6em">café </tspan><tspan fill="var(--br-fg)" font-weight="bold">resumes </tspan><tspan fill="var(--br-fg)" font-weight="bold">service </tspan><tspan fill="var(--c-12)">status</tspan><tspan opacity="0.5">=</tspan><tspan>open</tspan><tspan font-style="italic" opacity="0.5" x="41.4em">→ </tspan><tspan font-style="italic" opacity="0.5">cafe/main.go:28</tspan></text>
+</svg>
+<svg height="1.2em" overflow="hidden" width="96em" y="13.2em">
+<text xml:space="preserve" y="0.96em"><tspan opacity="0.5">2025-03-22 </tspan><tspan opacity="0.5">11:41:32.000 </tspan><tspan opacity="0.5">│</tspan><tspan fill="var(--c-13)">DBG</tspan><tspan opacity="0.5">│ </tspan><tspan opacity="0.5">system:</tspan><tspan fill="var(--br-fg)" font-weight="bold" x="22.8em">system </tspan><tspan fill="var(--br-fg)" font-weight="bold">health </tspan><tspan fill="var(--br-fg)" font-weight="bold">check </tspan><tspan fill="var(--br-fg)" font-weight="bold">completed </tspan><tspan fill="var(--c-12)">response-time</tspan><tspan opacity="0.5">=</tspan><tspan>200ms </tspan><tspan fill="var(--c-12)">status</tspan><tspan opacity="0.5">=</tspan><tspan>ok</tspan><tspan font-style="italic" opacity="0.5" x="58.8em">→ </tspan><tspan font-style="italic" opacity="0.5">system/health.go:105</tspan></text>
+</svg>
+<svg height="1.2em" overflow="hidden" width="96em" y="14.4em">
+<text xml:space="preserve" y="0.96em"><tspan opacity="0.5">2025-03-22 </tspan><tspan opacity="0.5">11:45:44.000 </tspan><tspan opacity="0.5">│</tspan><tspan fill="var(--c-6)">INF</tspan><tspan opacity="0.5">│ </tspan><tspan opacity="0.5">order:</tspan><tspan fill="var(--br-fg)" font-weight="bold" x="22.2em">order </tspan><tspan fill="var(--br-fg)" font-weight="bold">received </tspan><tspan fill="var(--c-12)">order</tspan><tspan opacity="0.5">=</tspan><tspan>"346" </tspan><tspan fill="var(--c-12)">customer</tspan><tspan opacity="0.5">=</tspan><tspan>Bob </tspan><tspan fill="var(--c-12)">beverage</tspan><tspan opacity="0.5">=</tspan><tspan>Espresso </tspan><tspan fill="var(--c-12)">size</tspan><tspan opacity="0.5">=</tspan><tspan>small </tspan><tspan fill="var(--c-12)">table</tspan><tspan opacity="0.5">=</tspan><tspan fill="var(--c-2)">2</tspan><tspan font-style="italic" opacity="0.5" x="68.4em">→ </tspan><tspan font-style="italic" opacity="0.5">order/order.go:48</tspan></text>
+</svg>
+<svg height="1.2em" overflow="hidden" width="96em" y="15.6em">
+<text xml:space="preserve" y="0.96em"><tspan opacity="0.5">2025-03-22 </tspan><tspan opacity="0.5">11:47:20.000 </tspan><tspan opacity="0.5">│</tspan><tspan fill="var(--c-6)">INF</tspan><tspan opacity="0.5">│ </tspan><tspan opacity="0.5">order:</tspan><tspan fill="var(--br-fg)" font-weight="bold" x="22.2em">order </tspan><tspan fill="var(--br-fg)" font-weight="bold">received </tspan><tspan fill="var(--c-12)">order</tspan><tspan opacity="0.5">=</tspan><tspan>"347" </tspan><tspan fill="var(--c-12)">customer</tspan><tspan opacity="0.5">=</tspan><tspan>Lisa </tspan><tspan fill="var(--c-12)">pastry</tspan><tspan opacity="0.5">=</tspan><tspan>"Chocolate </tspan><tspan>Croissant" </tspan><tspan fill="var(--c-12)">table</tspan><tspan opacity="0.5">=</tspan><tspan fill="var(--c-2)">3</tspan><tspan font-style="italic" opacity="0.5" x="69em">→ </tspan><tspan font-style="italic" opacity="0.5">order/order.go:57</tspan></text>
+</svg>
+<svg height="1.2em" overflow="hidden" width="96em" y="16.8em">
+<text xml:space="preserve" y="0.96em"><tspan opacity="0.5">2025-03-22 </tspan><tspan opacity="0.5">11:50:34.000 </tspan><tspan fill="var(--bg)" font-weight="bold">│ERR│</tspan><tspan opacity="0.5" x="18em">kitchen:</tspan><tspan fill="var(--c-9)" font-weight="bold" x="23.4em">kitchen </tspan><tspan fill="var(--c-9)" font-weight="bold">error </tspan><tspan fill="var(--c-9)" font-weight="bold">encountered </tspan><tspan fill="var(--c-12)">order</tspan><tspan opacity="0.5">=</tspan><tspan>"347" </tspan><tspan fill="var(--c-12)">chef</tspan><tspan opacity="0.5">=</tspan><tspan>Marco </tspan><tspan fill="var(--c-12)">error</tspan><tspan opacity="0.5">=</tspan><tspan>OvenMalfunction</tspan><tspan font-style="italic" opacity="0.5" x="66em">→ </tspan><tspan font-style="italic" opacity="0.5">kitchen/chef.go:110</tspan></text>
+</svg>
+<svg height="1.2em" overflow="hidden" width="96em" y="18em">
+<text xml:space="preserve" y="0.96em"><tspan opacity="0.5">2025-03-22 </tspan><tspan opacity="0.5">11:52:53.000 </tspan><tspan fill="var(--bg)" font-weight="bold">│WRN│</tspan><tspan opacity="0.5" x="18em">kitchen:</tspan><tspan fill="var(--c-11)" font-weight="bold" x="23.4em">order </tspan><tspan fill="var(--c-11)" font-weight="bold">reassigned </tspan><tspan fill="var(--c-12)">order</tspan><tspan opacity="0.5">=</tspan><tspan>"347" </tspan><tspan fill="var(--c-12)">chef</tspan><tspan opacity="0.5">=</tspan><tspan>Isabella </tspan><tspan fill="var(--c-12)">previous-chef</tspan><tspan opacity="0.5">=</tspan><tspan>Marco</tspan><tspan font-style="italic" opacity="0.5" x="61.2em">→ </tspan><tspan font-style="italic" opacity="0.5">kitchen/assign.go:33</tspan></text>
+</svg>
+<svg height="1.2em" overflow="hidden" width="96em" y="19.2em">
+<text xml:space="preserve" y="0.96em"><tspan opacity="0.5">2025-03-22 </tspan><tspan opacity="0.5">11:58:11.000 </tspan><tspan opacity="0.5">│</tspan><tspan fill="var(--c-6)">INF</tspan><tspan opacity="0.5">│ </tspan><tspan opacity="0.5">kitchen:</tspan><tspan fill="var(--br-fg)" font-weight="bold" x="23.4em">order </tspan><tspan fill="var(--br-fg)" font-weight="bold">completed </tspan><tspan fill="var(--c-12)">order</tspan><tspan opacity="0.5">=</tspan><tspan>"347" </tspan><tspan fill="var(--c-12)">status</tspan><tspan opacity="0.5">=</tspan><tspan>ready </tspan><tspan fill="var(--c-12)">presentation</tspan><tspan opacity="0.5">=</tspan><tspan>delicate</tspan><tspan font-style="italic" opacity="0.5" x="61.2em">→ </tspan><tspan font-style="italic" opacity="0.5">kitchen/chef.go:120</tspan></text>
+</svg>
+<svg height="1.2em" overflow="hidden" width="96em" y="20.4em">
+<text xml:space="preserve" y="0.96em"><tspan opacity="0.5">2025-03-22 </tspan><tspan opacity="0.5">12:01:26.000 </tspan><tspan opacity="0.5">│</tspan><tspan fill="var(--c-6)">INF</tspan><tspan opacity="0.5">│ </tspan><tspan opacity="0.5">delivery:</tspan><tspan fill="var(--br-fg)" font-weight="bold" x="24em">delivery </tspan><tspan fill="var(--br-fg)" font-weight="bold">dispatched </tspan><tspan fill="var(--c-12)">order</tspan><tspan opacity="0.5">=</tspan><tspan>"346" </tspan><tspan fill="var(--c-12)">rider</tspan><tspan opacity="0.5">=</tspan><tspan>Liam </tspan><tspan fill="var(--c-12)">eta</tspan><tspan opacity="0.5">=</tspan><tspan>3m</tspan><tspan font-style="italic" opacity="0.5" x="54em">→ </tspan><tspan font-style="italic" opacity="0.5">delivery/dispatch.go:40</tspan></text>
+</svg>
+<svg height="1.2em" overflow="hidden" width="96em" y="21.6em">
+<text xml:space="preserve" y="0.96em"><tspan opacity="0.5">2025-03-22 </tspan><tspan opacity="0.5">12:07:12.000 </tspan><tspan opacity="0.5">│</tspan><tspan fill="var(--c-6)">INF</tspan><tspan opacity="0.5">│ </tspan><tspan opacity="0.5">system:</tspan><tspan fill="var(--br-fg)" font-weight="bold" x="22.8em">maintenance </tspan><tspan fill="var(--br-fg)" font-weight="bold">initiated </tspan><tspan fill="var(--c-12)">type</tspan><tspan opacity="0.5">=</tspan><tspan>db-update </tspan><tspan fill="var(--c-12)">expected-duration</tspan><tspan opacity="0.5">=</tspan><tspan>15m</tspan><tspan font-style="italic" opacity="0.5" x="58.2em">→ </tspan><tspan font-style="italic" opacity="0.5">system/maintenance.go:75</tspan></text>
+</svg>
+<svg height="1.2em" overflow="hidden" width="96em" y="22.8em">
+<text xml:space="preserve" y="0.96em"><tspan opacity="0.5">2025-03-22 </tspan><tspan opacity="0.5">12:19:23.000 </tspan><tspan opacity="0.5">│</tspan><tspan fill="var(--c-6)">INF</tspan><tspan opacity="0.5">│ </tspan><tspan opacity="0.5">system:</tspan><tspan fill="var(--br-fg)" font-weight="bold" x="22.8em">maintenance </tspan><tspan fill="var(--br-fg)" font-weight="bold">completed </tspan><tspan fill="var(--c-12)">type</tspan><tspan opacity="0.5">=</tspan><tspan>db-update </tspan><tspan fill="var(--c-12)">duration</tspan><tspan opacity="0.5">=</tspan><tspan>12m </tspan><tspan fill="var(--c-12)">status</tspan><tspan opacity="0.5">=</tspan><tspan>success</tspan><tspan font-style="italic" opacity="0.5" x="61.8em">→ </tspan><tspan font-style="italic" opacity="0.5">system/maintenance.go:90</tspan></text>
+</svg>
+<svg height="1.2em" overflow="hidden" width="96em" y="24em">
+<text xml:space="preserve" y="0.96em"><tspan opacity="0.5">2025-03-22 </tspan><tspan opacity="0.5">12:32:44.000 </tspan><tspan opacity="0.5">│</tspan><tspan fill="var(--c-6)">INF</tspan><tspan opacity="0.5">│ </tspan><tspan opacity="0.5">order:</tspan><tspan fill="var(--br-fg)" font-weight="bold" x="22.2em">order </tspan><tspan fill="var(--br-fg)" font-weight="bold">received </tspan><tspan fill="var(--c-12)">order</tspan><tspan opacity="0.5">=</tspan><tspan>"348" </tspan><tspan fill="var(--c-12)">customer</tspan><tspan opacity="0.5">=</tspan><tspan>Diana </tspan><tspan fill="var(--c-12)">dish</tspan><tspan opacity="0.5">=</tspan><tspan>"Vegan </tspan><tspan>Salad" </tspan><tspan fill="var(--c-12)">table</tspan><tspan opacity="0.5">=</tspan><tspan fill="var(--c-2)">8</tspan><tspan font-style="italic" opacity="0.5" x="63.6em">→ </tspan><tspan font-style="italic" opacity="0.5">order/order.go:95</tspan></text>
+</svg>
+<svg height="1.2em" overflow="hidden" width="96em" y="25.2em">
+<text xml:space="preserve" y="0.96em"><tspan opacity="0.5">2025-03-22 </tspan><tspan opacity="0.5">13:11:33.000 </tspan><tspan opacity="0.5">│</tspan><tspan fill="var(--c-6)">INF</tspan><tspan opacity="0.5">│ </tspan><tspan opacity="0.5">cafe:</tspan><tspan fill="var(--br-fg)" font-weight="bold" x="21.6em">café </tspan><tspan fill="var(--br-fg)" font-weight="bold">closed </tspan><tspan fill="var(--c-12)">reason</tspan><tspan opacity="0.5">=</tspan><tspan>end-of-day </tspan><tspan fill="var(--c-12)">duration</tspan><tspan opacity="0.5">=</tspan><tspan>overnight</tspan><tspan font-style="italic" opacity="0.5" x="51em">→ </tspan><tspan font-style="italic" opacity="0.5">cafe/shutdown.go:40</tspan></text>
+</svg>
+</g>
+</svg>
+</svg>
+<rect fill="none" height="388" rx="10" ry="10" stroke="#80808080" stroke-width="0.5" width="1171.2"/>
+<rect fill="none" height="386" rx="9" ry="9" stroke="#ffffff80" stroke-width="0.5" width="1169.2" x="1" y="1"/>
+</g>
+<style>
+.terminal {
+    --bg: #fafafa;
+    --fg: #383a42;
+    --br-fg: #0f131e;
+    --c-1: #e45649;
+    --c-2: #50a14f;
+    --c-3: #c18401;
+    --c-6: #0997b3;
+    --c-9: #f24c2d;
+    --c-11: #e09d00;
+    --c-12: #2e63d6;
+    --c-13: #d21fd1;
+}
+@font-face {
+	font-family: JetBrains Mono;
+	font-weight: 100 800;
+	font-style: normal;
+	src: url(https://raw.githubusercontent.com/pamburus/fonts/refs/heads/main/JetBrainsMono/fonts/variable/JetBrainsMono%5Bwght%5D.woff2) format('woff2');
+}
+@font-face {
+	font-family: JetBrains Mono;
+	font-weight: 100 800;
+	font-style: italic;
+	src: url(https://raw.githubusercontent.com/pamburus/fonts/refs/heads/main/JetBrainsMono/fonts/variable/JetBrainsMono-Italic%5Bwght%5D.woff2) format('woff2');
+}
+</style>
+</svg>

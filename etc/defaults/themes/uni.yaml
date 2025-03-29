@@ -47,10 +47,10 @@ levels:
       foreground: cyan
   warning:
     message:
-      foreground: yellow
+      foreground: bright-yellow
       modes: [bold]
     level-inner:
-      foreground: yellow
+      foreground: bright-yellow
       modes: [bold]
   error:
     message:
