@@ -1,5 +1,6 @@
 // public modules
 pub mod app;
+pub mod appdirs;
 pub mod cli;
 pub mod config;
 pub mod datefmt;
@@ -21,7 +22,6 @@ pub mod timezone;
 pub mod types;
 
 // private modules
-mod appdirs;
 mod console;
 mod eseq;
 mod filtering;
@@ -33,6 +33,7 @@ mod scanning;
 mod serdex;
 mod tee;
 mod vfs;
+mod xerr;
 
 // conditional public modules
 #[cfg_attr(unix, path = "signal_unix.rs")]

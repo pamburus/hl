@@ -13,10 +13,13 @@ use chrono::Utc;
 use clap::{CommandFactory, Parser};
 use env_logger::{self as logger};
 use itertools::Itertools;
+use nu_ansi_term::Color as NuColor;
 
 // local imports
 use hl::{
-    Delimiter, app, cli, config,
+    Delimiter, IncludeExcludeKeyFilter, KeyMatchOptions, app,
+    appdirs::AppDirs,
+    cli, config,
     datefmt::LinuxDateFormat,
     error::*,
     input::InputReference,
@@ -27,7 +30,6 @@ use hl::{
     theme::{Theme, ThemeOrigin},
     timeparse::parse_time,
     timezone::Tz,
-    {IncludeExcludeKeyFilter, KeyMatchOptions},
 };
 
 const HL_DEBUG_LOG: &str = "HL_DEBUG_LOG";
@@ -82,6 +84,12 @@ fn run() -> Result<()> {
         return Ok(());
     }
 
+    let app_dirs = config::app_dirs().ok_or(Error::AppDirs)?;
+
+    if opt.list_themes {
+        return list_themes(&app_dirs);
+    }
+
     let color_supported = if stdout().is_terminal() {
         if let Err(err) = hl::enable_ansi_support() {
             eprintln!("failed to enable ansi support: {}", err);
@@ -105,36 +113,12 @@ fn run() -> Result<()> {
         cli::ColorOption::Never => false,
     };
 
-    let app_dirs = config::app_dirs().ok_or(Error::AppDirs)?;
     let theme = if use_colors {
         let theme = &opt.theme;
         Theme::load(&app_dirs, theme)?
     } else {
         Theme::none()
     };
-
-    if opt.list_themes {
-        let themes = Theme::list(&app_dirs)?
-            .into_iter()
-            .sorted_by_key(|(name, info)| (info.origin, name.clone()));
-        for (origin, group) in themes.chunk_by(|(_, info)| info.origin).into_iter() {
-            let origin = match origin {
-                ThemeOrigin::Stock => "stock",
-                ThemeOrigin::Custom => "custom",
-            };
-            if stdout().is_terminal() {
-                println!("{}:", origin);
-            }
-            for (name, _) in group {
-                if stdout().is_terminal() {
-                    println!("  - {}", name);
-                } else {
-                    println!("{}", name);
-                }
-            }
-        }
-        return Ok(());
-    }
 
     // Configure concurrency.
     let concurrency = match opt.concurrency.or(settings.concurrency) {
@@ -334,9 +318,69 @@ fn run() -> Result<()> {
     SignalHandler::run(interrupt_ignore_count, std::time::Duration::from_secs(1), run)
 }
 
+fn list_themes(app_dirs: &AppDirs) -> Result<()> {
+    let items = Theme::list(app_dirs)?;
+    let mut items: Vec<_> = items.into_iter().map(|x| (x.1.origin, x.0)).collect();
+    items.sort();
+
+    let term = if stdout().is_terminal() {
+        term_size::dimensions()
+    } else {
+        None
+    };
+
+    let max_len = if term.is_some() {
+        items.iter().map(|(_, name)| name.len()).max().unwrap_or_default()
+    } else {
+        0
+    };
+
+    let columns = term.map(|d| d.0 / (max_len + 4)).unwrap_or(1);
+
+    for (origin, group) in items.into_iter().chunk_by(|i| i.0).into_iter() {
+        let origin_str = match origin {
+            ThemeOrigin::Stock => "stock",
+            ThemeOrigin::Custom => "custom",
+        };
+
+        if term.is_some() {
+            println!("{}:", NuColor::Default.bold().paint(origin_str));
+        }
+
+        let group: Vec<_> = group.collect();
+        let rows = group.len().div_ceil(columns);
+
+        for row in 0..rows {
+            for col in 0..columns {
+                if let Some((_, name)) = group.get(row + col * rows) {
+                    if term.is_some() {
+                        print!("• {:width$}", name, width = max_len + 2);
+                    } else {
+                        println!("{}", name);
+                    }
+                }
+            }
+            if term.is_some() {
+                println!();
+            }
+        }
+    }
+    Ok(())
+}
+
 fn main() {
     if let Err(err) = run() {
-        err.log();
+        err.log(&AppInfo);
         process::exit(1);
+    }
+}
+
+struct AppInfo;
+
+impl AppInfoProvider for AppInfo {
+    fn usage_suggestion(&self, request: UsageRequest) -> Option<UsageResponse> {
+        match request {
+            UsageRequest::ListThemes => Some(("--list-themes".into(), "".into())),
+        }
     }
 }

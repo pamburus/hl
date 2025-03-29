@@ -21,7 +21,7 @@ use serde_yml as yaml;
 use strum::{EnumIter, IntoEnumIterator};
 
 // local imports
-use crate::{appdirs::AppDirs, error::*, level::InfallibleLevel};
+use crate::{appdirs::AppDirs, error::*, level::InfallibleLevel, xerr::Suggestions};
 
 // ---
 
@@ -38,13 +38,12 @@ impl Theme {
         match Self::load_from(&Self::themes_dir(app_dirs), name) {
             Err(Error::Io(e)) => match e.kind() {
                 ErrorKind::NotFound => match Self::load_embedded::<Assets>(name) {
-                    Err(Error::UnknownTheme { name, mut known }) => {
-                        if let Some(names) = Self::custom_names(app_dirs).ok() {
-                            known.extend(names.into_iter().filter_map(|n| n.ok()));
+                    Err(Error::UnknownTheme { name, mut suggestions }) => {
+                        if let Some(variants) = Self::custom_names(app_dirs).ok() {
+                            let variants: Vec<String> = variants.into_iter().filter_map(|v| v.ok()).collect();
+                            suggestions = suggestions.merge(Suggestions::new(&name, variants));
                         }
-                        known.sort_unstable();
-                        known.dedup();
-                        Err(Error::UnknownTheme { name, known })
+                        Err(Error::UnknownTheme { name, suggestions })
                     }
                     Err(e) => Err(e),
                     Ok(v) => Ok(v),
@@ -91,9 +90,11 @@ impl Theme {
             }
         }
 
+        let suggestions = Suggestions::new(name, Self::embedded_names());
+
         Err(Error::UnknownTheme {
             name: name.to_string(),
-            known: Self::embedded_names().into_iter().collect(),
+            suggestions,
         })
     }
 
