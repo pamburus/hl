@@ -290,8 +290,8 @@ pub struct Opt {
     /// Show input number and/or input filename before each message.
     #[arg(
         long,
-        default_value = "auto",
         overrides_with = "input_info",
+        default_value_t = config::global::get().input_info.into(),
         value_name = "VARIANT",
         value_enum,
         help_heading = heading::OUTPUT
@@ -408,37 +408,50 @@ pub struct Opt {
     pub files: Vec<PathBuf>,
 }
 
-#[derive(ValueEnum, Debug, Clone, Copy)]
+#[derive(ValueEnum, Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ColorOption {
     Auto,
     Always,
     Never,
 }
 
-#[derive(ValueEnum, Debug, Clone, Copy)]
+#[derive(ValueEnum, Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PagingOption {
     Auto,
     Always,
     Never,
 }
 
-#[derive(ValueEnum, Debug, Clone, Copy)]
+#[derive(ValueEnum, Debug, Clone, Copy, PartialEq, Eq)]
 pub enum InputInfoOption {
     Auto,
     None,
-    Full,
-    Compact,
     Minimal,
+    Compact,
+    Full,
 }
 
-#[derive(ValueEnum, Debug, Clone, Copy)]
+impl From<Option<settings::InputInfo>> for InputInfoOption {
+    fn from(value: Option<settings::InputInfo>) -> Self {
+        match value {
+            Some(settings::InputInfo::Auto) => Self::Auto,
+            Some(settings::InputInfo::None) => Self::None,
+            Some(settings::InputInfo::Minimal) => Self::Minimal,
+            Some(settings::InputInfo::Compact) => Self::Compact,
+            Some(settings::InputInfo::Full) => Self::Full,
+            None => Self::Auto,
+        }
+    }
+}
+
+#[derive(ValueEnum, Debug, Clone, Copy, PartialEq, Eq)]
 pub enum InputFormat {
     Auto,
     Json,
     Logfmt,
 }
 
-#[derive(ValueEnum, Debug, Clone, Copy)]
+#[derive(ValueEnum, Debug, Clone, Copy, PartialEq, Eq)]
 pub enum UnixTimestampUnit {
     Auto,
     S,
@@ -477,5 +490,35 @@ fn parse_non_zero_size(s: &str) -> std::result::Result<NonZeroUsize, NonZeroSize
         Ok(NonZeroUsize::from(value))
     } else {
         Err(NonZeroSizeParseError::ZeroSize)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_input_info_option_from() {
+        assert_eq!(InputInfoOption::from(None), InputInfoOption::Auto);
+        assert_eq!(
+            InputInfoOption::from(Some(settings::InputInfo::Auto)),
+            InputInfoOption::Auto
+        );
+        assert_eq!(
+            InputInfoOption::from(Some(settings::InputInfo::None)),
+            InputInfoOption::None
+        );
+        assert_eq!(
+            InputInfoOption::from(Some(settings::InputInfo::Minimal)),
+            InputInfoOption::Minimal
+        );
+        assert_eq!(
+            InputInfoOption::from(Some(settings::InputInfo::Compact)),
+            InputInfoOption::Compact
+        );
+        assert_eq!(
+            InputInfoOption::from(Some(settings::InputInfo::Full)),
+            InputInfoOption::Full
+        );
     }
 }

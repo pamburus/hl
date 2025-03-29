@@ -33,6 +33,7 @@ pub struct Settings {
     pub time_zone: Tz,
     pub formatting: Formatting,
     pub theme: String,
+    pub input_info: Option<InputInfo>,
 }
 
 impl Settings {
@@ -312,6 +313,18 @@ impl Field {
             show: FieldShowOption::Auto,
         }
     }
+}
+
+// ---
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Copy)]
+#[serde(rename_all = "kebab-case")]
+pub enum InputInfo {
+    Auto,
+    None,
+    Minimal,
+    Compact,
+    Full,
 }
 
 // ---
