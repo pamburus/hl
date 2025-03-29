@@ -4,7 +4,7 @@ members = [".", "crate/encstr", "crate/heapopt"]
 [workspace.package]
 repository = "https://github.com/pamburus/hl"
 authors = ["Pavel Ivanov <mr.pavel.ivanov@gmail.com>"]
-version = "0.31.0-alpha.17"
+version = "0.31.0-alpha.18"
 edition = "2024"
 license = "MIT"
 
@@ -80,7 +80,9 @@ sha2 = "0.10"
 shellwords = "1"
 signal-hook = "0.3"
 snap = "1"
+strsim = "0.11"
 strum = { version = "0.27", features = ["derive"] }
+term_size = "0.3"
 thiserror = "2"
 titlecase = "3"
 toml = "0.8"
