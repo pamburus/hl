@@ -1,10 +1,9 @@
 // std imports
-use std::path::PathBuf;
+use std::{num::NonZeroUsize, path::PathBuf};
 
 // third-party imports
 use clap::{ArgAction, Args, Parser, ValueEnum, value_parser};
 use clap_complete::Shell;
-use std::num::NonZeroUsize;
 
 // local imports
 use crate::{
@@ -12,6 +11,7 @@ use crate::{
     error::*,
     level::{LevelValueParser, RelaxedLevel},
     settings::{self, InputInfo},
+    themecfg,
 };
 use enumset_ext::convert::str::EnumSet;
 
@@ -391,9 +391,9 @@ pub struct Opt {
     #[arg(long, help_heading = heading::ADVANCED)]
     pub man_page: bool,
 
-    /// Print available themes and exit.
-    #[arg(long, help_heading = heading::ADVANCED)]
-    pub list_themes: bool,
+    /// Print available themes optionally filtered by tags [dark, light, 16color, 256color, truecolor].
+    #[arg(long, num_args=0..=1, value_name = "TAGS", require_equals = true, help_heading = heading::ADVANCED)]
+    pub list_themes: Option<Option<ThemeTagSet>>,
 
     /// Print debug index metadata (in --sort mode) and exit.
     #[arg(long, requires = "sort", help_heading = heading::ADVANCED)]
@@ -445,6 +445,7 @@ pub enum FlattenOption {
 }
 
 pub type InputInfoSet = EnumSet<InputInfo>;
+pub type ThemeTagSet = EnumSet<themecfg::Tag>;
 
 mod heading {
     pub const FILTERING: &str = "Filtering Options";

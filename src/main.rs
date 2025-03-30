@@ -90,8 +90,8 @@ fn run() -> Result<()> {
 
     let app_dirs = config::app_dirs().ok_or(Error::AppDirs)?;
 
-    if opt.list_themes {
-        return list_themes(&app_dirs);
+    if let Some(tags) = opt.list_themes {
+        return list_themes(&app_dirs, tags);
     }
 
     let color_supported = if stdout().is_terminal() {
@@ -346,12 +346,23 @@ fn run() -> Result<()> {
     SignalHandler::run(interrupt_ignore_count, std::time::Duration::from_secs(1), run)
 }
 
-fn list_themes(app_dirs: &AppDirs) -> Result<()> {
+fn list_themes(app_dirs: &AppDirs, tags: Option<cli::ThemeTagSet>) -> Result<()> {
     let items = Theme::list(app_dirs)?;
     let mut formatter = help::Formatter::new(stdout());
+
     formatter.format_grouped_list(
         items
             .into_iter()
+            .filter(|(name, _)| {
+                if let Some(tags) = tags {
+                    hl::themecfg::Theme::load(app_dirs, &name)
+                        .ok()
+                        .map(|theme| theme.tags.includes(*tags))
+                        .unwrap_or(false)
+                } else {
+                    true
+                }
+            })
             .sorted_by_key(|x| (x.1.origin, x.0.clone()))
             .chunk_by(|x| x.1.origin)
             .into_iter()

@@ -87,6 +87,7 @@ pub(super) fn bench(c: &mut Criterion) {
 
 fn theme() -> Theme {
     Theme::from(&themecfg::Theme {
+        tags: Default::default(),
         elements: hashmap! {
             Element::Time => Style {
                 modes: Vec::default(),

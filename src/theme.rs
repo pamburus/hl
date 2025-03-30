@@ -51,7 +51,7 @@ impl Theme {
     }
 
     pub fn list(app_dirs: &AppDirs) -> Result<HashMap<Arc<str>, ThemeInfo>> {
-        themecfg::Theme::list(app_dirs)
+        Ok(themecfg::Theme::list(app_dirs)?)
     }
 
     pub fn apply<'a, B: Push<u8>, F: FnOnce(&mut Styler<'a, B>)>(

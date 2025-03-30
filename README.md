@@ -661,7 +661,7 @@ Advanced Options:
   -C, --concurrency <N>             Number of processing threads [env: HL_CONCURRENCY=]
       --shell-completions <SHELL>   Print shell auto-completion script and exit [possible values: bash, elvish, fish, powershell, zsh]
       --man-page                    Print man page and exit
-      --list-themes                 Print available themes and exit
+      --list-themes[=<TAGS>]        Print available themes optionally filtered by tags [dark, light, 16color, 256color, truecolor]
       --dump-index                  Print debug index metadata (in --sort mode) and exit
 ```
 

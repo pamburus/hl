@@ -3,15 +3,16 @@ use std::{
     collections::HashMap,
     convert::TryFrom,
     fmt::{self, Write},
-    io::ErrorKind,
+    io::{self, ErrorKind},
     path::{Component, Path, PathBuf},
     str::{self, FromStr},
     sync::Arc,
 };
 
 // third-party imports
-use derive_more::{Deref, Display};
+use derive_more::Deref;
 use enum_map::Enum;
+use enumset::{EnumSet, EnumSetType};
 use rust_embed::RustEmbed;
 use serde::{
     Deserialize, Deserializer,
@@ -19,16 +20,59 @@ use serde::{
 };
 use serde_json as json;
 use serde_yml as yaml;
-use strum::{EnumIter, IntoEnumIterator};
+use strum::{Display, EnumIter, IntoEnumIterator};
+use thiserror::Error;
 
 // local imports
-use crate::{appdirs::AppDirs, error::*, level::InfallibleLevel, xerr::Suggestions};
+use crate::{
+    appdirs::AppDirs,
+    level::InfallibleLevel,
+    xerr::{HighlightQuoted, Suggestions},
+};
+
+/// Error is an error which may occur in the application.
+#[derive(Error, Debug)]
+pub enum Error {
+    #[error("unknown theme {name}", name=.name.hlq())]
+    ThemeNotFound { name: String, suggestions: Suggestions },
+    #[error("failed to load theme {name}: {source}", name=.name.hlq())]
+    FailedToLoadEmbeddedTheme { name: Arc<str>, source: ExternalError },
+    #[error("failed to load theme {name} from {path}: {source}", name=.name.hlq(), path=.path.hlq())]
+    FailedToLoadCustomTheme {
+        name: Arc<str>,
+        path: Arc<Path>,
+        source: ExternalError,
+    },
+    #[error("failed to list custom themes: {0}")]
+    FailedToListCustomThemes(#[from] io::Error),
+    #[error("invalid tag {value}", value=.value.hlq())]
+    InvalidTag { value: Arc<str>, suggestions: Suggestions },
+}
+
+/// Error is an error which may occur in the application.
+#[derive(Error, Debug)]
+pub enum ExternalError {
+    #[error(transparent)]
+    Io(#[from] io::Error),
+    #[error("failed to parse yaml: {0}")]
+    YamlError(#[from] serde_yml::Error),
+    #[error(transparent)]
+    TomlError(#[from] toml::de::Error),
+    #[error("failed to parse json: {0}")]
+    JsonError(#[from] serde_json::Error),
+    #[error("failed to parse utf-8 string: {0}")]
+    Utf8Error(#[from] std::str::Utf8Error),
+}
+
+pub type Result<T, E = Error> = std::result::Result<T, E>;
 
 // ---
 
 #[derive(Debug, Default, Deserialize)]
 #[serde(default)]
 pub struct Theme {
+    #[serde(deserialize_with = "enumset_serde::deserialize")]
+    pub tags: EnumSet<Tag>,
     pub elements: StylePack,
     pub levels: HashMap<InfallibleLevel, StylePack>,
     pub indicators: IndicatorPack,
@@ -37,22 +81,19 @@ pub struct Theme {
 impl Theme {
     pub fn load(app_dirs: &AppDirs, name: &str) -> Result<Self> {
         match Self::load_from(&Self::themes_dir(app_dirs), name) {
-            Err(Error::Io(e)) => match e.kind() {
-                ErrorKind::NotFound => match Self::load_embedded::<Assets>(name) {
-                    Err(Error::UnknownTheme { name, mut suggestions }) => {
-                        if let Some(variants) = Self::custom_names(app_dirs).ok() {
-                            let variants = variants.into_iter().filter_map(|v| v.ok());
-                            suggestions = suggestions.merge(Suggestions::new(&name, variants));
-                        }
-                        Err(Error::UnknownTheme { name, suggestions })
+            Ok(v) => Ok(v),
+            Err(Error::ThemeNotFound { .. }) => match Self::load_embedded::<Assets>(name) {
+                Ok(v) => Ok(v),
+                Err(Error::ThemeNotFound { name, mut suggestions }) => {
+                    if let Some(variants) = Self::custom_names(app_dirs).ok() {
+                        let variants = variants.into_iter().filter_map(|v| v.ok());
+                        suggestions = suggestions.merge(Suggestions::new(&name, variants));
                     }
-                    Err(e) => Err(e),
-                    Ok(v) => Ok(v),
-                },
-                _ => Err(Error::Io(e)),
+                    Err(Error::ThemeNotFound { name, suggestions })
+                }
+                Err(e) => Err(e),
             },
             Err(e) => Err(e),
-            Ok(v) => Ok(v),
         }
     }
 
@@ -87,19 +128,22 @@ impl Theme {
         for format in Format::iter() {
             let filename = Self::filename(name, format);
             if let Some(file) = S::get(&filename) {
-                return Self::from_buf(file.data.as_ref(), format);
+                return Self::from_buf(file.data.as_ref(), format).map_err(|e| Error::FailedToLoadEmbeddedTheme {
+                    name: name.into(),
+                    source: e,
+                });
             }
         }
 
         let suggestions = Suggestions::new(name, Self::embedded_names());
 
-        Err(Error::UnknownTheme {
+        Err(Error::ThemeNotFound {
             name: name.to_string(),
             suggestions,
         })
     }
 
-    fn from_buf(data: &[u8], format: Format) -> Result<Self> {
+    fn from_buf(data: &[u8], format: Format) -> Result<Self, ExternalError> {
         let s = std::str::from_utf8(data)?;
         match format {
             Format::Yaml => Ok(yaml::from_str(s)?),
@@ -117,22 +161,28 @@ impl Theme {
             } else {
                 dir.join(&filename)
             };
+
+            let map_err = |e: ExternalError, path: PathBuf| Error::FailedToLoadCustomTheme {
+                name: name.into(),
+                path: path.into(),
+                source: e,
+            };
+
             match std::fs::read(&path) {
                 Ok(data) => {
-                    return Self::from_buf(&data, format).map_err(|e| Error::FailedToLoadTheme {
-                        name: name.to_string(),
-                        filename: path.display().to_string(),
-                        source: Box::new(e),
-                    });
+                    return Self::from_buf(&data, format).map_err(|e| map_err(e, path));
                 }
                 Err(e) => match e.kind() {
                     ErrorKind::NotFound => continue,
-                    _ => return Err(e.into()),
+                    _ => return Err(map_err(e.into(), path)),
                 },
             }
         }
 
-        Err(std::io::Error::new(ErrorKind::NotFound, "theme file not found").into())
+        Err(Error::ThemeNotFound {
+            name: name.into(),
+            suggestions: Suggestions::none(),
+        })
     }
 
     fn filename(name: &str, format: Format) -> String {
@@ -157,7 +207,11 @@ impl Theme {
         Ok(dir
             .read_dir()?
             .map(|item| {
-                Ok(item?
+                let item = item?;
+                if !item.file_type()?.is_file() {
+                    return Ok(None);
+                }
+                Ok(item
                     .path()
                     .file_name()
                     .and_then(|n| n.to_str())
@@ -198,6 +252,39 @@ impl Format {
             Self::Toml => "toml",
             Self::Json => "json",
         }
+    }
+}
+
+// ---
+
+#[derive(Debug, Ord, PartialOrd, Hash, Enum, Deserialize, EnumSetType, Display)]
+#[strum(serialize_all = "kebab-case")]
+#[serde(rename_all = "kebab-case")]
+pub enum Tag {
+    Dark,
+    Light,
+    #[strum(serialize = "16color", serialize = "16-color")]
+    #[serde(rename = "16color")]
+    #[serde(alias = "16-color")]
+    Palette16,
+    #[strum(serialize = "256color", serialize = "256-color")]
+    #[serde(rename = "256color")]
+    #[serde(alias = "256-color")]
+    Palette256,
+    #[strum(serialize = "truecolor", serialize = "true-color")]
+    #[serde(rename = "truecolor")]
+    #[serde(alias = "true-color")]
+    TrueColor,
+}
+
+impl FromStr for Tag {
+    type Err = Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        serde_plain::from_str(s).map_err(|_| Error::InvalidTag {
+            value: s.into(),
+            suggestions: Suggestions::new(s, EnumSet::<Tag>::all().iter().map(|v| v.to_string())),
+        })
     }
 }
 
@@ -624,5 +711,15 @@ mod tests {
                 .to_string()
                 .ends_with("expected style pack object")
         );
+    }
+
+    #[test]
+    fn test_tags() {
+        assert_eq!(Tag::from_str("dark").unwrap(), Tag::Dark);
+        assert_eq!(Tag::from_str("light").unwrap(), Tag::Light);
+        assert_eq!(Tag::from_str("16-color").unwrap(), Tag::Palette16);
+        assert_eq!(Tag::from_str("256-color").unwrap(), Tag::Palette256);
+        assert_eq!(Tag::from_str("true-color").unwrap(), Tag::TrueColor);
+        assert!(Tag::from_str("invalid").is_err());
     }
 }

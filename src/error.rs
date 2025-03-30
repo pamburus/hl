@@ -17,6 +17,7 @@ use serde_logfmt::logfmt;
 
 // local imports
 use crate::level;
+use crate::themecfg;
 use crate::xerr::{Highlight, HighlightQuoted, Suggestions};
 
 /// Error is an error which may occur in the application.
@@ -46,15 +47,8 @@ pub enum Error {
     InvalidLevel(#[from] InvalidLevelError),
     #[error("cannot recognize time {0:?}")]
     UnrecognizedTime(String),
-    #[error("unknown theme {name}", name=.name.hlq())]
-    UnknownTheme { name: String, suggestions: Suggestions },
-    #[error("failed to load theme {}: {source}", .filename.hlq())]
-    FailedToLoadTheme {
-        name: String,
-        filename: String,
-        #[source]
-        source: Box<Error>,
-    },
+    #[error(transparent)]
+    Theme(#[from] themecfg::Error),
     #[error("failed to parse utf-8 string: {0}")]
     Utf8Error(#[from] std::str::Utf8Error),
     #[error("failed to construct utf-8 string from bytes: {0}")]
@@ -138,7 +132,7 @@ impl Error {
         A: AppInfoProvider,
     {
         match self {
-            Error::UnknownTheme { suggestions, .. } => {
+            Error::Theme(themecfg::Error::ThemeNotFound { suggestions, .. }) => {
                 let did_you_mean = did_you_mean(suggestions);
                 let usage =
                     usage(app, UsageRequest::ListThemes).map(|usage| format!("run {usage} to list available themes"));
@@ -313,10 +307,10 @@ mod tests {
 
     #[test]
     fn test_tips() {
-        let err = Error::UnknownTheme {
+        let err = Error::Theme(themecfg::Error::ThemeNotFound {
             name: "test".to_string(),
             suggestions: Suggestions::new("test", vec!["test1", "test2"]),
-        };
+        });
         assert_eq!(
             err.tips(&TestAppInfo).to_string(),
             "\u{1b}[1m\u{1b}[32m  tip:\u{1b}[39m\u{1b}[0m did you mean \u{1b}[33m\"test1\"\u{1b}[0m or \u{1b}[33m\"test2\"\u{1b}[0m?\n",
@@ -326,10 +320,10 @@ mod tests {
         err.log_to(&mut buf, &TestAppInfo).unwrap();
         assert!(!buf.is_empty());
 
-        let err = Error::UnknownTheme {
+        let err = Error::Theme(themecfg::Error::ThemeNotFound {
             name: "test".to_string(),
             suggestions: Suggestions::none(),
-        };
+        });
 
         assert_eq!(
             err.tips(&CustomAppInfo::default()).to_string(),

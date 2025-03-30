@@ -1,7 +1,7 @@
 // std imports
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
-    fmt, include_str,
+    include_str,
     ops::Deref,
     path::{Path, PathBuf},
     str::FromStr,
@@ -15,7 +15,7 @@ use enumset::{EnumSet, EnumSetType, enum_set};
 use enumset_ext::EnumSetExt;
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Deserializer, Serialize, Serializer, de::IntoDeserializer};
-use strum::IntoEnumIterator;
+use strum::{Display, IntoEnumIterator};
 
 // local imports
 use crate::level::{InfallibleLevel, Level};
@@ -327,7 +327,8 @@ impl Field {
 
 pub type InputInfoSet = EnumSet<InputInfo>;
 
-#[derive(Debug, Serialize, Deserialize, EnumSetType)]
+#[derive(Debug, Serialize, Deserialize, EnumSetType, Display)]
+#[strum(serialize_all = "kebab-case")]
 #[serde(rename_all = "kebab-case")]
 pub enum InputInfo {
     Auto,
@@ -345,12 +346,6 @@ impl InputInfo {
             set
         }
         .difference(InputInfo::Auto.into())
-    }
-}
-
-impl fmt::Display for InputInfo {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", serde_plain::to_string(self).unwrap())
     }
 }
 
