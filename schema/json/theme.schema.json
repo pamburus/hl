@@ -18,6 +18,12 @@
                     },
                     "title": "Optional YAML anchors for colors"
                 },
+                "tags": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/tag"
+                    }
+                },
                 "elements": {
                     "$ref": "#/definitions/elements"
                 },
@@ -30,6 +36,10 @@
             },
             "required": [],
             "title": "Theme"
+        },
+        "tag": {
+            "type": "string",
+            "enum": ["dark", "light", "16color", "256color", "truecolor"]
         },
         "mode": {
             "type": "string",

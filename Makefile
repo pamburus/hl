@@ -5,7 +5,6 @@ include build/make/common.mk
 SHELL = /bin/bash
 
 # Local variables
-THEMES = $(notdir $(basename $(wildcard etc/defaults/themes/*.yaml)))
 SCREENSHOT_SAMPLE = cafe.log
 
 # Exported variables
@@ -13,13 +12,6 @@ export RUST_BACKTRACE=1
 
 # The list of files that are intentionally ignored while being tracked
 ignored-tracked-files = .vscode/settings.json
-
-# Theme mappings
-theme-ayu-dark-24 = ayu
-theme-ayu-light-24 = ayu-light
-theme-ayu-mirage-24 = $(if $(filter dark,$1),ayu-mirage,)
-theme-one-dark-24 = one-half-dark
-theme-one-light-24 = one-half-light
 
 ## Build debug target
 .PHONY: build
@@ -95,12 +87,9 @@ clean: contrib-build
 
 ## Create screenshots
 .PHONY: screenshots
-screenshots: build $(THEMES:%=screenshot-%)
-
-screenshot-%: build contrib-screenshots
-	@$(SHELL) contrib/bin/screenshot.sh light $(SCREENSHOT_SAMPLE) $* "$(call theme-$*,light)"
-	@$(SHELL) contrib/bin/screenshot.sh dark $(SCREENSHOT_SAMPLE) $* "$(call theme-$*,dark)"
-.PHONY: screenshot-%
+screenshots: build
+	@$(SHELL) contrib/bin/screenshot.sh light $(SCREENSHOT_SAMPLE)
+	@$(SHELL) contrib/bin/screenshot.sh dark $(SCREENSHOT_SAMPLE)
 
 ## Collect coverage
 .PHONY: coverage

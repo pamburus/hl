@@ -1,16 +1,18 @@
 # yaml-language-server: $schema=https://raw.githubusercontent.com/pamburus/hl/master/schema/json/theme.schema.json
 $schema: https://raw.githubusercontent.com/pamburus/hl/master/schema/json/theme.schema.json
 
+tags: [light, truecolor]
+
 $palette:
-  - &default '#5d677b'
-  - &strong '#000000'
-  - &red '#dc143c'
-  - &gray '#778899'
-  - &blue '#4169e1'
-  - &yellow '#ff8c00'
-  - &cyan '#00ced1'
-  - &magenta '#ba55d3'
-  - &green '#228b22'
+  - &default "#5d677b"
+  - &strong "#000000"
+  - &red "#dc143c"
+  - &gray "#778899"
+  - &blue "#4169e1"
+  - &yellow "#ff8c00"
+  - &cyan "#00ced1"
+  - &magenta "#ba55d3"
+  - &green "#228b22"
 
 elements:
   input:
@@ -44,7 +46,7 @@ elements:
     foreground: *green
   boolean:
     foreground: *yellow
-  'null':
+  "null":
     foreground: *red
 levels:
   trace:
@@ -69,9 +71,9 @@ levels:
 indicators:
   sync:
     synced:
-      text: ' '
+      text: " "
     failed:
-      text: '!'
+      text: "!"
       inner:
         style:
           foreground: *yellow

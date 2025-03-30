@@ -1,6 +1,8 @@
 # yaml-language-server: $schema=https://raw.githubusercontent.com/pamburus/hl/master/schema/json/theme.schema.json
 $schema: https://raw.githubusercontent.com/pamburus/hl/master/schema/json/theme.schema.json
 
+tags: [light, 16color]
+
 elements:
   input:
     foreground: bright-black
@@ -30,7 +32,7 @@ elements:
     foreground: cyan
   boolean:
     foreground: yellow
-  'null':
+  "null":
     foreground: yellow
 levels:
   trace:

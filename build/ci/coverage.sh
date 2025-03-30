@@ -48,6 +48,7 @@ function test() {
     ${MAIN_EXECUTABLE:?} --config - --shell-completions bash > /dev/null
     ${MAIN_EXECUTABLE:?} --config - --man-page > /dev/null
     ${MAIN_EXECUTABLE:?} --config - --list-themes > /dev/null
+    ${MAIN_EXECUTABLE:?} --config - --list-themes=dark,16color > /dev/null
     ${MAIN_EXECUTABLE:?} --config - sample/prometheus.log -P > /dev/null
     HL_DEBUG_LOG=info ${MAIN_EXECUTABLE:?} --config - sample/prometheus.log -P > /dev/null
     echo "" | ${MAIN_EXECUTABLE:?} --config - --concurrency 4 > /dev/null
