@@ -633,7 +633,7 @@ Filtering Options:
 Output Options:
       --color [<WHEN>]        Color output control [env: HL_COLOR=] [default: auto] [possible values: auto, always, never]
   -c                          Handful alias for --color=always, overrides --color option
-      --theme <THEME>         Color theme [env: HL_THEME=] [default: universal]
+      --theme <THEME>         Color theme [env: HL_THEME=] [default: uni]
   -r, --raw                   Output raw source messages instead of formatted messages, which can be useful for applying filters and saving results in their original format
       --no-raw                Disable raw source messages output, overrides --raw option
       --raw-fields            Output field values as is, without unescaping or prettifying
@@ -645,7 +645,7 @@ Output Options:
       --no-local              Disable local time zone, overrides --local option
   -e, --hide-empty-fields     Hide empty fields, applies for null, string, object and array fields only [env: HL_HIDE_EMPTY_FIELDS=]
   -E, --show-empty-fields     Show empty fields, overrides --hide-empty-fields option [env: HL_SHOW_EMPTY_FIELDS=]
-      --input-info <VARIANT>  Show input number and/or input filename before each message [default: auto] [possible values: auto, none, full, compact, minimal]
+      --input-info <LAYOUTS>  Input number and filename layouts [one or many of: auto, none, minimal, compact, full] [default: auto]
   -o, --output <FILE>         Output file
 
 Input Options:

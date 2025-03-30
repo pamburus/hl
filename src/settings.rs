@@ -1,21 +1,28 @@
 // std imports
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
-    include_str,
+    fmt, include_str,
+    ops::Deref,
     path::{Path, PathBuf},
+    str::FromStr,
 };
 
 // third-party imports
 use chrono_tz::Tz;
 use config::{Config, File, FileFormat};
 use derive_more::{Deref, From};
+use enumset::{EnumSetType, enum_set};
+use enumset_ext::EnumSetExt;
 use once_cell::sync::Lazy;
-use serde::{Deserialize, Serialize, Serializer};
+use serde::{Deserialize, Deserializer, Serialize, Serializer, de::IntoDeserializer};
 use strum::IntoEnumIterator;
 
 // local imports
-use crate::error::Error;
 use crate::level::{InfallibleLevel, Level};
+use crate::{error::Error, xerr::Suggestions};
+
+// sub-modules
+pub mod error;
 
 // ---
 
@@ -33,7 +40,7 @@ pub struct Settings {
     pub time_zone: Tz,
     pub formatting: Formatting,
     pub theme: String,
-    pub input_info: Option<InputInfo>,
+    pub input_info: InputInfoSet,
 }
 
 impl Settings {
@@ -317,7 +324,9 @@ impl Field {
 
 // ---
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Copy)]
+pub type InputInfoSet = EnumSet<InputInfo>;
+
+#[derive(Debug, Serialize, Deserialize, EnumSetType)]
 #[serde(rename_all = "kebab-case")]
 pub enum InputInfo {
     Auto,
@@ -325,6 +334,34 @@ pub enum InputInfo {
     Minimal,
     Compact,
     Full,
+}
+
+impl InputInfo {
+    pub fn resolve(set: enumset::EnumSet<InputInfo>) -> enumset::EnumSet<InputInfo> {
+        if !set.intersects(enum_set!(InputInfo::Auto).complement()) {
+            enumset::EnumSet::all()
+        } else {
+            set
+        }
+        .difference(InputInfo::Auto.into())
+    }
+}
+
+impl fmt::Display for InputInfo {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", serde_plain::to_string(self).unwrap())
+    }
+}
+
+impl FromStr for InputInfo {
+    type Err = self::error::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        serde_plain::from_str(s).map_err(|_| Self::Err::InvalidInputInfo {
+            value: s.into(),
+            suggestions: Suggestions::new(s, InputInfoSet::all().iter().map(|v| v.to_string())),
+        })
+    }
 }
 
 // ---
@@ -430,6 +467,139 @@ impl Punctuation {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct EnumSet<T: EnumSetType>(enumset::EnumSet<T>);
+
+impl<T: EnumSetType> EnumSet<T> {
+    pub const fn all() -> Self {
+        Self(enumset::EnumSet::all())
+    }
+
+    pub const fn empty() -> Self {
+        Self(enumset::EnumSet::empty())
+    }
+}
+
+impl<T: EnumSetType> Deref for EnumSet<T> {
+    type Target = enumset::EnumSet<T>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl<T: EnumSetType + fmt::Display> fmt::Display for EnumSet<T> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let mut first = true;
+        for item in self.0.iter() {
+            if first {
+                first = false;
+            } else {
+                write!(f, ",")?;
+            }
+            write!(f, "{}", item)?;
+        }
+        Ok(())
+    }
+}
+
+impl<T: EnumSetType + FromStr> FromStr for EnumSet<T> {
+    type Err = <T as FromStr>::Err;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let mut set = enumset::EnumSet::new();
+        for item in s.split(',') {
+            let item = item.trim();
+            let enum_value: T = T::from_str(item)?;
+            set.insert(enum_value);
+        }
+        Ok(EnumSet(set))
+    }
+}
+
+struct EnumSetDeserializer<T: EnumSetType>(EnumSet<T>);
+
+impl<T: EnumSetType> Default for EnumSetDeserializer<T> {
+    fn default() -> Self {
+        Self(EnumSet(enumset::EnumSet::new()))
+    }
+}
+
+impl<'de, T: EnumSetType + Deserialize<'de>> serde::de::Visitor<'de> for EnumSetDeserializer<T> {
+    type Value = EnumSet<T>;
+
+    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+        formatter.write_str("a list of enum values or a comma-separated list of enum values")
+    }
+
+    fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
+    where
+        A: serde::de::SeqAccess<'de>,
+    {
+        let mut set = enumset::EnumSet::new();
+        while let Some(value) = seq.next_element()? {
+            set.insert(value);
+        }
+        Ok(EnumSet(set))
+    }
+
+    fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
+    where
+        E: serde::de::Error,
+    {
+        let mut set = enumset::EnumSet::new();
+        for item in value.split(',') {
+            let item = item.trim();
+            let enum_value: T = T::deserialize(item.into_deserializer())?;
+            set.insert(enum_value);
+        }
+        Ok(EnumSet(set))
+    }
+}
+
+impl<'de, T: EnumSetType + Deserialize<'de>> Deserialize<'de> for EnumSet<T> {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        deserializer.deserialize_any(EnumSetDeserializer::default())
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+#[serde(untagged)]
+pub enum ListOrCommaSeparatedList<T> {
+    List(Vec<T>),
+    #[serde(deserialize_with = "csl_deserialize")]
+    CommaSeparatedList(Vec<T>),
+}
+
+impl<T> Deref for ListOrCommaSeparatedList<T> {
+    type Target = [T];
+
+    fn deref(&self) -> &Self::Target {
+        match self {
+            ListOrCommaSeparatedList::List(list) => list,
+            ListOrCommaSeparatedList::CommaSeparatedList(list) => list,
+        }
+    }
+}
+
+impl<T> From<ListOrCommaSeparatedList<T>> for Vec<T> {
+    fn from(value: ListOrCommaSeparatedList<T>) -> Self {
+        match value {
+            ListOrCommaSeparatedList::List(list) => list,
+            ListOrCommaSeparatedList::CommaSeparatedList(list) => list,
+        }
+    }
+}
+
+impl<T> From<Vec<T>> for ListOrCommaSeparatedList<T> {
+    fn from(value: Vec<T>) -> Self {
+        ListOrCommaSeparatedList::List(value)
+    }
+}
+
 fn ordered_map_serialize<K: Eq + PartialEq + Ord + PartialOrd + Serialize, V: Serialize, S>(
     value: &HashMap<K, V>,
     serializer: S,
@@ -439,6 +609,21 @@ where
 {
     let ordered: BTreeMap<_, _> = value.iter().collect();
     ordered.serialize(serializer)
+}
+
+fn csl_deserialize<'de, D, T>(deserializer: D) -> Result<Vec<T>, D::Error>
+where
+    D: Deserializer<'de>,
+    T: Deserialize<'de>,
+{
+    let seq = String::deserialize(deserializer)?;
+    if seq.is_empty() {
+        Ok(Vec::new())
+    } else {
+        seq.split(',')
+            .map(|item| T::deserialize(item.trim().into_deserializer()))
+            .collect()
+    }
 }
 
 #[cfg(test)]
@@ -521,5 +706,68 @@ mod tests {
         };
 
         assert_eq!(variant.resolve(), None);
+    }
+
+    #[test]
+    fn test_input_info() {
+        let set = InputInfoSet::all();
+        assert_eq!(
+            *set,
+            enum_set!(InputInfo::Auto | InputInfo::None | InputInfo::Minimal | InputInfo::Compact | InputInfo::Full)
+        );
+        assert_eq!(set.to_string(), "auto,none,minimal,compact,full");
+
+        let set = InputInfoSet::from_str("auto,none").unwrap();
+        assert_eq!(InputInfo::resolve(*set), enum_set!(InputInfo::None));
+
+        let set = InputInfoSet::empty();
+        assert_eq!(
+            InputInfo::resolve(*set),
+            enum_set!(InputInfo::None | InputInfo::Minimal | InputInfo::Compact | InputInfo::Full)
+        );
+
+        let set = InputInfoSet::from_str("auto,none,invalid");
+        assert!(set.is_err());
+
+        let set = InputInfoSet::from_str("auto").unwrap();
+        assert_eq!(
+            InputInfo::resolve(*set),
+            enum_set!(InputInfo::None | InputInfo::Minimal | InputInfo::Compact | InputInfo::Full)
+        );
+
+        let set = InputInfoSet::from_str("auto,none").unwrap();
+        assert_eq!(InputInfo::resolve(*set), enum_set!(InputInfo::None));
+
+        let set: InputInfoSet = serde_json::from_str(r#"["none","minimal"]"#).unwrap();
+        assert_eq!(
+            InputInfo::resolve(*set),
+            enum_set!(InputInfo::None | InputInfo::Minimal)
+        );
+
+        let res = serde_json::from_str::<InputInfoSet>(r#"12"#);
+        assert!(res.is_err());
+    }
+
+    #[test]
+    fn test_csl() {
+        let csl = ListOrCommaSeparatedList::from(vec!["a", "b", "c"]);
+        assert_eq!(csl.deref(), vec!["a", "b", "c"]);
+        assert_eq!(Vec::from(csl), vec!["a", "b", "c"]);
+
+        let csl: ListOrCommaSeparatedList<String> = serde_plain::from_str("a,b,c").unwrap();
+        assert_eq!(csl.deref(), vec!["a", "b", "c"]);
+        assert_eq!(Vec::from(csl), vec!["a", "b", "c"]);
+
+        let csl: ListOrCommaSeparatedList<String> = serde_plain::from_str("").unwrap();
+        assert_eq!(csl.deref(), Vec::<String>::new());
+
+        let csl = serde_json::from_str::<ListOrCommaSeparatedList<String>>(r#""a,b,c""#).unwrap();
+        assert_eq!(csl.deref(), vec!["a", "b", "c"]);
+
+        let csl = serde_json::from_str::<ListOrCommaSeparatedList<String>>(r#""""#).unwrap();
+        assert_eq!(csl.deref(), Vec::<String>::new());
+
+        let res = serde_json::from_str::<ListOrCommaSeparatedList<String>>(r#"12"#);
+        assert!(res.is_err());
     }
 }

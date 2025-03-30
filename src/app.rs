@@ -22,6 +22,8 @@ use std::os::unix::fs::MetadataExt;
 use closure::closure;
 use crossbeam_channel::{self as channel, Receiver, RecvError, RecvTimeoutError, Sender};
 use crossbeam_utils::thread;
+use enumset::{EnumSet, enum_set};
+use enumset_ext::EnumSetExt;
 use itertools::{Itertools, izip};
 use serde::{Deserialize, Serialize};
 
@@ -39,7 +41,7 @@ use crate::{
     model::{Filter, Parser, ParserSettings, RawRecord, Record, RecordFilter, RecordWithSourceConstructor},
     query::Query,
     scanning::{BufFactory, Delimit, Delimiter, Scanner, SearchExt, Segment, SegmentBuf, SegmentBufFactory},
-    settings::{FieldShowOption, Fields, Formatting},
+    settings::{FieldShowOption, Fields, Formatting, InputInfo},
     theme::{Element, StylingPush, Theme},
     timezone::Tz,
     vfs::LocalFileSystem,
@@ -66,7 +68,7 @@ pub struct Options {
     pub sort: bool,
     pub follow: bool,
     pub sync_interval: Duration,
-    pub input_info: Option<InputInfo>,
+    pub input_info: InputInfoSet,
     pub input_format: Option<InputFormat>,
     pub dump_index: bool,
     pub app_dirs: Option<AppDirs>,
@@ -108,10 +110,12 @@ impl Options {
     }
 
     #[cfg(test)]
-    fn with_input_info(self, input_info: Option<InputInfo>) -> Self {
+    fn with_input_info(self, input_info: InputInfoSet) -> Self {
         Self { input_info, ..self }
     }
 }
+
+pub type InputInfoSet = EnumSet<InputInfo>;
 
 #[derive(Default)]
 pub struct AdvancedFilter {
@@ -164,14 +168,6 @@ pub struct FieldOptions {
     pub settings: Fields,
 }
 
-#[derive(Eq, PartialEq, Copy, Clone)]
-pub enum InputInfo {
-    Auto,
-    Full,
-    Compact,
-    Minimal,
-}
-
 #[derive(Eq, PartialEq, Copy, Clone, Debug, Serialize, Deserialize)]
 pub enum InputFormat {
     Json,
@@ -216,9 +212,10 @@ pub type Output = dyn Write + Send + Sync;
 
 impl App {
     pub fn new(mut options: Options) -> Self {
-        if options.raw && options.input_info == Some(InputInfo::Auto) {
-            options.input_info = None
+        if options.raw && options.input_info.intersects(InputInfo::None | InputInfo::Auto) {
+            options.input_info = InputInfo::None.into()
         }
+        options.input_info = InputInfo::resolve(options.input_info.into());
         Self { options }
     }
 
@@ -731,20 +728,22 @@ impl App {
 
         let mut badges = inputs.into_iter().map(|x| name(x).chars().collect_vec()).collect_vec();
 
-        match &self.options.input_info {
-            None => return None,
-            Some(InputInfo::Auto) => {
-                if badges.len() < 2 {
-                    return None;
-                }
-            }
-            _ => {}
-        };
+        let ii = self.options.input_info;
+
+        const II: InputInfoSet = enum_set!(InputInfo::Minimal | InputInfo::Compact | InputInfo::Full);
+
+        if ii.intersection(II).is_empty() {
+            return None;
+        }
+
+        if ii.contains(InputInfo::None) && badges.len() < 2 {
+            return None;
+        }
 
         let num_width = format!("{}", badges.len()).len();
         let opt = &self.options.formatting.punctuation;
 
-        if let Some(InputInfo::Compact | InputInfo::Auto) = self.options.input_info {
+        if ii.contains(InputInfo::Compact) {
             let pl = common_prefix_len(&badges);
             for badge in badges.iter_mut() {
                 let cl = opt.input_name_clipping.chars().count();
@@ -801,7 +800,7 @@ impl App {
                         s.batch(|buf| buf.extend(opt.input_number_right_separator.as_bytes()));
                     });
 
-                    if self.options.input_info != Some(InputInfo::Minimal) {
+                    if ii.intersects(InputInfo::Compact | InputInfo::Full) {
                         s.element(Element::InputName, |s| {
                             s.batch(|buf| buf.extend(opt.input_name_left_separator.as_bytes()));
                             s.element(Element::InputNameInner, |s| {
@@ -1239,7 +1238,7 @@ mod tests {
         let mut output = Vec::new();
         let mut ff = IncludeExcludeKeyFilter::new(MatchOptions::default());
         ff.entry("duration").exclude();
-        let app = App::new(options().with_input_info(Some(InputInfo::Auto)).with_raw(true));
+        let app = App::new(options().with_input_info(InputInfo::Auto.into()).with_raw(true));
         app.run(vec![input(input1), input(input2)], &mut output).unwrap();
         assert_eq!(
             std::str::from_utf8(&output).unwrap(),
@@ -1493,7 +1492,7 @@ mod tests {
             sort: false,
             follow: false,
             sync_interval: Duration::from_secs(1),
-            input_info: None,
+            input_info: Default::default(),
             input_format: None,
             dump_index: false,
             app_dirs: None,

@@ -8,8 +8,19 @@ time-format: "%b %d %T.%3N"
 # https://en.wikipedia.org/wiki/List_of_tz_database_time_zones page.
 time-zone: "UTC"
 
-# Which information about input file to display.
-# Possible values: [auto, none, minimal, compact, full].
+# Layouts defining which information about the input file to display.
+# One or many of the following values can be specified: [`auto`, `none`, `minimal`, `compact`, `full`].
+# If multiple layouts are specified, only these layouts will be enabled.
+#
+# If `auto` is specified, the most suitable layout will be automatically chosen from the enabled layouts
+# based on the number of input files and the width of the terminal screen.
+#
+# If `auto` is specified but no other layouts are specified, all supported layouts will be enabled.
+#
+# Layout `none` means that no information about the input file is displayed.
+# Layout `minimal` means that only the input file number is displayed.
+# Layout `compact` means that the input file number and shortened path are displayed.
+# Layout `full` means that the input file number and full path are displayed.
 input-info: auto
 
 # Settings for fields processing.
