@@ -11,8 +11,9 @@ use crate::{
     config,
     error::*,
     level::{LevelValueParser, RelaxedLevel},
-    settings::{self, InputInfoSet},
+    settings::{self, InputInfo},
 };
+use enumset_ext::convert::str::EnumSet;
 
 // ---
 
@@ -291,7 +292,7 @@ pub struct Opt {
     #[arg(
         long,
         overrides_with = "input_info",
-        default_value_t = config::global::get().input_info,
+        default_value_t = config::global::get().input_info.into(),
         value_name = "LAYOUTS",
         help_heading = heading::OUTPUT
     )]
@@ -443,6 +444,8 @@ pub enum FlattenOption {
     Always,
 }
 
+pub type InputInfoSet = EnumSet<InputInfo>;
+
 mod heading {
     pub const FILTERING: &str = "Filtering Options";
     pub const INPUT: &str = "Input Options";
@@ -467,5 +470,52 @@ fn parse_non_zero_size(s: &str) -> std::result::Result<NonZeroUsize, NonZeroSize
         Ok(NonZeroUsize::from(value))
     } else {
         Err(NonZeroSizeParseError::ZeroSize)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use enumset::enum_set;
+    use std::str::FromStr;
+
+    #[test]
+    fn test_input_info() {
+        let set = InputInfoSet::all();
+        assert_eq!(
+            *set,
+            enum_set!(InputInfo::Auto | InputInfo::None | InputInfo::Minimal | InputInfo::Compact | InputInfo::Full)
+        );
+        assert_eq!(set.to_string(), "auto,none,minimal,compact,full");
+
+        let set = InputInfoSet::from_str("auto,none").unwrap();
+        assert_eq!(InputInfo::resolve(*set), enum_set!(InputInfo::None));
+
+        let set = InputInfoSet::empty();
+        assert_eq!(
+            InputInfo::resolve(*set),
+            enum_set!(InputInfo::None | InputInfo::Minimal | InputInfo::Compact | InputInfo::Full)
+        );
+
+        let set = InputInfoSet::from_str("auto,none,invalid");
+        assert!(set.is_err());
+
+        let set = InputInfoSet::from_str("auto").unwrap();
+        assert_eq!(
+            InputInfo::resolve(*set),
+            enum_set!(InputInfo::None | InputInfo::Minimal | InputInfo::Compact | InputInfo::Full)
+        );
+
+        let set = InputInfoSet::from_str("auto,none").unwrap();
+        assert_eq!(InputInfo::resolve(*set), enum_set!(InputInfo::None));
+
+        let set: InputInfoSet = serde_json::from_str(r#"["none","minimal"]"#).unwrap();
+        assert_eq!(
+            InputInfo::resolve(*set),
+            enum_set!(InputInfo::None | InputInfo::Minimal)
+        );
+
+        let res = serde_json::from_str::<InputInfoSet>(r#"12"#);
+        assert!(res.is_err());
     }
 }

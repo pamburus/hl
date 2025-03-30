@@ -8,5 +8,10 @@ edition.workspace = true
 authors.workspace = true
 license.workspace = true
 
+[features]
+serde = ["dep:serde", "dep:enumset-serde"]
+
 [dependencies]
 enumset = { version = "1", features = [] }
+serde = { version = "1", optional = true }
+enumset-serde = { path = "../enumset-serde", optional = true }

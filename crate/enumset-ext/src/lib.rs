@@ -1,4 +1,8 @@
+// third-party imports
 use enumset::{EnumSet, EnumSetType};
+
+// modules
+pub mod convert;
 
 pub trait EnumSetExt<T: EnumSetType> {
     fn intersects(&self, other: Self) -> bool;

@@ -11,7 +11,7 @@ use std::{
 use chrono_tz::Tz;
 use config::{Config, File, FileFormat};
 use derive_more::{Deref, From};
-use enumset::{EnumSetType, enum_set};
+use enumset::{EnumSet, EnumSetType, enum_set};
 use enumset_ext::EnumSetExt;
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Deserializer, Serialize, Serializer, de::IntoDeserializer};
@@ -40,6 +40,7 @@ pub struct Settings {
     pub time_zone: Tz,
     pub formatting: Formatting,
     pub theme: String,
+    #[serde(deserialize_with = "enumset_serde::deserialize")]
     pub input_info: InputInfoSet,
 }
 
@@ -467,65 +468,6 @@ impl Punctuation {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct EnumSet<T: EnumSetType>(enumset::EnumSet<T>);
-
-impl<'de, T: EnumSetType + Deserialize<'de>> Deserialize<'de> for EnumSet<T> {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        Ok(Self(enumset_serde::deserialize(deserializer)?))
-    }
-}
-
-impl<T: EnumSetType> EnumSet<T> {
-    pub const fn all() -> Self {
-        Self(enumset::EnumSet::all())
-    }
-
-    pub const fn empty() -> Self {
-        Self(enumset::EnumSet::empty())
-    }
-}
-
-impl<T: EnumSetType> Deref for EnumSet<T> {
-    type Target = enumset::EnumSet<T>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl<T: EnumSetType + fmt::Display> fmt::Display for EnumSet<T> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let mut first = true;
-        for item in self.0.iter() {
-            if first {
-                first = false;
-            } else {
-                write!(f, ",")?;
-            }
-            write!(f, "{}", item)?;
-        }
-        Ok(())
-    }
-}
-
-impl<T: EnumSetType + FromStr> FromStr for EnumSet<T> {
-    type Err = <T as FromStr>::Err;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let mut set = enumset::EnumSet::new();
-        for item in s.split(',') {
-            let item = item.trim();
-            let enum_value: T = T::from_str(item)?;
-            set.insert(enum_value);
-        }
-        Ok(EnumSet(set))
-    }
-}
-
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 #[serde(untagged)]
 pub enum ListOrCommaSeparatedList<T> {
@@ -666,46 +608,6 @@ mod tests {
         };
 
         assert_eq!(variant.resolve(), None);
-    }
-
-    #[test]
-    fn test_input_info() {
-        let set = InputInfoSet::all();
-        assert_eq!(
-            *set,
-            enum_set!(InputInfo::Auto | InputInfo::None | InputInfo::Minimal | InputInfo::Compact | InputInfo::Full)
-        );
-        assert_eq!(set.to_string(), "auto,none,minimal,compact,full");
-
-        let set = InputInfoSet::from_str("auto,none").unwrap();
-        assert_eq!(InputInfo::resolve(*set), enum_set!(InputInfo::None));
-
-        let set = InputInfoSet::empty();
-        assert_eq!(
-            InputInfo::resolve(*set),
-            enum_set!(InputInfo::None | InputInfo::Minimal | InputInfo::Compact | InputInfo::Full)
-        );
-
-        let set = InputInfoSet::from_str("auto,none,invalid");
-        assert!(set.is_err());
-
-        let set = InputInfoSet::from_str("auto").unwrap();
-        assert_eq!(
-            InputInfo::resolve(*set),
-            enum_set!(InputInfo::None | InputInfo::Minimal | InputInfo::Compact | InputInfo::Full)
-        );
-
-        let set = InputInfoSet::from_str("auto,none").unwrap();
-        assert_eq!(InputInfo::resolve(*set), enum_set!(InputInfo::None));
-
-        let set: InputInfoSet = serde_json::from_str(r#"["none","minimal"]"#).unwrap();
-        assert_eq!(
-            InputInfo::resolve(*set),
-            enum_set!(InputInfo::None | InputInfo::Minimal)
-        );
-
-        let res = serde_json::from_str::<InputInfoSet>(r#"12"#);
-        assert!(res.is_err());
     }
 
     #[test]
