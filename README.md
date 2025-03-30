@@ -523,7 +523,7 @@ See other [screenshots](https://github.com/pamburus/hl-extra/blob/6575d04407aa9d
 To select themes with preview [fzf](https://github.com/junegunn/fzf) tool can be used like this:
 
 ```bash
-hl --list-themes | fzf --preview-window="top,80%" --preview="head -n 100 example.log | hl -c --theme {}"
+hl --list-themes | fzf --color='bg+:23,gutter:-1,pointer:210' --highlight-line --preview-window 'right,border-left,88%,<142(up,88%,border-bottom)' --preview="hl -t '%b %d %T' --input-info minimal -c --theme {} sample/*.log"
 ```
 
 #### Custom themes
