@@ -784,6 +784,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "enumset-serde"
+version = "0.1.0"
+dependencies = [
+ "enumset",
+ "serde",
+]
+
+[[package]]
 name = "enumset_derive"
 version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1053,7 +1061,7 @@ checksum = "7f24254aa9a54b5c858eaee2f5bccdb46aaf0e486a595ed5fd8f86ba55232a70"
 
 [[package]]
 name = "hl"
-version = "0.31.0-alpha.20"
+version = "0.31.0-alpha.21"
 dependencies = [
  "base32",
  "bincode",
@@ -1083,6 +1091,7 @@ dependencies = [
  "enum-map",
  "enumset",
  "enumset-ext",
+ "enumset-serde",
  "env_logger",
  "flate2",
  "fnv",
