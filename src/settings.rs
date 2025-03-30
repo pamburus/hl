@@ -470,6 +470,15 @@ impl Punctuation {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct EnumSet<T: EnumSetType>(enumset::EnumSet<T>);
 
+impl<'de, T: EnumSetType + Deserialize<'de>> Deserialize<'de> for EnumSet<T> {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        Ok(Self(enumset_serde::deserialize(deserializer)?))
+    }
+}
+
 impl<T: EnumSetType> EnumSet<T> {
     pub const fn all() -> Self {
         Self(enumset::EnumSet::all())
@@ -514,55 +523,6 @@ impl<T: EnumSetType + FromStr> FromStr for EnumSet<T> {
             set.insert(enum_value);
         }
         Ok(EnumSet(set))
-    }
-}
-
-struct EnumSetDeserializer<T: EnumSetType>(EnumSet<T>);
-
-impl<T: EnumSetType> Default for EnumSetDeserializer<T> {
-    fn default() -> Self {
-        Self(EnumSet(enumset::EnumSet::new()))
-    }
-}
-
-impl<'de, T: EnumSetType + Deserialize<'de>> serde::de::Visitor<'de> for EnumSetDeserializer<T> {
-    type Value = EnumSet<T>;
-
-    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-        formatter.write_str("a list of enum values or a comma-separated list of enum values")
-    }
-
-    fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
-    where
-        A: serde::de::SeqAccess<'de>,
-    {
-        let mut set = enumset::EnumSet::new();
-        while let Some(value) = seq.next_element()? {
-            set.insert(value);
-        }
-        Ok(EnumSet(set))
-    }
-
-    fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
-    where
-        E: serde::de::Error,
-    {
-        let mut set = enumset::EnumSet::new();
-        for item in value.split(',') {
-            let item = item.trim();
-            let enum_value: T = T::deserialize(item.into_deserializer())?;
-            set.insert(enum_value);
-        }
-        Ok(EnumSet(set))
-    }
-}
-
-impl<'de, T: EnumSetType + Deserialize<'de>> Deserialize<'de> for EnumSet<T> {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        deserializer.deserialize_any(EnumSetDeserializer::default())
     }
 }
 
