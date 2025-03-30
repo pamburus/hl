@@ -24,6 +24,8 @@ printf "\n"
     -H 23 \
     --theme ${TERMFRAME_THEME:?} \
     --font-family "JetBrains Mono, Fira Code, Cascadia Code, Source Code Pro, Consolas, Menlo, Monaco, DejaVu Sans Mono, monospace" \
+    --faint-font-weight 200 \
+    --faint-opacity 0.6 \
     --font-size 12 \
     --embed-fonts true \
     -o "${HL_SRC:?}"/extra/screenshot/${THEME:?}/${MODE:?}.svg \
