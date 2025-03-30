@@ -12,16 +12,16 @@ use std::{
 
 // third-party imports
 use deko::{Format, bufread::AnyDecoder};
-use nu_ansi_term::Color;
 
 // local imports
 use crate::{
-    error::{HILITE, Result},
+    error::Result,
     index::{Index, Indexer, SourceBlock, SourceMetadata},
     iox::ReadFill,
     replay::{ReplayBufCreator, ReplayBufReader, ReplaySeekReader},
     tee::TeeReader,
     vfs::{FileSystem, LocalFileSystem},
+    xerr::HighlightQuoted,
 };
 
 // ---
@@ -54,11 +54,7 @@ impl InputPath {
         let canonical = fs.canonicalize(&original).map_err(|e| {
             io::Error::new(
                 e.kind(),
-                format!(
-                    "failed to resolve path for '{}': {}",
-                    HILITE.paint(original.to_string_lossy()),
-                    e
-                ),
+                format!("failed to resolve path for {}: {}", original.hlq(), e),
             )
         })?;
 
@@ -132,7 +128,7 @@ impl InputReference {
     pub fn description(&self) -> String {
         match self {
             Self::Stdin => "<stdin>".into(),
-            Self::File(path) => format!("file '{}'", Color::Yellow.paint(path.original.to_string_lossy())),
+            Self::File(path) => format!("file {}", path.original.hlq()),
         }
     }
 
@@ -953,7 +949,7 @@ mod tests {
         let input = reference.open().unwrap();
         assert_eq!(input.reference, reference);
         let reference = InputReference::File(InputPath::ephemeral(PathBuf::from("test.log")));
-        assert_eq!(reference.description(), "file '\u{1b}[33mtest.log\u{1b}[0m'");
+        assert_eq!(reference.description(), "file \u{1b}[33m\"test.log\"\u{1b}[0m");
         assert_eq!(reference.path(), Some(&PathBuf::from("test.log")));
     }
 
@@ -981,7 +977,7 @@ mod tests {
         assert!(matches!(input.stream, Stream::RandomAccess(_)));
         assert_eq!(
             input.reference.description(),
-            "file '\u{1b}[33msample/prometheus.log\u{1b}[0m'"
+            "file \u{1b}[33m\"sample/prometheus.log\"\u{1b}[0m"
         );
     }
 

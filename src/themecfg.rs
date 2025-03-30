@@ -6,10 +6,11 @@ use std::{
     io::ErrorKind,
     path::{Component, Path, PathBuf},
     str::{self, FromStr},
+    sync::Arc,
 };
 
 // third-party imports
-use derive_more::Deref;
+use derive_more::{Deref, Display};
 use enum_map::Enum;
 use rust_embed::RustEmbed;
 use serde::{
@@ -21,7 +22,7 @@ use serde_yml as yaml;
 use strum::{EnumIter, IntoEnumIterator};
 
 // local imports
-use crate::{appdirs::AppDirs, error::*, level::InfallibleLevel};
+use crate::{appdirs::AppDirs, error::*, level::InfallibleLevel, xerr::Suggestions};
 
 // ---
 
@@ -38,13 +39,12 @@ impl Theme {
         match Self::load_from(&Self::themes_dir(app_dirs), name) {
             Err(Error::Io(e)) => match e.kind() {
                 ErrorKind::NotFound => match Self::load_embedded::<Assets>(name) {
-                    Err(Error::UnknownTheme { name, mut known }) => {
-                        if let Some(names) = Self::custom_names(app_dirs).ok() {
-                            known.extend(names.into_iter().filter_map(|n| n.ok()));
+                    Err(Error::UnknownTheme { name, mut suggestions }) => {
+                        if let Some(variants) = Self::custom_names(app_dirs).ok() {
+                            let variants = variants.into_iter().filter_map(|v| v.ok());
+                            suggestions = suggestions.merge(Suggestions::new(&name, variants));
                         }
-                        known.sort_unstable();
-                        known.dedup();
-                        Err(Error::UnknownTheme { name, known })
+                        Err(Error::UnknownTheme { name, suggestions })
                     }
                     Err(e) => Err(e),
                     Ok(v) => Ok(v),
@@ -60,7 +60,7 @@ impl Theme {
         Self::load_embedded::<Assets>(name)
     }
 
-    pub fn list(app_dirs: &AppDirs) -> Result<HashMap<String, ThemeInfo>> {
+    pub fn list(app_dirs: &AppDirs) -> Result<HashMap<Arc<str>, ThemeInfo>> {
         let mut result = HashMap::new();
 
         for name in Self::embedded_names() {
@@ -91,9 +91,11 @@ impl Theme {
             }
         }
 
+        let suggestions = Suggestions::new(name, Self::embedded_names());
+
         Err(Error::UnknownTheme {
             name: name.to_string(),
-            known: Self::embedded_names().into_iter().collect(),
+            suggestions,
         })
     }
 
@@ -145,11 +147,11 @@ impl Theme {
         app_dirs.config_dir.join("themes")
     }
 
-    fn embedded_names() -> impl IntoIterator<Item = String> {
-        Assets::iter().filter_map(|a| Self::strip_known_extension(&a).map(|n| n.to_string()))
+    fn embedded_names() -> impl IntoIterator<Item = Arc<str>> {
+        Assets::iter().filter_map(|a| Self::strip_known_extension(&a).map(|n| n.into()))
     }
 
-    fn custom_names(app_dirs: &AppDirs) -> Result<impl IntoIterator<Item = Result<String>> + use<>> {
+    fn custom_names(app_dirs: &AppDirs) -> Result<impl IntoIterator<Item = Result<Arc<str>>> + use<>> {
         let path = Self::themes_dir(app_dirs);
         let dir = Path::new(&path);
         Ok(dir
@@ -159,7 +161,7 @@ impl Theme {
                     .path()
                     .file_name()
                     .and_then(|n| n.to_str())
-                    .and_then(|a| Self::strip_known_extension(&a).map(|n| n.to_string())))
+                    .and_then(|a| Self::strip_known_extension(&a).map(|n| n.into())))
             })
             .filter_map(|x| x.transpose()))
     }
@@ -214,7 +216,7 @@ impl From<ThemeOrigin> for ThemeInfo {
 
 // ---
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash, Display)]
 pub enum ThemeOrigin {
     Stock,
     Custom,
