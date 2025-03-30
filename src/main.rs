@@ -11,6 +11,8 @@ use std::{
 // third-party imports
 use chrono::Utc;
 use clap::{CommandFactory, Parser};
+use enumset::enum_set;
+use enumset_ext::EnumSetExt;
 use env_logger::{self as logger};
 use itertools::Itertools;
 
@@ -24,7 +26,7 @@ use hl::{
     input::InputReference,
     output::{OutputStream, Pager},
     query::Query,
-    settings::Settings,
+    settings::{InputInfo, Settings},
     signal::SignalHandler,
     theme::Theme,
     timeparse::parse_time,
@@ -204,6 +206,36 @@ fn run() -> Result<()> {
         };
     }
 
+    let mut input_info = *opt.input_info;
+    if input_info.contains(InputInfo::Auto) {
+        log::debug!("configured input info layouts: {input_info}");
+        input_info = InputInfo::resolve(input_info);
+        log::debug!("* resolved input info layouts: {input_info}");
+        match term_size::dimensions_stdout().map(|(w, _)| w) {
+            None => {
+                log::debug!("* no terminal detected");
+            }
+            Some(200..) => {
+                log::debug!("* terminal is wide enough to show full input info");
+            }
+            Some(160..) => {
+                log::debug!("* terminal is wide enough to show compact input info");
+                if input_info.intersects(enum_set!(InputInfo::Minimal | InputInfo::Compact)) {
+                    input_info.remove(InputInfo::Full);
+                }
+            }
+            _ => {
+                log::debug!("* terminal is too narrow to show any input info except minimal");
+                if input_info.intersects(enum_set!(InputInfo::Minimal | InputInfo::Compact)) {
+                    input_info.remove(InputInfo::Full);
+                }
+                if input_info.contains(InputInfo::Minimal) {
+                    input_info.remove(InputInfo::Compact);
+                }
+            }
+        }
+    }
+
     // Create app.
     let app = hl::App::new(hl::Options {
         theme: Arc::new(theme),
@@ -225,13 +257,7 @@ fn run() -> Result<()> {
         sort: opt.sort,
         follow: opt.follow,
         sync_interval: Duration::from_millis(opt.sync_interval_ms),
-        input_info: match opt.input_info {
-            cli::InputInfoOption::Auto => Some(app::InputInfo::Auto),
-            cli::InputInfoOption::None => None,
-            cli::InputInfoOption::Full => Some(app::InputInfo::Full),
-            cli::InputInfoOption::Compact => Some(app::InputInfo::Compact),
-            cli::InputInfoOption::Minimal => Some(app::InputInfo::Minimal),
-        },
+        input_info,
         input_format: match opt.input_format {
             cli::InputFormat::Auto => None,
             cli::InputFormat::Json => Some(app::InputFormat::Json),

@@ -223,7 +223,7 @@ pub struct InvalidLevelError {
 }
 
 /// Result is an alias for standard result with bound Error type.
-pub type Result<T> = std::result::Result<T, Error>;
+pub type Result<T, E = Error> = std::result::Result<T, E>;
 
 pub trait AppInfoProvider {
     fn app_name(&self) -> Cow<'static, str> {
