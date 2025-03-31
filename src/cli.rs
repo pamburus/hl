@@ -288,11 +288,12 @@ pub struct Opt {
     )]
     pub show_empty_fields: bool,
 
-    /// Input number and filename layouts [one or many of: auto, none, minimal, compact, full].
+    /// Input number and filename layouts.
     #[arg(
         long,
         overrides_with = "input_info",
         default_value_t = config::global::get().input_info.into(),
+        value_parser = InputInfoSet::clap_parser(),
         value_name = "LAYOUTS",
         help_heading = heading::OUTPUT
     )]
@@ -391,8 +392,15 @@ pub struct Opt {
     #[arg(long, help_heading = heading::ADVANCED)]
     pub man_page: bool,
 
-    /// Print available themes optionally filtered by tags [dark, light, 16color, 256color, truecolor].
-    #[arg(long, num_args=0..=1, value_name = "TAGS", require_equals = true, help_heading = heading::ADVANCED)]
+    /// Print available themes optionally filtered by tags.
+    #[arg(
+        long,
+        num_args=0..=1,
+        value_name = "TAGS",
+        require_equals = true,
+        value_parser = ThemeTagSet::clap_parser(),
+        help_heading = heading::ADVANCED)
+    ]
     pub list_themes: Option<Option<ThemeTagSet>>,
 
     /// Print debug index metadata (in --sort mode) and exit.
@@ -479,6 +487,8 @@ mod tests {
     use super::*;
     use enumset::enum_set;
     use std::str::FromStr;
+
+    type InputInfoSet = EnumSet<InputInfo>;
 
     #[test]
     fn test_input_info() {

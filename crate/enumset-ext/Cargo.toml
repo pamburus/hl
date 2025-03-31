@@ -1,7 +1,7 @@
 [package]
 description = "Extends the enumset crate with additional functionality."
 name = "enumset-ext"
-version = "0.1.0"
+version = "0.2.0"
 workspace = "../.."
 repository.workspace = true
 edition.workspace = true
@@ -10,8 +10,10 @@ license.workspace = true
 
 [features]
 serde = ["dep:serde", "dep:enumset-serde"]
+clap = ["dep:clap" ]
 
 [dependencies]
+clap = { version = "4", optional = true }
 enumset = { version = "1", features = [] }
-serde = { version = "1", optional = true }
 enumset-serde = { path = "../enumset-serde", optional = true }
+serde = { version = "1", optional = true }
