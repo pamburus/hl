@@ -263,17 +263,14 @@ impl Format {
 pub enum Tag {
     Dark,
     Light,
-    #[strum(serialize = "16color", serialize = "16-color")]
+    #[strum(serialize = "16color")]
     #[serde(rename = "16color")]
-    #[serde(alias = "16-color")]
     Palette16,
-    #[strum(serialize = "256color", serialize = "256-color")]
+    #[strum(serialize = "256color")]
     #[serde(rename = "256color")]
-    #[serde(alias = "256-color")]
     Palette256,
-    #[strum(serialize = "truecolor", serialize = "true-color")]
+    #[strum(serialize = "truecolor")]
     #[serde(rename = "truecolor")]
-    #[serde(alias = "true-color")]
     TrueColor,
 }
 
@@ -717,9 +714,9 @@ mod tests {
     fn test_tags() {
         assert_eq!(Tag::from_str("dark").unwrap(), Tag::Dark);
         assert_eq!(Tag::from_str("light").unwrap(), Tag::Light);
-        assert_eq!(Tag::from_str("16-color").unwrap(), Tag::Palette16);
-        assert_eq!(Tag::from_str("256-color").unwrap(), Tag::Palette256);
-        assert_eq!(Tag::from_str("true-color").unwrap(), Tag::TrueColor);
+        assert_eq!(Tag::from_str("16color").unwrap(), Tag::Palette16);
+        assert_eq!(Tag::from_str("256color").unwrap(), Tag::Palette256);
+        assert_eq!(Tag::from_str("truecolor").unwrap(), Tag::TrueColor);
         assert!(Tag::from_str("invalid").is_err());
     }
 }
