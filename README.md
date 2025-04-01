@@ -645,7 +645,7 @@ Output Options:
       --no-local              Disable local time zone, overrides --local option
   -e, --hide-empty-fields     Hide empty fields, applies for null, string, object and array fields only [env: HL_HIDE_EMPTY_FIELDS=]
   -E, --show-empty-fields     Show empty fields, overrides --hide-empty-fields option [env: HL_SHOW_EMPTY_FIELDS=]
-      --input-info <LAYOUTS>  Input number and filename layouts [one or many of: auto, none, minimal, compact, full] [default: auto]
+      --input-info <LAYOUTS>  Input number and filename layouts [default: auto] [possible values: auto, none, minimal, compact, full]
   -o, --output <FILE>         Output file
 
 Input Options:
@@ -661,7 +661,7 @@ Advanced Options:
   -C, --concurrency <N>             Number of processing threads [env: HL_CONCURRENCY=]
       --shell-completions <SHELL>   Print shell auto-completion script and exit [possible values: bash, elvish, fish, powershell, zsh]
       --man-page                    Print man page and exit
-      --list-themes[=<TAGS>]        Print available themes optionally filtered by tags [dark, light, 16color, 256color, truecolor]
+      --list-themes[=<TAGS>]        Print available themes optionally filtered by tags [possible values: dark, light, 16color, 256color, truecolor]
       --dump-index                  Print debug index metadata (in --sort mode) and exit
 ```
 
