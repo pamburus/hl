@@ -86,7 +86,7 @@ impl<'de, T: EnumSetType + serde::de::Deserialize<'de>> serde::de::Deserialize<'
 
 #[cfg(feature = "clap")]
 #[derive(Debug, Clone)]
-pub struct ClapParser<T>(std::marker::PhantomData<fn(T)>);
+pub struct ClapParser<T>(std::marker::PhantomData<fn(T) -> T>);
 
 #[cfg(feature = "clap")]
 impl<T> ClapParser<T> {
