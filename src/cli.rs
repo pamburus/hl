@@ -2,7 +2,11 @@
 use std::{num::NonZeroUsize, path::PathBuf};
 
 // third-party imports
-use clap::{ArgAction, Args, Parser, ValueEnum, value_parser};
+use clap::{
+    ArgAction, Args, Parser, ValueEnum,
+    builder::{Styles, styling::AnsiColor},
+    value_parser,
+};
 use clap_complete::Shell;
 
 // local imports
@@ -17,6 +21,12 @@ use enumset_ext::convert::str::EnumSet;
 
 // ---
 
+const STYLES: Styles = Styles::styled()
+    .header(AnsiColor::Green.on_default().bold())
+    .usage(AnsiColor::Green.on_default().bold())
+    .literal(AnsiColor::Cyan.on_default().bold())
+    .placeholder(AnsiColor::Cyan.on_default());
+
 #[derive(Args)]
 pub struct BootstrapArgs {
     /// Configuration file path.
@@ -26,7 +36,7 @@ pub struct BootstrapArgs {
 
 /// JSON and logfmt log converter to human readable representation.
 #[derive(Parser)]
-#[clap(version, disable_help_flag = true)]
+#[command(version, styles = STYLES, disable_help_flag = true)]
 pub struct BootstrapOpt {
     #[command(flatten)]
     pub args: BootstrapArgs,
@@ -82,7 +92,7 @@ impl BootstrapOpt {
 
 /// JSON and logfmt log converter to human readable representation.
 #[derive(Parser)]
-#[clap(version, disable_help_flag = true)]
+#[command(version, styles = STYLES, disable_help_flag = true)]
 pub struct Opt {
     #[command(flatten)]
     pub bootstrap: BootstrapArgs,
