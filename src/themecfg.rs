@@ -301,6 +301,7 @@ impl From<ThemeOrigin> for ThemeInfo {
 // ---
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash, Display)]
+#[strum(serialize_all = "kebab-case")]
 pub enum ThemeOrigin {
     Stock,
     Custom,
