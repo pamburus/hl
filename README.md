@@ -71,10 +71,10 @@ High-performance log viewer and processor that transforms logs in JSON and logfm
     curl -sSfL https://github.com/pamburus/hl/releases/latest/download/hl-linux-x86_64-musl.tar.gz | tar xz
     ```
 
-* Install [AUR package](https://aur.archlinux.org/packages/hl-log-viewer-bin) on Arch Linux
+* Install [hl package](https://archlinux.org/packages/extra/x86_64/hl/) from Arch Linux extra repository
 
     ```sh
-    yay -S hl-log-viewer-bin
+    pacman -S hl
     ```
 
 <details>
