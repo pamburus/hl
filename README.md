@@ -117,7 +117,7 @@ High-performance log viewer and processor that transforms logs in JSON and logfm
 > It is recommended to install [less](https://www.greenwoodsoftware.com/less/) from the [Scoop](https://scoop.sh) or [Chocolatey](https://chocolatey.org/) package manager.
 > If you are using [Scoop](https://scoop.sh) and install `hl` by running `scoop install hl`, it already installs [less](https://www.greenwoodsoftware.com/less/) automatically as a dependency. Just make sure you do not have any other conflicting installations by running `where less` in cmd or `Get-Command less` in powershell.
 
-* Download latest release from [download page](https://github.com/pamburus/hl/releases/latest)
+* Download latest release from [download page](https://github.com/pamburus/hl/releases)
 
 <details>
 <summary>Other options</summary>
