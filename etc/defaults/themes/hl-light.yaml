@@ -24,10 +24,10 @@ elements:
   ellipsis:
     foreground: 30
   object:
-    foreground: 255
+    foreground: 16
     modes: [bold]
   array:
-    foreground: 255
+    foreground: 16
     modes: [bold]
   string:
     foreground: 18
