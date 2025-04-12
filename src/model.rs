@@ -328,7 +328,7 @@ pub struct Record<'a> {
     pub message: Option<RawValue<'a>>,
     pub level: Option<Level>,
     pub logger: Option<&'a str>,
-    pub caller: Option<Caller<'a>>,
+    pub caller: Caller<'a>,
     pub(crate) fields: RecordFields<'a>,
     pub(crate) predefined: heapless::Vec<(&'a str, RawValue<'a>), MAX_PREDEFINED_FIELDS>,
 }
@@ -355,7 +355,7 @@ impl<'a> Record<'a> {
             message: None,
             level: None,
             logger: None,
-            caller: None,
+            caller: Default::default(),
             fields: RecordFields::with_capacity(capacity),
             predefined: heapless::Vec::new(),
         }
@@ -372,10 +372,36 @@ pub trait RecordWithSourceConstructor<'r, 's> {
 
 // ---
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum Caller<'a> {
-    Text(&'a str),
-    FileLine(&'a str, &'a str),
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Default)]
+pub struct Caller<'a> {
+    pub name: &'a str,
+    pub file: &'a str,
+    pub line: &'a str,
+}
+
+impl<'a> Caller<'a> {
+    pub fn none() -> Self {
+        Self::default()
+    }
+
+    pub fn with_name(name: &'a str) -> Self {
+        Self {
+            name,
+            ..Default::default()
+        }
+    }
+
+    pub fn with_file_line(file: &'a str, line: &'a str) -> Self {
+        Self {
+            file,
+            line,
+            ..Default::default()
+        }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.name.is_empty() && self.file.is_empty() && self.line.is_empty()
+    }
 }
 
 // ---
@@ -782,32 +808,13 @@ impl FieldSettings {
                 true
             }
             Self::Caller => {
-                to.caller = value
-                    .parse::<&str>()
-                    .ok()
-                    .filter(|x| !x.is_empty())
-                    .map(|x| Caller::Text(x));
+                to.caller.name = value.parse::<&str>().ok().unwrap_or_default();
                 true
             }
-            Self::CallerFile => match &mut to.caller {
-                None => {
-                    to.caller = value
-                        .parse::<&str>()
-                        .ok()
-                        .filter(|x| !x.is_empty())
-                        .map(|x| Caller::FileLine(x, ""));
-                    to.caller.is_some()
-                }
-                Some(Caller::FileLine(file, _)) => {
-                    if let Some(value) = value.parse::<&str>().ok().filter(|x| !x.is_empty()) {
-                        *file = value;
-                        true
-                    } else {
-                        false
-                    }
-                }
-                _ => false,
-            },
+            Self::CallerFile => {
+                to.caller.file = value.parse::<&str>().ok().unwrap_or_default();
+                true
+            }
             Self::CallerLine => {
                 let value = match value {
                     RawValue::Number(value) => value,
@@ -821,11 +828,7 @@ impl FieldSettings {
                     _ => return false,
                 };
 
-                match &mut to.caller {
-                    None => to.caller = Some(Caller::FileLine("", value)),
-                    Some(Caller::FileLine(_, line)) => *line = value,
-                    Some(Caller::Text(_)) => return false,
-                }
+                to.caller.line = value;
                 true
             }
             Self::Nested(_) => false,
@@ -1550,8 +1553,8 @@ impl RecordFilter for FieldFilter {
                     }
                 }
                 FieldKind::Caller => {
-                    if let Some(Caller::Text(caller)) = record.caller {
-                        self.match_value(Some(caller), false)
+                    if !record.caller.name.is_empty() {
+                        self.match_value(Some(record.caller.name), false)
                     } else {
                         false
                     }
@@ -2267,6 +2270,15 @@ mod tests {
     }
 
     #[test]
+    fn test_field_filter_caller() {
+        let filter = FieldFilter::parse("caller~=somesource.py").unwrap();
+        let record = parse(r#"caller=somesource.py:42"#);
+        assert_eq!(filter.apply(&record), true);
+        let record = parse(r#"caller=somesource.go:42"#);
+        assert_eq!(filter.apply(&record), false);
+    }
+
+    #[test]
     fn test_raw_object() {
         let obj = RawObject::Json(json::from_str(r#"{"a":1,"b":2}"#).unwrap());
         let obj = obj.parse().unwrap();
@@ -2354,13 +2366,13 @@ mod tests {
     }
 
     #[rstest]
-    #[case(br#"{"caller":""}"#, None)]
-    #[case(br#"{"caller":"x"}"#, Some(Caller::Text("x")))]
-    #[case(br#"caller="""#, None)]
-    #[case(br#"caller="#, None)]
-    #[case(br#"caller=x"#, Some(Caller::Text("x")))]
-    #[case(br#"caller="x""#, Some(Caller::Text("x")))]
-    fn test_caller(#[case] input: &[u8], #[case] expected: Option<Caller>) {
+    #[case(br#"{"caller":""}"#, Caller::none())]
+    #[case(br#"{"caller":"x"}"#, Caller::with_name("x"))]
+    #[case(br#"caller="""#, Caller::none())]
+    #[case(br#"caller="#, Caller::none())]
+    #[case(br#"caller=x"#, Caller::with_name("x"))]
+    #[case(br#"caller="x""#, Caller::with_name("x"))]
+    fn test_caller(#[case] input: &[u8], #[case] expected: Caller) {
         let parser = Parser::new(ParserSettings::default());
         let record = RawRecord::parser().parse(input).next().unwrap().unwrap();
         let record = parser.parse(&record.record);
@@ -2368,36 +2380,36 @@ mod tests {
     }
 
     #[rstest]
-    #[case(br#"{"file":""}"#, None)] // 1
-    #[case(br#"{"file":"x"}"#, Some(Caller::FileLine("x", "")))] // 2
-    #[case(br#"file="""#, None)] // 3
-    #[case(br#"file="#, None)] // 4
-    #[case(br#"file=x"#, Some(Caller::FileLine("x", "")))] // 5
-    #[case(br#"file="x""#, Some(Caller::FileLine("x", "")))] // 6
-    #[case(br#"{"line":""}"#, None)] // 7
-    #[case(br#"{"line":"8"}"#, Some(Caller::FileLine("", "8")))] // 8
-    #[case(br#"line="""#, None)] // 9
-    #[case(br#"line="#, None)] // 10
-    #[case(br#"line=11"#, Some(Caller::FileLine("", "11")))] // 11
-    #[case(br#"line="12""#, Some(Caller::FileLine("", "12")))] // 12
-    #[case(br#"{"file":"","line":""}"#, None)] // 13
-    #[case(br#"{"file":"x","line":"14"}"#, Some(Caller::FileLine("x", "14")))] // 14
-    #[case(br#"file="" line="""#, None)] // 15
-    #[case(br#"file= line="#, None)] // 16
-    #[case(br#"file=x line=17"#, Some(Caller::FileLine("x", "17")))] // 17
-    #[case(br#"file="x" line="18""#, Some(Caller::FileLine("x", "18")))] // 18
-    #[case(br#"{"file":"","line":"19"}"#, Some(Caller::FileLine("", "19")))] // 19
-    #[case(br#"{"file":"x","line":""}"#, Some(Caller::FileLine("x", "")))] // 20
-    #[case(br#"file="" line="21""#, Some(Caller::FileLine("", "21")))] // 21
-    #[case(br#"file= line=22"#, Some(Caller::FileLine("", "22")))] // 22
-    #[case(br#"file=x line="#, Some(Caller::FileLine("x", "")))] // 23
-    #[case(br#"file="x" line="#, Some(Caller::FileLine("x", "")))] // 24
-    #[case(br#"file="x" line=21 line=25"#, Some(Caller::FileLine("x", "25")))] // 25
-    #[case(br#"file=x line=26 file=y"#, Some(Caller::FileLine("y", "26")))] // 26
-    #[case(br#"{"file":123, "file": {}, "line":27}"#, Some(Caller::FileLine("123", "27")))] // 27
-    #[case(br#"{"caller":"a", "file": "b", "line":28}"#, Some(Caller::Text("a")))] // 28
-    #[case(br#"{"file": "b", "line":{}}"#, Some(Caller::FileLine("b", "")))] // 29
-    fn test_caller_file_line(#[case] input: &[u8], #[case] expected: Option<Caller>) {
+    #[case(br#"{"file":""}"#, Caller::none())] // 1
+    #[case(br#"{"file":"x"}"#, Caller::with_file_line("x", ""))] // 2
+    #[case(br#"file="""#, Caller::none())] // 3
+    #[case(br#"file="#, Caller::none())] // 4
+    #[case(br#"file=x"#, Caller::with_file_line("x", ""))] // 5
+    #[case(br#"file="x""#, Caller::with_file_line("x", ""))] // 6
+    #[case(br#"{"line":""}"#, Caller::none())] // 7
+    #[case(br#"{"line":"8"}"#, Caller::with_file_line("", "8"))] // 8
+    #[case(br#"line="""#, Caller::none())] // 9
+    #[case(br#"line="#, Caller::none())] // 10
+    #[case(br#"line=11"#, Caller::with_file_line("", "11"))] // 11
+    #[case(br#"line="12""#, Caller::with_file_line("", "12"))] // 12
+    #[case(br#"{"file":"","line":""}"#, Caller::none())] // 13
+    #[case(br#"{"file":"x","line":"14"}"#, Caller::with_file_line("x", "14"))] // 14
+    #[case(br#"file="" line="""#, Caller::none())] // 15
+    #[case(br#"file= line="#, Caller::none())] // 16
+    #[case(br#"file=x line=17"#, Caller::with_file_line("x", "17"))] // 17
+    #[case(br#"file="x" line="18""#, Caller::with_file_line("x", "18"))] // 18
+    #[case(br#"{"file":"","line":"19"}"#, Caller::with_file_line("", "19"))] // 19
+    #[case(br#"{"file":"x","line":""}"#, Caller::with_file_line("x", ""))] // 20
+    #[case(br#"file="" line="21""#, Caller::with_file_line("", "21"))] // 21
+    #[case(br#"file= line=22"#, Caller::with_file_line("", "22"))] // 22
+    #[case(br#"file=x line="#, Caller::with_file_line("x", ""))] // 23
+    #[case(br#"file="x" line="#, Caller::with_file_line("x", ""))] // 24
+    #[case(br#"file="x" line=21 line=25"#, Caller::with_file_line("x", "25"))] // 25
+    #[case(br#"file=x line=26 file=y"#, Caller::with_file_line("y", "26"))] // 26
+    #[case(br#"{"file":123, "file": {}, "line":27}"#, Caller::with_file_line("", "27"))] // 27
+    #[case(br#"{"caller":"a", "file": "b", "line":28}"#, Caller{name:"a", file:"b",line:"28"})] // 28
+    #[case(br#"{"file": "b", "line":{}}"#, Caller::with_file_line("b", ""))] // 29
+    fn test_caller_file_line(#[case] input: &[u8], #[case] expected: Caller) {
         let mut predefined = PredefinedFields::default();
         predefined.caller_file = Field {
             names: vec!["file".into()],
