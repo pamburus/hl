@@ -80,6 +80,7 @@ formatting:
     string-opening-quote: "'"
     string-closing-quote: "'"
     source-location-separator: "→ "
+    caller-name-file-separator: " @ "
     hidden-fields-indicator: " ..."
     level-left-separator: "["
     level-right-separator: "]"

@@ -10,7 +10,7 @@ use crate::{
     datefmt::DateTimeFormatter,
     filtering::IncludeExcludeSetting,
     fmtx::{OptimizedBuf, Push, aligned_left, centered},
-    model::{self, Caller, Level, RawValue},
+    model::{self, Level, RawValue},
     settings::Formatting,
     theme::{Element, StylingPush, Theme},
 };
@@ -211,26 +211,28 @@ impl RecordFormatter {
             //
             // caller
             //
-            if let Some(caller) = &rec.caller {
+            if !rec.caller.is_empty() {
+                let caller = rec.caller;
                 s.element(Element::Caller, |s| {
                     s.batch(|buf| {
                         buf.push(b' ');
-                        buf.extend_from_slice(self.cfg.punctuation.source_location_separator.as_bytes())
+                        buf.extend(self.cfg.punctuation.source_location_separator.as_bytes())
                     });
                     s.element(Element::CallerInner, |s| {
                         s.batch(|buf| {
-                            match caller {
-                                Caller::Text(text) => {
-                                    buf.extend_from_slice(text.as_bytes());
+                            if !caller.name.is_empty() {
+                                buf.extend(caller.name.as_bytes());
+                            }
+                            if !caller.file.is_empty() || !caller.line.is_empty() {
+                                if !caller.name.is_empty() {
+                                    buf.extend(self.cfg.punctuation.caller_name_file_separator.as_bytes());
                                 }
-                                Caller::FileLine(file, line) => {
-                                    buf.extend_from_slice(file.as_bytes());
-                                    if line.len() != 0 {
-                                        buf.push(b':');
-                                        buf.extend_from_slice(line.as_bytes());
-                                    }
+                                buf.extend(caller.file.as_bytes());
+                                if caller.line.len() != 0 {
+                                    buf.push(b':');
+                                    buf.extend(caller.line.as_bytes());
                                 }
-                            };
+                            }
                         });
                     });
                 });
@@ -920,7 +922,7 @@ mod tests {
     use super::*;
     use crate::{
         datefmt::LinuxDateFormat,
-        model::{RawObject, Record, RecordFields},
+        model::{Caller, RawObject, Record, RecordFields},
         settings::Punctuation,
         theme::Theme,
         themecfg::testing,
@@ -1002,7 +1004,7 @@ mod tests {
             message: Some(RawValue::String(EncodedString::json(r#""tm""#))),
             level: Some(Level::Debug),
             logger: Some("tl"),
-            caller: Some(Caller::Text("tc")),
+            caller: Caller::with_name("tc"),
             fields: RecordFields::from_slice(&[("k_a", RawValue::from(RawObject::Json(&ka)))]),
             ..Default::default()
         };
@@ -1449,5 +1451,20 @@ mod tests {
         };
 
         assert_eq!(&formatter.format_to_string(&rec), "a={ b={ c={ d=1 ... } ... } }");
+    }
+
+    #[test]
+    fn test_caller() {
+        let rec = Record {
+            caller: Caller {
+                name: "test_function".into(),
+                file: "test_file.rs".into(),
+                line: "42".into(),
+            },
+            ..Default::default()
+        };
+
+        let result = format_no_color(&rec);
+        assert_eq!(&result, " @ test_function :: test_file.rs:42", "{}", result);
     }
 }
