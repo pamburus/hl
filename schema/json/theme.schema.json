@@ -1,273 +1,273 @@
 {
-    "$schema": "http://json-schema.org/draft-07/schema#",
-    "$ref": "#/definitions/theme",
-    "definitions": {
-        "theme": {
-            "type": "object",
-            "additionalProperties": false,
-            "properties": {
-                "$schema": {
-                    "type": "string",
-                    "format": "uri",
-                    "title": "JSON Schema Reference"
-                },
-                "$palette": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/color"
-                    },
-                    "title": "Optional YAML anchors for colors"
-                },
-                "tags": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/tag"
-                    }
-                },
-                "elements": {
-                    "$ref": "#/definitions/elements"
-                },
-                "levels": {
-                    "$ref": "#/definitions/levels"
-                },
-                "indicators": {
-                    "$ref": "#/definitions/indicators"
-                }
-            },
-            "required": [],
-            "title": "Theme"
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$ref": "#/definitions/theme",
+  "definitions": {
+    "theme": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "$schema": {
+          "type": "string",
+          "format": "uri",
+          "title": "JSON Schema Reference"
         },
-        "tag": {
-            "type": "string",
-            "enum": ["dark", "light", "16color", "256color", "truecolor"]
+        "$palette": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/color"
+          },
+          "title": "Optional YAML anchors for colors"
         },
-        "mode": {
-            "type": "string",
-            "enum": [
-                "bold",
-                "faint",
-                "italic",
-                "underline",
-                "slow-blink",
-                "rapid-blink",
-                "reverse",
-                "conceal",
-                "crossed-out"
-            ]
+        "tags": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/tag"
+          }
         },
         "elements": {
-            "type": "object",
-            "additionalProperties": false,
-            "properties": {
-                "input": {
-                    "$ref": "#/definitions/style"
-                },
-                "input-number": {
-                    "$ref": "#/definitions/style"
-                },
-                "input-number-inner": {
-                    "$ref": "#/definitions/style"
-                },
-                "input-name": {
-                    "$ref": "#/definitions/style"
-                },
-                "input-name-inner": {
-                    "$ref": "#/definitions/style"
-                },
-                "time": {
-                    "$ref": "#/definitions/style"
-                },
-                "level": {
-                    "$ref": "#/definitions/style"
-                },
-                "level-inner": {
-                    "$ref": "#/definitions/style"
-                },
-                "logger": {
-                    "$ref": "#/definitions/style"
-                },
-                "logger-inner": {
-                    "$ref": "#/definitions/style"
-                },
-                "caller": {
-                    "$ref": "#/definitions/style"
-                },
-                "caller-inner": {
-                    "$ref": "#/definitions/style"
-                },
-                "message": {
-                    "$ref": "#/definitions/style"
-                },
-                "field": {
-                    "$ref": "#/definitions/style"
-                },
-                "key": {
-                    "$ref": "#/definitions/style"
-                },
-                "array": {
-                    "$ref": "#/definitions/style"
-                },
-                "object": {
-                    "$ref": "#/definitions/style"
-                },
-                "string": {
-                    "$ref": "#/definitions/style"
-                },
-                "number": {
-                    "$ref": "#/definitions/style"
-                },
-                "boolean": {
-                    "$ref": "#/definitions/style"
-                },
-                "null": {
-                    "$ref": "#/definitions/style"
-                },
-                "ellipsis": {
-                    "$ref": "#/definitions/style"
-                }
-            },
-            "required": [],
-            "title": "Element Styles"
-        },
-        "style": {
-            "type": "object",
-            "additionalProperties": false,
-            "properties": {
-                "modes": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/mode"
-                    }
-                },
-                "foreground": {
-                    "$ref": "#/definitions/color"
-                },
-                "background": {
-                    "$ref": "#/definitions/color"
-                }
-            },
-            "required": [],
-            "title": "Style"
-        },
-        "color": {
-            "oneOf": [
-                {
-                    "$ref": "#/definitions/ansi-basic-color"
-                },
-                {
-                    "$ref": "#/definitions/ansi-extended-color"
-                },
-                {
-                    "$ref": "#/definitions/rgb-color"
-                }
-            ]
-        },
-        "ansi-basic-color": {
-            "type": "string",
-            "enum": [
-                "default",
-                "black",
-                "red",
-                "green",
-                "yellow",
-                "blue",
-                "magenta",
-                "cyan",
-                "white",
-                "bright-black",
-                "bright-red",
-                "bright-green",
-                "bright-yellow",
-                "bright-blue",
-                "bright-magenta",
-                "bright-cyan",
-                "bright-white"
-            ]
-        },
-        "ansi-extended-color": {
-            "type": "integer",
-            "minimum": 0,
-            "maximum": 255
-        },
-        "rgb-color": {
-            "type": "string",
-            "pattern": "^#[0-9a-fA-F]{6}$"
-        },
-        "indicators": {
-            "type": "object",
-            "additionalProperties": false,
-            "properties": {
-                "sync": {
-                    "$ref": "#/definitions/indicators-sync"
-                }
-            },
-            "required": [],
-            "title": "Indicators"
-        },
-        "indicators-sync": {
-            "type": "object",
-            "additionalProperties": false,
-            "properties": {
-                "synced": {
-                    "$ref": "#/definitions/indicator"
-                },
-                "failed": {
-                    "$ref": "#/definitions/indicator"
-                }
-            },
-            "required": [],
-            "title": "Sync Indicator Settings"
-        },
-        "indicator": {
-            "type": "object",
-            "additionalProperties": false,
-            "properties": {
-                "text": {
-                    "type": "string"
-                },
-                "inner": {
-                    "$ref": "#/definitions/indicator-style"
-                },
-                "outer": {
-                    "$ref": "#/definitions/indicator-style"
-                }
-            },
-            "required": [],
-            "title": "Indicator Settings"
-        },
-        "indicator-style": {
-            "type": "object",
-            "additionalProperties": false,
-            "properties": {
-                "style": {
-                    "$ref": "#/definitions/style"
-                }
-            },
-            "required": [],
-            "title": "Indicator Style Settings"
+          "$ref": "#/definitions/elements"
         },
         "levels": {
-            "type": "object",
-            "additionalProperties": false,
-            "properties": {
-                "trace": {
-                    "$ref": "#/definitions/elements"
-                },
-                "debug": {
-                    "$ref": "#/definitions/elements"
-                },
-                "info": {
-                    "$ref": "#/definitions/elements"
-                },
-                "warning": {
-                    "$ref": "#/definitions/elements"
-                },
-                "error": {
-                    "$ref": "#/definitions/elements"
-                }
-            },
-            "required": [],
-            "title": "Element Settings per Logging Level"
+          "$ref": "#/definitions/levels"
+        },
+        "indicators": {
+          "$ref": "#/definitions/indicators"
         }
+      },
+      "required": [],
+      "title": "Theme"
+    },
+    "tag": {
+      "type": "string",
+      "enum": ["dark", "light", "16color", "256color", "truecolor"]
+    },
+    "mode": {
+      "type": "string",
+      "enum": [
+        "bold",
+        "faint",
+        "italic",
+        "underline",
+        "slow-blink",
+        "rapid-blink",
+        "reverse",
+        "conceal",
+        "crossed-out"
+      ]
+    },
+    "elements": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "input": {
+          "$ref": "#/definitions/style"
+        },
+        "input-number": {
+          "$ref": "#/definitions/style"
+        },
+        "input-number-inner": {
+          "$ref": "#/definitions/style"
+        },
+        "input-name": {
+          "$ref": "#/definitions/style"
+        },
+        "input-name-inner": {
+          "$ref": "#/definitions/style"
+        },
+        "time": {
+          "$ref": "#/definitions/style"
+        },
+        "level": {
+          "$ref": "#/definitions/style"
+        },
+        "level-inner": {
+          "$ref": "#/definitions/style"
+        },
+        "logger": {
+          "$ref": "#/definitions/style"
+        },
+        "logger-inner": {
+          "$ref": "#/definitions/style"
+        },
+        "caller": {
+          "$ref": "#/definitions/style"
+        },
+        "caller-inner": {
+          "$ref": "#/definitions/style"
+        },
+        "message": {
+          "$ref": "#/definitions/style"
+        },
+        "field": {
+          "$ref": "#/definitions/style"
+        },
+        "key": {
+          "$ref": "#/definitions/style"
+        },
+        "array": {
+          "$ref": "#/definitions/style"
+        },
+        "object": {
+          "$ref": "#/definitions/style"
+        },
+        "string": {
+          "$ref": "#/definitions/style"
+        },
+        "number": {
+          "$ref": "#/definitions/style"
+        },
+        "boolean": {
+          "$ref": "#/definitions/style"
+        },
+        "null": {
+          "$ref": "#/definitions/style"
+        },
+        "ellipsis": {
+          "$ref": "#/definitions/style"
+        }
+      },
+      "required": [],
+      "title": "Element Styles"
+    },
+    "style": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "modes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/mode"
+          }
+        },
+        "foreground": {
+          "$ref": "#/definitions/color"
+        },
+        "background": {
+          "$ref": "#/definitions/color"
+        }
+      },
+      "required": [],
+      "title": "Style"
+    },
+    "color": {
+      "oneOf": [
+        {
+          "$ref": "#/definitions/ansi-basic-color"
+        },
+        {
+          "$ref": "#/definitions/ansi-extended-color"
+        },
+        {
+          "$ref": "#/definitions/rgb-color"
+        }
+      ]
+    },
+    "ansi-basic-color": {
+      "type": "string",
+      "enum": [
+        "default",
+        "black",
+        "red",
+        "green",
+        "yellow",
+        "blue",
+        "magenta",
+        "cyan",
+        "white",
+        "bright-black",
+        "bright-red",
+        "bright-green",
+        "bright-yellow",
+        "bright-blue",
+        "bright-magenta",
+        "bright-cyan",
+        "bright-white"
+      ]
+    },
+    "ansi-extended-color": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 255
+    },
+    "rgb-color": {
+      "type": "string",
+      "pattern": "^#[0-9a-fA-F]{6}$"
+    },
+    "indicators": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "sync": {
+          "$ref": "#/definitions/indicators-sync"
+        }
+      },
+      "required": [],
+      "title": "Indicators"
+    },
+    "indicators-sync": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "synced": {
+          "$ref": "#/definitions/indicator"
+        },
+        "failed": {
+          "$ref": "#/definitions/indicator"
+        }
+      },
+      "required": [],
+      "title": "Sync Indicator Settings"
+    },
+    "indicator": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "text": {
+          "type": "string"
+        },
+        "inner": {
+          "$ref": "#/definitions/indicator-style"
+        },
+        "outer": {
+          "$ref": "#/definitions/indicator-style"
+        }
+      },
+      "required": [],
+      "title": "Indicator Settings"
+    },
+    "indicator-style": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "style": {
+          "$ref": "#/definitions/style"
+        }
+      },
+      "required": [],
+      "title": "Indicator Style Settings"
+    },
+    "levels": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "trace": {
+          "$ref": "#/definitions/elements"
+        },
+        "debug": {
+          "$ref": "#/definitions/elements"
+        },
+        "info": {
+          "$ref": "#/definitions/elements"
+        },
+        "warning": {
+          "$ref": "#/definitions/elements"
+        },
+        "error": {
+          "$ref": "#/definitions/elements"
+        }
+      },
+      "required": [],
+      "title": "Element Settings per Logging Level"
     }
+  }
 }
