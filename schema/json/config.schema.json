@@ -233,6 +233,9 @@
             "source-location-separator": {
               "type": "string"
             },
+            "caller-name-file-separator": {
+              "type": "string"
+            },
             "hidden-fields-indicator": {
               "type": "string"
             },
