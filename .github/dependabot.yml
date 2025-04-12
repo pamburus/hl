@@ -9,8 +9,8 @@ updates:
     directory: "/"
     schedule:
       interval: weekly
-      day: saturday
-      time: "06:00"
+      day: friday
+      time: "20:00"
       timezone: "Europe/Belgrade"
     allow:
       - dependency-type: all
