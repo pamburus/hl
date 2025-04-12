@@ -21,12 +21,12 @@ updates:
           - "*"
         update-types:
           - "patch"
-      anstyle-sec:
+      anstyle|security:
         applies-to: security-updates
         patterns:
           - "anstyle"
           - "anstyle-*"
-      anstyle-ver:
+      anstyle|version:
         applies-to: version-updates
         patterns:
           - "anstyle"
@@ -34,12 +34,12 @@ updates:
         update-types:
           - "major"
           - "minor"
-      byte-strings-sec:
+      byte-strings|security:
         applies-to: security-updates
         patterns:
           - "byte-strings"
           - "byte-strings-*"
-      byte-strings-ver:
+      byte-strings|version:
         applies-to: version-updates
         patterns:
           - "byte-strings"
@@ -47,12 +47,12 @@ updates:
         update-types:
           - "major"
           - "minor"
-      bzip2-sec:
+      bzip2|security:
         applies-to: security-updates
         patterns:
           - "bzip2"
           - "bzip2-*"
-      bzip2-ver:
+      bzip2|version:
         applies-to: version-updates
         patterns:
           - "bzip2"
@@ -60,12 +60,12 @@ updates:
         update-types:
           - "major"
           - "minor"
-      capnp-sec:
+      capnp|security:
         applies-to: security-updates
         patterns:
           - "capnp"
           - "capnpc"
-      capnp-ver:
+      capnp|version:
         applies-to: version-updates
         patterns:
           - "capnp"
@@ -73,12 +73,12 @@ updates:
         update-types:
           - "major"
           - "minor"
-      chrono-sec:
+      chrono|security:
         applies-to: security-updates
         patterns:
           - "chrono"
           - "chrono-*"
-      chrono-ver:
+      chrono|version:
         applies-to: version-updates
         patterns:
           - "chrono"
@@ -86,12 +86,12 @@ updates:
         update-types:
           - "major"
           - "minor"
-      ciborium-sec:
+      ciborium|security:
         applies-to: security-updates
         patterns:
           - "ciborium"
           - "ciborium-*"
-      ciborium-ver:
+      ciborium|version:
         applies-to: version-updates
         patterns:
           - "ciborium"
@@ -99,12 +99,12 @@ updates:
         update-types:
           - "major"
           - "minor"
-      clap-sec:
+      clap|security:
         applies-to: security-updates
         patterns:
           - "clap"
           - "clap_*"
-      clap-ver:
+      clap|version:
         applies-to: version-updates
         patterns:
           - "clap"
@@ -112,12 +112,12 @@ updates:
         update-types:
           - "major"
           - "minor"
-      const-random-sec:
+      const-random|security:
         applies-to: security-updates
         patterns:
           - "const-random"
           - "const-random-*"
-      const-random-ver:
+      const-random|version:
         applies-to: version-updates
         patterns:
           - "const-random"
@@ -125,12 +125,12 @@ updates:
         update-types:
           - "major"
           - "minor"
-      criterion-sec:
+      criterion|security:
         applies-to: security-updates
         patterns:
           - "criterion"
           - "criterion-*"
-      criterion-ver:
+      criterion|version:
         applies-to: version-updates
         patterns:
           - "criterion"
@@ -138,12 +138,12 @@ updates:
         update-types:
           - "major"
           - "minor"
-      crossbeam-sec:
+      crossbeam|security:
         applies-to: security-updates
         patterns:
           - "crossbeam"
           - "crossbeam-*"
-      crossbeam-ver:
+      crossbeam|version:
         applies-to: version-updates
         patterns:
           - "crossbeam"
@@ -151,12 +151,12 @@ updates:
         update-types:
           - "major"
           - "minor"
-      darling-sec:
+      darling|security:
         applies-to: security-updates
         patterns:
           - "darling"
           - "darling_*"
-      darling-ver:
+      darling|version:
         applies-to: version-updates
         patterns:
           - "darling"
@@ -164,12 +164,12 @@ updates:
         update-types:
           - "major"
           - "minor"
-      enum-map-sec:
+      enum-map|security:
         applies-to: security-updates
         patterns:
           - "enum-map"
           - "enum-map-*"
-      enum-map-ver:
+      enum-map|version:
         applies-to: version-updates
         patterns:
           - "enum-map"
@@ -177,13 +177,13 @@ updates:
         update-types:
           - "major"
           - "minor"
-      enumset-sec:
+      enumset|security:
         applies-to: security-updates
         patterns:
           - "enumset"
           - "enumset-*"
           - "enumset_*"
-      enumset-ver:
+      enumset|version:
         applies-to: version-updates
         patterns:
           - "enumset"
@@ -192,12 +192,12 @@ updates:
         update-types:
           - "major"
           - "minor"
-      iana-time-zone-sec:
+      iana-time-zone|security:
         applies-to: security-updates
         patterns:
           - "iana-time-zone"
           - "iana-time-zone-*"
-      iana-time-zone-ver:
+      iana-time-zone|version:
         applies-to: version-updates
         patterns:
           - "iana-time-zone"
@@ -205,12 +205,12 @@ updates:
         update-types:
           - "major"
           - "minor"
-      inotify-sec:
+      inotify|security:
         applies-to: security-updates
         patterns:
           - "inotify"
           - "inotify-*"
-      inotify-ver:
+      inotify|version:
         applies-to: version-updates
         patterns:
           - "inotify"
@@ -218,13 +218,13 @@ updates:
         update-types:
           - "major"
           - "minor"
-      is-terminal-sec:
+      is-terminal|security:
         applies-to: security-updates
         patterns:
           - "is-terminal"
           - "is-terminal-*"
           - "is_terminal_*"
-      is-terminal-ver:
+      is-terminal|version:
         applies-to: version-updates
         patterns:
           - "is-terminal"
@@ -233,12 +233,12 @@ updates:
         update-types:
           - "major"
           - "minor"
-      kqueue-sec:
+      kqueue|security:
         applies-to: security-updates
         patterns:
           - "kqueue"
           - "kqueue-*"
-      kqueue-ver:
+      kqueue|version:
         applies-to: version-updates
         patterns:
           - "kqueue"
@@ -246,12 +246,12 @@ updates:
         update-types:
           - "major"
           - "minor"
-      pest-sec:
+      pest|security:
         applies-to: security-updates
         patterns:
           - "pest"
           - "pest_*"
-      pest-ver:
+      pest|version:
         applies-to: version-updates
         patterns:
           - "pest"
@@ -259,12 +259,12 @@ updates:
         update-types:
           - "major"
           - "minor"
-      phf-sec:
+      phf|security:
         applies-to: security-updates
         patterns:
           - "phf"
           - "phf_*"
-      phf-ver:
+      phf|version:
         applies-to: version-updates
         patterns:
           - "phf"
@@ -272,12 +272,12 @@ updates:
         update-types:
           - "major"
           - "minor"
-      plotters-sec:
+      plotters|security:
         applies-to: security-updates
         patterns:
           - "plotters"
           - "plotters-*"
-      plotters-ver:
+      plotters|version:
         applies-to: version-updates
         patterns:
           - "plotters"
@@ -285,12 +285,12 @@ updates:
         update-types:
           - "major"
           - "minor"
-      predicates-sec:
+      predicates|security:
         applies-to: security-updates
         patterns:
           - "predicates"
           - "predicates-*"
-      predicates-ver:
+      predicates|version:
         applies-to: version-updates
         patterns:
           - "predicates"
@@ -298,12 +298,12 @@ updates:
         update-types:
           - "major"
           - "minor"
-      rand-sec:
+      rand|security:
         applies-to: security-updates
         patterns:
           - "rand"
           - "rand_*"
-      rand-ver:
+      rand|version:
         applies-to: version-updates
         patterns:
           - "rand"
@@ -311,12 +311,12 @@ updates:
         update-types:
           - "major"
           - "minor"
-      rayon-sec:
+      rayon|security:
         applies-to: security-updates
         patterns:
           - "rayon"
           - "rayon-*"
-      rayon-ver:
+      rayon|version:
         applies-to: version-updates
         patterns:
           - "rayon"
@@ -324,23 +324,23 @@ updates:
         update-types:
           - "major"
           - "minor"
-      redox-sec:
+      redox|security:
         applies-to: security-updates
         patterns:
           - "redox_*"
-      redox-ver:
+      redox|version:
         applies-to: version-updates
         patterns:
           - "redox_*"
         update-types:
           - "major"
           - "minor"
-      regex-sec:
+      regex|security:
         applies-to: security-updates
         patterns:
           - "regex"
           - "regex-*"
-      regex-ver:
+      regex|version:
         applies-to: version-updates
         patterns:
           - "regex"
@@ -348,12 +348,12 @@ updates:
         update-types:
           - "major"
           - "minor"
-      rust-embed-sec:
+      rust-embed|security:
         applies-to: security-updates
         patterns:
           - "rust-embed"
           - "rust-embed-*"
-      rust-embed-ver:
+      rust-embed|version:
         applies-to: version-updates
         patterns:
           - "rust-embed"
@@ -361,12 +361,12 @@ updates:
         update-types:
           - "major"
           - "minor"
-      strum-sec:
+      strum|security:
         applies-to: security-updates
         patterns:
           - "strum"
           - "strum_*"
-      strum-ver:
+      strum|version:
         applies-to: version-updates
         patterns:
           - "strum"
@@ -374,12 +374,12 @@ updates:
         update-types:
           - "major"
           - "minor"
-      thiserror-sec:
+      thiserror|security:
         applies-to: security-updates
         patterns:
           - "thiserror"
           - "thiserror-*"
-      thiserror-ver:
+      thiserror|version:
         applies-to: version-updates
         patterns:
           - "thiserror"
@@ -387,14 +387,14 @@ updates:
         update-types:
           - "major"
           - "minor"
-      toml-sec:
+      toml|security:
         applies-to: security-updates
         patterns:
           - "serde_spanned"
           - "serde_toml"
           - "toml"
           - "toml_*"
-      toml-ver:
+      toml|version:
         applies-to: version-updates
         patterns:
           - "serde_spanned"
@@ -404,25 +404,25 @@ updates:
         update-types:
           - "major"
           - "minor"
-      unicode-sec:
+      unicode|security:
         applies-to: security-updates
         patterns:
           - "unicode-*"
-      unicode-ver:
+      unicode|version:
         applies-to: version-updates
         patterns:
           - "unicode-*"
         update-types:
           - "major"
           - "minor"
-      wasm-sec:
+      wasm|security:
         applies-to: security-updates
         patterns:
           - "js-sys"
           - "wasi"
           - "wasm-*"
           - "web-sys"
-      wasm-ver:
+      wasm|version:
         applies-to: version-updates
         patterns:
           - "js-sys"
@@ -432,12 +432,12 @@ updates:
         update-types:
           - "major"
           - "minor"
-      winapi-sec:
+      winapi|security:
         applies-to: security-updates
         patterns:
           - "winapi"
           - "winapi-*"
-      winapi-ver:
+      winapi|version:
         applies-to: version-updates
         patterns:
           - "winapi"
@@ -445,12 +445,12 @@ updates:
         update-types:
           - "major"
           - "minor"
-      windows-sec:
+      windows|security:
         applies-to: security-updates
         patterns:
           - "windows-*"
           - "windows_*"
-      windows-ver:
+      windows|version:
         applies-to: version-updates
         patterns:
           - "windows-*"
@@ -458,12 +458,12 @@ updates:
         update-types:
           - "major"
           - "minor"
-      zerofrom-sec:
+      zerofrom|security:
         applies-to: security-updates
         patterns:
           - "zerofrom"
           - "zerofrom-*"
-      zerofrom-ver:
+      zerofrom|version:
         applies-to: version-updates
         patterns:
           - "zerofrom"
@@ -471,12 +471,12 @@ updates:
         update-types:
           - "major"
           - "minor"
-      zstd-sec:
+      zstd|security:
         applies-to: security-updates
         patterns:
           - "zstd"
           - "zstd-*"
-      zstd-ver:
+      zstd|version:
         applies-to: version-updates
         patterns:
           - "zstd"
