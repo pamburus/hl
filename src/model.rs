@@ -42,25 +42,13 @@ pub const MAX_NUMBER_LEN: usize = 39;
 
 // ---
 
+#[inline]
 pub fn looks_like_number(value: &[u8]) -> bool {
-    if value.len() == 0 || value.len() > MAX_NUMBER_LEN {
+    if value.len() > MAX_NUMBER_LEN {
         return false;
     }
 
-    let mut s = value;
-    let mut n_dots = 0;
-    if s[0] == b'-' {
-        s = &s[1..];
-    }
-    s.len() != 0
-        && s.iter().all(|&x| {
-            if x == b'.' {
-                n_dots += 1;
-                n_dots <= 1
-            } else {
-                x.is_ascii_digit()
-            }
-        })
+    crate::number::looks_like_number(value)
 }
 
 // ---
@@ -2425,6 +2413,17 @@ mod tests {
         let record = RawRecord::parser().parse(input).next().unwrap().unwrap();
         let record = parser.parse(&record.record);
         assert_eq!(record.caller, expected);
+    }
+
+    #[rstest]
+    #[case(b"price=1", RawValue::Number("1"))] // 1
+    #[case(b"price=1.1", RawValue::Number("1.1"))] // 2
+    #[case(b"price=1.1.1", RawValue::String(EncodedString::raw("1.1.1")))] // 3
+    #[case(b"price=3.787e+04", RawValue::Number("3.787e+04"))] // 4
+    fn test_logfmt_number(#[case] input: &[u8], #[case] expected: RawValue) {
+        let record = RawRecord::parser().parse(input).next().unwrap().unwrap();
+        let actual = RawValue::auto(record.record.fields().next().unwrap().1.raw_str());
+        assert_eq!(actual, expected);
     }
 
     fn parse(s: &str) -> Record {

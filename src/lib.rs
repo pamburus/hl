@@ -28,6 +28,7 @@ mod eseq;
 mod filtering;
 mod fsmon;
 mod model;
+mod number;
 mod replay;
 mod scanning;
 mod serdex;
