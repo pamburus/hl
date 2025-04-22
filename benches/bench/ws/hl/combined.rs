@@ -12,6 +12,7 @@ use hl::{
     DateTimeFormatter, Filter, IncludeExcludeKeyFilter, LinuxDateFormat, Parser, ParserSettings, RecordFormatter,
     SegmentProcessor, Settings, Theme,
     app::{RecordIgnorer, SegmentProcess, SegmentProcessorOptions},
+    formatting::NoOpRecordWithSourceFormatter,
     settings,
     timezone::Tz,
 };
@@ -19,9 +20,11 @@ use hl::{
 const GROUP: &str = strcat!(super::GROUP, ND, "combined");
 
 const THEME: &str = "universal";
-const SAMPLES: [(&str, &[u8]); 2] = [
+const SAMPLES: [(&str, &[u8]); 4] = [
     ("json", samples::log::elk01::JSON),
     ("logfmt", samples::log::elk01::LOGFMT),
+    ("json", samples::log::int01::JSON),
+    ("logfmt", samples::log::int01::LOGFMT),
 ];
 
 pub(super) fn bench(c: &mut Criterion) {
@@ -46,8 +49,22 @@ pub(super) fn bench(c: &mut Criterion) {
             settings::Formatting::default(),
         );
 
-        c.bench_function(BenchmarkId::new("parse-and-format", param), |b| {
+        c.bench_function(BenchmarkId::new("parse-and-format", &param), |b| {
             let mut processor = SegmentProcessor::new(&parser, &formatter, &filter, SegmentProcessorOptions::default());
+            let setup = || Vec::with_capacity(4096);
+
+            b.iter_batched_ref_fixed(
+                setup,
+                |buf| {
+                    processor.process(input, buf, "", None, &mut RecordIgnorer {});
+                },
+                BatchSize::SmallInput,
+            );
+        });
+
+        c.bench_function(BenchmarkId::new("parse-only", &param), |b| {
+            let formatter = NoOpRecordWithSourceFormatter;
+            let mut processor = SegmentProcessor::new(&parser, formatter, &filter, SegmentProcessorOptions::default());
             let setup = || Vec::with_capacity(4096);
 
             b.iter_batched_ref_fixed(

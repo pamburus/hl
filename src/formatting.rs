@@ -53,6 +53,16 @@ impl RecordWithSourceFormatter for Box<dyn RecordWithSourceFormatter> {
 
 // ---
 
+#[derive(Default, Clone, Copy, Debug, PartialEq, Eq)]
+pub struct NoOpRecordWithSourceFormatter;
+
+impl RecordWithSourceFormatter for NoOpRecordWithSourceFormatter {
+    #[inline(always)]
+    fn format_record(&self, _: &mut Buf, _: model::RecordWithSource) {}
+}
+
+// ---
+
 pub struct RecordFormatter {
     theme: Arc<Theme>,
     unescape_fields: bool,
@@ -922,7 +932,7 @@ mod tests {
     use super::*;
     use crate::{
         datefmt::LinuxDateFormat,
-        model::{Caller, RawObject, Record, RecordFields},
+        model::{Caller, RawObject, Record, RecordFields, RecordWithSourceConstructor},
         settings::Punctuation,
         theme::Theme,
         themecfg::testing,
@@ -1466,5 +1476,13 @@ mod tests {
 
         let result = format_no_color(&rec);
         assert_eq!(&result, " @ test_function :: test_file.rs:42", "{}", result);
+    }
+
+    #[test]
+    fn test_no_op_record_with_source_formatter() {
+        let formatter = NoOpRecordWithSourceFormatter;
+        let rec = Record::default();
+        let rec = rec.with_source(b"src");
+        formatter.format_record(&mut Buf::default(), rec);
     }
 }
