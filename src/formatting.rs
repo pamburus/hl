@@ -933,7 +933,7 @@ mod tests {
     use crate::{
         datefmt::LinuxDateFormat,
         model::{Caller, RawObject, Record, RecordFields, RecordWithSourceConstructor},
-        settings::Punctuation,
+        settings::{MessageFormatting, MessageFormattingStyle, Punctuation},
         theme::Theme,
         themecfg::testing,
         timestamp::Timestamp,
@@ -975,8 +975,11 @@ mod tests {
             false,
             Arc::new(IncludeExcludeKeyFilter::default()),
             Formatting {
-                punctuation: Punctuation::test_default(),
                 flatten: None,
+                message: MessageFormatting {
+                    style: MessageFormattingStyle::AutoQuoted,
+                },
+                punctuation: Punctuation::test_default(),
             },
         )
     }

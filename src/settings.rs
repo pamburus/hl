@@ -365,8 +365,28 @@ impl FromStr for InputInfo {
 #[derive(Clone, Debug, Default, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub struct Formatting {
-    pub punctuation: Punctuation,
     pub flatten: Option<FlattenOption>,
+    pub message: MessageFormatting,
+    pub punctuation: Punctuation,
+}
+
+// ---
+
+#[derive(Clone, Debug, Default, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub struct MessageFormatting {
+    pub style: MessageFormattingStyle,
+}
+
+// ---
+
+#[derive(Clone, Debug, Default, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub enum MessageFormattingStyle {
+    AutoQuoted,
+    AlwaysQuoted,
+    #[default]
+    Suffixed,
 }
 
 // ---
@@ -380,17 +400,12 @@ pub enum FlattenOption {
 
 // ---
 
-#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, Default, Clone, Eq, PartialEq)]
 #[serde(rename_all = "kebab-case")]
 pub enum FieldShowOption {
+    #[default]
     Auto,
     Always,
-}
-
-impl Default for FieldShowOption {
-    fn default() -> Self {
-        Self::Auto
-    }
 }
 
 // ---
@@ -415,6 +430,7 @@ pub struct Punctuation {
     pub input_name_clipping: String,
     pub input_name_common_part: String,
     pub array_separator: String,
+    pub message_suffix: String,
 }
 
 impl Default for Punctuation {
@@ -437,6 +453,7 @@ impl Default for Punctuation {
             input_name_clipping: "...".into(),
             input_name_common_part: "...".into(),
             array_separator: " ".into(),
+            message_suffix: " :: ".into(),
         }
     }
 }
@@ -462,6 +479,7 @@ impl Punctuation {
             input_name_clipping: "...".into(),
             input_name_common_part: "...".into(),
             array_separator: ",".into(),
+            message_suffix: " :: ".into(),
         }
     }
 }
