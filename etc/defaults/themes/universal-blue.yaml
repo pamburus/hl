@@ -18,6 +18,8 @@ elements:
   message:
     foreground: default
     modes: [bold]
+  message-delimiter:
+    modes: [faint]
   field:
     modes: [faint]
   key:

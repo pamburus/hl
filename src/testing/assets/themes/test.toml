@@ -19,6 +19,9 @@ foreground = "cyan"
 foreground = "default"
 modes = ["bold"]
 
+[elements.message-delimiter]
+modes = ["faint", "italic"]
+
 [elements.field]
 modes = ["faint"]
 

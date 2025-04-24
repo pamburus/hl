@@ -98,6 +98,9 @@
         "message": {
           "$ref": "#/definitions/style"
         },
+        "message-delimiter": {
+          "$ref": "#/definitions/style"
+        },
         "field": {
           "$ref": "#/definitions/style"
         },

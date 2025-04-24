@@ -17,6 +17,8 @@ elements:
     foreground: "#3f5d7f"
   message:
     foreground: "#95e6cb"
+  message-delimiter:
+    foreground: "#565b66"
   field:
     foreground: "#3f5d7f"
   key:

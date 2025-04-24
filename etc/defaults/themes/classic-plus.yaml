@@ -17,6 +17,8 @@ elements:
     foreground: bright-black
   message:
     foreground: default
+  message-delimiter:
+    foreground: bright-black
   field:
     foreground: bright-black
   key:

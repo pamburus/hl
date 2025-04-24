@@ -28,6 +28,8 @@ elements:
     foreground: *gray
   message:
     foreground: *strong
+  message-delimiter:
+    foreground: *gray
   field:
     foreground: *gray
   key:
