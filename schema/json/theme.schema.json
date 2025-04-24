@@ -98,6 +98,9 @@
         "message": {
           "$ref": "#/definitions/style"
         },
+        "message-suffix": {
+          "$ref": "#/definitions/style"
+        },
         "field": {
           "$ref": "#/definitions/style"
         },

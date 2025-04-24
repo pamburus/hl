@@ -11,12 +11,12 @@ use crate::{
     filtering::IncludeExcludeSetting,
     fmtx::{OptimizedBuf, Push, aligned_left, centered},
     model::{self, Level, RawValue},
-    settings::Formatting,
+    settings::{Formatting, MessageFormattingStyle},
     theme::{Element, StylingPush, Theme},
 };
 
 // relative imports
-use string::{Format, MessageFormatAuto, ValueFormatAuto};
+use string::{DynFormat, Format, ValueFormatAuto};
 
 // ---
 
@@ -73,6 +73,8 @@ pub struct RecordFormatter {
     always_show_time: bool,
     always_show_level: bool,
     fields: Arc<IncludeExcludeKeyFilter>,
+    message_format: DynFormat,
+    message_suffixed: bool,
     cfg: Formatting,
 }
 
@@ -85,6 +87,17 @@ impl RecordFormatter {
         cfg: Formatting,
     ) -> Self {
         let ts_width = ts_formatter.max_length();
+        let (message_format, message_suffixed): (DynFormat, bool) = match cfg.message.style {
+            MessageFormattingStyle::AutoQuoted => (Arc::new(string::MessageFormatAutoQuoted), false),
+            MessageFormattingStyle::AlwaysQuoted => (Arc::new(string::MessageFormatAlwaysQuoted), false),
+            MessageFormattingStyle::AlwaysDoubleQuoted => (Arc::new(string::MessageFormatDoubleQuoted), false),
+            MessageFormattingStyle::Suffixed => {
+                let suffix = format!("{} ", &cfg.punctuation.message_suffix);
+                let n = suffix.len();
+                (Arc::new(string::MessageFormatSuffixed::new(suffix).rtrim(n)), true)
+            }
+            MessageFormattingStyle::Raw => (Arc::new(string::MessageFormatRaw), false),
+        };
         RecordFormatter {
             theme,
             unescape_fields: true,
@@ -95,6 +108,8 @@ impl RecordFormatter {
             always_show_time: false,
             always_show_level: false,
             fields,
+            message_format,
+            message_suffixed,
             cfg,
         }
     }
@@ -273,7 +288,7 @@ impl RecordFormatter {
                         s.space();
                     });
                     s.element(Element::Message, |s| {
-                        s.batch(|buf| MessageFormatAuto::new(value).format(buf).unwrap())
+                        s.batch(|buf| self.message_format.format(value, buf).unwrap())
                     });
                 }
                 false
@@ -302,6 +317,7 @@ struct FormattingState {
     flatten: bool,
     empty: bool,
     some_nested_fields_hidden: bool,
+    has_fields: bool,
 }
 
 impl FormattingState {
@@ -312,6 +328,7 @@ impl FormattingState {
             flatten,
             empty: true,
             some_nested_fields_hidden: false,
+            has_fields: false,
         }
     }
 
@@ -426,7 +443,7 @@ impl<'a> FieldFormatter<'a> {
         match value {
             RawValue::String(value) => {
                 s.element(Element::String, |s| {
-                    s.batch(|buf| ValueFormatAuto::new(value).format(buf).unwrap())
+                    s.batch(|buf| ValueFormatAuto.format(value, buf).unwrap())
                 });
             }
             RawValue::Number(value) => {
@@ -498,6 +515,15 @@ impl<'a> FieldFormatter<'a> {
     ) -> FormattedFieldVariant {
         if fs.flatten && matches!(value, RawValue::Object(_)) {
             return FormattedFieldVariant::Flattened(fs.key_prefix.push(key));
+        }
+
+        if !fs.has_fields {
+            fs.has_fields = true;
+            if self.rf.message_suffixed {
+                s.element(Element::MessageSuffix, |s| {
+                    s.batch(|buf| buf.extend(self.rf.cfg.punctuation.message_suffix.as_bytes()));
+                });
+            }
         }
 
         let variant = FormattedFieldVariant::Normal { flatten: fs.flatten };
@@ -590,11 +616,14 @@ enum FormattedFieldVariant {
 // ---
 
 pub mod string {
+    // std imports
+    use std::{cmp::min, sync::Arc};
+
     // third-party imports
     use enumset::{EnumSet, EnumSetType, enum_set as mask};
 
     // workspace imports
-    use encstr::{AnyEncodedString, JsonAppender, Result};
+    use encstr::{AnyEncodedString, EncodedString, JsonAppender, Result};
     use enumset_ext::EnumSetExt;
 
     // local imports
@@ -606,35 +635,32 @@ pub mod string {
     // ---
 
     pub trait Format {
-        fn format(&self, buf: &mut Vec<u8>) -> Result<()>;
-    }
+        fn format<'a>(&self, input: EncodedString<'a>, buf: &mut Vec<u8>) -> Result<()>;
 
-    // ---
-
-    pub struct ValueFormatAuto<S> {
-        string: S,
-    }
-
-    impl<S> ValueFormatAuto<S> {
-        #[inline(always)]
-        pub fn new(string: S) -> Self {
-            Self { string }
+        fn rtrim(self, n: usize) -> FormatRightTrimmed<Self>
+        where
+            Self: Sized,
+        {
+            FormatRightTrimmed::new(n, self)
         }
     }
 
-    impl<'a, S> Format for ValueFormatAuto<S>
-    where
-        S: AnyEncodedString<'a> + Clone + Copy,
-    {
+    pub type DynFormat = Arc<dyn Format>;
+
+    // ---
+
+    pub struct ValueFormatAuto;
+
+    impl Format for ValueFormatAuto {
         #[inline(always)]
-        fn format(&self, buf: &mut Vec<u8>) -> Result<()> {
-            if self.string.is_empty() {
+        fn format<'a>(&self, input: EncodedString<'a>, buf: &mut Vec<u8>) -> Result<()> {
+            if input.is_empty() {
                 buf.extend(r#""""#.as_bytes());
                 return Ok(());
             }
 
             let begin = buf.len();
-            buf.with_auto_trim(|buf| ValueFormatRaw::new(self.string).format(buf))?;
+            buf.with_auto_trim(|buf| ValueFormatRaw.format(input, buf))?;
 
             let mut mask = Mask::empty();
 
@@ -690,81 +716,45 @@ pub mod string {
             }
 
             buf.truncate(begin);
-            ValueFormatDoubleQuoted::new(self.string).format(buf)
+            ValueFormatDoubleQuoted.format(input, buf)
         }
     }
 
     // ---
 
-    pub struct ValueFormatRaw<S> {
-        string: S,
-    }
+    pub struct ValueFormatRaw;
 
-    impl<S> ValueFormatRaw<S> {
+    impl Format for ValueFormatRaw {
         #[inline(always)]
-        pub fn new(string: S) -> Self {
-            Self { string }
-        }
-    }
-
-    impl<'a, S> Format for ValueFormatRaw<S>
-    where
-        S: AnyEncodedString<'a>,
-    {
-        #[inline(always)]
-        fn format(&self, buf: &mut Vec<u8>) -> Result<()> {
-            self.string.decode(buf)
+        fn format<'a>(&self, input: EncodedString<'a>, buf: &mut Vec<u8>) -> Result<()> {
+            input.decode(buf)
         }
     }
 
     // ---
 
-    pub struct ValueFormatDoubleQuoted<S> {
-        string: S,
-    }
+    pub struct ValueFormatDoubleQuoted;
 
-    impl<S> ValueFormatDoubleQuoted<S> {
-        #[inline(always)]
-        pub fn new(string: S) -> Self {
-            Self { string }
-        }
-    }
-
-    impl<'a, S> Format for ValueFormatDoubleQuoted<S>
-    where
-        S: AnyEncodedString<'a>,
-    {
+    impl Format for ValueFormatDoubleQuoted {
         #[inline]
-        fn format(&self, buf: &mut Vec<u8>) -> Result<()> {
-            self.string.format_json(buf)
+        fn format<'a>(&self, input: EncodedString<'a>, buf: &mut Vec<u8>) -> Result<()> {
+            input.format_json(buf)
         }
     }
 
     // ---
 
-    pub struct MessageFormatAuto<S> {
-        string: S,
-    }
+    pub struct MessageFormatAutoQuoted;
 
-    impl<S> MessageFormatAuto<S> {
+    impl Format for MessageFormatAutoQuoted {
         #[inline(always)]
-        pub fn new(string: S) -> Self {
-            Self { string }
-        }
-    }
-
-    impl<'a, S> Format for MessageFormatAuto<S>
-    where
-        S: AnyEncodedString<'a> + Clone + Copy,
-    {
-        #[inline(always)]
-        fn format(&self, buf: &mut Vec<u8>) -> Result<()> {
-            if self.string.is_empty() {
+        fn format<'a>(&self, input: EncodedString<'a>, buf: &mut Vec<u8>) -> Result<()> {
+            if input.is_empty() {
                 return Ok(());
             }
 
             let begin = buf.len();
-            buf.with_auto_trim(|buf| MessageFormatRaw::new(self.string).format(buf))?;
+            buf.with_auto_trim(|buf| MessageFormatRaw.format(input, buf))?;
 
             let mut mask = Mask::empty();
 
@@ -803,53 +793,166 @@ pub mod string {
             }
 
             buf.truncate(begin);
-            MessageFormatDoubleQuoted::new(self.string).format(buf)
+            MessageFormatDoubleQuoted.format(input, buf)
         }
     }
 
     // ---
 
-    pub struct MessageFormatRaw<S> {
-        string: S,
-    }
+    pub struct MessageFormatAlwaysQuoted;
 
-    impl<S> MessageFormatRaw<S> {
+    impl Format for MessageFormatAlwaysQuoted {
         #[inline(always)]
-        pub fn new(string: S) -> Self {
-            Self { string }
-        }
-    }
+        fn format<'a>(&self, input: EncodedString<'a>, buf: &mut Vec<u8>) -> Result<()> {
+            if input.is_empty() {
+                return Ok(());
+            }
 
-    impl<'a, S> Format for MessageFormatRaw<S>
-    where
-        S: AnyEncodedString<'a>,
-    {
-        #[inline(always)]
-        fn format(&self, buf: &mut Vec<u8>) -> Result<()> {
-            self.string.decode(buf)
+            let begin = buf.len();
+            buf.push(b'"');
+            buf.with_auto_trim(|buf| MessageFormatRaw.format(input, buf))?;
+
+            let mut mask = Mask::empty();
+
+            buf[begin..].iter().map(|&c| CHAR_GROUPS[c as usize]).for_each(|group| {
+                mask |= group;
+            });
+
+            if !mask.intersects(Flag::DoubleQuote | Flag::Control | Flag::Backslash) {
+                buf.push(b'"');
+                return Ok(());
+            }
+
+            if !mask.intersects(Flag::SingleQuote | Flag::Control | Flag::Backslash) {
+                buf[begin] = b'\'';
+                buf.push(b'\'');
+                return Ok(());
+            }
+
+            const Z: Mask = Mask::empty();
+            const XS: Mask = mask!(Flag::Control | Flag::ExtendedSpace);
+
+            if matches!(mask & (Flag::Backtick | XS), Z | XS) {
+                buf[begin] = b'`';
+                buf.push(b'`');
+                return Ok(());
+            }
+
+            buf.truncate(begin);
+            MessageFormatDoubleQuoted.format(input, buf)
         }
     }
 
     // ---
 
-    pub struct MessageFormatDoubleQuoted<S> {
-        string: S,
-    }
+    pub struct MessageFormatSuffixed(String);
 
-    impl<S> MessageFormatDoubleQuoted<S> {
-        #[inline(always)]
-        pub fn new(string: S) -> Self {
-            Self { string }
+    impl MessageFormatSuffixed {
+        pub fn new(suffix: String) -> Self {
+            Self(suffix)
         }
     }
 
-    impl<'a, S> Format for MessageFormatDoubleQuoted<S>
-    where
-        S: AnyEncodedString<'a>,
-    {
+    impl Format for MessageFormatSuffixed {
+        #[inline(always)]
+        fn format<'a>(&self, input: EncodedString<'a>, buf: &mut Vec<u8>) -> Result<()> {
+            if input.is_empty() {
+                return Ok(());
+            }
+
+            let begin = buf.len();
+            buf.with_auto_trim(|buf| MessageFormatRaw.format(input, buf))?;
+
+            let mut mask = Mask::empty();
+
+            buf[begin..].iter().map(|&c| CHAR_GROUPS[c as usize]).for_each(|group| {
+                mask |= group;
+            });
+
+            if !mask.contains(Flag::Control)
+                && !matches!(buf[begin..], [b'"', ..] | [b'\'', ..] | [b'`', ..])
+                && memchr::memmem::find(&buf[begin..], self.0.as_bytes()).is_none()
+            {
+                buf.extend(self.0.as_bytes());
+                return Ok(());
+            }
+
+            if !mask.intersects(Flag::DoubleQuote | Flag::Control | Flag::Backslash) {
+                buf.push(b'"');
+                buf.push(b'"');
+                buf[begin..].rotate_right(1);
+                buf.extend(self.0.as_bytes());
+                return Ok(());
+            }
+
+            if !mask.intersects(Flag::SingleQuote | Flag::Control | Flag::Backslash) {
+                buf.push(b'\'');
+                buf.push(b'\'');
+                buf[begin..].rotate_right(1);
+                buf.extend(self.0.as_bytes());
+                return Ok(());
+            }
+
+            const Z: Mask = Mask::empty();
+            const XS: Mask = mask!(Flag::Control | Flag::ExtendedSpace);
+
+            if matches!(mask & (Flag::Backtick | XS), Z | XS) {
+                buf.push(b'`');
+                buf.push(b'`');
+                buf[begin..].rotate_right(1);
+                buf.extend(self.0.as_bytes());
+                return Ok(());
+            }
+
+            buf.truncate(begin);
+            MessageFormatDoubleQuoted.format(input, buf)?;
+            buf.extend(self.0.as_bytes());
+            Ok(())
+        }
+    }
+
+    // ---
+
+    pub struct MessageFormatRaw;
+
+    impl Format for MessageFormatRaw {
+        #[inline(always)]
+        fn format<'a>(&self, input: EncodedString<'a>, buf: &mut Vec<u8>) -> Result<()> {
+            input.decode(buf)
+        }
+    }
+
+    // ---
+
+    pub struct MessageFormatDoubleQuoted;
+
+    impl Format for MessageFormatDoubleQuoted {
         #[inline]
-        fn format(&self, buf: &mut Vec<u8>) -> Result<()> {
-            self.string.format_json(buf)
+        fn format<'a>(&self, input: EncodedString<'a>, buf: &mut Vec<u8>) -> Result<()> {
+            input.format_json(buf)
+        }
+    }
+
+    // ---
+
+    pub struct FormatRightTrimmed<F> {
+        n: usize,
+        inner: F,
+    }
+
+    impl<F> FormatRightTrimmed<F> {
+        fn new(n: usize, inner: F) -> Self {
+            Self { n, inner }
+        }
+    }
+
+    impl<F: Format> Format for FormatRightTrimmed<F> {
+        #[inline]
+        fn format<'a>(&self, input: EncodedString<'a>, buf: &mut Vec<u8>) -> Result<()> {
+            let begin = buf.len();
+            self.inner.format(input, buf)?;
+            buf.truncate(buf.len() - min(buf.len() - begin, self.n));
+            Ok(())
         }
     }
 
@@ -933,7 +1036,7 @@ mod tests {
     use crate::{
         datefmt::LinuxDateFormat,
         model::{Caller, RawObject, Record, RecordFields, RecordWithSourceConstructor},
-        settings::Punctuation,
+        settings::{MessageFormatting, MessageFormattingStyle, Punctuation},
         theme::Theme,
         themecfg::testing,
         timestamp::Timestamp,
@@ -975,8 +1078,11 @@ mod tests {
             false,
             Arc::new(IncludeExcludeKeyFilter::default()),
             Formatting {
-                punctuation: Punctuation::test_default(),
                 flatten: None,
+                message: MessageFormatting {
+                    style: MessageFormattingStyle::AutoQuoted,
+                },
+                punctuation: Punctuation::test_default(),
             },
         )
     }
