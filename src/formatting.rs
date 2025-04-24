@@ -302,6 +302,7 @@ struct FormattingState {
     flatten: bool,
     empty: bool,
     some_nested_fields_hidden: bool,
+    has_fields: bool,
 }
 
 impl FormattingState {
@@ -312,6 +313,7 @@ impl FormattingState {
             flatten,
             empty: true,
             some_nested_fields_hidden: false,
+            has_fields: false,
         }
     }
 
@@ -498,6 +500,10 @@ impl<'a> FieldFormatter<'a> {
     ) -> FormattedFieldVariant {
         if fs.flatten && matches!(value, RawValue::Object(_)) {
             return FormattedFieldVariant::Flattened(fs.key_prefix.push(key));
+        }
+
+        if !fs.has_fields {
+            fs.has_fields = true;
         }
 
         let variant = FormattedFieldVariant::Normal { flatten: fs.flatten };
