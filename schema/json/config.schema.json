@@ -214,6 +214,15 @@
           "type": "string",
           "enum": ["never", "always"]
         },
+        "message": {
+          "type": "object",
+          "properties": {
+            "style": {
+              "type": "string",
+              "enum": ["auto-quoted", "always-quoted", "suffixed"]
+            }
+          }
+        },
         "punctuation": {
           "type": "object",
           "additionalProperties": false,
@@ -267,6 +276,9 @@
               "type": "string"
             },
             "array-separator": {
+              "type": "string"
+            },
+            "message-suffix": {
               "type": "string"
             }
           }
