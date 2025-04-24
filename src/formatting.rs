@@ -273,7 +273,7 @@ impl RecordFormatter {
                         s.space();
                     });
                     s.element(Element::Message, |s| {
-                        s.batch(|buf| MessageFormatAuto::new(value).format(buf).unwrap())
+                        s.batch(|buf| MessageFormatAuto.format(value, buf).unwrap())
                     });
                 }
                 false
@@ -428,7 +428,7 @@ impl<'a> FieldFormatter<'a> {
         match value {
             RawValue::String(value) => {
                 s.element(Element::String, |s| {
-                    s.batch(|buf| ValueFormatAuto::new(value).format(buf).unwrap())
+                    s.batch(|buf| ValueFormatAuto.format(value, buf).unwrap())
                 });
             }
             RawValue::Number(value) => {
@@ -600,7 +600,7 @@ pub mod string {
     use enumset::{EnumSet, EnumSetType, enum_set as mask};
 
     // workspace imports
-    use encstr::{AnyEncodedString, JsonAppender, Result};
+    use encstr::{AnyEncodedString, EncodedString, JsonAppender, Result};
     use enumset_ext::EnumSetExt;
 
     // local imports
@@ -612,35 +612,23 @@ pub mod string {
     // ---
 
     pub trait Format {
-        fn format(&self, buf: &mut Vec<u8>) -> Result<()>;
+        fn format<'a>(&self, input: EncodedString<'a>, buf: &mut Vec<u8>) -> Result<()>;
     }
 
     // ---
 
-    pub struct ValueFormatAuto<S> {
-        string: S,
-    }
+    pub struct ValueFormatAuto;
 
-    impl<S> ValueFormatAuto<S> {
+    impl Format for ValueFormatAuto {
         #[inline(always)]
-        pub fn new(string: S) -> Self {
-            Self { string }
-        }
-    }
-
-    impl<'a, S> Format for ValueFormatAuto<S>
-    where
-        S: AnyEncodedString<'a> + Clone + Copy,
-    {
-        #[inline(always)]
-        fn format(&self, buf: &mut Vec<u8>) -> Result<()> {
-            if self.string.is_empty() {
+        fn format<'a>(&self, input: EncodedString<'a>, buf: &mut Vec<u8>) -> Result<()> {
+            if input.is_empty() {
                 buf.extend(r#""""#.as_bytes());
                 return Ok(());
             }
 
             let begin = buf.len();
-            buf.with_auto_trim(|buf| ValueFormatRaw::new(self.string).format(buf))?;
+            buf.with_auto_trim(|buf| ValueFormatRaw.format(input, buf))?;
 
             let mut mask = Mask::empty();
 
@@ -696,81 +684,45 @@ pub mod string {
             }
 
             buf.truncate(begin);
-            ValueFormatDoubleQuoted::new(self.string).format(buf)
+            ValueFormatDoubleQuoted.format(input, buf)
         }
     }
 
     // ---
 
-    pub struct ValueFormatRaw<S> {
-        string: S,
-    }
+    pub struct ValueFormatRaw;
 
-    impl<S> ValueFormatRaw<S> {
+    impl Format for ValueFormatRaw {
         #[inline(always)]
-        pub fn new(string: S) -> Self {
-            Self { string }
-        }
-    }
-
-    impl<'a, S> Format for ValueFormatRaw<S>
-    where
-        S: AnyEncodedString<'a>,
-    {
-        #[inline(always)]
-        fn format(&self, buf: &mut Vec<u8>) -> Result<()> {
-            self.string.decode(buf)
+        fn format<'a>(&self, input: EncodedString<'a>, buf: &mut Vec<u8>) -> Result<()> {
+            input.decode(buf)
         }
     }
 
     // ---
 
-    pub struct ValueFormatDoubleQuoted<S> {
-        string: S,
-    }
+    pub struct ValueFormatDoubleQuoted;
 
-    impl<S> ValueFormatDoubleQuoted<S> {
-        #[inline(always)]
-        pub fn new(string: S) -> Self {
-            Self { string }
-        }
-    }
-
-    impl<'a, S> Format for ValueFormatDoubleQuoted<S>
-    where
-        S: AnyEncodedString<'a>,
-    {
+    impl Format for ValueFormatDoubleQuoted {
         #[inline]
-        fn format(&self, buf: &mut Vec<u8>) -> Result<()> {
-            self.string.format_json(buf)
+        fn format<'a>(&self, input: EncodedString<'a>, buf: &mut Vec<u8>) -> Result<()> {
+            input.format_json(buf)
         }
     }
 
     // ---
 
-    pub struct MessageFormatAuto<S> {
-        string: S,
-    }
+    pub struct MessageFormatAuto;
 
-    impl<S> MessageFormatAuto<S> {
+    impl Format for MessageFormatAuto {
         #[inline(always)]
-        pub fn new(string: S) -> Self {
-            Self { string }
-        }
-    }
-
-    impl<'a, S> Format for MessageFormatAuto<S>
-    where
-        S: AnyEncodedString<'a> + Clone + Copy,
-    {
-        #[inline(always)]
-        fn format(&self, buf: &mut Vec<u8>) -> Result<()> {
-            if self.string.is_empty() {
+        fn format<'a>(&self, input: EncodedString<'a>, buf: &mut Vec<u8>) -> Result<()> {
+            if input.is_empty() {
                 return Ok(());
             }
 
             let begin = buf.len();
-            buf.with_auto_trim(|buf| MessageFormatRaw::new(self.string).format(buf))?;
+            buf.with_auto_trim(|buf| MessageFormatRaw.format(input, buf))?;
 
             let mut mask = Mask::empty();
 
@@ -809,53 +761,29 @@ pub mod string {
             }
 
             buf.truncate(begin);
-            MessageFormatDoubleQuoted::new(self.string).format(buf)
+            MessageFormatDoubleQuoted.format(input, buf)
         }
     }
 
     // ---
 
-    pub struct MessageFormatRaw<S> {
-        string: S,
-    }
+    pub struct MessageFormatRaw;
 
-    impl<S> MessageFormatRaw<S> {
+    impl Format for MessageFormatRaw {
         #[inline(always)]
-        pub fn new(string: S) -> Self {
-            Self { string }
-        }
-    }
-
-    impl<'a, S> Format for MessageFormatRaw<S>
-    where
-        S: AnyEncodedString<'a>,
-    {
-        #[inline(always)]
-        fn format(&self, buf: &mut Vec<u8>) -> Result<()> {
-            self.string.decode(buf)
+        fn format<'a>(&self, input: EncodedString<'a>, buf: &mut Vec<u8>) -> Result<()> {
+            input.decode(buf)
         }
     }
 
     // ---
 
-    pub struct MessageFormatDoubleQuoted<S> {
-        string: S,
-    }
+    pub struct MessageFormatDoubleQuoted;
 
-    impl<S> MessageFormatDoubleQuoted<S> {
-        #[inline(always)]
-        pub fn new(string: S) -> Self {
-            Self { string }
-        }
-    }
-
-    impl<'a, S> Format for MessageFormatDoubleQuoted<S>
-    where
-        S: AnyEncodedString<'a>,
-    {
+    impl Format for MessageFormatDoubleQuoted {
         #[inline]
-        fn format(&self, buf: &mut Vec<u8>) -> Result<()> {
-            self.string.format_json(buf)
+        fn format<'a>(&self, input: EncodedString<'a>, buf: &mut Vec<u8>) -> Result<()> {
+            input.format_json(buf)
         }
     }
 
