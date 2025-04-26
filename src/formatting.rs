@@ -11,12 +11,12 @@ use crate::{
     filtering::IncludeExcludeSetting,
     fmtx::{OptimizedBuf, Push, aligned_left, centered},
     model::{self, Level, RawValue},
-    settings::Formatting,
+    settings::{Formatting, MessageFormattingStyle},
     theme::{Element, StylingPush, Theme},
 };
 
 // relative imports
-use string::{Format, MessageFormatAuto, ValueFormatAuto};
+use string::{DynFormat, Format, ValueFormatAuto};
 
 // ---
 
@@ -73,6 +73,7 @@ pub struct RecordFormatter {
     always_show_time: bool,
     always_show_level: bool,
     fields: Arc<IncludeExcludeKeyFilter>,
+    message_format: DynFormat,
     cfg: Formatting,
 }
 
@@ -85,6 +86,17 @@ impl RecordFormatter {
         cfg: Formatting,
     ) -> Self {
         let ts_width = ts_formatter.max_length();
+        let message_format: DynFormat = match cfg.message.style {
+            MessageFormattingStyle::AutoQuoted => Arc::new(string::MessageFormatAutoQuoted),
+            MessageFormattingStyle::AlwaysQuoted => Arc::new(string::MessageFormatAlwaysQuoted),
+            MessageFormattingStyle::AlwaysDoubleQuoted => Arc::new(string::MessageFormatDoubleQuoted),
+            MessageFormattingStyle::Suffixed => {
+                let suffix = format!("{} ", &cfg.punctuation.message_suffix);
+                let n = suffix.len();
+                Arc::new(string::MessageFormatSuffixed::new(suffix).rtrim(n))
+            }
+            MessageFormattingStyle::Raw => Arc::new(string::MessageFormatRaw),
+        };
         RecordFormatter {
             theme,
             unescape_fields: true,
@@ -95,6 +107,7 @@ impl RecordFormatter {
             always_show_time: false,
             always_show_level: false,
             fields,
+            message_format,
             cfg,
         }
     }
@@ -273,7 +286,7 @@ impl RecordFormatter {
                         s.space();
                     });
                     s.element(Element::Message, |s| {
-                        s.batch(|buf| MessageFormatAuto.format(value, buf).unwrap())
+                        s.batch(|buf| self.message_format.format(value, buf).unwrap())
                     });
                 }
                 false
@@ -504,6 +517,9 @@ impl<'a> FieldFormatter<'a> {
 
         if !fs.has_fields {
             fs.has_fields = true;
+            s.element(Element::MessageSuffix, |s| {
+                s.batch(|buf| buf.extend(self.rf.cfg.punctuation.message_suffix.as_bytes()));
+            });
         }
 
         let variant = FormattedFieldVariant::Normal { flatten: fs.flatten };
@@ -596,6 +612,9 @@ enum FormattedFieldVariant {
 // ---
 
 pub mod string {
+    // std imports
+    use std::{cmp::min, sync::Arc};
+
     // third-party imports
     use enumset::{EnumSet, EnumSetType, enum_set as mask};
 
@@ -613,7 +632,16 @@ pub mod string {
 
     pub trait Format {
         fn format<'a>(&self, input: EncodedString<'a>, buf: &mut Vec<u8>) -> Result<()>;
+
+        fn rtrim(self, n: usize) -> FormatRightTrimmed<Self>
+        where
+            Self: Sized,
+        {
+            FormatRightTrimmed::new(n, self)
+        }
     }
+
+    pub type DynFormat = Arc<dyn Format>;
 
     // ---
 
@@ -712,9 +740,9 @@ pub mod string {
 
     // ---
 
-    pub struct MessageFormatAuto;
+    pub struct MessageFormatAutoQuoted;
 
-    impl Format for MessageFormatAuto {
+    impl Format for MessageFormatAutoQuoted {
         #[inline(always)]
         fn format<'a>(&self, input: EncodedString<'a>, buf: &mut Vec<u8>) -> Result<()> {
             if input.is_empty() {
@@ -767,6 +795,120 @@ pub mod string {
 
     // ---
 
+    pub struct MessageFormatAlwaysQuoted;
+
+    impl Format for MessageFormatAlwaysQuoted {
+        #[inline(always)]
+        fn format<'a>(&self, input: EncodedString<'a>, buf: &mut Vec<u8>) -> Result<()> {
+            if input.is_empty() {
+                return Ok(());
+            }
+
+            let begin = buf.len();
+            buf.push(b'"');
+            buf.with_auto_trim(|buf| MessageFormatRaw.format(input, buf))?;
+
+            let mut mask = Mask::empty();
+
+            buf[begin..].iter().map(|&c| CHAR_GROUPS[c as usize]).for_each(|group| {
+                mask |= group;
+            });
+
+            if !mask.intersects(Flag::DoubleQuote | Flag::Control | Flag::Backslash) {
+                buf.push(b'"');
+                return Ok(());
+            }
+
+            if !mask.intersects(Flag::SingleQuote | Flag::Control | Flag::Backslash) {
+                buf[begin] = b'\'';
+                buf.push(b'\'');
+                return Ok(());
+            }
+
+            const Z: Mask = Mask::empty();
+            const XS: Mask = mask!(Flag::Control | Flag::ExtendedSpace);
+
+            if matches!(mask & (Flag::Backtick | XS), Z | XS) {
+                buf[begin] = b'`';
+                buf.push(b'`');
+                return Ok(());
+            }
+
+            buf.truncate(begin);
+            MessageFormatDoubleQuoted.format(input, buf)
+        }
+    }
+
+    // ---
+
+    pub struct MessageFormatSuffixed(String);
+
+    impl MessageFormatSuffixed {
+        pub fn new(suffix: String) -> Self {
+            Self(suffix)
+        }
+    }
+
+    impl Format for MessageFormatSuffixed {
+        #[inline(always)]
+        fn format<'a>(&self, input: EncodedString<'a>, buf: &mut Vec<u8>) -> Result<()> {
+            if input.is_empty() {
+                return Ok(());
+            }
+
+            let begin = buf.len();
+            buf.with_auto_trim(|buf| MessageFormatRaw.format(input, buf))?;
+
+            let mut mask = Mask::empty();
+
+            buf[begin..].iter().map(|&c| CHAR_GROUPS[c as usize]).for_each(|group| {
+                mask |= group;
+            });
+
+            if !mask.contains(Flag::Control)
+                && !matches!(buf[begin..], [b'"', ..] | [b'\'', ..] | [b'`', ..])
+                && memchr::memmem::find(&buf[begin..], self.0.as_bytes()).is_none()
+            {
+                buf.extend(self.0.as_bytes());
+                return Ok(());
+            }
+
+            if !mask.intersects(Flag::DoubleQuote | Flag::Control | Flag::Backslash) {
+                buf.push(b'"');
+                buf.push(b'"');
+                buf[begin..].rotate_right(1);
+                buf.extend(self.0.as_bytes());
+                return Ok(());
+            }
+
+            if !mask.intersects(Flag::SingleQuote | Flag::Control | Flag::Backslash) {
+                buf.push(b'\'');
+                buf.push(b'\'');
+                buf[begin..].rotate_right(1);
+                buf.extend(self.0.as_bytes());
+                return Ok(());
+            }
+
+            const Z: Mask = Mask::empty();
+            const XS: Mask = mask!(Flag::Control | Flag::ExtendedSpace);
+
+            if matches!(mask & (Flag::Backtick | XS), Z | XS) {
+                buf.push(b'`');
+                buf.push(b'`');
+                buf[begin..].rotate_right(1);
+                buf.extend(self.0.as_bytes());
+                return Ok(());
+            }
+
+            buf.truncate(begin);
+            MessageFormatDoubleQuoted.format(input, buf)?;
+            buf.extend(self.0.as_bytes());
+            Ok(())
+        }
+    }
+
+    // ---
+
     pub struct MessageFormatRaw;
 
     impl Format for MessageFormatRaw {
@@ -784,6 +926,29 @@ pub mod string {
         #[inline]
         fn format<'a>(&self, input: EncodedString<'a>, buf: &mut Vec<u8>) -> Result<()> {
             input.format_json(buf)
+        }
+    }
+
+    // ---
+
+    pub struct FormatRightTrimmed<F> {
+        n: usize,
+        inner: F,
+    }
+
+    impl<F> FormatRightTrimmed<F> {
+        fn new(n: usize, inner: F) -> Self {
+            Self { n, inner }
+        }
+    }
+
+    impl<F: Format> Format for FormatRightTrimmed<F> {
+        #[inline]
+        fn format<'a>(&self, input: EncodedString<'a>, buf: &mut Vec<u8>) -> Result<()> {
+            let begin = buf.len();
+            self.inner.format(input, buf)?;
+            buf.truncate(buf.len() - min(buf.len() - begin, self.n));
+            Ok(())
         }
     }
 
