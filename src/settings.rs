@@ -385,8 +385,10 @@ pub struct MessageFormatting {
 pub enum MessageFormattingStyle {
     AutoQuoted,
     AlwaysQuoted,
+    AlwaysDoubleQuoted,
     #[default]
     Suffixed,
+    Raw,
 }
 
 // ---
