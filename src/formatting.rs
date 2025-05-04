@@ -613,7 +613,7 @@ enum FormattedFieldVariant {
 
 pub mod string {
     // std imports
-    use std::{cmp::min, sync::Arc};
+    use std::{cmp::min, collections::HashSet, sync::Arc};
 
     // third-party imports
     use enumset::{EnumSet, EnumSetType, enum_set as mask};
@@ -841,11 +841,37 @@ pub mod string {
 
     // ---
 
-    pub struct MessageFormatSuffixed(String);
+    pub struct MessageFormatSuffixed {
+        suffix: String,
+        chars: [u64; 256],
+        mask: u64,
+    }
 
     impl MessageFormatSuffixed {
         pub fn new(suffix: String) -> Self {
-            Self(suffix)
+            let mut chars = [0u64; 256];
+            for (i, &mask) in CHAR_GROUPS.iter().enumerate() {
+                chars[i] = mask.as_u64();
+            }
+
+            let mut mask = 0;
+            let mut next = size_of_val(&CHAR_GROUPS[0].as_repr());
+            let mut seen = HashSet::new();
+            for &ch in suffix.as_bytes() {
+                if !seen.contains(&ch) {
+                    if next >= 64 {
+                        mask = 0;
+                        break;
+                    }
+                    seen.insert(ch);
+                    let bit = 1u64 << next;
+                    chars[ch as usize] |= bit;
+                    mask |= bit;
+                    next += 1;
+                }
+            }
+
+            Self { suffix, chars, mask }
         }
     }
 
@@ -859,25 +885,28 @@ pub mod string {
             let begin = buf.len();
             buf.with_auto_trim(|buf| MessageFormatRaw.format(input, buf))?;
 
-            let mut mask = Mask::empty();
+            let mut mask = 0u64;
 
-            buf[begin..].iter().map(|&c| CHAR_GROUPS[c as usize]).for_each(|group| {
+            buf[begin..].iter().map(|&c| self.chars[c as usize]).for_each(|group| {
                 mask |= group;
             });
 
-            if !mask.contains(Flag::Control)
+            if !Mask::from_repr(mask as u16).contains(Flag::Control)
                 && !matches!(buf[begin..], [b'"', ..] | [b'\'', ..] | [b'`', ..])
-                && memchr::memmem::find(&buf[begin..], self.0.as_bytes()).is_none()
+                && ((self.mask != 0 && self.mask & mask != self.mask)
+                    || memchr::memmem::find(&buf[begin..], self.suffix.as_bytes()).is_none())
             {
-                buf.extend(self.0.as_bytes());
+                buf.extend(self.suffix.as_bytes());
                 return Ok(());
             }
+
+            let mask = Mask::from_repr(mask as u16);
 
             if !mask.intersects(Flag::DoubleQuote | Flag::Control | Flag::Backslash) {
                 buf.push(b'"');
                 buf.push(b'"');
                 buf[begin..].rotate_right(1);
-                buf.extend(self.0.as_bytes());
+                buf.extend(self.suffix.as_bytes());
                 return Ok(());
             }
 
@@ -885,7 +914,7 @@ pub mod string {
                 buf.push(b'\'');
                 buf.push(b'\'');
                 buf[begin..].rotate_right(1);
-                buf.extend(self.0.as_bytes());
+                buf.extend(self.suffix.as_bytes());
                 return Ok(());
             }
 
@@ -896,13 +925,13 @@ pub mod string {
                 buf.push(b'`');
                 buf.push(b'`');
                 buf[begin..].rotate_right(1);
-                buf.extend(self.0.as_bytes());
+                buf.extend(self.suffix.as_bytes());
                 return Ok(());
             }
 
             buf.truncate(begin);
             MessageFormatDoubleQuoted.format(input, buf)?;
-            buf.extend(self.0.as_bytes());
+            buf.extend(self.suffix.as_bytes());
             Ok(())
         }
     }
@@ -1008,6 +1037,7 @@ pub mod string {
     };
 
     #[derive(EnumSetType)]
+    #[enumset(repr = "u16")]
     enum Flag {
         Control,
         DoubleQuote,
