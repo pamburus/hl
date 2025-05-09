@@ -49,7 +49,7 @@ config = { version = "0.15", features = ["yaml", "json", "toml"] }
 crossbeam-channel = "0.5"
 crossbeam-queue = "0.3"
 crossbeam-utils = "0.8"
-deko = "0.4"
+deko = "0.5"
 derive_more = { version = "2", features = ["deref", "from", "display"] }
 dirs = "6"
 dirs-sys = "0.5"
