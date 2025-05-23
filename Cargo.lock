@@ -2777,11 +2777,11 @@ dependencies = [
 
 [[package]]
 name = "wyhash"
-version = "0.5.0"
+version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "baf6e163c25e3fac820b4b453185ea2dea3b6a3e0a721d4d23d75bd33734c295"
+checksum = "ca4d373340c479fd1e779f7a763acee85da3e423b1a9a9acccf97babcc92edbb"
 dependencies = [
- "rand_core 0.6.4",
+ "rand_core 0.9.3",
 ]
 
 [[package]]
