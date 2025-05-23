@@ -153,8 +153,7 @@ mod tests {
             variant.values,
             hashmap! {
                 InfallibleLevel::new(Level::Debug) => vec!["dbg".to_owned()],
-                // TODO: replace `"inf"` with `"INF"` when https://github.com/mehcode/config-rs/issues/568 is fixed
-                InfallibleLevel::new(Level::Info) => vec!["inf".to_owned()],
+                InfallibleLevel::new(Level::Info) => vec!["INF".to_owned()],
                 InfallibleLevel::new(Level::Warning) => vec!["wrn".to_owned()],
                 InfallibleLevel::new(Level::Error) => vec!["ERR".to_owned()],
             }
