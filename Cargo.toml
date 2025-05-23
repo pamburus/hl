@@ -98,7 +98,7 @@ toml = "0.8"
 wild = "2"
 wildflower = { git = "https://github.com/cassaundra/wildflower.git" }
 winapi-util = { version = "0.1" }
-wyhash = "0.5"
+wyhash = "0.6"
 
 [target.'cfg(target_os = "macos")'.dependencies]
 kqueue = "1"
