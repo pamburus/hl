@@ -11,7 +11,7 @@ members = [
 [workspace.package]
 repository = "https://github.com/pamburus/hl"
 authors = ["Pavel Ivanov <mr.pavel.ivanov@gmail.com>"]
-version = "0.31.2-alpha.2"
+version = "0.31.2"
 edition = "2024"
 license = "MIT"
 
