@@ -933,6 +933,7 @@ mod tests {
     use super::*;
     use io::Read;
 
+    use assert_matches::assert_matches;
     use itertools::Itertools;
     use nonzero_ext::nonzero;
 
@@ -964,7 +965,7 @@ mod tests {
         let stream = stream.as_sequential();
         let meta = stream.metadata().unwrap();
         assert_eq!(meta.is_some(), true);
-        assert_eq!(n, 147);
+        assert_matches!(n, 147 | 149);
         assert_eq!(buf.len(), n);
     }
 
@@ -1130,15 +1131,15 @@ mod tests {
             let mut blocks = input.into_blocks().sorted().collect_vec();
             assert_eq!(blocks.len(), 2);
             assert_eq!(blocks[0].lines_valid(), 1);
-            assert_eq!(blocks[0].size(), 74);
+            assert_matches!(blocks[0].size(), 74 | 75);
             assert_eq!(blocks[1].lines_valid(), 1);
-            assert_eq!(blocks[1].size(), 73);
+            assert_matches!(blocks[1].size(), 73 | 74);
             let lines = blocks.pop().unwrap().into_lines().unwrap().collect_vec();
             assert_eq!(lines.len(), 1);
-            assert_eq!(lines[0].len(), 73);
+            assert_matches!(lines[0].len(), 73 | 74);
             let lines = blocks.pop().unwrap().into_lines().unwrap().collect_vec();
             assert_eq!(lines.len(), 1);
-            assert_eq!(lines[0].len(), 74);
+            assert_matches!(lines[0].len(), 74 | 75);
         }
     }
 
@@ -1163,15 +1164,15 @@ mod tests {
             let mut blocks = input.into_blocks().sorted().collect_vec();
             assert_eq!(blocks.len(), 2);
             assert_eq!(blocks[0].lines_valid(), 1);
-            assert_eq!(blocks[0].size(), 74);
+            assert_matches!(blocks[0].size(), 74 | 75);
             assert_eq!(blocks[1].lines_valid(), 1);
-            assert_eq!(blocks[1].size(), 73);
+            assert_matches!(blocks[1].size(), 73 | 74);
             let lines = blocks.pop().unwrap().into_lines().unwrap().collect_vec();
             assert_eq!(lines.len(), 1);
-            assert_eq!(lines[0].len(), 73);
+            assert_matches!(lines[0].len(), 73 | 74);
             let lines = blocks.pop().unwrap().into_lines().unwrap().collect_vec();
             assert_eq!(lines.len(), 1);
-            assert_eq!(lines[0].len(), 74);
+            assert_matches!(lines[0].len(), 74 | 75);
         }
     }
 

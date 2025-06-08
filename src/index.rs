@@ -1207,7 +1207,7 @@ mod tests {
 
     use super::*;
 
-    use std::time::Duration;
+    use std::{path::Component, time::Duration};
 
     use crate::vfs::{self, MockFileSystem};
 
@@ -1320,7 +1320,14 @@ mod tests {
         let index1 = indexer.index(&PathBuf::from("test.log")).unwrap();
 
         assert_eq!(index1.source.size, 47);
-        assert_eq!(index1.source.path, "/tmp/test.log");
+        assert_eq!(
+            PathBuf::from(&index1.source.path).components().collect::<Vec<_>>(),
+            vec![
+                Component::RootDir,
+                Component::Normal(std::ffi::OsStr::new("tmp")),
+                Component::Normal(std::ffi::OsStr::new("test.log")),
+            ],
+        );
         assert_eq!(index1.source.stat.lines_valid, 1);
         assert_eq!(index1.source.stat.lines_invalid, 0);
         assert_eq!(index1.source.stat.flags, schema::FLAG_HAS_TIMESTAMPS);
