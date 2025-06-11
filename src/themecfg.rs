@@ -402,6 +402,8 @@ pub enum Element {
     String,
     Number,
     Boolean,
+    BooleanTrue,
+    BooleanFalse,
     Null,
     Ellipsis,
 }
@@ -415,6 +417,21 @@ pub struct Style {
     pub modes: Vec<Mode>,
     pub foreground: Option<Color>,
     pub background: Option<Color>,
+}
+
+impl Style {
+    pub fn merged(mut self, other: &Self) -> Self {
+        if other.modes.len() != 0 {
+            self.modes = other.modes.clone()
+        }
+        if let Some(color) = other.foreground {
+            self.foreground = Some(color);
+        }
+        if let Some(color) = other.background {
+            self.background = Some(color);
+        }
+        self
+    }
 }
 
 // ---
@@ -719,5 +736,38 @@ mod tests {
         assert_eq!(Tag::from_str("256color").unwrap(), Tag::Palette256);
         assert_eq!(Tag::from_str("truecolor").unwrap(), Tag::TrueColor);
         assert!(Tag::from_str("invalid").is_err());
+    }
+
+    #[test]
+    fn test_style_merge() {
+        let base = Style {
+            modes: vec![Mode::Bold],
+            foreground: Some(Color::Plain(PlainColor::Red)),
+            background: Some(Color::Plain(PlainColor::Blue)),
+        };
+
+        let patch = Style {
+            modes: vec![Mode::Italic],
+            foreground: Some(Color::Plain(PlainColor::Green)),
+            background: None,
+        };
+
+        let result = base.clone().merged(&patch);
+
+        assert_eq!(result.modes, vec![Mode::Italic]);
+        assert_eq!(result.foreground, Some(Color::Plain(PlainColor::Green)));
+        assert_eq!(result.background, Some(Color::Plain(PlainColor::Blue)));
+
+        let patch = Style {
+            modes: vec![],
+            foreground: None,
+            background: Some(Color::Plain(PlainColor::Green)),
+        };
+
+        let result = base.clone().merged(&patch);
+
+        assert_eq!(result.modes, vec![Mode::Bold]);
+        assert_eq!(result.foreground, Some(Color::Plain(PlainColor::Red)));
+        assert_eq!(result.background, Some(Color::Plain(PlainColor::Green)));
     }
 }

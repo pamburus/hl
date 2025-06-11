@@ -119,6 +119,12 @@
         "boolean": {
           "$ref": "#/definitions/style"
         },
+        "boolean-false": {
+          "$ref": "#/definitions/style"
+        },
+        "boolean-true": {
+          "$ref": "#/definitions/style"
+        },
         "null": {
           "$ref": "#/definitions/style"
         },

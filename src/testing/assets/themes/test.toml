@@ -43,6 +43,9 @@ foreground = "bright-blue"
 [elements.boolean]
 foreground = "bright-green"
 
+[elements.boolean-false]
+foreground = "bright-red"
+
 [elements.null]
 foreground = "bright-red"
 

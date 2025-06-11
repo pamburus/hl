@@ -279,14 +279,27 @@ impl StylePack {
 
     fn load(s: &themecfg::StylePack) -> Self {
         let mut result = Self::default();
+
         let items = s.items();
         if items.len() != 0 {
             result.styles.push(Style::reset());
             result.reset = Some(0);
         }
+
         for (&element, style) in s.items() {
             result.add(element, &Style::from(style))
         }
+
+        if let Some(base) = s.items().get(&Element::Boolean) {
+            for variant in [Element::BooleanTrue, Element::BooleanFalse] {
+                let mut style = base.clone();
+                if let Some(patch) = s.items().get(&variant) {
+                    style = style.merged(patch)
+                }
+                result.add(variant, &Style::from(&style));
+            }
+        }
+
         result
     }
 }
