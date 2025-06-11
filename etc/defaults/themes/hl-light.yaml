@@ -33,8 +33,10 @@ elements:
     foreground: 18
   number:
     foreground: 36
-  boolean:
-    foreground: 174
+  boolean-true:
+    foreground: 35
+  boolean-false:
+    foreground: 197
   "null":
     foreground: 197
 levels:

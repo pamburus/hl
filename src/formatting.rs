@@ -433,10 +433,10 @@ impl<'a> FieldFormatter<'a> {
                 s.element(Element::Number, |s| s.batch(|buf| buf.extend(value.as_bytes())));
             }
             RawValue::Boolean(true) => {
-                s.element(Element::Boolean, |s| s.batch(|buf| buf.extend(b"true")));
+                s.element(Element::BooleanTrue, |s| s.batch(|buf| buf.extend(b"true")));
             }
             RawValue::Boolean(false) => {
-                s.element(Element::Boolean, |s| s.batch(|buf| buf.extend(b"false")));
+                s.element(Element::BooleanFalse, |s| s.batch(|buf| buf.extend(b"false")));
             }
             RawValue::Null => {
                 s.element(Element::Null, |s| s.batch(|buf| buf.extend(b"null")));

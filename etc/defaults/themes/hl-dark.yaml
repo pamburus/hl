@@ -33,10 +33,12 @@ elements:
     foreground: 116
   number:
     foreground: 42
-  boolean:
-    foreground: 186
+  boolean-true:
+    foreground: 41
+  boolean-false:
+    foreground: 210
   "null":
-    foreground: 216
+    foreground: 210
 levels:
   trace:
     level-inner:

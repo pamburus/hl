@@ -32,7 +32,9 @@ elements:
     foreground: default
   number:
     foreground: green
-  boolean:
+  boolean-false:
+    foreground: red
+  boolean-true:
     foreground: yellow
   "null":
     foreground: bright-red

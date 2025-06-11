@@ -402,6 +402,8 @@ pub enum Element {
     String,
     Number,
     Boolean,
+    BooleanTrue,
+    BooleanFalse,
     Null,
     Ellipsis,
 }

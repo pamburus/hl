@@ -287,6 +287,12 @@ impl StylePack {
         for (&element, style) in s.items() {
             result.add(element, &Style::from(style))
         }
+        if result.elements[Element::BooleanFalse].is_none() {
+            result.elements[Element::BooleanFalse] = result.elements[Element::Boolean]
+        }
+        if result.elements[Element::BooleanTrue].is_none() {
+            result.elements[Element::BooleanTrue] = result.elements[Element::Boolean]
+        }
         result
     }
 }
