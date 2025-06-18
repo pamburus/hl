@@ -206,6 +206,7 @@ impl<'a, B: Push<u8>> Styler<'a, B> {
         if let Some(style) = self.pack.reset {
             self.pack.styles[style].apply(self.buf)
         }
+        self.synced = None;
     }
 
     #[inline(always)]
