@@ -455,7 +455,7 @@ impl Default for Punctuation {
             input_name_clipping: "...".into(),
             input_name_common_part: "...".into(),
             array_separator: " ".into(),
-            message_suffix: " :: ".into(),
+            message_suffix: "::".into(),
         }
     }
 }
@@ -481,7 +481,7 @@ impl Punctuation {
             input_name_clipping: "...".into(),
             input_name_common_part: "...".into(),
             array_separator: ",".into(),
-            message_suffix: " :: ".into(),
+            message_suffix: "::".into(),
         }
     }
 }

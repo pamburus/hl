@@ -1120,7 +1120,7 @@ mod tests {
         filtering::MatchOptions,
         level::{InfallibleLevel, Level},
         model::FieldFilterSet,
-        settings,
+        settings::{self, MessageFormatting, MessageFormattingStyle},
         themecfg::testing,
     };
 
@@ -1486,7 +1486,12 @@ mod tests {
             concurrency: 1,
             filter: Default::default(),
             fields: FieldOptions::default(),
-            formatting: Formatting::default(),
+            formatting: Formatting {
+                message: MessageFormatting {
+                    style: MessageFormattingStyle::AutoQuoted,
+                },
+                ..Formatting::default()
+            },
             time_zone: Tz::IANA(UTC),
             hide_empty_fields: false,
             sort: false,

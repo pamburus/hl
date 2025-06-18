@@ -507,6 +507,7 @@ impl<'a> FieldFormatter<'a> {
         if !fs.has_fields {
             fs.has_fields = true;
             if self.rf.message_format.is_suffixed() {
+                fs.add_element(|| s.space());
                 s.element(Element::MessageSuffix, |s| {
                     s.batch(|buf| buf.extend(self.rf.cfg.punctuation.message_suffix.as_bytes()));
                 });
@@ -648,7 +649,7 @@ pub mod string {
             MessageFormattingStyle::AlwaysQuoted => Arc::new(MessageFormatAlwaysQuoted),
             MessageFormattingStyle::AlwaysDoubleQuoted => Arc::new(MessageFormatDoubleQuoted),
             MessageFormattingStyle::Suffixed => {
-                let suffix = format!("{} ", suffix);
+                let suffix = format!(" {} ", suffix);
                 let n = suffix.len();
                 Arc::new(MessageFormatSuffixed::new(suffix).rtrim(n))
             }
@@ -1659,7 +1660,7 @@ mod tests {
         formatter.format_record(&mut result, &rec);
         assert_eq!(
             String::from_utf8(result).unwrap(),
-            " @ test_function :: test_file.rs:42"
+            "\u{1b}[0;2;3m00-01-02 03:04:05.123\u{1b}[0m \u{1b}[0;2;3m:: \u{1b}[0;32ma\u{1b}[0;2m=\u{1b}[0;94m42\u{1b}[0m"
         );
     }
 }
