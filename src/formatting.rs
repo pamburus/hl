@@ -11,7 +11,7 @@ use crate::{
     filtering::IncludeExcludeSetting,
     fmtx::{OptimizedBuf, Push, aligned_left, centered},
     model::{self, Level, RawValue},
-    settings::{Formatting, MessageFormattingStyle},
+    settings::Formatting,
     theme::{Element, StylingPush, Theme},
 };
 
@@ -74,7 +74,6 @@ pub struct RecordFormatter {
     always_show_level: bool,
     fields: Arc<IncludeExcludeKeyFilter>,
     message_format: DynFormat,
-    message_suffixed: bool,
     cfg: Formatting,
 }
 
@@ -87,17 +86,6 @@ impl RecordFormatter {
         cfg: Formatting,
     ) -> Self {
         let ts_width = ts_formatter.max_length();
-        let (message_format, message_suffixed): (DynFormat, bool) = match cfg.message.style {
-            MessageFormattingStyle::AutoQuoted => (Arc::new(string::MessageFormatAutoQuoted), false),
-            MessageFormattingStyle::AlwaysQuoted => (Arc::new(string::MessageFormatAlwaysQuoted), false),
-            MessageFormattingStyle::AlwaysDoubleQuoted => (Arc::new(string::MessageFormatDoubleQuoted), false),
-            MessageFormattingStyle::Suffixed => {
-                let suffix = format!("{} ", &cfg.punctuation.message_suffix);
-                let n = suffix.len();
-                (Arc::new(string::MessageFormatSuffixed::new(suffix).rtrim(n)), true)
-            }
-            MessageFormattingStyle::Raw => (Arc::new(string::MessageFormatRaw), false),
-        };
         RecordFormatter {
             theme,
             unescape_fields: true,
@@ -108,8 +96,7 @@ impl RecordFormatter {
             always_show_time: false,
             always_show_level: false,
             fields,
-            message_format,
-            message_suffixed,
+            message_format: (&cfg).into(),
             cfg,
         }
     }
@@ -519,7 +506,7 @@ impl<'a> FieldFormatter<'a> {
 
         if !fs.has_fields {
             fs.has_fields = true;
-            if self.rf.message_suffixed {
+            if self.rf.message_format.is_suffixed() {
                 s.element(Element::MessageSuffix, |s| {
                     s.batch(|buf| buf.extend(self.rf.cfg.punctuation.message_suffix.as_bytes()));
                 });
@@ -630,12 +617,14 @@ pub mod string {
     use crate::{
         formatting::WithAutoTrim,
         model::{MAX_NUMBER_LEN, looks_like_number},
+        settings::MessageFormattingStyle,
     };
 
     // ---
 
     pub trait Format {
         fn format<'a>(&self, input: EncodedString<'a>, buf: &mut Vec<u8>) -> Result<()>;
+        fn is_suffixed(&self) -> bool;
 
         fn rtrim(self, n: usize) -> FormatRightTrimmed<Self>
         where
@@ -646,6 +635,26 @@ pub mod string {
     }
 
     pub type DynFormat = Arc<dyn Format>;
+
+    impl From<&super::Formatting> for DynFormat {
+        fn from(cfg: &super::Formatting) -> Self {
+            new_message_format(cfg.message.style, &cfg.punctuation.message_suffix)
+        }
+    }
+
+    pub fn new_message_format(style: MessageFormattingStyle, suffix: &str) -> DynFormat {
+        match style {
+            MessageFormattingStyle::AutoQuoted => Arc::new(MessageFormatAutoQuoted),
+            MessageFormattingStyle::AlwaysQuoted => Arc::new(MessageFormatAlwaysQuoted),
+            MessageFormattingStyle::AlwaysDoubleQuoted => Arc::new(MessageFormatDoubleQuoted),
+            MessageFormattingStyle::Suffixed => {
+                let suffix = format!("{} ", suffix);
+                let n = suffix.len();
+                Arc::new(MessageFormatSuffixed::new(suffix).rtrim(n))
+            }
+            MessageFormattingStyle::Raw => Arc::new(MessageFormatRaw),
+        }
+    }
 
     // ---
 
@@ -718,6 +727,10 @@ pub mod string {
             buf.truncate(begin);
             ValueFormatDoubleQuoted.format(input, buf)
         }
+
+        fn is_suffixed(&self) -> bool {
+            false
+        }
     }
 
     // ---
@@ -729,6 +742,10 @@ pub mod string {
         fn format<'a>(&self, input: EncodedString<'a>, buf: &mut Vec<u8>) -> Result<()> {
             input.decode(buf)
         }
+
+        fn is_suffixed(&self) -> bool {
+            false
+        }
     }
 
     // ---
@@ -739,6 +756,10 @@ pub mod string {
         #[inline]
         fn format<'a>(&self, input: EncodedString<'a>, buf: &mut Vec<u8>) -> Result<()> {
             input.format_json(buf)
+        }
+
+        fn is_suffixed(&self) -> bool {
+            false
         }
     }
 
@@ -795,6 +816,10 @@ pub mod string {
             buf.truncate(begin);
             MessageFormatDoubleQuoted.format(input, buf)
         }
+
+        fn is_suffixed(&self) -> bool {
+            false
+        }
     }
 
     // ---
@@ -840,6 +865,10 @@ pub mod string {
 
             buf.truncate(begin);
             MessageFormatDoubleQuoted.format(input, buf)
+        }
+
+        fn is_suffixed(&self) -> bool {
+            false
         }
     }
 
@@ -909,6 +938,11 @@ pub mod string {
             buf.extend(self.0.as_bytes());
             Ok(())
         }
+
+        #[inline]
+        fn is_suffixed(&self) -> bool {
+            true
+        }
     }
 
     // ---
@@ -920,6 +954,10 @@ pub mod string {
         fn format<'a>(&self, input: EncodedString<'a>, buf: &mut Vec<u8>) -> Result<()> {
             input.decode(buf)
         }
+
+        fn is_suffixed(&self) -> bool {
+            false
+        }
     }
 
     // ---
@@ -930,6 +968,10 @@ pub mod string {
         #[inline]
         fn format<'a>(&self, input: EncodedString<'a>, buf: &mut Vec<u8>) -> Result<()> {
             input.format_json(buf)
+        }
+
+        fn is_suffixed(&self) -> bool {
+            false
         }
     }
 
@@ -953,6 +995,10 @@ pub mod string {
             self.inner.format(input, buf)?;
             buf.truncate(buf.len() - min(buf.len() - begin, self.n));
             Ok(())
+        }
+
+        fn is_suffixed(&self) -> bool {
+            self.inner.is_suffixed()
         }
     }
 
@@ -1590,5 +1636,30 @@ mod tests {
         let rec = Record::default();
         let rec = rec.with_source(b"src");
         formatter.format_record(&mut Buf::default(), rec);
+    }
+
+    #[test]
+    fn test_suffixed_message() {
+        let rec = Record {
+            ts: Some(Timestamp::new("2000-01-02T03:04:05.123Z")),
+            fields: RecordFields::from_slice(&[("a", RawValue::Number("42"))]),
+            ..Default::default()
+        };
+
+        let formatter = formatter();
+        let formatter = RecordFormatter {
+            message_format: super::string::new_message_format(
+                MessageFormattingStyle::Suffixed,
+                &formatter.cfg.punctuation.message_suffix,
+            ),
+            ..formatter
+        };
+
+        let mut result = Buf::new();
+        formatter.format_record(&mut result, &rec);
+        assert_eq!(
+            String::from_utf8(result).unwrap(),
+            " @ test_function :: test_file.rs:42"
+        );
     }
 }
