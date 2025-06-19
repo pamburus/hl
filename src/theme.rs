@@ -232,8 +232,7 @@ impl<'a, B: Push<u8>> Styler<'a, B> {
 impl<'a, B: Push<u8>> StylingPush<B> for Styler<'a, B> {
     #[inline]
     fn element<R, F: FnOnce(&mut Self) -> R>(&mut self, element: Element, f: F) -> R {
-        let style = self.current;
-        self.set(element);
+        let style = self.set(element);
         let result = f(self);
         self.set_style(style);
         result
