@@ -17,6 +17,8 @@ elements:
     foreground: 30
   message:
     foreground: 195
+  message-delimiter:
+    foreground: 30
   field:
     foreground: 30
   key:

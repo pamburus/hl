@@ -73,7 +73,17 @@ fields:
 
 # Formatting settings.
 formatting:
+  # Flatten nested fields by joining them with a dot. Options: [always, never].
   flatten: always
+  message:
+    # Message format [auto-quoted, always-quoted, always-double-quoted, delimited, raw]:
+    # * "auto-quoted"          • Automatically enables or disables message quotation to improve clarity or avoid ambiguities.
+    # * "always-quoted"        • Always prints messages in most appropriate to align them consistently and yet maintain readability.
+    # * "always-double-quoted" • Always prints messages in double quotes to align them consistently.
+    # * "delimited"            • Separates the message from fields with a supposedly rare delimiter to avoid quotation in most cases and avoid ambiguities at the same time.
+    #                            See [formatting.punctuation.message-delimiter] setting.
+    # * "raw"                  • Always prints messages without any quotes, escaping or delimiters.
+    format: delimited
   punctuation:
     logger-name-separator: ":"
     field-key-value-separator: "="
@@ -92,6 +102,9 @@ formatting:
     input-name-clipping: "··"
     input-name-common-part: "··"
     array-separator: " "
+    # Delimiter used between message and fields when "delimited" message format is used.
+    # See [formatting.message.format] for more details.
+    message-delimiter: "::"
 
 # Number of processing threads, configured automatically based on CPU count if not specified.
 concurrency: ~

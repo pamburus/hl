@@ -395,6 +395,7 @@ pub enum Element {
     Caller,
     CallerInner,
     Message,
+    MessageDelimiter,
     Field,
     Key,
     Array,

@@ -29,6 +29,8 @@ elements:
   message:
     foreground: *strong
     modes: [bold]
+  message-delimiter:
+    foreground: *gray
   field:
     foreground: *gray
   key:
