@@ -50,7 +50,7 @@ function screenshot() {
     "${HL_SRC:?}"/contrib/bin/termframe.sh \
         --title "${TITLE:?}" \
         --mode ${MODE:?} \
-        -W 120 \
+        -W 123 \
         -H 23 \
         --theme ${TERMFRAME_THEME:?} \
         --font-family "JetBrains Mono, Fira Code, Cascadia Code, Source Code Pro, Consolas, Menlo, Monaco, DejaVu Sans Mono, monospace" \
