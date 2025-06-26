@@ -650,12 +650,6 @@ pub mod string {
         }
     }
 
-    impl From<&super::Formatting> for DynFormat {
-        fn from(cfg: &super::Formatting) -> Self {
-            new_message_format(cfg.message.format, &cfg.punctuation.message_delimiter).format
-        }
-    }
-
     impl From<&super::Formatting> for DynMessageFormat {
         fn from(cfg: &super::Formatting) -> Self {
             new_message_format(cfg.message.format, &cfg.punctuation.message_delimiter)
