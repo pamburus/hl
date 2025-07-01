@@ -1186,7 +1186,7 @@ pub enum KeyMatch<'a> {
 
 // ---
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub struct KeyMatcher<'a> {
     key: &'a str,
 }
@@ -1221,10 +1221,49 @@ impl<'a> KeyMatcher<'a> {
         }
     }
 
+    pub fn index_matcher<'b>(&'b self) -> Option<(IndexMatcher, Option<KeyMatcher<'a>>)> {
+        let bytes = self.key.as_bytes();
+        match bytes {
+            b"[]" => return Some((IndexMatcher::Any, None)),
+            [b'[', b']', b'.', ..] => return Some((IndexMatcher::Any, Some(KeyMatcher::new(&self.key[3..])))),
+            [b'[', ..] => {
+                let tail = &bytes[1..];
+                if let Some(pos) = tail.iter().position(|c| !c.is_ascii_digit()) {
+                    if pos != 0 && tail[pos] == b']' {
+                        if pos >= tail.len() - 1 || tail[pos + 1] == b'.' {
+                            if let Some(idx) = unsafe { std::str::from_utf8_unchecked(&tail[..pos]) }.parse().ok() {
+                                let idx = IndexMatcher::Exact(idx);
+                                if pos >= tail.len() - 1 {
+                                    return Some((idx, None));
+                                } else {
+                                    return Some((
+                                        idx,
+                                        Some(KeyMatcher::new(unsafe {
+                                            std::str::from_utf8_unchecked(&tail[pos + 2..])
+                                        })),
+                                    ));
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            _ => {}
+        };
+        None
+    }
+
     #[inline]
     fn norm(c: char) -> char {
         if c == '_' { '-' } else { c.to_ascii_lowercase() }
     }
+}
+
+// ---
+
+pub enum IndexMatcher {
+    Any,
+    Exact(usize),
 }
 
 // ---
@@ -1493,23 +1532,60 @@ impl FieldFilter {
     }
 
     fn match_value_partial<'a>(&self, subkey: KeyMatcher, value: RawValue<'a>) -> bool {
-        if let RawValue::Object(value) = value {
-            let mut item = Object::default();
-            value.parse_into(&mut item).ok();
-            for (k, v) in item.fields.iter() {
-                match subkey.match_key(*k) {
-                    None => {
-                        continue;
-                    }
-                    Some(KeyMatch::Full) => {
-                        let s = v.raw_str();
-                        return self.match_value(Some(s), s.starts_with('"'));
-                    }
-                    Some(KeyMatch::Partial(subkey)) => {
-                        return self.match_value_partial(subkey, *v);
+        match value {
+            RawValue::Object(value) => {
+                let mut item = Object::default();
+                value.parse_into(&mut item).ok();
+                for (k, v) in item.fields.iter() {
+                    match subkey.match_key(*k) {
+                        None => {
+                            continue;
+                        }
+                        Some(KeyMatch::Full) => {
+                            let s = v.raw_str();
+                            return self.match_value(Some(s), s.starts_with('"'));
+                        }
+                        Some(KeyMatch::Partial(subkey)) => {
+                            return self.match_value_partial(subkey, *v);
+                        }
                     }
                 }
             }
+            RawValue::Array(value) => {
+                if let Some((index_matcher, tail)) = subkey.index_matcher() {
+                    let matches = |item: RawValue<'a>| {
+                        if let Some(tail) = &tail {
+                            if self.match_value_partial(*tail, item) {
+                                return true;
+                            }
+                        } else {
+                            let s = item.raw_str();
+                            return self.match_value(Some(s), s.starts_with('"'));
+                        }
+                        false
+                    };
+
+                    if let Some(value) = value.parse::<128>().ok() {
+                        match index_matcher {
+                            IndexMatcher::Any => {
+                                for item in value.iter() {
+                                    if matches(*item) {
+                                        return true;
+                                    }
+                                }
+                            }
+                            IndexMatcher::Exact(idx) => {
+                                if let Some(item) = value.items.get(idx) {
+                                    if matches(*item) {
+                                        return true;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            _ => {}
         }
         false
     }
@@ -2242,6 +2318,13 @@ mod tests {
         assert_eq!(filter.apply(&record), false);
         let record = parse(r#"{"mod":{"test":42,"test2":42}}"#);
         assert_eq!(filter.apply(&record), true);
+        let filter = FieldFilter::parse("mod.test.inner=42").unwrap();
+        let record = parse(r#"{"mod":{"test":{"inner":42}}}"#);
+        assert_eq!(filter.apply(&record), true);
+        let record = parse(r#"{"mod.test":{"inner":42}}"#);
+        assert_eq!(filter.apply(&record), true);
+        let record = parse(r#"{"mod":{"test":{"inner":43}}}"#);
+        assert_eq!(filter.apply(&record), false);
     }
 
     #[test]
@@ -2264,6 +2347,60 @@ mod tests {
         assert_eq!(filter.apply(&record), true);
         let record = parse(r#"caller=somesource.go:42"#);
         assert_eq!(filter.apply(&record), false);
+    }
+
+    #[test]
+    fn test_field_filter_array() {
+        let any = FieldFilter::parse("span.[].name=a").unwrap();
+        let first = FieldFilter::parse("span.[0].name=b").unwrap();
+
+        let record = parse(r#"{"span":[{"name":"a"},{"name":"b"}]}"#);
+        assert_eq!(any.apply(&record), true);
+        assert_eq!(first.apply(&record), false);
+
+        let inv = FieldFilter::parse("span.[0a].name=a").unwrap();
+        assert_eq!(inv.apply(&record), false);
+
+        let inv = FieldFilter::parse("span.[0]x=a").unwrap();
+        assert_eq!(inv.apply(&record), false);
+
+        let inv = FieldFilter::parse("span.[0.name=a").unwrap();
+        assert_eq!(inv.apply(&record), false);
+
+        let record = parse(r#"{"span":[{"name":"b"},{"name":"c"}]}"#);
+        assert_eq!(any.apply(&record), false);
+        assert_eq!(first.apply(&record), true);
+
+        let record = parse(r#"{"span":[]}"#);
+        assert_eq!(any.apply(&record), false);
+        assert_eq!(first.apply(&record), false);
+
+        let record = parse(r#"{"span":{"name":"a"}}"#);
+        assert_eq!(any.apply(&record), false);
+        assert_eq!(first.apply(&record), false);
+
+        let inv = FieldFilter::parse("span.[0=b").unwrap();
+        assert_eq!(inv.apply(&record), false);
+
+        let record = parse(r#"{"span":10}"#);
+        assert_eq!(any.apply(&record), false);
+        assert_eq!(first.apply(&record), false);
+
+        let any = FieldFilter::parse("span.[]=a").unwrap();
+        let first = FieldFilter::parse("span.[0]=b").unwrap();
+
+        let record = parse(r#"{"span":["a","b"]}"#);
+        assert_eq!(any.apply(&record), true);
+        assert_eq!(first.apply(&record), false);
+
+        let inv = FieldFilter::parse("span.[0=b").unwrap();
+        assert_eq!(inv.apply(&record), false);
+
+        let inv = FieldFilter::parse("span.x=b").unwrap();
+        assert_eq!(inv.apply(&record), false);
+
+        let inv = FieldFilter::parse("span.[98172389172389172312983761823]=b").unwrap();
+        assert_eq!(inv.apply(&record), false);
     }
 
     #[test]
