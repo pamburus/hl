@@ -326,6 +326,30 @@ See other [screenshots](https://github.com/pamburus/hl-extra/blob/1d41f4848c17ef
 
     Displays only messages where the `provider` field does not contain the `string` sub-string.
 
+* Command
+
+    ```sh
+    hl example.log -f 'request.method!=GET'
+    ```
+
+    Displays only messages where the `request.method` field is not equal to `GET`. In JSON messages, this also matches composite fields, e.g., `{"request":{"method":"POST"}}`.
+
+* Command
+
+    ```sh
+    hl example.log -f 'span.[].name=sp0001'
+    ```
+
+    Displays only messages where the `span` field is an array that contains an object with a `name` field equal to `sp0001`.
+
+* Command
+
+    ```sh
+    hl example.log -f 'span.[1].name=sp0001'
+    ```
+
+    Displays only messages where the `span` field is an array with at least two elements, and the element at index 1 (i.e., the second element) is an object with a `name` field equal to `sp0001`.
+
 ### Performing complex queries
 
 * Command
@@ -363,9 +387,9 @@ See other [screenshots](https://github.com/pamburus/hl-extra/blob/1d41f4848c17ef
       * Wildcard characters are: `*` for zero or more characters and `?` for a single character
     * Regular expression match - (`match`, `~~=`), (`not match`, `!~~=`)
   * Operators with sets
-    * Test if value is one of the values in a set - `in (v1, v2)`, `not in (v1, v2)`
-    * Test if value is one of the values in a set loaded from a file - `in @filename`, `not in @filename`, assuming that each element is a line in the file, which can be either a simple string or a JSON string
-    * Test if value is one of the values in a set loaded stdin - `in @-`, `not in @-`
+    * Test if a value is one of the values in a set - `in (v1, v2)`, `not in (v1, v2)`
+    * Test if a value is one of the values in a set loaded from a file - `in @filename`, `not in @filename`, assuming that each element is a line in the file, which can be either a simple string or a JSON string
+    * Test if a value is one of the values in a set loaded from stdin - `in @-`, `not in @-`
 
 * Notes
 
