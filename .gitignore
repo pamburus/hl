@@ -1,5 +1,6 @@
 /.debug
 /.vscode
+/.zed
 /*.log
 /*.log.bz2
 /*.log.gz

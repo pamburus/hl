@@ -17,7 +17,7 @@ _ff_rhs_num_1 = _{ _ff_num_op_1 ~ ws* ~ number }
 _ff_rhs_num_n = _{ _ff_num_op_n ~ ws* ~ number_set }
 _ff_rhs_str_1 = _{ _ff_str_op_1 ~ ws* ~ string }
 _ff_rhs_str_n = _{ _ff_str_op_n ~ ws* ~ string_set }
-_f_name_short = @{ ("@" | "_" | "-" | "." | LETTER | NUMBER)+ }
+_f_name_short = @{ ("@" | "_" | "-" | "." | LETTER | NUMBER | "[" | "]")+ }
 
 level = ${
     string ~ &punctuation
