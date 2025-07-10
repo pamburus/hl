@@ -23,6 +23,9 @@ time-zone: "UTC"
 # Layout `full` means that the input file number and full path are displayed.
 input-info: auto
 
+# Force ASCII mode for punctuation.
+ascii: auto
+
 # Settings for fields processing.
 fields:
   # Configuration of the predefined set of fields.
@@ -89,18 +92,28 @@ formatting:
     field-key-value-separator: "="
     string-opening-quote: "'"
     string-closing-quote: "'"
-    source-location-separator: "→ "
+    source-location-separator:
+      ascii: "-> "
+      unicode: "→ "
     caller-name-file-separator: " @ "
     hidden-fields-indicator: " ..."
     level-left-separator: "["
     level-right-separator: "]"
     input-number-prefix: "#"
     input-number-left-separator: ""
-    input-number-right-separator: " │ "
+    input-number-right-separator:
+      ascii: " | "
+      unicode: " │ "
     input-name-left-separator: ""
-    input-name-right-separator: " │ "
-    input-name-clipping: "··"
-    input-name-common-part: "··"
+    input-name-right-separator:
+      ascii: " | "
+      unicode: " │ "
+    input-name-clipping:
+      ascii: ".."
+      unicode: "··"
+    input-name-common-part:
+      ascii: ".."
+      unicode: "··"
     array-separator: " "
     # Delimiter used between message and fields when "delimited" message format is used.
     # See [formatting.message.format] for more details.

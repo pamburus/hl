@@ -42,6 +42,7 @@ pub struct Settings {
     pub theme: String,
     #[serde(deserialize_with = "enumset_serde::deserialize")]
     pub input_info: InputInfoSet,
+    pub ascii: AsciiMode,
 }
 
 impl Settings {
@@ -414,25 +415,50 @@ pub enum FieldShowOption {
 
 #[derive(Debug, Deserialize, Clone, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
-pub struct Punctuation {
-    pub logger_name_separator: String,
-    pub field_key_value_separator: String,
-    pub string_opening_quote: String,
-    pub string_closing_quote: String,
-    pub source_location_separator: String,
-    pub caller_name_file_separator: String,
-    pub hidden_fields_indicator: String,
-    pub level_left_separator: String,
-    pub level_right_separator: String,
-    pub input_number_prefix: String,
-    pub input_number_left_separator: String,
-    pub input_number_right_separator: String,
-    pub input_name_left_separator: String,
-    pub input_name_right_separator: String,
-    pub input_name_clipping: String,
-    pub input_name_common_part: String,
-    pub array_separator: String,
-    pub message_delimiter: String,
+pub struct Punctuation<T: Clone + PartialEq + Eq = DisplayVariant> {
+    pub logger_name_separator: T,
+    pub field_key_value_separator: T,
+    pub string_opening_quote: T,
+    pub string_closing_quote: T,
+    pub source_location_separator: T,
+    pub caller_name_file_separator: T,
+    pub hidden_fields_indicator: T,
+    pub level_left_separator: T,
+    pub level_right_separator: T,
+    pub input_number_prefix: T,
+    pub input_number_left_separator: T,
+    pub input_number_right_separator: T,
+    pub input_name_left_separator: T,
+    pub input_name_right_separator: T,
+    pub input_name_clipping: T,
+    pub input_name_common_part: T,
+    pub array_separator: T,
+    pub message_delimiter: T,
+}
+
+impl Punctuation {
+    pub fn resolve(&self, mode: AsciiMode) -> Punctuation<String> {
+        Punctuation {
+            logger_name_separator: self.logger_name_separator.resolve(mode).to_owned(),
+            field_key_value_separator: self.field_key_value_separator.resolve(mode).to_owned(),
+            string_opening_quote: self.string_opening_quote.resolve(mode).to_owned(),
+            string_closing_quote: self.string_closing_quote.resolve(mode).to_owned(),
+            source_location_separator: self.source_location_separator.resolve(mode).to_owned(),
+            caller_name_file_separator: self.caller_name_file_separator.resolve(mode).to_owned(),
+            hidden_fields_indicator: self.hidden_fields_indicator.resolve(mode).to_owned(),
+            level_left_separator: self.level_left_separator.resolve(mode).to_owned(),
+            level_right_separator: self.level_right_separator.resolve(mode).to_owned(),
+            input_number_prefix: self.input_number_prefix.resolve(mode).to_owned(),
+            input_number_left_separator: self.input_number_left_separator.resolve(mode).to_owned(),
+            input_number_right_separator: self.input_number_right_separator.resolve(mode).to_owned(),
+            input_name_left_separator: self.input_name_left_separator.resolve(mode).to_owned(),
+            input_name_right_separator: self.input_name_right_separator.resolve(mode).to_owned(),
+            input_name_clipping: self.input_name_clipping.resolve(mode).to_owned(),
+            input_name_common_part: self.input_name_common_part.resolve(mode).to_owned(),
+            array_separator: self.array_separator.resolve(mode).to_owned(),
+            message_delimiter: self.message_delimiter.resolve(mode).to_owned(),
+        }
+    }
 }
 
 impl Default for Punctuation {
@@ -483,6 +509,47 @@ impl Punctuation {
             array_separator: ",".into(),
             message_delimiter: "::".into(),
         }
+    }
+}
+
+#[derive(Default, Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Copy)]
+#[serde(rename_all = "kebab-case")]
+pub enum AsciiMode {
+    #[default]
+    Auto,
+    Always,
+    Never,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+#[serde(untagged)]
+pub enum DisplayVariant {
+    Uniform(String),
+    Selective { ascii: String, unicode: String },
+}
+
+impl DisplayVariant {
+    pub fn resolve(&self, mode: AsciiMode) -> &str {
+        match self {
+            Self::Uniform(s) => &s,
+            Self::Selective { ascii, unicode } => match mode {
+                AsciiMode::Auto | AsciiMode::Never => &unicode,
+                AsciiMode::Always => &ascii,
+            },
+        }
+    }
+}
+
+impl From<String> for DisplayVariant {
+    fn from(value: String) -> Self {
+        Self::Uniform(value)
+    }
+}
+
+impl From<&str> for DisplayVariant {
+    fn from(value: &str) -> Self {
+        Self::Uniform(value.to_string())
     }
 }
 

@@ -41,7 +41,7 @@ use crate::{
     model::{Filter, Parser, ParserSettings, RawRecord, Record, RecordFilter, RecordWithSourceConstructor},
     query::Query,
     scanning::{BufFactory, Delimit, Delimiter, Scanner, SearchExt, Segment, SegmentBuf, SegmentBufFactory},
-    settings::{FieldShowOption, Fields, Formatting, InputInfo},
+    settings::{AsciiMode, FieldShowOption, Fields, Formatting, InputInfo},
     theme::{Element, StylingPush, Theme},
     timezone::Tz,
     vfs::LocalFileSystem,
@@ -76,6 +76,7 @@ pub struct Options {
     pub delimiter: Delimiter,
     pub unix_ts_unit: Option<UnixTimestampUnit>,
     pub flatten: bool,
+    pub ascii: AsciiMode,
 }
 
 impl Options {
@@ -714,6 +715,7 @@ impl App {
                 )
                 .with_field_unescaping(!self.options.raw_fields)
                 .with_flatten(self.options.flatten)
+                .with_ascii(self.options.ascii)
                 .with_always_show_time(self.options.fields.settings.predefined.time.show == FieldShowOption::Always)
                 .with_always_show_level(self.options.fields.settings.predefined.level.show == FieldShowOption::Always),
             )
@@ -741,7 +743,7 @@ impl App {
         }
 
         let num_width = format!("{}", badges.len()).len();
-        let opt = &self.options.formatting.punctuation;
+        let opt = &self.options.formatting.punctuation.resolve(self.options.ascii);
 
         if ii.contains(InputInfo::Compact) {
             let pl = common_prefix_len(&badges);
@@ -1505,6 +1507,7 @@ mod tests {
             delimiter: Delimiter::default(),
             unix_ts_unit: None,
             flatten: false,
+            ascii: Default::default(),
         }
     }
 

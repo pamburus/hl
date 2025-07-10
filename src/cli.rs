@@ -14,7 +14,7 @@ use crate::{
     config,
     error::*,
     level::{LevelValueParser, RelaxedLevel},
-    settings::{self, InputInfo},
+    settings::{self, AsciiMode, InputInfo},
     themecfg,
 };
 use enumset_ext::convert::str::EnumSet;
@@ -309,6 +309,24 @@ pub struct Opt {
     )]
     pub input_info: InputInfoSet,
 
+    /// Whether to restrict punctuation to ASCII characters only.
+    #[arg(
+        long,
+        env = "HL_ASCII",
+        value_name = "WHEN",
+        value_enum,
+        default_value_t = match config::global::get().ascii{
+            settings::AsciiMode::Auto => AsciiOption::Auto,
+            settings::AsciiMode::Never => AsciiOption::Never,
+            settings::AsciiMode::Always => AsciiOption::Always,
+        },
+        default_missing_value = "always",
+        num_args = 0..=1,
+        overrides_with = "ascii",
+        help_heading = heading::OUTPUT
+    )]
+    pub ascii: AsciiOption,
+
     /// Output file.
     #[arg(long, short = 'o', overrides_with = "output", value_name = "FILE", help_heading = heading::OUTPUT)]
     pub output: Option<String>,
@@ -460,6 +478,23 @@ pub enum UnixTimestampUnit {
 pub enum FlattenOption {
     Never,
     Always,
+}
+
+#[derive(ValueEnum, Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AsciiOption {
+    Auto,
+    Never,
+    Always,
+}
+
+impl From<AsciiOption> for AsciiMode {
+    fn from(value: AsciiOption) -> Self {
+        match value {
+            AsciiOption::Auto => Self::Auto,
+            AsciiOption::Never => Self::Never,
+            AsciiOption::Always => Self::Always,
+        }
+    }
 }
 
 pub type InputInfoSet = EnumSet<InputInfo>;

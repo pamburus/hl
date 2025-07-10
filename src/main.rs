@@ -15,18 +15,20 @@ use enumset::enum_set;
 use enumset_ext::EnumSetExt;
 use env_logger::{self as logger};
 use itertools::Itertools;
+use utf8_supported::{Utf8Support, utf8_supported};
 
 // local imports
 use hl::{
     Delimiter, IncludeExcludeKeyFilter, KeyMatchOptions, app,
     appdirs::AppDirs,
-    cli, config,
+    cli::{self, AsciiOption},
+    config,
     datefmt::LinuxDateFormat,
     error::*,
     input::InputReference,
     output::{OutputStream, Pager},
     query::Query,
-    settings::{InputInfo, Settings},
+    settings::{AsciiMode, InputInfo, Settings},
     signal::SignalHandler,
     theme::Theme,
     timeparse::parse_time,
@@ -236,6 +238,15 @@ fn run() -> Result<()> {
         }
     }
 
+    let ascii = match opt.ascii {
+        AsciiOption::Always => AsciiMode::Always,
+        AsciiOption::Never => AsciiMode::Never,
+        AsciiOption::Auto => match utf8_supported() {
+            Utf8Support::UTF8 => AsciiMode::Never,
+            _ => AsciiMode::Always,
+        },
+    };
+
     // Create app.
     let app = hl::App::new(hl::Options {
         theme: Arc::new(theme),
@@ -275,6 +286,7 @@ fn run() -> Result<()> {
             cli::UnixTimestampUnit::Ns => Some(app::UnixTimestampUnit::Nanoseconds),
         },
         flatten: opt.flatten != cli::FlattenOption::Never,
+        ascii,
     });
 
     // Configure the input.
