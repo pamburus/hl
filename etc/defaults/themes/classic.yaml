@@ -49,8 +49,6 @@ levels:
   warning:
     level:
       foreground: bright-yellow
-      modes: [reverse]
   error:
     level:
       foreground: bright-red
-      modes: [reverse]

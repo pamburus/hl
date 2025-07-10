@@ -52,13 +52,11 @@ levels:
   warning:
     level:
       foreground: yellow
-      modes: [reverse]
   error:
     time:
       foreground: bright-red
     level:
       foreground: bright-red
-      modes: [reverse]
 indicators:
   sync:
     synced:
