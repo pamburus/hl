@@ -41,7 +41,7 @@ use crate::{
     model::{Filter, Parser, ParserSettings, RawRecord, Record, RecordFilter, RecordWithSourceConstructor},
     query::Query,
     scanning::{BufFactory, Delimit, Delimiter, Scanner, SearchExt, Segment, SegmentBuf, SegmentBufFactory},
-    settings::{FieldShowOption, Fields, Formatting, InputInfo},
+    settings::{AsciiMode, FieldShowOption, Fields, Formatting, InputInfo},
     theme::{Element, StylingPush, Theme},
     timezone::Tz,
     vfs::LocalFileSystem,
@@ -76,6 +76,7 @@ pub struct Options {
     pub delimiter: Delimiter,
     pub unix_ts_unit: Option<UnixTimestampUnit>,
     pub flatten: bool,
+    pub ascii: AsciiMode,
 }
 
 impl Options {
@@ -714,6 +715,7 @@ impl App {
                 )
                 .with_field_unescaping(!self.options.raw_fields)
                 .with_flatten(self.options.flatten)
+                .with_ascii(self.options.ascii)
                 .with_always_show_time(self.options.fields.settings.predefined.time.show == FieldShowOption::Always)
                 .with_always_show_level(self.options.fields.settings.predefined.level.show == FieldShowOption::Always),
             )
@@ -741,7 +743,7 @@ impl App {
         }
 
         let num_width = format!("{}", badges.len()).len();
-        let opt = &self.options.formatting.punctuation;
+        let opt = &self.options.formatting.punctuation.resolve(self.options.ascii);
 
         if ii.contains(InputInfo::Compact) {
             let pl = common_prefix_len(&badges);
@@ -1111,6 +1113,7 @@ mod tests {
     use std::io::Cursor;
 
     // third-party imports
+    use chrono::{Offset, Utc};
     use chrono_tz::UTC;
     use maplit::hashmap;
 
@@ -1119,10 +1122,11 @@ mod tests {
         LinuxDateFormat,
         filtering::MatchOptions,
         level::{InfallibleLevel, Level},
-        model::FieldFilterSet,
-        settings::{self, MessageFormat, MessageFormatting},
+        model::{Caller, FieldFilterSet, RawValue, Record},
+        settings::{self, AsciiMode, DisplayVariant, Formatting, MessageFormat, MessageFormatting, Punctuation},
         themecfg::testing,
     };
+    use encstr::EncodedString;
 
     #[test]
     fn test_common_prefix_len() {
@@ -1505,7 +1509,91 @@ mod tests {
             delimiter: Delimiter::default(),
             unix_ts_unit: None,
             flatten: false,
+            ascii: AsciiMode::Never,
         }
+    }
+
+    #[test]
+    fn test_ascii_mode_handling() {
+        // Create a test record with a caller
+        let record = Record {
+            message: Some(RawValue::String(EncodedString::raw("test message"))),
+            caller: Caller::with_name("test_caller"),
+            ..Default::default()
+        };
+
+        // Create a custom punctuation with selective variants for the source location separator
+        let mut punctuation = Punctuation::test_default();
+        punctuation.source_location_separator = DisplayVariant::Selective {
+            ascii: "-> ".to_string(),
+            utf8: "→ ".to_string(),
+        };
+
+        // Create a basic formatting config with our test punctuation
+        let formatting = Formatting {
+            flatten: None,
+            message: MessageFormatting {
+                format: MessageFormat::AutoQuoted,
+            },
+            punctuation,
+        };
+
+        // Create formatters with each ASCII mode but no theme (for no-color output)
+        let formatter_ascii = RecordFormatter::new(
+            Default::default(), // No theme = no colors
+            DateTimeFormatter::new(
+                LinuxDateFormat::new("%b %d %T.%3N").compile(),
+                Tz::FixedOffset(Utc.fix()),
+            ),
+            false,
+            Arc::new(IncludeExcludeKeyFilter::default()),
+            formatting.clone(),
+        )
+        .with_ascii(AsciiMode::Always);
+
+        let formatter_utf8 = RecordFormatter::new(
+            Default::default(), // No theme = no colors
+            DateTimeFormatter::new(
+                LinuxDateFormat::new("%b %d %T.%3N").compile(),
+                Tz::FixedOffset(Utc.fix()),
+            ),
+            false,
+            Arc::new(IncludeExcludeKeyFilter::default()),
+            formatting,
+        )
+        .with_ascii(AsciiMode::Never);
+
+        // Test ASCII mode
+        let mut buf_ascii = Vec::new();
+        formatter_ascii.format_record(&mut buf_ascii, &record);
+        let result_ascii = String::from_utf8(buf_ascii).unwrap();
+
+        // Test UTF-8 mode
+        let mut buf_utf8 = Vec::new();
+        formatter_utf8.format_record(&mut buf_utf8, &record);
+        let result_utf8 = String::from_utf8(buf_utf8).unwrap();
+
+        // Verify that the ASCII mode uses ASCII arrows
+        assert!(
+            result_ascii.contains("-> "),
+            "ASCII mode should use ASCII arrow, got: {}",
+            result_ascii
+        );
+        assert!(!result_ascii.contains("→ "), "ASCII mode should not use Unicode arrow");
+
+        // Verify that the UTF-8 mode uses Unicode arrows
+        assert!(
+            result_utf8.contains("→ "),
+            "UTF-8 mode should use Unicode arrow, got: {}",
+            result_utf8
+        );
+        assert!(!result_utf8.contains("-> "), "UTF-8 mode should not use ASCII arrow");
+
+        // The outputs should be different
+        assert_ne!(
+            result_ascii, result_utf8,
+            "ASCII and UTF-8 modes should produce different output"
+        );
     }
 
     fn theme() -> Arc<Theme> {

@@ -1,5 +1,5 @@
 // std imports
-use std::sync::Arc;
+use std::{cell::OnceCell, sync::Arc};
 
 // workspace imports
 use encstr::EncodedString;
@@ -11,7 +11,7 @@ use crate::{
     filtering::IncludeExcludeSetting,
     fmtx::{OptimizedBuf, Push, aligned_left, centered},
     model::{self, Level, RawValue},
-    settings::Formatting,
+    settings::{AsciiMode, Formatting, Punctuation},
     theme::{Element, StylingPush, Theme},
 };
 
@@ -70,11 +70,13 @@ pub struct RecordFormatter {
     ts_width: usize,
     hide_empty_fields: bool,
     flatten: bool,
+    ascii: AsciiMode,
     always_show_time: bool,
     always_show_level: bool,
     fields: Arc<IncludeExcludeKeyFilter>,
-    message_format: DynMessageFormat,
     cfg: Formatting,
+    message_format_cell: OnceCell<DynMessageFormat>,
+    punctuation_cell: OnceCell<Punctuation<String>>,
 }
 
 impl RecordFormatter {
@@ -93,11 +95,13 @@ impl RecordFormatter {
             ts_width,
             hide_empty_fields,
             flatten: false,
+            ascii: AsciiMode::Never,
             always_show_time: false,
             always_show_level: false,
             fields,
-            message_format: (&cfg).into(),
             cfg,
+            message_format_cell: OnceCell::new(),
+            punctuation_cell: OnceCell::new(),
         }
     }
 
@@ -110,6 +114,10 @@ impl RecordFormatter {
 
     pub fn with_flatten(self, flatten: bool) -> Self {
         Self { flatten, ..self }
+    }
+
+    pub fn with_ascii(self, ascii: AsciiMode) -> Self {
+        Self { ascii, ..self }
     }
 
     pub fn with_always_show_time(self, value: bool) -> Self {
@@ -179,10 +187,10 @@ impl RecordFormatter {
                 fs.add_element(|| s.space());
                 s.element(Element::Level, |s| {
                     s.batch(|buf| {
-                        buf.extend_from_slice(self.cfg.punctuation.level_left_separator.as_bytes());
+                        buf.extend_from_slice(self.punctuation().level_left_separator.as_bytes());
                     });
                     s.element(Element::LevelInner, |s| s.batch(|buf| buf.extend_from_slice(level)));
-                    s.batch(|buf| buf.extend_from_slice(self.cfg.punctuation.level_right_separator.as_bytes()));
+                    s.batch(|buf| buf.extend_from_slice(self.punctuation().level_right_separator.as_bytes()));
                 });
             }
 
@@ -195,7 +203,7 @@ impl RecordFormatter {
                     s.element(Element::LoggerInner, |s| {
                         s.batch(|buf| buf.extend_from_slice(logger.as_bytes()))
                     });
-                    s.batch(|buf| buf.extend_from_slice(self.cfg.punctuation.logger_name_separator.as_bytes()));
+                    s.batch(|buf| buf.extend_from_slice(self.punctuation().logger_name_separator.as_bytes()));
                 });
             }
             //
@@ -217,7 +225,7 @@ impl RecordFormatter {
             }
             if some_fields_hidden || (fs.some_nested_fields_hidden && fs.flatten) {
                 s.element(Element::Ellipsis, |s| {
-                    s.batch(|buf| buf.extend_from_slice(self.cfg.punctuation.hidden_fields_indicator.as_bytes()))
+                    s.batch(|buf| buf.extend_from_slice(self.punctuation().hidden_fields_indicator.as_bytes()))
                 });
             }
             //
@@ -228,7 +236,7 @@ impl RecordFormatter {
                 s.element(Element::Caller, |s| {
                     s.batch(|buf| {
                         buf.push(b' ');
-                        buf.extend(self.cfg.punctuation.source_location_separator.as_bytes())
+                        buf.extend(self.punctuation().source_location_separator.as_bytes())
                     });
                     s.element(Element::CallerInner, |s| {
                         s.batch(|buf| {
@@ -237,7 +245,7 @@ impl RecordFormatter {
                             }
                             if !caller.file.is_empty() || !caller.line.is_empty() {
                                 if !caller.name.is_empty() {
-                                    buf.extend(self.cfg.punctuation.caller_name_file_separator.as_bytes());
+                                    buf.extend(self.punctuation().caller_name_file_separator.as_bytes());
                                 }
                                 buf.extend(caller.file.as_bytes());
                                 if caller.line.len() != 0 {
@@ -275,7 +283,7 @@ impl RecordFormatter {
                         s.space();
                     });
                     s.element(Element::Message, |s| {
-                        s.batch(|buf| self.message_format.format(value, buf).unwrap())
+                        s.batch(|buf| self.message_format().format(value, buf).unwrap())
                     });
                 }
                 false
@@ -287,6 +295,15 @@ impl RecordFormatter {
     #[cfg(test)]
     fn with_theme(self, theme: Arc<Theme>) -> Self {
         Self { theme, ..self }
+    }
+
+    fn message_format(&self) -> &DynMessageFormat {
+        self.message_format_cell.get_or_init(|| (&self.cfg, self.ascii).into())
+    }
+
+    fn punctuation(&self) -> &Punctuation<String> {
+        self.punctuation_cell
+            .get_or_init(|| self.cfg.punctuation.resolve(self.ascii))
     }
 }
 
@@ -459,7 +476,7 @@ impl<'a> FieldFormatter<'a> {
                     if !fs.flatten {
                         if some_fields_hidden {
                             s.element(Element::Ellipsis, |s| {
-                                s.batch(|buf| buf.extend(self.rf.cfg.punctuation.hidden_fields_indicator.as_bytes()))
+                                s.batch(|buf| buf.extend(self.rf.punctuation().hidden_fields_indicator.as_bytes()))
                             });
                         }
                         s.batch(|buf| {
@@ -480,7 +497,7 @@ impl<'a> FieldFormatter<'a> {
                     let mut first = true;
                     for v in item.iter() {
                         if !first {
-                            s.batch(|buf| buf.extend(self.rf.cfg.punctuation.array_separator.as_bytes()));
+                            s.batch(|buf| buf.extend(self.rf.punctuation().array_separator.as_bytes()));
                         } else {
                             first = false;
                         }
@@ -506,10 +523,10 @@ impl<'a> FieldFormatter<'a> {
 
         if !fs.has_fields {
             fs.has_fields = true;
-            if self.rf.message_format.delimited {
+            if self.rf.message_format().delimited {
                 fs.add_element(|| s.space());
                 s.element(Element::MessageDelimiter, |s| {
-                    s.batch(|buf| buf.extend(self.rf.cfg.punctuation.message_delimiter.as_bytes()));
+                    s.batch(|buf| buf.extend(self.rf.punctuation().message_delimiter.as_bytes()));
                 });
             }
         }
@@ -530,7 +547,7 @@ impl<'a> FieldFormatter<'a> {
             });
         });
         s.element(Element::Field, |s| {
-            s.batch(|buf| buf.extend(self.rf.cfg.punctuation.field_key_value_separator.as_bytes()));
+            s.batch(|buf| buf.extend(self.rf.punctuation().field_key_value_separator.as_bytes()));
         });
 
         variant
@@ -650,9 +667,12 @@ pub mod string {
         }
     }
 
-    impl From<&super::Formatting> for DynMessageFormat {
-        fn from(cfg: &super::Formatting) -> Self {
-            new_message_format(cfg.message.format, &cfg.punctuation.message_delimiter)
+    impl From<(&super::Formatting, super::AsciiMode)> for DynMessageFormat {
+        fn from(args: (&super::Formatting, super::AsciiMode)) -> Self {
+            new_message_format(
+                args.0.message.format,
+                &args.0.punctuation.message_delimiter.resolve(args.1),
+            )
         }
     }
 
@@ -1061,7 +1081,7 @@ mod tests {
     use crate::{
         datefmt::LinuxDateFormat,
         model::{Caller, RawObject, Record, RecordFields, RecordWithSourceConstructor},
-        settings::{MessageFormat, MessageFormatting, Punctuation},
+        settings::{AsciiMode, DisplayVariant, MessageFormat, MessageFormatting, Punctuation},
         theme::Theme,
         themecfg::testing,
         timestamp::Timestamp,
@@ -1620,7 +1640,7 @@ mod tests {
     #[test]
     fn test_delimited_message_with_colors() {
         let formatter = RecordFormatter {
-            message_format: new_message_format(MessageFormat::Delimited, "::"),
+            message_format_cell: OnceCell::from(new_message_format(MessageFormat::Delimited, "::")),
             ..formatter()
         };
 
@@ -1638,7 +1658,7 @@ mod tests {
     #[test]
     fn test_auto_quoted_message() {
         let formatter = RecordFormatter {
-            message_format: new_message_format(MessageFormat::AutoQuoted, ""),
+            message_format_cell: OnceCell::from(new_message_format(MessageFormat::AutoQuoted, "")),
             theme: Default::default(),
             ..formatter()
         };
@@ -1678,7 +1698,7 @@ mod tests {
     #[test]
     fn test_always_quoted_message() {
         let formatter = RecordFormatter {
-            message_format: new_message_format(MessageFormat::AlwaysQuoted, ""),
+            message_format_cell: OnceCell::from(new_message_format(MessageFormat::AlwaysQuoted, "")),
             theme: Default::default(),
             ..formatter()
         };
@@ -1710,7 +1730,7 @@ mod tests {
     #[test]
     fn test_always_double_quoted_message() {
         let formatter = RecordFormatter {
-            message_format: new_message_format(MessageFormat::AlwaysDoubleQuoted, ""),
+            message_format_cell: OnceCell::from(new_message_format(MessageFormat::AlwaysDoubleQuoted, "")),
             theme: Default::default(),
             ..formatter()
         };
@@ -1729,7 +1749,7 @@ mod tests {
     #[test]
     fn test_raw_message() {
         let formatter = RecordFormatter {
-            message_format: new_message_format(MessageFormat::Raw, ""),
+            message_format_cell: OnceCell::from(new_message_format(MessageFormat::Raw, "")),
             theme: Default::default(),
             ..formatter()
         };
@@ -1748,7 +1768,7 @@ mod tests {
     #[test]
     fn test_delimited_message() {
         let formatter = RecordFormatter {
-            message_format: new_message_format(MessageFormat::Delimited, "::"),
+            message_format_cell: OnceCell::from(new_message_format(MessageFormat::Delimited, "::")),
             theme: Default::default(),
             ..formatter()
         };
@@ -1774,5 +1794,159 @@ mod tests {
 
         rec.message = Some(EncodedString::raw(r#""message" '1'"#).into());
         assert_eq!(formatter.format_to_string(&rec), r#"`"message" '1'`"#);
+    }
+
+    #[test]
+    fn test_ascii_mode() {
+        // Let's create a record with a caller to test source location separator
+        let rec = Record {
+            message: Some(RawValue::String(EncodedString::json(r#""message""#))),
+            caller: Caller::with_name("test_caller"),
+            ..Default::default()
+        };
+
+        // Create a custom punctuation with selective variants for the source location separator
+        let mut punctuation = Punctuation::test_default();
+        punctuation.source_location_separator = DisplayVariant::Selective {
+            ascii: "-> ".to_string(),
+            utf8: "→ ".to_string(),
+        };
+
+        // Create a basic formatting config with our test punctuation
+        let formatting = Formatting {
+            flatten: None,
+            message: MessageFormatting {
+                format: MessageFormat::AutoQuoted,
+            },
+            punctuation,
+        };
+
+        // Create formatters with each ASCII mode but no theme (for no-color output)
+        let formatter_ascii = RecordFormatter::new(
+            Default::default(), // No theme
+            DateTimeFormatter::new(
+                LinuxDateFormat::new("%b %d %T.%3N").compile(),
+                Tz::FixedOffset(Utc.fix()),
+            ),
+            false,
+            Arc::new(IncludeExcludeKeyFilter::default()),
+            formatting.clone(),
+        )
+        .with_ascii(AsciiMode::Always);
+
+        let formatter_utf8 = RecordFormatter::new(
+            Default::default(), // No theme
+            DateTimeFormatter::new(
+                LinuxDateFormat::new("%b %d %T.%3N").compile(),
+                Tz::FixedOffset(Utc.fix()),
+            ),
+            false,
+            Arc::new(IncludeExcludeKeyFilter::default()),
+            formatting,
+        )
+        .with_ascii(AsciiMode::Never);
+
+        // Get formatted output from both formatters (already without ANSI codes)
+        let ascii_result = formatter_ascii.format_to_string(&rec);
+        let utf8_result = formatter_utf8.format_to_string(&rec);
+
+        // Verify ASCII mode uses ASCII arrow
+        assert!(
+            ascii_result.contains("-> "),
+            "ASCII mode should use ASCII arrow, got: {}",
+            ascii_result
+        );
+
+        // The ASCII and UTF-8 outputs should be different
+        assert_ne!(
+            ascii_result, utf8_result,
+            "ASCII and UTF-8 modes should produce different output"
+        );
+
+        // UTF-8 mode should use Unicode arrow
+        assert!(
+            utf8_result.contains("→ "),
+            "UTF-8 mode should use Unicode arrow, got: {}",
+            utf8_result
+        );
+    }
+
+    #[test]
+    fn test_punctuation_with_ascii_mode() {
+        // Create a custom punctuation with selective variants for both separators we want to test
+        let mut selective_punctuation = Punctuation::test_default();
+        selective_punctuation.source_location_separator = DisplayVariant::Selective {
+            ascii: "-> ".to_string(),
+            utf8: "→ ".to_string(),
+        };
+        selective_punctuation.input_number_right_separator = DisplayVariant::Selective {
+            ascii: " | ".to_string(),
+            utf8: " │ ".to_string(),
+        };
+
+        // Create the formatting configuration
+        let formatting = Formatting {
+            flatten: None,
+            message: MessageFormatting {
+                format: MessageFormat::AutoQuoted,
+            },
+            punctuation: selective_punctuation,
+        };
+
+        // Create formatters with different ASCII modes but no theme
+        let ascii_formatter = RecordFormatter::new(
+            Default::default(), // No theme = no colors
+            DateTimeFormatter::new(
+                LinuxDateFormat::new("%y-%m-%d %T.%3N").compile(),
+                Tz::FixedOffset(Utc.fix()),
+            ),
+            false,
+            Arc::new(IncludeExcludeKeyFilter::default()),
+            formatting.clone(),
+        )
+        .with_ascii(AsciiMode::Always);
+
+        let utf8_formatter = RecordFormatter::new(
+            Default::default(), // No theme = no colors
+            DateTimeFormatter::new(
+                LinuxDateFormat::new("%y-%m-%d %T.%3N").compile(),
+                Tz::FixedOffset(Utc.fix()),
+            ),
+            false,
+            Arc::new(IncludeExcludeKeyFilter::default()),
+            formatting,
+        )
+        .with_ascii(AsciiMode::Never);
+
+        // Create a test record with a caller to test source_location_separator
+        let rec = Record {
+            message: Some(RawValue::String(EncodedString::json(r#""test message""#))),
+            caller: Caller::with_name("test_caller"),
+            ..Default::default()
+        };
+
+        // Format the record with both formatters
+        let ascii_result = ascii_formatter.format_to_string(&rec);
+        let utf8_result = utf8_formatter.format_to_string(&rec);
+
+        // ASCII result should contain the ASCII arrow
+        assert!(
+            ascii_result.contains("-> "),
+            "ASCII result missing expected arrow: {}",
+            ascii_result
+        );
+
+        // UTF-8 result should contain the Unicode arrow
+        assert!(
+            utf8_result.contains("→ "),
+            "UTF-8 result missing expected arrow: {}",
+            utf8_result
+        );
+
+        // The outputs should be different
+        assert_ne!(
+            ascii_result, utf8_result,
+            "ASCII and UTF-8 modes should produce different output"
+        );
     }
 }
