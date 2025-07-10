@@ -64,13 +64,11 @@ levels:
   warning:
     level:
       foreground: *yellow
-      modes: [reverse]
   error:
     time:
       foreground: *red
     level:
       foreground: *red
-      modes: [reverse]
 indicators:
   sync:
     synced:
