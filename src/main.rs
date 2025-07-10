@@ -15,6 +15,7 @@ use enumset::enum_set;
 use enumset_ext::EnumSetExt;
 use env_logger::{self as logger};
 use itertools::Itertools;
+use utf8_supported::{Utf8Support, utf8_supported};
 
 // local imports
 use hl::{
@@ -26,7 +27,7 @@ use hl::{
     input::InputReference,
     output::{OutputStream, Pager},
     query::Query,
-    settings::{InputInfo, Settings},
+    settings::{AsciiModeOpt, InputInfo, Settings},
     signal::SignalHandler,
     theme::Theme,
     timeparse::parse_time,
@@ -236,6 +237,11 @@ fn run() -> Result<()> {
         }
     }
 
+    // Convert cli::AsciiOption to AsciiModeOpt, then resolve to concrete AsciiMode
+    let ascii_opt = AsciiModeOpt::from(opt.ascii);
+    let utf8_is_supported = matches!(utf8_supported(), Utf8Support::UTF8);
+    let ascii = ascii_opt.resolve(utf8_is_supported);
+
     // Create app.
     let app = hl::App::new(hl::Options {
         theme: Arc::new(theme),
@@ -275,6 +281,7 @@ fn run() -> Result<()> {
             cli::UnixTimestampUnit::Ns => Some(app::UnixTimestampUnit::Nanoseconds),
         },
         flatten: opt.flatten != cli::FlattenOption::Never,
+        ascii,
     });
 
     // Configure the input.

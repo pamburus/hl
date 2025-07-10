@@ -11,7 +11,7 @@ members = [
 [workspace.package]
 repository = "https://github.com/pamburus/hl"
 authors = ["Pavel Ivanov <mr.pavel.ivanov@gmail.com>"]
-version = "0.32.0-alpha.5"
+version = "0.32.0-alpha.6"
 edition = "2024"
 license = "MIT"
 
@@ -95,6 +95,7 @@ term_size = "0.3"
 thiserror = "2"
 titlecase = "3"
 toml = "0.9"
+utf8-supported = "1"
 wild = "2"
 wildflower = { git = "https://github.com/cassaundra/wildflower.git" }
 winapi-util = { version = "0.1" }

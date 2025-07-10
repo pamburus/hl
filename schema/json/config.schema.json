@@ -6,6 +6,26 @@
     "input-info-layout": {
       "type": "string",
       "enum": ["auto", "none", "minimal", "compact", "full"]
+    },
+    "display-variant": {
+      "oneOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "ascii": {
+              "type": "string"
+            },
+            "utf-8": {
+              "type": "string"
+            }
+          },
+          "required": ["ascii", "utf-8"]
+        }
+      ]
     }
   },
   "properties": {
@@ -32,6 +52,10 @@
           }
         }
       ]
+    },
+    "ascii": {
+      "type": "string",
+      "enum": ["auto", "always", "never"]
     },
     "fields": {
       "type": "object",
@@ -234,58 +258,58 @@
           "additionalProperties": false,
           "properties": {
             "logger-name-separator": {
-              "type": "string"
+              "$ref": "#/definitions/display-variant"
             },
             "field-key-value-separator": {
-              "type": "string"
+              "$ref": "#/definitions/display-variant"
             },
             "string-opening-quote": {
-              "type": "string"
+              "$ref": "#/definitions/display-variant"
             },
             "string-closing-quote": {
-              "type": "string"
+              "$ref": "#/definitions/display-variant"
             },
             "source-location-separator": {
-              "type": "string"
+              "$ref": "#/definitions/display-variant"
             },
             "caller-name-file-separator": {
-              "type": "string"
+              "$ref": "#/definitions/display-variant"
             },
             "hidden-fields-indicator": {
-              "type": "string"
+              "$ref": "#/definitions/display-variant"
             },
             "level-left-separator": {
-              "type": "string"
+              "$ref": "#/definitions/display-variant"
             },
             "level-right-separator": {
-              "type": "string"
+              "$ref": "#/definitions/display-variant"
             },
             "input-number-prefix": {
-              "type": "string"
+              "$ref": "#/definitions/display-variant"
             },
             "input-number-left-separator": {
-              "type": "string"
+              "$ref": "#/definitions/display-variant"
             },
             "input-number-right-separator": {
-              "type": "string"
+              "$ref": "#/definitions/display-variant"
             },
             "input-name-left-separator": {
-              "type": "string"
+              "$ref": "#/definitions/display-variant"
             },
             "input-name-right-separator": {
-              "type": "string"
+              "$ref": "#/definitions/display-variant"
             },
             "input-name-clipping": {
-              "type": "string"
+              "$ref": "#/definitions/display-variant"
             },
             "input-name-common-part": {
-              "type": "string"
+              "$ref": "#/definitions/display-variant"
             },
             "array-separator": {
-              "type": "string"
+              "$ref": "#/definitions/display-variant"
             },
             "message-delimiter": {
-              "type": "string"
+              "$ref": "#/definitions/display-variant"
             }
           }
         }
