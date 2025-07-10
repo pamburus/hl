@@ -3,7 +3,8 @@
 if command -v termframe &> /dev/null; then
     TERMFRAME=$(command -v termframe)
 else
-    TERMFRAME=cargo run --lcoked --release --git github.com/pamburus/termframe --
+    cargo install --locked --git https://github.com/pamburus/termframe
+    TERMFRAME=termframe
 fi
 
 ${TERMFRAME:?} "$@"
