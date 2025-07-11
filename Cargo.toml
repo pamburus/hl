@@ -94,7 +94,7 @@ strum = { version = "0.27", features = ["derive"] }
 term_size = "0.3"
 thiserror = "2"
 titlecase = "3"
-toml = "0.8"
+toml = "0.9"
 wild = "2"
 wildflower = { git = "https://github.com/cassaundra/wildflower.git" }
 winapi-util = { version = "0.1" }
