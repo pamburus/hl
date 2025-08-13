@@ -115,7 +115,7 @@ maplit = "1"
 mockall = "0.13"
 rand = "0.9"
 regex = "1"
-rstest = "0.25"
+rstest = "0.26"
 stats_alloc = "0.1"
 wildmatch = "2"
 
