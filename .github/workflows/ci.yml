@@ -60,13 +60,13 @@ jobs:
         uses: DavidAnson/markdownlint-cli2-action@v18.0.0
 
       - name: Build
-        run: cargo +stable build --verbose --benches --workspace
+        run: cargo build --verbose --benches --workspace
 
       - name: Run tests
-        run: cargo +stable test --verbose --workspace
+        run: cargo test --verbose --workspace
 
       - name: Run executable
-        run: cargo +stable run
+        run: cargo run
 
   coverage:
     runs-on: ubuntu-latest
