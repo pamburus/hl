@@ -2563,11 +2563,11 @@ mod tests {
         assert_eq!(actual, expected);
     }
 
-    fn parse(s: &str) -> Record {
+    fn parse(s: &str) -> Record<'_> {
         try_parse(s).unwrap()
     }
 
-    fn try_parse(s: &str) -> Result<Record> {
+    fn try_parse(s: &str) -> Result<Record<'_>> {
         let items = RawRecord::parser().parse(s.as_bytes()).collect_vec();
         assert_eq!(items.len(), 1);
         let raw = items.into_iter().next().unwrap()?.record;

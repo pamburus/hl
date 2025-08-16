@@ -642,7 +642,7 @@ mod tests {
         }
     }
 
-    fn parse(s: &str) -> Record {
+    fn parse(s: &str) -> Record<'_> {
         let raw = RawRecord::parser().parse(s.as_bytes()).next().unwrap().unwrap().record;
         let parser = RecordParser::new(ParserSettings::default());
         parser.parse(&raw)

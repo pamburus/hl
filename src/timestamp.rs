@@ -99,7 +99,7 @@ impl<'a> Timestamp<'a> {
         }
     }
 
-    pub fn as_rfc3339(&self) -> Option<rfc3339::Timestamp> {
+    pub fn as_rfc3339(&self) -> Option<rfc3339::Timestamp<'_>> {
         rfc3339::Timestamp::parse(self.raw)
     }
 
@@ -132,22 +132,22 @@ pub mod rfc3339 {
         }
 
         #[inline]
-        pub fn date(&self) -> Date {
+        pub fn date(&self) -> Date<'_> {
             Date { v: &self.v[0..10] }
         }
 
         #[inline]
-        pub fn time(&self) -> Time {
+        pub fn time(&self) -> Time<'_> {
             Time { v: &self.v[11..19] }
         }
 
         #[inline]
-        pub fn fraction(&self) -> Fraction {
+        pub fn fraction(&self) -> Fraction<'_> {
             Fraction { v: &self.v[19..self.d] }
         }
 
         #[inline]
-        pub fn timezone(&self) -> Timezone {
+        pub fn timezone(&self) -> Timezone<'_> {
             Timezone { v: &self.v[self.d..] }
         }
 
