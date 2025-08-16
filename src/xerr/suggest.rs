@@ -54,7 +54,7 @@ impl Suggestions {
         self.candidates.is_empty()
     }
 
-    pub fn iter(&self) -> SuggestionsIter {
+    pub fn iter(&self) -> SuggestionsIter<'_> {
         SuggestionsIter {
             iter: self.candidates.iter(),
         }

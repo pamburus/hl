@@ -264,7 +264,7 @@ impl fmt::Display for DidYouMean<'_> {
     }
 }
 
-fn did_you_mean(suggestions: &Suggestions) -> Option<DidYouMean> {
+fn did_you_mean(suggestions: &Suggestions) -> Option<DidYouMean<'_>> {
     if suggestions.is_empty() {
         return None;
     }

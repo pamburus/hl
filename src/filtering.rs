@@ -10,6 +10,7 @@ pub trait KeyNormalize: Clone {
 // ---
 
 #[derive(Default, Clone)]
+#[allow(dead_code)]
 pub struct NoNormalizing {}
 
 impl KeyNormalize for NoNormalizing {
