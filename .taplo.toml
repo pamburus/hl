@@ -1,4 +1,4 @@
-include = ["src/testing/assets/themes/test.toml", "Cargo.toml"]
+include = ["src/testing/assets/themes/test.toml", "Cargo.toml", ".taplo.toml"]
 
 [formatting]
 indent = 4
