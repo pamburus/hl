@@ -84,14 +84,13 @@ impl RecordFormatterBuilder {
         fields: Arc<IncludeExcludeKeyFilter>,
         cfg: Formatting,
     ) -> Self {
-        let ascii = AsciiMode::Never;
         Self {
             theme,
             unescape_fields: true,
             ts_formatter,
             hide_empty_fields,
             flatten: false,
-            ascii,
+            ascii: AsciiMode::Off,
             always_show_time: false,
             always_show_level: false,
             fields,
@@ -1856,7 +1855,7 @@ mod tests {
             Arc::new(IncludeExcludeKeyFilter::default()),
             formatting.clone(),
         )
-        .with_ascii(AsciiMode::Always)
+        .with_ascii(AsciiMode::On)
         .build();
 
         let formatter_utf8 = RecordFormatterBuilder::new(
@@ -1869,7 +1868,7 @@ mod tests {
             Arc::new(IncludeExcludeKeyFilter::default()),
             formatting,
         )
-        .with_ascii(AsciiMode::Never)
+        .with_ascii(AsciiMode::Off)
         .build();
 
         // Get formatted output from both formatters (already without ANSI codes)
@@ -1930,7 +1929,7 @@ mod tests {
             Arc::new(IncludeExcludeKeyFilter::default()),
             formatting.clone(),
         )
-        .with_ascii(AsciiMode::Always)
+        .with_ascii(AsciiMode::On)
         .build();
 
         let utf8_formatter = RecordFormatterBuilder::new(
@@ -1943,7 +1942,7 @@ mod tests {
             Arc::new(IncludeExcludeKeyFilter::default()),
             formatting,
         )
-        .with_ascii(AsciiMode::Never)
+        .with_ascii(AsciiMode::Off)
         .build();
 
         // Create a test record with a caller to test source_location_separator

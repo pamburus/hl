@@ -523,8 +523,8 @@ pub enum AsciiModeOpt {
 
 #[derive(Debug, Clone, PartialEq, Eq, Copy)]
 pub enum AsciiMode {
-    Always,
-    Never,
+    On,
+    Off,
 }
 
 impl AsciiModeOpt {
@@ -532,13 +532,13 @@ impl AsciiModeOpt {
         match self {
             Self::Auto => {
                 if utf8_supported {
-                    AsciiMode::Never
+                    AsciiMode::Off
                 } else {
-                    AsciiMode::Always
+                    AsciiMode::On
                 }
             }
-            Self::Always => AsciiMode::Always,
-            Self::Never => AsciiMode::Never,
+            Self::Always => AsciiMode::On,
+            Self::Never => AsciiMode::Off,
         }
     }
 }
@@ -560,8 +560,8 @@ impl DisplayVariant {
         match self {
             Self::Uniform(s) => &s,
             Self::Selective { ascii, utf8: unicode } => match mode {
-                AsciiMode::Never => &unicode,
-                AsciiMode::Always => &ascii,
+                AsciiMode::Off => &unicode,
+                AsciiMode::On => &ascii,
             },
         }
     }
@@ -753,14 +753,14 @@ mod tests {
     #[test]
     fn test_ascii_mode_opt_resolve() {
         // Test resolve with utf8_supported = true
-        assert_eq!(AsciiModeOpt::Auto.resolve(true), AsciiMode::Never);
-        assert_eq!(AsciiModeOpt::Always.resolve(true), AsciiMode::Always);
-        assert_eq!(AsciiModeOpt::Never.resolve(true), AsciiMode::Never);
+        assert_eq!(AsciiModeOpt::Auto.resolve(true), AsciiMode::Off);
+        assert_eq!(AsciiModeOpt::Always.resolve(true), AsciiMode::On);
+        assert_eq!(AsciiModeOpt::Never.resolve(true), AsciiMode::Off);
 
         // Test resolve with utf8_supported = false
-        assert_eq!(AsciiModeOpt::Auto.resolve(false), AsciiMode::Always);
-        assert_eq!(AsciiModeOpt::Always.resolve(false), AsciiMode::Always);
-        assert_eq!(AsciiModeOpt::Never.resolve(false), AsciiMode::Never);
+        assert_eq!(AsciiModeOpt::Auto.resolve(false), AsciiMode::On);
+        assert_eq!(AsciiModeOpt::Always.resolve(false), AsciiMode::On);
+        assert_eq!(AsciiModeOpt::Never.resolve(false), AsciiMode::Off);
     }
 
     #[test]
@@ -768,8 +768,8 @@ mod tests {
         let uniform = DisplayVariant::Uniform("test".to_string());
 
         // Uniform variant should return the same string regardless of mode
-        assert_eq!(uniform.resolve(AsciiMode::Always), "test");
-        assert_eq!(uniform.resolve(AsciiMode::Never), "test");
+        assert_eq!(uniform.resolve(AsciiMode::On), "test");
+        assert_eq!(uniform.resolve(AsciiMode::Off), "test");
     }
 
     #[test]
@@ -780,22 +780,22 @@ mod tests {
         };
 
         // Selective variant should return the appropriate string based on mode
-        assert_eq!(selective.resolve(AsciiMode::Always), "ascii");
-        assert_eq!(selective.resolve(AsciiMode::Never), "utf8");
+        assert_eq!(selective.resolve(AsciiMode::On), "ascii");
+        assert_eq!(selective.resolve(AsciiMode::Off), "utf8");
     }
 
     #[test]
     fn test_display_variant_from_string() {
         let from_string = DisplayVariant::from("test".to_string());
         assert!(matches!(from_string, DisplayVariant::Uniform(_)));
-        assert_eq!(from_string.resolve(AsciiMode::Never), "test");
+        assert_eq!(from_string.resolve(AsciiMode::Off), "test");
     }
 
     #[test]
     fn test_display_variant_from_str() {
         let from_str = DisplayVariant::from("test");
         assert!(matches!(from_str, DisplayVariant::Uniform(_)));
-        assert_eq!(from_str.resolve(AsciiMode::Never), "test");
+        assert_eq!(from_str.resolve(AsciiMode::Off), "test");
     }
 
     #[test]
@@ -812,22 +812,16 @@ mod tests {
         };
 
         // Test with direct resolve calls
-        assert_eq!(
-            punctuation.input_number_right_separator.resolve(AsciiMode::Always),
-            " | "
-        );
-        assert_eq!(
-            punctuation.input_number_right_separator.resolve(AsciiMode::Never),
-            " │ "
-        );
+        assert_eq!(punctuation.input_number_right_separator.resolve(AsciiMode::On), " | ");
+        assert_eq!(punctuation.input_number_right_separator.resolve(AsciiMode::Off), " │ ");
 
         // Test ASCII mode through Punctuation::resolve
-        let resolved_ascii = punctuation.resolve(AsciiMode::Always);
+        let resolved_ascii = punctuation.resolve(AsciiMode::On);
         assert_eq!(resolved_ascii.input_number_right_separator, " | ");
         assert_eq!(resolved_ascii.source_location_separator, "-> ");
 
         // Test UTF-8 mode through Punctuation::resolve
-        let resolved_utf8 = punctuation.resolve(AsciiMode::Never);
+        let resolved_utf8 = punctuation.resolve(AsciiMode::Off);
         assert_eq!(resolved_utf8.input_number_right_separator, " │ ");
         assert_eq!(resolved_utf8.source_location_separator, "→ ");
 

@@ -1510,7 +1510,7 @@ mod tests {
             delimiter: Delimiter::default(),
             unix_ts_unit: None,
             flatten: false,
-            ascii: AsciiMode::Never,
+            ascii: AsciiMode::Off,
         }
     }
 
@@ -1550,7 +1550,7 @@ mod tests {
             Arc::new(IncludeExcludeKeyFilter::default()),
             formatting.clone(),
         )
-        .with_ascii(AsciiMode::Always)
+        .with_ascii(AsciiMode::On)
         .build();
 
         let formatter_utf8 = RecordFormatterBuilder::new(
@@ -1563,7 +1563,7 @@ mod tests {
             Arc::new(IncludeExcludeKeyFilter::default()),
             formatting,
         )
-        .with_ascii(AsciiMode::Never)
+        .with_ascii(AsciiMode::Off)
         .build();
 
         // Test ASCII mode
