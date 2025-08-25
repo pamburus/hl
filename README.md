@@ -670,6 +670,7 @@ Output Options:
   -e, --hide-empty-fields     Hide empty fields, applies for null, string, object and array fields only [env: HL_HIDE_EMPTY_FIELDS=]
   -E, --show-empty-fields     Show empty fields, overrides --hide-empty-fields option [env: HL_SHOW_EMPTY_FIELDS=]
       --input-info <LAYOUTS>  Input number and filename layouts [default: auto] [possible values: auto, none, minimal, compact, full]
+      --ascii [<WHEN>]        Controls whether to restrict punctuation to ASCII characters only [env: HL_ASCII=] [default: auto] [possible values: auto, never, always]
   -o, --output <FILE>         Output file
 
 Input Options:

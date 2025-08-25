@@ -9,10 +9,10 @@ use criterion::{BatchSize, BenchmarkId, Criterion, Throughput};
 // local imports
 use super::{BencherExt, ND, hash, samples};
 use hl::{
-    DateTimeFormatter, Filter, IncludeExcludeKeyFilter, LinuxDateFormat, Parser, ParserSettings, RecordFormatter,
-    SegmentProcessor, Settings, Theme,
+    DateTimeFormatter, Filter, IncludeExcludeKeyFilter, LinuxDateFormat, Parser, ParserSettings, SegmentProcessor,
+    Settings, Theme,
     app::{RecordIgnorer, SegmentProcess, SegmentProcessorOptions},
-    formatting::NoOpRecordWithSourceFormatter,
+    formatting::{NoOpRecordWithSourceFormatter, RecordFormatterBuilder},
     settings,
     timezone::Tz,
 };
@@ -38,7 +38,7 @@ pub(super) fn bench(c: &mut Criterion) {
         let settings = Settings::default();
         let parser = Parser::new(ParserSettings::new(&settings.fields.predefined, empty(), None));
         let filter = Filter::default();
-        let formatter = RecordFormatter::new(
+        let formatter = RecordFormatterBuilder::new(
             Arc::new(Theme::embedded(THEME).unwrap()),
             DateTimeFormatter::new(
                 LinuxDateFormat::new("%b %d %T.%3N").compile(),
@@ -47,7 +47,8 @@ pub(super) fn bench(c: &mut Criterion) {
             false,
             Arc::new(IncludeExcludeKeyFilter::default()),
             settings::Formatting::default(),
-        );
+        )
+        .build();
 
         c.bench_function(BenchmarkId::new("parse-and-format", &param), |b| {
             let mut processor = SegmentProcessor::new(&parser, &formatter, &filter, SegmentProcessorOptions::default());

@@ -34,14 +34,14 @@ use crate::{
     datefmt::{DateTimeFormat, DateTimeFormatter},
     error::*,
     fmtx::aligned_left,
-    formatting::{RawRecordFormatter, RecordFormatter, RecordWithSourceFormatter},
+    formatting::{RawRecordFormatter, RecordFormatterBuilder, RecordWithSourceFormatter},
     fsmon::{self, EventKind},
     index::{Indexer, IndexerSettings, Timestamp},
     input::{BlockLine, Input, InputHolder, InputReference},
     model::{Filter, Parser, ParserSettings, RawRecord, Record, RecordFilter, RecordWithSourceConstructor},
     query::Query,
     scanning::{BufFactory, Delimit, Delimiter, Scanner, SearchExt, Segment, SegmentBuf, SegmentBufFactory},
-    settings::{FieldShowOption, Fields, Formatting, InputInfo},
+    settings::{AsciiMode, FieldShowOption, Fields, Formatting, InputInfo},
     theme::{Element, StylingPush, Theme},
     timezone::Tz,
     vfs::LocalFileSystem,
@@ -76,6 +76,7 @@ pub struct Options {
     pub delimiter: Delimiter,
     pub unix_ts_unit: Option<UnixTimestampUnit>,
     pub flatten: bool,
+    pub ascii: AsciiMode,
 }
 
 impl Options {
@@ -705,7 +706,7 @@ impl App {
             Box::new(RawRecordFormatter {})
         } else {
             Box::new(
-                RecordFormatter::new(
+                RecordFormatterBuilder::new(
                     self.options.theme.clone(),
                     DateTimeFormatter::new(self.options.time_format.clone(), self.options.time_zone),
                     self.options.hide_empty_fields,
@@ -714,8 +715,10 @@ impl App {
                 )
                 .with_field_unescaping(!self.options.raw_fields)
                 .with_flatten(self.options.flatten)
+                .with_ascii(self.options.ascii)
                 .with_always_show_time(self.options.fields.settings.predefined.time.show == FieldShowOption::Always)
-                .with_always_show_level(self.options.fields.settings.predefined.level.show == FieldShowOption::Always),
+                .with_always_show_level(self.options.fields.settings.predefined.level.show == FieldShowOption::Always)
+                .build(),
             )
         }
     }
@@ -741,7 +744,7 @@ impl App {
         }
 
         let num_width = format!("{}", badges.len()).len();
-        let opt = &self.options.formatting.punctuation;
+        let opt = &self.options.formatting.punctuation.resolve(self.options.ascii);
 
         if ii.contains(InputInfo::Compact) {
             let pl = common_prefix_len(&badges);
@@ -1111,6 +1114,7 @@ mod tests {
     use std::io::Cursor;
 
     // third-party imports
+    use chrono::{Offset, Utc};
     use chrono_tz::UTC;
     use maplit::hashmap;
 
@@ -1120,7 +1124,7 @@ mod tests {
         filtering::MatchOptions,
         level::{InfallibleLevel, Level},
         model::FieldFilterSet,
-        settings::{self, MessageFormat, MessageFormatting},
+        settings::{self, AsciiMode, DisplayVariant, MessageFormat, MessageFormatting},
         themecfg::testing,
     };
 
@@ -1505,7 +1509,134 @@ mod tests {
             delimiter: Delimiter::default(),
             unix_ts_unit: None,
             flatten: false,
+            ascii: AsciiMode::Off,
         }
+    }
+
+    #[test]
+    fn test_ascii_mode_handling() {
+        // Use record and formatting from testing module
+        let (record, formatting) = crate::testing::ascii::record();
+
+        // Create formatters with each ASCII mode but no theme (for no-color output)
+        let formatter_ascii = RecordFormatterBuilder::new(
+            Default::default(), // No theme = no colors
+            DateTimeFormatter::new(
+                LinuxDateFormat::new("%b %d %T.%3N").compile(),
+                Tz::FixedOffset(Utc.fix()),
+            ),
+            false,
+            Arc::new(IncludeExcludeKeyFilter::default()),
+            formatting.clone(),
+        )
+        .with_ascii(AsciiMode::On)
+        .build();
+
+        let formatter_utf8 = RecordFormatterBuilder::new(
+            Default::default(), // No theme = no colors
+            DateTimeFormatter::new(
+                LinuxDateFormat::new("%b %d %T.%3N").compile(),
+                Tz::FixedOffset(Utc.fix()),
+            ),
+            false,
+            Arc::new(IncludeExcludeKeyFilter::default()),
+            formatting,
+        )
+        .with_ascii(AsciiMode::Off)
+        .build();
+
+        // Test ASCII mode
+        let mut buf_ascii = Vec::new();
+        formatter_ascii.format_record(&mut buf_ascii, &record);
+        let result_ascii = String::from_utf8(buf_ascii).unwrap();
+
+        // Test UTF-8 mode
+        let mut buf_utf8 = Vec::new();
+        formatter_utf8.format_record(&mut buf_utf8, &record);
+        let result_utf8 = String::from_utf8(buf_utf8).unwrap();
+
+        // Verify that the ASCII mode uses ASCII arrows
+        assert!(result_ascii.contains("-> "), "ASCII mode should use ASCII arrow");
+        assert!(!result_ascii.contains("→ "), "ASCII mode should not use Unicode arrow");
+
+        // Verify that the UTF-8 mode uses Unicode arrows
+        assert!(result_utf8.contains("→ "), "UTF-8 mode should use Unicode arrow");
+        assert!(!result_utf8.contains("-> "), "UTF-8 mode should not use ASCII arrow");
+
+        // The outputs should be different
+        assert_ne!(result_ascii, result_utf8);
+    }
+
+    #[test]
+    fn test_input_badges_with_ascii_mode() {
+        // Use test input references
+        let inputs = vec![
+            InputReference::File(crate::input::InputPath {
+                original: std::path::PathBuf::from("/path/to/some-log-file.log"),
+                canonical: std::path::PathBuf::from("/path/to/some-log-file.log"),
+            }),
+            InputReference::File(crate::input::InputPath {
+                original: std::path::PathBuf::from("/path/to/another-log-file.log"),
+                canonical: std::path::PathBuf::from("/path/to/another-log-file.log"),
+            }),
+        ];
+
+        println!("Created test input references");
+
+        // Setup app with ASCII mode ON
+        let mut options_ascii = options();
+        options_ascii.input_info = InputInfo::Full.into();
+        options_ascii.ascii = AsciiMode::On;
+
+        // Create formatting with selective variants for ASCII mode testing
+        let mut formatting = crate::testing::settings::formatting();
+        formatting.punctuation.input_name_right_separator = DisplayVariant::Selective {
+            ascii: " | ".to_string(),
+            utf8: " │ ".to_string(),
+        };
+        formatting.punctuation.input_number_right_separator = DisplayVariant::Selective {
+            ascii: " | ".to_string(),
+            utf8: " │ ".to_string(),
+        };
+        options_ascii.formatting = formatting.clone();
+
+        let app_ascii = App::new(options_ascii);
+
+        // Setup app with ASCII mode OFF (UTF-8)
+        let mut options_utf8 = options();
+        options_utf8.input_info = InputInfo::Full.into();
+        options_utf8.ascii = AsciiMode::Off;
+        options_utf8.formatting = formatting;
+
+        let app_utf8 = App::new(options_utf8);
+
+        // Get badges with ASCII mode ON
+        let badges_ascii = app_ascii.input_badges(inputs.iter());
+        assert!(badges_ascii.is_some(), "Should produce badges");
+        let badges_ascii = badges_ascii.unwrap();
+        println!("ASCII badges: {:?}", badges_ascii);
+
+        // Get badges with ASCII mode OFF (UTF-8)
+        let badges_utf8 = app_utf8.input_badges(inputs.iter());
+        assert!(badges_utf8.is_some(), "Should produce badges");
+        let badges_utf8 = badges_utf8.unwrap();
+        println!("UTF-8 badges: {:?}", badges_utf8);
+
+        // Check that we're using ASCII separator in ASCII mode
+        for badge in badges_ascii.iter() {
+            assert!(badge.contains(" | "), "ASCII mode should use ASCII separator");
+            assert!(!badge.contains(" │ "), "ASCII mode should not use Unicode separator");
+        }
+
+        // Check that we're using Unicode separator in UTF-8 mode
+        for badge in badges_utf8.iter() {
+            assert!(badge.contains(" │ "), "UTF-8 mode should use Unicode separator");
+            // Check that there are no ASCII separators (should be all replaced)
+            assert!(!badge.contains(" | "), "UTF-8 mode should not use ASCII separator");
+        }
+
+        // Check that the outputs are different
+        assert_ne!(badges_ascii, badges_utf8, "ASCII and UTF-8 badges should be different");
     }
 
     fn theme() -> Arc<Theme> {

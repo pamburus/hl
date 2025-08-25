@@ -14,6 +14,7 @@ PROFDATA_FILE="target/coverage.profdata"
 IGNORE=(
     '/.cargo/git/checkouts/'
     '/.cargo/registry/'
+    '/.rustup/toolchains/'
     '/target/coverage/debug/'
     'rustc/.*/library/'
     '_capnp.rs$'
@@ -52,7 +53,7 @@ function test() {
     ${MAIN_EXECUTABLE:?} --config - sample/prometheus.log -P > /dev/null
     HL_DEBUG_LOG=info ${MAIN_EXECUTABLE:?} --config - sample/prometheus.log -P > /dev/null
     echo "" | ${MAIN_EXECUTABLE:?} --config - --concurrency 4 > /dev/null
-} 
+}
 
 function merge() {
     "${LLVM_BIN:?}/llvm-profdata" merge \
