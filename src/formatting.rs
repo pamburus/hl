@@ -1,5 +1,5 @@
 // std imports
-use std::{cell::OnceCell, sync::Arc};
+use std::sync::Arc;
 
 // workspace imports
 use encstr::EncodedString;
@@ -63,11 +63,10 @@ impl RecordWithSourceFormatter for NoOpRecordWithSourceFormatter {
 
 // ---
 
-pub struct RecordFormatter {
+pub struct RecordFormatterBuilder {
     theme: Arc<Theme>,
     unescape_fields: bool,
     ts_formatter: DateTimeFormatter,
-    ts_width: usize,
     hide_empty_fields: bool,
     flatten: bool,
     ascii: AsciiMode,
@@ -75,11 +74,9 @@ pub struct RecordFormatter {
     always_show_level: bool,
     fields: Arc<IncludeExcludeKeyFilter>,
     cfg: Formatting,
-    message_format_cell: OnceCell<DynMessageFormat>,
-    punctuation_cell: OnceCell<Punctuation<String>>,
 }
 
-impl RecordFormatter {
+impl RecordFormatterBuilder {
     pub fn new(
         theme: Arc<Theme>,
         ts_formatter: DateTimeFormatter,
@@ -87,21 +84,18 @@ impl RecordFormatter {
         fields: Arc<IncludeExcludeKeyFilter>,
         cfg: Formatting,
     ) -> Self {
-        let ts_width = ts_formatter.max_length();
-        RecordFormatter {
+        let ascii = AsciiMode::Never;
+        Self {
             theme,
             unescape_fields: true,
             ts_formatter,
-            ts_width,
             hide_empty_fields,
             flatten: false,
-            ascii: AsciiMode::Never,
+            ascii,
             always_show_time: false,
             always_show_level: false,
             fields,
             cfg,
-            message_format_cell: OnceCell::new(),
-            punctuation_cell: OnceCell::new(),
         }
     }
 
@@ -134,6 +128,47 @@ impl RecordFormatter {
         }
     }
 
+    pub fn build(self) -> RecordFormatter {
+        let message_format = (&self.cfg, self.ascii).into();
+        let punctuation = self.cfg.punctuation.resolve(self.ascii);
+        let ts_width = self.ts_formatter.max_length();
+
+        RecordFormatter {
+            theme: self.theme,
+            unescape_fields: self.unescape_fields,
+            ts_formatter: self.ts_formatter,
+            ts_width,
+            hide_empty_fields: self.hide_empty_fields,
+            flatten: self.flatten,
+            always_show_time: self.always_show_time,
+            always_show_level: self.always_show_level,
+            fields: self.fields,
+            message_format,
+            punctuation,
+        }
+    }
+
+    #[cfg(test)]
+    fn with_theme(self, theme: Arc<Theme>) -> Self {
+        Self { theme, ..self }
+    }
+}
+
+pub struct RecordFormatter {
+    theme: Arc<Theme>,
+    unescape_fields: bool,
+    ts_formatter: DateTimeFormatter,
+    ts_width: usize,
+    hide_empty_fields: bool,
+    flatten: bool,
+    always_show_time: bool,
+    always_show_level: bool,
+    fields: Arc<IncludeExcludeKeyFilter>,
+    message_format: DynMessageFormat,
+    punctuation: Punctuation<String>,
+}
+
+impl RecordFormatter {
     pub fn format_record(&self, buf: &mut Buf, rec: &model::Record) {
         let mut fs = FormattingState::new(self.flatten && self.unescape_fields);
 
@@ -187,10 +222,10 @@ impl RecordFormatter {
                 fs.add_element(|| s.space());
                 s.element(Element::Level, |s| {
                     s.batch(|buf| {
-                        buf.extend_from_slice(self.punctuation().level_left_separator.as_bytes());
+                        buf.extend_from_slice(self.punctuation.level_left_separator.as_bytes());
                     });
                     s.element(Element::LevelInner, |s| s.batch(|buf| buf.extend_from_slice(level)));
-                    s.batch(|buf| buf.extend_from_slice(self.punctuation().level_right_separator.as_bytes()));
+                    s.batch(|buf| buf.extend_from_slice(self.punctuation.level_right_separator.as_bytes()));
                 });
             }
 
@@ -203,7 +238,7 @@ impl RecordFormatter {
                     s.element(Element::LoggerInner, |s| {
                         s.batch(|buf| buf.extend_from_slice(logger.as_bytes()))
                     });
-                    s.batch(|buf| buf.extend_from_slice(self.punctuation().logger_name_separator.as_bytes()));
+                    s.batch(|buf| buf.extend_from_slice(self.punctuation.logger_name_separator.as_bytes()));
                 });
             }
             //
@@ -225,7 +260,7 @@ impl RecordFormatter {
             }
             if some_fields_hidden || (fs.some_nested_fields_hidden && fs.flatten) {
                 s.element(Element::Ellipsis, |s| {
-                    s.batch(|buf| buf.extend_from_slice(self.punctuation().hidden_fields_indicator.as_bytes()))
+                    s.batch(|buf| buf.extend_from_slice(self.punctuation.hidden_fields_indicator.as_bytes()))
                 });
             }
             //
@@ -236,7 +271,7 @@ impl RecordFormatter {
                 s.element(Element::Caller, |s| {
                     s.batch(|buf| {
                         buf.push(b' ');
-                        buf.extend(self.punctuation().source_location_separator.as_bytes())
+                        buf.extend(self.punctuation.source_location_separator.as_bytes())
                     });
                     s.element(Element::CallerInner, |s| {
                         s.batch(|buf| {
@@ -245,7 +280,7 @@ impl RecordFormatter {
                             }
                             if !caller.file.is_empty() || !caller.line.is_empty() {
                                 if !caller.name.is_empty() {
-                                    buf.extend(self.punctuation().caller_name_file_separator.as_bytes());
+                                    buf.extend(self.punctuation.caller_name_file_separator.as_bytes());
                                 }
                                 buf.extend(caller.file.as_bytes());
                                 if caller.line.len() != 0 {
@@ -283,27 +318,13 @@ impl RecordFormatter {
                         s.space();
                     });
                     s.element(Element::Message, |s| {
-                        s.batch(|buf| self.message_format().format(value, buf).unwrap())
+                        s.batch(|buf| self.message_format.format(value, buf).unwrap())
                     });
                 }
                 false
             }
             _ => self.format_field(s, "msg", value, fs, Some(self.fields.as_ref())),
         };
-    }
-
-    #[cfg(test)]
-    fn with_theme(self, theme: Arc<Theme>) -> Self {
-        Self { theme, ..self }
-    }
-
-    fn message_format(&self) -> &DynMessageFormat {
-        self.message_format_cell.get_or_init(|| (&self.cfg, self.ascii).into())
-    }
-
-    fn punctuation(&self) -> &Punctuation<String> {
-        self.punctuation_cell
-            .get_or_init(|| self.cfg.punctuation.resolve(self.ascii))
     }
 }
 
@@ -476,7 +497,7 @@ impl<'a> FieldFormatter<'a> {
                     if !fs.flatten {
                         if some_fields_hidden {
                             s.element(Element::Ellipsis, |s| {
-                                s.batch(|buf| buf.extend(self.rf.punctuation().hidden_fields_indicator.as_bytes()))
+                                s.batch(|buf| buf.extend(self.rf.punctuation.hidden_fields_indicator.as_bytes()))
                             });
                         }
                         s.batch(|buf| {
@@ -497,7 +518,7 @@ impl<'a> FieldFormatter<'a> {
                     let mut first = true;
                     for v in item.iter() {
                         if !first {
-                            s.batch(|buf| buf.extend(self.rf.punctuation().array_separator.as_bytes()));
+                            s.batch(|buf| buf.extend(self.rf.punctuation.array_separator.as_bytes()));
                         } else {
                             first = false;
                         }
@@ -523,10 +544,10 @@ impl<'a> FieldFormatter<'a> {
 
         if !fs.has_fields {
             fs.has_fields = true;
-            if self.rf.message_format().delimited {
+            if self.rf.message_format.delimited {
                 fs.add_element(|| s.space());
                 s.element(Element::MessageDelimiter, |s| {
-                    s.batch(|buf| buf.extend(self.rf.punctuation().message_delimiter.as_bytes()));
+                    s.batch(|buf| buf.extend(self.rf.punctuation.message_delimiter.as_bytes()));
                 });
             }
         }
@@ -547,7 +568,7 @@ impl<'a> FieldFormatter<'a> {
             });
         });
         s.element(Element::Field, |s| {
-            s.batch(|buf| buf.extend(self.rf.punctuation().field_key_value_separator.as_bytes()));
+            s.batch(|buf| buf.extend(self.rf.punctuation.field_key_value_separator.as_bytes()));
         });
 
         variant
@@ -1113,8 +1134,8 @@ mod tests {
         }
     }
 
-    fn formatter() -> RecordFormatter {
-        RecordFormatter::new(
+    fn formatter() -> RecordFormatterBuilder {
+        RecordFormatterBuilder::new(
             Arc::new(Theme::from(testing::theme().unwrap())),
             DateTimeFormatter::new(
                 LinuxDateFormat::new("%y-%m-%d %T.%3N").compile(),
@@ -1133,11 +1154,11 @@ mod tests {
     }
 
     fn format(rec: &Record) -> String {
-        formatter().format_to_string(rec)
+        formatter().build().format_to_string(rec)
     }
 
     fn format_no_color(rec: &Record) -> String {
-        formatter().with_theme(Default::default()).format_to_string(rec)
+        formatter().with_theme(Default::default()).build().format_to_string(rec)
     }
 
     fn json_raw_value(s: &str) -> Box<json::value::RawValue> {
@@ -1176,7 +1197,7 @@ mod tests {
         );
 
         assert_eq!(
-            &formatter().with_flatten(true).format_to_string(&rec),
+            &formatter().with_flatten(true).build().format_to_string(&rec),
             "\u{1b}[0;2;3m00-01-02 03:04:05.123 \u{1b}[0;36m|\u{1b}[0;95mDBG\u{1b}[0;36m|\u{1b}[0;2;3m \u{1b}[0;2;4mtl:\u{1b}[0m \u{1b}[0;1;39mtm \u{1b}[0;32mk-a.va.kb\u{1b}[0;2m=\u{1b}[0;94m42 \u{1b}[0;32mk-a.va.kc\u{1b}[0;2m=\u{1b}[0;94m43\u{1b}[0;2;3m @ tc\u{1b}[0m",
         );
     }
@@ -1214,7 +1235,7 @@ mod tests {
         };
 
         assert_eq!(
-            &formatter().with_always_show_time(true).format_to_string(&rec),
+            &formatter().with_always_show_time(true).build().format_to_string(&rec),
             "\u{1b}[0;2;3m---------------------\u{1b}[0m \u{1b}[0;1;39mtm\u{1b}[0m",
         );
     }
@@ -1237,7 +1258,7 @@ mod tests {
         };
 
         assert_eq!(
-            &formatter().with_always_show_level(true).format_to_string(&rec),
+            &formatter().with_always_show_level(true).build().format_to_string(&rec),
             "\u{1b}[0;36m|(?)|\u{1b}[0m \u{1b}[0;1;39mtm\u{1b}[0m"
         );
     }
@@ -1568,12 +1589,13 @@ mod tests {
         let b = fields.entry("a").entry("b");
         b.exclude();
         b.entry("c").entry("d").include();
-        let formatter = RecordFormatter {
+        let formatter = RecordFormatterBuilder {
             flatten: true,
             theme: Default::default(),
             fields: Arc::new(fields),
             ..formatter()
-        };
+        }
+        .build();
 
         assert_eq!(&formatter.format_to_string(&rec), "a.b.c.d=1 ...");
     }
@@ -1586,12 +1608,13 @@ mod tests {
         fields.entry("a.b.c").exclude();
         fields.entry("a.b.c.e").include();
         fields.entry("a.b.c").exclude();
-        let formatter = RecordFormatter {
+        let formatter = RecordFormatterBuilder {
             flatten: true,
             theme: Default::default(),
             fields: Arc::new(fields),
             ..formatter()
-        };
+        }
+        .build();
 
         assert_eq!(&formatter.format_to_string(&rec), "a.b.f=3 ...");
     }
@@ -1604,12 +1627,13 @@ mod tests {
         let b = fields.entry("a").entry("b");
         b.exclude();
         b.entry("c").entry("d").include();
-        let formatter = RecordFormatter {
+        let formatter = RecordFormatterBuilder {
             flatten: false,
             theme: Default::default(),
             fields: Arc::new(fields),
             ..formatter()
-        };
+        }
+        .build();
 
         assert_eq!(&formatter.format_to_string(&rec), "a={ b={ c={ d=1 ... } ... } }");
     }
@@ -1640,8 +1664,8 @@ mod tests {
     #[test]
     fn test_delimited_message_with_colors() {
         let formatter = RecordFormatter {
-            message_format_cell: OnceCell::from(new_message_format(MessageFormat::Delimited, "::")),
-            ..formatter()
+            message_format: new_message_format(MessageFormat::Delimited, "::"),
+            ..formatter().build()
         };
 
         let rec = Record {
@@ -1658,9 +1682,9 @@ mod tests {
     #[test]
     fn test_auto_quoted_message() {
         let formatter = RecordFormatter {
-            message_format_cell: OnceCell::from(new_message_format(MessageFormat::AutoQuoted, "")),
+            message_format: new_message_format(MessageFormat::AutoQuoted, ""),
             theme: Default::default(),
-            ..formatter()
+            ..formatter().build()
         };
 
         let mut rec = Record {
@@ -1698,9 +1722,9 @@ mod tests {
     #[test]
     fn test_always_quoted_message() {
         let formatter = RecordFormatter {
-            message_format_cell: OnceCell::from(new_message_format(MessageFormat::AlwaysQuoted, "")),
+            message_format: new_message_format(MessageFormat::AlwaysQuoted, ""),
             theme: Default::default(),
-            ..formatter()
+            ..formatter().build()
         };
 
         let mut rec = Record {
@@ -1730,9 +1754,9 @@ mod tests {
     #[test]
     fn test_always_double_quoted_message() {
         let formatter = RecordFormatter {
-            message_format_cell: OnceCell::from(new_message_format(MessageFormat::AlwaysDoubleQuoted, "")),
+            message_format: new_message_format(MessageFormat::AlwaysDoubleQuoted, ""),
             theme: Default::default(),
-            ..formatter()
+            ..formatter().build()
         };
 
         let mut rec = Record {
@@ -1749,9 +1773,9 @@ mod tests {
     #[test]
     fn test_raw_message() {
         let formatter = RecordFormatter {
-            message_format_cell: OnceCell::from(new_message_format(MessageFormat::Raw, "")),
+            message_format: new_message_format(MessageFormat::Raw, ""),
             theme: Default::default(),
-            ..formatter()
+            ..formatter().build()
         };
 
         let mut rec = Record {
@@ -1768,9 +1792,9 @@ mod tests {
     #[test]
     fn test_delimited_message() {
         let formatter = RecordFormatter {
-            message_format_cell: OnceCell::from(new_message_format(MessageFormat::Delimited, "::")),
+            message_format: new_message_format(MessageFormat::Delimited, "::"),
             theme: Default::default(),
-            ..formatter()
+            ..formatter().build()
         };
 
         let mut rec = Record {
@@ -1822,7 +1846,7 @@ mod tests {
         };
 
         // Create formatters with each ASCII mode but no theme (for no-color output)
-        let formatter_ascii = RecordFormatter::new(
+        let formatter_ascii = RecordFormatterBuilder::new(
             Default::default(), // No theme
             DateTimeFormatter::new(
                 LinuxDateFormat::new("%b %d %T.%3N").compile(),
@@ -1832,9 +1856,10 @@ mod tests {
             Arc::new(IncludeExcludeKeyFilter::default()),
             formatting.clone(),
         )
-        .with_ascii(AsciiMode::Always);
+        .with_ascii(AsciiMode::Always)
+        .build();
 
-        let formatter_utf8 = RecordFormatter::new(
+        let formatter_utf8 = RecordFormatterBuilder::new(
             Default::default(), // No theme
             DateTimeFormatter::new(
                 LinuxDateFormat::new("%b %d %T.%3N").compile(),
@@ -1844,7 +1869,8 @@ mod tests {
             Arc::new(IncludeExcludeKeyFilter::default()),
             formatting,
         )
-        .with_ascii(AsciiMode::Never);
+        .with_ascii(AsciiMode::Never)
+        .build();
 
         // Get formatted output from both formatters (already without ANSI codes)
         let ascii_result = formatter_ascii.format_to_string(&rec);
@@ -1894,7 +1920,7 @@ mod tests {
         };
 
         // Create formatters with different ASCII modes but no theme
-        let ascii_formatter = RecordFormatter::new(
+        let ascii_formatter = RecordFormatterBuilder::new(
             Default::default(), // No theme = no colors
             DateTimeFormatter::new(
                 LinuxDateFormat::new("%y-%m-%d %T.%3N").compile(),
@@ -1904,9 +1930,10 @@ mod tests {
             Arc::new(IncludeExcludeKeyFilter::default()),
             formatting.clone(),
         )
-        .with_ascii(AsciiMode::Always);
+        .with_ascii(AsciiMode::Always)
+        .build();
 
-        let utf8_formatter = RecordFormatter::new(
+        let utf8_formatter = RecordFormatterBuilder::new(
             Default::default(), // No theme = no colors
             DateTimeFormatter::new(
                 LinuxDateFormat::new("%y-%m-%d %T.%3N").compile(),
@@ -1916,7 +1943,8 @@ mod tests {
             Arc::new(IncludeExcludeKeyFilter::default()),
             formatting,
         )
-        .with_ascii(AsciiMode::Never);
+        .with_ascii(AsciiMode::Never)
+        .build();
 
         // Create a test record with a caller to test source_location_separator
         let rec = Record {
