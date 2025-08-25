@@ -34,7 +34,7 @@ use crate::{
     datefmt::{DateTimeFormat, DateTimeFormatter},
     error::*,
     fmtx::aligned_left,
-    formatting::{RawRecordFormatter, RecordFormatter, RecordWithSourceFormatter},
+    formatting::{RawRecordFormatter, RecordFormatterBuilder, RecordWithSourceFormatter},
     fsmon::{self, EventKind},
     index::{Indexer, IndexerSettings, Timestamp},
     input::{BlockLine, Input, InputHolder, InputReference},
@@ -706,7 +706,7 @@ impl App {
             Box::new(RawRecordFormatter {})
         } else {
             Box::new(
-                RecordFormatter::new(
+                RecordFormatterBuilder::new(
                     self.options.theme.clone(),
                     DateTimeFormatter::new(self.options.time_format.clone(), self.options.time_zone),
                     self.options.hide_empty_fields,
@@ -717,7 +717,8 @@ impl App {
                 .with_flatten(self.options.flatten)
                 .with_ascii(self.options.ascii)
                 .with_always_show_time(self.options.fields.settings.predefined.time.show == FieldShowOption::Always)
-                .with_always_show_level(self.options.fields.settings.predefined.level.show == FieldShowOption::Always),
+                .with_always_show_level(self.options.fields.settings.predefined.level.show == FieldShowOption::Always)
+                .build(),
             )
         }
     }
@@ -1539,7 +1540,7 @@ mod tests {
         };
 
         // Create formatters with each ASCII mode but no theme (for no-color output)
-        let formatter_ascii = RecordFormatter::new(
+        let formatter_ascii = RecordFormatterBuilder::new(
             Default::default(), // No theme = no colors
             DateTimeFormatter::new(
                 LinuxDateFormat::new("%b %d %T.%3N").compile(),
@@ -1549,9 +1550,10 @@ mod tests {
             Arc::new(IncludeExcludeKeyFilter::default()),
             formatting.clone(),
         )
-        .with_ascii(AsciiMode::Always);
+        .with_ascii(AsciiMode::Always)
+        .build();
 
-        let formatter_utf8 = RecordFormatter::new(
+        let formatter_utf8 = RecordFormatterBuilder::new(
             Default::default(), // No theme = no colors
             DateTimeFormatter::new(
                 LinuxDateFormat::new("%b %d %T.%3N").compile(),
@@ -1561,7 +1563,8 @@ mod tests {
             Arc::new(IncludeExcludeKeyFilter::default()),
             formatting,
         )
-        .with_ascii(AsciiMode::Never);
+        .with_ascii(AsciiMode::Never)
+        .build();
 
         // Test ASCII mode
         let mut buf_ascii = Vec::new();
