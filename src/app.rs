@@ -1123,11 +1123,10 @@ mod tests {
         LinuxDateFormat,
         filtering::MatchOptions,
         level::{InfallibleLevel, Level},
-        model::{Caller, FieldFilterSet, RawValue, Record},
-        settings::{self, AsciiMode, DisplayVariant, Formatting, MessageFormat, MessageFormatting, Punctuation},
+        model::FieldFilterSet,
+        settings::{self, AsciiMode, DisplayVariant, MessageFormat, MessageFormatting},
         themecfg::testing,
     };
-    use encstr::EncodedString;
 
     #[test]
     fn test_common_prefix_len() {
@@ -1516,28 +1515,8 @@ mod tests {
 
     #[test]
     fn test_ascii_mode_handling() {
-        // Create a test record with a caller
-        let record = Record {
-            message: Some(RawValue::String(EncodedString::raw("test message"))),
-            caller: Caller::with_name("test_caller"),
-            ..Default::default()
-        };
-
-        // Create a custom punctuation with selective variants for the source location separator
-        let mut punctuation = Punctuation::test_default();
-        punctuation.source_location_separator = DisplayVariant::Selective {
-            ascii: "-> ".to_string(),
-            utf8: "→ ".to_string(),
-        };
-
-        // Create a basic formatting config with our test punctuation
-        let formatting = Formatting {
-            flatten: None,
-            message: MessageFormatting {
-                format: MessageFormat::AutoQuoted,
-            },
-            punctuation,
-        };
+        // Use record and formatting from testing module
+        let (record, formatting) = crate::testing::ascii::record();
 
         // Create formatters with each ASCII mode but no theme (for no-color output)
         let formatter_ascii = RecordFormatterBuilder::new(
@@ -1577,26 +1556,87 @@ mod tests {
         let result_utf8 = String::from_utf8(buf_utf8).unwrap();
 
         // Verify that the ASCII mode uses ASCII arrows
-        assert!(
-            result_ascii.contains("-> "),
-            "ASCII mode should use ASCII arrow, got: {}",
-            result_ascii
-        );
+        assert!(result_ascii.contains("-> "), "ASCII mode should use ASCII arrow");
         assert!(!result_ascii.contains("→ "), "ASCII mode should not use Unicode arrow");
 
         // Verify that the UTF-8 mode uses Unicode arrows
-        assert!(
-            result_utf8.contains("→ "),
-            "UTF-8 mode should use Unicode arrow, got: {}",
-            result_utf8
-        );
+        assert!(result_utf8.contains("→ "), "UTF-8 mode should use Unicode arrow");
         assert!(!result_utf8.contains("-> "), "UTF-8 mode should not use ASCII arrow");
 
         // The outputs should be different
-        assert_ne!(
-            result_ascii, result_utf8,
-            "ASCII and UTF-8 modes should produce different output"
-        );
+        assert_ne!(result_ascii, result_utf8);
+    }
+
+    #[test]
+    fn test_input_badges_with_ascii_mode() {
+        // Use test input references
+        let inputs = vec![
+            InputReference::File(crate::input::InputPath {
+                original: std::path::PathBuf::from("/path/to/some-log-file.log"),
+                canonical: std::path::PathBuf::from("/path/to/some-log-file.log"),
+            }),
+            InputReference::File(crate::input::InputPath {
+                original: std::path::PathBuf::from("/path/to/another-log-file.log"),
+                canonical: std::path::PathBuf::from("/path/to/another-log-file.log"),
+            }),
+        ];
+
+        println!("Created test input references");
+
+        // Setup app with ASCII mode ON
+        let mut options_ascii = options();
+        options_ascii.input_info = InputInfo::Full.into();
+        options_ascii.ascii = AsciiMode::On;
+
+        // Create formatting with selective variants for ASCII mode testing
+        let mut formatting = crate::testing::settings::formatting();
+        formatting.punctuation.input_name_right_separator = DisplayVariant::Selective {
+            ascii: " | ".to_string(),
+            utf8: " │ ".to_string(),
+        };
+        formatting.punctuation.input_number_right_separator = DisplayVariant::Selective {
+            ascii: " | ".to_string(),
+            utf8: " │ ".to_string(),
+        };
+        options_ascii.formatting = formatting.clone();
+
+        let app_ascii = App::new(options_ascii);
+
+        // Setup app with ASCII mode OFF (UTF-8)
+        let mut options_utf8 = options();
+        options_utf8.input_info = InputInfo::Full.into();
+        options_utf8.ascii = AsciiMode::Off;
+        options_utf8.formatting = formatting;
+
+        let app_utf8 = App::new(options_utf8);
+
+        // Get badges with ASCII mode ON
+        let badges_ascii = app_ascii.input_badges(inputs.iter());
+        assert!(badges_ascii.is_some(), "Should produce badges");
+        let badges_ascii = badges_ascii.unwrap();
+        println!("ASCII badges: {:?}", badges_ascii);
+
+        // Get badges with ASCII mode OFF (UTF-8)
+        let badges_utf8 = app_utf8.input_badges(inputs.iter());
+        assert!(badges_utf8.is_some(), "Should produce badges");
+        let badges_utf8 = badges_utf8.unwrap();
+        println!("UTF-8 badges: {:?}", badges_utf8);
+
+        // Check that we're using ASCII separator in ASCII mode
+        for badge in badges_ascii.iter() {
+            assert!(badge.contains(" | "), "ASCII mode should use ASCII separator");
+            assert!(!badge.contains(" │ "), "ASCII mode should not use Unicode separator");
+        }
+
+        // Check that we're using Unicode separator in UTF-8 mode
+        for badge in badges_utf8.iter() {
+            assert!(badge.contains(" │ "), "UTF-8 mode should use Unicode separator");
+            // Check that there are no ASCII separators (should be all replaced)
+            assert!(!badge.contains(" | "), "UTF-8 mode should not use ASCII separator");
+        }
+
+        // Check that the outputs are different
+        assert_ne!(badges_ascii, badges_utf8, "ASCII and UTF-8 badges should be different");
     }
 
     fn theme() -> Arc<Theme> {

@@ -1101,7 +1101,7 @@ mod tests {
     use crate::{
         datefmt::LinuxDateFormat,
         model::{Caller, RawObject, Record, RecordFields, RecordWithSourceConstructor},
-        settings::{AsciiMode, DisplayVariant, MessageFormat, MessageFormatting, Punctuation},
+        settings::{AsciiMode, MessageFormat, MessageFormatting, Punctuation},
         theme::Theme,
         themecfg::testing,
         timestamp::Timestamp,
@@ -1821,28 +1821,8 @@ mod tests {
 
     #[test]
     fn test_ascii_mode() {
-        // Let's create a record with a caller to test source location separator
-        let rec = Record {
-            message: Some(RawValue::String(EncodedString::json(r#""message""#))),
-            caller: Caller::with_name("test_caller"),
-            ..Default::default()
-        };
-
-        // Create a custom punctuation with selective variants for the source location separator
-        let mut punctuation = Punctuation::test_default();
-        punctuation.source_location_separator = DisplayVariant::Selective {
-            ascii: "-> ".to_string(),
-            utf8: "→ ".to_string(),
-        };
-
-        // Create a basic formatting config with our test punctuation
-        let formatting = Formatting {
-            flatten: None,
-            message: MessageFormatting {
-                format: MessageFormat::AutoQuoted,
-            },
-            punctuation,
-        };
+        // Use record and formatting from testing module
+        let (rec, formatting) = crate::testing::ascii::record();
 
         // Create formatters with each ASCII mode but no theme (for no-color output)
         let formatter_ascii = RecordFormatterBuilder::new(
@@ -1876,47 +1856,23 @@ mod tests {
         let utf8_result = formatter_utf8.format_to_string(&rec);
 
         // Verify ASCII mode uses ASCII arrow
-        assert!(
-            ascii_result.contains("-> "),
-            "ASCII mode should use ASCII arrow, got: {}",
-            ascii_result
-        );
+        assert!(ascii_result.contains("-> "), "ASCII mode should use ASCII arrow");
+        // Also verify that it doesn't contain the Unicode arrow
+        assert!(!ascii_result.contains("→ "), "ASCII mode should not use Unicode arrow");
 
         // The ASCII and UTF-8 outputs should be different
-        assert_ne!(
-            ascii_result, utf8_result,
-            "ASCII and UTF-8 modes should produce different output"
-        );
+        assert_ne!(ascii_result, utf8_result);
 
         // UTF-8 mode should use Unicode arrow
-        assert!(
-            utf8_result.contains("→ "),
-            "UTF-8 mode should use Unicode arrow, got: {}",
-            utf8_result
-        );
+        assert!(utf8_result.contains("→ "), "UTF-8 mode should use Unicode arrow");
+        // Also verify that it doesn't contain the ASCII arrow
+        assert!(!utf8_result.contains("-> "), "UTF-8 mode should not use ASCII arrow");
     }
 
     #[test]
     fn test_punctuation_with_ascii_mode() {
-        // Create a custom punctuation with selective variants for both separators we want to test
-        let mut selective_punctuation = Punctuation::test_default();
-        selective_punctuation.source_location_separator = DisplayVariant::Selective {
-            ascii: "-> ".to_string(),
-            utf8: "→ ".to_string(),
-        };
-        selective_punctuation.input_number_right_separator = DisplayVariant::Selective {
-            ascii: " | ".to_string(),
-            utf8: " │ ".to_string(),
-        };
-
-        // Create the formatting configuration
-        let formatting = Formatting {
-            flatten: None,
-            message: MessageFormatting {
-                format: MessageFormat::AutoQuoted,
-            },
-            punctuation: selective_punctuation,
-        };
+        // Use record and formatting from testing module
+        let (_, formatting) = crate::testing::ascii::record();
 
         // Create formatters with different ASCII modes but no theme
         let ascii_formatter = RecordFormatterBuilder::new(
@@ -1945,35 +1901,20 @@ mod tests {
         .with_ascii(AsciiMode::Off)
         .build();
 
-        // Create a test record with a caller to test source_location_separator
-        let rec = Record {
-            message: Some(RawValue::String(EncodedString::json(r#""test message""#))),
-            caller: Caller::with_name("test_caller"),
-            ..Default::default()
-        };
+        // Use test record with source location for testing source_location_separator
+        let rec = crate::testing::record_with_source();
 
         // Format the record with both formatters
         let ascii_result = ascii_formatter.format_to_string(&rec);
         let utf8_result = utf8_formatter.format_to_string(&rec);
 
         // ASCII result should contain the ASCII arrow
-        assert!(
-            ascii_result.contains("-> "),
-            "ASCII result missing expected arrow: {}",
-            ascii_result
-        );
+        assert!(ascii_result.contains("-> "), "ASCII result missing expected arrow");
 
         // UTF-8 result should contain the Unicode arrow
-        assert!(
-            utf8_result.contains("→ "),
-            "UTF-8 result missing expected arrow: {}",
-            utf8_result
-        );
+        assert!(utf8_result.contains("→ "), "UTF-8 result missing expected arrow");
 
         // The outputs should be different
-        assert_ne!(
-            ascii_result, utf8_result,
-            "ASCII and UTF-8 modes should produce different output"
-        );
+        assert_ne!(ascii_result, utf8_result);
     }
 }
