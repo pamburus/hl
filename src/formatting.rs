@@ -688,10 +688,10 @@ pub mod string {
     }
 
     impl From<(&super::Formatting, super::AsciiMode)> for DynMessageFormat {
-        fn from(args: (&super::Formatting, super::AsciiMode)) -> Self {
+        fn from((formatting, ascii): (&super::Formatting, super::AsciiMode)) -> Self {
             new_message_format(
-                args.0.message.format,
-                &args.0.punctuation.message_delimiter.resolve(args.1),
+                formatting.message.format,
+                &formatting.punctuation.message_delimiter.resolve(ascii),
             )
         }
     }
