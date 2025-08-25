@@ -36,6 +36,10 @@ mod tee;
 mod vfs;
 mod xerr;
 
+// test utilities
+#[cfg(test)]
+pub(crate) mod testing;
+
 // conditional public modules
 #[cfg_attr(unix, path = "signal_unix.rs")]
 #[cfg_attr(windows, path = "signal_windows.rs")]

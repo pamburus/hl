@@ -489,26 +489,7 @@ impl Default for Punctuation {
 impl Punctuation {
     #[cfg(test)]
     pub fn test_default() -> Self {
-        Self {
-            logger_name_separator: ":".into(),
-            field_key_value_separator: "=".into(),
-            string_opening_quote: "'".into(),
-            string_closing_quote: "'".into(),
-            source_location_separator: "@ ".into(),
-            caller_name_file_separator: " :: ".into(),
-            hidden_fields_indicator: " ...".into(),
-            level_left_separator: "|".into(),
-            level_right_separator: "|".into(),
-            input_number_prefix: "#".into(),
-            input_number_left_separator: "".into(),
-            input_number_right_separator: " | ".into(),
-            input_name_left_separator: "".into(),
-            input_name_right_separator: " | ".into(),
-            input_name_clipping: "...".into(),
-            input_name_common_part: "...".into(),
-            array_separator: ",".into(),
-            message_delimiter: "::".into(),
-        }
+        crate::testing::settings::punctuation()
     }
 }
 
@@ -794,14 +775,31 @@ mod tests {
     #[test]
     fn test_display_variant_from_str() {
         let from_str = DisplayVariant::from("test");
-        assert!(matches!(from_str, DisplayVariant::Uniform(_)));
-        assert_eq!(from_str.resolve(AsciiMode::Off), "test");
+        assert_eq!(from_str, DisplayVariant::Uniform("test".to_string()));
+    }
+
+    #[test]
+    fn test_display_variant_resolve() {
+        // Test with uniform variant
+        let uniform = DisplayVariant::Uniform("test".to_string());
+        assert_eq!(uniform.resolve(AsciiMode::On), "test");
+        assert_eq!(uniform.resolve(AsciiMode::Off), "test");
+
+        // Test with selective variant
+        let selective = DisplayVariant::Selective {
+            ascii: "ascii".to_string(),
+            utf8: "utf8".to_string(),
+        };
+        assert_eq!(selective.resolve(AsciiMode::On), "ascii");
+        assert_eq!(selective.resolve(AsciiMode::Off), "utf8");
     }
 
     #[test]
     fn test_punctuation_resolve() {
         // Use test_default instead of Default::default to avoid dependency on default config
         let mut punctuation = Punctuation::test_default();
+
+        // Set up selective variants for multiple punctuation elements
         punctuation.input_number_right_separator = DisplayVariant::Selective {
             ascii: " | ".to_string(),
             utf8: " │ ".to_string(),
@@ -810,20 +808,40 @@ mod tests {
             ascii: "-> ".to_string(),
             utf8: "→ ".to_string(),
         };
+        punctuation.array_separator = DisplayVariant::Selective {
+            ascii: ", ".to_string(),
+            utf8: "· ".to_string(),
+        };
+        punctuation.hidden_fields_indicator = DisplayVariant::Selective {
+            ascii: "...".to_string(),
+            utf8: "…".to_string(),
+        };
 
         // Test with direct resolve calls
         assert_eq!(punctuation.input_number_right_separator.resolve(AsciiMode::On), " | ");
         assert_eq!(punctuation.input_number_right_separator.resolve(AsciiMode::Off), " │ ");
+        assert_eq!(punctuation.source_location_separator.resolve(AsciiMode::On), "-> ");
+        assert_eq!(punctuation.source_location_separator.resolve(AsciiMode::Off), "→ ");
+        assert_eq!(punctuation.array_separator.resolve(AsciiMode::On), ", ");
+        assert_eq!(punctuation.array_separator.resolve(AsciiMode::Off), "· ");
+        assert_eq!(punctuation.hidden_fields_indicator.resolve(AsciiMode::On), "...");
+        assert_eq!(punctuation.hidden_fields_indicator.resolve(AsciiMode::Off), "…");
 
         // Test ASCII mode through Punctuation::resolve
         let resolved_ascii = punctuation.resolve(AsciiMode::On);
+        let resolved_utf8 = punctuation.resolve(AsciiMode::Off);
+
+        // Verify ASCII version of resolved punctuation
         assert_eq!(resolved_ascii.input_number_right_separator, " | ");
         assert_eq!(resolved_ascii.source_location_separator, "-> ");
+        assert_eq!(resolved_ascii.array_separator, ", ");
+        assert_eq!(resolved_ascii.hidden_fields_indicator, "...");
 
-        // Test UTF-8 mode through Punctuation::resolve
-        let resolved_utf8 = punctuation.resolve(AsciiMode::Off);
+        // Verify UTF-8 version of resolved punctuation
         assert_eq!(resolved_utf8.input_number_right_separator, " │ ");
         assert_eq!(resolved_utf8.source_location_separator, "→ ");
+        assert_eq!(resolved_utf8.array_separator, "· ");
+        assert_eq!(resolved_utf8.hidden_fields_indicator, "…");
 
         // Test that all fields are correctly resolved
         for (ascii_val, utf8_val) in [
