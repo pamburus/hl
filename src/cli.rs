@@ -317,7 +317,7 @@ pub struct Opt {
         env = "HL_ASCII",
         value_name = "WHEN",
         value_enum,
-        default_value_t = match config::global::get().ascii{
+        default_value_t = match config::global::get().ascii {
             settings::AsciiModeOpt::Auto => AsciiOption::Auto,
             settings::AsciiModeOpt::Never => AsciiOption::Never,
             settings::AsciiModeOpt::Always => AsciiOption::Always,
