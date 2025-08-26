@@ -41,7 +41,7 @@ use crate::{
     model::{Filter, Parser, ParserSettings, RawRecord, Record, RecordFilter, RecordWithSourceConstructor},
     query::Query,
     scanning::{BufFactory, Delimit, Delimiter, Scanner, SearchExt, Segment, SegmentBuf, SegmentBufFactory},
-    settings::{AsciiMode, FieldShowOption, Fields, Formatting, InputInfo},
+    settings::{AsciiMode, FieldShowOption, Fields, Formatting, InputInfo, Punctuation},
     theme::{Element, StylingPush, Theme},
     timezone::Tz,
     vfs::LocalFileSystem,
@@ -207,6 +207,7 @@ impl UnixTimestampUnit {
 
 pub struct App {
     options: Options,
+    punctuation: Arc<Punctuation<String>>,
 }
 
 pub type Output = dyn Write + Send + Sync;
@@ -217,7 +218,8 @@ impl App {
             options.input_info = InputInfo::None.into()
         }
         options.input_info = InputInfo::resolve(options.input_info.into());
-        Self { options }
+        let punctuation = options.formatting.punctuation.resolve(options.ascii).into();
+        Self { options, punctuation }
     }
 
     pub fn run(&self, inputs: Vec<InputHolder>, output: &mut Output) -> Result<()> {
@@ -721,6 +723,7 @@ impl App {
                     .with_always_show_level(
                         self.options.fields.settings.predefined.level.show == FieldShowOption::Always,
                     )
+                    .with_punctuation(self.punctuation.clone())
                     .build(),
             )
         }
@@ -747,7 +750,7 @@ impl App {
         }
 
         let num_width = format!("{}", badges.len()).len();
-        let opt = &self.options.formatting.punctuation.resolve(self.options.ascii);
+        let opt = &self.punctuation;
 
         if ii.contains(InputInfo::Compact) {
             let pl = common_prefix_len(&badges);

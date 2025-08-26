@@ -75,6 +75,7 @@ pub struct RecordFormatterBuilder {
     always_show_level: bool,
     fields: Option<Arc<IncludeExcludeKeyFilter>>,
     cfg: Option<Formatting>,
+    punctuation: Option<Arc<Punctuation<String>>>,
 }
 
 impl RecordFormatterBuilder {
@@ -146,10 +147,19 @@ impl RecordFormatterBuilder {
         }
     }
 
+    pub fn with_punctuation(self, value: Arc<Punctuation<String>>) -> Self {
+        Self {
+            punctuation: Some(value),
+            ..self
+        }
+    }
+
     pub fn build(self) -> RecordFormatter {
         let cfg = self.cfg.unwrap_or_default();
         let message_format = (&cfg, self.ascii).into();
-        let punctuation = cfg.punctuation.resolve(self.ascii);
+        let punctuation = self
+            .punctuation
+            .unwrap_or_else(|| cfg.punctuation.resolve(self.ascii).into());
         let ts_formatter = self.ts_formatter.unwrap_or_default();
         let ts_width = ts_formatter.max_length();
 
@@ -180,7 +190,7 @@ pub struct RecordFormatter {
     always_show_level: bool,
     fields: Arc<IncludeExcludeKeyFilter>,
     message_format: DynMessageFormat,
-    punctuation: Punctuation<String>,
+    punctuation: Arc<Punctuation<String>>,
 }
 
 impl RecordFormatter {
