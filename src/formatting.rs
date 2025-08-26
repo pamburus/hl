@@ -15,6 +15,10 @@ use crate::{
     theme::{Element, StylingPush, Theme},
 };
 
+// test imports
+#[cfg(test)]
+use crate::testing::Sample;
+
 // relative imports
 use string::{DynMessageFormat, Format, ValueFormatAuto};
 
@@ -175,6 +179,16 @@ impl RecordFormatterBuilder {
             fields: self.fields.unwrap_or_default(),
             message_format,
             punctuation,
+        }
+    }
+}
+
+#[cfg(test)]
+impl Sample for RecordFormatterBuilder {
+    fn sample() -> Self {
+        Self {
+            ascii: AsciiMode::On,
+            ..Default::default()
         }
     }
 }
@@ -1127,7 +1141,8 @@ mod tests {
     use crate::{
         datefmt::LinuxDateFormat,
         model::{Caller, RawObject, Record, RecordFields, RecordWithSourceConstructor},
-        settings::{AsciiMode, MessageFormat, MessageFormatting, Punctuation},
+        settings::{AsciiMode, MessageFormat, MessageFormatting},
+        testing::Sample,
         timestamp::Timestamp,
         timezone::Tz,
     };
@@ -1158,8 +1173,8 @@ mod tests {
     }
 
     fn formatter() -> RecordFormatterBuilder {
-        RecordFormatterBuilder::new()
-            .with_theme(crate::testing::theme())
+        RecordFormatterBuilder::sample()
+            .with_theme(Sample::sample())
             .with_timestamp_formatter(
                 DateTimeFormatter::new(
                     LinuxDateFormat::new("%y-%m-%d %T.%3N").compile(),
@@ -1172,7 +1187,7 @@ mod tests {
                 message: MessageFormatting {
                     format: MessageFormat::AutoQuoted,
                 },
-                punctuation: Punctuation::test_default(),
+                punctuation: Sample::sample(),
             })
     }
 
@@ -1845,8 +1860,8 @@ mod tests {
 
     #[test]
     fn test_ascii_mode() {
-        // Use record and formatting from testing module
-        let (rec, formatting) = crate::testing::ascii::record();
+        // Use testing samples for record and formatting
+        let (rec, formatting) = (Sample::sample(), Formatting::sample());
 
         // Create formatters with each ASCII mode but no theme (for no-color output)
         let formatter_ascii = RecordFormatterBuilder::new()
@@ -1878,7 +1893,7 @@ mod tests {
         let utf8_result = formatter_utf8.format_to_string(&rec);
 
         // Verify ASCII mode uses ASCII arrow
-        assert!(ascii_result.contains("-> "), "ASCII mode should use ASCII arrow");
+        assert!(ascii_result.contains("@ "), "ASCII mode should use ASCII arrow");
         // Also verify that it doesn't contain the Unicode arrow
         assert!(!ascii_result.contains("→ "), "ASCII mode should not use Unicode arrow");
 
@@ -1888,13 +1903,13 @@ mod tests {
         // UTF-8 mode should use Unicode arrow
         assert!(utf8_result.contains("→ "), "UTF-8 mode should use Unicode arrow");
         // Also verify that it doesn't contain the ASCII arrow
-        assert!(!utf8_result.contains("-> "), "UTF-8 mode should not use ASCII arrow");
+        assert!(!utf8_result.contains("@ "), "UTF-8 mode should not use ASCII arrow");
     }
 
     #[test]
     fn test_punctuation_with_ascii_mode() {
-        // Use record and formatting from testing module
-        let (_, formatting) = crate::testing::ascii::record();
+        // Use testing samples for formatting
+        let formatting = Formatting::sample();
 
         // Create formatters with different ASCII modes but no theme
         let ascii_formatter = RecordFormatterBuilder::new()
@@ -1922,14 +1937,14 @@ mod tests {
             .build();
 
         // Use test record with source location for testing source_location_separator
-        let rec = crate::testing::record_with_source();
+        let rec = Record::sample();
 
         // Format the record with both formatters
         let ascii_result = ascii_formatter.format_to_string(&rec);
         let utf8_result = utf8_formatter.format_to_string(&rec);
 
         // ASCII result should contain the ASCII arrow
-        assert!(ascii_result.contains("-> "), "ASCII result missing expected arrow");
+        assert!(ascii_result.contains("@ "), "ASCII result missing expected arrow");
 
         // UTF-8 result should contain the Unicode arrow
         assert!(utf8_result.contains("→ "), "UTF-8 result missing expected arrow");

@@ -14,6 +14,10 @@ use crate::{
     themecfg,
 };
 
+// test imports
+#[cfg(test)]
+use crate::testing::Sample;
+
 // ---
 
 pub use level::Level;
@@ -94,6 +98,13 @@ impl<S: Borrow<themecfg::Theme>> From<S> for Theme {
             packs,
             indicators: IndicatorPack::from(&s.indicators),
         }
+    }
+}
+
+#[cfg(test)]
+impl Sample for Arc<Theme> {
+    fn sample() -> Self {
+        Theme::from(themecfg::testing::theme().unwrap()).into()
     }
 }
 

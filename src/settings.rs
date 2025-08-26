@@ -21,6 +21,10 @@ use strum::{Display, IntoEnumIterator};
 use crate::level::{InfallibleLevel, Level};
 use crate::{error::Error, xerr::Suggestions};
 
+// test imports
+#[cfg(test)]
+use crate::testing::Sample;
+
 // sub-modules
 pub mod error;
 
@@ -371,6 +375,19 @@ pub struct Formatting {
     pub punctuation: Punctuation,
 }
 
+#[cfg(test)]
+impl Sample for Formatting {
+    fn sample() -> Self {
+        Self {
+            flatten: None,
+            message: MessageFormatting {
+                format: MessageFormat::AutoQuoted,
+            },
+            punctuation: Punctuation::sample(),
+        }
+    }
+}
+
 // ---
 
 #[derive(Clone, Debug, Default, Deserialize, PartialEq, Eq)]
@@ -486,10 +503,35 @@ impl Default for Punctuation {
     }
 }
 
-impl Punctuation {
-    #[cfg(test)]
-    pub fn test_default() -> Self {
-        crate::testing::settings::punctuation()
+#[cfg(test)]
+impl Sample for Punctuation {
+    fn sample() -> Self {
+        Self {
+            logger_name_separator: ":".into(),
+            field_key_value_separator: "=".into(),
+            string_opening_quote: "'".into(),
+            string_closing_quote: "'".into(),
+            source_location_separator: DisplayVariant::Selective {
+                ascii: "@ ".to_string(),
+                utf8: "→ ".to_string(),
+            },
+            caller_name_file_separator: " :: ".into(),
+            hidden_fields_indicator: " ...".into(),
+            level_left_separator: "|".into(),
+            level_right_separator: "|".into(),
+            input_number_prefix: "#".into(),
+            input_number_left_separator: "".into(),
+            input_number_right_separator: DisplayVariant::Selective {
+                ascii: " | ".to_string(),
+                utf8: " │ ".to_string(),
+            },
+            input_name_left_separator: "".into(),
+            input_name_right_separator: " | ".into(),
+            input_name_clipping: "..".into(),
+            input_name_common_part: "..".into(),
+            array_separator: ", ".into(),
+            message_delimiter: "::".into(),
+        }
     }
 }
 
@@ -798,7 +840,7 @@ mod tests {
     #[test]
     fn test_punctuation_resolve() {
         // Use test_default instead of Default::default to avoid dependency on default config
-        let mut punctuation = Punctuation::test_default();
+        let mut punctuation = Punctuation::sample();
 
         // Set up selective variants for multiple punctuation elements
         punctuation.input_number_right_separator = DisplayVariant::Selective {

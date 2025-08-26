@@ -34,6 +34,10 @@ use crate::{
     types::FieldKind,
 };
 
+// test imports
+#[cfg(test)]
+use crate::testing::Sample;
+
 // ---
 
 pub use level::Level;
@@ -346,6 +350,17 @@ impl<'a> Record<'a> {
             caller: Default::default(),
             fields: RecordFields::with_capacity(capacity),
             predefined: heapless::Vec::new(),
+        }
+    }
+}
+
+#[cfg(test)]
+impl Sample for Record<'static> {
+    fn sample() -> Self {
+        Self {
+            message: Some(RawValue::String(EncodedString::raw("test message"))),
+            caller: Caller::with_name("test-caller"),
+            ..Default::default()
         }
     }
 }

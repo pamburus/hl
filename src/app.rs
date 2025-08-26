@@ -47,6 +47,10 @@ use crate::{
     vfs::LocalFileSystem,
 };
 
+// test imports
+#[cfg(test)]
+use crate::testing::Sample;
+
 // TODO: merge Options to Settings and replace Options with Settings.
 
 // ---
@@ -1131,7 +1135,6 @@ mod tests {
         level::{InfallibleLevel, Level},
         model::FieldFilterSet,
         settings::{self, AsciiMode, DisplayVariant, MessageFormat, MessageFormatting},
-        testing,
     };
 
     #[test]
@@ -1521,8 +1524,8 @@ mod tests {
 
     #[test]
     fn test_ascii_mode_handling() {
-        // Use record and formatting from testing module
-        let (record, formatting) = crate::testing::ascii::record();
+        // Use testing samples for record and formatting
+        let (record, formatting) = (Sample::sample(), Formatting::sample());
 
         // Create formatters with each ASCII mode but no theme (for no-color output)
         let formatter_ascii = RecordFormatterBuilder::new()
@@ -1560,12 +1563,12 @@ mod tests {
         let result_utf8 = String::from_utf8(buf_utf8).unwrap();
 
         // Verify that the ASCII mode uses ASCII arrows
-        assert!(result_ascii.contains("-> "), "ASCII mode should use ASCII arrow");
+        assert!(result_ascii.contains("@ "), "ASCII mode should use ASCII '@'");
         assert!(!result_ascii.contains("→ "), "ASCII mode should not use Unicode arrow");
 
         // Verify that the UTF-8 mode uses Unicode arrows
         assert!(result_utf8.contains("→ "), "UTF-8 mode should use Unicode arrow");
-        assert!(!result_utf8.contains("-> "), "UTF-8 mode should not use ASCII arrow");
+        assert!(!result_utf8.contains("@ "), "UTF-8 mode should not use ASCII '@'");
 
         // The outputs should be different
         assert_ne!(result_ascii, result_utf8);
@@ -1593,7 +1596,7 @@ mod tests {
         options_ascii.ascii = AsciiMode::On;
 
         // Create formatting with selective variants for ASCII mode testing
-        let mut formatting = crate::testing::settings::formatting();
+        let mut formatting = Formatting::sample();
         formatting.punctuation.input_name_right_separator = DisplayVariant::Selective {
             ascii: " | ".to_string(),
             utf8: " │ ".to_string(),
@@ -1644,6 +1647,6 @@ mod tests {
     }
 
     fn theme() -> Arc<Theme> {
-        testing::theme()
+        Sample::sample()
     }
 }
