@@ -502,10 +502,11 @@ pub enum AsciiModeOpt {
     Never,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Copy)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Copy)]
 pub enum AsciiMode {
-    On,
+    #[default]
     Off,
+    On,
 }
 
 impl AsciiModeOpt {

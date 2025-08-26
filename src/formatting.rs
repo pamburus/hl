@@ -63,44 +63,35 @@ impl RecordWithSourceFormatter for NoOpRecordWithSourceFormatter {
 
 // ---
 
+#[derive(Default, Clone)]
 pub struct RecordFormatterBuilder {
-    theme: Arc<Theme>,
-    unescape_fields: bool,
-    ts_formatter: DateTimeFormatter,
+    theme: Option<Arc<Theme>>,
+    raw_fields: bool,
+    ts_formatter: Option<Arc<DateTimeFormatter>>,
     hide_empty_fields: bool,
     flatten: bool,
     ascii: AsciiMode,
     always_show_time: bool,
     always_show_level: bool,
-    fields: Arc<IncludeExcludeKeyFilter>,
-    cfg: Formatting,
+    fields: Option<Arc<IncludeExcludeKeyFilter>>,
+    cfg: Option<Formatting>,
 }
 
 impl RecordFormatterBuilder {
-    pub fn new(
-        theme: Arc<Theme>,
-        ts_formatter: DateTimeFormatter,
-        hide_empty_fields: bool,
-        fields: Arc<IncludeExcludeKeyFilter>,
-        cfg: Formatting,
-    ) -> Self {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn with_raw_fields(self, enabled: bool) -> Self {
         Self {
-            theme,
-            unescape_fields: true,
-            ts_formatter,
-            hide_empty_fields,
-            flatten: false,
-            ascii: AsciiMode::Off,
-            always_show_time: false,
-            always_show_level: false,
-            fields,
-            cfg,
+            raw_fields: enabled,
+            ..self
         }
     }
 
-    pub fn with_field_unescaping(self, unescape_fields: bool) -> Self {
+    pub fn with_empty_fields_hiding(self, enabled: bool) -> Self {
         Self {
-            unescape_fields,
+            hide_empty_fields: enabled,
             ..self
         }
     }
@@ -127,36 +118,61 @@ impl RecordFormatterBuilder {
         }
     }
 
+    pub fn with_theme(self, value: Arc<Theme>) -> Self {
+        Self {
+            theme: Some(value),
+            ..self
+        }
+    }
+
+    pub fn with_timestamp_formatter(self, value: Arc<DateTimeFormatter>) -> Self {
+        Self {
+            ts_formatter: Some(value),
+            ..self
+        }
+    }
+
+    pub fn with_options(self, value: Formatting) -> Self {
+        Self {
+            cfg: Some(value),
+            ..self
+        }
+    }
+
+    pub fn with_field_filter(self, value: Arc<IncludeExcludeKeyFilter>) -> Self {
+        Self {
+            fields: Some(value),
+            ..self
+        }
+    }
+
     pub fn build(self) -> RecordFormatter {
-        let message_format = (&self.cfg, self.ascii).into();
-        let punctuation = self.cfg.punctuation.resolve(self.ascii);
-        let ts_width = self.ts_formatter.max_length();
+        let cfg = self.cfg.unwrap_or_default();
+        let message_format = (&cfg, self.ascii).into();
+        let punctuation = cfg.punctuation.resolve(self.ascii);
+        let ts_formatter = self.ts_formatter.unwrap_or_default();
+        let ts_width = ts_formatter.max_length();
 
         RecordFormatter {
-            theme: self.theme,
-            unescape_fields: self.unescape_fields,
-            ts_formatter: self.ts_formatter,
+            theme: self.theme.unwrap_or_default(),
+            unescape_fields: !self.raw_fields,
+            ts_formatter,
             ts_width,
             hide_empty_fields: self.hide_empty_fields,
             flatten: self.flatten,
             always_show_time: self.always_show_time,
             always_show_level: self.always_show_level,
-            fields: self.fields,
+            fields: self.fields.unwrap_or_default(),
             message_format,
             punctuation,
         }
-    }
-
-    #[cfg(test)]
-    fn with_theme(self, theme: Arc<Theme>) -> Self {
-        Self { theme, ..self }
     }
 }
 
 pub struct RecordFormatter {
     theme: Arc<Theme>,
     unescape_fields: bool,
-    ts_formatter: DateTimeFormatter,
+    ts_formatter: Arc<DateTimeFormatter>,
     ts_width: usize,
     hide_empty_fields: bool,
     flatten: bool,
@@ -1102,8 +1118,6 @@ mod tests {
         datefmt::LinuxDateFormat,
         model::{Caller, RawObject, Record, RecordFields, RecordWithSourceConstructor},
         settings::{AsciiMode, MessageFormat, MessageFormatting, Punctuation},
-        theme::Theme,
-        themecfg::testing,
         timestamp::Timestamp,
         timezone::Tz,
     };
@@ -1134,22 +1148,22 @@ mod tests {
     }
 
     fn formatter() -> RecordFormatterBuilder {
-        RecordFormatterBuilder::new(
-            Arc::new(Theme::from(testing::theme().unwrap())),
-            DateTimeFormatter::new(
-                LinuxDateFormat::new("%y-%m-%d %T.%3N").compile(),
-                Tz::FixedOffset(Utc.fix()),
-            ),
-            false,
-            Arc::new(IncludeExcludeKeyFilter::default()),
-            Formatting {
+        RecordFormatterBuilder::new()
+            .with_theme(crate::testing::theme())
+            .with_timestamp_formatter(
+                DateTimeFormatter::new(
+                    LinuxDateFormat::new("%y-%m-%d %T.%3N").compile(),
+                    Tz::FixedOffset(Utc.fix()),
+                )
+                .into(),
+            )
+            .with_options(Formatting {
                 flatten: None,
                 message: MessageFormatting {
                     format: MessageFormat::AutoQuoted,
                 },
                 punctuation: Punctuation::test_default(),
-            },
-        )
+            })
     }
 
     fn format(rec: &Record) -> String {
@@ -1590,8 +1604,8 @@ mod tests {
         b.entry("c").entry("d").include();
         let formatter = RecordFormatterBuilder {
             flatten: true,
-            theme: Default::default(),
-            fields: Arc::new(fields),
+            theme: Default::default(), // No theme for consistent test output
+            fields: Some(fields.into()),
             ..formatter()
         }
         .build();
@@ -1609,8 +1623,8 @@ mod tests {
         fields.entry("a.b.c").exclude();
         let formatter = RecordFormatterBuilder {
             flatten: true,
-            theme: Default::default(),
-            fields: Arc::new(fields),
+            theme: Default::default(), // No theme for consistent test output
+            fields: Some(fields.into()),
             ..formatter()
         }
         .build();
@@ -1628,8 +1642,8 @@ mod tests {
         b.entry("c").entry("d").include();
         let formatter = RecordFormatterBuilder {
             flatten: false,
-            theme: Default::default(),
-            fields: Arc::new(fields),
+            theme: Default::default(), // No theme for consistent test output
+            fields: Some(fields.into()),
             ..formatter()
         }
         .build();
@@ -1825,31 +1839,29 @@ mod tests {
         let (rec, formatting) = crate::testing::ascii::record();
 
         // Create formatters with each ASCII mode but no theme (for no-color output)
-        let formatter_ascii = RecordFormatterBuilder::new(
-            Default::default(), // No theme
-            DateTimeFormatter::new(
-                LinuxDateFormat::new("%b %d %T.%3N").compile(),
-                Tz::FixedOffset(Utc.fix()),
-            ),
-            false,
-            Arc::new(IncludeExcludeKeyFilter::default()),
-            formatting.clone(),
-        )
-        .with_ascii(AsciiMode::On)
-        .build();
+        let formatter_ascii = RecordFormatterBuilder::new()
+            .with_timestamp_formatter(
+                DateTimeFormatter::new(
+                    LinuxDateFormat::new("%b %d %T.%3N").compile(),
+                    Tz::FixedOffset(Utc.fix()),
+                )
+                .into(),
+            )
+            .with_options(formatting.clone())
+            .with_ascii(AsciiMode::On)
+            .build();
 
-        let formatter_utf8 = RecordFormatterBuilder::new(
-            Default::default(), // No theme
-            DateTimeFormatter::new(
-                LinuxDateFormat::new("%b %d %T.%3N").compile(),
-                Tz::FixedOffset(Utc.fix()),
-            ),
-            false,
-            Arc::new(IncludeExcludeKeyFilter::default()),
-            formatting,
-        )
-        .with_ascii(AsciiMode::Off)
-        .build();
+        let formatter_utf8 = RecordFormatterBuilder::new()
+            .with_timestamp_formatter(
+                DateTimeFormatter::new(
+                    LinuxDateFormat::new("%b %d %T.%3N").compile(),
+                    Tz::FixedOffset(Utc.fix()),
+                )
+                .into(),
+            )
+            .with_options(formatting)
+            .with_ascii(AsciiMode::Off)
+            .build();
 
         // Get formatted output from both formatters (already without ANSI codes)
         let ascii_result = formatter_ascii.format_to_string(&rec);
@@ -1875,31 +1887,29 @@ mod tests {
         let (_, formatting) = crate::testing::ascii::record();
 
         // Create formatters with different ASCII modes but no theme
-        let ascii_formatter = RecordFormatterBuilder::new(
-            Default::default(), // No theme = no colors
-            DateTimeFormatter::new(
-                LinuxDateFormat::new("%y-%m-%d %T.%3N").compile(),
-                Tz::FixedOffset(Utc.fix()),
-            ),
-            false,
-            Arc::new(IncludeExcludeKeyFilter::default()),
-            formatting.clone(),
-        )
-        .with_ascii(AsciiMode::On)
-        .build();
+        let ascii_formatter = RecordFormatterBuilder::new()
+            .with_timestamp_formatter(
+                DateTimeFormatter::new(
+                    LinuxDateFormat::new("%y-%m-%d %T.%3N").compile(),
+                    Tz::FixedOffset(Utc.fix()),
+                )
+                .into(),
+            )
+            .with_options(formatting.clone())
+            .with_ascii(AsciiMode::On)
+            .build();
 
-        let utf8_formatter = RecordFormatterBuilder::new(
-            Default::default(), // No theme = no colors
-            DateTimeFormatter::new(
-                LinuxDateFormat::new("%y-%m-%d %T.%3N").compile(),
-                Tz::FixedOffset(Utc.fix()),
-            ),
-            false,
-            Arc::new(IncludeExcludeKeyFilter::default()),
-            formatting,
-        )
-        .with_ascii(AsciiMode::Off)
-        .build();
+        let utf8_formatter = RecordFormatterBuilder::new()
+            .with_timestamp_formatter(
+                DateTimeFormatter::new(
+                    LinuxDateFormat::new("%y-%m-%d %T.%3N").compile(),
+                    Tz::FixedOffset(Utc.fix()),
+                )
+                .into(),
+            )
+            .with_options(formatting)
+            .with_ascii(AsciiMode::Off)
+            .build();
 
         // Use test record with source location for testing source_location_separator
         let rec = crate::testing::record_with_source();

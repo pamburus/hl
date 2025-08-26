@@ -3,8 +3,11 @@
 use crate::{
     model::{Caller, RawValue, Record},
     settings::{DisplayVariant, Formatting, MessageFormat, MessageFormatting},
+    theme::Theme,
+    themecfg,
 };
 use encstr::EncodedString;
+use std::sync::Arc;
 
 /// Creates a basic test record with stable properties for testing.
 ///
@@ -26,6 +29,11 @@ pub fn record_with_source() -> Record<'static> {
     let mut rec = record();
     rec.caller = Caller::with_file_line("test_file.rs", "42");
     rec
+}
+
+/// Returns a new Arc-wrapped theme from the test theme configuration
+pub fn theme() -> Arc<Theme> {
+    Arc::new(Theme::from(themecfg::testing::theme().unwrap()))
 }
 
 /// Test settings and utilities for creating stable test configurations.

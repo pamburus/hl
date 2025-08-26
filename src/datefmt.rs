@@ -58,6 +58,15 @@ impl DateTimeFormatter {
     }
 }
 
+impl Default for DateTimeFormatter {
+    fn default() -> Self {
+        Self {
+            format: LinuxDateFormat::new(b"%Y-%m-%d %H:%M:%S").compile(),
+            tz: Tz::IANA(chrono_tz::UTC),
+        }
+    }
+}
+
 // ---
 
 #[derive(EnumSetType, Debug)]
@@ -1090,6 +1099,21 @@ mod tests {
         let mut buf = Vec::new();
         format_date(&mut buf, dt, &format(fmt));
         String::from_utf8(buf).unwrap()
+    }
+
+    #[test]
+    fn test_default_formatter() {
+        // Test the Default implementation for DateTimeFormatter
+        let formatter = DateTimeFormatter::default();
+
+        // Verify the formatter can format dates correctly
+        let dt = utc(2023, 5, 15, 14, 30, 45).fixed_offset();
+        let mut buf = Vec::new();
+        formatter.format(&mut buf, dt);
+        let formatted = String::from_utf8(buf).unwrap();
+
+        // The default format is "%Y-%m-%d %H:%M:%S"
+        assert_eq!(formatted, "2023-05-15 14:30:45");
     }
 
     #[test]

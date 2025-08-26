@@ -706,19 +706,22 @@ impl App {
             Box::new(RawRecordFormatter {})
         } else {
             Box::new(
-                RecordFormatterBuilder::new(
-                    self.options.theme.clone(),
-                    DateTimeFormatter::new(self.options.time_format.clone(), self.options.time_zone),
-                    self.options.hide_empty_fields,
-                    self.options.fields.filter.clone(),
-                    self.options.formatting.clone(),
-                )
-                .with_field_unescaping(!self.options.raw_fields)
-                .with_flatten(self.options.flatten)
-                .with_ascii(self.options.ascii)
-                .with_always_show_time(self.options.fields.settings.predefined.time.show == FieldShowOption::Always)
-                .with_always_show_level(self.options.fields.settings.predefined.level.show == FieldShowOption::Always)
-                .build(),
+                RecordFormatterBuilder::new()
+                    .with_theme(self.options.theme.clone())
+                    .with_timestamp_formatter(
+                        DateTimeFormatter::new(self.options.time_format.clone(), self.options.time_zone).into(),
+                    )
+                    .with_empty_fields_hiding(self.options.hide_empty_fields)
+                    .with_field_filter(self.options.fields.filter.clone())
+                    .with_options(self.options.formatting.clone())
+                    .with_raw_fields(self.options.raw_fields)
+                    .with_flatten(self.options.flatten)
+                    .with_ascii(self.options.ascii)
+                    .with_always_show_time(self.options.fields.settings.predefined.time.show == FieldShowOption::Always)
+                    .with_always_show_level(
+                        self.options.fields.settings.predefined.level.show == FieldShowOption::Always,
+                    )
+                    .build(),
             )
         }
     }
@@ -1125,7 +1128,7 @@ mod tests {
         level::{InfallibleLevel, Level},
         model::FieldFilterSet,
         settings::{self, AsciiMode, DisplayVariant, MessageFormat, MessageFormatting},
-        themecfg::testing,
+        testing,
     };
 
     #[test]
@@ -1519,31 +1522,29 @@ mod tests {
         let (record, formatting) = crate::testing::ascii::record();
 
         // Create formatters with each ASCII mode but no theme (for no-color output)
-        let formatter_ascii = RecordFormatterBuilder::new(
-            Default::default(), // No theme = no colors
-            DateTimeFormatter::new(
-                LinuxDateFormat::new("%b %d %T.%3N").compile(),
-                Tz::FixedOffset(Utc.fix()),
-            ),
-            false,
-            Arc::new(IncludeExcludeKeyFilter::default()),
-            formatting.clone(),
-        )
-        .with_ascii(AsciiMode::On)
-        .build();
+        let formatter_ascii = RecordFormatterBuilder::new()
+            .with_timestamp_formatter(
+                DateTimeFormatter::new(
+                    LinuxDateFormat::new("%b %d %T.%3N").compile(),
+                    Tz::FixedOffset(Utc.fix()),
+                )
+                .into(),
+            )
+            .with_options(formatting.clone())
+            .with_ascii(AsciiMode::On)
+            .build();
 
-        let formatter_utf8 = RecordFormatterBuilder::new(
-            Default::default(), // No theme = no colors
-            DateTimeFormatter::new(
-                LinuxDateFormat::new("%b %d %T.%3N").compile(),
-                Tz::FixedOffset(Utc.fix()),
-            ),
-            false,
-            Arc::new(IncludeExcludeKeyFilter::default()),
-            formatting,
-        )
-        .with_ascii(AsciiMode::Off)
-        .build();
+        let formatter_utf8 = RecordFormatterBuilder::new()
+            .with_timestamp_formatter(
+                DateTimeFormatter::new(
+                    LinuxDateFormat::new("%b %d %T.%3N").compile(),
+                    Tz::FixedOffset(Utc.fix()),
+                )
+                .into(),
+            )
+            .with_options(formatting)
+            .with_ascii(AsciiMode::Off)
+            .build();
 
         // Test ASCII mode
         let mut buf_ascii = Vec::new();
@@ -1640,6 +1641,6 @@ mod tests {
     }
 
     fn theme() -> Arc<Theme> {
-        Arc::new(Theme::from(testing::theme().unwrap()))
+        testing::theme()
     }
 }
