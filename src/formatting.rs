@@ -160,7 +160,6 @@ impl RecordFormatterBuilder {
 
     pub fn build(self) -> RecordFormatter {
         let cfg = self.cfg.unwrap_or_default();
-        let message_format = (&cfg, self.ascii).into();
         let punctuation = self
             .punctuation
             .unwrap_or_else(|| cfg.punctuation.resolve(self.ascii).into());
@@ -177,7 +176,7 @@ impl RecordFormatterBuilder {
             always_show_time: self.always_show_time,
             always_show_level: self.always_show_level,
             fields: self.fields.unwrap_or_default(),
-            message_format,
+            message_format: DynMessageFormat::new(&cfg, self.ascii),
             punctuation,
         }
     }
@@ -719,20 +718,20 @@ pub mod string {
         pub delimited: bool,
     }
 
+    impl DynMessageFormat {
+        pub fn new(formatting: &super::Formatting, ascii: super::AsciiMode) -> Self {
+            new_message_format(
+                formatting.message.format,
+                &formatting.punctuation.message_delimiter.resolve(ascii),
+            )
+        }
+    }
+
     impl std::ops::Deref for DynMessageFormat {
         type Target = DynFormat;
 
         fn deref(&self) -> &Self::Target {
             &self.format
-        }
-    }
-
-    impl From<(&super::Formatting, super::AsciiMode)> for DynMessageFormat {
-        fn from((formatting, ascii): (&super::Formatting, super::AsciiMode)) -> Self {
-            new_message_format(
-                formatting.message.format,
-                &formatting.punctuation.message_delimiter.resolve(ascii),
-            )
         }
     }
 
