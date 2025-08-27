@@ -432,30 +432,30 @@ pub enum FieldShowOption {
 
 #[derive(Debug, Deserialize, Clone, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
-pub struct Punctuation<T: Clone + PartialEq + Eq = DisplayVariant> {
-    pub logger_name_separator: T,
-    pub field_key_value_separator: T,
-    pub string_opening_quote: T,
-    pub string_closing_quote: T,
-    pub source_location_separator: T,
-    pub caller_name_file_separator: T,
-    pub hidden_fields_indicator: T,
-    pub level_left_separator: T,
-    pub level_right_separator: T,
-    pub input_number_prefix: T,
-    pub input_number_left_separator: T,
-    pub input_number_right_separator: T,
-    pub input_name_left_separator: T,
-    pub input_name_right_separator: T,
-    pub input_name_clipping: T,
-    pub input_name_common_part: T,
-    pub array_separator: T,
-    pub message_delimiter: T,
+pub struct Punctuation {
+    pub logger_name_separator: DisplayVariant,
+    pub field_key_value_separator: DisplayVariant,
+    pub string_opening_quote: DisplayVariant,
+    pub string_closing_quote: DisplayVariant,
+    pub source_location_separator: DisplayVariant,
+    pub caller_name_file_separator: DisplayVariant,
+    pub hidden_fields_indicator: DisplayVariant,
+    pub level_left_separator: DisplayVariant,
+    pub level_right_separator: DisplayVariant,
+    pub input_number_prefix: DisplayVariant,
+    pub input_number_left_separator: DisplayVariant,
+    pub input_number_right_separator: DisplayVariant,
+    pub input_name_left_separator: DisplayVariant,
+    pub input_name_right_separator: DisplayVariant,
+    pub input_name_clipping: DisplayVariant,
+    pub input_name_common_part: DisplayVariant,
+    pub array_separator: DisplayVariant,
+    pub message_delimiter: DisplayVariant,
 }
 
 impl Punctuation {
-    pub fn resolve(&self, mode: AsciiMode) -> Punctuation<String> {
-        Punctuation {
+    pub fn resolve(&self, mode: AsciiMode) -> ResolvedPunctuation {
+        ResolvedPunctuation {
             logger_name_separator: self.logger_name_separator.resolve(mode).to_owned(),
             field_key_value_separator: self.field_key_value_separator.resolve(mode).to_owned(),
             string_opening_quote: self.string_opening_quote.resolve(mode).to_owned(),
@@ -533,6 +533,28 @@ impl Sample for Punctuation {
             message_delimiter: "::".into(),
         }
     }
+}
+
+#[derive(Clone)]
+pub struct ResolvedPunctuation {
+    pub logger_name_separator: String,
+    pub field_key_value_separator: String,
+    pub string_opening_quote: String,
+    pub string_closing_quote: String,
+    pub source_location_separator: String,
+    pub caller_name_file_separator: String,
+    pub hidden_fields_indicator: String,
+    pub level_left_separator: String,
+    pub level_right_separator: String,
+    pub input_number_prefix: String,
+    pub input_number_left_separator: String,
+    pub input_number_right_separator: String,
+    pub input_name_left_separator: String,
+    pub input_name_right_separator: String,
+    pub input_name_clipping: String,
+    pub input_name_common_part: String,
+    pub array_separator: String,
+    pub message_delimiter: String,
 }
 
 #[derive(Default, Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Copy)]

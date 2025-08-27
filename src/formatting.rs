@@ -11,7 +11,7 @@ use crate::{
     filtering::IncludeExcludeSetting,
     fmtx::{OptimizedBuf, Push, aligned_left, centered},
     model::{self, Level, RawValue},
-    settings::{AsciiMode, Formatting, Punctuation},
+    settings::{AsciiMode, Formatting, ResolvedPunctuation},
     theme::{Element, StylingPush, Theme},
 };
 
@@ -79,7 +79,7 @@ pub struct RecordFormatterBuilder {
     always_show_level: bool,
     fields: Option<Arc<IncludeExcludeKeyFilter>>,
     cfg: Option<Formatting>,
-    punctuation: Option<Arc<Punctuation<String>>>,
+    punctuation: Option<Arc<ResolvedPunctuation>>,
 }
 
 impl RecordFormatterBuilder {
@@ -151,7 +151,7 @@ impl RecordFormatterBuilder {
         }
     }
 
-    pub fn with_punctuation(self, value: Arc<Punctuation<String>>) -> Self {
+    pub fn with_punctuation(self, value: Arc<ResolvedPunctuation>) -> Self {
         Self {
             punctuation: Some(value),
             ..self
@@ -203,7 +203,7 @@ pub struct RecordFormatter {
     always_show_level: bool,
     fields: Arc<IncludeExcludeKeyFilter>,
     message_format: DynMessageFormat,
-    punctuation: Arc<Punctuation<String>>,
+    punctuation: Arc<ResolvedPunctuation>,
 }
 
 impl RecordFormatter {

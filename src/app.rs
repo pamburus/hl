@@ -41,7 +41,7 @@ use crate::{
     model::{Filter, Parser, ParserSettings, RawRecord, Record, RecordFilter, RecordWithSourceConstructor},
     query::Query,
     scanning::{BufFactory, Delimit, Delimiter, Scanner, SearchExt, Segment, SegmentBuf, SegmentBufFactory},
-    settings::{AsciiMode, FieldShowOption, Fields, Formatting, InputInfo, Punctuation},
+    settings::{AsciiMode, FieldShowOption, Fields, Formatting, InputInfo, ResolvedPunctuation},
     theme::{Element, StylingPush, Theme},
     timezone::Tz,
     vfs::LocalFileSystem,
@@ -211,7 +211,7 @@ impl UnixTimestampUnit {
 
 pub struct App {
     options: Options,
-    punctuation: Arc<Punctuation<String>>,
+    punctuation: Arc<ResolvedPunctuation>,
 }
 
 pub type Output = dyn Write + Send + Sync;
