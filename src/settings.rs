@@ -430,6 +430,14 @@ pub enum FieldShowOption {
 
 // ---
 
+/// Configuration for various punctuation marks used in log formatting.
+///
+/// This struct defines how various separators, quotes, and indicators appear
+/// in the formatted output. Many of these can be configured to display differently
+/// when in ASCII mode versus UTF-8 mode through the use of `DisplayVariant`.
+///
+/// The configuration is used to create a `ResolvedPunctuation` instance when
+/// the ASCII mode is determined at runtime.
 #[derive(Debug, Deserialize, Clone, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub struct Punctuation {
@@ -535,6 +543,9 @@ impl Sample for Punctuation {
     }
 }
 
+/// A structure that contains resolved punctuation marks for formatting log output.
+/// This structure is created by resolving the `Punctuation` configuration
+/// according to the current ASCII mode setting.
 #[derive(Clone)]
 pub struct ResolvedPunctuation {
     pub logger_name_separator: String,
@@ -557,6 +568,17 @@ pub struct ResolvedPunctuation {
     pub message_delimiter: String,
 }
 
+/// Configuration option for ASCII mode.
+///
+/// This enum allows users to control whether the output should use ASCII-only characters
+/// or allow UTF-8 characters:
+///
+/// - `Auto`: Automatically choose based on terminal capabilities (default)
+/// - `Always`: Always use ASCII-only characters
+/// - `Never`: Always allow UTF-8 characters
+///
+/// When set to `Auto`, the program will detect whether the terminal supports UTF-8
+/// and choose the appropriate mode automatically.
 #[derive(Default, Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Copy)]
 #[serde(rename_all = "kebab-case")]
 pub enum AsciiModeOpt {
@@ -564,13 +586,6 @@ pub enum AsciiModeOpt {
     Auto,
     Always,
     Never,
-}
-
-#[derive(Default, Debug, Clone, PartialEq, Eq, Copy)]
-pub enum AsciiMode {
-    #[default]
-    Off,
-    On,
 }
 
 impl AsciiModeOpt {
@@ -589,6 +604,42 @@ impl AsciiModeOpt {
     }
 }
 
+/// Controls whether ASCII-only characters should be used in formatted output.
+///
+/// The formatter can produce output in either ASCII-only mode or with full UTF-8 characters,
+/// depending on terminal capabilities and user preferences.
+///
+/// * `Off` - Use full UTF-8 character set (default)
+/// * `On` - Use ASCII-only characters
+///
+/// This mode is usually determined by resolving an `AsciiModeOpt` configuration
+/// setting against the detected terminal capabilities.
+#[derive(Default, Debug, Clone, PartialEq, Eq, Copy)]
+pub enum AsciiMode {
+    #[default]
+    Off,
+    On,
+}
+
+/// A configuration type that allows for different display styles in ASCII and UTF-8 modes.
+///
+/// This type can either contain a single string to be used in all contexts (`Uniform`),
+/// or separate strings for ASCII and UTF-8 output modes (`Selective`).
+///
+/// # Examples
+///
+/// ```
+/// use hl::settings::DisplayVariant;
+///
+/// // Uniform variant - same in both modes
+/// let separator = DisplayVariant::Uniform(" | ".to_string());
+///
+/// // Selective variant - different representation in ASCII vs UTF-8 mode
+/// let separator = DisplayVariant::Selective {
+///     ascii: " | ".to_string(),
+///     utf8: " │ ".to_string(),
+/// };
+/// ```
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 #[serde(untagged)]
