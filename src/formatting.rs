@@ -68,7 +68,7 @@ pub type DynRecordWithSourceFormatter = Arc<dyn RecordWithSourceFormatter + Send
 pub struct RecordFormatterBuilder {
     theme: Option<Arc<Theme>>,
     raw_fields: bool,
-    ts_formatter: Option<Arc<DateTimeFormatter>>,
+    ts_formatter: Option<DateTimeFormatter>,
     hide_empty_fields: bool,
     flatten: bool,
     ascii: AsciiMode,
@@ -127,7 +127,7 @@ impl RecordFormatterBuilder {
         }
     }
 
-    pub fn with_timestamp_formatter(self, value: Arc<DateTimeFormatter>) -> Self {
+    pub fn with_timestamp_formatter(self, value: DateTimeFormatter) -> Self {
         Self {
             ts_formatter: Some(value),
             ..self
@@ -192,7 +192,7 @@ impl Sample for RecordFormatterBuilder {
 pub struct RecordFormatter {
     theme: Arc<Theme>,
     unescape_fields: bool,
-    ts_formatter: Arc<DateTimeFormatter>,
+    ts_formatter: DateTimeFormatter,
     ts_width: usize,
     hide_empty_fields: bool,
     flatten: bool,

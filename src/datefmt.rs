@@ -16,6 +16,7 @@ use crate::timezone::Tz;
 
 // ---
 
+#[derive(Clone)]
 pub struct DateTimeFormatter {
     format: Vec<Item>,
     tz: Tz,
