@@ -1,5 +1,5 @@
 // std imports
-use std::sync::Arc;
+use std::{ops::Deref, sync::Arc};
 
 // workspace imports
 use encstr::EncodedString;
@@ -41,14 +41,7 @@ impl RecordWithSourceFormatter for RawRecordFormatter {
     }
 }
 
-impl<T: RecordWithSourceFormatter> RecordWithSourceFormatter for &T {
-    #[inline(always)]
-    fn format_record(&self, buf: &mut Buf, rec: model::RecordWithSource) {
-        (**self).format_record(buf, rec)
-    }
-}
-
-impl RecordWithSourceFormatter for Box<dyn RecordWithSourceFormatter> {
+impl<T: Deref<Target = U> + ?Sized, U: RecordWithSourceFormatter + ?Sized> RecordWithSourceFormatter for T {
     #[inline(always)]
     fn format_record(&self, buf: &mut Buf, rec: model::RecordWithSource) {
         (**self).format_record(buf, rec)
@@ -64,6 +57,10 @@ impl RecordWithSourceFormatter for NoOpRecordWithSourceFormatter {
     #[inline(always)]
     fn format_record(&self, _: &mut Buf, _: model::RecordWithSource) {}
 }
+
+// ---
+
+pub type DynRecordWithSourceFormatter = Arc<dyn RecordWithSourceFormatter + Send + Sync>;
 
 // ---
 
@@ -710,7 +707,7 @@ pub mod string {
         }
     }
 
-    pub type DynFormat = Arc<dyn Format>;
+    pub type DynFormat = Arc<dyn Format + Send + Sync>;
 
     #[derive(Clone)]
     pub struct DynMessageFormat {

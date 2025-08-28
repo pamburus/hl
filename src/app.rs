@@ -34,7 +34,7 @@ use crate::{
     datefmt::{DateTimeFormat, DateTimeFormatter},
     error::*,
     fmtx::aligned_left,
-    formatting::{RawRecordFormatter, RecordFormatterBuilder, RecordWithSourceFormatter},
+    formatting::{DynRecordWithSourceFormatter, RawRecordFormatter, RecordFormatterBuilder, RecordWithSourceFormatter},
     fsmon::{self, EventKind},
     index::{Indexer, IndexerSettings, Timestamp},
     input::{BlockLine, Input, InputHolder, InputReference},
@@ -212,6 +212,7 @@ impl UnixTimestampUnit {
 pub struct App {
     options: Options,
     punctuation: Arc<ResolvedPunctuation>,
+    formatter: DynRecordWithSourceFormatter,
 }
 
 pub type Output = dyn Write + Send + Sync;
@@ -222,8 +223,16 @@ impl App {
             options.input_info = InputInfo::None.into()
         }
         options.input_info = InputInfo::resolve(options.input_info.into());
-        let punctuation = options.formatting.punctuation.resolve(options.ascii).into();
-        Self { options, punctuation }
+
+        let punctuation = Arc::new(options.formatting.punctuation.resolve(options.ascii));
+
+        let formatter = Self::new_formatter(&options, punctuation.clone());
+
+        Self {
+            options,
+            punctuation,
+            formatter,
+        }
     }
 
     pub fn run(&self, inputs: Vec<InputHolder>, output: &mut Output) -> Result<()> {
@@ -707,32 +716,6 @@ impl App {
         ))
     }
 
-    fn formatter(&self) -> Box<dyn RecordWithSourceFormatter> {
-        if self.options.raw {
-            Box::new(RawRecordFormatter {})
-        } else {
-            Box::new(
-                RecordFormatterBuilder::new()
-                    .with_theme(self.options.theme.clone())
-                    .with_timestamp_formatter(
-                        DateTimeFormatter::new(self.options.time_format.clone(), self.options.time_zone).into(),
-                    )
-                    .with_empty_fields_hiding(self.options.hide_empty_fields)
-                    .with_field_filter(self.options.fields.filter.clone())
-                    .with_options(self.options.formatting.clone())
-                    .with_raw_fields(self.options.raw_fields)
-                    .with_flatten(self.options.flatten)
-                    .with_ascii(self.options.ascii)
-                    .with_always_show_time(self.options.fields.settings.predefined.time.show == FieldShowOption::Always)
-                    .with_always_show_level(
-                        self.options.fields.settings.predefined.level.show == FieldShowOption::Always,
-                    )
-                    .with_punctuation(self.punctuation.clone())
-                    .build(),
-            )
-        }
-    }
-
     fn input_badges<'a, I: IntoIterator<Item = &'a InputReference>>(&self, inputs: I) -> Option<Vec<String>> {
         let name = |input: &InputReference| match input {
             InputReference::Stdin => "<stdin>".to_owned(),
@@ -841,7 +824,39 @@ impl App {
             input_format: self.options.input_format,
         };
 
-        SegmentProcessor::new(parser, self.formatter(), Query::from(&self.options.filter), options)
+        SegmentProcessor::new(
+            parser,
+            self.formatter.clone(),
+            Query::from(&self.options.filter),
+            options,
+        )
+    }
+
+    /// Creates a formatter based on the provided options.
+    ///
+    /// Returns either a RawRecordFormatter or a RecordFormatter depending on the options.
+    fn new_formatter(options: &Options, punctuation: Arc<ResolvedPunctuation>) -> DynRecordWithSourceFormatter {
+        if options.raw {
+            Arc::new(RawRecordFormatter {})
+        } else {
+            Arc::new(
+                RecordFormatterBuilder::new()
+                    .with_theme(options.theme.clone())
+                    .with_timestamp_formatter(
+                        DateTimeFormatter::new(options.time_format.clone(), options.time_zone).into(),
+                    )
+                    .with_empty_fields_hiding(options.hide_empty_fields)
+                    .with_field_filter(options.fields.filter.clone())
+                    .with_options(options.formatting.clone())
+                    .with_raw_fields(options.raw_fields)
+                    .with_flatten(options.flatten)
+                    .with_ascii(options.ascii)
+                    .with_always_show_time(options.fields.settings.predefined.time.show == FieldShowOption::Always)
+                    .with_always_show_level(options.fields.settings.predefined.level.show == FieldShowOption::Always)
+                    .with_punctuation(punctuation)
+                    .build(),
+            )
+        }
     }
 }
 
