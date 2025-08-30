@@ -1,5 +1,5 @@
 // std imports
-use std::{ops::Deref, sync::Arc};
+use std::sync::Arc;
 
 // workspace imports
 use encstr::EncodedString;
@@ -41,7 +41,14 @@ impl RecordWithSourceFormatter for RawRecordFormatter {
     }
 }
 
-impl<T: Deref<Target = U> + ?Sized, U: RecordWithSourceFormatter + ?Sized> RecordWithSourceFormatter for T {
+impl<T: RecordWithSourceFormatter + ?Sized> RecordWithSourceFormatter for Arc<T> {
+    #[inline(always)]
+    fn format_record(&self, buf: &mut Buf, rec: model::RecordWithSource) {
+        (**self).format_record(buf, rec)
+    }
+}
+
+impl<T: RecordWithSourceFormatter + ?Sized> RecordWithSourceFormatter for &T {
     #[inline(always)]
     fn format_record(&self, buf: &mut Buf, rec: model::RecordWithSource) {
         (**self).format_record(buf, rec)
