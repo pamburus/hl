@@ -1632,7 +1632,7 @@ mod tests {
         b.entry("c").entry("d").include();
         let formatter = RecordFormatterBuilder {
             flatten: true,
-            theme: Default::default(), // No theme for consistent test output
+            theme: Some(Default::default()), // No theme for consistent test output
             fields: Some(fields.into()),
             ..formatter()
         }
@@ -1651,7 +1651,7 @@ mod tests {
         fields.entry("a.b.c").exclude();
         let formatter = RecordFormatterBuilder {
             flatten: true,
-            theme: Default::default(), // No theme for consistent test output
+            theme: Some(Default::default()), // No theme for consistent test output
             fields: Some(fields.into()),
             ..formatter()
         }
@@ -1670,7 +1670,7 @@ mod tests {
         b.entry("c").entry("d").include();
         let formatter = RecordFormatterBuilder {
             flatten: false,
-            theme: Default::default(), // No theme for consistent test output
+            theme: Some(Default::default()), // No theme for consistent test output
             fields: Some(fields.into()),
             ..formatter()
         }
