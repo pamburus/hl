@@ -1625,43 +1625,40 @@ mod tests {
         let app_ascii = App::new(options_ascii);
 
         // Setup app with ASCII mode OFF (Unicode)
-        let mut options_utf8 = options();
-        options_utf8.input_info = InputInfo::Full.into();
-        options_utf8.ascii = AsciiMode::Off;
-        options_utf8.formatting = formatting;
+        let mut options_unicode = options();
+        options_unicode.input_info = InputInfo::Full.into();
+        options_unicode.ascii = AsciiMode::Off;
+        options_unicode.formatting = formatting;
 
-        let app_utf8 = App::new(options_utf8);
+        let app_unicode = App::new(options_unicode);
 
         // Get badges with ASCII mode ON
         let badges_ascii = app_ascii.input_badges(inputs.iter());
         assert!(badges_ascii.is_some(), "Should produce badges");
-        let badges_ascii = badges_ascii.unwrap();
-        println!("ASCII badges: {:?}", badges_ascii);
+        let badges_a = badges_ascii.unwrap();
+        println!("ASCII badges: {:?}", badges_a);
 
         // Get badges with ASCII mode OFF (Unicode)
-        let badges_utf8 = app_utf8.input_badges(inputs.iter());
+        let badges_utf8 = app_unicode.input_badges(inputs.iter());
         assert!(badges_utf8.is_some(), "Should produce badges");
-        let badges_utf8 = badges_utf8.unwrap();
-        println!("Unicode badges: {:?}", badges_utf8);
+        let badges_u = badges_utf8.unwrap();
+        println!("Unicode badges: {:?}", badges_u);
 
         // Check that we're using ASCII separator in ASCII mode
-        for badge in badges_ascii.iter() {
+        for badge in badges_a.iter() {
             assert!(badge.contains(" | "), "ASCII mode should use ASCII separator");
             assert!(!badge.contains(" │ "), "ASCII mode should not use Unicode separator");
         }
 
         // Check that we're using Unicode separator in Unicode mode
-        for badge in badges_utf8.iter() {
+        for badge in badges_u.iter() {
             assert!(badge.contains(" │ "), "Unicode mode should use Unicode separator");
             // Check that there are no ASCII separators (should be all replaced)
             assert!(!badge.contains(" | "), "Unicode mode should not use ASCII separator");
         }
 
         // Check that the outputs are different
-        assert_ne!(
-            badges_ascii, badges_utf8,
-            "ASCII and Unicode badges should be different"
-        );
+        assert_ne!(badges_a, badges_u, "ASCII and Unicode badges should be different");
     }
 
     fn theme() -> Arc<Theme> {
