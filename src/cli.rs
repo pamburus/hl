@@ -14,7 +14,7 @@ use crate::{
     config,
     error::*,
     level::{LevelValueParser, RelaxedLevel},
-    settings::{self, InputInfo},
+    settings::{self, AsciiModeOpt, InputInfo},
     themecfg,
 };
 use enumset_ext::convert::str::EnumSet;
@@ -309,6 +309,22 @@ pub struct Opt {
     )]
     pub input_info: InputInfoSet,
 
+    /// Controls whether to restrict punctuation to ASCII characters only.
+    ///
+    /// When enabled, unicode punctuation (like fancy quotes) will be replaced with ASCII equivalents.
+    #[arg(
+        long,
+        env = "HL_ASCII",
+        value_name = "WHEN",
+        value_enum,
+        default_value_t = AsciiOption::from(config::global::get().ascii),
+        default_missing_value = "always",
+        num_args = 0..=1,
+        overrides_with = "ascii",
+        help_heading = heading::OUTPUT
+    )]
+    pub ascii: AsciiOption,
+
     /// Output file.
     #[arg(long, short = 'o', overrides_with = "output", value_name = "FILE", help_heading = heading::OUTPUT)]
     pub output: Option<String>,
@@ -462,6 +478,33 @@ pub enum FlattenOption {
     Always,
 }
 
+#[derive(ValueEnum, Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AsciiOption {
+    Auto,
+    Never,
+    Always,
+}
+
+impl From<AsciiModeOpt> for AsciiOption {
+    fn from(value: AsciiModeOpt) -> Self {
+        match value {
+            AsciiModeOpt::Auto => Self::Auto,
+            AsciiModeOpt::Never => Self::Never,
+            AsciiModeOpt::Always => Self::Always,
+        }
+    }
+}
+
+impl From<AsciiOption> for AsciiModeOpt {
+    fn from(value: AsciiOption) -> Self {
+        match value {
+            AsciiOption::Auto => Self::Auto,
+            AsciiOption::Never => Self::Never,
+            AsciiOption::Always => Self::Always,
+        }
+    }
+}
+
 pub type InputInfoSet = EnumSet<InputInfo>;
 pub type ThemeTagSet = EnumSet<themecfg::Tag>;
 
@@ -538,5 +581,38 @@ mod tests {
 
         let res = serde_json::from_str::<InputInfoSet>(r#"12"#);
         assert!(res.is_err());
+    }
+
+    #[test]
+    fn test_ascii_option() {
+        // Test conversion from AsciiOption to AsciiModeOpt
+        assert_eq!(AsciiModeOpt::from(AsciiOption::Auto), AsciiModeOpt::Auto);
+        assert_eq!(AsciiModeOpt::from(AsciiOption::Never), AsciiModeOpt::Never);
+        assert_eq!(AsciiModeOpt::from(AsciiOption::Always), AsciiModeOpt::Always);
+
+        // Verify all options are covered for AsciiOption to AsciiModeOpt
+        let options = [AsciiOption::Auto, AsciiOption::Never, AsciiOption::Always];
+        for opt in &options {
+            match opt {
+                AsciiOption::Auto => assert_eq!(AsciiModeOpt::from(*opt), AsciiModeOpt::Auto),
+                AsciiOption::Never => assert_eq!(AsciiModeOpt::from(*opt), AsciiModeOpt::Never),
+                AsciiOption::Always => assert_eq!(AsciiModeOpt::from(*opt), AsciiModeOpt::Always),
+            }
+        }
+
+        // Test conversion from AsciiModeOpt to AsciiOption
+        assert_eq!(AsciiOption::from(AsciiModeOpt::Auto), AsciiOption::Auto);
+        assert_eq!(AsciiOption::from(AsciiModeOpt::Never), AsciiOption::Never);
+        assert_eq!(AsciiOption::from(AsciiModeOpt::Always), AsciiOption::Always);
+
+        // Verify all options are covered for AsciiModeOpt to AsciiOption
+        let mode_options = [AsciiModeOpt::Auto, AsciiModeOpt::Never, AsciiModeOpt::Always];
+        for mode_opt in &mode_options {
+            match mode_opt {
+                AsciiModeOpt::Auto => assert_eq!(AsciiOption::from(*mode_opt), AsciiOption::Auto),
+                AsciiModeOpt::Never => assert_eq!(AsciiOption::from(*mode_opt), AsciiOption::Never),
+                AsciiModeOpt::Always => assert_eq!(AsciiOption::from(*mode_opt), AsciiOption::Always),
+            }
+        }
     }
 }

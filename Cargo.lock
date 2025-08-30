@@ -1055,7 +1055,7 @@ checksum = "7f24254aa9a54b5c858eaee2f5bccdb46aaf0e486a595ed5fd8f86ba55232a70"
 
 [[package]]
 name = "hl"
-version = "0.32.0-alpha.5"
+version = "0.32.0-alpha.6"
 dependencies = [
  "assert_matches",
  "base32",
@@ -1131,6 +1131,7 @@ dependencies = [
  "thiserror 2.0.16",
  "titlecase",
  "toml",
+ "utf8-supported",
  "wild",
  "wildflower",
  "wildmatch",
@@ -2397,6 +2398,15 @@ name = "unty"
 version = "0.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6d49784317cd0d1ee7ec5c716dd598ec5b4483ea832a2dced265471cc0f690ae"
+
+[[package]]
+name = "utf8-supported"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c89925183ca66d87dd0ef6f6d88d15b6aefbd2400aa108958ceca2919955e130"
+dependencies = [
+ "windows-sys 0.59.0",
+]
 
 [[package]]
 name = "utf8parse"
