@@ -434,7 +434,7 @@ pub enum FieldShowOption {
 ///
 /// This struct defines how various separators, quotes, and indicators appear
 /// in the formatted output. Many of these can be configured to display differently
-/// when in ASCII mode versus UTF-8 mode through the use of `DisplayVariant`.
+/// when in ASCII mode versus Unicode mode through the use of `DisplayVariant`.
 ///
 /// The configuration is used to create a `ResolvedPunctuation` instance when
 /// the ASCII mode is determined at runtime.
@@ -521,7 +521,7 @@ impl Sample for Punctuation {
             string_closing_quote: "'".into(),
             source_location_separator: DisplayVariant::Selective {
                 ascii: "@ ".to_string(),
-                utf8: "→ ".to_string(),
+                unicode: "→ ".to_string(),
             },
             caller_name_file_separator: " :: ".into(),
             hidden_fields_indicator: " ...".into(),
@@ -531,17 +531,17 @@ impl Sample for Punctuation {
             input_number_left_separator: "".into(),
             input_number_right_separator: DisplayVariant::Selective {
                 ascii: " | ".to_string(),
-                utf8: " │ ".to_string(),
+                unicode: " │ ".to_string(),
             },
             input_name_left_separator: "".into(),
             input_name_right_separator: " | ".into(),
             input_name_clipping: DisplayVariant::Selective {
                 ascii: "..".into(),
-                utf8: "··".into(),
+                unicode: "··".into(),
             },
             input_name_common_part: DisplayVariant::Selective {
                 ascii: "..".into(),
-                utf8: "··".into(),
+                unicode: "··".into(),
             },
             array_separator: ", ".into(),
             message_delimiter: "::".into(),
@@ -577,13 +577,13 @@ pub struct ResolvedPunctuation {
 /// Configuration option for ASCII mode.
 ///
 /// This enum allows users to control whether the output should use ASCII-only characters
-/// or allow UTF-8 characters:
+/// or allow Unicode characters:
 ///
 /// - `Auto`: Automatically choose based on terminal capabilities (default)
 /// - `Always`: Always use ASCII-only characters
-/// - `Never`: Always allow UTF-8 characters
+/// - `Never`: Always allow Unicode characters
 ///
-/// When set to `Auto`, the program will detect whether the terminal supports UTF-8
+/// When set to `Auto`, the program will detect whether the terminal supports Unicode
 /// and choose the appropriate mode automatically.
 #[derive(Default, Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Copy)]
 #[serde(rename_all = "kebab-case")]
@@ -612,10 +612,10 @@ impl AsciiModeOpt {
 
 /// Controls whether ASCII-only characters should be used in formatted output.
 ///
-/// The formatter can produce output in either ASCII-only mode or with full UTF-8 characters,
+/// The formatter can produce output in either ASCII-only mode or with full Unicode characters,
 /// depending on terminal capabilities and user preferences.
 ///
-/// * `Off` - Use full UTF-8 character set (default)
+/// * `Off` - Use full Unicode character set (default)
 /// * `On` - Use ASCII-only characters
 ///
 /// This mode is usually determined by resolving an `AsciiModeOpt` configuration
@@ -627,10 +627,10 @@ pub enum AsciiMode {
     On,
 }
 
-/// A configuration type that allows for different display styles in ASCII and UTF-8 modes.
+/// A configuration type that allows for different display styles in ASCII and Unicode modes.
 ///
 /// This type can either contain a single string to be used in all contexts (`Uniform`),
-/// or separate strings for ASCII and UTF-8 output modes (`Selective`).
+/// or separate strings for ASCII and Unicode output modes (`Selective`).
 ///
 /// # Examples
 ///
@@ -640,10 +640,10 @@ pub enum AsciiMode {
 /// // Uniform variant - same in both modes
 /// let separator = DisplayVariant::Uniform(" | ".to_string());
 ///
-/// // Selective variant - different representation in ASCII vs UTF-8 mode
+/// // Selective variant - different representation in ASCII vs Unicode mode
 /// let separator = DisplayVariant::Selective {
 ///     ascii: " | ".to_string(),
-///     utf8: " │ ".to_string(),
+///     unicode: " │ ".to_string(),
 /// };
 /// ```
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
@@ -653,8 +653,8 @@ pub enum DisplayVariant {
     Uniform(String),
     Selective {
         ascii: String,
-        #[serde(rename = "utf-8")]
-        utf8: String,
+        #[serde(rename = "unicode")]
+        unicode: String,
     },
 }
 
@@ -662,7 +662,7 @@ impl DisplayVariant {
     pub fn resolve(&self, mode: AsciiMode) -> &str {
         match self {
             Self::Uniform(s) => &s,
-            Self::Selective { ascii, utf8: unicode } => match mode {
+            Self::Selective { ascii, unicode } => match mode {
                 AsciiMode::Off => &unicode,
                 AsciiMode::On => &ascii,
             },
@@ -879,12 +879,12 @@ mod tests {
     fn test_display_variant_selective() {
         let selective = DisplayVariant::Selective {
             ascii: "ascii".to_string(),
-            utf8: "utf8".to_string(),
+            unicode: "unicode".to_string(),
         };
 
         // Selective variant should return the appropriate string based on mode
         assert_eq!(selective.resolve(AsciiMode::On), "ascii");
-        assert_eq!(selective.resolve(AsciiMode::Off), "utf8");
+        assert_eq!(selective.resolve(AsciiMode::Off), "unicode");
     }
 
     #[test]
@@ -910,10 +910,10 @@ mod tests {
         // Test with selective variant
         let selective = DisplayVariant::Selective {
             ascii: "ascii".to_string(),
-            utf8: "utf8".to_string(),
+            unicode: "unicode".to_string(),
         };
         assert_eq!(selective.resolve(AsciiMode::On), "ascii");
-        assert_eq!(selective.resolve(AsciiMode::Off), "utf8");
+        assert_eq!(selective.resolve(AsciiMode::Off), "unicode");
     }
 
     #[test]
@@ -924,19 +924,19 @@ mod tests {
         // Set up selective variants for multiple punctuation elements
         punctuation.input_number_right_separator = DisplayVariant::Selective {
             ascii: " | ".to_string(),
-            utf8: " │ ".to_string(),
+            unicode: " │ ".to_string(),
         };
         punctuation.source_location_separator = DisplayVariant::Selective {
             ascii: "-> ".to_string(),
-            utf8: "→ ".to_string(),
+            unicode: "→ ".to_string(),
         };
         punctuation.array_separator = DisplayVariant::Selective {
             ascii: ", ".to_string(),
-            utf8: "· ".to_string(),
+            unicode: "· ".to_string(),
         };
         punctuation.hidden_fields_indicator = DisplayVariant::Selective {
             ascii: "...".to_string(),
-            utf8: "…".to_string(),
+            unicode: "…".to_string(),
         };
 
         // Test with direct resolve calls
@@ -959,7 +959,7 @@ mod tests {
         assert_eq!(resolved_ascii.array_separator, ", ");
         assert_eq!(resolved_ascii.hidden_fields_indicator, "...");
 
-        // Verify UTF-8 version of resolved punctuation
+        // Verify Unicode version of resolved punctuation
         assert_eq!(resolved_utf8.input_number_right_separator, " │ ");
         assert_eq!(resolved_utf8.source_location_separator, "→ ");
         assert_eq!(resolved_utf8.array_separator, "· ");
@@ -976,7 +976,7 @@ mod tests {
                 resolved_utf8.source_location_separator.as_str(),
             ),
         ] {
-            assert_ne!(ascii_val, utf8_val, "ASCII and UTF-8 values should be different");
+            assert_ne!(ascii_val, utf8_val, "ASCII and Unicode values should be different");
         }
     }
 }

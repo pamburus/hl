@@ -19,11 +19,11 @@
             "ascii": {
               "type": "string"
             },
-            "utf-8": {
+            "unicode": {
               "type": "string"
             }
           },
-          "required": ["ascii", "utf-8"]
+          "required": ["ascii", "unicode"]
         }
       ]
     }

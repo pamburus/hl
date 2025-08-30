@@ -24,7 +24,7 @@ time-zone: "UTC"
 input-info: auto
 
 # When to use ASCII mode for punctuation [auto, never, always].
-# If set to `auto`, UTF-8 support is automatically detected.
+# If set to `auto`, Unicode support is automatically detected.
 # See [formatting.punctuation] setting.
 ascii: auto
 
@@ -91,8 +91,8 @@ formatting:
     format: delimited
 
   # Punctuation settings.
-  # Each item here is either a string or an object with keys "ascii" and "utf-8".
-  # If set to a string, it is used for both ASCII mode and UTF-8 mode regardless of the [ascii] setting.
+  # Each item here is either a string or an object with keys "ascii" and "unicode".
+  # If set to a string, it is used for both ASCII mode and Unicode mode regardless of the [ascii] setting.
   # See [ascii] setting.
   punctuation:
     logger-name-separator: ":"
@@ -101,7 +101,7 @@ formatting:
     string-closing-quote: "'"
     source-location-separator:
       ascii: "-> "
-      utf-8: "→ "
+      unicode: "→ "
     caller-name-file-separator: " @ "
     hidden-fields-indicator: " ..."
     level-left-separator: "["
@@ -110,17 +110,17 @@ formatting:
     input-number-left-separator: ""
     input-number-right-separator:
       ascii: " | "
-      utf-8: " │ "
+      unicode: " │ "
     input-name-left-separator: ""
     input-name-right-separator:
       ascii: " | "
-      utf-8: " │ "
+      unicode: " │ "
     input-name-clipping:
       ascii: ".."
-      utf-8: "··"
+      unicode: "··"
     input-name-common-part:
       ascii: ".."
-      utf-8: "··"
+      unicode: "··"
     array-separator: " "
     # Delimiter used between message and fields when "delimited" message format is used.
     # See [formatting.message.format] for more details.

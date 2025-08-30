@@ -1900,13 +1900,13 @@ mod tests {
         // Also verify that it doesn't contain the Unicode arrow
         assert!(!ascii_result.contains("→ "), "ASCII mode should not use Unicode arrow");
 
-        // The ASCII and UTF-8 outputs should be different
+        // The ASCII and Unicode outputs should be different
         assert_ne!(ascii_result, utf8_result);
 
-        // UTF-8 mode should use Unicode arrow
-        assert!(utf8_result.contains("→ "), "UTF-8 mode should use Unicode arrow");
+        // Unicode mode should use Unicode arrow
+        assert!(utf8_result.contains("→ "), "Unicode mode should use Unicode arrow");
         // Also verify that it doesn't contain the ASCII arrow
-        assert!(!utf8_result.contains("@ "), "UTF-8 mode should not use ASCII arrow");
+        assert!(!utf8_result.contains("@ "), "Unicode mode should not use ASCII arrow");
     }
 
     #[test]
@@ -1949,8 +1949,8 @@ mod tests {
         // ASCII result should contain the ASCII arrow
         assert!(ascii_result.contains("@ "), "ASCII result missing expected arrow");
 
-        // UTF-8 result should contain the Unicode arrow
-        assert!(utf8_result.contains("→ "), "UTF-8 result missing expected arrow");
+        // Unicode result should contain the Unicode arrow
+        assert!(utf8_result.contains("→ "), "Unicode result missing expected arrow");
 
         // The outputs should be different
         assert_ne!(ascii_result, utf8_result);

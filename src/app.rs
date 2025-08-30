@@ -1572,7 +1572,7 @@ mod tests {
         formatter_ascii.format_record(&mut buf_ascii, &record);
         let result_ascii = String::from_utf8(buf_ascii).unwrap();
 
-        // Test UTF-8 mode
+        // Test Unicode mode
         let mut buf_utf8 = Vec::new();
         formatter_utf8.format_record(&mut buf_utf8, &record);
         let result_utf8 = String::from_utf8(buf_utf8).unwrap();
@@ -1581,9 +1581,9 @@ mod tests {
         assert!(result_ascii.contains("@ "), "ASCII mode should use ASCII '@'");
         assert!(!result_ascii.contains("→ "), "ASCII mode should not use Unicode arrow");
 
-        // Verify that the UTF-8 mode uses Unicode arrows
-        assert!(result_utf8.contains("→ "), "UTF-8 mode should use Unicode arrow");
-        assert!(!result_utf8.contains("@ "), "UTF-8 mode should not use ASCII '@'");
+        // Verify that the Unicode mode uses Unicode arrows
+        assert!(result_utf8.contains("→ "), "Unicode mode should use Unicode arrow");
+        assert!(!result_utf8.contains("@ "), "Unicode mode should not use ASCII '@'");
 
         // The outputs should be different
         assert_ne!(result_ascii, result_utf8);
@@ -1614,17 +1614,17 @@ mod tests {
         let mut formatting = Formatting::sample();
         formatting.punctuation.input_name_right_separator = DisplayVariant::Selective {
             ascii: " | ".to_string(),
-            utf8: " │ ".to_string(),
+            unicode: " │ ".to_string(),
         };
         formatting.punctuation.input_number_right_separator = DisplayVariant::Selective {
             ascii: " | ".to_string(),
-            utf8: " │ ".to_string(),
+            unicode: " │ ".to_string(),
         };
         options_ascii.formatting = formatting.clone();
 
         let app_ascii = App::new(options_ascii);
 
-        // Setup app with ASCII mode OFF (UTF-8)
+        // Setup app with ASCII mode OFF (Unicode)
         let mut options_utf8 = options();
         options_utf8.input_info = InputInfo::Full.into();
         options_utf8.ascii = AsciiMode::Off;
@@ -1638,11 +1638,11 @@ mod tests {
         let badges_ascii = badges_ascii.unwrap();
         println!("ASCII badges: {:?}", badges_ascii);
 
-        // Get badges with ASCII mode OFF (UTF-8)
+        // Get badges with ASCII mode OFF (Unicode)
         let badges_utf8 = app_utf8.input_badges(inputs.iter());
         assert!(badges_utf8.is_some(), "Should produce badges");
         let badges_utf8 = badges_utf8.unwrap();
-        println!("UTF-8 badges: {:?}", badges_utf8);
+        println!("Unicode badges: {:?}", badges_utf8);
 
         // Check that we're using ASCII separator in ASCII mode
         for badge in badges_ascii.iter() {
@@ -1650,15 +1650,18 @@ mod tests {
             assert!(!badge.contains(" │ "), "ASCII mode should not use Unicode separator");
         }
 
-        // Check that we're using Unicode separator in UTF-8 mode
+        // Check that we're using Unicode separator in Unicode mode
         for badge in badges_utf8.iter() {
-            assert!(badge.contains(" │ "), "UTF-8 mode should use Unicode separator");
+            assert!(badge.contains(" │ "), "Unicode mode should use Unicode separator");
             // Check that there are no ASCII separators (should be all replaced)
-            assert!(!badge.contains(" | "), "UTF-8 mode should not use ASCII separator");
+            assert!(!badge.contains(" | "), "Unicode mode should not use ASCII separator");
         }
 
         // Check that the outputs are different
-        assert_ne!(badges_ascii, badges_utf8, "ASCII and UTF-8 badges should be different");
+        assert_ne!(
+            badges_ascii, badges_utf8,
+            "ASCII and Unicode badges should be different"
+        );
     }
 
     fn theme() -> Arc<Theme> {
