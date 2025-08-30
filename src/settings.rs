@@ -535,8 +535,14 @@ impl Sample for Punctuation {
             },
             input_name_left_separator: "".into(),
             input_name_right_separator: " | ".into(),
-            input_name_clipping: "..".into(),
-            input_name_common_part: "..".into(),
+            input_name_clipping: DisplayVariant::Selective {
+                ascii: "..".into(),
+                utf8: "··".into(),
+            },
+            input_name_common_part: DisplayVariant::Selective {
+                ascii: "..".into(),
+                utf8: "··".into(),
+            },
             array_separator: ", ".into(),
             message_delimiter: "::".into(),
         }
