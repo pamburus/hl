@@ -777,7 +777,7 @@ pub mod string {
 
     impl<'a, F> DelimiterResolve<'a> for F
     where
-        F: FnOnce() -> &'a str + 'a,
+        F: FnOnce() -> &'a str,
     {
         fn resolve(self) -> &'a str {
             self()
