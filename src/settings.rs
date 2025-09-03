@@ -932,7 +932,7 @@ mod tests {
 
     #[test]
     fn test_punctuation_resolve() {
-        // Use test_default instead of Default::default to avoid dependency on default config
+        // Use Punctuation::sample instead of Default::default to avoid dependency on default config
         let mut punctuation = Punctuation::sample();
 
         // Set up selective variants for multiple punctuation elements
