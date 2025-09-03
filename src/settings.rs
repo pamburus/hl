@@ -464,25 +464,29 @@ pub struct Punctuation {
 impl Punctuation {
     pub fn resolve(&self, mode: AsciiMode) -> ResolvedPunctuation {
         ResolvedPunctuation {
-            logger_name_separator: String::from(self.logger_name_separator.resolve(mode)),
-            field_key_value_separator: String::from(self.field_key_value_separator.resolve(mode)),
-            string_opening_quote: String::from(self.string_opening_quote.resolve(mode)),
-            string_closing_quote: String::from(self.string_closing_quote.resolve(mode)),
-            source_location_separator: String::from(self.source_location_separator.resolve(mode)),
-            caller_name_file_separator: String::from(self.caller_name_file_separator.resolve(mode)),
-            hidden_fields_indicator: String::from(self.hidden_fields_indicator.resolve(mode)),
-            level_left_separator: String::from(self.level_left_separator.resolve(mode)),
-            level_right_separator: String::from(self.level_right_separator.resolve(mode)),
-            input_number_prefix: String::from(self.input_number_prefix.resolve(mode)),
-            input_number_left_separator: String::from(self.input_number_left_separator.resolve(mode)),
-            input_number_right_separator: String::from(self.input_number_right_separator.resolve(mode)),
-            input_name_left_separator: String::from(self.input_name_left_separator.resolve(mode)),
-            input_name_right_separator: String::from(self.input_name_right_separator.resolve(mode)),
-            input_name_clipping: String::from(self.input_name_clipping.resolve(mode)),
-            input_name_common_part: String::from(self.input_name_common_part.resolve(mode)),
-            array_separator: String::from(self.array_separator.resolve(mode)),
-            message_delimiter: String::from(self.message_delimiter.resolve(mode)),
+            logger_name_separator: Self::resolve_field(&self.logger_name_separator, mode),
+            field_key_value_separator: Self::resolve_field(&self.field_key_value_separator, mode),
+            string_opening_quote: Self::resolve_field(&self.string_opening_quote, mode),
+            string_closing_quote: Self::resolve_field(&self.string_closing_quote, mode),
+            source_location_separator: Self::resolve_field(&self.source_location_separator, mode),
+            caller_name_file_separator: Self::resolve_field(&self.caller_name_file_separator, mode),
+            hidden_fields_indicator: Self::resolve_field(&self.hidden_fields_indicator, mode),
+            level_left_separator: Self::resolve_field(&self.level_left_separator, mode),
+            level_right_separator: Self::resolve_field(&self.level_right_separator, mode),
+            input_number_prefix: Self::resolve_field(&self.input_number_prefix, mode),
+            input_number_left_separator: Self::resolve_field(&self.input_number_left_separator, mode),
+            input_number_right_separator: Self::resolve_field(&self.input_number_right_separator, mode),
+            input_name_left_separator: Self::resolve_field(&self.input_name_left_separator, mode),
+            input_name_right_separator: Self::resolve_field(&self.input_name_right_separator, mode),
+            input_name_clipping: Self::resolve_field(&self.input_name_clipping, mode),
+            input_name_common_part: Self::resolve_field(&self.input_name_common_part, mode),
+            array_separator: Self::resolve_field(&self.array_separator, mode),
+            message_delimiter: Self::resolve_field(&self.message_delimiter, mode),
         }
+    }
+
+    fn resolve_field(field: &DisplayVariant, mode: AsciiMode) -> String {
+        String::from(field.resolve(mode))
     }
 }
 
