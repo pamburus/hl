@@ -734,10 +734,9 @@ pub mod string {
 
     impl DynMessageFormat {
         pub fn new(formatting: &super::Formatting, ascii: super::AsciiMode) -> Self {
-            new_message_format(
-                formatting.message.format,
-                &formatting.punctuation.message_delimiter.resolve(ascii),
-            )
+            new_message_format(formatting.message.format, || {
+                formatting.punctuation.message_delimiter.resolve(ascii)
+            })
         }
     }
 
@@ -749,19 +748,40 @@ pub mod string {
         }
     }
 
-    pub fn new_message_format(setting: MessageFormat, delimiter: &str) -> DynMessageFormat {
+    pub fn new_message_format<'a>(setting: MessageFormat, delimiter: impl DelimiterResolve<'a>) -> DynMessageFormat {
         let (format, delimited): (DynFormat, _) = match setting {
             MessageFormat::AutoQuoted => (Arc::new(MessageFormatAutoQuoted), false),
             MessageFormat::AlwaysQuoted => (Arc::new(MessageFormatAlwaysQuoted), false),
             MessageFormat::AlwaysDoubleQuoted => (Arc::new(MessageFormatDoubleQuoted), false),
             MessageFormat::Delimited => {
-                let delimiter = format!(" {} ", delimiter);
+                let delimiter = format!(" {} ", delimiter.resolve());
                 let n = delimiter.len();
                 (Arc::new(MessageFormatDelimited::new(delimiter).rtrim(n)), true)
             }
             MessageFormat::Raw => (Arc::new(MessageFormatRaw), false),
         };
         DynMessageFormat { format, delimited }
+    }
+
+    // ---
+
+    pub trait DelimiterResolve<'a> {
+        fn resolve(self) -> &'a str;
+    }
+
+    impl<'a> DelimiterResolve<'a> for &'a str {
+        fn resolve(self) -> &'a str {
+            self
+        }
+    }
+
+    impl<'a, F> DelimiterResolve<'a> for F
+    where
+        F: FnOnce() -> &'a str + 'a,
+    {
+        fn resolve(self) -> &'a str {
+            self()
+        }
     }
 
     // ---
