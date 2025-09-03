@@ -569,13 +569,13 @@ pub struct ResolvedPunctuation {
 /// Configuration option for ASCII mode.
 ///
 /// This enum allows users to control whether the output should use ASCII-only characters
-/// or allow Unicode characters:
+/// or allow Unicode characters (when UTF-8 encoding is supported):
 ///
-/// - `Auto`: Automatically choose based on terminal capabilities (default)
+/// - `Auto`: Automatically choose based on terminal UTF-8 encoding support (default)
 /// - `Always`: Always use ASCII-only characters
 /// - `Never`: Always allow Unicode characters
 ///
-/// When set to `Auto`, the program will detect whether the terminal supports Unicode
+/// When set to `Auto`, the program will detect whether the terminal supports UTF-8 encoding
 /// and choose the appropriate mode automatically.
 #[derive(Default, Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Copy)]
 #[serde(rename_all = "kebab-case")]
