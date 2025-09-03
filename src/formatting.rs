@@ -84,6 +84,7 @@ pub struct RecordFormatterBuilder {
     fields: Option<Arc<IncludeExcludeKeyFilter>>,
     cfg: Option<Formatting>,
     punctuation: Option<Arc<ResolvedPunctuation>>,
+    message_format: Option<DynMessageFormat>,
 }
 
 impl RecordFormatterBuilder {
@@ -162,6 +163,13 @@ impl RecordFormatterBuilder {
         }
     }
 
+    pub fn with_message_format(self, value: DynMessageFormat) -> Self {
+        Self {
+            message_format: Some(value),
+            ..self
+        }
+    }
+
     pub fn build(self) -> RecordFormatter {
         let cfg = self.cfg.unwrap_or_default();
         let punctuation = self
@@ -180,7 +188,9 @@ impl RecordFormatterBuilder {
             always_show_time: self.always_show_time,
             always_show_level: self.always_show_level,
             fields: self.fields.unwrap_or_default(),
-            message_format: DynMessageFormat::new(&cfg, self.ascii),
+            message_format: self
+                .message_format
+                .unwrap_or_else(|| DynMessageFormat::new(&cfg, self.ascii)),
             punctuation,
         }
     }
@@ -1704,10 +1714,9 @@ mod tests {
 
     #[test]
     fn test_delimited_message_with_colors() {
-        let formatter = RecordFormatter {
-            message_format: new_message_format(MessageFormat::Delimited, "::"),
-            ..formatter().build()
-        };
+        let formatter = formatter()
+            .with_message_format(new_message_format(MessageFormat::Delimited, "::"))
+            .build();
 
         let rec = Record {
             ts: Some(Timestamp::new("2000-01-02T03:04:05.123Z")),
@@ -1722,11 +1731,10 @@ mod tests {
 
     #[test]
     fn test_auto_quoted_message() {
-        let formatter = RecordFormatter {
-            message_format: new_message_format(MessageFormat::AutoQuoted, ""),
-            theme: Default::default(),
-            ..formatter().build()
-        };
+        let formatter = formatter()
+            .with_theme(Default::default())
+            .with_message_format(new_message_format(MessageFormat::AutoQuoted, ""))
+            .build();
 
         let mut rec = Record {
             message: Some(EncodedString::raw("m").into()),
@@ -1762,11 +1770,10 @@ mod tests {
 
     #[test]
     fn test_always_quoted_message() {
-        let formatter = RecordFormatter {
-            message_format: new_message_format(MessageFormat::AlwaysQuoted, ""),
-            theme: Default::default(),
-            ..formatter().build()
-        };
+        let formatter = formatter()
+            .with_theme(Default::default())
+            .with_message_format(new_message_format(MessageFormat::AlwaysQuoted, ""))
+            .build();
 
         let mut rec = Record {
             message: Some(EncodedString::raw("m").into()),
@@ -1794,11 +1801,10 @@ mod tests {
 
     #[test]
     fn test_always_double_quoted_message() {
-        let formatter = RecordFormatter {
-            message_format: new_message_format(MessageFormat::AlwaysDoubleQuoted, ""),
-            theme: Default::default(),
-            ..formatter().build()
-        };
+        let formatter = formatter()
+            .with_theme(Default::default())
+            .with_message_format(new_message_format(MessageFormat::AlwaysDoubleQuoted, ""))
+            .build();
 
         let mut rec = Record {
             message: Some(EncodedString::raw("m").into()),
@@ -1813,11 +1819,10 @@ mod tests {
 
     #[test]
     fn test_raw_message() {
-        let formatter = RecordFormatter {
-            message_format: new_message_format(MessageFormat::Raw, ""),
-            theme: Default::default(),
-            ..formatter().build()
-        };
+        let formatter = formatter()
+            .with_theme(Default::default())
+            .with_message_format(new_message_format(MessageFormat::Raw, ""))
+            .build();
 
         let mut rec = Record {
             message: Some(EncodedString::raw("m 1").into()),
@@ -1832,11 +1837,10 @@ mod tests {
 
     #[test]
     fn test_delimited_message() {
-        let formatter = RecordFormatter {
-            message_format: new_message_format(MessageFormat::Delimited, "::"),
-            theme: Default::default(),
-            ..formatter().build()
-        };
+        let formatter = formatter()
+            .with_theme(Default::default())
+            .with_message_format(new_message_format(MessageFormat::Delimited, "::"))
+            .build();
 
         let mut rec = Record {
             message: Some(EncodedString::raw("'message' 1").into()),
