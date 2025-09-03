@@ -523,30 +523,18 @@ impl Sample for Punctuation {
             field_key_value_separator: "=".into(),
             string_opening_quote: "'".into(),
             string_closing_quote: "'".into(),
-            source_location_separator: DisplayVariant::Selective {
-                ascii: "@ ".to_string(),
-                unicode: "→ ".to_string(),
-            },
-            caller_name_file_separator: " :: ".into(),
-            hidden_fields_indicator: " ...".into(),
+            source_location_separator: DisplayVariant::ascii("-> ").unicode("→ "),
+            caller_name_file_separator: " @ ".into(),
+            hidden_fields_indicator: DisplayVariant::ascii(" ...").unicode(" …"),
             level_left_separator: "|".into(),
             level_right_separator: "|".into(),
             input_number_prefix: "#".into(),
             input_number_left_separator: "".into(),
-            input_number_right_separator: DisplayVariant::Selective {
-                ascii: " | ".to_string(),
-                unicode: " │ ".to_string(),
-            },
+            input_number_right_separator: DisplayVariant::ascii(" | ").unicode(" │ "),
             input_name_left_separator: "".into(),
             input_name_right_separator: " | ".into(),
-            input_name_clipping: DisplayVariant::Selective {
-                ascii: "..".into(),
-                unicode: "··".into(),
-            },
-            input_name_common_part: DisplayVariant::Selective {
-                ascii: "..".into(),
-                unicode: "··".into(),
-            },
+            input_name_clipping: DisplayVariant::ascii("..").unicode("··"),
+            input_name_common_part: DisplayVariant::ascii("**").unicode("★★"),
             array_separator: ", ".into(),
             message_delimiter: "::".into(),
         }
@@ -672,6 +660,13 @@ impl DisplayVariant {
             },
         }
     }
+
+    pub fn ascii<S>(s: S) -> DisplayVariantAscii<S>
+    where
+        S: Into<String>,
+    {
+        DisplayVariantAscii { ascii: s }
+    }
 }
 
 impl From<String> for DisplayVariant {
@@ -683,6 +678,21 @@ impl From<String> for DisplayVariant {
 impl From<&str> for DisplayVariant {
     fn from(value: &str) -> Self {
         Self::Uniform(value.to_string())
+    }
+}
+
+// ---
+
+pub struct DisplayVariantAscii<S> {
+    ascii: S,
+}
+
+impl<S: Into<String>> DisplayVariantAscii<S> {
+    pub fn unicode(self, s: impl Into<String>) -> DisplayVariant {
+        DisplayVariant::Selective {
+            ascii: self.ascii.into(),
+            unicode: s.into(),
+        }
     }
 }
 

@@ -1578,7 +1578,7 @@ mod tests {
         let result_utf8 = String::from_utf8(buf_utf8).unwrap();
 
         // Verify that the ASCII mode uses ASCII arrows
-        assert!(result_ascii.contains("@ "), "ASCII mode should use ASCII '@'");
+        assert!(result_ascii.contains("-> "), "ASCII mode should use ASCII '->'");
         assert!(!result_ascii.contains("→ "), "ASCII mode should not use Unicode arrow");
 
         // Verify that the Unicode mode uses Unicode arrows

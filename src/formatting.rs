@@ -1264,12 +1264,12 @@ mod tests {
 
         assert_eq!(
             &format(&rec),
-            "\u{1b}[0;2;3m00-01-02 03:04:05.123 \u{1b}[0;36m|\u{1b}[0;95mDBG\u{1b}[0;36m|\u{1b}[0;2;3m \u{1b}[0;2;4mtl:\u{1b}[0m \u{1b}[0;1;39mtm \u{1b}[0;32mk-a\u{1b}[0;2m=\u{1b}[0;33m{ \u{1b}[0;32mva\u{1b}[0;2m=\u{1b}[0;33m{ \u{1b}[0;32mkb\u{1b}[0;2m=\u{1b}[0;94m42 \u{1b}[0;32mkc\u{1b}[0;2m=\u{1b}[0;94m43\u{1b}[0;33m } }\u{1b}[0;2;3m @ tc\u{1b}[0m",
+            "\u{1b}[0;2;3m00-01-02 03:04:05.123 \u{1b}[0;36m|\u{1b}[0;95mDBG\u{1b}[0;36m|\u{1b}[0;2;3m \u{1b}[0;2;4mtl:\u{1b}[0m \u{1b}[0;1;39mtm \u{1b}[0;32mk-a\u{1b}[0;2m=\u{1b}[0;33m{ \u{1b}[0;32mva\u{1b}[0;2m=\u{1b}[0;33m{ \u{1b}[0;32mkb\u{1b}[0;2m=\u{1b}[0;94m42 \u{1b}[0;32mkc\u{1b}[0;2m=\u{1b}[0;94m43\u{1b}[0;33m } }\u{1b}[0;2;3m -> tc\u{1b}[0m",
         );
 
         assert_eq!(
             &formatter().with_flatten(true).build().format_to_string(&rec),
-            "\u{1b}[0;2;3m00-01-02 03:04:05.123 \u{1b}[0;36m|\u{1b}[0;95mDBG\u{1b}[0;36m|\u{1b}[0;2;3m \u{1b}[0;2;4mtl:\u{1b}[0m \u{1b}[0;1;39mtm \u{1b}[0;32mk-a.va.kb\u{1b}[0;2m=\u{1b}[0;94m42 \u{1b}[0;32mk-a.va.kc\u{1b}[0;2m=\u{1b}[0;94m43\u{1b}[0;2;3m @ tc\u{1b}[0m",
+            "\u{1b}[0;2;3m00-01-02 03:04:05.123 \u{1b}[0;36m|\u{1b}[0;95mDBG\u{1b}[0;36m|\u{1b}[0;2;3m \u{1b}[0;2;4mtl:\u{1b}[0m \u{1b}[0;1;39mtm \u{1b}[0;32mk-a.va.kb\u{1b}[0;2m=\u{1b}[0;94m42 \u{1b}[0;32mk-a.va.kc\u{1b}[0;2m=\u{1b}[0;94m43\u{1b}[0;2;3m -> tc\u{1b}[0m",
         );
     }
 
@@ -1721,7 +1721,7 @@ mod tests {
         };
 
         let result = format_no_color(&rec);
-        assert_eq!(&result, " @ test_function :: test_file.rs:42", "{}", result);
+        assert_eq!(&result, " -> test_function @ test_file.rs:42", "{}", result);
     }
 
     #[test]
@@ -1920,7 +1920,7 @@ mod tests {
         let utf8_result = formatter_utf8.format_to_string(&rec);
 
         // Verify ASCII mode uses ASCII arrow
-        assert!(ascii_result.contains("@ "), "ASCII mode should use ASCII arrow");
+        assert!(ascii_result.contains("-> "), "ASCII mode should use ASCII arrow");
         // Also verify that it doesn't contain the Unicode arrow
         assert!(!ascii_result.contains("→ "), "ASCII mode should not use Unicode arrow");
 
@@ -1971,7 +1971,7 @@ mod tests {
         let utf8_result = utf8_formatter.format_to_string(&rec);
 
         // ASCII result should contain the ASCII arrow
-        assert!(ascii_result.contains("@ "), "ASCII result missing expected arrow");
+        assert!(ascii_result.contains("-> "), "ASCII result missing expected arrow");
 
         // Unicode result should contain the Unicode arrow
         assert!(utf8_result.contains("→ "), "Unicode result missing expected arrow");
