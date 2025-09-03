@@ -748,7 +748,7 @@ pub mod string {
         }
     }
 
-    pub fn new_message_format(setting: MessageFormat, delimiter: impl DisplayResolve) -> DynMessageFormat {
+    pub fn new_message_format<D: DisplayResolve>(setting: MessageFormat, delimiter: D) -> DynMessageFormat {
         let (format, delimited): (DynFormat, _) = match setting {
             MessageFormat::AutoQuoted => (Arc::new(MessageFormatAutoQuoted), false),
             MessageFormat::AlwaysQuoted => (Arc::new(MessageFormatAlwaysQuoted), false),
