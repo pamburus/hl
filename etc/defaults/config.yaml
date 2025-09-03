@@ -124,7 +124,9 @@ formatting:
     array-separator: " "
     # Delimiter used between message and fields when "delimited" message format is used.
     # See [formatting.message.format] for more details.
-    message-delimiter: "::"
+    message-delimiter:
+      ascii: "::"
+      unicode: "›"
 
 # Number of processing threads, configured automatically based on CPU count if not specified.
 concurrency: ~
