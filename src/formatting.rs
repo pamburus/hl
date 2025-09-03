@@ -748,7 +748,7 @@ pub mod string {
         }
     }
 
-    pub fn new_message_format<'a>(setting: MessageFormat, delimiter: impl DelimiterResolve<'a>) -> DynMessageFormat {
+    pub fn new_message_format(setting: MessageFormat, delimiter: impl DisplayResolve) -> DynMessageFormat {
         let (format, delimited): (DynFormat, _) = match setting {
             MessageFormat::AutoQuoted => (Arc::new(MessageFormatAutoQuoted), false),
             MessageFormat::AlwaysQuoted => (Arc::new(MessageFormatAlwaysQuoted), false),
@@ -765,20 +765,26 @@ pub mod string {
 
     // ---
 
-    pub trait DelimiterResolve<'a> {
-        fn resolve(self) -> &'a str;
+    pub trait DisplayResolve {
+        type Output: std::fmt::Display;
+
+        fn resolve(self) -> Self::Output;
     }
 
-    impl<'a> DelimiterResolve<'a> for &'a str {
+    impl<'a> DisplayResolve for &'a str {
+        type Output = Self;
+
         fn resolve(self) -> &'a str {
             self
         }
     }
 
-    impl<'a, F> DelimiterResolve<'a> for F
+    impl<'a, F> DisplayResolve for F
     where
         F: FnOnce() -> &'a str,
     {
+        type Output = &'a str;
+
         fn resolve(self) -> &'a str {
             self()
         }
