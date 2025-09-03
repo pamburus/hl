@@ -1583,7 +1583,7 @@ mod tests {
 
         // Verify that the Unicode mode uses Unicode arrows
         assert!(result_utf8.contains("→ "), "Unicode mode should use Unicode arrow");
-        assert!(!result_utf8.contains("@ "), "Unicode mode should not use ASCII '@'");
+        assert!(!result_utf8.contains("@ "), "Unicode mode should not use ASCII '@ '");
 
         // The outputs should be different
         assert_ne!(result_ascii, result_utf8);
