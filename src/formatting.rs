@@ -41,14 +41,14 @@ impl RecordWithSourceFormatter for RawRecordFormatter {
     }
 }
 
-impl<T: RecordWithSourceFormatter + ?Sized> RecordWithSourceFormatter for Arc<T> {
+impl<T: RecordWithSourceFormatter + ?Sized> RecordWithSourceFormatter for &T {
     #[inline(always)]
     fn format_record(&self, buf: &mut Buf, rec: model::RecordWithSource) {
         (**self).format_record(buf, rec)
     }
 }
 
-impl<T: RecordWithSourceFormatter + ?Sized> RecordWithSourceFormatter for &T {
+impl<T: RecordWithSourceFormatter + ?Sized> RecordWithSourceFormatter for Arc<T> {
     #[inline(always)]
     fn format_record(&self, buf: &mut Buf, rec: model::RecordWithSource) {
         (**self).format_record(buf, rec)
