@@ -48,9 +48,11 @@ levels:
   debug:
     level-inner:
       foreground: bright-magenta
+      modes: [bold]
   info:
     level-inner:
       foreground: cyan
+      modes: [bold]
   warning:
     message:
       foreground: yellow

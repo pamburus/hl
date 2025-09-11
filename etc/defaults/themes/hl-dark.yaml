@@ -15,6 +15,7 @@ elements:
     modes: [italic]
   level:
     foreground: 30
+    modes: [faint]
   message:
     foreground: 195
   message-delimiter:
