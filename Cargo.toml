@@ -11,7 +11,7 @@ members = [
 [workspace.package]
 repository = "https://github.com/pamburus/hl"
 authors = ["Pavel Ivanov <mr.pavel.ivanov@gmail.com>"]
-version = "0.32.0-alpha.8"
+version = "0.32.0-alpha.9"
 edition = "2024"
 license = "MIT"
 
@@ -91,7 +91,7 @@ signal-hook = "0.3"
 snap = "1"
 strsim = "0.11"
 strum = { version = "0.27", features = ["derive"] }
-term_size = "0.3"
+terminal_size = "0.4"
 thiserror = "2"
 titlecase = "3"
 toml = "0.9"
