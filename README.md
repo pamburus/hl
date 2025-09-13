@@ -736,6 +736,38 @@ Advanced Options:
 
   * See [#132](https://github.com/pamburus/hl/issues/132) for how to repeat measurements
 
+## Development
+
+### With Nix (Recommended)
+
+The project uses Nix flakes for reproducible development environments:
+
+```sh
+# Enter development shell with all tools
+nix develop
+
+# Build the project
+nix build
+
+# Run the application
+nix run -- --help
+```
+
+See [`nix/README.md`](nix/README.md) for detailed Nix usage instructions.
+
+### Without Nix
+
+You can also develop using your system's Rust toolchain:
+
+```sh
+# Install Rust
+See [rustup.rs](https://rustup.rs) for installation instructions.
+
+# Build and run
+cargo build
+cargo run -- --help
+```
+
 [ci-img]: https://github.com/pamburus/hl/actions/workflows/ci.yml/badge.svg
 [ci]: https://github.com/pamburus/hl/actions/workflows/ci.yml
 [cov-img]: https://codecov.io/gh/pamburus/hl/graph/badge.svg?token=464MN13408

@@ -23,10 +23,7 @@ rustPlatform.buildRustPackage {
 
   cargoLock = {
     lockFile = ../Cargo.lock;
-    outputHashes = {
-      "htp-0.4.2" = "sha256-oYLN0aCLIeTST+Ib6OgWqEgu9qyI0n5BDtIUIIThLiQ=";
-      "wildflower-0.3.0" = "sha256-vv+ppiCrtEkCWab53eutfjHKrHZj+BEAprV5by8plzE=";
-    };
+    outputHashes = import ./cargo-hashes.nix;
   };
 
   nativeBuildInputs = [ installShellFiles ];
@@ -42,10 +39,26 @@ rustPlatform.buildRustPackage {
 
   doCheck = false;
 
-  meta = {
+  meta = with lib; {
     description = cargoToml.package.description;
+    longDescription = ''
+      hl is a fast log viewer and processor that converts JSON and logfmt logs
+      into a human-readable format. It supports filtering, highlighting, and
+      various output formats for better log analysis and debugging.
+    '';
     homepage = cargoToml.workspace.package.repository;
-    license = lib.licenses.mit;
+    changelog = "${cargoToml.workspace.package.repository}/releases";
+    license = licenses.mit;
+    maintainers = [
+      {
+        name = "Pavel Ivanov";
+        github = "pamburus";
+        email = "mr.pavel.ivanov@gmail.com";
+      }
+    ];
+    platforms = platforms.unix ++ platforms.windows;
     mainProgram = cargoToml.package.name;
+    categories = cargoToml.package.categories or [ ];
+    keywords = cargoToml.package.keywords or [ ];
   };
 }

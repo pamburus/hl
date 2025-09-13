@@ -18,8 +18,8 @@ license = "MIT"
 [package]
 name = "hl"
 description = "JSON and logfmt log converter to human readable representation"
-categories = ["command-line-utilities"]
-keywords = ["cli", "human", "log"]
+categories = ["command-line-utilities", "development-tools", "parsing", "text-processing"]
+keywords = ["cli", "log", "json", "logfmt", "viewer"]
 build = "build.rs"
 rust-version = "1.86.0"
 repository.workspace = true

@@ -101,6 +101,10 @@ jobs:
 
       - name: Install Nix
         uses: cachix/install-nix-action@v30
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+            accept-flake-config = true
 
       - name: Cache Nix store
         uses: cachix/cachix-action@v15
@@ -108,11 +112,58 @@ jobs:
           name: hl
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
 
-      - name: Setup Rust cache
-        uses: Swatinem/rust-cache@v2
+      - name: Check Nix formatting
+        run: |
+          nix fmt
+          if ! git diff --exit-code; then
+            echo "Nix files are not formatted correctly"
+            exit 1
+          fi
 
       - name: Run nix flake check
         run: nix flake check --print-build-logs --all-systems
 
-      - name: Run nix build
+      - name: Build all package variants
+        run: |
+          nix build --print-build-logs .#hl
+          nix build --print-build-logs .#hl-debug
+          nix build --print-build-logs .#hl-static
+          nix build --print-build-logs .#hl-minimal
+
+      - name: Test development shell
+        run: |
+          nix develop -c cargo --version
+          nix develop -c rustc --version
+          nix develop -c rust-analyzer --version
+
+      - name: Run application tests
+        run: |
+          nix develop -c cargo test --workspace
+          nix run -- --version
+          nix run -- --help
+
+  test-nix-macos:
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@v30
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+            accept-flake-config = true
+
+      - name: Cache Nix store
+        uses: cachix/cachix-action@v15
+        with:
+          name: hl
+          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
+
+      - name: Build for macOS
         run: nix build --print-build-logs
+
+      - name: Test macOS build
+        run: nix run -- --version
