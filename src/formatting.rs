@@ -834,24 +834,21 @@ pub mod string {
                 return Ok(());
             }
 
-            if !mask.intersects(Flag::DoubleQuote | Flag::Control | Flag::Backslash) {
+            if !mask.intersects(Flag::DoubleQuote | Flag::Control | Flag::Tab | Flag::NewLine | Flag::Backslash) {
                 buf.push(b'"');
                 buf.push(b'"');
                 buf[begin..].rotate_right(1);
                 return Ok(());
             }
 
-            if !mask.intersects(Flag::SingleQuote | Flag::Control | Flag::Backslash) {
+            if !mask.intersects(Flag::SingleQuote | Flag::Control | Flag::Tab | Flag::NewLine | Flag::Backslash) {
                 buf.push(b'\'');
                 buf.push(b'\'');
                 buf[begin..].rotate_right(1);
                 return Ok(());
             }
 
-            const Z: Mask = Mask::empty();
-            const XS: Mask = mask!(Flag::Control | Flag::ExtendedSpace);
-
-            if matches!(mask & (Flag::Backtick | XS), Z | XS) {
+            if !mask.intersects(Flag::Backtick | Flag::Control) {
                 buf.push(b'`');
                 buf.push(b'`');
                 buf[begin..].rotate_right(1);
@@ -905,30 +902,27 @@ pub mod string {
                 mask |= group;
             });
 
-            if !mask.intersects(Flag::EqualSign | Flag::Control | Flag::Backslash)
+            if !mask.intersects(Flag::EqualSign | Flag::Control | Flag::NewLine | Flag::Backslash)
                 && !matches!(buf[begin..], [b'"', ..] | [b'\'', ..] | [b'`', ..])
             {
                 return Ok(());
             }
 
-            if !mask.intersects(Flag::DoubleQuote | Flag::Control | Flag::Backslash) {
+            if !mask.intersects(Flag::DoubleQuote | Flag::Control | Flag::Tab | Flag::NewLine | Flag::Backslash) {
                 buf.push(b'"');
                 buf.push(b'"');
                 buf[begin..].rotate_right(1);
                 return Ok(());
             }
 
-            if !mask.intersects(Flag::SingleQuote | Flag::Control | Flag::Backslash) {
+            if !mask.intersects(Flag::SingleQuote | Flag::Control | Flag::Tab | Flag::NewLine | Flag::Backslash) {
                 buf.push(b'\'');
                 buf.push(b'\'');
                 buf[begin..].rotate_right(1);
                 return Ok(());
             }
 
-            const Z: Mask = Mask::empty();
-            const XS: Mask = mask!(Flag::Control | Flag::ExtendedSpace);
-
-            if matches!(mask & (Flag::Backtick | XS), Z | XS) {
+            if !mask.intersects(Flag::Backtick | Flag::Control) {
                 buf.push(b'`');
                 buf.push(b'`');
                 buf[begin..].rotate_right(1);
@@ -962,21 +956,18 @@ pub mod string {
                 mask |= group;
             });
 
-            if !mask.intersects(Flag::DoubleQuote | Flag::Control | Flag::Backslash) {
+            if !mask.intersects(Flag::DoubleQuote | Flag::Control | Flag::Tab | Flag::NewLine | Flag::Backslash) {
                 buf.push(b'"');
                 return Ok(());
             }
 
-            if !mask.intersects(Flag::SingleQuote | Flag::Control | Flag::Backslash) {
+            if !mask.intersects(Flag::SingleQuote | Flag::Control | Flag::Tab | Flag::NewLine | Flag::Backslash) {
                 buf[begin] = b'\'';
                 buf.push(b'\'');
                 return Ok(());
             }
 
-            const Z: Mask = Mask::empty();
-            const XS: Mask = mask!(Flag::Control | Flag::ExtendedSpace);
-
-            if matches!(mask & (Flag::Backtick | XS), Z | XS) {
+            if !mask.intersects(Flag::Backtick | Flag::Control) {
                 buf[begin] = b'`';
                 buf.push(b'`');
                 return Ok(());
@@ -1037,10 +1028,7 @@ pub mod string {
                 return Ok(());
             }
 
-            const Z: Mask = Mask::empty();
-            const XS: Mask = mask!(Flag::Control | Flag::ExtendedSpace);
-
-            if matches!(mask & (Flag::Backtick | XS), Z | XS) {
+            if !mask.intersects(Flag::Backtick | Flag::Control) {
                 buf.push(b'`');
                 buf.push(b'`');
                 buf[begin..].rotate_right(1);
@@ -1122,13 +1110,14 @@ pub mod string {
     // ---
 
     static CHAR_GROUPS: [Mask; 256] = {
-        const CT: Mask = mask!(Flag::Control); // 0x00..0x1F
+        const CT: Mask = mask!(Flag::Control); // 0x00..0x1F except 0x09, 0x0A, 0x0D
         const DQ: Mask = mask!(Flag::DoubleQuote); // 0x22
         const SQ: Mask = mask!(Flag::SingleQuote); // 0x27
         const BS: Mask = mask!(Flag::Backslash); // 0x5C
         const BT: Mask = mask!(Flag::Backtick); // 0x60
         const SP: Mask = mask!(Flag::Space); // 0x20
-        const XS: Mask = mask!(Flag::Control | Flag::ExtendedSpace); // 0x09, 0x0A, 0x0D
+        const TB: Mask = mask!(Flag::Tab); // 0x09
+        const NL: Mask = mask!(Flag::NewLine); // 0x0A, 0x0D
         const EQ: Mask = mask!(Flag::EqualSign); // 0x3D
         const HY: Mask = mask!(Flag::Minus); // Hyphen, 0x2D
         const DO: Mask = mask!(Flag::Dot); // Dot, 0x2E
@@ -1136,7 +1125,7 @@ pub mod string {
         const __: Mask = mask!(Flag::Other);
         [
             //   1   2   3   4   5   6   7   8   9   A   B   C   D   E   F
-            CT, CT, CT, CT, CT, CT, CT, CT, CT, XS, XS, CT, CT, XS, CT, CT, // 0
+            CT, CT, CT, CT, CT, CT, CT, CT, CT, TB, NL, CT, CT, NL, CT, CT, // 0
             CT, CT, CT, CT, CT, CT, CT, CT, CT, CT, CT, CT, CT, CT, CT, CT, // 1
             SP, __, DQ, __, __, __, __, SQ, __, __, __, __, __, HY, DO, __, // 2
             DD, DD, DD, DD, DD, DD, DD, DD, DD, DD, __, __, __, EQ, __, __, // 3
@@ -1163,7 +1152,8 @@ pub mod string {
         Backslash,
         Backtick,
         Space,
-        ExtendedSpace,
+        Tab,
+        NewLine,
         EqualSign,
         Digit,
         Minus,
@@ -1459,14 +1449,14 @@ mod tests {
     }
 
     #[test]
-    fn test_string_value_json_extended_space() {
+    fn test_string_value_json_tabs() {
         let v = r#""some\tvalue""#;
         let rec = Record::from_fields(&[("k", EncodedString::json(&v).into())]);
         assert_eq!(&format_no_color(&rec), "k=`some\tvalue`");
     }
 
     #[test]
-    fn test_string_value_raw_extended_space() {
+    fn test_string_value_raw_tabs() {
         let v = "some\tvalue";
         let rec = Record::from_fields(&[("k", EncodedString::raw(&v).into())]);
         assert_eq!(&format_no_color(&rec), "k=`some\tvalue`");
@@ -1889,6 +1879,9 @@ mod tests {
 
         rec.message = Some(EncodedString::raw(r#""message" '1'"#).into());
         assert_eq!(formatter.format_to_string(&rec), r#"`"message" '1'`"#);
+
+        rec.message = Some(EncodedString::raw(r#"message\twith\ttabs"#).into());
+        assert_eq!(formatter.format_to_string(&rec), r#"message\twith\ttabs"#);
     }
 
     #[test]
