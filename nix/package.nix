@@ -23,10 +23,7 @@ rustPlatform.buildRustPackage {
 
   cargoLock = {
     lockFile = ../Cargo.lock;
-    outputHashes = {
-      "htp-0.4.2" = "sha256-oYLN0aCLIeTST+Ib6OgWqEgu9qyI0n5BDtIUIIThLiQ=";
-      "wildflower-0.3.0" = "sha256-vv+ppiCrtEkCWab53eutfjHKrHZj+BEAprV5by8plzE=";
-    };
+    outputHashes = import ./cargo-hashes.nix;
   };
 
   nativeBuildInputs = [ installShellFiles ];
@@ -46,6 +43,17 @@ rustPlatform.buildRustPackage {
     description = cargoToml.package.description;
     homepage = cargoToml.workspace.package.repository;
     license = lib.licenses.mit;
+    changelog = "${cargoToml.workspace.package.repository}/releases";
+    maintainers = [
+      {
+        name = "Pavel Ivanov";
+        github = "pamburus";
+        email = "mr.pavel.ivanov@gmail.com";
+      }
+    ];
+    platforms = lib.platforms.unix ++ lib.platforms.windows;
     mainProgram = cargoToml.package.name;
+    categories = cargoToml.package.categories or [ ];
+    keywords = cargoToml.package.keywords or [ ];
   };
 }
