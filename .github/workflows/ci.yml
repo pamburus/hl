@@ -114,5 +114,13 @@ jobs:
       - name: Run nix flake check
         run: nix flake check --print-build-logs --all-systems --no-update-lock-file
 
+      - name: Check Nix formatting
+        run: |
+          nix fmt --no-update-lock-file
+          if ! git diff --exit-code; then
+            echo "Nix files are not formatted correctly"
+            exit 1
+          fi
+
       - name: Run nix build
         run: nix build --print-build-logs --no-update-lock-file

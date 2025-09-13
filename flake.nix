@@ -26,6 +26,8 @@
           packages.default = pkgs.callPackage ./nix/package.nix { };
 
           devShells.default = self'.packages.default;
+
+          formatter = pkgs.nixpkgs-fmt;
         };
       };
 }
