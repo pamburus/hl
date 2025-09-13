@@ -29,6 +29,8 @@
           };
 
           devShells.default = self'.packages.default;
+
+          formatter = pkgs.nixpkgs-fmt;
         };
       };
 }
