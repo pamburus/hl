@@ -13,6 +13,7 @@ repository = "https://github.com/pamburus/hl"
 authors = ["Pavel Ivanov <mr.pavel.ivanov@gmail.com>"]
 version = "0.32.0-alpha.10"
 edition = "2024"
+rust-version = "1.85.0"
 license = "MIT"
 
 [package]
