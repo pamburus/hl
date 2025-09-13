@@ -13,6 +13,9 @@ while :; do
             echo "  coverage"
             echo "  schema"
             echo "  screenshots"
+            echo "  lint"
+            echo "  audit"
+            echo "  outdated"
             exit 1
             ;;
         --)
@@ -125,6 +128,27 @@ setup_llvm_profdata() {
     fi
 }
 
+setup_clippy() {
+    setup_rustup
+    if ! (rustup component list | grep -q 'clippy.*(installed)'); then
+        rustup component add clippy
+    fi
+}
+
+setup_cargo_audit() {
+    setup_cargo
+    if [ ! -x "$(command -v cargo-audit)" ]; then
+        cargo install cargo-audit
+    fi
+}
+
+setup_cargo_outdated() {
+    setup_cargo
+    if [ ! -x "$(command -v cargo-outdated)" ]; then
+        cargo install cargo-outdated
+    fi
+}
+
 setup_coverage_tools() {
     setup_llvm_profdata
     setup_rustfilt
@@ -160,6 +184,15 @@ while [ $# -gt 0 ]; do
             ;;
         screenshots)
             setup_screenshot_tools
+            ;;
+        lint)
+            setup_clippy
+            ;;
+        audit)
+            setup_cargo_audit
+            ;;
+        outdated)
+            setup_cargo_outdated
             ;;
         *)
             echo "Unknown setup $1"
