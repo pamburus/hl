@@ -7,10 +7,11 @@ version: 2
 updates:
   - package-ecosystem: "cargo"
     directory: "/"
+    open-pull-requests-limit: 1
     schedule:
       interval: weekly
       day: friday
-      time: "20:00"
+      time: "19:00"
       timezone: "Europe/Belgrade"
     allow:
       - dependency-type: all
