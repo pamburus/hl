@@ -2,7 +2,9 @@
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-25.05";
     rust-overlay.url = "github:oxalica/rust-overlay";
+    rust-overlay.inputs.nixpkgs.follows = "nixpkgs";
     flake-parts.url = "github:hercules-ci/flake-parts";
+    flake-parts.inputs.nixpkgs-lib.follows = "nixpkgs";
   };
 
   outputs = inputs@{ flake-parts, ... }:
@@ -18,10 +20,7 @@
         perSystem = { self', lib, system, pkgs, config, ... }: {
           _module.args.pkgs = import inputs.nixpkgs {
             inherit system;
-
-            overlays = with inputs; [
-              rust-overlay.overlays.default
-            ];
+            overlays = [ inputs.rust-overlay.overlays.default ];
           };
 
           packages.default = pkgs.callPackage ./nix/package.nix { };
