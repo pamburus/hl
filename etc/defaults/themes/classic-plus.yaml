@@ -1,7 +1,7 @@
 # yaml-language-server: $schema=https://raw.githubusercontent.com/pamburus/hl/master/schema/json/theme.schema.json
 $schema: https://raw.githubusercontent.com/pamburus/hl/master/schema/json/theme.schema.json
 
-tags: [dark, 16color]
+tags: [dark, light, 16color]
 
 elements:
   input:
