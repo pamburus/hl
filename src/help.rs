@@ -1,8 +1,9 @@
 // std imports
-use std::{fmt, io};
+use std::{fmt, io, os};
 
 // third-party imports
 use owo_colors::OwoColorize;
+use terminal_size::terminal_size_of;
 
 pub struct Formatter<O> {
     width: Option<usize>,
@@ -15,18 +16,17 @@ where
 {
     pub fn new(output: O) -> Self
     where
-        O: io::IsTerminal,
+        O: io::IsTerminal + AsOsHandle,
     {
         let width = if output.is_terminal() {
-            term_size::dimensions().map(|d| d.0)
+            terminal_size_of(&output).map(|d| d.0.0)
         } else {
             None
         };
 
-        Self { output, width }
+        Self::with_width(output, width.map(usize::from))
     }
 
-    #[allow(dead_code)]
     pub fn with_width(output: O, width: Option<usize>) -> Self {
         Self { output, width }
     }
@@ -86,9 +86,27 @@ where
     }
 }
 
+#[cfg(not(windows))]
+pub trait AsOsHandle: os::fd::AsFd {}
+#[cfg(not(windows))]
+impl<T: os::fd::AsFd> AsOsHandle for T {}
+
+#[cfg(windows)]
+pub trait AsOsHandle: os::windows::io::AsHandle {}
+#[cfg(windows)]
+impl<T: os::windows::io::AsHandle> AsOsHandle for T {}
+
 #[cfg(test)]
 mod tests {
+    use std::io::IsTerminal;
+
     use super::*;
+
+    #[test]
+    fn test_formatter_new() {
+        let formatter = Formatter::new(std::io::stdout());
+        assert!(formatter.width.is_some() == std::io::stdout().is_terminal());
+    }
 
     #[test]
     fn test_format_grouped_list() {

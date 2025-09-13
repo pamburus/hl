@@ -15,6 +15,7 @@ use enumset::enum_set;
 use enumset_ext::EnumSetExt;
 use env_logger::{self as logger};
 use itertools::Itertools;
+use terminal_size::terminal_size_of;
 use utf8_supported::{Utf8Support, utf8_supported};
 
 // local imports
@@ -212,7 +213,7 @@ fn run() -> Result<()> {
         log::debug!("configured input info layouts: {input_info}");
         input_info = InputInfo::resolve(input_info);
         log::debug!("* resolved input info layouts: {input_info}");
-        match term_size::dimensions_stdout().map(|(w, _)| w) {
+        match terminal_size_of(stdout()).map(|(w, _)| w.0) {
             None => {
                 log::debug!("* no terminal detected");
             }
