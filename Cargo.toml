@@ -11,7 +11,7 @@ members = [
 [workspace.package]
 repository = "https://github.com/pamburus/hl"
 authors = ["Pavel Ivanov <mr.pavel.ivanov@gmail.com>"]
-version = "0.32.0-alpha.9"
+version = "0.32.0-alpha.10"
 edition = "2024"
 license = "MIT"
 
@@ -84,7 +84,6 @@ serde = { version = "1", features = ["derive"] }
 serde-logfmt = { path = "./crate/serde-logfmt" }
 serde_json = { version = "1", features = ["raw_value"] }
 serde_plain = "1"
-serde_yml = "0.0"
 sha2 = "0.10"
 shellwords = "1"
 signal-hook = "0.3"
@@ -100,6 +99,7 @@ wild = "2"
 wildflower = { git = "https://github.com/cassaundra/wildflower.git" }
 winapi-util = { version = "0.1" }
 wyhash = "0.6"
+yaml-peg = "1"
 
 [target.'cfg(target_os = "macos")'.dependencies]
 kqueue = "1"

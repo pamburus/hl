@@ -54,7 +54,7 @@ pub enum Error {
     #[error("failed to construct utf-8 string from bytes: {0}")]
     FromUtf8Error(#[from] std::string::FromUtf8Error),
     #[error("failed to parse yaml: {0}")]
-    YamlError(#[from] serde_yml::Error),
+    YamlError(#[from] yaml_peg::serde::SerdeError),
     #[error(transparent)]
     TomlError(#[from] toml::de::Error),
     #[error("failed to parse json: {0}")]

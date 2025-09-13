@@ -19,9 +19,9 @@ use serde::{
     de::{MapAccess, Visitor},
 };
 use serde_json as json;
-use serde_yml as yaml;
 use strum::{Display, EnumIter, IntoEnumIterator};
 use thiserror::Error;
+use yaml_peg::{NodeRc as YamlNode, serde as yaml};
 
 // local imports
 use crate::{
@@ -55,7 +55,7 @@ pub enum ExternalError {
     #[error(transparent)]
     Io(#[from] io::Error),
     #[error("failed to parse yaml: {0}")]
-    YamlError(#[from] serde_yml::Error),
+    YamlSerdeError(#[from] yaml::SerdeError),
     #[error(transparent)]
     TomlError(#[from] toml::de::Error),
     #[error("failed to parse json: {0}")]
@@ -146,7 +146,7 @@ impl Theme {
     fn from_buf(data: &[u8], format: Format) -> Result<Self, ExternalError> {
         let s = std::str::from_utf8(data)?;
         match format {
-            Format::Yaml => Ok(yaml::from_str(s)?),
+            Format::Yaml => Ok(yaml::from_str(s)?.remove(0)),
             Format::Toml => Ok(toml::from_str(s)?),
             Format::Json => Ok(json::from_str(s)?),
         }
@@ -363,12 +363,12 @@ impl<'de> Visitor<'de> for StylePackDeserializeVisitor {
     fn visit_map<A: MapAccess<'de>>(self, mut access: A) -> std::result::Result<Self::Value, A::Error> {
         let mut items = HashMap::new();
 
-        while let Some(key) = access.next_key::<yaml::Value>()? {
-            if let Ok(key) = yaml::from_value(key) {
+        while let Some(key) = access.next_key::<YamlNode>()? {
+            if let Ok(key) = Element::deserialize(key) {
                 let value: Style = access.next_value()?;
                 items.insert(key, value);
             } else {
-                _ = access.next_value::<yaml::Value>()?;
+                _ = access.next_value::<YamlNode>()?;
             }
         }
 
@@ -695,21 +695,8 @@ mod tests {
     fn test_style_pack() {
         assert_eq!(StylePack::default().clone().len(), 0);
 
-        let yaml = r##"
-            input:
-              foreground: red
-              background: blue
-              modes:
-                - bold
-                - faint
-            message:
-              foreground: green
-              modes:
-                - italic
-                - underline
-            unexpected: {}
-        "##;
-        let pack: StylePack = yaml::from_str(yaml).unwrap();
+        let yaml = include_str!("testing/assets/style-packs/pack1.yaml");
+        let pack: StylePack = yaml::from_str(yaml).unwrap().remove(0);
         assert_eq!(pack.0.len(), 2);
         assert_eq!(pack.0[&Element::Input].foreground, Some(Color::Plain(PlainColor::Red)));
         assert_eq!(pack.0[&Element::Input].background, Some(Color::Plain(PlainColor::Blue)));
@@ -724,7 +711,7 @@ mod tests {
         assert!(
             yaml::from_str::<StylePack>("invalid")
                 .unwrap_err()
-                .to_string()
+                .msg
                 .ends_with("expected style pack object")
         );
     }
