@@ -1,11 +1,21 @@
-{ 
+{
   lib,
   stdenv,
-  rustPlatform,
+  makeRustPlatform,
+  rust-bin,
   installShellFiles,
 }:
 let
   cargoToml = builtins.fromTOML (builtins.readFile ../Cargo.toml);
+
+  # Get the Rust toolchain from rust-overlay
+  toolchain = rust-bin.fromRustupToolchainFile ../rust-toolchain.toml;
+
+  # Create rustPlatform from the toolchain
+  rustPlatform = makeRustPlatform {
+    cargo = toolchain;
+    rustc = toolchain;
+  };
 in
 rustPlatform.buildRustPackage {
   pname = cargoToml.package.name;
