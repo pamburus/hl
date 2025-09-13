@@ -60,7 +60,7 @@ enumset-ext = { path = "./crate/enumset-ext", features = ["serde", "clap"] }
 enumset-serde = { path = "./crate/enumset-serde" }
 env_logger = "0.11"
 flate2 = "1"
-heapless = "0.8"
+heapless = "0.9"
 heapopt = { path = "./crate/heapopt" }
 hex = "0.4"
 htp = { git = "https://github.com/pamburus/htp.git" }
