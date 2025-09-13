@@ -112,7 +112,7 @@ jobs:
         uses: Swatinem/rust-cache@v2
 
       - name: Run nix flake check
-        run: nix flake check --print-build-logs --all-systems
+        run: nix flake check --print-build-logs --all-systems --no-update-lock-file
 
       - name: Run nix build
-        run: nix build --print-build-logs
+        run: nix build --print-build-logs --no-update-lock-file
