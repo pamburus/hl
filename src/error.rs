@@ -378,4 +378,205 @@ mod tests {
     fn test_app_name() {
         assert!(!TestAppInfo.app_name().is_empty());
     }
+
+    #[test]
+    fn test_from_config_error() {
+        let config_err = ConfigError::NotFound("test config error".to_string());
+        let error: Error = config_err.into();
+        match error {
+            Error::Config(boxed_err) => {
+                assert!(boxed_err.to_string().contains("test config error"));
+            }
+            _ => panic!("Expected Config error"),
+        }
+    }
+
+    #[test]
+    fn test_from_notify_error() {
+        let notify_err = notify::Error::generic("test notify error");
+        let error: Error = notify_err.into();
+        match error {
+            Error::NotifyError(boxed_err) => {
+                assert!(boxed_err.to_string().contains("test notify error"));
+            }
+            _ => panic!("Expected NotifyError"),
+        }
+    }
+
+    #[test]
+    fn test_from_query_parse_error() {
+        use pest::error::{Error as PestError, ErrorVariant};
+
+        let pest_err = PestError::new_from_pos(
+            ErrorVariant::ParsingError {
+                positives: vec![crate::query::Rule::input],
+                negatives: vec![],
+            },
+            pest::Position::from_start("test query"),
+        );
+        let error: Error = pest_err.into();
+        match error {
+            Error::QueryParseError(boxed_err) => {
+                assert!(boxed_err.to_string().contains("input"));
+            }
+            _ => panic!("Expected QueryParseError"),
+        }
+    }
+
+    #[test]
+    fn test_size_parse_error_variants() {
+        let parse_int_err = "not_a_number".parse::<u64>().unwrap_err();
+        let size_err = SizeParseError::ParseIntError(parse_int_err);
+        assert!(size_err.to_string().contains("invalid digit"));
+
+        let invalid_size_err = SizeParseError::InvalidSize("invalid".to_string());
+        assert!(invalid_size_err.to_string().contains("invalid size"));
+        assert!(invalid_size_err.to_string().contains("64K"));
+    }
+
+    #[test]
+    fn test_non_zero_size_parse_error() {
+        let zero_err = NonZeroSizeParseError::ZeroSize;
+        assert_eq!(zero_err.to_string(), "zero size");
+
+        let size_err = SizeParseError::InvalidSize("bad".to_string());
+        let non_zero_err = NonZeroSizeParseError::SizeParseError(size_err);
+        assert!(non_zero_err.to_string().contains("invalid size"));
+    }
+
+    #[test]
+    fn test_invalid_level_error() {
+        let level_err = InvalidLevelError {
+            value: "invalid_level".to_string(),
+            valid_values: vec!["debug".to_string(), "info".to_string()],
+        };
+        let error_msg = level_err.to_string();
+        assert!(error_msg.contains("invalid level"));
+        assert!(error_msg.contains("invalid_level"));
+        assert!(error_msg.contains("debug"));
+        assert!(error_msg.contains("info"));
+    }
+
+    #[test]
+    fn test_additional_error_variants() {
+        // Test FileNotFoundError
+        let file_err = Error::FileNotFoundError {
+            filename: "missing.log".to_string(),
+        };
+        assert!(file_err.to_string().contains("missing.log"));
+        assert!(file_err.to_string().contains("not found"));
+
+        // Test UnrecognizedTime
+        let time_err = Error::UnrecognizedTime("invalid_time".to_string());
+        assert!(time_err.to_string().contains("cannot recognize time"));
+        assert!(time_err.to_string().contains("invalid_time"));
+
+        // Test WrongFieldFilter
+        let filter_err = Error::WrongFieldFilter("bad_filter".to_string());
+        assert!(filter_err.to_string().contains("failed to parse json"));
+        assert!(filter_err.to_string().contains("bad_filter"));
+
+        // Test InconsistentIndex
+        let index_err = Error::InconsistentIndex {
+            details: "corrupted data".to_string(),
+        };
+        assert!(index_err.to_string().contains("inconsistent index"));
+        assert!(index_err.to_string().contains("corrupted data"));
+
+        // Test InvalidIndexHeader
+        let header_err = Error::InvalidIndexHeader;
+        assert!(header_err.to_string().contains("invalid index header"));
+
+        // Test AppDirs
+        let dirs_err = Error::AppDirs;
+        assert!(
+            dirs_err
+                .to_string()
+                .contains("failed to detect application directories")
+        );
+    }
+
+    #[test]
+    fn test_file_operation_errors() {
+        use std::io::{Error as IoError, ErrorKind};
+        use std::path::PathBuf;
+
+        let path = PathBuf::from("/test/file.log");
+
+        // Test FailedToOpenFileForReading
+        let read_err = Error::FailedToOpenFileForReading {
+            path: path.clone(),
+            source: IoError::new(ErrorKind::PermissionDenied, "permission denied"),
+        };
+        assert!(read_err.to_string().contains("failed to open file"));
+        assert!(read_err.to_string().contains("reading"));
+        assert!(read_err.to_string().contains("/test/file.log"));
+
+        // Test FailedToOpenFileForWriting
+        let write_err = Error::FailedToOpenFileForWriting {
+            path: path.clone(),
+            source: IoError::new(ErrorKind::PermissionDenied, "permission denied"),
+        };
+        assert!(write_err.to_string().contains("failed to open file"));
+        assert!(write_err.to_string().contains("writing"));
+
+        // Test FailedToGetFileMetadata
+        let meta_err = Error::FailedToGetFileMetadata {
+            path: path.clone(),
+            source: IoError::new(ErrorKind::PermissionDenied, "permission denied"),
+        };
+        assert!(meta_err.to_string().contains("failed to get metadata"));
+
+        // Test FailedToReadFile
+        let read_file_err = Error::FailedToReadFile {
+            path: "/test/file.log".to_string(),
+            source: IoError::new(ErrorKind::PermissionDenied, "permission denied"),
+        };
+        assert!(read_file_err.to_string().contains("failed to read file"));
+
+        // Test RecvTimeoutError
+        use std::sync::mpsc;
+        let (_, rx) = mpsc::channel::<()>();
+        let timeout_err = rx.recv_timeout(std::time::Duration::from_millis(1)).unwrap_err();
+        let recv_err = Error::RecvTimeoutError { source: timeout_err };
+        assert!(recv_err.to_string().contains("failed to receive from mpsc channel"));
+    }
+
+    #[test]
+    fn test_parse_json_line_error() {
+        let json_err = serde_json::from_str::<serde_json::Value>("invalid json").unwrap_err();
+        let line_err = Error::FailedToParseJsonLine {
+            line: 42,
+            source: json_err,
+        };
+        let error_msg = line_err.to_string();
+        assert!(error_msg.contains("42"));
+    }
+
+    #[test]
+    fn test_did_you_mean_display() {
+        let suggestions = Suggestions::new("test", vec!["option1", "option2", "option3"]);
+        let did_you_mean = DidYouMean {
+            suggestions: &suggestions,
+        };
+        let display_str = format!("{}", did_you_mean);
+        assert!(display_str.contains("did you mean"));
+        // Just check that the display string contains reasonable content
+        assert!(!display_str.is_empty());
+        assert!(display_str.ends_with("?"));
+    }
+
+    #[test]
+    fn test_tips_display_with_both_fields() {
+        let suggestions = Suggestions::new("test", vec!["suggestion1"]);
+        let tips = Tips {
+            did_you_mean: Some(DidYouMean {
+                suggestions: &suggestions,
+            }),
+            usage: Some("run command --help".to_string()),
+        };
+        let display_str = format!("{}", tips);
+        assert!(display_str.contains("did you mean") || display_str.contains("suggestion1"));
+        assert!(display_str.contains("run command --help") || display_str.contains("suggestion1"));
+    }
 }

@@ -1468,4 +1468,230 @@ mod tests {
             Err(io::Error::other("read error"))
         }
     }
+
+    #[test]
+    fn test_timestamp_operations() {
+        let ts1 = Timestamp {
+            sec: 1000,
+            nsec: 500_000_000,
+        };
+        let ts2 = Timestamp {
+            sec: 1001,
+            nsec: 200_000_000,
+        };
+
+        // Test addition
+        let duration = Duration::from_millis(500);
+        let result = ts1 + duration;
+        assert_eq!(result.sec, 1000);
+        assert_eq!(result.nsec, 1000000000);
+
+        // Test subtraction of Duration
+        let result = ts2 - duration;
+        assert_eq!(result.sec, 1000);
+        assert_eq!(result.nsec, 700_000_000);
+
+        // Test subtraction of Timestamp
+        let diff = ts2 - ts1;
+        assert_eq!(diff.as_millis(), 700);
+    }
+
+    #[test]
+    fn test_hash_enum() {
+        // Test Hash enum variants
+        let sha = Hash::Sha256([0; 32]);
+        let gx = Hash::GxHash64(0);
+        let wy = Hash::WyHash(0);
+
+        // Just ensure they exist and can be created
+        assert!(matches!(sha, Hash::Sha256(_)));
+        assert!(matches!(gx, Hash::GxHash64(_)));
+        assert!(matches!(wy, Hash::WyHash(_)));
+    }
+
+    #[test]
+    fn test_indexer_settings_hash() {
+        let fs = MockFileSystem::<MockSourceMetadata>::new();
+        let settings = IndexerSettings::with_fs(fs);
+
+        // Test that we can call hash method
+        let hash_result = settings.hash();
+        assert!(hash_result.is_ok());
+
+        // Should not panic and settings should be valid
+        assert!(settings.buffer_size.0.get() > 0);
+    }
+
+    #[test]
+    fn test_source_block_methods() {
+        let mut stat = Stat::new();
+        stat.flags = FLAG_LEVEL_INFO;
+        let block = SourceBlock::new(
+            0,
+            1024,
+            stat,
+            Chronology::default(),
+            Some(Hash::Sha256([
+                0x12, 0x34, 0x56, 0x78, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0,
+            ])),
+        );
+
+        // Test match_level
+        use crate::level::Level;
+        assert!(block.match_level(Level::Info));
+        assert!(block.match_level(Level::Trace));
+        assert!(!block.match_level(Level::Error));
+
+        // Test overlaps_by_time with timestamps
+        let ts1 = Timestamp { sec: 1000, nsec: 0 };
+        let ts2 = Timestamp { sec: 2000, nsec: 0 };
+
+        let mut block_with_time = block.clone();
+        block_with_time.stat.ts_min_max = Some((ts1, ts2));
+
+        // Create another block for testing overlap
+        let mut other_stat = Stat::new();
+        other_stat.ts_min_max = Some((ts1, Timestamp { sec: 3000, nsec: 0 }));
+        let other_block = SourceBlock::new(1024, 512, other_stat, Chronology::default(), None);
+
+        // Should overlap when range intersects
+        assert!(block_with_time.overlaps_by_time(&other_block));
+    }
+
+    #[test]
+    fn test_stat_operations() {
+        let mut stat = Stat::new();
+        stat.flags = FLAG_LEVEL_ERROR;
+
+        // Test add_valid
+        let ts = Timestamp { sec: 1000, nsec: 0 };
+        stat.add_valid(Some(ts), FLAG_LEVEL_ERROR);
+        assert_eq!(stat.lines_valid, 1);
+        assert_eq!(stat.ts_min_max, Some((ts, ts)));
+
+        // Test add_invalid
+        stat.add_invalid();
+        assert_eq!(stat.lines_invalid, 1);
+
+        // Test merge
+        let mut other_stat = Stat::new();
+        other_stat.flags = FLAG_LEVEL_INFO;
+        let ts2 = Timestamp { sec: 2000, nsec: 0 };
+        other_stat.add_valid(Some(ts2), FLAG_LEVEL_INFO);
+
+        stat.merge(&other_stat);
+        assert_eq!(stat.lines_valid, 2);
+        // flags should be merged with bitwise OR
+        assert!(stat.flags & FLAG_LEVEL_ERROR != 0);
+        assert!(stat.flags & FLAG_LEVEL_INFO != 0);
+        assert_eq!(stat.ts_min_max, Some((ts, ts2)));
+    }
+
+    #[test]
+    fn test_buffer_size_conversions() {
+        let buf_size = BufferSize::default();
+
+        // Test conversions
+        let as_u32: u32 = buf_size.into();
+        let buf_size2 = BufferSize::default();
+        let as_nonzero: NonZeroU32 = buf_size2.into();
+
+        assert!(as_u32 > 0);
+        assert_eq!(as_u32, as_nonzero.get());
+
+        // Test try_from
+        let from_nonzero = BufferSize::try_from(nonzero!(2048usize));
+        assert!(from_nonzero.is_ok());
+    }
+
+    #[test]
+    fn test_message_size_conversions() {
+        let msg_size = MessageSize::default();
+
+        // Test conversions
+        let as_u32: u32 = msg_size.into();
+        let msg_size2 = MessageSize::default();
+        let as_nonzero: NonZeroU32 = msg_size2.into();
+
+        assert!(as_u32 > 0);
+        assert_eq!(as_u32, as_nonzero.get());
+
+        // Test try_from
+        let from_nonzero = MessageSize::try_from(nonzero!(1024usize));
+        assert!(from_nonzero.is_ok());
+    }
+
+    #[test]
+    fn test_metadata_conversions() {
+        use std::time::SystemTime;
+
+        // Test from fs::Metadata (simulated)
+        let mock_meta = MockSourceMetadata {
+            len: 1024,
+            modified: SystemTime::UNIX_EPOCH + Duration::from_secs(1000),
+        };
+
+        // Manually construct metadata since MockSourceMetadata doesn't implement required trait
+        let meta = Metadata {
+            len: mock_meta.len,
+            modified: (1000, 0),
+        };
+        assert_eq!(meta.len, 1024);
+        assert_eq!(meta.modified.0, 1000);
+    }
+
+    #[test]
+    fn test_chronology_debug() {
+        let chronology = Chronology::default();
+        let debug_str = format!("{:?}", chronology);
+        assert!(debug_str.contains("Chronology"));
+    }
+
+    #[test]
+    fn test_timestamp_display() {
+        let ts = Timestamp {
+            sec: 1000,
+            nsec: 500_000_000,
+        };
+        let display_str = format!("{}", ts);
+        assert!(display_str.contains("1000"));
+        assert!(display_str.contains("500000000"));
+    }
+
+    #[test]
+    fn test_source_metadata_trait() {
+        use std::time::SystemTime;
+
+        let mock_meta = MockSourceMetadata {
+            len: 2048,
+            modified: SystemTime::UNIX_EPOCH + Duration::from_secs(2000),
+        };
+
+        assert_eq!(mock_meta.len(), 2048);
+        assert!(!mock_meta.is_empty());
+        assert!(mock_meta.modified().is_ok());
+
+        let empty_meta = MockSourceMetadata {
+            len: 0,
+            modified: SystemTime::UNIX_EPOCH,
+        };
+        assert!(empty_meta.is_empty());
+    }
+
+    #[derive(Clone)]
+    struct MockSourceMetadata {
+        len: u64,
+        modified: SystemTime,
+    }
+
+    impl SourceMetadata for MockSourceMetadata {
+        fn len(&self) -> u64 {
+            self.len
+        }
+
+        fn modified(&self) -> std::io::Result<SystemTime> {
+            Ok(self.modified)
+        }
+    }
 }

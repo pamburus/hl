@@ -1046,4 +1046,96 @@ mod tests {
         };
         assert_eq!(expected, from_str(j).unwrap());
     }
+
+    #[test]
+    fn test_deserializer_error_cases() {
+        use std::collections::HashMap;
+
+        // Test invalid key-value pair
+        let result: std::result::Result<HashMap<String, String>, Error> = from_str("invalid");
+        assert!(result.is_err());
+
+        // Test unterminated quoted string
+        let result: std::result::Result<HashMap<String, String>, Error> = from_str("key=\"unterminated");
+        assert!(result.is_err());
+
+        // Test invalid escape sequence
+        let result: std::result::Result<HashMap<String, String>, Error> = from_str("key=\"invalid\\x\"");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_raw_value_deserialization() {
+        use crate::logfmt::raw::RawValue;
+
+        // Test deserializing a raw value from logfmt
+        let raw: &RawValue = from_str("test_value").unwrap();
+        assert_eq!(raw.get(), "test_value");
+
+        // Test deserializing boxed raw value
+        let boxed: Box<RawValue> = from_str("boxed_value").unwrap();
+        assert_eq!(boxed.get(), "boxed_value");
+    }
+
+    #[test]
+    fn test_special_characters_in_values() {
+        #[derive(Deserialize, PartialEq, Debug)]
+        struct Test {
+            special: String,
+            unicode: String,
+        }
+
+        let j = r#"special="hello\nworld\ttab" unicode="café""#;
+        let expected = Test {
+            special: "hello\nworld\ttab".to_string(),
+            unicode: "café".to_string(),
+        };
+        assert_eq!(expected, from_str(j).unwrap());
+    }
+
+    #[test]
+    fn test_deserializer_numbers() {
+        #[derive(Deserialize, PartialEq, Debug)]
+        struct Test {
+            integer: i32,
+            string_number: String,
+        }
+
+        let j = "integer=42 string_number=3.14";
+        let expected = Test {
+            integer: 42,
+            string_number: "3.14".to_string(),
+        };
+        assert_eq!(expected, from_str(j).unwrap());
+    }
+
+    #[test]
+    fn test_deserializer_boolean() {
+        #[derive(Deserialize, PartialEq, Debug)]
+        struct Test {
+            flag1: bool,
+            flag2: bool,
+        }
+
+        let j = "flag1=true flag2=false";
+        let expected = Test {
+            flag1: true,
+            flag2: false,
+        };
+        assert_eq!(expected, from_str(j).unwrap());
+    }
+
+    #[test]
+    fn test_error_types() {
+        // Test specific error variants
+        assert!(matches!(
+            from_str::<i32>("not_a_number").unwrap_err(),
+            Error::ExpectedInteger
+        ));
+
+        assert!(matches!(
+            from_str::<bool>("not_a_bool").unwrap_err(),
+            Error::ExpectedBoolean
+        ));
+    }
 }

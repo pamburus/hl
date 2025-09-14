@@ -598,4 +598,156 @@ mod tests {
         test_rfc3339("2020-08-21T07:20:48+03:00", Some(b'+'), Some(3), Some(0));
         test_rfc3339("2020-08-21T07:20:48-03:00", Some(b'-'), Some(3), Some(0));
     }
+    #[test]
+    fn test_timestamp_methods() {
+        let ts = Timestamp::new("2020-08-21T07:20:48.123Z");
+
+        // Test raw method
+        assert_eq!(ts.raw(), "2020-08-21T07:20:48.123Z");
+
+        // Test with_unix_unit
+        let ts2 = Timestamp::new("2020-08-21T07:20:48.123Z");
+        let ts_with_unit = ts2.with_unix_unit(Some(UnixTimestampUnit::Milliseconds));
+        assert_eq!(ts_with_unit.unix_unit, Some(UnixTimestampUnit::Milliseconds));
+
+        // Test parsed method
+        let parsed = ts.parse().unwrap();
+        let ts3 = Timestamp::new("2020-08-21T07:20:48.123Z");
+        assert_eq!(ts3.parsed().unwrap().timestamp(), parsed.timestamp());
+
+        // Test as_rfc3339
+        let rfc3339 = ts.as_rfc3339().unwrap();
+        assert_eq!(rfc3339.as_str(), "2020-08-21T07:20:48.123Z");
+
+        // Test unix_utc
+        let unix_ts = Timestamp::new("1597994448");
+        let unix_utc = unix_ts.unix_utc().unwrap();
+        assert_eq!(unix_utc.0, 1597994448);
+    }
+
+    #[test]
+    fn test_rfc3339_components() {
+        use rfc3339::Timestamp;
+
+        let ts = Timestamp::parse("2020-12-25T15:30:45.999-05:00").unwrap();
+
+        // Test date components
+        let date = ts.date();
+        assert_eq!(date.as_bytes(), b"2020-12-25");
+        assert_eq!(date.year().value(), 2020);
+        assert_eq!(date.month().value(), 12);
+        assert_eq!(date.day().value(), 25);
+
+        // Test time components
+        let time = ts.time();
+        assert_eq!(time.as_bytes(), b"15:30:45");
+        assert_eq!(time.hour().value(), 15);
+        assert_eq!(time.minute().value(), 30);
+        assert_eq!(time.second().value(), 45);
+
+        // Test fraction
+        let fraction = ts.fraction();
+        assert_eq!(fraction.as_bytes(), b".999");
+
+        // Test timezone
+        let tz = ts.timezone();
+        assert_eq!(tz.as_bytes(), b"-05:00");
+        assert!(!tz.is_utc());
+        assert_eq!(tz.sign(), Some(b'-'));
+        assert_eq!(tz.hour().unwrap().value(), 5);
+        assert_eq!(tz.minute().unwrap().value(), 0);
+    }
+
+    #[test]
+    fn test_utc_timezone() {
+        use rfc3339::Timestamp;
+
+        let ts_z = Timestamp::parse("2020-01-01T00:00:00Z").unwrap();
+        assert!(ts_z.timezone().is_utc());
+
+        let ts_plus_zero = Timestamp::parse("2020-01-01T00:00:00+00:00").unwrap();
+        assert!(ts_plus_zero.timezone().is_utc());
+    }
+
+    #[test]
+    fn test_number_parsing() {
+        use rfc3339::Number;
+
+        let num = Number::parse(b"2020").unwrap();
+        assert_eq!(num.as_bytes(), b"2020");
+        assert_eq!(num.as_str(), "2020");
+        assert_eq!(num.value(), 2020);
+
+        // Test empty case
+        let empty_result = Number::parse(b"");
+        assert!(empty_result.is_none());
+
+        // Test non-digit case
+        let non_digit_result = Number::parse(b"abc");
+        assert!(non_digit_result.is_none());
+    }
+
+    #[test]
+    fn test_fraction_parsing() {
+        use rfc3339::Fraction;
+
+        let frac = Fraction::parse(b".123456").unwrap();
+        assert_eq!(frac.as_bytes(), b".123456");
+        assert_eq!(frac.as_str(), ".123456");
+
+        // Test without leading dot
+        let no_dot = Fraction::parse(b"123");
+        assert!(no_dot.is_none());
+
+        // Test empty - Fraction::parse returns Some for empty input
+        let empty = Fraction::parse(b"");
+        assert!(empty.is_some());
+    }
+
+    #[test]
+    fn test_guess_number_type() {
+        assert!(matches!(guess_number_type(b"123"), Some(NumberType::Integer)));
+        assert!(matches!(guess_number_type(b"123.456"), Some(NumberType::Float)));
+        assert!(matches!(guess_number_type(b"123."), Some(NumberType::Float)));
+        assert!(matches!(guess_number_type(b".456"), Some(NumberType::Float)));
+    }
+
+    #[test]
+    fn test_only_digits() {
+        assert!(only_digits(b"123456"));
+        assert!(!only_digits(b"123.456"));
+        assert!(!only_digits(b"abc"));
+        assert!(only_digits(b"")); // empty string returns true
+        assert!(!only_digits(b"123a"));
+    }
+
+    #[test]
+    fn test_edge_cases() {
+        // Test negative timestamp
+        let neg_ts = Timestamp::new("-1.5");
+        let parsed = neg_ts.parse().unwrap();
+        assert!(parsed.timestamp() < 0);
+
+        // Test very large timestamp
+        let large_ts = Timestamp::new("9999999999.999999999");
+        let parsed = large_ts.parse();
+        assert!(parsed.is_some());
+
+        // Test invalid RFC3339
+        let invalid_rfc = Timestamp::new("not-a-timestamp");
+        assert!(invalid_rfc.as_rfc3339().is_none());
+
+        // Test various unix units
+        let ms_ts = Timestamp::new("1597994448123").with_unix_unit(Some(UnixTimestampUnit::Milliseconds));
+        let parsed_ms = ms_ts.parse().unwrap();
+        assert_eq!(parsed_ms.timestamp(), 1597994448);
+
+        let us_ts = Timestamp::new("1597994448123456").with_unix_unit(Some(UnixTimestampUnit::Microseconds));
+        let parsed_us = us_ts.parse().unwrap();
+        assert_eq!(parsed_us.timestamp(), 1597994448);
+
+        let ns_ts = Timestamp::new("1597994448123456789").with_unix_unit(Some(UnixTimestampUnit::Nanoseconds));
+        let parsed_ns = ns_ts.parse().unwrap();
+        assert_eq!(parsed_ns.timestamp(), 1597994448);
+    }
 }

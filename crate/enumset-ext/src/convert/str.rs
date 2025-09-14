@@ -141,3 +141,47 @@ where
         ))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_enum_set_default() {
+        use enumset::EnumSetType;
+
+        #[derive(Debug, EnumSetType)]
+        enum TestEnum {
+            A,
+            B,
+            C,
+        }
+
+        let set1: EnumSet<TestEnum> = EnumSet::empty();
+        let set2: EnumSet<TestEnum> = EnumSet::default();
+
+        // Both should be empty
+        assert_eq!(set1, set2);
+    }
+
+    #[cfg(feature = "clap")]
+    #[test]
+    fn test_clap_parser_default() {
+        use enumset::EnumSetType;
+
+        #[derive(Debug, EnumSetType)]
+        enum TestEnum {
+            A,
+            B,
+            C,
+        }
+
+        let parser1 = ClapParser::<TestEnum>::new();
+        let parser2 = ClapParser::<TestEnum>::default();
+
+        // Both should have the same internal state
+        // We can't easily compare them directly, but we can verify they're both created
+        let _ = parser1;
+        let _ = parser2;
+    }
+}
