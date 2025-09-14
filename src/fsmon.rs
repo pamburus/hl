@@ -19,7 +19,7 @@ where
         return Ok(());
     }
 
-    paths.retain(|path| path.metadata().map_or(false, |metadata| metadata.file_type().is_file()));
+    paths.retain(|path| path.metadata().is_ok_and(|metadata| metadata.file_type().is_file()));
 
     for i in 0..paths.len() {
         if let Ok(canonical_path) = paths[i].canonicalize() {
@@ -46,7 +46,7 @@ where
     watch.dedup();
 
     imp::run(watch, |event| {
-        if event.paths.iter().any(|path| paths.binary_search(&path).is_ok()) {
+        if event.paths.iter().any(|path| paths.binary_search(path).is_ok()) {
             handle(event)
         } else {
             Ok(())

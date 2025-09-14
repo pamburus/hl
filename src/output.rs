@@ -71,7 +71,7 @@ impl Pager {
 
 impl Drop for Pager {
     fn drop(&mut self) {
-        if let Some(status) = self.process.wait().ok() {
+        if let Ok(status) = self.process.wait() {
             Self::recover(status);
         }
     }

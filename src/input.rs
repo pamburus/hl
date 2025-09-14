@@ -265,8 +265,8 @@ impl Input {
 
     /// Opens the file for reading.
     /// This includes decoding compressed files if needed.
-    pub fn open(path: &PathBuf) -> io::Result<Self> {
-        InputReference::File(path.clone().try_into()?).open()
+    pub fn open(path: &Path) -> io::Result<Self> {
+        InputReference::File(path.to_path_buf().try_into()?).open()
     }
 
     /// Opens the stdin for reading.
@@ -306,7 +306,7 @@ impl Input {
                 }
             }
         }
-        stream.seek(SeekFrom::Start(pos as u64))?;
+        stream.seek(SeekFrom::Start(pos))?;
         Ok(())
     }
 }
@@ -328,7 +328,7 @@ impl Stream {
             Self::Sequential(stream) => Self::Sequential(stream),
             Self::RandomAccess(stream) => {
                 let mut stream = stream;
-                if stream.seek(SeekFrom::Current(0)).is_err() {
+                if stream.stream_position().is_err() {
                     Self::Sequential(Box::new(stream))
                 } else {
                     Self::RandomAccess(stream)
@@ -345,12 +345,12 @@ impl Stream {
                 Self::Sequential(Box::new(AnyDecoder::new(BufReader::new(stream)).with_metadata(meta)))
             }
             Self::RandomAccess(mut stream) => {
-                if let Some(pos) = stream.seek(SeekFrom::Current(0)).ok() {
+                if let Ok(size) = stream.stream_position() {
                     log::debug!("detecting format of random access stream");
                     let meta = stream.metadata().ok().flatten();
                     let kind = AnyDecoder::new(BufReader::new(&mut stream)).kind().ok();
                     log::debug!("format detected: {:?}", &kind);
-                    stream.seek(SeekFrom::Start(pos)).ok();
+                    stream.seek(SeekFrom::Start(size)).ok();
                     match kind {
                         Some(Format::Verbatim) => {
                             return Self::RandomAccess(stream);
@@ -370,7 +370,7 @@ impl Stream {
     }
 
     /// Converts the stream to a sequential stream.
-    pub fn as_sequential<'a>(&'a mut self) -> StreamOver<&'a mut (dyn ReadMeta + Send + Sync)> {
+    pub fn as_sequential(&mut self) -> StreamOver<&mut (dyn ReadMeta + Send + Sync)> {
         match self {
             Self::Sequential(stream) => StreamOver(stream),
             Self::RandomAccess(stream) => StreamOver(stream),
@@ -492,7 +492,7 @@ impl IndexedInput {
     /// Converts the input to blocks.
     pub fn into_blocks(self) -> Blocks<IndexedInput, impl Iterator<Item = usize>> {
         let n = self.index.source().blocks.len();
-        Blocks::new(Arc::new(self), (0..n).into_iter())
+        Blocks::new(Arc::new(self), 0..n)
     }
 
     fn from_stream<FS>(reference: InputReference, stream: Stream, indexer: &Indexer<FS>) -> Result<Self>
@@ -540,16 +540,16 @@ impl IndexedInput {
         FS: FileSystem + Sync,
         FS::Metadata: SourceMetadata,
     {
-        let pos = stream.seek(SeekFrom::Current(0))?;
+        let position = stream.stream_position()?;
         let index = indexer.index_stream(&mut stream, path, meta)?;
 
-        stream.seek(SeekFrom::Start(pos))?;
+        stream.seek(SeekFrom::Start(position))?;
 
         Ok((stream, index))
     }
 
     fn index_sequential_stream<FS>(
-        path: &PathBuf,
+        path: &Path,
         meta: &Metadata,
         stream: SequentialStream,
         indexer: &Indexer<FS>,
@@ -702,7 +702,7 @@ impl Iterator for BlockLines<IndexedInput> {
         let block = self.block.source_block();
         let bitmap = &block.chronology.bitmap;
 
-        if bitmap.len() != 0 {
+        if !bitmap.is_empty() {
             let k = 8 * size_of_val(&bitmap[0]);
             let n = self.current / k;
             let m = self.current % k;
@@ -763,6 +763,11 @@ impl BlockLine {
     #[inline]
     pub fn len(&self) -> usize {
         self.range.end - self.range.start
+    }
+
+    #[inline]
+    pub fn is_empty(&self) -> bool {
+        self.range.start == self.range.end
     }
 }
 
@@ -964,7 +969,7 @@ mod tests {
         assert!(matches!(stream, Stream::RandomAccess(_)));
         let stream = stream.as_sequential();
         let meta = stream.metadata().unwrap();
-        assert_eq!(meta.is_some(), true);
+        assert!(meta.is_some());
         assert_matches!(n, 147 | 149);
         assert_eq!(buf.len(), n);
     }
@@ -1058,7 +1063,7 @@ mod tests {
         assert!(result.is_err());
         let err = result.unwrap_err();
         assert_eq!(err.kind(), io::ErrorKind::Other);
-        assert_eq!(err.to_string().contains("test.log"), true);
+        assert!(err.to_string().contains("test.log"));
     }
 
     #[test]
@@ -1068,7 +1073,7 @@ mod tests {
         assert!(result.is_err());
         let err = result.err().unwrap();
         assert_eq!(err.kind(), io::ErrorKind::InvalidInput);
-        assert_eq!(err.to_string().contains("is a directory"), true);
+        assert!(err.to_string().contains("is a directory"));
     }
 
     #[test]
@@ -1079,7 +1084,7 @@ mod tests {
         assert!(result.is_err());
         let err = result.err().unwrap();
         assert_eq!(err.kind(), io::ErrorKind::NotFound);
-        assert_eq!(err.to_string().contains(filename), true);
+        assert!(err.to_string().contains(filename));
     }
 
     #[test]
@@ -1101,7 +1106,7 @@ mod tests {
     fn test_indexed_input_stdin() {
         let data = br#"{"ts":"2024-10-01T01:02:03Z","level":"info","msg":"some test message"}\n"#;
         let stream = Stream::RandomAccess(Box::new(Cursor::new(data)));
-        let indexer = Indexer::<LocalFileSystem>::new(1, PathBuf::new(), IndexerSettings::default());
+        let indexer = Indexer::<LocalFileSystem>::new(1, PathBuf::new(), IndexerSettings::with_fs(LocalFileSystem));
         let input = IndexedInput::from_stream(InputReference::Stdin, stream, &indexer).unwrap();
         let mut blocks = input.into_blocks().collect_vec();
         assert_eq!(blocks.len(), 1);
@@ -1122,9 +1127,8 @@ mod tests {
                 1,
                 PathBuf::from("."),
                 IndexerSettings {
-                    fs: fs.clone(),
                     buffer_size: nonzero!(64u32).into(),
-                    ..Default::default()
+                    ..IndexerSettings::with_fs(fs.clone())
                 },
             );
             let input = IndexedInput::open(&path, &indexer).unwrap();
@@ -1151,11 +1155,10 @@ mod tests {
             let path = PathBuf::from("sample/test.log");
             let indexer = Indexer::new(
                 1,
-                PathBuf::from("/tmp/cache"),
+                PathBuf::from("."),
                 IndexerSettings {
-                    fs: fs.clone(),
                     buffer_size: nonzero!(64u32).into(),
-                    ..Default::default()
+                    ..IndexerSettings::with_fs(fs.clone())
                 },
             );
             let reference = InputReference::File(InputPath::resolve_with_fs(path.clone(), &fs).unwrap());
@@ -1182,7 +1185,7 @@ mod tests {
 
     impl Read for FailingReader {
         fn read(&mut self, _buf: &mut [u8]) -> io::Result<usize> {
-            Err(io::Error::new(io::ErrorKind::Other, "read error"))
+            Err(io::Error::other("read error"))
         }
     }
 
@@ -1192,7 +1195,7 @@ mod tests {
                 SeekFrom::Start(0) => Ok(0),
                 SeekFrom::Current(0) => Ok(0),
                 SeekFrom::End(0) => Ok(0),
-                _ => Err(io::Error::new(io::ErrorKind::Other, "seek error")),
+                _ => Err(io::Error::other("seek error")),
             }
         }
     }
@@ -1215,7 +1218,7 @@ mod tests {
 
     impl<R> Seek for UnseekableReader<R> {
         fn seek(&mut self, _: SeekFrom) -> io::Result<u64> {
-            Err(io::Error::new(io::ErrorKind::Other, "seek error"))
+            Err(io::Error::other("seek error"))
         }
     }
 
@@ -1223,5 +1226,22 @@ mod tests {
         fn metadata(&self) -> io::Result<Option<Metadata>> {
             Ok(None)
         }
+    }
+
+    #[test]
+    fn test_failing_reader_seek_error() {
+        use std::io::SeekFrom;
+
+        let mut reader = FailingReader;
+
+        // These should succeed (zero seeks)
+        assert!(reader.seek(SeekFrom::Start(0)).is_ok());
+        assert!(reader.stream_position().is_ok());
+        assert!(reader.seek(SeekFrom::End(0)).is_ok());
+
+        // This should fail (non-zero seek)
+        let result = reader.seek(SeekFrom::Start(10));
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err().to_string(), "seek error");
     }
 }

@@ -23,6 +23,7 @@ pub enum Error {
     UnexpectedByte(u8),
     Custom(String),
     InvalidUtf8(std::str::Utf8Error),
+    NotImplemented,
 }
 
 impl fmt::Display for Error {
@@ -45,6 +46,7 @@ impl fmt::Display for Error {
             Self::UnexpectedByte(byte) => write!(f, "unexpected byte: {}", byte),
             Self::Custom(msg) => f.write_str(msg),
             Self::InvalidUtf8(err) => write!(f, "invalid utf-8: {}", err),
+            Self::NotImplemented => f.write_str("not implemented"),
         }
     }
 }

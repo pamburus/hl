@@ -54,19 +54,25 @@ jobs:
           components: rustfmt
 
       - name: Check formatting
-        run: cargo +nightly fmt --verbose --all --check
+        run: cargo +nightly fmt --check --verbose --all
 
       - name: markdownlint-cli2-action
         uses: DavidAnson/markdownlint-cli2-action@v18.0.0
 
+      - name: Run Check
+        run: cargo check --locked --workspace
+
+      - name: Run Clippy
+        run: cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
+
       - name: Build
-        run: cargo build --verbose --benches --workspace
+        run: cargo build --locked --workspace --verbose --benches
 
       - name: Run tests
-        run: cargo test --verbose --workspace
+        run: cargo test --locked --workspace --verbose
 
       - name: Run executable
-        run: cargo run
+        run: cargo run --locked
 
   coverage:
     runs-on: ubuntu-latest

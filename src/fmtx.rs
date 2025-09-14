@@ -52,7 +52,15 @@ impl Counter {
     pub fn new() -> Self {
         Self { value: 0 }
     }
+}
 
+impl Default for Counter {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Counter {
     #[inline]
     pub fn result(&self) -> usize {
         self.value
@@ -584,5 +592,15 @@ mod tests {
             },
         );
         assert_eq!(buf, vec![0, 0, 1, 2, 3]);
+    }
+
+    #[test]
+    fn test_counter_default() {
+        let counter1 = Counter::default();
+        let counter2 = Counter::new();
+
+        // Both should have the same initial state
+        assert_eq!(counter1.result(), counter2.result());
+        assert_eq!(counter1.result(), 0);
     }
 }

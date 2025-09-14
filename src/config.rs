@@ -73,13 +73,13 @@ impl Loader {
             .map(|dirs| dirs.system_config_dirs.clone())
             .unwrap_or_default()
             .into_iter()
-            .map(|dir| SourceFile::new(&Self::config(&dir)).required(false).into())
+            .map(|dir| SourceFile::new(Self::config(&dir)).required(false).into())
     }
 
     fn user(&self) -> impl Iterator<Item = Source> + use<> {
         self.dirs
             .as_ref()
-            .map(|dirs| SourceFile::new(&Self::config(&dirs.config_dir)).required(false).into())
+            .map(|dirs| SourceFile::new(Self::config(&dirs.config_dir)).required(false).into())
             .into_iter()
     }
 

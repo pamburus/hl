@@ -121,7 +121,7 @@ impl ReplayBufCreator {
 impl Write for ReplayBufCreator {
     fn write(&mut self, buf: &[u8]) -> Result<usize> {
         let mut k: usize = 0;
-        if buf.len() != 0 {
+        if !buf.is_empty() {
             self.prepare()?;
         }
         while k < buf.len() {
@@ -240,17 +240,17 @@ impl<B: ReplayBufRead, C: Cache<Key = usize>> ReplayBufReader<B, C> {
         })
     }
 
-    fn from_start(&self, offset: u64) -> Option<usize> {
+    fn position_from_start(&self, offset: u64) -> Option<usize> {
         usize::try_from(offset).ok().filter(|&v| v <= self.buf.size())
     }
 
-    fn from_current(&self, offset: i64) -> Option<usize> {
+    fn position_from_current(&self, offset: i64) -> Option<usize> {
         usize::try_from(i64::try_from(self.position).ok()?.checked_add(offset)?)
             .ok()
             .filter(|&v| v <= self.buf.size())
     }
 
-    fn from_end(&self, offset: i64) -> Option<usize> {
+    fn position_from_end(&self, offset: i64) -> Option<usize> {
         usize::try_from(i64::try_from(self.buf.size()).ok()?.checked_add(offset)?)
             .ok()
             .filter(|&v| v <= self.buf.size())
@@ -281,9 +281,9 @@ impl<B: ReplayBufRead, C: Cache<Key = usize>> Read for ReplayBufReader<B, C> {
 impl<B: ReplayBufRead, C: Cache<Key = usize>> Seek for ReplayBufReader<B, C> {
     fn seek(&mut self, pos: SeekFrom) -> Result<u64> {
         let pos = match pos {
-            SeekFrom::Start(pos) => self.from_start(pos),
-            SeekFrom::Current(pos) => self.from_current(pos),
-            SeekFrom::End(pos) => self.from_end(pos),
+            SeekFrom::Start(pos) => self.position_from_start(pos),
+            SeekFrom::Current(pos) => self.position_from_current(pos),
+            SeekFrom::End(pos) => self.position_from_end(pos),
         };
         let pos = pos.ok_or_else(|| Error::new(ErrorKind::InvalidInput, "position out of range"))?;
         let pos = min(pos, self.buf.size());
@@ -362,15 +362,15 @@ impl<R: Read, C: Cache> ReplaySeekReader<R, C> {
         self.w.buf.size + self.w.scratch.len()
     }
 
-    fn from_start(&self, offset: u64) -> Option<usize> {
+    fn position_from_start(&self, offset: u64) -> Option<usize> {
         usize::try_from(offset).ok()
     }
 
-    fn from_current(&self, offset: i64) -> Option<usize> {
+    fn position_from_current(&self, offset: i64) -> Option<usize> {
         usize::try_from(i64::try_from(self.position).ok()?.checked_add(offset)?).ok()
     }
 
-    fn from_end(&self, offset: i64) -> Option<usize> {
+    fn position_from_end(&self, offset: i64) -> Option<usize> {
         usize::try_from(i64::try_from(self.end()).ok()?.checked_add(offset)?).ok()
     }
 }
@@ -409,15 +409,15 @@ impl<R: Read, C: Cache<Key = usize>> Read for ReplaySeekReader<R, C> {
         buf[..n].copy_from_slice(&self.w.scratch.bytes()[offset..offset + n]);
         self.position += n;
 
-        return Ok(n);
+        Ok(n)
     }
 }
 
 impl<R: Read, C: Cache<Key = usize>> Seek for ReplaySeekReader<R, C> {
     fn seek(&mut self, pos: SeekFrom) -> Result<u64> {
         let pos = match pos {
-            SeekFrom::Start(pos) => self.from_start(pos),
-            SeekFrom::Current(pos) => self.from_current(pos),
+            SeekFrom::Start(pos) => self.position_from_start(pos),
+            SeekFrom::Current(pos) => self.position_from_current(pos),
             SeekFrom::End(pos) => {
                 if !self.drained {
                     let old = self.position;
@@ -426,7 +426,7 @@ impl<R: Read, C: Cache<Key = usize>> Seek for ReplaySeekReader<R, C> {
                     result?;
                     assert!(self.drained);
                 }
-                self.from_end(pos)
+                self.position_from_end(pos)
             }
         };
         let pos = pos.filter(|&v| !self.drained || v <= self.w.buf.size);
@@ -709,15 +709,15 @@ impl<F: ReaderFactory> RewindingReader<F, MinimalCache<u64>> {
 }
 
 impl<F: ReaderFactory, C: Cache> RewindingReader<F, C> {
-    fn from_start(&self, offset: u64) -> Option<u64> {
+    fn position_from_start(&self, offset: u64) -> Option<u64> {
         Some(offset)
     }
 
-    fn from_current(&self, offset: i64) -> Option<u64> {
+    fn position_from_current(&self, offset: i64) -> Option<u64> {
         u64::try_from(i64::try_from(self.position).ok()?.checked_add(offset)?).ok()
     }
 
-    fn from_end(&mut self, end: u64, offset: i64) -> Option<u64> {
+    fn position_from_end(&mut self, end: u64, offset: i64) -> Option<u64> {
         u64::try_from(i64::try_from(end).ok()?.checked_add(offset)?).ok()
     }
 }
@@ -770,8 +770,8 @@ impl<F: ReaderFactory, C: Cache<Key = u64>> Read for RewindingReader<F, C> {
 impl<F: ReaderFactory, C: Cache<Key = u64>> Seek for RewindingReader<F, C> {
     fn seek(&mut self, pos: SeekFrom) -> Result<u64> {
         let pos = match pos {
-            SeekFrom::Start(pos) => self.from_start(pos),
-            SeekFrom::Current(pos) => self.from_current(pos),
+            SeekFrom::Start(pos) => self.position_from_start(pos),
+            SeekFrom::Current(pos) => self.position_from_current(pos),
             SeekFrom::End(pos) => {
                 let end = if let Some(end) = self.size {
                     end
@@ -781,7 +781,7 @@ impl<F: ReaderFactory, C: Cache<Key = u64>> Seek for RewindingReader<F, C> {
                     self.inner_pos = end;
                     end
                 };
-                self.from_end(end, pos)
+                self.position_from_end(end, pos)
             }
         };
         let pos = pos.ok_or_else(|| Error::new(ErrorKind::InvalidInput, "position out of range"))?;
@@ -851,13 +851,13 @@ mod tests {
     use nonzero_ext::nonzero;
     use std::{io::Cursor, num::NonZero};
 
-    fn dual<'a>(b: &[u8]) -> (&str, &[u8]) {
+    fn dual(b: &[u8]) -> (&str, &[u8]) {
         (str::from_utf8(b).unwrap(), b)
     }
 
     #[test]
     fn test_replay_buf() {
-        let mut w = ReplayBufCreator::build().segment_size(nonzero!(4 as usize)).done();
+        let mut w = ReplayBufCreator::build().segment_size(nonzero!(4_usize)).done();
         w.write_all(b"Lorem ipsum dolor sit amet.").unwrap();
         w.flush().unwrap();
         w.flush().unwrap();
@@ -885,7 +885,7 @@ mod tests {
             .position(6)
             .done();
 
-        let pos = r.seek(SeekFrom::Current(0)).unwrap();
+        let pos = r.stream_position().unwrap();
         assert_eq!(pos, 6);
         let mut buf = vec![0; 11];
         r.read_exact(&mut buf).unwrap();
@@ -977,7 +977,7 @@ mod tests {
         let data = b"Lorem ipsum dolor sit amet.";
         let s = |buf| str::from_utf8(buf).unwrap();
         let mut r = ReplaySeekReader::build(Cursor::new(data))
-            .segment_size(nonzero!(4 as usize))
+            .segment_size(nonzero!(4_usize))
             .done();
 
         let pos = r.seek(SeekFrom::Start(6)).unwrap();

@@ -1,5 +1,5 @@
 // std imports
-use std::cmp::{PartialOrd, max, min};
+use std::cmp::{PartialOrd, min};
 
 // third-party imports
 use chrono::{DateTime, Datelike, FixedOffset, NaiveDateTime, Offset, TimeZone, Timelike};
@@ -165,11 +165,11 @@ impl<'a> LinuxDateFormat<'a> {
         if self.pad_counter != 0 {
             self.pad_counter -= 1;
             Some(self.pad)
-        } else if self.jump.len() != 0 {
+        } else if !self.jump.is_empty() {
             let result = self.jump[0];
             self.jump = &self.jump[1..];
             Some(result)
-        } else if self.spec.len() != 0 {
+        } else if !self.spec.is_empty() {
             let result = self.spec[0];
             self.spec = &self.spec[1..];
             Some(result)
@@ -331,11 +331,8 @@ impl<'a> LinuxDateFormat<'a> {
     #[inline]
     fn parse_width(&mut self, mut b: Option<u8>) -> (u8, Option<u8>) {
         let mut width: u8 = 0;
-        loop {
-            match b {
-                Some(d @ b'0'..=b'9') => width = width * 10 + (d - b'0'),
-                _ => break,
-            }
+        while let Some(d @ b'0'..=b'9') = b {
+            width = width * 10 + (d - b'0');
             b = self.pop()
         }
         (width, b)
@@ -549,7 +546,7 @@ where
             month
         } else {
             let month = sts.date().month().value();
-            let month = min(max(month, 1), 12) - 1;
+            let month = month.clamp(1, 12) - 1;
             let month = month as usize;
             month_cache = Some(month);
             month
@@ -575,20 +572,20 @@ where
             Item::Char(b) => {
                 f.char(b);
             }
-            Item::Century(n) => {
-                reformat_numeric_2(f.buf, n, ts[0], ts[1]);
+            Item::Century(flags) => {
+                reformat_numeric_2(f.buf, flags, ts[0], ts[1]);
             }
-            Item::Year(n) => {
-                reformat_numeric(f.buf, n, sts.date().year().as_bytes());
+            Item::Year(flags) => {
+                reformat_numeric_4(f.buf, flags, sts.date().year().as_bytes());
             }
-            Item::YearShort(n) => {
-                reformat_numeric_2(f.buf, n, ts[2], ts[3]);
+            Item::YearShort(flags) => {
+                reformat_numeric_2(f.buf, flags, ts[2], ts[3]);
             }
             Item::YearQuarter(flags) => {
                 f.quarter(month(), flags);
             }
-            Item::MonthNumeric(n) => {
-                reformat_numeric_2(f.buf, n, ts[5], ts[6]);
+            Item::MonthNumeric(flags) => {
+                reformat_numeric_2(f.buf, flags, ts[5], ts[6]);
             }
             Item::MonthShort(flags) => {
                 f.month_short(month(), flags);
@@ -673,7 +670,7 @@ where
             }
             Item::Nanosecond((_, width)) => {
                 let nsec = sts.fraction().as_bytes();
-                let nsec = if nsec.len() == 0 { nsec } else { &nsec[1..] };
+                let nsec = if nsec.is_empty() { nsec } else { &nsec[1..] };
                 let precision = if width == 0 { 9 } else { width as usize };
                 if precision < nsec.len() {
                     f.text(&nsec[..precision])
@@ -848,12 +845,10 @@ impl<'a, B: Push<u8>> Formatter<'a, B> {
             } else {
                 dt.weekday().number_from_sunday()
             }
+        } else if flags.contains(FromZero) {
+            dt.weekday().num_days_from_monday()
         } else {
-            if flags.contains(FromZero) {
-                dt.weekday().num_days_from_monday()
-            } else {
-                dt.weekday().number_from_monday()
-            }
+            dt.weekday().number_from_monday()
         };
         self.numeric(value, 1, flags);
     }
@@ -917,7 +912,7 @@ fn align_text<B: Push<u8>>(buf: &mut B, alignment: Option<Alignment>, width: usi
             buf.extend_from_slice(s);
         }
         Some(Alignment::Center) => {
-            let n = (width - min(s.len(), width) + 1) / 2;
+            let n = (width - min(s.len(), width)).div_ceil(2);
             for _ in 0..n {
                 buf.push(pad);
             }
@@ -950,18 +945,20 @@ fn reformat_numeric_2<B: Push<u8>>(buf: &mut B, flags: Flags, b0: u8, b1: u8) {
 // ---
 
 #[inline]
-fn reformat_numeric<B: Push<u8>>(buf: &mut B, flags: Flags, b: &[u8]) {
+fn reformat_numeric_4<B: Push<u8>>(buf: &mut B, flags: Flags, b: &[u8]) {
+    assert_eq!(b.len(), 4);
     if !flags.contains(NoPadding) && !flags.contains(SpacePadding) {
-        buf.extend_from_slice(&b)
+        buf.extend_from_slice(b)
     } else {
-        let pos = (&b[0..b.len() - 1]).iter().map(|&b| b == b'0').position(|x| x == false);
+        let pos = b[0..b.len() - 1].iter().map(|&b| b == b'0').position(|x| !x);
+        let pos = pos.unwrap_or_default();
         if !flags.contains(NoPadding) {
-            for _ in 0..pos.unwrap_or_default() {
+            for _ in 0..pos {
                 buf.push(b' ')
             }
         }
-        for i in pos.unwrap_or_default()..4 {
-            buf.push(b[i])
+        for &byte in &b[pos..4] {
+            buf.push(byte)
         }
     }
 }
@@ -1098,7 +1095,7 @@ mod tests {
 
     fn f(fmt: &str, dt: DateTime<Tz>) -> String {
         let mut buf = Vec::new();
-        format_date(&mut buf, dt, &format(fmt));
+        format_date(&mut buf, dt, format(fmt));
         String::from_utf8(buf).unwrap()
     }
 
@@ -1172,5 +1169,70 @@ mod tests {
                 assert!(payload(setup()) != 0);
             }
         }
+    }
+
+    #[test]
+    fn test_century_format_rfc3339() {
+        // Test century format %C in reformat_rfc3339 to cover lines 575-576
+        use crate::timestamp::Timestamp;
+
+        let tz = |secs| Tz::FixedOffset(FixedOffset::east_opt(secs).unwrap());
+        let tsr = Timestamp::new("2023-05-15T14:30:45+00:00");
+        let tsr = tsr.as_rfc3339().unwrap();
+
+        // Create formatter with century format
+        let format = LinuxDateFormat::new("%C").compile();
+        let formatter = DateTimeFormatter::new(format, tz(0));
+        let mut buf = Vec::new();
+
+        formatter.reformat_rfc3339(&mut buf, tsr);
+        let result = String::from_utf8(buf).unwrap();
+        assert_eq!(result, "20"); // 2023 -> century 20
+    }
+
+    #[test]
+    fn test_weekday_numeric_formats() {
+        // Test different weekday numeric formats to cover various flag combinations
+        // in weekday_numeric function (lines 848-849, 851)
+
+        // Monday, May 15, 2023
+        let monday = utc(2023, 5, 15, 14, 30, 45);
+
+        // %u format: Monday=1 to Sunday=7 (FromZero=false, FromSunday=false)
+        assert_eq!(f("%u", monday), "1");
+
+        // %w format: Sunday=0 to Saturday=6 (FromZero=true, FromSunday=true)
+        assert_eq!(f("%w", monday), "1");
+
+        // Test Sunday to cover the FromSunday branch
+        let sunday = utc(2023, 5, 14, 14, 30, 45);
+        assert_eq!(f("%u", sunday), "7"); // Sunday=7 in %u format
+        assert_eq!(f("%w", sunday), "0"); // Sunday=0 in %w format
+    }
+
+    #[test]
+    fn test_year_padding_flags_rfc3339() {
+        // Test year formatting with padding flags in reformat_rfc3339 to cover lines 953-954, 956, 960-961
+        use crate::timestamp::Timestamp;
+
+        let tz = |secs| Tz::FixedOffset(FixedOffset::east_opt(secs).unwrap());
+        let tsr = Timestamp::new("2023-05-15T14:30:45+00:00");
+        let tsr = tsr.as_rfc3339().unwrap();
+
+        // Test year format with NoPadding flag (%-Y)
+        let format = LinuxDateFormat::new("%-Y").compile();
+        let formatter = DateTimeFormatter::new(format, tz(0));
+        let mut buf = Vec::new();
+        formatter.reformat_rfc3339(&mut buf, tsr.clone());
+        let result = String::from_utf8(buf).unwrap();
+        assert_eq!(result, "2023"); // Should trigger NoPadding branch
+
+        // Test year format with SpacePadding flag (%_Y)
+        let format2 = LinuxDateFormat::new("%_Y").compile();
+        let formatter2 = DateTimeFormatter::new(format2, tz(0));
+        let mut buf2 = Vec::new();
+        formatter2.reformat_rfc3339(&mut buf2, tsr);
+        let result2 = String::from_utf8(buf2).unwrap();
+        assert_eq!(result2, "2023"); // Should trigger SpacePadding branch
     }
 }

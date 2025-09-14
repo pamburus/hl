@@ -56,7 +56,7 @@ impl BootstrapOpt {
         let mut result = vec![first];
         let mut follow_up = false;
 
-        while let Some(arg) = args.next() {
+        for arg in args {
             match (arg.as_bytes(), follow_up) {
                 (b"--", _) => {
                     break;

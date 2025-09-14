@@ -25,11 +25,14 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
+// Type alias for complex file source return type
+type FileSource<M> = (PathBuf, Box<dyn FileRead<Metadata = M> + Send + Sync>);
+
 // third-party imports
 use capnp::{message, serialize::read_message};
 use closure::closure;
 use crossbeam_channel as channel;
-use crossbeam_channel::RecvError;
+
 use crossbeam_utils::thread;
 use derive_more::{Deref, From};
 use itertools::izip;
@@ -71,6 +74,7 @@ pub struct Timestamp {
 }
 
 impl Timestamp {
+    #[allow(clippy::should_implement_trait)]
     #[inline]
     pub fn add(mut self, interval: std::time::Duration) -> Self {
         self.sec += interval.as_secs() as i64;
@@ -78,6 +82,7 @@ impl Timestamp {
         self
     }
 
+    #[allow(clippy::should_implement_trait)]
     #[inline]
     pub fn sub(mut self, interval: std::time::Duration) -> Self {
         self.sec -= interval.as_secs() as i64;
@@ -117,6 +122,24 @@ impl From<chrono::DateTime<chrono::Utc>> for Timestamp {
     }
 }
 
+impl std::ops::Add<std::time::Duration> for Timestamp {
+    type Output = Self;
+
+    #[inline]
+    fn add(self, rhs: std::time::Duration) -> Self::Output {
+        self.add(rhs)
+    }
+}
+
+impl std::ops::Sub<std::time::Duration> for Timestamp {
+    type Output = Self;
+
+    #[inline]
+    fn sub(self, rhs: std::time::Duration) -> Self::Output {
+        self.sub(rhs)
+    }
+}
+
 impl std::ops::Sub for Timestamp {
     type Output = std::time::Duration;
 
@@ -135,8 +158,7 @@ impl std::ops::Sub for Timestamp {
 
 // ---
 
-#[derive(Default)]
-pub struct IndexerSettings<'a, FS> {
+pub struct IndexerSettings<'a, FS: FileSystem> {
     pub fs: FS,
     pub buffer_size: BufferSize,
     pub max_message_size: MessageSize,
@@ -147,33 +169,30 @@ pub struct IndexerSettings<'a, FS> {
     pub format: Option<InputFormat>,
 }
 
+impl<'a, FS: FileSystem + Default> Default for IndexerSettings<'a, FS> {
+    fn default() -> Self {
+        Self::with_fs(FS::default())
+    }
+}
+
 impl<'a, FS: FileSystem> IndexerSettings<'a, FS> {
-    pub fn new(
-        fs: FS,
-        buffer_size: BufferSize,
-        max_message_size: MessageSize,
-        fields: &'a PredefinedFields,
-        delimiter: Delimiter,
-        allow_prefix: bool,
-        unix_ts_unit: Option<UnixTimestampUnit>,
-        format: Option<InputFormat>,
-    ) -> Self {
+    pub fn with_fs(fs: FS) -> Self {
         Self {
             fs,
-            buffer_size,
-            max_message_size,
-            fields,
-            delimiter,
-            allow_prefix,
-            unix_ts_unit,
-            format,
+            buffer_size: BufferSize::default(),
+            max_message_size: MessageSize::default(),
+            fields: Default::default(),
+            delimiter: Delimiter::default(),
+            allow_prefix: false,
+            unix_ts_unit: None,
+            format: None,
         }
     }
 
     pub fn hash(&self) -> Result<[u8; 32]> {
         let mut hasher = Sha256::new();
         bincode::serde::encode_into_std_write(
-            &(
+            (
                 CURRENT_VERSION,
                 &self.buffer_size,
                 &self.max_message_size,
@@ -212,7 +231,7 @@ impl TryFrom<NonZero<usize>> for BufferSize {
 impl From<BufferSize> for NonZeroU32 {
     #[inline]
     fn from(value: BufferSize) -> NonZeroU32 {
-        value.0.into()
+        value.0
     }
 }
 
@@ -245,7 +264,7 @@ impl TryFrom<NonZero<usize>> for MessageSize {
 impl From<MessageSize> for NonZeroU32 {
     #[inline]
     fn from(value: MessageSize) -> NonZeroU32 {
-        value.0.into()
+        value.0
     }
 }
 
@@ -283,7 +302,7 @@ where
             buffer_size: settings.buffer_size.into(),
             max_message_size: settings.max_message_size.into(),
             dir,
-            parser: Parser::new(ParserSettings::new(&settings.fields, empty(), settings.unix_ts_unit)),
+            parser: Parser::new(ParserSettings::new(settings.fields, empty(), settings.unix_ts_unit)),
             delimiter: settings.delimiter,
             allow_prefix: settings.allow_prefix,
             format: settings.format,
@@ -374,14 +393,14 @@ where
         stream: &mut Reader,
         source_path: &Path,
         meta: &Metadata,
-        index_path: &PathBuf,
+        index_path: &Path,
         existing_index: Option<Index>,
     ) -> Result<Index> {
-        let mut output = match self.fs.create(&index_path) {
+        let mut output = match self.fs.create(index_path) {
             Ok(output) => output,
             Err(err) => {
                 return Err(Error::FailedToOpenFileForWriting {
-                    path: index_path.clone(),
+                    path: index_path.to_path_buf(),
                     source: err,
                 });
             }
@@ -405,18 +424,15 @@ where
             let (txi, rxi): (Vec<_>, Vec<_>) = (0..n).map(|_| channel::bounded(1)).unzip();
             // prepare receive/transmit channels for output data
             let (txo, rxo): (Vec<_>, Vec<_>) = (0..n)
-                .into_iter()
                 .map(|_| channel::bounded::<(usize, Stat, Chronology, Option<Hash>)>(1))
                 .unzip();
             // spawn reader thread
             let reader = scope.spawn(closure!(clone sfi, |_| -> Result<()> {
-                let mut sn: usize = 0;
                 let scanner = Scanner::new(sfi, &self.delimiter);
-                for item in scanner.items(input).with_max_segment_size(self.max_message_size.try_into()?) {
-                    if let Err(_) = txi[sn % n].send((sn, item?)) {
+                for (sn, item) in scanner.items(input).with_max_segment_size(self.max_message_size.try_into()?).enumerate() {
+                    if txi[sn % n].send((sn, item?)).is_err() {
                         break;
                     }
-                    sn += 1;
                 }
                 Ok(())
             }));
@@ -429,8 +445,7 @@ where
                                 let hash = Hash::WyHash(wyhash::wyhash(segment.data(), 0));
                                 let (stat, chronology) = existing_index
                                     .as_ref()
-                                    .and_then(|index| Self::match_segment(&index, sn, &hash))
-                                    .map(|(stat, chronology)| (stat, chronology))
+                                    .and_then(|index| Self::match_segment(index, sn, &hash))
                                     .unwrap_or_else(|| self.process_segment(&segment));
                                 (stat, chronology, segment, Some(hash))
                             }
@@ -442,7 +457,7 @@ where
                         };
                         let size = segment.data().len();
                         sfi.recycle(segment);
-                        if let Err(_) = txo.send((size, stat, chronology, hash)) {
+                        if txo.send((size, stat, chronology, hash)).is_err() {
                             break;
                         };
                     }
@@ -457,29 +472,22 @@ where
                         path: path.to_string_lossy().into(),
                         modified: metadata.modified,
                         stat: Stat::new(),
-                        blocks: Vec::with_capacity((usize::try_from(metadata.len)? + bs - 1) / bs),
+                        blocks: Vec::with_capacity((usize::try_from(metadata.len)?).div_ceil(bs)),
                     },
                 };
 
-                let mut sn = 0;
                 let mut offset: u64 = 0;
-                loop {
-                    match rxo[sn % n].recv() {
-                        Ok((size, stat, chronology, hash)) => {
-                            index.source.stat.merge(&stat);
-                            index.source.blocks.push(SourceBlock::new(
-                                offset,
-                                size.try_into()?,
-                                stat,
-                                chronology,
-                                hash,
-                            ));
-                            offset += u64::try_from(size)?;
-                        }
-                        Err(RecvError) => {
-                            break;
-                        }
-                    }
+                let mut sn = 0;
+                while let Ok((size, stat, chronology, hash)) = rxo[sn % n].recv() {
+                    index.source.stat.merge(&stat);
+                    index.source.blocks.push(SourceBlock::new(
+                        offset,
+                        size.try_into()?,
+                        stat,
+                        chronology,
+                        hash,
+                    ));
+                    offset += u64::try_from(size)?;
                     sn += 1;
                 }
                 Ok(index)
@@ -505,7 +513,7 @@ where
             let data = strip(data, b'\r');
             let mut ts = None;
             let mut rel = 0;
-            if data.len() != 0 {
+            if !data.is_empty() {
                 let mut stream = RawRecord::parser()
                     .allow_prefix(self.allow_prefix)
                     .format(self.format)
@@ -515,7 +523,9 @@ where
                         Ok(ar) => {
                             let rec = self.parser.parse(&ar.record);
                             let mut flags = 0;
-                            rec.level.map(|level| flags |= level_to_flag(level));
+                            if let Some(level) = rec.level {
+                                flags |= level_to_flag(level);
+                            }
                             ts = rec.ts.and_then(|ts| ts.unix_utc()).map(|ts| ts.into());
                             if ts < prev_ts {
                                 sorted = false;
@@ -547,7 +557,7 @@ where
             stat.flags |= schema::FLAG_UNSORTED;
             lines.sort();
 
-            let n = (lines.len() + 63) / 64;
+            let n = lines.len().div_ceil(64);
             let mut bitmap = Vec::with_capacity(n);
             let mut offsets = Vec::with_capacity(n);
             let mut jumps = Vec::new();
@@ -588,10 +598,7 @@ where
         })
     }
 
-    fn open_source(
-        &self,
-        source_path: &Path,
-    ) -> io::Result<(PathBuf, Box<dyn FileRead<Metadata = FS::Metadata> + Send + Sync>)> {
+    fn open_source(&self, source_path: &Path) -> io::Result<FileSource<FS::Metadata>> {
         let source_path = self.fs.canonicalize(source_path)?;
         let result = self.fs.open(&source_path)?;
         Ok((source_path, result))
@@ -604,6 +611,10 @@ where
 pub trait SourceMetadata {
     fn len(&self) -> u64;
     fn modified(&self) -> io::Result<SystemTime>;
+
+    fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
 }
 
 impl SourceMetadata for fs::Metadata {
@@ -792,23 +803,23 @@ impl Index {
     fn save_chronology(mut to: schema::chronology::Builder, from: &Chronology) -> Result<()> {
         let mut bitmap = to.reborrow().init_bitmap(from.bitmap.len().try_into()?);
         for (i, value) in from.bitmap.iter().enumerate() {
-            bitmap.set(i as u32, value.clone());
+            bitmap.set(i as u32, *value);
         }
         let n = from.offsets.len().try_into()?;
         let mut offsets = to.reborrow().init_offsets();
         {
             let mut bytes = offsets.reborrow().init_bytes(n);
             for (i, pair) in from.offsets.iter().enumerate() {
-                bytes.set(i as u32, pair.bytes.clone());
+                bytes.set(i as u32, pair.bytes);
             }
         }
         let mut jumps = offsets.reborrow().init_jumps(n);
         for (i, pair) in from.offsets.iter().enumerate() {
-            jumps.set(i as u32, pair.jumps.clone());
+            jumps.set(i as u32, pair.jumps);
         }
         let mut jumps = to.init_jumps(from.jumps.len().try_into()?);
         for (i, value) in from.jumps.iter().enumerate() {
-            jumps.set(i as u32, value.clone());
+            jumps.set(i as u32, *value);
         }
         Ok(())
     }
@@ -919,7 +930,7 @@ pub struct Stat {
 }
 
 impl Stat {
-    /// New returns a new Stat.
+    /// Returns a new Stat.
     #[inline]
     pub fn new() -> Self {
         Self {
@@ -929,11 +940,19 @@ impl Stat {
             ts_min_max: None,
         }
     }
+}
 
+impl Default for Stat {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Stat {
     /// Adds information about a single valid line.
     #[inline]
     pub fn add_valid(&mut self, ts: Option<Timestamp>, flags: u64) {
-        self.ts_min_max = min_max_opt(self.ts_min_max, ts.and_then(|ts| Some((ts, ts))));
+        self.ts_min_max = min_max_opt(self.ts_min_max, ts.map(|ts| (ts, ts)));
         self.flags |= flags;
         self.lines_valid += 1;
         if self.ts_min_max.is_some() {
@@ -1041,7 +1060,7 @@ impl Header {
     }
 
     fn save(&self, mut writer: &mut Writer) -> Result<()> {
-        bincode::serde::encode_into_std_write(&self, &mut writer, bincode::config::legacy())?;
+        bincode::serde::encode_into_std_write(self, &mut writer, bincode::config::legacy())?;
         Ok(())
     }
 }
@@ -1133,7 +1152,7 @@ fn sha256(bytes: &[u8]) -> [u8; 32] {
 }
 
 #[inline]
-fn strip<'a>(slice: &'a [u8], ch: u8) -> &'a [u8] {
+fn strip(slice: &[u8], ch: u8) -> &[u8] {
     let n = slice.len();
     if n == 0 {
         slice
@@ -1171,8 +1190,8 @@ fn level_mask_higher_or_eq(flag: u64) -> u64 {
 }
 
 #[inline]
-fn rtrim<'a>(s: &'a [u8], c: u8) -> &'a [u8] {
-    if s.len() > 0 && s[s.len() - 1] == c {
+fn rtrim(s: &[u8], c: u8) -> &[u8] {
+    if !s.is_empty() && s[s.len() - 1] == c {
         &s[..s.len() - 1]
     } else {
         s
@@ -1210,6 +1229,7 @@ mod tests {
     use std::{path::Component, time::Duration};
 
     use crate::vfs::{self, MockFileSystem};
+    use assert_matches::assert_matches;
 
     #[test]
     fn test_process_file_success() {
@@ -1218,10 +1238,9 @@ mod tests {
             1,
             PathBuf::from("/tmp/cache"),
             IndexerSettings {
-                fs: MockFileSystem::<MockSourceMetadata>::new(),
                 buffer_size: nonzero!(1024u32).into(),
                 max_message_size: nonzero!(1024u32).into(),
-                ..Default::default()
+                ..IndexerSettings::with_fs(MockFileSystem::<MockSourceMetadata>::new())
             },
         );
         let data = concat!(
@@ -1278,10 +1297,9 @@ mod tests {
             1,
             PathBuf::from("/tmp/cache"),
             IndexerSettings {
-                fs,
                 buffer_size: nonzero!(1024u32).into(),
                 max_message_size: nonzero!(1024u32).into(),
-                ..Default::default()
+                ..IndexerSettings::with_fs(fs)
             },
         );
         let mut input = FailingReader;
@@ -1296,7 +1314,7 @@ mod tests {
             &mut output,
             None,
         );
-        assert_eq!(result.is_err(), true);
+        assert!(result.is_err());
         assert_eq!(output.into_inner().len(), 0);
     }
 
@@ -1308,14 +1326,7 @@ mod tests {
         let mut file = fs.create(&PathBuf::from("test.log")).unwrap();
         file.write_all(data).unwrap();
 
-        let indexer = Indexer::new(
-            1,
-            PathBuf::from("/tmp/cache"),
-            IndexerSettings {
-                fs,
-                ..Default::default()
-            },
-        );
+        let indexer = Indexer::new(1, PathBuf::from("/tmp/cache"), IndexerSettings::with_fs(fs));
 
         let index1 = indexer.index(&PathBuf::from("test.log")).unwrap();
 
@@ -1344,27 +1355,27 @@ mod tests {
         assert_eq!(ts.sec, 1701680467);
         assert_eq!(ts.nsec, 91243000);
 
-        let ts = ts.add(Duration::from_secs(1));
+        let ts = ts + Duration::from_secs(1);
         assert_eq!(ts.sec, 1701680468);
         assert_eq!(ts.nsec, 91243000);
 
-        let ts = ts.add(Duration::from_nanos(1_000));
+        let ts = ts + Duration::from_nanos(1_000);
         assert_eq!(ts.sec, 1701680468);
         assert_eq!(ts.nsec, 91244000);
 
-        let ts = ts.add(Duration::from_nanos(1_000_000_000));
+        let ts = ts + Duration::from_nanos(1_000_000_000);
         assert_eq!(ts.sec, 1701680469);
         assert_eq!(ts.nsec, 91244000);
 
-        let ts = ts.sub(Duration::from_secs(1));
+        let ts = ts - Duration::from_secs(1);
         assert_eq!(ts.sec, 1701680468);
         assert_eq!(ts.nsec, 91244000);
 
-        let ts = ts.sub(Duration::from_nanos(1_000));
+        let ts = ts - Duration::from_nanos(1_000);
         assert_eq!(ts.sec, 1701680468);
         assert_eq!(ts.nsec, 91243000);
 
-        let ts = ts.sub(Duration::from_nanos(900_000_000));
+        let ts = ts - Duration::from_nanos(900_000_000);
         assert_eq!(ts.sec, 1701680467);
         assert_eq!(ts.nsec, 191243000);
 
@@ -1416,11 +1427,11 @@ mod tests {
         assert_eq!(block.offset, 0);
         assert_eq!(block.size, 4096);
         assert_eq!(block.stat.flags, FLAG_LEVEL_TRACE | FLAG_LEVEL_INFO);
-        assert_eq!(block.match_level(Level::Trace), true);
-        assert_eq!(block.match_level(Level::Debug), true);
-        assert_eq!(block.match_level(Level::Info), true);
-        assert_eq!(block.match_level(Level::Warning), false);
-        assert_eq!(block.match_level(Level::Error), false);
+        assert!(block.match_level(Level::Trace));
+        assert!(block.match_level(Level::Debug));
+        assert!(block.match_level(Level::Info));
+        assert!(!block.match_level(Level::Warning));
+        assert!(!block.match_level(Level::Error));
 
         let mut other = SourceBlock::new(
             4096,
@@ -1437,16 +1448,25 @@ mod tests {
             Chronology::default(),
             None,
         );
-        assert_eq!(block.overlaps_by_time(&other), true);
+        assert!(block.overlaps_by_time(&other));
 
         other.stat.ts_min_max = Some((
             Timestamp::from((1701680467, 191633000)),
             Timestamp::from((1701680468, 491633000)),
         ));
-        assert_eq!(block.overlaps_by_time(&other), false);
+        assert!(!block.overlaps_by_time(&other));
 
         other.stat.ts_min_max = None;
-        assert_eq!(block.overlaps_by_time(&other), false);
+        assert!(!block.overlaps_by_time(&other));
+    }
+
+    #[test]
+    fn test_indexer_settings_default() {
+        // Test that Default implementation works (calls with_fs with FS::default())
+        let _settings = IndexerSettings::<MockFileSystem<MockSourceMetadata>>::default();
+
+        // Just verify it doesn't panic and creates a valid settings instance
+        // The Default implementation should call with_fs(FS::default())
     }
 
     // ---
@@ -1455,7 +1475,91 @@ mod tests {
 
     impl Read for FailingReader {
         fn read(&mut self, _: &mut [u8]) -> io::Result<usize> {
-            Err(io::Error::new(io::ErrorKind::Other, "read error"))
+            Err(io::Error::other("read error"))
         }
+    }
+
+    #[test]
+    fn test_stat_default() {
+        let stat1 = Stat::default();
+        let stat2 = Stat::new();
+
+        // Both should have the same initial state
+        assert_eq!(stat1.flags, stat2.flags);
+        assert_eq!(stat1.lines_valid, stat2.lines_valid);
+        assert_eq!(stat1.lines_invalid, stat2.lines_invalid);
+        assert_eq!(stat1.ts_min_max, stat2.ts_min_max);
+    }
+
+    #[test]
+    fn test_build_index_from_stream_file_creation_error() {
+        use io::Cursor;
+
+        // Create a mock filesystem that fails on file creation
+        let mut fs = MockFileSystem::<MockSourceMetadata>::new();
+        fs.expect_create()
+            .returning(|_| Err(io::Error::new(io::ErrorKind::PermissionDenied, "Permission denied")));
+
+        let indexer = Indexer::new(
+            1,
+            PathBuf::from("/tmp/cache"),
+            IndexerSettings {
+                buffer_size: nonzero!(1024u32).into(),
+                max_message_size: nonzero!(1024u32).into(),
+                ..IndexerSettings::with_fs(fs)
+            },
+        );
+
+        let data = "ts=2023-12-04T10:01:07.091243+01:00 msg=test\n";
+        let mut input = Cursor::new(data);
+        let source_path = Path::new("/test/source.log");
+        let index_path = Path::new("/test/source.log.idx");
+
+        let mut mock_meta = MockSourceMetadata::new();
+        mock_meta.expect_len().returning(|| 42);
+        mock_meta.expect_modified().returning(|| Ok(UNIX_EPOCH));
+
+        // Convert MockSourceMetadata to Metadata
+        let metadata = Metadata::from(&mock_meta).unwrap();
+
+        // This should trigger the FailedToOpenFileForWriting error
+        let result = indexer.build_index_from_stream(&mut input, source_path, &metadata, index_path, None);
+
+        assert_matches!(
+            result,
+            Err(Error::FailedToOpenFileForWriting { path, .. }) if path == index_path
+        );
+    }
+
+    #[test]
+    fn test_source_metadata_is_empty() {
+        // Test the default implementation of is_empty by using a concrete implementation
+        use std::time::SystemTime;
+
+        struct TestMetadata {
+            len: u64,
+        }
+
+        impl SourceMetadata for TestMetadata {
+            fn len(&self) -> u64 {
+                self.len
+            }
+
+            fn modified(&self) -> io::Result<SystemTime> {
+                Ok(SystemTime::UNIX_EPOCH)
+            }
+        }
+
+        // Test when len() returns 0
+        let meta_empty = TestMetadata { len: 0 };
+        assert!(meta_empty.is_empty());
+        // Also call modified() to cover that method
+        assert!(meta_empty.modified().is_ok());
+
+        // Test when len() returns non-zero
+        let meta_nonempty = TestMetadata { len: 42 };
+        assert!(!meta_nonempty.is_empty());
+        // Also call modified() to cover that method
+        assert!(meta_nonempty.modified().is_ok());
     }
 }

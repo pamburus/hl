@@ -20,15 +20,15 @@ run *args: build
 
 # Run tests for all packages in the workspace
 test: (setup "build")
-    cargo test --workspace
+    cargo test --workspace --locked
 
 # Check the code for errors without building an executable
 check: (setup "build")
-    cargo check --workspace
+    cargo check --workspace --locked
 
 # Run the Rust linter (clippy)
 lint: (setup "lint")
-    cargo clippy --workspace -- -D warnings
+    cargo clippy --workspace --all-targets --all-features
 
 # Check for security vulnerabilities in dependencies
 audit: (setup "audit")
@@ -36,7 +36,7 @@ audit: (setup "audit")
 
 # Check for outdated dependencies
 outdated: (setup "outdated")
-    cargo outdated
+    cargo outdated --workspace
 
 # Format all Rust and Nix files
 fmt: fmt-rust fmt-nix
@@ -44,7 +44,7 @@ fmt: fmt-rust fmt-nix
 
 # Format Rust code
 fmt-rust: (setup "build-nightly")
-    cargo +nightly fmt --all
+    cargo +nightly fmt --workspace --all
 
 # Format Nix files (gracefully skips if Nix is not installed)
 fmt-nix:
@@ -75,13 +75,16 @@ clean:
     @rm -f result*
 
 # Run all CI checks locally
-ci: test lint audit fmt-check
+ci: test lint audit fmt-check check-schema check
     @echo "✓ All local CI checks passed"
 
 # Generate code coverage
 coverage: (setup "coverage")
-    @contrib/bin/setup.sh coverage
     @bash build/ci/coverage.sh
+
+# Show uncovered changed lines comparing to {{base}}
+uncovered base="origin/master": (setup "coverage")
+    @scripts/coverage-diff-analysis.py -q --ide-links {{base}}
 
 # Run benchmarks
 bench: (setup "build")

@@ -96,6 +96,13 @@ impl<T> ClapParser<T> {
 }
 
 #[cfg(feature = "clap")]
+impl<T> Default for ClapParser<T> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[cfg(feature = "clap")]
 impl<T> clap::builder::TypedValueParser for ClapParser<T>
 where
     T: EnumSetType + fmt::Display + Sync + Send + FromStr + 'static,
@@ -117,7 +124,7 @@ where
                     let value = value.trim();
                     let value: T = T::from_str(value).map_err(|_| {
                         clap::builder::PossibleValuesParser::new(self.possible_values().unwrap())
-                            .parse_ref(cmd, arg, std::ffi::OsStr::new(&*value))
+                            .parse_ref(cmd, arg, std::ffi::OsStr::new(value))
                             .unwrap_err()
                     })?;
                     set.insert(value);
@@ -132,5 +139,16 @@ where
                 .iter()
                 .map(|v: T| clap::builder::PossibleValue::new(v.to_string())),
         ))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    #[cfg(feature = "clap")]
+    fn test_clap_parser_default() {
+        let _ = ClapParser::<()>::default();
     }
 }

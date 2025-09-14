@@ -30,7 +30,7 @@ pub enum Error {
     #[error(transparent)]
     NonZeroSizeParseError(#[from] NonZeroSizeParseError),
     #[error("failed to load configuration: {0}")]
-    Config(#[from] ConfigError),
+    Config(Box<ConfigError>),
     #[error(transparent)]
     Infallible(#[from] std::convert::Infallible),
     #[error(transparent)]
@@ -108,14 +108,14 @@ pub enum Error {
     #[error(transparent)]
     TryFromIntError(#[from] TryFromIntError),
     #[error(transparent)]
-    NotifyError(#[from] notify::Error),
+    NotifyError(Box<notify::Error>),
     #[error("failed to receive from mpsc channel: {source}")]
     RecvTimeoutError {
         #[source]
         source: mpsc::RecvTimeoutError,
     },
     #[error("failed to parse query:\n{0}")]
-    QueryParseError(#[from] pest::error::Error<crate::query::Rule>),
+    QueryParseError(Box<pest::error::Error<crate::query::Rule>>),
     #[error(transparent)]
     LevelParseError(#[from] level::ParseError),
     #[error(transparent)]
@@ -219,6 +219,18 @@ pub struct InvalidLevelError {
 /// Result is an alias for standard result with bound Error type.
 pub type Result<T, E = Error> = std::result::Result<T, E>;
 
+impl From<ConfigError> for Error {
+    fn from(err: ConfigError) -> Self {
+        Error::Config(Box::new(err))
+    }
+}
+
+impl From<notify::Error> for Error {
+    fn from(err: notify::Error) -> Self {
+        Error::NotifyError(Box::new(err))
+    }
+}
+
 pub trait AppInfoProvider {
     fn app_name(&self) -> Cow<'static, str> {
         std::env::args().nth(0).map(Cow::Owned).unwrap_or("<app>".into())
@@ -272,12 +284,19 @@ fn did_you_mean(suggestions: &Suggestions) -> Option<DidYouMean<'_>> {
     Some(DidYouMean { suggestions })
 }
 
+impl From<pest::error::Error<crate::query::Rule>> for Error {
+    fn from(err: pest::error::Error<crate::query::Rule>) -> Self {
+        Error::QueryParseError(Box::new(err))
+    }
+}
+
 const ERR_PREFIX: &str = "error:";
 const TIP_PREFIX: &str = "  tip:";
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use assert_matches::assert_matches;
 
     struct TestAppInfo;
     impl AppInfoProvider for TestAppInfo {}
@@ -301,7 +320,7 @@ mod tests {
 
     #[test]
     fn test_log() {
-        let err = Error::Io(std::io::Error::new(std::io::ErrorKind::Other, "test"));
+        let err = Error::Io(std::io::Error::other("test"));
         let mut buf = Vec::new();
         err.log_to(&mut buf, &TestAppInfo).unwrap();
         assert_eq!(
@@ -359,5 +378,33 @@ mod tests {
     #[test]
     fn test_app_name() {
         assert!(!TestAppInfo.app_name().is_empty());
+    }
+
+    #[test]
+    fn test_from_config_error() {
+        let config_err = ConfigError::Message("test config error".to_string());
+        let err = Error::from(config_err);
+        assert_matches!(err, Error::Config(boxed_err) if boxed_err.to_string().contains("test config error"));
+    }
+
+    #[test]
+    fn test_from_notify_error() {
+        let notify_err = notify::Error::path_not_found();
+        let err = Error::from(notify_err);
+        assert_matches!(err, Error::NotifyError(boxed_err) if !boxed_err.to_string().is_empty());
+    }
+
+    #[test]
+    fn test_from_pest_error() {
+        // Create a simple pest error for testing
+        let pest_err = pest::error::Error::<crate::query::Rule>::new_from_pos(
+            pest::error::ErrorVariant::ParsingError {
+                positives: vec![],
+                negatives: vec![],
+            },
+            pest::Position::from_start("test"),
+        );
+        let err = Error::from(pest_err);
+        assert_matches!(err, Error::QueryParseError(_));
     }
 }
