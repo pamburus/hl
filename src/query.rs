@@ -1,6 +1,7 @@
 // std imports
 use std::{
     io::{BufRead, BufReader, Read},
+    ops::{BitAnd, BitOr, Not},
     sync::{Arc, LazyLock},
 };
 
@@ -34,25 +35,45 @@ pub struct Query {
 impl Query {
     pub fn parse(str: impl AsRef<str>) -> Result<Self> {
         let mut pairs = QueryParser::parse(Rule::input, str.as_ref())?;
-        Ok(expression(pairs.next().unwrap())?)
+        expression(pairs.next().unwrap())
     }
 
     pub fn and(self, rhs: Query) -> Query {
-        Query::new(And { lhs: self, rhs })
+        Query::new(OpAnd { lhs: self, rhs })
     }
 
     pub fn or(self, rhs: Query) -> Query {
-        Query::new(Or { lhs: self, rhs })
-    }
-
-    pub fn not(self) -> Query {
-        Query::new(Not { arg: self })
+        Query::new(OpOr { lhs: self, rhs })
     }
 
     pub fn new<F: RecordFilter + Sync + Send + 'static>(filter: F) -> Self {
         Self {
             filter: Arc::new(filter),
         }
+    }
+}
+
+impl Not for Query {
+    type Output = Query;
+
+    fn not(self) -> Self::Output {
+        Query::new(OpNot { arg: self })
+    }
+}
+
+impl BitAnd for Query {
+    type Output = Query;
+
+    fn bitand(self, rhs: Self) -> Self::Output {
+        self.and(rhs)
+    }
+}
+
+impl BitOr for Query {
+    type Output = Query;
+
+    fn bitor(self, rhs: Self) -> Self::Output {
+        self.or(rhs)
     }
 }
 
@@ -83,8 +104,8 @@ impl Default for &'static Query {
 
 fn expression(pair: Pair<Rule>) -> Result<Query> {
     match pair.as_rule() {
-        Rule::expr_or => binary_op::<Or>(pair),
-        Rule::expr_and => binary_op::<And>(pair),
+        Rule::expr_or => binary_op::<OpOr>(pair),
+        Rule::expr_and => binary_op::<OpAnd>(pair),
         Rule::expr_not => not(pair),
         Rule::primary => primary(pair),
         _ => unreachable!(),
@@ -103,7 +124,7 @@ fn binary_op<Op: BinaryOp + Sync + Send + 'static>(pair: Pair<Rule>) -> Result<Q
 fn not(pair: Pair<Rule>) -> Result<Query> {
     assert_eq!(pair.as_rule(), Rule::expr_not);
 
-    Ok(Query::new(Not {
+    Ok(Query::new(OpNot {
         arg: expression(pair.into_inner().next().unwrap())?,
     }))
 }
@@ -263,7 +284,7 @@ fn parse_number(pair: Pair<Rule>) -> Result<Number> {
     assert_eq!(pair.as_rule(), Rule::number);
 
     let inner = pair.as_str();
-    Ok(inner.parse()?)
+    inner.parse()
 }
 
 fn parse_number_set(pair: Pair<Rule>) -> Result<Vec<Number>> {
@@ -304,19 +325,19 @@ trait BinaryOp: RecordFilter {
 
 // ---
 
-struct Or {
+struct OpOr {
     lhs: Query,
     rhs: Query,
 }
 
-impl RecordFilter for Or {
+impl RecordFilter for OpOr {
     #[inline]
     fn apply<'a>(&self, record: &Record<'a>) -> bool {
         self.lhs.apply(record) || self.rhs.apply(record)
     }
 }
 
-impl BinaryOp for Or {
+impl BinaryOp for OpOr {
     fn new(lhs: Query, rhs: Query) -> Self {
         Self { lhs, rhs }
     }
@@ -324,19 +345,19 @@ impl BinaryOp for Or {
 
 // ---
 
-struct And {
+struct OpAnd {
     lhs: Query,
     rhs: Query,
 }
 
-impl RecordFilter for And {
+impl RecordFilter for OpAnd {
     #[inline]
     fn apply<'a>(&self, record: &Record<'a>) -> bool {
         self.lhs.apply(record) && self.rhs.apply(record)
     }
 }
 
-impl BinaryOp for And {
+impl BinaryOp for OpAnd {
     fn new(lhs: Query, rhs: Query) -> Self {
         Self { lhs, rhs }
     }
@@ -344,11 +365,11 @@ impl BinaryOp for And {
 
 // ---
 
-struct Not {
+struct OpNot {
     arg: Query,
 }
 
-impl RecordFilter for Not {
+impl RecordFilter for OpNot {
     #[inline]
     fn apply<'a>(&self, record: &Record<'a>) -> bool {
         !self.arg.apply(record)
@@ -444,11 +465,11 @@ mod tests {
 
         for query in &queries {
             let record = parse(r#"{"a":1}"#);
-            assert_eq!(record.matches(&query), true);
+            assert!(record.matches(query));
             let record = parse(r#"{"b":2}"#);
-            assert_eq!(record.matches(&query), true);
+            assert!(record.matches(query));
             let record = parse(r#"{"c":3}"#);
-            assert_eq!(record.matches(&query), false);
+            assert!(!record.matches(query));
         }
     }
 
@@ -461,33 +482,70 @@ mod tests {
 
         for query in &queries {
             let record = parse(r#"{"a":1,"b":2}"#);
-            assert_eq!(record.matches(&query), true);
+            assert!(record.matches(query));
             let record = parse(r#"{"a":1,"b":3}"#);
-            assert_eq!(record.matches(&query), false);
+            assert!(!record.matches(query));
             let record = parse(r#"{"a":2,"b":2}"#);
-            assert_eq!(record.matches(&query), false);
+            assert!(!record.matches(query));
         }
     }
 
     #[test]
     fn test_query_not() {
-        let queries = [Query::parse(".a=1").unwrap().not(), Query::parse("not .a=1").unwrap()];
+        let queries = [!Query::parse(".a=1").unwrap(), Query::parse("not .a=1").unwrap()];
 
         for query in &queries {
             let record = parse(r#"{"a":1}"#);
-            assert_eq!(record.matches(&query), false);
+            assert!(!record.matches(query));
             let record = parse(r#"{"a":2}"#);
-            assert_eq!(record.matches(&query), true);
+            assert!(record.matches(query));
         }
+    }
+
+    #[test]
+    fn test_query_bitwise_operators() {
+        let q1 = Query::parse(".a=1").unwrap();
+        let q2 = Query::parse(".b=2").unwrap();
+
+        // Test BitAnd (&)
+        let and_query1 = q1.clone() & q2.clone();
+        let and_query2 = q1.clone().and(q2.clone());
+
+        let record = parse(r#"{"a":1,"b":2}"#);
+        assert!(record.matches(&and_query1));
+        assert!(record.matches(&and_query2));
+
+        let record = parse(r#"{"a":1,"b":3}"#);
+        assert!(!record.matches(&and_query1));
+        assert!(!record.matches(&and_query2));
+
+        // Test BitOr (|)
+        let or_query1 = q1.clone() | q2.clone();
+        let or_query2 = q1.clone().or(q2.clone());
+
+        let record = parse(r#"{"a":1,"b":3}"#);
+        assert!(record.matches(&or_query1));
+        assert!(record.matches(&or_query2));
+
+        let record = parse(r#"{"a":0,"b":0}"#);
+        assert!(!record.matches(&or_query1));
+        assert!(!record.matches(&or_query2));
+
+        // Test Not (!)
+        let not_query = !q1.clone();
+        let record = parse(r#"{"a":1}"#);
+        assert!(!record.matches(&not_query));
+        let record = parse(r#"{"a":2}"#);
+        assert!(record.matches(&not_query));
     }
 
     #[test]
     fn test_query_level() {
         let query = Query::parse("level=info").unwrap();
         let record = parse(r#"{"level":"info"}"#);
-        assert_eq!(record.matches(&query), true);
+        assert!(record.matches(&query));
         let record = parse(r#"{"level":"error"}"#);
-        assert_eq!(record.matches(&query), false);
+        assert!(!record.matches(&query));
     }
 
     #[test]
@@ -495,11 +553,11 @@ mod tests {
         for q in &["mod=test", r#"mod="test""#] {
             let query = Query::parse(q).unwrap();
             let record = parse(r#"{"mod":"test"}"#);
-            assert_eq!(record.matches(&query), true);
+            assert!(record.matches(&query));
             let record = parse(r#"{"mod":"test2"}"#);
-            assert_eq!(record.matches(&query), false);
+            assert!(!record.matches(&query));
             let record = parse(r#"{"mod":"\"test\""}"#);
-            assert_eq!(record.matches(&query), false);
+            assert!(!record.matches(&query));
         }
     }
 
@@ -507,106 +565,106 @@ mod tests {
     fn test_query_json_str_empty() {
         let query = Query::parse(r#"mod="""#).unwrap();
         let record = parse(r#"{"mod":""}"#);
-        assert_eq!(record.matches(&query), true);
+        assert!(record.matches(&query));
         let record = parse(r#"{"mod":"t"}"#);
-        assert_eq!(record.matches(&query), false);
+        assert!(!record.matches(&query));
         let record = parse(r#"{"v":""}"#);
-        assert_eq!(record.matches(&query), false);
+        assert!(!record.matches(&query));
     }
 
     #[test]
     fn test_query_json_str_quoted() {
         let query = Query::parse(r#"mod="\"test\"""#).unwrap();
         let record = parse(r#"{"mod":"test"}"#);
-        assert_eq!(record.matches(&query), false);
+        assert!(!record.matches(&query));
         let record = parse(r#"{"mod":"test2"}"#);
-        assert_eq!(record.matches(&query), false);
+        assert!(!record.matches(&query));
         let record = parse(r#"{"mod":"\"test\""}"#);
-        assert_eq!(record.matches(&query), true);
+        assert!(record.matches(&query));
     }
 
     #[test]
     fn test_query_json_int() {
         let query = Query::parse("some-value=1447015572184281088").unwrap();
         let record = parse(r#"{"some-value":1447015572184281088}"#);
-        assert_eq!(record.matches(&query), true);
+        assert!(record.matches(&query));
         let record = parse(r#"{"some-value":1447015572184281089}"#);
-        assert_eq!(record.matches(&query), false);
+        assert!(!record.matches(&query));
         let record = parse(r#"{"some-value":"1447015572184281088"}"#);
-        assert_eq!(record.matches(&query), true);
+        assert!(record.matches(&query));
     }
 
     #[test]
     fn test_query_json_int_escaped() {
         let query = Query::parse("v=42").unwrap();
         let record = parse(r#"{"v":42}"#);
-        assert_eq!(record.matches(&query), true);
+        assert!(record.matches(&query));
         let record = parse(r#"{"v":"4\u0032"}"#);
-        assert_eq!(record.matches(&query), true);
+        assert!(record.matches(&query));
     }
 
     #[test]
     fn test_query_json_float() {
         let query = Query::parse("v > 0.5").unwrap();
         let record = parse(r#"{"v":0.4}"#);
-        assert_eq!(record.matches(&query), false);
+        assert!(!record.matches(&query));
         let record = parse(r#"{"v":0.5}"#);
-        assert_eq!(record.matches(&query), false);
+        assert!(!record.matches(&query));
         let record = parse(r#"{"v":2}"#);
-        assert_eq!(record.matches(&query), true);
+        assert!(record.matches(&query));
         let record = parse(r#"{"x":42}"#);
-        assert_eq!(record.matches(&query), false);
+        assert!(!record.matches(&query));
         let record = parse(r#"{"v":"0.4"}"#);
-        assert_eq!(record.matches(&query), false);
+        assert!(!record.matches(&query));
         let record = parse(r#"{"v":"0.6"}"#);
-        assert_eq!(record.matches(&query), true);
+        assert!(record.matches(&query));
     }
 
     #[test]
     fn test_query_json_in_str() {
         let query = Query::parse("v in (a,b,c)").unwrap();
         let record = parse(r#"{"v":"a"}"#);
-        assert_eq!(record.matches(&query), true);
+        assert!(record.matches(&query));
         let record = parse(r#"{"v":"b"}"#);
-        assert_eq!(record.matches(&query), true);
+        assert!(record.matches(&query));
         let record = parse(r#"{"v":"c"}"#);
-        assert_eq!(record.matches(&query), true);
+        assert!(record.matches(&query));
         let record = parse(r#"{"v":"d"}"#);
-        assert_eq!(record.matches(&query), false);
+        assert!(!record.matches(&query));
         let record = parse(r#"{"x":"a"}"#);
-        assert_eq!(record.matches(&query), false);
+        assert!(!record.matches(&query));
     }
 
     #[test]
     fn test_query_json_in_int() {
         let query = Query::parse("v in (1,2)").unwrap();
         let record = parse(r#"{"v":1}"#);
-        assert_eq!(record.matches(&query), true);
+        assert!(record.matches(&query));
         let record = parse(r#"{"v":"1"}"#);
-        assert_eq!(record.matches(&query), true);
+        assert!(record.matches(&query));
         let record = parse(r#"{"v":2}"#);
-        assert_eq!(record.matches(&query), true);
+        assert!(record.matches(&query));
         let record = parse(r#"{"v":3}"#);
-        assert_eq!(record.matches(&query), false);
+        assert!(!record.matches(&query));
         let record = parse(r#"{"v":"3"}"#);
-        assert_eq!(record.matches(&query), false);
+        assert!(!record.matches(&query));
         let record = parse(r#"{"x":1}"#);
-        assert_eq!(record.matches(&query), false);
+        assert!(!record.matches(&query));
     }
 
     #[test]
     fn query_in_set_file_valid() {
         let query = Query::parse("v in @src/testing/assets/query/set-valid").unwrap();
         let record = parse(r#"{"v":"line"}"#);
-        assert_eq!(record.matches(&query), false);
+        assert!(!record.matches(&query));
         let record = parse(r#"{"v":"line1"}"#);
-        assert_eq!(record.matches(&query), true);
+        assert!(record.matches(&query));
         let record = parse(r#"{"v":"line2"}"#);
-        assert_eq!(record.matches(&query), true);
+        assert!(record.matches(&query));
         let record = parse(r#"{"v":"line3"}"#);
-        assert_eq!(record.matches(&query), true);
+        assert!(record.matches(&query));
         let record = parse(r#"{"v":"line4"}"#);
-        assert_eq!(record.matches(&query), false);
+        assert!(!record.matches(&query));
     }
 
     #[test]

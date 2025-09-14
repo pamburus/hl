@@ -128,7 +128,7 @@ pub mod rfc3339 {
 
         #[inline]
         pub fn as_str(&self) -> &'a str {
-            return unsafe { std::str::from_utf8_unchecked(self.v) };
+            unsafe { std::str::from_utf8_unchecked(self.v) }
         }
 
         #[inline]
@@ -194,7 +194,7 @@ pub mod rfc3339 {
 
         #[inline]
         pub fn as_str(&self) -> &'a str {
-            return unsafe { std::str::from_utf8_unchecked(self.v) };
+            unsafe { std::str::from_utf8_unchecked(self.v) }
         }
 
         #[inline]
@@ -242,7 +242,7 @@ pub mod rfc3339 {
 
         #[inline]
         pub fn as_str(&self) -> &'a str {
-            return unsafe { std::str::from_utf8_unchecked(self.v) };
+            unsafe { std::str::from_utf8_unchecked(self.v) }
         }
 
         #[inline]
@@ -290,7 +290,7 @@ pub mod rfc3339 {
 
         #[inline]
         pub fn as_str(&self) -> &'a str {
-            return unsafe { std::str::from_utf8_unchecked(self.v) };
+            unsafe { std::str::from_utf8_unchecked(self.v) }
         }
 
         #[inline]
@@ -322,12 +322,10 @@ pub mod rfc3339 {
         pub fn is_utc(&self) -> bool {
             if self.v == b"z" || self.v == b"Z" {
                 true
+            } else if let (Some(hour), Some(minute)) = (self.hour(), self.minute()) {
+                hour.as_str() == "00" && minute.as_str() == "00"
             } else {
-                if let (Some(hour), Some(minute)) = (self.hour(), self.minute()) {
-                    hour.as_str() == "00" && minute.as_str() == "00"
-                } else {
-                    false
-                }
+                false
             }
         }
 
@@ -370,24 +368,22 @@ pub mod rfc3339 {
 
         #[inline]
         pub fn as_str(&self) -> &'a str {
-            return unsafe { std::str::from_utf8_unchecked(self.v) };
+            unsafe { std::str::from_utf8_unchecked(self.v) }
         }
 
         #[inline]
         pub fn parse<T: AsRef<[u8]> + ?Sized>(v: &'a T) -> Option<Self> {
             let v = v.as_ref();
-            let v = if v.len() == 0 {
+            let v = if v.is_empty() {
                 Some(v)
-            } else {
-                if v[0] == b'.' {
-                    if v.len() >= 2 && only_digits(&v[1..]) {
-                        Some(v)
-                    } else {
-                        None
-                    }
+            } else if v[0] == b'.' {
+                if v.len() >= 2 && only_digits(&v[1..]) {
+                    Some(v)
                 } else {
                     None
                 }
+            } else {
+                None
             }?;
             Some(Self { v })
         }
@@ -408,13 +404,13 @@ pub mod rfc3339 {
 
         #[inline]
         pub fn as_str(&self) -> &'a str {
-            return unsafe { std::str::from_utf8_unchecked(self.v) };
+            unsafe { std::str::from_utf8_unchecked(self.v) }
         }
 
         #[inline]
         pub fn parse<T: AsRef<[u8]> + ?Sized>(v: &'a T) -> Option<Self> {
             let v = v.as_ref();
-            if v.len() == 0 {
+            if v.is_empty() {
                 None
             } else if only_digits(v) {
                 Some(Self { v })
@@ -450,11 +446,11 @@ pub mod rfc3339 {
 // ---
 
 fn only_digits(b: &[u8]) -> bool {
-    b.iter().map(|&b| b.is_ascii_digit()).position(|x| x == false).is_none()
+    !b.iter().map(|&b| b.is_ascii_digit()).any(|x| !x)
 }
 
 fn guess_number_type(b: &[u8]) -> Option<NumberType> {
-    if b.len() == 0 {
+    if b.is_empty() {
         return None;
     }
 
@@ -466,10 +462,10 @@ fn guess_number_type(b: &[u8]) -> Option<NumberType> {
             dots <= 1
         }
         b'0'..=b'9' => true,
-        _ => return false,
+        _ => false,
     };
 
-    match (b.iter().map(|b| check(*b)).position(|x| x == false).is_none(), dots) {
+    match (!b.iter().map(|b| check(*b)).any(|x| !x), dots) {
         (true, 0) => Some(NumberType::Integer),
         (true, 1) => Some(NumberType::Float),
         _ => None,

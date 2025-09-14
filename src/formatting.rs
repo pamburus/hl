@@ -269,7 +269,7 @@ impl RecordFormatter {
                 Some(Level::Trace) => Some(b"TRC"),
                 None => None,
             };
-            let level = level.or_else(|| self.always_show_level.then(|| b"(?)"));
+            let level = level.or(self.always_show_level.then_some(b"(?)"));
             if let Some(level) = level {
                 fs.add_element(|| s.space());
                 s.element(Element::Level, |s| {
@@ -335,7 +335,7 @@ impl RecordFormatter {
                                     buf.extend(self.punctuation.caller_name_file_separator.as_bytes());
                                 }
                                 buf.extend(caller.file.as_bytes());
-                                if caller.line.len() != 0 {
+                                if !caller.line.is_empty() {
                                     buf.push(b':');
                                     buf.extend(caller.line.as_bytes());
                                 }
@@ -433,8 +433,8 @@ impl KeyPrefix {
 
     #[inline]
     fn format<B: Push<u8>>(&self, buf: &mut B) {
-        buf.extend_from_slice(&self.value.as_slices().0);
-        buf.extend_from_slice(&self.value.as_slices().1);
+        buf.extend_from_slice(self.value.as_slices().0);
+        buf.extend_from_slice(self.value.as_slices().1);
     }
 
     #[inline]
@@ -553,7 +553,7 @@ impl<'a> FieldFormatter<'a> {
                             });
                         }
                         s.batch(|buf| {
-                            if item.fields.len() != 0 {
+                            if !item.fields.is_empty() {
                                 buf.push(b' ');
                             }
                             buf.push(b'}');
@@ -1204,13 +1204,10 @@ mod tests {
     fn formatter() -> RecordFormatterBuilder {
         RecordFormatterBuilder::sample()
             .with_theme(Sample::sample())
-            .with_timestamp_formatter(
-                DateTimeFormatter::new(
-                    LinuxDateFormat::new("%y-%m-%d %T.%3N").compile(),
-                    Tz::FixedOffset(Utc.fix()),
-                )
-                .into(),
-            )
+            .with_timestamp_formatter(DateTimeFormatter::new(
+                LinuxDateFormat::new("%y-%m-%d %T.%3N").compile(),
+                Tz::FixedOffset(Utc.fix()),
+            ))
             .with_options(Formatting {
                 flatten: None,
                 message: MessageFormatting {
@@ -1333,105 +1330,105 @@ mod tests {
     #[test]
     fn test_string_value_raw() {
         let v = "v";
-        let rec = Record::from_fields(&[("k", EncodedString::raw(&v).into())]);
+        let rec = Record::from_fields(&[("k", EncodedString::raw(v).into())]);
         assert_eq!(&format_no_color(&rec), "k=v");
     }
 
     #[test]
     fn test_string_value_json_simple() {
         let v = r#""some-value""#;
-        let rec = Record::from_fields(&[("k", EncodedString::json(&v).into())]);
+        let rec = Record::from_fields(&[("k", EncodedString::json(v).into())]);
         assert_eq!(&format_no_color(&rec), r#"k=some-value"#);
     }
 
     #[test]
     fn test_string_value_json_space() {
         let v = r#""some value""#;
-        let rec = Record::from_fields(&[("k", EncodedString::json(&v).into())]);
+        let rec = Record::from_fields(&[("k", EncodedString::json(v).into())]);
         assert_eq!(&format_no_color(&rec), r#"k="some value""#);
     }
 
     #[test]
     fn test_string_value_raw_space() {
         let v = r#"some value"#;
-        let rec = Record::from_fields(&[("k", EncodedString::raw(&v).into())]);
+        let rec = Record::from_fields(&[("k", EncodedString::raw(v).into())]);
         assert_eq!(&format_no_color(&rec), r#"k="some value""#);
     }
 
     #[test]
     fn test_string_value_json_space_and_double_quotes() {
         let v = r#""some \"value\"""#;
-        let rec = Record::from_fields(&[("k", EncodedString::json(&v).into())]);
+        let rec = Record::from_fields(&[("k", EncodedString::json(v).into())]);
         assert_eq!(&format_no_color(&rec), r#"k='some "value"'"#);
     }
 
     #[test]
     fn test_string_value_raw_space_and_double_quotes() {
         let v = r#"some "value""#;
-        let rec = Record::from_fields(&[("k", EncodedString::raw(&v).into())]);
+        let rec = Record::from_fields(&[("k", EncodedString::raw(v).into())]);
         assert_eq!(&format_no_color(&rec), r#"k='some "value"'"#);
     }
 
     #[test]
     fn test_string_value_json_space_and_single_quotes() {
         let v = r#""some 'value'""#;
-        let rec = Record::from_fields(&[("k", EncodedString::json(&v).into())]);
+        let rec = Record::from_fields(&[("k", EncodedString::json(v).into())]);
         assert_eq!(&format_no_color(&rec), r#"k="some 'value'""#);
     }
 
     #[test]
     fn test_string_value_raw_space_and_single_quotes() {
         let v = r#"some 'value'"#;
-        let rec = Record::from_fields(&[("k", EncodedString::raw(&v).into())]);
+        let rec = Record::from_fields(&[("k", EncodedString::raw(v).into())]);
         assert_eq!(&format_no_color(&rec), r#"k="some 'value'""#);
     }
 
     #[test]
     fn test_string_value_json_space_and_backticks() {
         let v = r#""some `value`""#;
-        let rec = Record::from_fields(&[("k", EncodedString::json(&v).into())]);
+        let rec = Record::from_fields(&[("k", EncodedString::json(v).into())]);
         assert_eq!(&format_no_color(&rec), r#"k="some `value`""#);
     }
 
     #[test]
     fn test_string_value_raw_space_and_backticks() {
         let v = r#"some `value`"#;
-        let rec = Record::from_fields(&[("k", EncodedString::raw(&v).into())]);
+        let rec = Record::from_fields(&[("k", EncodedString::raw(v).into())]);
         assert_eq!(&format_no_color(&rec), r#"k="some `value`""#);
     }
 
     #[test]
     fn test_string_value_json_space_and_double_and_single_quotes() {
         let v = r#""some \"value\" from 'source'""#;
-        let rec = Record::from_fields(&[("k", EncodedString::json(&v).into())]);
+        let rec = Record::from_fields(&[("k", EncodedString::json(v).into())]);
         assert_eq!(&format_no_color(&rec), r#"k=`some "value" from 'source'`"#);
     }
 
     #[test]
     fn test_string_value_raw_space_and_double_and_single_quotes() {
         let v = r#"some "value" from 'source'"#;
-        let rec = Record::from_fields(&[("k", EncodedString::raw(&v).into())]);
+        let rec = Record::from_fields(&[("k", EncodedString::raw(v).into())]);
         assert_eq!(&format_no_color(&rec), r#"k=`some "value" from 'source'`"#);
     }
 
     #[test]
     fn test_string_value_json_backslash() {
         let v = r#""some-\\\"value\\\"""#;
-        let rec = Record::from_fields(&[("k", EncodedString::json(&v).into())]);
+        let rec = Record::from_fields(&[("k", EncodedString::json(v).into())]);
         assert_eq!(&format_no_color(&rec), r#"k=`some-\"value\"`"#);
     }
 
     #[test]
     fn test_string_value_raw_backslash() {
         let v = r#"some-\"value\""#;
-        let rec = Record::from_fields(&[("k", EncodedString::raw(&v).into())]);
+        let rec = Record::from_fields(&[("k", EncodedString::raw(v).into())]);
         assert_eq!(&format_no_color(&rec), r#"k=`some-\"value\"`"#);
     }
 
     #[test]
     fn test_string_value_json_space_and_double_and_single_quotes_and_backticks() {
         let v = r#""some \"value\" from 'source' with `sauce`""#;
-        let rec = Record::from_fields(&[("k", EncodedString::json(&v).into())]);
+        let rec = Record::from_fields(&[("k", EncodedString::json(v).into())]);
         assert_eq!(
             &format_no_color(&rec),
             r#"k="some \"value\" from 'source' with `sauce`""#
@@ -1441,7 +1438,7 @@ mod tests {
     #[test]
     fn test_string_value_raw_space_and_double_and_single_quotes_and_backticks() {
         let v = r#"some "value" from 'source' with `sauce`"#;
-        let rec = Record::from_fields(&[("k", EncodedString::raw(&v).into())]);
+        let rec = Record::from_fields(&[("k", EncodedString::raw(v).into())]);
         assert_eq!(
             &format_no_color(&rec),
             r#"k="some \"value\" from 'source' with `sauce`""#
@@ -1451,21 +1448,21 @@ mod tests {
     #[test]
     fn test_string_value_json_tabs() {
         let v = r#""some\tvalue""#;
-        let rec = Record::from_fields(&[("k", EncodedString::json(&v).into())]);
+        let rec = Record::from_fields(&[("k", EncodedString::json(v).into())]);
         assert_eq!(&format_no_color(&rec), "k=`some\tvalue`");
     }
 
     #[test]
     fn test_string_value_raw_tabs() {
         let v = "some\tvalue";
-        let rec = Record::from_fields(&[("k", EncodedString::raw(&v).into())]);
+        let rec = Record::from_fields(&[("k", EncodedString::raw(v).into())]);
         assert_eq!(&format_no_color(&rec), "k=`some\tvalue`");
     }
 
     #[test]
     fn test_string_value_json_control_chars() {
         let v = r#""some-\u001b[1mvalue\u001b[0m""#;
-        let rec = Record::from_fields(&[("k", EncodedString::json(&v).into())]);
+        let rec = Record::from_fields(&[("k", EncodedString::json(v).into())]);
         assert_eq!(format_no_color(&rec), format!(r#"k={}"#, v));
     }
 
@@ -1480,14 +1477,14 @@ mod tests {
     #[test]
     fn test_string_value_json_control_chars_and_quotes() {
         let v = r#""some-\u001b[1m\"value\"\u001b[0m""#;
-        let rec = Record::from_fields(&[("k", EncodedString::json(&v).into())]);
+        let rec = Record::from_fields(&[("k", EncodedString::json(v).into())]);
         assert_eq!(format_no_color(&rec), format!(r#"k={}"#, v));
     }
 
     #[test]
     fn test_string_value_raw_control_chars_and_quotes() {
         let v = "some-\x1b[1m\"value\"\x1b[0m";
-        let rec = Record::from_fields(&[("k", EncodedString::raw(&v).into())]);
+        let rec = Record::from_fields(&[("k", EncodedString::raw(v).into())]);
         assert_eq!(format_no_color(&rec), r#"k="some-\u001b[1m\"value\"\u001b[0m""#);
     }
 
@@ -1503,11 +1500,11 @@ mod tests {
     #[test]
     fn test_string_value_raw_ambiguous() {
         for v in ["true", "false", "null"] {
-            let rec = Record::from_fields(&[("k", EncodedString::raw(&v).into())]);
+            let rec = Record::from_fields(&[("k", EncodedString::raw(v).into())]);
             assert_eq!(format_no_color(&rec), format!(r#"k={}"#, v));
         }
         for v in ["{}", "[]"] {
-            let rec = Record::from_fields(&[("k", EncodedString::raw(&v).into())]);
+            let rec = Record::from_fields(&[("k", EncodedString::raw(v).into())]);
             assert_eq!(format_no_color(&rec), format!(r#"k="{}""#, v));
         }
     }
@@ -1532,14 +1529,14 @@ mod tests {
     #[test]
     fn test_string_value_raw_number() {
         for v in ["42", "42.42", "-42", "-42.42"] {
-            let rec = Record::from_fields(&[("k", EncodedString::raw(&v).into())]);
+            let rec = Record::from_fields(&[("k", EncodedString::raw(v).into())]);
             assert_eq!(format_no_color(&rec), format!(r#"k={}"#, v));
         }
         for v in [
             "42128731867381927389172983718293789127389172938712983718927",
             "42.128731867381927389172983718293789127389172938712983718927",
         ] {
-            let rec = Record::from_fields(&[("k", EncodedString::raw(&v).into())]);
+            let rec = Record::from_fields(&[("k", EncodedString::raw(v).into())]);
             assert_eq!(format_no_color(&rec), format!(r#"k={}"#, v));
         }
     }
@@ -1555,7 +1552,7 @@ mod tests {
     #[test]
     fn test_string_value_raw_version() {
         let v = "1.1.0";
-        let rec = Record::from_fields(&[("k", EncodedString::raw(&v).into())]);
+        let rec = Record::from_fields(&[("k", EncodedString::raw(v).into())]);
         assert_eq!(format_no_color(&rec), format!(r#"k={}"#, v));
     }
 
@@ -1570,7 +1567,7 @@ mod tests {
     #[test]
     fn test_string_value_raw_hyphen() {
         let v = "-";
-        let rec = Record::from_fields(&[("k", EncodedString::raw(&v).into())]);
+        let rec = Record::from_fields(&[("k", EncodedString::raw(v).into())]);
         assert_eq!(format_no_color(&rec), format!(r#"k={}"#, v));
     }
 
@@ -1578,7 +1575,7 @@ mod tests {
     fn test_string_value_trailing_space() {
         let input = "test message\n";
         let golden = r#""test message""#;
-        let rec = Record::from_fields(&[("k", EncodedString::raw(&input).into())]);
+        let rec = Record::from_fields(&[("k", EncodedString::raw(input).into())]);
         assert_eq!(format_no_color(&rec), format!(r#"k={}"#, golden));
     }
 
@@ -1709,9 +1706,9 @@ mod tests {
     fn test_caller() {
         let rec = Record {
             caller: Caller {
-                name: "test_function".into(),
-                file: "test_file.rs".into(),
-                line: "42".into(),
+                name: "test_function",
+                file: "test_file.rs",
+                line: "42",
             },
             ..Default::default()
         };
@@ -1891,25 +1888,19 @@ mod tests {
 
         // Create formatters with each ASCII mode but no theme (for no-color output)
         let formatter_ascii = RecordFormatterBuilder::new()
-            .with_timestamp_formatter(
-                DateTimeFormatter::new(
-                    LinuxDateFormat::new("%b %d %T.%3N").compile(),
-                    Tz::FixedOffset(Utc.fix()),
-                )
-                .into(),
-            )
+            .with_timestamp_formatter(DateTimeFormatter::new(
+                LinuxDateFormat::new("%b %d %T.%3N").compile(),
+                Tz::FixedOffset(Utc.fix()),
+            ))
             .with_options(formatting.clone())
             .with_ascii(AsciiMode::On)
             .build();
 
         let formatter_utf8 = RecordFormatterBuilder::new()
-            .with_timestamp_formatter(
-                DateTimeFormatter::new(
-                    LinuxDateFormat::new("%b %d %T.%3N").compile(),
-                    Tz::FixedOffset(Utc.fix()),
-                )
-                .into(),
-            )
+            .with_timestamp_formatter(DateTimeFormatter::new(
+                LinuxDateFormat::new("%b %d %T.%3N").compile(),
+                Tz::FixedOffset(Utc.fix()),
+            ))
             .with_options(formatting)
             .with_ascii(AsciiMode::Off)
             .build();
@@ -1939,25 +1930,19 @@ mod tests {
 
         // Create formatters with different ASCII modes but no theme
         let ascii_formatter = RecordFormatterBuilder::new()
-            .with_timestamp_formatter(
-                DateTimeFormatter::new(
-                    LinuxDateFormat::new("%y-%m-%d %T.%3N").compile(),
-                    Tz::FixedOffset(Utc.fix()),
-                )
-                .into(),
-            )
+            .with_timestamp_formatter(DateTimeFormatter::new(
+                LinuxDateFormat::new("%y-%m-%d %T.%3N").compile(),
+                Tz::FixedOffset(Utc.fix()),
+            ))
             .with_options(formatting.clone())
             .with_ascii(AsciiMode::On)
             .build();
 
         let utf8_formatter = RecordFormatterBuilder::new()
-            .with_timestamp_formatter(
-                DateTimeFormatter::new(
-                    LinuxDateFormat::new("%y-%m-%d %T.%3N").compile(),
-                    Tz::FixedOffset(Utc.fix()),
-                )
-                .into(),
-            )
+            .with_timestamp_formatter(DateTimeFormatter::new(
+                LinuxDateFormat::new("%y-%m-%d %T.%3N").compile(),
+                Tz::FixedOffset(Utc.fix()),
+            ))
             .with_options(formatting)
             .with_ascii(AsciiMode::Off)
             .build();

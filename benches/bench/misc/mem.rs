@@ -28,7 +28,7 @@ fn bench(c: &mut Criterion) {
 
     let bufs = |size| {
         let next = seq();
-        let vi: Vec<u8> = (0..size).into_iter().map(|_| next()).collect();
+        let vi: Vec<u8> = (0..size).map(|_| next()).collect();
         let ve: Vec<u8> = Vec::with_capacity(size);
         (vi, ve)
     };
@@ -58,7 +58,7 @@ fn bench(c: &mut Criterion) {
     for (n, batch) in variants {
         group.throughput(Throughput::Bytes(n as u64));
 
-        let setup = || (0..n).into_iter().map(|x| (x * 256 / n) as u8).collect::<Vec<u8>>();
+        let setup = || (0..n).map(|x| (x * 256 / n) as u8).collect::<Vec<u8>>();
         let param = |x| format!("{}:{}", n, x);
 
         group.bench_function(BenchmarkId::new("position", param("single-value")), |b| {

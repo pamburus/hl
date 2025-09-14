@@ -52,7 +52,15 @@ impl Counter {
     pub fn new() -> Self {
         Self { value: 0 }
     }
+}
 
+impl Default for Counter {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Counter {
     #[inline]
     pub fn result(&self) -> usize {
         self.value

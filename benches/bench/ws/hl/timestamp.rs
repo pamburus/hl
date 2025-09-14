@@ -27,12 +27,13 @@ pub(super) mod parsing {
 
         let variants = [("rfc3339", rfc3339)];
 
+        use regex::Regex;
+        let re = Regex::new(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-](\d{2}:\d{2}))?$").unwrap();
+
         for (name, input) in variants {
             c.throughput(Throughput::Bytes(input.len() as u64));
 
             c.bench_function(BenchmarkId::new("regex:match", name), |b| {
-                use regex::Regex;
-                let re = Regex::new(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-](\d{2}:\d{2}))?$").unwrap();
                 let setup = || input;
                 let routine = |input| re.is_match(input);
                 assert!(routine(setup()));

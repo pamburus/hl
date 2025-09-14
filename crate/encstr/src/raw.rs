@@ -32,18 +32,18 @@ impl<'a> AnyEncodedString<'a> for RawString<'a> {
 
     #[inline(always)]
     fn decode<H: Handler>(&self, mut handler: H) -> Result<()> {
-        handler.handle(Token::Sequence(self.0.as_ref()));
+        handler.handle(Token::Sequence(self.0));
         Ok(())
     }
 
     #[inline(always)]
     fn tokens(&self) -> Self::Tokens {
-        Tokens(Some(self.0.as_ref()))
+        Tokens(Some(self.0))
     }
 
     #[inline(always)]
     fn source(&self) -> &'a str {
-        self.0.as_ref()
+        self.0
     }
 
     #[inline(always)]
@@ -68,7 +68,7 @@ impl<'a> Iterator for Tokens<'a> {
 
     #[inline(always)]
     fn next(&mut self) -> Option<Self::Item> {
-        self.0.take().map(|s| Ok(Token::Sequence(s.as_ref())))
+        self.0.take().map(|s| Ok(Token::Sequence(s)))
     }
 }
 

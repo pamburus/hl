@@ -332,189 +332,189 @@ impl<'de> Deserializer<'de> for &'de RawValue {
     where
         V: Visitor<'de>,
     {
-        super::de::Deserializer::from_str(&self.v).deserialize_any(visitor)
+        super::de::Deserializer::new(&self.v).deserialize_any(visitor)
     }
 
     fn deserialize_bool<V>(self, visitor: V) -> Result<V::Value, Error>
     where
         V: Visitor<'de>,
     {
-        super::de::Deserializer::from_str(&self.v).deserialize_bool(visitor)
+        super::de::Deserializer::new(&self.v).deserialize_bool(visitor)
     }
 
     fn deserialize_i8<V>(self, visitor: V) -> Result<V::Value, Error>
     where
         V: Visitor<'de>,
     {
-        super::de::Deserializer::from_str(&self.v).deserialize_i8(visitor)
+        super::de::Deserializer::new(&self.v).deserialize_i8(visitor)
     }
 
     fn deserialize_i16<V>(self, visitor: V) -> Result<V::Value, Error>
     where
         V: Visitor<'de>,
     {
-        super::de::Deserializer::from_str(&self.v).deserialize_i16(visitor)
+        super::de::Deserializer::new(&self.v).deserialize_i16(visitor)
     }
 
     fn deserialize_i32<V>(self, visitor: V) -> Result<V::Value, Error>
     where
         V: Visitor<'de>,
     {
-        super::de::Deserializer::from_str(&self.v).deserialize_i32(visitor)
+        super::de::Deserializer::new(&self.v).deserialize_i32(visitor)
     }
 
     fn deserialize_i64<V>(self, visitor: V) -> Result<V::Value, Error>
     where
         V: Visitor<'de>,
     {
-        super::de::Deserializer::from_str(&self.v).deserialize_i64(visitor)
+        super::de::Deserializer::new(&self.v).deserialize_i64(visitor)
     }
 
     fn deserialize_i128<V>(self, visitor: V) -> Result<V::Value, Error>
     where
         V: Visitor<'de>,
     {
-        super::de::Deserializer::from_str(&self.v).deserialize_i128(visitor)
+        super::de::Deserializer::new(&self.v).deserialize_i128(visitor)
     }
 
     fn deserialize_u8<V>(self, visitor: V) -> Result<V::Value, Error>
     where
         V: Visitor<'de>,
     {
-        super::de::Deserializer::from_str(&self.v).deserialize_u8(visitor)
+        super::de::Deserializer::new(&self.v).deserialize_u8(visitor)
     }
 
     fn deserialize_u16<V>(self, visitor: V) -> Result<V::Value, Error>
     where
         V: Visitor<'de>,
     {
-        super::de::Deserializer::from_str(&self.v).deserialize_u16(visitor)
+        super::de::Deserializer::new(&self.v).deserialize_u16(visitor)
     }
 
     fn deserialize_u32<V>(self, visitor: V) -> Result<V::Value, Error>
     where
         V: Visitor<'de>,
     {
-        super::de::Deserializer::from_str(&self.v).deserialize_u32(visitor)
+        super::de::Deserializer::new(&self.v).deserialize_u32(visitor)
     }
 
     fn deserialize_u64<V>(self, visitor: V) -> Result<V::Value, Error>
     where
         V: Visitor<'de>,
     {
-        super::de::Deserializer::from_str(&self.v).deserialize_u64(visitor)
+        super::de::Deserializer::new(&self.v).deserialize_u64(visitor)
     }
 
     fn deserialize_u128<V>(self, visitor: V) -> Result<V::Value, Error>
     where
         V: Visitor<'de>,
     {
-        super::de::Deserializer::from_str(&self.v).deserialize_u128(visitor)
+        super::de::Deserializer::new(&self.v).deserialize_u128(visitor)
     }
 
     fn deserialize_f32<V>(self, visitor: V) -> Result<V::Value, Error>
     where
         V: Visitor<'de>,
     {
-        super::de::Deserializer::from_str(&self.v).deserialize_f32(visitor)
+        super::de::Deserializer::new(&self.v).deserialize_f32(visitor)
     }
 
     fn deserialize_f64<V>(self, visitor: V) -> Result<V::Value, Error>
     where
         V: Visitor<'de>,
     {
-        super::de::Deserializer::from_str(&self.v).deserialize_f64(visitor)
+        super::de::Deserializer::new(&self.v).deserialize_f64(visitor)
     }
 
     fn deserialize_char<V>(self, visitor: V) -> Result<V::Value, Error>
     where
         V: Visitor<'de>,
     {
-        super::de::Deserializer::from_str(&self.v).deserialize_char(visitor)
+        super::de::Deserializer::new(&self.v).deserialize_char(visitor)
     }
 
     fn deserialize_str<V>(self, visitor: V) -> Result<V::Value, Error>
     where
         V: Visitor<'de>,
     {
-        super::de::Deserializer::from_str(&self.v).deserialize_str(visitor)
+        super::de::Deserializer::new(&self.v).deserialize_str(visitor)
     }
 
     fn deserialize_string<V>(self, visitor: V) -> Result<V::Value, Error>
     where
         V: Visitor<'de>,
     {
-        super::de::Deserializer::from_str(&self.v).deserialize_string(visitor)
+        super::de::Deserializer::new(&self.v).deserialize_string(visitor)
     }
 
     fn deserialize_bytes<V>(self, visitor: V) -> Result<V::Value, Error>
     where
         V: Visitor<'de>,
     {
-        super::de::Deserializer::from_str(&self.v).deserialize_bytes(visitor)
+        super::de::Deserializer::new(&self.v).deserialize_bytes(visitor)
     }
 
     fn deserialize_byte_buf<V>(self, visitor: V) -> Result<V::Value, Error>
     where
         V: Visitor<'de>,
     {
-        super::de::Deserializer::from_str(&self.v).deserialize_byte_buf(visitor)
+        super::de::Deserializer::new(&self.v).deserialize_byte_buf(visitor)
     }
 
     fn deserialize_option<V>(self, visitor: V) -> Result<V::Value, Error>
     where
         V: Visitor<'de>,
     {
-        super::de::Deserializer::from_str(&self.v).deserialize_option(visitor)
+        super::de::Deserializer::new(&self.v).deserialize_option(visitor)
     }
 
     fn deserialize_unit<V>(self, visitor: V) -> Result<V::Value, Error>
     where
         V: Visitor<'de>,
     {
-        super::de::Deserializer::from_str(&self.v).deserialize_unit(visitor)
+        super::de::Deserializer::new(&self.v).deserialize_unit(visitor)
     }
 
     fn deserialize_unit_struct<V>(self, name: &'static str, visitor: V) -> Result<V::Value, Error>
     where
         V: Visitor<'de>,
     {
-        super::de::Deserializer::from_str(&self.v).deserialize_unit_struct(name, visitor)
+        super::de::Deserializer::new(&self.v).deserialize_unit_struct(name, visitor)
     }
 
     fn deserialize_newtype_struct<V>(self, name: &'static str, visitor: V) -> Result<V::Value, Error>
     where
         V: Visitor<'de>,
     {
-        super::de::Deserializer::from_str(&self.v).deserialize_newtype_struct(name, visitor)
+        super::de::Deserializer::new(&self.v).deserialize_newtype_struct(name, visitor)
     }
 
     fn deserialize_seq<V>(self, visitor: V) -> Result<V::Value, Error>
     where
         V: Visitor<'de>,
     {
-        super::de::Deserializer::from_str(&self.v).deserialize_seq(visitor)
+        super::de::Deserializer::new(&self.v).deserialize_seq(visitor)
     }
 
     fn deserialize_tuple<V>(self, len: usize, visitor: V) -> Result<V::Value, Error>
     where
         V: Visitor<'de>,
     {
-        super::de::Deserializer::from_str(&self.v).deserialize_tuple(len, visitor)
+        super::de::Deserializer::new(&self.v).deserialize_tuple(len, visitor)
     }
 
     fn deserialize_tuple_struct<V>(self, name: &'static str, len: usize, visitor: V) -> Result<V::Value, Error>
     where
         V: Visitor<'de>,
     {
-        super::de::Deserializer::from_str(&self.v).deserialize_tuple_struct(name, len, visitor)
+        super::de::Deserializer::new(&self.v).deserialize_tuple_struct(name, len, visitor)
     }
 
     fn deserialize_map<V>(self, visitor: V) -> Result<V::Value, Error>
     where
         V: Visitor<'de>,
     {
-        super::de::Deserializer::from_str(&self.v).deserialize_map(visitor)
+        super::de::Deserializer::new(&self.v).deserialize_map(visitor)
     }
 
     fn deserialize_struct<V>(
@@ -526,7 +526,7 @@ impl<'de> Deserializer<'de> for &'de RawValue {
     where
         V: Visitor<'de>,
     {
-        super::de::Deserializer::from_str(&self.v).deserialize_struct(name, fields, visitor)
+        super::de::Deserializer::new(&self.v).deserialize_struct(name, fields, visitor)
     }
 
     fn deserialize_enum<V>(
@@ -538,20 +538,20 @@ impl<'de> Deserializer<'de> for &'de RawValue {
     where
         V: Visitor<'de>,
     {
-        super::de::Deserializer::from_str(&self.v).deserialize_enum(name, variants, visitor)
+        super::de::Deserializer::new(&self.v).deserialize_enum(name, variants, visitor)
     }
 
     fn deserialize_identifier<V>(self, visitor: V) -> Result<V::Value, Error>
     where
         V: Visitor<'de>,
     {
-        super::de::Deserializer::from_str(&self.v).deserialize_identifier(visitor)
+        super::de::Deserializer::new(&self.v).deserialize_identifier(visitor)
     }
 
     fn deserialize_ignored_any<V>(self, visitor: V) -> Result<V::Value, Error>
     where
         V: Visitor<'de>,
     {
-        super::de::Deserializer::from_str(&self.v).deserialize_ignored_any(visitor)
+        super::de::Deserializer::new(&self.v).deserialize_ignored_any(visitor)
     }
 }

@@ -134,10 +134,10 @@ impl<'a> BencherExt for Bencher<'a> {
 
 fn iters_per_batch(size: BatchSize, iters: u64) -> usize {
     let size = match size {
-        BatchSize::SmallInput => (iters + 10 - 1) / 10,
-        BatchSize::LargeInput => (iters + 1000 - 1) / 1000,
+        BatchSize::SmallInput => iters.div_ceil(10),
+        BatchSize::LargeInput => iters.div_ceil(1000),
         BatchSize::PerIteration => 1,
-        BatchSize::NumBatches(batches) => (iters + batches - 1) / batches,
+        BatchSize::NumBatches(batches) => iters.div_ceil(batches),
         BatchSize::NumIterations(size) => size,
         BatchSize::__NonExhaustive => panic!("__NonExhaustive is not a valid BatchSize."),
     };
