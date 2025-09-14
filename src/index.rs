@@ -29,7 +29,7 @@ use std::{
 use capnp::{message, serialize::read_message};
 use closure::closure;
 use crossbeam_channel as channel;
-use crossbeam_channel::RecvError;
+
 use crossbeam_utils::thread;
 use derive_more::{Deref, From};
 use itertools::izip;
@@ -71,6 +71,7 @@ pub struct Timestamp {
 }
 
 impl Timestamp {
+    #[allow(clippy::should_implement_trait)]
     #[inline]
     pub fn add(mut self, interval: std::time::Duration) -> Self {
         self.sec += interval.as_secs() as i64;
@@ -78,6 +79,7 @@ impl Timestamp {
         self
     }
 
+    #[allow(clippy::should_implement_trait)]
     #[inline]
     pub fn sub(mut self, interval: std::time::Duration) -> Self {
         self.sec -= interval.as_secs() as i64;
@@ -114,6 +116,24 @@ impl From<chrono::DateTime<chrono::Utc>> for Timestamp {
             sec: value.timestamp(),
             nsec: value.timestamp_subsec_nanos(),
         }
+    }
+}
+
+impl std::ops::Add<std::time::Duration> for Timestamp {
+    type Output = Self;
+
+    #[inline]
+    fn add(self, rhs: std::time::Duration) -> Self::Output {
+        self.add(rhs)
+    }
+}
+
+impl std::ops::Sub<std::time::Duration> for Timestamp {
+    type Output = Self;
+
+    #[inline]
+    fn sub(self, rhs: std::time::Duration) -> Self::Output {
+        self.sub(rhs)
     }
 }
 
@@ -212,7 +232,7 @@ impl TryFrom<NonZero<usize>> for BufferSize {
 impl From<BufferSize> for NonZeroU32 {
     #[inline]
     fn from(value: BufferSize) -> NonZeroU32 {
-        value.0.into()
+        value.0
     }
 }
 
@@ -245,7 +265,7 @@ impl TryFrom<NonZero<usize>> for MessageSize {
 impl From<MessageSize> for NonZeroU32 {
     #[inline]
     fn from(value: MessageSize) -> NonZeroU32 {
-        value.0.into()
+        value.0
     }
 }
 
@@ -283,7 +303,7 @@ where
             buffer_size: settings.buffer_size.into(),
             max_message_size: settings.max_message_size.into(),
             dir,
-            parser: Parser::new(ParserSettings::new(&settings.fields, empty(), settings.unix_ts_unit)),
+            parser: Parser::new(ParserSettings::new(settings.fields, empty(), settings.unix_ts_unit)),
             delimiter: settings.delimiter,
             allow_prefix: settings.allow_prefix,
             format: settings.format,
@@ -377,7 +397,7 @@ where
         index_path: &PathBuf,
         existing_index: Option<Index>,
     ) -> Result<Index> {
-        let mut output = match self.fs.create(&index_path) {
+        let mut output = match self.fs.create(index_path) {
             Ok(output) => output,
             Err(err) => {
                 return Err(Error::FailedToOpenFileForWriting {
@@ -405,18 +425,15 @@ where
             let (txi, rxi): (Vec<_>, Vec<_>) = (0..n).map(|_| channel::bounded(1)).unzip();
             // prepare receive/transmit channels for output data
             let (txo, rxo): (Vec<_>, Vec<_>) = (0..n)
-                .into_iter()
                 .map(|_| channel::bounded::<(usize, Stat, Chronology, Option<Hash>)>(1))
                 .unzip();
             // spawn reader thread
             let reader = scope.spawn(closure!(clone sfi, |_| -> Result<()> {
-                let mut sn: usize = 0;
                 let scanner = Scanner::new(sfi, &self.delimiter);
-                for item in scanner.items(input).with_max_segment_size(self.max_message_size.try_into()?) {
-                    if let Err(_) = txi[sn % n].send((sn, item?)) {
+                for (sn, item) in scanner.items(input).with_max_segment_size(self.max_message_size.try_into()?).enumerate() {
+                    if txi[sn % n].send((sn, item?)).is_err() {
                         break;
                     }
-                    sn += 1;
                 }
                 Ok(())
             }));
@@ -429,8 +446,7 @@ where
                                 let hash = Hash::WyHash(wyhash::wyhash(segment.data(), 0));
                                 let (stat, chronology) = existing_index
                                     .as_ref()
-                                    .and_then(|index| Self::match_segment(&index, sn, &hash))
-                                    .map(|(stat, chronology)| (stat, chronology))
+                                    .and_then(|index| Self::match_segment(index, sn, &hash))
                                     .unwrap_or_else(|| self.process_segment(&segment));
                                 (stat, chronology, segment, Some(hash))
                             }
@@ -442,7 +458,7 @@ where
                         };
                         let size = segment.data().len();
                         sfi.recycle(segment);
-                        if let Err(_) = txo.send((size, stat, chronology, hash)) {
+                        if txo.send((size, stat, chronology, hash)).is_err() {
                             break;
                         };
                     }
@@ -457,29 +473,22 @@ where
                         path: path.to_string_lossy().into(),
                         modified: metadata.modified,
                         stat: Stat::new(),
-                        blocks: Vec::with_capacity((usize::try_from(metadata.len)? + bs - 1) / bs),
+                        blocks: Vec::with_capacity((usize::try_from(metadata.len)?).div_ceil(bs)),
                     },
                 };
 
-                let mut sn = 0;
                 let mut offset: u64 = 0;
-                loop {
-                    match rxo[sn % n].recv() {
-                        Ok((size, stat, chronology, hash)) => {
-                            index.source.stat.merge(&stat);
-                            index.source.blocks.push(SourceBlock::new(
-                                offset,
-                                size.try_into()?,
-                                stat,
-                                chronology,
-                                hash,
-                            ));
-                            offset += u64::try_from(size)?;
-                        }
-                        Err(RecvError) => {
-                            break;
-                        }
-                    }
+                let mut sn = 0;
+                while let Ok((size, stat, chronology, hash)) = rxo[sn % n].recv() {
+                    index.source.stat.merge(&stat);
+                    index.source.blocks.push(SourceBlock::new(
+                        offset,
+                        size.try_into()?,
+                        stat,
+                        chronology,
+                        hash,
+                    ));
+                    offset += u64::try_from(size)?;
                     sn += 1;
                 }
                 Ok(index)
@@ -505,7 +514,7 @@ where
             let data = strip(data, b'\r');
             let mut ts = None;
             let mut rel = 0;
-            if data.len() != 0 {
+            if !data.is_empty() {
                 let mut stream = RawRecord::parser()
                     .allow_prefix(self.allow_prefix)
                     .format(self.format)
@@ -515,7 +524,9 @@ where
                         Ok(ar) => {
                             let rec = self.parser.parse(&ar.record);
                             let mut flags = 0;
-                            rec.level.map(|level| flags |= level_to_flag(level));
+                            if let Some(level) = rec.level {
+                                flags |= level_to_flag(level);
+                            }
                             ts = rec.ts.and_then(|ts| ts.unix_utc()).map(|ts| ts.into());
                             if ts < prev_ts {
                                 sorted = false;
@@ -547,7 +558,7 @@ where
             stat.flags |= schema::FLAG_UNSORTED;
             lines.sort();
 
-            let n = (lines.len() + 63) / 64;
+            let n = lines.len().div_ceil(64);
             let mut bitmap = Vec::with_capacity(n);
             let mut offsets = Vec::with_capacity(n);
             let mut jumps = Vec::new();
@@ -604,6 +615,10 @@ where
 pub trait SourceMetadata {
     fn len(&self) -> u64;
     fn modified(&self) -> io::Result<SystemTime>;
+
+    fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
 }
 
 impl SourceMetadata for fs::Metadata {
@@ -792,23 +807,23 @@ impl Index {
     fn save_chronology(mut to: schema::chronology::Builder, from: &Chronology) -> Result<()> {
         let mut bitmap = to.reborrow().init_bitmap(from.bitmap.len().try_into()?);
         for (i, value) in from.bitmap.iter().enumerate() {
-            bitmap.set(i as u32, value.clone());
+            bitmap.set(i as u32, *value);
         }
         let n = from.offsets.len().try_into()?;
         let mut offsets = to.reborrow().init_offsets();
         {
             let mut bytes = offsets.reborrow().init_bytes(n);
             for (i, pair) in from.offsets.iter().enumerate() {
-                bytes.set(i as u32, pair.bytes.clone());
+                bytes.set(i as u32, pair.bytes);
             }
         }
         let mut jumps = offsets.reborrow().init_jumps(n);
         for (i, pair) in from.offsets.iter().enumerate() {
-            jumps.set(i as u32, pair.jumps.clone());
+            jumps.set(i as u32, pair.jumps);
         }
         let mut jumps = to.init_jumps(from.jumps.len().try_into()?);
         for (i, value) in from.jumps.iter().enumerate() {
-            jumps.set(i as u32, value.clone());
+            jumps.set(i as u32, *value);
         }
         Ok(())
     }
@@ -919,7 +934,7 @@ pub struct Stat {
 }
 
 impl Stat {
-    /// New returns a new Stat.
+    /// Returns a new Stat.
     #[inline]
     pub fn new() -> Self {
         Self {
@@ -929,11 +944,19 @@ impl Stat {
             ts_min_max: None,
         }
     }
+}
 
+impl Default for Stat {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Stat {
     /// Adds information about a single valid line.
     #[inline]
     pub fn add_valid(&mut self, ts: Option<Timestamp>, flags: u64) {
-        self.ts_min_max = min_max_opt(self.ts_min_max, ts.and_then(|ts| Some((ts, ts))));
+        self.ts_min_max = min_max_opt(self.ts_min_max, ts.map(|ts| (ts, ts)));
         self.flags |= flags;
         self.lines_valid += 1;
         if self.ts_min_max.is_some() {
@@ -1041,7 +1064,7 @@ impl Header {
     }
 
     fn save(&self, mut writer: &mut Writer) -> Result<()> {
-        bincode::serde::encode_into_std_write(&self, &mut writer, bincode::config::legacy())?;
+        bincode::serde::encode_into_std_write(self, &mut writer, bincode::config::legacy())?;
         Ok(())
     }
 }
@@ -1133,7 +1156,7 @@ fn sha256(bytes: &[u8]) -> [u8; 32] {
 }
 
 #[inline]
-fn strip<'a>(slice: &'a [u8], ch: u8) -> &'a [u8] {
+fn strip(slice: &[u8], ch: u8) -> &[u8] {
     let n = slice.len();
     if n == 0 {
         slice
@@ -1171,8 +1194,8 @@ fn level_mask_higher_or_eq(flag: u64) -> u64 {
 }
 
 #[inline]
-fn rtrim<'a>(s: &'a [u8], c: u8) -> &'a [u8] {
-    if s.len() > 0 && s[s.len() - 1] == c {
+fn rtrim(s: &[u8], c: u8) -> &[u8] {
+    if !s.is_empty() && s[s.len() - 1] == c {
         &s[..s.len() - 1]
     } else {
         s
@@ -1344,27 +1367,27 @@ mod tests {
         assert_eq!(ts.sec, 1701680467);
         assert_eq!(ts.nsec, 91243000);
 
-        let ts = ts.add(Duration::from_secs(1));
+        let ts = ts + Duration::from_secs(1);
         assert_eq!(ts.sec, 1701680468);
         assert_eq!(ts.nsec, 91243000);
 
-        let ts = ts.add(Duration::from_nanos(1_000));
+        let ts = ts + Duration::from_nanos(1_000);
         assert_eq!(ts.sec, 1701680468);
         assert_eq!(ts.nsec, 91244000);
 
-        let ts = ts.add(Duration::from_nanos(1_000_000_000));
+        let ts = ts + Duration::from_nanos(1_000_000_000);
         assert_eq!(ts.sec, 1701680469);
         assert_eq!(ts.nsec, 91244000);
 
-        let ts = ts.sub(Duration::from_secs(1));
+        let ts = ts - Duration::from_secs(1);
         assert_eq!(ts.sec, 1701680468);
         assert_eq!(ts.nsec, 91244000);
 
-        let ts = ts.sub(Duration::from_nanos(1_000));
+        let ts = ts - Duration::from_nanos(1_000);
         assert_eq!(ts.sec, 1701680468);
         assert_eq!(ts.nsec, 91243000);
 
-        let ts = ts.sub(Duration::from_nanos(900_000_000));
+        let ts = ts - Duration::from_nanos(900_000_000);
         assert_eq!(ts.sec, 1701680467);
         assert_eq!(ts.nsec, 191243000);
 

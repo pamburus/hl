@@ -174,7 +174,7 @@ impl<N: KeyNormalize> IncludeExcludeKeyFilter<N> {
 
     #[inline(always)]
     pub fn setting(&self) -> IncludeExcludeSetting {
-        self.setting.clone()
+        self.setting
     }
 
     #[inline(always)]

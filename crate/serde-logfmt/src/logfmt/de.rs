@@ -24,6 +24,8 @@ where
     from_str(str::from_utf8(s).map_err(Error::InvalidUtf8)?)
 }
 
+/// # Safety
+/// The caller must ensure that the input slice contains valid UTF-8 data.
 #[inline]
 pub unsafe fn from_slice_unchecked<'a, T>(s: &'a [u8]) -> Result<T>
 where
@@ -47,21 +49,23 @@ pub struct Deserializer<'de> {
 
 impl<'de> Deserializer<'de> {
     #[inline]
-    pub fn from_str(input: &'de str) -> Self {
+    pub fn new(input: &'de str) -> Self {
         unsafe { Self::from_slice_unchecked(input.as_bytes()) }
     }
 
     #[inline]
     pub fn from_slice(input: &'de [u8]) -> Result<Self> {
-        Ok(Self::from_str(str::from_utf8(input).map_err(Error::InvalidUtf8)?))
+        Ok(Self::new(str::from_utf8(input).map_err(Error::InvalidUtf8)?))
     }
 
+    /// # Safety
+    /// The caller must ensure that the input slice contains valid UTF-8 data.
     #[inline]
-    pub unsafe fn from_slice_unchecked(input: &'de [u8]) -> Self {
+    pub unsafe fn from_slice_unchecked(s: &'de [u8]) -> Self {
         Deserializer {
             scratch: Vec::new(),
             parser: Parser {
-                input,
+                input: s,
                 index: 0,
                 key: false,
             },
@@ -118,7 +122,7 @@ impl<'de> Deserializer<'de> {
     }
 }
 
-impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
+impl<'de> de::Deserializer<'de> for &mut Deserializer<'de> {
     type Error = Error;
 
     #[inline]
@@ -330,7 +334,7 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
     where
         V: Visitor<'de>,
     {
-        Ok(visitor.visit_map(KeyValueSequence::new(self))?)
+        visitor.visit_map(KeyValueSequence::new(self))
     }
 
     #[inline]
@@ -526,7 +530,7 @@ impl<'de> Parser<'de> {
         }
 
         if unicode {
-            return Ok(str::from_utf8(s).map_err(|_| Error::InvalidUnicodeCodePoint)?);
+            return str::from_utf8(s).map_err(|_| Error::InvalidUnicodeCodePoint);
         }
 
         Ok(unsafe { str::from_utf8_unchecked(s) })
@@ -569,7 +573,7 @@ impl<'de> Parser<'de> {
         let s = &self.input[start..self.index];
 
         if unicode {
-            return Ok(str::from_utf8(s).map_err(|_| Error::InvalidUnicodeCodePoint)?);
+            return str::from_utf8(s).map_err(|_| Error::InvalidUnicodeCodePoint);
         }
 
         Ok(unsafe { str::from_utf8_unchecked(s) })
@@ -660,7 +664,7 @@ impl<'de> Parser<'de> {
 
                         let n2 = self.decode_hex_escape()?;
 
-                        if n2 < 0xDC00 || n2 > 0xDFFF {
+                        if !(0xDC00..=0xDFFF).contains(&n2) {
                             return Err(Error::LoneLeadingSurrogateInHexEscape);
                         }
 
@@ -715,8 +719,8 @@ impl<'de> Parser<'de> {
         }
 
         let mut n = 0;
-        for i in 0..4 {
-            let ch = decode_hex_val(tail[i]);
+        for (i, &byte) in tail.iter().enumerate().take(4) {
+            let ch = decode_hex_val(byte);
             match ch {
                 None => {
                     self.index += i;
@@ -772,7 +776,7 @@ impl<'de, 'a> MapAccess<'de> for KeyValueSequence<'a, 'de> {
     where
         K: DeserializeSeed<'de>,
     {
-        if self.de.parser.tail().len() == 0 {
+        if self.de.parser.tail().is_empty() {
             return Ok(None);
         }
 
@@ -850,6 +854,7 @@ static ESCAPE: [bool; 256] = {
 
 static HEX: [u8; 256] = {
     const __: u8 = 255; // not a hex digit
+    #[allow(clippy::zero_prefixed_literal)]
     [
         //   1   2   3   4   5   6   7   8   9   A   B   C   D   E   F
         __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // 0

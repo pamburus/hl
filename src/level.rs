@@ -83,9 +83,9 @@ impl std::error::Error for ParseError {
 #[derive(Clone, Copy, Debug, Deserialize, Serialize, Eq, Hash, Ord, PartialEq, PartialOrd, Enum)]
 pub struct RelaxedLevel(Level);
 
-impl Into<Level> for RelaxedLevel {
-    fn into(self) -> Level {
-        self.0
+impl From<RelaxedLevel> for Level {
+    fn from(relaxed: RelaxedLevel) -> Level {
+        relaxed.0
     }
 }
 

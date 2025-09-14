@@ -573,10 +573,10 @@ impl ParserSettings {
             let mut mapping = HashMap::new();
             for (level, values) in &variant.values {
                 for value in values {
-                    mapping.insert(value.clone(), level.clone());
-                    mapping.insert(value.to_lowercase(), level.clone());
-                    mapping.insert(value.to_uppercase(), level.clone());
-                    mapping.insert(titlecase(value), level.clone());
+                    mapping.insert(value.clone(), *level);
+                    mapping.insert(value.to_lowercase(), *level);
+                    mapping.insert(value.to_uppercase(), *level);
+                    mapping.insert(titlecase(value), *level);
                 }
             }
             let k = self.level.len();
@@ -1244,20 +1244,18 @@ impl<'a> KeyMatcher<'a> {
             [b'[', ..] => {
                 let tail = &bytes[1..];
                 if let Some(pos) = tail.iter().position(|c| !c.is_ascii_digit()) {
-                    if pos != 0 && tail[pos] == b']' {
-                        if pos >= tail.len() - 1 || tail[pos + 1] == b'.' {
-                            if let Some(idx) = unsafe { std::str::from_utf8_unchecked(&tail[..pos]) }.parse().ok() {
-                                let idx = IndexMatcher::Exact(idx);
-                                if pos >= tail.len() - 1 {
-                                    return Some((idx, None));
-                                } else {
-                                    return Some((
-                                        idx,
-                                        Some(KeyMatcher::new(unsafe {
-                                            std::str::from_utf8_unchecked(&tail[pos + 2..])
-                                        })),
-                                    ));
-                                }
+                    if pos != 0 && tail[pos] == b']' && (pos >= tail.len() - 1 || tail[pos + 1] == b'.') {
+                        if let Some(idx) = unsafe { std::str::from_utf8_unchecked(&tail[..pos]) }.parse().ok() {
+                            let idx = IndexMatcher::Exact(idx);
+                            if pos >= tail.len() - 1 {
+                                return Some((idx, None));
+                            } else {
+                                return Some((
+                                    idx,
+                                    Some(KeyMatcher::new(unsafe {
+                                        std::str::from_utf8_unchecked(&tail[pos + 2..])
+                                    })),
+                                ));
                             }
                         }
                     }

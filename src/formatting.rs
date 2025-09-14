@@ -269,7 +269,7 @@ impl RecordFormatter {
                 Some(Level::Trace) => Some(b"TRC"),
                 None => None,
             };
-            let level = level.or_else(|| self.always_show_level.then(|| b"(?)"));
+            let level = level.or(self.always_show_level.then_some(b"(?)"));
             if let Some(level) = level {
                 fs.add_element(|| s.space());
                 s.element(Element::Level, |s| {
@@ -335,7 +335,7 @@ impl RecordFormatter {
                                     buf.extend(self.punctuation.caller_name_file_separator.as_bytes());
                                 }
                                 buf.extend(caller.file.as_bytes());
-                                if caller.line.len() != 0 {
+                                if !caller.line.is_empty() {
                                     buf.push(b':');
                                     buf.extend(caller.line.as_bytes());
                                 }
@@ -433,8 +433,8 @@ impl KeyPrefix {
 
     #[inline]
     fn format<B: Push<u8>>(&self, buf: &mut B) {
-        buf.extend_from_slice(&self.value.as_slices().0);
-        buf.extend_from_slice(&self.value.as_slices().1);
+        buf.extend_from_slice(self.value.as_slices().0);
+        buf.extend_from_slice(self.value.as_slices().1);
     }
 
     #[inline]
@@ -553,7 +553,7 @@ impl<'a> FieldFormatter<'a> {
                             });
                         }
                         s.batch(|buf| {
-                            if item.fields.len() != 0 {
+                            if !item.fields.is_empty() {
                                 buf.push(b' ');
                             }
                             buf.push(b'}');

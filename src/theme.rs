@@ -292,7 +292,7 @@ impl StylePack {
         let mut result = Self::default();
 
         let items = s.items();
-        if items.len() != 0 {
+        if !items.is_empty() {
             result.styles.push(Style::reset());
             result.reset = Some(0);
         }

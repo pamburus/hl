@@ -156,7 +156,7 @@ fn use_custom_format(s: &str, format: &DateTimeFormat, now: &DateTime<Tz>, tz: &
                 has_second = true;
             }
             Item::Nanosecond((_, _)) => {
-                if buf.len() == 0 || buf[buf.len() - 1] != b'.' {
+                if buf.is_empty() || buf[buf.len() - 1] != b'.' {
                     unsupported();
                 }
                 buf.pop();

@@ -25,12 +25,12 @@ impl<'a> AnyEncodedString<'a> for JsonEncodedString<'a> {
 
     #[inline]
     fn tokens(&self) -> Self::Tokens {
-        Tokens::new(self.0.as_ref())
+        Tokens::new(self.0)
     }
 
     #[inline]
     fn decode<H: Handler>(&self, handler: H) -> Result<()> {
-        Parser::new(self.0.as_ref()).parse(handler)
+        Parser::new(self.0).parse(handler)
     }
 
     #[inline]
@@ -138,7 +138,7 @@ impl<'a> Parser<'a> {
         loop {
             let tail = &self.input()[self.index..];
 
-            let pos = memchr::memchr2(b'"', b'\\', tail).unwrap_or_else(|| tail.len());
+            let pos = memchr::memchr2(b'"', b'\\', tail).unwrap_or(tail.len());
 
             self.index += pos;
             if self.index == self.input().len() {
@@ -207,7 +207,7 @@ impl<'a> Parser<'a> {
 
                         let n2 = self.decode_hex_escape()?;
 
-                        if n2 < 0xDC00 || n2 > 0xDFFF {
+                        if !(0xDC00..=0xDFFF).contains(&n2) {
                             return Err(Error::LoneLeadingSurrogateInHexEscape);
                         }
 
@@ -240,8 +240,8 @@ impl<'a> Parser<'a> {
         }
 
         let mut n = 0;
-        for i in 0..4 {
-            let ch = decode_hex_val(input[i]);
+        for (i, &byte) in input.iter().enumerate().take(4) {
+            let ch = decode_hex_val(byte);
             match ch {
                 None => {
                     self.index += i;
@@ -337,7 +337,7 @@ impl<'a> Iterator for Tokens<'a> {
 
         let start = self.0.index;
         let tail = &self.0.input()[start..];
-        let pos = memchr::memchr2(b'"', b'\\', tail).unwrap_or_else(|| tail.len());
+        let pos = memchr::memchr2(b'"', b'\\', tail).unwrap_or(tail.len());
         self.0.index += pos;
         let borrowed = &tail[..pos];
         Some(Ok(Token::Sequence(unsafe { str::from_utf8_unchecked(borrowed) })))
@@ -388,6 +388,7 @@ static HEX: [u8; 16] = [
 
 static UNHEX: [u8; 256] = {
     const __: u8 = 255; // not a hex digit
+    #[allow(clippy::zero_prefixed_literal)]
     [
         //   1   2   3   4   5   6   7   8   9   A   B   C   D   E   F
         __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // 0

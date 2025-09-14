@@ -306,7 +306,7 @@ impl Input {
                 }
             }
         }
-        stream.seek(SeekFrom::Start(pos as u64))?;
+        stream.seek(SeekFrom::Start(pos))?;
         Ok(())
     }
 }
@@ -345,12 +345,12 @@ impl Stream {
                 Self::Sequential(Box::new(AnyDecoder::new(BufReader::new(stream)).with_metadata(meta)))
             }
             Self::RandomAccess(mut stream) => {
-                if let Some(pos) = stream.seek(SeekFrom::Current(0)).ok() {
+                if let Some(size) = stream.stream_position().ok() {
                     log::debug!("detecting format of random access stream");
                     let meta = stream.metadata().ok().flatten();
                     let kind = AnyDecoder::new(BufReader::new(&mut stream)).kind().ok();
                     log::debug!("format detected: {:?}", &kind);
-                    stream.seek(SeekFrom::Start(pos)).ok();
+                    stream.seek(SeekFrom::Start(size)).ok();
                     match kind {
                         Some(Format::Verbatim) => {
                             return Self::RandomAccess(stream);
@@ -540,16 +540,16 @@ impl IndexedInput {
         FS: FileSystem + Sync,
         FS::Metadata: SourceMetadata,
     {
-        let pos = stream.seek(SeekFrom::Current(0))?;
+        let position = stream.stream_position()?;
         let index = indexer.index_stream(&mut stream, path, meta)?;
 
-        stream.seek(SeekFrom::Start(pos))?;
+        stream.seek(SeekFrom::Start(position))?;
 
         Ok((stream, index))
     }
 
     fn index_sequential_stream<FS>(
-        path: &PathBuf,
+        path: &Path,
         meta: &Metadata,
         stream: SequentialStream,
         indexer: &Indexer<FS>,
@@ -702,7 +702,7 @@ impl Iterator for BlockLines<IndexedInput> {
         let block = self.block.source_block();
         let bitmap = &block.chronology.bitmap;
 
-        if bitmap.len() != 0 {
+        if !bitmap.is_empty() {
             let k = 8 * size_of_val(&bitmap[0]);
             let n = self.current / k;
             let m = self.current % k;
@@ -763,6 +763,11 @@ impl BlockLine {
     #[inline]
     pub fn len(&self) -> usize {
         self.range.end - self.range.start
+    }
+
+    #[inline]
+    pub fn is_empty(&self) -> bool {
+        self.range.start == self.range.end
     }
 }
 

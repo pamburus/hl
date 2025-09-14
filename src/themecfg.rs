@@ -422,7 +422,7 @@ pub struct Style {
 
 impl Style {
     pub fn merged(mut self, other: &Self) -> Self {
-        if other.modes.len() != 0 {
+        if !other.modes.is_empty() {
             self.modes = other.modes.clone()
         }
         if let Some(color) = other.foreground {

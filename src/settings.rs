@@ -156,7 +156,7 @@ pub struct PredefinedFields {
 
 impl Default for &PredefinedFields {
     fn default() -> Self {
-        static DEFAULT: Lazy<PredefinedFields> = Lazy::new(|| PredefinedFields::default());
+        static DEFAULT: Lazy<PredefinedFields> = Lazy::new(PredefinedFields::default);
         &DEFAULT
     }
 }
@@ -214,7 +214,7 @@ impl RawLevelFieldVariant {
         for (level, names) in &self.values {
             match level {
                 InfallibleLevel::Valid(level) => {
-                    values.insert(level.clone(), names.clone());
+                    values.insert(*level, names.clone());
                 }
                 InfallibleLevel::Invalid(name) => {
                     unknowns.insert(name.clone());

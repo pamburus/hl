@@ -34,7 +34,7 @@ pub struct Query {
 impl Query {
     pub fn parse(str: impl AsRef<str>) -> Result<Self> {
         let mut pairs = QueryParser::parse(Rule::input, str.as_ref())?;
-        Ok(expression(pairs.next().unwrap())?)
+        expression(pairs.next().unwrap())
     }
 
     pub fn and(self, rhs: Query) -> Query {
@@ -263,7 +263,7 @@ fn parse_number(pair: Pair<Rule>) -> Result<Number> {
     assert_eq!(pair.as_rule(), Rule::number);
 
     let inner = pair.as_str();
-    Ok(inner.parse()?)
+    inner.parse()
 }
 
 fn parse_number_set(pair: Pair<Rule>) -> Result<Vec<Number>> {
