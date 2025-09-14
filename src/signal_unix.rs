@@ -29,7 +29,7 @@ impl SignalHandler {
     }
 
     fn new(max_count: usize, timeout: Duration) -> Result<Self> {
-        let mut signals = Signals::new(&[SIGINT])?;
+        let mut signals = Signals::new([SIGINT])?;
         let handle = signals.handle();
 
         let thread = spawn(move || {

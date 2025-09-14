@@ -85,7 +85,7 @@ impl Theme {
             Err(Error::ThemeNotFound { .. }) => match Self::load_embedded::<Assets>(name) {
                 Ok(v) => Ok(v),
                 Err(Error::ThemeNotFound { name, mut suggestions }) => {
-                    if let Some(variants) = Self::custom_names(app_dirs).ok() {
+                    if let Ok(variants) = Self::custom_names(app_dirs) {
                         let variants = variants.into_iter().filter_map(|v| v.ok());
                         suggestions = suggestions.merge(Suggestions::new(&name, variants));
                     }
@@ -152,7 +152,7 @@ impl Theme {
         }
     }
 
-    fn load_from(dir: &PathBuf, name: &str) -> Result<Self> {
+    fn load_from(dir: &Path, name: &str) -> Result<Self> {
         for format in Format::iter() {
             let filename = Self::filename(name, format);
             let path = PathBuf::from(&filename);
@@ -186,7 +186,7 @@ impl Theme {
     }
 
     fn filename(name: &str, format: Format) -> String {
-        if Self::strip_extension(&name, format).is_some() {
+        if Self::strip_extension(name, format).is_some() {
             return name.to_string();
         }
 
@@ -215,7 +215,7 @@ impl Theme {
                     .path()
                     .file_name()
                     .and_then(|n| n.to_str())
-                    .and_then(|a| Self::strip_known_extension(&a).map(|n| n.into())))
+                    .and_then(|a| Self::strip_known_extension(a).map(|n| n.into())))
             })
             .filter_map(|x| x.transpose()))
     }
@@ -338,7 +338,7 @@ impl<'de> Deserialize<'de> for StylePack {
     where
         D: Deserializer<'de>,
     {
-        Ok(deserializer.deserialize_map(StylePackDeserializeVisitor::new())?)
+        deserializer.deserialize_map(StylePackDeserializeVisitor::new())
     }
 }
 
@@ -422,7 +422,7 @@ pub struct Style {
 
 impl Style {
     pub fn merged(mut self, other: &Self) -> Self {
-        if other.modes.len() != 0 {
+        if !other.modes.is_empty() {
             self.modes = other.modes.clone()
         }
         if let Some(color) = other.foreground {

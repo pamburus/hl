@@ -476,7 +476,7 @@ impl<T: RecordFilter> RecordFilter for &T {
 impl RecordFilter for Level {
     #[inline]
     fn apply<'a>(&self, record: &Record<'a>) -> bool {
-        record.level.map_or(false, |x| x <= *self)
+        record.level.is_some_and(|x| x <= *self)
     }
 }
 
@@ -573,10 +573,10 @@ impl ParserSettings {
             let mut mapping = HashMap::new();
             for (level, values) in &variant.values {
                 for value in values {
-                    mapping.insert(value.clone(), level.clone());
-                    mapping.insert(value.to_lowercase(), level.clone());
-                    mapping.insert(value.to_uppercase(), level.clone());
-                    mapping.insert(titlecase(value), level.clone());
+                    mapping.insert(value.clone(), *level);
+                    mapping.insert(value.to_lowercase(), *level);
+                    mapping.insert(value.to_uppercase(), *level);
+                    mapping.insert(titlecase(value), *level);
                 }
             }
             let k = self.level.len();
@@ -598,9 +598,9 @@ impl ParserSettings {
         }
     }
 
-    fn build_block_for_name(&mut self, n: usize, name: &String, settings: FieldSettings, priority: usize) {
-        self.blocks[n].fields.insert(name.clone(), (settings, priority));
-        let mut remainder = &name[..];
+    fn build_block_for_name(&mut self, n: usize, name: &str, settings: FieldSettings, priority: usize) {
+        self.blocks[n].fields.insert(name.to_owned(), (settings, priority));
+        let mut remainder = name;
         while let Some(k) = remainder.rfind('.') {
             let (name, nested) = name.split_at(k);
             let nested = &nested[1..];
@@ -624,7 +624,7 @@ impl ParserSettings {
                     nest
                 });
 
-            self.build_block_for_name(nest, &nested.into(), settings, priority);
+            self.build_block_for_name(nest, nested, settings, priority);
             remainder = name;
         }
     }
@@ -779,7 +779,7 @@ impl FieldSettings {
         match *self {
             Self::Time => {
                 let s = value.raw_str();
-                let s = if s.len() > 0 && s.as_bytes()[0] == b'"' {
+                let s = if !s.is_empty() && s.as_bytes()[0] == b'"' {
                     &s[1..s.len() - 1]
                 } else {
                     s
@@ -938,7 +938,7 @@ impl<'a> Deserialize<'a> for RawRecord<'a> {
         D: Deserializer<'a>,
     {
         const N: usize = RAW_RECORD_FIELDS_CAPACITY;
-        Ok(deserializer.deserialize_map(ObjectVisitor::<json::value::RawValue, N>::new(&mut target.fields))?)
+        deserializer.deserialize_map(ObjectVisitor::<json::value::RawValue, N>::new(&mut target.fields))
     }
 }
 
@@ -953,6 +953,12 @@ type ObjectFields<'a, const N: usize> = heapopt::Vec<(&'a str, RawValue<'a>), N>
 pub struct RawRecordParser {
     allow_prefix: bool,
     format: Option<InputFormat>,
+}
+
+impl Default for RawRecordParser {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl RawRecordParser {
@@ -992,7 +998,7 @@ impl RawRecordParser {
         let data = &line[xn..];
 
         let format = self.format.or_else(|| {
-            if data.len() == 0 {
+            if data.is_empty() {
                 None
             } else if data[0] == b'{' {
                 Some(InputFormat::Json)
@@ -1217,8 +1223,7 @@ impl<'a> KeyMatcher<'a> {
         if bytes
             .iter()
             .zip(key.as_bytes().iter())
-            .position(|(&x, &y)| Self::norm(x.into()) != Self::norm(y.into()))
-            .is_some()
+            .any(|(&x, &y)| Self::norm(x.into()) != Self::norm(y.into()))
         {
             return None;
         }
@@ -1244,20 +1249,18 @@ impl<'a> KeyMatcher<'a> {
             [b'[', ..] => {
                 let tail = &bytes[1..];
                 if let Some(pos) = tail.iter().position(|c| !c.is_ascii_digit()) {
-                    if pos != 0 && tail[pos] == b']' {
-                        if pos >= tail.len() - 1 || tail[pos + 1] == b'.' {
-                            if let Some(idx) = unsafe { std::str::from_utf8_unchecked(&tail[..pos]) }.parse().ok() {
-                                let idx = IndexMatcher::Exact(idx);
-                                if pos >= tail.len() - 1 {
-                                    return Some((idx, None));
-                                } else {
-                                    return Some((
-                                        idx,
-                                        Some(KeyMatcher::new(unsafe {
-                                            std::str::from_utf8_unchecked(&tail[pos + 2..])
-                                        })),
-                                    ));
-                                }
+                    if pos != 0 && tail[pos] == b']' && (pos >= tail.len() - 1 || tail[pos + 1] == b'.') {
+                        if let Ok(idx) = unsafe { std::str::from_utf8_unchecked(&tail[..pos]) }.parse() {
+                            let idx = IndexMatcher::Exact(idx);
+                            if pos >= tail.len() - 1 {
+                                return Some((idx, None));
+                            } else {
+                                return Some((
+                                    idx,
+                                    Some(KeyMatcher::new(unsafe {
+                                        std::str::from_utf8_unchecked(&tail[pos + 2..])
+                                    })),
+                                ));
                             }
                         }
                     }
@@ -1295,9 +1298,9 @@ impl FromStr for Number {
     #[inline]
     fn from_str(s: &str) -> Result<Self> {
         if s.contains('.') {
-            Ok(Self::Float(s.parse().map_err(|e| Error::from(e))?))
+            Ok(Self::Float(s.parse().map_err(Error::from)?))
         } else {
-            Ok(Self::Integer(s.parse().map_err(|e| Error::from(e))?))
+            Ok(Self::Integer(s.parse().map_err(Error::from)?))
         }
     }
 }
@@ -1383,7 +1386,7 @@ impl ValueMatchPolicy {
             Self::In(patterns) => patterns.contains(subject),
             Self::WildCard(pattern) => pattern.matches(subject),
             Self::Numerically(op) => {
-                if let Some(value) = subject.parse::<Number>().ok() {
+                if let Ok(value) = subject.parse::<Number>() {
                     match op {
                         NumericOp::Eq(pattern) => value == *pattern,
                         NumericOp::Ne(pattern) => value != *pattern,
@@ -1391,7 +1394,7 @@ impl ValueMatchPolicy {
                         NumericOp::Ge(pattern) => value >= *pattern,
                         NumericOp::Lt(pattern) => value < *pattern,
                         NumericOp::Le(pattern) => value <= *pattern,
-                        NumericOp::In(patterns) => patterns.iter().any(|pattern| value == *pattern),
+                        NumericOp::In(patterns) => patterns.contains(&value),
                     }
                 } else {
                     false
@@ -1531,9 +1534,9 @@ impl FieldFilter {
         let apply = |value| self.op.apply(self.match_policy.matches(value));
         if let Some(value) = value {
             if escaped {
-                if let Some(value) = json::from_str::<&str>(value).ok() {
+                if let Ok(value) = json::from_str::<&str>(value) {
                     apply(value)
-                } else if let Some(value) = json::from_str::<String>(value).ok() {
+                } else if let Ok(value) = json::from_str::<String>(value) {
                     apply(&value)
                 } else {
                     false
@@ -1552,7 +1555,7 @@ impl FieldFilter {
                 let mut item = Object::default();
                 value.parse_into(&mut item).ok();
                 for (k, v) in item.fields.iter() {
-                    match subkey.match_key(*k) {
+                    match subkey.match_key(k) {
                         None => {
                             continue;
                         }
@@ -1580,7 +1583,7 @@ impl FieldFilter {
                         false
                     };
 
-                    if let Some(value) = value.parse::<128>().ok() {
+                    if let Ok(value) = value.parse::<128>() {
                         match index_matcher {
                             IndexMatcher::Any => {
                                 for item in value.iter() {
@@ -1642,7 +1645,7 @@ impl RecordFilter for FieldFilter {
             },
             FieldFilterKey::Custom(_) => {
                 for (k, v) in record.fields_for_search() {
-                    match self.match_custom_key(*k) {
+                    match self.match_custom_key(k) {
                         None => {}
                         Some(KeyMatch::Full) => {
                             let s = v.raw_str();
@@ -1874,7 +1877,7 @@ mod tests {
             _ => panic!(),
         };
 
-        assert_eq!(stream.next().is_none(), true);
+        assert!(stream.next().is_none());
     }
 
     #[test]
@@ -1897,6 +1900,22 @@ mod tests {
         let parser = RawRecordParser::new().format(Some(InputFormat::Json));
         let mut stream = parser.parse(b"12");
         assert!(matches!(stream.next(), Some(Err(Error::JsonParseError(_)))));
+    }
+
+    #[test]
+    fn test_raw_record_parser_default() {
+        let parser1 = RawRecordParser::new();
+        let parser2 = RawRecordParser::default();
+
+        // Both should behave identically
+        let stream1 = parser1.parse(b"{}");
+        let stream2 = parser2.parse(b"{}");
+
+        // Verify they both parse empty JSON correctly
+        match (stream1, stream2) {
+            (RawRecordStream::Json(_), RawRecordStream::Json(_)) => {}
+            _ => panic!("Both parsers should produce JSON streams"),
+        }
     }
 
     #[test]
@@ -1929,40 +1948,40 @@ mod tests {
     #[test]
     fn test_raw_value_is_empty() {
         let value = RawValue::Number("0");
-        assert_eq!(value.is_empty(), false);
+        assert!(!value.is_empty());
 
         let value = RawValue::Number("123");
-        assert_eq!(value.is_empty(), false);
+        assert!(!value.is_empty());
 
         let value = RawValue::String(EncodedString::raw(""));
-        assert_eq!(value.is_empty(), true);
+        assert!(value.is_empty());
 
         let value = RawValue::String(EncodedString::raw("aa"));
-        assert_eq!(value.is_empty(), false);
+        assert!(!value.is_empty());
 
         let value = RawValue::String(EncodedString::json(r#""""#));
-        assert_eq!(value.is_empty(), true);
+        assert!(value.is_empty());
 
         let value = RawValue::String(EncodedString::json(r#""aa""#));
-        assert_eq!(value.is_empty(), false);
+        assert!(!value.is_empty());
 
         let value = RawValue::Boolean(true);
-        assert_eq!(value.is_empty(), false);
+        assert!(!value.is_empty());
 
         let value = RawValue::Null;
-        assert_eq!(value.is_empty(), true);
+        assert!(value.is_empty());
 
         let value = RawValue::Object(RawObject::Json(json::from_str("{}").unwrap()));
-        assert_eq!(value.is_empty(), true);
+        assert!(value.is_empty());
 
         let value = RawValue::Object(RawObject::Json(json::from_str(r#"{"a":1}"#).unwrap()));
-        assert_eq!(value.is_empty(), false);
+        assert!(!value.is_empty());
 
         let value = RawValue::Array(RawArray::Json(json::from_str("[]").unwrap()));
-        assert_eq!(value.is_empty(), true);
+        assert!(value.is_empty());
 
         let value = RawValue::Array(RawArray::Json(json::from_str(r#"[1]"#).unwrap()));
-        assert_eq!(value.is_empty(), false);
+        assert!(!value.is_empty());
     }
 
     #[test]
@@ -2003,15 +2022,15 @@ mod tests {
         assert_eq!(value.parse::<&str>().unwrap(), "123");
 
         let value = RawValue::Boolean(true);
-        assert_eq!(value.parse::<bool>().unwrap(), true);
+        assert!(value.parse::<bool>().unwrap());
         assert_eq!(value.parse::<&str>().unwrap(), "true");
 
         let value = RawValue::Boolean(false);
-        assert_eq!(value.parse::<bool>().unwrap(), false);
+        assert!(!value.parse::<bool>().unwrap());
         assert_eq!(value.parse::<&str>().unwrap(), "false");
 
         let value = RawValue::Null;
-        assert_eq!(value.parse::<()>().unwrap(), ());
+        assert!(value.parse::<()>().is_ok());
 
         let value = RawValue::Object(RawObject::Json(json::from_str(r#"{"a":123}"#).unwrap()));
         assert_eq!(value.parse::<HashMap<_, _>>().unwrap(), hashmap! {"a" => 123});
@@ -2042,134 +2061,134 @@ mod tests {
     fn test_field_filter_json_str_simple() {
         let filter = FieldFilter::parse("mod=test").unwrap();
         let record = parse(r#"{"mod":"test"}"#);
-        assert_eq!(filter.apply(&record), true);
+        assert!(filter.apply(&record));
         let record = parse(r#"{"mod":"test2"}"#);
-        assert_eq!(filter.apply(&record), false);
+        assert!(!filter.apply(&record));
         let record = parse(r#"{"mod":"\"test\""}"#);
-        assert_eq!(filter.apply(&record), false);
+        assert!(!filter.apply(&record));
     }
 
     #[test]
     fn test_field_filter_json_str_empty() {
         let filter = FieldFilter::parse("mod=").unwrap();
         let record = parse(r#"{"mod":""}"#);
-        assert_eq!(filter.apply(&record), true);
+        assert!(filter.apply(&record));
         let record = parse(r#"{"mod":"t"}"#);
-        assert_eq!(filter.apply(&record), false);
+        assert!(!filter.apply(&record));
         let record = parse(r#"{"v":""}"#);
-        assert_eq!(filter.apply(&record), false);
+        assert!(!filter.apply(&record));
     }
 
     #[test]
     fn test_field_filter_json_str_quoted() {
         let filter = FieldFilter::parse(r#"mod="test""#).unwrap();
         let record = parse(r#"{"mod":"test"}"#);
-        assert_eq!(filter.apply(&record), false);
+        assert!(!filter.apply(&record));
         let record = parse(r#"{"mod":"test2"}"#);
-        assert_eq!(filter.apply(&record), false);
+        assert!(!filter.apply(&record));
         let record = parse(r#"{"mod":"\"test\""}"#);
-        assert_eq!(filter.apply(&record), true);
+        assert!(filter.apply(&record));
     }
 
     #[test]
     fn test_field_filter_json_str_escaped() {
         let filter = FieldFilter::parse("mod=te st").unwrap();
         let record = parse(r#"{"mod":"te st"}"#);
-        assert_eq!(filter.apply(&record), true);
+        assert!(filter.apply(&record));
         let record = parse(r#"{"mod":"test"}"#);
-        assert_eq!(filter.apply(&record), false);
+        assert!(!filter.apply(&record));
         let record = parse(r#"{"mod":"te\u0020st"}"#);
-        assert_eq!(filter.apply(&record), true);
+        assert!(filter.apply(&record));
     }
 
     #[test]
     fn test_field_filter_json_int() {
         let filter = FieldFilter::parse("v=42").unwrap();
         let record = parse(r#"{"v":42}"#);
-        assert_eq!(filter.apply(&record), true);
+        assert!(filter.apply(&record));
         let record = parse(r#"{"v":"42"}"#);
-        assert_eq!(filter.apply(&record), true);
+        assert!(filter.apply(&record));
         let record = parse(r#"{"v":423}"#);
-        assert_eq!(filter.apply(&record), false);
+        assert!(!filter.apply(&record));
         let record = parse(r#"{"v":"423"}"#);
-        assert_eq!(filter.apply(&record), false);
+        assert!(!filter.apply(&record));
     }
 
     #[test]
     fn test_field_filter_json_int_escaped() {
         let filter = FieldFilter::parse("v=42").unwrap();
         let record = parse(r#"{"v":42}"#);
-        assert_eq!(filter.apply(&record), true);
+        assert!(filter.apply(&record));
         let record = parse(r#"{"v":"4\u0032"}"#);
-        assert_eq!(filter.apply(&record), true);
+        assert!(filter.apply(&record));
     }
 
     #[test]
     fn test_field_filter_logfmt_str_simple() {
         let filter = FieldFilter::parse("mod=test").unwrap();
         let record = parse("mod=test");
-        assert_eq!(filter.apply(&record), true);
+        assert!(filter.apply(&record));
         let record = parse("mod=test2");
-        assert_eq!(filter.apply(&record), false);
+        assert!(!filter.apply(&record));
         let record = parse(r#"mod="test""#);
-        assert_eq!(filter.apply(&record), true);
+        assert!(filter.apply(&record));
         let record = parse(r#"mod="\"test\"""#);
-        assert_eq!(filter.apply(&record), false);
+        assert!(!filter.apply(&record));
     }
 
     #[test]
     fn test_field_filter_logfmt_str_empty() {
         let filter = FieldFilter::parse("mod=").unwrap();
         let record = parse(r#"mod="""#);
-        assert_eq!(filter.apply(&record), true);
+        assert!(filter.apply(&record));
         let record = parse("mod=t");
-        assert_eq!(filter.apply(&record), false);
+        assert!(!filter.apply(&record));
     }
 
     #[test]
     fn test_field_filter_logfmt_str_quoted() {
         let filter = FieldFilter::parse(r#"mod="test""#).unwrap();
         let record = parse("mod=test");
-        assert_eq!(filter.apply(&record), false);
+        assert!(!filter.apply(&record));
         let record = parse(r#"mod=test2"#);
-        assert_eq!(filter.apply(&record), false);
+        assert!(!filter.apply(&record));
         let record = parse(r#"mod="test""#);
-        assert_eq!(filter.apply(&record), false);
+        assert!(!filter.apply(&record));
         let record = parse(r#"mod="\"test\"""#);
-        assert_eq!(filter.apply(&record), true);
+        assert!(filter.apply(&record));
     }
 
     #[test]
     fn test_field_filter_logfmt_str_escaped() {
         let filter = FieldFilter::parse("mod=te st").unwrap();
         let record = parse(r#"mod="te st""#);
-        assert_eq!(filter.apply(&record), true);
+        assert!(filter.apply(&record));
         let record = parse(r#"mod=test"#);
-        assert_eq!(filter.apply(&record), false);
+        assert!(!filter.apply(&record));
         let record = parse(r#"mod="te\u0020st""#);
-        assert_eq!(filter.apply(&record), true);
+        assert!(filter.apply(&record));
     }
 
     #[test]
     fn test_field_filter_logfmt_int() {
         let filter = FieldFilter::parse("v=42").unwrap();
         let record = parse(r#"v=42"#);
-        assert_eq!(filter.apply(&record), true);
+        assert!(filter.apply(&record));
         let record = parse(r#"v="42""#);
-        assert_eq!(filter.apply(&record), true);
+        assert!(filter.apply(&record));
         let record = parse(r#"v=423"#);
-        assert_eq!(filter.apply(&record), false);
+        assert!(!filter.apply(&record));
         let record = parse(r#"v="423""#);
-        assert_eq!(filter.apply(&record), false);
+        assert!(!filter.apply(&record));
     }
 
     #[test]
     fn test_field_filter_logfmt_int_escaped() {
         let filter = FieldFilter::parse("v=42").unwrap();
         let record = parse(r#"v=42"#);
-        assert_eq!(filter.apply(&record), true);
+        assert!(filter.apply(&record));
         let record = parse(r#"v="4\u0032""#);
-        assert_eq!(filter.apply(&record), true);
+        assert!(filter.apply(&record));
     }
 
     #[test]
@@ -2186,7 +2205,7 @@ mod tests {
     fn test_record_filter_empty() {
         let filter = Filter::default();
         let record = parse(r#"{"v":42}"#);
-        assert_eq!(filter.apply(&record), true);
+        assert!(filter.apply(&record));
     }
 
     #[test]
@@ -2196,29 +2215,29 @@ mod tests {
             ..Default::default()
         };
         let record = parse(r#"{"level":"error"}"#);
-        assert_eq!(filter.apply(&record), true);
+        assert!(filter.apply(&record));
         let record = parse(r#"{"level":"info"}"#);
-        assert_eq!(filter.apply(&record), false);
+        assert!(!filter.apply(&record));
 
         let filter = Level::Error;
         let record = parse(r#"{"level":"error"}"#);
-        assert_eq!(filter.apply(&record), true);
+        assert!(filter.apply(&record));
         let record = parse(r#"{"level":"info"}"#);
-        assert_eq!(filter.apply(&record), false);
+        assert!(!filter.apply(&record));
 
         let filter = Some(Level::Info);
         let record = parse(r#"{"level":"info"}"#);
-        assert_eq!(filter.apply(&record), true);
+        assert!(filter.apply(&record));
         let record = parse(r#"{"level":"error"}"#);
-        assert_eq!(filter.apply(&record), true);
+        assert!(filter.apply(&record));
         let record = parse(r#"{"level":"debug"}"#);
-        assert_eq!(filter.apply(&record), false);
+        assert!(!filter.apply(&record));
 
         let filter: Option<Level> = None;
         let record = parse(r#"{"level":"info"}"#);
-        assert_eq!(filter.apply(&record), true);
+        assert!(filter.apply(&record));
         let record = parse(r#"{"level":"error"}"#);
-        assert_eq!(filter.apply(&record), true);
+        assert!(filter.apply(&record));
     }
 
     #[test]
@@ -2228,9 +2247,9 @@ mod tests {
             ..Default::default()
         };
         let record = parse(r#"{"ts":"2021-01-01T00:00:00Z"}"#);
-        assert_eq!(filter.apply(&record), true);
+        assert!(filter.apply(&record));
         let record = parse(r#"{"ts":"2020-01-01T00:00:00Z"}"#);
-        assert_eq!(filter.apply(&record), false);
+        assert!(!filter.apply(&record));
     }
 
     #[test]
@@ -2240,23 +2259,23 @@ mod tests {
             ..Default::default()
         };
         let record = parse(r#"{"ts":"2021-01-01T00:00:00Z"}"#);
-        assert_eq!(filter.apply(&record), true);
+        assert!(filter.apply(&record));
         let record = parse(r#"{"ts":"2022-01-01T00:00:00Z"}"#);
-        assert_eq!(filter.apply(&record), false);
+        assert!(!filter.apply(&record));
     }
 
     #[test]
     fn test_record_filter_fields() {
         let filter = Filter {
-            fields: FieldFilterSet::new(&["mod=test", "v=42"]).unwrap(),
+            fields: FieldFilterSet::new(["mod=test", "v=42"]).unwrap(),
             ..Default::default()
         };
         let record = parse(r#"{"mod":"test","v":42}"#);
-        assert_eq!(filter.apply(&record), true);
+        assert!(filter.apply(&record));
         let record = parse(r#"{"mod":"test","v":43}"#);
-        assert_eq!(filter.apply(&record), false);
+        assert!(!filter.apply(&record));
         let record = parse(r#"{"mod":"test2","v":42}"#);
-        assert_eq!(filter.apply(&record), false);
+        assert!(!filter.apply(&record));
     }
 
     #[test]
@@ -2265,16 +2284,16 @@ mod tests {
             level: Some(Level::Error),
             since: Some(Utc.with_ymd_and_hms(2021, 1, 1, 0, 0, 0).unwrap()),
             until: Some(Utc.with_ymd_and_hms(2021, 1, 2, 0, 0, 0).unwrap()),
-            fields: FieldFilterSet::new(&["mod=test", "v=42"]).unwrap(),
+            fields: FieldFilterSet::new(["mod=test", "v=42"]).unwrap(),
         };
         let record = parse(r#"{"level":"error","ts":"2021-01-01T00:00:00Z","mod":"test","v":42}"#);
-        assert_eq!(filter.apply(&record), true);
+        assert!(filter.apply(&record));
         let record = parse(r#"{"level":"info","ts":"2021-01-01T00:00:00Z","mod":"test","v":42}"#);
-        assert_eq!(filter.apply(&record), false);
+        assert!(!filter.apply(&record));
         let record = parse(r#"{"level":"error","ts":"2021-01-01T00:00:00Z","mod":"test","v":43}"#);
-        assert_eq!(filter.apply(&record), false);
+        assert!(!filter.apply(&record));
         let record = parse(r#"{"level":"error","ts":"2021-01-01T00:00:00Z","mod":"test2","v":42}"#);
-        assert_eq!(filter.apply(&record), false);
+        assert!(!filter.apply(&record));
     }
 
     #[test]
@@ -2283,13 +2302,13 @@ mod tests {
             .unwrap()
             .or(FieldFilter::parse("v=42").unwrap());
         let record = parse(r#"{"mod":"test","v":42}"#);
-        assert_eq!(filter.apply(&record), true);
+        assert!(filter.apply(&record));
         let record = parse(r#"{"mod":"test","v":43}"#);
-        assert_eq!(filter.apply(&record), true);
+        assert!(filter.apply(&record));
         let record = parse(r#"{"mod":"test2","v":42}"#);
-        assert_eq!(filter.apply(&record), true);
+        assert!(filter.apply(&record));
         let record = parse(r#"{"mod":"test2","v":43}"#);
-        assert_eq!(filter.apply(&record), false);
+        assert!(!filter.apply(&record));
     }
 
     #[test]
@@ -2298,70 +2317,70 @@ mod tests {
             .unwrap()
             .and(FieldFilter::parse("v=42").unwrap());
         let record = parse(r#"{"mod":"test","v":42}"#);
-        assert_eq!(filter.apply(&record), true);
+        assert!(filter.apply(&record));
         let record = parse(r#"{"mod":"test","v":43}"#);
-        assert_eq!(filter.apply(&record), false);
+        assert!(!filter.apply(&record));
         let record = parse(r#"{"mod":"test2","v":42}"#);
-        assert_eq!(filter.apply(&record), false);
+        assert!(!filter.apply(&record));
         let record = parse(r#"{"mod":"test2","v":43}"#);
-        assert_eq!(filter.apply(&record), false);
+        assert!(!filter.apply(&record));
     }
 
     #[test]
     fn test_field_filter_key_match() {
         let filter = FieldFilter::parse("mod.test=42").unwrap();
         let record = parse(r#"{"mod.test":42}"#);
-        assert_eq!(filter.apply(&record), true);
+        assert!(filter.apply(&record));
         let record = parse(r#"{"mod":{"test":42}}"#);
-        assert_eq!(filter.apply(&record), true);
+        assert!(filter.apply(&record));
         let record = parse(r#"{"mod":{"test":43}}"#);
-        assert_eq!(filter.apply(&record), false);
+        assert!(!filter.apply(&record));
         let record = parse(r#"{"mod":{"test":42,"test2":42}}"#);
-        assert_eq!(filter.apply(&record), true);
+        assert!(filter.apply(&record));
     }
 
     #[test]
     fn test_field_filter_key_match_partial() {
         let filter = FieldFilter::parse("mod.test=42").unwrap();
         let record = parse(r#"{"mod.test":42}"#);
-        assert_eq!(filter.apply(&record), true);
+        assert!(filter.apply(&record));
         let record = parse(r#"{"mod.test2":42}"#);
-        assert_eq!(filter.apply(&record), false);
+        assert!(!filter.apply(&record));
         let record = parse(r#"{"mod":{"test":42}}"#);
-        assert_eq!(filter.apply(&record), true);
+        assert!(filter.apply(&record));
         let record = parse(r#"{"mod":{"test2":42}}"#);
-        assert_eq!(filter.apply(&record), false);
+        assert!(!filter.apply(&record));
         let record = parse(r#"{"mod":{"test":42,"test2":42}}"#);
-        assert_eq!(filter.apply(&record), true);
+        assert!(filter.apply(&record));
         let filter = FieldFilter::parse("mod.test.inner=42").unwrap();
         let record = parse(r#"{"mod":{"test":{"inner":42}}}"#);
-        assert_eq!(filter.apply(&record), true);
+        assert!(filter.apply(&record));
         let record = parse(r#"{"mod.test":{"inner":42}}"#);
-        assert_eq!(filter.apply(&record), true);
+        assert!(filter.apply(&record));
         let record = parse(r#"{"mod":{"test":{"inner":43}}}"#);
-        assert_eq!(filter.apply(&record), false);
+        assert!(!filter.apply(&record));
     }
 
     #[test]
     fn test_field_filter_key_match_partial_nested() {
         let filter = FieldFilter::parse("mod.test=42").unwrap();
         let record = parse(r#"{"mod":{"test":42}}"#);
-        assert_eq!(filter.apply(&record), true);
+        assert!(filter.apply(&record));
         let record = parse(r#"{"mod":{"test2":42}}"#);
-        assert_eq!(filter.apply(&record), false);
+        assert!(!filter.apply(&record));
         let record = parse(r#"{"mod":{"test":42,"test2":42}}"#);
-        assert_eq!(filter.apply(&record), true);
+        assert!(filter.apply(&record));
         let record = parse(r#"{"mod":{"test":42,"test2":42,"test3":42}}"#);
-        assert_eq!(filter.apply(&record), true);
+        assert!(filter.apply(&record));
     }
 
     #[test]
     fn test_field_filter_caller() {
         let filter = FieldFilter::parse("caller~=somesource.py").unwrap();
         let record = parse(r#"caller=somesource.py:42"#);
-        assert_eq!(filter.apply(&record), true);
+        assert!(filter.apply(&record));
         let record = parse(r#"caller=somesource.go:42"#);
-        assert_eq!(filter.apply(&record), false);
+        assert!(!filter.apply(&record));
     }
 
     #[test]
@@ -2370,52 +2389,52 @@ mod tests {
         let first = FieldFilter::parse("span.[0].name=b").unwrap();
 
         let record = parse(r#"{"span":[{"name":"a"},{"name":"b"}]}"#);
-        assert_eq!(any.apply(&record), true);
-        assert_eq!(first.apply(&record), false);
+        assert!(any.apply(&record));
+        assert!(!first.apply(&record));
 
         let inv = FieldFilter::parse("span.[0a].name=a").unwrap();
-        assert_eq!(inv.apply(&record), false);
+        assert!(!inv.apply(&record));
 
         let inv = FieldFilter::parse("span.[0]x=a").unwrap();
-        assert_eq!(inv.apply(&record), false);
+        assert!(!inv.apply(&record));
 
         let inv = FieldFilter::parse("span.[0.name=a").unwrap();
-        assert_eq!(inv.apply(&record), false);
+        assert!(!inv.apply(&record));
 
         let record = parse(r#"{"span":[{"name":"b"},{"name":"c"}]}"#);
-        assert_eq!(any.apply(&record), false);
-        assert_eq!(first.apply(&record), true);
+        assert!(!any.apply(&record));
+        assert!(first.apply(&record));
 
         let record = parse(r#"{"span":[]}"#);
-        assert_eq!(any.apply(&record), false);
-        assert_eq!(first.apply(&record), false);
+        assert!(!any.apply(&record));
+        assert!(!first.apply(&record));
 
         let record = parse(r#"{"span":{"name":"a"}}"#);
-        assert_eq!(any.apply(&record), false);
-        assert_eq!(first.apply(&record), false);
+        assert!(!any.apply(&record));
+        assert!(!first.apply(&record));
 
         let inv = FieldFilter::parse("span.[0=b").unwrap();
-        assert_eq!(inv.apply(&record), false);
+        assert!(!inv.apply(&record));
 
         let record = parse(r#"{"span":10}"#);
-        assert_eq!(any.apply(&record), false);
-        assert_eq!(first.apply(&record), false);
+        assert!(!any.apply(&record));
+        assert!(!first.apply(&record));
 
         let any = FieldFilter::parse("span.[]=a").unwrap();
         let first = FieldFilter::parse("span.[0]=b").unwrap();
 
         let record = parse(r#"{"span":["a","b"]}"#);
-        assert_eq!(any.apply(&record), true);
-        assert_eq!(first.apply(&record), false);
+        assert!(any.apply(&record));
+        assert!(!first.apply(&record));
 
         let inv = FieldFilter::parse("span.[0=b").unwrap();
-        assert_eq!(inv.apply(&record), false);
+        assert!(!inv.apply(&record));
 
         let inv = FieldFilter::parse("span.x=b").unwrap();
-        assert_eq!(inv.apply(&record), false);
+        assert!(!inv.apply(&record));
 
         let inv = FieldFilter::parse("span.[98172389172389172312983761823]=b").unwrap();
-        assert_eq!(inv.apply(&record), false);
+        assert!(!inv.apply(&record));
     }
 
     #[test]
@@ -2550,17 +2569,19 @@ mod tests {
     #[case(br#"{"caller":"a", "file": "b", "line":28}"#, Caller{name:"a", file:"b",line:"28"})] // 28
     #[case(br#"{"file": "b", "line":{}}"#, Caller::with_file_line("b", ""))] // 29
     fn test_caller_file_line(#[case] input: &[u8], #[case] expected: Caller) {
-        let mut predefined = PredefinedFields::default();
-        predefined.caller_file = Field {
-            names: vec!["file".into()],
-            show: FieldShowOption::Always,
-        }
-        .into();
-        predefined.caller_line = Field {
-            names: vec!["line".into()],
-            show: FieldShowOption::Always,
-        }
-        .into();
+        let predefined = PredefinedFields {
+            caller_file: Field {
+                names: vec!["file".into()],
+                show: FieldShowOption::Always,
+            }
+            .into(),
+            caller_line: Field {
+                names: vec!["line".into()],
+                show: FieldShowOption::Always,
+            }
+            .into(),
+            ..Default::default()
+        };
         let parser = Parser::new(ParserSettings::new(&predefined, [], None));
         let record = RawRecord::parser().parse(input).next().unwrap().unwrap();
         let record = parser.parse(&record.record);

@@ -18,13 +18,13 @@ fn bench(c: &mut Criterion) {
     group.measurement_time(Duration::from_secs(5));
 
     group.bench_function("add42", |b| {
-        let setup = || 1 as u64;
-        b.iter_batched_ref_fixed(setup, |x| add42(x), BatchSize::NumIterations(65536));
+        let setup = || 1_u64;
+        b.iter_batched_ref_fixed(setup, add42, BatchSize::NumIterations(65536));
     });
 
     group.bench_function("add42:inline", |b| {
-        let setup = || 1 as u64;
-        b.iter_batched_ref_fixed(setup, |x| add42_inline(x), BatchSize::NumIterations(65536));
+        let setup = || 1_u64;
+        b.iter_batched_ref_fixed(setup, add42_inline, BatchSize::NumIterations(65536));
     });
 
     group.finish();
@@ -37,5 +37,5 @@ fn add42(x: &mut u64) {
 
 #[inline(always)]
 fn add42_inline(x: &mut u64) {
-    *x = *x + 42;
+    *x += 42;
 }

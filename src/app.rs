@@ -5,7 +5,6 @@ use std::{
     convert::{TryFrom, TryInto},
     fs,
     io::{BufWriter, Write},
-    iter::repeat,
     num::NonZeroUsize,
     ops::Range,
     path::PathBuf,
@@ -20,7 +19,7 @@ use std::os::unix::fs::MetadataExt;
 
 // third-party imports
 use closure::closure;
-use crossbeam_channel::{self as channel, Receiver, RecvError, RecvTimeoutError, Sender};
+use crossbeam_channel::{self as channel, Receiver, RecvTimeoutError, Sender};
 use crossbeam_utils::thread;
 use enumset::{EnumSet, enum_set};
 use enumset_ext::EnumSetExt;
@@ -140,7 +139,7 @@ impl AdvancedFilter {
 
 impl RecordFilter for AdvancedFilter {
     #[inline]
-    fn apply<'a>(&self, record: &'a Record) -> bool {
+    fn apply(&self, record: &Record) -> bool {
         self.basic.apply(record) && self.query.apply(record)
     }
 }
@@ -222,7 +221,7 @@ impl App {
         if options.raw && options.input_info.intersects(InputInfo::None | InputInfo::Auto) {
             options.input_info = InputInfo::None.into()
         }
-        options.input_info = InputInfo::resolve(options.input_info.into());
+        options.input_info = InputInfo::resolve(options.input_info);
 
         let punctuation = Arc::new(options.formatting.punctuation.resolve(options.ascii));
 
@@ -254,14 +253,14 @@ impl App {
             .collect::<std::io::Result<Vec<_>>>()?;
 
         let n = self.options.concurrency;
-        let sfi = Arc::new(SegmentBufFactory::new(self.options.buffer_size.try_into()?));
-        let bfo = BufFactory::new(self.options.buffer_size.try_into()?);
+        let sfi = Arc::new(SegmentBufFactory::new(self.options.buffer_size.into()));
+        let bfo = BufFactory::new(self.options.buffer_size.into());
         let parser = self.parser();
         thread::scope(|scope| -> Result<()> {
             // prepare receive/transmit channels for input data
             let (txi, rxi): (Vec<_>, Vec<_>) = (0..n).map(|_| channel::bounded(1)).unzip();
             // prepare receive/transmit channels for output data
-            let (txo, rxo): (Vec<_>, Vec<_>) = (0..n).into_iter().map(|_| channel::bounded::<(usize, SegmentBuf)>(1)).unzip();
+            let (txo, rxo): (Vec<_>, Vec<_>) = (0..n).map(|_| channel::bounded::<(usize, SegmentBuf)>(1)).unzip();
             // spawn reader thread
             let reader = scope.spawn(closure!(clone sfi, |_| -> Result<()> {
                 let mut tx = StripedSender::new(txi);
@@ -278,7 +277,7 @@ impl App {
             // spawn processing threads
             for (rxi, txo) in izip!(rxi, txo) {
                 scope.spawn(closure!(ref bfo, ref parser, ref sfi, ref input_badges, |_| {
-                    let mut processor = self.new_segment_processor(&parser);
+                    let mut processor = self.new_segment_processor(parser);
                     for (i, segment) in rxi.iter() {
                         let prefix = input_badges.as_ref().map(|b|b[i].as_str()).unwrap_or("");
                         match segment {
@@ -286,12 +285,12 @@ impl App {
                                 let mut buf = bfo.new_buf();
                                 processor.process(segment.data(), &mut buf, prefix, None, &mut RecordIgnorer{});
                                 sfi.recycle(segment);
-                                if let Err(_) = txo.send((i, buf.into())) {
+                                if txo.send((i, buf.into())).is_err() {
                                     break;
                                 };
                             }
                             Segment::Incomplete(segment, _) => {
-                                if let Err(_) = txo.send((i, segment)) {
+                                if txo.send((i, segment)).is_err() {
                                     break;
                                 }
                             }
@@ -319,16 +318,16 @@ impl App {
 
     fn sort(&self, inputs: Vec<InputHolder>, output: &mut Output) -> Result<()> {
         let mut output = BufWriter::new(output);
-        let indexer_settings = IndexerSettings::new(
-            LocalFileSystem,
-            self.options.buffer_size.try_into()?,
-            self.options.max_message_size.try_into()?,
-            &self.options.fields.settings.predefined,
-            self.options.delimiter.clone(),
-            self.options.allow_prefix,
-            self.options.unix_ts_unit,
-            self.options.input_format,
-        );
+        let indexer_settings = IndexerSettings {
+            buffer_size: self.options.buffer_size.try_into()?,
+            max_message_size: self.options.max_message_size.try_into()?,
+            fields: &self.options.fields.settings.predefined,
+            delimiter: self.options.delimiter.clone(),
+            allow_prefix: self.options.allow_prefix,
+            unix_ts_unit: self.options.unix_ts_unit,
+            format: self.options.input_format,
+            ..IndexerSettings::with_fs(LocalFileSystem)
+        };
         let param_hash = hex::encode(indexer_settings.hash()?);
         let cache_dir = self
             .options
@@ -381,8 +380,7 @@ impl App {
                 let mut blocks: Vec<_> = inputs
                     .into_iter()
                     .enumerate()
-                    .map(|(i, input)| input.into_blocks().map(move |block| (block, i)))
-                    .flatten()
+                    .flat_map(|(i, input)| input.into_blocks().map(move |block| (block, i)))
                     .filter_map(|(block, i)| {
                         let src = block.source_block();
                         if src.stat.lines_valid == 0 {
@@ -426,12 +424,12 @@ impl App {
             let mut workers = Vec::with_capacity(n);
             for (rxp, txw) in izip!(rxp, txw) {
                 workers.push(scope.spawn(closure!(ref parser, |_| -> Result<()> {
-                    let mut processor = self.new_segment_processor(&parser);
+                    let mut processor = self.new_segment_processor(parser);
                     for (block, ts_min, i, j) in rxp.iter() {
                         let mut buf = Vec::with_capacity(2 * usize::try_from(block.size())?);
                         let mut items = Vec::with_capacity(2 * usize::try_from(block.lines_valid())?);
                         for line in block.into_lines()? {
-                            if line.len() == 0 {
+                            if line.is_empty() {
                                 continue;
                             }
                             processor.process(
@@ -475,9 +473,9 @@ impl App {
                 // 3. Should be sorted by (head (next line timestamp), input, block number, offset)
 
                 loop {
-                    while tso >= tsi || workspace.len() == 0 {
+                    while tso >= tsi || workspace.is_empty() {
                         if let Some((block, i, j)) = input.next() {
-                            tsi = Some(block.ts_min.clone());
+                            tsi = Some(block.ts_min);
                             tso = tso.or(tsi);
                             let mut tail = block.into_lines();
                             let head = tail.next();
@@ -490,7 +488,7 @@ impl App {
                         }
                     }
 
-                    if done && workspace.len() == 0 {
+                    if done && workspace.is_empty() {
                         break;
                     }
 
@@ -503,10 +501,10 @@ impl App {
                         continue;
                     }
                     if let Some(badges) = &input_badges {
-                        output.write_all(&badges[item.2].as_bytes())?;
+                        output.write_all(badges[item.2].as_bytes())?;
                     }
                     output.write_all((item.0).1.bytes())?;
-                    output.write_all(&[b'\n'])?;
+                    output.write_all(b"\n")?;
                     match item.1.next() {
                         Some(head) => item.0 = head,
                         None => drop(workspace.swap_remove(k)),
@@ -535,8 +533,8 @@ impl App {
         let m = inputs.len();
         let n = self.options.concurrency;
         let parser = self.parser();
-        let sfi = Arc::new(SegmentBufFactory::new(self.options.buffer_size.try_into()?));
-        let bfo = BufFactory::new(self.options.buffer_size.try_into()?);
+        let sfi = Arc::new(SegmentBufFactory::new(self.options.buffer_size.into()));
+        let bfo = BufFactory::new(self.options.buffer_size.into());
         thread::scope(|scope| -> Result<()> {
             // prepare receive/transmit channels for input data
             let (txi, rxi) = channel::bounded(1);
@@ -610,7 +608,7 @@ impl App {
             let mut workers = Vec::with_capacity(n);
             for _ in 0..n {
                 let worker = scope.spawn(closure!(ref bfo, ref parser, ref sfi, ref input_badges, clone rxi, clone txo, |_| {
-                    let mut processor = self.new_segment_processor(&parser);
+                    let mut processor = self.new_segment_processor(parser);
                     for (i, j, segment) in rxi.iter() {
                         let prefix = input_badges.as_ref().map(|b|b[i].as_str()).unwrap_or("");
                         match segment {
@@ -658,7 +656,7 @@ impl App {
                             mem_usage -= entry.1.1.end - entry.1.1.start;
                             output.write_all(sync_indicator.value.as_bytes())?;
                             output.write_all(&entry.1.0[entry.1.1.clone()])?;
-                            output.write_all(&[b'\n'])?;
+                            output.write_all(b"\n")?;
                         }
                     }
 
@@ -772,7 +770,7 @@ impl App {
 
         if let Some(max_len) = badges.iter().map(|badge| badge.len()).max() {
             for badge in badges.iter_mut() {
-                badge.extend(repeat(' ').take(max_len - badge.len()));
+                badge.extend(std::iter::repeat_n(' ', max_len - badge.len()));
             }
         }
 
@@ -842,9 +840,7 @@ impl App {
             Arc::new(
                 RecordFormatterBuilder::new()
                     .with_theme(options.theme.clone())
-                    .with_timestamp_formatter(
-                        DateTimeFormatter::new(options.time_format.clone(), options.time_zone).into(),
-                    )
+                    .with_timestamp_formatter(DateTimeFormatter::new(options.time_format.clone(), options.time_zone))
                     .with_empty_fields_hiding(options.hide_empty_fields)
                     .with_field_filter(options.fields.filter.clone())
                     .with_options(options.formatting.clone())
@@ -923,7 +919,7 @@ impl<'a, Formatter: RecordWithSourceFormatter, Filter: RecordFilter> SegmentProc
         let limit = limit.unwrap_or(usize::MAX);
 
         for line in self.delim.split(data) {
-            if line.len() == 0 {
+            if line.is_empty() {
                 if self.show_unparsed() {
                     buf.push(b'\n');
                 }
@@ -962,7 +958,7 @@ impl<'a, Formatter: RecordWithSourceFormatter, Filter: RecordFilter> SegmentProc
                 }
             }
             let remainder = if parsed_some { &line[last_offset..] } else { line };
-            if remainder.len() != 0 && self.show_unparsed() {
+            if !remainder.is_empty() && self.show_unparsed() {
                 if !parsed_some {
                     buf.extend(prefix.as_bytes());
                 }
@@ -1073,10 +1069,7 @@ impl<T> Iterator for StripedReceiver<T> {
     type Item = T;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let item = match self.input[self.sn].recv() {
-            Ok(item) => Some(item),
-            Err(RecvError) => None,
-        }?;
+        let item = self.input[self.sn].recv().ok()?;
         self.sn = (self.sn + 1) % self.input.len();
         Some(item)
     }
@@ -1544,25 +1537,19 @@ mod tests {
 
         // Create formatters with each ASCII mode but no theme (for no-color output)
         let formatter_ascii = RecordFormatterBuilder::new()
-            .with_timestamp_formatter(
-                DateTimeFormatter::new(
-                    LinuxDateFormat::new("%b %d %T.%3N").compile(),
-                    Tz::FixedOffset(Utc.fix()),
-                )
-                .into(),
-            )
+            .with_timestamp_formatter(DateTimeFormatter::new(
+                LinuxDateFormat::new("%b %d %T.%3N").compile(),
+                Tz::FixedOffset(Utc.fix()),
+            ))
             .with_options(formatting.clone())
             .with_ascii(AsciiMode::On)
             .build();
 
         let formatter_utf8 = RecordFormatterBuilder::new()
-            .with_timestamp_formatter(
-                DateTimeFormatter::new(
-                    LinuxDateFormat::new("%b %d %T.%3N").compile(),
-                    Tz::FixedOffset(Utc.fix()),
-                )
-                .into(),
-            )
+            .with_timestamp_formatter(DateTimeFormatter::new(
+                LinuxDateFormat::new("%b %d %T.%3N").compile(),
+                Tz::FixedOffset(Utc.fix()),
+            ))
             .with_options(formatting)
             .with_ascii(AsciiMode::Off)
             .build();
@@ -1592,7 +1579,7 @@ mod tests {
     #[test]
     fn test_input_badges_with_ascii_mode() {
         // Use test input references
-        let inputs = vec![
+        let inputs = [
             InputReference::File(crate::input::InputPath {
                 original: std::path::PathBuf::from("/path/to/some-log-file.log"),
                 canonical: std::path::PathBuf::from("/path/to/some-log-file.log"),

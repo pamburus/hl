@@ -134,7 +134,7 @@ impl<N: KeyNormalize> IncludeExcludeKeyFilter<N> {
             return found(child);
         }
 
-        if self.patterns.len() != 0 {
+        if !self.patterns.is_empty() {
             let head = head.as_str();
             for (pattern, child) in self.patterns.iter().rev() {
                 if pattern.matches(head) {
@@ -174,12 +174,12 @@ impl<N: KeyNormalize> IncludeExcludeKeyFilter<N> {
 
     #[inline(always)]
     pub fn setting(&self) -> IncludeExcludeSetting {
-        self.setting.clone()
+        self.setting
     }
 
     #[inline(always)]
     pub fn leaf(&self) -> bool {
-        self.children.len() == 0 && self.patterns.len() == 0
+        self.children.is_empty() && self.patterns.is_empty()
     }
 
     fn split<'a>(&self, key: &'a str) -> (Key, Option<&'a str>) {
@@ -276,10 +276,11 @@ impl Key {
     fn as_str(&self) -> &str {
         std::str::from_utf8(self.as_bytes()).unwrap()
     }
+}
 
-    #[inline(always)]
-    fn to_string(&self) -> String {
-        self.as_str().to_string()
+impl std::fmt::Display for Key {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.as_str())
     }
 }
 

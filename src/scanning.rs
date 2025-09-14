@@ -33,7 +33,7 @@ impl<D: Delimit> Scanner<D> {
     /// Returns an iterator over segments found in the input.
     #[inline]
     pub fn items<'a, 'b>(&'a self, input: &'b mut dyn Read) -> ScannerIter<'a, 'b, D> {
-        return ScannerIter::new(self, input);
+        ScannerIter::new(self, input)
     }
 }
 
@@ -138,7 +138,7 @@ impl Delimit for u8 {
     }
 }
 
-impl<'a> Delimit for &'a [u8] {
+impl Delimit for &[u8] {
     type Searcher = SubStrSearcher<Self>;
 
     #[inline]
@@ -158,7 +158,7 @@ impl Delimit for char {
     }
 }
 
-impl<'a> Delimit for &'a str {
+impl Delimit for &str {
     type Searcher = SubStrSearcher<Self>;
 
     #[inline]
@@ -167,7 +167,7 @@ impl<'a> Delimit for &'a str {
     }
 }
 
-impl<'a> Delimit for &'a String {
+impl Delimit for &String {
     type Searcher = SubStrSearcher<Self>;
 
     #[inline]
@@ -342,7 +342,7 @@ impl<D: AsRef<[u8]>> Search for SubStrSearcher<D> {
     #[inline]
     fn search_r(&self, buf: &[u8], _edge: bool) -> Option<Range<usize>> {
         let needle = self.delimiter.as_ref();
-        if needle.len() == 0 {
+        if needle.is_empty() {
             return None;
         }
 
@@ -363,7 +363,7 @@ impl<D: AsRef<[u8]>> Search for SubStrSearcher<D> {
     #[inline]
     fn search_l(&self, buf: &[u8], _edge: bool) -> Option<Range<usize>> {
         let needle = self.delimiter.as_ref();
-        if needle.len() == 0 {
+        if needle.is_empty() {
             return None;
         }
 
@@ -390,13 +390,7 @@ impl<D: AsRef<[u8]>> Search for SubStrSearcher<D> {
 
         let end = buf.len();
         let begin = end.saturating_sub(self.len() - 1);
-        for i in begin..end {
-            if self.delimiter.as_ref().starts_with(&buf[i..]) {
-                return Some(i);
-            }
-        }
-
-        None
+        (begin..end).find(|&i| self.delimiter.as_ref().starts_with(&buf[i..]))
     }
 
     #[inline]
@@ -407,13 +401,9 @@ impl<D: AsRef<[u8]>> Search for SubStrSearcher<D> {
 
         let begin = 0;
         let end = begin + min(buf.len(), self.len() - 1);
-        for i in (begin..end).rev() {
-            if self.delimiter.as_ref().ends_with(&buf[..i]) {
-                return Some(i);
-            }
-        }
-
-        None
+        (begin..end)
+            .rev()
+            .find(|&i| self.delimiter.as_ref().ends_with(&buf[..i]))
     }
 }
 
@@ -425,35 +415,35 @@ pub struct SmartNewLineSearcher;
 impl Search for SmartNewLineSearcher {
     #[inline]
     fn search_r(&self, buf: &[u8], _edge: bool) -> Option<Range<usize>> {
-        memrchr(b'\n', buf).and_then(|i| {
+        memrchr(b'\n', buf).map(|i| {
             if i > 0 && buf[i - 1] == b'\r' {
-                Some(i - 1..i + 1)
+                i - 1..i + 1
             } else {
-                Some(i..i + 1)
+                i..i + 1
             }
         })
     }
 
     #[inline]
     fn search_l(&self, buf: &[u8], edge: bool) -> Option<Range<usize>> {
-        if buf.len() == 0 {
+        if buf.is_empty() {
             return None;
         }
 
         let b = if edge { 0 } else { 1 };
 
-        memchr(b'\n', &buf[b..]).and_then(|i| {
+        memchr(b'\n', &buf[b..]).map(|i| {
             if i > 0 && buf[i - 1] == b'\r' {
-                Some(b + i - 1..b + i + 1)
+                b + i - 1..b + i + 1
             } else {
-                Some(b + i..b + i + 1)
+                b + i..b + i + 1
             }
         })
     }
 
     #[inline]
     fn partial_match_r(&self, buf: &[u8]) -> Option<usize> {
-        if buf.len() > 0 && buf[buf.len() - 1] == b'\r' {
+        if !buf.is_empty() && buf[buf.len() - 1] == b'\r' {
             Some(buf.len() - 1)
         } else {
             None
@@ -462,7 +452,7 @@ impl Search for SmartNewLineSearcher {
 
     #[inline]
     fn partial_match_l(&self, buf: &[u8]) -> Option<usize> {
-        if buf.len() > 0 && buf[0] == b'\n' {
+        if !buf.is_empty() && buf[0] == b'\n' {
             Some(1)
         } else {
             None
@@ -500,8 +490,7 @@ impl SegmentBuf {
 
     #[inline]
     fn new(capacity: usize) -> Self {
-        let mut buf = Vec::with_capacity(capacity);
-        buf.resize(capacity, 0);
+        let buf = vec![0; capacity];
         Self { buf, size: 0 }
     }
 
@@ -604,10 +593,10 @@ pub struct SegmentBufFactory {
 impl SegmentBufFactory {
     /// Returns a new SegmentBufFactory with the given parameters.
     pub fn new(buf_size: usize) -> Self {
-        return Self {
+        Self {
             buf_size,
             recycled: SegQueue::new(),
-        };
+        }
     }
 
     /// Returns a new or recycled SegmentBuf.
@@ -640,10 +629,10 @@ impl BufFactory {
     /// Returns a new BufFactory with the given parameters.
     #[inline]
     pub fn new(buf_size: usize) -> Self {
-        return Self {
+        Self {
             buf_size,
             recycled: SegQueue::new(),
-        };
+        }
     }
 
     /// Returns a new or recycled buffer.
@@ -651,7 +640,7 @@ impl BufFactory {
     pub fn new_buf(&self) -> Vec<u8> {
         match self.recycled.pop() {
             Some(mut buf) => {
-                buf.resize(0, 0);
+                buf.clear();
                 buf
             }
             None => Vec::with_capacity(self.buf_size),
@@ -685,14 +674,14 @@ impl<'a, 'b, D: Delimit> ScannerIter<'a, 'b, D> {
 
     #[inline]
     fn new(scanner: &'a Scanner<D>, input: &'b mut dyn Read) -> Self {
-        return Self {
+        Self {
             scanner,
             input,
             next: scanner.sf.new_segment(),
             searcher: scanner.delimiter.clone().into_searcher(),
             placement: None,
             done: false,
-        };
+        }
     }
 
     #[inline]
@@ -813,12 +802,12 @@ pub struct ScannerJumboIter<'a, 'b, D: Delimit> {
 impl<'a, 'b, D: Delimit> ScannerJumboIter<'a, 'b, D> {
     #[inline]
     fn new(inner: ScannerIter<'a, 'b, D>, max_segment_size: usize) -> Self {
-        return Self {
+        Self {
             inner,
             max_segment_size,
             fetched: VecDeque::new(),
             next: None,
-        };
+        }
     }
 
     #[inline]
@@ -833,7 +822,7 @@ impl<'a, 'b, D: Delimit> ScannerJumboIter<'a, 'b, D> {
 
     #[inline]
     fn can_complete(&self) -> bool {
-        self.fetched.len() > 0
+        !self.fetched.is_empty()
             && self.fetched.front().map(|x| x.1) == Some(PartialPlacement::First)
             && self.fetched.back().map(|x| x.1) == Some(PartialPlacement::Last)
     }
@@ -850,7 +839,7 @@ impl<'a, 'b, D: Delimit> ScannerJumboIter<'a, 'b, D> {
             self.inner.scanner.sf.recycle(buf);
         }
 
-        return Some(Ok(Segment::Complete(buf.into())));
+        Some(Ok(Segment::Complete(buf.into())))
     }
 }
 
@@ -886,7 +875,7 @@ impl<'a, 'b, D: Delimit> Iterator for ScannerJumboIter<'a, 'b, D> {
                         break;
                     }
                     None => {
-                        if self.fetched.len() == 0 && self.next.is_none() {
+                        if self.fetched.is_empty() && self.next.is_none() {
                             return None;
                         }
                         break;

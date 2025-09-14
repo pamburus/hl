@@ -198,7 +198,7 @@ where
                 Some(Ok(Token::Char(ch @ '\x00'..='\x7F'))) => return Some(Ok(ch as u8)),
                 Some(Ok(Token::Char(ch))) => {
                     let mut buf: [u8; 4] = [0; 4];
-                    let n = ch.encode_utf8(&mut buf).bytes().len();
+                    let n = ch.encode_utf8(&mut buf).len();
                     self.head = Some(BytesHead::Char(buf, n, 0));
                 }
                 Some(Ok(Token::Sequence(s))) => self.head = Some(BytesHead::Sequence(s.bytes())),
@@ -284,7 +284,15 @@ impl Builder {
             buffer: Vec::with_capacity(capacity),
         }
     }
+}
 
+impl Default for Builder {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Builder {
     #[inline(always)]
     pub fn into_string(self) -> String {
         unsafe { String::from_utf8_unchecked(self.buffer) }
@@ -409,6 +417,19 @@ mod tests {
         result.handle(Token::Char('l')).unwrap();
         result.handle(Token::Char('d')).unwrap();
         assert_eq!(result.as_str(), "hello, world");
+    }
+
+    #[test]
+    fn builder_default() {
+        let builder1 = Builder::new();
+        let builder2 = Builder::default();
+
+        // Both should start with empty content
+        assert_eq!(builder1.as_str(), "");
+        assert_eq!(builder2.as_str(), "");
+
+        // Both should have the same capacity
+        assert_eq!(builder1.buffer.capacity(), builder2.buffer.capacity());
     }
 
     #[test]

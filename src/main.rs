@@ -58,7 +58,7 @@ fn bootstrap() -> Result<Settings> {
     let (offset, no_default_configs) = opt
         .config
         .iter()
-        .rposition(|x| x == "" || x == "-")
+        .rposition(|x| x.is_empty() || x == "-")
         .map(|x| (x + 1, true))
         .unwrap_or_default();
     let configs = &opt.config[offset..];
@@ -162,17 +162,15 @@ fn run() -> Result<()> {
             fields = none();
         } else if key == "!*" {
             fields = all();
-        } else if key.starts_with("!") {
+        } else if let Some(stripped) = key.strip_prefix("!") {
             if i == 0 {
                 fields = none();
             }
-            fields.entry(&key[1..]).include();
-        } else if key.starts_with("\\!") {
-            fields.entry(&key[1..]).exclude();
-        } else if key.starts_with("\\\\") {
+            fields.entry(stripped).include();
+        } else if key.starts_with("\\!") || key.starts_with("\\\\") {
             fields.entry(&key[1..]).exclude();
         } else {
-            fields.entry(&key).exclude();
+            fields.entry(key).exclude();
         }
     }
 
@@ -181,7 +179,7 @@ fn run() -> Result<()> {
 
     let mut query: Option<Query> = None;
     for q in &opt.query {
-        let right = Query::parse(&q)?;
+        let right = Query::parse(q)?;
         if let Some(left) = query {
             query = Some(left.and(right));
         } else {
@@ -297,7 +295,7 @@ fn run() -> Result<()> {
             }
         })
         .collect::<std::result::Result<Vec<_>, _>>()?;
-    if inputs.len() == 0 {
+    if inputs.is_empty() {
         if stdin().is_terminal() {
             let mut cmd = cli::Opt::command();
             return cmd.print_help().map_err(Error::Io);
@@ -313,13 +311,7 @@ fn run() -> Result<()> {
         .collect::<Result<Vec<_>>>()?;
 
     let paging = match opt.paging {
-        cli::PagingOption::Auto => {
-            if stdout().is_terminal() {
-                true
-            } else {
-                false
-            }
-        }
+        cli::PagingOption::Auto => stdout().is_terminal(),
         cli::PagingOption::Always => true,
         cli::PagingOption::Never => false,
     };
@@ -363,7 +355,7 @@ fn list_themes(app_dirs: &AppDirs, tags: Option<cli::ThemeTagSet>) -> Result<()>
             .into_iter()
             .filter(|(name, _)| {
                 if let Some(tags) = tags {
-                    hl::themecfg::Theme::load(app_dirs, &name)
+                    hl::themecfg::Theme::load(app_dirs, name)
                         .ok()
                         .map(|theme| theme.tags.includes(*tags))
                         .unwrap_or(false)

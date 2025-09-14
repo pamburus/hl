@@ -54,6 +54,12 @@ impl<T, const N: usize> Vec<T, N> {
         self.head.len() + self.tail.len()
     }
 
+    /// Returns `true` if the vector contains no elements.
+    #[inline]
+    pub fn is_empty(&self) -> bool {
+        self.head.is_empty() && self.tail.is_empty()
+    }
+
     /// Returns the total number of elements the vector can hold without reallocating.
     #[inline]
     pub fn capacity(&self) -> usize {

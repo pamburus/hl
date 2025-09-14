@@ -22,8 +22,8 @@ pub fn parse_time(s: &str, tz: &Tz, format: &DateTimeFormat) -> Result<DateTime<
 }
 
 fn relative_past(s: &str) -> Option<DateTime<Tz>> {
-    if s.starts_with('-') {
-        let d = parse_duration(&s[1..]).ok()?;
+    if let Some(stripped) = s.strip_prefix('-') {
+        let d = parse_duration(stripped).ok()?;
         let ts = Utc::now() - Duration::from_std(d).ok()?;
         Some(ts.with_timezone(&ts.timezone().into()))
     } else {
@@ -32,8 +32,8 @@ fn relative_past(s: &str) -> Option<DateTime<Tz>> {
 }
 
 fn relative_future(s: &str) -> Option<DateTime<Tz>> {
-    if s.starts_with('+') {
-        let d = parse_duration(&s[1..]).ok()?;
+    if let Some(stripped) = s.strip_prefix('+') {
+        let d = parse_duration(stripped).ok()?;
         let ts = Utc::now() + Duration::from_std(d).ok()?;
         Some(ts.with_timezone(&ts.timezone().into()))
     } else {
@@ -71,7 +71,7 @@ fn use_custom_format(s: &str, format: &DateTimeFormat, now: &DateTime<Tz>, tz: &
     let mut has_offset = false;
 
     for item in format {
-        match *item.as_ref() {
+        match *item {
             Item::Char(b) => {
                 buf.push(b);
             }
@@ -156,7 +156,7 @@ fn use_custom_format(s: &str, format: &DateTimeFormat, now: &DateTime<Tz>, tz: &
                 has_second = true;
             }
             Item::Nanosecond((_, _)) => {
-                if buf.len() == 0 || buf[buf.len() - 1] != b'.' {
+                if buf.is_empty() || buf[buf.len() - 1] != b'.' {
                     unsupported();
                 }
                 buf.pop();
@@ -483,5 +483,79 @@ mod tests {
             rfc3339_weak("2022-10-30 03:00:00", &tz),
             Some(ts("2022-10-30T03:00:00+01:00"))
         );
+    }
+
+    #[test]
+    fn test_relative_past_parsing() {
+        let tz = Tz::FixedOffset(Utc.fix());
+        let format = DateTimeFormat::new();
+
+        // Test valid relative past times
+        let result = parse_time("-1h", &tz, &format);
+        assert!(result.is_ok(), "Should parse '-1h' successfully");
+
+        let result = parse_time("-30m", &tz, &format);
+        assert!(result.is_ok(), "Should parse '-30m' successfully");
+
+        let result = parse_time("-1d", &tz, &format);
+        assert!(result.is_ok(), "Should parse '-1d' successfully");
+
+        let result = parse_time("-5s", &tz, &format);
+        assert!(result.is_ok(), "Should parse '-5s' successfully");
+
+        // Test invalid relative past times
+        let result = parse_time("-invalid", &tz, &format);
+        assert!(result.is_err(), "Should fail to parse '-invalid'");
+
+        // Test non-relative time (should not use relative_past)
+        let result = parse_time("1h", &tz, &format);
+        assert!(result.is_err(), "Should not parse '1h' as relative past");
+    }
+
+    #[test]
+    fn test_relative_future_parsing() {
+        let tz = Tz::FixedOffset(Utc.fix());
+        let format = DateTimeFormat::new();
+
+        // Test valid relative future times
+        let result = parse_time("+1h", &tz, &format);
+        assert!(result.is_ok(), "Should parse '+1h' successfully");
+
+        let result = parse_time("+30m", &tz, &format);
+        assert!(result.is_ok(), "Should parse '+30m' successfully");
+
+        let result = parse_time("+1d", &tz, &format);
+        assert!(result.is_ok(), "Should parse '+1d' successfully");
+
+        let result = parse_time("+5s", &tz, &format);
+        assert!(result.is_ok(), "Should parse '+5s' successfully");
+
+        // Test invalid relative future times
+        let result = parse_time("+invalid", &tz, &format);
+        assert!(result.is_err(), "Should fail to parse '+invalid'");
+
+        // Test non-relative time (should not use relative_future)
+        let result = parse_time("1h", &tz, &format);
+        assert!(result.is_err(), "Should not parse '1h' as relative future");
+    }
+
+    #[test]
+    fn test_relative_time_boundary_cases() {
+        let tz = Tz::FixedOffset(Utc.fix());
+        let format = DateTimeFormat::new();
+
+        // Test edge cases that should not match relative parsing
+        let result = parse_time("-", &tz, &format);
+        assert!(result.is_err(), "Should fail to parse lone '-'");
+
+        let result = parse_time("+", &tz, &format);
+        assert!(result.is_err(), "Should fail to parse lone '+'");
+
+        // Test combinations that should trigger relative parsing logic but fail
+        let result = parse_time("-0invalidunit", &tz, &format);
+        assert!(result.is_err(), "Should fail to parse '-0invalidunit'");
+
+        let result = parse_time("+0invalidunit", &tz, &format);
+        assert!(result.is_err(), "Should fail to parse '+0invalidunit'");
     }
 }

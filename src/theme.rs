@@ -156,7 +156,7 @@ impl Style {
                 themecfg::PlainColor::BrightYellow => ColorCode::Plain(Color::Yellow, Brightness::Bright),
             },
             themecfg::Color::Palette(code) => ColorCode::Palette(*code),
-            themecfg::Color::RGB(themecfg::RGB(r, g, b)) => ColorCode::RGB(*r, *g, *b),
+            themecfg::Color::RGB(themecfg::RGB(r, g, b)) => ColorCode::Rgb(*r, *g, *b),
         }
     }
 }
@@ -292,7 +292,7 @@ impl StylePack {
         let mut result = Self::default();
 
         let items = s.items();
-        if items.len() != 0 {
+        if !items.is_empty() {
             result.styles.push(Style::reset());
             result.reset = Some(0);
         }
