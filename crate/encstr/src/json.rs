@@ -452,7 +452,7 @@ mod tests {
 
     #[test]
     fn test_tokens() {
-        let mut tokens = Tokens::new(&r#""hello, \"world\"""#);
+        let mut tokens = Tokens::new(r#""hello, \"world\"""#);
         assert_eq!(tokens.next(), Some(Ok(Token::Sequence("hello, "))));
         assert_eq!(tokens.next(), Some(Ok(Token::Char('"'))));
         assert_eq!(tokens.next(), Some(Ok(Token::Sequence("world"))));
@@ -463,7 +463,7 @@ mod tests {
 
     #[test]
     fn test_tokens_escape() {
-        let mut tokens = Tokens::new(&r#""hello, \\\"world\"""#);
+        let mut tokens = Tokens::new(r#""hello, \\\"world\"""#);
         assert_eq!(tokens.next(), Some(Ok(Token::Sequence("hello, "))));
         assert_eq!(tokens.next(), Some(Ok(Token::Char('\\'))));
         assert_eq!(tokens.next(), Some(Ok(Token::Char('"'))));
@@ -475,7 +475,7 @@ mod tests {
 
     #[test]
     fn test_tokens_escape_b() {
-        let mut tokens = Tokens::new(&r#""00 \b""#);
+        let mut tokens = Tokens::new(r#""00 \b""#);
         assert_eq!(tokens.next(), Some(Ok(Token::Sequence("00 "))));
         assert_eq!(tokens.next(), Some(Ok(Token::Char('\x08'))));
         assert_eq!(tokens.next(), None);
@@ -484,7 +484,7 @@ mod tests {
 
     #[test]
     fn test_tokens_control() {
-        let mut tokens = Tokens::new(&r#""hello, \x00world""#);
+        let mut tokens = Tokens::new(r#""hello, \x00world""#);
         assert_eq!(tokens.next(), Some(Ok(Token::Sequence("hello, "))));
         assert_eq!(tokens.next(), Some(Err(Error::InvalidEscape)));
         assert_eq!(tokens.next(), Some(Err(Error::InvalidEscape)));
@@ -492,7 +492,7 @@ mod tests {
 
     #[test]
     fn test_tokens_eof() {
-        let mut tokens = Tokens::new(&r#""hello, \u"#);
+        let mut tokens = Tokens::new(r#""hello, \u"#);
         assert_eq!(tokens.next(), Some(Ok(Token::Sequence("hello, "))));
         assert_eq!(tokens.next(), Some(Err(Error::Eof)));
         assert_eq!(tokens.next(), Some(Err(Error::Eof)));
@@ -500,21 +500,21 @@ mod tests {
 
     #[test]
     fn test_tokens_lone_surrogate() {
-        let mut tokens = Tokens::new(&r#""hello, \udc00world""#);
+        let mut tokens = Tokens::new(r#""hello, \udc00world""#);
         assert_eq!(tokens.next(), Some(Ok(Token::Sequence("hello, "))));
         assert_eq!(tokens.next(), Some(Err(Error::LoneLeadingSurrogateInHexEscape)));
     }
 
     #[test]
     fn test_tokens_unexpected_end() {
-        let mut tokens = Tokens::new(&r#""hello, \ud800""#);
+        let mut tokens = Tokens::new(r#""hello, \ud800""#);
         assert_eq!(tokens.next(), Some(Ok(Token::Sequence("hello, "))));
         assert_eq!(tokens.next(), Some(Err(Error::UnexpectedEndOfHexEscape)));
     }
 
     #[test]
     fn test_append_esc_q() {
-        let mut tokens = Tokens::new(&r#""hello\u002c \"world\"""#);
+        let mut tokens = Tokens::new(r#""hello\u002c \"world\"""#);
         let mut buffer = Vec::new();
         let mut appender = Appender::new(&mut buffer);
         while let Some(Ok(token)) = tokens.next() {

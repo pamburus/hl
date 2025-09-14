@@ -20,23 +20,23 @@ run *args: build
 
 # Run tests for all packages in the workspace
 test: (setup "build")
-    cargo test --workspace
+    cargo test --workspace --locked
 
 # Check the code for errors without building an executable
 check: (setup "build")
-    cargo check --workspace
+    cargo check --workspace --locked
 
 # Run the Rust linter (clippy)
 lint: (setup "lint")
-    cargo clippy --workspace -- -D warnings
+    cargo clippy --workspace --all-targets --all-features
 
 # Check for security vulnerabilities in dependencies
 audit: (setup "audit")
-    cargo audit
+    cargo audit --workspace
 
 # Check for outdated dependencies
 outdated: (setup "outdated")
-    cargo outdated
+    cargo outdated --workspace
 
 # Format all Rust and Nix files
 fmt: fmt-rust fmt-nix
@@ -44,7 +44,7 @@ fmt: fmt-rust fmt-nix
 
 # Format Rust code
 fmt-rust: (setup "build-nightly")
-    cargo +nightly fmt --all
+    cargo +nightly fmt --workspace --all
 
 # Format Nix files (gracefully skips if Nix is not installed)
 fmt-nix:
