@@ -651,7 +651,7 @@ impl BufFactory {
     pub fn new_buf(&self) -> Vec<u8> {
         match self.recycled.pop() {
             Some(mut buf) => {
-                buf.resize(0, 0);
+                buf.clear();
                 buf
             }
             None => Vec::with_capacity(self.buf_size),

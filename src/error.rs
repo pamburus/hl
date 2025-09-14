@@ -115,7 +115,7 @@ pub enum Error {
         source: mpsc::RecvTimeoutError,
     },
     #[error("failed to parse query:\n{0}")]
-    QueryParseError(#[from] pest::error::Error<crate::query::Rule>),
+    QueryParseError(Box<pest::error::Error<crate::query::Rule>>),
     #[error(transparent)]
     LevelParseError(#[from] level::ParseError),
     #[error(transparent)]
@@ -270,6 +270,12 @@ fn did_you_mean(suggestions: &Suggestions) -> Option<DidYouMean<'_>> {
     }
 
     Some(DidYouMean { suggestions })
+}
+
+impl From<pest::error::Error<crate::query::Rule>> for Error {
+    fn from(err: pest::error::Error<crate::query::Rule>) -> Self {
+        Error::QueryParseError(Box::new(err))
+    }
 }
 
 const ERR_PREFIX: &str = "error:";

@@ -1,6 +1,7 @@
 // std imports
 use std::{
     io::{BufRead, BufReader, Read},
+    ops::{BitAnd, BitOr, Not},
     sync::{Arc, LazyLock},
 };
 
@@ -38,21 +39,41 @@ impl Query {
     }
 
     pub fn and(self, rhs: Query) -> Query {
-        Query::new(And { lhs: self, rhs })
+        Query::new(OpAnd { lhs: self, rhs })
     }
 
     pub fn or(self, rhs: Query) -> Query {
-        Query::new(Or { lhs: self, rhs })
-    }
-
-    pub fn not(self) -> Query {
-        Query::new(Not { arg: self })
+        Query::new(OpOr { lhs: self, rhs })
     }
 
     pub fn new<F: RecordFilter + Sync + Send + 'static>(filter: F) -> Self {
         Self {
             filter: Arc::new(filter),
         }
+    }
+}
+
+impl Not for Query {
+    type Output = Query;
+
+    fn not(self) -> Self::Output {
+        Query::new(OpNot { arg: self })
+    }
+}
+
+impl BitAnd for Query {
+    type Output = Query;
+
+    fn bitand(self, rhs: Self) -> Self::Output {
+        self.and(rhs)
+    }
+}
+
+impl BitOr for Query {
+    type Output = Query;
+
+    fn bitor(self, rhs: Self) -> Self::Output {
+        self.or(rhs)
     }
 }
 
@@ -83,8 +104,8 @@ impl Default for &'static Query {
 
 fn expression(pair: Pair<Rule>) -> Result<Query> {
     match pair.as_rule() {
-        Rule::expr_or => binary_op::<Or>(pair),
-        Rule::expr_and => binary_op::<And>(pair),
+        Rule::expr_or => binary_op::<OpOr>(pair),
+        Rule::expr_and => binary_op::<OpAnd>(pair),
         Rule::expr_not => not(pair),
         Rule::primary => primary(pair),
         _ => unreachable!(),
@@ -103,7 +124,7 @@ fn binary_op<Op: BinaryOp + Sync + Send + 'static>(pair: Pair<Rule>) -> Result<Q
 fn not(pair: Pair<Rule>) -> Result<Query> {
     assert_eq!(pair.as_rule(), Rule::expr_not);
 
-    Ok(Query::new(Not {
+    Ok(Query::new(OpNot {
         arg: expression(pair.into_inner().next().unwrap())?,
     }))
 }
@@ -304,19 +325,19 @@ trait BinaryOp: RecordFilter {
 
 // ---
 
-struct Or {
+struct OpOr {
     lhs: Query,
     rhs: Query,
 }
 
-impl RecordFilter for Or {
+impl RecordFilter for OpOr {
     #[inline]
     fn apply<'a>(&self, record: &Record<'a>) -> bool {
         self.lhs.apply(record) || self.rhs.apply(record)
     }
 }
 
-impl BinaryOp for Or {
+impl BinaryOp for OpOr {
     fn new(lhs: Query, rhs: Query) -> Self {
         Self { lhs, rhs }
     }
@@ -324,19 +345,19 @@ impl BinaryOp for Or {
 
 // ---
 
-struct And {
+struct OpAnd {
     lhs: Query,
     rhs: Query,
 }
 
-impl RecordFilter for And {
+impl RecordFilter for OpAnd {
     #[inline]
     fn apply<'a>(&self, record: &Record<'a>) -> bool {
         self.lhs.apply(record) && self.rhs.apply(record)
     }
 }
 
-impl BinaryOp for And {
+impl BinaryOp for OpAnd {
     fn new(lhs: Query, rhs: Query) -> Self {
         Self { lhs, rhs }
     }
@@ -344,11 +365,11 @@ impl BinaryOp for And {
 
 // ---
 
-struct Not {
+struct OpNot {
     arg: Query,
 }
 
-impl RecordFilter for Not {
+impl RecordFilter for OpNot {
     #[inline]
     fn apply<'a>(&self, record: &Record<'a>) -> bool {
         !self.arg.apply(record)
@@ -471,7 +492,7 @@ mod tests {
 
     #[test]
     fn test_query_not() {
-        let queries = [Query::parse(".a=1").unwrap().not(), Query::parse("not .a=1").unwrap()];
+        let queries = [!Query::parse(".a=1").unwrap(), Query::parse("not .a=1").unwrap()];
 
         for query in &queries {
             let record = parse(r#"{"a":1}"#);
@@ -479,6 +500,43 @@ mod tests {
             let record = parse(r#"{"a":2}"#);
             assert_eq!(record.matches(&query), true);
         }
+    }
+
+    #[test]
+    fn test_query_bitwise_operators() {
+        let q1 = Query::parse(".a=1").unwrap();
+        let q2 = Query::parse(".b=2").unwrap();
+
+        // Test BitAnd (&)
+        let and_query1 = q1.clone() & q2.clone();
+        let and_query2 = q1.clone().and(q2.clone());
+
+        let record = parse(r#"{"a":1,"b":2}"#);
+        assert_eq!(record.matches(&and_query1), true);
+        assert_eq!(record.matches(&and_query2), true);
+
+        let record = parse(r#"{"a":1,"b":3}"#);
+        assert_eq!(record.matches(&and_query1), false);
+        assert_eq!(record.matches(&and_query2), false);
+
+        // Test BitOr (|)
+        let or_query1 = q1.clone() | q2.clone();
+        let or_query2 = q1.clone().or(q2.clone());
+
+        let record = parse(r#"{"a":1,"b":3}"#);
+        assert_eq!(record.matches(&or_query1), true);
+        assert_eq!(record.matches(&or_query2), true);
+
+        let record = parse(r#"{"a":0,"b":0}"#);
+        assert_eq!(record.matches(&or_query1), false);
+        assert_eq!(record.matches(&or_query2), false);
+
+        // Test Not (!)
+        let not_query = !q1.clone();
+        let record = parse(r#"{"a":1}"#);
+        assert_eq!(record.matches(&not_query), false);
+        let record = parse(r#"{"a":2}"#);
+        assert_eq!(record.matches(&not_query), true);
     }
 
     #[test]

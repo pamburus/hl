@@ -2009,7 +2009,7 @@ mod tests {
         assert_eq!(value.parse::<&str>().unwrap(), "false");
 
         let value = RawValue::Null;
-        assert_eq!(value.parse::<()>().unwrap(), ());
+        assert!(value.parse::<()>().is_ok());
 
         let value = RawValue::Object(RawObject::Json(json::from_str(r#"{"a":123}"#).unwrap()));
         assert_eq!(value.parse::<HashMap<_, _>>().unwrap(), hashmap! {"a" => 123});

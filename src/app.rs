@@ -318,16 +318,16 @@ impl App {
 
     fn sort(&self, inputs: Vec<InputHolder>, output: &mut Output) -> Result<()> {
         let mut output = BufWriter::new(output);
-        let indexer_settings = IndexerSettings::new(
-            LocalFileSystem,
-            self.options.buffer_size.try_into()?,
-            self.options.max_message_size.try_into()?,
-            &self.options.fields.settings.predefined,
-            self.options.delimiter.clone(),
-            self.options.allow_prefix,
-            self.options.unix_ts_unit,
-            self.options.input_format,
-        );
+        let indexer_settings = IndexerSettings {
+            buffer_size: self.options.buffer_size.try_into()?,
+            max_message_size: self.options.max_message_size.try_into()?,
+            fields: &self.options.fields.settings.predefined,
+            delimiter: self.options.delimiter.clone(),
+            allow_prefix: self.options.allow_prefix,
+            unix_ts_unit: self.options.unix_ts_unit,
+            format: self.options.input_format,
+            ..IndexerSettings::with_fs(LocalFileSystem)
+        };
         let param_hash = hex::encode(indexer_settings.hash()?);
         let cache_dir = self
             .options
@@ -1585,7 +1585,7 @@ mod tests {
     #[test]
     fn test_input_badges_with_ascii_mode() {
         // Use test input references
-        let inputs = vec![
+        let inputs = [
             InputReference::File(crate::input::InputPath {
                 original: std::path::PathBuf::from("/path/to/some-log-file.log"),
                 canonical: std::path::PathBuf::from("/path/to/some-log-file.log"),

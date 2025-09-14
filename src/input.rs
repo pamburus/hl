@@ -265,8 +265,8 @@ impl Input {
 
     /// Opens the file for reading.
     /// This includes decoding compressed files if needed.
-    pub fn open(path: &PathBuf) -> io::Result<Self> {
-        InputReference::File(path.clone().try_into()?).open()
+    pub fn open(path: &Path) -> io::Result<Self> {
+        InputReference::File(path.to_path_buf().try_into()?).open()
     }
 
     /// Opens the stdin for reading.
@@ -328,7 +328,7 @@ impl Stream {
             Self::Sequential(stream) => Self::Sequential(stream),
             Self::RandomAccess(stream) => {
                 let mut stream = stream;
-                if stream.seek(SeekFrom::Current(0)).is_err() {
+                if stream.stream_position().is_err() {
                     Self::Sequential(Box::new(stream))
                 } else {
                     Self::RandomAccess(stream)
@@ -345,7 +345,7 @@ impl Stream {
                 Self::Sequential(Box::new(AnyDecoder::new(BufReader::new(stream)).with_metadata(meta)))
             }
             Self::RandomAccess(mut stream) => {
-                if let Some(size) = stream.stream_position().ok() {
+                if let Ok(size) = stream.stream_position() {
                     log::debug!("detecting format of random access stream");
                     let meta = stream.metadata().ok().flatten();
                     let kind = AnyDecoder::new(BufReader::new(&mut stream)).kind().ok();
@@ -370,7 +370,7 @@ impl Stream {
     }
 
     /// Converts the stream to a sequential stream.
-    pub fn as_sequential<'a>(&'a mut self) -> StreamOver<&'a mut (dyn ReadMeta + Send + Sync)> {
+    pub fn as_sequential(&mut self) -> StreamOver<&mut (dyn ReadMeta + Send + Sync)> {
         match self {
             Self::Sequential(stream) => StreamOver(stream),
             Self::RandomAccess(stream) => StreamOver(stream),
@@ -492,7 +492,7 @@ impl IndexedInput {
     /// Converts the input to blocks.
     pub fn into_blocks(self) -> Blocks<IndexedInput, impl Iterator<Item = usize>> {
         let n = self.index.source().blocks.len();
-        Blocks::new(Arc::new(self), (0..n).into_iter())
+        Blocks::new(Arc::new(self), 0..n)
     }
 
     fn from_stream<FS>(reference: InputReference, stream: Stream, indexer: &Indexer<FS>) -> Result<Self>
@@ -1106,7 +1106,7 @@ mod tests {
     fn test_indexed_input_stdin() {
         let data = br#"{"ts":"2024-10-01T01:02:03Z","level":"info","msg":"some test message"}\n"#;
         let stream = Stream::RandomAccess(Box::new(Cursor::new(data)));
-        let indexer = Indexer::<LocalFileSystem>::new(1, PathBuf::new(), IndexerSettings::default());
+        let indexer = Indexer::<LocalFileSystem>::new(1, PathBuf::new(), IndexerSettings::with_fs(LocalFileSystem));
         let input = IndexedInput::from_stream(InputReference::Stdin, stream, &indexer).unwrap();
         let mut blocks = input.into_blocks().collect_vec();
         assert_eq!(blocks.len(), 1);
@@ -1127,9 +1127,8 @@ mod tests {
                 1,
                 PathBuf::from("."),
                 IndexerSettings {
-                    fs: fs.clone(),
                     buffer_size: nonzero!(64u32).into(),
-                    ..Default::default()
+                    ..IndexerSettings::with_fs(fs.clone())
                 },
             );
             let input = IndexedInput::open(&path, &indexer).unwrap();
@@ -1156,11 +1155,10 @@ mod tests {
             let path = PathBuf::from("sample/test.log");
             let indexer = Indexer::new(
                 1,
-                PathBuf::from("/tmp/cache"),
+                PathBuf::from("."),
                 IndexerSettings {
-                    fs: fs.clone(),
                     buffer_size: nonzero!(64u32).into(),
-                    ..Default::default()
+                    ..IndexerSettings::with_fs(fs.clone())
                 },
             );
             let reference = InputReference::File(InputPath::resolve_with_fs(path.clone(), &fs).unwrap());

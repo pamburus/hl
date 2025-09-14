@@ -25,6 +25,9 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
+// Type alias for complex file source return type
+type FileSource<M> = (PathBuf, Box<dyn FileRead<Metadata = M> + Send + Sync>);
+
 // third-party imports
 use capnp::{message, serialize::read_message};
 use closure::closure;
@@ -155,8 +158,7 @@ impl std::ops::Sub for Timestamp {
 
 // ---
 
-#[derive(Default)]
-pub struct IndexerSettings<'a, FS> {
+pub struct IndexerSettings<'a, FS: FileSystem> {
     pub fs: FS,
     pub buffer_size: BufferSize,
     pub max_message_size: MessageSize,
@@ -167,33 +169,30 @@ pub struct IndexerSettings<'a, FS> {
     pub format: Option<InputFormat>,
 }
 
+impl<'a, FS: FileSystem + Default> Default for IndexerSettings<'a, FS> {
+    fn default() -> Self {
+        Self::with_fs(FS::default())
+    }
+}
+
 impl<'a, FS: FileSystem> IndexerSettings<'a, FS> {
-    pub fn new(
-        fs: FS,
-        buffer_size: BufferSize,
-        max_message_size: MessageSize,
-        fields: &'a PredefinedFields,
-        delimiter: Delimiter,
-        allow_prefix: bool,
-        unix_ts_unit: Option<UnixTimestampUnit>,
-        format: Option<InputFormat>,
-    ) -> Self {
+    pub fn with_fs(fs: FS) -> Self {
         Self {
             fs,
-            buffer_size,
-            max_message_size,
-            fields,
-            delimiter,
-            allow_prefix,
-            unix_ts_unit,
-            format,
+            buffer_size: BufferSize::default(),
+            max_message_size: MessageSize::default(),
+            fields: Default::default(),
+            delimiter: Delimiter::default(),
+            allow_prefix: false,
+            unix_ts_unit: None,
+            format: None,
         }
     }
 
     pub fn hash(&self) -> Result<[u8; 32]> {
         let mut hasher = Sha256::new();
         bincode::serde::encode_into_std_write(
-            &(
+            (
                 CURRENT_VERSION,
                 &self.buffer_size,
                 &self.max_message_size,
@@ -394,14 +393,14 @@ where
         stream: &mut Reader,
         source_path: &Path,
         meta: &Metadata,
-        index_path: &PathBuf,
+        index_path: &Path,
         existing_index: Option<Index>,
     ) -> Result<Index> {
         let mut output = match self.fs.create(index_path) {
             Ok(output) => output,
             Err(err) => {
                 return Err(Error::FailedToOpenFileForWriting {
-                    path: index_path.clone(),
+                    path: index_path.to_path_buf(),
                     source: err,
                 });
             }
@@ -599,10 +598,7 @@ where
         })
     }
 
-    fn open_source(
-        &self,
-        source_path: &Path,
-    ) -> io::Result<(PathBuf, Box<dyn FileRead<Metadata = FS::Metadata> + Send + Sync>)> {
+    fn open_source(&self, source_path: &Path) -> io::Result<FileSource<FS::Metadata>> {
         let source_path = self.fs.canonicalize(source_path)?;
         let result = self.fs.open(&source_path)?;
         Ok((source_path, result))
@@ -1241,10 +1237,9 @@ mod tests {
             1,
             PathBuf::from("/tmp/cache"),
             IndexerSettings {
-                fs: MockFileSystem::<MockSourceMetadata>::new(),
                 buffer_size: nonzero!(1024u32).into(),
                 max_message_size: nonzero!(1024u32).into(),
-                ..Default::default()
+                ..IndexerSettings::with_fs(MockFileSystem::<MockSourceMetadata>::new())
             },
         );
         let data = concat!(
@@ -1301,10 +1296,9 @@ mod tests {
             1,
             PathBuf::from("/tmp/cache"),
             IndexerSettings {
-                fs,
                 buffer_size: nonzero!(1024u32).into(),
                 max_message_size: nonzero!(1024u32).into(),
-                ..Default::default()
+                ..IndexerSettings::with_fs(fs)
             },
         );
         let mut input = FailingReader;
@@ -1331,14 +1325,7 @@ mod tests {
         let mut file = fs.create(&PathBuf::from("test.log")).unwrap();
         file.write_all(data).unwrap();
 
-        let indexer = Indexer::new(
-            1,
-            PathBuf::from("/tmp/cache"),
-            IndexerSettings {
-                fs,
-                ..Default::default()
-            },
-        );
+        let indexer = Indexer::new(1, PathBuf::from("/tmp/cache"), IndexerSettings::with_fs(fs));
 
         let index1 = indexer.index(&PathBuf::from("test.log")).unwrap();
 

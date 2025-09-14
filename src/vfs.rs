@@ -425,7 +425,7 @@ mod tests {
         assert!(res.is_err());
         assert_eq!(res.err().map(|e| e.kind()), Some(io::ErrorKind::AlreadyExists));
 
-        assert_eq!(fs.exists(path).unwrap(), true);
+        assert!(fs.exists(path).unwrap());
 
         let meta = fs.metadata(path).unwrap();
         assert_eq!(meta.len, 11);

@@ -187,7 +187,7 @@ impl Default for LevelField {
             variants: vec![RawLevelFieldVariant {
                 names: vec!["level".into()],
                 values: Level::iter()
-                    .map(|level| (level.into(), vec![level.as_ref().to_lowercase().into()]))
+                    .map(|level| (level.into(), vec![level.as_ref().to_lowercase()]))
                     .collect(),
                 level: None,
             }],
@@ -653,10 +653,10 @@ pub enum DisplayVariant {
 impl DisplayVariant {
     pub fn resolve(&self, mode: AsciiMode) -> &str {
         match self {
-            Self::Uniform(s) => &s,
+            Self::Uniform(s) => s,
             Self::Selective { ascii, unicode } => match mode {
-                AsciiMode::Off => &unicode,
-                AsciiMode::On => &ascii,
+                AsciiMode::Off => unicode,
+                AsciiMode::On => ascii,
             },
         }
     }
