@@ -1575,7 +1575,7 @@ mod tests {
     fn test_string_value_trailing_space() {
         let input = "test message\n";
         let golden = r#""test message""#;
-        let rec = Record::from_fields(&[("k", EncodedString::raw(&input).into())]);
+        let rec = Record::from_fields(&[("k", EncodedString::raw(input).into())]);
         assert_eq!(format_no_color(&rec), format!(r#"k={}"#, golden));
     }
 
@@ -1706,9 +1706,9 @@ mod tests {
     fn test_caller() {
         let rec = Record {
             caller: Caller {
-                name: "test_function".into(),
-                file: "test_file.rs".into(),
-                line: "42".into(),
+                name: "test_function",
+                file: "test_file.rs",
+                line: "42",
             },
             ..Default::default()
         };
@@ -1888,25 +1888,19 @@ mod tests {
 
         // Create formatters with each ASCII mode but no theme (for no-color output)
         let formatter_ascii = RecordFormatterBuilder::new()
-            .with_timestamp_formatter(
-                DateTimeFormatter::new(
-                    LinuxDateFormat::new("%b %d %T.%3N").compile(),
-                    Tz::FixedOffset(Utc.fix()),
-                )
-                .into(),
-            )
+            .with_timestamp_formatter(DateTimeFormatter::new(
+                LinuxDateFormat::new("%b %d %T.%3N").compile(),
+                Tz::FixedOffset(Utc.fix()),
+            ))
             .with_options(formatting.clone())
             .with_ascii(AsciiMode::On)
             .build();
 
         let formatter_utf8 = RecordFormatterBuilder::new()
-            .with_timestamp_formatter(
-                DateTimeFormatter::new(
-                    LinuxDateFormat::new("%b %d %T.%3N").compile(),
-                    Tz::FixedOffset(Utc.fix()),
-                )
-                .into(),
-            )
+            .with_timestamp_formatter(DateTimeFormatter::new(
+                LinuxDateFormat::new("%b %d %T.%3N").compile(),
+                Tz::FixedOffset(Utc.fix()),
+            ))
             .with_options(formatting)
             .with_ascii(AsciiMode::Off)
             .build();
@@ -1936,25 +1930,19 @@ mod tests {
 
         // Create formatters with different ASCII modes but no theme
         let ascii_formatter = RecordFormatterBuilder::new()
-            .with_timestamp_formatter(
-                DateTimeFormatter::new(
-                    LinuxDateFormat::new("%y-%m-%d %T.%3N").compile(),
-                    Tz::FixedOffset(Utc.fix()),
-                )
-                .into(),
-            )
+            .with_timestamp_formatter(DateTimeFormatter::new(
+                LinuxDateFormat::new("%y-%m-%d %T.%3N").compile(),
+                Tz::FixedOffset(Utc.fix()),
+            ))
             .with_options(formatting.clone())
             .with_ascii(AsciiMode::On)
             .build();
 
         let utf8_formatter = RecordFormatterBuilder::new()
-            .with_timestamp_formatter(
-                DateTimeFormatter::new(
-                    LinuxDateFormat::new("%y-%m-%d %T.%3N").compile(),
-                    Tz::FixedOffset(Utc.fix()),
-                )
-                .into(),
-            )
+            .with_timestamp_formatter(DateTimeFormatter::new(
+                LinuxDateFormat::new("%y-%m-%d %T.%3N").compile(),
+                Tz::FixedOffset(Utc.fix()),
+            ))
             .with_options(formatting)
             .with_ascii(AsciiMode::Off)
             .build();

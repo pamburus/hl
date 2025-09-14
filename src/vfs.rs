@@ -415,7 +415,7 @@ mod tests {
         let fs = mem::FileSystem::new();
         let path = Path::new("file.txt");
 
-        assert_eq!(fs.exists(path).unwrap(), false);
+        assert!(!fs.exists(path).unwrap());
 
         let mut file = fs.create(path).unwrap();
         file.write_all(b"hello world").unwrap();

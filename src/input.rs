@@ -969,7 +969,7 @@ mod tests {
         assert!(matches!(stream, Stream::RandomAccess(_)));
         let stream = stream.as_sequential();
         let meta = stream.metadata().unwrap();
-        assert_eq!(meta.is_some(), true);
+        assert!(meta.is_some());
         assert_matches!(n, 147 | 149);
         assert_eq!(buf.len(), n);
     }
@@ -1063,7 +1063,7 @@ mod tests {
         assert!(result.is_err());
         let err = result.unwrap_err();
         assert_eq!(err.kind(), io::ErrorKind::Other);
-        assert_eq!(err.to_string().contains("test.log"), true);
+        assert!(err.to_string().contains("test.log"));
     }
 
     #[test]
@@ -1073,7 +1073,7 @@ mod tests {
         assert!(result.is_err());
         let err = result.err().unwrap();
         assert_eq!(err.kind(), io::ErrorKind::InvalidInput);
-        assert_eq!(err.to_string().contains("is a directory"), true);
+        assert!(err.to_string().contains("is a directory"));
     }
 
     #[test]
@@ -1084,7 +1084,7 @@ mod tests {
         assert!(result.is_err());
         let err = result.err().unwrap();
         assert_eq!(err.kind(), io::ErrorKind::NotFound);
-        assert_eq!(err.to_string().contains(filename), true);
+        assert!(err.to_string().contains(filename));
     }
 
     #[test]
@@ -1185,7 +1185,7 @@ mod tests {
 
     impl Read for FailingReader {
         fn read(&mut self, _buf: &mut [u8]) -> io::Result<usize> {
-            Err(io::Error::new(io::ErrorKind::Other, "read error"))
+            Err(io::Error::other("read error"))
         }
     }
 
@@ -1195,7 +1195,7 @@ mod tests {
                 SeekFrom::Start(0) => Ok(0),
                 SeekFrom::Current(0) => Ok(0),
                 SeekFrom::End(0) => Ok(0),
-                _ => Err(io::Error::new(io::ErrorKind::Other, "seek error")),
+                _ => Err(io::Error::other("seek error")),
             }
         }
     }
@@ -1218,7 +1218,7 @@ mod tests {
 
     impl<R> Seek for UnseekableReader<R> {
         fn seek(&mut self, _: SeekFrom) -> io::Result<u64> {
-            Err(io::Error::new(io::ErrorKind::Other, "seek error"))
+            Err(io::Error::other("seek error"))
         }
     }
 

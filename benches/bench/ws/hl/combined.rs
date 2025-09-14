@@ -39,13 +39,10 @@ pub(super) fn bench(c: &mut Criterion) {
         let filter = Filter::default();
         let formatter = RecordFormatterBuilder::new()
             .with_theme(Arc::new(Theme::embedded(THEME).unwrap()))
-            .with_timestamp_formatter(
-                DateTimeFormatter::new(
-                    LinuxDateFormat::new("%b %d %T.%3N").compile(),
-                    Tz::FixedOffset(Utc.fix()),
-                )
-                .into(),
-            )
+            .with_timestamp_formatter(DateTimeFormatter::new(
+                LinuxDateFormat::new("%b %d %T.%3N").compile(),
+                Tz::FixedOffset(Utc.fix()),
+            ))
             .with_options(settings::Formatting::default())
             .build();
 

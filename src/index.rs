@@ -1313,7 +1313,7 @@ mod tests {
             &mut output,
             None,
         );
-        assert_eq!(result.is_err(), true);
+        assert!(result.is_err());
         assert_eq!(output.into_inner().len(), 0);
     }
 
@@ -1426,11 +1426,11 @@ mod tests {
         assert_eq!(block.offset, 0);
         assert_eq!(block.size, 4096);
         assert_eq!(block.stat.flags, FLAG_LEVEL_TRACE | FLAG_LEVEL_INFO);
-        assert_eq!(block.match_level(Level::Trace), true);
-        assert_eq!(block.match_level(Level::Debug), true);
-        assert_eq!(block.match_level(Level::Info), true);
-        assert_eq!(block.match_level(Level::Warning), false);
-        assert_eq!(block.match_level(Level::Error), false);
+        assert!(block.match_level(Level::Trace));
+        assert!(block.match_level(Level::Debug));
+        assert!(block.match_level(Level::Info));
+        assert!(!block.match_level(Level::Warning));
+        assert!(!block.match_level(Level::Error));
 
         let mut other = SourceBlock::new(
             4096,
@@ -1447,16 +1447,16 @@ mod tests {
             Chronology::default(),
             None,
         );
-        assert_eq!(block.overlaps_by_time(&other), true);
+        assert!(block.overlaps_by_time(&other));
 
         other.stat.ts_min_max = Some((
             Timestamp::from((1701680467, 191633000)),
             Timestamp::from((1701680468, 491633000)),
         ));
-        assert_eq!(block.overlaps_by_time(&other), false);
+        assert!(!block.overlaps_by_time(&other));
 
         other.stat.ts_min_max = None;
-        assert_eq!(block.overlaps_by_time(&other), false);
+        assert!(!block.overlaps_by_time(&other));
     }
 
     // ---
@@ -1465,7 +1465,7 @@ mod tests {
 
     impl Read for FailingReader {
         fn read(&mut self, _: &mut [u8]) -> io::Result<usize> {
-            Err(io::Error::new(io::ErrorKind::Other, "read error"))
+            Err(io::Error::other("read error"))
         }
     }
 }

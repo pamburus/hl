@@ -851,13 +851,13 @@ mod tests {
     use nonzero_ext::nonzero;
     use std::{io::Cursor, num::NonZero};
 
-    fn dual<'a>(b: &[u8]) -> (&str, &[u8]) {
+    fn dual(b: &[u8]) -> (&str, &[u8]) {
         (str::from_utf8(b).unwrap(), b)
     }
 
     #[test]
     fn test_replay_buf() {
-        let mut w = ReplayBufCreator::build().segment_size(nonzero!(4 as usize)).done();
+        let mut w = ReplayBufCreator::build().segment_size(nonzero!(4_usize)).done();
         w.write_all(b"Lorem ipsum dolor sit amet.").unwrap();
         w.flush().unwrap();
         w.flush().unwrap();
@@ -885,7 +885,7 @@ mod tests {
             .position(6)
             .done();
 
-        let pos = r.seek(SeekFrom::Current(0)).unwrap();
+        let pos = r.stream_position().unwrap();
         assert_eq!(pos, 6);
         let mut buf = vec![0; 11];
         r.read_exact(&mut buf).unwrap();
@@ -977,7 +977,7 @@ mod tests {
         let data = b"Lorem ipsum dolor sit amet.";
         let s = |buf| str::from_utf8(buf).unwrap();
         let mut r = ReplaySeekReader::build(Cursor::new(data))
-            .segment_size(nonzero!(4 as usize))
+            .segment_size(nonzero!(4_usize))
             .done();
 
         let pos = r.seek(SeekFrom::Start(6)).unwrap();

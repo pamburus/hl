@@ -465,11 +465,11 @@ mod tests {
 
         for query in &queries {
             let record = parse(r#"{"a":1}"#);
-            assert_eq!(record.matches(&query), true);
+            assert!(record.matches(query));
             let record = parse(r#"{"b":2}"#);
-            assert_eq!(record.matches(&query), true);
+            assert!(record.matches(query));
             let record = parse(r#"{"c":3}"#);
-            assert_eq!(record.matches(&query), false);
+            assert!(!record.matches(query));
         }
     }
 
@@ -482,11 +482,11 @@ mod tests {
 
         for query in &queries {
             let record = parse(r#"{"a":1,"b":2}"#);
-            assert_eq!(record.matches(&query), true);
+            assert!(record.matches(query));
             let record = parse(r#"{"a":1,"b":3}"#);
-            assert_eq!(record.matches(&query), false);
+            assert!(!record.matches(query));
             let record = parse(r#"{"a":2,"b":2}"#);
-            assert_eq!(record.matches(&query), false);
+            assert!(!record.matches(query));
         }
     }
 
@@ -496,9 +496,9 @@ mod tests {
 
         for query in &queries {
             let record = parse(r#"{"a":1}"#);
-            assert_eq!(record.matches(&query), false);
+            assert!(!record.matches(query));
             let record = parse(r#"{"a":2}"#);
-            assert_eq!(record.matches(&query), true);
+            assert!(record.matches(query));
         }
     }
 
@@ -512,40 +512,40 @@ mod tests {
         let and_query2 = q1.clone().and(q2.clone());
 
         let record = parse(r#"{"a":1,"b":2}"#);
-        assert_eq!(record.matches(&and_query1), true);
-        assert_eq!(record.matches(&and_query2), true);
+        assert!(record.matches(&and_query1));
+        assert!(record.matches(&and_query2));
 
         let record = parse(r#"{"a":1,"b":3}"#);
-        assert_eq!(record.matches(&and_query1), false);
-        assert_eq!(record.matches(&and_query2), false);
+        assert!(!record.matches(&and_query1));
+        assert!(!record.matches(&and_query2));
 
         // Test BitOr (|)
         let or_query1 = q1.clone() | q2.clone();
         let or_query2 = q1.clone().or(q2.clone());
 
         let record = parse(r#"{"a":1,"b":3}"#);
-        assert_eq!(record.matches(&or_query1), true);
-        assert_eq!(record.matches(&or_query2), true);
+        assert!(record.matches(&or_query1));
+        assert!(record.matches(&or_query2));
 
         let record = parse(r#"{"a":0,"b":0}"#);
-        assert_eq!(record.matches(&or_query1), false);
-        assert_eq!(record.matches(&or_query2), false);
+        assert!(!record.matches(&or_query1));
+        assert!(!record.matches(&or_query2));
 
         // Test Not (!)
         let not_query = !q1.clone();
         let record = parse(r#"{"a":1}"#);
-        assert_eq!(record.matches(&not_query), false);
+        assert!(!record.matches(&not_query));
         let record = parse(r#"{"a":2}"#);
-        assert_eq!(record.matches(&not_query), true);
+        assert!(record.matches(&not_query));
     }
 
     #[test]
     fn test_query_level() {
         let query = Query::parse("level=info").unwrap();
         let record = parse(r#"{"level":"info"}"#);
-        assert_eq!(record.matches(&query), true);
+        assert!(record.matches(&query));
         let record = parse(r#"{"level":"error"}"#);
-        assert_eq!(record.matches(&query), false);
+        assert!(!record.matches(&query));
     }
 
     #[test]
@@ -553,11 +553,11 @@ mod tests {
         for q in &["mod=test", r#"mod="test""#] {
             let query = Query::parse(q).unwrap();
             let record = parse(r#"{"mod":"test"}"#);
-            assert_eq!(record.matches(&query), true);
+            assert!(record.matches(&query));
             let record = parse(r#"{"mod":"test2"}"#);
-            assert_eq!(record.matches(&query), false);
+            assert!(!record.matches(&query));
             let record = parse(r#"{"mod":"\"test\""}"#);
-            assert_eq!(record.matches(&query), false);
+            assert!(!record.matches(&query));
         }
     }
 
@@ -565,106 +565,106 @@ mod tests {
     fn test_query_json_str_empty() {
         let query = Query::parse(r#"mod="""#).unwrap();
         let record = parse(r#"{"mod":""}"#);
-        assert_eq!(record.matches(&query), true);
+        assert!(record.matches(&query));
         let record = parse(r#"{"mod":"t"}"#);
-        assert_eq!(record.matches(&query), false);
+        assert!(!record.matches(&query));
         let record = parse(r#"{"v":""}"#);
-        assert_eq!(record.matches(&query), false);
+        assert!(!record.matches(&query));
     }
 
     #[test]
     fn test_query_json_str_quoted() {
         let query = Query::parse(r#"mod="\"test\"""#).unwrap();
         let record = parse(r#"{"mod":"test"}"#);
-        assert_eq!(record.matches(&query), false);
+        assert!(!record.matches(&query));
         let record = parse(r#"{"mod":"test2"}"#);
-        assert_eq!(record.matches(&query), false);
+        assert!(!record.matches(&query));
         let record = parse(r#"{"mod":"\"test\""}"#);
-        assert_eq!(record.matches(&query), true);
+        assert!(record.matches(&query));
     }
 
     #[test]
     fn test_query_json_int() {
         let query = Query::parse("some-value=1447015572184281088").unwrap();
         let record = parse(r#"{"some-value":1447015572184281088}"#);
-        assert_eq!(record.matches(&query), true);
+        assert!(record.matches(&query));
         let record = parse(r#"{"some-value":1447015572184281089}"#);
-        assert_eq!(record.matches(&query), false);
+        assert!(!record.matches(&query));
         let record = parse(r#"{"some-value":"1447015572184281088"}"#);
-        assert_eq!(record.matches(&query), true);
+        assert!(record.matches(&query));
     }
 
     #[test]
     fn test_query_json_int_escaped() {
         let query = Query::parse("v=42").unwrap();
         let record = parse(r#"{"v":42}"#);
-        assert_eq!(record.matches(&query), true);
+        assert!(record.matches(&query));
         let record = parse(r#"{"v":"4\u0032"}"#);
-        assert_eq!(record.matches(&query), true);
+        assert!(record.matches(&query));
     }
 
     #[test]
     fn test_query_json_float() {
         let query = Query::parse("v > 0.5").unwrap();
         let record = parse(r#"{"v":0.4}"#);
-        assert_eq!(record.matches(&query), false);
+        assert!(!record.matches(&query));
         let record = parse(r#"{"v":0.5}"#);
-        assert_eq!(record.matches(&query), false);
+        assert!(!record.matches(&query));
         let record = parse(r#"{"v":2}"#);
-        assert_eq!(record.matches(&query), true);
+        assert!(record.matches(&query));
         let record = parse(r#"{"x":42}"#);
-        assert_eq!(record.matches(&query), false);
+        assert!(!record.matches(&query));
         let record = parse(r#"{"v":"0.4"}"#);
-        assert_eq!(record.matches(&query), false);
+        assert!(!record.matches(&query));
         let record = parse(r#"{"v":"0.6"}"#);
-        assert_eq!(record.matches(&query), true);
+        assert!(record.matches(&query));
     }
 
     #[test]
     fn test_query_json_in_str() {
         let query = Query::parse("v in (a,b,c)").unwrap();
         let record = parse(r#"{"v":"a"}"#);
-        assert_eq!(record.matches(&query), true);
+        assert!(record.matches(&query));
         let record = parse(r#"{"v":"b"}"#);
-        assert_eq!(record.matches(&query), true);
+        assert!(record.matches(&query));
         let record = parse(r#"{"v":"c"}"#);
-        assert_eq!(record.matches(&query), true);
+        assert!(record.matches(&query));
         let record = parse(r#"{"v":"d"}"#);
-        assert_eq!(record.matches(&query), false);
+        assert!(!record.matches(&query));
         let record = parse(r#"{"x":"a"}"#);
-        assert_eq!(record.matches(&query), false);
+        assert!(!record.matches(&query));
     }
 
     #[test]
     fn test_query_json_in_int() {
         let query = Query::parse("v in (1,2)").unwrap();
         let record = parse(r#"{"v":1}"#);
-        assert_eq!(record.matches(&query), true);
+        assert!(record.matches(&query));
         let record = parse(r#"{"v":"1"}"#);
-        assert_eq!(record.matches(&query), true);
+        assert!(record.matches(&query));
         let record = parse(r#"{"v":2}"#);
-        assert_eq!(record.matches(&query), true);
+        assert!(record.matches(&query));
         let record = parse(r#"{"v":3}"#);
-        assert_eq!(record.matches(&query), false);
+        assert!(!record.matches(&query));
         let record = parse(r#"{"v":"3"}"#);
-        assert_eq!(record.matches(&query), false);
+        assert!(!record.matches(&query));
         let record = parse(r#"{"x":1}"#);
-        assert_eq!(record.matches(&query), false);
+        assert!(!record.matches(&query));
     }
 
     #[test]
     fn query_in_set_file_valid() {
         let query = Query::parse("v in @src/testing/assets/query/set-valid").unwrap();
         let record = parse(r#"{"v":"line"}"#);
-        assert_eq!(record.matches(&query), false);
+        assert!(!record.matches(&query));
         let record = parse(r#"{"v":"line1"}"#);
-        assert_eq!(record.matches(&query), true);
+        assert!(record.matches(&query));
         let record = parse(r#"{"v":"line2"}"#);
-        assert_eq!(record.matches(&query), true);
+        assert!(record.matches(&query));
         let record = parse(r#"{"v":"line3"}"#);
-        assert_eq!(record.matches(&query), true);
+        assert!(record.matches(&query));
         let record = parse(r#"{"v":"line4"}"#);
-        assert_eq!(record.matches(&query), false);
+        assert!(!record.matches(&query));
     }
 
     #[test]
