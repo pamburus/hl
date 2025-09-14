@@ -65,7 +65,7 @@ macro_rules! delegate_fs_methods {
     };
 }
 
-impl<'a, T> FileSystem for &'a T
+impl<T> FileSystem for &T
 where
     T: FileSystem,
 {

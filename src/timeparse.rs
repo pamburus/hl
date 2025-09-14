@@ -22,8 +22,8 @@ pub fn parse_time(s: &str, tz: &Tz, format: &DateTimeFormat) -> Result<DateTime<
 }
 
 fn relative_past(s: &str) -> Option<DateTime<Tz>> {
-    if s.starts_with('-') {
-        let d = parse_duration(&s[1..]).ok()?;
+    if let Some(stripped) = s.strip_prefix('-') {
+        let d = parse_duration(stripped).ok()?;
         let ts = Utc::now() - Duration::from_std(d).ok()?;
         Some(ts.with_timezone(&ts.timezone().into()))
     } else {
@@ -32,8 +32,8 @@ fn relative_past(s: &str) -> Option<DateTime<Tz>> {
 }
 
 fn relative_future(s: &str) -> Option<DateTime<Tz>> {
-    if s.starts_with('+') {
-        let d = parse_duration(&s[1..]).ok()?;
+    if let Some(stripped) = s.strip_prefix('+') {
+        let d = parse_duration(stripped).ok()?;
         let ts = Utc::now() + Duration::from_std(d).ok()?;
         Some(ts.with_timezone(&ts.timezone().into()))
     } else {
@@ -71,7 +71,7 @@ fn use_custom_format(s: &str, format: &DateTimeFormat, now: &DateTime<Tz>, tz: &
     let mut has_offset = false;
 
     for item in format {
-        match *item.as_ref() {
+        match *item {
             Item::Char(b) => {
                 buf.push(b);
             }

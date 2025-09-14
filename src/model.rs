@@ -476,7 +476,7 @@ impl<T: RecordFilter> RecordFilter for &T {
 impl RecordFilter for Level {
     #[inline]
     fn apply<'a>(&self, record: &Record<'a>) -> bool {
-        record.level.map_or(false, |x| x <= *self)
+        record.level.is_some_and(|x| x <= *self)
     }
 }
 
@@ -598,9 +598,9 @@ impl ParserSettings {
         }
     }
 
-    fn build_block_for_name(&mut self, n: usize, name: &String, settings: FieldSettings, priority: usize) {
-        self.blocks[n].fields.insert(name.clone(), (settings, priority));
-        let mut remainder = &name[..];
+    fn build_block_for_name(&mut self, n: usize, name: &str, settings: FieldSettings, priority: usize) {
+        self.blocks[n].fields.insert(name.to_owned(), (settings, priority));
+        let mut remainder = name;
         while let Some(k) = remainder.rfind('.') {
             let (name, nested) = name.split_at(k);
             let nested = &nested[1..];
@@ -624,7 +624,7 @@ impl ParserSettings {
                     nest
                 });
 
-            self.build_block_for_name(nest, &nested.into(), settings, priority);
+            self.build_block_for_name(nest, nested, settings, priority);
             remainder = name;
         }
     }
@@ -779,7 +779,7 @@ impl FieldSettings {
         match *self {
             Self::Time => {
                 let s = value.raw_str();
-                let s = if s.len() > 0 && s.as_bytes()[0] == b'"' {
+                let s = if !s.is_empty() && s.as_bytes()[0] == b'"' {
                     &s[1..s.len() - 1]
                 } else {
                     s
@@ -938,7 +938,7 @@ impl<'a> Deserialize<'a> for RawRecord<'a> {
         D: Deserializer<'a>,
     {
         const N: usize = RAW_RECORD_FIELDS_CAPACITY;
-        Ok(deserializer.deserialize_map(ObjectVisitor::<json::value::RawValue, N>::new(&mut target.fields))?)
+        deserializer.deserialize_map(ObjectVisitor::<json::value::RawValue, N>::new(&mut target.fields))
     }
 }
 
@@ -953,6 +953,12 @@ type ObjectFields<'a, const N: usize> = heapopt::Vec<(&'a str, RawValue<'a>), N>
 pub struct RawRecordParser {
     allow_prefix: bool,
     format: Option<InputFormat>,
+}
+
+impl Default for RawRecordParser {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl RawRecordParser {
@@ -992,7 +998,7 @@ impl RawRecordParser {
         let data = &line[xn..];
 
         let format = self.format.or_else(|| {
-            if data.len() == 0 {
+            if data.is_empty() {
                 None
             } else if data[0] == b'{' {
                 Some(InputFormat::Json)
@@ -1217,8 +1223,7 @@ impl<'a> KeyMatcher<'a> {
         if bytes
             .iter()
             .zip(key.as_bytes().iter())
-            .position(|(&x, &y)| Self::norm(x.into()) != Self::norm(y.into()))
-            .is_some()
+            .any(|(&x, &y)| Self::norm(x.into()) != Self::norm(y.into()))
         {
             return None;
         }
@@ -1245,7 +1250,7 @@ impl<'a> KeyMatcher<'a> {
                 let tail = &bytes[1..];
                 if let Some(pos) = tail.iter().position(|c| !c.is_ascii_digit()) {
                     if pos != 0 && tail[pos] == b']' && (pos >= tail.len() - 1 || tail[pos + 1] == b'.') {
-                        if let Some(idx) = unsafe { std::str::from_utf8_unchecked(&tail[..pos]) }.parse().ok() {
+                        if let Ok(idx) = unsafe { std::str::from_utf8_unchecked(&tail[..pos]) }.parse() {
                             let idx = IndexMatcher::Exact(idx);
                             if pos >= tail.len() - 1 {
                                 return Some((idx, None));
@@ -1293,9 +1298,9 @@ impl FromStr for Number {
     #[inline]
     fn from_str(s: &str) -> Result<Self> {
         if s.contains('.') {
-            Ok(Self::Float(s.parse().map_err(|e| Error::from(e))?))
+            Ok(Self::Float(s.parse().map_err(Error::from)?))
         } else {
-            Ok(Self::Integer(s.parse().map_err(|e| Error::from(e))?))
+            Ok(Self::Integer(s.parse().map_err(Error::from)?))
         }
     }
 }
@@ -1381,7 +1386,7 @@ impl ValueMatchPolicy {
             Self::In(patterns) => patterns.contains(subject),
             Self::WildCard(pattern) => pattern.matches(subject),
             Self::Numerically(op) => {
-                if let Some(value) = subject.parse::<Number>().ok() {
+                if let Ok(value) = subject.parse::<Number>() {
                     match op {
                         NumericOp::Eq(pattern) => value == *pattern,
                         NumericOp::Ne(pattern) => value != *pattern,
@@ -1389,7 +1394,7 @@ impl ValueMatchPolicy {
                         NumericOp::Ge(pattern) => value >= *pattern,
                         NumericOp::Lt(pattern) => value < *pattern,
                         NumericOp::Le(pattern) => value <= *pattern,
-                        NumericOp::In(patterns) => patterns.iter().any(|pattern| value == *pattern),
+                        NumericOp::In(patterns) => patterns.contains(&value),
                     }
                 } else {
                     false
@@ -1529,9 +1534,9 @@ impl FieldFilter {
         let apply = |value| self.op.apply(self.match_policy.matches(value));
         if let Some(value) = value {
             if escaped {
-                if let Some(value) = json::from_str::<&str>(value).ok() {
+                if let Ok(value) = json::from_str::<&str>(value) {
                     apply(value)
-                } else if let Some(value) = json::from_str::<String>(value).ok() {
+                } else if let Ok(value) = json::from_str::<String>(value) {
                     apply(&value)
                 } else {
                     false
@@ -1550,7 +1555,7 @@ impl FieldFilter {
                 let mut item = Object::default();
                 value.parse_into(&mut item).ok();
                 for (k, v) in item.fields.iter() {
-                    match subkey.match_key(*k) {
+                    match subkey.match_key(k) {
                         None => {
                             continue;
                         }
@@ -1578,7 +1583,7 @@ impl FieldFilter {
                         false
                     };
 
-                    if let Some(value) = value.parse::<128>().ok() {
+                    if let Ok(value) = value.parse::<128>() {
                         match index_matcher {
                             IndexMatcher::Any => {
                                 for item in value.iter() {
@@ -1640,7 +1645,7 @@ impl RecordFilter for FieldFilter {
             },
             FieldFilterKey::Custom(_) => {
                 for (k, v) in record.fields_for_search() {
-                    match self.match_custom_key(*k) {
+                    match self.match_custom_key(k) {
                         None => {}
                         Some(KeyMatch::Full) => {
                             let s = v.raw_str();

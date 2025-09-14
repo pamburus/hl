@@ -24,7 +24,7 @@ impl Suggestions {
                 continue;
             }
 
-            let relevance = strsim::jaro(wanted, &*variant);
+            let relevance = strsim::jaro(wanted, &variant);
 
             if relevance > MIN_RELEVANCE {
                 let item = variant;

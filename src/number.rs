@@ -1,7 +1,7 @@
 use logos::Logos;
 
 pub fn looks_like_number(value: &[u8]) -> bool {
-    if value.len() == 0 {
+    if value.is_empty() {
         return false;
     }
 

@@ -446,11 +446,11 @@ pub mod rfc3339 {
 // ---
 
 fn only_digits(b: &[u8]) -> bool {
-    b.iter().map(|&b| b.is_ascii_digit()).position(|x| x == false).is_none()
+    !b.iter().map(|&b| b.is_ascii_digit()).any(|x| !x)
 }
 
 fn guess_number_type(b: &[u8]) -> Option<NumberType> {
-    if b.len() == 0 {
+    if b.is_empty() {
         return None;
     }
 
@@ -462,10 +462,10 @@ fn guess_number_type(b: &[u8]) -> Option<NumberType> {
             dots <= 1
         }
         b'0'..=b'9' => true,
-        _ => return false,
+        _ => false,
     };
 
-    match (b.iter().map(|b| check(*b)).position(|x| x == false).is_none(), dots) {
+    match (!b.iter().map(|b| check(*b)).any(|x| !x), dots) {
         (true, 0) => Some(NumberType::Integer),
         (true, 1) => Some(NumberType::Float),
         _ => None,

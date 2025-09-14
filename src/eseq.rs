@@ -81,7 +81,7 @@ pub enum ColorCode {
     Default,
     Plain(Color, Brightness),
     Palette(u8),
-    RGB(u8, u8, u8),
+    Rgb(u8, u8, u8),
 }
 
 impl ColorCode {
@@ -99,7 +99,7 @@ impl ColorCode {
             Self::Plain(color, Brightness::Normal) => color.render(buf, base),
             Self::Plain(color, Brightness::Bright) => color.render(buf, base + 60),
             Self::Palette(color) => write!(buf, "{};5;{}", base + 8, color).unwrap(),
-            Self::RGB(r, g, b) => write!(buf, "{};2;{};{};{}", base + 8, r, g, b).unwrap(),
+            Self::Rgb(r, g, b) => write!(buf, "{};2;{};{};{}", base + 8, r, g, b).unwrap(),
         }
     }
 }

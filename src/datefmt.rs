@@ -1095,7 +1095,7 @@ mod tests {
 
     fn f(fmt: &str, dt: DateTime<Tz>) -> String {
         let mut buf = Vec::new();
-        format_date(&mut buf, dt, &format(fmt));
+        format_date(&mut buf, dt, format(fmt));
         String::from_utf8(buf).unwrap()
     }
 
