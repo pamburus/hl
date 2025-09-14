@@ -1024,6 +1024,7 @@ impl RawRecordParser {
 
 // ---
 
+#[derive(Debug)]
 pub enum RawRecordStream<Json, Logfmt> {
     Empty,
     Json(Json),
@@ -1912,10 +1913,13 @@ mod tests {
         let stream2 = parser2.parse(b"{}");
 
         // Verify they both parse empty JSON correctly
-        match (stream1, stream2) {
-            (RawRecordStream::Json(_), RawRecordStream::Json(_)) => {}
-            _ => panic!("Both parsers should produce JSON streams"),
+        // Use a helper function to check discriminant without requiring Debug on inner types
+        fn is_json_stream<Json, Logfmt>(stream: &RawRecordStream<Json, Logfmt>) -> bool {
+            matches!(stream, RawRecordStream::Json(_))
         }
+
+        assert!(is_json_stream(&stream1));
+        assert!(is_json_stream(&stream2));
     }
 
     #[test]

@@ -296,6 +296,7 @@ const TIP_PREFIX: &str = "  tip:";
 #[cfg(test)]
 mod tests {
     use super::*;
+    use assert_matches::assert_matches;
 
     struct TestAppInfo;
     impl AppInfoProvider for TestAppInfo {}
@@ -377,5 +378,33 @@ mod tests {
     #[test]
     fn test_app_name() {
         assert!(!TestAppInfo.app_name().is_empty());
+    }
+
+    #[test]
+    fn test_from_config_error() {
+        let config_err = ConfigError::Message("test config error".to_string());
+        let err = Error::from(config_err);
+        assert_matches!(err, Error::Config(boxed_err) if boxed_err.to_string().contains("test config error"));
+    }
+
+    #[test]
+    fn test_from_notify_error() {
+        let notify_err = notify::Error::path_not_found();
+        let err = Error::from(notify_err);
+        assert_matches!(err, Error::NotifyError(boxed_err) if !boxed_err.to_string().is_empty());
+    }
+
+    #[test]
+    fn test_from_pest_error() {
+        // Create a simple pest error for testing
+        let pest_err = pest::error::Error::<crate::query::Rule>::new_from_pos(
+            pest::error::ErrorVariant::ParsingError {
+                positives: vec![],
+                negatives: vec![],
+            },
+            pest::Position::from_start("test"),
+        );
+        let err = Error::from(pest_err);
+        assert_matches!(err, Error::QueryParseError(_));
     }
 }

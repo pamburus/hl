@@ -1204,4 +1204,61 @@ mod tests {
         let buf = factory.new_buf();
         assert_eq!(buf, b"");
     }
+
+    #[test]
+    fn test_substr_searcher_partial_match_l() {
+        // Test multi-character delimiter partial matching from left
+        let searcher = SubStrSearcher::new("abc".as_bytes());
+
+        // Empty buffer - no range to iterate over
+        let buf = b"";
+        let result = searcher.partial_match_l(buf);
+        assert_eq!(result, None);
+
+        // Buffer that could have a partial match - always finds empty string match
+        let buf = b"bc";
+        let result = searcher.partial_match_l(buf);
+        assert_eq!(result, Some(0)); // "abc".ends_with("") is true
+
+        // Buffer with no meaningful match - still finds empty string
+        let buf = b"xy";
+        let result = searcher.partial_match_l(buf);
+        assert_eq!(result, Some(0));
+
+        // Test single character delimiter (returns None due to len < 2 check)
+        let searcher = SubStrSearcher::new("a".as_bytes());
+        let buf = b"a";
+        let result = searcher.partial_match_l(buf);
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn test_smart_newline_searcher_partial_match_l() {
+        let searcher = SmartNewLineSearcher;
+
+        // Buffer starting with \n
+        let buf = b"\n";
+        let result = searcher.partial_match_l(buf);
+        assert_eq!(result, Some(1));
+
+        // Buffer starting with \n followed by other characters
+        let buf = b"\ntest";
+        let result = searcher.partial_match_l(buf);
+        assert_eq!(result, Some(1));
+
+        // Buffer not starting with \n
+        let buf = b"test";
+        let result = searcher.partial_match_l(buf);
+        assert_eq!(result, None);
+
+        // Empty buffer
+        let buf = b"";
+        let result = searcher.partial_match_l(buf);
+        assert_eq!(result, None);
+
+        // Buffer starting with \r (not \n)
+        let buf = b"\rtest";
+        let result = searcher.partial_match_l(buf);
+        assert_eq!(result, None);
+    }
 }

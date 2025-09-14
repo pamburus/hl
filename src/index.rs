@@ -1229,6 +1229,7 @@ mod tests {
     use std::{path::Component, time::Duration};
 
     use crate::vfs::{self, MockFileSystem};
+    use assert_matches::assert_matches;
 
     #[test]
     fn test_process_file_success() {
@@ -1459,6 +1460,15 @@ mod tests {
         assert!(!block.overlaps_by_time(&other));
     }
 
+    #[test]
+    fn test_indexer_settings_default() {
+        // Test that Default implementation works (calls with_fs with FS::default())
+        let _settings = IndexerSettings::<MockFileSystem<MockSourceMetadata>>::default();
+
+        // Just verify it doesn't panic and creates a valid settings instance
+        // The Default implementation should call with_fs(FS::default())
+    }
+
     // ---
 
     struct FailingReader;
@@ -1467,5 +1477,89 @@ mod tests {
         fn read(&mut self, _: &mut [u8]) -> io::Result<usize> {
             Err(io::Error::other("read error"))
         }
+    }
+
+    #[test]
+    fn test_stat_default() {
+        let stat1 = Stat::default();
+        let stat2 = Stat::new();
+
+        // Both should have the same initial state
+        assert_eq!(stat1.flags, stat2.flags);
+        assert_eq!(stat1.lines_valid, stat2.lines_valid);
+        assert_eq!(stat1.lines_invalid, stat2.lines_invalid);
+        assert_eq!(stat1.ts_min_max, stat2.ts_min_max);
+    }
+
+    #[test]
+    fn test_build_index_from_stream_file_creation_error() {
+        use io::Cursor;
+
+        // Create a mock filesystem that fails on file creation
+        let mut fs = MockFileSystem::<MockSourceMetadata>::new();
+        fs.expect_create()
+            .returning(|_| Err(io::Error::new(io::ErrorKind::PermissionDenied, "Permission denied")));
+
+        let indexer = Indexer::new(
+            1,
+            PathBuf::from("/tmp/cache"),
+            IndexerSettings {
+                buffer_size: nonzero!(1024u32).into(),
+                max_message_size: nonzero!(1024u32).into(),
+                ..IndexerSettings::with_fs(fs)
+            },
+        );
+
+        let data = "ts=2023-12-04T10:01:07.091243+01:00 msg=test\n";
+        let mut input = Cursor::new(data);
+        let source_path = Path::new("/test/source.log");
+        let index_path = Path::new("/test/source.log.idx");
+
+        let mut mock_meta = MockSourceMetadata::new();
+        mock_meta.expect_len().returning(|| 42);
+        mock_meta.expect_modified().returning(|| Ok(UNIX_EPOCH));
+
+        // Convert MockSourceMetadata to Metadata
+        let metadata = Metadata::from(&mock_meta).unwrap();
+
+        // This should trigger the FailedToOpenFileForWriting error
+        let result = indexer.build_index_from_stream(&mut input, source_path, &metadata, index_path, None);
+
+        assert_matches!(
+            result,
+            Err(Error::FailedToOpenFileForWriting { path, .. }) if path == index_path
+        );
+    }
+
+    #[test]
+    fn test_source_metadata_is_empty() {
+        // Test the default implementation of is_empty by using a concrete implementation
+        use std::time::SystemTime;
+
+        struct TestMetadata {
+            len: u64,
+        }
+
+        impl SourceMetadata for TestMetadata {
+            fn len(&self) -> u64 {
+                self.len
+            }
+
+            fn modified(&self) -> io::Result<SystemTime> {
+                Ok(SystemTime::UNIX_EPOCH)
+            }
+        }
+
+        // Test when len() returns 0
+        let meta_empty = TestMetadata { len: 0 };
+        assert!(meta_empty.is_empty());
+        // Also call modified() to cover that method
+        assert!(meta_empty.modified().is_ok());
+
+        // Test when len() returns non-zero
+        let meta_nonempty = TestMetadata { len: 42 };
+        assert!(!meta_nonempty.is_empty());
+        // Also call modified() to cover that method
+        assert!(meta_nonempty.modified().is_ok());
     }
 }

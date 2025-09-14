@@ -1170,4 +1170,69 @@ mod tests {
             }
         }
     }
+
+    #[test]
+    fn test_century_format_rfc3339() {
+        // Test century format %C in reformat_rfc3339 to cover lines 575-576
+        use crate::timestamp::Timestamp;
+
+        let tz = |secs| Tz::FixedOffset(FixedOffset::east_opt(secs).unwrap());
+        let tsr = Timestamp::new("2023-05-15T14:30:45+00:00");
+        let tsr = tsr.as_rfc3339().unwrap();
+
+        // Create formatter with century format
+        let format = LinuxDateFormat::new("%C").compile();
+        let formatter = DateTimeFormatter::new(format, tz(0));
+        let mut buf = Vec::new();
+
+        formatter.reformat_rfc3339(&mut buf, tsr);
+        let result = String::from_utf8(buf).unwrap();
+        assert_eq!(result, "20"); // 2023 -> century 20
+    }
+
+    #[test]
+    fn test_weekday_numeric_formats() {
+        // Test different weekday numeric formats to cover various flag combinations
+        // in weekday_numeric function (lines 848-849, 851)
+
+        // Monday, May 15, 2023
+        let monday = utc(2023, 5, 15, 14, 30, 45);
+
+        // %u format: Monday=1 to Sunday=7 (FromZero=false, FromSunday=false)
+        assert_eq!(f("%u", monday), "1");
+
+        // %w format: Sunday=0 to Saturday=6 (FromZero=true, FromSunday=true)
+        assert_eq!(f("%w", monday), "1");
+
+        // Test Sunday to cover the FromSunday branch
+        let sunday = utc(2023, 5, 14, 14, 30, 45);
+        assert_eq!(f("%u", sunday), "7"); // Sunday=7 in %u format
+        assert_eq!(f("%w", sunday), "0"); // Sunday=0 in %w format
+    }
+
+    #[test]
+    fn test_year_padding_flags_rfc3339() {
+        // Test year formatting with padding flags in reformat_rfc3339 to cover lines 953-954, 956, 960-961
+        use crate::timestamp::Timestamp;
+
+        let tz = |secs| Tz::FixedOffset(FixedOffset::east_opt(secs).unwrap());
+        let tsr = Timestamp::new("2023-05-15T14:30:45+00:00");
+        let tsr = tsr.as_rfc3339().unwrap();
+
+        // Test year format with NoPadding flag (%-Y)
+        let format = LinuxDateFormat::new("%-Y").compile();
+        let formatter = DateTimeFormatter::new(format, tz(0));
+        let mut buf = Vec::new();
+        formatter.reformat_rfc3339(&mut buf, tsr.clone());
+        let result = String::from_utf8(buf).unwrap();
+        assert_eq!(result, "2023"); // Should trigger NoPadding branch
+
+        // Test year format with SpacePadding flag (%_Y)
+        let format2 = LinuxDateFormat::new("%_Y").compile();
+        let formatter2 = DateTimeFormatter::new(format2, tz(0));
+        let mut buf2 = Vec::new();
+        formatter2.reformat_rfc3339(&mut buf2, tsr);
+        let result2 = String::from_utf8(buf2).unwrap();
+        assert_eq!(result2, "2023"); // Should trigger SpacePadding branch
+    }
 }

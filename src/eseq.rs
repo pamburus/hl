@@ -236,6 +236,7 @@ fn end(buf: &mut Vec<u8>) {
 
 #[cfg(test)]
 mod tests {
+
     use super::*;
 
     #[test]
@@ -261,15 +262,14 @@ mod tests {
         let bg_code = bright_red2.bg();
 
         // Test that we get the expected style codes
-        match fg_code {
-            StyleCode::Foreground(ColorCode::Plain(Color::Red, Brightness::Bright)) => {}
-            _ => panic!("Expected bright red foreground"),
-        }
-
-        match bg_code {
-            StyleCode::Background(ColorCode::Plain(Color::Red, Brightness::Bright)) => {}
-            _ => panic!("Expected bright red background"),
-        }
+        assert!(matches!(
+            fg_code,
+            StyleCode::Foreground(ColorCode::Plain(Color::Red, Brightness::Bright))
+        ));
+        assert!(matches!(
+            bg_code,
+            StyleCode::Background(ColorCode::Plain(Color::Red, Brightness::Bright))
+        ));
     }
 
     #[test]
@@ -277,15 +277,14 @@ mod tests {
         let fg_code = Color::Blue.fg();
         let bg_code = Color::Green.bg();
 
-        match fg_code {
-            StyleCode::Foreground(ColorCode::Plain(Color::Blue, Brightness::Normal)) => {}
-            _ => panic!("Expected blue foreground"),
-        }
-
-        match bg_code {
-            StyleCode::Background(ColorCode::Plain(Color::Green, Brightness::Normal)) => {}
-            _ => panic!("Expected green background"),
-        }
+        assert!(matches!(
+            fg_code,
+            StyleCode::Foreground(ColorCode::Plain(Color::Blue, Brightness::Normal))
+        ));
+        assert!(matches!(
+            bg_code,
+            StyleCode::Background(ColorCode::Plain(Color::Green, Brightness::Normal))
+        ));
     }
 
     #[test]
@@ -306,15 +305,14 @@ mod tests {
         let fg_code = plain1.fg();
         let bg_code = plain2.bg();
 
-        match fg_code {
-            StyleCode::Foreground(ColorCode::Plain(Color::Cyan, Brightness::Bright)) => {}
-            _ => panic!("Expected bright cyan foreground"),
-        }
-
-        match bg_code {
-            StyleCode::Background(ColorCode::Plain(Color::Cyan, Brightness::Bright)) => {}
-            _ => panic!("Expected bright cyan background"),
-        }
+        assert!(matches!(
+            fg_code,
+            StyleCode::Foreground(ColorCode::Plain(Color::Cyan, Brightness::Bright))
+        ));
+        assert!(matches!(
+            bg_code,
+            StyleCode::Background(ColorCode::Plain(Color::Cyan, Brightness::Bright))
+        ));
     }
 
     #[test]
@@ -361,10 +359,7 @@ mod tests {
     #[test]
     fn test_style_code_from_mode() {
         let style: StyleCode = Mode::Bold.into();
-        match style {
-            StyleCode::Mode(Mode::Bold) => {}
-            _ => panic!("Expected Mode::Bold"),
-        }
+        assert!(matches!(style, StyleCode::Mode(Mode::Bold)));
     }
 
     #[test]
@@ -432,14 +427,13 @@ mod tests {
         let fg = color1.fg();
         let bg = color2.bg();
 
-        match fg {
-            StyleCode::Foreground(ColorCode::Plain(Color::Yellow, Brightness::Bright)) => {}
-            _ => panic!("Expected yellow bright foreground"),
-        }
-
-        match bg {
-            StyleCode::Background(ColorCode::Plain(Color::Yellow, Brightness::Bright)) => {}
-            _ => panic!("Expected yellow bright background"),
-        }
+        assert!(matches!(
+            fg,
+            StyleCode::Foreground(ColorCode::Plain(Color::Yellow, Brightness::Bright))
+        ));
+        assert!(matches!(
+            bg,
+            StyleCode::Background(ColorCode::Plain(Color::Yellow, Brightness::Bright))
+        ));
     }
 }

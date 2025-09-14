@@ -404,4 +404,19 @@ mod tests {
         });
         assert_eq!(buf, b"hello!");
     }
+
+    #[test]
+    fn test_style_from_rgb_color() {
+        let theme_style = themecfg::Style {
+            foreground: Some(themecfg::Color::RGB(themecfg::RGB(255, 128, 64))),
+            ..Default::default()
+        };
+
+        let style = Style::from(&theme_style);
+
+        // Check that the style contains the RGB foreground color
+        // We can't directly access the internal structure, but we can check
+        // that the conversion didn't panic and produced a valid style
+        assert_ne!(style.0, Sequence::reset());
+    }
 }

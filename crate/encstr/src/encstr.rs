@@ -453,4 +453,12 @@ mod tests {
         assert_eq!(tokens.next(), None);
         assert_eq!(tokens.next(), None);
     }
+
+    #[test]
+    fn test_bytes_unicode_escape() {
+        let s = EncodedString::json(r#""\u2023""#);
+        let bytes: Result<Vec<u8>> = s.bytes().collect();
+        // This should trigger UTF-8 encoding on line 201 for the ‣ character (U+2023)
+        assert_eq!(bytes.unwrap(), "‣".as_bytes());
+    }
 }

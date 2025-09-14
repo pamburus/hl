@@ -598,4 +598,58 @@ mod tests {
         test_rfc3339("2020-08-21T07:20:48+03:00", Some(b'+'), Some(3), Some(0));
         test_rfc3339("2020-08-21T07:20:48-03:00", Some(b'-'), Some(3), Some(0));
     }
+
+    #[test]
+    fn test_timezone_is_utc() {
+        use crate::timestamp::rfc3339::Timezone;
+
+        // Test Z timezone
+        let tz_z = Timezone::parse("Z").unwrap();
+        assert!(tz_z.is_utc());
+
+        // Test z timezone
+        let tz_z_lower = Timezone::parse("z").unwrap();
+        assert!(tz_z_lower.is_utc());
+
+        // Test +00:00 timezone (should be UTC)
+        let tz_plus_zero = Timezone::parse("+00:00").unwrap();
+        assert!(tz_plus_zero.is_utc());
+
+        // Test -00:00 timezone (should be UTC)
+        let tz_minus_zero = Timezone::parse("-00:00").unwrap();
+        assert!(tz_minus_zero.is_utc());
+
+        // Test non-UTC timezone
+        let tz_plus_three = Timezone::parse("+03:00").unwrap();
+        assert!(!tz_plus_three.is_utc());
+
+        // Test negative non-UTC timezone
+        let tz_minus_five = Timezone::parse("-05:00").unwrap();
+        assert!(!tz_minus_five.is_utc());
+    }
+
+    #[test]
+    fn test_fraction_parse() {
+        use crate::timestamp::rfc3339::Fraction;
+
+        // Test valid fractional seconds
+        let frac_valid = Fraction::parse(".123").unwrap();
+        assert_eq!(frac_valid.as_str(), ".123");
+
+        // Test empty string (should be valid)
+        let frac_empty = Fraction::parse("").unwrap();
+        assert_eq!(frac_empty.as_str(), "");
+
+        // Test invalid fractional seconds (starts with . but has non-digits)
+        let frac_invalid1 = Fraction::parse(".abc");
+        assert!(frac_invalid1.is_none());
+
+        // Test invalid fractional seconds (starts with . but is too short)
+        let frac_invalid2 = Fraction::parse(".");
+        assert!(frac_invalid2.is_none());
+
+        // Test invalid fractional seconds (doesn't start with .)
+        let frac_invalid3 = Fraction::parse("123");
+        assert!(frac_invalid3.is_none());
+    }
 }

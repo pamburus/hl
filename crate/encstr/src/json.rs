@@ -513,6 +513,14 @@ mod tests {
     }
 
     #[test]
+    fn test_tokens_invalid_surrogate_pair() {
+        // Test case where first surrogate is followed by invalid second surrogate
+        // This should trigger the lone leading surrogate error
+        let mut tokens = Tokens::new(r#""\ud800\u1234""#);
+        assert_eq!(tokens.next(), Some(Err(Error::LoneLeadingSurrogateInHexEscape)));
+    }
+
+    #[test]
     fn test_append_esc_q() {
         let mut tokens = Tokens::new(r#""hello\u002c \"world\"""#);
         let mut buffer = Vec::new();

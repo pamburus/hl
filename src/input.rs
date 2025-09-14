@@ -1227,4 +1227,21 @@ mod tests {
             Ok(None)
         }
     }
+
+    #[test]
+    fn test_failing_reader_seek_error() {
+        use std::io::SeekFrom;
+
+        let mut reader = FailingReader;
+
+        // These should succeed (zero seeks)
+        assert!(reader.seek(SeekFrom::Start(0)).is_ok());
+        assert!(reader.stream_position().is_ok());
+        assert!(reader.seek(SeekFrom::End(0)).is_ok());
+
+        // This should fail (non-zero seek)
+        let result = reader.seek(SeekFrom::Start(10));
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err().to_string(), "seek error");
+    }
 }
