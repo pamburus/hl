@@ -9,14 +9,17 @@ while :; do
             echo "Options:"
             echo "  --help  Display this help message"
             echo "Setups:"
+            echo "  audit"
+            echo "  bat"
             echo "  build"
             echo "  cargo-edit"
             echo "  coverage"
+            echo "  gh"
+            echo "  git-cliff"
+            echo "  lint"
+            echo "  outdated"
             echo "  schema"
             echo "  screenshots"
-            echo "  lint"
-            echo "  audit"
-            echo "  outdated"
             exit 1
             ;;
         --)
@@ -174,6 +177,56 @@ setup_taplo() {
     fi
 }
 
+setup_gh() {
+    if [ ! -x "$(command -v gh)" ]; then
+        if [ -x "$(command -v brew)" ]; then
+            brew install gh
+        elif [ -x "$(command -v apt-get)" ]; then
+            sudo apt-get install gh
+        elif [ -x "$(command -v yum)" ]; then
+            sudo yum install gh
+        elif [ -x "$(command -v pacman)" ]; then
+            sudo pacman -S gh
+        else
+            echo "Please install gh manually"
+        fi
+    fi
+}
+
+setup_git_cliff() {
+    if [ ! -x "$(command -v git-cliff)" ]; then
+        if [ -x "$(command -v brew)" ]; then
+            brew install git-cliff
+        elif [ -x "$(command -v apt-get)" ]; then
+            sudo apt-get install git-cliff
+        elif [ -x "$(command -v yum)" ]; then
+            sudo yum install git-cliff
+        elif [ -x "$(command -v pacman)" ]; then
+            sudo pacman -S git-cliff
+        else
+            setup_cargo
+            cargo install git-cliff --locked
+        fi
+    fi
+}
+
+setup_bat() {
+    if [ ! -x "$(command -v bat)" ]; then
+        if [ -x "$(command -v brew)" ]; then
+            brew install bat
+        elif [ -x "$(command -v apt-get)" ]; then
+            sudo apt-get install bat
+        elif [ -x "$(command -v yum)" ]; then
+            sudo yum install bat
+        elif [ -x "$(command -v pacman)" ]; then
+            sudo pacman -S bat
+        else
+            setup_cargo
+            cargo install bat --locked
+        fi
+    fi
+}
+
 # --- main ---
 
 while [ $# -gt 0 ]; do
@@ -204,6 +257,15 @@ while [ $# -gt 0 ]; do
             ;;
         cargo-edit)
             setup_cargo_edit
+            ;;
+        git-cliff)
+            setup_git_cliff
+            ;;
+        gh)
+            setup_gh
+            ;;
+        bat)
+            setup_bat
             ;;
         *)
             echo "Unknown setup $1"

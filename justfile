@@ -1,6 +1,8 @@
 # Justfile for hl project - convenient command runner
 # Run `just --list` to see all available commands
 
+previous-tag := "git tag -l \"v*.*.*\" --merged HEAD --sort=-version:refname | head -1"
+
 # Default recipe, executed on `just` without arguments
 [private]
 default:
@@ -103,6 +105,21 @@ install: (setup "build")
 # Bump version
 bump type="alpha": (setup "cargo-edit")
     cargo set-version --package hl --bump {{type}}
+
+# List changes since the previous release
+changes since="auto": (setup "git-cliff" "bat" "gh")
+    #!/usr/bin/env bash
+    set -euo pipefail
+    since=$(if [ "{{since}}" = auto ]; then {{previous-tag}}; else echo "{{since}}"; fi)
+    version=$(cargo metadata --format-version 1 | jq -r '.packages[] | select(.name == "hl") | .version')
+    GITHUB_REPO=pamburus/hl \
+    GITHUB_TOKEN=$(gh auth token) \
+        git-cliff -vv --tag "v${version:?}" "${since:?}..HEAD" \
+        | bat -l md --paging=never
+
+# Show previous release tag
+previous-tag:
+    @{{previous-tag}}
 
 # Create screenshots
 screenshots: (setup "screenshots") build
