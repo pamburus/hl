@@ -141,6 +141,22 @@ jobs:
         if: matrix.archiver == 'tar.gz' && matrix.universal == true
         run: tar -C ./target -cz -f ${{ matrix.asset }} hl
 
+      - name: Calculate SHA256 hash
+        run: |
+          if [[ "${{ matrix.family }}" == "windows" ]]; then
+            certutil -hashfile ${{ matrix.asset }} SHA256 | grep -v "hash" | tr -d ' \r\n' > hash.txt
+            echo "$(<hash.txt)  ${{ matrix.asset }}" > ${{ matrix.asset }}.sha256
+          else
+            sha256sum ${{ matrix.asset }} > ${{ matrix.asset }}.sha256
+          fi
+
+      - name: Upload hash file to release
+        uses: svenstaro/upload-release-action@v2
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: ${{ matrix.asset }}.sha256
+          tag: ${{ github.ref }}
+
       - name: Upload binaries to release
         uses: svenstaro/upload-release-action@v2
         with:
