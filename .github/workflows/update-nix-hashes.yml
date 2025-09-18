@@ -1,0 +1,152 @@
+name: Update Nix Binary Hashes
+
+on:
+  release:
+    types: [published]
+  push:
+    branches: [feature/**]
+
+jobs:
+  update-hashes:
+    name: Update binary package hashes
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@v9
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract version from Cargo.toml
+        id: version
+        run: |
+          VERSION=$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[0].version')
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Version: $VERSION"
+
+      - name: Get hashes using nix-prefetch-url
+        run: |
+          VERSION=${{ steps.version.outputs.version }}
+
+          # Function to get Nix hash for an asset
+          get_nix_hash() {
+            local asset="$1"
+            local url="https://github.com/${{ github.repository }}/releases/download/v${VERSION}/${asset}"
+
+            echo "Fetching hash for $asset..."
+            if hash=$(nix-prefetch-url "$url" 2>/dev/null); then
+              # Convert to SRI format
+              nix-hash --type sha256 --to-sri "$hash"
+            else
+              echo "FAKE_HASH"
+            fi
+          }
+
+          # Get hashes for all assets
+          LINUX_X64=$(get_nix_hash "hl-linux-x86_64-musl.tar.gz")
+          LINUX_ARM64=$(get_nix_hash "hl-linux-arm64-musl.tar.gz")
+          MACOS_X64=$(get_nix_hash "hl-macos-x86_64.tar.gz")
+          MACOS_ARM64=$(get_nix_hash "hl-macos-arm64.tar.gz")
+
+          echo "LINUX_X64=$LINUX_X64" >> $GITHUB_ENV
+          echo "LINUX_ARM64=$LINUX_ARM64" >> $GITHUB_ENV
+          echo "MACOS_X64=$MACOS_X64" >> $GITHUB_ENV
+          echo "MACOS_ARM64=$MACOS_ARM64" >> $GITHUB_ENV
+
+          echo "Nix hashes fetched:"
+          echo "  Linux x64: $LINUX_X64"
+          echo "  Linux arm64: $LINUX_ARM64"
+          echo "  macOS x64: $MACOS_X64"
+          echo "  macOS arm64: $MACOS_ARM64"
+
+      - name: Update binary-hashes.nix
+        run: |
+          VERSION=${{ steps.version.outputs.version }}
+
+          echo "Updating nix/binary-hashes.nix with new hashes for v$VERSION"
+
+          # Create the new version entry (replace FAKE_HASH with lib.fakeHash)
+          NEW_ENTRY="    \"$VERSION\" = {
+            \"hl-linux-x86_64-musl.tar.gz\" = \"${LINUX_X64/FAKE_HASH/lib.fakeHash}\";
+            \"hl-linux-arm64-musl.tar.gz\" = \"${LINUX_ARM64/FAKE_HASH/lib.fakeHash}\";
+            \"hl-macos-x86_64.tar.gz\" = \"${MACOS_X64/FAKE_HASH/lib.fakeHash}\";
+            \"hl-macos-arm64.tar.gz\" = \"${MACOS_ARM64/FAKE_HASH/lib.fakeHash}\";
+          };"
+
+          # Use Python for proper Nix file editing
+          python3 << 'EOF'
+          import re
+          import sys
+
+          VERSION = "$VERSION"
+          LINUX_X64 = "$LINUX_X64".replace("FAKE_HASH", "lib.fakeHash")
+          LINUX_ARM64 = "$LINUX_ARM64".replace("FAKE_HASH", "lib.fakeHash")
+          MACOS_X64 = "$MACOS_X64".replace("FAKE_HASH", "lib.fakeHash")
+          MACOS_ARM64 = "$MACOS_ARM64".replace("FAKE_HASH", "lib.fakeHash")
+
+          # Read the file
+          with open('nix/binary-hashes.nix', 'r') as f:
+              content = f.read()
+
+          # Create new version entry
+          new_entry = f'''  "{VERSION}" = {{
+            "hl-linux-x86_64-musl.tar.gz" = "{LINUX_X64}";
+            "hl-linux-arm64-musl.tar.gz" = "{LINUX_ARM64}";
+            "hl-macos-x86_64.tar.gz" = "{MACOS_X64}";
+            "hl-macos-arm64.tar.gz" = "{MACOS_ARM64}";
+          }};'''
+
+          # Check if version already exists
+          version_pattern = rf'^\s*"{re.escape(VERSION)}"\s*=\s*{{.*?}};'
+          existing_match = re.search(version_pattern, content, re.MULTILINE | re.DOTALL)
+
+          if existing_match:
+              print(f"Updating existing version {VERSION}")
+              # Replace existing entry
+              content = re.sub(version_pattern, new_entry, content, flags=re.MULTILINE | re.DOTALL)
+          else:
+              print(f"Adding new version {VERSION}")
+              # Insert before the comment marker
+              marker = "  # New versions will be automatically added here by GitHub Actions"
+              if marker in content:
+                  content = content.replace(marker, new_entry + "\n" + marker)
+              else:
+                  print("Warning: Could not find insertion marker", file=sys.stderr)
+
+          # Write back to file
+          with open('nix/binary-hashes.nix', 'w') as f:
+              f.write(content)
+          EOF
+
+      - name: Verify changes
+        run: |
+          echo "Changes made to nix/binary-hashes.nix:"
+          git diff nix/binary-hashes.nix
+
+      - name: Create Pull Request
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: "nix: update binary hashes for v${{ steps.version.outputs.version }}"
+          title: "Update binary package hashes for v${{ steps.version.outputs.version }}"
+          body: |
+            🤖 **Automatically generated PR**
+
+            Updates binary package hashes for release **v${{ steps.version.outputs.version }}**.
+
+            This updates `nix/binary-hashes.nix` with SHA256 hashes for:
+            - `hl-linux-x86_64-musl.tar.gz`
+            - `hl-linux-arm64-musl.tar.gz`
+            - `hl-macos-x86_64.tar.gz`
+            - `hl-macos-arm64.tar.gz`
+
+            The hashes were automatically fetched from the release assets and converted to Nix SRI format.
+
+            **Next steps:**
+            - Review the changes
+            - Merge this PR to enable `nix build .#bin` for v${{ steps.version.outputs.version }}
+          branch: update-nix-hashes-v${{ steps.version.outputs.version }}
+          delete-branch: true
