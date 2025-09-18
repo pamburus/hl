@@ -15,5 +15,11 @@
     "hl-macos-x86_64.tar.gz" = "sha256-kcf18Us6KKAzdhTv98ashNTBJRDq1dBEJztJMoOUnso=";
     "hl-macos-arm64.tar.gz" = "sha256-kcf18Us6KKAzdhTv98ashNTBJRDq1dBEJztJMoOUnso=";
   };
+  "$VERSION" = {
+  "hl-linux-x86_64-musl.tar.gz" = "$LINUX_X64";
+  "hl-linux-arm64-musl.tar.gz" = "$LINUX_ARM64";
+  "hl-macos-x86_64.tar.gz" = "$MACOS_X64";
+  "hl-macos-arm64.tar.gz" = "$MACOS_ARM64";
+};
   # New versions will be automatically added here by GitHub Actions
 }
