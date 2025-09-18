@@ -1,9 +1,17 @@
-name: Publish
+name: Build
 
 on:
-  push:
-    tags:
-      - "v*.*.*"
+  workflow_call:
+    inputs:
+      release:
+        description: "Release tag or identifier"
+        required: true
+        type: string
+      ref:
+        description: "Git ref to build from"
+        required: false
+        type: string
+        default: ""
 
 permissions:
   contents: write
@@ -11,8 +19,8 @@ permissions:
   actions: read
 
 jobs:
-  publish:
-    name: Publish for ${{ matrix.name }}
+  build:
+    name: Build for ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
 
     env:
@@ -101,6 +109,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
 
       - uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
@@ -142,8 +152,7 @@ jobs:
         run: tar -C ./target -cz -f ${{ matrix.asset }} hl
 
       - name: Upload binaries to release
-        uses: svenstaro/upload-release-action@v2
-        with:
-          repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: ${{ matrix.asset }}
-          tag: ${{ github.ref }}
+        run: |
+          gh release upload "${{ inputs.release }}" "${{ matrix.asset }}" --clobber
+        env:
+          GH_TOKEN: ${{ github.token }}

@@ -1,0 +1,197 @@
+name: Release
+
+defaults:
+  run:
+    shell: bash -euxo pipefail {0}
+
+on:
+  workflow_dispatch:
+    inputs:
+      release-type:
+        description: "Release type"
+        required: true
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+
+permissions:
+  contents: write
+  issues: read
+  actions: read
+
+jobs:
+  prepare-release:
+    name: Prepare Release
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.update-version.outputs.version }}
+      release-tag: ${{ steps.create-release.outputs.release-tag }}
+      temp-branch: ${{ steps.create-temp-branch.outputs.branch }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ github.token }}
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Create temporary branch
+        id: create-temp-branch
+        run: |
+          TEMP_BRANCH="release-prep-$(date +%s)"
+          git checkout -b "${TEMP_BRANCH:?}"
+          echo "branch=${TEMP_BRANCH:?}" >> $GITHUB_OUTPUT
+
+      - name: Setup Rust toolchain
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: stable
+          rustflags: ""
+
+      - name: Install cargo-edit
+        run: cargo install cargo-edit
+
+      - name: Update version in Cargo.toml
+        id: update-version
+        run: |
+          cargo set-version --package hl --bump "${{ github.event.inputs.release-type }}"
+          VERSION=$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[] | select(.name == "hl") | .version')
+          echo "version=${VERSION?}" >> $GITHUB_OUTPUT
+
+      - name: Install git-cliff
+        run: |
+          # Install git-cliff for generating release notes
+          CLIFF_VERSION="2.10.1"
+          curl -sSfL "https://github.com/orhun/git-cliff/releases/download/v${CLIFF_VERSION}/git-cliff-${CLIFF_VERSION}-x86_64-unknown-linux-gnu.tar.gz" | tar -xz
+          sudo mv git-cliff-*/git-cliff /usr/local/bin/
+          git-cliff --version
+
+      - name: Generate release notes
+        id: release-notes
+        run: |
+          VERSION=${{ steps.update-version.outputs.version }}
+          PREVIOUS_TAG=$(git tag -l "v*.*.*" --merged HEAD --sort=-version:refname | head -1 || echo "")
+          git-cliff --tag "v${VERSION:?}" --output RELEASE_NOTES.md --verbose "${PREVIOUS_TAG:?}..HEAD"
+        env:
+          GITHUB_REPO: ${{ github.repository }}
+          GITHUB_TOKEN: ${{ github.token }}
+
+      - name: Create draft release
+        id: create-release
+        run: |
+          VERSION=${{ steps.update-version.outputs.version }}
+          gh release create "v${VERSION:?}" \
+            --title "v${VERSION:?}" \
+            --notes-file RELEASE_NOTES.md \
+            --draft
+          echo "release-tag=v${VERSION:?}" >> $GITHUB_OUTPUT
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Commit version update
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add Cargo.toml Cargo.lock
+          git commit -m "chore(release): bump version to ${{ steps.update-version.outputs.version }}"
+          git push origin "refs/heads/${{ steps.create-temp-branch.outputs.branch }}"
+
+  build:
+    name: Build and Upload Binaries
+    needs: prepare-release
+    uses: ./.github/workflows/build.yml
+    with:
+      release: ${{ needs.prepare-release.outputs.release-tag }}
+      ref: ${{ needs.prepare-release.outputs.temp-branch }}
+    permissions:
+      contents: write
+      issues: read
+      actions: read
+
+  finalize-release:
+    name: Finalize Release
+    runs-on: ubuntu-latest
+    needs: [prepare-release, build]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ github.token }}
+          ref: ${{ needs.prepare-release.outputs.temp-branch }}
+          fetch-depth: 0
+
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@v9
+
+      - name: Generate Nix binary hashes file
+        run: |
+          VERSION=${{ needs.prepare-release.outputs.version }}
+          RELEASE_TAG=${{ needs.prepare-release.outputs.release-tag }}
+
+          # Install nixfmt for pretty formatting
+          nix profile add nixpkgs#nixfmt
+
+          # Get filtered assets and convert hex hashes to SRI format
+          gh release view "${RELEASE_TAG:?}" --json assets --jq '.assets
+            | map(select(.name | test("^hl-(linux-(x86_64|arm64)-musl|macos-(x86_64|arm64))\\.tar\\.gz$")))
+            | .[] | .name + ":" + (.digest | ltrimstr("sha256:"))' | \
+            while IFS=':' read -r name hex; do
+              echo "${name:?}:sha256-$(echo -n "${hex:?}" | xxd -r -p | base64)"
+            done > /tmp/assets-sri.txt
+
+          # Convert SRI hashes to JSON format
+          jq -R -s --arg version "${VERSION:?}" '
+            {($version): (
+              split("\n")
+              | map(select(length > 0) | split(":") | {key: .[0], value: .[1]})
+              | from_entries
+            )}' < /tmp/assets-sri.txt > /tmp/hashes.json
+
+          # Convert JSON to Nix and format
+          nix eval --impure --expr 'builtins.fromJSON (builtins.readFile "/tmp/hashes.json")' | \
+            nixfmt > nix/binary-hashes.nix
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Commit hash updates and create final tag
+        run: |
+          VERSION=${{ needs.prepare-release.outputs.version }}
+
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+
+          git add nix/binary-hashes.nix
+          git commit -m "build(nix): update binary hashes for v${VERSION:?}"
+
+          # Create final tag pointing to commit with all changes
+          git tag "v${VERSION:?}"
+
+      - name: Fast-forward target branch and publish release
+        run: |
+          VERSION=${{ needs.prepare-release.outputs.version }}
+          RELEASE_TAG=${{ needs.prepare-release.outputs.release-tag }}
+          TEMP_BRANCH=${{ needs.prepare-release.outputs.temp-branch }}
+          TARGET_BRANCH=${{ github.ref_name }}
+
+          git checkout -B "${TARGET_BRANCH:?}" "origin/${TARGET_BRANCH:?}"
+
+          git merge --ff-only "refs/heads/${TEMP_BRANCH:?}"
+          git push origin "refs/heads/${TARGET_BRANCH:?}"
+          git push origin "refs/tags/v${VERSION:?}"
+
+          gh release edit "${RELEASE_TAG:?}" --tag "v${VERSION:?}" --draft=false --latest
+
+          git push origin --delete "refs/heads/${TEMP_BRANCH:?}" || true
+          if [ "$(git tag -l latest --merged HEAD)" = latest ]; then
+            git tag -f latest HEAD
+            git push -f origin refs/tags/latest
+          fi
+
+          echo "✅ Release v${VERSION:?} completed successfully!"
+          echo "🏷️ Target branch fast-forwarded and tag v${VERSION:?} pushed"
+        env:
+          GH_TOKEN: ${{ github.token }}

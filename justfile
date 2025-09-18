@@ -78,7 +78,7 @@ clean:
 
 # Run all CI checks locally
 ci: test lint audit fmt-check check-schema check
-    @echo "✓ All local CI checks passed"
+    @echo "✅ All local CI checks passed"
 
 # Generate code coverage
 coverage: (setup "coverage")
@@ -101,6 +101,10 @@ check-schema: (setup "schema")
 # Install binary and man pages
 install: (setup "build")
     cargo install --path . --locked
+
+# Build and publish new release
+release type="patch": (setup "cargo-edit")
+    gh workflow run -R pamburus/hl release.yml --ref $(git branch --show-current) --field release-type={{type}}
 
 # Bump version
 bump type="alpha": (setup "cargo-edit")
