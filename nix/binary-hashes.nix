@@ -10,10 +10,10 @@
 
 {
   "0.32.0" = {
-    "hl-linux-x86_64-musl.tar.gz" = "sha256-NvatH7J5/xjd/vmhE6CKe6BIC17b4+AQIS2OOFDgUxA=";
-    "hl-linux-arm64-musl.tar.gz" = "sha256-lbmJF9ECksCL/A0QMysTyQjOwVLi4hyOB0uFzpYA1Cs=";
-    "hl-macos-x86_64.tar.gz" = "sha256-kcf18Us6KKAzdhTv98ashNTBJRDq1dBEJztJMoOUnso=";
-    "hl-macos-arm64.tar.gz" = "sha256-kcf18Us6KKAzdhTv98ashNTBJRDq1dBEJztJMoOUnso=";
+    "hl-linux-x86_64-musl.tar.gz" = "Fetching hash for hl-linux-x86_64-musl.tar.gz...";
+    "hl-linux-arm64-musl.tar.gz" = "Fetching hash for hl-linux-arm64-musl.tar.gz...";
+    "hl-macos-x86_64.tar.gz" = "Fetching hash for hl-macos-x86_64.tar.gz...";
+    "hl-macos-arm64.tar.gz" = "Fetching hash for hl-macos-arm64.tar.gz...";
   };
   # New versions will be automatically added here by GitHub Actions
 }
