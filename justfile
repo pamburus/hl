@@ -100,6 +100,10 @@ check-schema: (setup "schema")
 install: (setup "build")
     cargo install --path . --locked
 
+# Bump version
+bump type="alpha": (setup "cargo-edit")
+    cargo set-version --package hl --bump {{type}}
+
 # Create screenshots
 screenshots: (setup "screenshots") build
     @bash contrib/bin/screenshot.sh light cafe.log
@@ -134,5 +138,5 @@ nix-deps:
 
 # Helper recipe to ensure required tools are available for a given task
 [private]
-setup tool:
-    @contrib/bin/setup.sh {{tool}}
+setup *tools:
+    @contrib/bin/setup.sh {{tools}}
