@@ -76,21 +76,13 @@ jobs:
             \"hl-macos-arm64.tar.gz\" = \"${MACOS_ARM64/FAKE_HASH/lib.fakeHash}\";
           };"
 
-          # Regenerate the entire file with updated hashes
-          echo "Regenerating nix/binary-hashes.nix with fresh hashes"
+          if grep -q "\"$VERSION\"" nix/binary-hashes.nix; then
+            echo "Version $VERSION already exists, skipping update"
+          else
+            echo "Adding new version $VERSION"
 
-          cat > nix/binary-hashes.nix << EOF
-          # Binary release hashes for hl
-          #
-          # This file is automatically updated by GitHub Actions when new releases are published.
-          # Each release version contains SHA256 hashes for all platform-specific binary assets.
-          #
-          # Hash format: Nix SRI format (sha256-base64hash)
-          # Asset naming: hl-{platform}-{arch}[-{libc}].{ext}
-          #
-          # DO NOT EDIT MANUALLY - changes will be overwritten by automation
-
-          {
+            # Create new entry (replace FAKE_HASH with lib.fakeHash)
+            cat > /tmp/new-entry.nix << EOF
             "$VERSION" = {
               "hl-linux-x86_64-musl.tar.gz" = "${LINUX_X64/FAKE_HASH/lib.fakeHash}";
               "hl-linux-arm64-musl.tar.gz" = "${LINUX_ARM64/FAKE_HASH/lib.fakeHash}";
@@ -101,12 +93,17 @@ jobs:
           }
           EOF
 
+            # Insert before the comment line
+            sed -i '/# New versions will be automatically added here by GitHub Actions/r /tmp/new-entry.nix' nix/binary-hashes.nix
+          fi
+
       - name: Verify changes
         run: |
           echo "Changes made to nix/binary-hashes.nix:"
           git diff nix/binary-hashes.nix
 
       - name: Create Pull Request
+        id: create-pr
         uses: peter-evans/create-pull-request@v6
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -125,8 +122,74 @@ jobs:
 
             The hashes were automatically fetched from the release assets and converted to Nix SRI format.
 
+            **⚠️ Important:** After merging this PR, the release tag will be automatically moved to include the hash updates.
+
             **Next steps:**
             - Review the changes
-            - Merge this PR to enable `nix build .#bin` for v${{ steps.version.outputs.version }}
+            - Merge this PR
+            - Tag will be moved automatically to enable `nix build .#bin` for v${{ steps.version.outputs.version }}
           branch: update-nix-hashes-v${{ steps.version.outputs.version }}
           delete-branch: true
+
+      - name: Auto-merge PR and move tag
+        if: steps.create-pr.outputs.pull-request-number
+        run: |
+          VERSION=${{ steps.version.outputs.version }}
+          PR_NUMBER=${{ steps.create-pr.outputs.pull-request-number }}
+
+          echo "Created PR #$PR_NUMBER, waiting for merge..."
+
+          # Wait for PR to be merged (with timeout)
+          timeout=300  # 5 minutes
+          interval=10
+          elapsed=0
+
+          while [ $elapsed -lt $timeout ]; do
+            pr_state=$(gh pr view $PR_NUMBER --json state --jq '.state')
+            if [ "$pr_state" = "MERGED" ]; then
+              echo "PR #$PR_NUMBER has been merged!"
+              break
+            elif [ "$pr_state" = "CLOSED" ]; then
+              echo "PR #$PR_NUMBER was closed without merging. Exiting."
+              exit 1
+            fi
+
+            echo "PR state: $pr_state, waiting..."
+            sleep $interval
+            elapsed=$((elapsed + interval))
+          done
+
+          if [ $elapsed -ge $timeout ]; then
+            echo "Timeout waiting for PR merge. Manual tag movement required."
+            exit 0
+          fi
+
+          # Get the original tag commit
+          original_tag_commit=$(git rev-list -n 1 v$VERSION)
+          echo "Original tag commit: $original_tag_commit"
+
+          # Get the current HEAD (should be the merge commit)
+          current_head=$(git rev-parse HEAD)
+          echo "Current HEAD: $current_head"
+
+          # Check that the only changes since the tag are in nix/binary-hashes.nix
+          changed_files=$(git diff --name-only $original_tag_commit HEAD)
+          echo "Changed files since tag: $changed_files"
+
+          if [ "$changed_files" = "nix/binary-hashes.nix" ]; then
+            echo "✅ Only binary-hashes.nix changed. Safe to move tag."
+
+            # Move the tag to current HEAD
+            git tag -f v$VERSION HEAD
+            git push origin v$VERSION --force
+
+            echo "🏷️ Moved tag v$VERSION to $current_head"
+            echo "✅ Flake users can now use the updated hashes!"
+          else
+            echo "❌ Other files changed since tag. Not safe to move tag automatically."
+            echo "Changed files: $changed_files"
+            echo "Manual review required."
+            exit 1
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
