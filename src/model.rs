@@ -1623,7 +1623,10 @@ impl RecordFilter for FieldFilter {
                 }
                 FieldKind::Message => {
                     if let Some(message) = record.message {
-                        self.match_value(Some(message.raw_str()), true)
+                        self.match_value(
+                            Some(message.raw_str()),
+                            matches!(message, RawValue::String(EncodedString::Json(_))),
+                        )
                     } else {
                         false
                     }
@@ -2601,6 +2604,26 @@ mod tests {
         let record = RawRecord::parser().parse(input).next().unwrap().unwrap();
         let actual = RawValue::auto(record.record.fields().next().unwrap().1.raw_str());
         assert_eq!(actual, expected);
+    }
+
+    #[rstest]
+    #[case(br#"message=Synced"#, RawValue::String(EncodedString::raw("Synced")))] // 1
+    #[case(br#"message="Synced""#, RawValue::String(EncodedString::json(r#""Synced""#)))] // 2
+    #[case(br#"message="Not synced""#, RawValue::String(EncodedString::json(r#""Not synced""#)))] // 3
+    fn test_logfmt_string(#[case] input: &[u8], #[case] expected: RawValue) {
+        let record = RawRecord::parser().parse(input).next().unwrap().unwrap();
+        let actual = RawValue::auto(record.record.fields().next().unwrap().1.raw_str());
+        assert_eq!(actual, expected);
+    }
+
+    #[rstest]
+    #[case(r#"msg=Synced"#, "msg=Synced", true)] // 1
+    #[case(r#"msg="Synced""#, "msg=Synced", true)] // 2
+    #[case(r#"msg="Not synced""#, "msg=Not synced", true)] // 3
+    fn test_logfmt_string_filter(#[case] input: &str, #[case] filter: &str, #[case] expected: bool) {
+        let filter = FieldFilter::parse(filter).unwrap();
+        let record = parse(input);
+        assert_eq!(filter.apply(&record), expected);
     }
 
     fn parse(s: &str) -> Record<'_> {
