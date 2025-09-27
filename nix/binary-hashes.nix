@@ -16,4 +16,12 @@
     "hl-macos-arm64.tar.gz" = "sha256-kcf18Us6KKAzdhTv98ashNTBJRDq1dBEJztJMoOUnso=";
   };
   # New versions will be automatically added here by GitHub Actions
+  "0.32.1-alpha.1" = {
+    "hl-linux-x86_64-musl.tar.gz" = "lib.fakeHash";
+    "hl-linux-arm64-musl.tar.gz" = "lib.fakeHash";
+    "hl-macos-x86_64.tar.gz" = "lib.fakeHash";
+    "hl-macos-arm64.tar.gz" = "lib.fakeHash";
+  };
+  # New versions will be automatically added here by GitHub Actions
+}
 }
