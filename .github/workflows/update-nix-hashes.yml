@@ -7,9 +7,12 @@ on:
     branches: [feature/**]
 
 jobs:
-  update-hashes:
-    name: Update binary package hashes
+  check-release:
+    name: Check if release exists
     runs-on: ubuntu-latest
+    outputs:
+      release-exists: ${{ steps.check.outputs.release-exists }}
+      version: ${{ steps.check.outputs.version }}
 
     steps:
       - name: Install Nix
@@ -20,25 +23,43 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Extract version from Cargo.toml
-        id: version
+      - name: Check release existence
+        id: check
         run: |
           VERSION=$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[0].version')
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "Version: $VERSION"
 
-          # Check if release exists
           echo "Checking if release v$VERSION exists..."
-          if ! gh release view "v$VERSION" >/dev/null 2>&1; then
-            echo "❌ Release v$VERSION does not exist. Workflow dismissed."
-            exit 0
+          if gh release view "v$VERSION" >/dev/null 2>&1; then
+            echo "✅ Release v$VERSION exists"
+            echo "release-exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "❌ Release v$VERSION does not exist. Workflow will be skipped."
+            echo "release-exists=false" >> $GITHUB_OUTPUT
           fi
-          echo "✅ Release v$VERSION exists"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  update-hashes:
+    name: Update binary package hashes
+    runs-on: ubuntu-latest
+    needs: check-release
+    if: needs.check-release.outputs.release-exists == 'true'
+
+    steps:
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@v9
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Get hashes using nix-prefetch-url
         run: |
           set -euo pipefail
-          VERSION=${{ steps.version.outputs.version }}
+          VERSION=${{ needs.check-release.outputs.version }}
 
           # Function to get Nix hash for an asset
           get_nix_hash() {
@@ -84,7 +105,7 @@ jobs:
       - name: Update binary-hashes.nix
         run: |
           set -euo pipefail
-          VERSION=${{ steps.version.outputs.version }}
+          VERSION=${{ needs.check-release.outputs.version }}
 
           echo "✅ Updating nix/binary-hashes.nix with verified hashes for v$VERSION"
 
@@ -124,7 +145,7 @@ jobs:
           body: |
             🤖 **Automatically generated PR**
 
-            Updates binary package hashes for release **v${{ steps.version.outputs.version }}**.
+            Updates binary package hashes for release **v${{ needs.check-release.outputs.version }}**.
 
             This updates `nix/binary-hashes.nix` with SHA256 hashes for:
             - `hl-linux-x86_64-musl.tar.gz`
@@ -139,15 +160,15 @@ jobs:
             **Next steps:**
             - Review the changes
             - Merge this PR
-            - Tag will be moved automatically to enable `nix build .#bin` for v${{ steps.version.outputs.version }}
-          branch: update-nix-hashes-v${{ steps.version.outputs.version }}
+            - Tag will be moved automatically to enable `nix build .#bin` for v${{ needs.check-release.outputs.version }}
+          branch: update-nix-hashes-v${{ needs.check-release.outputs.version }}
           delete-branch: true
 
       - name: Auto-merge PR and move tag
         if: steps.create-pr.outputs.pull-request-number
         run: |
           set -euo pipefail
-          VERSION=${{ steps.version.outputs.version }}
+          VERSION=${{ needs.check-release.outputs.version }}
           PR_NUMBER=${{ steps.create-pr.outputs.pull-request-number }}
 
           echo "Created PR #$PR_NUMBER, waiting for merge..."
