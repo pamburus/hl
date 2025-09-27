@@ -20,7 +20,7 @@ run *args: build
 
 # Run tests for all packages in the workspace
 test: (setup "build")
-    cargo test --workspace --locked
+    cargo test --workspace
 
 # Check the code for errors without building an executable
 check: (setup "build")
