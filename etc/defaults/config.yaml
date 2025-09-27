@@ -44,6 +44,7 @@ fields:
           "Timestamp",
           "_SOURCE_REALTIME_TIMESTAMP",
           "__REALTIME_TIMESTAMP",
+          "@timestamp",
         ]
     logger:
       names: ["logger", "LOGGER", "Logger"]
