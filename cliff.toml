@@ -53,7 +53,7 @@ body = """
 {%- if github -%}
     {%- set new_contributors = github.contributors | filter(attribute="is_first_time", value=true) %}
     {%- if new_contributors | length != 0 %}
-        ### New Contributors
+        ## New Contributors
         {% for contributor in new_contributors %}
             * @{{ contributor.username | replace(from="[bot]", to="") }} made their first contribution
                 {%- if contributor.pr_number %} in \
