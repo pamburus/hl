@@ -141,9 +141,7 @@ nix-update:
 # Build all defined Nix package variants
 nix-build-all:
     nix build .#hl
-    nix build .#hl-debug
-    nix build .#hl-static
-    nix build .#hl-minimal
+    nix build .#hl-bin
 
 # Show the dependency tree of the Nix derivation
 nix-deps:

@@ -23,7 +23,10 @@
             overlays = [ inputs.rust-overlay.overlays.default ];
           };
 
-          packages.default = pkgs.callPackage ./nix/package.nix { };
+          packages = {
+            default = pkgs.callPackage ./nix/package.nix { };
+            bin = pkgs.callPackage ./nix/binary-package.nix { };
+          };
 
           devShells.default = self'.packages.default;
         };
