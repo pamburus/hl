@@ -10,6 +10,7 @@ while :; do
             echo "  --help  Display this help message"
             echo "Setups:"
             echo "  build"
+            echo "  cargo-edit"
             echo "  coverage"
             echo "  schema"
             echo "  screenshots"
@@ -86,6 +87,13 @@ setup_cargo_nightly() {
     if ! (rustup toolchain list | grep -q nightly); then
         echo installing nightly toolchain
         rustup toolchain install nightly
+    fi
+}
+
+setup_cargo_edit() {
+    setup_cargo
+    if [ ! cargo set-version --help >/dev/null 2>&1 ]; then
+        cargo install cargo-edit
     fi
 }
 
@@ -193,6 +201,9 @@ while [ $# -gt 0 ]; do
             ;;
         outdated)
             setup_cargo_outdated
+            ;;
+        cargo-edit)
+            setup_cargo_edit
             ;;
         *)
             echo "Unknown setup $1"
