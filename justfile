@@ -114,7 +114,7 @@ changes since="auto": (setup "git-cliff" "bat" "gh")
     version=$(cargo metadata --format-version 1 | jq -r '.packages[] | select(.name == "hl") | .version')
     GITHUB_REPO=pamburus/hl \
     GITHUB_TOKEN=$(gh auth token) \
-        git-cliff -vv --tag "v${version:?}" "${since:?}..HEAD" \
+        git-cliff --tag "v${version:?}" "${since:?}..HEAD" \
         | bat -l md --paging=never
 
 # Show previous release tag
