@@ -13,7 +13,7 @@ body = """
 {% endmacro -%}
 
 {%- for group, commits in commits | group_by(attribute="group") %}
-    ### {{ group | striptags | trim | upper_first }}
+    ## {{ group | striptags | trim | upper_first }}
 
     {% set_global prev_base = "" -%}
     {%- set_global pr_numbers = [] -%}
