@@ -138,40 +138,85 @@ High-performance log viewer and processor that transforms logs in JSON and logfm
   nix run github:pamburus/hl
   ```
 
-  or install with [nix profile](https://nix.dev/manual/nix/2.22/command-ref/new-cli/nix3-profile-install):
+  or binary package
 
   ```sh
-  nix profile install github:pamburus/hl
+  nix run github:pamburus/hl#bin
   ```
 
-* Install the package using [nix-flakes](https://wiki.nixos.org/wiki/Flakes)
+  or install with [nix profile](https://nix.dev/manual/nix/2.31/command-ref/new-cli/nix3-profile-add):
+
+  ```sh
+  nix profile add github:pamburus/hl
+  ```
+
+  or binary package
+
+  ```sh
+  nix profile add github:pamburus/hl#bin
+  ```
+
+* Install the package from source using [nix-flakes](https://wiki.nixos.org/wiki/Flakes)
 
   <details>
   <summary>Example how to update nix configuration</summary>
 
   ```nix
   {
-      inputs = {
-          nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
-          hl.url = "github:pamburus/hl";
+    inputs = {
+      nixpkgs.url = "github:NixOS/nixpkgs/nixos-25.05";
+      hl.url = "github:pamburus/hl";
+    };
+    outputs = {nixpkgs, hl, ...}:
+    let
+      system = "x86_64-linux";
+    in
+    {
+      # this is just an example!
+      nixosConfigurations.yourHost = nixpkgs.lib.nixosSystem {
+        inherit system;
+        modules = [
+          ({...}: {
+            environment.systemPackages = [
+              hl.packages.${system}
+            ];
+          })
+        ];
       };
-      outputs = {nixpkgs, hl, ...}:
-      let
-          system = "x86_64-linux";
-      in
-      {
-          # this is just an example!
-          nixosConfigurations.yourHost = nixpkgs.lib.nixosSystem {
-              inherit system;
-              modules = [
-                  ({...}: {
-                    environment.systemPackages = [
-                      hl.packages.${system}
-                    ];
-                  })
-              ];
-          };
+    };
+  }
+  ```
+
+  </details>
+
+* Install the package with pre-built binaries using [nix-flakes](https://wiki.nixos.org/wiki/Flakes)
+
+  <details>
+  <summary>Example how to update nix configuration</summary>
+
+  ```nix
+  {
+    inputs = {
+      nixpkgs.url = "github:NixOS/nixpkgs/nixos-25.05";
+      hl.url = "github:pamburus/hl";
+    };
+    outputs = {nixpkgs, hl, ...}:
+    let
+      system = "x86_64-linux";
+    in
+    {
+      # this is just an example!
+      nixosConfigurations.yourHost = nixpkgs.lib.nixosSystem {
+        inherit system;
+        modules = [
+          ({...}: {
+            environment.systemPackages = [
+              hl.packages.${system}.bin
+            ];
+          })
+        ];
       };
+    };
   }
   ```
 
