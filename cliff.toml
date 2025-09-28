@@ -1,0 +1,120 @@
+[changelog]
+header = ""
+body = """
+{%- macro add_commit(message, author) -%}
+    - {{ message | trim | upper_first | replace(from="{AUTHOR}", to=author | replace(from="[bot]", to="")) }}
+{% endmacro -%}
+
+{%- macro dedup_finalize(prev_base, pr_numbers, prev_author) -%}
+    {%- if prev_base != "" -%}
+        {%- set joined_prs = pr_numbers | join(sep=", ") -%}
+        {{- self::add_commit(message=prev_base ~ " in " ~ joined_prs, author=prev_author) }}
+    {%- endif -%}
+{% endmacro -%}
+
+{%- for group, commits in commits | group_by(attribute="group") %}
+    ### {{ group | striptags | trim | upper_first }}
+
+    {% set_global prev_base = "" -%}
+    {%- set_global pr_numbers = [] -%}
+    {%- set_global prev_author = "" -%}
+
+    {% for commit in commits | filter(attribute="scope") | sort(attribute="scope") -%}
+        {%- set parts = commit.message | split(pat=" in #") -%}
+        {%- if parts | length == 2 -%}
+            {%- set base_msg = parts | first | trim -%}
+            {%- set pr_part = parts | last | trim -%}
+            {%- set pr_num = "#" ~ pr_part | replace(from=")", to="") -%}
+
+            {%- if base_msg == prev_base -%}
+                {%- set_global pr_numbers = pr_numbers | concat(with=pr_num) -%}
+            {%- else -%}
+                {{- self::dedup_finalize(prev_base=prev_base, pr_numbers=pr_numbers, prev_author=prev_author) }}
+                {%- set_global prev_base = base_msg -%}
+                {%- set_global pr_numbers = [pr_num] -%}
+                {%- set_global prev_author = commit.remote.username | default(value="") -%}
+            {%- endif -%}
+        {%- else -%}
+            {{- self::dedup_finalize(prev_base=prev_base, pr_numbers=pr_numbers, prev_author=prev_author) }}
+            {%- set_global prev_base = "" -%}
+            {%- set_global pr_numbers = [] -%}
+            {{- self::add_commit(message=commit.message, author=commit.remote.username | default(value="")) }}
+        {%- endif -%}
+    {%- endfor -%}
+    {{- self::dedup_finalize(prev_base=prev_base, pr_numbers=pr_numbers, prev_author=prev_author) }}
+
+    {%- for commit in commits -%}
+        {%- if not commit.scope -%}
+            {{ self::add_commit(message=commit.message, author=commit.remote.username | default(value="")) }}
+        {%- endif -%}
+    {%- endfor %}
+{%- endfor %}
+
+{%- if github -%}
+    {%- set new_contributors = github.contributors | filter(attribute="is_first_time", value=true) %}
+    {%- if new_contributors | length != 0 %}
+        ### New Contributors
+        {% for contributor in new_contributors %}
+            * @{{ contributor.username | replace(from="[bot]", to="") }} made their first contribution
+                {%- if contributor.pr_number %} in \
+                    #{{ contributor.pr_number }} \
+                {%- endif %}
+        {%- endfor -%}
+    {% endif %}
+{%- endif %}
+
+**Full Changelog**: https://github.com/{{ remote.github.owner }}/{{ remote.github.repo }}/compare/{{ previous.version }}...{{ version }}
+"""
+trim = true
+footer = ""
+
+[git]
+conventional_commits = true
+filter_unconventional = false
+split_commits = false
+commit_preprocessors = [
+    { pattern = '^(.*) \((#[0-9]+)\)', replace = "${1} by @{AUTHOR} in ${2}"},
+    { pattern = '^([a-z]+)(\([a-zA-Z0-9\-]+\))?: [Aa]dd (.*)$', replace = "${1}${2}: added ${3}"},
+    { pattern = '^([a-z]+)(\([a-zA-Z0-9\-]+\))?: [Ff]ix (.*)$', replace = "${1}${2}: fixed ${3}"},
+    { pattern = '^build\(deps\): bump the patch-updates group (across [0-9]+ director(y|ies) )?with [0-9]+ updates', replace = "build(deps): bump multiple patch updates"}
+]
+commit_parsers = [
+    # Features - things that add new functionality
+    { message = '^feat(\(.+\))?: add', group = "<!-- 0 -->Added"},
+
+    # Changes - improvements, updates to existing functionality
+    { message = '^feat', group = "<!-- 1 -->Changed"},
+    { message = "^refactor", group = "<!-- 1 -->Changed"},
+    { message = "^change", group = "<!-- 1 -->Changed"},
+    { message = "^set.+minimum.+rust", group = "<!-- 1 -->Changed"},
+    { message = "^replace.*", group = "<!-- 1 -->Changed"},
+
+    # Bug fixes
+    { message = "^fix", group = "<!-- 2 -->Fixed"},
+
+    # Performance improvements
+    { message = "^perf", group = "<!-- 3 -->Performance"},
+
+    # Documentation
+    { message = "^docs?", group = "<!-- 4 -->Documentation"},
+    { message = "added.+examples", group = "<!-- 4 -->Documentation"},
+
+    # Dependencies - all dependency updates
+    { message = '^(build|chore)\(deps\).*patch.*', group = "<!-- 5 -->Dependencies", scope = "0-deps/2-patch"},
+    { message = '^(build|chore)\(deps\)', group = "<!-- 5 -->Dependencies", scope = "0-deps/1-other"},
+    { message = "^build\\(nix\\): update flake", group = "<!-- 5 -->Dependencies", scope = "2-nix/flake"},
+
+    # Skip release commits
+    { message = "^chore\\(release\\)", skip = true},
+
+    # Everything else goes to Other (build, ci, chore, etc.)
+    { message = ".*", group = "<!-- 6 -->Other"},
+]
+# Set group order - Fixed comes before Dependencies and Other
+protect_breaking_commits = false
+filter_commits = false
+tag_pattern = "v[0-9].*"
+skip_tags = ""
+ignore_tags = ""
+topo_order = false
+sort_commits = "oldest"
