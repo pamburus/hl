@@ -21,6 +21,10 @@ rustPlatform.buildRustPackage {
     path = ../.;
   };
 
+  # Override Cargo profile settings for faster builds
+  CARGO_PROFILE_RELEASE_CODEGEN_UNITS = "16";
+  CARGO_PROFILE_RELEASE_LTO = "false";
+
   cargoLock = {
     lockFile = ../Cargo.lock;
     outputHashes = import ./cargo-hashes.nix;
