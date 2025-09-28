@@ -170,6 +170,13 @@ jobs:
           # Create final tag pointing to commit with all changes
           git tag "v${VERSION:?}"
 
+      - name: Generate token
+        id: generate-token
+        uses: tibdex/github-app-token@v1
+        with:
+          app_id: ${{ secrets.APP_ID }}
+          private_key: ${{ secrets.APP_PRIVATE_KEY }}
+
       - name: Fast-forward target branch and publish release
         run: |
           VERSION=${{ needs.prepare-release.outputs.version }}
@@ -178,6 +185,7 @@ jobs:
           TARGET_BRANCH=${{ github.ref_name }}
 
           git checkout -B "${TARGET_BRANCH:?}" "origin/${TARGET_BRANCH:?}"
+          git remote set-url origin https://x-access-token:${{ steps.generate_token.outputs.token }}@github.com/${{ github.repository }}.git
 
           git merge --ff-only "refs/heads/${TEMP_BRANCH:?}"
           git push origin "refs/heads/${TARGET_BRANCH:?}"
@@ -193,5 +201,3 @@ jobs:
 
           echo "✅ Release v${VERSION:?} completed successfully!"
           echo "🏷️ Target branch fast-forwarded and tag v${VERSION:?} pushed"
-        env:
-          GH_TOKEN: ${{ github.token }}
