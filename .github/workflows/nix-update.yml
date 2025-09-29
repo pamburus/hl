@@ -15,19 +15,40 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Install Nix
-        uses: cachix/install-nix-action@v30
+        uses: cachix/install-nix-action@v31
 
       - name: Update flake.lock
         run: nix flake update
 
+      - name: Generate token
+        id: generate-token
+        uses: tibdex/github-app-token@v2
+        with:
+          app_id: ${{ secrets.APP_ID }}
+          private_key: ${{ secrets.APP_PRIVATE_KEY }}
+
       - name: Create pull request for flake.lock update
+        id: create-pr
         uses: peter-evans/create-pull-request@v7
         with:
-          commit-message: "build(nix): update flake.lock"
+          token: ${{ steps.generate-token.outputs.token }}
+          commit-message: "chore(deps): update nix flake dependencies"
           branch: update-flake-lock
-          title: "build(nix): update flake.lock"
+          title: "chore(deps): update flake.lock"
           body: "This pull request updates the flake.lock file with the latest flake inputs."
-          sign-commits: true
+          author: "GitHub Action <action@github.com>"
+          labels: |
+            dependencies
+            automated
+          delete-branch: true
+
+      - name: Enable auto-merge
+        id: enable-auto-merge
+        if: steps.create-pr.outputs.pull-request-number
+        run: |
+          gh pr merge --auto -ds ${{ steps.create-pr.outputs.pull-request-number }}
+        env:
+          GH_TOKEN: ${{ github.token }}
