@@ -200,4 +200,4 @@ jobs:
           echo "✅ Release v${VERSION:?} completed successfully!"
           echo "🏷️ Target branch fast-forwarded and tag v${VERSION:?} pushed"
         env:
-          GH_TOKEN: ${{ guthub.token }}
+          GH_TOKEN: ${{ github.token }}
