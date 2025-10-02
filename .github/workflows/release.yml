@@ -201,3 +201,12 @@ jobs:
           echo "🏷️ Target branch fast-forwarded and tag v${VERSION:?} pushed"
         env:
           GH_TOKEN: ${{ github.token }}
+
+      - name: Trigger package updates
+        run: |
+          echo "Triggering package updates for hl"
+          gh workflow run publish.yml \
+            --repo pamburus/action-hub \
+            --field package="hl"
+        env:
+          GH_TOKEN: ${{ steps.generate-token.outputs.token }}
