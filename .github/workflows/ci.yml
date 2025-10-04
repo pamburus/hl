@@ -15,6 +15,10 @@ env:
   CARGO_TERM_COLOR: always
   RUSTFLAGS: "-Dwarnings"
 
+defaults:
+  run:
+    shell: bash -euo pipefail {0}
+
 jobs:
   test:
     runs-on: ${{ matrix.os }}
@@ -24,31 +28,31 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
 
       - name: Setup Rust cache
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@f13886b937689c021905a6b90929199931d60db1 # v2.8.1
 
       - name: Validate YAML configs
-        uses: cardinalby/schema-validator-action@v3
+        uses: cardinalby/schema-validator-action@2166123eb256fa40baef7e22ab1379708425efc7 # v3.1.1
         with:
           file: "etc/defaults/config*.yaml"
           schema: "schema/json/config.schema.json"
 
       - name: Validate YAML themes
-        uses: cardinalby/schema-validator-action@v3
+        uses: cardinalby/schema-validator-action@2166123eb256fa40baef7e22ab1379708425efc7 # v3.1.1
         with:
           file: "etc/defaults/themes/*.yaml"
           schema: "schema/json/theme.schema.json"
 
       - name: Setup taplo
-        uses: uncenter/setup-taplo@v1
+        uses: uncenter/setup-taplo@4f203fdb4f3b1e289c8382cf90d8397d2338df2e # v1.0.8
 
       - name: Validate TOML configs and themes
         run: taplo check
 
       - name: Install latest nightly
-        uses: dtolnay/rust-toolchain@v1
+        uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # v1
         with:
           toolchain: nightly
           components: rustfmt
@@ -57,7 +61,7 @@ jobs:
         run: cargo +nightly fmt --check --verbose --all
 
       - name: markdownlint-cli2-action
-        uses: DavidAnson/markdownlint-cli2-action@v18.0.0
+        uses: DavidAnson/markdownlint-cli2-action@992badcdf24e3b8eb7e87ff9287fe931bcb00c6e # v20.0.0
 
       - name: Run Check
         run: cargo check --locked --workspace
@@ -79,22 +83,22 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
 
       - name: Install latest toolchain
-        uses: dtolnay/rust-toolchain@v1
+        uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # v1
         with:
           toolchain: stable
 
       - name: Setup Rust cache
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@f13886b937689c021905a6b90929199931d60db1 # v2.8.1
 
       - name: Generate code coverage
         run: |
           make coverage
 
       - name: Upload coverage to codecov.io
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@5a1091511ad55cbe89839c7260b706298ca349f7 # v5.5.1
         env:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
@@ -103,19 +107,19 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
 
       - name: Install Nix
-        uses: cachix/install-nix-action@v30
+        uses: cachix/install-nix-action@9280e7aca88deada44c930f1e2c78e21c3ae3edd # v31.7.0
 
       - name: Cache Nix store
-        uses: cachix/cachix-action@v15
+        uses: cachix/cachix-action@0fc020193b5a1fa3ac4575aa3a7d3aa6a35435ad # v16
         with:
           name: hl
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
 
       - name: Setup Rust cache
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@f13886b937689c021905a6b90929199931d60db1 # v2.8.1
 
       - name: Run nix flake check
         run: nix flake check --print-build-logs --all-systems --no-update-lock-file

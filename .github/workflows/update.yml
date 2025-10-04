@@ -1,8 +1,8 @@
-name: Update flake.lock
+name: Update dependencies
 
 on:
   schedule:
-    - cron: "30 16 * * FRI" # Every Friday at 16:30 UTC
+    - cron: "00 17 * * FRI" # Every Friday at 17:00 UTC
   workflow_dispatch:
 
 permissions:
@@ -15,8 +15,8 @@ defaults:
     shell: bash -euo pipefail {0}
 
 jobs:
-  update-lock:
-    name: Update flake.lock
+  update-dependencies:
+    name: Update dependencies
     runs-on: ubuntu-latest
     steps:
       - name: Generate GitHub App Token
@@ -33,26 +33,33 @@ jobs:
         with:
           token: ${{ steps.generate-token.outputs.token }}
 
-      - name: Install Nix
-        uses: cachix/install-nix-action@9280e7aca88deada44c930f1e2c78e21c3ae3edd # v31.7.0
+      - name: Run cargo update
+        id: update
+        run: |
+          cargo update 2> >(tee /dev/stderr) | ./scripts/cargo-update-filter.sh > /tmp/cargo-update.log
+          echo "log=$(jq -Rs . < /tmp/cargo-update.log)" >> ${GITHUB_OUTPUT}
+          echo "table=$(./scripts/cargo-update-to-table.sh < /tmp/cargo-update.log | jq -Rs .)" >> ${GITHUB_OUTPUT}
 
-      - name: Update flake.lock
-        run: nix flake update
-
-      - name: Create pull request for flake.lock update
+      - name: Create pull request
         id: create-pr
         uses: peter-evans/create-pull-request@271a8d0340265f705b14b6d32b9829c1cb33d45e # v7.0.8
         with:
           token: ${{ steps.generate-token.outputs.token }}
-          commit-message: "chore(deps): update nix flake dependencies"
-          branch: update-flake-lock
-          title: "chore(deps): update flake.lock"
-          body: "This pull request updates the flake.lock file with the latest flake inputs."
+          commit-message: |
+            build(deps): update dependencies
+
+            ${{ fromJSON(steps.update.outputs.log) }}
+          branch: update-${{ github.run_number }}-${{ github.run_id }}
+          title: "build(deps): update dependencies"
+          body: |
+            Updates dependencies to latest versions per Cargo.toml constraints.
+
+            ${{ fromJSON(steps.update.outputs.table) }}
           author: "missionis[bot] <234988995+missionis[bot]@users.noreply.github.com>"
           committer: "missionis[bot] <234988995+missionis[bot]@users.noreply.github.com>"
           labels: |
             dependencies
-            nix
+            rust
           delete-branch: true
 
       - name: Enable auto-merge
