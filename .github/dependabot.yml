@@ -5,13 +5,22 @@
 
 version: 2
 updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "saturday"
+      time: "07:00"
+    commit-message:
+      prefix: "build(deps)"
+      include: "scope"
   - package-ecosystem: "cargo"
     directory: "/"
     schedule:
       interval: weekly
       day: friday
-      time: "19:00"
-      timezone: "Europe/Belgrade"
+      time: "17:00"
+      timezone: "Etc/UTC"
     allow:
       - dependency-type: all
     groups:

@@ -1,9 +1,5 @@
 name: Release
 
-defaults:
-  run:
-    shell: bash -euxo pipefail {0}
-
 on:
   workflow_dispatch:
     inputs:
@@ -21,6 +17,10 @@ permissions:
   issues: read
   actions: read
 
+defaults:
+  run:
+    shell: bash -euxo pipefail {0}
+
 jobs:
   prepare-release:
     name: Prepare Release
@@ -31,8 +31,18 @@ jobs:
       temp-branch: ${{ steps.create-temp-branch.outputs.branch }}
 
     steps:
+      - name: Check if running on allowed branch
+        run: |
+          if [[ "${{ github.ref_name }}" == "main" || "${{ github.ref_name }}" == "release/"* ]]; then
+            echo "✅ Running on allowed branch: ${{ github.ref_name }}"
+          else
+            echo "❌ Release workflow can only be triggered from 'main' or 'release/*' branches"
+            echo "Current branch: ${{ github.ref_name }}"
+            exit 1
+          fi
+
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
         with:
           token: ${{ github.token }}
           fetch-depth: 0
@@ -57,8 +67,8 @@ jobs:
       - name: Update version in Cargo.toml
         id: update-version
         run: |
-          cargo set-version --package hl --bump "${{ github.event.inputs.release-type }}"
-          VERSION=$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[] | select(.name == "hl") | .version')
+          cargo set-version --package ${{ github.event.repository.name }} --bump "${{ github.event.inputs.release-type }}"
+          VERSION=$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[] | select(.name == "${{ github.event.repository.name }}") | .version')
           echo "version=${VERSION?}" >> $GITHUB_OUTPUT
 
       - name: Install git-cliff
@@ -93,8 +103,8 @@ jobs:
 
       - name: Commit version update
         run: |
-          git config --local user.email "action@github.com"
-          git config --local user.name "GitHub Action"
+          git config --local user.name "missionis[bot]"
+          git config --local user.email "234988995+missionis[bot]@users.noreply.github.com"
           git add Cargo.toml Cargo.lock
           git commit -m "chore(release): bump version to ${{ steps.update-version.outputs.version }}"
           git push origin "refs/heads/${{ steps.create-temp-branch.outputs.branch }}"
@@ -117,22 +127,24 @@ jobs:
     needs: [prepare-release, build]
 
     steps:
-      - name: Generate token
+      - name: Generate GitHub App Token
         id: generate-token
-        uses: tibdex/github-app-token@v1
+        uses: actions/create-github-app-token@67018539274d69449ef7c02e8e71183d1719ab42 # v2.1.4
         with:
-          app_id: ${{ secrets.APP_ID }}
-          private_key: ${{ secrets.APP_PRIVATE_KEY }}
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
 
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
         with:
           token: ${{ steps.generate-token.outputs.token }}
           ref: ${{ needs.prepare-release.outputs.temp-branch }}
           fetch-depth: 0
 
       - name: Install Nix
-        uses: DeterminateSystems/nix-installer-action@v9
+        uses: DeterminateSystems/nix-installer-action@786fff0690178f1234e4e1fe9b536e94f5433196 # v20
 
       - name: Generate Nix binary hashes file
         run: |
@@ -144,7 +156,7 @@ jobs:
 
           # Get filtered assets and convert hex hashes to SRI format
           gh release view "${RELEASE_TAG:?}" --json assets --jq '.assets
-            | map(select(.name | test("^hl-(linux-(x86_64|arm64)-musl|macos-(x86_64|arm64))\\.tar\\.gz$")))
+            | map(select(.name | test("^${{ github.event.repository.name }}-(linux-(x86_64|arm64)-musl|macos-(x86_64|arm64))\\.tar\\.gz$")))
             | .[] | .name + ":" + (.digest | ltrimstr("sha256:"))' | \
             while IFS=':' read -r name hex; do
               echo "${name:?}:sha256-$(echo -n "${hex:?}" | xxd -r -p | base64)"
@@ -168,36 +180,54 @@ jobs:
         run: |
           VERSION=${{ needs.prepare-release.outputs.version }}
 
-          git config --local user.email "action@github.com"
-          git config --local user.name "GitHub Action"
+          git config --local user.name "missionis[bot]"
+          git config --local user.email "234988995+missionis[bot]@users.noreply.github.com"
 
           git add nix/binary-hashes.nix
           git commit -m "build(nix): update binary hashes for v${VERSION:?}"
 
+          # Push the commit to remote branch
+          git push origin "refs/heads/${{ needs.prepare-release.outputs.temp-branch }}"
+
           # Create final tag pointing to commit with all changes
           git tag "v${VERSION:?}"
 
-      - name: Fast-forward target branch and publish release
+      - name: Merge into the target branch and publish release
         run: |
           VERSION=${{ needs.prepare-release.outputs.version }}
           RELEASE_TAG=${{ needs.prepare-release.outputs.release-tag }}
           TEMP_BRANCH=${{ needs.prepare-release.outputs.temp-branch }}
           TARGET_BRANCH=${{ github.ref_name }}
 
+          # Merge the temporary branch into the target branch
           git checkout -B "${TARGET_BRANCH:?}" "origin/${TARGET_BRANCH:?}"
-          git merge --ff-only "refs/heads/${TEMP_BRANCH:?}"
+          git merge "refs/heads/${TEMP_BRANCH:?}"
           git push origin "refs/heads/${TARGET_BRANCH:?}"
+
+          # Push the release tag
           git push origin "refs/tags/v${VERSION:?}"
 
+          # Publish the release
           gh release edit "${RELEASE_TAG:?}" --tag "v${VERSION:?}" --draft=false --latest
 
-          git push origin --delete "refs/heads/${TEMP_BRANCH:?}" || true
+          # Update latest tag if it exists
           if [ "$(git tag -l latest --merged HEAD)" = latest ]; then
             git tag -f latest HEAD
             git push -f origin refs/tags/latest
           fi
 
+          # Delete the temporary branch
+          git push origin --delete "refs/heads/${TEMP_BRANCH:?}" || true
+
           echo "✅ Release v${VERSION:?} completed successfully!"
-          echo "🏷️ Target branch fast-forwarded and tag v${VERSION:?} pushed"
+          echo "🏷️ Target branch updated and tag v${VERSION:?} pushed"
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ steps.generate-token.outputs.token }}
+
+      - name: Trigger publish workflow to distribute release
+        run: |
+          gh workflow run publish.yml \
+            --repo pamburus/action-hub \
+            --field package="${{ github.event.repository.name }}"
+        env:
+          GH_TOKEN: ${{ steps.generate-token.outputs.token }}
