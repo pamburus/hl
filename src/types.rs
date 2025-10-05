@@ -2,7 +2,7 @@
 use std::cmp::Ord;
 
 // third-party imports
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 // ---
 
@@ -15,4 +15,10 @@ pub enum FieldKind {
     Caller,
     CallerFile,
     CallerLine,
+}
+
+#[derive(Eq, PartialEq, Copy, Clone, Debug, Serialize, Deserialize)]
+pub enum InputFormat {
+    Json,
+    Logfmt,
 }
