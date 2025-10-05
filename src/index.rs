@@ -46,7 +46,10 @@ use crate::{
     error::{Error, Result},
     index_capnp as schema,
     level::Level,
-    model::{Parser, ParserSettings, RawRecord},
+    model::v2::{
+        compat::{Parser, ParserSettings},
+        parse::NewParser,
+    },
     scanning::{Delimiter, Scanner, Segment, SegmentBuf, SegmentBufFactory},
     settings::PredefinedFields,
     vfs::{FileRead, FileSystem, LocalFileSystem},
@@ -284,7 +287,7 @@ pub struct Indexer<FS = LocalFileSystem> {
     buffer_size: u32,
     max_message_size: u32,
     dir: PathBuf,
-    parser: Parser,
+    parser: ParserSettings,
     delimiter: Delimiter,
     allow_prefix: bool,
     format: Option<InputFormat>,
@@ -302,7 +305,7 @@ where
             buffer_size: settings.buffer_size.into(),
             max_message_size: settings.max_message_size.into(),
             dir,
-            parser: Parser::new(ParserSettings::new(settings.fields, empty(), settings.unix_ts_unit)),
+            parser: ParserSettings::new(settings.fields).with_unix_timestamp_unit(settings.unix_ts_unit),
             delimiter: settings.delimiter,
             allow_prefix: settings.allow_prefix,
             format: settings.format,
@@ -514,14 +517,11 @@ where
             let mut ts = None;
             let mut rel = 0;
             if !data.is_empty() {
-                let mut stream = RawRecord::parser()
-                    .allow_prefix(self.allow_prefix)
-                    .format(self.format)
-                    .parse(data);
-                while let Some(item) = stream.next() {
-                    match item {
-                        Ok(ar) => {
-                            let rec = self.parser.parse(&ar.record);
+                // TODO: use format option
+                let mut parser = self.parser.new_parser(crate::format::Auto::default(), data).unwrap();
+                while let Some(rec) = parser.next() {
+                    match rec {
+                        Ok(rec) => {
                             let mut flags = 0;
                             if let Some(level) = rec.level {
                                 flags |= level_to_flag(level);
@@ -531,8 +531,8 @@ where
                                 sorted = false;
                             }
                             stat.add_valid(ts, flags);
-                            lines.push((ts.or(prev_ts), i as u32, offset + ar.offsets.start as u32));
-                            rel = ar.offsets.end;
+                            lines.push((ts.or(prev_ts), i as u32, offset + rec.span.start as u32));
+                            rel = rec.span.end;
                             i += 1;
                             prev_ts = ts;
                         }
