@@ -11,8 +11,11 @@ updates:
       interval: "weekly"
       day: "saturday"
       time: "07:00"
+    labels:
+      - "dependencies"
+      - "github-actions"
     commit-message:
-      prefix: "build(deps)"
+      prefix: "build"
       include: "scope"
   - package-ecosystem: "cargo"
     directory: "/"
