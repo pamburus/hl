@@ -1,0 +1,78 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/pamburus/hl/master/schema/json/theme.schema.json
+$schema: https://raw.githubusercontent.com/pamburus/hl/master/schema/json/theme.schema.json
+
+tags: [dark, light, 16color]
+
+elements:
+  input:
+    foreground: cyan
+    modes: [faint]
+  time:
+    foreground: cyan
+    modes: [faint]
+  logger:
+    foreground: cyan
+    modes: [faint]
+  caller:
+    foreground: cyan
+    modes: [faint, italic]
+  level:
+    foreground: cyan
+    modes: [faint]
+  message:
+    foreground: default
+  message-delimiter:
+    foreground: cyan
+    modes: [faint]
+  field:
+    foreground: cyan
+    modes: [faint]
+  key:
+    foreground: cyan
+  ellipsis:
+    foreground: cyan
+    modes: [faint]
+  object:
+    modes: [bold]
+  array:
+    modes: [bold]
+  string:
+    foreground: default
+  number:
+    foreground: bright-blue
+  boolean:
+    foreground: yellow
+  boolean-false:
+    foreground: red
+  "null":
+    foreground: red
+levels:
+  trace:
+    level-inner:
+      foreground: cyan
+  debug:
+    level-inner:
+      foreground: magenta
+  info:
+    level-inner:
+      foreground: cyan
+  warning:
+    message:
+      foreground: yellow
+    level-inner:
+      foreground: yellow
+  error:
+    message:
+      foreground: bright-red
+    level-inner:
+      foreground: bright-red
+indicators:
+  sync:
+    synced:
+      text: " "
+    failed:
+      text: "!"
+      inner:
+        style:
+          foreground: "yellow"
+          modes: [bold]
