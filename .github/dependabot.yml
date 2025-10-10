@@ -9,8 +9,8 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
-      day: "saturday"
-      time: "07:00"
+      day: "monday"
+      time: "04:00"
     labels:
       - "dependencies"
       - "github-actions"
@@ -22,7 +22,7 @@ updates:
     schedule:
       interval: weekly
       day: friday
-      time: "17:00"
+      time: "18:00"
       timezone: "Etc/UTC"
     allow:
       - dependency-type: all
