@@ -12,12 +12,12 @@ LLVM_BIN=$(rustc --print sysroot)/lib/rustlib/$(rustc -vV | sed -n 's|host: ||p'
 LLVM_PROFILE_PATTERN="target/coverage/test-*.profraw"
 PROFDATA_FILE="target/coverage.profdata"
 IGNORE=(
-    '/.cargo/git/checkouts/'
-    '/.cargo/registry/'
-    '/.rustup/toolchains/'
+    '/.cargo/'
+    '/.rustup/'
     '/target/coverage/debug/'
     'rustc/.*/library/'
-    '_capnp.rs$'
+    '_capnp\.rs$'
+    '/tests\.rs$'
 )
 
 function executables() {
