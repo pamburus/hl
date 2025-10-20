@@ -18,7 +18,7 @@ A comprehensive tool that compares test coverage between two Git commits to iden
 ### Usage
 
 ```bash
-./scripts/coverage-diff-analysis.py <old_commit>
+./scripts/coverage-diff-analysis.py <base>
 ```
 
 **Note**: The script analyzes changes from the old commit to your current working directory, including both staged and unstaged changes. This means you can analyze coverage impact before committing!
@@ -52,7 +52,7 @@ The script generates a comprehensive report with three main sections:
 src/app.rs: 8 23 143 225 257-258 (5 lines)
 src/model.rs: 479 576-579 601-603 (7 lines)
 
-🔍 UNCOVERED RANGES (by file)  
+🔍 UNCOVERED RANGES (by file)
 src/app.rs: 239 350-362 447 501 (15 lines)
 src/model.rs: 479 577 601 (3 lines)
 
