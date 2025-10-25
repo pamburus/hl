@@ -10,6 +10,7 @@ permissions:
   contents: read
   pull-requests: write
   actions: read
+  id-token: write
 
 env:
   CARGO_TERM_COLOR: always
@@ -99,8 +100,8 @@ jobs:
 
       - name: Upload coverage to codecov.io
         uses: codecov/codecov-action@5a1091511ad55cbe89839c7260b706298ca349f7 # v5.5.1
-        env:
-          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+        with:
+          use_oidc: true
 
   test-nix:
     runs-on: ubuntu-latest
