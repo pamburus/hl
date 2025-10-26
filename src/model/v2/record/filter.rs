@@ -164,11 +164,7 @@ impl<'a> KeyMatcher<'a> {
 
     #[inline]
     fn norm(c: char) -> char {
-        if c == '_' {
-            '-'
-        } else {
-            c.to_ascii_lowercase()
-        }
+        if c == '_' { '-' } else { c.to_ascii_lowercase() }
     }
 }
 
@@ -487,8 +483,8 @@ impl Filter for FieldFilter {
                     }
                 }
                 FieldKind::Caller => {
-                    if let Some(Caller::Text(caller)) = record.caller {
-                        self.match_value(Some(EncodedString::raw(caller)))
+                    if !record.caller.name.is_empty() {
+                        self.match_value(Some(EncodedString::raw(record.caller.name)))
                     } else {
                         false
                     }

@@ -24,9 +24,6 @@ use string::{DynMessageFormat, Format, ValueFormatAuto};
 
 pub mod v2;
 
-#[cfg(test)]
-mod test;
-
 // ---
 
 type Buf = Vec<u8>;

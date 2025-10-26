@@ -33,9 +33,9 @@ use crate::{
     datefmt::{DateTimeFormat, DateTimeFormatter},
     error::*,
     fmtx::aligned_left,
-    formatting::{
-        DynRecordWithSourceFormatter, RecordFormatterBuilder,
-        v2::{RawRecordFormatter, RecordFormatter, RecordWithSourceFormatter},
+    formatting::v2::{
+        DynRecordWithSourceFormatter, RawRecordFormatter, RecordFormatter, RecordFormatterBuilder,
+        RecordWithSourceFormatter,
     },
     fsmon::{self, EventKind},
     index::{Indexer, IndexerSettings, Timestamp},
