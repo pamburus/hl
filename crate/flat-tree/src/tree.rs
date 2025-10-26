@@ -51,12 +51,12 @@ where
     }
 
     #[inline]
-    pub fn roots(&self) -> Roots<V, S> {
+    pub fn roots(&self) -> Roots<'_, V, S> {
         Roots { tree: self }
     }
 
     #[inline]
-    pub fn nodes(&self) -> Nodes<V, S> {
+    pub fn nodes(&self) -> Nodes<'_, V, S> {
         Nodes {
             tree: self,
             start: 0,
@@ -81,7 +81,7 @@ where
     }
 
     #[inline]
-    pub fn metaroot(&mut self) -> NodeBuilder<V, S> {
+    pub fn metaroot(&mut self) -> NodeBuilder<'_, V, S> {
         NodeBuilder {
             tree: self,
             attachment: NoAttachment,
@@ -109,7 +109,7 @@ where
     }
 
     #[inline]
-    fn node(&self, index: usize) -> Node<V, S> {
+    fn node(&self, index: usize) -> Node<'_, V, S> {
         Node {
             tree: self,
             index,
