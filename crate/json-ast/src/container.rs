@@ -1,5 +1,5 @@
 // workspace imports
-use flat_tree::{tree, FlatTree};
+use flat_tree::{FlatTree, tree};
 
 // local imports
 use crate::{
@@ -35,7 +35,7 @@ impl<'s> Container<'s> {
     }
 
     #[inline]
-    pub fn nodes(&self) -> tree::Nodes<Node<'s>> {
+    pub fn nodes(&self) -> tree::Nodes<'_, Node<'s>> {
         self.inner.nodes()
     }
 
