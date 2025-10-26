@@ -1,3 +1,7 @@
+// workspace imports
+use encstr::{AnyEncodedString, EncodedString};
+use serde_logfmt::logfmt;
+
 // local imports
 pub use self::{
     build::{Builder, Settings},
@@ -9,6 +13,10 @@ use crate::{
     timestamp::Timestamp,
 };
 use once_cell::sync::Lazy;
+
+// test imports
+#[cfg(test)]
+use crate::testing::Sample;
 
 // ---
 
@@ -27,7 +35,7 @@ pub struct Record<'s> {
     pub message: Option<ast::Scalar<'s>>,
     pub level: Option<Level>,
     pub logger: Option<&'s str>,
-    pub caller: Option<Caller<'s>>,
+    pub caller: Caller<'s>,
     pub span: std::ops::Range<usize>,
     pub(crate) ast: ast::Container<'s>,
     pub(crate) predefined: heapless::Vec<ast::Index, MAX_PREDEFINED_FIELDS>,
@@ -74,6 +82,17 @@ impl<'s> From<Record<'s>> for ast::Container<'s> {
     #[inline]
     fn from(record: Record<'s>) -> Self {
         record.ast
+    }
+}
+
+#[cfg(test)]
+impl Sample for Record<'static> {
+    fn sample() -> Self {
+        Self {
+            message: Some(ast::Scalar::String(EncodedString::raw("test message"))),
+            caller: Caller::with_name("test-caller"),
+            ..Default::default()
+        }
     }
 }
 

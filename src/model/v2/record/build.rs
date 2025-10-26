@@ -473,10 +473,18 @@ impl FieldSettings {
         match *self {
             Self::Time => {
                 let s = as_text(value)?;
-                let s = if s.as_bytes()[0] == b'"' { &s[1..s.len() - 1] } else { s };
-                let ts = Timestamp::new(s).with_unix_unit(ps.unix_ts_unit);
-                to.ts = Some(ts);
-                true
+                let s = if !s.is_empty() && s.as_bytes()[0] == b'"' {
+                    &s[1..s.len() - 1]
+                } else {
+                    s
+                };
+                if !s.is_empty() {
+                    let ts = Timestamp::new(s).with_unix_unit(ps.unix_ts_unit);
+                    to.ts = Some(ts);
+                    true
+                } else {
+                    false
+                }
             }
             Self::Level(i) => {
                 let s = as_text(value)?;
@@ -500,31 +508,29 @@ impl FieldSettings {
                 Err(_) => false,
             },
             Self::Caller => {
-                to.caller = Some(Caller::Text(as_text(value)?));
+                to.caller.name = value.as_text()?.source();
                 true
             }
-            Self::CallerFile => match &mut to.caller {
-                None => {
-                    to.caller = Some(Caller::FileLine(as_text(value)?, ""));
-                    true
-                }
-                Some(Caller::FileLine(file, _)) => {
-                    *file = as_text(value)?;
-                    true
-                }
-                _ => false,
-            },
-            Self::CallerLine => match &mut to.caller {
-                None => {
-                    to.caller = Some(Caller::FileLine("", as_text(value)?));
-                    true
-                }
-                Some(Caller::FileLine(_, line)) => {
-                    *line = as_text(value)?;
-                    true
-                }
-                _ => false,
-            },
+            Self::CallerFile => {
+                to.caller.file = value.as_text()?.source();
+                true
+            }
+            Self::CallerLine => {
+                let value = match value {
+                    Value::Number(value) => value,
+                    Value::String(s) => {
+                        let s = s.source();
+                        if s.is_empty() {
+                            return None;
+                        }
+                        s
+                    }
+                    _ => return None,
+                };
+
+                to.caller.line = value;
+                true
+            }
             Self::Nested(_) => false,
         }
         .then(|| ())
