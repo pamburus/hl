@@ -3,8 +3,8 @@ use std::fmt::Debug;
 
 // workspace imports
 use flat_tree::{
-    tree::{self, NoAttachment},
     FlatTree,
+    tree::{self, NoAttachment},
 };
 use log_format::{
     ast, origin,
@@ -30,12 +30,12 @@ impl Container {
 
 impl Container {
     #[inline]
-    pub fn roots(&self) -> tree::Roots<Value> {
+    pub fn roots(&self) -> tree::Roots<'_, Value> {
         self.inner.roots()
     }
 
     #[inline]
-    pub fn nodes(&self) -> tree::Nodes<Value> {
+    pub fn nodes(&self) -> tree::Nodes<'_, Value> {
         self.inner.nodes()
     }
 
@@ -50,7 +50,7 @@ impl Container {
     }
 
     #[inline]
-    pub fn metaroot(&mut self) -> Builder<tree::NodeBuilder<Value>> {
+    pub fn metaroot(&mut self) -> Builder<tree::NodeBuilder<'_, Value>> {
         Builder::new(self.inner.metaroot())
     }
 }
@@ -73,10 +73,10 @@ where
 {
     type Attachment: BuildAttachment;
     type WithAttachment<V>: Build<
-        Attachment = AttachmentChild<Self::Attachment, V>,
-        Checkpoint = Self::Checkpoint,
-        WithoutAttachment = Self,
-    >;
+            Attachment = AttachmentChild<Self::Attachment, V>,
+            Checkpoint = Self::Checkpoint,
+            WithoutAttachment = Self,
+        >;
     type WithoutAttachment: Build<Checkpoint = Self::Checkpoint, Attachment = AttachmentParent<Self::Attachment>>;
     type Checkpoint;
 
