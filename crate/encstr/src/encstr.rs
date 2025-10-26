@@ -12,12 +12,12 @@ pub trait AnyEncodedString<'a> {
     fn source(&self) -> &'a str;
     fn is_empty(&self) -> bool;
 
-    #[inline(always)]
+    #[inline]
     fn chars(&self) -> Chars<'a, Self::Tokens> {
         Chars::new(self.tokens())
     }
 
-    #[inline(always)]
+    #[inline]
     fn bytes(&self) -> Bytes<'a, Self::Tokens> {
         Bytes::new(self.tokens())
     }
@@ -32,17 +32,17 @@ pub enum EncodedString<'a> {
 }
 
 impl<'a> EncodedString<'a> {
-    #[inline(always)]
+    #[inline]
     pub fn json(value: &'a str) -> Self {
         EncodedString::Json(super::json::JsonEncodedString::new(value))
     }
 
-    #[inline(always)]
+    #[inline]
     pub fn raw(value: &'a str) -> Self {
         EncodedString::Raw(super::raw::RawString::new(value))
     }
 
-    #[inline(always)]
+    #[inline]
     pub fn source(&self) -> &'a str {
         match self {
             EncodedString::Json(string) => string.source(),
@@ -50,7 +50,7 @@ impl<'a> EncodedString<'a> {
         }
     }
 
-    #[inline(always)]
+    #[inline]
     pub fn is_empty(&self) -> bool {
         match self {
             EncodedString::Json(string) => string.is_empty(),
@@ -62,7 +62,7 @@ impl<'a> EncodedString<'a> {
 impl<'a> AnyEncodedString<'a> for EncodedString<'a> {
     type Tokens = EncodedStringTokens<'a>;
 
-    #[inline(always)]
+    #[inline]
     fn decode<H: Handler>(&self, handler: H) -> Result<()> {
         match self {
             EncodedString::Json(string) => string.decode(handler),
@@ -70,7 +70,7 @@ impl<'a> AnyEncodedString<'a> for EncodedString<'a> {
         }
     }
 
-    #[inline(always)]
+    #[inline]
     fn tokens(&self) -> Self::Tokens {
         match self {
             EncodedString::Json(string) => Self::Tokens::Json(string.tokens()),
@@ -78,12 +78,12 @@ impl<'a> AnyEncodedString<'a> for EncodedString<'a> {
         }
     }
 
-    #[inline(always)]
+    #[inline]
     fn source(&self) -> &'a str {
         self.source()
     }
 
-    #[inline(always)]
+    #[inline]
     fn is_empty(&self) -> bool {
         match self {
             EncodedString::Json(string) => string.is_empty(),
@@ -100,7 +100,7 @@ pub enum EncodedStringTokens<'a> {
 impl<'a> Iterator for EncodedStringTokens<'a> {
     type Item = Result<Token<'a>>;
 
-    #[inline(always)]
+    #[inline]
     fn next(&mut self) -> Option<Self::Item> {
         match self {
             EncodedStringTokens::Json(tokens) => tokens.next(),
@@ -120,7 +120,7 @@ impl<'a, T> Chars<'a, T>
 where
     T: Iterator<Item = Result<Token<'a>>>,
 {
-    #[inline(always)]
+    #[inline]
     pub fn new(tokens: T) -> Self {
         Self { tokens, s: "".chars() }
     }
@@ -160,7 +160,7 @@ impl<'a, T> Bytes<'a, T>
 where
     T: Iterator<Item = Result<Token<'a>>>,
 {
-    #[inline(always)]
+    #[inline]
     pub fn new(tokens: T) -> Self {
         Self {
             head: None,
@@ -224,14 +224,14 @@ impl<H> Handler for &mut H
 where
     H: Handler,
 {
-    #[inline(always)]
+    #[inline]
     fn handle(&mut self, token: Token<'_>) -> Option<()> {
         (**self).handle(token)
     }
 }
 
 impl Handler for &mut Vec<u8> {
-    #[inline(always)]
+    #[inline]
     fn handle(&mut self, token: Token<'_>) -> Option<()> {
         RawAppender::new(self).handle(token)
     }
@@ -242,7 +242,7 @@ impl Handler for &mut Vec<u8> {
 pub struct HandlerFn<F>(F);
 
 impl<F> HandlerFn<F> {
-    #[inline(always)]
+    #[inline]
     pub fn new(f: F) -> Self {
         HandlerFn(f)
     }
@@ -252,7 +252,7 @@ impl<F> Handler for HandlerFn<F>
 where
     F: FnMut(Token<'_>) -> Option<()>,
 {
-    #[inline(always)]
+    #[inline]
     fn handle(&mut self, token: Token<'_>) -> Option<()> {
         self.0(token)
     }
@@ -273,12 +273,12 @@ pub struct Builder {
 }
 
 impl Builder {
-    #[inline(always)]
+    #[inline]
     pub fn new() -> Self {
         Builder { buffer: Vec::new() }
     }
 
-    #[inline(always)]
+    #[inline]
     pub fn with_capacity(capacity: usize) -> Self {
         Builder {
             buffer: Vec::with_capacity(capacity),
@@ -293,34 +293,34 @@ impl Default for Builder {
 }
 
 impl Builder {
-    #[inline(always)]
+    #[inline]
     pub fn into_string(self) -> String {
         unsafe { String::from_utf8_unchecked(self.buffer) }
     }
 
-    #[inline(always)]
+    #[inline]
     pub fn into_bytes(self) -> Vec<u8> {
         self.buffer
     }
 
-    #[inline(always)]
+    #[inline]
     pub fn clear(&mut self) {
         self.buffer.clear();
     }
 
-    #[inline(always)]
+    #[inline]
     pub fn as_str(&self) -> &str {
         unsafe { str::from_utf8_unchecked(&self.buffer) }
     }
 
-    #[inline(always)]
+    #[inline]
     pub fn as_bytes(&self) -> &[u8] {
         &self.buffer
     }
 }
 
 impl Handler for Builder {
-    #[inline(always)]
+    #[inline]
     fn handle(&mut self, token: Token<'_>) -> Option<()> {
         RawAppender::new(&mut self.buffer).handle(token)
     }
@@ -331,7 +331,7 @@ impl Handler for Builder {
 pub struct Ignorer;
 
 impl Handler for Ignorer {
-    #[inline(always)]
+    #[inline]
     fn handle(&mut self, _: Token<'_>) -> Option<()> {
         None
     }
@@ -344,28 +344,28 @@ pub trait AsBytes {
 }
 
 impl AsBytes for &str {
-    #[inline(always)]
+    #[inline]
     fn as_bytes(&self) -> &[u8] {
         (*self).as_bytes()
     }
 }
 
 impl AsBytes for String {
-    #[inline(always)]
+    #[inline]
     fn as_bytes(&self) -> &[u8] {
         self.as_bytes()
     }
 }
 
 impl AsBytes for &[u8] {
-    #[inline(always)]
+    #[inline]
     fn as_bytes(&self) -> &[u8] {
         self
     }
 }
 
 impl AsBytes for Vec<u8> {
-    #[inline(always)]
+    #[inline]
     fn as_bytes(&self) -> &[u8] {
         self.as_slice()
     }
@@ -375,7 +375,7 @@ impl<S> AsBytes for &S
 where
     S: AsBytes,
 {
-    #[inline(always)]
+    #[inline]
     fn as_bytes(&self) -> &[u8] {
         (*self).as_bytes()
     }
