@@ -31,7 +31,7 @@ impl<'s> Parse<'s> for Parser<'s> {
     type Lexer = Lexer<'s>;
 
     fn parse<T: ast::Build<'s>>(&mut self, target: T) -> ParseResult<T> {
-        let start = self.lexer.span().start;
+        let start = self.lexer.span().end;
 
         match parse_value(&mut self.lexer, target) {
             (target, Ok(true)) => Some(Ok(ParseOutput {
