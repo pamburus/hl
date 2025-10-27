@@ -9,11 +9,8 @@ use criterion::{BatchSize, BenchmarkId, Criterion, Throughput};
 // local imports
 use super::{BencherExt, ND, hash, samples};
 use hl::{
-    DateTimeFormatter, DateTimeFormatter, Filter, Filter, IncludeExcludeKeyFilter, IncludeExcludeKeyFilter,
-    LinuxDateFormat, LinuxDateFormat, Parser, ParserSettings, ParserSettings, RecordFormatter, RecordFormatter,
-    SegmentProcessor, Settings, Settings, Theme,
-    app::{RecordIgnorer, SegmentProcess, SegmentProcessorOptions},
-    formatting::{NoOpRecordWithSourceFormatter, RecordFormatterBuilder},
+    DateTimeFormatter, Filter, LinuxDateFormat, ParserSettings, Settings, Theme,
+    formatting::v2::{NoOpRecordWithSourceFormatter, RecordFormatterBuilder},
     processing::{RecordIgnorer, SegmentProcess, SegmentProcessor, SegmentProcessorOptions},
     settings,
     timezone::Tz,
