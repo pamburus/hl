@@ -1,6 +1,6 @@
 use super::{
-    error::{Error, ErrorKind, MakeError},
     Token,
+    error::{Error, ErrorKind, MakeError},
 };
 use upstream::{
     ast::{Build, Discard},
@@ -25,6 +25,7 @@ pub fn parse_value<'s, B: Build>(lexer: &mut Lexer<'s>, target: B) -> Result<(bo
 }
 
 #[inline]
+#[allow(dead_code)]
 pub fn parse_object<'s, B: Build>(lexer: &mut Lexer<'s>, target: B) -> Result<(bool, B), (Error, B)> {
     if let Some(token) = lexer.next() {
         let token = match token {

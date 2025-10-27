@@ -4,7 +4,7 @@ use std::str::Utf8Error;
 // workspace imports
 use encstr::EncodedString;
 use flat_tree::tree;
-use log_format::{ast::BuilderDetach, Format, Span};
+use log_format::{Format, Span, ast::BuilderDetach};
 
 use super::{
     ast::{self, Container, Node, SiblingsIter},
@@ -47,7 +47,7 @@ where
     S: Source + Clone,
 {
     #[inline]
-    pub fn entries(&self) -> Entries<S> {
+    pub fn entries(&self) -> Entries<'_, S> {
         Entries {
             segment: self,
             roots: self.container.roots(),
@@ -55,7 +55,7 @@ where
     }
 
     #[inline]
-    pub fn entry(&self, index: ast::Index) -> Option<Entry<S>> {
+    pub fn entry(&self, index: ast::Index) -> Option<Entry<'_, S>> {
         self.container.nodes().get(index).and_then(|node| match node.value() {
             ast::Value::Composite(ast::Composite::Object) => Some(Object::new(self, node)),
             _ => None,
@@ -254,7 +254,7 @@ where
     }
 
     #[inline]
-    pub fn get(&self) -> Result<EncodedString, Utf8Error> {
+    pub fn get(&self) -> Result<EncodedString<'_>, Utf8Error> {
         match &self.inner {
             ast::String::Plain(span) => Ok(EncodedString::raw(self.segment.source.slice(*span).str()?)),
             ast::String::JsonEscaped(span) => Ok(EncodedString::json(self.segment.source.slice(*span).str()?)),
@@ -388,7 +388,7 @@ where
     }
 
     #[inline]
-    pub fn key(&self) -> &String<S> {
+    pub fn key(&self) -> &String<'_, S> {
         &self.key
     }
 
