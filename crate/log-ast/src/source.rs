@@ -35,7 +35,7 @@ impl Source for [u8] {
 
     #[inline]
     unsafe fn slice_unchecked(&self, span: Span) -> &Self::Slice<'_> {
-        self.get_unchecked(Range::from(span))
+        unsafe { self.get_unchecked(Range::from(span)) }
     }
 }
 
@@ -55,7 +55,7 @@ impl Source for str {
 
     #[inline]
     unsafe fn slice_unchecked(&self, span: Span) -> &Self::Slice<'_> {
-        std::str::from_utf8_unchecked(self.as_bytes().get_unchecked(Range::from(span)))
+        unsafe { std::str::from_utf8_unchecked(self.as_bytes().get_unchecked(Range::from(span))) }
     }
 }
 
@@ -86,7 +86,7 @@ where
 
     #[inline]
     unsafe fn slice_unchecked(&self, span: Span) -> &Self::Slice<'_> {
-        self.deref().slice_unchecked(span)
+        unsafe { self.deref().slice_unchecked(span) }
     }
 }
 
@@ -111,7 +111,7 @@ impl Slice for [u8] {
 
     #[inline]
     unsafe fn str_unchecked(&self) -> &str {
-        std::str::from_utf8_unchecked(self)
+        unsafe { std::str::from_utf8_unchecked(self) }
     }
 }
 
@@ -149,6 +149,6 @@ where
 
     #[inline]
     unsafe fn str_unchecked(&self) -> &str {
-        self.deref().str_unchecked()
+        unsafe { self.deref().str_unchecked() }
     }
 }
