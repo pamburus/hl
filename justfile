@@ -89,8 +89,8 @@ uncovered base="origin/master": (setup "coverage")
     @scripts/coverage-diff-analysis.py -q --ide-links {{base}}
 
 # Run benchmarks
-bench: (setup "build")
-    cargo bench --workspace --locked
+bench *args: (setup "build")
+    cargo bench --workspace --locked {{args}}
 
 # Check schema validation
 check-schema: (setup "schema")
