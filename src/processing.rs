@@ -5,11 +5,11 @@ use std::ops::Range;
 use crate::{
     formatting::v2::{RawRecordFormatter, RecordFormatter, RecordWithSourceFormatter},
     model::{
+        Filter,
         v2::{
             parse::{NewParser, Parse, Parser, Settings as ParserSettings},
             record::{Filter as RecordFilter, Record, RecordWithSourceConstructor},
         },
-        Filter,
     },
     scanning::{BufFactory, Delimit, Delimiter, Scanner, SearchExt, Segment, SegmentBuf, SegmentBufFactory},
     types::InputFormat,
@@ -28,7 +28,7 @@ pub trait SegmentProcess {
 
 // ---
 
-#[derive(Default)]
+#[derive(Clone, Default)]
 pub struct SegmentProcessorOptions {
     pub allow_prefix: bool,
     pub allow_unparsed_data: bool,
