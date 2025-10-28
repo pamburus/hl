@@ -9,7 +9,7 @@ use crate::app::UnixTimestampUnit;
 
 // ---
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Timestamp<'a> {
     raw: &'a str,
     parsed: OnceCell<Option<DateTime<FixedOffset>>>,

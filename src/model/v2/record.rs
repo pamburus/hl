@@ -29,7 +29,7 @@ const MAX_PREDEFINED_FIELDS: usize = 8;
 
 // ---
 
-#[derive(Default)]
+#[derive(Default, Debug, Clone)]
 pub struct Record<'s> {
     pub ts: Option<Timestamp<'s>>,
     pub message: Option<ast::Scalar<'s>>,

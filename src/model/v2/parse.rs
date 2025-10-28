@@ -97,3 +97,6 @@ where
         self.container.clear();
     }
 }
+
+#[cfg(test)]
+mod tests;

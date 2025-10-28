@@ -12,6 +12,7 @@ use super::{DefaultStorage, Index, OptIndex, Storage};
 
 #[derive_where(Default; S: Default)]
 #[derive_where(Debug)]
+#[derive_where(Clone; S: Clone)]
 pub struct FlatTree<V, S = DefaultStorage<V>>
 where
     S: Storage<Value = V>,
