@@ -236,3 +236,6 @@ impl<'r, 's> Field<'r, 's> {
         }
     }
 }
+
+#[cfg(test)]
+mod tests;

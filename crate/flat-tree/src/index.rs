@@ -6,6 +6,27 @@ use std::fmt::Debug;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Index(pub(super) usize);
 
+impl Index {
+    #[inline]
+    pub fn new(index: usize) -> Self {
+        Self(index)
+    }
+}
+
+impl From<usize> for Index {
+    #[inline]
+    fn from(index: usize) -> Self {
+        Index(index)
+    }
+}
+
+impl From<Index> for usize {
+    #[inline]
+    fn from(index: Index) -> Self {
+        index.0
+    }
+}
+
 // ---
 
 #[derive(Clone, Copy, PartialEq, Eq)]

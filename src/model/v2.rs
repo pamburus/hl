@@ -24,3 +24,6 @@ pub mod compat {
 
     pub type RecordFilterNone = super::record::filter::Pass;
 }
+
+#[cfg(test)]
+mod tests;

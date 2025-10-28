@@ -26,7 +26,7 @@ pub mod error {
 
 pub use error::Result;
 
-#[derive(Default, Debug)]
+#[derive(Default, Debug, Clone)]
 pub struct Container<'s> {
     pub inner: ContainerInner<'s>,
 }
