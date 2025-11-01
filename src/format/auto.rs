@@ -1,4 +1,4 @@
-use super::{json, logfmt, Format, Parse, ParseOutput, ParseResult};
+use super::{Format, Parse, ParseOutput, ParseResult, json, logfmt};
 use crate::{error::Error, model::v2::ast};
 
 // ---

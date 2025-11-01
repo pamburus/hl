@@ -27,16 +27,12 @@ pub trait Push: Reserve {
 pub trait Build: Push + Sized {
     type Attachment: BuildAttachment;
     type WithAttachment<V>: Build<
-        Value = Self::Value,
-        Checkpoint = Self::Checkpoint,
-        Attachment = AttachmentChild<Self::Attachment, V>,
-        WithoutAttachment = Self,
-    >;
-    type WithoutAttachment: Build<
-        Value = Self::Value,
-        Checkpoint = Self::Checkpoint,
-        Attachment = AttachmentParent<Self::Attachment>,
-    >;
+            Value = Self::Value,
+            Checkpoint = Self::Checkpoint,
+            Attachment = AttachmentChild<Self::Attachment, V>,
+            WithoutAttachment = Self,
+        >;
+    type WithoutAttachment: Build<Value = Self::Value, Checkpoint = Self::Checkpoint, Attachment = AttachmentParent<Self::Attachment>>;
 
     fn build<R, F>(self, value: Self::Value, f: F) -> BuildOutput<F, R, Self>
     where

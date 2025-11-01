@@ -4,8 +4,8 @@ pub mod record;
 pub mod value;
 
 pub use record::{
-    filter::{FieldFilter, FieldFilterKey, Number, NumericOp, ValueMatchPolicy},
     Record,
+    filter::{FieldFilter, FieldFilterKey, Number, NumericOp, ValueMatchPolicy},
 };
 
 pub(crate) use record::filter::UnaryBoolOp;
@@ -16,8 +16,8 @@ pub mod compat {
     pub use super::{
         parse::{Parser, Settings as ParserSettings},
         record::{
-            filter::{CombinedFilter as Filter, FieldFilterSet, Filter as RecordFilter},
             Record, RecordWithSource, RecordWithSourceConstructor,
+            filter::{CombinedFilter as Filter, FieldFilterSet, Filter as RecordFilter},
         },
     };
     pub use crate::level::Level;

@@ -6,4 +6,4 @@ pub mod parse;
 pub mod token;
 pub mod value;
 
-pub use token::{lexer, Lexer};
+pub use token::{Lexer, lexer};

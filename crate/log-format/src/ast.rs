@@ -1,6 +1,6 @@
 use super::{
-    token::{Composite, Scalar},
     Span,
+    token::{Composite, Scalar},
 };
 use std::fmt::Display;
 

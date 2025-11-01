@@ -152,7 +152,5 @@ fn iters_per_batch(size: BatchSize, iters: u64) -> usize {
 
 #[macro_export]
 macro_rules! utf8 {
-    ($bytes: expr) => {{
-        std::str::from_utf8($bytes).unwrap()
-    }};
+    ($bytes: expr) => {{ std::str::from_utf8($bytes).unwrap() }};
 }

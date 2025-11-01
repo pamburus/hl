@@ -7,9 +7,9 @@ use derive_where::derive_where;
 // workspace imports
 use encstr::EncodedString;
 use flat_tree::{
+    FlatTree,
     storage::DefaultStorage,
     tree::{self, NoAttachment},
-    FlatTree,
 };
 
 // ---
@@ -84,12 +84,12 @@ where
     type Child: Build<'s, Checkpoint = Self::Checkpoint, Attachment = Self::Attachment>;
     type Attachment: BuildAttachment;
     type WithAttachment<V>: Build<
-        's,
-        Attachment = AttachmentChild<Self::Attachment, V>,
-        Checkpoint = Self::Checkpoint,
-        WithoutAttachment = Self,
-        Child = <Self::Child as Build<'s>>::WithAttachment<V>,
-    >;
+            's,
+            Attachment = AttachmentChild<Self::Attachment, V>,
+            Checkpoint = Self::Checkpoint,
+            WithoutAttachment = Self,
+            Child = <Self::Child as Build<'s>>::WithAttachment<V>,
+        >;
     type WithoutAttachment: Build<'s, Checkpoint = Self::Checkpoint, Attachment = AttachmentParent<Self::Attachment>>;
     type Checkpoint;
 

@@ -9,8 +9,8 @@ use flat_tree::{
 use log_format::{ast, origin};
 
 pub use log_format::{
-    token::{Composite, Scalar, String},
     Format, Span,
+    token::{Composite, Scalar, String},
 };
 pub use origin::Origin;
 
