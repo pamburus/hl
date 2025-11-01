@@ -1,5 +1,5 @@
 use logos::Logos;
-use upstream::{ast, Format, Span};
+use upstream::{Format, Span, ast};
 
 pub mod error;
 pub mod lexer;
@@ -22,7 +22,7 @@ impl Format for JsonFormat {
         Lexer::from_slice(s)
     }
 
-    fn parse<'s, B>(&mut self, s: &'s [u8], target: B) -> Result<(Option<Span>, B), (Self::Error, B)>
+    fn parse<B>(&mut self, s: &[u8], target: B) -> Result<(Option<Span>, B), (Self::Error, B)>
     where
         B: ast::Build,
     {

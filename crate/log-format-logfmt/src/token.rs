@@ -1,8 +1,8 @@
 use logos::Logos;
 
 use upstream::{
-    token::{Scalar, String},
     Span,
+    token::{Scalar, String},
 };
 
 use super::ErrorKind;

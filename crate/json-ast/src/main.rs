@@ -2,7 +2,6 @@
 use std::{env, fs, process::ExitCode};
 
 // external imports
-use ariadne;
 use logos::Logos;
 
 // ---

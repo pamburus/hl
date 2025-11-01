@@ -1,9 +1,9 @@
 use upstream::{
-    token::{Composite, Scalar},
     Lex, Span,
+    token::{Composite, Scalar},
 };
 
-use super::{error::MakeError, token::Token, Error, ErrorKind};
+use super::{Error, ErrorKind, error::MakeError, token::Token};
 
 // ---
 
@@ -221,6 +221,12 @@ pub struct BitStack {
     len: u8,
 }
 
+impl Default for BitStack {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl BitStack {
     #[inline]
     pub fn new() -> Self {
@@ -262,6 +268,11 @@ impl BitStack {
     #[inline]
     pub fn len(&self) -> u8 {
         self.len
+    }
+
+    #[inline]
+    pub fn is_empty(&self) -> bool {
+        self.len == 0
     }
 }
 

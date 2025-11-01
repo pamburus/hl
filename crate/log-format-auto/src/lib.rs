@@ -1,5 +1,5 @@
 // workspace imports
-use upstream::{ast, Format, Span};
+use upstream::{Format, Span, ast};
 
 // conditional imports
 #[cfg(feature = "json")]
@@ -35,14 +35,12 @@ impl AutoFormat {
 
 impl Default for AutoFormat {
     fn default() -> Self {
-        let mut enabled = Vec::new();
-
-        #[cfg(feature = "json")]
-        enabled.push(EnabledFormat::Json);
-
-        #[cfg(feature = "logfmt")]
-        enabled.push(EnabledFormat::Logfmt);
-
+        let enabled = vec![
+            #[cfg(feature = "json")]
+            EnabledFormat::Json,
+            #[cfg(feature = "logfmt")]
+            EnabledFormat::Logfmt,
+        ];
         Self::new(enabled)
     }
 }
@@ -56,7 +54,7 @@ impl Format for AutoFormat {
         Lexer::new(input, self.enabled.clone())
     }
 
-    fn parse<'s, B>(&mut self, s: &'s [u8], mut target: B) -> Result<(Option<Span>, B), (Self::Error, B)>
+    fn parse<B>(&mut self, s: &[u8], mut target: B) -> Result<(Option<Span>, B), (Self::Error, B)>
     where
         B: ast::Build,
     {

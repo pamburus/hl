@@ -27,10 +27,10 @@ impl OptIndex {
     }
 }
 
-impl Into<Option<Index>> for OptIndex {
+impl From<OptIndex> for Option<Index> {
     #[inline]
-    fn into(self) -> Option<Index> {
-        self.unfold()
+    fn from(val: OptIndex) -> Self {
+        val.unfold()
     }
 }
 

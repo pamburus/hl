@@ -1,9 +1,9 @@
 use upstream::{
-    token::{Composite, Scalar, String},
     Lex, Span,
+    token::{Composite, Scalar, String},
 };
 
-use super::{error::MakeError, token::Token, Error, ErrorKind};
+use super::{Error, ErrorKind, error::MakeError, token::Token};
 
 // ---
 
@@ -14,7 +14,7 @@ impl<'s> MakeError for InnerLexer<'s> {
     fn make_error(&self, kind: ErrorKind) -> Error {
         Error {
             kind,
-            span: self.span().into(),
+            span: self.span(),
         }
     }
 }
@@ -60,7 +60,7 @@ impl<'s> Lex for Lexer<'s> {
 
     #[inline]
     fn span(&self) -> Span {
-        self.inner.span().into()
+        self.inner.span()
     }
 }
 
@@ -95,7 +95,7 @@ impl<'s> Iterator for Lexer<'s> {
                 self.next = self.inner.next();
                 let mut span = self.inner.span();
                 span.end = span.start;
-                Some(Ok(upstream::Token::Scalar(Scalar::String(String::Plain(span.into())))))
+                Some(Ok(upstream::Token::Scalar(Scalar::String(String::Plain(span)))))
             }
             (None | Some(Ok(Token::Eol)), Context::Key) => {
                 self.context = Context::Root;

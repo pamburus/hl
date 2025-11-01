@@ -16,7 +16,7 @@ pub fn parse_value<'s, B: Build>(lexer: &mut Lexer<'s>, target: B) -> Result<(bo
     if let Some(token) = lexer.next() {
         let token = match token {
             Ok(token) => token,
-            Err(e) => return Err((lexer.make_error(e).into(), target)),
+            Err(e) => return Err((lexer.make_error(e), target)),
         };
         parse_value_token(lexer, target, token).map(|target| (true, target))
     } else {
@@ -30,11 +30,11 @@ pub fn parse_object<'s, B: Build>(lexer: &mut Lexer<'s>, target: B) -> Result<(b
     if let Some(token) = lexer.next() {
         let token = match token {
             Ok(token) => token,
-            Err(e) => return Err((lexer.make_error(e).into(), target)),
+            Err(e) => return Err((lexer.make_error(e), target)),
         };
         match token {
             Token::BraceOpen => parse_object_inner(lexer, target).map(|target| (true, target)),
-            _ => Err((lexer.make_error(ErrorKind::ExpectedObject).into(), target)),
+            _ => Err((lexer.make_error(ErrorKind::ExpectedObject), target)),
         }
     } else {
         Ok((false, target))
@@ -45,7 +45,7 @@ pub fn parse_object<'s, B: Build>(lexer: &mut Lexer<'s>, target: B) -> Result<(b
 fn parse_field_value<'s, B: Build>(lexer: &mut Lexer<'s>, target: B) -> Result<B, (Error, B)> {
     match parse_value(lexer, target) {
         Ok((true, target)) => Ok(target),
-        Ok((false, target)) => Err((lexer.make_error(ErrorKind::UnexpectedToken).into(), target)),
+        Ok((false, target)) => Err((lexer.make_error(ErrorKind::UnexpectedToken), target)),
         Err(e) => Err(e),
     }
 }
@@ -76,7 +76,7 @@ fn parse_value_token<'s, B: Build>(lexer: &mut Lexer<'s>, mut target: B, token: 
             }
             Ok(target)
         }
-        _ => Err((lexer.make_error(ErrorKind::UnexpectedToken).into(), target)),
+        _ => Err((lexer.make_error(ErrorKind::UnexpectedToken), target)),
     }
 }
 
@@ -90,7 +90,7 @@ fn parse_array_inner<'s, B: Build>(lexer: &mut Lexer<'s>, mut target: B) -> Resu
     while let Some(token) = lexer.next() {
         let token = match token {
             Ok(token) => token,
-            Err(e) => return Err((lexer.make_error(e).into(), target)),
+            Err(e) => return Err((lexer.make_error(e), target)),
         };
 
         match token {
@@ -104,7 +104,7 @@ fn parse_array_inner<'s, B: Build>(lexer: &mut Lexer<'s>, mut target: B) -> Resu
         awaits_comma = !awaits_value;
     }
 
-    Err((span.make_error(ErrorKind::UnmatchedBracket).into(), target))
+    Err((span.make_error(ErrorKind::UnmatchedBracket), target))
 }
 
 #[inline]
@@ -121,7 +121,7 @@ fn parse_object_inner<'s, B: Build>(lexer: &mut Lexer<'s>, mut target: B) -> Res
     while let Some(token) = lexer.next() {
         let token = match token {
             Ok(token) => token,
-            Err(e) => return Err(((lexer.make_error(e).into()), target)),
+            Err(e) => return Err(((lexer.make_error(e)), target)),
         };
 
         match (token, &mut awaits) {
@@ -134,7 +134,7 @@ fn parse_object_inner<'s, B: Build>(lexer: &mut Lexer<'s>, mut target: B) -> Res
             (Token::Scalar(Scalar::String(s)), Awaits::Key) => {
                 match lexer.next() {
                     Some(Ok(Token::Colon)) => (),
-                    _ => return Err((lexer.make_error(ErrorKind::UnexpectedToken).into(), target)),
+                    _ => return Err((lexer.make_error(ErrorKind::UnexpectedToken), target)),
                 }
 
                 let mut skipped = true;
@@ -149,9 +149,9 @@ fn parse_object_inner<'s, B: Build>(lexer: &mut Lexer<'s>, mut target: B) -> Res
 
                 awaits = Awaits::Comma;
             }
-            _ => return Err((lexer.make_error(ErrorKind::UnexpectedToken).into(), target)),
+            _ => return Err((lexer.make_error(ErrorKind::UnexpectedToken), target)),
         }
     }
 
-    Err((span.make_error(ErrorKind::UnmatchedBrace).into(), target))
+    Err((span.make_error(ErrorKind::UnmatchedBrace), target))
 }
