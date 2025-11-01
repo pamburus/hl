@@ -14,8 +14,9 @@ use crate::{
     LinuxDateFormat,
     filtering::MatchOptions,
     level::{InfallibleLevel, Level},
-    model::FieldFilterSet,
+    model::v2::compat::FieldFilterSet,
     settings::{self, AsciiMode, DisplayVariant, MessageFormat, MessageFormatting},
+    themecfg::testing,
 };
 
 #[test]
