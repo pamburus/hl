@@ -15,9 +15,9 @@ use wildflower::Pattern;
 // local imports
 use crate::error::{Error, Result};
 use crate::level::RelaxedLevel;
-use crate::model::{
-    FieldFilter, FieldFilterKey, Level, Number, NumericOp, Record, RecordFilter, RecordFilterNone, UnaryBoolOp,
-    ValueMatchPolicy,
+use crate::model::v2::{
+    FieldFilter, FieldFilterKey, Level, Number, NumericOp, Record, UnaryBoolOp, ValueMatchPolicy,
+    compat::{RecordFilter, RecordFilterNone},
 };
 use crate::types::FieldKind;
 

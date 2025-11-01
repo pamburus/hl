@@ -14,8 +14,9 @@ use crate::{
     LinuxDateFormat,
     filtering::MatchOptions,
     level::{InfallibleLevel, Level},
-    model::FieldFilterSet,
+    model::v2::compat::FieldFilterSet,
     settings::{self, AsciiMode, DisplayVariant, MessageFormat, MessageFormatting},
+    themecfg::testing,
 };
 
 #[test]
@@ -81,9 +82,10 @@ fn test_cat_msg_array() {
     let mut output = Vec::new();
     let app = App::new(options().with_theme(theme()));
     app.run(vec![input], &mut output).unwrap();
+    // TODO: think about keeping support for non-scalar msg values
     assert_eq!(
         std::str::from_utf8(&output).unwrap(),
-        "\u{1b}[0;2;3m2023-12-07 20:07:05.949 \u{1b}[0;36m|INF| \u{1b}[0;32mmsg\u{1b}[0;2m=\u{1b}[0;93m[\u{1b}[0;39mx\u{1b}[0;93m \u{1b}[0;39my\u{1b}[0;93m] \u{1b}[0;32mduration\u{1b}[0;2m=\u{1b}[0;39m15d\u{1b}[0;2;3m @ main.go:539\u{1b}[0m\n",
+        "\u{1b}[0;2;3m2023-12-07 20:07:05.949 \u{1b}[0;36m|INF|\u{1b}[0m \u{1b}[0;32mduration\u{1b}[0;2m=\u{1b}[0;39m15d \u{1b}[0;32mmsg\u{1b}[0;2m=\u{1b}[0;93m[\u{1b}[0;39mx\u{1b}[0;93m \u{1b}[0;39my\u{1b}[0;93m]\u{1b}[0;2;3m @ main.go:539\u{1b}[0m\n",
     );
 }
 

@@ -1,3 +1,5 @@
+#![allow(warnings)]
+
 // public modules
 pub mod app;
 pub mod appdirs;
@@ -26,9 +28,11 @@ pub mod types;
 mod console;
 mod eseq;
 mod filtering;
+pub mod format;
 mod fsmon;
-mod model;
+pub mod model;
 mod number;
+pub mod processing;
 mod replay;
 mod scanning;
 mod serdex;
@@ -46,11 +50,12 @@ pub(crate) mod testing;
 pub mod signal;
 
 // public uses
-pub use app::{App, FieldOptions, Options, SegmentProcessor};
+pub use app::{App, FieldOptions, Options};
 pub use datefmt::{DateTimeFormatter, LinuxDateFormat};
 pub use filtering::DefaultNormalizing;
-pub use formatting::RecordFormatter;
-pub use model::{FieldFilterSet, Filter, Level, Parser, ParserSettings, RecordFilter};
+pub use formatting::v2::{RecordFormatter, RecordWithSourceFormatter};
+pub use model::v2::compat::{FieldFilterSet, Filter, Level, Parser, ParserSettings, RecordFilter, RecordWithSource};
+pub use processing::SegmentProcessor;
 pub use query::Query;
 pub use scanning::{Delimit, Delimiter, SearchExt};
 pub use settings::Settings;
@@ -62,4 +67,4 @@ pub use console::enable_ansi_support;
 // public type aliases
 pub type IncludeExcludeKeyFilter = filtering::IncludeExcludeKeyFilter<DefaultNormalizing>;
 pub type KeyMatchOptions = filtering::MatchOptions<DefaultNormalizing>;
-pub type QueryNone = model::RecordFilterNone;
+pub type QueryNone = model::v2::compat::RecordFilterNone;

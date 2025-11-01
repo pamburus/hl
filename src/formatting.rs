@@ -22,6 +22,8 @@ use crate::testing::Sample;
 // relative imports
 use string::{DynMessageFormat, Format, ValueFormatAuto};
 
+pub mod v2;
+
 // ---
 
 type Buf = Vec<u8>;

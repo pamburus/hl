@@ -1,0 +1,73 @@
+// std imports
+use std::fmt::Debug;
+
+// ---
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub struct Index(pub(super) usize);
+
+impl Index {
+    #[inline]
+    pub fn new(index: usize) -> Self {
+        Self(index)
+    }
+}
+
+impl From<usize> for Index {
+    #[inline]
+    fn from(index: usize) -> Self {
+        Index(index)
+    }
+}
+
+impl From<Index> for usize {
+    #[inline]
+    fn from(index: Index) -> Self {
+        index.0
+    }
+}
+
+// ---
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub struct OptIndex(usize);
+
+impl OptIndex {
+    #[inline]
+    pub fn new(index: Option<Index>) -> Self {
+        Self(index.map(|x| x.0).unwrap_or(usize::MAX))
+    }
+
+    #[inline]
+    pub fn unfold(self) -> Option<Index> {
+        if self.0 == usize::MAX {
+            None
+        } else {
+            Some(Index(self.0))
+        }
+    }
+}
+
+impl From<OptIndex> for Option<Index> {
+    #[inline]
+    fn from(val: OptIndex) -> Self {
+        val.unfold()
+    }
+}
+
+impl From<Option<Index>> for OptIndex {
+    #[inline]
+    fn from(index: Option<Index>) -> Self {
+        Self::new(index)
+    }
+}
+
+impl Debug for OptIndex {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if let Some(index) = self.unfold() {
+            f.debug_tuple("Some").field(&index).finish()
+        } else {
+            f.write_str("None")
+        }
+    }
+}
