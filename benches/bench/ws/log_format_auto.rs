@@ -3,16 +3,16 @@ use std::{hint::black_box, sync::Arc, time::Duration, vec::Vec};
 
 // third-party imports
 use const_str::concat as strcat;
-use criterion::{criterion_group, BatchSize, BenchmarkId, Criterion, Throughput};
+use criterion::{BatchSize, BenchmarkId, Criterion, Throughput, criterion_group};
 
 // workspace imports
 use log_ast::{ast::Container, model::FormatExt};
-use log_format::{ast::Discarder, Format};
+use log_format::{Format, ast::Discarder};
 use log_format_auto::AutoFormat;
 
 // local imports
-use super::{hash, samples, ND};
-use crate::{utf8, BencherExt};
+use super::{ND, hash, samples};
+use crate::{BencherExt, utf8};
 
 criterion_group!(benches, bench);
 
@@ -53,7 +53,7 @@ pub(super) fn bench(c: &mut Criterion) {
 
             b.iter_batched_ref(
                 setup,
-                |(sample, format)| format.parse(&sample, Discarder::new()).unwrap(),
+                |(sample, format)| format.parse(sample, Discarder::new()).unwrap(),
                 BatchSize::SmallInput,
             );
         });
@@ -63,7 +63,7 @@ pub(super) fn bench(c: &mut Criterion) {
 
             b.iter_batched_ref(
                 setup,
-                |(container, sample, format)| format.parse(&sample, container.metaroot()).map_err(|x| x.0).unwrap().0,
+                |(container, sample, format)| format.parse(sample, container.metaroot()).map_err(|x| x.0).unwrap().0,
                 BatchSize::SmallInput,
             );
         });

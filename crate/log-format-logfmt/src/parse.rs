@@ -3,9 +3,9 @@ use super::{
     token::{Lexer, Token},
 };
 use upstream::{
+    Span,
     ast::Build,
     token::{Composite, Scalar, String},
-    Span,
 };
 
 // ---
@@ -23,7 +23,7 @@ pub fn parse_line<'s, B: Build>(lexer: &mut Lexer<'s>, target: B) -> Result<(Opt
     let r = target.add_composite(Composite::Object, |mut target| {
         let mut key = key;
         loop {
-            target = match target.add_composite(Composite::Field(String::Plain(key).into()), |target| {
+            target = match target.add_composite(Composite::Field(String::Plain(key)), |target| {
                 parse_value(lexer, target)
             }) {
                 Ok(target) => target,
@@ -36,7 +36,7 @@ pub fn parse_line<'s, B: Build>(lexer: &mut Lexer<'s>, target: B) -> Result<(Opt
 
             let token = match token {
                 Ok(token) => token,
-                Err(e) => return Err((lexer.make_error(e).into(), target)),
+                Err(e) => return Err((lexer.make_error(e), target)),
             };
 
             if token == Token::Eol {
@@ -44,7 +44,7 @@ pub fn parse_line<'s, B: Build>(lexer: &mut Lexer<'s>, target: B) -> Result<(Opt
             }
 
             let Token::Space = token else {
-                return Err((lexer.make_error(ErrorKind::ExpectedSpace).into(), target));
+                return Err((lexer.make_error(ErrorKind::ExpectedSpace), target));
             };
 
             match parse_key(lexer, target) {
@@ -74,13 +74,13 @@ fn parse_key<'s, B: Build>(lexer: &mut Lexer<'s>, target: B) -> Result<(Option<S
 
         let token = match token {
             Ok(token) => token,
-            Err(e) => return Err((lexer.make_error(e).into(), target)),
+            Err(e) => return Err((lexer.make_error(e), target)),
         };
 
         match token {
             Token::Space => continue,
             Token::Key(key) => return Ok((Some(key), target)),
-            _ => return Err((lexer.make_error(ErrorKind::ExpectedKey).into(), target)),
+            _ => return Err((lexer.make_error(ErrorKind::ExpectedKey), target)),
         }
     }
 }
@@ -90,7 +90,7 @@ fn parse_value<'s, B: Build>(lexer: &mut Lexer<'s>, target: B) -> Result<B, (Err
     let empty = |lexer: &mut Lexer<'s>, target: B| {
         let mut span = lexer.span();
         span.end = span.start;
-        return Ok(target.add_scalar(Scalar::String(upstream::String::Plain(span.into()))));
+        Ok(target.add_scalar(Scalar::String(upstream::String::Plain(span))))
     };
 
     let Some(token) = lexer.next() else {
@@ -99,13 +99,13 @@ fn parse_value<'s, B: Build>(lexer: &mut Lexer<'s>, target: B) -> Result<B, (Err
 
     let token = match token {
         Ok(token) => token,
-        Err(e) => return Err((lexer.make_error(e).into(), target)),
+        Err(e) => return Err((lexer.make_error(e), target)),
     };
 
     let target = match token {
         Token::Value(scalar) => target.add_scalar(scalar),
         Token::Space => return empty(lexer, target),
-        _ => return Err((lexer.make_error(ErrorKind::UnexpectedToken).into(), target)),
+        _ => return Err((lexer.make_error(ErrorKind::UnexpectedToken), target)),
     };
 
     Ok(target)
@@ -116,9 +116,9 @@ mod tests {
     use super::*;
     use log_ast::ast::{Container, Value};
     use upstream::{
+        Span,
         ast::BuilderDetach,
         token::{Composite, Scalar, String},
-        Span,
     };
 
     #[test]

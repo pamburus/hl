@@ -30,7 +30,7 @@ impl<'s> Container<'s> {
 
     #[inline]
     pub fn extend(&mut self, lexer: &mut Lexer<'s>) -> Result<()> {
-        while let Some(_) = parse_value(lexer, self.inner.metaroot())? {}
+        while (parse_value(lexer, self.inner.metaroot())?).is_some() {}
         Ok(())
     }
 

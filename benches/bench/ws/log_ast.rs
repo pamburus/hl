@@ -3,7 +3,7 @@ use std::{hint::black_box, ops::Range, sync::Arc, time::Duration, vec::Vec};
 
 // third-party imports
 use const_str::concat as strcat;
-use criterion::{criterion_group, BatchSize, BenchmarkId, Criterion, Throughput};
+use criterion::{BatchSize, BenchmarkId, Criterion, Throughput, criterion_group};
 
 // workspace imports
 use log_ast::{
@@ -14,7 +14,7 @@ use log_format::Format;
 use log_format_json::JsonFormat;
 
 // local imports
-use super::{hash, samples, ND};
+use super::{ND, hash, samples};
 use crate::utf8;
 
 criterion_group!(benches, bench);
@@ -90,9 +90,9 @@ pub(super) fn bench(c: &mut Criterion) {
     c.finish();
 }
 
-fn traverse_fast(sample: &[u8], node: Node) {
+fn traverse_fast(_sample: &[u8], node: Node) {
     for child in node.children() {
-        traverse_fast(sample, child);
+        traverse_fast(_sample, child);
     }
 }
 
@@ -100,7 +100,7 @@ fn traverse_match_drain(sample: &[u8], node: Node) {
     match node.value() {
         Value::Scalar(scalar) => match scalar {
             Scalar::Null => {
-                let _ = black_box(());
+                black_box(());
             }
             Scalar::Bool(value) => {
                 let _ = black_box(value);

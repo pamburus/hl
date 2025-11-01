@@ -145,6 +145,11 @@ impl<'s, S> Entries<'s, S> {
     pub fn len(&self) -> usize {
         self.roots.len()
     }
+
+    #[inline]
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
 }
 
 impl<'s, S> IntoIterator for Entries<'s, S>

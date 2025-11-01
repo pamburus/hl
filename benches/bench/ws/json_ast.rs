@@ -3,14 +3,14 @@ use std::{hint::black_box, time::Duration};
 
 // third-party imports
 use const_str::concat as strcat;
-use criterion::{criterion_group, BatchSize, BenchmarkId, Criterion, Throughput};
+use criterion::{BatchSize, BenchmarkId, Criterion, Throughput, criterion_group};
 use logos::Logos;
 
 // workspace imports
 use json_ast::{container::Container, token::Token};
 
 // local imports
-use super::{hash, samples, ND};
+use super::{ND, hash, samples};
 
 criterion_group!(benches, bench);
 
@@ -52,7 +52,7 @@ fn bench(c: &mut Criterion) {
                 setup,
                 |sample| {
                     let mut lexer = Token::lexer(sample);
-                    while let Some(_) = black_box(lexer.next()) {}
+                    while black_box(lexer.next()).is_some() {}
                 },
                 BatchSize::SmallInput,
             );

@@ -139,7 +139,7 @@ where
     }
 }
 
-impl<'t, V, S> Push for &'t mut FlatTree<V, S>
+impl<V, S> Push for &mut FlatTree<V, S>
 where
     S: Storage<Value = V>,
 {
@@ -178,7 +178,7 @@ where
     }
 }
 
-impl<'t, V, S> Reserve for &'t mut FlatTree<V, S>
+impl<V, S> Reserve for &mut FlatTree<V, S>
 where
     S: Storage<Value = V>,
 {
@@ -917,7 +917,7 @@ mod tests {
         let (_, result) = b.push(1).build(2, |b| (b.push(3), true));
         assert_eq!(tree.storage.len(), 3);
         assert_eq!(tree.roots, 2);
-        assert_eq!(result, true);
+        assert!(result);
 
         let roots = collect(tree.roots());
         assert_eq!(roots, [1, 2]);

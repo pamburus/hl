@@ -74,7 +74,7 @@ mod tests {
         storage.push(1);
         assert_eq!(storage.len(), 1);
         assert!(!storage.is_empty());
-        assert_eq!(storage.get(0), Some(&1));
+        assert_eq!(storage.first(), Some(&1));
         assert_eq!(storage.get_mut(0), Some(&mut 1));
         storage.clear();
         assert_eq!(storage.len(), 0);
