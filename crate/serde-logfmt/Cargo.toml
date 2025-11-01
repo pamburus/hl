@@ -1,7 +1,7 @@
 [package]
 description = "Logfmt decoding based on serde"
 name = "serde-logfmt"
-version = "0.1.1"
+version = "0.1.2"
 workspace = "../.."
 repository.workspace = true
 edition.workspace = true

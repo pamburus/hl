@@ -740,7 +740,7 @@ dependencies = [
 
 [[package]]
 name = "encstr"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "memchr",
 ]
@@ -776,7 +776,7 @@ dependencies = [
 
 [[package]]
 name = "enumset-ext"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "clap",
  "enumset",
@@ -1060,7 +1060,7 @@ dependencies = [
 
 [[package]]
 name = "heapopt"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "derive-where",
  "heapless",
@@ -2050,7 +2050,7 @@ dependencies = [
 
 [[package]]
 name = "serde-logfmt"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "serde",
 ]
