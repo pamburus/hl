@@ -28,7 +28,7 @@ pub trait Format {
                     error: e,
                     span: 0..input.len(),
                     target,
-                }))
+                }));
             }
         };
         self.parse_from_lexer(&mut lexer, target)

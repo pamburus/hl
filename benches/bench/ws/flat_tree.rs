@@ -3,7 +3,7 @@ use std::time::Duration;
 
 // third-party imports
 use const_str::concat as strcat;
-use criterion::{criterion_group, BatchSize, BenchmarkId, Criterion, Throughput};
+use criterion::{BatchSize, BenchmarkId, Criterion, Throughput, criterion_group};
 
 // workspace imports
 use flat_tree::FlatTree;
