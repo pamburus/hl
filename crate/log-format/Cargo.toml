@@ -1,0 +1,7 @@
+[package]
+name = "log-format"
+version = "0.1.0"
+repository.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
