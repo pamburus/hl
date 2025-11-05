@@ -1462,6 +1462,8 @@ impl FieldFilterKey<&str> {
             "message" | "msg" => FieldFilterKey::Predefined(FieldKind::Message),
             "logger" => FieldFilterKey::Predefined(FieldKind::Logger),
             "caller" => FieldFilterKey::Predefined(FieldKind::Caller),
+            "level" => FieldFilterKey::Predefined(FieldKind::Level),
+            "time" => FieldFilterKey::Predefined(FieldKind::Time),
             _ => FieldFilterKey::Custom(text.trim_start_matches('.')),
         })
     }
