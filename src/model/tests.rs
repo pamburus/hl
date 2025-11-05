@@ -761,6 +761,25 @@ fn test_logfmt_string_filter(#[case] input: &str, #[case] filter: &str, #[case] 
     assert_eq!(filter.apply(&record), expected);
 }
 
+#[rstest]
+#[case("price?!=3", r#"price=3"#, false)] // 1
+#[case("price?!=3", r#"price=4"#, true)] // 2
+#[case("price?!=3", r#"price=3 price=3"#, false)] // 3
+#[case("price?!=3", r#"price=3 price=4"#, true)] // 4
+#[case("price?!=3", r#"price=2 price=4"#, true)] // 5
+#[case("price?!=3", r#"x=a"#, true)] // 6
+#[case("price?=3", r#"price=3"#, true)] // 7
+#[case("price?=3", r#"price=4"#, false)] // 8
+#[case("price?=3", r#"price=3 price=3"#, true)] // 9
+#[case("price?=3", r#"price=3 price=4"#, true)] // 10
+#[case("price?=3", r#"price=2 price=4"#, false)] // 11
+#[case("price?=3", r#"x=a"#, true)] // 12
+fn test_logfmt_filter_include_absent(#[case] filter: &str, #[case] input: &str, #[case] expected: bool) {
+    let filter = FieldFilter::parse(filter).unwrap();
+    let record = parse(input);
+    assert_eq!(filter.apply(&record), expected);
+}
+
 fn parse(s: &str) -> Record<'_> {
     try_parse(s).unwrap()
 }
