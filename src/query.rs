@@ -33,9 +33,9 @@ pub struct Query {
 }
 
 impl Query {
-    pub fn parse(str: impl AsRef<str>) -> Result<Self> {
+    pub fn parse(str: impl AsRef<str>, include_missing: bool) -> Result<Self> {
         let mut pairs = QueryParser::parse(Rule::input, str.as_ref())?;
-        expression(pairs.next().unwrap())
+        expression(pairs.next().unwrap(), include_missing)
     }
 
     pub fn and(self, rhs: Query) -> Query {
@@ -102,55 +102,55 @@ impl Default for &'static Query {
 
 // ---
 
-fn expression(pair: Pair<Rule>) -> Result<Query> {
+fn expression(pair: Pair<Rule>, include_missing: bool) -> Result<Query> {
     match pair.as_rule() {
-        Rule::expr_or => binary_op::<OpOr>(pair),
-        Rule::expr_and => binary_op::<OpAnd>(pair),
-        Rule::expr_not => not(pair),
-        Rule::primary => primary(pair),
+        Rule::expr_or => binary_op::<OpOr>(pair, include_missing),
+        Rule::expr_and => binary_op::<OpAnd>(pair, include_missing),
+        Rule::expr_not => not(pair, include_missing),
+        Rule::primary => primary(pair, include_missing),
         _ => unreachable!(),
     }
 }
 
-fn binary_op<Op: BinaryOp + Sync + Send + 'static>(pair: Pair<Rule>) -> Result<Query> {
+fn binary_op<Op: BinaryOp + Sync + Send + 'static>(pair: Pair<Rule>, include_missing: bool) -> Result<Query> {
     let mut inner = pair.into_inner();
-    let mut result = expression(inner.next().unwrap())?;
+    let mut result = expression(inner.next().unwrap(), include_missing)?;
     for inner in inner {
-        result = Query::new(Op::new(result, expression(inner)?));
+        result = Query::new(Op::new(result, expression(inner, include_missing)?));
     }
     Ok(result)
 }
 
-fn not(pair: Pair<Rule>) -> Result<Query> {
+fn not(pair: Pair<Rule>, include_missing: bool) -> Result<Query> {
     assert_eq!(pair.as_rule(), Rule::expr_not);
 
     Ok(Query::new(OpNot {
-        arg: expression(pair.into_inner().next().unwrap())?,
+        arg: expression(pair.into_inner().next().unwrap(), include_missing)?,
     }))
 }
 
-fn primary(pair: Pair<Rule>) -> Result<Query> {
+fn primary(pair: Pair<Rule>, include_missing: bool) -> Result<Query> {
     assert_eq!(pair.as_rule(), Rule::primary);
 
     let inner = pair.into_inner().next().unwrap();
     match inner.as_rule() {
-        Rule::term => term(inner),
-        _ => expression(inner),
+        Rule::term => term(inner, include_missing),
+        _ => expression(inner, include_missing),
     }
 }
 
-fn term(pair: Pair<Rule>) -> Result<Query> {
+fn term(pair: Pair<Rule>, include_missing: bool) -> Result<Query> {
     assert_eq!(pair.as_rule(), Rule::term);
 
     let inner = pair.into_inner().next().unwrap();
     match inner.as_rule() {
-        Rule::field_filter => field_filter(inner),
+        Rule::field_filter => field_filter(inner, include_missing),
         Rule::level_filter => level_filter(inner),
         _ => unreachable!(),
     }
 }
 
-fn field_filter(pair: Pair<Rule>) -> Result<Query> {
+fn field_filter(pair: Pair<Rule>, include_missing: bool) -> Result<Query> {
     assert_eq!(pair.as_rule(), Rule::field_filter);
 
     let mut inner = pair.into_inner();
@@ -199,6 +199,7 @@ fn field_filter(pair: Pair<Rule>) -> Result<Query> {
         } else {
             UnaryBoolOp::None
         },
+        include_missing,
     )))
 }
 

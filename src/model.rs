@@ -1450,15 +1450,33 @@ impl FieldFilterKey<String> {
 
 // ---
 
+/// Result of matching a field value against a filter.
+enum FieldMatchResult {
+    /// The field was found and matched the filter
+    Matched,
+    /// The field was found but did not match the filter
+    NotMatched,
+    /// The field was not found in the record
+    FieldNotFound,
+}
+
+// ---
+
 pub struct FieldFilter {
     key: FieldFilterKey<String>,
     match_policy: ValueMatchPolicy,
     op: UnaryBoolOp,
     flat_key: bool,
+    include_missing: bool,
 }
 
 impl FieldFilter {
-    pub(crate) fn new(key: FieldFilterKey<&str>, match_policy: ValueMatchPolicy, op: UnaryBoolOp) -> Self {
+    pub(crate) fn new(
+        key: FieldFilterKey<&str>,
+        match_policy: ValueMatchPolicy,
+        op: UnaryBoolOp,
+        include_missing: bool,
+    ) -> Self {
         Self {
             key: match key {
                 FieldFilterKey::Predefined(kind) => FieldFilterKey::Predefined(kind),
@@ -1470,10 +1488,11 @@ impl FieldFilter {
                 FieldFilterKey::Predefined(_) => true,
                 FieldFilterKey::Custom(key) => !key.contains('.'),
             },
+            include_missing,
         }
     }
 
-    pub(crate) fn parse(text: &str) -> Result<Self> {
+    pub(crate) fn parse(text: &str, include_missing: bool) -> Result<Self> {
         let parse = |key, value| {
             let (key, match_policy, op) = Self::parse_mp_op(key, value)?;
             let key = match key {
@@ -1482,7 +1501,7 @@ impl FieldFilter {
                 "logger" => FieldFilterKey::Predefined(FieldKind::Logger),
                 _ => FieldFilterKey::Custom(key.trim_start_matches('.')),
             };
-            Ok(Self::new(key, match_policy, op))
+            Ok(Self::new(key, match_policy, op, include_missing))
         };
 
         if let Some(index) = text.find('=') {
@@ -1550,7 +1569,7 @@ impl FieldFilter {
         }
     }
 
-    fn match_value_partial<'a>(&self, subkey: KeyMatcher, value: RawValue<'a>) -> bool {
+    fn match_value_partial<'a>(&self, subkey: KeyMatcher, value: RawValue<'a>) -> FieldMatchResult {
         match value {
             RawValue::Object(value) => {
                 let mut item = Object::default();
@@ -1562,7 +1581,11 @@ impl FieldFilter {
                         }
                         Some(KeyMatch::Full) => {
                             let s = v.raw_str();
-                            return self.match_value(Some(s), s.starts_with('"'));
+                            return if self.match_value(Some(s), s.starts_with('"')) {
+                                FieldMatchResult::Matched
+                            } else {
+                                FieldMatchResult::NotMatched
+                            };
                         }
                         Some(KeyMatch::Partial(subkey)) => {
                             return self.match_value_partial(subkey, *v);
@@ -1574,30 +1597,39 @@ impl FieldFilter {
                 if let Some((index_matcher, tail)) = subkey.index_matcher() {
                     let matches = |item: RawValue<'a>| {
                         if let Some(tail) = &tail {
-                            if self.match_value_partial(*tail, item) {
-                                return true;
+                            let result = self.match_value_partial(*tail, item);
+                            if !matches!(result, FieldMatchResult::FieldNotFound) {
+                                return result;
                             }
                         } else {
                             let s = item.raw_str();
-                            return self.match_value(Some(s), s.starts_with('"'));
+                            return if self.match_value(Some(s), s.starts_with('"')) {
+                                FieldMatchResult::Matched
+                            } else {
+                                FieldMatchResult::NotMatched
+                            };
                         }
-                        false
+                        FieldMatchResult::FieldNotFound
                     };
 
                     if let Ok(value) = value.parse::<128>() {
                         match index_matcher {
                             IndexMatcher::Any => {
                                 for item in value.iter() {
-                                    if matches(*item) {
-                                        return true;
+                                    match matches(*item) {
+                                        FieldMatchResult::Matched => return FieldMatchResult::Matched,
+                                        FieldMatchResult::NotMatched => {
+                                            // Continue checking other array items
+                                        }
+                                        FieldMatchResult::FieldNotFound => {
+                                            // Continue checking other array items
+                                        }
                                     }
                                 }
                             }
                             IndexMatcher::Exact(idx) => {
                                 if let Some(item) = value.items.get(idx) {
-                                    if matches(*item) {
-                                        return true;
-                                    }
+                                    return matches(*item);
                                 }
                             }
                         }
@@ -1606,7 +1638,7 @@ impl FieldFilter {
             }
             _ => {}
         }
-        false
+        FieldMatchResult::FieldNotFound
     }
 }
 
@@ -1618,7 +1650,7 @@ impl RecordFilter for FieldFilter {
                     if let Some(ts) = &record.ts {
                         self.match_value(Some(ts.raw()), false)
                     } else {
-                        false
+                        self.include_missing && matches!(self.op, UnaryBoolOp::Negate)
                     }
                 }
                 FieldKind::Message => {
@@ -1628,21 +1660,21 @@ impl RecordFilter for FieldFilter {
                             matches!(message, RawValue::String(EncodedString::Json(_))),
                         )
                     } else {
-                        false
+                        self.include_missing && matches!(self.op, UnaryBoolOp::Negate)
                     }
                 }
                 FieldKind::Logger => {
                     if let Some(logger) = record.logger {
                         self.match_value(Some(logger), false)
                     } else {
-                        false
+                        self.include_missing && matches!(self.op, UnaryBoolOp::Negate)
                     }
                 }
                 FieldKind::Caller => {
                     if !record.caller.name.is_empty() {
                         self.match_value(Some(record.caller.name), false)
                     } else {
-                        false
+                        self.include_missing && matches!(self.op, UnaryBoolOp::Negate)
                     }
                 }
                 _ => true,
@@ -1654,18 +1686,16 @@ impl RecordFilter for FieldFilter {
                         Some(KeyMatch::Full) => {
                             let s = v.raw_str();
                             let escaped = s.starts_with('"');
-                            if self.match_value(Some(s), escaped) {
-                                return true;
-                            }
+                            return self.match_value(Some(s), escaped);
                         }
-                        Some(KeyMatch::Partial(subkey)) => {
-                            if self.match_value_partial(subkey, *v) {
-                                return true;
-                            }
-                        }
+                        Some(KeyMatch::Partial(subkey)) => match self.match_value_partial(subkey, *v) {
+                            FieldMatchResult::Matched => return true,
+                            FieldMatchResult::NotMatched => return false,
+                            FieldMatchResult::FieldNotFound => {}
+                        },
                     }
                 }
-                false
+                self.include_missing && matches!(self.op, UnaryBoolOp::Negate)
             }
         }
     }
@@ -1677,10 +1707,10 @@ impl RecordFilter for FieldFilter {
 pub struct FieldFilterSet(Vec<FieldFilter>);
 
 impl FieldFilterSet {
-    pub fn new<T: AsRef<str>, I: IntoIterator<Item = T>>(items: I) -> Result<Self> {
+    pub fn new<T: AsRef<str>, I: IntoIterator<Item = T>>(items: I, include_missing: bool) -> Result<Self> {
         let mut fields = Vec::new();
         for i in items {
-            fields.push(FieldFilter::parse(i.as_ref())?);
+            fields.push(FieldFilter::parse(i.as_ref(), include_missing)?);
         }
         Ok(FieldFilterSet(fields))
     }

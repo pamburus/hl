@@ -183,7 +183,7 @@ fn test_filter_with_blank_lines() {
     let app = App::new(
         options().with_filter(
             Filter {
-                fields: FieldFilterSet::new(["msg=m2"]).unwrap(),
+                fields: FieldFilterSet::new(["msg=m2"], false).unwrap(),
                 ..Default::default()
             }
             .into(),

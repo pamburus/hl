@@ -172,6 +172,19 @@ pub struct Opt {
     #[arg(short, long, num_args = 1, help_heading = heading::FILTERING)]
     pub filter: Vec<String>,
 
+    /// Include records with missing fields in negative filter results.
+    /// When enabled, a record without a field will match a negative filter (e.g., field!=value).
+    /// By default (disabled), only records with the field present are evaluated.
+    #[arg(
+        long,
+        env = "HL_INCLUDE_MISSING",
+        default_value_t = false,
+        overrides_with = "include_missing",
+        help_heading = heading::FILTERING,
+        action = ArgAction::Set
+    )]
+    pub include_missing: bool,
+
     /// Filter using query, accepts expressions from --filter
     /// and supports '(', ')', 'and', 'or', 'not', 'in', 'contain', 'like', '<', '>', '<=', '>=', etc.
     #[arg(short, long, num_args = 1, help_heading = heading::FILTERING)]

@@ -54,8 +54,10 @@ fn test_and_or() {
 #[test]
 fn test_query_or() {
     let queries = [
-        Query::parse(".a=1").unwrap().or(Query::parse(".b=2").unwrap()),
-        Query::parse(".a=1 or .b=2").unwrap(),
+        Query::parse(".a=1", false)
+            .unwrap()
+            .or(Query::parse(".b=2", false).unwrap()),
+        Query::parse(".a=1 or .b=2", false).unwrap(),
     ];
 
     for query in &queries {
@@ -71,8 +73,10 @@ fn test_query_or() {
 #[test]
 fn test_query_and() {
     let queries = [
-        Query::parse(".a=1").unwrap().and(Query::parse(".b=2").unwrap()),
-        Query::parse(".a=1 and .b=2").unwrap(),
+        Query::parse(".a=1", false)
+            .unwrap()
+            .and(Query::parse(".b=2", false).unwrap()),
+        Query::parse(".a=1 and .b=2", false).unwrap(),
     ];
 
     for query in &queries {
@@ -87,7 +91,10 @@ fn test_query_and() {
 
 #[test]
 fn test_query_not() {
-    let queries = [!Query::parse(".a=1").unwrap(), Query::parse("not .a=1").unwrap()];
+    let queries = [
+        !Query::parse(".a=1", false).unwrap(),
+        Query::parse("not .a=1", false).unwrap(),
+    ];
 
     for query in &queries {
         let record = parse(r#"{"a":1}"#);
@@ -99,8 +106,8 @@ fn test_query_not() {
 
 #[test]
 fn test_query_bitwise_operators() {
-    let q1 = Query::parse(".a=1").unwrap();
-    let q2 = Query::parse(".b=2").unwrap();
+    let q1 = Query::parse(".a=1", false).unwrap();
+    let q2 = Query::parse(".b=2", false).unwrap();
 
     // Test BitAnd (&)
     let and_query1 = q1.clone() & q2.clone();
@@ -136,7 +143,7 @@ fn test_query_bitwise_operators() {
 
 #[test]
 fn test_query_level() {
-    let query = Query::parse("level=info").unwrap();
+    let query = Query::parse("level=info", false).unwrap();
     let record = parse(r#"{"level":"info"}"#);
     assert!(record.matches(&query));
     let record = parse(r#"{"level":"error"}"#);
@@ -146,7 +153,7 @@ fn test_query_level() {
 #[test]
 fn test_query_json_str_simple() {
     for q in &["mod=test", r#"mod="test""#] {
-        let query = Query::parse(q).unwrap();
+        let query = Query::parse(q, false).unwrap();
         let record = parse(r#"{"mod":"test"}"#);
         assert!(record.matches(&query));
         let record = parse(r#"{"mod":"test2"}"#);
@@ -158,7 +165,7 @@ fn test_query_json_str_simple() {
 
 #[test]
 fn test_query_json_str_empty() {
-    let query = Query::parse(r#"mod="""#).unwrap();
+    let query = Query::parse(r#"mod="""#, false).unwrap();
     let record = parse(r#"{"mod":""}"#);
     assert!(record.matches(&query));
     let record = parse(r#"{"mod":"t"}"#);
@@ -169,7 +176,7 @@ fn test_query_json_str_empty() {
 
 #[test]
 fn test_query_json_str_quoted() {
-    let query = Query::parse(r#"mod="\"test\"""#).unwrap();
+    let query = Query::parse(r#"mod="\"test\"""#, false).unwrap();
     let record = parse(r#"{"mod":"test"}"#);
     assert!(!record.matches(&query));
     let record = parse(r#"{"mod":"test2"}"#);
@@ -180,7 +187,7 @@ fn test_query_json_str_quoted() {
 
 #[test]
 fn test_query_json_int() {
-    let query = Query::parse("some-value=1447015572184281088").unwrap();
+    let query = Query::parse("some-value=1447015572184281088", false).unwrap();
     let record = parse(r#"{"some-value":1447015572184281088}"#);
     assert!(record.matches(&query));
     let record = parse(r#"{"some-value":1447015572184281089}"#);
@@ -191,7 +198,7 @@ fn test_query_json_int() {
 
 #[test]
 fn test_query_json_int_escaped() {
-    let query = Query::parse("v=42").unwrap();
+    let query = Query::parse("v=42", false).unwrap();
     let record = parse(r#"{"v":42}"#);
     assert!(record.matches(&query));
     let record = parse(r#"{"v":"4\u0032"}"#);
@@ -200,7 +207,7 @@ fn test_query_json_int_escaped() {
 
 #[test]
 fn test_query_json_float() {
-    let query = Query::parse("v > 0.5").unwrap();
+    let query = Query::parse("v > 0.5", false).unwrap();
     let record = parse(r#"{"v":0.4}"#);
     assert!(!record.matches(&query));
     let record = parse(r#"{"v":0.5}"#);
@@ -217,7 +224,7 @@ fn test_query_json_float() {
 
 #[test]
 fn test_query_json_in_str() {
-    let query = Query::parse("v in (a,b,c)").unwrap();
+    let query = Query::parse("v in (a,b,c)", false).unwrap();
     let record = parse(r#"{"v":"a"}"#);
     assert!(record.matches(&query));
     let record = parse(r#"{"v":"b"}"#);
@@ -232,7 +239,7 @@ fn test_query_json_in_str() {
 
 #[test]
 fn test_query_json_in_int() {
-    let query = Query::parse("v in (1,2)").unwrap();
+    let query = Query::parse("v in (1,2)", false).unwrap();
     let record = parse(r#"{"v":1}"#);
     assert!(record.matches(&query));
     let record = parse(r#"{"v":"1"}"#);
@@ -249,7 +256,7 @@ fn test_query_json_in_int() {
 
 #[test]
 fn query_in_set_file_valid() {
-    let query = Query::parse("v in @src/testing/assets/query/set-valid").unwrap();
+    let query = Query::parse("v in @src/testing/assets/query/set-valid", false).unwrap();
     let record = parse(r#"{"v":"line"}"#);
     assert!(!record.matches(&query));
     let record = parse(r#"{"v":"line1"}"#);
@@ -265,7 +272,7 @@ fn query_in_set_file_valid() {
 #[test]
 fn query_in_set_file_invalid() {
     let filename = "src/testing/assets/query/set-invalid";
-    let result = Query::parse(format!("v in @{}", filename));
+    let result = Query::parse(format!("v in @{}", filename), false);
     assert!(result.is_err());
     let err = result.err().unwrap();
     if let Error::FailedToLoadFile { path, source } = &err {
@@ -284,7 +291,7 @@ fn query_in_set_file_invalid() {
 #[test]
 fn query_in_set_file_not_found() {
     let filename = "src/testing/assets/query/set-not-found";
-    let result = Query::parse(format!("v in @{}", filename));
+    let result = Query::parse(format!("v in @{}", filename), false);
     assert!(result.is_err());
     let err = result.err().unwrap();
     if let Error::FailedToReadFile { path, source } = &err {
@@ -299,4 +306,190 @@ fn parse(s: &str) -> Record<'_> {
     let raw = RawRecord::parser().parse(s.as_bytes()).next().unwrap().unwrap().record;
     let parser = RecordParser::new(ParserSettings::default());
     parser.parse(&raw)
+}
+
+#[test]
+fn test_query_include_missing_not_equal() {
+    let query_without = Query::parse("age != 30", false).unwrap();
+    let query_with = Query::parse("age != 30", true).unwrap();
+
+    assert!(!parse(r#"{"age":30}"#).matches(&query_without));
+    assert!(!parse(r#"{"age":30}"#).matches(&query_with));
+
+    assert!(parse(r#"{"age":25}"#).matches(&query_without));
+    assert!(parse(r#"{"age":25}"#).matches(&query_with));
+
+    assert!(!parse(r#"{"name":"bob"}"#).matches(&query_without));
+    assert!(parse(r#"{"name":"bob"}"#).matches(&query_with));
+}
+
+#[test]
+fn test_query_include_missing_not_in() {
+    let query_without = Query::parse("status not in (active, pending)", false).unwrap();
+    let query_with = Query::parse("status not in (active, pending)", true).unwrap();
+
+    let record = parse(r#"{"status":"active"}"#);
+    assert!(!record.matches(&query_without));
+    assert!(!record.matches(&query_with));
+
+    let record = parse(r#"{"status":"completed"}"#);
+    assert!(record.matches(&query_without));
+    assert!(record.matches(&query_with));
+
+    let record = parse(r#"{"name":"test"}"#);
+    assert!(!record.matches(&query_without));
+    assert!(record.matches(&query_with));
+}
+
+#[test]
+fn test_query_include_missing_not_like() {
+    let query_without = Query::parse("name not like test*", false).unwrap();
+    let query_with = Query::parse("name not like test*", true).unwrap();
+
+    let record = parse(r#"{"name":"test123"}"#);
+    assert!(!record.matches(&query_without));
+    assert!(!record.matches(&query_with));
+
+    let record = parse(r#"{"name":"prod123"}"#);
+    assert!(record.matches(&query_without));
+    assert!(record.matches(&query_with));
+
+    let record = parse(r#"{"id":42}"#);
+    assert!(!record.matches(&query_without));
+    assert!(record.matches(&query_with));
+}
+
+#[test]
+fn test_query_include_missing_not_contain() {
+    let query_without = Query::parse("msg not contain error", false).unwrap();
+    let query_with = Query::parse("msg not contain error", true).unwrap();
+
+    assert!(!parse(r#"{"msg":"an error occurred"}"#).matches(&query_without));
+    assert!(!parse(r#"{"msg":"an error occurred"}"#).matches(&query_with));
+
+    assert!(parse(r#"{"msg":"success"}"#).matches(&query_without));
+    assert!(parse(r#"{"msg":"success"}"#).matches(&query_with));
+
+    assert!(!parse(r#"{"status":"ok"}"#).matches(&query_without));
+    assert!(parse(r#"{"status":"ok"}"#).matches(&query_with));
+}
+
+#[test]
+fn test_query_include_missing_not_regex() {
+    let query_without = Query::parse(r#"code !~~= "^ERR""#, false).unwrap();
+    let query_with = Query::parse(r#"code !~~= "^ERR""#, true).unwrap();
+
+    assert!(!parse(r#"{"code":"ERR123"}"#).matches(&query_without));
+    assert!(!parse(r#"{"code":"ERR123"}"#).matches(&query_with));
+
+    assert!(parse(r#"{"code":"OK123"}"#).matches(&query_without));
+    assert!(parse(r#"{"code":"OK123"}"#).matches(&query_with));
+
+    assert!(!parse(r#"{"msg":"test"}"#).matches(&query_without));
+    assert!(parse(r#"{"msg":"test"}"#).matches(&query_with));
+}
+
+#[test]
+fn test_query_include_missing_numeric_not_equal() {
+    let query_without = Query::parse("count != 10", false).unwrap();
+    let query_with = Query::parse("count != 10", true).unwrap();
+
+    let record = parse(r#"{"count":10}"#);
+    assert!(!record.matches(&query_without));
+    assert!(!record.matches(&query_with));
+
+    let record = parse(r#"{"count":5}"#);
+    assert!(record.matches(&query_without));
+    assert!(record.matches(&query_with));
+
+    let record = parse(r#"{"name":"test"}"#);
+    assert!(!record.matches(&query_without));
+    assert!(record.matches(&query_with));
+}
+
+#[test]
+fn test_query_include_missing_numeric_not_in() {
+    let query_without = Query::parse("port not in (80, 443, 8080)", false).unwrap();
+    let query_with = Query::parse("port not in (80, 443, 8080)", true).unwrap();
+
+    let record = parse(r#"{"port":80}"#);
+    assert!(!record.matches(&query_without));
+    assert!(!record.matches(&query_with));
+
+    let record = parse(r#"{"port":3000}"#);
+    assert!(record.matches(&query_without));
+    assert!(record.matches(&query_with));
+
+    let record = parse(r#"{"host":"localhost"}"#);
+    assert!(!record.matches(&query_without));
+    assert!(record.matches(&query_with));
+}
+
+#[test]
+fn test_query_include_missing_compound_and() {
+    let query_without = Query::parse("age != 30 and city != NYC", false).unwrap();
+    let query_with = Query::parse("age != 30 and city != NYC", true).unwrap();
+
+    let record = parse(r#"{"age":25,"city":"LA"}"#);
+    assert!(record.matches(&query_without));
+    assert!(record.matches(&query_with));
+
+    let record = parse(r#"{"age":30,"city":"LA"}"#);
+    assert!(!record.matches(&query_without));
+    assert!(!record.matches(&query_with));
+
+    let record = parse(r#"{"city":"LA"}"#);
+    assert!(!record.matches(&query_without));
+    assert!(record.matches(&query_with));
+
+    let record = parse(r#"{"age":25}"#);
+    assert!(!record.matches(&query_without));
+    assert!(record.matches(&query_with));
+
+    let record = parse(r#"{"name":"test"}"#);
+    assert!(!record.matches(&query_without));
+    assert!(record.matches(&query_with));
+}
+
+#[test]
+fn test_query_include_missing_compound_or() {
+    let query_without = Query::parse("age != 30 or status != active", false).unwrap();
+    let query_with = Query::parse("age != 30 or status != active", true).unwrap();
+
+    let record = parse(r#"{"age":25,"status":"inactive"}"#);
+    assert!(record.matches(&query_without));
+    assert!(record.matches(&query_with));
+
+    let record = parse(r#"{"age":25,"status":"active"}"#);
+    assert!(record.matches(&query_without));
+    assert!(record.matches(&query_with));
+
+    let record = parse(r#"{"age":30,"status":"active"}"#);
+    assert!(!record.matches(&query_without));
+    assert!(!record.matches(&query_with));
+
+    let record = parse(r#"{"status":"active"}"#);
+    assert!(!record.matches(&query_without));
+    assert!(record.matches(&query_with));
+
+    let record = parse(r#"{"age":30}"#);
+    assert!(!record.matches(&query_without));
+    assert!(record.matches(&query_with));
+}
+
+#[test]
+fn test_query_include_missing_positive_operators_unaffected() {
+    let query_equal_without = Query::parse("age = 30", false).unwrap();
+    let query_equal_with = Query::parse("age = 30", true).unwrap();
+
+    let record = parse(r#"{"name":"test"}"#);
+    assert!(!record.matches(&query_equal_without));
+    assert!(!record.matches(&query_equal_with));
+
+    let query_in_without = Query::parse("status in (active, pending)", false).unwrap();
+    let query_in_with = Query::parse("status in (active, pending)", true).unwrap();
+
+    let record = parse(r#"{"name":"test"}"#);
+    assert!(!record.matches(&query_in_without));
+    assert!(!record.matches(&query_in_with));
 }

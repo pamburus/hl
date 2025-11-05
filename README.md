@@ -395,6 +395,38 @@ See other [screenshots](https://github.com/pamburus/hl-extra/blob/c89a0726818eb6
 
     Displays only messages where the `span` field is an array with at least two elements, and the element at index 1 (i.e., the second element) is an object with a `name` field equal to `sp0001`.
 
+#### Handling missing fields in negative filters
+
+By default, negative filters (e.g., `field!=value`) only match records where the field exists and doesn't equal the value. Records missing the field are excluded from results.
+
+* Command
+
+    ```sh
+    hl example.log --include-missing -f 'status!=active'
+    ```
+
+    Displays messages where the `status` field either doesn't exist OR has a value other than `active`. Without `--include-missing`, only messages with a `status` field would be evaluated.
+
+* Command
+
+    ```sh
+    hl example.log --include-missing -q 'level = error and user.role != admin'
+    ```
+
+    Displays error-level messages where the `user.role` field is either missing or not equal to `admin`. This is useful for finding errors from non-admin users, including cases where the role isn't logged.
+
+* Use cases for `--include-missing`:
+  * Finding all records that don't match a specific value, including those where the field wasn't logged
+  * Debugging missing or optional fields in log messages
+  * Filtering by negative conditions when field presence varies across log sources
+
+* The flag can also be set via the environment variable:
+
+    ```sh
+    export HL_INCLUDE_MISSING=true
+    hl example.log -f 'error-code!=0'
+    ```
+
 ### Performing complex queries
 
 * Command
@@ -693,11 +725,12 @@ Options:
   -V, --version                          Print version
 
 Filtering Options:
-  -l, --level <LEVEL>    Filter messages by level [env: HL_LEVEL=]
-      --since <TIME>     Filter messages by timestamp >= <TIME> (--time-zone and --local options are honored)
-      --until <TIME>     Filter messages by timestamp <= <TIME> (--time-zone and --local options are honored)
-  -f, --filter <FILTER>  Filter messages by field values [k=v, k~=v, k~~=v, 'k!=v', 'k!~=v', 'k!~~=v'] where ~ does substring match and ~~ does regular expression match
-  -q, --query <QUERY>    Filter using query, accepts expressions from --filter and supports '(', ')', 'and', 'or', 'not', 'in', 'contain', 'like', '<', '>', '<=', '>=', etc
+  -l, --level <LEVEL>       Filter messages by level [env: HL_LEVEL=]
+      --since <TIME>        Filter messages by timestamp >= <TIME> (--time-zone and --local options are honored)
+      --until <TIME>        Filter messages by timestamp <= <TIME> (--time-zone and --local options are honored)
+  -f, --filter <FILTER>     Filter messages by field values [k=v, k~=v, k~~=v, 'k!=v', 'k!~=v', 'k!~~=v'] where ~ does substring match and ~~ does regular expression match
+      --include-missing     Include records with missing fields in negative filter results [env: HL_INCLUDE_MISSING=] [default: false]
+  -q, --query <QUERY>       Filter using query, accepts expressions from --filter and supports '(', ')', 'and', 'or', 'not', 'in', 'contain', 'like', '<', '>', '<=', '>=', etc
 
 Output Options:
       --color [<WHEN>]        Color output control [env: HL_COLOR=] [default: auto] [possible values: auto, always, never]
