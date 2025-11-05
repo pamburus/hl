@@ -1448,6 +1448,25 @@ impl FieldFilterKey<String> {
     }
 }
 
+impl FieldFilterKey<&str> {
+    #[inline]
+    pub fn to_owned(&self) -> FieldFilterKey<String> {
+        match self {
+            FieldFilterKey::Predefined(kind) => FieldFilterKey::Predefined(*kind),
+            FieldFilterKey::Custom(key) => FieldFilterKey::Custom((*key).to_owned()),
+        }
+    }
+
+    pub fn parse(text: &str) -> Result<FieldFilterKey<&str>> {
+        Ok(match text {
+            "message" | "msg" => FieldFilterKey::Predefined(FieldKind::Message),
+            "logger" => FieldFilterKey::Predefined(FieldKind::Logger),
+            "caller" => FieldFilterKey::Predefined(FieldKind::Caller),
+            _ => FieldFilterKey::Custom(text.trim_start_matches('.')),
+        })
+    }
+}
+
 // ---
 
 pub struct FieldFilter {
@@ -1476,12 +1495,7 @@ impl FieldFilter {
     pub(crate) fn parse(text: &str) -> Result<Self> {
         let parse = |key, value| {
             let (key, match_policy, op) = Self::parse_mp_op(key, value)?;
-            let key = match key {
-                "message" | "msg" => FieldFilterKey::Predefined(FieldKind::Message),
-                "caller" => FieldFilterKey::Predefined(FieldKind::Caller),
-                "logger" => FieldFilterKey::Predefined(FieldKind::Logger),
-                _ => FieldFilterKey::Custom(key.trim_start_matches('.')),
-            };
+            let key = FieldFilterKey::parse(key)?;
             Ok(Self::new(key, match_policy, op))
         };
 

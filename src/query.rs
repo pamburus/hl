@@ -19,7 +19,6 @@ use crate::model::{
     FieldFilter, FieldFilterKey, Level, Number, NumericOp, Record, RecordFilter, RecordFilterNone, UnaryBoolOp,
     ValueMatchPolicy,
 };
-use crate::types::FieldKind;
 
 // ---
 
@@ -308,12 +307,7 @@ fn parse_field_name(pair: Pair<Rule>) -> Result<FieldFilterKey<String>> {
     let inner = pair.into_inner().next().unwrap();
     Ok(match inner.as_rule() {
         Rule::json_string => FieldFilterKey::Custom(json::from_str(inner.as_str())?),
-        _ => match inner.as_str() {
-            "message" => FieldFilterKey::Predefined(FieldKind::Message),
-            "logger" => FieldFilterKey::Predefined(FieldKind::Logger),
-            "caller" => FieldFilterKey::Predefined(FieldKind::Caller),
-            _ => FieldFilterKey::Custom(inner.as_str().trim_start_matches('.').to_owned()),
-        },
+        _ => FieldFilterKey::parse(inner.as_str())?.to_owned(),
     })
 }
 

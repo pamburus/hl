@@ -1,5 +1,6 @@
 use super::*;
 use crate::model::{Parser as RecordParser, ParserSettings, RawRecord};
+use rstest::rstest;
 
 #[test]
 fn test_or_3() {
@@ -293,6 +294,30 @@ fn query_in_set_file_not_found() {
     } else {
         panic!("unexpected error: {:?}", err);
     }
+}
+
+#[rstest]
+#[case("msg=test", "msg=test", true)] // 1
+#[case("msg=test", "msg=other", false)] // 2
+#[case("msg=test", "message=test", true)] // 3
+#[case("msg=test", "message=other", false)] // 4
+#[case("message=test", "msg=test", true)] // 5
+#[case("message=test", "msg=other", false)] // 6
+#[case("message=test", "message=test", true)] // 7
+#[case("message=test", "message=other", false)] // 8
+fn test_query_field_name_message_alias(#[case] raw_query: &str, #[case] input: &str, #[case] should_match: bool) {
+    // Test that both "msg" and "message" work as field name aliases for querying the message field
+    let query = Query::parse(raw_query).unwrap();
+
+    let record = parse(input);
+    assert_eq!(
+        record.matches(&query),
+        should_match,
+        "Query {:?} should {} input {:?}",
+        raw_query,
+        if should_match { "match" } else { "not match" },
+        input,
+    );
 }
 
 fn parse(s: &str) -> Record<'_> {
