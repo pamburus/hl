@@ -772,3 +772,175 @@ fn try_parse(s: &str) -> Result<Record<'_>> {
     let parser = Parser::new(ParserSettings::default());
     Ok(parser.parse(&raw))
 }
+
+#[test]
+fn test_field_filter_negative_missing_field() {
+    let filter = FieldFilter::parse("log.target!=foo").unwrap();
+
+    let record = parse(r#"log.target=foo"#);
+    assert!(!filter.apply(&record));
+
+    let record = parse(r#"log.target=bar"#);
+    assert!(filter.apply(&record));
+
+    let record = parse(r#"target=bar"#);
+    assert!(filter.apply(&record));
+
+    let record = parse(r#"message=test"#);
+    assert!(filter.apply(&record));
+}
+
+#[test]
+fn test_field_filter_negative_nested_missing() {
+    let filter = FieldFilter::parse("a.b.c!=value").unwrap();
+
+    let record = parse(r#"{"a":{"b":{"c":"value"}}}"#);
+    assert!(!filter.apply(&record));
+
+    let record = parse(r#"{"a":{"b":{"c":"other"}}}"#);
+    assert!(filter.apply(&record));
+
+    let record = parse(r#"{"a":{"b":{}}}"#);
+    assert!(filter.apply(&record));
+
+    let record = parse(r#"{"a":{}}"#);
+    assert!(filter.apply(&record));
+
+    let record = parse(r#"{"x":"y"}"#);
+    assert!(filter.apply(&record));
+}
+
+#[test]
+fn test_field_filter_negative_predefined_fields() {
+    let filter = FieldFilter::parse("message!=test").unwrap();
+
+    let record = parse(r#"{"msg":"test"}"#);
+    assert!(!filter.apply(&record));
+
+    let record = parse(r#"{"msg":"other"}"#);
+    assert!(filter.apply(&record));
+
+    let record = parse(r#"{"level":"info"}"#);
+    assert!(filter.apply(&record));
+
+    let filter = FieldFilter::parse("logger!=mylogger").unwrap();
+    let record = parse(r#"{"logger":"mylogger"}"#);
+    assert!(!filter.apply(&record));
+    let record = parse(r#"{"logger":"other"}"#);
+    assert!(filter.apply(&record));
+    let record = parse(r#"{"level":"info"}"#);
+    assert!(filter.apply(&record));
+}
+
+#[test]
+fn test_field_filter_positive_missing_field() {
+    let filter = FieldFilter::parse("log.target=foo").unwrap();
+
+    let record = parse(r#"{"log.target":"foo"}"#);
+    assert!(filter.apply(&record));
+
+    let record = parse(r#"{"log.target":"bar"}"#);
+    assert!(!filter.apply(&record));
+
+    let record = parse(r#"{"target":"bar"}"#);
+    assert!(!filter.apply(&record));
+
+    let record = parse(r#"{"message":"test"}"#);
+    assert!(!filter.apply(&record));
+}
+
+#[test]
+fn test_field_filter_array_iteration_with_negation() {
+    let filter = FieldFilter::parse("span.[].name!=target").unwrap();
+
+    let record = parse(r#"{"span":[{"name":"target"},{"name":"other"}]}"#);
+    assert!(filter.apply(&record));
+}
+
+#[test]
+fn test_field_filter_array_exact_index_with_result() {
+    let filter = FieldFilter::parse("span.[1].name=target").unwrap();
+
+    let record = parse(r#"{"span":[{"name":"other"},{"name":"target"}]}"#);
+    assert!(filter.apply(&record));
+
+    let filter2 = FieldFilter::parse("span.[1].name=target").unwrap();
+    let record2 = parse(r#"{"span":[{"name":"other"},{"name":"different"}]}"#);
+    assert!(!filter2.apply(&record2));
+}
+
+#[test]
+fn test_field_filter_array_nested_path_with_tail() {
+    let filter = FieldFilter::parse("data.[].span.name=test").unwrap();
+
+    let record = parse(r#"{"data":[{"span":{"name":"test"}}]}"#);
+    assert!(filter.apply(&record));
+
+    let record = parse(r#"{"data":[{"span":{"name":"other"}},{"span":{"name":"test"}}]}"#);
+    assert!(filter.apply(&record));
+}
+
+#[test]
+fn test_field_filter_array_nested_path_no_field() {
+    let filter = FieldFilter::parse("data.[].span.name=test").unwrap();
+
+    let record = parse(r#"{"data":[{"other":"value"},{"different":"value"}]}"#);
+    assert!(!filter.apply(&record));
+
+    let record = parse(r#"{"data":[{"span":{"other":"value"}}]}"#);
+    assert!(!filter.apply(&record));
+}
+
+#[test]
+fn test_field_filter_array_exact_index_nested_path() {
+    let filter = FieldFilter::parse("data.[0].span.name=test").unwrap();
+
+    let record = parse(r#"{"data":[{"span":{"name":"test"}}]}"#);
+    assert!(filter.apply(&record));
+
+    let record = parse(r#"{"data":[{"span":{"name":"other"}}]}"#);
+    assert!(!filter.apply(&record));
+
+    let filter_neg = FieldFilter::parse("data.[1].span.name!=test").unwrap();
+    let record = parse(r#"{"data":[{"span":{"name":"first"}},{"span":{"name":"other"}}]}"#);
+    assert!(filter_neg.apply(&record));
+}
+
+#[test]
+fn test_field_filter_negative_timestamp_missing() {
+    let filter = FieldFilter::parse("ts!=2021-01-01").unwrap();
+
+    let record = parse(r#"{"ts":"2021-01-01"}"#);
+    assert!(!filter.apply(&record));
+
+    let record = parse(r#"{"ts":"2021-01-02"}"#);
+    assert!(filter.apply(&record));
+
+    let record = parse(r#"{"level":"info"}"#);
+    assert!(filter.apply(&record));
+}
+
+#[test]
+fn test_field_filter_negative_caller_missing() {
+    let filter = FieldFilter::parse("caller!=main.go:42").unwrap();
+
+    let record = parse(r#"{"caller":"main.go:42"}"#);
+    assert!(!filter.apply(&record));
+
+    let record = parse(r#"{"caller":"other.go:10"}"#);
+    assert!(filter.apply(&record));
+
+    let record = parse(r#"{"level":"info"}"#);
+    assert!(filter.apply(&record));
+}
+
+#[test]
+fn test_field_filter_array_exact_index_false_result() {
+    let filter = FieldFilter::parse("items.[2]=value").unwrap();
+
+    let record = parse(r#"{"items":["a","b","different"]}"#);
+    assert!(!filter.apply(&record));
+
+    let filter_neg = FieldFilter::parse("items.[2]!=value").unwrap();
+    assert!(filter_neg.apply(&record));
+}
