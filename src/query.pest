@@ -47,11 +47,11 @@ op_not_regex_match = @{
 }
 op_contain         = @{
     "~="
-  | ^"contain" ~ &punctuation
+  | ^"contain" ~ "s"? ~ &punctuation
 }
 op_not_contain     = @{
     "!~="
-  | ^"not" ~ ws+ ~ ^"contain" ~ &punctuation
+  | ^"not" ~ ws+ ~ ^"contain" ~ "s"? ~ &punctuation
 }
 op_like            = @{
     ^"like" ~ &punctuation
