@@ -138,6 +138,13 @@ impl Error {
                     usage(app, UsageRequest::ListThemes).map(|usage| format!("run {usage} to list available themes"));
                 Tips { did_you_mean, usage }
             }
+            Error::LevelParseError(e) => {
+                let did_you_mean = did_you_mean(&e.suggestions);
+                Tips {
+                    did_you_mean,
+                    usage: None,
+                }
+            }
             _ => Default::default(),
         }
     }

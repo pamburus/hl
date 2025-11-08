@@ -53,6 +53,7 @@ function test() {
     ${MAIN_EXECUTABLE:?} --config - sample/prometheus.log -P > /dev/null
     HL_DEBUG_LOG=info ${MAIN_EXECUTABLE:?} --config - sample/prometheus.log -P > /dev/null
     echo "" | ${MAIN_EXECUTABLE:?} --config - --concurrency 4 > /dev/null
+    echo "level=info" | ${MAIN_EXECUTABLE:?} --config - sample/prometheus.log -P -q 'level=x' 2> /dev/null > /dev/null || true
 }
 
 function merge() {
