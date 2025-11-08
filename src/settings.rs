@@ -262,7 +262,7 @@ pub struct MessageField(pub Field);
 
 impl Default for MessageField {
     fn default() -> Self {
-        Self(Field::new(vec!["msg".into()]))
+        Self(Field::new(vec!["msg".into(), "message".into()]))
     }
 }
 
