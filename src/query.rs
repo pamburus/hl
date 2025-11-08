@@ -13,11 +13,13 @@ use serde_json as json;
 use wildflower::Pattern;
 
 // local imports
-use crate::error::{Error, Result};
-use crate::level::RelaxedLevel;
-use crate::model::{
-    FieldFilter, FieldFilterKey, Level, Number, NumericOp, Record, RecordFilter, RecordFilterNone, UnaryBoolOp,
-    ValueMatchPolicy,
+use crate::{
+    error::{Error, Result},
+    level::RelaxedLevel,
+    model::{
+        FieldFilter, FieldFilterKey, Level, Number, NumericOp, Record, RecordFilter, RecordFilterNone, ValueMatchPolicy,
+    },
+    model::{FieldFilterFlag, FieldFilterFlags},
 };
 
 // ---
@@ -152,9 +154,25 @@ fn term(pair: Pair<Rule>) -> Result<Query> {
 fn field_filter(pair: Pair<Rule>) -> Result<Query> {
     assert_eq!(pair.as_rule(), Rule::field_filter);
 
+    let inner = pair.into_inner().next().unwrap();
+    match inner.as_rule() {
+        Rule::field_expr_filter => field_expr_filter(inner),
+        Rule::field_exists_filter => field_exists_filter(inner),
+        _ => unreachable!(),
+    }
+}
+
+fn field_expr_filter(pair: Pair<Rule>) -> Result<Query> {
+    assert_eq!(pair.as_rule(), Rule::field_expr_filter);
+
     let mut inner = pair.into_inner();
     let lhs = inner.next().unwrap();
-    let op = inner.next().unwrap().as_rule();
+
+    let (op, has_include_absent_flag) = match inner.next().unwrap().as_rule() {
+        Rule::include_absent_flag => (inner.next().unwrap().as_rule(), true),
+        v => (v, false),
+    };
+
     let rhs = inner.next().unwrap();
 
     let (match_policy, negated) = match (op, rhs.as_rule()) {
@@ -190,15 +208,44 @@ fn field_filter(pair: Pair<Rule>) -> Result<Query> {
         _ => unreachable!(),
     };
 
+    let mut flags = if negated {
+        FieldFilterFlag::Negate.into()
+    } else {
+        FieldFilterFlags::empty()
+    };
+
+    if has_include_absent_flag {
+        flags |= FieldFilterFlag::IncludeAbsent;
+    }
+
     Ok(Query::new(FieldFilter::new(
         parse_field_name(lhs)?.borrowed(),
         match_policy,
-        if negated {
-            UnaryBoolOp::Negate
-        } else {
-            UnaryBoolOp::None
-        },
+        flags,
     )))
+}
+
+fn field_exists_filter(pair: Pair<Rule>) -> Result<Query> {
+    assert_eq!(pair.as_rule(), Rule::field_exists_filter);
+
+    let args = pair.into_inner();
+
+    let mut result: Option<Query> = None;
+    for arg in args {
+        let field_name = parse_field_name(arg)?;
+        let query = Query::new(FieldFilter::new(
+            field_name.borrowed(),
+            ValueMatchPolicy::Any,
+            FieldFilterFlags::empty(),
+        ));
+        result = Some(if let Some(prev) = result {
+            prev.and(query)
+        } else {
+            query
+        });
+    }
+
+    Ok(result.unwrap_or_default())
 }
 
 fn level_filter(pair: Pair<Rule>) -> Result<Query> {

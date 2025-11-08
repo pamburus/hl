@@ -353,7 +353,7 @@ See other [screenshots](https://github.com/pamburus/hl-extra/blob/c89a0726818eb6
     hl example.log -f component!=tsdb -f component!=uninteresting
     ```
 
-    Displays only messages where the `component` field has a value other than `tsdb` or `uninteresting`.
+    Displays only messages where the `component` field exists and has a value other than `tsdb` or `uninteresting`.
 
 * Command
 
@@ -369,15 +369,15 @@ See other [screenshots](https://github.com/pamburus/hl-extra/blob/c89a0726818eb6
     hl example.log -f 'provider!~=string'
     ```
 
-    Displays only messages where the `provider` field does not contain the `string` sub-string.
+    Displays only messages where the `provider` field exists and does not contain the `string` sub-string.
 
 * Command
 
     ```sh
-    hl example.log -f 'request.method!=GET'
+    hl example.log -f 'request.method?!=GET'
     ```
 
-    Displays only messages where the `request.method` field is not equal to `GET`. In JSON messages, this also matches composite fields, e.g., `{"request":{"method":"POST"}}`.
+    Displays only messages where the `request.method` field does not exist or exists and is not equal to `GET`. In JSON messages, this also matches composite fields, e.g., `{"request":{"method":"POST"}}`.
 
 * Command
 
@@ -413,6 +413,46 @@ See other [screenshots](https://github.com/pamburus/hl-extra/blob/c89a0726818eb6
 
     Displays all messages that have the 'request' field with one of these values, or the 'method' field with a value other than 'GET'.
 
+* Command
+
+    ```sh
+    hl my-service.log -q '.price?=3'
+    ```
+
+    Displays messages where the `price` field equals `3` OR the `price` field is absent. The `?` modifier after a field name includes records that don't have that field. Without the `?` modifier, filtering on a missing field will skip the record.
+
+* Command
+
+    ```sh
+    hl my-service.log -q '.status?!=error'
+    ```
+
+    Displays messages where the `status` field is not equal to `error` OR the `status` field is absent. This is useful to include records that may not have a status field at all.
+
+* Command
+
+    ```sh
+    hl my-service.log -q 'exists(.price)'
+    ```
+
+    Displays only messages that have the `price` field, regardless of its value. The `exists()` operator tests for field presence without any value comparison.
+
+* Command
+
+    ```sh
+    hl my-service.log -q 'exists(msg) and msg~=warning'
+    ```
+
+    Displays messages that have a `msg` field that exists AND contains the substring `warning`. This combines field existence checking with value matching.
+
+* Command
+
+    ```sh
+    hl my-service.log -q 'not exists(.internal)'
+    ```
+
+    Displays messages that do NOT have an `internal` field, effectively filtering out records with that field.
+
 * Complete set of supported operators
 
   * Logical operators
@@ -435,8 +475,16 @@ See other [screenshots](https://github.com/pamburus/hl-extra/blob/c89a0726818eb6
     * Test if a value is one of the values in a set - `in (v1, v2)`, `not in (v1, v2)`
     * Test if a value is one of the values in a set loaded from a file - `in @filename`, `not in @filename`, assuming that each element is a line in the file, which can be either a simple string or a JSON string
     * Test if a value is one of the values in a set loaded from stdin - `in @-`, `not in @-`
+  * Field existence operators
+    * Test if a field exists - `exists(.field)` or `exist(.field)` (both forms are supported)
 
 * Notes
+
+  * __Include Absent Modifier (`?`)__: When appending `?` to a field name (e.g., `.field?=value`), the filter will match both:
+    * Records where the field exists and matches the condition
+    * Records where the field is absent (does not exist)
+
+    This is useful in logfmt or similar formats where fields may be optional. Without the `?` modifier, records with a non-existent field are excluded from the results.
 
   * Special field names that are reserved for filtering by predefined fields regardless of the actual source field names used to load the corresponding value: `level`, `message`, `caller` and `logger`.
   * To address a source field with one of these names instead of predefined fields, add a period before its name, i.e., `.level` will perform a match against the "level" source field.

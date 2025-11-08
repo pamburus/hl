@@ -1,8 +1,8 @@
 use super::*;
-use rstest::rstest;
 
 use chrono::TimeZone;
 use maplit::hashmap;
+use rstest::rstest;
 use serde_logfmt::logfmt;
 
 use crate::settings::{Field, FieldShowOption};
@@ -761,6 +761,25 @@ fn test_logfmt_string_filter(#[case] input: &str, #[case] filter: &str, #[case] 
     assert_eq!(filter.apply(&record), expected);
 }
 
+#[rstest]
+#[case("price?!=3", r#"price=3"#, false)] // 1
+#[case("price?!=3", r#"price=4"#, true)] // 2
+#[case("price?!=3", r#"price=3 price=3"#, false)] // 3
+#[case("price?!=3", r#"price=3 price=4"#, true)] // 4
+#[case("price?!=3", r#"price=2 price=4"#, true)] // 5
+#[case("price?!=3", r#"x=a"#, true)] // 6
+#[case("price?=3", r#"price=3"#, true)] // 7
+#[case("price?=3", r#"price=4"#, false)] // 8
+#[case("price?=3", r#"price=3 price=3"#, true)] // 9
+#[case("price?=3", r#"price=3 price=4"#, true)] // 10
+#[case("price?=3", r#"price=2 price=4"#, false)] // 11
+#[case("price?=3", r#"x=a"#, true)] // 12
+fn test_logfmt_filter_include_absent(#[case] filter: &str, #[case] input: &str, #[case] expected: bool) {
+    let filter = FieldFilter::parse(filter).unwrap();
+    let record = parse(input);
+    assert_eq!(filter.apply(&record), expected);
+}
+
 fn parse(s: &str) -> Record<'_> {
     try_parse(s).unwrap()
 }
@@ -771,4 +790,55 @@ fn try_parse(s: &str) -> Result<Record<'_>> {
     let raw = items.into_iter().next().unwrap()?.record;
     let parser = Parser::new(ParserSettings::default());
     Ok(parser.parse(&raw))
+}
+
+#[test]
+fn test_field_filter_regex_matching() {
+    let filter = FieldFilter::parse("caller~~=source\\.py$").unwrap();
+    let record = parse(r#"caller=somesource.py"#);
+    assert!(filter.apply(&record));
+    let record = parse(r#"caller=somesource.go"#);
+    assert!(!filter.apply(&record));
+}
+
+#[test]
+fn test_field_filter_negation_with_match() {
+    let filter = FieldFilter::parse("message!=hello").unwrap();
+    let record = parse(r#"message=hello"#);
+    assert!(!filter.apply(&record));
+    let record = parse(r#"message=world"#);
+    assert!(filter.apply(&record));
+}
+
+#[test]
+fn test_field_filter_negation_with_value() {
+    let filter = FieldFilter::parse("price!=5").unwrap();
+    let record = parse(r#"price=5"#);
+    assert!(!filter.apply(&record));
+    let record = parse(r#"price=10"#);
+    assert!(filter.apply(&record));
+}
+
+#[rstest]
+#[case("logger=xx", "logger=xx", true)]
+#[case("logger=xx", "logger=x", false)]
+#[case("logger=xx", r#"{"logger":"xx"}"#, true)]
+#[case("logger=xx", r#"{"logger":"x"}"#, false)]
+fn test_field_filterlogger(#[case] raw_filter: &str, #[case] input: &str, #[case] should_match: bool) {
+    let filter = FieldFilter::parse(raw_filter).unwrap();
+    let record = parse(input);
+    assert_eq!(
+        filter.apply(&record),
+        should_match,
+        "Filter {:?} should {} input {:?}",
+        raw_filter,
+        if should_match { "match" } else { "not match" },
+        input,
+    );
+}
+
+#[test]
+fn test_wrong_field_filter() {
+    let result = FieldFilter::parse("xx");
+    assert!(result.is_err_and(|e| matches!(e, Error::WrongFieldFilter(_))));
 }

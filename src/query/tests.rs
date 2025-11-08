@@ -320,6 +320,196 @@ fn test_query_field_name_message_alias(#[case] raw_query: &str, #[case] input: &
     );
 }
 
+#[rstest]
+// Test include absent modifier (?) with exact match: field present
+#[case(".price?=3", r#"{"price":3}"#, true)] // 1
+// Test include absent modifier (?) with exact match: field absent
+#[case(".price?=3", r#"{"x":1}"#, true)] // 2
+// Test include absent modifier (?) with negation: field present but doesn't match
+#[case(".price?!=3", r#"{"price":4}"#, true)] // 3
+// Test include absent modifier (?) with negation: field absent
+#[case(".price?!=3", r#"{"x":1}"#, true)] // 4
+// Test include absent modifier (?) with negation: field present and matches (should fail)
+#[case(".price?!=3", r#"{"price":3}"#, false)] // 5
+// Test without include absent modifier: field absent (should fail)
+#[case(".price=3", r#"{"x":1}"#, false)] // 6
+// Test without include absent modifier: field present and matches
+#[case(".price=3", r#"{"price":3}"#, true)] // 7
+// Test with negation without include absent modifier: field absent (should fail)
+#[case(".price!=3", r#"{"x":1}"#, false)] // 8
+// Test with negation without include absent modifier: field present and doesn't match
+#[case(".price!=3", r#"{"price":4}"#, true)] // 9
+fn test_query_include_absent_modifier_single_field(
+    #[case] raw_query: &str,
+    #[case] input: &str,
+    #[case] should_match: bool,
+) {
+    let query = Query::parse(raw_query).unwrap();
+    let record = parse(input);
+    assert_eq!(
+        record.matches(&query),
+        should_match,
+        "Query {:?} should {} input {:?}",
+        raw_query,
+        if should_match { "match" } else { "not match" },
+        input,
+    );
+}
+
+#[rstest]
+// Test include absent modifier with repeated fields (same key, multiple values)
+// Query: .price?=3 | Field present with matching value
+#[case(".price?=3", r#"price=3"#, true)] // 1
+// Query: .price?=3 | Field repeated, one matches
+#[case(".price?=3", r#"price=3 price=3"#, true)] // 2
+// Query: .price?=3 | Field repeated, one matches among others
+#[case(".price?=3", r#"price=3 price=4"#, true)] // 3
+// Query: .price?=3 | Field repeated, none match
+#[case(".price?=3", r#"price=2 price=4"#, false)] // 4
+// Query: .price?=3 | Field absent
+#[case(".price?=3", r#"x=a"#, true)] // 5
+// Query: .price?!=3 | Field present with matching value (negation fails)
+#[case(".price?!=3", r#"price=3"#, false)] // 6
+// Query: .price?!=3 | Field repeated, all same and match (negation fails)
+#[case(".price?!=3", r#"price=3 price=3"#, false)] // 7
+// Query: .price?!=3 | Field repeated, some don't match (negation succeeds)
+#[case(".price?!=3", r#"price=3 price=4"#, true)] // 8
+// Query: .price?!=3 | Field repeated, none match value (negation succeeds)
+#[case(".price?!=3", r#"price=2 price=4"#, true)] // 9
+// Query: .price?!=3 | Field absent (negation succeeds with include absent)
+#[case(".price?!=3", r#"x=a"#, true)] // 10
+fn test_query_include_absent_modifier_repeated_fields(
+    #[case] raw_query: &str,
+    #[case] input: &str,
+    #[case] should_match: bool,
+) {
+    let query = Query::parse(raw_query).unwrap();
+    let record = parse(input);
+    assert_eq!(
+        record.matches(&query),
+        should_match,
+        "Query {:?} should {} input {:?}",
+        raw_query,
+        if should_match { "match" } else { "not match" },
+        input,
+    );
+}
+
+#[rstest]
+// Test with substring match and include absent modifier
+#[case(".msg?~=hello", r#"msg=helloworld"#, true)] // 1
+#[case(".msg?~=hello", r#"msg=goodbye"#, false)] // 2
+#[case(".msg?~=hello", r#"x=other"#, true)] // 3
+// Test with regex match and include absent modifier
+#[case(".code?~~=\"^[0-9]{3}$\"", r#"code=404"#, true)] // 4
+#[case(".code?~~=\"^[0-9]{3}$\"", r#"code=40"#, false)] // 5
+#[case(".code?~~=\"^[0-9]{3}$\"", r#"x=other"#, true)] // 6
+// Test negation with substring
+#[case(".msg?!~=error", r#"msg=success"#, true)] // 7
+#[case(".msg?!~=error", r#"msg=erroroccurred"#, false)] // 8
+#[case(".msg?!~=error", r#"x=other"#, true)] // 9
+// Test in operator with include absent
+#[case(".status?in(ok,good)", r#"status=ok"#, true)] // 10
+#[case(".status?in(ok,good)", r#"status=bad"#, false)] // 11
+#[case(".status?in(ok,good)", r#"x=other"#, true)] // 12
+fn test_query_include_absent_with_operators(#[case] raw_query: &str, #[case] input: &str, #[case] should_match: bool) {
+    let query = Query::parse(raw_query).unwrap();
+    let record = parse(input);
+    assert_eq!(
+        record.matches(&query),
+        should_match,
+        "Query {:?} should {} input {:?}",
+        raw_query,
+        if should_match { "match" } else { "not match" },
+        input,
+    );
+}
+
+#[rstest]
+// Test repeated fields (logfmt format where same key appears multiple times)
+// Query: .tag=v1 | Field repeated with matching value
+#[case(".tag=v1", r#"tag=v1"#, true)] // 1
+// Query: .tag=v1 | Field repeated multiple times, one matches
+#[case(".tag=v1", r#"tag=v1 tag=v2"#, true)] // 2
+// Query: .tag=v1 | Field repeated multiple times, none match
+#[case(".tag=v1", r#"tag=v2 tag=v3"#, false)] // 3
+// Query: .tag=v1 | Field absent
+#[case(".tag=v1", r#"x=y"#, false)] // 4
+// Query: .tag?=v1 | Field repeated, one matches (with include absent)
+#[case(".tag?=v1", r#"tag=v1 tag=v2"#, true)] // 5
+// Query: .tag?=v1 | Field absent (with include absent)
+#[case(".tag?=v1", r#"x=y"#, true)] // 6
+// Query: .tag!=v1 | Field repeated, none match
+#[case(".tag!=v1", r#"tag=v2 tag=v3"#, true)] // 7
+// Query: .tag!=v1 | Field repeated, one matches (negation succeeds on non-matching value)
+#[case(".tag!=v1", r#"tag=v1 tag=v2"#, true)] // 8
+// Query: .tag?!=v1 | Field repeated with one matching (negation with include absent)
+#[case(".tag?!=v1", r#"tag=v1"#, false)] // 9
+// Query: .tag?!=v1 | Field absent (negation with include absent succeeds)
+#[case(".tag?!=v1", r#"x=y"#, true)] // 10
+fn test_query_repeated_fields(#[case] raw_query: &str, #[case] input: &str, #[case] should_match: bool) {
+    let query = Query::parse(raw_query).unwrap();
+    let record = parse(input);
+    assert_eq!(
+        record.matches(&query),
+        should_match,
+        "Query {:?} should {} input {:?}",
+        raw_query,
+        if should_match { "match" } else { "not match" },
+        input,
+    );
+}
+
+#[rstest]
+// Test exists operator with single field
+#[case("exists(.price)", r#"{"price":3}"#, true)] // 1
+#[case("exists(.price)", r#"{"x":1}"#, false)] // 2
+// Test exists operator with single field (alternate form: exist)
+#[case("exist(.price)", r#"{"price":3}"#, true)] // 3
+#[case("exist(.price)", r#"{"x":1}"#, false)] // 4
+// Test exists operator with missing field
+#[case("exists(.missing)", r#"{"a":1,"b":2}"#, false)] // 5
+// Test exists operator combined with other conditions (and)
+#[case("exists(.price) and .price=3", r#"{"price":3}"#, true)] // 6
+#[case("exists(.price) and .price=5", r#"{"price":3}"#, false)] // 7
+#[case("exists(.price) and .price=3", r#"{"x":1}"#, false)] // 8
+// Test exists operator combined with other conditions (or)
+#[case("exists(.price) or .name=test", r#"{"name":"test"}"#, true)] // 9
+#[case("exists(.price) or .name=other", r#"{"x":1}"#, false)] // 10
+// Test exists operator with negation
+#[case("not exists(.price)", r#"{"price":3}"#, false)] // 11
+#[case("not exists(.price)", r#"{"x":1}"#, true)] // 12
+// Test exists operator with predefined fields
+#[case("exists(msg)", r#"msg=hello"#, true)] // 13
+#[case("exists(msg)", r#"x=hello"#, false)] // 14
+fn test_query_exists_operator(#[case] raw_query: &str, #[case] input: &str, #[case] should_match: bool) {
+    let query = Query::parse(raw_query).unwrap();
+    let record = parse(input);
+    assert_eq!(
+        record.matches(&query),
+        should_match,
+        "Query {:?} should {} input {:?}",
+        raw_query,
+        if should_match { "match" } else { "not match" },
+        input,
+    );
+}
+
+#[rstest]
+#[case("value > 3.14", r#"{"value":"a"}"#, false)]
+fn test_query_numerical_type_mismatch(#[case] raw_query: &str, #[case] input: &str, #[case] should_match: bool) {
+    let query = Query::parse(raw_query).unwrap();
+    let record = parse(input);
+    assert_eq!(
+        record.matches(&query),
+        should_match,
+        "Query {:?} should {} input {:?}",
+        raw_query,
+        if should_match { "match" } else { "not match" },
+        input,
+    );
+}
+
 fn parse(s: &str) -> Record<'_> {
     let raw = RawRecord::parser().parse(s.as_bytes()).next().unwrap().unwrap().record;
     let parser = RecordParser::new(ParserSettings::default());
