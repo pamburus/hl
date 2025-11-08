@@ -33,10 +33,10 @@ jobs:
     steps:
       - name: Check if running on allowed branch
         run: |
-          if [[ "${{ github.ref_name }}" == "main" || "${{ github.ref_name }}" == "release/"* ]]; then
+          if [[ "${{ github.ref_name }}" == "master" || "${{ github.ref_name }}" == "release/"* ]]; then
             echo "✅ Running on allowed branch: ${{ github.ref_name }}"
           else
-            echo "❌ Release workflow can only be triggered from 'main' or 'release/*' branches"
+            echo "❌ Release workflow can only be triggered from 'master' or 'release/*' branches"
             echo "Current branch: ${{ github.ref_name }}"
             exit 1
           fi
