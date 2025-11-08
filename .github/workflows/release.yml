@@ -56,7 +56,7 @@ jobs:
           echo "branch=${TEMP_BRANCH:?}" >> $GITHUB_OUTPUT
 
       - name: Setup Rust toolchain
-        uses: actions-rust-lang/setup-rust-toolchain@v1
+        uses: actions-rust-lang/setup-rust-toolchain@1780873c7b576612439a134613cc4cc74ce5538c # v1.15.2
         with:
           toolchain: stable
           rustflags: ""
@@ -93,10 +93,19 @@ jobs:
         id: create-release
         run: |
           VERSION=${{ steps.update-version.outputs.version }}
+
+          # Check if version is a pre-release (contains hyphen)
+          if [[ "${VERSION}" == *-* ]]; then
+            PRERELEASE_FLAG="--prerelease"
+          else
+            PRERELEASE_FLAG=""
+          fi
+
           gh release create "v${VERSION:?}" \
             --title "v${VERSION:?}" \
             --notes-file RELEASE_NOTES.md \
-            --draft
+            --draft \
+            ${PRERELEASE_FLAG}
           echo "release-tag=v${VERSION:?}" >> $GITHUB_OUTPUT
         env:
           GH_TOKEN: ${{ github.token }}
@@ -207,27 +216,34 @@ jobs:
           # Push the release tag
           git push origin "refs/tags/v${VERSION:?}"
 
-          # Publish the release
-          gh release edit "${RELEASE_TAG:?}" --tag "v${VERSION:?}" --draft=false --latest
+          # Check if release is marked as pre-release and publish accordingly
+          IS_PRERELEASE=$(gh release view "${RELEASE_TAG:?}" --json isPrerelease --jq '.isPrerelease')
 
-          # Update latest tag if it exists
-          if [ "$(git tag -l latest --merged HEAD)" = latest ]; then
+          # Update latest tag if it exists and release is not a pre-release
+          if [[ "${IS_PRERELEASE:?}" == "false" ]] && [ "$(git tag -l latest --merged HEAD)" = latest ]; then
+            gh release edit "${RELEASE_TAG:?}" --tag "v${VERSION:?}" --draft=false --latest
             git tag -f latest HEAD
             git push -f origin refs/tags/latest
+          else
+            gh release edit "${RELEASE_TAG:?}" --tag "v${VERSION:?}" --draft=false
           fi
 
           # Delete the temporary branch
           git push origin --delete "refs/heads/${TEMP_BRANCH:?}" || true
-
-          echo "✅ Release v${VERSION:?} completed successfully!"
-          echo "🏷️ Target branch updated and tag v${VERSION:?} pushed"
         env:
           GH_TOKEN: ${{ steps.generate-token.outputs.token }}
 
       - name: Trigger publish workflow to distribute release
         run: |
-          gh workflow run publish.yml \
-            --repo pamburus/action-hub \
-            --field package="${{ github.event.repository.name }}"
+          VERSION=${{ needs.prepare-release.outputs.version }}
+          RELEASE_TAG=${{ needs.prepare-release.outputs.release-tag }}
+
+          IS_PRERELEASE=$(gh release view "${RELEASE_TAG:?}" --json isPrerelease --jq '.isPrerelease')
+
+          if [[ "${IS_PRERELEASE:?}" == "false" ]]; then
+            gh workflow run publish.yml \
+              --repo pamburus/action-hub \
+              --field package="${{ github.event.repository.name }}"
+          fi
         env:
           GH_TOKEN: ${{ steps.generate-token.outputs.token }}
