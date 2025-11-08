@@ -1,6 +1,6 @@
 #/bin/bash
 
-set -e
+set -euo pipefail
 
 while :; do
     case $1 in

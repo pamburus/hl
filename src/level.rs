@@ -3,6 +3,7 @@ use std::cmp::Ord;
 use std::fmt;
 use std::ops::Deref;
 use std::result::Result;
+use std::sync::Arc;
 
 // third-party imports
 use clap::{
@@ -11,7 +12,10 @@ use clap::{
 };
 use enum_map::Enum;
 use serde::{Deserialize, Serialize};
-use strum::{AsRefStr, EnumIter};
+use strum::{AsRefStr, EnumIter, IntoEnumIterator};
+
+// local imports
+use crate::xerr::{HighlightQuoted, Suggestions};
 
 // ---
 
@@ -32,6 +36,7 @@ use strum::{AsRefStr, EnumIter};
     AsRefStr,
 )]
 #[serde(rename_all = "kebab-case")]
+#[strum(serialize_all = "lowercase")]
 pub enum Level {
     Error,
     Warning,
@@ -63,12 +68,15 @@ impl From<Level> for InfallibleLevel {
 
 // ---
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ParseError;
+#[derive(Debug, Clone)]
+pub struct ParseError {
+    pub value: Arc<str>,
+    pub suggestions: Suggestions,
+}
 
 impl fmt::Display for ParseError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "failed to parse level")
+        write!(f, "invalid level {value}", value = self.value.hlq())
     }
 }
 
@@ -112,7 +120,10 @@ impl TryFrom<&str> for RelaxedLevel {
             .iter()
             .find(|(_, values)| values.iter().cloned().any(|x| value.eq_ignore_ascii_case(x)))
             .map(|(level, _)| RelaxedLevel(*level))
-            .ok_or(ParseError)
+            .ok_or(ParseError {
+                value: value.into(),
+                suggestions: Suggestions::new(value, Level::iter().map(|level| level.as_ref().to_string())),
+            })
     }
 }
 
