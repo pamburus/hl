@@ -1658,6 +1658,13 @@ impl RecordFilter for FieldFilter {
                         false
                     }
                 }
+                FieldKind::Level => {
+                    if let Some(_) = record.level {
+                        self.match_value(Some(""), false)
+                    } else {
+                        false
+                    }
+                }
                 _ => true,
             },
             FieldFilterKey::Custom(_) => {
