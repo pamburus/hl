@@ -28,8 +28,19 @@ test: (setup "build")
 check: (setup "build")
     cargo check --workspace --locked
 
+# Lint all code
+lint: lint-rust lint-markdown
+
+# • Lint Rust
+lint-rust: clippy
+
+# • Lint Markdown files
+lint-markdown: (setup "markdown-lint")
+    @markdownlint-cli2 README.md
+
 # Run the Rust linter (clippy)
-lint: (setup "lint")
+[private]
+clippy: (setup "clippy")
     cargo clippy --workspace --all-targets --all-features
 
 # Check for security vulnerabilities in dependencies

@@ -16,7 +16,7 @@ while :; do
             echo "  coverage"
             echo "  gh"
             echo "  git-cliff"
-            echo "  lint"
+            echo "  clippy"
             echo "  outdated"
             echo "  schema"
             echo "  screenshots"
@@ -227,6 +227,20 @@ setup_bat() {
     fi
 }
 
+setup_markdownlint() {
+    if [ ! -x "$(command -v markdownlint-cli2)" ]; then
+        if [ -x "$(command -v brew)" ]; then
+            brew install markdownlint-cli2
+        elif [ -x "$(command -v npm)" ]; then
+            npm install markdownlint-cli2 --global
+        else
+            echo "Please install markdownlint-cli2 manually"
+        fi
+    fi
+}
+
+
+
 # --- main ---
 
 while [ $# -gt 0 ]; do
@@ -246,7 +260,7 @@ while [ $# -gt 0 ]; do
         screenshots)
             setup_screenshot_tools
             ;;
-        lint)
+        clippy)
             setup_clippy
             ;;
         audit)
@@ -266,6 +280,9 @@ while [ $# -gt 0 ]; do
             ;;
         bat)
             setup_bat
+            ;;
+        markdown-lint)
+            setup_markdownlint
             ;;
         *)
             echo "Unknown setup $1"
