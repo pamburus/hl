@@ -6,12 +6,13 @@ members = [
     "crate/enumset-serde",
     "crate/heapopt",
     "crate/serde-logfmt",
+    "crate/styled-help",
 ]
 
 [workspace.package]
 repository = "https://github.com/pamburus/hl"
 authors = ["Pavel Ivanov <mr.pavel.ivanov@gmail.com>"]
-version = "0.33.0-alpha.2"
+version = "0.33.0-alpha.3"
 edition = "2024"
 license = "MIT"
 
@@ -35,18 +36,26 @@ serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["raw_value"] }
 sha2 = "0.10"
 
+[workspace.dependencies]
+clap = { version = "4", features = ["wrap_help", "derive", "env", "string"] }
+clap_complete = { version = "4" }
+clap_mangen = { git = "https://github.com/pamburus/rust-clap.git", rev = "20f0ffd737581a5ebf7479d2174f2c197f25c94d" }
+
 [dependencies]
+anstream = "0.6"
 bincode = { version = "2", features = ["serde"] }
 bytefmt = "0.1"
 capnp = "0.23"
 chrono = { version = "0.4", default-features = false, features = ["clock", "serde", "std"] }
 chrono-tz = { version = "0.10", features = ["serde"] }
-clap = { version = "4", features = ["wrap_help", "derive", "env", "string"] }
-clap_complete = "4"
-clap_mangen = "0.2"
+clap = { workspace = true }
+clap_complete = { workspace = true }
+clap_mangen = { workspace = true }
 closure = "0.3"
 collection_macros = "0.2"
+color-print = "0.3"
 config = { version = "0.15", features = ["yaml", "json", "toml"] }
+const-str = "0.7"
 crossbeam-channel = "0.5"
 crossbeam-queue = "0.3"
 crossbeam-utils = "0.8"
@@ -84,6 +93,7 @@ rust-embed = "8"
 serde = { version = "1", features = ["derive"] }
 serde-logfmt = { path = "./crate/serde-logfmt" }
 serde_json = { version = "1", features = ["raw_value"] }
+styled-help = { path = "./crate/styled-help" }
 serde_plain = "1"
 sha2 = "0.10"
 shellwords = "1"
@@ -110,7 +120,6 @@ assert_matches = "1"
 base32 = "0.5"
 byte-strings = "0.3"
 clean-path = "0.2"
-const-str = "0.7"
 criterion = "0.8"
 fnv = "1"
 maplit = "1"

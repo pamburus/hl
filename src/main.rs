@@ -1,7 +1,7 @@
 // std imports
 use std::{
     default::Default,
-    io::{IsTerminal, stdin, stdout},
+    io::{IsTerminal, Write, stdin, stdout},
     path::PathBuf,
     process,
     sync::Arc,
@@ -73,28 +73,6 @@ fn run() -> Result<()> {
     let settings = bootstrap()?;
 
     let opt = cli::Opt::parse_from(wild::args());
-    if opt.help {
-        return cli::Opt::command().print_help().map_err(Error::Io);
-    }
-
-    if let Some(shell) = opt.shell_completions {
-        let mut cmd = cli::Opt::command();
-        let name = cmd.get_name().to_string();
-        clap_complete::generate(shell, &mut cmd, name, &mut stdout());
-        return Ok(());
-    }
-
-    if opt.man_page {
-        let man = clap_mangen::Man::new(cli::Opt::command());
-        man.render(&mut stdout())?;
-        return Ok(());
-    }
-
-    let app_dirs = config::app_dirs().ok_or(Error::AppDirs)?;
-
-    if let Some(tags) = opt.list_themes {
-        return list_themes(&app_dirs, tags);
-    }
 
     let color_supported = if stdout().is_terminal() {
         if let Err(err) = hl::enable_ansi_support() {
@@ -118,6 +96,63 @@ fn run() -> Result<()> {
         cli::ColorOption::Always => true,
         cli::ColorOption::Never => false,
     };
+
+    let help_color = match use_colors {
+        true => cli::ColorOption::Always,
+        false => cli::ColorOption::Never,
+    };
+
+    let command = || cli::Opt::command().color(help_color);
+
+    let paging = match opt.paging {
+        cli::PagingOption::Auto => stdout().is_terminal(),
+        cli::PagingOption::Always => true,
+        cli::PagingOption::Never => false,
+    };
+    let paging = if opt.paging_never || opt.follow { false } else { paging };
+    let pager = || -> OutputStream {
+        if paging {
+            if let Ok(pager) = Pager::new() {
+                Box::new(pager)
+            } else {
+                Box::new(stdout())
+            }
+        } else {
+            Box::new(stdout())
+        }
+    };
+
+    if let Some(verbosity) = opt.help {
+        let color_when = match use_colors {
+            true => anstream::ColorChoice::Always,
+            false => anstream::ColorChoice::Never,
+        };
+        let mut out = anstream::AutoStream::new(pager(), color_when);
+        let help = match verbosity.unwrap_or(cli::HelpVerbosity::Short) {
+            cli::HelpVerbosity::Short => command().render_help(),
+            cli::HelpVerbosity::Long => command().render_long_help(),
+        };
+        return write!(&mut out, "{}", help.ansi()).map_err(Error::Io);
+    }
+
+    if let Some(shell) = opt.shell_completions {
+        let mut cmd = cli::Opt::command();
+        let name = cmd.get_name().to_string();
+        clap_complete::generate(shell, &mut cmd, name, &mut stdout());
+        return Ok(());
+    }
+
+    if opt.man_page {
+        let man = clap_mangen::Man::new(cli::Opt::command()).verbatim(true);
+        man.render(&mut stdout())?;
+        return Ok(());
+    }
+
+    let app_dirs = config::app_dirs().ok_or(Error::AppDirs)?;
+
+    if let Some(tags) = opt.list_themes {
+        return list_themes(&app_dirs, tags);
+    }
 
     let theme = if use_colors {
         let theme = &opt.theme;
@@ -310,25 +345,9 @@ fn run() -> Result<()> {
         .map(|input| input.hold().map_err(Error::Io))
         .collect::<Result<Vec<_>>>()?;
 
-    let paging = match opt.paging {
-        cli::PagingOption::Auto => stdout().is_terminal(),
-        cli::PagingOption::Always => true,
-        cli::PagingOption::Never => false,
-    };
-    let paging = if opt.paging_never || opt.follow { false } else { paging };
     let mut output: OutputStream = match opt.output {
         Some(output) => Box::new(std::fs::File::create(PathBuf::from(&output))?),
-        None => {
-            if paging {
-                if let Ok(pager) = Pager::new() {
-                    Box::new(pager)
-                } else {
-                    Box::new(stdout())
-                }
-            } else {
-                Box::new(stdout())
-            }
-        }
+        None => pager(),
     };
 
     log::debug!("run the app");
