@@ -166,6 +166,10 @@ nix-deps:
         echo "nix-tree is not installed. Run 'nix develop' to enter a shell where it is available"; \
     fi
 
+# Show `hl --help`
+usage: build
+	@./target/debug/hl --config - --help
+
 # Helper recipe to ensure required tools are available for a given task
 [private]
 setup *tools:
