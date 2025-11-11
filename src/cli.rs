@@ -146,30 +146,42 @@ pub struct Opt {
     )]
     pub level: Option<RelaxedLevel>,
 
-    /// Filter messages by timestamp >= <TIME> (--time-zone and --local options are honored).
+    /// Filter messages by timestamp >= <TIME>.
     #[arg(
         long,
         allow_hyphen_values = true,
         overrides_with = "since",
         value_name = "TIME",
+        long_help = "Filter messages by timestamp >= <TIME> (--time-zone and --local options are honored)",
         help_heading = heading::FILTERING
     )]
     pub since: Option<String>,
 
-    /// Filter messages by timestamp <= <TIME> (--time-zone and --local options are honored).
+    /// Filter messages by timestamp <= <TIME>.
     #[arg(
         long,
         allow_hyphen_values = true,
         overrides_with = "until",
         value_name = "TIME",
+        long_help = "Filter messages by timestamp <= <TIME> (--time-zone and --local options are honored)",
         help_heading = heading::FILTERING
     )]
     pub until: Option<String>,
 
-    /// Filter messages by field values
-    /// [k=v, k~=v, k~~=v, 'k!=v', 'k!~=v', 'k!~~=v']
-    /// where ~ does substring match and ~~ does regular expression match.
-    #[arg(short, long, num_args = 1, help_heading = heading::FILTERING)]
+    /// Filter messages by field values [k=v, k~=v, k~~=v, 'k!=v', 'k?!=v', etc].
+    #[arg(
+        short,
+        long,
+        num_args = 1,
+        long_help = concat!(
+            "Filter messages by field values [k=v, k~=v, k~~=v, 'k!=v', 'k?!=v', etc]\n",
+            "~= performs sub-string match\n",
+            "~~= performs regular expression match\n",
+            "!= performs negative match\n",
+            "? includes entries with absent field",
+        ),
+        help_heading = heading::FILTERING
+    )]
     pub filter: Vec<String>,
 
     /// Filter using query, accepts expressions from --filter
