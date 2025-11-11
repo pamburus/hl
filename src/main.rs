@@ -74,7 +74,7 @@ fn run() -> Result<()> {
 
     let opt = cli::Opt::parse_from(wild::args());
     if opt.help {
-        return cli::Opt::command().print_help().map_err(Error::Io);
+        return cli::Opt::command().print_long_help().map_err(Error::Io);
     }
 
     if let Some(shell) = opt.shell_completions {
