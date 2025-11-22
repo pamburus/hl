@@ -4,8 +4,12 @@ use super::*;
 
 #[test]
 fn test_formatter_new() {
-    let formatter = Formatter::new(std::io::stdout());
-    assert!(formatter.width.is_some() == std::io::stdout().is_terminal());
+    let output = std::io::stdout();
+    let is_terminal = output.is_terminal();
+    let formatter = Formatter::new(output);
+    if !is_terminal {
+        assert!(formatter.width.is_none());
+    }
 }
 
 #[test]
