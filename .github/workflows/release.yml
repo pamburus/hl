@@ -242,8 +242,8 @@ jobs:
 
           if [[ "${IS_PRERELEASE:?}" == "false" ]]; then
             gh workflow run publish.yml \
-              --repo pamburus/action-hub \
+              --repo "${{ github.repository_owner }}/action-hub" \
               --field package="${{ github.event.repository.name }}"
           fi
         env:
-          GH_TOKEN: ${{ steps.generate-token.outputs.token }}
+          GH_TOKEN: ${{ github.token }}
