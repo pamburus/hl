@@ -36,6 +36,7 @@ serde_json = { version = "1", features = ["raw_value"] }
 sha2 = "0.10"
 
 [dependencies]
+anstream = "0.6"
 bincode = { version = "2", features = ["serde"] }
 bytefmt = "0.1"
 capnp = "0.23"
