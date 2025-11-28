@@ -8,6 +8,7 @@ use clap::{
     value_parser,
 };
 use clap_complete::Shell;
+use const_str::concat;
 
 // local imports
 use crate::{
@@ -25,7 +26,30 @@ const STYLES: Styles = Styles::styled()
     .header(AnsiColor::Green.on_default().bold())
     .usage(AnsiColor::Green.on_default().bold())
     .literal(AnsiColor::Cyan.on_default().bold())
-    .placeholder(AnsiColor::Cyan.on_default());
+    .placeholder(AnsiColor::Cyan.on_default())
+    .valid(AnsiColor::Green.on_default())
+    .invalid(AnsiColor::Yellow.on_default())
+    .context(AnsiColor::Cyan.on_default().dimmed())
+    .context_value(AnsiColor::Cyan.on_default());
+
+macro_rules! hyperlink {
+    ($url:expr $(,)?) => {
+        hyperlink!($url, $url)
+    };
+    ($text:expr, $url:expr $(,)?) => {
+        ::const_str::concat!("\x1b[34m\x1b]8;;", $url, "\x1b\\", $text, "\x1b]8;;\x1b\\\x1b[0m")
+    };
+}
+
+mod help {
+    use const_str::concat;
+
+    pub const TIME_ZONE_DETAILS_URL: &str = "https://en.wikipedia.org/wiki/List_of_tz_database_time_zones";
+    pub const TIME_ZONE: &str = concat!(
+        r#"Time zone name, see column "TZ identifier" at "#,
+        hyperlink!(TIME_ZONE_DETAILS_URL)
+    );
+}
 
 #[derive(Args)]
 pub struct BootstrapArgs {
@@ -101,7 +125,7 @@ pub struct Opt {
     #[arg(long, short = 's', overrides_with = "sort")]
     pub sort: bool,
 
-    /// Follow input streams and sort messages chronologically during time frame set by --sync-interval-ms option.
+    /// Follow input streams and sort messages chronologically within time frame set by `--sync-interval-ms` option.
     #[arg(long, short = 'F', overrides_with = "follow")]
     pub follow: bool,
 
@@ -270,7 +294,7 @@ pub struct Opt {
     )]
     pub time_format: String,
 
-    /// Time zone name, see column "TZ identifier" at https://en.wikipedia.org/wiki/List_of_tz_database_time_zones.
+    /// Time zone name.
     #[arg(
         long,
         short = 'Z',
@@ -278,7 +302,11 @@ pub struct Opt {
         default_value = config::global::get().time_zone.name(),
         overrides_with="time_zone",
         value_name = "TZ",
-        help_heading = heading::OUTPUT
+        help_heading = heading::OUTPUT,
+        help = help::TIME_ZONE,
+        long_help = concat!(help::TIME_ZONE, ".\n\n",
+            "Examples: 'UTC', 'America/New_York', 'Asia/Shanghai', 'Europe/Berlin', etc."
+        ),
     )]
     pub time_zone: chrono_tz::Tz,
 
@@ -458,12 +486,7 @@ pub struct Opt {
     pub files: Vec<PathBuf>,
 }
 
-#[derive(ValueEnum, Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ColorOption {
-    Auto,
-    Always,
-    Never,
-}
+pub type ColorOption = clap::ColorChoice;
 
 #[derive(ValueEnum, Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PagingOption {
