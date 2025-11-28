@@ -73,8 +73,11 @@ fn run() -> Result<()> {
     let settings = bootstrap()?;
 
     let opt = cli::Opt::parse_from(wild::args());
-    if opt.help {
+    if opt.help_long {
         return cli::Opt::command().print_long_help().map_err(Error::Io);
+    }
+    if opt.help {
+        return cli::Opt::command().print_help().map_err(Error::Io);
     }
 
     if let Some(shell) = opt.shell_completions {

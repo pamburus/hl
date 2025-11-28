@@ -170,6 +170,10 @@ nix-deps:
 usage: build
 	@./target/debug/hl --config - --help
 
+# Show `hl --help-long`
+usage-long: build
+	@./target/debug/hl --config - --help-long
+
 # Helper recipe to ensure required tools are available for a given task
 [private]
 setup *tools:

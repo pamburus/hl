@@ -449,6 +449,10 @@ pub struct Opt {
     #[arg(long, default_value_t = false, action = ArgAction::SetTrue)]
     pub help: bool,
 
+    /// Print long help with all options and extended descriptions.
+    #[arg(long, default_value_t = false, action = ArgAction::SetTrue)]
+    pub help_long: bool,
+
     /// Files to process
     #[arg(name = "FILE")]
     pub files: Vec<PathBuf>,
