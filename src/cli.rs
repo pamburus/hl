@@ -8,7 +8,6 @@ use clap::{
     value_parser,
 };
 use clap_complete::Shell;
-use color_print::cstr;
 use const_str::concat;
 use styled_help::styled_help;
 
@@ -34,29 +33,14 @@ const STYLES: Styles = Styles::styled()
     .context(AnsiColor::Cyan.on_default().dimmed())
     .context_value(AnsiColor::Cyan.on_default());
 
-macro_rules! hyperlink {
-    ($url:expr $(,)?) => {
-        hyperlink!($url, $url)
-    };
-    ($text:expr, $url:expr $(,)?) => {
-        ::const_str::concat!("\x1b[34m\x1b]8;;", $url, "\x1b\\", $text, "\x1b]8;;\x1b\\\x1b[0m")
-    };
-}
-
-mod help {
-    use super::{concat, cstr};
-
-    pub const FOLLOW: &str = cstr!(
-        "Follow input streams and sort entries chronologically within time frame set by <c>--sync-interval-ms</> option"
-    );
-    pub const SORT: &str = cstr!("Sort messages chronologically");
-    pub const TAIL: &str = cstr!("Number of last messages to preload from each file in <c>--follow</> mode");
-    pub const TIME_ZONE_DETAILS_URL: &str = "https://en.wikipedia.org/wiki/List_of_tz_database_time_zones";
-    pub const TIME_ZONE: &str = concat!(
-        r#"Time zone name, see column "TZ identifier" at "#,
-        hyperlink!(TIME_ZONE_DETAILS_URL)
-    );
-}
+// macro_rules! hyperlink {
+//     ($url:expr $(,)?) => {
+//         hyperlink!($url, $url)
+//     };
+//     ($text:expr, $url:expr $(,)?) => {
+//         ::const_str::concat!("\x1b[34m\x1b]8;;", $url, "\x1b\\", $text, "\x1b]8;;\x1b\\\x1b[0m")
+//     };
+// }
 
 #[derive(Args)]
 pub struct BootstrapArgs {
@@ -129,21 +113,24 @@ pub struct Opt {
     #[command(flatten)]
     pub bootstrap: BootstrapArgs,
 
-    #[arg(long, short = 's', overrides_with = "sort", help = help::SORT)]
+    /// Sort entries chronologically.
+    #[arg(long, short = 's', overrides_with = "sort")]
     pub sort: bool,
 
-    #[arg(long, short = 'F', overrides_with = "follow", help = help::FOLLOW)]
+    /// Follow input streams and sort entries chronologically within time frame set by <c>--sync-interval-ms</> option.
+    #[arg(long, short = 'F', overrides_with = "follow")]
     pub follow: bool,
 
-    #[arg(long, default_value = "10", overrides_with = "tail", value_name = "N", help = help::TAIL)]
+    /// Number of last entries to preload from each file in <c>--follow</> mode.
+    #[arg(long, default_value = "10", overrides_with = "tail", value_name = "N")]
     pub tail: u64,
 
+    /// Synchronization interval for live streaming mode enabled by <c>--follow</> option.
     #[arg(
         long,
         default_value = "100",
         overrides_with = "sync_interval_ms",
-        value_name = "MILLISECONDS",
-        help = cstr!("Synchronization interval for live streaming mode enabled by <c>--follow</> option"),
+        value_name = "MILLISECONDS"
     )]
     pub sync_interval_ms: u64,
 
@@ -299,7 +286,9 @@ pub struct Opt {
     )]
     pub time_format: String,
 
-    /// Time zone name.
+    /// Time zone name, see column "TZ identifier" at <b>https://en.wikipedia.org/wiki/List_of_tz_database_time_zones</>.
+    ///
+    /// Examples: 'UTC', 'America/New_York', 'Asia/Shanghai', 'Europe/Berlin', etc.
     #[arg(
         long,
         short = 'Z',
@@ -308,10 +297,6 @@ pub struct Opt {
         overrides_with="time_zone",
         value_name = "TZ",
         help_heading = heading::OUTPUT,
-        help = help::TIME_ZONE,
-        long_help = concat!(help::TIME_ZONE, ".\n\n",
-            "Examples: 'UTC', 'America/New_York', 'Asia/Shanghai', 'Europe/Berlin', etc."
-        ),
     )]
     pub time_zone: chrono_tz::Tz,
 
