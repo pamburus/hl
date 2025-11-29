@@ -6,6 +6,7 @@ members = [
     "crate/enumset-serde",
     "crate/heapopt",
     "crate/serde-logfmt",
+    "crate/styled-help",
 ]
 
 [workspace.package]
@@ -47,6 +48,7 @@ clap_complete = "4"
 clap_mangen = "0.2"
 closure = "0.3"
 collection_macros = "0.2"
+color-print = "0.3"
 config = { version = "0.15", features = ["yaml", "json", "toml"] }
 const-str = "0.7"
 crossbeam-channel = "0.5"
@@ -86,6 +88,7 @@ rust-embed = "8"
 serde = { version = "1", features = ["derive"] }
 serde-logfmt = { path = "./crate/serde-logfmt" }
 serde_json = { version = "1", features = ["raw_value"] }
+styled-help = { path = "./crate/styled-help" }
 serde_plain = "1"
 sha2 = "0.10"
 shellwords = "1"

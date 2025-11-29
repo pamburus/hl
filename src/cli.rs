@@ -8,7 +8,9 @@ use clap::{
     value_parser,
 };
 use clap_complete::Shell;
+use color_print::cstr;
 use const_str::concat;
+use styled_help::styled_help;
 
 // local imports
 use crate::{
@@ -42,8 +44,13 @@ macro_rules! hyperlink {
 }
 
 mod help {
-    use const_str::concat;
+    use super::{concat, cstr};
 
+    pub const FOLLOW: &str = cstr!(
+        "Follow input streams and sort entries chronologically within time frame set by <c>--sync-interval-ms</> option"
+    );
+    pub const SORT: &str = cstr!("Sort messages chronologically");
+    pub const TAIL: &str = cstr!("Number of last messages to preload from each file in <c>--follow</> mode");
     pub const TIME_ZONE_DETAILS_URL: &str = "https://en.wikipedia.org/wiki/List_of_tz_database_time_zones";
     pub const TIME_ZONE: &str = concat!(
         r#"Time zone name, see column "TZ identifier" at "#,
@@ -115,30 +122,28 @@ impl BootstrapOpt {
 // ---
 
 /// JSON and logfmt log converter to human readable representation.
+#[styled_help]
 #[derive(Parser)]
 #[command(version, styles = STYLES, disable_help_flag = true)]
 pub struct Opt {
     #[command(flatten)]
     pub bootstrap: BootstrapArgs,
 
-    /// Sort messages chronologically.
-    #[arg(long, short = 's', overrides_with = "sort")]
+    #[arg(long, short = 's', overrides_with = "sort", help = help::SORT)]
     pub sort: bool,
 
-    /// Follow input streams and sort messages chronologically within time frame set by `--sync-interval-ms` option.
-    #[arg(long, short = 'F', overrides_with = "follow")]
+    #[arg(long, short = 'F', overrides_with = "follow", help = help::FOLLOW)]
     pub follow: bool,
 
-    /// Number of last messages to preload from each file in --follow mode.
-    #[arg(long, default_value = "10", overrides_with = "tail", value_name = "N")]
+    #[arg(long, default_value = "10", overrides_with = "tail", value_name = "N", help = help::TAIL)]
     pub tail: u64,
 
-    /// Synchronization interval for live streaming mode enabled by --follow option.
     #[arg(
         long,
         default_value = "100",
         overrides_with = "sync_interval_ms",
-        value_name = "MILLISECONDS"
+        value_name = "MILLISECONDS",
+        help = cstr!("Synchronization interval for live streaming mode enabled by <c>--follow</> option"),
     )]
     pub sync_interval_ms: u64,
 
