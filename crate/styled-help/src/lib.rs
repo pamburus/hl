@@ -51,7 +51,8 @@ fn process_field(field: &mut Field) {
             if let Meta::List(ref meta_list) = attr.meta {
                 // Parse the tokens inside the arg attribute
                 let tokens_str = meta_list.tokens.to_string();
-                if tokens_str.contains("help") || tokens_str.contains("long_help") {
+                // Check for "help =" or "long_help =" to avoid matching help_heading
+                if tokens_str.contains("help =") || tokens_str.contains("long_help =") {
                     has_existing_help = true;
                     break;
                 }
@@ -86,7 +87,12 @@ fn process_field(field: &mut Field) {
     }
 
     // Combine doc lines into a single string
-    let combined_doc = doc_lines.join("\n");
+    let mut combined_doc = doc_lines.join("\n");
+
+    // Strip trailing period to match clap's default behavior for doc comments
+    if combined_doc.ends_with('.') {
+        combined_doc.pop();
+    }
 
     // Check if the doc comment contains style markers
     let has_style_markers = combined_doc.contains("<c>")
