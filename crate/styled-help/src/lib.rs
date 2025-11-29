@@ -96,8 +96,8 @@ fn process_field(field: &mut Field) {
     let short_help = if let Some(first_para) = paragraphs.first() {
         let trimmed = first_para.trim_end();
         // Strip trailing period from short help
-        if trimmed.ends_with('.') {
-            trimmed[..trimmed.len() - 1].to_string()
+        if let Some(stripped) = trimmed.strip_suffix('.') {
+            stripped.to_string()
         } else {
             trimmed.to_string()
         }
