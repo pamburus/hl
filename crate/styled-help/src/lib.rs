@@ -87,18 +87,30 @@ fn process_field(field: &mut Field) {
     field.attrs.retain(|attr| !attr.path().is_ident("doc"));
 
     // Combine doc lines into a single string
-    let long_help = doc_lines.join("\n");
+    let combined_doc = doc_lines.join("\n");
 
-    // Strip trailing period only from help (short help), keep it in long_help
-    let help = if long_help.ends_with('.') {
-        long_help[..long_help.len() - 1].to_string()
+    // Split into paragraphs (separated by empty lines)
+    // Short help gets first paragraph only, long help gets everything
+    let paragraphs: Vec<&str> = combined_doc.split("\n\n").collect();
+
+    let short_help = if let Some(first_para) = paragraphs.first() {
+        let trimmed = first_para.trim_end();
+        // Strip trailing period from short help
+        if trimmed.ends_with('.') {
+            trimmed[..trimmed.len() - 1].to_string()
+        } else {
+            trimmed.to_string()
+        }
     } else {
-        long_help.clone()
+        String::new()
     };
+
+    // Long help gets full text with periods preserved
+    let long_help = combined_doc;
 
     // Generate help attributes - always use cstr! (it handles plain text just fine)
     let help_attr: Attribute = syn::parse_quote! {
-        #[arg(help = ::color_print::cstr!(#help), long_help = ::color_print::cstr!(#long_help))]
+        #[arg(help = ::color_print::cstr!(#short_help), long_help = ::color_print::cstr!(#long_help))]
     };
     field.attrs.push(help_attr);
 }
