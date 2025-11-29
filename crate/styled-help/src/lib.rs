@@ -62,9 +62,8 @@ fn process_field(field: &mut Field) {
         return;
     }
 
-    // Collect doc comments and check for style markers
+    // Collect doc comments
     let mut doc_lines = Vec::new();
-    let mut has_style_markers = false;
 
     for attr in &field.attrs {
         if attr.path().is_ident("doc") {
@@ -73,62 +72,33 @@ fn process_field(field: &mut Field) {
                     if let Lit::Str(ref lit_str) = expr_lit.lit {
                         let doc_content = lit_str.value();
                         doc_lines.push(doc_content.trim().to_string());
-
-                        // Check for style markers
-                        if !has_style_markers {
-                            has_style_markers = doc_content.contains("<c>")
-                                || doc_content.contains("</>")
-                                || doc_content.contains("<s>")
-                                || doc_content.contains("<u>")
-                                || doc_content.contains("<k>")
-                                || doc_content.contains("<r>")
-                                || doc_content.contains("<g>")
-                                || doc_content.contains("<b>")
-                                || doc_content.contains("<y>")
-                                || doc_content.contains("<m>")
-                                || doc_content.contains("<cyan>")
-                                || doc_content.contains("<white>");
-                        }
                     }
                 }
             }
         }
     }
 
-    // If no doc comments found or no style markers, let clap handle it normally
-    if doc_lines.is_empty() || !has_style_markers {
+    // If no doc comments found, nothing to do
+    if doc_lines.is_empty() {
         return;
     }
 
-    // Only process and remove doc comments if they have style markers
+    // Process all doc comments (remove them to avoid duplication with help attributes)
     field.attrs.retain(|attr| !attr.path().is_ident("doc"));
 
     // Combine doc lines into a single string
-    let combined_doc = doc_lines.join("\n");
+    let long_help = doc_lines.join("\n");
 
-    // Split into paragraphs (separated by empty lines)
-    // Clap's behavior:
-    // - Short help (-h): First paragraph only, strip trailing period
-    // - Long help (--help): Full text, keep periods as-is
-    let paragraphs: Vec<&str> = combined_doc.split("\n\n").collect();
-
-    let short_help = if let Some(first_para) = paragraphs.first() {
-        // Strip trailing period from first paragraph for short help
-        let trimmed = first_para.trim_end();
-        if trimmed.ends_with('.') {
-            trimmed[..trimmed.len() - 1].to_string()
-        } else {
-            trimmed.to_string()
-        }
+    // Strip trailing period only from help (short help), keep it in long_help
+    let help = if long_help.ends_with('.') {
+        long_help[..long_help.len() - 1].to_string()
     } else {
-        String::new()
+        long_help.clone()
     };
 
-    let long_help = combined_doc;
-
-    // Use cstr! for styled help
+    // Generate help attributes - always use cstr! (it handles plain text just fine)
     let help_attr: Attribute = syn::parse_quote! {
-        #[arg(help = ::color_print::cstr!(#short_help), long_help = ::color_print::cstr!(#long_help))]
+        #[arg(help = ::color_print::cstr!(#help), long_help = ::color_print::cstr!(#long_help))]
     };
     field.attrs.push(help_attr);
 }

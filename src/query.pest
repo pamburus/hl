@@ -43,11 +43,11 @@ number_set         = ${ "(" ~ ws* ~ number ~ (ws* ~ "," ~ ws* ~ number)* ~ ws* ~
 
 op_regex_match     = @{
     "~~="
-  | ^"match" ~ &punctuation
+  | ^"match" ~ "es"? ~ &punctuation
 }
 op_not_regex_match = @{
     "!~~="
-  | ^"not" ~ ws+ ~ ^"match" ~ &punctuation
+  | ^"not" ~ ws+ ~ ^"match" ~ "es"? ~ &punctuation
 }
 op_contain         = @{
     "~="
