@@ -1,6 +1,6 @@
 use proc_macro::TokenStream;
 use quote::quote;
-use syn::{Attribute, DeriveInput, Field, Lit, Meta, parse_macro_input};
+use syn::{parse_macro_input, Attribute, DeriveInput, Field, Lit, Meta};
 
 /// Transforms doc comments with color_print style markers into `help` attributes.
 ///
@@ -41,11 +41,8 @@ pub fn styled_help(_attr: TokenStream, item: TokenStream) -> TokenStream {
 }
 
 fn process_field(field: &mut Field) {
-    // Extract and combine all doc comments
-    let mut doc_lines = Vec::new();
-    let mut has_existing_help = false;
-
     // Check if field already has a help or long_help attribute
+    let mut has_existing_help = false;
     for attr in &field.attrs {
         if attr.path().is_ident("arg") {
             if let Meta::List(ref meta_list) = attr.meta {
@@ -65,61 +62,73 @@ fn process_field(field: &mut Field) {
         return;
     }
 
-    // Collect doc comments
-    field.attrs.retain(|attr| {
+    // Collect doc comments and check for style markers
+    let mut doc_lines = Vec::new();
+    let mut has_style_markers = false;
+
+    for attr in &field.attrs {
         if attr.path().is_ident("doc") {
             if let Meta::NameValue(ref meta) = attr.meta {
                 if let syn::Expr::Lit(ref expr_lit) = meta.value {
                     if let Lit::Str(ref lit_str) = expr_lit.lit {
                         let doc_content = lit_str.value();
                         doc_lines.push(doc_content.trim().to_string());
-                        return false; // Remove the doc attribute
+
+                        // Check for style markers
+                        if !has_style_markers {
+                            has_style_markers = doc_content.contains("<c>")
+                                || doc_content.contains("</>")
+                                || doc_content.contains("<s>")
+                                || doc_content.contains("<u>")
+                                || doc_content.contains("<k>")
+                                || doc_content.contains("<r>")
+                                || doc_content.contains("<g>")
+                                || doc_content.contains("<b>")
+                                || doc_content.contains("<y>")
+                                || doc_content.contains("<m>")
+                                || doc_content.contains("<cyan>")
+                                || doc_content.contains("<white>");
+                        }
                     }
                 }
             }
         }
-        true // Keep non-doc attributes
-    });
+    }
 
-    // If no doc comments found, nothing to do
-    if doc_lines.is_empty() {
+    // If no doc comments found or no style markers, let clap handle it normally
+    if doc_lines.is_empty() || !has_style_markers {
         return;
     }
 
+    // Only process and remove doc comments if they have style markers
+    field.attrs.retain(|attr| !attr.path().is_ident("doc"));
+
     // Combine doc lines into a single string
-    let mut combined_doc = doc_lines.join("\n");
+    let combined_doc = doc_lines.join("\n");
 
-    // Strip trailing period to match clap's default behavior for doc comments
-    if combined_doc.ends_with('.') {
-        combined_doc.pop();
-    }
+    // Split into paragraphs (separated by empty lines)
+    // Clap's behavior:
+    // - Short help (-h): First paragraph only, strip trailing period
+    // - Long help (--help): Full text, keep periods as-is
+    let paragraphs: Vec<&str> = combined_doc.split("\n\n").collect();
 
-    // Check if the doc comment contains style markers
-    let has_style_markers = combined_doc.contains("<c>")
-        || combined_doc.contains("</>")
-        || combined_doc.contains("<s>")
-        || combined_doc.contains("<u>")
-        || combined_doc.contains("<k>")
-        || combined_doc.contains("<r>")
-        || combined_doc.contains("<g>")
-        || combined_doc.contains("<b>")
-        || combined_doc.contains("<y>")
-        || combined_doc.contains("<m>")
-        || combined_doc.contains("<cyan>")
-        || combined_doc.contains("<white>");
-
-    // Create the help attribute
-    if has_style_markers {
-        // Use cstr! for styled help
-        let help_attr: Attribute = syn::parse_quote! {
-            #[arg(help = ::color_print::cstr!(#combined_doc))]
-        };
-        field.attrs.push(help_attr);
+    let short_help = if let Some(first_para) = paragraphs.first() {
+        // Strip trailing period from first paragraph for short help
+        let trimmed = first_para.trim_end();
+        if trimmed.ends_with('.') {
+            trimmed[..trimmed.len() - 1].to_string()
+        } else {
+            trimmed.to_string()
+        }
     } else {
-        // Use plain string for non-styled help
-        let help_attr: Attribute = syn::parse_quote! {
-            #[arg(help = #combined_doc)]
-        };
-        field.attrs.push(help_attr);
-    }
+        String::new()
+    };
+
+    let long_help = combined_doc;
+
+    // Use cstr! for styled help
+    let help_attr: Attribute = syn::parse_quote! {
+        #[arg(help = ::color_print::cstr!(#short_help), long_help = ::color_print::cstr!(#long_help))]
+    };
+    field.attrs.push(help_attr);
 }
