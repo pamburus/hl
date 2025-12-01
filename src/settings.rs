@@ -168,7 +168,7 @@ pub struct TimeField(pub Field);
 
 impl Default for TimeField {
     fn default() -> Self {
-        Self(Field::new(vec!["time".into(), "ts".into()]))
+        Self(Field::new(vec!["timestamp".into(), "time".into(), "ts".into()]))
     }
 }
 
