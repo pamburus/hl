@@ -142,7 +142,7 @@ fn run() -> Result<()> {
     }
 
     if opt.man_page {
-        let man = clap_mangen::Man::new(cli::Opt::command());
+        let man = clap_mangen::Man::new(cli::Opt::command()).keep_line_breaks(true);
         man.render(&mut stdout())?;
         return Ok(());
     }

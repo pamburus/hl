@@ -338,7 +338,15 @@ version = "4.5.53"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c9e340e012a1bf4935f5282ed1436d1489548e8f72308207ea5df0e23d2d03f8"
 dependencies = [
- "clap_builder",
+ "clap_builder 4.5.53 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "clap"
+version = "4.5.53"
+source = "git+https://github.com/pamburus/rust-clap.git?rev=ab397c2127f2cee962c55c40e0aa1b78de670a05#ab397c2127f2cee962c55c40e0aa1b78de670a05"
+dependencies = [
+ "clap_builder 4.5.53 (git+https://github.com/pamburus/rust-clap.git?rev=ab397c2127f2cee962c55c40e0aa1b78de670a05)",
  "clap_derive",
 ]
 
@@ -348,9 +356,18 @@ version = "4.5.53"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d76b5d13eaa18c901fd2f7fca939fefe3a0727a953561fefdf3b2922b8569d00"
 dependencies = [
+ "anstyle",
+ "clap_lex 0.7.6 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "clap_builder"
+version = "4.5.53"
+source = "git+https://github.com/pamburus/rust-clap.git?rev=ab397c2127f2cee962c55c40e0aa1b78de670a05#ab397c2127f2cee962c55c40e0aa1b78de670a05"
+dependencies = [
  "anstream",
  "anstyle",
- "clap_lex",
+ "clap_lex 0.7.6 (git+https://github.com/pamburus/rust-clap.git?rev=ab397c2127f2cee962c55c40e0aa1b78de670a05)",
  "strsim",
  "terminal_size",
 ]
@@ -358,17 +375,15 @@ dependencies = [
 [[package]]
 name = "clap_complete"
 version = "4.5.61"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "39615915e2ece2550c0149addac32fb5bd312c657f43845bb9088cb9c8a7c992"
+source = "git+https://github.com/pamburus/rust-clap.git?rev=ab397c2127f2cee962c55c40e0aa1b78de670a05#ab397c2127f2cee962c55c40e0aa1b78de670a05"
 dependencies = [
- "clap",
+ "clap 4.5.53 (git+https://github.com/pamburus/rust-clap.git?rev=ab397c2127f2cee962c55c40e0aa1b78de670a05)",
 ]
 
 [[package]]
 name = "clap_derive"
 version = "4.5.49"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2a0b5487afeab2deb2ff4e03a807ad1a03ac532ff5a2cee5d86884440c7f7671"
+source = "git+https://github.com/pamburus/rust-clap.git?rev=ab397c2127f2cee962c55c40e0aa1b78de670a05#ab397c2127f2cee962c55c40e0aa1b78de670a05"
 dependencies = [
  "heck",
  "proc-macro2",
@@ -383,12 +398,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a1d728cc89cf3aee9ff92b05e62b19ee65a02b5702cff7d5a377e32c6ae29d8d"
 
 [[package]]
+name = "clap_lex"
+version = "0.7.6"
+source = "git+https://github.com/pamburus/rust-clap.git?rev=ab397c2127f2cee962c55c40e0aa1b78de670a05#ab397c2127f2cee962c55c40e0aa1b78de670a05"
+
+[[package]]
 name = "clap_mangen"
-version = "0.2.31"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "439ea63a92086df93893164221ad4f24142086d535b3a0957b9b9bea2dc86301"
+version = "0.2.32-alpha.1"
+source = "git+https://github.com/pamburus/rust-clap.git?rev=ab397c2127f2cee962c55c40e0aa1b78de670a05#ab397c2127f2cee962c55c40e0aa1b78de670a05"
 dependencies = [
- "clap",
+ "clap 4.5.53 (git+https://github.com/pamburus/rust-clap.git?rev=ab397c2127f2cee962c55c40e0aa1b78de670a05)",
  "roff",
 ]
 
@@ -525,7 +544,7 @@ dependencies = [
  "anes",
  "cast",
  "ciborium",
- "clap",
+ "clap 4.5.53 (registry+https://github.com/rust-lang/crates.io-index)",
  "criterion-plot",
  "itertools 0.13.0",
  "num-traits",
@@ -793,7 +812,7 @@ dependencies = [
 name = "enumset-ext"
 version = "0.2.1"
 dependencies = [
- "clap",
+ "clap 4.5.53 (git+https://github.com/pamburus/rust-clap.git?rev=ab397c2127f2cee962c55c40e0aa1b78de670a05)",
  "enumset",
  "enumset-serde",
  "serde",
@@ -1114,7 +1133,7 @@ dependencies = [
  "capnpc",
  "chrono",
  "chrono-tz",
- "clap",
+ "clap 4.5.53 (git+https://github.com/pamburus/rust-clap.git?rev=ab397c2127f2cee962c55c40e0aa1b78de670a05)",
  "clap_complete",
  "clap_mangen",
  "clean-path",

@@ -13,7 +13,7 @@ serde = ["dep:serde", "dep:enumset-serde"]
 clap = ["dep:clap" ]
 
 [dependencies]
-clap = { version = "4", optional = true }
+clap = { workspace = true, optional = true }
 enumset = { version = "1", features = [] }
 enumset-serde = { path = "../enumset-serde", optional = true }
 serde = { version = "1", optional = true }
