@@ -110,8 +110,14 @@ check-schema: (setup "schema")
     @.venv/bin/python build/ci/validate_yaml.py ./schema/json/theme.schema.json etc/defaults/themes/*.yaml
 
 # Install binary and man pages
-install: (setup "build")
+install: (setup "build") install-man-pages
     cargo install --path . --locked
+
+# Install man pages
+install-man-pages:
+    mkdir -p ~/share/man/man1
+    cargo run --release --locked -- --config - --man-page >~/share/man/man1/hl.1
+    @echo $(tput setaf 3)NOTE:$(tput sgr0) ensure $(tput setaf 2)~/share/man$(tput sgr0) is added to $(tput setaf 2)MANPATH$(tput sgr0) environment variable
 
 # Build and publish new release
 release type="patch": (setup "cargo-edit")
