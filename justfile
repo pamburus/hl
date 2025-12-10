@@ -115,9 +115,12 @@ install: (setup "build") install-man-pages
 
 # Install man pages
 install-man-pages:
+    #!/usr/bin/env bash
+    set -euo pipefail
     mkdir -p ~/share/man/man1
-    cargo run --release --locked -- --config - --man-page >~/share/man/man1/hl.1
-    @echo $(tput setaf 3)NOTE:$(tput sgr0) ensure $(tput setaf 2)~/share/man$(tput sgr0) is added to $(tput setaf 2)MANPATH$(tput sgr0) environment variable
+    cargo run --release --locked -- --config - --man-page >~/share/man/man1/hl.1.tmp
+    mv -f ~/share/man/man1/hl.1.tmp ~/share/man/man1/hl.1
+    echo $(tput setaf 3)NOTE:$(tput sgr0) ensure $(tput setaf 2)~/share/man$(tput sgr0) is added to $(tput setaf 2)MANPATH$(tput sgr0) environment variable
 
 # Build and publish new release
 release type="patch": (setup "cargo-edit")
