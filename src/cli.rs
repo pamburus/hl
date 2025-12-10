@@ -3,11 +3,13 @@ use std::{num::NonZeroUsize, path::PathBuf};
 
 // third-party imports
 use clap::{
-    ArgAction, Args, Parser, ValueEnum,
+    Args, Parser, ValueEnum,
     builder::{Styles, styling::AnsiColor},
     value_parser,
 };
 use clap_complete::Shell;
+use const_str::concat;
+use styled_help::styled_help;
 
 // local imports
 use crate::{
@@ -25,11 +27,16 @@ const STYLES: Styles = Styles::styled()
     .header(AnsiColor::Green.on_default().bold())
     .usage(AnsiColor::Green.on_default().bold())
     .literal(AnsiColor::Cyan.on_default().bold())
-    .placeholder(AnsiColor::Cyan.on_default());
+    .placeholder(AnsiColor::Cyan.on_default())
+    .valid(AnsiColor::Green.on_default())
+    .invalid(AnsiColor::Yellow.on_default())
+    .context(AnsiColor::Cyan.on_default().dimmed())
+    .context_value(AnsiColor::Cyan.on_default());
 
+#[styled_help]
 #[derive(Args)]
 pub struct BootstrapArgs {
-    /// Configuration file path.
+    /// Configuration file path
     #[arg(long, value_name = "FILE", env = "HL_CONFIG", num_args = 1)]
     pub config: Vec<String>,
 }
@@ -91,25 +98,26 @@ impl BootstrapOpt {
 // ---
 
 /// JSON and logfmt log converter to human readable representation.
+#[styled_help]
 #[derive(Parser)]
 #[command(version, styles = STYLES, disable_help_flag = true)]
 pub struct Opt {
     #[command(flatten)]
     pub bootstrap: BootstrapArgs,
 
-    /// Sort messages chronologically.
+    /// Sort entries chronologically
     #[arg(long, short = 's', overrides_with = "sort")]
     pub sort: bool,
 
-    /// Follow input streams and sort messages chronologically during time frame set by --sync-interval-ms option.
+    /// Follow input streams and sort entries chronologically within time frame set by <c>--sync-interval-ms</> option
     #[arg(long, short = 'F', overrides_with = "follow")]
     pub follow: bool,
 
-    /// Number of last messages to preload from each file in --follow mode.
+    /// Number of last entries to preload from each file in <c>--follow</> mode
     #[arg(long, default_value = "10", overrides_with = "tail", value_name = "N")]
     pub tail: u64,
 
-    /// Synchronization interval for live streaming mode enabled by --follow option.
+    /// Synchronization interval for live streaming mode enabled by <c>--follow</> option
     #[arg(
         long,
         default_value = "100",
@@ -118,7 +126,7 @@ pub struct Opt {
     )]
     pub sync_interval_ms: u64,
 
-    /// Control pager usage (HL_PAGER or PAGER).
+    /// Control pager usage (HL_PAGER or PAGER)
     #[arg(
         long,
         default_value = "auto",
@@ -129,11 +137,11 @@ pub struct Opt {
     )]
     pub paging: PagingOption,
 
-    /// Handful alias for --paging=never, overrides --paging option.
+    /// Handful alias for <c>--paging=never</>, overrides <c>--paging</> option
     #[arg(short = 'P')]
     pub paging_never: bool,
 
-    /// Filter messages by level.
+    /// Display entries with level <s>>>=</> <c><<LEVEL>></>
     #[arg(
         short,
         long,
@@ -146,7 +154,9 @@ pub struct Opt {
     )]
     pub level: Option<RelaxedLevel>,
 
-    /// Filter messages by timestamp >= <TIME> (--time-zone and --local options are honored).
+    /// Display entries with timestamp <s>>>=</> <c><<TIME>></>
+    ///
+    /// Note that <c>--time-zone</> and <c>--local</> options are honored.
     #[arg(
         long,
         allow_hyphen_values = true,
@@ -156,7 +166,9 @@ pub struct Opt {
     )]
     pub since: Option<String>,
 
-    /// Filter messages by timestamp <= <TIME> (--time-zone and --local options are honored).
+    /// Display entries with timestamp <s><<=</> <c><<TIME>></>
+    ///
+    /// Note that <c>--time-zone</> and <c>--local</> options are honored.
     #[arg(
         long,
         allow_hyphen_values = true,
@@ -166,18 +178,41 @@ pub struct Opt {
     )]
     pub until: Option<String>,
 
-    /// Filter messages by field values
-    /// [k=v, k~=v, k~~=v, 'k!=v', 'k!~=v', 'k!~~=v']
-    /// where ~ does substring match and ~~ does regular expression match.
-    #[arg(short, long, num_args = 1, help_heading = heading::FILTERING)]
+    /// Filter entries by matching field values <c><dim>[</>k=v<dim>, </>k~=v<dim>, </>k~~=v<dim>, </>'k!=v'<dim>, </>'k?!=v'<dim>, etc]</></>
+    ///
+    /// The format is <c><<key>> <<operator>> <<value>></>.
+    /// The <c><<key>></> is the field name to match.
+    /// The <c><<value>></> is the string to match against (case-sensitive).
+    ///
+    /// Operators:
+    /// •   <c>= <dim>:</></> perform exact string match
+    /// •  <c>~= <dim>:</></> perform sub-string match
+    /// • <c>~~= <dim>:</></> perform regular expression match
+    ///
+    /// Modifiers:
+    /// •   <c>! <dim>:</></> negate the match (placed before operator) <c><dim>[</>'k!=v'<dim>, </>'k!~=v'<dim>, etc]</></>
+    /// •   <c>? <dim>:</></> include entry if the field is missing (placed after the key) <c><dim>[</>'k?=v'<dim>, </>'k?!~=v'<dim>, etc]</></>
+    #[arg(
+        short,
+        long,
+        num_args = 1,
+        help_heading = heading::FILTERING
+    )]
     pub filter: Vec<String>,
 
-    /// Filter using query, accepts expressions from --filter
-    /// and supports '(', ')', 'and', 'or', 'not', 'in', 'contain', 'like', '<', '>', '<=', '>=', etc.
+    /// Filter entries using a query expression <c><dim>[</>'status>>=400 or duration>>=15'<dim>, etc]</></>
+    ///
+    /// Query expression supports all operators and modifiers from <c>--filter</> and additionally
+    /// • Logical: <c>'and'</>, <c>'or'</>, <c>'not'</> (aliases: <c>'&&'</>, <c>'||'</>, <c>'!'</>)
+    /// • Comparison: <c>'<<'</>, <c>'>>'</>, <c>'<<='</>, <c>'>>='</>, <c>'='</>, <c>'!='</>
+    /// • Sets: <c>'status in (500,503,504)'</>, <c>'id in @ids.txt'</> (values from file), <c>'id in @-'</> (values from stdin)
+    /// • Strings: <c>'message contains "timeout"'</> (substring), <c>'message matches "^Error.*timeout$"'</> (regular expression)
+    /// • Existence: <c>'exists(user-id)'</>, <c>'not exists(user-id)'</>
+    /// • Grouping: <c>'(status>>=500 and status<<=504) or (status==404)'</>
     #[arg(short, long, num_args = 1, help_heading = heading::FILTERING)]
     pub query: Vec<String>,
 
-    /// Color output control.
+    /// Whether to use ANSI colors and styles
     #[arg(
         long,
         default_value = "auto",
@@ -191,7 +226,7 @@ pub struct Opt {
     )]
     pub color: ColorOption,
 
-    /// Handful alias for --color=always, overrides --color option.
+    /// Handful alias for <c>--color=always</>, overrides <c>--color</> option
     #[arg(
         short,
         overrides_with_all = ["color", "color_always"],
@@ -199,7 +234,9 @@ pub struct Opt {
     )]
     pub color_always: bool,
 
-    /// Color theme.
+    /// Color theme
+    ///
+    /// Run <c>hl --list-themes</> to see available themes.
     #[arg(
         long,
         default_value_t = config::global::get().theme.clone(),
@@ -209,19 +246,21 @@ pub struct Opt {
     )]
     pub theme: String,
 
-    /// Output raw source messages instead of formatted messages, which can be useful for applying filters and saving results in their original format.
+    /// Output raw source entries instead of formatted entries
+    ///
+    /// This can be useful for applying filters and saving results in their original format.
     #[arg(short, long, overrides_with = "raw", help_heading = heading::OUTPUT)]
     pub raw: bool,
 
-    /// Disable raw source messages output, overrides --raw option.
+    /// Disable raw source entries output, overrides <c>--raw</> option
     #[arg(long, overrides_with = "raw", help_heading = heading::OUTPUT)]
     _no_raw: bool,
 
-    /// Output field values as is, without unescaping or prettifying.
+    /// Output field values as is, without unescaping or prettifying
     #[arg(long, overrides_with = "raw_fields", help_heading = heading::OUTPUT)]
     pub raw_fields: bool,
 
-    /// Hide or reveal fields with the specified keys, prefix with ! to reveal, specify '!*' to reveal all.
+    /// Hide or reveal fields with the specified keys, prefix with <c>!</> to reveal, provide <c>'!*'</> to reveal all
     #[arg(
         long,
         short = 'h',
@@ -231,7 +270,7 @@ pub struct Opt {
     )]
     pub hide: Vec<String>,
 
-    /// Whether to flatten objects.
+    /// Whether to flatten objects
     #[arg(
         long,
         env = "HL_FLATTEN",
@@ -246,7 +285,7 @@ pub struct Opt {
     )]
     pub flatten: FlattenOption,
 
-    /// Time format, see https://man7.org/linux/man-pages/man1/date.1.html.
+    /// Time format, see <b>https://man7.org/linux/man-pages/man1/date.1.html</>
     #[arg(
         short,
         long,
@@ -258,7 +297,9 @@ pub struct Opt {
     )]
     pub time_format: String,
 
-    /// Time zone name, see column "TZ identifier" at https://en.wikipedia.org/wiki/List_of_tz_database_time_zones.
+    /// Time zone name, see column "TZ identifier" at <b>https://en.wikipedia.org/wiki/List_of_tz_database_time_zones</>
+    ///
+    /// Examples: <c>'UTC'</>, <c>'America/New_York'</>, <c>'Asia/Shanghai'</>, <c>'Europe/Berlin'</>, etc.
     #[arg(
         long,
         short = 'Z',
@@ -266,19 +307,19 @@ pub struct Opt {
         default_value = config::global::get().time_zone.name(),
         overrides_with="time_zone",
         value_name = "TZ",
-        help_heading = heading::OUTPUT
+        help_heading = heading::OUTPUT,
     )]
     pub time_zone: chrono_tz::Tz,
 
-    /// Use local time zone, overrides --time-zone option.
+    /// Use local time zone, overrides <c>--time-zone</> option
     #[arg(long, short = 'L', overrides_with = "local", help_heading = heading::OUTPUT)]
     pub local: bool,
 
-    /// Disable local time zone, overrides --local option.
+    /// Disable local time zone, overrides <c>--local</> option
     #[arg(long, overrides_with = "local", help_heading = heading::OUTPUT)]
     _no_local: bool,
 
-    /// Hide empty fields, applies for null, string, object and array fields only.
+    /// Hide empty fields, applies for null, string, object and array fields only
     #[arg(
         long,
         short = 'e',
@@ -288,7 +329,7 @@ pub struct Opt {
     )]
     pub hide_empty_fields: bool,
 
-    /// Show empty fields, overrides --hide-empty-fields option.
+    /// Show empty fields, overrides <c>--hide-empty-fields</> option
     #[arg(
         long,
         short = 'E',
@@ -298,7 +339,7 @@ pub struct Opt {
     )]
     pub show_empty_fields: bool,
 
-    /// Input number and filename layouts.
+    /// Input number and filename layouts
     #[arg(
         long,
         overrides_with = "input_info",
@@ -309,9 +350,10 @@ pub struct Opt {
     )]
     pub input_info: InputInfoSet,
 
-    /// Controls whether to restrict punctuation to ASCII characters only.
+    /// Whether to restrict punctuation to ASCII characters only
     ///
     /// When enabled, unicode punctuation (like fancy quotes) will be replaced with ASCII equivalents.
+    /// The actual characters can be configured in the configuration file.
     #[arg(
         long,
         env = "HL_ASCII",
@@ -325,11 +367,11 @@ pub struct Opt {
     )]
     pub ascii: AsciiOption,
 
-    /// Output file.
+    /// Output file
     #[arg(long, short = 'o', overrides_with = "output", value_name = "FILE", help_heading = heading::OUTPUT)]
     pub output: Option<String>,
 
-    /// Input format.
+    /// Input format
     #[arg(
         long,
         env = "HL_INPUT_FORMAT",
@@ -340,7 +382,7 @@ pub struct Opt {
     )]
     pub input_format: InputFormat,
 
-    /// Unix timestamp unit.
+    /// Unix timestamp unit
     #[arg(
         long,
         default_value = "auto",
@@ -351,15 +393,15 @@ pub struct Opt {
     )]
     pub unix_timestamp_unit: UnixTimestampUnit,
 
-    /// Allow non-JSON prefixes before JSON messages.
+    /// Allow non-JSON prefixes before JSON log entries
     #[arg(long, env = "HL_ALLOW_PREFIX", overrides_with = "allow_prefix", help_heading = heading::INPUT)]
     pub allow_prefix: bool,
 
-    /// Log message delimiter, [NUL, CR, LF, CRLF] or any custom string.
+    /// Log entry delimiter <c><dim>[</>NUL<dim>, </>CR<dim>, </>LF<dim>, </>CRLF<dim>]</></> or any custom string
     #[arg(long, overrides_with = "delimiter", help_heading = heading::INPUT)]
     pub delimiter: Option<String>,
 
-    /// Number of interrupts to ignore, i.e. Ctrl-C (SIGINT).
+    /// Number of interrupts to ignore, i.e. Ctrl-C (SIGINT)
     #[arg(
         long,
         default_value = "3",
@@ -370,7 +412,7 @@ pub struct Opt {
     )]
     pub interrupt_ignore_count: usize,
 
-    /// Buffer size.
+    /// Buffer size
     #[arg(
         long,
         default_value = "256 KiB",
@@ -382,7 +424,7 @@ pub struct Opt {
     )]
     pub buffer_size: NonZeroUsize,
 
-    /// Maximum message size.
+    /// Maximum log entry size
     #[arg(
         long,
         default_value = "64 MiB",
@@ -394,7 +436,7 @@ pub struct Opt {
     )]
     pub max_message_size: NonZeroUsize,
 
-    /// Number of processing threads.
+    /// Number of processing threads
     #[arg(
         long,
         short = 'C',
@@ -405,7 +447,7 @@ pub struct Opt {
     )]
     pub concurrency: Option<usize>,
 
-    /// Print shell auto-completion script and exit.
+    /// Print shell auto-completion script and exit
     #[arg(
         long,
         value_parser = value_parser!(Shell),
@@ -414,11 +456,11 @@ pub struct Opt {
     )]
     pub shell_completions: Option<Shell>,
 
-    /// Print man page and exit.
+    /// Print man page and exit
     #[arg(long, help_heading = heading::ADVANCED)]
     pub man_page: bool,
 
-    /// Print available themes optionally filtered by tags.
+    /// Print available themes optionally filtered by tags
     #[arg(
         long,
         num_args=0..=1,
@@ -429,25 +471,25 @@ pub struct Opt {
     ]
     pub list_themes: Option<Option<ThemeTagSet>>,
 
-    /// Print debug index metadata (in --sort mode) and exit.
+    /// Print debug index metadata (in <c>--sort</> mode) and exit
     #[arg(long, requires = "sort", help_heading = heading::ADVANCED)]
     pub dump_index: bool,
 
-    /// Print help.
-    #[arg(long, default_value_t = false, action = ArgAction::SetTrue)]
-    pub help: bool,
+    /// Print help
+    #[arg(
+        long,
+        num_args=0..=1,
+        value_name = "VERBOSITY",
+        require_equals = true,
+    )]
+    pub help: Option<Option<HelpVerbosity>>,
 
     /// Files to process
     #[arg(name = "FILE")]
     pub files: Vec<PathBuf>,
 }
 
-#[derive(ValueEnum, Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ColorOption {
-    Auto,
-    Always,
-    Never,
-}
+pub type ColorOption = clap::ColorChoice;
 
 #[derive(ValueEnum, Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PagingOption {
@@ -476,6 +518,12 @@ pub enum UnixTimestampUnit {
 pub enum FlattenOption {
     Never,
     Always,
+}
+
+#[derive(ValueEnum, Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HelpVerbosity {
+    Short,
+    Long,
 }
 
 #[derive(ValueEnum, Debug, Clone, Copy, PartialEq, Eq)]

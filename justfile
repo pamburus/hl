@@ -110,7 +110,7 @@ check-schema: (setup "schema")
     @.venv/bin/python build/ci/validate_yaml.py ./schema/json/theme.schema.json etc/defaults/themes/*.yaml
 
 # Install binary and man pages
-install: (setup "build") install-man-pages
+install: (setup "build") build-release install-man-pages
     cargo install --path . --locked
 
 # Install man pages
@@ -174,6 +174,14 @@ nix-deps:
     else \
         echo "nix-tree is not installed. Run 'nix develop' to enter a shell where it is available"; \
     fi
+
+# Show `hl --help`
+usage *ARGS: build
+	@./target/debug/hl --config - --help {{ARGS}}
+
+# Show `hl --help=long`
+usage-long *ARGS: build
+	@./target/debug/hl --config - --help=long {{ARGS}}
 
 # Helper recipe to ensure required tools are available for a given task
 [private]

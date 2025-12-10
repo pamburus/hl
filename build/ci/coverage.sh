@@ -18,6 +18,7 @@ IGNORE=(
     'rustc/.*/library/'
     '_capnp\.rs$'
     '/tests\.rs$'
+    '/crate/styled-help/src/'
 )
 
 function executables() {
@@ -44,14 +45,16 @@ function test() {
     cargo build
     ${MAIN_EXECUTABLE:?} --config - > /dev/null
     ${MAIN_EXECUTABLE:?} --config - --help > /dev/null
+    ${MAIN_EXECUTABLE:?} --config - --help=short --color never > /dev/null
+    ${MAIN_EXECUTABLE:?} --config - --help=long -c --paging never > /dev/null
     ${MAIN_EXECUTABLE:?} --config - --config=etc/defaults/config-k8s.yaml > /dev/null
     ${MAIN_EXECUTABLE:?} --config - --config=etc/defaults/config-ecs.yaml > /dev/null
     ${MAIN_EXECUTABLE:?} --config - --shell-completions bash > /dev/null
     ${MAIN_EXECUTABLE:?} --config - --man-page > /dev/null
     ${MAIN_EXECUTABLE:?} --config - --list-themes > /dev/null
     ${MAIN_EXECUTABLE:?} --config - --list-themes=dark,16color > /dev/null
-    ${MAIN_EXECUTABLE:?} --config - sample/prometheus.log -P > /dev/null
-    HL_DEBUG_LOG=info ${MAIN_EXECUTABLE:?} --config - sample/prometheus.log -P > /dev/null
+    ${MAIN_EXECUTABLE:?} --config - sample/prometheus.log -P --theme frostline --color always > /dev/null
+    HL_DEBUG_LOG=info ${MAIN_EXECUTABLE:?} --config - sample/prometheus.log -P -o /dev/null
     echo "" | ${MAIN_EXECUTABLE:?} --config - --concurrency 4 > /dev/null
     echo "level=info" | ${MAIN_EXECUTABLE:?} --config - sample/prometheus.log -P -q 'level=x' 2> /dev/null > /dev/null || true
 }
