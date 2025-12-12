@@ -10,7 +10,7 @@ pub fn looks_like_number(value: &[u8]) -> bool {
 }
 
 #[derive(Logos, Debug, PartialEq, Clone)]
-#[logos(source = [u8])]
+#[logos(utf8 = false)]
 pub enum Token {
     #[regex(r"[+-]?(?:\d+\.\d*|\.\d+|\d+)(?:[eE][+-]?\d+)?")]
     Number,
