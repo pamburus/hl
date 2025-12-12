@@ -623,10 +623,10 @@ fn test_auto_quoted_message() {
     assert_eq!(formatter.format_to_string(&rec), r#""m x=1""#);
 
     rec.message = Some(EncodedString::raw("m '1'").into());
-    assert_eq!(formatter.format_to_string(&rec), r#""m '1'""#);
+    assert_eq!(formatter.format_to_string(&rec), r#"m '1'"#);
 
     rec.message = Some(EncodedString::raw(r#"m '1' and "2""#).into());
-    assert_eq!(formatter.format_to_string(&rec), r#"`m '1' and "2"`"#);
+    assert_eq!(formatter.format_to_string(&rec), r#"m '1' and "2""#);
 
     rec.message = Some(EncodedString::raw(r#"m x='1' and y="2""#).into());
     assert_eq!(formatter.format_to_string(&rec), r#"`m x='1' and y="2"`"#);
