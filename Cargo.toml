@@ -12,7 +12,7 @@ members = [
 [workspace.package]
 repository = "https://github.com/pamburus/hl"
 authors = ["Pavel Ivanov <mr.pavel.ivanov@gmail.com>"]
-version = "0.33.1-alpha.1"
+version = "0.34.0-alpha.1"
 edition = "2024"
 license = "MIT"
 
@@ -81,6 +81,7 @@ known-folders = "1"
 log = "0.4"
 logos = "0.16"
 memchr = "2"
+mline = { path = "./crate/mline" }
 nonzero_ext = "0.3"
 notify = { version = "8", features = ["macos_kqueue"] }
 num_cpus = "1"

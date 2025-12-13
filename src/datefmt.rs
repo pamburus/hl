@@ -16,6 +16,13 @@ use crate::timezone::Tz;
 
 // ---
 
+pub struct TextWidth {
+    pub bytes: usize,
+    pub chars: usize,
+}
+
+// ---
+
 #[derive(Clone)]
 pub struct DateTimeFormatter {
     format: Vec<Item>,
@@ -56,6 +63,19 @@ impl DateTimeFormatter {
         let ts = DateTime::from_naive_utc_and_offset(ts, self.tz.offset_from_utc_date(&ts.date()).fix());
         self.format(&mut counter, ts);
         counter.result()
+    }
+
+    pub fn max_width(&self) -> TextWidth {
+        let mut buf = Vec::new();
+        let ts = DateTime::from_timestamp(1654041600, 999_999_999).unwrap().naive_utc();
+        let ts = DateTime::from_naive_utc_and_offset(ts, self.tz.offset_from_utc_date(&ts.date()).fix());
+
+        self.format(&mut buf, ts);
+
+        TextWidth {
+            bytes: buf.len(),
+            chars: std::str::from_utf8(&buf).unwrap().chars().count(),
+        }
     }
 }
 

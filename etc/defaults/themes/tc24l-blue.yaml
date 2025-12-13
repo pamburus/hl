@@ -51,6 +51,10 @@ elements:
     foreground: *yellow
   "null":
     foreground: *red
+  bullet:
+    foreground: *gray
+  value-expansion:
+    foreground: *gray
 levels:
   trace:
     level-inner:

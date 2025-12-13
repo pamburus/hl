@@ -42,6 +42,10 @@ elements:
     foreground: 197
   "null":
     foreground: 197
+  bullet:
+    foreground: 30
+  value-expansion:
+    foreground: 30
 levels:
   trace:
     level-inner:

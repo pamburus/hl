@@ -76,3 +76,73 @@ fn test_ascii_option() {
         }
     }
 }
+
+#[test]
+fn test_flatten_option() {
+    assert_eq!(FlattenOption::from(None), FlattenOption::Always);
+    assert_eq!(
+        FlattenOption::from(Some(settings::FlattenOption::Never)),
+        FlattenOption::Never
+    );
+    assert_eq!(
+        FlattenOption::from(Some(settings::FlattenOption::Always)),
+        FlattenOption::Always
+    );
+    assert_eq!(
+        FlattenOption::from(settings::FlattenOption::Never),
+        FlattenOption::Never
+    );
+    assert_eq!(
+        FlattenOption::from(settings::FlattenOption::Always),
+        FlattenOption::Always
+    );
+    assert_eq!(
+        Into::<settings::FlattenOption>::into(FlattenOption::Never),
+        settings::FlattenOption::Never
+    );
+    assert_eq!(
+        Into::<settings::FlattenOption>::into(FlattenOption::Always),
+        settings::FlattenOption::Always
+    );
+}
+
+#[test]
+fn test_expansion_option() {
+    assert_eq!(ExpansionOption::from(None), ExpansionOption::Medium);
+    assert_eq!(
+        ExpansionOption::from(Some(settings::ExpansionMode::Medium)),
+        ExpansionOption::Medium
+    );
+    assert_eq!(
+        ExpansionOption::from(Some(settings::ExpansionMode::Never)),
+        ExpansionOption::Never
+    );
+    assert_eq!(
+        ExpansionOption::from(Some(settings::ExpansionMode::Always)),
+        ExpansionOption::Always
+    );
+    assert_eq!(
+        ExpansionOption::from(settings::ExpansionMode::Medium),
+        ExpansionOption::Medium
+    );
+    assert_eq!(
+        ExpansionOption::from(settings::ExpansionMode::Never),
+        ExpansionOption::Never
+    );
+    assert_eq!(
+        ExpansionOption::from(settings::ExpansionMode::Always),
+        ExpansionOption::Always
+    );
+    assert_eq!(
+        Into::<settings::ExpansionMode>::into(ExpansionOption::Medium),
+        settings::ExpansionMode::Medium
+    );
+    assert_eq!(
+        Into::<settings::ExpansionMode>::into(ExpansionOption::Never),
+        settings::ExpansionMode::Never
+    );
+    assert_eq!(
+        Into::<settings::ExpansionMode>::into(ExpansionOption::Always),
+        settings::ExpansionMode::Always
+    );
+}

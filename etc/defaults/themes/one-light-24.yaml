@@ -37,6 +37,10 @@ elements:
     foreground: "#986801"
   "null":
     foreground: "#e45649"
+  bullet:
+    foreground: "#a0a1a7"
+  value-expansion:
+    foreground: "#a0a1a7"
 levels:
   trace:
     level-inner:
