@@ -660,9 +660,7 @@ impl RecordFormatter {
             //
             // expanded fields
             //
-            if !fs.fields_to_expand.is_empty() {
-                self.expand(s, &mut fs);
-            }
+            self.expand_enqueued(s, &mut fs);
 
             if (some_fields_hidden || (fs.some_nested_fields_hidden && fs.flatten)) || fs.some_fields_hidden {
                 if fs.expanded {
@@ -871,7 +869,24 @@ impl RecordFormatter {
         });
     }
 
+    #[inline]
     fn expand<S: StylingPush<Buf>>(&self, s: &mut S, fs: &mut FormattingStateWithRec) {
+        self.expand_impl(s, fs, true);
+    }
+
+    #[inline]
+    fn expand_enqueued<S: StylingPush<Buf>>(&self, s: &mut S, fs: &mut FormattingStateWithRec) {
+        if !fs.fields_to_expand.is_empty() {
+            self.expand_impl(s, fs, false);
+        }
+    }
+
+    fn expand_impl<S: StylingPush<Buf>>(
+        &self,
+        s: &mut S,
+        fs: &mut FormattingStateWithRec,
+        expand_after_enqueued: bool,
+    ) {
         if fs.last_expansion_point == Some(s.batch(|buf| buf.len())) {
             return;
         }
@@ -936,11 +951,14 @@ impl RecordFormatter {
             });
         });
 
-        if fs.fields_to_expand.len() != 0 {
+        if !fs.fields_to_expand.is_empty() {
             fs.expanded = true;
             let fields_to_expand = std::mem::take(&mut fs.fields_to_expand);
             for (k, v) in fields_to_expand.iter() {
                 _ = self.format_field(s, k, *v, fs, Some(&self.fields), Some(&self.predefined_fields));
+            }
+            if expand_after_enqueued {
+                self.expand(s, fs);
             }
         }
     }
