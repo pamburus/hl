@@ -1,5 +1,8 @@
 use super::*;
-use crate::model::{Parser as RecordParser, ParserSettings, RawRecord};
+use crate::model::{
+    Parser as RecordParser, RawRecord,
+    v2::{compat::ParserSettings, parse::NewParser},
+};
 use rstest::rstest;
 
 #[test]
@@ -511,7 +514,9 @@ fn test_query_numerical_type_mismatch(#[case] raw_query: &str, #[case] input: &s
 }
 
 fn parse(s: &str) -> Record<'_> {
-    let raw = RawRecord::parser().parse(s.as_bytes()).next().unwrap().unwrap().record;
-    let parser = RecordParser::new(ParserSettings::default());
-    parser.parse(&raw)
+    let settings = ParserSettings::default();
+    let mut parser = settings
+        .new_parser(crate::format::Auto::default(), s.as_bytes())
+        .unwrap();
+    parser.next().unwrap().unwrap()
 }

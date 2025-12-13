@@ -24,8 +24,14 @@ mod ws;
 
 criterion_main!(
     ws::encstr::benches,
+    ws::flat_tree::benches,
     ws::hl::benches,
     misc::fncall::benches,
+    ws::json_ast::benches,
+    ws::log_ast::benches,
+    ws::log_format_auto::benches,
+    ws::log_format_json::benches,
+    ws::log_format_logfmt::benches,
     misc::mem::benches,
     misc::wildcard::benches,
 );
@@ -142,4 +148,9 @@ fn iters_per_batch(size: BatchSize, iters: u64) -> usize {
         BatchSize::__NonExhaustive => panic!("__NonExhaustive is not a valid BatchSize."),
     };
     usize::try_from(size).unwrap()
+}
+
+#[macro_export]
+macro_rules! utf8 {
+    ($bytes: expr) => {{ std::str::from_utf8($bytes).unwrap() }};
 }

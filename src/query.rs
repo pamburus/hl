@@ -13,13 +13,11 @@ use serde_json as json;
 use wildflower::Pattern;
 
 // local imports
-use crate::{
-    error::{Error, Result},
-    level::RelaxedLevel,
-    model::{
-        FieldFilter, FieldFilterKey, Level, Number, NumericOp, Record, RecordFilter, RecordFilterNone, ValueMatchPolicy,
-    },
-    model::{FieldFilterFlag, FieldFilterFlags},
+use crate::error::{Error, Result};
+use crate::level::RelaxedLevel;
+use crate::model::v2::{
+    FieldFilter, FieldFilterKey, Level, Number, NumericOp, Record, UnaryBoolOp, ValueMatchPolicy,
+    compat::{FieldFilterFlag, FieldFilterFlags, RecordFilter, RecordFilterNone},
 };
 
 // ---

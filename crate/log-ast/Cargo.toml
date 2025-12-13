@@ -1,0 +1,19 @@
+[package]
+name = "log-ast"
+version = "0.1.0"
+repository.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[features]
+default = []
+bytes = []
+
+[dependencies]
+flat-tree = { path = "../flat-tree" }
+log-format = { path = "../log-format" }
+encstr = { path = "../encstr" }
+
+[dev-dependencies]
+log-format-json = { path = "../log-format-json" }

@@ -20,7 +20,7 @@ use serde_json::{self as json};
 use titlecase::titlecase;
 use wildflower::Pattern;
 
-// other local crates
+// workspace imports
 use encstr::{AnyEncodedString, EncodedString};
 use serde_logfmt::logfmt;
 
@@ -40,6 +40,8 @@ use crate::{
 use crate::testing::Sample;
 
 // ---
+
+pub mod v2;
 
 pub use level::Level;
 
@@ -685,7 +687,7 @@ impl ParserSettingsBlock {
             Some((field, priority)) => {
                 let kind = field.kind();
                 if let Some(kind) = kind {
-                    pc.prioritize(kind, *priority, |pc| field.apply_ctx(ps, value, to, pc))
+                    pc.prioritize(kind, *priority, |_| field.apply(ps, value, to))
                 } else {
                     field.apply_ctx(ps, value, to, pc);
                     false
