@@ -493,16 +493,32 @@ impl<'a> FieldFormatter<'a> {
         if setting == IncludeExcludeSetting::Exclude && leaf {
             return false;
         }
+
+        let rollback_pos = if self.rf.hide_empty_fields && matches!(value, RawValue::Object(_)) {
+            Some(s.batch(|buf| buf.len()))
+        } else {
+            None
+        };
+
         let ffv = self.begin(s, key, value, fs);
-        if self.rf.unescape_fields {
-            self.format_value(s, value, fs, filter, setting);
+        let has_content = if self.rf.unescape_fields {
+            self.format_value(s, value, fs, filter, setting)
         } else {
             s.element(Element::String, |s| {
                 s.batch(|buf| buf.extend(value.raw_str().as_bytes()))
             });
-        }
+            true
+        };
+
         self.end(fs, ffv);
-        true
+
+        match (rollback_pos, has_content) {
+            (Some(pos), false) => {
+                s.batch(|buf| buf.truncate(pos));
+                false
+            }
+            _ => true,
+        }
     }
 
     fn format_value<S: StylingPush<Buf>>(
@@ -512,7 +528,7 @@ impl<'a> FieldFormatter<'a> {
         fs: &mut FormattingState,
         filter: Option<&IncludeExcludeKeyFilter>,
         setting: IncludeExcludeSetting,
-    ) {
+    ) -> bool {
         let value = match value {
             RawValue::String(EncodedString::Raw(value)) => RawValue::auto(value.as_str()),
             _ => value,
@@ -538,6 +554,7 @@ impl<'a> FieldFormatter<'a> {
             RawValue::Object(value) => {
                 let mut item = model::Object::default();
                 value.parse_into(&mut item).ok();
+                let mut any_fields_formatted = false;
                 s.element(Element::Object, |s| {
                     if !fs.flatten {
                         s.batch(|buf| buf.push(b'{'));
@@ -545,7 +562,9 @@ impl<'a> FieldFormatter<'a> {
                     let mut some_fields_hidden = false;
                     for (k, v) in item.fields.iter() {
                         if !self.rf.hide_empty_fields || !v.is_empty() {
-                            some_fields_hidden |= !self.format(s, k, *v, fs, filter, setting);
+                            let formatted = self.format(s, k, *v, fs, filter, setting);
+                            any_fields_formatted |= formatted;
+                            some_fields_hidden |= !formatted;
                         } else {
                             some_fields_hidden = true;
                         }
@@ -565,6 +584,7 @@ impl<'a> FieldFormatter<'a> {
                     }
                     fs.some_nested_fields_hidden |= some_fields_hidden;
                 });
+                return any_fields_formatted;
             }
             RawValue::Array(value) => {
                 s.element(Element::Array, |s| {
@@ -584,6 +604,7 @@ impl<'a> FieldFormatter<'a> {
                 });
             }
         };
+        true
     }
 
     #[inline(always)]

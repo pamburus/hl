@@ -890,3 +890,94 @@ fn test_hide_empty_fields_no_ellipsis_when_no_empty_fields() {
         "data.nested.nonempty1=value1 data.nested.nonempty2=value2"
     );
 }
+
+#[test]
+fn test_hide_empty_objects_flatten() {
+    let val = json_raw_value(r#"{"empty_obj":{},"all_empty":{"a":"","b":""},"has_value":{"a":"","b":"value"}}"#);
+    let rec = Record::from_fields(&[("data", RawObject::Json(&val).into())]);
+
+    // With hide_empty_fields enabled
+    let formatter_hide = RecordFormatterBuilder {
+        flatten: true,
+        hide_empty_fields: true,
+        theme: Some(Default::default()),
+        ..formatter()
+    }
+    .build();
+
+    // With hide_empty_fields disabled
+    let formatter_show = RecordFormatterBuilder {
+        flatten: true,
+        hide_empty_fields: false,
+        theme: Some(Default::default()),
+        ..formatter()
+    }
+    .build();
+
+    let result_hide = formatter_hide.format_to_string(&rec);
+    let result_show = formatter_show.format_to_string(&rec);
+
+    // When hiding empty fields, empty objects and objects with all empty fields should be hidden
+    assert_eq!(&result_hide, "data.has-value.b=value ...");
+
+    // When showing empty fields, all objects should show
+    assert_eq!(
+        &result_show,
+        r#"data.all-empty.a="" data.all-empty.b="" data.has-value.a="" data.has-value.b=value"#
+    );
+}
+
+#[test]
+fn test_hide_empty_objects_no_flatten() {
+    let val = json_raw_value(r#"{"empty_obj":{},"all_empty":{"a":"","b":""},"has_value":{"a":"","b":"value"}}"#);
+    let rec = Record::from_fields(&[("data", RawObject::Json(&val).into())]);
+
+    // With hide_empty_fields enabled
+    let formatter_hide = RecordFormatterBuilder {
+        flatten: false,
+        hide_empty_fields: true,
+        theme: Some(Default::default()),
+        ..formatter()
+    }
+    .build();
+
+    // With hide_empty_fields disabled
+    let formatter_show = RecordFormatterBuilder {
+        flatten: false,
+        hide_empty_fields: false,
+        theme: Some(Default::default()),
+        ..formatter()
+    }
+    .build();
+
+    let result_hide = formatter_hide.format_to_string(&rec);
+    let result_show = formatter_show.format_to_string(&rec);
+
+    // When hiding empty fields, empty objects and objects with all empty fields should be hidden
+    assert_eq!(&result_hide, "data={ has-value={ b=value ... } ... }");
+
+    // When showing empty fields, all objects should show
+    assert_eq!(
+        &result_show,
+        r#"data={ empty-obj={} all-empty={ a="" b="" } has-value={ a="" b=value } }"#
+    );
+}
+
+#[test]
+fn test_hide_deeply_nested_empty_objects() {
+    let val = json_raw_value(r#"{"deep":{"level1":{"level2":{"empty":""}}}}"#);
+    let rec = Record::from_fields(&[("data", RawObject::Json(&val).into())]);
+
+    let formatter_hide = RecordFormatterBuilder {
+        flatten: true,
+        hide_empty_fields: true,
+        theme: Some(Default::default()),
+        ..formatter()
+    }
+    .build();
+
+    let result_hide = formatter_hide.format_to_string(&rec);
+
+    // Deeply nested objects with only empty fields should be completely hidden
+    assert_eq!(&result_hide, " ...");
+}
