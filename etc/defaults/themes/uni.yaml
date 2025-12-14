@@ -43,8 +43,8 @@ elements:
 levels:
   trace:
     level-inner:
-      foreground: default
-      modes: [faint]
+      foreground: bright-black
+      modes: [bold]
   debug:
     level-inner:
       foreground: bright-magenta
