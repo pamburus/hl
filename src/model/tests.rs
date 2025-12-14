@@ -624,6 +624,23 @@ fn test_nested_predefined_fields(#[case] input: &[u8], #[case] expected: Option<
     assert_eq!(record.message.map(|x| x.raw_str()), expected);
 }
 
+#[test]
+fn test_ignore_pattern() {
+    let predefined = PredefinedFields::default();
+    let ignore = vec!["secret".to_string(), "password*".to_string()];
+    let settings = ParserSettings::new(&predefined, &ignore, None);
+    let parser = Parser::new(settings);
+
+    let input = br#"{"msg":"test","secret":"value","password123":"hidden","visible":"shown"}"#;
+    let record = RawRecord::parser().parse(input).next().unwrap().unwrap();
+    let record = parser.parse(&record.record);
+
+    let field_keys: Vec<&str> = record.fields().map(|(k, _)| *k).collect();
+    assert!(!field_keys.contains(&"secret"));
+    assert!(!field_keys.contains(&"password123"));
+    assert!(field_keys.contains(&"visible"));
+}
+
 #[rstest]
 #[case(br#"{"ts":""}"#, None)]
 #[case(br#"{"ts":"3"}"#, Some("3"))]

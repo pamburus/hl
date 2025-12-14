@@ -362,7 +362,7 @@ fn test_issue_288_t1() {
 }
 
 #[test]
-fn test_issue_176_simple_span() {
+fn test_issue_176_simple_span_json() {
     let input = input(concat!(r#"{"message":"test","span":{"name":"main"}}"#, "\n",));
     let mut output = Vec::new();
     let app = App::new(
@@ -386,7 +386,31 @@ fn test_issue_176_simple_span() {
 }
 
 #[test]
-fn test_issue_176_complex_span() {
+fn test_issue_176_simple_span_logfmt() {
+    let input = input(concat!(r#"message=test span.name=main"#, "\n",));
+    let mut output = Vec::new();
+    let app = App::new(
+        options().with_fields(FieldOptions {
+            settings: Fields {
+                predefined: settings::PredefinedFields {
+                    logger: settings::Field {
+                        names: vec!["span.name".to_string()],
+                        show: FieldShowOption::Always,
+                    }
+                    .into(),
+                    ..Default::default()
+                },
+                ..Default::default()
+            },
+            ..Default::default()
+        }),
+    );
+    app.run(vec![input], &mut output).unwrap();
+    assert_eq!(std::str::from_utf8(&output).unwrap(), "main: test\n");
+}
+
+#[test]
+fn test_issue_176_complex_span_json() {
     let input = input(concat!(
         r#"{"message":"test","span":{"name":"main","source":"main.rs:12","extra":"ignored"}}"#,
         "\n",
@@ -415,6 +439,89 @@ fn test_issue_176_complex_span() {
     );
     app.run(vec![input], &mut output).unwrap();
     assert_eq!(std::str::from_utf8(&output).unwrap(), "main: test @ main.rs:12\n");
+}
+
+#[test]
+fn test_issue_176_complex_span_logfmt() {
+    let input = input(concat!(
+        r#"message=test span.name=main span.source=main.rs:12 span.extra=included"#,
+        "\n",
+    ));
+    let mut output = Vec::new();
+    let app = App::new(
+        options().with_fields(FieldOptions {
+            settings: Fields {
+                predefined: settings::PredefinedFields {
+                    logger: settings::Field {
+                        names: vec!["span.name".to_string()],
+                        show: FieldShowOption::Always,
+                    }
+                    .into(),
+                    caller: settings::Field {
+                        names: vec!["span.source".to_string()],
+                        show: FieldShowOption::Always,
+                    }
+                    .into(),
+                    ..Default::default()
+                },
+                ..Default::default()
+            },
+            ..Default::default()
+        }),
+    );
+    app.run(vec![input], &mut output).unwrap();
+    assert_eq!(
+        std::str::from_utf8(&output).unwrap(),
+        "main: test span.extra=included @ main.rs:12\n"
+    );
+}
+
+#[test]
+fn test_issue_176_unmatched_json() {
+    let input = input(concat!(r#"{"message":"test","span":{"name":"main"}}"#, "\n",));
+    let mut output = Vec::new();
+    let app = App::new(
+        options().with_fields(FieldOptions {
+            settings: Fields {
+                predefined: settings::PredefinedFields {
+                    logger: settings::Field {
+                        names: vec!["span.title".to_string()],
+                        show: FieldShowOption::Always,
+                    }
+                    .into(),
+                    ..Default::default()
+                },
+                ..Default::default()
+            },
+            ..Default::default()
+        }),
+    );
+    app.run(vec![input], &mut output).unwrap();
+    assert_eq!(std::str::from_utf8(&output).unwrap(), "test span={ name=main }\n");
+}
+
+#[test]
+fn test_issue_176_unmatched_logfmt() {
+    let input = input(concat!(r#"message=test span.name=main"#, "\n",));
+    let mut output = Vec::new();
+    let app = App::new(
+        options().with_fields(FieldOptions {
+            settings: Fields {
+                predefined: settings::PredefinedFields {
+                    logger: settings::Field {
+                        names: vec!["span.title".to_string()],
+                        show: FieldShowOption::Always,
+                    }
+                    .into(),
+                    ..Default::default()
+                },
+                ..Default::default()
+            },
+            ..Default::default()
+        }),
+    );
+    app.run(vec![input], &mut output).unwrap();
+    assert_eq!(std::str::from_utf8(&output).unwrap(), "test span.name=main\n");
 }
 
 fn input<S: Into<String>>(s: S) -> InputHolder {
