@@ -855,10 +855,9 @@ impl FieldSettings {
                 RawValue::Object(value) => {
                     let mut object = Object::default();
                     if value.parse_into(&mut object).is_ok() {
-                        ps.blocks[nested].apply_each_ctx(ps, object.fields.iter(), to, ctx, false)
-                    } else {
-                        false
+                        ps.blocks[nested].apply_each_ctx(ps, object.fields.iter(), to, ctx, false);
                     }
+                    false
                 }
                 _ => false,
             },

@@ -6,7 +6,7 @@ use encstr::EncodedString;
 
 // local imports
 use crate::{
-    IncludeExcludeKeyFilter,
+    ExactIncludeExcludeKeyFilter, IncludeExcludeKeyFilter,
     datefmt::DateTimeFormatter,
     filtering::IncludeExcludeSetting,
     fmtx::{OptimizedBuf, Push, aligned_left, centered},
@@ -14,6 +14,31 @@ use crate::{
     settings::{AsciiMode, Formatting, ResolvedPunctuation},
     theme::{Element, StylingPush, Theme},
 };
+
+// ---
+
+/// Result of formatting a field.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum FormatResult {
+    /// Field was formatted and shown.
+    Formatted,
+    /// Field was hidden by user filter (should trigger ellipsis).
+    HiddenByUser,
+    /// Field was hidden by predefined filter (silent skip, no ellipsis).
+    HiddenByPredefined,
+}
+
+impl FormatResult {
+    #[inline]
+    fn is_formatted(self) -> bool {
+        self == FormatResult::Formatted
+    }
+
+    #[inline]
+    fn is_hidden_by_user(self) -> bool {
+        self == FormatResult::HiddenByUser
+    }
+}
 
 // test imports
 #[cfg(test)]
@@ -82,6 +107,7 @@ pub struct RecordFormatterBuilder {
     always_show_time: bool,
     always_show_level: bool,
     fields: Option<Arc<IncludeExcludeKeyFilter>>,
+    predefined_fields: Option<Arc<ExactIncludeExcludeKeyFilter>>,
     cfg: Option<Formatting>,
     punctuation: Option<Arc<ResolvedPunctuation>>,
     message_format: Option<DynMessageFormat>,
@@ -156,6 +182,13 @@ impl RecordFormatterBuilder {
         }
     }
 
+    pub fn with_predefined_field_filter(self, value: Arc<ExactIncludeExcludeKeyFilter>) -> Self {
+        Self {
+            predefined_fields: Some(value),
+            ..self
+        }
+    }
+
     pub fn with_punctuation(self, value: Arc<ResolvedPunctuation>) -> Self {
         Self {
             punctuation: Some(value),
@@ -188,6 +221,7 @@ impl RecordFormatterBuilder {
             always_show_time: self.always_show_time,
             always_show_level: self.always_show_level,
             fields: self.fields.unwrap_or_default(),
+            predefined_fields: self.predefined_fields.unwrap_or_default(),
             message_format: self
                 .message_format
                 .unwrap_or_else(|| DynMessageFormat::new(&cfg, self.ascii)),
@@ -216,6 +250,7 @@ pub struct RecordFormatter {
     always_show_time: bool,
     always_show_level: bool,
     fields: Arc<IncludeExcludeKeyFilter>,
+    predefined_fields: Arc<ExactIncludeExcludeKeyFilter>,
     message_format: DynMessageFormat,
     punctuation: Arc<ResolvedPunctuation>,
 }
@@ -307,7 +342,9 @@ impl RecordFormatter {
             let mut some_fields_hidden = false;
             for (k, v) in rec.fields() {
                 if !self.hide_empty_fields || !v.is_empty() {
-                    some_fields_hidden |= !self.format_field(s, k, *v, &mut fs, Some(&self.fields));
+                    let result =
+                        self.format_field(s, k, *v, &mut fs, Some(&self.fields), Some(&self.predefined_fields));
+                    some_fields_hidden |= result.is_hidden_by_user();
                 }
             }
             if some_fields_hidden || (fs.some_nested_fields_hidden && fs.flatten) {
@@ -355,9 +392,19 @@ impl RecordFormatter {
         value: RawValue<'a>,
         fs: &mut FormattingState,
         filter: Option<&IncludeExcludeKeyFilter>,
-    ) -> bool {
+        predefined_filter: Option<&ExactIncludeExcludeKeyFilter>,
+    ) -> FormatResult {
         let mut fv = FieldFormatter::new(self);
-        fv.format(s, key, value, fs, filter, IncludeExcludeSetting::Unspecified)
+        fv.format(
+            s,
+            key,
+            value,
+            fs,
+            filter,
+            IncludeExcludeSetting::Unspecified,
+            predefined_filter,
+            IncludeExcludeSetting::Unspecified,
+        )
     }
 
     #[inline]
@@ -373,10 +420,11 @@ impl RecordFormatter {
                         s.batch(|buf| self.message_format.format(value, buf).unwrap())
                     });
                 }
-                false
             }
-            _ => self.format_field(s, "msg", value, fs, Some(self.fields.as_ref())),
-        };
+            _ => {
+                self.format_field(s, "msg", value, fs, Some(self.fields.as_ref()), None);
+            }
+        }
     }
 }
 
@@ -471,6 +519,7 @@ impl<'a> FieldFormatter<'a> {
         Self { rf }
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn format<S: StylingPush<Buf>>(
         &mut self,
         s: &mut S,
@@ -479,7 +528,23 @@ impl<'a> FieldFormatter<'a> {
         fs: &mut FormattingState,
         filter: Option<&IncludeExcludeKeyFilter>,
         setting: IncludeExcludeSetting,
-    ) -> bool {
+        predefined_filter: Option<&ExactIncludeExcludeKeyFilter>,
+        predefined_setting: IncludeExcludeSetting,
+    ) -> FormatResult {
+        let (predefined_filter, predefined_setting, predefined_leaf) = match predefined_filter {
+            Some(filter) => {
+                let setting = predefined_setting.apply(filter.setting());
+                match filter.get(key) {
+                    Some(filter) => (Some(filter), setting.apply(filter.setting()), filter.leaf()),
+                    None => (None, setting, true),
+                }
+            }
+            None => (None, predefined_setting, true),
+        };
+        if predefined_setting == IncludeExcludeSetting::Exclude && predefined_leaf {
+            return FormatResult::HiddenByPredefined;
+        }
+
         let (filter, setting, leaf) = match filter {
             Some(filter) => {
                 let setting = setting.apply(filter.setting());
@@ -491,18 +556,20 @@ impl<'a> FieldFormatter<'a> {
             None => (None, setting, true),
         };
         if setting == IncludeExcludeSetting::Exclude && leaf {
-            return false;
+            return FormatResult::HiddenByUser;
         }
 
-        let rollback_pos = if self.rf.hide_empty_fields && matches!(value, RawValue::Object(_)) {
-            Some(s.batch(|buf| buf.len()))
-        } else {
-            None
-        };
+        let has_predefined_filter = predefined_filter.is_some();
+        let rollback_pos =
+            if (self.rf.hide_empty_fields || has_predefined_filter) && matches!(value, RawValue::Object(_)) {
+                Some(s.batch(|buf| buf.len()))
+            } else {
+                None
+            };
 
         let ffv = self.begin(s, key, value, fs);
         let has_content = if self.rf.unescape_fields {
-            self.format_value(s, value, fs, filter, setting)
+            self.format_value(s, value, fs, filter, predefined_filter, setting, predefined_setting)
         } else {
             s.element(Element::String, |s| {
                 s.batch(|buf| buf.extend(value.raw_str().as_bytes()))
@@ -515,19 +582,22 @@ impl<'a> FieldFormatter<'a> {
         match (rollback_pos, has_content) {
             (Some(pos), false) => {
                 s.batch(|buf| buf.truncate(pos));
-                false
+                FormatResult::HiddenByPredefined
             }
-            _ => true,
+            _ => FormatResult::Formatted,
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn format_value<S: StylingPush<Buf>>(
         &mut self,
         s: &mut S,
         value: RawValue<'a>,
         fs: &mut FormattingState,
         filter: Option<&IncludeExcludeKeyFilter>,
+        predefined_filter: Option<&ExactIncludeExcludeKeyFilter>,
         setting: IncludeExcludeSetting,
+        predefined_setting: IncludeExcludeSetting,
     ) -> bool {
         let value = match value {
             RawValue::String(EncodedString::Raw(value)) => RawValue::auto(value.as_str()),
@@ -559,18 +629,19 @@ impl<'a> FieldFormatter<'a> {
                     if !fs.flatten {
                         s.batch(|buf| buf.push(b'{'));
                     }
-                    let mut some_fields_hidden = false;
+                    let mut some_fields_hidden_by_user = false;
                     for (k, v) in item.fields.iter() {
                         if !self.rf.hide_empty_fields || !v.is_empty() {
-                            let formatted = self.format(s, k, *v, fs, filter, setting);
-                            any_fields_formatted |= formatted;
-                            some_fields_hidden |= !formatted;
+                            let result =
+                                self.format(s, k, *v, fs, filter, setting, predefined_filter, predefined_setting);
+                            any_fields_formatted |= result.is_formatted();
+                            some_fields_hidden_by_user |= result.is_hidden_by_user();
                         } else {
-                            some_fields_hidden = true;
+                            some_fields_hidden_by_user = true;
                         }
                     }
                     if !fs.flatten {
-                        if some_fields_hidden {
+                        if some_fields_hidden_by_user {
                             s.element(Element::Ellipsis, |s| {
                                 s.batch(|buf| buf.extend(self.rf.punctuation.hidden_fields_indicator.as_bytes()))
                             });
@@ -582,7 +653,7 @@ impl<'a> FieldFormatter<'a> {
                             buf.push(b'}');
                         });
                     }
-                    fs.some_nested_fields_hidden |= some_fields_hidden;
+                    fs.some_nested_fields_hidden |= some_fields_hidden_by_user;
                 });
                 return any_fields_formatted;
             }
@@ -598,7 +669,15 @@ impl<'a> FieldFormatter<'a> {
                         } else {
                             first = false;
                         }
-                        self.format_value(s, *v, fs, None, IncludeExcludeSetting::Unspecified);
+                        self.format_value(
+                            s,
+                            *v,
+                            fs,
+                            None,
+                            None,
+                            IncludeExcludeSetting::Unspecified,
+                            IncludeExcludeSetting::Unspecified,
+                        );
                     }
                     s.batch(|buf| buf.push(b']'));
                 });

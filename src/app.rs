@@ -28,10 +28,11 @@ use serde::{Deserialize, Serialize};
 
 // local imports
 use crate::{
-    IncludeExcludeKeyFilter,
+    ExactIncludeExcludeKeyFilter, IncludeExcludeKeyFilter,
     appdirs::AppDirs,
     datefmt::{DateTimeFormat, DateTimeFormatter},
     error::*,
+    filtering::{MatchOptions, NoNormalizing},
     fmtx::aligned_left,
     formatting::{DynRecordWithSourceFormatter, RawRecordFormatter, RecordFormatterBuilder, RecordWithSourceFormatter},
     fsmon::{self, EventKind},
@@ -837,12 +838,14 @@ impl App {
         if options.raw {
             Arc::new(RawRecordFormatter {})
         } else {
+            let predefined_filter = Self::build_predefined_filter(options);
             Arc::new(
                 RecordFormatterBuilder::new()
                     .with_theme(options.theme.clone())
                     .with_timestamp_formatter(DateTimeFormatter::new(options.time_format.clone(), options.time_zone))
                     .with_empty_fields_hiding(options.hide_empty_fields)
                     .with_field_filter(options.fields.filter.clone())
+                    .with_predefined_field_filter(predefined_filter)
                     .with_options(options.formatting.clone())
                     .with_raw_fields(options.raw_fields)
                     .with_flatten(options.flatten)
@@ -853,6 +856,19 @@ impl App {
                     .build(),
             )
         }
+    }
+
+    /// Builds an IncludeExcludeKeyFilter for nested predefined fields.
+    ///
+    /// This filter is used to silently exclude nested predefined fields from formatting
+    /// without triggering the "..." hidden fields indicator.
+    /// Uses exact matching (no normalization) to match field names precisely.
+    fn build_predefined_filter(options: &Options) -> Arc<ExactIncludeExcludeKeyFilter> {
+        let mut filter = ExactIncludeExcludeKeyFilter::new(MatchOptions::<NoNormalizing>::default());
+        for name in options.fields.settings.predefined.nested_field_names() {
+            filter.entry(name).exclude();
+        }
+        Arc::new(filter)
     }
 }
 

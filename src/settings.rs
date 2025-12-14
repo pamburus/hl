@@ -154,6 +154,25 @@ pub struct PredefinedFields {
     pub caller_line: CallerLineField,
 }
 
+impl PredefinedFields {
+    pub fn nested_field_names(&self) -> impl Iterator<Item = &str> {
+        let fields: [&[String]; 7] = [
+            &self.time.0.names,
+            &self.message.0.names,
+            &self.logger.0.names,
+            &self.caller.0.names,
+            &self.caller_file.0.names,
+            &self.caller_line.0.names,
+            self.level.variants.first().map(|v| v.names.as_slice()).unwrap_or(&[]),
+        ];
+        fields
+            .into_iter()
+            .flatten()
+            .filter(|name| name.contains('.'))
+            .map(|s| s.as_str())
+    }
+}
+
 impl Default for &PredefinedFields {
     fn default() -> Self {
         static DEFAULT: Lazy<PredefinedFields> = Lazy::new(PredefinedFields::default);
