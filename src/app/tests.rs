@@ -361,6 +361,62 @@ fn test_issue_288_t1() {
     );
 }
 
+#[test]
+fn test_issue_176_simple_span() {
+    let input = input(concat!(r#"{"message":"test","span":{"name":"main"}}"#, "\n",));
+    let mut output = Vec::new();
+    let app = App::new(
+        options().with_fields(FieldOptions {
+            settings: Fields {
+                predefined: settings::PredefinedFields {
+                    logger: settings::Field {
+                        names: vec!["span.name".to_string()],
+                        show: FieldShowOption::Always,
+                    }
+                    .into(),
+                    ..Default::default()
+                },
+                ..Default::default()
+            },
+            ..Default::default()
+        }),
+    );
+    app.run(vec![input], &mut output).unwrap();
+    assert_eq!(std::str::from_utf8(&output).unwrap(), "main: test\n");
+}
+
+#[test]
+fn test_issue_176_complex_span() {
+    let input = input(concat!(
+        r#"{"message":"test","span":{"name":"main","source":"main.rs:12","extra":"ignored"}}"#,
+        "\n",
+    ));
+    let mut output = Vec::new();
+    let app = App::new(
+        options().with_fields(FieldOptions {
+            settings: Fields {
+                predefined: settings::PredefinedFields {
+                    logger: settings::Field {
+                        names: vec!["span.name".to_string()],
+                        show: FieldShowOption::Always,
+                    }
+                    .into(),
+                    caller: settings::Field {
+                        names: vec!["span.source".to_string()],
+                        show: FieldShowOption::Always,
+                    }
+                    .into(),
+                    ..Default::default()
+                },
+                ..Default::default()
+            },
+            ..Default::default()
+        }),
+    );
+    app.run(vec![input], &mut output).unwrap();
+    assert_eq!(std::str::from_utf8(&output).unwrap(), "main: test @ main.rs:12\n");
+}
+
 fn input<S: Into<String>>(s: S) -> InputHolder {
     InputHolder::new(InputReference::Stdin, Some(Box::new(Cursor::new(s.into()))))
 }
