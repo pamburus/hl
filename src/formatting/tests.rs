@@ -795,3 +795,98 @@ fn test_punctuation_with_ascii_mode() {
     // The outputs should be different
     assert_ne!(ascii_result, utf8_result);
 }
+
+#[test]
+fn test_hide_empty_fields_nested_flatten() {
+    let val = json_raw_value(r#"{"nested":{"empty":"","nonempty":"value"},"top_empty":""}"#);
+    let rec = Record::from_fields(&[("data", RawObject::Json(&val).into())]);
+
+    // With hide_empty_fields enabled
+    let formatter_hide = RecordFormatterBuilder {
+        flatten: true,
+        hide_empty_fields: true,
+        theme: Some(Default::default()),
+        ..formatter()
+    }
+    .build();
+
+    // With hide_empty_fields disabled
+    let formatter_show = RecordFormatterBuilder {
+        flatten: true,
+        hide_empty_fields: false,
+        theme: Some(Default::default()),
+        ..formatter()
+    }
+    .build();
+
+    let result_hide = formatter_hide.format_to_string(&rec);
+    let result_show = formatter_show.format_to_string(&rec);
+
+    // When hiding empty fields, should only show non-empty nested field and ellipsis
+    assert_eq!(&result_hide, "data.nested.nonempty=value ...");
+
+    // When showing empty fields, should show all fields including empty ones
+    assert_eq!(
+        &result_show,
+        r#"data.nested.empty="" data.nested.nonempty=value data.top-empty="""#
+    );
+}
+
+#[test]
+fn test_hide_empty_fields_nested_no_flatten() {
+    let val = json_raw_value(r#"{"nested":{"empty":"","nonempty":"value"},"top_empty":""}"#);
+    let rec = Record::from_fields(&[("data", RawObject::Json(&val).into())]);
+
+    // With hide_empty_fields enabled
+    let formatter_hide = RecordFormatterBuilder {
+        flatten: false,
+        hide_empty_fields: true,
+        theme: Some(Default::default()),
+        ..formatter()
+    }
+    .build();
+
+    // With hide_empty_fields disabled
+    let formatter_show = RecordFormatterBuilder {
+        flatten: false,
+        hide_empty_fields: false,
+        theme: Some(Default::default()),
+        ..formatter()
+    }
+    .build();
+
+    let result_hide = formatter_hide.format_to_string(&rec);
+    let result_show = formatter_show.format_to_string(&rec);
+
+    // When hiding empty fields, should only show non-empty nested field and ellipsis
+    assert_eq!(&result_hide, "data={ nested={ nonempty=value ... } ... }");
+
+    // When showing empty fields, should show all fields including empty ones
+    assert_eq!(
+        &result_show,
+        r#"data={ nested={ empty="" nonempty=value } top-empty="" }"#
+    );
+}
+
+#[test]
+fn test_hide_empty_fields_no_ellipsis_when_no_empty_fields() {
+    let val = json_raw_value(r#"{"nested":{"nonempty1":"value1","nonempty2":"value2"}}"#);
+    let rec = Record::from_fields(&[("data", RawObject::Json(&val).into())]);
+
+    // With hide_empty_fields enabled
+    let formatter_hide = RecordFormatterBuilder {
+        flatten: true,
+        hide_empty_fields: true,
+        theme: Some(Default::default()),
+        ..formatter()
+    }
+    .build();
+
+    let result_hide = formatter_hide.format_to_string(&rec);
+
+    // When no empty fields exist, should not show ellipsis
+    assert_eq!(
+        &result_hide,
+        "data.nested.nonempty1=value1 data.nested.nonempty2=value2"
+    );
+}

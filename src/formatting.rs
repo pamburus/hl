@@ -544,7 +544,11 @@ impl<'a> FieldFormatter<'a> {
                     }
                     let mut some_fields_hidden = false;
                     for (k, v) in item.fields.iter() {
-                        some_fields_hidden |= !self.format(s, k, *v, fs, filter, setting);
+                        if !self.rf.hide_empty_fields || !v.is_empty() {
+                            some_fields_hidden |= !self.format(s, k, *v, fs, filter, setting);
+                        } else {
+                            some_fields_hidden = true;
+                        }
                     }
                     if !fs.flatten {
                         if some_fields_hidden {
