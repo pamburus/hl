@@ -412,7 +412,7 @@ fn test_issue_176_simple_span_logfmt() {
 #[test]
 fn test_issue_176_complex_span_json() {
     let input = input(concat!(
-        r#"{"message":"test","span":{"name":"main","source":"main.rs:12","extra":"ignored"}}"#,
+        r#"{"message":"test","span":{"name":"main","source":"main.rs:12","extra":"included"}}"#,
         "\n",
     ));
     let mut output = Vec::new();
@@ -438,7 +438,10 @@ fn test_issue_176_complex_span_json() {
         }),
     );
     app.run(vec![input], &mut output).unwrap();
-    assert_eq!(std::str::from_utf8(&output).unwrap(), "main: test @ main.rs:12\n");
+    assert_eq!(
+        std::str::from_utf8(&output).unwrap(),
+        "main: test span={ extra=included } @ main.rs:12\n"
+    );
 }
 
 #[test]
