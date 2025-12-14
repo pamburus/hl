@@ -23,6 +23,10 @@ use enumset_ext::convert::str::EnumSet;
 
 // ---
 
+const VERSION: &str = env!("VERSION");
+
+// ---
+
 const STYLES: Styles = Styles::styled()
     .header(AnsiColor::Green.on_default().bold())
     .usage(AnsiColor::Green.on_default().bold())
@@ -100,7 +104,7 @@ impl BootstrapOpt {
 /// JSON and logfmt log converter to human readable representation.
 #[styled_help]
 #[derive(Parser)]
-#[command(version, styles = STYLES, disable_help_flag = true)]
+#[command(version = VERSION, styles = STYLES, disable_help_flag = true)]
 pub struct Opt {
     #[command(flatten)]
     pub bootstrap: BootstrapArgs,
