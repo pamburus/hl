@@ -27,7 +27,7 @@ pub use themecfg::{Element, ThemeInfo, ThemeOrigin};
 
 pub trait StylingPush<B: Push<u8>> {
     fn element<R, F: FnOnce(&mut Self) -> R>(&mut self, element: Element, f: F) -> R;
-    fn batch<F: FnOnce(&mut B)>(&mut self, f: F);
+    fn batch<R, F: FnOnce(&mut B) -> R>(&mut self, f: F) -> R;
     fn space(&mut self);
     fn reset(&mut self);
 }
@@ -261,7 +261,7 @@ impl<'a, B: Push<u8>> StylingPush<B> for Styler<'a, B> {
     }
 
     #[inline]
-    fn batch<F: FnOnce(&mut B)>(&mut self, f: F) {
+    fn batch<R, F: FnOnce(&mut B) -> R>(&mut self, f: F) -> R {
         self.sync();
         f(self.buf)
     }
