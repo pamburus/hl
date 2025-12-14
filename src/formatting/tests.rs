@@ -1283,6 +1283,133 @@ fn test_hide_deeply_nested_empty_objects() {
 }
 
 #[test]
+fn test_expand_multiline_message_always() {
+    // Test that with ExpansionMode::Always, a multiline message is formatted as msg=|=>
+    // with proper indentation, not inline breaking the output
+    let rec = Record {
+        message: Some(EncodedString::raw("line1\nline2\nline3").into()),
+        fields: RecordFields::from_slice(&[("field", EncodedString::raw("value").into())]),
+        ..Default::default()
+    };
+
+    let formatter = RecordFormatterBuilder {
+        theme: Some(Default::default()),
+        expansion: Some(ExpansionMode::Always.into()),
+        ..formatter()
+    }
+    .build();
+
+    let result = formatter.format_to_string(&rec);
+
+    // With ExpansionMode::Always, multiline message should be formatted as a field
+    // msg=|=> followed by properly indented lines
+    assert_eq!(
+        &result,
+        concat!(
+            "~\n",
+            "  > msg=|=>\n",
+            "     \tline1\n",
+            "     \tline2\n",
+            "     \tline3\n",
+            "  > field=value"
+        )
+    );
+}
+
+#[test]
+fn test_expand_multiline_message_always_with_level_delimited() {
+    // Test that with ExpansionMode::Always, level present, and Delimited message format
+    // (matching CLI defaults), a multiline message is formatted as msg=|=> with proper
+    // indentation, not inline breaking the output
+    use crate::model::Level;
+
+    let rec = Record {
+        level: Some(Level::Info),
+        message: Some(EncodedString::raw("line1\nline2\nline3").into()),
+        fields: RecordFields::from_slice(&[("field", EncodedString::raw("value").into())]),
+        ..Default::default()
+    };
+
+    let formatter = RecordFormatterBuilder {
+        theme: Some(Default::default()),
+        expansion: Some(ExpansionMode::Always.into()),
+        ..formatter()
+    }
+    .with_message_format(new_message_format(MessageFormat::Delimited, "›"))
+    .build();
+
+    let result = formatter.format_to_string(&rec);
+
+    // With ExpansionMode::Always and Delimited message format, multiline message
+    // should be formatted as a field msg=|=> followed by properly indented lines.
+    // The message should NOT be formatted inline like:
+    //   |INF| line1
+    //   line2
+    //   line3
+    //   | - |   > field=value
+    // Instead it should be expanded properly.
+    assert_eq!(
+        &result,
+        concat!(
+            "|INF| ~\n",
+            "| - |   > msg=|=>\n",
+            "| - |      \tline1\n",
+            "| - |      \tline2\n",
+            "| - |      \tline3\n",
+            "| - |   > field=value"
+        )
+    );
+}
+
+#[test]
+fn test_expand_multiline_message_always_with_level() {
+    // Test that with ExpansionMode::Always and level present, a multiline message
+    // is formatted as msg=|=> with proper indentation, not inline breaking the output
+    use crate::model::Level;
+
+    let rec = Record {
+        level: Some(Level::Info),
+        message: Some(EncodedString::raw("line1\nline2\nline3").into()),
+        fields: RecordFields::from_slice(&[("field", EncodedString::raw("value").into())]),
+        ..Default::default()
+    };
+
+    let formatter = RecordFormatterBuilder {
+        theme: Some(Default::default()),
+        expansion: Some(ExpansionMode::Always.into()),
+        ..formatter()
+    }
+    .build();
+
+    let result = formatter.format_to_string(&rec);
+
+    // With ExpansionMode::Always, multiline message should be formatted as a field
+    // msg=|=> followed by properly indented lines, even when level is present
+    // The message should NOT be formatted inline like:
+    //   [INF] line1
+    //   line2
+    //   line3
+    // Instead it should be:
+    //   [INF] ~
+    //         > msg=|=>
+    //            	line1
+    //            	line2
+    //            	line3
+    //         > field=value
+    assert_eq!(
+        &result,
+        concat!(
+            "|INF| ~\n",
+            "| - |   > msg=|=>\n",
+            "| - |      \tline1\n",
+            "| - |      \tline2\n",
+            "| - |      \tline3\n",
+            "| - |   > field=value"
+        )
+    );
+}
+
+#[test]
 fn test_expand_without_message() {
     let rec = |f, ts| Record {
         ts,

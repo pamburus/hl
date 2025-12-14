@@ -2050,6 +2050,13 @@ pub mod string {
             let analysis = buf[begin..].analyze();
             let mask = analysis.chars;
 
+            // Check for extended spaces (newlines/tabs) and abort if requested
+            const XS: Mask = mask!(Flag::NewLine | Flag::Tab);
+            if (mask & XS) != Mask::empty() && matches!(xsa, ExtendedSpaceAction::Abort) {
+                buf.truncate(begin);
+                return Ok(FormatResult::Aborted);
+            }
+
             if !mask.contains(Flag::Control)
                 && !matches!(buf[begin..], [b'"', ..] | [b'\'', ..] | [b'`', ..])
                 && memchr::memmem::find(&buf[begin..], self.0.as_bytes()).is_none()
