@@ -49,7 +49,7 @@ fields:
           "@timestamp",
         ]
     logger:
-      names: ["logger", "LOGGER", "Logger"]
+      names: ["logger", "LOGGER", "Logger", "span.name"]
     level:
       show: auto
       variants:
