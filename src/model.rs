@@ -680,7 +680,7 @@ impl ParserSettingsBlock {
         to: &mut Record<'a>,
         pc: &mut PriorityController,
         is_root: bool,
-    ) {
+    ) -> bool {
         let done = match self.fields.get(key) {
             Some((field, priority)) => {
                 let kind = field.kind();
@@ -696,15 +696,16 @@ impl ParserSettingsBlock {
             to.predefined.push((key, value)).ok();
         }
         if done || !is_root {
-            return;
+            return done;
         }
 
         for pattern in &ps.ignore {
             if pattern.matches(key) {
-                return;
+                return false;
             }
         }
         to.fields.push((key, value));
+        false
     }
 
     #[inline]
@@ -715,13 +716,16 @@ impl ParserSettingsBlock {
         to: &mut Record<'a>,
         ctx: &mut PriorityController,
         is_root: bool,
-    ) where
+    ) -> bool
+    where
         I: IntoIterator<Item = &'i (&'a str, RawValue<'a>)>,
         'a: 'i,
     {
+        let mut any_matched = false;
         for (key, value) in items {
-            self.apply(ps, key, *value, to, ctx, is_root)
+            any_matched |= self.apply(ps, key, *value, to, ctx, is_root);
         }
+        any_matched
     }
 }
 
@@ -851,8 +855,7 @@ impl FieldSettings {
                 RawValue::Object(value) => {
                     let mut object = Object::default();
                     if value.parse_into(&mut object).is_ok() {
-                        ps.blocks[nested].apply_each_ctx(ps, object.fields.iter(), to, ctx, false);
-                        true
+                        ps.blocks[nested].apply_each_ctx(ps, object.fields.iter(), to, ctx, false)
                     } else {
                         false
                     }
