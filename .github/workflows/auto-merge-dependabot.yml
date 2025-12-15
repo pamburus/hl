@@ -1,0 +1,46 @@
+---
+name: Auto-merge Dependabot PRs
+
+"on":
+  pull_request_target:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  debug:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Debug actor information
+        run: |
+          echo "Actor: ${{ github.actor }}"
+          echo "Event name: ${{ github.event_name }}"
+          echo "PR author: ${{ github.event.pull_request.user.login }}"
+          echo "PR author type: ${{ github.event.pull_request.user.type }}"
+
+  auto-merge:
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.user.login == 'dependabot[bot]'
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Generate GitHub App Token
+        id: generate-token
+        uses: actions/create-github-app-token@67018539274d69449ef7c02e8e71183d1719ab42 # v2.1.4
+        with:
+          app-id: ${{ secrets.AUTOMERGE_APP_ID }}
+          private-key: ${{ secrets.AUTOMERGE_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+
+      - name: Enable auto-merge for Dependabot PRs
+        run: |
+          gh pr merge --auto --squash ${{ github.event.pull_request.number }} --repo ${{ github.repository }}
+          gh pr comment ${{ github.event.pull_request.number }} \
+            --body "🤖 Auto-merge enabled. This PR will merge automatically once all required checks pass." \
+            --repo ${{ github.repository }}
+        env:
+          GH_TOKEN: ${{ steps.generate-token.outputs.token }}
