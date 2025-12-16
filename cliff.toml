@@ -5,6 +5,23 @@ body = """
     - {{ message | trim | upper_first | replace(from="{AUTHOR}", to=author | replace(from="[bot]", to="")) }}
 {% endmacro -%}
 
+{%- macro strip_padding(version) -%}
+    {{- version | replace(from=".z00000000", to=".0") | replace(from=".z0000000", to=".") | replace(from=".z000000", to=".") | replace(from=".z00000", to=".") | replace(from=".z0000", to=".") | replace(from=".z000", to=".") | replace(from=".z00", to=".") | replace(from=".z0", to=".") | replace(from=".z", to=".") -}}
+{%- endmacro -%}
+
+{%- macro bump_finalize(pkg, first_from, last_to, pr_numbers, author) -%}
+    {%- if pkg != "" -%}
+        {%- set joined_prs = pr_numbers | join(sep=", ") -%}
+        {%- set clean_from = self::strip_padding(version=first_from) -%}
+        {%- set clean_to = self::strip_padding(version=last_to) -%}
+        {%- if clean_from == clean_to -%}
+            {{- self::add_commit(message="bump " ~ pkg ~ " by @{AUTHOR} in " ~ joined_prs, author=author) }}
+        {%- else -%}
+            {{- self::add_commit(message="bump " ~ pkg ~ " from " ~ clean_from ~ " to " ~ clean_to ~ " by @{AUTHOR} in " ~ joined_prs, author=author) }}
+        {%- endif -%}
+    {%- endif -%}
+{%- endmacro -%}
+
 {%- macro dedup_finalize(prev_base, pr_numbers, prev_author) -%}
     {%- if prev_base != "" -%}
         {%- set joined_prs = pr_numbers | join(sep=", ") -%}
@@ -12,35 +29,104 @@ body = """
     {%- endif -%}
 {% endmacro -%}
 
-{%- for group, commits in commits | group_by(attribute="group") %}
-    ## {{ group | striptags | trim | upper_first }}
+{% for group, commits in commits | group_by(attribute="group") %}
+## {{ group | striptags | trim | upper_first }}
 
-    {% set_global prev_base = "" -%}
+{% set_global prev_pkg = "" -%}
+    {%- set_global first_from_ver = "" -%}
+    {%- set_global last_to_ver = "" -%}
+    {%- set_global bump_pr_numbers = [] -%}
+    {%- set_global bump_author = "" -%}
+
+    {%- set_global prev_base = "" -%}
     {%- set_global pr_numbers = [] -%}
     {%- set_global prev_author = "" -%}
 
-    {% for commit in commits | filter(attribute="scope") | sort(attribute="scope") -%}
+    {% for commit in commits | filter(attribute="scope") | sort(attribute="message") -%}
         {%- set parts = commit.message | split(pat=" in #") -%}
         {%- if parts | length == 2 -%}
             {%- set base_msg = parts | first | trim -%}
             {%- set pr_part = parts | last | trim -%}
             {%- set pr_num = "#" ~ pr_part | replace(from=")", to="") -%}
 
-            {%- if base_msg == prev_base -%}
-                {%- set_global pr_numbers = pr_numbers | concat(with=pr_num) -%}
+            {%- set bump_parts = base_msg | split(pat="bump ") -%}
+            {%- if bump_parts | length >= 2 -%}
+                {%- set after_bump = bump_parts | last -%}
+                {%- set from_parts = after_bump | split(pat=" from ") -%}
+                {%- if from_parts | length == 2 -%}
+                    {%- set pkg_name = from_parts | first | trim -%}
+                    {%- set version_part = from_parts | last -%}
+                    {%- set by_parts = version_part | split(pat=" by @") -%}
+                    {%- set version_range = by_parts | first | trim -%}
+                    {%- set to_parts = version_range | split(pat=" to ") -%}
+                    {%- if to_parts | length == 2 -%}
+                        {%- set from_ver = to_parts | first | trim -%}
+                        {%- set to_ver = to_parts | last | trim -%}
+
+                        {%- if pkg_name == prev_pkg -%}
+                            {%- set_global last_to_ver = to_ver -%}
+                            {%- set_global bump_pr_numbers = bump_pr_numbers | concat(with=pr_num) -%}
+                        {%- else -%}
+                            {{- self::dedup_finalize(prev_base=prev_base, pr_numbers=pr_numbers, prev_author=prev_author) }}
+                            {%- set_global prev_base = "" -%}
+                            {%- set_global pr_numbers = [] -%}
+                            {{- self::bump_finalize(pkg=prev_pkg, first_from=first_from_ver, last_to=last_to_ver, pr_numbers=bump_pr_numbers, author=bump_author) }}
+                            {%- set_global prev_pkg = pkg_name -%}
+                            {%- set_global first_from_ver = from_ver -%}
+                            {%- set_global last_to_ver = to_ver -%}
+                            {%- set_global bump_pr_numbers = [pr_num] -%}
+                            {%- set_global bump_author = commit.remote.username | default(value="") -%}
+                        {%- endif -%}
+                    {%- else -%}
+                        {{- self::bump_finalize(pkg=prev_pkg, first_from=first_from_ver, last_to=last_to_ver, pr_numbers=bump_pr_numbers, author=bump_author) }}
+                        {%- set_global prev_pkg = "" -%}
+                        {%- set_global bump_pr_numbers = [] -%}
+                        {%- if base_msg == prev_base -%}
+                            {%- set_global pr_numbers = pr_numbers | concat(with=pr_num) -%}
+                        {%- else -%}
+                            {{- self::dedup_finalize(prev_base=prev_base, pr_numbers=pr_numbers, prev_author=prev_author) }}
+                            {%- set_global prev_base = base_msg -%}
+                            {%- set_global pr_numbers = [pr_num] -%}
+                            {%- set_global prev_author = commit.remote.username | default(value="") -%}
+                        {%- endif -%}
+                    {%- endif -%}
+                {%- else -%}
+                    {{- self::bump_finalize(pkg=prev_pkg, first_from=first_from_ver, last_to=last_to_ver, pr_numbers=bump_pr_numbers, author=bump_author) }}
+                    {%- set_global prev_pkg = "" -%}
+                    {%- set_global bump_pr_numbers = [] -%}
+                    {%- if base_msg == prev_base -%}
+                        {%- set_global pr_numbers = pr_numbers | concat(with=pr_num) -%}
+                    {%- else -%}
+                        {{- self::dedup_finalize(prev_base=prev_base, pr_numbers=pr_numbers, prev_author=prev_author) }}
+                        {%- set_global prev_base = base_msg -%}
+                        {%- set_global pr_numbers = [pr_num] -%}
+                        {%- set_global prev_author = commit.remote.username | default(value="") -%}
+                    {%- endif -%}
+                {%- endif -%}
             {%- else -%}
-                {{- self::dedup_finalize(prev_base=prev_base, pr_numbers=pr_numbers, prev_author=prev_author) }}
-                {%- set_global prev_base = base_msg -%}
-                {%- set_global pr_numbers = [pr_num] -%}
-                {%- set_global prev_author = commit.remote.username | default(value="") -%}
+                {{- self::bump_finalize(pkg=prev_pkg, first_from=first_from_ver, last_to=last_to_ver, pr_numbers=bump_pr_numbers, author=bump_author) }}
+                {%- set_global prev_pkg = "" -%}
+                {%- set_global bump_pr_numbers = [] -%}
+                {%- if base_msg == prev_base -%}
+                    {%- set_global pr_numbers = pr_numbers | concat(with=pr_num) -%}
+                {%- else -%}
+                    {{- self::dedup_finalize(prev_base=prev_base, pr_numbers=pr_numbers, prev_author=prev_author) }}
+                    {%- set_global prev_base = base_msg -%}
+                    {%- set_global pr_numbers = [pr_num] -%}
+                    {%- set_global prev_author = commit.remote.username | default(value="") -%}
+                {%- endif -%}
             {%- endif -%}
         {%- else -%}
+            {{- self::bump_finalize(pkg=prev_pkg, first_from=first_from_ver, last_to=last_to_ver, pr_numbers=bump_pr_numbers, author=bump_author) }}
+            {%- set_global prev_pkg = "" -%}
+            {%- set_global bump_pr_numbers = [] -%}
             {{- self::dedup_finalize(prev_base=prev_base, pr_numbers=pr_numbers, prev_author=prev_author) }}
             {%- set_global prev_base = "" -%}
             {%- set_global pr_numbers = [] -%}
             {{- self::add_commit(message=commit.message, author=commit.remote.username | default(value="")) }}
         {%- endif -%}
     {%- endfor -%}
+    {{- self::bump_finalize(pkg=prev_pkg, first_from=first_from_ver, last_to=last_to_ver, pr_numbers=bump_pr_numbers, author=bump_author) }}
     {{- self::dedup_finalize(prev_base=prev_base, pr_numbers=pr_numbers, prev_author=prev_author) }}
 
     {%- for commit in commits -%}
@@ -76,7 +162,10 @@ commit_preprocessors = [
     { pattern = '^(.*) \((#[0-9]+)\)', replace = "${1} by @{AUTHOR} in ${2}"},
     { pattern = '^([a-z]+)(\([a-zA-Z0-9\-]+\))?: [Aa]dd (.*)$', replace = "${1}${2}: added ${3}"},
     { pattern = '^([a-z]+)(\([a-zA-Z0-9\-]+\))?: [Ff]ix (.*)$', replace = "${1}${2}: fixed ${3}"},
-    { pattern = '^build\(deps\): bump the patch-updates group (across [0-9]+ director(y|ies) )?with [0-9]+ updates', replace = "build(deps): bump multiple patch updates"}
+    { pattern = '^build\(deps\): bump the patch-updates group (across [0-9]+ director(y|ies) )?with [0-9]+ updates', replace = "build(deps): bump multiple patch updates"},
+    # Zero-pad version numbers for proper alphanumeric sorting (e.g., 7.0.8 -> 7.z00000000.z00000008)
+    { pattern = '( from | to )([0-9]+)\.([0-9]+)\.([0-9]+)', replace = "${1}${2}.z00000000${3}.z00000000${4}"},
+    { pattern = 'z0*([0-9]{8})', replace = "z${1}"},
 ]
 commit_parsers = [
     # Features - things that add new functionality
@@ -100,15 +189,15 @@ commit_parsers = [
     { message = "added.+examples", group = "<!-- 4 -->Documentation"},
 
     # Dependencies - all dependency updates
-    { message = '^(build|chore)\(deps\).*patch.*', group = "<!-- 5 -->Dependencies", scope = "0-deps/2-patch"},
-    { message = '^(build|chore)\(deps\)', group = "<!-- 5 -->Dependencies", scope = "0-deps/1-other"},
-    { message = "^build\\(nix\\): update flake", group = "<!-- 5 -->Dependencies", scope = "2-nix/flake"},
+    { message = '^(build|chore)\(deps\).*patch.*', group = "<!-- 6 -->Dependencies", scope = "0-deps/2-patch"},
+    { message = '^(build|chore)\(deps\)', group = "<!-- 6 -->Dependencies", scope = "0-deps/1-other"},
+    { message = "^build\\(nix\\): update flake", group = "<!-- 6 -->Dependencies", scope = "2-nix/flake"},
 
     # Skip release commits
     { message = "^chore\\(release\\)", skip = true},
 
     # Everything else goes to Other (build, ci, chore, etc.)
-    { message = ".*", group = "<!-- 6 -->Other"},
+    { message = ".*", group = "<!-- 5 -->Other"},
 ]
 # Set group order - Fixed comes before Dependencies and Other
 protect_breaking_commits = false
