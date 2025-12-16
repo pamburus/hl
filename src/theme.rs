@@ -288,7 +288,7 @@ impl StylePack {
         self.elements[element] = Some(pos);
     }
 
-    fn load(s: &themecfg::StylePack) -> Self {
+    fn load(s: &themecfg::StylePack<Element>) -> Self {
         let mut result = Self::default();
 
         let items = s.items();

@@ -50,10 +50,10 @@ fn test_rgb() {
 
 #[test]
 fn test_style_pack() {
-    assert_eq!(StylePack::default().clone().len(), 0);
+    assert_eq!(StylePack::<Element>::default().clone().len(), 0);
 
     let yaml = include_str!("../testing/assets/style-packs/pack1.yaml");
-    let pack: StylePack = yaml::from_str(yaml).unwrap().remove(0);
+    let pack: StylePack<Element> = yaml::from_str(yaml).unwrap().remove(0);
     assert_eq!(pack.0.len(), 2);
     assert_eq!(pack.0[&Element::Input].foreground, Some(Color::Plain(PlainColor::Red)));
     assert_eq!(pack.0[&Element::Input].background, Some(Color::Plain(PlainColor::Blue)));
@@ -66,7 +66,7 @@ fn test_style_pack() {
     assert_eq!(pack.0[&Element::Message].modes, vec![Mode::Italic, Mode::Underline]);
 
     assert!(
-        yaml::from_str::<StylePack>("invalid")
+        yaml::from_str::<StylePack<Element>>("invalid")
             .unwrap_err()
             .msg
             .ends_with("expected style pack object")

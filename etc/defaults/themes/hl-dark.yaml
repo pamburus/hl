@@ -9,7 +9,7 @@ elements:
   time:
     foreground: 30
   logger:
-    foreground: 30
+    foreground: 37
   caller:
     foreground: 30
     modes: [italic]

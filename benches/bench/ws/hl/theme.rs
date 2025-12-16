@@ -11,7 +11,7 @@ use super::{BencherExt, ND};
 use hl::{
     Level,
     theme::{Element, StylingPush, Theme},
-    themecfg::{self, Color, Mode, Style},
+    themecfg::{self, Color, Mode, Role, Style},
 };
 
 const GROUP: &str = strcat!(super::GROUP, ND, "theme");
@@ -88,6 +88,19 @@ pub(super) fn bench(c: &mut Criterion) {
 fn theme() -> Theme {
     Theme::from(&themecfg::Theme {
         tags: Default::default(),
+        styles: hashmap! {
+            Role::Primary => Style {
+                modes: Vec::default(),
+                foreground: Some(Color::Palette(255)),
+                background: None,
+            },
+            Role::Secondary => Style {
+                modes: Vec::default(),
+                foreground: Some(Color::Palette(8)),
+                background: None,
+            },
+        }
+        .into(),
         elements: hashmap! {
             Element::Time => Style {
                 modes: Vec::default(),

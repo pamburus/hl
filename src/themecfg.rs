@@ -3,6 +3,7 @@ use std::{
     collections::HashMap,
     convert::TryFrom,
     fmt::{self, Write},
+    hash::Hash,
     io::{self, ErrorKind},
     path::{Component, Path, PathBuf},
     str::{self, FromStr},
@@ -68,13 +69,33 @@ pub type Result<T, E = Error> = std::result::Result<T, E>;
 
 // ---
 
+#[repr(u8)]
+#[derive(Clone, Copy, Debug, Hash, Eq, PartialEq, Ord, PartialOrd, Enum, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum Role {
+    Primary,
+    Secondary,
+    Muted,
+    Accent,
+    AccentAlt,
+    Syntax,
+    Value,
+    Status,
+    Info,
+    Warning,
+    Error,
+}
+
+// ---
+
 #[derive(Debug, Default, Deserialize)]
 #[serde(default)]
 pub struct Theme {
     #[serde(deserialize_with = "enumset_serde::deserialize")]
     pub tags: EnumSet<Tag>,
-    pub elements: StylePack,
-    pub levels: HashMap<InfallibleLevel, StylePack>,
+    pub styles: StylePack<Role>,
+    pub elements: StylePack<Element>,
+    pub levels: HashMap<InfallibleLevel, StylePack<Element>>,
     pub indicators: IndicatorPack,
 }
 
@@ -309,11 +330,20 @@ pub enum ThemeOrigin {
 
 // ---
 
-#[derive(Clone, Debug, Default, Deref)]
-pub struct StylePack(HashMap<Element, Style>);
+#[derive(Clone, Debug, Deref)]
+pub struct StylePack<K>(HashMap<K, Style>);
 
-impl StylePack {
-    pub fn items(&self) -> &HashMap<Element, Style> {
+impl<K> Default for StylePack<K> {
+    fn default() -> Self {
+        Self(HashMap::new())
+    }
+}
+
+impl<K> StylePack<K>
+where
+    K: Eq + Hash,
+{
+    pub fn items(&self) -> &HashMap<K, Style> {
         &self.0
     }
 
@@ -327,34 +357,44 @@ impl StylePack {
     }
 }
 
-impl<I: Into<HashMap<Element, Style>>> From<I> for StylePack {
+impl<K, I: Into<HashMap<K, Style>>> From<I> for StylePack<K> {
     fn from(i: I) -> Self {
         Self(i.into())
     }
 }
 
-impl<'de> Deserialize<'de> for StylePack {
+impl<'de, K> Deserialize<'de> for StylePack<K>
+where
+    K: Deserialize<'de> + Eq + Hash,
+{
     fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
     where
         D: Deserializer<'de>,
     {
-        deserializer.deserialize_map(StylePackDeserializeVisitor::new())
+        deserializer.deserialize_map(StylePackDeserializeVisitor::<K>::new())
     }
 }
 
 // ---
 
-struct StylePackDeserializeVisitor {}
+struct StylePackDeserializeVisitor<K> {
+    _phantom: std::marker::PhantomData<K>,
+}
 
-impl StylePackDeserializeVisitor {
+impl<K> StylePackDeserializeVisitor<K> {
     #[inline]
     fn new() -> Self {
-        Self {}
+        Self {
+            _phantom: std::marker::PhantomData,
+        }
     }
 }
 
-impl<'de> Visitor<'de> for StylePackDeserializeVisitor {
-    type Value = StylePack;
+impl<'de, K> Visitor<'de> for StylePackDeserializeVisitor<K>
+where
+    K: Deserialize<'de> + Eq + Hash,
+{
+    type Value = StylePack<K>;
 
     fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
         formatter.write_str("style pack object")
@@ -364,7 +404,7 @@ impl<'de> Visitor<'de> for StylePackDeserializeVisitor {
         let mut items = HashMap::new();
 
         while let Some(key) = access.next_key::<YamlNode>()? {
-            if let Ok(key) = Element::deserialize(key) {
+            if let Ok(key) = K::deserialize(key) {
                 let value: Style = access.next_value()?;
                 items.insert(key, value);
             } else {
