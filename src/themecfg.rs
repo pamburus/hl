@@ -3,7 +3,9 @@ use std::{
     collections::HashMap,
     convert::TryFrom,
     fmt::{self, Write},
+    hash::Hash,
     io::{self, ErrorKind},
+    ops::{Add, AddAssign},
     path::{Component, Path, PathBuf},
     str::{self, FromStr},
     sync::Arc,
@@ -15,7 +17,7 @@ use enum_map::Enum;
 use enumset::{EnumSet, EnumSetType};
 use rust_embed::RustEmbed;
 use serde::{
-    Deserialize, Deserializer,
+    Deserialize, Deserializer, Serialize,
     de::{MapAccess, Visitor},
 };
 use serde_json as json;
@@ -47,6 +49,8 @@ pub enum Error {
     FailedToListCustomThemes(#[from] io::Error),
     #[error("invalid tag {value}", value=.value.hlq())]
     InvalidTag { value: Arc<str>, suggestions: Suggestions },
+    #[error("style recursion limit exceeded")]
+    StyleRecursionLimitExceeded,
 }
 
 /// Error is an error which may occur in the application.
@@ -68,11 +72,32 @@ pub type Result<T, E = Error> = std::result::Result<T, E>;
 
 // ---
 
+#[repr(u8)]
+#[derive(Clone, Copy, Debug, Hash, Eq, PartialEq, Ord, PartialOrd, Enum, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum Role {
+    Default,
+    Primary,
+    Secondary,
+    Emphasized,
+    Muted,
+    Accent,
+    AccentSecondary,
+    Syntax,
+    Status,
+    Info,
+    Warning,
+    Error,
+}
+
+// ---
+
 #[derive(Debug, Default, Deserialize)]
 #[serde(default)]
 pub struct Theme {
     #[serde(deserialize_with = "enumset_serde::deserialize")]
     pub tags: EnumSet<Tag>,
+    pub styles: StylePack<Role>,
     pub elements: StylePack,
     pub levels: HashMap<InfallibleLevel, StylePack>,
     pub indicators: IndicatorPack,
@@ -80,7 +105,14 @@ pub struct Theme {
 
 impl Theme {
     pub fn load(app_dirs: &AppDirs, name: &str) -> Result<Self> {
-        match Self::load_from(&Self::themes_dir(app_dirs), name) {
+        const DEFAULT_THEME_NAME: &str = "@default";
+
+        let theme = Self::load_embedded::<Assets>(DEFAULT_THEME_NAME)?;
+        if name == DEFAULT_THEME_NAME {
+            return Ok(theme);
+        }
+
+        Ok(theme.merged(match Self::load_from(&Self::themes_dir(app_dirs), name) {
             Ok(v) => Ok(v),
             Err(Error::ThemeNotFound { .. }) => match Self::load_embedded::<Assets>(name) {
                 Ok(v) => Ok(v),
@@ -94,7 +126,27 @@ impl Theme {
                 Err(e) => Err(e),
             },
             Err(e) => Err(e),
+        }?))
+    }
+
+    pub fn merge(&mut self, other: Self) {
+        self.styles.merge(other.styles);
+        self.elements.merge(other.elements);
+
+        for (level, pack) in other.levels {
+            self.levels
+                .entry(level)
+                .and_modify(|existing| existing.merge(pack.clone()))
+                .or_insert(pack);
         }
+
+        self.tags = other.tags;
+        self.indicators.merge(other.indicators);
+    }
+
+    pub fn merged(mut self, other: Self) -> Self {
+        self.merge(other);
+        self
     }
 
     pub fn embedded(name: &str) -> Result<Self> {
@@ -309,14 +361,27 @@ pub enum ThemeOrigin {
 
 // ---
 
-#[derive(Clone, Debug, Default, Deref)]
-pub struct StylePack(HashMap<Element, Style>);
+pub type StyleInventory = StylePack<Role, ResolvedStyle>;
 
-impl StylePack {
-    pub fn items(&self) -> &HashMap<Element, Style> {
+#[derive(Clone, Debug, Deref)]
+pub struct StylePack<K = Element, S = Style>(HashMap<K, S>);
+
+impl<K, S> Default for StylePack<K, S> {
+    fn default() -> Self {
+        Self(HashMap::new())
+    }
+}
+
+impl<K, S> StylePack<K, S>
+where
+    K: Eq + Hash,
+{
+    pub fn items(&self) -> &HashMap<K, S> {
         &self.0
     }
+}
 
+impl<S> StylePack<Role, S> {
     pub fn merge(&mut self, patch: Self) {
         self.0.extend(patch.0);
     }
@@ -327,34 +392,84 @@ impl StylePack {
     }
 }
 
-impl<I: Into<HashMap<Element, Style>>> From<I> for StylePack {
-    fn from(i: I) -> Self {
-        Self(i.into())
-    }
-}
-
-impl<'de> Deserialize<'de> for StylePack {
-    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+impl<S> StylePack<Element, S> {
+    pub fn merge(&mut self, patch: Self)
     where
-        D: Deserializer<'de>,
+        S: Clone + for<'a> MergedWith<&'a S>,
     {
-        deserializer.deserialize_map(StylePackDeserializeVisitor::new())
+        for (key, patch) in patch.0 {
+            self.0
+                .entry(key)
+                .and_modify(|v| *v = v.clone().merged_with(&patch))
+                .or_insert(patch);
+        }
+    }
+
+    pub fn merged(mut self, patch: Self) -> Self
+    where
+        S: Clone + for<'a> MergedWith<&'a S>,
+    {
+        self.merge(patch);
+        self
     }
 }
 
 // ---
 
-struct StylePackDeserializeVisitor {}
+pub trait MergedWith<T> {
+    fn merged_with(self, other: T) -> Self;
+}
 
-impl StylePackDeserializeVisitor {
-    #[inline]
-    fn new() -> Self {
-        Self {}
+// ---
+
+impl StylePack<Role, Style> {
+    pub fn resolve(&self) -> StylePack<Role, ResolvedStyle> {
+        let mut resolver = StyleResolver::new(self);
+        let items = self.0.keys().map(|k| (*k, resolver.resolve(k))).collect();
+        StylePack(items)
     }
 }
 
-impl<'de> Visitor<'de> for StylePackDeserializeVisitor {
-    type Value = StylePack;
+impl<K, S, I: Into<HashMap<K, S>>> From<I> for StylePack<K, S> {
+    fn from(i: I) -> Self {
+        Self(i.into())
+    }
+}
+
+impl<'de, K, S> Deserialize<'de> for StylePack<K, S>
+where
+    K: Deserialize<'de> + Eq + Hash,
+    S: Deserialize<'de>,
+{
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        deserializer.deserialize_map(StylePackDeserializeVisitor::<K, S>::new())
+    }
+}
+
+// ---
+
+struct StylePackDeserializeVisitor<K, S> {
+    _phantom: std::marker::PhantomData<(K, S)>,
+}
+
+impl<K, S> StylePackDeserializeVisitor<K, S> {
+    #[inline]
+    fn new() -> Self {
+        Self {
+            _phantom: std::marker::PhantomData,
+        }
+    }
+}
+
+impl<'de, K, S> Visitor<'de> for StylePackDeserializeVisitor<K, S>
+where
+    K: Deserialize<'de> + Eq + Hash,
+    S: Deserialize<'de>,
+{
+    type Value = StylePack<K, S>;
 
     fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
         formatter.write_str("style pack object")
@@ -364,8 +479,8 @@ impl<'de> Visitor<'de> for StylePackDeserializeVisitor {
         let mut items = HashMap::new();
 
         while let Some(key) = access.next_key::<YamlNode>()? {
-            if let Ok(key) = Element::deserialize(key) {
-                let value: Style = access.next_value()?;
+            if let Ok(key) = K::deserialize(key) {
+                let value: S = access.next_value()?;
                 items.insert(key, value);
             } else {
                 _ = access.next_value::<YamlNode>()?;
@@ -415,16 +530,211 @@ pub enum Element {
 #[serde(rename_all = "kebab-case")]
 #[serde(default)]
 pub struct Style {
-    pub modes: Vec<Mode>,
+    #[serde(rename = "style")]
+    pub base: Option<Role>,
+    pub modes: ModeSetDiff,
     pub foreground: Option<Color>,
     pub background: Option<Color>,
 }
 
 impl Style {
-    pub fn merged(mut self, other: &Self) -> Self {
-        if !other.modes.is_empty() {
-            self.modes = other.modes.clone()
+    pub const fn new() -> Self {
+        Self {
+            base: None,
+            modes: ModeSetDiff::new(),
+            foreground: None,
+            background: None,
         }
+    }
+
+    pub fn base(self, base: Option<Role>) -> Self {
+        Self { base, ..self }
+    }
+
+    pub fn modes(self, modes: ModeSetDiff) -> Self {
+        Self { modes, ..self }
+    }
+
+    pub fn background(self, background: Option<Color>) -> Self {
+        Self { background, ..self }
+    }
+
+    pub fn foreground(self, foreground: Option<Color>) -> Self {
+        Self { foreground, ..self }
+    }
+
+    pub fn merged(mut self, other: &Self) -> Self {
+        if let Some(base) = other.base {
+            self.base = Some(base);
+        }
+        self.modes += other.modes.clone();
+        if let Some(color) = other.foreground {
+            self.foreground = Some(color);
+        }
+        if let Some(color) = other.background {
+            self.background = Some(color);
+        }
+        self
+    }
+
+    pub fn resolve(&self, inventory: &StylePack<Role, ResolvedStyle>) -> ResolvedStyle {
+        if let Some(base) = self.base {
+            if let Some(base) = inventory.0.get(&base) {
+                return base.clone().merged_with(self);
+            }
+        }
+
+        self.as_resolved()
+    }
+
+    fn as_resolved(&self) -> ResolvedStyle {
+        ResolvedStyle {
+            modes: self.modes.adds - self.modes.removes,
+            foreground: self.foreground,
+            background: self.background,
+        }
+    }
+}
+
+impl Default for &Style {
+    fn default() -> Self {
+        static DEFAULT: Style = Style::new();
+        &DEFAULT
+    }
+}
+
+impl MergedWith<&Style> for Style {
+    fn merged_with(self, other: &Style) -> Self {
+        self.merged(other)
+    }
+}
+
+impl From<Role> for Style {
+    fn from(base: Role) -> Self {
+        Self {
+            base: Some(base),
+            ..Default::default()
+        }
+    }
+}
+
+impl From<ResolvedStyle> for Style {
+    fn from(body: ResolvedStyle) -> Self {
+        Self {
+            base: None,
+            modes: ModeSetDiff::from(body.modes),
+            foreground: body.foreground,
+            background: body.background,
+        }
+    }
+}
+
+// ---
+
+pub struct StyleResolver<'a> {
+    inventory: &'a StylePack<Role, Style>,
+    cache: HashMap<Role, ResolvedStyle>,
+    depth: usize,
+}
+
+impl<'a> StyleResolver<'a> {
+    fn new(inventory: &'a StylePack<Role, Style>) -> Self {
+        Self {
+            inventory,
+            cache: HashMap::new(),
+            depth: 0,
+        }
+    }
+
+    fn resolve(&mut self, role: &Role) -> ResolvedStyle {
+        if let Some(resolved) = self.cache.get(role) {
+            return resolved.clone();
+        }
+
+        let style = self.inventory.0.get(role).unwrap_or_default();
+
+        if self.depth >= RECURSION_LIMIT {
+            log::warn!("style recursion limit exceeded for style {:?}", &role);
+            return style.as_resolved();
+        }
+
+        self.depth += 1;
+        let resolved = self.resolve_style(style, role);
+        self.depth -= 1;
+
+        self.cache.insert(*role, resolved.clone());
+
+        resolved
+    }
+
+    fn resolve_style(&mut self, style: &Style, role: &Role) -> ResolvedStyle {
+        let base = style.base.or_else(|| {
+            if *role != Role::Default {
+                Some(Role::Default)
+            } else {
+                None
+            }
+        });
+
+        if let Some(base) = base {
+            return self.resolve(&base).merged_with(style);
+        }
+
+        style.as_resolved()
+    }
+}
+
+// ---
+
+#[derive(Clone, Debug, Default, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+#[serde(default)]
+pub struct ResolvedStyle {
+    #[serde(deserialize_with = "enumset_serde::deserialize")]
+    pub modes: ModeSet,
+    pub foreground: Option<Color>,
+    pub background: Option<Color>,
+}
+
+impl ResolvedStyle {
+    pub const fn new() -> Self {
+        Self {
+            modes: ModeSet::new(),
+            foreground: None,
+            background: None,
+        }
+    }
+
+    pub fn modes(self, modes: ModeSet) -> Self {
+        Self { modes, ..self }
+    }
+
+    pub fn foreground(self, foreground: Option<Color>) -> Self {
+        Self { foreground, ..self }
+    }
+
+    pub fn background(self, background: Option<Color>) -> Self {
+        Self { background, ..self }
+    }
+}
+
+impl MergedWith<&ResolvedStyle> for ResolvedStyle {
+    fn merged_with(mut self, other: &ResolvedStyle) -> Self {
+        self.modes = self.modes.union(other.modes);
+        if let Some(color) = other.foreground {
+            self.foreground = Some(color);
+        }
+        if let Some(color) = other.background {
+            self.background = Some(color);
+        }
+        self
+    }
+}
+
+impl MergedWith<&Style> for ResolvedStyle {
+    fn merged_with(mut self, other: &Style) -> Self {
+        self.modes |= other.modes.adds;
+        self.modes -= other.modes.removes;
         if let Some(color) = other.foreground {
             self.foreground = Some(color);
         }
@@ -437,7 +747,7 @@ impl Style {
 
 // ---
 
-#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Deserialize, Serialize, EnumSetType)]
 #[serde(rename_all = "kebab-case")]
 pub enum Mode {
     Bold,
@@ -449,6 +759,178 @@ pub enum Mode {
     Reverse,
     Conceal,
     CrossedOut,
+}
+
+pub type ModeSet = EnumSet<Mode>;
+
+#[derive(Clone, Debug, PartialEq, Eq, Default)]
+pub struct ModeSetDiff {
+    pub adds: ModeSet,
+    pub removes: ModeSet,
+}
+
+impl ModeSetDiff {
+    pub const fn new() -> Self {
+        Self {
+            adds: ModeSet::new(),
+            removes: ModeSet::new(),
+        }
+    }
+
+    pub fn add(mut self, mode: Mode) -> Self {
+        self.adds.insert(mode);
+        self.removes.remove(mode);
+        self
+    }
+
+    pub fn remove(mut self, mode: Mode) -> Self {
+        self.removes.insert(mode);
+        self.adds.remove(mode);
+        self
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.adds.is_empty() && self.removes.is_empty()
+    }
+}
+
+impl Add<ModeSetDiff> for ModeSetDiff {
+    type Output = ModeSetDiff;
+
+    fn add(mut self, rhs: ModeSetDiff) -> Self::Output {
+        self += rhs;
+        self
+    }
+}
+
+impl AddAssign<ModeSetDiff> for ModeSetDiff {
+    fn add_assign(&mut self, rhs: ModeSetDiff) {
+        let adds = (self.adds | rhs.adds) - rhs.removes;
+        let removes = (self.removes | rhs.removes) - rhs.adds;
+
+        self.adds = adds;
+        self.removes = removes;
+    }
+}
+
+impl From<ModeSet> for ModeSetDiff {
+    fn from(modes: ModeSet) -> Self {
+        Self {
+            adds: modes,
+            removes: ModeSet::new(),
+        }
+    }
+}
+
+impl From<Mode> for ModeSetDiff {
+    fn from(mode: Mode) -> Self {
+        Self {
+            adds: mode.into(),
+            removes: ModeSet::new(),
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for ModeSetDiff {
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let diffs = Vec::<ModeDiff>::deserialize(deserializer)?;
+        let mut result = ModeSetDiff::new();
+
+        for diff in diffs {
+            match diff.action {
+                ModeDiffAction::Add => result.adds.insert(diff.mode),
+                ModeDiffAction::Remove => result.removes.insert(diff.mode),
+            };
+        }
+
+        Ok(result)
+    }
+}
+
+impl Serialize for ModeSetDiff {
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let mut diffs = Vec::new();
+
+        for mode in self.adds.iter() {
+            diffs.push(ModeDiff::add(mode));
+        }
+
+        for mode in self.removes.iter() {
+            diffs.push(ModeDiff::remove(mode));
+        }
+
+        diffs.serialize(serializer)
+    }
+}
+
+// ---
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ModeDiff {
+    pub action: ModeDiffAction,
+    pub mode: Mode,
+}
+
+impl ModeDiff {
+    pub fn add(mode: Mode) -> Self {
+        Self {
+            action: ModeDiffAction::Add,
+            mode,
+        }
+    }
+
+    pub fn remove(mode: Mode) -> Self {
+        Self {
+            action: ModeDiffAction::Remove,
+            mode,
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for ModeDiff {
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+
+        if let Some(s) = s.strip_prefix('+') {
+            let mode: Mode = serde_plain::from_str(s).map_err(serde::de::Error::custom)?;
+            Ok(ModeDiff::add(mode))
+        } else if let Some(s) = s.strip_prefix('-') {
+            let mode: Mode = serde_plain::from_str(s).map_err(serde::de::Error::custom)?;
+            Ok(ModeDiff::remove(mode))
+        } else {
+            let mode: Mode = serde_plain::from_str(&s).map_err(serde::de::Error::custom)?;
+            Ok(ModeDiff::add(mode))
+        }
+    }
+}
+
+impl Serialize for ModeDiff {
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let prefix = match self.action {
+            ModeDiffAction::Add => "+",
+            ModeDiffAction::Remove => "-",
+        };
+        let mode_str = serde_plain::to_string(&self.mode).map_err(serde::ser::Error::custom)?;
+        serializer.serialize_str(&format!("{}{}", prefix, mode_str))
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ModeDiffAction {
+    Add,
+    Remove,
 }
 
 // ---
@@ -537,6 +1019,17 @@ pub struct IndicatorPack {
     pub sync: SyncIndicatorPack,
 }
 
+impl IndicatorPack {
+    pub fn merge(&mut self, other: Self) {
+        self.sync.merge(other.sync);
+    }
+
+    pub fn merged(mut self, other: Self) -> Self {
+        self.merge(other);
+        self
+    }
+}
+
 // ---
 
 #[derive(Clone, Debug, Deserialize)]
@@ -559,15 +1052,28 @@ impl Default for SyncIndicatorPack {
                 inner: IndicatorStyle {
                     prefix: String::default(),
                     suffix: String::default(),
-                    style: Style {
-                        modes: vec![Mode::Bold],
+                    style: ResolvedStyle {
+                        modes: Mode::Bold.into(),
                         background: None,
                         foreground: Some(Color::Plain(PlainColor::Yellow)),
-                    },
+                    }
+                    .into(),
                 },
                 text: "!".into(),
             },
         }
+    }
+}
+
+impl SyncIndicatorPack {
+    pub fn merge(&mut self, other: Self) {
+        self.synced.merge(other.synced);
+        self.failed.merge(other.failed);
+    }
+
+    pub fn merged(mut self, other: Self) -> Self {
+        self.merge(other);
+        self
     }
 }
 
@@ -582,6 +1088,21 @@ pub struct Indicator {
     pub text: String,
 }
 
+impl Indicator {
+    pub fn merge(&mut self, other: Self) {
+        self.outer.merge(other.outer);
+        self.inner.merge(other.inner);
+        if !other.text.is_empty() {
+            self.text = other.text;
+        }
+    }
+
+    pub fn merged(mut self, other: Self) -> Self {
+        self.merge(other);
+        self
+    }
+}
+
 // ---
 
 #[derive(Clone, Debug, Default, Deserialize)]
@@ -591,6 +1112,23 @@ pub struct IndicatorStyle {
     pub prefix: String,
     pub suffix: String,
     pub style: Style,
+}
+
+impl IndicatorStyle {
+    pub fn merge(&mut self, other: Self) {
+        if !other.prefix.is_empty() {
+            self.prefix = other.prefix;
+        }
+        if !other.suffix.is_empty() {
+            self.suffix = other.suffix;
+        }
+        self.style = std::mem::take(&mut self.style).merged(&other.style);
+    }
+
+    pub fn merged(mut self, other: Self) -> Self {
+        self.merge(other);
+        self
+    }
 }
 
 // ---
@@ -623,6 +1161,8 @@ fn write_hex<T: fmt::Write>(to: &mut T, v: u8) -> fmt::Result {
 const HEXDIGIT: [u8; 16] = [
     b'0', b'1', b'2', b'3', b'4', b'5', b'6', b'7', b'8', b'9', b'a', b'b', b'c', b'd', b'e', b'f',
 ];
+
+const RECURSION_LIMIT: usize = 64;
 
 // ---
 

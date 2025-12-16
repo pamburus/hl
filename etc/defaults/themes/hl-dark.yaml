@@ -1,39 +1,36 @@
-# yaml-language-server: $schema=https://raw.githubusercontent.com/pamburus/hl/master/schema/json/theme.schema.json
-$schema: https://raw.githubusercontent.com/pamburus/hl/master/schema/json/theme.schema.json
+# yaml-language-server: $schema=https://raw.githubusercontent.com/pamburus/hl/62608d4099f92d709a510e84c0d2b6a073f22607/schema/json/theme.schema.json
+$schema: https://raw.githubusercontent.com/pamburus/hl/62608d4099f92d709a510e84c0d2b6a073f22607/schema/json/theme.schema.json
 
 tags: [dark, 256color]
 
+styles:
+  primary:
+    foreground: 116
+  secondary:
+    foreground: 30
+  emphasized:
+    foreground: 195
+  accent:
+    foreground: 111
+  accent-secondary:
+    foreground: 37
+  syntax:
+    foreground: 255
+    modes: [bold]
+  info:
+    foreground: 146
+  warning:
+    foreground: 215
+  error:
+    foreground: 210
+
 elements:
-  input:
-    foreground: 30
-  time:
-    foreground: 30
-  logger:
-    foreground: 30
   caller:
-    foreground: 30
+    style: secondary
     modes: [italic]
   level:
-    foreground: 30
+    style: muted
     modes: [faint]
-  message:
-    foreground: 195
-  message-delimiter:
-    foreground: 30
-  field:
-    foreground: 30
-  key:
-    foreground: 111
-  ellipsis:
-    foreground: 30
-  object:
-    foreground: 255
-    modes: [bold]
-  array:
-    foreground: 255
-    modes: [bold]
-  string:
-    foreground: 116
   number:
     foreground: 42
   boolean:
@@ -41,24 +38,10 @@ elements:
   boolean-false:
     foreground: 210
   "null":
+    style: primary
     foreground: 210
+
 levels:
-  trace:
-    level-inner:
-      foreground: 30
   debug:
     level-inner:
       foreground: 170
-  info:
-    level-inner:
-      foreground: 146
-  warning:
-    level-inner:
-      foreground: 215
-    message:
-      foreground: 215
-  error:
-    level-inner:
-      foreground: 210
-    message:
-      foreground: 210
