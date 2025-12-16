@@ -10,16 +10,6 @@ permissions:
   pull-requests: write
 
 jobs:
-  debug:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Debug actor information
-        run: |
-          echo "Actor: ${{ github.actor }}"
-          echo "Event name: ${{ github.event_name }}"
-          echo "PR author: ${{ github.event.pull_request.user.login }}"
-          echo "PR author type: ${{ github.event.pull_request.user.type }}"
-
   auto-merge:
     runs-on: ubuntu-latest
     if: github.event.pull_request.user.login == 'dependabot[bot]'
