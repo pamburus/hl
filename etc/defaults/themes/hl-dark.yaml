@@ -3,62 +3,89 @@ $schema: https://raw.githubusercontent.com/pamburus/hl/master/schema/json/theme.
 
 tags: [dark, 256color]
 
+styles:
+  primary:
+    foreground: 195
+  secondary:
+    foreground: 30
+  muted:
+    foreground: 30
+  accent:
+    foreground: 111
+  accent-alt:
+    foreground: 37
+  syntax:
+    foreground: 255
+    modes: [bold]
+  value:
+    foreground: 116
+  status:
+    foreground: 30
+  info:
+    foreground: 146
+  warning:
+    foreground: 215
+  error:
+    foreground: 210
+
 elements:
   input:
-    foreground: 30
+    style: secondary
   time:
-    foreground: 30
+    style: secondary
   logger:
-    foreground: 37
+    style: accent-alt
   caller:
-    foreground: 30
+    style: secondary
     modes: [italic]
   level:
-    foreground: 30
+    style: muted
     modes: [faint]
   message:
-    foreground: 195
+    style: primary
   message-delimiter:
-    foreground: 30
+    style: muted
   field:
-    foreground: 30
+    style: muted
   key:
-    foreground: 111
+    style: accent
   ellipsis:
-    foreground: 30
+    style: muted
   object:
-    foreground: 255
-    modes: [bold]
+    style: syntax
   array:
-    foreground: 255
-    modes: [bold]
+    style: syntax
   string:
-    foreground: 116
+    style: value
   number:
+    style: value
     foreground: 42
   boolean:
+    style: value
     foreground: 41
   boolean-false:
+    style: value
     foreground: 210
   "null":
+    style: value
     foreground: 210
 levels:
   trace:
     level-inner:
-      foreground: 30
+      style: status
   debug:
     level-inner:
       foreground: 170
   info:
     level-inner:
-      foreground: 146
+      style: info
   warning:
     level-inner:
-      foreground: 215
+      style: warning
     message:
-      foreground: 215
+      style: warning
   error:
     level-inner:
-      foreground: 210
+      style: error
     message:
-      foreground: 210
+      style: error

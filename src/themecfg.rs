@@ -93,9 +93,9 @@ pub enum Role {
 pub struct Theme {
     #[serde(deserialize_with = "enumset_serde::deserialize")]
     pub tags: EnumSet<Tag>,
-    pub styles: StylePack<Role>,
-    pub elements: StylePack<Element>,
-    pub levels: HashMap<InfallibleLevel, StylePack<Element>>,
+    pub styles: StyleInventory,
+    pub elements: StylePack,
+    pub levels: HashMap<InfallibleLevel, StylePack>,
     pub indicators: IndicatorPack,
 }
 
@@ -330,20 +330,22 @@ pub enum ThemeOrigin {
 
 // ---
 
-#[derive(Clone, Debug, Deref)]
-pub struct StylePack<K>(HashMap<K, Style>);
+pub type StyleInventory = StylePack<Role, Style>;
 
-impl<K> Default for StylePack<K> {
+#[derive(Clone, Debug, Deref)]
+pub struct StylePack<K = Element, S = ElementStyle>(HashMap<K, S>);
+
+impl<K, S> Default for StylePack<K, S> {
     fn default() -> Self {
         Self(HashMap::new())
     }
 }
 
-impl<K> StylePack<K>
+impl<K, S> StylePack<K, S>
 where
     K: Eq + Hash,
 {
-    pub fn items(&self) -> &HashMap<K, Style> {
+    pub fn items(&self) -> &HashMap<K, S> {
         &self.0
     }
 
@@ -357,31 +359,32 @@ where
     }
 }
 
-impl<K, I: Into<HashMap<K, Style>>> From<I> for StylePack<K> {
+impl<K, S, I: Into<HashMap<K, S>>> From<I> for StylePack<K, S> {
     fn from(i: I) -> Self {
         Self(i.into())
     }
 }
 
-impl<'de, K> Deserialize<'de> for StylePack<K>
+impl<'de, K, S> Deserialize<'de> for StylePack<K, S>
 where
     K: Deserialize<'de> + Eq + Hash,
+    S: Deserialize<'de>,
 {
     fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
     where
         D: Deserializer<'de>,
     {
-        deserializer.deserialize_map(StylePackDeserializeVisitor::<K>::new())
+        deserializer.deserialize_map(StylePackDeserializeVisitor::<K, S>::new())
     }
 }
 
 // ---
 
-struct StylePackDeserializeVisitor<K> {
-    _phantom: std::marker::PhantomData<K>,
+struct StylePackDeserializeVisitor<K, S> {
+    _phantom: std::marker::PhantomData<(K, S)>,
 }
 
-impl<K> StylePackDeserializeVisitor<K> {
+impl<K, S> StylePackDeserializeVisitor<K, S> {
     #[inline]
     fn new() -> Self {
         Self {
@@ -390,11 +393,12 @@ impl<K> StylePackDeserializeVisitor<K> {
     }
 }
 
-impl<'de, K> Visitor<'de> for StylePackDeserializeVisitor<K>
+impl<'de, K, S> Visitor<'de> for StylePackDeserializeVisitor<K, S>
 where
     K: Deserialize<'de> + Eq + Hash,
+    S: Deserialize<'de>,
 {
-    type Value = StylePack<K>;
+    type Value = StylePack<K, S>;
 
     fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
         formatter.write_str("style pack object")
@@ -405,7 +409,7 @@ where
 
         while let Some(key) = access.next_key::<YamlNode>()? {
             if let Ok(key) = K::deserialize(key) {
-                let value: Style = access.next_value()?;
+                let value: S = access.next_value()?;
                 items.insert(key, value);
             } else {
                 _ = access.next_value::<YamlNode>()?;
@@ -472,6 +476,51 @@ impl Style {
             self.background = Some(color);
         }
         self
+    }
+}
+
+// ---
+
+#[derive(Clone, Debug, Default, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub struct ElementStyle {
+    #[serde(rename = "style")]
+    pub style: Option<Role>,
+    #[serde(flatten)]
+    pub patch: Style,
+}
+
+impl ElementStyle {
+    pub fn merged(mut self, other: &Self) -> Self {
+        if let Some(role) = other.style {
+            self.style = Some(role);
+        }
+        self.patch = self.patch.merged(&other.patch);
+        self
+    }
+
+    pub fn resolved(self, inventory: &StyleInventory) -> Style {
+        let base = if let Some(role) = self.style {
+            inventory.0.get(&role).cloned().unwrap_or_default()
+        } else {
+            Style::default()
+        };
+        base.merged(&self.patch)
+    }
+}
+
+impl From<Role> for ElementStyle {
+    fn from(role: Role) -> Self {
+        Self {
+            style: Some(role),
+            patch: Style::default(),
+        }
+    }
+}
+
+impl From<Style> for ElementStyle {
+    fn from(patch: Style) -> Self {
+        Self { style: None, patch }
     }
 }
 

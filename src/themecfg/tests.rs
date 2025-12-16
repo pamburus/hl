@@ -50,20 +50,29 @@ fn test_rgb() {
 
 #[test]
 fn test_style_pack() {
-    assert_eq!(StylePack::<Element>::default().clone().len(), 0);
+    assert_eq!(StylePack::<Element, ElementStyle>::default().clone().len(), 0);
 
     let yaml = include_str!("../testing/assets/style-packs/pack1.yaml");
     let pack: StylePack<Element> = yaml::from_str(yaml).unwrap().remove(0);
     assert_eq!(pack.0.len(), 2);
-    assert_eq!(pack.0[&Element::Input].foreground, Some(Color::Plain(PlainColor::Red)));
-    assert_eq!(pack.0[&Element::Input].background, Some(Color::Plain(PlainColor::Blue)));
-    assert_eq!(pack.0[&Element::Input].modes, vec![Mode::Bold, Mode::Faint]);
     assert_eq!(
-        pack.0[&Element::Message].foreground,
+        pack.0[&Element::Input].patch.foreground,
+        Some(Color::Plain(PlainColor::Red))
+    );
+    assert_eq!(
+        pack.0[&Element::Input].patch.background,
+        Some(Color::Plain(PlainColor::Blue))
+    );
+    assert_eq!(pack.0[&Element::Input].patch.modes, vec![Mode::Bold, Mode::Faint]);
+    assert_eq!(
+        pack.0[&Element::Message].patch.foreground,
         Some(Color::Plain(PlainColor::Green))
     );
-    assert_eq!(pack.0[&Element::Message].background, None);
-    assert_eq!(pack.0[&Element::Message].modes, vec![Mode::Italic, Mode::Underline]);
+    assert_eq!(pack.0[&Element::Message].patch.background, None);
+    assert_eq!(
+        pack.0[&Element::Message].patch.modes,
+        vec![Mode::Italic, Mode::Underline]
+    );
 
     assert!(
         yaml::from_str::<StylePack<Element>>("invalid")

@@ -81,7 +81,7 @@ impl Theme {
 impl<S: Borrow<themecfg::Theme>> From<S> for Theme {
     fn from(s: S) -> Self {
         let s = s.borrow();
-        let default = StylePack::load(&s.elements);
+        let default = StylePack::load(&s.elements, &s.styles);
         let mut packs = EnumMap::default();
         for (level, pack) in &s.levels {
             let level = match level {
@@ -91,7 +91,7 @@ impl<S: Borrow<themecfg::Theme>> From<S> for Theme {
                     continue;
                 }
             };
-            packs[*level] = StylePack::load(&s.elements.clone().merged(pack.clone()));
+            packs[*level] = StylePack::load(&s.elements.clone().merged(pack.clone()), &s.styles);
         }
         Self {
             default,
@@ -288,7 +288,7 @@ impl StylePack {
         self.elements[element] = Some(pos);
     }
 
-    fn load(s: &themecfg::StylePack<Element>) -> Self {
+    fn load(s: &themecfg::StylePack, inventory: &themecfg::StyleInventory) -> Self {
         let mut result = Self::default();
 
         let items = s.items();
@@ -298,7 +298,7 @@ impl StylePack {
         }
 
         for (&element, style) in s.items() {
-            result.add(element, &Style::from(style))
+            result.add(element, &Style::from(&style.clone().resolved(inventory)))
         }
 
         if let Some(base) = s.items().get(&Element::Boolean) {
@@ -307,7 +307,7 @@ impl StylePack {
                 if let Some(patch) = s.items().get(&variant) {
                     style = style.merged(patch)
                 }
-                result.add(variant, &Style::from(&style));
+                result.add(variant, &Style::from(&style.resolved(inventory)));
             }
         }
 

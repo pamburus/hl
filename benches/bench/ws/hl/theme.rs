@@ -99,79 +99,54 @@ fn theme() -> Theme {
                 foreground: Some(Color::Palette(8)),
                 background: None,
             },
-        }
-        .into(),
-        elements: hashmap! {
-            Element::Time => Style {
-                modes: Vec::default(),
-                foreground: Some(Color::Palette(8)),
-                background: None,
-            },
-            Element::Level => Style {
-                modes: Vec::default(),
-                foreground: Some(Color::Palette(25)),
-                background: None,
-            },
-            Element::Logger => Style {
-                modes: Vec::default(),
-                foreground: Some(Color::Palette(8)),
-                background: None,
-            },
-            Element::Caller => Style {
-                modes: Vec::default(),
-                foreground: Some(Color::Palette(8)),
-                background: None,
-            },
-            Element::Message => Style {
-                modes: Vec::default(),
-                foreground: Some(Color::Palette(255)),
-                background: None,
-            },
-            Element::Field => Style {
-                modes: Vec::default(),
-                foreground: Some(Color::Palette(8)),
-                background: None,
-            },
-            Element::Object => Style {
+            Role::Syntax => Style {
                 modes: Vec::default(),
                 foreground: Some(Color::Palette(246)),
                 background: None,
             },
-            Element::Array => Style {
-                modes: Vec::default(),
-                foreground: Some(Color::Palette(246)),
-                background: None,
-            },
-            Element::Ellipsis => Style {
-                modes: Vec::default(),
-                foreground: Some(Color::Palette(8)),
-                background: None,
-            },
-            Element::Key => Style {
+            Role::Accent => Style {
                 modes: vec![Mode::Underline],
                 foreground: Some(Color::Palette(117)),
                 background: None,
             },
-            Element::Null => Style {
-                modes: Vec::default(),
-                foreground: Some(Color::Palette(136)),
-                background: None,
-            },
-            Element::Boolean => Style {
-                modes: Vec::default(),
-                foreground: Some(Color::Palette(178)),
-                background: None,
-            },
-            Element::Number => Style {
-                modes: Vec::default(),
-                foreground: Some(Color::Palette(41)),
-                background: None,
-            },
-            Element::String => Style {
+            Role::Value => Style {
                 modes: Vec::default(),
                 foreground: Some(Color::Palette(36)),
                 background: None,
             },
+        }
+        .into(),
+        elements: hashmap! {
+            Element::Time => Role::Secondary.into(),
+            Element::Level => Style {
+                modes: Vec::default(),
+                foreground: Some(Color::Palette(25)),
+                background: None,
+            }.into(),
+            Element::Logger => Role::Secondary.into(),
+            Element::Caller => Role::Secondary.into(),
+            Element::Message => Role::Primary.into(),
+            Element::Field => Role::Secondary.into(),
+            Element::Object => Role::Syntax.into(),
+            Element::Array => Role::Syntax.into(),
+            Element::Ellipsis => Role::Secondary.into(),
+            Element::Key => Role::Accent.into(),
+            Element::Null => Style {
+                modes: Vec::default(),
+                foreground: Some(Color::Palette(136)),
+                background: None,
+            }.into(),
+            Element::Boolean => Style {
+                modes: Vec::default(),
+                foreground: Some(Color::Palette(178)),
+                background: None,
+            }.into(),
+            Element::Number => Style {
+                modes: Vec::default(),
+                foreground: Some(Color::Palette(41)),
+                background: None,
+            }.into(),
+            Element::String => Role::Value.into(),
         }
         .into(),
         levels: HashMap::new(),
