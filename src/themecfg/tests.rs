@@ -72,23 +72,23 @@ fn test_rgb_invalid() {
 
 #[test]
 fn test_style_pack() {
-    assert_eq!(StylePack::default().clone().len(), 0);
+    assert_eq!(StylePack::<Element>::default().clone().len(), 0);
 
     let yaml = include_str!("../testing/assets/style-packs/pack1.yaml");
-    let pack: StylePack = yaml::from_str(yaml).unwrap().remove(0);
+    let pack: StylePack<Element> = yaml::from_str(yaml).unwrap().remove(0);
     assert_eq!(pack.0.len(), 2);
     assert_eq!(pack.0[&Element::Input].foreground, Some(Color::Plain(PlainColor::Red)));
     assert_eq!(pack.0[&Element::Input].background, Some(Color::Plain(PlainColor::Blue)));
-    assert_eq!(pack.0[&Element::Input].modes, vec![Mode::Bold, Mode::Faint]);
+    assert_eq!(pack.0[&Element::Input].modes, (Mode::Bold | Mode::Faint).into());
     assert_eq!(
         pack.0[&Element::Message].foreground,
         Some(Color::Plain(PlainColor::Green))
     );
     assert_eq!(pack.0[&Element::Message].background, None);
-    assert_eq!(pack.0[&Element::Message].modes, vec![Mode::Italic, Mode::Underline]);
+    assert_eq!(pack.0[&Element::Message].modes, (Mode::Italic | Mode::Underline).into());
 
     assert!(
-        yaml::from_str::<StylePack>("invalid")
+        yaml::from_str::<StylePack<Element>>("invalid")
             .unwrap_err()
             .msg
             .ends_with("expected style pack object")
@@ -107,33 +107,32 @@ fn test_tags() {
 
 #[test]
 fn test_style_merge() {
-    let base = Style {
-        modes: vec![Mode::Bold],
+    let base = ResolvedStyle {
+        modes: Mode::Bold.into(),
         foreground: Some(Color::Plain(PlainColor::Red)),
         background: Some(Color::Plain(PlainColor::Blue)),
     };
 
-    let patch = Style {
-        modes: vec![Mode::Italic],
+    let patch = ResolvedStyle {
+        modes: Mode::Italic.into(),
         foreground: Some(Color::Plain(PlainColor::Green)),
         background: None,
     };
 
-    let result = base.clone().merged(&patch);
+    let result = base.clone().merged_with(&patch);
 
-    assert_eq!(result.modes, vec![Mode::Italic]);
+    assert_eq!(result.modes, Mode::Bold | Mode::Italic);
     assert_eq!(result.foreground, Some(Color::Plain(PlainColor::Green)));
     assert_eq!(result.background, Some(Color::Plain(PlainColor::Blue)));
 
-    let patch = Style {
-        modes: vec![],
-        foreground: None,
+    let patch = ResolvedStyle {
         background: Some(Color::Plain(PlainColor::Green)),
+        ..Default::default()
     };
 
-    let result = base.clone().merged(&patch);
+    let result = base.clone().merged_with(&patch);
 
-    assert_eq!(result.modes, vec![Mode::Bold]);
+    assert_eq!(result.modes, EnumSet::from(Mode::Bold));
     assert_eq!(result.foreground, Some(Color::Plain(PlainColor::Red)));
     assert_eq!(result.background, Some(Color::Plain(PlainColor::Green)));
 }

@@ -1,5 +1,5 @@
 {
-  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$schema": "https://json-schema.org/draft/2019-09/schema",
   "$ref": "#/definitions/theme",
   "definitions": {
     "theme": {
@@ -23,6 +23,9 @@
           "items": {
             "$ref": "#/definitions/tag"
           }
+        },
+        "styles": {
+          "$ref": "#/definitions/styles"
         },
         "elements": {
           "$ref": "#/definitions/elements"
@@ -55,84 +58,111 @@
         "crossed-out"
       ]
     },
+    "role": {
+      "type": "string",
+      "enum": [
+        "default",
+        "primary",
+        "secondary",
+        "emphasized",
+        "muted",
+        "accent",
+        "accent-secondary",
+        "syntax",
+        "status",
+        "info",
+        "warning",
+        "error"
+      ]
+    },
+    "styles": {
+      "type": "object",
+      "propertyNames": {
+        "$ref": "#/definitions/role"
+      },
+      "additionalProperties": {
+        "$ref": "#/definitions/style-with-base"
+      },
+      "title": "Semantic Styles"
+    },
     "elements": {
       "type": "object",
       "additionalProperties": false,
       "properties": {
         "input": {
-          "$ref": "#/definitions/style"
+          "$ref": "#/definitions/element-style"
         },
         "input-number": {
-          "$ref": "#/definitions/style"
+          "$ref": "#/definitions/element-style"
         },
         "input-number-inner": {
-          "$ref": "#/definitions/style"
+          "$ref": "#/definitions/element-style"
         },
         "input-name": {
-          "$ref": "#/definitions/style"
+          "$ref": "#/definitions/element-style"
         },
         "input-name-inner": {
-          "$ref": "#/definitions/style"
+          "$ref": "#/definitions/element-style"
         },
         "time": {
-          "$ref": "#/definitions/style"
+          "$ref": "#/definitions/element-style"
         },
         "level": {
-          "$ref": "#/definitions/style"
+          "$ref": "#/definitions/element-style"
         },
         "level-inner": {
-          "$ref": "#/definitions/style"
+          "$ref": "#/definitions/element-style"
         },
         "logger": {
-          "$ref": "#/definitions/style"
+          "$ref": "#/definitions/element-style"
         },
         "logger-inner": {
-          "$ref": "#/definitions/style"
+          "$ref": "#/definitions/element-style"
         },
         "caller": {
-          "$ref": "#/definitions/style"
+          "$ref": "#/definitions/element-style"
         },
         "caller-inner": {
-          "$ref": "#/definitions/style"
+          "$ref": "#/definitions/element-style"
         },
         "message": {
-          "$ref": "#/definitions/style"
+          "$ref": "#/definitions/element-style"
         },
         "message-delimiter": {
-          "$ref": "#/definitions/style"
+          "$ref": "#/definitions/element-style"
         },
         "field": {
-          "$ref": "#/definitions/style"
+          "$ref": "#/definitions/element-style"
         },
         "key": {
-          "$ref": "#/definitions/style"
+          "$ref": "#/definitions/element-style"
         },
         "array": {
-          "$ref": "#/definitions/style"
+          "$ref": "#/definitions/element-style"
         },
         "object": {
-          "$ref": "#/definitions/style"
+          "$ref": "#/definitions/element-style"
         },
         "string": {
-          "$ref": "#/definitions/style"
+          "$ref": "#/definitions/element-style"
         },
         "number": {
-          "$ref": "#/definitions/style"
+          "$ref": "#/definitions/element-style"
         },
         "boolean": {
-          "$ref": "#/definitions/style"
+          "$ref": "#/definitions/element-style"
         },
         "boolean-false": {
-          "$ref": "#/definitions/style"
+          "$ref": "#/definitions/element-style"
         },
         "boolean-true": {
-          "$ref": "#/definitions/style"
+          "$ref": "#/definitions/element-style"
         },
         "null": {
-          "$ref": "#/definitions/style"
+          "$ref": "#/definitions/element-style"
         },
         "ellipsis": {
-          "$ref": "#/definitions/style"
+          "$ref": "#/definitions/element-style"
         }
       },
       "required": [],
@@ -140,7 +170,6 @@
     },
     "style": {
       "type": "object",
-      "additionalProperties": false,
       "properties": {
         "modes": {
           "type": "array",
@@ -155,8 +184,35 @@
           "$ref": "#/definitions/color"
         }
       },
-      "required": [],
       "title": "Style"
+    },
+    "style-with-base": {
+      "allOf": [
+        {
+          "$ref": "#/definitions/style"
+        }
+      ],
+      "properties": {
+        "style": {
+          "$ref": "#/definitions/role"
+        }
+      },
+      "unevaluatedProperties": false,
+      "title": "Style with Base Reference"
+    },
+    "element-style": {
+      "allOf": [
+        {
+          "$ref": "#/definitions/style"
+        }
+      ],
+      "properties": {
+        "style": {
+          "$ref": "#/definitions/role"
+        }
+      },
+      "unevaluatedProperties": false,
+      "title": "Element Style"
     },
     "color": {
       "oneOf": [

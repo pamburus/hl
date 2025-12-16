@@ -11,7 +11,7 @@ use crate::{
     eseq::{Brightness, Color, ColorCode, Mode, Sequence, StyleCode},
     fmtx::Push,
     level::{self, InfallibleLevel},
-    themecfg,
+    themecfg::{self, StyleInventory},
 };
 
 // test imports
@@ -81,7 +81,8 @@ impl Theme {
 impl<S: Borrow<themecfg::Theme>> From<S> for Theme {
     fn from(s: S) -> Self {
         let s = s.borrow();
-        let default = StylePack::load(&s.elements);
+        let inventory = s.styles.resolve();
+        let default = StylePack::load(&s.elements, &inventory);
         let mut packs = EnumMap::default();
         for (level, pack) in &s.levels {
             let level = match level {
@@ -91,12 +92,12 @@ impl<S: Borrow<themecfg::Theme>> From<S> for Theme {
                     continue;
                 }
             };
-            packs[*level] = StylePack::load(&s.elements.clone().merged(pack.clone()));
+            packs[*level] = StylePack::load(&s.elements.clone().merged(pack.clone()), &inventory);
         }
         Self {
             default,
             packs,
-            indicators: IndicatorPack::from(&s.indicators),
+            indicators: IndicatorPack::new(&s.indicators, &inventory),
         }
     }
 }
@@ -173,10 +174,10 @@ impl<T: Into<Sequence>> From<T> for Style {
     }
 }
 
-impl From<&themecfg::Style> for Style {
-    fn from(style: &themecfg::Style) -> Self {
+impl From<&themecfg::ResolvedStyle> for Style {
+    fn from(style: &themecfg::ResolvedStyle) -> Self {
         let mut codes = Vec::<StyleCode>::new();
-        for mode in &style.modes {
+        for mode in style.modes {
             codes.push(
                 match mode {
                     themecfg::Mode::Bold => Mode::Bold,
@@ -294,7 +295,7 @@ impl StylePack {
         self.elements[element] = Some(pos);
     }
 
-    fn load(s: &themecfg::StylePack) -> Self {
+    fn load(s: &themecfg::StylePack, inventory: &themecfg::StyleInventory) -> Self {
         let mut result = Self::default();
 
         let items = s.items();
@@ -304,7 +305,7 @@ impl StylePack {
         }
 
         for (&element, style) in s.items() {
-            result.add(element, &Style::from(style))
+            result.add(element, &Style::from(&style.clone().resolve(inventory)))
         }
 
         if let Some(base) = s.items().get(&Element::Boolean) {
@@ -313,7 +314,7 @@ impl StylePack {
                 if let Some(patch) = s.items().get(&variant) {
                     style = style.merged(patch)
                 }
-                result.add(variant, &Style::from(&style));
+                result.add(variant, &Style::from(&style.resolve(inventory)));
             }
         }
 
@@ -328,10 +329,10 @@ pub struct IndicatorPack {
     pub sync: SyncIndicatorPack,
 }
 
-impl From<&themecfg::IndicatorPack> for IndicatorPack {
-    fn from(indicator: &themecfg::IndicatorPack) -> Self {
+impl IndicatorPack {
+    fn new(indicator: &themecfg::IndicatorPack, inventory: &StyleInventory) -> Self {
         Self {
-            sync: SyncIndicatorPack::from(&indicator.sync),
+            sync: SyncIndicatorPack::new(&indicator.sync, inventory),
         }
     }
 }
@@ -344,11 +345,11 @@ pub struct SyncIndicatorPack {
     pub failed: Indicator,
 }
 
-impl From<&themecfg::SyncIndicatorPack> for SyncIndicatorPack {
-    fn from(indicator: &themecfg::SyncIndicatorPack) -> Self {
+impl SyncIndicatorPack {
+    fn new(indicator: &themecfg::SyncIndicatorPack, inventory: &StyleInventory) -> Self {
         Self {
-            synced: Indicator::from(&indicator.synced),
-            failed: Indicator::from(&indicator.failed),
+            synced: Indicator::new(&indicator.synced, inventory),
+            failed: Indicator::new(&indicator.failed, inventory),
         }
     }
 }
@@ -360,11 +361,11 @@ pub struct Indicator {
     pub value: String,
 }
 
-impl From<&themecfg::Indicator> for Indicator {
-    fn from(indicator: &themecfg::Indicator) -> Self {
+impl Indicator {
+    fn new(indicator: &themecfg::Indicator, inventory: &StyleInventory) -> Self {
         let mut buf = Vec::new();
-        let os = Style::from(&indicator.outer.style);
-        let is = Style::from(&indicator.inner.style);
+        let os = Style::from(&indicator.outer.style.resolve(inventory));
+        let is = Style::from(&indicator.inner.style.resolve(inventory));
         os.apply(&mut buf);
         os.with(&mut buf, |buf| {
             buf.extend(indicator.outer.prefix.as_bytes());
