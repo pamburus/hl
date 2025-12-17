@@ -1,5 +1,5 @@
 {
-  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$schema": "https://json-schema.org/draft/2019-09/schema",
   "$ref": "#/definitions/theme",
   "definitions": {
     "theme": {
@@ -80,7 +80,12 @@
         "$ref": "#/definitions/role"
       },
       "additionalProperties": {
-        "$ref": "#/definitions/style"
+        "allOf": [
+          {
+            "$ref": "#/definitions/style"
+          }
+        ],
+        "unevaluatedProperties": false
       },
       "title": "Semantic Styles"
     },
@@ -169,7 +174,6 @@
     },
     "style": {
       "type": "object",
-      "additionalProperties": false,
       "properties": {
         "modes": {
           "type": "array",
@@ -184,23 +188,20 @@
           "$ref": "#/definitions/color"
         }
       },
-      "required": [],
       "title": "Style"
     },
     "element-style": {
       "allOf": [
         {
           "$ref": "#/definitions/style"
-        },
-        {
-          "type": "object",
-          "properties": {
-            "style": {
-              "$ref": "#/definitions/role"
-            }
-          }
         }
       ],
+      "properties": {
+        "style": {
+          "$ref": "#/definitions/role"
+        }
+      },
+      "unevaluatedProperties": false,
       "title": "Element Style"
     },
     "color": {
