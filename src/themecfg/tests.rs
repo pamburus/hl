@@ -50,27 +50,27 @@ fn test_rgb() {
 
 #[test]
 fn test_style_pack() {
-    assert_eq!(StylePack::<Element, ElementStyle>::default().clone().len(), 0);
+    assert_eq!(StylePack::<Element>::default().clone().len(), 0);
 
     let yaml = include_str!("../testing/assets/style-packs/pack1.yaml");
     let pack: StylePack<Element> = yaml::from_str(yaml).unwrap().remove(0);
     assert_eq!(pack.0.len(), 2);
     assert_eq!(
-        pack.0[&Element::Input].patch.foreground,
+        pack.0[&Element::Input].body.foreground,
         Some(Color::Plain(PlainColor::Red))
     );
     assert_eq!(
-        pack.0[&Element::Input].patch.background,
+        pack.0[&Element::Input].body.background,
         Some(Color::Plain(PlainColor::Blue))
     );
-    assert_eq!(pack.0[&Element::Input].patch.modes, vec![Mode::Bold, Mode::Faint]);
+    assert_eq!(pack.0[&Element::Input].body.modes, vec![Mode::Bold, Mode::Faint]);
     assert_eq!(
-        pack.0[&Element::Message].patch.foreground,
+        pack.0[&Element::Message].body.foreground,
         Some(Color::Plain(PlainColor::Green))
     );
-    assert_eq!(pack.0[&Element::Message].patch.background, None);
+    assert_eq!(pack.0[&Element::Message].body.background, None);
     assert_eq!(
-        pack.0[&Element::Message].patch.modes,
+        pack.0[&Element::Message].body.modes,
         vec![Mode::Italic, Mode::Underline]
     );
 
@@ -94,13 +94,13 @@ fn test_tags() {
 
 #[test]
 fn test_style_merge() {
-    let base = Style {
+    let base = ResolvedStyle {
         modes: vec![Mode::Bold],
         foreground: Some(Color::Plain(PlainColor::Red)),
         background: Some(Color::Plain(PlainColor::Blue)),
     };
 
-    let patch = Style {
+    let patch = ResolvedStyle {
         modes: vec![Mode::Italic],
         foreground: Some(Color::Plain(PlainColor::Green)),
         background: None,
@@ -112,7 +112,7 @@ fn test_style_merge() {
     assert_eq!(result.foreground, Some(Color::Plain(PlainColor::Green)));
     assert_eq!(result.background, Some(Color::Plain(PlainColor::Blue)));
 
-    let patch = Style {
+    let patch = ResolvedStyle {
         modes: vec![],
         foreground: None,
         background: Some(Color::Plain(PlainColor::Green)),

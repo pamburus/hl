@@ -89,40 +89,16 @@ fn theme() -> Theme {
     Theme::from(&themecfg::Theme {
         tags: Default::default(),
         styles: hashmap! {
-            Role::Primary => Style {
-                modes: Vec::default(),
-                foreground: Some(Color::Palette(255)),
-                background: None,
-            },
-            Role::Secondary => Style {
-                modes: Vec::default(),
-                foreground: Some(Color::Palette(8)),
-                background: None,
-            },
-            Role::Syntax => Style {
-                modes: Vec::default(),
-                foreground: Some(Color::Palette(246)),
-                background: None,
-            },
-            Role::Accent => Style {
-                modes: vec![Mode::Underline],
-                foreground: Some(Color::Palette(117)),
-                background: None,
-            },
-            Role::Value => Style {
-                modes: Vec::default(),
-                foreground: Some(Color::Palette(36)),
-                background: None,
-            },
+            Role::Primary => Style::new().foreground(Some(Color::Palette(255))),
+            Role::Secondary => Style::new().foreground(Some(Color::Palette(8))),
+            Role::Syntax => Style::new().foreground(Some(Color::Palette(246))),
+            Role::Accent => Style::new().modes(vec![Mode::Underline]).foreground(Some(Color::Palette(8))),
+            Role::Value => Style::new().foreground(Some(Color::Palette(36))),
         }
         .into(),
         elements: hashmap! {
             Element::Time => Role::Secondary.into(),
-            Element::Level => Style {
-                modes: Vec::default(),
-                foreground: Some(Color::Palette(25)),
-                background: None,
-            }.into(),
+            Element::Level => Style::new().foreground(Some(Color::Palette(25))),
             Element::Logger => Role::Secondary.into(),
             Element::Caller => Role::Secondary.into(),
             Element::Message => Role::Primary.into(),
@@ -131,21 +107,9 @@ fn theme() -> Theme {
             Element::Array => Role::Syntax.into(),
             Element::Ellipsis => Role::Secondary.into(),
             Element::Key => Role::Accent.into(),
-            Element::Null => Style {
-                modes: Vec::default(),
-                foreground: Some(Color::Palette(136)),
-                background: None,
-            }.into(),
-            Element::Boolean => Style {
-                modes: Vec::default(),
-                foreground: Some(Color::Palette(178)),
-                background: None,
-            }.into(),
-            Element::Number => Style {
-                modes: Vec::default(),
-                foreground: Some(Color::Palette(41)),
-                background: None,
-            }.into(),
+            Element::Null => Style::new().foreground(Some(Color::Palette(136))),
+            Element::Boolean => Style::new().foreground(Some(Color::Palette(178))),
+            Element::Number => Style::new().foreground(Some(Color::Palette(41))),
             Element::String => Role::Value.into(),
         }
         .into(),

@@ -25,10 +25,9 @@ fn test_unknown_level() {
 
 #[test]
 fn test_style_from_rgb_color() {
-    let theme_style = themecfg::Style {
-        foreground: Some(themecfg::Color::RGB(themecfg::RGB(255, 128, 64))),
-        ..Default::default()
-    };
+    use themecfg::{Color, RGB, ResolvedStyle};
+
+    let theme_style = ResolvedStyle::new().foreground(Some(Color::RGB(RGB(255, 128, 64))));
 
     let style = Style::from(&theme_style);
 

@@ -48,6 +48,8 @@ pub enum Error {
     FailedToListCustomThemes(#[from] io::Error),
     #[error("invalid tag {value}", value=.value.hlq())]
     InvalidTag { value: Arc<str>, suggestions: Suggestions },
+    #[error("style recursion limit exceeded")]
+    StyleRecursionLimitExceeded,
 }
 
 /// Error is an error which may occur in the application.
@@ -93,7 +95,7 @@ pub enum Role {
 pub struct Theme {
     #[serde(deserialize_with = "enumset_serde::deserialize")]
     pub tags: EnumSet<Tag>,
-    pub styles: StyleInventory,
+    pub styles: StylePack<Role>,
     pub elements: StylePack,
     pub levels: HashMap<InfallibleLevel, StylePack>,
     pub indicators: IndicatorPack,
@@ -330,10 +332,10 @@ pub enum ThemeOrigin {
 
 // ---
 
-pub type StyleInventory = StylePack<Role, Style>;
+pub type StyleInventory = StylePack<Role, ResolvedStyle>;
 
 #[derive(Clone, Debug, Deref)]
-pub struct StylePack<K = Element, S = ElementStyle>(HashMap<K, S>);
+pub struct StylePack<K = Element, S = Style>(HashMap<K, S>);
 
 impl<K, S> Default for StylePack<K, S> {
     fn default() -> Self {
@@ -356,6 +358,18 @@ where
     pub fn merged(mut self, patch: Self) -> Self {
         self.merge(patch);
         self
+    }
+}
+
+impl StylePack<Role, Style> {
+    pub fn resolve(&self) -> StylePack<Role, ResolvedStyle> {
+        let mut resolver = StyleResolver::new(self);
+        let items = self
+            .0
+            .keys()
+            .filter_map(|k| resolver.resolve(k).map(|v| (*k, v)))
+            .collect();
+        StylePack(items)
     }
 }
 
@@ -459,12 +473,161 @@ pub enum Element {
 #[serde(rename_all = "kebab-case")]
 #[serde(default)]
 pub struct Style {
+    #[serde(rename = "style")]
+    pub base: Option<Role>,
+    #[serde(flatten)]
+    pub body: ResolvedStyle,
+}
+
+impl Style {
+    pub const fn new() -> Self {
+        Self {
+            base: None,
+            body: ResolvedStyle::new(),
+        }
+    }
+
+    pub fn base(self, base: Option<Role>) -> Self {
+        Self { base, ..self }
+    }
+
+    pub fn modes(self, modes: Vec<Mode>) -> Self {
+        Self {
+            body: self.body.modes(modes),
+            ..self
+        }
+    }
+
+    pub fn background(self, color: Option<Color>) -> Self {
+        Self {
+            body: self.body.background(color),
+            ..self
+        }
+    }
+
+    pub fn foreground(self, color: Option<Color>) -> Self {
+        Self {
+            body: self.body.foreground(color),
+            ..self
+        }
+    }
+
+    pub fn merged(mut self, other: &Self) -> Self {
+        if let Some(base) = other.base {
+            self.base = Some(base);
+        }
+        self.body = self.body.merged(&other.body);
+        self
+    }
+
+    pub fn resolve(&self, inventory: &StylePack<Role, ResolvedStyle>) -> ResolvedStyle {
+        if let Some(base) = self.base {
+            if let Some(base) = inventory.0.get(&base) {
+                return base.clone().merged(&self.body);
+            }
+        }
+
+        self.body.clone()
+    }
+}
+
+// ---
+
+impl From<Role> for Style {
+    fn from(base: Role) -> Self {
+        Self {
+            base: Some(base),
+            body: Default::default(),
+        }
+    }
+}
+
+impl From<ResolvedStyle> for Style {
+    fn from(body: ResolvedStyle) -> Self {
+        Self { base: None, body }
+    }
+}
+
+// ---
+
+pub struct StyleResolver<'a> {
+    inventory: &'a StylePack<Role, Style>,
+    cache: HashMap<Role, ResolvedStyle>,
+    depth: usize,
+}
+
+impl<'a> StyleResolver<'a> {
+    fn new(inventory: &'a StylePack<Role, Style>) -> Self {
+        Self {
+            inventory,
+            cache: HashMap::new(),
+            depth: 0,
+        }
+    }
+
+    fn resolve(&mut self, role: &Role) -> Option<ResolvedStyle> {
+        if let Some(resolved) = self.cache.get(role) {
+            return Some(resolved.clone());
+        }
+
+        if self.depth >= RECURSION_LIMIT {
+            return self.inventory.0.get(role).map(|s| s.body.clone());
+        }
+
+        let style = self.inventory.0.get(role)?;
+
+        self.depth += 1;
+        let resolved = self.resolve_style(style);
+        self.depth -= 1;
+
+        self.cache.insert(*role, resolved.clone());
+
+        Some(resolved)
+    }
+
+    fn resolve_style(&mut self, style: &Style) -> ResolvedStyle {
+        if let Some(base) = style.base {
+            if let Some(base) = self.resolve(&base) {
+                return base.merged(&style.body);
+            }
+        }
+
+        style.body.clone()
+    }
+}
+
+// ---
+
+#[derive(Clone, Debug, Default, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+#[serde(default)]
+pub struct ResolvedStyle {
     pub modes: Vec<Mode>,
     pub foreground: Option<Color>,
     pub background: Option<Color>,
 }
 
-impl Style {
+impl ResolvedStyle {
+    pub const fn new() -> Self {
+        Self {
+            modes: Vec::new(),
+            foreground: None,
+            background: None,
+        }
+    }
+
+    pub fn modes(self, modes: Vec<Mode>) -> Self {
+        Self { modes, ..self }
+    }
+
+    pub fn foreground(self, foreground: Option<Color>) -> Self {
+        Self { foreground, ..self }
+    }
+
+    pub fn background(self, background: Option<Color>) -> Self {
+        Self { background, ..self }
+    }
+
     pub fn merged(mut self, other: &Self) -> Self {
         if !other.modes.is_empty() {
             self.modes = other.modes.clone()
@@ -476,51 +639,6 @@ impl Style {
             self.background = Some(color);
         }
         self
-    }
-}
-
-// ---
-
-#[derive(Clone, Debug, Default, Deserialize)]
-#[serde(rename_all = "kebab-case")]
-pub struct ElementStyle {
-    #[serde(rename = "style")]
-    pub style: Option<Role>,
-    #[serde(flatten)]
-    pub patch: Style,
-}
-
-impl ElementStyle {
-    pub fn merged(mut self, other: &Self) -> Self {
-        if let Some(role) = other.style {
-            self.style = Some(role);
-        }
-        self.patch = self.patch.merged(&other.patch);
-        self
-    }
-
-    pub fn resolved(self, inventory: &StyleInventory) -> Style {
-        let base = if let Some(role) = self.style {
-            inventory.0.get(&role).cloned().unwrap_or_default()
-        } else {
-            Style::default()
-        };
-        base.merged(&self.patch)
-    }
-}
-
-impl From<Role> for ElementStyle {
-    fn from(role: Role) -> Self {
-        Self {
-            style: Some(role),
-            patch: Style::default(),
-        }
-    }
-}
-
-impl From<Style> for ElementStyle {
-    fn from(patch: Style) -> Self {
-        Self { style: None, patch }
     }
 }
 
@@ -648,11 +766,12 @@ impl Default for SyncIndicatorPack {
                 inner: IndicatorStyle {
                     prefix: String::default(),
                     suffix: String::default(),
-                    style: Style {
+                    style: ResolvedStyle {
                         modes: vec![Mode::Bold],
                         background: None,
                         foreground: Some(Color::Plain(PlainColor::Yellow)),
-                    },
+                    }
+                    .into(),
                 },
                 text: "!".into(),
             },
@@ -712,6 +831,8 @@ fn write_hex<T: fmt::Write>(to: &mut T, v: u8) -> fmt::Result {
 const HEXDIGIT: [u8; 16] = [
     b'0', b'1', b'2', b'3', b'4', b'5', b'6', b'7', b'8', b'9', b'a', b'b', b'c', b'd', b'e', b'f',
 ];
+
+const RECURSION_LIMIT: usize = 64;
 
 // ---
 
