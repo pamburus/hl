@@ -9,7 +9,7 @@ styles:
   secondary:
     foreground: 30
   muted:
-    foreground: 30
+    style: secondary
   accent:
     foreground: 111
   accent-alt:
@@ -20,7 +20,7 @@ styles:
   value:
     foreground: 116
   status:
-    foreground: 30
+    style: secondary
   info:
     foreground: 146
   warning:
