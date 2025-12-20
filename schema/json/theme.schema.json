@@ -63,11 +63,11 @@
       "enum": [
         "primary",
         "secondary",
+        "emphasized",
         "muted",
         "accent",
-        "accent-alt",
+        "accent-secondary",
         "syntax",
-        "value",
         "status",
         "info",
         "warning",
@@ -80,12 +80,7 @@
         "$ref": "#/definitions/role"
       },
       "additionalProperties": {
-        "allOf": [
-          {
-            "$ref": "#/definitions/style"
-          }
-        ],
-        "unevaluatedProperties": false
+        "$ref": "#/definitions/style-with-base"
       },
       "title": "Semantic Styles"
     },
@@ -189,6 +184,20 @@
         }
       },
       "title": "Style"
+    },
+    "style-with-base": {
+      "allOf": [
+        {
+          "$ref": "#/definitions/style"
+        }
+      ],
+      "properties": {
+        "style": {
+          "$ref": "#/definitions/role"
+        }
+      },
+      "unevaluatedProperties": false,
+      "title": "Style with Base Reference"
     },
     "element-style": {
       "allOf": [

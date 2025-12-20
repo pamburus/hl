@@ -5,20 +5,20 @@ tags: [dark, 256color]
 
 styles:
   primary:
-    foreground: 195
+    foreground: 116
   secondary:
     foreground: 30
+  emphasized:
+    foreground: 195
   muted:
     style: secondary
   accent:
     foreground: 111
-  accent-alt:
+  accent-secondary:
     foreground: 37
   syntax:
     foreground: 255
     modes: [bold]
-  value:
-    foreground: 116
   status:
     style: secondary
   info:
@@ -34,7 +34,7 @@ elements:
   time:
     style: secondary
   logger:
-    style: accent-alt
+    style: accent-secondary
   caller:
     style: secondary
     modes: [italic]
@@ -42,7 +42,7 @@ elements:
     style: muted
     modes: [faint]
   message:
-    style: primary
+    style: emphasized
   message-delimiter:
     style: muted
   field:
@@ -56,18 +56,18 @@ elements:
   array:
     style: syntax
   string:
-    style: value
+    style: primary
   number:
-    style: value
+    style: primary
     foreground: 42
   boolean:
-    style: value
+    style: primary
     foreground: 41
   boolean-false:
-    style: value
+    style: primary
     foreground: 210
   "null":
-    style: value
+    style: primary
     foreground: 210
 
 levels:

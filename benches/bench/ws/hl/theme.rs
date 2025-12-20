@@ -89,11 +89,11 @@ fn theme() -> Theme {
     Theme::from(&themecfg::Theme {
         tags: Default::default(),
         styles: hashmap! {
-            Role::Primary => Style::new().foreground(Some(Color::Palette(255))),
+            Role::Primary => Style::new().foreground(Some(Color::Palette(36))),
             Role::Secondary => Style::new().foreground(Some(Color::Palette(8))),
+            Role::Emphasized => Style::new().foreground(Some(Color::Palette(255))),
             Role::Syntax => Style::new().foreground(Some(Color::Palette(246))),
             Role::Accent => Style::new().modes(vec![Mode::Underline]).foreground(Some(Color::Palette(8))),
-            Role::Value => Style::new().foreground(Some(Color::Palette(36))),
         }
         .into(),
         elements: hashmap! {
@@ -101,7 +101,7 @@ fn theme() -> Theme {
             Element::Level => Style::new().foreground(Some(Color::Palette(25))),
             Element::Logger => Role::Secondary.into(),
             Element::Caller => Role::Secondary.into(),
-            Element::Message => Role::Primary.into(),
+            Element::Message => Role::Emphasized.into(),
             Element::Field => Role::Secondary.into(),
             Element::Object => Role::Syntax.into(),
             Element::Array => Role::Syntax.into(),
@@ -110,7 +110,7 @@ fn theme() -> Theme {
             Element::Null => Style::new().foreground(Some(Color::Palette(136))),
             Element::Boolean => Style::new().foreground(Some(Color::Palette(178))),
             Element::Number => Style::new().foreground(Some(Color::Palette(41))),
-            Element::String => Role::Value.into(),
+            Element::String => Role::Primary.into(),
         }
         .into(),
         levels: HashMap::new(),

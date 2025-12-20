@@ -77,11 +77,11 @@ pub type Result<T, E = Error> = std::result::Result<T, E>;
 pub enum Role {
     Primary,
     Secondary,
+    Emphasized,
     Muted,
     Accent,
-    AccentAlt,
+    AccentSecondary,
     Syntax,
-    Value,
     Status,
     Info,
     Warning,
