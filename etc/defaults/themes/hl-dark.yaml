@@ -1,5 +1,5 @@
-# yaml-language-server: $schema=https://raw.githubusercontent.com/pamburus/hl/880d3e55f069a68ffaa0966f2e46620b047e5571/schema/json/theme.schema.json
-$schema: https://raw.githubusercontent.com/pamburus/hl/880d3e55f069a68ffaa0966f2e46620b047e5571/schema/json/theme.schema.json
+# yaml-language-server: $schema=https://raw.githubusercontent.com/pamburus/hl/62608d4099f92d709a510e84c0d2b6a073f22607/schema/json/theme.schema.json
+$schema: https://raw.githubusercontent.com/pamburus/hl/62608d4099f92d709a510e84c0d2b6a073f22607/schema/json/theme.schema.json
 
 tags: [dark, 256color]
 

@@ -75,6 +75,7 @@ pub type Result<T, E = Error> = std::result::Result<T, E>;
 #[derive(Clone, Copy, Debug, Hash, Eq, PartialEq, Ord, PartialOrd, Enum, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum Role {
+    Default,
     Primary,
     Secondary,
     Emphasized,
@@ -364,11 +365,7 @@ where
 impl StylePack<Role, Style> {
     pub fn resolve(&self) -> StylePack<Role, ResolvedStyle> {
         let mut resolver = StyleResolver::new(self);
-        let items = self
-            .0
-            .keys()
-            .filter_map(|k| resolver.resolve(k).map(|v| (*k, v)))
-            .collect();
+        let items = self.0.keys().map(|k| (*k, resolver.resolve(k))).collect();
         StylePack(items)
     }
 }
@@ -531,6 +528,13 @@ impl Style {
     }
 }
 
+impl Default for &Style {
+    fn default() -> Self {
+        static DEFAULT: Style = Style::new();
+        &DEFAULT
+    }
+}
+
 // ---
 
 impl From<Role> for Style {
@@ -565,31 +569,38 @@ impl<'a> StyleResolver<'a> {
         }
     }
 
-    fn resolve(&mut self, role: &Role) -> Option<ResolvedStyle> {
+    fn resolve(&mut self, role: &Role) -> ResolvedStyle {
         if let Some(resolved) = self.cache.get(role) {
-            return Some(resolved.clone());
+            return resolved.clone();
         }
+
+        let style = self.inventory.0.get(role).unwrap_or_default();
 
         if self.depth >= RECURSION_LIMIT {
-            return self.inventory.0.get(role).map(|s| s.body.clone());
+            log::warn!("style recursion limit exceeded for style {:?}", &role);
+            return style.body.clone();
         }
 
-        let style = self.inventory.0.get(role)?;
-
         self.depth += 1;
-        let resolved = self.resolve_style(style);
+        let resolved = self.resolve_style(style, role);
         self.depth -= 1;
 
         self.cache.insert(*role, resolved.clone());
 
-        Some(resolved)
+        resolved
     }
 
-    fn resolve_style(&mut self, style: &Style) -> ResolvedStyle {
-        if let Some(base) = style.base {
-            if let Some(base) = self.resolve(&base) {
-                return base.merged(&style.body);
+    fn resolve_style(&mut self, style: &Style, role: &Role) -> ResolvedStyle {
+        let base = style.base.or_else(|| {
+            if *role != Role::Default {
+                Some(Role::Default)
+            } else {
+                None
             }
+        });
+
+        if let Some(base) = base {
+            return self.resolve(&base).merged(&style.body);
         }
 
         style.body.clone()

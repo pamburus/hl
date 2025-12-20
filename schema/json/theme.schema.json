@@ -61,6 +61,7 @@
     "role": {
       "type": "string",
       "enum": [
+        "default",
         "primary",
         "secondary",
         "emphasized",
