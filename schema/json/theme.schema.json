@@ -89,7 +89,7 @@
         "$ref": "#/$defs/role"
       },
       "additionalProperties": {
-        "$ref": "#/$defs/style-with-base"
+        "$ref": "#/$defs/style"
       },
       "title": "Semantic Styles"
     },
@@ -98,79 +98,79 @@
       "additionalProperties": false,
       "properties": {
         "input": {
-          "$ref": "#/$defs/element-style"
+          "$ref": "#/$defs/style"
         },
         "input-number": {
-          "$ref": "#/$defs/element-style"
+          "$ref": "#/$defs/style"
         },
         "input-number-inner": {
-          "$ref": "#/$defs/element-style"
+          "$ref": "#/$defs/style"
         },
         "input-name": {
-          "$ref": "#/$defs/element-style"
+          "$ref": "#/$defs/style"
         },
         "input-name-inner": {
-          "$ref": "#/$defs/element-style"
+          "$ref": "#/$defs/style"
         },
         "time": {
-          "$ref": "#/$defs/element-style"
+          "$ref": "#/$defs/style"
         },
         "level": {
-          "$ref": "#/$defs/element-style"
+          "$ref": "#/$defs/style"
         },
         "level-inner": {
-          "$ref": "#/$defs/element-style"
+          "$ref": "#/$defs/style"
         },
         "logger": {
-          "$ref": "#/$defs/element-style"
+          "$ref": "#/$defs/style"
         },
         "logger-inner": {
-          "$ref": "#/$defs/element-style"
+          "$ref": "#/$defs/style"
         },
         "caller": {
-          "$ref": "#/$defs/element-style"
+          "$ref": "#/$defs/style"
         },
         "caller-inner": {
-          "$ref": "#/$defs/element-style"
+          "$ref": "#/$defs/style"
         },
         "message": {
-          "$ref": "#/$defs/element-style"
+          "$ref": "#/$defs/style"
         },
         "message-delimiter": {
-          "$ref": "#/$defs/element-style"
+          "$ref": "#/$defs/style"
         },
         "field": {
-          "$ref": "#/$defs/element-style"
+          "$ref": "#/$defs/style"
         },
         "key": {
-          "$ref": "#/$defs/element-style"
+          "$ref": "#/$defs/style"
         },
         "array": {
-          "$ref": "#/$defs/element-style"
+          "$ref": "#/$defs/style"
         },
         "object": {
-          "$ref": "#/$defs/element-style"
+          "$ref": "#/$defs/style"
         },
         "string": {
-          "$ref": "#/$defs/element-style"
+          "$ref": "#/$defs/style"
         },
         "number": {
-          "$ref": "#/$defs/element-style"
+          "$ref": "#/$defs/style"
         },
         "boolean": {
-          "$ref": "#/$defs/element-style"
+          "$ref": "#/$defs/style"
         },
         "boolean-false": {
-          "$ref": "#/$defs/element-style"
+          "$ref": "#/$defs/style"
         },
         "boolean-true": {
-          "$ref": "#/$defs/element-style"
+          "$ref": "#/$defs/style"
         },
         "null": {
-          "$ref": "#/$defs/element-style"
+          "$ref": "#/$defs/style"
         },
         "ellipsis": {
-          "$ref": "#/$defs/element-style"
+          "$ref": "#/$defs/style"
         }
       },
       "required": [],
@@ -178,6 +178,7 @@
     },
     "style": {
       "type": "object",
+      "additionalProperties": false,
       "properties": {
         "modes": {
           "type": "array",
@@ -190,54 +191,14 @@
         },
         "background": {
           "$ref": "#/$defs/color"
+        },
+        "style": {
+          "$ref": "#/$defs/role"
         }
       },
       "title": "Style"
     },
-    "style-with-base": {
-      "type": "object",
-      "additionalProperties": false,
-      "properties": {
-        "modes": {
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/mode-diff"
-          }
-        },
-        "foreground": {
-          "$ref": "#/$defs/color"
-        },
-        "background": {
-          "$ref": "#/$defs/color"
-        },
-        "style": {
-          "$ref": "#/$defs/role"
-        }
-      },
-      "title": "Style with Base Reference"
-    },
-    "element-style": {
-      "type": "object",
-      "additionalProperties": false,
-      "properties": {
-        "modes": {
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/mode-diff"
-          }
-        },
-        "foreground": {
-          "$ref": "#/$defs/color"
-        },
-        "background": {
-          "$ref": "#/$defs/color"
-        },
-        "style": {
-          "$ref": "#/$defs/role"
-        }
-      },
-      "title": "Element Style"
-    },
+
     "color": {
       "oneOf": [
         {
