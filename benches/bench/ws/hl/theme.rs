@@ -93,7 +93,7 @@ fn theme() -> Theme {
             Role::Secondary => Style::new().foreground(Some(Color::Palette(8))),
             Role::Emphasized => Style::new().foreground(Some(Color::Palette(255))),
             Role::Syntax => Style::new().foreground(Some(Color::Palette(246))),
-            Role::Accent => Style::new().modes(Some(vec![Mode::Underline])).foreground(Some(Color::Palette(8))),
+            Role::Accent => Style::new().modes(Mode::Underline.into()).foreground(Some(Color::Palette(8))),
         }
         .into(),
         elements: hashmap! {

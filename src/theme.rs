@@ -177,7 +177,7 @@ impl<T: Into<Sequence>> From<T> for Style {
 impl From<&themecfg::ResolvedStyle> for Style {
     fn from(style: &themecfg::ResolvedStyle) -> Self {
         let mut codes = Vec::<StyleCode>::new();
-        for mode in &style.modes {
+        for mode in style.modes {
             codes.push(
                 match mode {
                     themecfg::Mode::Bold => Mode::Bold,
