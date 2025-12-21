@@ -131,7 +131,8 @@ impl Theme {
 
     pub fn merge(&mut self, other: Self) {
         self.styles.merge(other.styles);
-        self.elements.merge(other.elements);
+        // Replace top-level elements (no merge for backward compatibility)
+        self.elements.0.extend(other.elements.0);
 
         for (level, pack) in other.levels {
             self.levels
