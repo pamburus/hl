@@ -1,0 +1,28 @@
+#:schema https://raw.githubusercontent.com/pamburus/hl/4ebdfc43ff1f665099b2a7057a0b78d8948c691c/schema/json/theme.schema.json
+
+tags = ["dark", "light", "16color"]
+
+[elements.null]
+style = "primary"
+foreground = "bright-red"
+
+[levels.trace.level-inner]
+modes = ["faint"]
+
+[levels.debug.level-inner]
+foreground = "default"
+
+[levels.info.level-inner]
+foreground = "green"
+
+[levels.warning.level-inner]
+foreground = "bright-yellow"
+
+[levels.warning.message]
+foreground = "yellow"
+
+[levels.error.level-inner]
+foreground = "bright-red"
+
+[levels.error.message]
+foreground = "bright-red"
