@@ -131,6 +131,29 @@ impl Theme {
 
     pub fn merge(&mut self, other: Self) {
         self.styles.merge(other.styles);
+
+        // Apply blocking rule: if child theme defines a parent element,
+        // remove the corresponding -inner element from parent theme
+        let parent_inner_pairs = [
+            (Element::Level, Element::LevelInner),
+            (Element::Logger, Element::LoggerInner),
+            (Element::Caller, Element::CallerInner),
+            (Element::InputNumber, Element::InputNumberInner),
+            (Element::InputName, Element::InputNameInner),
+        ];
+
+        // Block base -inner elements if parent is defined in child theme
+        for (parent, inner) in parent_inner_pairs {
+            if other.elements.0.contains_key(&parent) {
+                self.elements.0.remove(&inner);
+            }
+        }
+
+        // Block entire level sections if child theme defines any element for that level
+        for level in other.levels.keys() {
+            self.levels.remove(level);
+        }
+
         // Replace top-level elements (no merge for backward compatibility)
         self.elements.0.extend(other.elements.0);
 
@@ -414,6 +437,15 @@ impl<S> StylePack<Element, S> {
         self.merge(patch);
         self
     }
+
+    pub fn replace(&mut self, patch: Self) {
+        self.0.extend(patch.0);
+    }
+
+    pub fn replaced(mut self, patch: Self) -> Self {
+        self.replace(patch);
+        self
+    }
 }
 
 // ---
@@ -570,6 +602,21 @@ impl Style {
             self.base = Some(base);
         }
         self.modes += other.modes.clone();
+        if let Some(color) = other.foreground {
+            self.foreground = Some(color);
+        }
+        if let Some(color) = other.background {
+            self.background = Some(color);
+        }
+        self
+    }
+
+    pub fn merged_for_inheritance(mut self, other: &Self) -> Self {
+        if let Some(base) = other.base {
+            self.base = Some(base);
+        }
+        // For inheritance, always replace modes (even if empty)
+        self.modes = other.modes.clone();
         if let Some(color) = other.foreground {
             self.foreground = Some(color);
         }
