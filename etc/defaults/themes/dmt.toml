@@ -1,0 +1,87 @@
+#:schema https://raw.githubusercontent.com/pamburus/hl/677a02dbe9b11112f2dec967e61392b1c78ba03a/schema/json/theme.schema.json
+
+tags = [
+  "dark",
+  "256color",
+]
+
+[elements.input]
+foreground = "bright-black"
+
+[elements.time]
+foreground = 8
+
+[elements.logger]
+foreground = 8
+
+[elements.caller]
+foreground = 8
+modes = [
+  "italic",
+]
+
+[elements.level]
+foreground = 139
+
+[elements.message]
+foreground = "default"
+
+[elements.message-delimiter]
+foreground = 8
+
+[elements.field]
+foreground = 60
+
+[elements.key]
+foreground = 117
+modes = [
+  "underline",
+]
+
+[elements.ellipsis]
+foreground = 8
+
+[elements.object]
+foreground = 174
+
+[elements.array]
+foreground = 174
+
+[elements.string]
+foreground = 36
+
+[elements.number]
+foreground = 41
+
+[elements.boolean]
+foreground = 192
+
+[elements.null]
+foreground = 136
+
+[levels.trace.level-inner]
+foreground = "bright-black"
+
+[levels.debug.level-inner]
+foreground = 31
+
+[levels.info.level-inner]
+foreground = 68
+
+[levels.warning.time]
+foreground = 214
+
+[levels.warning.level-inner]
+foreground = 214
+
+[levels.warning.message]
+foreground = "yellow"
+
+[levels.error.time]
+foreground = 202
+
+[levels.error.level-inner]
+foreground = 202
+
+[levels.error.message]
+foreground = "bright-red"

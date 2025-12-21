@@ -1,0 +1,64 @@
+#:schema https://raw.githubusercontent.com/pamburus/hl/677a02dbe9b11112f2dec967e61392b1c78ba03a/schema/json/theme.schema.json
+
+tags = [
+  "dark",
+  "256color",
+]
+
+[styles.primary]
+foreground = 116
+
+[styles.secondary]
+foreground = 30
+
+[styles.emphasized]
+foreground = 195
+
+[styles.accent]
+foreground = 111
+
+[styles.accent-secondary]
+foreground = 37
+
+[styles.syntax]
+foreground = 255
+modes = [
+  "bold",
+]
+
+[styles.info]
+foreground = 146
+
+[styles.warning]
+foreground = 215
+
+[styles.error]
+foreground = 210
+
+[elements.caller]
+style = "secondary"
+modes = [
+  "italic",
+]
+
+[elements.level]
+style = "muted"
+modes = [
+  "faint",
+]
+
+[elements.number]
+foreground = 42
+
+[elements.boolean]
+foreground = 41
+
+[elements.boolean-false]
+foreground = 210
+
+[elements.null]
+style = "primary"
+foreground = 210
+
+[levels.debug.level-inner]
+foreground = 170

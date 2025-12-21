@@ -1,0 +1,94 @@
+#:schema https://raw.githubusercontent.com/pamburus/hl/677a02dbe9b11112f2dec967e61392b1c78ba03a/schema/json/theme.schema.json
+
+tags = [
+  "light",
+  "truecolor",
+]
+
+[elements.input]
+foreground = "#a7aaad"
+
+[elements.time]
+foreground = "#a7aaad"
+
+[elements.logger]
+foreground = "#8a9199"
+
+[elements.caller]
+foreground = "#a7aaad"
+modes = [
+  "italic",
+]
+
+[elements.level]
+foreground = "#a8caf1"
+
+[elements.message]
+foreground = "#5c6166"
+
+[elements.message-delimiter]
+foreground = "#a7aaad"
+
+[elements.field]
+foreground = "#478acc"
+
+[elements.key]
+foreground = "#478acc"
+
+[elements.ellipsis]
+foreground = "#a7aaad"
+
+[elements.object]
+modes = [
+  "bold",
+]
+
+[elements.array]
+modes = [
+  "bold",
+]
+
+[elements.string]
+foreground = "#5c6166"
+
+[elements.number]
+foreground = "#6cbf43"
+
+[elements.boolean]
+foreground = "#86b300"
+
+[elements.null]
+foreground = "#ed9366"
+
+[levels.trace.level-inner]
+foreground = "#a7aaad"
+
+[levels.debug.level-inner]
+foreground = "#a37acc"
+
+[levels.info.level-inner]
+foreground = "#55b4d4"
+
+[levels.warning.level-inner]
+foreground = "#ffaa33"
+
+[levels.warning.message]
+foreground = "#ffaa33"
+
+[levels.error.level-inner]
+foreground = "#e65050"
+
+[levels.error.message]
+foreground = "#ff7383"
+
+[indicators.sync.synced]
+text = " "
+
+[indicators.sync.failed]
+text = "!"
+
+[indicators.sync.failed.inner.style]
+foreground = "#ffaa33"
+modes = [
+  "bold",
+]

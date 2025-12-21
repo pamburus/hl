@@ -1,0 +1,119 @@
+#:schema https://raw.githubusercontent.com/pamburus/hl/677a02dbe9b11112f2dec967e61392b1c78ba03a/schema/json/theme.schema.json
+
+tags = [
+  "dark",
+  "light",
+  "16color",
+]
+
+[elements.input]
+modes = [
+  "faint",
+]
+
+[elements.time]
+modes = [
+  "faint",
+]
+
+[elements.logger]
+modes = [
+  "faint",
+]
+
+[elements.caller]
+modes = [
+  "faint",
+  "italic",
+]
+
+[elements.level]
+foreground = "default"
+modes = [
+  "faint",
+]
+
+[elements.message]
+foreground = "default"
+modes = [
+  "bold",
+]
+
+[elements.message-delimiter]
+modes = [
+  "faint",
+]
+
+[elements.field]
+modes = [
+  "faint",
+]
+
+[elements.key]
+foreground = "green"
+
+[elements.ellipsis]
+modes = [
+  "faint",
+]
+
+[elements.object]
+modes = [
+  "bold",
+]
+
+[elements.array]
+modes = [
+  "bold",
+]
+
+[elements.string]
+foreground = "default"
+
+[elements.number]
+foreground = "bright-blue"
+
+[elements.boolean]
+foreground = "yellow"
+
+[elements.null]
+foreground = "bright-red"
+
+[levels.trace.level-inner]
+foreground = "default"
+modes = [
+  "faint",
+]
+
+[levels.debug.level-inner]
+foreground = "bright-magenta"
+
+[levels.info.level-inner]
+foreground = "cyan"
+
+[levels.warning.level]
+foreground = "yellow"
+modes = [
+  "reverse",
+]
+
+[levels.error.time]
+foreground = "bright-red"
+
+[levels.error.level]
+foreground = "bright-red"
+modes = [
+  "reverse",
+]
+
+[indicators.sync.synced]
+text = " "
+
+[indicators.sync.failed]
+text = "!"
+
+[indicators.sync.failed.inner.style]
+foreground = "yellow"
+modes = [
+  "bold",
+]

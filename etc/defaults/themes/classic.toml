@@ -1,0 +1,75 @@
+#:schema https://raw.githubusercontent.com/pamburus/hl/677a02dbe9b11112f2dec967e61392b1c78ba03a/schema/json/theme.schema.json
+
+"$schema" = "https://raw.githubusercontent.com/pamburus/hl/master/schema/json/theme.schema.json"
+tags = [
+  "dark",
+]
+
+[elements.input]
+foreground = "bright-black"
+
+[elements.time]
+foreground = "bright-black"
+
+[elements.logger]
+foreground = "bright-black"
+
+[elements.caller]
+foreground = "bright-black"
+
+[elements.level]
+foreground = "default"
+
+[elements.message]
+foreground = "bright-white"
+
+[elements.message-delimiter]
+foreground = "bright-black"
+
+[elements.field]
+foreground = "bright-black"
+
+[elements.key]
+foreground = "green"
+
+[elements.ellipsis]
+foreground = "bright-black"
+
+[elements.object]
+foreground = "default"
+
+[elements.array]
+foreground = "default"
+
+[elements.string]
+foreground = "default"
+
+[elements.number]
+foreground = "cyan"
+
+[elements.boolean]
+foreground = "yellow"
+
+[elements.null]
+foreground = "yellow"
+
+[levels.trace.level-inner]
+foreground = "bright-black"
+
+[levels.debug.level-inner]
+foreground = "magenta"
+
+[levels.info.level-inner]
+foreground = "cyan"
+
+[levels.warning.level]
+foreground = "bright-yellow"
+modes = [
+  "reverse",
+]
+
+[levels.error.level]
+foreground = "bright-red"
+modes = [
+  "reverse",
+]
