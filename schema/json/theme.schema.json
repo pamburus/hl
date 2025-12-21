@@ -58,6 +58,17 @@
         "crossed-out"
       ]
     },
+    "mode-diff": {
+      "oneOf": [
+        {
+          "$ref": "#/definitions/mode"
+        },
+        {
+          "type": "string",
+          "pattern": "^[+-](bold|faint|italic|underline|slow-blink|rapid-blink|reverse|conceal|crossed-out)$"
+        }
+      ]
+    },
     "role": {
       "type": "string",
       "enum": [
@@ -174,7 +185,7 @@
         "modes": {
           "type": "array",
           "items": {
-            "$ref": "#/definitions/mode"
+            "$ref": "#/definitions/mode-diff"
           }
         },
         "foreground": {
