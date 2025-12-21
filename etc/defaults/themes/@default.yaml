@@ -18,19 +18,14 @@ styles:
   accent:
     style: secondary
   accent-secondary:
-    style: accent
+    style: secondary
   syntax:
     style: emphasized
-  status:
-    style: primary
   info:
-    style: status
     foreground: cyan
   warning:
-    style: status
     foreground: yellow
   error:
-    style: status
     foreground: bright-red
 
 elements:
@@ -49,11 +44,12 @@ elements:
   level:
     style: muted
   level-inner:
-    style: status
+    style: primary
   logger:
     style: accent-secondary
   caller:
     style: secondary
+    modes: [italic]
   message:
     style: emphasized
   message-delimiter:
@@ -80,12 +76,10 @@ elements:
 levels:
   trace:
     level-inner:
-      style: status
+      style: secondary
   debug:
     level-inner:
-      style: status
-      foreground: magenta
-      modes: []
+      style: secondary
   info:
     level-inner:
       style: info
@@ -108,5 +102,5 @@ indicators:
       text: "!"
       inner:
         style:
-          foreground: yellow
+          style: warning
           modes: [bold]

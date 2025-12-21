@@ -668,7 +668,7 @@ impl ResolvedStyle {
 
     pub fn merged(mut self, other: &Self) -> Self {
         if !other.modes.is_empty() {
-            self.modes = other.modes.clone()
+            self.modes.extend_from_slice(&other.modes);
         }
         if let Some(color) = other.foreground {
             self.foreground = Some(color);

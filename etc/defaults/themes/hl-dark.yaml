@@ -32,13 +32,10 @@ elements:
     style: muted
     modes: [faint]
   number:
-    style: primary
     foreground: 42
   boolean:
-    style: primary
     foreground: 41
   boolean-false:
-    style: primary
     foreground: 210
   "null":
     style: primary
