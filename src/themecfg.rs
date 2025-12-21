@@ -135,9 +135,10 @@ impl Theme {
         self.elements.0.extend(other.elements.0);
 
         for (level, pack) in other.levels {
+            // Replace level-specific elements (no merge for backward compatibility)
             self.levels
                 .entry(level)
-                .and_modify(|existing| existing.merge(pack.clone()))
+                .and_modify(|existing| existing.0.extend(pack.0.clone()))
                 .or_insert(pack);
         }
 
