@@ -1,0 +1,120 @@
+#:schema https://raw.githubusercontent.com/pamburus/hl/677a02dbe9b11112f2dec967e61392b1c78ba03a/schema/json/theme.schema.json
+
+tags = [
+  "dark",
+  "light",
+  "16color",
+]
+
+[elements.input]
+foreground = "cyan"
+modes = [
+  "faint",
+]
+
+[elements.time]
+foreground = "cyan"
+modes = [
+  "faint",
+]
+
+[elements.logger]
+foreground = "cyan"
+modes = [
+  "faint",
+]
+
+[elements.caller]
+foreground = "cyan"
+modes = [
+  "faint",
+  "italic",
+]
+
+[elements.level]
+foreground = "cyan"
+modes = [
+  "faint",
+]
+
+[elements.message]
+foreground = "default"
+
+[elements.message-delimiter]
+foreground = "cyan"
+modes = [
+  "faint",
+]
+
+[elements.field]
+foreground = "cyan"
+modes = [
+  "faint",
+]
+
+[elements.key]
+foreground = "cyan"
+
+[elements.ellipsis]
+foreground = "cyan"
+modes = [
+  "faint",
+]
+
+[elements.object]
+modes = [
+  "bold",
+]
+
+[elements.array]
+modes = [
+  "bold",
+]
+
+[elements.string]
+foreground = "default"
+
+[elements.number]
+foreground = "bright-blue"
+
+[elements.boolean]
+foreground = "yellow"
+
+[elements.boolean-false]
+foreground = "red"
+
+[elements.null]
+foreground = "red"
+
+[levels.trace.level-inner]
+foreground = "cyan"
+
+[levels.debug.level-inner]
+foreground = "magenta"
+
+[levels.info.level-inner]
+foreground = "cyan"
+
+[levels.warning.message]
+foreground = "yellow"
+
+[levels.warning.level-inner]
+foreground = "yellow"
+
+[levels.error.message]
+foreground = "bright-red"
+
+[levels.error.level-inner]
+foreground = "bright-red"
+
+[indicators.sync.synced]
+text = " "
+
+[indicators.sync.failed]
+text = "!"
+
+[indicators.sync.failed.inner.style]
+foreground = "yellow"
+modes = [
+  "bold",
+]
