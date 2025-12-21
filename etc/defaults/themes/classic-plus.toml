@@ -1,0 +1,85 @@
+#:schema https://raw.githubusercontent.com/pamburus/hl/677a02dbe9b11112f2dec967e61392b1c78ba03a/schema/json/theme.schema.json
+
+tags = [
+  "dark",
+  "light",
+  "16color",
+]
+
+[elements.input]
+foreground = "bright-black"
+
+[elements.time]
+foreground = "bright-black"
+
+[elements.logger]
+foreground = "bright-black"
+
+[elements.caller]
+foreground = "bright-black"
+modes = [
+  "italic",
+]
+
+[elements.level]
+foreground = "bright-black"
+
+[elements.message]
+foreground = "default"
+
+[elements.message-delimiter]
+foreground = "bright-black"
+
+[elements.field]
+foreground = "bright-black"
+
+[elements.key]
+foreground = "green"
+modes = [
+  "underline",
+]
+
+[elements.ellipsis]
+foreground = "bright-black"
+
+[elements.object]
+foreground = "default"
+
+[elements.array]
+foreground = "default"
+
+[elements.string]
+foreground = "default"
+
+[elements.number]
+foreground = "blue"
+
+[elements.boolean]
+foreground = "red"
+
+[elements.null]
+foreground = "red"
+
+[levels.trace.level-inner]
+foreground = "bright-black"
+
+[levels.debug.level-inner]
+foreground = "magenta"
+
+[levels.info.level-inner]
+foreground = "cyan"
+
+[levels.warning.time]
+foreground = "bright-yellow"
+
+[levels.warning.level-inner]
+foreground = "bright-yellow"
+
+[levels.error.time]
+foreground = "bright-red"
+
+[levels.error.level-inner]
+foreground = "bright-red"
+
+[levels.error.message]
+foreground = "bright-red"

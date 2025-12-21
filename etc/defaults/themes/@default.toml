@@ -1,0 +1,137 @@
+#:schema https://raw.githubusercontent.com/pamburus/hl/677a02dbe9b11112f2dec967e61392b1c78ba03a/schema/json/theme.schema.json
+
+[styles.default]
+
+[styles.primary]
+
+[styles.secondary]
+style = "primary"
+modes = [
+  "faint",
+]
+
+[styles.emphasized]
+style = "primary"
+modes = [
+  "bold",
+]
+
+[styles.muted]
+style = "secondary"
+
+[styles.accent]
+style = "secondary"
+
+[styles.accent-secondary]
+style = "secondary"
+
+[styles.syntax]
+style = "emphasized"
+
+[styles.info]
+foreground = "cyan"
+
+[styles.warning]
+foreground = "yellow"
+
+[styles.error]
+foreground = "bright-red"
+
+[elements.input]
+style = "secondary"
+
+[elements.input-number]
+style = "muted"
+
+[elements.input-number-inner]
+style = "secondary"
+
+[elements.input-name]
+style = "muted"
+
+[elements.input-name-inner]
+style = "secondary"
+
+[elements.time]
+style = "secondary"
+
+[elements.level]
+style = "muted"
+
+[elements.level-inner]
+style = "primary"
+
+[elements.logger]
+style = "accent-secondary"
+
+[elements.caller]
+style = "secondary"
+modes = [
+  "italic",
+]
+
+[elements.message]
+style = "emphasized"
+
+[elements.message-delimiter]
+style = "muted"
+
+[elements.field]
+style = "muted"
+
+[elements.key]
+style = "accent"
+
+[elements.ellipsis]
+style = "muted"
+
+[elements.object]
+style = "syntax"
+
+[elements.array]
+style = "syntax"
+
+[elements.string]
+style = "primary"
+
+[elements.number]
+style = "primary"
+
+[elements.boolean]
+style = "primary"
+
+[elements.null]
+style = "primary"
+
+[levels.trace.level-inner]
+style = "secondary"
+
+[levels.debug.level-inner]
+style = "secondary"
+
+[levels.info.level-inner]
+style = "info"
+
+[levels.warning.level-inner]
+style = "warning"
+
+[levels.warning.message]
+style = "warning"
+
+[levels.error.level-inner]
+style = "error"
+
+[levels.error.message]
+style = "error"
+
+[indicators.sync.synced]
+text = " "
+
+[indicators.sync.failed]
+text = "!"
+
+[indicators.sync.failed.inner.style]
+style = "warning"
+modes = [
+  "bold",
+]
