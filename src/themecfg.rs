@@ -378,7 +378,9 @@ where
     pub fn items(&self) -> &HashMap<K, S> {
         &self.0
     }
+}
 
+impl<S> StylePack<Role, S> {
     pub fn merge(&mut self, patch: Self) {
         self.0.extend(patch.0);
     }
@@ -388,6 +390,36 @@ where
         self
     }
 }
+
+impl<S> StylePack<Element, S> {
+    pub fn merge(&mut self, patch: Self)
+    where
+        S: Clone + for<'a> MergedWith<&'a S>,
+    {
+        for (key, patch) in patch.0 {
+            self.0
+                .entry(key)
+                .and_modify(|v| *v = v.clone().merged_with(&patch))
+                .or_insert(patch);
+        }
+    }
+
+    pub fn merged(mut self, patch: Self) -> Self
+    where
+        S: Clone + for<'a> MergedWith<&'a S>,
+    {
+        self.merge(patch);
+        self
+    }
+}
+
+// ---
+
+pub trait MergedWith<T> {
+    fn merged_with(self, other: T) -> Self;
+}
+
+// ---
 
 impl StylePack<Role, Style> {
     pub fn resolve(&self) -> StylePack<Role, ResolvedStyle> {
@@ -499,15 +531,18 @@ pub enum Element {
 pub struct Style {
     #[serde(rename = "style")]
     pub base: Option<Role>,
-    #[serde(flatten)]
-    pub body: ResolvedStyle,
+    pub modes: Option<Vec<Mode>>,
+    pub foreground: Option<Color>,
+    pub background: Option<Color>,
 }
 
 impl Style {
     pub const fn new() -> Self {
         Self {
             base: None,
-            body: ResolvedStyle::new(),
+            modes: None,
+            foreground: None,
+            background: None,
         }
     }
 
@@ -515,43 +550,50 @@ impl Style {
         Self { base, ..self }
     }
 
-    pub fn modes(self, modes: Vec<Mode>) -> Self {
-        Self {
-            body: self.body.modes(modes),
-            ..self
-        }
+    pub fn modes(self, modes: Option<Vec<Mode>>) -> Self {
+        Self { modes, ..self }
     }
 
-    pub fn background(self, color: Option<Color>) -> Self {
-        Self {
-            body: self.body.background(color),
-            ..self
-        }
+    pub fn background(self, background: Option<Color>) -> Self {
+        Self { background, ..self }
     }
 
-    pub fn foreground(self, color: Option<Color>) -> Self {
-        Self {
-            body: self.body.foreground(color),
-            ..self
-        }
+    pub fn foreground(self, foreground: Option<Color>) -> Self {
+        Self { foreground, ..self }
     }
 
     pub fn merged(mut self, other: &Self) -> Self {
         if let Some(base) = other.base {
             self.base = Some(base);
         }
-        self.body = self.body.merged(&other.body);
+        if let Some(modes) = &other.modes {
+            self.modes = Some(modes.clone());
+        }
+        if let Some(color) = &other.foreground {
+            self.foreground = Some(*color);
+        }
+        if let Some(color) = &other.background {
+            self.background = Some(*color);
+        }
         self
     }
 
     pub fn resolve(&self, inventory: &StylePack<Role, ResolvedStyle>) -> ResolvedStyle {
         if let Some(base) = self.base {
             if let Some(base) = inventory.0.get(&base) {
-                return base.clone().merged(&self.body);
+                return base.clone().merged_with(self);
             }
         }
 
-        self.body.clone()
+        self.as_resolved()
+    }
+
+    fn as_resolved(&self) -> ResolvedStyle {
+        ResolvedStyle {
+            modes: self.modes.clone().unwrap_or_default(),
+            foreground: self.foreground,
+            background: self.background,
+        }
     }
 }
 
@@ -562,20 +604,31 @@ impl Default for &Style {
     }
 }
 
-// ---
+impl MergedWith<&Style> for Style {
+    fn merged_with(self, other: &Style) -> Self {
+        self.merged(other)
+    }
+}
 
 impl From<Role> for Style {
     fn from(base: Role) -> Self {
         Self {
             base: Some(base),
-            body: Default::default(),
+            modes: None,
+            foreground: None,
+            background: None,
         }
     }
 }
 
 impl From<ResolvedStyle> for Style {
     fn from(body: ResolvedStyle) -> Self {
-        Self { base: None, body }
+        Self {
+            base: None,
+            modes: if body.modes.is_empty() { None } else { Some(body.modes) },
+            foreground: body.foreground,
+            background: body.background,
+        }
     }
 }
 
@@ -605,7 +658,7 @@ impl<'a> StyleResolver<'a> {
 
         if self.depth >= RECURSION_LIMIT {
             log::warn!("style recursion limit exceeded for style {:?}", &role);
-            return style.body.clone();
+            return style.as_resolved();
         }
 
         self.depth += 1;
@@ -627,10 +680,10 @@ impl<'a> StyleResolver<'a> {
         });
 
         if let Some(base) = base {
-            return self.resolve(&base).merged(&style.body);
+            return self.resolve(&base).merged_with(style);
         }
 
-        style.body.clone()
+        style.as_resolved()
     }
 }
 
@@ -665,10 +718,25 @@ impl ResolvedStyle {
     pub fn background(self, background: Option<Color>) -> Self {
         Self { background, ..self }
     }
+}
 
-    pub fn merged(mut self, other: &Self) -> Self {
-        if !other.modes.is_empty() {
-            self.modes.extend_from_slice(&other.modes);
+impl MergedWith<&ResolvedStyle> for ResolvedStyle {
+    fn merged_with(mut self, other: &ResolvedStyle) -> Self {
+        self.modes.extend_from_slice(&other.modes);
+        if let Some(color) = other.foreground {
+            self.foreground = Some(color);
+        }
+        if let Some(color) = other.background {
+            self.background = Some(color);
+        }
+        self
+    }
+}
+
+impl MergedWith<&Style> for ResolvedStyle {
+    fn merged_with(mut self, other: &Style) -> Self {
+        if let Some(modes) = &other.modes {
+            self.modes = modes.clone();
         }
         if let Some(color) = other.foreground {
             self.foreground = Some(color);

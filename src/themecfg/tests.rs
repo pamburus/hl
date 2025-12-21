@@ -55,23 +55,17 @@ fn test_style_pack() {
     let yaml = include_str!("../testing/assets/style-packs/pack1.yaml");
     let pack: StylePack<Element> = yaml::from_str(yaml).unwrap().remove(0);
     assert_eq!(pack.0.len(), 2);
+    assert_eq!(pack.0[&Element::Input].foreground, Some(Color::Plain(PlainColor::Red)));
+    assert_eq!(pack.0[&Element::Input].background, Some(Color::Plain(PlainColor::Blue)));
+    assert_eq!(pack.0[&Element::Input].modes, Some(vec![Mode::Bold, Mode::Faint]));
     assert_eq!(
-        pack.0[&Element::Input].body.foreground,
-        Some(Color::Plain(PlainColor::Red))
-    );
-    assert_eq!(
-        pack.0[&Element::Input].body.background,
-        Some(Color::Plain(PlainColor::Blue))
-    );
-    assert_eq!(pack.0[&Element::Input].body.modes, vec![Mode::Bold, Mode::Faint]);
-    assert_eq!(
-        pack.0[&Element::Message].body.foreground,
+        pack.0[&Element::Message].foreground,
         Some(Color::Plain(PlainColor::Green))
     );
-    assert_eq!(pack.0[&Element::Message].body.background, None);
+    assert_eq!(pack.0[&Element::Message].background, None);
     assert_eq!(
-        pack.0[&Element::Message].body.modes,
-        vec![Mode::Italic, Mode::Underline]
+        pack.0[&Element::Message].modes,
+        Some(vec![Mode::Italic, Mode::Underline])
     );
 
     assert!(
@@ -106,7 +100,7 @@ fn test_style_merge() {
         background: None,
     };
 
-    let result = base.clone().merged(&patch);
+    let result = base.clone().merged_with(&patch);
 
     assert_eq!(result.modes, vec![Mode::Italic]);
     assert_eq!(result.foreground, Some(Color::Plain(PlainColor::Green)));
@@ -118,7 +112,7 @@ fn test_style_merge() {
         background: Some(Color::Plain(PlainColor::Green)),
     };
 
-    let result = base.clone().merged(&patch);
+    let result = base.clone().merged_with(&patch);
 
     assert_eq!(result.modes, vec![Mode::Bold]);
     assert_eq!(result.foreground, Some(Color::Plain(PlainColor::Red)));
