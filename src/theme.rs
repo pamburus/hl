@@ -92,7 +92,7 @@ impl<S: Borrow<themecfg::Theme>> From<S> for Theme {
                     continue;
                 }
             };
-            packs[*level] = StylePack::load(&s.elements.clone().merged(pack.clone()), &inventory);
+            packs[*level] = StylePack::load(&s.elements.clone().replaced(pack.clone()), &inventory);
         }
         Self {
             default,
@@ -310,6 +310,25 @@ impl StylePack {
                     style = style.merged(patch)
                 }
                 result.add(variant, &Style::from(&style.resolve(inventory)));
+            }
+        }
+
+        // Handle inner elements inheriting from their parent elements
+        let inner_pairs = [
+            (Element::Level, Element::LevelInner),
+            (Element::Logger, Element::LoggerInner),
+            (Element::Caller, Element::CallerInner),
+            (Element::InputNumber, Element::InputNumberInner),
+            (Element::InputName, Element::InputNameInner),
+        ];
+
+        for (parent, inner) in inner_pairs {
+            if let Some(parent_style) = s.items().get(&parent) {
+                let mut style = parent_style.clone();
+                if let Some(patch) = s.items().get(&inner) {
+                    style = style.merged_for_inheritance(patch);
+                }
+                result.add(inner, &Style::from(&style.resolve(inventory)));
             }
         }
 
