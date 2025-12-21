@@ -8,8 +8,10 @@ styles:
   default: {}
   primary: {}
   secondary:
+    style: primary
     modes: [faint]
   emphasized:
+    style: primary
     modes: [bold]
   muted:
     style: secondary
@@ -20,12 +22,15 @@ styles:
   syntax:
     style: emphasized
   status:
-    style: secondary
+    style: primary
   info:
+    style: status
     foreground: cyan
   warning:
+    style: status
     foreground: yellow
   error:
+    style: status
     foreground: bright-red
 
 elements:
