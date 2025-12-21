@@ -104,7 +104,14 @@ pub struct Theme {
 
 impl Theme {
     pub fn load(app_dirs: &AppDirs, name: &str) -> Result<Self> {
-        match Self::load_from(&Self::themes_dir(app_dirs), name) {
+        const DEFAULT_THEME_NAME: &str = "@default";
+
+        let theme = Self::load_embedded::<Assets>(DEFAULT_THEME_NAME)?;
+        if name == DEFAULT_THEME_NAME {
+            return Ok(theme);
+        }
+
+        Ok(theme.merged(match Self::load_from(&Self::themes_dir(app_dirs), name) {
             Ok(v) => Ok(v),
             Err(Error::ThemeNotFound { .. }) => match Self::load_embedded::<Assets>(name) {
                 Ok(v) => Ok(v),
@@ -118,7 +125,27 @@ impl Theme {
                 Err(e) => Err(e),
             },
             Err(e) => Err(e),
+        }?))
+    }
+
+    pub fn merge(&mut self, other: Self) {
+        self.styles.merge(other.styles);
+        self.elements.merge(other.elements);
+
+        for (level, pack) in other.levels {
+            self.levels
+                .entry(level)
+                .and_modify(|existing| existing.merge(pack.clone()))
+                .or_insert(pack);
         }
+
+        self.tags = other.tags;
+        self.indicators.merge(other.indicators);
+    }
+
+    pub fn merged(mut self, other: Self) -> Self {
+        self.merge(other);
+        self
     }
 
     pub fn embedded(name: &str) -> Result<Self> {
@@ -755,6 +782,17 @@ pub struct IndicatorPack {
     pub sync: SyncIndicatorPack,
 }
 
+impl IndicatorPack {
+    pub fn merge(&mut self, other: Self) {
+        self.sync.merge(other.sync);
+    }
+
+    pub fn merged(mut self, other: Self) -> Self {
+        self.merge(other);
+        self
+    }
+}
+
 // ---
 
 #[derive(Clone, Debug, Deserialize)]
@@ -790,6 +828,18 @@ impl Default for SyncIndicatorPack {
     }
 }
 
+impl SyncIndicatorPack {
+    pub fn merge(&mut self, other: Self) {
+        self.synced.merge(other.synced);
+        self.failed.merge(other.failed);
+    }
+
+    pub fn merged(mut self, other: Self) -> Self {
+        self.merge(other);
+        self
+    }
+}
+
 // ---
 
 #[derive(Clone, Debug, Default, Deserialize)]
@@ -801,6 +851,21 @@ pub struct Indicator {
     pub text: String,
 }
 
+impl Indicator {
+    pub fn merge(&mut self, other: Self) {
+        self.outer.merge(other.outer);
+        self.inner.merge(other.inner);
+        if !other.text.is_empty() {
+            self.text = other.text;
+        }
+    }
+
+    pub fn merged(mut self, other: Self) -> Self {
+        self.merge(other);
+        self
+    }
+}
+
 // ---
 
 #[derive(Clone, Debug, Default, Deserialize)]
@@ -810,6 +875,23 @@ pub struct IndicatorStyle {
     pub prefix: String,
     pub suffix: String,
     pub style: Style,
+}
+
+impl IndicatorStyle {
+    pub fn merge(&mut self, other: Self) {
+        if !other.prefix.is_empty() {
+            self.prefix = other.prefix;
+        }
+        if !other.suffix.is_empty() {
+            self.suffix = other.suffix;
+        }
+        self.style = std::mem::take(&mut self.style).merged(&other.style);
+    }
+
+    pub fn merged(mut self, other: Self) -> Self {
+        self.merge(other);
+        self
+    }
 }
 
 // ---

@@ -1,0 +1,107 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/pamburus/hl/master/schema/json/theme.schema.json
+$schema: https://raw.githubusercontent.com/pamburus/hl/master/schema/json/theme.schema.json
+
+# Default theme - serves as base for all other themes
+# Defines semantic styles and element-to-role mappings
+
+styles:
+  default: {}
+  primary: {}
+  secondary:
+    modes: [faint]
+  emphasized:
+    modes: [bold]
+  muted:
+    style: secondary
+  accent:
+    style: secondary
+  accent-secondary:
+    style: accent
+  syntax:
+    style: emphasized
+  status:
+    style: secondary
+  info:
+    foreground: cyan
+  warning:
+    foreground: yellow
+  error:
+    foreground: bright-red
+
+elements:
+  input:
+    style: secondary
+  input-number:
+    style: muted
+  input-number-inner:
+    style: secondary
+  input-name:
+    style: muted
+  input-name-inner:
+    style: secondary
+  time:
+    style: secondary
+  level:
+    style: muted
+  level-inner:
+    style: status
+  logger:
+    style: accent-secondary
+  caller:
+    style: secondary
+  message:
+    style: emphasized
+  message-delimiter:
+    style: muted
+  field:
+    style: muted
+  key:
+    style: accent
+  ellipsis:
+    style: muted
+  object:
+    style: syntax
+  array:
+    style: syntax
+  string:
+    style: primary
+  number:
+    style: primary
+  boolean:
+    style: primary
+  "null":
+    style: primary
+
+levels:
+  trace:
+    level-inner:
+      style: status
+  debug:
+    level-inner:
+      style: status
+      foreground: magenta
+      modes: []
+  info:
+    level-inner:
+      style: info
+  warning:
+    level-inner:
+      style: warning
+    message:
+      style: warning
+  error:
+    level-inner:
+      style: error
+    message:
+      style: error
+
+indicators:
+  sync:
+    synced:
+      text: " "
+    failed:
+      text: "!"
+      inner:
+        style:
+          foreground: yellow
+          modes: [bold]
