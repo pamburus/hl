@@ -99,7 +99,7 @@ fn test_style_merge() {
 
     let result = base.clone().merged_with(&patch);
 
-    assert_eq!(result.modes, Mode::Bold | Mode::Italic);
+    assert_eq!(result.modes, ModeSetDiff::from(Mode::Bold | Mode::Italic));
     assert_eq!(result.foreground, Some(Color::Plain(PlainColor::Green)));
     assert_eq!(result.background, Some(Color::Plain(PlainColor::Blue)));
 
@@ -110,7 +110,7 @@ fn test_style_merge() {
 
     let result = base.clone().merged_with(&patch);
 
-    assert_eq!(result.modes, EnumSet::from(Mode::Bold));
+    assert_eq!(result.modes, ModeSetDiff::from(Mode::Bold));
     assert_eq!(result.foreground, Some(Color::Plain(PlainColor::Red)));
     assert_eq!(result.background, Some(Color::Plain(PlainColor::Green)));
 }

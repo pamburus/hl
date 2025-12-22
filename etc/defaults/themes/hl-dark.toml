@@ -47,6 +47,12 @@ modes = [
   "faint",
 ]
 
+[elements.level-inner]
+style = "primary"
+modes = [
+  "-faint",
+]
+
 [elements.number]
 foreground = 42
 

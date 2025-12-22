@@ -611,21 +611,6 @@ impl Style {
         self
     }
 
-    pub fn merged_for_inheritance(mut self, other: &Self) -> Self {
-        if let Some(base) = other.base {
-            self.base = Some(base);
-        }
-        // For inheritance, always replace modes (even if empty)
-        self.modes = other.modes.clone();
-        if let Some(color) = other.foreground {
-            self.foreground = Some(color);
-        }
-        if let Some(color) = other.background {
-            self.background = Some(color);
-        }
-        self
-    }
-
     pub fn resolve(&self, inventory: &StylePack<Role, ResolvedStyle>) -> ResolvedStyle {
         if let Some(base) = self.base {
             if let Some(base) = inventory.0.get(&base) {
@@ -638,7 +623,7 @@ impl Style {
 
     fn as_resolved(&self) -> ResolvedStyle {
         ResolvedStyle {
-            modes: self.modes.adds - self.modes.removes,
+            modes: self.modes,
             foreground: self.foreground,
             background: self.background,
         }
@@ -739,8 +724,7 @@ impl<'a> StyleResolver<'a> {
 #[serde(rename_all = "kebab-case")]
 #[serde(default)]
 pub struct ResolvedStyle {
-    #[serde(deserialize_with = "enumset_serde::deserialize")]
-    pub modes: ModeSet,
+    pub modes: ModeSetDiff,
     pub foreground: Option<Color>,
     pub background: Option<Color>,
 }
@@ -748,13 +732,13 @@ pub struct ResolvedStyle {
 impl ResolvedStyle {
     pub const fn new() -> Self {
         Self {
-            modes: ModeSet::new(),
+            modes: ModeSetDiff::new(),
             foreground: None,
             background: None,
         }
     }
 
-    pub fn modes(self, modes: ModeSet) -> Self {
+    pub fn modes(self, modes: ModeSetDiff) -> Self {
         Self { modes, ..self }
     }
 
@@ -769,7 +753,7 @@ impl ResolvedStyle {
 
 impl MergedWith<&ResolvedStyle> for ResolvedStyle {
     fn merged_with(mut self, other: &ResolvedStyle) -> Self {
-        self.modes = self.modes.union(other.modes);
+        self.modes += other.modes;
         if let Some(color) = other.foreground {
             self.foreground = Some(color);
         }
@@ -782,8 +766,7 @@ impl MergedWith<&ResolvedStyle> for ResolvedStyle {
 
 impl MergedWith<&Style> for ResolvedStyle {
     fn merged_with(mut self, other: &Style) -> Self {
-        self.modes |= other.modes.adds;
-        self.modes -= other.modes.removes;
+        self.modes += other.modes;
         if let Some(color) = other.foreground {
             self.foreground = Some(color);
         }
@@ -812,7 +795,7 @@ pub enum Mode {
 
 pub type ModeSet = EnumSet<Mode>;
 
-#[derive(Clone, Debug, PartialEq, Eq, Default)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub struct ModeSetDiff {
     pub adds: ModeSet,
     pub removes: ModeSet,
