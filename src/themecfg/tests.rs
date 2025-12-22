@@ -97,7 +97,7 @@ fn test_style_merge() {
         background: None,
     };
 
-    let result = base.clone().merged_with(&patch);
+    let result = base.clone().merged_with(&patch, MergeFlags::default());
 
     assert_eq!(result.modes, ModeSetDiff::from(Mode::Bold | Mode::Italic));
     assert_eq!(result.foreground, Some(Color::Plain(PlainColor::Green)));
@@ -108,7 +108,7 @@ fn test_style_merge() {
         ..Default::default()
     };
 
-    let result = base.clone().merged_with(&patch);
+    let result = base.clone().merged_with(&patch, MergeFlags::default());
 
     assert_eq!(result.modes, ModeSetDiff::from(Mode::Bold));
     assert_eq!(result.foreground, Some(Color::Plain(PlainColor::Red)));
