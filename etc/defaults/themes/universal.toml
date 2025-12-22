@@ -28,13 +28,9 @@ modes = [
 ]
 
 [elements.level]
+foreground = "default"
 modes = [
   "faint",
-]
-
-[elements.level-inner]
-modes = [
-  "-faint",
 ]
 
 [elements.message]

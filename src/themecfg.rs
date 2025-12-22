@@ -32,6 +32,8 @@ use crate::{
     xerr::{HighlightQuoted, Suggestions},
 };
 
+pub const THEME_VERSION: u32 = 1;
+
 /// Error is an error which may occur in the application.
 #[derive(Error, Debug)]
 pub enum Error {
@@ -131,6 +133,7 @@ impl Theme {
     }
 
     pub fn merge(&mut self, other: Self) {
+        let flags = other.merge_flags();
         self.styles.merge(other.styles);
 
         // Apply blocking rule: if child theme defines a parent element,
@@ -167,7 +170,7 @@ impl Theme {
         }
 
         self.tags = other.tags;
-        self.indicators.merge(other.indicators);
+        self.indicators.merge(other.indicators, flags);
     }
 
     pub fn merged(mut self, other: Self) -> Self {
@@ -200,6 +203,13 @@ impl Theme {
         }
 
         Ok(result)
+    }
+
+    pub fn merge_flags(&self) -> MergeFlags {
+        match self.version.unwrap_or_default() {
+            0 => MergeFlag::ReplaceElements | MergeFlag::ReplaceGroups | MergeFlag::ReplaceModes,
+            _ => MergeFlags::new(),
+        }
     }
 
     fn load_embedded<S: RustEmbed>(name: &str) -> Result<Self> {
@@ -419,37 +429,43 @@ impl<S> StylePack<Role, S> {
 }
 
 impl<S> StylePack<Element, S> {
-    pub fn merge(&mut self, patch: Self)
+    pub fn merge(&mut self, patch: Self, flags: MergeFlags)
     where
         S: Clone + for<'a> MergedWith<&'a S>,
     {
+        if flags.contains(MergeFlag::ReplaceGroups) {
+            for (parent, child) in Element::pairs() {
+                if patch.contains_key(child) {
+                    self.0.remove(parent);
+                }
+            }
+        }
+
+        if flags.contains(MergeFlag::ReplaceElements) {
+            self.0.extend(patch.0);
+            return;
+        }
+
         for (key, patch) in patch.0 {
             self.0
                 .entry(key)
-                .and_modify(|v| *v = v.clone().merged_with(&patch))
+                .and_modify(|v| *v = v.clone().merged_with(&patch, flags))
                 .or_insert(patch);
         }
     }
 
-    pub fn merged(mut self, patch: Self) -> Self
+    pub fn merged(mut self, patch: Self, flags: MergeFlags) -> Self
     where
         S: Clone + for<'a> MergedWith<&'a S>,
     {
-        self.merge(patch);
+        self.merge(patch, flags);
         self
     }
+}
 
-    pub fn replace(&mut self, patch: Self) {
-        for (parent, child) in Element::pairs() {
-            if patch.contains_key(child) {
-                self.0.remove(parent);
-            }
-        }
-        self.0.extend(patch.0);
-    }
-
-    pub fn replaced(mut self, patch: Self) -> Self {
-        self.replace(patch);
+impl MergedWith<&StylePack> for StylePack {
+    fn merged_with(mut self, other: &StylePack<Element, Style>, flags: MergeFlags) -> Self {
+        self.merge(other.clone(), flags);
         self
     }
 }
@@ -457,14 +473,23 @@ impl<S> StylePack<Element, S> {
 // ---
 
 pub trait MergedWith<T> {
-    fn merged_with(self, other: T) -> Self;
+    fn merged_with(self, other: T, flags: MergeFlags) -> Self;
 }
+
+#[derive(Debug, Hash, Ord, PartialOrd, EnumSetType, Deserialize)]
+pub enum MergeFlag {
+    ReplaceElements,
+    ReplaceGroups,
+    ReplaceModes,
+}
+
+pub type MergeFlags = EnumSet<MergeFlag>;
 
 // ---
 
 impl StylePack<Role, Style> {
-    pub fn resolve(&self) -> StylePack<Role, ResolvedStyle> {
-        let mut resolver = StyleResolver::new(self);
+    pub fn resolve(&self, flags: MergeFlags) -> StylePack<Role, ResolvedStyle> {
+        let mut resolver = StyleResolver::new(self, flags);
         let items = self.0.keys().map(|k| (*k, resolver.resolve(k))).collect();
         StylePack(items)
     }
@@ -630,11 +655,15 @@ impl Style {
         Self { foreground, ..self }
     }
 
-    pub fn merged(mut self, other: &Self) -> Self {
+    pub fn merged(mut self, other: &Self, flags: MergeFlags) -> Self {
         if let Some(base) = other.base {
             self.base = Some(base);
         }
-        self.modes += other.modes.clone();
+        if flags.contains(MergeFlag::ReplaceModes) {
+            self.modes = other.modes.clone();
+        } else {
+            self.modes += other.modes.clone();
+        }
         if let Some(color) = other.foreground {
             self.foreground = Some(color);
         }
@@ -644,10 +673,10 @@ impl Style {
         self
     }
 
-    pub fn resolve(&self, inventory: &StylePack<Role, ResolvedStyle>) -> ResolvedStyle {
+    pub fn resolve(&self, inventory: &StylePack<Role, ResolvedStyle>, flags: MergeFlags) -> ResolvedStyle {
         if let Some(base) = self.base {
             if let Some(base) = inventory.0.get(&base) {
-                return base.clone().merged_with(self);
+                return base.clone().merged_with(self, flags);
             }
         }
 
@@ -671,8 +700,8 @@ impl Default for &Style {
 }
 
 impl MergedWith<&Style> for Style {
-    fn merged_with(self, other: &Style) -> Self {
-        self.merged(other)
+    fn merged_with(self, other: &Style, flags: MergeFlags) -> Self {
+        self.merged(other, flags)
     }
 }
 
@@ -700,14 +729,16 @@ impl From<ResolvedStyle> for Style {
 
 pub struct StyleResolver<'a> {
     inventory: &'a StylePack<Role, Style>,
+    flags: MergeFlags,
     cache: HashMap<Role, ResolvedStyle>,
     depth: usize,
 }
 
 impl<'a> StyleResolver<'a> {
-    fn new(inventory: &'a StylePack<Role, Style>) -> Self {
+    fn new(inventory: &'a StylePack<Role, Style>, flags: MergeFlags) -> Self {
         Self {
             inventory,
+            flags,
             cache: HashMap::new(),
             depth: 0,
         }
@@ -744,7 +775,7 @@ impl<'a> StyleResolver<'a> {
         });
 
         if let Some(base) = base {
-            return self.resolve(&base).merged_with(style);
+            return self.resolve(&base).merged_with(style, self.flags);
         }
 
         style.as_resolved()
@@ -785,8 +816,12 @@ impl ResolvedStyle {
 }
 
 impl MergedWith<&ResolvedStyle> for ResolvedStyle {
-    fn merged_with(mut self, other: &ResolvedStyle) -> Self {
-        self.modes += other.modes;
+    fn merged_with(mut self, other: &ResolvedStyle, flags: MergeFlags) -> Self {
+        if flags.contains(MergeFlag::ReplaceModes) {
+            self.modes = other.modes.clone();
+        } else {
+            self.modes += other.modes.clone();
+        }
         if let Some(color) = other.foreground {
             self.foreground = Some(color);
         }
@@ -798,8 +833,12 @@ impl MergedWith<&ResolvedStyle> for ResolvedStyle {
 }
 
 impl MergedWith<&Style> for ResolvedStyle {
-    fn merged_with(mut self, other: &Style) -> Self {
-        self.modes += other.modes;
+    fn merged_with(mut self, other: &Style, flags: MergeFlags) -> Self {
+        if flags.contains(MergeFlag::ReplaceModes) {
+            self.modes = other.modes.clone();
+        } else {
+            self.modes += other.modes.clone();
+        }
         if let Some(color) = other.foreground {
             self.foreground = Some(color);
         }
@@ -1085,12 +1124,12 @@ pub struct IndicatorPack {
 }
 
 impl IndicatorPack {
-    pub fn merge(&mut self, other: Self) {
-        self.sync.merge(other.sync);
+    pub fn merge(&mut self, other: Self, flags: MergeFlags) {
+        self.sync.merge(other.sync, flags);
     }
 
-    pub fn merged(mut self, other: Self) -> Self {
-        self.merge(other);
+    pub fn merged(mut self, other: Self, flags: MergeFlags) -> Self {
+        self.merge(other, flags);
         self
     }
 }
@@ -1131,13 +1170,13 @@ impl Default for SyncIndicatorPack {
 }
 
 impl SyncIndicatorPack {
-    pub fn merge(&mut self, other: Self) {
-        self.synced.merge(other.synced);
-        self.failed.merge(other.failed);
+    pub fn merge(&mut self, other: Self, flags: MergeFlags) {
+        self.synced.merge(other.synced, flags);
+        self.failed.merge(other.failed, flags);
     }
 
-    pub fn merged(mut self, other: Self) -> Self {
-        self.merge(other);
+    pub fn merged(mut self, other: Self, flags: MergeFlags) -> Self {
+        self.merge(other, flags);
         self
     }
 }
@@ -1154,16 +1193,16 @@ pub struct Indicator {
 }
 
 impl Indicator {
-    pub fn merge(&mut self, other: Self) {
-        self.outer.merge(other.outer);
-        self.inner.merge(other.inner);
+    pub fn merge(&mut self, other: Self, flags: MergeFlags) {
+        self.outer.merge(other.outer, flags);
+        self.inner.merge(other.inner, flags);
         if !other.text.is_empty() {
             self.text = other.text;
         }
     }
 
-    pub fn merged(mut self, other: Self) -> Self {
-        self.merge(other);
+    pub fn merged(mut self, other: Self, flags: MergeFlags) -> Self {
+        self.merge(other, flags);
         self
     }
 }
@@ -1180,18 +1219,18 @@ pub struct IndicatorStyle {
 }
 
 impl IndicatorStyle {
-    pub fn merge(&mut self, other: Self) {
+    pub fn merge(&mut self, other: Self, flags: MergeFlags) {
         if !other.prefix.is_empty() {
             self.prefix = other.prefix;
         }
         if !other.suffix.is_empty() {
             self.suffix = other.suffix;
         }
-        self.style = std::mem::take(&mut self.style).merged(&other.style);
+        self.style = std::mem::take(&mut self.style).merged(&other.style, flags);
     }
 
-    pub fn merged(mut self, other: Self) -> Self {
-        self.merge(other);
+    pub fn merged(mut self, other: Self, flags: MergeFlags) -> Self {
+        self.merge(other, flags);
         self
     }
 }
