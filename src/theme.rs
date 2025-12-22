@@ -21,7 +21,7 @@ use crate::testing::Sample;
 // ---
 
 pub use level::Level;
-pub use themecfg::{Element, ThemeInfo, ThemeOrigin};
+pub use themecfg::{Element, MergeFlag, MergeFlags, MergedWith, ThemeInfo, ThemeOrigin};
 
 // ---
 
@@ -81,8 +81,9 @@ impl Theme {
 impl<S: Borrow<themecfg::Theme>> From<S> for Theme {
     fn from(s: S) -> Self {
         let s = s.borrow();
-        let inventory = s.styles.resolve();
-        let default = StylePack::load(&s.elements, &inventory);
+        let flags = s.merge_flags();
+        let inventory = s.styles.resolve(flags);
+        let default = StylePack::load(&s.elements, &inventory, flags);
         // log::trace!("loaded default style pack: {:#?}", &default);
         let mut packs = EnumMap::default();
         for (level, pack) in &s.levels {
@@ -93,13 +94,14 @@ impl<S: Borrow<themecfg::Theme>> From<S> for Theme {
                     continue;
                 }
             };
-            packs[level] = StylePack::load(&s.elements.clone().replaced(pack.clone()), &inventory);
+            let flags = flags - MergeFlag::ReplaceGroups;
+            packs[level] = StylePack::load(&s.elements.clone().merged_with(&pack, flags), &inventory, flags);
             // log::trace!("loaded style pack for level {:?}: {:#?}", level, &packs[level]);
         }
         Self {
             default,
             packs,
-            indicators: IndicatorPack::new(&s.indicators, &inventory),
+            indicators: IndicatorPack::new(&s.indicators, &inventory, flags),
         }
     }
 }
@@ -291,7 +293,7 @@ impl StylePack {
         self.elements[element] = Some(pos);
     }
 
-    fn load(s: &themecfg::StylePack, inventory: &themecfg::StyleInventory) -> Self {
+    fn load(s: &themecfg::StylePack, inventory: &themecfg::StyleInventory, flags: MergeFlags) -> Self {
         let mut result = Self::default();
 
         let items = s.items();
@@ -301,7 +303,7 @@ impl StylePack {
         }
 
         for (&element, style) in s.items() {
-            result.add(element, &Style::from(&style.clone().resolve(inventory)))
+            result.add(element, &Style::from(&style.clone().resolve(inventory, flags)))
         }
 
         // Handle boolean variants inheriting from base boolean
@@ -309,9 +311,9 @@ impl StylePack {
             for variant in [Element::BooleanTrue, Element::BooleanFalse] {
                 let mut style = base.clone();
                 if let Some(patch) = s.items().get(&variant) {
-                    style = style.merged(patch)
+                    style = style.merged(patch, flags)
                 }
-                result.add(variant, &Style::from(&style.resolve(inventory)));
+                result.add(variant, &Style::from(&style.resolve(inventory, flags)));
             }
         }
 
@@ -328,9 +330,9 @@ impl StylePack {
             if let Some(parent_style) = s.items().get(&parent) {
                 let mut style = parent_style.clone();
                 if let Some(patch) = s.items().get(&inner) {
-                    style = style.merged(patch);
+                    style = style.merged(patch, flags);
                 }
-                result.add(inner, &Style::from(&style.resolve(inventory)));
+                result.add(inner, &Style::from(&style.resolve(inventory, flags)));
             }
         }
 
@@ -346,9 +348,9 @@ pub struct IndicatorPack {
 }
 
 impl IndicatorPack {
-    fn new(indicator: &themecfg::IndicatorPack, inventory: &StyleInventory) -> Self {
+    fn new(indicator: &themecfg::IndicatorPack, inventory: &StyleInventory, flags: MergeFlags) -> Self {
         Self {
-            sync: SyncIndicatorPack::new(&indicator.sync, inventory),
+            sync: SyncIndicatorPack::new(&indicator.sync, inventory, flags),
         }
     }
 }
@@ -362,10 +364,10 @@ pub struct SyncIndicatorPack {
 }
 
 impl SyncIndicatorPack {
-    fn new(indicator: &themecfg::SyncIndicatorPack, inventory: &StyleInventory) -> Self {
+    fn new(indicator: &themecfg::SyncIndicatorPack, inventory: &StyleInventory, flags: MergeFlags) -> Self {
         Self {
-            synced: Indicator::new(&indicator.synced, inventory),
-            failed: Indicator::new(&indicator.failed, inventory),
+            synced: Indicator::new(&indicator.synced, inventory, flags),
+            failed: Indicator::new(&indicator.failed, inventory, flags),
         }
     }
 }
@@ -378,10 +380,10 @@ pub struct Indicator {
 }
 
 impl Indicator {
-    fn new(indicator: &themecfg::Indicator, inventory: &StyleInventory) -> Self {
+    fn new(indicator: &themecfg::Indicator, inventory: &StyleInventory, flags: MergeFlags) -> Self {
         let mut buf = Vec::new();
-        let os = Style::from(&indicator.outer.style.resolve(inventory));
-        let is = Style::from(&indicator.inner.style.resolve(inventory));
+        let os = Style::from(&indicator.outer.style.resolve(inventory, flags));
+        let is = Style::from(&indicator.inner.style.resolve(inventory, flags));
         os.apply(&mut buf);
         os.with(&mut buf, |buf| {
             buf.extend(indicator.outer.prefix.as_bytes());
