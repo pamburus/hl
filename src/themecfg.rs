@@ -97,6 +97,7 @@ pub enum Role {
 pub struct Theme {
     #[serde(deserialize_with = "enumset_serde::deserialize")]
     pub tags: EnumSet<Tag>,
+    pub version: Option<u32>,
     pub styles: StylePack<Role>,
     pub elements: StylePack,
     pub levels: HashMap<InfallibleLevel, StylePack>,
@@ -439,6 +440,11 @@ impl<S> StylePack<Element, S> {
     }
 
     pub fn replace(&mut self, patch: Self) {
+        for (parent, child) in Element::pairs() {
+            if patch.contains_key(child) {
+                self.0.remove(parent);
+            }
+        }
         self.0.extend(patch.0);
     }
 
@@ -556,6 +562,33 @@ pub enum Element {
     BooleanFalse,
     Null,
     Ellipsis,
+}
+
+impl Element {
+    pub fn is_inner(&self) -> bool {
+        self.parent().is_some()
+    }
+
+    pub fn parent(&self) -> Option<Element> {
+        match self {
+            Element::InputNumberInner => Some(Element::InputNumber),
+            Element::InputNameInner => Some(Element::InputName),
+            Element::LevelInner => Some(Element::Level),
+            Element::LoggerInner => Some(Element::Logger),
+            Element::CallerInner => Some(Element::Caller),
+            _ => None,
+        }
+    }
+
+    pub fn pairs() -> &'static [(Element, Element)] {
+        &[
+            (Element::InputNumber, Element::InputNumberInner),
+            (Element::InputName, Element::InputNameInner),
+            (Element::Level, Element::LevelInner),
+            (Element::Logger, Element::LoggerInner),
+            (Element::Caller, Element::CallerInner),
+        ]
+    }
 }
 
 // ---

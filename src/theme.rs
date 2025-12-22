@@ -83,16 +83,18 @@ impl<S: Borrow<themecfg::Theme>> From<S> for Theme {
         let s = s.borrow();
         let inventory = s.styles.resolve();
         let default = StylePack::load(&s.elements, &inventory);
+        // log::trace!("loaded default style pack: {:#?}", &default);
         let mut packs = EnumMap::default();
         for (level, pack) in &s.levels {
             let level = match level {
-                InfallibleLevel::Valid(level) => level,
+                InfallibleLevel::Valid(level) => *level,
                 InfallibleLevel::Invalid(s) => {
                     log::warn!("unknown level: {:?}", s);
                     continue;
                 }
             };
-            packs[*level] = StylePack::load(&s.elements.clone().replaced(pack.clone()), &inventory);
+            packs[level] = StylePack::load(&s.elements.clone().replaced(pack.clone()), &inventory);
+            // log::trace!("loaded style pack for level {:?}: {:#?}", level, &packs[level]);
         }
         Self {
             default,
@@ -111,7 +113,7 @@ impl Sample for Arc<Theme> {
 
 // ---
 
-#[derive(Clone, Eq, PartialEq)]
+#[derive(Clone, Eq, PartialEq, Debug)]
 struct Style(Sequence);
 
 impl Style {
@@ -276,7 +278,7 @@ impl<'a, B: Push<u8>> StylingPush<B> for Styler<'a, B> {
 
 // ---
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 struct StylePack {
     elements: EnumMap<Element, Option<usize>>,
     reset: Option<usize>,
