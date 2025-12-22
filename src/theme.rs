@@ -177,7 +177,7 @@ impl<T: Into<Sequence>> From<T> for Style {
 impl From<&themecfg::ResolvedStyle> for Style {
     fn from(style: &themecfg::ResolvedStyle) -> Self {
         let mut codes = Vec::<StyleCode>::new();
-        for mode in style.modes {
+        for mode in style.modes.adds {
             codes.push(
                 match mode {
                     themecfg::Mode::Bold => Mode::Bold,
@@ -326,7 +326,7 @@ impl StylePack {
             if let Some(parent_style) = s.items().get(&parent) {
                 let mut style = parent_style.clone();
                 if let Some(patch) = s.items().get(&inner) {
-                    style = style.merged_for_inheritance(patch);
+                    style = style.merged(patch);
                 }
                 result.add(inner, &Style::from(&style.resolve(inventory)));
             }
