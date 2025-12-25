@@ -137,37 +137,53 @@ impl Theme {
         self.version = other.version;
         self.styles.merge(other.styles);
 
-        // Apply blocking rule: if child theme defines a parent element,
-        // remove the corresponding -inner element from parent theme
-        let parent_inner_pairs = [
-            (Element::Level, Element::LevelInner),
-            (Element::Logger, Element::LoggerInner),
-            (Element::Caller, Element::CallerInner),
-            (Element::InputNumber, Element::InputNumberInner),
-            (Element::InputName, Element::InputNameInner),
-        ];
+        // Apply blocking rules only for version 0 themes (backward compatibility)
+        if flags.contains(MergeFlag::ReplaceGroups) {
+            // Apply blocking rule: if child theme defines a parent element,
+            // remove the corresponding -inner element from parent theme
+            let parent_inner_pairs = [
+                (Element::Level, Element::LevelInner),
+                (Element::Logger, Element::LoggerInner),
+                (Element::Caller, Element::CallerInner),
+                (Element::InputNumber, Element::InputNumberInner),
+                (Element::InputName, Element::InputNameInner),
+            ];
 
-        // Block base -inner elements if parent is defined in child theme
-        for (parent, inner) in parent_inner_pairs {
-            if other.elements.0.contains_key(&parent) {
-                self.elements.0.remove(&inner);
+            // Block base -inner elements if parent is defined in child theme
+            for (parent, inner) in parent_inner_pairs {
+                if other.elements.0.contains_key(&parent) {
+                    self.elements.0.remove(&inner);
+                }
+            }
+
+            // Block entire level sections if child theme defines any element for that level
+            for level in other.levels.keys() {
+                self.levels.remove(level);
             }
         }
 
-        // Block entire level sections if child theme defines any element for that level
-        for level in other.levels.keys() {
-            self.levels.remove(level);
+        if flags.contains(MergeFlag::ReplaceElements) {
+            // Replace top-level elements (no merge for backward compatibility)
+            self.elements.0.extend(other.elements.0);
+        } else {
+            // Merge elements properly for version 1+
+            self.elements.merge(other.elements, flags);
         }
 
-        // Replace top-level elements (no merge for backward compatibility)
-        self.elements.0.extend(other.elements.0);
-
         for (level, pack) in other.levels {
-            // Replace level-specific elements (no merge for backward compatibility)
-            self.levels
-                .entry(level)
-                .and_modify(|existing| existing.0.extend(pack.0.clone()))
-                .or_insert(pack);
+            if flags.contains(MergeFlag::ReplaceElements) {
+                // Replace level-specific elements (no merge for backward compatibility)
+                self.levels
+                    .entry(level)
+                    .and_modify(|existing| existing.0.extend(pack.0.clone()))
+                    .or_insert(pack);
+            } else {
+                // Merge level-specific elements properly for version 1+
+                self.levels
+                    .entry(level)
+                    .and_modify(|existing| existing.merge(pack.clone(), flags))
+                    .or_insert(pack);
+            }
         }
 
         self.tags = other.tags;
