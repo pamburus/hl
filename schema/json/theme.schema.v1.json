@@ -1,5 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Theme Version 1",
   "type": "object",
   "additionalProperties": false,
   "properties": {
@@ -40,7 +41,6 @@
     }
   },
   "required": [],
-  "title": "Theme",
   "$defs": {
     "tag": {
       "type": "string",
