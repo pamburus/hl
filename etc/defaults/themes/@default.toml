@@ -2,138 +2,54 @@
 
 version = 1
 
-[styles.default]
+# Styles define general purpose styles used throughout the theme.
+[styles]
+default = {  }
+primary = {  }
+secondary = { style = "primary", modes = ["faint"] }
+emphasized = { style = "primary", modes = ["bold"] }
+muted = { style = "secondary" }
+accent = { style = "secondary" }
+accent-secondary = { style = "secondary" }
+syntax = { style = "emphasized" }
+info = { foreground = "cyan" }
+warning = { foreground = "yellow" }
+error = { foreground = "bright-red" }
+input = { style = "secondary" }
 
-[styles.primary]
+# Elements define specific styles for different log elements.
+[elements]
+input-number = { style = "muted" }
+input-number-inner = { style = "secondary" }
+input-name = { style = "muted" }
+input-name-inner = { style = "secondary" }
+time = { style = "secondary" }
+level = { style = "muted" }
+level-inner = { style = "primary" }
+logger = { style = "accent-secondary" }
+caller = { style = "secondary", modes = ["italic"] }
+message = { style = "emphasized" }
+message-delimiter = { style = "muted" }
+field = { style = "muted" }
+key = { style = "accent" }
+ellipsis = { style = "muted" }
+object = { style = "syntax" }
+array = { style = "syntax" }
+string = { style = "primary" }
+number = { style = "primary" }
+boolean = { style = "primary" }
+null = { style = "primary" }
 
-[styles.secondary]
-style = "primary"
-modes = [
-  "faint",
-]
+# Levels define styles for different log levels.
+[levels]
+trace = { level-inner = { style = "secondary" } }
+debug = { level-inner = { style = "secondary" } }
+info = { level-inner = { style = "info" } }
+warning = { level-inner = { style = "warning" }, message = { style = "warning" } }
+error = { level-inner = { style = "error" }, message = { style = "error" } }
 
-[styles.emphasized]
-style = "primary"
-modes = [
-  "bold",
-]
-
-[styles.muted]
-style = "secondary"
-
-[styles.accent]
-style = "secondary"
-
-[styles.accent-secondary]
-style = "secondary"
-
-[styles.syntax]
-style = "emphasized"
-
-[styles.info]
-foreground = "cyan"
-
-[styles.warning]
-foreground = "yellow"
-
-[styles.error]
-foreground = "bright-red"
-
-[elements.input]
-style = "secondary"
-
-[elements.input-number]
-style = "muted"
-
-[elements.input-number-inner]
-style = "secondary"
-
-[elements.input-name]
-style = "muted"
-
-[elements.input-name-inner]
-style = "secondary"
-
-[elements.time]
-style = "secondary"
-
-[elements.level]
-style = "muted"
-
-[elements.level-inner]
-style = "primary"
-
-[elements.logger]
-style = "accent-secondary"
-
-[elements.caller]
-style = "secondary"
-modes = [
-  "italic",
-]
-
-[elements.message]
-style = "emphasized"
-
-[elements.message-delimiter]
-style = "muted"
-
-[elements.field]
-style = "muted"
-
-[elements.key]
-style = "accent"
-
-[elements.ellipsis]
-style = "muted"
-
-[elements.object]
-style = "syntax"
-
-[elements.array]
-style = "syntax"
-
-[elements.string]
-style = "primary"
-
-[elements.number]
-style = "primary"
-
-[elements.boolean]
-style = "primary"
-
-[elements.null]
-style = "primary"
-
-[levels.trace.level-inner]
-style = "secondary"
-
-[levels.debug.level-inner]
-style = "secondary"
-
-[levels.info.level-inner]
-style = "info"
-
-[levels.warning.level-inner]
-style = "warning"
-
-[levels.warning.message]
-style = "warning"
-
-[levels.error.level-inner]
-style = "error"
-
-[levels.error.message]
-style = "error"
-
-[indicators.sync.synced]
-text = " "
-
-[indicators.sync.failed]
-text = "!"
-
-[indicators.sync.failed.inner.style]
-style = "warning"
-modes = [
-  "bold",
-]
+# Indicators define styles for various status indicators.
+[indicators]
+[indicators.sync]
+synced = { text = " " }
+failed = { text = "!", inner.style = { style = "warning", modes = ["bold"] } }
