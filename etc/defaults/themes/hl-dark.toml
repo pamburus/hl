@@ -18,9 +18,6 @@ foreground = 195
 [styles.accent]
 foreground = 111
 
-[styles.accent-secondary]
-foreground = 37
-
 [styles.syntax]
 foreground = 255
 modes = [
@@ -64,7 +61,6 @@ foreground = 41
 foreground = 210
 
 [elements.null]
-style = "primary"
 foreground = 210
 
 [levels.debug.level-inner]
