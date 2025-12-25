@@ -55,6 +55,18 @@
 
 - Q: How should the system handle alternate file extensions like `.yml`? → A: Only accept `.yaml` - users must rename `.yml` files to `.yaml`
 
+### Session 2024-12-25 (Fifth Pass)
+
+- Q: What is the property precedence order when both an element and its referenced role define the same property? → A: Element explicit properties win (override role properties) - explicit is more specific
+
+- Q: What is the order of modes in the result when merging modes arrays from role and element in v1? → A: V1 modes support +mode (add) and -mode (remove) prefixes; plain mode defaults to +mode. Internally represented as two unordered sets (adds/removes). During merge, -mode can turn off parent's mode. Final ANSI output uses only adds in enum declaration order (Bold, Faint, Italic, Underline, SlowBlink, RapidBlink, Reverse, Conceal, CrossedOut); removes only used during merge.
+
+- Q: What should happen when the same mode appears in both +mode and -mode forms within the same modes array in v1? → A: Last occurrence wins - if modes=[+bold, -bold], bold is removed; if [-bold, +bold], bold is added
+
+- Q: What happens in v0 when a mode has a +/- prefix (e.g., modes=[+bold])? → A: Error - v0 does not support +/- prefixes, exit with message suggesting to use v1 or remove prefix
+
+- Q: Do level-specific overrides in v1 work the same way as v0, or can they use v1 features? → A: V1 extends v0 behavior - level-specific elements can use `style` field to reference roles
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Theme File Loading and Validation (Priority: P1)
@@ -229,9 +241,13 @@ Theme authors using v1 can define semantic roles (like "warning", "error", "succ
 
 3. **Given** a v1 theme with parent element `level` having modes=[bold, underline]
    **When** child element `level-inner` defines modes=[italic]
-   **Then** in v1, modes are merged: [bold, underline, italic] (contrast with v0 where modes=[italic] would replace entirely)
+   **Then** in v1, modes are added to parent modes: result has bold, underline, italic (contrast with v0 where modes=[italic] would replace entirely)
 
-4. **Given** a v1 theme that defines only 5 specific elements
+4. **Given** a v1 theme with parent element `level` having modes=[bold, underline]
+   **When** child element `level-inner` defines modes=[-bold, italic]
+   **Then** in v1, the -bold removes parent's bold, result has underline and italic only
+
+5. **Given** a v1 theme that defines only 5 specific elements
    **When** the theme is loaded
    **Then** all non-defined elements inherit from the embedded `@default` theme (property-level merging for v1)
 
@@ -250,7 +266,6 @@ Theme authors using v1 can define semantic roles (like "warning", "error", "succ
 - What happens when a theme file exists but has restrictive permissions (not readable)?
 
 - What happens when a color palette anchor is referenced but not defined (YAML anchor edge case)?
-- In v1 when merging modes arrays, if both parent and child have [bold], does the result have one [bold] or two (e.g., parent [bold], child [bold, italic] → [bold, italic] or [bold, bold, italic])? (Answer: deduplicated with last occurrence winning per FR-041)
 - What happens when a user specifies a theme with `.yml` extension explicitly (e.g., `my-theme.yml`)? (Answer: file not found error - only `.yaml` extension is supported)
 
 
@@ -287,11 +302,13 @@ Theme authors using v1 can define semantic roles (like "warning", "error", "succ
 
 - **FR-011**: System MUST support all v0 element names as defined in schema: input, input-number, input-number-inner, input-name, input-name-inner, time, level, level-inner, logger, logger-inner, caller, caller-inner, message, message-delimiter, field, key, array, object, string, number, boolean, boolean-true, boolean-false, null, ellipsis
 
-- **FR-012**: System MUST support style properties: foreground (color), background (color), modes (array of mode enums)
+- **FR-012**: System MUST support style properties: foreground (color), background (color), modes (array of mode enums in v0, array of mode operations in v1)
 
 - **FR-013**: System MUST support color formats: ANSI basic colors (named), ANSI extended colors (0-255 integers), RGB colors (#RRGGBB hex)
 
-- **FR-014**: System MUST support mode values: bold, faint, italic, underline, slow-blink, rapid-blink, reverse, conceal, crossed-out
+- **FR-014**: System MUST support mode values in v0: bold, faint, italic, underline, slow-blink, rapid-blink, reverse, conceal, crossed-out (plain values only, no +/- prefixes supported)
+
+- **FR-014a**: System MUST reject v0 themes that include mode prefixes (+/-) and exit with error message suggesting to use version="1.0" or remove the prefix
 
 #### V0 Nested Styling Semantics
 
@@ -313,6 +330,8 @@ Theme authors using v1 can define semantic roles (like "warning", "error", "succ
 - **FR-020**: System MUST merge level-specific elements with base elements at load time (creating a complete StylePack for each level) such that level overrides win for defined properties
 
 - **FR-021**: System MUST apply nested styling during rendering after level-specific merging is complete, so that parent-inner nesting works with the merged element set for each level
+
+- **FR-021a**: V1 level-specific overrides MUST support all v1 features including the `style` field to reference roles, mode operations (+mode/-mode), and property-level merging semantics
 
 #### V0 Additional Features
 
@@ -354,11 +373,17 @@ Theme authors using v1 can define semantic roles (like "warning", "error", "succ
 
 - **FR-038**: V1 themes MUST support `style` property on elements to reference role names
 
-- **FR-039**: V1 themes MUST resolve styles in this order: resolve `style` field references to parent roles (recursively) → merge with `@default` theme for undefined roles → apply explicit property overrides
+- **FR-039**: V1 themes MUST resolve element styles in this order: 1) resolve element's `style` field to role (recursively following role-to-role `style` references up to 64 levels), 2) merge with `@default` theme for undefined roles, 3) apply element's explicit properties (foreground, background, modes) which override role properties
+
+- **FR-039a**: V1 property precedence: element explicit properties MUST override role properties when both are defined (e.g., if element has `style: "warning"` and `foreground: "#FF0000"`, and warning role has `foreground: "#FFA500"`, the element uses `#FF0000`)
 
 - **FR-040**: V1 `@default` theme MUST define reasonable defaults for all styles, with specific styles using the `style` field to reference more generic ones (e.g., `warning: {style: "primary", ...}` where `primary` is also defined in `@default`)
 
-- **FR-041**: V1 themes MUST use property-level merging for modes (union of parent and child modes with last occurrence winning for duplicates) instead of v0's replacement semantics
+- **FR-041**: V1 themes MUST support mode operations with +mode (add) and -mode (remove) prefixes; plain mode defaults to +mode. Modes are internally represented as two unordered sets (adds/removes). During style merging, child -mode removes parent's mode, child +mode adds mode. Final ANSI output includes only added modes in enum declaration order: Bold, Faint, Italic, Underline, SlowBlink, RapidBlink, Reverse, Conceal, CrossedOut. Remove operations are only used during merge process.
+
+- **FR-041a**: V1 mode operations contrast with v0 replacement semantics: v0 child modes completely replace parent modes (no merging), v1 child modes modify parent modes (additive/subtractive operations)
+
+- **FR-041b**: V1 themes MUST resolve conflicting mode operations within the same modes array using last occurrence wins semantics (e.g., modes=[+bold, -bold] results in bold removed; modes=[-bold, +bold] results in bold added)
 
 - **FR-042**: V1 does NOT support custom `include` directive for referencing other themes; only `@default` theme inheritance is supported (custom includes may be considered for future versions)
 
@@ -380,16 +405,16 @@ Theme authors using v1 can define semantic roles (like "warning", "error", "succ
 
 - **Element**: Named visual element in log output (28 distinct elements in v0) including: input, input-number, input-number-inner, input-name, input-name-inner, time, level, level-inner, logger, logger-inner, caller, caller-inner, message, message-delimiter, field, key, array, object, string, number, boolean, boolean-true, boolean-false, null, ellipsis
 
-- **Style**: Visual appearance specification with optional foreground color, optional background color, and optional text modes list. In v1, styles can also have an optional `style` field that references a parent/base style for inheritance.
+- **Style**: Visual appearance specification with optional foreground color, optional background color, and optional text modes list. In v0, modes is a simple array of mode names. In v1, modes is an array of mode operations (+mode to add, -mode to remove, plain mode defaults to +mode), and styles can have an optional `style` field that references a parent/base style for inheritance.
 
-- **Role** (v1 only): Named style defined in the `styles` section that can be referenced by elements or other roles. Roles support inheritance via the optional `style` field (e.g., `warning: {style: "primary", foreground: "#FFA500"}`).
+- **Role** (v1 only): Named style defined in the `styles` section that can be referenced by elements or other roles. Roles support inheritance via the optional `style` field (e.g., `warning: {style: "primary", foreground: "#FFA500", modes: [+bold, -italic]}`).
 
 - **Color**: Visual color value in one of three formats:
   - ANSI basic: named colors (default, black, red, green, yellow, blue, magenta, cyan, white, bright-black, bright-red, bright-green, bright-yellow, bright-blue, bright-magenta, bright-cyan, bright-white)
   - ANSI extended: integer value 0-255
   - RGB: hex format #RRGGBB
 
-- **Mode**: Text rendering mode (bold, faint, italic, underline, slow-blink, rapid-blink, reverse, conceal, crossed-out)
+- **Mode**: Text rendering mode (bold, faint, italic, underline, slow-blink, rapid-blink, reverse, conceal, crossed-out). In v0, modes are plain values in an array. In v1, modes are operations: +mode (add), -mode (remove), or plain mode (defaults to +mode). V1 modes are internally stored as two unordered sets (adds/removes) and final output uses only adds in enum declaration order.
 
 - **Level**: Log severity level (trace, debug, info, warning, error)
 
@@ -401,7 +426,7 @@ Theme authors using v1 can define semantic roles (like "warning", "error", "succ
 
 - **NFR-002**: Theme validation errors MUST include specific location (field name, element name) and expected format
 
-- **NFR-003**: Style merge operations MUST be deterministic and produce identical results across all platforms
+- **NFR-003**: Style merge operations MUST be deterministic and produce identical results across all platforms. In v1, mode output order is deterministic (enum declaration order: Bold, Faint, Italic, Underline, SlowBlink, RapidBlink, Reverse, Conceal, CrossedOut) regardless of input order.
 
 - **NFR-004**: The system MUST base inheritance decisions on semantic property values (whether colors/modes are defined) not on internal representation details
 
@@ -450,13 +475,16 @@ Theme authors using v1 can define semantic roles (like "warning", "error", "succ
 - In v0, parent-inner pairs use nested styling scope (inner rendered inside parent) for these specific pairs listed in FR-013; if inner element is not defined, parent style continues through nesting (v1 adds explicit property-level inheritance)
 - In v0, boolean special case (boolean → boolean-true/boolean-false) uses active property merging at load time, different from the passive nested styling used for other pairs; this exists for backward compatibility because `boolean` was added first and variants came later (v1 may generalize active inheritance to more element pairs)
 - Empty modes array `[]` is semantically identical to absent modes field in v0 (both result in no mode override, so parent style continues through nesting or no modes applied)
-- In v0, duplicate modes in modes array are allowed and all passed to terminal (terminal ignores redundant codes); in v1, duplicates are deduplicated with last occurrence winning
+- In v0, duplicate modes in modes array are allowed and all passed to terminal (terminal ignores redundant codes); v0 modes are plain values only (no +/- prefixes supported); if a mode with +/- prefix is detected in v0 theme, system exits with error suggesting to use v1 or remove prefix
+- In v1, modes are operations: +mode (add mode), -mode (remove mode), or plain mode (defaults to +mode). Modes are internally represented as two unordered sets (adds/removes). During merge, child -mode can turn off parent's mode. When the same mode appears in both +mode and -mode forms within the same array, last occurrence wins. Final ANSI output uses only added modes in enum declaration order (Bold, Faint, Italic, Underline, SlowBlink, RapidBlink, Reverse, Conceal, CrossedOut); remove operations are only used during merge.
 - The $palette section is part of the schema for all formats, but only YAML can use anchor/alias syntax; TOML and JSON can define $palette for organization but must reference colors by explicit values
-- Level-specific overrides are merged with base elements at load time, creating a complete element set for each level; nested styling then applies during rendering
+- Level-specific overrides are merged with base elements at load time, creating a complete element set for each level; nested styling then applies during rendering (v0 and v1)
+- In v1, level-specific element overrides can use the `style` field to reference roles, enabling level-specific elements to inherit from semantic roles (e.g., `levels.error.message: {style: "error-text", modes: [+bold]}`)
 - The system has access to all theme files at load time (no lazy loading)
 - Theme files are relatively small (< 10KB typical, < 100KB expected maximum in practice, but no hard limits enforced)
 - Themes are loaded once at application startup and remain constant for the lifetime of the process; changing themes requires restarting the application
 - In v1, all user themes implicitly inherit from the embedded `@default` theme, which provides sensible defaults for all roles and styles; undefined roles/elements in user themes fall back to `@default` definitions
+- V1 property precedence: element explicit properties override role properties; this allows elements to reference a role for base styling while overriding specific properties
 - V1 does NOT support custom `include` directive for theme-to-theme inheritance; only `@default` inheritance is available (custom includes may be added in future versions)
 - V1 role-to-role inheritance chains via the `style` field support a maximum depth of 64 levels; deeper chains or circular references cause theme loading to fail with error
 - The `@default` theme is not visible in theme listings (it's an internal/system theme)
