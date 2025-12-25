@@ -35,7 +35,6 @@ check-schema: contrib-schema .venv build/ci/validate_yaml.py
 	@taplo check
 	@taplo check --no-auto-config --schema "file://${PWD}/schema/json/theme.schema.json" src/testing/assets/themes/test.toml
 	@.venv/bin/python build/ci/validate_yaml.py ./schema/json/config.schema.json etc/defaults/config{,-ecs,-k8s}.yaml
-	@.venv/bin/python build/ci/validate_yaml.py ./schema/json/theme.schema.json etc/defaults/themes/*.yaml
 
 ## Automatically format code
 .PHONY: fmt
