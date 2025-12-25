@@ -1,46 +1,40 @@
+[package]
+name = "hl"
+version.workspace = true
+edition.workspace = true
+rust-version = "1.86.0"
+description = "JSON and logfmt log converter to human readable representation"
+repository.workspace = true
+license.workspace = true
+keywords = ["cli", "json", "log", "logfmt", "viewer"]
+categories = ["command-line-utilities", "development-tools", "parsing", "text-processing"]
+build = "build.rs"
+
 [workspace]
 members = [
-    ".",
-    "crate/encstr",
-    "crate/enumset-ext",
-    "crate/enumset-serde",
-    "crate/heapopt",
-    "crate/serde-logfmt",
-    "crate/styled-help",
+  ".",
+  "crate/encstr",
+  "crate/enumset-ext",
+  "crate/enumset-serde",
+  "crate/heapopt",
+  "crate/serde-logfmt",
+  "crate/styled-help",
 ]
 
 [workspace.package]
-repository = "https://github.com/pamburus/hl"
-authors = ["Pavel Ivanov <mr.pavel.ivanov@gmail.com>"]
 version = "0.33.1"
 edition = "2024"
+repository = "https://github.com/pamburus/hl"
 license = "MIT"
 
-[package]
-name = "hl"
-description = "JSON and logfmt log converter to human readable representation"
-categories = ["command-line-utilities", "development-tools", "parsing", "text-processing"]
-keywords = ["cli", "log", "json", "logfmt", "viewer"]
-build = "build.rs"
-rust-version = "1.86.0"
-repository.workspace = true
-edition.workspace = true
-authors.workspace = true
-license.workspace = true
-version.workspace = true
-
-[build-dependencies]
-capnpc = "0.23"
-hex = "0.4"
-semver = "1"
-serde = { version = "1", features = ["derive"] }
-serde_json = { version = "1", features = ["raw_value"] }
-sha2 = "0.10"
-
 [workspace.dependencies]
-clap = { version = "4", features = ["wrap_help", "derive", "env", "string"] }
+clap = { version = "4", features = ["derive", "env", "string", "wrap_help"] }
 clap_complete = { version = "4" }
 clap_mangen = { git = "https://github.com/pamburus/rust-clap.git", rev = "20f0ffd737581a5ebf7479d2174f2c197f25c94d" }
+
+[[bench]]
+harness = false
+name = "bench"
 
 [dependencies]
 anstream = "0.6"
@@ -55,19 +49,19 @@ clap_mangen = { workspace = true }
 closure = "0.3"
 collection_macros = "0.2"
 color-print = "0.3"
-config = { version = "0.15", features = ["yaml", "json", "toml"] }
+config = { version = "0.15", features = ["json", "toml", "yaml"] }
 const-str = "0.7"
 crossbeam-channel = "0.5"
 crossbeam-queue = "0.3"
 crossbeam-utils = "0.8"
 deko = "0.5"
-derive_more = { version = "2", features = ["deref", "from", "display"] }
+derive_more = { version = "2", features = ["deref", "display", "from"] }
 dirs = "6"
 dirs-sys = "0.5"
 encstr = { path = "./crate/encstr" }
 enum-map = "2"
 enumset = "1"
-enumset-ext = { path = "./crate/enumset-ext", features = ["serde", "clap"] }
+enumset-ext = { path = "./crate/enumset-ext", features = ["clap", "serde"] }
 enumset-serde = { path = "./crate/enumset-serde" }
 env_logger = "0.11"
 flate2 = "1"
@@ -92,9 +86,8 @@ pest_derive = "2"
 regex = "1"
 rust-embed = "8"
 serde = { version = "1", features = ["derive"] }
-serde-logfmt = { path = "./crate/serde-logfmt" }
 serde_json = { version = "1", features = ["raw_value"] }
-styled-help = { path = "./crate/styled-help" }
+serde-logfmt = { path = "./crate/serde-logfmt" }
 serde_plain = "1"
 sha2 = "0.10"
 shellwords = "1"
@@ -102,6 +95,7 @@ signal-hook = "0.3"
 snap = "1"
 strsim = "0.11"
 strum = { version = "0.27", features = ["derive"] }
+styled-help = { path = "./crate/styled-help" }
 terminal_size = "0.4"
 thiserror = "2"
 titlecase = "3"
@@ -112,9 +106,6 @@ wildflower = { git = "https://github.com/cassaundra/wildflower.git" }
 winapi-util = { version = "0.1" }
 wyhash = "0.6"
 yaml-peg = "1"
-
-[target.'cfg(target_os = "macos")'.dependencies]
-kqueue = "1"
 
 [dev-dependencies]
 assert_matches = "1"
@@ -131,12 +122,19 @@ rstest = "0.26"
 stats_alloc = "0.1"
 wildmatch = "2"
 
-[profile.release]
-debug = false
-opt-level = 3
-codegen-units = 1
-lto = true
+[build-dependencies]
+capnpc = "0.23"
+hex = "0.4"
+semver = "1"
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["raw_value"] }
+sha2 = "0.10"
 
-[[bench]]
-name = "bench"
-harness = false
+[target.'cfg(target_os = "macos")'.dependencies]
+kqueue = "1"
+
+[profile.release]
+opt-level = 3
+debug = false
+lto = true
+codegen-units = 1

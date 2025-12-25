@@ -18,7 +18,7 @@ build-release: (setup "build")
 
 # Run the application, example: `just run -- --help`
 run *args: build
-    cargo run -- {{args}}
+    cargo run -- {{ args }}
 
 # Run tests for all packages in the workspace
 test: (setup "build")
@@ -97,14 +97,15 @@ coverage: (setup "coverage")
 
 # Show uncovered changed lines comparing to {{base}}
 uncovered base="origin/master": (setup "coverage")
-    @scripts/coverage-diff-analysis.py -q --ide-links {{base}}
+    @scripts/coverage-diff-analysis.py -q --ide-links {{ base }}
 
 # Run benchmarks
 bench *ARGS: (setup "build")
-    cargo bench --workspace --locked {{ARGS}}
+    cargo bench --workspace --locked {{ ARGS }}
 
 # Check schema validation
 check-schema: (setup "schema")
+    tombi lint
     taplo check
     @.venv/bin/python build/ci/validate_yaml.py ./schema/json/config.schema.json etc/defaults/config{,-ecs,-k8s}.yaml
     @.venv/bin/python build/ci/validate_yaml.py ./schema/json/theme.schema.json etc/defaults/themes/*.yaml
@@ -124,17 +125,17 @@ install-man-pages:
 
 # Build and publish new release
 release type="patch": (setup "cargo-edit")
-    gh workflow run -R pamburus/hl release.yml --ref $(git branch --show-current) --field release-type={{type}}
+    gh workflow run -R pamburus/hl release.yml --ref $(git branch --show-current) --field release-type={{ type }}
 
 # Bump version
 bump type="alpha": (setup "cargo-edit")
-    cargo set-version --package hl --bump {{type}}
+    cargo set-version --package hl --bump {{ type }}
 
 # List changes since the previous release
 changes since="auto": (setup "git-cliff" "bat" "gh")
     #!/usr/bin/env bash
     set -euo pipefail
-    since=$(if [ "{{since}}" = auto ]; then {{previous-tag}}; else echo "{{since}}"; fi)
+    since=$(if [ "{{ since }}" = auto ]; then {{ previous-tag }}; else echo "{{ since }}"; fi)
     version=$(cargo metadata --format-version 1 | jq -r '.packages[] | select(.name == "hl") | .version')
     GITHUB_REPO=pamburus/hl \
     GITHUB_TOKEN=$(gh auth token) \
@@ -143,7 +144,7 @@ changes since="auto": (setup "git-cliff" "bat" "gh")
 
 # Show previous release tag
 previous-tag:
-    @{{previous-tag}}
+    @{{ previous-tag }}
 
 # Create screenshots
 screenshots: (setup "screenshots") build
@@ -177,13 +178,13 @@ nix-deps:
 
 # Show `hl --help`
 usage *ARGS: build
-	@./target/debug/hl --config - --help {{ARGS}}
+    @./target/debug/hl --config - --help {{ ARGS }}
 
 # Show `hl --help=long`
 usage-long *ARGS: build
-	@./target/debug/hl --config - --help=long {{ARGS}}
+    @./target/debug/hl --config - --help=long {{ ARGS }}
 
 # Helper recipe to ensure required tools are available for a given task
 [private]
 setup *tools:
-    @contrib/bin/setup.sh {{tools}}
+    @contrib/bin/setup.sh {{ tools }}

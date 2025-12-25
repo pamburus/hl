@@ -1,6 +1,7 @@
-include = ["src/testing/assets/themes/test.toml", "Cargo.toml", ".taplo.toml"]
-
 [formatting]
-indent = 4
+column_width = 128
 reorder_keys = false
-column_width = 112
+
+[[rule]]
+include = ["etc/defaults/themes/*.toml"]
+schema = { path = "schema/json/theme.schema.json", enabled = true }
