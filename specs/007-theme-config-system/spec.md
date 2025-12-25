@@ -31,6 +31,18 @@
 
 - Q: What information is displayed when listing themes? → A: Theme names only, grouped by origin (stock/custom). Each origin group shows themes in a compact multi-column layout with bullets. No tags or paths are shown in the listing.
 
+### Session 2024-12-25 (Third Pass)
+
+- Q: What should happen when a theme file exceeds safe size limits? → A: Accept any file size - rely on OS/filesystem limits only
+
+- Q: What is the expected behavior for theme changes during runtime? → A: No runtime reload - theme loaded once at startup, restart required to change themes
+
+- Q: What observability is needed for theme loading operations? → A: Silent on success - only log/output on errors (standard CLI behavior)
+
+- Q: What should happen if filesystem operations fail during theme file reading (e.g., permission denied, I/O error, disk full)? → A: Exit with error to stderr reporting the specific filesystem error (permission denied, I/O error, etc.)
+
+- Q: What happens when a v1 theme references a role that is not defined in the theme? → A: V1 uses embedded `@default` theme with defaults for all styles; undefined roles in user themes fall back to `@default` which defines all reasonable defaults with specific styles resolving to generic ones (primary/secondary)
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Theme File Loading and Validation (Priority: P1)
@@ -221,10 +233,12 @@ Theme authors using v1 can define semantic roles (like "warning", "error", "succ
 - Can inner elements be defined without corresponding parent elements?
 - What happens when trying to load a theme with an extension not in the priority list (.yaml, .toml, .json)?
 - What happens when multiple theme files exist with the same stem but different extensions (e.g., theme.yaml and theme.toml)?
-- What happens when a v1 theme with `style="warning"` reference has no `warning` role defined?
+- What happens when filesystem operations fail (permission denied on theme file, I/O error during read, disk full)?
+- What happens when the theme directory doesn't exist or isn't readable?
+- What happens when a theme file exists but has restrictive permissions (not readable)?
 - How are circular includes detected in v1 (Theme A includes Theme B which includes Theme A)?
 - What happens when v1 theme includes a v0 theme or vice versa?
-- How does the system handle multi-level inheritance (grandparent → parent → child) in v1?
+- What happens when the system handle multi-level inheritance (grandparent → parent → child) in v1?
 - What happens when a color palette anchor is referenced but not defined (YAML anchor edge case)?
 - In v1 when merging modes arrays, if both parent and child have [bold], does the result have one [bold] or two (e.g., parent [bold], child [bold, italic] → [bold, italic] or [bold, bold, italic])?
 
@@ -234,7 +248,7 @@ Theme authors using v1 can define semantic roles (like "warning", "error", "succ
 
 #### V0 Theme Loading (Existing Behavior)
 
-- **FR-001**: System MUST load theme files in TOML, YAML, or JSON format from user config directories and embedded resources
+- **FR-001**: System MUST load theme files in TOML, YAML, or JSON format from user config directories and embedded resources at startup only (no runtime reloading)
 
 - **FR-002**: System MUST support loading themes by stem name (without extension) with automatic format detection in priority order: .yaml, .toml, .json (first found wins)
 
@@ -249,90 +263,100 @@ Theme authors using v1 can define semantic roles (like "warning", "error", "succ
 
 - **FR-006**: System MUST exit with error to stderr when a specified theme cannot be loaded (no fallback to default)
 
-- **FR-007**: System MUST include suggestions for similar theme names in error messages when theme is not found
+- **FR-007**: System MUST exit with error to stderr when filesystem operations fail during theme loading, reporting the specific error (permission denied, I/O error, disk read failure, etc.)
 
-- **FR-008**: System MUST parse theme files with the following top-level sections: `elements`, `levels`, `indicators`, `tags`, `$palette` (optional YAML anchors)
+- **FR-008**: System MUST include suggestions for similar theme names in error messages when theme is not found
 
-- **FR-009**: System MUST support all v0 element names as defined in schema: input, input-number, input-number-inner, input-name, input-name-inner, time, level, level-inner, logger, logger-inner, caller, caller-inner, message, message-delimiter, field, key, array, object, string, number, boolean, boolean-true, boolean-false, null, ellipsis
+- **FR-009**: System MUST be silent on successful theme loading (no output to stdout/stderr) following standard CLI behavior; errors only are reported to stderr
 
-- **FR-010**: System MUST support style properties: foreground (color), background (color), modes (array of mode enums)
+- **FR-010**: System MUST parse theme files with the following top-level sections: `elements`, `levels`, `indicators`, `tags`, `$palette` (optional YAML anchors)
 
-- **FR-011**: System MUST support color formats: ANSI basic colors (named), ANSI extended colors (0-255 integers), RGB colors (#RRGGBB hex)
+- **FR-011**: System MUST support all v0 element names as defined in schema: input, input-number, input-number-inner, input-name, input-name-inner, time, level, level-inner, logger, logger-inner, caller, caller-inner, message, message-delimiter, field, key, array, object, string, number, boolean, boolean-true, boolean-false, null, ellipsis
 
-- **FR-012**: System MUST support mode values: bold, faint, italic, underline, slow-blink, rapid-blink, reverse, conceal, crossed-out
+- **FR-012**: System MUST support style properties: foreground (color), background (color), modes (array of mode enums)
+
+- **FR-013**: System MUST support color formats: ANSI basic colors (named), ANSI extended colors (0-255 integers), RGB colors (#RRGGBB hex)
+
+- **FR-014**: System MUST support mode values: bold, faint, italic, underline, slow-blink, rapid-blink, reverse, conceal, crossed-out
 
 #### V0 Nested Styling Semantics
 
-- **FR-013**: System MUST render inner elements nested inside parent elements for these specific pairs: (input-number, input-number-inner), (input-name, input-name-inner), (level, level-inner), (logger, logger-inner), (caller, caller-inner), so that when an inner element is not defined in the theme, the parent's style naturally continues to apply through nested styling scope
+- **FR-015**: System MUST render inner elements nested inside parent elements for these specific pairs: (input-number, input-number-inner), (input-name, input-name-inner), (level, level-inner), (logger, logger-inner), (caller, caller-inner), so that when an inner element is not defined in the theme, the parent's style naturally continues to apply through nested styling scope
 
-- **FR-014**: System MUST implement v0 style merging with these exact semantics:
+- **FR-016**: System MUST implement v0 style merging with these exact semantics:
   - When merging child into parent: if child has non-empty modes, child modes completely replace parent modes (no merging)
   - When merging child into parent: if child has foreground defined, child foreground replaces parent foreground
   - When merging child into parent: if child has background defined, child background replaces parent background
 
-- **FR-015**: System MUST fall back to parent element when inner element is not defined (e.g., if `level-inner` is absent, use `level` style)
+- **FR-017**: System MUST fall back to parent element when inner element is not defined (e.g., if `level-inner` is absent, use `level` style)
 
-- **FR-016**: System MUST treat empty modes array `[]` identically to absent modes field (both inherit from parent)
+- **FR-018**: System MUST treat empty modes array `[]` identically to absent modes field (both inherit from parent)
 
 #### V0 Level-Specific Overrides
 
-- **FR-017**: System MUST support level-specific element overrides under `levels` section for: trace, debug, info, warning, error
+- **FR-019**: System MUST support level-specific element overrides under `levels` section for: trace, debug, info, warning, error
 
-- **FR-018**: System MUST merge level-specific elements with base elements at load time (creating a complete StylePack for each level) such that level overrides win for defined properties
+- **FR-020**: System MUST merge level-specific elements with base elements at load time (creating a complete StylePack for each level) such that level overrides win for defined properties
 
-- **FR-019**: System MUST apply nested styling during rendering after level-specific merging is complete, so that parent-inner nesting works with the merged element set for each level
+- **FR-021**: System MUST apply nested styling during rendering after level-specific merging is complete, so that parent-inner nesting works with the merged element set for each level
 
 #### V0 Additional Features
 
-- **FR-020**: System MUST support tags array with allowed values: dark, light, 16color, 256color, truecolor
+- **FR-022**: System MUST support tags array with allowed values: dark, light, 16color, 256color, truecolor
 
-- **FR-021**: System MUST support indicators section with sync.synced and sync.failed configurations
+- **FR-023**: System MUST support indicators section with sync.synced and sync.failed configurations
 
-- **FR-022**: System MUST support boolean special case for backward compatibility in v0 only: if base `boolean` element is defined, automatically apply it to `boolean-true` and `boolean-false` at load time before applying their specific overrides (this is active property merging, different from the passive nested styling scope used for other parent-inner pairs; this pattern exists because `boolean` was added first, variants came later; v1 may generalize this pattern)
+- **FR-024**: System MUST support boolean special case for backward compatibility in v0 only: if base `boolean` element is defined, automatically apply it to `boolean-true` and `boolean-false` at load time before applying their specific overrides (this is active property merging, different from the passive nested styling scope used for other parent-inner pairs; this pattern exists because `boolean` was added first, variants came later; v1 may generalize this pattern)
 
-- **FR-023**: System MUST ignore unknown element names gracefully (forward compatibility)
+- **FR-025**: System MUST ignore unknown element names gracefully (forward compatibility)
 
-- **FR-024**: System MUST validate color values and exit with clear error messages to stderr for invalid values
+- **FR-026**: System MUST validate color values and exit with clear error messages to stderr for invalid values
 
-- **FR-025**: System MUST allow duplicate modes in the modes array in v0 (all duplicates passed to terminal which naturally ignores redundant mode codes)
+- **FR-027**: System MUST allow duplicate modes in the modes array in v0 (all duplicates passed to terminal which naturally ignores redundant mode codes)
 
-- **FR-026**: System MUST support $palette section in theme schema for all formats (TOML, YAML, JSON), but only YAML can use anchor/alias syntax to reference palette colors; TOML and JSON can define $palette for organization but must reference colors by value
+- **FR-028**: System MUST support $palette section in theme schema for all formats (TOML, YAML, JSON), but only YAML can use anchor/alias syntax to reference palette colors; TOML and JSON can define $palette for organization but must reference colors by value
 
-- **FR-027**: System MUST report file format errors (TOML/YAML/JSON syntax errors) to stderr with line numbers and exit
+- **FR-029**: System MUST report file format errors (TOML/YAML/JSON syntax errors) to stderr with line numbers and exit
 
-- **FR-028**: System MUST provide theme listing grouped by origin (stock/custom) showing theme names only in compact multi-column layout with bullets (no tags or paths in listing output)
+- **FR-030**: System MUST provide theme listing grouped by origin (stock/custom) showing theme names only in compact multi-column layout with bullets (no tags or paths in listing output)
 
 #### V1 Versioning
 
-- **FR-029**: System MUST treat themes without `version` field as v0
+- **FR-031**: System MUST treat themes without `version` field as v0
 
-- **FR-030**: System MUST support version field with format "major.minor" where major=1 and minor is non-negative integer without leading zeros (e.g., "1.0", "1.5", "1.12")
+- **FR-032**: System MUST support version field with format "major.minor" where major=1 and minor is non-negative integer without leading zeros (e.g., "1.0", "1.5", "1.12")
 
-- **FR-031**: System MUST validate version string against pattern `^1\.(0|[1-9][0-9]*)$` and reject malformed versions
+- **FR-033**: System MUST validate version string against pattern `^1\.(0|[1-9][0-9]*)$` and reject malformed versions
 
-- **FR-032**: System MUST check theme version compatibility against the supported version range and reject themes with unsupported major or minor versions
+- **FR-034**: System MUST check theme version compatibility against the supported version range and reject themes with unsupported major or minor versions
 
-- **FR-033**: System MUST provide error message format: "Unsupported theme version X.Y, maximum supported is A.B"
+- **FR-035**: System MUST provide error message format: "Unsupported theme version X.Y, maximum supported is A.B"
 
 #### V1 Enhanced Inheritance (Future)
 
-- **FR-034**: V1 themes MUST support `styles` section for defining semantic roles (warning, error, success, etc.)
+- **FR-036**: V1 system MUST include an embedded `@default` theme that defines defaults for all styles and roles; this theme is invisible when listing themes (not shown in stock or custom groups)
 
-- **FR-035**: V1 themes MUST support `style` property on elements to reference role names
+- **FR-037**: V1 themes MUST support `styles` section for defining semantic roles (warning, error, success, primary, secondary, etc.)
 
-- **FR-036**: V1 themes MUST resolve styles in this order: role resolution → parent inheritance → explicit overrides
+- **FR-038**: V1 themes MUST support `style` property on elements to reference role names
 
-- **FR-037**: V1 themes MUST use property-level merging for modes (union of parent and child modes with last occurrence winning for duplicates) instead of v0's replacement semantics
+- **FR-039**: V1 themes MUST resolve styles in this order: user theme role resolution → `@default` theme fallback → parent inheritance → explicit overrides
 
-- **FR-038**: V1 themes MUST support `include` directive to reference parent themes
+- **FR-040**: V1 `@default` theme MUST define reasonable defaults for all styles, with specific styles resolving to more generic ones (e.g., specific roles falling back to `primary` or `secondary`)
 
-- **FR-039**: V1 themes MUST detect circular includes and report error with dependency chain
+- **FR-041**: V1 themes MUST use property-level merging for modes (union of parent and child modes with last occurrence winning for duplicates) instead of v0's replacement semantics
 
-- **FR-040**: V1 cross-theme merging MUST preserve property-level granularity (child overrides only specified properties, inherits others)
+- **FR-042**: V1 themes MUST support `include` directive to reference parent themes
+
+- **FR-043**: V1 themes MUST detect circular includes and report error with dependency chain
+
+- **FR-044**: V1 cross-theme merging MUST preserve property-level granularity (child overrides only specified properties, inherits others)
 
 ### Key Entities
 
 - **Theme**: Complete theme configuration containing element styles, level-specific overrides, indicators, version, and metadata tags
+
+- **@default Theme** (v1 only): Embedded theme that provides default definitions for all styles and roles. Not visible in theme listings. All v1 user themes implicitly inherit from `@default` when roles or styles are not explicitly defined. More specific styles in `@default` resolve to generic ones (e.g., `primary`, `secondary`).
 
 - **Theme Version**: Version identifier following "major.minor" format (e.g., "1.0", "1.5") where major=1 and minor has no leading zeros. Used to determine which schema and merge semantics apply.
 
@@ -367,6 +391,8 @@ Theme authors using v1 can define semantic roles (like "warning", "error", "succ
 
 - **NFR-007**: Invalid theme files MUST NOT cause application crashes - all errors MUST be handled gracefully with clear error messages
 
+- **NFR-008**: Successful theme loading operations MUST produce no output to stdout or stderr (silent success following standard CLI conventions); only errors are reported
+
 ## Success Criteria *(mandatory)*
 
 ### Measurable Outcomes
@@ -400,6 +426,7 @@ Theme authors using v1 can define semantic roles (like "warning", "error", "succ
 - Users have appropriate terminal capabilities for the colors they choose (no runtime terminal capability detection required)
 - Mode values are from the known set (unknown modes are rejected during parsing)
 - Theme files are UTF-8 encoded
+- Theme file size limits are enforced by OS/filesystem only; no application-level size validation or limits are imposed (parser will handle files of any size that the OS allows to be read)
 - In v0, parent-inner pairs use nested styling scope (inner rendered inside parent) for these specific pairs listed in FR-013; if inner element is not defined, parent style continues through nesting (v1 adds explicit property-level inheritance)
 - In v0, boolean special case (boolean → boolean-true/boolean-false) uses active property merging at load time, different from the passive nested styling used for other pairs; this exists for backward compatibility because `boolean` was added first and variants came later (v1 may generalize active inheritance to more element pairs)
 - Empty modes array `[]` is semantically identical to absent modes field in v0 (both result in no mode override, so parent style continues through nesting or no modes applied)
@@ -407,7 +434,10 @@ Theme authors using v1 can define semantic roles (like "warning", "error", "succ
 - The $palette section is part of the schema for all formats, but only YAML can use anchor/alias syntax; TOML and JSON can define $palette for organization but must reference colors by explicit values
 - Level-specific overrides are merged with base elements at load time, creating a complete element set for each level; nested styling then applies during rendering
 - The system has access to all theme files at load time (no lazy loading)
-- Theme files are relatively small (< 10KB typical, < 100KB maximum)
+- Theme files are relatively small (< 10KB typical, < 100KB expected maximum in practice, but no hard limits enforced)
+- Themes are loaded once at application startup and remain constant for the lifetime of the process; changing themes requires restarting the application
+- In v1, all user themes implicitly inherit from the embedded `@default` theme, which provides sensible defaults for all roles and styles; undefined roles in user themes fall back to `@default` definitions
+- The `@default` theme is not visible in theme listings (it's an internal/system theme)
 - YAML anchors ($palette) are a convenience feature - themes can be written without them
 - The embedded configuration file (etc/defaults/config.yaml) specifies the default theme used when no theme is explicitly specified
 - Theme loading failures (file not found, parse errors, invalid color values) cause the application to exit with error messages to stderr - no silent fallbacks
