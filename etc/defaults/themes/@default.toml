@@ -1,4 +1,4 @@
-#:schema ../../../schema/json/theme.schema.v1.json
+#:schema https://raw.githubusercontent.com/pamburus/hl/c5f7bbb768219023877d4d65959972d0f9701d5e/schema/json/theme.schema.v1.json
 
 version = "1.0"
 
