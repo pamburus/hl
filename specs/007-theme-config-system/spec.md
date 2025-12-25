@@ -127,6 +127,18 @@
 
 - Q: What happens when a custom theme has the same name as a stock theme? → A: Complete replacement - custom theme fully replaces stock theme, no merging or inheritance
 
+### Session 2024-12-25 (Eleventh Pass)
+
+- Q: Are level names in the `levels` section case-sensitive? → A: Case-sensitive - "error" is valid, "Error" or "ERROR" are invalid. However, correction: unknown/invalid level names are ignored (not error as previously stated).
+
+- Q: Can boolean-true and boolean-false use the v1 `style` field to reference roles? → A: Yes - boolean-true and boolean-false can use `style` field in v1 like any other element
+
+- Q: How should unknown element properties be handled (e.g., properties other than foreground, background, modes, style)? → A: Ignore unknown properties silently (forward compatibility - newer themes work on older apps). Note: strict validation (D) may be considered later.
+
+- Q: Can a role name be the same as an element name (e.g., both element "primary" and role "primary")? → A: Separate namespaces - element and role names can overlap without conflict
+
+- Q: Is ANSI extended color value 0 valid? → A: Yes - 0 is valid (0-255 means inclusive range, 0 is black in ANSI 256-color palette)
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Theme File Loading and Validation (Priority: P1)
@@ -375,7 +387,7 @@ Theme authors using v1 can define semantic roles (like "warning", "error", "succ
 
 - **FR-010d**: System MUST reject themes with unsupported version numbers (e.g., v1.1+ or v2.0+ when not implemented) before parsing sections; if version is unsupported, exit with error without processing unknown sections
 
-- **FR-010e**: System MUST validate that level names in `levels` section are from the known set (trace, debug, info, warning, error); unknown level names MUST cause error even if other unknown sections are ignored
+- **FR-010e**: System MUST treat level names in `levels` section as case-sensitive (valid: trace, debug, info, warning, error; invalid: Trace, ERROR, etc.); unknown or invalid level names are ignored (not loaded) rather than causing error
 
 - **FR-011**: System MUST support all v0 element names as defined in schema (case-sensitive): input, input-number, input-number-inner, input-name, input-name-inner, time, level, level-inner, logger, logger-inner, caller, caller-inner, message, message-delimiter, field, key, array, object, string, number, boolean, boolean-true, boolean-false, null, ellipsis
 
@@ -383,9 +395,13 @@ Theme authors using v1 can define semantic roles (like "warning", "error", "succ
 
 - **FR-011b**: V0 themes MUST allow all sections (`elements`, `levels`, `indicators`, `tags`) to be optional or empty; missing sections are treated as if all elements inside are missing; elements with parent/inner relations inherit from parent if missing; elements with boolean special case inherit from `boolean` if missing; other elements use empty style (default terminal background and foreground, no modes)
 
+- **FR-011c**: System MUST ignore unknown element properties silently (forward compatibility allows newer themes with additional properties to work on older app versions); known properties in v0: foreground, background, modes; known properties in v1: foreground, background, modes, style
+
 - **FR-012**: System MUST support style properties: foreground (color), background (color), modes (array of mode enums in v0, array of mode operations in v1)
 
-- **FR-013**: System MUST support color formats: ANSI basic colors (named, case-sensitive), ANSI extended colors (0-255 integers), RGB colors (#RRGGBB hex, case-insensitive for A-F)
+- **FR-013**: System MUST support color formats: ANSI basic colors (named, case-sensitive), ANSI extended colors (0-255 integers inclusive), RGB colors (#RRGGBB hex, case-insensitive for A-F)
+
+- **FR-013b**: System MUST accept ANSI extended color value 0 as valid (0 is black in the ANSI 256-color palette); valid range is 0-255 inclusive
 
 - **FR-013a**: System MUST treat ANSI basic color names as case-sensitive; "black" is valid, "Black" or "BLACK" are invalid and cause error
 
@@ -408,7 +424,7 @@ Theme authors using v1 can define semantic roles (like "warning", "error", "succ
 
 - **FR-018**: System MUST treat empty modes array `[]` identically to absent modes field (both inherit from parent)
 
-- **FR-018a**: System MUST validate level names in the `levels` section and reject themes with unknown level names (valid levels: trace, debug, info, warning, error)
+- **FR-018a**: System MUST treat level names in the `levels` section as case-sensitive (valid: trace, debug, info, warning, error); unknown or invalid level names (e.g., "critical", "Error") are silently ignored and not loaded
 
 #### V0 Level-Specific Overrides
 
@@ -432,7 +448,7 @@ Theme authors using v1 can define semantic roles (like "warning", "error", "succ
 
 - **FR-023**: System MUST support indicators section with sync.synced and sync.failed configurations; indicators are a separate application feature (--follow mode) where sync state markers are displayed at the start of each line; themes provide only the visual styling for these indicator states (in sync vs out of sync)
 
-- **FR-024**: System MUST support boolean special case for backward compatibility in v0 and v1: if base `boolean` element is defined, automatically apply it to `boolean-true` and `boolean-false` at load time before applying their specific overrides (this is active property merging, different from the passive nested styling scope used for other parent-inner pairs; this pattern exists because `boolean` was added first, variants came later)
+- **FR-024**: System MUST support boolean special case for backward compatibility in v0 and v1: if base `boolean` element is defined, automatically apply it to `boolean-true` and `boolean-false` at load time before applying their specific overrides (this is active property merging, different from the passive nested styling scope used for other parent-inner pairs; this pattern exists because `boolean` was added first, variants came later); in v1, boolean-true and boolean-false can also use `style` field to reference roles like any other element
 
 - **FR-025**: System MUST ignore unknown element names gracefully (forward compatibility)
 
@@ -474,7 +490,7 @@ Theme authors using v1 can define semantic roles (like "warning", "error", "succ
 
 - **FR-037**: V1 themes MUST support `styles` section as an object map where keys are role names (from predefined enum) and values are style objects containing optional foreground, background, modes, and an optional `style` field that references another role for parent/base inheritance (e.g., `styles: {warning: {style: "primary", foreground: "#FFA500", modes: [bold]}}`)
 
-- **FR-037a**: V1 role names MUST be from the predefined enum (kebab-case, case-sensitive): default, primary, secondary, emphasized, muted, accent, accent-secondary, syntax, status, info, warning, error. Undefined role names or incorrect case (e.g., "Primary") are rejected with error.
+- **FR-037a**: V1 role names MUST be from the predefined enum (kebab-case, case-sensitive): default, primary, secondary, emphasized, muted, accent, accent-secondary, syntax, status, info, warning, error. Undefined role names or incorrect case (e.g., "Primary") are rejected with error. Element and role names exist in separate namespaces and can overlap without conflict.
 
 - **FR-037b**: V1 `default` role serves as the implicit base for all roles that do not explicitly specify a `style` field; properties set in `default` (foreground, background, modes) apply to all other roles unless overridden
 
@@ -524,7 +540,7 @@ Theme authors using v1 can define semantic roles (like "warning", "error", "succ
 
 - **Color**: Visual color value in one of three formats:
   - ANSI basic: named colors (case-sensitive: default, black, red, green, yellow, blue, magenta, cyan, white, bright-black, bright-red, bright-green, bright-yellow, bright-blue, bright-magenta, bright-cyan, bright-white)
-  - ANSI extended: integer value 0-255 (values outside this range are rejected with specific error)
+  - ANSI extended: integer value 0-255 inclusive (0 is black in ANSI 256-color palette; values outside this range are rejected with specific error)
   - RGB: hex format #RRGGBB (exactly 6 hex digits; hex letters A-F are case-insensitive; other formats like #FFF, #RRGGBBAA are rejected with specific error messages)
 
 - **Mode**: Text rendering mode (case-sensitive: bold, faint, italic, underline, slow-blink, rapid-blink, reverse, conceal, crossed-out). In v0, modes are plain values in an array. In v1, modes are operations: +mode (add), -mode (remove), or plain mode (defaults to +mode). V1 modes are internally stored as two unordered sets (adds/removes) and final output uses only adds in enum declaration order.
@@ -590,12 +606,12 @@ Theme authors using v1 can define semantic roles (like "warning", "error", "succ
 - Theme files are UTF-8 encoded
 - Theme file size limits are enforced by OS/filesystem only; no application-level size validation or limits are imposed (parser will handle files of any size that the OS allows to be read)
 - Both v0 and v1 use nested styling scope for parent-inner pairs (inner rendered inside parent) for these specific pairs listed in FR-015; if inner element is not defined, parent style continues through nesting; v1 adds property-level merging via roles as an additional inheritance mechanism
-- Boolean special case (boolean → boolean-true/boolean-false) uses active property merging at load time in both v0 and v1, different from the passive nested styling used for other pairs; this exists for backward compatibility because `boolean` was added first and variants came later
+- Boolean special case (boolean → boolean-true/boolean-false) uses active property merging at load time in both v0 and v1, different from the passive nested styling used for other pairs; this exists for backward compatibility because `boolean` was added first and variants came later; in v1, boolean-true and boolean-false can also use the `style` field to reference roles like any other element (boolean special case merging occurs first, then role resolution)
 - Empty modes array `[]` is semantically identical to absent modes field in v0 (both result in no mode override, so parent style continues through nesting or no modes applied)
 - In v0, duplicate modes in modes array are allowed and all passed to terminal (terminal ignores redundant codes); v0 modes are plain values only (no +/- prefixes supported); if a mode with +/- prefix is detected in v0 theme, system exits with error suggesting to use v1 or remove prefix
 - In v1, modes are operations: +mode (add mode), -mode (remove mode), or plain mode (defaults to +mode). Modes are internally represented as two unordered sets (adds/removes). During merge, child -mode can turn off parent's mode. When the same mode appears in both +mode and -mode forms within the same array, last occurrence wins. Final ANSI output uses only added modes in enum declaration order (Bold, Faint, Italic, Underline, SlowBlink, RapidBlink, Reverse, Conceal, CrossedOut); remove operations are only used during merge.
 - The $palette section is part of the schema for all formats in both v0 and v1, but only YAML can use anchor/alias syntax; TOML and JSON can define $palette for organization but must reference colors by explicit values; YAML undefined anchor references are detected by the YAML parser and reported as parse errors with line numbers; v1 $palette works identically to v0
-- Color validation provides format-specific error messages: RGB hex colors must be exactly #RRGGBB format (6 hex digits), ANSI extended colors must be integers 0-255 (inclusive), ANSI basic colors must match known color names; invalid formats exit with specific error describing the issue and expected format
+- Color validation provides format-specific error messages: RGB hex colors must be exactly #RRGGBB format (6 hex digits), ANSI extended colors must be integers 0-255 inclusive (0 is valid and represents black in ANSI 256-color palette), ANSI basic colors must match known color names; invalid formats exit with specific error describing the issue and expected format
 - Stock themes are embedded in the application binary; custom themes are searched first, allowing users to completely replace stock themes by creating a custom theme with the same name (no merging - complete replacement)
 - Level-specific overrides are merged with base elements at load time, creating a complete element set for each level; nested styling then applies during rendering (v0 and v1)
 - In v1, level-specific element overrides can use the `style` field to reference roles, enabling level-specific elements to inherit from semantic roles (e.g., `levels.error.message: {style: "error-text", modes: [+bold]}`)
@@ -607,13 +623,15 @@ Theme authors using v1 can define semantic roles (like "warning", "error", "succ
 - V1 property resolution order needs further refinement based on complete user stories; current likely order: @default → level-specific → role → element explicit (highest precedence); alternative under consideration: level-specific → @default → role (recursive) → element explicit
 - The theme name `@default` is reserved for the embedded v1 default theme; custom theme files named `@default` (any extension) are ignored and not loaded; other theme names starting with `@` can be used normally
 - File extension determines which parser is used (YAML/TOML/JSON); if file content doesn't match extension, parser fails with error to stderr (no auto-detection of actual format)
-- Unknown top-level sections in theme files are ignored when the theme version is supported (forward compatibility); if theme version is unsupported, error occurs before section parsing; exception: unknown level names in `levels` section always cause error (only trace, debug, info, warning, error are valid)
+- Unknown top-level sections in theme files are ignored when the theme version is supported (forward compatibility); if theme version is unsupported, error occurs before section parsing; level names in `levels` section are case-sensitive (trace, debug, info, warning, error); unknown or invalid level names are silently ignored
+- Unknown element properties (properties other than foreground, background, modes, and in v1: style) are silently ignored for forward compatibility; this allows newer themes with additional properties to work on older app versions
+- Element names and role names exist in separate namespaces; element and role names can overlap without conflict (e.g., can have both an element named "message" and a role named "message" in v1)
 - In v1, all user themes implicitly inherit from the embedded `@default` theme, which explicitly defines all 28 v0 elements and all 12 v1 roles with reasonable defaults; undefined roles/elements in user themes fall back to `@default` definitions
 - V1 `@default` theme defines roles with inheritance chains where more specific roles inherit from more generic ones (e.g., `info: {style: "primary"}`, `warning: {style: "accent"}`), providing flexibility and forward compatibility - old themes work with newer app versions by falling back to consistent generic role styles
 - Theme name matching when loading themes follows platform filesystem conventions: case-sensitive on Linux/macOS (e.g., "MyTheme" ≠ "mytheme"), case-insensitive on Windows (e.g., "MyTheme" matches "mytheme.yaml")
 - Tags are validated against allowed values (dark, light, 16color, 256color, truecolor); unknown tags cause error; empty array is allowed; multiple tags including combinations like dark+light (compatible with both modes) are allowed; no tag combinations are considered conflicting
 - Theme listing format is terminal-aware: when output is a terminal, use multi-column layout (terminal-width-aware) with alphabetical sorting within groups (stock/custom); when output is not a terminal (pipe/redirect), use plain list format with one theme name per line without grouping or styling; each theme shown by stem name once even if multiple formats exist
-- All identifiers are case-sensitive: element names (e.g., "message" ≠ "Message"), role names (e.g., "primary" ≠ "Primary"), mode names (e.g., "bold" ≠ "Bold"), ANSI basic color names (e.g., "black" ≠ "Black"); RGB hex color codes are case-insensitive for letters A-F
+- All identifiers are case-sensitive: element names (e.g., "message" ≠ "Message"), role names (e.g., "primary" ≠ "Primary"), mode names (e.g., "bold" ≠ "Bold"), level names (e.g., "error" ≠ "Error"), ANSI basic color names (e.g., "black" ≠ "Black"); RGB hex color codes are case-insensitive for letters A-F
 - Currently only version="1.0" is supported for v1 themes; version="1.1" or higher minor versions are rejected until implemented; version="2.0" or higher major versions are rejected as unsupported
 - V1 role names are restricted to a predefined enum (kebab-case, case-sensitive): default, primary, secondary, emphasized, muted, accent, accent-secondary, syntax, status, info, warning, error. User themes can only define roles from this list; undefined role names or incorrect case are rejected with error. The `default` role is the implicit base for all roles that don't specify a `style` field - properties set in `default` (foreground, background, modes) apply to all other roles unless explicitly overridden.
 - V1 property precedence: element explicit properties override role properties; this allows elements to reference a role for base styling while overriding specific properties
