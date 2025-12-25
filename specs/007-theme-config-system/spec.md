@@ -43,6 +43,18 @@
 
 - Q: What happens when a v1 theme references a role that is not defined in the theme? → A: V1 uses embedded `@default` theme with defaults for all styles; undefined roles in user themes fall back to `@default` which defines all reasonable defaults with specific styles resolving to generic ones (primary/secondary)
 
+### Session 2024-12-25 (Fourth Pass)
+
+- Q: How does the `include` directive work in v1? → A: No custom `include` directive in v1; only `@default` theme inheritance. Custom inclusions may be considered later.
+
+- Q: What is the schema for the `styles` section in v1 themes? → A: Object map where keys are role names, values are style objects with optional `style` field for parent/base inheritance: `styles: {warning: {style: "primary", foreground: "#FFA500", modes: [bold]}}`
+
+- Q: What happens when role inheritance chains are deep or circular via the `style` field? → A: Maximum depth of 64 levels
+
+- Q: How are theme name suggestions computed when a theme is not found? → A: Jaro similarity algorithm with minimum relevance threshold of 0.75, sorted by descending relevance
+
+- Q: How should the system handle alternate file extensions like `.yml`? → A: Only accept `.yaml` - users must rename `.yml` files to `.yaml`
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Theme File Loading and Validation (Priority: P1)
@@ -219,9 +231,9 @@ Theme authors using v1 can define semantic roles (like "warning", "error", "succ
    **When** child element `level-inner` defines modes=[italic]
    **Then** in v1, modes are merged: [bold, underline, italic] (contrast with v0 where modes=[italic] would replace entirely)
 
-4. **Given** a v1 theme that includes a default theme via `include` directive
-   **When** the theme overrides only 5 specific elements
-   **Then** all non-overridden elements inherit from the default theme (property-level merging for v1)
+4. **Given** a v1 theme that defines only 5 specific elements
+   **When** the theme is loaded
+   **Then** all non-defined elements inherit from the embedded `@default` theme (property-level merging for v1)
 
 ---
 
@@ -236,11 +248,11 @@ Theme authors using v1 can define semantic roles (like "warning", "error", "succ
 - What happens when filesystem operations fail (permission denied on theme file, I/O error during read, disk full)?
 - What happens when the theme directory doesn't exist or isn't readable?
 - What happens when a theme file exists but has restrictive permissions (not readable)?
-- How are circular includes detected in v1 (Theme A includes Theme B which includes Theme A)?
-- What happens when v1 theme includes a v0 theme or vice versa?
-- What happens when the system handle multi-level inheritance (grandparent → parent → child) in v1?
+
 - What happens when a color palette anchor is referenced but not defined (YAML anchor edge case)?
-- In v1 when merging modes arrays, if both parent and child have [bold], does the result have one [bold] or two (e.g., parent [bold], child [bold, italic] → [bold, italic] or [bold, bold, italic])?
+- In v1 when merging modes arrays, if both parent and child have [bold], does the result have one [bold] or two (e.g., parent [bold], child [bold, italic] → [bold, italic] or [bold, bold, italic])? (Answer: deduplicated with last occurrence winning per FR-041)
+- What happens when a user specifies a theme with `.yml` extension explicitly (e.g., `my-theme.yml`)? (Answer: file not found error - only `.yaml` extension is supported)
+
 
 ## Requirements *(mandatory)*
 
@@ -250,7 +262,7 @@ Theme authors using v1 can define semantic roles (like "warning", "error", "succ
 
 - **FR-001**: System MUST load theme files in TOML, YAML, or JSON format from user config directories and embedded resources at startup only (no runtime reloading)
 
-- **FR-002**: System MUST support loading themes by stem name (without extension) with automatic format detection in priority order: .yaml, .toml, .json (first found wins)
+- **FR-002**: System MUST support loading themes by stem name (without extension) with automatic format detection in priority order: .yaml, .toml, .json (first found wins); alternate extension `.yml` is NOT supported
 
 - **FR-003**: System MUST support loading themes by full filename (with extension) to load a specific format
 
@@ -263,9 +275,11 @@ Theme authors using v1 can define semantic roles (like "warning", "error", "succ
 
 - **FR-006**: System MUST exit with error to stderr when a specified theme cannot be loaded (no fallback to default)
 
+- **FR-006a**: System MUST compute theme name suggestions using Jaro similarity algorithm with minimum relevance threshold of 0.75, presenting suggestions sorted by descending relevance score
+
 - **FR-007**: System MUST exit with error to stderr when filesystem operations fail during theme loading, reporting the specific error (permission denied, I/O error, disk read failure, etc.)
 
-- **FR-008**: System MUST include suggestions for similar theme names in error messages when theme is not found
+- **FR-008**: System MUST include suggestions for similar theme names (computed via Jaro similarity ≥0.75) in error messages when theme is not found
 
 - **FR-009**: System MUST be silent on successful theme loading (no output to stdout/stderr) following standard CLI behavior; errors only are reported to stderr
 
@@ -336,21 +350,25 @@ Theme authors using v1 can define semantic roles (like "warning", "error", "succ
 
 - **FR-036**: V1 system MUST include an embedded `@default` theme that defines defaults for all styles and roles; this theme is invisible when listing themes (not shown in stock or custom groups)
 
-- **FR-037**: V1 themes MUST support `styles` section for defining semantic roles (warning, error, success, primary, secondary, etc.)
+- **FR-037**: V1 themes MUST support `styles` section as an object map where keys are role names and values are style objects containing optional foreground, background, modes, and an optional `style` field that references another role for parent/base inheritance (e.g., `styles: {warning: {style: "primary", foreground: "#FFA500", modes: [bold]}}`)
 
 - **FR-038**: V1 themes MUST support `style` property on elements to reference role names
 
-- **FR-039**: V1 themes MUST resolve styles in this order: user theme role resolution → `@default` theme fallback → parent inheritance → explicit overrides
+- **FR-039**: V1 themes MUST resolve styles in this order: resolve `style` field references to parent roles (recursively) → merge with `@default` theme for undefined roles → apply explicit property overrides
 
-- **FR-040**: V1 `@default` theme MUST define reasonable defaults for all styles, with specific styles resolving to more generic ones (e.g., specific roles falling back to `primary` or `secondary`)
+- **FR-040**: V1 `@default` theme MUST define reasonable defaults for all styles, with specific styles using the `style` field to reference more generic ones (e.g., `warning: {style: "primary", ...}` where `primary` is also defined in `@default`)
 
 - **FR-041**: V1 themes MUST use property-level merging for modes (union of parent and child modes with last occurrence winning for duplicates) instead of v0's replacement semantics
 
-- **FR-042**: V1 themes MUST support `include` directive to reference parent themes
+- **FR-042**: V1 does NOT support custom `include` directive for referencing other themes; only `@default` theme inheritance is supported (custom includes may be considered for future versions)
 
-- **FR-043**: V1 themes MUST detect circular includes and report error with dependency chain
+- **FR-043**: V1 inheritance chain is simple: user theme → `@default` theme (no circular dependency detection needed)
 
-- **FR-044**: V1 cross-theme merging MUST preserve property-level granularity (child overrides only specified properties, inherits others)
+- **FR-044**: V1 role-to-role inheritance via the `style` field MUST support a maximum depth of 64 levels
+
+- **FR-045**: V1 themes MUST detect circular role references (e.g., `warning: {style: "error"}` and `error: {style: "warning"}`) and exit with error message showing the circular dependency chain
+
+- **FR-046**: V1 themes MUST exit with error when a role's `style` field references a role that doesn't exist in either the user theme or `@default` theme
 
 ### Key Entities
 
@@ -362,7 +380,9 @@ Theme authors using v1 can define semantic roles (like "warning", "error", "succ
 
 - **Element**: Named visual element in log output (28 distinct elements in v0) including: input, input-number, input-number-inner, input-name, input-name-inner, time, level, level-inner, logger, logger-inner, caller, caller-inner, message, message-delimiter, field, key, array, object, string, number, boolean, boolean-true, boolean-false, null, ellipsis
 
-- **Style**: Visual appearance specification with optional foreground color, optional background color, and optional text modes list
+- **Style**: Visual appearance specification with optional foreground color, optional background color, and optional text modes list. In v1, styles can also have an optional `style` field that references a parent/base style for inheritance.
+
+- **Role** (v1 only): Named style defined in the `styles` section that can be referenced by elements or other roles. Roles support inheritance via the optional `style` field (e.g., `warning: {style: "primary", foreground: "#FFA500"}`).
 
 - **Color**: Visual color value in one of three formats:
   - ANSI basic: named colors (default, black, red, green, yellow, blue, magenta, cyan, white, bright-black, bright-red, bright-green, bright-yellow, bright-blue, bright-magenta, bright-cyan, bright-white)
@@ -436,8 +456,12 @@ Theme authors using v1 can define semantic roles (like "warning", "error", "succ
 - The system has access to all theme files at load time (no lazy loading)
 - Theme files are relatively small (< 10KB typical, < 100KB expected maximum in practice, but no hard limits enforced)
 - Themes are loaded once at application startup and remain constant for the lifetime of the process; changing themes requires restarting the application
-- In v1, all user themes implicitly inherit from the embedded `@default` theme, which provides sensible defaults for all roles and styles; undefined roles in user themes fall back to `@default` definitions
+- In v1, all user themes implicitly inherit from the embedded `@default` theme, which provides sensible defaults for all roles and styles; undefined roles/elements in user themes fall back to `@default` definitions
+- V1 does NOT support custom `include` directive for theme-to-theme inheritance; only `@default` inheritance is available (custom includes may be added in future versions)
+- V1 role-to-role inheritance chains via the `style` field support a maximum depth of 64 levels; deeper chains or circular references cause theme loading to fail with error
 - The `@default` theme is not visible in theme listings (it's an internal/system theme)
+- Theme name suggestions use Jaro similarity algorithm with minimum relevance threshold of 0.75; suggestions are sorted by descending relevance score
+- Only `.yaml` extension is supported for YAML files; alternate `.yml` extension is NOT supported (users must rename `.yml` files to `.yaml`)
 - YAML anchors ($palette) are a convenience feature - themes can be written without them
 - The embedded configuration file (etc/defaults/config.yaml) specifies the default theme used when no theme is explicitly specified
 - Theme loading failures (file not found, parse errors, invalid color values) cause the application to exit with error messages to stderr - no silent fallbacks
