@@ -79,6 +79,18 @@
 
 - Q: What determines the layout and ordering of theme listing output? → A: Terminal-width-aware column count (fit max columns); alphabetically sorted within each group, if output is terminal. Plain list (without grouping or styling) with one theme name per line if output is not terminal.
 
+### Session 2024-12-25 (Seventh Pass)
+
+- Q: Are element names, role names, and ANSI color names case-sensitive or case-insensitive? → A: Case-sensitive for all: element names, role names, color names (e.g., "primary" ≠ "Primary", "black" ≠ "Black")
+
+- Q: What is the behavior for empty/missing sections (elements, styles, levels)? → A: For v1: missing sections treated as empty; empty sections allowed; theme inherits from @default for undefined parts. For v0: all sections are optional; if missing then all elements inside are considered missing; elements with parent/inner relations or boolean special case inherit from parent if missing; others use empty style (default terminal background and foreground, no modes).
+
+- Q: Does the boolean→boolean-true/boolean-false special case still occur in v1, or does v1 use only role-based inheritance? → A: V1 keeps boolean special case for backward compatibility (active merging still happens)
+
+- Q: What is the indicators feature referenced in the indicators section? → A: Out of scope for detailed specification - indicators are a separate feature (--follow mode). Brief description: When --follow option is used, application processes inputs simultaneously, sorting entries chronologically. A sync indicator placeholder at line start shows two states: in sync (default) and out of sync (typically `!` with warning style). Themes provide only styling for these indicator states.
+
+- Q: Does @default theme define all 28 elements and all 12 roles explicitly, or just a subset? → A: @default defines all 28 elements and all 12 roles explicitly with reasonable defaults. Styles with more specific roles usually just inherit styles with more generic roles by default - this provides better flexibility, old themes may still be compatible with newer app versions and look consistently even without defining explicitly styles for new roles.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Theme File Loading and Validation (Priority: P1)
@@ -311,13 +323,19 @@ Theme authors using v1 can define semantic roles (like "warning", "error", "succ
 
 - **FR-009**: System MUST be silent on successful theme loading (no output to stdout/stderr) following standard CLI behavior; errors only are reported to stderr
 
-- **FR-010**: System MUST parse theme files with the following top-level sections: `elements`, `levels`, `indicators`, `tags`, `$palette` (optional YAML anchors)
+- **FR-010**: System MUST parse theme files with the following top-level sections: `elements`, `levels`, `indicators`, `tags`, `$palette` (all sections optional)
 
-- **FR-011**: System MUST support all v0 element names as defined in schema: input, input-number, input-number-inner, input-name, input-name-inner, time, level, level-inner, logger, logger-inner, caller, caller-inner, message, message-delimiter, field, key, array, object, string, number, boolean, boolean-true, boolean-false, null, ellipsis
+- **FR-011**: System MUST support all v0 element names as defined in schema (case-sensitive): input, input-number, input-number-inner, input-name, input-name-inner, time, level, level-inner, logger, logger-inner, caller, caller-inner, message, message-delimiter, field, key, array, object, string, number, boolean, boolean-true, boolean-false, null, ellipsis
+
+- **FR-011a**: System MUST treat element names as case-sensitive; "message" and "Message" are different identifiers (unknown element "Message" would be ignored per forward compatibility)
+
+- **FR-011b**: V0 themes MUST allow all sections (`elements`, `levels`, `indicators`, `tags`) to be optional or empty; missing sections are treated as if all elements inside are missing; elements with parent/inner relations inherit from parent if missing; elements with boolean special case inherit from `boolean` if missing; other elements use empty style (default terminal background and foreground, no modes)
 
 - **FR-012**: System MUST support style properties: foreground (color), background (color), modes (array of mode enums in v0, array of mode operations in v1)
 
-- **FR-013**: System MUST support color formats: ANSI basic colors (named), ANSI extended colors (0-255 integers), RGB colors (#RRGGBB hex)
+- **FR-013**: System MUST support color formats: ANSI basic colors (named, case-sensitive), ANSI extended colors (0-255 integers), RGB colors (#RRGGBB hex, case-insensitive for A-F)
+
+- **FR-013a**: System MUST treat ANSI basic color names as case-sensitive; "black" is valid, "Black" or "BLACK" are invalid and cause error
 
 - **FR-014**: System MUST support mode values in v0: bold, faint, italic, underline, slow-blink, rapid-blink, reverse, conceal, crossed-out (plain values only, no +/- prefixes supported)
 
@@ -350,9 +368,9 @@ Theme authors using v1 can define semantic roles (like "warning", "error", "succ
 
 - **FR-022**: System MUST support tags array with allowed values: dark, light, 16color, 256color, truecolor
 
-- **FR-023**: System MUST support indicators section with sync.synced and sync.failed configurations
+- **FR-023**: System MUST support indicators section with sync.synced and sync.failed configurations; indicators are a separate application feature (--follow mode) where sync state markers are displayed at the start of each line; themes provide only the visual styling for these indicator states (in sync vs out of sync)
 
-- **FR-024**: System MUST support boolean special case for backward compatibility in v0 only: if base `boolean` element is defined, automatically apply it to `boolean-true` and `boolean-false` at load time before applying their specific overrides (this is active property merging, different from the passive nested styling scope used for other parent-inner pairs; this pattern exists because `boolean` was added first, variants came later; v1 may generalize this pattern)
+- **FR-024**: System MUST support boolean special case for backward compatibility in v0 and v1: if base `boolean` element is defined, automatically apply it to `boolean-true` and `boolean-false` at load time before applying their specific overrides (this is active property merging, different from the passive nested styling scope used for other parent-inner pairs; this pattern exists because `boolean` was added first, variants came later)
 
 - **FR-025**: System MUST ignore unknown element names gracefully (forward compatibility)
 
@@ -384,13 +402,17 @@ Theme authors using v1 can define semantic roles (like "warning", "error", "succ
 
 #### V1 Enhanced Inheritance (Future)
 
-- **FR-036**: V1 system MUST include an embedded `@default` theme that defines defaults for all styles and roles; this theme is invisible when listing themes (not shown in stock or custom groups)
+- **FR-036**: V1 system MUST include an embedded `@default` theme that explicitly defines all 28 v0 elements and all 12 v1 roles with reasonable defaults; this theme is invisible when listing themes (not shown in stock or custom groups)
+
+- **FR-036a**: V1 `@default` theme MUST define roles with inheritance chains where more specific roles inherit from more generic ones (e.g., specific roles reference `primary` or `secondary` via `style` field), providing flexibility so old themes remain compatible with newer app versions and look consistent even without defining new roles explicitly
 
 - **FR-037**: V1 themes MUST support `styles` section as an object map where keys are role names (from predefined enum) and values are style objects containing optional foreground, background, modes, and an optional `style` field that references another role for parent/base inheritance (e.g., `styles: {warning: {style: "primary", foreground: "#FFA500", modes: [bold]}}`)
 
-- **FR-037a**: V1 role names MUST be from the predefined enum (kebab-case): default, primary, secondary, emphasized, muted, accent, accent-secondary, syntax, status, info, warning, error. Undefined role names are rejected with error.
+- **FR-037a**: V1 role names MUST be from the predefined enum (kebab-case, case-sensitive): default, primary, secondary, emphasized, muted, accent, accent-secondary, syntax, status, info, warning, error. Undefined role names or incorrect case (e.g., "Primary") are rejected with error.
 
 - **FR-037b**: V1 `default` role serves as the implicit base for all roles that do not explicitly specify a `style` field; properties set in `default` (foreground, background, modes) apply to all other roles unless overridden
+
+- **FR-037c**: V1 themes MUST allow `elements`, `styles`, and `levels` sections to be optional or empty; missing sections are treated as empty; undefined elements/roles inherit from the `@default` theme
 
 - **FR-038**: V1 themes MUST support `style` property on elements to reference role names
 
@@ -420,7 +442,7 @@ Theme authors using v1 can define semantic roles (like "warning", "error", "succ
 
 - **Theme**: Complete theme configuration containing element styles, level-specific overrides, indicators, version, and metadata tags
 
-- **@default Theme** (v1 only): Embedded theme that provides default definitions for all styles and roles. Not visible in theme listings. All v1 user themes implicitly inherit from `@default` when roles or styles are not explicitly defined. More specific styles in `@default` resolve to generic ones (e.g., `primary`, `secondary`).
+- **@default Theme** (v1 only): Embedded theme that explicitly defines all 28 v0 elements and all 12 v1 roles with reasonable defaults. Not visible in theme listings. All v1 user themes implicitly inherit from `@default` when roles or styles are not explicitly defined. More specific roles in `@default` typically inherit from more generic ones via `style` field (e.g., `warning: {style: "primary", ...}`), ensuring old themes remain compatible with newer app versions by falling back to consistent generic styles.
 
 - **Theme Version**: Version identifier following "major.minor" format (e.g., "1.0", "1.5") where major=1 and minor has no leading zeros. Used to determine which schema and merge semantics apply.
 
@@ -428,12 +450,12 @@ Theme authors using v1 can define semantic roles (like "warning", "error", "succ
 
 - **Style**: Visual appearance specification with optional foreground color, optional background color, and optional text modes list. In v0, modes is a simple array of mode names. In v1, modes is an array of mode operations (+mode to add, -mode to remove, plain mode defaults to +mode), and styles can have an optional `style` field that references a parent/base style for inheritance.
 
-- **Role** (v1 only): Named style defined in the `styles` section that can be referenced by elements or other roles. Role names must be from the predefined enum (kebab-case): default, primary, secondary, emphasized, muted, accent, accent-secondary, syntax, status, info, warning, error. The `default` role is the implicit base for all roles that don't specify a `style` field - properties set in `default` apply to all other roles unless overridden. Roles support inheritance via the optional `style` field (e.g., `warning: {style: "primary", foreground: "#FFA500", modes: [+bold, -italic]}`).
+- **Role** (v1 only): Named style defined in the `styles` section that can be referenced by elements or other roles. Role names must be from the predefined enum (kebab-case, case-sensitive): default, primary, secondary, emphasized, muted, accent, accent-secondary, syntax, status, info, warning, error. The `default` role is the implicit base for all roles that don't specify a `style` field - properties set in `default` apply to all other roles unless overridden. Roles support inheritance via the optional `style` field (e.g., `warning: {style: "primary", foreground: "#FFA500", modes: [+bold, -italic]}`).
 
 - **Color**: Visual color value in one of three formats:
-  - ANSI basic: named colors (default, black, red, green, yellow, blue, magenta, cyan, white, bright-black, bright-red, bright-green, bright-yellow, bright-blue, bright-magenta, bright-cyan, bright-white)
+  - ANSI basic: named colors (case-sensitive: default, black, red, green, yellow, blue, magenta, cyan, white, bright-black, bright-red, bright-green, bright-yellow, bright-blue, bright-magenta, bright-cyan, bright-white)
   - ANSI extended: integer value 0-255 (values outside this range are rejected with specific error)
-  - RGB: hex format #RRGGBB (exactly 6 hex digits; other formats like #FFF, #RRGGBBAA are rejected with specific error messages)
+  - RGB: hex format #RRGGBB (exactly 6 hex digits; hex letters A-F are case-insensitive; other formats like #FFF, #RRGGBBAA are rejected with specific error messages)
 
 - **Mode**: Text rendering mode (bold, faint, italic, underline, slow-blink, rapid-blink, reverse, conceal, crossed-out). In v0, modes are plain values in an array. In v1, modes are operations: +mode (add), -mode (remove), or plain mode (defaults to +mode). V1 modes are internally stored as two unordered sets (adds/removes) and final output uses only adds in enum declaration order.
 
@@ -490,11 +512,15 @@ Theme authors using v1 can define semantic roles (like "warning", "error", "succ
 - When multiple files with same stem but different extensions exist, only the highest priority extension is loaded
 - Color values are valid when specified (validation occurs during parsing)
 - Users have appropriate terminal capabilities for the colors they choose (no runtime terminal capability detection required)
-- Mode values are from the known set (unknown modes are rejected during parsing)
+- Mode values are from the known set (unknown modes are rejected during parsing in v0; in v1 unknown mode operations are also rejected)
+- All theme sections (`elements`, `levels`, `indicators`, `tags`, `styles`) are optional and can be empty or missing
+- V0: missing sections mean all elements inside are considered missing; elements with parent/inner relations or boolean special case inherit from parent; others use empty style (default terminal colors, no modes)
+- Indicators section (`indicators.sync.synced` and `indicators.sync.failed`) provides styling for sync state markers used in --follow mode; this is a separate application feature where themes only define visual appearance
+- V1: missing sections are treated as empty; all undefined elements/roles inherit from `@default` theme
 - Theme files are UTF-8 encoded
 - Theme file size limits are enforced by OS/filesystem only; no application-level size validation or limits are imposed (parser will handle files of any size that the OS allows to be read)
 - In v0, parent-inner pairs use nested styling scope (inner rendered inside parent) for these specific pairs listed in FR-013; if inner element is not defined, parent style continues through nesting (v1 adds explicit property-level inheritance)
-- In v0, boolean special case (boolean → boolean-true/boolean-false) uses active property merging at load time, different from the passive nested styling used for other pairs; this exists for backward compatibility because `boolean` was added first and variants came later (v1 may generalize active inheritance to more element pairs)
+- Boolean special case (boolean → boolean-true/boolean-false) uses active property merging at load time in both v0 and v1, different from the passive nested styling used for other pairs; this exists for backward compatibility because `boolean` was added first and variants came later
 - Empty modes array `[]` is semantically identical to absent modes field in v0 (both result in no mode override, so parent style continues through nesting or no modes applied)
 - In v0, duplicate modes in modes array are allowed and all passed to terminal (terminal ignores redundant codes); v0 modes are plain values only (no +/- prefixes supported); if a mode with +/- prefix is detected in v0 theme, system exits with error suggesting to use v1 or remove prefix
 - In v1, modes are operations: +mode (add mode), -mode (remove mode), or plain mode (defaults to +mode). Modes are internally represented as two unordered sets (adds/removes). During merge, child -mode can turn off parent's mode. When the same mode appears in both +mode and -mode forms within the same array, last occurrence wins. Final ANSI output uses only added modes in enum declaration order (Bold, Faint, Italic, Underline, SlowBlink, RapidBlink, Reverse, Conceal, CrossedOut); remove operations are only used during merge.
@@ -506,9 +532,11 @@ Theme authors using v1 can define semantic roles (like "warning", "error", "succ
 - The system has access to all theme files at load time (no lazy loading)
 - Theme files are relatively small (< 10KB typical, < 100KB expected maximum in practice, but no hard limits enforced)
 - Themes are loaded once at application startup and remain constant for the lifetime of the process; changing themes requires restarting the application
-- In v1, all user themes implicitly inherit from the embedded `@default` theme, which provides sensible defaults for all roles and styles; undefined roles/elements in user themes fall back to `@default` definitions
+- In v1, all user themes implicitly inherit from the embedded `@default` theme, which explicitly defines all 28 v0 elements and all 12 v1 roles with reasonable defaults; undefined roles/elements in user themes fall back to `@default` definitions
+- V1 `@default` theme defines roles with inheritance chains where more specific roles inherit from more generic ones (e.g., `info: {style: "primary"}`, `warning: {style: "accent"}`), providing flexibility and forward compatibility - old themes work with newer app versions by falling back to consistent generic role styles
 - Theme listing format is terminal-aware: when output is a terminal, use multi-column layout (terminal-width-aware) with alphabetical sorting within groups (stock/custom); when output is not a terminal (pipe/redirect), use plain list format with one theme name per line without grouping or styling
-- V1 role names are restricted to a predefined enum (kebab-case): default, primary, secondary, emphasized, muted, accent, accent-secondary, syntax, status, info, warning, error. User themes can only define roles from this list; undefined role names are rejected with error. The `default` role is the implicit base for all roles that don't specify a `style` field - properties set in `default` (foreground, background, modes) apply to all other roles unless explicitly overridden.
+- All identifiers are case-sensitive: element names (e.g., "message" ≠ "Message"), role names (e.g., "primary" ≠ "Primary"), ANSI basic color names (e.g., "black" ≠ "Black"); RGB hex color codes are case-insensitive for letters A-F
+- V1 role names are restricted to a predefined enum (kebab-case, case-sensitive): default, primary, secondary, emphasized, muted, accent, accent-secondary, syntax, status, info, warning, error. User themes can only define roles from this list; undefined role names or incorrect case are rejected with error. The `default` role is the implicit base for all roles that don't specify a `style` field - properties set in `default` (foreground, background, modes) apply to all other roles unless explicitly overridden.
 - V1 property precedence: element explicit properties override role properties; this allows elements to reference a role for base styling while overriding specific properties
 - V1 does NOT support custom `include` directive for theme-to-theme inheritance; only `@default` inheritance is available (custom includes may be added in future versions)
 - V1 role-to-role inheritance chains via the `style` field support a maximum depth of 64 levels; deeper chains or circular references cause theme loading to fail with error
