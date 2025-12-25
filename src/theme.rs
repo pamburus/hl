@@ -302,8 +302,41 @@ impl StylePack {
             result.reset = Some(0);
         }
 
+        // Build a map of inner elements to their parents for quick lookup
+        let inner_pairs = [
+            (Element::Level, Element::LevelInner),
+            (Element::Logger, Element::LoggerInner),
+            (Element::Caller, Element::CallerInner),
+            (Element::InputNumber, Element::InputNumberInner),
+            (Element::InputName, Element::InputNameInner),
+        ];
+
+        // Process all elements, applying parent→inner inheritance where needed
         for (&element, style) in s.items() {
-            result.add(element, &Style::from(&style.clone().resolve(inventory, flags)))
+            // Check if this element is an inner element that should inherit from its parent
+            let mut final_style = style.clone();
+            for (parent, inner) in inner_pairs {
+                if element == inner {
+                    // This is an inner element
+                    // Only inherit from parent if the inner doesn't have a base style reference
+                    if style.base.is_none() {
+                        if let Some(parent_style) = s.items().get(&parent) {
+                            final_style = parent_style.clone().merged(&final_style, flags);
+                        }
+                    }
+                    break;
+                }
+            }
+            result.add(element, &Style::from(&final_style.resolve(inventory, flags)));
+        }
+
+        // Add inherited inner elements that weren't explicitly defined
+        for (parent, inner) in inner_pairs {
+            if let Some(parent_style) = s.items().get(&parent) {
+                if s.items().get(&inner).is_none() {
+                    result.add(inner, &Style::from(&parent_style.resolve(inventory, flags)));
+                }
+            }
         }
 
         // Handle boolean variants inheriting from base boolean
@@ -314,36 +347,6 @@ impl StylePack {
                     style = style.merged(patch, flags)
                 }
                 result.add(variant, &Style::from(&style.resolve(inventory, flags)));
-            }
-        }
-
-        // Handle inner elements inheriting from their parent elements
-        // This only applies to v0 themes which don't have @default.toml with explicit inner definitions
-        let inner_pairs = [
-            (Element::Level, Element::LevelInner),
-            (Element::Logger, Element::LoggerInner),
-            (Element::Caller, Element::CallerInner),
-            (Element::InputNumber, Element::InputNumberInner),
-            (Element::InputName, Element::InputNameInner),
-        ];
-
-        for (parent, inner) in inner_pairs {
-            if let Some(parent_style) = s.items().get(&parent) {
-                // For v0 themes: always inherit parent -> inner, then merge with explicit overrides
-                // For v1 themes: only add inner if explicitly defined (no automatic inheritance)
-                if flags.contains(MergeFlag::ReplaceElements) {
-                    // V0 behavior: inherit and merge
-                    let mut style = parent_style.clone();
-                    if let Some(patch) = s.items().get(&inner) {
-                        style = style.merged(patch, flags);
-                    }
-                    result.add(inner, &Style::from(&style.resolve(inventory, flags)));
-                } else {
-                    // V1 behavior: only use if explicitly defined
-                    if let Some(inner_style) = s.items().get(&inner) {
-                        result.add(inner, &Style::from(&inner_style.resolve(inventory, flags)));
-                    }
-                }
             }
         }
 
