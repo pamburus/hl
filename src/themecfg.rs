@@ -33,6 +33,7 @@ use crate::{
 };
 
 pub const THEME_VERSION: u32 = 1;
+const DEFAULT_THEME_NAME: &str = "@default";
 
 /// Error is an error which may occur in the application.
 #[derive(Error, Debug)]
@@ -108,8 +109,6 @@ pub struct Theme {
 
 impl Theme {
     pub fn load(app_dirs: &AppDirs, name: &str) -> Result<Self> {
-        const DEFAULT_THEME_NAME: &str = "@default";
-
         let theme = Self::load_embedded::<Assets>(DEFAULT_THEME_NAME)?;
         if name == DEFAULT_THEME_NAME {
             return Ok(theme);
@@ -303,7 +302,11 @@ impl Theme {
     }
 
     fn embedded_names() -> impl IntoIterator<Item = Arc<str>> {
-        Assets::iter().filter_map(|a| Self::strip_known_extension(&a).map(|n| n.into()))
+        Assets::iter().filter_map(|a| {
+            Self::strip_known_extension(&a)
+                .filter(|&n| n != DEFAULT_THEME_NAME)
+                .map(|n| n.into())
+        })
     }
 
     fn custom_names(app_dirs: &AppDirs) -> Result<impl IntoIterator<Item = Result<Arc<str>>> + use<>> {
