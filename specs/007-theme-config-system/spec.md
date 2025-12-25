@@ -67,6 +67,18 @@
 
 - Q: Do level-specific overrides in v1 work the same way as v0, or can they use v1 features? → A: V1 extends v0 behavior - level-specific elements can use `style` field to reference roles
 
+### Session 2024-12-25 (Sixth Pass)
+
+- Q: Where are stock themes stored and what is the theme search priority? → A: Stock themes embedded in binary; custom directory searched first, then stock (custom wins)
+
+- Q: What should happen with invalid color values like 3-digit hex (#FFF), 8-digit hex with alpha (#RRGGBBAA), out-of-range ANSI (256 or -1), or invalid hex (#GGGGGG)? → A: Exit with specific error for each case: "Invalid hex color #FFF (must be #RRGGBB)", "ANSI color 256 out of range (0-255)", etc.
+
+- Q: Are there restrictions on role names in v1 (length, allowed characters, reserved words, case sensitivity)? → A: Kebab case, predefined list (enum): default, primary, secondary, emphasized, muted, accent, accent-secondary, syntax, status, info, warning, error. The `default` role is the implicit base for all styles that don't specify a base style explicitly via the `style` field.
+
+- Q: What happens when a color palette anchor is referenced but not defined (YAML anchor edge case)? → A: YAML parser handles it - parse error with line number showing undefined anchor reference (treat as parse error)
+
+- Q: What determines the layout and ordering of theme listing output? → A: Terminal-width-aware column count (fit max columns); alphabetically sorted within each group, if output is terminal. Plain list (without grouping or styling) with one theme name per line if output is not terminal.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Theme File Loading and Validation (Priority: P1)
@@ -265,7 +277,6 @@ Theme authors using v1 can define semantic roles (like "warning", "error", "succ
 - What happens when the theme directory doesn't exist or isn't readable?
 - What happens when a theme file exists but has restrictive permissions (not readable)?
 
-- What happens when a color palette anchor is referenced but not defined (YAML anchor edge case)?
 - What happens when a user specifies a theme with `.yml` extension explicitly (e.g., `my-theme.yml`)? (Answer: file not found error - only `.yaml` extension is supported)
 
 
@@ -276,6 +287,8 @@ Theme authors using v1 can define semantic roles (like "warning", "error", "succ
 #### V0 Theme Loading (Existing Behavior)
 
 - **FR-001**: System MUST load theme files in TOML, YAML, or JSON format from user config directories and embedded resources at startup only (no runtime reloading)
+
+- **FR-001a**: System MUST search for themes in this priority order: custom themes directory first, then stock themes embedded in binary (custom themes with same name override stock themes)
 
 - **FR-002**: System MUST support loading themes by stem name (without extension) with automatic format detection in priority order: .yaml, .toml, .json (first found wins); alternate extension `.yml` is NOT supported
 
@@ -343,15 +356,19 @@ Theme authors using v1 can define semantic roles (like "warning", "error", "succ
 
 - **FR-025**: System MUST ignore unknown element names gracefully (forward compatibility)
 
-- **FR-026**: System MUST validate color values and exit with clear error messages to stderr for invalid values
+- **FR-026**: System MUST validate color values and exit with clear error messages to stderr for invalid values, with format-specific error messages: invalid hex length (e.g., "#FFF must be #RRGGBB"), invalid hex characters (e.g., "#GGGGGG contains invalid hex characters"), out-of-range ANSI extended (e.g., "ANSI color 256 out of range (0-255)"), negative ANSI values, etc.
 
 - **FR-027**: System MUST allow duplicate modes in the modes array in v0 (all duplicates passed to terminal which naturally ignores redundant mode codes)
 
 - **FR-028**: System MUST support $palette section in theme schema for all formats (TOML, YAML, JSON), but only YAML can use anchor/alias syntax to reference palette colors; TOML and JSON can define $palette for organization but must reference colors by value
 
-- **FR-029**: System MUST report file format errors (TOML/YAML/JSON syntax errors) to stderr with line numbers and exit
+- **FR-029**: System MUST report file format errors (TOML/YAML/JSON syntax errors) to stderr with line numbers and exit; YAML undefined anchor references are treated as parse errors
 
-- **FR-030**: System MUST provide theme listing grouped by origin (stock/custom) showing theme names only in compact multi-column layout with bullets (no tags or paths in listing output)
+- **FR-029a**: System MUST rely on YAML parser to detect and report undefined anchor references in $palette section as parse errors with line numbers
+
+- **FR-030**: System MUST provide theme listing grouped by origin (stock/custom) showing theme names only in compact multi-column layout with bullets (no tags or paths in listing output) when output is a terminal; when output is not a terminal (pipe/redirect), output plain list with one theme name per line without grouping or styling
+
+- **FR-030a**: System MUST detect whether output is a terminal and adjust theme listing format accordingly: terminal output uses terminal-width-aware multi-column layout with alphabetical sorting within each group; non-terminal output uses plain list format (one name per line) without grouping
 
 #### V1 Versioning
 
@@ -369,7 +386,11 @@ Theme authors using v1 can define semantic roles (like "warning", "error", "succ
 
 - **FR-036**: V1 system MUST include an embedded `@default` theme that defines defaults for all styles and roles; this theme is invisible when listing themes (not shown in stock or custom groups)
 
-- **FR-037**: V1 themes MUST support `styles` section as an object map where keys are role names and values are style objects containing optional foreground, background, modes, and an optional `style` field that references another role for parent/base inheritance (e.g., `styles: {warning: {style: "primary", foreground: "#FFA500", modes: [bold]}}`)
+- **FR-037**: V1 themes MUST support `styles` section as an object map where keys are role names (from predefined enum) and values are style objects containing optional foreground, background, modes, and an optional `style` field that references another role for parent/base inheritance (e.g., `styles: {warning: {style: "primary", foreground: "#FFA500", modes: [bold]}}`)
+
+- **FR-037a**: V1 role names MUST be from the predefined enum (kebab-case): default, primary, secondary, emphasized, muted, accent, accent-secondary, syntax, status, info, warning, error. Undefined role names are rejected with error.
+
+- **FR-037b**: V1 `default` role serves as the implicit base for all roles that do not explicitly specify a `style` field; properties set in `default` (foreground, background, modes) apply to all other roles unless overridden
 
 - **FR-038**: V1 themes MUST support `style` property on elements to reference role names
 
@@ -377,7 +398,7 @@ Theme authors using v1 can define semantic roles (like "warning", "error", "succ
 
 - **FR-039a**: V1 property precedence: element explicit properties MUST override role properties when both are defined (e.g., if element has `style: "warning"` and `foreground: "#FF0000"`, and warning role has `foreground: "#FFA500"`, the element uses `#FF0000`)
 
-- **FR-040**: V1 `@default` theme MUST define reasonable defaults for all styles, with specific styles using the `style` field to reference more generic ones (e.g., `warning: {style: "primary", ...}` where `primary` is also defined in `@default`)
+- **FR-040**: V1 `@default` theme MUST define reasonable defaults for all roles, with the `default` role serving as the implicit base for all other roles that don't specify a `style` field, and specific roles using the `style` field to reference more generic ones (e.g., `warning: {style: "primary", ...}` where `primary` is also defined in `@default`)
 
 - **FR-041**: V1 themes MUST support mode operations with +mode (add) and -mode (remove) prefixes; plain mode defaults to +mode. Modes are internally represented as two unordered sets (adds/removes). During style merging, child -mode removes parent's mode, child +mode adds mode. Final ANSI output includes only added modes in enum declaration order: Bold, Faint, Italic, Underline, SlowBlink, RapidBlink, Reverse, Conceal, CrossedOut. Remove operations are only used during merge process.
 
@@ -393,7 +414,7 @@ Theme authors using v1 can define semantic roles (like "warning", "error", "succ
 
 - **FR-045**: V1 themes MUST detect circular role references (e.g., `warning: {style: "error"}` and `error: {style: "warning"}`) and exit with error message showing the circular dependency chain
 
-- **FR-046**: V1 themes MUST exit with error when a role's `style` field references a role that doesn't exist in either the user theme or `@default` theme
+- **FR-046**: V1 themes MUST exit with error when a role's `style` field references a role name that is not in the predefined role enum or when the referenced role is not defined in either the user theme or `@default` theme
 
 ### Key Entities
 
@@ -407,12 +428,12 @@ Theme authors using v1 can define semantic roles (like "warning", "error", "succ
 
 - **Style**: Visual appearance specification with optional foreground color, optional background color, and optional text modes list. In v0, modes is a simple array of mode names. In v1, modes is an array of mode operations (+mode to add, -mode to remove, plain mode defaults to +mode), and styles can have an optional `style` field that references a parent/base style for inheritance.
 
-- **Role** (v1 only): Named style defined in the `styles` section that can be referenced by elements or other roles. Roles support inheritance via the optional `style` field (e.g., `warning: {style: "primary", foreground: "#FFA500", modes: [+bold, -italic]}`).
+- **Role** (v1 only): Named style defined in the `styles` section that can be referenced by elements or other roles. Role names must be from the predefined enum (kebab-case): default, primary, secondary, emphasized, muted, accent, accent-secondary, syntax, status, info, warning, error. The `default` role is the implicit base for all roles that don't specify a `style` field - properties set in `default` apply to all other roles unless overridden. Roles support inheritance via the optional `style` field (e.g., `warning: {style: "primary", foreground: "#FFA500", modes: [+bold, -italic]}`).
 
 - **Color**: Visual color value in one of three formats:
   - ANSI basic: named colors (default, black, red, green, yellow, blue, magenta, cyan, white, bright-black, bright-red, bright-green, bright-yellow, bright-blue, bright-magenta, bright-cyan, bright-white)
-  - ANSI extended: integer value 0-255
-  - RGB: hex format #RRGGBB
+  - ANSI extended: integer value 0-255 (values outside this range are rejected with specific error)
+  - RGB: hex format #RRGGBB (exactly 6 hex digits; other formats like #FFF, #RRGGBBAA are rejected with specific error messages)
 
 - **Mode**: Text rendering mode (bold, faint, italic, underline, slow-blink, rapid-blink, reverse, conceal, crossed-out). In v0, modes are plain values in an array. In v1, modes are operations: +mode (add), -mode (remove), or plain mode (defaults to +mode). V1 modes are internally stored as two unordered sets (adds/removes) and final output uses only adds in enum declaration order.
 
@@ -477,13 +498,17 @@ Theme authors using v1 can define semantic roles (like "warning", "error", "succ
 - Empty modes array `[]` is semantically identical to absent modes field in v0 (both result in no mode override, so parent style continues through nesting or no modes applied)
 - In v0, duplicate modes in modes array are allowed and all passed to terminal (terminal ignores redundant codes); v0 modes are plain values only (no +/- prefixes supported); if a mode with +/- prefix is detected in v0 theme, system exits with error suggesting to use v1 or remove prefix
 - In v1, modes are operations: +mode (add mode), -mode (remove mode), or plain mode (defaults to +mode). Modes are internally represented as two unordered sets (adds/removes). During merge, child -mode can turn off parent's mode. When the same mode appears in both +mode and -mode forms within the same array, last occurrence wins. Final ANSI output uses only added modes in enum declaration order (Bold, Faint, Italic, Underline, SlowBlink, RapidBlink, Reverse, Conceal, CrossedOut); remove operations are only used during merge.
-- The $palette section is part of the schema for all formats, but only YAML can use anchor/alias syntax; TOML and JSON can define $palette for organization but must reference colors by explicit values
+- The $palette section is part of the schema for all formats, but only YAML can use anchor/alias syntax; TOML and JSON can define $palette for organization but must reference colors by explicit values; YAML undefined anchor references are detected by the YAML parser and reported as parse errors with line numbers
+- Color validation provides format-specific error messages: RGB hex colors must be exactly #RRGGBB format (6 hex digits), ANSI extended colors must be integers 0-255 (inclusive), ANSI basic colors must match known color names; invalid formats exit with specific error describing the issue and expected format
+- Stock themes are embedded in the application binary; custom themes are searched first, allowing users to override stock themes by creating a custom theme with the same name
 - Level-specific overrides are merged with base elements at load time, creating a complete element set for each level; nested styling then applies during rendering (v0 and v1)
 - In v1, level-specific element overrides can use the `style` field to reference roles, enabling level-specific elements to inherit from semantic roles (e.g., `levels.error.message: {style: "error-text", modes: [+bold]}`)
 - The system has access to all theme files at load time (no lazy loading)
 - Theme files are relatively small (< 10KB typical, < 100KB expected maximum in practice, but no hard limits enforced)
 - Themes are loaded once at application startup and remain constant for the lifetime of the process; changing themes requires restarting the application
 - In v1, all user themes implicitly inherit from the embedded `@default` theme, which provides sensible defaults for all roles and styles; undefined roles/elements in user themes fall back to `@default` definitions
+- Theme listing format is terminal-aware: when output is a terminal, use multi-column layout (terminal-width-aware) with alphabetical sorting within groups (stock/custom); when output is not a terminal (pipe/redirect), use plain list format with one theme name per line without grouping or styling
+- V1 role names are restricted to a predefined enum (kebab-case): default, primary, secondary, emphasized, muted, accent, accent-secondary, syntax, status, info, warning, error. User themes can only define roles from this list; undefined role names are rejected with error. The `default` role is the implicit base for all roles that don't specify a `style` field - properties set in `default` (foreground, background, modes) apply to all other roles unless explicitly overridden.
 - V1 property precedence: element explicit properties override role properties; this allows elements to reference a role for base styling while overriding specific properties
 - V1 does NOT support custom `include` directive for theme-to-theme inheritance; only `@default` inheritance is available (custom includes may be added in future versions)
 - V1 role-to-role inheritance chains via the `style` field support a maximum depth of 64 levels; deeper chains or circular references cause theme loading to fail with error
