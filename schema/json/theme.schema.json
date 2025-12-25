@@ -2,31 +2,44 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "Theme",
   "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "$palette": {
+      "type": "array"
+    },
+    "version": {},
+    "tags": {
+      "type": "array"
+    },
+    "styles": {
+      "type": "object"
+    },
+    "elements": {
+      "type": "object"
+    },
+    "levels": {
+      "type": "object"
+    },
+    "indicators": {
+      "type": "object"
+    }
+  },
   "allOf": [
     {
       "if": {
         "properties": {
           "version": {
-            "const": 1
+            "type": "string",
+            "pattern": "^1\\.(0|[1-9][0-9]*)$"
           }
         },
         "required": ["version"]
       },
       "then": {
-        "$ref": "https://raw.githubusercontent.com/pamburus/hl/7c092867f9640f28bad103b80111da89ebae2db8/schema/json/theme.schema.v1.json"
-      }
-    },
-    {
-      "if": {
-        "properties": {
-          "version": {
-            "const": 0
-          }
-        },
-        "required": ["version"]
-      },
-      "then": {
-        "$ref": "https://raw.githubusercontent.com/pamburus/hl/7c092867f9640f28bad103b80111da89ebae2db8/schema/json/theme.schema.v0.json"
+        "$ref": "theme.schema.v1.json"
       }
     },
     {
@@ -36,29 +49,7 @@
         }
       },
       "then": {
-        "$ref": "https://raw.githubusercontent.com/pamburus/hl/7c092867f9640f28bad103b80111da89ebae2db8/schema/json/theme.schema.v0.json"
-      }
-    },
-    {
-      "if": {
-        "properties": {
-          "version": {
-            "type": "integer",
-            "not": {
-              "enum": [0, 1]
-            }
-          }
-        },
-        "required": ["version"]
-      },
-      "then": {
-        "properties": {
-          "version": {
-            "type": "integer",
-            "enum": [0, 1],
-            "description": "Unsupported version. Only versions 0 and 1 are supported."
-          }
-        }
+        "$ref": "theme.schema.v0.json"
       }
     }
   ]
