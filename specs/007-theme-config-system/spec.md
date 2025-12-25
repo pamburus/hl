@@ -7,7 +7,7 @@
 
 ## Clarifications
 
-### Session 2024-12-25
+### Session 2024-12-25 (First Pass)
 
 - Q: How are themes uniquely identified when users load them? → A: By filename (stem without extension) OR by full filename (with extension). When loading by stem, system tries extensions in priority order: .yaml, .toml, .json (first found wins).
 
@@ -18,6 +18,18 @@
 - Q: Why does the boolean special case exist for boolean → boolean-true/boolean-false inheritance? → A: Backward compatibility + convenience. Initially only `boolean` existed, variants added later. Provides DRY for shared styling. In v0, this pattern is NOT applied to other parent-inner pairs like level/level-inner (v1 may generalize this to more element pairs).
 
 - Q: How are theme loading errors communicated to users? → A: Application exits with error code and message to stderr. Error messages include suggestions for similar theme names when theme is not found.
+
+### Session 2024-12-25 (Second Pass)
+
+- Q: How do parent-inner element pairs like level/level-inner actually work in v0? → A: They use nested styling scope, not explicit inheritance. The inner element is rendered nested inside the parent element. If the inner element is not defined in the theme, the parent's style naturally continues to apply because rendering is still inside the parent's styling scope. This is different from the boolean special case which actively merges properties at load time.
+
+- Q: What is the merge order when both level-specific overrides and parent-inner nesting are involved? → A: Base elements and level-specific overrides are merged first at load time (creating a complete StylePack for each level), then during rendering the parent-inner nesting naturally applies through nested styling scope.
+
+- Q: How are duplicate modes in the modes array handled? → A: In v0, duplicates are allowed and all applied (terminal naturally ignores redundant mode codes). In v1, duplicates are allowed but deduplicated during load or merge with last occurrence winning.
+
+- Q: How do YAML anchors ($palette) work across different file formats? → A: The $palette section is part of the schema and can be defined in all formats (TOML, YAML, JSON), but only YAML can use anchor/alias syntax to reference palette colors. TOML and JSON can include $palette for organization but must reference colors by value.
+
+- Q: What information is displayed when listing themes? → A: Theme names only, grouped by origin (stock/custom). Each origin group shows themes in a compact multi-column layout with bullets. No tags or paths are shown in the listing.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -61,35 +73,35 @@ Users can create theme files in TOML, YAML, or JSON format that define visual st
 
 ---
 
-### User Story 2 - V0 Parent-Inner Element Inheritance (Priority: P2)
+### User Story 2 - V0 Parent-Inner Element Nested Styling (Priority: P2)
 
-Theme authors can define parent element styles (like `level`, `input-number`, `logger`, `caller`) and have corresponding inner elements (`level-inner`, `input-number-inner`, etc.) automatically inherit missing properties, enabling DRY theme authoring for common parent-inner pairs.
+Theme authors can define parent element styles (like `level`, `input-number`, `logger`, `caller`) and corresponding inner elements (`level-inner`, `input-number-inner`, etc.). During rendering, inner elements are nested inside parent elements, so if an inner element is not defined in the theme, the parent's style naturally continues to apply (nested styling scope fallback).
 
-**Why this priority**: This is the core v0 inheritance feature that already exists. Documenting it properly is essential before adding v1 capabilities.
+**Why this priority**: This is the core v0 styling pattern that already exists. Understanding nested styling scope is essential before adding v1's explicit property inheritance.
 
-**Independent Test**: Can be tested by creating a theme with a parent element (e.g., `level`) having foreground and background, defining the inner element (`level-inner`) with only modes, and verifying the inner element displays with inherited colors plus explicit modes.
+**Independent Test**: Can be tested by creating a theme with a parent element (e.g., `level`) defined but the inner element (`level-inner`) not defined, and verifying that the parent's style continues to apply when the inner element is rendered (because it's nested inside the parent's styling scope).
 
 **Acceptance Scenarios**:
 
 1. **Given** a parent element `level` with foreground=#FF0000 and background=#000000
-   **When** an inner element `level-inner` is defined with only modes=[bold]
-   **Then** `level-inner` displays with foreground=#FF0000 (inherited), background=#000000 (inherited), and modes=[bold] (explicit)
+   **When** the inner element `level-inner` is not defined in the theme
+   **Then** `level-inner` displays with the parent's style (foreground=#FF0000, background=#000000) because it's rendered nested inside the parent's styling scope
 
-2. **Given** a parent element `input-number` with foreground=#00FF00
-   **When** an inner element `input-number-inner` defines foreground=#FF0000 and modes=[italic]
-   **Then** `input-number-inner` displays with foreground=#FF0000 (explicit override) and modes=[italic] (explicit)
+2. **Given** a parent element `level` with foreground=#FF0000
+   **When** an inner element `level-inner` is defined with foreground=#00FF00 and modes=[bold]
+   **Then** `level-inner` displays with foreground=#00FF00 (overrides parent) and modes=[bold]
 
 3. **Given** a parent element `logger` with modes=[bold, underline]
    **When** an inner element `logger-inner` defines modes=[italic]
-   **Then** `logger-inner` displays with modes=[italic] only (modes completely replace when non-empty, never merge in v0)
+   **Then** `logger-inner` displays with modes=[italic] only (modes completely replace when non-empty in v0)
 
 4. **Given** a parent element `caller` with modes=[bold]
    **When** an inner element `caller-inner` is defined with modes=[] or modes field absent
-   **Then** `caller-inner` displays with modes=[bold] (empty array and absent field are identical - both inherit)
+   **Then** `caller-inner` displays with modes=[bold] through nested styling scope (empty array and absent field both result in no mode override)
 
-5. **Given** a parent element `caller` with all properties defined
-   **When** the inner element `caller-inner` is not defined in the theme
-   **Then** references to `caller-inner` use the parent `caller` style as fallback
+5. **Given** a parent element `input-number` with foreground=#00FF00 and background=#000000
+   **When** an inner element `input-number-inner` defines only modes=[italic]
+   **Then** `input-number-inner` displays with parent's colors (foreground=#00FF00, background=#000000) through nesting, plus modes=[italic]
 
 ---
 
@@ -117,7 +129,7 @@ Theme authors can override element styles for specific log levels (trace, debug,
 
 4. **Given** a level override that defines only `level-inner` without defining `level`
    **When** the level is displayed
-   **Then** `level-inner` still inherits from base `level` (level overrides don't affect inheritance relationships)
+   **Then** `level-inner` uses its level-specific override, and nested styling falls back to base `level` (because base elements and level overrides are merged first, then nesting applies during rendering)
 
 ---
 
@@ -135,9 +147,9 @@ Theme authors can add metadata tags to themes (dark, light, 16color, 256color, t
    **When** the theme is loaded
    **Then** the tag metadata is available and can be queried
 
-2. **Given** a theme file with tags=["light", "256color", "16color"]
-   **When** listing available themes
-   **Then** the theme appears in filtered lists for each tag category
+2. **Given** multiple themes with various tags
+   **When** user lists themes with `--list-themes`
+   **Then** themes are displayed grouped by origin (stock/custom), showing only theme names in compact multi-column layout with bullets (tags are not shown in listing)
 
 3. **Given** a theme file with no tags specified
    **When** the theme is loaded
@@ -205,7 +217,7 @@ Theme authors using v1 can define semantic roles (like "warning", "error", "succ
 
 - What happens when a parent element is defined at the level-specific scope but not in base elements?
 - How does the system handle a theme with both base `level` and level-specific `warning.level` when displaying a warning?
-- What happens when modes contains duplicate values (e.g., modes=[bold, italic, bold])?
+- What happens when modes contains duplicate values in v0 (e.g., modes=[bold, italic, bold])? Are they passed to terminal as-is or deduplicated?
 - Can inner elements be defined without corresponding parent elements?
 - What happens when trying to load a theme with an extension not in the priority list (.yaml, .toml, .json)?
 - What happens when multiple theme files exist with the same stem but different extensions (e.g., theme.yaml and theme.toml)?
@@ -214,7 +226,7 @@ Theme authors using v1 can define semantic roles (like "warning", "error", "succ
 - What happens when v1 theme includes a v0 theme or vice versa?
 - How does the system handle multi-level inheritance (grandparent → parent → child) in v1?
 - What happens when a color palette anchor is referenced but not defined (YAML anchor edge case)?
-- How are mode duplicates handled when merging in v1 (e.g., parent has [bold], child adds [bold, italic])?
+- In v1 when merging modes arrays, if both parent and child have [bold], does the result have one [bold] or two (e.g., parent [bold], child [bold, italic] → [bold, italic] or [bold, bold, italic])?
 
 ## Requirements *(mandatory)*
 
@@ -249,9 +261,9 @@ Theme authors using v1 can define semantic roles (like "warning", "error", "succ
 
 - **FR-012**: System MUST support mode values: bold, faint, italic, underline, slow-blink, rapid-blink, reverse, conceal, crossed-out
 
-#### V0 Inheritance Semantics
+#### V0 Nested Styling Semantics
 
-- **FR-013**: System MUST apply parent-to-inner inheritance for these specific pairs only: (input-number, input-number-inner), (input-name, input-name-inner), (level, level-inner), (logger, logger-inner), (caller, caller-inner)
+- **FR-013**: System MUST render inner elements nested inside parent elements for these specific pairs: (input-number, input-number-inner), (input-name, input-name-inner), (level, level-inner), (logger, logger-inner), (caller, caller-inner), so that when an inner element is not defined in the theme, the parent's style naturally continues to apply through nested styling scope
 
 - **FR-014**: System MUST implement v0 style merging with these exact semantics:
   - When merging child into parent: if child has non-empty modes, child modes completely replace parent modes (no merging)
@@ -266,9 +278,9 @@ Theme authors using v1 can define semantic roles (like "warning", "error", "succ
 
 - **FR-017**: System MUST support level-specific element overrides under `levels` section for: trace, debug, info, warning, error
 
-- **FR-018**: System MUST merge level-specific elements with base elements such that level overrides win for defined properties
+- **FR-018**: System MUST merge level-specific elements with base elements at load time (creating a complete StylePack for each level) such that level overrides win for defined properties
 
-- **FR-019**: System MUST apply level overrides independently - overriding `level` at warning level does not affect `level-inner` inheritance from base `level`
+- **FR-019**: System MUST apply nested styling during rendering after level-specific merging is complete, so that parent-inner nesting works with the merged element set for each level
 
 #### V0 Additional Features
 
@@ -276,41 +288,47 @@ Theme authors using v1 can define semantic roles (like "warning", "error", "succ
 
 - **FR-021**: System MUST support indicators section with sync.synced and sync.failed configurations
 
-- **FR-022**: System MUST support boolean special case for backward compatibility in v0 only: if base `boolean` element is defined, automatically apply it to `boolean-true` and `boolean-false` before applying their specific overrides (this pattern exists because `boolean` was added first, variants came later; in v0 this is NOT applied to other parent-inner pairs like level/level-inner; v1 may generalize this pattern)
+- **FR-022**: System MUST support boolean special case for backward compatibility in v0 only: if base `boolean` element is defined, automatically apply it to `boolean-true` and `boolean-false` at load time before applying their specific overrides (this is active property merging, different from the passive nested styling scope used for other parent-inner pairs; this pattern exists because `boolean` was added first, variants came later; v1 may generalize this pattern)
 
 - **FR-023**: System MUST ignore unknown element names gracefully (forward compatibility)
 
-- **FR-024**: System MUST validate color and mode values and exit with clear error messages to stderr for invalid values
+- **FR-024**: System MUST validate color values and exit with clear error messages to stderr for invalid values
 
-- **FR-025**: System MUST report file format errors (TOML/YAML/JSON syntax errors) to stderr with line numbers and exit
+- **FR-025**: System MUST allow duplicate modes in the modes array in v0 (all duplicates passed to terminal which naturally ignores redundant mode codes)
+
+- **FR-026**: System MUST support $palette section in theme schema for all formats (TOML, YAML, JSON), but only YAML can use anchor/alias syntax to reference palette colors; TOML and JSON can define $palette for organization but must reference colors by value
+
+- **FR-027**: System MUST report file format errors (TOML/YAML/JSON syntax errors) to stderr with line numbers and exit
+
+- **FR-028**: System MUST provide theme listing grouped by origin (stock/custom) showing theme names only in compact multi-column layout with bullets (no tags or paths in listing output)
 
 #### V1 Versioning
 
-- **FR-026**: System MUST treat themes without `version` field as v0
+- **FR-029**: System MUST treat themes without `version` field as v0
 
-- **FR-027**: System MUST support version field with format "major.minor" where major=1 and minor is non-negative integer without leading zeros (e.g., "1.0", "1.5", "1.12")
+- **FR-030**: System MUST support version field with format "major.minor" where major=1 and minor is non-negative integer without leading zeros (e.g., "1.0", "1.5", "1.12")
 
-- **FR-028**: System MUST validate version string against pattern `^1\.(0|[1-9][0-9]*)$` and reject malformed versions
+- **FR-031**: System MUST validate version string against pattern `^1\.(0|[1-9][0-9]*)$` and reject malformed versions
 
-- **FR-029**: System MUST check theme version compatibility against the supported version range and reject themes with unsupported major or minor versions
+- **FR-032**: System MUST check theme version compatibility against the supported version range and reject themes with unsupported major or minor versions
 
-- **FR-030**: System MUST provide error message format: "Unsupported theme version X.Y, maximum supported is A.B"
+- **FR-033**: System MUST provide error message format: "Unsupported theme version X.Y, maximum supported is A.B"
 
 #### V1 Enhanced Inheritance (Future)
 
-- **FR-031**: V1 themes MUST support `styles` section for defining semantic roles (warning, error, success, etc.)
+- **FR-034**: V1 themes MUST support `styles` section for defining semantic roles (warning, error, success, etc.)
 
-- **FR-032**: V1 themes MUST support `style` property on elements to reference role names
+- **FR-035**: V1 themes MUST support `style` property on elements to reference role names
 
-- **FR-033**: V1 themes MUST resolve styles in this order: role resolution → parent inheritance → explicit overrides
+- **FR-036**: V1 themes MUST resolve styles in this order: role resolution → parent inheritance → explicit overrides
 
-- **FR-034**: V1 themes MUST use property-level merging for modes (union of parent and child modes) instead of replacement
+- **FR-037**: V1 themes MUST use property-level merging for modes (union of parent and child modes with last occurrence winning for duplicates) instead of v0's replacement semantics
 
-- **FR-035**: V1 themes MUST support `include` directive to reference parent themes
+- **FR-038**: V1 themes MUST support `include` directive to reference parent themes
 
-- **FR-036**: V1 themes MUST detect circular includes and report error with dependency chain
+- **FR-039**: V1 themes MUST detect circular includes and report error with dependency chain
 
-- **FR-037**: V1 cross-theme merging MUST preserve property-level granularity (child overrides only specified properties, inherits others)
+- **FR-040**: V1 cross-theme merging MUST preserve property-level granularity (child overrides only specified properties, inherits others)
 
 ### Key Entities
 
@@ -382,15 +400,18 @@ Theme authors using v1 can define semantic roles (like "warning", "error", "succ
 - Users have appropriate terminal capabilities for the colors they choose (no runtime terminal capability detection required)
 - Mode values are from the known set (unknown modes are rejected during parsing)
 - Theme files are UTF-8 encoded
-- In v0, parent-inner inheritance applies only to the specific pairs listed in FR-013 (not all *-inner elements; v1 may extend this)
-- In v0, boolean special case (boolean → boolean-true/boolean-false) exists for backward compatibility because `boolean` was added first and variants came later; this automatic inheritance is NOT applied to other parent-child relationships like level/level-inner in v0 (v1 may generalize this pattern to more element pairs)
-- Empty modes array `[]` is semantically identical to absent modes field in v0 (both result in inheriting parent modes)
-- Level-specific overrides are independent - overriding one element doesn't affect inheritance of related elements
+- In v0, parent-inner pairs use nested styling scope (inner rendered inside parent) for these specific pairs listed in FR-013; if inner element is not defined, parent style continues through nesting (v1 adds explicit property-level inheritance)
+- In v0, boolean special case (boolean → boolean-true/boolean-false) uses active property merging at load time, different from the passive nested styling used for other pairs; this exists for backward compatibility because `boolean` was added first and variants came later (v1 may generalize active inheritance to more element pairs)
+- Empty modes array `[]` is semantically identical to absent modes field in v0 (both result in no mode override, so parent style continues through nesting or no modes applied)
+- In v0, duplicate modes in modes array are allowed and all passed to terminal (terminal ignores redundant codes); in v1, duplicates are deduplicated with last occurrence winning
+- The $palette section is part of the schema for all formats, but only YAML can use anchor/alias syntax; TOML and JSON can define $palette for organization but must reference colors by explicit values
+- Level-specific overrides are merged with base elements at load time, creating a complete element set for each level; nested styling then applies during rendering
 - The system has access to all theme files at load time (no lazy loading)
 - Theme files are relatively small (< 10KB typical, < 100KB maximum)
 - YAML anchors ($palette) are a convenience feature - themes can be written without them
 - The embedded configuration file (etc/defaults/config.yaml) specifies the default theme used when no theme is explicitly specified
-- Theme loading failures (file not found, parse errors, invalid values) cause the application to exit with error messages to stderr - no silent fallbacks
+- Theme loading failures (file not found, parse errors, invalid color values) cause the application to exit with error messages to stderr - no silent fallbacks
+- Theme listing shows names only, grouped by origin (stock/custom), in compact multi-column layout; no tags or paths shown in listing
 - V1 features (roles, includes, property-level merging) are additive - v0 behavior remains unchanged
 - Version checking occurs before any inheritance processing
 - The default/embedded themes serve as reference implementations

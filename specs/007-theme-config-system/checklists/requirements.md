@@ -70,19 +70,29 @@
 
 ## Clarification Status
 
-- [X] Clarification session completed (2024-12-25)
-- [X] 5 questions asked and answered
+- [X] First clarification session completed (2024-12-25)
+- [X] 5 questions asked and answered in first pass
+- [X] Second clarification session completed (2024-12-25)
+- [X] 5 additional questions asked and answered in second pass
 - [X] All answers integrated into spec
-- [X] Clarifications section added to spec
+- [X] Clarifications section updated with both sessions
 
-### Key Clarifications Resolved
+### Key Clarifications Resolved (Session 1)
 
 1. Theme identification: By stem (auto-detect format) OR full filename
 2. Format support: TOML, YAML, JSON with priority order (.yaml > .toml > .json)
 3. Default theme: From embedded config `theme` setting
 4. Error handling: Exit with stderr message (no silent fallback)
 5. Theme locations: Platform-specific paths documented
-6. Boolean special case: Backward compatibility, NOT general pattern
+6. Boolean special case: Backward compatibility, NOT general pattern in v0
+
+### Key Clarifications Resolved (Session 2)
+
+1. Parent-inner mechanism: Nested styling scope (not active inheritance) - passive fallback
+2. Level overrides: Merged with base at load time, then nesting applies at render time
+3. Modes duplicates: v0 allows all duplicates, v1 deduplicates with last-wins
+4. YAML anchors: $palette in schema for all formats, but only YAML supports anchor/alias syntax
+5. Theme listing: Names only, grouped by origin (stock/custom), compact multi-column layout
 
 ## Notes
 
@@ -93,4 +103,6 @@
 - Critical constraint: Zero regression for existing v0 themes
 - Success depends on eliminating implementation-detail-based logic
 - Backward compatibility is non-negotiable
+- Two clarification sessions complete (10 total questions answered)
+- Major clarification: v0 uses nested styling scope, NOT active property inheritance (except boolean special case)
 - Ready for `/speckit.plan`
