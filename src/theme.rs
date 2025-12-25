@@ -318,6 +318,7 @@ impl StylePack {
         }
 
         // Handle inner elements inheriting from their parent elements
+        // This only applies to v0 themes which don't have @default.toml with explicit inner definitions
         let inner_pairs = [
             (Element::Level, Element::LevelInner),
             (Element::Logger, Element::LoggerInner),
@@ -328,8 +329,20 @@ impl StylePack {
 
         for (parent, inner) in inner_pairs {
             if let Some(parent_style) = s.items().get(&parent) {
-                if s.items().get(&inner).is_none() {
-                    result.add(inner, &Style::from(&parent_style.resolve(inventory, flags)));
+                // For v0 themes: always inherit parent -> inner, then merge with explicit overrides
+                // For v1 themes: only add inner if explicitly defined (no automatic inheritance)
+                if flags.contains(MergeFlag::ReplaceElements) {
+                    // V0 behavior: inherit and merge
+                    let mut style = parent_style.clone();
+                    if let Some(patch) = s.items().get(&inner) {
+                        style = style.merged(patch, flags);
+                    }
+                    result.add(inner, &Style::from(&style.resolve(inventory, flags)));
+                } else {
+                    // V1 behavior: only use if explicitly defined
+                    if let Some(inner_style) = s.items().get(&inner) {
+                        result.add(inner, &Style::from(&inner_style.resolve(inventory, flags)));
+                    }
                 }
             }
         }
