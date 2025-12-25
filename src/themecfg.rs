@@ -134,6 +134,7 @@ impl Theme {
 
     pub fn merge(&mut self, other: Self) {
         let flags = other.merge_flags();
+        self.version = other.version;
         self.styles.merge(other.styles);
 
         // Apply blocking rule: if child theme defines a parent element,
