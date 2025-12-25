@@ -91,6 +91,18 @@
 
 - Q: Does @default theme define all 28 elements and all 12 roles explicitly, or just a subset? → A: @default defines all 28 elements and all 12 roles explicitly with reasonable defaults. Styles with more specific roles usually just inherit styles with more generic roles by default - this provides better flexibility, old themes may still be compatible with newer app versions and look consistently even without defining explicitly styles for new roles.
 
+### Session 2024-12-25 (Eighth Pass)
+
+- Q: Does v1 still use nested styling scope for parent/inner pairs, or does v1 replace it entirely with property-level merging? → A: V1 keeps nested styling scope for parent/inner pairs AND adds property-level merging for roles
+
+- Q: What are the exact version validation rules and maximum supported version? → A: Support only v1.0 initially; reject any other version (v1.1+, v2.0+) until implemented
+
+- Q: Are theme names case-sensitive when loading (e.g., "MyTheme" vs "mytheme")? → A: Platform-dependent - case-sensitive on Linux/macOS, case-insensitive on Windows
+
+- Q: What happens with unknown tags, empty tag arrays, or conflicting tags (e.g., both "dark" and "light")? → A: Validate known tags only, allow empty array, allow conflicting tags (theme author's choice). Note: dark+light are not conflicting - means theme is compatible with both dark and light modes.
+
+- Q: What is the absolute minimum valid theme that can be successfully loaded? → A: Empty file OR minimal version declaration (v1 requires `version: "1.0"`, v0 can be completely empty)
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Theme File Loading and Validation (Priority: P1)
@@ -302,7 +314,7 @@ Theme authors using v1 can define semantic roles (like "warning", "error", "succ
 
 - **FR-001a**: System MUST search for themes in this priority order: custom themes directory first, then stock themes embedded in binary (custom themes with same name override stock themes)
 
-- **FR-002**: System MUST support loading themes by stem name (without extension) with automatic format detection in priority order: .yaml, .toml, .json (first found wins); alternate extension `.yml` is NOT supported
+- **FR-002**: System MUST support loading themes by stem name (without extension) with automatic format detection in priority order: .yaml, .toml, .json (first found wins); alternate extension `.yml` is NOT supported; theme name matching is case-sensitive on Linux/macOS and case-insensitive on Windows (follows platform filesystem conventions)
 
 - **FR-003**: System MUST support loading themes by full filename (with extension) to load a specific format
 
@@ -323,7 +335,11 @@ Theme authors using v1 can define semantic roles (like "warning", "error", "succ
 
 - **FR-009**: System MUST be silent on successful theme loading (no output to stdout/stderr) following standard CLI behavior; errors only are reported to stderr
 
-- **FR-010**: System MUST parse theme files with the following top-level sections: `elements`, `levels`, `indicators`, `tags`, `$palette` (all sections optional)
+- **FR-010**: System MUST parse theme files with the following top-level sections: `elements`, `levels`, `indicators`, `tags`, `$palette` (all sections optional); an empty theme file is valid for v0, v1 requires at minimum `version: "1.0"`
+
+- **FR-010a**: System MUST accept completely empty theme files as valid v0 themes (all sections missing, inherits from terminal defaults and parent/inner relationships)
+
+- **FR-010b**: System MUST accept v1 theme files with only `version: "1.0"` field as valid (all other sections optional, inherits from `@default` theme)
 
 - **FR-011**: System MUST support all v0 element names as defined in schema (case-sensitive): input, input-number, input-number-inner, input-name, input-name-inner, time, level, level-inner, logger, logger-inner, caller, caller-inner, message, message-delimiter, field, key, array, object, string, number, boolean, boolean-true, boolean-false, null, ellipsis
 
@@ -343,7 +359,7 @@ Theme authors using v1 can define semantic roles (like "warning", "error", "succ
 
 #### V0 Nested Styling Semantics
 
-- **FR-015**: System MUST render inner elements nested inside parent elements for these specific pairs: (input-number, input-number-inner), (input-name, input-name-inner), (level, level-inner), (logger, logger-inner), (caller, caller-inner), so that when an inner element is not defined in the theme, the parent's style naturally continues to apply through nested styling scope
+- **FR-015**: System MUST render inner elements nested inside parent elements for these specific pairs: (input-number, input-number-inner), (input-name, input-name-inner), (level, level-inner), (logger, logger-inner), (caller, caller-inner), so that when an inner element is not defined in the theme, the parent's style naturally continues to apply through nested styling scope; v1 retains this nested styling scope behavior for backward compatibility
 
 - **FR-016**: System MUST implement v0 style merging with these exact semantics:
   - When merging child into parent: if child has non-empty modes, child modes completely replace parent modes (no merging)
@@ -366,7 +382,13 @@ Theme authors using v1 can define semantic roles (like "warning", "error", "succ
 
 #### V0 Additional Features
 
-- **FR-022**: System MUST support tags array with allowed values: dark, light, 16color, 256color, truecolor
+- **FR-022**: System MUST support tags array with allowed values: dark, light, 16color, 256color, truecolor; tags are optional metadata for theme classification
+
+- **FR-022a**: System MUST validate that tag values are from the allowed set (dark, light, 16color, 256color, truecolor) and reject themes with unknown tag values
+
+- **FR-022b**: System MUST allow empty tags array; tags are purely informational metadata
+
+- **FR-022c**: System MUST allow multiple tags including combinations like dark+light (theme compatible with both modes), dark+256color, etc.; no tag combinations are considered conflicting
 
 - **FR-023**: System MUST support indicators section with sync.synced and sync.failed configurations; indicators are a separate application feature (--follow mode) where sync state markers are displayed at the start of each line; themes provide only the visual styling for these indicator states (in sync vs out of sync)
 
@@ -392,13 +414,15 @@ Theme authors using v1 can define semantic roles (like "warning", "error", "succ
 
 - **FR-031**: System MUST treat themes without `version` field as v0
 
-- **FR-032**: System MUST support version field with format "major.minor" where major=1 and minor is non-negative integer without leading zeros (e.g., "1.0", "1.5", "1.12")
+- **FR-032**: System MUST support version field with format "major.minor" where major=1 and minor is non-negative integer without leading zeros (e.g., "1.0")
 
 - **FR-033**: System MUST validate version string against pattern `^1\.(0|[1-9][0-9]*)$` and reject malformed versions
 
-- **FR-034**: System MUST check theme version compatibility against the supported version range and reject themes with unsupported major or minor versions
+- **FR-034**: System MUST support only version="1.0" initially; reject v1.1+ with error "Unsupported theme version 1.X, only version 1.0 is currently supported"; reject v2.0+ with error "Unsupported theme version 2.0, maximum supported major version is 1"
 
-- **FR-035**: System MUST provide error message format: "Unsupported theme version X.Y, maximum supported is A.B"
+- **FR-034a**: System MUST treat future minor versions (v1.1, v1.2, etc.) as unsupported until explicitly implemented; version support can be extended in future releases
+
+- **FR-035**: System MUST provide version-specific error messages: for v1.1+: "Unsupported theme version 1.X, only version 1.0 is currently supported"; for v2.0+: "Unsupported theme version 2.Y, maximum supported major version is 1"
 
 #### V1 Enhanced Inheritance (Future)
 
@@ -413,6 +437,8 @@ Theme authors using v1 can define semantic roles (like "warning", "error", "succ
 - **FR-037b**: V1 `default` role serves as the implicit base for all roles that do not explicitly specify a `style` field; properties set in `default` (foreground, background, modes) apply to all other roles unless overridden
 
 - **FR-037c**: V1 themes MUST allow `elements`, `styles`, and `levels` sections to be optional or empty; missing sections are treated as empty; undefined elements/roles inherit from the `@default` theme
+
+- **FR-037d**: V1 MUST retain nested styling scope for parent/inner element pairs (same as v0) in addition to the new property-level merging available through roles; both inheritance mechanisms coexist in v1
 
 - **FR-038**: V1 themes MUST support `style` property on elements to reference role names
 
@@ -444,7 +470,7 @@ Theme authors using v1 can define semantic roles (like "warning", "error", "succ
 
 - **@default Theme** (v1 only): Embedded theme that explicitly defines all 28 v0 elements and all 12 v1 roles with reasonable defaults. Not visible in theme listings. All v1 user themes implicitly inherit from `@default` when roles or styles are not explicitly defined. More specific roles in `@default` typically inherit from more generic ones via `style` field (e.g., `warning: {style: "primary", ...}`), ensuring old themes remain compatible with newer app versions by falling back to consistent generic styles.
 
-- **Theme Version**: Version identifier following "major.minor" format (e.g., "1.0", "1.5") where major=1 and minor has no leading zeros. Used to determine which schema and merge semantics apply.
+- **Theme Version**: Version identifier following "major.minor" format (e.g., "1.0") where major=1 and minor is non-negative integer without leading zeros. Currently only version="1.0" is supported; future minor versions (1.1, 1.2, etc.) will be added as needed. Used to determine which schema and merge semantics apply.
 
 - **Element**: Named visual element in log output (28 distinct elements in v0) including: input, input-number, input-number-inner, input-name, input-name-inner, time, level, level-inner, logger, logger-inner, caller, caller-inner, message, message-delimiter, field, key, array, object, string, number, boolean, boolean-true, boolean-false, null, ellipsis
 
@@ -461,7 +487,7 @@ Theme authors using v1 can define semantic roles (like "warning", "error", "succ
 
 - **Level**: Log severity level (trace, debug, info, warning, error)
 
-- **Tag**: Theme classification metadata (dark, light, 16color, 256color, truecolor)
+- **Tag**: Theme classification metadata with allowed values: dark, light, 16color, 256color, truecolor. Tags are optional and can be combined (e.g., dark+light means theme works in both modes, dark+256color means dark theme optimized for 256-color terminals). Empty tag array is valid.
 
 ### Non-Functional Requirements
 
@@ -519,7 +545,7 @@ Theme authors using v1 can define semantic roles (like "warning", "error", "succ
 - V1: missing sections are treated as empty; all undefined elements/roles inherit from `@default` theme
 - Theme files are UTF-8 encoded
 - Theme file size limits are enforced by OS/filesystem only; no application-level size validation or limits are imposed (parser will handle files of any size that the OS allows to be read)
-- In v0, parent-inner pairs use nested styling scope (inner rendered inside parent) for these specific pairs listed in FR-013; if inner element is not defined, parent style continues through nesting (v1 adds explicit property-level inheritance)
+- Both v0 and v1 use nested styling scope for parent-inner pairs (inner rendered inside parent) for these specific pairs listed in FR-015; if inner element is not defined, parent style continues through nesting; v1 adds property-level merging via roles as an additional inheritance mechanism
 - Boolean special case (boolean → boolean-true/boolean-false) uses active property merging at load time in both v0 and v1, different from the passive nested styling used for other pairs; this exists for backward compatibility because `boolean` was added first and variants came later
 - Empty modes array `[]` is semantically identical to absent modes field in v0 (both result in no mode override, so parent style continues through nesting or no modes applied)
 - In v0, duplicate modes in modes array are allowed and all passed to terminal (terminal ignores redundant codes); v0 modes are plain values only (no +/- prefixes supported); if a mode with +/- prefix is detected in v0 theme, system exits with error suggesting to use v1 or remove prefix
@@ -532,10 +558,14 @@ Theme authors using v1 can define semantic roles (like "warning", "error", "succ
 - The system has access to all theme files at load time (no lazy loading)
 - Theme files are relatively small (< 10KB typical, < 100KB expected maximum in practice, but no hard limits enforced)
 - Themes are loaded once at application startup and remain constant for the lifetime of the process; changing themes requires restarting the application
+- Minimum valid theme: v0 can be completely empty file (inherits terminal defaults); v1 requires at minimum `version: "1.0"` field (inherits from `@default` theme)
 - In v1, all user themes implicitly inherit from the embedded `@default` theme, which explicitly defines all 28 v0 elements and all 12 v1 roles with reasonable defaults; undefined roles/elements in user themes fall back to `@default` definitions
 - V1 `@default` theme defines roles with inheritance chains where more specific roles inherit from more generic ones (e.g., `info: {style: "primary"}`, `warning: {style: "accent"}`), providing flexibility and forward compatibility - old themes work with newer app versions by falling back to consistent generic role styles
+- Theme name matching when loading themes follows platform filesystem conventions: case-sensitive on Linux/macOS (e.g., "MyTheme" ≠ "mytheme"), case-insensitive on Windows (e.g., "MyTheme" matches "mytheme.yaml")
+- Tags are validated against allowed values (dark, light, 16color, 256color, truecolor); unknown tags cause error; empty array is allowed; multiple tags including combinations like dark+light (compatible with both modes) are allowed; no tag combinations are considered conflicting
 - Theme listing format is terminal-aware: when output is a terminal, use multi-column layout (terminal-width-aware) with alphabetical sorting within groups (stock/custom); when output is not a terminal (pipe/redirect), use plain list format with one theme name per line without grouping or styling
 - All identifiers are case-sensitive: element names (e.g., "message" ≠ "Message"), role names (e.g., "primary" ≠ "Primary"), ANSI basic color names (e.g., "black" ≠ "Black"); RGB hex color codes are case-insensitive for letters A-F
+- Currently only version="1.0" is supported for v1 themes; version="1.1" or higher minor versions are rejected until implemented; version="2.0" or higher major versions are rejected as unsupported
 - V1 role names are restricted to a predefined enum (kebab-case, case-sensitive): default, primary, secondary, emphasized, muted, accent, accent-secondary, syntax, status, info, warning, error. User themes can only define roles from this list; undefined role names or incorrect case are rejected with error. The `default` role is the implicit base for all roles that don't specify a `style` field - properties set in `default` (foreground, background, modes) apply to all other roles unless explicitly overridden.
 - V1 property precedence: element explicit properties override role properties; this allows elements to reference a role for base styling while overriding specific properties
 - V1 does NOT support custom `include` directive for theme-to-theme inheritance; only `@default` inheritance is available (custom includes may be added in future versions)
