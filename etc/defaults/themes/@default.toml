@@ -1,6 +1,6 @@
 #:schema ../../../schema/json/theme.schema.v1.json
 
-version = 1
+version = "1.0"
 
 # Styles define general purpose styles used throughout the theme.
 [styles]
