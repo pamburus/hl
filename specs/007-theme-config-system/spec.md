@@ -5,11 +5,25 @@
 **Status**: Draft  
 **Input**: Define the complete theme configuration system including loading, validation, inheritance semantics, and versioning for both v0 (existing) and v1 (new) theme formats.
 
+## Clarifications
+
+### Session 2024-12-25
+
+- Q: How are themes uniquely identified when users load them? → A: By filename (stem without extension) OR by full filename (with extension). When loading by stem, system tries extensions in priority order: .yaml, .toml, .json (first found wins).
+
+- Q: What is the fallback behavior when no theme is specified or theme loading fails? → A: When no theme specified, use the theme setting from embedded config file (etc/defaults/config.yaml). When theme loading fails (specified theme not found or parse error), application exits with error to stderr - no fallback.
+
+- Q: Where are custom theme files located on each platform? → A: macOS: ~/.config/hl/themes/*.{yaml,toml,json}, Linux: ~/.config/hl/themes/*.{yaml,toml,json}, Windows: %USERPROFILE%\AppData\Roaming\hl\themes\*.{yaml,toml,json}
+
+- Q: Why does the boolean special case exist for boolean → boolean-true/boolean-false inheritance? → A: Backward compatibility + convenience. Initially only `boolean` existed, variants added later. Provides DRY for shared styling. In v0, this pattern is NOT applied to other parent-inner pairs like level/level-inner (v1 may generalize this to more element pairs).
+
+- Q: How are theme loading errors communicated to users? → A: Application exits with error code and message to stderr. Error messages include suggestions for similar theme names when theme is not found.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Theme File Loading and Validation (Priority: P1)
 
-Users can create theme files in TOML format that define visual styles for log output elements. The system loads these themes, validates their structure against the appropriate schema version, and provides clear error messages for invalid configurations.
+Users can create theme files in TOML, YAML, or JSON format that define visual styles for log output elements. The system loads these themes by name (with automatic format detection) or by full filename, validates their structure against the appropriate schema version, and provides clear error messages for invalid configurations.
 
 **Why this priority**: This is the foundation - without reliable theme loading, nothing else works. This documents the existing v0 behavior that already works in production.
 
@@ -17,21 +31,33 @@ Users can create theme files in TOML format that define visual styles for log ou
 
 **Acceptance Scenarios**:
 
-1. **Given** a valid v0 theme TOML file with element styles defined
-   **When** the user loads the theme by name or path
-   **Then** the theme loads successfully and all defined elements are available for styling
+1. **Given** a valid v0 theme file (YAML, TOML, or JSON) with element styles defined
+   **When** the user loads the theme by stem name (e.g., "my-theme")
+   **Then** the system tries extensions in order (.yaml, .toml, .json) and loads the first found theme successfully
 
-2. **Given** a theme file with invalid TOML syntax
+2. **Given** a theme file "my-theme.toml" in the custom themes directory
+   **When** the user loads the theme by full filename "my-theme.toml"
+   **Then** the system loads that specific file without trying other extensions
+
+3. **Given** no theme is explicitly specified by the user
+   **When** the application starts
+   **Then** the system uses the theme specified by the `theme` setting in the embedded config file
+
+4. **Given** a user specifies a theme name that doesn't exist
+   **When** the system attempts to load the theme
+   **Then** the application exits with error message to stderr including suggestions for similar theme names
+
+5. **Given** a theme file with invalid syntax (TOML/YAML/JSON)
    **When** the user attempts to load the theme
-   **Then** the system reports a parse error with line number and description
+   **Then** the system exits with parse error to stderr including line number and description
 
-3. **Given** a theme file with an undefined element name
+6. **Given** a theme file with an undefined element name
    **When** the user loads the theme
-   **Then** the system ignores the unknown element (graceful degradation)
+   **Then** the system ignores the unknown element (graceful degradation for forward compatibility)
 
-4. **Given** a theme file with invalid color format
+7. **Given** a theme file with invalid color format
    **When** the user loads the theme
-   **Then** the system reports an error identifying the invalid color value and expected format
+   **Then** the system exits with error to stderr identifying the invalid color value and expected format
 
 ---
 
@@ -181,6 +207,8 @@ Theme authors using v1 can define semantic roles (like "warning", "error", "succ
 - How does the system handle a theme with both base `level` and level-specific `warning.level` when displaying a warning?
 - What happens when modes contains duplicate values (e.g., modes=[bold, italic, bold])?
 - Can inner elements be defined without corresponding parent elements?
+- What happens when trying to load a theme with an extension not in the priority list (.yaml, .toml, .json)?
+- What happens when multiple theme files exist with the same stem but different extensions (e.g., theme.yaml and theme.toml)?
 - What happens when a v1 theme with `style="warning"` reference has no `warning` role defined?
 - How are circular includes detected in v1 (Theme A includes Theme B which includes Theme A)?
 - What happens when v1 theme includes a v0 theme or vice versa?
@@ -194,78 +222,95 @@ Theme authors using v1 can define semantic roles (like "warning", "error", "succ
 
 #### V0 Theme Loading (Existing Behavior)
 
-- **FR-001**: System MUST load theme files in TOML format from user config directories and embedded resources
+- **FR-001**: System MUST load theme files in TOML, YAML, or JSON format from user config directories and embedded resources
 
-- **FR-002**: System MUST parse theme files with the following top-level sections: `elements`, `levels`, `indicators`, `tags`, `$palette` (optional YAML anchors)
+- **FR-002**: System MUST support loading themes by stem name (without extension) with automatic format detection in priority order: .yaml, .toml, .json (first found wins)
 
-- **FR-003**: System MUST support all v0 element names as defined in schema: input, input-number, input-number-inner, input-name, input-name-inner, time, level, level-inner, logger, logger-inner, caller, caller-inner, message, message-delimiter, field, key, array, object, string, number, boolean, boolean-true, boolean-false, null, ellipsis
+- **FR-003**: System MUST support loading themes by full filename (with extension) to load a specific format
 
-- **FR-004**: System MUST support style properties: foreground (color), background (color), modes (array of mode enums)
+- **FR-004**: System MUST load custom themes from platform-specific directories:
+  - macOS: `~/.config/hl/themes/*.{yaml,toml,json}`
+  - Linux: `~/.config/hl/themes/*.{yaml,toml,json}`
+  - Windows: `%USERPROFILE%\AppData\Roaming\hl\themes\*.{yaml,toml,json}`
 
-- **FR-005**: System MUST support color formats: ANSI basic colors (named), ANSI extended colors (0-255 integers), RGB colors (#RRGGBB hex)
+- **FR-005**: System MUST use the theme specified in the `theme` setting of the embedded configuration file when no theme is explicitly specified
 
-- **FR-006**: System MUST support mode values: bold, faint, italic, underline, slow-blink, rapid-blink, reverse, conceal, crossed-out
+- **FR-006**: System MUST exit with error to stderr when a specified theme cannot be loaded (no fallback to default)
+
+- **FR-007**: System MUST include suggestions for similar theme names in error messages when theme is not found
+
+- **FR-008**: System MUST parse theme files with the following top-level sections: `elements`, `levels`, `indicators`, `tags`, `$palette` (optional YAML anchors)
+
+- **FR-009**: System MUST support all v0 element names as defined in schema: input, input-number, input-number-inner, input-name, input-name-inner, time, level, level-inner, logger, logger-inner, caller, caller-inner, message, message-delimiter, field, key, array, object, string, number, boolean, boolean-true, boolean-false, null, ellipsis
+
+- **FR-010**: System MUST support style properties: foreground (color), background (color), modes (array of mode enums)
+
+- **FR-011**: System MUST support color formats: ANSI basic colors (named), ANSI extended colors (0-255 integers), RGB colors (#RRGGBB hex)
+
+- **FR-012**: System MUST support mode values: bold, faint, italic, underline, slow-blink, rapid-blink, reverse, conceal, crossed-out
 
 #### V0 Inheritance Semantics
 
-- **FR-007**: System MUST apply parent-to-inner inheritance for these specific pairs only: (input-number, input-number-inner), (input-name, input-name-inner), (level, level-inner), (logger, logger-inner), (caller, caller-inner)
+- **FR-013**: System MUST apply parent-to-inner inheritance for these specific pairs only: (input-number, input-number-inner), (input-name, input-name-inner), (level, level-inner), (logger, logger-inner), (caller, caller-inner)
 
-- **FR-008**: System MUST implement v0 style merging with these exact semantics:
+- **FR-014**: System MUST implement v0 style merging with these exact semantics:
   - When merging child into parent: if child has non-empty modes, child modes completely replace parent modes (no merging)
   - When merging child into parent: if child has foreground defined, child foreground replaces parent foreground
   - When merging child into parent: if child has background defined, child background replaces parent background
 
-- **FR-009**: System MUST fall back to parent element when inner element is not defined (e.g., if `level-inner` is absent, use `level` style)
+- **FR-015**: System MUST fall back to parent element when inner element is not defined (e.g., if `level-inner` is absent, use `level` style)
 
-- **FR-010**: System MUST treat empty modes array `[]` identically to absent modes field (both inherit from parent)
+- **FR-016**: System MUST treat empty modes array `[]` identically to absent modes field (both inherit from parent)
 
 #### V0 Level-Specific Overrides
 
-- **FR-011**: System MUST support level-specific element overrides under `levels` section for: trace, debug, info, warning, error
+- **FR-017**: System MUST support level-specific element overrides under `levels` section for: trace, debug, info, warning, error
 
-- **FR-012**: System MUST merge level-specific elements with base elements such that level overrides win for defined properties
+- **FR-018**: System MUST merge level-specific elements with base elements such that level overrides win for defined properties
 
-- **FR-013**: System MUST apply level overrides independently - overriding `level` at warning level does not affect `level-inner` inheritance from base `level`
+- **FR-019**: System MUST apply level overrides independently - overriding `level` at warning level does not affect `level-inner` inheritance from base `level`
 
 #### V0 Additional Features
 
-- **FR-014**: System MUST support tags array with allowed values: dark, light, 16color, 256color, truecolor
+- **FR-020**: System MUST support tags array with allowed values: dark, light, 16color, 256color, truecolor
 
-- **FR-015**: System MUST support indicators section with sync.synced and sync.failed configurations
+- **FR-021**: System MUST support indicators section with sync.synced and sync.failed configurations
 
-- **FR-016**: System MUST support boolean special case: if base `boolean` is defined, apply it to `boolean-true` and `boolean-false` before applying their specific overrides
+- **FR-022**: System MUST support boolean special case for backward compatibility in v0 only: if base `boolean` element is defined, automatically apply it to `boolean-true` and `boolean-false` before applying their specific overrides (this pattern exists because `boolean` was added first, variants came later; in v0 this is NOT applied to other parent-inner pairs like level/level-inner; v1 may generalize this pattern)
 
-- **FR-017**: System MUST ignore unknown element names gracefully (forward compatibility)
+- **FR-023**: System MUST ignore unknown element names gracefully (forward compatibility)
 
-- **FR-018**: System MUST validate color and mode values and reject invalid values with clear error messages
+- **FR-024**: System MUST validate color and mode values and exit with clear error messages to stderr for invalid values
+
+- **FR-025**: System MUST report file format errors (TOML/YAML/JSON syntax errors) to stderr with line numbers and exit
 
 #### V1 Versioning
 
-- **FR-019**: System MUST treat themes without `version` field as v0
+- **FR-026**: System MUST treat themes without `version` field as v0
 
-- **FR-020**: System MUST support version field with format "major.minor" where major=1 and minor is non-negative integer without leading zeros (e.g., "1.0", "1.5", "1.12")
+- **FR-027**: System MUST support version field with format "major.minor" where major=1 and minor is non-negative integer without leading zeros (e.g., "1.0", "1.5", "1.12")
 
-- **FR-021**: System MUST validate version string against pattern `^1\.(0|[1-9][0-9]*)$` and reject malformed versions
+- **FR-028**: System MUST validate version string against pattern `^1\.(0|[1-9][0-9]*)$` and reject malformed versions
 
-- **FR-022**: System MUST check theme version compatibility against the supported version range and reject themes with unsupported major or minor versions
+- **FR-029**: System MUST check theme version compatibility against the supported version range and reject themes with unsupported major or minor versions
 
-- **FR-023**: System MUST provide error message format: "Unsupported theme version X.Y, maximum supported is A.B"
+- **FR-030**: System MUST provide error message format: "Unsupported theme version X.Y, maximum supported is A.B"
 
 #### V1 Enhanced Inheritance (Future)
 
-- **FR-024**: V1 themes MUST support `styles` section for defining semantic roles (warning, error, success, etc.)
+- **FR-031**: V1 themes MUST support `styles` section for defining semantic roles (warning, error, success, etc.)
 
-- **FR-025**: V1 themes MUST support `style` property on elements to reference role names
+- **FR-032**: V1 themes MUST support `style` property on elements to reference role names
 
-- **FR-026**: V1 themes MUST resolve styles in this order: role resolution → parent inheritance → explicit overrides
+- **FR-033**: V1 themes MUST resolve styles in this order: role resolution → parent inheritance → explicit overrides
 
-- **FR-027**: V1 themes MUST use property-level merging for modes (union of parent and child modes) instead of replacement
+- **FR-034**: V1 themes MUST use property-level merging for modes (union of parent and child modes) instead of replacement
 
-- **FR-028**: V1 themes MUST support `include` directive to reference parent themes
+- **FR-035**: V1 themes MUST support `include` directive to reference parent themes
 
-- **FR-029**: V1 themes MUST detect circular includes and report error with dependency chain
+- **FR-036**: V1 themes MUST detect circular includes and report error with dependency chain
 
-- **FR-030**: V1 cross-theme merging MUST preserve property-level granularity (child overrides only specified properties, inherits others)
+- **FR-037**: V1 cross-theme merging MUST preserve property-level granularity (child overrides only specified properties, inherits others)
 
 ### Key Entities
 
@@ -330,18 +375,22 @@ Theme authors using v1 can define semantic roles (like "warning", "error", "succ
 
 ## Assumptions
 
-- Theme files are valid TOML format (TOML parsing errors are handled but not part of theme validation)
+- Theme files are valid TOML, YAML, or JSON format (format parsing errors are handled and reported to stderr)
+- When loading by stem name, the first format found in priority order (.yaml, .toml, .json) is used
+- When multiple files with same stem but different extensions exist, only the highest priority extension is loaded
 - Color values are valid when specified (validation occurs during parsing)
 - Users have appropriate terminal capabilities for the colors they choose (no runtime terminal capability detection required)
 - Mode values are from the known set (unknown modes are rejected during parsing)
 - Theme files are UTF-8 encoded
-- Parent-inner inheritance applies only to the specific pairs listed in FR-007 (not all *-inner elements)
+- In v0, parent-inner inheritance applies only to the specific pairs listed in FR-013 (not all *-inner elements; v1 may extend this)
+- In v0, boolean special case (boolean → boolean-true/boolean-false) exists for backward compatibility because `boolean` was added first and variants came later; this automatic inheritance is NOT applied to other parent-child relationships like level/level-inner in v0 (v1 may generalize this pattern to more element pairs)
 - Empty modes array `[]` is semantically identical to absent modes field in v0 (both result in inheriting parent modes)
 - Level-specific overrides are independent - overriding one element doesn't affect inheritance of related elements
 - The system has access to all theme files at load time (no lazy loading)
 - Theme files are relatively small (< 10KB typical, < 100KB maximum)
 - YAML anchors ($palette) are a convenience feature - themes can be written without them
-- Boolean special case (boolean → boolean-true/boolean-false) is unique to that element and not generalized to other parent-child relationships
+- The embedded configuration file (etc/defaults/config.yaml) specifies the default theme used when no theme is explicitly specified
+- Theme loading failures (file not found, parse errors, invalid values) cause the application to exit with error messages to stderr - no silent fallbacks
 - V1 features (roles, includes, property-level merging) are additive - v0 behavior remains unchanged
 - Version checking occurs before any inheritance processing
 - The default/embedded themes serve as reference implementations
