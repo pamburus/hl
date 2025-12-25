@@ -334,11 +334,9 @@ impl StylePack {
 
         for (parent, inner) in inner_pairs {
             if let Some(parent_style) = s.items().get(&parent) {
-                let mut style = parent_style.clone();
-                if let Some(patch) = s.items().get(&inner) {
-                    style = style.merged(patch, flags);
+                if s.items().get(&inner).is_none() {
+                    result.add(inner, &Style::from(&parent_style.resolve(inventory, flags)));
                 }
-                result.add(inner, &Style::from(&style.resolve(inventory, flags)));
             }
         }
 
