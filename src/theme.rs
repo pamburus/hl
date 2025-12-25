@@ -95,7 +95,7 @@ impl<S: Borrow<themecfg::Theme>> From<S> for Theme {
                 }
             };
             let flags = flags - MergeFlag::ReplaceGroups;
-            packs[level] = StylePack::load(&s.elements.clone().merged_with(&pack, flags), &inventory, flags);
+            packs[level] = StylePack::load(&s.elements.clone().merged_with(pack, flags), &inventory, flags);
             // log::trace!("loaded style pack for level {:?}: {:#?}", level, &packs[level]);
         }
         Self {

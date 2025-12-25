@@ -660,9 +660,9 @@ impl Style {
             self.base = Some(base);
         }
         if flags.contains(MergeFlag::ReplaceModes) {
-            self.modes = other.modes.clone();
+            self.modes = other.modes;
         } else {
-            self.modes += other.modes.clone();
+            self.modes += other.modes;
         }
         if let Some(color) = other.foreground {
             self.foreground = Some(color);
@@ -718,7 +718,7 @@ impl From<ResolvedStyle> for Style {
     fn from(body: ResolvedStyle) -> Self {
         Self {
             base: None,
-            modes: ModeSetDiff::from(body.modes),
+            modes: body.modes,
             foreground: body.foreground,
             background: body.background,
         }
@@ -818,9 +818,9 @@ impl ResolvedStyle {
 impl MergedWith<&ResolvedStyle> for ResolvedStyle {
     fn merged_with(mut self, other: &ResolvedStyle, flags: MergeFlags) -> Self {
         if flags.contains(MergeFlag::ReplaceModes) {
-            self.modes = other.modes.clone();
+            self.modes = other.modes;
         } else {
-            self.modes += other.modes.clone();
+            self.modes += other.modes;
         }
         if let Some(color) = other.foreground {
             self.foreground = Some(color);
@@ -835,9 +835,9 @@ impl MergedWith<&ResolvedStyle> for ResolvedStyle {
 impl MergedWith<&Style> for ResolvedStyle {
     fn merged_with(mut self, other: &Style, flags: MergeFlags) -> Self {
         if flags.contains(MergeFlag::ReplaceModes) {
-            self.modes = other.modes.clone();
+            self.modes = other.modes;
         } else {
-            self.modes += other.modes.clone();
+            self.modes += other.modes;
         }
         if let Some(color) = other.foreground {
             self.foreground = Some(color);
@@ -879,18 +879,6 @@ impl ModeSetDiff {
             adds: ModeSet::new(),
             removes: ModeSet::new(),
         }
-    }
-
-    pub fn add(mut self, mode: Mode) -> Self {
-        self.adds.insert(mode);
-        self.removes.remove(mode);
-        self
-    }
-
-    pub fn remove(mut self, mode: Mode) -> Self {
-        self.removes.insert(mode);
-        self.adds.remove(mode);
-        self
     }
 
     pub fn is_empty(&self) -> bool {
