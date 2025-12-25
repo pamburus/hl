@@ -1,6 +1,6 @@
-#:schema https://raw.githubusercontent.com/pamburus/hl/2b8b974f9a23006987a23e0d1948849c2da4c378/schema/json/theme.schema.json
+#:schema ../../../schema/json/theme.schema.v1.json
 
-version = 1
+version = "1.0"
 tags = ["dark", "light", "16color"]
 
 [elements.null]
