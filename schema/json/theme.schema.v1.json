@@ -90,11 +90,44 @@
     },
     "styles": {
       "type": "object",
-      "propertyNames": {
-        "$ref": "#/$defs/role"
-      },
-      "additionalProperties": {
-        "$ref": "#/$defs/style"
+      "additionalProperties": false,
+      "properties": {
+        "default": {
+          "$ref": "#/$defs/style"
+        },
+        "primary": {
+          "$ref": "#/$defs/style"
+        },
+        "secondary": {
+          "$ref": "#/$defs/style"
+        },
+        "emphasized": {
+          "$ref": "#/$defs/style"
+        },
+        "muted": {
+          "$ref": "#/$defs/style"
+        },
+        "accent": {
+          "$ref": "#/$defs/style"
+        },
+        "accent-secondary": {
+          "$ref": "#/$defs/style"
+        },
+        "syntax": {
+          "$ref": "#/$defs/style"
+        },
+        "status": {
+          "$ref": "#/$defs/style"
+        },
+        "info": {
+          "$ref": "#/$defs/style"
+        },
+        "warning": {
+          "$ref": "#/$defs/style"
+        },
+        "error": {
+          "$ref": "#/$defs/style"
+        }
       },
       "title": "Semantic Styles"
     },

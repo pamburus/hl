@@ -1,4 +1,4 @@
-#:schema https://raw.githubusercontent.com/pamburus/hl/2b8b974f9a23006987a23e0d1948849c2da4c378/schema/json/theme.schema.json
+#:schema ../../../schema/json/theme.schema.v1.json
 
 version = 1
 
@@ -15,7 +15,6 @@ syntax = { style = "emphasized" }
 info = { foreground = "cyan" }
 warning = { foreground = "yellow" }
 error = { foreground = "bright-red" }
-input = { style = "secondary" }
 
 # Elements define specific styles for different log elements.
 [elements]
