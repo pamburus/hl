@@ -13,7 +13,7 @@
         "required": ["version"]
       },
       "then": {
-        "$ref": "theme.schema.v1.json"
+        "$ref": "https://raw.githubusercontent.com/pamburus/hl/7c092867f9640f28bad103b80111da89ebae2db8/schema/json/theme.schema.v1.json"
       }
     },
     {
@@ -26,7 +26,7 @@
         "required": ["version"]
       },
       "then": {
-        "$ref": "theme.schema.v0.json"
+        "$ref": "https://raw.githubusercontent.com/pamburus/hl/7c092867f9640f28bad103b80111da89ebae2db8/schema/json/theme.schema.v0.json"
       }
     },
     {
@@ -36,7 +36,7 @@
         }
       },
       "then": {
-        "$ref": "theme.schema.v0.json"
+        "$ref": "https://raw.githubusercontent.com/pamburus/hl/7c092867f9640f28bad103b80111da89ebae2db8/schema/json/theme.schema.v0.json"
       }
     },
     {
