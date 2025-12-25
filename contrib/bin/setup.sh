@@ -147,9 +147,18 @@ setup_clippy() {
 }
 
 setup_cargo_audit() {
-    setup_cargo
     if [ ! -x "$(command -v cargo-audit)" ]; then
-        cargo install cargo-audit
+        if [ -x "$(command -v brew)" ]; then
+            brew install cargo-audit
+        elif [ -x "$(command -v apk)" ]; then
+            sudo apk add cargo-audit
+        elif [ -x "$(command -v pacman)" ]; then
+            sudo pacman -S cargo-audit
+        elif [ -x "$(command -v cargo)" ]; then
+            cargo install cargo-audit
+        else
+            echo "Please install cargo-audit manually"
+        fi
     fi
 }
 
