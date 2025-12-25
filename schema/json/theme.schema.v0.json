@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "title": "Theme",
+  "title": "Theme Version 0",
   "type": "object",
   "additionalProperties": false,
   "properties": {
