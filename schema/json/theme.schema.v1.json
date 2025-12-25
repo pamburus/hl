@@ -1,42 +1,47 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$ref": "#/definitions/theme",
-  "definitions": {
-    "theme": {
-      "type": "object",
-      "additionalProperties": false,
-      "properties": {
-        "$schema": {
-          "type": "string",
-          "format": "uri",
-          "title": "JSON Schema Reference"
-        },
-        "$palette": {
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/color"
-          },
-          "title": "Optional YAML anchors for colors"
-        },
-        "tags": {
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/tag"
-          }
-        },
-        "elements": {
-          "$ref": "#/definitions/elements"
-        },
-        "levels": {
-          "$ref": "#/definitions/levels"
-        },
-        "indicators": {
-          "$ref": "#/definitions/indicators"
-        }
-      },
-      "required": [],
-      "title": "Theme"
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "format": "uri",
+      "title": "JSON Schema Reference"
     },
+    "$palette": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/color"
+      },
+      "title": "Optional YAML anchors for colors"
+    },
+    "version": {
+      "type": "integer",
+      "minimum": 0,
+      "title": "Theme Version"
+    },
+    "tags": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/tag"
+      }
+    },
+    "styles": {
+      "$ref": "#/$defs/styles"
+    },
+    "elements": {
+      "$ref": "#/$defs/elements"
+    },
+    "levels": {
+      "$ref": "#/$defs/levels"
+    },
+    "indicators": {
+      "$ref": "#/$defs/indicators"
+    }
+  },
+  "required": [],
+  "title": "Theme",
+  "$defs": {
     "tag": {
       "type": "string",
       "enum": ["dark", "light", "16color", "256color", "truecolor"]
@@ -55,84 +60,122 @@
         "crossed-out"
       ]
     },
+    "mode-diff": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/mode"
+        },
+        {
+          "type": "string",
+          "pattern": "^[+-](bold|faint|italic|underline|slow-blink|rapid-blink|reverse|conceal|crossed-out)$"
+        }
+      ]
+    },
+    "role": {
+      "type": "string",
+      "enum": [
+        "default",
+        "primary",
+        "secondary",
+        "emphasized",
+        "muted",
+        "accent",
+        "accent-secondary",
+        "syntax",
+        "status",
+        "info",
+        "warning",
+        "error"
+      ]
+    },
+    "styles": {
+      "type": "object",
+      "propertyNames": {
+        "$ref": "#/$defs/role"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/style"
+      },
+      "title": "Semantic Styles"
+    },
     "elements": {
       "type": "object",
       "additionalProperties": false,
       "properties": {
         "input": {
-          "$ref": "#/definitions/style"
+          "$ref": "#/$defs/style"
         },
         "input-number": {
-          "$ref": "#/definitions/style"
+          "$ref": "#/$defs/style"
         },
         "input-number-inner": {
-          "$ref": "#/definitions/style"
+          "$ref": "#/$defs/style"
         },
         "input-name": {
-          "$ref": "#/definitions/style"
+          "$ref": "#/$defs/style"
         },
         "input-name-inner": {
-          "$ref": "#/definitions/style"
+          "$ref": "#/$defs/style"
         },
         "time": {
-          "$ref": "#/definitions/style"
+          "$ref": "#/$defs/style"
         },
         "level": {
-          "$ref": "#/definitions/style"
+          "$ref": "#/$defs/style"
         },
         "level-inner": {
-          "$ref": "#/definitions/style"
+          "$ref": "#/$defs/style"
         },
         "logger": {
-          "$ref": "#/definitions/style"
+          "$ref": "#/$defs/style"
         },
         "logger-inner": {
-          "$ref": "#/definitions/style"
+          "$ref": "#/$defs/style"
         },
         "caller": {
-          "$ref": "#/definitions/style"
+          "$ref": "#/$defs/style"
         },
         "caller-inner": {
-          "$ref": "#/definitions/style"
+          "$ref": "#/$defs/style"
         },
         "message": {
-          "$ref": "#/definitions/style"
+          "$ref": "#/$defs/style"
         },
         "message-delimiter": {
-          "$ref": "#/definitions/style"
+          "$ref": "#/$defs/style"
         },
         "field": {
-          "$ref": "#/definitions/style"
+          "$ref": "#/$defs/style"
         },
         "key": {
-          "$ref": "#/definitions/style"
+          "$ref": "#/$defs/style"
         },
         "array": {
-          "$ref": "#/definitions/style"
+          "$ref": "#/$defs/style"
         },
         "object": {
-          "$ref": "#/definitions/style"
+          "$ref": "#/$defs/style"
         },
         "string": {
-          "$ref": "#/definitions/style"
+          "$ref": "#/$defs/style"
         },
         "number": {
-          "$ref": "#/definitions/style"
+          "$ref": "#/$defs/style"
         },
         "boolean": {
-          "$ref": "#/definitions/style"
+          "$ref": "#/$defs/style"
         },
         "boolean-false": {
-          "$ref": "#/definitions/style"
+          "$ref": "#/$defs/style"
         },
         "boolean-true": {
-          "$ref": "#/definitions/style"
+          "$ref": "#/$defs/style"
         },
         "null": {
-          "$ref": "#/definitions/style"
+          "$ref": "#/$defs/style"
         },
         "ellipsis": {
-          "$ref": "#/definitions/style"
+          "$ref": "#/$defs/style"
         }
       },
       "required": [],
@@ -145,29 +188,32 @@
         "modes": {
           "type": "array",
           "items": {
-            "$ref": "#/definitions/mode"
+            "$ref": "#/$defs/mode-diff"
           }
         },
         "foreground": {
-          "$ref": "#/definitions/color"
+          "$ref": "#/$defs/color"
         },
         "background": {
-          "$ref": "#/definitions/color"
+          "$ref": "#/$defs/color"
+        },
+        "style": {
+          "$ref": "#/$defs/role"
         }
       },
-      "required": [],
       "title": "Style"
     },
+
     "color": {
       "oneOf": [
         {
-          "$ref": "#/definitions/ansi-basic-color"
+          "$ref": "#/$defs/ansi-basic-color"
         },
         {
-          "$ref": "#/definitions/ansi-extended-color"
+          "$ref": "#/$defs/ansi-extended-color"
         },
         {
-          "$ref": "#/definitions/rgb-color"
+          "$ref": "#/$defs/rgb-color"
         }
       ]
     },
@@ -207,7 +253,7 @@
       "additionalProperties": false,
       "properties": {
         "sync": {
-          "$ref": "#/definitions/indicators-sync"
+          "$ref": "#/$defs/indicators-sync"
         }
       },
       "required": [],
@@ -218,10 +264,10 @@
       "additionalProperties": false,
       "properties": {
         "synced": {
-          "$ref": "#/definitions/indicator"
+          "$ref": "#/$defs/indicator"
         },
         "failed": {
-          "$ref": "#/definitions/indicator"
+          "$ref": "#/$defs/indicator"
         }
       },
       "required": [],
@@ -235,10 +281,10 @@
           "type": "string"
         },
         "inner": {
-          "$ref": "#/definitions/indicator-style"
+          "$ref": "#/$defs/indicator-style"
         },
         "outer": {
-          "$ref": "#/definitions/indicator-style"
+          "$ref": "#/$defs/indicator-style"
         }
       },
       "required": [],
@@ -249,7 +295,7 @@
       "additionalProperties": false,
       "properties": {
         "style": {
-          "$ref": "#/definitions/style"
+          "$ref": "#/$defs/style"
         }
       },
       "required": [],
@@ -260,19 +306,19 @@
       "additionalProperties": false,
       "properties": {
         "trace": {
-          "$ref": "#/definitions/elements"
+          "$ref": "#/$defs/elements"
         },
         "debug": {
-          "$ref": "#/definitions/elements"
+          "$ref": "#/$defs/elements"
         },
         "info": {
-          "$ref": "#/definitions/elements"
+          "$ref": "#/$defs/elements"
         },
         "warning": {
-          "$ref": "#/definitions/elements"
+          "$ref": "#/$defs/elements"
         },
         "error": {
-          "$ref": "#/definitions/elements"
+          "$ref": "#/$defs/elements"
         }
       },
       "required": [],
