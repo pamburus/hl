@@ -1,12 +1,11 @@
 [package]
-description = "Logfmt decoding based on serde"
 name = "serde-logfmt"
 version = "0.1.2"
-workspace = "../.."
-repository.workspace = true
 edition.workspace = true
-authors.workspace = true
+description = "Logfmt decoding based on serde"
+repository.workspace = true
 license.workspace = true
+workspace = "../.."
 
 [dependencies]
 serde = { version = "1.0", features = ["derive"] }

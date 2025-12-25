@@ -1,12 +1,11 @@
 [package]
-description = "Enables usage of enumset types with serde."
 name = "enumset-serde"
 version = "0.1.0"
-workspace = "../.."
-repository.workspace = true
 edition.workspace = true
-authors.workspace = true
+description = "Enables usage of enumset types with serde."
+repository.workspace = true
 license.workspace = true
+workspace = "../.."
 
 [dependencies]
 enumset = { version = "1", features = [] }

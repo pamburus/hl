@@ -49,8 +49,18 @@ jobs:
       - name: Setup taplo
         uses: uncenter/setup-taplo@4f203fdb4f3b1e289c8382cf90d8397d2338df2e # v1.0.8
 
-      - name: Validate TOML configs and themes
+      - if: matrix.os != 'windows-latest'
+        name: Setup tombi
+        uses: tombi-toml/setup-tombi@2119ac80a557c9fb2e7012858e63c22d8bf26cdb # v1.0.6
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Validate TOML configs and themes with taplo
         run: taplo check
+
+      - if: matrix.os != 'windows-latest'
+        name: Validate TOML configs and themes with tombi
+        run: tombi lint
 
       - name: Install latest nightly
         uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # v1

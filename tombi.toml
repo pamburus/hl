@@ -1,0 +1,55 @@
+toml-version = "v1.0.0"
+
+[files]
+include = ["**/*.toml"]
+
+[format]
+[format.rules]
+array-bracket-space-width = 0
+array-comma-space-width = 1
+date-time-delimiter = "T"
+indent-style = "space"
+indent-sub-tables = false
+indent-table-key-value-pairs = false
+indent-width = 2
+inline-table-brace-space-width = 1
+inline-table-comma-space-width = 1
+key-value-equals-sign-alignment = false
+key-value-equals-sign-space-width = 1
+line-ending = "lf"
+line-width = 128
+string-quote-style = "double"
+trailing-comment-alignment = false
+trailing-comment-space-width = 2
+
+[lint]
+[lint.rules]
+dotted-keys-out-of-order = "warn"
+key-empty = "warn"
+tables-out-of-order = "warn"
+
+[lsp]
+code-action.enabled = true
+completion.enabled = true
+diagnostic.enabled = true
+document-link.enabled = true
+formatting.enabled = true
+goto-declaration.enabled = true
+goto-definition.enabled = true
+goto-type-definition.enabled = true
+hover.enabled = true
+workspace-diagnostic.enabled = true
+
+[schema]
+enabled = true
+strict = true
+
+[schema.catalog]
+paths = [
+  "tombi://www.schemastore.org/api/json/catalog.json",
+  "https://www.schemastore.org/api/json/catalog.json",
+]
+
+[[schemas]]
+path = "schema/json/theme.schema.json"
+include = ["etc/defaults/themes/*.toml", "src/testing/assets/themes/*.toml"]

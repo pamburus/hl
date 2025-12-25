@@ -1,9 +1,8 @@
 [package]
 name = "heapopt"
 version = "0.1.1"
-repository.workspace = true
-authors.workspace = true
 edition.workspace = true
+repository.workspace = true
 license.workspace = true
 
 [dependencies]

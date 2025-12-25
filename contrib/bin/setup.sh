@@ -186,6 +186,18 @@ setup_taplo() {
     fi
 }
 
+setup_tombi() {
+    if [ ! -x "$(command -v tombi)" ]; then
+        if [ -x "$(command -v brew)" ]; then
+            brew install tombi
+        elif [ -x "$(command -v uv)" ]; then
+            uv add --dev tombi
+        else
+            echo "Please install tombi manually"
+        fi
+    fi
+}
+
 setup_gh() {
     if [ ! -x "$(command -v gh)" ]; then
         if [ -x "$(command -v brew)" ]; then
@@ -261,6 +273,7 @@ while [ $# -gt 0 ]; do
             setup_cargo_nightly
             ;;
         schema)
+            setup_tombi
             setup_taplo
             ;;
         coverage)

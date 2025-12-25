@@ -1,12 +1,11 @@
 [package]
-description = "Encoded string"
 name = "encstr"
 version = "0.1.1"
-workspace = "../.."
-repository.workspace = true
 edition.workspace = true
-authors.workspace = true
+description = "Encoded string"
+repository.workspace = true
 license.workspace = true
+workspace = "../.."
 
 [dependencies]
 memchr = "2"
