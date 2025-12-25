@@ -39,7 +39,7 @@
         "required": ["version"]
       },
       "then": {
-        "$ref": "theme.schema.v1.json"
+        "$ref": "https://raw.githubusercontent.com/pamburus/hl/feaaf7e6b50d1487e17c9a48d07378848e599bc8/schema/json/theme.schema.v1.json"
       }
     },
     {
@@ -49,7 +49,7 @@
         }
       },
       "then": {
-        "$ref": "theme.schema.v0.json"
+        "$ref": "https://raw.githubusercontent.com/pamburus/hl/feaaf7e6b50d1487e17c9a48d07378848e599bc8/schema/json/theme.schema.v0.json"
       }
     }
   ]
