@@ -68,6 +68,22 @@
 - [X] Error messages for version issues are specified
 - [X] Migration path from v0 to v1 is implied (additive features)
 
+## Clarification Status
+
+- [X] Clarification session completed (2024-12-25)
+- [X] 5 questions asked and answered
+- [X] All answers integrated into spec
+- [X] Clarifications section added to spec
+
+### Key Clarifications Resolved
+
+1. Theme identification: By stem (auto-detect format) OR full filename
+2. Format support: TOML, YAML, JSON with priority order (.yaml > .toml > .json)
+3. Default theme: From embedded config `theme` setting
+4. Error handling: Exit with stderr message (no silent fallback)
+5. Theme locations: Platform-specific paths documented
+6. Boolean special case: Backward compatibility, NOT general pattern
+
 ## Notes
 
 - All checklist items passed
@@ -75,6 +91,6 @@
 - V1 features (P5-P6) are clearly marked as future work building on v0
 - Key priority: Document v0 accurately before implementing v1
 - Critical constraint: Zero regression for existing v0 themes
-- Success depends on eliminating implementation-detail-based logic (style.base.is_none())
+- Success depends on eliminating implementation-detail-based logic
 - Backward compatibility is non-negotiable
-- Ready for `/speckit.clarify` or `/speckit.plan`
+- Ready for `/speckit.plan`
