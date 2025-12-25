@@ -114,3 +114,96 @@ fn test_style_merge() {
     assert_eq!(result.foreground, Some(Color::Plain(PlainColor::Red)));
     assert_eq!(result.background, Some(Color::Plain(PlainColor::Green)));
 }
+
+#[test]
+fn test_theme_version_parsing() {
+    // Valid versions
+    assert_eq!(ThemeVersion::from_str("1.0").unwrap(), ThemeVersion::new(1, 0));
+    assert_eq!(ThemeVersion::from_str("1.10").unwrap(), ThemeVersion::new(1, 10));
+    assert_eq!(ThemeVersion::from_str("2.123").unwrap(), ThemeVersion::new(2, 123));
+    assert_eq!(ThemeVersion::from_str("0.0").unwrap(), ThemeVersion::new(0, 0));
+
+    // Invalid versions - leading zeros
+    assert!(ThemeVersion::from_str("1.01").is_err());
+    assert!(ThemeVersion::from_str("01.0").is_err());
+    assert!(ThemeVersion::from_str("01.01").is_err());
+
+    // Invalid versions - missing components
+    assert!(ThemeVersion::from_str("1").is_err());
+    assert!(ThemeVersion::from_str("1.").is_err());
+    assert!(ThemeVersion::from_str(".1").is_err());
+
+    // Invalid versions - not numbers
+    assert!(ThemeVersion::from_str("1.x").is_err());
+    assert!(ThemeVersion::from_str("x.1").is_err());
+    assert!(ThemeVersion::from_str("a.b").is_err());
+
+    // Invalid versions - extra components
+    assert!(ThemeVersion::from_str("1.0.0").is_err());
+}
+
+#[test]
+fn test_theme_version_display() {
+    assert_eq!(ThemeVersion::new(1, 0).to_string(), "1.0");
+    assert_eq!(ThemeVersion::new(1, 10).to_string(), "1.10");
+    assert_eq!(ThemeVersion::new(2, 123).to_string(), "2.123");
+    assert_eq!(ThemeVersion::new(0, 0).to_string(), "0.0");
+}
+
+#[test]
+fn test_theme_version_compatibility() {
+    let v1_0 = ThemeVersion::new(1, 0);
+    let v1_1 = ThemeVersion::new(1, 1);
+    let v1_2 = ThemeVersion::new(1, 2);
+    let v2_0 = ThemeVersion::new(2, 0);
+
+    // Same version is compatible
+    assert!(v1_0.is_compatible_with(&v1_0));
+    assert!(v1_1.is_compatible_with(&v1_1));
+
+    // Older minor version is compatible
+    assert!(v1_0.is_compatible_with(&v1_1));
+    assert!(v1_0.is_compatible_with(&v1_2));
+    assert!(v1_1.is_compatible_with(&v1_2));
+
+    // Newer minor version is not compatible
+    assert!(!v1_1.is_compatible_with(&v1_0));
+    assert!(!v1_2.is_compatible_with(&v1_0));
+    assert!(!v1_2.is_compatible_with(&v1_1));
+
+    // Different major version is not compatible
+    assert!(!v2_0.is_compatible_with(&v1_0));
+    assert!(!v1_0.is_compatible_with(&v2_0));
+}
+
+#[test]
+fn test_theme_version_serde() {
+    // Deserialize
+    let version: ThemeVersion = serde_json::from_str(r#""1.0""#).unwrap();
+    assert_eq!(version, ThemeVersion::new(1, 0));
+
+    let version: ThemeVersion = serde_json::from_str(r#""2.15""#).unwrap();
+    assert_eq!(version, ThemeVersion::new(2, 15));
+
+    // Serialize
+    let version = ThemeVersion::new(1, 0);
+    let json = serde_json::to_string(&version).unwrap();
+    assert_eq!(json, r#""1.0""#);
+
+    let version = ThemeVersion::new(2, 15);
+    let json = serde_json::to_string(&version).unwrap();
+    assert_eq!(json, r#""2.15""#);
+
+    // Invalid formats should fail
+    assert!(serde_json::from_str::<ThemeVersion>(r#""1.01""#).is_err());
+    assert!(serde_json::from_str::<ThemeVersion>(r#""1""#).is_err());
+    assert!(serde_json::from_str::<ThemeVersion>(r#"1"#).is_err());
+}
+
+#[test]
+fn test_theme_version_constants() {
+    assert_eq!(ThemeVersion::V0_0, ThemeVersion::new(0, 0));
+    assert_eq!(ThemeVersion::V1_0, ThemeVersion::new(1, 0));
+    assert_eq!(ThemeVersion::CURRENT, ThemeVersion::V1_0);
+    assert_eq!(THEME_VERSION, ThemeVersion::CURRENT);
+}

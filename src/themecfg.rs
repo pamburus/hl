@@ -32,7 +32,99 @@ use crate::{
     xerr::{HighlightQuoted, Suggestions},
 };
 
-pub const THEME_VERSION: u32 = 1;
+/// Theme version with major.minor components
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
+pub struct ThemeVersion {
+    pub major: u32,
+    pub minor: u32,
+}
+
+impl ThemeVersion {
+    /// Create a new theme version
+    pub const fn new(major: u32, minor: u32) -> Self {
+        Self { major, minor }
+    }
+
+    /// Version 0.0 (implicit, no version field in theme)
+    pub const V0_0: Self = Self { major: 0, minor: 0 };
+
+    /// Version 1.0 (first versioned theme format)
+    pub const V1_0: Self = Self { major: 1, minor: 0 };
+
+    /// Current supported version
+    pub const CURRENT: Self = Self::V1_0;
+
+    /// Check if this version is compatible with a supported version
+    pub fn is_compatible_with(&self, supported: &ThemeVersion) -> bool {
+        // Same major version and minor <= supported
+        self.major == supported.major && self.minor <= supported.minor
+    }
+}
+
+impl FromStr for ThemeVersion {
+    type Err = Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let parts: Vec<&str> = s.split('.').collect();
+
+        if parts.len() != 2 {
+            return Err(Error::InvalidVersion(s.to_string()));
+        }
+
+        let major: u32 = parts[0].parse().map_err(|_| Error::InvalidVersion(s.to_string()))?;
+        let minor: u32 = parts[1].parse().map_err(|_| Error::InvalidVersion(s.to_string()))?;
+
+        // Reject leading zeros (except "0" itself)
+        if (parts[0].len() > 1 && parts[0].starts_with('0')) || (parts[1].len() > 1 && parts[1].starts_with('0')) {
+            return Err(Error::InvalidVersion(s.to_string()));
+        }
+
+        Ok(ThemeVersion { major, minor })
+    }
+}
+
+impl fmt::Display for ThemeVersion {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}.{}", self.major, self.minor)
+    }
+}
+
+impl Serialize for ThemeVersion {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_str(&self.to_string())
+    }
+}
+
+impl<'de> Deserialize<'de> for ThemeVersion {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        struct ThemeVersionVisitor;
+
+        impl<'de> Visitor<'de> for ThemeVersionVisitor {
+            type Value = ThemeVersion;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str("a version string like \"1.0\"")
+            }
+
+            fn visit_str<E>(self, value: &str) -> Result<ThemeVersion, E>
+            where
+                E: serde::de::Error,
+            {
+                ThemeVersion::from_str(value).map_err(|e| E::custom(format!("invalid version: {}", e)))
+            }
+        }
+
+        deserializer.deserialize_str(ThemeVersionVisitor)
+    }
+}
+
+pub const THEME_VERSION: ThemeVersion = ThemeVersion::CURRENT;
 const DEFAULT_THEME_NAME: &str = "@default";
 
 /// Error is an error which may occur in the application.
@@ -54,6 +146,13 @@ pub enum Error {
     InvalidTag { value: Arc<str>, suggestions: Suggestions },
     #[error("style recursion limit exceeded")]
     StyleRecursionLimitExceeded,
+    #[error("theme version {requested} is not supported (maximum supported: {supported})")]
+    UnsupportedVersion {
+        requested: ThemeVersion,
+        supported: ThemeVersion,
+    },
+    #[error("invalid version format: {0}")]
+    InvalidVersion(String),
 }
 
 /// Error is an error which may occur in the application.
@@ -100,7 +199,7 @@ pub enum Role {
 pub struct Theme {
     #[serde(deserialize_with = "enumset_serde::deserialize")]
     pub tags: EnumSet<Tag>,
-    pub version: Option<u32>,
+    pub version: ThemeVersion,
     pub styles: StylePack<Role>,
     pub elements: StylePack,
     pub levels: HashMap<InfallibleLevel, StylePack>,
@@ -109,6 +208,12 @@ pub struct Theme {
 
 impl Theme {
     pub fn load(app_dirs: &AppDirs, name: &str) -> Result<Self> {
+        let theme = Self::load_impl(app_dirs, name)?;
+        theme.validate_version()?;
+        Ok(theme)
+    }
+
+    fn load_impl(app_dirs: &AppDirs, name: &str) -> Result<Self> {
         let theme = Self::load_embedded::<Assets>(DEFAULT_THEME_NAME)?;
         if name == DEFAULT_THEME_NAME {
             return Ok(theme);
@@ -222,10 +327,27 @@ impl Theme {
     }
 
     pub fn merge_flags(&self) -> MergeFlags {
-        match self.version.unwrap_or_default() {
-            0 => MergeFlag::ReplaceElements | MergeFlag::ReplaceGroups | MergeFlag::ReplaceModes,
+        match self.version {
+            ThemeVersion { major: 0, .. } => {
+                MergeFlag::ReplaceElements | MergeFlag::ReplaceGroups | MergeFlag::ReplaceModes
+            }
             _ => MergeFlags::new(),
         }
+    }
+
+    fn validate_version(&self) -> Result<()> {
+        if self.version == ThemeVersion::default() {
+            // Version 0.0 (no version field) is considered compatible
+            return Ok(());
+        }
+        if !self.version.is_compatible_with(&ThemeVersion::CURRENT) {
+            return Err(Error::UnsupportedVersion {
+                requested: self.version,
+                supported: ThemeVersion::CURRENT,
+            });
+        }
+
+        Ok(())
     }
 
     fn load_embedded<S: RustEmbed>(name: &str) -> Result<Self> {
