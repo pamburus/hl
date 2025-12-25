@@ -115,6 +115,18 @@
 
 - Q: What happens when a file's extension doesn't match its content (e.g., `theme.yaml` contains TOML content)? → A: Parse error from format parser (YAML parser fails on TOML content) - exit with error to stderr
 
+### Session 2024-12-25 (Tenth Pass)
+
+- Q: What is the complete property resolution order for a v1 element when combining roles, @default, element explicit properties, and level-specific overrides? → A: Likely B (@default → level-specific → role → element explicit), but exact resolution order needs further clarification after defining complete list of user stories and use cases. Alternative: level-specific first, then @default, then merge parent roles recursively, then explicit element properties.
+
+- Q: Does the <50ms performance requirement apply to all theme configurations including edge cases like 64-level role chains? → A: Yes - <50ms for all scenarios including 64-level role chains and maximum complexity
+
+- Q: If both `theme.yaml` and `theme.toml` exist when loading by stem, is this silent or does the system provide indication? → A: Silent - loads theme.yaml (highest priority), theme.toml ignored without indication
+
+- Q: When listing themes with `--list-themes`, if both `theme.yaml` and `theme.toml` exist, how are they displayed? → A: Show only "theme" once (represents the loadable theme, .yaml would be loaded)
+
+- Q: What happens when a custom theme has the same name as a stock theme? → A: Complete replacement - custom theme fully replaces stock theme, no merging or inheritance
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Theme File Loading and Validation (Priority: P1)
@@ -324,13 +336,15 @@ Theme authors using v1 can define semantic roles (like "warning", "error", "succ
 
 - **FR-001**: System MUST load theme files in TOML, YAML, or JSON format from user config directories and embedded resources at startup only (no runtime reloading)
 
-- **FR-001a**: System MUST search for themes in this priority order: custom themes directory first, then stock themes embedded in binary (custom themes with same name override stock themes)
+- **FR-001a**: System MUST search for themes in this priority order: custom themes directory first, then stock themes embedded in binary (custom themes with same name completely replace stock themes - no merging or inheritance)
 
 - **FR-001b**: System MUST reserve the theme name `@default` for the embedded v1 default theme; custom theme files named `@default` (with any extension) are ignored and not loaded; other theme names starting with `@` are not reserved and can be used normally
 
 - **FR-002**: System MUST support loading themes by stem name (without extension) with automatic format detection in priority order: .yaml, .toml, .json (first found wins); alternate extension `.yml` is NOT supported; theme name matching is case-sensitive on Linux/macOS and case-insensitive on Windows (follows platform filesystem conventions)
 
-- **FR-002a**: System MUST use the file extension to determine which parser to use (YAML parser for .yaml files, TOML parser for .toml files, JSON parser for .json files); if file content doesn't match the extension, the parser will fail with parse error to stderr
+- **FR-002a**: System MUST silently load the highest priority format when multiple theme files with the same stem but different extensions exist (e.g., if both theme.yaml and theme.toml exist, load theme.yaml without warning or indication that theme.toml was ignored)
+
+- **FR-002b**: System MUST use the file extension to determine which parser to use (YAML parser for .yaml files, TOML parser for .toml files, JSON parser for .json files); if file content doesn't match the extension, the parser will fail with parse error to stderr
 
 - **FR-003**: System MUST support loading themes by full filename (with extension) to load a specific format
 
@@ -436,6 +450,8 @@ Theme authors using v1 can define semantic roles (like "warning", "error", "succ
 
 - **FR-030a**: System MUST detect whether output is a terminal and adjust theme listing format accordingly: terminal output uses terminal-width-aware multi-column layout with alphabetical sorting within each group; non-terminal output uses plain list format (one name per line) without grouping
 
+- **FR-030b**: System MUST display each theme by stem name only once in theme listings, even when multiple file formats exist for the same stem (e.g., if both theme.yaml and theme.toml exist, list shows "theme" once, representing the loadable theme per extension priority)
+
 #### V1 Versioning
 
 - **FR-031**: System MUST treat themes without `version` field as v0
@@ -468,7 +484,9 @@ Theme authors using v1 can define semantic roles (like "warning", "error", "succ
 
 - **FR-038**: V1 themes MUST support `style` property on elements to reference role names
 
-- **FR-039**: V1 themes MUST resolve element styles in this order: 1) resolve element's `style` field to role (recursively following role-to-role `style` references up to 64 levels), 2) merge with `@default` theme for undefined roles, 3) apply element's explicit properties (foreground, background, modes) which override role properties
+- **FR-039**: V1 themes MUST resolve element styles with precedence rules (exact resolution order to be refined based on complete user stories): likely @default → level-specific → role → element explicit properties, with element explicit properties having highest precedence; alternative order under consideration: level-specific → @default → role (recursive) → element explicit
+
+- **FR-039-TODO**: Complete property resolution order for v1 elements needs further specification after defining all user stories and use cases; current understanding: element's `style` field references role (recursively following role-to-role `style` references up to 64 levels), merge with `@default` theme for undefined roles, apply level-specific overrides, apply element's explicit properties which override all
 
 - **FR-039a**: V1 property precedence: element explicit properties MUST override role properties when both are defined (e.g., if element has `style: "warning"` and `foreground: "#FF0000"`, and warning role has `foreground: "#FFA500"`, the element uses `#FF0000`)
 
@@ -517,7 +535,7 @@ Theme authors using v1 can define semantic roles (like "warning", "error", "succ
 
 ### Non-Functional Requirements
 
-- **NFR-001**: Theme loading MUST complete in under 50ms for typical themes (50-100 elements)
+- **NFR-001**: Theme loading MUST complete in under 50ms for all theme configurations including typical themes (50-100 elements), complex v1 themes with deep role inheritance chains (up to 64 levels), and maximum complexity scenarios
 
 - **NFR-002**: Theme validation errors MUST include specific location (field name, element name) and expected format
 
@@ -561,7 +579,7 @@ Theme authors using v1 can define semantic roles (like "warning", "error", "succ
 
 - Theme files are valid TOML, YAML, or JSON format (format parsing errors are handled and reported to stderr)
 - When loading by stem name, the first format found in priority order (.yaml, .toml, .json) is used
-- When multiple files with same stem but different extensions exist, only the highest priority extension is loaded
+- When multiple files with same stem but different extensions exist, only the highest priority extension is loaded silently without warning or indication
 - Color values are valid when specified (validation occurs during parsing)
 - Users have appropriate terminal capabilities for the colors they choose (no runtime terminal capability detection required)
 - Mode values are from the known set (unknown modes are rejected during parsing in v0; in v1 unknown mode operations are also rejected)
@@ -578,13 +596,15 @@ Theme authors using v1 can define semantic roles (like "warning", "error", "succ
 - In v1, modes are operations: +mode (add mode), -mode (remove mode), or plain mode (defaults to +mode). Modes are internally represented as two unordered sets (adds/removes). During merge, child -mode can turn off parent's mode. When the same mode appears in both +mode and -mode forms within the same array, last occurrence wins. Final ANSI output uses only added modes in enum declaration order (Bold, Faint, Italic, Underline, SlowBlink, RapidBlink, Reverse, Conceal, CrossedOut); remove operations are only used during merge.
 - The $palette section is part of the schema for all formats in both v0 and v1, but only YAML can use anchor/alias syntax; TOML and JSON can define $palette for organization but must reference colors by explicit values; YAML undefined anchor references are detected by the YAML parser and reported as parse errors with line numbers; v1 $palette works identically to v0
 - Color validation provides format-specific error messages: RGB hex colors must be exactly #RRGGBB format (6 hex digits), ANSI extended colors must be integers 0-255 (inclusive), ANSI basic colors must match known color names; invalid formats exit with specific error describing the issue and expected format
-- Stock themes are embedded in the application binary; custom themes are searched first, allowing users to override stock themes by creating a custom theme with the same name
+- Stock themes are embedded in the application binary; custom themes are searched first, allowing users to completely replace stock themes by creating a custom theme with the same name (no merging - complete replacement)
 - Level-specific overrides are merged with base elements at load time, creating a complete element set for each level; nested styling then applies during rendering (v0 and v1)
 - In v1, level-specific element overrides can use the `style` field to reference roles, enabling level-specific elements to inherit from semantic roles (e.g., `levels.error.message: {style: "error-text", modes: [+bold]}`)
 - The system has access to all theme files at load time (no lazy loading)
 - Theme files are relatively small (< 10KB typical, < 100KB expected maximum in practice, but no hard limits enforced)
+- Theme loading performance requirement (<50ms) applies to all scenarios including edge cases with 64-level role chains and maximum complexity
 - Themes are loaded once at application startup and remain constant for the lifetime of the process; changing themes requires restarting the application
 - Minimum valid theme: v0 can be completely empty file (inherits terminal defaults); v1 requires at minimum `version: "1.0"` field (inherits from `@default` theme)
+- V1 property resolution order needs further refinement based on complete user stories; current likely order: @default → level-specific → role → element explicit (highest precedence); alternative under consideration: level-specific → @default → role (recursive) → element explicit
 - The theme name `@default` is reserved for the embedded v1 default theme; custom theme files named `@default` (any extension) are ignored and not loaded; other theme names starting with `@` can be used normally
 - File extension determines which parser is used (YAML/TOML/JSON); if file content doesn't match extension, parser fails with error to stderr (no auto-detection of actual format)
 - Unknown top-level sections in theme files are ignored when the theme version is supported (forward compatibility); if theme version is unsupported, error occurs before section parsing; exception: unknown level names in `levels` section always cause error (only trace, debug, info, warning, error are valid)
@@ -592,7 +612,7 @@ Theme authors using v1 can define semantic roles (like "warning", "error", "succ
 - V1 `@default` theme defines roles with inheritance chains where more specific roles inherit from more generic ones (e.g., `info: {style: "primary"}`, `warning: {style: "accent"}`), providing flexibility and forward compatibility - old themes work with newer app versions by falling back to consistent generic role styles
 - Theme name matching when loading themes follows platform filesystem conventions: case-sensitive on Linux/macOS (e.g., "MyTheme" ≠ "mytheme"), case-insensitive on Windows (e.g., "MyTheme" matches "mytheme.yaml")
 - Tags are validated against allowed values (dark, light, 16color, 256color, truecolor); unknown tags cause error; empty array is allowed; multiple tags including combinations like dark+light (compatible with both modes) are allowed; no tag combinations are considered conflicting
-- Theme listing format is terminal-aware: when output is a terminal, use multi-column layout (terminal-width-aware) with alphabetical sorting within groups (stock/custom); when output is not a terminal (pipe/redirect), use plain list format with one theme name per line without grouping or styling
+- Theme listing format is terminal-aware: when output is a terminal, use multi-column layout (terminal-width-aware) with alphabetical sorting within groups (stock/custom); when output is not a terminal (pipe/redirect), use plain list format with one theme name per line without grouping or styling; each theme shown by stem name once even if multiple formats exist
 - All identifiers are case-sensitive: element names (e.g., "message" ≠ "Message"), role names (e.g., "primary" ≠ "Primary"), mode names (e.g., "bold" ≠ "Bold"), ANSI basic color names (e.g., "black" ≠ "Black"); RGB hex color codes are case-insensitive for letters A-F
 - Currently only version="1.0" is supported for v1 themes; version="1.1" or higher minor versions are rejected until implemented; version="2.0" or higher major versions are rejected as unsupported
 - V1 role names are restricted to a predefined enum (kebab-case, case-sensitive): default, primary, secondary, emphasized, muted, accent, accent-secondary, syntax, status, info, warning, error. User themes can only define roles from this list; undefined role names or incorrect case are rejected with error. The `default` role is the implicit base for all roles that don't specify a `style` field - properties set in `default` (foreground, background, modes) apply to all other roles unless explicitly overridden.
