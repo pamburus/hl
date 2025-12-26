@@ -24,6 +24,9 @@ foreground = 117
 [styles.accent-secondary]
 style = "secondary"
 
+[styles.trace]
+foreground = "bright-black"
+
 [styles.debug]
 foreground = 31
 
