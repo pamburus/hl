@@ -760,12 +760,83 @@ impl Element {
 
 // ---
 
+/// Represents one or more base styles for inheritance.
+/// Supports both single role (`style = "warning"`) and multiple roles (`style = ["primary", "warning"]`).
+/// When multiple roles are specified, they are merged left to right (later roles override earlier ones).
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct StyleBase(pub Vec<Role>);
+
+impl StyleBase {
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = &Role> {
+        self.0.iter()
+    }
+}
+
+impl From<Role> for StyleBase {
+    fn from(role: Role) -> Self {
+        Self(vec![role])
+    }
+}
+
+impl From<Vec<Role>> for StyleBase {
+    fn from(roles: Vec<Role>) -> Self {
+        Self(roles)
+    }
+}
+
+impl<'de> Deserialize<'de> for StyleBase {
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        use serde::de::{self, SeqAccess, Visitor};
+
+        struct StyleBaseVisitor;
+
+        impl<'de> Visitor<'de> for StyleBaseVisitor {
+            type Value = StyleBase;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+                formatter.write_str("a role name or array of role names")
+            }
+
+            fn visit_str<E>(self, value: &str) -> std::result::Result<Self::Value, E>
+            where
+                E: de::Error,
+            {
+                let role: Role = serde_plain::from_str(value).map_err(de::Error::custom)?;
+                Ok(StyleBase(vec![role]))
+            }
+
+            fn visit_seq<A>(self, mut seq: A) -> std::result::Result<Self::Value, A::Error>
+            where
+                A: SeqAccess<'de>,
+            {
+                let mut roles = Vec::new();
+                while let Some(value) = seq.next_element::<String>()? {
+                    let role: Role = serde_plain::from_str(&value).map_err(de::Error::custom)?;
+                    roles.push(role);
+                }
+                Ok(StyleBase(roles))
+            }
+        }
+
+        deserializer.deserialize_any(StyleBaseVisitor)
+    }
+}
+
+// ---
+
 #[derive(Clone, Debug, Default, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 #[serde(default)]
 pub struct Style {
     #[serde(rename = "style")]
-    pub base: Option<Role>,
+    pub base: StyleBase,
     pub modes: ModeSetDiff,
     pub foreground: Option<Color>,
     pub background: Option<Color>,
@@ -774,15 +845,18 @@ pub struct Style {
 impl Style {
     pub const fn new() -> Self {
         Self {
-            base: None,
+            base: StyleBase(Vec::new()),
             modes: ModeSetDiff::new(),
             foreground: None,
             background: None,
         }
     }
 
-    pub fn base(self, base: Option<Role>) -> Self {
-        Self { base, ..self }
+    pub fn base(self, base: impl Into<StyleBase>) -> Self {
+        Self {
+            base: base.into(),
+            ..self
+        }
     }
 
     pub fn modes(self, modes: ModeSetDiff) -> Self {
@@ -798,8 +872,8 @@ impl Style {
     }
 
     pub fn merged(mut self, other: &Self, flags: MergeFlags) -> Self {
-        if let Some(base) = other.base {
-            self.base = Some(base);
+        if !other.base.is_empty() {
+            self.base = other.base.clone();
         }
         if flags.contains(MergeFlag::ReplaceModes) {
             self.modes = other.modes;
@@ -816,13 +890,18 @@ impl Style {
     }
 
     pub fn resolve(&self, inventory: &StylePack<Role, ResolvedStyle>, flags: MergeFlags) -> ResolvedStyle {
-        if let Some(base) = self.base {
-            if let Some(base) = inventory.0.get(&base) {
-                return base.clone().merged_with(self, flags);
-            }
+        if self.base.is_empty() {
+            return self.as_resolved();
         }
 
-        self.as_resolved()
+        // Resolve multiple bases: merge left to right, then apply self on top
+        let mut result = ResolvedStyle::default();
+        for role in self.base.iter() {
+            if let Some(base_style) = inventory.0.get(role) {
+                result = result.merged_with(base_style, flags);
+            }
+        }
+        result.merged_with(self, flags)
     }
 
     fn as_resolved(&self) -> ResolvedStyle {
@@ -848,9 +927,18 @@ impl MergedWith<&Style> for Style {
 }
 
 impl From<Role> for Style {
-    fn from(base: Role) -> Self {
+    fn from(role: Role) -> Self {
         Self {
-            base: Some(base),
+            base: StyleBase::from(role),
+            ..Default::default()
+        }
+    }
+}
+
+impl From<Vec<Role>> for Style {
+    fn from(roles: Vec<Role>) -> Self {
+        Self {
+            base: StyleBase::from(roles),
             ..Default::default()
         }
     }
@@ -859,7 +947,7 @@ impl From<Role> for Style {
 impl From<ResolvedStyle> for Style {
     fn from(body: ResolvedStyle) -> Self {
         Self {
-            base: None,
+            base: StyleBase::default(),
             modes: body.modes,
             foreground: body.foreground,
             background: body.background,
@@ -908,19 +996,27 @@ impl<'a> StyleResolver<'a> {
     }
 
     fn resolve_style(&mut self, style: &Style, role: &Role) -> ResolvedStyle {
-        let base = style.base.or_else(|| {
+        // If no explicit base, default to inheriting from Default role (except for Default itself)
+        let bases: Vec<Role> = if style.base.is_empty() {
             if *role != Role::Default {
-                Some(Role::Default)
+                vec![Role::Default]
             } else {
-                None
+                vec![]
             }
-        });
+        } else {
+            style.base.0.clone()
+        };
 
-        if let Some(base) = base {
-            return self.resolve(&base).merged_with(style, self.flags);
+        if bases.is_empty() {
+            return style.as_resolved();
         }
 
-        style.as_resolved()
+        // Resolve multiple bases: merge left to right, then apply style on top
+        let mut result = ResolvedStyle::default();
+        for base in bases {
+            result = result.merged_with(&self.resolve(&base), self.flags);
+        }
+        result.merged_with(style, self.flags)
     }
 }
 

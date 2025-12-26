@@ -232,10 +232,25 @@
           "$ref": "#/$defs/color"
         },
         "style": {
-          "$ref": "#/$defs/role"
+          "$ref": "#/$defs/style-base"
         }
       },
       "title": "Style"
+    },
+    "style-base": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/role"
+        },
+        {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/role"
+          },
+          "minItems": 1
+        }
+      ],
+      "title": "Style Base (single role or array of roles for multiple inheritance)"
     },
 
     "color": {

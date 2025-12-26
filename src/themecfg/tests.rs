@@ -367,7 +367,7 @@ fn test_v0_style_pack_merge() {
     base.0.insert(
         Element::Message,
         Style {
-            base: None,
+            base: StyleBase::default(),
             foreground: Some(Color::Plain(PlainColor::Red)),
             background: Some(Color::Plain(PlainColor::Blue)),
             modes: Mode::Bold.into(),
@@ -378,7 +378,7 @@ fn test_v0_style_pack_merge() {
     patch.0.insert(
         Element::Message,
         Style {
-            base: None,
+            base: StyleBase::default(),
             foreground: Some(Color::Plain(PlainColor::Green)),
             background: None,
             modes: Mode::Italic.into(),
@@ -387,7 +387,7 @@ fn test_v0_style_pack_merge() {
     patch.0.insert(
         Element::Level,
         Style {
-            base: None,
+            base: StyleBase::default(),
             foreground: Some(Color::Plain(PlainColor::Yellow)),
             background: None,
             modes: Default::default(),
@@ -640,14 +640,14 @@ fn test_v0_level_override_merge_behavior() {
 fn test_v0_style_merged_modes() {
     // Test Style::merged behavior with modes
     let base = Style {
-        base: None,
+        base: StyleBase::default(),
         modes: modes(&[Mode::Bold, Mode::Italic]),
         foreground: Some(Color::Plain(PlainColor::Red)),
         background: None,
     };
 
     let patch_with_modes = Style {
-        base: None,
+        base: StyleBase::default(),
         modes: (Mode::Underline).into(),
         foreground: None,
         background: Some(Color::Plain(PlainColor::Blue)),
@@ -658,7 +658,7 @@ fn test_v0_style_merged_modes() {
     assert_eq!(result.modes, Mode::Underline.into());
 
     let patch_empty_modes = Style {
-        base: None,
+        base: StyleBase::default(),
         modes: Default::default(),
         foreground: Some(Color::Plain(PlainColor::Green)),
         background: None,
@@ -695,6 +695,81 @@ fn test_v0_tags_parsing() {
 
     // Test theme can be loaded (tags field is optional)
     assert!(theme.elements.len() > 0);
+}
+
+#[test]
+fn test_v1_multiple_inheritance() {
+    // Test that style = ["role1", "role2"] merges roles left to right
+    let path = PathBuf::from("src/testing/assets/themes");
+    let theme = Theme::load_from(&path, "v1-multiple-inheritance").unwrap();
+
+    // Verify the theme loaded correctly
+    assert_eq!(theme.version, ThemeVersion::V1_0);
+
+    // Resolve styles to check inheritance
+    let flags = theme.merge_flags();
+    let inventory = theme.styles.resolve(flags);
+
+    // Test warning role: inherits from [secondary, emphasized, accent]
+    // - secondary has: foreground=#888888, modes=[faint]
+    // - emphasized has: modes=[bold]
+    // - accent has: modes=[underline]
+    // - warning adds: background=#331100
+    // Result: foreground=#888888 (from secondary, last one with foreground)
+    //         modes=[faint, bold, underline] (accumulated from all)
+    //         background=#331100 (from warning itself)
+    let warning = inventory.0.get(&Role::Warning).unwrap();
+    assert_eq!(warning.foreground, Some(Color::RGB(RGB(0x88, 0x88, 0x88))));
+    assert_eq!(warning.background, Some(Color::RGB(RGB(0x33, 0x11, 0x00))));
+    assert!(warning.modes.adds.contains(Mode::Faint));
+    assert!(warning.modes.adds.contains(Mode::Bold));
+    assert!(warning.modes.adds.contains(Mode::Underline));
+
+    // Test error role: inherits from warning and overrides foreground
+    let error = inventory.0.get(&Role::Error).unwrap();
+    assert_eq!(error.foreground, Some(Color::RGB(RGB(0xff, 0x00, 0x00))));
+    assert_eq!(error.background, Some(Color::RGB(RGB(0x33, 0x11, 0x00)))); // inherited from warning
+    assert!(error.modes.adds.contains(Mode::Faint)); // inherited from warning chain
+
+    // Test level element: style = ["secondary", "emphasized"]
+    // Should have: foreground=#888888, modes=[faint, bold]
+    let level = theme.elements.0.get(&Element::Level).unwrap();
+    let resolved_level = level.resolve(&inventory, flags);
+    assert_eq!(resolved_level.foreground, Some(Color::RGB(RGB(0x88, 0x88, 0x88))));
+    assert!(resolved_level.modes.adds.contains(Mode::Faint));
+    assert!(resolved_level.modes.adds.contains(Mode::Bold));
+
+    // Test level-inner element: style = ["secondary", "emphasized"], modes=[italic], foreground=#00ff00
+    // Should have: foreground=#00ff00 (explicit override), modes=[faint, bold, italic]
+    let level_inner = theme.elements.0.get(&Element::LevelInner).unwrap();
+    let resolved_level_inner = level_inner.resolve(&inventory, flags);
+    assert_eq!(resolved_level_inner.foreground, Some(Color::RGB(RGB(0x00, 0xff, 0x00))));
+    assert!(resolved_level_inner.modes.adds.contains(Mode::Faint));
+    assert!(resolved_level_inner.modes.adds.contains(Mode::Bold));
+    assert!(resolved_level_inner.modes.adds.contains(Mode::Italic));
+}
+
+#[test]
+fn test_v1_style_base_construction() {
+    // Test StyleBase construction and basic operations
+
+    // Single role via From trait
+    let single = StyleBase::from(Role::Warning);
+    assert_eq!(single.0.len(), 1);
+    assert_eq!(single.0[0], Role::Warning);
+
+    // Multiple roles via From trait
+    let multiple = StyleBase::from(vec![Role::Primary, Role::Secondary, Role::Warning]);
+    assert_eq!(multiple.0.len(), 3);
+    assert_eq!(multiple.0[0], Role::Primary);
+    assert_eq!(multiple.0[1], Role::Secondary);
+    assert_eq!(multiple.0[2], Role::Warning);
+
+    // Empty style base
+    let empty = StyleBase::default();
+    assert!(empty.is_empty());
+    assert!(!single.is_empty());
+    assert!(!multiple.is_empty());
 }
 
 #[test]
