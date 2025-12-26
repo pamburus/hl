@@ -264,6 +264,15 @@ impl Theme {
                 }
             }
 
+            // Block input-number/input-name and their inner elements if input is defined in child theme
+            // This ensures v0 themes that define `input` get nested styling scope behavior
+            if other.elements.0.contains_key(&Element::Input) {
+                self.elements.0.remove(&Element::InputNumber);
+                self.elements.0.remove(&Element::InputNumberInner);
+                self.elements.0.remove(&Element::InputName);
+                self.elements.0.remove(&Element::InputNameInner);
+            }
+
             // Block entire level sections if child theme defines any element for that level
             for level in other.levels.keys() {
                 self.levels.remove(level);

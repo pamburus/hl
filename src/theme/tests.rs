@@ -172,3 +172,72 @@ fn test_v1_parent_inner_property_level_merging() {
         output
     );
 }
+
+#[test]
+fn test_v0_input_element_styling() {
+    // Test that the Input element is correctly loaded and styled from v0 themes
+    use crate::appdirs::AppDirs;
+    use std::path::PathBuf;
+
+    let app_dirs = AppDirs {
+        config_dir: PathBuf::from("etc/defaults"),
+        cache_dir: Default::default(),
+        system_config_dirs: Default::default(),
+    };
+
+    // Load classic theme (v0)
+    let cfg = themecfg::Theme::load(&app_dirs, "classic").unwrap();
+    let theme = Theme::from(&cfg);
+
+    // Apply the theme and render something with Input element
+    let mut buf = Vec::new();
+    theme.apply(&mut buf, &None, |s| {
+        s.element(Element::Input, |s| s.batch(|buf| buf.extend_from_slice(b"test")));
+    });
+
+    // The buffer should contain ANSI codes for bright-black (90)
+    let output = String::from_utf8_lossy(&buf);
+
+    // bright-black is ANSI code 90
+    assert!(
+        output.contains(";90") || output.contains("[90"),
+        "Expected bright-black (90) color code for Input element, got: {:?}",
+        output
+    );
+}
+
+#[test]
+fn test_v0_input_nested_styling() {
+    // Test that v0 themes with `input` defined get nested styling scope behavior
+    // where InputNumber inherits from Input via nested rendering scope
+    use crate::appdirs::AppDirs;
+    use std::path::PathBuf;
+
+    let app_dirs = AppDirs {
+        config_dir: PathBuf::from("etc/defaults"),
+        cache_dir: Default::default(),
+        system_config_dirs: Default::default(),
+    };
+
+    // Load classic theme (v0) which only defines `input`, not `input-number`
+    let cfg = themecfg::Theme::load(&app_dirs, "classic").unwrap();
+    let theme = Theme::from(&cfg);
+
+    // Render nested elements: Input containing InputNumber containing content
+    let mut buf = Vec::new();
+    theme.apply(&mut buf, &None, |s| {
+        s.element(Element::Input, |s| {
+            s.element(Element::InputNumber, |s| s.batch(|buf| buf.extend_from_slice(b"#0")))
+        });
+    });
+
+    let output = String::from_utf8_lossy(&buf);
+
+    // In v0, InputNumber should inherit from Input via nested styling scope
+    // Since Input has bright-black (90), the nested content should also be bright-black
+    assert!(
+        output.contains(";90") || output.contains("[90"),
+        "Expected bright-black (90) color for nested InputNumber element (inherited from Input), got: {:?}",
+        output
+    );
+}
