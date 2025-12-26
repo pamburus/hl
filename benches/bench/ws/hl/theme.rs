@@ -87,7 +87,7 @@ pub(super) fn bench(c: &mut Criterion) {
 
 fn theme() -> Theme {
     Theme::from(&themecfg::Theme {
-        version: Some(themecfg::THEME_VERSION),
+        version: themecfg::THEME_VERSION,
         tags: Default::default(),
         styles: hashmap! {
             Role::Primary => Style::new().foreground(Some(Color::Palette(36))),
