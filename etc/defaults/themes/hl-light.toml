@@ -1,79 +1,60 @@
-#:schema https://raw.githubusercontent.com/pamburus/hl/c5f7bbb768219023877d4d65959972d0f9701d5e/schema/json/theme.schema.v0.json
+#:schema https://raw.githubusercontent.com/pamburus/hl/e6cc1ea34263c5b208f6582c0a4e231379da0fe9/schema/json/theme.schema.v1.json
 
+version = "1.0"
 tags = ["light", "256color"]
 
-[elements.input]
+#
+# Styles define general purpose styles used throughout the theme.
+#
+[styles]
+[styles.primary]
+foreground = 18
+
+[styles.secondary]
 foreground = 30
 
-[elements.time]
-foreground = 30
-
-[elements.logger]
-foreground = 30
-
-[elements.caller]
-foreground = 30
-modes = ["italic"]
-
-[elements.level]
-foreground = 30
-modes = ["faint"]
-
-[elements.message]
+[styles.emphasized]
 foreground = 16
 
-[elements.message-delimiter]
-foreground = 30
+[styles.syntax]
+style = "emphasized"
+modes = ["bold"]
 
-[elements.field]
-foreground = 30
-
-[elements.key]
+[styles.accent]
 foreground = 33
 
-[elements.ellipsis]
-foreground = 30
+[styles.debug]
+foreground = 213
 
-[elements.object]
-foreground = 16
-modes = ["bold"]
+[styles.info]
+foreground = 140
 
-[elements.array]
-foreground = 16
-modes = ["bold"]
+[styles.warning]
+foreground = 208
 
-[elements.string]
-foreground = 18
+[styles.error]
+foreground = 197
+
+#
+# Elements define specific styles for different log elements.
+#
+[elements]
+[elements.level]
+style = "muted"
+modes = ["faint"]
+
+[elements.level-inner]
+style = "primary"
+modes = ["-faint"]
 
 [elements.number]
 foreground = 36
 
-[elements.boolean]
+[elements.boolean-true]
 foreground = 35
 
 [elements.boolean-false]
 foreground = 197
 
 [elements.null]
-foreground = 197
-
-[levels.trace.level-inner]
-foreground = 30
-
-[levels.debug.level-inner]
-foreground = 213
-
-[levels.info.level-inner]
-foreground = 140
-
-[levels.warning.level-inner]
-foreground = 208
-
-[levels.warning.message]
-foreground = 208
-
-[levels.error.level-inner]
-foreground = 197
-
-[levels.error.message]
 foreground = 197
