@@ -1,4 +1,4 @@
-#:schema https://raw.githubusercontent.com/pamburus/hl/c5f7bbb768219023877d4d65959972d0f9701d5e/schema/json/theme.schema.v1.json
+#:schema https://raw.githubusercontent.com/pamburus/hl/1be0f37534d6054c7975094e11f3c89f620d4234/schema/json/theme.schema.v1.json
 
 version = "1.0"
 
@@ -10,8 +10,13 @@ secondary = { style = "primary", modes = ["faint"] }
 emphasized = { style = "primary", modes = ["bold"] }
 muted = { style = "secondary" }
 accent = { style = "secondary" }
-accent-secondary = { style = "secondary" }
+accent-secondary = { style = ["accent", "secondary"] }
+message = { style = "emphasized" }
 syntax = { style = "emphasized" }
+status = {  }
+level = { style = "status" }
+trace = { style = "secondary" }
+debug = { foreground = "magenta" }
 info = { foreground = "cyan" }
 warning = { foreground = "yellow" }
 error = { foreground = "bright-red" }
@@ -27,7 +32,7 @@ level = { style = "muted" }
 level-inner = { style = "primary" }
 logger = { style = "accent-secondary" }
 caller = { style = "secondary", modes = ["italic"] }
-message = { style = "emphasized" }
+message = { style = "message" }
 message-delimiter = { style = "muted" }
 field = { style = "muted" }
 key = { style = "accent" }
@@ -41,14 +46,14 @@ null = { style = "primary" }
 
 # Levels define styles for different log levels.
 [levels]
-trace = { level-inner = { style = "secondary" } }
-debug = { level-inner = { style = "secondary" } }
-info = { level-inner = { style = "info" } }
-warning = { level-inner = { style = "warning" }, message = { style = "warning" } }
-error = { level-inner = { style = "error" }, message = { style = "error" } }
+trace = { level-inner = { style = ["level", "trace"] } }
+debug = { level-inner = { style = ["level", "debug"] } }
+info = { level-inner = { style = ["level", "info"] } }
+warning = { level-inner = { style = ["level", "warning"] }, message = { style = ["message", "warning"] } }
+error = { level-inner = { style = ["level", "error"] }, message = { style = ["message", "error"] } }
 
 # Indicators define styles for various status indicators.
 [indicators]
 [indicators.sync]
 synced = { text = " " }
-failed = { text = "!", inner.style = { style = "warning", modes = ["bold"] } }
+failed = { text = "!", inner.style = { style = ["status", "warning"], modes = ["bold"] } }

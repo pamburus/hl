@@ -82,8 +82,12 @@
         "muted",
         "accent",
         "accent-secondary",
+        "message",
         "syntax",
         "status",
+        "level",
+        "trace",
+        "debug",
         "info",
         "warning",
         "error"
@@ -114,10 +118,22 @@
         "accent-secondary": {
           "$ref": "#/$defs/style"
         },
+        "message": {
+          "$ref": "#/$defs/style"
+        },
         "syntax": {
           "$ref": "#/$defs/style"
         },
         "status": {
+          "$ref": "#/$defs/style"
+        },
+        "level": {
+          "$ref": "#/$defs/style"
+        },
+        "trace": {
+          "$ref": "#/$defs/style"
+        },
+        "debug": {
           "$ref": "#/$defs/style"
         },
         "info": {
