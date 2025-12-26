@@ -1,47 +1,57 @@
-#:schema https://raw.githubusercontent.com/pamburus/hl/c5f7bbb768219023877d4d65959972d0f9701d5e/schema/json/theme.schema.v0.json
+#:schema https://raw.githubusercontent.com/pamburus/hl/e6cc1ea34263c5b208f6582c0a4e231379da0fe9/schema/json/theme.schema.v1.json
 
+version = "1.0"
 tags = ["dark", "256color"]
 
+#
+# Styles define general purpose styles used throughout the theme.
+#
+[styles]
+[styles.primary]
+foreground = 36
+
+[styles.secondary]
+foreground = 8
+
+[styles.emphasized]
+foreground = 174
+
+[styles.message]
+
+[styles.accent]
+foreground = 117
+
+[styles.accent-secondary]
+style = "secondary"
+
+[styles.debug]
+foreground = 31
+
+[styles.info]
+foreground = 68
+
+[styles.warning]
+foreground = 214
+
+[styles.error]
+foreground = 202
+
+#
+# Elements define specific styles for different log elements.
+#
+[elements]
 [elements.input]
 foreground = "bright-black"
 
-[elements.time]
-foreground = 8
-
-[elements.logger]
-foreground = 8
-
-[elements.caller]
-foreground = 8
-modes = ["italic"]
-
 [elements.level]
 foreground = 139
-
-[elements.message]
-foreground = "default"
-
-[elements.message-delimiter]
-foreground = 8
 
 [elements.field]
 foreground = 60
 
 [elements.key]
-foreground = 117
+style = "accent"
 modes = ["underline"]
-
-[elements.ellipsis]
-foreground = 8
-
-[elements.object]
-foreground = 174
-
-[elements.array]
-foreground = 174
-
-[elements.string]
-foreground = 36
 
 [elements.number]
 foreground = 41
@@ -52,29 +62,18 @@ foreground = 192
 [elements.null]
 foreground = 136
 
-[levels.trace.level-inner]
-foreground = "bright-black"
-
-[levels.debug.level-inner]
-foreground = 31
-
-[levels.info.level-inner]
-foreground = 68
-
+#
+# Levels define styles for different log levels.
+#
+[levels]
 [levels.warning.time]
-foreground = 214
-
-[levels.warning.level-inner]
-foreground = 214
+style = "warning"
 
 [levels.warning.message]
 foreground = "yellow"
 
 [levels.error.time]
-foreground = 202
-
-[levels.error.level-inner]
-foreground = 202
+style = "error"
 
 [levels.error.message]
 foreground = "bright-red"
