@@ -12,8 +12,10 @@ tags = ["light", "16color"]
 [styles.secondary]
 foreground = "bright-black"
 
-[styles.emphasized]
+[styles.message]
 foreground = "black"
+
+[styles.syntax]
 
 [styles.accent]
 foreground = "green"
@@ -37,6 +39,11 @@ foreground = "bright-red"
 # Elements define specific styles for different log elements.
 #
 [elements]
+[elements.caller]
+style = "secondary"
+
+[elements.level]
+
 [elements.number]
 foreground = "cyan"
 

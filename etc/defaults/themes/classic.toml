@@ -1,7 +1,7 @@
 #:schema https://raw.githubusercontent.com/pamburus/hl/e6cc1ea34263c5b208f6582c0a4e231379da0fe9/schema/json/theme.schema.v1.json
 
 version = "1.0"
-tags = ["dark"]
+tags = ["dark", "16color"]
 
 #
 # Styles define general purpose styles used throughout the theme.
@@ -12,8 +12,10 @@ tags = ["dark"]
 [styles.secondary]
 foreground = "bright-black"
 
-[styles.emphasized]
+[styles.message]
 foreground = "bright-white"
+
+[styles.syntax]
 
 [styles.accent]
 foreground = "green"
@@ -39,6 +41,8 @@ foreground = "bright-red"
 [elements]
 [elements.caller]
 style = "secondary"
+
+[elements.level]
 
 [elements.number]
 foreground = "cyan"
