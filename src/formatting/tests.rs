@@ -119,7 +119,7 @@ fn test_level_trace() {
 
     assert_eq!(
         &format(&rec),
-        "\u{1b}[0;36m|\u{1b}[0;2;36mTRC\u{1b}[0;36m|\u{1b}[0m \u{1b}[0;1;39mtm\u{1b}[0m"
+        "\u{1b}[0;36m|\u{1b}[0;2mTRC\u{1b}[0;36m|\u{1b}[0m \u{1b}[0;1;39mtm\u{1b}[0m"
     );
 }
 
