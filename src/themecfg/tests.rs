@@ -715,3 +715,42 @@ fn test_v0_plain_color_case_sensitivity() {
         Some(Color::Plain(PlainColor::Red))
     );
 }
+
+#[test]
+fn test_v0_boolean_merge_with_level_overrides() {
+    // Test whether level-specific overrides to `boolean` element
+    // affect boolean-true and boolean-false at that level.
+    // This tests the timing of boolean active merge relative to level merging.
+    let path = PathBuf::from("src/testing/assets/themes");
+    let theme = Theme::load_from(&path, "v0-boolean-level-override").unwrap();
+
+    // Base elements - boolean merge happens at themecfg level or theme level?
+    // At themecfg level, we just see the raw elements
+    let base_boolean = theme.elements.get(&Element::Boolean).unwrap();
+    assert_eq!(base_boolean.foreground, Some(Color::RGB(RGB(0, 255, 0))));
+    assert_eq!(base_boolean.background, Some(Color::RGB(RGB(0, 17, 0))));
+
+    let base_boolean_true = theme.elements.get(&Element::BooleanTrue).unwrap();
+    assert_eq!(base_boolean_true.foreground, Some(Color::RGB(RGB(0, 255, 255))));
+    // At themecfg level, boolean-true doesn't have background yet
+    // The merge happens in theme::StylePack::load()
+
+    // Error level has overrides for boolean and boolean-false
+    let error_pack = theme
+        .levels
+        .get(&InfallibleLevel::Valid(crate::level::Level::Error))
+        .unwrap();
+
+    // Error level should have overridden boolean
+    let error_boolean = error_pack.get(&Element::Boolean).unwrap();
+    assert_eq!(error_boolean.foreground, Some(Color::RGB(RGB(255, 0, 255))));
+
+    // Error level should have overridden boolean-false
+    let error_boolean_false = error_pack.get(&Element::BooleanFalse).unwrap();
+    assert_eq!(error_boolean_false.foreground, Some(Color::RGB(RGB(255, 170, 170))));
+
+    // Note: The boolean merge happens during theme::Theme creation,
+    // not at the themecfg::Theme level. So we can't test the final merged
+    // result here - this test documents the themecfg-level behavior.
+    // The actual boolean merge with level overrides happens in theme::StylePack::load()
+}

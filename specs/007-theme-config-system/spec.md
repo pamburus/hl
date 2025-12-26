@@ -143,6 +143,10 @@
 
 - Q: What is the exact v1 element property resolution order when combining @default, base element, level-specific override, role reference, and explicit properties? → A: Proposed Order A (merge elements first, then resolve role): 1) Start with @default element, 2) Merge base element from user theme, 3) Merge level-specific element, 4) Resolve `style` field if present (role resolution recursive), 5) Apply explicit properties from merged element (override role properties)
 
+### Session 2024-12-26 (Thirteenth Pass)
+
+- Q: When does the boolean active merge happen relative to level-specific element merging? → A: After level merging - Boolean merge happens on each level's merged StylePack; level overrides to `boolean` DO affect variants at that level
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Theme File Loading and Validation (Priority: P1)
@@ -452,7 +456,9 @@ Theme authors using v1 can define semantic roles (like "warning", "error", "succ
 
 - **FR-023**: System MUST support indicators section with sync.synced and sync.failed configurations; indicators are a separate application feature (--follow mode) where sync state markers are displayed at the start of each line; themes provide only the visual styling for these indicator states (in sync vs out of sync)
 
-- **FR-024**: System MUST support boolean special case for backward compatibility in v0 and v1: if base `boolean` element is defined, automatically apply it to `boolean-true` and `boolean-false` at load time before applying their specific overrides (this is active property merging, different from the passive nested styling scope used for other parent-inner pairs; this pattern exists because `boolean` was added first, variants came later); in v1, boolean-true and boolean-false can also use `style` field to reference roles like any other element
+- **FR-024**: System MUST support boolean special case for backward compatibility in v0 and v1: if base `boolean` element is defined, automatically apply it to `boolean-true` and `boolean-false` during theme structure creation (after level-specific merging) before applying the variants' specific element-level overrides (this is active property merging, different from the passive nested styling scope used for other parent-inner pairs; this pattern exists because `boolean` was added first, variants came later); in v1, boolean-true and boolean-false can also use `style` field to reference roles like any other element
+
+- **FR-024a**: When level-specific overrides include a `boolean` element override, the boolean active merge for that level uses the level-merged `boolean` element (base + level override) as the base for `boolean-true` and `boolean-false` at that level; this allows level-specific customization of boolean styling across all variants (e.g., if error level defines `boolean: {background: "#440000"}` and base defines `boolean-true: {foreground: "#00ffff"}`, then at error level boolean-true gets foreground from base boolean-true and background from error level's boolean)
 
 - **FR-025**: System MUST ignore unknown element names gracefully (forward compatibility)
 
