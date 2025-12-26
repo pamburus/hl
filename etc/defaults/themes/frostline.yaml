@@ -50,6 +50,7 @@ levels:
   trace:
     level-inner:
       foreground: cyan
+      modes: [faint]
   debug:
     level-inner:
       foreground: magenta
