@@ -1,46 +1,45 @@
-#:schema https://raw.githubusercontent.com/pamburus/hl/c5f7bbb768219023877d4d65959972d0f9701d5e/schema/json/theme.schema.v0.json
+#:schema https://raw.githubusercontent.com/pamburus/hl/c5f7bbb768219023877d4d65959972d0f9701d5e/schema/json/theme.schema.v1.json
 
+version = "1.0"
 tags = ["dark", "truecolor"]
 
-[elements.input]
+#
+# Styles define general purpose styles used throughout the theme.
+#
+[styles]
+[styles.primary]
+foreground = "#cccac2"
+
+[styles.secondary]
 foreground = "#707a8c"
 
-[elements.time]
-foreground = "#707a8c"
-
-[elements.logger]
-foreground = "#407485"
-
-[elements.caller]
-foreground = "#707a8c"
-modes = ["italic"]
-
-[elements.level]
-foreground = "#707a8c"
-
-[elements.message]
+[styles.emphasized]
 foreground = "#95e6cb"
 
-[elements.message-delimiter]
-foreground = "#707a8c"
+[styles.info]
+foreground = "#5ccfe6"
 
-[elements.field]
-foreground = "#4e6c90"
+[styles.warning]
+foreground = "#d5ff80"
 
-[elements.key]
+[styles.error]
+foreground = "#f27983"
+
+[styles.accent]
 foreground = "#80bfff"
 
-[elements.ellipsis]
-foreground = "#707a8c"
+[styles.accent-secondary]
+foreground = "#407485"
 
-[elements.object]
+[styles.syntax]
 modes = ["bold"]
 
-[elements.array]
-modes = ["bold"]
-
-[elements.string]
-foreground = "#cccac2"
+#
+# Elements define specific styles for different log elements.
+#
+[elements]
+[elements.field]
+foreground = "#4e6c90"
 
 [elements.number]
 foreground = "#87d96c"
@@ -49,32 +48,10 @@ foreground = "#87d96c"
 foreground = "#ffad66"
 
 [elements.null]
-foreground = "#f27983"
+style = "error"
 
 [levels.trace.level-inner]
-foreground = "#707a8c"
+style = "secondary"
 
 [levels.debug.level-inner]
 foreground = "#7988bd"
-
-[levels.info.level-inner]
-foreground = "#5ccfe6"
-
-[levels.warning.message]
-foreground = "#d5ff80"
-
-[levels.warning.level-inner]
-foreground = "#d5ff80"
-
-[levels.error.level-inner]
-foreground = "#f27983"
-
-[levels.error.message]
-foreground = "#f27983"
-
-[indicators.sync.synced]
-text = " "
-
-[indicators.sync.failed]
-text = "!"
-inner.style = { foreground = "#d5ff80", modes = ["bold"] }
