@@ -33,26 +33,26 @@ fn test_v0_input_element_blocking() {
     // Test that v0 themes defining `input` block @default's input-number/input-name elements
     // This ensures backward compatibility where `input` styling applies to all nested input elements
     let app_dirs = AppDirs {
-        config_dir: PathBuf::from("etc/defaults"),
+        config_dir: PathBuf::from("src/testing/assets"),
         cache_dir: Default::default(),
         system_config_dirs: Default::default(),
     };
-    let theme = Theme::load(&app_dirs, "classic").unwrap();
+    let theme = Theme::load(&app_dirs, "v0-color-formats").unwrap();
 
-    // Input element should be loaded with bright-black foreground from classic theme
+    // Input element should be loaded with bright-yellow foreground from v0-color-formats theme
     let input = theme.elements.get(&Element::Input);
     assert!(
         input.is_some(),
-        "Input element should be present in classic theme after merge with @default"
+        "Input element should be present in v0 theme after merge with @default"
     );
     assert_eq!(
         input.unwrap().foreground,
-        Some(Color::Plain(PlainColor::BrightBlack)),
-        "Input element should have bright-black foreground"
+        Some(Color::Plain(PlainColor::BrightYellow)),
+        "Input element should have bright-yellow foreground"
     );
 
     // InputNumber and InputName should NOT be present (blocked by v0 merge rules)
-    // because classic defines `input` but not `input-number` or `input-name`
+    // because v0-color-formats defines `input` but not `input-number` or `input-name`
     // This allows nested styling scope to work properly for v0 themes
     assert!(
         theme.elements.get(&Element::InputNumber).is_none(),
