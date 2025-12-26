@@ -1,4 +1,4 @@
-#:schema https://raw.githubusercontent.com/pamburus/hl/c5f7bbb768219023877d4d65959972d0f9701d5e/schema/json/theme.schema.v1.json
+#:schema https://raw.githubusercontent.com/pamburus/hl/e6cc1ea34263c5b208f6582c0a4e231379da0fe9/schema/json/theme.schema.v1.json
 
 version = "1.0"
 tags = ["dark", "truecolor"]
@@ -16,12 +16,6 @@ foreground = "#565b66"
 [styles.emphasized]
 foreground = "#95e6cb"
 
-[styles.warning]
-foreground = "#e6b450"
-
-[styles.error]
-foreground = "#d95757"
-
 [styles.accent]
 foreground = "#73b8ff"
 
@@ -30,6 +24,18 @@ foreground = "#3f5d7f"
 
 [styles.syntax]
 modes = ["bold"]
+
+[styles.debug]
+foreground = "#d2a6ff"
+
+[styles.warning]
+foreground = "#e6b450"
+
+[styles.error]
+foreground = "#d95757"
+
+[styles.info]
+foreground = "#39bae6"
 
 #
 # Elements define specific styles for different log elements.
@@ -52,13 +58,3 @@ foreground = "#e6b450"
 
 [elements.null]
 foreground = "#d95757"
-
-#
-# Levels define styles for different log levels.
-#
-[levels]
-[levels.debug.level-inner]
-foreground = "#d2a6ff"
-
-[levels.info.level-inner]
-foreground = "#39bae6"
