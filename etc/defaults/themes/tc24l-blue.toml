@@ -1,85 +1,73 @@
-#:schema https://raw.githubusercontent.com/pamburus/hl/c5f7bbb768219023877d4d65959972d0f9701d5e/schema/json/theme.schema.v0.json
+#:schema https://raw.githubusercontent.com/pamburus/hl/f2d142049de7704b555a67e5e06289de64b91551/schema/json/theme.schema.v1.json
 
+version = "1.0"
 tags = ["light", "truecolor"]
 
-[elements.input]
-foreground = "#778899"
-
-[elements.time]
-foreground = "#778899"
-
-[elements.logger]
-foreground = "#778899"
-
-[elements.caller]
-foreground = "#778899"
-modes = ["italic"]
-
-[elements.level]
-foreground = "#778899"
-
-[elements.message]
-foreground = "#262a33"
-modes = ["bold"]
-
-[elements.message-delimiter]
-foreground = "#778899"
-
-[elements.field]
-foreground = "#778899"
-
-[elements.key]
-foreground = "#4169e1"
-
-[elements.ellipsis]
-foreground = "#778899"
-
-[elements.object]
-foreground = "#262a33"
-modes = ["bold"]
-
-[elements.array]
-foreground = "#262a33"
-modes = ["bold"]
-
-[elements.string]
+#
+# Styles define general purpose styles used throughout the theme.
+#
+[styles]
+[styles.primary]
 foreground = "#313641"
 
+[styles.secondary]
+foreground = "#778899"
+
+[styles.strong]
+foreground = "#262a33"
+modes = ["bold"]
+
+[styles.accent]
+foreground = "#4169e1"
+
+[styles.debug]
+foreground = "#da70d6"
+
+[styles.info]
+foreground = "#48d1cc"
+
+[styles.warning]
+foreground = "#ff8c00"
+
+[styles.error]
+foreground = "#e06c75"
+
+#
+# Elements define specific styles for different log elements.
+#
+[elements]
 [elements.number]
 foreground = "#228b22"
 
 [elements.boolean]
-foreground = "#ff8c00"
+style = "warning"
 
 [elements.null]
-foreground = "#e06c75"
+style = "error"
 
-[levels.trace.level-inner]
-foreground = "#778899"
-
-[levels.debug.level-inner]
-foreground = "#da70d6"
-
-[levels.info.level-inner]
-foreground = "#48d1cc"
-
+#
+# Levels define styles for different log levels.
+#
+[levels]
 [levels.warning.level]
-foreground = "#ff8c00"
+style = "warning"
 modes = ["reverse"]
+
+[levels.warning.message]
 
 [levels.error.time]
-foreground = "#e06c75"
+style = "error"
 
 [levels.error.level]
-foreground = "#e06c75"
+style = "error"
 modes = ["reverse"]
 
-[indicators.sync.synced]
-text = " "
+[levels.error.message]
 
-[indicators.sync.failed]
-text = "!"
-
-[indicators.sync.failed.inner.style]
-foreground = "#ff8c00"
-modes = ["bold"]
+#
+# Indicators define styles for various status indicators.
+#
+[indicators]
+[indicators.sync]
+synced = { text = " " }
+failed = { text = "!", inner.style = { foreground = "#ff8c00", modes = ["bold"] } }
