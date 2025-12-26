@@ -23,10 +23,7 @@ error = { foreground = "bright-red" }
 
 # Elements define specific styles for different log elements.
 [elements]
-input-number = { style = "muted" }
-input-number-inner = { style = "secondary" }
-input-name = { style = "muted" }
-input-name-inner = { style = "secondary" }
+input = { style = "secondary" }
 time = { style = "secondary" }
 level = { style = "muted" }
 level-inner = { style = "primary" }
