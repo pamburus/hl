@@ -1,48 +1,34 @@
-#:schema https://raw.githubusercontent.com/pamburus/hl/c5f7bbb768219023877d4d65959972d0f9701d5e/schema/json/theme.schema.v0.json
+#:schema https://raw.githubusercontent.com/pamburus/hl/f2d142049de7704b555a67e5e06289de64b91551/schema/json/theme.schema.v1.json
 
+version = "1.0"
 tags = ["dark", "light", "16color"]
 
-[elements.input]
-modes = ["faint"]
-
-[elements.time]
-modes = ["faint"]
-
-[elements.logger]
-modes = ["faint"]
-
-[elements.caller]
-modes = ["faint", "italic"]
-
-[elements.level]
-foreground = "default"
-modes = ["faint"]
-
-[elements.message]
-foreground = "default"
-modes = ["bold"]
-
-[elements.message-delimiter]
-modes = ["faint"]
-
-[elements.field]
-modes = ["faint"]
-
-[elements.key]
+#
+# Styles define general purpose styles used throughout the theme.
+#
+[styles]
+[styles.accent]
 foreground = "bright-blue"
 
-[elements.ellipsis]
+[styles.accent-secondary]
 modes = ["faint"]
 
-[elements.object]
-modes = ["bold"]
+[styles.debug]
+foreground = "bright-magenta"
 
-[elements.array]
-modes = ["bold"]
+[styles.info]
+foreground = "cyan"
 
-[elements.string]
-foreground = "default"
+[styles.warning]
+foreground = "yellow"
 
+[styles.error]
+foreground = "bright-red"
+
+#
+# Elements define specific styles for different log elements.
+#
+[elements]
 [elements.number]
 foreground = "green"
 
@@ -52,33 +38,29 @@ foreground = "yellow"
 [elements.null]
 foreground = "bright-red"
 
-[levels.trace.level-inner]
-foreground = "default"
-modes = ["faint"]
-
-[levels.debug.level-inner]
-foreground = "bright-magenta"
-
-[levels.info.level-inner]
-foreground = "cyan"
-
+#
+# Levels define styles for different log levels.
+#
+[levels]
 [levels.warning.level]
-foreground = "yellow"
+style = "warning"
 modes = ["reverse"]
+
+[levels.warning.message]
 
 [levels.error.time]
-foreground = "bright-red"
+style = "error"
 
 [levels.error.level]
-foreground = "bright-red"
+style = "error"
 modes = ["reverse"]
 
-[indicators.sync.synced]
-text = " "
+[levels.error.message]
 
-[indicators.sync.failed]
-text = "!"
-
-[indicators.sync.failed.inner.style]
-foreground = "yellow"
-modes = ["bold"]
+#
+# Indicators define styles for various status indicators.
+#
+[indicators]
+[indicators.sync]
+synced = { text = " " }
+failed = { text = "!", inner.style = { foreground = "yellow", modes = ["bold"] } }
