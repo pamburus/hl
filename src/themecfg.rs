@@ -890,18 +890,25 @@ impl Style {
     }
 
     pub fn resolve(&self, inventory: &StylePack<Role, ResolvedStyle>, flags: MergeFlags) -> ResolvedStyle {
-        if self.base.is_empty() {
-            return self.as_resolved();
+        Self::resolve_with(&self.base, self, flags, |role| {
+            inventory.0.get(role).cloned().unwrap_or_default()
+        })
+    }
+
+    fn resolve_with<F>(bases: &StyleBase, style: &Style, flags: MergeFlags, mut resolve_role: F) -> ResolvedStyle
+    where
+        F: FnMut(&Role) -> ResolvedStyle,
+    {
+        if bases.is_empty() {
+            return style.as_resolved();
         }
 
-        // Resolve multiple bases: merge left to right, then apply self on top
+        // Resolve multiple bases: merge left to right, then apply style on top
         let mut result = ResolvedStyle::default();
-        for role in self.base.iter() {
-            if let Some(base_style) = inventory.0.get(role) {
-                result = result.merged_with(base_style, flags);
-            }
+        for role in bases.iter() {
+            result = result.merged_with(&resolve_role(role), flags);
         }
-        result.merged_with(self, flags)
+        result.merged_with(style, flags)
     }
 
     fn as_resolved(&self) -> ResolvedStyle {
@@ -997,26 +1004,17 @@ impl<'a> StyleResolver<'a> {
 
     fn resolve_style(&mut self, style: &Style, role: &Role) -> ResolvedStyle {
         // If no explicit base, default to inheriting from Default role (except for Default itself)
-        let bases: Vec<Role> = if style.base.is_empty() {
+        let bases = if style.base.is_empty() {
             if *role != Role::Default {
-                vec![Role::Default]
+                StyleBase::from(Role::Default)
             } else {
-                vec![]
+                StyleBase::default()
             }
         } else {
-            style.base.0.clone()
+            style.base.clone()
         };
 
-        if bases.is_empty() {
-            return style.as_resolved();
-        }
-
-        // Resolve multiple bases: merge left to right, then apply style on top
-        let mut result = ResolvedStyle::default();
-        for base in bases {
-            result = result.merged_with(&self.resolve(&base), self.flags);
-        }
-        result.merged_with(style, self.flags)
+        Style::resolve_with(&bases, style, self.flags, |r| self.resolve(r))
     }
 }
 
