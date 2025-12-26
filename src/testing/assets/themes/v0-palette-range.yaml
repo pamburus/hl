@@ -1,0 +1,74 @@
+# V0 theme testing palette color range
+# Test palette indices from 0 to 255 (all valid values)
+
+elements:
+  message:
+    foreground: 0
+    background: 255
+
+  level:
+    foreground: 1
+    background: 254
+
+  level-inner:
+    foreground: 16
+    background: 231
+
+  time:
+    foreground: 88
+    background: 0
+
+  caller:
+    foreground: 124
+
+  logger:
+    foreground: 196
+
+  key:
+    foreground: 220
+
+  string:
+    foreground: 46
+
+  number:
+    foreground: 33
+
+  boolean:
+    foreground: 40
+
+  boolean-true:
+    foreground: 82
+
+  boolean-false:
+    foreground: 160
+
+  array:
+    foreground: 214
+
+  object:
+    foreground: 178
+
+  null:
+    foreground: 240
+
+  field:
+    foreground: 250
+
+levels:
+  debug:
+    level:
+      foreground: 243
+
+  info:
+    level:
+      foreground: 51
+
+  warning:
+    level:
+      foreground: 226
+      background: 94
+
+  error:
+    level:
+      foreground: 255
+      background: 52

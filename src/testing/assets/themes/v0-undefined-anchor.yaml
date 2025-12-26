@@ -1,0 +1,10 @@
+# V0 theme with undefined YAML anchor
+# This should fail to parse with an error about undefined anchor
+
+elements:
+  message:
+    foreground: *undefined-anchor
+    modes: [bold]
+
+  level:
+    foreground: "#00ff00"

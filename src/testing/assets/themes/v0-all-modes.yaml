@@ -1,0 +1,59 @@
+# V0 theme testing all mode types
+# Test that all ANSI modes are supported and parsed correctly
+
+elements:
+  message:
+    foreground: '#ffffff'
+    modes: [bold]
+
+  level:
+    foreground: '#00ff00'
+    modes: [faint]
+
+  level-inner:
+    foreground: '#00ffff'
+    modes: [italic]
+
+  time:
+    foreground: '#aaaaaa'
+    modes: [underline]
+
+  caller:
+    foreground: '#cccccc'
+    modes: [slow-blink]
+
+  logger:
+    foreground: '#ffff00'
+    modes: [rapid-blink]
+
+  key:
+    foreground: '#ff00ff'
+    modes: [reverse]
+
+  string:
+    foreground: '#00aaaa'
+    modes: [conceal]
+
+  number:
+    foreground: '#ffaa00'
+    modes: [crossed-out]
+
+  # Multiple modes combined
+  boolean:
+    foreground: '#ff0000'
+    modes: [bold, italic, underline]
+
+  boolean-true:
+    foreground: '#00ff00'
+    modes: [bold, faint, italic, underline, slow-blink]
+
+  boolean-false:
+    foreground: '#0000ff'
+    modes: [rapid-blink, reverse, conceal, crossed-out]
+
+levels:
+  error:
+    level:
+      modes: [bold, reverse]
+    message:
+      modes: [bold, italic, underline, reverse]

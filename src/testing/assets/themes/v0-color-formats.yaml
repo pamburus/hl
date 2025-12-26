@@ -1,0 +1,31 @@
+# V0 theme testing various color formats
+# RGB colors, plain color names, and palette indices
+
+elements:
+  message:
+    foreground: '#ff0000'
+
+  level:
+    foreground: 'red'
+
+  time:
+    foreground: 'bright-blue'
+
+  caller:
+    foreground: 42
+
+  key:
+    foreground: 0
+
+  string:
+    foreground: 255
+
+  logger:
+    foreground: 'green'
+
+  input:
+    foreground: 'bright-yellow'
+
+  field:
+    foreground: '#00ff00'
+    background: '#110011'

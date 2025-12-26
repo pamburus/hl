@@ -1,0 +1,55 @@
+# V0 theme testing level-specific overrides
+# Level-specific elements should merge with base elements
+# Level overrides win for properties that are defined
+
+elements:
+  message:
+    foreground: "#ffffff"
+    background: "#000000"
+    modes: [bold]
+
+  level:
+    foreground: "#00ff00"
+    modes: [italic]
+
+  level-inner:
+    foreground: "#00ffff"
+
+  time:
+    foreground: "#aaaaaa"
+    modes: [faint]
+
+  caller:
+    foreground: "#cccccc"
+
+levels:
+  # Debug level: override level and level-inner
+  debug:
+    level:
+      foreground: "#ff00ff"
+      modes: [bold, underline]
+    level-inner:
+      background: "#111111"
+
+  # Warning level: override multiple elements
+  warning:
+    level:
+      foreground: "#ffaa00"
+    time:
+      foreground: "#ffaa00"
+      modes: [bold]
+
+  # Error level: comprehensive overrides
+  error:
+    level:
+      foreground: "#ff0000"
+      background: "#440000"
+      modes: [reverse, bold]
+    level-inner:
+      foreground: "#ffaaaa"
+    message:
+      foreground: "#ff8888"
+    time:
+      modes: [bold, underline]
+    caller:
+      foreground: "#ff0000"
