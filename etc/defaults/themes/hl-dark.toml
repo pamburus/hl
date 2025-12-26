@@ -33,12 +33,6 @@ foreground = 215
 [styles.error]
 foreground = 210
 
-[elements.caller]
-style = "secondary"
-modes = [
-  "italic",
-]
-
 [elements.level]
 style = "muted"
 modes = [
