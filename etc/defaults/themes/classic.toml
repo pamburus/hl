@@ -37,6 +37,9 @@ foreground = "bright-red"
 # Elements define specific styles for different log elements.
 #
 [elements]
+[elements.caller]
+style = "secondary"
+
 [elements.number]
 foreground = "cyan"
 
