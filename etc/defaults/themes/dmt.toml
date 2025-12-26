@@ -13,7 +13,7 @@ foreground = 36
 [styles.secondary]
 foreground = 8
 
-[styles.emphasized]
+[styles.strong]
 foreground = 174
 
 [styles.message]

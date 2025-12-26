@@ -746,9 +746,9 @@ fn test_v1_multiple_inheritance() {
     let flags = theme.merge_flags();
     let inventory = theme.styles.resolve(flags);
 
-    // Test warning role: inherits from [secondary, emphasized, accent]
+    // Test warning role: inherits from [secondary, strong, accent]
     // - secondary has: foreground=#888888, modes=[faint]
-    // - emphasized has: modes=[bold]
+    // - strong has: modes=[bold]
     // - accent has: modes=[underline]
     // - warning adds: background=#331100
     // Result: foreground=#888888 (from secondary, last one with foreground)
@@ -767,7 +767,7 @@ fn test_v1_multiple_inheritance() {
     assert_eq!(error.background, Some(Color::RGB(RGB(0x33, 0x11, 0x00)))); // inherited from warning
     assert!(error.modes.adds.contains(Mode::Faint)); // inherited from warning chain
 
-    // Test level element: style = ["secondary", "emphasized"]
+    // Test level element: style = ["secondary", "strong"]
     // Should have: foreground=#888888, modes=[faint, bold]
     let level = theme.elements.0.get(&Element::Level).unwrap();
     let resolved_level = level.resolve(&inventory, flags);
@@ -775,7 +775,7 @@ fn test_v1_multiple_inheritance() {
     assert!(resolved_level.modes.adds.contains(Mode::Faint));
     assert!(resolved_level.modes.adds.contains(Mode::Bold));
 
-    // Test level-inner element: style = ["secondary", "emphasized"], modes=[italic], foreground=#00ff00
+    // Test level-inner element: style = ["secondary", "strong"], modes=[italic], foreground=#00ff00
     // Should have: foreground=#00ff00 (explicit override), modes=[faint, bold, italic]
     let level_inner = theme.elements.0.get(&Element::LevelInner).unwrap();
     let resolved_level_inner = level_inner.resolve(&inventory, flags);

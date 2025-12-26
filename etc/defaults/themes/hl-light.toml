@@ -13,11 +13,11 @@ foreground = 18
 [styles.secondary]
 foreground = 30
 
-[styles.emphasized]
+[styles.strong]
 foreground = 16
 
 [styles.syntax]
-style = "emphasized"
+style = "strong"
 modes = ["bold"]
 
 [styles.accent]

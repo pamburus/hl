@@ -13,7 +13,7 @@ foreground = 116
 [styles.secondary]
 foreground = 30
 
-[styles.emphasized]
+[styles.strong]
 foreground = 195
 
 [styles.accent]

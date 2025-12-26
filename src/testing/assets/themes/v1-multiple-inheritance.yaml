@@ -13,7 +13,7 @@ styles:
     modes: ["faint"]
 
   # Style with bold mode only
-  emphasized:
+  strong:
     modes: ["bold"]
 
   # Style with underline mode only
@@ -22,9 +22,9 @@ styles:
 
   # Style that inherits from multiple bases
   # Should get: foreground from secondary (#888888),
-  # modes from both emphasized (bold) and accent (underline)
+  # modes from both strong (bold) and accent (underline)
   warning:
-    style: ["secondary", "emphasized", "accent"]
+    style: ["secondary", "strong", "accent"]
     background: "#331100"
 
   # Style that inherits from one base and overrides
@@ -37,14 +37,14 @@ elements:
   message:
     style: "primary"
 
-  # Multiple inheritance: should get faint from secondary + bold from emphasized
+  # Multiple inheritance: should get faint from secondary + bold from strong
   level:
-    style: ["secondary", "emphasized"]
+    style: ["secondary", "strong"]
 
   # Multiple inheritance with explicit override
-  # Should get foreground from secondary, bold from emphasized, then override with italic
+  # Should get foreground from secondary, bold from strong, then override with italic
   level-inner:
-    style: ["secondary", "emphasized"]
+    style: ["secondary", "strong"]
     modes: ["italic"]
     foreground: "#00ff00"
 

@@ -13,7 +13,7 @@ foreground = "#cccac2"
 [styles.secondary]
 foreground = "#707a8c"
 
-[styles.emphasized]
+[styles.strong]
 foreground = "#95e6cb"
 
 [styles.accent]

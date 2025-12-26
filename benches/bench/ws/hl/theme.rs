@@ -92,7 +92,7 @@ fn theme() -> Theme {
         styles: hashmap! {
             Role::Primary => Style::new().foreground(Some(Color::Palette(36))),
             Role::Secondary => Style::new().foreground(Some(Color::Palette(8))),
-            Role::Emphasized => Style::new().foreground(Some(Color::Palette(255))),
+            Role::Strong => Style::new().foreground(Some(Color::Palette(255))),
             Role::Syntax => Style::new().foreground(Some(Color::Palette(246))),
             Role::Accent => Style::new().modes(Mode::Underline.into()).foreground(Some(Color::Palette(8))),
         }
@@ -102,7 +102,7 @@ fn theme() -> Theme {
             Element::Level => Style::new().foreground(Some(Color::Palette(25))),
             Element::Logger => Role::Secondary.into(),
             Element::Caller => Role::Secondary.into(),
-            Element::Message => Role::Emphasized.into(),
+            Element::Message => Role::Strong.into(),
             Element::Field => Role::Secondary.into(),
             Element::Object => Role::Syntax.into(),
             Element::Array => Role::Syntax.into(),

@@ -7,12 +7,12 @@ version = "1.0"
 default = {  }
 primary = { modes = ["-faint"] }
 secondary = { style = "primary", modes = ["faint"] }
-emphasized = { style = "primary", modes = ["bold"] }
+strong = { style = "primary", modes = ["bold"] }
 muted = { style = "secondary" }
 accent = { style = "secondary" }
 accent-secondary = { style = ["accent", "secondary"] }
-message = { style = "emphasized" }
-syntax = { style = "emphasized" }
+message = { style = "strong" }
+syntax = { style = "strong" }
 status = { modes = ["-faint"] }
 level = { style = "status" }
 trace = { style = "secondary" }

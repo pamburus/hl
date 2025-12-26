@@ -12,7 +12,7 @@ tags = ["dark", "light", "16color"]
 [styles.secondary]
 foreground = "bright-black"
 
-[styles.emphasized]
+[styles.strong]
 style = "primary"
 
 [styles.accent]

@@ -78,7 +78,7 @@
         "default",
         "primary",
         "secondary",
-        "emphasized",
+        "strong",
         "muted",
         "accent",
         "accent-secondary",
@@ -106,7 +106,7 @@
         "secondary": {
           "$ref": "#/$defs/style"
         },
-        "emphasized": {
+        "strong": {
           "$ref": "#/$defs/style"
         },
         "muted": {

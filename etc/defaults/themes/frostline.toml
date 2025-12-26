@@ -14,7 +14,7 @@ style = "default"
 foreground = "cyan"
 modes = ["faint"]
 
-[styles.emphasized]
+[styles.strong]
 style = "default"
 
 [styles.syntax]

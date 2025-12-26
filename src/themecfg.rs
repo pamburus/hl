@@ -181,7 +181,7 @@ pub enum Role {
     Default,
     Primary,
     Secondary,
-    Emphasized,
+    Strong,
     Muted,
     Accent,
     AccentSecondary,
