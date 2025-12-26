@@ -320,21 +320,41 @@ impl StylePack {
         // Process all elements, applying parent→inner inheritance where needed
         for (&element, style) in s.items() {
             // Check if this element is an inner element that should inherit from its parent
-            let mut final_style = style.clone();
+            let mut parent_for_inner = None;
             for (parent, inner) in inner_pairs {
                 if element == inner {
-                    // This is an inner element
-                    if let Some(parent_style) = s.items().get(&parent) {
-                        // V1: always merge parent→inner (property-level merging)
-                        // V0: never merge (handled in fallback section below)
-                        if !flags.contains(MergeFlag::ReplaceElements) {
-                            final_style = parent_style.clone().merged(&final_style, flags);
-                        }
-                    }
+                    parent_for_inner = s.items().get(&parent).cloned();
                     break;
                 }
             }
-            result.add(element, &Style::from(&final_style.resolve(inventory, flags)));
+
+            let resolved_style = match parent_for_inner {
+                Some(parent_style) if !flags.contains(MergeFlag::ReplaceElements) => {
+                    // V1: Resolve both parent and inner first, then merge based on resolved values
+                    // This respects role resolution without checking implementation details (base field)
+                    let resolved_inner = style.resolve(inventory, flags);
+                    let resolved_parent = parent_style.resolve(inventory, flags);
+
+                    // Parent fills in only properties that are None in the resolved inner
+                    let mut merged = resolved_inner;
+                    if merged.foreground.is_none() {
+                        merged.foreground = resolved_parent.foreground;
+                    }
+                    if merged.background.is_none() {
+                        merged.background = resolved_parent.background;
+                    }
+                    // For modes in v1, merge additively
+                    merged.modes = resolved_parent.modes + merged.modes;
+
+                    merged
+                }
+                _ => {
+                    // V0 or no parent: just resolve the style
+                    style.resolve(inventory, flags)
+                }
+            };
+
+            result.add(element, &Style::from(&resolved_style));
         }
 
         // Add inherited inner elements that weren't explicitly defined
