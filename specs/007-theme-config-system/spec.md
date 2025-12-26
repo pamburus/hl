@@ -139,6 +139,10 @@
 
 - Q: Is ANSI extended color value 0 valid? → A: Yes - 0 is valid (0-255 means inclusive range, 0 is black in ANSI 256-color palette)
 
+### Session 2024-12-25 (Twelfth Pass)
+
+- Q: What is the exact v1 element property resolution order when combining @default, base element, level-specific override, role reference, and explicit properties? → A: Proposed Order A (merge elements first, then resolve role): 1) Start with @default element, 2) Merge base element from user theme, 3) Merge level-specific element, 4) Resolve `style` field if present (role resolution recursive), 5) Apply explicit properties from merged element (override role properties)
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Theme File Loading and Validation (Priority: P1)
@@ -500,11 +504,13 @@ Theme authors using v1 can define semantic roles (like "warning", "error", "succ
 
 - **FR-038**: V1 themes MUST support `style` property on elements to reference role names
 
-- **FR-039**: V1 themes MUST resolve element styles with precedence rules (exact resolution order to be refined based on complete user stories): likely @default → level-specific → role → element explicit properties, with element explicit properties having highest precedence; alternative order under consideration: level-specific → @default → role (recursive) → element explicit
+- **FR-039**: V1 themes MUST resolve element styles using the following order: 1) Start with element from @default theme (if defined), 2) Merge with base element from user theme (properties in base override @default), 3) Merge with level-specific element for the current level (level-specific properties override base), 4) If the merged element has a `style` field, resolve the role recursively (following role-to-role `style` references up to 64 levels depth), applying role properties to fill in undefined properties, 5) Apply explicit properties from the merged element (foreground, background, modes) which override role properties
 
-- **FR-039-TODO**: Complete property resolution order for v1 elements needs further specification after defining all user stories and use cases; current understanding: element's `style` field references role (recursively following role-to-role `style` references up to 64 levels), merge with `@default` theme for undefined roles, apply level-specific overrides, apply element's explicit properties which override all
+- **FR-039a**: V1 element merging (steps 1-3) follows standard property override semantics: later sources override earlier sources for defined properties; undefined properties are inherited from earlier sources
 
-- **FR-039a**: V1 property precedence: element explicit properties MUST override role properties when both are defined (e.g., if element has `style: "warning"` and `foreground: "#FF0000"`, and warning role has `foreground: "#FFA500"`, the element uses `#FF0000`)
+- **FR-039b**: V1 role resolution (step 4) fills in properties not explicitly defined in the merged element; if merged element has foreground defined, role's foreground is not applied; if merged element lacks foreground but role defines it, role's foreground is used
+
+- **FR-039c**: V1 property precedence: explicit properties in the merged element (result of steps 1-3) MUST override role properties when both are defined (e.g., if merged element has `style: "warning"` and `foreground: "#FF0000"`, and warning role has `foreground: "#FFA500"`, the final result uses `#FF0000` from the merged element)
 
 - **FR-040**: V1 `@default` theme MUST define reasonable defaults for all roles, with the `default` role serving as the implicit base for all other roles that don't specify a `style` field, and specific roles using the `style` field to reference more generic ones (e.g., `warning: {style: "primary", ...}` where `primary` is also defined in `@default`)
 
@@ -620,7 +626,7 @@ Theme authors using v1 can define semantic roles (like "warning", "error", "succ
 - Theme loading performance requirement (<50ms) applies to all scenarios including edge cases with 64-level role chains and maximum complexity
 - Themes are loaded once at application startup and remain constant for the lifetime of the process; changing themes requires restarting the application
 - Minimum valid theme: v0 can be completely empty file (inherits terminal defaults); v1 requires at minimum `version: "1.0"` field (inherits from `@default` theme)
-- V1 property resolution order needs further refinement based on complete user stories; current likely order: @default → level-specific → role → element explicit (highest precedence); alternative under consideration: level-specific → @default → role (recursive) → element explicit
+- V1 property resolution order: 1) @default element, 2) merge base element, 3) merge level-specific element, 4) resolve `style` field (role resolution fills undefined properties), 5) explicit properties from merged element override role; this ensures level-specific can change role reference and explicit properties always win
 - The theme name `@default` is reserved for the embedded v1 default theme; custom theme files named `@default` (any extension) are ignored and not loaded; other theme names starting with `@` can be used normally
 - File extension determines which parser is used (YAML/TOML/JSON); if file content doesn't match extension, parser fails with error to stderr (no auto-detection of actual format)
 - Unknown top-level sections in theme files are ignored when the theme version is supported (forward compatibility); if theme version is unsupported, error occurs before section parsing; level names in `levels` section are case-sensitive (trace, debug, info, warning, error); unknown or invalid level names are silently ignored
