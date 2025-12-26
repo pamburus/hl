@@ -228,13 +228,13 @@ High-performance log viewer and processor that transforms logs in JSON and logfm
 
 <p align="center">
     <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/pamburus/hl-extra/2d956593188617b4c464688caa9456348e648216/screenshot/uni/dark.svg" />
-    <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/pamburus/hl-extra/2d956593188617b4c464688caa9456348e648216/screenshot/uni/light.svg" />
+    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/pamburus/hl-extra/3e11e950c336d7e17e8a902d906632f20ff3281b/screenshot/uni/dark.svg" />
+    <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/pamburus/hl-extra/3e11e950c336d7e17e8a902d906632f20ff3281b/screenshot/uni/light.svg" />
     <img alt="screenshot" src="https://hl-uni.tiiny.site/dark.svg" />
     </picture>
 </p>
 
-See other [screenshots](https://github.com/pamburus/hl-extra/blob/2d956593188617b4c464688caa9456348e648216/screenshot/README.md#current-mode)
+See other [screenshots](https://github.com/pamburus/hl-extra/blob/3e11e950c336d7e17e8a902d906632f20ff3281b/screenshot/README.md#current-mode)
 
 ## Features and usage
 
