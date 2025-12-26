@@ -324,9 +324,10 @@ impl StylePack {
             for (parent, inner) in inner_pairs {
                 if element == inner {
                     // This is an inner element
-                    // Only inherit from parent if the inner doesn't have a base style reference
-                    if style.base.is_none() {
-                        if let Some(parent_style) = s.items().get(&parent) {
+                    if let Some(parent_style) = s.items().get(&parent) {
+                        // V1: always merge parent→inner (property-level merging)
+                        // V0: never merge (handled in fallback section below)
+                        if !flags.contains(MergeFlag::ReplaceElements) {
                             final_style = parent_style.clone().merged(&final_style, flags);
                         }
                     }
@@ -337,6 +338,8 @@ impl StylePack {
         }
 
         // Add inherited inner elements that weren't explicitly defined
+        // V0: fallback to parent when inner is missing
+        // V1: also fallback to parent when inner is missing
         for (parent, inner) in inner_pairs {
             if let Some(parent_style) = s.items().get(&parent) {
                 if s.items().get(&inner).is_none() {

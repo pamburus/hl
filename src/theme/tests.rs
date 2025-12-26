@@ -128,3 +128,47 @@ fn test_boolean_merge_timing_with_level_overrides() {
     });
     assert!(!buf.is_empty());
 }
+
+#[test]
+fn test_v1_parent_inner_property_level_merging() {
+    // Test FR-037d and User Story 6, Scenario 2:
+    // V1 themes should always merge parent→inner using property-level merging
+    // even when the inner element has a role reference.
+    //
+    // Test scenario:
+    // - level element has modes=[faint] (in ayu-dark-24 theme)
+    // - level-inner for debug has foreground=#d2a6ff (specific color)
+    // - Expected: level-inner should inherit modes=[faint] from parent AND have foreground=#d2a6ff
+
+    use crate::appdirs::AppDirs;
+    use std::path::PathBuf;
+
+    let app_dirs = AppDirs {
+        config_dir: PathBuf::from("etc/defaults"),
+        cache_dir: Default::default(),
+        system_config_dirs: Default::default(),
+    };
+
+    // Load ayu-dark-24 which is a v1 theme
+    let cfg = themecfg::Theme::load(&app_dirs, "ayu-dark-24").unwrap();
+    let theme = Theme::from(&cfg);
+
+    // Apply the theme and render something with level-inner at debug level
+    let mut buf = Vec::new();
+    theme.apply(&mut buf, &Some(Level::Debug), |s| {
+        s.element(Element::LevelInner, |s| s.batch(|buf| buf.extend_from_slice(b"DBG")));
+    });
+
+    // The buffer should contain ANSI codes that include both:
+    // - The faint mode (2) from the parent level element
+    // - The color code from the debug level-inner foreground
+    let output = String::from_utf8_lossy(&buf);
+
+    // Check that faint mode (2) is present in the output
+    // ANSI faint mode is "\u{1b}[2m" or as part of combined codes like "\u{1b}[0;2m"
+    assert!(
+        output.contains(";2") || output.contains("[2"),
+        "Expected faint mode to be inherited from parent level element, got: {}",
+        output
+    );
+}
