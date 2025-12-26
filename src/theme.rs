@@ -319,25 +319,6 @@ impl StylePack {
             }
         }
 
-        // Handle inner elements inheriting from their parent elements
-        let inner_pairs = [
-            (Element::Level, Element::LevelInner),
-            (Element::Logger, Element::LoggerInner),
-            (Element::Caller, Element::CallerInner),
-            (Element::InputNumber, Element::InputNumberInner),
-            (Element::InputName, Element::InputNameInner),
-        ];
-
-        for (parent, inner) in inner_pairs {
-            if let Some(parent_style) = s.items().get(&parent) {
-                let mut style = parent_style.clone();
-                if let Some(patch) = s.items().get(&inner) {
-                    style = style.merged(patch);
-                }
-                result.add(inner, &Style::from(&style.resolve(inventory)));
-            }
-        }
-
         result
     }
 }
