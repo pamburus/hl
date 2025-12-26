@@ -89,12 +89,12 @@ fn test_nested_objects() {
 
     assert_eq!(
         &format(&rec),
-        "\u{1b}[0;2;3m00-01-02 03:04:05.123 \u{1b}[0;36m|\u{1b}[0;95mDBG\u{1b}[0;36m|\u{1b}[0;2;3m \u{1b}[0;2;4mtl:\u{1b}[0m \u{1b}[0;1;39mtm \u{1b}[0;32mk-a\u{1b}[0;2m=\u{1b}[0;33m{ \u{1b}[0;32mva\u{1b}[0;2m=\u{1b}[0;33m{ \u{1b}[0;32mkb\u{1b}[0;2m=\u{1b}[0;94m42 \u{1b}[0;32mkc\u{1b}[0;2m=\u{1b}[0;94m43\u{1b}[0;33m } }\u{1b}[0;2;3m -> tc\u{1b}[0m",
+        "\u{1b}[0;2;3m00-01-02 03:04:05.123 \u{1b}[0;36m|\u{1b}[0;95mDBG\u{1b}[0;36m|\u{1b}[0;2;3m \u{1b}[0;2;4mtl:\u{1b}[0m \u{1b}[0;1mtm \u{1b}[0;32mk-a\u{1b}[0;2m=\u{1b}[0;33m{ \u{1b}[0;32mva\u{1b}[0;2m=\u{1b}[0;33m{ \u{1b}[0;32mkb\u{1b}[0;2m=\u{1b}[0;94m42 \u{1b}[0;32mkc\u{1b}[0;2m=\u{1b}[0;94m43\u{1b}[0;33m } }\u{1b}[0;2;3m -> tc\u{1b}[0m",
     );
 
     assert_eq!(
         &formatter().with_flatten(true).build().format_to_string(&rec),
-        "\u{1b}[0;2;3m00-01-02 03:04:05.123 \u{1b}[0;36m|\u{1b}[0;95mDBG\u{1b}[0;36m|\u{1b}[0;2;3m \u{1b}[0;2;4mtl:\u{1b}[0m \u{1b}[0;1;39mtm \u{1b}[0;32mk-a.va.kb\u{1b}[0;2m=\u{1b}[0;94m42 \u{1b}[0;32mk-a.va.kc\u{1b}[0;2m=\u{1b}[0;94m43\u{1b}[0;2;3m -> tc\u{1b}[0m",
+        "\u{1b}[0;2;3m00-01-02 03:04:05.123 \u{1b}[0;36m|\u{1b}[0;95mDBG\u{1b}[0;36m|\u{1b}[0;2;3m \u{1b}[0;2;4mtl:\u{1b}[0m \u{1b}[0;1mtm \u{1b}[0;32mk-a.va.kb\u{1b}[0;2m=\u{1b}[0;94m42 \u{1b}[0;32mk-a.va.kc\u{1b}[0;2m=\u{1b}[0;94m43\u{1b}[0;2;3m -> tc\u{1b}[0m",
     );
 }
 
@@ -106,7 +106,7 @@ fn test_timestamp_none() {
         ..Default::default()
     };
 
-    assert_eq!(&format(&rec), "\u{1b}[0;7;91m|ERR|\u{1b}[0m \u{1b}[0;1;39mtm\u{1b}[0m");
+    assert_eq!(&format(&rec), "\u{1b}[0;7;91m|ERR|\u{1b}[0m \u{1b}[0;1mtm\u{1b}[0m");
 }
 
 #[test]
@@ -119,7 +119,7 @@ fn test_level_trace() {
 
     assert_eq!(
         &format(&rec),
-        "\u{1b}[0;36m|\u{1b}[0;2mTRC\u{1b}[0;36m|\u{1b}[0m \u{1b}[0;1;39mtm\u{1b}[0m"
+        "\u{1b}[0;36m|\u{1b}[0;2mTRC\u{1b}[0;36m|\u{1b}[0m \u{1b}[0;1mtm\u{1b}[0m"
     );
 }
 
@@ -132,7 +132,7 @@ fn test_timestamp_none_always_show() {
 
     assert_eq!(
         &formatter().with_always_show_time(true).build().format_to_string(&rec),
-        "\u{1b}[0;2;3m---------------------\u{1b}[0m \u{1b}[0;1;39mtm\u{1b}[0m",
+        "\u{1b}[0;2;3m---------------------\u{1b}[0m \u{1b}[0;1mtm\u{1b}[0m",
     );
 }
 
@@ -143,7 +143,7 @@ fn test_level_none() {
         ..Default::default()
     };
 
-    assert_eq!(&format(&rec), "\u{1b}[0;1;39mtm\u{1b}[0m",);
+    assert_eq!(&format(&rec), "\u{1b}[0;1mtm\u{1b}[0m",);
 }
 
 #[test]
@@ -155,7 +155,7 @@ fn test_level_none_always_show() {
 
     assert_eq!(
         &formatter().with_always_show_level(true).build().format_to_string(&rec),
-        "\u{1b}[0;36m|(?)|\u{1b}[0m \u{1b}[0;1;39mtm\u{1b}[0m"
+        "\u{1b}[0;36m|(?)|\u{1b}[0m \u{1b}[0;1mtm\u{1b}[0m"
     );
 }
 

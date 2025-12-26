@@ -193,10 +193,16 @@ impl From<&themecfg::Style> for Style {
             );
         }
         if let Some(color) = &style.background {
-            codes.push(StyleCode::Background(Self::convert_color(color)));
+            let color = Self::convert_color(color);
+            if !matches!(color, ColorCode::Default) {
+                codes.push(StyleCode::Background(color));
+            }
         }
         if let Some(color) = &style.foreground {
-            codes.push(StyleCode::Foreground(Self::convert_color(color)));
+            let color = Self::convert_color(color);
+            if !matches!(color, ColorCode::Default) {
+                codes.push(StyleCode::Foreground(color));
+            }
         }
         Self(codes.into())
     }

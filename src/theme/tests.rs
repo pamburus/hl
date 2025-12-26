@@ -37,3 +37,48 @@ fn test_style_from_rgb_color() {
     // that the conversion didn't panic and produced a valid style
     assert_ne!(style.0, Sequence::reset());
 }
+
+#[test]
+fn test_style_from_background_color() {
+    let theme_style = themecfg::Style {
+        background: Some(themecfg::Color::Plain(themecfg::PlainColor::Blue)),
+        ..Default::default()
+    };
+
+    let style = Style::from(&theme_style);
+    assert_ne!(style.0, Sequence::reset());
+}
+
+#[test]
+fn test_style_from_foreground_plain_color() {
+    let theme_style = themecfg::Style {
+        foreground: Some(themecfg::Color::Plain(themecfg::PlainColor::Red)),
+        ..Default::default()
+    };
+
+    let style = Style::from(&theme_style);
+    assert_ne!(style.0, Sequence::reset());
+}
+
+#[test]
+fn test_style_from_background_rgb_color() {
+    let theme_style = themecfg::Style {
+        background: Some(themecfg::Color::RGB(themecfg::RGB(100, 150, 200))),
+        ..Default::default()
+    };
+
+    let style = Style::from(&theme_style);
+    assert_ne!(style.0, Sequence::reset());
+}
+
+#[test]
+fn test_style_from_default_colors_ignored() {
+    let theme_style = themecfg::Style {
+        foreground: Some(themecfg::Color::Plain(themecfg::PlainColor::Default)),
+        background: Some(themecfg::Color::Plain(themecfg::PlainColor::Default)),
+        ..Default::default()
+    };
+
+    let style = Style::from(&theme_style);
+    assert_eq!(style.0, Sequence::reset());
+}
