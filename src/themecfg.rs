@@ -596,17 +596,8 @@ impl<S> StylePack<Element, S> {
             }
         }
 
-        if flags.contains(MergeFlag::ReplaceElements) {
-            self.0.extend(patch.0);
-            return;
-        }
-
-        for (key, patch) in patch.0 {
-            self.0
-                .entry(key)
-                .and_modify(|v| *v = v.clone().merged_with(&patch, flags))
-                .or_insert(patch);
-        }
+        // For both v0 and v1, elements defined in child theme replace elements from parent
+        self.0.extend(patch.0);
     }
 
     pub fn merged(mut self, patch: Self, flags: MergeFlags) -> Self
