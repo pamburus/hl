@@ -1,54 +1,44 @@
-#:schema https://raw.githubusercontent.com/pamburus/hl/c5f7bbb768219023877d4d65959972d0f9701d5e/schema/json/theme.schema.v0.json
+#:schema https://raw.githubusercontent.com/pamburus/hl/e6cc1ea34263c5b208f6582c0a4e231379da0fe9/schema/json/theme.schema.v1.json
 
+version = "1.0"
 tags = ["dark", "light", "16color"]
 
-[elements.input]
+#
+# Styles define general purpose styles used throughout the theme.
+#
+[styles]
+[styles.primary]
+style = "default"
+
+[styles.secondary]
 foreground = "cyan"
 modes = ["faint"]
 
-[elements.time]
-foreground = "cyan"
-modes = ["faint"]
+[styles.emphasized]
+style = "default"
 
-[elements.logger]
-foreground = "cyan"
-modes = ["faint"]
-
-[elements.caller]
-foreground = "cyan"
-modes = ["faint", "italic"]
-
-[elements.level]
-foreground = "cyan"
-modes = ["faint"]
-
-[elements.message]
-foreground = "default"
-
-[elements.message-delimiter]
-foreground = "cyan"
-modes = ["faint"]
-
-[elements.field]
-foreground = "cyan"
-modes = ["faint"]
-
-[elements.key]
-foreground = "cyan"
-
-[elements.ellipsis]
-foreground = "cyan"
-modes = ["faint"]
-
-[elements.object]
+[styles.syntax]
 modes = ["bold"]
 
-[elements.array]
-modes = ["bold"]
+[styles.accent]
+foreground = "cyan"
 
-[elements.string]
-foreground = "default"
+[styles.debug]
+foreground = "magenta"
 
+[styles.info]
+foreground = "cyan"
+
+[styles.warning]
+foreground = "yellow"
+
+[styles.error]
+foreground = "bright-red"
+
+#
+# Elements define specific styles for different log elements.
+#
+[elements]
 [elements.number]
 foreground = "bright-blue"
 
@@ -60,34 +50,3 @@ foreground = "red"
 
 [elements.null]
 foreground = "red"
-
-[levels.trace.level-inner]
-foreground = "cyan"
-
-[levels.debug.level-inner]
-foreground = "magenta"
-
-[levels.info.level-inner]
-foreground = "cyan"
-
-[levels.warning.message]
-foreground = "yellow"
-
-[levels.warning.level-inner]
-foreground = "yellow"
-
-[levels.error.message]
-foreground = "bright-red"
-
-[levels.error.level-inner]
-foreground = "bright-red"
-
-[indicators.sync.synced]
-text = " "
-
-[indicators.sync.failed]
-text = "!"
-
-[indicators.sync.failed.inner.style]
-foreground = "yellow"
-modes = ["bold"]
