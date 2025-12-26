@@ -279,28 +279,16 @@ impl Theme {
             }
         }
 
-        if flags.contains(MergeFlag::ReplaceElements) {
-            // Replace top-level elements (no merge for backward compatibility)
-            self.elements.0.extend(other.elements.0);
-        } else {
-            // Merge elements properly for version 1+
-            self.elements.merge(other.elements, flags);
-        }
+        // For both v0 and v1, elements defined in child theme replace elements from parent theme
+        // Property-level merge happens later when merging elements with per-level styles
+        self.elements.0.extend(other.elements.0);
 
+        // For both v0 and v1, level-specific elements defined in child theme replace from parent
         for (level, pack) in other.levels {
-            if flags.contains(MergeFlag::ReplaceElements) {
-                // Replace level-specific elements (no merge for backward compatibility)
-                self.levels
-                    .entry(level)
-                    .and_modify(|existing| existing.0.extend(pack.0.clone()))
-                    .or_insert(pack);
-            } else {
-                // Merge level-specific elements properly for version 1+
-                self.levels
-                    .entry(level)
-                    .and_modify(|existing| existing.merge(pack.clone(), flags))
-                    .or_insert(pack);
-            }
+            self.levels
+                .entry(level)
+                .and_modify(|existing| existing.0.extend(pack.0.clone()))
+                .or_insert(pack);
         }
 
         self.tags = other.tags;
@@ -596,8 +584,17 @@ impl<S> StylePack<Element, S> {
             }
         }
 
-        // For both v0 and v1, elements defined in child theme replace elements from parent
-        self.0.extend(patch.0);
+        if flags.contains(MergeFlag::ReplaceElements) {
+            self.0.extend(patch.0);
+            return;
+        }
+
+        for (key, patch) in patch.0 {
+            self.0
+                .entry(key)
+                .and_modify(|v| *v = v.clone().merged_with(&patch, flags))
+                .or_insert(patch);
+        }
     }
 
     pub fn merged(mut self, patch: Self, flags: MergeFlags) -> Self
