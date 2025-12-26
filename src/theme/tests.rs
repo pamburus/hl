@@ -207,6 +207,59 @@ fn test_v0_input_element_styling() {
 }
 
 #[test]
+fn test_v1_element_modes_preserved_after_per_level_merge() {
+    // Test that when a v1 theme defines an element with modes (e.g., level-inner with bold),
+    // those modes are preserved after merging with per-level styles from @default.
+    //
+    // This tests the fix for the issue where a theme's level-inner = { modes = ["bold"] }
+    // was losing the bold mode when merged with per-level styles.
+    //
+    // The merge flow is:
+    // 1. Theme merge: @default + child theme → child's level-inner replaces @default's
+    // 2. Per-level merge: elements.level-inner + levels.info.level-inner → property-level merge
+    //    Result: level-inner = { style = "info", modes = ["bold"] }
+    // 3. Resolution: The final rendered style should have bold mode
+
+    use crate::appdirs::AppDirs;
+    use std::path::PathBuf;
+
+    let app_dirs = AppDirs {
+        config_dir: PathBuf::from("src/testing/assets"),
+        cache_dir: Default::default(),
+        system_config_dirs: Default::default(),
+    };
+
+    // Load synthetic test theme which defines level-inner = { modes = ["bold"] }
+    // and levels.info.level-inner = { style = "info" }
+    let cfg = themecfg::Theme::load(&app_dirs, "v1-element-modes-per-level").unwrap();
+    let theme = Theme::from(&cfg);
+
+    // Apply the theme and render level-inner at info level
+    let mut buf = Vec::new();
+    theme.apply(&mut buf, &Some(Level::Info), |s| {
+        s.element(Element::LevelInner, |s| s.batch(|buf| buf.extend_from_slice(b"INF")));
+    });
+
+    let output = String::from_utf8_lossy(&buf);
+
+    // Check that bold mode (1) is present in the output
+    // ANSI bold mode is represented as "1" in the escape sequence
+    // Expected output: \x1b[0;1;36mINF\x1b[0m (reset, bold, cyan)
+    assert!(
+        output.contains(";1;") || output.contains("[0;1"),
+        "Expected bold mode (1) to be preserved from element definition after per-level merge, got: {:?}",
+        output
+    );
+
+    // Also verify cyan (36) is present from the info style
+    assert!(
+        output.contains(";36") || output.contains("[36"),
+        "Expected cyan (36) from info style, got: {:?}",
+        output
+    );
+}
+
+#[test]
 fn test_v0_input_nested_styling() {
     // Test that v0 themes with `input` defined get nested styling scope behavior
     // where InputNumber inherits from Input via nested rendering scope

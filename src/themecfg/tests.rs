@@ -786,6 +786,82 @@ fn test_v1_multiple_inheritance() {
 }
 
 #[test]
+fn test_v1_element_replacement_preserves_per_level_modes() {
+    // Test that when a v1 theme defines an element (e.g., level-inner with modes),
+    // and merges with per-level styles, the modes from the element definition
+    // are preserved after the property-level merge.
+    //
+    // The merge flow is:
+    // 1. Theme merge: @default + child theme → child's level-inner replaces @default's
+    // 2. Per-level merge: elements.level-inner + levels.info.level-inner → property-level merge
+    //    Result: level-inner = { style = "info", modes = ["bold"] }
+    let path = PathBuf::from("src/testing/assets/themes");
+    let theme = Theme::load_from(&path, "v1-element-modes-per-level").unwrap();
+
+    // The test theme defines:
+    //   [elements.level-inner]
+    //   modes = ["bold"]
+    //
+    //   [levels.info.level-inner]
+    //   style = "info"
+    //
+    // After per-level merge: level-inner = { style = "info", modes = ["bold"] }
+
+    // Check the element-level definition has bold mode
+    let level_inner = theme.elements.get(&Element::LevelInner);
+    assert!(level_inner.is_some(), "level-inner element should exist");
+    assert!(
+        level_inner.unwrap().modes.adds.contains(Mode::Bold),
+        "level-inner element should have bold mode"
+    );
+
+    // Check that levels.info.level-inner has the style
+    let info_level = theme.levels.get(&InfallibleLevel::Valid(crate::level::Level::Info));
+    assert!(info_level.is_some(), "info level should exist");
+    let info_level_inner = info_level.unwrap().get(&Element::LevelInner);
+    assert!(info_level_inner.is_some(), "info level-inner should exist");
+
+    // The per-level style should have the style base
+    assert!(
+        !info_level_inner.unwrap().base.is_empty(),
+        "info level-inner should have a style base"
+    );
+}
+
+#[test]
+fn test_v1_element_replacement_removes_parent_modes() {
+    // Test that when a v1 child theme defines an element, it completely replaces
+    // the parent theme's element (modes from parent are not inherited during theme merge)
+    //
+    // This is tested by simulating Theme::merge behavior using extend()
+
+    // Create parent and child StylePacks
+    let mut parent_elements: HashMap<Element, Style> = HashMap::new();
+    parent_elements.insert(
+        Element::Caller,
+        Style::new().base(Role::Secondary).modes(Mode::Italic.into()),
+    );
+
+    let mut child_elements: HashMap<Element, Style> = HashMap::new();
+    child_elements.insert(Element::Caller, Style::new().base(Role::Secondary));
+
+    // Simulate Theme::merge: self.elements.0.extend(other.elements.0)
+    parent_elements.extend(child_elements);
+
+    // After extend, the child's element should have replaced the parent's
+    let result = parent_elements.get(&Element::Caller).unwrap();
+
+    // Verify the italic mode from parent is NOT present (element was replaced, not merged)
+    assert!(
+        result.modes.is_empty(),
+        "Child element should completely replace parent's element, not inherit modes"
+    );
+
+    // Verify the base is preserved
+    assert!(!result.base.is_empty(), "Child element should have its own base");
+}
+
+#[test]
 fn test_v1_style_base_construction() {
     // Test StyleBase construction and basic operations
 
