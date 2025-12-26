@@ -1,10 +1,6 @@
 #:schema https://raw.githubusercontent.com/pamburus/hl/c5f7bbb768219023877d4d65959972d0f9701d5e/schema/json/theme.schema.v0.json
 
-tags = [
-  "dark",
-  "light",
-  "16color",
-]
+tags = ["dark", "light", "16color"]
 
 [elements.input]
 foreground = "bright-black"
@@ -17,9 +13,7 @@ foreground = "bright-black"
 
 [elements.caller]
 foreground = "bright-black"
-modes = [
-  "italic",
-]
+modes = ["italic"]
 
 [elements.level]
 foreground = "bright-black"
@@ -35,9 +29,7 @@ foreground = "bright-black"
 
 [elements.key]
 foreground = "green"
-modes = [
-  "underline",
-]
+modes = ["underline"]
 
 [elements.ellipsis]
 foreground = "bright-black"

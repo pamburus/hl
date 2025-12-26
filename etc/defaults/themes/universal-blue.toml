@@ -1,71 +1,44 @@
 #:schema https://raw.githubusercontent.com/pamburus/hl/c5f7bbb768219023877d4d65959972d0f9701d5e/schema/json/theme.schema.v0.json
 
-tags = [
-  "dark",
-  "light",
-  "16color",
-]
+tags = ["dark", "light", "16color"]
 
 [elements.input]
-modes = [
-  "faint",
-]
+modes = ["faint"]
 
 [elements.time]
-modes = [
-  "faint",
-]
+modes = ["faint"]
 
 [elements.logger]
-modes = [
-  "faint",
-]
+modes = ["faint"]
 
 [elements.caller]
-modes = [
-  "faint",
-  "italic",
-]
+modes = ["faint", "italic"]
 
 [elements.level]
 foreground = "default"
-modes = [
-  "faint",
-]
+modes = ["faint"]
 
 [elements.message]
 foreground = "default"
-modes = [
-  "bold",
-]
+modes = ["bold"]
 
 [elements.message-delimiter]
-modes = [
-  "faint",
-]
+modes = ["faint"]
 
 [elements.field]
-modes = [
-  "faint",
-]
+modes = ["faint"]
 
 [elements.key]
 foreground = "bright-blue"
 
 [elements.ellipsis]
-modes = [
-  "faint",
-]
+modes = ["faint"]
 
 [elements.object]
-modes = [
-  "bold",
-]
+modes = ["bold"]
 
 [elements.array]
-modes = [
-  "bold",
-]
+modes = ["bold"]
 
 [elements.string]
 foreground = "default"
@@ -81,9 +54,7 @@ foreground = "bright-red"
 
 [levels.trace.level-inner]
 foreground = "default"
-modes = [
-  "faint",
-]
+modes = ["faint"]
 
 [levels.debug.level-inner]
 foreground = "bright-magenta"
@@ -93,18 +64,14 @@ foreground = "cyan"
 
 [levels.warning.level]
 foreground = "yellow"
-modes = [
-  "reverse",
-]
+modes = ["reverse"]
 
 [levels.error.time]
 foreground = "bright-red"
 
 [levels.error.level]
 foreground = "bright-red"
-modes = [
-  "reverse",
-]
+modes = ["reverse"]
 
 [indicators.sync.synced]
 text = " "
@@ -114,6 +81,4 @@ text = "!"
 
 [indicators.sync.failed.inner.style]
 foreground = "yellow"
-modes = [
-  "bold",
-]
+modes = ["bold"]

@@ -1,75 +1,50 @@
 #:schema https://raw.githubusercontent.com/pamburus/hl/c5f7bbb768219023877d4d65959972d0f9701d5e/schema/json/theme.schema.v0.json
 
-tags = [
-  "dark",
-  "light",
-  "16color",
-]
+tags = ["dark", "light", "16color"]
 
 [elements.input]
 foreground = "cyan"
-modes = [
-  "faint",
-]
+modes = ["faint"]
 
 [elements.time]
 foreground = "cyan"
-modes = [
-  "faint",
-]
+modes = ["faint"]
 
 [elements.logger]
 foreground = "cyan"
-modes = [
-  "faint",
-]
+modes = ["faint"]
 
 [elements.caller]
 foreground = "cyan"
-modes = [
-  "faint",
-  "italic",
-]
+modes = ["faint", "italic"]
 
 [elements.level]
 foreground = "cyan"
-modes = [
-  "faint",
-]
+modes = ["faint"]
 
 [elements.message]
 foreground = "default"
 
 [elements.message-delimiter]
 foreground = "cyan"
-modes = [
-  "faint",
-]
+modes = ["faint"]
 
 [elements.field]
 foreground = "cyan"
-modes = [
-  "faint",
-]
+modes = ["faint"]
 
 [elements.key]
 foreground = "cyan"
 
 [elements.ellipsis]
 foreground = "cyan"
-modes = [
-  "faint",
-]
+modes = ["faint"]
 
 [elements.object]
-modes = [
-  "bold",
-]
+modes = ["bold"]
 
 [elements.array]
-modes = [
-  "bold",
-]
+modes = ["bold"]
 
 [elements.string]
 foreground = "default"
@@ -115,6 +90,4 @@ text = "!"
 
 [indicators.sync.failed.inner.style]
 foreground = "yellow"
-modes = [
-  "bold",
-]
+modes = ["bold"]

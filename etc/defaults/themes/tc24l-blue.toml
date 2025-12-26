@@ -1,20 +1,6 @@
 #:schema https://raw.githubusercontent.com/pamburus/hl/c5f7bbb768219023877d4d65959972d0f9701d5e/schema/json/theme.schema.v0.json
 
-tags = [
-  "light",
-  "truecolor",
-]
-"$palette" = [
-  "#313641",
-  "#262a33",
-  "#e06c75",
-  "#778899",
-  "#4169e1",
-  "#ff8c00",
-  "#48d1cc",
-  "#da70d6",
-  "#228b22",
-]
+tags = ["light", "truecolor"]
 
 [elements.input]
 foreground = "#778899"
@@ -27,18 +13,14 @@ foreground = "#778899"
 
 [elements.caller]
 foreground = "#778899"
-modes = [
-  "italic",
-]
+modes = ["italic"]
 
 [elements.level]
 foreground = "#778899"
 
 [elements.message]
 foreground = "#262a33"
-modes = [
-  "bold",
-]
+modes = ["bold"]
 
 [elements.message-delimiter]
 foreground = "#778899"
@@ -54,15 +36,11 @@ foreground = "#778899"
 
 [elements.object]
 foreground = "#262a33"
-modes = [
-  "bold",
-]
+modes = ["bold"]
 
 [elements.array]
 foreground = "#262a33"
-modes = [
-  "bold",
-]
+modes = ["bold"]
 
 [elements.string]
 foreground = "#313641"
@@ -87,18 +65,14 @@ foreground = "#48d1cc"
 
 [levels.warning.level]
 foreground = "#ff8c00"
-modes = [
-  "reverse",
-]
+modes = ["reverse"]
 
 [levels.error.time]
 foreground = "#e06c75"
 
 [levels.error.level]
 foreground = "#e06c75"
-modes = [
-  "reverse",
-]
+modes = ["reverse"]
 
 [indicators.sync.synced]
 text = " "
@@ -108,6 +82,4 @@ text = "!"
 
 [indicators.sync.failed.inner.style]
 foreground = "#ff8c00"
-modes = [
-  "bold",
-]
+modes = ["bold"]

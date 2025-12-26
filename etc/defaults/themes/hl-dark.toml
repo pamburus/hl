@@ -1,10 +1,7 @@
 #:schema https://raw.githubusercontent.com/pamburus/hl/c5f7bbb768219023877d4d65959972d0f9701d5e/schema/json/theme.schema.v1.json
 
 version = "1.0"
-tags = [
-  "dark",
-  "256color",
-]
+tags = ["dark", "256color"]
 
 [styles.primary]
 foreground = 116
@@ -20,9 +17,7 @@ foreground = 111
 
 [styles.syntax]
 foreground = 255
-modes = [
-  "bold",
-]
+modes = ["bold"]
 
 [styles.info]
 foreground = 146
@@ -35,15 +30,11 @@ foreground = 210
 
 [elements.level]
 style = "muted"
-modes = [
-  "faint",
-]
+modes = ["faint"]
 
 [elements.level-inner]
 style = "primary"
-modes = [
-  "-faint",
-]
+modes = ["-faint"]
 
 [elements.number]
 foreground = 42

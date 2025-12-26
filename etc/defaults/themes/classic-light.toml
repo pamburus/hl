@@ -1,9 +1,6 @@
 #:schema https://raw.githubusercontent.com/pamburus/hl/c5f7bbb768219023877d4d65959972d0f9701d5e/schema/json/theme.schema.v0.json
 
-tags = [
-  "light",
-  "16color",
-]
+tags = ["light", "16color"]
 
 [elements.input]
 foreground = "bright-black"
@@ -64,12 +61,8 @@ foreground = "cyan"
 
 [levels.warning.level]
 foreground = "bright-yellow"
-modes = [
-  "reverse",
-]
+modes = ["reverse"]
 
 [levels.error.level]
 foreground = "bright-red"
-modes = [
-  "reverse",
-]
+modes = ["reverse"]

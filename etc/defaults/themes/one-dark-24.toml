@@ -1,9 +1,6 @@
 #:schema https://raw.githubusercontent.com/pamburus/hl/c5f7bbb768219023877d4d65959972d0f9701d5e/schema/json/theme.schema.v0.json
 
-tags = [
-  "dark",
-  "truecolor",
-]
+tags = ["dark", "truecolor"]
 
 [elements.input]
 foreground = "#426d77"
@@ -16,9 +13,7 @@ foreground = "#476a8c"
 
 [elements.caller]
 foreground = "#426d77"
-modes = [
-  "italic",
-]
+modes = ["italic"]
 
 [elements.level]
 foreground = "#476a8c"
@@ -39,14 +34,10 @@ foreground = "#61afef"
 foreground = "#666b76"
 
 [elements.object]
-modes = [
-  "bold",
-]
+modes = ["bold"]
 
 [elements.array]
-modes = [
-  "bold",
-]
+modes = ["bold"]
 
 [elements.string]
 foreground = "#56b6c2"
@@ -89,6 +80,4 @@ text = "!"
 
 [indicators.sync.failed.inner.style]
 foreground = "#e5c07b"
-modes = [
-  "bold",
-]
+modes = ["bold"]

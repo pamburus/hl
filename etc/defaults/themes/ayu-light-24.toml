@@ -1,10 +1,7 @@
 #:schema https://raw.githubusercontent.com/pamburus/hl/c5f7bbb768219023877d4d65959972d0f9701d5e/schema/json/theme.schema.v1.json
 
 version = "1.0"
-tags = [
-  "light",
-  "truecolor",
-]
+tags = ["light", "truecolor"]
 
 #
 # Styles define general purpose styles used throughout the theme.
@@ -35,9 +32,7 @@ foreground = "#478acc"
 foreground = "#8a9199"
 
 [styles.syntax]
-modes = [
-  "bold",
-]
+modes = ["bold"]
 
 #
 # Elements define specific styles for different log elements.

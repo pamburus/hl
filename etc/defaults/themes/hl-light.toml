@@ -1,9 +1,6 @@
 #:schema https://raw.githubusercontent.com/pamburus/hl/c5f7bbb768219023877d4d65959972d0f9701d5e/schema/json/theme.schema.v0.json
 
-tags = [
-  "light",
-  "256color",
-]
+tags = ["light", "256color"]
 
 [elements.input]
 foreground = 30
@@ -16,15 +13,11 @@ foreground = 30
 
 [elements.caller]
 foreground = 30
-modes = [
-  "italic",
-]
+modes = ["italic"]
 
 [elements.level]
 foreground = 30
-modes = [
-  "faint",
-]
+modes = ["faint"]
 
 [elements.message]
 foreground = 16
@@ -43,15 +36,11 @@ foreground = 30
 
 [elements.object]
 foreground = 16
-modes = [
-  "bold",
-]
+modes = ["bold"]
 
 [elements.array]
 foreground = 16
-modes = [
-  "bold",
-]
+modes = ["bold"]
 
 [elements.string]
 foreground = 18
