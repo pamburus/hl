@@ -329,15 +329,14 @@ impl StylePack {
 
         for (parent, inner) in inner_pairs {
             if let Some(parent_style) = s.items().get(&parent) {
-                // For v0 themes: always inherit parent -> inner, then merge with explicit overrides
+                // For v0 themes: use parent as fallback only when inner is not defined
                 // For v1 themes: only add inner if explicitly defined (no automatic inheritance)
                 if flags.contains(MergeFlag::ReplaceElements) {
-                    // V0 behavior: inherit and merge
-                    let mut style = parent_style.clone();
-                    if let Some(patch) = s.items().get(&inner) {
-                        style = style.merged(patch, flags);
+                    // V0 behavior: fallback to parent only if inner is not defined
+                    // If inner is defined, it was already added in the main loop above
+                    if s.items().get(&inner).is_none() {
+                        result.add(inner, &Style::from(&parent_style.resolve(inventory, flags)));
                     }
-                    result.add(inner, &Style::from(&style.resolve(inventory, flags)));
                 } else {
                     // V1 behavior: only use if explicitly defined
                     if let Some(inner_style) = s.items().get(&inner) {
