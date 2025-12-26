@@ -1,47 +1,45 @@
-#:schema https://raw.githubusercontent.com/pamburus/hl/c5f7bbb768219023877d4d65959972d0f9701d5e/schema/json/theme.schema.v0.json
+#:schema https://raw.githubusercontent.com/pamburus/hl/e6cc1ea34263c5b208f6582c0a4e231379da0fe9/schema/json/theme.schema.v1.json
 
+version = "1.0"
 tags = ["dark", "light", "16color"]
 
-[elements.input]
+#
+# Styles define general purpose styles used throughout the theme.
+#
+[styles]
+[styles.primary]
+
+[styles.secondary]
 foreground = "bright-black"
 
-[elements.time]
-foreground = "bright-black"
+[styles.emphasized]
+style = "primary"
 
-[elements.logger]
-foreground = "bright-black"
-
-[elements.caller]
-foreground = "bright-black"
-modes = ["italic"]
-
-[elements.level]
-foreground = "bright-black"
-
-[elements.message]
-foreground = "default"
-
-[elements.message-delimiter]
-foreground = "bright-black"
-
-[elements.field]
-foreground = "bright-black"
-
-[elements.key]
+[styles.accent]
 foreground = "green"
+
+[styles.accent-secondary]
+style = "secondary"
+
+[styles.debug]
+foreground = "magenta"
+
+[styles.info]
+foreground = "cyan"
+
+[styles.warning]
+foreground = "bright-yellow"
+
+[styles.error]
+foreground = "bright-red"
+
+#
+# Elements define specific styles for different log elements.
+#
+[elements]
+[elements.key]
+style = "accent"
 modes = ["underline"]
-
-[elements.ellipsis]
-foreground = "bright-black"
-
-[elements.object]
-foreground = "default"
-
-[elements.array]
-foreground = "default"
-
-[elements.string]
-foreground = "default"
 
 [elements.number]
 foreground = "blue"
@@ -52,26 +50,15 @@ foreground = "red"
 [elements.null]
 foreground = "red"
 
-[levels.trace.level-inner]
-foreground = "bright-black"
-
-[levels.debug.level-inner]
-foreground = "magenta"
-
-[levels.info.level-inner]
-foreground = "cyan"
-
+#
+# Levels define styles for different log levels.
+#
+[levels]
 [levels.warning.time]
-foreground = "bright-yellow"
+style = "warning"
 
-[levels.warning.level-inner]
-foreground = "bright-yellow"
+[levels.warning.message]
+style = "message"
 
 [levels.error.time]
-foreground = "bright-red"
-
-[levels.error.level-inner]
-foreground = "bright-red"
-
-[levels.error.message]
-foreground = "bright-red"
+style = "error"

@@ -1,46 +1,42 @@
-#:schema https://raw.githubusercontent.com/pamburus/hl/c5f7bbb768219023877d4d65959972d0f9701d5e/schema/json/theme.schema.v0.json
+#:schema https://raw.githubusercontent.com/pamburus/hl/e6cc1ea34263c5b208f6582c0a4e231379da0fe9/schema/json/theme.schema.v1.json
 
+version = "1.0"
 tags = ["dark"]
 
-[elements.input]
+#
+# Styles define general purpose styles used throughout the theme.
+#
+[styles]
+[styles.primary]
+
+[styles.secondary]
 foreground = "bright-black"
 
-[elements.time]
-foreground = "bright-black"
-
-[elements.logger]
-foreground = "bright-black"
-
-[elements.caller]
-foreground = "bright-black"
-
-[elements.level]
-foreground = "default"
-
-[elements.message]
+[styles.emphasized]
 foreground = "bright-white"
 
-[elements.message-delimiter]
-foreground = "bright-black"
-
-[elements.field]
-foreground = "bright-black"
-
-[elements.key]
+[styles.accent]
 foreground = "green"
 
-[elements.ellipsis]
-foreground = "bright-black"
+[styles.accent-secondary]
+style = "secondary"
 
-[elements.object]
-foreground = "default"
+[styles.debug]
+foreground = "magenta"
 
-[elements.array]
-foreground = "default"
+[styles.info]
+foreground = "cyan"
 
-[elements.string]
-foreground = "default"
+[styles.warning]
+foreground = "bright-yellow"
 
+[styles.error]
+foreground = "bright-red"
+
+#
+# Elements define specific styles for different log elements.
+#
+[elements]
 [elements.number]
 foreground = "cyan"
 
@@ -50,19 +46,20 @@ foreground = "yellow"
 [elements.null]
 foreground = "yellow"
 
-[levels.trace.level-inner]
-foreground = "bright-black"
-
-[levels.debug.level-inner]
-foreground = "magenta"
-
-[levels.info.level-inner]
-foreground = "cyan"
-
+#
+# Levels define styles for different log levels.
+#
+[levels]
 [levels.warning.level]
-foreground = "bright-yellow"
+style = "warning"
 modes = ["reverse"]
+
+[levels.warning.message]
+style = "message"
 
 [levels.error.level]
-foreground = "bright-red"
+style = "error"
 modes = ["reverse"]
+
+[levels.error.message]
+style = "message"
