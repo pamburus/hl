@@ -1635,43 +1635,12 @@ impl fmt::Display for RGB {
 
 // ---
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+#[serde(bound(deserialize = "S: Deserialize<'de> + Default"))]
 pub struct IndicatorPack<S = Style> {
+    #[serde(default)]
     pub sync: SyncIndicatorPack<S>,
-}
-
-// Manual Deserialize impl for IndicatorPack<Style>
-impl<'de> Deserialize<'de> for IndicatorPack<Style> {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        #[derive(Deserialize)]
-        #[serde(rename_all = "kebab-case")]
-        struct Helper {
-            #[serde(default)]
-            sync: SyncIndicatorPack<Style>,
-        }
-
-        let helper = Helper::deserialize(deserializer)?;
-        Ok(IndicatorPack { sync: helper.sync })
-    }
-}
-
-impl Default for IndicatorPack<Style> {
-    fn default() -> Self {
-        Self {
-            sync: SyncIndicatorPack::default(),
-        }
-    }
-}
-
-impl Default for IndicatorPack<ResolvedStyle> {
-    fn default() -> Self {
-        Self {
-            sync: SyncIndicatorPack::default(),
-        }
-    }
 }
 
 impl<S: Clone> IndicatorPack<S> {
@@ -1693,84 +1662,14 @@ impl<S: Clone> IndicatorPack<S> {
 
 // ---
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+#[serde(bound(deserialize = "S: Deserialize<'de> + Default"))]
 pub struct SyncIndicatorPack<S = Style> {
+    #[serde(default)]
     pub synced: Indicator<S>,
+    #[serde(default)]
     pub failed: Indicator<S>,
-}
-
-// Manual Deserialize impl for SyncIndicatorPack<Style>
-impl<'de> Deserialize<'de> for SyncIndicatorPack<Style> {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        #[derive(Deserialize)]
-        #[serde(rename_all = "kebab-case")]
-        struct Helper {
-            #[serde(default)]
-            synced: Indicator<Style>,
-            #[serde(default)]
-            failed: Indicator<Style>,
-        }
-
-        let helper = Helper::deserialize(deserializer)?;
-        Ok(SyncIndicatorPack {
-            synced: helper.synced,
-            failed: helper.failed,
-        })
-    }
-}
-
-impl Default for SyncIndicatorPack<Style> {
-    fn default() -> Self {
-        Self {
-            synced: Indicator {
-                outer: IndicatorStyle::default(),
-                inner: IndicatorStyle::default(),
-                text: " ".into(),
-            },
-            failed: Indicator {
-                outer: IndicatorStyle::default(),
-                inner: IndicatorStyle {
-                    prefix: String::default(),
-                    suffix: String::default(),
-                    style: ResolvedStyle {
-                        modes: Mode::Bold.into(),
-                        background: None,
-                        foreground: Some(Color::Plain(PlainColor::Yellow)),
-                    }
-                    .into(),
-                },
-                text: "!".into(),
-            },
-        }
-    }
-}
-
-impl Default for SyncIndicatorPack<ResolvedStyle> {
-    fn default() -> Self {
-        Self {
-            synced: Indicator {
-                outer: IndicatorStyle::default(),
-                inner: IndicatorStyle::default(),
-                text: " ".into(),
-            },
-            failed: Indicator {
-                outer: IndicatorStyle::default(),
-                inner: IndicatorStyle {
-                    prefix: String::default(),
-                    suffix: String::default(),
-                    style: ResolvedStyle {
-                        modes: Mode::Bold.into(),
-                        background: None,
-                        foreground: Some(Color::Plain(PlainColor::Yellow)),
-                    },
-                },
-                text: "!".into(),
-            },
-        }
-    }
 }
 
 impl Mergeable for SyncIndicatorPack<Style> {
@@ -1789,47 +1688,16 @@ impl Mergeable for SyncIndicatorPack<ResolvedStyle> {
 
 // ---
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+#[serde(bound(deserialize = "S: Deserialize<'de> + Default"))]
 pub struct Indicator<S = Style> {
+    #[serde(default)]
     pub outer: IndicatorStyle<S>,
+    #[serde(default)]
     pub inner: IndicatorStyle<S>,
+    #[serde(default)]
     pub text: String,
-}
-
-// Manual Deserialize impl for Indicator<Style>
-impl<'de> Deserialize<'de> for Indicator<Style> {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        #[derive(Deserialize)]
-        #[serde(rename_all = "kebab-case")]
-        struct Helper {
-            #[serde(default)]
-            outer: IndicatorStyle<Style>,
-            #[serde(default)]
-            inner: IndicatorStyle<Style>,
-            #[serde(default)]
-            text: String,
-        }
-
-        let helper = Helper::deserialize(deserializer)?;
-        Ok(Indicator {
-            outer: helper.outer,
-            inner: helper.inner,
-            text: helper.text,
-        })
-    }
-}
-
-impl<S: Default> Default for Indicator<S> {
-    fn default() -> Self {
-        Self {
-            outer: IndicatorStyle::default(),
-            inner: IndicatorStyle::default(),
-            text: String::default(),
-        }
-    }
 }
 
 impl<S: Clone> Indicator<S> {
@@ -1855,47 +1723,16 @@ impl<S: Clone> Indicator<S> {
 
 // ---
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+#[serde(bound(deserialize = "S: Deserialize<'de> + Default"))]
 pub struct IndicatorStyle<S = Style> {
+    #[serde(default)]
     pub prefix: String,
+    #[serde(default)]
     pub suffix: String,
+    #[serde(default)]
     pub style: S,
-}
-
-// Manual Deserialize impl for IndicatorStyle<Style>
-impl<'de> Deserialize<'de> for IndicatorStyle<Style> {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        #[derive(Deserialize)]
-        #[serde(rename_all = "kebab-case")]
-        struct Helper {
-            #[serde(default)]
-            prefix: String,
-            #[serde(default)]
-            suffix: String,
-            #[serde(default)]
-            style: Style,
-        }
-
-        let helper = Helper::deserialize(deserializer)?;
-        Ok(IndicatorStyle {
-            prefix: helper.prefix,
-            suffix: helper.suffix,
-            style: helper.style,
-        })
-    }
-}
-
-impl<S: Default> Default for IndicatorStyle<S> {
-    fn default() -> Self {
-        Self {
-            prefix: String::default(),
-            suffix: String::default(),
-            style: S::default(),
-        }
-    }
 }
 
 // Trait for types that support merging
