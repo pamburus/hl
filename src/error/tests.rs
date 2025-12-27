@@ -35,7 +35,7 @@ fn test_log() {
 #[test]
 fn test_tips() {
     let err = Error::Theme(themecfg::Error::ThemeNotFound {
-        name: "test".to_string(),
+        name: "test".into(),
         suggestions: Suggestions::new("test", vec!["test1", "test2"]),
     });
     assert_eq!(
@@ -48,7 +48,7 @@ fn test_tips() {
     assert!(!buf.is_empty());
 
     let err = Error::Theme(themecfg::Error::ThemeNotFound {
-        name: "test".to_string(),
+        name: "test".into(),
         suggestions: Suggestions::none(),
     });
 

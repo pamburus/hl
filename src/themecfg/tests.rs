@@ -555,7 +555,7 @@ fn test_theme_not_found_error() {
     assert!(result.is_err());
     match result {
         Err(Error::ThemeNotFound { name, .. }) => {
-            assert_eq!(name, "nonexistent");
+            assert_eq!(name.as_ref(), "nonexistent");
         }
         _ => panic!("Expected ThemeNotFound error"),
     }

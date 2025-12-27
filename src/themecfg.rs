@@ -132,7 +132,7 @@ impl<'de> Deserialize<'de> for ThemeVersion {
 #[derive(Error, Debug)]
 pub enum Error {
     #[error("unknown theme {name}", name=.name.hlq())]
-    ThemeNotFound { name: String, suggestions: Suggestions },
+    ThemeNotFound { name: Arc<str>, suggestions: Suggestions },
     #[error("failed to load theme {name}: {source}", name=.name.hlq())]
     FailedToLoadEmbeddedTheme { name: Arc<str>, source: ExternalError },
     #[error("failed to load theme {name} from {path}: {source}", name=.name.hlq(), path=.path.hlq())]
@@ -366,7 +366,7 @@ impl Theme {
         let suggestions = Suggestions::new(name, Self::embedded_names());
 
         Err(Error::ThemeNotFound {
-            name: name.to_string(),
+            name: name.into(),
             suggestions,
         })
     }
