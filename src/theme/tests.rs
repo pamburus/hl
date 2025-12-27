@@ -131,7 +131,7 @@ fn test_boolean_merge_timing_with_level_overrides() {
 
 #[test]
 fn test_v1_parent_inner_property_level_merging() {
-    // Test FR-037d and User Story 6, Scenario 2:
+    // Test FR-039d and User Story 6, Scenario 2:
     // V1 themes should always merge parent→inner using property-level merging
     // even when the inner element has a role reference.
     //

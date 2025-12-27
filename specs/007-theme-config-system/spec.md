@@ -147,6 +147,16 @@
 
 - Q: When does the boolean active merge happen relative to level-specific element merging? → A: After level merging - Boolean merge happens on each level's merged StylePack; level overrides to `boolean` DO affect variants at that level
 
+### Session 2025-01-07 (Fourteenth Pass)
+
+- Q: Should v0 themes automatically deduce style roles from element definitions to improve consistency with @default? → A: Yes - before merging with @default, deduce styles.secondary from time, styles.primary from string, styles.strong from message, styles.accent from key, and styles.syntax from array; this makes undefined elements use colors consistent with v0 theme's aesthetic
+
+- Q: How should elements not defined in v0 themes fall back to @default when they reference styles? → A: Fix style resolution to preserve inherited modes from base styles; ReplaceModes flag should only apply to theme-level merging, not within-theme style resolution; when merging style's own properties onto resolved base, use additive mode merging
+
+- Q: Should style deduction override explicitly defined styles in v0 themes? → A: No - deduction only creates a style if: (1) element is defined in v0 theme, AND (2) style is not already defined; explicit definitions take precedence
+
+- Q: When exactly does style deduction happen? → A: After loading v0 theme file but before merging with @default; deduced styles become part of v0 theme's inventory and override @default's corresponding styles during merge
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Theme File Loading and Validation (Priority: P1)
@@ -478,63 +488,77 @@ Theme authors using v1 can define semantic roles (like "warning", "error", "succ
 
 - **FR-030b**: System MUST display each theme by stem name only once in theme listings, even when multiple file formats exist for the same stem (e.g., if both theme.yaml and theme.toml exist, list shows "theme" once, representing the loadable theme per extension priority)
 
+- **FR-031**: System MUST automatically deduce style roles from element definitions in v0 themes before merging with `@default` theme, using these mappings: if v0 theme defines `time` element → deduce `styles.secondary` from it; if defines `string` → deduce `styles.primary`; if defines `message` → deduce `styles.strong`; if defines `key` → deduce `styles.accent`; if defines `array` → deduce `styles.syntax`; deduction copies foreground, background, and modes from the element definition to create the corresponding style role (with empty base)
+
+- **FR-031a**: Style deduction MUST only create a style role if: (1) the corresponding element is defined in the v0 theme, AND (2) the style role is not already defined in the v0 theme; if a v0 theme explicitly defines both the element and its corresponding style, the explicit style definition takes precedence (no deduction)
+
+- **FR-031b**: Style deduction MUST happen after loading the v0 theme file but before merging with `@default` theme; the deduced styles become part of the v0 theme's style inventory and override corresponding styles from `@default` during merge
+
+- **FR-031c**: Deduced styles MUST be used by all elements in `@default` that reference those style roles, making elements not defined in the v0 theme (like new elements added to `@default`) use colors and modes consistent with the v0 theme's aesthetic; for example, if v0 theme defines `time: {foreground: 30}`, this deduces `secondary: {foreground: 30}`, and then `input` element from `@default` (which has `style: "secondary"`) will use foreground 30
+
+- **FR-031d**: Style deduction MUST NOT affect elements that are explicitly defined in the v0 theme; elements defined in v0 themes are complete and render exactly as specified (no inheritance from deduced or `@default` styles)
+
+- **FR-032**: System MUST preserve inherited modes from base styles when resolving element styles that reference roles; when a style's own properties (foreground, background, modes) are merged onto the resolved base, mode merging MUST be additive (not replacement) regardless of the `ReplaceModes` flag; the `ReplaceModes` flag applies only to theme-level merging (child theme replacing parent theme), not to within-theme style resolution
+
+- **FR-032a**: For elements not defined in v0 themes, the system MUST fall back to `@default` theme's element definitions, preserving all properties including modes inherited from referenced styles; for example, if v0 theme doesn't define `input`, it falls back to `@default`'s `input = {style: "secondary"}` which resolves to include faint mode from the secondary style (unless overridden by deduced secondary style per FR-031)
+
 #### V1 Versioning
 
-- **FR-031**: System MUST treat themes without `version` field as v0
+- **FR-033**: System MUST treat themes without `version` field as v0
 
-- **FR-032**: System MUST support version field with format "major.minor" where major=1 and minor is non-negative integer without leading zeros (e.g., "1.0")
+- **FR-034**: System MUST support version field with format "major.minor" where major=1 and minor is non-negative integer without leading zeros (e.g., "1.0")
 
-- **FR-033**: System MUST validate version string against pattern `^1\.(0|[1-9][0-9]*)$` and reject malformed versions
+- **FR-035**: System MUST validate version string against pattern `^1\.(0|[1-9][0-9]*)$` and reject malformed versions
 
-- **FR-034**: System MUST support only version="1.0" initially; reject v1.1+ with error "Unsupported theme version 1.X, only version 1.0 is currently supported"; reject v2.0+ with error "Unsupported theme version 2.0, maximum supported major version is 1"
+- **FR-036**: System MUST support only version="1.0" initially; reject v1.1+ with error "Unsupported theme version 1.X, only version 1.0 is currently supported"; reject v2.0+ with error "Unsupported theme version 2.0, maximum supported major version is 1"
 
-- **FR-034a**: System MUST treat future minor versions (v1.1, v1.2, etc.) as unsupported until explicitly implemented; version support can be extended in future releases
+- **FR-036a**: System MUST treat future minor versions (v1.1, v1.2, etc.) as unsupported until explicitly implemented; version support can be extended in future releases
 
-- **FR-035**: System MUST provide version-specific error messages: for v1.1+: "Unsupported theme version 1.X, only version 1.0 is currently supported"; for v2.0+: "Unsupported theme version 2.Y, maximum supported major version is 1"
+- **FR-037**: System MUST provide version-specific error messages: for v1.1+: "Unsupported theme version 1.X, only version 1.0 is currently supported"; for v2.0+: "Unsupported theme version 2.Y, maximum supported major version is 1"
 
 #### V1 Enhanced Inheritance (Future)
 
-- **FR-036**: V1 system MUST include an embedded `@default` theme that explicitly defines all 28 v0 elements and all 12 v1 roles with reasonable defaults; this theme is invisible when listing themes (not shown in stock or custom groups)
+- **FR-038**: V1 system MUST include an embedded `@default` theme that explicitly defines all 28 v0 elements and all 12 v1 roles with reasonable defaults; this theme is invisible when listing themes (not shown in stock or custom groups)
 
-- **FR-036a**: V1 `@default` theme MUST define roles with inheritance chains where more specific roles inherit from more generic ones (e.g., specific roles reference `primary` or `secondary` via `style` field), providing flexibility so old themes remain compatible with newer app versions and look consistent even without defining new roles explicitly
+- **FR-038a**: V1 `@default` theme MUST define roles with inheritance chains where more specific roles inherit from more generic ones (e.g., specific roles reference `primary` or `secondary` via `style` field), providing flexibility so old themes remain compatible with newer app versions and look consistent even without defining new roles explicitly
 
-- **FR-037**: V1 themes MUST support `styles` section as an object map where keys are role names (from predefined enum) and values are style objects containing optional foreground, background, modes, and an optional `style` field that references another role for parent/base inheritance (e.g., `styles: {warning: {style: "primary", foreground: "#FFA500", modes: [bold]}}`)
+- **FR-039**: V1 themes MUST support `styles` section as an object map where keys are role names (from predefined enum) and values are style objects containing optional foreground, background, modes, and an optional `style` field that references another role for parent/base inheritance (e.g., `styles: {warning: {style: "primary", foreground: "#FFA500", modes: [bold]}}`)
 
-- **FR-037a**: V1 role names MUST be from the predefined enum (kebab-case, case-sensitive): default, primary, secondary, strong, muted, accent, accent-secondary, syntax, status, info, warning, error. Undefined role names or incorrect case (e.g., "Primary") are rejected with error. Element and role names exist in separate namespaces and can overlap without conflict.
+- **FR-039a**: V1 role names MUST be from the predefined enum (kebab-case, case-sensitive): default, primary, secondary, strong, muted, accent, accent-secondary, syntax, status, info, warning, error. Undefined role names or incorrect case (e.g., "Primary") are rejected with error. Element and role names exist in separate namespaces and can overlap without conflict.
 
-- **FR-037b**: V1 `default` role serves as the implicit base for all roles that do not explicitly specify a `style` field; properties set in `default` (foreground, background, modes) apply to all other roles unless overridden
+- **FR-039b**: V1 `default` role serves as the implicit base for all roles that do not explicitly specify a `style` field; properties set in `default` (foreground, background, modes) apply to all other roles unless overridden
 
-- **FR-037c**: V1 themes MUST allow `elements`, `styles`, and `levels` sections to be optional or empty; missing sections are treated as empty; undefined elements/roles inherit from the `@default` theme
+- **FR-039c**: V1 themes MUST allow `elements`, `styles`, and `levels` sections to be optional or empty; missing sections are treated as empty; undefined elements/roles inherit from the `@default` theme
 
-- **FR-037d**: V1 MUST retain nested styling scope for parent/inner element pairs (same as v0) in addition to the new property-level merging available through roles; both inheritance mechanisms coexist in v1
+- **FR-039d**: V1 MUST retain nested styling scope for parent/inner element pairs (same as v0) in addition to the new property-level merging available through roles; both inheritance mechanisms coexist in v1
 
-- **FR-038**: V1 themes MUST support `style` property on elements to reference role names
+- **FR-040**: V1 themes MUST support `style` property on elements to reference role names
 
-- **FR-039**: V1 themes MUST resolve element styles using the following order: 1) Start with element from @default theme (if defined), 2) Merge with base element from user theme (properties in base override @default), 3) Merge with level-specific element for the current level (level-specific properties override base), 4) If the merged element has a `style` field, resolve the role recursively (following role-to-role `style` references up to 64 levels depth), applying role properties to fill in undefined properties, 5) Apply explicit properties from the merged element (foreground, background, modes) which override role properties
+- **FR-041**: V1 themes MUST resolve element styles using the following order: 1) Start with element from @default theme (if defined), 2) Merge with base element from user theme (properties in base override @default), 3) Merge with level-specific element for the current level (level-specific properties override base), 4) If the merged element has a `style` field, resolve the role recursively (following role-to-role `style` references up to 64 levels depth), applying role properties to fill in undefined properties, 5) Apply explicit properties from the merged element (foreground, background, modes) which override role properties
 
-- **FR-039a**: V1 element merging (steps 1-3) follows standard property override semantics: later sources override earlier sources for defined properties; undefined properties are inherited from earlier sources
+- **FR-041a**: V1 element merging (steps 1-3) follows standard property override semantics: later sources override earlier sources for defined properties; undefined properties are inherited from earlier sources
 
-- **FR-039b**: V1 role resolution (step 4) fills in properties not explicitly defined in the merged element; if merged element has foreground defined, role's foreground is not applied; if merged element lacks foreground but role defines it, role's foreground is used
+- **FR-041b**: V1 role resolution (step 4) fills in properties not explicitly defined in the merged element; if merged element has foreground defined, role's foreground is not applied; if merged element lacks foreground but role defines it, role's foreground is used
 
-- **FR-039c**: V1 property precedence: explicit properties in the merged element (result of steps 1-3) MUST override role properties when both are defined (e.g., if merged element has `style: "warning"` and `foreground: "#FF0000"`, and warning role has `foreground: "#FFA500"`, the final result uses `#FF0000` from the merged element)
+- **FR-041c**: V1 property precedence: explicit properties in the merged element (result of steps 1-3) MUST override role properties when both are defined (e.g., if merged element has `style: "warning"` and `foreground: "#FF0000"`, and warning role has `foreground: "#FFA500"`, the final result uses `#FF0000` from the merged element)
 
-- **FR-040**: V1 `@default` theme MUST define reasonable defaults for all roles, with the `default` role serving as the implicit base for all other roles that don't specify a `style` field, and specific roles using the `style` field to reference more generic ones (e.g., `warning: {style: "primary", ...}` where `primary` is also defined in `@default`)
+- **FR-042**: V1 `@default` theme MUST define reasonable defaults for all roles, with the `default` role serving as the implicit base for all other roles that don't specify a `style` field, and specific roles using the `style` field to reference more generic ones (e.g., `warning: {style: "primary", ...}` where `primary` is also defined in `@default`)
 
-- **FR-041**: V1 themes MUST support mode operations with +mode (add) and -mode (remove) prefixes; plain mode defaults to +mode. Modes are internally represented as two unordered sets (adds/removes). During style merging, child -mode removes parent's mode, child +mode adds mode. Final ANSI output includes only added modes in enum declaration order: Bold, Faint, Italic, Underline, SlowBlink, RapidBlink, Reverse, Conceal, CrossedOut. Remove operations are only used during merge process.
+- **FR-043**: V1 themes MUST support mode operations with +mode (add) and -mode (remove) prefixes; plain mode defaults to +mode. Modes are internally represented as two unordered sets (adds/removes). During style merging, child -mode removes parent's mode, child +mode adds mode. Final ANSI output includes only added modes in enum declaration order: Bold, Faint, Italic, Underline, SlowBlink, RapidBlink, Reverse, Conceal, CrossedOut. Remove operations are only used during merge process.
 
-- **FR-041a**: V1 mode operations contrast with v0 replacement semantics: v0 child modes completely replace parent modes (no merging), v1 child modes modify parent modes (additive/subtractive operations)
+- **FR-043a**: V1 mode operations contrast with v0 replacement semantics: v0 child modes completely replace parent modes (no merging), v1 child modes modify parent modes (additive/subtractive operations)
 
-- **FR-041b**: V1 themes MUST resolve conflicting mode operations within the same modes array using last occurrence wins semantics (e.g., modes=[+bold, -bold] results in bold removed; modes=[-bold, +bold] results in bold added)
+- **FR-043b**: V1 themes MUST resolve conflicting mode operations within the same modes array using last occurrence wins semantics (e.g., modes=[+bold, -bold] results in bold removed; modes=[-bold, +bold] results in bold added)
 
-- **FR-042**: V1 does NOT support custom `include` directive for referencing other themes; only `@default` theme inheritance is supported (custom includes may be considered for future versions)
+- **FR-044**: V1 does NOT support custom `include` directive for referencing other themes; only `@default` theme inheritance is supported (custom includes may be considered for future versions)
 
-- **FR-043**: V1 inheritance chain is simple: user theme → `@default` theme (no circular dependency detection needed)
+- **FR-045**: V1 inheritance chain is simple: user theme → `@default` theme (no circular dependency detection needed)
 
-- **FR-044**: V1 role-to-role inheritance via the `style` field MUST support a maximum depth of 64 levels
+- **FR-046**: V1 role-to-role inheritance via the `style` field MUST support a maximum depth of 64 levels
 
-- **FR-045**: V1 themes MUST detect circular role references (e.g., `warning: {style: "error"}` and `error: {style: "warning"}`) and exit with error message showing the circular dependency chain
+- **FR-047**: V1 themes MUST detect circular role references (e.g., `warning: {style: "error"}` and `error: {style: "warning"}`) and exit with error message showing the circular dependency chain
 
-- **FR-046**: V1 themes MUST exit with error when a role's `style` field references a role name that is not in the predefined role enum or when the referenced role is not defined in either the user theme or `@default` theme
+- **FR-048**: V1 themes MUST exit with error when a role's `style` field references a role name that is not in the predefined role enum or when the referenced role is not defined in either the user theme or `@default` theme
 
 ### Key Entities
 
