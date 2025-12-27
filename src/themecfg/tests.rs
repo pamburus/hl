@@ -1554,6 +1554,50 @@ fn test_platform_specific_paths() {
 }
 
 #[test]
+fn test_theme_name_suggestions() {
+    // FR-006a: System MUST provide helpful suggestions using Jaro similarity
+    // when a theme name is not found
+    let app_dirs = AppDirs {
+        config_dir: PathBuf::from("src/testing/assets"),
+        cache_dir: Default::default(),
+        system_config_dirs: Default::default(),
+    };
+
+    // Try to load a theme with a typo - should get suggestions
+    let result = Theme::load(&app_dirs, "universl"); // typo: missing 'a'
+    assert!(result.is_err(), "Loading non-existent theme should fail");
+
+    // Check that the error includes suggestions via the Suggestions field
+    match result.unwrap_err() {
+        Error::ThemeNotFound { name, suggestions } => {
+            assert_eq!(name.as_ref(), "universl");
+            // Suggestions should not be empty - Jaro similarity should find "universal"
+            assert!(
+                !suggestions.is_empty(),
+                "Should provide suggestions for typo 'universl' (likely 'universal')"
+            );
+        }
+        other => panic!("Expected ThemeNotFound error, got: {:?}", other),
+    }
+
+    // Try another typo
+    let result2 = Theme::load(&app_dirs, "tst"); // typo: missing 'e' from "test"
+    assert!(result2.is_err(), "Loading non-existent theme should fail");
+
+    match result2.unwrap_err() {
+        Error::ThemeNotFound { name, suggestions } => {
+            assert_eq!(name.as_ref(), "tst");
+            // Should suggest similar themes using Jaro similarity
+            assert!(
+                !suggestions.is_empty(),
+                "Should provide suggestions for typo 'tst' (likely 'test')"
+            );
+        }
+        other => panic!("Expected ThemeNotFound error, got: {:?}", other),
+    }
+}
+
+#[test]
 fn test_file_format_parse_errors() {
     // FR-029: System MUST report file format parse errors with helpful messages
     // This test verifies that malformed theme files produce clear error messages
