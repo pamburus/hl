@@ -84,7 +84,6 @@ impl<S: Borrow<themecfg::Theme>> From<S> for Theme {
         let flags = s.merge_flags();
         let inventory = s.styles.resolve(flags);
         let default = StylePack::load(&s.elements, &inventory, flags);
-        // log::trace!("loaded default style pack: {:#?}", &default);
         let mut packs = EnumMap::default();
         for (level, pack) in &s.levels {
             let level = match level {
@@ -96,7 +95,6 @@ impl<S: Borrow<themecfg::Theme>> From<S> for Theme {
             };
             let flags = flags - MergeFlag::ReplaceGroups;
             packs[level] = StylePack::load(&s.elements.clone().merged_with(pack, flags), &inventory, flags);
-            // log::trace!("loaded style pack for level {:?}: {:#?}", level, &packs[level]);
         }
         Self {
             default,
