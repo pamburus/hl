@@ -69,17 +69,18 @@ impl FromStr for ThemeVersion {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let parts: Vec<&str> = s.split('.').collect();
+        let err = || Error::InvalidVersion(s.into());
 
         if parts.len() != 2 {
-            return Err(Error::InvalidVersion(s.to_string()));
+            return Err(err());
         }
 
-        let major: u32 = parts[0].parse().map_err(|_| Error::InvalidVersion(s.to_string()))?;
-        let minor: u32 = parts[1].parse().map_err(|_| Error::InvalidVersion(s.to_string()))?;
+        let major: u32 = parts[0].parse().map_err(|_| err())?;
+        let minor: u32 = parts[1].parse().map_err(|_| err())?;
 
         // Reject leading zeros (except "0" itself)
         if (parts[0].len() > 1 && parts[0].starts_with('0')) || (parts[1].len() > 1 && parts[1].starts_with('0')) {
-            return Err(Error::InvalidVersion(s.to_string()));
+            return Err(err());
         }
 
         Ok(ThemeVersion { major, minor })
@@ -152,7 +153,7 @@ pub enum Error {
         supported: ThemeVersion,
     },
     #[error("invalid version format: {0}")]
-    InvalidVersion(String),
+    InvalidVersion(Arc<str>),
 }
 
 /// Error is an error which may occur in the application.
