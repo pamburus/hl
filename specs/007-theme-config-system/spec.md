@@ -157,6 +157,10 @@
 
 - Q: When exactly does style deduction happen? → A: After loading v0 theme file but before merging with @default; deduced styles become part of v0 theme's inventory and override @default's corresponding styles during merge
 
+- Q: What does "with empty base" mean in FR-031's style deduction description? → A: The deduced style has no reference to a parent style (no base roles to inherit from); internally this means the base field is empty/default, not referencing any other style role; this is an artificially created style during deduction logic, not present in v0 theme schema
+
+- Q: Should v0 themes ignore the `styles` section if present, or treat it as an error? → A: Ignore silently - v0 schema does NOT include styles section; if present in v0 theme file, ignore entire section per forward compatibility rule (FR-010c for unknown top-level sections)
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Theme File Loading and Validation (Priority: P1)
@@ -407,6 +411,8 @@ Theme authors using v1 can define semantic roles (like "warning", "error", "succ
 
 - **FR-010e**: System MUST treat level names in `levels` section as case-sensitive (valid: trace, debug, info, warning, error; invalid: Trace, ERROR, etc.); unknown or invalid level names are ignored (not loaded) rather than causing error
 
+- **FR-010f**: System MUST recognize that v0 theme schema does NOT include a `styles` section (only v1 and later versions support styles); if a v0 theme file contains a `styles` section, the system MUST ignore it silently per the forward compatibility rule for unknown top-level sections (FR-010c); this ensures v0 themes cannot accidentally define styles, and style deduction (FR-031) remains the only mechanism for creating style roles in v0 themes
+
 - **FR-011**: System MUST support all v0 element names as defined in schema (case-sensitive): input, input-number, input-number-inner, input-name, input-name-inner, time, level, level-inner, logger, logger-inner, caller, caller-inner, message, message-delimiter, field, key, array, object, string, number, boolean, boolean-true, boolean-false, null, ellipsis
 
 - **FR-011a**: System MUST treat element names as case-sensitive; "message" and "Message" are different identifiers (unknown element "Message" would be ignored per forward compatibility)
@@ -488,7 +494,7 @@ Theme authors using v1 can define semantic roles (like "warning", "error", "succ
 
 - **FR-030b**: System MUST display each theme by stem name only once in theme listings, even when multiple file formats exist for the same stem (e.g., if both theme.yaml and theme.toml exist, list shows "theme" once, representing the loadable theme per extension priority)
 
-- **FR-031**: System MUST automatically deduce style roles from element definitions in v0 themes before merging with `@default` theme, using these mappings: if v0 theme defines `time` element → deduce `styles.secondary` from it; if defines `string` → deduce `styles.primary`; if defines `message` → deduce `styles.strong`; if defines `key` → deduce `styles.accent`; if defines `array` → deduce `styles.syntax`; deduction copies foreground, background, and modes from the element definition to create the corresponding style role (with empty base)
+- **FR-031**: System MUST automatically deduce style roles from element definitions in v0 themes before merging with `@default` theme, using these mappings: if v0 theme defines `time` element → deduce `styles.secondary` from it; if defines `string` → deduce `styles.primary`; if defines `message` → deduce `styles.strong`; if defines `key` → deduce `styles.accent`; if defines `array` → deduce `styles.syntax`; deduction copies foreground, background, and modes from the element definition to create the corresponding style role with no base (the deduced style has no reference to parent styles, i.e., no base roles to inherit from); note that v0 theme schema does not include a styles section, so deduced styles are created artificially during theme loading and cannot be explicitly defined in v0 theme files
 
 - **FR-031a**: Style deduction MUST only create a style role if: (1) the corresponding element is defined in the v0 theme, AND (2) the style role is not already defined in the v0 theme; if a v0 theme explicitly defines both the element and its corresponding style, the explicit style definition takes precedence (no deduction)
 
