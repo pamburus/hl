@@ -1598,6 +1598,50 @@ fn test_theme_name_suggestions() {
 }
 
 #[test]
+fn test_v1_level_overrides_with_styles() {
+    // FR-021a: V1 level overrides MUST support v1 features like style references
+    // This test verifies that level-specific overrides can use style definitions
+    // Uses external file: src/testing/assets/themes/v1-level-with-styles.yaml
+    let path = PathBuf::from("src/testing/assets/themes");
+
+    let theme = Theme::load_from(&path, "v1-level-with-styles").unwrap();
+
+    // Verify it's a v1 theme
+    assert_eq!(theme.version, ThemeVersion::V1_0);
+
+    // Verify the theme has styles defined
+    assert!(!theme.styles.is_empty(), "V1 theme should have style definitions");
+
+    // Verify base elements
+    assert_eq!(
+        theme.elements[&Element::Message].foreground,
+        Some(Color::RGB(RGB(255, 255, 255))),
+        "Base message should be white"
+    );
+
+    // Verify level-specific overrides exist
+    let error_level = InfallibleLevel::Valid(crate::level::Level::Error);
+    assert!(
+        theme.levels.contains_key(&error_level),
+        "Theme should have error level overrides"
+    );
+
+    // Verify level overrides reference styles (v1 feature)
+    let error_message = theme
+        .levels
+        .get(&error_level)
+        .and_then(|pack| pack.get(&Element::Message));
+    assert!(error_message.is_some(), "Error level should override message element");
+
+    // The style reference should be preserved in the base
+    let error_msg_style = error_message.unwrap();
+    assert!(
+        !error_msg_style.base.is_empty(),
+        "V1 level override should reference styles via base"
+    );
+}
+
+#[test]
 fn test_file_format_parse_errors() {
     // FR-029: System MUST report file format parse errors with helpful messages
     // This test verifies that malformed theme files produce clear error messages
