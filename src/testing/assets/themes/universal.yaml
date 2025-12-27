@@ -1,0 +1,17 @@
+# Test file for FR-001a: Custom directory priority over stock themes
+# This custom "universal" theme should override the embedded stock "universal" theme
+# The custom version has distinctly different colors to verify priority
+
+version: "0.0"
+
+elements:
+  # Use distinctive colors that are NOT in the stock universal theme
+  # This way we can verify the custom theme was loaded
+  key:
+    foreground: "#FF00FF"  # Bright magenta - not in stock universal
+  message:
+    foreground: "#00FFFF"  # Bright cyan - not in stock universal
+  time:
+    foreground: "#FFFF00"  # Bright yellow - not in stock universal
+  level:
+    foreground: "#FF0000"  # Bright red - not in stock universal

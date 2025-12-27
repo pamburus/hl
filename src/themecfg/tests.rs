@@ -1472,6 +1472,88 @@ fn test_theme_stem_deduplication() {
 }
 
 #[test]
+fn test_custom_theme_priority_over_stock() {
+    // FR-001a: System MUST prioritize custom themes over stock themes with same name
+    // This test verifies that a custom "universal" theme overrides the embedded stock version
+    // Uses external file: src/testing/assets/themes/universal.yaml
+    let app_dirs = AppDirs {
+        config_dir: PathBuf::from("src/testing/assets"),
+        cache_dir: Default::default(),
+        system_config_dirs: Default::default(),
+    };
+
+    // Load "universal" - should get custom version, not stock
+    let theme = Theme::load(&app_dirs, "universal").unwrap();
+
+    // Verify we loaded the custom version by checking its distinctive colors
+    // Stock universal doesn't use these exact RGB values
+    assert_eq!(
+        theme.elements[&Element::Key].foreground,
+        Some(Color::RGB(RGB(255, 0, 255))),
+        "Custom universal theme should override stock: key should be bright magenta #FF00FF"
+    );
+    assert_eq!(
+        theme.elements[&Element::Message].foreground,
+        Some(Color::RGB(RGB(0, 255, 255))),
+        "Custom universal theme should override stock: message should be bright cyan #00FFFF"
+    );
+    assert_eq!(
+        theme.elements[&Element::Time].foreground,
+        Some(Color::RGB(RGB(255, 255, 0))),
+        "Custom universal theme should override stock: time should be bright yellow #FFFF00"
+    );
+    assert_eq!(
+        theme.elements[&Element::Level].foreground,
+        Some(Color::RGB(RGB(255, 0, 0))),
+        "Custom universal theme should override stock: level should be bright red #FF0000"
+    );
+}
+
+#[test]
+fn test_platform_specific_paths() {
+    // FR-004: System MUST use platform-specific directories for theme files
+    // This test verifies that Theme::load respects AppDirs configuration
+    // and loads themes from the correct platform-specific paths
+
+    // Test with custom config directory
+    let custom_app_dirs = AppDirs {
+        config_dir: PathBuf::from("src/testing/assets"),
+        cache_dir: Default::default(),
+        system_config_dirs: Default::default(),
+    };
+
+    // Should find theme in the configured directory
+    let result = Theme::load(&custom_app_dirs, "test");
+    assert!(
+        result.is_ok(),
+        "Theme should load from custom config_dir path via AppDirs"
+    );
+
+    // Test with different config directory - should NOT find the theme
+    let different_app_dirs = AppDirs {
+        config_dir: PathBuf::from("etc/defaults"), // Different path
+        cache_dir: Default::default(),
+        system_config_dirs: Default::default(),
+    };
+
+    // "test" theme is not in etc/defaults, should fall back to embedded or fail
+    // Since "test" is not embedded, this should fail
+    let result = Theme::load(&different_app_dirs, "test");
+    assert!(
+        result.is_err(),
+        "Theme 'test' should not be found in different config_dir (etc/defaults)"
+    );
+
+    // Verify the AppDirs paths are actually being used by checking we can load
+    // from the correct custom directory
+    let theme = Theme::load(&custom_app_dirs, "test").unwrap();
+    assert!(
+        !theme.elements.is_empty(),
+        "Theme loaded from custom AppDirs should have elements"
+    );
+}
+
+#[test]
 fn test_file_format_parse_errors() {
     // FR-029: System MUST report file format parse errors with helpful messages
     // This test verifies that malformed theme files produce clear error messages
