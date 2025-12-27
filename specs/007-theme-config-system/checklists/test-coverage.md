@@ -9,8 +9,8 @@
 
 ## Test Statistics
 
-- **Total Tests**: 67 (66 passing + 1 ignored known failure)
-- **Coverage**: ~90% of functional requirements
+- **Total Tests**: 67 (all passing)
+- **Coverage**: 100% of functional requirements
 - **Test Assets**: 15 external theme files in `src/testing/assets/themes/`
 
 ## Phase 1: Critical Missing Tests (6/6) ✅
@@ -18,7 +18,7 @@
 - [X] T001 FR-001b: Custom @default theme loading with extension
 - [X] T002 FR-001b: Custom @default theme loading without extension
 - [X] T003 FR-010a: Empty v0 theme file validation
-- [X] T004 FR-010f: V0 ignores styles section (KNOWN FAILURE)
+- [X] T004 FR-010f: V0 ignores styles section
 - [X] T005 FR-014b: V0 rejects mode prefix -
 - [X] T006 FR-007: Filesystem error handling
 
@@ -45,7 +45,7 @@
 - [X] T017 FR-006a: Jaro similarity suggestions
 - [X] T018 FR-021a: V1 level overrides with styles
 
-## Known Implementation Bugs (1 test ignored)
+## Known Implementation Bugs (All Fixed ✅)
 
 - [X] BUG-001 (FIXED): FR-001b - Custom @default by stem doesn't load
   - Test: `test_custom_default_theme_without_extension`
@@ -58,10 +58,11 @@
   - Status: ✅ FIXED - Test now passing
   - Note: `+` prefix is allowed in v0 (same as no prefix)
 
-- [ ] BUG-003 (LOW): FR-010f - V0 loads styles section instead of ignoring
+- [X] BUG-003 (FIXED): FR-010f - V0 loads styles section instead of ignoring
   - Test: `test_v0_ignores_styles_section`
-  - Impact: V0 files with styles section don't ignore it properly
-  - Status: Test exists, marked `#[ignore]`
+  - Fix: Added `clear_v0_styles()` method called after validation in `load_from()` to clear styles from file before deduction
+  - Status: ✅ FIXED - Test now passing
+  - Note: Deduced styles (from elements via FR-031) are preserved and created after clearing
 
 ## Test Assets Created
 
@@ -106,7 +107,7 @@
 
 ### FR-010: V0 Format
 - [X] FR-010a: Empty v0 theme valid (T003)
-- [ ] FR-010f: V0 ignores styles section (T004 - KNOWN FAILURE)
+- [X] FR-010f: V0 ignores styles section (T004)
 
 ### FR-011: Element Names
 - [X] FR-011a: Case-sensitive element names (T007)
@@ -131,8 +132,8 @@
 ### Theme Loading & Discovery: 100% ✅
 - 10/10 requirements fully tested
 
-### V0 Format & Validation: 90% ✅
-- 9/10 requirements fully tested (1 known failure)
+### V0 Format & Validation: 100% ✅
+- 10/10 requirements fully tested
 
 ### V1 Features: 100% ✅
 - All tested v1 features working
@@ -161,11 +162,6 @@
 
 ## Next Steps
 
-### Bug Fixes Required (Priority Order)
-1. **LOW**: Implement FR-010f data model separation
-   - Larger refactoring effort
-   - Current behavior: silently ignores (no user impact)
-
 ### Future Test Improvements
 - Add integration tests for theme switching
 - Add performance benchmarks (50ms requirement)
@@ -175,11 +171,12 @@
 ## Notes
 
 - All tests follow Constitution Principle VII (external test data)
-- Test coverage increased from 79% to 90% during implementation
+- Test coverage increased from 79% to 100% during implementation
 - 18 new tests added across 3 implementation phases
-- 3 bugs discovered and documented with reproducible tests (2 now fixed)
+- 3 bugs discovered and documented with reproducible tests (all now fixed ✅)
 - Zero regressions introduced (all existing tests still pass)
 - **BUG-001 FIXED**: Custom @default theme now loads correctly by stem name
 - **BUG-002 FIXED**: V0 themes now properly reject `-` mode prefix with helpful error message
+- **BUG-003 FIXED**: V0 themes now properly ignore styles section from file; only deduced styles are created
 - **Intentionally malformed test files**: `malformed.{yaml,toml,json}` are designed to fail parsing and will show diagnostics - this is expected behavior for FR-029 testing
 - Malformed files are excluded from linters via `.yamllint`, `.taplo.toml`, and `tombi.toml`
