@@ -332,8 +332,8 @@ Current state: ⚠️ Exists but needs refactoring
 
 ## Summary Counts
 
-- ✅ Done: ~75
-- ⚠️ Partially done / needs fixing: ~10
+- ✅ Done: ~80
+- ⚠️ Partially done / needs fixing: ~5
 - ❌ Not started: ~50
 - 🔍 Needs review: ~10
 
@@ -341,17 +341,17 @@ Current state: ⚠️ Exists but needs refactoring
 
 ## Current Status
 
-✅ **Phases 2.1, 3.1, 3.2, 3.3, and 3.4 Complete!**
+✅ **Phases 2.1, 3.1, 3.2, 3.3, 3.4 COMPLETE!**
 - v0 and v1 modules properly separated and cleaned up
 - Common types correctly shared from main module
 - **Role, StyleBase, Style moved from main to v1**
 - **Element moved from main to v0, re-exported via v1**
-- **ALL merge logic now in v1** (StylePack, Style, Indicators, Theme)
-- **ALL resolve logic now in v1** (StylePack, Style, StyleResolver, Theme)
-- All CI checks passing
-- All 102 themecfg tests passing
-- Project compiles cleanly with no errors
-- **Next**: Phase 4 - Public API refactoring (RawTheme/RawStyle aliases, rename ResolvedTheme→Theme)
+- **ALL merge logic ONLY in v1** - no duplicates in main ✅
+- **ALL resolve logic ONLY in v1** - no duplicates in main ✅
+- **StyleResolver ONLY in v1** - removed from main ✅
+- Main module cleaned up - only loading helpers and resolved output types
+- themecfg.rs and themecfg/v1/mod.rs have NO compilation errors
+- **Next**: Fix other files that reference renamed types (ResolvedTheme→Theme, ResolvedStyle→Style)
 
 ---
 
@@ -427,7 +427,34 @@ Current state: ⚠️ Exists but needs refactoring
   - v0: 274 lines (pure data, lenient deser, no logic)
   - v1: ~900 lines (types, conversions, ALL merge/resolve logic)
   - main: reduced by ~400 lines (moved to v1)
-- **Next**: Phase 4 - Public API refactoring (add RawTheme/RawStyle type aliases, rename ResolvedTheme→Theme, implement Theme::load_raw())
+
+### 2024-12-27 - Phase 3.3-3.4 TRULY Complete! ✅ (Cleanup)
+- ✅ **Removed ALL duplicate code from main module:**
+  - Removed duplicate `impl RawTheme` block with merge/resolve (was duplicating v1)
+  - Removed `StyleResolver` struct and impl from main (only in v1 now)
+  - Removed duplicate `StylePack::resolve()` from main (only in v1 now)
+  - Removed duplicate indicator merge implementations from main (only in v1 now)
+  - Removed all duplicate merge logic that was shadowing v1's implementations
+- ✅ **Main module now contains ONLY:**
+  - Type aliases: `RawTheme = v1::RawTheme`, `RawStyle = v1::Style`
+  - Re-exports from v1: `Element`, `Role`, `StyleBase`
+  - Resolved output types: `Theme` (was `ResolvedTheme`), `Style` (was `ResolvedStyle`)
+  - Loading helper methods as static methods on `Theme`
+  - Common infrastructure types (MergeFlags, Color, etc.)
+- ✅ **v1 module is the ONLY place with:**
+  - `StyleResolver` - caching and recursion protection
+  - All merge logic for themes, styles, indicators
+  - All resolve logic for themes, styles, indicators
+  - Role-based style resolution
+- ✅ **Zero compilation errors in themecfg modules:**
+  - hl/src/themecfg.rs ✅
+  - hl/src/themecfg/v1/mod.rs ✅
+  - hl/src/themecfg/v0/mod.rs ✅
+- ⚠️ **Other files need updates** (expected):
+  - theme.rs, themecfg/tests.rs need to use `Style` instead of `ResolvedStyle`
+  - Need to use `Theme` instead of `ResolvedTheme`
+  - This is just mechanical renaming, not themecfg refactoring
+- **Next**: Phase 4 - Update consuming code to use renamed types, then continue with remaining Phase 4 tasks
 
 ---
 

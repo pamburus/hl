@@ -11,7 +11,7 @@ use super::{BencherExt, ND};
 use hl::{
     Level,
     theme::{Element, StylingPush, Theme},
-    themecfg::{self, Color, Mode, Role, Style, ThemeVersion},
+    themecfg::{self, Color, Mode, RawStyle, Role, ThemeVersion},
 };
 
 const GROUP: &str = strcat!(super::GROUP, ND, "theme");
@@ -86,20 +86,19 @@ pub(super) fn bench(c: &mut Criterion) {
 }
 
 fn theme() -> Theme {
-    let cfg = themecfg::Theme {
+    let cfg = themecfg::RawTheme {
         version: ThemeVersion::CURRENT,
         tags: Default::default(),
-        styles: hashmap! {
-            Role::Primary => Style::new().foreground(Some(Color::Palette(36))),
-            Role::Secondary => Style::new().foreground(Some(Color::Palette(8))),
-            Role::Strong => Style::new().foreground(Some(Color::Palette(255))),
-            Role::Syntax => Style::new().foreground(Some(Color::Palette(246))),
-            Role::Accent => Style::new().modes(Mode::Underline.into()).foreground(Some(Color::Palette(8))),
-        }
-        .into(),
-        elements: hashmap! {
+        styles: themecfg::v1::StylePack(hashmap! {
+            Role::Primary => RawStyle::new().foreground(Some(Color::Palette(36))),
+            Role::Secondary => RawStyle::new().foreground(Some(Color::Palette(8))),
+            Role::Strong => RawStyle::new().foreground(Some(Color::Palette(255))),
+            Role::Syntax => RawStyle::new().foreground(Some(Color::Palette(246))),
+            Role::Accent => RawStyle::new().modes(Mode::Underline.into()).foreground(Some(Color::Palette(8))),
+        }),
+        elements: themecfg::v1::StylePack(hashmap! {
             Element::Time => Role::Secondary.into(),
-            Element::Level => Style::new().foreground(Some(Color::Palette(25))),
+            Element::Level => RawStyle::new().foreground(Some(Color::Palette(25))),
             Element::Logger => Role::Secondary.into(),
             Element::Caller => Role::Secondary.into(),
             Element::Message => Role::Strong.into(),
@@ -108,14 +107,13 @@ fn theme() -> Theme {
             Element::Array => Role::Syntax.into(),
             Element::Ellipsis => Role::Secondary.into(),
             Element::Key => Role::Accent.into(),
-            Element::Null => Style::new().foreground(Some(Color::Palette(136))),
-            Element::Boolean => Style::new().foreground(Some(Color::Palette(178))),
-            Element::Number => Style::new().foreground(Some(Color::Palette(41))),
+            Element::Null => RawStyle::new().foreground(Some(Color::Palette(136))),
+            Element::Boolean => RawStyle::new().foreground(Some(Color::Palette(178))),
+            Element::Number => RawStyle::new().foreground(Some(Color::Palette(41))),
             Element::String => Role::Primary.into(),
-        }
-        .into(),
+        }),
         levels: HashMap::new(),
-        indicators: themecfg::IndicatorPack::default(),
+        indicators: themecfg::v1::IndicatorPack::default(),
     };
     Theme::from(cfg.resolve().unwrap())
 }

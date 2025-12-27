@@ -47,11 +47,11 @@ impl Theme {
     }
 
     pub fn load(app_dirs: &AppDirs, name: &str) -> Result<Self> {
-        Ok(themecfg::Theme::load(app_dirs, name)?.resolve()?.into())
+        Ok(themecfg::Theme::load(app_dirs, name)?.into())
     }
 
     pub fn embedded(name: &str) -> Result<Self> {
-        Ok(themecfg::Theme::embedded(name)?.resolve()?.into())
+        Ok(themecfg::Theme::embedded(name)?.into())
     }
 
     pub fn list(app_dirs: &AppDirs) -> Result<HashMap<Arc<str>, ThemeInfo>> {
@@ -78,7 +78,7 @@ impl Theme {
     }
 }
 
-impl<S: Borrow<themecfg::ResolvedTheme>> From<S> for Theme {
+impl<S: Borrow<themecfg::Theme>> From<S> for Theme {
     fn from(s: S) -> Self {
         let s = s.borrow();
         let default = StylePack::load(&s.elements);
@@ -97,7 +97,7 @@ impl<S: Borrow<themecfg::ResolvedTheme>> From<S> for Theme {
 #[cfg(test)]
 impl Sample for Arc<Theme> {
     fn sample() -> Self {
-        Theme::from(themecfg::testing::theme().unwrap().resolve().unwrap()).into()
+        Theme::from(themecfg::testing::theme().unwrap()).into()
     }
 }
 
@@ -166,8 +166,8 @@ impl<T: Into<Sequence>> From<T> for Style {
     }
 }
 
-impl From<&themecfg::ResolvedStyle> for Style {
-    fn from(style: &themecfg::ResolvedStyle) -> Self {
+impl From<&themecfg::Style> for Style {
+    fn from(style: &themecfg::Style) -> Self {
         let mut codes = Vec::<StyleCode>::new();
         for mode in style.modes.adds {
             codes.push(
@@ -287,7 +287,7 @@ impl StylePack {
         self.elements[element] = Some(pos);
     }
 
-    fn load(s: &themecfg::StylePack<Element, themecfg::ResolvedStyle>) -> Self {
+    fn load(s: &themecfg::StylePack<Element, themecfg::Style>) -> Self {
         let mut result = Self::default();
 
         let items = s.items();
@@ -296,7 +296,7 @@ impl StylePack {
             result.reset = Some(0);
         }
 
-        // Process all elements and convert ResolvedStyle to runtime Style
+        // Process all elements and convert Style to runtime Style
         for (&element, resolved_style) in s.items() {
             result.add(element, &Style::from(resolved_style));
         }
@@ -313,7 +313,7 @@ pub struct IndicatorPack {
 }
 
 impl IndicatorPack {
-    fn new(indicator: &themecfg::IndicatorPack<themecfg::ResolvedStyle>) -> Self {
+    fn new(indicator: &themecfg::IndicatorPack<themecfg::Style>) -> Self {
         Self {
             sync: SyncIndicatorPack::new(&indicator.sync),
         }
@@ -329,7 +329,7 @@ pub struct SyncIndicatorPack {
 }
 
 impl SyncIndicatorPack {
-    fn new(indicator: &themecfg::SyncIndicatorPack<themecfg::ResolvedStyle>) -> Self {
+    fn new(indicator: &themecfg::SyncIndicatorPack<themecfg::Style>) -> Self {
         Self {
             synced: Indicator::new(&indicator.synced),
             failed: Indicator::new(&indicator.failed),
@@ -345,7 +345,7 @@ pub struct Indicator {
 }
 
 impl Indicator {
-    fn new(indicator: &themecfg::Indicator<themecfg::ResolvedStyle>) -> Self {
+    fn new(indicator: &themecfg::Indicator<themecfg::Style>) -> Self {
         let mut buf = Vec::new();
         let os = Style::from(&indicator.outer.style);
         let is = Style::from(&indicator.inner.style);

@@ -10,6 +10,7 @@
 use std::collections::HashMap;
 
 // third-party imports
+use derive_more::Deref;
 use enumset::EnumSet;
 use serde::{Deserialize, Serialize};
 
@@ -29,7 +30,10 @@ pub use super::{
 };
 
 // Import resolved types and traits from parent (output types)
-use super::{Mergeable, MergedWith, ResolvedStyle};
+use super::{Mergeable, MergedWith};
+
+// Import the resolved Style from parent (was ResolvedStyle)
+use super::Style as ResolvedStyle;
 
 // Type alias for resolved style inventory
 pub type StyleInventory = super::StylePack<Role, ResolvedStyle>;
@@ -275,7 +279,7 @@ impl From<ResolvedStyle> for Style {
 // ---
 
 /// StylePack for v1 - strict deserialization, generic over key and style types
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Deref)]
 pub struct StylePack<K, S = Style>(pub HashMap<K, S>);
 
 impl<K, S> Default for StylePack<K, S> {
@@ -486,7 +490,7 @@ impl RawTheme {
     /// Returns an error if:
     /// - Style recursion limit is exceeded
     /// - Any other style resolution error occurs
-    pub fn resolve(self) -> super::Result<super::ResolvedTheme> {
+    pub fn resolve(self) -> super::Result<super::Theme> {
         let flags = self.merge_flags();
 
         // Step 1: Resolve the role-based styles inventory
@@ -518,7 +522,7 @@ impl RawTheme {
         // Step 4: Resolve indicators
         let indicators = Self::resolve_indicators(&self.indicators, &inventory, flags)?;
 
-        Ok(super::ResolvedTheme {
+        Ok(super::Theme {
             tags: self.tags,
             version: self.version,
             elements,
