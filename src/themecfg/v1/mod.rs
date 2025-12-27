@@ -744,7 +744,6 @@ impl<S: Clone> IndicatorPack<S> {
 #[serde(bound(deserialize = "S: Deserialize<'de> + Default"))]
 pub struct SyncIndicatorPack<S = Style> {
     pub synced: Indicator<S>,
-    #[serde(rename = "sync-failed")]
     pub failed: Indicator<S>,
 }
 

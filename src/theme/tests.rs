@@ -1,5 +1,6 @@
 use super::*;
 use crate::level::InfallibleLevel;
+use crate::themecfg::{self, Color, PlainColor, RGB, RawTheme};
 
 // Helper function to create test AppDirs
 fn test_app_dirs() -> crate::appdirs::AppDirs {
@@ -23,7 +24,7 @@ fn test_theme() {
 
 #[test]
 fn test_unknown_level() {
-    let mut cfg = themecfg::RawTheme::default();
+    let mut cfg = RawTheme::default();
     cfg.levels
         .insert(InfallibleLevel::Invalid("unknown".to_string()), Default::default());
     let theme = Theme::from(cfg.resolve().unwrap());
@@ -36,7 +37,7 @@ fn test_unknown_level() {
 
 #[test]
 fn test_style_from_rgb_color() {
-    let theme_style = themecfg::Style::default();
+    let theme_style = themecfg::Style::new().foreground(Some(Color::RGB(RGB(255, 128, 64))));
 
     let style = Style::from(&theme_style);
 
@@ -49,9 +50,8 @@ fn test_style_from_rgb_color() {
 #[test]
 fn test_style_from_background_color() {
     let theme_style = themecfg::Style {
-        modes: Default::default(),
-        background: Some(themecfg::Color::Plain(themecfg::PlainColor::Blue)),
-        foreground: None,
+        background: Some(Color::Plain(PlainColor::Blue)),
+        ..Default::default()
     };
 
     let style = Style::from(&theme_style);

@@ -217,7 +217,6 @@ pub struct IndicatorPack {
 #[serde(default)]
 pub struct SyncIndicatorPack {
     pub synced: Indicator,
-    #[serde(rename = "sync-failed")]
     pub failed: Indicator,
 }
 

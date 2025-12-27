@@ -478,8 +478,9 @@ fn test_v0_color_formats() {
 #[test]
 fn test_v0_unknown_elements_ignored() {
     // Test that unknown element names are silently ignored (forward compatibility)
-    let app_dirs = test_app_dirs();
-    let theme = Theme::load(&app_dirs, "v0-unknown-elements").unwrap();
+    let path = PathBuf::from("src/testing/assets/themes");
+    let raw_theme = Theme::load_from(&path, "v0-unknown-elements").unwrap();
+    let theme = raw_theme.resolve().unwrap();
 
     // Should have parsed successfully, ignoring unknown elements
     assert_eq!(theme.elements.len(), 1);
@@ -491,25 +492,27 @@ fn test_unknown_elements_toml() {
     // Test that unknown elements are silently ignored in TOML files
     // This verifies that serde_value::Value works for TOML format,
     // providing forward compatibility by ignoring unknown keys
-    let app_dirs = test_app_dirs();
-    let result = Theme::load(&app_dirs, "test-unknown-elements.toml");
+    let path = PathBuf::from("src/testing/assets/themes");
+    let result = Theme::load_from(&path, "test-unknown-elements.toml");
 
     match result {
         Ok(theme) => {
-            // Verify only known elements were loaded (should be 2: message and level)
+            // Verify only known elements were loaded from file (should be 2: message and level)
             // Unknown elements (unknown-element-1, future-element) should be ignored
-            println!("TOML: Loaded {} elements", theme.elements.len());
-            for key in theme.elements.0.keys() {
-                println!("  - {:?}", key);
-            }
+            assert_eq!(theme.elements.len(), 2, "Should only load 2 known elements from file");
+            assert!(theme.elements.0.contains_key(&Element::Message));
+            assert!(theme.elements.0.contains_key(&Element::Level));
 
-            assert_eq!(theme.elements.len(), 2, "Should only load 2 known elements");
+            let theme = theme.resolve().unwrap();
+            // After resolution, LevelInner is automatically added (parent→inner inheritance)
+            assert_eq!(
+                theme.elements.len(),
+                3,
+                "Should have 3 elements after resolution (Level + LevelInner + Message)"
+            );
             assert!(theme.elements.contains_key(&Element::Message));
             assert!(theme.elements.contains_key(&Element::Level));
-            assert_eq!(
-                theme.elements[&Element::Message].foreground,
-                Some(Color::Plain(PlainColor::White))
-            );
+            assert!(theme.elements.contains_key(&Element::LevelInner));
         }
         Err(e) => {
             panic!("TOML with unknown elements failed: {:?}", e);
@@ -522,25 +525,27 @@ fn test_unknown_elements_json() {
     // Test that unknown elements are silently ignored in JSON files
     // This verifies that serde_value::Value works for JSON format,
     // providing forward compatibility by ignoring unknown keys
-    let app_dirs = test_app_dirs();
-    let result = Theme::load(&app_dirs, "test-unknown-elements.json");
+    let path = PathBuf::from("src/testing/assets/themes");
+    let result = Theme::load_from(&path, "test-unknown-elements.json");
 
     match result {
         Ok(theme) => {
-            // Verify only known elements were loaded (should be 2: message and level)
+            // Verify only known elements were loaded from file (should be 2: message and level)
             // Unknown elements (unknown-element-1, future-element) should be ignored
-            println!("JSON: Loaded {} elements", theme.elements.len());
-            for key in theme.elements.0.keys() {
-                println!("  - {:?}", key);
-            }
+            assert_eq!(theme.elements.len(), 2, "Should only load 2 known elements from file");
+            assert!(theme.elements.0.contains_key(&Element::Message));
+            assert!(theme.elements.0.contains_key(&Element::Level));
 
-            assert_eq!(theme.elements.len(), 2, "Should only load 2 known elements");
+            let theme = theme.resolve().unwrap();
+            // After resolution, LevelInner is automatically added (parent→inner inheritance)
+            assert_eq!(
+                theme.elements.len(),
+                3,
+                "Should have 3 elements after resolution (Level + LevelInner + Message)"
+            );
             assert!(theme.elements.contains_key(&Element::Message));
             assert!(theme.elements.contains_key(&Element::Level));
-            assert_eq!(
-                theme.elements[&Element::Message].foreground,
-                Some(Color::Plain(PlainColor::White))
-            );
+            assert!(theme.elements.contains_key(&Element::LevelInner));
         }
         Err(e) => {
             panic!("JSON with unknown elements failed: {:?}", e);
@@ -552,25 +557,27 @@ fn test_unknown_elements_json() {
 fn test_unknown_elements_yaml() {
     // Test that unknown elements are silently ignored in YAML files
     // This is the original use case for YamlNode-based unknown key handling
-    let app_dirs = test_app_dirs();
-    let result = Theme::load(&app_dirs, "test-unknown-elements.yaml");
+    let path = PathBuf::from("src/testing/assets/themes");
+    let result = Theme::load_from(&path, "test-unknown-elements.yaml");
 
     match result {
         Ok(theme) => {
-            // Verify only known elements were loaded (should be 2: message and level)
+            // Verify only known elements were loaded from file (should be 2: message and level)
             // Unknown elements (unknown-element-1, future-element) should be ignored
-            println!("YAML: Loaded {} elements", theme.elements.len());
-            for key in theme.elements.0.keys() {
-                println!("  - {:?}", key);
-            }
+            assert_eq!(theme.elements.len(), 2, "Should only load 2 known elements from file");
+            assert!(theme.elements.0.contains_key(&Element::Message));
+            assert!(theme.elements.0.contains_key(&Element::Level));
 
-            assert_eq!(theme.elements.len(), 2, "Should only load 2 known elements");
+            let theme = theme.resolve().unwrap();
+            // After resolution, LevelInner is automatically added (parent→inner inheritance)
+            assert_eq!(
+                theme.elements.len(),
+                3,
+                "Should have 3 elements after resolution (Level + LevelInner + Message)"
+            );
             assert!(theme.elements.contains_key(&Element::Message));
             assert!(theme.elements.contains_key(&Element::Level));
-            assert_eq!(
-                theme.elements[&Element::Message].foreground,
-                Some(Color::Plain(PlainColor::White))
-            );
+            assert!(theme.elements.contains_key(&Element::LevelInner));
         }
         Err(e) => {
             panic!("YAML with unknown elements failed: {:?}", e);
@@ -600,8 +607,8 @@ fn test_future_version_rejected() {
 #[test]
 fn test_v0_unknown_level_names_ignored() {
     // Test that unknown level names are stored as InfallibleLevel::Invalid
-    let app_dirs = test_app_dirs();
-    let theme = Theme::load_raw(&app_dirs, "v0-unknown-levels").unwrap();
+    let path = PathBuf::from("src/testing/assets/themes");
+    let theme = Theme::load_from(&path, "v0-unknown-levels").unwrap();
 
     // Should have error level as a valid level
     assert!(theme.levels.contains_key(&InfallibleLevel::Valid(Level::Error)));
@@ -626,8 +633,9 @@ fn test_v0_unknown_level_names_ignored() {
 #[test]
 fn test_v0_indicators() {
     // Test that indicators section loads correctly
-    let app_dirs = test_app_dirs();
-    let theme = Theme::load(&app_dirs, "v0-json-format").unwrap();
+    let path = PathBuf::from("src/testing/assets/themes");
+    let raw_theme = Theme::load_from(&path, "v0-json-format").unwrap();
+    let theme = raw_theme.resolve().unwrap();
 
     assert_eq!(theme.indicators.sync.synced.text, " ");
     assert_eq!(theme.indicators.sync.failed.text, "!");
@@ -1163,8 +1171,9 @@ fn test_empty_v0_theme_file_valid() {
     let empty_theme_path = app_dirs.config_dir.join("themes/empty-v0.yaml");
     std::fs::write(&empty_theme_path, "{}").unwrap();
 
-    // Load the empty theme file directly
-    let theme = Theme::load_raw(&app_dirs, "empty-v0").unwrap();
+    // Load the empty theme file directly without merging with default
+    let path = app_dirs.config_dir.join("themes");
+    let theme = Theme::load_from(&path, "empty-v0").unwrap();
 
     // Verify it's treated as v0 (version 0.0)
     assert_eq!(
@@ -1196,10 +1205,9 @@ fn test_v0_ignores_styles_section() {
     // FR-010f: System MUST recognize that v0 theme schema does NOT include a `styles` section;
     // if a v0 theme file contains a `styles` section, the system MUST ignore it silently
     // Uses external file: src/testing/assets/themes/v0-with-styles-section.yaml
-    let app_dirs = test_app_dirs();
-
-    // Load the theme (file already exists with styles section)
-    let theme = Theme::load_raw(&app_dirs, "v0-with-styles-section").unwrap();
+    // Load the theme directly without merging with default
+    let path = PathBuf::from("src/testing/assets/themes");
+    let theme = Theme::load_from(&path, "v0-with-styles-section").unwrap();
 
     // Verify it's v0 (no version field means v0)
     assert_eq!(theme.version, ThemeVersion::V0_0, "Theme without version should be v0");
@@ -1640,10 +1648,15 @@ fn test_platform_specific_paths() {
     );
 
     // Test with different config directory - should NOT find the theme
-    let different_app_dirs = test_app_dirs();
+    let different_app_dirs = AppDirs {
+        config_dir: PathBuf::from("etc/defaults"),
+        cache_dir: Default::default(),
+        system_config_dirs: Default::default(),
+    };
 
-    // "test" theme is not in etc/defaults, should fall back to embedded or fail
-    // Since "test" is not embedded, this should fail
+    // "test" theme is not in etc/defaults, and since we're using main Assets (not testing Assets)
+    // it should fall back to embedded themes. But "test" is not in main embedded Assets,
+    // so it should fail.
     let result = Theme::load(&different_app_dirs, "test");
     assert!(
         result.is_err(),

@@ -484,3 +484,56 @@ Based on this analysis, I recommend **finishing the refactoring** rather than st
 4. **Phase 4.1-4.3**: Add RawTheme/RawStyle aliases and new API methods
 5. **Phase 6-7**: Fix Level usage and add tests
 6. **Phase 8-9**: Documentation and cleanup
+---
+
+### 2024-12-27 - Phase 4 Complete! ✅
+
+✅ **All Phase 4 tasks completed:**
+
+**4.1 Type Aliases and Re-exports:**
+- ✅ `pub type RawTheme = v1::RawTheme;` added to main
+- ✅ `pub type RawStyle = v1::Style;` added to main  
+- ✅ Renamed `ResolvedTheme` → `Theme` (resolved theme)
+- ✅ Renamed `ResolvedStyle` → `Style` (resolved style)
+- ✅ `pub type StyleInventory = StylePack<Role, Style>;` exists
+- ✅ Re-exports from v1: `Element`, `Role`, `StyleBase`
+
+**4.2 Theme::load() API:**
+- ✅ `Theme::load(app_dirs, name) -> Result<Theme>` - returns fully resolved Theme
+- ✅ `Theme::load_raw(app_dirs, name) -> Result<RawTheme>` - returns unresolved RawTheme
+- ✅ Both methods work correctly with version detection and merging
+
+**4.3 RawTheme API:**
+- ✅ `RawTheme` is type alias for `v1::RawTheme`
+- ✅ `RawTheme::merge()` delegates to v1
+- ✅ `RawTheme::resolve()` delegates to v1
+
+**4.4 Version Detection and Loading:**
+- ✅ `Theme::peek_version()` added - detects v0 vs v1 before deserialization
+- ✅ `Theme::from_buf()` dispatches to v0 or v1 deserializer based on version
+- ✅ V0 themes use lenient deserialization (ignore unknown fields)
+- ✅ V1 themes use strict deserialization (fail on unknown fields)
+- ✅ V0 themes automatically converted to v1::RawTheme
+- ✅ `Theme::load_from()` works correctly with version detection
+
+**4.5 Resolved Types:**
+- ✅ `Style` (was `ResolvedStyle`) - resolved style with no `base` field
+- ✅ `Theme` (was `ResolvedTheme`) - resolved theme
+- ✅ All consuming code updated to use new names
+
+**Bug Fixes:**
+- ✅ Fixed incorrect `#[serde(rename = "sync-failed")]` - should be `failed`
+- ✅ Fixed test `test_style_from_rgb_color` - was using empty default() instead of RGB color
+- ✅ Fixed multiple tests using wrong API (`load()` instead of `load_from()`)
+- ✅ Updated test expectations for automatic parent→inner element inheritance
+
+**Test Results:**
+- ✅ All 102 themecfg tests passing (was 87 passing, 15 failing)
+- ✅ All 570 total lib tests passing
+- ✅ Zero compilation errors
+
+**Code Quality:**
+- ✅ Improved test readability with type alias `ThemeStyle = themecfg::Style`
+- ✅ Added proper imports to avoid verbose `themecfg::` prefixes
+
+**Next**: Phase 5-9 (Error handling, Level handling, Testing, Documentation, Cleanup)
