@@ -576,6 +576,25 @@ fn test_unknown_elements_yaml() {
 }
 
 #[test]
+fn test_future_version_rejected() {
+    // Test that themes with future versions (e.g., 1.1 when current is 1.0) are rejected
+    let path = PathBuf::from("src/testing/assets/themes");
+    let result = Theme::load_from(&path, "test-future-version");
+
+    assert!(result.is_err());
+    match result {
+        Err(Error::FailedToLoadCustomTheme {
+            source: ThemeLoadError::UnsupportedVersion { requested, supported },
+            ..
+        }) => {
+            assert_eq!(requested, ThemeVersion::new(1, 1));
+            assert_eq!(supported, ThemeVersion::CURRENT);
+        }
+        _ => panic!("Expected UnsupportedVersion error, got {:?}", result),
+    }
+}
+
+#[test]
 fn test_v0_unknown_level_names_ignored() {
     // Test that unknown level names are stored as InfallibleLevel::Invalid
     let path = PathBuf::from("src/testing/assets/themes");
