@@ -21,9 +21,10 @@ use serde::{
     de::{MapAccess, Visitor},
 };
 use serde_json as json;
+use serde_value::Value;
 use strum::{Display, EnumIter, IntoEnumIterator};
 use thiserror::Error;
-use yaml_peg::{NodeRc as YamlNode, serde as yaml};
+use yaml_peg::serde as yaml;
 
 // local imports
 use crate::{
@@ -884,12 +885,19 @@ where
     fn visit_map<A: MapAccess<'de>>(self, mut access: A) -> std::result::Result<Self::Value, A::Error> {
         let mut items = HashMap::new();
 
-        while let Some(key) = access.next_key::<YamlNode>()? {
+        // Use Value as a generic "any value" type to handle unknown keys.
+        // This is format-agnostic and works with all serde formats (YAML, TOML, JSON).
+        // This allows us to:
+        // 1. Deserialize the key as Value
+        // 2. Try to convert it to K (the expected key type)
+        // 3. If conversion fails (unknown key), discard the value
+        // This provides forward compatibility by silently ignoring unknown elements.
+        while let Some(key) = access.next_key::<Value>()? {
             if let Ok(key) = K::deserialize(key) {
                 let value: S = access.next_value()?;
                 items.insert(key, value);
             } else {
-                _ = access.next_value::<YamlNode>()?;
+                _ = access.next_value::<Value>()?;
             }
         }
 

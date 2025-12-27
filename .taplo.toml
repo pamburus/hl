@@ -1,4 +1,7 @@
-exclude = ["src/testing/assets/themes/malformed.toml"]
+exclude = [
+  "src/testing/assets/themes/malformed.toml",
+  "src/testing/assets/themes/test-unknown-elements.toml",
+]
 
 [formatting]
 column_width = 128

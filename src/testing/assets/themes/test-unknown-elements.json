@@ -1,0 +1,19 @@
+{
+  "$schema": "../../../../schema/json/theme.schema.v0.json",
+  "elements": {
+    "message": {
+      "foreground": "white",
+      "modes": ["bold"]
+    },
+    "unknown-element-1": {
+      "foreground": "red"
+    },
+    "level": {
+      "foreground": "cyan"
+    },
+    "future-element": {
+      "foreground": "yellow",
+      "modes": ["italic"]
+    }
+  }
+}

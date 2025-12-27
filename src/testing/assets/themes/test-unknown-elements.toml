@@ -1,0 +1,15 @@
+#:schema ../../../../schema/json/theme.schema.v0.json
+
+[elements.message]
+foreground = "white"
+modes = ["bold"]
+
+[elements.unknown-element-1]
+foreground = "red"
+
+[elements.level]
+foreground = "cyan"
+
+[elements.future-element]
+foreground = "yellow"
+modes = ["italic"]

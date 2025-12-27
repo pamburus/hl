@@ -484,6 +484,98 @@ fn test_v0_unknown_elements_ignored() {
 }
 
 #[test]
+fn test_unknown_elements_toml() {
+    // Test that unknown elements are silently ignored in TOML files
+    // This verifies that serde_value::Value works for TOML format,
+    // providing forward compatibility by ignoring unknown keys
+    let path = PathBuf::from("src/testing/assets/themes");
+    let result = Theme::load_from(&path, "test-unknown-elements.toml");
+
+    match result {
+        Ok(theme) => {
+            // Verify only known elements were loaded (should be 2: message and level)
+            // Unknown elements (unknown-element-1, future-element) should be ignored
+            println!("TOML: Loaded {} elements", theme.elements.len());
+            for key in theme.elements.0.keys() {
+                println!("  - {:?}", key);
+            }
+
+            assert_eq!(theme.elements.len(), 2, "Should only load 2 known elements");
+            assert!(theme.elements.contains_key(&Element::Message));
+            assert!(theme.elements.contains_key(&Element::Level));
+            assert_eq!(
+                theme.elements[&Element::Message].foreground,
+                Some(Color::Plain(PlainColor::White))
+            );
+        }
+        Err(e) => {
+            panic!("TOML with unknown elements failed: {:?}", e);
+        }
+    }
+}
+
+#[test]
+fn test_unknown_elements_json() {
+    // Test that unknown elements are silently ignored in JSON files
+    // This verifies that serde_value::Value works for JSON format,
+    // providing forward compatibility by ignoring unknown keys
+    let path = PathBuf::from("src/testing/assets/themes");
+    let result = Theme::load_from(&path, "test-unknown-elements.json");
+
+    match result {
+        Ok(theme) => {
+            // Verify only known elements were loaded (should be 2: message and level)
+            // Unknown elements (unknown-element-1, future-element) should be ignored
+            println!("JSON: Loaded {} elements", theme.elements.len());
+            for key in theme.elements.0.keys() {
+                println!("  - {:?}", key);
+            }
+
+            assert_eq!(theme.elements.len(), 2, "Should only load 2 known elements");
+            assert!(theme.elements.contains_key(&Element::Message));
+            assert!(theme.elements.contains_key(&Element::Level));
+            assert_eq!(
+                theme.elements[&Element::Message].foreground,
+                Some(Color::Plain(PlainColor::White))
+            );
+        }
+        Err(e) => {
+            panic!("JSON with unknown elements failed: {:?}", e);
+        }
+    }
+}
+
+#[test]
+fn test_unknown_elements_yaml() {
+    // Test that unknown elements are silently ignored in YAML files
+    // This is the original use case for YamlNode-based unknown key handling
+    let path = PathBuf::from("src/testing/assets/themes");
+    let result = Theme::load_from(&path, "test-unknown-elements.yaml");
+
+    match result {
+        Ok(theme) => {
+            // Verify only known elements were loaded (should be 2: message and level)
+            // Unknown elements (unknown-element-1, future-element) should be ignored
+            println!("YAML: Loaded {} elements", theme.elements.len());
+            for key in theme.elements.0.keys() {
+                println!("  - {:?}", key);
+            }
+
+            assert_eq!(theme.elements.len(), 2, "Should only load 2 known elements");
+            assert!(theme.elements.contains_key(&Element::Message));
+            assert!(theme.elements.contains_key(&Element::Level));
+            assert_eq!(
+                theme.elements[&Element::Message].foreground,
+                Some(Color::Plain(PlainColor::White))
+            );
+        }
+        Err(e) => {
+            panic!("YAML with unknown elements failed: {:?}", e);
+        }
+    }
+}
+
+#[test]
 fn test_v0_unknown_level_names_ignored() {
     // Test that unknown level names are stored as InfallibleLevel::Invalid
     let path = PathBuf::from("src/testing/assets/themes");
