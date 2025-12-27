@@ -1330,10 +1330,8 @@ fn test_multiple_conflicting_tags_allowed() {
 }
 
 #[test]
-#[ignore] // KNOWN FAILURE: Implementation doesn't load custom @default theme without extension (FR-001b)
 fn test_custom_default_theme_without_extension() {
     // FR-001b: System MUST allow custom themes named `@default` when loaded by stem name
-    // BUG: Currently only works with extension, not with stem name
     // Uses external file: src/testing/assets/themes/@default.yaml
     let app_dirs = AppDirs {
         config_dir: PathBuf::from("src/testing/assets"),
@@ -1344,11 +1342,11 @@ fn test_custom_default_theme_without_extension() {
     // Load @default without extension (this currently doesn't load custom theme)
     let theme = Theme::load(&app_dirs, "@default").unwrap();
 
-    // Verify it's still v1 (custom theme merges with embedded v1 @default)
+    // Custom @default.yaml is a v0 theme, merged result uses custom theme's version (v0)
     assert_eq!(
         theme.version,
-        ThemeVersion::V1_0,
-        "Custom @default should merge with embedded v1 @default"
+        ThemeVersion::V0_0,
+        "Custom @default is v0, merged result uses custom theme's version"
     );
 
     // Verify the custom content WAS loaded and merged
@@ -1358,11 +1356,30 @@ fn test_custom_default_theme_without_extension() {
     assert!(message_style.is_some(), "Message element should be present after merge");
 
     // The custom @default.yaml defines message with red foreground
-    // This should override/merge with the embedded @default
+    // This should override the message definition from embedded @default
     assert_eq!(
         message_style.unwrap().foreground,
         Some(Color::Plain(PlainColor::Red)),
-        "Custom @default theme (without extension) should apply: message should have red foreground"
+        "Custom @default.yaml message definition should override embedded @default"
+    );
+
+    // Verify it actually merged with embedded @default by checking for elements
+    // that are NOT in custom @default.yaml but ARE in embedded @default
+    assert!(
+        theme.elements.get(&Element::Input).is_some(),
+        "Should have 'input' element from embedded @default (not in custom file)"
+    );
+    assert!(
+        theme.elements.get(&Element::Time).is_some(),
+        "Should have 'time' element from embedded @default (not in custom file)"
+    );
+
+    // Custom file only defines 'message', so if we have other elements,
+    // it proves the merge with @default happened
+    assert!(
+        theme.elements.0.len() > 1,
+        "Should have multiple elements from @default merge, not just 'message' from custom file. Got {} elements",
+        theme.elements.0.len()
     );
 }
 

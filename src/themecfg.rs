@@ -221,9 +221,6 @@ pub struct Theme {
 impl Theme {
     pub fn load(app_dirs: &AppDirs, name: &str) -> Result<Self> {
         let theme = Self::load_embedded::<Assets>(DEFAULT_THEME_NAME)?;
-        if name == DEFAULT_THEME_NAME {
-            return Ok(theme);
-        }
 
         Ok(theme.merged(match Self::load_from(&Self::themes_dir(app_dirs), name) {
             Ok(v) => Ok(v),

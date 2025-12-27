@@ -9,14 +9,14 @@
 
 ## Test Statistics
 
-- **Total Tests**: 67 (64 passing + 3 ignored known failures)
+- **Total Tests**: 67 (65 passing + 2 ignored known failures)
 - **Coverage**: ~85% of functional requirements
 - **Test Assets**: 15 external theme files in `src/testing/assets/themes/`
 
 ## Phase 1: Critical Missing Tests (6/6) ✅
 
 - [X] T001 FR-001b: Custom @default theme loading with extension
-- [X] T002 FR-001b: Custom @default theme loading without extension (KNOWN FAILURE)
+- [X] T002 FR-001b: Custom @default theme loading without extension
 - [X] T003 FR-010a: Empty v0 theme file validation
 - [X] T004 FR-010f: V0 ignores styles section (KNOWN FAILURE)
 - [X] T005 FR-014b: V0 rejects mode prefix +/- (KNOWN FAILURE)
@@ -45,12 +45,12 @@
 - [X] T017 FR-006a: Jaro similarity suggestions
 - [X] T018 FR-021a: V1 level overrides with styles
 
-## Known Implementation Bugs (3 tests ignored)
+## Known Implementation Bugs (2 tests ignored)
 
-- [ ] BUG-001 (MEDIUM): FR-001b - Custom @default by stem doesn't load
+- [X] BUG-001 (FIXED): FR-001b - Custom @default by stem doesn't load
   - Test: `test_custom_default_theme_without_extension`
-  - Impact: Stem-based loading doesn't check custom themes for @default
-  - Status: Test exists, marked `#[ignore]`
+  - Fix: Added custom @default check in `Theme::load()` before returning embedded @default
+  - Status: ✅ FIXED - Test now passing
 
 - [ ] BUG-002 (MEDIUM): FR-014b - V0 doesn't reject +/- mode prefixes
   - Test: `test_v0_rejects_mode_prefix`
@@ -94,7 +94,7 @@
 ### FR-001: Theme Loading
 - [X] FR-001a: Custom directory priority (T015)
 - [X] FR-001b: Custom @default with extension (T001)
-- [ ] FR-001b: Custom @default by stem (T002 - KNOWN FAILURE)
+- [X] FR-001b: Custom @default by stem (T002 - FIXED)
 
 ### FR-002-006: Discovery & Error Handling
 - [X] FR-003: Load by full filename (T011)
@@ -127,8 +127,8 @@
 
 ## Coverage by Category
 
-### Theme Loading & Discovery: 90% ✅
-- 9/10 requirements fully tested (1 known failure)
+### Theme Loading & Discovery: 100% ✅
+- 10/10 requirements fully tested
 
 ### V0 Format & Validation: 80% ⚠️
 - 8/10 requirements fully tested (2 known failures)
@@ -161,15 +161,11 @@
 ## Next Steps
 
 ### Bug Fixes Required (Priority Order)
-1. **MEDIUM**: Fix FR-001b stem-based @default loading
-   - Location: `src/themecfg.rs::Theme::load()`
-   - Issue: Doesn't check custom dir for @default when loading by stem
-   
-2. **MEDIUM**: Add FR-014b +/- prefix validation for v0
+1. **MEDIUM**: Add FR-014b +/- prefix validation for v0
    - Location: Mode parsing/validation
    - Add: Check for +/- prefix, error if v0 theme
 
-3. **LOW**: Implement FR-010f data model separation
+2. **LOW**: Implement FR-010f data model separation
    - Larger refactoring effort
    - Current behavior: silently ignores (no user impact)
 
@@ -184,7 +180,8 @@
 - All tests follow Constitution Principle VII (external test data)
 - Test coverage increased from 79% to 85%+ during implementation
 - 18 new tests added across 3 implementation phases
-- 3 bugs discovered and documented with reproducible tests
+- 3 bugs discovered and documented with reproducible tests (1 now fixed)
 - Zero regressions introduced (all existing tests still pass)
+- **BUG-001 FIXED**: Custom @default theme now loads correctly by stem name
 - **Intentionally malformed test files**: `malformed.{yaml,toml,json}` are designed to fail parsing and will show diagnostics - this is expected behavior for FR-029 testing
 - Malformed files are excluded from linters via `.yamllint`, `.taplo.toml`, and `tombi.toml`
