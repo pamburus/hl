@@ -11,7 +11,7 @@ use super::{BencherExt, ND};
 use hl::{
     Level,
     theme::{Element, StylingPush, Theme},
-    themecfg::{self, Color, Mode, Role, Style},
+    themecfg::{self, Color, Mode, Role, Style, ThemeVersion},
 };
 
 const GROUP: &str = strcat!(super::GROUP, ND, "theme");
@@ -87,7 +87,7 @@ pub(super) fn bench(c: &mut Criterion) {
 
 fn theme() -> Theme {
     Theme::from(&themecfg::Theme {
-        version: themecfg::THEME_VERSION,
+        version: ThemeVersion::CURRENT,
         tags: Default::default(),
         styles: hashmap! {
             Role::Primary => Style::new().foreground(Some(Color::Palette(36))),

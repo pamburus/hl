@@ -32,6 +32,9 @@ use crate::{
     xerr::{HighlightQuoted, Suggestions},
 };
 
+// Private constants
+const DEFAULT_THEME_NAME: &str = "@default";
+
 /// Theme version with major.minor components
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
 pub struct ThemeVersion {
@@ -123,9 +126,6 @@ impl<'de> Deserialize<'de> for ThemeVersion {
         deserializer.deserialize_str(ThemeVersionVisitor)
     }
 }
-
-pub const THEME_VERSION: ThemeVersion = ThemeVersion::CURRENT;
-const DEFAULT_THEME_NAME: &str = "@default";
 
 /// Error is an error which may occur in the application.
 #[derive(Error, Debug)]

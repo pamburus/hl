@@ -1048,5 +1048,4 @@ fn test_theme_version_constants() {
     assert_eq!(ThemeVersion::V0_0, ThemeVersion::new(0, 0));
     assert_eq!(ThemeVersion::V1_0, ThemeVersion::new(1, 0));
     assert_eq!(ThemeVersion::CURRENT, ThemeVersion::V1_0);
-    assert_eq!(THEME_VERSION, ThemeVersion::CURRENT);
 }
