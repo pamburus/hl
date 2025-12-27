@@ -223,6 +223,17 @@ impl Theme {
         })
     }
 
+    fn deserialize<T>(s: &str, format: Format) -> Result<T, ExternalError>
+    where
+        T: for<'de> Deserialize<'de>,
+    {
+        match format {
+            Format::Yaml => Ok(yaml::from_str(s)?.remove(0)),
+            Format::Toml => Ok(toml::from_str(s)?),
+            Format::Json => Ok(json::from_str(s)?),
+        }
+    }
+
     fn from_buf(data: &[u8], format: Format) -> Result<RawTheme, ExternalError> {
         let s = std::str::from_utf8(data)?;
 
@@ -231,20 +242,12 @@ impl Theme {
 
         if version.major == 0 {
             // V0 themes use lenient deserialization (ignore unknown fields/variants)
-            let v0_theme: v0::RawTheme = match format {
-                Format::Yaml => yaml::from_str(s)?.remove(0),
-                Format::Toml => toml::from_str(s)?,
-                Format::Json => json::from_str(s)?,
-            };
+            let v0_theme: v0::RawTheme = Self::deserialize(s, format)?;
             // Convert v0 to v1
             Ok(v0_theme.into())
         } else {
             // V1+ themes use strict deserialization
-            match format {
-                Format::Yaml => Ok(yaml::from_str(s)?.remove(0)),
-                Format::Toml => Ok(toml::from_str(s)?),
-                Format::Json => Ok(json::from_str(s)?),
-            }
+            Self::deserialize(s, format)
         }
     }
 
@@ -255,13 +258,8 @@ impl Theme {
             version: ThemeVersion,
         }
 
-        let version_only: VersionOnly = match format {
-            Format::Yaml => yaml::from_str(s)?.remove(0),
-            Format::Toml => toml::from_str(s)?,
-            Format::Json => json::from_str(s)?,
-        };
-
-        Ok(version_only.version)
+        let data: VersionOnly = Self::deserialize(s, format)?;
+        Ok(data.version)
     }
 
     fn load_from(dir: &Path, name: &str) -> Result<RawTheme> {
