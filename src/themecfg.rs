@@ -28,7 +28,7 @@ use yaml_peg::{NodeRc as YamlNode, serde as yaml};
 // local imports
 use crate::{
     appdirs::AppDirs,
-    level::InfallibleLevel,
+    level::{InfallibleLevel, Level},
     xerr::{HighlightQuoted, Suggestions},
 };
 
@@ -301,6 +301,175 @@ impl Theme {
     pub fn merged(mut self, other: Self) -> Self {
         self.merge(other);
         self
+    }
+
+    /// Resolves all styles in this theme and returns a ResolvedTheme.
+    ///
+    /// This method:
+    /// 1. Resolves the role-based styles inventory
+    /// 2. Applies the inventory to element-based styles
+    /// 3. Handles parent-inner element inheritance
+    /// 4. Processes level-specific element overrides
+    /// 5. Resolves indicator styles
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - Style recursion limit is exceeded
+    /// - Any other style resolution error occurs
+    pub fn resolve(self) -> Result<ResolvedTheme> {
+        let flags = self.merge_flags();
+
+        // Step 1: Resolve the role-based styles inventory
+        let inventory = self.styles.resolve(flags);
+
+        // Step 2: Resolve base element styles
+        let elements = Self::resolve_element_pack(&self.elements, &inventory, flags)?;
+
+        // Step 3: Resolve level-specific element styles
+        let mut levels = HashMap::new();
+        for (level, level_pack) in &self.levels {
+            let level = match level {
+                InfallibleLevel::Valid(level) => *level,
+                InfallibleLevel::Invalid(s) => {
+                    log::warn!("unknown level: {:?}", s);
+                    continue;
+                }
+            };
+
+            // Merge base elements with level-specific elements
+            let merged_pack = self
+                .elements
+                .clone()
+                .merged_with(level_pack, flags - MergeFlag::ReplaceGroups);
+            let resolved_pack = Self::resolve_element_pack(&merged_pack, &inventory, flags)?;
+            levels.insert(level, resolved_pack);
+        }
+
+        // Step 4: Resolve indicators
+        let indicators = Self::resolve_indicators(&self.indicators, &inventory, flags)?;
+
+        Ok(ResolvedTheme {
+            tags: self.tags,
+            version: self.version,
+            elements,
+            levels,
+            indicators,
+        })
+    }
+
+    fn resolve_element_pack(
+        pack: &StylePack<Element, Style>,
+        inventory: &StyleInventory,
+        flags: MergeFlags,
+    ) -> Result<StylePack<Element, ResolvedStyle>> {
+        let mut result = HashMap::new();
+
+        let parent_inner_pairs = [
+            (Element::Level, Element::LevelInner),
+            (Element::Logger, Element::LoggerInner),
+            (Element::Caller, Element::CallerInner),
+            (Element::InputNumber, Element::InputNumberInner),
+            (Element::InputName, Element::InputNameInner),
+        ];
+
+        // Process all elements, applying parent→inner inheritance where needed
+        for (&element, style) in pack.items() {
+            // Check if this element is an inner element that should inherit from its parent
+            let mut parent_for_inner = None;
+            for (parent, inner) in parent_inner_pairs {
+                if element == inner {
+                    parent_for_inner = pack.items().get(&parent).cloned();
+                    break;
+                }
+            }
+
+            let resolved_style = match parent_for_inner {
+                Some(parent_style) if !flags.contains(MergeFlag::ReplaceElements) => {
+                    // V1: Resolve both parent and inner first, then merge based on resolved values
+                    let resolved_inner = style.resolve(inventory, flags);
+                    let resolved_parent = parent_style.resolve(inventory, flags);
+
+                    // Parent fills in only properties that are None in the resolved inner
+                    let mut merged = resolved_inner;
+                    if merged.foreground.is_none() {
+                        merged.foreground = resolved_parent.foreground;
+                    }
+                    if merged.background.is_none() {
+                        merged.background = resolved_parent.background;
+                    }
+                    // For modes in v1, merge additively
+                    merged.modes = resolved_parent.modes + merged.modes;
+
+                    merged
+                }
+                _ => {
+                    // V0 or no parent: just resolve the style
+                    style.resolve(inventory, flags)
+                }
+            };
+
+            result.insert(element, resolved_style);
+        }
+
+        // Add inherited inner elements that weren't explicitly defined
+        for (parent, inner) in parent_inner_pairs {
+            if let Some(parent_style) = pack.items().get(&parent) {
+                result
+                    .entry(inner)
+                    .or_insert_with(|| parent_style.resolve(inventory, flags));
+            }
+        }
+
+        // Handle boolean variants inheriting from base boolean
+        if let Some(base) = pack.items().get(&Element::Boolean) {
+            for variant in [Element::BooleanTrue, Element::BooleanFalse] {
+                let mut style = base.clone();
+                if let Some(patch) = pack.items().get(&variant) {
+                    style = style.merged(patch, flags)
+                }
+                result.insert(variant, style.resolve(inventory, flags));
+            }
+        }
+
+        Ok(StylePack(result))
+    }
+
+    fn resolve_indicators(
+        indicators: &IndicatorPack<Style>,
+        inventory: &StyleInventory,
+        flags: MergeFlags,
+    ) -> Result<IndicatorPack<ResolvedStyle>> {
+        Ok(IndicatorPack {
+            sync: SyncIndicatorPack {
+                synced: Indicator {
+                    outer: IndicatorStyle {
+                        prefix: indicators.sync.synced.outer.prefix.clone(),
+                        suffix: indicators.sync.synced.outer.suffix.clone(),
+                        style: indicators.sync.synced.outer.style.resolve(inventory, flags),
+                    },
+                    inner: IndicatorStyle {
+                        prefix: indicators.sync.synced.inner.prefix.clone(),
+                        suffix: indicators.sync.synced.inner.suffix.clone(),
+                        style: indicators.sync.synced.inner.style.resolve(inventory, flags),
+                    },
+                    text: indicators.sync.synced.text.clone(),
+                },
+                failed: Indicator {
+                    outer: IndicatorStyle {
+                        prefix: indicators.sync.failed.outer.prefix.clone(),
+                        suffix: indicators.sync.failed.outer.suffix.clone(),
+                        style: indicators.sync.failed.outer.style.resolve(inventory, flags),
+                    },
+                    inner: IndicatorStyle {
+                        prefix: indicators.sync.failed.inner.prefix.clone(),
+                        suffix: indicators.sync.failed.inner.suffix.clone(),
+                        style: indicators.sync.failed.inner.style.resolve(inventory, flags),
+                    },
+                    text: indicators.sync.failed.text.clone(),
+                },
+            },
+        })
     }
 
     pub fn embedded(name: &str) -> Result<Self> {
@@ -589,6 +758,53 @@ impl FromStr for Tag {
             suggestions: Suggestions::new(s, EnumSet::<Tag>::all().iter().map(|v| v.to_string())),
         })
     }
+}
+
+// ---
+
+/// Source location for a theme, used for error reporting.
+///
+/// This enum tracks where a theme was loaded from, enabling better
+/// error messages when theme resolution or validation fails.
+#[derive(Debug, Clone)]
+pub enum ThemeSource {
+    /// Theme loaded from an embedded resource
+    Embedded { name: Arc<str> },
+    /// Theme loaded from a file on disk
+    File { path: Arc<Path> },
+    /// Theme loaded from an in-memory buffer
+    Buffer,
+}
+
+impl fmt::Display for ThemeSource {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Self::Embedded { name } => write!(f, "embedded theme '{}'", name),
+            Self::File { path } => write!(f, "theme file '{}'", path.display()),
+            Self::Buffer => write!(f, "in-memory theme"),
+        }
+    }
+}
+
+// ---
+
+/// A fully resolved theme with all styles resolved and ready for use.
+///
+/// This type contains element-based styles that have been fully resolved
+/// from role-based styles, with all inheritance and merging applied.
+/// It is the output of [`Theme::resolve()`] and the input for creating
+/// a runtime [`crate::theme::Theme`].
+///
+/// Unlike [`Theme`], which contains unresolved [`Style`] references that may
+/// use role-based inheritance, `ResolvedTheme` contains only [`ResolvedStyle`]
+/// instances with concrete foreground, background, and mode values.
+#[derive(Debug, Default)]
+pub struct ResolvedTheme {
+    pub tags: EnumSet<Tag>,
+    pub version: ThemeVersion,
+    pub elements: StylePack<Element, ResolvedStyle>,
+    pub levels: HashMap<Level, StylePack<Element, ResolvedStyle>>,
+    pub indicators: IndicatorPack<ResolvedStyle>,
 }
 
 // ---
@@ -1419,19 +1635,57 @@ impl fmt::Display for RGB {
 
 // ---
 
-#[derive(Clone, Debug, Default, Deserialize)]
-#[serde(rename_all = "kebab-case")]
-#[serde(default)]
-pub struct IndicatorPack {
-    pub sync: SyncIndicatorPack,
+#[derive(Clone, Debug)]
+pub struct IndicatorPack<S = Style> {
+    pub sync: SyncIndicatorPack<S>,
 }
 
-impl IndicatorPack {
-    pub fn merge(&mut self, other: Self, flags: MergeFlags) {
+// Manual Deserialize impl for IndicatorPack<Style>
+impl<'de> Deserialize<'de> for IndicatorPack<Style> {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        #[serde(rename_all = "kebab-case")]
+        struct Helper {
+            #[serde(default)]
+            sync: SyncIndicatorPack<Style>,
+        }
+
+        let helper = Helper::deserialize(deserializer)?;
+        Ok(IndicatorPack { sync: helper.sync })
+    }
+}
+
+impl Default for IndicatorPack<Style> {
+    fn default() -> Self {
+        Self {
+            sync: SyncIndicatorPack::default(),
+        }
+    }
+}
+
+impl Default for IndicatorPack<ResolvedStyle> {
+    fn default() -> Self {
+        Self {
+            sync: SyncIndicatorPack::default(),
+        }
+    }
+}
+
+impl<S: Clone> IndicatorPack<S> {
+    pub fn merge(&mut self, other: Self, flags: MergeFlags)
+    where
+        SyncIndicatorPack<S>: Mergeable,
+    {
         self.sync.merge(other.sync, flags);
     }
 
-    pub fn merged(mut self, other: Self, flags: MergeFlags) -> Self {
+    pub fn merged(mut self, other: Self, flags: MergeFlags) -> Self
+    where
+        SyncIndicatorPack<S>: Mergeable,
+    {
         self.merge(other, flags);
         self
     }
@@ -1439,14 +1693,36 @@ impl IndicatorPack {
 
 // ---
 
-#[derive(Clone, Debug, Deserialize)]
-#[serde(rename_all = "kebab-case")]
-pub struct SyncIndicatorPack {
-    pub synced: Indicator,
-    pub failed: Indicator,
+#[derive(Clone, Debug)]
+pub struct SyncIndicatorPack<S = Style> {
+    pub synced: Indicator<S>,
+    pub failed: Indicator<S>,
 }
 
-impl Default for SyncIndicatorPack {
+// Manual Deserialize impl for SyncIndicatorPack<Style>
+impl<'de> Deserialize<'de> for SyncIndicatorPack<Style> {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        #[serde(rename_all = "kebab-case")]
+        struct Helper {
+            #[serde(default)]
+            synced: Indicator<Style>,
+            #[serde(default)]
+            failed: Indicator<Style>,
+        }
+
+        let helper = Helper::deserialize(deserializer)?;
+        Ok(SyncIndicatorPack {
+            synced: helper.synced,
+            failed: helper.failed,
+        })
+    }
+}
+
+impl Default for SyncIndicatorPack<Style> {
     fn default() -> Self {
         Self {
             synced: Indicator {
@@ -1472,31 +1748,95 @@ impl Default for SyncIndicatorPack {
     }
 }
 
-impl SyncIndicatorPack {
-    pub fn merge(&mut self, other: Self, flags: MergeFlags) {
+impl Default for SyncIndicatorPack<ResolvedStyle> {
+    fn default() -> Self {
+        Self {
+            synced: Indicator {
+                outer: IndicatorStyle::default(),
+                inner: IndicatorStyle::default(),
+                text: " ".into(),
+            },
+            failed: Indicator {
+                outer: IndicatorStyle::default(),
+                inner: IndicatorStyle {
+                    prefix: String::default(),
+                    suffix: String::default(),
+                    style: ResolvedStyle {
+                        modes: Mode::Bold.into(),
+                        background: None,
+                        foreground: Some(Color::Plain(PlainColor::Yellow)),
+                    },
+                },
+                text: "!".into(),
+            },
+        }
+    }
+}
+
+impl Mergeable for SyncIndicatorPack<Style> {
+    fn merge(&mut self, other: Self, flags: MergeFlags) {
         self.synced.merge(other.synced, flags);
         self.failed.merge(other.failed, flags);
     }
+}
 
-    pub fn merged(mut self, other: Self, flags: MergeFlags) -> Self {
-        self.merge(other, flags);
-        self
+impl Mergeable for SyncIndicatorPack<ResolvedStyle> {
+    fn merge(&mut self, other: Self, flags: MergeFlags) {
+        self.synced.merge(other.synced, flags);
+        self.failed.merge(other.failed, flags);
     }
 }
 
 // ---
 
-#[derive(Clone, Debug, Default, Deserialize)]
-#[serde(rename_all = "kebab-case")]
-#[serde(default)]
-pub struct Indicator {
-    pub outer: IndicatorStyle,
-    pub inner: IndicatorStyle,
+#[derive(Clone, Debug)]
+pub struct Indicator<S = Style> {
+    pub outer: IndicatorStyle<S>,
+    pub inner: IndicatorStyle<S>,
     pub text: String,
 }
 
-impl Indicator {
-    pub fn merge(&mut self, other: Self, flags: MergeFlags) {
+// Manual Deserialize impl for Indicator<Style>
+impl<'de> Deserialize<'de> for Indicator<Style> {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        #[serde(rename_all = "kebab-case")]
+        struct Helper {
+            #[serde(default)]
+            outer: IndicatorStyle<Style>,
+            #[serde(default)]
+            inner: IndicatorStyle<Style>,
+            #[serde(default)]
+            text: String,
+        }
+
+        let helper = Helper::deserialize(deserializer)?;
+        Ok(Indicator {
+            outer: helper.outer,
+            inner: helper.inner,
+            text: helper.text,
+        })
+    }
+}
+
+impl<S: Default> Default for Indicator<S> {
+    fn default() -> Self {
+        Self {
+            outer: IndicatorStyle::default(),
+            inner: IndicatorStyle::default(),
+            text: String::default(),
+        }
+    }
+}
+
+impl<S: Clone> Indicator<S> {
+    pub fn merge(&mut self, other: Self, flags: MergeFlags)
+    where
+        IndicatorStyle<S>: Mergeable,
+    {
         self.outer.merge(other.outer, flags);
         self.inner.merge(other.inner, flags);
         if !other.text.is_empty() {
@@ -1504,7 +1844,10 @@ impl Indicator {
         }
     }
 
-    pub fn merged(mut self, other: Self, flags: MergeFlags) -> Self {
+    pub fn merged(mut self, other: Self, flags: MergeFlags) -> Self
+    where
+        IndicatorStyle<S>: Mergeable,
+    {
         self.merge(other, flags);
         self
     }
@@ -1512,17 +1855,64 @@ impl Indicator {
 
 // ---
 
-#[derive(Clone, Debug, Default, Deserialize)]
-#[serde(rename_all = "kebab-case")]
-#[serde(default)]
-pub struct IndicatorStyle {
+#[derive(Clone, Debug)]
+pub struct IndicatorStyle<S = Style> {
     pub prefix: String,
     pub suffix: String,
-    pub style: Style,
+    pub style: S,
 }
 
-impl IndicatorStyle {
-    pub fn merge(&mut self, other: Self, flags: MergeFlags) {
+// Manual Deserialize impl for IndicatorStyle<Style>
+impl<'de> Deserialize<'de> for IndicatorStyle<Style> {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        #[serde(rename_all = "kebab-case")]
+        struct Helper {
+            #[serde(default)]
+            prefix: String,
+            #[serde(default)]
+            suffix: String,
+            #[serde(default)]
+            style: Style,
+        }
+
+        let helper = Helper::deserialize(deserializer)?;
+        Ok(IndicatorStyle {
+            prefix: helper.prefix,
+            suffix: helper.suffix,
+            style: helper.style,
+        })
+    }
+}
+
+impl<S: Default> Default for IndicatorStyle<S> {
+    fn default() -> Self {
+        Self {
+            prefix: String::default(),
+            suffix: String::default(),
+            style: S::default(),
+        }
+    }
+}
+
+// Trait for types that support merging
+pub trait Mergeable {
+    fn merge(&mut self, other: Self, flags: MergeFlags);
+    fn merged(self, other: Self, flags: MergeFlags) -> Self
+    where
+        Self: Sized,
+    {
+        let mut result = self;
+        result.merge(other, flags);
+        result
+    }
+}
+
+impl Mergeable for IndicatorStyle<Style> {
+    fn merge(&mut self, other: Self, flags: MergeFlags) {
         if !other.prefix.is_empty() {
             self.prefix = other.prefix;
         }
@@ -1531,10 +1921,18 @@ impl IndicatorStyle {
         }
         self.style = std::mem::take(&mut self.style).merged(&other.style, flags);
     }
+}
 
-    pub fn merged(mut self, other: Self, flags: MergeFlags) -> Self {
-        self.merge(other, flags);
-        self
+impl Mergeable for IndicatorStyle<ResolvedStyle> {
+    fn merge(&mut self, other: Self, _flags: MergeFlags) {
+        if !other.prefix.is_empty() {
+            self.prefix = other.prefix;
+        }
+        if !other.suffix.is_empty() {
+            self.suffix = other.suffix;
+        }
+        // ResolvedStyle doesn't have a merge method, so we just replace
+        self.style = other.style;
     }
 }
 

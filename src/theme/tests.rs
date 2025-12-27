@@ -1,4 +1,5 @@
 use super::*;
+use crate::level::InfallibleLevel;
 
 #[test]
 fn test_theme() {
@@ -15,7 +16,7 @@ fn test_unknown_level() {
     let mut cfg = themecfg::Theme::default();
     cfg.levels
         .insert(InfallibleLevel::Invalid("unknown".to_string()), Default::default());
-    let theme = Theme::from(&cfg);
+    let theme = Theme::from(cfg.resolve().unwrap());
     let mut buf = Vec::new();
     theme.apply(&mut buf, &Some(Level::Debug), |s| {
         s.element(Element::Message, |s| s.batch(|buf| buf.extend_from_slice(b"hello!")));
@@ -105,7 +106,7 @@ fn test_boolean_merge_timing_with_level_overrides() {
 
     // Load the theme that has level-specific boolean overrides
     let cfg = themecfg::Theme::load(&app_dirs, "v0-boolean-level-override").unwrap();
-    let theme = Theme::from(&cfg);
+    let theme = Theme::from(cfg.resolve().unwrap());
 
     // This test documents the current behavior:
     // The boolean merge happens AFTER level merging in StylePack::load(),
@@ -151,7 +152,7 @@ fn test_v1_parent_inner_property_level_merging() {
 
     // Load ayu-dark-24 which is a v1 theme
     let cfg = themecfg::Theme::load(&app_dirs, "ayu-dark-24").unwrap();
-    let theme = Theme::from(&cfg);
+    let theme = Theme::from(cfg.resolve().unwrap());
 
     // Apply the theme and render something with level-inner at debug level
     let mut buf = Vec::new();
@@ -187,7 +188,7 @@ fn test_v0_input_element_styling() {
 
     // Load classic theme (v0)
     let cfg = themecfg::Theme::load(&app_dirs, "classic").unwrap();
-    let theme = Theme::from(&cfg);
+    let theme = Theme::from(cfg.resolve().unwrap());
 
     // Apply the theme and render something with Input element
     let mut buf = Vec::new();
@@ -232,7 +233,7 @@ fn test_v1_element_modes_preserved_after_per_level_merge() {
     // Load synthetic test theme which defines level-inner = { modes = ["bold"] }
     // and levels.info.level-inner = { style = "info" }
     let cfg = themecfg::Theme::load(&app_dirs, "v1-element-modes-per-level").unwrap();
-    let theme = Theme::from(&cfg);
+    let theme = Theme::from(cfg.resolve().unwrap());
 
     // Apply the theme and render level-inner at info level
     let mut buf = Vec::new();
@@ -274,7 +275,7 @@ fn test_v0_input_nested_styling() {
 
     // Load classic theme (v0) which only defines `input`, not `input-number`
     let cfg = themecfg::Theme::load(&app_dirs, "classic").unwrap();
-    let theme = Theme::from(&cfg);
+    let theme = Theme::from(cfg.resolve().unwrap());
 
     // Render nested elements: Input containing InputNumber containing content
     let mut buf = Vec::new();
@@ -311,7 +312,7 @@ fn test_v0_theme_without_input_falls_back_to_default() {
 
     // Load v0 theme that doesn't define input element
     let cfg = themecfg::Theme::load(&app_dirs, "v0-missing-input").unwrap();
-    let theme = Theme::from(&cfg);
+    let theme = Theme::from(cfg.resolve().unwrap());
 
     // Apply the theme and render something with Input element
     let mut buf = Vec::new();
@@ -350,7 +351,7 @@ fn test_v0_theme_multiple_elements_fallback_to_default() {
 
     // Load v0 theme that doesn't define input, key, or logger elements
     let cfg = themecfg::Theme::load(&app_dirs, "v0-missing-input").unwrap();
-    let theme = Theme::from(&cfg);
+    let theme = Theme::from(cfg.resolve().unwrap());
 
     // Test Input element - should use deduced secondary style (bright-black from time)
     let mut buf = Vec::new();
@@ -410,7 +411,7 @@ fn test_v0_theme_inherits_foreground_and_modes_from_default() {
 
     // Load v0 theme that doesn't define level-specific elements
     let cfg = themecfg::Theme::load(&app_dirs, "v0-missing-input").unwrap();
-    let theme = Theme::from(&cfg);
+    let theme = Theme::from(cfg.resolve().unwrap());
 
     // Apply the theme and render level-inner at debug level
     let mut buf = Vec::new();
@@ -465,7 +466,7 @@ fn test_v0_theme_modes_only_inherits_colors_from_default() {
     // Load v0 theme that defines message with only modes (underline)
     // In @default: message = { style = "message" } -> { style = "strong" } -> { style = "primary", modes = ["bold"] }
     let cfg = themecfg::Theme::load(&app_dirs, "v0-modes-no-foreground").unwrap();
-    let theme = Theme::from(&cfg);
+    let theme = Theme::from(cfg.resolve().unwrap());
 
     // Test message element - has underline from theme, should still work
     let mut buf = Vec::new();
@@ -529,7 +530,7 @@ fn test_v0_theme_defined_elements_no_auto_deduction() {
 
     // Load v0 theme that defines time/message/key/string with only foreground
     let cfg = themecfg::Theme::load(&app_dirs, "v0-regression-test").unwrap();
-    let theme = Theme::from(&cfg);
+    let theme = Theme::from(cfg.resolve().unwrap());
 
     // Time: foreground='30' (palette index 30), should have NO faint mode
     let mut buf = Vec::new();
@@ -612,7 +613,7 @@ fn test_v0_theme_style_deduction_from_elements() {
     // Load v0 theme that defines time/message/key/string with only foreground
     // This should deduce secondary/strong/accent/primary styles
     let cfg = themecfg::Theme::load(&app_dirs, "v0-regression-test").unwrap();
-    let theme = Theme::from(&cfg);
+    let theme = Theme::from(cfg.resolve().unwrap());
 
     // Input element is NOT defined in v0-regression-test, but IS in @default with style="secondary"
     // Since we deduced secondary style from time element (foreground=30),
@@ -663,7 +664,7 @@ fn test_v0_theme_style_deduction_with_modes() {
 
     // Load v0 theme that defines message with BOTH foreground and modes
     let cfg = themecfg::Theme::load(&app_dirs, "v0-auto-style-deduction").unwrap();
-    let theme = Theme::from(&cfg);
+    let theme = Theme::from(cfg.resolve().unwrap());
 
     // Message element IS defined in v0 theme with foreground='white' and modes=['italic']
     // It should render exactly as defined
@@ -752,7 +753,7 @@ styles:
 
     // Load the theme
     let cfg = themecfg::Theme::load(&app_dirs, "v0-explicit-style-precedence").unwrap();
-    let theme = Theme::from(&cfg);
+    let theme = Theme::from(cfg.resolve().unwrap());
 
     // Time element should use its own definition (foreground 30)
     let mut buf = Vec::new();
@@ -809,7 +810,7 @@ elements:
 
     // Load the theme
     let cfg = themecfg::Theme::load(&app_dirs, "v0-empty-modes-deduction").unwrap();
-    let theme = Theme::from(&cfg);
+    let theme = Theme::from(cfg.resolve().unwrap());
 
     // Time element should have foreground but no modes
     let mut buf = Vec::new();
@@ -865,7 +866,7 @@ elements:
 
     // Load the theme
     let cfg = themecfg::Theme::load(&app_dirs, "v0-background-deduction").unwrap();
-    let theme = Theme::from(&cfg);
+    let theme = Theme::from(cfg.resolve().unwrap());
 
     // String element should have foreground, background, and bold mode
     let mut buf = Vec::new();

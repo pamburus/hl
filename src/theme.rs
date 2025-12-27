@@ -10,8 +10,8 @@ use crate::{
     error::*,
     eseq::{Brightness, Color, ColorCode, Mode, Sequence, StyleCode},
     fmtx::Push,
-    level::{self, InfallibleLevel},
-    themecfg::{self, StyleInventory},
+    level::{self},
+    themecfg,
 };
 
 // test imports
@@ -47,11 +47,11 @@ impl Theme {
     }
 
     pub fn load(app_dirs: &AppDirs, name: &str) -> Result<Self> {
-        Ok(themecfg::Theme::load(app_dirs, name)?.into())
+        Ok(themecfg::Theme::load(app_dirs, name)?.resolve()?.into())
     }
 
     pub fn embedded(name: &str) -> Result<Self> {
-        Ok(themecfg::Theme::embedded(name)?.into())
+        Ok(themecfg::Theme::embedded(name)?.resolve()?.into())
     }
 
     pub fn list(app_dirs: &AppDirs) -> Result<HashMap<Arc<str>, ThemeInfo>> {
@@ -78,28 +78,18 @@ impl Theme {
     }
 }
 
-impl<S: Borrow<themecfg::Theme>> From<S> for Theme {
+impl<S: Borrow<themecfg::ResolvedTheme>> From<S> for Theme {
     fn from(s: S) -> Self {
         let s = s.borrow();
-        let flags = s.merge_flags();
-        let inventory = s.styles.resolve(flags);
-        let default = StylePack::load(&s.elements, &inventory, flags);
+        let default = StylePack::load(&s.elements);
         let mut packs = EnumMap::default();
         for (level, pack) in &s.levels {
-            let level = match level {
-                InfallibleLevel::Valid(level) => *level,
-                InfallibleLevel::Invalid(s) => {
-                    log::warn!("unknown level: {:?}", s);
-                    continue;
-                }
-            };
-            let flags = flags - MergeFlag::ReplaceGroups;
-            packs[level] = StylePack::load(&s.elements.clone().merged_with(pack, flags), &inventory, flags);
+            packs[*level] = StylePack::load(pack);
         }
         Self {
             default,
             packs,
-            indicators: IndicatorPack::new(&s.indicators, &inventory, flags),
+            indicators: IndicatorPack::new(&s.indicators),
         }
     }
 }
@@ -107,7 +97,7 @@ impl<S: Borrow<themecfg::Theme>> From<S> for Theme {
 #[cfg(test)]
 impl Sample for Arc<Theme> {
     fn sample() -> Self {
-        Theme::from(themecfg::testing::theme().unwrap()).into()
+        Theme::from(themecfg::testing::theme().unwrap().resolve().unwrap()).into()
     }
 }
 
@@ -297,7 +287,7 @@ impl StylePack {
         self.elements[element] = Some(pos);
     }
 
-    fn load(s: &themecfg::StylePack, inventory: &themecfg::StyleInventory, flags: MergeFlags) -> Self {
+    fn load(s: &themecfg::StylePack<Element, themecfg::ResolvedStyle>) -> Self {
         let mut result = Self::default();
 
         let items = s.items();
@@ -306,75 +296,9 @@ impl StylePack {
             result.reset = Some(0);
         }
 
-        // Build a map of inner elements to their parents for quick lookup
-        let inner_pairs = [
-            (Element::Level, Element::LevelInner),
-            (Element::Logger, Element::LoggerInner),
-            (Element::Caller, Element::CallerInner),
-            (Element::InputNumber, Element::InputNumberInner),
-            (Element::InputName, Element::InputNameInner),
-        ];
-
-        // Process all elements, applying parent→inner inheritance where needed
-        for (&element, style) in s.items() {
-            // Check if this element is an inner element that should inherit from its parent
-            let mut parent_for_inner = None;
-            for (parent, inner) in inner_pairs {
-                if element == inner {
-                    parent_for_inner = s.items().get(&parent).cloned();
-                    break;
-                }
-            }
-
-            let resolved_style = match parent_for_inner {
-                Some(parent_style) if !flags.contains(MergeFlag::ReplaceElements) => {
-                    // V1: Resolve both parent and inner first, then merge based on resolved values
-                    // This respects role resolution without checking implementation details (base field)
-                    let resolved_inner = style.resolve(inventory, flags);
-                    let resolved_parent = parent_style.resolve(inventory, flags);
-
-                    // Parent fills in only properties that are None in the resolved inner
-                    let mut merged = resolved_inner;
-                    if merged.foreground.is_none() {
-                        merged.foreground = resolved_parent.foreground;
-                    }
-                    if merged.background.is_none() {
-                        merged.background = resolved_parent.background;
-                    }
-                    // For modes in v1, merge additively
-                    merged.modes = resolved_parent.modes + merged.modes;
-
-                    merged
-                }
-                _ => {
-                    // V0 or no parent: just resolve the style
-                    style.resolve(inventory, flags)
-                }
-            };
-
-            result.add(element, &Style::from(&resolved_style));
-        }
-
-        // Add inherited inner elements that weren't explicitly defined
-        // V0: fallback to parent when inner is missing
-        // V1: also fallback to parent when inner is missing
-        for (parent, inner) in inner_pairs {
-            if let Some(parent_style) = s.items().get(&parent) {
-                if s.items().get(&inner).is_none() {
-                    result.add(inner, &Style::from(&parent_style.resolve(inventory, flags)));
-                }
-            }
-        }
-
-        // Handle boolean variants inheriting from base boolean
-        if let Some(base) = s.items().get(&Element::Boolean) {
-            for variant in [Element::BooleanTrue, Element::BooleanFalse] {
-                let mut style = base.clone();
-                if let Some(patch) = s.items().get(&variant) {
-                    style = style.merged(patch, flags)
-                }
-                result.add(variant, &Style::from(&style.resolve(inventory, flags)));
-            }
+        // Process all elements and convert ResolvedStyle to runtime Style
+        for (&element, resolved_style) in s.items() {
+            result.add(element, &Style::from(resolved_style));
         }
 
         result
@@ -389,9 +313,9 @@ pub struct IndicatorPack {
 }
 
 impl IndicatorPack {
-    fn new(indicator: &themecfg::IndicatorPack, inventory: &StyleInventory, flags: MergeFlags) -> Self {
+    fn new(indicator: &themecfg::IndicatorPack<themecfg::ResolvedStyle>) -> Self {
         Self {
-            sync: SyncIndicatorPack::new(&indicator.sync, inventory, flags),
+            sync: SyncIndicatorPack::new(&indicator.sync),
         }
     }
 }
@@ -405,10 +329,10 @@ pub struct SyncIndicatorPack {
 }
 
 impl SyncIndicatorPack {
-    fn new(indicator: &themecfg::SyncIndicatorPack, inventory: &StyleInventory, flags: MergeFlags) -> Self {
+    fn new(indicator: &themecfg::SyncIndicatorPack<themecfg::ResolvedStyle>) -> Self {
         Self {
-            synced: Indicator::new(&indicator.synced, inventory, flags),
-            failed: Indicator::new(&indicator.failed, inventory, flags),
+            synced: Indicator::new(&indicator.synced),
+            failed: Indicator::new(&indicator.failed),
         }
     }
 }
@@ -421,17 +345,17 @@ pub struct Indicator {
 }
 
 impl Indicator {
-    fn new(indicator: &themecfg::Indicator, inventory: &StyleInventory, flags: MergeFlags) -> Self {
+    fn new(indicator: &themecfg::Indicator<themecfg::ResolvedStyle>) -> Self {
         let mut buf = Vec::new();
-        let os = Style::from(&indicator.outer.style.resolve(inventory, flags));
-        let is = Style::from(&indicator.inner.style.resolve(inventory, flags));
+        let os = Style::from(&indicator.outer.style);
+        let is = Style::from(&indicator.inner.style);
         os.apply(&mut buf);
         os.with(&mut buf, |buf| {
             buf.extend(indicator.outer.prefix.as_bytes());
             is.with(buf, |buf| {
                 buf.extend(indicator.inner.prefix.as_bytes());
                 buf.extend(indicator.text.as_bytes());
-                buf.extend(indicator.outer.prefix.as_bytes());
+                buf.extend(indicator.inner.suffix.as_bytes());
             });
             buf.extend(indicator.outer.suffix.as_bytes());
         });

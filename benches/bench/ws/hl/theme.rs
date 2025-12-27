@@ -86,7 +86,7 @@ pub(super) fn bench(c: &mut Criterion) {
 }
 
 fn theme() -> Theme {
-    Theme::from(&themecfg::Theme {
+    let cfg = themecfg::Theme {
         version: ThemeVersion::CURRENT,
         tags: Default::default(),
         styles: hashmap! {
@@ -116,5 +116,6 @@ fn theme() -> Theme {
         .into(),
         levels: HashMap::new(),
         indicators: themecfg::IndicatorPack::default(),
-    })
+    };
+    Theme::from(cfg.resolve().unwrap())
 }

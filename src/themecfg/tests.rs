@@ -2098,8 +2098,8 @@ fn test_resolved_style_builder_methods() {
 
 #[test]
 fn test_indicator_pack_merge() {
-    let mut base = IndicatorPack::default();
-    let mut other = IndicatorPack::default();
+    let mut base = IndicatorPack::<Style>::default();
+    let mut other = IndicatorPack::<Style>::default();
 
     other.sync.synced.text = "✓".to_string();
     other.sync.failed.text = "✗".to_string();
@@ -2110,9 +2110,9 @@ fn test_indicator_pack_merge() {
 }
 
 #[test]
-fn test_indicator_style_merge() {
-    let mut base = IndicatorStyle::default();
-    let other = IndicatorStyle {
+fn test_indicator_style_merge_empty() {
+    let mut base = IndicatorStyle::<Style>::default();
+    let other = IndicatorStyle::<Style> {
         prefix: "[".to_string(),
         suffix: "]".to_string(),
         ..Default::default()
@@ -2198,8 +2198,8 @@ fn test_resolved_style_merged_with_style_replace_modes() {
 
 #[test]
 fn test_sync_indicator_pack_merge() {
-    let mut base = SyncIndicatorPack::default();
-    let mut other = SyncIndicatorPack::default();
+    let mut base = SyncIndicatorPack::<Style>::default();
+    let mut other = SyncIndicatorPack::<Style>::default();
 
     other.synced.text = "✓".to_string();
     other.failed.text = "✗".to_string();
@@ -2211,12 +2211,12 @@ fn test_sync_indicator_pack_merge() {
 
 #[test]
 fn test_indicator_merge_empty_text() {
-    let mut base = Indicator {
+    let mut base = Indicator::<Style> {
         text: "original".to_string(),
         ..Default::default()
     };
 
-    let other = Indicator {
+    let other = Indicator::<Style> {
         text: "".to_string(),
         ..Default::default()
     };
@@ -2266,20 +2266,20 @@ fn test_mode_set_diff_with_removes() {
 }
 
 #[test]
-fn test_sync_indicator_pack_default() {
-    let pack = SyncIndicatorPack::default();
-    assert_eq!(pack.synced.text, " ");
-    assert_eq!(pack.failed.text, "!");
+fn test_indicator_pack_defaults() {
+    let pack = IndicatorPack::<Style>::default();
+    assert_eq!(pack.sync.synced.text, " ");
+    assert_eq!(pack.sync.failed.text, "!");
     assert_eq!(
-        pack.failed.inner.style.foreground,
+        pack.sync.failed.inner.style.foreground,
         Some(Color::Plain(PlainColor::Yellow))
     );
 }
 
 #[test]
 fn test_indicator_pack_merged() {
-    let base = IndicatorPack::default();
-    let mut other = IndicatorPack::default();
+    let base = IndicatorPack::<Style>::default();
+    let mut other = IndicatorPack::<Style>::default();
     other.sync.synced.text = "✓".to_string();
 
     let merged = base.merged(other, MergeFlags::default());
@@ -2288,8 +2288,8 @@ fn test_indicator_pack_merged() {
 
 #[test]
 fn test_sync_indicator_pack_merged() {
-    let base = SyncIndicatorPack::default();
-    let mut other = SyncIndicatorPack::default();
+    let base = SyncIndicatorPack::<Style>::default();
+    let mut other = SyncIndicatorPack::<Style>::default();
     other.synced.text = "✓".to_string();
 
     let merged = base.merged(other, MergeFlags::default());
@@ -2297,9 +2297,9 @@ fn test_sync_indicator_pack_merged() {
 }
 
 #[test]
-fn test_indicator_merged() {
-    let base = Indicator::default();
-    let other = Indicator {
+fn test_indicator_text_merge() {
+    let base = Indicator::<Style>::default();
+    let other = Indicator::<Style> {
         text: "test".to_string(),
         ..Default::default()
     };
@@ -2309,15 +2309,15 @@ fn test_indicator_merged() {
 }
 
 #[test]
-fn test_indicator_style_merged() {
-    let base = IndicatorStyle::default();
-    let other = IndicatorStyle {
+fn test_indicator_style_defaults() {
+    let style = IndicatorStyle::<Style>::default();
+    let other = IndicatorStyle::<Style> {
         prefix: "[".to_string(),
         suffix: "]".to_string(),
         ..Default::default()
     };
 
-    let merged = base.merged(other, MergeFlags::default());
+    let merged = style.merged(other, MergeFlags::default());
     assert_eq!(merged.prefix, "[");
     assert_eq!(merged.suffix, "]");
 }
