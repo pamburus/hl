@@ -1,0 +1,7 @@
+# Test file for FR-022c: Multiple and "conflicting" tags are allowed
+# Tags like dark+light are not actually conflicting (theme works with both)
+elements:
+  message:
+    foreground: 'green'
+
+tags: ['dark', 'light', '256color', 'truecolor']

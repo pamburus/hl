@@ -1,0 +1,13 @@
+# Test theme for FR-003: Load by full filename
+# This file tests that loading "test-fullname.yaml" specifically loads YAML format
+# even if a "test-fullname.toml" exists in the same directory
+
+version: 0
+
+elements:
+  key:
+    color: cyan
+  value:
+    color: green
+  message:
+    color: white

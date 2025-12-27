@@ -1,0 +1,11 @@
+# Test file for FR-011a: Case-sensitive element names
+# Element names with wrong case should be ignored (unknown elements)
+elements:
+  message:
+    foreground: 'green'
+  Message:
+    foreground: 'red'
+  TIME:
+    foreground: 'blue'
+  Level:
+    foreground: 'yellow'
