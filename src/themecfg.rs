@@ -213,12 +213,6 @@ pub struct Theme {
 
 impl Theme {
     pub fn load(app_dirs: &AppDirs, name: &str) -> Result<Self> {
-        let theme = Self::load_impl(app_dirs, name)?;
-        theme.validate_version()?;
-        Ok(theme)
-    }
-
-    fn load_impl(app_dirs: &AppDirs, name: &str) -> Result<Self> {
         let theme = Self::load_embedded::<Assets>(DEFAULT_THEME_NAME)?;
         if name == DEFAULT_THEME_NAME {
             return Ok(theme);
@@ -398,7 +392,9 @@ impl Theme {
 
             match std::fs::read(&path) {
                 Ok(data) => {
-                    return Self::from_buf(&data, format).map_err(|e| map_err(e, path));
+                    let theme = Self::from_buf(&data, format).map_err(|e| map_err(e, path))?;
+                    theme.validate_version()?;
+                    return Ok(theme);
                 }
                 Err(e) => match e.kind() {
                     ErrorKind::NotFound => continue,
