@@ -1,0 +1,12 @@
+# Test file for strict v1 deserialization - unknown keys should fail
+# This v1 theme has an unknown top-level key that should cause an error
+
+version: "1.0"
+
+elements:
+  message:
+    foreground: "#FFFFFF"
+
+# This is an unknown key - v1 should reject it
+unknown_feature:
+  some_value: "test"

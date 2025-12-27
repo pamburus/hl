@@ -2416,3 +2416,51 @@ fn test_style_base_visitor_expecting() {
     let err_msg = result.unwrap_err().to_string();
     assert!(!err_msg.is_empty());
 }
+
+#[test]
+fn test_v1_strict_unknown_key_rejected() {
+    // Test that v1 themes strictly reject unknown top-level keys (fail-fast)
+    // This is different from v0 which silently ignores unknown keys for forward compatibility
+    let path = PathBuf::from("src/testing/assets/themes");
+    let result = Theme::load_from(&path, "v1-unknown-key");
+
+    // v1 should fail on unknown keys due to #[serde(deny_unknown_fields)]
+    assert!(
+        result.is_err(),
+        "v1 theme with unknown key should fail strict validation"
+    );
+
+    let err = result.unwrap_err();
+    let err_msg = err.to_string();
+
+    // The error message should mention the unknown field
+    assert!(
+        err_msg.contains("unknown") || err_msg.contains("field"),
+        "Error message should indicate unknown field, got: {}",
+        err_msg
+    );
+}
+
+#[test]
+fn test_v1_strict_unknown_enum_variant_rejected() {
+    // Test that v1 themes strictly reject unknown enum variants (fail-fast)
+    // This tests unknown Role variant in the styles section
+    let path = PathBuf::from("src/testing/assets/themes");
+    let result = Theme::load_from(&path, "v1-unknown-role");
+
+    // v1 should fail on unknown enum variants
+    assert!(
+        result.is_err(),
+        "v1 theme with unknown Role variant should fail strict validation"
+    );
+
+    let err = result.unwrap_err();
+    let err_msg = err.to_string();
+
+    // The error message should mention the unknown variant or role
+    assert!(
+        err_msg.contains("unknown") || err_msg.contains("variant") || err_msg.contains("future-role"),
+        "Error message should indicate unknown enum variant, got: {}",
+        err_msg
+    );
+}

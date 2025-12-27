@@ -274,8 +274,8 @@ Current state: ⚠️ Exists but needs refactoring
 
 ### 7.2 V1 Tests
 - 🔍 Test v1 deserialization
-- ❌ Test strict unknown-key behavior (should fail)
-- ❌ Test unknown enum variant (should fail)
+- ✅ Test strict unknown-key behavior (should fail)
+- ✅ Test unknown enum variant (should fail)
 - 🔍 Test v1 features (Role, StyleBase, ModeSetDiff)
 - ❌ Test merging logic
 - ❌ Test resolution logic
@@ -332,9 +332,9 @@ Current state: ⚠️ Exists but needs refactoring
 
 ## Summary Counts
 
-- ✅ Done: ~80
+- ✅ Done: ~82
 - ⚠️ Partially done / needs fixing: ~5
-- ❌ Not started: ~50
+- ❌ Not started: ~48
 - 🔍 Needs review: ~10
 
 **Total items: ~145**
@@ -623,3 +623,29 @@ Based on this analysis, I recommend **finishing the refactoring** rather than st
 - ✅ Zero clippy warnings (full workspace check)
 
 **Next**: Phases 7-9 (Additional testing, Documentation, Cleanup) - optional improvements
+
+### 2024-12-27 - Phase 7.2 Strict Validation Tests ✅
+
+✅ **V1 Strict Validation - Unknown Keys and Enum Variants:**
+
+**Implementation:**
+- ✅ **test_v1_strict_unknown_key_rejected** - Verifies v1 themes fail on unknown top-level keys
+  - Test fixture: `v1-unknown-key.yaml` with `unknown_feature` field
+  - Confirms `#[serde(deny_unknown_fields)]` on v1::Theme works correctly
+  - Error message: "unknown field `unknown_feature`, expected one of `tags`, `version`, `styles`, `elements`, `levels`, `indicators`"
+- ✅ **test_v1_strict_unknown_enum_variant_rejected** - Verifies v1 themes fail on unknown Role variants
+  - Test fixture: `v1-unknown-role.yaml` with `future-role` in styles section
+  - Confirms strict enum deserialization rejects unknown variants
+  - Error message: "unknown variant `future-role`, expected one of `default`, `primary`, `secondary`, `strong`, `muted`, `accent`, `accent-secondary`, `message`, `syntax`, `status`, `level`, `trace`, `debug`, `info`, `warning`, `error`"
+
+**Design Validation:**
+- ✅ **v1 is strict** - Fails fast on unknown keys/variants (better error messages for users)
+- ✅ **v0 remains lenient** - Silently ignores unknown keys for forward compatibility
+- ✅ **Clear error messages** - Users get helpful feedback about what went wrong and what's expected
+
+**Test Results:**
+- ✅ All 572 lib tests passing (2 new tests added)
+- ✅ Zero compilation errors
+- ✅ Zero clippy warnings (full workspace check)
+
+**Next**: Remaining Phase 7 items (merge/resolve logic tests, round-trip tests) - optional improvements
