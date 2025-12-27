@@ -1444,6 +1444,34 @@ fn test_silent_on_success() {
 }
 
 #[test]
+fn test_theme_stem_deduplication() {
+    // FR-030b: System MUST display each theme stem only once in listings
+    // even when multiple file formats exist for the same stem
+    // Uses external files: src/testing/assets/themes/dedup-test.{yaml,toml}
+    let app_dirs = AppDirs {
+        config_dir: PathBuf::from("src/testing/assets"),
+        cache_dir: Default::default(),
+        system_config_dirs: Default::default(),
+    };
+
+    let themes = Theme::list(&app_dirs).unwrap();
+
+    // Count how many times "dedup-test" appears
+    let dedup_count = themes.keys().filter(|k| k.as_ref() == "dedup-test").count();
+
+    assert_eq!(
+        dedup_count, 1,
+        "Theme stem 'dedup-test' should appear exactly once in listing, even though both .yaml and .toml exist"
+    );
+
+    // Verify it's actually in the list
+    assert!(
+        themes.contains_key("dedup-test"),
+        "dedup-test should be present in theme listing"
+    );
+}
+
+#[test]
 fn test_file_format_parse_errors() {
     // FR-029: System MUST report file format parse errors with helpful messages
     // This test verifies that malformed theme files produce clear error messages

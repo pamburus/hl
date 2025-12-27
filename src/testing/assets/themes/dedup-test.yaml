@@ -1,0 +1,11 @@
+# Test file for FR-030b: Theme stem deduplication
+# This YAML version should be deduplicated with dedup-test.toml
+# When listing themes, "dedup-test" should appear only once
+
+version: "0.0"
+
+elements:
+  key:
+    foreground: cyan
+  message:
+    foreground: white
