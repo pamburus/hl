@@ -645,3 +645,288 @@ fn test_v0_theme_style_deduction_from_elements() {
         String::from_utf8_lossy(&buf)
     );
 }
+
+#[test]
+fn test_v0_theme_style_deduction_with_modes() {
+    // Test FR-031c: Style deduction MUST copy both colors AND modes from element definitions
+    // If v0 theme defines: time: { foreground: 30, modes: ['italic'] }
+    // Then deduced secondary should be: { foreground: 30, modes: ['italic'] }
+    // And elements in @default that reference secondary should inherit BOTH color AND modes
+    use crate::appdirs::AppDirs;
+    use std::path::PathBuf;
+
+    let app_dirs = AppDirs {
+        config_dir: PathBuf::from("src/testing/assets"),
+        cache_dir: Default::default(),
+        system_config_dirs: Default::default(),
+    };
+
+    // Load v0 theme that defines message with BOTH foreground and modes
+    let cfg = themecfg::Theme::load(&app_dirs, "v0-auto-style-deduction").unwrap();
+    let theme = Theme::from(&cfg);
+
+    // Message element IS defined in v0 theme with foreground='white' and modes=['italic']
+    // It should render exactly as defined
+    let mut buf = Vec::new();
+    theme.apply(&mut buf, &None, |s| {
+        s.element(Element::Message, |s| s.batch(|buf| buf.extend_from_slice(b"msg")));
+    });
+
+    let output = String::from_utf8_lossy(&buf);
+
+    // Should contain white foreground (ANSI 37)
+    assert!(
+        output.contains(";37") || output.contains("[37"),
+        "Expected white (37) foreground from message definition, got: {:?}",
+        output
+    );
+
+    // Should contain italic mode (3)
+    assert!(
+        output.contains(";3") || output.contains("[3"),
+        "Expected italic (3) mode from message definition, got: {:?}",
+        output
+    );
+
+    // Now test an element NOT defined in v0 theme that references the deduced strong style
+    // @default defines: object = { style = "syntax" }
+    // @default defines: syntax = { style = "strong" }
+    // v0-auto-style-deduction defines: message = { foreground: 'white', modes: ['italic'] }
+    // This should deduce: strong = { foreground: 'white', modes: ['italic'] }
+    // So object should inherit BOTH foreground AND modes from deduced strong
+    buf.clear();
+    theme.apply(&mut buf, &None, |s| {
+        s.element(Element::Object, |s| s.batch(|buf| buf.extend_from_slice(b"obj")));
+    });
+
+    let output = String::from_utf8_lossy(&buf);
+
+    // Should contain white foreground from deduced strong style
+    assert!(
+        output.contains(";37") || output.contains("[37"),
+        "Object (not in v0 theme) should inherit white foreground from deduced strong style, got: {:?}",
+        output
+    );
+
+    // Should contain italic mode from deduced strong style
+    assert!(
+        output.contains(";3") || output.contains("[3"),
+        "Object (not in v0 theme) should inherit italic mode from deduced strong style, got: {:?}",
+        output
+    );
+}
+
+#[test]
+fn test_v0_theme_explicit_style_takes_precedence_over_deduction() {
+    // Test FR-031a: If v0 theme explicitly defines BOTH element AND style,
+    // the explicit style definition takes precedence (no deduction)
+    //
+    // This test verifies that when a v0 theme defines:
+    //   time: { foreground: 30 }  <- would normally deduce secondary
+    //   styles.secondary: { foreground: 40 }  <- explicit style definition
+    // The explicit style (foreground 40) should take precedence and NOT be overwritten
+    // by deduction. However, the time element itself should still use its own
+    // definition (foreground 30), not the explicit style.
+    use crate::appdirs::AppDirs;
+    use std::path::PathBuf;
+
+    let app_dirs = AppDirs {
+        config_dir: PathBuf::from("src/testing/assets"),
+        cache_dir: Default::default(),
+        system_config_dirs: Default::default(),
+    };
+
+    // Create a temporary theme file with both element and style defined
+    let theme_content = r#"
+elements:
+  time:
+    foreground: 30
+
+styles:
+  secondary:
+    foreground: 40
+"#;
+
+    let theme_dir = std::path::PathBuf::from("src/testing/assets/themes");
+    let theme_path = theme_dir.join("v0-explicit-style-precedence.yaml");
+    std::fs::write(&theme_path, theme_content).unwrap();
+
+    // Load the theme
+    let cfg = themecfg::Theme::load(&app_dirs, "v0-explicit-style-precedence").unwrap();
+    let theme = Theme::from(&cfg);
+
+    // Time element should use its own definition (foreground 30), not the style
+    let mut buf = Vec::new();
+    theme.apply(&mut buf, &None, |s| {
+        s.element(Element::Time, |s| s.batch(|buf| buf.extend_from_slice(b"time")));
+    });
+
+    assert_eq!(
+        buf, b"\x1b[0;38;5;30mtime\x1b[0m",
+        "Time element should use its own definition (foreground 30)"
+    );
+
+    // Input element (not defined in v0, but in @default with style="secondary")
+    // should use the EXPLICIT secondary style (foreground 40), NOT deduced from time
+    buf.clear();
+    theme.apply(&mut buf, &None, |s| {
+        s.element(Element::Input, |s| s.batch(|buf| buf.extend_from_slice(b"input")));
+    });
+
+    assert_eq!(
+        buf, b"\x1b[0;38;5;40minput\x1b[0m",
+        "Input should use explicit secondary style (foreground 40), not deduced from time"
+    );
+
+    // Clean up
+    std::fs::remove_file(&theme_path).ok();
+}
+
+#[test]
+fn test_v0_theme_deduction_with_empty_modes_array() {
+    // Test edge case: What happens when v0 theme defines element with empty modes array?
+    // According to FR-018: empty modes array [] is treated identically to absent modes
+    // This test verifies the deduction behavior in this edge case
+    use crate::appdirs::AppDirs;
+    use std::path::PathBuf;
+
+    let app_dirs = AppDirs {
+        config_dir: PathBuf::from("src/testing/assets"),
+        cache_dir: Default::default(),
+        system_config_dirs: Default::default(),
+    };
+
+    // Create a temporary theme with empty modes array
+    let theme_content = r#"
+elements:
+  time:
+    foreground: 30
+    modes: []
+"#;
+
+    let theme_dir = std::path::PathBuf::from("src/testing/assets/themes");
+    let theme_path = theme_dir.join("v0-empty-modes-deduction.yaml");
+    std::fs::write(&theme_path, theme_content).unwrap();
+
+    // Load the theme
+    let cfg = themecfg::Theme::load(&app_dirs, "v0-empty-modes-deduction").unwrap();
+    let theme = Theme::from(&cfg);
+
+    // Time element should have foreground but no modes
+    let mut buf = Vec::new();
+    theme.apply(&mut buf, &None, |s| {
+        s.element(Element::Time, |s| s.batch(|buf| buf.extend_from_slice(b"time")));
+    });
+
+    assert_eq!(
+        buf, b"\x1b[0;38;5;30mtime\x1b[0m",
+        "Time with empty modes array should have only foreground"
+    );
+
+    // Input element should also have no modes (deduced secondary has no modes)
+    buf.clear();
+    theme.apply(&mut buf, &None, |s| {
+        s.element(Element::Input, |s| s.batch(|buf| buf.extend_from_slice(b"input")));
+    });
+
+    assert_eq!(
+        buf, b"\x1b[0;38;5;30minput\x1b[0m",
+        "Input should use deduced secondary with foreground but no modes"
+    );
+
+    // Clean up
+    std::fs::remove_file(&theme_path).ok();
+}
+
+#[test]
+fn test_v0_theme_deduction_copies_background() {
+    // Test that style deduction copies background color as well as foreground
+    // FR-031 states: "deduction copies foreground, background, and modes"
+    use crate::appdirs::AppDirs;
+    use std::path::PathBuf;
+
+    let app_dirs = AppDirs {
+        config_dir: PathBuf::from("src/testing/assets"),
+        cache_dir: Default::default(),
+        system_config_dirs: Default::default(),
+    };
+
+    // Create a theme with background defined
+    let theme_content = r#"
+elements:
+  string:
+    foreground: 'green'
+    background: 'black'
+    modes: ['bold']
+"#;
+
+    let theme_dir = std::path::PathBuf::from("src/testing/assets/themes");
+    let theme_path = theme_dir.join("v0-background-deduction.yaml");
+    std::fs::write(&theme_path, theme_content).unwrap();
+
+    // Load the theme
+    let cfg = themecfg::Theme::load(&app_dirs, "v0-background-deduction").unwrap();
+    let theme = Theme::from(&cfg);
+
+    // String element should have foreground, background, and bold mode
+    let mut buf = Vec::new();
+    theme.apply(&mut buf, &None, |s| {
+        s.element(Element::String, |s| s.batch(|buf| buf.extend_from_slice(b"str")));
+    });
+
+    let output = String::from_utf8_lossy(&buf);
+
+    // Should contain green foreground
+    assert!(
+        output.contains(";32") || output.contains("[32"),
+        "String should have green foreground, got: {:?}",
+        output
+    );
+
+    // Should contain black background (40)
+    assert!(
+        output.contains(";40") || output.contains("[40"),
+        "String should have black background, got: {:?}",
+        output
+    );
+
+    // Should contain bold mode (1)
+    assert!(
+        output.contains(";1") || output.contains("[1"),
+        "String should have bold mode, got: {:?}",
+        output
+    );
+
+    // Number element (not defined in v0, uses @default's number = { style = "primary" })
+    // should inherit ALL properties from deduced primary style
+    buf.clear();
+    theme.apply(&mut buf, &None, |s| {
+        s.element(Element::Number, |s| s.batch(|buf| buf.extend_from_slice(b"123")));
+    });
+
+    let output = String::from_utf8_lossy(&buf);
+
+    // Should contain green foreground from deduced primary
+    assert!(
+        output.contains(";32") || output.contains("[32"),
+        "Number should inherit green foreground from deduced primary, got: {:?}",
+        output
+    );
+
+    // Should contain black background from deduced primary
+    assert!(
+        output.contains(";40") || output.contains("[40"),
+        "Number should inherit black background from deduced primary, got: {:?}",
+        output
+    );
+
+    // Should contain bold mode from deduced primary
+    assert!(
+        output.contains(";1") || output.contains("[1"),
+        "Number should inherit bold mode from deduced primary, got: {:?}",
+        output
+    );
+
+    // Clean up
+    std::fs::remove_file(&theme_path).ok();
+}
