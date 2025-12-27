@@ -1,0 +1,8 @@
+# Test file for FR-014b: V0 theme with invalid +/- mode prefixes
+# V0 does not support +/- prefixes (only v1 does)
+# This should produce an error with helpful message
+
+elements:
+  message:
+    foreground: 'green'
+    modes: ['+bold']  # Invalid: v0 doesn't support +/- prefixes

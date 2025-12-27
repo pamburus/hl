@@ -1,7 +1,7 @@
 <!-- 
 Sync Impact Report:
-- Version: 1.0.0 → 1.1.0
-- Added: Principle VI - Specification & Cross-Reference Integrity
+- Version: 1.1.0 → 1.2.0
+- Added: Principle VII - Test Data Management
 - Rationale: MINOR version bump - new principle added to governance
 - Templates requiring updates: ✅ All templates reviewed and compatible
 - Date: 2025-01-07
@@ -45,6 +45,22 @@ When renumbering identifiers (FR/requirement IDs, user story IDs, feature number
 
 This ensures specifications remain the single source of truth and prevents broken references that make requirements untraceable. Use grep/search tools with patterns covering all identifier formats before any renumbering operation.
 
+### VII. Test Data Management
+<!-- Separate test logic from test data -->
+Tests MUST use external data files instead of inline multiline string literals for themes, configs, and other structured data. This improves maintainability, enables proper validation tooling, and separates test logic from test data.
+
+**Requirements:**
+- Theme and config test data MUST be stored in dedicated test asset directories (e.g., `src/testing/assets/themes/`)
+- Test files SHOULD use the same format as production files (YAML, TOML, JSON)
+- Tests MAY embed external files at compile time using `include_str!` or similar if needed for performance
+- Inline strings are acceptable ONLY for very short values (<3 lines) or when the string content itself is what's being tested (e.g., parse error messages)
+
+**Rationale:**
+- External files can be validated with proper tooling (YAML/TOML linters)
+- Easier to reuse test data across multiple tests
+- Better separation of concerns improves test readability
+- Compile-time embedding provides same performance as inline strings
+
 ## Technology Stack & Standards
 
 **Language**: Rust (enforced for reliability and performance)
@@ -74,4 +90,4 @@ This constitution supersedes all other practices and informal conventions. All P
 3. Documentation of rationale
 4. Migration plan for any breaking changes
 
-**Version**: 1.1.0 | **Ratified**: 2025-11-02 | **Last Amended**: 2025-01-07
+**Version**: 1.2.0 | **Ratified**: 2025-11-02 | **Last Amended**: 2025-01-07

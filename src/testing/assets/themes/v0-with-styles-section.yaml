@@ -1,0 +1,11 @@
+# Test file for FR-010f: V0 theme with styles section (should be ignored)
+elements:
+  message:
+    foreground: 'green'
+
+# This styles section should be ignored in v0 themes
+styles:
+  primary:
+    foreground: 'red'
+  secondary:
+    foreground: 'blue'

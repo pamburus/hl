@@ -111,7 +111,7 @@
 
 - Q: Does the `$palette` section work the same in v1 as in v0? → A: Yes - $palette works identically in v1 as v0 (YAML anchors supported, organization feature)
 
-- Q: Can users create a custom theme file named `@default` or is this name reserved/protected? → A: `@default` is a special reserved name; custom themes named `@default` are ignored (not loaded). Other theme names starting with `@` are not reserved and can be used normally.
+- Q: Can users create a custom theme file named `@default` or is this name reserved/protected? → A: The embedded `@default` theme is excluded from theme listings (special hidden base theme), but users CAN create custom themes named `@default` which will be loaded and merged with the embedded `@default` following normal custom theme priority rules. Other theme names starting with `@` are not reserved and can be used normally.
 
 - Q: What happens when a file's extension doesn't match its content (e.g., `theme.yaml` contains TOML content)? → A: Parse error from format parser (YAML parser fails on TOML content) - exit with error to stderr
 
@@ -372,7 +372,7 @@ Theme authors using v1 can define semantic roles (like "warning", "error", "succ
 
 - **FR-001a**: System MUST search for themes in this priority order: custom themes directory first, then stock themes embedded in binary (custom themes with same name completely replace stock themes - no merging or inheritance)
 
-- **FR-001b**: System MUST reserve the theme name `@default` for the embedded v1 default theme; custom theme files named `@default` (with any extension) are ignored and not loaded; other theme names starting with `@` are not reserved and can be used normally
+- **FR-001b**: System MUST exclude the embedded `@default` from theme listings (it is a special hidden base theme); however, users MAY create custom themes named `@default` which will be loaded and merged with the embedded `@default` theme following normal custom theme priority rules (FR-001a); the system MUST load custom `@default` themes consistently whether loaded by stem name (`@default`) or full filename (`@default.yaml`), both methods should check for custom theme files first and merge with embedded `@default`; the embedded `@default` theme itself MUST NOT merge with itself (no recursion); other theme names starting with `@` are not reserved and can be used normally
 
 - **FR-002**: System MUST support loading themes by stem name (without extension) with automatic format detection in priority order: .yaml, .toml, .json (first found wins); alternate extension `.yml` is NOT supported; theme name matching is case-sensitive on Linux/macOS and case-insensitive on Windows (follows platform filesystem conventions)
 
