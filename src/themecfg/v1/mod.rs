@@ -15,7 +15,7 @@ use enumset::EnumSet;
 use serde::{Deserialize, Serialize};
 
 // local imports
-use crate::level::InfallibleLevel;
+use crate::level::{InfallibleLevel, Level};
 
 // Import v0 module for conversion from v0 to v1
 use super::v0;
@@ -392,17 +392,17 @@ impl StylePack<Role, Style> {
 #[derive(Debug, Clone, Deserialize)]
 #[serde(default)]
 #[serde(deny_unknown_fields)]
-pub struct RawTheme {
+pub struct Theme {
     #[serde(deserialize_with = "enumset_serde::deserialize")]
     pub tags: EnumSet<Tag>,
     pub version: ThemeVersion,
     pub styles: StylePack<Role>,
     pub elements: StylePack<Element>,
-    pub levels: HashMap<InfallibleLevel, StylePack<Element>>,
+    pub levels: HashMap<Level, StylePack<Element>>,
     pub indicators: IndicatorPack,
 }
 
-impl Default for RawTheme {
+impl Default for Theme {
     fn default() -> Self {
         Self {
             tags: EnumSet::new(),
@@ -415,7 +415,7 @@ impl Default for RawTheme {
     }
 }
 
-impl RawTheme {
+impl Theme {
     pub fn merge(&mut self, other: Self) {
         let flags = other.merge_flags();
         self.version = other.version;
@@ -502,21 +502,13 @@ impl RawTheme {
         // Step 3: Resolve level-specific element styles
         let mut levels = HashMap::new();
         for (level, level_pack) in &self.levels {
-            let level = match level {
-                InfallibleLevel::Valid(level) => *level,
-                InfallibleLevel::Invalid(s) => {
-                    log::warn!("unknown level: {:?}", s);
-                    continue;
-                }
-            };
-
             // Merge base elements with level-specific elements
             let merged_pack = self
                 .elements
                 .clone()
                 .merged_with(level_pack, flags - MergeFlag::ReplaceGroups);
             let resolved_pack = Self::resolve_element_pack(&merged_pack, &inventory, flags)?;
-            levels.insert(level, resolved_pack);
+            levels.insert(*level, resolved_pack);
         }
 
         // Step 4: Resolve indicators
@@ -854,22 +846,20 @@ impl Mergeable for IndicatorStyle<ResolvedStyle> {
 // ---
 
 /// Convert v0::RawTheme to v1::RawTheme
-impl From<v0::RawTheme> for RawTheme {
-    fn from(theme: v0::RawTheme) -> Self {
+impl From<v0::Theme> for Theme {
+    fn from(theme: v0::Theme) -> Self {
         // Convert v0 elements to v1 format
-        let mut elements = HashMap::new();
-        for (element, style) in theme.elements.0 {
-            elements.insert(element, style.into());
-        }
+        let elements = theme.elements.0;
+        let elements = elements.into_iter().map(|(e, style)| (e, style.into())).collect();
 
         // Convert v0 levels to v1 format
         let mut levels = HashMap::new();
         for (level, pack) in theme.levels {
-            let mut pack_map = HashMap::new();
-            for (element, style) in pack.0 {
-                pack_map.insert(element, style.into());
+            // Only convert valid levels - v1 is strict, invalid levels are dropped
+            if let InfallibleLevel::Valid(level) = level {
+                let pack = pack.0.into_iter().map(|(e, style)| (e, style.into())).collect();
+                levels.insert(level, StylePack(pack));
             }
-            levels.insert(level, StylePack(pack_map));
         }
 
         // Convert v0 indicators to v1 format

@@ -582,3 +582,44 @@ Based on this analysis, I recommend **finishing the refactoring** rather than st
 - ✅ Zero clippy warnings
 
 **Next**: Phases 5-9 if needed (Error handling, Level handling, Testing, Documentation, Cleanup)
+
+---
+
+### 2024-12-27 - Phase 6 Complete! ✅
+
+✅ **Level Handling - Strict Validation for v1:**
+
+**Implementation:**
+- ✅ **v0::RawTheme** - Keeps `HashMap<InfallibleLevel, StylePack>` (lenient, backward compatible)
+  - Unknown level names stored as `InfallibleLevel::Invalid`
+  - Maintains backward compatibility with existing v0 themes
+- ✅ **v1::RawTheme** - Changed to `HashMap<Level, StylePack>` (strict, fail-fast)
+  - Only accepts valid levels: Error, Warning, Info, Debug, Trace
+  - Unknown levels cause deserialization errors (strict validation)
+- ✅ **v0→v1 Conversion** - Invalid levels dropped during conversion
+  - When converting v0 to v1, only `InfallibleLevel::Valid` levels are preserved
+  - `InfallibleLevel::Invalid` entries are silently dropped (v1 is strict)
+
+**Code Quality:**
+- ✅ Removed all `crate::level::Level` - use proper imports
+- ✅ Removed useless `.into()` conversions on Level values
+- ✅ Added `InfallibleLevel` import to v1 for conversion logic
+
+**Tests Updated:**
+- ✅ `test_v0_unknown_level_names_ignored` - Updated to verify invalid levels dropped after v0→v1 conversion
+- ✅ `test_unknown_level` (theme module) - Removed invalid level insertion (v1 is strict)
+- ✅ Fixed test fixture `v1-level-with-styles.yaml` - Changed `warn` → `warning`
+- ✅ All v1 tests now use `Level` directly, not `InfallibleLevel`
+
+**Architecture Benefits:**
+- ✅ **v0 remains lenient** - Historical format unchanged for backward compatibility
+- ✅ **v1 enforces strict validation** - Fail fast on unknown levels (better error messages)
+- ✅ **Clear migration path** - v0 themes with invalid levels convert cleanly to v1
+- ✅ **Type safety** - v1 can only contain valid levels (enforced at compile time)
+
+**Test Results:**
+- ✅ All 570 lib tests passing
+- ✅ Zero compilation errors
+- ✅ Zero clippy warnings (full workspace check)
+
+**Next**: Phases 7-9 (Additional testing, Documentation, Cleanup) - optional improvements

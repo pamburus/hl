@@ -36,7 +36,7 @@ levels:
     level:
       style: error
 
-  warn:
+  warning:
     message:
       style: warning
     level:

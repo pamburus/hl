@@ -43,7 +43,7 @@ pub use v1::{Element, Role, StyleBase};
 
 // Type aliases for the public API
 // RawTheme and RawStyle are unresolved types (before merge/resolve)
-pub type RawTheme = v1::RawTheme;
+pub type RawTheme = v1::Theme;
 pub type RawStyle = v1::Style;
 
 // Private constants
@@ -240,7 +240,7 @@ impl Theme {
 
         if version.major == 0 {
             // V0 themes use lenient deserialization (ignore unknown fields/variants)
-            let theme: v0::RawTheme = Self::deserialize(s, format)?;
+            let theme: v0::Theme = Self::deserialize(s, format)?;
             theme.validate()?;
             // Convert v0 to v1
             Ok(theme.into())

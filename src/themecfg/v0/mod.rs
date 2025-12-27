@@ -250,7 +250,7 @@ pub struct IndicatorStyle {
 /// It uses lenient deserialization and includes v0-specific logic
 #[derive(Debug, Deserialize)]
 #[serde(default)]
-pub struct RawTheme {
+pub struct Theme {
     #[serde(deserialize_with = "enumset_serde::deserialize")]
     pub tags: EnumSet<Tag>,
     pub version: ThemeVersion,
@@ -260,7 +260,7 @@ pub struct RawTheme {
     pub indicators: IndicatorPack,
 }
 
-impl Default for RawTheme {
+impl Default for Theme {
     fn default() -> Self {
         Self {
             tags: EnumSet::new(),
@@ -272,7 +272,7 @@ impl Default for RawTheme {
     }
 }
 
-impl RawTheme {
+impl Theme {
     /// Validate v0 theme
     ///
     /// V0 themes should have version 0.0 (default) or be compatible with v0

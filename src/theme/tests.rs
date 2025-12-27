@@ -1,5 +1,4 @@
 use super::*;
-use crate::level::InfallibleLevel;
 use crate::themecfg::{self, Color, PlainColor, RGB, RawTheme};
 
 // Helper function to create test AppDirs
@@ -24,9 +23,9 @@ fn test_theme() {
 
 #[test]
 fn test_unknown_level() {
-    let mut cfg = RawTheme::default();
-    cfg.levels
-        .insert(InfallibleLevel::Invalid("unknown".to_string()), Default::default());
+    // Test that theme can handle a valid level gracefully
+    // V1 RawTheme uses Level (strict), so we can't insert invalid levels
+    let cfg = RawTheme::default();
     let theme = Theme::from(cfg.resolve().unwrap());
     let mut buf = Vec::new();
     theme.apply(&mut buf, &Some(Level::Debug), |s| {

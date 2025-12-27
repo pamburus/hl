@@ -1,5 +1,5 @@
 use super::*;
-use crate::level::{InfallibleLevel, Level};
+use crate::level::Level;
 
 // V0 merge flags (replace semantics for modes)
 use enumset::enum_set;
@@ -622,28 +622,20 @@ fn test_future_version_rejected() {
 
 #[test]
 fn test_v0_unknown_level_names_ignored() {
-    // Test that unknown level names are stored as InfallibleLevel::Invalid
+    // Test that v0 themes with unknown level names convert to v1 successfully
+    // V1 is strict - unknown levels are dropped during v0->v1 conversion
     let path = PathBuf::from("src/testing/assets/themes");
     let theme = Theme::load_from(&path, "v0-unknown-levels").unwrap();
 
-    // Should have error level as a valid level
-    assert!(theme.levels.contains_key(&InfallibleLevel::Valid(Level::Error)));
+    // After conversion to v1, only valid levels should remain
+    assert!(theme.levels.contains_key(&Level::Error), "Should have error level");
 
-    // Unknown level names are stored as InfallibleLevel::Invalid
-    // We should have 1 valid level (error) and 3 invalid levels
-    let valid_count = theme
-        .levels
-        .keys()
-        .filter(|k| matches!(k, InfallibleLevel::Valid(_)))
-        .count();
-    let invalid_count = theme
-        .levels
-        .keys()
-        .filter(|k| matches!(k, InfallibleLevel::Invalid(_)))
-        .count();
-
-    assert_eq!(valid_count, 1, "Should have 1 valid level");
-    assert_eq!(invalid_count, 3, "Should have 3 invalid levels (unknown names)");
+    // V1 drops invalid levels - we should only have 1 valid level
+    assert_eq!(
+        theme.levels.len(),
+        1,
+        "Should have only 1 valid level (unknown levels dropped during v0->v1 conversion)"
+    );
 }
 
 #[test]
@@ -855,7 +847,7 @@ fn test_v0_indicators_default_values() {
 fn test_v0_tags_parsing() {
     // Test that tags are parsed correctly
     let yaml = include_str!("../testing/assets/themes/test.toml");
-    let theme: v1::RawTheme = toml::from_str(yaml).unwrap();
+    let theme: v1::Theme = toml::from_str(yaml).unwrap();
 
     // Test theme can be loaded (tags field is optional)
     assert!(!theme.elements.is_empty());
@@ -944,7 +936,7 @@ fn test_v1_element_replacement_preserves_per_level_modes() {
     );
 
     // Check that levels.info.level-inner has the style
-    let info_level = theme.levels.get(&InfallibleLevel::Valid(Level::Info));
+    let info_level = theme.levels.get(&Level::Info);
     assert!(info_level.is_some(), "info level should exist");
     let info_level_inner = info_level.unwrap().get(&Element::LevelInner);
     assert!(info_level_inner.is_some(), "info level-inner should exist");
@@ -1824,7 +1816,7 @@ fn test_v0_level_section_blocking() {
             modes: Default::default(),
         },
     );
-    base.levels.insert(crate::level::Level::Error.into(), error_pack);
+    base.levels.insert(Level::Error, error_pack);
 
     let mut info_pack = v1::StylePack::default();
     info_pack.0.insert(
@@ -1836,7 +1828,7 @@ fn test_v0_level_section_blocking() {
             modes: Default::default(),
         },
     );
-    base.levels.insert(crate::level::Level::Info.into(), info_pack);
+    base.levels.insert(Level::Info, info_pack);
 
     // Child theme defines just ONE element for error level (not info)
     let mut child = RawTheme::default();
@@ -1850,13 +1842,13 @@ fn test_v0_level_section_blocking() {
             modes: Default::default(),
         },
     );
-    child.levels.insert(crate::level::Level::Error.into(), child_error_pack);
+    child.levels.insert(Level::Error, child_error_pack);
 
     // Merge
     let merged = base.merged(child);
 
     // Error level section should be completely replaced (base error elements removed)
-    let error_level = merged.levels.get(&crate::level::Level::Error.into()).unwrap();
+    let error_level = merged.levels.get(&Level::Error).unwrap();
     assert!(
         error_level.0.contains_key(&Element::Time),
         "Child time should be present"
@@ -1871,7 +1863,7 @@ fn test_v0_level_section_blocking() {
     );
 
     // Info level section should remain (child didn't define it)
-    let info_level = merged.levels.get(&crate::level::Level::Info.into()).unwrap();
+    let info_level = merged.levels.get(&Level::Info).unwrap();
     assert!(
         info_level.0.contains_key(&Element::Message),
         "Base info message should remain"
@@ -1895,7 +1887,7 @@ fn test_v0_multiple_blocking_rules_combined() {
     // Base has level sections
     let mut error_pack = v1::StylePack::default();
     error_pack.0.insert(Element::Message, RawStyle::default());
-    base.levels.insert(crate::level::Level::Error.into(), error_pack);
+    base.levels.insert(Level::Error, error_pack);
 
     // Child triggers all blocking rules
     let mut child = RawTheme::default();
@@ -1905,7 +1897,7 @@ fn test_v0_multiple_blocking_rules_combined() {
 
     let mut child_error_pack = v1::StylePack::default();
     child_error_pack.0.insert(Element::Time, RawStyle::default());
-    child.levels.insert(crate::level::Level::Error.into(), child_error_pack); // Blocks error section
+    child.levels.insert(Level::Error, child_error_pack); // Blocks error section
 
     // Merge
     let merged = base.merged(child);
@@ -1928,7 +1920,7 @@ fn test_v0_multiple_blocking_rules_combined() {
         "input-name blocked by input rule"
     );
 
-    let error_level = merged.levels.get(&crate::level::Level::Error.into()).unwrap();
+    let error_level = merged.levels.get(&Level::Error).unwrap();
     assert!(
         !error_level.0.contains_key(&Element::Message),
         "Base error message blocked by level section rule"
@@ -1971,7 +1963,7 @@ fn test_v1_no_blocking_rules() {
             modes: Default::default(),
         },
     );
-    base.levels.insert(crate::level::Level::Error.into(), error_pack);
+    base.levels.insert(Level::Error, error_pack);
 
     // Child v1 theme defines parent elements
     let mut child = RawTheme {
@@ -1984,7 +1976,7 @@ fn test_v1_no_blocking_rules() {
     // Child defines error level element
     let mut child_error_pack = v1::StylePack::default();
     child_error_pack.0.insert(Element::Time, RawStyle::default());
-    child.levels.insert(crate::level::Level::Error.into(), child_error_pack);
+    child.levels.insert(Level::Error, child_error_pack);
 
     // Merge
     let merged = base.merged(child);
@@ -2008,7 +2000,7 @@ fn test_v1_no_blocking_rules() {
     );
 
     // In v1, level sections merge (not replaced)
-    let error_level = merged.levels.get(&crate::level::Level::Error.into()).unwrap();
+    let error_level = merged.levels.get(&Level::Error).unwrap();
     assert!(
         error_level.0.contains_key(&Element::Message),
         "v1 should preserve base error message"
@@ -2042,7 +2034,7 @@ fn test_v1_level_overrides_with_styles() {
     );
 
     // Verify level-specific overrides exist
-    let error_level = InfallibleLevel::Valid(crate::level::Level::Error);
+    let error_level = Level::Error;
     assert!(
         theme.levels.contains_key(&error_level),
         "Theme should have error level overrides"
