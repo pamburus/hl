@@ -1,0 +1,24 @@
+# V0 theme to test regression where defined elements should NOT inherit styles
+# This represents a typical v0 theme where elements are defined with only foreground
+# These elements should be rendered EXACTLY as defined, without inheriting modes from @default
+
+elements:
+  # Time with only foreground - should NOT get faint mode from @default's secondary style
+  time:
+    foreground: 30
+
+  # Message with only foreground - should NOT get bold mode from @default's strong/message style
+  message:
+    foreground: 195
+
+  # Key with only foreground - should NOT get faint mode from @default's accent style
+  key:
+    foreground: 220
+
+  # String with only foreground - should NOT get any modes from @default's primary style
+  string:
+    foreground: 120
+
+  # Level with foreground - should render as-is
+  level:
+    foreground: "blue"

@@ -392,8 +392,9 @@ impl Theme {
 
             match std::fs::read(&path) {
                 Ok(data) => {
-                    let theme = Self::from_buf(&data, format).map_err(|e| map_err(e, path))?;
+                    let mut theme = Self::from_buf(&data, format).map_err(|e| map_err(e, path))?;
                     theme.validate_version()?;
+                    theme.deduce_styles_from_elements();
                     return Ok(theme);
                 }
                 Err(e) => match e.kind() {
@@ -407,6 +408,40 @@ impl Theme {
             name: name.into(),
             suggestions: Suggestions::none(),
         })
+    }
+
+    fn deduce_styles_from_elements(&mut self) {
+        // Only deduce styles for v0 themes
+        if self.version.major != 0 {
+            return;
+        }
+
+        // Mapping of elements to their corresponding style roles
+        // If a v0 theme defines these elements, we deduce the corresponding style
+        let element_to_role = [
+            (Element::String, Role::Primary),
+            (Element::Time, Role::Secondary),
+            (Element::Message, Role::Strong),
+            (Element::Key, Role::Accent),
+            (Element::Array, Role::Syntax),
+        ];
+
+        for (element, role) in element_to_role {
+            // If the element is defined in the v0 theme and the corresponding style is not
+            if let Some(element_style) = self.elements.0.get(&element) {
+                if !self.styles.0.contains_key(&role) {
+                    // Deduce the style from the element definition
+                    // Copy foreground, background, and modes from the element
+                    let deduced_style = Style {
+                        base: StyleBase::default(),
+                        modes: element_style.modes,
+                        foreground: element_style.foreground,
+                        background: element_style.background,
+                    };
+                    self.styles.0.insert(role, deduced_style);
+                }
+            }
+        }
     }
 
     fn filename(name: &str, format: Format) -> String {
@@ -906,7 +941,10 @@ impl Style {
         for role in bases.iter() {
             result = result.merged_with(&resolve_role(role), flags);
         }
-        result.merged_with(style, flags)
+        // When applying the style's own properties on top of the resolved base,
+        // we should NOT use ReplaceModes - the style's properties should be merged additively
+        // with the base, not replace them. ReplaceModes is only for theme-level merging.
+        result.merged_with(style, flags - MergeFlag::ReplaceModes)
     }
 
     fn as_resolved(&self) -> ResolvedStyle {

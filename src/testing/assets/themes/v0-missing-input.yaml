@@ -1,0 +1,17 @@
+# V0 theme without input element defined
+# This should fall back to @default.toml's input element
+
+elements:
+  message:
+    foreground: 'bright-white'
+    modes: ['bold']
+
+  level:
+    foreground: 'green'
+
+  time:
+    foreground: 'bright-black'
+
+  caller:
+    foreground: 'bright-black'
+    modes: ['italic']

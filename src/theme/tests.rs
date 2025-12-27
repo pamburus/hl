@@ -294,3 +294,354 @@ fn test_v0_input_nested_styling() {
         output
     );
 }
+
+#[test]
+fn test_v0_theme_without_input_falls_back_to_default() {
+    // Test that v0 themes without input element defined fall back to @default's input styling
+    // This reproduces the issue where old v0 themes that don't have input element
+    // render input without any styles instead of falling back to @default
+    use crate::appdirs::AppDirs;
+    use std::path::PathBuf;
+
+    let app_dirs = AppDirs {
+        config_dir: PathBuf::from("src/testing/assets"),
+        cache_dir: Default::default(),
+        system_config_dirs: Default::default(),
+    };
+
+    // Load v0 theme that doesn't define input element
+    let cfg = themecfg::Theme::load(&app_dirs, "v0-missing-input").unwrap();
+    let theme = Theme::from(&cfg);
+
+    // Apply the theme and render something with Input element
+    let mut buf = Vec::new();
+    theme.apply(&mut buf, &None, |s| {
+        s.element(Element::Input, |s| s.batch(|buf| buf.extend_from_slice(b"test")));
+    });
+
+    // The input element should get styling from deduced secondary style:
+    // - v0-missing-input defines: time = { foreground: 'bright-black' }
+    // - This deduces: styles.secondary = { foreground: 'bright-black' }
+    // - @default defines: input = { style = "secondary" }
+    // - Result: input uses bright-black (90) from deduced secondary
+    // This makes input consistent with the v0 theme's aesthetic
+    let expected = "\x1b[0;90mtest\x1b[0m";
+    assert_eq!(
+        buf,
+        expected.as_bytes(),
+        "Expected input element to use deduced secondary style (bright-black from time).\nExpected: {:?}\nActual:   {:?}",
+        expected,
+        String::from_utf8_lossy(&buf)
+    );
+}
+
+#[test]
+fn test_v0_theme_multiple_elements_fallback_to_default() {
+    // Test that v0 themes correctly fall back to @default for multiple undefined elements
+    // This verifies the fix works across different element types
+    use crate::appdirs::AppDirs;
+    use std::path::PathBuf;
+
+    let app_dirs = AppDirs {
+        config_dir: PathBuf::from("src/testing/assets"),
+        cache_dir: Default::default(),
+        system_config_dirs: Default::default(),
+    };
+
+    // Load v0 theme that doesn't define input, key, or logger elements
+    let cfg = themecfg::Theme::load(&app_dirs, "v0-missing-input").unwrap();
+    let theme = Theme::from(&cfg);
+
+    // Test Input element - should use deduced secondary style (bright-black from time)
+    let mut buf = Vec::new();
+    theme.apply(&mut buf, &None, |s| {
+        s.element(Element::Input, |s| s.batch(|buf| buf.extend_from_slice(b"in")));
+    });
+    assert_eq!(
+        buf, b"\x1b[0;90min\x1b[0m",
+        "Input element should use deduced secondary style (bright-black from time)"
+    );
+
+    // Test Key element - should use deduced accent style
+    // v0-missing-input doesn't define key, so no accent style deduction
+    // Falls back to @default's accent = { style = "secondary" }
+    // Which uses the deduced secondary = { foreground: 'bright-black' }
+    buf.clear();
+    theme.apply(&mut buf, &None, |s| {
+        s.element(Element::Key, |s| s.batch(|buf| buf.extend_from_slice(b"key")));
+    });
+    assert_eq!(
+        buf, b"\x1b[0;90mkey\x1b[0m",
+        "Key element should use deduced secondary (bright-black) via accent"
+    );
+
+    // Test Logger element - should use accent-secondary which chains to deduced secondary
+    buf.clear();
+    theme.apply(&mut buf, &None, |s| {
+        s.element(Element::Logger, |s| s.batch(|buf| buf.extend_from_slice(b"log")));
+    });
+    assert_eq!(
+        buf, b"\x1b[0;90mlog\x1b[0m",
+        "Logger element should use deduced secondary (bright-black) via accent-secondary"
+    );
+}
+
+#[test]
+fn test_v0_theme_inherits_foreground_and_modes_from_default() {
+    // Test that v0 themes correctly inherit both foreground/background AND modes from @default
+    // This verifies that our fix for modes doesn't break foreground/background inheritance
+    //
+    // In @default.toml:
+    // - levels.debug.level-inner = { style = ["level", "debug"] }
+    // - level style = { style = "status" } -> { modes = ["-faint"] }
+    // - debug style = { foreground = "magenta" }
+    //
+    // So level-inner at debug level should have:
+    // - modes from "level": ["-faint"] which removes faint
+    // - foreground from "debug": magenta (ANSI 35)
+    use crate::appdirs::AppDirs;
+    use std::path::PathBuf;
+
+    let app_dirs = AppDirs {
+        config_dir: PathBuf::from("src/testing/assets"),
+        cache_dir: Default::default(),
+        system_config_dirs: Default::default(),
+    };
+
+    // Load v0 theme that doesn't define level-specific elements
+    let cfg = themecfg::Theme::load(&app_dirs, "v0-missing-input").unwrap();
+    let theme = Theme::from(&cfg);
+
+    // Apply the theme and render level-inner at debug level
+    let mut buf = Vec::new();
+    theme.apply(&mut buf, &Some(Level::Debug), |s| {
+        s.element(Element::LevelInner, |s| s.batch(|buf| buf.extend_from_slice(b"DBG")));
+    });
+
+    let output = String::from_utf8_lossy(&buf);
+
+    // Should contain magenta (35) from debug style
+    assert!(
+        output.contains(";35") || output.contains("[35"),
+        "Expected magenta (35) foreground from @default's debug style, got: {:?}",
+        output
+    );
+
+    // Should NOT contain faint mode (2) because level style has modes = ["-faint"]
+    assert!(
+        !output.contains(";2") && !output.contains("[2"),
+        "Expected no faint mode (level style removes it), got: {:?}",
+        output
+    );
+
+    // Verify exact output: \x1b[0;35mDBG\x1b[0m (reset, magenta)
+    let expected = "\x1b[0;35mDBG\x1b[0m";
+    assert_eq!(
+        buf,
+        expected.as_bytes(),
+        "Expected level-inner at debug to have magenta without faint mode.\nExpected: {:?}\nActual:   {:?}",
+        expected,
+        output
+    );
+}
+
+#[test]
+fn test_v0_theme_modes_only_inherits_colors_from_default() {
+    // Test that v0 themes defining only modes for an element correctly inherit
+    // foreground/background from @default, and vice versa
+    //
+    // This verifies that when a style has modes but no foreground, the foreground
+    // is inherited from the base role, and when it has foreground but no modes,
+    // the modes are inherited (or not set) correctly.
+    use crate::appdirs::AppDirs;
+    use std::path::PathBuf;
+
+    let app_dirs = AppDirs {
+        config_dir: PathBuf::from("src/testing/assets"),
+        cache_dir: Default::default(),
+        system_config_dirs: Default::default(),
+    };
+
+    // Load v0 theme that defines message with only modes (underline)
+    // In @default: message = { style = "message" } -> { style = "strong" } -> { style = "primary", modes = ["bold"] }
+    let cfg = themecfg::Theme::load(&app_dirs, "v0-modes-no-foreground").unwrap();
+    let theme = Theme::from(&cfg);
+
+    // Test message element - has underline from theme, should still work
+    let mut buf = Vec::new();
+    theme.apply(&mut buf, &None, |s| {
+        s.element(Element::Message, |s| s.batch(|buf| buf.extend_from_slice(b"msg")));
+    });
+
+    let output = String::from_utf8_lossy(&buf);
+
+    // Should contain underline mode (4) from the theme
+    assert!(
+        output.contains(";4") || output.contains("[4"),
+        "Expected underline (4) mode from theme definition, got: {:?}",
+        output
+    );
+
+    // Test level element - has blue (34) foreground from theme, no modes
+    buf.clear();
+    theme.apply(&mut buf, &None, |s| {
+        s.element(Element::Level, |s| s.batch(|buf| buf.extend_from_slice(b"lvl")));
+    });
+
+    let output = String::from_utf8_lossy(&buf);
+
+    // Should contain blue (34) foreground from the theme
+    assert!(
+        output.contains(";34") || output.contains("[34"),
+        "Expected blue (34) foreground from theme definition, got: {:?}",
+        output
+    );
+
+    // Should NOT contain faint mode since level in @default is { style = "muted" }
+    // and muted -> secondary -> primary (which removes faint), then adds faint
+    // But our theme overrides with just foreground, no style reference
+    // So it should only have the blue foreground, no modes
+    assert_eq!(
+        buf, b"\x1b[0;34mlvl\x1b[0m",
+        "Expected level to have only blue foreground, no modes"
+    );
+}
+
+#[test]
+fn test_v0_theme_defined_elements_no_auto_deduction() {
+    // REGRESSION TEST: v0 themes with elements explicitly defined should NOT
+    // get automatic style deduction. Auto-deduction should ONLY apply to elements
+    // that are NOT defined in the v0 theme at all.
+    //
+    // In v0, when an element is defined, it's complete - no inheritance from base styles.
+    // For example:
+    //   time: { foreground: '30' }
+    // Should render ONLY with foreground color 30, NO faint mode even though
+    // @default defines time with style="secondary" which adds faint.
+    use crate::appdirs::AppDirs;
+    use std::path::PathBuf;
+
+    let app_dirs = AppDirs {
+        config_dir: PathBuf::from("src/testing/assets"),
+        cache_dir: Default::default(),
+        system_config_dirs: Default::default(),
+    };
+
+    // Load v0 theme that defines time/message/key/string with only foreground
+    let cfg = themecfg::Theme::load(&app_dirs, "v0-regression-test").unwrap();
+    let theme = Theme::from(&cfg);
+
+    // Time: foreground='30' (palette index 30), should have NO faint mode
+    let mut buf = Vec::new();
+    theme.apply(&mut buf, &None, |s| {
+        s.element(Element::Time, |s| s.batch(|buf| buf.extend_from_slice(b"time")));
+    });
+    let expected = "\x1b[0;38;5;30mtime\x1b[0m";
+    assert_eq!(
+        buf,
+        expected.as_bytes(),
+        "Time defined in v0 theme should have ONLY foreground, NO faint mode.\nExpected: {:?}\nActual:   {:?}",
+        expected,
+        String::from_utf8_lossy(&buf)
+    );
+
+    // Message: foreground='195', should have NO bold mode
+    buf.clear();
+    theme.apply(&mut buf, &None, |s| {
+        s.element(Element::Message, |s| s.batch(|buf| buf.extend_from_slice(b"msg")));
+    });
+    let expected = "\x1b[0;38;5;195mmsg\x1b[0m";
+    assert_eq!(
+        buf,
+        expected.as_bytes(),
+        "Message defined in v0 theme should have ONLY foreground, NO bold mode.\nExpected: {:?}\nActual:   {:?}",
+        expected,
+        String::from_utf8_lossy(&buf)
+    );
+
+    // Key: foreground='220', should have NO faint mode
+    buf.clear();
+    theme.apply(&mut buf, &None, |s| {
+        s.element(Element::Key, |s| s.batch(|buf| buf.extend_from_slice(b"key")));
+    });
+    let expected = "\x1b[0;38;5;220mkey\x1b[0m";
+    assert_eq!(
+        buf,
+        expected.as_bytes(),
+        "Key defined in v0 theme should have ONLY foreground, NO faint mode.\nExpected: {:?}\nActual:   {:?}",
+        expected,
+        String::from_utf8_lossy(&buf)
+    );
+
+    // String: foreground='120', should have NO modes
+    buf.clear();
+    theme.apply(&mut buf, &None, |s| {
+        s.element(Element::String, |s| s.batch(|buf| buf.extend_from_slice(b"str")));
+    });
+    let expected = "\x1b[0;38;5;120mstr\x1b[0m";
+    assert_eq!(
+        buf,
+        expected.as_bytes(),
+        "String defined in v0 theme should have ONLY foreground, NO modes.\nExpected: {:?}\nActual:   {:?}",
+        expected,
+        String::from_utf8_lossy(&buf)
+    );
+}
+
+#[test]
+fn test_v0_theme_style_deduction_from_elements() {
+    // Test that v0 themes automatically deduce styles FROM element definitions
+    // BEFORE merging with @default, so that elements not defined in v0 theme
+    // but defined in @default will use colors consistent with the v0 theme.
+    //
+    // For example, if a v0 theme defines:
+    //   time: { foreground: 30 }
+    // We deduce:
+    //   styles.secondary: { foreground: 30 }
+    // Then when merged with @default, the `input` element (which has style="secondary")
+    // will use foreground 30, making it consistent with the v0 theme's aesthetic.
+    use crate::appdirs::AppDirs;
+    use std::path::PathBuf;
+
+    let app_dirs = AppDirs {
+        config_dir: PathBuf::from("src/testing/assets"),
+        cache_dir: Default::default(),
+        system_config_dirs: Default::default(),
+    };
+
+    // Load v0 theme that defines time/message/key/string with only foreground
+    // This should deduce secondary/strong/accent/primary styles
+    let cfg = themecfg::Theme::load(&app_dirs, "v0-regression-test").unwrap();
+    let theme = Theme::from(&cfg);
+
+    // Input element is NOT defined in v0-regression-test, but IS in @default with style="secondary"
+    // Since we deduced secondary style from time element (foreground=30),
+    // input should use foreground 30
+    let mut buf = Vec::new();
+    theme.apply(&mut buf, &None, |s| {
+        s.element(Element::Input, |s| s.batch(|buf| buf.extend_from_slice(b"input")));
+    });
+    let expected = "\x1b[0;38;5;30minput\x1b[0m";
+    assert_eq!(
+        buf,
+        expected.as_bytes(),
+        "Input (not in v0 theme) should use deduced secondary style (foreground 30 from time).\nExpected: {:?}\nActual:   {:?}",
+        expected,
+        String::from_utf8_lossy(&buf)
+    );
+
+    // Time element IS defined in v0 theme with foreground=30
+    // It should render as-is (no modes added)
+    buf.clear();
+    theme.apply(&mut buf, &None, |s| {
+        s.element(Element::Time, |s| s.batch(|buf| buf.extend_from_slice(b"time")));
+    });
+    let expected = "\x1b[0;38;5;30mtime\x1b[0m";
+    assert_eq!(
+        buf,
+        expected.as_bytes(),
+        "Time (defined in v0 theme) should have only its foreground.\nExpected: {:?}\nActual:   {:?}",
+        expected,
+        String::from_utf8_lossy(&buf)
+    );
+}
