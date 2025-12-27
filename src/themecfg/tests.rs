@@ -1090,7 +1090,6 @@ fn test_empty_v0_theme_file_valid() {
 }
 
 #[test]
-#[ignore] // KNOWN FAILURE: Implementation currently loads styles section in v0 themes (FR-010f)
 fn test_v0_ignores_styles_section() {
     // FR-010f: System MUST recognize that v0 theme schema does NOT include a `styles` section;
     // if a v0 theme file contains a `styles` section, the system MUST ignore it silently
@@ -1112,11 +1111,28 @@ fn test_v0_ignores_styles_section() {
         "Message should have green foreground from elements section"
     );
 
-    // Verify styles section was ignored (v0 doesn't support styles)
+    // Verify styles section from file was ignored (v0 doesn't support styles)
+    // The file defines 'primary' and 'secondary' styles which should be ignored
+    assert!(
+        !theme.styles.0.contains_key(&Role::Primary),
+        "V0 theme should not have 'primary' style from file (styles section should be ignored)"
+    );
+    assert!(
+        !theme.styles.0.contains_key(&Role::Secondary),
+        "V0 theme should not have 'secondary' style from file (styles section should be ignored)"
+    );
+
+    // However, v0 themes deduce styles from elements (FR-031)
+    // Message element maps to Strong role, so that should be present
+    let strong_style = theme.styles.0.get(&Role::Strong);
+    assert!(
+        strong_style.is_some(),
+        "V0 theme should have 'strong' style deduced from message element"
+    );
     assert_eq!(
-        theme.styles.0.len(),
-        0,
-        "V0 theme should have no styles (styles section should be ignored)"
+        strong_style.unwrap().foreground,
+        Some(Color::Plain(PlainColor::Green)),
+        "Deduced 'strong' style should match message element foreground"
     );
 }
 

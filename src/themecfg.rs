@@ -390,6 +390,13 @@ impl Theme {
         Ok(())
     }
 
+    fn clear_v0_styles(&mut self) {
+        // V0 themes do not support styles section; if present, it should be ignored (FR-010f)
+        if self.version.major == 0 {
+            self.styles.0.clear();
+        }
+    }
+
     fn load_embedded<S: RustEmbed>(name: &str) -> Result<Self> {
         for format in Format::iter() {
             let filename = Self::filename(name, format);
@@ -439,6 +446,7 @@ impl Theme {
                     let mut theme = Self::from_buf(&data, format).map_err(|e| map_err(e.into(), &path))?;
                     theme.validate_version().map_err(|e| map_err(e, &path))?;
                     theme.validate_modes().map_err(|e| map_err(e, &path))?;
+                    theme.clear_v0_styles();
                     theme.deduce_styles_from_elements();
                     return Ok(theme);
                 }

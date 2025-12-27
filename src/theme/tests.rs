@@ -718,15 +718,13 @@ fn test_v0_theme_style_deduction_with_modes() {
 
 #[test]
 fn test_v0_theme_explicit_style_takes_precedence_over_deduction() {
-    // Test FR-031a: If v0 theme explicitly defines BOTH element AND style,
-    // the explicit style definition takes precedence (no deduction)
+    // Test FR-010f + FR-031: V0 themes ignore styles section, only deduction creates styles
     //
     // This test verifies that when a v0 theme defines:
-    //   time: { foreground: 30 }  <- would normally deduce secondary
-    //   styles.secondary: { foreground: 40 }  <- explicit style definition
-    // The explicit style (foreground 40) should take precedence and NOT be overwritten
-    // by deduction. However, the time element itself should still use its own
-    // definition (foreground 30), not the explicit style.
+    //   time: { foreground: 30 }  <- will deduce secondary
+    //   styles.secondary: { foreground: 40 }  <- IGNORED per FR-010f
+    // The styles section is ignored, and secondary is deduced from time (foreground 30).
+    // The time element itself uses its own definition (foreground 30).
     use crate::appdirs::AppDirs;
     use std::path::PathBuf;
 
@@ -737,6 +735,7 @@ fn test_v0_theme_explicit_style_takes_precedence_over_deduction() {
     };
 
     // Create a temporary theme file with both element and style defined
+    // Per FR-010f, the styles section will be ignored
     let theme_content = r#"
 elements:
   time:
@@ -755,7 +754,7 @@ styles:
     let cfg = themecfg::Theme::load(&app_dirs, "v0-explicit-style-precedence").unwrap();
     let theme = Theme::from(&cfg);
 
-    // Time element should use its own definition (foreground 30), not the style
+    // Time element should use its own definition (foreground 30)
     let mut buf = Vec::new();
     theme.apply(&mut buf, &None, |s| {
         s.element(Element::Time, |s| s.batch(|buf| buf.extend_from_slice(b"time")));
@@ -767,15 +766,15 @@ styles:
     );
 
     // Input element (not defined in v0, but in @default with style="secondary")
-    // should use the EXPLICIT secondary style (foreground 40), NOT deduced from time
+    // should use the DEDUCED secondary style (foreground 30 from time), NOT the ignored explicit style (40)
     buf.clear();
     theme.apply(&mut buf, &None, |s| {
         s.element(Element::Input, |s| s.batch(|buf| buf.extend_from_slice(b"input")));
     });
 
     assert_eq!(
-        buf, b"\x1b[0;38;5;40minput\x1b[0m",
-        "Input should use explicit secondary style (foreground 40), not deduced from time"
+        buf, b"\x1b[0;38;5;30minput\x1b[0m",
+        "Input should use deduced secondary style (foreground 30), styles section is ignored per FR-010f"
     );
 
     // Clean up
