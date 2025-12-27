@@ -730,7 +730,7 @@ fn test_v0_tags_parsing() {
     let theme: Theme = toml::from_str(yaml).unwrap();
 
     // Test theme can be loaded (tags field is optional)
-    assert!(theme.elements.len() > 0);
+    assert!(!theme.elements.is_empty());
 }
 
 #[test]

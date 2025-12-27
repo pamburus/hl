@@ -436,17 +436,16 @@ impl Theme {
         for (element, role) in element_to_role {
             // If the element is defined in the v0 theme and the corresponding style is not
             if let Some(element_style) = self.elements.0.get(&element) {
-                if !self.styles.0.contains_key(&role) {
+                self.styles.0.entry(role).or_insert_with(|| {
                     // Deduce the style from the element definition
                     // Copy foreground, background, and modes from the element
-                    let deduced_style = Style {
+                    Style {
                         base: StyleBase::default(),
                         modes: element_style.modes,
                         foreground: element_style.foreground,
                         background: element_style.background,
-                    };
-                    self.styles.0.insert(role, deduced_style);
-                }
+                    }
+                });
             }
         }
     }
