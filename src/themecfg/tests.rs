@@ -1859,8 +1859,10 @@ fn test_v0_multiple_blocking_rules_combined() {
 fn test_v1_no_blocking_rules() {
     // Test that v1 themes do NOT apply blocking rules (no ReplaceGroups flag)
     // Elements merge additively without blocking parent-inner pairs
-    let mut base = Theme::default();
-    base.version = ThemeVersion { major: 1, minor: 0 };
+    let mut base = Theme {
+        version: ThemeVersion { major: 1, minor: 0 },
+        ..Default::default()
+    };
 
     // Base has -inner elements
     base.elements.0.insert(
@@ -1889,8 +1891,10 @@ fn test_v1_no_blocking_rules() {
         .insert(InfallibleLevel::Valid(crate::level::Level::Error), error_pack);
 
     // Child v1 theme defines parent elements
-    let mut child = Theme::default();
-    child.version = ThemeVersion { major: 1, minor: 0 };
+    let mut child = Theme {
+        version: ThemeVersion { major: 1, minor: 0 },
+        ..Default::default()
+    };
     child.elements.0.insert(Element::Level, Style::default()); // Does NOT block level-inner in v1
     child.elements.0.insert(Element::Input, Style::default()); // Does NOT block input-number in v1
 
