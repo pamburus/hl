@@ -2,8 +2,9 @@
 //!
 //! This module contains v1-specific theme loading logic, including:
 //! - Strict deserialization (fails on unknown keys/values)
-//! - Type reuse from v0 for unchanged types
-//! - V1-specific validation
+//! - V1-specific types (Role, StyleBase, Style)
+//! - ALL merge logic for themes
+//! - ALL resolve logic for themes
 
 // std imports
 use std::collections::HashMap;
@@ -15,19 +16,26 @@ use serde::{Deserialize, Serialize};
 // local imports
 use crate::level::InfallibleLevel;
 
-// Re-export Element from v0 (unchanged in v1)
-pub use super::v0::Element;
-
 // Import v0 module for conversion from v0 to v1
 use super::v0;
 
-// Import traits from parent
+// Re-export Element from v0 (unchanged in v1)
+pub use super::v0::Element;
 
 // Re-export common types from parent module
 pub use super::{
     Color, MergeFlag, MergeFlags, Mode, ModeDiff, ModeDiffAction, ModeSet, ModeSetDiff, PlainColor, RGB, Tag,
     ThemeVersion,
 };
+
+// Import resolved types and traits from parent (output types)
+use super::{Mergeable, MergedWith, ResolvedStyle};
+
+// Type alias for resolved style inventory
+pub type StyleInventory = super::StylePack<Role, ResolvedStyle>;
+
+// Constants
+const RECURSION_LIMIT: usize = 64;
 
 // ---
 
@@ -57,9 +65,9 @@ pub enum Role {
 
 // ---
 
-// ModeSetDiff, ModeDiff, ModeDiffAction are now imported from parent module
-
 /// StyleBase represents base styles for inheritance (v1 feature)
+/// Supports both single role (`style = "warning"`) and multiple roles (`style = ["primary", "warning"]`).
+/// When multiple roles are specified, they are merged left to right (later roles override earlier ones).
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct StyleBase(pub Vec<Role>);
 
@@ -129,6 +137,7 @@ impl<'de> Deserialize<'de> for StyleBase {
 // ---
 
 /// Style with v1 features (base, ModeSetDiff)
+/// This is the unresolved style type used in v1 themes.
 #[derive(Clone, Debug, Default, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 #[serde(default)]
@@ -140,11 +149,140 @@ pub struct Style {
     pub background: Option<Color>,
 }
 
+impl Style {
+    pub const fn new() -> Self {
+        Self {
+            base: StyleBase(Vec::new()),
+            modes: ModeSetDiff::new(),
+            foreground: None,
+            background: None,
+        }
+    }
+
+    pub fn base(self, base: impl Into<StyleBase>) -> Self {
+        Self {
+            base: base.into(),
+            ..self
+        }
+    }
+
+    pub fn modes(self, modes: ModeSetDiff) -> Self {
+        Self { modes, ..self }
+    }
+
+    pub fn background(self, background: Option<Color>) -> Self {
+        Self { background, ..self }
+    }
+
+    pub fn foreground(self, foreground: Option<Color>) -> Self {
+        Self { foreground, ..self }
+    }
+
+    pub fn merged(mut self, other: &Self, flags: MergeFlags) -> Self {
+        if !other.base.is_empty() {
+            self.base = other.base.clone();
+        }
+        if flags.contains(MergeFlag::ReplaceModes) {
+            self.modes = other.modes;
+        } else {
+            self.modes += other.modes;
+        }
+        if let Some(color) = other.foreground {
+            self.foreground = Some(color);
+        }
+        if let Some(color) = other.background {
+            self.background = Some(color);
+        }
+        self
+    }
+
+    pub fn resolve(&self, inventory: &StyleInventory, flags: MergeFlags) -> ResolvedStyle {
+        Self::resolve_with(&self.base, self, flags, |role| {
+            inventory.0.get(role).cloned().unwrap_or_default()
+        })
+    }
+
+    pub fn resolve_with<F>(bases: &StyleBase, style: &Style, flags: MergeFlags, mut resolve_role: F) -> ResolvedStyle
+    where
+        F: FnMut(&Role) -> ResolvedStyle,
+    {
+        if bases.is_empty() {
+            return style.as_resolved();
+        }
+
+        // Resolve multiple bases: merge left to right, then apply style on top
+        let mut result = ResolvedStyle::default();
+        for role in bases.iter() {
+            result = result.merged_with(&resolve_role(role), flags);
+        }
+        // When applying the style's own properties on top of the resolved base,
+        // we should NOT use ReplaceModes - the style's properties should be merged additively
+        // with the base, not replace them. ReplaceModes is only for theme-level merging.
+        result.merged_with(style, flags - MergeFlag::ReplaceModes)
+    }
+
+    pub fn as_resolved(&self) -> ResolvedStyle {
+        ResolvedStyle {
+            modes: self.modes,
+            foreground: self.foreground,
+            background: self.background,
+        }
+    }
+}
+
+impl Default for &Style {
+    fn default() -> Self {
+        static DEFAULT: Style = Style::new();
+        &DEFAULT
+    }
+}
+
+impl MergedWith<&Style> for Style {
+    fn merged_with(self, other: &Style, flags: MergeFlags) -> Self {
+        self.merged(other, flags)
+    }
+}
+
+impl From<Role> for Style {
+    fn from(role: Role) -> Self {
+        Self {
+            base: StyleBase::from(role),
+            ..Default::default()
+        }
+    }
+}
+
+impl From<Vec<Role>> for Style {
+    fn from(roles: Vec<Role>) -> Self {
+        Self {
+            base: StyleBase::from(roles),
+            ..Default::default()
+        }
+    }
+}
+
+impl From<ResolvedStyle> for Style {
+    fn from(body: ResolvedStyle) -> Self {
+        Self {
+            base: StyleBase::default(),
+            modes: body.modes,
+            foreground: body.foreground,
+            background: body.background,
+        }
+    }
+}
+
 // ---
 
 /// StylePack for v1 - strict deserialization, generic over key and style types
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct StylePack<K, S = Style>(pub HashMap<K, S>);
+
+impl<K, S> Default for StylePack<K, S> {
+    fn default() -> Self {
+        Self(HashMap::new())
+    }
+}
 
 impl<'de, K, S> Deserialize<'de> for StylePack<K, S>
 where
@@ -161,7 +299,10 @@ where
     }
 }
 
-impl<K, S> StylePack<K, S> {
+impl<K, S> StylePack<K, S>
+where
+    K: std::cmp::Eq + std::hash::Hash,
+{
     pub fn len(&self) -> usize {
         self.0.len()
     }
@@ -170,15 +311,73 @@ impl<K, S> StylePack<K, S> {
         self.0.is_empty()
     }
 
-    pub fn get(&self, key: &K) -> Option<&S>
-    where
-        K: std::cmp::Eq + std::hash::Hash,
-    {
+    pub fn get(&self, key: &K) -> Option<&S> {
         self.0.get(key)
     }
 
-    pub fn items(&self) -> impl Iterator<Item = (&K, &S)> {
-        self.0.iter()
+    pub fn items(&self) -> &HashMap<K, S> {
+        &self.0
+    }
+}
+
+impl<S> StylePack<Role, S> {
+    pub fn merge(&mut self, patch: Self) {
+        self.0.extend(patch.0);
+    }
+
+    pub fn merged(mut self, patch: Self) -> Self {
+        self.merge(patch);
+        self
+    }
+}
+
+impl<S> StylePack<Element, S> {
+    pub fn merge(&mut self, patch: Self, flags: MergeFlags)
+    where
+        S: Clone + for<'a> MergedWith<&'a S>,
+    {
+        if flags.contains(MergeFlag::ReplaceGroups) {
+            for (parent, child) in Element::pairs() {
+                if patch.0.contains_key(child) {
+                    self.0.remove(parent);
+                }
+            }
+        }
+
+        if flags.contains(MergeFlag::ReplaceElements) {
+            self.0.extend(patch.0);
+            return;
+        }
+
+        for (key, patch) in patch.0 {
+            self.0
+                .entry(key)
+                .and_modify(|v| *v = v.clone().merged_with(&patch, flags))
+                .or_insert(patch);
+        }
+    }
+
+    pub fn merged(mut self, patch: Self, flags: MergeFlags) -> Self
+    where
+        S: Clone + for<'a> MergedWith<&'a S>,
+    {
+        self.merge(patch, flags);
+        self
+    }
+}
+
+impl MergedWith<&StylePack<Element, Style>> for StylePack<Element, Style> {
+    fn merged_with(mut self, other: &StylePack<Element, Style>, flags: MergeFlags) -> Self {
+        self.merge(other.clone(), flags);
+        self
+    }
+}
+
+impl StylePack<Role, Style> {
+    pub fn resolve(&self, flags: MergeFlags) -> StyleInventory {
+        let mut resolver = StyleResolver::new(self, flags);
+        let items: HashMap<Role, ResolvedStyle> = self.0.keys().map(|k| (*k, resolver.resolve(k))).collect();
+        super::StylePack(items)
     }
 }
 
@@ -212,7 +411,302 @@ impl Default for RawTheme {
     }
 }
 
+impl RawTheme {
+    pub fn merge(&mut self, other: Self) {
+        let flags = other.merge_flags();
+        self.version = other.version;
+        self.styles.merge(other.styles);
+
+        // Apply blocking rules only for version 0 themes (backward compatibility)
+        if flags.contains(MergeFlag::ReplaceGroups) {
+            // Apply blocking rule: if child theme defines a parent element,
+            // remove the corresponding -inner element from parent theme
+            let parent_inner_pairs = [
+                (Element::Level, Element::LevelInner),
+                (Element::Logger, Element::LoggerInner),
+                (Element::Caller, Element::CallerInner),
+                (Element::InputNumber, Element::InputNumberInner),
+                (Element::InputName, Element::InputNameInner),
+            ];
+
+            // Block base -inner elements if parent is defined in child theme
+            for (parent, inner) in parent_inner_pairs {
+                if other.elements.0.contains_key(&parent) {
+                    self.elements.0.remove(&inner);
+                }
+            }
+
+            // Block input-number/input-name and their inner elements if input is defined in child theme
+            // This ensures v0 themes that define `input` get nested styling scope behavior
+            if other.elements.0.contains_key(&Element::Input) {
+                self.elements.0.remove(&Element::InputNumber);
+                self.elements.0.remove(&Element::InputNumberInner);
+                self.elements.0.remove(&Element::InputName);
+                self.elements.0.remove(&Element::InputNameInner);
+            }
+
+            // Block entire level sections if child theme defines any element for that level
+            for level in other.levels.keys() {
+                self.levels.remove(level);
+            }
+        }
+
+        // For both v0 and v1, elements defined in child theme replace elements from parent theme
+        // Property-level merge happens later when merging elements with per-level styles
+        self.elements.0.extend(other.elements.0);
+
+        // For both v0 and v1, level-specific elements defined in child theme replace from parent
+        for (level, pack) in other.levels {
+            self.levels
+                .entry(level)
+                .and_modify(|existing| existing.0.extend(pack.0.clone()))
+                .or_insert(pack);
+        }
+
+        self.tags = other.tags;
+        self.indicators.merge(other.indicators, flags);
+    }
+
+    pub fn merged(mut self, other: Self) -> Self {
+        self.merge(other);
+        self
+    }
+
+    /// Resolves all styles in this theme and returns a ResolvedTheme.
+    ///
+    /// This method:
+    /// 1. Resolves the role-based styles inventory
+    /// 2. Applies the inventory to element-based styles
+    /// 3. Handles parent-inner element inheritance
+    /// 4. Processes level-specific element overrides
+    /// 5. Resolves indicator styles
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - Style recursion limit is exceeded
+    /// - Any other style resolution error occurs
+    pub fn resolve(self) -> super::Result<super::ResolvedTheme> {
+        let flags = self.merge_flags();
+
+        // Step 1: Resolve the role-based styles inventory
+        let inventory = self.styles.resolve(flags);
+
+        // Step 2: Resolve base element styles
+        let elements = Self::resolve_element_pack(&self.elements, &inventory, flags)?;
+
+        // Step 3: Resolve level-specific element styles
+        let mut levels = HashMap::new();
+        for (level, level_pack) in &self.levels {
+            let level = match level {
+                InfallibleLevel::Valid(level) => *level,
+                InfallibleLevel::Invalid(s) => {
+                    log::warn!("unknown level: {:?}", s);
+                    continue;
+                }
+            };
+
+            // Merge base elements with level-specific elements
+            let merged_pack = self
+                .elements
+                .clone()
+                .merged_with(level_pack, flags - MergeFlag::ReplaceGroups);
+            let resolved_pack = Self::resolve_element_pack(&merged_pack, &inventory, flags)?;
+            levels.insert(level, resolved_pack);
+        }
+
+        // Step 4: Resolve indicators
+        let indicators = Self::resolve_indicators(&self.indicators, &inventory, flags)?;
+
+        Ok(super::ResolvedTheme {
+            tags: self.tags,
+            version: self.version,
+            elements,
+            levels,
+            indicators,
+        })
+    }
+
+    fn resolve_element_pack(
+        pack: &StylePack<Element, Style>,
+        inventory: &StyleInventory,
+        flags: MergeFlags,
+    ) -> super::Result<super::StylePack<Element, ResolvedStyle>> {
+        let mut result = HashMap::new();
+
+        let parent_inner_pairs = [
+            (Element::Level, Element::LevelInner),
+            (Element::Logger, Element::LoggerInner),
+            (Element::Caller, Element::CallerInner),
+            (Element::InputNumber, Element::InputNumberInner),
+            (Element::InputName, Element::InputNameInner),
+        ];
+
+        // Process all elements, applying parent→inner inheritance where needed
+        for (&element, style) in pack.items() {
+            // Check if this element is an inner element that should inherit from its parent
+            let mut parent_for_inner = None;
+            for (parent, inner) in parent_inner_pairs.iter().copied() {
+                if element == inner {
+                    parent_for_inner = pack.items().get(&parent).cloned();
+                    break;
+                }
+            }
+
+            let resolved_style = match parent_for_inner {
+                Some(parent_style) if !flags.contains(MergeFlag::ReplaceElements) => {
+                    // V1: Resolve both parent and inner first, then merge based on resolved values
+                    let resolved_inner = style.resolve(inventory, flags);
+                    let resolved_parent = parent_style.resolve(inventory, flags);
+
+                    // Parent fills in only properties that are None in the resolved inner
+                    let mut merged = resolved_inner;
+                    if merged.foreground.is_none() {
+                        merged.foreground = resolved_parent.foreground;
+                    }
+                    if merged.background.is_none() {
+                        merged.background = resolved_parent.background;
+                    }
+                    // For modes in v1, merge additively
+                    merged.modes = resolved_parent.modes + merged.modes;
+
+                    merged
+                }
+                _ => {
+                    // V0 or no parent: just resolve the style
+                    style.resolve(inventory, flags)
+                }
+            };
+
+            result.insert(element, resolved_style);
+        }
+
+        // Add inherited inner elements that weren't explicitly defined
+        for (parent, inner) in parent_inner_pairs.iter().copied() {
+            if let Some(parent_style) = pack.items().get(&parent) {
+                result
+                    .entry(inner)
+                    .or_insert_with(|| parent_style.resolve(inventory, flags));
+            }
+        }
+
+        // Handle boolean variants inheriting from base boolean
+        if let Some(base) = pack.items().get(&Element::Boolean) {
+            for variant in [Element::BooleanTrue, Element::BooleanFalse] {
+                let mut style = base.clone();
+                if let Some(patch) = pack.items().get(&variant) {
+                    style = style.merged(patch, flags)
+                }
+                result.insert(variant, style.resolve(inventory, flags));
+            }
+        }
+
+        Ok(super::StylePack(result))
+    }
+
+    fn resolve_indicators(
+        indicators: &IndicatorPack<Style>,
+        inventory: &StyleInventory,
+        flags: MergeFlags,
+    ) -> super::Result<super::IndicatorPack<ResolvedStyle>> {
+        Ok(super::IndicatorPack {
+            sync: super::SyncIndicatorPack {
+                synced: super::Indicator {
+                    outer: super::IndicatorStyle {
+                        prefix: indicators.sync.synced.outer.prefix.clone(),
+                        suffix: indicators.sync.synced.outer.suffix.clone(),
+                        style: indicators.sync.synced.outer.style.resolve(inventory, flags),
+                    },
+                    inner: super::IndicatorStyle {
+                        prefix: indicators.sync.synced.inner.prefix.clone(),
+                        suffix: indicators.sync.synced.inner.suffix.clone(),
+                        style: indicators.sync.synced.inner.style.resolve(inventory, flags),
+                    },
+                    text: indicators.sync.synced.text.clone(),
+                },
+                failed: super::Indicator {
+                    outer: super::IndicatorStyle {
+                        prefix: indicators.sync.failed.outer.prefix.clone(),
+                        suffix: indicators.sync.failed.outer.suffix.clone(),
+                        style: indicators.sync.failed.outer.style.resolve(inventory, flags),
+                    },
+                    inner: super::IndicatorStyle {
+                        prefix: indicators.sync.failed.inner.prefix.clone(),
+                        suffix: indicators.sync.failed.inner.suffix.clone(),
+                        style: indicators.sync.failed.inner.style.resolve(inventory, flags),
+                    },
+                    text: indicators.sync.failed.text.clone(),
+                },
+            },
+        })
+    }
+
+    pub fn merge_flags(&self) -> MergeFlags {
+        match self.version {
+            ThemeVersion { major: 0, .. } => {
+                MergeFlag::ReplaceElements | MergeFlag::ReplaceGroups | MergeFlag::ReplaceModes
+            }
+            _ => MergeFlags::new(),
+        }
+    }
+}
+
 // ---
+
+/// StyleResolver - helper for resolving role-based styles with caching and recursion protection
+pub struct StyleResolver<'a> {
+    inventory: &'a StylePack<Role, Style>,
+    flags: MergeFlags,
+    cache: HashMap<Role, ResolvedStyle>,
+    depth: usize,
+}
+
+impl<'a> StyleResolver<'a> {
+    fn new(inventory: &'a StylePack<Role, Style>, flags: MergeFlags) -> Self {
+        Self {
+            inventory,
+            flags,
+            cache: HashMap::new(),
+            depth: 0,
+        }
+    }
+
+    fn resolve(&mut self, role: &Role) -> ResolvedStyle {
+        if let Some(resolved) = self.cache.get(role) {
+            return resolved.clone();
+        }
+
+        let style = self.inventory.0.get(role).unwrap_or_default();
+
+        if self.depth >= RECURSION_LIMIT {
+            log::warn!("style recursion limit exceeded for style {:?}", &role);
+            return style.as_resolved();
+        }
+
+        self.depth += 1;
+        let resolved = self.resolve_style(style, role);
+        self.depth -= 1;
+
+        self.cache.insert(*role, resolved.clone());
+
+        resolved
+    }
+
+    fn resolve_style(&mut self, style: &Style, role: &Role) -> ResolvedStyle {
+        // If no explicit base, default to inheriting from Default role (except for Default itself)
+        let bases = if style.base.is_empty() {
+            if *role != Role::Default {
+                StyleBase::from(Role::Default)
+            } else {
+                StyleBase::default()
+            }
+        } else {
+            style.base.clone()
+        };
+
+        Style::resolve_with(&bases, style, self.flags, |r| self.resolve(r))
+    }
+}
 
 // ---
 
@@ -224,6 +718,23 @@ pub struct IndicatorPack<S = Style> {
     pub sync: SyncIndicatorPack<S>,
 }
 
+impl<S: Clone> IndicatorPack<S> {
+    pub fn merge(&mut self, other: Self, flags: MergeFlags)
+    where
+        SyncIndicatorPack<S>: Mergeable,
+    {
+        self.sync.merge(other.sync, flags);
+    }
+
+    pub fn merged(mut self, other: Self, flags: MergeFlags) -> Self
+    where
+        SyncIndicatorPack<S>: Mergeable,
+    {
+        self.merge(other, flags);
+        self
+    }
+}
+
 #[derive(Clone, Debug, Default, Deserialize)]
 #[serde(default)]
 #[serde(bound(deserialize = "S: Deserialize<'de> + Default"))]
@@ -231,6 +742,20 @@ pub struct SyncIndicatorPack<S = Style> {
     pub synced: Indicator<S>,
     #[serde(rename = "sync-failed")]
     pub failed: Indicator<S>,
+}
+
+impl Mergeable for SyncIndicatorPack<Style> {
+    fn merge(&mut self, other: Self, flags: MergeFlags) {
+        self.synced.merge(other.synced, flags);
+        self.failed.merge(other.failed, flags);
+    }
+}
+
+impl Mergeable for SyncIndicatorPack<ResolvedStyle> {
+    fn merge(&mut self, other: Self, flags: MergeFlags) {
+        self.synced.merge(other.synced, flags);
+        self.failed.merge(other.failed, flags);
+    }
 }
 
 #[derive(Clone, Debug, Default, Deserialize)]
@@ -245,6 +770,27 @@ pub struct Indicator<S = Style> {
     pub text: String,
 }
 
+impl<S: Clone> Indicator<S> {
+    pub fn merge(&mut self, other: Self, flags: MergeFlags)
+    where
+        IndicatorStyle<S>: Mergeable,
+    {
+        self.outer.merge(other.outer, flags);
+        self.inner.merge(other.inner, flags);
+        if !other.text.is_empty() {
+            self.text = other.text;
+        }
+    }
+
+    pub fn merged(mut self, other: Self, flags: MergeFlags) -> Self
+    where
+        IndicatorStyle<S>: Mergeable,
+    {
+        self.merge(other, flags);
+        self
+    }
+}
+
 #[derive(Clone, Debug, Default, Deserialize)]
 #[serde(default)]
 #[serde(bound(deserialize = "S: Deserialize<'de> + Default"))]
@@ -255,6 +801,31 @@ pub struct IndicatorStyle<S = Style> {
     pub suffix: String,
     #[serde(default)]
     pub style: S,
+}
+
+impl Mergeable for IndicatorStyle<Style> {
+    fn merge(&mut self, other: Self, flags: MergeFlags) {
+        if !other.prefix.is_empty() {
+            self.prefix = other.prefix;
+        }
+        if !other.suffix.is_empty() {
+            self.suffix = other.suffix;
+        }
+        self.style = std::mem::take(&mut self.style).merged(&other.style, flags);
+    }
+}
+
+impl Mergeable for IndicatorStyle<ResolvedStyle> {
+    fn merge(&mut self, other: Self, _flags: MergeFlags) {
+        if !other.prefix.is_empty() {
+            self.prefix = other.prefix;
+        }
+        if !other.suffix.is_empty() {
+            self.suffix = other.suffix;
+        }
+        // ResolvedStyle doesn't have a merge method, so we just replace
+        self.style = other.style;
+    }
 }
 
 // ---

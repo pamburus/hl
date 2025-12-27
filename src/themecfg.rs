@@ -37,6 +37,10 @@ use crate::{
 pub mod v0;
 pub mod v1;
 
+// Re-export v1 types that are part of the public API
+// (Element comes from v0, re-exported by v1)
+pub use v1::{Element, Role, Style, StyleBase};
+
 // Private constants
 const DEFAULT_THEME_NAME: &str = "@default";
 
@@ -98,30 +102,9 @@ pub type Result<T, E = Error> = std::result::Result<T, E>;
 
 // ---
 
-#[repr(u8)]
-#[derive(Clone, Copy, Debug, Hash, Eq, PartialEq, Ord, PartialOrd, Enum, Deserialize, Serialize)]
-#[serde(rename_all = "kebab-case")]
-pub enum Role {
-    Default,
-    Primary,
-    Secondary,
-    Strong,
-    Muted,
-    Accent,
-    AccentSecondary,
-    Message,
-    Syntax,
-    Status,
-    Level,
-    Trace,
-    Debug,
-    Info,
-    Warning,
-    Error,
-}
+// Role is now defined in v1 module and re-exported above
 
 // ---
-
 #[derive(Debug, Default, Deserialize)]
 #[serde(default)]
 pub struct Theme {
@@ -911,270 +894,15 @@ where
 
 // ---
 
-#[repr(u8)]
-#[derive(Clone, Copy, Debug, Hash, Eq, PartialEq, Ord, PartialOrd, Enum, Deserialize, Serialize)]
-#[serde(rename_all = "kebab-case")]
-pub enum Element {
-    Input,
-    InputNumber,
-    InputNumberInner,
-    InputName,
-    InputNameInner,
-    Time,
-    Level,
-    LevelInner,
-    Logger,
-    LoggerInner,
-    Caller,
-    CallerInner,
-    Message,
-    MessageDelimiter,
-    Field,
-    Key,
-    Array,
-    Object,
-    String,
-    Number,
-    Boolean,
-    BooleanTrue,
-    BooleanFalse,
-    Null,
-    Ellipsis,
-}
-
-impl Element {
-    pub fn is_inner(&self) -> bool {
-        self.parent().is_some()
-    }
-
-    pub fn parent(&self) -> Option<Element> {
-        match self {
-            Element::InputNumberInner => Some(Element::InputNumber),
-            Element::InputNameInner => Some(Element::InputName),
-            Element::LevelInner => Some(Element::Level),
-            Element::LoggerInner => Some(Element::Logger),
-            Element::CallerInner => Some(Element::Caller),
-            _ => None,
-        }
-    }
-
-    pub fn pairs() -> &'static [(Element, Element)] {
-        &[
-            (Element::InputNumber, Element::InputNumberInner),
-            (Element::InputName, Element::InputNameInner),
-            (Element::Level, Element::LevelInner),
-            (Element::Logger, Element::LoggerInner),
-            (Element::Caller, Element::CallerInner),
-        ]
-    }
-}
+// Element is now defined in v0 module and re-exported above (via v1)
 
 // ---
 
-/// Represents one or more base styles for inheritance.
-/// Supports both single role (`style = "warning"`) and multiple roles (`style = ["primary", "warning"]`).
-/// When multiple roles are specified, they are merged left to right (later roles override earlier ones).
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
-pub struct StyleBase(pub Vec<Role>);
-
-impl StyleBase {
-    pub fn is_empty(&self) -> bool {
-        self.0.is_empty()
-    }
-
-    pub fn iter(&self) -> impl Iterator<Item = &Role> {
-        self.0.iter()
-    }
-}
-
-impl From<Role> for StyleBase {
-    fn from(role: Role) -> Self {
-        Self(vec![role])
-    }
-}
-
-impl From<Vec<Role>> for StyleBase {
-    fn from(roles: Vec<Role>) -> Self {
-        Self(roles)
-    }
-}
-
-impl<'de> Deserialize<'de> for StyleBase {
-    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        use serde::de::{self, SeqAccess, Visitor};
-
-        struct StyleBaseVisitor;
-
-        impl<'de> Visitor<'de> for StyleBaseVisitor {
-            type Value = StyleBase;
-
-            fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
-                formatter.write_str("a role name or array of role names")
-            }
-
-            fn visit_str<E>(self, value: &str) -> std::result::Result<Self::Value, E>
-            where
-                E: de::Error,
-            {
-                let role: Role = serde_plain::from_str(value).map_err(de::Error::custom)?;
-                Ok(StyleBase(vec![role]))
-            }
-
-            fn visit_seq<A>(self, mut seq: A) -> std::result::Result<Self::Value, A::Error>
-            where
-                A: SeqAccess<'de>,
-            {
-                let mut roles = Vec::new();
-                while let Some(value) = seq.next_element::<String>()? {
-                    let role: Role = serde_plain::from_str(&value).map_err(de::Error::custom)?;
-                    roles.push(role);
-                }
-                Ok(StyleBase(roles))
-            }
-        }
-
-        deserializer.deserialize_any(StyleBaseVisitor)
-    }
-}
+// StyleBase is now defined in v1 module and re-exported above
 
 // ---
 
-#[derive(Clone, Debug, Default, Deserialize)]
-#[serde(rename_all = "kebab-case")]
-#[serde(default)]
-pub struct Style {
-    #[serde(rename = "style")]
-    pub base: StyleBase,
-    pub modes: ModeSetDiff,
-    pub foreground: Option<Color>,
-    pub background: Option<Color>,
-}
-
-impl Style {
-    pub const fn new() -> Self {
-        Self {
-            base: StyleBase(Vec::new()),
-            modes: ModeSetDiff::new(),
-            foreground: None,
-            background: None,
-        }
-    }
-
-    pub fn base(self, base: impl Into<StyleBase>) -> Self {
-        Self {
-            base: base.into(),
-            ..self
-        }
-    }
-
-    pub fn modes(self, modes: ModeSetDiff) -> Self {
-        Self { modes, ..self }
-    }
-
-    pub fn background(self, background: Option<Color>) -> Self {
-        Self { background, ..self }
-    }
-
-    pub fn foreground(self, foreground: Option<Color>) -> Self {
-        Self { foreground, ..self }
-    }
-
-    pub fn merged(mut self, other: &Self, flags: MergeFlags) -> Self {
-        if !other.base.is_empty() {
-            self.base = other.base.clone();
-        }
-        if flags.contains(MergeFlag::ReplaceModes) {
-            self.modes = other.modes;
-        } else {
-            self.modes += other.modes;
-        }
-        if let Some(color) = other.foreground {
-            self.foreground = Some(color);
-        }
-        if let Some(color) = other.background {
-            self.background = Some(color);
-        }
-        self
-    }
-
-    pub fn resolve(&self, inventory: &StylePack<Role, ResolvedStyle>, flags: MergeFlags) -> ResolvedStyle {
-        Self::resolve_with(&self.base, self, flags, |role| {
-            inventory.0.get(role).cloned().unwrap_or_default()
-        })
-    }
-
-    fn resolve_with<F>(bases: &StyleBase, style: &Style, flags: MergeFlags, mut resolve_role: F) -> ResolvedStyle
-    where
-        F: FnMut(&Role) -> ResolvedStyle,
-    {
-        if bases.is_empty() {
-            return style.as_resolved();
-        }
-
-        // Resolve multiple bases: merge left to right, then apply style on top
-        let mut result = ResolvedStyle::default();
-        for role in bases.iter() {
-            result = result.merged_with(&resolve_role(role), flags);
-        }
-        // When applying the style's own properties on top of the resolved base,
-        // we should NOT use ReplaceModes - the style's properties should be merged additively
-        // with the base, not replace them. ReplaceModes is only for theme-level merging.
-        result.merged_with(style, flags - MergeFlag::ReplaceModes)
-    }
-
-    fn as_resolved(&self) -> ResolvedStyle {
-        ResolvedStyle {
-            modes: self.modes,
-            foreground: self.foreground,
-            background: self.background,
-        }
-    }
-}
-
-impl Default for &Style {
-    fn default() -> Self {
-        static DEFAULT: Style = Style::new();
-        &DEFAULT
-    }
-}
-
-impl MergedWith<&Style> for Style {
-    fn merged_with(self, other: &Style, flags: MergeFlags) -> Self {
-        self.merged(other, flags)
-    }
-}
-
-impl From<Role> for Style {
-    fn from(role: Role) -> Self {
-        Self {
-            base: StyleBase::from(role),
-            ..Default::default()
-        }
-    }
-}
-
-impl From<Vec<Role>> for Style {
-    fn from(roles: Vec<Role>) -> Self {
-        Self {
-            base: StyleBase::from(roles),
-            ..Default::default()
-        }
-    }
-}
-
-impl From<ResolvedStyle> for Style {
-    fn from(body: ResolvedStyle) -> Self {
-        Self {
-            base: StyleBase::default(),
-            modes: body.modes,
-            foreground: body.foreground,
-            background: body.background,
-        }
-    }
-}
+// Style (unresolved) is now defined in v1 module and re-exported above
 
 // ---
 

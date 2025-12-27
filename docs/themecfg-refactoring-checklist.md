@@ -71,73 +71,99 @@ Move these from v0 to main `themecfg.rs`:
 
 ## Phase 3: V1 Module (Current Format + All Logic)
 
-### 3.1 V1 Type Ownership
+### 3.1 V1 Type Ownership ✅
 - ✅ Re-export `Element` from v0 (`pub use super::v0::Element;`)
 - ✅ `Role` enum - NEW in v1
   - ✅ Defined in v1
   - ✅ Properly used in deserialize/serialize
+  - ✅ Moved from main to v1
 - ✅ `StyleBase` - NEW in v1
   - ✅ Defined as `Vec<Role>`
   - ✅ Has `is_empty()`, `iter()`
   - ✅ Deserialization supports both str and seq
+  - ✅ Moved from main to v1
 - ✅ Removed duplicate `ModeSetDiff`, `ModeDiff`, `ModeDiffAction` from v1 (now imported from main)
-- ⚠️ `Style` struct - v1-specific (with base, uses ModeSetDiff)
+- ✅ `Style` struct - v1-specific (with base, uses ModeSetDiff)
   - ✅ Has `base: StyleBase`
   - ✅ Has `modes: ModeSetDiff` (not Vec<Mode>)
   - ✅ Has `foreground`, `background`
-  - ❌ Needs Default impl
-  - ❌ Needs proper deserialize with deny_unknown_fields
-- ⚠️ `StylePack<K, S>` - generic version
+  - ✅ Has Default impl
+  - ✅ Moved from main to v1 with all methods
+  - ⚠️ Still needs deny_unknown_fields (Phase 3.5)
+- ✅ `StylePack<K, S>` - generic version
   - ✅ Generic over K and S
-  - ❌ Needs strict deserialization (deny_unknown_fields)
-  - ❌ Needs merge implementation
-- ⚠️ Indicator types - generic
+  - ✅ Has merge implementations
+  - ⚠️ Still needs strict deserialization (Phase 3.5)
+- ✅ Indicator types - generic
   - ✅ `IndicatorPack<S>`, `SyncIndicatorPack<S>`, `Indicator<S>`, `IndicatorStyle<S>`
-  - ❌ Need proper Default impls
-  - ❌ Need merge implementations
+  - ✅ Have proper Default impls
+  - ✅ Have merge implementations
 - ⚠️ `RawTheme` - should be named just `Theme` in v1 module
-  - ❌ Rename `RawTheme` to `Theme`
+  - ❌ Rename `RawTheme` to `Theme` (Phase 4)
   - ✅ Has `styles: StylePack<Role, Style>` (NEW in v1)
   - ✅ Has `elements: StylePack<Element, Style>`
-  - ❌ Use `Level` instead of `InfallibleLevel`
+  - ❌ Use `Level` instead of `InfallibleLevel` (Phase 6)
   - ✅ Has `levels`, `indicators`
-  - ❌ Needs strict deserialization (deny_unknown_fields)
+  - ⚠️ Needs strict deserialization (Phase 3.5)
 
-### 3.2 V1 Conversion from V0
-- ⚠️ `impl From<v0::Theme> for v1::Theme`
-  - ✅ Exists
-  - 🔍 Verify correctness
-- ⚠️ `convert_v0_style_to_v1()` - Vec<Mode> -> ModeSetDiff
-  - ✅ Exists
-  - 🔍 Verify correctness
-- ⚠️ `deduce_styles_from_elements()` - map elements to roles
-  - ✅ Exists
-  - 🔍 Verify completeness of role mapping
-- ⚠️ `convert_v0_indicators_to_v1()`
-  - ✅ Exists
-  - 🔍 Verify correctness
+### 3.2 V1 Conversion from V0 ✅
+- ✅ `impl From<v0::Theme> for v1::Theme`
+  - ✅ Exists and working
+  - ✅ Tested via existing tests
+- ✅ `impl From<v0::Style> for v1::Style` - Vec<Mode> -> ModeSetDiff
+  - ✅ Exists and working
+  - ✅ Converts Vec<Mode> to ModeSet then to ModeSetDiff
+- ✅ `deduce_styles_from_elements()` - map elements to roles
+  - ✅ Exists and working
+  - ✅ Maps String→Primary, Time→Secondary, Message→Strong, Key→Accent, Array→Syntax
+- ✅ `impl From<v0::IndicatorPack> for v1::IndicatorPack<Style>`
+  - ✅ Exists and working
+  - ✅ Converts all indicator structures
 
-### 3.3 V1 Merging Logic (ALL merge logic in v1)
-- ⚠️ `merge_themes(base, overlay) -> Theme`
-  - ✅ Function exists
-  - ❌ Needs full implementation
-  - ❌ Must handle all MergeFlags
-  - ❌ Must merge styles, elements, levels, indicators
-- ❌ `StylePack::merge()` implementations
-- ❌ `Indicator::merge()` implementations
-- ❌ `Style::merge()` implementations
-- ❌ `impl Mergeable for Theme`
+### 3.3 V1 Merging Logic (ALL merge logic in v1) ✅
+- ✅ `RawTheme::merge()` and `merged()`
+  - ✅ Full implementation with all v0/v1 compatibility rules
+  - ✅ Handles all MergeFlags (ReplaceElements, ReplaceGroups, ReplaceModes)
+  - ✅ Merges styles, elements, levels, indicators
+  - ✅ Implements v0 blocking rules (parent-inner, input, level sections)
+- ✅ `StylePack::merge()` implementations
+  - ✅ `StylePack<Role, S>::merge()` - simple extend
+  - ✅ `StylePack<Element, S>::merge()` - with flags support
+  - ✅ `merged()` methods for both
+- ✅ `Indicator::merge()` implementations
+  - ✅ `IndicatorPack::merge()` and `merged()`
+  - ✅ `SyncIndicatorPack::merge()` (impl Mergeable)
+  - ✅ `Indicator::merge()` and `merged()`
+  - ✅ `IndicatorStyle::merge()` (impl Mergeable)
+- ✅ `Style::merged()`
+  - ✅ Merges base, modes, foreground, background
+  - ✅ Respects MergeFlags
+  - ✅ `impl MergedWith<&Style> for Style`
 
-### 3.4 V1 Resolution Logic (ALL resolution in v1)
-- ⚠️ `resolve_theme() -> super::Theme`
-  - ✅ Function exists
-  - ❌ Needs full implementation
-  - ❌ Must resolve all StylePack instances
-  - ❌ Must handle role inheritance via StyleBase
-  - ❌ Must resolve indicators
-- ❌ `StylePack::resolve()` implementations
-- ❌ `Style::resolve()` implementations
-- ❌ `StyleResolver` helper (mentioned in main, needs to be in v1)
+### 3.4 V1 Resolution Logic (ALL resolution in v1) ✅
+- ✅ `RawTheme::resolve() -> super::ResolvedTheme`
+  - ✅ Full implementation
+  - ✅ Resolves role-based styles inventory
+  - ✅ Resolves element packs with parent-inner inheritance
+  - ✅ Resolves level-specific overrides
+  - ✅ Resolves indicators
+  - ✅ Handles boolean variants (BooleanTrue, BooleanFalse)
+- ✅ `StylePack::resolve()` implementation
+  - ✅ `StylePack<Role, Style>::resolve()` returns StyleInventory
+  - ✅ Uses StyleResolver for caching and recursion protection
+- ✅ `Style::resolve()` implementation
+  - ✅ `resolve()` - resolves with role inventory
+  - ✅ `resolve_with()` - internal helper for role resolution
+  - ✅ `as_resolved()` - converts to ResolvedStyle
+  - ✅ Handles multi-level base inheritance
+- ✅ `StyleResolver` helper
+  - ✅ Defined in v1
+  - ✅ Caching mechanism for resolved roles
+  - ✅ Recursion limit protection (64 levels)
+  - ✅ Default role inheritance (non-Default roles inherit from Default)
+- ✅ Helper methods
+  - ✅ `resolve_element_pack()` - resolves element styles with parent-inner logic
+  - ✅ `resolve_indicators()` - resolves all indicator styles
 
 ### 3.5 V1 Deserialization
 - ❌ Strict mode (deny_unknown_fields on Theme)
@@ -306,21 +332,26 @@ Current state: ⚠️ Exists but needs refactoring
 
 ## Summary Counts
 
-- ✅ Done: ~50
-- ⚠️ Partially done / needs fixing: ~15
-- ❌ Not started: ~55
-- 🔍 Needs review: ~25
+- ✅ Done: ~75
+- ⚠️ Partially done / needs fixing: ~10
+- ❌ Not started: ~50
+- 🔍 Needs review: ~10
 
 **Total items: ~145**
 
 ## Current Status
 
-✅ **Phases 2.1 and 3.1 Complete!**
+✅ **Phases 2.1, 3.1, 3.2, 3.3, and 3.4 Complete!**
 - v0 and v1 modules properly separated and cleaned up
 - Common types correctly shared from main module
+- **Role, StyleBase, Style moved from main to v1**
+- **Element moved from main to v0, re-exported via v1**
+- **ALL merge logic now in v1** (StylePack, Style, Indicators, Theme)
+- **ALL resolve logic now in v1** (StylePack, Style, StyleResolver, Theme)
 - All CI checks passing
+- All 102 themecfg tests passing
 - Project compiles cleanly with no errors
-- Foundation ready for Phase 3.3-3.4 (merge and resolve logic)
+- **Next**: Phase 4 - Public API refactoring (RawTheme/RawStyle aliases, rename ResolvedTheme→Theme)
 
 ---
 
@@ -357,7 +388,46 @@ Current state: ⚠️ Exists but needs refactoring
 - ✅ **All CI checks passing!** (`just ci` succeeds)
 - ✅ Project compiles cleanly
 - ✅ All existing tests pass (570 tests)
-- **Next**: Continue with Phase 3.3-3.4 - move/copy complete merge and resolve logic from main themecfg.rs to v1
+
+### 2024-12-27 - Phase 3.2, 3.3, 3.4 Complete! ✅
+- ✅ **Moved v1-specific types from main to v1:**
+  - `Role` enum with all derives and implementations
+  - `StyleBase` struct with deserialization support
+  - `Style` struct (unresolved) with all builder methods and merge logic
+  - All `From` trait implementations
+- ✅ **Moved Element from main to v0:**
+  - Element enum with all methods (is_inner, parent, pairs)
+  - v1 re-exports: `pub use super::v0::Element;`
+  - Main re-exports: `pub use v1::Element;`
+- ✅ **Implemented ALL merge logic in v1:**
+  - `RawTheme::merge()` and `merged()` - full v0/v1 compatibility
+  - `StylePack<Role, S>::merge()` and `merged()`
+  - `StylePack<Element, S>::merge()` and `merged()` with MergeFlags
+  - `Style::merged()` with base/modes/colors merging
+  - `IndicatorPack::merge()`, `SyncIndicatorPack::merge()`, `Indicator::merge()`, `IndicatorStyle::merge()`
+  - All `impl Mergeable` and `impl MergedWith` trait implementations
+- ✅ **Implemented ALL resolve logic in v1:**
+  - `RawTheme::resolve()` - full theme resolution pipeline
+  - `StylePack<Role, Style>::resolve()` - role-based style resolution
+  - `Style::resolve()`, `resolve_with()`, `as_resolved()` - style resolution with inheritance
+  - `StyleResolver` struct - caching and recursion protection (limit: 64)
+  - Helper methods: `resolve_element_pack()`, `resolve_indicators()`
+  - Parent-inner element inheritance logic
+  - Boolean variant inheritance (BooleanTrue, BooleanFalse)
+  - Level-specific override resolution
+- ✅ **Main module now:**
+  - Re-exports v1 types: `pub use v1::{Element, Role, Style, StyleBase};`
+  - Keeps `ResolvedStyle` and `ResolvedTheme` (output types)
+  - No longer has merge/resolve logic (cleanly moved to v1)
+- ✅ **All tests passing:**
+  - 102 themecfg tests pass
+  - Full CI suite passes (clippy, formatting, linting, audit)
+  - No compilation errors or warnings
+- ✅ **Code metrics:**
+  - v0: 274 lines (pure data, lenient deser, no logic)
+  - v1: ~900 lines (types, conversions, ALL merge/resolve logic)
+  - main: reduced by ~400 lines (moved to v1)
+- **Next**: Phase 4 - Public API refactoring (add RawTheme/RawStyle type aliases, rename ResolvedTheme→Theme, implement Theme::load_raw())
 
 ---
 
