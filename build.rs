@@ -1,24 +1,36 @@
-use semver::Version;
-use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256};
+// std imports
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+// third-party imports
+use anyhow::{Result, anyhow};
+use semver::Version;
+use serde::{Deserialize, Serialize};
+use serde_json as json;
+use sha2::{Digest, Sha256};
+
 fn main() {
-    build_capnp();
-    set_git_build_info();
+    if let Err(e) = run() {
+        eprintln!("{:?}", e);
+        std::process::exit(1);
+    }
 }
 
-fn set_git_build_info() {
+fn run() -> Result<()> {
+    build_capnp()?;
+    set_git_build_info()
+}
+
+fn set_git_build_info() -> Result<()> {
     let base_version = env!("CARGO_PKG_VERSION");
 
     // Parse the base version
     let Ok(mut version) = Version::parse(base_version) else {
         // If version doesn't parse, just use it as-is
         println!("cargo:rustc-env=HL_VERSION={}", base_version);
-        return;
+        return Ok(());
     };
 
     // Determine if we should add git info (only for pre-release builds)
@@ -66,7 +78,7 @@ fn set_git_build_info() {
         if metadata_parts.is_empty() {
             version.to_string()
         } else {
-            version.build = metadata_parts.join(".").parse().unwrap();
+            version.build = metadata_parts.join(".").parse()?;
             version.to_string()
         }
     } else {
@@ -82,19 +94,23 @@ fn set_git_build_info() {
         println!("cargo:rerun-if-changed=.git/HEAD");
         println!("cargo:rerun-if-changed=.git/index");
     }
+
+    Ok(())
 }
 
-fn build_capnp() {
+fn build_capnp() -> Result<()> {
     for filename in ["index.capnp"] {
         let source_file = Path::new("schema").join(filename);
         let target_file = Path::new("src").join(filename.replace(".", "_") + ".rs");
         let hashes = HashInfo {
-            source: hex::encode(file_hash(&source_file)),
-            target: hex::encode(file_hash(&target_file)),
+            source: hex::encode(file_hash(&source_file)?),
+            target: hex::encode(file_hash(&target_file)?),
         };
         let hash_file = Path::new(".build").join("capnp").join(format!("{}.json", filename));
         if hash_file.is_file() {
-            if let Ok(stored_hashes) = serde_json::from_reader::<_, HashInfo>(File::open(&hash_file).unwrap()) {
+            let file = File::open(&hash_file)
+                .map_err(|e| anyhow!("Failed to open hash file {}: {}", hash_file.display(), e))?;
+            if let Ok(stored_hashes) = json::from_reader::<_, HashInfo>(file) {
                 if stored_hashes == hashes {
                     continue;
                 }
@@ -106,19 +122,25 @@ fn build_capnp() {
             .file(source_file)
             .output_path("src")
             .run()
-            .expect("schema compiler command");
+            .map_err(|e| anyhow!("Failed to compile capnp schema {}: {}", filename, e))?;
 
-        std::fs::write(&hash_file, serde_json::to_string_pretty(&hashes).unwrap()).unwrap();
+        std::fs::write(&hash_file, json::to_string_pretty(&hashes).unwrap())?;
     }
+    Ok(())
 }
 
-fn file_hash(filename: &PathBuf) -> [u8; 32] {
+fn file_hash(filename: &PathBuf) -> Result<Hash> {
     let mut hasher = Sha256::new();
-    for line in BufReader::new(File::open(filename).unwrap()).lines() {
-        hasher.update(line.unwrap());
+    let file = File::open(filename).map_err(|e| anyhow!("Failed to open {}: {}", filename.display(), e))?;
+    for line in BufReader::new(file).lines() {
+        let line = line.map_err(|e| anyhow!("Failed to read line from {}: {}", filename.display(), e))?;
+        hasher.update(line);
     }
-    hasher.finalize().into()
+
+    Ok(hasher.finalize().into())
 }
+
+type Hash = [u8; 32];
 
 #[derive(Debug, Eq, PartialEq, Deserialize, Serialize)]
 struct HashInfo {
