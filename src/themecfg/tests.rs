@@ -15,6 +15,22 @@ fn test_app_dirs() -> AppDirs {
     }
 }
 
+// Helper for displaying serializable types in tests
+struct SerdeDisplay<'a, T>(&'a T);
+
+impl<'a, T: serde::Serialize + std::fmt::Debug> std::fmt::Display for SerdeDisplay<'a, T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match serde_plain::to_string(self.0) {
+            Ok(s) => write!(f, "{}", s),
+            Err(_) => write!(f, "{:?}", self.0),
+        }
+    }
+}
+
+fn display<T: serde::Serialize + std::fmt::Debug>(value: &T) -> SerdeDisplay<'_, T> {
+    SerdeDisplay(value)
+}
+
 // Helper function to create ModeSetDiff from a list of modes (v0 semantics - only adds, no removes)
 fn modes(modes: &[Mode]) -> ModeSetDiff {
     let mut mode_set = ModeSet::new();

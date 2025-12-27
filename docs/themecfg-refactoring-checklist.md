@@ -537,3 +537,48 @@ Based on this analysis, I recommend **finishing the refactoring** rather than st
 - ✅ Added proper imports to avoid verbose `themecfg::` prefixes
 
 **Next**: Phase 5-9 (Error handling, Level handling, Testing, Documentation, Cleanup)
+
+---
+
+### 2024-12-27 - Post-Phase 4 Cleanup & Improvements ✅
+
+✅ **Code Quality Improvements:**
+
+**1. Generic Deserialization Helper:**
+- ✅ Added `deserialize_with_format<T>()` generic helper
+- ✅ Eliminated boilerplate - 3 match statements reduced to 1 reusable function
+- ✅ Type-safe generic function infers target type from context
+- ✅ Single point of maintenance for format-based deserialization
+
+**2. Validation Moved to Version Modules:**
+- ✅ Added `v0::RawTheme::validate()` - validates v0 themes have version 0.x
+- ✅ Added `v1::RawTheme::validate()` - validates v1 themes are compatible with current
+- ✅ Removed `validate_version()` from main module
+- ✅ Removed `clear_v0_styles()` - not needed (v0::RawTheme has no styles field)
+- ✅ Removed `validate_modes()` - not needed (v0 uses Vec<Mode>, can't have invalid diffs)
+- ✅ Removed `deduce_styles_from_elements()` from main - already in v0→v1 conversion
+- ✅ Version-specific validation now lives in version-specific modules (proper separation)
+
+**3. Error Type Consistency:**
+- ✅ Changed `FailedToLoadEmbeddedTheme.source` from `ExternalError` → `ThemeLoadError`
+- ✅ Both embedded and custom theme loading now use consistent error type
+- ✅ Removed incorrect `From<ThemeLoadError> for ExternalError` conversion
+- ✅ Eliminated lossy conversion that was creating fake io::Error from validation errors
+
+**4. Clippy Fixes:**
+- ✅ Removed useless `.into()` conversion in `load_from`
+- ✅ Moved `SerdeDisplay` and `display()` helpers to tests module
+- ✅ Zero clippy warnings
+
+**Architecture Benefits:**
+- ✅ **Clean separation**: Version modules handle their own validation
+- ✅ **DRY principle**: Generic helper eliminates duplication
+- ✅ **Proper layering**: Validation happens at deserialization layer, not loading layer
+- ✅ **Semantic correctness**: Error types properly represent their domain
+
+**Test Results:**
+- ✅ All 570 lib tests passing
+- ✅ Zero compilation errors
+- ✅ Zero clippy warnings
+
+**Next**: Phases 5-9 if needed (Error handling, Level handling, Testing, Documentation, Cleanup)

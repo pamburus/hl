@@ -653,6 +653,26 @@ impl RawTheme {
             _ => MergeFlags::new(),
         }
     }
+
+    /// Validate v1 theme
+    ///
+    /// V1 themes should have version 1.x or be compatible with current version
+    pub fn validate(&self) -> Result<(), super::ThemeLoadError> {
+        // Version 0.0 (default/no version field) is considered compatible
+        if self.version == ThemeVersion::default() {
+            return Ok(());
+        }
+
+        // Check if version is compatible with current supported version
+        if !self.version.is_compatible_with(&ThemeVersion::CURRENT) {
+            return Err(super::ThemeLoadError::UnsupportedVersion {
+                requested: self.version,
+                supported: ThemeVersion::CURRENT,
+            });
+        }
+
+        Ok(())
+    }
 }
 
 // ---

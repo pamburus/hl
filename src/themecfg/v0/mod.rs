@@ -271,3 +271,21 @@ impl Default for RawTheme {
         }
     }
 }
+
+impl RawTheme {
+    /// Validate v0 theme
+    ///
+    /// V0 themes should have version 0.0 (default) or be compatible with v0
+    pub fn validate(&self) -> Result<(), super::ThemeLoadError> {
+        // V0 themes should have version 0.0 (default/no version field)
+        // If version is specified, it must be compatible with 0.x
+        if self.version != ThemeVersion::default() && self.version.major != 0 {
+            return Err(super::ThemeLoadError::UnsupportedVersion {
+                requested: self.version,
+                supported: ThemeVersion::V0_0,
+            });
+        }
+
+        Ok(())
+    }
+}

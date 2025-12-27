@@ -57,7 +57,7 @@ pub enum Error {
     #[error("unknown theme {name}", name=.name.hlq())]
     ThemeNotFound { name: Arc<str>, suggestions: Suggestions },
     #[error("failed to load theme {name}: {source}", name=.name.hlq())]
-    FailedToLoadEmbeddedTheme { name: Arc<str>, source: ExternalError },
+    FailedToLoadEmbeddedTheme { name: Arc<str>, source: ThemeLoadError },
     #[error("failed to load theme {name} from {path}: {source}", name=.name.hlq(), path=.path.hlq())]
     FailedToLoadCustomTheme {
         name: Arc<str>,
@@ -84,8 +84,6 @@ pub enum ThemeLoadError {
         requested: ThemeVersion,
         supported: ThemeVersion,
     },
-    #[error("v0 theme contains mode prefix '-' in {context} (only supported in v1.0+)")]
-    InvalidModePrefixInV0 { context: String },
 }
 
 /// Error is an error which may occur in the application.
@@ -234,20 +232,23 @@ impl Theme {
         }
     }
 
-    fn from_buf(data: &[u8], format: Format) -> Result<RawTheme, ExternalError> {
-        let s = std::str::from_utf8(data)?;
+    fn from_buf(data: &[u8], format: Format) -> Result<RawTheme, ThemeLoadError> {
+        let s = std::str::from_utf8(data).map_err(ExternalError::from)?;
 
         // Peek at version to decide which deserialization path to use
         let version = Self::peek_version(s, format)?;
 
         if version.major == 0 {
             // V0 themes use lenient deserialization (ignore unknown fields/variants)
-            let v0_theme: v0::RawTheme = Self::deserialize(s, format)?;
+            let theme: v0::RawTheme = Self::deserialize(s, format)?;
+            theme.validate()?;
             // Convert v0 to v1
-            Ok(v0_theme.into())
+            Ok(theme.into())
         } else {
             // V1+ themes use strict deserialization
-            Self::deserialize(s, format)
+            let theme: RawTheme = Self::deserialize(s, format)?;
+            theme.validate()?;
+            Ok(theme)
         }
     }
 
@@ -280,11 +281,7 @@ impl Theme {
 
             match std::fs::read(&path) {
                 Ok(data) => {
-                    let mut theme = Self::from_buf(&data, format).map_err(|e| map_err(e.into(), &path))?;
-                    Self::validate_version(&theme).map_err(|e| map_err(e, &path))?;
-                    Self::clear_v0_styles(&mut theme);
-                    Self::validate_modes(&theme).map_err(|e| map_err(e, &path))?;
-                    Self::deduce_styles_from_elements(&mut theme);
+                    let theme = Self::from_buf(&data, format).map_err(|e| map_err(e, &path))?;
                     return Ok(theme);
                 }
                 Err(e) => match e.kind() {
@@ -298,88 +295,6 @@ impl Theme {
             name: name.into(),
             suggestions: Suggestions::none(),
         })
-    }
-
-    fn validate_version(theme: &RawTheme) -> Result<(), ThemeLoadError> {
-        if theme.version == ThemeVersion::default() {
-            // Version 0.0 (no version field) is considered compatible
-            return Ok(());
-        }
-        if !theme.version.is_compatible_with(&ThemeVersion::CURRENT) {
-            return Err(ThemeLoadError::UnsupportedVersion {
-                requested: theme.version,
-                supported: ThemeVersion::CURRENT,
-            });
-        }
-
-        Ok(())
-    }
-
-    fn validate_modes(theme: &RawTheme) -> Result<(), ThemeLoadError> {
-        // V0 themes must not use - mode prefix (only v1 supports it for additive merging)
-        if theme.version.major == 0 {
-            // Check all element modes
-            for (element, style) in &theme.elements.0 {
-                if !style.modes.removes.is_empty() {
-                    return Err(ThemeLoadError::InvalidModePrefixInV0 {
-                        context: format!("element '{}'", display(element)),
-                    });
-                }
-            }
-
-            // Check all level-specific element modes
-            for (level, level_pack) in &theme.levels {
-                for (element, style) in &level_pack.0 {
-                    if !style.modes.removes.is_empty() {
-                        return Err(ThemeLoadError::InvalidModePrefixInV0 {
-                            context: format!("level '{}' element '{}'", display(level), display(element)),
-                        });
-                    }
-                }
-            }
-        }
-
-        Ok(())
-    }
-
-    fn clear_v0_styles(theme: &mut RawTheme) {
-        // V0 themes do not support styles section; if present, it should be ignored (FR-010f)
-        if theme.version.major == 0 {
-            theme.styles.0.clear();
-        }
-    }
-
-    fn deduce_styles_from_elements(theme: &mut RawTheme) {
-        // Only deduce styles for v0 themes
-        if theme.version.major != 0 {
-            return;
-        }
-
-        // Mapping of elements to their corresponding style roles
-        // If a v0 theme defines these elements, we deduce the corresponding style
-        let element_to_role = [
-            (Element::String, Role::Primary),
-            (Element::Time, Role::Secondary),
-            (Element::Message, Role::Strong),
-            (Element::Key, Role::Accent),
-            (Element::Array, Role::Syntax),
-        ];
-
-        for (element, role) in element_to_role {
-            // If the element is defined in the v0 theme and the corresponding style is not
-            if let Some(element_style) = theme.elements.0.get(&element) {
-                theme.styles.0.entry(role).or_insert_with(|| {
-                    // Deduce the style from the element definition
-                    // Copy foreground, background, and modes from the element
-                    RawStyle {
-                        base: StyleBase::default(),
-                        modes: element_style.modes,
-                        foreground: element_style.foreground,
-                        background: element_style.background,
-                    }
-                });
-            }
-        }
     }
 
     fn filename(name: &str, format: Format) -> String {
@@ -1214,24 +1129,6 @@ impl<'de> Deserialize<'de> for ThemeVersion {
 }
 
 // ---
-
-/// A display wrapper for types that implement Serialize.
-/// This formats the value using serde_plain, falling back to Debug if serialization fails.
-struct SerdeDisplay<'a, T>(&'a T);
-
-impl<'a, T: Serialize + fmt::Debug> fmt::Display for SerdeDisplay<'a, T> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match serde_plain::to_string(self.0) {
-            Ok(s) => write!(f, "{}", s),
-            Err(_) => write!(f, "{:?}", self.0),
-        }
-    }
-}
-
-/// Helper function to create a SerdeDisplay wrapper
-fn display<T: Serialize + fmt::Debug>(value: &T) -> SerdeDisplay<'_, T> {
-    SerdeDisplay(value)
-}
 
 // ---
 
