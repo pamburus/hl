@@ -1442,3 +1442,47 @@ fn test_silent_on_success() {
     // If either of these produced output to stdout/stderr, it would be visible
     // in the test output, violating the silent-on-success requirement
 }
+
+#[test]
+fn test_file_format_parse_errors() {
+    // FR-029: System MUST report file format parse errors with helpful messages
+    // This test verifies that malformed theme files produce clear error messages
+    // Uses external files: src/testing/assets/themes/malformed.{yaml,toml,json}
+    let path = PathBuf::from("src/testing/assets/themes");
+
+    // Test YAML parse error
+    let yaml_result = Theme::load_from(&path, "malformed.yaml");
+    assert!(yaml_result.is_err(), "Malformed YAML should produce an error");
+    let yaml_err = yaml_result.unwrap_err();
+    let yaml_msg = yaml_err.to_string();
+    // Error message should mention it's a YAML error or parsing issue
+    assert!(
+        yaml_msg.contains("malformed.yaml") || yaml_msg.contains("YAML") || yaml_msg.contains("parse"),
+        "YAML error should be descriptive, got: {}",
+        yaml_msg
+    );
+
+    // Test TOML parse error
+    let toml_result = Theme::load_from(&path, "malformed.toml");
+    assert!(toml_result.is_err(), "Malformed TOML should produce an error");
+    let toml_err = toml_result.unwrap_err();
+    let toml_msg = toml_err.to_string();
+    // Error message should mention it's a TOML error or parsing issue
+    assert!(
+        toml_msg.contains("malformed.toml") || toml_msg.contains("TOML") || toml_msg.contains("parse"),
+        "TOML error should be descriptive, got: {}",
+        toml_msg
+    );
+
+    // Test JSON parse error
+    let json_result = Theme::load_from(&path, "malformed.json");
+    assert!(json_result.is_err(), "Malformed JSON should produce an error");
+    let json_err = json_result.unwrap_err();
+    let json_msg = json_err.to_string();
+    // Error message should mention it's a JSON error or parsing issue
+    assert!(
+        json_msg.contains("malformed.json") || json_msg.contains("JSON") || json_msg.contains("parse"),
+        "JSON error should be descriptive, got: {}",
+        json_msg
+    );
+}
