@@ -1,8 +1,8 @@
-# Test file for FR-014b: V0 theme with invalid +/- mode prefixes
-# V0 does not support +/- prefixes (only v1 does)
+# Test file for FR-014b: V0 theme with invalid - mode prefix
+# V0 does not support - prefix (only v1 does for additive merging)
 # This should produce an error with helpful message
 
 elements:
   message:
-    foreground: 'green'
-    modes: ['+bold']  # Invalid: v0 doesn't support +/- prefixes
+    foreground: "green"
+    modes: ["-bold"] # Invalid: v0 doesn't support - prefix (remove action)

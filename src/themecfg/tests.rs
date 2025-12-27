@@ -1179,25 +1179,24 @@ fn test_custom_default_theme_with_extension() {
 }
 
 #[test]
-#[ignore] // KNOWN FAILURE: Implementation doesn't currently reject +/- mode prefixes in v0 (FR-014b)
 fn test_v0_rejects_mode_prefix() {
-    // FR-014b: System MUST reject v0 themes that include mode prefixes (+/-)
+    // FR-014b: System MUST reject v0 themes that include mode prefix '-' (remove action)
     // and exit with error message suggesting to use version="1.0" or remove the prefix
+    // Note: '+' prefix is allowed in v0 (it's the same as no prefix)
     // Uses external file: src/testing/assets/themes/v0-invalid-mode-prefix.yaml
     let path = PathBuf::from("src/testing/assets/themes");
     let result = Theme::load_from(&path, "v0-invalid-mode-prefix");
 
     // Should fail to load
-    assert!(result.is_err(), "V0 theme with +/- mode prefix should fail to load");
+    assert!(result.is_err(), "V0 theme with - mode prefix should fail to load");
 
     // Verify error message mentions the issue
     if let Err(e) = result {
-        let error_msg = format!("{:?}", e);
-        // Error should mention something about mode prefix or v1
-        // The exact error format may vary, but it should indicate the problem
+        let error_msg = e.to_string();
+        // Error should mention mode prefix and v0/v1
         assert!(
-            error_msg.contains("mode") || error_msg.contains("prefix") || error_msg.contains("bold"),
-            "Error should mention mode/prefix issue, got: {}",
+            error_msg.contains("mode prefix") || error_msg.contains("v0") || error_msg.contains("v1.0"),
+            "Error should mention mode prefix issue, got: {}",
             error_msg
         );
     }

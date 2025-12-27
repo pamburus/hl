@@ -35,6 +35,8 @@ use crate::{
 // Private constants
 const DEFAULT_THEME_NAME: &str = "@default";
 
+// ---
+
 /// Theme version with major.minor components
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
 pub struct ThemeVersion {
@@ -161,6 +163,8 @@ pub enum ThemeLoadError {
         requested: ThemeVersion,
         supported: ThemeVersion,
     },
+    #[error("v0 theme contains mode prefix '-' in {context} (only supported in v1.0+)")]
+    InvalidModePrefixInV0 { context: String },
 }
 
 /// Error is an error which may occur in the application.
@@ -183,7 +187,7 @@ pub type Result<T, E = Error> = std::result::Result<T, E>;
 // ---
 
 #[repr(u8)]
-#[derive(Clone, Copy, Debug, Hash, Eq, PartialEq, Ord, PartialOrd, Enum, Deserialize)]
+#[derive(Clone, Copy, Debug, Hash, Eq, PartialEq, Ord, PartialOrd, Enum, Deserialize, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum Role {
     Default,
@@ -350,6 +354,42 @@ impl Theme {
         Ok(())
     }
 
+    fn validate_modes(&self) -> Result<(), ThemeLoadError> {
+        // V0 themes must not use - mode prefix (only v1 supports it for additive merging)
+        if self.version.major == 0 {
+            // Check all element modes
+            for (element, style) in &self.elements.0 {
+                if !style.modes.removes.is_empty() {
+                    return Err(ThemeLoadError::InvalidModePrefixInV0 {
+                        context: format!("element '{}'", display(element)),
+                    });
+                }
+            }
+
+            // Check all level-specific element modes
+            for (level, level_pack) in &self.levels {
+                for (element, style) in &level_pack.0 {
+                    if !style.modes.removes.is_empty() {
+                        return Err(ThemeLoadError::InvalidModePrefixInV0 {
+                            context: format!("level '{}' element '{}'", display(level), display(element)),
+                        });
+                    }
+                }
+            }
+
+            // Check all style definitions (v1 feature, but could be present in invalid v0 themes)
+            for (role, style) in &self.styles.0 {
+                if !style.modes.removes.is_empty() {
+                    return Err(ThemeLoadError::InvalidModePrefixInV0 {
+                        context: format!("style '{}'", display(role)),
+                    });
+                }
+            }
+        }
+
+        Ok(())
+    }
+
     fn load_embedded<S: RustEmbed>(name: &str) -> Result<Self> {
         for format in Format::iter() {
             let filename = Self::filename(name, format);
@@ -398,6 +438,7 @@ impl Theme {
                 Ok(data) => {
                     let mut theme = Self::from_buf(&data, format).map_err(|e| map_err(e.into(), &path))?;
                     theme.validate_version().map_err(|e| map_err(e, &path))?;
+                    theme.validate_modes().map_err(|e| map_err(e, &path))?;
                     theme.deduce_styles_from_elements();
                     return Ok(theme);
                 }
@@ -737,7 +778,7 @@ where
 // ---
 
 #[repr(u8)]
-#[derive(Clone, Copy, Debug, Hash, Eq, PartialEq, Ord, PartialOrd, Enum, Deserialize)]
+#[derive(Clone, Copy, Debug, Hash, Eq, PartialEq, Ord, PartialOrd, Enum, Deserialize, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum Element {
     Input,
@@ -1496,6 +1537,26 @@ impl IndicatorStyle {
         self.merge(other, flags);
         self
     }
+}
+
+// ---
+
+/// A display wrapper for types that implement Serialize.
+/// This formats the value using serde_plain, falling back to Debug if serialization fails.
+struct SerdeDisplay<'a, T>(&'a T);
+
+impl<'a, T: Serialize + fmt::Debug> fmt::Display for SerdeDisplay<'a, T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match serde_plain::to_string(self.0) {
+            Ok(s) => write!(f, "{}", s),
+            Err(_) => write!(f, "{:?}", self.0),
+        }
+    }
+}
+
+/// Helper function to create a SerdeDisplay wrapper
+fn display<T: Serialize + fmt::Debug>(value: &T) -> SerdeDisplay<'_, T> {
+    SerdeDisplay(value)
 }
 
 // ---
