@@ -1365,3 +1365,52 @@ fn test_custom_default_theme_without_extension() {
         "Custom @default theme (without extension) should apply: message should have red foreground"
     );
 }
+
+#[test]
+fn test_load_by_full_filename_explicit() {
+    // FR-003: System MUST support loading theme by full filename with extension
+    // This test verifies that specifying the full filename (e.g., "test-fullname.toml")
+    // loads the correct file format even when multiple formats exist with the same stem
+    // Uses external files: src/testing/assets/themes/test-fullname.{yaml,toml}
+    let path = PathBuf::from("src/testing/assets/themes");
+
+    // Load TOML file explicitly
+    let toml_theme = Theme::load_from(&path, "test-fullname.toml").unwrap();
+
+    // Verify it loaded the TOML version (has magenta key, not cyan)
+    assert_eq!(
+        toml_theme.elements[&Element::Key].foreground,
+        Some(Color::Plain(PlainColor::Magenta)),
+        "Loading test-fullname.toml should load TOML file with magenta key"
+    );
+    assert_eq!(
+        toml_theme.elements[&Element::Number].foreground,
+        Some(Color::Plain(PlainColor::Yellow)),
+        "TOML file should have yellow number"
+    );
+    assert_eq!(
+        toml_theme.elements[&Element::Message].foreground,
+        Some(Color::Plain(PlainColor::Blue)),
+        "TOML file should have blue message"
+    );
+
+    // Load YAML file explicitly
+    let yaml_theme = Theme::load_from(&path, "test-fullname.yaml").unwrap();
+
+    // Verify it loaded the YAML version (has cyan key, not magenta)
+    assert_eq!(
+        yaml_theme.elements[&Element::Key].foreground,
+        Some(Color::Plain(PlainColor::Cyan)),
+        "Loading test-fullname.yaml should load YAML file with cyan key"
+    );
+    assert_eq!(
+        yaml_theme.elements[&Element::Number].foreground,
+        Some(Color::Plain(PlainColor::Green)),
+        "YAML file should have green number"
+    );
+    assert_eq!(
+        yaml_theme.elements[&Element::Message].foreground,
+        Some(Color::Plain(PlainColor::White)),
+        "YAML file should have white message"
+    );
+}
