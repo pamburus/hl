@@ -33,6 +33,10 @@ use crate::{
     xerr::{HighlightQuoted, Suggestions},
 };
 
+// Version-specific modules
+pub mod v0;
+pub mod v1;
+
 // Private constants
 const DEFAULT_THEME_NAME: &str = "@default";
 
