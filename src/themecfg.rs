@@ -37,99 +37,6 @@ const DEFAULT_THEME_NAME: &str = "@default";
 
 // ---
 
-/// Theme version with major.minor components
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
-pub struct ThemeVersion {
-    pub major: u32,
-    pub minor: u32,
-}
-
-impl ThemeVersion {
-    /// Create a new theme version
-    pub const fn new(major: u32, minor: u32) -> Self {
-        Self { major, minor }
-    }
-
-    /// Version 0.0 (implicit, no version field in theme)
-    pub const V0_0: Self = Self { major: 0, minor: 0 };
-
-    /// Version 1.0 (first versioned theme format)
-    pub const V1_0: Self = Self { major: 1, minor: 0 };
-
-    /// Current supported version
-    pub const CURRENT: Self = Self::V1_0;
-
-    /// Check if this version is compatible with a supported version
-    pub fn is_compatible_with(&self, supported: &ThemeVersion) -> bool {
-        // Same major version and minor <= supported
-        self.major == supported.major && self.minor <= supported.minor
-    }
-}
-
-impl FromStr for ThemeVersion {
-    type Err = Error;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let parts: Vec<&str> = s.split('.').collect();
-        let err = || Error::InvalidVersion(s.into());
-
-        if parts.len() != 2 {
-            return Err(err());
-        }
-
-        let major: u32 = parts[0].parse().map_err(|_| err())?;
-        let minor: u32 = parts[1].parse().map_err(|_| err())?;
-
-        // Reject leading zeros (except "0" itself)
-        if (parts[0].len() > 1 && parts[0].starts_with('0')) || (parts[1].len() > 1 && parts[1].starts_with('0')) {
-            return Err(err());
-        }
-
-        Ok(ThemeVersion { major, minor })
-    }
-}
-
-impl fmt::Display for ThemeVersion {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}.{}", self.major, self.minor)
-    }
-}
-
-impl Serialize for ThemeVersion {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        serializer.serialize_str(&self.to_string())
-    }
-}
-
-impl<'de> Deserialize<'de> for ThemeVersion {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        struct ThemeVersionVisitor;
-
-        impl<'de> Visitor<'de> for ThemeVersionVisitor {
-            type Value = ThemeVersion;
-
-            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-                formatter.write_str("a version string like \"1.0\"")
-            }
-
-            fn visit_str<E>(self, value: &str) -> Result<ThemeVersion, E>
-            where
-                E: serde::de::Error,
-            {
-                ThemeVersion::from_str(value).map_err(|e| E::custom(format!("invalid version: {}", e)))
-            }
-        }
-
-        deserializer.deserialize_str(ThemeVersionVisitor)
-    }
-}
-
 /// Error is an error which may occur in the application.
 #[derive(Error, Debug)]
 pub enum Error {
@@ -1770,6 +1677,101 @@ impl Mergeable for IndicatorStyle<ResolvedStyle> {
         }
         // ResolvedStyle doesn't have a merge method, so we just replace
         self.style = other.style;
+    }
+}
+
+// ---
+
+/// Theme version with major.minor components
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
+pub struct ThemeVersion {
+    pub major: u32,
+    pub minor: u32,
+}
+
+impl ThemeVersion {
+    /// Create a new theme version
+    pub const fn new(major: u32, minor: u32) -> Self {
+        Self { major, minor }
+    }
+
+    /// Version 0.0 (implicit, no version field in theme)
+    pub const V0_0: Self = Self { major: 0, minor: 0 };
+
+    /// Version 1.0 (first versioned theme format)
+    pub const V1_0: Self = Self { major: 1, minor: 0 };
+
+    /// Current supported version
+    pub const CURRENT: Self = Self::V1_0;
+
+    /// Check if this version is compatible with a supported version
+    pub fn is_compatible_with(&self, supported: &ThemeVersion) -> bool {
+        // Same major version and minor <= supported
+        self.major == supported.major && self.minor <= supported.minor
+    }
+}
+
+impl FromStr for ThemeVersion {
+    type Err = Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let parts: Vec<&str> = s.split('.').collect();
+        let err = || Error::InvalidVersion(s.into());
+
+        if parts.len() != 2 {
+            return Err(err());
+        }
+
+        let major: u32 = parts[0].parse().map_err(|_| err())?;
+        let minor: u32 = parts[1].parse().map_err(|_| err())?;
+
+        // Reject leading zeros (except "0" itself)
+        if (parts[0].len() > 1 && parts[0].starts_with('0')) || (parts[1].len() > 1 && parts[1].starts_with('0')) {
+            return Err(err());
+        }
+
+        Ok(ThemeVersion { major, minor })
+    }
+}
+
+impl fmt::Display for ThemeVersion {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}.{}", self.major, self.minor)
+    }
+}
+
+impl Serialize for ThemeVersion {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_str(&self.to_string())
+    }
+}
+
+impl<'de> Deserialize<'de> for ThemeVersion {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        struct ThemeVersionVisitor;
+
+        impl<'de> Visitor<'de> for ThemeVersionVisitor {
+            type Value = ThemeVersion;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str("a version string like \"1.0\"")
+            }
+
+            fn visit_str<E>(self, value: &str) -> Result<ThemeVersion, E>
+            where
+                E: serde::de::Error,
+            {
+                ThemeVersion::from_str(value).map_err(|e| E::custom(format!("invalid version: {}", e)))
+            }
+        }
+
+        deserializer.deserialize_str(ThemeVersionVisitor)
     }
 }
 
