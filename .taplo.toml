@@ -1,3 +1,5 @@
+exclude = ["src/testing/assets/themes/malformed.toml"]
+
 [formatting]
 column_width = 128
 reorder_keys = false

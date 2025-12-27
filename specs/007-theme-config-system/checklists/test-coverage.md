@@ -186,3 +186,5 @@
 - 18 new tests added across 3 implementation phases
 - 3 bugs discovered and documented with reproducible tests
 - Zero regressions introduced (all existing tests still pass)
+- **Intentionally malformed test files**: `malformed.{yaml,toml,json}` are designed to fail parsing and will show diagnostics - this is expected behavior for FR-029 testing
+- Malformed files are excluded from linters via `.yamllint`, `.taplo.toml`, and `tombi.toml`

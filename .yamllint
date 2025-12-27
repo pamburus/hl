@@ -1,0 +1,15 @@
+---
+# YAML Lint Configuration
+# Excludes intentionally malformed test files from validation
+
+extends: default
+
+ignore: |
+  src/testing/assets/themes/malformed.yaml
+
+rules:
+  line-length:
+    max: 120
+  indentation:
+    spaces: 2
+  document-start: disable

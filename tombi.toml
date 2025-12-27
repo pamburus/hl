@@ -2,6 +2,7 @@ toml-version = "v1.0.0"
 
 [files]
 include = ["**/*.toml"]
+exclude = ["src/testing/assets/themes/malformed.toml"]
 
 [format]
 [format.rules]
