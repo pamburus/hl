@@ -139,7 +139,7 @@ pub enum Error {
     FailedToLoadCustomTheme {
         name: Arc<str>,
         path: Arc<Path>,
-        source: ExternalError,
+        source: ThemeLoadError,
     },
     #[error("failed to list custom themes: {0}")]
     FailedToListCustomThemes(#[from] io::Error),
@@ -147,13 +147,20 @@ pub enum Error {
     InvalidTag { value: Arc<str>, suggestions: Suggestions },
     #[error("style recursion limit exceeded")]
     StyleRecursionLimitExceeded,
+    #[error("invalid version format: {0}")]
+    InvalidVersion(Arc<str>),
+}
+
+/// Error is an error which may occur in the application.
+#[derive(Error, Debug)]
+pub enum ThemeLoadError {
+    #[error(transparent)]
+    External(#[from] ExternalError),
     #[error("theme version {requested} is not supported (maximum supported: {supported})")]
     UnsupportedVersion {
         requested: ThemeVersion,
         supported: ThemeVersion,
     },
-    #[error("invalid version format: {0}")]
-    InvalidVersion(Arc<str>),
 }
 
 /// Error is an error which may occur in the application.
@@ -331,13 +338,13 @@ impl Theme {
         }
     }
 
-    fn validate_version(&self) -> Result<()> {
+    fn validate_version(&self) -> Result<(), ThemeLoadError> {
         if self.version == ThemeVersion::default() {
             // Version 0.0 (no version field) is considered compatible
             return Ok(());
         }
         if !self.version.is_compatible_with(&ThemeVersion::CURRENT) {
-            return Err(Error::UnsupportedVersion {
+            return Err(ThemeLoadError::UnsupportedVersion {
                 requested: self.version,
                 supported: ThemeVersion::CURRENT,
             });
@@ -384,7 +391,7 @@ impl Theme {
                 dir.join(&filename)
             };
 
-            let map_err = |e: ExternalError, path: PathBuf| Error::FailedToLoadCustomTheme {
+            let map_err = |e: ThemeLoadError, path: &Path| Error::FailedToLoadCustomTheme {
                 name: name.into(),
                 path: path.into(),
                 source: e,
@@ -392,14 +399,14 @@ impl Theme {
 
             match std::fs::read(&path) {
                 Ok(data) => {
-                    let mut theme = Self::from_buf(&data, format).map_err(|e| map_err(e, path))?;
-                    theme.validate_version()?;
+                    let mut theme = Self::from_buf(&data, format).map_err(|e| map_err(e.into(), &path))?;
+                    theme.validate_version().map_err(|e| map_err(e, &path))?;
                     theme.deduce_styles_from_elements();
                     return Ok(theme);
                 }
                 Err(e) => match e.kind() {
                     ErrorKind::NotFound => continue,
-                    _ => return Err(map_err(e.into(), path)),
+                    _ => return Err(map_err(ExternalError::from(e).into(), &path)),
                 },
             }
         }
