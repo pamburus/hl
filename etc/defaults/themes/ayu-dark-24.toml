@@ -1,0 +1,60 @@
+#:schema https://raw.githubusercontent.com/pamburus/hl/29ced163a1c66b7cc94b03665b7306f51104690c/schema/json/theme.schema.v1.json
+
+version = "1.0"
+tags = ["dark", "truecolor"]
+
+#
+# Styles define general purpose styles used throughout the theme.
+#
+[styles]
+[styles.primary]
+foreground = "#bfbdb6"
+
+[styles.secondary]
+foreground = "#565b66"
+
+[styles.strong]
+foreground = "#95e6cb"
+
+[styles.accent]
+foreground = "#73b8ff"
+
+[styles.accent-secondary]
+foreground = "#3f5d7f"
+
+[styles.syntax]
+modes = ["bold"]
+
+[styles.debug]
+foreground = "#d2a6ff"
+
+[styles.warning]
+foreground = "#e6b450"
+
+[styles.error]
+foreground = "#d95757"
+
+[styles.info]
+foreground = "#39bae6"
+
+#
+# Elements define specific styles for different log elements.
+#
+[elements]
+[elements.logger]
+style = "accent-secondary"
+
+[elements.level]
+style = "accent-secondary"
+
+[elements.field]
+style = "accent-secondary"
+
+[elements.number]
+foreground = "#7fd962"
+
+[elements.boolean]
+foreground = "#e6b450"
+
+[elements.null]
+foreground = "#d95757"

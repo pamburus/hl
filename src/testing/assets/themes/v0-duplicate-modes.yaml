@@ -1,0 +1,28 @@
+# V0 theme testing duplicate modes
+# In v0, duplicate modes are allowed and passed to terminal
+
+elements:
+  message:
+    foreground: '#ffffff'
+    modes: [bold, italic, bold, underline, bold]
+
+  level:
+    foreground: '#00ff00'
+    modes: [italic, italic, italic]
+
+  time:
+    foreground: '#aaaaaa'
+    modes: [faint, bold, faint]
+
+  caller:
+    foreground: '#cccccc'
+    modes: []
+
+levels:
+  warning:
+    level:
+      modes: [bold, underline, bold, reverse, bold]
+
+  error:
+    message:
+      modes: [reverse, reverse]

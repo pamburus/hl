@@ -39,12 +39,15 @@ use hl::{
 mod help;
 
 const HL_DEBUG_LOG: &str = "HL_DEBUG_LOG";
+const HL_DEBUG_LOG_STYLE: &str = "HL_DEBUG_LOG_STYLE";
 
 // ---
 
 fn bootstrap() -> Result<Settings> {
     if std::env::var(HL_DEBUG_LOG).is_ok() {
-        logger::Builder::from_env(HL_DEBUG_LOG).format_timestamp_micros().init();
+        logger::Builder::from_env(logger::Env::new().filter(HL_DEBUG_LOG).write_style(HL_DEBUG_LOG_STYLE))
+            .format_timestamp_micros()
+            .init();
         log::debug!("logging initialized");
     } else {
         logger::Builder::new()

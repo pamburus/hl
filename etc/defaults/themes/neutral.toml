@@ -1,0 +1,33 @@
+#:schema https://raw.githubusercontent.com/pamburus/hl/29ced163a1c66b7cc94b03665b7306f51104690c/schema/json/theme.schema.v1.json
+
+version = "1.0"
+tags = ["dark", "light", "16color"]
+
+#
+# Styles define general purpose styles used throughout the theme.
+#
+[styles]
+[styles.debug]
+
+[styles.info]
+foreground = "green"
+
+[styles.warning]
+foreground = "bright-yellow"
+
+[styles.error]
+foreground = "bright-red"
+
+#
+# Elements define specific styles for different log elements.
+#
+[elements]
+[elements.null]
+foreground = "bright-red"
+
+#
+# Levels define styles for different log levels.
+#
+[levels]
+[levels.warning.message]
+foreground = "yellow"

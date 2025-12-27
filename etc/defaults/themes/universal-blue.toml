@@ -1,58 +1,59 @@
-#:schema ../../../../schema/json/theme.schema.v0.json
+#:schema https://raw.githubusercontent.com/pamburus/hl/c5f7bbb768219023877d4d65959972d0f9701d5e/schema/json/theme.schema.v0.json
+
+tags = ["dark", "light", "16color"]
 
 [elements.input]
 modes = ["faint"]
 
 [elements.time]
-modes = ["faint", "italic"]
+modes = ["faint"]
 
 [elements.logger]
-modes = ["faint", "underline"]
+modes = ["faint"]
 
 [elements.caller]
 modes = ["faint", "italic"]
 
 [elements.level]
-foreground = "cyan"
+foreground = "default"
+modes = ["faint"]
 
 [elements.message]
 foreground = "default"
 modes = ["bold"]
 
 [elements.message-delimiter]
-modes = ["faint", "italic"]
+modes = ["faint"]
 
 [elements.field]
 modes = ["faint"]
 
 [elements.key]
-foreground = "green"
+foreground = "bright-blue"
 
 [elements.ellipsis]
 modes = ["faint"]
 
 [elements.object]
-foreground = "yellow"
+modes = ["bold"]
 
 [elements.array]
-foreground = "bright-yellow"
+modes = ["bold"]
 
 [elements.string]
 foreground = "default"
 
 [elements.number]
-foreground = "bright-blue"
+foreground = "green"
 
 [elements.boolean]
-foreground = "bright-green"
-
-[elements.boolean-false]
-foreground = "bright-red"
+foreground = "yellow"
 
 [elements.null]
 foreground = "bright-red"
 
 [levels.trace.level-inner]
+foreground = "default"
 modes = ["faint"]
 
 [levels.debug.level-inner]
