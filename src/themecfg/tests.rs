@@ -1630,6 +1630,314 @@ fn test_theme_name_suggestions() {
 }
 
 #[test]
+fn test_v0_parent_inner_blocking_all_pairs() {
+    // Test that all 5 parent-inner pairs are blocked when parent is defined in child theme
+    // This verifies the complete blocking rule implementation
+    let mut base = Theme::default();
+
+    // Base theme has all 5 -inner elements
+    base.elements.0.insert(Element::LevelInner, Style::default());
+    base.elements.0.insert(Element::LoggerInner, Style::default());
+    base.elements.0.insert(Element::CallerInner, Style::default());
+    base.elements.0.insert(Element::InputNumberInner, Style::default());
+    base.elements.0.insert(Element::InputNameInner, Style::default());
+
+    // Child theme defines all 5 parent elements
+    let mut child = Theme::default();
+    child.elements.0.insert(Element::Level, Style::default());
+    child.elements.0.insert(Element::Logger, Style::default());
+    child.elements.0.insert(Element::Caller, Style::default());
+    child.elements.0.insert(Element::InputNumber, Style::default());
+    child.elements.0.insert(Element::InputName, Style::default());
+
+    // Merge
+    let merged = base.merged(child);
+
+    // All -inner elements should be blocked (removed)
+    assert!(
+        !merged.elements.0.contains_key(&Element::LevelInner),
+        "level-inner should be blocked"
+    );
+    assert!(
+        !merged.elements.0.contains_key(&Element::LoggerInner),
+        "logger-inner should be blocked"
+    );
+    assert!(
+        !merged.elements.0.contains_key(&Element::CallerInner),
+        "caller-inner should be blocked"
+    );
+    assert!(
+        !merged.elements.0.contains_key(&Element::InputNumberInner),
+        "input-number-inner should be blocked"
+    );
+    assert!(
+        !merged.elements.0.contains_key(&Element::InputNameInner),
+        "input-name-inner should be blocked"
+    );
+
+    // All parent elements should be present
+    assert!(
+        merged.elements.0.contains_key(&Element::Level),
+        "level should be present"
+    );
+    assert!(
+        merged.elements.0.contains_key(&Element::Logger),
+        "logger should be present"
+    );
+    assert!(
+        merged.elements.0.contains_key(&Element::Caller),
+        "caller should be present"
+    );
+    assert!(
+        merged.elements.0.contains_key(&Element::InputNumber),
+        "input-number should be present"
+    );
+    assert!(
+        merged.elements.0.contains_key(&Element::InputName),
+        "input-name should be present"
+    );
+}
+
+#[test]
+fn test_v0_level_section_blocking() {
+    // Test that when child defines ANY element for a level, parent's entire level section is removed
+    // FR-027: V0 level section blocking for backward compatibility
+    let mut base = Theme::default();
+
+    // Base theme has level sections with multiple elements
+    let mut error_pack = StylePack::default();
+    error_pack.0.insert(
+        Element::Message,
+        Style {
+            base: StyleBase::default(),
+            foreground: Some(Color::Plain(PlainColor::Red)),
+            background: None,
+            modes: Mode::Bold.into(),
+        },
+    );
+    error_pack.0.insert(
+        Element::Level,
+        Style {
+            base: StyleBase::default(),
+            foreground: Some(Color::Plain(PlainColor::Red)),
+            background: None,
+            modes: Default::default(),
+        },
+    );
+    base.levels
+        .insert(InfallibleLevel::Valid(crate::level::Level::Error), error_pack);
+
+    let mut info_pack = StylePack::default();
+    info_pack.0.insert(
+        Element::Message,
+        Style {
+            base: StyleBase::default(),
+            foreground: Some(Color::Plain(PlainColor::Blue)),
+            background: None,
+            modes: Default::default(),
+        },
+    );
+    base.levels
+        .insert(InfallibleLevel::Valid(crate::level::Level::Info), info_pack);
+
+    // Child theme defines just ONE element for error level (not info)
+    let mut child = Theme::default();
+    let mut child_error_pack = StylePack::default();
+    child_error_pack.0.insert(
+        Element::Time,
+        Style {
+            base: StyleBase::default(),
+            foreground: Some(Color::Plain(PlainColor::Yellow)),
+            background: None,
+            modes: Default::default(),
+        },
+    );
+    child
+        .levels
+        .insert(InfallibleLevel::Valid(crate::level::Level::Error), child_error_pack);
+
+    // Merge
+    let merged = base.merged(child);
+
+    // Error level section should be completely replaced (base error elements removed)
+    let error_level = merged
+        .levels
+        .get(&InfallibleLevel::Valid(crate::level::Level::Error))
+        .unwrap();
+    assert!(
+        error_level.0.contains_key(&Element::Time),
+        "Child time should be present"
+    );
+    assert!(
+        !error_level.0.contains_key(&Element::Message),
+        "Base error message should be blocked"
+    );
+    assert!(
+        !error_level.0.contains_key(&Element::Level),
+        "Base error level should be blocked"
+    );
+
+    // Info level section should remain (child didn't define it)
+    let info_level = merged
+        .levels
+        .get(&InfallibleLevel::Valid(crate::level::Level::Info))
+        .unwrap();
+    assert!(
+        info_level.0.contains_key(&Element::Message),
+        "Base info message should remain"
+    );
+}
+
+#[test]
+fn test_v0_multiple_blocking_rules_combined() {
+    // Test that multiple blocking rules can trigger simultaneously
+    // Parent-inner blocking + input blocking + level section blocking
+    let mut base = Theme::default();
+
+    // Base has parent-inner elements
+    base.elements.0.insert(Element::LevelInner, Style::default());
+    base.elements.0.insert(Element::LoggerInner, Style::default());
+
+    // Base has input elements
+    base.elements.0.insert(Element::InputNumber, Style::default());
+    base.elements.0.insert(Element::InputName, Style::default());
+
+    // Base has level sections
+    let mut error_pack = StylePack::default();
+    error_pack.0.insert(Element::Message, Style::default());
+    base.levels
+        .insert(InfallibleLevel::Valid(crate::level::Level::Error), error_pack);
+
+    // Child triggers all blocking rules
+    let mut child = Theme::default();
+    child.elements.0.insert(Element::Level, Style::default()); // Blocks level-inner
+    child.elements.0.insert(Element::Logger, Style::default()); // Blocks logger-inner
+    child.elements.0.insert(Element::Input, Style::default()); // Blocks input-number/input-name
+
+    let mut child_error_pack = StylePack::default();
+    child_error_pack.0.insert(Element::Time, Style::default());
+    child
+        .levels
+        .insert(InfallibleLevel::Valid(crate::level::Level::Error), child_error_pack); // Blocks error section
+
+    // Merge
+    let merged = base.merged(child);
+
+    // Verify all blocking happened
+    assert!(
+        !merged.elements.0.contains_key(&Element::LevelInner),
+        "level-inner blocked by parent rule"
+    );
+    assert!(
+        !merged.elements.0.contains_key(&Element::LoggerInner),
+        "logger-inner blocked by parent rule"
+    );
+    assert!(
+        !merged.elements.0.contains_key(&Element::InputNumber),
+        "input-number blocked by input rule"
+    );
+    assert!(
+        !merged.elements.0.contains_key(&Element::InputName),
+        "input-name blocked by input rule"
+    );
+
+    let error_level = merged
+        .levels
+        .get(&InfallibleLevel::Valid(crate::level::Level::Error))
+        .unwrap();
+    assert!(
+        !error_level.0.contains_key(&Element::Message),
+        "Base error message blocked by level section rule"
+    );
+    assert!(
+        error_level.0.contains_key(&Element::Time),
+        "Child error time should be present"
+    );
+}
+
+#[test]
+fn test_v1_no_blocking_rules() {
+    // Test that v1 themes do NOT apply blocking rules (no ReplaceGroups flag)
+    // Elements merge additively without blocking parent-inner pairs
+    let mut base = Theme::default();
+    base.version = ThemeVersion { major: 1, minor: 0 };
+
+    // Base has -inner elements
+    base.elements.0.insert(
+        Element::LevelInner,
+        Style {
+            base: StyleBase::default(),
+            foreground: Some(Color::Plain(PlainColor::Red)),
+            background: None,
+            modes: Default::default(),
+        },
+    );
+    base.elements.0.insert(Element::InputNumber, Style::default());
+
+    // Base has level sections
+    let mut error_pack = StylePack::default();
+    error_pack.0.insert(
+        Element::Message,
+        Style {
+            base: StyleBase::default(),
+            foreground: Some(Color::Plain(PlainColor::Red)),
+            background: None,
+            modes: Default::default(),
+        },
+    );
+    base.levels
+        .insert(InfallibleLevel::Valid(crate::level::Level::Error), error_pack);
+
+    // Child v1 theme defines parent elements
+    let mut child = Theme::default();
+    child.version = ThemeVersion { major: 1, minor: 0 };
+    child.elements.0.insert(Element::Level, Style::default()); // Does NOT block level-inner in v1
+    child.elements.0.insert(Element::Input, Style::default()); // Does NOT block input-number in v1
+
+    // Child defines error level element
+    let mut child_error_pack = StylePack::default();
+    child_error_pack.0.insert(Element::Time, Style::default());
+    child
+        .levels
+        .insert(InfallibleLevel::Valid(crate::level::Level::Error), child_error_pack);
+
+    // Merge
+    let merged = base.merged(child);
+
+    // In v1, no blocking should happen - elements should merge additively
+    assert!(
+        merged.elements.0.contains_key(&Element::LevelInner),
+        "v1 should NOT block level-inner"
+    );
+    assert!(
+        merged.elements.0.contains_key(&Element::InputNumber),
+        "v1 should NOT block input-number"
+    );
+    assert!(
+        merged.elements.0.contains_key(&Element::Level),
+        "Child level should be present"
+    );
+    assert!(
+        merged.elements.0.contains_key(&Element::Input),
+        "Child input should be present"
+    );
+
+    // In v1, level sections merge (not replaced)
+    let error_level = merged
+        .levels
+        .get(&InfallibleLevel::Valid(crate::level::Level::Error))
+        .unwrap();
+    assert!(
+        error_level.0.contains_key(&Element::Message),
+        "v1 should preserve base error message"
+    );
+    assert!(
+        error_level.0.contains_key(&Element::Time),
+        "v1 should have child error time"
+    );
+}
+
+#[test]
 fn test_v1_level_overrides_with_styles() {
     // FR-021a: V1 level overrides MUST support v1 features like style references
     // This test verifies that level-specific overrides can use style definitions
