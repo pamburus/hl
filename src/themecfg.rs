@@ -376,15 +376,6 @@ impl Theme {
                     }
                 }
             }
-
-            // Check all style definitions (v1 feature, but could be present in invalid v0 themes)
-            for (role, style) in &self.styles.0 {
-                if !style.modes.removes.is_empty() {
-                    return Err(ThemeLoadError::InvalidModePrefixInV0 {
-                        context: format!("style '{}'", display(role)),
-                    });
-                }
-            }
         }
 
         Ok(())
@@ -445,8 +436,8 @@ impl Theme {
                 Ok(data) => {
                     let mut theme = Self::from_buf(&data, format).map_err(|e| map_err(e.into(), &path))?;
                     theme.validate_version().map_err(|e| map_err(e, &path))?;
-                    theme.validate_modes().map_err(|e| map_err(e, &path))?;
                     theme.clear_v0_styles();
+                    theme.validate_modes().map_err(|e| map_err(e, &path))?;
                     theme.deduce_styles_from_elements();
                     return Ok(theme);
                 }

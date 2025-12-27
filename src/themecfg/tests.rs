@@ -2028,3 +2028,329 @@ fn test_file_format_parse_errors() {
         json_msg
     );
 }
+
+#[test]
+fn test_unsupported_theme_version() {
+    let theme_dir = PathBuf::from("src/testing/assets/themes");
+    let result = Theme::load_from(&theme_dir, "test-unsupported-version");
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_v0_level_override_with_invalid_mode_prefix() {
+    let theme_dir = PathBuf::from("src/testing/assets/themes");
+    let result = Theme::load_from(&theme_dir, "test-v0-level-invalid-mode");
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_element_parent_queries() {
+    assert!(Element::LevelInner.is_inner());
+    assert!(Element::LoggerInner.is_inner());
+    assert!(Element::CallerInner.is_inner());
+    assert!(Element::InputNumberInner.is_inner());
+    assert!(Element::InputNameInner.is_inner());
+
+    assert!(!Element::Level.is_inner());
+    assert!(!Element::Message.is_inner());
+
+    assert_eq!(Element::LevelInner.parent(), Some(Element::Level));
+    assert_eq!(Element::LoggerInner.parent(), Some(Element::Logger));
+    assert_eq!(Element::CallerInner.parent(), Some(Element::Caller));
+    assert_eq!(Element::InputNumberInner.parent(), Some(Element::InputNumber));
+    assert_eq!(Element::InputNameInner.parent(), Some(Element::InputName));
+    assert_eq!(Element::Level.parent(), None);
+    assert_eq!(Element::Message.parent(), None);
+
+    let pairs = Element::pairs();
+    assert_eq!(pairs.len(), 5);
+    assert!(pairs.contains(&(Element::Level, Element::LevelInner)));
+}
+
+#[test]
+fn test_style_from_role() {
+    let style = Style::from(Role::Primary);
+    assert!(!style.base.is_empty());
+    assert_eq!(style.base.0.len(), 1);
+    assert!(style.base.0.contains(&Role::Primary));
+}
+
+#[test]
+fn test_style_from_vec_roles() {
+    let style = Style::from(vec![Role::Primary, Role::Secondary]);
+    assert!(!style.base.is_empty());
+    assert_eq!(style.base.0.len(), 2);
+    assert!(style.base.0.contains(&Role::Primary));
+    assert!(style.base.0.contains(&Role::Secondary));
+}
+
+#[test]
+fn test_resolved_style_builder_methods() {
+    let style = ResolvedStyle::default()
+        .modes(Mode::Bold.into())
+        .foreground(Some(Color::Plain(PlainColor::Red)))
+        .background(Some(Color::Plain(PlainColor::Blue)));
+
+    assert_eq!(style.modes, Mode::Bold.into());
+    assert_eq!(style.foreground, Some(Color::Plain(PlainColor::Red)));
+    assert_eq!(style.background, Some(Color::Plain(PlainColor::Blue)));
+}
+
+#[test]
+fn test_indicator_pack_merge() {
+    let mut base = IndicatorPack::default();
+    let mut other = IndicatorPack::default();
+
+    other.sync.synced.text = "✓".to_string();
+    other.sync.failed.text = "✗".to_string();
+
+    base.merge(other, MergeFlags::default());
+    assert_eq!(base.sync.synced.text, "✓");
+    assert_eq!(base.sync.failed.text, "✗");
+}
+
+#[test]
+fn test_indicator_style_merge() {
+    let mut base = IndicatorStyle::default();
+    let other = IndicatorStyle {
+        prefix: "[".to_string(),
+        suffix: "]".to_string(),
+        ..Default::default()
+    };
+
+    base.merge(other, MergeFlags::default());
+    assert_eq!(base.prefix, "[");
+    assert_eq!(base.suffix, "]");
+}
+
+#[test]
+fn test_serde_display_success() {
+    use crate::themecfg::Role;
+    let wrapper = display(&Role::Primary);
+    let display_str = format!("{}", wrapper);
+    assert!(display_str.contains("primary"));
+}
+
+#[test]
+fn test_style_builder_methods() {
+    let style = Style::default()
+        .foreground(Some(Color::Plain(PlainColor::Green)))
+        .background(Some(Color::Plain(PlainColor::Black)));
+
+    assert_eq!(style.foreground, Some(Color::Plain(PlainColor::Green)));
+    assert_eq!(style.background, Some(Color::Plain(PlainColor::Black)));
+}
+
+#[test]
+fn test_resolved_style_merged_with_style_additive() {
+    let base = ResolvedStyle {
+        modes: Mode::Bold.into(),
+        foreground: Some(Color::Plain(PlainColor::Red)),
+        background: None,
+    };
+
+    let patch = Style {
+        base: StyleBase::default(),
+        modes: Mode::Italic.into(),
+        foreground: Some(Color::Plain(PlainColor::Green)),
+        background: Some(Color::Plain(PlainColor::Blue)),
+    };
+
+    let merged = base.merged_with(&patch, MergeFlags::default());
+    assert_eq!(merged.modes, ModeSetDiff::from(Mode::Bold | Mode::Italic));
+    assert_eq!(merged.foreground, Some(Color::Plain(PlainColor::Green)));
+    assert_eq!(merged.background, Some(Color::Plain(PlainColor::Blue)));
+}
+
+#[test]
+fn test_child_blocking_parent_in_style_pack() {
+    let mut base = StylePack::default();
+    base.0.insert(Element::Level, Style::default());
+
+    let mut patch = StylePack::default();
+    patch.0.insert(Element::LevelInner, Style::default());
+
+    let merged = base.merged(patch, V0_MERGE_FLAGS);
+
+    assert!(!merged.0.contains_key(&Element::Level));
+    assert!(merged.0.contains_key(&Element::LevelInner));
+}
+
+#[test]
+fn test_resolved_style_merged_with_style_replace_modes() {
+    let base = ResolvedStyle {
+        modes: Mode::Bold.into(),
+        foreground: Some(Color::Plain(PlainColor::Red)),
+        background: None,
+    };
+
+    let patch = Style {
+        base: StyleBase::default(),
+        modes: Mode::Italic.into(),
+        foreground: Some(Color::Plain(PlainColor::Green)),
+        background: None,
+    };
+
+    let merged = base.merged_with(&patch, V0_MERGE_FLAGS);
+    assert_eq!(merged.modes, Mode::Italic.into());
+    assert_eq!(merged.foreground, Some(Color::Plain(PlainColor::Green)));
+}
+
+#[test]
+fn test_sync_indicator_pack_merge() {
+    let mut base = SyncIndicatorPack::default();
+    let mut other = SyncIndicatorPack::default();
+
+    other.synced.text = "✓".to_string();
+    other.failed.text = "✗".to_string();
+
+    base.merge(other, MergeFlags::default());
+    assert_eq!(base.synced.text, "✓");
+    assert_eq!(base.failed.text, "✗");
+}
+
+#[test]
+fn test_indicator_merge_empty_text() {
+    let mut base = Indicator {
+        text: "original".to_string(),
+        ..Default::default()
+    };
+
+    let other = Indicator {
+        text: "".to_string(),
+        ..Default::default()
+    };
+
+    base.merge(other, MergeFlags::default());
+    assert_eq!(base.text, "original");
+}
+
+#[test]
+fn test_v0_element_with_invalid_mode_prefix() {
+    let theme_dir = PathBuf::from("src/testing/assets/themes");
+    let result = Theme::load_from(&theme_dir, "test-v0-element-invalid-mode");
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_invalid_style_base_deserialization() {
+    let theme_dir = PathBuf::from("src/testing/assets/themes");
+    let result = Theme::load_from(&theme_dir, "test-invalid-style-base");
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_style_recursion_limit() {
+    let theme_dir = PathBuf::from("src/testing/assets/themes");
+    let theme = Theme::load_from(&theme_dir, "test-recursive-style").unwrap();
+    let mut resolver = StyleResolver::new(&theme.styles, MergeFlags::default());
+    let _resolved = resolver.resolve(&Role::Primary);
+}
+
+#[test]
+fn test_style_base_deserialization_single_string() {
+    let theme_dir = PathBuf::from("src/testing/assets/themes");
+    let theme = Theme::load_from(&theme_dir, "test-base-single").unwrap();
+    let secondary = theme.styles.0.get(&Role::Secondary);
+    assert!(secondary.is_some());
+    assert!(!secondary.unwrap().base.is_empty());
+}
+
+#[test]
+fn test_mode_set_diff_with_removes() {
+    let theme_dir = PathBuf::from("src/testing/assets/themes");
+    let theme = Theme::load_from(&theme_dir, "test-mode-diff").unwrap();
+    let message = theme.elements.0.get(&Element::Message).unwrap();
+    assert!(message.modes.adds.contains(Mode::Bold));
+    assert!(message.modes.removes.contains(Mode::Italic));
+}
+
+#[test]
+fn test_sync_indicator_pack_default() {
+    let pack = SyncIndicatorPack::default();
+    assert_eq!(pack.synced.text, " ");
+    assert_eq!(pack.failed.text, "!");
+    assert_eq!(
+        pack.failed.inner.style.foreground,
+        Some(Color::Plain(PlainColor::Yellow))
+    );
+}
+
+#[test]
+fn test_indicator_pack_merged() {
+    let base = IndicatorPack::default();
+    let mut other = IndicatorPack::default();
+    other.sync.synced.text = "✓".to_string();
+
+    let merged = base.merged(other, MergeFlags::default());
+    assert_eq!(merged.sync.synced.text, "✓");
+}
+
+#[test]
+fn test_sync_indicator_pack_merged() {
+    let base = SyncIndicatorPack::default();
+    let mut other = SyncIndicatorPack::default();
+    other.synced.text = "✓".to_string();
+
+    let merged = base.merged(other, MergeFlags::default());
+    assert_eq!(merged.synced.text, "✓");
+}
+
+#[test]
+fn test_indicator_merged() {
+    let base = Indicator::default();
+    let other = Indicator {
+        text: "test".to_string(),
+        ..Default::default()
+    };
+
+    let merged = base.merged(other, MergeFlags::default());
+    assert_eq!(merged.text, "test");
+}
+
+#[test]
+fn test_indicator_style_merged() {
+    let base = IndicatorStyle::default();
+    let other = IndicatorStyle {
+        prefix: "[".to_string(),
+        suffix: "]".to_string(),
+        ..Default::default()
+    };
+
+    let merged = base.merged(other, MergeFlags::default());
+    assert_eq!(merged.prefix, "[");
+    assert_eq!(merged.suffix, "]");
+}
+
+#[test]
+fn test_mode_set_diff_serialization() {
+    let mut diff = ModeSetDiff::default();
+    diff.adds.insert(Mode::Bold);
+    diff.adds.insert(Mode::Italic);
+    diff.removes.insert(Mode::Underline);
+
+    let json = serde_json::to_string(&diff).unwrap();
+    assert!(json.contains("bold") || json.contains("Bold"));
+    assert!(json.contains("italic") || json.contains("Italic"));
+    assert!(json.contains("underline") || json.contains("Underline"));
+}
+
+#[test]
+fn test_mode_diff_serialization() {
+    let add_diff = ModeDiff::add(Mode::Bold);
+    let json = serde_json::to_string(&add_diff).unwrap();
+    assert!(json.contains("+bold") || json.contains("bold"));
+
+    let remove_diff = ModeDiff::remove(Mode::Italic);
+    let json = serde_json::to_string(&remove_diff).unwrap();
+    assert!(json.contains("-italic") || json.contains("italic"));
+}
+
+#[test]
+fn test_style_base_visitor_expecting() {
+    let theme_dir = PathBuf::from("src/testing/assets/themes");
+    let result = Theme::load_from(&theme_dir, "test-invalid-style-base");
+    assert!(result.is_err());
+    let err_msg = result.unwrap_err().to_string();
+    assert!(!err_msg.is_empty());
+}

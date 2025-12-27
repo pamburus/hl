@@ -1,0 +1,7 @@
+version: "1.0"
+elements:
+  message:
+    foreground: 'red'
+    modes:
+      - '+bold'
+      - '-italic'
