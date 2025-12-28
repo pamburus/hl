@@ -89,7 +89,7 @@
 use std::collections::HashMap;
 
 // third-party imports
-use derive_more::Deref;
+use derive_more::{Deref, DerefMut, IntoIterator};
 use enumset::EnumSet;
 use serde::{Deserialize, Serialize};
 
@@ -245,18 +245,8 @@ impl std::fmt::Display for Role {
 /// - Single role: `style: "warning"` → `StyleBase(vec![Role::Warning])`
 /// - Multiple roles: `style: ["primary", "strong"]` → `StyleBase(vec![Role::Primary, Role::Strong])`
 /// - Empty (no inheritance): omitted or `null` → `StyleBase(vec![])`
-#[derive(Clone, Debug, Default, PartialEq, Eq, Deref)]
-pub struct StyleBase(pub Vec<Role>);
-
-impl StyleBase {
-    pub fn is_empty(&self) -> bool {
-        self.0.is_empty()
-    }
-
-    pub fn iter(&self) -> impl Iterator<Item = &Role> {
-        self.0.iter()
-    }
-}
+#[derive(Clone, Debug, Default, PartialEq, Eq, Deref, DerefMut)]
+pub struct StyleBase(Vec<Role>);
 
 impl From<Role> for StyleBase {
     fn from(role: Role) -> Self {
@@ -411,7 +401,7 @@ impl Style {
 
     pub fn resolve(&self, inventory: &StyleInventory, flags: MergeFlags) -> ResolvedStyle {
         Self::resolve_with(&self.base, self, flags, |role| {
-            inventory.0.get(role).cloned().unwrap_or_default()
+            inventory.get(role).cloned().unwrap_or_default()
         })
     }
 
@@ -525,8 +515,8 @@ impl Merge<&Style> for ResolvedStyle {
 // ---
 
 /// StylePack for v1 - strict deserialization, generic over key and style types
-#[derive(Clone, Debug, Deref)]
-pub struct StylePack<K, S = Style>(pub HashMap<K, S>);
+#[derive(Clone, Debug, Deref, DerefMut, IntoIterator)]
+pub struct StylePack<K, S = Style>(HashMap<K, S>);
 
 impl<K, S> Default for StylePack<K, S> {
     fn default() -> Self {
@@ -556,22 +546,6 @@ where
     pub fn new(items: HashMap<K, S>) -> Self {
         Self(items)
     }
-
-    pub fn len(&self) -> usize {
-        self.0.len()
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.0.is_empty()
-    }
-
-    pub fn get(&self, key: &K) -> Option<&S> {
-        self.0.get(key)
-    }
-
-    pub fn items(&self) -> &HashMap<K, S> {
-        &self.0
-    }
 }
 
 impl<S> StylePack<Role, S> {
@@ -591,7 +565,7 @@ impl<S> StylePack<Element, S> {
         S: Clone + for<'a> Merge<&'a S>,
     {
         if flags.contains(MergeFlag::ReplaceHierarchies) {
-            for (parent, child) in Element::pairs() {
+            for (parent, child) in Element::nested() {
                 if patch.0.contains_key(child) {
                     self.0.remove(parent);
                 }
@@ -628,7 +602,6 @@ impl StylePack<Role, Style> {
     pub fn resolve(&self, flags: MergeFlags) -> Result<StyleInventory, ThemeLoadError> {
         let mut resolver = StyleResolver::new(self, flags);
         let items: HashMap<Role, ResolvedStyle> = self
-            .0
             .keys()
             .map(|k| Ok((*k, resolver.resolve(k)?)))
             .collect::<Result<HashMap<Role, ResolvedStyle>, ThemeLoadError>>()?;
@@ -726,11 +699,11 @@ impl Theme {
         if flags.contains(MergeFlag::ReplaceHierarchies) {
             // Apply blocking rule: remove all elements from self that have any ancestor
             // element defined in other.elements (including direct parent and all grand-parents)
-            self.elements.0.retain(|element, _| {
+            self.elements.retain(|element, _| {
                 // Check if any ancestor of this element is defined in other.elements
                 let mut current = *element;
-                while let Some(parent) = current.parent() {
-                    if other.elements.0.contains_key(&parent) {
+                while let Some(parent) = current.outer() {
+                    if other.elements.contains_key(&parent) {
                         return false; // This element should be removed
                     }
                     current = parent;
@@ -745,13 +718,13 @@ impl Theme {
 
         // For both v0 and v1, elements defined in child theme replace elements from parent theme
         // Property-level merge happens later when merging elements with per-level styles
-        self.elements.0.extend(other.elements.0);
+        self.elements.extend(other.elements);
 
         // For both v0 and v1, level-specific elements defined in child theme replace from parent
         for (level, pack) in other.levels {
             self.levels
                 .entry(level)
-                .and_modify(|existing| existing.0.extend(pack.0.clone()))
+                .and_modify(|existing| existing.extend(pack.clone()))
                 .or_insert(pack);
         }
 
@@ -819,48 +792,36 @@ impl Theme {
         let mut result = HashMap::new();
 
         // Process all elements, applying parent→inner inheritance where needed
-        for (&element, style) in pack.items() {
+        for (&element, style) in pack.iter() {
             // Check if this element is an inner element that should inherit from its parent
             // Use canonical pairs from Element::pairs() for single source of truth (FR-015a)
-            let mut parent_for_inner = None;
-            for &(parent, inner) in Element::pairs() {
-                if element == inner {
-                    parent_for_inner = pack.items().get(&parent).cloned();
-                    break;
-                }
-            }
+            let outer = element.outer().and_then(|p| pack.get(&p));
 
-            let resolved_style = match parent_for_inner {
-                Some(parent_style) if !flags.contains(MergeFlag::ReplaceElements) => {
+            let style = match outer {
+                Some(outer) if !flags.contains(MergeFlag::ReplaceElements) => {
                     // V1: Merge unresolved parent and inner first, then resolve (per FR-041)
                     // This ensures role inheritance and mode operations work correctly
-                    let merged = parent_style.merged(style, flags);
-                    merged.resolve(inventory, flags)
+                    outer.clone().merged(style, flags).resolve(inventory, flags)
                 }
-                _ => {
-                    // V0 or no parent: just resolve the style
-                    style.resolve(inventory, flags)
-                }
+                _ => style.resolve(inventory, flags),
             };
 
-            result.insert(element, resolved_style);
+            result.insert(element, style);
         }
 
         // Add inherited inner elements that weren't explicitly defined
         // Use canonical pairs from Element::pairs() for single source of truth (FR-015a)
-        for &(parent, inner) in Element::pairs() {
-            if let Some(parent_style) = pack.items().get(&parent) {
-                result
-                    .entry(inner)
-                    .or_insert_with(|| parent_style.resolve(inventory, flags));
+        for &(outer, inner) in Element::nested() {
+            if let Some(outer) = pack.get(&outer) {
+                result.entry(inner).or_insert_with(|| outer.resolve(inventory, flags));
             }
         }
 
         // Handle boolean variants inheriting from base boolean
-        if let Some(base) = pack.items().get(&Element::Boolean) {
+        if let Some(base) = pack.get(&Element::Boolean) {
             for variant in [Element::BooleanTrue, Element::BooleanFalse] {
                 let mut style = base.clone();
-                if let Some(patch) = pack.items().get(&variant) {
+                if let Some(patch) = pack.get(&variant) {
                     style = style.merged(patch, flags)
                 }
                 result.insert(variant, style.resolve(inventory, flags));
@@ -953,7 +914,7 @@ impl<'a> StyleResolver<'a> {
             return Ok(resolved.clone());
         }
 
-        let style = self.inventory.0.get(role).unwrap_or_default();
+        let style = self.inventory.get(role).unwrap_or_default();
 
         self.depth += 1;
         let resolved = self.resolve_style(style, role)?;
@@ -1149,15 +1110,18 @@ impl Merge for IndicatorStyle<Style> {
 impl From<v0::Theme> for Theme {
     fn from(theme: v0::Theme) -> Self {
         // Convert v0 elements to v1 format
-        let elements = theme.elements.0;
-        let elements = elements.into_iter().map(|(e, style)| (e, style.into())).collect();
+        let elements: HashMap<Element, Style> = theme
+            .elements
+            .iter()
+            .map(|(e, style)| (*e, style.clone().into()))
+            .collect();
 
         // Convert v0 levels to v1 format
         let mut levels = HashMap::new();
         for (level, pack) in theme.levels {
             // Only convert valid levels - v1 is strict, invalid levels are dropped
             if let InfallibleLevel::Valid(level) = level {
-                let pack = pack.0.into_iter().map(|(e, style)| (e, style.into())).collect();
+                let pack: HashMap<Element, Style> = pack.iter().map(|(e, style)| (*e, style.clone().into())).collect();
                 levels.insert(level, StylePack::new(pack));
             }
         }

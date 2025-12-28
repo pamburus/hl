@@ -290,14 +290,13 @@ impl StylePack {
     fn load(s: &themecfg::StylePack<Element, themecfg::Style>) -> Self {
         let mut result = Self::default();
 
-        let items = s.items();
-        if !items.is_empty() {
+        if !s.is_empty() {
             result.styles.push(Style::reset());
             result.reset = Some(0);
         }
 
         // Process all elements and convert Style to runtime Style
-        for (&element, resolved_style) in s.items() {
+        for (&element, resolved_style) in s.iter() {
             result.add(element, &Style::from(resolved_style));
         }
 

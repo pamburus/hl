@@ -9,6 +9,7 @@
 use std::{collections::HashMap, fmt, hash::Hash, sync::LazyLock};
 
 // third-party imports
+use derive_more::{Deref, DerefMut, IntoIterator};
 use enum_map::Enum;
 use enumset::EnumSet;
 use serde::{
@@ -64,10 +65,10 @@ pub enum Element {
 
 impl Element {
     pub fn is_inner(&self) -> bool {
-        self.parent().is_some()
+        self.outer().is_some()
     }
 
-    pub fn parent(&self) -> Option<Self> {
+    pub fn outer(&self) -> Option<Self> {
         match self {
             Self::InputNumber => Some(Self::Input),
             Self::InputName => Some(Self::Input),
@@ -80,10 +81,10 @@ impl Element {
         }
     }
 
-    pub fn pairs() -> &'static [(Self, Self)] {
+    pub fn nested() -> &'static [(Self, Self)] {
         static PAIRS: LazyLock<Vec<(Element, Element)>> = LazyLock::new(|| {
             Element::iter()
-                .filter_map(|element| element.parent().map(|parent| (parent, element)))
+                .filter_map(|element| element.outer().map(|parent| (parent, element)))
                 .collect()
         });
         &PAIRS
@@ -131,26 +132,8 @@ impl Default for &Style {
 
 /// StylePack is a collection of Element->Style mappings
 /// V0 uses lenient deserialization that ignores unknown keys for forward compatibility
-#[derive(Clone, Debug, Default)]
-pub struct StylePack(pub HashMap<Element, Style>);
-
-impl StylePack {
-    pub fn len(&self) -> usize {
-        self.0.len()
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.0.is_empty()
-    }
-
-    pub fn get(&self, key: &Element) -> Option<&Style> {
-        self.0.get(key)
-    }
-
-    pub fn items(&self) -> impl Iterator<Item = (&Element, &Style)> {
-        self.0.iter()
-    }
-}
+#[derive(Clone, Debug, Default, Deref, DerefMut, IntoIterator)]
+pub struct StylePack(HashMap<Element, Style>);
 
 impl From<HashMap<Element, Style>> for StylePack {
     fn from(items: HashMap<Element, Style>) -> Self {

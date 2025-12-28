@@ -151,16 +151,16 @@ fn test_style_pack() {
 
     let yaml = include_str!("../testing/assets/style-packs/pack1.yaml");
     let pack: StylePack<Element> = yaml::from_str(yaml).unwrap().remove(0);
-    assert_eq!(pack.0.len(), 2);
-    assert_eq!(pack.0[&Element::Input].foreground, Some(Color::Plain(PlainColor::Red)));
-    assert_eq!(pack.0[&Element::Input].background, Some(Color::Plain(PlainColor::Blue)));
-    assert_eq!(pack.0[&Element::Input].modes, modes(&[Mode::Bold, Mode::Faint]));
+    assert_eq!(pack.len(), 2);
+    assert_eq!(pack[&Element::Input].foreground, Some(Color::Plain(PlainColor::Red)));
+    assert_eq!(pack[&Element::Input].background, Some(Color::Plain(PlainColor::Blue)));
+    assert_eq!(pack[&Element::Input].modes, modes(&[Mode::Bold, Mode::Faint]));
     assert_eq!(
-        pack.0[&Element::Message].foreground,
+        pack[&Element::Message].foreground,
         Some(Color::Plain(PlainColor::Green))
     );
-    assert_eq!(pack.0[&Element::Message].background, None);
-    assert_eq!(pack.0[&Element::Message].modes, modes(&[Mode::Italic, Mode::Underline]));
+    assert_eq!(pack[&Element::Message].background, None);
+    assert_eq!(pack[&Element::Message].modes, modes(&[Mode::Italic, Mode::Underline]));
 
     // v1 StylePack uses strict deserialization - just verify it errors on invalid input
     assert!(yaml::from_str::<StylePack<Element>>("invalid").is_err());
@@ -423,7 +423,7 @@ fn test_v0_file_format_priority() {
 fn test_v0_style_pack_merge() {
     // Test StylePack merge behavior
     let mut base = StylePack::default();
-    base.0.insert(
+    base.insert(
         Element::Message,
         RawStyle {
             base: StyleBase::default(),
@@ -434,7 +434,7 @@ fn test_v0_style_pack_merge() {
     );
 
     let mut patch = StylePack::default();
-    patch.0.insert(
+    patch.insert(
         Element::Message,
         RawStyle {
             base: StyleBase::default(),
@@ -443,7 +443,7 @@ fn test_v0_style_pack_merge() {
             modes: Mode::Italic.into(),
         },
     );
-    patch.0.insert(
+    patch.insert(
         Element::Level,
         RawStyle {
             base: StyleBase::default(),
@@ -457,13 +457,13 @@ fn test_v0_style_pack_merge() {
 
     // Message should be from patch
     assert_eq!(
-        merged.0[&Element::Message].foreground,
+        merged[&Element::Message].foreground,
         Some(Color::Plain(PlainColor::Green))
     );
 
     // Level should be from patch
     assert_eq!(
-        merged.0[&Element::Level].foreground,
+        merged[&Element::Level].foreground,
         Some(Color::Plain(PlainColor::Yellow))
     );
 }
@@ -520,8 +520,8 @@ fn test_unknown_elements_toml() {
             // Verify only known elements were loaded from file (should be 2: message and level)
             // Unknown elements (unknown-element-1, future-element) should be ignored
             assert_eq!(theme.elements.len(), 2, "Should only load 2 known elements from file");
-            assert!(theme.elements.0.contains_key(&Element::Message));
-            assert!(theme.elements.0.contains_key(&Element::Level));
+            assert!(theme.elements.contains_key(&Element::Message));
+            assert!(theme.elements.contains_key(&Element::Level));
 
             let theme = theme.resolve().unwrap();
             // After resolution, LevelInner is automatically added (parent→inner inheritance)
@@ -553,8 +553,8 @@ fn test_unknown_elements_json() {
             // Verify only known elements were loaded from file (should be 2: message and level)
             // Unknown elements (unknown-element-1, future-element) should be ignored
             assert_eq!(theme.elements.len(), 2, "Should only load 2 known elements from file");
-            assert!(theme.elements.0.contains_key(&Element::Message));
-            assert!(theme.elements.0.contains_key(&Element::Level));
+            assert!(theme.elements.contains_key(&Element::Message));
+            assert!(theme.elements.contains_key(&Element::Level));
 
             let theme = theme.resolve().unwrap();
             // After resolution, LevelInner is automatically added (parent→inner inheritance)
@@ -585,8 +585,8 @@ fn test_unknown_elements_yaml() {
             // Verify only known elements were loaded from file (should be 2: message and level)
             // Unknown elements (unknown-element-1, future-element) should be ignored
             assert_eq!(theme.elements.len(), 2, "Should only load 2 known elements from file");
-            assert!(theme.elements.0.contains_key(&Element::Message));
-            assert!(theme.elements.0.contains_key(&Element::Level));
+            assert!(theme.elements.contains_key(&Element::Message));
+            assert!(theme.elements.contains_key(&Element::Level));
 
             let theme = theme.resolve().unwrap();
             // After resolution, LevelInner is automatically added (parent→inner inheritance)
@@ -878,7 +878,7 @@ fn test_v1_multiple_inheritance() {
     // Result: foreground=#888888 (from secondary, last one with foreground)
     //         modes=[faint, bold, underline] (accumulated from all)
     //         background=#331100 (from warning itself)
-    let warning = inventory.0.get(&Role::Warning).unwrap();
+    let warning = inventory.get(&Role::Warning).unwrap();
     assert_eq!(warning.foreground, Some(Color::RGB(RGB(0x88, 0x88, 0x88))));
     assert_eq!(warning.background, Some(Color::RGB(RGB(0x33, 0x11, 0x00))));
     assert!(warning.modes.adds.contains(Mode::Faint));
@@ -886,7 +886,7 @@ fn test_v1_multiple_inheritance() {
     assert!(warning.modes.adds.contains(Mode::Underline));
 
     // Test error role: inherits from warning and overrides foreground
-    let error = inventory.0.get(&Role::Error).unwrap();
+    let error = inventory.get(&Role::Error).unwrap();
     assert_eq!(error.foreground, Some(Color::RGB(RGB(0xff, 0x00, 0x00))));
     assert_eq!(error.background, Some(Color::RGB(RGB(0x33, 0x11, 0x00)))); // inherited from warning
     assert!(error.modes.adds.contains(Mode::Faint)); // inherited from warning chain
@@ -894,7 +894,7 @@ fn test_v1_multiple_inheritance() {
     // Test level element: style = ["secondary", "strong"]
     // Should have: foreground=#888888, modes=[faint, bold]
     let resolved_theme = theme.resolve().unwrap();
-    let level = resolved_theme.elements.0.get(&Element::Level).unwrap();
+    let level = resolved_theme.elements.get(&Element::Level).unwrap();
     let resolved_level = level.clone();
     assert_eq!(resolved_level.foreground, Some(Color::RGB(RGB(0x88, 0x88, 0x88))));
     assert!(resolved_level.modes.adds.contains(Mode::Faint));
@@ -902,7 +902,7 @@ fn test_v1_multiple_inheritance() {
 
     // Test level-inner element: style = ["secondary", "strong"], modes=[italic], foreground=#00ff00
     // Should have: foreground=#00ff00 (explicit override), modes=[faint, bold, italic]
-    let level_inner = resolved_theme.elements.0.get(&Element::LevelInner).unwrap();
+    let level_inner = resolved_theme.elements.get(&Element::LevelInner).unwrap();
     let resolved_level_inner = level_inner.clone();
     assert_eq!(resolved_level_inner.foreground, Some(Color::RGB(RGB(0x00, 0xff, 0x00))));
     assert!(resolved_level_inner.modes.adds.contains(Mode::Faint));
@@ -1038,15 +1038,15 @@ fn test_v1_style_base_construction() {
 
     // Single role via From trait
     let single = StyleBase::from(Role::Warning);
-    assert_eq!(single.0.len(), 1);
-    assert_eq!(single.0[0], Role::Warning);
+    assert_eq!(single.len(), 1);
+    assert_eq!(single[0], Role::Warning);
 
     // Multiple roles via From trait
     let multiple = StyleBase::from(vec![Role::Primary, Role::Secondary, Role::Warning]);
-    assert_eq!(multiple.0.len(), 3);
-    assert_eq!(multiple.0[0], Role::Primary);
-    assert_eq!(multiple.0[1], Role::Secondary);
-    assert_eq!(multiple.0[2], Role::Warning);
+    assert_eq!(multiple.len(), 3);
+    assert_eq!(multiple[0], Role::Primary);
+    assert_eq!(multiple[1], Role::Secondary);
+    assert_eq!(multiple[2], Role::Warning);
 
     // Empty style base
     let empty = StyleBase::default();
@@ -1243,13 +1243,13 @@ fn test_empty_v0_theme_file_valid() {
 
     // Verify all sections are empty/default
     assert_eq!(
-        theme.elements.0.len(),
+        theme.elements.len(),
         0,
         "Empty v0 theme should have no elements defined"
     );
-    assert_eq!(theme.levels.len(), 0, "Empty v0 theme should have no level overrides");
+    // V0 doesn't support styles section, so it should be empty
     assert_eq!(
-        theme.styles.0.len(),
+        theme.styles.len(),
         0,
         "Empty v0 theme should have no styles (v0 doesn't support styles)"
     );
@@ -1283,17 +1283,17 @@ fn test_v0_ignores_styles_section() {
     // Verify styles section from file was ignored (v0 doesn't support styles)
     // The file defines 'primary' and 'secondary' styles which should be ignored
     assert!(
-        !theme.styles.0.contains_key(&Role::Primary),
+        !theme.styles.contains_key(&Role::Primary),
         "V0 theme should not have 'primary' style from file (styles section should be ignored)"
     );
     assert!(
-        !theme.styles.0.contains_key(&Role::Secondary),
+        !theme.styles.contains_key(&Role::Secondary),
         "V0 theme should not have 'secondary' style from file (styles section should be ignored)"
     );
 
     // However, v0 themes deduce styles from elements (FR-031)
     // Message element maps to Strong role, so that should be present
-    let strong_style = theme.styles.0.get(&Role::Strong);
+    let strong_style = theme.styles.get(&Role::Strong);
     assert!(
         strong_style.is_some(),
         "V0 theme should have 'strong' style deduced from message element"
@@ -1353,9 +1353,9 @@ fn test_custom_default_theme_with_extension() {
     // Custom file only defines 'message', so if we have other elements,
     // it proves the merge with @default happened
     assert!(
-        theme.elements.0.len() > 1,
+        theme.elements.len() > 1,
         "Should have multiple elements from @default merge, not just 'message' from custom file. Got {} elements",
-        theme.elements.0.len()
+        theme.elements.len()
     );
 }
 
@@ -1553,9 +1553,9 @@ fn test_custom_default_theme_without_extension() {
     // Custom file only defines 'message', so if we have other elements,
     // it proves the merge with @default happened
     assert!(
-        theme.elements.0.len() > 1,
+        theme.elements.len() > 1,
         "Should have multiple elements from @default merge, not just 'message' from custom file. Got {} elements",
-        theme.elements.0.len()
+        theme.elements.len()
     );
 }
 
@@ -1777,66 +1777,62 @@ fn test_v0_parent_inner_blocking_all_pairs() {
     // This verifies the complete blocking rule implementation
     let mut base = RawTheme::default();
 
-    // Base theme has all 5 -inner elements
-    base.elements.0.insert(Element::LevelInner, RawStyle::default());
-    base.elements.0.insert(Element::LoggerInner, RawStyle::default());
-    base.elements.0.insert(Element::CallerInner, RawStyle::default());
-    base.elements.0.insert(Element::InputNumberInner, RawStyle::default());
-    base.elements.0.insert(Element::InputNameInner, RawStyle::default());
+    // Base has all 5 -inner elements
+    base.elements.insert(Element::LevelInner, RawStyle::default());
+    base.elements.insert(Element::LoggerInner, RawStyle::default());
+    base.elements.insert(Element::CallerInner, RawStyle::default());
+    base.elements.insert(Element::InputNumberInner, RawStyle::default());
+    base.elements.insert(Element::InputNameInner, RawStyle::default());
 
-    // Child theme defines all 5 parent elements
+    // Child theme has all 5 parent elements
     let mut child = RawTheme::default();
-    // Child defines parent elements that should block -inner elements
-    child.elements.0.insert(Element::Level, RawStyle::default());
-    child.elements.0.insert(Element::Logger, RawStyle::default());
-    child.elements.0.insert(Element::Caller, RawStyle::default());
-    child.elements.0.insert(Element::InputNumber, RawStyle::default());
-    child.elements.0.insert(Element::InputName, RawStyle::default());
+    child.elements.insert(Element::Level, RawStyle::default());
+    child.elements.insert(Element::Logger, RawStyle::default());
+    child.elements.insert(Element::Caller, RawStyle::default());
+    child.elements.insert(Element::InputNumber, RawStyle::default());
+    child.elements.insert(Element::InputName, RawStyle::default());
 
     // Merge
     let merged = base.merged(child);
 
     // All -inner elements should be blocked (removed)
     assert!(
-        !merged.elements.0.contains_key(&Element::LevelInner),
+        !merged.elements.contains_key(&Element::LevelInner),
         "level-inner should be blocked"
     );
     assert!(
-        !merged.elements.0.contains_key(&Element::LoggerInner),
+        !merged.elements.contains_key(&Element::LoggerInner),
         "logger-inner should be blocked"
     );
     assert!(
-        !merged.elements.0.contains_key(&Element::CallerInner),
+        !merged.elements.contains_key(&Element::CallerInner),
         "caller-inner should be blocked"
     );
     assert!(
-        !merged.elements.0.contains_key(&Element::InputNumberInner),
+        !merged.elements.contains_key(&Element::InputNumberInner),
         "input-number-inner should be blocked"
     );
     assert!(
-        !merged.elements.0.contains_key(&Element::InputNameInner),
+        !merged.elements.contains_key(&Element::InputNameInner),
         "input-name-inner should be blocked"
     );
 
     // All parent elements should be present
+    assert!(merged.elements.contains_key(&Element::Level), "level should be present");
     assert!(
-        merged.elements.0.contains_key(&Element::Level),
-        "level should be present"
-    );
-    assert!(
-        merged.elements.0.contains_key(&Element::Logger),
+        merged.elements.contains_key(&Element::Logger),
         "logger should be present"
     );
     assert!(
-        merged.elements.0.contains_key(&Element::Caller),
+        merged.elements.contains_key(&Element::Caller),
         "caller should be present"
     );
     assert!(
-        merged.elements.0.contains_key(&Element::InputNumber),
+        merged.elements.contains_key(&Element::InputNumber),
         "input-number should be present"
     );
     assert!(
-        merged.elements.0.contains_key(&Element::InputName),
+        merged.elements.contains_key(&Element::InputName),
         "input-name should be present"
     );
 }
@@ -1849,17 +1845,8 @@ fn test_v0_level_section_blocking() {
 
     // Base theme has level sections with multiple elements
     let mut error_pack = v1::StylePack::default();
-    error_pack.0.insert(
+    error_pack.insert(
         Element::Message,
-        RawStyle {
-            base: StyleBase::default(),
-            foreground: Some(Color::Plain(PlainColor::Red)),
-            background: None,
-            modes: Mode::Bold.into(),
-        },
-    );
-    error_pack.0.insert(
-        Element::Level,
         RawStyle {
             base: StyleBase::default(),
             foreground: Some(Color::Plain(PlainColor::Red)),
@@ -1867,14 +1854,23 @@ fn test_v0_level_section_blocking() {
             modes: Default::default(),
         },
     );
-    base.levels.insert(Level::Error, error_pack);
-
-    let mut info_pack = v1::StylePack::default();
-    info_pack.0.insert(
-        Element::Message,
+    error_pack.insert(
+        Element::Level,
         RawStyle {
             base: StyleBase::default(),
             foreground: Some(Color::Plain(PlainColor::Blue)),
+            background: None,
+            modes: Default::default(),
+        },
+    );
+    base.levels.insert(Level::Error, error_pack);
+
+    let mut info_pack = v1::StylePack::default();
+    info_pack.insert(
+        Element::Message,
+        RawStyle {
+            base: StyleBase::default(),
+            foreground: Some(Color::Plain(PlainColor::Green)),
             background: None,
             modes: Default::default(),
         },
@@ -1884,13 +1880,13 @@ fn test_v0_level_section_blocking() {
     // Child theme defines just ONE element for error level (not info)
     let mut child = RawTheme::default();
     let mut child_error_pack = v1::StylePack::default();
-    child_error_pack.0.insert(
+    child_error_pack.insert(
         Element::Time,
         RawStyle {
             base: StyleBase::default(),
-            foreground: Some(Color::Plain(PlainColor::Yellow)),
+            modes: modes(&[Mode::Bold]),
+            foreground: None,
             background: None,
-            modes: Default::default(),
         },
     );
     child.levels.insert(Level::Error, child_error_pack);
@@ -1900,23 +1896,20 @@ fn test_v0_level_section_blocking() {
 
     // Error level section should be completely replaced (base error elements removed)
     let error_level = merged.levels.get(&Level::Error).unwrap();
+    assert!(error_level.contains_key(&Element::Time), "Child time should be present");
     assert!(
-        error_level.0.contains_key(&Element::Time),
-        "Child time should be present"
-    );
-    assert!(
-        !error_level.0.contains_key(&Element::Message),
+        !error_level.contains_key(&Element::Message),
         "Base error message should be blocked"
     );
     assert!(
-        !error_level.0.contains_key(&Element::Level),
+        !error_level.contains_key(&Element::Level),
         "Base error level should be blocked"
     );
 
     // Info level section should remain (child didn't define it)
     let info_level = merged.levels.get(&Level::Info).unwrap();
     assert!(
-        info_level.0.contains_key(&Element::Message),
+        info_level.contains_key(&Element::Message),
         "Base info message should remain"
     );
 }
@@ -1928,26 +1921,26 @@ fn test_v0_multiple_blocking_rules_combined() {
     let mut base = RawTheme::default();
 
     // Base has parent-inner elements
-    base.elements.0.insert(Element::LevelInner, RawStyle::default());
-    base.elements.0.insert(Element::LoggerInner, RawStyle::default());
+    base.elements.insert(Element::LevelInner, RawStyle::default());
+    base.elements.insert(Element::LoggerInner, RawStyle::default());
 
     // Base has input elements
-    base.elements.0.insert(Element::InputNumber, RawStyle::default());
-    base.elements.0.insert(Element::InputName, RawStyle::default());
+    base.elements.insert(Element::InputNumber, RawStyle::default());
+    base.elements.insert(Element::InputName, RawStyle::default());
 
     // Base has level sections
     let mut error_pack = v1::StylePack::default();
-    error_pack.0.insert(Element::Message, RawStyle::default());
+    error_pack.insert(Element::Message, RawStyle::default());
     base.levels.insert(Level::Error, error_pack);
 
     // Child triggers all blocking rules
     let mut child = RawTheme::default();
-    child.elements.0.insert(Element::Level, RawStyle::default()); // Blocks level-inner
-    child.elements.0.insert(Element::Logger, RawStyle::default()); // Blocks logger-inner
-    child.elements.0.insert(Element::Input, RawStyle::default()); // Blocks input-number/input-name
+    child.elements.insert(Element::Level, RawStyle::default()); // Blocks level-inner
+    child.elements.insert(Element::Logger, RawStyle::default()); // Blocks logger-inner
+    child.elements.insert(Element::Input, RawStyle::default()); // Blocks input-number/input-name
 
     let mut child_error_pack = v1::StylePack::default();
-    child_error_pack.0.insert(Element::Time, RawStyle::default());
+    child_error_pack.insert(Element::Time, RawStyle::default());
     child.levels.insert(Level::Error, child_error_pack); // Blocks error section
 
     // Merge
@@ -1955,29 +1948,29 @@ fn test_v0_multiple_blocking_rules_combined() {
 
     // Verify all blocking happened
     assert!(
-        !merged.elements.0.contains_key(&Element::LevelInner),
+        !merged.elements.contains_key(&Element::LevelInner),
         "level-inner blocked by parent rule"
     );
     assert!(
-        !merged.elements.0.contains_key(&Element::LoggerInner),
+        !merged.elements.contains_key(&Element::LoggerInner),
         "logger-inner blocked by parent rule"
     );
     assert!(
-        !merged.elements.0.contains_key(&Element::InputNumber),
+        !merged.elements.contains_key(&Element::InputNumber),
         "input-number blocked by input rule"
     );
     assert!(
-        !merged.elements.0.contains_key(&Element::InputName),
+        !merged.elements.contains_key(&Element::InputName),
         "input-name blocked by input rule"
     );
 
     let error_level = merged.levels.get(&Level::Error).unwrap();
     assert!(
-        !error_level.0.contains_key(&Element::Message),
+        !error_level.contains_key(&Element::Message),
         "Base error message blocked by level section rule"
     );
     assert!(
-        error_level.0.contains_key(&Element::Time),
+        error_level.contains_key(&Element::Time),
         "Child error time should be present"
     );
 }
@@ -1990,7 +1983,7 @@ fn test_v1_no_blocking_rules() {
     base.inner_mut().version = ThemeVersion { major: 1, minor: 0 };
 
     // Base has -inner elements
-    base.elements.0.insert(
+    base.elements.insert(
         Element::LevelInner,
         RawStyle {
             base: StyleBase::default(),
@@ -1999,11 +1992,14 @@ fn test_v1_no_blocking_rules() {
             modes: Default::default(),
         },
     );
-    base.elements.0.insert(Element::InputNumber, RawStyle::default());
+
+    // Base has input elements
+    base.elements.insert(Element::InputNumber, RawStyle::default());
+    base.elements.insert(Element::InputName, RawStyle::default());
 
     // Base has level sections
     let mut error_pack = v1::StylePack::default();
-    error_pack.0.insert(
+    error_pack.insert(
         Element::Message,
         RawStyle {
             base: StyleBase::default(),
@@ -2017,12 +2013,12 @@ fn test_v1_no_blocking_rules() {
     // Child v1 theme defines parent elements
     let mut child = RawTheme::default();
     child.inner_mut().version = ThemeVersion { major: 1, minor: 0 };
-    child.elements.0.insert(Element::Level, RawStyle::default()); // Does NOT block level-inner in v1
-    child.elements.0.insert(Element::Input, RawStyle::default()); // Does NOT block input-number in v1
+    child.elements.insert(Element::Level, RawStyle::default()); // Does NOT block level-inner in v1
+    child.elements.insert(Element::Input, RawStyle::default()); // Does NOT block input-number in v1
 
     // Child defines error level element
     let mut child_error_pack = v1::StylePack::default();
-    child_error_pack.0.insert(Element::Time, RawStyle::default());
+    child_error_pack.insert(Element::Time, RawStyle::default());
     child.levels.insert(Level::Error, child_error_pack);
 
     // Merge
@@ -2030,30 +2026,30 @@ fn test_v1_no_blocking_rules() {
 
     // In v1, no blocking should happen - elements should merge additively
     assert!(
-        merged.elements.0.contains_key(&Element::LevelInner),
+        merged.elements.contains_key(&Element::LevelInner),
         "v1 should NOT block level-inner"
     );
     assert!(
-        merged.elements.0.contains_key(&Element::InputNumber),
+        merged.elements.contains_key(&Element::InputNumber),
         "v1 should NOT block input-number"
     );
     assert!(
-        merged.elements.0.contains_key(&Element::Level),
+        merged.elements.contains_key(&Element::Level),
         "Child level should be present"
     );
     assert!(
-        merged.elements.0.contains_key(&Element::Input),
+        merged.elements.contains_key(&Element::Input),
         "Child input should be present"
     );
 
     // In v1, level sections merge (not replaced)
     let error_level = merged.levels.get(&Level::Error).unwrap();
     assert!(
-        error_level.0.contains_key(&Element::Message),
+        error_level.contains_key(&Element::Message),
         "v1 should preserve base error message"
     );
     assert!(
-        error_level.0.contains_key(&Element::Time),
+        error_level.contains_key(&Element::Time),
         "v1 should have child error time"
     );
 }
@@ -2162,7 +2158,7 @@ fn test_v0_level_override_with_invalid_mode_prefix() {
 
 #[test]
 fn test_element_parent_queries() {
-    let pairs = Element::pairs();
+    let pairs = Element::nested();
     assert_ne!(pairs.len(), 0);
     assert!(pairs.contains(&(Element::Level, Element::LevelInner)));
 }
@@ -2171,17 +2167,17 @@ fn test_element_parent_queries() {
 fn test_style_from_role() {
     let style = RawStyle::from(Role::Primary);
     assert!(!style.base.is_empty());
-    assert_eq!(style.base.0.len(), 1);
-    assert!(style.base.0.contains(&Role::Primary));
+    assert_eq!(style.base.len(), 1);
+    assert_eq!(style.base[0], Role::Primary);
 }
 
 #[test]
 fn test_style_from_vec_roles() {
     let style = RawStyle::from(vec![Role::Primary, Role::Secondary]);
     assert!(!style.base.is_empty());
-    assert_eq!(style.base.0.len(), 2);
-    assert!(style.base.0.contains(&Role::Primary));
-    assert!(style.base.0.contains(&Role::Secondary));
+    assert_eq!(style.base.len(), 2);
+    assert_eq!(style.base[0], Role::Primary);
+    assert_eq!(style.base[1], Role::Secondary);
 }
 
 #[test]
@@ -2266,15 +2262,15 @@ fn test_resolved_style_merged_style_additive() {
 #[test]
 fn test_child_blocking_parent_in_style_pack() {
     let mut base = v1::StylePack::default();
-    base.0.insert(Element::Level, RawStyle::default());
+    base.insert(Element::Level, RawStyle::default());
 
     let mut patch = v1::StylePack::default();
-    patch.0.insert(Element::LevelInner, RawStyle::default());
+    patch.insert(Element::LevelInner, RawStyle::default());
 
     let merged = base.merged(&patch, V0_MERGE_FLAGS);
 
-    assert!(!merged.0.contains_key(&Element::Level));
-    assert!(merged.0.contains_key(&Element::LevelInner));
+    assert!(!merged.contains_key(&Element::Level));
+    assert!(merged.contains_key(&Element::LevelInner));
 }
 
 #[test]
@@ -2345,7 +2341,7 @@ fn test_invalid_style_base_deserialization() {
 fn test_style_base_deserialization_single_string() {
     let app_dirs = test_app_dirs();
     let theme = Theme::load_raw(&app_dirs, "test-base-single").unwrap();
-    let secondary = theme.styles.0.get(&Role::Secondary);
+    let secondary = theme.styles.get(&Role::Secondary);
     assert!(secondary.is_some());
     assert!(!secondary.unwrap().base.is_empty());
 }
@@ -2354,7 +2350,7 @@ fn test_style_base_deserialization_single_string() {
 fn test_mode_set_diff_with_removes() {
     let app_dirs = test_app_dirs();
     let theme = Theme::load_raw(&app_dirs, "test-mode-diff").unwrap();
-    let message = theme.elements.0.get(&Element::Message).unwrap();
+    let message = theme.elements.get(&Element::Message).unwrap();
     assert!(message.modes.adds.contains(Mode::Bold));
     assert!(message.modes.removes.contains(Mode::Italic));
 }
