@@ -8,14 +8,9 @@
 //!
 //! # Quick Start
 //!
-//! ```no_run
-//! use hl::themecfg::Theme;
-//! use hl::app::AppDirs;
-//!
-//! let app_dirs = AppDirs::default();
-//! let theme = Theme::load(&app_dirs, "monokai")?;
-//! # Ok::<(), hl::themecfg::Error>(())
-//! ```
+//! Load a theme by name:
+//! - `Theme::load(app_dirs, "monokai")` - loads, merges, and resolves a theme
+//! - Returns a fully resolved `Theme` ready for use
 //!
 //! # Theme Formats
 //!
@@ -79,22 +74,13 @@
 //!
 //! # Advanced Usage
 //!
-//! For advanced customization, use [`Theme::load_raw()`] to get an unresolved theme,
-//! modify it, then call [`RawTheme::resolve()`]:
+//! For advanced customization:
+//! 1. Call `Theme::load_raw(app_dirs, "monokai")` to get an unresolved `RawTheme`
+//! 2. Modify the theme (e.g., `raw_theme.styles`, `raw_theme.elements`)
+//! 3. Call `raw_theme.resolve()` to get a fully resolved `Theme`
 //!
-//! ```no_run
-//! use hl::themecfg::{Theme, RawTheme};
-//! use hl::app::AppDirs;
-//!
-//! let app_dirs = AppDirs::default();
-//! let mut raw_theme = Theme::load_raw(&app_dirs, "monokai")?;
-//!
-//! // Customize the theme
-//! // raw_theme.styles.0.insert(...);
-//!
-//! let theme = raw_theme.resolve()?;
-//! # Ok::<(), Box<dyn std::error::Error>>(())
-//! ```
+//! The `RawTheme` automatically includes theme metadata, so resolution errors
+//! will include the theme name and source for better debugging.
 //!
 //! # Error Handling
 //!
@@ -154,27 +140,6 @@ pub mod v1;
 // (Element comes from v0, re-exported by v1)
 pub use v1::{Element, Role, StyleBase};
 
-// Type aliases for the public API
-/// An unresolved theme, before style resolution.
-///
-/// This is a type alias for [`v1::Theme`], which contains unresolved [`RawStyle`]
-/// definitions that may reference role-based styles.
-///
-/// Use [`RawTheme::resolve()`](v1::Theme::resolve) to convert to a fully resolved [`Theme`].
-///
-/// # Examples
-///
-/// ```no_run
-/// use hl::themecfg::{Theme, RawTheme};
-/// use hl::app::AppDirs;
-///
-/// let app_dirs = AppDirs::default();
-/// let raw: RawTheme = Theme::load_raw(&app_dirs, "monokai")?;
-/// let resolved: Theme = raw.resolve()?;
-/// # Ok::<(), Box<dyn std::error::Error>>(())
-/// ```
-pub type RawTheme = v1::Theme;
-
 /// An unresolved style, before role resolution.
 ///
 /// This is a type alias for [`v1::Style`], which may contain:
@@ -183,6 +148,104 @@ pub type RawTheme = v1::Theme;
 ///
 /// After resolution, this becomes a concrete [`Style`] with all values computed.
 pub type RawStyle = v1::Style;
+
+/// An unresolved theme with metadata, before style resolution.
+///
+/// This struct wraps a [`v1::Theme`] and includes metadata about the theme's
+/// origin (name, source). The metadata is used to provide context in error
+/// messages when resolution fails.
+///
+/// # Usage
+///
+/// Obtain via `Theme::load_raw(app_dirs, "theme-name")`, then:
+/// - Access fields directly via `Deref`: `raw_theme.styles`, `raw_theme.elements`
+/// - Modify as needed
+/// - Call `raw_theme.resolve()` to get a resolved `Theme`
+///
+/// Resolution errors automatically include the theme name and source from metadata.
+#[derive(Debug, Clone, Deref)]
+pub struct RawTheme {
+    /// Theme metadata (name, source, origin).
+    pub info: Arc<ThemeInfo>,
+    /// The unresolved theme data.
+    #[deref]
+    inner: v1::Theme,
+}
+
+impl RawTheme {
+    /// Create a new `RawTheme` with metadata.
+    pub fn new(info: impl Into<Arc<ThemeInfo>>, inner: v1::Theme) -> Self {
+        Self {
+            info: info.into(),
+            inner,
+        }
+    }
+
+    /// Resolve the theme to a fully resolved [`Theme`].
+    ///
+    /// This method resolves all role-based styles to concrete element styles.
+    /// Any resolution errors (e.g., circular inheritance) will include the
+    /// theme name and source in the error message.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - Style recursion limit is exceeded (circular role inheritance)
+    /// - Any other style resolution error occurs
+    ///
+    /// Error messages automatically include the theme name for context.
+    pub fn resolve(self) -> Result<Theme> {
+        self.inner.resolve().map_err(|source| Error::FailedToResolveTheme {
+            info: self.info.clone(),
+            source,
+        })
+    }
+
+    /// Merge this theme with another theme.
+    ///
+    /// The `other` theme's values override this theme's values where they conflict.
+    pub fn merged(self, other: Self) -> Self {
+        Self {
+            info: other.info,
+            inner: self.inner.merged(other.inner),
+        }
+    }
+
+    /// Get the merge flags from this theme.
+    pub fn merge_flags(&self) -> MergeFlags {
+        self.inner.merge_flags()
+    }
+
+    /// Access the inner v1::Theme for advanced use cases.
+    pub fn inner(&self) -> &v1::Theme {
+        &self.inner
+    }
+
+    /// Access the inner v1::Theme mutably for advanced use cases.
+    pub fn inner_mut(&mut self) -> &mut v1::Theme {
+        &mut self.inner
+    }
+
+    /// Consume self and return the inner v1::Theme.
+    pub fn into_inner(self) -> v1::Theme {
+        self.inner
+    }
+}
+
+impl Default for RawTheme {
+    fn default() -> Self {
+        Self {
+            info: ThemeInfo::new("(empty)", ThemeSource::Embedded, ThemeOrigin::Stock).into(),
+            inner: v1::Theme::default(),
+        }
+    }
+}
+
+impl std::ops::DerefMut for RawTheme {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.inner
+    }
+}
 
 // Private constants
 const DEFAULT_THEME_NAME: &str = "@default";
@@ -200,24 +263,18 @@ const DEFAULT_THEME_NAME: &str = "@default";
 ///   - [`ThemeLoadError`] - Theme loading/resolution errors
 ///     - [`ExternalError`] - I/O and parsing errors
 ///
-/// # Examples
+/// # Error Context
 ///
-/// ```no_run
-/// use hl::themecfg::{Theme, Error};
-/// use hl::app::AppDirs;
+/// All error variants include rich context:
+/// - `ThemeNotFound`: includes theme name and suggestions for similar names
+/// - `FailedToLoadEmbeddedTheme`: includes theme name and nested error
+/// - `FailedToLoadCustomTheme`: includes theme name, file path, and nested error
+/// - `FailedToResolveTheme`: includes full `ThemeInfo` (name, source, origin) and nested error
 ///
-/// let app_dirs = AppDirs::default();
-/// match Theme::load(&app_dirs, "invalid-theme") {
-///     Ok(theme) => println!("Loaded theme successfully"),
-///     Err(Error::ThemeNotFound { name, suggestions }) => {
-///         eprintln!("Theme '{}' not found", name);
-///         if !suggestions.is_empty() {
-///             eprintln!("Did you mean: {}", suggestions);
-///         }
-///     }
-///     Err(e) => eprintln!("Error: {}", e),
-/// }
-/// ```
+/// Nested errors (`ThemeLoadError`) may include:
+/// - Parse errors with line/column information
+/// - Version incompatibility details
+/// - Style recursion errors with the problematic role name
 #[derive(Error, Debug)]
 pub enum Error {
     /// Theme file not found (neither custom nor embedded).
@@ -257,8 +314,11 @@ pub enum Error {
     ///
     /// This occurs after the theme file is loaded successfully but style
     /// resolution fails (e.g., circular role inheritance).
-    #[error("failed to resolve theme {name}: {source}", name=.name.hlq())]
-    FailedToResolveTheme { name: Arc<str>, source: ThemeLoadError },
+    #[error("failed to resolve theme {name}: {source}", name=.info.name.hlq())]
+    FailedToResolveTheme {
+        info: Arc<ThemeInfo>,
+        source: ThemeLoadError,
+    },
 
     /// Invalid theme version format.
     #[error("invalid version format: {format}", format=.0.hlq())]
@@ -410,16 +470,13 @@ impl Theme {
     /// * `app_dirs` - Application directories configuration
     /// * `name` - Theme name (without file extension)
     ///
-    /// # Examples
+    /// # Usage
     ///
-    /// ```no_run
-    /// use hl::themecfg::Theme;
-    /// use hl::app::AppDirs;
-    ///
-    /// let app_dirs = AppDirs::default();
-    /// let theme = Theme::load(&app_dirs, "monokai")?;
-    /// # Ok::<(), hl::themecfg::Error>(())
-    /// ```
+    /// Call with application directories and theme name:
+    /// - `Theme::load(app_dirs, "monokai")` loads the monokai theme
+    /// - Searches custom directory first, then embedded themes
+    /// - Automatically merges with `@default` theme
+    /// - Returns fully resolved theme ready for use
     ///
     /// # Errors
     ///
@@ -434,12 +491,7 @@ impl Theme {
     /// - File path (for custom themes)
     /// - Specific error details (parse error, unsupported version, recursion, etc.)
     pub fn load(app_dirs: &AppDirs, name: &str) -> Result<Self> {
-        Self::load_raw(app_dirs, name)?
-            .resolve()
-            .map_err(|source| Error::FailedToResolveTheme {
-                name: name.into(),
-                source,
-            })
+        Self::load_raw(app_dirs, name)?.resolve()
     }
 
     /// Load an unresolved (raw) theme by name.
@@ -461,24 +513,15 @@ impl Theme {
     /// * `app_dirs` - Application directories configuration
     /// * `name` - Theme name (without file extension)
     ///
-    /// # Examples
+    /// # Usage
     ///
-    /// ```no_run
-    /// use hl::themecfg::{Theme, RawTheme};
-    /// use hl::app::AppDirs;
+    /// For advanced theme customization:
+    /// 1. `let mut raw = Theme::load_raw(app_dirs, "monokai")?;`
+    /// 2. Modify the theme: `raw.styles.0.insert(role, style);`
+    /// 3. Resolve: `let theme = raw.resolve()?;`
     ///
-    /// let app_dirs = AppDirs::default();
-    ///
-    /// // Load raw theme
-    /// let mut raw_theme = Theme::load_raw(&app_dirs, "monokai")?;
-    ///
-    /// // Apply custom modifications
-    /// // raw_theme.styles.0.insert(...);
-    ///
-    /// // Resolve to get final theme
-    /// let theme = raw_theme.resolve()?;
-    /// # Ok::<(), Box<dyn std::error::Error>>(())
-    /// ```
+    /// The returned `RawTheme` includes theme metadata, so any resolution
+    /// errors will automatically include the theme name and source.
     ///
     /// # Errors
     ///
@@ -490,9 +533,9 @@ impl Theme {
     /// Note: Style resolution errors (e.g., circular inheritance) will only
     /// occur when calling [`RawTheme::resolve()`], not during `load_raw()`.
     pub fn load_raw(app_dirs: &AppDirs, name: &str) -> Result<RawTheme> {
-        let theme = Self::load_embedded::<Assets>(DEFAULT_THEME_NAME)?;
+        let default_theme = Self::load_embedded::<Assets>(DEFAULT_THEME_NAME)?;
 
-        Ok(theme.merged(match Self::load_from(&Self::themes_dir(app_dirs), name) {
+        let theme = match Self::load_from(&Self::themes_dir(app_dirs), name) {
             Ok(v) => Ok(v),
             Err(Error::ThemeNotFound { .. }) => match Self::load_embedded::<Assets>(name) {
                 Ok(v) => Ok(v),
@@ -506,16 +549,13 @@ impl Theme {
                 Err(e) => Err(e),
             },
             Err(e) => Err(e),
-        }?))
+        }?;
+
+        Ok(default_theme.merged(theme))
     }
 
     pub fn embedded(name: &str) -> Result<Self> {
-        Self::load_embedded::<Assets>(name)?
-            .resolve()
-            .map_err(|source| Error::FailedToResolveTheme {
-                name: name.into(),
-                source,
-            })
+        Self::load_embedded::<Assets>(name)?.resolve()
     }
 
     pub fn list(app_dirs: &AppDirs) -> Result<HashMap<Arc<str>, ThemeInfo>> {
@@ -545,10 +585,13 @@ impl Theme {
         for format in Format::iter() {
             let filename = Self::filename(name, format);
             if let Some(file) = S::get(&filename) {
-                return Self::from_buf(file.data.as_ref(), format).map_err(|e| Error::FailedToLoadEmbeddedTheme {
-                    name: name.into(),
-                    source: e,
-                });
+                let inner =
+                    Self::from_buf(file.data.as_ref(), format).map_err(|e| Error::FailedToLoadEmbeddedTheme {
+                        name: name.into(),
+                        source: e,
+                    })?;
+                let info = ThemeInfo::new(name, ThemeSource::Embedded, ThemeOrigin::Stock);
+                return Ok(RawTheme::new(info, inner));
             }
         }
 
@@ -571,7 +614,7 @@ impl Theme {
         }
     }
 
-    fn from_buf(data: &[u8], format: Format) -> Result<RawTheme, ThemeLoadError> {
+    fn from_buf(data: &[u8], format: Format) -> Result<v1::Theme, ThemeLoadError> {
         let s = std::str::from_utf8(data).map_err(ExternalError::from)?;
 
         // Peek at version to decide which deserialization path to use
@@ -586,9 +629,9 @@ impl Theme {
             Ok(theme.into())
         } else {
             // Validate v1 version before deserializing
-            RawTheme::validate_version(&version)?;
+            v1::Theme::validate_version(&version)?;
             // V1+ themes use strict deserialization
-            let theme: RawTheme = Self::deserialize(s, format)?;
+            let theme: v1::Theme = Self::deserialize(s, format)?;
             Ok(theme)
         }
     }
@@ -622,8 +665,15 @@ impl Theme {
 
             match std::fs::read(&path) {
                 Ok(data) => {
-                    let theme = Self::from_buf(&data, format).map_err(|e| map_err(e, &path))?;
-                    return Ok(theme);
+                    let inner = Self::from_buf(&data, format).map_err(|e| map_err(e, &path))?;
+                    let info = ThemeInfo::new(
+                        name,
+                        ThemeSource::Custom {
+                            path: path.clone().into(),
+                        },
+                        ThemeOrigin::Custom,
+                    );
+                    return Ok(RawTheme::new(info, inner));
                 }
                 Err(e) => match e.kind() {
                     ErrorKind::NotFound => continue,
@@ -746,38 +796,49 @@ impl FromStr for Tag {
 
 /// Source location for a theme, used for error reporting.
 ///
+/// Theme source information (embedded or custom file).
+///
 /// This enum tracks where a theme was loaded from, enabling better
 /// error messages when theme resolution or validation fails.
 #[derive(Debug, Clone)]
 pub enum ThemeSource {
-    /// Theme loaded from an embedded resource
-    Embedded { name: Arc<str> },
-    /// Theme loaded from a file on disk
-    File { path: Arc<Path> },
-    /// Theme loaded from an in-memory buffer
-    Buffer,
-}
-
-impl fmt::Display for ThemeSource {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            Self::Embedded { name } => write!(f, "embedded theme '{}'", name),
-            Self::File { path } => write!(f, "theme file '{}'", path.display()),
-            Self::Buffer => write!(f, "in-memory theme"),
-        }
-    }
+    /// Theme embedded in the binary.
+    Embedded,
+    /// Theme loaded from a custom file.
+    Custom { path: Arc<Path> },
 }
 
 // ---
 
+/// Theme metadata for error reporting and information display.
 #[derive(Debug, Clone)]
 pub struct ThemeInfo {
+    /// The theme name.
+    pub name: Arc<str>,
+    /// The theme source (embedded or custom file).
+    pub source: ThemeSource,
+    /// The theme origin (stock or custom).
     pub origin: ThemeOrigin,
+}
+
+impl ThemeInfo {
+    /// Create a new ThemeInfo.
+    pub fn new(name: impl Into<Arc<str>>, source: ThemeSource, origin: ThemeOrigin) -> Self {
+        Self {
+            name: name.into(),
+            source,
+            origin,
+        }
+    }
 }
 
 impl From<ThemeOrigin> for ThemeInfo {
     fn from(origin: ThemeOrigin) -> Self {
-        Self { origin }
+        Self {
+            name: "unknown".into(),
+            source: ThemeSource::Embedded,
+            origin,
+        }
     }
 }
 
@@ -1511,12 +1572,7 @@ pub mod testing {
     struct Assets;
 
     pub fn theme() -> Result<Theme> {
-        Theme::load_embedded::<Assets>("test")?
-            .resolve()
-            .map_err(|source| Error::FailedToResolveTheme {
-                name: "test".into(),
-                source,
-            })
+        Theme::load_embedded::<Assets>("test")?.resolve()
     }
 }
 

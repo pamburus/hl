@@ -925,8 +925,8 @@ fn test_v1_style_recursion_limit_error() {
     assert!(err_msg.contains("role"));
 
     match err {
-        Error::FailedToResolveTheme { name, source } => {
-            assert_eq!(name.as_ref(), "v1-recursion-circular");
+        Error::FailedToResolveTheme { info, source } => {
+            assert_eq!(info.name.as_ref(), "v1-recursion-circular");
 
             match source {
                 ThemeLoadError::StyleRecursionLimitExceeded { role } => {
@@ -1977,10 +1977,8 @@ fn test_v0_multiple_blocking_rules_combined() {
 fn test_v1_no_blocking_rules() {
     // Test that v1 themes do NOT apply blocking rules (no ReplaceGroups flag)
     // Elements merge additively without blocking parent-inner pairs
-    let mut base = RawTheme {
-        version: ThemeVersion { major: 1, minor: 0 },
-        ..Default::default()
-    };
+    let mut base = RawTheme::default();
+    base.inner_mut().version = ThemeVersion { major: 1, minor: 0 };
 
     // Base has -inner elements
     base.elements.0.insert(
@@ -2008,10 +2006,8 @@ fn test_v1_no_blocking_rules() {
     base.levels.insert(Level::Error, error_pack);
 
     // Child v1 theme defines parent elements
-    let mut child = RawTheme {
-        version: ThemeVersion { major: 1, minor: 0 },
-        ..Default::default()
-    };
+    let mut child = RawTheme::default();
+    child.inner_mut().version = ThemeVersion { major: 1, minor: 0 };
     child.elements.0.insert(Element::Level, RawStyle::default()); // Does NOT block level-inner in v1
     child.elements.0.insert(Element::Input, RawStyle::default()); // Does NOT block input-number in v1
 

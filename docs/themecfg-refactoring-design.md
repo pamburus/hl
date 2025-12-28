@@ -29,14 +29,17 @@ hl/src/themecfg.rs (main module)
 ├── Output types:
 │   ├── Style (resolved style - was ResolvedStyle)
 │   ├── StyleInventory (type alias)
-│   ├── ThemeInfo, ThemeOrigin
+│   ├── ThemeInfo (name, source, origin), ThemeOrigin, ThemeSource
 ├── Public API:
 │   ├── Theme (fully resolved theme - was ResolvedTheme)
 │   │   ├── Theme::load(name) -> Result<Theme> (loads, merges, resolves)
 │   │   └── Theme::load_raw(name) -> Result<RawTheme> (loads, merges, not resolved)
-│   ├── RawTheme (type alias for v1::Theme - unresolved theme)
-│   │   ├── RawTheme::merge() (delegates to v1)
-│   │   └── RawTheme::resolve() -> Result<Theme> (delegates to v1)
+│   ├── RawTheme (wrapper struct with ThemeInfo metadata)
+│   │   ├── Fields: info (ThemeInfo), inner (v1::Theme)
+│   │   ├── RawTheme::new(info, inner) -> RawTheme
+│   │   ├── RawTheme::merged(other) -> RawTheme
+│   │   ├── RawTheme::resolve() -> Result<Theme> (wraps errors with ThemeInfo)
+│   │   └── Deref/DerefMut to v1::Theme for transparent field access
 │   ├── RawStyle (type alias for v1::Style - unresolved style)
 └── Re-exports for public API:
     └── pub use v1::{Element, Role, StylePack, ...}
@@ -127,15 +130,17 @@ hl/src/themecfg/v1/mod.rs
 | `v0::Indicator` | v0 | No | Simple, concrete style field |
 | `v1::Indicator` | v1 | Yes `<S>` | Generic over style type |
 | `v0::Theme` | v0 | No | v0 deserialization target |
-| `v1::Theme` (RawTheme) | v1 | No | v1 deserialization target |
+| `v1::Theme` | v1 | No | v1 deserialization target |
 | `ThemeVersion` | themecfg | No | Version tracking, common |
 | `MergeFlag` | themecfg | No | Merge behavior, common |
 | `Error` | themecfg | No | Single error type for all versions |
 | `ThemeLoadError` | themecfg | No | Single error type |
 | `Style` | themecfg | No | **Resolved style** (was ResolvedStyle) |
 | `Theme` | themecfg | No | **Resolved theme** (public API, was ResolvedTheme) |
-| `RawTheme` | themecfg | No | Type alias for `v1::Theme` (unresolved) |
+| `RawTheme` | themecfg | No | **Wrapper struct** with ThemeInfo + v1::Theme |
 | `RawStyle` | themecfg | No | Type alias for `v1::Style` (unresolved) |
+| `ThemeInfo` | themecfg | No | Theme metadata (name, source, origin) |
+| `ThemeSource` | themecfg | No | Embedded or Custom file path |
 
 ## Key Architectural Decisions
 
@@ -149,7 +154,16 @@ hl/src/themecfg/v1/mod.rs
 - Used by both v0 and v1
 - Simpler than separate v0::Error and v1::Error
 
-### 3. Type Location Strategy
+### 3. RawTheme Wrapper with Metadata
+- `RawTheme` is a wrapper struct (not a type alias) containing:
+  - `info: ThemeInfo` - metadata (name, source, origin)
+  - `inner: v1::Theme` - the actual theme data
+- `RawTheme::resolve()` automatically wraps errors with `ThemeInfo` context
+- Deref/DerefMut provide transparent access to inner v1::Theme fields
+- **No code duplication** - context added in one place (RawTheme::resolve)
+- **Works everywhere** - any call to resolve() gets proper error context
+
+### 4. Type Location Strategy
 **themecfg (main)**: Primitives and common infrastructure
 - Types that don't change between versions
 - Types used by both v0 and v1
@@ -167,24 +181,24 @@ hl/src/themecfg/v1/mod.rs
 - Generic versions of StylePack and Indicator
 - ALL merge and resolution logic
 
-### 4. No Logic in v0
+### 5. No Logic in v0
 - v0 module only has data structures and deserialization
 - NO merge implementations
 - NO resolution logic
 - Clean, simple, historical format representation
 
-### 5. All Logic in v1
+### 6. All Logic in v1
 - ALL merging logic
 - ALL resolution logic
 - Conversion from v0
 - This is where the complexity lives
 
-### 6. Clear Naming: Resolved vs Raw
+### 7. Clear Naming: Resolved vs Raw
 - **In v0 and v1 modules**: Types are named naturally (`Theme`, `Style`)
 - **In main themecfg module**: 
   - `Theme` = **resolved** theme (what was `ResolvedTheme`)
   - `Style` = **resolved** style (what was `ResolvedStyle`)
-  - `RawTheme` = type alias for `v1::Theme` (unresolved)
+  - `RawTheme` = **wrapper struct** with metadata + v1::Theme
   - `RawStyle` = type alias for `v1::Style` (unresolved)
 - `Theme::load()` returns fully resolved theme (load + merge + resolve)
 - `Theme::load_raw()` returns unresolved theme (load + merge only)
@@ -332,9 +346,11 @@ They don't need to know about v0 vs v1 internals - that's all implementation det
 11. **Type clarity**: Theme = resolved, RawTheme = unresolved (clear naming)
 12. **Fail fast**: Use Level instead of InfallibleLevel - unknown levels are errors
 13. **Error handling**: Recursion limit violations return ThemeLoadError::StyleRecursionLimitExceeded
-    - Resolution errors are wrapped in FailedToResolveTheme
+    - Resolution errors are wrapped in FailedToResolveTheme with full ThemeInfo
+    - ThemeInfo contains name, source (Embedded or Custom{path}), and origin (Stock or Custom)
     - Error message includes theme name and the problematic role (displayed in kebab-case)
     - Role implements Display using serde to match user input format
+    - RawTheme::resolve() automatically adds context - no code duplication
     - Example: "failed to resolve theme 'my-theme': style recursion limit exceeded while resolving role primary"
 14. **Clear naming**: Raw vs Resolved is explicit in type names
     - `v1::Theme` → main's `RawTheme` (unresolved)
