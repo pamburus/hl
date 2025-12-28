@@ -87,6 +87,7 @@ pub(super) fn bench(c: &mut Criterion) {
 
 fn theme() -> Theme {
     let cfg = themecfg::RawTheme {
+        schema: None,
         version: ThemeVersion::CURRENT,
         tags: Default::default(),
         styles: themecfg::v1::StylePack(hashmap! {

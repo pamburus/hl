@@ -273,15 +273,20 @@ impl Default for Theme {
 }
 
 impl Theme {
-    /// Validate v0 theme
+    /// Validate v0 theme version before deserialization
     ///
-    /// V0 themes should have version 0.0 (default) or be compatible with v0
-    pub fn validate(&self) -> Result<(), super::ThemeLoadError> {
-        // V0 themes should have version 0.0 (default/no version field)
-        // If version is specified, it must be compatible with 0.x
-        if self.version != ThemeVersion::default() && self.version.major != 0 {
+    /// V0 themes must be exactly version 0.0 (or default/unspecified)
+    /// This is called before deserialization to provide better error messages
+    pub fn validate_version(version: &ThemeVersion) -> Result<(), super::ThemeLoadError> {
+        // Default version (0.0) is always acceptable for v0
+        if *version == ThemeVersion::default() {
+            return Ok(());
+        }
+
+        // V0 themes must be exactly version 0.0
+        if *version != ThemeVersion::V0_0 {
             return Err(super::ThemeLoadError::UnsupportedVersion {
-                requested: self.version,
+                requested: *version,
                 supported: ThemeVersion::V0_0,
             });
         }

@@ -393,6 +393,10 @@ impl StylePack<Role, Style> {
 #[serde(default)]
 #[serde(deny_unknown_fields)]
 pub struct Theme {
+    /// Optional JSON/YAML schema reference (ignored, for IDE/validator support)
+    #[serde(rename = "$schema")]
+    #[serde(skip_serializing)]
+    pub schema: Option<String>,
     #[serde(deserialize_with = "enumset_serde::deserialize")]
     pub tags: EnumSet<Tag>,
     pub version: ThemeVersion,
@@ -405,6 +409,7 @@ pub struct Theme {
 impl Default for Theme {
     fn default() -> Self {
         Self {
+            schema: None,
             tags: EnumSet::new(),
             version: ThemeVersion::default(),
             styles: StylePack::default(),
@@ -476,7 +481,7 @@ impl Theme {
         self
     }
 
-    /// Resolves all styles in this theme and returns a ResolvedTheme.
+    /// Resolves all styles in this theme and returns a resolved Theme.
     ///
     /// This method:
     /// 1. Resolves the role-based styles inventory
@@ -646,19 +651,20 @@ impl Theme {
         }
     }
 
-    /// Validate v1 theme
+    /// Validate v1 theme version before deserialization
     ///
-    /// V1 themes should have version 1.x or be compatible with current version
-    pub fn validate(&self) -> Result<(), super::ThemeLoadError> {
-        // Version 0.0 (default/no version field) is considered compatible
-        if self.version == ThemeVersion::default() {
+    /// V1 themes must be compatible with the current version
+    /// This is called before deserialization to provide better error messages
+    pub fn validate_version(version: &ThemeVersion) -> Result<(), super::ThemeLoadError> {
+        // Default version (0.0/unspecified) is considered compatible with v1
+        if *version == ThemeVersion::default() {
             return Ok(());
         }
 
         // Check if version is compatible with current supported version
-        if !self.version.is_compatible_with(&ThemeVersion::CURRENT) {
+        if !version.is_compatible_with(&ThemeVersion::CURRENT) {
             return Err(super::ThemeLoadError::UnsupportedVersion {
-                requested: self.version,
+                requested: *version,
                 supported: ThemeVersion::CURRENT,
             });
         }
@@ -869,6 +875,7 @@ impl From<v0::Theme> for Theme {
         let styles = deduce_styles_from_elements(&elements);
 
         Self {
+            schema: None,
             tags: theme.tags,
             version: theme.version,
             styles: StylePack(styles),

@@ -239,15 +239,17 @@ impl Theme {
         let version = Self::peek_version(s, format)?;
 
         if version.major == 0 {
+            // Validate v0 version before deserializing
+            v0::Theme::validate_version(&version)?;
             // V0 themes use lenient deserialization (ignore unknown fields/variants)
             let theme: v0::Theme = Self::deserialize(s, format)?;
-            theme.validate()?;
             // Convert v0 to v1
             Ok(theme.into())
         } else {
+            // Validate v1 version before deserializing
+            RawTheme::validate_version(&version)?;
             // V1+ themes use strict deserialization
             let theme: RawTheme = Self::deserialize(s, format)?;
-            theme.validate()?;
             Ok(theme)
         }
     }

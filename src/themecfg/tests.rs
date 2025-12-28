@@ -2464,3 +2464,64 @@ fn test_v1_strict_unknown_enum_variant_rejected() {
         err_msg
     );
 }
+
+#[test]
+fn test_v0_version_0_1_rejected() {
+    // Test that v0 themes with version "0.1" are rejected before deserialization
+    // Only version "0.0" (or default/no version) is valid for v0
+    let path = PathBuf::from("src/testing/assets/themes");
+    let result = Theme::load_from(&path, "v0-invalid-version");
+
+    assert!(result.is_err(), "v0 theme with version 0.1 should be rejected");
+
+    let err = result.unwrap_err();
+    let err_msg = err.to_string();
+
+    assert!(
+        err_msg.contains("0.1") && err_msg.contains("not supported"),
+        "Error should indicate version 0.1 is not supported, got: {}",
+        err_msg
+    );
+}
+
+#[test]
+fn test_v1_version_1_1_rejected_before_deserialization() {
+    // Test that v1 themes with unsupported version "1.1" are rejected BEFORE
+    // attempting to deserialize, giving a better error message
+    let path = PathBuf::from("src/testing/assets/themes");
+    let result = Theme::load_from(&path, "v1-unsupported-version");
+
+    assert!(result.is_err(), "v1 theme with version 1.1 should be rejected");
+
+    let err = result.unwrap_err();
+    let err_msg = err.to_string();
+
+    assert!(
+        err_msg.contains("1.1") && err_msg.contains("not supported"),
+        "Error should indicate version 1.1 is not supported, got: {}",
+        err_msg
+    );
+}
+
+#[test]
+fn test_v1_schema_field_accepted() {
+    // Test that v1 themes can include $schema field for IDE/validator support
+    // The field should be accepted and ignored during processing
+    let path = PathBuf::from("src/testing/assets/themes");
+    let result = Theme::load_from(&path, "v1-with-schema");
+
+    assert!(
+        result.is_ok(),
+        "v1 theme with $schema field should be accepted, got error: {:?}",
+        result.err()
+    );
+
+    // Verify the theme loads and resolves correctly
+    let theme = result.unwrap();
+    let resolved = theme.resolve();
+    assert!(resolved.is_ok(), "Theme with $schema should resolve successfully");
+
+    let resolved = resolved.unwrap();
+    // After resolution, LevelInner is added via parent→inner inheritance (Level → LevelInner)
+    assert_eq!(resolved.elements.len(), 3, "Should have 3 elements after resolution");
+}
