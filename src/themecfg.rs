@@ -90,6 +90,17 @@
 //! - **Parse errors**: Includes file path and line/column information
 //! - **Version errors**: Shows requested vs. supported version
 //! - **Resolution errors**: Shows theme name and problematic role (for circular inheritance)
+//! - **Recursion limit**: V1 role inheritance is limited to 64 levels (FR-046); circular
+//!   references are detected by this limit (FR-047)
+//!
+//! ## Recursion Protection
+//!
+//! V1 themes enforce a maximum depth of **64 levels** for role-to-role inheritance chains.
+//! This prevents both excessively deep chains and circular references from causing
+//! stack overflow or infinite loops.
+//!
+//! Circular references (e.g., `warning → error → warning`) will trigger this limit
+//! and fail with [`ThemeLoadError::StyleRecursionLimitExceeded`].
 //!
 //! Example error messages:
 //! ```text
@@ -366,9 +377,16 @@ pub enum ThemeLoadError {
     /// Style recursion limit exceeded during role resolution.
     ///
     /// This occurs when there is circular inheritance in role-based styles
-    /// (e.g., role A inherits from role B, which inherits from role A).
+    /// (e.g., role A inherits from role B, which inherits from role A) or
+    /// when inheritance chains exceed the maximum depth of 64 levels.
     ///
-    /// The recursion limit is set to prevent infinite loops and stack overflow.
+    /// The recursion limit prevents infinite loops and stack overflow.
+    ///
+    /// # Specification Requirements
+    ///
+    /// - **FR-046**: V1 role-to-role inheritance via the `style` field MUST support
+    ///   a maximum depth of 64 levels
+    /// - **FR-047**: V1 themes MUST detect circular role references and exit with error
     ///
     /// # Example Error Message
     ///
@@ -376,15 +394,23 @@ pub enum ThemeLoadError {
     /// style recursion limit exceeded while resolving role primary
     /// ```
     ///
-    /// # Common Cause
+    /// # Common Causes
     ///
-    /// Circular inheritance in theme file:
+    /// **Circular inheritance** in theme file:
     /// ```yaml
     /// styles:
     ///   primary:
     ///     style: [secondary]
     ///   secondary:
     ///     style: [primary]  # Circular!
+    /// ```
+    ///
+    /// **Excessively deep chain** (rare):
+    /// ```yaml
+    /// styles:
+    ///   role1: { style: [role2] }
+    ///   role2: { style: [role3] }
+    ///   # ... 65+ levels deep
     /// ```
     #[error("style recursion limit exceeded while resolving role {role}", role=.role.hlq())]
     StyleRecursionLimitExceeded { role: Role },

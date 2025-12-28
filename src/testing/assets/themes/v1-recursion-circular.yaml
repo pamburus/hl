@@ -1,3 +1,18 @@
+# Test theme for circular role reference detection (FR-047)
+#
+# This theme contains a circular inheritance chain:
+#   primary → secondary → primary
+#
+# When resolving the `level` element (which references `primary`),
+# the resolver will detect that the chain exceeds the recursion limit
+# of 64 levels and fail with StyleRecursionLimitExceeded error.
+#
+# Expected behavior:
+# - Theme loading should fail with Error::FailedToResolveTheme
+# - Inner error should be ThemeLoadError::StyleRecursionLimitExceeded
+# - Error should include theme name "v1-recursion-circular"
+# - Error should indicate which role exceeded the limit (primary or secondary)
+
 version: "1.0"
 tags: [dark]
 

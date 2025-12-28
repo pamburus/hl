@@ -42,6 +42,39 @@
 //!       foreground: "#ff0000"
 //! ```
 //!
+//! # Recursion Limits and Circular Reference Protection
+//!
+//! Role-to-role inheritance chains are limited to a maximum depth of **64 levels**
+//! to prevent stack overflow and infinite loops. This limit applies to both:
+//!
+//! - **Deep inheritance chains**: `role1 → role2 → role3 → ... → role64` (allowed)
+//! - **Circular references**: `warning → error → warning` (rejected with error)
+//!
+//! When the limit is exceeded, theme loading fails with
+//! [`ThemeLoadError::StyleRecursionLimitExceeded`], indicating which role
+//! triggered the limit.
+//!
+//! ## Example Error
+//!
+//! ```yaml
+//! # This will fail with recursion limit error:
+//! styles:
+//!   warning:
+//!     style: [error]
+//!   error:
+//!     style: [warning]  # Circular reference!
+//! ```
+//!
+//! Error message:
+//! ```text
+//! failed to resolve theme "my-theme": style recursion limit exceeded while resolving role warning
+//! ```
+//!
+//! ## Specification References
+//!
+//! - **FR-046**: Maximum depth of 64 levels for role-to-role inheritance
+//! - **FR-047**: Circular role references must be detected and cause an error
+//!
 //! # Implementation Details
 //!
 //! This module contains:
@@ -50,6 +83,7 @@
 //! - ALL merge logic for themes
 //! - ALL resolve logic for themes (role → element resolution)
 //! - Conversion from v0 to v1 format
+//! - Recursion protection via [`StyleResolver`]
 
 // std imports
 use std::collections::HashMap;
@@ -84,6 +118,47 @@ use super::Style as ResolvedStyle;
 pub type StyleInventory = super::StylePack<Role, ResolvedStyle>;
 
 // Constants
+
+/// Maximum depth for role-to-role style inheritance chains.
+///
+/// This limit prevents both excessively deep inheritance chains and circular
+/// role references from causing stack overflow or infinite loops.
+///
+/// # Specification Requirements
+///
+/// - **FR-046**: V1 role-to-role inheritance via the `style` field MUST support
+///   a maximum depth of 64 levels
+/// - **FR-047**: V1 themes MUST detect circular role references (e.g.,
+///   `warning: {style: "error"}` and `error: {style: "warning"}`) and exit
+///   with error message
+///
+/// # Implementation
+///
+/// When resolving role styles, the [`StyleResolver`] tracks recursion depth.
+/// If depth reaches this limit, resolution fails with
+/// [`ThemeLoadError::StyleRecursionLimitExceeded`].
+///
+/// Circular references will be caught by this limit when the circular chain
+/// is traversed 64 times. While this doesn't provide a full dependency chain
+/// in the error message, it reliably prevents infinite loops and provides
+/// a clear error indicating which role exceeded the limit.
+///
+/// # Examples
+///
+/// Valid deep chain (allowed up to 64 levels):
+/// ```yaml
+/// styles:
+///   role1: { style: [role2] }
+///   role2: { style: [role3] }
+///   # ... up to 64 levels deep
+/// ```
+///
+/// Circular reference (detected and rejected):
+/// ```yaml
+/// styles:
+///   warning: { style: [error] }
+///   error: { style: [warning] }  # Circular!
+/// ```
 const RECURSION_LIMIT: usize = 64;
 
 // ---
@@ -784,7 +859,26 @@ impl Theme {
 
 // ---
 
-/// StyleResolver - helper for resolving role-based styles with caching and recursion protection
+/// StyleResolver - helper for resolving role-based styles with caching and recursion protection.
+///
+/// This resolver handles role-to-role inheritance chains while preventing:
+/// - Stack overflow from excessively deep inheritance chains
+/// - Infinite loops from circular role references
+///
+/// # Recursion Protection
+///
+/// The resolver enforces a maximum depth of 64 levels for style inheritance
+/// chains. When this limit is exceeded, resolution fails with
+/// [`ThemeLoadError::StyleRecursionLimitExceeded`].
+///
+/// This protects against both:
+/// - Deep non-circular chains (e.g., role1 → role2 → ... → role65)
+/// - Circular references (e.g., warning → error → warning)
+///
+/// # Caching
+///
+/// Resolved styles are cached to avoid redundant resolution of the same role.
+/// This improves performance and ensures each role is resolved at most once.
 pub struct StyleResolver<'a> {
     inventory: &'a StylePack<Role, Style>,
     flags: MergeFlags,

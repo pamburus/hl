@@ -908,7 +908,12 @@ fn test_v1_multiple_inheritance() {
 
 #[test]
 fn test_v1_style_recursion_limit_error() {
-    // Test that style recursion limit is detected and returns an error wrapped with theme context
+    // FR-046: V1 role-to-role inheritance via the `style` field MUST support a maximum depth of 64 levels
+    // FR-047: V1 themes MUST detect circular role references and exit with error message
+    //
+    // Test that style recursion limit is detected and returns an error wrapped with theme context.
+    // Uses external test file: src/testing/assets/themes/v1-recursion-circular.yaml
+    // which contains circular inheritance: primary → secondary → primary
     let app_dirs = test_app_dirs();
 
     // Attempting to load (which includes resolve) should fail with recursion limit error
@@ -2347,15 +2352,6 @@ fn test_invalid_style_base_deserialization() {
     let app_dirs = test_app_dirs();
     let result = Theme::load(&app_dirs, "test-invalid-style-base");
     assert!(result.is_err());
-}
-
-#[test]
-fn test_style_recursion_limit() {
-    let app_dirs = test_app_dirs();
-    let theme = Theme::load_raw(&app_dirs, "test-recursive-style").unwrap();
-    // StyleResolver is internal to v1, this test may need adjustment or removal
-    // For now, just verify the theme loads
-    assert!(!theme.styles.0.is_empty());
 }
 
 #[test]
