@@ -185,6 +185,16 @@
 
 - Q: Should custom @default theme files created by users appear in theme listings? → A: Yes - show custom @default in custom themes list; while embedded @default is hidden (system default), custom @default is user-created and should be visible so users can see and manage it
 
+- Q: When does color validation occur - during initial theme file parsing, during merge, or during resolution? → A: During initial theme file parsing (fail-fast approach) - if a theme file contains invalid color values, the system exits with error immediately when parsing that file, providing immediate feedback to theme authors per FR-026
+
+- Q: When a custom theme (e.g., v0) merges with the embedded @default theme (v1), what version does the resulting merged theme have? → A: Custom theme's version wins - the merged result uses the version from the custom theme that was explicitly requested by the user; for example, v0 custom theme + v1 @default = v0 result; this ensures the custom theme's semantics (v0 replacement vs v1 property-level merge) are applied correctly
+
+- Q: Should circular reference detection apply to the embedded @default theme, or only to user themes? → A: Circular reference detection occurs after merging user theme with @default - user theme overrides can create circular role references that didn't exist before merge (e.g., user overrides role A to reference role B, while @default has B reference A); detection must happen on the merged result, not on individual themes separately
+
+- Q: In v1, what's the difference between an element having modes=[] (empty array) versus not having a modes field at all? → A: Same as v0 - both empty array and absent field inherit modes from parent/role; in v1 modes is a diff set (add/remove operations), so an empty modes array means "no mode operations specified" which results in inheriting from the base style/role, just like an absent field; modes never replace the whole set in v1, only modify it
+
+- Q: Should theme listing output use case-sensitive or case-insensitive alphabetical sorting? → A: Case-sensitive sorting (ASCII order) - themes are sorted with uppercase letters before lowercase, following standard ASCII ordering; this provides deterministic and predictable ordering
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Theme File Loading and Validation (Priority: P1)
@@ -376,6 +386,11 @@ Theme authors using v1 can define semantic roles (like "warning", "error", "succ
 - What happens when trying to load a theme with an extension not in the supported list (.yaml, .yml, .toml, .json)? (Answer: Exit with specific error message to stderr: "Unsupported theme file extension '.ext' - supported extensions are: .yaml, .yml, .toml, .json")
 - What happens when multiple theme files exist with the same stem but different extensions (e.g., theme.yaml and theme.toml)? (Answer: Silent - load highest priority extension without warning per FR-002a; users can specify full filename for specific format)
 - Should custom @default theme files created by users appear in theme listings? (Answer: Yes - custom @default shown in custom themes list per FR-030c; embedded @default remains hidden)
+- When does color validation occur - during initial theme file parsing, during merge, or during resolution? (Answer: During initial theme file parsing per FR-026a - fail-fast approach provides immediate feedback)
+- When a custom theme (e.g., v0) merges with the embedded @default theme (v1), what version does the resulting merged theme have? (Answer: Custom theme's version wins per FR-045a - v0 custom + v1 @default = v0 result)
+- Should circular reference detection apply to the embedded @default theme, or only to user themes? (Answer: Detection occurs after merging per FR-047a - user overrides can create loops that didn't exist before merge)
+- In v1, what's the difference between an element having modes=[] (empty array) versus not having a modes field at all? (Answer: Same as v0 - both inherit from parent/role per FR-018b; in v1 modes is a diff set, so empty array = no operations = inherit)
+- Should theme listing output use case-sensitive or case-insensitive alphabetical sorting? (Answer: Case-sensitive sorting per FR-030d - ASCII order with uppercase before lowercase for deterministic ordering)
 - Can inner elements be defined without corresponding parent elements? (Answer: Yes - inner elements are valid on their own; in v1 they fall back to @default theme's parent element, in v0 they use empty/terminal default for the parent)
 - What happens when the theme directory doesn't exist or isn't readable? (Answer: Skip custom themes silently, continue with stock themes only - no error, no directory creation)
 - How does a custom @default theme merge with the embedded @default theme? (Answer: Custom @default merges like any other theme - elements from custom theme completely replace embedded @default elements at theme merge level; property-level merging happens during resolution; merge strategy depends on custom theme version per FR-016 (v0) or FR-041 (v1))
@@ -481,6 +496,8 @@ Theme authors using v1 can define semantic roles (like "warning", "error", "succ
 
 - **FR-018a**: System MUST treat level names in the `levels` section as case-sensitive (valid: trace, debug, info, warning, error); unknown or invalid level names (e.g., "critical", "Error") are silently ignored and not loaded
 
+- **FR-018b**: In v1, system MUST treat empty modes array `[]` identically to absent modes field (both inherit from parent/role); since v1 modes are diff operations (add/remove), an empty array means "no mode operations specified" which results in inheriting all modes from the base style/role; v1 modes never replace the whole set, only modify it through +/- operations
+
 #### V0 Level-Specific Overrides
 
 - **FR-019**: System MUST support level-specific element overrides under `levels` section for: trace, debug, info, warning, error
@@ -515,6 +532,8 @@ Theme authors using v1 can define semantic roles (like "warning", "error", "succ
 
 - **FR-026**: System MUST validate color values and exit with clear error messages to stderr for invalid values, with format-specific error messages: invalid hex length (e.g., "#FFF must be #RRGGBB"), invalid hex characters (e.g., "#GGGGGG contains invalid hex characters"), out-of-range ANSI extended (e.g., "ANSI color 256 out of range (0-255)"), negative ANSI values, etc.
 
+- **FR-026a**: System MUST perform color validation during initial theme file parsing (fail-fast approach); if a theme file contains invalid color values, the system exits with error immediately when parsing that file, before any merge or resolution operations; this provides immediate feedback to theme authors
+
 - **FR-027**: System MUST allow duplicate modes in the modes array in v0 but deduplicate them during theme loading with last occurrence kept (e.g., modes=[bold, italic, bold] becomes [italic, bold]); v1 uses the same deduplication strategy for consistency
 
 - **FR-028**: System MUST support $palette section in theme schema for all formats (TOML, YAML, JSON) in both v0 and v1, but only YAML can use anchor/alias syntax to reference palette colors; TOML and JSON can define $palette for organization but must reference colors by value; v1 $palette works identically to v0
@@ -530,6 +549,8 @@ Theme authors using v1 can define semantic roles (like "warning", "error", "succ
 - **FR-030b**: System MUST display each theme by stem name only once in theme listings, even when multiple file formats exist for the same stem (e.g., if both theme.yaml and theme.toml exist, list shows "theme" once, representing the loadable theme per extension priority)
 
 - **FR-030c**: System MUST include custom `@default` theme files in theme listings under the custom themes group; only the embedded `@default` theme is excluded from listings; this allows users to see and manage their custom @default themes
+
+- **FR-030d**: System MUST sort themes alphabetically within each group (stock/custom) using case-sensitive ASCII ordering where uppercase letters come before lowercase letters (e.g., "MyTheme", "Theme", "another", "basic"); this provides deterministic and predictable ordering
 
 - **FR-031**: System MUST automatically deduce style roles from element definitions in v0 themes before merging with `@default` theme, using these mappings: if v0 theme defines `time` element → deduce `styles.secondary` from it; if defines `string` → deduce `styles.primary`; if defines `message` → deduce `styles.strong`; if defines `key` → deduce `styles.accent`; if defines `array` → deduce `styles.syntax`; deduction copies foreground, background, and modes from the element definition to create the corresponding style role with no base (the deduced style has no reference to parent styles, i.e., no base roles to inherit from); note that v0 theme schema does not include a styles section, so deduced styles are created artificially during theme loading and cannot be explicitly defined in v0 theme files
 
@@ -597,9 +618,13 @@ Theme authors using v1 can define semantic roles (like "warning", "error", "succ
 
 - **FR-045**: V1 inheritance chain is simple: user theme → `@default` theme (no circular dependency detection needed)
 
+- **FR-045a**: When a custom theme merges with the embedded `@default` theme, the resulting merged theme MUST use the version from the custom theme; this ensures the custom theme's merge semantics are applied correctly (e.g., v0 custom theme + v1 @default = v0 result with v0 replacement semantics; v1 custom theme + v1 @default = v1 result with v1 property-level merge semantics)
+
 - **FR-046**: V1 role-to-role inheritance via the `style` field MUST support a maximum depth of 64 levels
 
 - **FR-047**: V1 themes MUST detect circular role references (e.g., `warning: {style: "error"}` and `error: {style: "warning"}`) and exit with error message showing the circular dependency chain
+
+- **FR-047a**: Circular reference detection MUST occur after merging the user theme with the embedded `@default` theme, not before; user theme overrides can create circular role references that didn't exist in either theme individually (e.g., if @default has `A: {style: "B"}` and user theme overrides with `B: {style: "A"}`, the circular reference only exists after merge); the detection applies to the complete merged role inventory
 
 - **FR-048**: V1 themes MUST exit with error when a role's `style` field references a role name that is not in the predefined role enum or when the referenced role is not defined in either the user theme or `@default` theme
 
