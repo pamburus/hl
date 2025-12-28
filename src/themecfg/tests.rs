@@ -695,9 +695,9 @@ fn test_format_iteration() {
 
 #[test]
 fn test_format_extensions() {
-    assert_eq!(Format::Yaml.extension(), "yaml");
-    assert_eq!(Format::Toml.extension(), "toml");
-    assert_eq!(Format::Json.extension(), "json");
+    assert_eq!(Format::Yaml.extensions(), &["yaml", "yml"]);
+    assert_eq!(Format::Toml.extensions(), &["toml"]);
+    assert_eq!(Format::Json.extensions(), &["json"]);
 }
 
 #[test]

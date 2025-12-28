@@ -719,7 +719,7 @@ impl Theme {
             return name.to_string();
         }
 
-        format!("{}.{}", name, format.extension())
+        format!("{}.{}", name, format.extensions()[0])
     }
 
     fn themes_dir(app_dirs: &AppDirs) -> PathBuf {
@@ -754,9 +754,12 @@ impl Theme {
     }
 
     fn strip_extension(filename: &str, format: Format) -> Option<&str> {
-        filename
-            .strip_suffix(format.extension())
-            .and_then(|r| r.strip_suffix("."))
+        for ext in format.extensions() {
+            if let Some(name) = filename.strip_suffix(ext).and_then(|r| r.strip_suffix(".")) {
+                return Some(name);
+            }
+        }
+        None
     }
 
     fn strip_known_extension(filename: &str) -> Option<&str> {
@@ -779,11 +782,11 @@ pub enum Format {
 }
 
 impl Format {
-    pub fn extension(&self) -> &str {
+    pub fn extensions(&self) -> &[&str] {
         match self {
-            Self::Yaml => "yaml",
-            Self::Toml => "toml",
-            Self::Json => "json",
+            Self::Yaml => &["yaml", "yml"],
+            Self::Toml => &["toml"],
+            Self::Json => &["json"],
         }
     }
 }
