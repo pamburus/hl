@@ -109,7 +109,7 @@
 
 - Q: How should unknown top-level sections be handled in theme files? → A: Ignore unknown top-level sections when app knows the version (forward compatible within same version). If app doesn't know the theme version, fail with error. Exception: unknown level names in `levels` section cause error (levels must be from known set: trace, debug, info, warning, error).
 
-- Q: Does the `$palette` section work the same in v1 as in v0? → A: Yes - $palette works identically in v1 as v0 (YAML anchors supported, organization feature)
+- Q: Does the `$palette` section work the same in v1 as in v0? → A: No - $palette is NOT supported in v1; it's only supported in v0 as a YAML anchor/alias organization feature; v1 strict parsing rejects $palette as an unknown top-level section per FR-028a
 
 - Q: Can users create a custom theme file named `@default` or is this name reserved/protected? → A: The embedded `@default` theme is excluded from theme listings (special hidden base theme), but users CAN create custom themes named `@default` which will be loaded and merged with the embedded `@default` following normal custom theme priority rules. Other theme names starting with `@` are not reserved and can be used normally.
 
@@ -194,6 +194,16 @@
 - Q: In v1, what's the difference between an element having modes=[] (empty array) versus not having a modes field at all? → A: Same as v0 - both empty array and absent field inherit modes from parent/role; in v1 modes is a diff set (add/remove operations), so an empty modes array means "no mode operations specified" which results in inheriting from the base style/role, just like an absent field; modes never replace the whole set in v1, only modify it
 
 - Q: Should theme listing output use case-sensitive or case-insensitive alphabetical sorting? → A: Case-sensitive sorting (ASCII order) - themes are sorted with uppercase letters before lowercase, following standard ASCII ordering; this provides deterministic and predictable ordering
+
+- Q: When an element references a role name via the `style` field, is the role name validated immediately during parsing or later during style resolution? → A: During initial theme file parsing (fail-fast like color validation) - if an element references an invalid role name (not in the predefined role enum), the system exits with error immediately when parsing that file; this provides immediate feedback to theme authors and catches typos early
+
+- Q: What happens if the `default` role is not defined in the theme (neither in user theme nor in @default)? → A: The embedded @default theme MUST define the `default` role - this is a guaranteed invariant tested during development; since @default defines all 12 roles explicitly (per FR-038), the `default` role is always available as the implicit base for other roles
+
+- Q: Are palette color values in the `$palette` section validated the same way as element colors? → A: No - palette colors are not validated; $palette is only supported in v0 themes (YAML anchor/alias organization feature); v1 strict parsing rejects the `$palette` section as an unknown top-level section per FR-010c forward compatibility rules (v1 themes must not include $palette)
+
+- Q: Are file extensions case-sensitive (e.g., does .YAML or .Yaml work on any platform)? → A: Strict - only lowercase extensions are accepted (.yaml, .yml, .toml, .json) on all platforms; variations like .YAML, .Yaml, .YML are not recognized and result in unsupported extension error per FR-002c; this provides consistent behavior across platforms
+
+- Q: In the boolean special case merge, what is the merge direction and how are undefined properties handled? → A: The `boolean` element serves as the base style, and `boolean-true`/`boolean-false` variants merge over it (override/extend); the merge is: boolean (base) → merged with → boolean-true/false (patch); variant properties override corresponding boolean properties; undefined properties in variants inherit from boolean; undefined properties in boolean resolve to base style (if specified via `style` field in v1) or terminal defaults
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -391,6 +401,11 @@ Theme authors using v1 can define semantic roles (like "warning", "error", "succ
 - Should circular reference detection apply to the embedded @default theme, or only to user themes? (Answer: Detection occurs after merging per FR-047a - user overrides can create loops that didn't exist before merge)
 - In v1, what's the difference between an element having modes=[] (empty array) versus not having a modes field at all? (Answer: Same as v0 - both inherit from parent/role per FR-018b; in v1 modes is a diff set, so empty array = no operations = inherit)
 - Should theme listing output use case-sensitive or case-insensitive alphabetical sorting? (Answer: Case-sensitive sorting per FR-030d - ASCII order with uppercase before lowercase for deterministic ordering)
+- When an element references a role name via the `style` field, is the role name validated immediately during parsing or later during style resolution? (Answer: During initial parsing per FR-040a - fail-fast validation like colors, catches invalid role names immediately)
+- What happens if the `default` role is not defined in the theme (neither in user theme nor in @default)? (Answer: Guaranteed invariant - @default theme MUST define default role per FR-038a, tested during development)
+- Are palette color values in the `$palette` section validated the same way as element colors? (Answer: No - palette colors not validated; $palette only supported in v0, v1 rejects it per FR-028a)
+- Are file extensions case-sensitive (e.g., does .YAML or .Yaml work on any platform)? (Answer: Strict - only lowercase extensions accepted per FR-002c; .YAML, .Yaml, .YML not recognized)
+- In the boolean special case merge, what is the merge direction and how are undefined properties handled? (Answer: Boolean is base, variants override per FR-024b - boolean → merged with → boolean-true/false; undefined variant properties inherit from boolean)
 - Can inner elements be defined without corresponding parent elements? (Answer: Yes - inner elements are valid on their own; in v1 they fall back to @default theme's parent element, in v0 they use empty/terminal default for the parent)
 - What happens when the theme directory doesn't exist or isn't readable? (Answer: Skip custom themes silently, continue with stock themes only - no error, no directory creation)
 - How does a custom @default theme merge with the embedded @default theme? (Answer: Custom @default merges like any other theme - elements from custom theme completely replace embedded @default elements at theme merge level; property-level merging happens during resolution; merge strategy depends on custom theme version per FR-016 (v0) or FR-041 (v1))
@@ -415,6 +430,8 @@ Theme authors using v1 can define semantic roles (like "warning", "error", "succ
 - **FR-001b**: System MUST exclude the embedded `@default` from theme listings (it is a special hidden base theme); however, users MAY create custom themes named `@default` which will be loaded and merged with the embedded `@default` theme following normal custom theme priority rules (FR-001a); custom `@default` theme files MUST appear in theme listings under the custom themes group (FR-030c) since they are user-created; the system MUST load custom `@default` themes consistently whether loaded by stem name (`@default`) or full filename (`@default.yaml`), both methods should check for custom theme files first and merge with embedded `@default`; the embedded `@default` theme itself MUST NOT merge with itself (no recursion); other theme names starting with `@` are not reserved and can be used normally
 
 - **FR-002**: System MUST support loading themes by stem name (without extension) with automatic format detection in priority order: .yaml, .yml, .toml, .json (first found wins); both .yaml and .yml extensions are supported for YAML files and use the YAML parser; theme name matching is case-sensitive on Linux/macOS and case-insensitive on Windows (follows platform filesystem conventions)
+
+- **FR-002c**: System MUST only accept lowercase file extensions (.yaml, .yml, .toml, .json) on all platforms; variations with uppercase letters (.YAML, .Yaml, .YML, .TOML, .JSON, etc.) are NOT recognized as valid theme files and result in unsupported extension error per FR-006b; this provides consistent behavior across all platforms regardless of filesystem case sensitivity
 
 - **FR-002a**: System MUST silently load the highest priority format when multiple theme files with the same stem but different extensions exist (e.g., if theme.yaml, theme.yml, and theme.toml all exist, load theme.yaml without warning or indication that others were ignored; if only theme.yml and theme.toml exist, load theme.yml)
 
@@ -528,6 +545,8 @@ Theme authors using v1 can define semantic roles (like "warning", "error", "succ
 
 - **FR-024a**: When level-specific overrides include a `boolean` element override, the boolean active merge for that level uses the level-merged `boolean` element (base + level override) as the base for `boolean-true` and `boolean-false` at that level; this allows level-specific customization of boolean styling across all variants (e.g., if error level defines `boolean: {background: "#440000"}` and base defines `boolean-true: {foreground: "#00ffff"}`, then at error level boolean-true gets foreground from base boolean-true and background from error level's boolean)
 
+- **FR-024b**: The boolean merge direction is: `boolean` element serves as base → `boolean-true`/`boolean-false` variants merge over it (clone boolean, then merge variant properties); variant properties override corresponding boolean properties; undefined properties in variants inherit from boolean; undefined properties in boolean resolve to base style (if variant specifies `style` field in v1) or terminal defaults; this is standard property-level override semantics where the patch (variant) overrides the base (boolean)
+
 - **FR-025**: System MUST ignore unknown element names gracefully (forward compatibility)
 
 - **FR-026**: System MUST validate color values and exit with clear error messages to stderr for invalid values, with format-specific error messages: invalid hex length (e.g., "#FFF must be #RRGGBB"), invalid hex characters (e.g., "#GGGGGG contains invalid hex characters"), out-of-range ANSI extended (e.g., "ANSI color 256 out of range (0-255)"), negative ANSI values, etc.
@@ -536,7 +555,9 @@ Theme authors using v1 can define semantic roles (like "warning", "error", "succ
 
 - **FR-027**: System MUST allow duplicate modes in the modes array in v0 but deduplicate them during theme loading with last occurrence kept (e.g., modes=[bold, italic, bold] becomes [italic, bold]); v1 uses the same deduplication strategy for consistency
 
-- **FR-028**: System MUST support $palette section in theme schema for all formats (TOML, YAML, JSON) in both v0 and v1, but only YAML can use anchor/alias syntax to reference palette colors; TOML and JSON can define $palette for organization but must reference colors by value; v1 $palette works identically to v0
+- **FR-028**: System MUST support $palette section in v0 theme schema for all formats (TOML, YAML, JSON), but only YAML can use anchor/alias syntax to reference palette colors; TOML and JSON can define $palette for organization but must reference colors by value; palette color values are NOT validated - $palette is purely an organizational/referencing feature in v0
+
+- **FR-028a**: V1 themes MUST NOT include the `$palette` section; v1 strict parsing treats `$palette` as an unknown top-level section and rejects it per forward compatibility rules (FR-010c applies only when version is supported, but v1 doesn't support $palette); if a v1 theme includes `$palette`, the system exits with error indicating it's not supported in v1
 
 - **FR-029**: System MUST report file format errors (TOML/YAML/JSON syntax errors) to stderr with line numbers and exit; YAML undefined anchor references are treated as parse errors
 
@@ -584,7 +605,7 @@ Theme authors using v1 can define semantic roles (like "warning", "error", "succ
 
 - **FR-038**: V1 system MUST include an embedded `@default` theme that explicitly defines all 28 v0 elements and all 12 v1 roles with reasonable defaults; this theme is invisible when listing themes (not shown in stock or custom groups)
 
-- **FR-038a**: V1 `@default` theme MUST define roles with inheritance chains where more specific roles inherit from more generic ones (e.g., specific roles reference `primary` or `secondary` via `style` field), providing flexibility so old themes remain compatible with newer app versions and look consistent even without defining new roles explicitly
+- **FR-038a**: V1 `@default` theme MUST define roles with inheritance chains where more specific roles inherit from more generic ones (e.g., specific roles reference `primary` or `secondary` via `style` field), providing flexibility so old themes remain compatible with newer app versions and look consistent even without defining new roles explicitly; the `default` role MUST always be defined in the embedded @default theme (guaranteed invariant, tested during development) since it serves as the implicit base for all other roles per FR-039b
 
 - **FR-039**: V1 themes MUST support `styles` section as an object map where keys are role names (from predefined enum) and values are style objects containing optional foreground, background, modes, and an optional `style` field that references another role for parent/base inheritance (e.g., `styles: {warning: {style: "primary", foreground: "#FFA500", modes: [bold]}}`)
 
@@ -597,6 +618,8 @@ Theme authors using v1 can define semantic roles (like "warning", "error", "succ
 - **FR-039d**: V1 MUST retain nested styling scope for parent/inner element pairs (same as v0) in addition to the new property-level merging available through roles; both inheritance mechanisms coexist in v1
 
 - **FR-040**: V1 themes MUST support `style` property on elements to reference role names
+
+- **FR-040a**: System MUST validate role names in the `style` field during initial theme file parsing (fail-fast approach); if an element's `style` field references a role name that is not in the predefined role enum (default, primary, secondary, strong, muted, accent, accent-secondary, syntax, status, info, warning, error), the system exits with error immediately when parsing that file; this provides immediate feedback to theme authors and catches typos early, before any merge or resolution operations
 
 - **FR-041**: V1 themes MUST resolve element styles using the following order: 1) Start with element from @default theme (if defined), 2) Merge with base element from user theme (properties in base override @default), 3) Merge with level-specific element for the current level (level-specific properties override base), 4) If the merged element has a `style` field, resolve the role recursively (following role-to-role `style` references up to 64 levels depth), applying role properties to fill in undefined properties, 5) Apply explicit properties from the merged element (foreground, background, modes) which override role properties
 
