@@ -73,7 +73,7 @@
 
 - Q: What should happen with invalid color values like 3-digit hex (#FFF), 8-digit hex with alpha (#RRGGBBAA), out-of-range ANSI (256 or -1), or invalid hex (#GGGGGG)? → A: Exit with specific error for each case: "Invalid hex color #FFF (must be #RRGGBB)", "ANSI color 256 out of range (0-255)", etc.
 
-- Q: Are there restrictions on role names in v1 (length, allowed characters, reserved words, case sensitivity)? → A: Kebab case, predefined list (enum): default, primary, secondary, strong, muted, accent, accent-secondary, syntax, status, info, warning, error. The `default` role is the implicit base for all styles that don't specify a base style explicitly via the `style` field.
+- Q: Are there restrictions on role names in v1 (length, allowed characters, reserved words, case sensitivity)? → A: Kebab case, predefined list (enum): default, primary, secondary, strong, muted, accent, accent-secondary, message, syntax, status, level, trace, debug, info, warning, error. The `default` role is the implicit base for all styles that don't specify a base style explicitly via the `style` field.
 
 - Q: What happens when a color palette anchor is referenced but not defined (YAML anchor edge case)? → A: YAML parser handles it - parse error with line number showing undefined anchor reference (treat as parse error)
 
@@ -89,7 +89,7 @@
 
 - Q: What is the indicators feature referenced in the indicators section? → A: Out of scope for detailed specification - indicators are a separate feature (--follow mode). Brief description: When --follow option is used, application processes inputs simultaneously, sorting entries chronologically. A sync indicator placeholder at line start shows two states: in sync (default) and out of sync (typically `!` with warning style). Themes provide only styling for these indicator states.
 
-- Q: Does @default theme define all 28 elements and all 12 roles explicitly, or just a subset? → A: @default defines all 28 elements and all 12 roles explicitly with reasonable defaults. Styles with more specific roles usually just inherit styles with more generic roles by default - this provides better flexibility, old themes may still be compatible with newer app versions and look consistently even without defining explicitly styles for new roles.
+- Q: Does @default theme define all 28 elements and all 16 roles explicitly, or just a subset? → A: @default defines all 28 elements and all 16 roles explicitly with reasonable defaults. Styles with more specific roles usually just inherit styles with more generic roles by default - this provides better flexibility, old themes may still be compatible with newer app versions and look consistently even without defining explicitly styles for new roles.
 
 ### Session 2024-12-25 (Eighth Pass)
 
@@ -197,7 +197,7 @@
 
 - Q: When an element references a role name via the `style` field, is the role name validated immediately during parsing or later during style resolution? → A: During initial theme file parsing (fail-fast like color validation) - if an element references an invalid role name (not in the predefined role enum), the system exits with error immediately when parsing that file; this provides immediate feedback to theme authors and catches typos early
 
-- Q: What happens if the `default` role is not defined in the theme (neither in user theme nor in @default)? → A: The embedded @default theme MUST define the `default` role - this is a guaranteed invariant tested during development; since @default defines all 12 roles explicitly (per FR-038), the `default` role is always available as the implicit base for other roles
+- Q: What happens if the `default` role is not defined in the theme (neither in user theme nor in @default)? → A: The embedded @default theme MUST define the `default` role - this is a guaranteed invariant tested during development; since @default defines all 16 roles explicitly (per FR-038), the `default` role is always available as the implicit base for other roles
 
 - Q: Are palette color values in the `$palette` section validated the same way as element colors? → A: No - palette colors are not validated; $palette is only supported in v0 themes (YAML anchor/alias organization feature); v1 strict parsing rejects the `$palette` section as an unknown top-level section per FR-010c forward compatibility rules (v1 themes must not include $palette)
 
@@ -214,6 +214,10 @@
 - Q: Can theme names contain special characters like spaces, dots, unicode, or other non-ASCII characters? → A: Theme names can contain any valid filename characters per platform filesystem rules (no restrictions beyond filesystem limitations like /, \, null); however, the recommendation is to use lowercase kebab-case style (e.g., "my-theme", "dark-blue") for consistency and portability across platforms; dots in names are allowed but may create ambiguity with extensions (e.g., "theme.backup.yaml" has stem "theme.backup")
 
 - Q: What happens if no theme names meet the Jaro similarity threshold of 0.75 for suggestions? → A: Omit suggestions entirely - if no themes meet the 0.75 threshold, the error message shows only "Theme not found" without a suggestions section; showing an empty suggestion list or lowering the threshold doesn't help the user, so suggestions are only included when at least one theme meets the quality threshold
+
+### Session 2025-12-28 (Sixteenth Pass)
+
+- Q: How many v1 roles are actually defined in the implementation? → A: 16 roles total - the implementation defines: default, primary, secondary, strong, muted, accent, accent-secondary, message, syntax, status, level, trace, debug, info, warning, error. The spec previously mentioned only 12 roles, omitting the newer roles: message, level, trace, debug.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -626,13 +630,13 @@ Theme authors using v1 can define semantic roles (like "warning", "error", "succ
 
 #### V1 Enhanced Inheritance (Future)
 
-- **FR-038**: V1 system MUST include an embedded `@default` theme that explicitly defines all 28 v0 elements and all 12 v1 roles with reasonable defaults; this theme is invisible when listing themes (not shown in stock or custom groups)
+- **FR-038**: V1 system MUST include an embedded `@default` theme that explicitly defines all 28 v0 elements and all 16 v1 roles with reasonable defaults; this theme is invisible when listing themes (not shown in stock or custom groups)
 
 - **FR-038a**: V1 `@default` theme MUST define roles with inheritance chains where more specific roles inherit from more generic ones (e.g., specific roles reference `primary` or `secondary` via `style` field), providing flexibility so old themes remain compatible with newer app versions and look consistent even without defining new roles explicitly; the `default` role MUST always be defined in the embedded @default theme (guaranteed invariant, tested during development) since it serves as the implicit base for all other roles per FR-039b
 
 - **FR-039**: V1 themes MUST support `styles` section as an object map where keys are role names (from predefined enum) and values are style objects containing optional foreground, background, modes, and an optional `style` field that references another role for parent/base inheritance (e.g., `styles: {warning: {style: "primary", foreground: "#FFA500", modes: [bold]}}`)
 
-- **FR-039a**: V1 role names MUST be from the predefined enum (kebab-case, case-sensitive): default, primary, secondary, strong, muted, accent, accent-secondary, syntax, status, info, warning, error. Undefined role names or incorrect case (e.g., "Primary") are rejected with error. Element and role names exist in separate namespaces and can overlap without conflict.
+- **FR-039a**: V1 role names MUST be from the predefined enum (kebab-case, case-sensitive): default, primary, secondary, strong, muted, accent, accent-secondary, message, syntax, status, level, trace, debug, info, warning, error. Undefined role names or incorrect case (e.g., "Primary") are rejected with error. Element and role names exist in separate namespaces and can overlap without conflict.
 
 - **FR-039b**: V1 `default` role serves as the implicit base for all roles that do not explicitly specify a `style` field; properties set in `default` (foreground, background, modes) apply to all other roles unless overridden
 
@@ -642,7 +646,7 @@ Theme authors using v1 can define semantic roles (like "warning", "error", "succ
 
 - **FR-040**: V1 themes MUST support `style` property on elements to reference role names
 
-- **FR-040a**: System MUST validate role names in the `style` field during initial theme file parsing (fail-fast approach); if an element's `style` field references a role name that is not in the predefined role enum (default, primary, secondary, strong, muted, accent, accent-secondary, syntax, status, info, warning, error), the system exits with error immediately when parsing that file; this provides immediate feedback to theme authors and catches typos early, before any merge or resolution operations
+- **FR-040a**: System MUST validate role names in the `style` field during initial theme file parsing (fail-fast approach); if an element's `style` field references a role name that is not in the predefined role enum (default, primary, secondary, strong, muted, accent, accent-secondary, message, syntax, status, level, trace, debug, info, warning, error), the system exits with error immediately when parsing that file; this provides immediate feedback to theme authors and catches typos early, before any merge or resolution operations
 
 - **FR-041**: V1 themes MUST resolve element styles using the following order: 1) Start with element from @default theme (if defined), 2) Merge with base element from user theme (properties in base override @default), 3) Merge with level-specific element for the current level (level-specific properties override base), 4) If the merged element has a `style` field, resolve the role recursively (following role-to-role `style` references up to 64 levels depth), applying role properties to fill in undefined properties, 5) Apply explicit properties from the merged element (foreground, background, modes) which override role properties
 
@@ -680,7 +684,7 @@ Theme authors using v1 can define semantic roles (like "warning", "error", "succ
 
 - **Theme**: Complete theme configuration containing element styles, level-specific overrides, indicators, version, and metadata tags
 
-- **@default Theme** (v1 only): Embedded theme that explicitly defines all 28 v0 elements and all 12 v1 roles with reasonable defaults. Not visible in theme listings. All user themes (both v0 and v1) implicitly inherit from `@default` when roles or styles are not explicitly defined. More specific roles in `@default` typically inherit from more generic ones via `style` field (e.g., `warning: {style: "primary", ...}`), ensuring old themes remain compatible with newer app versions by falling back to consistent generic styles. Users CAN create custom themes named `@default` which merge with the embedded `@default` following normal theme merge rules (FR-001b): at theme merge level, custom elements completely replace embedded elements; property-level merging happens during style resolution based on custom theme's version.
+- **@default Theme** (v1 only): Embedded theme that explicitly defines all 28 v0 elements and all 16 v1 roles with reasonable defaults. Not visible in theme listings. All user themes (both v0 and v1) implicitly inherit from `@default` when roles or styles are not explicitly defined. More specific roles in `@default` typically inherit from more generic ones via `style` field (e.g., `warning: {style: "primary", ...}`), ensuring old themes remain compatible with newer app versions by falling back to consistent generic styles. Users CAN create custom themes named `@default` which merge with the embedded `@default` following normal theme merge rules (FR-001b): at theme merge level, custom elements completely replace embedded elements; property-level merging happens during style resolution based on custom theme's version.
 
 - **Theme Version**: Version identifier following "major.minor" format (e.g., "1.0") where major=1 and minor is non-negative integer without leading zeros. Currently only version="1.0" is supported; future minor versions (1.1, 1.2, etc.) will be added as needed. Used to determine which schema and merge semantics apply.
 
@@ -688,7 +692,7 @@ Theme authors using v1 can define semantic roles (like "warning", "error", "succ
 
 - **Style**: Visual appearance specification with optional foreground color, optional background color, and optional text modes list. In v0, modes is a simple array of mode names. In v1, modes is an array of mode operations (+mode to add, -mode to remove, plain mode defaults to +mode), and styles can have an optional `style` field that references a parent/base style for inheritance.
 
-- **Role** (v1 only): Named style defined in the `styles` section that can be referenced by elements or other roles. Role names must be from the predefined enum (kebab-case, case-sensitive): default, primary, secondary, strong, muted, accent, accent-secondary, syntax, status, info, warning, error. The `default` role is the implicit base for all roles that don't specify a `style` field - properties set in `default` apply to all other roles unless overridden. Roles support inheritance via the optional `style` field (e.g., `warning: {style: "primary", foreground: "#FFA500", modes: [+bold, -italic]}`).
+- **Role** (v1 only): Named style defined in the `styles` section that can be referenced by elements or other roles. Role names must be from the predefined enum (kebab-case, case-sensitive): default, primary, secondary, strong, muted, accent, accent-secondary, message, syntax, status, level, trace, debug, info, warning, error. The `default` role is the implicit base for all roles that don't specify a `style` field - properties set in `default` apply to all other roles unless overridden. Roles support inheritance via the optional `style` field (e.g., `warning: {style: "primary", foreground: "#FFA500", modes: [+bold, -italic]}`).
 
 - **Color**: Visual color value in one of three formats:
   - ANSI basic: named colors (case-sensitive: default, black, red, green, yellow, blue, magenta, cyan, white, bright-black, bright-red, bright-green, bright-yellow, bright-blue, bright-magenta, bright-cyan, bright-white)
@@ -778,14 +782,14 @@ Theme authors using v1 can define semantic roles (like "warning", "error", "succ
 - Unknown top-level sections in theme files are ignored when the theme version is supported (forward compatibility); if theme version is unsupported, error occurs before section parsing; level names in `levels` section are case-sensitive (trace, debug, info, warning, error); unknown or invalid level names are silently ignored
 - Unknown element properties (properties other than foreground, background, modes, and in v1: style) are silently ignored for forward compatibility; this allows newer themes with additional properties to work on older app versions
 - Element names and role names exist in separate namespaces; element and role names can overlap without conflict (e.g., can have both an element named "message" and a role named "message" in v1)
-- In v1, all user themes implicitly inherit from the embedded `@default` theme, which explicitly defines all 28 v0 elements and all 12 v1 roles with reasonable defaults; undefined roles/elements in user themes fall back to `@default` definitions
+- In v1, all user themes implicitly inherit from the embedded `@default` theme, which explicitly defines all 28 v0 elements and all 16 v1 roles with reasonable defaults; undefined roles/elements in user themes fall back to `@default` definitions
 - V1 `@default` theme defines roles with inheritance chains where more specific roles inherit from more generic ones (e.g., `info: {style: "primary"}`, `warning: {style: "accent"}`), providing flexibility and forward compatibility - old themes work with newer app versions by falling back to consistent generic role styles
 - Theme name matching when loading themes follows platform filesystem conventions: case-sensitive on Linux/macOS (e.g., "MyTheme" ≠ "mytheme"), case-insensitive on Windows (e.g., "MyTheme" matches "mytheme.yaml")
 - Tags are validated against allowed values (dark, light, 16color, 256color, truecolor); unknown tags cause error; empty array is allowed; multiple tags including combinations like dark+light (compatible with both modes) are allowed; no tag combinations are considered conflicting
 - Theme listing format is terminal-aware: when output is a terminal, use multi-column layout (terminal-width-aware) with alphabetical sorting within groups (stock/custom); when output is not a terminal (pipe/redirect), use plain list format with one theme name per line without grouping or styling; each theme shown by stem name once even if multiple formats exist
 - All identifiers are case-sensitive: element names (e.g., "message" ≠ "Message"), role names (e.g., "primary" ≠ "Primary"), mode names (e.g., "bold" ≠ "Bold"), level names (e.g., "error" ≠ "Error"), ANSI basic color names (e.g., "black" ≠ "Black"); RGB hex color codes are case-insensitive for letters A-F
 - Currently only version="1.0" is supported for v1 themes; version="1.1" or higher minor versions are rejected until implemented; version="2.0" or higher major versions are rejected as unsupported
-- V1 role names are restricted to a predefined enum (kebab-case, case-sensitive): default, primary, secondary, strong, muted, accent, accent-secondary, syntax, status, info, warning, error. User themes can only define roles from this list; undefined role names or incorrect case are rejected with error. The `default` role is the implicit base for all roles that don't specify a `style` field - properties set in `default` (foreground, background, modes) apply to all other roles unless explicitly overridden.
+- V1 role names are restricted to a predefined enum (kebab-case, case-sensitive): default, primary, secondary, strong, muted, accent, accent-secondary, message, syntax, status, level, trace, debug, info, warning, error. User themes can only define roles from this list; undefined role names or incorrect case are rejected with error. The `default` role is the implicit base for all roles that don't specify a `style` field - properties set in `default` (foreground, background, modes) apply to all other roles unless explicitly overridden.
 - V1 property precedence: element explicit properties override role properties; this allows elements to reference a role for base styling while overriding specific properties
 - V1 does NOT support custom `include` directive for theme-to-theme inheritance; only `@default` inheritance is available (custom includes may be added in future versions)
 - V1 role-to-role inheritance chains via the `style` field support a maximum depth of 64 levels; deeper chains or circular references cause theme loading to fail with error
