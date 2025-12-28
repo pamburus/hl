@@ -610,36 +610,7 @@ impl Theme {
         inventory: &StyleInventory,
         flags: MergeFlags,
     ) -> super::Result<super::IndicatorPack<ResolvedStyle>> {
-        Ok(super::IndicatorPack {
-            sync: super::SyncIndicatorPack {
-                synced: super::Indicator {
-                    outer: super::IndicatorStyle {
-                        prefix: indicators.sync.synced.outer.prefix.clone(),
-                        suffix: indicators.sync.synced.outer.suffix.clone(),
-                        style: indicators.sync.synced.outer.style.resolve(inventory, flags),
-                    },
-                    inner: super::IndicatorStyle {
-                        prefix: indicators.sync.synced.inner.prefix.clone(),
-                        suffix: indicators.sync.synced.inner.suffix.clone(),
-                        style: indicators.sync.synced.inner.style.resolve(inventory, flags),
-                    },
-                    text: indicators.sync.synced.text.clone(),
-                },
-                failed: super::Indicator {
-                    outer: super::IndicatorStyle {
-                        prefix: indicators.sync.failed.outer.prefix.clone(),
-                        suffix: indicators.sync.failed.outer.suffix.clone(),
-                        style: indicators.sync.failed.outer.style.resolve(inventory, flags),
-                    },
-                    inner: super::IndicatorStyle {
-                        prefix: indicators.sync.failed.inner.prefix.clone(),
-                        suffix: indicators.sync.failed.inner.suffix.clone(),
-                        style: indicators.sync.failed.inner.style.resolve(inventory, flags),
-                    },
-                    text: indicators.sync.failed.text.clone(),
-                },
-            },
-        })
+        Ok(indicators.clone().resolve(|style| style.resolve(inventory, flags)))
     }
 
     pub fn merge_flags(&self) -> MergeFlags {
@@ -757,6 +728,17 @@ impl<S: Clone> IndicatorPack<S> {
     }
 }
 
+impl IndicatorPack<Style> {
+    pub fn resolve<F>(self, resolve_style: F) -> super::IndicatorPack<super::Style>
+    where
+        F: Fn(Style) -> super::Style,
+    {
+        super::IndicatorPack {
+            sync: self.sync.resolve(resolve_style),
+        }
+    }
+}
+
 #[derive(Clone, Debug, Default, Deserialize)]
 #[serde(default)]
 #[serde(bound(deserialize = "S: Deserialize<'de> + Default"))]
@@ -779,6 +761,19 @@ impl Mergeable for SyncIndicatorPack<ResolvedStyle> {
     }
 }
 
+impl SyncIndicatorPack<Style> {
+    pub fn resolve<F>(self, resolve_style: F) -> super::SyncIndicatorPack<super::Style>
+    where
+        F: Fn(Style) -> super::Style,
+    {
+        super::SyncIndicatorPack {
+            synced: self.synced.resolve(&resolve_style),
+            failed: self.failed.resolve(&resolve_style),
+        }
+    }
+}
+
+// SyncIndicatorPack Mergeable impls are in v1 module
 #[derive(Clone, Debug, Default, Deserialize)]
 #[serde(default)]
 #[serde(bound(deserialize = "S: Deserialize<'de> + Default"))]
@@ -789,6 +784,19 @@ pub struct Indicator<S = Style> {
     pub inner: IndicatorStyle<S>,
     #[serde(default)]
     pub text: String,
+}
+
+impl Indicator<Style> {
+    pub fn resolve<F>(self, resolve_style: F) -> super::Indicator<super::Style>
+    where
+        F: Fn(Style) -> super::Style,
+    {
+        super::Indicator {
+            outer: self.outer.resolve(&resolve_style),
+            inner: self.inner.resolve(&resolve_style),
+            text: self.text,
+        }
+    }
 }
 
 impl<S: Clone> Indicator<S> {
@@ -822,6 +830,19 @@ pub struct IndicatorStyle<S = Style> {
     pub suffix: String,
     #[serde(default)]
     pub style: S,
+}
+
+impl IndicatorStyle<Style> {
+    pub fn resolve<F>(self, resolve_style: F) -> super::IndicatorStyle<super::Style>
+    where
+        F: Fn(Style) -> super::Style,
+    {
+        super::IndicatorStyle {
+            prefix: self.prefix,
+            suffix: self.suffix,
+            style: resolve_style(self.style),
+        }
+    }
 }
 
 impl Mergeable for IndicatorStyle<Style> {
@@ -899,38 +920,43 @@ impl From<v0::Style> for Style {
     }
 }
 
-/// Convert v0 indicators to v1 indicators
+/// Convert v0 indicator styles to v1
+impl From<v0::IndicatorStyle> for IndicatorStyle<Style> {
+    fn from(style: v0::IndicatorStyle) -> Self {
+        IndicatorStyle {
+            prefix: style.prefix,
+            suffix: style.suffix,
+            style: style.style.into(),
+        }
+    }
+}
+
+/// Convert v0 indicators to v1
+impl From<v0::Indicator> for Indicator<Style> {
+    fn from(indicator: v0::Indicator) -> Self {
+        Indicator {
+            outer: indicator.outer.into(),
+            inner: indicator.inner.into(),
+            text: indicator.text,
+        }
+    }
+}
+
+/// Convert v0 sync indicator packs to v1
+impl From<v0::SyncIndicatorPack> for SyncIndicatorPack<Style> {
+    fn from(pack: v0::SyncIndicatorPack) -> Self {
+        SyncIndicatorPack {
+            synced: pack.synced.into(),
+            failed: pack.failed.into(),
+        }
+    }
+}
+
+/// Convert v0 indicator packs to v1
 impl From<v0::IndicatorPack> for IndicatorPack<Style> {
     fn from(indicators: v0::IndicatorPack) -> Self {
-        Self {
-            sync: SyncIndicatorPack {
-                synced: Indicator {
-                    outer: IndicatorStyle {
-                        prefix: indicators.sync.synced.outer.prefix,
-                        suffix: indicators.sync.synced.outer.suffix,
-                        style: indicators.sync.synced.outer.style.into(),
-                    },
-                    inner: IndicatorStyle {
-                        prefix: indicators.sync.synced.inner.prefix,
-                        suffix: indicators.sync.synced.inner.suffix,
-                        style: indicators.sync.synced.inner.style.into(),
-                    },
-                    text: indicators.sync.synced.text,
-                },
-                failed: Indicator {
-                    outer: IndicatorStyle {
-                        prefix: indicators.sync.failed.outer.prefix,
-                        suffix: indicators.sync.failed.outer.suffix,
-                        style: indicators.sync.failed.outer.style.into(),
-                    },
-                    inner: IndicatorStyle {
-                        prefix: indicators.sync.failed.inner.prefix,
-                        suffix: indicators.sync.failed.inner.suffix,
-                        style: indicators.sync.failed.inner.style.into(),
-                    },
-                    text: indicators.sync.failed.text,
-                },
-            },
+        IndicatorPack {
+            sync: indicators.sync.into(),
         }
     }
 }
