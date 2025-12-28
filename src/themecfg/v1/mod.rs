@@ -25,8 +25,8 @@ pub use super::v0::Element;
 
 // Re-export common types from parent module
 pub use super::{
-    Color, Error, MergeFlag, MergeFlags, Mode, ModeDiff, ModeDiffAction, ModeSet, ModeSetDiff, PlainColor, RGB, Result,
-    Tag, ThemeVersion,
+    Color, MergeFlag, MergeFlags, Mode, ModeDiff, ModeDiffAction, ModeSet, ModeSetDiff, PlainColor, RGB, Result, Tag,
+    ThemeLoadError, ThemeVersion,
 };
 
 // Import resolved types and traits from parent (output types)
@@ -369,13 +369,13 @@ impl Merge<&StylePack<Element, Style>> for StylePack<Element, Style> {
 }
 
 impl StylePack<Role, Style> {
-    pub fn resolve(&self, flags: MergeFlags) -> Result<StyleInventory> {
+    pub fn resolve(&self, flags: MergeFlags) -> Result<StyleInventory, ThemeLoadError> {
         let mut resolver = StyleResolver::new(self, flags);
         let items: HashMap<Role, ResolvedStyle> = self
             .0
             .keys()
             .map(|k| Ok((*k, resolver.resolve(k)?)))
-            .collect::<Result<HashMap<Role, ResolvedStyle>>>()?;
+            .collect::<Result<HashMap<Role, ResolvedStyle>, ThemeLoadError>>()?;
         Ok(super::StylePack(items))
     }
 }
@@ -490,7 +490,7 @@ impl Theme {
     /// Returns an error if:
     /// - Style recursion limit is exceeded
     /// - Any other style resolution error occurs
-    pub fn resolve(self) -> Result<super::Theme> {
+    pub fn resolve(self) -> Result<super::Theme, ThemeLoadError> {
         let flags = self.merge_flags();
 
         // Step 1: Resolve the role-based styles inventory
@@ -527,7 +527,7 @@ impl Theme {
         pack: &StylePack<Element, Style>,
         inventory: &StyleInventory,
         flags: MergeFlags,
-    ) -> Result<super::StylePack<Element, ResolvedStyle>> {
+    ) -> Result<super::StylePack<Element, ResolvedStyle>, ThemeLoadError> {
         let mut result = HashMap::new();
 
         let parent_inner_pairs = [
@@ -604,7 +604,7 @@ impl Theme {
         indicators: &IndicatorPack<Style>,
         inventory: &StyleInventory,
         flags: MergeFlags,
-    ) -> Result<super::IndicatorPack<super::Style>> {
+    ) -> Result<super::IndicatorPack<super::Style>, ThemeLoadError> {
         Ok(indicators.clone().resolve(|style| style.resolve(inventory, flags)))
     }
 
@@ -659,7 +659,7 @@ impl<'a> StyleResolver<'a> {
         }
     }
 
-    fn resolve(&mut self, role: &Role) -> Result<ResolvedStyle> {
+    fn resolve(&mut self, role: &Role) -> Result<ResolvedStyle, ThemeLoadError> {
         if let Some(resolved) = self.cache.get(role) {
             return Ok(resolved.clone());
         }
@@ -667,7 +667,7 @@ impl<'a> StyleResolver<'a> {
         let style = self.inventory.0.get(role).unwrap_or_default();
 
         if self.depth >= RECURSION_LIMIT {
-            return Err(Error::StyleRecursionLimitExceeded { role: *role });
+            return Err(ThemeLoadError::StyleRecursionLimitExceeded { role: *role });
         }
 
         self.depth += 1;
@@ -679,7 +679,7 @@ impl<'a> StyleResolver<'a> {
         Ok(resolved)
     }
 
-    fn resolve_style(&mut self, style: &Style, role: &Role) -> Result<ResolvedStyle> {
+    fn resolve_style(&mut self, style: &Style, role: &Role) -> Result<ResolvedStyle, ThemeLoadError> {
         // If no explicit base, default to inheriting from Default role (except for Default itself)
         let bases = if style.base.is_empty() {
             if *role != Role::Default {

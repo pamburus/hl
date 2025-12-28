@@ -908,32 +908,42 @@ fn test_v1_multiple_inheritance() {
 
 #[test]
 fn test_v1_style_recursion_limit_error() {
-    // Test that style recursion limit is detected and returns an error
+    // Test that style recursion limit is detected and returns an error wrapped with theme context
     let app_dirs = test_app_dirs();
-    let theme = Theme::load_raw(&app_dirs, "v1-recursion-circular").unwrap();
 
-    // Attempting to resolve should fail with recursion limit error
-    let result = theme.resolve();
+    // Attempting to load (which includes resolve) should fail with recursion limit error
+    let result = Theme::load(&app_dirs, "v1-recursion-circular");
     assert!(result.is_err());
 
     let err = result.unwrap_err();
 
-    // Verify error message includes the role context
+    // Verify error message includes the theme name AND the role context
     let err_msg = err.to_string();
     println!("Error message: {}", err_msg);
+    assert!(err_msg.contains("v1-recursion-circular"));
     assert!(err_msg.contains("style recursion limit exceeded"));
     assert!(err_msg.contains("role"));
 
     match err {
-        Error::StyleRecursionLimitExceeded { role } => {
-            // Expected error - should be either Primary or Secondary (the circular pair)
-            assert!(
-                role == Role::Primary || role == Role::Secondary,
-                "Expected recursion in Primary or Secondary, got: {:?}",
-                role
-            );
+        Error::FailedToResolveTheme { name, source } => {
+            assert_eq!(name.as_ref(), "v1-recursion-circular");
+
+            match source {
+                ThemeLoadError::StyleRecursionLimitExceeded { role } => {
+                    // Expected error - should be either Primary or Secondary (the circular pair)
+                    assert!(
+                        role == Role::Primary || role == Role::Secondary,
+                        "Expected recursion in Primary or Secondary, got: {:?}",
+                        role
+                    );
+                }
+                other => panic!("Expected StyleRecursionLimitExceeded, got: {:?}", other),
+            }
         }
-        other => panic!("Expected StyleRecursionLimitExceeded, got: {:?}", other),
+        other => panic!(
+            "Expected FailedToResolveTheme wrapping StyleRecursionLimitExceeded, got: {:?}",
+            other
+        ),
     }
 }
 

@@ -68,8 +68,8 @@ pub enum Error {
     FailedToListCustomThemes(#[from] io::Error),
     #[error("invalid tag {value}", value=.value.hlq())]
     InvalidTag { value: Arc<str>, suggestions: Suggestions },
-    #[error("style recursion limit exceeded while resolving role {role:?}")]
-    StyleRecursionLimitExceeded { role: Role },
+    #[error("failed to resolve theme {name}: {source}", name=.name.hlq())]
+    FailedToResolveTheme { name: Arc<str>, source: ThemeLoadError },
     #[error("invalid version format: {0}")]
     InvalidVersion(Arc<str>),
 }
@@ -84,6 +84,8 @@ pub enum ThemeLoadError {
         requested: ThemeVersion,
         supported: ThemeVersion,
     },
+    #[error("style recursion limit exceeded while resolving role {role:?}")]
+    StyleRecursionLimitExceeded { role: Role },
 }
 
 /// Error is an error which may occur in the application.
@@ -143,7 +145,12 @@ impl Theme {
     ///
     /// Returns an error if the theme cannot be loaded or resolved.
     pub fn load(app_dirs: &AppDirs, name: &str) -> Result<Self> {
-        Self::load_raw(app_dirs, name)?.resolve()
+        Self::load_raw(app_dirs, name)?
+            .resolve()
+            .map_err(|source| Error::FailedToResolveTheme {
+                name: name.into(),
+                source,
+            })
     }
 
     /// Load an unresolved (raw) theme by name.
@@ -176,7 +183,12 @@ impl Theme {
     }
 
     pub fn embedded(name: &str) -> Result<Self> {
-        Self::load_embedded::<Assets>(name)?.resolve()
+        Self::load_embedded::<Assets>(name)?
+            .resolve()
+            .map_err(|source| Error::FailedToResolveTheme {
+                name: name.into(),
+                source,
+            })
     }
 
     pub fn list(app_dirs: &AppDirs) -> Result<HashMap<Arc<str>, ThemeInfo>> {
@@ -1172,7 +1184,12 @@ pub mod testing {
     struct Assets;
 
     pub fn theme() -> Result<Theme> {
-        Theme::load_embedded::<Assets>("test")?.resolve()
+        Theme::load_embedded::<Assets>("test")?
+            .resolve()
+            .map_err(|source| Error::FailedToResolveTheme {
+                name: "test".into(),
+                source,
+            })
     }
 }
 
