@@ -30,7 +30,7 @@ use yaml_peg::serde as yaml;
 use crate::{
     appdirs::AppDirs,
     level::Level,
-    xerr::{HighlightQuoted, Suggestions},
+    xerr::{Highlight, HighlightQuoted, Suggestions},
 };
 
 // Version-specific modules
@@ -70,7 +70,7 @@ pub enum Error {
     InvalidTag { value: Arc<str>, suggestions: Suggestions },
     #[error("failed to resolve theme {name}: {source}", name=.name.hlq())]
     FailedToResolveTheme { name: Arc<str>, source: ThemeLoadError },
-    #[error("invalid version format: {0}")]
+    #[error("invalid version format: {format}", format=.0.hlq())]
     InvalidVersion(Arc<str>),
 }
 
@@ -79,12 +79,12 @@ pub enum Error {
 pub enum ThemeLoadError {
     #[error(transparent)]
     External(#[from] ExternalError),
-    #[error("theme version {requested} is not supported (maximum supported: {supported})")]
+    #[error("theme version {requested} is not supported", requested=.requested.hl())]
     UnsupportedVersion {
         requested: ThemeVersion,
         supported: ThemeVersion,
     },
-    #[error("style recursion limit exceeded while resolving role {role:?}")]
+    #[error("style recursion limit exceeded while resolving role {role}", role=.role.hlq())]
     StyleRecursionLimitExceeded { role: Role },
 }
 

@@ -67,6 +67,15 @@ pub enum Role {
     Error,
 }
 
+impl std::fmt::Display for Role {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match serde_plain::to_string(self) {
+            Ok(s) => write!(f, "{}", s),
+            Err(_) => write!(f, "{:?}", self),
+        }
+    }
+}
+
 // ---
 
 /// StyleBase represents base styles for inheritance (v1 feature)

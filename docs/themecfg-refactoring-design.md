@@ -333,8 +333,9 @@ They don't need to know about v0 vs v1 internals - that's all implementation det
 12. **Fail fast**: Use Level instead of InfallibleLevel - unknown levels are errors
 13. **Error handling**: Recursion limit violations return ThemeLoadError::StyleRecursionLimitExceeded
     - Resolution errors are wrapped in FailedToResolveTheme
-    - Error message includes theme name and the problematic role
-    - Example: "failed to resolve theme 'my-theme': style recursion limit exceeded while resolving role Primary"
+    - Error message includes theme name and the problematic role (displayed in kebab-case)
+    - Role implements Display using serde to match user input format
+    - Example: "failed to resolve theme 'my-theme': style recursion limit exceeded while resolving role primary"
 14. **Clear naming**: Raw vs Resolved is explicit in type names
     - `v1::Theme` → main's `RawTheme` (unresolved)
     - `v1::Style` → main's `RawStyle` (unresolved)
