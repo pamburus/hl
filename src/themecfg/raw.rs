@@ -9,18 +9,8 @@ use super::{Error, MergeFlags, Result, Theme, ThemeInfo, ThemeOrigin, ThemeSourc
 
 /// An unresolved theme with metadata, before style resolution.
 ///
-/// This struct wraps a [`v1::Theme`] and includes metadata about the theme's
-/// origin (name, source). The metadata is used to provide context in error
-/// messages when resolution fails.
-///
-/// # Usage
-///
-/// Obtain via `Theme::load_raw(app_dirs, "theme-name")`, then:
-/// - Access fields directly via `Deref`: `raw_theme.styles`, `raw_theme.elements`
-/// - Modify as needed
-/// - Call `raw_theme.resolve()` to get a resolved `Theme`
-///
-/// Resolution errors automatically include the theme name and source from metadata.
+/// Wraps a [`v1::Theme`] and includes metadata (name, source) for error reporting.
+/// Can be modified before calling `.resolve()` to create a usable [`Theme`].
 #[derive(Debug, Clone, Deref)]
 pub struct RawTheme {
     /// Theme metadata (name, source, origin).
@@ -41,17 +31,8 @@ impl RawTheme {
 
     /// Resolve the theme to a fully resolved [`Theme`].
     ///
-    /// This method resolves all role-based styles to concrete element styles.
-    /// Any resolution errors (e.g., circular inheritance) will include the
-    /// theme name and source in the error message.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if:
-    /// - Style recursion limit is exceeded (circular role inheritance)
-    /// - Any other style resolution error occurs
-    ///
-    /// Error messages automatically include the theme name for context.
+    /// Resolves all role-based styles to concrete element styles.
+    /// Errors will include the theme name and source from metadata.
     pub fn resolve(self) -> Result<Theme> {
         self.inner.resolve().map_err(|source| Error::FailedToResolveTheme {
             info: self.info.clone(),

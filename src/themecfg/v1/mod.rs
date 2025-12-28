@@ -1,89 +1,7 @@
 //! Theme configuration v1 format support.
 //!
-//! This module implements the v1 theme format, which adds semantic roles and
-//! style inheritance on top of the legacy v0 format.
-//!
-//! # V1 Features
-//!
-//! - **Semantic Roles**: Define reusable style roles (primary, warning, error, etc.)
-//! - **Style Inheritance**: Elements can inherit from roles using `style: [role-name]`
-//! - **Multiple Inheritance**: Combine multiple roles: `style: [primary, strong]`
-//! - **Mode Diffs**: Add/remove modes with `+`/`-` prefix: `modes: [+bold, -italic]`
-//! - **Strict Validation**: Unknown fields/values cause errors (fail-fast)
-//! - **$schema Support**: Optional `$schema` field for IDE validation
-//!
-//! # V1 Theme Structure
-//!
-//! ```yaml
-//! version: "1.0"
-//! tags: [dark]
-//!
-//! # Define semantic roles
-//! styles:
-//!   primary:
-//!     foreground: "#00ff00"
-//!     modes: [bold]
-//!   warning:
-//!     style: [primary]      # Inherit from primary
-//!     foreground: "#ffaa00" # Override foreground
-//!     modes: [+underline]   # Add underline to inherited modes
-//!
-//! # Map elements to roles
-//! elements:
-//!   level:
-//!     style: [primary]
-//!   timestamp:
-//!     style: [warning]
-//!
-//! # Level-specific overrides
-//! levels:
-//!   error:
-//!     level:
-//!       foreground: "#ff0000"
-//! ```
-//!
-//! # Recursion Limits and Circular Reference Protection
-//!
-//! Role-to-role inheritance chains are limited to a maximum depth of **64 levels**
-//! to prevent stack overflow and infinite loops. This limit applies to both:
-//!
-//! - **Deep inheritance chains**: `role1 → role2 → role3 → ... → role64` (allowed)
-//! - **Circular references**: `warning → error → warning` (rejected with error)
-//!
-//! When the limit is exceeded, theme loading fails with
-//! [`ThemeLoadError::StyleRecursionLimitExceeded`], indicating which role
-//! triggered the limit.
-//!
-//! ## Example Error
-//!
-//! ```yaml
-//! # This will fail with recursion limit error:
-//! styles:
-//!   warning:
-//!     style: [error]
-//!   error:
-//!     style: [warning]  # Circular reference!
-//! ```
-//!
-//! Error message:
-//! ```text
-//! failed to resolve theme "my-theme": style recursion limit exceeded while resolving role warning
-//! ```
-//!
-//! ## Specification References
-//!
-//! - **FR-046**: Maximum depth of 64 levels for role-to-role inheritance
-//! - **FR-047**: Circular role references must be detected and cause an error
-//!
-//! # Implementation Details
-//!
-//! This module contains:
-//! - V1-specific types ([`Role`], [`StyleBase`], [`Style`])
-//! - Strict deserialization (fails on unknown keys/values)
-//! - ALL merge logic for themes
-//! - ALL resolve logic for themes (role → element resolution)
-//! - Conversion from v0 to v1 format
-//! - Recursion protection via [`StyleResolver`]
+//! Implements strict, semantic theme loading with role-based inheritance.
+//! Supports `$schema`, mode diffs, and deep inheritance chains (up to 64 levels).
 
 // std imports
 use std::collections::HashMap;
@@ -121,74 +39,16 @@ pub type StyleInventory = super::StylePack<Role, ResolvedStyle>;
 
 /// Maximum depth for role-to-role style inheritance chains.
 ///
-/// This limit prevents both excessively deep inheritance chains and circular
-/// role references from causing stack overflow or infinite loops.
-///
-/// # Specification Requirements
-///
-/// - **FR-046**: V1 role-to-role inheritance via the `style` field MUST support
-///   a maximum depth of 64 levels
-/// - **FR-047**: V1 themes MUST detect circular role references (e.g.,
-///   `warning: {style: "error"}` and `error: {style: "warning"}`) and exit
-///   with error message
-///
-/// # Implementation
-///
-/// When resolving role styles, the [`StyleResolver`] tracks recursion depth.
-/// If depth reaches this limit, resolution fails with
-/// [`ThemeLoadError::StyleRecursionLimitExceeded`].
-///
-/// Circular references will be caught by this limit when the circular chain
-/// is traversed 64 times. While this doesn't provide a full dependency chain
-/// in the error message, it reliably prevents infinite loops and provides
-/// a clear error indicating which role exceeded the limit.
-///
-/// # Examples
-///
-/// Valid deep chain (allowed up to 64 levels):
-/// ```yaml
-/// styles:
-///   role1: { style: [role2] }
-///   role2: { style: [role3] }
-///   # ... up to 64 levels deep
-/// ```
-///
-/// Circular reference (detected and rejected):
-/// ```yaml
-/// styles:
-///   warning: { style: [error] }
-///   error: { style: [warning] }  # Circular!
-/// ```
+/// Limits recursion depth to 64 (FR-046) to prevent infinite loops and stack overflow.
+/// Circular references will trigger this limit (FR-047).
 const RECURSION_LIMIT: usize = 64;
 
 // ---
 
 /// Semantic style role for theme inheritance (v1 feature).
 ///
-/// Roles allow defining reusable style definitions that elements can inherit from.
-/// This enables DRY (Don't Repeat Yourself) theme definitions and consistent styling.
-///
-/// # Serialization
-///
-/// Roles are serialized in kebab-case to match user input format:
-/// - `Primary` → `"primary"`
-/// - `AccentSecondary` → `"accent-secondary"`
-///
-/// # Examples
-///
-/// In a theme file:
-/// ```yaml
-/// styles:
-///   primary:
-///     foreground: "#00ff00"
-///   warning:
-///     style: [primary]  # Inherit from primary role
-///     background: "#331100"
-///
-/// elements:
-///   level:
-///     style: [primary]  # Use primary role
-/// ```
+/// Defines reusable styles (e.g., primary, warning) that elements can inherit from.
+/// Roles are serialized in kebab-case (e.g., `AccentSecondary` -> `accent-secondary`).
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, Default, Hash, Eq, PartialEq, Ord, PartialOrd, Deserialize, Serialize)]
 #[serde(rename_all = "kebab-case")]
@@ -225,26 +85,8 @@ impl std::fmt::Display for Role {
 
 /// Base style inheritance specification (v1 feature).
 ///
-/// Defines which roles a style should inherit from. Supports both single
-/// and multiple role inheritance.
-///
-/// # Multiple Inheritance
-///
-/// When multiple roles are specified, they are merged **left to right**
-/// (later roles override earlier ones):
-///
-/// ```yaml
-/// styles:
-///   combined:
-///     style: [primary, strong]  # strong overrides primary
-///     foreground: "#ff0000"     # this overrides both
-/// ```
-///
-/// # Serialization Formats
-///
-/// - Single role: `style: "warning"` → `StyleBase(vec![Role::Warning])`
-/// - Multiple roles: `style: ["primary", "strong"]` → `StyleBase(vec![Role::Primary, Role::Strong])`
-/// - Empty (no inheritance): omitted or `null` → `StyleBase(vec![])`
+/// Specifies generic roles to inherit from (single or multiple).
+/// Merge order is left-to-right (later roles override earlier ones).
 #[derive(Clone, Debug, Default, PartialEq, Eq, Deref, DerefMut)]
 pub struct StyleBase(Vec<Role>);
 
@@ -339,7 +181,7 @@ impl From<Mode> for ModeSetDiff {
 
 // ---
 
-/// Style with v1 features (base, ModeSetDiff)
+/// Style with v1 features (base, ModeSetDiff).
 /// This is the unresolved style type used in v1 themes.
 #[derive(Clone, Debug, Default, Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -680,48 +522,8 @@ impl StylePack<Role, Style> {
 
 /// V1 theme definition (unresolved).
 ///
-/// This is the deserialization target for v1 theme files. It contains unresolved
-/// style definitions that may reference roles and use inheritance.
-///
-/// # Strict Validation
-///
-/// V1 themes use **strict deserialization** - unknown fields or enum variants
-/// cause errors. This ensures themes are valid and helps catch typos early.
-///
-/// # Schema Support
-///
-/// V1 themes support an optional `$schema` field for IDE/validator integration:
-///
-/// ```yaml
-/// $schema: "https://example.com/hl-theme-schema.json"
-/// version: "1.0"
-/// # ... rest of theme
-/// ```
-///
-/// The `$schema` field is accepted but ignored during processing. It exists
-/// purely to enable IDE features like autocomplete and validation.
-///
-/// # Examples
-///
-/// Basic v1 theme:
-/// ```yaml
-/// version: "1.0"
-/// tags: [dark]
-///
-/// styles:
-///   primary:
-///     foreground: "#00ff00"
-///     modes: [bold]
-///
-/// elements:
-///   level:
-///     style: [primary]
-/// ```
-///
-/// # Resolution
-///
-/// Call [`Theme::resolve()`] to convert this unresolved theme to a fully
-/// resolved [`super::Theme`] with all role references expanded.
+/// Contains unresolved style definitions that may reference roles and use inheritance.
+/// Uses strict deserialization (fails on unknown fields) and optionally accepts `$schema`.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(default)]
 #[serde(deny_unknown_fields)]
@@ -892,26 +694,10 @@ impl Theme {
 
 // ---
 
-/// StyleResolver - helper for resolving role-based styles with caching and recursion protection.
+/// Helper for resolving role-based styles with caching and recursion protection.
 ///
-/// This resolver handles role-to-role inheritance chains while preventing:
-/// - Stack overflow from excessively deep inheritance chains
-/// - Infinite loops from circular role references
-///
-/// # Recursion Protection
-///
-/// The resolver enforces a maximum depth of 64 levels for style inheritance
-/// chains. When this limit is exceeded, resolution fails with
-/// [`ThemeLoadError::StyleRecursionLimitExceeded`].
-///
-/// This protects against both:
-/// - Deep non-circular chains (e.g., role1 → role2 → ... → role65)
-/// - Circular references (e.g., warning → error → warning)
-///
-/// # Caching
-///
-/// Resolved styles are cached to avoid redundant resolution of the same role.
-/// This improves performance and ensures each role is resolved at most once.
+/// Resolves role-to-role inheritance chains while enforcing dependency limits (64 levels)
+/// to prevent stack overflow and infinite loops from circular references.
 pub struct StyleResolver<'a> {
     inventory: &'a StylePack<Role, Style>,
     flags: MergeFlags,

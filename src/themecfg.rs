@@ -1,111 +1,31 @@
 //! Theme configuration system for `hl`.
 //!
-//! This module provides theme loading, parsing, and resolution functionality.
-//! It supports two theme format versions:
+//! Handles theme loading, parsing, and resolution for both v0 (legacy) and v1 (semantic) formats.
 //!
-//! - **v0** (legacy): Simple, flat, element-based styling
-//! - **v1** (current): Semantic roles, base styles, mode diffs, and advanced features
+//! # Main Types
 //!
-//! # Quick Start
+//! - [`Theme`]: Fully resolved theme ready for use.
+//! - [`RawTheme`]: Unresolved theme (allows modification before resolution).
+//! - [`Role`]: Semantic style role (primary, warning, etc.) - v1 only.
+//! - [`Style`]: Concrete style with color and modes.
 //!
-//! Load a theme by name:
-//! - `Theme::load(app_dirs, "monokai")` - loads, merges, and resolves a theme
-//! - Returns a fully resolved `Theme` ready for use
+//! # Usage
 //!
-//! # Theme Formats
-//!
-//! ## V0 Format (Legacy)
-//!
-//! V0 themes use simple element-based styling with no semantic roles:
-//!
-//! ```yaml
-//! version: "0.0"
-//! elements:
-//!   level:
-//!     foreground: "#00ff00"
-//!     modes: [bold]
+//! Load a resolved theme:
+//! ```no_run
+//! # use hl::themecfg::Theme;
+//! # let app_dirs = hl::appdirs::AppDirs::new("hl").unwrap();
+//! let theme = Theme::load(&app_dirs, "monokai")?;
+//! # Ok::<(), hl::themecfg::Error>(())
 //! ```
 //!
-//! Features:
-//! - Lenient parsing (ignores unknown fields for forward compatibility)
-//! - Direct element → style mapping
-//! - Simple mode lists (no diff syntax)
-//!
-//! ## V1 Format (Current)
-//!
-//! V1 themes support semantic roles and style inheritance:
-//!
-//! ```yaml
-//! version: "1.0"
-//! styles:
-//!   primary:
-//!     foreground: "#00ff00"
-//!     modes: [bold]
-//!   secondary:
-//!     style: [primary]  # Inherit from primary
-//!     modes: [+italic]  # Add italic to inherited modes
-//! elements:
-//!   level:
-//!     style: [secondary]  # Reference role-based style
-//! ```
-//!
-//! Features:
-//! - Strict parsing (fails on unknown fields)
-//! - Role-based styles with inheritance
-//! - Mode diff syntax (`+mode`, `-mode`)
-//! - `$schema` field support for IDE validation
-//!
-//! # Loading Pipeline
-//!
-//! 1. **Load**: Theme file is loaded from custom directory or embedded themes
-//! 2. **Parse**: YAML/TOML/JSON is deserialized based on detected version
-//! 3. **Convert**: V0 themes are converted to V1 format
-//! 4. **Merge**: Theme is merged with `@default` theme
-//! 5. **Resolve**: Role-based styles are resolved to concrete element styles
-//!
-//! # Public API Types
-//!
-//! - [`Theme`]: Fully resolved theme (output of loading pipeline)
-//! - [`RawTheme`]: Unresolved theme (before resolution, allows modifications)
-//! - [`Style`]: Resolved style with concrete foreground/background/modes
-//! - [`RawStyle`]: Unresolved style (may reference roles)
-//! - [`Element`]: Theme element enum (level, timestamp, etc.)
-//! - [`Role`]: Semantic style role (primary, secondary, warning, etc.)
-//!
-//! # Advanced Usage
-//!
-//! For advanced customization:
-//! 1. Call `Theme::load_raw(app_dirs, "monokai")` to get an unresolved `RawTheme`
-//! 2. Modify the theme (e.g., `raw_theme.styles`, `raw_theme.elements`)
-//! 3. Call `raw_theme.resolve()` to get a fully resolved `Theme`
-//!
-//! The `RawTheme` automatically includes theme metadata, so resolution errors
-//! will include the theme name and source for better debugging.
-//!
-//! # Error Handling
-//!
-//! All errors include context about what failed:
-//!
-//! - **Theme not found**: Includes suggestions for similar theme names
-//! - **Parse errors**: Includes file path and line/column information
-//! - **Version errors**: Shows requested vs. supported version
-//! - **Resolution errors**: Shows theme name and problematic role (for circular inheritance)
-//! - **Recursion limit**: V1 role inheritance is limited to 64 levels (FR-046); circular
-//!   references are detected by this limit (FR-047)
-//!
-//! ## Recursion Protection
-//!
-//! V1 themes enforce a maximum depth of **64 levels** for role-to-role inheritance chains.
-//! This prevents both excessively deep chains and circular references from causing
-//! stack overflow or infinite loops.
-//!
-//! Circular references (e.g., `warning → error → warning`) will trigger this limit
-//! and fail with [`ThemeLoadError::StyleRecursionLimitExceeded`].
-//!
-//! Example error messages:
-//! ```text
-//! failed to load theme "my-theme" from "path/to/my-theme.yaml": unknown field `invalid`
-//! failed to resolve theme "my-theme": style recursion limit exceeded while resolving role primary
+//! Load raw theme for customization:
+//! ```no_run
+//! # use hl::themecfg::Theme;
+//! # let app_dirs = hl::appdirs::AppDirs::new("hl").unwrap();
+//! let raw = Theme::load_raw(&app_dirs, "monokai")?;
+//! let theme = raw.resolve()?;
+//! # Ok::<(), hl::themecfg::Error>(())
 //! ```
 
 // std imports

@@ -1,9 +1,6 @@
 //! Theme configuration v0 support
 //!
-//! This module contains all v0-specific theme loading logic, including:
-//! - Lenient deserialization (ignores unknown keys for forward compatibility)
-//! - V0-specific validation and transformations
-//! - Original type definitions that are reused by later versions
+//! Handles legacy v0 theme loading with lenient deserialization and conversions.
 
 // std imports
 use std::{collections::HashMap, fmt, hash::Hash, sync::LazyLock};
@@ -30,7 +27,7 @@ pub use super::{Color, MergeFlag, MergeFlags, Mode, PlainColor, RGB, Tag, ThemeV
 
 // ---
 
-/// Element represents a UI element that can be styled
+/// Element represents a UI element that can be styled (v0).
 #[repr(u8)]
 #[derive(Debug, Default, Hash, Eq, PartialEq, Clone, Copy, Ord, PartialOrd, Enum, Deserialize, Serialize, EnumIter)]
 #[serde(rename_all = "kebab-case")]
@@ -101,7 +98,7 @@ impl Element {
 
 // ---
 
-/// Style represents an element's visual styling (v0 format - simple, no base)
+/// Style represents an element's visual styling (v0 format - simple, no base).
 #[derive(Clone, Debug, Default, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 #[serde(default)]
@@ -130,8 +127,7 @@ impl Default for &Style {
 
 // ---
 
-/// StylePack is a collection of Element->Style mappings
-/// V0 uses lenient deserialization that ignores unknown keys for forward compatibility
+/// Collection of Element->Style mappings with lenient deserialization.
 #[derive(Clone, Debug, Default, Deref, DerefMut, IntoIterator)]
 pub struct StylePack(HashMap<Element, Style>);
 
@@ -231,8 +227,7 @@ pub struct IndicatorStyle {
 
 // ---
 
-/// Theme is the v0 theme deserialization target
-/// It uses lenient deserialization and includes v0-specific logic
+/// V0 theme deserialization target.
 #[derive(Debug, Deserialize)]
 #[serde(default)]
 pub struct Theme {
