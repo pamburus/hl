@@ -632,7 +632,7 @@ impl StylePack<Role, Style> {
             .keys()
             .map(|k| Ok((*k, resolver.resolve(k)?)))
             .collect::<Result<HashMap<Role, ResolvedStyle>, ThemeLoadError>>()?;
-        Ok(super::StylePack(items))
+        Ok(super::StylePack::new(items))
     }
 }
 
@@ -832,22 +832,10 @@ impl Theme {
 
             let resolved_style = match parent_for_inner {
                 Some(parent_style) if !flags.contains(MergeFlag::ReplaceElements) => {
-                    // V1: Resolve both parent and inner first, then merge based on resolved values
-                    let resolved_inner = style.resolve(inventory, flags);
-                    let resolved_parent = parent_style.resolve(inventory, flags);
-
-                    // Parent fills in only properties that are None in the resolved inner
-                    let mut merged = resolved_inner;
-                    if merged.foreground.is_none() {
-                        merged.foreground = resolved_parent.foreground;
-                    }
-                    if merged.background.is_none() {
-                        merged.background = resolved_parent.background;
-                    }
-                    // For modes in v1, merge additively
-                    merged.modes = resolved_parent.modes + merged.modes;
-
-                    merged
+                    // V1: Merge unresolved parent and inner first, then resolve (per FR-041)
+                    // This ensures role inheritance and mode operations work correctly
+                    let merged = parent_style.merged(style, flags);
+                    merged.resolve(inventory, flags)
                 }
                 _ => {
                     // V0 or no parent: just resolve the style
@@ -879,7 +867,7 @@ impl Theme {
             }
         }
 
-        Ok(super::StylePack(result))
+        Ok(super::StylePack::new(result))
     }
 
     fn resolve_indicators(
@@ -1170,7 +1158,7 @@ impl From<v0::Theme> for Theme {
             // Only convert valid levels - v1 is strict, invalid levels are dropped
             if let InfallibleLevel::Valid(level) = level {
                 let pack = pack.0.into_iter().map(|(e, style)| (e, style.into())).collect();
-                levels.insert(level, StylePack(pack));
+                levels.insert(level, StylePack::new(pack));
             }
         }
 
@@ -1184,8 +1172,8 @@ impl From<v0::Theme> for Theme {
             schema: None,
             tags: theme.tags,
             version: theme.version,
-            styles: StylePack(styles),
-            elements: StylePack(elements),
+            styles: StylePack::new(styles),
+            elements: StylePack::new(elements),
             levels,
             indicators,
         }
