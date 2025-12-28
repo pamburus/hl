@@ -161,6 +161,18 @@
 
 - Q: Should v0 themes ignore the `styles` section if present, or treat it as an error? → A: Ignore silently - v0 schema does NOT include styles section; if present in v0 theme file, ignore entire section per forward compatibility rule (FR-010c for unknown top-level sections)
 
+### Session 2025-12-28 (Fifteenth Pass)
+
+- Q: Can inner elements be defined without corresponding parent elements (e.g., can you define `level-inner` in a theme without defining `level`)? → A: Inner elements are valid on their own; in v1, they fall back to @default theme's parent element for the parent's style; in v0, orphaned inner elements use empty/terminal default for the parent since v0 has no @default theme to fall back to
+
+- Q: What happens when the theme directory doesn't exist or isn't readable? → A: Skip custom themes silently, continue with stock themes only (no error, no directory creation)
+
+- Q: What happens when a theme file exists but has restrictive permissions (not readable)? → A: Exit with permission denied error to stderr (consistent with FR-007 filesystem error handling)
+
+- Q: How does a custom @default theme merge with the embedded @default theme? → A: Custom @default merges like any other custom theme - no special treatment for the name. At theme merge level (FR-001a): custom theme elements completely replace corresponding embedded @default elements (using extend, not property merge). Property-level merging happens later during style resolution. The merge strategy depends on custom theme version: v0 uses element replacement semantics (FR-016), v1 uses property-level merge during resolution (FR-041). The embedded @default is v1, so it has styles and hierarchical inheritance. After merging, the result can have hierarchical styles requiring resolution. Cross-references: FR-001b (custom @default allowed), FR-045 (v1 inheritance chain), FR-041 (v1 resolution order)
+
+- Q: What happens when a parent element is defined at the level-specific scope but not in base elements (e.g., theme defines levels.error.level but not elements.level)? → A: Level-specific element merges with @default base element - follows FR-041 resolution order which starts with @default element, then merges base element from user theme (if present), then merges level-specific element; absence of base element in custom theme doesn't prevent level-specific elements from working
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Theme File Loading and Validation (Priority: P1)
@@ -349,17 +361,18 @@ Theme authors using v1 can define semantic roles (like "warning", "error", "succ
 
 ### Edge Cases
 
-- What happens when a parent element is defined at the level-specific scope but not in base elements?
 - How does the system handle a theme with both base `level` and level-specific `warning.level` when displaying a warning?
 - What happens when modes contains duplicate values in v0 (e.g., modes=[bold, italic, bold])? Are they passed to terminal as-is or deduplicated?
-- Can inner elements be defined without corresponding parent elements?
 - What happens when trying to load a theme with an extension not in the priority list (.yaml, .toml, .json)?
 - What happens when multiple theme files exist with the same stem but different extensions (e.g., theme.yaml and theme.toml)?
-- What happens when filesystem operations fail (permission denied on theme file, I/O error during read, disk full)?
-- What happens when the theme directory doesn't exist or isn't readable?
-- What happens when a theme file exists but has restrictive permissions (not readable)?
 
 - What happens when a user specifies a theme with `.yml` extension explicitly (e.g., `my-theme.yml`)? (Answer: file not found error - only `.yaml` extension is supported)
+- Can inner elements be defined without corresponding parent elements? (Answer: Yes - inner elements are valid on their own; in v1 they fall back to @default theme's parent element, in v0 they use empty/terminal default for the parent)
+- What happens when the theme directory doesn't exist or isn't readable? (Answer: Skip custom themes silently, continue with stock themes only - no error, no directory creation)
+- How does a custom @default theme merge with the embedded @default theme? (Answer: Custom @default merges like any other theme - elements from custom theme completely replace embedded @default elements at theme merge level; property-level merging happens during resolution; merge strategy depends on custom theme version per FR-016 (v0) or FR-041 (v1))
+- What happens when a parent element is defined at the level-specific scope but not in base elements? (Answer: Level-specific element merges with @default base element per FR-041 resolution order)
+- What happens when filesystem operations fail (permission denied on theme file, I/O error during read, disk full)? (Answer: Exit with error to stderr per FR-007)
+- What happens when a theme file exists but has restrictive permissions (not readable)? (Answer: Exit with permission denied error to stderr - same as other filesystem errors per FR-007)
 
 
 ## Requirements *(mandatory)*
@@ -387,13 +400,15 @@ Theme authors using v1 can define semantic roles (like "warning", "error", "succ
   - Linux: `~/.config/hl/themes/*.{yaml,toml,json}`
   - Windows: `%USERPROFILE%\AppData\Roaming\hl\themes\*.{yaml,toml,json}`
 
+- **FR-004a**: System MUST silently skip custom theme directory search if the theme directory does not exist or is not readable (permission denied); the system continues with stock themes only without errors or warnings; the system does NOT automatically create the theme directory
+
 - **FR-005**: System MUST use the theme specified in the `theme` setting of the embedded configuration file when no theme is explicitly specified
 
 - **FR-006**: System MUST exit with error to stderr when a specified theme cannot be loaded (no fallback to default)
 
 - **FR-006a**: System MUST compute theme name suggestions using Jaro similarity algorithm with minimum relevance threshold of 0.75, presenting suggestions sorted by descending relevance score
 
-- **FR-007**: System MUST exit with error to stderr when filesystem operations fail during theme loading, reporting the specific error (permission denied, I/O error, disk read failure, etc.)
+- **FR-007**: System MUST exit with error to stderr when filesystem operations fail during theme loading, reporting the specific error (permission denied, I/O error, disk read failure, etc.); this applies both when a requested theme file exists but cannot be read due to permissions, and when other I/O errors occur during the read operation
 
 - **FR-008**: System MUST include suggestions for similar theme names (computed via Jaro similarity ≥0.75) in error messages when theme is not found
 
@@ -446,6 +461,8 @@ Theme authors using v1 can define semantic roles (like "warning", "error", "succ
 
 - **FR-017**: System MUST fall back to parent element when inner element is not defined (e.g., if `level-inner` is absent, use `level` style)
 
+- **FR-017a**: System MUST allow inner elements to be defined without corresponding parent elements (orphaned inner elements); in v1, orphaned inner elements fall back to the `@default` theme's parent element for the parent's style (leveraging v1's @default inheritance); in v0, orphaned inner elements use empty/terminal default for the parent since v0 has no @default theme
+
 - **FR-018**: System MUST treat empty modes array `[]` identically to absent modes field (both inherit from parent)
 
 - **FR-018a**: System MUST treat level names in the `levels` section as case-sensitive (valid: trace, debug, info, warning, error); unknown or invalid level names (e.g., "critical", "Error") are silently ignored and not loaded
@@ -455,6 +472,8 @@ Theme authors using v1 can define semantic roles (like "warning", "error", "succ
 - **FR-019**: System MUST support level-specific element overrides under `levels` section for: trace, debug, info, warning, error
 
 - **FR-020**: System MUST merge level-specific elements with base elements at load time (creating a complete StylePack for each level) such that level overrides win for defined properties
+
+- **FR-020a**: System MUST allow level-specific elements to be defined without corresponding base elements in the custom theme; level-specific elements merge with @default theme's base element following the resolution order in FR-041 (start with @default element, merge base element if present in custom theme, then merge level-specific element); this allows themes to define level-specific overrides without requiring base element definitions
 
 - **FR-021**: System MUST apply nested styling during rendering after level-specific merging is complete, so that parent-inner nesting works with the merged element set for each level
 
@@ -570,7 +589,7 @@ Theme authors using v1 can define semantic roles (like "warning", "error", "succ
 
 - **Theme**: Complete theme configuration containing element styles, level-specific overrides, indicators, version, and metadata tags
 
-- **@default Theme** (v1 only): Embedded theme that explicitly defines all 28 v0 elements and all 12 v1 roles with reasonable defaults. Not visible in theme listings. All v1 user themes implicitly inherit from `@default` when roles or styles are not explicitly defined. More specific roles in `@default` typically inherit from more generic ones via `style` field (e.g., `warning: {style: "primary", ...}`), ensuring old themes remain compatible with newer app versions by falling back to consistent generic styles. The name `@default` is reserved; custom theme files with this name are ignored.
+- **@default Theme** (v1 only): Embedded theme that explicitly defines all 28 v0 elements and all 12 v1 roles with reasonable defaults. Not visible in theme listings. All user themes (both v0 and v1) implicitly inherit from `@default` when roles or styles are not explicitly defined. More specific roles in `@default` typically inherit from more generic ones via `style` field (e.g., `warning: {style: "primary", ...}`), ensuring old themes remain compatible with newer app versions by falling back to consistent generic styles. Users CAN create custom themes named `@default` which merge with the embedded `@default` following normal theme merge rules (FR-001b): at theme merge level, custom elements completely replace embedded elements; property-level merging happens during style resolution based on custom theme's version.
 
 - **Theme Version**: Version identifier following "major.minor" format (e.g., "1.0") where major=1 and minor is non-negative integer without leading zeros. Currently only version="1.0" is supported; future minor versions (1.1, 1.2, etc.) will be added as needed. Used to determine which schema and merge semantics apply.
 
@@ -663,7 +682,7 @@ Theme authors using v1 can define semantic roles (like "warning", "error", "succ
 - Themes are loaded once at application startup and remain constant for the lifetime of the process; changing themes requires restarting the application
 - Minimum valid theme: v0 can be completely empty file (inherits terminal defaults); v1 requires at minimum `version: "1.0"` field (inherits from `@default` theme)
 - V1 property resolution order: 1) @default element, 2) merge base element, 3) merge level-specific element, 4) resolve `style` field (role resolution fills undefined properties), 5) explicit properties from merged element override role; this ensures level-specific can change role reference and explicit properties always win
-- The theme name `@default` is reserved for the embedded v1 default theme; custom theme files named `@default` (any extension) are ignored and not loaded; other theme names starting with `@` can be used normally
+- Custom theme files named `@default` ARE allowed and merge with the embedded v1 @default theme following normal theme merge rules (FR-001b); the embedded `@default` is excluded from theme listings but custom `@default` themes are loaded and merged; other theme names starting with `@` can be used normally
 - File extension determines which parser is used (YAML/TOML/JSON); if file content doesn't match extension, parser fails with error to stderr (no auto-detection of actual format)
 - Unknown top-level sections in theme files are ignored when the theme version is supported (forward compatibility); if theme version is unsupported, error occurs before section parsing; level names in `levels` section are case-sensitive (trace, debug, info, warning, error); unknown or invalid level names are silently ignored
 - Unknown element properties (properties other than foreground, background, modes, and in v1: style) are silently ignored for forward compatibility; this allows newer themes with additional properties to work on older app versions
