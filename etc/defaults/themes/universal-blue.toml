@@ -60,7 +60,6 @@ modes = ["reverse"]
 #
 # Indicators define styles for various status indicators.
 #
-[indicators]
-[indicators.sync]
-synced = { text = " " }
-failed = { text = "!", inner.style = { foreground = "yellow", modes = ["bold"] } }
+[indicators.sync.failed.inner.style]
+foreground = "yellow"
+modes = ["bold"]

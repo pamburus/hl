@@ -51,7 +51,6 @@ foreground = "#e06c75"
 #
 # Indicators define styles for various status indicators.
 #
-[indicators]
-[indicators.sync]
-synced = { text = " " }
-failed = { text = "!", inner.style = { foreground = "#f4a460", modes = ["bold"] } }
+[indicators.sync.failed.inner.style]
+foreground = "#f4a460"
+modes = ["bold"]
