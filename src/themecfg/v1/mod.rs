@@ -654,24 +654,19 @@ impl Theme {
 
         // Apply blocking rules only for version 0 themes (backward compatibility)
         if flags.contains(MergeFlag::ReplaceGroups) {
-            // Apply blocking rule: if child theme defines a parent element,
-            // remove the corresponding -inner element from parent theme
-            // Use canonical pairs from Element::pairs() for single source of truth (FR-015a)
-            for &(parent, inner) in Element::pairs() {
-                if other.elements.0.contains_key(&parent) {
-                    self.elements.0.remove(&inner);
+            // Apply blocking rule: remove all elements from self that have any ancestor
+            // element defined in other.elements (including direct parent and all grand-parents)
+            self.elements.0.retain(|element, _| {
+                // Check if any ancestor of this element is defined in other.elements
+                let mut current = *element;
+                while let Some(parent) = current.parent() {
+                    if other.elements.0.contains_key(&parent) {
+                        return false; // This element should be removed
+                    }
+                    current = parent;
                 }
-            }
-
-            // Block input-number/input-name and their inner elements if input is defined in child theme
-            // This ensures v0 themes that define `input` get nested styling scope behavior
-            if other.elements.0.contains_key(&Element::Input) {
-                self.elements.0.remove(&Element::InputNumber);
-                self.elements.0.remove(&Element::InputNumberInner);
-                self.elements.0.remove(&Element::InputName);
-                self.elements.0.remove(&Element::InputNameInner);
-            }
-
+                true // Keep this element
+            });
             // Block entire level sections if child theme defines any element for that level
             for level in other.levels.keys() {
                 self.levels.remove(level);

@@ -6,7 +6,7 @@
 //! - Original type definitions that are reused by later versions
 
 // std imports
-use std::{collections::HashMap, fmt, hash::Hash};
+use std::{collections::HashMap, fmt, hash::Hash, sync::LazyLock};
 
 // third-party imports
 use enum_map::Enum;
@@ -16,6 +16,7 @@ use serde::{
     de::{MapAccess, Visitor},
 };
 use serde_value::Value;
+use strum::{EnumIter, IntoEnumIterator};
 
 // local imports
 use crate::level::InfallibleLevel;
@@ -30,7 +31,7 @@ pub use super::{Color, MergeFlag, MergeFlags, Mode, PlainColor, RGB, Tag, ThemeV
 
 /// Element represents a UI element that can be styled
 #[repr(u8)]
-#[derive(Clone, Copy, Debug, Default, Hash, Eq, PartialEq, Ord, PartialOrd, Enum, Deserialize, Serialize)]
+#[derive(Debug, Default, Hash, Eq, PartialEq, Clone, Copy, Ord, PartialOrd, Enum, Deserialize, Serialize, EnumIter)]
 #[serde(rename_all = "kebab-case")]
 pub enum Element {
     #[default]
@@ -66,25 +67,26 @@ impl Element {
         self.parent().is_some()
     }
 
-    pub fn parent(&self) -> Option<Element> {
+    pub fn parent(&self) -> Option<Self> {
         match self {
-            Element::InputNumberInner => Some(Element::InputNumber),
-            Element::InputNameInner => Some(Element::InputName),
-            Element::LevelInner => Some(Element::Level),
-            Element::LoggerInner => Some(Element::Logger),
-            Element::CallerInner => Some(Element::Caller),
+            Self::InputNumber => Some(Self::Input),
+            Self::InputName => Some(Self::Input),
+            Self::InputNumberInner => Some(Self::InputNumber),
+            Self::InputNameInner => Some(Self::InputName),
+            Self::LevelInner => Some(Self::Level),
+            Self::LoggerInner => Some(Self::Logger),
+            Self::CallerInner => Some(Self::Caller),
             _ => None,
         }
     }
 
-    pub fn pairs() -> &'static [(Element, Element)] {
-        &[
-            (Element::InputNumber, Element::InputNumberInner),
-            (Element::InputName, Element::InputNameInner),
-            (Element::Level, Element::LevelInner),
-            (Element::Logger, Element::LoggerInner),
-            (Element::Caller, Element::CallerInner),
-        ]
+    pub fn pairs() -> &'static [(Self, Self)] {
+        static PAIRS: LazyLock<Vec<(Element, Element)>> = LazyLock::new(|| {
+            Element::iter()
+                .filter_map(|element| element.parent().map(|parent| (parent, element)))
+                .collect()
+        });
+        &PAIRS
     }
 }
 

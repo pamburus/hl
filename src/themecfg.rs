@@ -987,8 +987,6 @@ pub type MergeFlags = EnumSet<MergeFlag>;
 
 // ---
 
-// StylePack::resolve is now in v1 module only
-
 impl<K, S, I: Into<HashMap<K, S>>> From<I> for StylePack<K, S> {
     fn from(i: I) -> Self {
         Self(i.into())
@@ -1059,23 +1057,7 @@ where
 
 // ---
 
-// Element is now defined in v0 module and re-exported above (via v1)
-
-// ---
-
-// StyleBase is now defined in v1 module and re-exported above
-
-// ---
-
-// Style (unresolved) is now defined in v1 module and re-exported above
-
-// ---
-
-// StyleResolver is now defined in v1 module only
-
-// ---
-
-#[derive(Clone, Debug, Default, Deserialize)]
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq)]
 #[serde(rename_all = "kebab-case")]
 #[serde(default)]
 pub struct Style {
