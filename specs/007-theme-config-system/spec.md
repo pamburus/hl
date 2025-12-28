@@ -13,7 +13,7 @@
 
 - Q: What is the fallback behavior when no theme is specified or theme loading fails? → A: When no theme specified, use the theme setting from embedded config file (etc/defaults/config.yaml). When theme loading fails (specified theme not found or parse error), application exits with error to stderr - no fallback.
 
-- Q: Where are custom theme files located on each platform? → A: macOS: ~/.config/hl/themes/*.{yaml,toml,json}, Linux: ~/.config/hl/themes/*.{yaml,toml,json}, Windows: %USERPROFILE%\AppData\Roaming\hl\themes\*.{yaml,toml,json}
+- Q: Where are custom theme files located on each platform? → A: macOS: ~/.config/hl/themes/*.{yaml,yml,toml,json}, Linux: ~/.config/hl/themes/*.{yaml,yml,toml,json}, Windows: %USERPROFILE%\AppData\Roaming\hl\themes\*.{yaml,yml,toml,json}
 
 - Q: Why does the boolean special case exist for boolean → boolean-true/boolean-false inheritance? → A: Backward compatibility + convenience. Initially only `boolean` existed, variants added later. Provides DRY for shared styling. In v0, this pattern is NOT applied to other parent-inner pairs like level/level-inner (v1 may generalize this to more element pairs).
 
@@ -53,7 +53,7 @@
 
 - Q: How are theme name suggestions computed when a theme is not found? → A: Jaro similarity algorithm with minimum relevance threshold of 0.75, sorted by descending relevance
 
-- Q: How should the system handle alternate file extensions like `.yml`? → A: Only accept `.yaml` - users must rename `.yml` files to `.yaml`
+- Q: How should the system handle alternate file extensions like `.yml`? → A: Support both `.yml` and `.yaml` extensions - both are valid YAML file extensions and use the same YAML parser
 
 ### Session 2024-12-25 (Fifth Pass)
 
@@ -172,6 +172,18 @@
 - Q: How does a custom @default theme merge with the embedded @default theme? → A: Custom @default merges like any other custom theme - no special treatment for the name. At theme merge level (FR-001a): custom theme elements completely replace corresponding embedded @default elements (using extend, not property merge). Property-level merging happens later during style resolution. The merge strategy depends on custom theme version: v0 uses element replacement semantics (FR-016), v1 uses property-level merge during resolution (FR-041). The embedded @default is v1, so it has styles and hierarchical inheritance. After merging, the result can have hierarchical styles requiring resolution. Cross-references: FR-001b (custom @default allowed), FR-045 (v1 inheritance chain), FR-041 (v1 resolution order)
 
 - Q: What happens when a parent element is defined at the level-specific scope but not in base elements (e.g., theme defines levels.error.level but not elements.level)? → A: Level-specific element merges with @default base element - follows FR-041 resolution order which starts with @default element, then merges base element from user theme (if present), then merges level-specific element; absence of base element in custom theme doesn't prevent level-specific elements from working
+
+- Q: How does the system handle a theme with both base `level` and level-specific `warning.level` when displaying a warning? → A: Level-specific properties override base properties - the system merges base `level` element with `warning.level` override per FR-020 where level-specific properties win for defined properties; the merged result is used for rendering warning-level logs; undefined properties in level-specific inherit from base
+
+- Q: What happens when modes contains duplicate values in v0 (e.g., modes=[bold, italic, bold])? Are they passed to terminal as-is or deduplicated? → A: Deduplicated during theme loading with last occurrence kept - this ensures consistent behavior and minimal processing; v1 uses the same deduplication strategy (FR-027 allows duplicates but they are deduplicated with last occurrence winning)
+
+- Q: Should the system support .yml extension alongside .yaml for YAML theme files? → A: Yes - support both .yml and .yaml extensions with same priority in the extension search order; when loading by stem name, try extensions in order: .yaml, .yml, .toml, .json (first found wins); both extensions use the YAML parser
+
+- Q: What happens when trying to load a theme with an unsupported extension (not .yaml, .yml, .toml, or .json)? → A: Exit with specific error message to stderr: "Unsupported theme file extension '.ext' - supported extensions are: .yaml, .yml, .toml, .json"
+
+- Q: What happens when multiple theme files exist with the same stem but different extensions (e.g., theme.yaml and theme.toml)? → A: Silent - load highest priority extension (.yaml) without warning or indication that other files were ignored; this keeps behavior simple and predictable; users who want a specific format can use full filename
+
+- Q: Should custom @default theme files created by users appear in theme listings? → A: Yes - show custom @default in custom themes list; while embedded @default is hidden (system default), custom @default is user-created and should be visible so users can see and manage it
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -361,16 +373,16 @@ Theme authors using v1 can define semantic roles (like "warning", "error", "succ
 
 ### Edge Cases
 
-- How does the system handle a theme with both base `level` and level-specific `warning.level` when displaying a warning?
-- What happens when modes contains duplicate values in v0 (e.g., modes=[bold, italic, bold])? Are they passed to terminal as-is or deduplicated?
-- What happens when trying to load a theme with an extension not in the priority list (.yaml, .toml, .json)?
-- What happens when multiple theme files exist with the same stem but different extensions (e.g., theme.yaml and theme.toml)?
-
-- What happens when a user specifies a theme with `.yml` extension explicitly (e.g., `my-theme.yml`)? (Answer: file not found error - only `.yaml` extension is supported)
+- What happens when trying to load a theme with an extension not in the supported list (.yaml, .yml, .toml, .json)? (Answer: Exit with specific error message to stderr: "Unsupported theme file extension '.ext' - supported extensions are: .yaml, .yml, .toml, .json")
+- What happens when multiple theme files exist with the same stem but different extensions (e.g., theme.yaml and theme.toml)? (Answer: Silent - load highest priority extension without warning per FR-002a; users can specify full filename for specific format)
+- Should custom @default theme files created by users appear in theme listings? (Answer: Yes - custom @default shown in custom themes list per FR-030c; embedded @default remains hidden)
 - Can inner elements be defined without corresponding parent elements? (Answer: Yes - inner elements are valid on their own; in v1 they fall back to @default theme's parent element, in v0 they use empty/terminal default for the parent)
 - What happens when the theme directory doesn't exist or isn't readable? (Answer: Skip custom themes silently, continue with stock themes only - no error, no directory creation)
 - How does a custom @default theme merge with the embedded @default theme? (Answer: Custom @default merges like any other theme - elements from custom theme completely replace embedded @default elements at theme merge level; property-level merging happens during resolution; merge strategy depends on custom theme version per FR-016 (v0) or FR-041 (v1))
 - What happens when a parent element is defined at the level-specific scope but not in base elements? (Answer: Level-specific element merges with @default base element per FR-041 resolution order)
+- How does the system handle a theme with both base `level` and level-specific `warning.level` when displaying a warning? (Answer: Level-specific properties override base properties per FR-020 - merged result used for rendering where level-specific wins for defined properties, undefined properties inherit from base)
+- What happens when modes contains duplicate values in v0 (e.g., modes=[bold, italic, bold])? (Answer: Deduplicated during theme loading with last occurrence kept per FR-027)
+- Should the system support .yml extension alongside .yaml for YAML theme files? (Answer: Yes - both .yml and .yaml supported with same priority in extension search order per updated FR-002)
 - What happens when filesystem operations fail (permission denied on theme file, I/O error during read, disk full)? (Answer: Exit with error to stderr per FR-007)
 - What happens when a theme file exists but has restrictive permissions (not readable)? (Answer: Exit with permission denied error to stderr - same as other filesystem errors per FR-007)
 
@@ -381,24 +393,24 @@ Theme authors using v1 can define semantic roles (like "warning", "error", "succ
 
 #### V0 Theme Loading (Existing Behavior)
 
-- **FR-001**: System MUST load theme files in TOML, YAML, or JSON format from user config directories and embedded resources at startup only (no runtime reloading)
+- **FR-001**: System MUST load theme files in TOML, YAML (both .yaml and .yml extensions), or JSON format from user config directories and embedded resources at startup only (no runtime reloading)
 
 - **FR-001a**: System MUST search for themes in this priority order: custom themes directory first, then stock themes embedded in binary (custom themes with same name completely replace stock themes - no merging or inheritance)
 
-- **FR-001b**: System MUST exclude the embedded `@default` from theme listings (it is a special hidden base theme); however, users MAY create custom themes named `@default` which will be loaded and merged with the embedded `@default` theme following normal custom theme priority rules (FR-001a); the system MUST load custom `@default` themes consistently whether loaded by stem name (`@default`) or full filename (`@default.yaml`), both methods should check for custom theme files first and merge with embedded `@default`; the embedded `@default` theme itself MUST NOT merge with itself (no recursion); other theme names starting with `@` are not reserved and can be used normally
+- **FR-001b**: System MUST exclude the embedded `@default` from theme listings (it is a special hidden base theme); however, users MAY create custom themes named `@default` which will be loaded and merged with the embedded `@default` theme following normal custom theme priority rules (FR-001a); custom `@default` theme files MUST appear in theme listings under the custom themes group (FR-030c) since they are user-created; the system MUST load custom `@default` themes consistently whether loaded by stem name (`@default`) or full filename (`@default.yaml`), both methods should check for custom theme files first and merge with embedded `@default`; the embedded `@default` theme itself MUST NOT merge with itself (no recursion); other theme names starting with `@` are not reserved and can be used normally
 
-- **FR-002**: System MUST support loading themes by stem name (without extension) with automatic format detection in priority order: .yaml, .toml, .json (first found wins); alternate extension `.yml` is NOT supported; theme name matching is case-sensitive on Linux/macOS and case-insensitive on Windows (follows platform filesystem conventions)
+- **FR-002**: System MUST support loading themes by stem name (without extension) with automatic format detection in priority order: .yaml, .yml, .toml, .json (first found wins); both .yaml and .yml extensions are supported for YAML files and use the YAML parser; theme name matching is case-sensitive on Linux/macOS and case-insensitive on Windows (follows platform filesystem conventions)
 
-- **FR-002a**: System MUST silently load the highest priority format when multiple theme files with the same stem but different extensions exist (e.g., if both theme.yaml and theme.toml exist, load theme.yaml without warning or indication that theme.toml was ignored)
+- **FR-002a**: System MUST silently load the highest priority format when multiple theme files with the same stem but different extensions exist (e.g., if theme.yaml, theme.yml, and theme.toml all exist, load theme.yaml without warning or indication that others were ignored; if only theme.yml and theme.toml exist, load theme.yml)
 
-- **FR-002b**: System MUST use the file extension to determine which parser to use (YAML parser for .yaml files, TOML parser for .toml files, JSON parser for .json files); if file content doesn't match the extension, the parser will fail with parse error to stderr
+- **FR-002b**: System MUST use the file extension to determine which parser to use (YAML parser for .yaml and .yml files, TOML parser for .toml files, JSON parser for .json files); if file content doesn't match the extension, the parser will fail with parse error to stderr
 
 - **FR-003**: System MUST support loading themes by full filename (with extension) to load a specific format
 
 - **FR-004**: System MUST load custom themes from platform-specific directories:
-  - macOS: `~/.config/hl/themes/*.{yaml,toml,json}`
-  - Linux: `~/.config/hl/themes/*.{yaml,toml,json}`
-  - Windows: `%USERPROFILE%\AppData\Roaming\hl\themes\*.{yaml,toml,json}`
+  - macOS: `~/.config/hl/themes/*.{yaml,yml,toml,json}`
+  - Linux: `~/.config/hl/themes/*.{yaml,yml,toml,json}`
+  - Windows: `%USERPROFILE%\AppData\Roaming\hl\themes\*.{yaml,yml,toml,json}`
 
 - **FR-004a**: System MUST silently skip custom theme directory search if the theme directory does not exist or is not readable (permission denied); the system continues with stock themes only without errors or warnings; the system does NOT automatically create the theme directory
 
@@ -407,6 +419,8 @@ Theme authors using v1 can define semantic roles (like "warning", "error", "succ
 - **FR-006**: System MUST exit with error to stderr when a specified theme cannot be loaded (no fallback to default)
 
 - **FR-006a**: System MUST compute theme name suggestions using Jaro similarity algorithm with minimum relevance threshold of 0.75, presenting suggestions sorted by descending relevance score
+
+- **FR-006b**: System MUST exit with specific error message to stderr when a user explicitly specifies a theme file with an unsupported extension (any extension other than .yaml, .yml, .toml, or .json): "Unsupported theme file extension '.ext' - supported extensions are: .yaml, .yml, .toml, .json"
 
 - **FR-007**: System MUST exit with error to stderr when filesystem operations fail during theme loading, reporting the specific error (permission denied, I/O error, disk read failure, etc.); this applies both when a requested theme file exists but cannot be read due to permissions, and when other I/O errors occur during the read operation
 
@@ -475,6 +489,8 @@ Theme authors using v1 can define semantic roles (like "warning", "error", "succ
 
 - **FR-020a**: System MUST allow level-specific elements to be defined without corresponding base elements in the custom theme; level-specific elements merge with @default theme's base element following the resolution order in FR-041 (start with @default element, merge base element if present in custom theme, then merge level-specific element); this allows themes to define level-specific overrides without requiring base element definitions
 
+- **FR-020b**: System MUST merge base elements with level-specific elements using property-level override semantics: when both base element and level-specific element exist, level-specific properties win for defined properties (foreground, background, modes), while undefined properties in level-specific inherit from base; the merged result is used for rendering at that level; for example, if base `level` has foreground=#AAAAAA and modes=[italic], and `warning.level` has foreground=#FFA500, the warning level renders with foreground=#FFA500 (overridden) and modes=[italic] (inherited from base)
+
 - **FR-021**: System MUST apply nested styling during rendering after level-specific merging is complete, so that parent-inner nesting works with the merged element set for each level
 
 - **FR-021a**: V1 level-specific overrides MUST support all v1 features including the `style` field to reference roles, mode operations (+mode/-mode), and property-level merging semantics
@@ -499,7 +515,7 @@ Theme authors using v1 can define semantic roles (like "warning", "error", "succ
 
 - **FR-026**: System MUST validate color values and exit with clear error messages to stderr for invalid values, with format-specific error messages: invalid hex length (e.g., "#FFF must be #RRGGBB"), invalid hex characters (e.g., "#GGGGGG contains invalid hex characters"), out-of-range ANSI extended (e.g., "ANSI color 256 out of range (0-255)"), negative ANSI values, etc.
 
-- **FR-027**: System MUST allow duplicate modes in the modes array in v0 (all duplicates passed to terminal which naturally ignores redundant mode codes)
+- **FR-027**: System MUST allow duplicate modes in the modes array in v0 but deduplicate them during theme loading with last occurrence kept (e.g., modes=[bold, italic, bold] becomes [italic, bold]); v1 uses the same deduplication strategy for consistency
 
 - **FR-028**: System MUST support $palette section in theme schema for all formats (TOML, YAML, JSON) in both v0 and v1, but only YAML can use anchor/alias syntax to reference palette colors; TOML and JSON can define $palette for organization but must reference colors by value; v1 $palette works identically to v0
 
@@ -512,6 +528,8 @@ Theme authors using v1 can define semantic roles (like "warning", "error", "succ
 - **FR-030a**: System MUST detect whether output is a terminal and adjust theme listing format accordingly: terminal output uses terminal-width-aware multi-column layout with alphabetical sorting within each group; non-terminal output uses plain list format (one name per line) without grouping
 
 - **FR-030b**: System MUST display each theme by stem name only once in theme listings, even when multiple file formats exist for the same stem (e.g., if both theme.yaml and theme.toml exist, list shows "theme" once, representing the loadable theme per extension priority)
+
+- **FR-030c**: System MUST include custom `@default` theme files in theme listings under the custom themes group; only the embedded `@default` theme is excluded from listings; this allows users to see and manage their custom @default themes
 
 - **FR-031**: System MUST automatically deduce style roles from element definitions in v0 themes before merging with `@default` theme, using these mappings: if v0 theme defines `time` element → deduce `styles.secondary` from it; if defines `string` → deduce `styles.primary`; if defines `message` → deduce `styles.strong`; if defines `key` → deduce `styles.accent`; if defines `array` → deduce `styles.syntax`; deduction copies foreground, background, and modes from the element definition to create the corresponding style role with no base (the deduced style has no reference to parent styles, i.e., no base roles to inherit from); note that v0 theme schema does not include a styles section, so deduced styles are created artificially during theme loading and cannot be explicitly defined in v0 theme files
 
