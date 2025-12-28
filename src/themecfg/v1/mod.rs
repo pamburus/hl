@@ -656,16 +656,8 @@ impl Theme {
         if flags.contains(MergeFlag::ReplaceGroups) {
             // Apply blocking rule: if child theme defines a parent element,
             // remove the corresponding -inner element from parent theme
-            let parent_inner_pairs = [
-                (Element::Level, Element::LevelInner),
-                (Element::Logger, Element::LoggerInner),
-                (Element::Caller, Element::CallerInner),
-                (Element::InputNumber, Element::InputNumberInner),
-                (Element::InputName, Element::InputNameInner),
-            ];
-
-            // Block base -inner elements if parent is defined in child theme
-            for (parent, inner) in parent_inner_pairs {
+            // Use canonical pairs from Element::pairs() for single source of truth (FR-015a)
+            for &(parent, inner) in Element::pairs() {
                 if other.elements.0.contains_key(&parent) {
                     self.elements.0.remove(&inner);
                 }
@@ -761,19 +753,12 @@ impl Theme {
     ) -> Result<super::StylePack<Element, ResolvedStyle>, ThemeLoadError> {
         let mut result = HashMap::new();
 
-        let parent_inner_pairs = [
-            (Element::Level, Element::LevelInner),
-            (Element::Logger, Element::LoggerInner),
-            (Element::Caller, Element::CallerInner),
-            (Element::InputNumber, Element::InputNumberInner),
-            (Element::InputName, Element::InputNameInner),
-        ];
-
         // Process all elements, applying parent→inner inheritance where needed
         for (&element, style) in pack.items() {
             // Check if this element is an inner element that should inherit from its parent
+            // Use canonical pairs from Element::pairs() for single source of truth (FR-015a)
             let mut parent_for_inner = None;
-            for (parent, inner) in parent_inner_pairs.iter().copied() {
+            for &(parent, inner) in Element::pairs() {
                 if element == inner {
                     parent_for_inner = pack.items().get(&parent).cloned();
                     break;
@@ -809,7 +794,8 @@ impl Theme {
         }
 
         // Add inherited inner elements that weren't explicitly defined
-        for (parent, inner) in parent_inner_pairs.iter().copied() {
+        // Use canonical pairs from Element::pairs() for single source of truth (FR-015a)
+        for &(parent, inner) in Element::pairs() {
             if let Some(parent_style) = pack.items().get(&parent) {
                 result
                     .entry(inner)
