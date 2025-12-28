@@ -868,7 +868,7 @@ fn test_v1_multiple_inheritance() {
 
     // Resolve styles to check inheritance
     let flags = theme.merge_flags();
-    let inventory = theme.styles.resolve(flags).unwrap();
+    let inventory = theme.styles.resolved(flags).unwrap();
 
     // Test warning role: inherits from [secondary, strong, accent]
     // - secondary has: foreground=#888888, modes=[faint]

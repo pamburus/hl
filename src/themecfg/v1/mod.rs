@@ -586,6 +586,73 @@ impl<S> StylePack<Element, S> {
     }
 }
 
+impl StylePack<Element, Style> {
+    pub fn resolved(&self, inventory: &StyleInventory, flags: MergeFlags) -> StylePack<Element, ResolvedStyle> {
+        self.clone().complete_hierarchy(flags).resolve_styles(inventory, flags)
+    }
+
+    /// Completes the element hierarchy by applying parent→inner and boolean variant inheritance.
+    /// This is a merge operation that must happen before style resolution.
+    ///
+    /// This method:
+    /// 1. Merges parent styles into inner elements (unless ReplaceElements flag is set)
+    /// 2. Adds inherited inner elements that weren't explicitly defined
+    /// 3. Handles boolean variant inheritance from base Boolean element
+    ///
+    /// Per FR-041, this merging of unresolved styles must occur before resolving `base` references.
+    pub fn complete_hierarchy(mut self, flags: MergeFlags) -> Self {
+        // Step 1: Merge parent→inner where inner is explicitly defined (v1 only)
+        // For v0 (ReplaceElements), inner elements replace parent completely
+        if !flags.contains(MergeFlag::ReplaceElements) {
+            // V1: Merge parent into each explicitly-defined inner element
+            for (element, style) in self.clone() {
+                if let Some(outer) = element.outer() {
+                    if let Some(outer) = self.0.get(&outer) {
+                        // Merge unresolved parent and inner first (per FR-041)
+                        self.0.insert(element, outer.clone().merged(&style, flags));
+                    }
+                }
+            }
+        }
+
+        // Step 2: Add inherited inner elements that weren't explicitly defined
+        // Use canonical pairs from Element::nested() for single source of truth (FR-015a)
+        for &(outer, inner) in Element::nested() {
+            if let Some(outer) = self.0.get(&outer).cloned() {
+                self.0.entry(inner).or_insert_with(|| outer);
+            }
+        }
+
+        // Step 3: Handle boolean variants inheriting from base boolean
+        if let Some(base) = self.0.get(&Element::Boolean).cloned() {
+            for variant in [Element::BooleanTrue, Element::BooleanFalse] {
+                self.0
+                    .entry(variant)
+                    .and_modify(|style| *style = base.clone().merged(style, flags))
+                    .or_insert_with(|| base.clone());
+            }
+        }
+
+        self
+    }
+
+    /// Resolves all styles in this pack by converting `base` references to actual styles.
+    /// This is a pure resolution operation that should be called after all merging is complete.
+    ///
+    /// Per FR-041, all merging (including hierarchy completion) must happen before resolution.
+    pub fn resolve_styles(
+        &self,
+        inventory: &StyleInventory,
+        flags: MergeFlags,
+    ) -> super::StylePack<Element, ResolvedStyle> {
+        let items: HashMap<Element, ResolvedStyle> = self
+            .iter()
+            .map(|(&element, style)| (element, style.resolve(inventory, flags)))
+            .collect();
+        super::StylePack::new(items)
+    }
+}
+
 impl Merge<&StylePack<Element, Style>> for StylePack<Element, Style> {
     fn merge(&mut self, other: &StylePack<Element, Style>, flags: MergeFlags) {
         Self::merge(self, other.clone(), flags);
@@ -599,7 +666,7 @@ impl Merge<StylePack<Element, Style>> for StylePack<Element, Style> {
 }
 
 impl StylePack<Role, Style> {
-    pub fn resolve(&self, flags: MergeFlags) -> Result<StyleInventory, ThemeLoadError> {
+    pub fn resolved(&self, flags: MergeFlags) -> Result<StyleInventory, ThemeLoadError> {
         let mut resolver = StyleResolver::new(self, flags);
         let items: HashMap<Role, ResolvedStyle> = self
             .keys()
@@ -755,25 +822,25 @@ impl Theme {
         let flags = self.merge_flags();
 
         // Step 1: Resolve the role-based styles inventory
-        let inventory = self.styles.resolve(flags)?;
+        let inventory = self.styles.resolved(flags)?;
 
         // Step 2: Resolve base element styles
-        let elements = Self::resolve_element_pack(&self.elements, &inventory, flags)?;
+        let elements = self.elements.resolved(&inventory, flags);
 
         // Step 3: Resolve level-specific element styles
         let mut levels = HashMap::new();
-        for (level, level_pack) in &self.levels {
+        for (level, pack) in &self.levels {
             // Merge base elements with level-specific elements
-            let merged_pack = self
+            let pack = self
                 .elements
                 .clone()
-                .merged(level_pack, flags - MergeFlag::ReplaceHierarchies);
-            let resolved_pack = Self::resolve_element_pack(&merged_pack, &inventory, flags)?;
-            levels.insert(*level, resolved_pack);
+                .merged(pack, flags - MergeFlag::ReplaceHierarchies)
+                .resolved(&inventory, flags);
+            levels.insert(*level, pack);
         }
 
-        // Step 4: Resolve indicators
-        let indicators = Self::resolve_indicators(&self.indicators, &inventory, flags)?;
+        // Step 4: Resolve indicator styles
+        let indicators = Self::resolve_indicators(&self.indicators, &inventory, flags);
 
         Ok(super::Theme {
             tags: self.tags,
@@ -784,59 +851,12 @@ impl Theme {
         })
     }
 
-    fn resolve_element_pack(
-        pack: &StylePack<Element, Style>,
-        inventory: &StyleInventory,
-        flags: MergeFlags,
-    ) -> Result<super::StylePack<Element, ResolvedStyle>, ThemeLoadError> {
-        let mut result = HashMap::new();
-
-        // Process all elements, applying parent→inner inheritance where needed
-        for (&element, style) in pack.iter() {
-            // Check if this element is an inner element that should inherit from its parent
-            // Use canonical pairs from Element::pairs() for single source of truth (FR-015a)
-            let outer = element.outer().and_then(|p| pack.get(&p));
-
-            let style = match outer {
-                Some(outer) if !flags.contains(MergeFlag::ReplaceElements) => {
-                    // V1: Merge unresolved parent and inner first, then resolve (per FR-041)
-                    // This ensures role inheritance and mode operations work correctly
-                    outer.clone().merged(style, flags).resolve(inventory, flags)
-                }
-                _ => style.resolve(inventory, flags),
-            };
-
-            result.insert(element, style);
-        }
-
-        // Add inherited inner elements that weren't explicitly defined
-        // Use canonical pairs from Element::pairs() for single source of truth (FR-015a)
-        for &(outer, inner) in Element::nested() {
-            if let Some(outer) = pack.get(&outer) {
-                result.entry(inner).or_insert_with(|| outer.resolve(inventory, flags));
-            }
-        }
-
-        // Handle boolean variants inheriting from base boolean
-        if let Some(base) = pack.get(&Element::Boolean) {
-            for variant in [Element::BooleanTrue, Element::BooleanFalse] {
-                let mut style = base.clone();
-                if let Some(patch) = pack.get(&variant) {
-                    style = style.merged(patch, flags)
-                }
-                result.insert(variant, style.resolve(inventory, flags));
-            }
-        }
-
-        Ok(super::StylePack::new(result))
-    }
-
     fn resolve_indicators(
         indicators: &IndicatorPack<Style>,
         inventory: &StyleInventory,
         flags: MergeFlags,
-    ) -> Result<super::IndicatorPack<super::Style>, ThemeLoadError> {
-        Ok(indicators.clone().resolve(|style| style.resolve(inventory, flags)))
+    ) -> super::IndicatorPack<super::Style> {
+        indicators.clone().resolve(|style| style.resolve(inventory, flags))
     }
 
     pub fn merge_flags(&self) -> MergeFlags {

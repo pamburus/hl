@@ -231,7 +231,7 @@ pub struct IndicatorStyle {
 
 // ---
 
-/// RawTheme is the v0 theme deserialization target
+/// Theme is the v0 theme deserialization target
 /// It uses lenient deserialization and includes v0-specific logic
 #[derive(Debug, Deserialize)]
 #[serde(default)]
