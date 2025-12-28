@@ -938,7 +938,7 @@ impl<S> StylePack<Element, S> {
     where
         S: Clone + for<'a> Merge<&'a S>,
     {
-        if flags.contains(MergeFlag::ReplaceGroups) {
+        if flags.contains(MergeFlag::ReplaceHierarchies) {
             for (parent, child) in Element::pairs() {
                 if patch.contains_key(child) {
                     self.0.remove(parent);
@@ -979,7 +979,7 @@ impl Merge<&StylePack> for StylePack {
 #[derive(Debug, Hash, Ord, PartialOrd, EnumSetType, Deserialize)]
 pub enum MergeFlag {
     ReplaceElements,
-    ReplaceGroups,
+    ReplaceHierarchies,
     ReplaceModes,
 }
 

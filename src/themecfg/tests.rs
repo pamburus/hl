@@ -4,7 +4,7 @@ use crate::level::Level;
 // V0 merge flags (replace semantics for modes)
 use enumset::enum_set;
 const V0_MERGE_FLAGS: MergeFlags =
-    enum_set!(MergeFlag::ReplaceElements | MergeFlag::ReplaceGroups | MergeFlag::ReplaceModes);
+    enum_set!(MergeFlag::ReplaceElements | MergeFlag::ReplaceHierarchies | MergeFlag::ReplaceModes);
 
 // Helper function to create test AppDirs
 fn test_app_dirs() -> AppDirs {

@@ -526,7 +526,7 @@ impl<S> StylePack<Element, S> {
     where
         S: Clone + for<'a> Merge<&'a S>,
     {
-        if flags.contains(MergeFlag::ReplaceGroups) {
+        if flags.contains(MergeFlag::ReplaceHierarchies) {
             for (parent, child) in Element::pairs() {
                 if patch.0.contains_key(child) {
                     self.0.remove(parent);
@@ -653,7 +653,7 @@ impl Theme {
         self.styles.merge(other.styles);
 
         // Apply blocking rules only for version 0 themes (backward compatibility)
-        if flags.contains(MergeFlag::ReplaceGroups) {
+        if flags.contains(MergeFlag::ReplaceHierarchies) {
             // Apply blocking rule: remove all elements from self that have any ancestor
             // element defined in other.elements (including direct parent and all grand-parents)
             self.elements.0.retain(|element, _| {
@@ -724,7 +724,7 @@ impl Theme {
             let merged_pack = self
                 .elements
                 .clone()
-                .merged(level_pack, flags - MergeFlag::ReplaceGroups);
+                .merged(level_pack, flags - MergeFlag::ReplaceHierarchies);
             let resolved_pack = Self::resolve_element_pack(&merged_pack, &inventory, flags)?;
             levels.insert(*level, resolved_pack);
         }
@@ -823,7 +823,7 @@ impl Theme {
     pub fn merge_flags(&self) -> MergeFlags {
         match self.version {
             ThemeVersion { major: 0, .. } => {
-                MergeFlag::ReplaceElements | MergeFlag::ReplaceGroups | MergeFlag::ReplaceModes
+                MergeFlag::ReplaceElements | MergeFlag::ReplaceHierarchies | MergeFlag::ReplaceModes
             }
             _ => MergeFlags::new(),
         }
