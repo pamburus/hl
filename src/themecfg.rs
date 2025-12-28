@@ -291,8 +291,12 @@ pub enum Error {
     /// Theme file not found (neither custom nor embedded).
     ///
     /// Includes suggestions for similar theme names to help users correct typos.
-    #[error("unknown theme {name}", name=.name.hlq())]
+    #[error("theme {name} not found", name=.name.hlq())]
     ThemeNotFound { name: Arc<str>, suggestions: Suggestions },
+
+    /// Unsupported file type for theme.
+    #[error("failed to load theme {path}: unsupported file type {extension}", path=.path.hlq(), extension=.extension.hlq())]
+    UnsupportedFileType { path: Arc<str>, extension: Arc<str> },
 
     /// Failed to load an embedded theme.
     ///
@@ -674,6 +678,18 @@ impl Theme {
     }
 
     fn load_from(dir: &Path, name: &str) -> Result<RawTheme> {
+        if name.contains('/') && Self::strip_known_extension(name).is_none() {
+            return Err(Error::UnsupportedFileType {
+                path: name.into(),
+                extension: Arc::from(
+                    Path::new(name)
+                        .extension()
+                        .and_then(|e| e.to_str())
+                        .unwrap_or("unknown"),
+                ),
+            });
+        }
+
         for format in Format::iter() {
             let filename = Self::filename(name, format);
             let path = PathBuf::from(&filename);
