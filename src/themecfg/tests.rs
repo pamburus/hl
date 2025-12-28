@@ -864,7 +864,7 @@ fn test_v1_multiple_inheritance() {
 
     // Resolve styles to check inheritance
     let flags = theme.merge_flags();
-    let inventory = theme.styles.resolve(flags);
+    let inventory = theme.styles.resolve(flags).unwrap();
 
     // Test warning role: inherits from [secondary, strong, accent]
     // - secondary has: foreground=#888888, modes=[faint]
@@ -889,20 +889,52 @@ fn test_v1_multiple_inheritance() {
 
     // Test level element: style = ["secondary", "strong"]
     // Should have: foreground=#888888, modes=[faint, bold]
-    let level = theme.elements.0.get(&Element::Level).unwrap();
-    let resolved_level = level.resolve(&inventory, flags);
+    let resolved_theme = theme.resolve().unwrap();
+    let level = resolved_theme.elements.0.get(&Element::Level).unwrap();
+    let resolved_level = level.clone();
     assert_eq!(resolved_level.foreground, Some(Color::RGB(RGB(0x88, 0x88, 0x88))));
     assert!(resolved_level.modes.adds.contains(Mode::Faint));
     assert!(resolved_level.modes.adds.contains(Mode::Bold));
 
     // Test level-inner element: style = ["secondary", "strong"], modes=[italic], foreground=#00ff00
     // Should have: foreground=#00ff00 (explicit override), modes=[faint, bold, italic]
-    let level_inner = theme.elements.0.get(&Element::LevelInner).unwrap();
-    let resolved_level_inner = level_inner.resolve(&inventory, flags);
+    let level_inner = resolved_theme.elements.0.get(&Element::LevelInner).unwrap();
+    let resolved_level_inner = level_inner.clone();
     assert_eq!(resolved_level_inner.foreground, Some(Color::RGB(RGB(0x00, 0xff, 0x00))));
     assert!(resolved_level_inner.modes.adds.contains(Mode::Faint));
     assert!(resolved_level_inner.modes.adds.contains(Mode::Bold));
     assert!(resolved_level_inner.modes.adds.contains(Mode::Italic));
+}
+
+#[test]
+fn test_v1_style_recursion_limit_error() {
+    // Test that style recursion limit is detected and returns an error
+    let app_dirs = test_app_dirs();
+    let theme = Theme::load_raw(&app_dirs, "v1-recursion-circular").unwrap();
+
+    // Attempting to resolve should fail with recursion limit error
+    let result = theme.resolve();
+    assert!(result.is_err());
+
+    let err = result.unwrap_err();
+
+    // Verify error message includes the role context
+    let err_msg = err.to_string();
+    println!("Error message: {}", err_msg);
+    assert!(err_msg.contains("style recursion limit exceeded"));
+    assert!(err_msg.contains("role"));
+
+    match err {
+        Error::StyleRecursionLimitExceeded { role } => {
+            // Expected error - should be either Primary or Secondary (the circular pair)
+            assert!(
+                role == Role::Primary || role == Role::Secondary,
+                "Expected recursion in Primary or Secondary, got: {:?}",
+                role
+            );
+        }
+        other => panic!("Expected StyleRecursionLimitExceeded, got: {:?}", other),
+    }
 }
 
 #[test]

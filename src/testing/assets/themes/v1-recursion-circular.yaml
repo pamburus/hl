@@ -1,0 +1,12 @@
+version: "1.0"
+tags: [dark]
+
+styles:
+  primary:
+    style: [secondary]
+  secondary:
+    style: [primary]
+
+elements:
+  level:
+    style: [primary]

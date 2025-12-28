@@ -101,10 +101,10 @@ hl/src/themecfg/v1/mod.rs
 │   ├── Indicator merge implementations
 │   └── Style::merged() implementations
 ├── Resolution logic (ALL resolution here):
-│   ├── resolve_theme() -> super::Theme
-│   ├── StylePack::resolve() implementations
+│   ├── resolve_theme() -> Result<super::Theme>
+│   ├── StylePack::resolve() -> Result<StyleInventory> (can fail on recursion)
 │   ├── Style::resolve() implementations
-│   └── StyleResolver (helper for role resolution)
+│   └── StyleResolver (helper for role resolution, checks recursion limit)
 └── Deserialization:
     └── Strict (fails on unknown fields - proper versioning)
 ```
@@ -331,7 +331,8 @@ They don't need to know about v0 vs v1 internals - that's all implementation det
 10. **Advanced control**: load_raw() + manual resolve for power users
 11. **Type clarity**: Theme = resolved, RawTheme = unresolved (clear naming)
 12. **Fail fast**: Use Level instead of InfallibleLevel - unknown levels are errors
-13. **Clear naming**: Raw vs Resolved is explicit in type names
+13. **Error handling**: Recursion limit violations return Error::StyleRecursionLimitExceeded with role context
+14. **Clear naming**: Raw vs Resolved is explicit in type names
     - `v1::Theme` → main's `RawTheme` (unresolved)
     - `v1::Style` → main's `RawStyle` (unresolved)
     - main's `Theme` = resolved (was ResolvedTheme)

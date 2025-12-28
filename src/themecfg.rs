@@ -68,8 +68,8 @@ pub enum Error {
     FailedToListCustomThemes(#[from] io::Error),
     #[error("invalid tag {value}", value=.value.hlq())]
     InvalidTag { value: Arc<str>, suggestions: Suggestions },
-    #[error("style recursion limit exceeded")]
-    StyleRecursionLimitExceeded,
+    #[error("style recursion limit exceeded while resolving role {role:?}")]
+    StyleRecursionLimitExceeded { role: Role },
     #[error("invalid version format: {0}")]
     InvalidVersion(Arc<str>),
 }
