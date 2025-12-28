@@ -188,7 +188,7 @@ fn test_style_merge() {
         background: None,
     };
 
-    let result = base.clone().merged_with(&patch, MergeFlags::default());
+    let result = base.clone().merged(&patch, MergeFlags::default());
 
     assert_eq!(result.modes, ModeSetDiff::from(Mode::Bold | Mode::Italic));
     assert_eq!(result.foreground, Some(Color::Plain(PlainColor::Green)));
@@ -199,7 +199,7 @@ fn test_style_merge() {
         ..Default::default()
     };
 
-    let result = base.clone().merged_with(&patch, MergeFlags::default());
+    let result = base.clone().merged(&patch, MergeFlags::default());
 
     assert_eq!(result.modes, ModeSetDiff::from(Mode::Bold));
     assert_eq!(result.foreground, Some(Color::Plain(PlainColor::Red)));
@@ -2212,7 +2212,7 @@ fn test_style_builder_methods() {
 }
 
 #[test]
-fn test_resolved_style_merged_with_style_additive() {
+fn test_resolved_style_merged_style_additive() {
     let base = RawStyle {
         base: StyleBase::default(),
         modes: Mode::Bold.into(),
@@ -2241,14 +2241,14 @@ fn test_child_blocking_parent_in_style_pack() {
     let mut patch = v1::StylePack::default();
     patch.0.insert(Element::LevelInner, RawStyle::default());
 
-    let merged = base.merged(patch, V0_MERGE_FLAGS);
+    let merged = base.merged(&patch, V0_MERGE_FLAGS);
 
     assert!(!merged.0.contains_key(&Element::Level));
     assert!(merged.0.contains_key(&Element::LevelInner));
 }
 
 #[test]
-fn test_resolved_style_merged_with_style_replace_modes() {
+fn test_resolved_style_merged_style_replace_modes() {
     let base = RawStyle {
         base: StyleBase::default(),
         modes: Mode::Bold.into(),

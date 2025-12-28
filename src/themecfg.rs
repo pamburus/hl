@@ -491,7 +491,7 @@ impl<S> StylePack<Role, S> {
 impl<S> StylePack<Element, S> {
     pub fn merge(&mut self, patch: Self, flags: MergeFlags)
     where
-        S: Clone + for<'a> MergedWith<&'a S>,
+        S: Clone + for<'a> Merge<&'a S>,
     {
         if flags.contains(MergeFlag::ReplaceGroups) {
             for (parent, child) in Element::pairs() {
@@ -509,32 +509,27 @@ impl<S> StylePack<Element, S> {
         for (key, patch) in patch.0 {
             self.0
                 .entry(key)
-                .and_modify(|v| *v = v.clone().merged_with(&patch, flags))
+                .and_modify(|v| *v = v.clone().merged(&patch, flags))
                 .or_insert(patch);
         }
     }
 
     pub fn merged(mut self, patch: Self, flags: MergeFlags) -> Self
     where
-        S: Clone + for<'a> MergedWith<&'a S>,
+        S: Clone + for<'a> Merge<&'a S>,
     {
         self.merge(patch, flags);
         self
     }
 }
 
-impl MergedWith<&StylePack> for StylePack {
-    fn merged_with(mut self, other: &StylePack<Element, Style>, flags: MergeFlags) -> Self {
-        self.merge(other.clone(), flags);
-        self
+impl Merge<&StylePack> for StylePack {
+    fn merge(&mut self, other: &StylePack<Element, Style>, flags: MergeFlags) {
+        Self::merge(self, other.clone(), flags);
     }
 }
 
 // ---
-
-pub trait MergedWith<T> {
-    fn merged_with(self, other: T, flags: MergeFlags) -> Self;
-}
 
 #[derive(Debug, Hash, Ord, PartialOrd, EnumSetType, Deserialize)]
 pub enum MergeFlag {
@@ -666,8 +661,8 @@ impl Style {
     }
 }
 
-impl MergedWith<&Style> for Style {
-    fn merged_with(mut self, other: &Style, flags: MergeFlags) -> Self {
+impl Merge<&Style> for Style {
+    fn merge(&mut self, other: &Style, flags: MergeFlags) {
         if flags.contains(MergeFlag::ReplaceModes) {
             self.modes = other.modes;
         } else {
@@ -679,12 +674,11 @@ impl MergedWith<&Style> for Style {
         if let Some(color) = other.background {
             self.background = Some(color);
         }
-        self
     }
 }
 
-impl MergedWith<&RawStyle> for Style {
-    fn merged_with(mut self, other: &RawStyle, flags: MergeFlags) -> Self {
+impl Merge<&RawStyle> for Style {
+    fn merge(&mut self, other: &RawStyle, flags: MergeFlags) {
         if flags.contains(MergeFlag::ReplaceModes) {
             self.modes = other.modes;
         } else {
@@ -696,7 +690,6 @@ impl MergedWith<&RawStyle> for Style {
         if let Some(color) = other.background {
             self.background = Some(color);
         }
-        self
     }
 }
 
@@ -1025,9 +1018,9 @@ pub struct IndicatorStyle<S = Style> {
 }
 
 // Trait for types that support merging
-pub trait Merge {
-    fn merge(&mut self, other: Self, flags: MergeFlags);
-    fn merged(self, other: Self, flags: MergeFlags) -> Self
+pub trait Merge<T = Self> {
+    fn merge(&mut self, other: T, flags: MergeFlags);
+    fn merged(self, other: T, flags: MergeFlags) -> Self
     where
         Self: Sized,
     {
@@ -1037,7 +1030,8 @@ pub trait Merge {
     }
 }
 
-// IndicatorStyle Mergeable impls are in v1 module
+// Convenience alias for the common case of merging with references
+pub trait MergedWith<T>: Merge<T> {}
 
 // ---
 

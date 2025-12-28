@@ -30,7 +30,7 @@ pub use super::{
 };
 
 // Import resolved types and traits from parent (output types)
-use super::{Merge, MergedWith};
+use super::Merge;
 
 // Import the resolved Style from parent (was ResolvedStyle)
 use super::Style as ResolvedStyle;
@@ -217,12 +217,12 @@ impl Style {
         // Resolve multiple bases: merge left to right, then apply style on top
         let mut result = ResolvedStyle::default();
         for role in bases.iter() {
-            result = result.merged_with(&resolve_role(role), flags);
+            result = result.merged(&resolve_role(role), flags);
         }
         // When applying the style's own properties on top of the resolved base,
         // we should NOT use ReplaceModes - the style's properties should be merged additively
         // with the base, not replace them. ReplaceModes is only for theme-level merging.
-        result.merged_with(style, flags - MergeFlag::ReplaceModes)
+        result.merged(style, flags - MergeFlag::ReplaceModes)
     }
 
     pub fn as_resolved(&self) -> ResolvedStyle {
@@ -241,9 +241,9 @@ impl Default for &Style {
     }
 }
 
-impl MergedWith<&Style> for Style {
-    fn merged_with(self, other: &Style, flags: MergeFlags) -> Self {
-        self.merged(other, flags)
+impl Merge<&Style> for Style {
+    fn merge(&mut self, other: &Style, flags: MergeFlags) {
+        *self = self.clone().merged(other, flags);
     }
 }
 
@@ -338,7 +338,7 @@ impl<S> StylePack<Role, S> {
 impl<S> StylePack<Element, S> {
     pub fn merge(&mut self, patch: Self, flags: MergeFlags)
     where
-        S: Clone + for<'a> MergedWith<&'a S>,
+        S: Clone + for<'a> Merge<&'a S>,
     {
         if flags.contains(MergeFlag::ReplaceGroups) {
             for (parent, child) in Element::pairs() {
@@ -356,24 +356,15 @@ impl<S> StylePack<Element, S> {
         for (key, patch) in patch.0 {
             self.0
                 .entry(key)
-                .and_modify(|v| *v = v.clone().merged_with(&patch, flags))
+                .and_modify(|v| *v = v.clone().merged(&patch, flags))
                 .or_insert(patch);
         }
     }
-
-    pub fn merged(mut self, patch: Self, flags: MergeFlags) -> Self
-    where
-        S: Clone + for<'a> MergedWith<&'a S>,
-    {
-        self.merge(patch, flags);
-        self
-    }
 }
 
-impl MergedWith<&StylePack<Element, Style>> for StylePack<Element, Style> {
-    fn merged_with(mut self, other: &StylePack<Element, Style>, flags: MergeFlags) -> Self {
-        self.merge(other.clone(), flags);
-        self
+impl Merge<&StylePack<Element, Style>> for StylePack<Element, Style> {
+    fn merge(&mut self, other: &StylePack<Element, Style>, flags: MergeFlags) {
+        Self::merge(self, other.clone(), flags);
     }
 }
 
@@ -511,7 +502,7 @@ impl Theme {
             let merged_pack = self
                 .elements
                 .clone()
-                .merged_with(level_pack, flags - MergeFlag::ReplaceGroups);
+                .merged(level_pack, flags - MergeFlag::ReplaceGroups);
             let resolved_pack = Self::resolve_element_pack(&merged_pack, &inventory, flags)?;
             levels.insert(*level, resolved_pack);
         }
