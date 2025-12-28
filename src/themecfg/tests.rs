@@ -926,7 +926,7 @@ fn test_v1_style_recursion_limit_error() {
     let err_msg = err.to_string();
     println!("Error message: {}", err_msg);
     assert!(err_msg.contains("v1-recursion-circular"));
-    assert!(err_msg.contains("style recursion limit exceeded"));
+    assert!(err_msg.contains("style inheritance depth exceeded limit"));
     assert!(err_msg.contains("role"));
 
     match err {
@@ -934,7 +934,7 @@ fn test_v1_style_recursion_limit_error() {
             assert_eq!(info.name.as_ref(), "v1-recursion-circular");
 
             match source {
-                ThemeLoadError::StyleRecursionLimitExceeded { role } => {
+                ThemeLoadError::StyleRecursionLimitExceeded { role, .. } => {
                     // Expected error - should be either Primary or Secondary (the circular pair)
                     assert!(
                         role == Role::Primary || role == Role::Secondary,

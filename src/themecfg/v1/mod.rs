@@ -245,7 +245,7 @@ impl std::fmt::Display for Role {
 /// - Single role: `style: "warning"` → `StyleBase(vec![Role::Warning])`
 /// - Multiple roles: `style: ["primary", "strong"]` → `StyleBase(vec![Role::Primary, Role::Strong])`
 /// - Empty (no inheritance): omitted or `null` → `StyleBase(vec![])`
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Deref)]
 pub struct StyleBase(pub Vec<Role>);
 
 impl StyleBase {
@@ -308,6 +308,19 @@ impl<'de> Deserialize<'de> for StyleBase {
         }
 
         deserializer.deserialize_any(StyleBaseVisitor)
+    }
+}
+
+impl std::fmt::Display for StyleBase {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "[")?;
+        for (i, role) in self.0.iter().enumerate() {
+            if i > 0 {
+                write!(f, ",")?;
+            }
+            write!(f, "{}", role)?;
+        }
+        write!(f, "]")
     }
 }
 
@@ -903,10 +916,6 @@ impl<'a> StyleResolver<'a> {
 
         let style = self.inventory.0.get(role).unwrap_or_default();
 
-        if self.depth >= RECURSION_LIMIT {
-            return Err(ThemeLoadError::StyleRecursionLimitExceeded { role: *role });
-        }
-
         self.depth += 1;
         let resolved = self.resolve_style(style, role)?;
         self.depth -= 1;
@@ -918,7 +927,7 @@ impl<'a> StyleResolver<'a> {
 
     fn resolve_style(&mut self, style: &Style, role: &Role) -> Result<ResolvedStyle, ThemeLoadError> {
         // If no explicit base, default to inheriting from Default role (except for Default itself)
-        let bases = if style.base.is_empty() {
+        let base = if style.base.is_empty() {
             if *role != Role::Default {
                 StyleBase::from(Role::Default)
             } else {
@@ -928,8 +937,16 @@ impl<'a> StyleResolver<'a> {
             style.base.clone()
         };
 
+        if !base.is_empty() && self.depth >= RECURSION_LIMIT {
+            return Err(ThemeLoadError::StyleRecursionLimitExceeded {
+                role: *role,
+                base,
+                limit: RECURSION_LIMIT,
+            });
+        }
+
         let mut result = ResolvedStyle::default();
-        for base_role in bases.0 {
+        for base_role in base.0 {
             let base_resolved = self.resolve(&base_role)?;
             result = result.merged(&base_resolved, self.flags);
         }

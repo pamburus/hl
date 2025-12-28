@@ -416,8 +416,8 @@ pub enum ThemeLoadError {
     ///   role2: { style: [role3] }
     ///   # ... 65+ levels deep
     /// ```
-    #[error("style recursion limit exceeded while resolving role {role}", role=.role.hlq())]
-    StyleRecursionLimitExceeded { role: Role },
+    #[error("style inheritance depth exceeded limit {limit} for role {role} with base {base}", limit=.limit.hl(), role=.role.hlq(), base=.base.hlq())]
+    StyleRecursionLimitExceeded { role: Role, base: StyleBase, limit: usize },
 }
 
 /// External errors from I/O and parsing operations.
