@@ -1,3 +1,116 @@
+//! Theme configuration system for `hl`.
+//!
+//! This module provides theme loading, parsing, and resolution functionality.
+//! It supports two theme format versions:
+//!
+//! - **v0** (legacy): Simple, flat, element-based styling
+//! - **v1** (current): Semantic roles, base styles, mode diffs, and advanced features
+//!
+//! # Quick Start
+//!
+//! ```no_run
+//! use hl::themecfg::Theme;
+//! use hl::app::AppDirs;
+//!
+//! let app_dirs = AppDirs::default();
+//! let theme = Theme::load(&app_dirs, "monokai")?;
+//! # Ok::<(), hl::themecfg::Error>(())
+//! ```
+//!
+//! # Theme Formats
+//!
+//! ## V0 Format (Legacy)
+//!
+//! V0 themes use simple element-based styling with no semantic roles:
+//!
+//! ```yaml
+//! version: "0.0"
+//! elements:
+//!   level:
+//!     foreground: "#00ff00"
+//!     modes: [bold]
+//! ```
+//!
+//! Features:
+//! - Lenient parsing (ignores unknown fields for forward compatibility)
+//! - Direct element → style mapping
+//! - Simple mode lists (no diff syntax)
+//!
+//! ## V1 Format (Current)
+//!
+//! V1 themes support semantic roles and style inheritance:
+//!
+//! ```yaml
+//! version: "1.0"
+//! styles:
+//!   primary:
+//!     foreground: "#00ff00"
+//!     modes: [bold]
+//!   secondary:
+//!     style: [primary]  # Inherit from primary
+//!     modes: [+italic]  # Add italic to inherited modes
+//! elements:
+//!   level:
+//!     style: [secondary]  # Reference role-based style
+//! ```
+//!
+//! Features:
+//! - Strict parsing (fails on unknown fields)
+//! - Role-based styles with inheritance
+//! - Mode diff syntax (`+mode`, `-mode`)
+//! - `$schema` field support for IDE validation
+//!
+//! # Loading Pipeline
+//!
+//! 1. **Load**: Theme file is loaded from custom directory or embedded themes
+//! 2. **Parse**: YAML/TOML/JSON is deserialized based on detected version
+//! 3. **Convert**: V0 themes are converted to V1 format
+//! 4. **Merge**: Theme is merged with `@default` theme
+//! 5. **Resolve**: Role-based styles are resolved to concrete element styles
+//!
+//! # Public API Types
+//!
+//! - [`Theme`]: Fully resolved theme (output of loading pipeline)
+//! - [`RawTheme`]: Unresolved theme (before resolution, allows modifications)
+//! - [`Style`]: Resolved style with concrete foreground/background/modes
+//! - [`RawStyle`]: Unresolved style (may reference roles)
+//! - [`Element`]: Theme element enum (level, timestamp, etc.)
+//! - [`Role`]: Semantic style role (primary, secondary, warning, etc.)
+//!
+//! # Advanced Usage
+//!
+//! For advanced customization, use [`Theme::load_raw()`] to get an unresolved theme,
+//! modify it, then call [`RawTheme::resolve()`]:
+//!
+//! ```no_run
+//! use hl::themecfg::{Theme, RawTheme};
+//! use hl::app::AppDirs;
+//!
+//! let app_dirs = AppDirs::default();
+//! let mut raw_theme = Theme::load_raw(&app_dirs, "monokai")?;
+//!
+//! // Customize the theme
+//! // raw_theme.styles.0.insert(...);
+//!
+//! let theme = raw_theme.resolve()?;
+//! # Ok::<(), Box<dyn std::error::Error>>(())
+//! ```
+//!
+//! # Error Handling
+//!
+//! All errors include context about what failed:
+//!
+//! - **Theme not found**: Includes suggestions for similar theme names
+//! - **Parse errors**: Includes file path and line/column information
+//! - **Version errors**: Shows requested vs. supported version
+//! - **Resolution errors**: Shows theme name and problematic role (for circular inheritance)
+//!
+//! Example error messages:
+//! ```text
+//! failed to load theme "my-theme" from "path/to/my-theme.yaml": unknown field `invalid`
+//! failed to resolve theme "my-theme": style recursion limit exceeded while resolving role primary
+//! ```
+
 // std imports
 use std::{
     collections::HashMap,
@@ -42,8 +155,33 @@ pub mod v1;
 pub use v1::{Element, Role, StyleBase};
 
 // Type aliases for the public API
-// RawTheme and RawStyle are unresolved types (before merge/resolve)
+/// An unresolved theme, before style resolution.
+///
+/// This is a type alias for [`v1::Theme`], which contains unresolved [`RawStyle`]
+/// definitions that may reference role-based styles.
+///
+/// Use [`RawTheme::resolve()`](v1::Theme::resolve) to convert to a fully resolved [`Theme`].
+///
+/// # Examples
+///
+/// ```no_run
+/// use hl::themecfg::{Theme, RawTheme};
+/// use hl::app::AppDirs;
+///
+/// let app_dirs = AppDirs::default();
+/// let raw: RawTheme = Theme::load_raw(&app_dirs, "monokai")?;
+/// let resolved: Theme = raw.resolve()?;
+/// # Ok::<(), Box<dyn std::error::Error>>(())
+/// ```
 pub type RawTheme = v1::Theme;
+
+/// An unresolved style, before role resolution.
+///
+/// This is a type alias for [`v1::Style`], which may contain:
+/// - Base style references (inheriting from roles)
+/// - Mode diffs (additions/removals using `+`/`-` prefix)
+///
+/// After resolution, this becomes a concrete [`Style`] with all values computed.
 pub type RawStyle = v1::Style;
 
 // Private constants
@@ -51,54 +189,170 @@ const DEFAULT_THEME_NAME: &str = "@default";
 
 // ---
 
-/// Error is an error which may occur in the application.
+/// Top-level error type for theme operations.
+///
+/// This error type wraps lower-level errors ([`ThemeLoadError`], [`ExternalError`])
+/// with context about which theme operation failed.
+///
+/// # Error Hierarchy
+///
+/// - [`enum@Error`] (this type) - High-level theme operations
+///   - [`ThemeLoadError`] - Theme loading/resolution errors
+///     - [`ExternalError`] - I/O and parsing errors
+///
+/// # Examples
+///
+/// ```no_run
+/// use hl::themecfg::{Theme, Error};
+/// use hl::app::AppDirs;
+///
+/// let app_dirs = AppDirs::default();
+/// match Theme::load(&app_dirs, "invalid-theme") {
+///     Ok(theme) => println!("Loaded theme successfully"),
+///     Err(Error::ThemeNotFound { name, suggestions }) => {
+///         eprintln!("Theme '{}' not found", name);
+///         if !suggestions.is_empty() {
+///             eprintln!("Did you mean: {}", suggestions);
+///         }
+///     }
+///     Err(e) => eprintln!("Error: {}", e),
+/// }
+/// ```
 #[derive(Error, Debug)]
 pub enum Error {
+    /// Theme file not found (neither custom nor embedded).
+    ///
+    /// Includes suggestions for similar theme names to help users correct typos.
     #[error("unknown theme {name}", name=.name.hlq())]
     ThemeNotFound { name: Arc<str>, suggestions: Suggestions },
+
+    /// Failed to load an embedded theme.
+    ///
+    /// This wraps errors that occur when loading themes built into the binary.
     #[error("failed to load theme {name}: {source}", name=.name.hlq())]
     FailedToLoadEmbeddedTheme { name: Arc<str>, source: ThemeLoadError },
+
+    /// Failed to load a custom theme from the filesystem.
+    ///
+    /// This wraps errors that occur when loading user-provided theme files,
+    /// including the file path for better debugging.
     #[error("failed to load theme {name} from {path}: {source}", name=.name.hlq(), path=.path.hlq())]
     FailedToLoadCustomTheme {
         name: Arc<str>,
         path: Arc<Path>,
         source: ThemeLoadError,
     },
+
+    /// Failed to list custom themes directory.
     #[error("failed to list custom themes: {0}")]
     FailedToListCustomThemes(#[from] io::Error),
+
+    /// Invalid theme tag value.
+    ///
+    /// Includes suggestions for valid tag names.
     #[error("invalid tag {value}", value=.value.hlq())]
     InvalidTag { value: Arc<str>, suggestions: Suggestions },
+
+    /// Failed to resolve theme styles.
+    ///
+    /// This occurs after the theme file is loaded successfully but style
+    /// resolution fails (e.g., circular role inheritance).
     #[error("failed to resolve theme {name}: {source}", name=.name.hlq())]
     FailedToResolveTheme { name: Arc<str>, source: ThemeLoadError },
+
+    /// Invalid theme version format.
     #[error("invalid version format: {format}", format=.0.hlq())]
     InvalidVersion(Arc<str>),
 }
 
-/// Error is an error which may occur in the application.
+/// Theme loading and resolution errors.
+///
+/// These errors occur during theme file parsing and style resolution.
+/// They are typically wrapped by [`enum@Error`] variants that add context
+/// about which theme failed.
+///
+/// # Examples
+///
+/// ```text
+/// UnsupportedVersion: theme version 2.0 is not supported (maximum supported: 1.0)
+/// StyleRecursionLimitExceeded: style recursion limit exceeded while resolving role primary
+/// External(YamlSerdeError): failed to parse yaml: unknown field `typo`
+/// ```
 #[derive(Error, Debug)]
 pub enum ThemeLoadError {
+    /// External I/O or parsing error.
+    ///
+    /// Wraps errors from file I/O, YAML/TOML/JSON parsing, etc.
     #[error(transparent)]
     External(#[from] ExternalError),
+
+    /// Theme version is not supported.
+    ///
+    /// This occurs when a theme file specifies a version newer than the
+    /// current implementation supports (e.g., loading a v2.0 theme when
+    /// only v1.0 is supported).
+    ///
+    /// # Example Error Message
+    ///
+    /// ```text
+    /// theme version 2.0 is not supported (maximum supported: 1.0)
+    /// ```
     #[error("theme version {requested} is not supported", requested=.requested.hl())]
     UnsupportedVersion {
         requested: ThemeVersion,
         supported: ThemeVersion,
     },
+
+    /// Style recursion limit exceeded during role resolution.
+    ///
+    /// This occurs when there is circular inheritance in role-based styles
+    /// (e.g., role A inherits from role B, which inherits from role A).
+    ///
+    /// The recursion limit is set to prevent infinite loops and stack overflow.
+    ///
+    /// # Example Error Message
+    ///
+    /// ```text
+    /// style recursion limit exceeded while resolving role primary
+    /// ```
+    ///
+    /// # Common Cause
+    ///
+    /// Circular inheritance in theme file:
+    /// ```yaml
+    /// styles:
+    ///   primary:
+    ///     style: [secondary]
+    ///   secondary:
+    ///     style: [primary]  # Circular!
+    /// ```
     #[error("style recursion limit exceeded while resolving role {role}", role=.role.hlq())]
     StyleRecursionLimitExceeded { role: Role },
 }
 
-/// Error is an error which may occur in the application.
+/// External errors from I/O and parsing operations.
+///
+/// These are low-level errors that occur when reading files or parsing
+/// theme file formats (YAML, TOML, JSON).
 #[derive(Error, Debug)]
 pub enum ExternalError {
+    /// I/O error (file not found, permission denied, etc.).
     #[error(transparent)]
     Io(#[from] io::Error),
+
+    /// YAML parsing error.
     #[error("failed to parse yaml: {0}")]
     YamlSerdeError(#[from] yaml::SerdeError),
+
+    /// TOML parsing error.
     #[error(transparent)]
     TomlError(#[from] toml::de::Error),
+
+    /// JSON parsing error.
     #[error("failed to parse json: {0}")]
     JsonError(#[from] serde_json::Error),
+
+    /// UTF-8 decoding error.
     #[error("failed to parse utf-8 string: {0}")]
     Utf8Error(#[from] std::str::Utf8Error),
 }
@@ -138,12 +392,47 @@ pub struct Theme {
 impl Theme {
     /// Load a fully resolved theme by name.
     ///
-    /// This method loads the theme from either embedded or custom themes,
-    /// merges it with the default theme, and resolves all styles.
+    /// This is the primary method for loading themes. It performs the complete
+    /// theme loading pipeline:
+    /// 1. Loads the theme from custom directory or embedded themes
+    /// 2. Merges with the `@default` theme
+    /// 3. Resolves all role-based styles to concrete styles
+    ///
+    /// The theme is searched in the following order:
+    /// - Custom themes in `{config_dir}/themes/`
+    /// - Embedded themes (built into the binary)
+    ///
+    /// All themes are automatically merged with `@default` to ensure all
+    /// required elements have styles defined.
+    ///
+    /// # Arguments
+    ///
+    /// * `app_dirs` - Application directories configuration
+    /// * `name` - Theme name (without file extension)
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use hl::themecfg::Theme;
+    /// use hl::app::AppDirs;
+    ///
+    /// let app_dirs = AppDirs::default();
+    /// let theme = Theme::load(&app_dirs, "monokai")?;
+    /// # Ok::<(), hl::themecfg::Error>(())
+    /// ```
     ///
     /// # Errors
     ///
-    /// Returns an error if the theme cannot be loaded or resolved.
+    /// Returns an error if:
+    /// - Theme file cannot be found (neither custom nor embedded)
+    /// - Theme file cannot be parsed (invalid YAML/TOML/JSON)
+    /// - Theme version is unsupported (e.g., future version)
+    /// - Style resolution fails (e.g., circular role inheritance)
+    ///
+    /// Error messages include context:
+    /// - Theme name
+    /// - File path (for custom themes)
+    /// - Specific error details (parse error, unsupported version, recursion, etc.)
     pub fn load(app_dirs: &AppDirs, name: &str) -> Result<Self> {
         Self::load_raw(app_dirs, name)?
             .resolve()
@@ -155,13 +444,51 @@ impl Theme {
 
     /// Load an unresolved (raw) theme by name.
     ///
-    /// This method loads and merges the theme but does not resolve styles.
-    /// Useful for advanced use cases where you want to manipulate the theme
-    /// before resolution.
+    /// This method loads and merges the theme but **does not resolve styles**.
+    /// It returns a [`RawTheme`] which contains unresolved [`RawStyle`] definitions
+    /// that may reference role-based styles.
+    ///
+    /// This is useful for advanced use cases where you want to:
+    /// - Inspect the theme structure before resolution
+    /// - Apply custom modifications to the theme
+    /// - Merge multiple themes programmatically
+    /// - Defer resolution until later
+    ///
+    /// After modifications, call [`RawTheme::resolve()`] to get a fully resolved [`Theme`].
+    ///
+    /// # Arguments
+    ///
+    /// * `app_dirs` - Application directories configuration
+    /// * `name` - Theme name (without file extension)
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use hl::themecfg::{Theme, RawTheme};
+    /// use hl::app::AppDirs;
+    ///
+    /// let app_dirs = AppDirs::default();
+    ///
+    /// // Load raw theme
+    /// let mut raw_theme = Theme::load_raw(&app_dirs, "monokai")?;
+    ///
+    /// // Apply custom modifications
+    /// // raw_theme.styles.0.insert(...);
+    ///
+    /// // Resolve to get final theme
+    /// let theme = raw_theme.resolve()?;
+    /// # Ok::<(), Box<dyn std::error::Error>>(())
+    /// ```
     ///
     /// # Errors
     ///
-    /// Returns an error if the theme cannot be loaded.
+    /// Returns an error if:
+    /// - Theme file cannot be found
+    /// - Theme file cannot be parsed
+    /// - Theme version is unsupported
+    ///
+    /// Note: Style resolution errors (e.g., circular inheritance) will only
+    /// occur when calling [`RawTheme::resolve()`], not during `load_raw()`.
     pub fn load_raw(app_dirs: &AppDirs, name: &str) -> Result<RawTheme> {
         let theme = Self::load_embedded::<Assets>(DEFAULT_THEME_NAME)?;
 

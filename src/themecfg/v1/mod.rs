@@ -1,10 +1,55 @@
-//! Theme configuration v1 support
+//! Theme configuration v1 format support.
 //!
-//! This module contains v1-specific theme loading logic, including:
+//! This module implements the v1 theme format, which adds semantic roles and
+//! style inheritance on top of the legacy v0 format.
+//!
+//! # V1 Features
+//!
+//! - **Semantic Roles**: Define reusable style roles (primary, warning, error, etc.)
+//! - **Style Inheritance**: Elements can inherit from roles using `style: [role-name]`
+//! - **Multiple Inheritance**: Combine multiple roles: `style: [primary, strong]`
+//! - **Mode Diffs**: Add/remove modes with `+`/`-` prefix: `modes: [+bold, -italic]`
+//! - **Strict Validation**: Unknown fields/values cause errors (fail-fast)
+//! - **$schema Support**: Optional `$schema` field for IDE validation
+//!
+//! # V1 Theme Structure
+//!
+//! ```yaml
+//! version: "1.0"
+//! tags: [dark]
+//!
+//! # Define semantic roles
+//! styles:
+//!   primary:
+//!     foreground: "#00ff00"
+//!     modes: [bold]
+//!   warning:
+//!     style: [primary]      # Inherit from primary
+//!     foreground: "#ffaa00" # Override foreground
+//!     modes: [+underline]   # Add underline to inherited modes
+//!
+//! # Map elements to roles
+//! elements:
+//!   level:
+//!     style: [primary]
+//!   timestamp:
+//!     style: [warning]
+//!
+//! # Level-specific overrides
+//! levels:
+//!   error:
+//!     level:
+//!       foreground: "#ff0000"
+//! ```
+//!
+//! # Implementation Details
+//!
+//! This module contains:
+//! - V1-specific types ([`Role`], [`StyleBase`], [`Style`])
 //! - Strict deserialization (fails on unknown keys/values)
-//! - V1-specific types (Role, StyleBase, Style)
 //! - ALL merge logic for themes
-//! - ALL resolve logic for themes
+//! - ALL resolve logic for themes (role → element resolution)
+//! - Conversion from v0 to v1 format
 
 // std imports
 use std::collections::HashMap;
@@ -43,7 +88,32 @@ const RECURSION_LIMIT: usize = 64;
 
 // ---
 
-/// Role represents a semantic style role (v1 feature)
+/// Semantic style role for theme inheritance (v1 feature).
+///
+/// Roles allow defining reusable style definitions that elements can inherit from.
+/// This enables DRY (Don't Repeat Yourself) theme definitions and consistent styling.
+///
+/// # Serialization
+///
+/// Roles are serialized in kebab-case to match user input format:
+/// - `Primary` → `"primary"`
+/// - `AccentSecondary` → `"accent-secondary"`
+///
+/// # Examples
+///
+/// In a theme file:
+/// ```yaml
+/// styles:
+///   primary:
+///     foreground: "#00ff00"
+///   warning:
+///     style: [primary]  # Inherit from primary role
+///     background: "#331100"
+///
+/// elements:
+///   level:
+///     style: [primary]  # Use primary role
+/// ```
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, Default, Hash, Eq, PartialEq, Ord, PartialOrd, Deserialize, Serialize)]
 #[serde(rename_all = "kebab-case")]
@@ -78,9 +148,28 @@ impl std::fmt::Display for Role {
 
 // ---
 
-/// StyleBase represents base styles for inheritance (v1 feature)
-/// Supports both single role (`style = "warning"`) and multiple roles (`style = ["primary", "warning"]`).
-/// When multiple roles are specified, they are merged left to right (later roles override earlier ones).
+/// Base style inheritance specification (v1 feature).
+///
+/// Defines which roles a style should inherit from. Supports both single
+/// and multiple role inheritance.
+///
+/// # Multiple Inheritance
+///
+/// When multiple roles are specified, they are merged **left to right**
+/// (later roles override earlier ones):
+///
+/// ```yaml
+/// styles:
+///   combined:
+///     style: [primary, strong]  # strong overrides primary
+///     foreground: "#ff0000"     # this overrides both
+/// ```
+///
+/// # Serialization Formats
+///
+/// - Single role: `style: "warning"` → `StyleBase(vec![Role::Warning])`
+/// - Multiple roles: `style: ["primary", "strong"]` → `StyleBase(vec![Role::Primary, Role::Strong])`
+/// - Empty (no inheritance): omitted or `null` → `StyleBase(vec![])`
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct StyleBase(pub Vec<Role>);
 
@@ -391,13 +480,58 @@ impl StylePack<Role, Style> {
 
 // ---
 
-/// Theme is the v1 theme deserialization target
-/// It uses strict deserialization and fails on unknown fields
+/// V1 theme definition (unresolved).
+///
+/// This is the deserialization target for v1 theme files. It contains unresolved
+/// style definitions that may reference roles and use inheritance.
+///
+/// # Strict Validation
+///
+/// V1 themes use **strict deserialization** - unknown fields or enum variants
+/// cause errors. This ensures themes are valid and helps catch typos early.
+///
+/// # Schema Support
+///
+/// V1 themes support an optional `$schema` field for IDE/validator integration:
+///
+/// ```yaml
+/// $schema: "https://example.com/hl-theme-schema.json"
+/// version: "1.0"
+/// # ... rest of theme
+/// ```
+///
+/// The `$schema` field is accepted but ignored during processing. It exists
+/// purely to enable IDE features like autocomplete and validation.
+///
+/// # Examples
+///
+/// Basic v1 theme:
+/// ```yaml
+/// version: "1.0"
+/// tags: [dark]
+///
+/// styles:
+///   primary:
+///     foreground: "#00ff00"
+///     modes: [bold]
+///
+/// elements:
+///   level:
+///     style: [primary]
+/// ```
+///
+/// # Resolution
+///
+/// Call [`Theme::resolve()`] to convert this unresolved theme to a fully
+/// resolved [`super::Theme`] with all role references expanded.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(default)]
 #[serde(deny_unknown_fields)]
 pub struct Theme {
-    /// Optional JSON/YAML schema reference (ignored, for IDE/validator support)
+    /// Optional JSON/YAML schema reference for IDE/validator support.
+    ///
+    /// This field is accepted in theme files but ignored during processing.
+    /// It enables IDE features like autocomplete and validation when editing themes.
     #[serde(rename = "$schema")]
     #[serde(skip_serializing)]
     pub schema: Option<String>,
@@ -896,7 +1030,7 @@ impl From<v0::Theme> for Theme {
     }
 }
 
-/// Convert v0::Style (Vec<Mode>) to v1::Style (ModeSetDiff)
+/// Convert v0::Style (`Vec<Mode>`) to v1::Style (ModeSetDiff)
 impl From<v0::Style> for Style {
     fn from(style: v0::Style) -> Self {
         let modes = style.modes.into_iter().collect::<ModeSet>().into();

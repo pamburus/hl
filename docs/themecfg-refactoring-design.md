@@ -342,6 +342,16 @@ They don't need to know about v0 vs v1 internals - that's all implementation det
     - main's `Theme` = resolved (was ResolvedTheme)
     - main's `Style` = resolved (was ResolvedStyle)
 
+## Documentation
+
+- **Module-level docs**: Complete overview of theme system architecture
+- **Public API docs**: Comprehensive docs for `Theme`, `RawTheme`, `Style`, `RawStyle`
+- **Examples**: Usage examples for common and advanced scenarios
+- **Error docs**: Detailed error type documentation with example messages
+- **Format docs**: V0 vs V1 format differences with YAML examples
+- **$schema support**: Documented for IDE integration
+- **Role Display**: User-friendly kebab-case formatting using serde
+
 ## Testing Strategy
 
 - **v0 tests**: Test v0 deserialization, ensure it matches historical behavior
