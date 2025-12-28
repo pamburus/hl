@@ -966,14 +966,14 @@ pub struct IndicatorPack<S = Style> {
 impl<S: Clone> IndicatorPack<S> {
     pub fn merge(&mut self, other: Self, flags: MergeFlags)
     where
-        SyncIndicatorPack<S>: Mergeable,
+        SyncIndicatorPack<S>: Merge,
     {
         self.sync.merge(other.sync, flags);
     }
 
     pub fn merged(mut self, other: Self, flags: MergeFlags) -> Self
     where
-        SyncIndicatorPack<S>: Mergeable,
+        SyncIndicatorPack<S>: Merge,
     {
         self.merge(other, flags);
         self
@@ -1025,7 +1025,7 @@ pub struct IndicatorStyle<S = Style> {
 }
 
 // Trait for types that support merging
-pub trait Mergeable {
+pub trait Merge {
     fn merge(&mut self, other: Self, flags: MergeFlags);
     fn merged(self, other: Self, flags: MergeFlags) -> Self
     where

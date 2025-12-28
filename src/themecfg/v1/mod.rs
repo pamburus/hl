@@ -30,7 +30,7 @@ pub use super::{
 };
 
 // Import resolved types and traits from parent (output types)
-use super::{Mergeable, MergedWith};
+use super::{Merge, MergedWith};
 
 // Import the resolved Style from parent (was ResolvedStyle)
 use super::Style as ResolvedStyle;
@@ -714,14 +714,14 @@ pub struct IndicatorPack<S = Style> {
 impl<S: Clone> IndicatorPack<S> {
     pub fn merge(&mut self, other: Self, flags: MergeFlags)
     where
-        SyncIndicatorPack<S>: Mergeable,
+        SyncIndicatorPack<S>: Merge,
     {
         self.sync.merge(other.sync, flags);
     }
 
     pub fn merged(mut self, other: Self, flags: MergeFlags) -> Self
     where
-        SyncIndicatorPack<S>: Mergeable,
+        SyncIndicatorPack<S>: Merge,
     {
         self.merge(other, flags);
         self
@@ -747,14 +747,7 @@ pub struct SyncIndicatorPack<S = Style> {
     pub failed: Indicator<S>,
 }
 
-impl Mergeable for SyncIndicatorPack<Style> {
-    fn merge(&mut self, other: Self, flags: MergeFlags) {
-        self.synced.merge(other.synced, flags);
-        self.failed.merge(other.failed, flags);
-    }
-}
-
-impl Mergeable for SyncIndicatorPack<ResolvedStyle> {
+impl Merge for SyncIndicatorPack<Style> {
     fn merge(&mut self, other: Self, flags: MergeFlags) {
         self.synced.merge(other.synced, flags);
         self.failed.merge(other.failed, flags);
@@ -802,7 +795,7 @@ impl Indicator<Style> {
 impl<S: Clone> Indicator<S> {
     pub fn merge(&mut self, other: Self, flags: MergeFlags)
     where
-        IndicatorStyle<S>: Mergeable,
+        IndicatorStyle<S>: Merge,
     {
         self.outer.merge(other.outer, flags);
         self.inner.merge(other.inner, flags);
@@ -813,7 +806,7 @@ impl<S: Clone> Indicator<S> {
 
     pub fn merged(mut self, other: Self, flags: MergeFlags) -> Self
     where
-        IndicatorStyle<S>: Mergeable,
+        IndicatorStyle<S>: Merge,
     {
         self.merge(other, flags);
         self
@@ -845,7 +838,7 @@ impl IndicatorStyle<Style> {
     }
 }
 
-impl Mergeable for IndicatorStyle<Style> {
+impl Merge for IndicatorStyle<Style> {
     fn merge(&mut self, other: Self, flags: MergeFlags) {
         if !other.prefix.is_empty() {
             self.prefix = other.prefix;
@@ -854,19 +847,6 @@ impl Mergeable for IndicatorStyle<Style> {
             self.suffix = other.suffix;
         }
         self.style = std::mem::take(&mut self.style).merged(&other.style, flags);
-    }
-}
-
-impl Mergeable for IndicatorStyle<ResolvedStyle> {
-    fn merge(&mut self, other: Self, _flags: MergeFlags) {
-        if !other.prefix.is_empty() {
-            self.prefix = other.prefix;
-        }
-        if !other.suffix.is_empty() {
-            self.suffix = other.suffix;
-        }
-        // ResolvedStyle doesn't have a merge method, so we just replace
-        self.style = other.style;
     }
 }
 
