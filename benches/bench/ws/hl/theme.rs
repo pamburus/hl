@@ -11,7 +11,7 @@ use super::{BencherExt, ND};
 use hl::{
     Level,
     theme::{Element, StylingPush, Theme},
-    themecfg::{self, Color, Mode, RawStyle, Role, ThemeVersion},
+    themecfg::{self, Color, Mode, ThemeVersion},
 };
 
 const GROUP: &str = strcat!(super::GROUP, ND, "theme");
@@ -86,35 +86,27 @@ pub(super) fn bench(c: &mut Criterion) {
 }
 
 fn theme() -> Theme {
-    let cfg = themecfg::RawTheme {
-        schema: None,
+    let cfg = themecfg::Theme {
         version: ThemeVersion::CURRENT,
         tags: Default::default(),
-        styles: themecfg::v1::StylePack(hashmap! {
-            Role::Primary => RawStyle::new().foreground(Some(Color::Palette(36))),
-            Role::Secondary => RawStyle::new().foreground(Some(Color::Palette(8))),
-            Role::Strong => RawStyle::new().foreground(Some(Color::Palette(255))),
-            Role::Syntax => RawStyle::new().foreground(Some(Color::Palette(246))),
-            Role::Accent => RawStyle::new().modes(Mode::Underline.into()).foreground(Some(Color::Palette(8))),
-        }),
-        elements: themecfg::v1::StylePack(hashmap! {
-            Element::Time => Role::Secondary.into(),
-            Element::Level => RawStyle::new().foreground(Some(Color::Palette(25))),
-            Element::Logger => Role::Secondary.into(),
-            Element::Caller => Role::Secondary.into(),
-            Element::Message => Role::Strong.into(),
-            Element::Field => Role::Secondary.into(),
-            Element::Object => Role::Syntax.into(),
-            Element::Array => Role::Syntax.into(),
-            Element::Ellipsis => Role::Secondary.into(),
-            Element::Key => Role::Accent.into(),
-            Element::Null => RawStyle::new().foreground(Some(Color::Palette(136))),
-            Element::Boolean => RawStyle::new().foreground(Some(Color::Palette(178))),
-            Element::Number => RawStyle::new().foreground(Some(Color::Palette(41))),
-            Element::String => Role::Primary.into(),
+        elements: themecfg::StylePack::new(hashmap! {
+            Element::Time => themecfg::Style::new().foreground(Some(Color::Palette(8))),
+            Element::Level => themecfg::Style::new().foreground(Some(Color::Palette(25))),
+            Element::Logger => themecfg::Style::new().foreground(Some(Color::Palette(8))),
+            Element::Caller => themecfg::Style::new().foreground(Some(Color::Palette(8))),
+            Element::Message => themecfg::Style::new().foreground(Some(Color::Palette(255))),
+            Element::Field => themecfg::Style::new().foreground(Some(Color::Palette(8))),
+            Element::Object => themecfg::Style::new().foreground(Some(Color::Palette(246))),
+            Element::Array => themecfg::Style::new().foreground(Some(Color::Palette(246))),
+            Element::Ellipsis => themecfg::Style::new().foreground(Some(Color::Palette(8))),
+            Element::Key => themecfg::Style::new().modes(Mode::Underline.into()).foreground(Some(Color::Palette(8))),
+            Element::Null => themecfg::Style::new().foreground(Some(Color::Palette(136))),
+            Element::Boolean => themecfg::Style::new().foreground(Some(Color::Palette(178))),
+            Element::Number => themecfg::Style::new().foreground(Some(Color::Palette(41))),
+            Element::String => themecfg::Style::new().foreground(Some(Color::Palette(36))),
         }),
         levels: HashMap::new(),
-        indicators: themecfg::v1::IndicatorPack::default(),
+        indicators: themecfg::IndicatorPack::default(),
     };
-    Theme::from(cfg.resolve().unwrap())
+    Theme::from(cfg)
 }

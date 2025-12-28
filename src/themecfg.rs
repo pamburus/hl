@@ -468,6 +468,10 @@ impl<K, S> StylePack<K, S>
 where
     K: Eq + Hash,
 {
+    pub fn new(items: HashMap<K, S>) -> Self {
+        Self(items)
+    }
+
     pub fn items(&self) -> &HashMap<K, S> {
         &self.0
     }
