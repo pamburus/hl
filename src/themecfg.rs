@@ -126,12 +126,8 @@ use derive_more::Deref;
 use enum_map::Enum;
 use enumset::{EnumSet, EnumSetType};
 use rust_embed::RustEmbed;
-use serde::{
-    Deserialize, Deserializer, Serialize,
-    de::{MapAccess, Visitor},
-};
+use serde::{Deserialize, Deserializer, Serialize, de::Visitor};
 use serde_json as json;
-use serde_value::Value;
 use strum::{Display, EnumIter, IntoEnumIterator};
 use thiserror::Error;
 use yaml_peg::serde as yaml;
@@ -150,6 +146,10 @@ pub mod v1;
 // Re-export v1 types that are part of the public API
 // (Element comes from v0, re-exported by v1)
 pub use v1::{Element, Role, StyleBase};
+
+// Re-export v1::StylePack for use with resolved styles
+// This is the generic container used throughout the system
+pub use v1::StylePack;
 
 /// An unresolved style, before role resolution.
 ///
@@ -898,81 +898,9 @@ pub enum ThemeOrigin {
 
 // ---
 
+/// Type alias for a style inventory mapping roles to resolved styles.
+/// This is the output type after resolution in v1.
 pub type StyleInventory = StylePack<Role, Style>;
-
-#[derive(Clone, Debug, Deref)]
-pub struct StylePack<K = Element, S = Style>(HashMap<K, S>);
-
-impl<K, S> Default for StylePack<K, S> {
-    fn default() -> Self {
-        Self(HashMap::new())
-    }
-}
-
-impl<K, S> StylePack<K, S>
-where
-    K: Eq + Hash,
-{
-    pub fn new(items: HashMap<K, S>) -> Self {
-        Self(items)
-    }
-
-    pub fn items(&self) -> &HashMap<K, S> {
-        &self.0
-    }
-}
-
-impl<S> StylePack<Role, S> {
-    pub fn merge(&mut self, patch: Self) {
-        self.0.extend(patch.0);
-    }
-
-    pub fn merged(mut self, patch: Self) -> Self {
-        self.merge(patch);
-        self
-    }
-}
-
-impl<S> StylePack<Element, S> {
-    pub fn merge(&mut self, patch: Self, flags: MergeFlags)
-    where
-        S: Clone + for<'a> Merge<&'a S>,
-    {
-        if flags.contains(MergeFlag::ReplaceHierarchies) {
-            for (parent, child) in Element::pairs() {
-                if patch.contains_key(child) {
-                    self.0.remove(parent);
-                }
-            }
-        }
-
-        if flags.contains(MergeFlag::ReplaceElements) {
-            self.0.extend(patch.0);
-            return;
-        }
-
-        for (key, patch) in patch.0 {
-            self.0
-                .entry(key)
-                .and_modify(|v| *v = v.clone().merged(&patch, flags))
-                .or_insert(patch);
-        }
-    }
-
-    pub fn merged(mut self, patch: Self, flags: MergeFlags) -> Self
-    where
-        S: Clone + for<'a> Merge<&'a S>,
-    {
-        self.merge(patch, flags);
-        self
-    }
-}
-
-impl Merge<&StylePack> for StylePack {
-    fn merge(&mut self, other: &StylePack<Element, Style>, flags: MergeFlags) {
-        Self::merge(self, other.clone(), flags);
-    }
-}
 
 // ---
 
@@ -987,79 +915,13 @@ pub type MergeFlags = EnumSet<MergeFlag>;
 
 // ---
 
-impl<K, S, I: Into<HashMap<K, S>>> From<I> for StylePack<K, S> {
-    fn from(i: I) -> Self {
-        Self(i.into())
-    }
-}
-
-impl<'de, K, S> Deserialize<'de> for StylePack<K, S>
-where
-    K: Deserialize<'de> + Eq + Hash,
-    S: Deserialize<'de>,
-{
-    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        deserializer.deserialize_map(StylePackDeserializeVisitor::<K, S>::new())
-    }
-}
-
-// ---
-
-struct StylePackDeserializeVisitor<K, S> {
-    _phantom: std::marker::PhantomData<(K, S)>,
-}
-
-impl<K, S> StylePackDeserializeVisitor<K, S> {
-    #[inline]
-    fn new() -> Self {
-        Self {
-            _phantom: std::marker::PhantomData,
-        }
-    }
-}
-
-impl<'de, K, S> Visitor<'de> for StylePackDeserializeVisitor<K, S>
-where
-    K: Deserialize<'de> + Eq + Hash,
-    S: Deserialize<'de>,
-{
-    type Value = StylePack<K, S>;
-
-    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-        formatter.write_str("style pack object")
-    }
-
-    fn visit_map<A: MapAccess<'de>>(self, mut access: A) -> std::result::Result<Self::Value, A::Error> {
-        let mut items = HashMap::new();
-
-        // Use Value as a generic "any value" type to handle unknown keys.
-        // This is format-agnostic and works with all serde formats (YAML, TOML, JSON).
-        // This allows us to:
-        // 1. Deserialize the key as Value
-        // 2. Try to convert it to K (the expected key type)
-        // 3. If conversion fails (unknown key), discard the value
-        // This provides forward compatibility by silently ignoring unknown elements.
-        while let Some(key) = access.next_key::<Value>()? {
-            if let Ok(key) = K::deserialize(key) {
-                let value: S = access.next_value()?;
-                items.insert(key, value);
-            } else {
-                _ = access.next_value::<Value>()?;
-            }
-        }
-
-        Ok(StylePack(items))
-    }
-}
-
-// ---
-
-#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq)]
-#[serde(rename_all = "kebab-case")]
-#[serde(default)]
+/// A fully resolved style with concrete values.
+///
+/// This is the output type after resolving [`RawStyle`] (which may contain
+/// role references and mode diffs). All values are concrete:
+/// - `modes` contains the final mode operations to apply
+/// - `foreground` and `background` are final computed colors
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct Style {
     pub modes: ModeSetDiff,
     pub foreground: Option<Color>,
@@ -1085,38 +947,6 @@ impl Style {
 
     pub fn background(self, background: Option<Color>) -> Self {
         Self { background, ..self }
-    }
-}
-
-impl Merge<&Style> for Style {
-    fn merge(&mut self, other: &Style, flags: MergeFlags) {
-        if flags.contains(MergeFlag::ReplaceModes) {
-            self.modes = other.modes;
-        } else {
-            self.modes += other.modes;
-        }
-        if let Some(color) = other.foreground {
-            self.foreground = Some(color);
-        }
-        if let Some(color) = other.background {
-            self.background = Some(color);
-        }
-    }
-}
-
-impl Merge<&RawStyle> for Style {
-    fn merge(&mut self, other: &RawStyle, flags: MergeFlags) {
-        if flags.contains(MergeFlag::ReplaceModes) {
-            self.modes = other.modes;
-        } else {
-            self.modes += other.modes;
-        }
-        if let Some(color) = other.foreground {
-            self.foreground = Some(color);
-        }
-        if let Some(color) = other.background {
-            self.background = Some(color);
-        }
     }
 }
 
@@ -1173,24 +1003,6 @@ impl AddAssign<ModeSetDiff> for ModeSetDiff {
 
         self.adds = adds;
         self.removes = removes;
-    }
-}
-
-impl From<ModeSet> for ModeSetDiff {
-    fn from(modes: ModeSet) -> Self {
-        Self {
-            adds: modes,
-            removes: ModeSet::new(),
-        }
-    }
-}
-
-impl From<Mode> for ModeSetDiff {
-    fn from(mode: Mode) -> Self {
-        Self {
-            adds: mode.into(),
-            removes: ModeSet::new(),
-        }
     }
 }
 

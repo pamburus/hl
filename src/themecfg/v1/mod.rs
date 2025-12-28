@@ -326,6 +326,29 @@ impl std::fmt::Display for StyleBase {
 
 // ---
 
+// ---
+
+// Conversion helpers for ModeSetDiff (v1 unresolved mode representation)
+impl From<ModeSet> for ModeSetDiff {
+    fn from(modes: ModeSet) -> Self {
+        Self {
+            adds: modes,
+            removes: ModeSet::new(),
+        }
+    }
+}
+
+impl From<Mode> for ModeSetDiff {
+    fn from(mode: Mode) -> Self {
+        Self {
+            adds: mode.into(),
+            removes: ModeSet::new(),
+        }
+    }
+}
+
+// ---
+
 /// Style with v1 features (base, ModeSetDiff)
 /// This is the unresolved style type used in v1 themes.
 #[derive(Clone, Debug, Default, Deserialize)]
@@ -462,6 +485,43 @@ impl From<ResolvedStyle> for Style {
     }
 }
 
+// Merge implementations for ResolvedStyle (used during resolution)
+// These live in v1 module because they're part of the resolution logic
+
+impl Merge<&ResolvedStyle> for ResolvedStyle {
+    fn merge(&mut self, other: &ResolvedStyle, flags: MergeFlags) {
+        // For resolved styles, merge mode diffs
+        if flags.contains(MergeFlag::ReplaceModes) {
+            self.modes = other.modes;
+        } else {
+            self.modes += other.modes;
+        }
+        if let Some(color) = other.foreground {
+            self.foreground = Some(color);
+        }
+        if let Some(color) = other.background {
+            self.background = Some(color);
+        }
+    }
+}
+
+impl Merge<&Style> for ResolvedStyle {
+    fn merge(&mut self, other: &Style, flags: MergeFlags) {
+        // When merging an unresolved style (v1::Style) into a resolved style
+        if flags.contains(MergeFlag::ReplaceModes) {
+            self.modes = other.modes;
+        } else {
+            self.modes += other.modes;
+        }
+        if let Some(color) = other.foreground {
+            self.foreground = Some(color);
+        }
+        if let Some(color) = other.background {
+            self.background = Some(color);
+        }
+    }
+}
+
 // ---
 
 /// StylePack for v1 - strict deserialization, generic over key and style types
@@ -493,6 +553,10 @@ impl<K, S> StylePack<K, S>
 where
     K: std::cmp::Eq + std::hash::Hash,
 {
+    pub fn new(items: HashMap<K, S>) -> Self {
+        Self(items)
+    }
+
     pub fn len(&self) -> usize {
         self.0.len()
     }
@@ -551,6 +615,12 @@ impl<S> StylePack<Element, S> {
 impl Merge<&StylePack<Element, Style>> for StylePack<Element, Style> {
     fn merge(&mut self, other: &StylePack<Element, Style>, flags: MergeFlags) {
         Self::merge(self, other.clone(), flags);
+    }
+}
+
+impl Merge<StylePack<Element, Style>> for StylePack<Element, Style> {
+    fn merge(&mut self, other: StylePack<Element, Style>, flags: MergeFlags) {
+        Self::merge(self, other, flags);
     }
 }
 
