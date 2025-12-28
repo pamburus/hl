@@ -205,6 +205,16 @@
 
 - Q: In the boolean special case merge, what is the merge direction and how are undefined properties handled? → A: The `boolean` element serves as the base style, and `boolean-true`/`boolean-false` variants merge over it (override/extend); the merge is: boolean (base) → merged with → boolean-true/false (patch); variant properties override corresponding boolean properties; undefined properties in variants inherit from boolean; undefined properties in boolean resolve to base style (if specified via `style` field in v1) or terminal defaults
 
+- Q: What is the complete schema for the indicators section? → A: Complete schema: `indicators.sync.synced` and `indicators.sync.failed`, each with: `text` (string, the indicator character/text), `outer.prefix` (string), `outer.suffix` (string), `outer.style` (style object), `inner.prefix` (string), `inner.suffix` (string), `inner.style` (style object); all fields optional with defaults (empty strings for text/prefix/suffix, empty style for style objects); this supports --follow mode sync state indicators
+
+- Q: What happens if the embedded configuration file is missing, corrupted, or doesn't have a theme setting? → A: Embedded config file cannot be missing or corrupted - if this happens it means the application build is invalid; if embedded config is missing the `theme` field, the application exits with error: "failed to load configuration: missing configuration field 'theme'" (unless theme is explicitly specified in user configuration file which overrides embedded config)
+
+- Q: What error message is shown when role inheritance depth exceeds 64 levels? → A: Specific error with depth information and affected roles: "Role inheritance depth exceeded: maximum 64 levels (chain: role1 → role2 → ... → roleN)" showing the actual depth reached and the inheritance chain that caused the problem; this helps theme authors debug deep or infinite inheritance chains
+
+- Q: Can theme names contain special characters like spaces, dots, unicode, or other non-ASCII characters? → A: Theme names can contain any valid filename characters per platform filesystem rules (no restrictions beyond filesystem limitations like /, \, null); however, the recommendation is to use lowercase kebab-case style (e.g., "my-theme", "dark-blue") for consistency and portability across platforms; dots in names are allowed but may create ambiguity with extensions (e.g., "theme.backup.yaml" has stem "theme.backup")
+
+- Q: What happens if no theme names meet the Jaro similarity threshold of 0.75 for suggestions? → A: Omit suggestions entirely - if no themes meet the 0.75 threshold, the error message shows only "Theme not found" without a suggestions section; showing an empty suggestion list or lowering the threshold doesn't help the user, so suggestions are only included when at least one theme meets the quality threshold
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Theme File Loading and Validation (Priority: P1)
@@ -404,8 +414,13 @@ Theme authors using v1 can define semantic roles (like "warning", "error", "succ
 - When an element references a role name via the `style` field, is the role name validated immediately during parsing or later during style resolution? (Answer: During initial parsing per FR-040a - fail-fast validation like colors, catches invalid role names immediately)
 - What happens if the `default` role is not defined in the theme (neither in user theme nor in @default)? (Answer: Guaranteed invariant - @default theme MUST define default role per FR-038a, tested during development)
 - Are palette color values in the `$palette` section validated the same way as element colors? (Answer: No - palette colors not validated; $palette only supported in v0, v1 rejects it per FR-028a)
-- Are file extensions case-sensitive (e.g., does .YAML or .Yaml work on any platform)? (Answer: Strict - only lowercase extensions accepted per FR-002c; .YAML, .Yaml, .YML not recognized)
-- In the boolean special case merge, what is the merge direction and how are undefined properties handled? (Answer: Boolean is base, variants override per FR-024b - boolean → merged with → boolean-true/false; undefined variant properties inherit from boolean)
+- Are file extensions case-sensitive (e.g., does .YAML or .Yaml work on any platform)? → A: Strict - only lowercase extensions accepted per FR-002c; .YAML, .Yaml, .YML not recognized)
+- In the boolean special case merge, what is the merge direction and how are undefined properties handled? → A: Boolean is base, variants override per FR-024b - boolean → merged with → boolean-true/false; undefined variant properties inherit from boolean)
+- What is the complete schema for the indicators section? (Answer: Complete schema per FR-023a - indicators.sync.synced/failed each with text, outer/inner prefix/suffix/style; all fields optional)
+- What happens if the embedded configuration file is missing, corrupted, or doesn't have a theme setting? (Answer: Build validation error if missing/corrupted; runtime error if missing theme field per FR-005a - exits with "failed to load configuration: missing configuration field 'theme'")
+- What error message is shown when role inheritance depth exceeds 64 levels? (Answer: Specific error per FR-046a: "Role inheritance depth exceeded: maximum 64 levels (chain: role1 → role2 → ... → roleN)" with depth info and affected roles)
+- Can theme names contain special characters like spaces, dots, unicode, or other non-ASCII characters? (Answer: Yes per FR-002d - any valid filename characters allowed; recommendation is lowercase kebab-case for portability)
+- What happens if no theme names meet the Jaro similarity threshold of 0.75 for suggestions? (Answer: Omit suggestions entirely per FR-006c - error shows only "Theme not found" without suggestions section if none meet threshold)
 - Can inner elements be defined without corresponding parent elements? (Answer: Yes - inner elements are valid on their own; in v1 they fall back to @default theme's parent element, in v0 they use empty/terminal default for the parent)
 - What happens when the theme directory doesn't exist or isn't readable? (Answer: Skip custom themes silently, continue with stock themes only - no error, no directory creation)
 - How does a custom @default theme merge with the embedded @default theme? (Answer: Custom @default merges like any other theme - elements from custom theme completely replace embedded @default elements at theme merge level; property-level merging happens during resolution; merge strategy depends on custom theme version per FR-016 (v0) or FR-041 (v1))
@@ -433,6 +448,8 @@ Theme authors using v1 can define semantic roles (like "warning", "error", "succ
 
 - **FR-002c**: System MUST only accept lowercase file extensions (.yaml, .yml, .toml, .json) on all platforms; variations with uppercase letters (.YAML, .Yaml, .YML, .TOML, .JSON, etc.) are NOT recognized as valid theme files and result in unsupported extension error per FR-006b; this provides consistent behavior across all platforms regardless of filesystem case sensitivity
 
+- **FR-002d**: System MUST allow theme names (file stems) to contain any characters that are valid in filenames on the platform filesystem, with no additional restrictions beyond platform filesystem rules (e.g., no /, \, null, or other OS-specific forbidden characters); theme names can include spaces, dots, unicode characters, and other non-ASCII characters; however, the RECOMMENDED naming convention is lowercase kebab-case (e.g., "my-theme", "dark-blue", "solarized-dark") for consistency, portability across platforms, and avoiding potential filesystem compatibility issues; dots in theme names are allowed but may create ambiguity (e.g., "theme.backup.yaml" has stem "theme.backup")
+
 - **FR-002a**: System MUST silently load the highest priority format when multiple theme files with the same stem but different extensions exist (e.g., if theme.yaml, theme.yml, and theme.toml all exist, load theme.yaml without warning or indication that others were ignored; if only theme.yml and theme.toml exist, load theme.yml)
 
 - **FR-002b**: System MUST use the file extension to determine which parser to use (YAML parser for .yaml and .yml files, TOML parser for .toml files, JSON parser for .json files); if file content doesn't match the extension, the parser will fail with parse error to stderr
@@ -448,11 +465,15 @@ Theme authors using v1 can define semantic roles (like "warning", "error", "succ
 
 - **FR-005**: System MUST use the theme specified in the `theme` setting of the embedded configuration file when no theme is explicitly specified
 
+- **FR-005a**: The embedded configuration file is part of the application build and MUST be valid (not missing or corrupted); if the embedded config file is missing or corrupted, this indicates an invalid application build; if the embedded config file is present but missing the `theme` field, the system exits with error: "failed to load configuration: missing configuration field 'theme'" unless the theme is explicitly specified in the user configuration file (user config overrides embedded config)
+
 - **FR-006**: System MUST exit with error to stderr when a specified theme cannot be loaded (no fallback to default)
 
 - **FR-006a**: System MUST compute theme name suggestions using Jaro similarity algorithm with minimum relevance threshold of 0.75, presenting suggestions sorted by descending relevance score
 
 - **FR-006b**: System MUST exit with specific error message to stderr when a user explicitly specifies a theme file with an unsupported extension (any extension other than .yaml, .yml, .toml, or .json): "Unsupported theme file extension '.ext' - supported extensions are: .yaml, .yml, .toml, .json"
+
+- **FR-006c**: System MUST omit the suggestions section entirely from the error message if no theme names meet the Jaro similarity threshold of 0.75; when no themes meet the quality threshold, the error message shows only "Theme not found: <theme-name>" without including a suggestions section; suggestions are only included when at least one theme meets the 0.75 threshold, ensuring that only helpful suggestions are shown to users
 
 - **FR-007**: System MUST exit with error to stderr when filesystem operations fail during theme loading, reporting the specific error (permission denied, I/O error, disk read failure, etc.); this applies both when a requested theme file exists but cannot be read due to permissions, and when other I/O errors occur during the read operation
 
@@ -540,6 +561,8 @@ Theme authors using v1 can define semantic roles (like "warning", "error", "succ
 - **FR-022c**: System MUST allow multiple tags including combinations like dark+light (theme compatible with both modes), dark+256color, etc.; no tag combinations are considered conflicting
 
 - **FR-023**: System MUST support indicators section with sync.synced and sync.failed configurations; indicators are a separate application feature (--follow mode) where sync state markers are displayed at the start of each line; themes provide only the visual styling for these indicator states (in sync vs out of sync)
+
+- **FR-023a**: System MUST support the complete indicators schema structure: `indicators.sync.synced` and `indicators.sync.failed`, where each indicator has: `text` (string, the indicator character/text displayed), `outer.prefix` (string), `outer.suffix` (string), `outer.style` (style object with optional foreground, background, modes, and in v1: style field), `inner.prefix` (string), `inner.suffix` (string), `inner.style` (style object); all fields are optional with defaults: empty strings for text/prefix/suffix, empty style objects for outer/inner styles; the outer/inner distinction supports nested styling where the indicator text is rendered with inner style nested inside outer style
 
 - **FR-024**: System MUST support boolean special case for backward compatibility in v0 and v1: if base `boolean` element is defined, automatically apply it to `boolean-true` and `boolean-false` during theme structure creation (after level-specific merging) before applying the variants' specific element-level overrides (this is active property merging, different from the passive nested styling scope used for other parent-inner pairs; this pattern exists because `boolean` was added first, variants came later); in v1, boolean-true and boolean-false can also use `style` field to reference roles like any other element
 
@@ -644,6 +667,8 @@ Theme authors using v1 can define semantic roles (like "warning", "error", "succ
 - **FR-045a**: When a custom theme merges with the embedded `@default` theme, the resulting merged theme MUST use the version from the custom theme; this ensures the custom theme's merge semantics are applied correctly (e.g., v0 custom theme + v1 @default = v0 result with v0 replacement semantics; v1 custom theme + v1 @default = v1 result with v1 property-level merge semantics)
 
 - **FR-046**: V1 role-to-role inheritance via the `style` field MUST support a maximum depth of 64 levels
+
+- **FR-046a**: When role inheritance depth exceeds 64 levels, the system MUST exit with a specific error message including: the actual depth reached, the maximum allowed depth (64), and the inheritance chain showing affected roles; error format: "Role inheritance depth exceeded: maximum 64 levels (chain: role1 → role2 → ... → roleN)" where the chain shows the sequence of role references that caused the limit to be exceeded; this helps theme authors identify and fix deep or accidentally infinite inheritance chains
 
 - **FR-047**: V1 themes MUST detect circular role references (e.g., `warning: {style: "error"}` and `error: {style: "warning"}`) and exit with error message showing the circular dependency chain
 
