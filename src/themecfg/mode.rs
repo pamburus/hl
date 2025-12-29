@@ -99,6 +99,24 @@ impl Serialize for ModeSetDiff {
     }
 }
 
+impl From<ModeSet> for ModeSetDiff {
+    fn from(modes: ModeSet) -> Self {
+        Self {
+            adds: modes,
+            removes: ModeSet::new(),
+        }
+    }
+}
+
+impl From<Mode> for ModeSetDiff {
+    fn from(mode: Mode) -> Self {
+        Self {
+            adds: mode.into(),
+            removes: ModeSet::new(),
+        }
+    }
+}
+
 // ---
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

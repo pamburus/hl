@@ -6,7 +6,7 @@ use enum_map::Enum;
 use serde::{Deserialize, Serialize};
 use strum::{EnumIter, IntoEnumIterator};
 
-/// Element represents a UI element that can be styled (v0).
+/// Element represents a log element that can be styled.
 #[repr(u8)]
 #[derive(Debug, Hash, Eq, PartialEq, Clone, Copy, Ord, PartialOrd, Enum, Deserialize, Serialize, EnumIter)]
 #[serde(rename_all = "kebab-case")]

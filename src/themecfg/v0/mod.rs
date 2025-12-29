@@ -22,6 +22,46 @@ use super::{Color, Element, Mode, Tag, Version};
 
 // ---
 
+/// V0 theme deserialization target.
+#[derive(Debug, Deserialize)]
+#[serde(default)]
+pub struct Theme {
+    #[serde(deserialize_with = "enumset_serde::deserialize")]
+    pub tags: EnumSet<Tag>,
+    pub version: Version,
+    pub elements: StylePack,
+    pub levels: HashMap<InfallibleLevel, StylePack>,
+    pub indicators: IndicatorPack,
+}
+
+impl Default for Theme {
+    fn default() -> Self {
+        Self {
+            tags: EnumSet::new(),
+            version: Version::default(),
+            elements: StylePack::default(),
+            levels: HashMap::new(),
+            indicators: IndicatorPack::default(),
+        }
+    }
+}
+
+impl Theme {
+    /// Validate v0 theme version before deserialization
+    pub fn validate_version(version: &Version) -> Result<(), super::ThemeLoadError> {
+        if *version != Version::V0_0 {
+            return Err(super::ThemeLoadError::UnsupportedVersion {
+                requested: *version,
+                nearest: Version::V0_0,
+                latest: Version::CURRENT,
+            });
+        }
+
+        Ok(())
+    }
+}
+// ---
+
 /// Style represents an element's visual styling (v0 format - simple, no base).
 #[derive(Clone, Debug, Default, Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -147,45 +187,4 @@ pub struct IndicatorStyle {
     pub suffix: String,
     #[serde(default)]
     pub style: Style,
-}
-
-// ---
-
-/// V0 theme deserialization target.
-#[derive(Debug, Deserialize)]
-#[serde(default)]
-pub struct Theme {
-    #[serde(deserialize_with = "enumset_serde::deserialize")]
-    pub tags: EnumSet<Tag>,
-    pub version: Version,
-    pub elements: StylePack,
-    pub levels: HashMap<InfallibleLevel, StylePack>,
-    pub indicators: IndicatorPack,
-}
-
-impl Default for Theme {
-    fn default() -> Self {
-        Self {
-            tags: EnumSet::new(),
-            version: Version::default(),
-            elements: StylePack::default(),
-            levels: HashMap::new(),
-            indicators: IndicatorPack::default(),
-        }
-    }
-}
-
-impl Theme {
-    /// Validate v0 theme version before deserialization
-    pub fn validate_version(version: &Version) -> Result<(), super::ThemeLoadError> {
-        if *version != Version::V0_0 {
-            return Err(super::ThemeLoadError::UnsupportedVersion {
-                requested: *version,
-                nearest: Version::V0_0,
-                latest: Version::CURRENT,
-            });
-        }
-
-        Ok(())
-    }
 }
