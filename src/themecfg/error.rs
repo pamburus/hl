@@ -66,10 +66,11 @@ pub enum ThemeLoadError {
     External(#[from] ExternalError),
 
     /// Theme version is not supported (e.g., v2.0 when max is v1.0).
-    #[error("theme version {requested} is not supported", requested=.requested.hl())]
+    #[error("theme version {requested} is not supported (latest is {latest})", requested=.requested.hl(), latest=.latest.hl())]
     UnsupportedVersion {
         requested: ThemeVersion,
-        supported: ThemeVersion,
+        nearest: ThemeVersion,
+        latest: ThemeVersion,
     },
 
     /// Style recursion limit exceeded (circular inheritance or too deep).

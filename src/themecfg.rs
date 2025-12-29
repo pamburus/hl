@@ -917,14 +917,20 @@ impl ThemeVersion {
         Self { major, minor }
     }
 
+    /// Version 0 (the latest v0 version)
+    pub const V0: Self = Self::V0_0;
+
     /// Version 0.0 (implicit, no version field in theme)
-    pub const V0_0: Self = Self { major: 0, minor: 0 };
+    pub const V0_0: Self = Self::new(0, 0);
+
+    /// Version 1 (the latest v1 version)
+    pub const V1: Self = Self::V1_0;
 
     /// Version 1.0 (first versioned theme format)
-    pub const V1_0: Self = Self { major: 1, minor: 0 };
+    pub const V1_0: Self = Self::new(1, 0);
 
     /// Current supported version
-    pub const CURRENT: Self = Self::V1_0;
+    pub const CURRENT: Self = Self::V1;
 
     /// Check if this version is compatible with a supported version
     pub fn is_compatible_with(&self, supported: &ThemeVersion) -> bool {

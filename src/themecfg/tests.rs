@@ -614,11 +614,17 @@ fn test_future_version_rejected() {
     assert!(result.is_err());
     match result {
         Err(Error::FailedToLoadCustomTheme {
-            source: ThemeLoadError::UnsupportedVersion { requested, supported },
+            source:
+                ThemeLoadError::UnsupportedVersion {
+                    requested,
+                    nearest,
+                    latest,
+                },
             ..
         }) => {
             assert_eq!(requested, ThemeVersion::new(1, 1));
-            assert_eq!(supported, ThemeVersion::CURRENT);
+            assert_eq!(nearest, ThemeVersion::CURRENT);
+            assert_eq!(latest, ThemeVersion::CURRENT);
         }
         _ => panic!("Expected UnsupportedVersion error, got {:?}", result),
     }

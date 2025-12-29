@@ -61,10 +61,12 @@ pub enum Element {
 }
 
 impl Element {
+    /// Returns true if this is an "inner" element (nested inside another element).
     pub fn is_inner(&self) -> bool {
         self.outer().is_some()
     }
 
+    /// Returns corresponding "outer" element for an "inner" element.
     pub fn outer(&self) -> Option<Self> {
         match self {
             Self::InputNumber => Some(Self::Input),
@@ -78,6 +80,7 @@ impl Element {
         }
     }
 
+    /// Returns a list of all outer-inner element pairs.
     pub fn nested() -> &'static [(Self, Self)] {
         static PAIRS: LazyLock<Vec<(Element, Element)>> = LazyLock::new(|| {
             Element::iter()
@@ -87,14 +90,6 @@ impl Element {
         &PAIRS
     }
 }
-
-// ---
-
-// v0 uses simple Vec<Mode> (no ModeSetDiff like v1)
-
-// ---
-
-// v0 does not have StyleBase - that's a v1 feature
 
 // ---
 
@@ -258,16 +253,12 @@ impl Theme {
     /// V0 themes must be exactly version 0.0 (or default/unspecified)
     /// This is called before deserialization to provide better error messages
     pub fn validate_version(version: &ThemeVersion) -> Result<(), super::ThemeLoadError> {
-        // Default version (0.0) is always acceptable for v0
-        if *version == ThemeVersion::default() {
-            return Ok(());
-        }
-
         // V0 themes must be exactly version 0.0
         if *version != ThemeVersion::V0_0 {
             return Err(super::ThemeLoadError::UnsupportedVersion {
                 requested: *version,
-                supported: ThemeVersion::V0_0,
+                nearest: ThemeVersion::V0_0,
+                latest: ThemeVersion::CURRENT,
             });
         }
 

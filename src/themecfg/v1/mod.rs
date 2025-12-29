@@ -675,16 +675,14 @@ impl Theme {
     /// V1 themes must be compatible with the current version
     /// This is called before deserialization to provide better error messages
     pub fn validate_version(version: &ThemeVersion) -> Result<(), super::ThemeLoadError> {
-        // Default version (0.0/unspecified) is considered compatible with v1
-        if *version == ThemeVersion::default() {
-            return Ok(());
-        }
+        const CURRENT: ThemeVersion = ThemeVersion::V1;
 
         // Check if version is compatible with current supported version
         if !version.is_compatible_with(&ThemeVersion::CURRENT) {
             return Err(super::ThemeLoadError::UnsupportedVersion {
                 requested: *version,
-                supported: ThemeVersion::CURRENT,
+                nearest: CURRENT,
+                latest: ThemeVersion::CURRENT,
             });
         }
 
