@@ -26,7 +26,7 @@ error = { foreground = "bright-red" }
 input = { style = "secondary" }
 time = { style = "secondary" }
 level = { style = "muted" }
-level-inner = { style = "primary" }
+level-inner = { style = "level" }
 logger = { style = "accent-secondary" }
 caller = { style = "secondary", modes = ["italic"] }
 message = { style = "message" }

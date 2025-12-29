@@ -36,7 +36,7 @@ foreground = "bright-red"
 modes = ["faint"]
 
 [elements.level-inner]
-modes = ["bold"]
+modes = ["-faint", "bold"]
 
 [elements.number]
 foreground = "green"
