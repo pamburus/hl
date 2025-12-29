@@ -17,8 +17,8 @@ use serde_value::Value;
 // local imports
 use crate::level::InfallibleLevel;
 
-// Re-exports from parent module (common types)
-pub use super::{Color, Element, MergeFlag, MergeFlags, Mode, PlainColor, RGB, Tag, ThemeVersion};
+// relative imports
+use super::{Color, Element, Mode, Tag, ThemeVersion};
 
 // ---
 

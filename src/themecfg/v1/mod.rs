@@ -15,18 +15,12 @@ use serde::{Deserialize, Serialize};
 use crate::level::{InfallibleLevel, Level};
 
 // relative imports
-use super::v0;
+use super::{
+    Color, Element, MergeFlag, MergeFlags, Mode, ModeSet, ModeSetDiff, Result, StyleInventory, Tag, ThemeLoadError,
+    ThemeVersion, v0,
+};
 
 // ---
-
-// Re-export Element from v0 (unchanged in v1)
-pub use super::v0::Element;
-
-// Re-export common types from parent module
-pub use super::{
-    Color, MergeFlag, MergeFlags, Mode, ModeDiff, ModeDiffAction, ModeSet, ModeSetDiff, PlainColor, RGB, Result,
-    StyleInventory, Tag, ThemeLoadError, ThemeVersion,
-};
 
 // Import resolved types and traits from parent (output types)
 use super::Merge;
