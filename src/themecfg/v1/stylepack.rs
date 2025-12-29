@@ -1,5 +1,5 @@
 // std imports
-use std::collections::HashMap;
+use std::{cmp::Eq, collections::HashMap, hash::Hash};
 
 // third-party imports
 use derive_more::{Deref, DerefMut, IntoIterator};
@@ -8,7 +8,7 @@ use serde::Deserialize;
 // relative imports
 use super::{
     Element, Merge, MergeFlag, MergeFlags, ResolvedStyle, ResolvedStylePack, Result, Role, Style, StyleInventory,
-    StyleResolver, ThemeLoadError,
+    StyleResolveError, StyleResolver,
 };
 
 // ---
@@ -25,7 +25,7 @@ impl<K, S> Default for StylePack<K, S> {
 
 impl<'de, K, S> Deserialize<'de> for StylePack<K, S>
 where
-    K: Deserialize<'de> + std::cmp::Eq + std::hash::Hash,
+    K: Deserialize<'de> + Eq + Hash,
     S: Deserialize<'de>,
 {
     fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
@@ -40,7 +40,7 @@ where
 
 impl<K, S> StylePack<K, S>
 where
-    K: std::cmp::Eq + std::hash::Hash,
+    K: Eq + Hash,
 {
     pub fn new(items: HashMap<K, S>) -> Self {
         Self(items)
@@ -99,7 +99,7 @@ impl StylePack<Element, Style> {
     /// 3. Handles boolean variant inheritance from base Boolean element
     ///
     /// Per FR-041, this merging of unresolved styles must occur before resolving `base` references.
-    pub fn complete_hierarchy(mut self, flags: MergeFlags) -> Self {
+    fn complete_hierarchy(mut self, flags: MergeFlags) -> Self {
         // Step 1: Merge parent→inner where inner is explicitly defined (v1 only)
         // For v0 (ReplaceElements), inner elements replace parent completely
         if !flags.contains(MergeFlag::ReplaceElements) {
@@ -118,7 +118,7 @@ impl StylePack<Element, Style> {
         // Use canonical pairs from Element::nested() for single source of truth (FR-015a)
         for &(outer, inner) in Element::nested() {
             if let Some(outer) = self.0.get(&outer).cloned() {
-                self.0.entry(inner).or_insert_with(|| outer);
+                self.0.entry(inner).or_insert(outer);
             }
         }
 
@@ -139,12 +139,23 @@ impl StylePack<Element, Style> {
     /// This is a pure resolution operation that should be called after all merging is complete.
     ///
     /// Per FR-041, all merging (including hierarchy completion) must happen before resolution.
-    pub fn resolve_styles(&self, inventory: &StyleInventory, flags: MergeFlags) -> ResolvedStylePack {
-        let items: HashMap<Element, ResolvedStyle> = self
+    fn resolve_styles(&self, inventory: &StyleInventory, flags: MergeFlags) -> ResolvedStylePack {
+        let items = self
             .iter()
             .map(|(&element, style)| (element, style.resolve(inventory, flags)))
             .collect();
-        super::StylePack::new(items)
+        ResolvedStylePack::new(items)
+    }
+}
+
+impl StylePack<Role, Style> {
+    pub fn resolved(&self, flags: MergeFlags) -> Result<StyleInventory, StyleResolveError> {
+        let mut resolver = StyleResolver::new(self, flags);
+        let items: HashMap<Role, ResolvedStyle> = self
+            .keys()
+            .map(|k| resolver.resolve(k).map(|v| (*k, v)))
+            .collect::<Result<_, _>>()?;
+        Ok(StyleInventory::new(items))
     }
 }
 
@@ -157,16 +168,5 @@ impl Merge<&StylePack<Element, Style>> for StylePack<Element, Style> {
 impl Merge<StylePack<Element, Style>> for StylePack<Element, Style> {
     fn merge(&mut self, other: StylePack<Element, Style>, flags: MergeFlags) {
         Self::merge(self, other, flags);
-    }
-}
-
-impl StylePack<Role, Style> {
-    pub fn resolved(&self, flags: MergeFlags) -> Result<StyleInventory, ThemeLoadError> {
-        let mut resolver = StyleResolver::new(self, flags);
-        let items: HashMap<Role, ResolvedStyle> = self
-            .keys()
-            .map(|k| Ok((*k, resolver.resolve(k)?)))
-            .collect::<Result<HashMap<Role, ResolvedStyle>, ThemeLoadError>>()?;
-        Ok(StyleInventory::new(items))
     }
 }

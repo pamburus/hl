@@ -11,7 +11,10 @@ use enumset::EnumSet;
 use serde::Deserialize;
 
 // local imports
-use crate::level::{InfallibleLevel, Level};
+use crate::{
+    level::{InfallibleLevel, Level},
+    themecfg::StyleResolveError,
+};
 
 // relative imports
 use super::{
@@ -112,7 +115,7 @@ impl Theme {
     /// This method:
     /// 1. Resolves the role-based styles inventory
     /// 2. Applies the inventory to element-based styles
-    /// 3. Handles parent-inner element inheritance
+    /// 3. Handles outer-inner element inheritance
     /// 4. Processes level-specific element overrides
     /// 5. Resolves indicator styles
     ///
@@ -120,8 +123,7 @@ impl Theme {
     ///
     /// Returns an error if:
     /// - Style recursion limit is exceeded
-    /// - Any other style resolution error occurs
-    pub fn resolve(self) -> Result<ResolvedTheme, ThemeLoadError> {
+    pub fn resolve(self) -> Result<ResolvedTheme, StyleResolveError> {
         let flags = self.merge_flags();
 
         // Step 1: Resolve the role-based styles inventory

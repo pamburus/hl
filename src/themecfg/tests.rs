@@ -938,7 +938,7 @@ fn test_v1_style_recursion_limit_error() {
             assert_eq!(info.name.as_ref(), "v1-recursion-circular");
 
             match source {
-                ThemeLoadError::StyleRecursionLimitExceeded { role, .. } => {
+                StyleResolveError::RecursionLimitExceeded { role, .. } => {
                     // Expected error - should be either Primary or Secondary (the circular pair)
                     assert!(
                         role == Role::Primary || role == Role::Secondary,
@@ -946,7 +946,6 @@ fn test_v1_style_recursion_limit_error() {
                         role
                     );
                 }
-                other => panic!("Expected StyleRecursionLimitExceeded, got: {:?}", other),
             }
         }
         other => panic!(

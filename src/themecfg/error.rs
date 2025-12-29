@@ -48,7 +48,7 @@ pub enum Error {
     #[error("failed to resolve theme {name}: {source}", name=.info.name.hlq())]
     FailedToResolveTheme {
         info: Arc<ThemeInfo>,
-        source: ThemeLoadError,
+        source: StyleResolveError,
     },
 
     /// Invalid theme version format.
@@ -73,11 +73,20 @@ pub enum ThemeLoadError {
         latest: Version,
     },
 
+    #[error(transparent)]
+    ResolveError(#[from] StyleResolveError),
+}
+
+/// Style inventory resolution error.
+///
+/// Occurs during style role-based inventory resolution.
+#[derive(Error, Debug)]
+pub enum StyleResolveError {
     /// Style recursion limit exceeded (circular inheritance or too deep).
     ///
     /// Limits role inheritance to 64 levels to prevent infinite loops (FR-046, FR-047).
     #[error("style inheritance depth exceeded limit {limit} for role {role} with base {base}", limit=.limit.hl(), role=.role.hlq(), base=.base.hlq())]
-    StyleRecursionLimitExceeded { role: Role, base: StyleBase, limit: usize },
+    RecursionLimitExceeded { role: Role, base: StyleBase, limit: usize },
 }
 
 /// External errors from I/O and parsing operations.

@@ -7,7 +7,7 @@ use serde::Deserialize;
 // relative imports
 use super::{
     Color, Merge, MergeFlag, MergeFlags, ModeSet, ModeSetDiff, ResolvedStyle, Result, Role, StyleBase, StyleInventory,
-    StylePack, ThemeLoadError, v0,
+    StylePack, StyleResolveError, v0,
 };
 
 // ---
@@ -205,7 +205,7 @@ impl<'a> StyleResolver<'a> {
         }
     }
 
-    pub fn resolve(&mut self, role: &Role) -> Result<ResolvedStyle, ThemeLoadError> {
+    pub fn resolve(&mut self, role: &Role) -> Result<ResolvedStyle, StyleResolveError> {
         if let Some(resolved) = self.cache.get(role) {
             return Ok(resolved.clone());
         }
@@ -221,7 +221,7 @@ impl<'a> StyleResolver<'a> {
         Ok(resolved)
     }
 
-    fn resolve_style(&mut self, style: &Style, role: &Role) -> Result<ResolvedStyle, ThemeLoadError> {
+    fn resolve_style(&mut self, style: &Style, role: &Role) -> Result<ResolvedStyle, StyleResolveError> {
         // If no explicit base, default to inheriting from Default role (except for Default itself)
         let base = if style.base.is_empty() {
             if *role != Role::Default {
@@ -234,7 +234,7 @@ impl<'a> StyleResolver<'a> {
         };
 
         if !base.is_empty() && self.depth >= RECURSION_LIMIT {
-            return Err(ThemeLoadError::StyleRecursionLimitExceeded {
+            return Err(StyleResolveError::RecursionLimitExceeded {
                 role: *role,
                 base,
                 limit: RECURSION_LIMIT,
@@ -243,7 +243,7 @@ impl<'a> StyleResolver<'a> {
 
         let mut result = ResolvedStyle::default();
         for base in base.iter() {
-            result = result.merged(&self.resolve(&base)?, self.flags);
+            result.merge(&self.resolve(base)?, self.flags);
         }
 
         Ok(result.merged(&style.as_resolved(), self.flags))
