@@ -55,17 +55,19 @@ use yaml_peg::serde as yaml;
 use crate::{appdirs::AppDirs, level::Level, xerr::Suggestions};
 
 // Version-specific modules
+pub mod element;
 pub mod error;
 pub mod raw;
 pub mod v0;
 pub mod v1;
 
+pub use element::Element;
 pub use error::{Error, ExternalError, Result, ThemeLoadError};
 pub use raw::RawTheme;
 
 // Re-export v1 types that are part of the public API
 // (Element comes from v0, re-exported by v1)
-pub use v1::{Element, Role, StyleBase};
+pub use v1::{Role, StyleBase};
 
 // Re-export v1::StylePack for use with resolved styles
 // This is the generic container used throughout the system

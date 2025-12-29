@@ -3,93 +3,22 @@
 //! Handles legacy v0 theme loading with lenient deserialization and conversions.
 
 // std imports
-use std::{collections::HashMap, fmt, hash::Hash, sync::LazyLock};
+use std::{collections::HashMap, fmt};
 
 // third-party imports
 use derive_more::{Deref, DerefMut, IntoIterator};
-use enum_map::Enum;
 use enumset::EnumSet;
 use serde::{
-    Deserialize, Deserializer, Serialize,
+    Deserialize, Deserializer,
     de::{MapAccess, Visitor},
 };
 use serde_value::Value;
-use strum::{EnumIter, IntoEnumIterator};
 
 // local imports
 use crate::level::InfallibleLevel;
 
 // Re-exports from parent module (common types)
-pub use super::{Color, MergeFlag, MergeFlags, Mode, PlainColor, RGB, Tag, ThemeVersion};
-
-// ---
-// v0 does not have Role - that's a v1 feature for semantic styling
-
-// ---
-
-/// Element represents a UI element that can be styled (v0).
-#[repr(u8)]
-#[derive(Debug, Default, Hash, Eq, PartialEq, Clone, Copy, Ord, PartialOrd, Enum, Deserialize, Serialize, EnumIter)]
-#[serde(rename_all = "kebab-case")]
-pub enum Element {
-    #[default]
-    Input,
-    InputNumber,
-    InputNumberInner,
-    InputName,
-    InputNameInner,
-    Time,
-    Level,
-    LevelInner,
-    Logger,
-    LoggerInner,
-    Caller,
-    CallerInner,
-    Message,
-    MessageDelimiter,
-    Field,
-    Key,
-    Array,
-    Object,
-    String,
-    Number,
-    Boolean,
-    BooleanTrue,
-    BooleanFalse,
-    Null,
-    Ellipsis,
-}
-
-impl Element {
-    /// Returns true if this is an "inner" element (nested inside another element).
-    pub fn is_inner(&self) -> bool {
-        self.outer().is_some()
-    }
-
-    /// Returns corresponding "outer" element for an "inner" element.
-    pub fn outer(&self) -> Option<Self> {
-        match self {
-            Self::InputNumber => Some(Self::Input),
-            Self::InputName => Some(Self::Input),
-            Self::InputNumberInner => Some(Self::InputNumber),
-            Self::InputNameInner => Some(Self::InputName),
-            Self::LevelInner => Some(Self::Level),
-            Self::LoggerInner => Some(Self::Logger),
-            Self::CallerInner => Some(Self::Caller),
-            _ => None,
-        }
-    }
-
-    /// Returns a list of all outer-inner element pairs.
-    pub fn nested() -> &'static [(Self, Self)] {
-        static PAIRS: LazyLock<Vec<(Element, Element)>> = LazyLock::new(|| {
-            Element::iter()
-                .filter_map(|element| element.outer().map(|parent| (parent, element)))
-                .collect()
-        });
-        &PAIRS
-    }
-}
+pub use super::{Color, Element, MergeFlag, MergeFlags, Mode, PlainColor, RGB, Tag, ThemeVersion};
 
 // ---
 
@@ -229,7 +158,6 @@ pub struct Theme {
     #[serde(deserialize_with = "enumset_serde::deserialize")]
     pub tags: EnumSet<Tag>,
     pub version: ThemeVersion,
-    // v0 does not have styles section - only elements
     pub elements: StylePack,
     pub levels: HashMap<InfallibleLevel, StylePack>,
     pub indicators: IndicatorPack,
@@ -249,11 +177,7 @@ impl Default for Theme {
 
 impl Theme {
     /// Validate v0 theme version before deserialization
-    ///
-    /// V0 themes must be exactly version 0.0 (or default/unspecified)
-    /// This is called before deserialization to provide better error messages
     pub fn validate_version(version: &ThemeVersion) -> Result<(), super::ThemeLoadError> {
-        // V0 themes must be exactly version 0.0
         if *version != ThemeVersion::V0_0 {
             return Err(super::ThemeLoadError::UnsupportedVersion {
                 requested: *version,
