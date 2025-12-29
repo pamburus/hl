@@ -267,7 +267,7 @@ impl Style {
 
     pub fn as_resolved(&self) -> ResolvedStyle {
         ResolvedStyle {
-            modes: self.modes,
+            modes: self.modes.adds,
             foreground: self.foreground,
             background: self.background,
         }
@@ -309,7 +309,7 @@ impl From<ResolvedStyle> for Style {
     fn from(body: ResolvedStyle) -> Self {
         Self {
             base: StyleBase::default(),
-            modes: body.modes,
+            modes: body.modes.into(),
             foreground: body.foreground,
             background: body.background,
         }
@@ -325,7 +325,7 @@ impl Merge<&ResolvedStyle> for ResolvedStyle {
         if flags.contains(MergeFlag::ReplaceModes) {
             self.modes = other.modes;
         } else {
-            self.modes += other.modes;
+            self.modes |= other.modes;
         }
         if let Some(color) = other.foreground {
             self.foreground = Some(color);
@@ -340,9 +340,10 @@ impl Merge<&Style> for ResolvedStyle {
     fn merge(&mut self, other: &Style, flags: MergeFlags) {
         // When merging an unresolved style (v1::Style) into a resolved style
         if flags.contains(MergeFlag::ReplaceModes) {
-            self.modes = other.modes;
+            self.modes = other.modes.adds;
         } else {
-            self.modes += other.modes;
+            self.modes |= other.modes.adds;
+            self.modes -= other.modes.removes;
         }
         if let Some(color) = other.foreground {
             self.foreground = Some(color);

@@ -1,0 +1,7 @@
+version = "1.0"
+
+[styles.warning]
+foreground = 214
+
+[elements.level]
+foreground = 139

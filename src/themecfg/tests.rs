@@ -8,12 +8,16 @@ const V0_MERGE_FLAGS: MergeFlags =
     enum_set!(MergeFlag::ReplaceElements | MergeFlag::ReplaceHierarchies | MergeFlag::ReplaceModes);
 
 // Helper function to create test AppDirs
-fn test_app_dirs() -> AppDirs {
+fn dirs() -> AppDirs {
     AppDirs {
         config_dir: PathBuf::from("src/testing/assets"),
         cache_dir: Default::default(),
         system_config_dirs: Default::default(),
     }
+}
+
+fn theme(name: &str) -> Theme {
+    Theme::load(&dirs(), name).unwrap()
 }
 
 // Helper for displaying serializable types in tests
@@ -43,20 +47,19 @@ fn modes(modes: &[Mode]) -> ModeSetDiff {
 
 #[test]
 fn test_load() {
-    let app_dirs = test_app_dirs();
-    assert_ne!(Theme::load(&app_dirs, "test").unwrap().elements.len(), 0);
-    assert_ne!(Theme::load(&app_dirs, "universal").unwrap().elements.len(), 0);
-    assert!(Theme::load(&app_dirs, "non-existent").is_err());
-    assert!(Theme::load(&app_dirs, "invalid").is_err());
-    assert!(Theme::load(&app_dirs, "invalid-type").is_err());
+    let dirs = dirs();
+    assert_ne!(Theme::load(&dirs, "test").unwrap().elements.len(), 0);
+    assert_ne!(Theme::load(&dirs, "universal").unwrap().elements.len(), 0);
+    assert!(Theme::load(&dirs, "non-existent").is_err());
+    assert!(Theme::load(&dirs, "invalid").is_err());
+    assert!(Theme::load(&dirs, "invalid-type").is_err());
 }
 
 #[test]
 fn test_v0_input_element_inheritance() {
     // Test that v0 themes defining `input` block @default's input-number/input-name elements
     // This ensures backward compatibility where `input` styling applies to all nested input elements
-    let app_dirs = test_app_dirs();
-    let theme = Theme::load(&app_dirs, "v0-color-formats").unwrap();
+    let theme = theme("v0-color-formats");
 
     // Expected style for input element
     let expected = Style {
@@ -93,7 +96,7 @@ fn test_v0_input_element_inheritance() {
 
 #[test]
 fn test_load_from() {
-    let app_dirs = test_app_dirs();
+    let app_dirs = dirs();
     assert_ne!(Theme::load(&app_dirs, "universal").unwrap().elements.len(), 0);
 
     assert_ne!(Theme::load(&app_dirs, "test").unwrap().elements.len(), 0);
@@ -218,52 +221,49 @@ fn test_v0_boolean_active_merge() {
     // Test that v0 applies base `boolean` element to `boolean-true` and `boolean-false`
     // Note: The boolean active merge happens during conversion to theme::Theme,
     // not at the themecfg::Theme level. At themecfg level, we just verify the elements exist.
-    let app_dirs = test_app_dirs();
-    let theme = Theme::load(&app_dirs, "v0-boolean-merge").unwrap();
+    let theme = theme("v0-boolean-merge");
 
     // Base boolean element should exist
     assert!(theme.elements.get(&Element::Boolean).is_some());
-    let boolean = theme.elements.get(&Element::Boolean).unwrap();
+    let boolean = &theme.elements[&Element::Boolean];
     assert_eq!(boolean.foreground, Some(Color::RGB(RGB(0, 255, 0))));
     assert_eq!(boolean.background, Some(Color::RGB(RGB(0, 0, 0))));
-    assert_eq!(boolean.modes, Mode::Bold.into());
+    assert_eq!(boolean.modes, Mode::Bold);
 
     // boolean-true and boolean-false should exist with their own properties
-    let boolean_true = theme.elements.get(&Element::BooleanTrue).unwrap();
+    let boolean_true = &theme.elements[&Element::BooleanTrue];
     assert_eq!(boolean_true.foreground, Some(Color::RGB(RGB(0, 255, 255))));
     // At themecfg level, boolean-true doesn't have background/modes yet
     // The merge happens in theme::StylePack::load()
 
-    let boolean_false = theme.elements.get(&Element::BooleanFalse).unwrap();
+    let boolean_false = &theme.elements[&Element::BooleanFalse];
     assert_eq!(boolean_false.foreground, Some(Color::RGB(RGB(255, 0, 0))));
 }
 
 #[test]
 fn test_v0_modes_replacement() {
     // Test that v0 child modes completely replace parent modes (no merging)
-    let app_dirs = test_app_dirs();
-    let theme = Theme::load(&app_dirs, "v0-modes-replace").unwrap();
+    let theme = theme("v0-modes-replace");
 
     // level has bold and underline
-    let level = theme.elements.get(&Element::Level).unwrap();
-    assert_eq!(level.modes, (Mode::Bold | Mode::Underline).into());
+    let level = &theme.elements[&Element::Level];
+    assert_eq!(level.modes, Mode::Bold | Mode::Underline);
 
     // level-inner has only italic (replaces parent's modes, not merged)
-    let level_inner = theme.elements.get(&Element::LevelInner).unwrap();
-    assert_eq!(level_inner.modes, Mode::Italic.into());
+    let level_inner = &theme.elements[&Element::LevelInner];
+    assert_eq!(level_inner.modes, Mode::Italic);
 }
 
 #[test]
 fn test_v0_level_specific_overrides() {
     // Test that level-specific elements merge with base elements
     // and level overrides win for defined properties
-    let app_dirs = test_app_dirs();
-    let theme = Theme::load(&app_dirs, "v0-level-overrides").unwrap();
+    let theme = theme("v0-level-overrides");
 
     // Base level element
-    let base_level = theme.elements.get(&Element::Level).unwrap();
+    let base_level = &theme.elements[&Element::Level];
     assert_eq!(base_level.foreground, Some(Color::RGB(RGB(0, 255, 0))));
-    assert_eq!(base_level.modes, Mode::Italic.into());
+    assert_eq!(base_level.modes, Mode::Italic);
 
     // Debug level should have overridden foreground and modes
     let debug_level = theme
@@ -273,7 +273,7 @@ fn test_v0_level_specific_overrides() {
     assert!(debug_level.is_some());
     let debug_level = debug_level.unwrap();
     assert_eq!(debug_level.foreground, Some(Color::RGB(RGB(255, 0, 255))));
-    assert_eq!(debug_level.modes, (Mode::Bold | Mode::Underline).into());
+    assert_eq!(debug_level.modes, Mode::Bold | Mode::Underline);
 
     // Error level should have comprehensive overrides
     let error_level = theme
@@ -284,74 +284,71 @@ fn test_v0_level_specific_overrides() {
     let error_level = error_level.unwrap();
     assert_eq!(error_level.foreground, Some(Color::RGB(RGB(255, 0, 0))));
     assert_eq!(error_level.background, Some(Color::RGB(RGB(68, 0, 0))));
-    assert_eq!(error_level.modes, (Mode::Reverse | Mode::Bold).into());
+    assert_eq!(error_level.modes, Mode::Reverse | Mode::Bold);
 }
 
 #[test]
 fn test_v0_nested_styling_elements() {
     // Test that v0 has separate parent/inner elements (nested rendering scope)
-    let app_dirs = test_app_dirs();
-    let theme = Theme::load(&app_dirs, "v0-nested-styling").unwrap();
+    let theme = theme("v0-nested-styling");
 
     // Parent element with full styling
-    let level = theme.elements.get(&Element::Level).unwrap();
+    let level = &theme.elements[&Element::Level];
     assert_eq!(level.foreground, Some(Color::RGB(RGB(0, 255, 0))));
     assert_eq!(level.background, Some(Color::RGB(RGB(0, 17, 0))));
-    assert_eq!(level.modes, Mode::Bold.into());
+    assert_eq!(level.modes, Mode::Bold);
 
     // Inner element has only foreground - does NOT inherit background/modes in v0
     // (This is nested scope, not property merging)
-    let level_inner = theme.elements.get(&Element::LevelInner).unwrap();
+    let level_inner = &theme.elements[&Element::LevelInner];
     assert_eq!(level_inner.foreground, Some(Color::RGB(RGB(0, 255, 255))));
     assert_eq!(level_inner.background, None);
-    assert_eq!(level_inner.modes, Default::default());
+    assert_eq!(level_inner.modes, ModeSet::empty());
 
     // Logger/logger-inner pair
-    let logger = theme.elements.get(&Element::Logger).unwrap();
+    let logger = &theme.elements[&Element::Logger];
     assert_eq!(logger.foreground, Some(Color::RGB(RGB(255, 255, 0))));
-    assert_eq!(logger.modes, (Mode::Italic | Mode::Underline).into());
+    assert_eq!(logger.modes, Mode::Italic | Mode::Underline);
 
-    let logger_inner = theme.elements.get(&Element::LoggerInner).unwrap();
+    let logger_inner = &theme.elements[&Element::LoggerInner];
     assert_eq!(logger_inner.foreground, Some(Color::RGB(RGB(255, 255, 255))));
-    assert_eq!(logger_inner.modes, Mode::Bold.into());
+    assert_eq!(logger_inner.modes, Mode::Bold);
 }
 
 #[test]
 fn test_v0_empty_modes_vs_absent_modes() {
     // Test that empty modes [] is different from no modes field
-    let app_dirs = test_app_dirs();
-    let theme = Theme::load(&app_dirs, "v0-empty-modes").unwrap();
+    let theme = theme("v0-empty-modes");
 
     // Element with empty modes array
-    let message = theme.elements.get(&Element::Message).unwrap();
-    assert_eq!(message.modes, Default::default());
+    let message = &theme.elements[&Element::Message];
+    assert_eq!(message.modes, ModeSet::empty());
 
     // Element with modes
-    let level = theme.elements.get(&Element::Level).unwrap();
-    assert_eq!(level.modes, (Mode::Bold | Mode::Italic).into());
+    let level = &theme.elements[&Element::Level];
+    assert_eq!(level.modes, Mode::Bold | Mode::Italic);
 
     // Element with no modes field should have empty vec
-    let level_inner = theme.elements.get(&Element::LevelInner).unwrap();
-    assert_eq!(level_inner.modes, Default::default());
+    let level_inner = &theme.elements[&Element::LevelInner];
+    assert_eq!(level_inner.modes, ModeSet::empty());
 }
 
 #[test]
 fn test_v0_yaml_anchors() {
     // Test that YAML anchors and aliases work correctly
-    let app_dirs = test_app_dirs();
-    let theme = Theme::load(&app_dirs, "v0-yaml-anchors").unwrap();
+    let theme = theme("v0-yaml-anchors");
 
     // Message should use base-style anchor
-    let message = theme.elements.get(&Element::Message).unwrap();
+    let message = &theme.elements[&Element::Message];
     assert_eq!(message.foreground, Some(Color::RGB(RGB(0, 255, 0))));
-    assert_eq!(message.modes, Mode::Bold.into());
+    assert_eq!(message.modes, Mode::Bold);
 
     // Level should use secondary color
-    let level = theme.elements.get(&Element::Level).unwrap();
+    let level = &theme.elements[&Element::Level];
     assert_eq!(level.foreground, Some(Color::RGB(RGB(0, 0, 255))));
 
     // level-inner should use error-style anchor
-    let level_inner = theme.elements.get(&Element::LevelInner).unwrap();
+    let level_inner = &theme.elements[&Element::LevelInner];
     assert_eq!(level_inner.foreground, Some(Color::RGB(RGB(255, 0, 0))));
     assert_eq!(level_inner.background, Some(Color::RGB(RGB(17, 0, 0))));
 }
@@ -359,65 +356,62 @@ fn test_v0_yaml_anchors() {
 #[test]
 fn test_v0_undefined_anchor_error() {
     // Test that undefined YAML anchor produces an error
-    let app_dirs = test_app_dirs();
-    let result = Theme::load(&app_dirs, "v0-undefined-anchor");
+    let result = Theme::load(&dirs(), "v0-undefined-anchor");
     assert!(result.is_err());
 }
 
 #[test]
 fn test_v0_json_format() {
     // Test loading theme from JSON format
-    let app_dirs = test_app_dirs();
-    let theme = Theme::load(&app_dirs, "v0-json-format").unwrap();
+    let theme = theme("v0-json-format");
 
     assert!(theme.elements.get(&Element::Message).is_some());
     assert!(theme.elements.get(&Element::Level).is_some());
 
-    let message = theme.elements.get(&Element::Message).unwrap();
+    let message = &theme.elements[&Element::Message];
     assert_eq!(message.foreground, Some(Color::RGB(RGB(255, 255, 255))));
-    assert_eq!(message.modes, Mode::Bold.into());
+    assert_eq!(message.modes, Mode::Bold);
 
     // Boolean active merge should work in JSON too
-    let boolean_true = theme.elements.get(&Element::BooleanTrue).unwrap();
+    let boolean_true = &theme.elements[&Element::BooleanTrue];
     assert_eq!(boolean_true.foreground, Some(Color::RGB(RGB(0, 255, 255))));
 }
 
 #[test]
 fn test_v0_toml_format() {
     // Test loading theme from TOML format
-    let app_dirs = test_app_dirs();
-    let theme = Theme::load(&app_dirs, "v0-toml-format").unwrap();
+    let theme = theme("v0-toml-format");
 
     assert!(theme.elements.get(&Element::Message).is_some());
     assert!(theme.elements.get(&Element::Level).is_some());
 
-    let message = theme.elements.get(&Element::Message).unwrap();
+    let message = &theme.elements[&Element::Message];
     assert_eq!(message.foreground, Some(Color::RGB(RGB(255, 255, 255))));
-    assert_eq!(message.modes, Mode::Bold.into());
+    assert_eq!(message.modes, Mode::Bold);
 
     // Test different color formats
-    let string_elem = theme.elements.get(&Element::String).unwrap();
+    let string_elem = &theme.elements[&Element::String];
     assert_eq!(string_elem.foreground, Some(Color::Plain(PlainColor::Green)));
 
-    let number_elem = theme.elements.get(&Element::Number).unwrap();
+    let number_elem = &theme.elements[&Element::Number];
     assert_eq!(number_elem.foreground, Some(Color::Plain(PlainColor::BrightBlue)));
 
-    let array_elem = theme.elements.get(&Element::Array).unwrap();
+    let array_elem = &theme.elements[&Element::Array];
     assert_eq!(array_elem.foreground, Some(Color::Palette(220)));
 }
 
 #[test]
 fn test_v0_file_format_priority() {
     // Test that YAML has priority over TOML and JSON when loading by stem
-    let app_dirs = test_app_dirs();
+    let dirs = dirs();
 
     // When loading "test" by stem, should find test.toml (YAML priority, but test.yaml doesn't exist)
-    let theme = Theme::load(&app_dirs, "test").unwrap();
+    let theme = Theme::load(&dirs, "test").unwrap();
     assert!(theme.elements.get(&Element::Message).is_some());
 
     // Loading by full filename should work
-    let theme_toml = Theme::load(&app_dirs, "test.toml").unwrap();
-    assert!(theme_toml.elements.get(&Element::Message).is_some());
+    let theme = Theme::load(&dirs, "test.toml").unwrap();
+    assert!(theme.elements.get(&Element::Message).is_some());
 }
 
 #[test]
@@ -469,8 +463,7 @@ fn test_v1_style_pack_merge() {
 #[test]
 fn test_v0_color_formats() {
     // Test various color format parsing
-    let app_dirs = test_app_dirs();
-    let theme = Theme::load(&app_dirs, "v0-color-formats").unwrap();
+    let theme = theme("v0-color-formats");
 
     assert_eq!(
         theme.elements[&Element::Message].foreground,
@@ -606,7 +599,7 @@ fn test_unknown_elements_yaml() {
 #[test]
 fn test_future_version_rejected() {
     // Test that themes with future versions (e.g., 1.1 when current is 1.0) are rejected
-    let app_dirs = test_app_dirs();
+    let app_dirs = dirs();
     let result = Theme::load(&app_dirs, "test-future-version");
 
     assert!(result.is_err());
@@ -659,13 +652,13 @@ fn test_v0_indicators() {
         theme.indicators.sync.failed.inner.style.foreground,
         Some(Color::Plain(PlainColor::Yellow))
     );
-    assert_eq!(theme.indicators.sync.failed.inner.style.modes, Mode::Bold.into());
+    assert_eq!(theme.indicators.sync.failed.inner.style.modes, Mode::Bold);
 }
 
 #[test]
 fn test_theme_list() {
     // Test theme listing functionality
-    let app_dirs = test_app_dirs();
+    let app_dirs = dirs();
 
     let themes = Theme::list(&app_dirs).unwrap();
 
@@ -679,7 +672,7 @@ fn test_theme_list() {
 #[test]
 fn test_theme_not_found_error() {
     // Test that theme not found error includes suggestions
-    let app_dirs = test_app_dirs();
+    let app_dirs = dirs();
     let result = Theme::load(&app_dirs, "nonexistent");
 
     assert!(result.is_err());
@@ -711,54 +704,51 @@ fn test_format_extensions() {
 #[test]
 fn test_v0_duplicate_modes() {
     // Test that v0 allows duplicate modes and passes them to terminal
-    let app_dirs = test_app_dirs();
-    let theme = Theme::load(&app_dirs, "v0-duplicate-modes").unwrap();
+    let theme = theme("v0-duplicate-modes");
 
     // In v1 with ModeSetDiff, duplicate modes within same element are deduplicated
     // The test theme has duplicates in YAML, but they get deduplicated during deserialization
-    let message = theme.elements.get(&Element::Message).unwrap();
-    assert_eq!(message.modes, (Mode::Bold | Mode::Italic | Mode::Underline).into(),);
+    let message = &theme.elements[&Element::Message];
+    assert_eq!(message.modes, Mode::Bold | Mode::Italic | Mode::Underline);
 
-    let level = theme.elements.get(&Element::Level).unwrap();
-    assert_eq!(level.modes, Mode::Italic.into());
+    let level = &theme.elements[&Element::Level];
+    assert_eq!(level.modes, Mode::Italic);
 
-    let time = theme.elements.get(&Element::Time).unwrap();
-    assert_eq!(time.modes, (Mode::Faint | Mode::Bold).into());
+    let time = &theme.elements[&Element::Time];
+    assert_eq!(time.modes, Mode::Faint | Mode::Bold);
 }
 
 #[test]
 fn test_v0_all_modes() {
     // Test that all ANSI mode types are supported
-    let app_dirs = test_app_dirs();
-    let theme = Theme::load(&app_dirs, "v0-all-modes").unwrap();
+    let theme = theme("v0-all-modes");
 
     // Test individual modes
-    assert_eq!(theme.elements[&Element::Message].modes, Mode::Bold.into());
-    assert_eq!(theme.elements[&Element::Level].modes, Mode::Faint.into());
-    assert_eq!(theme.elements[&Element::LevelInner].modes, Mode::Italic.into());
-    assert_eq!(theme.elements[&Element::Time].modes, Mode::Underline.into());
-    assert_eq!(theme.elements[&Element::Caller].modes, Mode::SlowBlink.into());
-    assert_eq!(theme.elements[&Element::Logger].modes, Mode::RapidBlink.into());
-    assert_eq!(theme.elements[&Element::Key].modes, Mode::Reverse.into());
-    assert_eq!(theme.elements[&Element::String].modes, Mode::Conceal.into());
-    assert_eq!(theme.elements[&Element::Number].modes, Mode::CrossedOut.into());
+    assert_eq!(theme.elements[&Element::Message].modes, Mode::Bold);
+    assert_eq!(theme.elements[&Element::Level].modes, Mode::Faint);
+    assert_eq!(theme.elements[&Element::LevelInner].modes, Mode::Italic);
+    assert_eq!(theme.elements[&Element::Time].modes, Mode::Underline);
+    assert_eq!(theme.elements[&Element::Caller].modes, Mode::SlowBlink);
+    assert_eq!(theme.elements[&Element::Logger].modes, Mode::RapidBlink);
+    assert_eq!(theme.elements[&Element::Key].modes, Mode::Reverse);
+    assert_eq!(theme.elements[&Element::String].modes, Mode::Conceal);
+    assert_eq!(theme.elements[&Element::Number].modes, Mode::CrossedOut);
 
     // Test combined modes
-    let boolean = theme.elements.get(&Element::Boolean).unwrap();
-    assert_eq!(boolean.modes, (Mode::Bold | Mode::Italic | Mode::Underline).into());
+    let boolean = &theme.elements[&Element::Boolean];
+    assert_eq!(boolean.modes, Mode::Bold | Mode::Italic | Mode::Underline);
 
-    let boolean_true = theme.elements.get(&Element::BooleanTrue).unwrap();
+    let boolean_true = &theme.elements[&Element::BooleanTrue];
     assert_eq!(
         boolean_true.modes,
-        (Mode::Bold | Mode::Faint | Mode::Italic | Mode::Underline | Mode::SlowBlink).into(),
+        Mode::Bold | Mode::Faint | Mode::Italic | Mode::Underline | Mode::SlowBlink,
     );
 }
 
 #[test]
 fn test_v0_palette_range() {
     // Test that palette indices from 0 to 255 are all valid
-    let app_dirs = test_app_dirs();
-    let theme = Theme::load(&app_dirs, "v0-palette-range").unwrap();
+    let theme = theme("v0-palette-range");
 
     // Test boundary values
     assert_eq!(theme.elements[&Element::Message].foreground, Some(Color::Palette(0)));
@@ -781,14 +771,13 @@ fn test_v0_palette_range() {
 fn test_v0_level_override_merge_behavior() {
     // Test that level-specific overrides properly merge with base elements
     // Level overrides should only replace properties that are explicitly defined
-    let app_dirs = test_app_dirs();
-    let theme = Theme::load(&app_dirs, "v0-level-overrides").unwrap();
+    let theme = theme("v0-level-overrides");
 
     // Base message has foreground, background, and modes
-    let base_message = theme.elements.get(&Element::Message).unwrap();
+    let base_message = &theme.elements[&Element::Message];
     assert_eq!(base_message.foreground, Some(Color::RGB(RGB(255, 255, 255))));
     assert_eq!(base_message.background, Some(Color::RGB(RGB(0, 0, 0))));
-    assert_eq!(base_message.modes, Mode::Bold.into());
+    assert_eq!(base_message.modes, Mode::Bold);
 
     // Error level message override only has foreground
     // At themecfg level, it should only have foreground
@@ -839,9 +828,7 @@ fn test_v0_style_merged_modes() {
 #[test]
 fn test_v0_indicators_default_values() {
     // Test that @default theme has proper indicator values
-    let app_dirs = test_app_dirs();
-
-    let theme = Theme::load(&app_dirs, "@default").unwrap();
+    let theme = theme("@default");
 
     // Default synced indicator should have empty text " "
     assert_eq!(theme.indicators.sync.synced.text, " ");
@@ -864,7 +851,7 @@ fn test_v0_tags_parsing() {
 #[test]
 fn test_v1_multiple_inheritance() {
     // Test that style = ["role1", "role2"] merges roles left to right
-    let app_dirs = test_app_dirs();
+    let app_dirs = dirs();
     let theme = Theme::load_raw(&app_dirs, "v1-multiple-inheritance").unwrap();
 
     // Verify the theme loaded correctly
@@ -882,36 +869,34 @@ fn test_v1_multiple_inheritance() {
     // Result: foreground=#888888 (from secondary, last one with foreground)
     //         modes=[faint, bold, underline] (accumulated from all)
     //         background=#331100 (from warning itself)
-    let warning = inventory.get(&Role::Warning).unwrap();
+    let warning = &inventory[&Role::Warning];
     assert_eq!(warning.foreground, Some(Color::RGB(RGB(0x88, 0x88, 0x88))));
     assert_eq!(warning.background, Some(Color::RGB(RGB(0x33, 0x11, 0x00))));
-    assert!(warning.modes.adds.contains(Mode::Faint));
-    assert!(warning.modes.adds.contains(Mode::Bold));
-    assert!(warning.modes.adds.contains(Mode::Underline));
+    assert!(warning.modes.contains(Mode::Faint));
+    assert!(warning.modes.contains(Mode::Bold));
+    assert!(warning.modes.contains(Mode::Underline));
 
     // Test error role: inherits from warning and overrides foreground
-    let error = inventory.get(&Role::Error).unwrap();
+    let error = &inventory[&Role::Error];
     assert_eq!(error.foreground, Some(Color::RGB(RGB(0xff, 0x00, 0x00))));
     assert_eq!(error.background, Some(Color::RGB(RGB(0x33, 0x11, 0x00)))); // inherited from warning
-    assert!(error.modes.adds.contains(Mode::Faint)); // inherited from warning chain
+    assert!(error.modes.contains(Mode::Faint)); // inherited from warning chain
 
     // Test level element: style = ["secondary", "strong"]
     // Should have: foreground=#888888, modes=[faint, bold]
-    let resolved_theme = theme.resolve().unwrap();
-    let level = resolved_theme.elements.get(&Element::Level).unwrap();
-    let resolved_level = level.clone();
-    assert_eq!(resolved_level.foreground, Some(Color::RGB(RGB(0x88, 0x88, 0x88))));
-    assert!(resolved_level.modes.adds.contains(Mode::Faint));
-    assert!(resolved_level.modes.adds.contains(Mode::Bold));
+    let theme = theme.resolve().unwrap();
+    let level = &theme.elements[&Element::Level];
+    assert_eq!(level.foreground, Some(Color::RGB(RGB(0x88, 0x88, 0x88))));
+    assert!(level.modes.contains(Mode::Faint));
+    assert!(level.modes.contains(Mode::Bold));
 
     // Test level-inner element: style = ["secondary", "strong"], modes=[italic], foreground=#00ff00
     // Should have: foreground=#00ff00 (explicit override), modes=[faint, bold, italic]
-    let level_inner = resolved_theme.elements.get(&Element::LevelInner).unwrap();
-    let resolved_level_inner = level_inner.clone();
-    assert_eq!(resolved_level_inner.foreground, Some(Color::RGB(RGB(0x00, 0xff, 0x00))));
-    assert!(resolved_level_inner.modes.adds.contains(Mode::Faint));
-    assert!(resolved_level_inner.modes.adds.contains(Mode::Bold));
-    assert!(resolved_level_inner.modes.adds.contains(Mode::Italic));
+    let inner = &theme.elements[&Element::LevelInner];
+    assert_eq!(inner.foreground, Some(Color::RGB(RGB(0x00, 0xff, 0x00))));
+    assert!(inner.modes.contains(Mode::Faint));
+    assert!(inner.modes.contains(Mode::Bold));
+    assert!(inner.modes.contains(Mode::Italic));
 }
 
 #[test]
@@ -922,7 +907,7 @@ fn test_v1_style_recursion_limit_error() {
     // Test that style recursion limit is detected and returns an error wrapped with theme context.
     // Uses external test file: src/testing/assets/themes/v1-recursion-circular.yaml
     // which contains circular inheritance: primary → secondary → primary
-    let app_dirs = test_app_dirs();
+    let app_dirs = dirs();
 
     // Attempting to load (which includes resolve) should fail with recursion limit error
     let result = Theme::load(&app_dirs, "v1-recursion-circular");
@@ -970,7 +955,7 @@ fn test_v1_element_replacement_preserves_per_level_modes() {
     // 1. Theme merge: @default + child theme → child's level-inner replaces @default's
     // 2. Per-level merge: elements.level-inner + levels.info.level-inner → property-level merge
     //    Result: level-inner = { style = "info", modes = ["bold"] }
-    let app_dirs = test_app_dirs();
+    let app_dirs = dirs();
     let theme = Theme::load_raw(&app_dirs, "v1-element-modes-per-level").unwrap();
 
     // The test theme defines:
@@ -1024,7 +1009,7 @@ fn test_v1_element_replacement_removes_parent_modes() {
     parent_elements.extend(child_elements);
 
     // After extend, the child's element should have replaced the parent's
-    let result = parent_elements.get(&Element::Caller).unwrap();
+    let result = &parent_elements[&Element::Caller];
 
     // Verify the italic mode from parent is NOT present (element was replaced, not merged)
     assert!(
@@ -1062,14 +1047,13 @@ fn test_v1_style_base_construction() {
 #[test]
 fn test_v0_partial_element_definitions() {
     // Test elements with only partial properties defined
-    let app_dirs = test_app_dirs();
-    let theme = Theme::load(&app_dirs, "v0-nested-styling").unwrap();
+    let theme = theme("v0-nested-styling");
 
     // input-number-inner has only background, no foreground or modes
-    let input_number_inner = theme.elements.get(&Element::InputNumberInner).unwrap();
-    assert_eq!(input_number_inner.foreground, None);
-    assert_eq!(input_number_inner.background, Some(Color::RGB(RGB(0, 0, 68))));
-    assert_eq!(input_number_inner.modes, Default::default());
+    let inner = &theme.elements[&Element::InputNumberInner];
+    assert_eq!(inner.foreground, None);
+    assert_eq!(inner.background, Some(Color::RGB(RGB(0, 0, 68))));
+    assert_eq!(inner.modes, ModeSet::empty());
 }
 
 #[test]
@@ -1084,8 +1068,7 @@ fn test_v0_rgb_case_insensitivity() {
 fn test_v0_plain_color_case_sensitivity() {
     // Plain color names are case-sensitive in v0
     // This test verifies the existing behavior
-    let app_dirs = test_app_dirs();
-    let theme = Theme::load(&app_dirs, "v0-color-formats").unwrap();
+    let theme = theme("v0-color-formats");
 
     // 'red' should parse as PlainColor::Red
     assert_eq!(
@@ -1099,30 +1082,29 @@ fn test_v0_boolean_merge_with_level_overrides() {
     // Test whether level-specific overrides to `boolean` element
     // affect boolean-true and boolean-false at that level.
     // This tests the timing of boolean active merge relative to level merging.
-    let app_dirs = test_app_dirs();
-    let theme = Theme::load(&app_dirs, "v0-boolean-level-override").unwrap();
+    let theme = theme("v0-boolean-level-override");
 
     // Base elements - boolean merge happens at themecfg level or theme level?
     // At themecfg level, we just see the raw elements
-    let base_boolean = theme.elements.get(&Element::Boolean).unwrap();
+    let base_boolean = &theme.elements[&Element::Boolean];
     assert_eq!(base_boolean.foreground, Some(Color::RGB(RGB(0, 255, 0))));
     assert_eq!(base_boolean.background, Some(Color::RGB(RGB(0, 17, 0))));
 
-    let base_boolean_true = theme.elements.get(&Element::BooleanTrue).unwrap();
+    let base_boolean_true = &theme.elements[&Element::BooleanTrue];
     assert_eq!(base_boolean_true.foreground, Some(Color::RGB(RGB(0, 255, 255))));
     // At themecfg level, boolean-true doesn't have background yet
     // The merge happens in theme::StylePack::load()
 
     // Error level has overrides for boolean and boolean-false
     // Error level should have message element
-    let error_pack = theme.levels.get(&Level::Error).unwrap();
+    let error_pack = &theme.levels[&Level::Error];
 
     // Error level should have overridden boolean
-    let error_boolean = error_pack.get(&Element::Boolean).unwrap();
+    let error_boolean = &error_pack[&Element::Boolean];
     assert_eq!(error_boolean.foreground, Some(Color::RGB(RGB(255, 0, 255))));
 
     // Error level should have overridden boolean-false
-    let error_boolean_false = error_pack.get(&Element::BooleanFalse).unwrap();
+    let error_boolean_false = &error_pack[&Element::BooleanFalse];
     assert_eq!(error_boolean_false.foreground, Some(Color::RGB(RGB(255, 170, 170))));
 
     // Note: The boolean merge happens during theme::Theme creation,
@@ -1228,7 +1210,7 @@ fn test_empty_v0_theme_file_valid() {
     // FR-010a: System MUST accept completely empty theme files as valid v0 themes
     // (all sections missing, inherits from terminal defaults and parent/inner relationships)
     // Uses external file: src/testing/assets/themes/empty-v0.yaml
-    let app_dirs = test_app_dirs();
+    let app_dirs = dirs();
 
     // Create minimal empty YAML object (valid empty v0 theme)
     let empty_theme_path = app_dirs.config_dir.join("themes/empty-v0.yaml");
@@ -1313,7 +1295,7 @@ fn test_v0_ignores_styles_section() {
 fn test_custom_default_theme_with_extension() {
     // FR-001b: System MUST allow custom themes named `@default` when loaded with extension
     // Uses external file: src/testing/assets/themes/@default.yaml
-    let app_dirs = test_app_dirs();
+    let app_dirs = dirs();
 
     // Load @default.yaml with extension (merges with embedded @default correctly)
     let theme = Theme::load(&app_dirs, "@default.yaml").unwrap();
@@ -1369,7 +1351,7 @@ fn test_v0_rejects_mode_prefix() {
     // and exit with error message suggesting to use version="1.0" or remove the prefix
     // Note: '+' prefix is allowed in v0 (it's the same as no prefix)
     // Uses external file: src/testing/assets/themes/v0-invalid-mode-prefix.yaml
-    let app_dirs = test_app_dirs();
+    let app_dirs = dirs();
     let result = Theme::load(&app_dirs, "v0-invalid-mode-prefix");
 
     // Should fail to load
@@ -1391,7 +1373,7 @@ fn test_v0_rejects_mode_prefix() {
 fn test_filesystem_error_handling() {
     // FR-007: System MUST exit with error to stderr when filesystem operations fail,
     // reporting the specific error (permission denied, I/O error, disk read failure, etc.)
-    let app_dirs = test_app_dirs();
+    let app_dirs = dirs();
 
     // Test 1: Non-existent theme (file not found)
     let result = Theme::load(&app_dirs, "definitely-does-not-exist-12345");
@@ -1420,8 +1402,7 @@ fn test_element_names_case_sensitive() {
     // FR-011a: System MUST treat element names as case-sensitive
     // "message" is valid, "Message" or "MESSAGE" are invalid (unknown elements, ignored)
     // Uses external file: src/testing/assets/themes/v0-invalid-element-case.yaml
-    let app_dirs = test_app_dirs();
-    let theme = Theme::load(&app_dirs, "v0-invalid-element-case").unwrap();
+    let theme = theme("v0-invalid-element-case");
 
     // Valid element with correct case should be loaded
     let message = theme.elements.get(&Element::Message);
@@ -1447,7 +1428,7 @@ fn test_mode_names_case_sensitive() {
     // FR-014a: System MUST treat mode names as case-sensitive
     // "bold" is valid, "Bold" or "BOLD" are invalid and cause error
     // Uses external file: src/testing/assets/themes/v0-invalid-mode-case.yaml
-    let app_dirs = test_app_dirs();
+    let app_dirs = dirs();
     let result = Theme::load(&app_dirs, "v0-invalid-mode-case");
 
     // Should fail to load due to invalid mode case
@@ -1473,7 +1454,7 @@ fn test_tag_validation() {
     // FR-022a: System MUST validate that tag values are from the allowed set
     // (dark, light, 16color, 256color, truecolor) and reject themes with unknown tag values
     // Uses external file: src/testing/assets/themes/v0-invalid-tag.yaml
-    let app_dirs = test_app_dirs();
+    let app_dirs = dirs();
     let result = Theme::load(&app_dirs, "v0-invalid-tag");
 
     // Should fail to load due to invalid tag value
@@ -1497,8 +1478,7 @@ fn test_multiple_conflicting_tags_allowed() {
     // (theme compatible with both modes), dark+256color, etc.; no tag combinations are
     // considered conflicting
     // Uses external file: src/testing/assets/themes/v0-multiple-tags.yaml
-    let app_dirs = test_app_dirs();
-    let theme = Theme::load(&app_dirs, "v0-multiple-tags").unwrap();
+    let theme = theme("v0-multiple-tags");
 
     // Verify all tags were loaded
     assert_eq!(theme.tags.len(), 4, "Should have 4 tags");
@@ -1517,7 +1497,7 @@ fn test_multiple_conflicting_tags_allowed() {
 fn test_custom_default_theme_without_extension() {
     // FR-001b: System MUST allow custom themes named `@default` when loaded by stem name
     // Uses external file: src/testing/assets/themes/@default.yaml
-    let app_dirs = test_app_dirs();
+    let app_dirs = dirs();
 
     // Load @default without extension (this currently doesn't load custom theme)
     let theme = Theme::load(&app_dirs, "@default").unwrap();
@@ -1569,7 +1549,7 @@ fn test_load_by_full_filename_explicit() {
     // This test verifies that specifying the full filename (e.g., "test-fullname.toml")
     // loads the correct file format even when multiple formats exist with the same stem
     // Uses external files: src/testing/assets/themes/test-fullname.{yaml,toml}
-    let app_dirs = test_app_dirs();
+    let app_dirs = dirs();
 
     // Load TOML file explicitly
     let toml_theme = Theme::load(&app_dirs, "test-fullname.toml").unwrap();
@@ -1618,7 +1598,7 @@ fn test_silent_on_success() {
     // This test verifies that loading a theme successfully produces no output
     // Note: In Rust tests, any output to stderr would show up in test output
     // The fact that this test passes cleanly verifies silent operation
-    let app_dirs = test_app_dirs();
+    let app_dirs = dirs();
 
     // Load a known-good theme
     let result = Theme::load(&app_dirs, "test-fullname.yaml");
@@ -1627,7 +1607,7 @@ fn test_silent_on_success() {
     assert!(result.is_ok(), "Theme load should succeed silently");
 
     // Test with load via AppDirs as well
-    let app_dirs = test_app_dirs();
+    let app_dirs = dirs();
 
     let result = Theme::load(&app_dirs, "test");
     assert!(result.is_ok(), "Theme load via AppDirs should succeed silently");
@@ -1641,7 +1621,7 @@ fn test_theme_stem_deduplication() {
     // FR-030b: System MUST display each theme stem only once in listings
     // even when multiple file formats exist for the same stem
     // Uses external files: src/testing/assets/themes/dedup-test.{yaml,toml}
-    let app_dirs = test_app_dirs();
+    let app_dirs = dirs();
 
     let themes = Theme::list(&app_dirs).unwrap();
 
@@ -1665,7 +1645,7 @@ fn test_custom_theme_priority_over_stock() {
     // FR-001a: System MUST prioritize custom themes over stock themes with same name
     // This test verifies that a custom "universal" theme overrides the embedded stock version
     // Uses external file: src/testing/assets/themes/universal.yaml
-    let app_dirs = test_app_dirs();
+    let app_dirs = dirs();
 
     // Load "universal" - should get custom version, not stock
     let theme = Theme::load(&app_dirs, "universal").unwrap();
@@ -1701,7 +1681,7 @@ fn test_platform_specific_paths() {
     // and loads themes from the correct platform-specific paths
 
     // Test with custom config directory
-    let custom_app_dirs = test_app_dirs();
+    let custom_app_dirs = dirs();
 
     // Should find theme in the configured directory
     let result = Theme::load(&custom_app_dirs, "test");
@@ -1739,7 +1719,7 @@ fn test_platform_specific_paths() {
 fn test_theme_name_suggestions() {
     // FR-006a: System MUST provide helpful suggestions using Jaro similarity
     // when a theme name is not found
-    let app_dirs = test_app_dirs();
+    let app_dirs = dirs();
 
     // Try to load a theme with a typo - should get suggestions
     let result = Theme::load(&app_dirs, "universl"); // typo: missing 'a'
@@ -1899,7 +1879,7 @@ fn test_v0_level_section_blocking() {
     let merged = base.merged(child);
 
     // Error level section should be completely replaced (base error elements removed)
-    let error_level = merged.levels.get(&Level::Error).unwrap();
+    let error_level = &merged.levels[&Level::Error];
     assert!(error_level.contains_key(&Element::Time), "Child time should be present");
     assert!(
         !error_level.contains_key(&Element::Message),
@@ -1911,7 +1891,7 @@ fn test_v0_level_section_blocking() {
     );
 
     // Info level section should remain (child didn't define it)
-    let info_level = merged.levels.get(&Level::Info).unwrap();
+    let info_level = &merged.levels[&Level::Info];
     assert!(
         info_level.contains_key(&Element::Message),
         "Base info message should remain"
@@ -1968,7 +1948,7 @@ fn test_v0_multiple_blocking_rules_combined() {
         "input-name blocked by input rule"
     );
 
-    let error_level = merged.levels.get(&Level::Error).unwrap();
+    let error_level = &merged.levels[&Level::Error];
     assert!(
         !error_level.contains_key(&Element::Message),
         "Base error message blocked by level section rule"
@@ -2047,7 +2027,7 @@ fn test_v1_no_blocking_rules() {
     );
 
     // In v1, level sections merge (not replaced)
-    let error_level = merged.levels.get(&Level::Error).unwrap();
+    let error_level = &merged.levels[&Level::Error];
     assert!(
         error_level.contains_key(&Element::Message),
         "v1 should preserve base error message"
@@ -2063,7 +2043,7 @@ fn test_v1_level_overrides_with_styles() {
     // FR-021a: V1 level overrides MUST support v1 features like style references
     // This test verifies that level-specific overrides can use style definitions
     // Uses external file: src/testing/assets/themes/v1-level-with-styles.yaml
-    let app_dirs = test_app_dirs();
+    let app_dirs = dirs();
 
     let theme = Theme::load_raw(&app_dirs, "v1-level-with-styles").unwrap();
 
@@ -2103,11 +2083,48 @@ fn test_v1_level_overrides_with_styles() {
 }
 
 #[test]
+fn test_v1_level_override_foreground() {
+    let theme = theme("v1-level-override-foreground");
+
+    assert_eq!(
+        theme.elements[&Element::Level],
+        Style {
+            foreground: Some(Color::Palette(139)),
+            ..Default::default()
+        }
+    );
+
+    assert_eq!(
+        theme.elements[&Element::LevelInner],
+        Style {
+            foreground: Some(Color::Palette(139)),
+            ..Default::default()
+        }
+    );
+
+    assert_eq!(
+        theme.levels[&Level::Warning][&Element::Level],
+        Style {
+            foreground: Some(Color::Palette(139)),
+            ..Default::default()
+        }
+    );
+
+    assert_eq!(
+        theme.levels[&Level::Warning][&Element::LevelInner],
+        Style {
+            foreground: Some(Color::Palette(214)),
+            ..Default::default()
+        }
+    );
+}
+
+#[test]
 fn test_file_format_parse_errors() {
     // FR-029: System MUST report file format parse errors with helpful messages
     // This test verifies that malformed theme files produce clear error messages
     // Uses external files: src/testing/assets/themes/malformed.{yaml,toml,json}
-    let app_dirs = test_app_dirs();
+    let app_dirs = dirs();
 
     // Test YAML parse error
     let yaml_result = Theme::load(&app_dirs, "malformed.yaml");
@@ -2148,14 +2165,14 @@ fn test_file_format_parse_errors() {
 
 #[test]
 fn test_unsupported_theme_version() {
-    let app_dirs = test_app_dirs();
+    let app_dirs = dirs();
     let result = Theme::load(&app_dirs, "test-unsupported-version");
     assert!(result.is_err());
 }
 
 #[test]
 fn test_v0_level_override_with_invalid_mode_prefix() {
-    let app_dirs = test_app_dirs();
+    let app_dirs = dirs();
     let result = Theme::load(&app_dirs, "test-v0-level-invalid-mode");
     assert!(result.is_err());
 }
@@ -2329,21 +2346,21 @@ fn test_indicator_merge_empty_text() {
 
 #[test]
 fn test_v0_element_with_invalid_mode_prefix() {
-    let app_dirs = test_app_dirs();
+    let app_dirs = dirs();
     let result = Theme::load(&app_dirs, "test-v0-element-invalid-mode");
     assert!(result.is_err());
 }
 
 #[test]
 fn test_invalid_style_base_deserialization() {
-    let app_dirs = test_app_dirs();
+    let app_dirs = dirs();
     let result = Theme::load(&app_dirs, "test-invalid-style-base");
     assert!(result.is_err());
 }
 
 #[test]
 fn test_style_base_deserialization_single_string() {
-    let app_dirs = test_app_dirs();
+    let app_dirs = dirs();
     let theme = Theme::load_raw(&app_dirs, "test-base-single").unwrap();
     let secondary = theme.styles.get(&Role::Secondary);
     assert!(secondary.is_some());
@@ -2352,9 +2369,9 @@ fn test_style_base_deserialization_single_string() {
 
 #[test]
 fn test_mode_set_diff_with_removes() {
-    let app_dirs = test_app_dirs();
+    let app_dirs = dirs();
     let theme = Theme::load_raw(&app_dirs, "test-mode-diff").unwrap();
-    let message = theme.elements.get(&Element::Message).unwrap();
+    let message = &theme.elements[&Element::Message];
     assert!(message.modes.adds.contains(Mode::Bold));
     assert!(message.modes.removes.contains(Mode::Italic));
 }
@@ -2431,7 +2448,7 @@ fn test_mode_diff_serialization() {
 
 #[test]
 fn test_style_base_visitor_expecting() {
-    let app_dirs = test_app_dirs();
+    let app_dirs = dirs();
     let result = Theme::load(&app_dirs, "test-invalid-style-base");
     assert!(result.is_err());
     let err_msg = result.unwrap_err().to_string();

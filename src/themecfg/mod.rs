@@ -563,7 +563,7 @@ pub type MergeFlags = EnumSet<MergeFlag>;
 /// - `foreground` and `background` are final computed colors
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct Style {
-    pub modes: ModeSetDiff,
+    pub modes: ModeSet,
     pub foreground: Option<Color>,
     pub background: Option<Color>,
 }
@@ -571,13 +571,13 @@ pub struct Style {
 impl Style {
     pub const fn new() -> Self {
         Self {
-            modes: ModeSetDiff::new(),
+            modes: ModeSet::new(),
             foreground: None,
             background: None,
         }
     }
 
-    pub fn modes(self, modes: ModeSetDiff) -> Self {
+    pub fn modes(self, modes: ModeSet) -> Self {
         Self { modes, ..self }
     }
 
