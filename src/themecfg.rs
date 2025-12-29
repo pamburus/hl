@@ -112,7 +112,7 @@
 use std::{
     collections::HashMap,
     convert::TryFrom,
-    fmt::{self, Write},
+    fmt,
     hash::Hash,
     io::ErrorKind,
     ops::{Add, AddAssign},
@@ -891,11 +891,7 @@ impl TryFrom<String> for RGB {
 
 impl fmt::Display for RGB {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_char('#')?;
-        write_hex(f, self.0)?;
-        write_hex(f, self.1)?;
-        write_hex(f, self.2)?;
-        Ok(())
+        write!(f, "#{:02x}{:02x}{:02x}", self.0, self.1, self.2)
     }
 }
 
@@ -1092,29 +1088,10 @@ struct Assets;
 // ---
 
 fn unhex(high: u8, low: u8) -> Option<u8> {
-    unhex_one(high).and_then(|high| unhex_one(low).map(|low| (high << 4) + low))
+    let h = (high as char).to_digit(16)?;
+    let l = (low as char).to_digit(16)?;
+    Some((h as u8) << 4 | (l as u8))
 }
-
-fn unhex_one(v: u8) -> Option<u8> {
-    match v {
-        b'0'..=b'9' => Some(v - b'0'),
-        b'a'..=b'f' => Some(10 + v - b'a'),
-        b'A'..=b'F' => Some(10 + v - b'A'),
-        _ => None,
-    }
-}
-
-fn write_hex<T: fmt::Write>(to: &mut T, v: u8) -> fmt::Result {
-    to.write_char(HEXDIGIT[(v >> 4) as usize].into())?;
-    to.write_char(HEXDIGIT[(v & 0xF) as usize].into())?;
-    Ok(())
-}
-
-const HEXDIGIT: [u8; 16] = [
-    b'0', b'1', b'2', b'3', b'4', b'5', b'6', b'7', b'8', b'9', b'a', b'b', b'c', b'd', b'e', b'f',
-];
-
-// ---
 
 #[cfg(test)]
 pub mod testing {
