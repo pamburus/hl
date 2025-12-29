@@ -91,7 +91,7 @@ pub enum ExternalError {
     Io(#[from] io::Error),
 
     /// YAML parsing error.
-    #[error("failed to parse yaml: {0}")]
+    #[error("{source}", source=.0.msg)]
     YamlSerdeError(#[from] yaml::SerdeError),
 
     /// TOML parsing error.
@@ -103,7 +103,7 @@ pub enum ExternalError {
     JsonError(#[from] serde_json::Error),
 
     /// UTF-8 decoding error.
-    #[error("failed to parse utf-8 string: {0}")]
+    #[error("failed to parse utf-8: {0}")]
     Utf8Error(#[from] std::str::Utf8Error),
 }
 

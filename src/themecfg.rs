@@ -995,7 +995,7 @@ impl<'de> Deserialize<'de> for ThemeVersion {
             where
                 E: serde::de::Error,
             {
-                ThemeVersion::from_str(value).map_err(|e| E::custom(format!("invalid version: {}", e)))
+                ThemeVersion::from_str(value).map_err(|e| E::custom(e))
             }
         }
 
