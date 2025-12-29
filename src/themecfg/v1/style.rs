@@ -73,47 +73,48 @@ impl Style {
     /// This is used for parent→inner merging where we need role properties resolved
     /// but mode diffs preserved for correct merge semantics.
     pub fn resolve_base(&self, inventory: &StyleInventory, flags: MergeFlags) -> Self {
-        if self.base.is_empty() {
-            return self.clone();
-        }
-
-        // Resolve role references to get base properties
-        let mut result = Self::default();
-        for role in self.base.iter() {
-            if let Some(role_style) = inventory.get(role) {
-                // Convert ResolvedStyle back to v1::Style to preserve mode diff semantics
-                let role_as_v1 = Self::from(role_style.clone());
-                result = result.merged(&role_as_v1, flags);
-            }
-        }
-
-        // Merge this style's explicit properties on top
-        result.merged(self, flags - MergeFlag::ReplaceModes)
-    }
-
-    pub fn resolve(&self, inventory: &StyleInventory, flags: MergeFlags) -> ResolvedStyle {
-        Self::resolve_with(&self.base, self, flags, |role| {
+        Self::resolve_base_with(&self.base, self, flags, |role| {
             inventory.get(role).cloned().unwrap_or_default()
         })
     }
 
-    pub fn resolve_with<F>(bases: &StyleBase, style: &Style, flags: MergeFlags, mut resolve_role: F) -> ResolvedStyle
+    /// Resolve role references and return ResolvedStyle (flattens ModeSetDiff to ModeSet).
+    pub fn resolve(&self, inventory: &StyleInventory, flags: MergeFlags) -> ResolvedStyle {
+        // Reuse resolve_base logic, then convert to ResolvedStyle
+        self.resolve_base(inventory, flags).as_resolved()
+    }
+
+    /// Generic base resolution that works with custom role resolvers.
+    /// Returns v1::Style with base=empty but ModeSetDiff intact.
+    pub fn resolve_base_with<F>(bases: &StyleBase, style: &Style, flags: MergeFlags, mut resolve_role: F) -> Style
     where
         F: FnMut(&Role) -> ResolvedStyle,
     {
         if bases.is_empty() {
-            return style.as_resolved();
+            return style.clone();
         }
 
-        // Resolve multiple bases: merge left to right, then apply style on top
-        let mut result = ResolvedStyle::default();
+        // Resolve role references to get base properties
+        let mut result = Style::default();
         for role in bases.iter() {
-            result = result.merged(&resolve_role(role), flags);
+            // Convert ResolvedStyle back to v1::Style to preserve mode diff semantics
+            let role_as_v1 = Style::from(resolve_role(role));
+            result = result.merged(&role_as_v1, flags);
         }
-        // When applying the style's own properties on top of the resolved base,
-        // we should NOT use ReplaceModes - the style's properties should be merged additively
+
+        // Merge this style's explicit properties on top
+        // We should NOT use ReplaceModes - the style's properties should be merged additively
         // with the base, not replace them. ReplaceModes is only for theme-level merging.
         result.merged(style, flags - MergeFlag::ReplaceModes)
+    }
+
+    /// Generic resolution with custom role resolver (for backward compatibility).
+    /// Returns ResolvedStyle (flattens ModeSetDiff to ModeSet).
+    pub fn resolve_with<F>(bases: &StyleBase, style: &Style, flags: MergeFlags, resolve_role: F) -> ResolvedStyle
+    where
+        F: FnMut(&Role) -> ResolvedStyle,
+    {
+        Self::resolve_base_with(bases, style, flags, resolve_role).as_resolved()
     }
 
     pub fn as_resolved(&self) -> ResolvedStyle {
