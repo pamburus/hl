@@ -1,0 +1,45 @@
+# V1 test theme for verifying uni theme regression: level-inner should not inherit parent modes
+#
+# This minimal theme reproduces a regression where changing merge logic order caused
+# level-inner to incorrectly inherit faint mode from parent level.
+#
+# Theme structure (mimics uni theme):
+# - level element has modes = ["faint"]
+# - level-inner element has modes = ["-faint", "bold"]
+# - At info level, level-inner should get cyan from style reference
+#
+# Expected result for level-inner at info level:
+# - modes: ["bold"] (from level-inner element, NOT faint from parent)
+# - foreground: cyan (from info style)
+#
+# The bug causes level-inner to get:
+# - modes: ["bold", "faint"] (incorrectly inherits faint from parent)
+# - foreground: cyan
+#
+# This happens when unresolved parent+inner are merged first, then resolved,
+# causing parent modes to leak into inner element.
+
+version: "1.0"
+
+styles:
+  # Style that removes faint mode (like @default's status->level chain)
+  level:
+    modes: ["-faint"]
+  info:
+    foreground: cyan
+
+elements:
+  # Parent element with faint mode (like uni theme)
+  level:
+    modes: ["faint"]
+
+  # Child element with bold mode - should NOT inherit parent's faint
+  level-inner:
+    modes: ["-faint", "bold"]
+
+levels:
+  info:
+    level-inner:
+      # Reference both level (which has -faint) and info (which has cyan)
+      # This matches how @default.toml defines levels.info.level-inner
+      style: ["level", "info"]

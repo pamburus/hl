@@ -856,3 +856,58 @@ elements:
     // Clean up
     std::fs::remove_file(&theme_path).ok();
 }
+
+#[test]
+fn test_v1_level_inner_does_not_inherit_parent_modes() {
+    // Test that level-inner does not inherit faint mode from parent level element
+    //
+    // This is a regression test for a bug where changing merge logic order caused
+    // inner elements to incorrectly inherit parent element modes during parent→inner merging.
+    //
+    // Test scenario (mimics uni theme):
+    // - level element has modes = ["faint"]
+    // - level-inner element has modes = ["-faint", "bold"]
+    // - levels.info.level-inner has style = ["level", "info"] (cyan foreground)
+    //
+    // Expected result:
+    // - level-inner at info level should have: bold + cyan (NO faint)
+    //
+    // Bug causes:
+    // - level-inner at info level to have: bold + faint + cyan (incorrect)
+
+    let app_dirs = test_app_dirs();
+
+    // Load minimal test theme that mimics uni theme structure
+    let cfg = themecfg::Theme::load(&app_dirs, "v1-uni-like-level-modes").unwrap();
+    let theme = Theme::from(cfg);
+
+    // Render level-inner at info level
+    let mut buf = Vec::new();
+    theme.apply(&mut buf, &Some(Level::Info), |s| {
+        s.element(Element::LevelInner, |s| s.batch(|buf| buf.extend_from_slice(b"INF")));
+    });
+
+    let output = String::from_utf8_lossy(&buf);
+
+    // Verify bold mode (1) is present from level-inner definition
+    assert!(
+        output.contains(";1;") || output.contains("[0;1"),
+        "Expected bold mode (1) from level-inner, got: {:?}",
+        output
+    );
+
+    // Verify cyan (36) is present from info style
+    assert!(
+        output.contains(";36") || output.contains("[36"),
+        "Expected cyan (36) from info style, got: {:?}",
+        output
+    );
+
+    // CRITICAL: Verify faint mode (2) is NOT present
+    // The regression bug causes level-inner to incorrectly inherit faint from parent level
+    assert!(
+        !output.contains(";2;") && !output.contains(";1;2;") && !output.contains(";2;1;"),
+        "level-inner must NOT inherit faint mode (2) from parent level element, got: {:?}",
+        output
+    );
+}
