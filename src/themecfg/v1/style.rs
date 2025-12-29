@@ -67,6 +67,30 @@ impl Style {
         *self = other.merged(&*self, flags);
     }
 
+    /// Resolve role references in the `base` field and return a v1::Style with base=empty.
+    /// This keeps ModeSetDiff intact (unlike `resolve()` which flattens to ModeSet).
+    ///
+    /// This is used for parent→inner merging where we need role properties resolved
+    /// but mode diffs preserved for correct merge semantics.
+    pub fn resolve_base(&self, inventory: &StyleInventory, flags: MergeFlags) -> Self {
+        if self.base.is_empty() {
+            return self.clone();
+        }
+
+        // Resolve role references to get base properties
+        let mut result = Self::default();
+        for role in self.base.iter() {
+            if let Some(role_style) = inventory.get(role) {
+                // Convert ResolvedStyle back to v1::Style to preserve mode diff semantics
+                let role_as_v1 = Self::from(role_style.clone());
+                result = result.merged(&role_as_v1, flags);
+            }
+        }
+
+        // Merge this style's explicit properties on top
+        result.merged(self, flags - MergeFlag::ReplaceModes)
+    }
+
     pub fn resolve(&self, inventory: &StyleInventory, flags: MergeFlags) -> ResolvedStyle {
         Self::resolve_with(&self.base, self, flags, |role| {
             inventory.get(role).cloned().unwrap_or_default()

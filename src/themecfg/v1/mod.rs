@@ -7,8 +7,8 @@
 use super::{
     Color, Element, Indicator as ResolvedIndicator, IndicatorPack as ResolvedIndicatorPack,
     IndicatorStyle as ResolvedIndicatorStyle, Merge, MergeFlag, MergeFlags, ModeSet, ModeSetDiff, Result,
-    Style as ResolvedStyle, StyleInventory, StylePack as ResolvedStylePack, StyleResolveError,
-    SyncIndicatorPack as ResolvedSyncIndicatorPack, Tag, Theme as ResolvedTheme, ThemeLoadError, Version, v0,
+    Style as ResolvedStyle, StyleInventory, StyleResolveError, SyncIndicatorPack as ResolvedSyncIndicatorPack, Tag,
+    Theme as ResolvedTheme, ThemeLoadError, Version, v0,
 };
 
 // sub-modules

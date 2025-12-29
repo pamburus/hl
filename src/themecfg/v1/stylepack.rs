@@ -7,8 +7,8 @@ use serde::Deserialize;
 
 // relative imports
 use super::{
-    Element, Merge, MergeFlag, MergeFlags, ResolvedStyle, ResolvedStylePack, Result, Role, Style, StyleInventory,
-    StyleResolveError, StyleResolver,
+    Element, Merge, MergeFlag, MergeFlags, ResolvedStyle, Result, Role, Style, StyleInventory, StyleResolveError,
+    StyleResolver,
 };
 
 // ---
@@ -87,27 +87,43 @@ impl<S> StylePack<Element, S> {
 
 impl StylePack<Element, Style> {
     pub fn resolved(&self, inventory: &StyleInventory, flags: MergeFlags) -> StylePack<Element, ResolvedStyle> {
-        self.clone().complete_hierarchy(flags).resolve_styles(inventory, flags)
+        // Per FR-041d: First resolve role refs (keeping ModeSetDiff), then parent→inner merge (with ModeSetDiff),
+        // then convert to ResolvedStyle (flatten ModeSetDiff to ModeSet)
+        self.clone()
+            .resolve_base_refs(inventory, flags)
+            .complete_hierarchy(flags)
+            .convert_to_resolved()
+    }
+
+    /// Resolve role references in the `base` field but keep result as v1::Style with ModeSetDiff.
+    /// This is step 4-5 of FR-041 but keeps ModeSetDiff intact for parent→inner merging.
+    fn resolve_base_refs(self, inventory: &StyleInventory, flags: MergeFlags) -> Self {
+        let items = self
+            .iter()
+            .map(|(&element, style)| (element, style.resolve_base(inventory, flags)))
+            .collect();
+        StylePack::new(items)
     }
 
     /// Completes the element hierarchy by applying parent→inner and boolean variant inheritance.
-    /// This is a merge operation that must happen before style resolution.
+    /// This operates on v1::Style with base=empty but ModeSetDiff preserved.
     ///
-    /// This method:
-    /// 1. Merges parent styles into inner elements (unless ReplaceElements flag is set)
-    /// 2. Adds inherited inner elements that weren't explicitly defined
-    /// 3. Handles boolean variant inheritance from base Boolean element
+    /// This is step 6 of FR-041 and must happen AFTER base resolution but BEFORE flattening ModeSetDiff.
+    /// Operating on v1::Style (not ResolvedStyle) ensures:
+    /// 1. Parent→inner merging preserves ModeSetDiff semantics (adds/removes)
+    /// 2. Inner element's mode operations (e.g., "-faint") correctly override parent modes
     ///
-    /// Per FR-041, this merging of unresolved styles must occur before resolving `base` references.
+    /// Per FR-041d, this ensures correct priority: inner's role properties > parent's explicit properties.
     fn complete_hierarchy(mut self, flags: MergeFlags) -> Self {
         // Step 1: Merge parent→inner where inner is explicitly defined (v1 only)
         // For v0 (ReplaceElements), inner elements replace parent completely
         if !flags.contains(MergeFlag::ReplaceElements) {
             // V1: Merge parent into each explicitly-defined inner element
+            // Both have base=empty at this point, but ModeSetDiff is preserved
             for (element, style) in self.clone() {
                 if let Some(outer) = element.outer() {
                     if let Some(outer) = self.0.get(&outer) {
-                        // Merge unresolved parent and inner first (per FR-041)
+                        // Merge parent and inner with ModeSetDiff semantics
                         self.0.insert(element, outer.clone().merged(&style, flags));
                     }
                 }
@@ -127,7 +143,11 @@ impl StylePack<Element, Style> {
             for variant in [Element::BooleanTrue, Element::BooleanFalse] {
                 self.0
                     .entry(variant)
-                    .and_modify(|style| style.reverse_merge(base.clone(), flags))
+                    .and_modify(|style| {
+                        // Merge base into variant: base properties fill in undefined properties
+                        // Variant properties override base properties
+                        *style = base.clone().merged(&*style, flags);
+                    })
                     .or_insert_with(|| base.clone());
             }
         }
@@ -135,16 +155,14 @@ impl StylePack<Element, Style> {
         self
     }
 
-    /// Resolves all styles in this pack by converting `base` references to actual styles.
-    /// This is a pure resolution operation that should be called after all merging is complete.
-    ///
-    /// Per FR-041, all merging (including hierarchy completion) must happen before resolution.
-    fn resolve_styles(&self, inventory: &StyleInventory, flags: MergeFlags) -> ResolvedStylePack {
+    /// Convert v1::Style to ResolvedStyle by flattening ModeSetDiff to ModeSet.
+    /// This is the final step after all merging and inheritance is complete.
+    fn convert_to_resolved(self) -> StylePack<Element, ResolvedStyle> {
         let items = self
             .iter()
-            .map(|(&element, style)| (element, style.resolve(inventory, flags)))
+            .map(|(&element, style)| (element, style.as_resolved()))
             .collect();
-        ResolvedStylePack::new(items)
+        StylePack::new(items)
     }
 }
 

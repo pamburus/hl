@@ -2089,7 +2089,6 @@ fn test_v1_level_overrides_with_styles() {
 }
 
 #[test]
-#[ignore] // TODO: fix the logic error that causes this to fail
 fn test_v1_level_override_foreground() {
     let theme = theme("v1-level-override-foreground");
 
