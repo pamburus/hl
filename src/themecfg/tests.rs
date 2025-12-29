@@ -1,5 +1,5 @@
 // std imports
-use std::{collections::HashMap, path::PathBuf};
+use std::{collections::HashMap, path::PathBuf, str::FromStr};
 
 // third-party imports
 use strum::IntoEnumIterator;

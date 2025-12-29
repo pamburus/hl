@@ -1,33 +1,3 @@
-//! Theme configuration system for `hl`.
-//!
-//! Handles theme loading, parsing, and resolution for both v0 (legacy) and v1 (semantic) formats.
-//!
-//! # Main Types
-//!
-//! - [`Theme`]: Fully resolved theme ready for use.
-//! - [`RawTheme`]: Unresolved theme (allows modification before resolution).
-//! - [`Role`]: Semantic style role (primary, warning, etc.) - v1 only.
-//! - [`Style`]: Concrete style with color and modes.
-//!
-//! # Usage
-//!
-//! Load a resolved theme:
-//! ```no_run
-//! # use hl::themecfg::Theme;
-//! # let app_dirs = hl::appdirs::AppDirs::new("hl").unwrap();
-//! let theme = Theme::load(&app_dirs, "monokai")?;
-//! # Ok::<(), hl::themecfg::Error>(())
-//! ```
-//!
-//! Load raw theme for customization:
-//! ```no_run
-//! # use hl::themecfg::Theme;
-//! # let app_dirs = hl::appdirs::AppDirs::new("hl").unwrap();
-//! let raw = Theme::load_raw(&app_dirs, "monokai")?;
-//! let theme = raw.resolve()?;
-//! # Ok::<(), hl::themecfg::Error>(())
-//! ```
-
 // std imports
 use std::{
     collections::HashMap,
@@ -54,16 +24,7 @@ use crate::{appdirs::AppDirs, level::Level, xerr::Suggestions};
 use super::{Error, ExternalError, IndicatorPack, RawTheme, Result, StylePack, ThemeLoadError, ThemeVersion, v0, v1};
 
 // Private constants
-const DEFAULT_THEME_NAME: &str = "@default";
-
-// ---
-
-// Role is now defined in v1 module and re-exported above
-
-// ---
-// RawTheme is a type alias to v1::RawTheme
-// All merge/resolve logic is in v1
-// Loading helpers are defined below as Theme static methods
+const BASE: &str = "@default";
 
 // ---
 
@@ -170,7 +131,7 @@ impl Theme {
     /// Note: Style resolution errors (e.g., circular inheritance) will only
     /// occur when calling [`RawTheme::resolve()`], not during `load_raw()`.
     pub fn load_raw(app_dirs: &AppDirs, name: &str) -> Result<RawTheme> {
-        let default_theme = Self::load_embedded::<Assets>(DEFAULT_THEME_NAME)?;
+        let default_theme = Self::load_embedded::<Assets>(BASE)?;
 
         let theme = match Self::load_from(&Self::themes_dir(app_dirs), name) {
             Ok(v) => Ok(v),
@@ -350,11 +311,7 @@ impl Theme {
     }
 
     fn embedded_names() -> impl IntoIterator<Item = Arc<str>> {
-        Assets::iter().filter_map(|a| {
-            Self::strip_known_extension(&a)
-                .filter(|&n| n != DEFAULT_THEME_NAME)
-                .map(|n| n.into())
-        })
+        Assets::iter().filter_map(|a| Self::strip_known_extension(&a).filter(|&n| n != BASE).map(|n| n.into()))
     }
 
     fn custom_names(app_dirs: &AppDirs) -> Result<impl IntoIterator<Item = Result<Arc<str>>> + use<>> {
