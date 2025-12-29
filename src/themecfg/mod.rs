@@ -901,9 +901,6 @@ pub trait Merge<T = Self> {
     }
 }
 
-// Convenience alias for the common case of merging with references
-pub trait MergedWith<T>: Merge<T> {}
-
 // ---
 
 /// Theme version with major.minor components

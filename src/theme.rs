@@ -21,7 +21,7 @@ use crate::testing::Sample;
 // ---
 
 pub use level::Level;
-pub use themecfg::{Element, MergeFlag, MergeFlags, MergedWith, ThemeInfo, ThemeOrigin};
+pub use themecfg::{Element, MergeFlag, MergeFlags, ThemeInfo, ThemeOrigin};
 
 // ---
 
