@@ -2126,6 +2126,44 @@ fn test_v1_level_override_foreground() {
 }
 
 #[test]
+fn test_v1_empty() {
+    let theme = theme("v1-empty");
+
+    assert_eq!(
+        theme.elements[&Element::Level],
+        Style {
+            modes: Mode::Faint.into(),
+            ..Default::default()
+        }
+    );
+
+    assert_eq!(
+        theme.elements[&Element::LevelInner],
+        Style {
+            modes: ModeSet::new(),
+            ..Default::default()
+        }
+    );
+
+    assert_eq!(
+        theme.levels[&Level::Warning][&Element::Level],
+        Style {
+            modes: Mode::Faint.into(),
+            ..Default::default()
+        }
+    );
+
+    assert_eq!(
+        theme.levels[&Level::Warning][&Element::LevelInner],
+        Style {
+            foreground: Some(Color::Plain(PlainColor::Yellow)),
+            modes: ModeSet::new(),
+            ..Default::default()
+        }
+    );
+}
+
+#[test]
 fn test_file_format_parse_errors() {
     // FR-029: System MUST report file format parse errors with helpful messages
     // This test verifies that malformed theme files produce clear error messages
