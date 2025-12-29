@@ -63,22 +63,8 @@ impl Style {
         Self { foreground, ..self }
     }
 
-    pub fn merged(mut self, other: &Self, flags: MergeFlags) -> Self {
-        if !other.base.is_empty() {
-            self.base = other.base.clone();
-        }
-        if flags.contains(MergeFlag::ReplaceModes) {
-            self.modes = other.modes;
-        } else {
-            self.modes += other.modes;
-        }
-        if let Some(color) = other.foreground {
-            self.foreground = Some(color);
-        }
-        if let Some(color) = other.background {
-            self.background = Some(color);
-        }
-        self
+    pub fn reverse_merge(&mut self, other: Self, flags: MergeFlags) {
+        *self = other.merged(&*self, flags);
     }
 
     pub fn resolve(&self, inventory: &StyleInventory, flags: MergeFlags) -> ResolvedStyle {
@@ -113,6 +99,20 @@ impl Style {
             background: self.background,
         }
     }
+
+    fn merge_body(&mut self, other: &Self, flags: MergeFlags) {
+        if flags.contains(MergeFlag::ReplaceModes) {
+            self.modes = other.modes;
+        } else {
+            self.modes += other.modes;
+        }
+        if let Some(color) = other.foreground {
+            self.foreground = Some(color);
+        }
+        if let Some(color) = other.background {
+            self.background = Some(color);
+        }
+    }
 }
 
 impl Default for &Style {
@@ -122,9 +122,21 @@ impl Default for &Style {
     }
 }
 
+impl Merge<Style> for Style {
+    fn merge(&mut self, other: Style, flags: MergeFlags) {
+        self.merge_body(&other, flags);
+        if !other.base.is_empty() {
+            self.base = other.base;
+        }
+    }
+}
+
 impl Merge<&Style> for Style {
     fn merge(&mut self, other: &Style, flags: MergeFlags) {
-        *self = self.clone().merged(other, flags);
+        self.merge_body(other, flags);
+        if !other.base.is_empty() {
+            self.base = other.base.clone();
+        }
     }
 }
 
@@ -153,44 +165,6 @@ impl From<ResolvedStyle> for Style {
             modes: body.modes.into(),
             foreground: body.foreground,
             background: body.background,
-        }
-    }
-}
-
-// Merge implementations for ResolvedStyle (used during resolution)
-// These live in v1 module because they're part of the resolution logic
-
-impl Merge<&ResolvedStyle> for ResolvedStyle {
-    fn merge(&mut self, other: &ResolvedStyle, flags: MergeFlags) {
-        // For resolved styles, merge mode diffs
-        if flags.contains(MergeFlag::ReplaceModes) {
-            self.modes = other.modes;
-        } else {
-            self.modes |= other.modes;
-        }
-        if let Some(color) = other.foreground {
-            self.foreground = Some(color);
-        }
-        if let Some(color) = other.background {
-            self.background = Some(color);
-        }
-    }
-}
-
-impl Merge<&Style> for ResolvedStyle {
-    fn merge(&mut self, other: &Style, flags: MergeFlags) {
-        // When merging an unresolved style (v1::Style) into a resolved style
-        if flags.contains(MergeFlag::ReplaceModes) {
-            self.modes = other.modes.adds;
-        } else {
-            self.modes |= other.modes.adds;
-            self.modes -= other.modes.removes;
-        }
-        if let Some(color) = other.foreground {
-            self.foreground = Some(color);
-        }
-        if let Some(color) = other.background {
-            self.background = Some(color);
         }
     }
 }

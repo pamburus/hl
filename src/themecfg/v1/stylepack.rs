@@ -127,7 +127,7 @@ impl StylePack<Element, Style> {
             for variant in [Element::BooleanTrue, Element::BooleanFalse] {
                 self.0
                     .entry(variant)
-                    .and_modify(|style| *style = base.clone().merged(style, flags))
+                    .and_modify(|style| style.reverse_merge(base.clone(), flags))
                     .or_insert_with(|| base.clone());
             }
         }

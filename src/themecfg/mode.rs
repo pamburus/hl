@@ -23,6 +23,21 @@ pub enum Mode {
 
 pub type ModeSet = EnumSet<Mode>;
 
+impl Add<ModeSetDiff> for ModeSet {
+    type Output = ModeSet;
+
+    fn add(mut self, rhs: ModeSetDiff) -> Self::Output {
+        self += rhs;
+        self
+    }
+}
+
+impl AddAssign<ModeSetDiff> for ModeSet {
+    fn add_assign(&mut self, rhs: ModeSetDiff) {
+        *self = (*self | rhs.adds) - rhs.removes;
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub struct ModeSetDiff {
     pub adds: ModeSet,
