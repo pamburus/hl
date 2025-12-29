@@ -14,16 +14,18 @@ use serde::{Deserialize, Serialize};
 // local imports
 use crate::level::{InfallibleLevel, Level};
 
-// Import v0 module for conversion from v0 to v1
+// relative imports
 use super::v0;
+
+// ---
 
 // Re-export Element from v0 (unchanged in v1)
 pub use super::v0::Element;
 
 // Re-export common types from parent module
 pub use super::{
-    Color, MergeFlag, MergeFlags, Mode, ModeDiff, ModeDiffAction, ModeSet, ModeSetDiff, PlainColor, RGB, Result, Tag,
-    ThemeLoadError, ThemeVersion,
+    Color, MergeFlag, MergeFlags, Mode, ModeDiff, ModeDiffAction, ModeSet, ModeSetDiff, PlainColor, RGB, Result,
+    StyleInventory, Tag, ThemeLoadError, ThemeVersion,
 };
 
 // Import resolved types and traits from parent (output types)
@@ -31,9 +33,6 @@ use super::Merge;
 
 // Import the resolved Style from parent (was ResolvedStyle)
 use super::Style as ResolvedStyle;
-
-// Type alias for resolved style inventory
-pub type StyleInventory = super::StylePack<Role, ResolvedStyle>;
 
 // Constants
 
@@ -482,11 +481,7 @@ impl StylePack<Element, Style> {
     /// This is a pure resolution operation that should be called after all merging is complete.
     ///
     /// Per FR-041, all merging (including hierarchy completion) must happen before resolution.
-    pub fn resolve_styles(
-        &self,
-        inventory: &StyleInventory,
-        flags: MergeFlags,
-    ) -> super::StylePack<Element, ResolvedStyle> {
+    pub fn resolve_styles(&self, inventory: &StyleInventory, flags: MergeFlags) -> super::StylePack {
         let items: HashMap<Element, ResolvedStyle> = self
             .iter()
             .map(|(&element, style)| (element, style.resolve(inventory, flags)))
@@ -514,7 +509,7 @@ impl StylePack<Role, Style> {
             .keys()
             .map(|k| Ok((*k, resolver.resolve(k)?)))
             .collect::<Result<HashMap<Role, ResolvedStyle>, ThemeLoadError>>()?;
-        Ok(super::StylePack::new(items))
+        Ok(StyleInventory::new(items))
     }
 }
 
@@ -657,7 +652,7 @@ impl Theme {
         indicators: &IndicatorPack<Style>,
         inventory: &StyleInventory,
         flags: MergeFlags,
-    ) -> super::IndicatorPack<super::Style> {
+    ) -> super::IndicatorPack {
         indicators.clone().resolve(|style| style.resolve(inventory, flags))
     }
 
@@ -787,7 +782,7 @@ impl<S: Clone> IndicatorPack<S> {
 }
 
 impl IndicatorPack<Style> {
-    pub fn resolve<F>(self, resolve_style: F) -> super::IndicatorPack<super::Style>
+    pub fn resolve<F>(self, resolve_style: F) -> super::IndicatorPack
     where
         F: Fn(Style) -> super::Style,
     {
@@ -813,7 +808,7 @@ impl Merge for SyncIndicatorPack<Style> {
 }
 
 impl SyncIndicatorPack<Style> {
-    pub fn resolve<F>(self, resolve_style: F) -> super::SyncIndicatorPack<super::Style>
+    pub fn resolve<F>(self, resolve_style: F) -> super::SyncIndicatorPack
     where
         F: Fn(Style) -> super::Style,
     {
@@ -838,7 +833,7 @@ pub struct Indicator<S = Style> {
 }
 
 impl Indicator<Style> {
-    pub fn resolve<F>(self, resolve_style: F) -> super::Indicator<super::Style>
+    pub fn resolve<F>(self, resolve_style: F) -> super::Indicator
     where
         F: Fn(Style) -> super::Style,
     {
@@ -884,7 +879,7 @@ pub struct IndicatorStyle<S = Style> {
 }
 
 impl IndicatorStyle<Style> {
-    pub fn resolve<F>(self, resolve_style: F) -> super::IndicatorStyle<super::Style>
+    pub fn resolve<F>(self, resolve_style: F) -> super::IndicatorStyle
     where
         F: Fn(Style) -> super::Style,
     {

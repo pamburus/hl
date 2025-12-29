@@ -287,7 +287,7 @@ impl StylePack {
         self.elements[element] = Some(pos);
     }
 
-    fn load(s: &themecfg::StylePack<Element, themecfg::Style>) -> Self {
+    fn load(s: &themecfg::StylePack) -> Self {
         let mut result = Self::default();
 
         if !s.is_empty() {
@@ -312,7 +312,7 @@ pub struct IndicatorPack {
 }
 
 impl IndicatorPack {
-    fn new(indicator: &themecfg::IndicatorPack<themecfg::Style>) -> Self {
+    fn new(indicator: &themecfg::IndicatorPack) -> Self {
         Self {
             sync: SyncIndicatorPack::new(&indicator.sync),
         }
@@ -328,7 +328,7 @@ pub struct SyncIndicatorPack {
 }
 
 impl SyncIndicatorPack {
-    fn new(indicator: &themecfg::SyncIndicatorPack<themecfg::Style>) -> Self {
+    fn new(indicator: &themecfg::SyncIndicatorPack) -> Self {
         Self {
             synced: Indicator::new(&indicator.synced),
             failed: Indicator::new(&indicator.failed),
@@ -344,7 +344,7 @@ pub struct Indicator {
 }
 
 impl Indicator {
-    fn new(indicator: &themecfg::Indicator<themecfg::Style>) -> Self {
+    fn new(indicator: &themecfg::Indicator) -> Self {
         let mut buf = Vec::new();
         let os = Style::from(&indicator.outer.style);
         let is = Style::from(&indicator.inner.style);

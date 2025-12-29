@@ -1,5 +1,6 @@
 use super::*;
-use crate::level::Level;
+
+// ---
 
 // V0 merge flags (replace semantics for modes)
 use enumset::enum_set;
@@ -147,10 +148,10 @@ fn test_rgb_invalid() {
 
 #[test]
 fn test_style_pack() {
-    assert_eq!(StylePack::<Element>::default().clone().len(), 0);
+    assert_eq!(StylePack::default().len(), 0);
 
     let yaml = include_str!("../testing/assets/style-packs/pack1.yaml");
-    let pack: StylePack<Element> = yaml::from_str(yaml).unwrap().remove(0);
+    let pack: v1::StylePack<Element> = yaml::from_str(yaml).unwrap().remove(0);
     assert_eq!(pack.len(), 2);
     assert_eq!(pack[&Element::Input].foreground, Some(Color::Plain(PlainColor::Red)));
     assert_eq!(pack[&Element::Input].background, Some(Color::Plain(PlainColor::Blue)));
@@ -163,7 +164,7 @@ fn test_style_pack() {
     assert_eq!(pack[&Element::Message].modes, modes(&[Mode::Italic, Mode::Underline]));
 
     // v1 StylePack uses strict deserialization - just verify it errors on invalid input
-    assert!(yaml::from_str::<StylePack<Element>>("invalid").is_err());
+    assert!(yaml::from_str::<v1::StylePack<Element>>("invalid").is_err());
 }
 
 #[test]
@@ -420,9 +421,9 @@ fn test_v0_file_format_priority() {
 }
 
 #[test]
-fn test_v0_style_pack_merge() {
+fn test_v1_style_pack_merge() {
     // Test StylePack merge behavior
-    let mut base = StylePack::default();
+    let mut base = v1::StylePack::default();
     base.insert(
         Element::Message,
         RawStyle {
@@ -433,23 +434,20 @@ fn test_v0_style_pack_merge() {
         },
     );
 
-    let mut patch = StylePack::default();
+    let mut patch = v1::StylePack::<Element>::default();
     patch.insert(
         Element::Message,
-        RawStyle {
-            base: StyleBase::default(),
+        v1::Style {
             foreground: Some(Color::Plain(PlainColor::Green)),
-            background: None,
             modes: Mode::Italic.into(),
+            ..Default::default()
         },
     );
     patch.insert(
         Element::Level,
-        RawStyle {
-            base: StyleBase::default(),
+        v1::Style {
             foreground: Some(Color::Plain(PlainColor::Yellow)),
-            background: None,
-            modes: Default::default(),
+            ..Default::default()
         },
     );
 
