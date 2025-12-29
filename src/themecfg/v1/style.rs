@@ -46,13 +46,12 @@ impl Style {
     }
 
     pub fn base(self, base: impl Into<StyleBase>) -> Self {
-        Self {
-            base: base.into(),
-            ..self
-        }
+        let base = base.into();
+        Self { base, ..self }
     }
 
-    pub fn modes(self, modes: ModeSetDiff) -> Self {
+    pub fn modes(self, modes: impl Into<ModeSetDiff>) -> Self {
+        let modes = modes.into();
         Self { modes, ..self }
     }
 

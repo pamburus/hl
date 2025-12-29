@@ -1010,7 +1010,7 @@ fn test_v1_element_replacement_removes_parent_modes() {
     let mut parent_elements: HashMap<Element, RawStyle> = HashMap::new();
     parent_elements.insert(
         Element::Caller,
-        RawStyle::new().base(Role::Secondary).modes(Mode::Italic.into()),
+        RawStyle::new().base(Role::Secondary).modes(Mode::Italic),
     );
 
     let mut child_elements: HashMap<Element, RawStyle> = HashMap::new();
@@ -2212,7 +2212,7 @@ fn test_style_from_vec_roles() {
 #[test]
 fn test_resolved_style_builder_methods() {
     let style = RawStyle::default()
-        .modes(Mode::Bold.into())
+        .modes(Mode::Bold)
         .foreground(Some(Color::Plain(PlainColor::Red)))
         .background(Some(Color::Plain(PlainColor::Blue)));
 
