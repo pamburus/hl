@@ -13,12 +13,12 @@ use super::{Error, Result};
 
 /// Theme version with major.minor components
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
-pub struct ThemeVersion {
+pub struct Version {
     pub major: u32,
     pub minor: u32,
 }
 
-impl ThemeVersion {
+impl Version {
     /// Create a new theme version
     pub const fn new(major: u32, minor: u32) -> Self {
         Self { major, minor }
@@ -40,13 +40,13 @@ impl ThemeVersion {
     pub const CURRENT: Self = Self::V1;
 
     /// Check if this version is compatible with a supported version
-    pub fn is_compatible_with(&self, supported: &ThemeVersion) -> bool {
+    pub fn is_compatible_with(&self, supported: &Version) -> bool {
         // Same major version and minor <= supported
         self.major == supported.major && self.minor <= supported.minor
     }
 }
 
-impl FromStr for ThemeVersion {
+impl FromStr for Version {
     type Err = Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
@@ -65,17 +65,17 @@ impl FromStr for ThemeVersion {
             return Err(err());
         }
 
-        Ok(ThemeVersion { major, minor })
+        Ok(Version { major, minor })
     }
 }
 
-impl fmt::Display for ThemeVersion {
+impl fmt::Display for Version {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}.{}", self.major, self.minor)
     }
 }
 
-impl Serialize for ThemeVersion {
+impl Serialize for Version {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: serde::Serializer,
@@ -84,7 +84,7 @@ impl Serialize for ThemeVersion {
     }
 }
 
-impl<'de> Deserialize<'de> for ThemeVersion {
+impl<'de> Deserialize<'de> for Version {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
@@ -92,17 +92,17 @@ impl<'de> Deserialize<'de> for ThemeVersion {
         struct ThemeVersionVisitor;
 
         impl<'de> Visitor<'de> for ThemeVersionVisitor {
-            type Value = ThemeVersion;
+            type Value = Version;
 
             fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
                 formatter.write_str("a version string like \"1.0\"")
             }
 
-            fn visit_str<E>(self, value: &str) -> Result<ThemeVersion, E>
+            fn visit_str<E>(self, value: &str) -> Result<Version, E>
             where
                 E: serde::de::Error,
             {
-                ThemeVersion::from_str(value).map_err(|e| E::custom(e))
+                Version::from_str(value).map_err(|e| E::custom(e))
             }
         }
 

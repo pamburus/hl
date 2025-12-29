@@ -18,7 +18,7 @@ use serde_value::Value;
 use crate::level::InfallibleLevel;
 
 // relative imports
-use super::{Color, Element, Mode, Tag, ThemeVersion};
+use super::{Color, Element, Mode, Tag, Version};
 
 // ---
 
@@ -157,7 +157,7 @@ pub struct IndicatorStyle {
 pub struct Theme {
     #[serde(deserialize_with = "enumset_serde::deserialize")]
     pub tags: EnumSet<Tag>,
-    pub version: ThemeVersion,
+    pub version: Version,
     pub elements: StylePack,
     pub levels: HashMap<InfallibleLevel, StylePack>,
     pub indicators: IndicatorPack,
@@ -167,7 +167,7 @@ impl Default for Theme {
     fn default() -> Self {
         Self {
             tags: EnumSet::new(),
-            version: ThemeVersion::default(),
+            version: Version::default(),
             elements: StylePack::default(),
             levels: HashMap::new(),
             indicators: IndicatorPack::default(),
@@ -177,12 +177,12 @@ impl Default for Theme {
 
 impl Theme {
     /// Validate v0 theme version before deserialization
-    pub fn validate_version(version: &ThemeVersion) -> Result<(), super::ThemeLoadError> {
-        if *version != ThemeVersion::V0_0 {
+    pub fn validate_version(version: &Version) -> Result<(), super::ThemeLoadError> {
+        if *version != Version::V0_0 {
             return Err(super::ThemeLoadError::UnsupportedVersion {
                 requested: *version,
-                nearest: ThemeVersion::V0_0,
-                latest: ThemeVersion::CURRENT,
+                nearest: Version::V0_0,
+                latest: Version::CURRENT,
             });
         }
 

@@ -624,9 +624,9 @@ fn test_future_version_rejected() {
                 },
             ..
         }) => {
-            assert_eq!(requested, ThemeVersion::new(1, 1));
-            assert_eq!(nearest, ThemeVersion::CURRENT);
-            assert_eq!(latest, ThemeVersion::CURRENT);
+            assert_eq!(requested, Version::new(1, 1));
+            assert_eq!(nearest, Version::CURRENT);
+            assert_eq!(latest, Version::CURRENT);
         }
         _ => panic!("Expected UnsupportedVersion error, got {:?}", result),
     }
@@ -866,7 +866,7 @@ fn test_v1_multiple_inheritance() {
     let theme = Theme::load_raw(&app_dirs, "v1-multiple-inheritance").unwrap();
 
     // Verify the theme loaded correctly
-    assert_eq!(theme.version, ThemeVersion::V1_0);
+    assert_eq!(theme.version, Version::V1_0);
 
     // Resolve styles to check inheritance
     let flags = theme.merge_flags();
@@ -1127,44 +1127,44 @@ fn test_v0_boolean_merge_with_level_overrides() {
 #[test]
 fn test_theme_version_parsing() {
     // Valid versions
-    assert_eq!(ThemeVersion::from_str("1.0").unwrap(), ThemeVersion::new(1, 0));
-    assert_eq!(ThemeVersion::from_str("1.10").unwrap(), ThemeVersion::new(1, 10));
-    assert_eq!(ThemeVersion::from_str("2.123").unwrap(), ThemeVersion::new(2, 123));
-    assert_eq!(ThemeVersion::from_str("0.0").unwrap(), ThemeVersion::new(0, 0));
+    assert_eq!(Version::from_str("1.0").unwrap(), Version::new(1, 0));
+    assert_eq!(Version::from_str("1.10").unwrap(), Version::new(1, 10));
+    assert_eq!(Version::from_str("2.123").unwrap(), Version::new(2, 123));
+    assert_eq!(Version::from_str("0.0").unwrap(), Version::new(0, 0));
 
     // Invalid versions - leading zeros
-    assert!(ThemeVersion::from_str("1.01").is_err());
-    assert!(ThemeVersion::from_str("01.0").is_err());
-    assert!(ThemeVersion::from_str("01.01").is_err());
+    assert!(Version::from_str("1.01").is_err());
+    assert!(Version::from_str("01.0").is_err());
+    assert!(Version::from_str("01.01").is_err());
 
     // Invalid versions - missing components
-    assert!(ThemeVersion::from_str("1").is_err());
-    assert!(ThemeVersion::from_str("1.").is_err());
-    assert!(ThemeVersion::from_str(".1").is_err());
+    assert!(Version::from_str("1").is_err());
+    assert!(Version::from_str("1.").is_err());
+    assert!(Version::from_str(".1").is_err());
 
     // Invalid versions - not numbers
-    assert!(ThemeVersion::from_str("1.x").is_err());
-    assert!(ThemeVersion::from_str("x.1").is_err());
-    assert!(ThemeVersion::from_str("a.b").is_err());
+    assert!(Version::from_str("1.x").is_err());
+    assert!(Version::from_str("x.1").is_err());
+    assert!(Version::from_str("a.b").is_err());
 
     // Invalid versions - extra components
-    assert!(ThemeVersion::from_str("1.0.0").is_err());
+    assert!(Version::from_str("1.0.0").is_err());
 }
 
 #[test]
 fn test_theme_version_display() {
-    assert_eq!(ThemeVersion::new(1, 0).to_string(), "1.0");
-    assert_eq!(ThemeVersion::new(1, 10).to_string(), "1.10");
-    assert_eq!(ThemeVersion::new(2, 123).to_string(), "2.123");
-    assert_eq!(ThemeVersion::new(0, 0).to_string(), "0.0");
+    assert_eq!(Version::new(1, 0).to_string(), "1.0");
+    assert_eq!(Version::new(1, 10).to_string(), "1.10");
+    assert_eq!(Version::new(2, 123).to_string(), "2.123");
+    assert_eq!(Version::new(0, 0).to_string(), "0.0");
 }
 
 #[test]
 fn test_theme_version_compatibility() {
-    let v1_0 = ThemeVersion::new(1, 0);
-    let v1_1 = ThemeVersion::new(1, 1);
-    let v1_2 = ThemeVersion::new(1, 2);
-    let v2_0 = ThemeVersion::new(2, 0);
+    let v1_0 = Version::new(1, 0);
+    let v1_1 = Version::new(1, 1);
+    let v1_2 = Version::new(1, 2);
+    let v2_0 = Version::new(2, 0);
 
     // Same version is compatible
     assert!(v1_0.is_compatible_with(&v1_0));
@@ -1188,32 +1188,32 @@ fn test_theme_version_compatibility() {
 #[test]
 fn test_theme_version_serde() {
     // Deserialize
-    let version: ThemeVersion = serde_json::from_str(r#""1.0""#).unwrap();
-    assert_eq!(version, ThemeVersion::new(1, 0));
+    let version: Version = serde_json::from_str(r#""1.0""#).unwrap();
+    assert_eq!(version, Version::new(1, 0));
 
-    let version: ThemeVersion = serde_json::from_str(r#""2.15""#).unwrap();
-    assert_eq!(version, ThemeVersion::new(2, 15));
+    let version: Version = serde_json::from_str(r#""2.15""#).unwrap();
+    assert_eq!(version, Version::new(2, 15));
 
     // Serialize
-    let version = ThemeVersion::new(1, 0);
+    let version = Version::new(1, 0);
     let json = serde_json::to_string(&version).unwrap();
     assert_eq!(json, r#""1.0""#);
 
-    let version = ThemeVersion::new(2, 15);
+    let version = Version::new(2, 15);
     let json = serde_json::to_string(&version).unwrap();
     assert_eq!(json, r#""2.15""#);
 
     // Invalid formats should fail
-    assert!(serde_json::from_str::<ThemeVersion>(r#""1.01""#).is_err());
-    assert!(serde_json::from_str::<ThemeVersion>(r#""1""#).is_err());
-    assert!(serde_json::from_str::<ThemeVersion>(r#"1"#).is_err());
+    assert!(serde_json::from_str::<Version>(r#""1.01""#).is_err());
+    assert!(serde_json::from_str::<Version>(r#""1""#).is_err());
+    assert!(serde_json::from_str::<Version>(r#"1"#).is_err());
 }
 
 #[test]
 fn test_theme_version_constants() {
-    assert_eq!(ThemeVersion::V0_0, ThemeVersion::new(0, 0));
-    assert_eq!(ThemeVersion::V1_0, ThemeVersion::new(1, 0));
-    assert_eq!(ThemeVersion::CURRENT, ThemeVersion::V1_0);
+    assert_eq!(Version::V0_0, Version::new(0, 0));
+    assert_eq!(Version::V1_0, Version::new(1, 0));
+    assert_eq!(Version::CURRENT, Version::V1_0);
 }
 
 #[test]
@@ -1232,11 +1232,7 @@ fn test_empty_v0_theme_file_valid() {
     let theme = Theme::load_from(&path, "empty-v0").unwrap();
 
     // Verify it's treated as v0 (version 0.0)
-    assert_eq!(
-        theme.version,
-        ThemeVersion::V0_0,
-        "Empty file should be treated as v0 theme"
-    );
+    assert_eq!(theme.version, Version::V0_0, "Empty file should be treated as v0 theme");
 
     // Verify all sections are empty/default
     assert_eq!(
@@ -1266,7 +1262,7 @@ fn test_v0_ignores_styles_section() {
     let theme = Theme::load_from(&path, "v0-with-styles-section").unwrap();
 
     // Verify it's v0 (no version field means v0)
-    assert_eq!(theme.version, ThemeVersion::V0_0, "Theme without version should be v0");
+    assert_eq!(theme.version, Version::V0_0, "Theme without version should be v0");
 
     // Verify message element was loaded correctly
     let message = theme.elements.get(&Element::Message);
@@ -1315,7 +1311,7 @@ fn test_custom_default_theme_with_extension() {
     // The merged theme retains the custom theme's version (v0)
     assert_eq!(
         theme.version,
-        ThemeVersion::V0_0,
+        Version::V0_0,
         "Custom @default.yaml is v0, merged result uses custom theme's version"
     );
 
@@ -1516,7 +1512,7 @@ fn test_custom_default_theme_without_extension() {
     // Custom @default.yaml is a v0 theme, merged result uses custom theme's version (v0)
     assert_eq!(
         theme.version,
-        ThemeVersion::V0_0,
+        Version::V0_0,
         "Custom @default is v0, merged result uses custom theme's version"
     );
 
@@ -1975,7 +1971,7 @@ fn test_v1_no_blocking_rules() {
     // Test that v1 themes do NOT apply blocking rules (no ReplaceGroups flag)
     // Elements merge additively without blocking parent-inner pairs
     let mut base = RawTheme::default();
-    base.inner_mut().version = ThemeVersion { major: 1, minor: 0 };
+    base.inner_mut().version = Version { major: 1, minor: 0 };
 
     // Base has -inner elements
     base.elements.insert(
@@ -2007,7 +2003,7 @@ fn test_v1_no_blocking_rules() {
 
     // Child v1 theme defines parent elements
     let mut child = RawTheme::default();
-    child.inner_mut().version = ThemeVersion { major: 1, minor: 0 };
+    child.inner_mut().version = Version { major: 1, minor: 0 };
     child.elements.insert(Element::Level, RawStyle::default()); // Does NOT block level-inner in v1
     child.elements.insert(Element::Input, RawStyle::default()); // Does NOT block input-number in v1
 
@@ -2059,7 +2055,7 @@ fn test_v1_level_overrides_with_styles() {
     let theme = Theme::load_raw(&app_dirs, "v1-level-with-styles").unwrap();
 
     // Verify it's a v1 theme
-    assert_eq!(theme.version, ThemeVersion::V1_0);
+    assert_eq!(theme.version, Version::V1_0);
 
     // Verify the theme has styles defined
     assert!(!theme.styles.is_empty(), "V1 theme should have style definitions");

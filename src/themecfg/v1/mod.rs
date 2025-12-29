@@ -17,7 +17,7 @@ use crate::level::{InfallibleLevel, Level};
 // relative imports
 use super::{
     Color, Element, MergeFlag, MergeFlags, Mode, ModeSet, ModeSetDiff, Result, StyleInventory, Tag, ThemeLoadError,
-    ThemeVersion, v0,
+    Version, v0,
 };
 
 // ---
@@ -527,7 +527,7 @@ pub struct Theme {
     pub schema: Option<String>,
     #[serde(deserialize_with = "enumset_serde::deserialize")]
     pub tags: EnumSet<Tag>,
-    pub version: ThemeVersion,
+    pub version: Version,
     pub styles: StylePack<Role>,
     pub elements: StylePack<Element>,
     pub levels: HashMap<Level, StylePack<Element>>,
@@ -539,7 +539,7 @@ impl Default for Theme {
         Self {
             schema: None,
             tags: EnumSet::new(),
-            version: ThemeVersion::default(),
+            version: Version::default(),
             styles: StylePack::default(),
             elements: StylePack::default(),
             levels: HashMap::new(),
@@ -653,7 +653,7 @@ impl Theme {
 
     pub fn merge_flags(&self) -> MergeFlags {
         match self.version {
-            ThemeVersion { major: 0, .. } => {
+            Version { major: 0, .. } => {
                 MergeFlag::ReplaceElements | MergeFlag::ReplaceHierarchies | MergeFlag::ReplaceModes
             }
             _ => MergeFlags::new(),
@@ -664,15 +664,15 @@ impl Theme {
     ///
     /// V1 themes must be compatible with the current version
     /// This is called before deserialization to provide better error messages
-    pub fn validate_version(version: &ThemeVersion) -> Result<(), super::ThemeLoadError> {
-        const CURRENT: ThemeVersion = ThemeVersion::V1;
+    pub fn validate_version(version: &Version) -> Result<(), super::ThemeLoadError> {
+        const CURRENT: Version = Version::V1;
 
         // Check if version is compatible with current supported version
-        if !version.is_compatible_with(&ThemeVersion::CURRENT) {
+        if !version.is_compatible_with(&Version::CURRENT) {
             return Err(super::ThemeLoadError::UnsupportedVersion {
                 requested: *version,
                 nearest: CURRENT,
-                latest: ThemeVersion::CURRENT,
+                latest: Version::CURRENT,
             });
         }
 

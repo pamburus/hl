@@ -9,7 +9,7 @@ use yaml_peg::serde as yaml;
 use crate::xerr::{Highlight, HighlightQuoted, Suggestions};
 
 // relative imports
-pub use super::{Role, StyleBase, ThemeInfo, ThemeVersion};
+pub use super::{Role, StyleBase, ThemeInfo, Version};
 
 /// Top-level error type for theme operations.
 ///
@@ -68,9 +68,9 @@ pub enum ThemeLoadError {
     /// Theme version is not supported (e.g., v2.0 when max is v1.0).
     #[error("theme version {requested} is not supported (latest is {latest})", requested=.requested.hl(), latest=.latest.hl())]
     UnsupportedVersion {
-        requested: ThemeVersion,
-        nearest: ThemeVersion,
-        latest: ThemeVersion,
+        requested: Version,
+        nearest: Version,
+        latest: Version,
     },
 
     /// Style recursion limit exceeded (circular inheritance or too deep).

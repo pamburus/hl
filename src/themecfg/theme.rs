@@ -21,7 +21,7 @@ use yaml_peg::serde as yaml;
 use crate::{appdirs::AppDirs, level::Level, xerr::Suggestions};
 
 // relative imports
-use super::{Error, ExternalError, IndicatorPack, RawTheme, Result, StylePack, ThemeLoadError, ThemeVersion, v0, v1};
+use super::{Error, ExternalError, IndicatorPack, RawTheme, Result, StylePack, ThemeLoadError, Version, v0, v1};
 
 // Private constants
 const BASE: &str = "@default";
@@ -41,7 +41,7 @@ const BASE: &str = "@default";
 #[derive(Debug, Default)]
 pub struct Theme {
     pub tags: EnumSet<Tag>,
-    pub version: ThemeVersion,
+    pub version: Version,
     pub elements: StylePack,
     pub levels: HashMap<Level, StylePack>,
     pub indicators: IndicatorPack,
@@ -234,11 +234,11 @@ impl Theme {
         }
     }
 
-    fn peek_version(s: &str, format: Format) -> Result<ThemeVersion, ExternalError> {
+    fn peek_version(s: &str, format: Format) -> Result<Version, ExternalError> {
         #[derive(Deserialize)]
         struct VersionOnly {
             #[serde(default)]
-            version: ThemeVersion,
+            version: Version,
         }
 
         let data: VersionOnly = Self::deserialize(s, format)?;
