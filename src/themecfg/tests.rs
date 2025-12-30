@@ -14,7 +14,7 @@ use super::*;
 // ---
 
 // Helper function to create test AppDirs
-fn dirs() -> AppDirs {
+pub(crate) fn dirs() -> AppDirs {
     AppDirs {
         config_dir: PathBuf::from("src/testing/assets/fixtures"),
         cache_dir: Default::default(),

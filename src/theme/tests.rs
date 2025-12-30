@@ -1,7 +1,5 @@
 use super::*;
 
-use std::path::PathBuf;
-
 use crate::{
     appdirs::AppDirs,
     themecfg::{self, Color, PlainColor, RGB, RawTheme},
@@ -9,11 +7,7 @@ use crate::{
 
 // Helper function to create test AppDirs
 fn dirs() -> AppDirs {
-    AppDirs {
-        config_dir: PathBuf::from("src/testing/assets/fixtures"),
-        cache_dir: Default::default(),
-        system_config_dirs: Default::default(),
-    }
+    themecfg::tests::dirs()
 }
 
 fn theme(name: &str) -> Theme {
@@ -169,15 +163,9 @@ fn test_v1_parent_inner_property_level_merging() {
 }
 
 #[test]
-fn test_v0_input_element_styling() {
-    let dirs = AppDirs {
-        config_dir: PathBuf::from("etc/defaults"),
-        cache_dir: Default::default(),
-        system_config_dirs: Default::default(),
-    };
-
-    // Load classic theme (v0)
-    let theme = Theme::load(&dirs, "classic").unwrap();
+fn test_v1_input_element_styling() {
+    // Test that the Input element is correctly loaded and styled from v1 themes
+    let theme = theme("test-input-styling");
 
     // Apply the theme and render something with Input element
     let mut buf = Vec::new();
@@ -241,17 +229,10 @@ fn test_v1_element_modes_preserved_after_per_level_merge() {
 }
 
 #[test]
-fn test_v0_input_nested_styling() {
-    // Test that v0 themes with `input` defined get nested styling scope behavior
+fn test_v1_input_nested_styling() {
+    // Test that v1 themes with `input` defined get nested styling scope behavior
     // where InputNumber inherits from Input via nested rendering scope
-    let dirs = AppDirs {
-        config_dir: PathBuf::from("etc/defaults"),
-        cache_dir: Default::default(),
-        system_config_dirs: Default::default(),
-    };
-
-    // Load classic theme (v0) which only defines `input`, not `input-number`
-    let theme = Theme::load(&dirs, "classic").unwrap();
+    let theme = theme("test-input-nested");
 
     // Render nested elements: Input containing InputNumber containing content
     let mut buf = Vec::new();
@@ -263,7 +244,7 @@ fn test_v0_input_nested_styling() {
 
     let output = String::from_utf8_lossy(&buf);
 
-    // In v0, InputNumber should inherit from Input via nested styling scope
+    // In v1, InputNumber should inherit from Input via nested styling scope
     // Since Input has bright-black (90), the nested content should also be bright-black
     assert!(
         output.contains(";90") || output.contains("[90"),
