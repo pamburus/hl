@@ -2104,6 +2104,7 @@ fn test_v1_level_override_foreground() {
         theme.elements[&Element::LevelInner],
         Style {
             foreground: Some(Color::Palette(139)),
+            modes: ModeSetDiff::new() - Mode::Faint,
             ..Default::default()
         }
     );
@@ -2120,6 +2121,7 @@ fn test_v1_level_override_foreground() {
         theme.levels[&Level::Warning][&Element::LevelInner],
         Style {
             foreground: Some(Color::Palette(214)),
+            modes: ModeSetDiff::new() - Mode::Faint,
             ..Default::default()
         }
     );
@@ -2140,7 +2142,7 @@ fn test_v1_empty() {
     assert_eq!(
         theme.elements[&Element::LevelInner],
         Style {
-            modes: ModeSetDiff::new().remove(Mode::Faint),
+            modes: ModeSetDiff::new() - Mode::Faint,
             ..Default::default()
         }
     );
@@ -2157,7 +2159,7 @@ fn test_v1_empty() {
         theme.levels[&Level::Warning][&Element::LevelInner],
         Style {
             foreground: Some(Color::Plain(PlainColor::Yellow)),
-            modes: ModeSetDiff::new().remove(Mode::Faint),
+            modes: ModeSetDiff::new() - Mode::Faint,
             ..Default::default()
         }
     );

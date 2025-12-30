@@ -1,5 +1,5 @@
 // std imports
-use std::ops::{Add, AddAssign};
+use std::ops::{Add, AddAssign, Neg, Sub, SubAssign};
 
 // third-party imports
 use enumset::{EnumSet, EnumSetType};
@@ -38,7 +38,22 @@ impl AddAssign<ModeSetDiff> for ModeSet {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+impl Sub<ModeSetDiff> for ModeSet {
+    type Output = ModeSet;
+
+    fn sub(mut self, rhs: ModeSetDiff) -> Self::Output {
+        self -= rhs;
+        self
+    }
+}
+
+impl SubAssign<ModeSetDiff> for ModeSet {
+    fn sub_assign(&mut self, rhs: ModeSetDiff) {
+        *self = (*self | rhs.removes) - rhs.adds;
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct ModeSetDiff {
     pub adds: ModeSet,
     pub removes: ModeSet,
@@ -60,15 +75,13 @@ impl ModeSetDiff {
         std::mem::swap(&mut self.adds, &mut self.removes);
         self
     }
+}
 
-    pub fn add(mut self, mode: impl Into<ModeSet>) -> Self {
-        self += ModeSetDiff::from(mode.into());
-        self
-    }
+impl Neg for ModeSetDiff {
+    type Output = Self;
 
-    pub fn remove(mut self, mode: impl Into<ModeSet>) -> Self {
-        self += ModeSetDiff::from(mode.into()).reversed();
-        self
+    fn neg(self) -> Self::Output {
+        self.reversed()
     }
 }
 
@@ -83,11 +96,84 @@ impl Add<ModeSetDiff> for ModeSetDiff {
 
 impl AddAssign<ModeSetDiff> for ModeSetDiff {
     fn add_assign(&mut self, rhs: ModeSetDiff) {
-        let adds = (self.adds | rhs.adds) - rhs.removes;
-        let removes = (self.removes | rhs.removes) - rhs.adds;
+        self.adds = (self.adds | rhs.adds) - rhs.removes;
+        self.removes = (self.removes | rhs.removes) - rhs.adds;
+    }
+}
 
-        self.adds = adds;
-        self.removes = removes;
+impl Sub<ModeSetDiff> for ModeSetDiff {
+    type Output = ModeSetDiff;
+
+    fn sub(mut self, rhs: ModeSetDiff) -> Self::Output {
+        self -= rhs;
+        self
+    }
+}
+
+impl SubAssign<ModeSetDiff> for ModeSetDiff {
+    fn sub_assign(&mut self, rhs: ModeSetDiff) {
+        self.adds = (self.adds | rhs.removes) - rhs.adds;
+        self.removes = (self.removes | rhs.adds) - rhs.removes;
+    }
+}
+
+impl Add<ModeSet> for ModeSetDiff {
+    type Output = ModeSetDiff;
+
+    fn add(mut self, rhs: ModeSet) -> Self::Output {
+        self += ModeSetDiff::from(rhs);
+        self
+    }
+}
+
+impl AddAssign<ModeSet> for ModeSetDiff {
+    fn add_assign(&mut self, rhs: ModeSet) {
+        *self += ModeSetDiff::from(rhs);
+    }
+}
+
+impl Sub<ModeSet> for ModeSetDiff {
+    type Output = ModeSetDiff;
+
+    fn sub(mut self, rhs: ModeSet) -> Self::Output {
+        self -= rhs;
+        self
+    }
+}
+
+impl SubAssign<ModeSet> for ModeSetDiff {
+    fn sub_assign(&mut self, rhs: ModeSet) {
+        *self -= ModeSetDiff::from(rhs);
+    }
+}
+
+impl Add<Mode> for ModeSetDiff {
+    type Output = ModeSetDiff;
+
+    fn add(mut self, rhs: Mode) -> Self::Output {
+        self += ModeSetDiff::from(rhs);
+        self
+    }
+}
+
+impl AddAssign<Mode> for ModeSetDiff {
+    fn add_assign(&mut self, rhs: Mode) {
+        *self += ModeSetDiff::from(rhs);
+    }
+}
+
+impl Sub<Mode> for ModeSetDiff {
+    type Output = ModeSetDiff;
+
+    fn sub(mut self, rhs: Mode) -> Self::Output {
+        self -= rhs;
+        self
+    }
+}
+
+impl SubAssign<Mode> for ModeSetDiff {
+    fn sub_assign(&mut self, rhs: Mode) {
+        *self -= ModeSetDiff::from(rhs);
     }
 }
 

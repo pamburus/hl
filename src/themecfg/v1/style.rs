@@ -187,7 +187,7 @@ impl From<ResolvedStyle> for Style {
     fn from(body: ResolvedStyle) -> Self {
         Self {
             base: StyleBase::default(),
-            modes: body.modes.into(),
+            modes: body.modes,
             foreground: body.foreground,
             background: body.background,
         }
