@@ -239,7 +239,7 @@ fn test_v0_boolean_active_merge() {
     let boolean = &theme.elements[&Element::Boolean];
     assert_eq!(boolean.foreground, Some(Color::RGB(RGB(0, 255, 0))));
     assert_eq!(boolean.background, Some(Color::RGB(RGB(0, 0, 0))));
-    assert_eq!(boolean.modes, Mode::Bold);
+    assert_eq!(boolean.modes, Mode::Bold.into());
 
     // boolean-true and boolean-false should exist with their own properties
     let boolean_true = &theme.elements[&Element::BooleanTrue];
@@ -258,11 +258,11 @@ fn test_v0_modes_replacement() {
 
     // level has bold and underline
     let level = &theme.elements[&Element::Level];
-    assert_eq!(level.modes, Mode::Bold | Mode::Underline);
+    assert_eq!(level.modes, (Mode::Bold | Mode::Underline).into());
 
     // level-inner has only italic (replaces parent's modes, not merged)
     let level_inner = &theme.elements[&Element::LevelInner];
-    assert_eq!(level_inner.modes, Mode::Italic);
+    assert_eq!(level_inner.modes, Mode::Italic.into());
 }
 
 #[test]
@@ -274,7 +274,7 @@ fn test_v0_level_specific_overrides() {
     // Base level element
     let base_level = &theme.elements[&Element::Level];
     assert_eq!(base_level.foreground, Some(Color::RGB(RGB(0, 255, 0))));
-    assert_eq!(base_level.modes, Mode::Italic);
+    assert_eq!(base_level.modes, Mode::Italic.into());
 
     // Debug level should have overridden foreground and modes
     let debug_level = theme
@@ -284,7 +284,7 @@ fn test_v0_level_specific_overrides() {
     assert!(debug_level.is_some());
     let debug_level = debug_level.unwrap();
     assert_eq!(debug_level.foreground, Some(Color::RGB(RGB(255, 0, 255))));
-    assert_eq!(debug_level.modes, Mode::Bold | Mode::Underline);
+    assert_eq!(debug_level.modes, (Mode::Bold | Mode::Underline).into());
 
     // Error level should have comprehensive overrides
     let error_level = theme
@@ -295,7 +295,7 @@ fn test_v0_level_specific_overrides() {
     let error_level = error_level.unwrap();
     assert_eq!(error_level.foreground, Some(Color::RGB(RGB(255, 0, 0))));
     assert_eq!(error_level.background, Some(Color::RGB(RGB(68, 0, 0))));
-    assert_eq!(error_level.modes, Mode::Reverse | Mode::Bold);
+    assert_eq!(error_level.modes, (Mode::Reverse | Mode::Bold).into());
 }
 
 #[test]
@@ -307,23 +307,23 @@ fn test_v0_nested_styling_elements() {
     let level = &theme.elements[&Element::Level];
     assert_eq!(level.foreground, Some(Color::RGB(RGB(0, 255, 0))));
     assert_eq!(level.background, Some(Color::RGB(RGB(0, 17, 0))));
-    assert_eq!(level.modes, Mode::Bold);
+    assert_eq!(level.modes, Mode::Bold.into());
 
     // Inner element has only foreground - does NOT inherit background/modes in v0
     // (This is nested scope, not property merging)
     let level_inner = &theme.elements[&Element::LevelInner];
     assert_eq!(level_inner.foreground, Some(Color::RGB(RGB(0, 255, 255))));
     assert_eq!(level_inner.background, None);
-    assert_eq!(level_inner.modes, ModeSet::empty());
+    assert_eq!(level_inner.modes, ModeSetDiff::new());
 
     // Logger/logger-inner pair
     let logger = &theme.elements[&Element::Logger];
     assert_eq!(logger.foreground, Some(Color::RGB(RGB(255, 255, 0))));
-    assert_eq!(logger.modes, Mode::Italic | Mode::Underline);
+    assert_eq!(logger.modes, (Mode::Italic | Mode::Underline).into());
 
     let logger_inner = &theme.elements[&Element::LoggerInner];
     assert_eq!(logger_inner.foreground, Some(Color::RGB(RGB(255, 255, 255))));
-    assert_eq!(logger_inner.modes, Mode::Bold);
+    assert_eq!(logger_inner.modes, Mode::Bold.into());
 }
 
 #[test]
@@ -333,15 +333,15 @@ fn test_v0_empty_modes_vs_absent_modes() {
 
     // Element with empty modes array
     let message = &theme.elements[&Element::Message];
-    assert_eq!(message.modes, ModeSet::empty());
+    assert_eq!(message.modes, ModeSetDiff::new());
 
     // Element with modes
     let level = &theme.elements[&Element::Level];
-    assert_eq!(level.modes, Mode::Bold | Mode::Italic);
+    assert_eq!(level.modes, (Mode::Bold | Mode::Italic).into());
 
     // Element with no modes field should have empty vec
     let level_inner = &theme.elements[&Element::LevelInner];
-    assert_eq!(level_inner.modes, ModeSet::empty());
+    assert_eq!(level_inner.modes, ModeSetDiff::new());
 }
 
 #[test]
@@ -352,7 +352,7 @@ fn test_v0_yaml_anchors() {
     // Message should use base-style anchor
     let message = &theme.elements[&Element::Message];
     assert_eq!(message.foreground, Some(Color::RGB(RGB(0, 255, 0))));
-    assert_eq!(message.modes, Mode::Bold);
+    assert_eq!(message.modes, Mode::Bold.into());
 
     // Level should use secondary color
     let level = &theme.elements[&Element::Level];
@@ -381,7 +381,7 @@ fn test_v0_json_format() {
 
     let message = &theme.elements[&Element::Message];
     assert_eq!(message.foreground, Some(Color::RGB(RGB(255, 255, 255))));
-    assert_eq!(message.modes, Mode::Bold);
+    assert_eq!(message.modes, Mode::Bold.into());
 
     // Boolean active merge should work in JSON too
     let boolean_true = &theme.elements[&Element::BooleanTrue];
@@ -398,7 +398,7 @@ fn test_v0_toml_format() {
 
     let message = &theme.elements[&Element::Message];
     assert_eq!(message.foreground, Some(Color::RGB(RGB(255, 255, 255))));
-    assert_eq!(message.modes, Mode::Bold);
+    assert_eq!(message.modes, Mode::Bold.into());
 
     // Test different color formats
     let string_elem = &theme.elements[&Element::String];
@@ -663,7 +663,7 @@ fn test_v0_indicators() {
         theme.indicators.sync.failed.inner.style.foreground,
         Some(Color::Plain(PlainColor::Yellow))
     );
-    assert_eq!(theme.indicators.sync.failed.inner.style.modes, Mode::Bold);
+    assert_eq!(theme.indicators.sync.failed.inner.style.modes, Mode::Bold.into());
 }
 
 #[test]
@@ -720,13 +720,13 @@ fn test_v0_duplicate_modes() {
     // In v1 with ModeSetDiff, duplicate modes within same element are deduplicated
     // The test theme has duplicates in YAML, but they get deduplicated during deserialization
     let message = &theme.elements[&Element::Message];
-    assert_eq!(message.modes, Mode::Bold | Mode::Italic | Mode::Underline);
+    assert_eq!(message.modes, (Mode::Bold | Mode::Italic | Mode::Underline).into());
 
     let level = &theme.elements[&Element::Level];
-    assert_eq!(level.modes, Mode::Italic);
+    assert_eq!(level.modes, (Mode::Italic).into());
 
     let time = &theme.elements[&Element::Time];
-    assert_eq!(time.modes, Mode::Faint | Mode::Bold);
+    assert_eq!(time.modes, (Mode::Faint | Mode::Bold).into());
 }
 
 #[test]
@@ -735,24 +735,24 @@ fn test_v0_all_modes() {
     let theme = theme("v0-all-modes");
 
     // Test individual modes
-    assert_eq!(theme.elements[&Element::Message].modes, Mode::Bold);
-    assert_eq!(theme.elements[&Element::Level].modes, Mode::Faint);
-    assert_eq!(theme.elements[&Element::LevelInner].modes, Mode::Italic);
-    assert_eq!(theme.elements[&Element::Time].modes, Mode::Underline);
-    assert_eq!(theme.elements[&Element::Caller].modes, Mode::SlowBlink);
-    assert_eq!(theme.elements[&Element::Logger].modes, Mode::RapidBlink);
-    assert_eq!(theme.elements[&Element::Key].modes, Mode::Reverse);
-    assert_eq!(theme.elements[&Element::String].modes, Mode::Conceal);
-    assert_eq!(theme.elements[&Element::Number].modes, Mode::CrossedOut);
+    assert_eq!(theme.elements[&Element::Message].modes, Mode::Bold.into());
+    assert_eq!(theme.elements[&Element::Level].modes, Mode::Faint.into());
+    assert_eq!(theme.elements[&Element::LevelInner].modes, Mode::Italic.into());
+    assert_eq!(theme.elements[&Element::Time].modes, Mode::Underline.into());
+    assert_eq!(theme.elements[&Element::Caller].modes, Mode::SlowBlink.into());
+    assert_eq!(theme.elements[&Element::Logger].modes, Mode::RapidBlink.into());
+    assert_eq!(theme.elements[&Element::Key].modes, Mode::Reverse.into());
+    assert_eq!(theme.elements[&Element::String].modes, Mode::Conceal.into());
+    assert_eq!(theme.elements[&Element::Number].modes, Mode::CrossedOut.into());
 
     // Test combined modes
     let boolean = &theme.elements[&Element::Boolean];
-    assert_eq!(boolean.modes, Mode::Bold | Mode::Italic | Mode::Underline);
+    assert_eq!(boolean.modes, (Mode::Bold | Mode::Italic | Mode::Underline).into());
 
     let boolean_true = &theme.elements[&Element::BooleanTrue];
     assert_eq!(
         boolean_true.modes,
-        Mode::Bold | Mode::Faint | Mode::Italic | Mode::Underline | Mode::SlowBlink,
+        (Mode::Bold | Mode::Faint | Mode::Italic | Mode::Underline | Mode::SlowBlink).into(),
     );
 }
 
@@ -788,7 +788,7 @@ fn test_v0_level_override_merge_behavior() {
     let base_message = &theme.elements[&Element::Message];
     assert_eq!(base_message.foreground, Some(Color::RGB(RGB(255, 255, 255))));
     assert_eq!(base_message.background, Some(Color::RGB(RGB(0, 0, 0))));
-    assert_eq!(base_message.modes, Mode::Bold);
+    assert_eq!(base_message.modes, Mode::Bold.into());
 
     // Error level message override only has foreground
     // At themecfg level, it should only have foreground
@@ -883,31 +883,31 @@ fn test_v1_multiple_inheritance() {
     let warning = &inventory[&Role::Warning];
     assert_eq!(warning.foreground, Some(Color::RGB(RGB(0x88, 0x88, 0x88))));
     assert_eq!(warning.background, Some(Color::RGB(RGB(0x33, 0x11, 0x00))));
-    assert!(warning.modes.contains(Mode::Faint));
-    assert!(warning.modes.contains(Mode::Bold));
-    assert!(warning.modes.contains(Mode::Underline));
+    assert!(warning.modes.adds.contains(Mode::Faint));
+    assert!(warning.modes.adds.contains(Mode::Bold));
+    assert!(warning.modes.adds.contains(Mode::Underline));
 
     // Test error role: inherits from warning and overrides foreground
     let error = &inventory[&Role::Error];
     assert_eq!(error.foreground, Some(Color::RGB(RGB(0xff, 0x00, 0x00))));
     assert_eq!(error.background, Some(Color::RGB(RGB(0x33, 0x11, 0x00)))); // inherited from warning
-    assert!(error.modes.contains(Mode::Faint)); // inherited from warning chain
+    assert!(error.modes.adds.contains(Mode::Faint)); // inherited from warning chain
 
     // Test level element: style = ["secondary", "strong"]
     // Should have: foreground=#888888, modes=[faint, bold]
     let theme = theme.resolve().unwrap();
     let level = &theme.elements[&Element::Level];
     assert_eq!(level.foreground, Some(Color::RGB(RGB(0x88, 0x88, 0x88))));
-    assert!(level.modes.contains(Mode::Faint));
-    assert!(level.modes.contains(Mode::Bold));
+    assert!(level.modes.adds.contains(Mode::Faint));
+    assert!(level.modes.adds.contains(Mode::Bold));
 
     // Test level-inner element: style = ["secondary", "strong"], modes=[italic], foreground=#00ff00
     // Should have: foreground=#00ff00 (explicit override), modes=[faint, bold, italic]
     let inner = &theme.elements[&Element::LevelInner];
     assert_eq!(inner.foreground, Some(Color::RGB(RGB(0x00, 0xff, 0x00))));
-    assert!(inner.modes.contains(Mode::Faint));
-    assert!(inner.modes.contains(Mode::Bold));
-    assert!(inner.modes.contains(Mode::Italic));
+    assert!(inner.modes.adds.contains(Mode::Faint));
+    assert!(inner.modes.adds.contains(Mode::Bold));
+    assert!(inner.modes.adds.contains(Mode::Italic));
 }
 
 #[test]
@@ -1063,7 +1063,7 @@ fn test_v0_partial_element_definitions() {
     let inner = &theme.elements[&Element::InputNumberInner];
     assert_eq!(inner.foreground, None);
     assert_eq!(inner.background, Some(Color::RGB(RGB(0, 0, 68))));
-    assert_eq!(inner.modes, ModeSet::empty());
+    assert_eq!(inner.modes, ModeSetDiff::new());
 }
 
 #[test]
@@ -2137,13 +2137,7 @@ fn test_v1_empty() {
         }
     );
 
-    assert_eq!(
-        theme.elements[&Element::LevelInner],
-        Style {
-            modes: ModeSet::new(),
-            ..Default::default()
-        }
-    );
+    assert_eq!(theme.elements[&Element::LevelInner], Style::default());
 
     assert_eq!(
         theme.levels[&Level::Warning][&Element::Level],
@@ -2157,7 +2151,6 @@ fn test_v1_empty() {
         theme.levels[&Level::Warning][&Element::LevelInner],
         Style {
             foreground: Some(Color::Plain(PlainColor::Yellow)),
-            modes: ModeSet::new(),
             ..Default::default()
         }
     );

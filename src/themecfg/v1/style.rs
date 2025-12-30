@@ -119,7 +119,7 @@ impl Style {
 
     pub fn as_resolved(&self) -> ResolvedStyle {
         ResolvedStyle {
-            modes: self.modes.adds,
+            modes: self.modes,
             foreground: self.foreground,
             background: self.background,
         }
