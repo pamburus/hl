@@ -6,7 +6,7 @@
 # - After merging, the bold mode should be preserved
 #
 # The merge flow being tested:
-# 1. Theme merge: @default + this theme → level-inner = { modes = ["bold"] } replaces @default's
+# 1. Theme merge: @base + this theme → level-inner = { modes = ["bold"] } replaces @base's
 # 2. Per-level merge: elements.level-inner + levels.info.level-inner → property-level merge
 #    Result: level-inner = { style = ["level", "info"], modes = ["bold"] }
 # 3. Resolution: The final rendered style should have bold mode

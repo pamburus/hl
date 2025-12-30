@@ -68,7 +68,7 @@ fn test_load() {
 
 #[test]
 fn test_v0_input_element_inheritance() {
-    // Test that v0 themes defining `input` block @default's input-number/input-name elements
+    // Test that v0 themes defining `input` block @base's input-number/input-name elements
     // This ensures backward compatibility where `input` styling applies to all nested input elements
     let theme = theme("v0-color-formats");
 
@@ -82,7 +82,7 @@ fn test_v0_input_element_inheritance() {
     let input = theme.elements.get(&Element::Input);
     assert!(
         input.is_some(),
-        "Input element should be present in v0 theme after merge with @default"
+        "Input element should be present in v0 theme after merge with @base"
     );
     assert_eq!(
         input,
@@ -838,15 +838,15 @@ fn test_v0_style_merged_modes() {
 
 #[test]
 fn test_v0_indicators_default_values() {
-    // Test that @default theme has proper indicator values
-    let theme = theme("@default");
+    // Test that @base theme has proper indicator values
+    let theme = theme("@base");
 
     // Default synced indicator should have empty text " "
     assert_eq!(theme.indicators.sync.synced.text, " ");
 
     // Default failed indicator should have "!" and yellow bold styling
     assert_eq!(theme.indicators.sync.failed.text, "!");
-    // Note: These values come from @default.toml, not programmatic defaults
+    // Note: These values come from @base.toml, not programmatic defaults
 }
 
 #[test]
@@ -962,7 +962,7 @@ fn test_v1_element_replacement_preserves_per_level_modes() {
     // are preserved after the property-level merge.
     //
     // The merge flow is:
-    // 1. Theme merge: @default + child theme → child's level-inner replaces @default's
+    // 1. Theme merge: @base + child theme → child's level-inner replaces @base's
     // 2. Per-level merge: elements.level-inner + levels.info.level-inner → property-level merge
     //    Result: level-inner = { style = "info", modes = ["bold"] }
     let app_dirs = dirs();
@@ -1299,54 +1299,54 @@ fn test_v0_ignores_styles_section() {
 
 #[test]
 fn test_custom_default_theme_with_extension() {
-    // FR-001b: System MUST allow custom themes named `@default` when loaded with extension
-    // Uses external file: src/testing/assets/themes/@default.yaml
+    // FR-001b: System MUST allow custom themes named `@base` when loaded with extension
+    // Uses external file: src/testing/assets/themes/@base.yaml
     let app_dirs = dirs();
 
-    // Load @default.yaml with extension (merges with embedded @default correctly)
-    let theme = Theme::load(&app_dirs, "@default.yaml").unwrap();
+    // Load @base.yaml with extension (merges with embedded @base correctly)
+    let theme = Theme::load(&app_dirs, "@base.yaml").unwrap();
 
-    // Custom @default.yaml is a v0 theme, but it still merges with embedded v1 @default
+    // Custom @base.yaml is a v0 theme, but it still merges with embedded v1 @base
     // The merged theme retains the custom theme's version (v0)
     assert_eq!(
         theme.version,
         Version::V0_0,
-        "Custom @default.yaml is v0, merged result uses custom theme's version"
+        "Custom @base.yaml is v0, merged result uses custom theme's version"
     );
 
     // Verify the custom content WAS loaded and applied
     // Custom file defines message with red foreground and bold mode
-    // This should override the message definition from embedded @default
+    // This should override the message definition from embedded @base
     let message_style = theme.elements.get(&Element::Message);
     assert!(
         message_style.is_some(),
-        "Message element should be present (from custom or @default)"
+        "Message element should be present (from custom or @base)"
     );
 
-    // The custom @default.yaml defines message with red foreground
+    // The custom @base.yaml defines message with red foreground
     // After merge, custom definition should win
     assert_eq!(
         message_style.unwrap().foreground,
         Some(Color::Plain(PlainColor::Red)),
-        "Custom @default.yaml message definition should override embedded @default"
+        "Custom @base.yaml message definition should override embedded @base"
     );
 
-    // Verify it actually merged with embedded @default by checking for elements
-    // that are NOT in custom @default.yaml but ARE in embedded @default
+    // Verify it actually merged with embedded @base by checking for elements
+    // that are NOT in custom @base.yaml but ARE in embedded @base
     assert!(
         theme.elements.get(&Element::Input).is_some(),
-        "Should have 'input' element from embedded @default (not in custom file)"
+        "Should have 'input' element from embedded @base (not in custom file)"
     );
     assert!(
         theme.elements.get(&Element::Time).is_some(),
-        "Should have 'time' element from embedded @default (not in custom file)"
+        "Should have 'time' element from embedded @base (not in custom file)"
     );
 
     // Custom file only defines 'message', so if we have other elements,
-    // it proves the merge with @default happened
+    // it proves the merge with @base happened
     assert!(
         theme.elements.len() > 1,
-        "Should have multiple elements from @default merge, not just 'message' from custom file. Got {} elements",
+        "Should have multiple elements from @base merge, not just 'message' from custom file. Got {} elements",
         theme.elements.len()
     );
 }
@@ -1501,18 +1501,18 @@ fn test_multiple_conflicting_tags_allowed() {
 
 #[test]
 fn test_custom_default_theme_without_extension() {
-    // FR-001b: System MUST allow custom themes named `@default` when loaded by stem name
-    // Uses external file: src/testing/assets/themes/@default.yaml
+    // FR-001b: System MUST allow custom themes named `@base` when loaded by stem name
+    // Uses external file: src/testing/assets/themes/@base.yaml
     let app_dirs = dirs();
 
-    // Load @default without extension (this currently doesn't load custom theme)
-    let theme = Theme::load(&app_dirs, "@default").unwrap();
+    // Load @base without extension (this currently doesn't load custom theme)
+    let theme = Theme::load(&app_dirs, "@base").unwrap();
 
-    // Custom @default.yaml is a v0 theme, merged result uses custom theme's version (v0)
+    // Custom @base.yaml is a v0 theme, merged result uses custom theme's version (v0)
     assert_eq!(
         theme.version,
         Version::V0_0,
-        "Custom @default is v0, merged result uses custom theme's version"
+        "Custom @base is v0, merged result uses custom theme's version"
     );
 
     // Verify the custom content WAS loaded and merged
@@ -1521,30 +1521,30 @@ fn test_custom_default_theme_without_extension() {
     let message_style = theme.elements.get(&Element::Message);
     assert!(message_style.is_some(), "Message element should be present after merge");
 
-    // The custom @default.yaml defines message with red foreground
-    // This should override the message definition from embedded @default
+    // The custom @base.yaml defines message with red foreground
+    // This should override the message definition from embedded @base
     assert_eq!(
         message_style.unwrap().foreground,
         Some(Color::Plain(PlainColor::Red)),
-        "Custom @default.yaml message definition should override embedded @default"
+        "Custom @base.yaml message definition should override embedded @base"
     );
 
-    // Verify it actually merged with embedded @default by checking for elements
-    // that are NOT in custom @default.yaml but ARE in embedded @default
+    // Verify it actually merged with embedded @base by checking for elements
+    // that are NOT in custom @base.yaml but ARE in embedded @base
     assert!(
         theme.elements.get(&Element::Input).is_some(),
-        "Should have 'input' element from embedded @default (not in custom file)"
+        "Should have 'input' element from embedded @base (not in custom file)"
     );
     assert!(
         theme.elements.get(&Element::Time).is_some(),
-        "Should have 'time' element from embedded @default (not in custom file)"
+        "Should have 'time' element from embedded @base (not in custom file)"
     );
 
     // Custom file only defines 'message', so if we have other elements,
-    // it proves the merge with @default happened
+    // it proves the merge with @base happened
     assert!(
         theme.elements.len() > 1,
-        "Should have multiple elements from @default merge, not just 'message' from custom file. Got {} elements",
+        "Should have multiple elements from @base merge, not just 'message' from custom file. Got {} elements",
         theme.elements.len()
     );
 }

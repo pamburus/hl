@@ -41,11 +41,11 @@
 
 - Q: What should happen if filesystem operations fail during theme file reading (e.g., permission denied, I/O error, disk full)? → A: Exit with error to stderr reporting the specific filesystem error (permission denied, I/O error, etc.)
 
-- Q: What happens when a v1 theme references a role that is not defined in the theme? → A: V1 uses embedded `@default` theme with defaults for all styles; undefined roles in user themes fall back to `@default` which defines all reasonable defaults with specific styles resolving to generic ones (primary/secondary)
+- Q: What happens when a v1 theme references a role that is not defined in the theme? → A: V1 uses embedded `@base` theme with defaults for all styles; undefined roles in user themes fall back to `@base` which defines all reasonable defaults with specific styles resolving to generic ones (primary/secondary)
 
 ### Session 2024-12-25 (Fourth Pass)
 
-- Q: How does the `include` directive work in v1? → A: No custom `include` directive in v1; only `@default` theme inheritance. Custom inclusions may be considered later.
+- Q: How does the `include` directive work in v1? → A: No custom `include` directive in v1; only `@base` theme inheritance. Custom inclusions may be considered later.
 
 - Q: What is the schema for the `styles` section in v1 themes? → A: Object map where keys are role names, values are style objects with optional `style` field for parent/base inheritance: `styles: {warning: {style: "primary", foreground: "#FFA500", modes: [bold]}}`
 
@@ -83,13 +83,13 @@
 
 - Q: Are element names, role names, and ANSI color names case-sensitive or case-insensitive? → A: Case-sensitive for all: element names, role names, color names (e.g., "primary" ≠ "Primary", "black" ≠ "Black")
 
-- Q: What is the behavior for empty/missing sections (elements, styles, levels)? → A: For v1: missing sections treated as empty; empty sections allowed; theme inherits from @default for undefined parts. For v0: all sections are optional; if missing then all elements inside are considered missing; elements with parent/inner relations or boolean special case inherit from parent if missing; others use empty style (default terminal background and foreground, no modes).
+- Q: What is the behavior for empty/missing sections (elements, styles, levels)? → A: For v1: missing sections treated as empty; empty sections allowed; theme inherits from @base for undefined parts. For v0: all sections are optional; if missing then all elements inside are considered missing; elements with parent/inner relations or boolean special case inherit from parent if missing; others use empty style (default terminal background and foreground, no modes).
 
 - Q: Does the boolean→boolean-true/boolean-false special case still occur in v1, or does v1 use only role-based inheritance? → A: V1 keeps boolean special case for backward compatibility (active merging still happens)
 
 - Q: What is the indicators feature referenced in the indicators section? → A: Out of scope for detailed specification - indicators are a separate feature (--follow mode). Brief description: When --follow option is used, application processes inputs simultaneously, sorting entries chronologically. A sync indicator placeholder at line start shows two states: in sync (default) and out of sync (typically `!` with warning style). Themes provide only styling for these indicator states.
 
-- Q: Does @default theme define all 28 elements and all 16 roles explicitly, or just a subset? → A: @default defines all 28 elements and all 16 roles explicitly with reasonable defaults. Styles with more specific roles usually just inherit styles with more generic roles by default - this provides better flexibility, old themes may still be compatible with newer app versions and look consistently even without defining explicitly styles for new roles.
+- Q: Does @base theme define all 28 elements and all 16 roles explicitly, or just a subset? → A: @base defines all 28 elements and all 16 roles explicitly with reasonable defaults. Styles with more specific roles usually just inherit styles with more generic roles by default - this provides better flexibility, old themes may still be compatible with newer app versions and look consistently even without defining explicitly styles for new roles.
 
 ### Session 2024-12-25 (Eighth Pass)
 
@@ -111,13 +111,13 @@
 
 - Q: Does the `$palette` section work the same in v1 as in v0? → A: No - $palette is NOT supported in v1; it's only supported in v0 as a YAML anchor/alias organization feature; v1 strict parsing rejects $palette as an unknown top-level section per FR-028a
 
-- Q: Can users create a custom theme file named `@default` or is this name reserved/protected? → A: The embedded `@default` theme is excluded from theme listings (special hidden base theme), but users CAN create custom themes named `@default` which will be loaded and merged with the embedded `@default` following normal custom theme priority rules. Other theme names starting with `@` are not reserved and can be used normally.
+- Q: Can users create a custom theme file named `@base` or is this name reserved/protected? → A: The embedded `@base` theme is excluded from theme listings (special hidden base theme), but users CAN create custom themes named `@base` which will be loaded and merged with the embedded `@base` following normal custom theme priority rules. Other theme names starting with `@` are not reserved and can be used normally.
 
 - Q: What happens when a file's extension doesn't match its content (e.g., `theme.yaml` contains TOML content)? → A: Parse error from format parser (YAML parser fails on TOML content) - exit with error to stderr
 
 ### Session 2024-12-25 (Tenth Pass)
 
-- Q: What is the complete property resolution order for a v1 element when combining roles, @default, element explicit properties, and level-specific overrides? → A: Likely B (@default → level-specific → role → element explicit), but exact resolution order needs further clarification after defining complete list of user stories and use cases. Alternative: level-specific first, then @default, then merge parent roles recursively, then explicit element properties.
+- Q: What is the complete property resolution order for a v1 element when combining roles, @base, element explicit properties, and level-specific overrides? → A: Likely B (@base → level-specific → role → element explicit), but exact resolution order needs further clarification after defining complete list of user stories and use cases. Alternative: level-specific first, then @base, then merge parent roles recursively, then explicit element properties.
 
 - Q: Does the <50ms performance requirement apply to all theme configurations including edge cases like 64-level role chains? → A: Yes - <50ms for all scenarios including 64-level role chains and maximum complexity
 
@@ -141,7 +141,7 @@
 
 ### Session 2024-12-25 (Twelfth Pass)
 
-- Q: What is the exact v1 element property resolution order when combining @default, base element, level-specific override, role reference, and explicit properties? → A: Proposed Order A (merge elements first, then resolve role): 1) Start with @default element, 2) Merge base element from user theme, 3) Merge level-specific element, 4) Resolve `style` field if present (role resolution recursive), 5) Apply explicit properties from merged element (override role properties)
+- Q: What is the exact v1 element property resolution order when combining @base, base element, level-specific override, role reference, and explicit properties? → A: Proposed Order A (merge elements first, then resolve role): 1) Start with @base element, 2) Merge base element from user theme, 3) Merge level-specific element, 4) Resolve `style` field if present (role resolution recursive), 5) Apply explicit properties from merged element (override role properties)
 
 ### Session 2024-12-26 (Thirteenth Pass)
 
@@ -149,13 +149,13 @@
 
 ### Session 2025-01-07 (Fourteenth Pass)
 
-- Q: Should v0 themes automatically deduce style roles from element definitions to improve consistency with @default? → A: Yes - before merging with @default, deduce styles.secondary from time, styles.primary from string, styles.strong from message, styles.accent from key, and styles.syntax from array; this makes undefined elements use colors consistent with v0 theme's aesthetic
+- Q: Should v0 themes automatically deduce style roles from element definitions to improve consistency with @base? → A: Yes - before merging with @base, deduce styles.secondary from time, styles.primary from string, styles.strong from message, styles.accent from key, and styles.syntax from array; this makes undefined elements use colors consistent with v0 theme's aesthetic
 
-- Q: How should elements not defined in v0 themes fall back to @default when they reference styles? → A: Fix style resolution to preserve inherited modes from base styles; ReplaceModes flag should only apply to theme-level merging, not within-theme style resolution; when merging style's own properties onto resolved base, use additive mode merging
+- Q: How should elements not defined in v0 themes fall back to @base when they reference styles? → A: Fix style resolution to preserve inherited modes from base styles; ReplaceModes flag should only apply to theme-level merging, not within-theme style resolution; when merging style's own properties onto resolved base, use additive mode merging
 
 - Q: Should style deduction override explicitly defined styles in v0 themes? → A: No - deduction only creates a style if: (1) element is defined in v0 theme, AND (2) style is not already defined; explicit definitions take precedence
 
-- Q: When exactly does style deduction happen? → A: After loading v0 theme file but before merging with @default; deduced styles become part of v0 theme's inventory and override @default's corresponding styles during merge
+- Q: When exactly does style deduction happen? → A: After loading v0 theme file but before merging with @base; deduced styles become part of v0 theme's inventory and override @base's corresponding styles during merge
 
 - Q: What does "with empty base" mean in FR-031's style deduction description? → A: The deduced style has no reference to a parent style (no base roles to inherit from); internally this means the base field is empty/default, not referencing any other style role; this is an artificially created style during deduction logic, not present in v0 theme schema
 
@@ -163,15 +163,15 @@
 
 ### Session 2025-12-28 (Fifteenth Pass)
 
-- Q: Can inner elements be defined without corresponding parent elements (e.g., can you define `level-inner` in a theme without defining `level`)? → A: Inner elements are valid on their own; in v1, they fall back to @default theme's parent element for the parent's style; in v0, orphaned inner elements use empty/terminal default for the parent since v0 has no @default theme to fall back to
+- Q: Can inner elements be defined without corresponding parent elements (e.g., can you define `level-inner` in a theme without defining `level`)? → A: Inner elements are valid on their own; in v1, they fall back to @base theme's parent element for the parent's style; in v0, orphaned inner elements use empty/terminal default for the parent since v0 has no @base theme to fall back to
 
 - Q: What happens when the theme directory doesn't exist or isn't readable? → A: Skip custom themes silently, continue with stock themes only (no error, no directory creation)
 
 - Q: What happens when a theme file exists but has restrictive permissions (not readable)? → A: Exit with permission denied error to stderr (consistent with FR-007 filesystem error handling)
 
-- Q: How does a custom @default theme merge with the embedded @default theme? → A: Custom @default merges like any other custom theme - no special treatment for the name. At theme merge level (FR-001a): custom theme elements completely replace corresponding embedded @default elements (using extend, not property merge). Property-level merging happens later during style resolution. The merge strategy depends on custom theme version: v0 uses element replacement semantics (FR-016), v1 uses property-level merge during resolution (FR-041). The embedded @default is v1, so it has styles and hierarchical inheritance. After merging, the result can have hierarchical styles requiring resolution. Cross-references: FR-001b (custom @default allowed), FR-045 (v1 inheritance chain), FR-041 (v1 resolution order)
+- Q: How does a custom @base theme merge with the embedded @base theme? → A: Custom @base merges like any other custom theme - no special treatment for the name. At theme merge level (FR-001a): custom theme elements completely replace corresponding embedded @base elements (using extend, not property merge). Property-level merging happens later during style resolution. The merge strategy depends on custom theme version: v0 uses element replacement semantics (FR-016), v1 uses property-level merge during resolution (FR-041). The embedded @base is v1, so it has styles and hierarchical inheritance. After merging, the result can have hierarchical styles requiring resolution. Cross-references: FR-001b (custom @base allowed), FR-045 (v1 inheritance chain), FR-041 (v1 resolution order)
 
-- Q: What happens when a parent element is defined at the level-specific scope but not in base elements (e.g., theme defines levels.error.level but not elements.level)? → A: Level-specific element merges with @default base element - follows FR-041 resolution order which starts with @default element, then merges base element from user theme (if present), then merges level-specific element; absence of base element in custom theme doesn't prevent level-specific elements from working
+- Q: What happens when a parent element is defined at the level-specific scope but not in base elements (e.g., theme defines levels.error.level but not elements.level)? → A: Level-specific element merges with @base base element - follows FR-041 resolution order which starts with @base element, then merges base element from user theme (if present), then merges level-specific element; absence of base element in custom theme doesn't prevent level-specific elements from working
 
 - Q: How does the system handle a theme with both base `level` and level-specific `warning.level` when displaying a warning? → A: Level-specific properties override base properties - the system merges base `level` element with `warning.level` override per FR-020 where level-specific properties win for defined properties; the merged result is used for rendering warning-level logs; undefined properties in level-specific inherit from base
 
@@ -183,13 +183,13 @@
 
 - Q: What happens when multiple theme files exist with the same stem but different extensions (e.g., theme.yaml and theme.toml)? → A: Silent - load highest priority extension (.yaml) without warning or indication that other files were ignored; this keeps behavior simple and predictable; users who want a specific format can use full filename
 
-- Q: Should custom @default theme files created by users appear in theme listings? → A: Yes - show custom @default in custom themes list; while embedded @default is hidden (system default), custom @default is user-created and should be visible so users can see and manage it
+- Q: Should custom @base theme files created by users appear in theme listings? → A: Yes - show custom @base in custom themes list; while embedded @base is hidden (system default), custom @base is user-created and should be visible so users can see and manage it
 
 - Q: When does color validation occur - during initial theme file parsing, during merge, or during resolution? → A: During initial theme file parsing (fail-fast approach) - if a theme file contains invalid color values, the system exits with error immediately when parsing that file, providing immediate feedback to theme authors per FR-026
 
-- Q: When a custom theme (e.g., v0) merges with the embedded @default theme (v1), what version does the resulting merged theme have? → A: Custom theme's version wins - the merged result uses the version from the custom theme that was explicitly requested by the user; for example, v0 custom theme + v1 @default = v0 result; this ensures the custom theme's semantics (v0 replacement vs v1 property-level merge) are applied correctly
+- Q: When a custom theme (e.g., v0) merges with the embedded @base theme (v1), what version does the resulting merged theme have? → A: Custom theme's version wins - the merged result uses the version from the custom theme that was explicitly requested by the user; for example, v0 custom theme + v1 @base = v0 result; this ensures the custom theme's semantics (v0 replacement vs v1 property-level merge) are applied correctly
 
-- Q: Should circular reference detection apply to the embedded @default theme, or only to user themes? → A: Circular reference detection occurs after merging user theme with @default - user theme overrides can create circular role references that didn't exist before merge (e.g., user overrides role A to reference role B, while @default has B reference A); detection must happen on the merged result, not on individual themes separately
+- Q: Should circular reference detection apply to the embedded @base theme, or only to user themes? → A: Circular reference detection occurs after merging user theme with @base - user theme overrides can create circular role references that didn't exist before merge (e.g., user overrides role A to reference role B, while @base has B reference A); detection must happen on the merged result, not on individual themes separately
 
 - Q: In v1, what's the difference between an element having modes=[] (empty array) versus not having a modes field at all? → A: Same as v0 - both empty array and absent field inherit modes from parent/role; in v1 modes is a diff set (add/remove operations), so an empty modes array means "no mode operations specified" which results in inheriting from the base style/role, just like an absent field; modes never replace the whole set in v1, only modify it
 
@@ -197,7 +197,7 @@
 
 - Q: When an element references a role name via the `style` field, is the role name validated immediately during parsing or later during style resolution? → A: During initial theme file parsing (fail-fast like color validation) - if an element references an invalid role name (not in the predefined role enum), the system exits with error immediately when parsing that file; this provides immediate feedback to theme authors and catches typos early
 
-- Q: What happens if the `default` role is not defined in the theme (neither in user theme nor in @default)? → A: The embedded @default theme MUST define the `default` role - this is a guaranteed invariant tested during development; since @default defines all 16 roles explicitly (per FR-038), the `default` role is always available as the implicit base for other roles
+- Q: What happens if the `default` role is not defined in the theme (neither in user theme nor in @base)? → A: The embedded @base theme MUST define the `default` role - this is a guaranteed invariant tested during development; since @base defines all 16 roles explicitly (per FR-038), the `default` role is always available as the implicit base for other roles
 
 - Q: Are palette color values in the `$palette` section validated the same way as element colors? → A: No - palette colors are not validated; $palette is only supported in v0 themes (YAML anchor/alias organization feature); v1 strict parsing rejects the `$palette` section as an unknown top-level section per FR-010c forward compatibility rules (v1 themes must not include $palette)
 
@@ -401,7 +401,7 @@ Theme authors using v1 can define semantic roles (like "warning", "error", "succ
 
 5. **Given** a v1 theme that defines only 5 specific elements
    **When** the theme is loaded
-   **Then** all non-defined elements inherit from the embedded `@default` theme (property-level merging for v1)
+   **Then** all non-defined elements inherit from the embedded `@base` theme (property-level merging for v1)
 
 ---
 
@@ -409,14 +409,14 @@ Theme authors using v1 can define semantic roles (like "warning", "error", "succ
 
 - What happens when trying to load a theme with an extension not in the supported list (.yaml, .yml, .toml, .json)? (Answer: Exit with specific error message to stderr: "Unsupported theme file extension '.ext' - supported extensions are: .yaml, .yml, .toml, .json")
 - What happens when multiple theme files exist with the same stem but different extensions (e.g., theme.yaml and theme.toml)? (Answer: Silent - load highest priority extension without warning per FR-002a; users can specify full filename for specific format)
-- Should custom @default theme files created by users appear in theme listings? (Answer: Yes - custom @default shown in custom themes list per FR-030c; embedded @default remains hidden)
+- Should custom @base theme files created by users appear in theme listings? (Answer: Yes - custom @base shown in custom themes list per FR-030c; embedded @base remains hidden)
 - When does color validation occur - during initial theme file parsing, during merge, or during resolution? (Answer: During initial theme file parsing per FR-026a - fail-fast approach provides immediate feedback)
-- When a custom theme (e.g., v0) merges with the embedded @default theme (v1), what version does the resulting merged theme have? (Answer: Custom theme's version wins per FR-045a - v0 custom + v1 @default = v0 result)
-- Should circular reference detection apply to the embedded @default theme, or only to user themes? (Answer: Detection occurs after merging per FR-047a - user overrides can create loops that didn't exist before merge)
+- When a custom theme (e.g., v0) merges with the embedded @base theme (v1), what version does the resulting merged theme have? (Answer: Custom theme's version wins per FR-045a - v0 custom + v1 @base = v0 result)
+- Should circular reference detection apply to the embedded @base theme, or only to user themes? (Answer: Detection occurs after merging per FR-047a - user overrides can create loops that didn't exist before merge)
 - In v1, what's the difference between an element having modes=[] (empty array) versus not having a modes field at all? (Answer: Same as v0 - both inherit from parent/role per FR-018b; in v1 modes is a diff set, so empty array = no operations = inherit)
 - Should theme listing output use case-sensitive or case-insensitive alphabetical sorting? (Answer: Case-sensitive sorting per FR-030d - ASCII order with uppercase before lowercase for deterministic ordering)
 - When an element references a role name via the `style` field, is the role name validated immediately during parsing or later during style resolution? (Answer: During initial parsing per FR-040a - fail-fast validation like colors, catches invalid role names immediately)
-- What happens if the `default` role is not defined in the theme (neither in user theme nor in @default)? (Answer: Guaranteed invariant - @default theme MUST define default role per FR-038a, tested during development)
+- What happens if the `default` role is not defined in the theme (neither in user theme nor in @base)? (Answer: Guaranteed invariant - @base theme MUST define default role per FR-038a, tested during development)
 - Are palette color values in the `$palette` section validated the same way as element colors? (Answer: No - palette colors not validated; $palette only supported in v0, v1 rejects it per FR-028a)
 - Are file extensions case-sensitive (e.g., does .YAML or .Yaml work on any platform)? → A: Strict - only lowercase extensions accepted per FR-002c; .YAML, .Yaml, .YML not recognized)
 - In the boolean special case merge, what is the merge direction and how are undefined properties handled? → A: Boolean is base, variants override per FR-024b - boolean → merged with → boolean-true/false; undefined variant properties inherit from boolean)
@@ -425,10 +425,10 @@ Theme authors using v1 can define semantic roles (like "warning", "error", "succ
 - What error message is shown when role inheritance depth exceeds 64 levels? (Answer: Specific error per FR-046a: "Role inheritance depth exceeded: maximum 64 levels (chain: role1 → role2 → ... → roleN)" with depth info and affected roles)
 - Can theme names contain special characters like spaces, dots, unicode, or other non-ASCII characters? (Answer: Yes per FR-002d - any valid filename characters allowed; recommendation is lowercase kebab-case for portability)
 - What happens if no theme names meet the Jaro similarity threshold of 0.75 for suggestions? (Answer: Omit suggestions entirely per FR-006c - error shows only "Theme not found" without suggestions section if none meet threshold)
-- Can inner elements be defined without corresponding parent elements? (Answer: Yes - inner elements are valid on their own; in v1 they fall back to @default theme's parent element, in v0 they use empty/terminal default for the parent)
+- Can inner elements be defined without corresponding parent elements? (Answer: Yes - inner elements are valid on their own; in v1 they fall back to @base theme's parent element, in v0 they use empty/terminal default for the parent)
 - What happens when the theme directory doesn't exist or isn't readable? (Answer: Skip custom themes silently, continue with stock themes only - no error, no directory creation)
-- How does a custom @default theme merge with the embedded @default theme? (Answer: Custom @default merges like any other theme - elements from custom theme completely replace embedded @default elements at theme merge level; property-level merging happens during resolution; merge strategy depends on custom theme version per FR-016 (v0) or FR-041 (v1))
-- What happens when a parent element is defined at the level-specific scope but not in base elements? (Answer: Level-specific element merges with @default base element per FR-041 resolution order)
+- How does a custom @base theme merge with the embedded @base theme? (Answer: Custom @base merges like any other theme - elements from custom theme completely replace embedded @base elements at theme merge level; property-level merging happens during resolution; merge strategy depends on custom theme version per FR-016 (v0) or FR-041 (v1))
+- What happens when a parent element is defined at the level-specific scope but not in base elements? (Answer: Level-specific element merges with @base base element per FR-041 resolution order)
 - How does the system handle a theme with both base `level` and level-specific `warning.level` when displaying a warning? (Answer: Level-specific properties override base properties per FR-020 - merged result used for rendering where level-specific wins for defined properties, undefined properties inherit from base)
 - What happens when modes contains duplicate values in v0 (e.g., modes=[bold, italic, bold])? (Answer: Deduplicated during theme loading with last occurrence kept per FR-027)
 - Should the system support .yml extension alongside .yaml for YAML theme files? (Answer: Yes - both .yml and .yaml supported with same priority in extension search order per updated FR-002)
@@ -446,7 +446,7 @@ Theme authors using v1 can define semantic roles (like "warning", "error", "succ
 
 - **FR-001a**: System MUST search for themes in this priority order: custom themes directory first, then stock themes embedded in binary (custom themes with same name completely replace stock themes - no merging or inheritance)
 
-- **FR-001b**: System MUST exclude the embedded `@default` from theme listings (it is a special hidden base theme); however, users MAY create custom themes named `@default` which will be loaded and merged with the embedded `@default` theme following normal custom theme priority rules (FR-001a); custom `@default` theme files MUST appear in theme listings under the custom themes group (FR-030c) since they are user-created; the system MUST load custom `@default` themes consistently whether loaded by stem name (`@default`) or full filename (`@default.yaml`), both methods should check for custom theme files first and merge with embedded `@default`; the embedded `@default` theme itself MUST NOT merge with itself (no recursion); other theme names starting with `@` are not reserved and can be used normally
+- **FR-001b**: System MUST exclude the embedded `@base` from theme listings (it is a special hidden base theme); however, users MAY create custom themes named `@base` which will be loaded and merged with the embedded `@base` theme following normal custom theme priority rules (FR-001a); custom `@base` theme files MUST appear in theme listings under the custom themes group (FR-030c) since they are user-created; the system MUST load custom `@base` themes consistently whether loaded by stem name (`@base`) or full filename (`@base.yaml`), both methods should check for custom theme files first and merge with embedded `@base`; the embedded `@base` theme itself MUST NOT merge with itself (no recursion); other theme names starting with `@` are not reserved and can be used normally
 
 - **FR-002**: System MUST support loading themes by stem name (without extension) with automatic format detection in priority order: .yaml, .yml, .toml, .json (first found wins); both .yaml and .yml extensions are supported for YAML files and use the YAML parser; theme name matching is case-sensitive on Linux/macOS and case-insensitive on Windows (follows platform filesystem conventions)
 
@@ -489,7 +489,7 @@ Theme authors using v1 can define semantic roles (like "warning", "error", "succ
 
 - **FR-010a**: System MUST accept completely empty theme files as valid v0 themes (all sections missing, inherits from terminal defaults and parent/inner relationships)
 
-- **FR-010b**: System MUST accept v1 theme files with only `version: "1.0"` field as valid (all other sections optional, inherits from `@default` theme)
+- **FR-010b**: System MUST accept v1 theme files with only `version: "1.0"` field as valid (all other sections optional, inherits from `@base` theme)
 
 - **FR-010c**: System MUST ignore unknown top-level sections in theme files when the theme version is supported by the application (forward compatibility within same version)
 
@@ -530,9 +530,9 @@ Theme authors using v1 can define semantic roles (like "warning", "error", "succ
   - When merging child into parent: if child has foreground defined, child foreground replaces parent foreground
   - When merging child into parent: if child has background defined, child background replaces parent background
 
-- **FR-017**: System MUST provide parent→inner inheritance such that when an inner element is not explicitly defined in the theme files (after merging @default, base elements, and level-specific elements), the system creates the inner element by copying the resolved parent element style; this inheritance happens during theme resolution after role resolution (per FR-041d step 6)
+- **FR-017**: System MUST provide parent→inner inheritance such that when an inner element is not explicitly defined in the theme files (after merging @base, base elements, and level-specific elements), the system creates the inner element by copying the resolved parent element style; this inheritance happens during theme resolution after role resolution (per FR-041d step 6)
 
-- **FR-017a**: System MUST allow inner elements to be defined without corresponding parent elements (orphaned inner elements); in v1, orphaned inner elements inherit from the `@default` theme's parent element for parent→inner inheritance (leveraging v1's @default inheritance mechanism); in v0, orphaned inner elements use empty/terminal default for the parent since v0 has no @default theme; parent→inner inheritance still applies at the resolved style level regardless of whether the parent is explicitly defined in the user theme
+- **FR-017a**: System MUST allow inner elements to be defined without corresponding parent elements (orphaned inner elements); in v1, orphaned inner elements inherit from the `@base` theme's parent element for parent→inner inheritance (leveraging v1's @base inheritance mechanism); in v0, orphaned inner elements use empty/terminal default for the parent since v0 has no @base theme; parent→inner inheritance still applies at the resolved style level regardless of whether the parent is explicitly defined in the user theme
 
 - **FR-018**: System MUST treat empty modes array `[]` identically to absent modes field (both inherit from parent)
 
@@ -546,7 +546,7 @@ Theme authors using v1 can define semantic roles (like "warning", "error", "succ
 
 - **FR-020**: System MUST merge level-specific elements with base elements at load time (creating a complete StylePack for each level) such that level overrides win for defined properties
 
-- **FR-020a**: System MUST allow level-specific elements to be defined without corresponding base elements in the custom theme; level-specific elements merge with @default theme's base element following the resolution order in FR-041 (start with @default element, merge base element if present in custom theme, then merge level-specific element); this allows themes to define level-specific overrides without requiring base element definitions
+- **FR-020a**: System MUST allow level-specific elements to be defined without corresponding base elements in the custom theme; level-specific elements merge with @base theme's base element following the resolution order in FR-041 (start with @base element, merge base element if present in custom theme, then merge level-specific element); this allows themes to define level-specific overrides without requiring base element definitions
 
 - **FR-020b**: System MUST merge base elements with level-specific elements using property-level override semantics: when both base element and level-specific element exist, level-specific properties win for defined properties (foreground, background, modes), while undefined properties in level-specific inherit from base; the merged result is used for rendering at that level; for example, if base `level` has foreground=#AAAAAA and modes=[italic], and `warning.level` has foreground=#FFA500, the warning level renders with foreground=#FFA500 (overridden) and modes=[italic] (inherited from base)
 
@@ -596,23 +596,23 @@ Theme authors using v1 can define semantic roles (like "warning", "error", "succ
 
 - **FR-030b**: System MUST display each theme by stem name only once in theme listings, even when multiple file formats exist for the same stem (e.g., if both theme.yaml and theme.toml exist, list shows "theme" once, representing the loadable theme per extension priority)
 
-- **FR-030c**: System MUST include custom `@default` theme files in theme listings under the custom themes group; only the embedded `@default` theme is excluded from listings; this allows users to see and manage their custom @default themes
+- **FR-030c**: System MUST include custom `@base` theme files in theme listings under the custom themes group; only the embedded `@base` theme is excluded from listings; this allows users to see and manage their custom @base themes
 
 - **FR-030d**: System MUST sort themes alphabetically within each group (stock/custom) using case-sensitive ASCII ordering where uppercase letters come before lowercase letters (e.g., "MyTheme", "Theme", "another", "basic"); this provides deterministic and predictable ordering
 
-- **FR-031**: System MUST automatically deduce style roles from element definitions in v0 themes before merging with `@default` theme, using these mappings: if v0 theme defines `time` element → deduce `styles.secondary` from it; if defines `string` → deduce `styles.primary`; if defines `message` → deduce `styles.strong`; if defines `key` → deduce `styles.accent`; if defines `array` → deduce `styles.syntax`; deduction copies foreground, background, and modes from the element definition to create the corresponding style role with no base (the deduced style has no reference to parent styles, i.e., no base roles to inherit from); note that v0 theme schema does not include a styles section, so deduced styles are created artificially during theme loading and cannot be explicitly defined in v0 theme files
+- **FR-031**: System MUST automatically deduce style roles from element definitions in v0 themes before merging with `@base` theme, using these mappings: if v0 theme defines `time` element → deduce `styles.secondary` from it; if defines `string` → deduce `styles.primary`; if defines `message` → deduce `styles.strong`; if defines `key` → deduce `styles.accent`; if defines `array` → deduce `styles.syntax`; deduction copies foreground, background, and modes from the element definition to create the corresponding style role with no base (the deduced style has no reference to parent styles, i.e., no base roles to inherit from); note that v0 theme schema does not include a styles section, so deduced styles are created artificially during theme loading and cannot be explicitly defined in v0 theme files
 
 - **FR-031a**: Style deduction MUST only create a style role if: (1) the corresponding element is defined in the v0 theme, AND (2) the style role is not already defined in the v0 theme; if a v0 theme explicitly defines both the element and its corresponding style, the explicit style definition takes precedence (no deduction)
 
-- **FR-031b**: Style deduction MUST happen after loading the v0 theme file but before merging with `@default` theme; the deduced styles become part of the v0 theme's style inventory and override corresponding styles from `@default` during merge
+- **FR-031b**: Style deduction MUST happen after loading the v0 theme file but before merging with `@base` theme; the deduced styles become part of the v0 theme's style inventory and override corresponding styles from `@base` during merge
 
-- **FR-031c**: Deduced styles MUST be used by all elements in `@default` that reference those style roles, making elements not defined in the v0 theme (like new elements added to `@default`) use colors and modes consistent with the v0 theme's aesthetic; for example, if v0 theme defines `time: {foreground: 30}`, this deduces `secondary: {foreground: 30}`, and then `input` element from `@default` (which has `style: "secondary"`) will use foreground 30
+- **FR-031c**: Deduced styles MUST be used by all elements in `@base` that reference those style roles, making elements not defined in the v0 theme (like new elements added to `@base`) use colors and modes consistent with the v0 theme's aesthetic; for example, if v0 theme defines `time: {foreground: 30}`, this deduces `secondary: {foreground: 30}`, and then `input` element from `@base` (which has `style: "secondary"`) will use foreground 30
 
-- **FR-031d**: Style deduction MUST NOT affect elements that are explicitly defined in the v0 theme; elements defined in v0 themes are complete and render exactly as specified (no inheritance from deduced or `@default` styles)
+- **FR-031d**: Style deduction MUST NOT affect elements that are explicitly defined in the v0 theme; elements defined in v0 themes are complete and render exactly as specified (no inheritance from deduced or `@base` styles)
 
 - **FR-032**: System MUST preserve inherited modes from base styles when resolving element styles that reference roles; when a style's own properties (foreground, background, modes) are merged onto the resolved base, mode merging MUST be additive (not replacement) regardless of the `ReplaceModes` flag; the `ReplaceModes` flag applies only to theme-level merging (child theme replacing parent theme), not to within-theme style resolution
 
-- **FR-032a**: For elements not defined in v0 themes, the system MUST fall back to `@default` theme's element definitions, preserving all properties including modes inherited from referenced styles; for example, if v0 theme doesn't define `input`, it falls back to `@default`'s `input = {style: "secondary"}` which resolves to include faint mode from the secondary style (unless overridden by deduced secondary style per FR-031)
+- **FR-032a**: For elements not defined in v0 themes, the system MUST fall back to `@base` theme's element definitions, preserving all properties including modes inherited from referenced styles; for example, if v0 theme doesn't define `input`, it falls back to `@base`'s `input = {style: "secondary"}` which resolves to include faint mode from the secondary style (unless overridden by deduced secondary style per FR-031)
 
 #### V1 Versioning
 
@@ -630,9 +630,9 @@ Theme authors using v1 can define semantic roles (like "warning", "error", "succ
 
 #### V1 Enhanced Inheritance (Future)
 
-- **FR-038**: V1 system MUST include an embedded `@default` theme that explicitly defines all 28 v0 elements and all 16 v1 roles with reasonable defaults; this theme is invisible when listing themes (not shown in stock or custom groups)
+- **FR-038**: V1 system MUST include an embedded `@base` theme that explicitly defines all 28 v0 elements and all 16 v1 roles with reasonable defaults; this theme is invisible when listing themes (not shown in stock or custom groups)
 
-- **FR-038a**: V1 `@default` theme MUST define roles with inheritance chains where more specific roles inherit from more generic ones (e.g., specific roles reference `primary` or `secondary` via `style` field), providing flexibility so old themes remain compatible with newer app versions and look consistent even without defining new roles explicitly; the `default` role MUST always be defined in the embedded @default theme (guaranteed invariant, tested during development) since it serves as the implicit base for all other roles per FR-039b
+- **FR-038a**: V1 `@base` theme MUST define roles with inheritance chains where more specific roles inherit from more generic ones (e.g., specific roles reference `primary` or `secondary` via `style` field), providing flexibility so old themes remain compatible with newer app versions and look consistent even without defining new roles explicitly; the `default` role MUST always be defined in the embedded @base theme (guaranteed invariant, tested during development) since it serves as the implicit base for all other roles per FR-039b
 
 - **FR-039**: V1 themes MUST support `styles` section as an object map where keys are role names (from predefined enum) and values are style objects containing optional foreground, background, modes, and an optional `style` field that references another role for parent/base inheritance (e.g., `styles: {warning: {style: "primary", foreground: "#FFA500", modes: [bold]}}`)
 
@@ -640,7 +640,7 @@ Theme authors using v1 can define semantic roles (like "warning", "error", "succ
 
 - **FR-039b**: V1 `default` role serves as the implicit base for all roles that do not explicitly specify a `style` field; properties set in `default` (foreground, background, modes) apply to all other roles unless overridden
 
-- **FR-039c**: V1 themes MUST allow `elements`, `styles`, and `levels` sections to be optional or empty; missing sections are treated as empty; undefined elements/roles inherit from the `@default` theme
+- **FR-039c**: V1 themes MUST allow `elements`, `styles`, and `levels` sections to be optional or empty; missing sections are treated as empty; undefined elements/roles inherit from the `@base` theme
 
 - **FR-039d**: V1 MUST retain nested styling scope for parent/inner element pairs (same as v0) in addition to the new property-level merging available through roles; both inheritance mechanisms coexist in v1
 
@@ -648,7 +648,7 @@ Theme authors using v1 can define semantic roles (like "warning", "error", "succ
 
 - **FR-040a**: System MUST validate role names in the `style` field during initial theme file parsing (fail-fast approach); if an element's `style` field references a role name that is not in the predefined role enum (default, primary, secondary, strong, muted, accent, accent-secondary, message, syntax, status, level, trace, debug, info, warning, error), the system exits with error immediately when parsing that file; this provides immediate feedback to theme authors and catches typos early, before any merge or resolution operations
 
-- **FR-041**: V1 themes MUST resolve element styles using the following order: 1) Start with element from @default theme (if defined), 2) Merge with base element from user theme (properties in base override @default), 3) Merge with level-specific element for the current level (level-specific properties override base), 4) If the merged element has a `style` field, resolve the role recursively (following role-to-role `style` references up to 64 levels depth), applying role properties to fill in undefined properties, 5) Apply explicit properties from the merged element (foreground, background, modes) which override role properties, 6) Apply parent→inner element inheritance by merging resolved parent element into resolved inner element (inner's resolved properties override parent's resolved properties)
+- **FR-041**: V1 themes MUST resolve element styles using the following order: 1) Start with element from @base theme (if defined), 2) Merge with base element from user theme (properties in base override @base), 3) Merge with level-specific element for the current level (level-specific properties override base), 4) If the merged element has a `style` field, resolve the role recursively (following role-to-role `style` references up to 64 levels depth), applying role properties to fill in undefined properties, 5) Apply explicit properties from the merged element (foreground, background, modes) which override role properties, 6) Apply parent→inner element inheritance by merging resolved parent element into resolved inner element (inner's resolved properties override parent's resolved properties)
 
 - **FR-041a**: V1 element merging (steps 1-3) follows standard property override semantics: later sources override earlier sources for defined properties; undefined properties are inherited from earlier sources
 
@@ -658,9 +658,9 @@ Theme authors using v1 can define semantic roles (like "warning", "error", "succ
 
 - **FR-041d**: V1 parent→inner inheritance (step 6) MUST occur AFTER role resolution (steps 4-5) is complete for both parent and inner elements; this ensures that role-based properties from the inner element's `style` field are fully resolved before being merged with parent element properties, maintaining correct priority where inner element's role-based properties override parent element's explicit properties (e.g., if parent `level` has explicit `foreground=139` and inner `level-inner` has `style=["level", "warning"]` where warning role defines `foreground=214`, the final result uses `foreground=214` from the inner element's resolved role, not `foreground=139` from the parent)
 
-- **FR-041e**: V1 complete resolution example for clarity: Given user theme `{version="1.0", styles.warning={foreground=214}, elements.level={foreground=139}}` and @default theme `{elements.level-inner={style="level"}, levels.warning.level-inner={style=["level","warning"]}}`, the warning level's `level-inner` resolves as follows: Step 1: Start with @default.elements.level-inner={style="level"}, Step 2: Merge user.elements.level-inner (undefined, no change), Step 3: Merge @default.levels.warning.level-inner={style=["level","warning"]}, result={style=["level","warning"]} with NO explicit foreground, Step 4-5: Resolve roles ["level","warning"] to get foreground=214 (from warning role), Step 6: Apply parent→inner inheritance by merging resolved parent element.level={foreground=139} into resolved level-inner={foreground=214}, since inner has explicit foreground=214 (from role resolution), it overrides parent's foreground=139, final result={foreground=214}; this demonstrates that role-based properties resolved in steps 4-5 become "explicit" for purposes of parent→inner merging in step 6
+- **FR-041e**: V1 complete resolution example for clarity: Given user theme `{version="1.0", styles.warning={foreground=214}, elements.level={foreground=139}}` and @base theme `{elements.level-inner={style="level"}, levels.warning.level-inner={style=["level","warning"]}}`, the warning level's `level-inner` resolves as follows: Step 1: Start with @base.elements.level-inner={style="level"}, Step 2: Merge user.elements.level-inner (undefined, no change), Step 3: Merge @base.levels.warning.level-inner={style=["level","warning"]}, result={style=["level","warning"]} with NO explicit foreground, Step 4-5: Resolve roles ["level","warning"] to get foreground=214 (from warning role), Step 6: Apply parent→inner inheritance by merging resolved parent element.level={foreground=139} into resolved level-inner={foreground=214}, since inner has explicit foreground=214 (from role resolution), it overrides parent's foreground=139, final result={foreground=214}; this demonstrates that role-based properties resolved in steps 4-5 become "explicit" for purposes of parent→inner merging in step 6
 
-- **FR-042**: V1 `@default` theme MUST define reasonable defaults for all roles, with the `default` role serving as the implicit base for all other roles that don't specify a `style` field, and specific roles using the `style` field to reference more generic ones (e.g., `warning: {style: "primary", ...}` where `primary` is also defined in `@default`)
+- **FR-042**: V1 `@base` theme MUST define reasonable defaults for all roles, with the `default` role serving as the implicit base for all other roles that don't specify a `style` field, and specific roles using the `style` field to reference more generic ones (e.g., `warning: {style: "primary", ...}` where `primary` is also defined in `@base`)
 
 - **FR-043**: V1 themes MUST support mode operations with +mode (add) and -mode (remove) prefixes; plain mode defaults to +mode. Modes are internally represented as two unordered sets (adds/removes). During style merging, child -mode removes parent's mode, child +mode adds mode. Final ANSI output includes only added modes in enum declaration order: Bold, Faint, Italic, Underline, SlowBlink, RapidBlink, Reverse, Conceal, CrossedOut. Remove operations are only used during merge process.
 
@@ -668,11 +668,11 @@ Theme authors using v1 can define semantic roles (like "warning", "error", "succ
 
 - **FR-043b**: V1 themes MUST resolve conflicting mode operations within the same modes array using last occurrence wins semantics (e.g., modes=[+bold, -bold] results in bold removed; modes=[-bold, +bold] results in bold added)
 
-- **FR-044**: V1 does NOT support custom `include` directive for referencing other themes; only `@default` theme inheritance is supported (custom includes may be considered for future versions)
+- **FR-044**: V1 does NOT support custom `include` directive for referencing other themes; only `@base` theme inheritance is supported (custom includes may be considered for future versions)
 
-- **FR-045**: V1 inheritance chain is simple: user theme → `@default` theme (no circular dependency detection needed)
+- **FR-045**: V1 inheritance chain is simple: user theme → `@base` theme (no circular dependency detection needed)
 
-- **FR-045a**: When a custom theme merges with the embedded `@default` theme, the resulting merged theme MUST use the version from the custom theme; this ensures the custom theme's merge semantics are applied correctly (e.g., v0 custom theme + v1 @default = v0 result with v0 replacement semantics; v1 custom theme + v1 @default = v1 result with v1 property-level merge semantics)
+- **FR-045a**: When a custom theme merges with the embedded `@base` theme, the resulting merged theme MUST use the version from the custom theme; this ensures the custom theme's merge semantics are applied correctly (e.g., v0 custom theme + v1 @base = v0 result with v0 replacement semantics; v1 custom theme + v1 @base = v1 result with v1 property-level merge semantics)
 
 - **FR-046**: V1 role-to-role inheritance via the `style` field MUST support a maximum depth of 64 levels
 
@@ -680,15 +680,15 @@ Theme authors using v1 can define semantic roles (like "warning", "error", "succ
 
 - **FR-047**: V1 themes MUST detect circular role references (e.g., `warning: {style: "error"}` and `error: {style: "warning"}`) and exit with error message showing the circular dependency chain
 
-- **FR-047a**: Circular reference detection MUST occur after merging the user theme with the embedded `@default` theme, not before; user theme overrides can create circular role references that didn't exist in either theme individually (e.g., if @default has `A: {style: "B"}` and user theme overrides with `B: {style: "A"}`, the circular reference only exists after merge); the detection applies to the complete merged role inventory
+- **FR-047a**: Circular reference detection MUST occur after merging the user theme with the embedded `@base` theme, not before; user theme overrides can create circular role references that didn't exist in either theme individually (e.g., if @base has `A: {style: "B"}` and user theme overrides with `B: {style: "A"}`, the circular reference only exists after merge); the detection applies to the complete merged role inventory
 
-- **FR-048**: V1 themes MUST exit with error when a role's `style` field references a role name that is not in the predefined role enum or when the referenced role is not defined in either the user theme or `@default` theme
+- **FR-048**: V1 themes MUST exit with error when a role's `style` field references a role name that is not in the predefined role enum or when the referenced role is not defined in either the user theme or `@base` theme
 
 ### Key Entities
 
 - **Theme**: Complete theme configuration containing element styles, level-specific overrides, indicators, version, and metadata tags
 
-- **@default Theme** (v1 only): Embedded theme that explicitly defines all 28 v0 elements and all 16 v1 roles with reasonable defaults. Not visible in theme listings. All user themes (both v0 and v1) implicitly inherit from `@default` when roles or styles are not explicitly defined. More specific roles in `@default` typically inherit from more generic ones via `style` field (e.g., `warning: {style: "primary", ...}`), ensuring old themes remain compatible with newer app versions by falling back to consistent generic styles. Users CAN create custom themes named `@default` which merge with the embedded `@default` following normal theme merge rules (FR-001b): at theme merge level, custom elements completely replace embedded elements; property-level merging happens during style resolution based on custom theme's version.
+- **@base Theme** (v1 only): Embedded theme that explicitly defines all 28 v0 elements and all 16 v1 roles with reasonable defaults. Not visible in theme listings. All user themes (both v0 and v1) implicitly inherit from `@base` when roles or styles are not explicitly defined. More specific roles in `@base` typically inherit from more generic ones via `style` field (e.g., `warning: {style: "primary", ...}`), ensuring old themes remain compatible with newer app versions by falling back to consistent generic styles. Users CAN create custom themes named `@base` which merge with the embedded `@base` following normal theme merge rules (FR-001b): at theme merge level, custom elements completely replace embedded elements; property-level merging happens during style resolution based on custom theme's version.
 
 - **Theme Version**: Version identifier following "major.minor" format (e.g., "1.0") where major=1 and minor is non-negative integer without leading zeros. Currently only version="1.0" is supported; future minor versions (1.1, 1.2, etc.) will be added as needed. Used to determine which schema and merge semantics apply.
 
@@ -762,7 +762,7 @@ Theme authors using v1 can define semantic roles (like "warning", "error", "succ
 - All theme sections (`elements`, `levels`, `indicators`, `tags`, `styles`) are optional and can be empty or missing
 - V0: missing sections mean all elements inside are considered missing; elements with parent/inner relations or boolean special case inherit from parent; others use empty style (default terminal colors, no modes)
 - Indicators section (`indicators.sync.synced` and `indicators.sync.failed`) provides styling for sync state markers used in --follow mode; this is a separate application feature where themes only define visual appearance
-- V1: missing sections are treated as empty; all undefined elements/roles inherit from `@default` theme
+- V1: missing sections are treated as empty; all undefined elements/roles inherit from `@base` theme
 - Theme files are UTF-8 encoded
 - Theme file size limits are enforced by OS/filesystem only; no application-level size validation or limits are imposed (parser will handle files of any size that the OS allows to be read)
 - Both v0 and v1 use nested styling scope for parent-inner pairs (inner rendered inside parent) for these specific pairs listed in FR-015; if inner element is not defined, parent style continues through nesting; v1 adds property-level merging via roles as an additional inheritance mechanism
@@ -779,15 +779,15 @@ Theme authors using v1 can define semantic roles (like "warning", "error", "succ
 - Theme files are relatively small (< 10KB typical, < 100KB expected maximum in practice, but no hard limits enforced)
 - Theme loading performance requirement (<50ms) applies to all scenarios including edge cases with 64-level role chains and maximum complexity
 - Themes are loaded once at application startup and remain constant for the lifetime of the process; changing themes requires restarting the application
-- Minimum valid theme: v0 can be completely empty file (inherits terminal defaults); v1 requires at minimum `version: "1.0"` field (inherits from `@default` theme)
-- V1 property resolution order: 1) @default element, 2) merge base element, 3) merge level-specific element, 4) resolve `style` field (role resolution fills undefined properties), 5) explicit properties from merged element override role; this ensures level-specific can change role reference and explicit properties always win
-- Custom theme files named `@default` ARE allowed and merge with the embedded v1 @default theme following normal theme merge rules (FR-001b); the embedded `@default` is excluded from theme listings but custom `@default` themes are loaded and merged; other theme names starting with `@` can be used normally
+- Minimum valid theme: v0 can be completely empty file (inherits terminal defaults); v1 requires at minimum `version: "1.0"` field (inherits from `@base` theme)
+- V1 property resolution order: 1) @base element, 2) merge base element, 3) merge level-specific element, 4) resolve `style` field (role resolution fills undefined properties), 5) explicit properties from merged element override role; this ensures level-specific can change role reference and explicit properties always win
+- Custom theme files named `@base` ARE allowed and merge with the embedded v1 @base theme following normal theme merge rules (FR-001b); the embedded `@base` is excluded from theme listings but custom `@base` themes are loaded and merged; other theme names starting with `@` can be used normally
 - File extension determines which parser is used (YAML/TOML/JSON); if file content doesn't match extension, parser fails with error to stderr (no auto-detection of actual format)
 - Unknown top-level sections in theme files are ignored when the theme version is supported (forward compatibility); if theme version is unsupported, error occurs before section parsing; level names in `levels` section are case-sensitive (trace, debug, info, warning, error); unknown or invalid level names are silently ignored
 - Unknown element properties (properties other than foreground, background, modes, and in v1: style) are silently ignored for forward compatibility; this allows newer themes with additional properties to work on older app versions
 - Element names and role names exist in separate namespaces; element and role names can overlap without conflict (e.g., can have both an element named "message" and a role named "message" in v1)
-- In v1, all user themes implicitly inherit from the embedded `@default` theme, which explicitly defines all 28 v0 elements and all 16 v1 roles with reasonable defaults; undefined roles/elements in user themes fall back to `@default` definitions
-- V1 `@default` theme defines roles with inheritance chains where more specific roles inherit from more generic ones (e.g., `info: {style: "primary"}`, `warning: {style: "accent"}`), providing flexibility and forward compatibility - old themes work with newer app versions by falling back to consistent generic role styles
+- In v1, all user themes implicitly inherit from the embedded `@base` theme, which explicitly defines all 28 v0 elements and all 16 v1 roles with reasonable defaults; undefined roles/elements in user themes fall back to `@base` definitions
+- V1 `@base` theme defines roles with inheritance chains where more specific roles inherit from more generic ones (e.g., `info: {style: "primary"}`, `warning: {style: "accent"}`), providing flexibility and forward compatibility - old themes work with newer app versions by falling back to consistent generic role styles
 - Theme name matching when loading themes follows platform filesystem conventions: case-sensitive on Linux/macOS (e.g., "MyTheme" ≠ "mytheme"), case-insensitive on Windows (e.g., "MyTheme" matches "mytheme.yaml")
 - Tags are validated against allowed values (dark, light, 16color, 256color, truecolor); unknown tags cause error; empty array is allowed; multiple tags including combinations like dark+light (compatible with both modes) are allowed; no tag combinations are considered conflicting
 - Theme listing format is terminal-aware: when output is a terminal, use multi-column layout (terminal-width-aware) with alphabetical sorting within groups (stock/custom); when output is not a terminal (pipe/redirect), use plain list format with one theme name per line without grouping or styling; each theme shown by stem name once even if multiple formats exist
@@ -795,9 +795,9 @@ Theme authors using v1 can define semantic roles (like "warning", "error", "succ
 - Currently only version="1.0" is supported for v1 themes; version="1.1" or higher minor versions are rejected until implemented; version="2.0" or higher major versions are rejected as unsupported
 - V1 role names are restricted to a predefined enum (kebab-case, case-sensitive): default, primary, secondary, strong, muted, accent, accent-secondary, message, syntax, status, level, trace, debug, info, warning, error. User themes can only define roles from this list; undefined role names or incorrect case are rejected with error. The `default` role is the implicit base for all roles that don't specify a `style` field - properties set in `default` (foreground, background, modes) apply to all other roles unless explicitly overridden.
 - V1 property precedence: element explicit properties override role properties; this allows elements to reference a role for base styling while overriding specific properties
-- V1 does NOT support custom `include` directive for theme-to-theme inheritance; only `@default` inheritance is available (custom includes may be added in future versions)
+- V1 does NOT support custom `include` directive for theme-to-theme inheritance; only `@base` inheritance is available (custom includes may be added in future versions)
 - V1 role-to-role inheritance chains via the `style` field support a maximum depth of 64 levels; deeper chains or circular references cause theme loading to fail with error
-- The `@default` theme is not visible in theme listings (it's an internal/system theme)
+- The `@base` theme is not visible in theme listings (it's an internal/system theme)
 - Theme name suggestions use Jaro similarity algorithm with minimum relevance threshold of 0.75; suggestions are sorted by descending relevance score
 - Only `.yaml` extension is supported for YAML files; alternate `.yml` extension is NOT supported (users must rename `.yml` files to `.yaml`)
 - YAML anchors ($palette) are a convenience feature - themes can be written without them

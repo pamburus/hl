@@ -22,7 +22,7 @@
 version: "1.0"
 
 styles:
-  # Style that removes faint mode (like @default's status->level chain)
+  # Style that removes faint mode (like @base's status->level chain)
   level:
     modes: ["-faint"]
   info:
@@ -41,5 +41,5 @@ levels:
   info:
     level-inner:
       # Reference both level (which has -faint) and info (which has cyan)
-      # This matches how @default.toml defines levels.info.level-inner
+      # This matches how @base.toml defines levels.info.level-inner
       style: ["level", "info"]

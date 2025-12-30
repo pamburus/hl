@@ -1,0 +1,6 @@
+# Test file for FR-001b: Custom theme attempting to override @base
+# This file should be ignored when loading @base
+elements:
+  message:
+    foreground: "red"
+    modes: ["bold"]

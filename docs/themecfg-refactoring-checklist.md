@@ -196,7 +196,7 @@ Current state: ⚠️ Exists but needs refactoring
   - Peeks version
   - Deserializes as v0 or v1
   - Converts v0 to v1 if needed
-  - Merges with @default
+  - Merges with @base
   - Returns unresolved `RawTheme` (alias for v1::Theme)
 
 ### 4.3 RawTheme API (v1::Theme methods)

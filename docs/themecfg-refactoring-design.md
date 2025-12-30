@@ -217,7 +217,7 @@ hl/src/themecfg/v1/mod.rs
       - Vec<Mode> -> ModeSetDiff
       - No styles section -> deduce from elements
       - Simple indicators -> generic indicators
-   e. Merge with @default theme
+   e. Merge with @base theme
    f. Returns RawTheme (alias for v1::Theme)
 3. RawTheme::resolve() called
 4. v1::resolve_theme() resolves all styles
@@ -231,7 +231,7 @@ hl/src/themecfg/v1/mod.rs
    a. Theme::load_from() reads file
    b. Theme::peek_version() detects version 1.0
    c. Deserialize as v1::Theme (strict)
-   d. Merge with @default theme
+   d. Merge with @base theme
    e. Returns RawTheme (alias for v1::Theme)
 3. RawTheme::resolve() called
 4. v1::resolve_theme() resolves all styles

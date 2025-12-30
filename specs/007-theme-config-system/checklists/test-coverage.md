@@ -15,8 +15,8 @@
 
 ## Phase 1: Critical Missing Tests (6/6) ✅
 
-- [X] T001 FR-001b: Custom @default theme loading with extension
-- [X] T002 FR-001b: Custom @default theme loading without extension
+- [X] T001 FR-001b: Custom @base theme loading with extension
+- [X] T002 FR-001b: Custom @base theme loading without extension
 - [X] T003 FR-010a: Empty v0 theme file validation
 - [X] T004 FR-010f: V0 ignores styles section
 - [X] T005 FR-014b: V0 rejects mode prefix -
@@ -54,9 +54,9 @@
 
 ## Known Implementation Bugs (All Fixed ✅)
 
-- [X] BUG-001 (FIXED): FR-001b - Custom @default by stem doesn't load
+- [X] BUG-001 (FIXED): FR-001b - Custom @base by stem doesn't load
   - Test: `test_custom_default_theme_without_extension`
-  - Fix: Added custom @default check in `Theme::load()` before returning embedded @default
+  - Fix: Added custom @base check in `Theme::load()` before returning embedded @base
   - Status: ✅ FIXED - Test now passing
 
 - [X] BUG-002 (FIXED): FR-014b - V0 doesn't reject - mode prefix
@@ -74,7 +74,7 @@
 ## Test Assets Created
 
 ### Phase 1 Assets (4 files)
-- `@default.yaml` - Custom @default theme for priority testing
+- `@base.yaml` - Custom @base theme for priority testing
 - `v0-with-styles-section.yaml` - V0 theme with v1 styles section
 - `v0-invalid-mode-prefix.yaml` - V0 theme with +/- mode prefixes
 - `empty-v0.yaml` - Completely empty v0 theme file
@@ -102,8 +102,8 @@
 
 ### FR-001: Theme Loading
 - [X] FR-001a: Custom directory priority (T015)
-- [X] FR-001b: Custom @default with extension (T001)
-- [X] FR-001b: Custom @default by stem (T002 - FIXED)
+- [X] FR-001b: Custom @base with extension (T001)
+- [X] FR-001b: Custom @base by stem (T002 - FIXED)
 
 ### FR-002-006: Discovery & Error Handling
 - [X] FR-003: Load by full filename (T011)
@@ -198,7 +198,7 @@
 - 22 new tests added across 3 implementation phases (Phase 1: 6, Phase 2: 12, Phase 3: 4)
 - 3 bugs discovered and documented with reproducible tests (all now fixed ✅)
 - Zero regressions introduced (all existing tests still pass)
-- **BUG-001 FIXED**: Custom @default theme now loads correctly by stem name
+- **BUG-001 FIXED**: Custom @base theme now loads correctly by stem name
 - **BUG-002 FIXED**: V0 themes now properly reject `-` mode prefix with helpful error message
 - **BUG-003 FIXED**: V0 themes now properly ignore styles section from file; only deduced styles are created
 - **Intentionally malformed test files**: `malformed.{yaml,toml,json}` are designed to fail parsing and will show diagnostics - this is expected behavior for FR-029 testing

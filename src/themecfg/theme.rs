@@ -24,7 +24,7 @@ use crate::{appdirs::AppDirs, level::Level, xerr::Suggestions};
 use super::{Error, ExternalError, IndicatorPack, RawTheme, Result, StylePack, ThemeLoadError, Version, v0, v1};
 
 // Private constants
-const BASE: &str = "@default";
+const BASE: &str = "@base";
 
 // ---
 
@@ -53,14 +53,14 @@ impl Theme {
     /// This is the primary method for loading themes. It performs the complete
     /// theme loading pipeline:
     /// 1. Loads the theme from custom directory or embedded themes
-    /// 2. Merges with the `@default` theme
+    /// 2. Merges with the `@base` theme
     /// 3. Resolves all role-based styles to concrete styles
     ///
     /// The theme is searched in the following order:
     /// - Custom themes in `{config_dir}/themes/`
     /// - Embedded themes (built into the binary)
     ///
-    /// All themes are automatically merged with `@default` to ensure all
+    /// All themes are automatically merged with `@base` to ensure all
     /// required elements have styles defined.
     ///
     /// # Arguments
@@ -73,7 +73,7 @@ impl Theme {
     /// Call with application directories and theme name:
     /// - `Theme::load(app_dirs, "monokai")` loads the monokai theme
     /// - Searches custom directory first, then embedded themes
-    /// - Automatically merges with `@default` theme
+    /// - Automatically merges with `@base` theme
     /// - Returns fully resolved theme ready for use
     ///
     /// # Errors

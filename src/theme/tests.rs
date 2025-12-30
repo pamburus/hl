@@ -202,13 +202,13 @@ fn test_v0_input_element_styling() {
 #[test]
 fn test_v1_element_modes_preserved_after_per_level_merge() {
     // Test that when a v1 theme defines an element with modes (e.g., level-inner with bold),
-    // those modes are preserved after merging with per-level styles from @default.
+    // those modes are preserved after merging with per-level styles from @base.
     //
     // This tests the fix for the issue where a theme's level-inner = { modes = ["bold"] }
     // was losing the bold mode when merged with per-level styles.
     //
     // The merge flow is:
-    // 1. Theme merge: @default + child theme → child's level-inner replaces @default's
+    // 1. Theme merge: @base + child theme → child's level-inner replaces @base's
     // 2. Per-level merge: elements.level-inner + levels.info.level-inner → property-level merge
     //    Result: level-inner = { style = "info", modes = ["bold"] }
     // 3. Resolution: The final rendered style should have bold mode
@@ -284,9 +284,9 @@ fn test_v0_input_nested_styling() {
 
 #[test]
 fn test_v0_theme_without_input_falls_back_to_default() {
-    // Test that v0 themes without input element defined fall back to @default's input styling
+    // Test that v0 themes without input element defined fall back to @base's input styling
     // This reproduces the issue where old v0 themes that don't have input element
-    // render input without any styles instead of falling back to @default
+    // render input without any styles instead of falling back to @base
     let app_dirs = test_app_dirs();
 
     // Load the v0 theme with nested logger elements
@@ -303,7 +303,7 @@ fn test_v0_theme_without_input_falls_back_to_default() {
     // The input element should get styling from deduced secondary style:
     // - v0-missing-input defines: time = { foreground: 'bright-black' }
     // - This deduces: styles.secondary = { foreground: 'bright-black' }
-    // - @default defines: input = { style = "secondary" }
+    // - @base defines: input = { style = "secondary" }
     // - Result: input uses bright-black (90) from deduced secondary
     // This makes input consistent with the v0 theme's aesthetic
     let expected = "\x1b[0;90mtest\x1b[0m";
@@ -318,7 +318,7 @@ fn test_v0_theme_without_input_falls_back_to_default() {
 
 #[test]
 fn test_v0_theme_multiple_elements_fallback_to_default() {
-    // Test that v0 themes correctly fall back to @default for multiple undefined elements
+    // Test that v0 themes correctly fall back to @base for multiple undefined elements
     // This verifies the fix works across different element types
     let app_dirs = test_app_dirs();
 
@@ -339,7 +339,7 @@ fn test_v0_theme_multiple_elements_fallback_to_default() {
 
     // Test Key element - should use deduced accent style
     // v0-missing-input doesn't define key, so no accent style deduction
-    // Falls back to @default's accent = { style = "secondary" }
+    // Falls back to @base's accent = { style = "secondary" }
     // Which uses the deduced secondary = { foreground: 'bright-black' }
     buf.clear();
     theme.apply(&mut buf, &None, |s| {
@@ -363,10 +363,10 @@ fn test_v0_theme_multiple_elements_fallback_to_default() {
 
 #[test]
 fn test_v0_theme_inherits_foreground_and_modes_from_default() {
-    // Test that v0 themes correctly inherit both foreground/background AND modes from @default
+    // Test that v0 themes correctly inherit both foreground/background AND modes from @base
     // This verifies that our fix for modes doesn't break foreground/background inheritance
     //
-    // In @default.toml:
+    // In @base.toml:
     // - levels.debug.level-inner = { style = ["level", "debug"] }
     // - level style = { style = "status" } -> { modes = ["-faint"] }
     // - debug style = { foreground = "magenta" }
@@ -392,7 +392,7 @@ fn test_v0_theme_inherits_foreground_and_modes_from_default() {
     // Should contain magenta (35) from debug style
     assert!(
         output.contains(";35") || output.contains("[35"),
-        "Expected magenta (35) foreground from @default's debug style, got: {:?}",
+        "Expected magenta (35) foreground from @base's debug style, got: {:?}",
         output
     );
 
@@ -417,7 +417,7 @@ fn test_v0_theme_inherits_foreground_and_modes_from_default() {
 #[test]
 fn test_v0_theme_modes_only_inherits_colors_from_default() {
     // Test that v0 themes defining only modes for an element correctly inherit
-    // foreground/background from @default, and vice versa
+    // foreground/background from @base, and vice versa
     //
     // This verifies that when a style has modes but no foreground, the foreground
     // is inherited from the base role, and when it has foreground but no modes,
@@ -426,7 +426,7 @@ fn test_v0_theme_modes_only_inherits_colors_from_default() {
 
     // Load theme with caller but no caller-inner
     // Load v0 theme that defines message with only modes (underline)
-    // In @default: message = { style = "message" } -> { style = "strong" } -> { style = "primary", modes = ["bold"] }
+    // In @base: message = { style = "message" } -> { style = "strong" } -> { style = "primary", modes = ["bold"] }
     let cfg = themecfg::Theme::load(&app_dirs, "v0-modes-no-foreground").unwrap();
     let theme = Theme::from(cfg);
 
@@ -460,7 +460,7 @@ fn test_v0_theme_modes_only_inherits_colors_from_default() {
         output
     );
 
-    // Should NOT contain faint mode since level in @default is { style = "muted" }
+    // Should NOT contain faint mode since level in @base is { style = "muted" }
     // and muted -> secondary -> primary (which removes faint), then adds faint
     // But our theme overrides with just foreground, no style reference
     // So it should only have the blue foreground, no modes
@@ -480,7 +480,7 @@ fn test_v0_theme_defined_elements_no_auto_deduction() {
     // For example:
     //   time: { foreground: '30' }
     // Should render ONLY with foreground color 30, NO faint mode even though
-    // @default defines time with style="secondary" which adds faint.
+    // @base defines time with style="secondary" which adds faint.
     let app_dirs = test_app_dirs();
 
     // Load v1 theme that has level-inner and uses base inheritance
@@ -548,14 +548,14 @@ fn test_v0_theme_defined_elements_no_auto_deduction() {
 #[test]
 fn test_v0_theme_style_deduction_from_elements() {
     // Test that v0 themes automatically deduce styles FROM element definitions
-    // BEFORE merging with @default, so that elements not defined in v0 theme
-    // but defined in @default will use colors consistent with the v0 theme.
+    // BEFORE merging with @base, so that elements not defined in v0 theme
+    // but defined in @base will use colors consistent with the v0 theme.
     //
     // For example, if a v0 theme defines:
     //   time: { foreground: 30 }
     // We deduce:
     //   styles.secondary: { foreground: 30 }
-    // Then when merged with @default, the `input` element (which has style="secondary")
+    // Then when merged with @base, the `input` element (which has style="secondary")
     // will use foreground 30, making it consistent with the v0 theme's aesthetic.
     let app_dirs = test_app_dirs();
 
@@ -565,7 +565,7 @@ fn test_v0_theme_style_deduction_from_elements() {
     let cfg = themecfg::Theme::load(&app_dirs, "v0-regression-test").unwrap();
     let theme = Theme::from(cfg);
 
-    // Input element is NOT defined in v0-regression-test, but IS in @default with style="secondary"
+    // Input element is NOT defined in v0-regression-test, but IS in @base with style="secondary"
     // Since we deduced secondary style from time element (foreground=30),
     // input should use foreground 30
     let mut buf = Vec::new();
@@ -602,7 +602,7 @@ fn test_v0_theme_style_deduction_with_modes() {
     // Test FR-031c: Style deduction MUST copy both colors AND modes from element definitions
     // If v0 theme defines: time: { foreground: 30, modes: ['italic'] }
     // Then deduced secondary should be: { foreground: 30, modes: ['italic'] }
-    // And elements in @default that reference secondary should inherit BOTH color AND modes
+    // And elements in @base that reference secondary should inherit BOTH color AND modes
     let app_dirs = test_app_dirs();
 
     // Load the theme with mode diff testing
@@ -634,8 +634,8 @@ fn test_v0_theme_style_deduction_with_modes() {
     );
 
     // Now test an element NOT defined in v0 theme that references the deduced strong style
-    // @default defines: object = { style = "syntax" }
-    // @default defines: syntax = { style = "strong" }
+    // @base defines: object = { style = "syntax" }
+    // @base defines: syntax = { style = "strong" }
     // v0-auto-style-deduction defines: message = { foreground: 'white', modes: ['italic'] }
     // This should deduce: strong = { foreground: 'white', modes: ['italic'] }
     // So object should inherit BOTH foreground AND modes from deduced strong
@@ -704,7 +704,7 @@ styles:
         "Time element should use its own definition (foreground 30)"
     );
 
-    // Input element (not defined in v0, but in @default with style="secondary")
+    // Input element (not defined in v0, but in @base with style="secondary")
     // should use the DEDUCED secondary style (foreground 30 from time), NOT the ignored explicit style (40)
     buf.clear();
     theme.apply(&mut buf, &None, |s| {
@@ -823,7 +823,7 @@ elements:
         output
     );
 
-    // Number element (not defined in v0, uses @default's number = { style = "primary" })
+    // Number element (not defined in v0, uses @base's number = { style = "primary" })
     // should inherit ALL properties from deduced primary style
     buf.clear();
     theme.apply(&mut buf, &None, |s| {
