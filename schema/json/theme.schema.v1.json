@@ -85,6 +85,8 @@
         "message",
         "syntax",
         "status",
+        "key",
+        "value",
         "level",
         "trace",
         "debug",
@@ -125,6 +127,12 @@
           "$ref": "#/$defs/style"
         },
         "status": {
+          "$ref": "#/$defs/style"
+        },
+        "key": {
+          "$ref": "#/$defs/style"
+        },
+        "value": {
           "$ref": "#/$defs/style"
         },
         "level": {
