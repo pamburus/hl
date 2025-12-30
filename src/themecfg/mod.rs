@@ -67,6 +67,10 @@ pub enum MergeFlag {
 
 pub type MergeFlags = EnumSet<MergeFlag>;
 
+pub trait GetMergeFlags {
+    fn merge_flags(&self) -> MergeFlags;
+}
+
 // ---
 
 // Trait for types that support merging

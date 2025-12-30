@@ -1,0 +1,7 @@
+elements:
+  time:
+    foreground: 30
+
+styles:
+  secondary:
+    foreground: 40

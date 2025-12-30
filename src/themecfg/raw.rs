@@ -2,21 +2,22 @@
 use std::sync::Arc;
 
 // third-party imports
-use derive_more::Deref;
+use derive_more::{Deref, DerefMut};
 
 // relative imports
-use super::{Error, MergeFlags, Result, Theme, ThemeInfo, ThemeOrigin, ThemeSource, v1};
+use super::{Error, GetMergeFlags, MergeFlags, Result, Theme, ThemeInfo, ThemeOrigin, ThemeSource, v1};
 
 /// An unresolved theme with metadata, before style resolution.
 ///
 /// Wraps a [`v1::Theme`] and includes metadata (name, source) for error reporting.
 /// Can be modified before calling `.resolve()` to create a usable [`Theme`].
-#[derive(Debug, Clone, Deref)]
+#[derive(Debug, Clone, Deref, DerefMut)]
 pub struct RawTheme {
     /// Theme metadata (name, source, origin).
     pub info: Arc<ThemeInfo>,
     /// The unresolved theme data.
     #[deref]
+    #[deref_mut]
     inner: v1::Theme,
 }
 
@@ -50,11 +51,6 @@ impl RawTheme {
         }
     }
 
-    /// Get the merge flags from this theme.
-    pub fn merge_flags(&self) -> MergeFlags {
-        self.inner.merge_flags()
-    }
-
     /// Access the inner v1::Theme for advanced use cases.
     pub fn inner(&self) -> &v1::Theme {
         &self.inner
@@ -80,8 +76,8 @@ impl Default for RawTheme {
     }
 }
 
-impl std::ops::DerefMut for RawTheme {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.inner
+impl GetMergeFlags for RawTheme {
+    fn merge_flags(&self) -> MergeFlags {
+        self.inner.merge_flags()
     }
 }

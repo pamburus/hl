@@ -88,7 +88,7 @@ clean:
     @rm -f result*
 
 # Run all CI checks locally
-ci: test lint audit fmt-check check-schema check
+ci: check test lint audit fmt-check check-schema
     @echo "✅ All local CI checks passed"
 
 # Generate code coverage

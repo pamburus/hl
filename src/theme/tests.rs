@@ -1,14 +1,23 @@
 use super::*;
-use crate::themecfg::{self, Color, PlainColor, RGB, RawTheme};
+
+use std::path::PathBuf;
+
+use crate::{
+    appdirs::AppDirs,
+    themecfg::{self, Color, PlainColor, RGB, RawTheme},
+};
 
 // Helper function to create test AppDirs
-fn test_app_dirs() -> crate::appdirs::AppDirs {
-    use std::path::PathBuf;
-    crate::appdirs::AppDirs {
-        config_dir: PathBuf::from("src/testing/assets"),
+fn dirs() -> AppDirs {
+    AppDirs {
+        config_dir: PathBuf::from("src/testing/assets/fixtures"),
         cache_dir: Default::default(),
         system_config_dirs: Default::default(),
     }
+}
+
+fn theme(name: &str) -> Theme {
+    Theme::load(&dirs(), name).unwrap()
 }
 
 #[test]
@@ -36,9 +45,8 @@ fn test_unknown_level() {
 
 #[test]
 fn test_style_from_rgb_color() {
-    let theme_style = themecfg::Style::new().foreground(Some(Color::RGB(RGB(255, 128, 64))));
-
-    let style = Style::from(&theme_style);
+    let style = themecfg::Style::new().foreground(Some(Color::RGB(RGB(255, 128, 64))));
+    let style = Style::from(&style);
 
     // Check that the style contains the RGB foreground color
     // We can't directly access the internal structure, but we can check
@@ -48,46 +56,46 @@ fn test_style_from_rgb_color() {
 
 #[test]
 fn test_style_from_background_color() {
-    let theme_style = themecfg::Style {
+    let style = themecfg::Style {
         background: Some(Color::Plain(PlainColor::Blue)),
         ..Default::default()
     };
 
-    let style = Style::from(&theme_style);
+    let style = Style::from(&style);
     assert_ne!(style.0, Sequence::reset());
 }
 
 #[test]
 fn test_style_from_foreground_plain_color() {
-    let theme_style = themecfg::Style {
-        foreground: Some(themecfg::Color::Plain(themecfg::PlainColor::Red)),
+    let style = themecfg::Style {
+        foreground: Some(Color::Plain(PlainColor::Red)),
         ..Default::default()
     };
 
-    let style = Style::from(&theme_style);
+    let style = Style::from(&style);
     assert_ne!(style.0, Sequence::reset());
 }
 
 #[test]
 fn test_style_from_background_rgb_color() {
-    let theme_style = themecfg::Style {
-        background: Some(themecfg::Color::RGB(themecfg::RGB(100, 150, 200))),
+    let style = themecfg::Style {
+        background: Some(Color::RGB(RGB(100, 150, 200))),
         ..Default::default()
     };
 
-    let style = Style::from(&theme_style);
+    let style = Style::from(&style);
     assert_ne!(style.0, Sequence::reset());
 }
 
 #[test]
 fn test_style_from_default_colors_ignored() {
-    let theme_style = themecfg::Style {
-        foreground: Some(themecfg::Color::Plain(themecfg::PlainColor::Default)),
-        background: Some(themecfg::Color::Plain(themecfg::PlainColor::Default)),
+    let style = themecfg::Style {
+        foreground: Some(Color::Plain(PlainColor::Default)),
+        background: Some(Color::Plain(PlainColor::Default)),
         ..Default::default()
     };
 
-    let style = Style::from(&theme_style);
+    let style = Style::from(&style);
     assert_eq!(style.0, Sequence::reset());
 }
 
@@ -103,11 +111,7 @@ fn test_boolean_merge_timing_with_level_overrides() {
     // and verifies the theme loads successfully. The actual merge behavior happens
     // in StylePack::load() which is called during Theme::from(themecfg::Theme).
 
-    let app_dirs = test_app_dirs();
-
-    // Load the theme that has level-specific boolean overrides
-    let cfg = themecfg::Theme::load(&app_dirs, "v0-boolean-level-override").unwrap();
-    let theme = Theme::from(cfg);
+    let theme = theme("v0-boolean-level-override");
 
     // This test documents the current behavior:
     // The boolean merge happens AFTER level merging in StylePack::load(),
@@ -142,9 +146,7 @@ fn test_v1_parent_inner_property_level_merging() {
     // - level-inner for debug has foreground=#d2a6ff (specific color)
     // - Expected: level-inner should inherit modes=[faint] from parent AND have foreground=#d2a6ff
 
-    let app_dirs = test_app_dirs();
-    let cfg = themecfg::Theme::load(&app_dirs, "v1-parent-inner-modes-merge").unwrap();
-    let theme = Theme::from(cfg);
+    let theme = theme("v1-parent-inner-modes-merge");
 
     // Apply the theme and render something with level-inner at debug level
     let mut buf = Vec::new();
@@ -168,19 +170,14 @@ fn test_v1_parent_inner_property_level_merging() {
 
 #[test]
 fn test_v0_input_element_styling() {
-    // Test that the Input element is correctly loaded and styled from v0 themes
-    use crate::appdirs::AppDirs;
-    use std::path::PathBuf;
-
-    let app_dirs = AppDirs {
+    let dirs = AppDirs {
         config_dir: PathBuf::from("etc/defaults"),
         cache_dir: Default::default(),
         system_config_dirs: Default::default(),
     };
 
     // Load classic theme (v0)
-    let cfg = themecfg::Theme::load(&app_dirs, "classic").unwrap();
-    let theme = Theme::from(cfg);
+    let theme = Theme::load(&dirs, "classic").unwrap();
 
     // Apply the theme and render something with Input element
     let mut buf = Vec::new();
@@ -213,13 +210,10 @@ fn test_v1_element_modes_preserved_after_per_level_merge() {
     //    Result: level-inner = { style = "info", modes = ["bold"] }
     // 3. Resolution: The final rendered style should have bold mode
 
-    let app_dirs = test_app_dirs();
-
     // Load the v0 theme with nested input elements
     // Load synthetic test theme which defines level-inner = { modes = ["bold"] }
     // and levels.info.level-inner = { style = "info" }
-    let cfg = themecfg::Theme::load(&app_dirs, "v1-element-modes-per-level").unwrap();
-    let theme = Theme::from(cfg);
+    let theme = theme("v1-element-modes-per-level");
 
     // Apply the theme and render level-inner at info level
     let mut buf = Vec::new();
@@ -250,18 +244,14 @@ fn test_v1_element_modes_preserved_after_per_level_merge() {
 fn test_v0_input_nested_styling() {
     // Test that v0 themes with `input` defined get nested styling scope behavior
     // where InputNumber inherits from Input via nested rendering scope
-    use crate::appdirs::AppDirs;
-    use std::path::PathBuf;
-
-    let app_dirs = AppDirs {
+    let dirs = AppDirs {
         config_dir: PathBuf::from("etc/defaults"),
         cache_dir: Default::default(),
         system_config_dirs: Default::default(),
     };
 
     // Load classic theme (v0) which only defines `input`, not `input-number`
-    let cfg = themecfg::Theme::load(&app_dirs, "classic").unwrap();
-    let theme = Theme::from(cfg);
+    let theme = Theme::load(&dirs, "classic").unwrap();
 
     // Render nested elements: Input containing InputNumber containing content
     let mut buf = Vec::new();
@@ -287,12 +277,10 @@ fn test_v0_theme_without_input_falls_back_to_default() {
     // Test that v0 themes without input element defined fall back to @base's input styling
     // This reproduces the issue where old v0 themes that don't have input element
     // render input without any styles instead of falling back to @base
-    let app_dirs = test_app_dirs();
 
     // Load the v0 theme with nested logger elements
     // Load v0 theme that doesn't define input element
-    let cfg = themecfg::Theme::load(&app_dirs, "v0-missing-input").unwrap();
-    let theme = Theme::from(cfg);
+    let theme = theme("v0-missing-input");
 
     // Apply the theme and render something with Input element
     let mut buf = Vec::new();
@@ -320,12 +308,10 @@ fn test_v0_theme_without_input_falls_back_to_default() {
 fn test_v0_theme_multiple_elements_fallback_to_default() {
     // Test that v0 themes correctly fall back to @base for multiple undefined elements
     // This verifies the fix works across different element types
-    let app_dirs = test_app_dirs();
 
     // Load the v0 theme with nested caller elements
     // Load v0 theme that doesn't define input, key, or logger elements
-    let cfg = themecfg::Theme::load(&app_dirs, "v0-missing-input").unwrap();
-    let theme = Theme::from(cfg);
+    let theme = theme("v0-missing-input");
 
     // Test Input element - should use deduced secondary style (bright-black from time)
     let mut buf = Vec::new();
@@ -374,12 +360,10 @@ fn test_v0_theme_inherits_foreground_and_modes_from_default() {
     // So level-inner at debug level should have:
     // - modes from "level": ["-faint"] which removes faint
     // - foreground from "debug": magenta (ANSI 35)
-    let app_dirs = test_app_dirs();
 
     // Load the theme that doesn't define level element (only level-inner)
     // Load v0 theme that doesn't define level-specific elements
-    let cfg = themecfg::Theme::load(&app_dirs, "v0-missing-input").unwrap();
-    let theme = Theme::from(cfg);
+    let theme = theme("v0-missing-input");
 
     // Apply the theme and render level-inner at debug level
     let mut buf = Vec::new();
@@ -422,13 +406,11 @@ fn test_v0_theme_modes_only_inherits_colors_from_default() {
     // This verifies that when a style has modes but no foreground, the foreground
     // is inherited from the base role, and when it has foreground but no modes,
     // the modes are inherited (or not set) correctly.
-    let app_dirs = test_app_dirs();
 
     // Load theme with caller but no caller-inner
     // Load v0 theme that defines message with only modes (underline)
     // In @base: message = { style = "message" } -> { style = "strong" } -> { style = "primary", modes = ["bold"] }
-    let cfg = themecfg::Theme::load(&app_dirs, "v0-modes-no-foreground").unwrap();
-    let theme = Theme::from(cfg);
+    let theme = theme("v0-modes-no-foreground");
 
     // Test message element - has underline from theme, should still work
     let mut buf = Vec::new();
@@ -481,12 +463,10 @@ fn test_v0_theme_defined_elements_no_auto_deduction() {
     //   time: { foreground: '30' }
     // Should render ONLY with foreground color 30, NO faint mode even though
     // @base defines time with style="secondary" which adds faint.
-    let app_dirs = test_app_dirs();
 
     // Load v1 theme that has level-inner and uses base inheritance
     // Load v0 theme that defines time/message/key/string with only foreground
-    let cfg = themecfg::Theme::load(&app_dirs, "v0-regression-test").unwrap();
-    let theme = Theme::from(cfg);
+    let theme = theme("v0-regression-test");
 
     // Time: foreground='30' (palette index 30), should have NO faint mode
     let mut buf = Vec::new();
@@ -557,13 +537,11 @@ fn test_v0_theme_style_deduction_from_elements() {
     //   styles.secondary: { foreground: 30 }
     // Then when merged with @base, the `input` element (which has style="secondary")
     // will use foreground 30, making it consistent with the v0 theme's aesthetic.
-    let app_dirs = test_app_dirs();
 
     // Load v1 theme that uses the Default role
     // Load v0 theme that defines time/message/key/string with only foreground
     // This should deduce secondary/strong/accent/primary styles
-    let cfg = themecfg::Theme::load(&app_dirs, "v0-regression-test").unwrap();
-    let theme = Theme::from(cfg);
+    let theme = theme("v0-regression-test");
 
     // Input element is NOT defined in v0-regression-test, but IS in @base with style="secondary"
     // Since we deduced secondary style from time element (foreground=30),
@@ -603,12 +581,10 @@ fn test_v0_theme_style_deduction_with_modes() {
     // If v0 theme defines: time: { foreground: 30, modes: ['italic'] }
     // Then deduced secondary should be: { foreground: 30, modes: ['italic'] }
     // And elements in @base that reference secondary should inherit BOTH color AND modes
-    let app_dirs = test_app_dirs();
 
     // Load the theme with mode diff testing
     // Load v0 theme that defines message with BOTH foreground and modes
-    let cfg = themecfg::Theme::load(&app_dirs, "v0-auto-style-deduction").unwrap();
-    let theme = Theme::from(cfg);
+    let theme = theme("v0-auto-style-deduction");
 
     // Message element IS defined in v0 theme with foreground='white' and modes=['italic']
     // It should render exactly as defined
@@ -670,28 +646,9 @@ fn test_v0_theme_explicit_style_takes_precedence_over_deduction() {
     //   styles.secondary: { foreground: 40 }  <- IGNORED per FR-010f
     // The styles section is ignored, and secondary is deduced from time (foreground 30).
     // The time element itself uses its own definition (foreground 30).
-    let app_dirs = test_app_dirs();
 
-    // Load theme with mode inheritance
-    // Create a temporary theme file with both element and style defined
-    // Per FR-010f, the styles section will be ignored
-    let theme_content = r#"
-elements:
-  time:
-    foreground: 30
-
-styles:
-  secondary:
-    foreground: 40
-"#;
-
-    let theme_dir = std::path::PathBuf::from("src/testing/assets/themes");
-    let theme_path = theme_dir.join("v0-explicit-style-precedence.yaml");
-    std::fs::write(&theme_path, theme_content).unwrap();
-
-    // Load the theme
-    let cfg = themecfg::Theme::load(&app_dirs, "v0-explicit-style-precedence").unwrap();
-    let theme = Theme::from(cfg);
+    // This test uses the pre-existing v0-explicit-style-precedence.yaml fixture
+    let theme = theme("v0-explicit-style-precedence");
 
     // Time element should use its own definition (foreground 30)
     let mut buf = Vec::new();
@@ -715,9 +672,6 @@ styles:
         buf, b"\x1b[0;38;5;30minput\x1b[0m",
         "Input should use deduced secondary style (foreground 30), styles section is ignored per FR-010f"
     );
-
-    // Clean up
-    std::fs::remove_file(&theme_path).ok();
 }
 
 #[test]
@@ -725,24 +679,9 @@ fn test_v0_theme_deduction_with_empty_modes_array() {
     // Test edge case: What happens when v0 theme defines element with empty modes array?
     // According to FR-018: empty modes array [] is treated identically to absent modes
     // This test verifies the deduction behavior in this edge case
-    let app_dirs = test_app_dirs();
 
-    // Load v0 theme that defines logger-inner
-    // Create a temporary theme with empty modes array
-    let theme_content = r#"
-elements:
-  time:
-    foreground: 30
-    modes: []
-"#;
-
-    let theme_dir = std::path::PathBuf::from("src/testing/assets/themes");
-    let theme_path = theme_dir.join("v0-empty-modes-deduction.yaml");
-    std::fs::write(&theme_path, theme_content).unwrap();
-
-    // Load the theme
-    let cfg = themecfg::Theme::load(&app_dirs, "v0-empty-modes-deduction").unwrap();
-    let theme = Theme::from(cfg);
+    // This test uses the pre-existing v0-empty-modes-deduction.yaml fixture
+    let theme = theme("v0-empty-modes-deduction");
 
     // Time element should have foreground but no modes
     let mut buf = Vec::new();
@@ -765,34 +704,15 @@ elements:
         buf, b"\x1b[0;38;5;30minput\x1b[0m",
         "Input should use deduced secondary with foreground but no modes"
     );
-
-    // Clean up
-    std::fs::remove_file(&theme_path).ok();
 }
 
 #[test]
 fn test_v0_theme_deduction_copies_background() {
     // Test that style deduction copies background color as well as foreground
     // FR-031 states: "deduction copies foreground, background, and modes"
-    let app_dirs = test_app_dirs();
 
-    // Load v1 theme with multiple base inheritance
-    // Create a theme with background defined
-    let theme_content = r#"
-elements:
-  string:
-    foreground: 'green'
-    background: 'black'
-    modes: ['bold']
-"#;
-
-    let theme_dir = std::path::PathBuf::from("src/testing/assets/themes");
-    let theme_path = theme_dir.join("v0-background-deduction.yaml");
-    std::fs::write(&theme_path, theme_content).unwrap();
-
-    // Load the theme
-    let cfg = themecfg::Theme::load(&app_dirs, "v0-background-deduction").unwrap();
-    let theme = Theme::from(cfg);
+    // This test uses the pre-existing v0-background-deduction.yaml fixture
+    let theme = theme("v0-background-deduction");
 
     // String element should have foreground, background, and bold mode
     let mut buf = Vec::new();
@@ -852,9 +772,6 @@ elements:
         "Number should inherit bold mode from deduced primary, got: {:?}",
         output
     );
-
-    // Clean up
-    std::fs::remove_file(&theme_path).ok();
 }
 
 #[test]
@@ -875,11 +792,8 @@ fn test_v1_level_inner_does_not_inherit_parent_modes() {
     // Bug causes:
     // - level-inner at info level to have: bold + faint + cyan (incorrect)
 
-    let app_dirs = test_app_dirs();
-
     // Load minimal test theme that mimics uni theme structure
-    let cfg = themecfg::Theme::load(&app_dirs, "v1-uni-like-level-modes").unwrap();
-    let theme = Theme::from(cfg);
+    let theme = theme("v1-uni-like-level-modes");
 
     // Render level-inner at info level
     let mut buf = Vec::new();

@@ -13,15 +13,10 @@ use super::*;
 
 // ---
 
-// V0 merge flags (replace semantics for modes)
-use enumset::enum_set;
-const V0_MERGE_FLAGS: MergeFlags =
-    enum_set!(MergeFlag::ReplaceElements | MergeFlag::ReplaceHierarchies | MergeFlag::ReplaceModes);
-
 // Helper function to create test AppDirs
 fn dirs() -> AppDirs {
     AppDirs {
-        config_dir: PathBuf::from("src/testing/assets"),
+        config_dir: PathBuf::from("src/testing/assets/fixtures"),
         cache_dir: Default::default(),
         system_config_dirs: Default::default(),
     }
@@ -29,6 +24,18 @@ fn dirs() -> AppDirs {
 
 fn theme(name: &str) -> Theme {
     Theme::load(&dirs(), name).unwrap()
+}
+
+fn raw_theme(name: &str) -> RawTheme {
+    Theme::load_raw(&dirs(), name).unwrap()
+}
+
+fn load_raw_theme_unmerged(name: &str) -> Result<RawTheme> {
+    Theme::load_from(&Theme::themes_dir(&dirs()), name)
+}
+
+fn raw_theme_unmerged(name: &str) -> RawTheme {
+    load_raw_theme_unmerged(name).unwrap()
 }
 
 // Helper for displaying serializable types in tests
@@ -456,7 +463,7 @@ fn test_v1_style_pack_merge() {
         },
     );
 
-    let merged = base.merged(patch, V0_MERGE_FLAGS);
+    let merged = base.merged(patch, Version::V0.merge_flags());
 
     // Message should be from patch
     assert_eq!(
@@ -500,9 +507,7 @@ fn test_v0_color_formats() {
 #[test]
 fn test_v0_unknown_elements_ignored() {
     // Test that unknown element names are silently ignored (forward compatibility)
-    let path = PathBuf::from("src/testing/assets/themes");
-    let raw_theme = Theme::load_from(&path, "v0-unknown-elements").unwrap();
-    let theme = raw_theme.resolve().unwrap();
+    let theme = raw_theme_unmerged("v0-unknown-elements").resolve().unwrap();
 
     // Should have parsed successfully, ignoring unknown elements
     assert_eq!(theme.elements.len(), 1);
@@ -514,8 +519,7 @@ fn test_unknown_elements_toml() {
     // Test that unknown elements are silently ignored in TOML files
     // This verifies that serde_value::Value works for TOML format,
     // providing forward compatibility by ignoring unknown keys
-    let path = PathBuf::from("src/testing/assets/themes");
-    let result = Theme::load_from(&path, "test-unknown-elements.toml");
+    let result = load_raw_theme_unmerged("test-unknown-elements.toml");
 
     match result {
         Ok(theme) => {
@@ -547,8 +551,7 @@ fn test_unknown_elements_json() {
     // Test that unknown elements are silently ignored in JSON files
     // This verifies that serde_value::Value works for JSON format,
     // providing forward compatibility by ignoring unknown keys
-    let path = PathBuf::from("src/testing/assets/themes");
-    let result = Theme::load_from(&path, "test-unknown-elements.json");
+    let result = load_raw_theme_unmerged("test-unknown-elements.json");
 
     match result {
         Ok(theme) => {
@@ -579,8 +582,7 @@ fn test_unknown_elements_json() {
 fn test_unknown_elements_yaml() {
     // Test that unknown elements are silently ignored in YAML files
     // This is the original use case for YamlNode-based unknown key handling
-    let path = PathBuf::from("src/testing/assets/themes");
-    let result = Theme::load_from(&path, "test-unknown-elements.yaml");
+    let result = load_raw_theme_unmerged("test-unknown-elements.yaml");
 
     match result {
         Ok(theme) => {
@@ -610,8 +612,7 @@ fn test_unknown_elements_yaml() {
 #[test]
 fn test_future_version_rejected() {
     // Test that themes with future versions (e.g., 1.1 when current is 1.0) are rejected
-    let app_dirs = dirs();
-    let result = Theme::load(&app_dirs, "test-future-version");
+    let result = Theme::load(&dirs(), "test-future-version");
 
     assert!(result.is_err());
     match result {
@@ -636,8 +637,7 @@ fn test_future_version_rejected() {
 fn test_v0_unknown_level_names_ignored() {
     // Test that v0 themes with unknown level names convert to v1 successfully
     // V1 is strict - unknown levels are dropped during v0->v1 conversion
-    let path = PathBuf::from("src/testing/assets/themes");
-    let theme = Theme::load_from(&path, "v0-unknown-levels").unwrap();
+    let theme = raw_theme_unmerged("v0-unknown-levels");
 
     // After conversion to v1, only valid levels should remain
     assert!(theme.levels.contains_key(&Level::Error), "Should have error level");
@@ -653,9 +653,7 @@ fn test_v0_unknown_level_names_ignored() {
 #[test]
 fn test_v0_indicators() {
     // Test that indicators section loads correctly
-    let path = PathBuf::from("src/testing/assets/themes");
-    let raw_theme = Theme::load_from(&path, "v0-json-format").unwrap();
-    let theme = raw_theme.resolve().unwrap();
+    let theme = theme("v0-json-format");
 
     assert_eq!(theme.indicators.sync.synced.text, " ");
     assert_eq!(theme.indicators.sync.failed.text, "!");
@@ -669,9 +667,7 @@ fn test_v0_indicators() {
 #[test]
 fn test_theme_list() {
     // Test theme listing functionality
-    let app_dirs = dirs();
-
-    let themes = Theme::list(&app_dirs).unwrap();
+    let themes = Theme::list(&dirs()).unwrap();
 
     // Should include embedded themes
     assert!(themes.contains_key("universal"));
@@ -683,8 +679,7 @@ fn test_theme_list() {
 #[test]
 fn test_theme_not_found_error() {
     // Test that theme not found error includes suggestions
-    let app_dirs = dirs();
-    let result = Theme::load(&app_dirs, "nonexistent");
+    let result = Theme::load(&dirs(), "nonexistent");
 
     assert!(result.is_err());
     match result {
@@ -820,7 +815,7 @@ fn test_v0_style_merged_modes() {
     };
 
     // When patch has non-empty modes, it replaces base modes
-    let result = base.clone().merged(&patch_with_modes, V0_MERGE_FLAGS);
+    let result = base.clone().merged(&patch_with_modes, Version::V0.merge_flags());
     assert_eq!(result.modes, Mode::Underline.into());
 
     let patch_empty_modes = RawStyle {
@@ -831,7 +826,7 @@ fn test_v0_style_merged_modes() {
     };
 
     // When patch has empty modes, base modes are preserved
-    let result = base.clone().merged(&patch_empty_modes, V0_MERGE_FLAGS);
+    let result = base.clone().merged(&patch_empty_modes, Version::V0.merge_flags());
     // TODO: check if this is actually correct expecation: (Mode::Bold | Mode::Italic).into()
     assert_eq!(result.modes, Default::default());
 }
@@ -862,8 +857,7 @@ fn test_v0_tags_parsing() {
 #[test]
 fn test_v1_multiple_inheritance() {
     // Test that style = ["role1", "role2"] merges roles left to right
-    let app_dirs = dirs();
-    let theme = Theme::load_raw(&app_dirs, "v1-multiple-inheritance").unwrap();
+    let theme = raw_theme("v1-multiple-inheritance");
 
     // Verify the theme loaded correctly
     assert_eq!(theme.version, Version::V1_0);
@@ -1220,15 +1214,9 @@ fn test_empty_v0_theme_file_valid() {
     // FR-010a: System MUST accept completely empty theme files as valid v0 themes
     // (all sections missing, inherits from terminal defaults and parent/inner relationships)
     // Uses external file: src/testing/assets/themes/empty-v0.yaml
-    let app_dirs = dirs();
-
-    // Create minimal empty YAML object (valid empty v0 theme)
-    let empty_theme_path = app_dirs.config_dir.join("themes/empty-v0.yaml");
-    std::fs::write(&empty_theme_path, "{}").unwrap();
 
     // Load the empty theme file directly without merging with default
-    let path = app_dirs.config_dir.join("themes");
-    let theme = Theme::load_from(&path, "empty-v0").unwrap();
+    let theme = raw_theme_unmerged("v0-empty");
 
     // Verify it's treated as v0 (version 0.0)
     assert_eq!(theme.version, Version::V0_0, "Empty file should be treated as v0 theme");
@@ -1246,9 +1234,6 @@ fn test_empty_v0_theme_file_valid() {
         "Empty v0 theme should have no styles (v0 doesn't support styles)"
     );
     assert_eq!(theme.tags.len(), 0, "Empty v0 theme should have no tags");
-
-    // Clean up
-    std::fs::remove_file(&empty_theme_path).ok();
 }
 
 #[test]
@@ -1257,8 +1242,7 @@ fn test_v0_ignores_styles_section() {
     // if a v0 theme file contains a `styles` section, the system MUST ignore it silently
     // Uses external file: src/testing/assets/themes/v0-with-styles-section.yaml
     // Load the theme directly without merging with default
-    let path = PathBuf::from("src/testing/assets/themes");
-    let theme = Theme::load_from(&path, "v0-with-styles-section").unwrap();
+    let theme = raw_theme_unmerged("v0-with-styles-section");
 
     // Verify it's v0 (no version field means v0)
     assert_eq!(theme.version, Version::V0_0, "Theme without version should be v0");
@@ -1301,10 +1285,9 @@ fn test_v0_ignores_styles_section() {
 fn test_custom_default_theme_with_extension() {
     // FR-001b: System MUST allow custom themes named `@base` when loaded with extension
     // Uses external file: src/testing/assets/themes/@base.yaml
-    let app_dirs = dirs();
 
     // Load @base.yaml with extension (merges with embedded @base correctly)
-    let theme = Theme::load(&app_dirs, "@base.yaml").unwrap();
+    let theme = theme("@base.yaml");
 
     // Custom @base.yaml is a v0 theme, but it still merges with embedded v1 @base
     // The merged theme retains the custom theme's version (v0)
@@ -1357,8 +1340,7 @@ fn test_v0_rejects_mode_prefix() {
     // and exit with error message suggesting to use version="1.0" or remove the prefix
     // Note: '+' prefix is allowed in v0 (it's the same as no prefix)
     // Uses external file: src/testing/assets/themes/v0-invalid-mode-prefix.yaml
-    let app_dirs = dirs();
-    let result = Theme::load(&app_dirs, "v0-invalid-mode-prefix");
+    let result = Theme::load(&dirs(), "v0-invalid-mode-prefix");
 
     // Should fail to load
     assert!(result.is_err(), "V0 theme with - mode prefix should fail to load");
@@ -1379,10 +1361,9 @@ fn test_v0_rejects_mode_prefix() {
 fn test_filesystem_error_handling() {
     // FR-007: System MUST exit with error to stderr when filesystem operations fail,
     // reporting the specific error (permission denied, I/O error, disk read failure, etc.)
-    let app_dirs = dirs();
 
     // Test 1: Non-existent theme (file not found)
-    let result = Theme::load(&app_dirs, "definitely-does-not-exist-12345");
+    let result = Theme::load(&dirs(), "definitely-does-not-exist-12345");
     assert!(result.is_err(), "Should fail when theme file doesn't exist");
 
     // Verify it's a ThemeNotFound error (not a generic filesystem error)
@@ -1434,8 +1415,7 @@ fn test_mode_names_case_sensitive() {
     // FR-014a: System MUST treat mode names as case-sensitive
     // "bold" is valid, "Bold" or "BOLD" are invalid and cause error
     // Uses external file: src/testing/assets/themes/v0-invalid-mode-case.yaml
-    let app_dirs = dirs();
-    let result = Theme::load(&app_dirs, "v0-invalid-mode-case");
+    let result = Theme::load(&dirs(), "v0-invalid-mode-case");
 
     // Should fail to load due to invalid mode case
     assert!(
@@ -1460,8 +1440,7 @@ fn test_tag_validation() {
     // FR-022a: System MUST validate that tag values are from the allowed set
     // (dark, light, 16color, 256color, truecolor) and reject themes with unknown tag values
     // Uses external file: src/testing/assets/themes/v0-invalid-tag.yaml
-    let app_dirs = dirs();
-    let result = Theme::load(&app_dirs, "v0-invalid-tag");
+    let result = Theme::load(&dirs(), "v0-invalid-tag");
 
     // Should fail to load due to invalid tag value
     assert!(result.is_err(), "Theme with invalid tag value should fail to load");
@@ -1503,10 +1482,9 @@ fn test_multiple_conflicting_tags_allowed() {
 fn test_custom_default_theme_without_extension() {
     // FR-001b: System MUST allow custom themes named `@base` when loaded by stem name
     // Uses external file: src/testing/assets/themes/@base.yaml
-    let app_dirs = dirs();
 
     // Load @base without extension (this currently doesn't load custom theme)
-    let theme = Theme::load(&app_dirs, "@base").unwrap();
+    let theme = theme("@base");
 
     // Custom @base.yaml is a v0 theme, merged result uses custom theme's version (v0)
     assert_eq!(
@@ -1555,10 +1533,9 @@ fn test_load_by_full_filename_explicit() {
     // This test verifies that specifying the full filename (e.g., "test-fullname.toml")
     // loads the correct file format even when multiple formats exist with the same stem
     // Uses external files: src/testing/assets/themes/test-fullname.{yaml,toml}
-    let app_dirs = dirs();
 
     // Load TOML file explicitly
-    let toml_theme = Theme::load(&app_dirs, "test-fullname.toml").unwrap();
+    let toml_theme = theme("test-fullname.toml");
 
     // Verify it loaded the TOML version (has magenta key, not cyan)
     assert_eq!(
@@ -1578,7 +1555,7 @@ fn test_load_by_full_filename_explicit() {
     );
 
     // Load YAML file explicitly
-    let yaml_theme = Theme::load(&app_dirs, "test-fullname.yaml").unwrap();
+    let yaml_theme = theme("test-fullname.yaml");
 
     // Verify it loaded the YAML version (has cyan key, not magenta)
     assert_eq!(
@@ -1604,18 +1581,15 @@ fn test_silent_on_success() {
     // This test verifies that loading a theme successfully produces no output
     // Note: In Rust tests, any output to stderr would show up in test output
     // The fact that this test passes cleanly verifies silent operation
-    let app_dirs = dirs();
 
     // Load a known-good theme
-    let result = Theme::load(&app_dirs, "test-fullname.yaml");
+    let result = Theme::load(&dirs(), "test-fullname.yaml");
 
     // Verify it succeeds without error (which would produce stderr output)
     assert!(result.is_ok(), "Theme load should succeed silently");
 
     // Test with load via AppDirs as well
-    let app_dirs = dirs();
-
-    let result = Theme::load(&app_dirs, "test");
+    let result = Theme::load(&dirs(), "test");
     assert!(result.is_ok(), "Theme load via AppDirs should succeed silently");
 
     // If either of these produced output to stdout/stderr, it would be visible
@@ -1627,9 +1601,7 @@ fn test_theme_stem_deduplication() {
     // FR-030b: System MUST display each theme stem only once in listings
     // even when multiple file formats exist for the same stem
     // Uses external files: src/testing/assets/themes/dedup-test.{yaml,toml}
-    let app_dirs = dirs();
-
-    let themes = Theme::list(&app_dirs).unwrap();
+    let themes = Theme::list(&dirs()).unwrap();
 
     // Count how many times "dedup-test" appears
     let dedup_count = themes.keys().filter(|k| k.as_ref() == "dedup-test").count();
@@ -1651,10 +1623,9 @@ fn test_custom_theme_priority_over_stock() {
     // FR-001a: System MUST prioritize custom themes over stock themes with same name
     // This test verifies that a custom "universal" theme overrides the embedded stock version
     // Uses external file: src/testing/assets/themes/universal.yaml
-    let app_dirs = dirs();
 
     // Load "universal" - should get custom version, not stock
-    let theme = Theme::load(&app_dirs, "universal").unwrap();
+    let theme = theme("universal");
 
     // Verify we loaded the custom version by checking its distinctive colors
     // Stock universal doesn't use these exact RGB values
@@ -1686,11 +1657,8 @@ fn test_platform_specific_paths() {
     // This test verifies that Theme::load respects AppDirs configuration
     // and loads themes from the correct platform-specific paths
 
-    // Test with custom config directory
-    let custom_app_dirs = dirs();
-
     // Should find theme in the configured directory
-    let result = Theme::load(&custom_app_dirs, "test");
+    let result = Theme::load(&dirs(), "test");
     assert!(
         result.is_ok(),
         "Theme should load from custom config_dir path via AppDirs"
@@ -1714,7 +1682,7 @@ fn test_platform_specific_paths() {
 
     // Verify the AppDirs paths are actually being used by checking we can load
     // from the correct custom directory
-    let theme = Theme::load(&custom_app_dirs, "test").unwrap();
+    let theme = Theme::load(&dirs(), "test").unwrap();
     assert!(
         !theme.elements.is_empty(),
         "Theme loaded from custom AppDirs should have elements"
@@ -1725,10 +1693,9 @@ fn test_platform_specific_paths() {
 fn test_theme_name_suggestions() {
     // FR-006a: System MUST provide helpful suggestions using Jaro similarity
     // when a theme name is not found
-    let app_dirs = dirs();
 
     // Try to load a theme with a typo - should get suggestions
-    let result = Theme::load(&app_dirs, "universl"); // typo: missing 'a'
+    let result = Theme::load(&dirs(), "universl"); // typo: missing 'a'
     assert!(result.is_err(), "Loading non-existent theme should fail");
 
     // Check that the error includes suggestions via the Suggestions field
@@ -1745,10 +1712,10 @@ fn test_theme_name_suggestions() {
     }
 
     // Try another typo
-    let result2 = Theme::load(&app_dirs, "tst"); // typo: missing 'e' from "test"
-    assert!(result2.is_err(), "Loading non-existent theme should fail");
+    let result = Theme::load(&dirs(), "tst"); // typo: missing 'e' from "test"
+    assert!(result.is_err(), "Loading non-existent theme should fail");
 
-    match result2.unwrap_err() {
+    match result.unwrap_err() {
         Error::ThemeNotFound { name, suggestions } => {
             assert_eq!(name.as_ref(), "tst");
             // Should suggest similar themes using Jaro similarity
@@ -2049,9 +2016,8 @@ fn test_v1_level_overrides_with_styles() {
     // FR-021a: V1 level overrides MUST support v1 features like style references
     // This test verifies that level-specific overrides can use style definitions
     // Uses external file: src/testing/assets/themes/v1-level-with-styles.yaml
-    let app_dirs = dirs();
 
-    let theme = Theme::load_raw(&app_dirs, "v1-level-with-styles").unwrap();
+    let theme = raw_theme("v1-level-with-styles");
 
     // Verify it's a v1 theme
     assert_eq!(theme.version, Version::V1_0);
@@ -2170,10 +2136,9 @@ fn test_file_format_parse_errors() {
     // FR-029: System MUST report file format parse errors with helpful messages
     // This test verifies that malformed theme files produce clear error messages
     // Uses external files: src/testing/assets/themes/malformed.{yaml,toml,json}
-    let app_dirs = dirs();
 
     // Test YAML parse error
-    let yaml_result = Theme::load(&app_dirs, "malformed.yaml");
+    let yaml_result = Theme::load(&dirs(), "malformed.yaml");
     assert!(yaml_result.is_err(), "Malformed YAML should produce an error");
     let yaml_err = yaml_result.unwrap_err();
     let yaml_msg = yaml_err.to_string();
@@ -2185,7 +2150,7 @@ fn test_file_format_parse_errors() {
     );
 
     // Test TOML parse error
-    let toml_result = Theme::load(&app_dirs, "malformed.toml");
+    let toml_result = Theme::load(&dirs(), "malformed.toml");
     assert!(toml_result.is_err(), "Malformed TOML should produce an error");
     let toml_err = toml_result.unwrap_err();
     let toml_msg = toml_err.to_string();
@@ -2197,7 +2162,7 @@ fn test_file_format_parse_errors() {
     );
 
     // Test JSON parse error
-    let json_result = Theme::load(&app_dirs, "malformed.json");
+    let json_result = Theme::load(&dirs(), "malformed.json");
     assert!(json_result.is_err(), "Malformed JSON should produce an error");
     let json_err = json_result.unwrap_err();
     let json_msg = json_err.to_string();
@@ -2211,15 +2176,13 @@ fn test_file_format_parse_errors() {
 
 #[test]
 fn test_unsupported_theme_version() {
-    let app_dirs = dirs();
-    let result = Theme::load(&app_dirs, "test-unsupported-version");
+    let result = Theme::load(&dirs(), "test-unsupported-version");
     assert!(result.is_err());
 }
 
 #[test]
 fn test_v0_level_override_with_invalid_mode_prefix() {
-    let app_dirs = dirs();
-    let result = Theme::load(&app_dirs, "test-v0-level-invalid-mode");
+    let result = Theme::load(&dirs(), "test-v0-level-invalid-mode");
     assert!(result.is_err());
 }
 
@@ -2334,7 +2297,7 @@ fn test_child_blocking_parent_in_style_pack() {
     let mut patch = v1::StylePack::default();
     patch.insert(Element::LevelInner, RawStyle::default());
 
-    let merged = base.merged(&patch, V0_MERGE_FLAGS);
+    let merged = base.merged(&patch, Version::V0.merge_flags());
 
     assert!(!merged.contains_key(&Element::Level));
     assert!(merged.contains_key(&Element::LevelInner));
@@ -2356,7 +2319,7 @@ fn test_resolved_style_merged_style_replace_modes() {
         background: None,
     };
 
-    let merged = base.merged(&patch, V0_MERGE_FLAGS);
+    let merged = base.merged(&patch, Version::V0.merge_flags());
     assert_eq!(merged.modes, Mode::Italic.into());
     assert_eq!(merged.foreground, Some(Color::Plain(PlainColor::Green)));
 }
@@ -2392,22 +2355,19 @@ fn test_indicator_merge_empty_text() {
 
 #[test]
 fn test_v0_element_with_invalid_mode_prefix() {
-    let app_dirs = dirs();
-    let result = Theme::load(&app_dirs, "test-v0-element-invalid-mode");
+    let result = Theme::load(&dirs(), "test-v0-element-invalid-mode");
     assert!(result.is_err());
 }
 
 #[test]
 fn test_invalid_style_base_deserialization() {
-    let app_dirs = dirs();
-    let result = Theme::load(&app_dirs, "test-invalid-style-base");
+    let result = Theme::load(&dirs(), "test-invalid-style-base");
     assert!(result.is_err());
 }
 
 #[test]
 fn test_style_base_deserialization_single_string() {
-    let app_dirs = dirs();
-    let theme = Theme::load_raw(&app_dirs, "test-base-single").unwrap();
+    let theme = raw_theme("test-base-single");
     let secondary = theme.styles.get(&Role::Secondary);
     assert!(secondary.is_some());
     assert!(!secondary.unwrap().base.is_empty());
@@ -2415,8 +2375,7 @@ fn test_style_base_deserialization_single_string() {
 
 #[test]
 fn test_mode_set_diff_with_removes() {
-    let app_dirs = dirs();
-    let theme = Theme::load_raw(&app_dirs, "test-mode-diff").unwrap();
+    let theme = raw_theme("test-mode-diff");
     let message = &theme.elements[&Element::Message];
     assert!(message.modes.adds.contains(Mode::Bold));
     assert!(message.modes.removes.contains(Mode::Italic));
@@ -2494,8 +2453,7 @@ fn test_mode_diff_serialization() {
 
 #[test]
 fn test_style_base_visitor_expecting() {
-    let app_dirs = dirs();
-    let result = Theme::load(&app_dirs, "test-invalid-style-base");
+    let result = Theme::load(&dirs(), "test-invalid-style-base");
     assert!(result.is_err());
     let err_msg = result.unwrap_err().to_string();
     assert!(!err_msg.is_empty());
@@ -2505,8 +2463,7 @@ fn test_style_base_visitor_expecting() {
 fn test_v1_strict_unknown_key_rejected() {
     // Test that v1 themes strictly reject unknown top-level keys (fail-fast)
     // This is different from v0 which silently ignores unknown keys for forward compatibility
-    let path = PathBuf::from("src/testing/assets/themes");
-    let result = Theme::load_from(&path, "v1-unknown-key");
+    let result = load_raw_theme_unmerged("v1-unknown-key");
 
     // v1 should fail on unknown keys due to #[serde(deny_unknown_fields)]
     assert!(
@@ -2529,8 +2486,7 @@ fn test_v1_strict_unknown_key_rejected() {
 fn test_v1_strict_unknown_enum_variant_rejected() {
     // Test that v1 themes strictly reject unknown enum variants (fail-fast)
     // This tests unknown Role variant in the styles section
-    let path = PathBuf::from("src/testing/assets/themes");
-    let result = Theme::load_from(&path, "v1-unknown-role");
+    let result = load_raw_theme_unmerged("v1-unknown-role");
 
     // v1 should fail on unknown enum variants
     assert!(
@@ -2553,8 +2509,7 @@ fn test_v1_strict_unknown_enum_variant_rejected() {
 fn test_v0_version_0_1_rejected() {
     // Test that v0 themes with version "0.1" are rejected before deserialization
     // Only version "0.0" (or default/no version) is valid for v0
-    let path = PathBuf::from("src/testing/assets/themes");
-    let result = Theme::load_from(&path, "v0-invalid-version");
+    let result = load_raw_theme_unmerged("v0-invalid-version");
 
     assert!(result.is_err(), "v0 theme with version 0.1 should be rejected");
 
@@ -2572,8 +2527,7 @@ fn test_v0_version_0_1_rejected() {
 fn test_v1_version_1_1_rejected_before_deserialization() {
     // Test that v1 themes with unsupported version "1.1" are rejected BEFORE
     // attempting to deserialize, giving a better error message
-    let path = PathBuf::from("src/testing/assets/themes");
-    let result = Theme::load_from(&path, "v1-unsupported-version");
+    let result = load_raw_theme_unmerged("v1-unsupported-version");
 
     assert!(result.is_err(), "v1 theme with version 1.1 should be rejected");
 
@@ -2591,8 +2545,7 @@ fn test_v1_version_1_1_rejected_before_deserialization() {
 fn test_v1_schema_field_accepted() {
     // Test that v1 themes can include $schema field for IDE/validator support
     // The field should be accepted and ignored during processing
-    let path = PathBuf::from("src/testing/assets/themes");
-    let result = Theme::load_from(&path, "v1-with-schema");
+    let result = load_raw_theme_unmerged("v1-with-schema");
 
     assert!(
         result.is_ok(),

@@ -8,8 +8,10 @@ use std::{
 // third-party imports
 use serde::{Deserialize, Deserializer, Serialize, de::Visitor};
 
+use crate::themecfg::GetMergeFlags;
+
 // relative imports
-use super::{Error, Result};
+use super::{Error, MergeFlag, MergeFlags, Result};
 
 /// Theme version with major.minor components
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
@@ -43,6 +45,18 @@ impl Version {
     pub fn is_compatible_with(&self, supported: &Version) -> bool {
         // Same major version and minor <= supported
         self.major == supported.major && self.minor <= supported.minor
+    }
+}
+
+impl GetMergeFlags for Version {
+    fn merge_flags(&self) -> MergeFlags {
+        match self {
+            Self { major: 0, .. } => {
+                MergeFlag::ReplaceElements | MergeFlag::ReplaceHierarchies | MergeFlag::ReplaceModes
+            }
+            Self { major: 1, .. } => MergeFlags::new(),
+            _ => MergeFlags::new(),
+        }
     }
 }
 

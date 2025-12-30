@@ -18,7 +18,7 @@ use serde_value::Value;
 use crate::level::InfallibleLevel;
 
 // relative imports
-use super::{Color, Element, Mode, Tag, Version};
+use super::{Color, Element, GetMergeFlags, MergeFlags, Mode, Tag, ThemeLoadError, Version};
 
 // ---
 
@@ -48,9 +48,9 @@ impl Default for Theme {
 
 impl Theme {
     /// Validate v0 theme version before deserialization
-    pub fn validate_version(version: &Version) -> Result<(), super::ThemeLoadError> {
+    pub fn validate_version(version: &Version) -> Result<(), ThemeLoadError> {
         if *version != Version::V0_0 {
-            return Err(super::ThemeLoadError::UnsupportedVersion {
+            return Err(ThemeLoadError::UnsupportedVersion {
                 requested: *version,
                 nearest: Version::V0_0,
                 latest: Version::CURRENT,
@@ -60,6 +60,13 @@ impl Theme {
         Ok(())
     }
 }
+
+impl GetMergeFlags for Theme {
+    fn merge_flags(&self) -> MergeFlags {
+        self.version.merge_flags()
+    }
+}
+
 // ---
 
 /// Style represents an element's visual styling (v0 format - simple, no base).

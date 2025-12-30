@@ -11,15 +11,12 @@ use enumset::EnumSet;
 use serde::Deserialize;
 
 // local imports
-use crate::{
-    level::{InfallibleLevel, Level},
-    themecfg::StyleResolveError,
-};
+use crate::level::{InfallibleLevel, Level};
 
 // relative imports
 use super::{
-    Element, IndicatorPack, Merge, MergeFlag, MergeFlags, ResolvedIndicatorPack, ResolvedTheme, Result, Role, Style,
-    StyleInventory, StylePack, Tag, ThemeLoadError, Version, v0,
+    Element, GetMergeFlags, IndicatorPack, Merge, MergeFlag, MergeFlags, ResolvedIndicatorPack, ResolvedTheme, Result,
+    Role, Style, StyleInventory, StylePack, StyleResolveError, Tag, ThemeLoadError, Version, v0,
 };
 
 // ---
@@ -164,15 +161,6 @@ impl Theme {
         indicators.clone().resolve(|style| style.resolve(inventory, flags))
     }
 
-    pub fn merge_flags(&self) -> MergeFlags {
-        match self.version {
-            Version { major: 0, .. } => {
-                MergeFlag::ReplaceElements | MergeFlag::ReplaceHierarchies | MergeFlag::ReplaceModes
-            }
-            _ => MergeFlags::new(),
-        }
-    }
-
     /// Validate v1 theme version before deserialization
     ///
     /// V1 themes must be compatible with the current version
@@ -190,6 +178,12 @@ impl Theme {
         }
 
         Ok(())
+    }
+}
+
+impl GetMergeFlags for Theme {
+    fn merge_flags(&self) -> MergeFlags {
+        self.version.merge_flags()
     }
 }
 

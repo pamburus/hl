@@ -179,7 +179,7 @@ impl Theme {
         Ok(result)
     }
 
-    fn load_embedded<S: RustEmbed>(name: &str) -> Result<RawTheme> {
+    pub(super) fn load_embedded<S: RustEmbed>(name: &str) -> Result<RawTheme> {
         for format in Format::iter() {
             let filename = Self::filename(name, format);
             if let Some(file) = S::get(&filename) {
@@ -201,18 +201,7 @@ impl Theme {
         })
     }
 
-    fn deserialize<T>(s: &str, format: Format) -> Result<T, ExternalError>
-    where
-        T: for<'de> Deserialize<'de>,
-    {
-        match format {
-            Format::Yaml => Ok(yaml::from_str(s)?.remove(0)),
-            Format::Toml => Ok(toml::from_str(s)?),
-            Format::Json => Ok(json::from_str(s)?),
-        }
-    }
-
-    fn from_buf(data: &[u8], format: Format) -> Result<v1::Theme, ThemeLoadError> {
+    pub(super) fn from_buf(data: &[u8], format: Format) -> Result<v1::Theme, ThemeLoadError> {
         let s = std::str::from_utf8(data).map_err(ExternalError::from)?;
 
         // Peek at version to decide which deserialization path to use
@@ -234,15 +223,8 @@ impl Theme {
         }
     }
 
-    fn peek_version(s: &str, format: Format) -> Result<Version, ExternalError> {
-        #[derive(Deserialize)]
-        struct VersionOnly {
-            #[serde(default)]
-            version: Version,
-        }
-
-        let data: VersionOnly = Self::deserialize(s, format)?;
-        Ok(data.version)
+    pub(super) fn themes_dir(app_dirs: &AppDirs) -> PathBuf {
+        app_dirs.config_dir.join("themes")
     }
 
     pub(super) fn load_from(dir: &Path, name: &str) -> Result<RawTheme> {
@@ -298,23 +280,11 @@ impl Theme {
         })
     }
 
-    fn filename(name: &str, format: Format) -> String {
-        if Self::strip_extension(name, format).is_some() {
-            return name.to_string();
-        }
-
-        format!("{}.{}", name, format.extensions()[0])
-    }
-
-    fn themes_dir(app_dirs: &AppDirs) -> PathBuf {
-        app_dirs.config_dir.join("themes")
-    }
-
-    fn embedded_names() -> impl IntoIterator<Item = Arc<str>> {
+    pub(super) fn embedded_names() -> impl IntoIterator<Item = Arc<str>> {
         Assets::iter().filter_map(|a| Self::strip_known_extension(&a).filter(|&n| n != BASE).map(|n| n.into()))
     }
 
-    fn custom_names(app_dirs: &AppDirs) -> Result<impl IntoIterator<Item = Result<Arc<str>>> + use<>> {
+    pub(super) fn custom_names(app_dirs: &AppDirs) -> Result<impl IntoIterator<Item = Result<Arc<str>>> + use<>> {
         let path = Self::themes_dir(app_dirs);
         let dir = Path::new(&path);
         Ok(dir
@@ -331,6 +301,36 @@ impl Theme {
                     .and_then(|a| Self::strip_known_extension(a).map(|n| n.into())))
             })
             .filter_map(|x| x.transpose()))
+    }
+
+    fn deserialize<T>(s: &str, format: Format) -> Result<T, ExternalError>
+    where
+        T: for<'de> Deserialize<'de>,
+    {
+        match format {
+            Format::Yaml => Ok(yaml::from_str(s)?.remove(0)),
+            Format::Toml => Ok(toml::from_str(s)?),
+            Format::Json => Ok(json::from_str(s)?),
+        }
+    }
+
+    fn peek_version(s: &str, format: Format) -> Result<Version, ExternalError> {
+        #[derive(Deserialize)]
+        struct VersionOnly {
+            #[serde(default)]
+            version: Version,
+        }
+
+        let data: VersionOnly = Self::deserialize(s, format)?;
+        Ok(data.version)
+    }
+
+    fn filename(name: &str, format: Format) -> String {
+        if Self::strip_extension(name, format).is_some() {
+            return name.to_string();
+        }
+
+        format!("{}.{}", name, format.extensions()[0])
     }
 
     fn strip_extension(filename: &str, format: Format) -> Option<&str> {

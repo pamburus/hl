@@ -1,4 +1,4 @@
-#:schema ../../../../schema/json/theme.schema.v0.json
+#:schema ../../../../../schema/json/theme.schema.v0.json
 
 [elements.message]
 foreground = "white"

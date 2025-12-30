@@ -3,8 +3,8 @@ toml-version = "v1.0.0"
 [files]
 include = ["**/*.toml"]
 exclude = [
-  "src/testing/assets/themes/malformed.toml",
-  "src/testing/assets/themes/test-unknown-elements.toml",
+  "src/testing/assets/fixtures/themes/malformed.toml",
+  "src/testing/assets/fixtures/themes/test-unknown-elements.toml",
 ]
 
 [format]
