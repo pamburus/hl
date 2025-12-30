@@ -2137,7 +2137,13 @@ fn test_v1_empty() {
         }
     );
 
-    assert_eq!(theme.elements[&Element::LevelInner], Style::default());
+    assert_eq!(
+        theme.elements[&Element::LevelInner],
+        Style {
+            modes: ModeSetDiff::new().remove(Mode::Faint),
+            ..Default::default()
+        }
+    );
 
     assert_eq!(
         theme.levels[&Level::Warning][&Element::Level],
@@ -2151,6 +2157,7 @@ fn test_v1_empty() {
         theme.levels[&Level::Warning][&Element::LevelInner],
         Style {
             foreground: Some(Color::Plain(PlainColor::Yellow)),
+            modes: ModeSetDiff::new().remove(Mode::Faint),
             ..Default::default()
         }
     );

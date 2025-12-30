@@ -55,6 +55,21 @@ impl ModeSetDiff {
     pub fn is_empty(&self) -> bool {
         self.adds.is_empty() && self.removes.is_empty()
     }
+
+    pub fn reversed(mut self) -> Self {
+        std::mem::swap(&mut self.adds, &mut self.removes);
+        self
+    }
+
+    pub fn add(mut self, mode: impl Into<ModeSet>) -> Self {
+        self += ModeSetDiff::from(mode.into());
+        self
+    }
+
+    pub fn remove(mut self, mode: impl Into<ModeSet>) -> Self {
+        self += ModeSetDiff::from(mode.into()).reversed();
+        self
+    }
 }
 
 impl Add<ModeSetDiff> for ModeSetDiff {
