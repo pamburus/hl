@@ -14,6 +14,8 @@ accent-secondary = { style = ["accent", "secondary"] }
 message = { style = "strong" }
 syntax = { style = "strong" }
 status = { modes = ["-faint"] }
+key = { style = "accent" }
+value = { style = "primary" }
 level = { style = "status" }
 trace = { style = "secondary" }
 debug = { foreground = "magenta" }
@@ -32,14 +34,14 @@ caller = { style = "secondary", modes = ["italic"] }
 message = { style = "message" }
 message-delimiter = { style = "muted" }
 field = { style = "muted" }
-key = { style = "accent" }
+key = { style = "key" }
 ellipsis = { style = "muted" }
 object = { style = "syntax" }
 array = { style = "syntax" }
-string = { style = "primary" }
-number = { style = "primary" }
-boolean = { style = "primary" }
-null = { style = "primary" }
+string = { style = "value" }
+number = { style = "value" }
+boolean = { style = "value" }
+null = { style = "value" }
 
 # Levels define styles for different log levels.
 [levels]

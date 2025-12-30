@@ -20,6 +20,8 @@ pub enum Role {
     Accent,
     AccentSecondary,
     Message,
+    Key,
+    Value,
     Syntax,
     Status,
     Level,
