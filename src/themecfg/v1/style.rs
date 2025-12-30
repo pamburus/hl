@@ -266,11 +266,15 @@ impl<'a> StyleResolver<'a> {
             });
         }
 
+        // Role-to-role inheritance should use additive mode semantics (v1 style)
+        // even when resolving v0 themes. ReplaceModes is only for v0 element merging.
+        let role_flags = self.flags - MergeFlag::ReplaceModes;
+
         let mut result = ResolvedStyle::default();
         for base in base.iter() {
-            result.merge(&self.resolve(base)?, self.flags);
+            result.merge(&self.resolve(base)?, role_flags);
         }
 
-        Ok(result.merged(&style.as_resolved(), self.flags))
+        Ok(result.merged(&style.as_resolved(), role_flags))
     }
 }

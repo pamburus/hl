@@ -823,8 +823,8 @@ elements:
         output
     );
 
-    // Number element (not defined in v0, uses @base's number = { style = "primary" })
-    // should inherit ALL properties from deduced primary style
+    // Number element (not defined in v0, uses @base's number = { style = "value" })
+    // should inherit ALL properties from deduced primary style (via value role)
     buf.clear();
     theme.apply(&mut buf, &None, |s| {
         s.element(Element::Number, |s| s.batch(|buf| buf.extend_from_slice(b"123")));
