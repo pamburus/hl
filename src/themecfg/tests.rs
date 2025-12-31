@@ -42,7 +42,7 @@ pub(crate) fn load_yaml_fixture<T>(path: &str) -> T
 where
     T: serde::de::DeserializeOwned,
 {
-    let content = std::fs::read_to_string(PathBuf::from("src/testing/assets").join(path)).unwrap();
+    let content = std::fs::read_to_string(PathBuf::from("src/testing/assets/fixtures").join(path)).unwrap();
     let items: Vec<T> = yaml::from_str(&content).unwrap();
     items.into_iter().next().unwrap()
 }

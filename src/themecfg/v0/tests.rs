@@ -5,7 +5,7 @@ use super::{Style, StylePack, Theme};
 
 #[test]
 fn test_v0_theme_merge_flags() {
-    let theme: Theme = load_yaml_fixture("fixtures/themes/v0-theme-merge-flags.yaml");
+    let theme: Theme = load_yaml_fixture("themes/v0-theme-merge-flags.yaml");
     let flags = theme.merge_flags();
     assert!(flags.contains(MergeFlag::ReplaceElements));
     assert!(flags.contains(MergeFlag::ReplaceHierarchies));

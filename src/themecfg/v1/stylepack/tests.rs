@@ -8,7 +8,7 @@ use super::StylePack;
 fn test_style_pack() {
     assert_eq!(StylePack::<Element>::default().len(), 0);
 
-    let yaml = include_str!("../../../testing/assets/style-packs/pack1.yaml");
+    let yaml = include_str!("../../../testing/assets/fixtures/style-packs/pack1.yaml");
     let pack: StylePack<Element> = yaml::from_str(yaml).unwrap().remove(0);
     assert_eq!(pack.len(), 2);
     assert_eq!(pack[&Element::Input].foreground, Some(Color::Plain(PlainColor::Red)));
