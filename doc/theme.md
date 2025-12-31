@@ -122,12 +122,12 @@ graph TB
     error["<b>error</b><br/>fg: bright-red"]
 
     %% Implicit inheritance from default (dotted lines)
-    default -.->|implicit| primary
-    default -.->|implicit| status
-    default -.->|implicit| debug
-    default -.->|implicit| info
-    default -.->|implicit| warning
-    default -.->|implicit| error
+    default -.-> primary
+    default -.-> status
+    default -.-> debug
+    default -.-> info
+    default -.-> warning
+    default -.-> error
 
     %% Primary hierarchy (solid lines)
     primary --> secondary
@@ -151,44 +151,20 @@ graph TB
     %% Status derivative
     status --> level
 
-    %% Subgraph for better organization
-    subgraph " "
-        default
-    end
-
-    subgraph "Primary Hierarchy"
-        primary
-        secondary
-        strong
-        value
-        muted
-        accent
-        trace
-        key
-        accsec
-        message
-        syntax
-    end
-
-    subgraph "Status Hierarchy"
-        status
-        level
-    end
-
-    subgraph "Log Levels"
-        debug
-        info
-        warning
-        error
-    end
+    %% Note: Subgraph titles and edge labels removed to avoid dark mode readability issues
+    %% Grouping still visible through layout and color coding
+    %% - default: root of all styles (dotted lines = implicit inheritance)
+    %% - primary/secondary/strong/value/muted/accent/trace/key/accsec/message/syntax: primary hierarchy
+    %% - status/level: status hierarchy
+    %% - debug/info/warning/error: independent log level styles
 
     %% Style definitions
-    classDef root fill:#e1f5ff,stroke:#01579b,stroke-width:4px
-    classDef tier1 fill:#fff9c4,stroke:#f57f17,stroke-width:3px
-    classDef tier2 fill:#f3e5f5,stroke:#4a148c,stroke-width:2px
-    classDef tier3 fill:#e8f5e9,stroke:#1b5e20,stroke-width:2px
-    classDef independent fill:#fff3e0,stroke:#e65100,stroke-width:2px
-    classDef loglevel fill:#fce4ec,stroke:#880e4f,stroke-width:2px
+    classDef root fill:#e1f5ff,stroke:#01579b,stroke-width:4px,color:#000
+    classDef tier1 fill:#fff9c4,stroke:#f57f17,stroke-width:3px,color:#000
+    classDef tier2 fill:#f3e5f5,stroke:#4a148c,stroke-width:2px,color:#000
+    classDef tier3 fill:#e8f5e9,stroke:#1b5e20,stroke-width:2px,color:#000
+    classDef independent fill:#fff3e0,stroke:#e65100,stroke-width:2px,color:#000
+    classDef loglevel fill:#fce4ec,stroke:#880e4f,stroke-width:2px,color:#000
 
     class default root
     class primary,status tier1
