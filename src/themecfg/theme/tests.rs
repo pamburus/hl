@@ -1,8 +1,8 @@
-use std::str::FromStr;
+use std::{path::PathBuf, str::FromStr};
 
 use strum::IntoEnumIterator;
 
-use crate::level::Level;
+use crate::{appdirs::AppDirs, level::Level};
 
 use super::super::{
     Color, Element, Error, Format, Mode, ModeSetDiff, PlainColor, RGB, Style, Tag, Theme, Version,
@@ -565,5 +565,254 @@ fn test_v0_rejects_mode_prefix() {
             "Error should mention mode prefix issue, got: {}",
             error_msg
         );
+    }
+}
+
+#[test]
+fn test_filesystem_error_handling() {
+    let result = Theme::load(&dirs(), "definitely-does-not-exist-12345");
+    assert!(result.is_err(), "Should fail when theme file doesn't exist");
+
+    match result {
+        Err(Error::ThemeNotFound { name, .. }) => {
+            assert_eq!(name.as_ref(), "definitely-does-not-exist-12345");
+        }
+        _ => panic!("Expected ThemeNotFound error for non-existent file"),
+    }
+
+    let invalid_path = PathBuf::from("/nonexistent/directory/that/does/not/exist");
+    let result = Theme::load_from(&invalid_path, "any-theme");
+    assert!(result.is_err(), "Should fail when directory doesn't exist");
+}
+
+#[test]
+fn test_mode_names_case_sensitive() {
+    let result = Theme::load(&dirs(), "v0-invalid-mode-case");
+
+    assert!(
+        result.is_err(),
+        "Theme with invalid mode case 'Bold' should fail to load"
+    );
+
+    if let Err(e) = result {
+        let error_msg = format!("{:?}", e);
+        assert!(
+            error_msg.contains("Bold") || error_msg.contains("mode") || error_msg.contains("unknown"),
+            "Error should mention invalid mode, got: {}",
+            error_msg
+        );
+    }
+}
+
+#[test]
+fn test_tag_validation() {
+    let result = Theme::load(&dirs(), "v0-invalid-tag");
+
+    assert!(result.is_err(), "Theme with invalid tag value should fail to load");
+
+    if let Err(e) = result {
+        let error_msg = format!("{:?}", e);
+        assert!(
+            error_msg.contains("tag") || error_msg.contains("invalid"),
+            "Error should mention invalid tag, got: {}",
+            error_msg
+        );
+    }
+}
+
+#[test]
+fn test_multiple_conflicting_tags_allowed() {
+    let theme = theme("v0-multiple-tags");
+
+    assert_eq!(theme.tags.len(), 4, "Should have 4 tags");
+
+    assert!(theme.tags.contains(Tag::Dark), "Should have 'dark' tag");
+    assert!(theme.tags.contains(Tag::Light), "Should have 'light' tag");
+    assert!(theme.tags.contains(Tag::Palette256), "Should have '256color' tag");
+    assert!(theme.tags.contains(Tag::TrueColor), "Should have 'truecolor' tag");
+}
+
+#[test]
+fn test_custom_default_theme_without_extension() {
+    let theme = theme("@base");
+
+    assert_eq!(
+        theme.version,
+        Version::V0_0,
+        "Custom @base is v0, merged result uses custom theme's version"
+    );
+
+    let message_style = theme.elements.get(&Element::Message);
+    assert!(message_style.is_some(), "Message element should be present after merge");
+
+    assert_eq!(
+        message_style.unwrap().foreground,
+        Some(Color::Plain(PlainColor::Red)),
+        "Custom @base.yaml message definition should override embedded @base"
+    );
+
+    assert!(
+        theme.elements.get(&Element::Input).is_some(),
+        "Should have 'input' element from embedded @base (not in custom file)"
+    );
+    assert!(
+        theme.elements.get(&Element::Time).is_some(),
+        "Should have 'time' element from embedded @base (not in custom file)"
+    );
+
+    assert!(
+        theme.elements.len() > 1,
+        "Should have multiple elements from @base merge, not just 'message' from custom file. Got {} elements",
+        theme.elements.len()
+    );
+}
+
+#[test]
+fn test_load_by_full_filename_explicit() {
+    let toml_theme = theme("test-fullname.toml");
+
+    assert_eq!(
+        toml_theme.elements[&Element::Key].foreground,
+        Some(Color::Plain(PlainColor::Magenta)),
+        "Loading test-fullname.toml should load TOML file with magenta key"
+    );
+    assert_eq!(
+        toml_theme.elements[&Element::Number].foreground,
+        Some(Color::Plain(PlainColor::Yellow)),
+        "TOML file should have yellow number"
+    );
+    assert_eq!(
+        toml_theme.elements[&Element::Message].foreground,
+        Some(Color::Plain(PlainColor::Blue)),
+        "TOML file should have blue message"
+    );
+
+    let yaml_theme = theme("test-fullname.yaml");
+
+    assert_eq!(
+        yaml_theme.elements[&Element::Key].foreground,
+        Some(Color::Plain(PlainColor::Cyan)),
+        "Loading test-fullname.yaml should load YAML file with cyan key"
+    );
+    assert_eq!(
+        yaml_theme.elements[&Element::Number].foreground,
+        Some(Color::Plain(PlainColor::Green)),
+        "YAML file should have green number"
+    );
+    assert_eq!(
+        yaml_theme.elements[&Element::Message].foreground,
+        Some(Color::Plain(PlainColor::White)),
+        "YAML file should have white message"
+    );
+}
+
+#[test]
+fn test_silent_on_success() {
+    let result = Theme::load(&dirs(), "test-fullname.yaml");
+
+    assert!(result.is_ok(), "Theme load should succeed silently");
+
+    let result = Theme::load(&dirs(), "test");
+    assert!(result.is_ok(), "Theme load via AppDirs should succeed silently");
+}
+
+#[test]
+fn test_theme_stem_deduplication() {
+    let themes = Theme::list(&dirs()).unwrap();
+
+    let dedup_count = themes.keys().filter(|k| k.as_ref() == "dedup-test").count();
+
+    assert_eq!(
+        dedup_count, 1,
+        "Theme stem 'dedup-test' should appear exactly once in listing, even though both .yaml and .toml exist"
+    );
+
+    assert!(
+        themes.contains_key("dedup-test"),
+        "dedup-test should be present in theme listing"
+    );
+}
+
+#[test]
+fn test_custom_theme_priority_over_stock() {
+    let theme = theme("universal");
+
+    assert_eq!(
+        theme.elements[&Element::Key].foreground,
+        Some(Color::RGB(RGB(255, 0, 255))),
+        "Custom universal theme should override stock: key should be bright magenta #FF00FF"
+    );
+    assert_eq!(
+        theme.elements[&Element::Message].foreground,
+        Some(Color::RGB(RGB(0, 255, 255))),
+        "Custom universal theme should override stock: message should be bright cyan #00FFFF"
+    );
+    assert_eq!(
+        theme.elements[&Element::Time].foreground,
+        Some(Color::RGB(RGB(255, 255, 0))),
+        "Custom universal theme should override stock: time should be bright yellow #FFFF00"
+    );
+    assert_eq!(
+        theme.elements[&Element::Level].foreground,
+        Some(Color::RGB(RGB(255, 0, 0))),
+        "Custom universal theme should override stock: level should be bright red #FF0000"
+    );
+}
+
+#[test]
+fn test_platform_specific_paths() {
+    let result = Theme::load(&dirs(), "test");
+    assert!(
+        result.is_ok(),
+        "Theme should load from custom config_dir path via AppDirs"
+    );
+
+    let different_app_dirs = AppDirs {
+        config_dir: PathBuf::from("etc/defaults"),
+        cache_dir: Default::default(),
+        system_config_dirs: Default::default(),
+    };
+
+    let result = Theme::load(&different_app_dirs, "test");
+    assert!(
+        result.is_err(),
+        "Theme 'test' should not be found in different config_dir (etc/defaults)"
+    );
+
+    let theme = Theme::load(&dirs(), "test").unwrap();
+    assert!(
+        !theme.elements.is_empty(),
+        "Theme loaded from custom AppDirs should have elements"
+    );
+}
+
+#[test]
+fn test_theme_name_suggestions() {
+    let result = Theme::load(&dirs(), "universl");
+    assert!(result.is_err(), "Loading non-existent theme should fail");
+
+    match result.unwrap_err() {
+        Error::ThemeNotFound { name, suggestions } => {
+            assert_eq!(name.as_ref(), "universl");
+            assert!(
+                !suggestions.is_empty(),
+                "Should provide suggestions for typo 'universl' (likely 'universal')"
+            );
+        }
+        other => panic!("Expected ThemeNotFound error, got: {:?}", other),
+    }
+
+    let result = Theme::load(&dirs(), "tst");
+    assert!(result.is_err(), "Loading non-existent theme should fail");
+
+    match result.unwrap_err() {
+        Error::ThemeNotFound { name, suggestions } => {
+            assert_eq!(name.as_ref(), "tst");
+            assert!(
+                !suggestions.is_empty(),
+                "Should provide suggestions for typo 'tst' (likely 'test')"
+            );
+        }
+        other => panic!("Expected ThemeNotFound error, got: {:?}", other),
     }
 }
