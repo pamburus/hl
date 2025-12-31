@@ -123,3 +123,6 @@ impl<'de> Deserialize<'de> for Version {
         deserializer.deserialize_str(ThemeVersionVisitor)
     }
 }
+
+#[cfg(test)]
+pub(crate) mod tests;
