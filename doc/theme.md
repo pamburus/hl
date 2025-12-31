@@ -35,6 +35,35 @@ Theme configuration v1.0 introduces role-based styling with inheritance, making 
 - **Multiple inheritance**: Merge properties from multiple parent roles
 - **Built-in defaults**: All undefined styles fall back to `@base` theme
 
+**Best Practices:**
+
+> **💡 Define generic styles first, specific elements only when necessary**
+>
+> For maximum compatibility with future versions:
+> 1. **Start with styles** - Define colors and modes in the `[styles]` section using role names
+> 2. **Let elements inherit** - Elements automatically inherit from their default style roles
+> 3. **Override sparingly** - Only define elements in `[elements]` when you need element-specific styling
+>
+> **Why?** Future versions may add new elements. If you define generic styles (e.g., `primary`, `secondary`, `accent`), 
+> new elements will automatically pick up your theme's colors. If you only define specific elements, new elements 
+> will fall back to the default `@base` colors, potentially breaking your theme's visual consistency.
+>
+> **Example - Good (future-proof):**
+> ```toml
+> [styles]
+> primary = { foreground = "#E5C07B" }
+> accent = { foreground = "#98C379" }
+> # New elements using these roles will automatically inherit your colors
+> ```
+>
+> **Example - Less ideal:**
+> ```toml
+> [elements]
+> time = { foreground = "#E5C07B" }
+> key = { foreground = "#98C379" }
+> # New elements won't inherit these colors
+> ```
+
 **Supported Formats:**
 - TOML (`.toml`) - Recommended
 - YAML (`.yaml`, `.yml`)
@@ -124,6 +153,10 @@ Tags can be combined (e.g., `["dark", "light"]` means compatible with both).
 
 **Optional.** Define reusable styles with role names as keys.
 
+> **💡 Tip:** Define your theme colors here first! Elements inherit from these styles by default, 
+> ensuring consistency and better forward compatibility. The more you use generic style roles instead 
+> of specific element overrides, the better your theme will adapt to future versions.
+
 **All 18 predefined role names:**
 
 | Role Name | Default Purpose |
@@ -160,6 +193,10 @@ error = { style = "primary", foreground = "bright-red", modes = ["bold"] }
 ### Elements
 
 **Optional.** Define styles for specific log elements.
+
+> **💡 Tip:** Only override elements when you need element-specific styling that differs from 
+> the inherited style roles. Most themes can achieve their look using just the `[styles]` section, 
+> letting elements inherit naturally.
 
 Elements in the `@base` theme inherit from style roles. The diagram below shows the default inheritance relationships:
 
