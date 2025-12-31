@@ -649,61 +649,69 @@ hl --list-themes | fzf --color='bg+:23,gutter:-1,pointer:210' --highlight-line -
 
     | OS      | Location                                                   |
     | ------- | ---------------------------------------------------------- |
-    | macOS   | ~/.config/hl/themes/*.{yaml,toml,json}                     |
-    | Linux   | ~/.config/hl/themes/*.{yaml,toml,json}                     |
-    | Windows | %USERPROFILE%\AppData\Roaming\hl\themes\*.{yaml,toml,json} |
+    | macOS   | ~/.config/hl/themes/*.{yaml,yml,toml,json}                 |
+    | Linux   | ~/.config/hl/themes/*.{yaml,yml,toml,json}                 |
+    | Windows | %USERPROFILE%\AppData\Roaming\hl\themes\*.{yaml,yml,toml,json} |
 
-* Format description
-  * Section `elements` contains styles for predefined elements.
-  * Section `levels` contains optional overrides for styles defined in `elements` sections per logging level, which are [`trace`, `debug`, `info`, `warning`, `error`].
-  * Each element style contains optional `background`, `foreground` and `modes` parameters.
-  * Example
+* **Structure**
+  * `version` (required): Must be `"1.0"`
+  * `tags` (optional): Theme classification (`dark`, `light`, `16color`, `256color`, `truecolor`)
+  * `styles` (optional): Reusable role-based styles that can inherit from each other
+  * `elements` (optional): Visual styles for specific log elements
+  * `levels` (optional): Per-level overrides for elements
+  * `indicators` (optional): Sync indicator styling for `--follow` mode
 
-    ```yaml
-    elements:
-        <element>:
-            foreground: <color>
-            background: <color>
-            modes: [<mode>, <mode>, ...]
-    levels:
-        <level>:
-            <element>:
-                foreground: <color>
-                background: <color>
-                modes: [<mode>, <mode>, ...]
+* **Example**
+
+    ```toml
+    version = "1.0"
+    tags = ["dark", "256color"]
+
+    # Reusable styles with inheritance
+    [styles]
+    primary = { modes = ["-faint"] }
+    secondary = { style = "primary", modes = ["faint"] }
+    warning = { style = "primary", foreground = "yellow" }
+    error = { style = "primary", foreground = "bright-red" }
+
+    # Element-specific styles can reference roles
+    [elements]
+    message = { style = "primary", modes = ["bold"] }
+    time = { style = "secondary" }
+    level-inner = { style = "primary" }
+
+    # Level-specific overrides
+    [levels.warning]
+    level-inner = { style = ["primary", "warning"] }
+    message = { style = ["primary", "warning"] }
+
+    [levels.error]
+    level-inner = { style = ["primary", "error"] }
+    message = { style = ["primary", "error"] }
     ```
 
-  * Color format is one of
-    * Keyword `default` specifies default color defined by the terminal.
-    * ASCII basic color name, one of
-      * `black`
-      * `red`
-      * `green`
-      * `yellow`
-      * `blue`
-      * `magenta`
-      * `cyan`
-      * `white`
-      * `bright-black`
-      * `bright-red`
-      * `bright-green`
-      * `bright-yellow`
-      * `bright-blue`
-      * `bright-magenta`
-      * `bright-cyan`
-      * `bright-white`
-    * 256-color palette code, from `0` to `255`.
-    * RGB color in hex web color format, i.e. `#FFFF00` for bright yellow color.
-  * Modes is a list of additional styles, each of them is one of
-    * `bold`
-    * `faint`
-    * `italic`
-    * `underline`
-    * `slow-blink`
-    * `rapid-blink`
-    * `reverse`
-    * `conceal`
-    * `crossed-out`
+* **Roles** (predefined): `default`, `primary`, `secondary`, `strong`, `muted`, `accent`, `accent-secondary`, `message`, `syntax`, `status`, `key`, `value`, `level`, `trace`, `debug`, `info`, `warning`, `error`
+
+* **Elements** (predefined): `input`, `input-number`, `input-number-inner`, `input-name`, `input-name-inner`, `time`, `level`, `level-inner`, `logger`, `logger-inner`, `caller`, `caller-inner`, `message`, `message-delimiter`, `field`, `key`, `array`, `object`, `string`, `number`, `boolean`, `boolean-true`, `boolean-false`, `null`, `ellipsis`
+
+* **Mode operations**:
+  * `+mode` or `mode`: Add mode (e.g., `["+bold"]` or `["bold"]`)
+  * `-mode`: Remove inherited mode (e.g., `["-faint"]`)
+  * Last occurrence wins for conflicts (e.g., `["+bold", "-bold"]` removes bold)
+
+* **Inheritance chain**: `@base` theme → user theme's roles → element's `style` field → element's explicit properties
+  * All themes inherit from built-in `@base` theme
+  * Roles can reference other roles via `style` field
+  * Elements can reference roles via `style` field
+  * Explicit properties override inherited ones
+
+* **Color format**:
+  * Keyword `default` for terminal default color
+  * ASCII basic color names: `black`, `red`, `green`, `yellow`, `blue`, `magenta`, `cyan`, `white`, `bright-black`, `bright-red`, `bright-green`, `bright-yellow`, `bright-blue`, `bright-magenta`, `bright-cyan`, `bright-white`
+  * 256-color palette code: `0` to `255`
+  * RGB hex format: `#RRGGBB` (e.g., `#FFFF00` for bright yellow)
+
+* **Modes**: `bold`, `faint`, `italic`, `underline`, `slow-blink`, `rapid-blink`, `reverse`, `conceal`, `crossed-out`
 
 ### Used terminal color schemes
 
