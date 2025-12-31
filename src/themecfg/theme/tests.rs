@@ -5,7 +5,7 @@ use strum::IntoEnumIterator;
 use crate::level::Level;
 
 use super::super::{
-    Color, Element, Error, Format, Mode, ModeSetDiff, PlainColor, RGB, Style, Tag, Theme,
+    Color, Element, Error, Format, Mode, ModeSetDiff, PlainColor, RGB, Style, Tag, Theme, Version,
     tests::{dirs, load_raw_theme_unmerged, theme},
 };
 
@@ -449,5 +449,121 @@ fn test_unknown_elements_yaml() {
         Err(e) => {
             panic!("YAML with unknown elements failed: {:?}", e);
         }
+    }
+}
+
+#[test]
+fn test_v0_indicators_default_values() {
+    let theme = theme("@base");
+
+    assert_eq!(theme.indicators.sync.synced.text, " ");
+
+    assert_eq!(theme.indicators.sync.failed.text, "!");
+}
+
+#[test]
+fn test_v1_element_replacement_preserves_per_level_modes() {
+    let app_dirs = dirs();
+    let theme = Theme::load_raw(&app_dirs, "v1-element-modes-per-level").unwrap();
+
+    let level_inner = theme.elements.get(&Element::LevelInner);
+    assert!(level_inner.is_some(), "level-inner element should exist");
+    assert!(
+        level_inner.unwrap().modes.adds.contains(Mode::Bold),
+        "level-inner element should have bold mode"
+    );
+
+    let info_level = theme.levels.get(&Level::Info);
+    assert!(info_level.is_some(), "info level should exist");
+    let info_level_inner = info_level.unwrap().get(&Element::LevelInner);
+    assert!(info_level_inner.is_some(), "info level-inner should exist");
+
+    assert!(
+        !info_level_inner.unwrap().base.is_empty(),
+        "info level-inner should have a style base"
+    );
+}
+
+#[test]
+fn test_v0_partial_element_definitions() {
+    let theme = theme("v0-nested-styling");
+
+    let inner = &theme.elements[&Element::InputNumberInner];
+    assert_eq!(inner.foreground, None);
+    assert_eq!(inner.background, Some(Color::RGB(RGB(0, 0, 68))));
+    assert_eq!(inner.modes, ModeSetDiff::new());
+}
+
+#[test]
+fn test_v0_boolean_merge_with_level_overrides() {
+    let theme = theme("v0-boolean-level-override");
+
+    let base_boolean = &theme.elements[&Element::Boolean];
+    assert_eq!(base_boolean.foreground, Some(Color::RGB(RGB(0, 255, 0))));
+    assert_eq!(base_boolean.background, Some(Color::RGB(RGB(0, 17, 0))));
+
+    let base_boolean_true = &theme.elements[&Element::BooleanTrue];
+    assert_eq!(base_boolean_true.foreground, Some(Color::RGB(RGB(0, 255, 255))));
+
+    let error_pack = &theme.levels[&Level::Error];
+
+    let error_boolean = &error_pack[&Element::Boolean];
+    assert_eq!(error_boolean.foreground, Some(Color::RGB(RGB(255, 0, 255))));
+
+    let error_boolean_false = &error_pack[&Element::BooleanFalse];
+    assert_eq!(error_boolean_false.foreground, Some(Color::RGB(RGB(255, 170, 170))));
+}
+
+#[test]
+fn test_custom_default_theme_with_extension() {
+    let theme = theme("@base.yaml");
+
+    assert_eq!(
+        theme.version,
+        Version::V0_0,
+        "Custom @base.yaml is v0, merged result uses custom theme's version"
+    );
+
+    let message_style = theme.elements.get(&Element::Message);
+    assert!(
+        message_style.is_some(),
+        "Message element should be present (from custom or @base)"
+    );
+
+    assert_eq!(
+        message_style.unwrap().foreground,
+        Some(Color::Plain(PlainColor::Red)),
+        "Custom @base.yaml message definition should override embedded @base"
+    );
+
+    assert!(
+        theme.elements.get(&Element::Input).is_some(),
+        "Should have 'input' element from embedded @base (not in custom file)"
+    );
+    assert!(
+        theme.elements.get(&Element::Time).is_some(),
+        "Should have 'time' element from embedded @base (not in custom file)"
+    );
+
+    assert!(
+        theme.elements.len() > 1,
+        "Should have multiple elements from @base merge, not just 'message' from custom file. Got {} elements",
+        theme.elements.len()
+    );
+}
+
+#[test]
+fn test_v0_rejects_mode_prefix() {
+    let result = Theme::load(&dirs(), "v0-invalid-mode-prefix");
+
+    assert!(result.is_err(), "V0 theme with - mode prefix should fail to load");
+
+    if let Err(e) = result {
+        let error_msg = e.to_string();
+        assert!(
+            error_msg.contains("mode prefix") || error_msg.contains("v0") || error_msg.contains("v1.0"),
+            "Error should mention mode prefix issue, got: {}",
+            error_msg
+        );
     }
 }

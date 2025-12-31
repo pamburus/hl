@@ -86,3 +86,6 @@ impl std::fmt::Display for StyleBase {
         write!(f, "]")
     }
 }
+
+#[cfg(test)]
+pub(crate) mod tests;

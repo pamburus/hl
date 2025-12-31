@@ -86,3 +86,10 @@ fn test_v0_plain_color_case_sensitivity() {
         Some(Color::Plain(PlainColor::Red))
     );
 }
+
+#[test]
+fn test_v0_rgb_case_insensitivity() {
+    assert_eq!(RGB::from_str("#aabbcc").unwrap(), RGB(170, 187, 204));
+    assert_eq!(RGB::from_str("#AABBCC").unwrap(), RGB(170, 187, 204));
+    assert_eq!(RGB::from_str("#AaBbCc").unwrap(), RGB(170, 187, 204));
+}
