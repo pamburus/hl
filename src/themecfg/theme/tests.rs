@@ -6,7 +6,7 @@ use crate::{appdirs::AppDirs, level::Level};
 
 use super::super::{
     Color, Element, Error, Format, Mode, ModeSetDiff, PlainColor, RGB, Style, Tag, Theme, Version,
-    tests::{dirs, load_raw_theme_unmerged, theme},
+    tests::{dirs, load_raw_theme_unmerged, raw_theme, theme},
 };
 
 #[test]
@@ -815,4 +815,159 @@ fn test_theme_name_suggestions() {
         }
         other => panic!("Expected ThemeNotFound error, got: {:?}", other),
     }
+}
+
+#[test]
+fn test_v1_level_overrides_with_styles() {
+    let theme = raw_theme("v1-level-with-styles");
+
+    assert_eq!(theme.version, Version::V1_0);
+
+    assert!(!theme.styles.is_empty(), "V1 theme should have style definitions");
+
+    assert_eq!(
+        theme.elements[&Element::Message].foreground,
+        Some(Color::RGB(RGB(255, 255, 255))),
+        "Base message should be white"
+    );
+
+    let error_level = Level::Error;
+    assert!(
+        theme.levels.contains_key(&error_level),
+        "Theme should have error level overrides"
+    );
+
+    let error_message = theme
+        .levels
+        .get(&error_level)
+        .and_then(|pack| pack.get(&Element::Message));
+    assert!(error_message.is_some(), "Error level should override message element");
+
+    let error_msg_style = error_message.unwrap();
+    assert!(
+        !error_msg_style.base.is_empty(),
+        "V1 level override should reference styles via base"
+    );
+}
+
+#[test]
+fn test_v1_level_override_foreground() {
+    let theme = theme("v1-level-override-foreground");
+
+    assert_eq!(
+        theme.elements[&Element::Level],
+        Style {
+            foreground: Some(Color::Palette(139)),
+            ..Default::default()
+        }
+    );
+
+    assert_eq!(
+        theme.elements[&Element::LevelInner],
+        Style {
+            foreground: Some(Color::Palette(139)),
+            modes: ModeSetDiff::new() - Mode::Faint,
+            ..Default::default()
+        }
+    );
+
+    assert_eq!(
+        theme.levels[&Level::Warning][&Element::Level],
+        Style {
+            foreground: Some(Color::Palette(139)),
+            ..Default::default()
+        }
+    );
+
+    assert_eq!(
+        theme.levels[&Level::Warning][&Element::LevelInner],
+        Style {
+            foreground: Some(Color::Palette(214)),
+            modes: ModeSetDiff::new() - Mode::Faint,
+            ..Default::default()
+        }
+    );
+}
+
+#[test]
+fn test_v1_empty() {
+    let theme = theme("v1-empty");
+
+    assert_eq!(
+        theme.elements[&Element::Level],
+        Style {
+            modes: Mode::Faint.into(),
+            ..Default::default()
+        }
+    );
+
+    assert_eq!(
+        theme.elements[&Element::LevelInner],
+        Style {
+            modes: ModeSetDiff::new() - Mode::Faint,
+            ..Default::default()
+        }
+    );
+
+    assert_eq!(
+        theme.levels[&Level::Warning][&Element::Level],
+        Style {
+            modes: Mode::Faint.into(),
+            ..Default::default()
+        }
+    );
+
+    assert_eq!(
+        theme.levels[&Level::Warning][&Element::LevelInner],
+        Style {
+            foreground: Some(Color::Plain(PlainColor::Yellow)),
+            modes: ModeSetDiff::new() - Mode::Faint,
+            ..Default::default()
+        }
+    );
+}
+
+#[test]
+fn test_file_format_parse_errors() {
+    let yaml_result = Theme::load(&dirs(), "malformed.yaml");
+    assert!(yaml_result.is_err(), "Malformed YAML should produce an error");
+    let yaml_err = yaml_result.unwrap_err();
+    let yaml_msg = yaml_err.to_string();
+    assert!(
+        yaml_msg.contains("malformed.yaml") || yaml_msg.contains("YAML") || yaml_msg.contains("parse"),
+        "YAML error should be descriptive, got: {}",
+        yaml_msg
+    );
+
+    let toml_result = Theme::load(&dirs(), "malformed.toml");
+    assert!(toml_result.is_err(), "Malformed TOML should produce an error");
+    let toml_err = toml_result.unwrap_err();
+    let toml_msg = toml_err.to_string();
+    assert!(
+        toml_msg.contains("malformed.toml") || toml_msg.contains("TOML") || toml_msg.contains("parse"),
+        "TOML error should be descriptive, got: {}",
+        toml_msg
+    );
+
+    let json_result = Theme::load(&dirs(), "malformed.json");
+    assert!(json_result.is_err(), "Malformed JSON should produce an error");
+    let json_err = json_result.unwrap_err();
+    let json_msg = json_err.to_string();
+    assert!(
+        json_msg.contains("malformed.json") || json_msg.contains("JSON") || json_msg.contains("parse"),
+        "JSON error should be descriptive, got: {}",
+        json_msg
+    );
+}
+
+#[test]
+fn test_unsupported_theme_version() {
+    let result = Theme::load(&dirs(), "test-unsupported-version");
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_v0_level_override_with_invalid_mode_prefix() {
+    let result = Theme::load(&dirs(), "test-v0-level-invalid-mode");
+    assert!(result.is_err());
 }
