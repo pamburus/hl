@@ -67,3 +67,6 @@ impl Merge<&RawStyle> for Style {
         }
     }
 }
+
+#[cfg(test)]
+pub(crate) mod tests;
