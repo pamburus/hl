@@ -161,6 +161,14 @@ error = { style = "primary", foreground = "bright-red", modes = ["bold"] }
 
 **Optional.** Define styles for specific log elements.
 
+Elements in the `@base` theme inherit from style roles. The diagram below shows the default inheritance relationships:
+
+<img src="theme-element-inheritance.svg" alt="Element Inheritance Diagram" width="600">
+
+**Legend:**
+- **Solid arrows** - Style inheritance (element inherits from style role)
+- **Dashed arrows** - Parent-inner relationship (inner element inherits from parent element by default)
+
 **All 28 predefined elements:**
 
 | Category | Elements |
