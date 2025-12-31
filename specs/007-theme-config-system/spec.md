@@ -217,7 +217,7 @@
 
 ### Session 2025-12-28 (Sixteenth Pass)
 
-- Q: How many v1 roles are actually defined in the implementation? → A: 16 roles total - the implementation defines: default, primary, secondary, strong, muted, accent, accent-secondary, message, syntax, status, level, trace, debug, info, warning, error. The spec previously mentioned only 12 roles, omitting the newer roles: message, level, trace, debug.
+- Q: How many v1 roles are actually defined in the implementation? → A: 18 roles total - the implementation defines: default, primary, secondary, strong, muted, accent, accent-secondary, message, key, value, syntax, status, level, trace, debug, info, warning, error. The spec previously mentioned only 16 roles, omitting the newer roles: key, value.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -630,13 +630,13 @@ Theme authors using v1 can define semantic roles (like "warning", "error", "succ
 
 #### V1 Enhanced Inheritance (Future)
 
-- **FR-038**: V1 system MUST include an embedded `@base` theme that explicitly defines all 28 v0 elements and all 16 v1 roles with reasonable defaults; this theme is invisible when listing themes (not shown in stock or custom groups)
+- **FR-038**: V1 system MUST include an embedded `@base` theme that explicitly defines all 28 v0 elements and all 18 v1 roles with reasonable defaults; this theme is invisible when listing themes (not shown in stock or custom groups)
 
 - **FR-038a**: V1 `@base` theme MUST define roles with inheritance chains where more specific roles inherit from more generic ones (e.g., specific roles reference `primary` or `secondary` via `style` field), providing flexibility so old themes remain compatible with newer app versions and look consistent even without defining new roles explicitly; the `default` role MUST always be defined in the embedded @base theme (guaranteed invariant, tested during development) since it serves as the implicit base for all other roles per FR-039b
 
 - **FR-039**: V1 themes MUST support `styles` section as an object map where keys are role names (from predefined enum) and values are style objects containing optional foreground, background, modes, and an optional `style` field that references another role for parent/base inheritance (e.g., `styles: {warning: {style: "primary", foreground: "#FFA500", modes: [bold]}}`)
 
-- **FR-039a**: V1 role names MUST be from the predefined enum (kebab-case, case-sensitive): default, primary, secondary, strong, muted, accent, accent-secondary, message, syntax, status, level, trace, debug, info, warning, error. Undefined role names or incorrect case (e.g., "Primary") are rejected with error. Element and role names exist in separate namespaces and can overlap without conflict.
+- **FR-039a**: V1 role names MUST be from the predefined enum (kebab-case, case-sensitive): default, primary, secondary, strong, muted, accent, accent-secondary, message, key, value, syntax, status, level, trace, debug, info, warning, error. Undefined role names or incorrect case (e.g., "Primary") are rejected with error. Element and role names exist in separate namespaces and can overlap without conflict.
 
 - **FR-039b**: V1 `default` role serves as the implicit base for all roles that do not explicitly specify a `style` field; properties set in `default` (foreground, background, modes) apply to all other roles unless overridden
 
@@ -688,7 +688,7 @@ Theme authors using v1 can define semantic roles (like "warning", "error", "succ
 
 - **Theme**: Complete theme configuration containing element styles, level-specific overrides, indicators, version, and metadata tags
 
-- **@base Theme** (v1 only): Embedded theme that explicitly defines all 28 v0 elements and all 16 v1 roles with reasonable defaults. Not visible in theme listings. All user themes (both v0 and v1) implicitly inherit from `@base` when roles or styles are not explicitly defined. More specific roles in `@base` typically inherit from more generic ones via `style` field (e.g., `warning: {style: "primary", ...}`), ensuring old themes remain compatible with newer app versions by falling back to consistent generic styles. Users CAN create custom themes named `@base` which merge with the embedded `@base` following normal theme merge rules (FR-001b): at theme merge level, custom elements completely replace embedded elements; property-level merging happens during style resolution based on custom theme's version.
+- **@base Theme** (v1 only): Embedded theme that explicitly defines all 28 v0 elements and all 18 v1 roles with reasonable defaults. Not visible in theme listings. All user themes (both v0 and v1) implicitly inherit from `@base` when roles or styles are not explicitly defined. More specific roles in `@base` typically inherit from more generic ones via `style` field (e.g., `warning: {style: "primary", ...}`), ensuring old themes remain compatible with newer app versions by falling back to consistent generic styles. Users CAN create custom themes named `@base` which merge with the embedded `@base` following normal theme merge rules (FR-001b): at theme merge level, custom elements completely replace embedded elements; property-level merging happens during style resolution based on custom theme's version.
 
 - **Theme Version**: Version identifier following "major.minor" format (e.g., "1.0") where major=1 and minor is non-negative integer without leading zeros. Currently only version="1.0" is supported; future minor versions (1.1, 1.2, etc.) will be added as needed. Used to determine which schema and merge semantics apply.
 
@@ -696,7 +696,7 @@ Theme authors using v1 can define semantic roles (like "warning", "error", "succ
 
 - **Style**: Visual appearance specification with optional foreground color, optional background color, and optional text modes list. In v0, modes is a simple array of mode names. In v1, modes is an array of mode operations (+mode to add, -mode to remove, plain mode defaults to +mode), and styles can have an optional `style` field that references a parent/base style for inheritance.
 
-- **Role** (v1 only): Named style defined in the `styles` section that can be referenced by elements or other roles. Role names must be from the predefined enum (kebab-case, case-sensitive): default, primary, secondary, strong, muted, accent, accent-secondary, message, syntax, status, level, trace, debug, info, warning, error. The `default` role is the implicit base for all roles that don't specify a `style` field - properties set in `default` apply to all other roles unless overridden. Roles support inheritance via the optional `style` field (e.g., `warning: {style: "primary", foreground: "#FFA500", modes: [+bold, -italic]}`).
+- **Role** (v1 only): Named style defined in the `styles` section that can be referenced by elements or other roles. Role names must be from the predefined enum (kebab-case, case-sensitive): default, primary, secondary, strong, muted, accent, accent-secondary, message, key, value, syntax, status, level, trace, debug, info, warning, error. The `default` role is the implicit base for all roles that don't specify a `style` field - properties set in `default` apply to all other roles unless overridden. Roles support inheritance via the optional `style` field (e.g., `warning: {style: "primary", foreground: "#FFA500", modes: [+bold, -italic]}`).
 
 - **Color**: Visual color value in one of three formats:
   - ANSI basic: named colors (case-sensitive: default, black, red, green, yellow, blue, magenta, cyan, white, bright-black, bright-red, bright-green, bright-yellow, bright-blue, bright-magenta, bright-cyan, bright-white)
