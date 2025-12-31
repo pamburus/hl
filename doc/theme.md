@@ -86,56 +86,115 @@ Styles in the `@base` theme form an inheritance hierarchy. By default, all custo
 ![Role Inheritance Diagram](theme-style-roles.mmd)
 
 ```mermaid
-graph TD
-    default[default<br/>empty base]
-    
-    primary[primary<br/>modes: -faint]
-    secondary[secondary<br/>style: primary<br/>modes: faint]
-    strong[strong<br/>style: primary<br/>modes: bold]
-    
-    muted[muted<br/>style: secondary]
-    accent[accent<br/>style: secondary]
-    trace[trace<br/>style: secondary]
-    
-    accent-secondary[accent-secondary<br/>style: accent, secondary]
-    key[key<br/>style: accent]
-    
-    message[message<br/>style: strong]
-    syntax[syntax<br/>style: strong]
-    
-    value[value<br/>style: primary]
-    
-    status[status<br/>modes: -faint]
-    level[level<br/>style: status]
-    
-    debug[debug<br/>foreground: magenta]
-    info[info<br/>foreground: cyan]
-    warning[warning<br/>foreground: yellow]
-    error[error<br/>foreground: bright-red]
-    
+graph TB
+    %% Root - centered at top
+    default["<b>default</b><br/><i>empty base</i>"]
+
+    %% Tier 1 - Primary hierarchy and independent status
+    primary["<b>primary</b><br/>modes: -faint"]
+    status["<b>status</b><br/>modes: -faint"]
+
+    %% Tier 2 - Primary derivatives
+    secondary["<b>secondary</b><br/>style: primary<br/>modes: faint"]
+    strong["<b>strong</b><br/>style: primary<br/>modes: bold"]
+    value["<b>value</b><br/>style: primary"]
+
+    %% Tier 3 - Secondary derivatives (left branch)
+    muted["<b>muted</b><br/>style: secondary"]
+    accent["<b>accent</b><br/>style: secondary"]
+    trace["<b>trace</b><br/>style: secondary"]
+
+    %% Tier 3 - Accent derivatives (middle branch)
+    key["<b>key</b><br/>style: accent"]
+    accsec["<b>accent-secondary</b><br/>style: accent, secondary"]
+
+    %% Tier 3 - Strong derivatives (right branch)
+    message["<b>message</b><br/>style: strong"]
+    syntax["<b>syntax</b><br/>style: strong"]
+
+    %% Status derivative
+    level["<b>level</b><br/>style: status"]
+
+    %% Log level roles - independent (bottom row)
+    debug["<b>debug</b><br/>fg: magenta"]
+    info["<b>info</b><br/>fg: cyan"]
+    warning["<b>warning</b><br/>fg: yellow"]
+    error["<b>error</b><br/>fg: bright-red"]
+
+    %% Implicit inheritance from default (dotted lines)
     default -.->|implicit| primary
     default -.->|implicit| status
     default -.->|implicit| debug
     default -.->|implicit| info
     default -.->|implicit| warning
     default -.->|implicit| error
-    
-    primary -->|inherits| secondary
-    primary -->|inherits| strong
-    primary -->|inherits| value
-    
-    secondary -->|inherits| muted
-    secondary -->|inherits| accent
-    secondary -->|inherits| trace
-    secondary -->|inherits| accent-secondary
-    
-    accent -->|inherits| accent-secondary
-    accent -->|inherits| key
-    
-    strong -->|inherits| message
-    strong -->|inherits| syntax
-    
-    status -->|inherits| level
+
+    %% Primary hierarchy (solid lines)
+    primary --> secondary
+    primary --> strong
+    primary --> value
+
+    %% Secondary derivatives
+    secondary --> muted
+    secondary --> accent
+    secondary --> trace
+    secondary --> accsec
+
+    %% Accent derivatives
+    accent --> key
+    accent --> accsec
+
+    %% Strong derivatives
+    strong --> message
+    strong --> syntax
+
+    %% Status derivative
+    status --> level
+
+    %% Subgraph for better organization
+    subgraph " "
+        default
+    end
+
+    subgraph "Primary Hierarchy"
+        primary
+        secondary
+        strong
+        value
+        muted
+        accent
+        trace
+        key
+        accsec
+        message
+        syntax
+    end
+
+    subgraph "Status Hierarchy"
+        status
+        level
+    end
+
+    subgraph "Log Levels"
+        debug
+        info
+        warning
+        error
+    end
+
+    %% Style definitions
+    classDef root fill:#e1f5ff,stroke:#01579b,stroke-width:4px,color:#000
+    classDef tier1 fill:#fff9c4,stroke:#f57f17,stroke-width:3px,color:#000
+    classDef tier2 fill:#f3e5f5,stroke:#4a148c,stroke-width:2px,color:#000
+    classDef tier3 fill:#e8f5e9,stroke:#1b5e20,stroke-width:2px,color:#000
+    classDef independent fill:#fff3e0,stroke:#e65100,stroke-width:2px,color:#000
+    classDef loglevel fill:#fce4ec,stroke:#880e4f,stroke-width:2px,color:#000
+
+    class default root
+    class primary,status tier1
+    class secondary,strong,value,level tier2
+    class muted,accent,trace,key,accsec,message,syntax tier3
+    class debug,info,warning,error loglevel
 ```
 
 **You can override any style's inheritance** using the `style` property. For example, to make `warning` inherit from `error`:
