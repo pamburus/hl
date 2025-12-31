@@ -296,3 +296,6 @@ pub enum ModeDiffAction {
     Add,
     Remove,
 }
+
+#[cfg(test)]
+pub(crate) mod tests;
