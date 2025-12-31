@@ -5,8 +5,8 @@ use strum::IntoEnumIterator;
 use crate::level::Level;
 
 use super::super::{
-    Color, Element, Format, Mode, ModeSetDiff, PlainColor, RGB, Style, Tag, Theme,
-    tests::{dirs, theme},
+    Color, Element, Error, Format, Mode, ModeSetDiff, PlainColor, RGB, Style, Tag, Theme,
+    tests::{dirs, load_raw_theme_unmerged, theme},
 };
 
 #[test]
@@ -262,4 +262,192 @@ fn test_format_extensions() {
     assert_eq!(Format::Yaml.extensions(), &["yaml", "yml"]);
     assert_eq!(Format::Toml.extensions(), &["toml"]);
     assert_eq!(Format::Json.extensions(), &["json"]);
+}
+
+#[test]
+fn test_v0_indicators() {
+    let theme = theme("v0-json-format");
+
+    assert_eq!(theme.indicators.sync.synced.text, " ");
+    assert_eq!(theme.indicators.sync.failed.text, "!");
+    assert_eq!(
+        theme.indicators.sync.failed.inner.style.foreground,
+        Some(Color::Plain(PlainColor::Yellow))
+    );
+    assert_eq!(theme.indicators.sync.failed.inner.style.modes, Mode::Bold.into());
+}
+
+#[test]
+fn test_theme_list() {
+    let themes = Theme::list(&dirs()).unwrap();
+
+    assert!(themes.contains_key("universal"));
+
+    assert!(themes.contains_key("test"));
+}
+
+#[test]
+fn test_theme_not_found_error() {
+    let result = Theme::load(&dirs(), "nonexistent");
+
+    assert!(result.is_err());
+    match result {
+        Err(Error::ThemeNotFound { name, .. }) => {
+            assert_eq!(name.as_ref(), "nonexistent");
+        }
+        _ => panic!("Expected ThemeNotFound error"),
+    }
+}
+
+#[test]
+fn test_v0_duplicate_modes() {
+    let theme = theme("v0-duplicate-modes");
+
+    let message = &theme.elements[&Element::Message];
+    assert_eq!(message.modes, (Mode::Bold | Mode::Italic | Mode::Underline).into());
+
+    let level = &theme.elements[&Element::Level];
+    assert_eq!(level.modes, (Mode::Italic).into());
+
+    let time = &theme.elements[&Element::Time];
+    assert_eq!(time.modes, (Mode::Faint | Mode::Bold).into());
+}
+
+#[test]
+fn test_v0_all_modes() {
+    let theme = theme("v0-all-modes");
+
+    assert_eq!(theme.elements[&Element::Message].modes, Mode::Bold.into());
+    assert_eq!(theme.elements[&Element::Level].modes, Mode::Faint.into());
+    assert_eq!(theme.elements[&Element::LevelInner].modes, Mode::Italic.into());
+    assert_eq!(theme.elements[&Element::Time].modes, Mode::Underline.into());
+    assert_eq!(theme.elements[&Element::Caller].modes, Mode::SlowBlink.into());
+    assert_eq!(theme.elements[&Element::Logger].modes, Mode::RapidBlink.into());
+    assert_eq!(theme.elements[&Element::Key].modes, Mode::Reverse.into());
+    assert_eq!(theme.elements[&Element::String].modes, Mode::Conceal.into());
+    assert_eq!(theme.elements[&Element::Number].modes, Mode::CrossedOut.into());
+
+    let boolean = &theme.elements[&Element::Boolean];
+    assert_eq!(boolean.modes, (Mode::Bold | Mode::Italic | Mode::Underline).into());
+
+    let boolean_true = &theme.elements[&Element::BooleanTrue];
+    assert_eq!(
+        boolean_true.modes,
+        (Mode::Bold | Mode::Faint | Mode::Italic | Mode::Underline | Mode::SlowBlink).into(),
+    );
+}
+
+#[test]
+fn test_v0_palette_range() {
+    let theme = theme("v0-palette-range");
+
+    assert_eq!(theme.elements[&Element::Message].foreground, Some(Color::Palette(0)));
+    assert_eq!(theme.elements[&Element::Message].background, Some(Color::Palette(255)));
+
+    assert_eq!(theme.elements[&Element::Level].foreground, Some(Color::Palette(1)));
+    assert_eq!(
+        theme.elements[&Element::LevelInner].foreground,
+        Some(Color::Palette(16))
+    );
+    assert_eq!(theme.elements[&Element::Time].foreground, Some(Color::Palette(88)));
+    assert_eq!(theme.elements[&Element::Caller].foreground, Some(Color::Palette(124)));
+    assert_eq!(theme.elements[&Element::Logger].foreground, Some(Color::Palette(196)));
+    assert_eq!(theme.elements[&Element::Key].foreground, Some(Color::Palette(220)));
+    assert_eq!(theme.elements[&Element::String].foreground, Some(Color::Palette(46)));
+}
+
+#[test]
+fn test_v0_level_override_merge_behavior() {
+    let theme = theme("v0-level-overrides");
+
+    let base_message = &theme.elements[&Element::Message];
+    assert_eq!(base_message.foreground, Some(Color::RGB(RGB(255, 255, 255))));
+    assert_eq!(base_message.background, Some(Color::RGB(RGB(0, 0, 0))));
+    assert_eq!(base_message.modes, Mode::Bold.into());
+
+    let error_message = theme
+        .levels
+        .get(&Level::Error)
+        .and_then(|pack| pack.get(&Element::Message));
+    assert!(error_message.is_some());
+    let error_message = error_message.unwrap();
+    assert_eq!(error_message.foreground, Some(Color::RGB(RGB(255, 136, 136))));
+}
+
+#[test]
+fn test_unknown_elements_toml() {
+    let result = load_raw_theme_unmerged("test-unknown-elements.toml");
+
+    match result {
+        Ok(theme) => {
+            assert_eq!(theme.elements.len(), 2, "Should only load 2 known elements from file");
+            assert!(theme.elements.contains_key(&Element::Message));
+            assert!(theme.elements.contains_key(&Element::Level));
+
+            let theme = theme.resolve().unwrap();
+            assert_eq!(
+                theme.elements.len(),
+                3,
+                "Should have 3 elements after resolution (Level + LevelInner + Message)"
+            );
+            assert!(theme.elements.contains_key(&Element::Message));
+            assert!(theme.elements.contains_key(&Element::Level));
+            assert!(theme.elements.contains_key(&Element::LevelInner));
+        }
+        Err(e) => {
+            panic!("TOML with unknown elements failed: {:?}", e);
+        }
+    }
+}
+
+#[test]
+fn test_unknown_elements_json() {
+    let result = load_raw_theme_unmerged("test-unknown-elements.json");
+
+    match result {
+        Ok(theme) => {
+            assert_eq!(theme.elements.len(), 2, "Should only load 2 known elements from file");
+            assert!(theme.elements.contains_key(&Element::Message));
+            assert!(theme.elements.contains_key(&Element::Level));
+
+            let theme = theme.resolve().unwrap();
+            assert_eq!(
+                theme.elements.len(),
+                3,
+                "Should have 3 elements after resolution (Level + LevelInner + Message)"
+            );
+            assert!(theme.elements.contains_key(&Element::Message));
+            assert!(theme.elements.contains_key(&Element::Level));
+            assert!(theme.elements.contains_key(&Element::LevelInner));
+        }
+        Err(e) => {
+            panic!("JSON with unknown elements failed: {:?}", e);
+        }
+    }
+}
+
+#[test]
+fn test_unknown_elements_yaml() {
+    let result = load_raw_theme_unmerged("test-unknown-elements.yaml");
+
+    match result {
+        Ok(theme) => {
+            assert_eq!(theme.elements.len(), 2, "Should only load 2 known elements from file");
+            assert!(theme.elements.contains_key(&Element::Message));
+            assert!(theme.elements.contains_key(&Element::Level));
+
+            let theme = theme.resolve().unwrap();
+            assert_eq!(
+                theme.elements.len(),
+                3,
+                "Should have 3 elements after resolution (Level + LevelInner + Message)"
+            );
+            assert!(theme.elements.contains_key(&Element::Message));
+            assert!(theme.elements.contains_key(&Element::Level));
+            assert!(theme.elements.contains_key(&Element::LevelInner));
+        }
+        Err(e) => {
+            panic!("YAML with unknown elements failed: {:?}", e);
+        }
+    }
 }

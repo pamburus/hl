@@ -188,3 +188,6 @@ impl Merge<StylePack<Element, Style>> for StylePack<Element, Style> {
         Self::merge(self, other, flags);
     }
 }
+
+#[cfg(test)]
+pub(crate) mod tests;
