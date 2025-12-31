@@ -56,3 +56,49 @@ fn test_indicator_merge_empty_text() {
     base.merge(other, MergeFlags::default());
     assert_eq!(base.text, "original");
 }
+
+#[test]
+fn test_indicator_pack_merged() {
+    let base = IndicatorPack::<RawStyle>::default();
+    let mut other = IndicatorPack::<RawStyle>::default();
+    other.sync.synced.text = "✓".to_string();
+
+    let merged = base.merged(other, MergeFlags::default());
+    assert_eq!(merged.sync.synced.text, "✓");
+}
+
+#[test]
+fn test_sync_indicator_pack_merged() {
+    let base = SyncIndicatorPack::<RawStyle>::default();
+    let mut other = SyncIndicatorPack::<RawStyle>::default();
+    other.synced.text = "✓".to_string();
+
+    let merged = base.merged(other, MergeFlags::default());
+    assert_eq!(merged.synced.text, "✓");
+}
+
+#[test]
+fn test_indicator_text_merge() {
+    let base = Indicator::<RawStyle>::default();
+    let other = Indicator::<RawStyle> {
+        text: "test".to_string(),
+        ..Default::default()
+    };
+
+    let merged = base.merged(other, MergeFlags::default());
+    assert_eq!(merged.text, "test");
+}
+
+#[test]
+fn test_indicator_style_defaults() {
+    let style = IndicatorStyle::<RawStyle>::default();
+    let other = IndicatorStyle::<RawStyle> {
+        prefix: "[".to_string(),
+        suffix: "]".to_string(),
+        ..Default::default()
+    };
+
+    let merged = style.merged(other, MergeFlags::default());
+    assert_eq!(merged.prefix, "[");
+    assert_eq!(merged.suffix, "]");
+}

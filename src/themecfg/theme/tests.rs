@@ -991,3 +991,67 @@ fn test_style_base_deserialization_single_string() {
     assert!(secondary.is_some());
     assert!(!secondary.unwrap().base.is_empty());
 }
+
+#[test]
+fn test_style_base_visitor_expecting() {
+    let result = Theme::load(&dirs(), "test-invalid-style-base");
+    assert!(result.is_err());
+    let err_msg = result.unwrap_err().to_string();
+    assert!(!err_msg.is_empty());
+}
+
+#[test]
+fn test_v1_strict_unknown_key_rejected() {
+    let result = load_raw_theme_unmerged("v1-unknown-key");
+
+    assert!(
+        result.is_err(),
+        "v1 theme with unknown key should fail strict validation"
+    );
+
+    let err = result.unwrap_err();
+    let err_msg = err.to_string();
+
+    assert!(
+        err_msg.contains("unknown") || err_msg.contains("field"),
+        "Error message should indicate unknown field, got: {}",
+        err_msg
+    );
+}
+
+#[test]
+fn test_v1_strict_unknown_enum_variant_rejected() {
+    let result = load_raw_theme_unmerged("v1-unknown-role");
+
+    assert!(
+        result.is_err(),
+        "v1 theme with unknown Role variant should fail strict validation"
+    );
+
+    let err = result.unwrap_err();
+    let err_msg = err.to_string();
+
+    assert!(
+        err_msg.contains("unknown") || err_msg.contains("variant") || err_msg.contains("future-role"),
+        "Error message should indicate unknown enum variant, got: {}",
+        err_msg
+    );
+}
+
+#[test]
+fn test_v1_schema_field_accepted() {
+    let result = load_raw_theme_unmerged("v1-with-schema");
+
+    assert!(
+        result.is_ok(),
+        "v1 theme with $schema field should be accepted, got error: {:?}",
+        result.err()
+    );
+
+    let theme = result.unwrap();
+    let resolved = theme.resolve();
+    assert!(resolved.is_ok(), "Theme with $schema should resolve successfully");
+
+    let resolved = resolved.unwrap();
+    assert_eq!(resolved.elements.len(), 3, "Should have 3 elements after resolution");
+}

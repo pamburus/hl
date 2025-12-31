@@ -17,3 +17,10 @@ fn test_v1_style_base_construction() {
     assert!(!single.is_empty());
     assert!(!multiple.is_empty());
 }
+
+#[test]
+fn test_style_base_display_multiple_roles() {
+    let base = StyleBase::from(vec![Role::Primary, Role::Secondary]);
+    let s = format!("{}", base);
+    assert!(s.contains(","));
+}

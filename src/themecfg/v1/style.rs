@@ -278,3 +278,6 @@ impl<'a> StyleResolver<'a> {
         Ok(result.merged(&style.as_resolved(), role_flags))
     }
 }
+
+#[cfg(test)]
+pub(crate) mod tests;
