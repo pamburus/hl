@@ -1,0 +1,73 @@
+graph TD
+    %% Root role
+    default[default<br/>empty base]
+
+    %% Primary hierarchy
+    primary[primary<br/>modes: -faint]
+    secondary[secondary<br/>style: primary<br/>modes: faint]
+    strong[strong<br/>style: primary<br/>modes: bold]
+
+    %% Secondary derivatives
+    muted[muted<br/>style: secondary]
+    accent[accent<br/>style: secondary]
+    trace[trace<br/>style: secondary]
+
+    %% Accent derivatives
+    accent-secondary[accent-secondary<br/>style: accent, secondary]
+    key[key<br/>style: accent]
+
+    %% Strong derivatives
+    message[message<br/>style: strong]
+    syntax[syntax<br/>style: strong]
+
+    %% Primary derivatives
+    value[value<br/>style: primary]
+
+    %% Independent roles
+    status[status<br/>modes: -faint]
+    level[level<br/>style: status]
+
+    %% Log level roles (no inheritance)
+    debug[debug<br/>foreground: magenta]
+    info[info<br/>foreground: cyan]
+    warning[warning<br/>foreground: yellow]
+    error[error<br/>foreground: bright-red]
+
+    %% Inheritance relationships
+    default -.->|implicit| primary
+    default -.->|implicit| status
+    default -.->|implicit| debug
+    default -.->|implicit| info
+    default -.->|implicit| warning
+    default -.->|implicit| error
+
+    primary -->|inherits| secondary
+    primary -->|inherits| strong
+    primary -->|inherits| value
+
+    secondary -->|inherits| muted
+    secondary -->|inherits| accent
+    secondary -->|inherits| trace
+    secondary -->|inherits| accent-secondary
+
+    accent -->|inherits| accent-secondary
+    accent -->|inherits| key
+
+    strong -->|inherits| message
+    strong -->|inherits| syntax
+
+    status -->|inherits| level
+
+    %% Style classes
+    classDef root fill:#e1f5ff,stroke:#01579b,stroke-width:3px
+    classDef tier1 fill:#fff9c4,stroke:#f57f17,stroke-width:2px
+    classDef tier2 fill:#f3e5f5,stroke:#4a148c,stroke-width:2px
+    classDef tier3 fill:#e8f5e9,stroke:#1b5e20,stroke-width:2px
+    classDef independent fill:#fff3e0,stroke:#e65100,stroke-width:2px
+    classDef loglevel fill:#fce4ec,stroke:#880e4f,stroke-width:2px
+
+    class default root
+    class primary,status tier1
+    class secondary,strong,level tier2
+    class muted,accent,trace,accent-secondary,key,message,syntax,value tier3
+    class debug,info,warning,error loglevel

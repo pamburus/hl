@@ -645,6 +645,8 @@ hl --list-themes | fzf --color='bg+:23,gutter:-1,pointer:210' --highlight-line -
 
 #### Custom themes
 
+For complete theme configuration reference, see **[Theme Configuration Guide](doc/theme.md)**.
+
 * Custom themes are automatically loaded when found in a predefined platform-specific location.
 
     | OS      | Location                                                   |
@@ -699,10 +701,10 @@ hl --list-themes | fzf --color='bg+:23,gutter:-1,pointer:210' --highlight-line -
   * `-mode`: Remove inherited mode (e.g., `["-faint"]`)
   * Last occurrence wins for conflicts (e.g., `["+bold", "-bold"]` removes bold)
 
-* **Inheritance chain**: `@base` theme → user theme's roles → element's `style` field → element's explicit properties
+* **Inheritance chain**: `@base` theme → user theme's styles → element's `style` field → element's explicit properties
   * All themes inherit from built-in `@base` theme
-  * Roles can reference other roles via `style` field
-  * Elements can reference roles via `style` field
+  * Styles can reference other styles via `style` field
+  * Elements can reference styles via `style` field
   * Explicit properties override inherited ones
 
 * **Color format**:
