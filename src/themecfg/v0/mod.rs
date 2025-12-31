@@ -195,3 +195,6 @@ pub struct IndicatorStyle {
     #[serde(default)]
     pub style: Style,
 }
+
+#[cfg(test)]
+pub(crate) mod tests;
