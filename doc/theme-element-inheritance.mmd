@@ -1,106 +1,84 @@
 %%{init: {'theme':'base','themeVariables':{'primaryColor':'#e1f5ff','primaryTextColor':'#000','primaryBorderColor':'#01579b','lineColor':'#666','secondaryColor':'#fff9c4','tertiaryColor':'#f3e5f5','background':'transparent','mainBkg':'transparent','secondaryBkg':'transparent','tertiaryBkg':'transparent'}}}%%
 graph LR
-    %% Style roles (from previous diagram)
-    default["<b>default</b><br/><i>(style)</i>"]
+    %% Style roles
     primary["<b>primary</b><br/><i>(style)</i>"]
     secondary["<b>secondary</b><br/><i>(style)</i>"]
     strong["<b>strong</b><br/><i>(style)</i>"]
     muted["<b>muted</b><br/><i>(style)</i>"]
+    status["<b>status</b><br/><i>(style)</i>"]
     accent["<b>accent</b><br/><i>(style)</i>"]
+    accent_secondary["<b>accent-secondary</b><br/><i>(style)</i>"]
     message_style["<b>message</b><br/><i>(style)</i>"]
+    syntax_style["<b>syntax</b><br/><i>(style)</i>"]
     key_style["<b>key</b><br/><i>(style)</i>"]
     value["<b>value</b><br/><i>(style)</i>"]
-    syntax["<b>syntax</b><br/><i>(style)</i>"]
-    status["<b>status</b><br/><i>(style)</i>"]
     level_style["<b>level</b><br/><i>(style)</i>"]
 
-    %% Metadata elements
-    time["<b>time</b><br/><i>element</i>"]
-    level["<b>level</b><br/><i>element</i>"]
-    level_inner["<b>level-inner</b><br/><i>element</i>"]
-    logger["<b>logger</b><br/><i>element</i>"]
-    logger_inner["<b>logger-inner</b><br/><i>element</i>"]
-    caller["<b>caller</b><br/><i>element</i>"]
-    caller_inner["<b>caller-inner</b><br/><i>element</i>"]
+    %% Elements
+    input["<b>input</b><br/><i>(element)</i>"]
+    time["<b>time</b><br/><i>(element)</i>"]
+    level["<b>level</b><br/><i>(element)</i>"]
+    level_inner["<b>level-inner</b><br/><i>(element)</i>"]
+    logger["<b>logger</b><br/><i>(element)</i>"]
+    logger_inner["<b>logger-inner</b><br/><i>(element)</i>"]
+    caller["<b>caller</b><br/><i>(element)</i>"]
+    caller_inner["<b>caller-inner</b><br/><i>(element)</i>"]
+    message["<b>message</b><br/><i>(element)</i>"]
+    message_delimiter["<b>message-delimiter</b><br/><i>(element)</i>"]
+    field["<b>field</b><br/><i>(element)</i>"]
+    key["<b>key</b><br/><i>(element)</i>"]
+    ellipsis["<b>ellipsis</b><br/><i>(element)</i>"]
+    object["<b>object</b><br/><i>(element)</i>"]
+    array["<b>array</b><br/><i>(element)</i>"]
+    string["<b>string</b><br/><i>(element)</i>"]
+    number["<b>number</b><br/><i>(element)</i>"]
+    boolean["<b>boolean</b><br/><i>(element)</i>"]
+    boolean_true["<b>boolean-true</b><br/><i>(element)</i>"]
+    boolean_false["<b>boolean-false</b><br/><i>(element)</i>"]
+    null["<b>null</b><br/><i>(element)</i>"]
 
-    %% Message elements
-    message["<b>message</b><br/><i>element</i>"]
-    key["<b>key</b><br/><i>element</i>"]
-    field["<b>field</b><br/><i>element</i>"]
-
-    %% Value elements
-    string["<b>string</b><br/><i>element</i>"]
-    number["<b>number</b><br/><i>element</i>"]
-    boolean["<b>boolean</b><br/><i>element</i>"]
-    boolean_true["<b>boolean-true</b><br/><i>element</i>"]
-    boolean_false["<b>boolean-false</b><br/><i>element</i>"]
-    null["<b>null</b><br/><i>element</i>"]
-    array["<b>array</b><br/><i>element</i>"]
-    object["<b>object</b><br/><i>element</i>"]
-
-    %% Input elements
-    input["<b>input</b><br/><i>element</i>"]
-    input_number["<b>input-number</b><br/><i>element</i>"]
-    input_number_inner["<b>input-number-inner</b><br/><i>element</i>"]
-    input_name["<b>input-name</b><br/><i>element</i>"]
-    input_name_inner["<b>input-name-inner</b><br/><i>element</i>"]
-
-    %% Style inheritance (from role diagram)
-    default -.-> primary
-    default -.-> status
+    %% Style inheritance
     primary --> secondary
     primary --> strong
     primary --> value
     secondary --> muted
     secondary --> accent
+    secondary --> accent_secondary
     accent --> key_style
+    accent --> accent_secondary
     strong --> message_style
+    strong --> syntax_style
     status --> level_style
 
-    %% Style to element inheritance
+    %% Element inheritance from styles
+    secondary --> input
     secondary --> time
-    status --> level
-    level_style --> level_inner
-    muted --> logger
-    muted --> logger_inner
     secondary --> caller
-    secondary --> caller_inner
-
+    accent_secondary --> logger
+    muted --> message_delimiter
+    muted --> field
+    muted --> ellipsis
+    muted --> level
+    level_style --> level_inner
     message_style --> message
     key_style --> key
-    secondary --> field
-
+    syntax_style --> object
+    syntax_style --> array
     value --> string
     value --> number
     value --> boolean
     value --> null
-    syntax --> array
-    syntax --> object
-
-    primary --> input
-    status --> input_number
-    status --> input_number_inner
-    muted --> input_name
-    muted --> input_name_inner
 
     %% Parent-inner relationships (dashed)
     level -.-> level_inner
     logger -.-> logger_inner
     caller -.-> caller_inner
-    input_number -.-> input_number_inner
-    input_name -.-> input_name_inner
     boolean -.-> boolean_true
     boolean -.-> boolean_false
 
     %% Style definitions
     classDef styleRole fill:#fff9c4,stroke:#f57f17,stroke-width:2px,color:#000
     classDef element fill:#e8f5e9,stroke:#1b5e20,stroke-width:2px,color:#000
-    classDef metadataElement fill:#e1f5ff,stroke:#01579b,stroke-width:2px,color:#000
-    classDef valueElement fill:#f3e5f5,stroke:#4a148c,stroke-width:2px,color:#000
-    classDef inputElement fill:#fff3e0,stroke:#e65100,stroke-width:2px,color:#000
 
-    class default,primary,secondary,strong,muted,accent,message_style,key_style,value,syntax,status,level_style styleRole
-    class time,level,level_inner,logger,logger_inner,caller,caller_inner metadataElement
-    class message,key,field element
-    class string,number,boolean,boolean_true,boolean_false,null,array,object valueElement
-    class input,input_number,input_number_inner,input_name,input_name_inner inputElement
+    class primary,secondary,strong,muted,accent,accent_secondary,message_style,syntax_style,status,key_style,value,level_style, styleRole
+    class input,time,level,level_inner,logger,logger_inner,caller,caller_inner,message,message_delimiter,field,key,ellipsis,object,array,string,number,boolean,boolean_true,boolean_false,null element
