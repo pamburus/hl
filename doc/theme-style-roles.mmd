@@ -1,3 +1,4 @@
+%%{init: {'theme':'base','themeVariables':{'primaryColor':'#e1f5ff','primaryTextColor':'#000','primaryBorderColor':'#01579b','lineColor':'#666','secondaryColor':'#fff9c4','tertiaryColor':'#f3e5f5','background':'transparent','mainBkg':'transparent','secondaryBkg':'transparent','tertiaryBkg':'transparent'}}}%%
 graph TB
     %% Root - centered at top
     default["<b>default</b><br/><i>empty base</i>"]
@@ -63,14 +64,7 @@ graph TB
     %% Status derivative
     status --> level
 
-    %% Note: Subgraph titles removed to avoid dark mode readability issues
-    %% Grouping still visible through box boundaries
-    %% - default: root of all styles
-    %% - primary/secondary/strong/value/muted/accent/trace/key/accsec/message/syntax: primary hierarchy
-    %% - status/level: status hierarchy
-    %% - debug/info/warning/error: independent log level styles
-
-    %% Style definitions
+    %% Style definitions with readable colors for both light and dark backgrounds
     classDef root fill:#e1f5ff,stroke:#01579b,stroke-width:4px,color:#000
     classDef tier1 fill:#fff9c4,stroke:#f57f17,stroke-width:3px,color:#000
     classDef tier2 fill:#f3e5f5,stroke:#4a148c,stroke-width:2px,color:#000
