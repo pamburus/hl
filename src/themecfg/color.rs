@@ -86,3 +86,6 @@ fn unhex(high: u8, low: u8) -> Option<u8> {
     let l = (low as char).to_digit(16)?;
     Some((h as u8) << 4 | (l as u8))
 }
+
+#[cfg(test)]
+pub(crate) mod tests;
