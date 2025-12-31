@@ -81,3 +81,6 @@ impl GetMergeFlags for RawTheme {
         self.inner.merge_flags()
     }
 }
+
+#[cfg(test)]
+pub(crate) mod tests;

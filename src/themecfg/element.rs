@@ -68,3 +68,6 @@ impl Element {
         &PAIRS
     }
 }
+
+#[cfg(test)]
+pub(crate) mod tests;

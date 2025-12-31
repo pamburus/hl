@@ -1278,32 +1278,6 @@ fn test_filesystem_error_handling() {
 }
 
 #[test]
-fn test_element_names_case_sensitive() {
-    // FR-011a: System MUST treat element names as case-sensitive
-    // "message" is valid, "Message" or "MESSAGE" are invalid (unknown elements, ignored)
-    // Uses external file: src/testing/assets/themes/v0-invalid-element-case.yaml
-    let theme = theme("v0-invalid-element-case");
-
-    // Valid element with correct case should be loaded
-    let message = theme.elements.get(&Element::Message);
-    assert!(message.is_some(), "Element 'message' (lowercase) should be loaded");
-    assert_eq!(
-        message.unwrap().foreground,
-        Some(Color::Plain(PlainColor::Green)),
-        "Valid 'message' element should have green foreground"
-    );
-
-    // The theme file also defines "Message", "TIME", "Level" with wrong case
-    // These should be ignored (treated as unknown elements)
-    // We can verify this by checking that only the valid element was loaded
-    // (theme has 4 element definitions, but only 1 should be recognized)
-
-    // Note: We can't directly verify unknown elements were ignored without
-    // checking internal parsing details, but the valid element being loaded
-    // with correct value proves case-sensitivity is enforced.
-}
-
-#[test]
 fn test_mode_names_case_sensitive() {
     // FR-014a: System MUST treat mode names as case-sensitive
     // "bold" is valid, "Bold" or "BOLD" are invalid and cause error
@@ -2080,13 +2054,6 @@ fn test_v0_level_override_with_invalid_mode_prefix() {
 }
 
 #[test]
-fn test_element_parent_queries() {
-    let pairs = Element::nested();
-    assert_ne!(pairs.len(), 0);
-    assert!(pairs.contains(&(Element::Level, Element::LevelInner)));
-}
-
-#[test]
 fn test_style_from_role() {
     let style = RawStyle::from(Role::Primary);
     assert!(!style.base.is_empty());
@@ -2666,28 +2633,6 @@ fn test_rgb_from_str_invalid_length() {
     let result = RGB::from_str("#ff");
     assert!(result.is_err());
     assert!(result.unwrap_err().contains("expected 7 bytes"));
-}
-
-#[test]
-fn test_element_is_inner() {
-    assert!(Element::LevelInner.is_inner());
-    assert!(Element::InputNumber.is_inner());
-    assert!(!Element::Level.is_inner());
-}
-
-#[test]
-fn test_raw_theme_inner_mut() {
-    let mut theme = RawTheme::default();
-    theme.inner_mut().version = Version::new(1, 0);
-    assert_eq!(theme.inner().version, Version::new(1, 0));
-}
-
-#[test]
-fn test_raw_theme_into_inner() {
-    let mut theme = RawTheme::default();
-    theme.inner_mut().version = Version::new(1, 0);
-    let inner = theme.into_inner();
-    assert_eq!(inner.version, Version::new(1, 0));
 }
 
 #[test]
