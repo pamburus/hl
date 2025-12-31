@@ -5,7 +5,7 @@ use strum::IntoEnumIterator;
 use crate::{appdirs::AppDirs, level::Level};
 
 use super::super::{
-    Color, Element, Error, Format, Mode, ModeSetDiff, PlainColor, RGB, Style, Tag, Theme, Version,
+    Color, Element, Error, Format, Mode, ModeSetDiff, PlainColor, RGB, Role, Style, Tag, Theme, Version,
     tests::{dirs, load_raw_theme_unmerged, raw_theme, theme},
 };
 
@@ -970,4 +970,24 @@ fn test_unsupported_theme_version() {
 fn test_v0_level_override_with_invalid_mode_prefix() {
     let result = Theme::load(&dirs(), "test-v0-level-invalid-mode");
     assert!(result.is_err());
+}
+
+#[test]
+fn test_v0_element_with_invalid_mode_prefix() {
+    let result = Theme::load(&dirs(), "test-v0-element-invalid-mode");
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_invalid_style_base_deserialization() {
+    let result = Theme::load(&dirs(), "test-invalid-style-base");
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_style_base_deserialization_single_string() {
+    let theme = raw_theme("test-base-single");
+    let secondary = theme.styles.get(&Role::Secondary);
+    assert!(secondary.is_some());
+    assert!(!secondary.unwrap().base.is_empty());
 }

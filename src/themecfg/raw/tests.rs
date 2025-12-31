@@ -505,3 +505,75 @@ fn test_v1_no_blocking_rules() {
         "v1 should have child error time"
     );
 }
+
+#[test]
+fn test_style_from_role() {
+    let style = RawStyle::from(Role::Primary);
+    assert!(!style.base.is_empty());
+    assert_eq!(style.base.len(), 1);
+    assert_eq!(style.base[0], Role::Primary);
+}
+
+#[test]
+fn test_style_from_vec_roles() {
+    let style = RawStyle::from(vec![Role::Primary, Role::Secondary]);
+    assert!(!style.base.is_empty());
+    assert_eq!(style.base.len(), 2);
+    assert_eq!(style.base[0], Role::Primary);
+    assert_eq!(style.base[1], Role::Secondary);
+}
+
+#[test]
+fn test_resolved_style_builder_methods() {
+    let style = RawStyle::default()
+        .modes(Mode::Bold)
+        .foreground(Some(Color::Plain(PlainColor::Red)))
+        .background(Some(Color::Plain(PlainColor::Blue)));
+
+    assert_eq!(style.modes, Mode::Bold.into());
+    assert_eq!(style.foreground, Some(Color::Plain(PlainColor::Red)));
+    assert_eq!(style.background, Some(Color::Plain(PlainColor::Blue)));
+}
+
+#[test]
+fn test_resolved_style_merged_style_additive() {
+    let base = RawStyle {
+        base: StyleBase::default(),
+        modes: Mode::Bold.into(),
+        foreground: Some(Color::Plain(PlainColor::Red)),
+        background: None,
+    };
+
+    let patch = RawStyle {
+        base: StyleBase::default(),
+        modes: Mode::Italic.into(),
+        foreground: Some(Color::Plain(PlainColor::Green)),
+        background: Some(Color::Plain(PlainColor::Blue)),
+    };
+
+    let merged = base.merged(&patch, MergeFlags::default());
+    assert_eq!(merged.modes, ModeSetDiff::from(Mode::Bold | Mode::Italic));
+    assert_eq!(merged.foreground, Some(Color::Plain(PlainColor::Green)));
+    assert_eq!(merged.background, Some(Color::Plain(PlainColor::Blue)));
+}
+
+#[test]
+fn test_resolved_style_merged_style_replace_modes() {
+    let base = RawStyle {
+        base: StyleBase::default(),
+        modes: Mode::Bold.into(),
+        foreground: Some(Color::Plain(PlainColor::Red)),
+        background: None,
+    };
+
+    let patch = RawStyle {
+        base: StyleBase::default(),
+        modes: Mode::Italic.into(),
+        foreground: Some(Color::Plain(PlainColor::Green)),
+        background: None,
+    };
+
+    let merged = base.merged(&patch, Version::V0.merge_flags());
+    assert_eq!(merged.modes, Mode::Italic.into());
+    assert_eq!(merged.foreground, Some(Color::Plain(PlainColor::Green)));
+}

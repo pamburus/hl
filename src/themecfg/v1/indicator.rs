@@ -202,3 +202,6 @@ impl From<v0::IndicatorStyle> for IndicatorStyle<Style> {
         }
     }
 }
+
+#[cfg(test)]
+pub(crate) mod tests;

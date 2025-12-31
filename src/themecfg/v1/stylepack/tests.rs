@@ -1,14 +1,15 @@
 use yaml_peg::serde as yaml;
 
-use super::super::super::{Color, Element, Merge, Mode, PlainColor, RawStyle, StyleBase, StylePack, tests::modes, v1};
-use super::super::{GetMergeFlags, Version};
+use super::super::super::{Color, Element, Merge, Mode, PlainColor, tests::modes};
+use super::super::{GetMergeFlags, Style, Version};
+use super::StylePack;
 
 #[test]
 fn test_style_pack() {
-    assert_eq!(StylePack::default().len(), 0);
+    assert_eq!(StylePack::<Element>::default().len(), 0);
 
     let yaml = include_str!("../../../testing/assets/style-packs/pack1.yaml");
-    let pack: v1::StylePack<Element> = yaml::from_str(yaml).unwrap().remove(0);
+    let pack: StylePack<Element> = yaml::from_str(yaml).unwrap().remove(0);
     assert_eq!(pack.len(), 2);
     assert_eq!(pack[&Element::Input].foreground, Some(Color::Plain(PlainColor::Red)));
     assert_eq!(pack[&Element::Input].background, Some(Color::Plain(PlainColor::Blue)));
@@ -20,26 +21,26 @@ fn test_style_pack() {
     assert_eq!(pack[&Element::Message].background, None);
     assert_eq!(pack[&Element::Message].modes, modes(&[Mode::Italic, Mode::Underline]));
 
-    assert!(yaml::from_str::<v1::StylePack<Element>>("invalid").is_err());
+    assert!(yaml::from_str::<StylePack<Element>>("invalid").is_err());
 }
 
 #[test]
 fn test_v1_style_pack_merge() {
-    let mut base = v1::StylePack::default();
+    let mut base = StylePack::default();
     base.insert(
         Element::Message,
-        RawStyle {
-            base: StyleBase::default(),
+        Style {
             foreground: Some(Color::Plain(PlainColor::Red)),
             background: Some(Color::Plain(PlainColor::Blue)),
             modes: Mode::Bold.into(),
+            ..Default::default()
         },
     );
 
-    let mut patch = v1::StylePack::<Element>::default();
+    let mut patch = StylePack::<Element>::default();
     patch.insert(
         Element::Message,
-        v1::Style {
+        Style {
             foreground: Some(Color::Plain(PlainColor::Green)),
             modes: Mode::Italic.into(),
             ..Default::default()
@@ -47,7 +48,7 @@ fn test_v1_style_pack_merge() {
     );
     patch.insert(
         Element::Level,
-        v1::Style {
+        Style {
             foreground: Some(Color::Plain(PlainColor::Yellow)),
             ..Default::default()
         },
@@ -64,4 +65,18 @@ fn test_v1_style_pack_merge() {
         merged[&Element::Level].foreground,
         Some(Color::Plain(PlainColor::Yellow))
     );
+}
+
+#[test]
+fn test_child_blocking_parent_in_style_pack() {
+    let mut base = StylePack::default();
+    base.insert(Element::Level, Style::default());
+
+    let mut patch = StylePack::default();
+    patch.insert(Element::LevelInner, Style::default());
+
+    let merged = base.merged(&patch, Version::V0.merge_flags());
+
+    assert!(!merged.contains_key(&Element::Level));
+    assert!(merged.contains_key(&Element::LevelInner));
 }
