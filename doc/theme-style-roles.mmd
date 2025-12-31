@@ -1,40 +1,38 @@
 %%{init: {'theme':'base','themeVariables':{'primaryColor':'#e1f5ff','primaryTextColor':'#000','primaryBorderColor':'#01579b','lineColor':'#666','secondaryColor':'#fff9c4','tertiaryColor':'#f3e5f5','background':'transparent','mainBkg':'transparent','secondaryBkg':'transparent','tertiaryBkg':'transparent'}}}%%
-graph TB
-    %% Root - centered at top
+graph LR
+    %% Root
     default["<b>default</b><br/><i>empty base</i>"]
 
-    %% Tier 1 - Primary hierarchy and independent status
+    %% Tier 1
     primary["<b>primary</b><br/>modes: -faint"]
     status["<b>status</b><br/>modes: -faint"]
 
-    %% Tier 2 - Primary derivatives
+    %% Tier 2
     secondary["<b>secondary</b><br/>style: primary<br/>modes: faint"]
     strong["<b>strong</b><br/>style: primary<br/>modes: bold"]
     value["<b>value</b><br/>style: primary"]
+    level["<b>level</b><br/>style: status"]
 
-    %% Tier 3 - Secondary derivatives (left branch)
+    %% Tier 3 - Secondary branch
     muted["<b>muted</b><br/>style: secondary"]
     accent["<b>accent</b><br/>style: secondary"]
     trace["<b>trace</b><br/>style: secondary"]
 
-    %% Tier 3 - Accent derivatives (middle branch)
-    key["<b>key</b><br/>style: accent"]
-    accsec["<b>accent-secondary</b><br/>style: accent, secondary"]
-
-    %% Tier 3 - Strong derivatives (right branch)
+    %% Tier 3 - Strong branch
     message["<b>message</b><br/>style: strong"]
     syntax["<b>syntax</b><br/>style: strong"]
 
-    %% Status derivative
-    level["<b>level</b><br/>style: status"]
+    %% Tier 4 - Accent derivatives
+    key["<b>key</b><br/>style: accent"]
+    accsec["<b>accent-secondary</b><br/>style: accent, secondary"]
 
-    %% Log level roles - independent (bottom row)
+    %% Independent log levels
     debug["<b>debug</b><br/>fg: magenta"]
     info["<b>info</b><br/>fg: cyan"]
     warning["<b>warning</b><br/>fg: yellow"]
     error["<b>error</b><br/>fg: bright-red"]
 
-    %% Implicit inheritance from default (dotted lines)
+    %% Connections from default
     default -.-> primary
     default -.-> status
     default -.-> debug
@@ -42,26 +40,25 @@ graph TB
     default -.-> warning
     default -.-> error
 
-    %% Primary hierarchy (solid lines)
+    %% Primary branch
     primary --> secondary
     primary --> strong
     primary --> value
 
-    %% Secondary derivatives
+    %% Secondary branch
     secondary --> muted
     secondary --> accent
     secondary --> trace
-    secondary --> accsec
 
-    %% Accent derivatives
+    %% Accent branch
     accent --> key
     accent --> accsec
 
-    %% Strong derivatives
+    %% Strong branch
     strong --> message
     strong --> syntax
 
-    %% Status derivative
+    %% Status branch
     status --> level
 
     %% Style definitions with readable colors for both light and dark backgrounds
