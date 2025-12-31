@@ -480,3 +480,6 @@ pub mod testing {
         Theme::load_embedded::<Assets>("test")?.resolve()
     }
 }
+
+#[cfg(test)]
+pub(crate) mod tests;
