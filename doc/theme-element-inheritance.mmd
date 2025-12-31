@@ -1,17 +1,17 @@
 %%{init: {'theme':'base','themeVariables':{'primaryColor':'#e1f5ff','primaryTextColor':'#000','primaryBorderColor':'#01579b','lineColor':'#666','secondaryColor':'#fff9c4','tertiaryColor':'#f3e5f5','background':'transparent','mainBkg':'transparent','secondaryBkg':'transparent','tertiaryBkg':'transparent'}}}%%
 graph LR
     %% Style roles (from previous diagram)
-    default["<b>default</b>"]
-    primary["<b>primary</b>"]
-    secondary["<b>secondary</b>"]
-    strong["<b>strong</b>"]
-    muted["<b>muted</b>"]
-    accent["<b>accent</b>"]
+    default["<b>default</b><br/><i>(style)</i>"]
+    primary["<b>primary</b><br/><i>(style)</i>"]
+    secondary["<b>secondary</b><br/><i>(style)</i>"]
+    strong["<b>strong</b><br/><i>(style)</i>"]
+    muted["<b>muted</b><br/><i>(style)</i>"]
+    accent["<b>accent</b><br/><i>(style)</i>"]
     message_style["<b>message</b><br/><i>(style)</i>"]
     key_style["<b>key</b><br/><i>(style)</i>"]
-    value["<b>value</b>"]
-    syntax["<b>syntax</b>"]
-    status["<b>status</b>"]
+    value["<b>value</b><br/><i>(style)</i>"]
+    syntax["<b>syntax</b><br/><i>(style)</i>"]
+    status["<b>status</b><br/><i>(style)</i>"]
     level_style["<b>level</b><br/><i>(style)</i>"]
 
     %% Metadata elements
@@ -44,6 +44,18 @@ graph LR
     input_number_inner["<b>input-number-inner</b><br/><i>element</i>"]
     input_name["<b>input-name</b><br/><i>element</i>"]
     input_name_inner["<b>input-name-inner</b><br/><i>element</i>"]
+
+    %% Style inheritance (from role diagram)
+    default -.-> primary
+    default -.-> status
+    primary --> secondary
+    primary --> strong
+    primary --> value
+    secondary --> muted
+    secondary --> accent
+    accent --> key_style
+    strong --> message_style
+    status --> level_style
 
     %% Style to element inheritance
     secondary --> time

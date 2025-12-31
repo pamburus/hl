@@ -163,7 +163,7 @@ error = { style = "primary", foreground = "bright-red", modes = ["bold"] }
 
 Elements in the `@base` theme inherit from style roles. The diagram below shows the default inheritance relationships:
 
-<img src="theme-element-inheritance.svg" alt="Element Inheritance Diagram" width="600">
+![Element Inheritance Diagram](theme-element-inheritance.svg)
 
 **Legend:**
 - **Solid arrows** - Style inheritance (element inherits from style role)
