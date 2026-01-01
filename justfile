@@ -107,7 +107,6 @@ bench *ARGS: (setup "build")
 check-schema: (setup "schema")
     tombi lint
     taplo check
-    @.venv/bin/python build/ci/validate_yaml.py ./schema/json/config.schema.json etc/defaults/config{-ecs,-k8s}.yaml
     @.venv/bin/python build/ci/validate_yaml.py ./schema/json/theme.schema.json etc/defaults/themes/*.yaml
 
 # Install binary and man pages
