@@ -390,6 +390,7 @@ pub enum Tag {
     #[strum(serialize = "truecolor")]
     #[serde(rename = "truecolor")]
     TrueColor,
+    Overlay,
 }
 
 impl FromStr for Tag {

@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use super::super::super::{Color, Merge, MergeFlags, MergeWithOptions, Mode, PlainColor, Role, Style as ResolvedStyle};
+use super::super::super::{Color, MergeFlags, MergeWithOptions, Mode, PlainColor, Role, Style as ResolvedStyle};
 use super::super::{Style, StyleBase, StylePack, StyleResolver};
 
 #[test]
@@ -17,7 +17,7 @@ fn test_style_pack_merged() {
     items2.insert(Role::Secondary, style2);
     let pack2 = StylePack::<Role, Style>::new(items2);
 
-    let merged = pack1.merged(pack2);
+    let merged = pack1.merged(pack2, MergeFlags::default());
     let mut resolver = StyleResolver::new(&merged, MergeFlags::default());
     assert!(resolver.resolve(&Role::Primary).is_ok());
     assert!(resolver.resolve(&Role::Secondary).is_ok());

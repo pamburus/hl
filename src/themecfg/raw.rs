@@ -3,11 +3,12 @@ use std::sync::{Arc, LazyLock};
 
 // third-party imports
 use derive_more::{Deref, DerefMut};
+use enumset::EnumSet;
 
-use crate::themecfg::Merge;
+use crate::themecfg::{Merge, Version};
 
 // relative imports
-use super::{Assets, Error, MergeFlags, MergeOptions, Result, Theme, ThemeInfo, ThemeOrigin, ThemeSource, v1};
+use super::{Assets, Error, MergeFlags, MergeOptions, Result, Tag, Theme, ThemeInfo, ThemeOrigin, ThemeSource, v1};
 
 static BASE: LazyLock<RawTheme> = LazyLock::new(|| Theme::load_embedded::<Assets>("@base").unwrap());
 
@@ -38,7 +39,9 @@ impl RawTheme {
     ///
     /// This ensures that all required styles are present.
     pub fn finalized(self) -> Self {
-        BASE.clone().merged(self)
+        let version = self.version;
+        let tags = self.tags.clone();
+        BASE.clone().merged(self).tags(tags).version(version)
     }
 
     /// Resolve the theme to a fully resolved [`Theme`].
@@ -65,6 +68,16 @@ impl RawTheme {
     /// Consume self and return the inner v1::Theme.
     pub fn into_inner(self) -> v1::Theme {
         self.inner
+    }
+
+    fn tags(mut self, tags: EnumSet<Tag>) -> Self {
+        self.inner.tags = tags;
+        self
+    }
+
+    fn version(mut self, version: Version) -> Self {
+        self.inner.version = version;
+        self
     }
 }
 

@@ -63,6 +63,7 @@ pub enum MergeFlag {
     ReplaceElements,
     ReplaceHierarchies,
     ReplaceModes,
+    Overlay,
 }
 
 pub type MergeFlags = EnumSet<MergeFlag>;

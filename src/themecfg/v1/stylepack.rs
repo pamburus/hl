@@ -169,7 +169,9 @@ where
                     e.get_mut().merge(patch, flags);
                 }
                 Entry::Vacant(e) => {
-                    e.insert(patch);
+                    if !flags.contains(MergeFlag::Overlay) {
+                        e.insert(patch);
+                    }
                 }
             }
         }

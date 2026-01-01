@@ -145,8 +145,14 @@ impl MergeOptions for Theme {
 impl Merge for Theme {
     fn merge(&mut self, other: Self) {
         let flags = other.merge_options();
-        self.version = other.version;
-        self.styles.merge(other.styles, flags);
+
+        if other.tags.contains(Tag::Overlay) {
+            self.styles.merge(other.styles, flags);
+            self.elements.merge(other.elements, MergeFlag::Overlay.into());
+            return;
+        }
+
+        self.styles.merge(other.styles, flags | MergeFlag::ReplaceElements);
 
         // Apply blocking rules only for version 0 themes (backward compatibility)
         if flags.contains(MergeFlag::ReplaceHierarchies) {
@@ -181,7 +187,6 @@ impl Merge for Theme {
                 .or_insert(pack);
         }
 
-        self.tags = other.tags;
         self.indicators.merge(other.indicators, flags);
     }
 }
