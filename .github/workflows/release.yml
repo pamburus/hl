@@ -124,12 +124,31 @@ jobs:
             rm -f "${file}.bak"
           done
 
+      - name: Update schema references in JSON schema files
+        run: |
+          VERSION=${{ steps.update-version.outputs.version }}
+
+          # Find all JSON schema files with schema references and update them
+          find . -name "*.schema.json" -type f -exec grep -l "https://raw.githubusercontent.com/pamburus/hl/" {} \; | while read -r file; do
+            echo "Updating schema reference in ${file}"
+            jq --arg version "v${VERSION}" '
+              walk(
+                if type == "string" and test("https://raw.githubusercontent.com/pamburus/hl/[^/]+/schema/") then
+                  gsub("https://raw.githubusercontent.com/pamburus/hl/[^/]+/schema/"; "https://raw.githubusercontent.com/pamburus/hl/\($version)/schema/")
+                else
+                  .
+                end
+              )
+            ' "${file}" > "${file}.tmp" && mv "${file}.tmp" "${file}"
+          done
+
       - name: Commit version update
         run: |
           git config --local user.name "missionis[bot]"
           git config --local user.email "234988995+missionis[bot]@users.noreply.github.com"
           git add Cargo.toml Cargo.lock
           git add -u "*.toml" || true
+          git add -u "*.schema.json" || true
           git commit -m "chore(release): bump version to ${{ steps.update-version.outputs.version }}"
           git push origin "refs/heads/${{ steps.create-temp-branch.outputs.branch }}"
 
