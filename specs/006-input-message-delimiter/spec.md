@@ -176,7 +176,7 @@ Input Stream → Delimiter-Based Message Splitting → Individual Messages → P
 **Environment Variables:**
 - `HL_DELIMITER=<delim>` — Set message delimiter
 
-**Configuration File** (`config.yaml`):
+**Configuration File** (`config.toml`):
 Currently, delimiter configuration is not supported in config files; only CLI and environment variables are available.
 
 **Supported Values:**

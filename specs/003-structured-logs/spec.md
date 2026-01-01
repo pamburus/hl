@@ -159,7 +159,7 @@ Parsed Record (from any format) → Predefined Field Detection → Field Extract
 
 ### Field Recognition Configuration
 
-**Location:** `fields.predefined` section in `config.yaml`
+**Location:** `fields.predefined` section in `config.toml`
 
 **Configuration Structure:**
 - Each predefined field has a `names` array listing recognized field name patterns
@@ -167,19 +167,21 @@ Parsed Record (from any format) → Predefined Field Detection → Field Extract
 - The first matching name in the configuration order is used
 
 **Example Configuration:**
-```yaml
-fields:
-  predefined:
-    level:
-      names: ["level", "LEVEL", "Level"]
-    message:
-      names: ["msg", "message", "MESSAGE", "Message"]
-    time:
-      names: ["ts", "timestamp", "time"]
-    logger:
-      names: ["logger", "LOGGER", "Logger"]
-    caller:
-      names: ["caller", "CALLER", "Caller"]
+```toml
+[fields.predefined.level]
+names = ["level", "LEVEL", "Level"]
+
+[fields.predefined.message]
+names = ["msg", "message", "MESSAGE", "Message"]
+
+[fields.predefined.time]
+names = ["ts", "timestamp", "time"]
+
+[fields.predefined.logger]
+names = ["logger", "LOGGER", "Logger"]
+
+[fields.predefined.caller]
+names = ["caller", "CALLER", "Caller"]
 ```
 
 ### Field Extraction Behavior
@@ -282,24 +284,28 @@ When a numeric timestamp is detected, the unit (seconds, milliseconds, microseco
 **Environment Variables:**
 - `HL_UNIX_TIMESTAMP_UNIT=ms` — Set Unix timestamp unit
 
-**Configuration File** (`config.yaml`):
-```yaml
-fields:
-  predefined:
-    time:
-      names: [field names to recognize as timestamp]
-      show: [placeholder display strategy when timestamp is missing]
-    level:
-      names: [field names to recognize as level]
-      show: [placeholder display strategy when level is missing]
-    message:
-      names: [field names to recognize as message]
-    logger:
-      names: [field names to recognize as logger]
-    caller:
-      names: [field names to recognize as caller]
-  ignore: [wildcard patterns for fields to ignore]
-  hide: [exact field names to hide]
+**Configuration File** (`config.toml`):
+```toml
+[fields.predefined.time]
+names = ["field names to recognize as timestamp"]
+show = "placeholder display strategy when timestamp is missing"
+
+[fields.predefined.level]
+names = ["field names to recognize as level"]
+show = "placeholder display strategy when level is missing"
+
+[fields.predefined.message]
+names = ["field names to recognize as message"]
+
+[fields.predefined.logger]
+names = ["field names to recognize as logger"]
+
+[fields.predefined.caller]
+names = ["field names to recognize as caller"]
+
+[fields]
+ignore = ["wildcard patterns for fields to ignore"]
+hide = ["exact field names to hide"]
 ```
 
 **Field Rendering Behavior:**
@@ -326,7 +332,7 @@ fields:
 - Display order is: [source-location-separator] [caller-name] [caller-name-file-separator] [file] [:] [line]
 - Only non-empty components are included in output
 
-**Field Recognition:** Configuration is via `config.yaml` with the `fields.predefined` section. CLI flags for field recognition patterns are not available; all configuration is file-based.
+**Field Recognition:** Configuration is via `config.toml` with the `fields.predefined` section. CLI flags for field recognition patterns are not available; all configuration is file-based.
 
 ## Testing Requirements
 

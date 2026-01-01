@@ -212,9 +212,9 @@ Line → Format Detection → Logfmt Parsing → Record Fields → Downstream Fe
 
 **Message Delimiter Configuration:** The `--delimiter` option is handled by the separate Input Message Delimiter feature.
 
-**Configuration File** (`config.yaml`):
-```yaml
-input_format: auto    # or: json, logfmt
+**Configuration File** (`config.toml`):
+```toml
+input_format = "auto"    # or: "json", "logfmt"
 ```
 
 ## Testing Requirements

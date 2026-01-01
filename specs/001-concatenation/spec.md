@@ -142,9 +142,9 @@ The concatenation feature enables users to process multiple log files in a singl
 **Environment Variables:**
 - `HL_MAX_MESSAGE_SIZE` — Override max message size
 
-**Configuration File** (`config.yaml`):
-```yaml
-max_message_size: 64 MiB
+**Configuration File** (`config.toml`):
+```toml
+max_message_size = "64 MiB"
 ```
 
 ### Error Handling
