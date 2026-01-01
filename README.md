@@ -657,7 +657,11 @@ For complete theme configuration reference, see __[Theme Configuration Guide](do
 
 * __Structure__
   * `version` (required): Must be `"1.0"`
-  * `tags` (optional): Theme classification (`dark`, `light`, `16color`, `256color`, `truecolor`)
+  * `tags` (optional): Theme classification and filtering
+    * Classification tags: `dark`, `light`, `16color`, `256color`, `truecolor`
+    * Special tags: `base` (foundation themes, excluded from default listings), `overlay` (composition themes, excluded from default listings)
+    * Use `--list-themes=base` or `--list-themes=overlay` to show themes with these tags
+    * Theme names starting with `@` (e.g., `@base`, `@accent-italic`) are a naming convention; filtering is based on tags, not name prefixes
   * `styles` (optional): Reusable role-based styles that can inherit from each other
   * `elements` (optional): Visual styles for specific log elements
   * `levels` (optional): Per-level overrides for elements
@@ -789,7 +793,7 @@ Advanced Options:
   -C, --concurrency <N>             Number of processing threads [env: HL_CONCURRENCY=]
       --shell-completions <SHELL>   Print shell auto-completion script and exit [possible values: bash, elvish, fish, powershell, zsh]
       --man-page                    Print man page and exit
-      --list-themes[=<TAGS>]        Print available themes optionally filtered by tags [possible values: dark, light, 16color, 256color, truecolor]
+      --list-themes[=<TAGS>]        Print available themes optionally filtered by tags [possible values: dark, light, 16color, 256color, truecolor, base, overlay]
       --dump-index                  Print debug index metadata (in --sort mode) and exit
 ```
 

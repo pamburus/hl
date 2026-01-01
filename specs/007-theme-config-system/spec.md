@@ -111,7 +111,7 @@
 
 - Q: Does the `$palette` section work the same in v1 as in v0? → A: No - $palette is NOT supported in v1; it's only supported in v0 as a YAML anchor/alias organization feature; v1 strict parsing rejects $palette as an unknown top-level section per FR-028a
 
-- Q: Can users create a custom theme file named `@base` or is this name reserved/protected? → A: Users CAN create custom themes with `@`-prefixed names (including `@base`) which will be loaded and merged following normal custom theme priority rules. All themes with `@`-prefixed names (both embedded and custom) are excluded from theme listings - they are considered theme mixtures/overlays for composition rather than direct selection. These themes can be referenced in the `theme-overlays` configuration setting to be merged on top of the base theme and main configured theme.
+- Q: Can users create a custom theme file named `@base` or is this name reserved/protected? → A: Users CAN create custom themes with `@`-prefixed names (including `@base`) which will be loaded and merged following normal custom theme priority rules. The `@` prefix is a naming convention (recommended for clarity) but has no special meaning; themes are filtered from listings based on their tags (`base` and `overlay` tags), not their names. Themes with `base` or `overlay` tags can be referenced in the `theme-overlays` configuration setting to be merged on top of the base theme and main configured theme.
 
 - Q: What happens when a file's extension doesn't match its content (e.g., `theme.yaml` contains TOML content)? → A: Parse error from format parser (YAML parser fails on TOML content) - exit with error to stderr
 
@@ -183,7 +183,7 @@
 
 - Q: What happens when multiple theme files exist with the same stem but different extensions (e.g., theme.yaml and theme.toml)? → A: Silent - load highest priority extension (.yaml) without warning or indication that other files were ignored; this keeps behavior simple and predictable; users who want a specific format can use full filename
 
-- Q: Should custom @base theme files created by users appear in theme listings? → A: Yes - show custom @base in custom themes list; while embedded @base is hidden (system default), custom @base is user-created and should be visible so users can see and manage it
+- Q: Should custom @base theme files created by users appear in theme listings? → A: No - custom themes tagged with `base` are excluded from default listings just like embedded base themes; users can explicitly show them using `--list-themes=base`; this ensures consistent filtering behavior regardless of whether the base theme is embedded or custom
 
 - Q: When does color validation occur - during initial theme file parsing, during merge, or during resolution? → A: During initial theme file parsing (fail-fast approach) - if a theme file contains invalid color values, the system exits with error immediately when parsing that file, providing immediate feedback to theme authors per FR-026
 
@@ -237,7 +237,7 @@
 
 - Q: What happens when `theme-overlays` is not specified in the config file versus when it's specified as an empty array `[]`? → A: Both cases behave identically (no overlays applied, just @base → configured theme)
 
-- Q: Can the main configured theme (via the `theme` setting) itself have a `@`-prefixed name, or must it be a regular (non-@-prefixed) theme? → A: Allowed - main theme can be @-prefixed, though unconventional (overlays are meant for composition)
+- Q: Can the main configured theme (via the `theme` setting) itself have a `@`-prefixed name, or must it be a regular (non-@-prefixed) theme? → A: Allowed - the `@` prefix is just a naming convention; main theme can have any name, though using overlay/base-tagged themes as the main theme is unconventional (those are meant for composition)
 
 - Q: What happens if the same theme appears multiple times in the `theme-overlays` list (e.g., `theme-overlays: ["@dark", "@compact", "@dark"]`)? → A: Apply the theme multiple times in the specified order (each appearance is a separate merge)
 
@@ -267,7 +267,7 @@
 
 - Q: Should overlays be loaded and merged eagerly at startup, or can the loading be optimized? → A: Eager sequential loading (simple, deterministic, meets <50ms requirement)
 
-### Session 2026-01-01 (Twenty-First Pass)
+### Session 2026-01-01 (Twenty-First Pass - Merge Order Fix)
 
 - Q: When resolving level-specific elements in v1, should base elements and level overrides be merged before or after role resolution? → A: Resolve base elements and level overrides separately first, then merge the resolved results; this ensures level-specific role references take priority over base element explicit properties
 
@@ -278,6 +278,28 @@
 - Q: Does this change affect outer/inner element inheritance? → A: No, parent→inner inheritance already happens after role resolution per FR-041d; this change specifically addresses level-specific element overrides
 
 - Q: Should this resolution-before-merge strategy apply to all element merging or only level-specific overrides? → A: Only level-specific overrides; base element merging (step 1-2 in FR-041) still happens before resolution as it's part of building the element definition that will be resolved
+
+### Session 2026-01-01 (Twenty-Second Pass - Tag-Based Filtering)
+
+- Q: How are base and overlay themes identified and filtered from listings? → A: Using special tags (`base` and `overlay`) instead of `@`-prefix naming convention; `@` prefix is purely a convention and does not affect logic
+
+- Q: What tags are available for theme classification? → A: Seven tags: `dark`, `light`, `16color`, `256color`, `truecolor`, `base`, `overlay`
+
+- Q: How does the `base` tag work? → A: Themes with the `base` tag are excluded from default theme listings; they can be explicitly shown using `--list-themes=base`
+
+- Q: How does the `overlay` tag work? → A: Themes with the `overlay` tag are excluded from default theme listings; they can be explicitly shown using `--list-themes=overlay`
+
+- Q: Can a theme have both `base` and `overlay` tags? → A: Yes, tags can be combined freely; a theme with both tags would be excluded unless both are explicitly requested
+
+- Q: What is the default behavior when running `--list-themes` without arguments? → A: Shows all themes except those tagged with `base` or `overlay`
+
+- Q: Can users request multiple tag filters? → A: Yes, e.g., `--list-themes=overlay,dark` shows overlay themes that also have the dark tag
+
+- Q: Is the `@` prefix still used for theme names? → A: The `@` prefix is a naming convention (recommended for clarity) but has no special meaning in the system; filtering is based entirely on tags
+
+- Q: Do embedded themes like `@base` and `@accent-italic` need the `base` and `overlay` tags respectively? → A: Yes, they must be tagged appropriately (`@base` has `base` tag, `@accent-italic` has `overlay` tag) to be excluded from default listings
+
+- Q: Can custom themes use the `base` or `overlay` tags? → A: Yes, users can tag their custom themes with `base` or `overlay` to exclude them from default listings
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -405,11 +427,23 @@ Theme authors can add metadata tags to themes (dark, light, 16color, 256color, t
 
 2. **Given** multiple themes with various tags
    **When** user lists themes with `--list-themes`
-   **Then** themes are displayed grouped by origin (stock/custom), showing only theme names in compact multi-column layout with bullets (tags are not shown in listing)
+   **Then** themes are displayed grouped by origin (stock/custom), showing only theme names in compact multi-column layout with bullets (tags are not shown in listing), and themes tagged with `base` or `overlay` are excluded from the listing
 
-3. **Given** a theme file with no tags specified
+3. **Given** themes tagged with `base` (e.g., `@base`) and `overlay` (e.g., `@accent-italic`)
+   **When** user lists themes with `--list-themes=base`
+   **Then** only themes with the `base` tag are shown in the listing
+
+4. **Given** themes tagged with `overlay` and some also tagged with `dark`
+   **When** user lists themes with `--list-themes=overlay,dark`
+   **Then** only themes that have BOTH `overlay` AND `dark` tags are shown (intersection logic)
+
+5. **Given** a custom theme file named `@mystyle.yaml` with `tags: ["overlay"]`
+   **When** user lists themes with `--list-themes`
+   **Then** the custom theme is excluded from the default listing (filtered by tag, not by name prefix)
+
+6. **Given** a theme file with no tags specified
    **When** the theme is loaded
-   **Then** the theme loads successfully with empty tag list
+   **Then** the theme loads successfully with empty tag list and appears in default listings
 
 ---
 
@@ -477,7 +511,7 @@ Theme authors using v1 can define semantic roles (like "warning", "error", "succ
 
 - What happens when trying to load a theme with an extension not in the supported list (.yaml, .yml, .toml, .json)? (Answer: Exit with specific error message to stderr: "Unsupported theme file extension '.ext' - supported extensions are: .yaml, .yml, .toml, .json")
 - What happens when multiple theme files exist with the same stem but different extensions (e.g., theme.yaml and theme.toml)? (Answer: Silent - load highest priority extension without warning per FR-002a; users can specify full filename for specific format)
-- Should custom @base theme files created by users appear in theme listings? (Answer: Yes - custom @base shown in custom themes list per FR-030c; embedded @base remains hidden)
+- Should custom @base theme files created by users appear in theme listings? (Answer: No - custom themes tagged with `base` are excluded from default listings per FR-022e and FR-030c; users can explicitly show them using `--list-themes=base`)
 - When does color validation occur - during initial theme file parsing, during merge, or during resolution? (Answer: During initial theme file parsing per FR-026a - fail-fast approach provides immediate feedback)
 - When a custom theme (e.g., v0) merges with the embedded @base theme (v1), what version does the resulting merged theme have? (Answer: Custom theme's version wins per FR-045a - v0 custom + v1 @base = v0 result)
 - Should circular reference detection apply to the embedded @base theme, or only to user themes? (Answer: Detection occurs after merging per FR-047a - user overrides can create loops that didn't exist before merge)
@@ -514,17 +548,17 @@ Theme authors using v1 can define semantic roles (like "warning", "error", "succ
 
 - **FR-001a**: System MUST search for themes in this priority order: custom themes directory first, then stock themes embedded in binary (custom themes with same name completely replace stock themes - no merging or inheritance)
 
-- **FR-001b**: System MUST exclude all themes whose names start with `@` from theme listings; these are considered theme mixtures/overlays used for composition rather than direct selection; the embedded `@base` theme is a special base theme that serves as the implicit foundation for all themes; users MAY create custom themes with `@`-prefixed names (including `@base`) which will be loaded following normal custom theme priority rules (FR-001a); custom `@`-prefixed theme files MUST be excluded from theme listings (consistent with stock `@`-prefixed themes); the system MUST load custom `@`-prefixed themes consistently whether loaded by stem name or full filename
+- **FR-001b**: System MUST exclude themes tagged with `base` or `overlay` from default theme listings; the `base` tag identifies foundation themes (like the embedded `@base`), and the `overlay` tag identifies themes meant for composition rather than direct selection; users MAY explicitly request these themes in listings using `--list-themes=base` or `--list-themes=overlay`; the `@` prefix in theme names is a naming convention (recommended for clarity) but has no special meaning in the filtering logic; filtering is based entirely on tags
 
-- **FR-001b-a**: When a custom `@base` theme file exists, the complete merge order MUST be: embedded `@base` → custom `@base` → configured theme → theme overlays (if specified); the custom `@base` merges on top of the embedded `@base` following normal custom-over-stock priority (FR-001a), then the configured theme merges on top of that result, then any overlays merge in list order; this allows users to customize the base defaults globally while maintaining the embedded `@base` foundation
+- **FR-001b-a**: When a custom theme file with the `base` tag exists (e.g., a custom `@base.yaml`), the complete merge order MUST be: embedded base theme → custom base theme → configured theme → theme overlays (if specified); the custom base theme merges on top of the embedded base theme following normal custom-over-stock priority (FR-001a), then the configured theme merges on top of that result, then any overlays merge in list order; this allows users to customize the base defaults globally while maintaining the embedded base theme foundation
 
 - **FR-001c**: System MUST support a `theme-overlays` configuration setting as a top-level setting in the config file (at the same level as the `theme` setting) that accepts an ordered list of theme names to be merged on top of the base theme and main configured theme; the merge order is: `@base` → theme (configured via `theme` setting) → theme-overlays (in list order); overlays are regular theme files that follow normal theme loading rules and version-based merge semantics; example configuration: `theme: "mytheme"` and `theme-overlays: ["@dark", "@compact"]` at the top level of the config file
 
 - **FR-001c-a**: System MUST treat absent `theme-overlays` setting and empty array `theme-overlays: []` identically - both result in no overlays being applied (merge chain is just `@base` → configured theme); this follows the principle of least surprise where undefined and explicitly empty have the same effect
 
-- **FR-001c-b**: System MUST allow the main configured theme (via `theme` setting) to have a `@`-prefixed name, though this is unconventional since overlays are meant for composition rather than standalone use; there are no technical restrictions preventing @-prefixed themes from being used as the main theme
+- **FR-001c-b**: System MUST allow the main configured theme (via `theme` setting) to be tagged with `overlay` or `base`, though this is unconventional since overlay/base-tagged themes are meant for composition rather than standalone use; there are no technical restrictions preventing overlay/base-tagged themes from being used as the main theme
 
-- **FR-001c-c**: System MUST apply themes in the exact order specified in the `theme-overlays` list, including duplicates; if the same theme appears multiple times (e.g., `theme-overlays: ["@dark", "@compact", "@dark"]`), it is merged multiple times at the specified positions in the chain; each list entry represents a separate merge operation with no automatic deduplication
+- **FR-001c-c**: System MUST apply themes in the exact order specified in the `theme-overlays` list, including duplicates; if the same theme appears multiple times (e.g., `theme-overlays: ["my-overlay", "@dark", "my-overlay"]`), it is merged multiple times at the specified positions in the chain; each list entry represents a separate merge operation with no automatic deduplication
 
 - **FR-001c-d**: System MUST allow `@base` to appear in the `theme-overlays` list; if present, `@base` is merged again as a regular overlay at its position in the list; this means `@base` would be merged twice: once implicitly at the start of the chain, and once explicitly at the specified position; while unusual, this maintains consistency with "overlays are regular themes" and the duplicate handling rule (FR-001c-c)
 
@@ -542,7 +576,7 @@ Theme authors using v1 can define semantic roles (like "warning", "error", "succ
 
 - **FR-001e**: System MUST apply version-based merge semantics when merging overlays: each merge operation in the chain uses the merge rules determined by the version of the theme being merged in (the "patch" theme); for example, when merging `@base (v1)` → `main-theme (v0)` → `@overlay (v1)`, the first merge uses v0 rules (main-theme's version) and the second merge uses v1 rules (overlay's version); this ensures each theme controls how it wants to be applied, consistent with FR-045a
 
-- **FR-001f**: Overlay themes (themes with `@`-prefixed names) MUST have no restrictions on content - they can contain any sections that regular themes support (elements, styles, levels, indicators, tags, version, etc.); overlays are truly regular themes distinguished only by their naming convention and exclusion from listings
+- **FR-001f**: Overlay themes (themes tagged with `overlay`) MUST have no restrictions on content - they can contain any sections that regular themes support (elements, styles, levels, indicators, tags, version, etc.); overlays are truly regular themes distinguished only by their tag and exclusion from default listings
 
 - **FR-002**: System MUST support loading themes by stem name (without extension) with automatic format detection in priority order: .yaml, .yml, .toml, .json (first found wins); both .yaml and .yml extensions are supported for YAML files and use the YAML parser; theme name matching is case-sensitive on Linux/macOS and case-insensitive on Windows (follows platform filesystem conventions)
 
@@ -652,15 +686,23 @@ Theme authors using v1 can define semantic roles (like "warning", "error", "succ
 
 #### V0 Additional Features
 
-- **FR-022**: System MUST support tags array with allowed values: dark, light, 16color, 256color, truecolor; tags are optional metadata for theme classification
+- **FR-022**: System MUST support tags array with allowed values: dark, light, 16color, 256color, truecolor, base, overlay; tags are optional metadata for theme classification and filtering
 
-- **FR-022a**: System MUST validate that tag values are from the allowed set (dark, light, 16color, 256color, truecolor) and reject themes with unknown tag values
+- **FR-022a**: System MUST validate that tag values are from the allowed set (dark, light, 16color, 256color, truecolor, base, overlay) and reject themes with unknown tag values
 
 - **FR-022b**: System MUST allow empty tags array; tags are purely informational metadata
 
 - **FR-022c**: System MUST allow multiple tags including combinations like dark+light (theme compatible with both modes), dark+256color, etc.; no tag combinations are considered conflicting
 
-- **FR-022d**: When overlay themes contain `tags` sections, the system MUST ignore them; only the main configured theme's tags are kept as the final theme metadata; this ensures tags describe the base theme's identity, not the compositional overlays applied on top; overlays are meant to be mixins that tweak styling without fundamentally changing what the theme "is"
+- **FR-022d**: When themes tagged with `overlay` contain additional tags in their `tags` sections, the system MUST ignore those additional tags during merge; only the main configured theme's tags are kept as the final theme metadata; this ensures tags describe the base theme's identity, not the compositional overlays applied on top; overlays are meant to be mixins that tweak styling without fundamentally changing what the theme "is"
+
+- **FR-022e**: The `base` tag MUST be used to identify foundation themes (like the embedded `@base` theme) that serve as the implicit foundation for all themes; themes with the `base` tag are excluded from default theme listings but can be explicitly shown using `--list-themes=base`
+
+- **FR-022f**: The `overlay` tag MUST be used to identify themes meant for composition rather than standalone use (like `@accent-italic`); themes with the `overlay` tag are excluded from default theme listings but can be explicitly shown using `--list-themes=overlay`
+
+- **FR-022g**: When using `--list-themes` without arguments, the system MUST exclude all themes tagged with `base` or `overlay` by default; users can explicitly include these themes by specifying the tags (e.g., `--list-themes=base`, `--list-themes=overlay`, or `--list-themes=base,overlay`)
+
+- **FR-022h**: The `--list-themes` option MUST support filtering by multiple tags; when multiple tags are specified (e.g., `--list-themes=overlay,dark`), the system MUST show only themes that have ALL specified tags (intersection/AND logic); this allows users to find specific combinations like "dark overlay themes"
 
 - **FR-023**: System MUST support indicators section with sync.synced and sync.failed configurations; indicators are a separate application feature (--follow mode) where sync state markers are displayed at the start of each line; themes provide only the visual styling for these indicator states (in sync vs out of sync)
 
@@ -696,7 +738,7 @@ Theme authors using v1 can define semantic roles (like "warning", "error", "succ
 
 - **FR-030b**: System MUST display each theme by stem name only once in theme listings, even when multiple file formats exist for the same stem (e.g., if both theme.yaml and theme.toml exist, list shows "theme" once, representing the loadable theme per extension priority)
 
-- **FR-030c**: System MUST exclude all themes with `@`-prefixed names from theme listings (both embedded and custom), consistent with FR-001b; this applies to `@base` and any other theme names starting with `@` (e.g., `@dark`, `@compact`); these themes are considered mixtures/overlays for composition rather than direct selection, so they are hidden from the standard theme listing output
+- **FR-030c**: System MUST exclude themes tagged with `base` or `overlay` from default theme listings (both embedded and custom), consistent with FR-001b and FR-022e/f; by default, themes like the embedded `@base` (tagged with `base`) and `@accent-italic` (tagged with `overlay`) are hidden from the standard theme listing output; users can explicitly show these themes using `--list-themes=base` or `--list-themes=overlay`
 
 - **FR-030d**: System MUST sort themes alphabetically within each group (stock/custom) using case-sensitive ASCII ordering where uppercase letters come before lowercase letters (e.g., "MyTheme", "Theme", "another", "basic"); this provides deterministic and predictable ordering
 
