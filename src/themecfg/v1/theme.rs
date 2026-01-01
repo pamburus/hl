@@ -4,7 +4,7 @@
 //! Supports `$schema`, mode diffs, and deep inheritance chains (up to 64 levels).
 
 // std imports
-use std::collections::HashMap;
+use std::collections::{HashMap, hash_map::Entry};
 
 // third-party imports
 use enumset::EnumSet;
@@ -177,14 +177,25 @@ impl Merge for Theme {
 
         // For both v0 and v1, elements defined in child theme replace elements from parent theme
         // Property-level merge happens later when merging elements with per-level styles
-        self.elements.extend(other.elements);
+        if flags.contains(MergeFlag::ReplaceElements) {
+            self.elements.extend(other.elements);
+        } else {
+            self.elements.merge(other.elements, flags);
+        }
 
-        // For both v0 and v1, level-specific elements defined in child theme replace from parent
         for (level, pack) in other.levels {
-            self.levels
-                .entry(level)
-                .and_modify(|existing| existing.extend(pack.clone()))
-                .or_insert(pack);
+            match self.levels.entry(level) {
+                Entry::Vacant(e) => {
+                    e.insert(pack);
+                }
+                Entry::Occupied(mut e) => {
+                    if flags.contains(MergeFlag::ReplaceElements) {
+                        e.get_mut().extend(pack);
+                    } else {
+                        e.get_mut().merge(pack, flags);
+                    }
+                }
+            }
         }
 
         self.indicators.merge(other.indicators, flags);

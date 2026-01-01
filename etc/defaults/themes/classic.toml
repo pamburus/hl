@@ -40,6 +40,7 @@ foreground = "bright-red"
 style = "secondary"
 
 [elements.level]
+foreground = "default"
 
 [elements.number]
 foreground = "cyan"
@@ -55,14 +56,14 @@ foreground = "yellow"
 #
 [levels]
 [levels.warning.level]
-style = "warning"
+style = ["level", "warning"]
 modes = ["reverse"]
 
 [levels.warning.message]
 style = "message"
 
 [levels.error.level]
-style = "error"
+style = ["level", "error"]
 modes = ["reverse"]
 
 [levels.error.message]
