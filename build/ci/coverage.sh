@@ -47,8 +47,8 @@ function test() {
     ${MAIN_EXECUTABLE:?} --config - --help > /dev/null
     ${MAIN_EXECUTABLE:?} --config - --help=short --color never > /dev/null
     ${MAIN_EXECUTABLE:?} --config - --help=long -c --paging never > /dev/null
-    ${MAIN_EXECUTABLE:?} --config - --config=etc/defaults/config-k8s.yaml > /dev/null
-    ${MAIN_EXECUTABLE:?} --config - --config=etc/defaults/config-ecs.yaml > /dev/null
+    ${MAIN_EXECUTABLE:?} --config - --config=etc/defaults/config-k8s.toml > /dev/null
+    ${MAIN_EXECUTABLE:?} --config - --config=etc/defaults/config-ecs.toml > /dev/null
     ${MAIN_EXECUTABLE:?} --config - --shell-completions bash > /dev/null
     ${MAIN_EXECUTABLE:?} --config - --man-page > /dev/null
     ${MAIN_EXECUTABLE:?} --config - --list-themes > /dev/null
