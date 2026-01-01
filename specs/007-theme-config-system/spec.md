@@ -11,7 +11,7 @@
 
 - Q: How are themes uniquely identified when users load them? → A: By filename (stem without extension) OR by full filename (with extension). When loading by stem, system tries extensions in priority order: .yaml, .toml, .json (first found wins).
 
-- Q: What is the fallback behavior when no theme is specified or theme loading fails? → A: When no theme specified, use the theme setting from embedded config file (etc/defaults/config.yaml). When theme loading fails (specified theme not found or parse error), application exits with error to stderr - no fallback.
+- Q: What is the fallback behavior when no theme is specified or theme loading fails? → A: When no theme specified, use the theme setting from embedded config file (etc/defaults/config.toml). When theme loading fails (specified theme not found or parse error), application exits with error to stderr - no fallback.
 
 - Q: Where are custom theme files located on each platform? → A: macOS: ~/.config/hl/themes/*.{yaml,yml,toml,json}, Linux: ~/.config/hl/themes/*.{yaml,yml,toml,json}, Windows: %USERPROFILE%\AppData\Roaming\hl\themes\*.{yaml,yml,toml,json}
 
@@ -949,7 +949,7 @@ Theme authors using v1 can define semantic roles (like "warning", "error", "succ
 - Theme name suggestions use Jaro similarity algorithm with minimum relevance threshold of 0.75; suggestions are sorted by descending relevance score
 - Only `.yaml` extension is supported for YAML files; alternate `.yml` extension is NOT supported (users must rename `.yml` files to `.yaml`)
 - YAML anchors ($palette) are a convenience feature - themes can be written without them
-- The embedded configuration file (etc/defaults/config.yaml) specifies the default theme used when no theme is explicitly specified
+- The embedded configuration file (etc/defaults/config.toml) specifies the default theme used when no theme is explicitly specified
 - Theme loading failures (file not found, parse errors, invalid color values) cause the application to exit with error messages to stderr - no silent fallbacks
 - Theme listing shows names only, grouped by origin (stock/custom), in compact multi-column layout; no tags or paths shown in listing
 - V1 features (roles, includes, property-level merging) are additive - v0 behavior remains unchanged
