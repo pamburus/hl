@@ -267,6 +267,18 @@
 
 - Q: Should overlays be loaded and merged eagerly at startup, or can the loading be optimized? → A: Eager sequential loading (simple, deterministic, meets <50ms requirement)
 
+### Session 2026-01-01 (Twenty-First Pass)
+
+- Q: When resolving level-specific elements in v1, should base elements and level overrides be merged before or after role resolution? → A: Resolve base elements and level overrides separately first, then merge the resolved results; this ensures level-specific role references take priority over base element explicit properties
+
+- Q: What is the problem with merging before resolution? → A: If base element has `foreground="default"` and level override has `style="warning"`, merging first creates `{foreground="default", style="warning"}`, then resolution applies role properties first followed by explicit properties, causing the explicit `foreground="default"` to override the warning role's foreground color
+
+- Q: How does the new merge order fix the priority issue? → A: By resolving separately: base element `foreground="default"` resolves to no color, level override `style="warning"` resolves to yellow (from role), then merging gives priority to the override's resolved yellow color
+
+- Q: Does this change affect outer/inner element inheritance? → A: No, parent→inner inheritance already happens after role resolution per FR-041d; this change specifically addresses level-specific element overrides
+
+- Q: Should this resolution-before-merge strategy apply to all element merging or only level-specific overrides? → A: Only level-specific overrides; base element merging (step 1-2 in FR-041) still happens before resolution as it's part of building the element definition that will be resolved
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Theme File Loading and Validation (Priority: P1)
@@ -366,6 +378,14 @@ Theme authors can override element styles for specific log levels (trace, debug,
 4. **Given** a level override that defines only `level-inner` without defining `level`
    **When** the level is displayed
    **Then** `level-inner` uses its level-specific override, and nested styling falls back to base `level` (because base elements and level overrides are merged first, then nesting applies during rendering)
+
+5. **Given** a base theme with element `level` having explicit `foreground="default"` (v1)
+   **When** the `warning` level defines `level` with `style="warning"` where the warning role has `foreground=214`
+   **Then** warning-level logs display with foreground=214 from the role (level-specific role reference takes priority over base explicit property because base and level-specific elements are resolved separately before merging)
+
+6. **Given** a base theme with element `level-inner` having `style="level"` and `warning` level defining `level-inner` with `style=["level", "warning"]` (v1)
+   **When** base `level` has explicit `foreground=139` and warning role has `foreground=214`
+   **Then** warning-level `level-inner` displays with foreground=214 (level-specific role resolution happens first, then parent→inner inheritance applies, where inner's resolved role properties override parent's explicit properties)
 
 ---
 
@@ -624,7 +644,7 @@ Theme authors using v1 can define semantic roles (like "warning", "error", "succ
 
 - **FR-020a**: System MUST allow level-specific elements to be defined without corresponding base elements in the custom theme; level-specific elements merge with @base theme's base element following the resolution order in FR-041 (start with @base element, merge base element if present in custom theme, then merge level-specific element); this allows themes to define level-specific overrides without requiring base element definitions
 
-- **FR-020b**: System MUST merge base elements with level-specific elements using property-level override semantics: when both base element and level-specific element exist, level-specific properties win for defined properties (foreground, background, modes), while undefined properties in level-specific inherit from base; the merged result is used for rendering at that level; for example, if base `level` has foreground=#AAAAAA and modes=[italic], and `warning.level` has foreground=#FFA500, the warning level renders with foreground=#FFA500 (overridden) and modes=[italic] (inherited from base)
+- **FR-020b**: System MUST resolve base elements and level-specific elements separately, then merge the resolved results: (1) resolve base elements with role resolution to produce fully resolved styles, (2) resolve level-specific elements with role resolution to produce fully resolved styles, (3) merge the two resolved StylePacks where level-specific properties override base properties; this resolution-before-merge strategy ensures that level-specific role references take priority over base element explicit properties; for example, if base `level` has explicit `foreground="default"` and `warning.level` has `style="warning"` (where warning role resolves to foreground=#FFA500), the base resolves to no foreground color, the level-specific override resolves to foreground=#FFA500, and the merge produces foreground=#FFA500 (from the level-specific role), not "default" (from the base explicit property)
 
 - **FR-021**: System MUST apply parent→inner element inheritance after role resolution is complete (per FR-041d), so that parent-inner nesting works with fully resolved styles; the parent→inner inheritance happens during theme resolution (not rendering) but must occur after all role references have been resolved to concrete style properties
 
@@ -730,9 +750,9 @@ Theme authors using v1 can define semantic roles (like "warning", "error", "succ
 
 - **FR-040a**: System MUST validate role names in the `style` field during initial theme file parsing (fail-fast approach); if an element's `style` field references a role name that is not in the predefined role enum (default, primary, secondary, strong, muted, accent, accent-secondary, message, syntax, status, level, trace, debug, info, warning, error), the system exits with error immediately when parsing that file; this provides immediate feedback to theme authors and catches typos early, before any merge or resolution operations
 
-- **FR-041**: V1 themes MUST resolve element styles using the following order: 1) Start with element from @base theme (if defined), 2) Merge with base element from user theme (properties in base override @base), 3) Merge with level-specific element for the current level (level-specific properties override base), 4) If the merged element has a `style` field, resolve the role recursively (following role-to-role `style` references up to 64 levels depth), applying role properties to fill in undefined properties, 5) Apply explicit properties from the merged element (foreground, background, modes) which override role properties, 6) Apply parent→inner element inheritance by merging resolved parent element into resolved inner element (inner's resolved properties override parent's resolved properties)
+- **FR-041**: V1 themes MUST resolve element styles using the following order: 1) Start with element from @base theme (if defined), 2) Merge with base element from user theme (properties in base override @base), producing a "base element definition", 3) For non-level-specific resolution: resolve the base element definition (steps 4-6 below); For level-specific resolution: resolve base element definition and level-specific element definition separately, then merge the resolved results (per FR-041e), 4) If the element definition has a `style` field, resolve the role recursively (following role-to-role `style` references up to 64 levels depth), applying role properties to fill in undefined properties, 5) Apply explicit properties from the element definition (foreground, background, modes) which override role properties, 6) Apply parent→inner element inheritance by merging resolved parent element into resolved inner element (inner's resolved properties override parent's resolved properties)
 
-- **FR-041a**: V1 element merging (steps 1-3) follows standard property override semantics: later sources override earlier sources for defined properties; undefined properties are inherited from earlier sources
+- **FR-041a**: V1 element merging (steps 1-2) follows standard property override semantics: later sources override earlier sources for defined properties; undefined properties are inherited from earlier sources; note that level-specific elements are NOT merged at this stage but are resolved separately per FR-041e
 
 - **FR-041b**: V1 role resolution (step 4) fills in properties not explicitly defined in the merged element; if merged element has foreground defined, role's foreground is not applied; if merged element lacks foreground but role defines it, role's foreground is used
 
@@ -740,7 +760,9 @@ Theme authors using v1 can define semantic roles (like "warning", "error", "succ
 
 - **FR-041d**: V1 parent→inner inheritance (step 6) MUST occur AFTER role resolution (steps 4-5) is complete for both parent and inner elements; this ensures that role-based properties from the inner element's `style` field are fully resolved before being merged with parent element properties, maintaining correct priority where inner element's role-based properties override parent element's explicit properties (e.g., if parent `level` has explicit `foreground=139` and inner `level-inner` has `style=["level", "warning"]` where warning role defines `foreground=214`, the final result uses `foreground=214` from the inner element's resolved role, not `foreground=139` from the parent)
 
-- **FR-041e**: V1 complete resolution example for clarity: Given user theme `{version="1.0", styles.warning={foreground=214}, elements.level={foreground=139}}` and @base theme `{elements.level-inner={style="level"}, levels.warning.level-inner={style=["level","warning"]}}`, the warning level's `level-inner` resolves as follows: Step 1: Start with @base.elements.level-inner={style="level"}, Step 2: Merge user.elements.level-inner (undefined, no change), Step 3: Merge @base.levels.warning.level-inner={style=["level","warning"]}, result={style=["level","warning"]} with NO explicit foreground, Step 4-5: Resolve roles ["level","warning"] to get foreground=214 (from warning role), Step 6: Apply parent→inner inheritance by merging resolved parent element.level={foreground=139} into resolved level-inner={foreground=214}, since inner has explicit foreground=214 (from role resolution), it overrides parent's foreground=139, final result={foreground=214}; this demonstrates that role-based properties resolved in steps 4-5 become "explicit" for purposes of parent→inner merging in step 6
+- **FR-041e**: V1 level-specific override resolution MUST resolve base elements and level-specific overrides separately before merging; specifically: (1) resolve base elements with role resolution producing fully resolved styles, (2) resolve level-specific overrides with role resolution producing fully resolved styles, (3) merge the two resolved results where level-specific properties override base properties; this ensures level-specific role references take priority over base element explicit properties; for example, if base element has `foreground="default"` and level override has `style="warning"` (where warning role defines `foreground=214`), the base resolves to no foreground color, the override resolves to `foreground=214`, and the merge produces `foreground=214`
+
+- **FR-041f**: V1 complete resolution example for clarity: Given user theme `{version="1.0", styles.warning={foreground=214}, elements.level={foreground=139}}` and @base theme `{elements.level-inner={style="level"}, levels.warning.level-inner={style=["level","warning"]}}`, the warning level's `level-inner` resolves as follows: First resolve base elements.level-inner from @base and user theme (steps 1-2): merged result={style="level"} (no explicit properties from user theme); then resolve warning-specific override: @base.levels.warning.level-inner={style=["level","warning"]} resolves to foreground=214 (from warning role); merge base resolved and override resolved: override's foreground=214 wins; then apply parent→inner inheritance (step 6) by merging resolved parent element.level={foreground=139} into resolved level-inner={foreground=214}, since inner has foreground=214 (from level-specific role resolution), it overrides parent's foreground=139, final result={foreground=214}; this demonstrates that level-specific role references are resolved before merging with base elements, allowing them to take priority
 
 - **FR-042**: V1 `@base` theme MUST define reasonable defaults for all roles, with the `default` role serving as the implicit base for all other roles that don't specify a `style` field, and specific roles using the `style` field to reference more generic ones (e.g., `warning: {style: "primary", ...}` where `primary` is also defined in `@base`)
 
