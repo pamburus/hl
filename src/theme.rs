@@ -50,6 +50,10 @@ impl Theme {
         Ok(themecfg::Theme::load(dirs, name)?.into())
     }
 
+    pub fn load_with_overlays(dirs: &AppDirs, name: &str, overlays: &[impl AsRef<str>]) -> Result<Self> {
+        Ok(themecfg::Theme::load_with_overlays(dirs, name, overlays)?.into())
+    }
+
     pub fn embedded(name: &str) -> Result<Self> {
         Ok(themecfg::Theme::embedded(name)?.into())
     }

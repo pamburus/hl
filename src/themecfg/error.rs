@@ -20,6 +20,10 @@ pub enum Error {
     #[error("theme {name} not found", name=.name.hlq())]
     ThemeNotFound { name: Arc<str>, suggestions: Suggestions },
 
+    /// Theme overlay file not found (neither custom nor embedded).
+    #[error("theme overlay {name} not found", name=.name.hlq())]
+    ThemeOverlayNotFound { name: Arc<str>, suggestions: Suggestions },
+
     /// Unsupported file type for theme.
     #[error("failed to load theme {path}: unsupported file type {extension}", path=.path.hlq(), extension=.extension.hlq())]
     UnsupportedFileType { path: Arc<str>, extension: Arc<str> },

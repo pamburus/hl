@@ -17,6 +17,7 @@ impl AppInfoProvider for CustomAppInfo {
     fn usage_suggestion(&self, request: UsageRequest) -> Option<UsageResponse> {
         match request {
             UsageRequest::ListThemes => Some(("list-themes".into(), self.suggestion_arg.into())),
+            UsageRequest::ListThemeOverlays => Some(("list-themes=overlay".into(), self.suggestion_arg.into())),
         }
     }
 }

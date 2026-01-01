@@ -635,6 +635,22 @@ See other [screenshots](https://github.com/pamburus/hl-extra/blob/d6f41877060b79
 * Using environment variable, i.e. `HL_THEME=classic`, overrides the value specified in configuration file.
 * Using command-line argument, i.e. `--theme classic`, overrides all other values.
 
+#### Theme overlays
+
+Theme overlays allow you to apply multiple theme modifications on top of your base theme and main configured theme, enabling compositional theming. Overlays are merged in order: `@base` → configured theme → overlays (in list order).
+
+* Configure overlays in your configuration file using the `theme-overlays` setting:
+
+    ```yaml
+    theme: "uni"
+    theme-overlays: ["@accent-italic"]
+    ```
+
+* Overlays are regular theme files that can customize specific aspects without replacing the entire theme
+* Overlays are applied in the specified order, allowing fine-grained control over theme composition
+* Empty array `[]` or omitting `theme-overlays` means no overlays are applied
+* Overlay themes are typically tagged with `overlay` and excluded from default theme listings (use `--list-themes=overlay` to view them)
+
 #### Selecting themes with preview
 
 To select themes with preview [fzf](https://github.com/junegunn/fzf) tool can be used like this:

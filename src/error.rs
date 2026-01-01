@@ -138,6 +138,12 @@ impl Error {
                     usage(app, UsageRequest::ListThemes).map(|usage| format!("run {usage} to list available themes"));
                 Tips { did_you_mean, usage }
             }
+            Error::Theme(themecfg::Error::ThemeOverlayNotFound { suggestions, .. }) => {
+                let did_you_mean = did_you_mean(suggestions);
+                let usage = usage(app, UsageRequest::ListThemeOverlays)
+                    .map(|usage| format!("run {usage} to list available theme overlays"));
+                Tips { did_you_mean, usage }
+            }
             Error::LevelParseError(e) => {
                 let did_you_mean = did_you_mean(&e.suggestions);
                 Tips {
@@ -250,6 +256,7 @@ pub trait AppInfoProvider {
 
 pub enum UsageRequest {
     ListThemes,
+    ListThemeOverlays,
 }
 
 pub type UsageResponse = (Cow<'static, str>, Cow<'static, str>);

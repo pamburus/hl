@@ -87,6 +87,41 @@ impl Theme {
     /// - File path (for custom themes)
     /// - Specific error details (parse error, unsupported version, recursion, etc.)
     pub fn load(dirs: &AppDirs, name: &str) -> Result<Self> {
+        Self::load_with_overlays(dirs, name, &[] as &[&str])
+    }
+
+    /// Load and resolve a theme with overlays applied.
+    ///
+    /// This method loads a theme and applies an ordered list of overlay themes on top of it.
+    /// The merge order is: `@base` → configured theme → theme overlays (in list order).
+    ///
+    /// # Arguments
+    ///
+    /// * `dirs` - Application directories configuration
+    /// * `name` - Main theme name (without file extension)
+    /// * `overlays` - Ordered list of overlay theme names to merge on top
+    ///
+    /// # Examples
+    ///
+    /// ```ignore
+    /// // Load theme with overlays
+    /// let theme = Theme::load_with_overlays(
+    ///     &app_dirs,
+    ///     "monokai",
+    ///     &["@dark", "@compact"]
+    /// )?;
+    /// ```
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - Main theme or any overlay theme cannot be found
+    /// - Any theme file cannot be parsed (invalid YAML/TOML/JSON)
+    /// - Theme version is unsupported (e.g., future version)
+    /// - Style resolution fails (e.g., circular role inheritance)
+    ///
+    /// Error messages include context about which theme (main or overlay) failed.
+    pub fn load_with_overlays(dirs: &AppDirs, name: &str, overlays: &[impl AsRef<str>]) -> Result<Self> {
         let theme = Self::load_raw(dirs, name)?;
 
         let theme = if theme.tags.intersects(Tag::Base | Tag::Overlay) {
@@ -95,7 +130,17 @@ impl Theme {
             RawTheme::base().clone().merged(theme)
         };
 
-        // .merged(Self::load_raw(dirs, "@accent-italic")?)
+        // Apply overlays in order
+        let mut theme = theme;
+        for name in overlays {
+            let name = name.as_ref();
+            let overlay = Self::load_raw(dirs, name).map_err(|e| match e {
+                Error::ThemeNotFound { name, suggestions } => Error::ThemeOverlayNotFound { name, suggestions },
+                other => other,
+            })?;
+            theme = theme.merged(overlay);
+        }
+
         theme.resolve()
     }
 

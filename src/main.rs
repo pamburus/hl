@@ -160,7 +160,7 @@ fn run() -> Result<()> {
 
     let theme = if use_colors {
         let theme = &opt.theme;
-        Theme::load(&app_dirs, theme)?
+        Theme::load_with_overlays(&app_dirs, theme, &settings.theme_overlays)?
     } else {
         Theme::none()
     };
@@ -412,6 +412,7 @@ impl AppInfoProvider for AppInfo {
     fn usage_suggestion(&self, request: UsageRequest) -> Option<UsageResponse> {
         match request {
             UsageRequest::ListThemes => Some(("--list-themes".into(), "".into())),
+            UsageRequest::ListThemeOverlays => Some(("--list-themes=overlay".into(), "".into())),
         }
     }
 }

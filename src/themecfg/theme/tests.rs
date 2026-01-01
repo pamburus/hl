@@ -20,6 +20,36 @@ fn test_load() {
 }
 
 #[test]
+fn test_load_with_overlays() {
+    let dirs = dirs();
+
+    // Test loading with valid overlay
+    let theme = Theme::load_with_overlays(&dirs, "test", &["@accent-italic"]).unwrap();
+    assert_ne!(theme.elements.len(), 0);
+
+    // Test loading with empty overlays
+    let theme = Theme::load_with_overlays(&dirs, "test", &[] as &[&str]).unwrap();
+    assert_ne!(theme.elements.len(), 0);
+
+    // Test loading with multiple overlays (including duplicates)
+    let theme = Theme::load_with_overlays(&dirs, "test", &["@accent-italic", "@accent-italic"]).unwrap();
+    assert_ne!(theme.elements.len(), 0);
+
+    // Test loading with non-existent overlay
+    let result = Theme::load_with_overlays(&dirs, "test", &["@nonexistent"]);
+    assert!(result.is_err());
+    if let Err(Error::ThemeNotFound { name, .. }) = result {
+        assert!(
+            name.contains("overlay"),
+            "Error should mention it's an overlay: {}",
+            name
+        );
+    } else {
+        panic!("Expected ThemeNotFound error");
+    }
+}
+
+#[test]
 fn test_v0_input_element_inheritance() {
     let theme = theme("v0-color-formats");
 

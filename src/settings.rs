@@ -44,6 +44,8 @@ pub struct Settings {
     pub time_zone: Tz,
     pub formatting: Formatting,
     pub theme: String,
+    #[serde(default)]
+    pub theme_overlays: Vec<String>,
     #[serde(deserialize_with = "enumset_serde::deserialize")]
     pub input_info: InputInfoSet,
     pub ascii: AsciiModeOpt,
