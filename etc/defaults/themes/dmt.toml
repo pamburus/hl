@@ -18,6 +18,9 @@ foreground = 8
 modes = ["-bold"]
 foreground = "default"
 
+[styles.syntax]
+foreground = 174
+
 [styles.accent]
 foreground = 117
 

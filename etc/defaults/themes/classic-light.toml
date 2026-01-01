@@ -38,8 +38,10 @@ foreground = "bright-red"
 [elements]
 [elements.caller]
 style = "secondary"
+modes = ["-italic"]
 
 [elements.level]
+foreground = "default"
 
 [elements.number]
 foreground = "cyan"

@@ -858,6 +858,7 @@ fn test_v1_level_override_foreground() {
         theme.elements[&Element::Level],
         Style {
             foreground: Some(Color::Palette(139)),
+            modes: Mode::Faint.into(),
             ..Default::default()
         }
     );
@@ -875,6 +876,7 @@ fn test_v1_level_override_foreground() {
         theme.levels[&Level::Warning][&Element::Level],
         Style {
             foreground: Some(Color::Palette(139)),
+            modes: Mode::Faint.into(),
             ..Default::default()
         }
     );

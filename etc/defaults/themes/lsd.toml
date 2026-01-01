@@ -41,6 +41,7 @@ foreground = "bright-red"
 #
 [elements]
 [elements.field]
+foreground = "default"
 
 [elements.key]
 style = "accent"
@@ -58,6 +59,10 @@ foreground = "yellow"
 #
 # Levels define styles for different log levels.
 #
-[levels]
-warning = { time.foreground = "yellow", message = {  } }
-error = { time.foreground = "red", message = {  } }
+[levels.warning]
+time.foreground = "yellow"
+message.style = "message"
+
+[levels.error]
+time.foreground = "red"
+message.style = "message"

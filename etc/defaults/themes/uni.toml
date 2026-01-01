@@ -12,6 +12,7 @@ modes = ["-faint"]
 foreground = "bright-blue"
 
 [styles.trace]
+style = "default"
 foreground = "bright-black"
 
 [styles.debug]

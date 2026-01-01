@@ -89,7 +89,7 @@ impl Theme {
         RawTheme::base()
             .clone()
             .merged(Self::load_raw(dirs, name)?)
-            .merged(Self::load_raw(dirs, "@accent-italic")?)
+            // .merged(Self::load_raw(dirs, "@accent-italic")?)
             .resolve()
     }
 

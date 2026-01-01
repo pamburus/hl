@@ -25,10 +25,12 @@ foreground = "#abb2bf"
 foreground = "#61afef"
 
 [styles.accent-secondary]
+style = "secondary"
 foreground = "#476a8c"
 
 [styles.syntax]
 modes = ["bold"]
+foreground = "default"
 
 [styles.trace]
 foreground = "#666b76"
@@ -51,7 +53,9 @@ foreground = "#e06c75"
 [elements]
 [elements.field]
 style = "accent-secondary"
-modes = ["-italic"]
+
+[elements.level]
+style = "accent-secondary"
 
 [elements.number]
 foreground = "#98c379"

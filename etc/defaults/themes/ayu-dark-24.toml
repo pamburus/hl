@@ -26,6 +26,7 @@ foreground = "#3f5d7f"
 
 [styles.syntax]
 modes = ["bold"]
+foreground = "default"
 
 [styles.debug]
 foreground = "#d2a6ff"
