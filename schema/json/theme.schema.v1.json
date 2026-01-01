@@ -45,7 +45,7 @@
   "$defs": {
     "tag": {
       "type": "string",
-      "enum": ["dark", "light", "16color", "256color", "truecolor"]
+      "enum": ["dark", "light", "16color", "256color", "truecolor", "overlay"]
     },
     "mode": {
       "type": "string",
