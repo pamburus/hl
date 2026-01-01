@@ -69,5 +69,10 @@ foreground = 136
 # Levels define styles for different log levels.
 #
 [levels]
-warning = { time.style = "warning", message.foreground = "yellow" }
-error = { time.style = "error", message.foreground = "bright-red" }
+[levels.warning]
+time.style = "warning"
+message.foreground = "yellow"
+
+[levels.error]
+time.style = "error"
+message.foreground = "bright-red"

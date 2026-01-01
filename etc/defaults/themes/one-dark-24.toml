@@ -67,6 +67,16 @@ foreground = "#e5c07b"
 foreground = "#e06c75"
 
 #
+# Levels define styles for different log levels.
+#
+[levels]
+[levels.warning]
+message.style = ["message", "warning"]
+
+[levels.error]
+message.style = ["message", "error"]
+
+#
 # Indicators define styles for various status indicators.
 #
 [indicators.sync.failed.inner.style]

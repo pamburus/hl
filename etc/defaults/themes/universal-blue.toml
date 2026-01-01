@@ -47,19 +47,13 @@ foreground = "bright-red"
 style = ["level", "warning"]
 modes = ["reverse"]
 
-[levels.warning.message]
-style = ["message"]
-
 [levels.error.time]
-style = ["error"]
+style = ["secondary", "error"]
 modes = ["-faint"]
 
 [levels.error.level]
 style = ["level", "error"]
 modes = ["reverse"]
-
-[levels.error.message]
-style = ["message"]
 
 #
 # Indicators define styles for various status indicators.

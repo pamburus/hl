@@ -59,3 +59,13 @@ foreground = 197
 
 [elements.null]
 foreground = 197
+
+#
+# Levels define styles for different log levels.
+#
+[levels]
+[levels.warning]
+message.style = ["message", "warning"]
+
+[levels.error]
+message.style = ["message", "error"]

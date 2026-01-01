@@ -62,5 +62,9 @@ foreground = "#ed9366"
 # Levels define styles for different log levels.
 #
 [levels]
+[levels.warning.message]
+style = ["message", "warning"]
+
 [levels.error.message]
+style = ["message", "error"]
 foreground = "#ff7383"

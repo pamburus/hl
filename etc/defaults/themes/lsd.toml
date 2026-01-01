@@ -61,8 +61,6 @@ foreground = "yellow"
 #
 [levels.warning]
 time.foreground = "yellow"
-message.style = "message"
 
 [levels.error]
 time.foreground = "red"
-message.style = "message"

@@ -50,11 +50,9 @@ foreground = "red"
 # Levels define styles for different log levels.
 #
 [levels]
-[levels.warning.time]
-style = "warning"
+[levels.warning]
+time.style = "warning"
 
-[levels.warning.message]
-style = "message"
-
-[levels.error.time]
-style = "error"
+[levels.error]
+time.style = "error"
+message.style = ["message", "error"]

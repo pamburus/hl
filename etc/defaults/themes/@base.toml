@@ -48,8 +48,8 @@ null = { style = "value" }
 trace = { level-inner = { style = ["level", "trace"] } }
 debug = { level-inner = { style = ["level", "debug"] } }
 info = { level-inner = { style = ["level", "info"] } }
-warning = { level-inner = { style = ["level", "warning"] }, message = { style = ["message", "warning"] } }
-error = { level-inner = { style = ["level", "error"] }, message = { style = ["message", "error"] } }
+warning = { level-inner = { style = ["level", "warning"] } }
+error = { level-inner = { style = ["level", "error"] } }
 
 # Indicators define styles for various status indicators.
 [indicators]

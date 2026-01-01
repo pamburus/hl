@@ -60,12 +60,6 @@ foreground = "yellow"
 style = "warning"
 modes = ["reverse"]
 
-[levels.warning.message]
-style = "message"
-
 [levels.error.level]
 style = "error"
 modes = ["reverse"]
-
-[levels.error.message]
-style = "message"
