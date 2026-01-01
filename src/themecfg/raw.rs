@@ -3,9 +3,8 @@ use std::sync::{Arc, LazyLock};
 
 // third-party imports
 use derive_more::{Deref, DerefMut};
-use enumset::EnumSet;
 
-use crate::themecfg::{Merge, Version};
+use crate::themecfg::Merge;
 
 // relative imports
 use super::{Assets, Error, MergeFlags, MergeOptions, Result, Tag, Theme, ThemeInfo, ThemeOrigin, ThemeSource, v1};
@@ -35,13 +34,11 @@ impl RawTheme {
         }
     }
 
-    /// Finalize the theme by merging it with the base theme.
-    ///
-    /// This ensures that all required styles are present.
-    pub fn finalized(self) -> Self {
-        let version = self.version;
-        let tags = self.tags.clone();
-        BASE.clone().merged(self).tags(tags).version(version)
+    /// Access the base theme.
+    ////
+    /// The base theme provides default styles for all elements.
+    pub fn base() -> &'static RawTheme {
+        &BASE
     }
 
     /// Resolve the theme to a fully resolved [`Theme`].
@@ -69,22 +66,14 @@ impl RawTheme {
     pub fn into_inner(self) -> v1::Theme {
         self.inner
     }
-
-    fn tags(mut self, tags: EnumSet<Tag>) -> Self {
-        self.inner.tags = tags;
-        self
-    }
-
-    fn version(mut self, version: Version) -> Self {
-        self.inner.version = version;
-        self
-    }
 }
 
 impl Merge for RawTheme {
     fn merge(&mut self, other: Self) {
+        if !other.inner.tags.contains(Tag::Overlay) {
+            self.info = other.info;
+        }
         self.inner.merge(other.inner);
-        self.info = other.info;
     }
 }
 

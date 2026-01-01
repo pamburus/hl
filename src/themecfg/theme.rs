@@ -86,9 +86,10 @@ impl Theme {
     /// - File path (for custom themes)
     /// - Specific error details (parse error, unsupported version, recursion, etc.)
     pub fn load(dirs: &AppDirs, name: &str) -> Result<Self> {
-        Self::load_raw(dirs, name)?
+        RawTheme::base()
+            .clone()
+            .merged(Self::load_raw(dirs, name)?)
             .merged(Self::load_raw(dirs, "@accent-italic")?)
-            .finalized()
             .resolve()
     }
 
@@ -281,7 +282,7 @@ impl Theme {
     pub(super) fn embedded_names() -> impl IntoIterator<Item = Arc<str>> {
         Assets::iter().filter_map(|a| {
             Self::strip_known_extension(&a)
-                .filter(|&n| n.starts_with('@'))
+                .filter(|&n| !n.starts_with('@'))
                 .map(|n| n.into())
         })
     }

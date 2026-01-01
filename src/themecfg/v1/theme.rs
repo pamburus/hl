@@ -188,6 +188,11 @@ impl Merge for Theme {
         }
 
         self.indicators.merge(other.indicators, flags);
+        if !other.tags.contains(Tag::Overlay) {
+            self.version = other.version;
+            self.schema = other.schema;
+            self.tags = other.tags;
+        }
     }
 }
 
