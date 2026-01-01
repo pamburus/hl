@@ -130,15 +130,15 @@ impl Theme {
     ///
     /// Note: Style resolution errors (e.g., circular inheritance) will only
     /// occur when calling [`RawTheme::resolve()`], not during `load_raw()`.
-    pub fn load_raw(app_dirs: &AppDirs, name: &str) -> Result<RawTheme> {
-        let default_theme = Self::load_embedded::<Assets>(BASE)?;
+    pub fn load_raw(dirs: &AppDirs, name: &str) -> Result<RawTheme> {
+        let base = Self::load_embedded::<Assets>(BASE)?;
 
-        let theme = match Self::load_from(&Self::themes_dir(app_dirs), name) {
+        let theme = match Self::load_from(&Self::themes_dir(dirs), name) {
             Ok(v) => Ok(v),
             Err(Error::ThemeNotFound { .. }) => match Self::load_embedded::<Assets>(name) {
                 Ok(v) => Ok(v),
                 Err(Error::ThemeNotFound { name, mut suggestions }) => {
-                    if let Ok(variants) = Self::custom_names(app_dirs) {
+                    if let Ok(variants) = Self::custom_names(dirs) {
                         let variants = variants.into_iter().filter_map(|v| v.ok());
                         suggestions = suggestions.merge(Suggestions::new(&name, variants));
                     }
@@ -149,7 +149,7 @@ impl Theme {
             Err(e) => Err(e),
         }?;
 
-        Ok(default_theme.merged(theme))
+        Ok(base.merged(theme))
     }
 
     pub fn embedded(name: &str) -> Result<Self> {

@@ -60,53 +60,6 @@ impl Default for Theme {
 }
 
 impl Theme {
-    pub fn merge(&mut self, other: Self) {
-        let flags = other.merge_options();
-        self.version = other.version;
-        self.styles.merge(other.styles);
-
-        // Apply blocking rules only for version 0 themes (backward compatibility)
-        if flags.contains(MergeFlag::ReplaceHierarchies) {
-            // Apply blocking rule: remove all elements from self that have any ancestor
-            // element defined in other.elements (including direct parent and all grand-parents)
-            self.elements.retain(|element, _| {
-                // Check if any ancestor of this element is defined in other.elements
-                let mut current = *element;
-                while let Some(parent) = current.outer() {
-                    if other.elements.contains_key(&parent) {
-                        return false; // This element should be removed
-                    }
-                    current = parent;
-                }
-                true // Keep this element
-            });
-            // Block entire level sections if child theme defines any element for that level
-            for level in other.levels.keys() {
-                self.levels.remove(level);
-            }
-        }
-
-        // For both v0 and v1, elements defined in child theme replace elements from parent theme
-        // Property-level merge happens later when merging elements with per-level styles
-        self.elements.extend(other.elements);
-
-        // For both v0 and v1, level-specific elements defined in child theme replace from parent
-        for (level, pack) in other.levels {
-            self.levels
-                .entry(level)
-                .and_modify(|existing| existing.extend(pack.clone()))
-                .or_insert(pack);
-        }
-
-        self.tags = other.tags;
-        self.indicators.merge(other.indicators, flags);
-    }
-
-    pub fn merged(mut self, other: Self) -> Self {
-        self.merge(other);
-        self
-    }
-
     /// Resolves all styles in this theme and returns a resolved Theme.
     ///
     /// This method:
@@ -186,6 +139,61 @@ impl MergeOptions for Theme {
 
     fn merge_options(&self) -> Self::Output {
         self.version.merge_options()
+    }
+}
+
+impl Merge for Theme {
+    fn merge(&mut self, other: Self) {
+        let flags = other.merge_options();
+        self.version = other.version;
+        self.styles.merge(other.styles);
+
+        // Apply blocking rules only for version 0 themes (backward compatibility)
+        if flags.contains(MergeFlag::ReplaceHierarchies) {
+            // Apply blocking rule: remove all elements from self that have any ancestor
+            // element defined in other.elements (including direct parent and all grand-parents)
+            self.elements.retain(|element, _| {
+                // Check if any ancestor of this element is defined in other.elements
+                let mut current = *element;
+                while let Some(parent) = current.outer() {
+                    if other.elements.contains_key(&parent) {
+                        return false; // This element should be removed
+                    }
+                    current = parent;
+                }
+                true // Keep this element
+            });
+            // Block entire level sections if child theme defines any element for that level
+            for level in other.levels.keys() {
+                self.levels.remove(level);
+            }
+        }
+
+        // For both v0 and v1, elements defined in child theme replace elements from parent theme
+        // Property-level merge happens later when merging elements with per-level styles
+        self.elements.extend(other.elements);
+
+        // For both v0 and v1, level-specific elements defined in child theme replace from parent
+        for (level, pack) in other.levels {
+            self.levels
+                .entry(level)
+                .and_modify(|existing| existing.extend(pack.clone()))
+                .or_insert(pack);
+        }
+
+        self.tags = other.tags;
+        self.indicators.merge(other.indicators, flags);
+    }
+}
+
+impl<T> Merge<T> for Theme
+where
+    T: IntoIterator<Item = Theme>,
+{
+    fn merge(&mut self, other: T) {
+        for theme in other {
+            self.merge(theme);
+        }
     }
 }
 
