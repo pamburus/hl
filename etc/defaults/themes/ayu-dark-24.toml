@@ -11,9 +11,11 @@ tags = ["dark", "truecolor"]
 foreground = "#bfbdb6"
 
 [styles.secondary]
+modes = ["-faint"]
 foreground = "#565b66"
 
 [styles.strong]
+modes = ["-bold"]
 foreground = "#95e6cb"
 
 [styles.accent]
@@ -41,11 +43,9 @@ foreground = "#39bae6"
 # Elements define specific styles for different log elements.
 #
 [elements]
-[elements.logger]
-style = "accent-secondary"
-
 [elements.level]
 style = "accent-secondary"
+modes = ["-italic"]
 
 [elements.field]
 style = "accent-secondary"

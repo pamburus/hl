@@ -11,11 +11,12 @@ tags = ["light", "truecolor"]
 foreground = "#313641"
 
 [styles.secondary]
+modes = ["-faint"]
 foreground = "#778899"
 
 [styles.strong]
-foreground = "#262a33"
 modes = ["bold"]
+foreground = "#262a33"
 
 [styles.accent]
 foreground = "#4169e1"

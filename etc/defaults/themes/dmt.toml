@@ -11,18 +11,15 @@ tags = ["dark", "256color"]
 foreground = 36
 
 [styles.secondary]
+modes = ["-faint"]
 foreground = 8
 
 [styles.strong]
-foreground = 174
-
-[styles.message]
+modes = ["-bold"]
+foreground = "default"
 
 [styles.accent]
 foreground = 117
-
-[styles.accent-secondary]
-style = "secondary"
 
 [styles.trace]
 foreground = "bright-black"
@@ -53,7 +50,7 @@ foreground = 139
 foreground = 60
 
 [elements.key]
-style = "accent"
+style = "key"
 modes = ["underline"]
 
 [elements.number]

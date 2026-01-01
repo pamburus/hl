@@ -8,10 +8,8 @@ tags = ["dark", "light", "16color"]
 #
 [styles]
 [styles.accent]
+modes = ["-faint"]
 foreground = "bright-blue"
-
-[styles.accent-secondary]
-style = "secondary"
 
 [styles.trace]
 foreground = "bright-black"
@@ -37,6 +35,10 @@ modes = ["faint"]
 
 [elements.level-inner]
 modes = ["-faint", "bold"]
+
+[elements.logger]
+style = ["accent", "secondary"]
+foreground = "default"
 
 [elements.number]
 foreground = "green"

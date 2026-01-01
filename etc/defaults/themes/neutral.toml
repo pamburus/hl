@@ -8,6 +8,7 @@ tags = ["dark", "light", "16color"]
 #
 [styles]
 [styles.debug]
+foreground = "default"
 
 [styles.info]
 foreground = "green"

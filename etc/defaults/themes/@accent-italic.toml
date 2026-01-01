@@ -5,7 +5,4 @@ tags = ["overlay"]
 
 # Styles define general purpose styles used throughout the theme.
 [styles.accent]
-modes = ["italic", "-underline"]
-
-[elements.key]
-modes = ["-underline"]
+modes = ["italic"]

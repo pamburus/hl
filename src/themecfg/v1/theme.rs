@@ -152,7 +152,7 @@ impl Merge for Theme {
             return;
         }
 
-        self.styles.merge(other.styles, flags | MergeFlag::ReplaceElements);
+        self.styles.merge(other.styles, flags);
 
         // Apply blocking rules only for version 0 themes (backward compatibility)
         if flags.contains(MergeFlag::ReplaceHierarchies) {

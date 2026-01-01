@@ -8,10 +8,11 @@ tags = ["dark", "light", "16color"]
 #
 [styles]
 [styles.accent]
+modes = ["-faint"]
 foreground = "green"
 
 [styles.accent-secondary]
-modes = ["faint"]
+foreground = "default"
 
 [styles.debug]
 foreground = "bright-magenta"

@@ -7,19 +7,15 @@ tags = ["dark", "light", "16color"]
 # Styles define general purpose styles used throughout the theme.
 #
 [styles]
-[styles.primary]
-
 [styles.secondary]
+modes = ["-faint"]
 foreground = "bright-black"
 
 [styles.strong]
-style = "primary"
+modes = ["-bold"]
 
 [styles.accent]
 foreground = "green"
-
-[styles.accent-secondary]
-style = "secondary"
 
 [styles.debug]
 foreground = "magenta"

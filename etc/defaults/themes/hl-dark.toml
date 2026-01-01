@@ -11,17 +11,19 @@ tags = ["dark", "256color"]
 foreground = 116
 
 [styles.secondary]
+modes = ["-faint"]
 foreground = 30
 
 [styles.strong]
+modes = ["-bold"]
 foreground = 195
 
 [styles.accent]
 foreground = 111
 
 [styles.syntax]
-foreground = 255
 modes = ["bold"]
+foreground = 255
 
 [styles.debug]
 foreground = 170
