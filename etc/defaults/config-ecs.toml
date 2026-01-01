@@ -1,0 +1,25 @@
+#:schema https://raw.githubusercontent.com/pamburus/hl/d6d70f5f83fd18280d48ac1eac4c14d2097bdfdf/schema/json/config.schema.json
+
+# Settings for fields processing.
+[fields]
+ignore = ["_*"]
+hide = ["log"]
+
+# Configuration of the predefined set of fields.
+[fields.predefined]
+time.names = ["@timestamp"]
+logger.names = ["log.logger"]
+message.names = ["message"]
+caller.names = ["log.origin.function"]
+caller-file.names = ["log.origin.file.name"]
+caller-line.names = ["log.origin.file.line"]
+
+[[fields.predefined.level.variants]]
+names = ["log.level"]
+
+[fields.predefined.level.variants.values]
+error = ["error", "err", "fatal", "critical", "panic", "e"]
+warning = ["warning", "warn", "wrn", "w"]
+info = ["info", "inf", "i", "informational"]
+debug = ["debug", "dbg", "d"]
+trace = ["trace", "trc", "t"]

@@ -34,12 +34,6 @@ jobs:
       - name: Setup Rust cache
         uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5 # v2.8.2
 
-      - name: Validate YAML configs
-        uses: cardinalby/schema-validator-action@2166123eb256fa40baef7e22ab1379708425efc7 # v3.1.1
-        with:
-          file: "etc/defaults/config*.yaml"
-          schema: "schema/json/config.schema.json"
-
       - name: Validate YAML themes
         uses: cardinalby/schema-validator-action@2166123eb256fa40baef7e22ab1379708425efc7 # v3.1.1
         with:

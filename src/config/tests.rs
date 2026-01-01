@@ -11,7 +11,7 @@ fn test_default() {
 
 #[test]
 fn test_load_k8s() {
-    let settings = super::at(["etc/defaults/config-k8s.yaml"]).load().unwrap();
+    let settings = super::at(["etc/defaults/config-k8s.toml"]).load().unwrap();
     assert_eq!(settings.fields.predefined.time.0.names, &["ts"]);
     assert_eq!(settings.fields.predefined.message.0.names, &["msg"]);
     assert_eq!(settings.fields.predefined.level.variants.len(), 2);

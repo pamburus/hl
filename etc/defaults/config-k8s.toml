@@ -1,0 +1,21 @@
+#:schema https://raw.githubusercontent.com/pamburus/hl/d6d70f5f83fd18280d48ac1eac4c14d2097bdfdf/schema/json/config.schema.json
+
+# Configuration of the predefined set of fields.
+[fields.predefined]
+time.names = ["ts"]
+logger.names = []
+message.names = ["msg"]
+caller.names = ["caller"]
+
+[[fields.predefined.level.variants]]
+names = ["v"]
+
+[fields.predefined.level.variants.values]
+warning = [0]
+info = [1]
+debug = [2, 3]
+trace = [4]
+
+[[fields.predefined.level.variants]]
+names = ["err"]
+level = "error"

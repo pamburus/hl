@@ -16,7 +16,7 @@ fn test_default_settings() {
 
 #[test]
 fn test_load_settings_k8s() {
-    let settings = Settings::load([SourceFile::new("etc/defaults/config-k8s.yaml").into()]).unwrap();
+    let settings = Settings::load([SourceFile::new("etc/defaults/config-k8s.toml").into()]).unwrap();
     assert_eq!(
         settings.fields.predefined.time,
         TimeField(Field {
