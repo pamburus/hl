@@ -241,7 +241,7 @@
         "message": {
           "type": "object",
           "properties": {
-            "style": {
+            "format": {
               "type": "string",
               "enum": [
                 "auto-quoted",
