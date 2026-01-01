@@ -1,4 +1,4 @@
-#:schema https://raw.githubusercontent.com/pamburus/hl/847e8a510aff63e625a95d565972b461c1ca5175/schema/json/theme.schema.v1.json
+#:schema https://raw.githubusercontent.com/pamburus/hl/42eb24f79f492b02278057e5d7f3cb3bb2e89b9e/schema/json/theme.schema.v1.json
 
 version = "1.0"
 tags = ["dark", "256color"]
