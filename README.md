@@ -645,17 +645,17 @@ hl --list-themes | fzf --color='bg+:23,gutter:-1,pointer:210' --highlight-line -
 
 #### Custom themes
 
-For complete theme configuration reference, see **[Theme Configuration Guide](doc/theme.md)**.
+For complete theme configuration reference, see __[Theme Configuration Guide](doc/theme.md)__.
 
 * Custom themes are automatically loaded when found in a predefined platform-specific location.
 
-    | OS      | Location                                                   |
-    | ------- | ---------------------------------------------------------- |
-    | macOS   | ~/.config/hl/themes/*.{yaml,yml,toml,json}                 |
-    | Linux   | ~/.config/hl/themes/*.{yaml,yml,toml,json}                 |
-    | Windows | %USERPROFILE%\AppData\Roaming\hl\themes\*.{yaml,yml,toml,json} |
+    | OS      | Location                                                             |
+    | ------- | -------------------------------------------------------------------- |
+    | macOS   | ~/.config/hl/themes/*.{yaml,yml,toml,json}                           |
+    | Linux   | ~/.config/hl/themes/*.{yaml,yml,toml,json}                           |
+    | Windows | %USERPROFILE%\AppData\Roaming\hl\themes\*.{yaml,yml,toml,json}       |
 
-* **Structure**
+* __Structure__
   * `version` (required): Must be `"1.0"`
   * `tags` (optional): Theme classification (`dark`, `light`, `16color`, `256color`, `truecolor`)
   * `styles` (optional): Reusable role-based styles that can inherit from each other
@@ -663,7 +663,7 @@ For complete theme configuration reference, see **[Theme Configuration Guide](do
   * `levels` (optional): Per-level overrides for elements
   * `indicators` (optional): Sync indicator styling for `--follow` mode
 
-* **Example**
+* __Example__
 
     ```toml
     version = "1.0"
@@ -692,28 +692,28 @@ For complete theme configuration reference, see **[Theme Configuration Guide](do
     message = { style = ["primary", "error"] }
     ```
 
-* **Roles** (predefined): `default`, `primary`, `secondary`, `strong`, `muted`, `accent`, `accent-secondary`, `message`, `syntax`, `status`, `key`, `value`, `level`, `trace`, `debug`, `info`, `warning`, `error`
+* __Roles__ (predefined): `default`, `primary`, `secondary`, `strong`, `muted`, `accent`, `accent-secondary`, `message`, `syntax`, `status`, `key`, `value`, `level`, `trace`, `debug`, `info`, `warning`, `error`
 
-* **Elements** (predefined): `input`, `input-number`, `input-number-inner`, `input-name`, `input-name-inner`, `time`, `level`, `level-inner`, `logger`, `logger-inner`, `caller`, `caller-inner`, `message`, `message-delimiter`, `field`, `key`, `array`, `object`, `string`, `number`, `boolean`, `boolean-true`, `boolean-false`, `null`, `ellipsis`
+* __Elements__ (predefined): `input`, `input-number`, `input-number-inner`, `input-name`, `input-name-inner`, `time`, `level`, `level-inner`, `logger`, `logger-inner`, `caller`, `caller-inner`, `message`, `message-delimiter`, `field`, `key`, `array`, `object`, `string`, `number`, `boolean`, `boolean-true`, `boolean-false`, `null`, `ellipsis`
 
-* **Mode operations**:
+* __Mode operations__:
   * `+mode` or `mode`: Add mode (e.g., `["+bold"]` or `["bold"]`)
   * `-mode`: Remove inherited mode (e.g., `["-faint"]`)
   * Last occurrence wins for conflicts (e.g., `["+bold", "-bold"]` removes bold)
 
-* **Inheritance chain**: `@base` theme → user theme's styles → element's `style` field → element's explicit properties
+* __Inheritance chain__: `@base` theme → user theme's styles → element's `style` field → element's explicit properties
   * All themes inherit from built-in `@base` theme
   * Styles can reference other styles via `style` field
   * Elements can reference styles via `style` field
   * Explicit properties override inherited ones
 
-* **Color format**:
+* __Color format__:
   * Keyword `default` for terminal default color
   * ASCII basic color names: `black`, `red`, `green`, `yellow`, `blue`, `magenta`, `cyan`, `white`, `bright-black`, `bright-red`, `bright-green`, `bright-yellow`, `bright-blue`, `bright-magenta`, `bright-cyan`, `bright-white`
   * 256-color palette code: `0` to `255`
   * RGB hex format: `#RRGGBB` (e.g., `#FFFF00` for bright yellow)
 
-* **Modes**: `bold`, `faint`, `italic`, `underline`, `slow-blink`, `rapid-blink`, `reverse`, `conceal`, `crossed-out`
+* __Modes__: `bold`, `faint`, `italic`, `underline`, `slow-blink`, `rapid-blink`, `reverse`, `conceal`, `crossed-out`
 
 ### Used terminal color schemes
 
