@@ -111,7 +111,7 @@
 
 - Q: Does the `$palette` section work the same in v1 as in v0? → A: No - $palette is NOT supported in v1; it's only supported in v0 as a YAML anchor/alias organization feature; v1 strict parsing rejects $palette as an unknown top-level section per FR-028a
 
-- Q: Can users create a custom theme file named `@base` or is this name reserved/protected? → A: The embedded `@base` theme is excluded from theme listings (special hidden base theme), but users CAN create custom themes named `@base` which will be loaded and merged with the embedded `@base` following normal custom theme priority rules. Other theme names starting with `@` are not reserved and can be used normally.
+- Q: Can users create a custom theme file named `@base` or is this name reserved/protected? → A: Users CAN create custom themes with `@`-prefixed names (including `@base`) which will be loaded and merged following normal custom theme priority rules. All themes with `@`-prefixed names (both embedded and custom) are excluded from theme listings - they are considered theme mixtures/overlays for composition rather than direct selection. These themes can be referenced in the `theme-overlays` configuration setting to be merged on top of the base theme and main configured theme.
 
 - Q: What happens when a file's extension doesn't match its content (e.g., `theme.yaml` contains TOML content)? → A: Parse error from format parser (YAML parser fails on TOML content) - exit with error to stderr
 
@@ -218,6 +218,54 @@
 ### Session 2025-12-28 (Sixteenth Pass)
 
 - Q: How many v1 roles are actually defined in the implementation? → A: 18 roles total - the implementation defines: default, primary, secondary, strong, muted, accent, accent-secondary, message, key, value, syntax, status, level, trace, debug, info, warning, error. The spec previously mentioned only 16 roles, omitting the newer roles: key, value.
+
+### Session 2026-01-01 (Seventeenth Pass)
+
+- Q: How are theme overlays configured and merged? → A: Users configure overlays in their config file as an ordered list (e.g., `theme-overlays: ["@dark", "@compact"]`)
+
+- Q: What happens when a user specifies an overlay theme that doesn't exist? → A: Exit with error listing which overlay theme(s) were not found
+
+- Q: What merge semantics should be used for overlays? → A: Overlays are regular themes, the only difference is that they are excluded from the listing. The merge semantics depends on their version - v0 overlays follow v0 merge rules, v1 overlays follow v1 merge rules.
+
+- Q: When merging a chain like @base (v1) → main-theme (v0) → @overlay (v1), how should version conflicts be handled? → A: Each merge uses the patch theme's version (the theme being merged in)
+
+- Q: Can overlays contain all the same sections as regular themes (elements, styles, levels, indicators, etc.)? → A: No restrictions - overlays can contain any sections that regular themes support
+
+### Session 2026-01-01 (Eighteenth Pass)
+
+- Q: Where is the `theme-overlays` configuration setting located in the config file? → A: Top-level setting in the config file (e.g., `theme: "mytheme"` and `theme-overlays: ["@dark"]` at same level)
+
+- Q: What happens when `theme-overlays` is not specified in the config file versus when it's specified as an empty array `[]`? → A: Both cases behave identically (no overlays applied, just @base → configured theme)
+
+- Q: Can the main configured theme (via the `theme` setting) itself have a `@`-prefixed name, or must it be a regular (non-@-prefixed) theme? → A: Allowed - main theme can be @-prefixed, though unconventional (overlays are meant for composition)
+
+- Q: What happens if the same theme appears multiple times in the `theme-overlays` list (e.g., `theme-overlays: ["@dark", "@compact", "@dark"]`)? → A: Apply the theme multiple times in the specified order (each appearance is a separate merge)
+
+- Q: What happens if `@base` appears in the `theme-overlays` list (e.g., `theme-overlays: ["@base", "@dark"]`)? → A: Apply @base again as a regular overlay (merge it twice: implicit first, then explicit in list)
+
+### Session 2026-01-01 (Nineteenth Pass)
+
+- Q: When a custom `@base` theme file exists, what is the complete merge order? → A: Embedded @base → custom @base → configured theme → overlays (custom @base merges over embedded)
+
+- Q: Should there be a limit on the number of themes in the `theme-overlays` list? → A: No limit at all (performance may degrade but not an error)
+
+- Q: Can users override the `theme-overlays` setting via command-line arguments, or is it configuration-file-only? → A: Configuration file only, no CLI override
+
+- Q: In v1, when an overlay defines a `style` field referencing a role name, can that role be defined in the main theme or only in @base and the overlay itself? → A: Roles resolved from complete merged result up to that point (overlay can reference main theme's roles)
+
+- Q: What happens if the configured main theme appears in the `theme-overlays` list (e.g., `theme: "mytheme"` and `theme-overlays: ["mytheme", "@dark"]`)? → A: Apply the main theme twice (merged once normally, once again as overlay at list position)
+
+### Session 2026-01-01 (Twentieth Pass)
+
+- Q: When overlays contain `tags` sections, how should tags be merged across the theme chain? → A: Only the main theme's tags are kept (overlays' tags sections ignored)
+
+- Q: How should the `indicators` section be merged across the theme chain? → A: Indicators merged property-by-property (overlays can override specific indicator fields)
+
+- Q: When an overlay theme fails to load due to a parse error, should the error message indicate which overlay in the chain failed? → A: Yes, include only the overlay name (no position information)
+
+- Q: How does v0 style deduction (FR-031) work when v0 themes are used as overlays? → A: Style deduction occurs independently for each v0 theme before merging into the chain
+
+- Q: Should overlays be loaded and merged eagerly at startup, or can the loading be optimized? → A: Eager sequential loading (simple, deterministic, meets <50ms requirement)
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -446,7 +494,35 @@ Theme authors using v1 can define semantic roles (like "warning", "error", "succ
 
 - **FR-001a**: System MUST search for themes in this priority order: custom themes directory first, then stock themes embedded in binary (custom themes with same name completely replace stock themes - no merging or inheritance)
 
-- **FR-001b**: System MUST exclude the embedded `@base` from theme listings (it is a special hidden base theme); however, users MAY create custom themes named `@base` which will be loaded and merged with the embedded `@base` theme following normal custom theme priority rules (FR-001a); custom `@base` theme files MUST appear in theme listings under the custom themes group (FR-030c) since they are user-created; the system MUST load custom `@base` themes consistently whether loaded by stem name (`@base`) or full filename (`@base.yaml`), both methods should check for custom theme files first and merge with embedded `@base`; the embedded `@base` theme itself MUST NOT merge with itself (no recursion); other theme names starting with `@` are not reserved and can be used normally
+- **FR-001b**: System MUST exclude all themes whose names start with `@` from theme listings; these are considered theme mixtures/overlays used for composition rather than direct selection; the embedded `@base` theme is a special base theme that serves as the implicit foundation for all themes; users MAY create custom themes with `@`-prefixed names (including `@base`) which will be loaded following normal custom theme priority rules (FR-001a); custom `@`-prefixed theme files MUST be excluded from theme listings (consistent with stock `@`-prefixed themes); the system MUST load custom `@`-prefixed themes consistently whether loaded by stem name or full filename
+
+- **FR-001b-a**: When a custom `@base` theme file exists, the complete merge order MUST be: embedded `@base` → custom `@base` → configured theme → theme overlays (if specified); the custom `@base` merges on top of the embedded `@base` following normal custom-over-stock priority (FR-001a), then the configured theme merges on top of that result, then any overlays merge in list order; this allows users to customize the base defaults globally while maintaining the embedded `@base` foundation
+
+- **FR-001c**: System MUST support a `theme-overlays` configuration setting as a top-level setting in the config file (at the same level as the `theme` setting) that accepts an ordered list of theme names to be merged on top of the base theme and main configured theme; the merge order is: `@base` → theme (configured via `theme` setting) → theme-overlays (in list order); overlays are regular theme files that follow normal theme loading rules and version-based merge semantics; example configuration: `theme: "mytheme"` and `theme-overlays: ["@dark", "@compact"]` at the top level of the config file
+
+- **FR-001c-a**: System MUST treat absent `theme-overlays` setting and empty array `theme-overlays: []` identically - both result in no overlays being applied (merge chain is just `@base` → configured theme); this follows the principle of least surprise where undefined and explicitly empty have the same effect
+
+- **FR-001c-b**: System MUST allow the main configured theme (via `theme` setting) to have a `@`-prefixed name, though this is unconventional since overlays are meant for composition rather than standalone use; there are no technical restrictions preventing @-prefixed themes from being used as the main theme
+
+- **FR-001c-c**: System MUST apply themes in the exact order specified in the `theme-overlays` list, including duplicates; if the same theme appears multiple times (e.g., `theme-overlays: ["@dark", "@compact", "@dark"]`), it is merged multiple times at the specified positions in the chain; each list entry represents a separate merge operation with no automatic deduplication
+
+- **FR-001c-d**: System MUST allow `@base` to appear in the `theme-overlays` list; if present, `@base` is merged again as a regular overlay at its position in the list; this means `@base` would be merged twice: once implicitly at the start of the chain, and once explicitly at the specified position; while unusual, this maintains consistency with "overlays are regular themes" and the duplicate handling rule (FR-001c-c)
+
+- **FR-001c-e**: System MUST NOT impose a hard limit on the number of themes in the `theme-overlays` list; users can specify any number of overlays, though performance may degrade with very long chains; the system makes no guarantees about performance for excessively long overlay chains, but does not exit with error based on count alone
+
+- **FR-001c-f**: System MUST NOT provide command-line arguments to override the `theme-overlays` setting; theme overlays are configured exclusively via the configuration file as a more permanent compositional choice, while command-line theme selection (e.g., `--theme`) remains available for quick theme switching
+
+- **FR-001c-g**: System MUST allow the configured main theme to appear in the `theme-overlays` list; if present, the main theme is merged twice: once at its normal position in the chain (after @base), and once again as an overlay at the specified position in the list; this follows the duplicate handling rule (FR-001c-c) where each list entry represents a separate merge operation
+
+- **FR-001c-h**: System MUST load and merge overlay themes eagerly in sequential order at application startup; overlay loading is not lazy or parallelized; this ensures simple, deterministic behavior and easily meets the <50ms performance requirement (NFR-001)
+
+- **FR-001d**: System MUST exit with error to stderr when any theme specified in the `theme-overlays` list cannot be loaded (theme not found or parse error); the error message MUST list which overlay theme(s) were not found and MAY include suggestions for similar theme names using the same Jaro similarity algorithm (≥0.75 threshold) as regular theme loading (FR-006a)
+
+- **FR-001d-a**: When an overlay theme fails to load due to a parse error or validation error, the error message MUST include the overlay theme name to help users identify which overlay in the chain caused the failure (e.g., "Failed to load overlay '@compact': invalid YAML syntax at line 5"); the position/index in the overlay list is not required in the error message
+
+- **FR-001e**: System MUST apply version-based merge semantics when merging overlays: each merge operation in the chain uses the merge rules determined by the version of the theme being merged in (the "patch" theme); for example, when merging `@base (v1)` → `main-theme (v0)` → `@overlay (v1)`, the first merge uses v0 rules (main-theme's version) and the second merge uses v1 rules (overlay's version); this ensures each theme controls how it wants to be applied, consistent with FR-045a
+
+- **FR-001f**: Overlay themes (themes with `@`-prefixed names) MUST have no restrictions on content - they can contain any sections that regular themes support (elements, styles, levels, indicators, tags, version, etc.); overlays are truly regular themes distinguished only by their naming convention and exclusion from listings
 
 - **FR-002**: System MUST support loading themes by stem name (without extension) with automatic format detection in priority order: .yaml, .yml, .toml, .json (first found wins); both .yaml and .yml extensions are supported for YAML files and use the YAML parser; theme name matching is case-sensitive on Linux/macOS and case-insensitive on Windows (follows platform filesystem conventions)
 
@@ -564,9 +640,13 @@ Theme authors using v1 can define semantic roles (like "warning", "error", "succ
 
 - **FR-022c**: System MUST allow multiple tags including combinations like dark+light (theme compatible with both modes), dark+256color, etc.; no tag combinations are considered conflicting
 
+- **FR-022d**: When overlay themes contain `tags` sections, the system MUST ignore them; only the main configured theme's tags are kept as the final theme metadata; this ensures tags describe the base theme's identity, not the compositional overlays applied on top; overlays are meant to be mixins that tweak styling without fundamentally changing what the theme "is"
+
 - **FR-023**: System MUST support indicators section with sync.synced and sync.failed configurations; indicators are a separate application feature (--follow mode) where sync state markers are displayed at the start of each line; themes provide only the visual styling for these indicator states (in sync vs out of sync)
 
 - **FR-023a**: System MUST support the complete indicators schema structure: `indicators.sync.synced` and `indicators.sync.failed`, where each indicator has: `text` (string, the indicator character/text displayed), `outer.prefix` (string), `outer.suffix` (string), `outer.style` (style object with optional foreground, background, modes, and in v1: style field), `inner.prefix` (string), `inner.suffix` (string), `inner.style` (style object); all fields are optional with defaults: empty strings for text/prefix/suffix, empty style objects for outer/inner styles; the outer/inner distinction supports nested styling where the indicator text is rendered with inner style nested inside outer style
+
+- **FR-023b**: When merging themes with `indicators` sections across the overlay chain, the system MUST merge indicators property-by-property (like elements); overlays can selectively customize specific indicator fields (e.g., change only sync.synced.outer.style.foreground) without replacing the entire indicators section; this allows fine-grained indicator customization through overlays
 
 - **FR-024**: System MUST support boolean special case for backward compatibility in v0 and v1: if base `boolean` element is defined, automatically apply it to `boolean-true` and `boolean-false` during theme structure creation (after level-specific merging) before applying the variants' specific element-level overrides (this is active property merging, different from the passive nested styling scope used for other parent-inner pairs; this pattern exists because `boolean` was added first, variants came later); in v1, boolean-true and boolean-false can also use `style` field to reference roles like any other element
 
@@ -596,7 +676,7 @@ Theme authors using v1 can define semantic roles (like "warning", "error", "succ
 
 - **FR-030b**: System MUST display each theme by stem name only once in theme listings, even when multiple file formats exist for the same stem (e.g., if both theme.yaml and theme.toml exist, list shows "theme" once, representing the loadable theme per extension priority)
 
-- **FR-030c**: System MUST include custom `@base` theme files in theme listings under the custom themes group; only the embedded `@base` theme is excluded from listings; this allows users to see and manage their custom @base themes
+- **FR-030c**: System MUST exclude all themes with `@`-prefixed names from theme listings (both embedded and custom), consistent with FR-001b; this applies to `@base` and any other theme names starting with `@` (e.g., `@dark`, `@compact`); these themes are considered mixtures/overlays for composition rather than direct selection, so they are hidden from the standard theme listing output
 
 - **FR-030d**: System MUST sort themes alphabetically within each group (stock/custom) using case-sensitive ASCII ordering where uppercase letters come before lowercase letters (e.g., "MyTheme", "Theme", "another", "basic"); this provides deterministic and predictable ordering
 
@@ -609,6 +689,8 @@ Theme authors using v1 can define semantic roles (like "warning", "error", "succ
 - **FR-031c**: Deduced styles MUST be used by all elements in `@base` that reference those style roles, making elements not defined in the v0 theme (like new elements added to `@base`) use colors and modes consistent with the v0 theme's aesthetic; for example, if v0 theme defines `time: {foreground: 30}`, this deduces `secondary: {foreground: 30}`, and then `input` element from `@base` (which has `style: "secondary"`) will use foreground 30
 
 - **FR-031d**: Style deduction MUST NOT affect elements that are explicitly defined in the v0 theme; elements defined in v0 themes are complete and render exactly as specified (no inheritance from deduced or `@base` styles)
+
+- **FR-031e**: When v0 themes are used as overlays in the theme chain, style deduction (FR-031) MUST occur independently for each v0 theme before it is merged into the chain; each v0 overlay processes its own element definitions to deduce styles, then those deduced styles become part of that overlay's style inventory before merging; this ensures v0 overlays work correctly with the same semantics whether used standalone or as overlays in a chain
 
 - **FR-032**: System MUST preserve inherited modes from base styles when resolving element styles that reference roles; when a style's own properties (foreground, background, modes) are merged onto the resolved base, mode merging MUST be additive (not replacement) regardless of the `ReplaceModes` flag; the `ReplaceModes` flag applies only to theme-level merging (child theme replacing parent theme), not to within-theme style resolution
 
@@ -670,9 +752,9 @@ Theme authors using v1 can define semantic roles (like "warning", "error", "succ
 
 - **FR-044**: V1 does NOT support custom `include` directive for referencing other themes; only `@base` theme inheritance is supported (custom includes may be considered for future versions)
 
-- **FR-045**: V1 inheritance chain is simple: user theme → `@base` theme (no circular dependency detection needed)
+- **FR-045**: V1 base inheritance and overlay chain: the complete merge order is `@base` → configured theme → theme overlays (if specified); with theme overlays, the chain can be longer (e.g., `@base` → `main-theme` → `@dark` → `@compact`); circular dependency detection is not needed for the base→theme direction, but role-to-role inheritance within a theme still requires circular reference detection per FR-047
 
-- **FR-045a**: When a custom theme merges with the embedded `@base` theme, the resulting merged theme MUST use the version from the custom theme; this ensures the custom theme's merge semantics are applied correctly (e.g., v0 custom theme + v1 @base = v0 result with v0 replacement semantics; v1 custom theme + v1 @base = v1 result with v1 property-level merge semantics)
+- **FR-045a**: When merging themes in a chain, each merge operation MUST use the version-based merge semantics determined by the version of the theme being merged in (the "patch" theme); for example, in the chain `@base (v1)` → `main-theme (v0)` → `@overlay (v1)`, the merge of `@base` into `main-theme` uses v0 merge semantics (because main-theme is v0), and the merge of `@overlay` into the result uses v1 merge semantics (because overlay is v1); this ensures each theme controls its own merge behavior and is consistent with the principle that the custom/patch theme's version determines how it applies itself
 
 - **FR-046**: V1 role-to-role inheritance via the `style` field MUST support a maximum depth of 64 levels
 
@@ -683,6 +765,8 @@ Theme authors using v1 can define semantic roles (like "warning", "error", "succ
 - **FR-047a**: Circular reference detection MUST occur after merging the user theme with the embedded `@base` theme, not before; user theme overrides can create circular role references that didn't exist in either theme individually (e.g., if @base has `A: {style: "B"}` and user theme overrides with `B: {style: "A"}`, the circular reference only exists after merge); the detection applies to the complete merged role inventory
 
 - **FR-048**: V1 themes MUST exit with error when a role's `style` field references a role name that is not in the predefined role enum or when the referenced role is not defined in either the user theme or `@base` theme
+
+- **FR-048a**: V1 role resolution in overlay chains MUST use the complete merged result up to that point in the chain; when an overlay references a role via the `style` field, that role can be defined in `@base`, the main theme, or any previously merged overlay; for example, if the main theme defines a role "custom-accent", a subsequent overlay can reference it via `style: "custom-accent"`; this enables true compositional theming where overlays can build upon roles defined in earlier parts of the chain
 
 ### Key Entities
 
