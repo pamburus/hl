@@ -85,13 +85,13 @@ impl Theme {
         // Step 3: Resolve level-specific element styles
         let mut levels = HashMap::new();
         for (level, pack) in &self.levels {
-            // Merge base elements with level-specific elements
-            let pack = self
-                .elements
-                .clone()
-                .merged(pack, flags - MergeFlag::ReplaceHierarchies)
-                .resolved(&inventory, flags);
-            levels.insert(*level, pack);
+            // First resolve base elements, then merge level-specific overrides
+            // This ensures level-specific properties override base properties while
+            // allowing base roles to be resolved first
+            let mut resolved_base = self.elements.resolved(&inventory, flags);
+            let resolved_override = pack.resolved(&inventory, flags);
+            resolved_base.merge(resolved_override, flags - MergeFlag::ReplaceHierarchies);
+            levels.insert(*level, resolved_base);
         }
 
         // Step 4: Resolve indicator styles

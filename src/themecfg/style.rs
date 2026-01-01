@@ -36,6 +36,14 @@ impl Style {
     }
 }
 
+impl MergeWithOptions<Style> for Style {
+    type Options = MergeFlags;
+
+    fn merge(&mut self, other: Style, options: Self::Options) {
+        self.merge(&other, options);
+    }
+}
+
 impl MergeWithOptions<&Style> for Style {
     type Options = MergeFlags;
 
