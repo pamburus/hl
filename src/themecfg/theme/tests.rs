@@ -38,14 +38,10 @@ fn test_load_with_overlays() {
     // Test loading with non-existent overlay
     let result = Theme::load_with_overlays(&dirs, "test", &["@nonexistent"]);
     assert!(result.is_err());
-    if let Err(Error::ThemeNotFound { name, .. }) = result {
-        assert!(
-            name.contains("overlay"),
-            "Error should mention it's an overlay: {}",
-            name
-        );
+    if let Err(Error::ThemeOverlayNotFound { name, .. }) = result {
+        assert_eq!(name.as_ref(), "@nonexistent");
     } else {
-        panic!("Expected ThemeNotFound error");
+        panic!("Expected ThemeOverlayNotFound error");
     }
 }
 
