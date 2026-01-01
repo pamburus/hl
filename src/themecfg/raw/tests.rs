@@ -5,7 +5,7 @@ use crate::level::Level;
 use super::super::{
     Color, Element, Merge, MergeFlags, MergeOptions, MergeWithOptions, Mode, ModeSetDiff, PlainColor, RGB, RawStyle,
     RawTheme, Role, StyleBase, Version,
-    tests::{dirs, modes, raw_theme, raw_theme_unmerged},
+    tests::{dirs, modes, raw_theme},
     v1,
 };
 
@@ -60,7 +60,7 @@ fn test_style_merge() {
 
 #[test]
 fn test_v0_unknown_elements_ignored() {
-    let theme = raw_theme_unmerged("v0-unknown-elements").resolve().unwrap();
+    let theme = raw_theme("v0-unknown-elements").resolve().unwrap();
 
     assert_eq!(theme.elements.len(), 1);
     assert!(theme.elements.contains_key(&Element::Message));
@@ -68,7 +68,7 @@ fn test_v0_unknown_elements_ignored() {
 
 #[test]
 fn test_v0_unknown_level_names_ignored() {
-    let theme = raw_theme_unmerged("v0-unknown-levels");
+    let theme = raw_theme("v0-unknown-levels");
 
     assert!(theme.levels.contains_key(&Level::Error), "Should have error level");
 
@@ -203,7 +203,7 @@ fn test_v1_element_replacement_removes_parent_modes() {
 
 #[test]
 fn test_empty_v0_theme_file_valid() {
-    let theme = raw_theme_unmerged("v0-empty");
+    let theme = raw_theme("v0-empty");
 
     assert_eq!(theme.version, Version::V0_0, "Empty file should be treated as v0 theme");
 
@@ -222,7 +222,7 @@ fn test_empty_v0_theme_file_valid() {
 
 #[test]
 fn test_v0_ignores_styles_section() {
-    let theme = raw_theme_unmerged("v0-with-styles-section");
+    let theme = raw_theme("v0-with-styles-section");
 
     assert_eq!(theme.version, Version::V0_0, "Theme without version should be v0");
 

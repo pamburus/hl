@@ -21,10 +21,7 @@ use yaml_peg::serde as yaml;
 use crate::{appdirs::AppDirs, level::Level, xerr::Suggestions};
 
 // relative imports
-use super::{Error, ExternalError, IndicatorPack, Merge, RawTheme, Result, StylePack, ThemeLoadError, Version, v0, v1};
-
-// Private constants
-const BASE: &str = "@base";
+use super::{Error, ExternalError, IndicatorPack, RawTheme, Result, StylePack, ThemeLoadError, Version, v0, v1};
 
 // ---
 
@@ -88,8 +85,8 @@ impl Theme {
     /// - Theme name
     /// - File path (for custom themes)
     /// - Specific error details (parse error, unsupported version, recursion, etc.)
-    pub fn load(app_dirs: &AppDirs, name: &str) -> Result<Self> {
-        Self::load_raw(app_dirs, name)?.resolve()
+    pub fn load(dirs: &AppDirs, name: &str) -> Result<Self> {
+        Self::load_raw(dirs, name)?.finalized().resolve()
     }
 
     /// Load an unresolved (raw) theme by name.
@@ -131,8 +128,6 @@ impl Theme {
     /// Note: Style resolution errors (e.g., circular inheritance) will only
     /// occur when calling [`RawTheme::resolve()`], not during `load_raw()`.
     pub fn load_raw(dirs: &AppDirs, name: &str) -> Result<RawTheme> {
-        let base = Self::load_embedded::<Assets>(BASE)?;
-
         let theme = match Self::load_from(&Self::themes_dir(dirs), name) {
             Ok(v) => Ok(v),
             Err(Error::ThemeNotFound { .. }) => match Self::load_embedded::<Assets>(name) {
@@ -149,7 +144,7 @@ impl Theme {
             Err(e) => Err(e),
         }?;
 
-        Ok(base.merged(theme))
+        Ok(theme)
     }
 
     pub fn embedded(name: &str) -> Result<Self> {
@@ -281,7 +276,11 @@ impl Theme {
     }
 
     pub(super) fn embedded_names() -> impl IntoIterator<Item = Arc<str>> {
-        Assets::iter().filter_map(|a| Self::strip_known_extension(&a).filter(|&n| n != BASE).map(|n| n.into()))
+        Assets::iter().filter_map(|a| {
+            Self::strip_known_extension(&a)
+                .filter(|&n| n.starts_with('@'))
+                .map(|n| n.into())
+        })
     }
 
     pub(super) fn custom_names(app_dirs: &AppDirs) -> Result<impl IntoIterator<Item = Result<Arc<str>>> + use<>> {
@@ -464,7 +463,7 @@ pub enum ThemeOrigin {
 
 #[derive(RustEmbed)]
 #[folder = "etc/defaults/themes/"]
-struct Assets;
+pub(super) struct Assets;
 
 // ---
 

@@ -6,7 +6,7 @@ use crate::{appdirs::AppDirs, level::Level};
 
 use super::super::{
     Color, Element, Error, Format, Mode, ModeSetDiff, PlainColor, RGB, Role, Style, Tag, Theme, Version,
-    tests::{dirs, load_raw_theme_unmerged, raw_theme, theme},
+    tests::{dirs, load_raw_theme, raw_theme, theme},
 };
 
 #[test]
@@ -376,7 +376,7 @@ fn test_v0_level_override_merge_behavior() {
 
 #[test]
 fn test_unknown_elements_toml() {
-    let result = load_raw_theme_unmerged("test-unknown-elements.toml");
+    let result = load_raw_theme("test-unknown-elements.toml");
 
     match result {
         Ok(theme) => {
@@ -402,7 +402,7 @@ fn test_unknown_elements_toml() {
 
 #[test]
 fn test_unknown_elements_json() {
-    let result = load_raw_theme_unmerged("test-unknown-elements.json");
+    let result = load_raw_theme("test-unknown-elements.json");
 
     match result {
         Ok(theme) => {
@@ -428,7 +428,7 @@ fn test_unknown_elements_json() {
 
 #[test]
 fn test_unknown_elements_yaml() {
-    let result = load_raw_theme_unmerged("test-unknown-elements.yaml");
+    let result = load_raw_theme("test-unknown-elements.yaml");
 
     match result {
         Ok(theme) => {
@@ -1002,7 +1002,7 @@ fn test_style_base_visitor_expecting() {
 
 #[test]
 fn test_v1_strict_unknown_key_rejected() {
-    let result = load_raw_theme_unmerged("v1-unknown-key");
+    let result = load_raw_theme("v1-unknown-key");
 
     assert!(
         result.is_err(),
@@ -1021,7 +1021,7 @@ fn test_v1_strict_unknown_key_rejected() {
 
 #[test]
 fn test_v1_strict_unknown_enum_variant_rejected() {
-    let result = load_raw_theme_unmerged("v1-unknown-role");
+    let result = load_raw_theme("v1-unknown-role");
 
     assert!(
         result.is_err(),
@@ -1040,7 +1040,7 @@ fn test_v1_strict_unknown_enum_variant_rejected() {
 
 #[test]
 fn test_v1_schema_field_accepted() {
-    let result = load_raw_theme_unmerged("v1-with-schema");
+    let result = load_raw_theme("v1-with-schema");
 
     assert!(
         result.is_ok(),

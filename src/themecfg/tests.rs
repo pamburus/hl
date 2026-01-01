@@ -26,16 +26,12 @@ pub(crate) fn theme(name: &str) -> Theme {
     Theme::load(&dirs(), name).unwrap()
 }
 
+pub(crate) fn load_raw_theme(name: &str) -> Result<RawTheme> {
+    Theme::load_raw(&dirs(), name)
+}
+
 pub(crate) fn raw_theme(name: &str) -> RawTheme {
-    Theme::load_raw(&dirs(), name).unwrap()
-}
-
-pub(crate) fn load_raw_theme_unmerged(name: &str) -> Result<RawTheme> {
-    Theme::load_from(&Theme::themes_dir(&dirs()), name)
-}
-
-pub(crate) fn raw_theme_unmerged(name: &str) -> RawTheme {
-    load_raw_theme_unmerged(name).unwrap()
+    load_raw_theme(name).unwrap()
 }
 
 pub(crate) fn load_yaml_fixture<T>(path: &str) -> T

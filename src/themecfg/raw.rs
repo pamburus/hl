@@ -1,5 +1,5 @@
 // std imports
-use std::sync::Arc;
+use std::sync::{Arc, LazyLock};
 
 // third-party imports
 use derive_more::{Deref, DerefMut};
@@ -7,7 +7,9 @@ use derive_more::{Deref, DerefMut};
 use crate::themecfg::Merge;
 
 // relative imports
-use super::{Error, MergeFlags, MergeOptions, Result, Theme, ThemeInfo, ThemeOrigin, ThemeSource, v1};
+use super::{Assets, Error, MergeFlags, MergeOptions, Result, Theme, ThemeInfo, ThemeOrigin, ThemeSource, v1};
+
+static BASE: LazyLock<RawTheme> = LazyLock::new(|| Theme::load_embedded::<Assets>("@base").unwrap());
 
 /// An unresolved theme with metadata, before style resolution.
 ///
@@ -30,6 +32,13 @@ impl RawTheme {
             info: info.into(),
             inner,
         }
+    }
+
+    /// Finalize the theme by merging it with the base theme.
+    ///
+    /// This ensures that all required styles are present.
+    pub fn finalized(self) -> Self {
+        BASE.clone().merged(self)
     }
 
     /// Resolve the theme to a fully resolved [`Theme`].

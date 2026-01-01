@@ -1,6 +1,6 @@
 use std::str::FromStr;
 
-use super::super::tests::{dirs, load_raw_theme_unmerged};
+use super::super::tests::{dirs, load_raw_theme};
 use super::Version;
 use crate::themecfg::{Error, MergeFlags, MergeOptions, Theme, ThemeLoadError};
 
@@ -121,7 +121,7 @@ fn test_future_version_rejected() {
 
 #[test]
 fn test_v0_version_0_1_rejected() {
-    let result = load_raw_theme_unmerged("v0-invalid-version");
+    let result = load_raw_theme("v0-invalid-version");
 
     assert!(result.is_err(), "v0 theme with version 0.1 should be rejected");
 
@@ -137,7 +137,7 @@ fn test_v0_version_0_1_rejected() {
 
 #[test]
 fn test_v1_version_1_1_rejected_before_deserialization() {
-    let result = load_raw_theme_unmerged("v1-unsupported-version");
+    let result = load_raw_theme("v1-unsupported-version");
 
     assert!(result.is_err(), "v1 theme with version 1.1 should be rejected");
 
