@@ -1,0 +1,28 @@
+# V1 test theme for verifying element modes are preserved after per-level merge
+#
+# This theme tests the scenario where:
+# - An element (level-inner) defines modes = ["bold"]
+# - Per-level styles (levels.info.level-inner) define style references
+# - After merging, the bold mode should be preserved
+#
+# The merge flow being tested:
+# 1. Theme merge: @base + this theme → level-inner = { modes = ["bold"] } replaces @base's
+# 2. Per-level merge: elements.level-inner + levels.info.level-inner → property-level merge
+#    Result: level-inner = { style = ["level", "info"], modes = ["bold"] }
+# 3. Resolution: The final rendered style should have bold mode
+
+version: "1.0"
+
+styles:
+  primary: {}
+  info:
+    foreground: cyan
+
+elements:
+  level-inner:
+    modes: ["bold"]
+
+levels:
+  info:
+    level-inner:
+      style: info

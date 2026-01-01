@@ -1,0 +1,4 @@
+version: "99.0"
+elements:
+  message:
+    foreground: 'green'

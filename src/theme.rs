@@ -10,7 +10,7 @@ use crate::{
     error::*,
     eseq::{Brightness, Color, ColorCode, Mode, Sequence, StyleCode},
     fmtx::Push,
-    level::{self, InfallibleLevel},
+    level::{self},
     themecfg,
 };
 
@@ -21,7 +21,7 @@ use crate::testing::Sample;
 // ---
 
 pub use level::Level;
-pub use themecfg::{Element, ThemeInfo, ThemeOrigin};
+pub use themecfg::{Element, MergeFlag, MergeFlags, ThemeInfo, ThemeOrigin};
 
 // ---
 
@@ -46,16 +46,20 @@ impl Theme {
         Self::default()
     }
 
-    pub fn load(app_dirs: &AppDirs, name: &str) -> Result<Self> {
-        Ok(themecfg::Theme::load(app_dirs, name)?.into())
+    pub fn load(dirs: &AppDirs, name: &str) -> Result<Self> {
+        Ok(themecfg::Theme::load(dirs, name)?.into())
+    }
+
+    pub fn load_with_overlays(dirs: &AppDirs, name: &str, overlays: &[impl AsRef<str>]) -> Result<Self> {
+        Ok(themecfg::Theme::load_with_overlays(dirs, name, overlays)?.into())
     }
 
     pub fn embedded(name: &str) -> Result<Self> {
         Ok(themecfg::Theme::embedded(name)?.into())
     }
 
-    pub fn list(app_dirs: &AppDirs) -> Result<HashMap<Arc<str>, ThemeInfo>> {
-        Ok(themecfg::Theme::list(app_dirs)?)
+    pub fn list(dirs: &AppDirs) -> Result<HashMap<Arc<str>, ThemeInfo>> {
+        Ok(themecfg::Theme::list(dirs)?)
     }
 
     pub fn apply<'a, B: Push<u8>, F: FnOnce(&mut Styler<'a, B>)>(
@@ -84,19 +88,12 @@ impl<S: Borrow<themecfg::Theme>> From<S> for Theme {
         let default = StylePack::load(&s.elements);
         let mut packs = EnumMap::default();
         for (level, pack) in &s.levels {
-            let level = match level {
-                InfallibleLevel::Valid(level) => level,
-                InfallibleLevel::Invalid(s) => {
-                    log::warn!("unknown level: {:?}", s);
-                    continue;
-                }
-            };
-            packs[*level] = StylePack::load(&s.elements.clone().merged(pack.clone()));
+            packs[*level] = StylePack::load(pack);
         }
         Self {
             default,
             packs,
-            indicators: IndicatorPack::from(&s.indicators),
+            indicators: IndicatorPack::new(&s.indicators),
         }
     }
 }
@@ -110,7 +107,7 @@ impl Sample for Arc<Theme> {
 
 // ---
 
-#[derive(Clone, Eq, PartialEq)]
+#[derive(Clone, Eq, PartialEq, Debug)]
 struct Style(Sequence);
 
 impl Style {
@@ -176,7 +173,7 @@ impl<T: Into<Sequence>> From<T> for Style {
 impl From<&themecfg::Style> for Style {
     fn from(style: &themecfg::Style) -> Self {
         let mut codes = Vec::<StyleCode>::new();
-        for mode in &style.modes {
+        for mode in style.modes.adds {
             codes.push(
                 match mode {
                     themecfg::Mode::Bold => Mode::Bold,
@@ -275,7 +272,7 @@ impl<'a, B: Push<u8>> StylingPush<B> for Styler<'a, B> {
 
 // ---
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 struct StylePack {
     elements: EnumMap<Element, Option<usize>>,
     reset: Option<usize>,
@@ -297,24 +294,13 @@ impl StylePack {
     fn load(s: &themecfg::StylePack) -> Self {
         let mut result = Self::default();
 
-        let items = s.items();
-        if !items.is_empty() {
+        if !s.is_empty() {
             result.styles.push(Style::reset());
             result.reset = Some(0);
         }
 
-        for (&element, style) in s.items() {
-            result.add(element, &Style::from(style))
-        }
-
-        if let Some(base) = s.items().get(&Element::Boolean) {
-            for variant in [Element::BooleanTrue, Element::BooleanFalse] {
-                let mut style = base.clone();
-                if let Some(patch) = s.items().get(&variant) {
-                    style = style.merged(patch)
-                }
-                result.add(variant, &Style::from(&style));
-            }
+        for (&element, style) in s.iter() {
+            result.add(element, &Style::from(style));
         }
 
         result
@@ -328,10 +314,10 @@ pub struct IndicatorPack {
     pub sync: SyncIndicatorPack,
 }
 
-impl From<&themecfg::IndicatorPack> for IndicatorPack {
-    fn from(indicator: &themecfg::IndicatorPack) -> Self {
+impl IndicatorPack {
+    fn new(indicator: &themecfg::IndicatorPack) -> Self {
         Self {
-            sync: SyncIndicatorPack::from(&indicator.sync),
+            sync: SyncIndicatorPack::new(&indicator.sync),
         }
     }
 }
@@ -344,11 +330,11 @@ pub struct SyncIndicatorPack {
     pub failed: Indicator,
 }
 
-impl From<&themecfg::SyncIndicatorPack> for SyncIndicatorPack {
-    fn from(indicator: &themecfg::SyncIndicatorPack) -> Self {
+impl SyncIndicatorPack {
+    fn new(indicator: &themecfg::SyncIndicatorPack) -> Self {
         Self {
-            synced: Indicator::from(&indicator.synced),
-            failed: Indicator::from(&indicator.failed),
+            synced: Indicator::new(&indicator.synced),
+            failed: Indicator::new(&indicator.failed),
         }
     }
 }
@@ -360,8 +346,8 @@ pub struct Indicator {
     pub value: String,
 }
 
-impl From<&themecfg::Indicator> for Indicator {
-    fn from(indicator: &themecfg::Indicator) -> Self {
+impl Indicator {
+    fn new(indicator: &themecfg::Indicator) -> Self {
         let mut buf = Vec::new();
         let os = Style::from(&indicator.outer.style);
         let is = Style::from(&indicator.inner.style);
@@ -371,7 +357,7 @@ impl From<&themecfg::Indicator> for Indicator {
             is.with(buf, |buf| {
                 buf.extend(indicator.inner.prefix.as_bytes());
                 buf.extend(indicator.text.as_bytes());
-                buf.extend(indicator.outer.prefix.as_bytes());
+                buf.extend(indicator.inner.suffix.as_bytes());
             });
             buf.extend(indicator.outer.suffix.as_bytes());
         });

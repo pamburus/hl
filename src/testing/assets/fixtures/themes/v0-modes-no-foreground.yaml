@@ -1,0 +1,11 @@
+# V0 theme that defines modes for an element but not foreground
+# This should inherit foreground from @base while using its own modes
+
+elements:
+  # Define message with only modes, should inherit foreground from @base
+  message:
+    modes: ["underline"]
+
+  # Define level with only foreground, no modes
+  level:
+    foreground: "blue"

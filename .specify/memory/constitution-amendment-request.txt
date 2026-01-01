@@ -1,0 +1,16 @@
+Add new principle VII: Test Data Management
+
+Tests MUST use external data files instead of inline multiline string literals for themes, configs, and other structured data.
+
+Rationale:
+- Inline strings make tests harder to read and maintain
+- External files can be validated with proper tooling (YAML/TOML linters)
+- Embedded resources at compile time provide same performance as inline strings
+- Easier to reuse test data across multiple tests
+- Better separation of test logic from test data
+
+Requirements:
+- Theme and config test data MUST be stored in dedicated test asset directories (e.g., src/testing/assets/themes/)
+- Test files SHOULD use the same format as production files (YAML, TOML, JSON)
+- Tests MAY embed external files at compile time using include_str! or similar if needed
+- Inline strings are acceptable ONLY for very short values (<3 lines) or when the string content itself is what's being tested

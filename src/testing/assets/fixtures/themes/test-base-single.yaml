@@ -1,0 +1,5 @@
+version: "1.0"
+styles:
+  secondary:
+    style: primary
+    foreground: "blue"

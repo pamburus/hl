@@ -1,0 +1,27 @@
+# V0 theme testing boolean active merge
+# When base `boolean` element is present, it should be applied to
+# `boolean-true` and `boolean-false` at load time (v0 active merge behavior)
+
+elements:
+  boolean:
+    foreground: "#00ff00"
+    background: "#000000"
+    modes: [bold]
+
+  boolean-true:
+    foreground: "#00ffff"
+
+  boolean-false:
+    foreground: "#ff0000"
+
+  message:
+    foreground: "#ffffff"
+
+  level:
+    foreground: "#ffff00"
+
+levels:
+  error:
+    level:
+      foreground: "#ff0000"
+      modes: [reverse]

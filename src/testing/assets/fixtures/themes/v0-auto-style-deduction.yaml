@@ -1,0 +1,25 @@
+# V0 theme to test automatic style deduction
+# Elements are defined with colors/modes but no style references
+# The system should automatically deduce appropriate style references
+
+elements:
+  # String with foreground - should auto-add style = "primary"
+  string:
+    foreground: 'green'
+
+  # Time with foreground - should auto-add style = "secondary"
+  time:
+    foreground: 'bright-black'
+
+  # Message with foreground and modes - should auto-add style = "strong"
+  message:
+    foreground: 'white'
+    modes: ['italic']
+
+  # Key with foreground - should auto-add style = "accent"
+  key:
+    foreground: 'yellow'
+
+  # Level with foreground - no auto style deduction for this one
+  level:
+    foreground: 'blue'

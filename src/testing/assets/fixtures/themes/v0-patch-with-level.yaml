@@ -1,0 +1,5 @@
+levels:
+  error:
+    message:
+      foreground: "#0000FF"
+      modes: [bold]

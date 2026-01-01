@@ -1,0 +1,6 @@
+levels:
+  error:
+    message:
+      foreground: 'red'
+      modes:
+        - '-bold'

@@ -1,0 +1,14 @@
+# Test theme for FR-003: Load by full filename
+# This file tests that loading "test-fullname.toml" specifically loads TOML format
+# even if a "test-fullname.yaml" exists in the same directory
+
+version = "0.0"
+
+[elements.key]
+foreground = "magenta"
+
+[elements.number]
+foreground = "yellow"
+
+[elements.message]
+foreground = "blue"

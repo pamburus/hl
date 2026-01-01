@@ -1,0 +1,7 @@
+# Test file for FR-022a: Invalid tag values should be rejected
+# Valid tags: dark, light, 16color, 256color, truecolor
+elements:
+  message:
+    foreground: 'green'
+
+tags: ['dark', 'invalid-tag-value', '256color']

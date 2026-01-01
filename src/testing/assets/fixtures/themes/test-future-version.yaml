@@ -1,0 +1,8 @@
+#:schema ../../../../schema/json/theme.schema.v1.json
+
+version: "1.1"
+
+elements:
+  message:
+    foreground: white
+    modes: [bold]

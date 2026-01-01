@@ -17,6 +17,7 @@ impl AppInfoProvider for CustomAppInfo {
     fn usage_suggestion(&self, request: UsageRequest) -> Option<UsageResponse> {
         match request {
             UsageRequest::ListThemes => Some(("list-themes".into(), self.suggestion_arg.into())),
+            UsageRequest::ListThemeOverlays => Some(("list-themes=overlay".into(), self.suggestion_arg.into())),
         }
     }
 }
@@ -35,7 +36,7 @@ fn test_log() {
 #[test]
 fn test_tips() {
     let err = Error::Theme(themecfg::Error::ThemeNotFound {
-        name: "test".to_string(),
+        name: "test".into(),
         suggestions: Suggestions::new("test", vec!["test1", "test2"]),
     });
     assert_eq!(
@@ -48,7 +49,7 @@ fn test_tips() {
     assert!(!buf.is_empty());
 
     let err = Error::Theme(themecfg::Error::ThemeNotFound {
-        name: "test".to_string(),
+        name: "test".into(),
         suggestions: Suggestions::none(),
     });
 

@@ -1,0 +1,8 @@
+#:schema https://raw.githubusercontent.com/pamburus/hl/847e8a510aff63e625a95d565972b461c1ca5175/schema/json/theme.schema.v1.json
+
+version = "1.0"
+tags = ["overlay", "dark", "light", "16color"]
+
+# Styles define general purpose styles used throughout the theme.
+[styles.accent]
+modes = ["italic"]

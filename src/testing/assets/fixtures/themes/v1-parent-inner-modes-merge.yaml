@@ -1,0 +1,17 @@
+# V1 test theme for parent-inner property-level merging
+# Tests FR-039d: V1 themes should merge parent→inner using property-level merging
+# Test scenario:
+# - level element has modes=[faint]
+# - level-inner for debug has foreground=#d2a6ff
+# - Expected: level-inner should inherit modes=[faint] from parent AND have foreground=#d2a6ff
+
+version: "1.0"
+
+elements:
+  level:
+    modes: ["faint"]
+
+levels:
+  debug:
+    level-inner:
+      foreground: "#d2a6ff"

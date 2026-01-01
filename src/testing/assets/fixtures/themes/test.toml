@@ -1,0 +1,83 @@
+#:schema ../../../../../schema/json/theme.schema.v0.json
+
+[elements.input]
+modes = ["faint"]
+
+[elements.time]
+modes = ["faint", "italic"]
+
+[elements.logger]
+modes = ["faint", "underline"]
+
+[elements.caller]
+modes = ["faint", "italic"]
+
+[elements.level]
+foreground = "cyan"
+
+[elements.message]
+foreground = "default"
+modes = ["bold"]
+
+[elements.message-delimiter]
+modes = ["faint", "italic"]
+
+[elements.field]
+modes = ["faint"]
+
+[elements.key]
+foreground = "green"
+
+[elements.ellipsis]
+modes = ["faint"]
+
+[elements.object]
+foreground = "yellow"
+
+[elements.array]
+foreground = "bright-yellow"
+
+[elements.string]
+foreground = "default"
+
+[elements.number]
+foreground = "bright-blue"
+
+[elements.boolean]
+foreground = "bright-green"
+
+[elements.boolean-false]
+foreground = "bright-red"
+
+[elements.null]
+foreground = "bright-red"
+
+[levels.trace.level-inner]
+modes = ["faint"]
+
+[levels.debug.level-inner]
+foreground = "bright-magenta"
+
+[levels.info.level-inner]
+foreground = "cyan"
+
+[levels.warning.level]
+foreground = "yellow"
+modes = ["reverse"]
+
+[levels.error.time]
+foreground = "bright-red"
+
+[levels.error.level]
+foreground = "bright-red"
+modes = ["reverse"]
+
+[indicators.sync.synced]
+text = " "
+
+[indicators.sync.failed]
+text = "!"
+
+[indicators.sync.failed.inner.style]
+foreground = "yellow"
+modes = ["bold"]

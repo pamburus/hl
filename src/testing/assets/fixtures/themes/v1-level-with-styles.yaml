@@ -1,0 +1,55 @@
+# Test file for FR-021a: V1 level overrides support v1 features
+# This v1 theme uses style definitions and references them in level-specific overrides
+
+version: "1.0"
+
+# Define reusable styles using predefined role names (v1 feature)
+styles:
+  error:
+    foreground: "#FF0000"
+    modes: [bold]
+
+  warning:
+    foreground: "#FFA500"
+    modes: [italic]
+
+  accent:
+    foreground: "#00FF00"
+
+  muted:
+    foreground: "#888888"
+    modes: [faint]
+
+# Base element definitions
+elements:
+  message:
+    foreground: "#FFFFFF"
+
+  level:
+    foreground: "#AAAAAA"
+
+# Level-specific overrides using v1 style references
+levels:
+  error:
+    message:
+      style: error
+    level:
+      style: error
+
+  warning:
+    message:
+      style: warning
+    level:
+      style: warning
+
+  info:
+    message:
+      style: accent
+    level:
+      style: accent
+
+  debug:
+    message:
+      style: muted
+    level:
+      style: muted

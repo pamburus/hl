@@ -1,0 +1,12 @@
+# Test file for v1 $schema support
+# The $schema field should be accepted and ignored (used for IDE/validator support)
+
+$schema: "https://example.com/theme.schema.json"
+version: "1.0"
+
+elements:
+  message:
+    foreground: "#FFFFFF"
+
+  level:
+    foreground: "#AAAAAA"

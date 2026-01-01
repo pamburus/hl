@@ -1,0 +1,76 @@
+%%{init: {'theme':'base','themeVariables':{'primaryColor':'#e1f5ff','primaryTextColor':'#000','primaryBorderColor':'#01579b','lineColor':'#666','secondaryColor':'#fff9c4','tertiaryColor':'#f3e5f5','background':'transparent','mainBkg':'transparent','secondaryBkg':'transparent','tertiaryBkg':'transparent'}}}%%
+graph LR
+    %% Root
+    default["<b>default</b><br/><i>empty base</i>"]
+
+    %% Tier 1
+    primary["<b>primary</b><br/>modes: -faint"]
+    status["<b>status</b><br/>modes: -faint"]
+
+    %% Tier 2
+    secondary["<b>secondary</b><br/>style: primary<br/>modes: faint"]
+    strong["<b>strong</b><br/>style: primary<br/>modes: bold"]
+    value["<b>value</b><br/>style: primary"]
+    level["<b>level</b><br/>style: status"]
+
+    %% Tier 3 - Secondary branch
+    muted["<b>muted</b><br/>style: secondary"]
+    accent["<b>accent</b><br/>style: secondary"]
+    trace["<b>trace</b><br/>style: secondary"]
+
+    %% Tier 3 - Strong branch
+    message["<b>message</b><br/>style: strong"]
+    syntax["<b>syntax</b><br/>style: strong"]
+
+    %% Tier 4 - Accent derivatives
+    key["<b>key</b><br/>style: accent"]
+    accsec["<b>accent-secondary</b><br/>style: accent, secondary"]
+
+    %% Independent log levels
+    debug["<b>debug</b><br/>fg: magenta"]
+    info["<b>info</b><br/>fg: cyan"]
+    warning["<b>warning</b><br/>fg: yellow"]
+    error["<b>error</b><br/>fg: bright-red"]
+
+    %% Connections from default
+    default -.-> primary
+    default -.-> status
+    default -.-> debug
+    default -.-> info
+    default -.-> warning
+    default -.-> error
+
+    %% Primary branch
+    primary --> secondary
+    primary --> strong
+    primary --> value
+
+    %% Secondary branch
+    secondary --> muted
+    secondary --> accent
+    secondary --> trace
+
+    %% Accent branch
+    accent --> key
+    accent --> accsec
+
+    %% Strong branch
+    strong --> message
+    strong --> syntax
+
+    %% Status branch
+    status --> level
+
+    %% Style definitions with readable colors for both light and dark backgrounds
+    classDef root fill:#e1f5ff,stroke:#01579b,stroke-width:4px,color:#000
+    classDef tier1 fill:#fff9c4,stroke:#f57f17,stroke-width:3px,color:#000
+    classDef tier2 fill:#f3e5f5,stroke:#4a148c,stroke-width:2px,color:#000
+    classDef tier3 fill:#e8f5e9,stroke:#1b5e20,stroke-width:2px,color:#000
+    classDef independent fill:#fff3e0,stroke:#e65100,stroke-width:2px,color:#000
+    classDef loglevel fill:#fce4ec,stroke:#880e4f,stroke-width:2px,color:#000
+
+    class default root
+    class primary,status tier1
+    class secondary,strong,value,level tier2
+    class muted,accent,trace,key,accsec,message,syntax tier3
+    class debug,info,warning,error loglevel

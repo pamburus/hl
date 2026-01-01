@@ -1,0 +1,15 @@
+{
+  "version": "0.0",
+  "elements": {
+    "key": {
+      "foreground": "red"
+    },
+    "message": {
+      "foreground": "blue",
+      "background": "green"
+    },
+    "invalid": {
+      "foreground": "yellow",
+    }
+  }
+}

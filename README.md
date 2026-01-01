@@ -635,6 +635,22 @@ See other [screenshots](https://github.com/pamburus/hl-extra/blob/d6f41877060b79
 * Using environment variable, i.e. `HL_THEME=classic`, overrides the value specified in configuration file.
 * Using command-line argument, i.e. `--theme classic`, overrides all other values.
 
+#### Theme overlays
+
+Theme overlays allow you to apply multiple theme modifications on top of your base theme and main configured theme, enabling compositional theming. Overlays are merged in order: `@base` → configured theme → overlays (in list order).
+
+* Configure overlays in your configuration file using the `theme-overlays` setting:
+
+    ```yaml
+    theme: "uni"
+    theme-overlays: ["@accent-italic"]
+    ```
+
+* Overlays are regular theme files that can customize specific aspects without replacing the entire theme
+* Overlays are applied in the specified order, allowing fine-grained control over theme composition
+* Empty array `[]` or omitting `theme-overlays` means no overlays are applied
+* Overlay themes are typically tagged with `overlay` and excluded from default theme listings (use `--list-themes=overlay` to view them)
+
 #### Selecting themes with preview
 
 To select themes with preview [fzf](https://github.com/junegunn/fzf) tool can be used like this:
@@ -645,65 +661,79 @@ hl --list-themes | fzf --color='bg+:23,gutter:-1,pointer:210' --highlight-line -
 
 #### Custom themes
 
+For complete theme configuration reference, see __[Theme Configuration Guide](doc/theme.md)__.
+
 * Custom themes are automatically loaded when found in a predefined platform-specific location.
 
-    | OS      | Location                                                   |
-    | ------- | ---------------------------------------------------------- |
-    | macOS   | ~/.config/hl/themes/*.{yaml,toml,json}                     |
-    | Linux   | ~/.config/hl/themes/*.{yaml,toml,json}                     |
-    | Windows | %USERPROFILE%\AppData\Roaming\hl\themes\*.{yaml,toml,json} |
+    | OS      | Location                                                             |
+    | ------- | -------------------------------------------------------------------- |
+    | macOS   | ~/.config/hl/themes/*.{yaml,yml,toml,json}                           |
+    | Linux   | ~/.config/hl/themes/*.{yaml,yml,toml,json}                           |
+    | Windows | %USERPROFILE%\AppData\Roaming\hl\themes\*.{yaml,yml,toml,json}       |
 
-* Format description
-  * Section `elements` contains styles for predefined elements.
-  * Section `levels` contains optional overrides for styles defined in `elements` sections per logging level, which are [`trace`, `debug`, `info`, `warning`, `error`].
-  * Each element style contains optional `background`, `foreground` and `modes` parameters.
-  * Example
+* __Structure__
+  * `version` (required): Must be `"1.0"`
+  * `tags` (optional): Theme classification and filtering
+    * Classification tags: `dark`, `light`, `16color`, `256color`, `truecolor`
+    * Special tags: `base` (foundation themes, excluded from default listings), `overlay` (composition themes, excluded from default listings)
+    * Use `--list-themes=base` or `--list-themes=overlay` to show themes with these tags
+    * Theme names starting with `@` (e.g., `@base`, `@accent-italic`) are a naming convention; filtering is based on tags, not name prefixes
+  * `styles` (optional): Reusable role-based styles that can inherit from each other
+  * `elements` (optional): Visual styles for specific log elements
+  * `levels` (optional): Per-level overrides for elements
+  * `indicators` (optional): Sync indicator styling for `--follow` mode
 
-    ```yaml
-    elements:
-        <element>:
-            foreground: <color>
-            background: <color>
-            modes: [<mode>, <mode>, ...]
-    levels:
-        <level>:
-            <element>:
-                foreground: <color>
-                background: <color>
-                modes: [<mode>, <mode>, ...]
+* __Example__
+
+    ```toml
+    version = "1.0"
+    tags = ["dark", "256color"]
+
+    # Reusable styles with inheritance
+    [styles]
+    primary = { modes = ["-faint"] }
+    secondary = { style = "primary", modes = ["faint"] }
+    warning = { style = "primary", foreground = "yellow" }
+    error = { style = "primary", foreground = "bright-red" }
+
+    # Element-specific styles can reference roles
+    [elements]
+    message = { style = "primary", modes = ["bold"] }
+    time = { style = "secondary" }
+    level-inner = { style = "primary" }
+
+    # Level-specific overrides
+    [levels.warning]
+    level-inner = { style = ["primary", "warning"] }
+    message = { style = ["primary", "warning"] }
+
+    [levels.error]
+    level-inner = { style = ["primary", "error"] }
+    message = { style = ["primary", "error"] }
     ```
 
-  * Color format is one of
-    * Keyword `default` specifies default color defined by the terminal.
-    * ASCII basic color name, one of
-      * `black`
-      * `red`
-      * `green`
-      * `yellow`
-      * `blue`
-      * `magenta`
-      * `cyan`
-      * `white`
-      * `bright-black`
-      * `bright-red`
-      * `bright-green`
-      * `bright-yellow`
-      * `bright-blue`
-      * `bright-magenta`
-      * `bright-cyan`
-      * `bright-white`
-    * 256-color palette code, from `0` to `255`.
-    * RGB color in hex web color format, i.e. `#FFFF00` for bright yellow color.
-  * Modes is a list of additional styles, each of them is one of
-    * `bold`
-    * `faint`
-    * `italic`
-    * `underline`
-    * `slow-blink`
-    * `rapid-blink`
-    * `reverse`
-    * `conceal`
-    * `crossed-out`
+* __Roles__ (predefined): `default`, `primary`, `secondary`, `strong`, `muted`, `accent`, `accent-secondary`, `message`, `syntax`, `status`, `key`, `value`, `level`, `trace`, `debug`, `info`, `warning`, `error`
+
+* __Elements__ (predefined): `input`, `input-number`, `input-number-inner`, `input-name`, `input-name-inner`, `time`, `level`, `level-inner`, `logger`, `logger-inner`, `caller`, `caller-inner`, `message`, `message-delimiter`, `field`, `key`, `array`, `object`, `string`, `number`, `boolean`, `boolean-true`, `boolean-false`, `null`, `ellipsis`
+
+* __Mode operations__:
+  * `+mode` or `mode`: Add mode (e.g., `["+bold"]` or `["bold"]`)
+  * `-mode`: Remove inherited mode (e.g., `["-faint"]`)
+  * Last occurrence wins for conflicts (e.g., `["+bold", "-bold"]` removes bold)
+
+* __Inheritance chain__: `@base` theme → user theme's styles → element's `style` field → element's explicit properties
+  * All themes inherit from built-in `@base` theme
+  * Styles can reference other styles via `style` field
+  * Elements can reference styles via `style` field
+  * Explicit properties override inherited ones
+
+* __Color format__:
+  * Keyword `default` for terminal default color
+  * ASCII basic color names: `black`, `red`, `green`, `yellow`, `blue`, `magenta`, `cyan`, `white`, `bright-black`, `bright-red`, `bright-green`, `bright-yellow`, `bright-blue`, `bright-magenta`, `bright-cyan`, `bright-white`
+  * 256-color palette code: `0` to `255`
+  * RGB hex format: `#RRGGBB` (e.g., `#FFFF00` for bright yellow)
+
+* __Modes__: `bold`, `faint`, `italic`, `underline`, `slow-blink`, `rapid-blink`, `reverse`, `conceal`, `crossed-out`
 
 ### Used terminal color schemes
 
@@ -779,7 +809,7 @@ Advanced Options:
   -C, --concurrency <N>             Number of processing threads [env: HL_CONCURRENCY=]
       --shell-completions <SHELL>   Print shell auto-completion script and exit [possible values: bash, elvish, fish, powershell, zsh]
       --man-page                    Print man page and exit
-      --list-themes[=<TAGS>]        Print available themes optionally filtered by tags [possible values: dark, light, 16color, 256color, truecolor]
+      --list-themes[=<TAGS>]        Print available themes optionally filtered by tags [possible values: dark, light, 16color, 256color, truecolor, base, overlay]
       --dump-index                  Print debug index metadata (in --sort mode) and exit
 ```
 

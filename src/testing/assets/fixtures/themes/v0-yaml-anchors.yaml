@@ -1,0 +1,54 @@
+# V0 theme testing YAML anchors and aliases
+# YAML supports anchors (&) and aliases (*) for reusing definitions
+
+# Define a palette using anchors
+$palette:
+  primary-color: &primary "#00ff00"
+  secondary-color: &secondary "#0000ff"
+  error-color: &error "#ff0000"
+  warning-color: &warning "#ffaa00"
+  base-style: &base-style
+    foreground: *primary
+    modes: [bold]
+  error-style: &error-style
+    foreground: *error
+    background: "#110000"
+    modes: [bold, reverse]
+
+elements:
+  # Use anchor alias
+  message: *base-style
+
+  # Use palette color
+  level:
+    foreground: *secondary
+    modes: [italic]
+
+  # Use error style
+  level-inner: *error-style
+
+  # Mix palette with custom properties
+  time:
+    foreground: *warning
+    modes: [faint]
+
+  caller:
+    foreground: *primary
+    background: "#001100"
+
+  key:
+    foreground: "#ffff00"
+
+  value:
+    foreground: "#00ffff"
+
+levels:
+  warning:
+    level:
+      foreground: *warning
+      modes: [bold]
+
+  error:
+    level: *error-style
+    message:
+      foreground: *error

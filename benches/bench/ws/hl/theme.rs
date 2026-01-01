@@ -11,7 +11,7 @@ use super::{BencherExt, ND};
 use hl::{
     Level,
     theme::{Element, StylingPush, Theme},
-    themecfg::{self, Color, Mode, Style},
+    themecfg::{self, Color, Mode, Version},
 };
 
 const GROUP: &str = strcat!(super::GROUP, ND, "theme");
@@ -86,82 +86,27 @@ pub(super) fn bench(c: &mut Criterion) {
 }
 
 fn theme() -> Theme {
-    Theme::from(&themecfg::Theme {
+    let cfg = themecfg::Theme {
+        version: Version::CURRENT,
         tags: Default::default(),
-        elements: hashmap! {
-            Element::Time => Style {
-                modes: Vec::default(),
-                foreground: Some(Color::Palette(8)),
-                background: None,
-            },
-            Element::Level => Style {
-                modes: Vec::default(),
-                foreground: Some(Color::Palette(25)),
-                background: None,
-            },
-            Element::Logger => Style {
-                modes: Vec::default(),
-                foreground: Some(Color::Palette(8)),
-                background: None,
-            },
-            Element::Caller => Style {
-                modes: Vec::default(),
-                foreground: Some(Color::Palette(8)),
-                background: None,
-            },
-            Element::Message => Style {
-                modes: Vec::default(),
-                foreground: Some(Color::Palette(255)),
-                background: None,
-            },
-            Element::Field => Style {
-                modes: Vec::default(),
-                foreground: Some(Color::Palette(8)),
-                background: None,
-            },
-            Element::Object => Style {
-                modes: Vec::default(),
-                foreground: Some(Color::Palette(246)),
-                background: None,
-            },
-            Element::Array => Style {
-                modes: Vec::default(),
-                foreground: Some(Color::Palette(246)),
-                background: None,
-            },
-            Element::Ellipsis => Style {
-                modes: Vec::default(),
-                foreground: Some(Color::Palette(8)),
-                background: None,
-            },
-            Element::Key => Style {
-                modes: vec![Mode::Underline],
-                foreground: Some(Color::Palette(117)),
-                background: None,
-            },
-            Element::Null => Style {
-                modes: Vec::default(),
-                foreground: Some(Color::Palette(136)),
-                background: None,
-            },
-            Element::Boolean => Style {
-                modes: Vec::default(),
-                foreground: Some(Color::Palette(178)),
-                background: None,
-            },
-            Element::Number => Style {
-                modes: Vec::default(),
-                foreground: Some(Color::Palette(41)),
-                background: None,
-            },
-            Element::String => Style {
-                modes: Vec::default(),
-                foreground: Some(Color::Palette(36)),
-                background: None,
-            },
-        }
-        .into(),
+        elements: themecfg::StylePack::new(hashmap! {
+            Element::Time => themecfg::Style::new().foreground(Some(Color::Palette(8))),
+            Element::Level => themecfg::Style::new().foreground(Some(Color::Palette(25))),
+            Element::Logger => themecfg::Style::new().foreground(Some(Color::Palette(8))),
+            Element::Caller => themecfg::Style::new().foreground(Some(Color::Palette(8))),
+            Element::Message => themecfg::Style::new().foreground(Some(Color::Palette(255))),
+            Element::Field => themecfg::Style::new().foreground(Some(Color::Palette(8))),
+            Element::Object => themecfg::Style::new().foreground(Some(Color::Palette(246))),
+            Element::Array => themecfg::Style::new().foreground(Some(Color::Palette(246))),
+            Element::Ellipsis => themecfg::Style::new().foreground(Some(Color::Palette(8))),
+            Element::Key => themecfg::Style::new().modes(Mode::Underline.into()).foreground(Some(Color::Palette(8))),
+            Element::Null => themecfg::Style::new().foreground(Some(Color::Palette(136))),
+            Element::Boolean => themecfg::Style::new().foreground(Some(Color::Palette(178))),
+            Element::Number => themecfg::Style::new().foreground(Some(Color::Palette(41))),
+            Element::String => themecfg::Style::new().foreground(Some(Color::Palette(36))),
+        }),
         levels: HashMap::new(),
         indicators: themecfg::IndicatorPack::default(),
-    })
+    };
+    Theme::from(cfg)
 }

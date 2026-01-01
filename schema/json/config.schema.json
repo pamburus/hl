@@ -320,6 +320,13 @@
     },
     "theme": {
       "type": "string"
+    },
+    "theme-overlays": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Ordered list of theme overlays to apply on top of the base theme and main configured theme"
     }
   }
 }

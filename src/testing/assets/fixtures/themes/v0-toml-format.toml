@@ -1,0 +1,79 @@
+# V0 theme in TOML format
+# Testing TOML parsing for v0 themes
+
+[elements.message]
+foreground = "#ffffff"
+modes = ["bold"]
+
+[elements.level]
+foreground = "#00ff00"
+background = "#001100"
+modes = ["italic", "underline"]
+
+[elements.level-inner]
+foreground = "#00ffff"
+
+[elements.time]
+foreground = "#aaaaaa"
+modes = ["faint"]
+
+[elements.caller]
+foreground = "#cccccc"
+
+[elements.key]
+foreground = "#ffff00"
+modes = ["bold"]
+
+[elements.value]
+foreground = "#00aaaa"
+
+[elements.boolean]
+foreground = "#00ff00"
+modes = ["bold"]
+
+[elements.boolean-true]
+foreground = "#00ffff"
+
+[elements.boolean-false]
+foreground = "#ff0000"
+
+[elements.string]
+foreground = "green"
+
+[elements.number]
+foreground = "bright-blue"
+
+[elements.array]
+foreground = 220
+
+[elements.object]
+foreground = 214
+
+[levels.debug.level]
+foreground = "#ff00ff"
+modes = ["faint"]
+
+[levels.warning.level]
+foreground = "#ffaa00"
+modes = ["bold"]
+
+[levels.warning.time]
+foreground = "#ffaa00"
+
+[levels.error.level]
+foreground = "#ff0000"
+background = "#440000"
+modes = ["reverse", "bold"]
+
+[levels.error.message]
+foreground = "#ff8888"
+
+[indicators.sync.synced]
+text = " "
+
+[indicators.sync.failed]
+text = "!"
+
+[indicators.sync.failed.inner.style]
+foreground = "yellow"
+modes = ["bold"]

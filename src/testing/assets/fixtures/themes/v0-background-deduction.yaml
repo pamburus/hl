@@ -1,0 +1,5 @@
+elements:
+  string:
+    foreground: 'green'
+    background: 'black'
+    modes: ['bold']

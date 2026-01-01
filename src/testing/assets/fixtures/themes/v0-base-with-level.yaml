@@ -1,0 +1,8 @@
+elements:
+  message:
+    foreground: "#00FF00"
+
+levels:
+  error:
+    message:
+      foreground: "#FF0000"

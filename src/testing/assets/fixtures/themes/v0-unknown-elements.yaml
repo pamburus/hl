@@ -1,0 +1,17 @@
+# V0 theme testing unknown elements are ignored
+# Unknown element names should be silently ignored (forward compatibility)
+
+elements:
+  message:
+    foreground: '#ffffff'
+
+  # These are unknown elements and should be ignored
+  unknown-element:
+    foreground: '#ff0000'
+
+  another-unknown:
+    foreground: '#00ff00'
+
+  future-element:
+    foreground: '#0000ff'
+    modes: [bold]
