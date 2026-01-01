@@ -88,10 +88,12 @@ impl Theme {
             // First resolve base elements, then merge level-specific overrides
             // This ensures level-specific properties override base properties while
             // allowing base roles to be resolved first
-            let mut resolved_base = self.elements.resolved(&inventory, flags);
-            let resolved_override = pack.resolved(&inventory, flags);
-            resolved_base.merge(resolved_override, flags - MergeFlag::ReplaceHierarchies);
-            levels.insert(*level, resolved_base);
+            levels.insert(
+                *level,
+                self.elements
+                    .resolved(&inventory, flags)
+                    .merged(pack.resolved(&inventory, flags), flags - MergeFlag::ReplaceHierarchies),
+            );
         }
 
         // Step 4: Resolve indicator styles
