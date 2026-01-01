@@ -8,7 +8,7 @@ use std::{
 // third-party imports
 use serde::{Deserialize, Deserializer, Serialize, de::Visitor};
 
-use crate::themecfg::GetMergeFlags;
+use crate::themecfg::MergeOptions;
 
 // relative imports
 use super::{Error, MergeFlag, MergeFlags, Result};
@@ -48,8 +48,10 @@ impl Version {
     }
 }
 
-impl GetMergeFlags for Version {
-    fn merge_flags(&self) -> MergeFlags {
+impl MergeOptions for Version {
+    type Output = MergeFlags;
+
+    fn merge_options(&self) -> Self::Output {
         match self {
             Self { major: 0, .. } => {
                 MergeFlag::ReplaceElements | MergeFlag::ReplaceHierarchies | MergeFlag::ReplaceModes

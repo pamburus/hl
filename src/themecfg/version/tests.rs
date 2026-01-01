@@ -2,7 +2,7 @@ use std::str::FromStr;
 
 use super::super::tests::{dirs, load_raw_theme_unmerged};
 use super::Version;
-use crate::themecfg::{Error, GetMergeFlags, MergeFlags, Theme, ThemeLoadError};
+use crate::themecfg::{Error, MergeFlags, MergeOptions, Theme, ThemeLoadError};
 
 #[test]
 fn test_theme_version_parsing() {
@@ -154,6 +154,6 @@ fn test_v1_version_1_1_rejected_before_deserialization() {
 #[test]
 fn test_version_merge_flags_unknown() {
     let version = Version::new(99, 0);
-    let flags = version.merge_flags();
+    let flags = version.merge_options();
     assert_eq!(flags, MergeFlags::new());
 }

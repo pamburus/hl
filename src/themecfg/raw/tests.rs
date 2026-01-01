@@ -3,8 +3,8 @@ use std::collections::HashMap;
 use crate::level::Level;
 
 use super::super::{
-    Color, Element, GetMergeFlags, Merge, MergeFlags, Mode, ModeSetDiff, PlainColor, RGB, RawStyle, RawTheme, Role,
-    StyleBase, Version,
+    Color, Element, Merge, MergeFlags, MergeOptions, MergeWithOptions, Mode, ModeSetDiff, PlainColor, RGB, RawStyle,
+    RawTheme, Role, StyleBase, Version,
     tests::{dirs, modes, raw_theme, raw_theme_unmerged},
     v1,
 };
@@ -95,7 +95,7 @@ fn test_v0_style_merged_modes() {
         background: Some(Color::Plain(PlainColor::Blue)),
     };
 
-    let result = base.clone().merged(&patch_with_modes, Version::V0.merge_flags());
+    let result = base.clone().merged(&patch_with_modes, Version::V0.merge_options());
     assert_eq!(result.modes, Mode::Underline.into());
 
     let patch_empty_modes = RawStyle {
@@ -105,7 +105,7 @@ fn test_v0_style_merged_modes() {
         background: None,
     };
 
-    let result = base.clone().merged(&patch_empty_modes, Version::V0.merge_flags());
+    let result = base.clone().merged(&patch_empty_modes, Version::V0.merge_options());
     assert_eq!(result.modes, Default::default());
 }
 
@@ -115,7 +115,7 @@ fn test_v1_multiple_inheritance() {
 
     assert_eq!(theme.version, Version::V1_0);
 
-    let flags = theme.merge_flags();
+    let flags = theme.merge_options();
     let inventory = theme.styles.resolved(flags).unwrap();
 
     let warning = &inventory[&Role::Warning];
@@ -573,7 +573,7 @@ fn test_resolved_style_merged_style_replace_modes() {
         background: None,
     };
 
-    let merged = base.merged(&patch, Version::V0.merge_flags());
+    let merged = base.merged(&patch, Version::V0.merge_options());
     assert_eq!(merged.modes, Mode::Italic.into());
     assert_eq!(merged.foreground, Some(Color::Plain(PlainColor::Green)));
 }

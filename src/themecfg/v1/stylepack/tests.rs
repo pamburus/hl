@@ -1,7 +1,7 @@
 use yaml_peg::serde as yaml;
 
-use super::super::super::{Color, Element, Merge, Mode, PlainColor, tests::modes};
-use super::super::{GetMergeFlags, Style, Version};
+use super::super::super::{Color, Element, MergeWithOptions, Mode, PlainColor, tests::modes};
+use super::super::{MergeOptions, Style, Version};
 use super::StylePack;
 
 #[test]
@@ -54,7 +54,7 @@ fn test_v1_style_pack_merge() {
         },
     );
 
-    let merged = base.merged(patch, Version::V0.merge_flags());
+    let merged = base.merged(patch, Version::V0.merge_options());
 
     assert_eq!(
         merged[&Element::Message].foreground,
@@ -75,7 +75,7 @@ fn test_child_blocking_parent_in_style_pack() {
     let mut patch = StylePack::default();
     patch.insert(Element::LevelInner, Style::default());
 
-    let merged = base.merged(&patch, Version::V0.merge_flags());
+    let merged = base.merged(&patch, Version::V0.merge_options());
 
     assert!(!merged.contains_key(&Element::Level));
     assert!(merged.contains_key(&Element::LevelInner));

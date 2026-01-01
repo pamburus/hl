@@ -1,4 +1,4 @@
-use super::{Color, Merge, MergeFlag, MergeFlags, ModeSetDiff, RawStyle};
+use super::{Color, MergeFlag, MergeFlags, MergeWithOptions, ModeSetDiff, RawStyle};
 
 // ---
 
@@ -36,9 +36,11 @@ impl Style {
     }
 }
 
-impl Merge<&Style> for Style {
-    fn merge(&mut self, other: &Self, flags: MergeFlags) {
-        if flags.contains(MergeFlag::ReplaceModes) {
+impl MergeWithOptions<&Style> for Style {
+    type Options = MergeFlags;
+
+    fn merge(&mut self, other: &Self, options: Self::Options) {
+        if options.contains(MergeFlag::ReplaceModes) {
             self.modes = other.modes;
         } else {
             self.modes += other.modes;
@@ -52,9 +54,11 @@ impl Merge<&Style> for Style {
     }
 }
 
-impl Merge<&RawStyle> for Style {
-    fn merge(&mut self, other: &RawStyle, flags: MergeFlags) {
-        if flags.contains(MergeFlag::ReplaceModes) {
+impl MergeWithOptions<&RawStyle> for Style {
+    type Options = MergeFlags;
+
+    fn merge(&mut self, other: &RawStyle, options: Self::Options) {
+        if options.contains(MergeFlag::ReplaceModes) {
             self.modes = other.modes;
         } else {
             self.modes += other.modes;

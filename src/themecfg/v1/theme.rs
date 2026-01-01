@@ -15,8 +15,8 @@ use crate::level::{InfallibleLevel, Level};
 
 // relative imports
 use super::{
-    Element, GetMergeFlags, IndicatorPack, Merge, MergeFlag, MergeFlags, ResolvedIndicatorPack, ResolvedTheme, Result,
-    Role, Style, StyleInventory, StylePack, StyleResolveError, Tag, ThemeLoadError, Version, v0,
+    Element, IndicatorPack, Merge, MergeFlag, MergeFlags, MergeOptions, MergeWithOptions, ResolvedIndicatorPack,
+    ResolvedTheme, Result, Role, Style, StyleInventory, StylePack, StyleResolveError, Tag, ThemeLoadError, Version, v0,
 };
 
 // ---
@@ -61,7 +61,7 @@ impl Default for Theme {
 
 impl Theme {
     pub fn merge(&mut self, other: Self) {
-        let flags = other.merge_flags();
+        let flags = other.merge_options();
         self.version = other.version;
         self.styles.merge(other.styles);
 
@@ -121,7 +121,7 @@ impl Theme {
     /// Returns an error if:
     /// - Style recursion limit is exceeded
     pub fn resolve(self) -> Result<ResolvedTheme, StyleResolveError> {
-        let flags = self.merge_flags();
+        let flags = self.merge_options();
 
         // Step 1: Resolve the role-based styles inventory
         let inventory = self.styles.resolved(flags)?;
@@ -181,9 +181,11 @@ impl Theme {
     }
 }
 
-impl GetMergeFlags for Theme {
-    fn merge_flags(&self) -> MergeFlags {
-        self.version.merge_flags()
+impl MergeOptions for Theme {
+    type Output = MergeFlags;
+
+    fn merge_options(&self) -> Self::Output {
+        self.version.merge_options()
     }
 }
 

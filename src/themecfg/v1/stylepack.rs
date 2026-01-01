@@ -7,8 +7,8 @@ use serde::Deserialize;
 
 // relative imports
 use super::{
-    Element, Merge, MergeFlag, MergeFlags, ResolvedStyle, Result, Role, Style, StyleInventory, StyleResolveError,
-    StyleResolver,
+    Element, Merge, MergeFlag, MergeFlags, MergeWithOptions, ResolvedStyle, Result, Role, Style, StyleInventory,
+    StyleResolveError, StyleResolver,
 };
 
 // ---
@@ -44,44 +44,6 @@ where
 {
     pub fn new(items: HashMap<K, S>) -> Self {
         Self(items)
-    }
-}
-
-impl<S> StylePack<Role, S> {
-    pub fn merge(&mut self, patch: Self) {
-        self.0.extend(patch.0);
-    }
-
-    pub fn merged(mut self, patch: Self) -> Self {
-        self.merge(patch);
-        self
-    }
-}
-
-impl<S> StylePack<Element, S> {
-    pub fn merge(&mut self, patch: Self, flags: MergeFlags)
-    where
-        S: Clone + for<'a> Merge<&'a S>,
-    {
-        if flags.contains(MergeFlag::ReplaceHierarchies) {
-            for (parent, child) in Element::nested() {
-                if patch.0.contains_key(child) {
-                    self.0.remove(parent);
-                }
-            }
-        }
-
-        if flags.contains(MergeFlag::ReplaceElements) {
-            self.0.extend(patch.0);
-            return;
-        }
-
-        for (key, patch) in patch.0 {
-            self.0
-                .entry(key)
-                .and_modify(|v| *v = v.clone().merged(&patch, flags))
-                .or_insert(patch);
-        }
     }
 }
 
@@ -177,15 +139,50 @@ impl StylePack<Role, Style> {
     }
 }
 
-impl Merge<&StylePack<Element, Style>> for StylePack<Element, Style> {
-    fn merge(&mut self, other: &StylePack<Element, Style>, flags: MergeFlags) {
-        Self::merge(self, other.clone(), flags);
+impl<S> MergeWithOptions for StylePack<Element, S>
+where
+    for<'a> S: MergeWithOptions<&'a S, Options = MergeFlags> + Default + Clone,
+{
+    type Options = MergeFlags;
+
+    fn merge(&mut self, patch: Self, flags: MergeFlags) {
+        if flags.contains(MergeFlag::ReplaceHierarchies) {
+            for (parent, child) in Element::nested() {
+                if patch.0.contains_key(child) {
+                    self.0.remove(parent);
+                }
+            }
+        }
+
+        if flags.contains(MergeFlag::ReplaceElements) {
+            self.0.extend(patch.0);
+            return;
+        }
+
+        for (key, patch) in patch.0 {
+            self.0
+                .entry(key)
+                .and_modify(|v| *v = v.clone().merged(&patch, flags))
+                .or_insert(patch);
+        }
     }
 }
 
-impl Merge<StylePack<Element, Style>> for StylePack<Element, Style> {
-    fn merge(&mut self, other: StylePack<Element, Style>, flags: MergeFlags) {
-        Self::merge(self, other, flags);
+impl<S> MergeWithOptions<&StylePack<Element, S>> for StylePack<Element, S>
+where
+    for<'a> S: MergeWithOptions<&'a S, Options = MergeFlags> + Default + Clone,
+    Self: MergeWithOptions<StylePack<Element, S>, Options = MergeFlags>,
+{
+    type Options = MergeFlags;
+
+    fn merge(&mut self, other: &StylePack<Element, S>, options: MergeFlags) {
+        <Self as MergeWithOptions<StylePack<Element, S>>>::merge(self, other.clone(), options);
+    }
+}
+
+impl<S> Merge for StylePack<Role, S> {
+    fn merge(&mut self, patch: Self) {
+        self.0.extend(patch.0);
     }
 }
 

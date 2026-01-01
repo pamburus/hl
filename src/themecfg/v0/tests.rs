@@ -1,12 +1,12 @@
 use std::collections::HashMap;
 
-use super::super::{Element, GetMergeFlags, MergeFlag, tests::load_yaml_fixture};
+use super::super::{Element, MergeFlag, MergeOptions, tests::load_yaml_fixture};
 use super::{Style, StylePack, Theme};
 
 #[test]
 fn test_v0_theme_merge_flags() {
     let theme: Theme = load_yaml_fixture("themes/v0-theme-merge-flags.yaml");
-    let flags = theme.merge_flags();
+    let flags = theme.merge_options();
     assert!(flags.contains(MergeFlag::ReplaceElements));
     assert!(flags.contains(MergeFlag::ReplaceHierarchies));
     assert!(flags.contains(MergeFlag::ReplaceModes));

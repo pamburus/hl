@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use super::super::super::{Color, Merge, MergeFlags, Mode, PlainColor, Role, Style as ResolvedStyle};
+use super::super::super::{Color, Merge, MergeFlags, MergeWithOptions, Mode, PlainColor, Role, Style as ResolvedStyle};
 use super::super::{Style, StyleBase, StylePack, StyleResolver};
 
 #[test]

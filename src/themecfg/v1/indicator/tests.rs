@@ -1,4 +1,4 @@
-use super::super::super::{Merge, MergeFlags, RawStyle};
+use super::super::super::{MergeFlags, MergeWithOptions, RawStyle};
 use super::{Indicator, IndicatorPack, IndicatorStyle, SyncIndicatorPack};
 
 #[test]

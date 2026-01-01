@@ -21,7 +21,7 @@ use yaml_peg::serde as yaml;
 use crate::{appdirs::AppDirs, level::Level, xerr::Suggestions};
 
 // relative imports
-use super::{Error, ExternalError, IndicatorPack, RawTheme, Result, StylePack, ThemeLoadError, Version, v0, v1};
+use super::{Error, ExternalError, IndicatorPack, Merge, RawTheme, Result, StylePack, ThemeLoadError, Version, v0, v1};
 
 // Private constants
 const BASE: &str = "@base";

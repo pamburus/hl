@@ -3,7 +3,7 @@ use serde::Deserialize;
 
 // relative imports
 use super::{
-    Merge, MergeFlags, ResolvedIndicator, ResolvedIndicatorPack, ResolvedIndicatorStyle, ResolvedStyle,
+    MergeFlags, MergeWithOptions, ResolvedIndicator, ResolvedIndicatorPack, ResolvedIndicatorStyle, ResolvedStyle,
     ResolvedSyncIndicatorPack, Style, v0,
 };
 
@@ -17,20 +17,14 @@ pub struct IndicatorPack<S = Style> {
     pub sync: SyncIndicatorPack<S>,
 }
 
-impl<S: Clone> IndicatorPack<S> {
-    pub fn merge(&mut self, other: Self, flags: MergeFlags)
-    where
-        SyncIndicatorPack<S>: Merge,
-    {
-        self.sync.merge(other.sync, flags);
-    }
+impl<S> MergeWithOptions for IndicatorPack<S>
+where
+    S: MergeWithOptions<Options = MergeFlags> + Default,
+{
+    type Options = MergeFlags;
 
-    pub fn merged(mut self, other: Self, flags: MergeFlags) -> Self
-    where
-        SyncIndicatorPack<S>: Merge,
-    {
-        self.merge(other, flags);
-        self
+    fn merge(&mut self, other: Self, options: MergeFlags) {
+        self.sync.merge(other.sync, options);
     }
 }
 
@@ -64,10 +58,15 @@ pub struct SyncIndicatorPack<S = Style> {
     pub failed: Indicator<S>,
 }
 
-impl Merge for SyncIndicatorPack<Style> {
-    fn merge(&mut self, other: Self, flags: MergeFlags) {
-        self.synced.merge(other.synced, flags);
-        self.failed.merge(other.failed, flags);
+impl<S> MergeWithOptions for SyncIndicatorPack<S>
+where
+    S: MergeWithOptions<Options = MergeFlags> + Default,
+{
+    type Options = MergeFlags;
+
+    fn merge(&mut self, other: Self, options: Self::Options) {
+        self.synced.merge(other.synced, options);
+        self.failed.merge(other.failed, options);
     }
 }
 
@@ -121,24 +120,18 @@ impl Indicator<Style> {
     }
 }
 
-impl<S: Clone> Indicator<S> {
-    pub fn merge(&mut self, other: Self, flags: MergeFlags)
-    where
-        IndicatorStyle<S>: Merge,
-    {
+impl<S> MergeWithOptions for Indicator<S>
+where
+    S: MergeWithOptions<Options = MergeFlags> + Default,
+{
+    type Options = MergeFlags;
+
+    fn merge(&mut self, other: Self, flags: MergeFlags) {
         self.outer.merge(other.outer, flags);
         self.inner.merge(other.inner, flags);
         if !other.text.is_empty() {
             self.text = other.text;
         }
-    }
-
-    pub fn merged(mut self, other: Self, flags: MergeFlags) -> Self
-    where
-        IndicatorStyle<S>: Merge,
-    {
-        self.merge(other, flags);
-        self
     }
 }
 
@@ -180,15 +173,20 @@ impl IndicatorStyle<Style> {
     }
 }
 
-impl Merge for IndicatorStyle<Style> {
-    fn merge(&mut self, other: Self, flags: MergeFlags) {
+impl<S> MergeWithOptions for IndicatorStyle<S>
+where
+    S: MergeWithOptions<Options = MergeFlags> + Default,
+{
+    type Options = MergeFlags;
+
+    fn merge(&mut self, other: Self, options: Self::Options) {
         if !other.prefix.is_empty() {
             self.prefix = other.prefix;
         }
         if !other.suffix.is_empty() {
             self.suffix = other.suffix;
         }
-        self.style = std::mem::take(&mut self.style).merged(&other.style, flags);
+        self.style = std::mem::take(&mut self.style).merged(other.style, options);
     }
 }
 

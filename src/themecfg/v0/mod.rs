@@ -18,7 +18,7 @@ use serde_value::Value;
 use crate::level::InfallibleLevel;
 
 // relative imports
-use super::{Color, Element, GetMergeFlags, MergeFlags, Mode, Tag, ThemeLoadError, Version};
+use super::{Color, Element, MergeFlags, MergeOptions, Mode, Tag, ThemeLoadError, Version};
 
 // ---
 
@@ -61,9 +61,11 @@ impl Theme {
     }
 }
 
-impl GetMergeFlags for Theme {
-    fn merge_flags(&self) -> MergeFlags {
-        self.version.merge_flags()
+impl MergeOptions for Theme {
+    type Output = MergeFlags;
+
+    fn merge_options(&self) -> Self::Output {
+        self.version.merge_options()
     }
 }
 

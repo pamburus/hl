@@ -4,8 +4,10 @@ use std::sync::Arc;
 // third-party imports
 use derive_more::{Deref, DerefMut};
 
+use crate::themecfg::Merge;
+
 // relative imports
-use super::{Error, GetMergeFlags, MergeFlags, Result, Theme, ThemeInfo, ThemeOrigin, ThemeSource, v1};
+use super::{Error, MergeFlags, MergeOptions, Result, Theme, ThemeInfo, ThemeOrigin, ThemeSource, v1};
 
 /// An unresolved theme with metadata, before style resolution.
 ///
@@ -41,16 +43,6 @@ impl RawTheme {
         })
     }
 
-    /// Merge this theme with another theme.
-    ///
-    /// The `other` theme's values override this theme's values where they conflict.
-    pub fn merged(self, other: Self) -> Self {
-        Self {
-            info: other.info,
-            inner: self.inner.merged(other.inner),
-        }
-    }
-
     /// Access the inner v1::Theme for advanced use cases.
     pub fn inner(&self) -> &v1::Theme {
         &self.inner
@@ -67,6 +59,13 @@ impl RawTheme {
     }
 }
 
+impl Merge for RawTheme {
+    fn merge(&mut self, other: Self) {
+        self.inner.merge(other.inner);
+        self.info = other.info;
+    }
+}
+
 impl Default for RawTheme {
     fn default() -> Self {
         Self {
@@ -76,9 +75,11 @@ impl Default for RawTheme {
     }
 }
 
-impl GetMergeFlags for RawTheme {
-    fn merge_flags(&self) -> MergeFlags {
-        self.inner.merge_flags()
+impl MergeOptions for RawTheme {
+    type Output = MergeFlags;
+
+    fn merge_options(&self) -> Self::Output {
+        self.inner.merge_options()
     }
 }
 

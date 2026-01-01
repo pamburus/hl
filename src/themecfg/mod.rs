@@ -67,21 +67,38 @@ pub enum MergeFlag {
 
 pub type MergeFlags = EnumSet<MergeFlag>;
 
-pub trait GetMergeFlags {
-    fn merge_flags(&self) -> MergeFlags;
+pub trait MergeOptions {
+    type Output;
+
+    fn merge_options(&self) -> Self::Output;
 }
 
 // ---
 
 // Trait for types that support merging
 pub trait Merge<T = Self> {
-    fn merge(&mut self, other: T, flags: MergeFlags);
-    fn merged(self, other: T, flags: MergeFlags) -> Self
+    fn merge(&mut self, other: T);
+    fn merged(self, other: T) -> Self
     where
         Self: Sized,
     {
         let mut result = self;
-        result.merge(other, flags);
+        result.merge(other);
+        result
+    }
+}
+
+// Trait for types that support merging with options
+pub trait MergeWithOptions<T = Self> {
+    type Options;
+
+    fn merge(&mut self, other: T, options: Self::Options);
+    fn merged(self, other: T, options: Self::Options) -> Self
+    where
+        Self: Sized,
+    {
+        let mut result = self;
+        result.merge(other, options);
         result
     }
 }

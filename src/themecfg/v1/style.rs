@@ -6,8 +6,8 @@ use serde::Deserialize;
 
 // relative imports
 use super::{
-    Color, Merge, MergeFlag, MergeFlags, ModeSet, ModeSetDiff, ResolvedStyle, Result, Role, StyleBase, StyleInventory,
-    StylePack, StyleResolveError, v0,
+    Color, MergeFlag, MergeFlags, MergeWithOptions, ModeSet, ModeSetDiff, ResolvedStyle, Result, Role, StyleBase,
+    StyleInventory, StylePack, StyleResolveError, v0,
 };
 
 // ---
@@ -147,18 +147,22 @@ impl Default for &Style {
     }
 }
 
-impl Merge<Style> for Style {
-    fn merge(&mut self, other: Style, flags: MergeFlags) {
-        self.merge_body(&other, flags);
+impl MergeWithOptions<Style> for Style {
+    type Options = MergeFlags;
+
+    fn merge(&mut self, other: Style, options: MergeFlags) {
+        self.merge_body(&other, options);
         if !other.base.is_empty() {
             self.base = other.base;
         }
     }
 }
 
-impl Merge<&Style> for Style {
-    fn merge(&mut self, other: &Style, flags: MergeFlags) {
-        self.merge_body(other, flags);
+impl MergeWithOptions<&Style> for Style {
+    type Options = MergeFlags;
+
+    fn merge(&mut self, other: &Style, options: MergeFlags) {
+        self.merge_body(other, options);
         if !other.base.is_empty() {
             self.base = other.base.clone();
         }

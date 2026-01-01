@@ -1,4 +1,4 @@
-use super::super::{Color, Merge, MergeFlag, MergeFlags, Mode, ModeSetDiff, PlainColor, RawStyle};
+use super::super::{Color, MergeFlag, MergeFlags, MergeWithOptions, Mode, ModeSetDiff, PlainColor, RawStyle};
 use super::Style;
 
 #[test]
