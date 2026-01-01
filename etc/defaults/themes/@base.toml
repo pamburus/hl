@@ -6,54 +6,55 @@ tags = ["base", "dark", "light", "16color"]
 # Styles define general purpose styles used throughout the theme.
 [styles]
 default = {  }
-primary = { modes = ["-faint"] }
+primary.modes = ["-faint"]
 secondary = { style = "primary", modes = ["faint"] }
 strong = { style = "primary", modes = ["bold"] }
-muted = { style = "secondary" }
-accent = { style = "secondary" }
-accent-secondary = { style = ["accent", "secondary"] }
-message = { style = "strong" }
-syntax = { style = "strong" }
-status = { modes = ["-faint"] }
-key = { style = "accent" }
-value = { style = "primary" }
-level = { style = "status" }
-trace = { style = "secondary" }
-debug = { foreground = "magenta" }
-info = { foreground = "cyan" }
-warning = { foreground = "yellow" }
-error = { foreground = "bright-red" }
+muted.style = "secondary"
+accent.style = "secondary"
+accent-secondary.style = ["accent", "secondary"]
+message.style = "strong"
+syntax.style = "strong"
+status.modes = ["-faint"]
+key.style = "accent"
+value.style = "primary"
+level.style = "status"
+trace.style = "secondary"
+debug.foreground = "magenta"
+info.foreground = "cyan"
+warning.foreground = "yellow"
+error.foreground = "bright-red"
 
 # Elements define specific styles for different log elements.
 [elements]
-input = { style = "secondary" }
-time = { style = "secondary" }
-level = { style = "muted" }
-level-inner = { style = "level" }
-logger = { style = "accent-secondary" }
+input.style = "secondary"
+time.style = "secondary"
+level.style = "muted"
+level-inner.style = "level"
+logger.style = "accent-secondary"
 caller = { style = "secondary", modes = ["italic"] }
-message = { style = "message" }
-message-delimiter = { style = "muted" }
-field = { style = "muted" }
-key = { style = "key" }
-ellipsis = { style = "muted" }
-object = { style = "syntax" }
-array = { style = "syntax" }
-string = { style = "value" }
-number = { style = "value" }
-boolean = { style = "value" }
-null = { style = "value" }
+message.style = "message"
+message-delimiter.style = "muted"
+field.style = "muted"
+key.style = "key"
+ellipsis.style = "muted"
+object.style = "syntax"
+array.style = "syntax"
+string.style = "value"
+number.style = "value"
+boolean.style = "value"
+null.style = "value"
 
 # Levels define styles for different log levels.
 [levels]
-trace = { level-inner = { style = ["level", "trace"] } }
-debug = { level-inner = { style = ["level", "debug"] } }
-info = { level-inner = { style = ["level", "info"] } }
-warning = { level-inner = { style = ["level", "warning"] } }
-error = { level-inner = { style = ["level", "error"] } }
+trace.level-inner.style = ["level", "trace"]
+debug.level-inner.style = ["level", "debug"]
+info.level-inner.style = ["level", "info"]
+warning.level-inner.style = ["level", "warning"]
+error.level-inner.style = ["level", "error"]
 
 # Indicators define styles for various status indicators.
 [indicators]
 [indicators.sync]
-synced = { text = " " }
-failed = { text = "!", inner.style = { style = ["status", "warning"], modes = ["bold"] } }
+synced.text = " "
+failed.text = "!"
+failed.inner.style = { style = ["status", "warning"], modes = ["bold"] }
