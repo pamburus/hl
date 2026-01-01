@@ -239,10 +239,10 @@ Line → Prefix Extraction (optional) → Format Detection → JSON Parsing → 
 
 **Message Delimiter Configuration:** The `--delimiter` option is handled by the separate Input Message Delimiter feature.
 
-**Configuration File** (`config.yaml`):
-```yaml
-input_format: auto    # or: json, logfmt
-allow_prefix: false
+**Configuration File** (`config.toml`):
+```toml
+input_format = "auto"    # or: "json", "logfmt"
+allow_prefix = false
 ```
 
 **Timestamp Unit Configuration:** Unix timestamp unit configuration (if applicable) is handled by the Structured Logs Processing feature.

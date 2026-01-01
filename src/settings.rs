@@ -30,8 +30,8 @@ pub mod error;
 
 // ---
 
-static DEFAULT_SETTINGS_RAW: &str = include_str!("../etc/defaults/config.yaml");
-static DEFAULT_SETTINGS: Lazy<Settings> = Lazy::new(|| Settings::load([Source::string("", FileFormat::Yaml)]).unwrap());
+static DEFAULT_SETTINGS_RAW: &str = include_str!("../etc/defaults/config.toml");
+static DEFAULT_SETTINGS: Lazy<Settings> = Lazy::new(|| Settings::load([Source::string("", FileFormat::Toml)]).unwrap());
 
 // ---
 
@@ -54,7 +54,7 @@ impl Settings {
     where
         I: IntoIterator<Item = Source>,
     {
-        let mut builder = Config::builder().add_source(File::from_str(DEFAULT_SETTINGS_RAW, FileFormat::Yaml));
+        let mut builder = Config::builder().add_source(File::from_str(DEFAULT_SETTINGS_RAW, FileFormat::Toml));
 
         for source in sources {
             builder = match source {

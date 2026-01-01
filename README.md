@@ -604,7 +604,7 @@ See other [screenshots](https://github.com/pamburus/hl-extra/blob/d6f41877060b79
 
 #### Default configuration file
 
-* [config.yaml](etc/defaults/config.yaml)
+* [config.toml](etc/defaults/config.toml)
 
 ### Environment variables
 
