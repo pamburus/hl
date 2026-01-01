@@ -148,12 +148,6 @@ impl Merge for Theme {
     fn merge(&mut self, other: Self) {
         let flags = other.merge_options();
 
-        if other.tags.contains(Tag::Overlay) {
-            self.styles.merge(other.styles, flags);
-            self.elements.merge(other.elements, MergeFlag::Overlay.into());
-            return;
-        }
-
         self.styles.merge(other.styles, flags);
 
         // Apply blocking rules only for version 0 themes (backward compatibility)
