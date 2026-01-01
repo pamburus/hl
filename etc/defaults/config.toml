@@ -30,13 +30,6 @@ ascii = "auto"
 #
 # Currently selected theme.
 theme = "uni"
-#
-# Theme overlays to apply on top of the base theme and main configured theme.
-# Overlays are merged in the specified order: @base → theme → overlays (in list order).
-# Overlays are regular theme files that can customize specific aspects without replacing the entire theme.
-# Example: ["@accent-italic"] applies italic attribute to accent style.
-# Default: ["@accent-italic"].
-theme-overlays = ["@accent-italic"]
 
 #
 # Settings for fields processing.
