@@ -46,16 +46,16 @@ impl Theme {
         Self::default()
     }
 
-    pub fn load(app_dirs: &AppDirs, name: &str) -> Result<Self> {
-        Ok(themecfg::Theme::load(app_dirs, name)?.into())
+    pub fn load(dirs: &AppDirs, name: &str) -> Result<Self> {
+        Ok(themecfg::Theme::load(dirs, name)?.into())
     }
 
     pub fn embedded(name: &str) -> Result<Self> {
         Ok(themecfg::Theme::embedded(name)?.into())
     }
 
-    pub fn list(app_dirs: &AppDirs) -> Result<HashMap<Arc<str>, ThemeInfo>> {
-        Ok(themecfg::Theme::list(app_dirs)?)
+    pub fn list(dirs: &AppDirs) -> Result<HashMap<Arc<str>, ThemeInfo>> {
+        Ok(themecfg::Theme::list(dirs)?)
     }
 
     pub fn apply<'a, B: Push<u8>, F: FnOnce(&mut Styler<'a, B>)>(

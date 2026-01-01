@@ -11,6 +11,7 @@ use std::{
 // third-party imports
 use enum_map::Enum;
 use enumset::{EnumSet, EnumSetType};
+use enumset_ext::EnumSetExt;
 use rust_embed::RustEmbed;
 use serde::Deserialize;
 use serde_json as json;
@@ -86,11 +87,16 @@ impl Theme {
     /// - File path (for custom themes)
     /// - Specific error details (parse error, unsupported version, recursion, etc.)
     pub fn load(dirs: &AppDirs, name: &str) -> Result<Self> {
-        RawTheme::base()
-            .clone()
-            .merged(Self::load_raw(dirs, name)?)
-            // .merged(Self::load_raw(dirs, "@accent-italic")?)
-            .resolve()
+        let theme = Self::load_raw(dirs, name)?;
+
+        let theme = if theme.tags.intersects(Tag::Base | Tag::Overlay) {
+            theme
+        } else {
+            RawTheme::base().clone().merged(theme)
+        };
+
+        // .merged(Self::load_raw(dirs, "@accent-italic")?)
+        theme.resolve()
     }
 
     /// Load an unresolved (raw) theme by name.
@@ -280,11 +286,7 @@ impl Theme {
     }
 
     pub(super) fn embedded_names() -> impl IntoIterator<Item = Arc<str>> {
-        Assets::iter().filter_map(|a| {
-            Self::strip_known_extension(&a)
-                .filter(|&n| !n.starts_with('@'))
-                .map(|n| n.into())
-        })
+        Assets::iter().filter_map(|a| Self::strip_known_extension(&a).map(|n| n.into()))
     }
 
     pub(super) fn custom_names(app_dirs: &AppDirs) -> Result<impl IntoIterator<Item = Result<Arc<str>>> + use<>> {
@@ -392,6 +394,7 @@ pub enum Tag {
     #[serde(rename = "truecolor")]
     TrueColor,
     Overlay,
+    Base,
 }
 
 impl FromStr for Tag {

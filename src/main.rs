@@ -22,7 +22,8 @@ use utf8_supported::{Utf8Support, utf8_supported};
 use hl::{
     Delimiter, IncludeExcludeKeyFilter, KeyMatchOptions, app,
     appdirs::AppDirs,
-    cli, config,
+    cli::{self, ThemeTagSet},
+    config,
     datefmt::LinuxDateFormat,
     error::*,
     input::InputReference,
@@ -368,22 +369,27 @@ fn run() -> Result<()> {
     SignalHandler::run(interrupt_ignore_count, std::time::Duration::from_secs(1), run)
 }
 
-fn list_themes(app_dirs: &AppDirs, tags: Option<cli::ThemeTagSet>) -> Result<()> {
-    let items = Theme::list(app_dirs)?;
+fn list_themes(dirs: &AppDirs, tags: Option<cli::ThemeTagSet>) -> Result<()> {
+    let items = Theme::list(dirs)?;
     let mut formatter = help::Formatter::new(stdout());
+
+    let tags = tags.unwrap_or_default();
+    let mut exclude = ThemeTagSet::default();
+    if !tags.contains(cli::ThemeTag::Base) {
+        exclude.insert(cli::ThemeTag::Base);
+    }
+    if !tags.contains(cli::ThemeTag::Overlay) {
+        exclude.insert(cli::ThemeTag::Overlay);
+    }
 
     formatter.format_grouped_list(
         items
             .into_iter()
             .filter(|(name, _)| {
-                if let Some(tags) = tags {
-                    hl::themecfg::Theme::load(app_dirs, name)
-                        .ok()
-                        .map(|theme| theme.tags.includes(*tags))
-                        .unwrap_or(false)
-                } else {
-                    true
-                }
+                hl::themecfg::Theme::load(dirs, name)
+                    .ok()
+                    .map(|theme| theme.tags.includes(*tags) && !theme.tags.intersects(*exclude))
+                    .unwrap_or(false)
             })
             .sorted_by_key(|x| (x.1.origin, x.0.clone()))
             .chunk_by(|x| x.1.origin)

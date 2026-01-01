@@ -1,6 +1,7 @@
-#:schema https://raw.githubusercontent.com/pamburus/hl/8c78fccaf6eab76062551ccad3ad8ee7c18fdb1a/schema/json/theme.schema.v1.json
+#:schema https://raw.githubusercontent.com/pamburus/hl/168be2832748eff5597ee221b6c959abd6c2d212/schema/json/theme.schema.v1.json
 
 version = "1.0"
+tags = ["base"]
 
 # Styles define general purpose styles used throughout the theme.
 [styles]
