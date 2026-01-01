@@ -21,7 +21,7 @@ use yaml_peg::serde as yaml;
 use crate::{appdirs::AppDirs, level::Level, xerr::Suggestions};
 
 // relative imports
-use super::{Error, ExternalError, IndicatorPack, RawTheme, Result, StylePack, ThemeLoadError, Version, v0, v1};
+use super::{Error, ExternalError, IndicatorPack, Merge, RawTheme, Result, StylePack, ThemeLoadError, Version, v0, v1};
 
 // ---
 
@@ -86,7 +86,10 @@ impl Theme {
     /// - File path (for custom themes)
     /// - Specific error details (parse error, unsupported version, recursion, etc.)
     pub fn load(dirs: &AppDirs, name: &str) -> Result<Self> {
-        Self::load_raw(dirs, name)?.finalized().resolve()
+        Self::load_raw(dirs, name)?
+            .merged(Self::load_raw(dirs, "@accent-italic")?)
+            .finalized()
+            .resolve()
     }
 
     /// Load an unresolved (raw) theme by name.

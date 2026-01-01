@@ -1,5 +1,9 @@
 // std imports
-use std::{cmp::Eq, collections::HashMap, hash::Hash};
+use std::{
+    cmp::Eq,
+    collections::{HashMap, hash_map::Entry},
+    hash::Hash,
+};
 
 // third-party imports
 use derive_more::{Deref, DerefMut, IntoIterator};
@@ -7,7 +11,7 @@ use serde::Deserialize;
 
 // relative imports
 use super::{
-    Element, Merge, MergeFlag, MergeFlags, MergeWithOptions, ResolvedStyle, Result, Role, Style, StyleInventory,
+    Element, MergeFlag, MergeFlags, MergeWithOptions, ResolvedStyle, Result, Role, Style, StyleInventory,
     StyleResolveError, StyleResolver,
 };
 
@@ -141,7 +145,7 @@ impl StylePack<Role, Style> {
 
 impl<S> MergeWithOptions for StylePack<Element, S>
 where
-    for<'a> S: MergeWithOptions<&'a S, Options = MergeFlags> + Default + Clone,
+    S: MergeWithOptions<S, Options = MergeFlags>,
 {
     type Options = MergeFlags;
 
@@ -160,29 +164,53 @@ where
         }
 
         for (key, patch) in patch.0 {
-            self.0
-                .entry(key)
-                .and_modify(|v| *v = v.clone().merged(&patch, flags))
-                .or_insert(patch);
+            match self.0.entry(key) {
+                Entry::Occupied(mut e) => {
+                    e.get_mut().merge(patch, flags);
+                }
+                Entry::Vacant(e) => {
+                    e.insert(patch);
+                }
+            }
         }
     }
 }
 
-impl<S> MergeWithOptions<&StylePack<Element, S>> for StylePack<Element, S>
+impl<K, S> MergeWithOptions<&StylePack<K, S>> for StylePack<K, S>
 where
+    K: Clone,
     for<'a> S: MergeWithOptions<&'a S, Options = MergeFlags> + Default + Clone,
-    Self: MergeWithOptions<StylePack<Element, S>, Options = MergeFlags>,
+    Self: MergeWithOptions<StylePack<K, S>, Options = MergeFlags>,
 {
     type Options = MergeFlags;
 
-    fn merge(&mut self, other: &StylePack<Element, S>, options: MergeFlags) {
-        <Self as MergeWithOptions<StylePack<Element, S>>>::merge(self, other.clone(), options);
+    fn merge(&mut self, other: &StylePack<K, S>, options: MergeFlags) {
+        <Self as MergeWithOptions<StylePack<K, S>>>::merge(self, other.clone(), options);
     }
 }
 
-impl<S> Merge for StylePack<Role, S> {
-    fn merge(&mut self, patch: Self) {
-        self.0.extend(patch.0);
+impl<S> MergeWithOptions for StylePack<Role, S>
+where
+    S: MergeWithOptions<Options = MergeFlags>,
+{
+    type Options = MergeFlags;
+
+    fn merge(&mut self, patch: Self, flags: MergeFlags) {
+        if flags.contains(MergeFlag::ReplaceElements) {
+            self.0.extend(patch.0);
+            return;
+        }
+
+        for (key, patch) in patch.0 {
+            match self.0.entry(key) {
+                Entry::Occupied(mut e) => {
+                    e.get_mut().merge(patch, flags);
+                }
+                Entry::Vacant(e) => {
+                    e.insert(patch);
+                }
+            }
+        }
     }
 }
 

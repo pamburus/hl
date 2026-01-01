@@ -146,7 +146,7 @@ impl Merge for Theme {
     fn merge(&mut self, other: Self) {
         let flags = other.merge_options();
         self.version = other.version;
-        self.styles.merge(other.styles);
+        self.styles.merge(other.styles, flags);
 
         // Apply blocking rules only for version 0 themes (backward compatibility)
         if flags.contains(MergeFlag::ReplaceHierarchies) {
