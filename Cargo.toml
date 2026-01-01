@@ -22,7 +22,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.34.0-alpha.4"
+version = "0.34.0-alpha.5"
 edition = "2024"
 repository = "https://github.com/pamburus/hl"
 license = "MIT"
@@ -55,7 +55,7 @@ crossbeam-channel = "0.5"
 crossbeam-queue = "0.3"
 crossbeam-utils = "0.8"
 deko = "0.5"
-derive_more = { version = "2", features = ["deref", "display", "from"] }
+derive_more = { version = "2", features = ["deref", "deref_mut", "display", "from", "into_iterator"] }
 dirs = "6"
 dirs-sys = "0.5"
 encstr = { path = "./crate/encstr" }
@@ -89,6 +89,7 @@ serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["raw_value"] }
 serde-logfmt = { path = "./crate/serde-logfmt" }
 serde_plain = "1"
+serde-value = "0.7"
 sha2 = "0.10"
 shellwords = "1"
 signal-hook = "0.3"

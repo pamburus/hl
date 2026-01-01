@@ -558,7 +558,8 @@ impl From<AsciiOption> for AsciiModeOpt {
 }
 
 pub type InputInfoSet = EnumSet<InputInfo>;
-pub type ThemeTagSet = EnumSet<themecfg::Tag>;
+pub type ThemeTag = themecfg::Tag;
+pub type ThemeTagSet = EnumSet<ThemeTag>;
 
 mod heading {
     pub const FILTERING: &str = "Filtering Options";

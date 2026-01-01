@@ -88,7 +88,7 @@ clean:
     @rm -f result*
 
 # Run all CI checks locally
-ci: test lint audit fmt-check check-schema check
+ci: check test lint audit fmt-check check-schema
     @echo "✅ All local CI checks passed"
 
 # Generate code coverage
@@ -107,7 +107,6 @@ bench *ARGS: (setup "build")
 check-schema: (setup "schema")
     tombi lint
     taplo check
-    @.venv/bin/python build/ci/validate_yaml.py ./schema/json/theme.schema.json etc/defaults/themes/*.yaml
 
 # Install binary and man pages
 install: (setup "build") build-release install-man-pages
@@ -182,6 +181,49 @@ usage *ARGS: build
 # Show `hl --help=long`
 usage-long *ARGS: build
     @./target/debug/hl --config - --help=long {{ ARGS }}
+
+# Convert all Mermaid (.mmd) files to SVG with transparent background using Docker
+mmd2svg:
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    # Check if Docker is available
+    if ! command -v docker > /dev/null; then
+        echo "Error: Docker is not installed"
+        echo "Please install Docker from: https://www.docker.com/get-started"
+        exit 1
+    fi
+
+    # Check if Docker daemon is running
+    if ! docker info > /dev/null 2>&1; then
+        echo "Error: Docker is not running"
+        echo "Please start Docker Desktop or your Docker daemon"
+        exit 1
+    fi
+
+    # Find and convert all .mmd files
+    find . -name "*.mmd" -type f | while read -r mmd_file; do
+        svg_file="${mmd_file%.mmd}.svg"
+
+        # Get absolute paths
+        abs_mmd_file=$(pwd)/"$mmd_file"
+        abs_svg_file=$(pwd)/"$svg_file"
+        mmd_dir=$(dirname "$abs_mmd_file")
+        mmd_name=$(basename "$mmd_file")
+        svg_name=$(basename "$svg_file")
+
+        echo "Converting: $mmd_file → $svg_file"
+
+        # Run mermaid-cli in Docker
+        docker run --rm -u $(id -u):$(id -g) \
+            -v "$mmd_dir":/data \
+            minlag/mermaid-cli:latest \
+            -i "/data/$mmd_name" \
+            -o "/data/$svg_name" \
+            -b transparent
+    done
+
+    echo "✓ All Mermaid files converted to SVG"
 
 # Helper recipe to ensure required tools are available for a given task
 [private]

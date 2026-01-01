@@ -1,0 +1,13 @@
+# Test file for FR-029: File format parse errors
+# This TOML file has a syntax error - unclosed string and missing quote
+
+version = "0.0"
+
+[elements.key]
+foreground = "red
+
+[elements.message]
+foreground = "blue"
+background = "green"
+
+# Missing closing quote above will cause parse error

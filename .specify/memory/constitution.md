@@ -1,3 +1,12 @@
+<!-- 
+Sync Impact Report:
+- Version: 1.1.0 → 1.2.0
+- Added: Principle VII - Test Data Management
+- Rationale: MINOR version bump - new principle added to governance
+- Templates requiring updates: ✅ All templates reviewed and compatible
+- Date: 2025-01-07
+-->
+
 # hl (High-performance Log viewer) Constitution
 <!-- A high-performance log viewer and processor command-line app -->
 
@@ -22,6 +31,35 @@ Comprehensive error handling with graceful degradation. All input validated; mal
 ### V. Test-First Development & Quality
 <!-- TDD mandatory; no exceptions for performance-critical code -->
 Unit tests for algorithms and parsers. Integration tests for end-to-end CLI workflows. Property-based tests for streaming behavior. Performance benchmarks tracked and enforced. All tests must pass before merging. Coverage must not decrease: patches must maintain or improve the project's average code coverage.
+
+### VI. Specification & Cross-Reference Integrity
+<!-- Maintain referential integrity across all documentation and code -->
+**Avoid renumbering identifiers whenever possible.** Prefer adding new requirements at the end of sections or using sub-identifiers (e.g., FR-030c, FR-030d) to insert requirements without disrupting existing numbering.
+
+When renumbering identifiers (FR/requirement IDs, user story IDs, feature numbers, etc.) is unavoidable, all cross-references MUST be identified and updated throughout the complete codebase including specs, documentation, code comments, and tests. Before renumbering any requirement or feature:
+
+1. Search entire codebase for references to affected IDs using patterns like `FR-XXX`, `US-XXX`, feature numbers
+2. Update ALL found references to reflect new identifiers
+3. Verify tests still pass after updates
+4. Document the ID mapping in commit message (e.g., "renamed FR-037d → FR-039d")
+
+This ensures specifications remain the single source of truth and prevents broken references that make requirements untraceable. Use grep/search tools with patterns covering all identifier formats before any renumbering operation.
+
+### VII. Test Data Management
+<!-- Separate test logic from test data -->
+Tests MUST use external data files instead of inline multiline string literals for themes, configs, and other structured data. This improves maintainability, enables proper validation tooling, and separates test logic from test data.
+
+**Requirements:**
+- Theme and config test data MUST be stored in dedicated test asset directories (e.g., `src/testing/assets/themes/`)
+- Test files SHOULD use the same format as production files (YAML, TOML, JSON)
+- Tests MAY embed external files at compile time using `include_str!` or similar if needed for performance
+- Inline strings are acceptable ONLY for very short values (<3 lines) or when the string content itself is what's being tested (e.g., parse error messages)
+
+**Rationale:**
+- External files can be validated with proper tooling (YAML/TOML linters)
+- Easier to reuse test data across multiple tests
+- Better separation of concerns improves test readability
+- Compile-time embedding provides same performance as inline strings
 
 ## Technology Stack & Standards
 
@@ -52,4 +90,4 @@ This constitution supersedes all other practices and informal conventions. All P
 3. Documentation of rationale
 4. Migration plan for any breaking changes
 
-**Version**: 1.0.0 | **Ratified**: 2025-11-02 | **Last Amended**: 2025-11-02
+**Version**: 1.2.0 | **Ratified**: 2025-11-02 | **Last Amended**: 2025-01-07

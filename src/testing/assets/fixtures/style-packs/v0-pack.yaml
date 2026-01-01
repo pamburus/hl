@@ -1,0 +1,3 @@
+message:
+  foreground: red
+  modes: [bold]

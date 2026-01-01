@@ -1,0 +1,69 @@
+#:schema https://raw.githubusercontent.com/pamburus/hl/847e8a510aff63e625a95d565972b461c1ca5175/schema/json/theme.schema.v1.json
+
+version = "1.0"
+tags = ["light", "truecolor"]
+
+#
+# Styles define general purpose styles used throughout the theme.
+#
+[styles]
+[styles.primary]
+foreground = "#313641"
+
+[styles.secondary]
+modes = ["-faint"]
+foreground = "#778899"
+
+[styles.strong]
+modes = ["bold"]
+foreground = "#262a33"
+
+[styles.accent]
+foreground = "#4169e1"
+
+[styles.debug]
+foreground = "#da70d6"
+
+[styles.info]
+foreground = "#48d1cc"
+
+[styles.warning]
+foreground = "#ff8c00"
+
+[styles.error]
+foreground = "#e06c75"
+
+#
+# Elements define specific styles for different log elements.
+#
+[elements]
+[elements.number]
+foreground = "#228b22"
+
+[elements.boolean]
+style = "warning"
+
+[elements.null]
+style = "error"
+
+#
+# Levels define styles for different log levels.
+#
+[levels]
+[levels.warning.level]
+style = ["level", "warning"]
+modes = ["reverse"]
+
+[levels.error.time]
+style = "error"
+
+[levels.error.level]
+style = ["level", "error"]
+modes = ["reverse"]
+
+#
+# Indicators define styles for various status indicators.
+#
+[indicators.sync.failed.inner.style]
+foreground = "#ff8c00"
+modes = ["bold"]

@@ -22,7 +22,8 @@ use utf8_supported::{Utf8Support, utf8_supported};
 use hl::{
     Delimiter, IncludeExcludeKeyFilter, KeyMatchOptions, app,
     appdirs::AppDirs,
-    cli, config,
+    cli::{self, ThemeTagSet},
+    config,
     datefmt::LinuxDateFormat,
     error::*,
     input::InputReference,
@@ -31,6 +32,7 @@ use hl::{
     settings::{AsciiModeOpt, InputInfo, Settings},
     signal::SignalHandler,
     theme::Theme,
+    themecfg,
     timeparse::parse_time,
     timezone::Tz,
 };
@@ -39,12 +41,15 @@ use hl::{
 mod help;
 
 const HL_DEBUG_LOG: &str = "HL_DEBUG_LOG";
+const HL_DEBUG_LOG_STYLE: &str = "HL_DEBUG_LOG_STYLE";
 
 // ---
 
 fn bootstrap() -> Result<Settings> {
     if std::env::var(HL_DEBUG_LOG).is_ok() {
-        logger::Builder::from_env(HL_DEBUG_LOG).format_timestamp_micros().init();
+        logger::Builder::from_env(logger::Env::new().filter(HL_DEBUG_LOG).write_style(HL_DEBUG_LOG_STYLE))
+            .format_timestamp_micros()
+            .init();
         log::debug!("logging initialized");
     } else {
         logger::Builder::new()
@@ -156,7 +161,7 @@ fn run() -> Result<()> {
 
     let theme = if use_colors {
         let theme = &opt.theme;
-        Theme::load(&app_dirs, theme)?
+        Theme::load_with_overlays(&app_dirs, theme, &settings.theme_overlays)?
     } else {
         Theme::none()
     };
@@ -365,22 +370,27 @@ fn run() -> Result<()> {
     SignalHandler::run(interrupt_ignore_count, std::time::Duration::from_secs(1), run)
 }
 
-fn list_themes(app_dirs: &AppDirs, tags: Option<cli::ThemeTagSet>) -> Result<()> {
-    let items = Theme::list(app_dirs)?;
+fn list_themes(dirs: &AppDirs, tags: Option<cli::ThemeTagSet>) -> Result<()> {
+    let items = Theme::list(dirs)?;
     let mut formatter = help::Formatter::new(stdout());
+
+    let tags = tags.unwrap_or_default();
+    let mut exclude = ThemeTagSet::default();
+    if !tags.contains(cli::ThemeTag::Base) {
+        exclude.insert(cli::ThemeTag::Base);
+    }
+    if !tags.contains(cli::ThemeTag::Overlay) {
+        exclude.insert(cli::ThemeTag::Overlay);
+    }
 
     formatter.format_grouped_list(
         items
             .into_iter()
             .filter(|(name, _)| {
-                if let Some(tags) = tags {
-                    hl::themecfg::Theme::load(app_dirs, name)
-                        .ok()
-                        .map(|theme| theme.tags.includes(*tags))
-                        .unwrap_or(false)
-                } else {
-                    true
-                }
+                themecfg::Theme::load(dirs, name)
+                    .ok()
+                    .map(|theme| theme.tags.includes(*tags) && !theme.tags.intersects(*exclude))
+                    .unwrap_or(false)
             })
             .sorted_by_key(|x| (x.1.origin, x.0.clone()))
             .chunk_by(|x| x.1.origin)
@@ -403,6 +413,7 @@ impl AppInfoProvider for AppInfo {
     fn usage_suggestion(&self, request: UsageRequest) -> Option<UsageResponse> {
         match request {
             UsageRequest::ListThemes => Some(("--list-themes".into(), "".into())),
+            UsageRequest::ListThemeOverlays => Some(("--list-themes=overlay".into(), "".into())),
         }
     }
 }

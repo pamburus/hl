@@ -1,0 +1,36 @@
+# V0 theme testing boolean active merge with level-specific overrides
+# This tests whether level-specific overrides to `boolean` element
+# affect boolean-true and boolean-false at that level
+
+elements:
+  boolean:
+    foreground: '#00ff00'
+    background: '#001100'
+    modes: [bold]
+
+  boolean-true:
+    foreground: '#00ffff'
+
+  boolean-false:
+    foreground: '#ff0000'
+
+  message:
+    foreground: '#ffffff'
+
+levels:
+  # Error level overrides the base boolean element
+  error:
+    boolean:
+      foreground: '#ff00ff'
+      background: '#110011'
+      modes: [italic, underline]
+
+    # Also override boolean-false specifically at error level
+    boolean-false:
+      foreground: '#ffaaaa'
+
+  # Warning level only overrides boolean-true
+  warning:
+    boolean-true:
+      foreground: '#ffff00'
+      modes: [reverse]

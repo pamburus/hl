@@ -1,0 +1,5 @@
+elements:
+  message:
+    foreground: 'green'
+    modes:
+      - '-bold'

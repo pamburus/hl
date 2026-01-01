@@ -1,0 +1,10 @@
+# Test file for FR-029: File format parse errors
+# This YAML file has a syntax error - unclosed bracket
+
+version: "0.0"
+
+elements:
+  key:
+    foreground: red
+  message: [
+    # Unclosed bracket - missing closing ]

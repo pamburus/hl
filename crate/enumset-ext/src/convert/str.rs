@@ -1,5 +1,9 @@
 // std imports
-use std::{fmt, ops::Deref, str::FromStr};
+use std::{
+    fmt,
+    ops::{Deref, DerefMut},
+    str::FromStr,
+};
 
 // third-party imports
 use enumset::EnumSetType;
@@ -36,6 +40,11 @@ impl<T: EnumSetType> Deref for EnumSet<T> {
 
     fn deref(&self) -> &Self::Target {
         &self.0
+    }
+}
+impl<T: EnumSetType> DerefMut for EnumSet<T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
     }
 }
 

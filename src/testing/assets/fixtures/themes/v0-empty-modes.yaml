@@ -1,0 +1,43 @@
+# V0 theme testing empty modes vs absent modes
+# Empty modes array [] vs no modes field should behave differently
+
+elements:
+  # Element with empty modes array
+  message:
+    foreground: "#ffffff"
+    modes: []
+
+  # Element with modes
+  level:
+    foreground: "#00ff00"
+    modes: [bold, italic]
+
+  # Element with no modes field at all
+  level-inner:
+    foreground: "#00ffff"
+
+  # Element with empty modes in base, modes in level override
+  time:
+    foreground: "#aaaaaa"
+    modes: []
+
+  # Element with modes in base, empty modes in level override
+  caller:
+    foreground: "#cccccc"
+    modes: [faint, italic]
+
+levels:
+  debug:
+    # Override with empty modes - should replace parent's modes
+    caller:
+      modes: []
+
+  warning:
+    # Override with modes - should replace parent's empty modes
+    time:
+      modes: [bold]
+
+  error:
+    # Empty modes
+    message:
+      modes: []

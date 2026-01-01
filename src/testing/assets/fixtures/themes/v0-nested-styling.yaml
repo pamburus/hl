@@ -1,0 +1,61 @@
+# V0 theme testing nested styling scope
+# In v0, parent/inner element pairs use nested rendering scope
+# Inner elements are rendered inside parent elements at render time
+# If inner element is undefined, parent style continues
+
+elements:
+  # Parent element with full styling
+  level:
+    foreground: "#00ff00"
+    background: "#001100"
+    modes: [bold]
+
+  # Inner element with only foreground - should NOT inherit parent's background/modes
+  # In v0, this is NOT active property merging - it's nested scope at render time
+  level-inner:
+    foreground: "#00ffff"
+
+  # Another parent/inner pair
+  logger:
+    foreground: "#ffff00"
+    background: "#221100"
+    modes: [italic, underline]
+
+  logger-inner:
+    foreground: "#ffffff"
+    modes: [bold]
+
+  # Parent without corresponding inner defined
+  caller:
+    foreground: "#ff00ff"
+    background: "#110011"
+    modes: [reverse]
+  # caller-inner is NOT defined - parent style should continue
+
+  # Input number pair
+  input-number:
+    foreground: "#0000ff"
+    modes: [bold]
+
+  input-number-inner:
+    background: "#000044"
+
+  # Input name pair
+  input-name:
+    foreground: "#00aaaa"
+    background: "#002222"
+
+  # input-name-inner NOT defined
+
+levels:
+  warning:
+    level:
+      foreground: "#ffaa00"
+    level-inner:
+      foreground: "#ffdd00"
+
+  error:
+    level:
+      foreground: "#ff0000"
+      modes: [reverse, bold]
+    # level-inner NOT overridden at error level - uses base level-inner

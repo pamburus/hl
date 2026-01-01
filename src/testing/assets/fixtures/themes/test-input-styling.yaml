@@ -1,0 +1,11 @@
+# Minimal v1 theme for testing Input element styling
+# Tests that Input element gets bright-black color via secondary style
+version: "1.0"
+
+styles:
+  secondary:
+    foreground: bright-black
+
+elements:
+  input:
+    style: secondary

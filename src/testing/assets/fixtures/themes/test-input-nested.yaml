@@ -1,0 +1,11 @@
+# Minimal v1 theme for testing nested Input element styling
+# Tests that InputNumber inherits styling from Input via nested rendering scope
+version: "1.0"
+
+styles:
+  secondary:
+    foreground: bright-black
+
+elements:
+  input:
+    style: secondary

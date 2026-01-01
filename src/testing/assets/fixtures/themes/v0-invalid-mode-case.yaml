@@ -1,0 +1,6 @@
+# Test file for FR-014a: Case-sensitive mode names
+# Mode names with wrong case should cause an error
+elements:
+  message:
+    foreground: 'green'
+    modes: ['Bold']

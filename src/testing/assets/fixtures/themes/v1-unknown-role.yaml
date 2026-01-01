@@ -1,0 +1,17 @@
+# Test file for strict v1 deserialization - unknown enum variants should fail
+# This v1 theme has an unknown role name in the styles section that should cause an error
+
+version: "1.0"
+
+# Define styles with an unknown role name as the key
+# The Role enum doesn't have a 'future-role' variant, so this should fail
+styles:
+  error:
+    foreground: "#FF0000"
+
+  future-role:
+    foreground: "#00FF00"
+
+elements:
+  message:
+    foreground: "#FFFFFF"

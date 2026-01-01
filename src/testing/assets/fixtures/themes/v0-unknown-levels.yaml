@@ -1,0 +1,30 @@
+# V0 theme testing unknown level names are ignored
+# Unknown level names should be silently ignored
+
+elements:
+  message:
+    foreground: '#ffffff'
+
+  level:
+    foreground: '#00ff00'
+
+levels:
+  error:
+    message:
+      foreground: '#ff0000'
+    level:
+      foreground: '#ff0000'
+      modes: [bold]
+
+  # These are unknown level names and should be ignored
+  unknown-level:
+    message:
+      foreground: '#00ff00'
+
+  super-critical:
+    level:
+      foreground: '#ff00ff'
+
+  custom-level:
+    message:
+      modes: [italic]

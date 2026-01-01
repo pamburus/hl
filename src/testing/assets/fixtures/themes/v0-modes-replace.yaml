@@ -1,0 +1,20 @@
+# V0 theme testing modes replacement semantics
+# In v0, child modes completely replace parent modes (no merging)
+
+elements:
+  message:
+    foreground: "#ffffff"
+    modes: [bold, italic]
+
+  level:
+    foreground: "#00ff00"
+    background: "#000000"
+    modes: [bold, underline]
+
+  level-inner:
+    # In v0, these modes completely replace parent's [bold, underline]
+    modes: [italic]
+
+  key:
+    foreground: "#ffff00"
+    modes: [bold]

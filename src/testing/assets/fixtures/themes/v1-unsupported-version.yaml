@@ -1,0 +1,12 @@
+# Test file for v1 version validation before deserialization
+# This v1 theme has version 1.1 which is not compatible with current 1.0
+# The version check should happen BEFORE deserialization to give a better error message
+
+version: "1.1"
+
+elements:
+  message:
+    foreground: "#FFFFFF"
+
+  level:
+    foreground: "#AAAAAA"

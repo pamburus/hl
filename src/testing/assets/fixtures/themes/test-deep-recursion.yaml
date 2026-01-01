@@ -1,0 +1,29 @@
+version: "1.0"
+styles:
+  primary:
+    style: [secondary]
+    foreground: 'red'
+  secondary:
+    style: [strong]
+    foreground: 'green'
+  strong:
+    style: [muted]
+    foreground: 'blue'
+  muted:
+    style: [accent]
+    foreground: 'yellow'
+  accent:
+    style: [accent-secondary]
+    foreground: 'cyan'
+  accent-secondary:
+    style: [message]
+    foreground: 'magenta'
+  message:
+    style: [syntax]
+    foreground: 'white'
+  syntax:
+    style: [status]
+    foreground: 'black'
+  status:
+    style: [primary]
+    foreground: 'red'

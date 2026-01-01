@@ -1,0 +1,8 @@
+# Test file for v0 version validation
+# v0 themes must be exactly version 0.0, not 0.1
+
+version: "0.1"
+
+elements:
+  message:
+    foreground: white

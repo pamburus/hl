@@ -1,0 +1,70 @@
+#:schema https://raw.githubusercontent.com/pamburus/hl/847e8a510aff63e625a95d565972b461c1ca5175/schema/json/theme.schema.v1.json
+
+version = "1.0"
+tags = ["light", "truecolor"]
+
+#
+# Styles define general purpose styles used throughout the theme.
+#
+[styles]
+[styles.primary]
+foreground = "#5c6166"
+
+[styles.secondary]
+modes = ["-faint"]
+foreground = "#a7aaad"
+
+[styles.strong]
+modes = ["-bold"]
+
+[styles.accent]
+foreground = "#478acc"
+
+[styles.accent-secondary]
+foreground = "#8a9199"
+
+[styles.syntax]
+modes = ["bold"]
+foreground = "default"
+
+[styles.debug]
+foreground = "#a37acc"
+
+[styles.info]
+foreground = "#55b4d4"
+
+[styles.warning]
+foreground = "#ffaa33"
+
+[styles.error]
+foreground = "#e65050"
+
+#
+# Elements define specific styles for different log elements.
+#
+[elements]
+[elements.level]
+foreground = "#a8caf1"
+
+[elements.field]
+style = "accent"
+
+[elements.number]
+foreground = "#6cbf43"
+
+[elements.boolean]
+foreground = "#86b300"
+
+[elements.null]
+foreground = "#ed9366"
+
+#
+# Levels define styles for different log levels.
+#
+[levels]
+[levels.warning.message]
+style = ["message", "warning"]
+
+[levels.error.message]
+style = ["message", "error"]
+foreground = "#ff7383"
