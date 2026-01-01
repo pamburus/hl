@@ -11,7 +11,7 @@ use crate::{
     eseq::{Brightness, Color, ColorCode, Mode, Sequence, StyleCode},
     fmtx::Push,
     level::{self, InfallibleLevel},
-    themecfg,
+    themecfg::{self, StyleInventory},
 };
 
 // test imports
@@ -21,7 +21,7 @@ use crate::testing::Sample;
 // ---
 
 pub use level::Level;
-pub use themecfg::{Element, ThemeInfo, ThemeOrigin};
+pub use themecfg::{Element, MergeFlag, MergeFlags, MergedWith, ThemeInfo, ThemeOrigin};
 
 // ---
 
@@ -81,22 +81,27 @@ impl Theme {
 impl<S: Borrow<themecfg::Theme>> From<S> for Theme {
     fn from(s: S) -> Self {
         let s = s.borrow();
-        let default = StylePack::load(&s.elements);
+        let flags = s.merge_flags();
+        let inventory = s.styles.resolve(flags);
+        let default = StylePack::load(&s.elements, &inventory, flags);
+        // log::trace!("loaded default style pack: {:#?}", &default);
         let mut packs = EnumMap::default();
         for (level, pack) in &s.levels {
             let level = match level {
-                InfallibleLevel::Valid(level) => level,
+                InfallibleLevel::Valid(level) => *level,
                 InfallibleLevel::Invalid(s) => {
                     log::warn!("unknown level: {:?}", s);
                     continue;
                 }
             };
-            packs[*level] = StylePack::load(&s.elements.clone().merged(pack.clone()));
+            let flags = flags - MergeFlag::ReplaceGroups;
+            packs[level] = StylePack::load(&s.elements.clone().merged_with(pack, flags), &inventory, flags);
+            // log::trace!("loaded style pack for level {:?}: {:#?}", level, &packs[level]);
         }
         Self {
             default,
             packs,
-            indicators: IndicatorPack::from(&s.indicators),
+            indicators: IndicatorPack::new(&s.indicators, &inventory, flags),
         }
     }
 }
@@ -110,7 +115,7 @@ impl Sample for Arc<Theme> {
 
 // ---
 
-#[derive(Clone, Eq, PartialEq)]
+#[derive(Clone, Eq, PartialEq, Debug)]
 struct Style(Sequence);
 
 impl Style {
@@ -173,10 +178,10 @@ impl<T: Into<Sequence>> From<T> for Style {
     }
 }
 
-impl From<&themecfg::Style> for Style {
-    fn from(style: &themecfg::Style) -> Self {
+impl From<&themecfg::ResolvedStyle> for Style {
+    fn from(style: &themecfg::ResolvedStyle) -> Self {
         let mut codes = Vec::<StyleCode>::new();
-        for mode in &style.modes {
+        for mode in style.modes.adds {
             codes.push(
                 match mode {
                     themecfg::Mode::Bold => Mode::Bold,
@@ -275,7 +280,7 @@ impl<'a, B: Push<u8>> StylingPush<B> for Styler<'a, B> {
 
 // ---
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 struct StylePack {
     elements: EnumMap<Element, Option<usize>>,
     reset: Option<usize>,
@@ -294,7 +299,7 @@ impl StylePack {
         self.elements[element] = Some(pos);
     }
 
-    fn load(s: &themecfg::StylePack) -> Self {
+    fn load(s: &themecfg::StylePack, inventory: &themecfg::StyleInventory, flags: MergeFlags) -> Self {
         let mut result = Self::default();
 
         let items = s.items();
@@ -303,17 +308,74 @@ impl StylePack {
             result.reset = Some(0);
         }
 
+        // Build a map of inner elements to their parents for quick lookup
+        let inner_pairs = [
+            (Element::Level, Element::LevelInner),
+            (Element::Logger, Element::LoggerInner),
+            (Element::Caller, Element::CallerInner),
+            (Element::InputNumber, Element::InputNumberInner),
+            (Element::InputName, Element::InputNameInner),
+        ];
+
+        // Process all elements, applying parent→inner inheritance where needed
         for (&element, style) in s.items() {
-            result.add(element, &Style::from(style))
+            // Check if this element is an inner element that should inherit from its parent
+            let mut parent_for_inner = None;
+            for (parent, inner) in inner_pairs {
+                if element == inner {
+                    parent_for_inner = s.items().get(&parent).cloned();
+                    break;
+                }
+            }
+
+            let resolved_style = match parent_for_inner {
+                Some(parent_style) if !flags.contains(MergeFlag::ReplaceElements) => {
+                    // V1: Resolve both parent and inner first, then merge based on resolved values
+                    // This respects role resolution without checking implementation details (base field)
+                    let resolved_inner = style.resolve(inventory, flags);
+                    let resolved_parent = parent_style.resolve(inventory, flags);
+
+                    // Parent fills in only properties that are None in the resolved inner
+                    let mut merged = resolved_inner;
+                    if merged.foreground.is_none() {
+                        merged.foreground = resolved_parent.foreground;
+                    }
+                    if merged.background.is_none() {
+                        merged.background = resolved_parent.background;
+                    }
+                    // For modes in v1, merge additively
+                    merged.modes = resolved_parent.modes + merged.modes;
+
+                    merged
+                }
+                _ => {
+                    // V0 or no parent: just resolve the style
+                    style.resolve(inventory, flags)
+                }
+            };
+
+            result.add(element, &Style::from(&resolved_style));
         }
 
+        // Add inherited inner elements that weren't explicitly defined
+        // V0: fallback to parent when inner is missing
+        // V1: also fallback to parent when inner is missing
+        for (parent, inner) in inner_pairs {
+            if let Some(parent_style) = s.items().get(&parent) {
+                if s.items().get(&inner).is_none() {
+                    result.add(inner, &Style::from(&parent_style.resolve(inventory, flags)));
+                }
+            }
+        }
+
+        // Handle boolean variants inheriting from base boolean
         if let Some(base) = s.items().get(&Element::Boolean) {
             for variant in [Element::BooleanTrue, Element::BooleanFalse] {
                 let mut style = base.clone();
                 if let Some(patch) = s.items().get(&variant) {
-                    style = style.merged(patch)
+                    style = style.merged(patch, flags)
                 }
-                result.add(variant, &Style::from(&style));
+                result.add(variant, &Style::from(&style.resolve(inventory, flags)));
             }
         }
 
@@ -328,10 +390,10 @@ pub struct IndicatorPack {
     pub sync: SyncIndicatorPack,
 }
 
-impl From<&themecfg::IndicatorPack> for IndicatorPack {
-    fn from(indicator: &themecfg::IndicatorPack) -> Self {
+impl IndicatorPack {
+    fn new(indicator: &themecfg::IndicatorPack, inventory: &StyleInventory, flags: MergeFlags) -> Self {
         Self {
-            sync: SyncIndicatorPack::from(&indicator.sync),
+            sync: SyncIndicatorPack::new(&indicator.sync, inventory, flags),
         }
     }
 }
@@ -344,11 +406,11 @@ pub struct SyncIndicatorPack {
     pub failed: Indicator,
 }
 
-impl From<&themecfg::SyncIndicatorPack> for SyncIndicatorPack {
-    fn from(indicator: &themecfg::SyncIndicatorPack) -> Self {
+impl SyncIndicatorPack {
+    fn new(indicator: &themecfg::SyncIndicatorPack, inventory: &StyleInventory, flags: MergeFlags) -> Self {
         Self {
-            synced: Indicator::from(&indicator.synced),
-            failed: Indicator::from(&indicator.failed),
+            synced: Indicator::new(&indicator.synced, inventory, flags),
+            failed: Indicator::new(&indicator.failed, inventory, flags),
         }
     }
 }
@@ -360,11 +422,11 @@ pub struct Indicator {
     pub value: String,
 }
 
-impl From<&themecfg::Indicator> for Indicator {
-    fn from(indicator: &themecfg::Indicator) -> Self {
+impl Indicator {
+    fn new(indicator: &themecfg::Indicator, inventory: &StyleInventory, flags: MergeFlags) -> Self {
         let mut buf = Vec::new();
-        let os = Style::from(&indicator.outer.style);
-        let is = Style::from(&indicator.inner.style);
+        let os = Style::from(&indicator.outer.style.resolve(inventory, flags));
+        let is = Style::from(&indicator.inner.style.resolve(inventory, flags));
         os.apply(&mut buf);
         os.with(&mut buf, |buf| {
             buf.extend(indicator.outer.prefix.as_bytes());

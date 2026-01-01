@@ -73,7 +73,7 @@
 
 - Q: What should happen with invalid color values like 3-digit hex (#FFF), 8-digit hex with alpha (#RRGGBBAA), out-of-range ANSI (256 or -1), or invalid hex (#GGGGGG)? → A: Exit with specific error for each case: "Invalid hex color #FFF (must be #RRGGBB)", "ANSI color 256 out of range (0-255)", etc.
 
-- Q: Are there restrictions on role names in v1 (length, allowed characters, reserved words, case sensitivity)? → A: Kebab case, predefined list (enum): default, primary, secondary, emphasized, muted, accent, accent-secondary, syntax, status, info, warning, error. The `default` role is the implicit base for all styles that don't specify a base style explicitly via the `style` field.
+- Q: Are there restrictions on role names in v1 (length, allowed characters, reserved words, case sensitivity)? → A: Kebab case, predefined list (enum): default, primary, secondary, strong, muted, accent, accent-secondary, syntax, status, info, warning, error. The `default` role is the implicit base for all styles that don't specify a base style explicitly via the `style` field.
 
 - Q: What happens when a color palette anchor is referenced but not defined (YAML anchor edge case)? → A: YAML parser handles it - parse error with line number showing undefined anchor reference (treat as parse error)
 
@@ -142,6 +142,10 @@
 ### Session 2024-12-25 (Twelfth Pass)
 
 - Q: What is the exact v1 element property resolution order when combining @default, base element, level-specific override, role reference, and explicit properties? → A: Proposed Order A (merge elements first, then resolve role): 1) Start with @default element, 2) Merge base element from user theme, 3) Merge level-specific element, 4) Resolve `style` field if present (role resolution recursive), 5) Apply explicit properties from merged element (override role properties)
+
+### Session 2024-12-26 (Thirteenth Pass)
+
+- Q: When does the boolean active merge happen relative to level-specific element merging? → A: After level merging - Boolean merge happens on each level's merged StylePack; level overrides to `boolean` DO affect variants at that level
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -452,7 +456,9 @@ Theme authors using v1 can define semantic roles (like "warning", "error", "succ
 
 - **FR-023**: System MUST support indicators section with sync.synced and sync.failed configurations; indicators are a separate application feature (--follow mode) where sync state markers are displayed at the start of each line; themes provide only the visual styling for these indicator states (in sync vs out of sync)
 
-- **FR-024**: System MUST support boolean special case for backward compatibility in v0 and v1: if base `boolean` element is defined, automatically apply it to `boolean-true` and `boolean-false` at load time before applying their specific overrides (this is active property merging, different from the passive nested styling scope used for other parent-inner pairs; this pattern exists because `boolean` was added first, variants came later); in v1, boolean-true and boolean-false can also use `style` field to reference roles like any other element
+- **FR-024**: System MUST support boolean special case for backward compatibility in v0 and v1: if base `boolean` element is defined, automatically apply it to `boolean-true` and `boolean-false` during theme structure creation (after level-specific merging) before applying the variants' specific element-level overrides (this is active property merging, different from the passive nested styling scope used for other parent-inner pairs; this pattern exists because `boolean` was added first, variants came later); in v1, boolean-true and boolean-false can also use `style` field to reference roles like any other element
+
+- **FR-024a**: When level-specific overrides include a `boolean` element override, the boolean active merge for that level uses the level-merged `boolean` element (base + level override) as the base for `boolean-true` and `boolean-false` at that level; this allows level-specific customization of boolean styling across all variants (e.g., if error level defines `boolean: {background: "#440000"}` and base defines `boolean-true: {foreground: "#00ffff"}`, then at error level boolean-true gets foreground from base boolean-true and background from error level's boolean)
 
 - **FR-025**: System MUST ignore unknown element names gracefully (forward compatibility)
 
@@ -494,7 +500,7 @@ Theme authors using v1 can define semantic roles (like "warning", "error", "succ
 
 - **FR-037**: V1 themes MUST support `styles` section as an object map where keys are role names (from predefined enum) and values are style objects containing optional foreground, background, modes, and an optional `style` field that references another role for parent/base inheritance (e.g., `styles: {warning: {style: "primary", foreground: "#FFA500", modes: [bold]}}`)
 
-- **FR-037a**: V1 role names MUST be from the predefined enum (kebab-case, case-sensitive): default, primary, secondary, emphasized, muted, accent, accent-secondary, syntax, status, info, warning, error. Undefined role names or incorrect case (e.g., "Primary") are rejected with error. Element and role names exist in separate namespaces and can overlap without conflict.
+- **FR-037a**: V1 role names MUST be from the predefined enum (kebab-case, case-sensitive): default, primary, secondary, strong, muted, accent, accent-secondary, syntax, status, info, warning, error. Undefined role names or incorrect case (e.g., "Primary") are rejected with error. Element and role names exist in separate namespaces and can overlap without conflict.
 
 - **FR-037b**: V1 `default` role serves as the implicit base for all roles that do not explicitly specify a `style` field; properties set in `default` (foreground, background, modes) apply to all other roles unless overridden
 
@@ -542,7 +548,7 @@ Theme authors using v1 can define semantic roles (like "warning", "error", "succ
 
 - **Style**: Visual appearance specification with optional foreground color, optional background color, and optional text modes list. In v0, modes is a simple array of mode names. In v1, modes is an array of mode operations (+mode to add, -mode to remove, plain mode defaults to +mode), and styles can have an optional `style` field that references a parent/base style for inheritance.
 
-- **Role** (v1 only): Named style defined in the `styles` section that can be referenced by elements or other roles. Role names must be from the predefined enum (kebab-case, case-sensitive): default, primary, secondary, emphasized, muted, accent, accent-secondary, syntax, status, info, warning, error. The `default` role is the implicit base for all roles that don't specify a `style` field - properties set in `default` apply to all other roles unless overridden. Roles support inheritance via the optional `style` field (e.g., `warning: {style: "primary", foreground: "#FFA500", modes: [+bold, -italic]}`).
+- **Role** (v1 only): Named style defined in the `styles` section that can be referenced by elements or other roles. Role names must be from the predefined enum (kebab-case, case-sensitive): default, primary, secondary, strong, muted, accent, accent-secondary, syntax, status, info, warning, error. The `default` role is the implicit base for all roles that don't specify a `style` field - properties set in `default` apply to all other roles unless overridden. Roles support inheritance via the optional `style` field (e.g., `warning: {style: "primary", foreground: "#FFA500", modes: [+bold, -italic]}`).
 
 - **Color**: Visual color value in one of three formats:
   - ANSI basic: named colors (case-sensitive: default, black, red, green, yellow, blue, magenta, cyan, white, bright-black, bright-red, bright-green, bright-yellow, bright-blue, bright-magenta, bright-cyan, bright-white)
@@ -639,7 +645,7 @@ Theme authors using v1 can define semantic roles (like "warning", "error", "succ
 - Theme listing format is terminal-aware: when output is a terminal, use multi-column layout (terminal-width-aware) with alphabetical sorting within groups (stock/custom); when output is not a terminal (pipe/redirect), use plain list format with one theme name per line without grouping or styling; each theme shown by stem name once even if multiple formats exist
 - All identifiers are case-sensitive: element names (e.g., "message" ≠ "Message"), role names (e.g., "primary" ≠ "Primary"), mode names (e.g., "bold" ≠ "Bold"), level names (e.g., "error" ≠ "Error"), ANSI basic color names (e.g., "black" ≠ "Black"); RGB hex color codes are case-insensitive for letters A-F
 - Currently only version="1.0" is supported for v1 themes; version="1.1" or higher minor versions are rejected until implemented; version="2.0" or higher major versions are rejected as unsupported
-- V1 role names are restricted to a predefined enum (kebab-case, case-sensitive): default, primary, secondary, emphasized, muted, accent, accent-secondary, syntax, status, info, warning, error. User themes can only define roles from this list; undefined role names or incorrect case are rejected with error. The `default` role is the implicit base for all roles that don't specify a `style` field - properties set in `default` (foreground, background, modes) apply to all other roles unless explicitly overridden.
+- V1 role names are restricted to a predefined enum (kebab-case, case-sensitive): default, primary, secondary, strong, muted, accent, accent-secondary, syntax, status, info, warning, error. User themes can only define roles from this list; undefined role names or incorrect case are rejected with error. The `default` role is the implicit base for all roles that don't specify a `style` field - properties set in `default` (foreground, background, modes) apply to all other roles unless explicitly overridden.
 - V1 property precedence: element explicit properties override role properties; this allows elements to reference a role for base styling while overriding specific properties
 - V1 does NOT support custom `include` directive for theme-to-theme inheritance; only `@default` inheritance is available (custom includes may be added in future versions)
 - V1 role-to-role inheritance chains via the `style` field support a maximum depth of 64 levels; deeper chains or circular references cause theme loading to fail with error

@@ -11,7 +11,7 @@ use super::{BencherExt, ND};
 use hl::{
     Level,
     theme::{Element, StylingPush, Theme},
-    themecfg::{self, Color, Mode, Style},
+    themecfg::{self, Color, Mode, Role, Style},
 };
 
 const GROUP: &str = strcat!(super::GROUP, ND, "theme");
@@ -87,78 +87,31 @@ pub(super) fn bench(c: &mut Criterion) {
 
 fn theme() -> Theme {
     Theme::from(&themecfg::Theme {
+        version: themecfg::THEME_VERSION,
         tags: Default::default(),
+        styles: hashmap! {
+            Role::Primary => Style::new().foreground(Some(Color::Palette(36))),
+            Role::Secondary => Style::new().foreground(Some(Color::Palette(8))),
+            Role::Strong => Style::new().foreground(Some(Color::Palette(255))),
+            Role::Syntax => Style::new().foreground(Some(Color::Palette(246))),
+            Role::Accent => Style::new().modes(Mode::Underline.into()).foreground(Some(Color::Palette(8))),
+        }
+        .into(),
         elements: hashmap! {
-            Element::Time => Style {
-                modes: Vec::default(),
-                foreground: Some(Color::Palette(8)),
-                background: None,
-            },
-            Element::Level => Style {
-                modes: Vec::default(),
-                foreground: Some(Color::Palette(25)),
-                background: None,
-            },
-            Element::Logger => Style {
-                modes: Vec::default(),
-                foreground: Some(Color::Palette(8)),
-                background: None,
-            },
-            Element::Caller => Style {
-                modes: Vec::default(),
-                foreground: Some(Color::Palette(8)),
-                background: None,
-            },
-            Element::Message => Style {
-                modes: Vec::default(),
-                foreground: Some(Color::Palette(255)),
-                background: None,
-            },
-            Element::Field => Style {
-                modes: Vec::default(),
-                foreground: Some(Color::Palette(8)),
-                background: None,
-            },
-            Element::Object => Style {
-                modes: Vec::default(),
-                foreground: Some(Color::Palette(246)),
-                background: None,
-            },
-            Element::Array => Style {
-                modes: Vec::default(),
-                foreground: Some(Color::Palette(246)),
-                background: None,
-            },
-            Element::Ellipsis => Style {
-                modes: Vec::default(),
-                foreground: Some(Color::Palette(8)),
-                background: None,
-            },
-            Element::Key => Style {
-                modes: vec![Mode::Underline],
-                foreground: Some(Color::Palette(117)),
-                background: None,
-            },
-            Element::Null => Style {
-                modes: Vec::default(),
-                foreground: Some(Color::Palette(136)),
-                background: None,
-            },
-            Element::Boolean => Style {
-                modes: Vec::default(),
-                foreground: Some(Color::Palette(178)),
-                background: None,
-            },
-            Element::Number => Style {
-                modes: Vec::default(),
-                foreground: Some(Color::Palette(41)),
-                background: None,
-            },
-            Element::String => Style {
-                modes: Vec::default(),
-                foreground: Some(Color::Palette(36)),
-                background: None,
-            },
+            Element::Time => Role::Secondary.into(),
+            Element::Level => Style::new().foreground(Some(Color::Palette(25))),
+            Element::Logger => Role::Secondary.into(),
+            Element::Caller => Role::Secondary.into(),
+            Element::Message => Role::Strong.into(),
+            Element::Field => Role::Secondary.into(),
+            Element::Object => Role::Syntax.into(),
+            Element::Array => Role::Syntax.into(),
+            Element::Ellipsis => Role::Secondary.into(),
+            Element::Key => Role::Accent.into(),
+            Element::Null => Style::new().foreground(Some(Color::Palette(136))),
+            Element::Boolean => Style::new().foreground(Some(Color::Palette(178))),
+            Element::Number => Style::new().foreground(Some(Color::Palette(41))),
+            Element::String => Role::Primary.into(),
         }
         .into(),
         levels: HashMap::new(),

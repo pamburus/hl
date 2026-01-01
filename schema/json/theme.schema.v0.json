@@ -1,0 +1,279 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Theme Version 0",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "format": "uri",
+      "title": "JSON Schema Reference"
+    },
+    "$palette": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/color"
+      },
+      "title": "Optional YAML anchors for colors"
+    },
+    "tags": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/tag"
+      }
+    },
+    "elements": {
+      "$ref": "#/$defs/elements"
+    },
+    "levels": {
+      "$ref": "#/$defs/levels"
+    },
+    "indicators": {
+      "$ref": "#/$defs/indicators"
+    }
+  },
+  "required": [],
+  "$defs": {
+    "tag": {
+      "type": "string",
+      "enum": ["dark", "light", "16color", "256color", "truecolor"]
+    },
+    "mode": {
+      "type": "string",
+      "enum": [
+        "bold",
+        "faint",
+        "italic",
+        "underline",
+        "slow-blink",
+        "rapid-blink",
+        "reverse",
+        "conceal",
+        "crossed-out"
+      ]
+    },
+    "elements": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "input": {
+          "$ref": "#/$defs/style"
+        },
+        "input-number": {
+          "$ref": "#/$defs/style"
+        },
+        "input-number-inner": {
+          "$ref": "#/$defs/style"
+        },
+        "input-name": {
+          "$ref": "#/$defs/style"
+        },
+        "input-name-inner": {
+          "$ref": "#/$defs/style"
+        },
+        "time": {
+          "$ref": "#/$defs/style"
+        },
+        "level": {
+          "$ref": "#/$defs/style"
+        },
+        "level-inner": {
+          "$ref": "#/$defs/style"
+        },
+        "logger": {
+          "$ref": "#/$defs/style"
+        },
+        "logger-inner": {
+          "$ref": "#/$defs/style"
+        },
+        "caller": {
+          "$ref": "#/$defs/style"
+        },
+        "caller-inner": {
+          "$ref": "#/$defs/style"
+        },
+        "message": {
+          "$ref": "#/$defs/style"
+        },
+        "message-delimiter": {
+          "$ref": "#/$defs/style"
+        },
+        "field": {
+          "$ref": "#/$defs/style"
+        },
+        "key": {
+          "$ref": "#/$defs/style"
+        },
+        "array": {
+          "$ref": "#/$defs/style"
+        },
+        "object": {
+          "$ref": "#/$defs/style"
+        },
+        "string": {
+          "$ref": "#/$defs/style"
+        },
+        "number": {
+          "$ref": "#/$defs/style"
+        },
+        "boolean": {
+          "$ref": "#/$defs/style"
+        },
+        "boolean-false": {
+          "$ref": "#/$defs/style"
+        },
+        "boolean-true": {
+          "$ref": "#/$defs/style"
+        },
+        "null": {
+          "$ref": "#/$defs/style"
+        },
+        "ellipsis": {
+          "$ref": "#/$defs/style"
+        }
+      },
+      "required": [],
+      "title": "Element Styles"
+    },
+    "style": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "modes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/mode"
+          }
+        },
+        "foreground": {
+          "$ref": "#/$defs/color"
+        },
+        "background": {
+          "$ref": "#/$defs/color"
+        }
+      },
+      "required": [],
+      "title": "Style"
+    },
+    "color": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/ansi-basic-color"
+        },
+        {
+          "$ref": "#/$defs/ansi-extended-color"
+        },
+        {
+          "$ref": "#/$defs/rgb-color"
+        }
+      ]
+    },
+    "ansi-basic-color": {
+      "type": "string",
+      "enum": [
+        "default",
+        "black",
+        "red",
+        "green",
+        "yellow",
+        "blue",
+        "magenta",
+        "cyan",
+        "white",
+        "bright-black",
+        "bright-red",
+        "bright-green",
+        "bright-yellow",
+        "bright-blue",
+        "bright-magenta",
+        "bright-cyan",
+        "bright-white"
+      ]
+    },
+    "ansi-extended-color": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 255
+    },
+    "rgb-color": {
+      "type": "string",
+      "pattern": "^#[0-9a-fA-F]{6}$"
+    },
+    "indicators": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "sync": {
+          "$ref": "#/$defs/indicators-sync"
+        }
+      },
+      "required": [],
+      "title": "Indicators"
+    },
+    "indicators-sync": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "synced": {
+          "$ref": "#/$defs/indicator"
+        },
+        "failed": {
+          "$ref": "#/$defs/indicator"
+        }
+      },
+      "required": [],
+      "title": "Sync Indicator Settings"
+    },
+    "indicator": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "text": {
+          "type": "string"
+        },
+        "inner": {
+          "$ref": "#/$defs/indicator-style"
+        },
+        "outer": {
+          "$ref": "#/$defs/indicator-style"
+        }
+      },
+      "required": [],
+      "title": "Indicator Settings"
+    },
+    "indicator-style": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "style": {
+          "$ref": "#/$defs/style"
+        }
+      },
+      "required": [],
+      "title": "Indicator Style Settings"
+    },
+    "levels": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "trace": {
+          "$ref": "#/$defs/elements"
+        },
+        "debug": {
+          "$ref": "#/$defs/elements"
+        },
+        "info": {
+          "$ref": "#/$defs/elements"
+        },
+        "warning": {
+          "$ref": "#/$defs/elements"
+        },
+        "error": {
+          "$ref": "#/$defs/elements"
+        }
+      },
+      "required": [],
+      "title": "Element Settings per Logging Level"
+    }
+  }
+}

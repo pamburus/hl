@@ -1,0 +1,31 @@
+# V0 theme with invalid color formats for error testing
+# This theme should fail to parse due to invalid color values
+
+elements:
+  # Invalid RGB - missing # prefix
+  message:
+    foreground: "ff0000"
+
+  # Invalid RGB - wrong length
+  level:
+    foreground: "#fff"
+
+  # Invalid RGB - non-hex characters
+  time:
+    foreground: "#gghhii"
+
+  # Invalid palette index - out of range
+  caller:
+    foreground: 256
+
+  # Invalid palette index - negative
+  logger:
+    foreground: -1
+
+  # Invalid color name - wrong case
+  key:
+    foreground: "RED"
+
+  # Invalid color name - doesn't exist
+  value:
+    foreground: "orange"

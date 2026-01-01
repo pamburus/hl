@@ -1,0 +1,58 @@
+# Test theme for v1 multiple inheritance feature
+# Tests that style = ["role1", "role2"] merges roles left to right
+
+version: "1.0"
+
+styles:
+  # Base styles to inherit from
+  primary:
+    foreground: "#ffffff"
+
+  secondary:
+    foreground: "#888888"
+    modes: ["faint"]
+
+  # Style with bold mode only
+  strong:
+    modes: ["bold"]
+
+  # Style with underline mode only
+  accent:
+    modes: ["underline"]
+
+  # Style that inherits from multiple bases
+  # Should get: foreground from secondary (#888888),
+  # modes from both strong (bold) and accent (underline)
+  warning:
+    style: ["secondary", "strong", "accent"]
+    background: "#331100"
+
+  # Style that inherits from one base and overrides
+  error:
+    style: "warning"
+    foreground: "#ff0000"
+
+elements:
+  # Single inheritance (backward compatible)
+  message:
+    style: "primary"
+
+  # Multiple inheritance: should get faint from secondary + bold from strong
+  level:
+    style: ["secondary", "strong"]
+
+  # Multiple inheritance with explicit override
+  # Should get foreground from secondary, bold from strong, then override with italic
+  level-inner:
+    style: ["secondary", "strong"]
+    modes: ["italic"]
+    foreground: "#00ff00"
+
+levels:
+  warning:
+    level-inner:
+      style: "warning"
+
+  error:
+    level-inner:
+      style: "error"
