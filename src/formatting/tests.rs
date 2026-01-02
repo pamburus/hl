@@ -1,7 +1,7 @@
 use super::{string::new_message_format, *};
 use crate::{
     datefmt::LinuxDateFormat,
-    model::{Caller, RawObject, Record, RecordFields, RecordWithSourceConstructor},
+    model::{Caller, RawArray, RawObject, Record, RecordFields, RecordWithSourceConstructor},
     settings::{AsciiMode, MessageFormat, MessageFormatting},
     testing::Sample,
     timestamp::Timestamp,
@@ -1787,5 +1787,51 @@ fn test_complex_message_expansion() {
     assert_eq!(
         &result,
         "~\n  > msg=|=>\n     \t<Settings source=\"X\" type=\"Y\" version=\"1\">\n     \t</Settings>\n  > level=info\n  > ts=2024-06-05T04:25:29Z"
+    );
+}
+
+#[test]
+fn test_array_of_objects() {
+    let ka = json_raw_value(r#"[{"name":"a","value":1},{"name":"b","value":2}]"#);
+    let rec = Record {
+        ts: Some(Timestamp::new("2000-01-02T03:04:05.123Z")),
+        message: Some(RawValue::String(EncodedString::json(r#""test message""#))),
+        level: Some(Level::Info),
+        fields: RecordFields::from_slice(&[("items", RawValue::from(RawArray::Json(&ka)))]),
+        ..Default::default()
+    };
+
+    // Test with expansion mode always - this is where the bug occurs
+    let output = formatter()
+        .with_theme(Default::default())
+        .with_expansion(Expansion {
+            mode: ExpansionMode::Always,
+            ..Default::default()
+        })
+        .build()
+        .format_to_string(&rec);
+
+    // The array should contain the objects, not be empty
+    assert!(
+        output.contains("name"),
+        "Array should contain 'name' field from objects, but got: {}",
+        output
+    );
+    assert!(
+        output.contains("value"),
+        "Array should contain 'value' field from objects, but got: {}",
+        output
+    );
+    assert!(
+        output.contains("items"),
+        "Output should contain 'items' field name, but got: {}",
+        output
+    );
+
+    // Check that both objects are present
+    assert!(
+        output.contains("a") && output.contains("b"),
+        "Array should contain object values 'a' and 'b', but got: {}",
+        output
     );
 }

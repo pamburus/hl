@@ -1350,6 +1350,7 @@ impl<'a> FieldFormatter<'a> {
 
                 fs.complexity += 4;
                 let xb = std::mem::replace(&mut fs.expanded, false);
+                let saved_expansion = std::mem::replace(&mut fs.expansion, &ExpansionProfile::INLINE);
                 let item = value.parse::<32>().unwrap();
                 s.element(Element::Array, |s| {
                     s.batch(|buf| buf.push(b'['));
@@ -1372,6 +1373,7 @@ impl<'a> FieldFormatter<'a> {
                     }
                     s.batch(|buf| buf.push(b']'));
                 });
+                fs.expansion = saved_expansion;
                 fs.expanded = xb;
             }
         };
