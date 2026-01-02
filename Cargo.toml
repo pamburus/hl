@@ -50,7 +50,7 @@ closure = "0.3"
 collection_macros = "0.2"
 color-print = "0.3"
 config = { version = "0.15", features = ["json", "toml", "yaml"] }
-const-str = "0.7"
+const-str = "1"
 crossbeam-channel = "0.5"
 crossbeam-queue = "0.3"
 crossbeam-utils = "0.8"
