@@ -1210,6 +1210,7 @@ dependencies = [
  "thiserror 2.0.17",
  "titlecase",
  "toml",
+ "unicode-segmentation",
  "unicode-width",
  "utf8-supported",
  "wild",

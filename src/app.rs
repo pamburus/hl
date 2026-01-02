@@ -25,7 +25,8 @@ use enumset::{EnumSet, enum_set};
 use enumset_ext::EnumSetExt;
 use itertools::{Itertools, izip};
 use serde::{Deserialize, Serialize};
-use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
+use unicode_segmentation::UnicodeSegmentation;
+use unicode_width::UnicodeWidthStr;
 
 // local imports
 use crate::{
@@ -753,7 +754,8 @@ impl App {
             InputReference::File(path) => path.original.to_string_lossy().to_string(),
         };
 
-        let mut badges = inputs.into_iter().map(|x| name(x).chars().collect_vec()).collect_vec();
+        let names = inputs.into_iter().map(name).collect_vec();
+        let mut badges = names.iter().map(|x| x.graphemes(true).collect_vec()).collect_vec();
 
         let ii = self.options.input_info;
 
@@ -778,32 +780,32 @@ impl App {
                     if pl > 7 {
                         *badge = opt
                             .input_name_common_part
-                            .chars()
+                            .graphemes(true)
                             .chain(badge[pl - 4..pl + 8].iter().cloned())
-                            .chain(opt.input_name_clipping.chars())
+                            .chain(opt.input_name_clipping.graphemes(true))
                             .chain(badge[badge.len() - 16..].iter().cloned())
                             .collect();
                     } else {
                         *badge = badge[0..pl + 12]
                             .iter()
                             .cloned()
-                            .chain(opt.input_name_clipping.chars())
+                            .chain(opt.input_name_clipping.graphemes(true))
                             .chain(badge[badge.len() - 12..].iter().cloned())
                             .collect();
                     }
                 } else if pl > 7 {
                     *badge = opt
                         .input_name_common_part
-                        .chars()
+                        .graphemes(true)
                         .chain(badge[pl - 4..].iter().cloned())
                         .collect();
                 }
             }
         }
 
-        if let Some(max_width) = badges.iter().map(|badge| char_slice_width(badge)).max() {
+        if let Some(max_width) = badges.iter().map(|badge| grapheme_slice_width(badge)).max() {
             for badge in badges.iter_mut() {
-                badge.extend(std::iter::repeat_n(' ', max_width - char_slice_width(badge)));
+                badge.extend(std::iter::repeat_n(" ", max_width - grapheme_slice_width(badge)));
             }
         }
 
@@ -832,7 +834,7 @@ impl App {
                             s.batch(|buf| buf.extend(opt.input_name_left_separator.as_bytes()));
                             s.element(Element::InputNameInner, |s| {
                                 s.batch(|buf| {
-                                    buf.extend_from_slice(badge.iter().collect::<String>().as_bytes());
+                                    buf.extend_from_slice(badge.join("").as_bytes());
                                 })
                             });
                             s.batch(|buf| buf.extend(opt.input_name_right_separator.as_bytes()));
@@ -1176,7 +1178,7 @@ impl From<&SyncIndicatorPack> for SyncIndicator {
 
 fn common_prefix_len<'a, V, I>(items: &'a Vec<I>) -> usize
 where
-    V: 'a + Eq + PartialEq + Copy,
+    V: 'a + Eq + PartialEq,
     I: AsRef<[V]> + 'a,
 {
     let mut i: usize = 0;
@@ -1188,19 +1190,20 @@ where
                 return i;
             }
             if let Some(b) = b {
-                if item[i] != b {
+                if &item[i] != b {
                     return i;
                 }
             } else {
-                b = Some(item[i])
+                b = Some(&item[i])
             }
         }
         i += 1;
     }
 }
 
-fn char_slice_width(chars: &[char]) -> usize {
-    chars.iter().map(|c| c.width().unwrap_or_default()).sum()
+#[allow(dead_code)]
+fn grapheme_slice_width(graphemes: &[impl AsRef<str>]) -> usize {
+    graphemes.iter().map(|g| g.as_ref().width()).sum()
 }
 
 // ---
