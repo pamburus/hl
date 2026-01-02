@@ -1129,7 +1129,7 @@ checksum = "7f24254aa9a54b5c858eaee2f5bccdb46aaf0e486a595ed5fd8f86ba55232a70"
 
 [[package]]
 name = "hl"
-version = "0.34.0-alpha.8"
+version = "0.34.0-alpha.9"
 dependencies = [
  "anstream",
  "anyhow",
@@ -1210,6 +1210,7 @@ dependencies = [
  "thiserror 2.0.17",
  "titlecase",
  "toml",
+ "unicode-segmentation",
  "unicode-width",
  "utf8-supported",
  "wild",

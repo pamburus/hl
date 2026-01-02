@@ -690,34 +690,56 @@ fn theme() -> Arc<Theme> {
 }
 
 #[test]
-fn test_char_slice_width() {
+fn test_grapheme_slice_width() {
+    use unicode_segmentation::UnicodeSegmentation;
+
     // ASCII characters
-    let ascii: Vec<char> = "hello".chars().collect();
-    assert_eq!(char_slice_width(&ascii), 5);
+    let ascii: Vec<String> = "hello".graphemes(true).map(String::from).collect();
+    assert_eq!(grapheme_slice_width(&ascii), 5);
 
     // Emoji (width 2)
-    let emoji: Vec<char> = "🎉".chars().collect();
-    assert_eq!(char_slice_width(&emoji), 2);
+    let emoji: Vec<String> = "🎉".graphemes(true).map(String::from).collect();
+    assert_eq!(grapheme_slice_width(&emoji), 2);
 
-    // Mixed ASCII and emoji
-    let mixed: Vec<char> = "test🎉".chars().collect();
-    assert_eq!(char_slice_width(&mixed), 6); // 4 + 2
+    // Emoji with variation selector (should be treated as single grapheme)
+    let emoji_vs: Vec<String> = "⚠️".graphemes(true).map(String::from).collect();
+    assert_eq!(emoji_vs.len(), 1, "Emoji with variation selector should be 1 grapheme");
+    assert_eq!(grapheme_slice_width(&emoji_vs), 2);
 
-    // Multiple emojis
-    let multi_emoji: Vec<char> = "🎉🔥".chars().collect();
-    assert_eq!(char_slice_width(&multi_emoji), 4); // 2 + 2
+    // Mixed ASCII and emoji with variation selector
+    let mixed: Vec<String> = "x-⚠️-.log".graphemes(true).map(String::from).collect();
+    assert_eq!(grapheme_slice_width(&mixed), 9); // x(1) -(1) ⚠️(2) -(1) .(1) l(1) o(1) g(1)
 
     // CJK characters (width 2)
-    let cjk: Vec<char> = "你好".chars().collect();
-    assert_eq!(char_slice_width(&cjk), 4); // 2 + 2
-
-    // Mixed CJK and ASCII
-    let mixed_cjk: Vec<char> = "hello世界".chars().collect();
-    assert_eq!(char_slice_width(&mixed_cjk), 9); // 5 + 4
+    let cjk: Vec<String> = "你好".graphemes(true).map(String::from).collect();
+    assert_eq!(grapheme_slice_width(&cjk), 4); // 2 + 2
 
     // Empty
-    let empty: Vec<char> = vec![];
-    assert_eq!(char_slice_width(&empty), 0);
+    let empty: Vec<String> = vec![];
+    assert_eq!(grapheme_slice_width(&empty), 0);
+}
+
+#[test]
+fn test_input_badges_with_emoji_variation_selectors() {
+    // Test that emoji with variation selectors are preserved correctly
+    let inputs = [InputReference::File(crate::input::InputPath {
+        original: std::path::PathBuf::from("x-⚠️-.log"),
+        canonical: std::path::PathBuf::from("x-⚠️-.log"),
+    })];
+
+    let mut opts = options();
+    opts.input_info = InputInfo::Full.into();
+    let app = App::new(opts);
+
+    let badges = app.input_badges(inputs.iter()).expect("Should produce badges");
+    assert_eq!(badges.len(), 1);
+
+    // The badge should contain the emoji with variation selector
+    // We can't check the exact styled output, but we can verify it contains the emoji
+    assert!(
+        badges[0].contains("⚠️"),
+        "Badge should preserve emoji with variation selector"
+    );
 }
 
 #[test]
