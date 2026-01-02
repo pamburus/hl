@@ -46,6 +46,20 @@ impl Theme {
         Self::default()
     }
 
+    fn new(cfg: impl Borrow<themecfg::Theme>) -> Self {
+        let cfg = cfg.borrow();
+        let default = StylePack::load(&cfg.elements);
+        let mut packs = EnumMap::default();
+        for (level, pack) in &cfg.levels {
+            packs[*level] = StylePack::load(pack);
+        }
+        Self {
+            default,
+            packs,
+            indicators: IndicatorPack::new(&cfg.indicators),
+        }
+    }
+
     pub fn load(dirs: &AppDirs, name: &str) -> Result<Self> {
         Ok(themecfg::Theme::load(dirs, name)?.into())
     }
@@ -82,19 +96,15 @@ impl Theme {
     }
 }
 
-impl<S: Borrow<themecfg::Theme>> From<S> for Theme {
-    fn from(s: S) -> Self {
-        let s = s.borrow();
-        let default = StylePack::load(&s.elements);
-        let mut packs = EnumMap::default();
-        for (level, pack) in &s.levels {
-            packs[*level] = StylePack::load(pack);
-        }
-        Self {
-            default,
-            packs,
-            indicators: IndicatorPack::new(&s.indicators),
-        }
+impl From<themecfg::Theme> for Theme {
+    fn from(cfg: themecfg::Theme) -> Self {
+        Self::from(&cfg)
+    }
+}
+
+impl From<&themecfg::Theme> for Theme {
+    fn from(cfg: &themecfg::Theme) -> Self {
+        Self::new(cfg)
     }
 }
 
