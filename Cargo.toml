@@ -22,7 +22,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.34.0-alpha.7"
+version = "0.34.0-alpha.8"
 edition = "2024"
 repository = "https://github.com/pamburus/hl"
 license = "MIT"
@@ -101,6 +101,7 @@ terminal_size = "0.4"
 thiserror = "2"
 titlecase = "3"
 toml = "0.9"
+unicode-width = "0.2"
 utf8-supported = "1"
 wild = "2"
 wildflower = { git = "https://github.com/cassaundra/wildflower.git" }

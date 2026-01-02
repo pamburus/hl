@@ -25,6 +25,7 @@ use enumset::{EnumSet, enum_set};
 use enumset_ext::EnumSetExt;
 use itertools::{Itertools, izip};
 use serde::{Deserialize, Serialize};
+use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
 // local imports
 use crate::{
@@ -42,7 +43,7 @@ use crate::{
     query::Query,
     scanning::{BufFactory, Delimit, Delimiter, Scanner, SearchExt, Segment, SegmentBuf, SegmentBufFactory},
     settings::{AsciiMode, FieldShowOption, Fields, Formatting, InputInfo, ResolvedPunctuation},
-    theme::{Element, StylingPush, Theme},
+    theme::{Element, StylingPush, SyncIndicatorPack, Theme},
     timezone::Tz,
     vfs::LocalFileSystem,
 };
@@ -528,8 +529,21 @@ impl App {
         Ok(())
     }
 
+    fn prepare_follow_badges<'a, I: IntoIterator<Item = &'a InputReference>>(&self, inputs: I) -> FollowBadges {
+        let si = SyncIndicator::from(&self.options.theme.indicators.sync);
+
+        let mut badges = self.input_badges(inputs);
+        if let Some(badges) = &mut badges {
+            for badge in badges.iter_mut() {
+                *badge = format!("{}{}", si.placeholder, badge);
+            }
+        }
+
+        FollowBadges { si, input: badges }
+    }
+
     fn follow(&self, inputs: Vec<InputReference>, output: &mut Output) -> Result<()> {
-        let input_badges = self.input_badges(inputs.iter());
+        let badges = self.prepare_follow_badges(inputs.iter());
 
         let m = inputs.len();
         let n = self.options.concurrency;
@@ -608,30 +622,15 @@ impl App {
             // spawn processing threads
             let mut workers = Vec::with_capacity(n);
             for _ in 0..n {
-                let worker = scope.spawn(closure!(ref bfo, ref parser, ref sfi, ref input_badges, clone rxi, clone txo, |_| {
-                    let mut processor = self.new_segment_processor(parser);
-                    for (i, j, segment) in rxi.iter() {
-                        let prefix = input_badges.as_ref().map(|b|b[i].as_str()).unwrap_or("");
-                        match segment {
-                            Segment::Complete(segment) => {
-                                let mut buf = bfo.new_buf();
-                                let mut index_builder = TimestampIndexBuilder{result: TimestampIndex::new(j)};
-                                processor.process(segment.data(), &mut buf, prefix, None, &mut index_builder);
-                                sfi.recycle(segment);
-                                if txo.send((i, buf, index_builder.result)).is_err() {
-                                    return;
-                                };
-                            }
-                            Segment::Incomplete(_, _) => {}
-                        }
-                    }
+                let worker = scope.spawn(closure!(ref bfo, ref parser, ref sfi, ref badges, clone rxi, clone txo, |_| {
+                    self.process_segments(parser, bfo, sfi, badges, rxi, txo);
                 }));
                 workers.push(worker);
             }
             drop(txo);
 
             // spawn merger thread
-            let merger = scope.spawn(move |_| -> Result<()> {
+            let merger = scope.spawn(closure!(ref badges, |_| -> Result<()> {
                 type Key = (Timestamp, usize, usize, usize); // (ts, input, block, offset)
                 type Line = (Rc<Vec<u8>>, Range<usize>, Instant); // (buf, location, instant)
 
@@ -649,14 +648,14 @@ impl App {
                         }
                         if let Some(entry) = window.pop_first() {
                             let sync_indicator = if prev_ts.map(|ts| ts <= entry.0.0).unwrap_or(true) {
-                                &self.options.theme.indicators.sync.synced
+                                &badges.si.synced
                             } else {
-                                &self.options.theme.indicators.sync.failed
+                                &badges.si.failed
                             };
                             prev_ts = Some(entry.0.0);
                             mem_usage -= entry.1.1.end - entry.1.1.start;
-                            output.write_all(sync_indicator.value.as_bytes())?;
-                            output.write_all(&entry.1.0[entry.1.1.clone()])?;
+                            output.write_all(sync_indicator.as_bytes())?;
+                            output.write_all(&entry.1.0[entry.1.1.clone()][badges.si.width..])?;
                             output.write_all(b"\n")?;
                         }
                     }
@@ -688,7 +687,7 @@ impl App {
                 }
 
                 Ok(())
-            });
+            }));
 
             for reader in readers {
                 reader.join().unwrap()?;
@@ -705,6 +704,39 @@ impl App {
         .unwrap()?;
 
         Ok(())
+    }
+
+    fn process_segments(
+        &self,
+        parser: &Parser,
+        bfo: &BufFactory,
+        sfi: &SegmentBufFactory,
+        badges: &FollowBadges,
+        rxi: Receiver<(usize, usize, Segment)>,
+        txo: Sender<(usize, Vec<u8>, TimestampIndex)>,
+    ) {
+        let mut processor = self.new_segment_processor(parser);
+        for (i, j, segment) in rxi.iter() {
+            let prefix = badges
+                .input
+                .as_ref()
+                .map(|b| b[i].as_str())
+                .unwrap_or(&badges.si.placeholder);
+            match segment {
+                Segment::Complete(segment) => {
+                    let mut buf = bfo.new_buf();
+                    let mut index_builder = TimestampIndexBuilder {
+                        result: TimestampIndex::new(j),
+                    };
+                    processor.process(segment.data(), &mut buf, prefix, None, &mut index_builder);
+                    sfi.recycle(segment);
+                    if txo.send((i, buf, index_builder.result)).is_err() {
+                        return;
+                    };
+                }
+                Segment::Incomplete(_, _) => {}
+            }
+        }
     }
 
     fn parser(&self) -> Parser {
@@ -741,7 +773,7 @@ impl App {
         if ii.contains(InputInfo::Compact) {
             let pl = common_prefix_len(&badges);
             for badge in badges.iter_mut() {
-                let cl = opt.input_name_clipping.chars().count();
+                let cl = opt.input_name_clipping.width();
                 if badge.len() > 24 + cl + pl {
                     if pl > 7 {
                         *badge = opt
@@ -769,9 +801,9 @@ impl App {
             }
         }
 
-        if let Some(max_len) = badges.iter().map(|badge| badge.len()).max() {
+        if let Some(max_width) = badges.iter().map(|badge| char_slice_width(badge)).max() {
             for badge in badges.iter_mut() {
-                badge.extend(std::iter::repeat_n(' ', max_len - badge.len()));
+                badge.extend(std::iter::repeat_n(' ', max_width - char_slice_width(badge)));
             }
         }
 
@@ -1112,6 +1144,36 @@ impl<T> StripedSender<T> {
 
 // ---
 
+struct FollowBadges {
+    si: SyncIndicator,
+    input: Option<Vec<String>>,
+}
+
+struct SyncIndicator {
+    width: usize,
+    synced: String,
+    failed: String,
+    placeholder: String,
+}
+
+impl From<&SyncIndicatorPack> for SyncIndicator {
+    fn from(si: &SyncIndicatorPack) -> Self {
+        let width = max(si.synced.width, si.failed.width);
+        let synced = si.synced.value.to_owned() + &" ".repeat(width - si.synced.width);
+        let failed = si.failed.value.to_owned() + &" ".repeat(width - si.failed.width);
+        let placeholder = " ".repeat(width);
+
+        Self {
+            width,
+            synced,
+            failed,
+            placeholder,
+        }
+    }
+}
+
+// ---
+
 fn common_prefix_len<'a, V, I>(items: &'a Vec<I>) -> usize
 where
     V: 'a + Eq + PartialEq + Copy,
@@ -1135,6 +1197,10 @@ where
         }
         i += 1;
     }
+}
+
+fn char_slice_width(chars: &[char]) -> usize {
+    chars.iter().map(|c| c.width().unwrap_or_default()).sum()
 }
 
 // ---
