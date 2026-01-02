@@ -351,7 +351,6 @@ impl Indicator {
         let mut buf = Vec::new();
         let os = Style::from(&indicator.outer.style);
         let is = Style::from(&indicator.inner.style);
-        os.apply(&mut buf);
         os.with(&mut buf, |buf| {
             buf.extend(indicator.outer.prefix.as_bytes());
             is.with(buf, |buf| {

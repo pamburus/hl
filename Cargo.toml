@@ -22,7 +22,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.34.0-alpha.6"
+version = "0.34.0-alpha.7"
 edition = "2024"
 repository = "https://github.com/pamburus/hl"
 license = "MIT"
