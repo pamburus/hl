@@ -3,6 +3,7 @@ use std::{borrow::Borrow, collections::HashMap, sync::Arc, vec::Vec};
 
 // third-party imports
 use enum_map::EnumMap;
+use unicode_width::UnicodeWidthStr;
 
 // local imports
 use crate::{
@@ -354,6 +355,7 @@ impl SyncIndicatorPack {
 #[derive(Default)]
 pub struct Indicator {
     pub value: String,
+    pub width: usize,
 }
 
 impl Indicator {
@@ -373,6 +375,11 @@ impl Indicator {
 
         Self {
             value: String::from_utf8(buf).unwrap(),
+            width: indicator.text.width()
+                + indicator.outer.prefix.width()
+                + indicator.outer.suffix.width()
+                + indicator.inner.prefix.width()
+                + indicator.inner.suffix.width(),
         }
     }
 }
