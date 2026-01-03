@@ -36,20 +36,24 @@
             "pattern": "^1\\.(0|[1-9][0-9]*)$"
           }
         },
-        "required": ["version"]
+        "required": [
+          "version"
+        ]
       },
       "then": {
-        "$ref": "https://raw.githubusercontent.com/pamburus/hl/42eb24f79f492b02278057e5d7f3cb3bb2e89b9e/schema/json/theme.schema.v1.json"
+        "$ref": "https://raw.githubusercontent.com/pamburus/hl/v0.34.0/schema/json/theme.schema.v1.json"
       }
     },
     {
       "if": {
         "not": {
-          "required": ["version"]
+          "required": [
+            "version"
+          ]
         }
       },
       "then": {
-        "$ref": "https://raw.githubusercontent.com/pamburus/hl/42eb24f79f492b02278057e5d7f3cb3bb2e89b9e/schema/json/theme.schema.v0.json"
+        "$ref": "https://raw.githubusercontent.com/pamburus/hl/v0.34.0/schema/json/theme.schema.v0.json"
       }
     }
   ]
