@@ -132,10 +132,10 @@
           "$ref": "#/$defs/style"
         },
         "bullet": {
-          "$ref": "#/definitions/style"
+          "$ref": "#/$defs/style"
         },
         "value-expansion": {
-          "$ref": "#/definitions/style"
+          "$ref": "#/$defs/style"
         }
       },
       "required": [],

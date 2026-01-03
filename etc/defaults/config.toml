@@ -1,4 +1,4 @@
-#:schema https://raw.githubusercontent.com/pamburus/hl/v0.34.0/schema/json/config.schema.json
+#:schema https://raw.githubusercontent.com/pamburus/hl/3df9bc6e91ba0e6fb8c3496840d8e9bfef464ab9/schema/json/config.schema.json
 
 #
 # Time format, see https://man7.org/linux/man-pages/man1/date.1.html for details.
