@@ -219,11 +219,7 @@ impl From<&themecfg::Style> for Style {
                 codes.push(StyleCode::Foreground(color));
             }
         }
-        if codes.is_empty() {
-            Self::default()
-        } else {
-            Self(codes.into())
-        }
+        Self(codes.into())
     }
 }
 
@@ -462,13 +458,14 @@ impl Default for ExpandedValueSuffix {
 // ---
 
 fn styled(style: Style, text: &str) -> String {
-    let mut buf = Vec::new();
-    style.apply(&mut buf);
-    let styled = !buf.is_empty();
-    buf.extend(text.as_bytes());
-    if styled {
-        Style::reset().apply(&mut buf);
+    if style == Style::reset() {
+        return text.into();
     }
+
+    let mut buf = Vec::new();
+    style.with(&mut buf, |buf| {
+        buf.extend(text.as_bytes());
+    });
     String::from_utf8(buf).unwrap()
 }
 
