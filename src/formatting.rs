@@ -1481,14 +1481,16 @@ pub mod string {
         ) -> Result<FormatResult> {
             if input.is_empty() {
                 buf.extend(r#""""#.as_bytes());
-                return Ok(FormatResult::Ok(Some(Analysis::empty())));
+                return Ok(FormatResult::Ok(None));
             }
 
             let begin = buf.len();
             _ = buf.with_auto_trim(|buf| ValueFormatRaw.format(input, buf, xsa))?;
 
-            let analysis = buf[begin..].analyze();
-            let mask = analysis.chars;
+            let mut mask = Mask::empty();
+            buf[begin..].iter().map(|&c| CHAR_GROUPS[c as usize]).for_each(|group| {
+                mask |= group;
+            });
 
             const NON_PLAIN: Mask = mask!(
                 Flag::DoubleQuote
@@ -1520,21 +1522,21 @@ pub mod string {
             };
 
             if !mask.intersects(NON_PLAIN) && !like_number() && !confusing() {
-                return Ok(FormatResult::Ok(Some(analysis)));
+                return Ok(FormatResult::Ok(None));
             }
 
             if !mask.intersects(Flag::DoubleQuote | Flag::Control | Flag::Tab | Flag::NewLine | Flag::Backslash) {
                 buf.push(b'"');
                 buf.push(b'"');
                 buf[begin..].rotate_right(1);
-                return Ok(FormatResult::Ok(Some(analysis)));
+                return Ok(FormatResult::Ok(None));
             }
 
             if !mask.intersects(Flag::SingleQuote | Flag::Control | Flag::Tab | Flag::NewLine | Flag::Backslash) {
                 buf.push(b'\'');
                 buf.push(b'\'');
                 buf[begin..].rotate_right(1);
-                return Ok(FormatResult::Ok(Some(analysis)));
+                return Ok(FormatResult::Ok(None));
             }
 
             const Z: Mask = Mask::empty();
@@ -1547,7 +1549,7 @@ pub mod string {
                     buf.push(b'`');
                     buf.push(b'`');
                     buf[begin..].rotate_right(1);
-                    Ok(FormatResult::Ok(Some(analysis)))
+                    Ok(FormatResult::Ok(None))
                 }
                 (Z, _, ExtendedSpaceAction::Expand(prefix)) => {
                     let l0 = buf.len();
@@ -1555,7 +1557,7 @@ pub mod string {
                     let n = buf.len() - l0;
                     buf[begin..].rotate_right(n);
                     prefix_lines_within(buf, begin + n.., 1.., (begin + n - pl)..(begin + n));
-                    Ok(FormatResult::Ok(Some(analysis)))
+                    Ok(FormatResult::Ok(None))
                 }
                 (Z, _, ExtendedSpaceAction::Abort) => {
                     buf.truncate(begin);
