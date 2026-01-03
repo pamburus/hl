@@ -857,6 +857,47 @@ fn test_expand_empty_hidden_values() {
 }
 
 #[test]
+fn test_expand_unparseable_timestamp() {
+    let input = input(concat!(
+        r#"level=debug time=invalid-timestamp msg=hello caller=src1 a="line one\nline two\nline three\n""#,
+        "\n",
+    ));
+
+    let mut output = Vec::new();
+    let app = App::new(Options {
+        expand: ExpansionMode::Always,
+        theme: Theme::from(themecfg::Theme {
+            elements: themecfg::StylePack::new(hashmap! {
+                Element::ValueExpansion => themecfg::Style::default(),
+            }),
+            ..Default::default()
+        })
+        .into(),
+        ..options()
+    });
+
+    app.run(vec![input], &mut output).unwrap();
+
+    let actual = std::str::from_utf8(&output).unwrap();
+    let expected = format!(
+        concat!(
+            "|{ld}| hello @ src1\n",
+            "|{lx}|   > ts=invalid-timestamp\n",
+            "|{lx}|   > a={vh}\n",
+            "|{lx}|     {vi}line one\n",
+            "|{lx}|     {vi}line two\n",
+            "|{lx}|     {vi}line three\n",
+        ),
+        ld = LEVEL_DEBUG,
+        lx = LEVEL_EXPANDED,
+        vh = EXPANDED_VALUE_HEADER,
+        vi = EXPANDED_VALUE_INDENT,
+    );
+
+    assert_eq!(actual, expected, "\nactual:\n{}expected:\n{}", actual, expected);
+}
+
+#[test]
 fn test_input_badges() {
     let inputs = (1..12).map(|i| input(format!("msg=hello input={}\n", i))).collect_vec();
 

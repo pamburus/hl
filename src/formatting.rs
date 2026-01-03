@@ -1016,12 +1016,14 @@ impl<'a> FormattingStateWithRec<'a> {
         let depth = self.depth;
         let first_line_used = self.first_line_used;
         let complexity = self.complexity;
+        let ts_width = self.ts_width;
         let result = s.transact(|s| f(self, s));
         if result.is_err() {
             self.dirty = dirty;
             self.depth = depth;
             self.first_line_used = first_line_used;
             self.complexity = complexity;
+            self.ts_width = ts_width;
         }
         result
     }
