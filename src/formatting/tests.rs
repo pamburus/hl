@@ -1780,6 +1780,40 @@ fn test_expansion_mode_auto_only_expands_multiline() {
 }
 
 #[test]
+fn test_expansion_mode_always_with_hidden_no_double_space() {
+    let mut fields = IncludeExcludeKeyFilter::default();
+    fields.entry("hidden").exclude();
+
+    let formatter = RecordFormatterBuilder {
+        theme: Default::default(),
+        flatten: false,
+        expansion: Some(ExpansionMode::Always.into()),
+        fields: Some(fields.into()),
+        ..formatter()
+    }
+    .build();
+
+    let rec = Record {
+        message: Some(EncodedString::raw("m").into()),
+        fields: RecordFields::from_slice(&[
+            ("a", EncodedString::raw("1").into()),
+            ("hidden", EncodedString::raw("2").into()),
+            ("b", EncodedString::raw("3").into()),
+        ]),
+        ..Default::default()
+    };
+
+    let result = formatter.format_to_string(&rec);
+
+    assert!(
+        !result.contains("  ..."),
+        "Should not have double space before ellipsis, got: {}",
+        result
+    );
+    assert!(result.contains(" ..."), "Should have single space before ellipsis");
+}
+
+#[test]
 fn test_arc_record_formatter() {
     use std::sync::Arc;
 

@@ -514,7 +514,9 @@ impl Punctuation {
             string_closing_quote: Self::resolve_field(&self.string_closing_quote, mode),
             source_location_separator: Self::resolve_field(&self.source_location_separator, mode),
             caller_name_file_separator: Self::resolve_field(&self.caller_name_file_separator, mode),
-            hidden_fields_indicator: Self::resolve_field(&self.hidden_fields_indicator, mode),
+            hidden_fields_indicator: Self::resolve_field(&self.hidden_fields_indicator, mode)
+                .trim()
+                .to_string(),
             level_left_separator: Self::resolve_field(&self.level_left_separator, mode),
             level_right_separator: Self::resolve_field(&self.level_right_separator, mode),
             input_number_prefix: Self::resolve_field(&self.input_number_prefix, mode),
