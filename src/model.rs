@@ -161,20 +161,6 @@ impl<'a> RawValue<'a> {
             _ => 0,
         }
     }
-
-    #[inline]
-    pub fn rough_complexity(&self) -> usize {
-        match self {
-            Self::String(EncodedString::Json(value)) => 4 + value.source().len(),
-            Self::String(EncodedString::Raw(value)) => value.source().len(),
-            Self::Null => 4,
-            Self::Boolean(false) => 5,
-            Self::Boolean(true) => 4,
-            Self::Number(value) => value.len(),
-            Self::Object(value) => value.rough_complexity(),
-            Self::Array(value) => value.rough_complexity(),
-        }
-    }
 }
 
 impl<'a> From<EncodedString<'a>> for RawValue<'a> {
@@ -260,13 +246,6 @@ impl<'a> RawObject<'a> {
             Self::Json(value) => json_match(value, "{}"),
         }
     }
-
-    #[inline]
-    pub fn rough_complexity(&self) -> usize {
-        match self {
-            Self::Json(value) => 4 + value.get().len() * 3 / 2,
-        }
-    }
 }
 
 impl<'a> From<&'a json::value::RawValue> for RawObject<'a> {
@@ -314,13 +293,6 @@ impl<'a> RawArray<'a> {
     pub fn is_empty(&self) -> bool {
         match self {
             Self::Json(value) => json_match(value, "[]"),
-        }
-    }
-
-    #[inline]
-    pub fn rough_complexity(&self) -> usize {
-        match self {
-            Self::Json(value) => 4 + value.get().len() * 5 / 4,
         }
     }
 }

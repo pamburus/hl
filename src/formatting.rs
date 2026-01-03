@@ -80,12 +80,7 @@ pub enum MultilineExpansion {
 // ---
 
 #[derive(Clone, Debug)]
-pub struct ExpansionThresholds {
-    pub global: usize,
-    pub cumulative: usize,
-    pub message: usize,
-    pub field: usize,
-}
+pub struct ExpansionThresholds {}
 
 // ---
 
@@ -93,47 +88,32 @@ pub struct ExpansionThresholds {
 pub struct ExpansionProfile {
     pub multiline: MultilineExpansion,
     pub thresholds: ExpansionThresholds,
+    pub expand_all: bool,
 }
 
 impl ExpansionProfile {
     pub const NEVER: Self = Self {
         multiline: MultilineExpansion::Disabled,
-        thresholds: ExpansionThresholds {
-            global: usize::MAX,
-            cumulative: usize::MAX,
-            message: usize::MAX,
-            field: usize::MAX,
-        },
+        thresholds: ExpansionThresholds {},
+        expand_all: false,
     };
 
     pub const ALWAYS: Self = Self {
         multiline: MultilineExpansion::Standard,
-        thresholds: ExpansionThresholds {
-            global: 0,
-            cumulative: 0,
-            message: 256,
-            field: 0,
-        },
+        thresholds: ExpansionThresholds {},
+        expand_all: true,
     };
 
     pub const INLINE: Self = Self {
         multiline: MultilineExpansion::Inline,
-        thresholds: ExpansionThresholds {
-            global: usize::MAX,
-            cumulative: usize::MAX,
-            message: usize::MAX,
-            field: usize::MAX,
-        },
+        thresholds: ExpansionThresholds {},
+        expand_all: false,
     };
 
     pub const AUTO: Self = Self {
         multiline: MultilineExpansion::Standard,
-        thresholds: ExpansionThresholds {
-            global: usize::MAX,
-            cumulative: usize::MAX,
-            message: usize::MAX,
-            field: usize::MAX,
-        },
+        thresholds: ExpansionThresholds {},
+        expand_all: false,
     };
 }
 
@@ -380,10 +360,7 @@ impl RecordFormatter {
                         .ok();
                 } else if self.always_show_time {
                     self.format_timestamp_stub(&mut fs, s);
-                    fs.complexity += 1 + self.ts_width.chars;
                 }
-            } else {
-                fs.complexity += 1 + self.ts_width.chars;
             }
 
             //
@@ -400,7 +377,6 @@ impl RecordFormatter {
             let level = level.or(self.always_show_level.then_some(LEVEL_UNKNOWN.as_bytes()));
             if let Some(level) = level {
                 fs.has_level = true;
-                fs.complexity += 3 + level.len();
                 self.format_level(s, &mut fs, level);
                 // fs.add_element(|| s.space());
                 // s.element(Element::Level, |s| {
@@ -422,15 +398,11 @@ impl RecordFormatter {
                         s.batch(|buf| buf.extend_from_slice(logger.as_bytes()))
                     });
                     s.batch(|buf| buf.extend_from_slice(self.punctuation.logger_name_separator.as_bytes()));
-                    fs.complexity += 2 + logger.len();
                     fs.first_line_used = true;
                 });
             }
 
             // include caller into cumulative complexity calculation
-            if !rec.caller.is_empty() {
-                fs.complexity += 3 + rec.caller.name.len() + 1 + rec.caller.file.len() + 1 + rec.caller.line.len();
-            }
 
             //
             // message text
@@ -438,7 +410,6 @@ impl RecordFormatter {
             if let Some(value) = &rec.message {
                 match fs.transact(s, |fs, s| self.format_message(s, fs, *value)) {
                     Ok(()) => {
-                        fs.complexity += 2;
                         fs.first_line_used = true;
                     }
                     Err(MessageFormatError::ExpansionNeeded) => {
@@ -458,18 +429,6 @@ impl RecordFormatter {
                 }
             } else {
                 s.reset();
-            }
-
-            match (fs.expansion.thresholds.global, fs.expansion.thresholds.cumulative) {
-                (0, 0) => {}
-                (usize::MAX, usize::MAX) => {}
-                (global, cumulative) => {
-                    if fs.complexity >= cumulative
-                        || self.rough_complexity(fs.complexity, rec, Some(&self.fields)) >= global
-                    {
-                        fs.expanded = true;
-                    }
-                }
             }
 
             //
@@ -572,41 +531,6 @@ impl RecordFormatter {
     }
 
     #[inline]
-    fn rough_complexity(&self, initial: usize, rec: &model::Record, filter: Option<&IncludeExcludeKeyFilter>) -> usize {
-        let mut result = initial;
-        result += rec.message.map(|x| x.raw_str().len()).unwrap_or(0);
-        result += rec.predefined.len();
-        result += rec.logger.map(|x| x.len()).unwrap_or(0);
-        for (key, value) in rec.fields() {
-            if value.is_empty() {
-                if self.hide_empty_fields {
-                    continue;
-                }
-                result += 4;
-            }
-
-            let setting = IncludeExcludeSetting::Unspecified;
-            let (_, setting, leaf) = match filter {
-                Some(filter) => {
-                    let setting = setting.apply(filter.setting());
-                    match filter.get(key) {
-                        Some(filter) => (Some(filter), setting.apply(filter.setting()), filter.leaf()),
-                        None => (None, setting, true),
-                    }
-                }
-                None => (None, setting, true),
-            };
-            if setting == IncludeExcludeSetting::Exclude && leaf {
-                continue;
-            }
-
-            result += 2 + key.len();
-            result += value.rough_complexity();
-        }
-        result
-    }
-
-    #[inline]
     fn format_caller<S: StylingPush<Buf>>(&self, s: &mut S, caller: &Caller) {
         s.element(Element::Caller, |s| {
             s.batch(|buf| {
@@ -666,9 +590,6 @@ impl RecordFormatter {
         match value {
             RawValue::String(value) => {
                 if !value.is_empty() {
-                    if value.source().len() > fs.expansion.thresholds.message {
-                        return Err(MessageFormatError::ExpansionNeeded);
-                    }
                     fs.add_element(|| {
                         s.reset();
                         s.space();
@@ -683,12 +604,7 @@ impl RecordFormatter {
                             };
                             let result = self.message_format.format(value, buf, xsa).unwrap();
                             match result {
-                                string::FormatResult::Ok(analysis) => {
-                                    if let Some(analysis) = analysis {
-                                        fs.complexity += analysis.complexity;
-                                    }
-                                    Ok(())
-                                }
+                                string::FormatResult::Ok(_) => Ok(()),
                                 string::FormatResult::Aborted => Err(MessageFormatError::ExpansionNeeded),
                             }
                         })
@@ -859,14 +775,12 @@ impl<'a> FormattingStateWithRec<'a> {
         let dirty = self.dirty;
         let depth = self.depth;
         let first_line_used = self.first_line_used;
-        let complexity = self.complexity;
         let ts_width = self.ts_width;
         let result = s.transact(|s| f(self, s));
         if result.is_err() {
             self.dirty = dirty;
             self.depth = depth;
             self.first_line_used = first_line_used;
-            self.complexity = complexity;
             self.ts_width = ts_width;
         }
         result
@@ -908,7 +822,6 @@ struct FormattingState<'a> {
     first_line_used: bool,
     some_fields_hidden: bool,
     caller_formatted: bool,
-    complexity: usize,
     extra_fields: heapless::Vec<(&'a str, RawValue<'a>), 4>,
     fields_to_expand: heapless::Vec<(&'a str, RawValue<'a>), MAX_FIELDS_TO_EXPAND_ON_HOLD>,
     last_expansion_point: Option<usize>,
@@ -1009,9 +922,8 @@ impl<'a> FieldFormatter<'a> {
             return FieldFormatResult::Hidden;
         }
 
-        let key_complexity = key.len() + 2;
-
-        if !fs.expanded && key_complexity + value.raw_str().len() + 2 > fs.expansion.thresholds.field {
+        // If expand_all is enabled and we're not already expanded, trigger expansion for all fields
+        if !fs.expanded && fs.expansion.expand_all {
             return FieldFormatResult::ExpansionNeeded;
         }
 
@@ -1027,8 +939,6 @@ impl<'a> FieldFormatter<'a> {
             };
 
         let ffv = self.begin(s, key, value, fs);
-
-        fs.complexity += key_complexity;
 
         let result = if self.rf.unescape_fields {
             self.format_value(s, value, fs, filter, predefined_filter, setting, predefined_setting)
@@ -1071,15 +981,6 @@ impl<'a> FieldFormatter<'a> {
             _ => value,
         };
 
-        let complexity_limit = if !fs.expanded {
-            Some(std::cmp::min(
-                fs.expansion.thresholds.field,
-                fs.expansion.thresholds.cumulative - std::cmp::min(fs.expansion.thresholds.cumulative, fs.complexity),
-            ))
-        } else {
-            None
-        };
-
         match value {
             RawValue::String(value) => {
                 let result = s.element(Element::String, |s| {
@@ -1091,18 +992,11 @@ impl<'a> FieldFormatter<'a> {
                             (false, MultilineExpansion::Disabled) => ExtendedSpaceAction::Escape,
                             (false, MultilineExpansion::Standard) => ExtendedSpaceAction::Abort,
                         };
-                        ValueFormatAuto::default()
-                            .with_complexity_limit(complexity_limit)
-                            .format(value, buf, xsa)
-                            .unwrap()
+                        ValueFormatAuto::default().format(value, buf, xsa).unwrap()
                     })
                 });
                 match result {
-                    string::FormatResult::Ok(analysis) => {
-                        if let Some(analysis) = analysis {
-                            fs.complexity += analysis.complexity;
-                        }
-                    }
+                    string::FormatResult::Ok(_) => {}
                     string::FormatResult::Aborted => {
                         return ValueFormatResult::ExpansionNeeded;
                     }
@@ -1110,28 +1004,21 @@ impl<'a> FieldFormatter<'a> {
             }
             RawValue::Number(value) => {
                 s.element(Element::Number, |s| s.batch(|buf| buf.extend(value.as_bytes())));
-                fs.complexity += value.len();
             }
             RawValue::Boolean(true) => {
                 s.element(Element::BooleanTrue, |s| s.batch(|buf| buf.extend(b"true")));
-                fs.complexity += 4;
             }
             RawValue::Boolean(false) => {
                 s.element(Element::BooleanFalse, |s| s.batch(|buf| buf.extend(b"false")));
-                fs.complexity += 5;
             }
             RawValue::Null => {
                 s.element(Element::Null, |s| s.batch(|buf| buf.extend(b"null")));
-                fs.complexity += 4;
             }
             RawValue::Object(value) => {
-                if let Some(limit) = complexity_limit {
-                    if !fs.flatten && value.rough_complexity() > limit {
-                        return ValueFormatResult::ExpansionNeeded;
-                    }
+                if !fs.expanded && !fs.flatten && fs.expansion.expand_all {
+                    return ValueFormatResult::ExpansionNeeded;
                 }
 
-                fs.complexity += 4;
                 let item = value.parse().unwrap();
                 if !fs.flatten && (!fs.expanded || value.is_empty()) {
                     s.element(Element::Object, |s| {
@@ -1188,13 +1075,10 @@ impl<'a> FieldFormatter<'a> {
                 }
             }
             RawValue::Array(value) => {
-                if let Some(limit) = complexity_limit {
-                    if value.rough_complexity() > limit {
-                        return ValueFormatResult::ExpansionNeeded;
-                    }
+                if !fs.expanded && fs.expansion.expand_all {
+                    return ValueFormatResult::ExpansionNeeded;
                 }
 
-                fs.complexity += 4;
                 let xb = std::mem::replace(&mut fs.expanded, false);
                 let saved_expansion = std::mem::replace(&mut fs.expansion, &ExpansionProfile::INLINE);
                 let item = value.parse::<32>().unwrap();
@@ -1585,18 +1469,7 @@ pub mod string {
     // ---
 
     #[derive(Default)]
-    pub struct ValueFormatAuto {
-        complexity_limit: Option<usize>,
-    }
-
-    impl ValueFormatAuto {
-        #[inline]
-        pub fn with_complexity_limit(self, limit: Option<usize>) -> Self {
-            Self {
-                complexity_limit: limit,
-            }
-        }
-    }
+    pub struct ValueFormatAuto {}
 
     impl Format for ValueFormatAuto {
         #[inline(always)]
@@ -1607,11 +1480,6 @@ pub mod string {
             xsa: ExtendedSpaceAction<'a>,
         ) -> Result<FormatResult> {
             if input.is_empty() {
-                if let Some(limit) = self.complexity_limit {
-                    if limit < 2 {
-                        return Ok(FormatResult::Aborted);
-                    }
-                }
                 buf.extend(r#""""#.as_bytes());
                 return Ok(FormatResult::Ok(Some(Analysis::empty())));
             }
@@ -1621,12 +1489,6 @@ pub mod string {
 
             let analysis = buf[begin..].analyze();
             let mask = analysis.chars;
-
-            if let Some(limit) = self.complexity_limit {
-                if analysis.complexity > limit {
-                    return Ok(FormatResult::Aborted);
-                }
-            }
 
             const NON_PLAIN: Mask = mask!(
                 Flag::DoubleQuote
