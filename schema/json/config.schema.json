@@ -26,32 +26,6 @@
           "required": ["ascii", "unicode"]
         }
       ]
-    },
-    "expansion-profile": {
-      "type": "object",
-      "properties": {
-        "multiline": {
-          "type": "string",
-          "enum": ["standard", "disabled", "inline"]
-        },
-        "thresholds": {
-          "type": "object",
-          "properties": {
-            "global": {
-              "type": "integer"
-            },
-            "cumulative": {
-              "type": "integer"
-            },
-            "message": {
-              "type": "integer"
-            },
-            "field": {
-              "type": "integer"
-            }
-          }
-        }
-      }
     }
   },
   "properties": {
@@ -284,21 +258,7 @@
           "properties": {
             "mode": {
               "type": "string",
-              "enum": ["never", "inline", "low", "medium", "high", "always"]
-            },
-            "profiles": {
-              "type": "object",
-              "properties": {
-                "low": {
-                  "$ref": "#/definitions/expansion-profile"
-                },
-                "medium": {
-                  "$ref": "#/definitions/expansion-profile"
-                },
-                "high": {
-                  "$ref": "#/definitions/expansion-profile"
-                }
-              }
+              "enum": ["never", "inline", "auto", "always"]
             }
           }
         },

@@ -108,10 +108,10 @@ fn test_flatten_option() {
 
 #[test]
 fn test_expansion_option() {
-    assert_eq!(ExpansionOption::from(None), ExpansionOption::Medium);
+    assert_eq!(ExpansionOption::from(None), ExpansionOption::Auto);
     assert_eq!(
-        ExpansionOption::from(Some(settings::ExpansionMode::Medium)),
-        ExpansionOption::Medium
+        ExpansionOption::from(Some(settings::ExpansionMode::Inline)),
+        ExpansionOption::Inline
     );
     assert_eq!(
         ExpansionOption::from(Some(settings::ExpansionMode::Never)),
@@ -122,8 +122,8 @@ fn test_expansion_option() {
         ExpansionOption::Always
     );
     assert_eq!(
-        ExpansionOption::from(settings::ExpansionMode::Medium),
-        ExpansionOption::Medium
+        ExpansionOption::from(settings::ExpansionMode::Inline),
+        ExpansionOption::Inline
     );
     assert_eq!(
         ExpansionOption::from(settings::ExpansionMode::Never),
@@ -134,8 +134,8 @@ fn test_expansion_option() {
         ExpansionOption::Always
     );
     assert_eq!(
-        Into::<settings::ExpansionMode>::into(ExpansionOption::Medium),
-        settings::ExpansionMode::Medium
+        Into::<settings::ExpansionMode>::into(ExpansionOption::Inline),
+        settings::ExpansionMode::Inline
     );
     assert_eq!(
         Into::<settings::ExpansionMode>::into(ExpansionOption::Never),

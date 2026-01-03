@@ -9,7 +9,6 @@ use crate::{
 };
 use chrono::{Offset, Utc};
 use encstr::EncodedString;
-use itertools::Itertools;
 use serde_json as json;
 
 trait FormatToVec {
@@ -64,7 +63,16 @@ fn format_no_color_inline(rec: &Record) -> String {
         .with_theme(Default::default())
         .with_expansion(Expansion {
             mode: ExpansionMode::Inline,
-            ..Default::default()
+        })
+        .build()
+        .format_to_string(rec)
+}
+
+fn format_no_color_expand(rec: &Record) -> String {
+    formatter()
+        .with_theme(Default::default())
+        .with_expansion(Expansion {
+            mode: ExpansionMode::Always,
         })
         .build()
         .format_to_string(rec)
@@ -301,7 +309,7 @@ fn test_string_value_json_tabs() {
 fn test_string_value_json_tabs_expand() {
     let v = r#""some\tvalue""#;
     let rec = Record::from_fields(&[("k", EncodedString::json(v).into())]);
-    assert_eq!(&format_no_color(&rec), "~\n  > k=|=>\n     \tsome\tvalue");
+    assert_eq!(&format_no_color_expand(&rec), "~\n  > k=|=>\n     \tsome\tvalue");
 }
 
 #[test]
@@ -315,7 +323,7 @@ fn test_string_value_raw_tabs() {
 fn test_string_value_raw_tabs_expand() {
     let v = "some\tvalue";
     let rec = Record::from_fields(&[("k", EncodedString::raw(v).into())]);
-    assert_eq!(&format_no_color(&rec), "~\n  > k=|=>\n     \tsome\tvalue");
+    assert_eq!(&format_no_color_expand(&rec), "~\n  > k=|=>\n     \tsome\tvalue");
 }
 
 #[test]
@@ -829,7 +837,7 @@ fn test_string_value_json_extended_space() {
     let v = r#""some\tvalue""#;
     let rec = Record::from_fields(&[("k", EncodedString::json(v).into())]);
     assert_eq!(
-        format_no_color(&rec),
+        format_no_color_expand(&rec),
         format!(
             "{mh}\n  > k={vh}\n    {vi}some\tvalue",
             mh = EXPANDED_MESSAGE_HEADER,
@@ -944,7 +952,7 @@ fn test_string_value_raw_extended_space() {
     let v = "some\tvalue";
     let rec = Record::from_fields(&[("k", EncodedString::raw(v).into())]);
     assert_eq!(
-        format_no_color(&rec),
+        format_no_color_expand(&rec),
         format!(
             "{mh}\n  > k={vh}\n    {vi}some\tvalue",
             mh = EXPANDED_MESSAGE_HEADER,
@@ -1022,7 +1030,7 @@ fn test_expand_object() {
     let formatter = RecordFormatterBuilder {
         theme: Default::default(),
         flatten: false,
-        expansion: Some(ExpansionMode::default().into()),
+        expansion: Some(ExpansionMode::Always.into()),
         ..formatter()
     }
     .build();
@@ -1042,34 +1050,8 @@ fn test_expand_object() {
     let result = formatter.format_to_string(&rec);
     assert_eq!(
         &result,
-        "m a=1 b=2 d=4\n  > c:\n    > x=10\n    > y=|=>\n       \tsome\n       \tmultiline\n       \tvalue\n    > z=30"
+        "m\n  > a=1\n  > b=2\n  > c:\n    > x=10\n    > y=|=>\n       \tsome\n       \tmultiline\n       \tvalue\n    > z=30\n  > d=4"
     );
-}
-
-#[test]
-fn test_expand_global_threshold() {
-    let mut expansion = Expansion::from(ExpansionMode::High);
-    expansion.profiles.high.thresholds.global = 2;
-
-    let formatter = RecordFormatterBuilder {
-        theme: Default::default(),
-        expansion: Some(expansion),
-        ..formatter()
-    }
-    .build();
-
-    let rec = Record {
-        message: Some(EncodedString::raw("m").into()),
-        fields: RecordFields::from_slice(&[
-            ("a", EncodedString::raw("1").into()),
-            ("b", EncodedString::raw("2").into()),
-            ("c", EncodedString::raw("3").into()),
-        ]),
-        ..Default::default()
-    };
-
-    let result = formatter.format_to_string(&rec);
-    assert_eq!(&result, "m\n  > a=1\n  > b=2\n  > c=3", "{}", result);
 }
 
 #[test]
@@ -1109,81 +1091,6 @@ fn test_expand_no_filter() {
     .build();
 
     assert_eq!(formatter.format_to_string(&rec), r#"m a=1 b=2 c=3"#);
-}
-
-#[test]
-fn test_expand_message() {
-    let rec = |m, f| Record {
-        message: Some(EncodedString::raw(m).into()),
-        fields: RecordFields::from_slice(&[("a", EncodedString::raw(f).into())]),
-        ..Default::default()
-    };
-
-    let mut expansion = Expansion::from(ExpansionMode::Medium);
-    expansion.profiles.medium.thresholds.message = 64;
-
-    let default_theme = formatter().theme;
-
-    let mut formatter = RecordFormatterBuilder {
-        theme: Default::default(),
-        expansion: Some(expansion),
-        ..formatter()
-    }
-    .build();
-
-    let lorem_ipsum = "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.";
-
-    assert_eq!(
-        formatter.format_to_string(&rec(lorem_ipsum, "1")),
-        format!("a=1\n  > msg=\"{}\"", lorem_ipsum)
-    );
-    assert_eq!(
-        formatter.format_to_string(&rec("", "some\nmultiline\ntext")),
-        format!(
-            concat!(
-                "{mh}\n",
-                "  > a={header}\n",
-                "    {indent}some\n",
-                "    {indent}multiline\n",
-                "    {indent}text"
-            ),
-            mh = EXPANDED_MESSAGE_HEADER,
-            header = EXPANDED_VALUE_HEADER,
-            indent = EXPANDED_VALUE_INDENT
-        )
-    );
-
-    assert_eq!(
-        formatter.format_to_string(&rec("some\nmultiline\ntext", "1")),
-        format!(
-            concat!(
-                "a=1\n",
-                "  > msg={vh}\n",
-                "    {vi}some\n",
-                "    {vi}multiline\n",
-                "    {vi}text",
-            ),
-            vh = EXPANDED_VALUE_HEADER,
-            vi = EXPANDED_VALUE_INDENT,
-        )
-    );
-
-    formatter.theme = default_theme.unwrap_or_default();
-
-    assert_eq!(
-        formatter.format_to_string(&rec("some\nmultiline\ntext", "1")),
-        format!(
-            concat!(
-                "\u{1b}[0;32ma\u{1b}[0;2m=\u{1b}[0;94m1\u{1b}[0;32m\u{1b}[0m\n",
-                "  \u{1b}[0;2m> \u{1b}[0;32mmsg\u{1b}[0;2m=\u{1b}[0m\u{1b}[0;2m{vh}\u{1b}[0m\n",
-                "  \u{1b}[0;2m  {vi}\u{1b}[0msome\n",
-                "  \u{1b}[0;2m  {vi}\u{1b}[0mmultiline\n",
-                "  \u{1b}[0;2m  {vi}\u{1b}[0mtext\u{1b}[0m",
-            ),
-            vh = EXPANDED_VALUE_HEADER,
-            vi = EXPANDED_VALUE_INDENT,
-        )
-    );
 }
 
 #[test]
@@ -1533,264 +1440,6 @@ fn test_expand_mode_inline() {
 }
 
 #[test]
-fn test_expand_mode_low() {
-    let rec = |value| Record {
-        fields: RecordFields::from_slice(&[("a", EncodedString::raw(value).into())]),
-        ..Default::default()
-    };
-
-    let mut expansion = Expansion::from(ExpansionMode::Low);
-    expansion.profiles.low.thresholds.global = 1024;
-    expansion.profiles.low.thresholds.cumulative = 1024;
-    expansion.profiles.low.thresholds.field = 1024;
-    expansion.profiles.low.thresholds.message = 1024;
-
-    let formatter = formatter()
-        .with_theme(Default::default())
-        .with_expansion(expansion)
-        .build();
-
-    assert_eq!(
-        formatter.format_to_string(&rec("some single-line message")),
-        r#"a="some single-line message""#
-    );
-    assert_eq!(
-        formatter.format_to_string(&rec("some\nmultiline\nmessage")),
-        "~\n  > a=|=>\n     \tsome\n     \tmultiline\n     \tmessage"
-    );
-}
-
-#[test]
-fn test_expansion_threshold_cumulative() {
-    let rec = |msg, v1, v2, v3| Record {
-        message: Some(EncodedString::raw(msg).into()),
-        fields: RecordFields::from_slice(&[
-            ("a", EncodedString::raw(v1).into()),
-            ("b", EncodedString::raw(v2).into()),
-            ("c", EncodedString::raw(v3).into()),
-        ]),
-        ..Default::default()
-    };
-
-    let mut expansion = Expansion::from(ExpansionMode::High);
-    expansion.profiles.high.thresholds.global = 1024;
-    expansion.profiles.high.thresholds.cumulative = 32;
-    expansion.profiles.high.thresholds.field = 1024;
-    expansion.profiles.high.thresholds.message = 1024;
-
-    let formatter = formatter()
-        .with_theme(Default::default())
-        .with_expansion(expansion)
-        .build();
-
-    assert_eq!(
-        formatter.format_to_string(&rec("", "v1", "v2", "v3")),
-        r#"a=v1 b=v2 c=v3"#
-    );
-    assert_eq!(
-        formatter.format_to_string(&rec("m", "v1", "v2", "v3")),
-        r#"m a=v1 b=v2 c=v3"#
-    );
-    assert_eq!(
-        formatter.format_to_string(&rec("", "long-v1", "long-v2", "long-v3")),
-        "a=long-v1 b=long-v2 c=long-v3"
-    );
-    assert_eq!(
-        formatter.format_to_string(&rec("m", "long-v1", "long-v2", "long-v3")),
-        "m a=long-v1 b=long-v2\n  > c=long-v3"
-    );
-    assert_eq!(
-        formatter.format_to_string(&rec(
-            "some long long long long long long message",
-            "long-v1",
-            "long-v2",
-            "long-v3"
-        )),
-        "some long long long long long long message\n  > a=long-v1\n  > b=long-v2\n  > c=long-v3"
-    );
-}
-
-#[test]
-fn test_expansion_threshold_global() {
-    let rec = |msg, v1, v2, v3| Record {
-        message: Some(EncodedString::raw(msg).into()),
-        fields: RecordFields::from_slice(&[
-            ("a", EncodedString::raw(v1).into()),
-            ("b", EncodedString::raw(v2).into()),
-            ("c", EncodedString::raw(v3).into()),
-        ]),
-        ..Default::default()
-    };
-
-    let mut expansion = Expansion::from(ExpansionMode::High);
-    expansion.profiles.high.thresholds.global = 28;
-    expansion.profiles.high.thresholds.cumulative = 1024;
-    expansion.profiles.high.thresholds.field = 1024;
-    expansion.profiles.high.thresholds.message = 1024;
-
-    let formatter = formatter()
-        .with_theme(Default::default())
-        .with_expansion(expansion)
-        .build();
-
-    assert_eq!(
-        formatter.format_to_string(&rec("", "v1", "v2", "v3")),
-        r#"a=v1 b=v2 c=v3"#
-    );
-    assert_eq!(
-        formatter.format_to_string(&rec("m", "v1", "v2", "v3")),
-        r#"m a=v1 b=v2 c=v3"#
-    );
-    assert_eq!(
-        formatter.format_to_string(&rec("", "long-v1", "long-v2", "long-v3")),
-        "~\n  > a=long-v1\n  > b=long-v2\n  > c=long-v3"
-    );
-    assert_eq!(
-        formatter.format_to_string(&rec("m", "long-v1", "long-v2", "long-v3")),
-        "m\n  > a=long-v1\n  > b=long-v2\n  > c=long-v3"
-    );
-    assert_eq!(
-        formatter.format_to_string(&rec(
-            "some long long long long long long message",
-            "long-v1",
-            "long-v2",
-            "long-v3"
-        )),
-        "some long long long long long long message\n  > a=long-v1\n  > b=long-v2\n  > c=long-v3"
-    );
-}
-
-#[test]
-fn test_expansion_threshold_field() {
-    let rec = |value| Record {
-        fields: RecordFields::from_slice(&[("a", value)]),
-        ..Default::default()
-    };
-
-    let mut expansion = Expansion::from(ExpansionMode::High);
-    expansion.profiles.high.thresholds.global = 1024;
-    expansion.profiles.high.thresholds.cumulative = 1024;
-    expansion.profiles.high.thresholds.field = 48;
-    expansion.profiles.high.thresholds.message = 1024;
-
-    let formatter = formatter()
-        .with_theme(Default::default())
-        .with_expansion(expansion)
-        .with_flatten(false)
-        .build();
-
-    let array = json_raw_value("[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16]");
-    let object = json_raw_value(r#"{"a":"v1","b":"v2","c":"v3","d":"v4","e":"v5","f":"v6"}"#);
-
-    assert_eq!(
-        formatter.format_to_string(&rec(EncodedString::raw("v").into())),
-        r#"a=v"#
-    );
-    assert_eq!(
-        formatter.format_to_string(&rec(RawValue::Array(array.as_ref().into()))),
-        "~\n  > a=[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]"
-    );
-    assert_eq!(
-        formatter.format_to_string(&rec(RawValue::Object(object.as_ref().into()))),
-        "~\n  > a:\n    > a=v1\n    > b=v2\n    > c=v3\n    > d=v4\n    > e=v5\n    > f=v6"
-    );
-}
-
-#[test]
-fn test_expansion_nested_field() {
-    let rec = |value| Record {
-        fields: RecordFields::from_slice(&[("a", value)]),
-        ..Default::default()
-    };
-
-    let mut expansion = Expansion::from(ExpansionMode::High);
-    expansion.profiles.high.thresholds.global = 1024;
-    expansion.profiles.high.thresholds.cumulative = 1024;
-    expansion.profiles.high.thresholds.field = 1024;
-    expansion.profiles.high.thresholds.message = 1024;
-
-    let formatter = formatter()
-        .with_theme(Default::default())
-        .with_expansion(expansion)
-        .with_empty_fields_hiding(true)
-        .with_flatten(false)
-        .build();
-
-    let object =
-        json_raw_value(r#"{"a":"v1","b":"v2","c":{"c":"v3","d":"v4\nwith second line","e":"v5","f":"v6","g":""}}"#);
-
-    assert_eq!(
-        formatter.format_to_string(&rec(RawValue::Object(object.as_ref().into()))),
-        "~\n  > a:\n    > a=v1\n    > b=v2\n    > c:\n      > c=v3\n      > d=|=>\n         \tv4\n         \twith second line\n      > e=v5\n      > f=v6\n      > ..."
-    );
-}
-
-#[test]
-fn test_add_field_to_expand() {
-    const M: usize = MAX_FIELDS_TO_EXPAND_ON_HOLD + 2;
-    let kvs = (0..M)
-        .map(|i| (format!("k{}", i).to_owned(), format!("some\nvalue #{}", i).to_owned()))
-        .collect_vec();
-    let rec = Record {
-        message: Some(EncodedString::raw("m").into()),
-        fields: RecordFields::from_iter(
-            kvs.iter()
-                .map(|(k, v)| (k.as_str(), EncodedString::raw(v.as_str()).into())),
-        ),
-        ..Default::default()
-    };
-
-    let mut expansion = Expansion::from(ExpansionMode::Medium);
-    expansion.profiles.medium.thresholds.global = 1024;
-    expansion.profiles.medium.thresholds.cumulative = 320;
-    expansion.profiles.medium.thresholds.field = 1024;
-    expansion.profiles.medium.thresholds.message = 1024;
-
-    let formatter = formatter()
-        .with_theme(Default::default())
-        .with_expansion(expansion)
-        .build();
-
-    assert_eq!(
-        formatter.format_to_string(&rec),
-        "m\n  > k0=|=>\n     \tsome\n     \tvalue #0\n  > k1=|=>\n     \tsome\n     \tvalue #1\n  > k2=|=>\n     \tsome\n     \tvalue #2\n  > k3=|=>\n     \tsome\n     \tvalue #3\n  > k4=|=>\n     \tsome\n     \tvalue #4\n  > k5=|=>\n     \tsome\n     \tvalue #5\n  > k6=|=>\n     \tsome\n     \tvalue #6\n  > k7=|=>\n     \tsome\n     \tvalue #7\n  > k8=|=>\n     \tsome\n     \tvalue #8\n  > k9=|=>\n     \tsome\n     \tvalue #9\n  > k10=|=>\n     \tsome\n     \tvalue #10\n  > k11=|=>\n     \tsome\n     \tvalue #11\n  > k12=|=>\n     \tsome\n     \tvalue #12\n  > k13=|=>\n     \tsome\n     \tvalue #13\n  > k14=|=>\n     \tsome\n     \tvalue #14\n  > k15=|=>\n     \tsome\n     \tvalue #15\n  > k16=|=>\n     \tsome\n     \tvalue #16\n  > k17=|=>\n     \tsome\n     \tvalue #17\n  > k18=|=>\n     \tsome\n     \tvalue #18\n  > k19=|=>\n     \tsome\n     \tvalue #19\n  > k20=|=>\n     \tsome\n     \tvalue #20\n  > k21=|=>\n     \tsome\n     \tvalue #21\n  > k22=|=>\n     \tsome\n     \tvalue #22\n  > k23=|=>\n     \tsome\n     \tvalue #23\n  > k24=|=>\n     \tsome\n     \tvalue #24\n  > k25=|=>\n     \tsome\n     \tvalue #25\n  > k26=|=>\n     \tsome\n     \tvalue #26\n  > k27=|=>\n     \tsome\n     \tvalue #27\n  > k28=|=>\n     \tsome\n     \tvalue #28\n  > k29=|=>\n     \tsome\n     \tvalue #29\n  > k30=|=>\n     \tsome\n     \tvalue #30\n  > k31=|=>\n     \tsome\n     \tvalue #31\n  > k32=|=>\n     \tsome\n     \tvalue #32\n  > k33=|=>\n     \tsome\n     \tvalue #33"
-    );
-}
-
-#[test]
-fn test_complex_message_expansion() {
-    let rec = Record {
-        message: Some(EncodedString::json(r#""<Settings source=\"X\" type=\"Y\" version=\"1\">\n</Settings>""#).into()),
-        fields: RecordFields::from_slice(&[
-            ("level", EncodedString::raw("info").into()),
-            ("ts", EncodedString::raw("2024-06-05T04:25:29Z").into()),
-        ]),
-        ..Default::default()
-    };
-
-    let mut expansion = Expansion::from(ExpansionMode::High);
-    expansion.profiles.high.thresholds.cumulative = 32;
-    expansion.profiles.high.thresholds.field = 1024;
-    expansion.profiles.high.thresholds.global = 10;
-    expansion.profiles.high.thresholds.message = 1024;
-
-    let formatter = RecordFormatterBuilder {
-        theme: Default::default(),
-        flatten: true,
-        expansion: Some(expansion),
-        ..formatter()
-    }
-    .build();
-
-    let result = formatter.format_to_string(&rec);
-
-    assert_eq!(
-        &result,
-        "~\n  > msg=|=>\n     \t<Settings source=\"X\" type=\"Y\" version=\"1\">\n     \t</Settings>\n  > level=info\n  > ts=2024-06-05T04:25:29Z"
-    );
-}
-
-#[test]
 fn test_array_of_objects() {
     let ka = json_raw_value(r#"[{"name":"a","value":1},{"name":"b","value":2}]"#);
     let rec = Record {
@@ -1806,7 +1455,6 @@ fn test_array_of_objects() {
         .with_theme(Default::default())
         .with_expansion(Expansion {
             mode: ExpansionMode::Always,
-            ..Default::default()
         })
         .build()
         .format_to_string(&rec);
@@ -1834,4 +1482,319 @@ fn test_array_of_objects() {
         "Array should contain object values 'a' and 'b', but got: {}",
         output
     );
+}
+
+#[test]
+fn test_expansion_mode_never_simple() {
+    let rec = Record {
+        ts: Some(Timestamp::new("2000-01-02T03:04:05.123Z")),
+        message: Some(RawValue::String(EncodedString::json(r#""simple message""#))),
+        level: Some(Level::Info),
+        fields: RecordFields::from_slice(&[("key", RawValue::String(EncodedString::json(r#""value""#)))]),
+        ..Default::default()
+    };
+
+    let output = formatter()
+        .with_theme(Default::default())
+        .with_expansion(Expansion {
+            mode: ExpansionMode::Never,
+        })
+        .build()
+        .format_to_string(&rec);
+
+    assert!(!output.contains('\n') || output.lines().count() == 1);
+    assert!(output.contains("simple message"));
+    assert!(output.contains("key=value"));
+}
+
+#[test]
+fn test_expansion_mode_never_multiline() {
+    let rec = Record {
+        ts: Some(Timestamp::new("2000-01-02T03:04:05.123Z")),
+        message: Some(RawValue::String(EncodedString::json(r#""line1\nline2\nline3""#))),
+        level: Some(Level::Info),
+        fields: RecordFields::from_slice(&[("error", RawValue::String(EncodedString::json(r#""tab\there""#)))]),
+        ..Default::default()
+    };
+
+    let output = formatter()
+        .with_theme(Default::default())
+        .with_expansion(Expansion {
+            mode: ExpansionMode::Never,
+        })
+        .build()
+        .format_to_string(&rec);
+
+    assert!(output.contains("line1"));
+    assert!(output.contains("error="));
+}
+
+#[test]
+fn test_expansion_mode_inline_simple() {
+    let rec = Record {
+        ts: Some(Timestamp::new("2000-01-02T03:04:05.123Z")),
+        message: Some(RawValue::String(EncodedString::json(r#""simple message""#))),
+        level: Some(Level::Info),
+        fields: RecordFields::from_slice(&[("key", RawValue::String(EncodedString::json(r#""value""#)))]),
+        ..Default::default()
+    };
+
+    let output = formatter()
+        .with_theme(Default::default())
+        .with_expansion(Expansion {
+            mode: ExpansionMode::Inline,
+        })
+        .build()
+        .format_to_string(&rec);
+
+    assert!(output.contains("simple message"));
+    assert!(output.contains("key=value"));
+}
+
+#[test]
+fn test_expansion_mode_inline_multiline() {
+    let rec = Record {
+        ts: Some(Timestamp::new("2000-01-02T03:04:05.123Z")),
+        message: Some(RawValue::String(EncodedString::json(r#""line1\nline2\nline3""#))),
+        level: Some(Level::Info),
+        fields: RecordFields::from_slice(&[("error", RawValue::String(EncodedString::json(r#""tab\there""#)))]),
+        ..Default::default()
+    };
+
+    let output = formatter()
+        .with_theme(Default::default())
+        .with_expansion(Expansion {
+            mode: ExpansionMode::Inline,
+        })
+        .build()
+        .format_to_string(&rec);
+
+    assert!(output.contains("line1"));
+    assert!(output.contains("line2"));
+    assert!(output.contains("line3"));
+    assert!(output.contains("error="));
+}
+
+#[test]
+fn test_expansion_mode_auto_simple() {
+    let rec = Record {
+        ts: Some(Timestamp::new("2000-01-02T03:04:05.123Z")),
+        message: Some(RawValue::String(EncodedString::json(r#""simple message""#))),
+        level: Some(Level::Info),
+        fields: RecordFields::from_slice(&[("key", RawValue::String(EncodedString::json(r#""value""#)))]),
+        ..Default::default()
+    };
+
+    let output = formatter()
+        .with_theme(Default::default())
+        .with_expansion(Expansion {
+            mode: ExpansionMode::Auto,
+        })
+        .build()
+        .format_to_string(&rec);
+
+    assert!(output.contains("simple message"));
+    assert!(output.contains("key=value"));
+}
+
+#[test]
+fn test_expansion_mode_auto_multiline_message() {
+    let rec = Record {
+        ts: Some(Timestamp::new("2000-01-02T03:04:05.123Z")),
+        message: Some(RawValue::String(EncodedString::json(r#""line1\nline2\nline3""#))),
+        level: Some(Level::Info),
+        fields: RecordFields::from_slice(&[("simple", RawValue::String(EncodedString::json(r#""value""#)))]),
+        ..Default::default()
+    };
+
+    let output = formatter()
+        .with_theme(Default::default())
+        .with_expansion(Expansion {
+            mode: ExpansionMode::Auto,
+        })
+        .build()
+        .format_to_string(&rec);
+
+    assert!(output.contains("line1"));
+    assert!(output.contains("line2"));
+    assert!(output.contains("line3"));
+    assert!(output.contains("simple=value"));
+}
+
+#[test]
+fn test_expansion_mode_auto_multiline_field() {
+    let rec = Record {
+        ts: Some(Timestamp::new("2000-01-02T03:04:05.123Z")),
+        message: Some(RawValue::String(EncodedString::json(r#""simple message""#))),
+        level: Some(Level::Info),
+        fields: RecordFields::from_slice(&[
+            ("error", RawValue::String(EncodedString::json(r#""line1\nline2""#))),
+            ("simple", RawValue::String(EncodedString::json(r#""value""#))),
+        ]),
+        ..Default::default()
+    };
+
+    let output = formatter()
+        .with_theme(Default::default())
+        .with_expansion(Expansion {
+            mode: ExpansionMode::Auto,
+        })
+        .build()
+        .format_to_string(&rec);
+
+    assert!(output.contains("simple message"));
+    assert!(output.contains("error="));
+    assert!(output.contains("line1"));
+    assert!(output.contains("line2"));
+    assert!(output.contains("simple=value"));
+}
+
+#[test]
+fn test_expansion_mode_auto_tab_in_field() {
+    let rec = Record {
+        ts: Some(Timestamp::new("2000-01-02T03:04:05.123Z")),
+        message: Some(RawValue::String(EncodedString::json(r#""simple message""#))),
+        level: Some(Level::Info),
+        fields: RecordFields::from_slice(&[
+            ("error", RawValue::String(EncodedString::json(r#""tab\there""#))),
+            ("normal", RawValue::String(EncodedString::json(r#""value""#))),
+        ]),
+        ..Default::default()
+    };
+
+    let output = formatter()
+        .with_theme(Default::default())
+        .with_expansion(Expansion {
+            mode: ExpansionMode::Auto,
+        })
+        .build()
+        .format_to_string(&rec);
+
+    assert!(output.contains("simple message"));
+    assert!(output.contains("error="));
+    assert!(output.contains("tab"));
+    assert!(output.contains("here"));
+    assert!(output.contains("normal=value"));
+}
+
+#[test]
+fn test_expansion_mode_always_simple() {
+    let rec = Record {
+        ts: Some(Timestamp::new("2000-01-02T03:04:05.123Z")),
+        message: Some(RawValue::String(EncodedString::json(r#""simple message""#))),
+        level: Some(Level::Info),
+        fields: RecordFields::from_slice(&[("key", RawValue::String(EncodedString::json(r#""value""#)))]),
+        ..Default::default()
+    };
+
+    let output = formatter()
+        .with_theme(Default::default())
+        .with_expansion(Expansion {
+            mode: ExpansionMode::Always,
+        })
+        .build()
+        .format_to_string(&rec);
+
+    assert!(output.contains("simple message"));
+    assert!(output.contains("key=value"));
+}
+
+#[test]
+fn test_expansion_mode_always_multiline() {
+    let rec = Record {
+        ts: Some(Timestamp::new("2000-01-02T03:04:05.123Z")),
+        message: Some(RawValue::String(EncodedString::json(r#""line1\nline2\nline3""#))),
+        level: Some(Level::Info),
+        fields: RecordFields::from_slice(&[("error", RawValue::String(EncodedString::json(r#""tab\there""#)))]),
+        ..Default::default()
+    };
+
+    let output = formatter()
+        .with_theme(Default::default())
+        .with_expansion(Expansion {
+            mode: ExpansionMode::Always,
+        })
+        .build()
+        .format_to_string(&rec);
+
+    assert!(output.contains("line1"));
+    assert!(output.contains("line2"));
+    assert!(output.contains("line3"));
+    assert!(output.contains("error="));
+    assert!(output.contains("tab"));
+    assert!(output.contains("here"));
+}
+
+#[test]
+fn test_expansion_mode_auto_with_objects() {
+    let nested_obj = json_raw_value(r#"{"key":"value"}"#);
+    let rec = Record {
+        ts: Some(Timestamp::new("2000-01-02T03:04:05.123Z")),
+        message: Some(RawValue::String(EncodedString::json(r#""test message""#))),
+        level: Some(Level::Info),
+        fields: RecordFields::from_slice(&[
+            ("nested", RawValue::Object(RawObject::Json(&nested_obj))),
+            ("simple", RawValue::String(EncodedString::json(r#""text""#))),
+        ]),
+        ..Default::default()
+    };
+
+    let output = formatter()
+        .with_theme(Default::default())
+        .with_expansion(Expansion {
+            mode: ExpansionMode::Auto,
+        })
+        .build()
+        .format_to_string(&rec);
+
+    assert!(output.contains("test message"));
+    assert!(output.contains("simple=text"));
+}
+
+#[test]
+fn test_expansion_mode_auto_only_expands_multiline() {
+    let rec = Record {
+        ts: Some(Timestamp::new("2000-01-02T03:04:05.123Z")),
+        message: Some(RawValue::String(EncodedString::json(r#""single line""#))),
+        level: Some(Level::Info),
+        fields: RecordFields::from_slice(&[
+            ("field1", RawValue::String(EncodedString::json(r#""value1""#))),
+            ("field2", RawValue::String(EncodedString::json(r#""value2""#))),
+            ("field3", RawValue::String(EncodedString::json(r#""value3""#))),
+        ]),
+        ..Default::default()
+    };
+
+    let output = formatter()
+        .with_theme(Default::default())
+        .with_expansion(Expansion {
+            mode: ExpansionMode::Auto,
+        })
+        .build()
+        .format_to_string(&rec);
+
+    assert!(output.contains("single line"));
+    assert!(output.contains("field1=value1"));
+    assert!(output.contains("field2=value2"));
+    assert!(output.contains("field3=value3"));
+}
+
+#[test]
+fn test_arc_record_formatter() {
+    use std::sync::Arc;
+
+    let rec = Record {
+        ts: Some(Timestamp::new("2000-01-02T03:04:05.123Z")),
+        message: Some(RawValue::String(EncodedString::json(r#""test message""#))),
+        level: Some(Level::Info),
+        fields: RecordFields::from_slice(&[("key", RawValue::String(EncodedString::json(r#""value""#)))]),
+        ..Default::default()
+    };
+
+    let formatter = Arc::new(formatter().with_theme(Default::default()).build());
+
+    let output = formatter.format_to_string(&rec);
+
+    assert!(output.contains("test message"));
+    assert!(output.contains("key=value"));
 }

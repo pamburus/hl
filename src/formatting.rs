@@ -14,7 +14,7 @@ use crate::{
     filtering::IncludeExcludeSetting,
     fmtx::{OptimizedBuf, Push, aligned_left, centered},
     model::{self, Caller, Level, RawValue},
-    settings::{self, AsciiMode, ExpansionMode, Formatting, MultilineExpansion, ResolvedPunctuation},
+    settings::{self, AsciiMode, ExpansionMode, Formatting, ResolvedPunctuation},
     syntax::*,
     theme::{Element, Styler, StylingPush, Theme},
 };
@@ -32,33 +32,9 @@ type Buf = Vec<u8>;
 
 // ---
 
-const DEFAULT_EXPANSION_LOW_THRESHOLDS: ExpansionThresholds = ExpansionThresholds {
-    global: 4096,
-    cumulative: 512,
-    message: 256,
-    field: 128,
-};
-
-const DEFAULT_EXPANSION_MEDIUM_THRESHOLDS: ExpansionThresholds = ExpansionThresholds {
-    global: 2048,
-    cumulative: 256,
-    message: 192,
-    field: 64,
-};
-
-const DEFAULT_EXPANSION_HIGH_THRESHOLDS: ExpansionThresholds = ExpansionThresholds {
-    global: 1024,
-    cumulative: 192,
-    message: 128,
-    field: 48,
-};
-
-// ---
-
 #[derive(Clone, Debug, Default)]
 pub struct Expansion {
     pub mode: ExpansionMode,
-    pub profiles: ExpansionProfiles,
 }
 
 impl Expansion {
@@ -68,7 +44,12 @@ impl Expansion {
     }
 
     pub fn profile(&self) -> &ExpansionProfile {
-        self.profiles.resolve(self.mode)
+        match self.mode {
+            ExpansionMode::Never => &ExpansionProfile::NEVER,
+            ExpansionMode::Inline => &ExpansionProfile::INLINE,
+            ExpansionMode::Auto => &ExpansionProfile::AUTO,
+            ExpansionMode::Always => &ExpansionProfile::ALWAYS,
+        }
     }
 }
 
@@ -76,152 +57,34 @@ impl From<settings::ExpansionOptions> for Expansion {
     fn from(options: settings::ExpansionOptions) -> Self {
         Self {
             mode: options.mode.unwrap_or_default(),
-            profiles: options.profiles.into(),
         }
     }
 }
 
 impl From<settings::ExpansionMode> for Expansion {
     fn from(mode: settings::ExpansionMode) -> Self {
-        Self {
-            mode,
-            profiles: Default::default(),
-        }
+        Self { mode }
     }
 }
 
 // ---
 
-#[derive(Clone, Debug, Default)]
-pub struct ExpansionProfiles {
-    pub low: ExpansionProfileLow,
-    pub medium: ExpansionProfileMedium,
-    pub high: ExpansionProfileHigh,
-}
-
-impl ExpansionProfiles {
-    pub fn resolve(&self, mode: ExpansionMode) -> &ExpansionProfile {
-        match mode {
-            ExpansionMode::Never => &ExpansionProfile::NEVER,
-            ExpansionMode::Always => &ExpansionProfile::ALWAYS,
-            ExpansionMode::Inline => &ExpansionProfile::INLINE,
-            ExpansionMode::Low => &self.low,
-            ExpansionMode::Medium => &self.medium,
-            ExpansionMode::High => &self.high,
-        }
-    }
-}
-
-impl From<settings::ExpansionProfiles> for ExpansionProfiles {
-    fn from(options: settings::ExpansionProfiles) -> Self {
-        Self {
-            low: options.low.into(),
-            medium: options.medium.into(),
-            high: options.high.into(),
-        }
-    }
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum MultilineExpansion {
+    #[default]
+    Standard,
+    Disabled,
+    Inline,
 }
 
 // ---
 
 #[derive(Clone, Debug)]
-pub struct ExpansionProfileLow(ExpansionProfile);
-
-impl From<settings::ExpansionProfile> for ExpansionProfileLow {
-    fn from(options: settings::ExpansionProfile) -> Self {
-        Self(Self::default().0.updated(options))
-    }
-}
-
-impl Deref for ExpansionProfileLow {
-    type Target = ExpansionProfile;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl DerefMut for ExpansionProfileLow {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
-    }
-}
-
-impl Default for ExpansionProfileLow {
-    fn default() -> Self {
-        Self(ExpansionProfile {
-            multiline: MultilineExpansion::Standard,
-            thresholds: DEFAULT_EXPANSION_LOW_THRESHOLDS,
-        })
-    }
-}
-
-// ---
-
-#[derive(Clone, Debug)]
-pub struct ExpansionProfileMedium(ExpansionProfile);
-
-impl From<settings::ExpansionProfile> for ExpansionProfileMedium {
-    fn from(options: settings::ExpansionProfile) -> Self {
-        Self(Self::default().0.updated(options))
-    }
-}
-
-impl Deref for ExpansionProfileMedium {
-    type Target = ExpansionProfile;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl DerefMut for ExpansionProfileMedium {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
-    }
-}
-
-impl Default for ExpansionProfileMedium {
-    fn default() -> Self {
-        Self(ExpansionProfile {
-            multiline: MultilineExpansion::Standard,
-            thresholds: DEFAULT_EXPANSION_MEDIUM_THRESHOLDS,
-        })
-    }
-}
-
-// ---
-
-#[derive(Clone, Debug)]
-pub struct ExpansionProfileHigh(ExpansionProfile);
-
-impl From<settings::ExpansionProfile> for ExpansionProfileHigh {
-    fn from(options: settings::ExpansionProfile) -> Self {
-        Self(Self::default().0.updated(options))
-    }
-}
-
-impl Deref for ExpansionProfileHigh {
-    type Target = ExpansionProfile;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl DerefMut for ExpansionProfileHigh {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
-    }
-}
-
-impl Default for ExpansionProfileHigh {
-    fn default() -> Self {
-        Self(ExpansionProfile {
-            multiline: MultilineExpansion::Standard,
-            thresholds: DEFAULT_EXPANSION_HIGH_THRESHOLDS,
-        })
-    }
+pub struct ExpansionThresholds {
+    pub global: usize,
+    pub cumulative: usize,
+    pub message: usize,
+    pub field: usize,
 }
 
 // ---
@@ -263,39 +126,20 @@ impl ExpansionProfile {
         },
     };
 
-    fn update(&mut self, options: settings::ExpansionProfile) {
-        self.multiline = options.multiline.unwrap_or(self.multiline);
-        self.thresholds.update(&options.thresholds);
-    }
-
-    fn updated(mut self, options: settings::ExpansionProfile) -> Self {
-        self.update(options);
-        self
-    }
+    pub const AUTO: Self = Self {
+        multiline: MultilineExpansion::Standard,
+        thresholds: ExpansionThresholds {
+            global: usize::MAX,
+            cumulative: usize::MAX,
+            message: usize::MAX,
+            field: usize::MAX,
+        },
+    };
 }
 
 impl Default for &ExpansionProfile {
     fn default() -> Self {
         &ExpansionProfile::NEVER
-    }
-}
-
-// ---
-
-#[derive(Clone, Debug)]
-pub struct ExpansionThresholds {
-    pub global: usize,
-    pub cumulative: usize,
-    pub message: usize,
-    pub field: usize,
-}
-
-impl ExpansionThresholds {
-    fn update(&mut self, options: &settings::ExpansionThresholds) {
-        self.global = options.global.unwrap_or(self.global);
-        self.cumulative = options.cumulative.unwrap_or(self.cumulative);
-        self.message = options.message.unwrap_or(self.message);
-        self.field = options.field.unwrap_or(self.field);
     }
 }
 

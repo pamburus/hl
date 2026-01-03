@@ -233,32 +233,3 @@ fn test_punctuation_resolve() {
         assert_ne!(ascii_val, utf8_val, "ASCII and Unicode values should be different");
     }
 }
-
-#[test]
-fn test_expansion_options() {
-    let mut profiles = ExpansionProfiles::default();
-    profiles.low.thresholds.global = Some(1);
-    profiles.low.thresholds.cumulative = Some(2);
-    profiles.low.thresholds.message = Some(3);
-    profiles.medium.thresholds.global = Some(4);
-    profiles.medium.thresholds.field = Some(5);
-    profiles.high.thresholds.global = Some(6);
-    profiles.high.thresholds.cumulative = Some(7);
-    let xo = |mode| ExpansionOptions {
-        mode,
-        profiles: profiles.clone(),
-    };
-    assert_eq!(xo(None).profile(), None);
-    assert_eq!(xo(Some(ExpansionMode::Never)).profile(), Some(&ExpansionProfile::NEVER));
-    assert_eq!(
-        xo(Some(ExpansionMode::Inline)).profile(),
-        Some(&ExpansionProfile::INLINE)
-    );
-    assert_eq!(xo(Some(ExpansionMode::Low)).profile(), Some(&profiles.low));
-    assert_eq!(xo(Some(ExpansionMode::Medium)).profile(), Some(&profiles.medium));
-    assert_eq!(xo(Some(ExpansionMode::High)).profile(), Some(&profiles.high));
-    assert_eq!(
-        xo(Some(ExpansionMode::Always)).profile(),
-        Some(&ExpansionProfile::ALWAYS)
-    );
-}

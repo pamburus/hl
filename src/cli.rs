@@ -617,10 +617,8 @@ mod heading {
 pub enum ExpansionOption {
     Never,
     Inline,
-    Low,
     #[default]
-    Medium,
-    High,
+    Auto,
     Always,
 }
 
@@ -629,9 +627,7 @@ impl From<ExpansionMode> for ExpansionOption {
         match value {
             ExpansionMode::Never => Self::Never,
             ExpansionMode::Inline => Self::Inline,
-            ExpansionMode::Low => Self::Low,
-            ExpansionMode::Medium => Self::Medium,
-            ExpansionMode::High => Self::High,
+            ExpansionMode::Auto => Self::Auto,
             ExpansionMode::Always => Self::Always,
         }
     }
@@ -648,9 +644,7 @@ impl From<ExpansionOption> for ExpansionMode {
         match value {
             ExpansionOption::Never => ExpansionMode::Never,
             ExpansionOption::Inline => ExpansionMode::Inline,
-            ExpansionOption::Low => ExpansionMode::Low,
-            ExpansionOption::Medium => ExpansionMode::Medium,
-            ExpansionOption::High => ExpansionMode::High,
+            ExpansionOption::Auto => ExpansionMode::Auto,
             ExpansionOption::Always => ExpansionMode::Always,
         }
     }
