@@ -1,4 +1,4 @@
-#:schema https://raw.githubusercontent.com/pamburus/hl/v0.34.0/schema/json/config.schema.json
+#:schema https://raw.githubusercontent.com/pamburus/hl/3df9bc6e91ba0e6fb8c3496840d8e9bfef464ab9/schema/json/config.schema.json
 
 #
 # Time format, see https://man7.org/linux/man-pages/man1/date.1.html for details.
@@ -157,3 +157,58 @@ input-name-right-separator = { ascii = " | ", unicode = " │ " }
 input-name-clipping = { ascii = "..", unicode = "··" }
 input-name-common-part = { ascii = "..", unicode = "··" }
 message-delimiter = { ascii = "::", unicode = "›" }
+
+# Expansion settings.
+[formatting.expansion]
+# Field expansion mode [never|inline|low|medium|high|always].
+mode = "medium"
+
+# Field expansion setting profiles for all modes except [never,inline,always].
+[formatting.expansion.profiles]
+# Field expansion settings for the low mode.
+[formatting.expansion.profiles.low]
+# Multiline field expansion mode [standard|disabled|inline].
+multiline = "standard"
+
+# Various complexity thresholds for field expansion.
+[formatting.expansion.profiles.low.thresholds]
+# Threshold of overall draft log record complexity that triggers expansion of all fields.
+global = 4096
+# Threshold of cumulative complexity of all fields on the first line that triggers expansion of remaining fields.
+cumulative = 512
+# Threshold of message field's complexity that triggers its expansion.
+message = 256
+# Threshold of any other field's complexity that triggers its expansion.
+field = 256
+
+# Field expansion settings for the medium mode.
+[formatting.expansion.profiles.medium]
+# Multiline field expansion mode [standard|disabled|inline].
+multiline = "standard"
+
+# Various complexity thresholds for field expansion.
+[formatting.expansion.profiles.medium.thresholds]
+# Threshold of overall draft log record complexity that triggers expansion of all fields.
+global = 2048
+# Threshold of cumulative complexity of all fields on the first line that triggers expansion of remaining fields.
+cumulative = 256
+# Threshold of message field's complexity that triggers its expansion.
+message = 192
+# Threshold of any other field's complexity that triggers its expansion.
+field = 192
+
+# Field expansion settings for the high mode.
+[formatting.expansion.profiles.high]
+# Multiline field expansion mode [standard|disabled|inline].
+multiline = "standard"
+
+# Various complexity thresholds for field expansion.
+[formatting.expansion.profiles.high.thresholds]
+# Threshold of overall draft log record complexity that triggers expansion of all fields.
+global = 1024
+# Threshold of cumulative complexity of all fields on the first line that triggers expansion of remaining fields.
+cumulative = 128
+# Threshold of message field's complexity that triggers its expansion.
+message = 128
+# Threshold of any other field's complexity that triggers its expansion.
+field = 128

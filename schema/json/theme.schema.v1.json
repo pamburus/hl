@@ -242,6 +242,12 @@
         },
         "ellipsis": {
           "$ref": "#/$defs/style"
+        },
+        "bullet": {
+          "$ref": "#/$defs/style"
+        },
+        "value-expansion": {
+          "$ref": "#/$defs/style"
         }
       },
       "required": [],

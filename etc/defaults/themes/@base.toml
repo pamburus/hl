@@ -1,4 +1,4 @@
-#:schema https://raw.githubusercontent.com/pamburus/hl/v0.34.0/schema/json/theme.schema.v1.json
+#:schema https://raw.githubusercontent.com/pamburus/hl/3df9bc6e91ba0e6fb8c3496840d8e9bfef464ab9/schema/json/theme.schema.v1.json
 
 version = "1.0"
 tags = ["base", "dark", "light", "16color"]
@@ -37,6 +37,8 @@ message-delimiter.style = "muted"
 field.style = "muted"
 key.style = "key"
 ellipsis.style = "muted"
+bullet.style = "muted"
+value-expansion.style = "muted"
 object.style = "syntax"
 array.style = "syntax"
 string.style = "value"
