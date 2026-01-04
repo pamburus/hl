@@ -38,11 +38,13 @@ pub struct Expansion {
 }
 
 impl Expansion {
+    #[inline(always)]
     pub fn with_mode(mut self, mode: ExpansionMode) -> Self {
         self.mode = mode;
         self
     }
 
+    #[inline(always)]
     pub fn profile(&self) -> &ExpansionProfile {
         match self.mode {
             ExpansionMode::Never => &ExpansionProfile::NEVER,
@@ -54,6 +56,7 @@ impl Expansion {
 }
 
 impl From<settings::ExpansionOptions> for Expansion {
+    #[inline(always)]
     fn from(options: settings::ExpansionOptions) -> Self {
         Self {
             mode: options.mode.unwrap_or_default(),
@@ -62,6 +65,7 @@ impl From<settings::ExpansionOptions> for Expansion {
 }
 
 impl From<settings::ExpansionMode> for Expansion {
+    #[inline(always)]
     fn from(mode: settings::ExpansionMode) -> Self {
         Self { mode }
     }
@@ -378,14 +382,6 @@ impl RecordFormatter {
             if let Some(level) = level {
                 fs.has_level = true;
                 self.format_level(s, &mut fs, level);
-                // fs.add_element(|| s.space());
-                // s.element(Element::Level, |s| {
-                //     s.batch(|buf| {
-                //         buf.extend_from_slice(self.punctuation.level_left_separator.as_bytes());
-                //     });
-                //     s.element(Element::LevelInner, |s| s.batch(|buf| buf.extend_from_slice(level)));
-                //     s.batch(|buf| buf.extend_from_slice(self.punctuation.level_right_separator.as_bytes()));
-                // });
             }
 
             //
@@ -401,8 +397,6 @@ impl RecordFormatter {
                     fs.first_line_used = true;
                 });
             }
-
-            // include caller into cumulative complexity calculation
 
             //
             // message text
@@ -484,7 +478,7 @@ impl RecordFormatter {
         });
     }
 
-    #[inline]
+    #[inline(always)]
     fn format_timestamp<S: StylingPush<Buf>>(
         &self,
         rec: &model::Record,
@@ -517,7 +511,7 @@ impl RecordFormatter {
         })
     }
 
-    #[inline]
+    #[inline(always)]
     fn format_timestamp_stub<S: StylingPush<Buf>>(&self, fs: &mut FormattingStateWithRec, s: &mut S) {
         fs.ts_width = self.ts_width.chars;
         fs.add_element(|| {});
@@ -530,7 +524,7 @@ impl RecordFormatter {
         });
     }
 
-    #[inline]
+    #[inline(always)]
     fn format_caller<S: StylingPush<Buf>>(&self, s: &mut S, caller: &Caller) {
         s.element(Element::Caller, |s| {
             s.batch(|buf| {
@@ -557,7 +551,7 @@ impl RecordFormatter {
         });
     }
 
-    #[inline]
+    #[inline(always)]
     fn format_field<'a, S: StylingPush<Buf>>(
         &self,
         s: &mut S,
@@ -580,7 +574,7 @@ impl RecordFormatter {
         )
     }
 
-    #[inline]
+    #[inline(always)]
     fn format_message<'a, S: StylingPush<Buf>>(
         &self,
         s: &mut S,
@@ -617,7 +611,7 @@ impl RecordFormatter {
         }
     }
 
-    #[inline]
+    #[inline(always)]
     fn format_level<S: StylingPush<Buf>>(&self, s: &mut S, fs: &mut FormattingStateWithRec, level: &[u8]) {
         fs.add_element(|| s.space());
         s.element(Element::Level, |s| {
@@ -629,18 +623,19 @@ impl RecordFormatter {
         });
     }
 
-    #[inline]
+    #[inline(always)]
     fn expand<S: StylingPush<Buf>>(&self, s: &mut S, fs: &mut FormattingStateWithRec) {
         self.expand_impl(s, fs, true);
     }
 
-    #[inline]
+    #[inline(always)]
     fn expand_enqueued<S: StylingPush<Buf>>(&self, s: &mut S, fs: &mut FormattingStateWithRec) {
         if !fs.fields_to_expand.is_empty() {
             self.expand_impl(s, fs, false);
         }
     }
 
+    #[inline(never)]
     fn expand_impl<S: StylingPush<Buf>>(
         &self,
         s: &mut S,
@@ -723,6 +718,7 @@ impl RecordFormatter {
         }
     }
 
+    #[inline]
     fn add_field_to_expand<'a, S: StylingPush<Buf>>(
         &self,
         s: &mut S,
@@ -746,7 +742,7 @@ impl RecordFormatter {
 }
 
 impl RecordWithSourceFormatter for RecordFormatter {
-    #[inline]
+    #[inline(always)]
     fn format_record(&self, buf: &mut Buf, prefix_range: Range<usize>, rec: model::RecordWithSource) {
         RecordFormatter::format_record(self, buf, prefix_range, rec.record)
     }
@@ -760,6 +756,7 @@ struct FormattingStateWithRec<'a> {
 }
 
 impl<'a> FormattingStateWithRec<'a> {
+    #[inline(always)]
     fn add_element(&mut self, add_space: impl FnOnce()) {
         if !self.dirty {
             self.dirty = true;
@@ -768,6 +765,7 @@ impl<'a> FormattingStateWithRec<'a> {
         }
     }
 
+    #[inline(always)]
     fn transact<R, E, F>(&mut self, s: &mut Styler<Buf>, f: F) -> Result<R, E>
     where
         F: FnOnce(&mut Self, &mut Styler<Buf>) -> Result<R, E>,
@@ -837,18 +835,18 @@ struct KeyPrefix {
 }
 
 impl KeyPrefix {
-    #[inline]
+    #[inline(always)]
     fn len(&self) -> usize {
         self.value.len()
     }
 
-    #[inline]
+    #[inline(always)]
     fn format<B: Push<u8>>(&self, buf: &mut B) {
         buf.extend_from_slice(self.value.as_slices().0);
         buf.extend_from_slice(self.value.as_slices().1);
     }
 
-    #[inline]
+    #[inline(always)]
     fn push(&mut self, key: &str) -> usize {
         let len = self.len();
         if len != 0 {
@@ -858,7 +856,7 @@ impl KeyPrefix {
         self.len() - len
     }
 
-    #[inline]
+    #[inline(always)]
     fn pop(&mut self, n: usize) {
         if n != 0 {
             let len = self.len();
@@ -878,10 +876,12 @@ struct FieldFormatter<'a> {
 }
 
 impl<'a> FieldFormatter<'a> {
+    #[inline(always)]
     fn new(rf: &'a RecordFormatter) -> Self {
         Self { rf }
     }
 
+    #[inline(always)]
     #[allow(clippy::too_many_arguments)]
     fn format<S: StylingPush<Buf>>(
         &mut self,
@@ -965,6 +965,7 @@ impl<'a> FieldFormatter<'a> {
         }
     }
 
+    #[inline(always)]
     #[allow(clippy::too_many_arguments)]
     fn format_value<S: StylingPush<Buf>>(
         &mut self,
@@ -1111,6 +1112,7 @@ impl<'a> FieldFormatter<'a> {
         ValueFormatResult::Ok
     }
 
+    #[inline]
     fn add_prefix(&self, buf: &mut Vec<u8>, fs: &FormattingStateWithRec) -> usize {
         buf.extend(self.rf.theme.expanded_value_suffix.value.as_bytes());
         buf.push(b'\n');
@@ -1177,7 +1179,7 @@ impl<'a> FieldFormatter<'a> {
         variant
     }
 
-    #[inline]
+    #[inline(always)]
     fn end(&mut self, fs: &mut FormattingStateWithRec, v: FormattedFieldVariant) {
         match v {
             FormattedFieldVariant::Normal { flatten } => {
@@ -1248,7 +1250,7 @@ trait KeyPrettify {
 }
 
 impl KeyPrettify for str {
-    #[inline]
+    #[inline(always)]
     fn key_prettify<B: Push<u8>>(&self, buf: &mut B) {
         let bytes = self.as_bytes();
         let mut i = 0;
@@ -1272,7 +1274,7 @@ enum FormattedFieldVariant {
 
 pub mod string {
     // std imports
-    use std::{cmp::min, sync::Arc};
+    use std::{cmp::min, ops::Deref, sync::Arc};
 
     // third-party imports
     use enumset::{EnumSet, EnumSetType, enum_set as mask};
@@ -1313,6 +1315,7 @@ pub mod string {
             xsa: ExtendedSpaceAction<'a>,
         ) -> Result<FormatResult>;
 
+        #[inline(always)]
         fn rtrim(self, n: usize) -> FormatRightTrimmed<Self>
         where
             Self: Sized,
@@ -1337,9 +1340,10 @@ pub mod string {
         }
     }
 
-    impl std::ops::Deref for DynMessageFormat {
+    impl Deref for DynMessageFormat {
         type Target = DynFormat;
 
+        #[inline(always)]
         fn deref(&self) -> &Self::Target {
             &self.format
         }
@@ -1367,7 +1371,7 @@ pub mod string {
     }
 
     impl Analyze for [u8] {
-        #[inline]
+        #[inline(always)]
         fn analyze(&self) -> Analysis {
             let mut chars = Mask::empty();
             let mut complexity = 0;
@@ -1391,21 +1395,6 @@ pub mod string {
         Abort,
     }
 
-    // impl<'a> ExtendedSpaceAction<'a> {
-    //     #[inline]
-    //     pub fn map_expand<P2, F>(&self, f: F) -> ExtendedSpaceAction<P2>
-    //     where
-    //         F: FnOnce(&P) -> P2,
-    //     {
-    //         match self {
-    //             Self::Expand(prefix) => ExtendedSpaceAction::Expand(f(prefix)),
-    //             Self::Inline => ExtendedSpaceAction::Inline,
-    //             Self::Escape => ExtendedSpaceAction::Escape,
-    //             Self::Abort => ExtendedSpaceAction::Abort,
-    //         }
-    //     }
-    // }
-
     #[must_use]
     pub enum FormatResult {
         Ok(Option<Analysis>),
@@ -1413,8 +1402,8 @@ pub mod string {
     }
 
     impl FormatResult {
-        #[inline]
         #[cfg(test)]
+        #[inline(always)]
         pub fn is_ok(&self) -> bool {
             matches!(self, Self::Ok(_))
         }
@@ -1428,7 +1417,7 @@ pub mod string {
     }
 
     impl Analysis {
-        #[inline]
+        #[inline(always)]
         pub fn empty() -> Self {
             Self {
                 chars: Mask::empty(),
@@ -1450,6 +1439,7 @@ pub mod string {
     impl<'a> DisplayResolve for &'a str {
         type Output = Self;
 
+        #[inline(always)]
         fn resolve(self) -> &'a str {
             self
         }
@@ -1461,6 +1451,7 @@ pub mod string {
     {
         type Output = &'a str;
 
+        #[inline(always)]
         fn resolve(self) -> &'a str {
             self()
         }
@@ -1593,7 +1584,7 @@ pub mod string {
     pub struct ValueFormatDoubleQuoted;
 
     impl Format for ValueFormatDoubleQuoted {
-        #[inline]
+        #[inline(always)]
         fn format<'a>(
             &self,
             input: EncodedString<'a>,
@@ -1830,7 +1821,7 @@ pub mod string {
     pub struct MessageFormatDoubleQuoted;
 
     impl Format for MessageFormatDoubleQuoted {
-        #[inline]
+        #[inline(always)]
         fn format<'a>(
             &self,
             input: EncodedString<'a>,
@@ -1850,13 +1841,14 @@ pub mod string {
     }
 
     impl<F> FormatRightTrimmed<F> {
+        #[inline(always)]
         fn new(n: usize, inner: F) -> Self {
             Self { n, inner }
         }
     }
 
     impl<F: Format> Format for FormatRightTrimmed<F> {
-        #[inline]
+        #[inline(always)]
         fn format<'a>(
             &self,
             input: EncodedString<'a>,
@@ -1880,7 +1872,7 @@ pub mod string {
     where
         S: AnyEncodedString<'a>,
     {
-        #[inline]
+        #[inline(always)]
         fn format_json(&self, buf: &mut Vec<u8>) -> Result<()> {
             buf.push(b'"');
             self.decode(JsonAppender::new(buf))?;
