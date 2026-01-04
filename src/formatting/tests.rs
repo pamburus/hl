@@ -1,7 +1,7 @@
 use super::{string::new_message_format, *};
 use crate::{
     datefmt::LinuxDateFormat,
-    model::{Caller, RawObject, Record, RecordFields, RecordWithSourceConstructor},
+    model::{Caller, Parser, ParserSettings, RawObject, RawRecord, Record, RecordFields, RecordWithSourceConstructor},
     settings::{AsciiMode, MessageFormat, MessageFormatting},
     testing::Sample,
     timestamp::Timestamp,
@@ -9,6 +9,7 @@ use crate::{
 };
 use chrono::{Offset, Utc};
 use encstr::EncodedString;
+use rstest::rstest;
 use serde_json as json;
 
 trait FormatToVec {
@@ -980,4 +981,45 @@ fn test_hide_deeply_nested_empty_objects() {
 
     // Deeply nested objects with only empty fields should be completely hidden
     assert_eq!(&result_hide, " ...");
+}
+
+#[rstest]
+#[case::simple_exponent(r#"{"val":1e10}"#, "val=1e10")]
+#[case::decimal_with_exponent(r#"{"val":1.5e10}"#, "val=1.5e10")]
+#[case::negative_exponent(r#"{"val":1e-10}"#, "val=1e-10")]
+#[case::uppercase_e(r#"{"val":1E10}"#, "val=1E10")]
+#[case::large_integer(r#"{"val":10000000000}"#, "val=10000000000")]
+fn test_format_number_scientific_notation(#[case] input: &str, #[case] expected: &str) {
+    let raw = RawRecord::parser()
+        .parse(input.as_bytes())
+        .next()
+        .unwrap()
+        .unwrap()
+        .record;
+    let parser = Parser::new(ParserSettings::default());
+    let record = parser.parse(&raw);
+    let formatted = format_no_color(&record);
+
+    assert_eq!(formatted, expected);
+}
+
+#[rstest]
+#[case::simple_exponent(r#"{"val":"1e10"}"#, r#"val="1e10""#)]
+#[case::decimal_with_exponent(r#"{"val":"1.5e10"}"#, r#"val="1.5e10""#)]
+#[case::negative_exponent(r#"{"val":"1e-10"}"#, r#"val="1e-10""#)]
+#[case::uppercase_e(r#"{"val":"1E10"}"#, r#"val="1E10""#)]
+#[case::integer_string(r#"{"val":"42"}"#, r#"val="42""#)]
+#[case::decimal_string(r#"{"val":"2.5"}"#, r#"val="2.5""#)]
+fn test_format_string_scientific_notation(#[case] input: &str, #[case] expected: &str) {
+    let raw = RawRecord::parser()
+        .parse(input.as_bytes())
+        .next()
+        .unwrap()
+        .unwrap()
+        .record;
+    let parser = Parser::new(ParserSettings::default());
+    let record = parser.parse(&raw);
+    let formatted = format_no_color(&record);
+
+    assert_eq!(formatted, expected);
 }

@@ -859,3 +859,63 @@ fn test_wrong_field_filter() {
     let result = FieldFilter::parse("xx");
     assert!(result.is_err_and(|e| matches!(e, Error::WrongFieldFilter(_))));
 }
+
+#[rstest]
+#[case::integer("42", Number::Integer(42))]
+#[case::zero("0", Number::Integer(0))]
+#[case::negative_integer("-123", Number::Integer(-123))]
+#[case::decimal("2.5", Number::Float(2.5))]
+#[case::negative_decimal("-2.5", Number::Float(-2.5))]
+#[case::scientific_no_decimal("1e10", Number::Float(1e10))]
+#[case::scientific_uppercase_e("1E10", Number::Float(1E10))]
+#[case::scientific_negative_base("-1e10", Number::Float(-1e10))]
+#[case::scientific_negative_exponent("1e-10", Number::Float(1e-10))]
+#[case::scientific_explicit_plus("1e+10", Number::Float(1e+10))]
+#[case::scientific_zero("0e0", Number::Float(0e0))]
+#[case::scientific_overflow("123e456", Number::Float(f64::INFINITY))]
+#[case::scientific_with_decimal("1.5e10", Number::Float(1.5e10))]
+#[case::scientific_negative_all("-1.5e-10", Number::Float(-1.5e-10))]
+#[case::scientific_positive_exponent("3.787e+04", Number::Float(3.787e+04))]
+#[case::scientific_small_value("3.787e-04", Number::Float(3.787e-04))]
+#[case::scientific_negative_small("-3.787e-04", Number::Float(-3.787e-04))]
+fn test_number_from_str(#[case] input: &str, #[case] expected: Number) {
+    let result = input.parse::<Number>();
+    assert!(result.is_ok(), "Failed to parse '{}': {:?}", input, result.err());
+    let parsed = result.unwrap();
+
+    match (parsed, expected) {
+        (Number::Integer(a), Number::Integer(b)) => assert_eq!(a, b, "Integer mismatch for '{}'", input),
+        (Number::Float(a), Number::Float(b)) => {
+            if b.is_infinite() {
+                assert!(a.is_infinite(), "Expected infinity for '{}', got {}", input, a);
+            } else {
+                assert!((a - b).abs() < 1e-10, "Float mismatch for '{}': {} != {}", input, a, b);
+            }
+        }
+        (a, b) => panic!("Type mismatch for '{}': {:?} != {:?}", input, a, b),
+    }
+}
+
+#[rstest]
+#[case::missing_exponent("1e")]
+#[case::missing_base("e10")]
+#[case::double_e("1ee10")]
+#[case::not_a_number("abc")]
+#[case::empty("")]
+fn test_number_from_str_invalid(#[case] input: &str) {
+    let result = input.parse::<Number>();
+    assert!(
+        result.is_err(),
+        "Expected error parsing '{}', but got: {:?}",
+        input,
+        result
+    );
+}
+
+#[test]
+fn test_number_equality_scientific() {
+    let n1 = "10000000000".parse::<Number>().unwrap();
+    let n2 = "1e10".parse::<Number>().unwrap();
+
+    assert_eq!(n1, n2, "10000000000 should equal 1e10");
+}
