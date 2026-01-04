@@ -928,7 +928,7 @@ pub mod string {
                             | [b't', b'r', b'u', b'e']
                             | [b'f', b'a', b'l', b's', b'e']
                             | [b'n', b'u', b'l', b'l']
-                    )
+                    ) && !looks_like_number(&buf[begin..])
                 }
             } else {
                 false

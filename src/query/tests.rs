@@ -515,3 +515,36 @@ fn parse(s: &str) -> Record<'_> {
     let parser = RecordParser::new(ParserSettings::default());
     parser.parse(&raw)
 }
+
+#[rstest]
+#[case::eq_simple(".value = 1e10", r#"{"value":10000000000}"#, true)]
+#[case::eq_uppercase_e(".value = 1E10", r#"{"value":10000000000}"#, true)]
+#[case::eq_negative_exponent(".value = 1e-10", r#"{"value":0.0000000001}"#, true)]
+#[case::eq_explicit_plus(".value = 1e+10", r#"{"value":10000000000}"#, true)]
+#[case::eq_negative_base(".value = -1e10", r#"{"value":-10000000000}"#, true)]
+#[case::eq_with_decimal(".value = 1.5e10", r#"{"value":15000000000}"#, true)]
+#[case::eq_positive_exponent(".value = 3.787e+04", r#"{"value":37870}"#, true)]
+#[case::eq_small_value(".value = 3.787e-04", r#"{"value":0.0003787}"#, true)]
+#[case::eq_negative_small(".value = -3.787e-04", r#"{"value":-0.0003787}"#, true)]
+#[case::gt_match(".value > 1e9", r#"{"value":10000000000}"#, true)]
+#[case::gt_no_match(".value > 1e9", r#"{"value":100000}"#, false)]
+#[case::lt_match(".value < 1e-5", r#"{"value":0.000001}"#, true)]
+#[case::lt_no_match(".value < 1e-5", r#"{"value":0.0001}"#, false)]
+#[case::gte(".value >= 1e10", r#"{"value":10000000000}"#, true)]
+#[case::lte(".value <= 1e10", r#"{"value":10000000000}"#, true)]
+#[case::in_first(".value in (1e5, 1e6, 1e7)", r#"{"value":100000}"#, true)]
+#[case::in_second(".value in (1e5, 1e6, 1e7)", r#"{"value":1000000}"#, true)]
+#[case::in_third(".value in (1e5, 1e6, 1e7)", r#"{"value":10000000}"#, true)]
+#[case::in_no_match(".value in (1e5, 1e6, 1e7)", r#"{"value":1000}"#, false)]
+fn test_query_scientific_notation(#[case] raw_query: &str, #[case] input: &str, #[case] should_match: bool) {
+    let query = Query::parse(raw_query).unwrap();
+    let record = parse(input);
+    assert_eq!(
+        record.matches(&query),
+        should_match,
+        "Query {:?} should {} input {:?}",
+        raw_query,
+        if should_match { "match" } else { "not match" },
+        input,
+    );
+}

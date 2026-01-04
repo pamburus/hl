@@ -31,7 +31,7 @@ _or  = _{ ^"or" ~ &punctuation | "||" }
 _and = _{ ^"and" ~ &punctuation | "&&" }
 _not = _{ ^"not" ~ &punctuation | "!" }
 
-_ff_num_op_1       = _{ op_le | op_ge | op_lt | op_gt }
+_ff_num_op_1       = _{ op_le | op_ge | op_lt | op_gt | op_equal | op_not_equal }
 _ff_num_op_n       = _{ op_in | op_not_in }
 _ff_str_op_1       = _{ op_regex_match | op_not_regex_match | op_contain | op_not_contain | op_like | op_not_like | op_equal | op_not_equal }
 _ff_str_op_n       = _{ op_in | op_not_in }

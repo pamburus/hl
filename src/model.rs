@@ -1300,7 +1300,7 @@ impl FromStr for Number {
 
     #[inline]
     fn from_str(s: &str) -> Result<Self> {
-        if s.contains('.') {
+        if s.contains('.') || s.contains('e') || s.contains('E') {
             Ok(Self::Float(s.parse().map_err(Error::from)?))
         } else {
             Ok(Self::Integer(s.parse().map_err(Error::from)?))
