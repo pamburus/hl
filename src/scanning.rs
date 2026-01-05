@@ -261,9 +261,20 @@ impl Delimit for SmartNewLine {
 
 /// Defines a token delimiter search algorithm.
 pub trait Search {
+    /// Searches for the delimiter in the buffer from the right.
+    #[must_use]
     fn search_r(&self, buf: &[u8], edge: bool) -> Option<Range<usize>>;
+
+    /// Searches for the delimiter in the buffer from the left.
+    #[must_use]
     fn search_l(&self, buf: &[u8], edge: bool) -> Option<Range<usize>>;
+
+    /// Searches for a partial match of the delimiter at the right edge of the buffer.
+    #[must_use]
     fn partial_match_r(&self, buf: &[u8]) -> Option<usize>;
+
+    /// Searches for a partial match of the delimiter at the left edge of the buffer.
+    #[must_use]
     fn partial_match_l(&self, buf: &[u8]) -> Option<usize>;
 }
 

@@ -279,16 +279,18 @@ impl Input {
         InputReference::Stdin.open()
     }
 
-    pub fn tail(mut self, lines: u64) -> io::Result<Self> {
+    /// Seeks to the last `entries` entries of the input.
+    pub fn tail(mut self, entries: u64, delimiter: Delimiter) -> io::Result<Self> {
         match &mut self.stream {
             Stream::Sequential(_) => (),
-            Stream::RandomAccess(stream) => Self::seek_tail(stream, lines)?,
+            Stream::RandomAccess(stream) => Self::seek_tail(stream, entries, delimiter)?,
         }
         Ok(self)
     }
 
-    fn seek_tail(stream: &mut RandomAccessStream, lines: u64) -> io::Result<()> {
+    fn seek_tail(stream: &mut RandomAccessStream, entries: u64, delimiter: Delimiter) -> io::Result<()> {
         const BUF_SIZE: usize = 64 * 1024;
+        let searcher = delimiter.into_searcher();
         let mut scratch = [0; BUF_SIZE];
         let mut count: u64 = 0;
         let mut pos = stream.seek(SeekFrom::End(0))?;
@@ -301,13 +303,19 @@ impl Input {
 
             stream.read_exact(buf)?;
 
-            for i in (0..bn).rev() {
-                if buf[i] == b'\n' {
-                    if count == lines {
-                        stream.seek(SeekFrom::Start(pos + i as u64 + 1))?;
-                        return Ok(());
-                    }
-                    count += 1;
+            let mut r = bn;
+            while let Some(i) = searcher.search_r(&buf[..r], pos == 0) {
+                if count == entries {
+                    stream.seek(SeekFrom::Start(pos + i.end as u64))?;
+                    return Ok(());
+                }
+                count += 1;
+                r = i.start;
+            }
+
+            if r != 0 {
+                if let Some(i) = searcher.partial_match_r(&buf[..r]) {
+                    pos += i as u64;
                 }
             }
         }

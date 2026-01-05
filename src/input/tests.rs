@@ -52,7 +52,7 @@ fn test_input() {
 
 #[test]
 fn test_input_tail() {
-    let input = Input::stdin().unwrap().tail(1).unwrap();
+    let input = Input::stdin().unwrap().tail(1, Delimiter::SmartNewLine).unwrap();
     assert!(matches!(input.stream, Stream::Sequential(_)));
 
     for &(filename, requested, expected) in &[
@@ -61,7 +61,10 @@ fn test_input_tail() {
         ("sample/test.log", 3, 2),
         ("sample/prometheus.log", 2, 2),
     ] {
-        let input = Input::open(&PathBuf::from(filename)).unwrap().tail(requested).unwrap();
+        let input = Input::open(&PathBuf::from(filename))
+            .unwrap()
+            .tail(requested, Delimiter::SmartNewLine)
+            .unwrap();
         let mut buf = Vec::new();
         let n = input.stream.into_sequential().read_to_end(&mut buf).unwrap();
         assert!(n > 0);

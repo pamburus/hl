@@ -559,13 +559,14 @@ impl App {
             // spawn reader threads
             let mut readers = Vec::with_capacity(m);
             for (i, input_ref) in inputs.into_iter().enumerate() {
+                let delimiter = &self.options.delimiter;
                 let reader = scope.spawn(closure!(clone sfi, clone txi, |_| -> Result<()> {
-                    let scanner = Scanner::new(sfi.clone(), self.options.delimiter.clone());
+                    let scanner = Scanner::new(sfi.clone(), delimiter.clone());
                     let mut meta = None;
                     if let InputReference::File(path) = &input_ref {
                         meta = Some(fs::metadata(&path.canonical)?);
                     }
-                    let mut input = Some(input_ref.open()?.tail(self.options.tail)?);
+                    let mut input = Some(input_ref.open()?.tail(self.options.tail, delimiter.clone())?);
                     let is_file = |meta: &Option<fs::Metadata>| meta.as_ref().map(|m|m.is_file()).unwrap_or(false);
                     let process = |input: &mut Option<Input>, is_file: bool| {
                         if let Some(input) = input {
