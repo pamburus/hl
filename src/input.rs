@@ -733,7 +733,7 @@ impl Iterator for BlockEntries<IndexedInput> {
             }
         }
         let s = &self.buf[self.byte..];
-        let l = self.searcher.search_l(s, true).map_or(s.len(), |i| i + 1);
+        let l = self.searcher.search_l(s, true).map_or(s.len(), |i| i.end);
         let offset = self.byte;
         self.byte += l;
         self.current += 1;
