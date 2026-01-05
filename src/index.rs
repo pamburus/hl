@@ -47,7 +47,7 @@ use crate::{
     index_capnp as schema,
     level::Level,
     model::{Parser, ParserSettings, RawRecord},
-    scanning::{Delimiter, Scanner, Segment, SegmentBuf, SegmentBufFactory},
+    scanning::{Delimit, Delimiter, Scanner, SearchExt, Segment, SegmentBuf, SegmentBufFactory},
     settings::PredefinedFields,
     vfs::{FileRead, FileSystem, LocalFileSystem},
 };
@@ -506,18 +506,21 @@ where
         let mut sorted = true;
         let mut prev_ts = None;
         let mut lines = Vec::<(Option<Timestamp>, u32, u32)>::with_capacity(segment.data().len() / 512);
-        let mut offset = 0;
         let mut i = 0;
-        for data in rtrim(segment.data(), b'\n').split(|c| *c == b'\n') {
-            let data_len = data.len();
-            let data = strip(data, b'\r');
+        let searcher = self.delimiter.clone().into_searcher();
+        let segment_data = segment.data();
+        let base_ptr = segment_data.as_ptr() as usize;
+
+        for data in searcher.split(segment_data) {
+            let record_offset = (data.as_ptr() as usize - base_ptr) as u32;
+            let data_stripped = strip(data, b'\r');
             let mut ts = None;
             let mut rel = 0;
-            if !data.is_empty() {
+            if !data_stripped.is_empty() {
                 let mut stream = RawRecord::parser()
                     .allow_prefix(self.allow_prefix)
                     .format(self.format)
-                    .parse(data);
+                    .parse(data_stripped);
                 while let Some(item) = stream.next() {
                     match item {
                         Ok(ar) => {
@@ -531,14 +534,14 @@ where
                                 sorted = false;
                             }
                             stat.add_valid(ts, flags);
-                            lines.push((ts.or(prev_ts), i as u32, offset + ar.offsets.start as u32));
+                            lines.push((ts.or(prev_ts), i as u32, record_offset + ar.offsets.start as u32));
                             rel = ar.offsets.end;
                             i += 1;
                             prev_ts = ts;
                         }
                         _ => {
                             stat.add_invalid();
-                            lines.push((ts.or(prev_ts), i as u32, offset + rel as u32));
+                            lines.push((ts.or(prev_ts), i as u32, record_offset + rel as u32));
                             i += 1;
                             break;
                         }
@@ -546,10 +549,9 @@ where
                 }
             } else {
                 stat.add_invalid();
-                lines.push((ts.or(prev_ts), i as u32, offset));
+                lines.push((ts.or(prev_ts), i as u32, record_offset));
                 i += 1;
             }
-            offset += data_len as u32 + 1;
         }
         let chronology = if sorted {
             Chronology::default()
@@ -1187,15 +1189,6 @@ fn level_mask_higher(flag: u64) -> u64 {
 #[inline]
 fn level_mask_higher_or_eq(flag: u64) -> u64 {
     flag | level_mask_higher(flag)
-}
-
-#[inline]
-fn rtrim(s: &[u8], c: u8) -> &[u8] {
-    if !s.is_empty() && s[s.len() - 1] == c {
-        &s[..s.len() - 1]
-    } else {
-        s
-    }
 }
 
 const VALID_MAGIC: u64 = 0x5845444e492d4c48;
