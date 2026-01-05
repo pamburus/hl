@@ -3,7 +3,7 @@ use std::cmp::min;
 use std::collections::VecDeque;
 use std::convert::From;
 use std::io::Read;
-use std::ops::Range;
+use std::ops::{Deref, Range};
 use std::sync::Arc;
 
 // third-party imports
@@ -215,6 +215,24 @@ impl Delimit for Vec<u8> {
     }
 }
 
+impl Delimit for Arc<[u8]> {
+    type Searcher = SubStrSearcher<Self>;
+
+    #[inline]
+    fn into_searcher(self) -> Self::Searcher {
+        SubStrSearcher::new(self)
+    }
+}
+
+impl Delimit for Arc<str> {
+    type Searcher = SubStrSearcher<Self>;
+
+    #[inline]
+    fn into_searcher(self) -> Self::Searcher {
+        SubStrSearcher::new(self)
+    }
+}
+
 impl Delimit for &Delimiter {
     type Searcher = Arc<dyn Search>;
 
@@ -369,7 +387,11 @@ pub struct SubStrSearcher<D> {
     delimiter: D,
 }
 
-impl<D: AsRef<[u8]>> SubStrSearcher<D> {
+impl<D> SubStrSearcher<D>
+where
+    D: Deref,
+    D::Target: AsRef<[u8]>,
+{
     #[inline]
     pub fn new(delimiter: D) -> Self {
         Self { delimiter }
@@ -377,14 +399,18 @@ impl<D: AsRef<[u8]>> SubStrSearcher<D> {
 
     #[inline]
     fn len(&self) -> usize {
-        self.delimiter.as_ref().len()
+        self.delimiter.deref().as_ref().len()
     }
 }
 
-impl<D: AsRef<[u8]>> Search for SubStrSearcher<D> {
+impl<D> Search for SubStrSearcher<D>
+where
+    D: Deref,
+    D::Target: AsRef<[u8]>,
+{
     #[inline]
     fn search_r(&self, buf: &[u8], _edge: bool) -> Option<Range<usize>> {
-        let needle = self.delimiter.as_ref();
+        let needle = self.delimiter.deref().as_ref();
         if needle.is_empty() {
             return None;
         }
@@ -405,7 +431,7 @@ impl<D: AsRef<[u8]>> Search for SubStrSearcher<D> {
 
     #[inline]
     fn search_l(&self, buf: &[u8], _edge: bool) -> Option<Range<usize>> {
-        let needle = self.delimiter.as_ref();
+        let needle = self.delimiter.deref().as_ref();
         if needle.is_empty() {
             return None;
         }

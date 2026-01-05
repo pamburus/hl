@@ -239,7 +239,7 @@ fn run() -> Result<()> {
                 if d.len() == 1 {
                     Delimiter::Byte(d.as_bytes()[0])
                 } else if d.len() > 1 {
-                    Delimiter::Str(d)
+                    Delimiter::Str(d.into())
                 } else {
                     Delimiter::default()
                 }
