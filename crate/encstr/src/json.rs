@@ -103,7 +103,7 @@ impl<'a> Handler for Appender<'a> {
             },
             Token::Sequence(s) => {
                 let mut ss = s.as_bytes();
-                while let Some(pos) = ss.iter().position(|x| matches!(x, 0..=0x1f | b'"' | b'\\')) {
+                while let Some(pos) = ss.iter().position(|x| matches!(x, 0..=0x1f | b'"' | b'\\' | 0x7f)) {
                     self.buffer.extend(&ss[..pos]);
                     self.handle_escape(ss[pos]);
                     ss = &ss[pos + 1..];
@@ -360,6 +360,7 @@ static ESCAPE: [bool; 256] = {
     const CT: bool = true; // control character \x00..=\x1F
     const QU: bool = true; // quote \x22
     const BS: bool = true; // backslash \x5C
+    const DL: bool = true; // DEL \x7F
     const __: bool = false; // allow unescaped
     [
         //   1   2   3   4   5   6   7   8   9   A   B   C   D   E   F
@@ -370,7 +371,7 @@ static ESCAPE: [bool; 256] = {
         __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // 4
         __, __, __, __, __, __, __, __, __, __, __, __, BS, __, __, __, // 5
         __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // 6
-        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // 7
+        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, DL, // 7
         __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // 8
         __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // 9
         __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // A
