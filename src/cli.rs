@@ -401,7 +401,7 @@ pub struct Opt {
     #[arg(long, env = "HL_ALLOW_PREFIX", overrides_with = "allow_prefix", help_heading = heading::INPUT)]
     pub allow_prefix: bool,
 
-    /// Log entry delimiter <c><dim>[</>NUL<dim>, </>CR<dim>, </>LF<dim>, </>CRLF<dim>]</></> or any custom string
+    /// Log entry delimiter <c><dim>[</>NUL<dim>, </>CR<dim>, </>LF<dim>, </>CRLF<dim>, </>JSON<dim>]</></> or any custom string
     #[arg(long, overrides_with = "delimiter", help_heading = heading::INPUT)]
     pub delimiter: Option<String>,
 

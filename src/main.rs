@@ -233,7 +233,8 @@ fn run() -> Result<()> {
             "nul" => Delimiter::Byte(0),
             "lf" => Delimiter::Byte(b'\n'),
             "cr" => Delimiter::Byte(b'\r'),
-            "crlf" => Delimiter::default(),
+            "crlf" => Delimiter::SmartNewLine,
+            "json" => Delimiter::Json,
             _ => {
                 if d.len() == 1 {
                     Delimiter::Byte(d.as_bytes()[0])
@@ -244,6 +245,8 @@ fn run() -> Result<()> {
                 }
             }
         };
+    } else if opt.input_format == cli::InputFormat::Json {
+        delimiter = Delimiter::Json;
     }
 
     let mut input_info = *opt.input_info;

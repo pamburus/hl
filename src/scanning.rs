@@ -16,6 +16,11 @@ use crate::error::*;
 
 // ---
 
+mod json;
+
+// Re-export JSON delimiter
+pub use json::JsonDelimiter;
+
 /// Scans input stream and splits it into segments containing a whole number of tokens delimited by the given delimiter.
 /// If a single token exceeds size of a buffer allocated by SegmentBufFactory, it is split into multiple Incomplete segments.
 pub struct Scanner<D> {
@@ -47,6 +52,7 @@ pub enum Delimiter {
     Char(char),
     Str(String),
     SmartNewLine,
+    Json,
 }
 
 impl Default for Delimiter {
@@ -116,6 +122,7 @@ impl Delimit for Delimiter {
             Self::Char(c) => Box::new(c.into_searcher()),
             Self::Str(s) => Box::new(s.into_searcher()),
             Self::SmartNewLine => Box::new(SmartNewLine.into_searcher()),
+            Self::Json => Box::new(JsonDelimiter.into_searcher()),
         }
     }
 }
