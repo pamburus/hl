@@ -932,17 +932,10 @@ pub mod string {
             let plain = if (mask & !(Flag::Other | Flag::Digit | Flag::Dot | Flag::Minus)).is_empty() {
                 if mask == Flag::Digit {
                     buf[begin..].len() > MAX_NUMBER_LEN
-                } else if !mask.contains(Flag::Other) {
-                    !looks_like_number(&buf[begin..])
                 } else {
-                    !matches!(
-                        buf[begin..],
-                        [b'{', ..]
-                            | [b'[', ..]
-                            | [b't', b'r', b'u', b'e']
-                            | [b'f', b'a', b'l', b's', b'e']
-                            | [b'n', b'u', b'l', b'l']
-                    ) && !looks_like_number(&buf[begin..])
+                    (!mask.contains(Flag::Other)
+                        || !matches!(&buf[begin..], [b'{', ..] | [b'[', ..] | b"true" | b"false" | b"null"))
+                        && !looks_like_number(&buf[begin..])
                 }
             } else {
                 false
