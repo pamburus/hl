@@ -48,9 +48,9 @@ impl<D: Delimit> Scanner<D> {
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum Delimiter {
     Byte(u8),
-    Bytes(Vec<u8>),
+    Bytes(Arc<[u8]>),
     Char(char),
-    Str(String),
+    Str(Arc<str>),
     SmartNewLine,
     Json,
 }
@@ -69,10 +69,17 @@ impl From<u8> for Delimiter {
     }
 }
 
+impl From<Arc<[u8]>> for Delimiter {
+    #[inline]
+    fn from(d: Arc<[u8]>) -> Self {
+        Self::Bytes(d)
+    }
+}
+
 impl From<Vec<u8>> for Delimiter {
     #[inline]
     fn from(d: Vec<u8>) -> Self {
-        Self::Bytes(d)
+        Self::Bytes(d.into())
     }
 }
 
@@ -97,10 +104,17 @@ impl From<&str> for Delimiter {
     }
 }
 
+impl From<Arc<str>> for Delimiter {
+    #[inline]
+    fn from(d: Arc<str>) -> Self {
+        Self::Str(d)
+    }
+}
+
 impl From<String> for Delimiter {
     #[inline]
     fn from(d: String) -> Self {
-        Self::Str(d)
+        Self::Str(d.into())
     }
 }
 
@@ -112,17 +126,17 @@ impl From<SmartNewLine> for Delimiter {
 }
 
 impl Delimit for Delimiter {
-    type Searcher = Box<dyn Search>;
+    type Searcher = Arc<dyn Search>;
 
     #[inline]
     fn into_searcher(self) -> Self::Searcher {
         match self {
-            Self::Byte(b) => Box::new(b.into_searcher()),
-            Self::Bytes(b) => Box::new(b.into_searcher()),
-            Self::Char(c) => Box::new(c.into_searcher()),
-            Self::Str(s) => Box::new(s.into_searcher()),
-            Self::SmartNewLine => Box::new(SmartNewLine.into_searcher()),
-            Self::Json => Box::new(JsonDelimiter.into_searcher()),
+            Self::Byte(b) => Arc::new(b.into_searcher()),
+            Self::Bytes(b) => Arc::new(b.into_searcher()),
+            Self::Char(c) => Arc::new(c.into_searcher()),
+            Self::Str(s) => Arc::new(s.into_searcher()),
+            Self::SmartNewLine => Arc::new(SmartNewLine.into_searcher()),
+            Self::Json => Arc::new(JsonDelimiter.into_searcher()),
         }
     }
 }
@@ -202,7 +216,7 @@ impl Delimit for Vec<u8> {
 }
 
 impl Delimit for &Delimiter {
-    type Searcher = Box<dyn Search>;
+    type Searcher = Arc<dyn Search>;
 
     #[inline]
     fn into_searcher(self) -> Self::Searcher {
@@ -219,7 +233,7 @@ pub struct SmartNewLine;
 impl Delimit for SmartNewLine {
     type Searcher = SmartNewLineSearcher;
 
-    #[inline]
+    #[inline(always)]
     fn into_searcher(self) -> Self::Searcher {
         Self::Searcher {}
     }
@@ -236,44 +250,66 @@ pub trait Search {
 }
 
 impl Search for u8 {
-    #[inline]
+    #[inline(always)]
     fn search_r(&self, buf: &[u8], _: bool) -> Option<Range<usize>> {
         memrchr(*self, buf).map(|x| x..x + 1)
     }
 
-    #[inline]
+    #[inline(always)]
     fn search_l(&self, buf: &[u8], _: bool) -> Option<Range<usize>> {
         memchr(*self, buf).map(|x| x..x + 1)
     }
 
-    #[inline]
+    #[inline(always)]
     fn partial_match_l(&self, _: &[u8]) -> Option<usize> {
         None
     }
 
-    #[inline]
+    #[inline(always)]
     fn partial_match_r(&self, _: &[u8]) -> Option<usize> {
         None
     }
 }
 
 impl Search for Box<dyn Search> {
-    #[inline]
+    #[inline(always)]
     fn search_r(&self, buf: &[u8], edge: bool) -> Option<Range<usize>> {
         self.as_ref().search_r(buf, edge)
     }
 
-    #[inline]
+    #[inline(always)]
     fn search_l(&self, buf: &[u8], edge: bool) -> Option<Range<usize>> {
         self.as_ref().search_l(buf, edge)
     }
 
-    #[inline]
+    #[inline(always)]
     fn partial_match_r(&self, buf: &[u8]) -> Option<usize> {
         self.as_ref().partial_match_r(buf)
     }
 
-    #[inline]
+    #[inline(always)]
+    fn partial_match_l(&self, buf: &[u8]) -> Option<usize> {
+        self.as_ref().partial_match_l(buf)
+    }
+}
+
+impl Search for Arc<dyn Search> {
+    #[inline(always)]
+    fn search_r(&self, buf: &[u8], edge: bool) -> Option<Range<usize>> {
+        self.as_ref().search_r(buf, edge)
+    }
+
+    #[inline(always)]
+    fn search_l(&self, buf: &[u8], edge: bool) -> Option<Range<usize>> {
+        self.as_ref().search_l(buf, edge)
+    }
+
+    #[inline(always)]
+    fn partial_match_r(&self, buf: &[u8]) -> Option<usize> {
+        self.as_ref().partial_match_r(buf)
+    }
+
+    #[inline(always)]
     fn partial_match_l(&self, buf: &[u8]) -> Option<usize> {
         self.as_ref().partial_match_l(buf)
     }

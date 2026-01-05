@@ -15,7 +15,7 @@ fn test_input_reference() {
     let reference = InputReference::Stdin;
     assert_eq!(reference.description(), "<stdin>");
     assert_eq!(reference.path(), None);
-    let input = reference.open().unwrap();
+    let input = reference.open(Delimiter::SmartNewLine).unwrap();
     assert_eq!(input.reference, reference);
     let reference = InputReference::File(InputPath::ephemeral(PathBuf::from("test.log")));
     assert_eq!(reference.description(), "file \u{1b}[33m\"test.log\"\u{1b}[0m");
@@ -26,7 +26,7 @@ fn test_input_reference() {
 fn test_input_holder() {
     let reference = InputReference::File(InputPath::ephemeral(PathBuf::from("sample/test.log")));
     let holder = InputHolder::new(reference, None);
-    let mut stream = holder.stream().unwrap();
+    let mut stream = holder.open(Delimiter::SmartNewLine).unwrap().stream;
     let mut buf = Vec::new();
     let n = stream.read_to_end(&mut buf).unwrap();
     assert!(matches!(stream, Stream::RandomAccess(_)));
@@ -39,10 +39,10 @@ fn test_input_holder() {
 
 #[test]
 fn test_input() {
-    let input = Input::stdin().unwrap();
+    let input = Input::stdin(Delimiter::SmartNewLine).unwrap();
     assert!(matches!(input.stream, Stream::Sequential(_)));
     assert_eq!(input.reference.description(), "<stdin>");
-    let input = Input::open(&PathBuf::from("sample/prometheus.log")).unwrap();
+    let input = Input::open(&PathBuf::from("sample/prometheus.log"), Delimiter::SmartNewLine).unwrap();
     assert!(matches!(input.stream, Stream::RandomAccess(_)));
     assert_eq!(
         input.reference.description(),
@@ -52,7 +52,7 @@ fn test_input() {
 
 #[test]
 fn test_input_tail() {
-    let input = Input::stdin().unwrap().tail(1).unwrap();
+    let input = Input::stdin(Delimiter::SmartNewLine).unwrap().tail(1).unwrap();
     assert!(matches!(input.stream, Stream::Sequential(_)));
 
     for &(filename, requested, expected) in &[
@@ -61,7 +61,10 @@ fn test_input_tail() {
         ("sample/test.log", 3, 2),
         ("sample/prometheus.log", 2, 2),
     ] {
-        let input = Input::open(&PathBuf::from(filename)).unwrap().tail(requested).unwrap();
+        let input = Input::open(&PathBuf::from(filename), Delimiter::SmartNewLine)
+            .unwrap()
+            .tail(requested)
+            .unwrap();
         let mut buf = Vec::new();
         let n = input.stream.into_sequential().read_to_end(&mut buf).unwrap();
         assert!(n > 0);
@@ -120,7 +123,11 @@ fn test_stream() {
 #[test]
 fn test_input_read_error() {
     let reference = InputReference::File(InputPath::ephemeral(PathBuf::from("test.log")));
-    let input = Input::new(reference, Stream::Sequential(Box::new(FailingReader)));
+    let input = Input::new(
+        reference,
+        Stream::Sequential(Box::new(FailingReader)),
+        Delimiter::default(),
+    );
     let mut buf = [0; 128];
     let result = input.stream.into_sequential().read(&mut buf);
     assert!(result.is_err());
@@ -170,7 +177,7 @@ fn test_indexed_input_stdin() {
     let data = br#"{"ts":"2024-10-01T01:02:03Z","level":"info","msg":"some test message"}\n"#;
     let stream = Stream::RandomAccess(Box::new(Cursor::new(data)));
     let indexer = Indexer::<LocalFileSystem>::new(1, PathBuf::new(), IndexerSettings::with_fs(LocalFileSystem));
-    let input = IndexedInput::from_stream(InputReference::Stdin, stream, &indexer).unwrap();
+    let input = IndexedInput::from_stream(InputReference::Stdin, stream, Delimiter::default(), &indexer).unwrap();
     let mut blocks = input.into_blocks().collect_vec();
     assert_eq!(blocks.len(), 1);
     let block = blocks.drain(..).next().unwrap();
@@ -194,7 +201,7 @@ fn test_indexed_input_file_random_access() {
                 ..IndexerSettings::with_fs(fs.clone())
             },
         );
-        let input = IndexedInput::open(&path, &indexer).unwrap();
+        let input = IndexedInput::open(&path, &indexer, Delimiter::SmartNewLine).unwrap();
         let mut blocks = input.into_blocks().sorted().collect_vec();
         assert_eq!(blocks.len(), 2);
         assert_eq!(blocks[0].entries_valid(), 1);
@@ -226,7 +233,7 @@ fn test_indexed_input_sequential_access() {
         );
         let reference = InputReference::File(InputPath::resolve_with_fs(path.clone(), &fs).unwrap());
         let stream = Stream::Sequential(Box::new(File::open(&path).unwrap()));
-        let input = IndexedInput::from_stream(reference, stream, &indexer).unwrap();
+        let input = IndexedInput::from_stream(reference, stream, Delimiter::default(), &indexer).unwrap();
         let mut blocks = input.into_blocks().sorted().collect_vec();
         assert_eq!(blocks.len(), 2);
         assert_eq!(blocks[0].entries_valid(), 1);

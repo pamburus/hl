@@ -15,10 +15,12 @@ use deko::{Format, bufread::AnyDecoder};
 
 // local imports
 use crate::{
+    Delimit,
     error::Result,
     index::{Index, Indexer, SourceBlock, SourceMetadata},
     iox::ReadFill,
     replay::{ReplayBufCreator, ReplayBufReader, ReplaySeekReader},
+    scanning::{Delimiter, Search},
     tee::TeeReader,
     vfs::{FileSystem, LocalFileSystem},
     xerr::HighlightQuoted,
@@ -120,8 +122,8 @@ impl InputReference {
 
     /// Completely opens the input for reading.
     /// This includes decoding compressed files if needed.
-    pub fn open(&self) -> io::Result<Input> {
-        self.hold()?.open()
+    pub fn open(&self, delimiter: Delimiter) -> io::Result<Input> {
+        self.hold()?.open(delimiter)
     }
 
     /// Returns a description of the input reference.
@@ -192,49 +194,52 @@ impl<T: Meta> Meta for Mutex<T> {
 
 // ---
 
+type InputStream = Box<dyn ReadSeekMeta + Send + Sync>;
+
 /// A holder of an input file.
 /// It can be used to ensure the input file is not suddenly deleting while it is needed.
 pub struct InputHolder {
     pub reference: InputReference,
-    pub stream: Option<Box<dyn ReadSeekMeta + Send + Sync>>,
+    pub stream: Option<InputStream>,
 }
 
 impl InputHolder {
     /// Creates a new input holder.
-    pub fn new(reference: InputReference, stream: Option<Box<dyn ReadSeekMeta + Send + Sync>>) -> Self {
+    pub fn new(reference: InputReference, stream: Option<InputStream>) -> Self {
         Self { reference, stream }
     }
 
     /// Opens the input file for reading.
     /// This includes decoding compressed files if needed.
-    pub fn open(self) -> io::Result<Input> {
-        Ok(Input::new(self.reference.clone(), self.stream()?))
+    pub fn open(self, delimiter: Delimiter) -> io::Result<Input> {
+        let stream = Self::stream(&self.reference, self.stream)?;
+        Ok(Input::new(self.reference, stream, delimiter))
     }
 
     /// Indexes the input file and returns IndexedInput that can be used to access the data in random order.
-    pub fn index<FS>(self, indexer: &Indexer<FS>) -> Result<IndexedInput>
+    pub fn index<FS>(self, indexer: &Indexer<FS>, delimiter: Delimiter) -> Result<IndexedInput>
     where
         FS: FileSystem + Sync,
         FS::Metadata: SourceMetadata,
     {
-        self.open()?.indexed(indexer)
+        self.open(delimiter)?.indexed(indexer)
     }
 
-    fn stream(self) -> io::Result<Stream> {
-        Ok(match &self.reference {
-            InputReference::Stdin => match self.stream {
+    fn stream(reference: &InputReference, stream: Option<InputStream>) -> io::Result<Stream> {
+        Ok(match &reference {
+            InputReference::Stdin => match stream {
                 Some(stream) => Stream::Sequential(Stream::RandomAccess(stream).into_sequential()),
-                None => Stream::Sequential(self.stdin()),
+                None => Stream::Sequential(Self::stdin(stream)),
             },
-            InputReference::File(_) => match self.stream {
+            InputReference::File(_) => match stream {
                 Some(stream) => Stream::RandomAccess(stream),
-                None => Stream::RandomAccess(self.reference.hold()?.stream.unwrap()),
+                None => Stream::RandomAccess(reference.hold()?.stream.unwrap()),
             },
         })
     }
 
-    fn stdin(self) -> SequentialStream {
-        self.stream
+    fn stdin(stream: Option<InputStream>) -> SequentialStream {
+        stream
             .map(|s| Box::new(StreamOver(s)) as SequentialStream)
             .unwrap_or_else(|| Box::new(stdin()))
     }
@@ -244,13 +249,15 @@ impl InputHolder {
 pub struct Input {
     pub reference: InputReference,
     pub stream: Stream,
+    pub delimiter: Delimiter,
 }
 
 impl Input {
-    fn new(reference: InputReference, stream: Stream) -> Self {
+    fn new(reference: InputReference, stream: Stream, delimiter: Delimiter) -> Self {
         Self {
             reference: reference.clone(),
             stream: stream.verified().decoded().tagged(reference),
+            delimiter,
         }
     }
 
@@ -260,18 +267,18 @@ impl Input {
         FS: FileSystem + Sync,
         FS::Metadata: SourceMetadata,
     {
-        IndexedInput::from_stream(self.reference, self.stream, indexer)
+        IndexedInput::from_stream(self.reference, self.stream, self.delimiter, indexer)
     }
 
     /// Opens the file for reading.
     /// This includes decoding compressed files if needed.
-    pub fn open(path: &Path) -> io::Result<Self> {
-        InputReference::File(path.to_path_buf().try_into()?).open()
+    pub fn open(path: &Path, delimiter: Delimiter) -> io::Result<Self> {
+        InputReference::File(path.to_path_buf().try_into()?).open(delimiter)
     }
 
     /// Opens the stdin for reading.
-    pub fn stdin() -> io::Result<Self> {
-        InputReference::Stdin.open()
+    pub fn stdin(delimiter: Delimiter) -> io::Result<Self> {
+        InputReference::Stdin.open(delimiter)
     }
 
     pub fn tail(mut self, lines: u64) -> io::Result<Self> {
@@ -465,28 +472,30 @@ impl<R: Meta> Meta for TaggedStream<R> {
 pub struct IndexedInput {
     pub reference: InputReference,
     pub stream: Mutex<RandomAccessStream>,
+    pub delimiter: Delimiter,
     pub index: Index,
 }
 
 impl IndexedInput {
     #[inline]
-    fn new(reference: InputReference, stream: RandomAccessStream, index: Index) -> Self {
+    fn new(reference: InputReference, stream: RandomAccessStream, delimiter: Delimiter, index: Index) -> Self {
         Self {
             reference,
             stream: Mutex::new(stream),
+            delimiter,
             index,
         }
     }
 
     /// Opens the input file and indexes it.
-    pub fn open<FS>(path: &Path, indexer: &Indexer<FS>) -> Result<Self>
+    pub fn open<FS>(path: &Path, indexer: &Indexer<FS>, delimiter: Delimiter) -> Result<Self>
     where
         FS: FileSystem + Sync,
         FS::Metadata: SourceMetadata,
     {
         InputReference::File(PathBuf::from(path).try_into()?)
             .hold()?
-            .index(indexer)
+            .index(indexer, delimiter)
     }
 
     /// Converts the input to blocks.
@@ -495,13 +504,18 @@ impl IndexedInput {
         Blocks::new(Arc::new(self), 0..n)
     }
 
-    fn from_stream<FS>(reference: InputReference, stream: Stream, indexer: &Indexer<FS>) -> Result<Self>
+    fn from_stream<FS>(
+        reference: InputReference,
+        stream: Stream,
+        delimiter: Delimiter,
+        indexer: &Indexer<FS>,
+    ) -> Result<Self>
     where
         FS: FileSystem + Sync,
         FS::Metadata: SourceMetadata,
     {
         let (stream, index) = Self::index_stream(&reference, stream, indexer)?;
-        Ok(Self::new(reference, stream, index))
+        Ok(Self::new(reference, stream, delimiter, index))
     }
 
     fn index_stream<FS>(
@@ -660,6 +674,7 @@ impl Block<IndexedInput> {
 // ---
 
 pub struct BlockEntries<I> {
+    searcher: Arc<dyn Search>,
     block: Block<I>,
     buf: Arc<Vec<u8>>,
     total: usize,
@@ -682,6 +697,7 @@ impl BlockEntries<IndexedInput> {
             (buf, total)
         };
         Ok(Self {
+            searcher: block.input.delimiter.clone().into_searcher(),
             block,
             buf: Arc::new(buf),
             total,
@@ -717,7 +733,7 @@ impl Iterator for BlockEntries<IndexedInput> {
             }
         }
         let s = &self.buf[self.byte..];
-        let l = s.iter().position(|&x| x == b'\n').map_or(s.len(), |i| i + 1);
+        let l = self.searcher.search_l(s, true).map_or(s.len(), |i| i + 1);
         let offset = self.byte;
         self.byte += l;
         self.current += 1;
