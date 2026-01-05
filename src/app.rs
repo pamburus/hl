@@ -252,7 +252,7 @@ impl App {
 
         let inputs = inputs
             .into_iter()
-            .map(|x| x.open(self.options.delimiter.clone()))
+            .map(|x| x.open())
             .collect::<std::io::Result<Vec<_>>>()?;
 
         let n = self.options.concurrency;
@@ -558,15 +558,14 @@ impl App {
             let (txo, rxo) = channel::bounded(1);
             // spawn reader threads
             let mut readers = Vec::with_capacity(m);
-            let delimiter = &self.options.delimiter;
             for (i, input_ref) in inputs.into_iter().enumerate() {
                 let reader = scope.spawn(closure!(clone sfi, clone txi, |_| -> Result<()> {
-                    let scanner = Scanner::new(sfi.clone(), delimiter);
+                    let scanner = Scanner::new(sfi.clone(), self.options.delimiter.clone());
                     let mut meta = None;
                     if let InputReference::File(path) = &input_ref {
                         meta = Some(fs::metadata(&path.canonical)?);
                     }
-                    let mut input = Some(input_ref.open(delimiter.clone())?.tail(self.options.tail)?);
+                    let mut input = Some(input_ref.open()?.tail(self.options.tail)?);
                     let is_file = |meta: &Option<fs::Metadata>| meta.as_ref().map(|m|m.is_file()).unwrap_or(false);
                     let process = |input: &mut Option<Input>, is_file: bool| {
                         if let Some(input) = input {
@@ -598,7 +597,7 @@ impl App {
                                         meta = Some(new_meta);
                                     }
                                     if input.is_none() {
-                                        input = input_ref.open(delimiter.clone()).ok();
+                                        input = input_ref.open().ok();
                                     }
                                     if process(&mut input, is_file(&meta))? {
                                         return Ok(())

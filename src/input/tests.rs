@@ -15,7 +15,7 @@ fn test_input_reference() {
     let reference = InputReference::Stdin;
     assert_eq!(reference.description(), "<stdin>");
     assert_eq!(reference.path(), None);
-    let input = reference.open(Delimiter::SmartNewLine).unwrap();
+    let input = reference.open().unwrap();
     assert_eq!(input.reference, reference);
     let reference = InputReference::File(InputPath::ephemeral(PathBuf::from("test.log")));
     assert_eq!(reference.description(), "file \u{1b}[33m\"test.log\"\u{1b}[0m");
@@ -26,7 +26,7 @@ fn test_input_reference() {
 fn test_input_holder() {
     let reference = InputReference::File(InputPath::ephemeral(PathBuf::from("sample/test.log")));
     let holder = InputHolder::new(reference, None);
-    let mut stream = holder.open(Delimiter::SmartNewLine).unwrap().stream;
+    let mut stream = holder.open().unwrap().stream;
     let mut buf = Vec::new();
     let n = stream.read_to_end(&mut buf).unwrap();
     assert!(matches!(stream, Stream::RandomAccess(_)));
@@ -39,10 +39,10 @@ fn test_input_holder() {
 
 #[test]
 fn test_input() {
-    let input = Input::stdin(Delimiter::SmartNewLine).unwrap();
+    let input = Input::stdin().unwrap();
     assert!(matches!(input.stream, Stream::Sequential(_)));
     assert_eq!(input.reference.description(), "<stdin>");
-    let input = Input::open(&PathBuf::from("sample/prometheus.log"), Delimiter::SmartNewLine).unwrap();
+    let input = Input::open(&PathBuf::from("sample/prometheus.log")).unwrap();
     assert!(matches!(input.stream, Stream::RandomAccess(_)));
     assert_eq!(
         input.reference.description(),
@@ -52,7 +52,7 @@ fn test_input() {
 
 #[test]
 fn test_input_tail() {
-    let input = Input::stdin(Delimiter::SmartNewLine).unwrap().tail(1).unwrap();
+    let input = Input::stdin().unwrap().tail(1).unwrap();
     assert!(matches!(input.stream, Stream::Sequential(_)));
 
     for &(filename, requested, expected) in &[
@@ -61,10 +61,7 @@ fn test_input_tail() {
         ("sample/test.log", 3, 2),
         ("sample/prometheus.log", 2, 2),
     ] {
-        let input = Input::open(&PathBuf::from(filename), Delimiter::SmartNewLine)
-            .unwrap()
-            .tail(requested)
-            .unwrap();
+        let input = Input::open(&PathBuf::from(filename)).unwrap().tail(requested).unwrap();
         let mut buf = Vec::new();
         let n = input.stream.into_sequential().read_to_end(&mut buf).unwrap();
         assert!(n > 0);
@@ -123,11 +120,7 @@ fn test_stream() {
 #[test]
 fn test_input_read_error() {
     let reference = InputReference::File(InputPath::ephemeral(PathBuf::from("test.log")));
-    let input = Input::new(
-        reference,
-        Stream::Sequential(Box::new(FailingReader)),
-        Delimiter::default(),
-    );
+    let input = Input::new(reference, Stream::Sequential(Box::new(FailingReader)));
     let mut buf = [0; 128];
     let result = input.stream.into_sequential().read(&mut buf);
     assert!(result.is_err());

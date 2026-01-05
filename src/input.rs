@@ -122,8 +122,8 @@ impl InputReference {
 
     /// Completely opens the input for reading.
     /// This includes decoding compressed files if needed.
-    pub fn open(&self, delimiter: Delimiter) -> io::Result<Input> {
-        self.hold()?.open(delimiter)
+    pub fn open(&self) -> io::Result<Input> {
+        self.hold()?.open()
     }
 
     /// Returns a description of the input reference.
@@ -211,9 +211,9 @@ impl InputHolder {
 
     /// Opens the input file for reading.
     /// This includes decoding compressed files if needed.
-    pub fn open(self, delimiter: Delimiter) -> io::Result<Input> {
+    pub fn open(self) -> io::Result<Input> {
         let stream = Self::stream(&self.reference, self.stream)?;
-        Ok(Input::new(self.reference, stream, delimiter))
+        Ok(Input::new(self.reference, stream))
     }
 
     /// Indexes the input file and returns IndexedInput that can be used to access the data in random order.
@@ -222,7 +222,7 @@ impl InputHolder {
         FS: FileSystem + Sync,
         FS::Metadata: SourceMetadata,
     {
-        self.open(delimiter)?.indexed(indexer)
+        self.open()?.indexed(indexer, delimiter)
     }
 
     fn stream(reference: &InputReference, stream: Option<InputStream>) -> io::Result<Stream> {
@@ -249,36 +249,34 @@ impl InputHolder {
 pub struct Input {
     pub reference: InputReference,
     pub stream: Stream,
-    pub delimiter: Delimiter,
 }
 
 impl Input {
-    fn new(reference: InputReference, stream: Stream, delimiter: Delimiter) -> Self {
+    fn new(reference: InputReference, stream: Stream) -> Self {
         Self {
             reference: reference.clone(),
             stream: stream.verified().decoded().tagged(reference),
-            delimiter,
         }
     }
 
     /// Indexes the input file and returns IndexedInput that can be used to access the data in random order.
-    pub fn indexed<FS>(self, indexer: &Indexer<FS>) -> Result<IndexedInput>
+    pub fn indexed<FS>(self, indexer: &Indexer<FS>, delimiter: Delimiter) -> Result<IndexedInput>
     where
         FS: FileSystem + Sync,
         FS::Metadata: SourceMetadata,
     {
-        IndexedInput::from_stream(self.reference, self.stream, self.delimiter, indexer)
+        IndexedInput::from_stream(self.reference, self.stream, delimiter, indexer)
     }
 
     /// Opens the file for reading.
     /// This includes decoding compressed files if needed.
-    pub fn open(path: &Path, delimiter: Delimiter) -> io::Result<Self> {
-        InputReference::File(path.to_path_buf().try_into()?).open(delimiter)
+    pub fn open(path: &Path) -> io::Result<Self> {
+        InputReference::File(path.to_path_buf().try_into()?).open()
     }
 
     /// Opens the stdin for reading.
-    pub fn stdin(delimiter: Delimiter) -> io::Result<Self> {
-        InputReference::Stdin.open(delimiter)
+    pub fn stdin() -> io::Result<Self> {
+        InputReference::Stdin.open()
     }
 
     pub fn tail(mut self, lines: u64) -> io::Result<Self> {
