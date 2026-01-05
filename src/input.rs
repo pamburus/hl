@@ -294,6 +294,7 @@ impl Input {
         let mut scratch = [0; BUF_SIZE];
         let mut count: u64 = 0;
         let mut pos = stream.seek(SeekFrom::End(0))?;
+        let file_size = pos;
         while pos != 0 {
             let n = min(BUF_SIZE as u64, pos);
             pos -= n;
@@ -305,11 +306,16 @@ impl Input {
 
             let mut r = bn;
             while let Some(i) = searcher.search_r(&buf[..r], pos == 0) {
+                // Skip trailing delimiter at EOF
+                if pos + i.end as u64 == file_size {
+                    r = i.start;
+                    continue;
+                }
+                count += 1;
                 if count == entries {
                     stream.seek(SeekFrom::Start(pos + i.end as u64))?;
                     return Ok(());
                 }
-                count += 1;
                 r = i.start;
             }
 
