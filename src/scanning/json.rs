@@ -30,10 +30,8 @@ impl Search for JsonDelimitSearcher {
                 if buf[i + 1..j].iter().all(|&c| c.is_ascii_whitespace()) {
                     return Some(i + 1..j);
                 }
-            } else if edge {
-                if buf[..j].iter().all(|&c| c.is_ascii_whitespace()) {
-                    return Some(0..j);
-                }
+            } else if edge && buf[..j].iter().all(|&c| c.is_ascii_whitespace()) {
+                return Some(0..j);
             }
         }
         None
@@ -47,10 +45,8 @@ impl Search for JsonDelimitSearcher {
                 if buf[i + 1..j].iter().all(|&c| c.is_ascii_whitespace()) {
                     return Some(i + 1..j);
                 }
-            } else if edge {
-                if buf[i + 1..].iter().all(|&c| c.is_ascii_whitespace()) {
-                    return Some(i + 1..buf.len());
-                }
+            } else if edge && buf[i + 1..].iter().all(|&c| c.is_ascii_whitespace()) {
+                return Some(i + 1..buf.len());
             }
         }
         None
