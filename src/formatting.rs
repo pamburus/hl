@@ -1,6 +1,9 @@
 // std imports
 use std::sync::Arc;
 
+// third-party imports
+use enumset::{EnumSet, EnumSetType};
+
 // workspace imports
 use encstr::EncodedString;
 
@@ -745,28 +748,36 @@ impl<'a> FieldFormatter<'a> {
 
 // ---
 
-pub trait WithAutoTrim {
-    fn with_auto_trim<F, R>(&mut self, f: F) -> R
+trait WithAutoTrim {
+    fn with_auto_trim<F, R>(&mut self, f: F, flags: impl Into<AutoTrimFlags>) -> R
     where
         F: FnOnce(&mut Self) -> R;
 }
 
 impl WithAutoTrim for Vec<u8> {
     #[inline(always)]
-    fn with_auto_trim<F, R>(&mut self, f: F) -> R
+    fn with_auto_trim<F, R>(&mut self, f: F, flags: impl Into<AutoTrimFlags>) -> R
     where
         F: FnOnce(&mut Self) -> R,
     {
+        let flags = flags.into();
         let begin = self.len();
         let result = f(self);
         if let Some(end) = self[begin..].iter().rposition(|&b| !b.is_ascii_whitespace()) {
             self.truncate(begin + end + 1);
-        } else {
+        } else if !flags.contains(AutoTrimFlag::PreserveWhiteSpaceOnly) {
             self.truncate(begin);
         }
         result
     }
 }
+
+#[derive(EnumSetType, Debug)]
+enum AutoTrimFlag {
+    PreserveWhiteSpaceOnly,
+}
+
+type AutoTrimFlags = EnumSet<AutoTrimFlag>;
 
 // ---
 
@@ -810,7 +821,7 @@ pub mod string {
 
     // local imports
     use crate::{
-        formatting::WithAutoTrim,
+        formatting::{AutoTrimFlag, AutoTrimFlags, WithAutoTrim},
         model::{MAX_NUMBER_LEN, looks_like_number},
         settings::MessageFormat,
     };
@@ -907,7 +918,10 @@ pub mod string {
             }
 
             let begin = buf.len();
-            buf.with_auto_trim(|buf| ValueFormatRaw.format(input, buf))?;
+            buf.with_auto_trim(
+                |buf| ValueFormatRaw.format(input, buf),
+                AutoTrimFlag::PreserveWhiteSpaceOnly,
+            )?;
 
             let mut mask = Mask::empty();
 
@@ -952,7 +966,9 @@ pub mod string {
                 return Ok(());
             }
 
-            if !mask.intersects(Flag::Backtick | Flag::Control) {
+            const WS: Mask = mask!(Flag::NewLine | Flag::Tab | Flag::Space);
+
+            if !mask.intersects(Flag::Backtick | Flag::Control) && mask.intersects(!WS) {
                 buf.push(b'`');
                 buf.push(b'`');
                 buf[begin..].rotate_right(1);
@@ -998,7 +1014,7 @@ pub mod string {
             }
 
             let begin = buf.len();
-            buf.with_auto_trim(|buf| MessageFormatRaw.format(input, buf))?;
+            buf.with_auto_trim(|buf| MessageFormatRaw.format(input, buf), AutoTrimFlags::empty())?;
 
             let mut mask = Mask::empty();
 
@@ -1051,7 +1067,7 @@ pub mod string {
 
             let begin = buf.len();
             buf.push(b'"');
-            buf.with_auto_trim(|buf| MessageFormatRaw.format(input, buf))?;
+            buf.with_auto_trim(|buf| MessageFormatRaw.format(input, buf), AutoTrimFlags::empty())?;
 
             let mut mask = Mask::empty();
 
@@ -1100,7 +1116,7 @@ pub mod string {
             }
 
             let begin = buf.len();
-            buf.with_auto_trim(|buf| MessageFormatRaw.format(input, buf))?;
+            buf.with_auto_trim(|buf| MessageFormatRaw.format(input, buf), AutoTrimFlags::empty())?;
 
             let mut mask = Mask::empty();
 

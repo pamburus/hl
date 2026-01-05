@@ -1178,9 +1178,9 @@ mod string {
     #[case::trailing_newline("hello\n", "hello")]
     #[case::trailing_crlf("hello\r\n", "hello")]
     #[case::multiple_trailing("text   \t\n", "text")]
-    // Only whitespace after trimming still produces output, just empty after trim
-    #[case::only_spaces("   ", "")]
-    #[case::only_tabs("\t\t", "")]
+    // Only whitespace requires quoting
+    #[case::only_spaces("   ", r#""   ""#)]
+    #[case::only_tabs("\t\t", r#""\t\t""#)]
     // Leading whitespace is preserved and triggers quoting
     #[case::leading_space(" hello", r#"" hello""#)]
     // Leading tab uses backticks
@@ -1205,7 +1205,21 @@ mod string {
     }
 
     // ---
-    // Test 8: ValueFormatAuto special characters and edge cases
+    // Test 8: ValueFormatAuto error handling
+    // ---
+
+    #[test]
+    fn test_value_format_auto_invalid_json() {
+        use encstr::json::JsonEncodedString;
+
+        let invalid_json = JsonEncodedString::new(r#""invalid\xZZ""#);
+        let mut buf = Vec::new();
+        let result = ValueFormatAuto.format(EncodedString::Json(invalid_json), &mut buf);
+        assert!(result.is_err());
+    }
+
+    // ---
+    // Test 9: ValueFormatAuto special characters and edge cases
     // ---
 
     #[rstest]
@@ -1593,7 +1607,7 @@ mod string {
     #[case::trailing_space("message ", " | ", "message | ")]
     #[case::trailing_tab("message\t", " | ", "message | ")]
     #[case::trailing_newline("message\n", " | ", "message | ")]
-    // Whitespace-only: empty check is on input (before trim), so delimiter is appended
+    // Whitespace-only: trimmed to empty, so only delimiter appears
     #[case::only_spaces("   ", " | ", " | ")]
     fn test_message_format_delimited_whitespace(#[case] input: &str, #[case] delim: &str, #[case] expected: &str) {
         let formatter = MessageFormatDelimited::new(delim.to_string());
