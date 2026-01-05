@@ -1288,6 +1288,53 @@ mod string {
     }
 
     // ---
+    // Test 11b: ValueFormatDoubleQuoted - complete control character suite
+    // ---
+
+    #[rstest]
+    // 0x00-0x08
+    #[case::nul("\x00", r#""\u0000""#)]
+    #[case::soh("\x01", r#""\u0001""#)]
+    #[case::stx("\x02", r#""\u0002""#)]
+    #[case::etx("\x03", r#""\u0003""#)]
+    #[case::eot("\x04", r#""\u0004""#)]
+    #[case::enq("\x05", r#""\u0005""#)]
+    #[case::ack("\x06", r#""\u0006""#)]
+    #[case::bel("\x07", r#""\u0007""#)]
+    #[case::bs("\x08", r#""\b""#)]
+    // 0x09-0x0d (special handling)
+    #[case::ht("\x09", r#""\t""#)]
+    #[case::lf("\x0a", r#""\n""#)]
+    #[case::vt("\x0b", r#""\u000b""#)]
+    #[case::ff("\x0c", r#""\f""#)]
+    #[case::cr("\x0d", r#""\r""#)]
+    // 0x0e-0x1f
+    #[case::so("\x0e", r#""\u000e""#)]
+    #[case::si("\x0f", r#""\u000f""#)]
+    #[case::dle("\x10", r#""\u0010""#)]
+    #[case::dc1("\x11", r#""\u0011""#)]
+    #[case::dc2("\x12", r#""\u0012""#)]
+    #[case::dc3("\x13", r#""\u0013""#)]
+    #[case::dc4("\x14", r#""\u0014""#)]
+    #[case::nak("\x15", r#""\u0015""#)]
+    #[case::syn("\x16", r#""\u0016""#)]
+    #[case::etb("\x17", r#""\u0017""#)]
+    #[case::can("\x18", r#""\u0018""#)]
+    #[case::em("\x19", r#""\u0019""#)]
+    #[case::sub("\x1a", r#""\u001a""#)]
+    #[case::esc("\x1b", r#""\u001b""#)]
+    #[case::fs("\x1c", r#""\u001c""#)]
+    #[case::gs("\x1d", r#""\u001d""#)]
+    #[case::rs("\x1e", r#""\u001e""#)]
+    #[case::us("\x1f", r#""\u001f""#)]
+    // DEL (0x7F) - Now escaped to match jq and best practice
+    #[case::del("\x7f", r#""\u007f""#)]
+    fn test_value_format_double_quoted_control_chars(#[case] input: &str, #[case] expected: &str) {
+        // Tests the complete control character suite (0x00-0x1F, 0x7F)
+        assert_formats_to(&ValueFormatDoubleQuoted, input, expected);
+    }
+
+    // ---
     // Test 12: MessageFormatAutoQuoted - empty handling
     // ---
 
@@ -1592,6 +1639,53 @@ mod string {
     #[case::vertical_tab("\x0b", r#""\u000b""#)]
     #[case::form_feed("\x0c", r#""\f""#)]
     fn test_message_format_double_quoted(#[case] input: &str, #[case] expected: &str) {
+        assert_formats_to(&MessageFormatDoubleQuoted, input, expected);
+    }
+
+    // ---
+    // Test 31b: MessageFormatDoubleQuoted - complete control character suite
+    // ---
+
+    #[rstest]
+    // 0x00-0x08
+    #[case::nul("\x00", r#""\u0000""#)]
+    #[case::soh("\x01", r#""\u0001""#)]
+    #[case::stx("\x02", r#""\u0002""#)]
+    #[case::etx("\x03", r#""\u0003""#)]
+    #[case::eot("\x04", r#""\u0004""#)]
+    #[case::enq("\x05", r#""\u0005""#)]
+    #[case::ack("\x06", r#""\u0006""#)]
+    #[case::bel("\x07", r#""\u0007""#)]
+    #[case::bs("\x08", r#""\b""#)]
+    // 0x09-0x0d (special handling)
+    #[case::ht("\x09", r#""\t""#)]
+    #[case::lf("\x0a", r#""\n""#)]
+    #[case::vt("\x0b", r#""\u000b""#)]
+    #[case::ff("\x0c", r#""\f""#)]
+    #[case::cr("\x0d", r#""\r""#)]
+    // 0x0e-0x1f
+    #[case::so("\x0e", r#""\u000e""#)]
+    #[case::si("\x0f", r#""\u000f""#)]
+    #[case::dle("\x10", r#""\u0010""#)]
+    #[case::dc1("\x11", r#""\u0011""#)]
+    #[case::dc2("\x12", r#""\u0012""#)]
+    #[case::dc3("\x13", r#""\u0013""#)]
+    #[case::dc4("\x14", r#""\u0014""#)]
+    #[case::nak("\x15", r#""\u0015""#)]
+    #[case::syn("\x16", r#""\u0016""#)]
+    #[case::etb("\x17", r#""\u0017""#)]
+    #[case::can("\x18", r#""\u0018""#)]
+    #[case::em("\x19", r#""\u0019""#)]
+    #[case::sub("\x1a", r#""\u001a""#)]
+    #[case::esc("\x1b", r#""\u001b""#)]
+    #[case::fs("\x1c", r#""\u001c""#)]
+    #[case::gs("\x1d", r#""\u001d""#)]
+    #[case::rs("\x1e", r#""\u001e""#)]
+    #[case::us("\x1f", r#""\u001f""#)]
+    // DEL (0x7F) - Now escaped to match jq and best practice
+    #[case::del("\x7f", r#""\u007f""#)]
+    fn test_message_format_double_quoted_control_chars(#[case] input: &str, #[case] expected: &str) {
+        // Tests the complete control character suite (0x00-0x1F, 0x7F)
         assert_formats_to(&MessageFormatDoubleQuoted, input, expected);
     }
 
