@@ -39,7 +39,7 @@ use crate::{
     formatting::{DynRecordWithSourceFormatter, RawRecordFormatter, RecordFormatterBuilder, RecordWithSourceFormatter},
     fsmon::{self, EventKind},
     index::{Indexer, IndexerSettings, Timestamp},
-    input::{BlockLine, Input, InputHolder, InputReference},
+    input::{BlockEntry, Input, InputHolder, InputReference},
     model::{Filter, Parser, ParserSettings, RawRecord, Record, RecordFilter, RecordWithSourceConstructor},
     query::Query,
     scanning::{BufFactory, Delimit, Delimiter, Scanner, SearchExt, Segment, SegmentBuf, SegmentBufFactory},
@@ -355,7 +355,7 @@ impl App {
                     writeln!(output, "block at {} with size {}", block.offset(), block.size())?;
                     writeln!(output, "{:#?}", block.source_block())?;
                     let block_offset = block.offset();
-                    for line in block.into_lines()? {
+                    for line in block.into_entries()? {
                         writeln!(
                             output,
                             "{} bytes at {} (absolute {})",
@@ -386,7 +386,7 @@ impl App {
                     .flat_map(|(i, input)| input.into_blocks().map(move |block| (block, i)))
                     .filter_map(|(block, i)| {
                         let src = block.source_block();
-                        if src.stat.lines_valid == 0 {
+                        if src.stat.entries_valid == 0 {
                             return None;
                         }
                         if let Some((ts_min, ts_max)) = src.stat.ts_min_max {
@@ -430,8 +430,8 @@ impl App {
                     let mut processor = self.new_segment_processor(parser);
                     for (block, ts_min, i, j) in rxp.iter() {
                         let mut buf = Vec::with_capacity(2 * usize::try_from(block.size())?);
-                        let mut items = Vec::with_capacity(2 * usize::try_from(block.lines_valid())?);
-                        for line in block.into_lines()? {
+                        let mut items = Vec::with_capacity(2 * usize::try_from(block.entries_valid())?);
+                        for line in block.into_entries()? {
                             if line.is_empty() {
                                 continue;
                             }
@@ -1094,11 +1094,11 @@ struct OutputBlock {
 }
 
 impl OutputBlock {
-    pub fn into_lines(self) -> impl Iterator<Item = (Timestamp, BlockLine)> {
+    pub fn into_lines(self) -> impl Iterator<Item = (Timestamp, BlockEntry)> {
         let buf = self.buf;
         self.items
             .into_iter()
-            .map(move |(ts, range)| (ts, BlockLine::new(buf.clone(), range.clone())))
+            .map(move |(ts, range)| (ts, BlockEntry::new(buf.clone(), range.clone())))
     }
 }
 

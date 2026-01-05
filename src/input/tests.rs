@@ -174,8 +174,8 @@ fn test_indexed_input_stdin() {
     let mut blocks = input.into_blocks().collect_vec();
     assert_eq!(blocks.len(), 1);
     let block = blocks.drain(..).next().unwrap();
-    assert_eq!(block.lines_valid(), 1);
-    let mut lines = block.into_lines().unwrap().collect_vec();
+    assert_eq!(block.entries_valid(), 1);
+    let mut lines = block.into_entries().unwrap().collect_vec();
     let line = lines.drain(..).next().unwrap();
     assert_eq!(line.bytes(), data);
 }
@@ -197,14 +197,14 @@ fn test_indexed_input_file_random_access() {
         let input = IndexedInput::open(&path, &indexer).unwrap();
         let mut blocks = input.into_blocks().sorted().collect_vec();
         assert_eq!(blocks.len(), 2);
-        assert_eq!(blocks[0].lines_valid(), 1);
+        assert_eq!(blocks[0].entries_valid(), 1);
         assert_matches!(blocks[0].size(), 74 | 75);
-        assert_eq!(blocks[1].lines_valid(), 1);
+        assert_eq!(blocks[1].entries_valid(), 1);
         assert_matches!(blocks[1].size(), 73 | 74);
-        let lines = blocks.pop().unwrap().into_lines().unwrap().collect_vec();
+        let lines = blocks.pop().unwrap().into_entries().unwrap().collect_vec();
         assert_eq!(lines.len(), 1);
         assert_matches!(lines[0].len(), 73 | 74);
-        let lines = blocks.pop().unwrap().into_lines().unwrap().collect_vec();
+        let lines = blocks.pop().unwrap().into_entries().unwrap().collect_vec();
         assert_eq!(lines.len(), 1);
         assert_matches!(lines[0].len(), 74 | 75);
     }
@@ -229,14 +229,14 @@ fn test_indexed_input_sequential_access() {
         let input = IndexedInput::from_stream(reference, stream, &indexer).unwrap();
         let mut blocks = input.into_blocks().sorted().collect_vec();
         assert_eq!(blocks.len(), 2);
-        assert_eq!(blocks[0].lines_valid(), 1);
+        assert_eq!(blocks[0].entries_valid(), 1);
         assert_matches!(blocks[0].size(), 74 | 75);
-        assert_eq!(blocks[1].lines_valid(), 1);
+        assert_eq!(blocks[1].entries_valid(), 1);
         assert_matches!(blocks[1].size(), 73 | 74);
-        let lines = blocks.pop().unwrap().into_lines().unwrap().collect_vec();
+        let lines = blocks.pop().unwrap().into_entries().unwrap().collect_vec();
         assert_eq!(lines.len(), 1);
         assert_matches!(lines[0].len(), 73 | 74);
-        let lines = blocks.pop().unwrap().into_lines().unwrap().collect_vec();
+        let lines = blocks.pop().unwrap().into_entries().unwrap().collect_vec();
         assert_eq!(lines.len(), 1);
         assert_matches!(lines[0].len(), 74 | 75);
     }

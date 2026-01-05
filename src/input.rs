@@ -632,8 +632,8 @@ impl Block<IndexedInput> {
     }
 
     #[inline]
-    pub fn into_lines(self) -> Result<BlockLines<IndexedInput>> {
-        BlockLines::new(self)
+    pub fn into_entries(self) -> Result<BlockEntries<IndexedInput>> {
+        BlockEntries::new(self)
     }
 
     #[inline]
@@ -652,14 +652,14 @@ impl Block<IndexedInput> {
     }
 
     #[inline]
-    pub fn lines_valid(&self) -> u64 {
-        self.source_block().stat.lines_valid
+    pub fn entries_valid(&self) -> u64 {
+        self.source_block().stat.entries_valid
     }
 }
 
 // ---
 
-pub struct BlockLines<I> {
+pub struct BlockEntries<I> {
     block: Block<I>,
     buf: Arc<Vec<u8>>,
     total: usize,
@@ -668,7 +668,7 @@ pub struct BlockLines<I> {
     jump: usize,
 }
 
-impl BlockLines<IndexedInput> {
+impl BlockEntries<IndexedInput> {
     pub fn new(mut block: Block<IndexedInput>) -> Result<Self> {
         let (buf, total) = {
             let block = &mut block;
@@ -678,7 +678,7 @@ impl BlockLines<IndexedInput> {
             let mut stream = block.input.stream.lock().unwrap();
             stream.seek(SeekFrom::Start(source_block.offset))?;
             stream.read_fill(&mut buf)?;
-            let total = (source_block.stat.lines_valid + source_block.stat.lines_invalid).try_into()?;
+            let total = (source_block.stat.entries_valid + source_block.stat.entries_invalid).try_into()?;
             (buf, total)
         };
         Ok(Self {
@@ -692,8 +692,8 @@ impl BlockLines<IndexedInput> {
     }
 }
 
-impl Iterator for BlockLines<IndexedInput> {
-    type Item = BlockLine;
+impl Iterator for BlockEntries<IndexedInput> {
+    type Item = BlockEntry;
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.current >= self.total {
@@ -722,7 +722,7 @@ impl Iterator for BlockLines<IndexedInput> {
         self.byte += l;
         self.current += 1;
 
-        Some(BlockLine::new(self.buf.clone(), offset..offset + l))
+        Some(BlockEntry::new(self.buf.clone(), offset..offset + l))
     }
 
     #[inline]
@@ -739,12 +739,12 @@ impl Iterator for BlockLines<IndexedInput> {
 
 // ---
 
-pub struct BlockLine {
+pub struct BlockEntry {
     buf: Arc<Vec<u8>>,
     range: Range<usize>,
 }
 
-impl BlockLine {
+impl BlockEntry {
     #[inline]
     pub fn new(buf: Arc<Vec<u8>>, range: Range<usize>) -> Self {
         Self { buf, range }

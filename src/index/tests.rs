@@ -42,8 +42,8 @@ fn test_process_file_success() {
     assert_eq!(index.source.size, data.len() as u64);
     assert_eq!(index.source.path, "/tmp/test.log");
     assert_eq!(index.source.modified, (1714739340, 0));
-    assert_eq!(index.source.stat.lines_valid, 3);
-    assert_eq!(index.source.stat.lines_invalid, 0);
+    assert_eq!(index.source.stat.entries_valid, 3);
+    assert_eq!(index.source.stat.entries_invalid, 0);
     assert_eq!(index.source.stat.flags, schema::FLAG_HAS_TIMESTAMPS);
     assert_eq!(
         index.source.stat.ts_min_max,
@@ -53,8 +53,8 @@ fn test_process_file_success() {
         ))
     );
     assert_eq!(index.source.blocks.len(), 1);
-    assert_eq!(index.source.blocks[0].stat.lines_valid, 3);
-    assert_eq!(index.source.blocks[0].stat.lines_invalid, 0);
+    assert_eq!(index.source.blocks[0].stat.entries_valid, 3);
+    assert_eq!(index.source.blocks[0].stat.entries_invalid, 0);
     assert_eq!(index.source.blocks[0].stat.flags, schema::FLAG_HAS_TIMESTAMPS);
     assert_eq!(
         index.source.blocks[0].stat.ts_min_max,
@@ -115,8 +115,8 @@ fn test_indexer() {
             Component::Normal(std::ffi::OsStr::new("test.log")),
         ],
     );
-    assert_eq!(index1.source.stat.lines_valid, 1);
-    assert_eq!(index1.source.stat.lines_invalid, 0);
+    assert_eq!(index1.source.stat.entries_valid, 1);
+    assert_eq!(index1.source.stat.entries_invalid, 0);
     assert_eq!(index1.source.stat.flags, schema::FLAG_HAS_TIMESTAMPS);
     assert_eq!(index1.source.blocks.len(), 1);
 
@@ -190,8 +190,8 @@ fn test_source_block() {
         4096,
         Stat {
             flags: FLAG_LEVEL_TRACE | FLAG_LEVEL_INFO,
-            lines_valid: 128,
-            lines_invalid: 5,
+            entries_valid: 128,
+            entries_invalid: 5,
             ts_min_max: Some((
                 Timestamp::from((1701680250, 91243000)),
                 Timestamp::from((1701680467, 91633000)),
@@ -214,8 +214,8 @@ fn test_source_block() {
         4096,
         Stat {
             flags: FLAG_LEVEL_INFO | FLAG_LEVEL_ERROR,
-            lines_valid: 64,
-            lines_invalid: 2,
+            entries_valid: 64,
+            entries_invalid: 2,
             ts_min_max: Some((
                 Timestamp::from((1701680467, 91242000)),
                 Timestamp::from((1701680467, 91633000)),
@@ -245,6 +245,62 @@ fn test_indexer_settings_default() {
     // The Default implementation should call with_fs(FS::default())
 }
 
+#[test]
+fn test_indexer_with_json_delimiter() {
+    use crate::scanning::Delimiter;
+
+    let fs = vfs::mem::FileSystem::new();
+
+    let data = br#"{
+  "timestamp": "2024-01-01T00:00:02Z",
+  "level": "error",
+  "message": "third"
+}
+{
+  "timestamp": "2024-01-01T00:00:00Z",
+  "level": "info",
+  "message": "first"
+}
+{
+  "timestamp": "2024-01-01T00:00:01Z",
+  "level": "warn",
+  "message": "second"
+}
+"#;
+    let mut file = fs.create(&PathBuf::from("test.log")).unwrap();
+    file.write_all(data).unwrap();
+
+    let indexer = Indexer::new(
+        1,
+        PathBuf::from("/tmp/cache"),
+        IndexerSettings {
+            buffer_size: nonzero!(4096u32).into(),
+            delimiter: Delimiter::Json,
+            ..IndexerSettings::with_fs(fs)
+        },
+    );
+
+    let index = indexer.index(&PathBuf::from("test.log")).unwrap();
+
+    eprintln!("Number of blocks: {}", index.source.blocks.len());
+    for (i, block) in index.source.blocks.iter().enumerate() {
+        eprintln!(
+            "Block {}: offset={}, size={}, lines_valid={}, lines_invalid={}",
+            i, block.offset, block.size, block.stat.entries_valid, block.stat.entries_invalid
+        );
+        eprintln!(
+            "  chronology: bitmap.len={}, offsets.len={}, jumps={:?}",
+            block.chronology.bitmap.len(),
+            block.chronology.offsets.len(),
+            block.chronology.jumps
+        );
+    }
+
+    // Verify we found all 3 valid lines across all blocks
+    assert_eq!(index.source.stat.entries_valid, 3);
+    assert_eq!(index.source.stat.entries_invalid, 0);
+}
+
 // ---
 
 struct FailingReader;
@@ -262,8 +318,8 @@ fn test_stat_default() {
 
     // Both should have the same initial state
     assert_eq!(stat1.flags, stat2.flags);
-    assert_eq!(stat1.lines_valid, stat2.lines_valid);
-    assert_eq!(stat1.lines_invalid, stat2.lines_invalid);
+    assert_eq!(stat1.entries_valid, stat2.entries_valid);
+    assert_eq!(stat1.entries_invalid, stat2.entries_invalid);
     assert_eq!(stat1.ts_min_max, stat2.ts_min_max);
 }
 
