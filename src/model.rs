@@ -47,7 +47,7 @@ pub const MAX_NUMBER_LEN: usize = 39;
 
 // ---
 
-#[inline]
+#[inline(always)]
 pub fn looks_like_number(value: &[u8]) -> bool {
     if value.len() > MAX_NUMBER_LEN {
         return false;
