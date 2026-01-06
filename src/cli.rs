@@ -413,7 +413,7 @@ pub struct Opt {
     /// • <c>lf</>: Line feed (\n)
     /// • <c>crlf</>: Carriage return + line feed (\r\n)
     /// • <c>nul</>: Null character (\0)
-    /// • <c>json</>: JSON object boundaries containing new line characters (CR/LF/CRLF)
+    /// • <c>json</>: JSON object boundaries containing new line characters (CR/LF/CRLF), default for <c>--input-format json</>
     #[arg(long, env = "HL_DELIMITER", overrides_with = "delimiter", help_heading = heading::INPUT)]
     pub delimiter: Option<Delimiter>,
 
