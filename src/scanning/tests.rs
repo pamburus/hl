@@ -652,6 +652,16 @@ fn test_auto_delimiter_search_l_edge_cases() {
     // At end of buffer (edge=false) - None because at boundary
     let buf = b"line1\n";
     let result = searcher.search_l(buf, false);
+    assert_eq!(result, Some(5..6));
+
+    // At end of buffer (edge=true)
+    let buf = b"\nline1";
+    let result = searcher.search_l(buf, true);
+    assert_eq!(result, Some(0..1));
+
+    // At end of buffer (edge=false) - None because at boundary
+    let buf = b"\nline1";
+    let result = searcher.search_l(buf, false);
     assert_eq!(result, None);
 
     // Empty buffer
@@ -1285,9 +1295,9 @@ fn test_json_delimiter_full_pretty_log_case() {
     // Test with single-line JSON (like the simple test file)
     let buf_simple = b"{\"a\":1}\n{\"b\":2}\nasd\n{\"c\":3}\n";
     let mut entries_simple = Vec::new();
-    let mut splits_simple = searcher.split(buf_simple);
+    let splits_simple = searcher.split(buf_simple);
 
-    while let Some(entry) = splits_simple.next() {
+    for entry in splits_simple {
         entries_simple.push(entry);
     }
 

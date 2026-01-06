@@ -30,7 +30,7 @@ impl Search for AutoDelimitSearcher {
             }
 
             match buf.get(range.end) {
-                Some(b'}' | b' ' | b'\t') | None => {}
+                Some(b'}' | b' ' | b'\t') => {}
                 _ => return Some(range),
             }
 
@@ -50,7 +50,7 @@ impl Search for AutoDelimitSearcher {
             }
 
             match buf.get(range.end) {
-                Some(b'}' | b' ' | b'\t') | None => {}
+                Some(b'}' | b' ' | b'\t') => {}
                 _ => return Some(range),
             }
 
