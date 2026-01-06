@@ -142,3 +142,6 @@ fn resolve_delimiter(buf: &[u8], i: usize, edge: bool) -> Option<Range<usize>> {
     }
     None
 }
+
+#[cfg(test)]
+mod tests;
