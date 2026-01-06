@@ -111,7 +111,7 @@ fn find_right_boundary_end(s: &[u8], edge: bool) -> Option<usize> {
                     first_newline = Some(i + 1);
                 }
             }
-            b',' | b']' => return None,
+            b',' | b'[' | b']' | b'}' => return None,
             _ => return first_newline,
         }
     }
