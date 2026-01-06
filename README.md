@@ -774,8 +774,8 @@ Filtering Options:
   -l, --level <LEVEL>    Display entries with level >= <LEVEL> [env: HL_LEVEL=]
       --since <TIME>     Display entries with timestamp >= <TIME>
       --until <TIME>     Display entries with timestamp <= <TIME>
-  -f, --filter <FILTER>  Filter entries by field values [k=v, k~=v, k~~=v, 'k!=v', 'k?!=v', etc]
-  -q, --query <QUERY>    Filter entries using query expression ['status>=400 or duration>=15', etc]
+  -f, --filter <FILTER>  Filter entries by matching field values [k=v, k~=v, k~~=v, 'k!=v', 'k?!=v', etc]
+  -q, --query <QUERY>    Filter entries using a query expression ['status>=400 or duration>=15', etc]
 
 Output Options:
       --color [<WHEN>]        Whether to use ANSI colors and styles [env: HL_COLOR=] [default: auto] [possible values: auto, always, never]
@@ -809,7 +809,7 @@ Advanced Options:
   -C, --concurrency <N>             Number of processing threads [env: HL_CONCURRENCY=]
       --shell-completions <SHELL>   Print shell auto-completion script and exit [possible values: bash, elvish, fish, powershell, zsh]
       --man-page                    Print man page and exit
-      --list-themes[=<TAGS>]        Print available themes optionally filtered by tags [possible values: dark, light, 16color, 256color, truecolor, base, overlay]
+      --list-themes[=<TAGS>]        Print available themes optionally filtered by tags [possible values: dark, light, 16color, 256color, truecolor, overlay, base]
       --dump-index                  Print debug index metadata (in --sort mode) and exit
 ```
 
