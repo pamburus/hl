@@ -78,3 +78,6 @@ impl Search for AutoDelimitSearcher {
         SmartNewLineSearcher.partial_match_l(buf)
     }
 }
+
+#[cfg(test)]
+mod tests;
