@@ -605,10 +605,9 @@ fn test_auto_delimiter_search_l_basic() {
 
     // CRLF followed by regular character
     // SmartNewLineSearcher with edge=false skips first byte, finds \n at relative position 5
-    // checks buf[5-1]=buf[4]='1' (not \r), so returns 6..7 (just the \n)
     let buf = b"line1\r\nline2";
     let result = searcher.search_l(buf, false);
-    assert_eq!(result, Some(6..7));
+    assert_eq!(result, Some(5..7));
 }
 
 #[test]
