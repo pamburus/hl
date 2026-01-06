@@ -25,7 +25,7 @@ impl Search for AutoDelimitSearcher {
     fn search_r(&self, buf: &[u8], edge: bool) -> Option<Range<usize>> {
         let mut r = buf.len();
         while let Some(range) = SmartNewLineSearcher.search_r(&buf[..r], edge) {
-            if range.start == 0 && edge {
+            if edge && range.end == buf.len() {
                 return Some(range);
             }
 
@@ -45,7 +45,7 @@ impl Search for AutoDelimitSearcher {
         while let Some(range) = SmartNewLineSearcher.search_l(&buf[l..], edge) {
             let range = (l + range.start)..(l + range.end);
 
-            if range.end >= buf.len() && edge {
+            if edge && range.start == 0 {
                 return Some(range);
             }
 
