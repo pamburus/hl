@@ -2,10 +2,10 @@
 use std::ops::Range;
 
 // third-party imports
-use memchr::{memchr, memchr_iter, memrchr, memrchr_iter};
+use memchr::{memchr, memchr2_iter, memrchr, memrchr2_iter};
 
 // relative imports
-use super::{Delimit, Search};
+use super::{Delimit, Search, SmartNewLineSearcher};
 
 #[derive(Clone)]
 pub struct JsonDelimiter;
@@ -25,37 +25,36 @@ pub struct JsonDelimitSearcher;
 impl Search for JsonDelimitSearcher {
     #[inline]
     fn search_r(&self, buf: &[u8], edge: bool) -> Option<Range<usize>> {
-        for j in memrchr_iter(b'{', buf) {
-            if let Some(i) = memrchr(b'}', &buf[..j]) {
-                if valid_space(&buf[i + 1..j]) {
-                    return Some(i + 1..j);
-                }
-            } else if edge && valid_space(&buf[..j]) {
-                return Some(0..j);
+        for i in memrchr2_iter(b'{', b'}', buf) {
+            if let Some(range) = resolve_delimiter(buf, i, edge) {
+                return Some(range);
             }
         }
-        None
+        if edge {
+            SmartNewLineSearcher.search_l(buf, edge)
+        } else {
+            None
+        }
     }
 
     #[inline]
     fn search_l(&self, buf: &[u8], edge: bool) -> Option<Range<usize>> {
-        for i in memchr_iter(b'}', buf) {
-            if let Some(j) = memchr(b'{', &buf[i..]) {
-                let j = i + j;
-                if valid_space(&buf[i + 1..j]) {
-                    return Some(i + 1..j);
-                }
-            } else if edge && valid_space(&buf[i + 1..]) {
-                return Some(i + 1..buf.len());
+        for i in memchr2_iter(b'{', b'}', buf) {
+            if let Some(range) = resolve_delimiter(buf, i, edge) {
+                return Some(range);
             }
         }
-        None
+        if edge {
+            SmartNewLineSearcher.search_r(buf, edge)
+        } else {
+            None
+        }
     }
 
     #[inline]
     fn partial_match_r(&self, buf: &[u8]) -> Option<usize> {
         if let Some(i) = memrchr(b'}', buf) {
-            if valid_space(&buf[i + 1..]) {
+            if whitespace_only(&buf[i + 1..]) {
                 return Some(i + 1);
             }
         }
@@ -65,7 +64,7 @@ impl Search for JsonDelimitSearcher {
     #[inline]
     fn partial_match_l(&self, buf: &[u8]) -> Option<usize> {
         if let Some(i) = memchr(b'{', buf) {
-            if valid_space(&buf[..i]) {
+            if whitespace_only(&buf[..i]) {
                 return Some(i);
             }
         }
@@ -74,16 +73,59 @@ impl Search for JsonDelimitSearcher {
 }
 
 #[inline]
-fn valid_space(s: &[u8]) -> bool {
-    let mut has_newlines = false;
+fn whitespace_only(s: &[u8]) -> bool {
+    s.iter().all(|&c| matches!(c, b' ' | b'\t' | b'\n' | b'\r'))
+}
 
-    for &c in s {
+#[inline]
+fn find_left_boundary_begin(s: &[u8], edge: bool) -> Option<usize> {
+    let mut has_newlines = false;
+    for (i, &c) in s.iter().enumerate().rev() {
         match c {
+            b' ' | b'\t' => continue,
             b'\n' | b'\r' => has_newlines = true,
-            b' ' | b'\t' => {}
-            _ => return false,
+            b',' | b'[' | b':' => return None,
+            _ => return if has_newlines { Some(i + 1) } else { None },
         }
     }
+    if edge { Some(0) } else { None }
+}
 
-    has_newlines
+#[inline]
+fn find_right_boundary_end(s: &[u8], edge: bool) -> Option<usize> {
+    let mut has_newlines = false;
+    for (i, &c) in s.iter().enumerate() {
+        match c {
+            b' ' | b'\t' => continue,
+            b'\n' | b'\r' => has_newlines = true,
+            b',' | b']' => return None,
+            _ => return if has_newlines { Some(i) } else { None },
+        }
+    }
+    if edge { Some(s.len()) } else { None }
+}
+
+#[inline]
+fn resolve_delimiter(buf: &[u8], i: usize, edge: bool) -> Option<Range<usize>> {
+    let c = buf[i];
+    match c {
+        b'}' => {
+            let i = i + 1;
+            if i < buf.len() {
+                if let Some(j) = find_right_boundary_end(&buf[i..], edge) {
+                    let j = i + j;
+                    return Some(i..j);
+                }
+            }
+        }
+        b'{' => {
+            if i != 0 {
+                if let Some(j) = find_left_boundary_begin(&buf[..i], edge) {
+                    return Some(j..i);
+                }
+            }
+        }
+        _ => {}
+    }
+    None
 }
