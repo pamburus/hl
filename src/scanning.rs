@@ -16,9 +16,11 @@ use crate::error::*;
 
 // ---
 
+mod auto;
 mod json;
 
 // Re-export JSON delimiter
+pub use auto::AutoDelimiter;
 pub use json::JsonDelimiter;
 
 /// Scans input stream and splits it into segments containing a whole number of tokens delimited by the given delimiter.
@@ -45,21 +47,16 @@ impl<D: Delimit> Scanner<D> {
 // ---
 
 /// Defines a token delimiter for Scanner.
-#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
 pub enum Delimiter {
+    #[default]
+    Auto,
     Byte(u8),
     Bytes(Arc<[u8]>),
     Char(char),
     Str(Arc<str>),
     SmartNewLine,
     Json,
-}
-
-impl Default for Delimiter {
-    #[inline]
-    fn default() -> Self {
-        Self::SmartNewLine
-    }
 }
 
 impl From<u8> for Delimiter {
@@ -137,6 +134,7 @@ impl Delimit for Delimiter {
             Self::Str(s) => Arc::new(s.into_searcher()),
             Self::SmartNewLine => Arc::new(SmartNewLine.into_searcher()),
             Self::Json => Arc::new(JsonDelimiter.into_searcher()),
+            Self::Auto => Arc::new(AutoDelimiter.into_searcher()),
         }
     }
 }

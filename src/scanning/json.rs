@@ -19,7 +19,7 @@ impl Delimit for JsonDelimiter {
     }
 }
 
-/// Searches for a new line in a byte slice that can be either LF or CRLF.
+/// Searches for a whitespace boundary between two top-level JSON objects.
 pub struct JsonDelimitSearcher;
 
 impl Search for JsonDelimitSearcher {

@@ -235,6 +235,7 @@ fn run() -> Result<()> {
             "cr" => Delimiter::Byte(b'\r'),
             "crlf" => Delimiter::SmartNewLine,
             "json" => Delimiter::Json,
+            "auto" => Delimiter::Auto,
             _ => {
                 if d.len() == 1 {
                     Delimiter::Byte(d.as_bytes()[0])
