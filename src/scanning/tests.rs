@@ -1,4 +1,5 @@
 use super::*;
+use rstest::rstest;
 
 #[test]
 fn test_empty() {
@@ -365,4 +366,148 @@ fn test_smart_newline_searcher_partial_match_l() {
     let buf = b"\rtest";
     let result = searcher.partial_match_l(buf);
     assert_eq!(result, None);
+}
+
+#[rstest]
+#[case(b"test\n", false, Some(4..5))] // case 1
+#[case(b"test\n", true, Some(4..5))] // case 2
+#[case(b"test\r\n", false, Some(4..6))] // case 3
+#[case(b"test\r\n", true, Some(4..6))] // case 4
+#[case(b"\n", false, None)] // case 5
+#[case(b"\n", true, Some(0..1))] // case 6
+#[case(b"\r\n", false, Some(0..2))] // case 7
+#[case(b"\r\n", true, Some(0..2))] // case 8
+#[case(b"no newline", false, None)] // case 9
+#[case(b"no newline", true, None)] // case 10
+#[case(b"", false, None)] // case 11
+#[case(b"", true, None)] // case 12
+fn test_smart_newline_search_l_edge_cases(
+    #[case] buf: &[u8],
+    #[case] edge: bool,
+    #[case] expected: Option<Range<usize>>,
+) {
+    let searcher = SmartNewLineSearcher;
+    let result = searcher.search_l(buf, edge);
+    assert_eq!(result, expected);
+}
+
+#[rstest]
+#[case(b"first\nsecond\n", false, Some(5..6))] // case 1
+#[case(b"first\nsecond\n", true, Some(5..6))] // case 2
+#[case(b"first\r\nsecond\r\n", false, Some(5..7))] // case 3
+#[case(b"first\r\nsecond\r\n", true, Some(5..7))] // case 4
+#[case(b"a\nb\nc\n", false, Some(1..2))] // case 5
+#[case(b"a\nb\nc\n", true, Some(1..2))] // case 6
+#[case(b"a\r\nb\r\nc\r\n", false, Some(1..3))] // case 7
+#[case(b"a\r\nb\r\nc\r\n", true, Some(1..3))] // case 8
+fn test_smart_newline_search_l_multiple_newlines(
+    #[case] buf: &[u8],
+    #[case] edge: bool,
+    #[case] expected: Option<Range<usize>>,
+) {
+    let searcher = SmartNewLineSearcher;
+    let result = searcher.search_l(buf, edge);
+    assert_eq!(result, expected);
+}
+
+#[rstest]
+#[case(b"test\n", Some(4..5))] // case 1
+#[case(b"test\r\n", Some(4..6))] // case 2
+#[case(b"\n", Some(0..1))] // case 3
+#[case(b"\r\n", Some(0..2))] // case 4
+#[case(b"no newline", None)] // case 5
+#[case(b"", None)] // case 6
+#[case(b"first\nsecond\n", Some(12..13))] // case 7
+#[case(b"first\r\nsecond\r\n", Some(13..15))] // case 8
+fn test_smart_newline_search_r(#[case] buf: &[u8], #[case] expected: Option<Range<usize>>) {
+    let searcher = SmartNewLineSearcher;
+    let result = searcher.search_r(buf, false);
+    assert_eq!(result, expected);
+    let result = searcher.search_r(buf, true);
+    assert_eq!(result, expected);
+}
+
+#[rstest]
+#[case(b"\r", Some(0))] // case 1
+#[case(b"test\r", Some(4))] // case 2
+#[case(b"", None)] // case 3
+#[case(b"test", None)] // case 4
+#[case(b"test\n", None)] // case 5
+#[case(b"test\r\n", None)] // case 6
+fn test_smart_newline_partial_match_r(#[case] buf: &[u8], #[case] expected: Option<usize>) {
+    let searcher = SmartNewLineSearcher;
+    let result = searcher.partial_match_r(buf);
+    assert_eq!(result, expected);
+}
+
+#[test]
+fn test_smart_newline_split_mixed_line_endings() {
+    let searcher = SmartNewLineSearcher;
+    let buf = b"line1\nline2\r\nline3\nline4\r\n";
+    let parts: Vec<_> = searcher.split(buf).collect();
+    assert_eq!(parts, vec![&b"line1"[..], &b"line2"[..], &b"line3"[..], &b"line4"[..]]);
+}
+
+#[test]
+fn test_smart_newline_split_only_lf() {
+    let searcher = SmartNewLineSearcher;
+    let buf = b"a\nb\nc\n";
+    let parts: Vec<_> = searcher.split(buf).collect();
+    assert_eq!(parts, vec![&b"a"[..], &b"b"[..], &b"c"[..]]);
+}
+
+#[test]
+fn test_smart_newline_split_only_crlf() {
+    let searcher = SmartNewLineSearcher;
+    let buf = b"a\r\nb\r\nc\r\n";
+    let parts: Vec<_> = searcher.split(buf).collect();
+    assert_eq!(parts, vec![&b"a"[..], &b"b"[..], &b"c"[..]]);
+}
+
+#[test]
+fn test_smart_newline_split_empty_lines() {
+    let searcher = SmartNewLineSearcher;
+    let buf = b"a\n\nb\r\n\r\nc\n";
+    let parts: Vec<_> = searcher.split(buf).collect();
+    assert_eq!(parts, vec![&b"a"[..], &b""[..], &b"b"[..], &b""[..], &b"c"[..]]);
+}
+
+#[test]
+fn test_smart_newline_search_l_edge_false_with_crlf() {
+    let searcher = SmartNewLineSearcher;
+
+    // When edge=false, search_l skips the first byte
+    // This test verifies correct offset calculation for both LF and CRLF
+
+    // CRLF with edge=false at position 1
+    let buf = b"x\r\ntest";
+    let result = searcher.search_l(buf, false);
+    assert_eq!(
+        result,
+        Some(1..3),
+        "CRLF should be found at correct position with edge=false"
+    );
+
+    // LF with edge=false at position 1
+    let buf = b"x\ntest";
+    let result = searcher.search_l(buf, false);
+    assert_eq!(
+        result,
+        Some(1..2),
+        "LF should be found at correct position with edge=false"
+    );
+
+    // CRLF with edge=false at later position
+    let buf = b"abc\r\ndefg";
+    let result = searcher.search_l(buf, false);
+    assert_eq!(
+        result,
+        Some(3..5),
+        "CRLF at position 3 should be found correctly with edge=false"
+    );
+
+    // Verify edge=true still works correctly
+    let buf = b"\r\ntest";
+    let result = searcher.search_l(buf, true);
+    assert_eq!(result, Some(0..2), "CRLF at start should be found with edge=true");
 }
