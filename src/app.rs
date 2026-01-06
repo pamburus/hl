@@ -853,7 +853,7 @@ impl App {
     fn new_segment_processor<'a>(&'a self, parser: &'a Parser) -> impl SegmentProcess + 'a {
         let options = SegmentProcessorOptions {
             allow_prefix: self.options.allow_prefix,
-            allow_unparsed_data: self.options.filter.is_empty(),
+            allow_unparsed_data: self.options.filter.is_empty() && self.options.input_format.is_none(),
             delimiter: self.options.delimiter.clone(),
             input_format: self.options.input_format,
         };

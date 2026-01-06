@@ -549,7 +549,6 @@ pub enum Delimiter {
     Lf,
     Crlf,
     Nul,
-    Json,
 }
 
 #[derive(ValueEnum, Debug, Clone, Copy, PartialEq, Eq)]

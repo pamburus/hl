@@ -5,7 +5,7 @@ use std::ops::Range;
 use memchr::{memchr, memchr2_iter, memrchr, memrchr2_iter};
 
 // relative imports
-use super::{Delimit, Search, SmartNewLineSearcher};
+use super::{Delimit, Search};
 
 #[derive(Clone)]
 pub struct JsonDelimiter;
@@ -30,11 +30,7 @@ impl Search for JsonDelimitSearcher {
                 return Some(range);
             }
         }
-        if edge {
-            SmartNewLineSearcher.search_l(buf, edge)
-        } else {
-            None
-        }
+        None
     }
 
     #[inline]
@@ -44,11 +40,7 @@ impl Search for JsonDelimitSearcher {
                 return Some(range);
             }
         }
-        if edge {
-            SmartNewLineSearcher.search_r(buf, edge)
-        } else {
-            None
-        }
+        None
     }
 
     #[inline]

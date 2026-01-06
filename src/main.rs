@@ -234,11 +234,14 @@ fn run() -> Result<()> {
             cli::Delimiter::Lf => Delimiter::Byte(b'\n'),
             cli::Delimiter::Cr => Delimiter::Byte(b'\r'),
             cli::Delimiter::Crlf => Delimiter::SmartNewLine,
-            cli::Delimiter::Json => Delimiter::Json,
             cli::Delimiter::Auto => Delimiter::Auto,
         };
-    } else if opt.input_format == cli::InputFormat::Json {
-        delimiter = Delimiter::Json;
+    } else {
+        match opt.input_format {
+            cli::InputFormat::Json => delimiter = Delimiter::Json,
+            cli::InputFormat::Logfmt => delimiter = Delimiter::SmartNewLine,
+            cli::InputFormat::Auto => {}
+        }
     }
 
     let mut input_info = *opt.input_info;
