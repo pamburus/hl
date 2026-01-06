@@ -5,7 +5,7 @@ use std::ops::Range;
 use memchr::{memchr, memchr2_iter, memrchr, memrchr2_iter};
 
 // relative imports
-use super::{Delimit, Search};
+use super::{Delimit, Search, SmartNewLineSearcher};
 
 #[derive(Clone)]
 pub struct JsonDelimiter;
@@ -30,7 +30,11 @@ impl Search for JsonDelimitSearcher {
                 return Some(range);
             }
         }
-        None
+        if edge {
+            SmartNewLineSearcher.search_l(buf, edge)
+        } else {
+            None
+        }
     }
 
     #[inline]
@@ -40,7 +44,11 @@ impl Search for JsonDelimitSearcher {
                 return Some(range);
             }
         }
-        None
+        if edge {
+            SmartNewLineSearcher.search_r(buf, edge)
+        } else {
+            None
+        }
     }
 
     #[inline]
@@ -71,13 +79,22 @@ fn whitespace_only(s: &[u8]) -> bool {
 
 #[inline]
 fn find_left_boundary_begin(s: &[u8], edge: bool) -> Option<usize> {
-    let mut has_newlines = false;
+    let mut first_newline = None;
     for (i, &c) in s.iter().enumerate().rev() {
         match c {
-            b' ' | b'\t' => continue,
-            b'\n' | b'\r' => has_newlines = true,
+            b' ' | b'\t' => {}
+            b'\n' => {
+                if first_newline.is_none() {
+                    first_newline = Some(i)
+                }
+            }
+            b'\r' => {
+                if first_newline == Some(i + 1) {
+                    first_newline = Some(i);
+                }
+            }
             b',' | b'[' | b':' => return None,
-            _ => return if has_newlines { Some(i + 1) } else { None },
+            _ => return first_newline,
         }
     }
     if edge { Some(0) } else { None }
@@ -85,13 +102,17 @@ fn find_left_boundary_begin(s: &[u8], edge: bool) -> Option<usize> {
 
 #[inline]
 fn find_right_boundary_end(s: &[u8], edge: bool) -> Option<usize> {
-    let mut has_newlines = false;
+    let mut first_newline = None;
     for (i, &c) in s.iter().enumerate() {
         match c {
-            b' ' | b'\t' => continue,
-            b'\n' | b'\r' => has_newlines = true,
+            b' ' | b'\t' | b'\r' => {}
+            b'\n' => {
+                if first_newline.is_none() {
+                    first_newline = Some(i + 1);
+                }
+            }
             b',' | b']' => return None,
-            _ => return if has_newlines { Some(i) } else { None },
+            _ => return first_newline,
         }
     }
     if edge { Some(s.len()) } else { None }
