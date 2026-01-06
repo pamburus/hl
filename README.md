@@ -774,8 +774,8 @@ Filtering Options:
   -l, --level <LEVEL>    Display entries with level >= <LEVEL> [env: HL_LEVEL=]
       --since <TIME>     Display entries with timestamp >= <TIME>
       --until <TIME>     Display entries with timestamp <= <TIME>
-  -f, --filter <FILTER>  Filter entries by field values [k=v, k~=v, k~~=v, 'k!=v', 'k?!=v', etc]
-  -q, --query <QUERY>    Filter entries using query expression ['status>=400 or duration>=15', etc]
+  -f, --filter <FILTER>  Filter entries by matching field values [k=v, k~=v, k~~=v, 'k!=v', 'k?!=v', etc]
+  -q, --query <QUERY>    Filter entries using a query expression ['status>=400 or duration>=15', etc]
 
 Output Options:
       --color [<WHEN>]        Whether to use ANSI colors and styles [env: HL_COLOR=] [default: auto] [possible values: auto, always, never]
@@ -800,7 +800,7 @@ Input Options:
       --input-format <FORMAT>       Input format [env: HL_INPUT_FORMAT=] [default: auto] [possible values: auto, json, logfmt]
       --unix-timestamp-unit <UNIT>  Unix timestamp unit [env: HL_UNIX_TIMESTAMP_UNIT=] [default: auto] [possible values: auto, s, ms, us, ns]
       --allow-prefix                Allow non-JSON prefixes before JSON log entries [env: HL_ALLOW_PREFIX=]
-      --delimiter <DELIMITER>       Log entry delimiter [NUL, CR, LF, CRLF] or any custom string
+      --delimiter <DELIMITER>       Log entry delimiter [env: HL_DELIMITER=] [possible values: auto, cr, lf, crlf, nul]
 
 Advanced Options:
       --interrupt-ignore-count <N>  Number of interrupts to ignore, i.e. Ctrl-C (SIGINT) [env: HL_INTERRUPT_IGNORE_COUNT=] [default: 3]
@@ -809,7 +809,7 @@ Advanced Options:
   -C, --concurrency <N>             Number of processing threads [env: HL_CONCURRENCY=]
       --shell-completions <SHELL>   Print shell auto-completion script and exit [possible values: bash, elvish, fish, powershell, zsh]
       --man-page                    Print man page and exit
-      --list-themes[=<TAGS>]        Print available themes optionally filtered by tags [possible values: dark, light, 16color, 256color, truecolor, base, overlay]
+      --list-themes[=<TAGS>]        Print available themes optionally filtered by tags [possible values: dark, light, 16color, 256color, truecolor, overlay, base]
       --dump-index                  Print debug index metadata (in --sort mode) and exit
 ```
 
