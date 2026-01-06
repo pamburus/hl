@@ -47,7 +47,7 @@ use crate::{
     index_capnp as schema,
     level::Level,
     model::{Parser, ParserSettings, RawRecord},
-    scanning::{Delimiter, Scanner, Segment, SegmentBuf, SegmentBufFactory},
+    scanning::{Delimit, Delimiter, Scanner, SearchExt, Segment, SegmentBuf, SegmentBufFactory},
     settings::PredefinedFields,
     vfs::{FileRead, FileSystem, LocalFileSystem},
 };
@@ -505,11 +505,14 @@ where
         let mut stat = Stat::new();
         let mut sorted = true;
         let mut prev_ts = None;
-        let mut lines = Vec::<(Option<Timestamp>, u32, u32)>::with_capacity(segment.data().len() / 512);
-        let mut offset = 0;
+        let mut entries = Vec::<(Option<Timestamp>, u32, u32)>::with_capacity(segment.data().len() / 512);
         let mut i = 0;
-        for data in rtrim(segment.data(), b'\n').split(|c| *c == b'\n') {
-            let data_len = data.len();
+        let searcher = self.delimiter.clone().into_searcher();
+        let data = segment.data();
+        let base_ptr = data.as_ptr() as usize;
+
+        for data in searcher.split(data) {
+            let offset = (data.as_ptr() as usize - base_ptr) as u32;
             let data = strip(data, b'\r');
             let mut ts = None;
             let mut rel = 0;
@@ -531,14 +534,14 @@ where
                                 sorted = false;
                             }
                             stat.add_valid(ts, flags);
-                            lines.push((ts.or(prev_ts), i as u32, offset + ar.offsets.start as u32));
+                            entries.push((ts.or(prev_ts), i as u32, offset + ar.offsets.start as u32));
                             rel = ar.offsets.end;
                             i += 1;
                             prev_ts = ts;
                         }
                         _ => {
                             stat.add_invalid();
-                            lines.push((ts.or(prev_ts), i as u32, offset + rel as u32));
+                            entries.push((ts.or(prev_ts), i as u32, offset + rel as u32));
                             i += 1;
                             break;
                         }
@@ -546,23 +549,22 @@ where
                 }
             } else {
                 stat.add_invalid();
-                lines.push((ts.or(prev_ts), i as u32, offset));
+                entries.push((ts.or(prev_ts), i as u32, offset));
                 i += 1;
             }
-            offset += data_len as u32 + 1;
         }
         let chronology = if sorted {
             Chronology::default()
         } else {
             stat.flags |= schema::FLAG_UNSORTED;
-            lines.sort();
+            entries.sort();
 
-            let n = lines.len().div_ceil(64);
+            let n = entries.len().div_ceil(64);
             let mut bitmap = Vec::with_capacity(n);
             let mut offsets = Vec::with_capacity(n);
             let mut jumps = Vec::new();
             let mut prev = None;
-            for chunk in lines.chunks(64) {
+            for chunk in entries.chunks(64) {
                 let mut mask: u64 = 0;
                 for (i, line) in chunk.iter().enumerate() {
                     if i == 0 {
@@ -694,13 +696,13 @@ impl Index {
     }
 
     fn load_stat(index: schema::index::Reader) -> Stat {
-        let lines = index.get_lines();
+        let entries = index.get_entries();
         let ts = index.get_timestamps();
         let flags = index.get_flags();
         Stat {
             flags,
-            lines_valid: lines.get_valid(),
-            lines_invalid: lines.get_invalid(),
+            entries_valid: entries.get_valid(),
+            entries_invalid: entries.get_invalid(),
             ts_min_max: if flags & schema::FLAG_HAS_TIMESTAMPS != 0 {
                 Some((
                     Timestamp {
@@ -720,9 +722,9 @@ impl Index {
 
     fn save_stat(mut index: schema::index::Builder, stat: &Stat) {
         index.set_flags(stat.flags);
-        let mut lines = index.reborrow().init_lines();
-        lines.set_valid(stat.lines_valid);
-        lines.set_invalid(stat.lines_invalid);
+        let mut entries = index.reborrow().init_entries();
+        entries.set_valid(stat.entries_valid);
+        entries.set_invalid(stat.entries_invalid);
         if let Some((min, max)) = stat.ts_min_max {
             let mut timestamps = index.init_timestamps();
             let mut ts_min = timestamps.reborrow().init_min();
@@ -901,7 +903,7 @@ impl SourceBlock {
         }
     }
 
-    /// Returns true if SourceBlock contains at least one line matching the given level or higher level.
+    /// Returns true if SourceBlock contains at least one entry matching the given level or higher level.
     #[inline]
     pub fn match_level(&self, level: Level) -> bool {
         self.stat.flags & level_to_flag_mask(level) != 0
@@ -924,8 +926,8 @@ impl SourceBlock {
 #[derive(Debug, Clone)]
 pub struct Stat {
     pub flags: u64,
-    pub lines_valid: u64,
-    pub lines_invalid: u64,
+    pub entries_valid: u64,
+    pub entries_invalid: u64,
     pub ts_min_max: Option<(Timestamp, Timestamp)>,
 }
 
@@ -935,8 +937,8 @@ impl Stat {
     pub fn new() -> Self {
         Self {
             flags: 0,
-            lines_valid: 0,
-            lines_invalid: 0,
+            entries_valid: 0,
+            entries_invalid: 0,
             ts_min_max: None,
         }
     }
@@ -949,28 +951,28 @@ impl Default for Stat {
 }
 
 impl Stat {
-    /// Adds information about a single valid line.
+    /// Adds information about a single valid entry.
     #[inline]
     pub fn add_valid(&mut self, ts: Option<Timestamp>, flags: u64) {
         self.ts_min_max = min_max_opt(self.ts_min_max, ts.map(|ts| (ts, ts)));
         self.flags |= flags;
-        self.lines_valid += 1;
+        self.entries_valid += 1;
         if self.ts_min_max.is_some() {
             self.flags |= schema::FLAG_HAS_TIMESTAMPS;
         }
     }
 
-    /// Counts a single invalid line.
+    /// Counts a single invalid entry.
     #[inline]
     pub fn add_invalid(&mut self) {
-        self.lines_invalid += 1;
+        self.entries_invalid += 1;
     }
 
     /// Merges with other Stat.
     #[inline]
     pub fn merge(&mut self, other: &Self) {
-        self.lines_valid += other.lines_valid;
-        self.lines_invalid += other.lines_invalid;
+        self.entries_valid += other.entries_valid;
+        self.entries_invalid += other.entries_invalid;
         self.flags |= other.flags;
         self.ts_min_max = min_max_opt(self.ts_min_max, other.ts_min_max);
     }
@@ -1009,7 +1011,7 @@ impl fmt::Debug for Chronology {
 
 // ---
 
-/// OffsetPair contains information offsets for a line in bytes in a SourceBlock and in a jump table.
+/// OffsetPair contains information offsets for an entry in bytes in a SourceBlock and in a jump table.
 #[derive(Debug, Clone, Copy)]
 pub struct OffsetPair {
     pub bytes: u32,
@@ -1189,17 +1191,8 @@ fn level_mask_higher_or_eq(flag: u64) -> u64 {
     flag | level_mask_higher(flag)
 }
 
-#[inline]
-fn rtrim(s: &[u8], c: u8) -> &[u8] {
-    if !s.is_empty() && s[s.len() - 1] == c {
-        &s[..s.len() - 1]
-    } else {
-        s
-    }
-}
-
 const VALID_MAGIC: u64 = 0x5845444e492d4c48;
-const CURRENT_VERSION: u64 = 2;
+const CURRENT_VERSION: u64 = 3;
 
 /*
 ---

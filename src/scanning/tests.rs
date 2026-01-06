@@ -1,5 +1,10 @@
-use super::*;
+use std::io::Cursor;
+use std::sync::Arc;
+
 use rstest::rstest;
+
+use super::json::JsonDelimitSearcher;
+use super::*;
 
 #[test]
 fn test_empty() {
@@ -8,6 +13,68 @@ fn test_empty() {
     let mut iter = searcher.split(buf);
 
     assert_eq!(iter.next(), None);
+}
+
+#[test]
+fn test_delimiter_json_into_searcher() {
+    let delimiter = Delimiter::Json;
+    let searcher = delimiter.into_searcher();
+    let buf = b"{\"a\":1}\n{\"b\":2}";
+    let result = searcher.search_l(buf, false);
+    assert_eq!(result, Some(7..8));
+
+    let pm = searcher.partial_match_r(b"}  ");
+    assert_eq!(pm, Some(1));
+
+    let pm = searcher.partial_match_l(b"  {");
+    assert_eq!(pm, Some(2));
+}
+
+#[test]
+fn test_delimiter_json_partial_match_l_via_arc() {
+    let searcher = Delimiter::Json.into_searcher();
+    let buf = b"  {";
+    let result = searcher.partial_match_l(buf);
+    assert_eq!(result, Some(2));
+}
+
+#[test]
+fn test_scanner_with_json_delimiter() {
+    let factory = Arc::new(SegmentBufFactory::new(1024));
+    let scanner = Scanner::new(factory, Delimiter::Json);
+
+    let data = b"{\"a\":1}\n{\"b\":2}\n";
+    let mut stream = Cursor::new(data);
+
+    let items: Vec<_> = scanner.items(&mut stream).collect::<Result<Vec<_>, _>>().unwrap();
+    assert_eq!(items.len(), 2);
+}
+
+#[test]
+fn test_delimiter_char_into_searcher() {
+    let delimiter = Delimiter::Char('|');
+    let searcher = delimiter.into_searcher();
+    let buf = b"a|b|c";
+    let result = searcher.search_l(buf, false);
+    assert_eq!(result, Some(1..2));
+}
+
+#[test]
+fn test_arc_searcher_partial_match_l() {
+    fn call_partial_match_l(searcher: &Arc<dyn Search>, buf: &[u8]) -> Option<usize> {
+        searcher.partial_match_l(buf)
+    }
+
+    let searcher = Delimiter::Json.into_searcher();
+    let result = call_partial_match_l(&searcher, b"  {");
+    assert_eq!(result, Some(2));
+}
+
+#[test]
+fn test_box_searcher_partial_match_l() {
+    let searcher: Box<dyn Search> = Box::new(JsonDelimitSearcher);
+    let result = searcher.partial_match_l(b"  {");
+    assert_eq!(result, Some(2));
 }
 
 #[test]
@@ -510,4 +577,126 @@ fn test_smart_newline_search_l_edge_false_with_crlf() {
     let buf = b"\r\ntest";
     let result = searcher.search_l(buf, true);
     assert_eq!(result, Some(0..2), "CRLF at start should be found with edge=true");
+}
+
+#[test]
+fn test_delimiter_arc_types() {
+    // Test Arc<[u8]> delimiter
+    let bytes: Arc<[u8]> = Arc::from(b"::".as_slice());
+    let delimiter = Delimiter::from(bytes);
+    let searcher = delimiter.into_searcher();
+    let buf = b"a::b::c";
+    assert_eq!(searcher.search_l(buf, false), Some(1..3));
+
+    // Test Arc<str> delimiter
+    let s: Arc<str> = Arc::from("::");
+    let delimiter = Delimiter::from(s);
+    let searcher = delimiter.into_searcher();
+    let buf = b"a::b::c";
+    assert_eq!(searcher.search_l(buf, false), Some(1..3));
+}
+
+#[test]
+fn test_delimiter_enum_conversions() {
+    // Test conversion from u8
+    let delimiter = Delimiter::from(b'/');
+    assert_eq!(delimiter, Delimiter::Byte(b'/'));
+
+    // Test conversion from Vec<u8>
+    let delimiter = Delimiter::from(vec![b':', b':']);
+    match delimiter {
+        Delimiter::Bytes(b) => assert_eq!(&*b, &[b':', b':'][..]),
+        _ => panic!("Expected Delimiter::Bytes"),
+    }
+
+    // Test conversion from String
+    let delimiter = Delimiter::from(String::from("::"));
+    match delimiter {
+        Delimiter::Str(s) => assert_eq!(&*s, "::"),
+        _ => panic!("Expected Delimiter::Str"),
+    }
+}
+
+#[test]
+fn test_delimiter_default() {
+    let delimiter = Delimiter::default();
+    assert_eq!(delimiter, Delimiter::Auto);
+}
+
+#[test]
+fn test_auto_delimiter_with_mixed_newlines() {
+    use super::auto::AutoDelimitSearcher;
+    let searcher = AutoDelimitSearcher;
+
+    // Mix of LF and CRLF
+    let buf = b"line1\nline2\r\nline3";
+    let mut iter = searcher.split(buf);
+    assert_eq!(iter.next(), Some(&b"line1"[..]));
+    assert_eq!(iter.next(), Some(&b"line2"[..]));
+    assert_eq!(iter.next(), Some(&b"line3"[..]));
+    assert_eq!(iter.next(), None);
+}
+
+#[test]
+fn test_searcher_arc_delegation() {
+    // Test that Arc<dyn Search> properly delegates to inner searcher
+    let searcher: Arc<dyn Search> = Arc::new(b'/'.into_searcher());
+    let buf = b"a/b/c";
+    assert_eq!(searcher.search_l(buf, false), Some(1..2));
+    assert_eq!(searcher.search_r(buf, false), Some(3..4));
+    assert_eq!(searcher.partial_match_l(buf), None);
+    assert_eq!(searcher.partial_match_r(buf), None);
+}
+
+#[test]
+fn test_auto_delimiter_with_scanner() {
+    use super::auto::AutoDelimiter;
+
+    // Test that AutoDelimiter works correctly with Scanner
+    let sf = Arc::new(SegmentBufFactory::new(10));
+    let scanner = Scanner::new(sf.clone(), AutoDelimiter);
+
+    // Test case: buffer ends with LF
+    let mut data = std::io::Cursor::new(b"test\nmore");
+    let tokens = scanner.items(&mut data).collect::<Result<Vec<_>>>().unwrap();
+
+    // Should successfully parse the data
+    assert!(!tokens.is_empty());
+}
+
+#[test]
+fn test_partial_match_r_position_semantics() {
+    use super::SmartNewLineSearcher;
+
+    // Verify SmartNewLineSearcher correctly returns positions
+    let searcher = SmartNewLineSearcher;
+
+    // Buffer ending with CR
+    let buf = b"test\r";
+    let result = searcher.partial_match_r(buf);
+    // Should return position where CR starts (4)
+    assert_eq!(result, Some(4));
+
+    // Verify this works correctly in split calculation
+    let bs = buf.len(); // 5
+    if let Some(n) = result {
+        let length = bs - n; // 5 - 4 = 1 (length of partial match to extract)
+        assert_eq!(length, 1);
+        // Would copy buf[4..5] = "\r"
+        assert_eq!(&buf[bs - length..bs], b"\r");
+    }
+
+    // Test with SubStrSearcher for multi-byte delimiter
+    let searcher = SubStrSearcher::new(b"abc");
+    let buf = b"xyzab";
+    let result = searcher.partial_match_r(buf);
+    // Should return position where "ab" starts (3)
+    assert_eq!(result, Some(3));
+
+    if let Some(n) = result {
+        let bs = buf.len(); // 5
+        let length = bs - n; // 5 - 3 = 2 (length of "ab")
+        assert_eq!(length, 2);
+        assert_eq!(&buf[bs - length..bs], b"ab");
+    }
 }

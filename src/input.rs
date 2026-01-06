@@ -15,10 +15,12 @@ use deko::{Format, bufread::AnyDecoder};
 
 // local imports
 use crate::{
+    Delimit,
     error::Result,
     index::{Index, Indexer, SourceBlock, SourceMetadata},
     iox::ReadFill,
     replay::{ReplayBufCreator, ReplayBufReader, ReplaySeekReader},
+    scanning::{Delimiter, Search},
     tee::TeeReader,
     vfs::{FileSystem, LocalFileSystem},
     xerr::HighlightQuoted,
@@ -192,49 +194,52 @@ impl<T: Meta> Meta for Mutex<T> {
 
 // ---
 
+type InputStream = Box<dyn ReadSeekMeta + Send + Sync>;
+
 /// A holder of an input file.
 /// It can be used to ensure the input file is not suddenly deleting while it is needed.
 pub struct InputHolder {
     pub reference: InputReference,
-    pub stream: Option<Box<dyn ReadSeekMeta + Send + Sync>>,
+    pub stream: Option<InputStream>,
 }
 
 impl InputHolder {
     /// Creates a new input holder.
-    pub fn new(reference: InputReference, stream: Option<Box<dyn ReadSeekMeta + Send + Sync>>) -> Self {
+    pub fn new(reference: InputReference, stream: Option<InputStream>) -> Self {
         Self { reference, stream }
     }
 
     /// Opens the input file for reading.
     /// This includes decoding compressed files if needed.
     pub fn open(self) -> io::Result<Input> {
-        Ok(Input::new(self.reference.clone(), self.stream()?))
+        let stream = Self::stream(&self.reference, self.stream)?;
+        Ok(Input::new(self.reference, stream))
     }
 
     /// Indexes the input file and returns IndexedInput that can be used to access the data in random order.
-    pub fn index<FS>(self, indexer: &Indexer<FS>) -> Result<IndexedInput>
+    pub fn index<FS>(self, indexer: &Indexer<FS>, delimiter: Delimiter) -> Result<IndexedInput>
     where
         FS: FileSystem + Sync,
         FS::Metadata: SourceMetadata,
     {
-        self.open()?.indexed(indexer)
+        self.open()?.indexed(indexer, delimiter)
     }
 
-    fn stream(self) -> io::Result<Stream> {
-        Ok(match &self.reference {
-            InputReference::Stdin => match self.stream {
+    fn stream(reference: &InputReference, stream: Option<InputStream>) -> io::Result<Stream> {
+        Ok(match &reference {
+            InputReference::Stdin => match stream {
                 Some(stream) => Stream::Sequential(Stream::RandomAccess(stream).into_sequential()),
-                None => Stream::Sequential(self.stdin()),
+                None => Stream::Sequential(Self::stdin(stream)),
             },
-            InputReference::File(_) => match self.stream {
+            InputReference::File(_) => match stream {
                 Some(stream) => Stream::RandomAccess(stream),
-                None => Stream::RandomAccess(self.reference.hold()?.stream.unwrap()),
+                None => Stream::RandomAccess(reference.hold()?.stream.unwrap()),
             },
         })
     }
 
-    fn stdin(self) -> SequentialStream {
-        self.stream
+    fn stdin(stream: Option<InputStream>) -> SequentialStream {
+        stream
             .map(|s| Box::new(StreamOver(s)) as SequentialStream)
             .unwrap_or_else(|| Box::new(stdin()))
     }
@@ -255,12 +260,12 @@ impl Input {
     }
 
     /// Indexes the input file and returns IndexedInput that can be used to access the data in random order.
-    pub fn indexed<FS>(self, indexer: &Indexer<FS>) -> Result<IndexedInput>
+    pub fn indexed<FS>(self, indexer: &Indexer<FS>, delimiter: Delimiter) -> Result<IndexedInput>
     where
         FS: FileSystem + Sync,
         FS::Metadata: SourceMetadata,
     {
-        IndexedInput::from_stream(self.reference, self.stream, indexer)
+        IndexedInput::from_stream(self.reference, self.stream, delimiter, indexer)
     }
 
     /// Opens the file for reading.
@@ -274,19 +279,22 @@ impl Input {
         InputReference::Stdin.open()
     }
 
-    pub fn tail(mut self, lines: u64) -> io::Result<Self> {
+    /// Seeks to the last `entries` entries of the input.
+    pub fn tail(mut self, entries: u64, delimiter: Delimiter) -> io::Result<Self> {
         match &mut self.stream {
             Stream::Sequential(_) => (),
-            Stream::RandomAccess(stream) => Self::seek_tail(stream, lines)?,
+            Stream::RandomAccess(stream) => Self::seek_tail(stream, entries, delimiter)?,
         }
         Ok(self)
     }
 
-    fn seek_tail(stream: &mut RandomAccessStream, lines: u64) -> io::Result<()> {
+    fn seek_tail(stream: &mut RandomAccessStream, entries: u64, delimiter: Delimiter) -> io::Result<()> {
         const BUF_SIZE: usize = 64 * 1024;
+        let searcher = delimiter.into_searcher();
         let mut scratch = [0; BUF_SIZE];
         let mut count: u64 = 0;
         let mut pos = stream.seek(SeekFrom::End(0))?;
+        let file_size = pos;
         while pos != 0 {
             let n = min(BUF_SIZE as u64, pos);
             pos -= n;
@@ -296,13 +304,24 @@ impl Input {
 
             stream.read_exact(buf)?;
 
-            for i in (0..bn).rev() {
-                if buf[i] == b'\n' {
-                    if count == lines {
-                        stream.seek(SeekFrom::Start(pos + i as u64 + 1))?;
-                        return Ok(());
-                    }
-                    count += 1;
+            let mut r = bn;
+            while let Some(i) = searcher.search_r(&buf[..r], pos == 0) {
+                // Skip trailing delimiter at EOF
+                if pos + i.end as u64 == file_size {
+                    r = i.start;
+                    continue;
+                }
+                count += 1;
+                if count == entries {
+                    stream.seek(SeekFrom::Start(pos + i.end as u64))?;
+                    return Ok(());
+                }
+                r = i.start;
+            }
+
+            if r != 0 {
+                if let Some(i) = searcher.partial_match_r(&buf[..r]) {
+                    pos += i as u64;
                 }
             }
         }
@@ -465,28 +484,30 @@ impl<R: Meta> Meta for TaggedStream<R> {
 pub struct IndexedInput {
     pub reference: InputReference,
     pub stream: Mutex<RandomAccessStream>,
+    pub delimiter: Delimiter,
     pub index: Index,
 }
 
 impl IndexedInput {
     #[inline]
-    fn new(reference: InputReference, stream: RandomAccessStream, index: Index) -> Self {
+    fn new(reference: InputReference, stream: RandomAccessStream, delimiter: Delimiter, index: Index) -> Self {
         Self {
             reference,
             stream: Mutex::new(stream),
+            delimiter,
             index,
         }
     }
 
     /// Opens the input file and indexes it.
-    pub fn open<FS>(path: &Path, indexer: &Indexer<FS>) -> Result<Self>
+    pub fn open<FS>(path: &Path, indexer: &Indexer<FS>, delimiter: Delimiter) -> Result<Self>
     where
         FS: FileSystem + Sync,
         FS::Metadata: SourceMetadata,
     {
         InputReference::File(PathBuf::from(path).try_into()?)
             .hold()?
-            .index(indexer)
+            .index(indexer, delimiter)
     }
 
     /// Converts the input to blocks.
@@ -495,13 +516,18 @@ impl IndexedInput {
         Blocks::new(Arc::new(self), 0..n)
     }
 
-    fn from_stream<FS>(reference: InputReference, stream: Stream, indexer: &Indexer<FS>) -> Result<Self>
+    fn from_stream<FS>(
+        reference: InputReference,
+        stream: Stream,
+        delimiter: Delimiter,
+        indexer: &Indexer<FS>,
+    ) -> Result<Self>
     where
         FS: FileSystem + Sync,
         FS::Metadata: SourceMetadata,
     {
         let (stream, index) = Self::index_stream(&reference, stream, indexer)?;
-        Ok(Self::new(reference, stream, index))
+        Ok(Self::new(reference, stream, delimiter, index))
     }
 
     fn index_stream<FS>(
@@ -632,8 +658,8 @@ impl Block<IndexedInput> {
     }
 
     #[inline]
-    pub fn into_lines(self) -> Result<BlockLines<IndexedInput>> {
-        BlockLines::new(self)
+    pub fn into_entries(self) -> Result<BlockEntries<IndexedInput>> {
+        BlockEntries::new(self)
     }
 
     #[inline]
@@ -652,14 +678,15 @@ impl Block<IndexedInput> {
     }
 
     #[inline]
-    pub fn lines_valid(&self) -> u64 {
-        self.source_block().stat.lines_valid
+    pub fn entries_valid(&self) -> u64 {
+        self.source_block().stat.entries_valid
     }
 }
 
 // ---
 
-pub struct BlockLines<I> {
+pub struct BlockEntries<I> {
+    searcher: Arc<dyn Search>,
     block: Block<I>,
     buf: Arc<Vec<u8>>,
     total: usize,
@@ -668,7 +695,7 @@ pub struct BlockLines<I> {
     jump: usize,
 }
 
-impl BlockLines<IndexedInput> {
+impl BlockEntries<IndexedInput> {
     pub fn new(mut block: Block<IndexedInput>) -> Result<Self> {
         let (buf, total) = {
             let block = &mut block;
@@ -678,10 +705,11 @@ impl BlockLines<IndexedInput> {
             let mut stream = block.input.stream.lock().unwrap();
             stream.seek(SeekFrom::Start(source_block.offset))?;
             stream.read_fill(&mut buf)?;
-            let total = (source_block.stat.lines_valid + source_block.stat.lines_invalid).try_into()?;
+            let total = (source_block.stat.entries_valid + source_block.stat.entries_invalid).try_into()?;
             (buf, total)
         };
         Ok(Self {
+            searcher: block.input.delimiter.clone().into_searcher(),
             block,
             buf: Arc::new(buf),
             total,
@@ -692,8 +720,8 @@ impl BlockLines<IndexedInput> {
     }
 }
 
-impl Iterator for BlockLines<IndexedInput> {
-    type Item = BlockLine;
+impl Iterator for BlockEntries<IndexedInput> {
+    type Item = BlockEntry;
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.current >= self.total {
@@ -717,12 +745,12 @@ impl Iterator for BlockLines<IndexedInput> {
             }
         }
         let s = &self.buf[self.byte..];
-        let l = s.iter().position(|&x| x == b'\n').map_or(s.len(), |i| i + 1);
+        let l = self.searcher.search_l(s, true).map_or(s.len(), |i| i.end);
         let offset = self.byte;
         self.byte += l;
         self.current += 1;
 
-        Some(BlockLine::new(self.buf.clone(), offset..offset + l))
+        Some(BlockEntry::new(self.buf.clone(), offset..offset + l))
     }
 
     #[inline]
@@ -739,12 +767,12 @@ impl Iterator for BlockLines<IndexedInput> {
 
 // ---
 
-pub struct BlockLine {
+pub struct BlockEntry {
     buf: Arc<Vec<u8>>,
     range: Range<usize>,
 }
 
-impl BlockLine {
+impl BlockEntry {
     #[inline]
     pub fn new(buf: Arc<Vec<u8>>, range: Range<usize>) -> Self {
         Self { buf, range }

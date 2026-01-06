@@ -22,7 +22,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.34.2-alpha.1"
+version = "0.35.0-alpha.1"
 edition = "2024"
 repository = "https://github.com/pamburus/hl"
 license = "MIT"
@@ -85,7 +85,7 @@ pest = "2"
 pest_derive = "2"
 regex = "1"
 rust-embed = "8"
-serde = { version = "1", features = ["derive"] }
+serde = { version = "1", features = ["derive", "rc"] }
 serde_json = { version = "1", features = ["raw_value"] }
 serde-logfmt = { path = "./crate/serde-logfmt" }
 serde_plain = "1"

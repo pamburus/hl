@@ -30,7 +30,7 @@ struct SourceBlock {
 # Index holds index information of a block or a whole file.
 struct Index {
     flags @0 :UInt64;
-    lines :group{
+    entries :group{
         valid @1 :UInt64;
         invalid @2 :UInt64;
     }
@@ -49,20 +49,20 @@ struct Index {
 # Chronology holds information about ordering of log messages by timestamp in a SourceBlock.
 # It can be used to effectively iterate over log messages in chronological order.
 struct Chronology {
-    # Each item in a `bitmap` holds 64 bits for 64 source lines.
-    # Bit value 0 means the corresponding line goes chronologically after previous line.
-    # Bit value 1 means the corresponding line does not go chronologically after previous line and there is a jump value for it in a jump table.
-    # Offset in a jump table for the first line in item N of bitmap can be found in offsets.jumps[N].
-    # Each next line referenced by the same item in bitmap uses the same offset in jump table if it has bit value 0, or an offset with added 1 if it has bit value 1.
-    # Offset in a SourceBlock bytes for a first line referenced by bitmap item N can be found in offsets.bytes[N].
-    # Each next line referenced by the same item in bitmap can be located in the SourceBlock bytes at offset of previous line + length of previous line if it has bit value 0 in bitmap, or at offset specified in a jump table if it has bit value 1.
+    # Each item in a `bitmap` holds 64 bits for 64 source entries.
+    # Bit value 0 means the corresponding entry goes chronologically after previous entry.
+    # Bit value 1 means the corresponding entry does not go chronologically after previous entry and there is a jump value for it in a jump table.
+    # Offset in a jump table for the first entry in item N of bitmap can be found in offsets.jumps[N].
+    # Each next entry referenced by the same item in bitmap uses the same offset in jump table if it has bit value 0, or an offset with added 1 if it has bit value 1.
+    # Offset in a SourceBlock bytes for a first entry referenced by bitmap item N can be found in offsets.bytes[N].
+    # Each next entry referenced by the same item in bitmap can be located in the SourceBlock bytes at offset of previous entry + length of previous entry if it has bit value 0 in bitmap, or at offset specified in a jump table if it has bit value 1.
     bitmap @0 :List(UInt64);
-    # Group `offsets` holds offsets in SourceBlock bytes and in a `jumps` table for each 64th line.
+    # Group `offsets` holds offsets in SourceBlock bytes and in a `jumps` table for each 64th entry.
     offsets :group {
         bytes @1 :List(UInt32);
         jumps @2 :List(UInt32);
     }
-    # Field `jumps` holds offsets in a SourceBlock bytes for lines which breaks chronological order.
+    # Field `jumps` holds offsets in a SourceBlock bytes for entries which breaks chronological order.
     jumps @3 :List(UInt32);
 }
 

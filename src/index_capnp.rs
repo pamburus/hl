@@ -1244,7 +1244,7 @@ pub mod index {
       self.reader.get_data_field::<u64>(0)
     }
     #[inline]
-    pub fn get_lines(self) -> crate::index_capnp::index::lines::Reader<'a> {
+    pub fn get_entries(self) -> crate::index_capnp::index::entries::Reader<'a> {
       self.reader.into()
     }
     #[inline]
@@ -1314,11 +1314,11 @@ pub mod index {
       self.builder.set_data_field::<u64>(0, value);
     }
     #[inline]
-    pub fn get_lines(self) -> crate::index_capnp::index::lines::Builder<'a> {
+    pub fn get_entries(self) -> crate::index_capnp::index::entries::Builder<'a> {
       self.builder.into()
     }
     #[inline]
-    pub fn init_lines(self, ) -> crate::index_capnp::index::lines::Builder<'a> {
+    pub fn init_entries(self, ) -> crate::index_capnp::index::entries::Builder<'a> {
       self.builder.set_data_field::<u64>(1, 0u64);
       self.builder.set_data_field::<u64>(2, 0u64);
       self.builder.into()
@@ -1344,7 +1344,7 @@ pub mod index {
     }
   }
   impl Pipeline  {
-    pub fn get_lines(&self) -> crate::index_capnp::index::lines::Pipeline {
+    pub fn get_entries(&self) -> crate::index_capnp::index::entries::Pipeline {
       ::capnp::capability::FromTypelessPipeline::new(self._typeless.noop())
     }
     pub fn get_timestamps(&self) -> crate::index_capnp::index::timestamps::Pipeline {
@@ -1359,7 +1359,7 @@ pub mod index {
       ::capnp::word(159, 109, 14, 67, 239, 4, 192, 180),
       ::capnp::word(0, 0, 7, 0, 0, 0, 0, 0),
       ::capnp::word(0, 0, 0, 0, 0, 0, 0, 0),
-      ::capnp::word(122, 2, 0, 0, 186, 3, 0, 0),
+      ::capnp::word(122, 2, 0, 0, 188, 3, 0, 0),
       ::capnp::word(21, 0, 0, 0, 146, 0, 0, 0),
       ::capnp::word(29, 0, 0, 0, 7, 0, 0, 0),
       ::capnp::word(0, 0, 0, 0, 0, 0, 0, 0),
@@ -1381,7 +1381,7 @@ pub mod index {
       ::capnp::word(1, 0, 0, 0, 0, 0, 0, 0),
       ::capnp::word(1, 0, 0, 0, 0, 0, 0, 0),
       ::capnp::word(167, 9, 143, 45, 122, 129, 213, 191),
-      ::capnp::word(73, 0, 0, 0, 50, 0, 0, 0),
+      ::capnp::word(73, 0, 0, 0, 66, 0, 0, 0),
       ::capnp::word(0, 0, 0, 0, 0, 0, 0, 0),
       ::capnp::word(0, 0, 0, 0, 0, 0, 0, 0),
       ::capnp::word(0, 0, 0, 0, 0, 0, 0, 0),
@@ -1400,14 +1400,14 @@ pub mod index {
       ::capnp::word(9, 0, 0, 0, 0, 0, 0, 0),
       ::capnp::word(0, 0, 0, 0, 0, 0, 0, 0),
       ::capnp::word(0, 0, 0, 0, 0, 0, 0, 0),
-      ::capnp::word(108, 105, 110, 101, 115, 0, 0, 0),
+      ::capnp::word(101, 110, 116, 114, 105, 101, 115, 0),
       ::capnp::word(116, 105, 109, 101, 115, 116, 97, 109),
       ::capnp::word(112, 115, 0, 0, 0, 0, 0, 0),
     ];
     pub fn get_field_types(index: u16) -> ::capnp::introspect::Type {
       match index {
         0 => <u64 as ::capnp::introspect::Introspect>::introspect(),
-        1 => <crate::index_capnp::index::lines::Owned as ::capnp::introspect::Introspect>::introspect(),
+        1 => <crate::index_capnp::index::entries::Owned as ::capnp::introspect::Introspect>::introspect(),
         2 => <crate::index_capnp::index::timestamps::Owned as ::capnp::introspect::Introspect>::introspect(),
         _ => ::capnp::introspect::panic_invalid_field_index(index),
       }
@@ -1423,11 +1423,11 @@ pub mod index {
     )};
     pub static NONUNION_MEMBERS : &[u16] = &[0,1,2];
     pub static MEMBERS_BY_DISCRIMINANT : &[u16] = &[];
-    pub static MEMBERS_BY_NAME : &[u16] = &[0,1,2];
+    pub static MEMBERS_BY_NAME : &[u16] = &[1,0,2];
     pub const TYPE_ID: u64 = 0xff78_b66c_3434_661c;
   }
 
-  pub mod lines {
+  pub mod entries {
     #[derive(Copy, Clone)]
     pub struct Owned(());
     impl ::capnp::introspect::Introspect for Owned { fn introspect() -> ::capnp::introspect::Type { ::capnp::introspect::TypeVariant::Struct(::capnp::introspect::RawBrandedStructSchema { generic: &_private::RAW_SCHEMA, field_types: _private::get_field_types, annotation_types: _private::get_annotation_types }).into() } }
@@ -1577,7 +1577,7 @@ pub mod index {
     impl Pipeline  {
     }
     mod _private {
-      pub static ENCODED_NODE: [::capnp::Word; 47] = [
+      pub static ENCODED_NODE: [::capnp::Word; 48] = [
         ::capnp::word(0, 0, 0, 0, 6, 0, 6, 0),
         ::capnp::word(167, 9, 143, 45, 122, 129, 213, 191),
         ::capnp::word(18, 0, 0, 0, 1, 0, 6, 0),
@@ -1585,15 +1585,16 @@ pub mod index {
         ::capnp::word(0, 0, 7, 0, 1, 0, 0, 0),
         ::capnp::word(0, 0, 0, 0, 0, 0, 0, 0),
         ::capnp::word(0, 0, 0, 0, 0, 0, 0, 0),
-        ::capnp::word(21, 0, 0, 0, 194, 0, 0, 0),
+        ::capnp::word(21, 0, 0, 0, 210, 0, 0, 0),
         ::capnp::word(0, 0, 0, 0, 0, 0, 0, 0),
         ::capnp::word(0, 0, 0, 0, 0, 0, 0, 0),
-        ::capnp::word(21, 0, 0, 0, 119, 0, 0, 0),
+        ::capnp::word(25, 0, 0, 0, 119, 0, 0, 0),
         ::capnp::word(0, 0, 0, 0, 0, 0, 0, 0),
         ::capnp::word(0, 0, 0, 0, 0, 0, 0, 0),
         ::capnp::word(105, 110, 100, 101, 120, 46, 99, 97),
         ::capnp::word(112, 110, 112, 58, 73, 110, 100, 101),
-        ::capnp::word(120, 46, 108, 105, 110, 101, 115, 0),
+        ::capnp::word(120, 46, 101, 110, 116, 114, 105, 101),
+        ::capnp::word(115, 0, 0, 0, 0, 0, 0, 0),
         ::capnp::word(8, 0, 0, 0, 3, 0, 4, 0),
         ::capnp::word(0, 0, 0, 0, 1, 0, 0, 0),
         ::capnp::word(0, 0, 1, 0, 1, 0, 0, 0),
@@ -2515,7 +2516,7 @@ pub mod chronology {
       ::capnp::word(159, 109, 14, 67, 239, 4, 192, 180),
       ::capnp::word(4, 0, 7, 0, 0, 0, 0, 0),
       ::capnp::word(0, 0, 0, 0, 0, 0, 0, 0),
-      ::capnp::word(107, 4, 0, 0, 126, 9, 0, 0),
+      ::capnp::word(109, 4, 0, 0, 143, 9, 0, 0),
       ::capnp::word(21, 0, 0, 0, 186, 0, 0, 0),
       ::capnp::word(29, 0, 0, 0, 7, 0, 0, 0),
       ::capnp::word(0, 0, 0, 0, 0, 0, 0, 0),
@@ -2893,7 +2894,7 @@ pub static ENCODED_NODE: [::capnp::Word; 32] = [
   ::capnp::word(159, 109, 14, 67, 239, 4, 192, 180),
   ::capnp::word(0, 0, 0, 0, 0, 0, 0, 0),
   ::capnp::word(0, 0, 0, 0, 0, 0, 0, 0),
-  ::capnp::word(189, 9, 0, 0, 2, 10, 0, 0),
+  ::capnp::word(206, 9, 0, 0, 19, 10, 0, 0),
   ::capnp::word(21, 0, 0, 0, 210, 0, 0, 0),
   ::capnp::word(33, 0, 0, 0, 7, 0, 0, 0),
   ::capnp::word(0, 0, 0, 0, 0, 0, 0, 0),
@@ -3094,7 +3095,7 @@ pub mod hash {
       ::capnp::word(159, 109, 14, 67, 239, 4, 192, 180),
       ::capnp::word(1, 0, 7, 0, 0, 0, 0, 0),
       ::capnp::word(0, 0, 0, 0, 0, 0, 0, 0),
-      ::capnp::word(35, 10, 0, 0, 103, 10, 0, 0),
+      ::capnp::word(52, 10, 0, 0, 120, 10, 0, 0),
       ::capnp::word(21, 0, 0, 0, 138, 0, 0, 0),
       ::capnp::word(29, 0, 0, 0, 7, 0, 0, 0),
       ::capnp::word(0, 0, 0, 0, 0, 0, 0, 0),

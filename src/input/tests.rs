@@ -1,10 +1,10 @@
-use super::*;
-use io::Read;
+use std::io::{self, Cursor, Read};
 
 use assert_matches::assert_matches;
 use itertools::Itertools;
 use nonzero_ext::nonzero;
 
+use super::*;
 use crate::{
     index::IndexerSettings,
     vfs::{self, LocalFileSystem},
@@ -26,7 +26,7 @@ fn test_input_reference() {
 fn test_input_holder() {
     let reference = InputReference::File(InputPath::ephemeral(PathBuf::from("sample/test.log")));
     let holder = InputHolder::new(reference, None);
-    let mut stream = holder.stream().unwrap();
+    let mut stream = holder.open().unwrap().stream;
     let mut buf = Vec::new();
     let n = stream.read_to_end(&mut buf).unwrap();
     assert!(matches!(stream, Stream::RandomAccess(_)));
@@ -52,7 +52,7 @@ fn test_input() {
 
 #[test]
 fn test_input_tail() {
-    let input = Input::stdin().unwrap().tail(1).unwrap();
+    let input = Input::stdin().unwrap().tail(1, Delimiter::SmartNewLine).unwrap();
     assert!(matches!(input.stream, Stream::Sequential(_)));
 
     for &(filename, requested, expected) in &[
@@ -61,7 +61,10 @@ fn test_input_tail() {
         ("sample/test.log", 3, 2),
         ("sample/prometheus.log", 2, 2),
     ] {
-        let input = Input::open(&PathBuf::from(filename)).unwrap().tail(requested).unwrap();
+        let input = Input::open(&PathBuf::from(filename))
+            .unwrap()
+            .tail(requested, Delimiter::SmartNewLine)
+            .unwrap();
         let mut buf = Vec::new();
         let n = input.stream.into_sequential().read_to_end(&mut buf).unwrap();
         assert!(n > 0);
@@ -170,12 +173,12 @@ fn test_indexed_input_stdin() {
     let data = br#"{"ts":"2024-10-01T01:02:03Z","level":"info","msg":"some test message"}\n"#;
     let stream = Stream::RandomAccess(Box::new(Cursor::new(data)));
     let indexer = Indexer::<LocalFileSystem>::new(1, PathBuf::new(), IndexerSettings::with_fs(LocalFileSystem));
-    let input = IndexedInput::from_stream(InputReference::Stdin, stream, &indexer).unwrap();
+    let input = IndexedInput::from_stream(InputReference::Stdin, stream, Delimiter::default(), &indexer).unwrap();
     let mut blocks = input.into_blocks().collect_vec();
     assert_eq!(blocks.len(), 1);
     let block = blocks.drain(..).next().unwrap();
-    assert_eq!(block.lines_valid(), 1);
-    let mut lines = block.into_lines().unwrap().collect_vec();
+    assert_eq!(block.entries_valid(), 1);
+    let mut lines = block.into_entries().unwrap().collect_vec();
     let line = lines.drain(..).next().unwrap();
     assert_eq!(line.bytes(), data);
 }
@@ -194,17 +197,17 @@ fn test_indexed_input_file_random_access() {
                 ..IndexerSettings::with_fs(fs.clone())
             },
         );
-        let input = IndexedInput::open(&path, &indexer).unwrap();
+        let input = IndexedInput::open(&path, &indexer, Delimiter::SmartNewLine).unwrap();
         let mut blocks = input.into_blocks().sorted().collect_vec();
         assert_eq!(blocks.len(), 2);
-        assert_eq!(blocks[0].lines_valid(), 1);
+        assert_eq!(blocks[0].entries_valid(), 1);
         assert_matches!(blocks[0].size(), 74 | 75);
-        assert_eq!(blocks[1].lines_valid(), 1);
+        assert_eq!(blocks[1].entries_valid(), 1);
         assert_matches!(blocks[1].size(), 73 | 74);
-        let lines = blocks.pop().unwrap().into_lines().unwrap().collect_vec();
+        let lines = blocks.pop().unwrap().into_entries().unwrap().collect_vec();
         assert_eq!(lines.len(), 1);
         assert_matches!(lines[0].len(), 73 | 74);
-        let lines = blocks.pop().unwrap().into_lines().unwrap().collect_vec();
+        let lines = blocks.pop().unwrap().into_entries().unwrap().collect_vec();
         assert_eq!(lines.len(), 1);
         assert_matches!(lines[0].len(), 74 | 75);
     }
@@ -226,17 +229,17 @@ fn test_indexed_input_sequential_access() {
         );
         let reference = InputReference::File(InputPath::resolve_with_fs(path.clone(), &fs).unwrap());
         let stream = Stream::Sequential(Box::new(File::open(&path).unwrap()));
-        let input = IndexedInput::from_stream(reference, stream, &indexer).unwrap();
+        let input = IndexedInput::from_stream(reference, stream, Delimiter::default(), &indexer).unwrap();
         let mut blocks = input.into_blocks().sorted().collect_vec();
         assert_eq!(blocks.len(), 2);
-        assert_eq!(blocks[0].lines_valid(), 1);
+        assert_eq!(blocks[0].entries_valid(), 1);
         assert_matches!(blocks[0].size(), 74 | 75);
-        assert_eq!(blocks[1].lines_valid(), 1);
+        assert_eq!(blocks[1].entries_valid(), 1);
         assert_matches!(blocks[1].size(), 73 | 74);
-        let lines = blocks.pop().unwrap().into_lines().unwrap().collect_vec();
+        let lines = blocks.pop().unwrap().into_entries().unwrap().collect_vec();
         assert_eq!(lines.len(), 1);
         assert_matches!(lines[0].len(), 73 | 74);
-        let lines = blocks.pop().unwrap().into_lines().unwrap().collect_vec();
+        let lines = blocks.pop().unwrap().into_entries().unwrap().collect_vec();
         assert_eq!(lines.len(), 1);
         assert_matches!(lines[0].len(), 74 | 75);
     }
@@ -306,4 +309,269 @@ fn test_failing_reader_seek_error() {
     let result = reader.seek(SeekFrom::Start(10));
     assert!(result.is_err());
     assert_eq!(result.unwrap_err().to_string(), "seek error");
+}
+
+#[test]
+fn test_input_tail_with_json_delimiter() {
+    use std::io::Cursor;
+
+    let data = b"{\"a\":1}\n{\"b\":2}\n{\"c\":3}\n{\"d\":4}\n{\"e\":5}";
+    let stream = Stream::RandomAccess(Box::new(Cursor::new(data)));
+    let reference = InputReference::Stdin;
+    let input = Input::new(reference, stream);
+
+    // Request last 2 entries with JSON delimiter
+    let input = input.tail(2, Delimiter::Json).unwrap();
+    let mut buf = Vec::new();
+    input.stream.into_sequential().read_to_end(&mut buf).unwrap();
+
+    // Should get last 2 JSON objects
+    assert_eq!(buf, b"{\"d\":4}\n{\"e\":5}");
+}
+
+#[test]
+fn test_input_tail_with_auto_delimiter() {
+    use std::io::Cursor;
+
+    // Multi-line JSON with continuation lines (closing braces)
+    let data = b"{\"a\":1,\n  \"nested\":true\n}\n{\"b\":2\n}";
+    let stream = Stream::RandomAccess(Box::new(Cursor::new(data)));
+    let reference = InputReference::Stdin;
+    let input = Input::new(reference, stream);
+
+    // Request last 1 entry with Auto delimiter
+    let input = input.tail(1, Delimiter::Auto).unwrap();
+    let mut buf = Vec::new();
+    input.stream.into_sequential().read_to_end(&mut buf).unwrap();
+
+    // Should get last JSON object (multi-line entry)
+    assert_eq!(buf, b"{\"b\":2\n}");
+}
+
+#[test]
+fn test_input_tail_with_byte_delimiter() {
+    use std::io::Cursor;
+
+    let data = b"line1\nline2\nline3\nline4\nline5";
+    let stream = Stream::RandomAccess(Box::new(Cursor::new(data)));
+    let reference = InputReference::Stdin;
+    let input = Input::new(reference, stream);
+
+    // Request last 2 entries with LF delimiter
+    let input = input.tail(2, Delimiter::Byte(b'\n')).unwrap();
+    let mut buf = Vec::new();
+    input.stream.into_sequential().read_to_end(&mut buf).unwrap();
+
+    assert_eq!(buf, b"line4\nline5");
+}
+
+#[test]
+fn test_input_tail_ending_with_delimiter() {
+    use std::io::Cursor;
+
+    let data = b"line1\nline2\nline3\n";
+    let stream = Stream::RandomAccess(Box::new(Cursor::new(data)));
+    let reference = InputReference::Stdin;
+    let input = Input::new(reference, stream);
+
+    // Request last 1 entry
+    let input = input.tail(1, Delimiter::SmartNewLine).unwrap();
+    let mut buf = Vec::new();
+    input.stream.into_sequential().read_to_end(&mut buf).unwrap();
+
+    // Should skip trailing delimiter and get last line
+    assert_eq!(buf, b"line3\n");
+}
+
+#[test]
+fn test_input_tail_json_with_spaces() {
+    use std::io::Cursor;
+
+    let data = b"{\"a\":1}\n  \n{\"b\":2}\n\t\n{\"c\":3}";
+    let stream = Stream::RandomAccess(Box::new(Cursor::new(data)));
+    let reference = InputReference::Stdin;
+    let input = Input::new(reference, stream);
+
+    // Request last 1 entry with JSON delimiter
+    let input = input.tail(1, Delimiter::Json).unwrap();
+    let mut buf = Vec::new();
+    input.stream.into_sequential().read_to_end(&mut buf).unwrap();
+
+    assert_eq!(buf, b"{\"c\":3}");
+}
+
+#[test]
+fn test_input_tail_more_than_available() {
+    use std::io::Cursor;
+
+    let data = b"line1\nline2";
+    let stream = Stream::RandomAccess(Box::new(Cursor::new(data)));
+    let reference = InputReference::Stdin;
+    let input = Input::new(reference, stream);
+
+    // Request more entries than available
+    let input = input.tail(10, Delimiter::SmartNewLine).unwrap();
+    let mut buf = Vec::new();
+    input.stream.into_sequential().read_to_end(&mut buf).unwrap();
+
+    // Should get all data
+    assert_eq!(buf, b"line1\nline2");
+}
+
+#[test]
+fn test_input_tail_with_crlf() {
+    use std::io::Cursor;
+
+    let data = b"line1\r\nline2\r\nline3\r\n";
+    let stream = Stream::RandomAccess(Box::new(Cursor::new(data)));
+    let reference = InputReference::Stdin;
+    let input = Input::new(reference, stream);
+
+    // Request last 2 entries
+    let input = input.tail(2, Delimiter::SmartNewLine).unwrap();
+    let mut buf = Vec::new();
+    input.stream.into_sequential().read_to_end(&mut buf).unwrap();
+
+    assert_eq!(buf, b"line2\r\nline3\r\n");
+}
+
+#[test]
+fn test_input_tail_partial_match_handling() {
+    use std::io::Cursor;
+
+    // Data that might have partial delimiter at buffer boundary
+    let data = b"line1\nline2\nline3\nline4\nline5\nline6\nline7\nline8";
+    let stream = Stream::RandomAccess(Box::new(Cursor::new(data)));
+    let reference = InputReference::Stdin;
+    let input = Input::new(reference, stream);
+
+    let input = input.tail(3, Delimiter::SmartNewLine).unwrap();
+    let mut buf = Vec::new();
+    input.stream.into_sequential().read_to_end(&mut buf).unwrap();
+
+    assert_eq!(buf, b"line6\nline7\nline8");
+}
+
+#[test]
+fn test_input_tail_json_partial_match() {
+    let mut data = Vec::new();
+    for i in 0..100 {
+        data.extend_from_slice(format!("{{\"id\":{}}}\n", i).as_bytes());
+    }
+
+    let stream = Stream::RandomAccess(Box::new(Cursor::new(data.clone())));
+    let reference = InputReference::Stdin;
+    let input = Input::new(reference, stream);
+
+    let input = input.tail(5, Delimiter::Json).unwrap();
+    let mut buf = Vec::new();
+    input.stream.into_sequential().read_to_end(&mut buf).unwrap();
+
+    let expected_start = b"{\"id\":95}\n";
+    assert!(buf.starts_with(expected_start));
+}
+
+#[test]
+fn test_input_tail_json_triggers_partial_match() {
+    let mut data = Vec::new();
+    for i in 0..100 {
+        data.extend_from_slice(format!("{{\"id\":{}}}\n", i).as_bytes());
+    }
+
+    let stream = Stream::RandomAccess(Box::new(Cursor::new(data)));
+    let reference = InputReference::Stdin;
+    let input = Input::new(reference, stream);
+
+    let result = input.tail(10, Delimiter::Json);
+    assert!(result.is_ok());
+}
+
+#[test]
+fn test_input_tail_json_with_trailing_whitespace() {
+    let data = b"{\"a\":1}  \n{\"b\":2}\t\n{\"c\":3} \t \n{\"d\":4}\n";
+    let stream = Stream::RandomAccess(Box::new(Cursor::new(data)));
+    let reference = InputReference::Stdin;
+    let input = Input::new(reference, stream);
+
+    let input = input.tail(2, Delimiter::Json).unwrap();
+    let mut buf = Vec::new();
+    input.stream.into_sequential().read_to_end(&mut buf).unwrap();
+
+    assert_eq!(buf, b"{\"c\":3} \t \n{\"d\":4}\n");
+}
+
+#[test]
+fn test_block_entry_methods() {
+    use crate::scanning::Delimiter;
+
+    let data = include_bytes!("testdata/two_messages.jsonl");
+    let stream = Stream::RandomAccess(Box::new(Cursor::new(data)));
+    let indexer = Indexer::<LocalFileSystem>::new(1, PathBuf::new(), IndexerSettings::with_fs(LocalFileSystem));
+    let input = IndexedInput::from_stream(InputReference::Stdin, stream, Delimiter::SmartNewLine, &indexer).unwrap();
+
+    let blocks = input.into_blocks().collect_vec();
+    assert!(!blocks.is_empty());
+
+    // Test entries_valid method - should have at least one valid entry across all blocks
+    let total_valid: u64 = blocks.iter().map(|b| b.entries_valid()).sum();
+    assert!(total_valid > 0);
+}
+
+#[test]
+fn test_indexed_input_with_json_delimiter() {
+    use std::io::Cursor;
+
+    let data = b"{\"a\":1}\n{\"b\":2}\n{\"c\":3}";
+    let stream = Stream::RandomAccess(Box::new(Cursor::new(data)));
+    let indexer = Indexer::<LocalFileSystem>::new(1, PathBuf::new(), IndexerSettings::with_fs(LocalFileSystem));
+    let input = IndexedInput::from_stream(InputReference::Stdin, stream, Delimiter::Json, &indexer).unwrap();
+
+    let blocks = input.into_blocks().collect_vec();
+    assert!(!blocks.is_empty());
+
+    // Should successfully parse with JSON delimiter - verify we can iterate entries
+    let total_entries: usize = blocks
+        .into_iter()
+        .map(|block| block.into_entries().unwrap().count())
+        .sum();
+    assert!(total_entries > 0);
+}
+
+#[test]
+fn test_indexed_input_with_auto_delimiter() {
+    use std::io::Cursor;
+
+    // Multi-line entries with continuation characters
+    let data = b"line1\n  continued\nline2\n}also continued\nline3";
+    let stream = Stream::RandomAccess(Box::new(Cursor::new(data)));
+    let indexer = Indexer::<LocalFileSystem>::new(1, PathBuf::new(), IndexerSettings::with_fs(LocalFileSystem));
+    let input = IndexedInput::from_stream(InputReference::Stdin, stream, Delimiter::Auto, &indexer).unwrap();
+
+    let blocks = input.into_blocks().collect_vec();
+    assert!(!blocks.is_empty());
+
+    // Should successfully parse with Auto delimiter - verify we can iterate entries
+    let total_entries: usize = blocks
+        .into_iter()
+        .map(|block| block.into_entries().unwrap().count())
+        .sum();
+    assert!(total_entries > 0);
+}
+
+#[test]
+fn test_block_entry_empty() {
+    use std::io::Cursor;
+
+    let data = b"\n\n";
+    let stream = Stream::RandomAccess(Box::new(Cursor::new(data)));
+    let indexer = Indexer::<LocalFileSystem>::new(1, PathBuf::new(), IndexerSettings::with_fs(LocalFileSystem));
+    let input = IndexedInput::from_stream(InputReference::Stdin, stream, Delimiter::SmartNewLine, &indexer).unwrap();
+
+    let blocks = input.into_blocks().collect_vec();
+    assert!(!blocks.is_empty());
+
+    // Should be able to iterate entries even for empty/invalid input - verify it doesn't panic
+    for block in blocks {
+        let _entries = block.into_entries().unwrap().collect_vec();
+    }
 }

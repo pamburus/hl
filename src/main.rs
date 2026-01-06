@@ -229,21 +229,19 @@ fn run() -> Result<()> {
 
     let mut delimiter = Delimiter::default();
     if let Some(d) = opt.delimiter {
-        delimiter = match d.to_lowercase().as_str() {
-            "nul" => Delimiter::Byte(0),
-            "lf" => Delimiter::Byte(b'\n'),
-            "cr" => Delimiter::Byte(b'\r'),
-            "crlf" => Delimiter::default(),
-            _ => {
-                if d.len() == 1 {
-                    Delimiter::Byte(d.as_bytes()[0])
-                } else if d.len() > 1 {
-                    Delimiter::Str(d)
-                } else {
-                    Delimiter::default()
-                }
-            }
+        delimiter = match d {
+            cli::Delimiter::Nul => Delimiter::Byte(0),
+            cli::Delimiter::Lf => Delimiter::Byte(b'\n'),
+            cli::Delimiter::Cr => Delimiter::Byte(b'\r'),
+            cli::Delimiter::Crlf => Delimiter::SmartNewLine,
+            cli::Delimiter::Auto => Delimiter::Auto,
         };
+    } else {
+        match opt.input_format {
+            cli::InputFormat::Json => delimiter = Delimiter::Json,
+            cli::InputFormat::Logfmt => delimiter = Delimiter::SmartNewLine,
+            cli::InputFormat::Auto => {}
+        }
     }
 
     let mut input_info = *opt.input_info;
