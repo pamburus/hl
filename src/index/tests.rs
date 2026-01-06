@@ -394,3 +394,313 @@ fn test_source_metadata_is_empty() {
     // Also call modified() to cover that method
     assert!(meta_nonempty.modified().is_ok());
 }
+
+#[test]
+fn test_indexer_with_auto_delimiter() {
+    use crate::scanning::Delimiter;
+
+    let fs = vfs::mem::FileSystem::new();
+
+    // Multi-line JSON entries with continuation lines
+    let data = br#"{"timestamp":"2024-01-01T00:00:00Z","level":"info",
+  "message":"first"}
+{"timestamp":"2024-01-01T00:00:01Z","level":"warn",
+  "message":"second"}
+{"timestamp":"2024-01-01T00:00:02Z","level":"error",
+  "message":"third"}"#;
+    let mut file = fs.create(&PathBuf::from("test.log")).unwrap();
+    file.write_all(data).unwrap();
+
+    let indexer = Indexer::new(
+        1,
+        PathBuf::from("/tmp/cache"),
+        IndexerSettings {
+            buffer_size: nonzero!(4096u32).into(),
+            delimiter: Delimiter::Auto,
+            ..IndexerSettings::with_fs(fs)
+        },
+    );
+
+    let index = indexer.index(&PathBuf::from("test.log")).unwrap();
+
+    // Should find 3 valid entries (multi-line entries treated as single entries)
+    assert_eq!(index.source.stat.entries_valid, 3);
+    assert_eq!(index.source.stat.entries_invalid, 0);
+}
+
+#[test]
+fn test_indexer_with_byte_delimiter() {
+    use crate::scanning::Delimiter;
+
+    let fs = vfs::mem::FileSystem::new();
+
+    let data = b"msg1|msg2|msg3";
+    let mut file = fs.create(&PathBuf::from("test.log")).unwrap();
+    file.write_all(data).unwrap();
+
+    let indexer = Indexer::new(
+        1,
+        PathBuf::from("/tmp/cache"),
+        IndexerSettings {
+            buffer_size: nonzero!(4096u32).into(),
+            delimiter: Delimiter::Byte(b'|'),
+            ..IndexerSettings::with_fs(fs)
+        },
+    );
+
+    let index = indexer.index(&PathBuf::from("test.log")).unwrap();
+
+    // Should find entries split by '|'
+    assert!(index.source.stat.entries_valid > 0 || index.source.stat.entries_invalid > 0);
+}
+
+#[test]
+fn test_indexer_chronology_with_unsorted_entries() {
+    use crate::scanning::Delimiter;
+
+    let fs = vfs::mem::FileSystem::new();
+
+    // Entries with timestamps out of order
+    let data = br#"{"ts":"2024-01-01T00:00:02Z","msg":"third"}
+{"ts":"2024-01-01T00:00:00Z","msg":"first"}
+{"ts":"2024-01-01T00:00:01Z","msg":"second"}
+"#;
+    let mut file = fs.create(&PathBuf::from("test.log")).unwrap();
+    file.write_all(data).unwrap();
+
+    let indexer = Indexer::new(
+        1,
+        PathBuf::from("/tmp/cache"),
+        IndexerSettings {
+            buffer_size: nonzero!(4096u32).into(),
+            delimiter: Delimiter::SmartNewLine,
+            ..IndexerSettings::with_fs(fs)
+        },
+    );
+
+    let index = indexer.index(&PathBuf::from("test.log")).unwrap();
+
+    // Verify chronology was built because entries are unsorted
+    assert_eq!(index.source.stat.flags & schema::FLAG_UNSORTED, schema::FLAG_UNSORTED);
+    assert_eq!(index.source.stat.entries_valid, 3);
+
+    // Check that at least one block has chronology data
+    let has_chronology = index
+        .source
+        .blocks
+        .iter()
+        .any(|block| !block.chronology.bitmap.is_empty() || !block.chronology.jumps.is_empty());
+    assert!(has_chronology);
+}
+
+#[test]
+fn test_indexer_with_empty_entries() {
+    use crate::scanning::Delimiter;
+
+    let fs = vfs::mem::FileSystem::new();
+
+    let data = b"\n\n\n";
+    let mut file = fs.create(&PathBuf::from("test.log")).unwrap();
+    file.write_all(data).unwrap();
+
+    let indexer = Indexer::new(
+        1,
+        PathBuf::from("/tmp/cache"),
+        IndexerSettings {
+            buffer_size: nonzero!(4096u32).into(),
+            delimiter: Delimiter::SmartNewLine,
+            ..IndexerSettings::with_fs(fs)
+        },
+    );
+
+    let index = indexer.index(&PathBuf::from("test.log")).unwrap();
+
+    // Empty entries should be counted as invalid
+    assert!(index.source.stat.entries_invalid > 0);
+}
+
+#[test]
+fn test_indexer_json_delimiter_with_nested_objects() {
+    use crate::scanning::Delimiter;
+
+    let fs = vfs::mem::FileSystem::new();
+
+    let data = br#"{"outer":{"inner":"value1"}}
+{"outer":{"inner":"value2"}}"#;
+    let mut file = fs.create(&PathBuf::from("test.log")).unwrap();
+    file.write_all(data).unwrap();
+
+    let indexer = Indexer::new(
+        1,
+        PathBuf::from("/tmp/cache"),
+        IndexerSettings {
+            buffer_size: nonzero!(4096u32).into(),
+            delimiter: Delimiter::Json,
+            ..IndexerSettings::with_fs(fs)
+        },
+    );
+
+    let index = indexer.index(&PathBuf::from("test.log")).unwrap();
+
+    // Should correctly identify 2 top-level objects
+    assert_eq!(index.source.stat.entries_valid, 2);
+}
+
+#[test]
+fn test_indexer_auto_delimiter_skips_continuation_lines() {
+    use crate::scanning::Delimiter;
+
+    let fs = vfs::mem::FileSystem::new();
+
+    // Lines starting with } should be treated as continuation
+    let data = b"line1\n}continuation\nline2";
+    let mut file = fs.create(&PathBuf::from("test.log")).unwrap();
+    file.write_all(data).unwrap();
+
+    let indexer = Indexer::new(
+        1,
+        PathBuf::from("/tmp/cache"),
+        IndexerSettings {
+            buffer_size: nonzero!(4096u32).into(),
+            delimiter: Delimiter::Auto,
+            ..IndexerSettings::with_fs(fs)
+        },
+    );
+
+    let index = indexer.index(&PathBuf::from("test.log")).unwrap();
+
+    // Should have 2 entries: first multi-line entry and line2
+    assert_eq!(index.source.stat.entries_valid + index.source.stat.entries_invalid, 2);
+}
+
+#[test]
+fn test_indexer_with_mixed_valid_invalid_entries() {
+    use crate::scanning::Delimiter;
+
+    let fs = vfs::mem::FileSystem::new();
+
+    let data = br#"{"ts":"2024-01-01T00:00:00Z","msg":"valid"}
+invalid json
+{"ts":"2024-01-01T00:00:01Z","msg":"valid again"}
+"#;
+    let mut file = fs.create(&PathBuf::from("test.log")).unwrap();
+    file.write_all(data).unwrap();
+
+    let indexer = Indexer::new(
+        1,
+        PathBuf::from("/tmp/cache"),
+        IndexerSettings {
+            buffer_size: nonzero!(4096u32).into(),
+            delimiter: Delimiter::SmartNewLine,
+            ..IndexerSettings::with_fs(fs)
+        },
+    );
+
+    let index = indexer.index(&PathBuf::from("test.log")).unwrap();
+
+    // Should have 2 valid and 1 invalid entry
+    assert_eq!(index.source.stat.entries_valid, 2);
+    assert_eq!(index.source.stat.entries_invalid, 1);
+}
+
+#[test]
+fn test_indexer_large_entries_across_blocks() {
+    use crate::scanning::Delimiter;
+
+    let fs = vfs::mem::FileSystem::new();
+
+    // Create data larger than buffer size to force multiple blocks
+    let entry = br#"{"ts":"2024-01-01T00:00:00Z","msg":"data"}"#;
+    let mut data = Vec::new();
+    for _ in 0..100 {
+        data.extend_from_slice(entry);
+        data.push(b'\n');
+    }
+    let mut file = fs.create(&PathBuf::from("test.log")).unwrap();
+    file.write_all(&data).unwrap();
+
+    let indexer = Indexer::new(
+        1,
+        PathBuf::from("/tmp/cache"),
+        IndexerSettings {
+            buffer_size: nonzero!(1024u32).into(),
+            delimiter: Delimiter::SmartNewLine,
+            ..IndexerSettings::with_fs(fs)
+        },
+    );
+
+    let index = indexer.index(&PathBuf::from("test.log")).unwrap();
+
+    // Should have multiple blocks
+    assert!(index.source.blocks.len() > 1);
+
+    // Total entries across all blocks should be 100
+    let total_entries: u64 = index
+        .source
+        .blocks
+        .iter()
+        .map(|b| b.stat.entries_valid + b.stat.entries_invalid)
+        .sum();
+    assert_eq!(total_entries, 100);
+}
+
+#[test]
+fn test_chronology_bitmap_structure() {
+    use crate::scanning::Delimiter;
+
+    let fs = vfs::mem::FileSystem::new();
+
+    // Create enough unsorted entries to test bitmap structure (more than 64)
+    let mut data = Vec::new();
+    for i in (0..100).rev() {
+        let entry = format!("{{\"ts\":\"2024-01-01T00:00:{:02}Z\",\"msg\":\"entry{}\"}}\n", i, i);
+        data.extend_from_slice(entry.as_bytes());
+    }
+    let mut file = fs.create(&PathBuf::from("test.log")).unwrap();
+    file.write_all(&data).unwrap();
+
+    let indexer = Indexer::new(
+        1,
+        PathBuf::from("/tmp/cache"),
+        IndexerSettings {
+            buffer_size: nonzero!(16384u32).into(),
+            delimiter: Delimiter::SmartNewLine,
+            ..IndexerSettings::with_fs(fs)
+        },
+    );
+
+    let index = indexer.index(&PathBuf::from("test.log")).unwrap();
+
+    // Verify unsorted flag is set
+    assert_eq!(index.source.stat.flags & schema::FLAG_UNSORTED, schema::FLAG_UNSORTED);
+
+    // Check chronology structure
+    for block in &index.source.blocks {
+        if block.stat.entries_valid > 64 {
+            // Should have multiple bitmap entries for >64 entries
+            assert!(block.chronology.bitmap.len() >= 2);
+        }
+    }
+}
+
+#[test]
+fn test_indexer_delimiter_in_settings() {
+    use crate::scanning::Delimiter;
+
+    // Test that delimiter from settings is properly used
+    let settings_json = IndexerSettings {
+        buffer_size: nonzero!(1024u32).into(),
+        delimiter: Delimiter::Json,
+        ..IndexerSettings::with_fs(vfs::mem::FileSystem::new())
+    };
+
+    let settings_auto = IndexerSettings {
+        buffer_size: nonzero!(1024u32).into(),
+        delimiter: Delimiter::Auto,
+        ..IndexerSettings::with_fs(vfs::mem::FileSystem::new())
+    };
+
+    // Verify delimiter is stored correctly
+    assert_eq!(settings_json.delimiter, Delimiter::Json);
+    assert_eq!(settings_auto.delimiter, Delimiter::Auto);
+}

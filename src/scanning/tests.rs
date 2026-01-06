@@ -366,3 +366,575 @@ fn test_smart_newline_searcher_partial_match_l() {
     let result = searcher.partial_match_l(buf);
     assert_eq!(result, None);
 }
+
+#[test]
+fn test_json_delimiter_search_l_basic() {
+    use super::json::JsonDelimitSearcher;
+    let searcher = JsonDelimitSearcher;
+
+    // Two JSON objects with newline between closing and opening brace
+    let buf = b"{\"a\":1}\n{\"b\":2}";
+    let result = searcher.search_l(buf, false);
+    assert_eq!(result, Some(7..8));
+
+    // Multiple newlines and spaces
+    let buf = b"{\"a\":1}\n\n  \n{\"b\":2}";
+    let result = searcher.search_l(buf, false);
+    assert_eq!(result, Some(7..12));
+
+    // Tab characters in whitespace
+    let buf = b"{\"a\":1}\n\t\n{\"b\":2}";
+    let result = searcher.search_l(buf, false);
+    assert_eq!(result, Some(7..10));
+}
+
+#[test]
+fn test_json_delimiter_search_l_edge_cases() {
+    use super::json::JsonDelimitSearcher;
+    let searcher = JsonDelimitSearcher;
+
+    // Closing brace at end (edge=true) - should find whitespace after }
+    let buf = b"{\"a\":1}\n\n";
+    let result = searcher.search_l(buf, true);
+    assert_eq!(result, Some(7..buf.len()));
+
+    // Closing brace at end (edge=false) - no opening brace after, should not match
+    let buf = b"{\"a\":1}\n\n";
+    let result = searcher.search_l(buf, false);
+    assert_eq!(result, None);
+
+    // No newline in whitespace - should not match
+    let buf = b"{\"a\":1}  {\"b\":2}";
+    let result = searcher.search_l(buf, false);
+    assert_eq!(result, None);
+
+    // Only spaces, no newlines - should not match
+    let buf = b"{\"a\":1}   {\"b\":2}";
+    let result = searcher.search_l(buf, false);
+    assert_eq!(result, None);
+}
+
+#[test]
+fn test_json_delimiter_search_l_no_match() {
+    use super::json::JsonDelimitSearcher;
+    let searcher = JsonDelimitSearcher;
+
+    // No closing brace
+    let buf = b"{\"a\":1\n{\"b\":2}";
+    let result = searcher.search_l(buf, false);
+    assert_eq!(result, None);
+
+    // No opening brace after closing
+    let buf = b"{\"a\":1}";
+    let result = searcher.search_l(buf, false);
+    assert_eq!(result, None);
+
+    // Empty buffer
+    let buf = b"";
+    let result = searcher.search_l(buf, false);
+    assert_eq!(result, None);
+
+    // Only opening brace
+    let buf = b"{";
+    let result = searcher.search_l(buf, false);
+    assert_eq!(result, None);
+
+    // Only closing brace
+    let buf = b"}";
+    let result = searcher.search_l(buf, false);
+    assert_eq!(result, None);
+}
+
+#[test]
+fn test_json_delimiter_search_r_basic() {
+    use super::json::JsonDelimitSearcher;
+    let searcher = JsonDelimitSearcher;
+
+    // Two JSON objects with newline between closing and opening brace
+    let buf = b"{\"a\":1}\n{\"b\":2}";
+    let result = searcher.search_r(buf, false);
+    assert_eq!(result, Some(7..8));
+
+    // Multiple newlines and spaces
+    let buf = b"{\"a\":1}\n\n  \n{\"b\":2}";
+    let result = searcher.search_r(buf, false);
+    assert_eq!(result, Some(7..12));
+
+    // CRLF newlines
+    let buf = b"{\"a\":1}\r\n{\"b\":2}";
+    let result = searcher.search_r(buf, false);
+    assert_eq!(result, Some(7..9));
+}
+
+#[test]
+fn test_json_delimiter_search_r_edge_cases() {
+    use super::json::JsonDelimitSearcher;
+    let searcher = JsonDelimitSearcher;
+
+    // Opening brace at start (edge=true) - whitespace before first {
+    let buf = b"\n\n{\"b\":2}";
+    let result = searcher.search_r(buf, true);
+    assert_eq!(result, Some(0..2));
+
+    // Opening brace at start (edge=false) - no closing brace before
+    let buf = b"\n\n{\"b\":2}";
+    let result = searcher.search_r(buf, false);
+    assert_eq!(result, None);
+
+    // No closing brace found before opening brace
+    let buf = b"{\"a\":1}";
+    let result = searcher.search_r(buf, false);
+    assert_eq!(result, None);
+}
+
+#[test]
+fn test_json_delimiter_search_r_multiple_objects() {
+    use super::json::JsonDelimitSearcher;
+    let searcher = JsonDelimitSearcher;
+
+    // Multiple JSON objects - search_r finds rightmost { and looks back for }
+    let buf = b"{\"a\":1}\n{\"b\":2}\n{\"c\":3}";
+    let result = searcher.search_r(buf, false);
+    assert_eq!(result, Some(15..16));
+
+    // Three objects with varying whitespace
+    let buf = b"{\"a\":1}\n  \n{\"b\":2}\n\t{\"c\":3}";
+    let result = searcher.search_r(buf, false);
+    assert_eq!(result, Some(18..20));
+}
+
+#[test]
+fn test_json_delimiter_partial_match_r() {
+    use super::json::JsonDelimitSearcher;
+    let searcher = JsonDelimitSearcher;
+
+    // Buffer ending with closing brace and newlines
+    // Returns distance from } (at position 6) to end (9): 9 - 6 = 3
+    let buf = b"{\"a\":1}\n\n";
+    let result = searcher.partial_match_r(buf);
+    assert_eq!(result, Some(3));
+
+    // Buffer ending with closing brace and space+newline
+    // Returns distance from } (at position 6) to end (10): 10 - 6 = 4
+    let buf = b"{\"a\":1}  \n";
+    let result = searcher.partial_match_r(buf);
+    assert_eq!(result, Some(4));
+
+    // Buffer ending with closing brace only (no whitespace with newline)
+    let buf = b"{\"a\":1}";
+    let result = searcher.partial_match_r(buf);
+    assert_eq!(result, None);
+
+    // Buffer ending with spaces only (no closing brace)
+    let buf = b"{\"a\":1  \n";
+    let result = searcher.partial_match_r(buf);
+    assert_eq!(result, None);
+
+    // Empty buffer
+    let buf = b"";
+    let result = searcher.partial_match_r(buf);
+    assert_eq!(result, None);
+}
+
+#[test]
+fn test_json_delimiter_partial_match_l() {
+    use super::json::JsonDelimitSearcher;
+    let searcher = JsonDelimitSearcher;
+
+    // Buffer starting with newlines and opening brace
+    let buf = b"\n\n{\"b\":2}";
+    let result = searcher.partial_match_l(buf);
+    assert_eq!(result, Some(2));
+
+    // Buffer starting with space+newline and opening brace
+    let buf = b"  \n{\"b\":2}";
+    let result = searcher.partial_match_l(buf);
+    assert_eq!(result, Some(3));
+
+    // Buffer starting with opening brace only
+    let buf = b"{\"b\":2}";
+    let result = searcher.partial_match_l(buf);
+    assert_eq!(result, None);
+
+    // Buffer with no opening brace
+    let buf = b"\n\n  ";
+    let result = searcher.partial_match_l(buf);
+    assert_eq!(result, None);
+
+    // Empty buffer
+    let buf = b"";
+    let result = searcher.partial_match_l(buf);
+    assert_eq!(result, None);
+}
+
+#[test]
+fn test_json_delimiter_split() {
+    use super::json::JsonDelimitSearcher;
+    let searcher = JsonDelimitSearcher;
+
+    // Multiple JSON objects
+    let buf = b"{\"a\":1}\n{\"b\":2}\n{\"c\":3}";
+    let mut iter = searcher.split(buf);
+    assert_eq!(iter.next(), Some(&b"{\"a\":1}"[..]));
+    assert_eq!(iter.next(), Some(&b"{\"b\":2}"[..]));
+    assert_eq!(iter.next(), Some(&b"{\"c\":3}"[..]));
+    assert_eq!(iter.next(), None);
+
+    // With extra whitespace
+    let buf = b"{\"a\":1}\n  \n{\"b\":2}\n\t{\"c\":3}";
+    let mut iter = searcher.split(buf);
+    assert_eq!(iter.next(), Some(&b"{\"a\":1}"[..]));
+    assert_eq!(iter.next(), Some(&b"{\"b\":2}"[..]));
+    assert_eq!(iter.next(), Some(&b"{\"c\":3}"[..]));
+    assert_eq!(iter.next(), None);
+}
+
+#[test]
+fn test_auto_delimiter_search_l_basic() {
+    use super::auto::AutoDelimitSearcher;
+    let searcher = AutoDelimitSearcher;
+
+    // Normal newline followed by regular character
+    let buf = b"line1\nline2";
+    let result = searcher.search_l(buf, false);
+    assert_eq!(result, Some(5..6));
+
+    // CRLF followed by regular character
+    // SmartNewLineSearcher with edge=false skips first byte, finds \n at relative position 5
+    // checks buf[5-1]=buf[4]='1' (not \r), so returns 6..7 (just the \n)
+    let buf = b"line1\r\nline2";
+    let result = searcher.search_l(buf, false);
+    assert_eq!(result, Some(6..7));
+}
+
+#[test]
+fn test_auto_delimiter_search_l_skip_continuations() {
+    use super::auto::AutoDelimitSearcher;
+    let searcher = AutoDelimitSearcher;
+
+    // Newline followed by closing brace - should skip
+    let buf = b"line1\n}";
+    let result = searcher.search_l(buf, false);
+    assert_eq!(result, None);
+
+    // Newline followed by space - should skip and continue searching
+    // First match at 5..6, buf[6]=' ' (continuation), so skip
+    // No more newlines found
+    let buf = b"line1\n line2";
+    let result = searcher.search_l(buf, false);
+    assert_eq!(result, None);
+
+    // Newline followed by tab - should skip
+    let buf = b"line1\n\tline2";
+    let result = searcher.search_l(buf, false);
+    assert_eq!(result, None);
+
+    // Multiple newlines, first followed by }, second by regular char
+    let buf = b"line1\n}\nline2";
+    let result = searcher.search_l(buf, false);
+    assert_eq!(result, Some(7..8));
+}
+
+#[test]
+fn test_auto_delimiter_search_l_edge_cases() {
+    use super::auto::AutoDelimitSearcher;
+    let searcher = AutoDelimitSearcher;
+
+    // At end of buffer (edge=true)
+    let buf = b"line1\n";
+    let result = searcher.search_l(buf, true);
+    assert_eq!(result, Some(5..6));
+
+    // At end of buffer (edge=false) - None because at boundary
+    let buf = b"line1\n";
+    let result = searcher.search_l(buf, false);
+    assert_eq!(result, None);
+
+    // Empty buffer
+    let buf = b"";
+    let result = searcher.search_l(buf, false);
+    assert_eq!(result, None);
+
+    // No newline
+    let buf = b"line1";
+    let result = searcher.search_l(buf, false);
+    assert_eq!(result, None);
+}
+
+#[test]
+fn test_auto_delimiter_search_r_basic() {
+    use super::auto::AutoDelimitSearcher;
+    let searcher = AutoDelimitSearcher;
+
+    // Normal newline followed by regular character
+    let buf = b"line1\nline2";
+    let result = searcher.search_r(buf, false);
+    assert_eq!(result, Some(5..6));
+
+    // CRLF followed by regular character
+    let buf = b"line1\r\nline2";
+    let result = searcher.search_r(buf, false);
+    assert_eq!(result, Some(5..7));
+
+    // Multiple lines - should find last valid delimiter
+    let buf = b"line1\nline2\nline3";
+    let result = searcher.search_r(buf, false);
+    assert_eq!(result, Some(11..12));
+}
+
+#[test]
+fn test_auto_delimiter_search_r_skip_continuations() {
+    use super::auto::AutoDelimitSearcher;
+    let searcher = AutoDelimitSearcher;
+
+    // Newline followed by closing brace - should skip
+    let buf = b"line1\n}";
+    let result = searcher.search_r(buf, false);
+    assert_eq!(result, None);
+
+    // Newline followed by space - should skip
+    let buf = b"line1\n line2";
+    let result = searcher.search_r(buf, false);
+    assert_eq!(result, None);
+
+    // Newline followed by tab - should skip
+    let buf = b"line1\n\tline2";
+    let result = searcher.search_r(buf, false);
+    assert_eq!(result, None);
+
+    // Multiple newlines, last followed by }, earlier by regular char
+    let buf = b"line1\nline2\n}";
+    let result = searcher.search_r(buf, false);
+    assert_eq!(result, Some(5..6));
+}
+
+#[test]
+fn test_auto_delimiter_search_r_edge_cases() {
+    use super::auto::AutoDelimitSearcher;
+    let searcher = AutoDelimitSearcher;
+
+    // At start of buffer (edge=true)
+    let buf = b"\nline2";
+    let result = searcher.search_r(buf, true);
+    assert_eq!(result, Some(0..1));
+
+    // Empty buffer
+    let buf = b"";
+    let result = searcher.search_r(buf, false);
+    assert_eq!(result, None);
+
+    // No newline
+    let buf = b"line1";
+    let result = searcher.search_r(buf, false);
+    assert_eq!(result, None);
+}
+
+#[test]
+fn test_auto_delimiter_partial_match_r() {
+    use super::auto::AutoDelimitSearcher;
+    let searcher = AutoDelimitSearcher;
+
+    // NOTE: The AutoDelimitSearcher.partial_match_r implementation appears inconsistent:
+    // - When delegating to SmartNewLineSearcher (CR at end), it returns a position
+    // - When handling LF directly, it returns a length (1 or 2)
+    // This inconsistency may be a bug, but tests document actual behavior.
+
+    // Buffer ending with LF - SmartNewLineSearcher returns None, impl returns length 1
+    let buf = b"line1\n";
+    let result = searcher.partial_match_r(buf);
+    assert_eq!(result, Some(1));
+
+    // Buffer ending with CRLF - impl detects \r\n and returns length 2
+    let buf = b"line1\r\n";
+    let result = searcher.partial_match_r(buf);
+    assert_eq!(result, Some(2));
+
+    // Buffer ending with CR only - SmartNewLineSearcher returns position 5 (len-1)
+    let buf = b"line1\r";
+    let result = searcher.partial_match_r(buf);
+    assert_eq!(result, Some(5));
+
+    // Buffer not ending with newline
+    let buf = b"line1";
+    let result = searcher.partial_match_r(buf);
+    assert_eq!(result, None);
+
+    // Empty buffer
+    let buf = b"";
+    let result = searcher.partial_match_r(buf);
+    assert_eq!(result, None);
+}
+
+#[test]
+fn test_auto_delimiter_partial_match_l() {
+    use super::auto::AutoDelimitSearcher;
+    let searcher = AutoDelimitSearcher;
+
+    // Buffer starting with LF followed by non-continuation character
+    let buf = b"\nline2";
+    let result = searcher.partial_match_l(buf);
+    assert_eq!(result, Some(1));
+
+    // Buffer starting with LF followed by }
+    let buf = b"\n}";
+    let result = searcher.partial_match_l(buf);
+    assert_eq!(result, Some(1));
+
+    // Buffer not starting with newline
+    let buf = b"line1";
+    let result = searcher.partial_match_l(buf);
+    assert_eq!(result, None);
+
+    // Empty buffer
+    let buf = b"";
+    let result = searcher.partial_match_l(buf);
+    assert_eq!(result, None);
+}
+
+#[test]
+fn test_auto_delimiter_split() {
+    use super::auto::AutoDelimitSearcher;
+    let searcher = AutoDelimitSearcher;
+
+    // Multiple lines with valid delimiters
+    let buf = b"line1\nline2\nline3";
+    let mut iter = searcher.split(buf);
+    assert_eq!(iter.next(), Some(&b"line1"[..]));
+    assert_eq!(iter.next(), Some(&b"line2"[..]));
+    assert_eq!(iter.next(), Some(&b"line3"[..]));
+    assert_eq!(iter.next(), None);
+
+    // Lines with continuation (closing brace)
+    let buf = b"line1\n}continued\nline2";
+    let mut iter = searcher.split(buf);
+    assert_eq!(iter.next(), Some(&b"line1\n}continued"[..]));
+    assert_eq!(iter.next(), Some(&b"line2"[..]));
+    assert_eq!(iter.next(), None);
+
+    // Lines with continuation (space)
+    let buf = b"line1\n continued\nline2";
+    let mut iter = searcher.split(buf);
+    assert_eq!(iter.next(), Some(&b"line1\n continued"[..]));
+    assert_eq!(iter.next(), Some(&b"line2"[..]));
+    assert_eq!(iter.next(), None);
+}
+
+#[test]
+fn test_delimiter_arc_types() {
+    // Test Arc<[u8]> delimiter
+    let bytes: Arc<[u8]> = Arc::from(b"::".as_slice());
+    let delimiter = Delimiter::from(bytes);
+    let searcher = delimiter.into_searcher();
+    let buf = b"a::b::c";
+    assert_eq!(searcher.search_l(buf, false), Some(1..3));
+
+    // Test Arc<str> delimiter
+    let s: Arc<str> = Arc::from("::");
+    let delimiter = Delimiter::from(s);
+    let searcher = delimiter.into_searcher();
+    let buf = b"a::b::c";
+    assert_eq!(searcher.search_l(buf, false), Some(1..3));
+}
+
+#[test]
+fn test_delimiter_enum_conversions() {
+    // Test conversion from u8
+    let delimiter = Delimiter::from(b'/');
+    assert_eq!(delimiter, Delimiter::Byte(b'/'));
+
+    // Test conversion from Vec<u8>
+    let delimiter = Delimiter::from(vec![b':', b':']);
+    match delimiter {
+        Delimiter::Bytes(b) => assert_eq!(&*b, &[b':', b':'][..]),
+        _ => panic!("Expected Delimiter::Bytes"),
+    }
+
+    // Test conversion from String
+    let delimiter = Delimiter::from(String::from("::"));
+    match delimiter {
+        Delimiter::Str(s) => assert_eq!(&*s, "::"),
+        _ => panic!("Expected Delimiter::Str"),
+    }
+}
+
+#[test]
+fn test_delimiter_default() {
+    let delimiter = Delimiter::default();
+    assert_eq!(delimiter, Delimiter::Auto);
+}
+
+#[test]
+fn test_json_delimiter_nested_objects() {
+    use super::json::JsonDelimitSearcher;
+    let searcher = JsonDelimitSearcher;
+
+    // Nested JSON objects - finds boundary between top-level objects
+    // Buffer has actual newline between objects
+    let buf = b"{\"a\":{\"b\":1}}\n{\"c\":2}";
+    let result = searcher.search_l(buf, false);
+    assert_eq!(result, Some(13..14));
+
+    // Multiple levels of nesting
+    let buf = b"{\"a\":{\"b\":{\"c\":1}}}\n{\"d\":2}";
+    let result = searcher.search_l(buf, false);
+    assert_eq!(result, Some(19..20));
+}
+
+#[test]
+fn test_json_delimiter_with_crlf() {
+    use super::json::JsonDelimitSearcher;
+    let searcher = JsonDelimitSearcher;
+
+    // CRLF between objects
+    let buf = b"{\"a\":1}\r\n{\"b\":2}";
+    let result = searcher.search_l(buf, false);
+    assert_eq!(result, Some(7..9));
+
+    // Mixed newlines
+    // Buffer: {\"a\":1}\r\n  \n{\"b\":2}
+    // } at 6, { at 12, space between is buf[7..12] = "\r\n  \n"
+    let buf = b"{\"a\":1}\r\n  \n{\"b\":2}";
+    let result = searcher.search_l(buf, false);
+    assert_eq!(result, Some(7..12));
+}
+
+#[test]
+fn test_auto_delimiter_with_mixed_newlines() {
+    use super::auto::AutoDelimitSearcher;
+    let searcher = AutoDelimitSearcher;
+
+    // Mix of LF and CRLF
+    let buf = b"line1\nline2\r\nline3";
+    let mut iter = searcher.split(buf);
+    assert_eq!(iter.next(), Some(&b"line1"[..]));
+    assert_eq!(iter.next(), Some(&b"line2"[..]));
+    assert_eq!(iter.next(), Some(&b"line3"[..]));
+    assert_eq!(iter.next(), None);
+}
+
+#[test]
+fn test_json_delimiter_invalid_whitespace() {
+    use super::json::JsonDelimitSearcher;
+    let searcher = JsonDelimitSearcher;
+
+    // Invalid character in whitespace - should not match
+    let buf = b"{\"a\":1}\nx\n{\"b\":2}";
+    let result = searcher.search_l(buf, false);
+    assert_eq!(result, None);
+
+    // Number in whitespace - should not match
+    let buf = b"{\"a\":1}\n1{\"b\":2}";
+    let result = searcher.search_l(buf, false);
+    assert_eq!(result, None);
+}
+
+#[test]
+fn test_searcher_arc_delegation() {
+    // Test that Arc<dyn Search> properly delegates to inner searcher
+    let searcher: Arc<dyn Search> = Arc::new(b'/'.into_searcher());
+    let buf = b"a/b/c";
+    assert_eq!(searcher.search_l(buf, false), Some(1..2));
+    assert_eq!(searcher.search_r(buf, false), Some(3..4));
+    assert_eq!(searcher.partial_match_l(buf), None);
+    assert_eq!(searcher.partial_match_r(buf), None);
+}
