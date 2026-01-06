@@ -27,10 +27,10 @@ impl Search for JsonDelimitSearcher {
     fn search_r(&self, buf: &[u8], edge: bool) -> Option<Range<usize>> {
         for j in memrchr_iter(b'{', buf) {
             if let Some(i) = memrchr(b'}', &buf[..j]) {
-                if buf[i + 1..j].iter().all(|&c| c.is_ascii_whitespace()) {
+                if valid_space(&buf[i + 1..j]) {
                     return Some(i + 1..j);
                 }
-            } else if edge && buf[..j].iter().all(|&c| c.is_ascii_whitespace()) {
+            } else if edge && valid_space(&buf[..j]) {
                 return Some(0..j);
             }
         }
@@ -42,10 +42,10 @@ impl Search for JsonDelimitSearcher {
         for i in memchr_iter(b'}', buf) {
             if let Some(j) = memchr(b'{', &buf[i..]) {
                 let j = i + j;
-                if buf[i + 1..j].iter().all(|&c| c.is_ascii_whitespace()) {
+                if valid_space(&buf[i + 1..j]) {
                     return Some(i + 1..j);
                 }
-            } else if edge && buf[i + 1..].iter().all(|&c| c.is_ascii_whitespace()) {
+            } else if edge && valid_space(&buf[i + 1..]) {
                 return Some(i + 1..buf.len());
             }
         }
@@ -55,7 +55,7 @@ impl Search for JsonDelimitSearcher {
     #[inline]
     fn partial_match_r(&self, buf: &[u8]) -> Option<usize> {
         if let Some(i) = memrchr(b'}', buf) {
-            if buf[i + 1..].iter().all(|&c| c.is_ascii_whitespace()) {
+            if valid_space(&buf[i + 1..]) {
                 return Some(buf.len() - i);
             }
         }
@@ -65,10 +65,25 @@ impl Search for JsonDelimitSearcher {
     #[inline]
     fn partial_match_l(&self, buf: &[u8]) -> Option<usize> {
         if let Some(i) = memchr(b'{', buf) {
-            if buf[..i].iter().all(|&c| c.is_ascii_whitespace()) {
+            if valid_space(&buf[..i]) {
                 return Some(i);
             }
         }
         None
     }
+}
+
+#[inline]
+fn valid_space(s: &[u8]) -> bool {
+    let mut has_newlines = false;
+
+    for &c in s {
+        match c {
+            b'\n' | b'\r' => has_newlines = true,
+            b' ' | b'\t' => {}
+            _ => return false,
+        }
+    }
+
+    has_newlines
 }

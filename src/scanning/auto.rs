@@ -29,11 +29,9 @@ impl Search for AutoDelimitSearcher {
                 return Some(range);
             }
 
-            if range.end < buf.len() {
-                match buf[range.end] {
-                    b'}' | b' ' | b'\t' => (),
-                    _ => return Some(range),
-                }
+            match buf.get(range.end) {
+                Some(b'}' | b' ' | b'\t') | None => {}
+                _ => return Some(range),
             }
 
             r = range.start;
@@ -51,11 +49,9 @@ impl Search for AutoDelimitSearcher {
                 return Some(range);
             }
 
-            if range.end < buf.len() {
-                match buf[range.end] {
-                    b'}' | b' ' | b'\t' => (),
-                    _ => return Some(range),
-                }
+            match buf.get(range.end) {
+                Some(b'}' | b' ' | b'\t') | None => {}
+                _ => return Some(range),
             }
 
             l = range.end;
