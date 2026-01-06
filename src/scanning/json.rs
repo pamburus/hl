@@ -97,7 +97,7 @@ fn find_left_boundary_begin(s: &[u8], edge: bool) -> Option<usize> {
             _ => return first_newline,
         }
     }
-    if edge { Some(0) } else { None }
+    if edge { first_newline } else { None }
 }
 
 #[inline]
@@ -115,7 +115,7 @@ fn find_right_boundary_end(s: &[u8], edge: bool) -> Option<usize> {
             _ => return first_newline,
         }
     }
-    if edge { Some(s.len()) } else { None }
+    if edge { first_newline } else { None }
 }
 
 #[inline]
