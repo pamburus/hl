@@ -509,16 +509,16 @@ fn test_json_delimiter_partial_match_r() {
     let searcher = JsonDelimitSearcher;
 
     // Buffer ending with closing brace and newlines
-    // Returns distance from } (at position 6) to end (9): 9 - 6 = 3
+    // Returns position after } where whitespace starts: position 7
     let buf = b"{\"a\":1}\n\n";
     let result = searcher.partial_match_r(buf);
-    assert_eq!(result, Some(3));
+    assert_eq!(result, Some(7));
 
     // Buffer ending with closing brace and space+newline
-    // Returns distance from } (at position 6) to end (10): 10 - 6 = 4
+    // Returns position after } where whitespace starts: position 7
     let buf = b"{\"a\":1}  \n";
     let result = searcher.partial_match_r(buf);
-    assert_eq!(result, Some(4));
+    assert_eq!(result, Some(7));
 
     // Buffer ending with closing brace only (no whitespace with newline)
     let buf = b"{\"a\":1}";
@@ -734,22 +734,17 @@ fn test_auto_delimiter_partial_match_r() {
     use super::auto::AutoDelimitSearcher;
     let searcher = AutoDelimitSearcher;
 
-    // NOTE: The AutoDelimitSearcher.partial_match_r implementation appears inconsistent:
-    // - When delegating to SmartNewLineSearcher (CR at end), it returns a position
-    // - When handling LF directly, it returns a length (1 or 2)
-    // This inconsistency may be a bug, but tests document actual behavior.
-
-    // Buffer ending with LF - SmartNewLineSearcher returns None, impl returns length 1
+    // Buffer ending with LF - returns position where \n starts
     let buf = b"line1\n";
     let result = searcher.partial_match_r(buf);
-    assert_eq!(result, Some(1));
+    assert_eq!(result, Some(5));
 
-    // Buffer ending with CRLF - impl detects \r\n and returns length 2
+    // Buffer ending with CRLF - returns position where \r starts
     let buf = b"line1\r\n";
     let result = searcher.partial_match_r(buf);
-    assert_eq!(result, Some(2));
+    assert_eq!(result, Some(5));
 
-    // Buffer ending with CR only - SmartNewLineSearcher returns position 5 (len-1)
+    // Buffer ending with CR only - SmartNewLineSearcher returns position where \r starts
     let buf = b"line1\r";
     let result = searcher.partial_match_r(buf);
     assert_eq!(result, Some(5));
@@ -937,4 +932,57 @@ fn test_searcher_arc_delegation() {
     assert_eq!(searcher.search_r(buf, false), Some(3..4));
     assert_eq!(searcher.partial_match_l(buf), None);
     assert_eq!(searcher.partial_match_r(buf), None);
+}
+
+#[test]
+fn test_auto_delimiter_with_scanner() {
+    use super::auto::AutoDelimiter;
+
+    // Test that AutoDelimiter works correctly with Scanner
+    let sf = Arc::new(SegmentBufFactory::new(10));
+    let scanner = Scanner::new(sf.clone(), AutoDelimiter);
+
+    // Test case: buffer ends with LF
+    let mut data = std::io::Cursor::new(b"test\nmore");
+    let tokens = scanner.items(&mut data).collect::<Result<Vec<_>>>().unwrap();
+
+    // Should successfully parse the data
+    assert!(!tokens.is_empty());
+}
+
+#[test]
+fn test_partial_match_r_position_semantics() {
+    use super::SmartNewLineSearcher;
+
+    // Verify SmartNewLineSearcher correctly returns positions
+    let searcher = SmartNewLineSearcher;
+
+    // Buffer ending with CR
+    let buf = b"test\r";
+    let result = searcher.partial_match_r(buf);
+    // Should return position where CR starts (4)
+    assert_eq!(result, Some(4));
+
+    // Verify this works correctly in split calculation
+    let bs = buf.len(); // 5
+    if let Some(n) = result {
+        let length = bs - n; // 5 - 4 = 1 (length of partial match to extract)
+        assert_eq!(length, 1);
+        // Would copy buf[4..5] = "\r"
+        assert_eq!(&buf[bs - length..bs], b"\r");
+    }
+
+    // Test with SubStrSearcher for multi-byte delimiter
+    let searcher = SubStrSearcher::new(b"abc");
+    let buf = b"xyzab";
+    let result = searcher.partial_match_r(buf);
+    // Should return position where "ab" starts (3)
+    assert_eq!(result, Some(3));
+
+    if let Some(n) = result {
+        let bs = buf.len(); // 5
+        let length = bs - n; // 5 - 3 = 2 (length of "ab")
+        assert_eq!(length, 2);
+        assert_eq!(&buf[bs - length..bs], b"ab");
+    }
 }

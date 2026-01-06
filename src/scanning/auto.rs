@@ -66,9 +66,9 @@ impl Search for AutoDelimitSearcher {
         }
         if let Some(&b'\n') = buf.last() {
             if buf.len() >= 2 && buf[buf.len() - 2] == b'\r' {
-                return Some(2);
+                return Some(buf.len() - 2);
             }
-            return Some(1);
+            return Some(buf.len() - 1);
         }
         None
     }

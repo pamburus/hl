@@ -56,7 +56,7 @@ impl Search for JsonDelimitSearcher {
     fn partial_match_r(&self, buf: &[u8]) -> Option<usize> {
         if let Some(i) = memrchr(b'}', buf) {
             if valid_space(&buf[i + 1..]) {
-                return Some(buf.len() - i);
+                return Some(i + 1);
             }
         }
         None

@@ -268,10 +268,27 @@ pub trait Search {
     fn search_l(&self, buf: &[u8], edge: bool) -> Option<Range<usize>>;
 
     /// Searches for a partial match of the delimiter at the right edge of the buffer.
+    ///
+    /// Returns the position (index from the beginning of the buffer) where a potential
+    /// partial delimiter match starts at the end of the buffer.
+    ///
+    /// For example, if delimiter is "abc" and buffer is "xyzab", this returns Some(3)
+    /// because "ab" at position 3 could be the start of "abc".
+    ///
+    /// Used in Scanner as: `bs - position` to calculate the length of bytes to extract.
     #[must_use]
     fn partial_match_r(&self, buf: &[u8]) -> Option<usize>;
 
     /// Searches for a partial match of the delimiter at the left edge of the buffer.
+    ///
+    /// Returns the position (index from the beginning of the buffer) where a potential
+    /// partial delimiter match ends at the start of the buffer.
+    ///
+    /// For example, if delimiter is "abc" and buffer is "bcxyz", this returns Some(2)
+    /// because "bc" at buf[0..2] could be the end of "abc".
+    ///
+    /// Since the match starts at position 0, the returned position also equals the length
+    /// of the partial match.
     #[must_use]
     fn partial_match_l(&self, buf: &[u8]) -> Option<usize>;
 }
