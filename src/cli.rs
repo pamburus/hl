@@ -401,9 +401,21 @@ pub struct Opt {
     #[arg(long, env = "HL_ALLOW_PREFIX", overrides_with = "allow_prefix", help_heading = heading::INPUT)]
     pub allow_prefix: bool,
 
-    /// Log entry delimiter <c><dim>[</>NUL<dim>, </>CR<dim>, </>LF<dim>, </>CRLF<dim>, </>JSON<dim>, </>auto<dim>]</></> or any custom string
-    #[arg(long, overrides_with = "delimiter", help_heading = heading::INPUT)]
-    pub delimiter: Option<String>,
+    /// Log entry delimiter
+    ///
+    /// By default, the delimiter is considered to be LF or CRLF followed by an empty line or a line that
+    /// starts with a character other than '}', a space, or a tab.
+    /// This works well for most JSON and logfmt logs, including series of pretty-printed JSON objects.
+    ///
+    /// Possible values:
+    /// • <c>auto</>: Auto-detect delimiter (default)
+    /// • <c>cr</>: Carriage return (\r)
+    /// • <c>lf</>: Line feed (\n)
+    /// • <c>crlf</>: Carriage return + line feed (\r\n)
+    /// • <c>nul</>: Null character (\0)
+    /// • <c>json</>: JSON object boundaries containing new line characters (CR/LF/CRLF)
+    #[arg(long, env = "HL_DELIMITER", overrides_with = "delimiter", help_heading = heading::INPUT)]
+    pub delimiter: Option<Delimiter>,
 
     /// Number of interrupts to ignore, i.e. Ctrl-C (SIGINT)
     #[arg(
@@ -528,6 +540,16 @@ pub enum FlattenOption {
 pub enum HelpVerbosity {
     Short,
     Long,
+}
+
+#[derive(ValueEnum, Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Delimiter {
+    Auto,
+    Cr,
+    Lf,
+    Crlf,
+    Nul,
+    Json,
 }
 
 #[derive(ValueEnum, Debug, Clone, Copy, PartialEq, Eq)]
