@@ -528,10 +528,11 @@ impl Search for SmartNewLineSearcher {
         let b = if edge { 0 } else { 1 };
 
         memchr(b'\n', &buf[b..]).map(|i| {
+            let i = b + i;
             if i > 0 && buf[i - 1] == b'\r' {
-                b + i - 1..b + i + 1
+                i - 1..i + 1
             } else {
-                b + i..b + i + 1
+                i..i + 1
             }
         })
     }
