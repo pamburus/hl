@@ -22,7 +22,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.35.0-alpha.5"
+version = "0.35.0-alpha.6"
 edition = "2024"
 repository = "https://github.com/pamburus/hl"
 license = "MIT"
@@ -129,6 +129,7 @@ wildmatch = "2"
 [build-dependencies]
 anyhow = "1"
 capnpc = "0.24"
+const-str = "1"
 hex = "0.4"
 semver = "1"
 serde = { version = "1", features = ["derive"] }
