@@ -6,20 +6,20 @@ use std::process::Command;
 
 // third-party imports
 use anyhow::{Result, anyhow};
+use const_str::join;
 use semver::Version;
 use serde::{Deserialize, Serialize};
 use serde_json as json;
 use sha2::{Digest, Sha256};
 
 const DEFAULTS_DIR: &str = "etc/defaults";
-const THEME_DIR: &str = "etc/defaults/themes";
-const SCHEMA_JSON_DIR: &str = "schema/json";
-const THEME_SCHEMA_PATH: &str = "schema/json/theme.schema.v1.json";
-const CAPNP_DIR: &str = "schema";
+const THEME_DIR: &str = join!(&[DEFAULTS_DIR, "themes"], "/");
+const SCHEMA_DIR: &str = "schema";
+const JSON_SCHEMA_DIR: &str = join!(&[SCHEMA_DIR, "json"], "/");
+const THEME_SCHEMA_PATH: &str = join!(&[JSON_SCHEMA_DIR, "theme.schema.v1.json"], "/");
+const CAPNP_DIR: &str = SCHEMA_DIR;
 const SRC_DIR: &str = "src";
 const BUILD_CAPNP_DIR: &str = ".build/capnp";
-const GIT_HEAD_PATH: &str = ".git/HEAD";
-const GIT_INDEX_PATH: &str = ".git/index";
 
 fn main() {
     if let Err(e) = run() {
@@ -42,14 +42,15 @@ fn set_git_build_info() -> Result<()> {
     // Parse the base version
     let Ok(mut version) = Version::parse(base_version) else {
         // If version doesn't parse, just use it as-is
-        println!("cargo:rustc-env=HL_VERSION={}", base_version);
+        println!("cargo:rustc-env=VERSION={}", base_version);
         return Ok(());
     };
 
     // Determine if we should add git info (only for pre-release builds)
-    let should_add_git_info = !version.pre.is_empty();
-
-    let final_version = if should_add_git_info {
+    let final_version = if version.pre.is_empty() {
+        // For stable releases, just use the base version
+        base_version.into()
+    } else {
         // Get commit hash
         let commit = Command::new("git")
             .args(["rev-parse", "--short", "HEAD"])
@@ -94,19 +95,10 @@ fn set_git_build_info() -> Result<()> {
             version.build = metadata_parts.join(".").parse()?;
             version.to_string()
         }
-    } else {
-        // For stable releases, just use the base version
-        base_version.into()
     };
 
-    // Always set HL_VERSION
+    // Set VERSION
     println!("cargo:rustc-env=VERSION={}", final_version);
-
-    // Rerun build if git HEAD changes or working directory changes
-    if should_add_git_info {
-        println!("cargo:rerun-if-changed={}", GIT_HEAD_PATH);
-        println!("cargo:rerun-if-changed={}", GIT_INDEX_PATH);
-    }
 
     Ok(())
 }
@@ -226,7 +218,7 @@ fn update_toml_schema_url(toml_path: &Path) -> Result<()> {
 }
 
 fn find_local_schema_file(filename: &str) -> Result<PathBuf> {
-    let schema_dir = Path::new(SCHEMA_JSON_DIR);
+    let schema_dir = Path::new(JSON_SCHEMA_DIR);
     let schema_path = schema_dir.join(filename);
 
     if schema_path.exists() {
