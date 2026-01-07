@@ -1,15 +1,23 @@
-use super::{string::new_message_format, *};
+use chrono::{Offset, Utc};
+use rstest::rstest;
+
+use super::{
+    string::{MessageFormatAutoQuoted, new_message_format},
+    *,
+};
 use crate::{
     datefmt::LinuxDateFormat,
-    model::{Caller, Parser, ParserSettings, RawObject, RawRecord, Record, RecordFields, RecordWithSourceConstructor},
+    model::{
+        Caller, Level, Parser, ParserSettings, RawArray, RawObject, RawRecord, Record, RecordFields,
+        RecordWithSourceConstructor,
+    },
     settings::{AsciiMode, MessageFormat, MessageFormatting},
     testing::Sample,
     timestamp::Timestamp,
     timezone::Tz,
 };
-use chrono::{Offset, Utc};
+
 use encstr::EncodedString;
-use rstest::rstest;
 
 trait FormatToVec {
     fn format_to_vec(&self, rec: &Record) -> Vec<u8>;
@@ -22,7 +30,7 @@ trait FormatToString {
 impl FormatToVec for RecordFormatter {
     fn format_to_vec(&self, rec: &Record) -> Vec<u8> {
         let mut buf = Vec::new();
-        self.format_record(&mut buf, rec);
+        self.format_record(&mut buf, 0..0, rec);
         buf
     }
 }
@@ -42,6 +50,7 @@ fn formatter() -> RecordFormatterBuilder {
         ))
         .with_options(Formatting {
             flatten: None,
+            expansion: Default::default(),
             message: MessageFormatting {
                 format: MessageFormat::AutoQuoted,
             },
@@ -55,6 +64,26 @@ fn format(rec: &Record) -> String {
 
 fn format_no_color(rec: &Record) -> String {
     formatter().with_theme(Default::default()).build().format_to_string(rec)
+}
+
+fn format_no_color_inline(rec: &Record) -> String {
+    formatter()
+        .with_theme(Default::default())
+        .with_expansion(Expansion {
+            mode: ExpansionMode::Inline,
+        })
+        .build()
+        .format_to_string(rec)
+}
+
+fn format_no_color_expand(rec: &Record) -> String {
+    formatter()
+        .with_theme(Default::default())
+        .with_expansion(Expansion {
+            mode: ExpansionMode::Always,
+        })
+        .build()
+        .format_to_string(rec)
 }
 
 fn json_raw_value(s: &str) -> Box<json::value::RawValue> {
@@ -132,7 +161,7 @@ fn test_timestamp_none_always_show() {
 
     assert_eq!(
         &formatter().with_always_show_time(true).build().format_to_string(&rec),
-        "\u{1b}[0;2;3m---------------------\u{1b}[0m \u{1b}[0;1mtm\u{1b}[0m",
+        "\u{1b}[0;2;3m##-##-## ##:##:##.###\u{1b}[0m \u{1b}[0;1mtm\u{1b}[0m",
     );
 }
 
@@ -155,7 +184,7 @@ fn test_level_none_always_show() {
 
     assert_eq!(
         &formatter().with_always_show_level(true).build().format_to_string(&rec),
-        "\u{1b}[0;36m|(?)|\u{1b}[0m \u{1b}[0;1mtm\u{1b}[0m"
+        "\u{1b}[0;36m|###|\u{1b}[0m \u{1b}[0;1mtm\u{1b}[0m"
     );
 }
 
@@ -262,7 +291,7 @@ fn test_string_value_json_space_and_double_and_single_quotes_and_backticks() {
     let v = r#""some \"value\" from 'source' with `sauce`""#;
     let rec = Record::from_fields(&[("k", EncodedString::json(v).into())]);
     assert_eq!(
-        &format_no_color(&rec),
+        &format_no_color_inline(&rec),
         r#"k="some \"value\" from 'source' with `sauce`""#
     );
 }
@@ -272,7 +301,7 @@ fn test_string_value_raw_space_and_double_and_single_quotes_and_backticks() {
     let v = r#"some "value" from 'source' with `sauce`"#;
     let rec = Record::from_fields(&[("k", EncodedString::raw(v).into())]);
     assert_eq!(
-        &format_no_color(&rec),
+        &format_no_color_inline(&rec),
         r#"k="some \"value\" from 'source' with `sauce`""#
     );
 }
@@ -281,14 +310,28 @@ fn test_string_value_raw_space_and_double_and_single_quotes_and_backticks() {
 fn test_string_value_json_tabs() {
     let v = r#""some\tvalue""#;
     let rec = Record::from_fields(&[("k", EncodedString::json(v).into())]);
-    assert_eq!(&format_no_color(&rec), "k=`some\tvalue`");
+    assert_eq!(&format_no_color_inline(&rec), "k=`some\tvalue`");
+}
+
+#[test]
+fn test_string_value_json_tabs_expand() {
+    let v = r#""some\tvalue""#;
+    let rec = Record::from_fields(&[("k", EncodedString::json(v).into())]);
+    assert_eq!(&format_no_color_expand(&rec), "~\n  > k=|=>\n     \tsome\tvalue");
 }
 
 #[test]
 fn test_string_value_raw_tabs() {
     let v = "some\tvalue";
     let rec = Record::from_fields(&[("k", EncodedString::raw(v).into())]);
-    assert_eq!(&format_no_color(&rec), "k=`some\tvalue`");
+    assert_eq!(&format_no_color_inline(&rec), "k=`some\tvalue`");
+}
+
+#[test]
+fn test_string_value_raw_tabs_expand() {
+    let v = "some\tvalue";
+    let rec = Record::from_fields(&[("k", EncodedString::raw(v).into())]);
+    assert_eq!(&format_no_color_expand(&rec), "~\n  > k=|=>\n     \tsome\tvalue");
 }
 
 #[test]
@@ -354,7 +397,7 @@ fn test_string_value_json_number() {
     ] {
         let qv = format!(r#""{}""#, v);
         let rec = Record::from_fields(&[("k", EncodedString::json(&qv).into())]);
-        assert_eq!(format_no_color(&rec), format!(r#"k={}"#, v));
+        assert_eq!(format_no_color_inline(&rec), format!(r#"k={}"#, v));
     }
 }
 
@@ -369,7 +412,7 @@ fn test_string_value_raw_number() {
         "42.128731867381927389172983718293789127389172938712983718927",
     ] {
         let rec = Record::from_fields(&[("k", EncodedString::raw(v).into())]);
-        assert_eq!(format_no_color(&rec), format!(r#"k={}"#, v));
+        assert_eq!(format_no_color_inline(&rec), format!(r#"k={}"#, v));
     }
 }
 
@@ -527,6 +570,7 @@ fn test_nested_hidden_fields_no_flatten() {
         flatten: false,
         theme: Some(Default::default()), // No theme for consistent test output
         fields: Some(fields.into()),
+        expansion: Some(ExpansionMode::Never.into()),
         ..formatter()
     }
     .build();
@@ -554,7 +598,29 @@ fn test_no_op_record_with_source_formatter() {
     let formatter = NoOpRecordWithSourceFormatter;
     let rec = Record::default();
     let rec = rec.with_source(b"src");
-    formatter.format_record(&mut Buf::default(), rec);
+    formatter.format_record(&mut Buf::default(), 0..0, rec);
+}
+
+#[test]
+fn test_record_with_source_formatter_ref() {
+    let formatter = RawRecordFormatter {};
+    let formatter_ref = &formatter;
+    let rec = Record::default();
+    let rec = rec.with_source(b"test_source");
+    let mut buf = Buf::default();
+    formatter_ref.format_record(&mut buf, 0..0, rec);
+    assert_eq!(buf.as_slice(), b"test_source");
+}
+
+#[test]
+fn test_record_with_source_formatter_arc() {
+    use std::sync::Arc;
+    let formatter = Arc::new(RawRecordFormatter {});
+    let rec = Record::default();
+    let rec = rec.with_source(b"arc_test");
+    let mut buf = Buf::default();
+    formatter.format_record(&mut buf, 0..0, rec);
+    assert_eq!(buf.as_slice(), b"arc_test");
 }
 
 #[test]
@@ -797,6 +863,21 @@ fn test_punctuation_with_ascii_mode() {
 }
 
 #[test]
+fn test_string_value_json_extended_space() {
+    let v = r#""some\tvalue""#;
+    let rec = Record::from_fields(&[("k", EncodedString::json(v).into())]);
+    assert_eq!(
+        format_no_color_expand(&rec),
+        format!(
+            "{mh}\n  > k={vh}\n    {vi}some\tvalue",
+            mh = EXPANDED_MESSAGE_HEADER,
+            vh = EXPANDED_VALUE_HEADER,
+            vi = EXPANDED_VALUE_INDENT,
+        )
+    );
+}
+
+#[test]
 fn test_hide_empty_fields_nested_flatten() {
     let val = json_raw_value(r#"{"nested":{"empty":"","nonempty":"value"},"top_empty":""}"#);
     let rec = Record::from_fields(&[("data", RawObject::Json(&val).into())]);
@@ -806,6 +887,7 @@ fn test_hide_empty_fields_nested_flatten() {
         flatten: true,
         hide_empty_fields: true,
         theme: Some(Default::default()),
+        expansion: Some(ExpansionMode::Never.into()),
         ..formatter()
     }
     .build();
@@ -815,6 +897,7 @@ fn test_hide_empty_fields_nested_flatten() {
         flatten: true,
         hide_empty_fields: false,
         theme: Some(Default::default()),
+        expansion: Some(ExpansionMode::Never.into()),
         ..formatter()
     }
     .build();
@@ -842,6 +925,7 @@ fn test_hide_empty_fields_nested_no_flatten() {
         flatten: false,
         hide_empty_fields: true,
         theme: Some(Default::default()),
+        expansion: Some(ExpansionMode::Never.into()),
         ..formatter()
     }
     .build();
@@ -851,6 +935,7 @@ fn test_hide_empty_fields_nested_no_flatten() {
         flatten: false,
         hide_empty_fields: false,
         theme: Some(Default::default()),
+        expansion: Some(ExpansionMode::Never.into()),
         ..formatter()
     }
     .build();
@@ -878,6 +963,7 @@ fn test_hide_empty_fields_no_ellipsis_when_no_empty_fields() {
         flatten: true,
         hide_empty_fields: true,
         theme: Some(Default::default()),
+        expansion: Some(ExpansionMode::Never.into()),
         ..formatter()
     }
     .build();
@@ -892,6 +978,152 @@ fn test_hide_empty_fields_no_ellipsis_when_no_empty_fields() {
 }
 
 #[test]
+fn test_string_value_raw_extended_space() {
+    let v = "some\tvalue";
+    let rec = Record::from_fields(&[("k", EncodedString::raw(v).into())]);
+    assert_eq!(
+        format_no_color_expand(&rec),
+        format!(
+            "{mh}\n  > k={vh}\n    {vi}some\tvalue",
+            mh = EXPANDED_MESSAGE_HEADER,
+            vh = EXPANDED_VALUE_HEADER,
+            vi = EXPANDED_VALUE_INDENT,
+        )
+    );
+}
+
+#[test]
+fn test_expand_with_hidden() {
+    let mut fields = IncludeExcludeKeyFilter::default();
+    fields.entry("b").exclude();
+    fields.entry("c").entry("z").exclude();
+    let formatter = RecordFormatterBuilder {
+        theme: Default::default(),
+        flatten: false,
+        expansion: Some(ExpansionMode::Always.into()),
+        fields: Some(fields.into()),
+        ..formatter()
+    }
+    .build();
+
+    let obj = json_raw_value(r#"{"x":10,"y":20,"z":30}"#);
+    let rec = Record {
+        message: Some(EncodedString::raw("m").into()),
+        fields: RecordFields::from_slice(&[
+            ("a", EncodedString::raw("1").into()),
+            ("b", EncodedString::raw("2").into()),
+            ("c", RawObject::Json(&obj).into()),
+            ("d", EncodedString::raw("4").into()),
+        ]),
+        ..Default::default()
+    };
+
+    let result = formatter.format_to_string(&rec);
+    assert_eq!(
+        &result,
+        "m\n  > a=1\n  > c:\n    > x=10\n    > y=20\n    > ...\n  > d=4\n  > ..."
+    );
+}
+
+#[test]
+fn test_expand_with_hidden_and_flatten() {
+    let mut fields = IncludeExcludeKeyFilter::default();
+    fields.entry("c").entry("z").exclude();
+
+    let formatter = RecordFormatterBuilder {
+        theme: Default::default(),
+        flatten: true,
+        expansion: Some(ExpansionMode::Always.into()),
+        fields: Some(fields.into()),
+        ..formatter()
+    }
+    .build();
+
+    let obj = json_raw_value(r#"{"x":10,"y":20,"z":30}"#);
+    let rec = Record {
+        message: Some(EncodedString::raw("m").into()),
+        fields: RecordFields::from_slice(&[
+            ("a", EncodedString::raw("1").into()),
+            ("b", EncodedString::raw("2").into()),
+            ("c", RawObject::Json(&obj).into()),
+            ("d", EncodedString::raw("4").into()),
+        ]),
+        ..Default::default()
+    };
+
+    let result = formatter.format_to_string(&rec);
+    assert_eq!(&result, "m\n  > a=1\n  > b=2\n  > c.x=10\n  > c.y=20\n  > d=4\n  > ...");
+}
+
+#[test]
+fn test_expand_object() {
+    let formatter = RecordFormatterBuilder {
+        theme: Default::default(),
+        flatten: false,
+        expansion: Some(ExpansionMode::Always.into()),
+        ..formatter()
+    }
+    .build();
+
+    let obj = json_raw_value(r#"{"x":10,"y":"some\nmultiline\nvalue","z":30}"#);
+    let rec = Record {
+        message: Some(EncodedString::raw("m").into()),
+        fields: RecordFields::from_slice(&[
+            ("a", EncodedString::raw("1").into()),
+            ("b", EncodedString::raw("2").into()),
+            ("c", RawObject::Json(&obj).into()),
+            ("d", EncodedString::raw("4").into()),
+        ]),
+        ..Default::default()
+    };
+
+    let result = formatter.format_to_string(&rec);
+    assert_eq!(
+        &result,
+        "m\n  > a=1\n  > b=2\n  > c:\n    > x=10\n    > y=|=>\n       \tsome\n       \tmultiline\n       \tvalue\n    > z=30\n  > d=4"
+    );
+}
+
+#[test]
+fn test_caller_file_line() {
+    let format = |file, line| {
+        let rec = Record {
+            message: Some(EncodedString::raw("m").into()),
+            caller: Caller { file, line, name: "" },
+            ..Default::default()
+        };
+
+        format_no_color(&rec)
+    };
+
+    assert_eq!(format("f", "42"), r#"m -> f:42"#);
+    assert_eq!(format("f", ""), r#"m -> f"#);
+    assert_eq!(format("", "42"), r#"m -> :42"#);
+}
+
+#[test]
+fn test_expand_no_filter() {
+    let rec = Record {
+        message: Some(EncodedString::raw("m").into()),
+        fields: RecordFields::from_slice(&[
+            ("a", EncodedString::raw("1").into()),
+            ("b", EncodedString::raw("2").into()),
+            ("c", EncodedString::raw("3").into()),
+        ]),
+        ..Default::default()
+    };
+
+    let formatter = RecordFormatterBuilder {
+        theme: Default::default(),
+        expansion: Some(ExpansionMode::default().into()),
+        ..formatter()
+    }
+    .build();
+
+    assert_eq!(formatter.format_to_string(&rec), r#"m a=1 b=2 c=3"#);
+}
+
+#[test]
 fn test_hide_empty_objects_flatten() {
     let val = json_raw_value(r#"{"empty_obj":{},"all_empty":{"a":"","b":""},"has_value":{"a":"","b":"value"}}"#);
     let rec = Record::from_fields(&[("data", RawObject::Json(&val).into())]);
@@ -901,6 +1133,7 @@ fn test_hide_empty_objects_flatten() {
         flatten: true,
         hide_empty_fields: true,
         theme: Some(Default::default()),
+        expansion: Some(ExpansionMode::Never.into()),
         ..formatter()
     }
     .build();
@@ -910,6 +1143,7 @@ fn test_hide_empty_objects_flatten() {
         flatten: true,
         hide_empty_fields: false,
         theme: Some(Default::default()),
+        expansion: Some(ExpansionMode::Never.into()),
         ..formatter()
     }
     .build();
@@ -937,6 +1171,7 @@ fn test_hide_empty_objects_no_flatten() {
         flatten: false,
         hide_empty_fields: true,
         theme: Some(Default::default()),
+        expansion: Some(ExpansionMode::Never.into()),
         ..formatter()
     }
     .build();
@@ -946,6 +1181,7 @@ fn test_hide_empty_objects_no_flatten() {
         flatten: false,
         hide_empty_fields: false,
         theme: Some(Default::default()),
+        expansion: Some(ExpansionMode::Never.into()),
         ..formatter()
     }
     .build();
@@ -972,6 +1208,7 @@ fn test_hide_deeply_nested_empty_objects() {
         flatten: true,
         hide_empty_fields: true,
         theme: Some(Default::default()),
+        expansion: Some(ExpansionMode::Never.into()),
         ..formatter()
     }
     .build();
@@ -979,7 +1216,254 @@ fn test_hide_deeply_nested_empty_objects() {
     let result_hide = formatter_hide.format_to_string(&rec);
 
     // Deeply nested objects with only empty fields should be completely hidden
-    assert_eq!(&result_hide, " ...");
+    assert_eq!(&result_hide, "...");
+}
+
+#[test]
+fn test_expand_multiline_message_always() {
+    // Test that with ExpansionMode::Always, a multiline message is formatted as msg=|=>
+    // with proper indentation, not inline breaking the output
+    let rec = Record {
+        message: Some(EncodedString::raw("line1\nline2\nline3").into()),
+        fields: RecordFields::from_slice(&[("field", EncodedString::raw("value").into())]),
+        ..Default::default()
+    };
+
+    let formatter = RecordFormatterBuilder {
+        theme: Some(Default::default()),
+        expansion: Some(ExpansionMode::Always.into()),
+        ..formatter()
+    }
+    .build();
+
+    let result = formatter.format_to_string(&rec);
+
+    // With ExpansionMode::Always, multiline message should be formatted as a field
+    // msg=|=> followed by properly indented lines
+    assert_eq!(
+        &result,
+        concat!(
+            "~\n",
+            "  > msg=|=>\n",
+            "     \tline1\n",
+            "     \tline2\n",
+            "     \tline3\n",
+            "  > field=value"
+        )
+    );
+}
+
+#[test]
+fn test_expand_multiline_message_always_with_level_delimited() {
+    // Test that with ExpansionMode::Always, level present, and Delimited message format
+    // (matching CLI defaults), a multiline message is formatted as msg=|=> with proper
+    // indentation, not inline breaking the output
+
+    let rec = Record {
+        level: Some(Level::Info),
+        message: Some(EncodedString::raw("line1\nline2\nline3").into()),
+        fields: RecordFields::from_slice(&[("field", EncodedString::raw("value").into())]),
+        ..Default::default()
+    };
+
+    let formatter = RecordFormatterBuilder {
+        theme: Some(Default::default()),
+        expansion: Some(ExpansionMode::Always.into()),
+        ..formatter()
+    }
+    .with_message_format(new_message_format(MessageFormat::Delimited, "›"))
+    .build();
+
+    let result = formatter.format_to_string(&rec);
+
+    // With ExpansionMode::Always and Delimited message format, multiline message
+    // should be formatted as a field msg=|=> followed by properly indented lines.
+    // The message should NOT be formatted inline like:
+    //   |INF| line1
+    //   line2
+    //   line3
+    //   | - |   > field=value
+    // Instead it should be expanded properly.
+    assert_eq!(
+        &result,
+        concat!(
+            "|INF| ~\n",
+            "| ~ |   > msg=|=>\n",
+            "| ~ |      \tline1\n",
+            "| ~ |      \tline2\n",
+            "| ~ |      \tline3\n",
+            "| ~ |   > field=value"
+        )
+    );
+}
+
+#[test]
+fn test_expand_multiline_message_always_with_level() {
+    // Test that with ExpansionMode::Always and level present, a multiline message
+    // is formatted as msg=|=> with proper indentation, not inline breaking the output
+
+    let rec = Record {
+        level: Some(Level::Info),
+        message: Some(EncodedString::raw("line1\nline2\nline3").into()),
+        fields: RecordFields::from_slice(&[("field", EncodedString::raw("value").into())]),
+        ..Default::default()
+    };
+
+    let formatter = RecordFormatterBuilder {
+        theme: Some(Default::default()),
+        expansion: Some(ExpansionMode::Always.into()),
+        ..formatter()
+    }
+    .build();
+
+    let result = formatter.format_to_string(&rec);
+
+    // With ExpansionMode::Always, multiline message should be formatted as a field
+    // msg=|=> followed by properly indented lines, even when level is present
+    // The message should NOT be formatted inline like:
+    //   [INF] line1
+    //   line2
+    //   line3
+    // Instead it should be:
+    //   [INF] ~
+    //         > msg=|=>
+    //            	line1
+    //            	line2
+    //            	line3
+    //         > field=value
+    assert_eq!(
+        &result,
+        concat!(
+            "|INF| ~\n",
+            "| ~ |   > msg=|=>\n",
+            "| ~ |      \tline1\n",
+            "| ~ |      \tline2\n",
+            "| ~ |      \tline3\n",
+            "| ~ |   > field=value"
+        )
+    );
+}
+
+#[test]
+fn test_expand_without_message() {
+    let rec = |f, ts| Record {
+        ts,
+        fields: RecordFields::from_slice(&[("a", EncodedString::raw(f).into())]),
+        ..Default::default()
+    };
+
+    let ts = Timestamp::new("2000-01-02T03:04:05.123Z");
+
+    let formatter = RecordFormatterBuilder {
+        theme: Default::default(),
+        expansion: Some(ExpansionMode::Always.into()),
+        ..formatter()
+    }
+    .build();
+
+    assert_eq!(
+        formatter.format_to_string(&rec("1", None)),
+        format!("{mh}\n  > a=1", mh = EXPANDED_MESSAGE_HEADER)
+    );
+    assert_eq!(
+        formatter.format_to_string(&rec("1", Some(ts))),
+        format!(
+            concat!("00-01-02 03:04:05.123 {mh}\n", "                        > a=1"),
+            mh = EXPANDED_MESSAGE_HEADER
+        )
+    );
+}
+
+#[test]
+fn test_format_uuid() {
+    let rec = |value| Record {
+        fields: RecordFields::from_slice(&[("a", EncodedString::raw(value).into())]),
+        ..Default::default()
+    };
+
+    assert_eq!(
+        format_no_color(&rec("243e020d-11d6-42f6-b4cd-b4586057b9a2")),
+        "a=243e020d-11d6-42f6-b4cd-b4586057b9a2"
+    );
+}
+
+#[test]
+fn test_format_int_string() {
+    let rec = |value| Record {
+        fields: RecordFields::from_slice(&[("a", EncodedString::json(value).into())]),
+        ..Default::default()
+    };
+
+    assert_eq!(format_no_color(&rec(r#""243""#)), r#"a="243""#);
+}
+
+#[test]
+fn test_format_unparsable_time() {
+    let rec = |ts, msg| Record {
+        ts: Some(Timestamp::new(ts)),
+        level: Some(Level::Info),
+        message: Some(EncodedString::raw(msg).into()),
+        ..Default::default()
+    };
+
+    assert_eq!(
+        format_no_color(&rec("some-unparsable-time", "some-msg")),
+        "|INF| some-msg ts=some-unparsable-time"
+    );
+}
+
+#[test]
+fn test_format_value_with_eq() {
+    let rec = |value| Record {
+        fields: RecordFields::from_slice(&[("a", EncodedString::raw(value).into())]),
+        ..Default::default()
+    };
+
+    assert_eq!(format_no_color(&rec("x=y")), r#"a="x=y""#);
+    assert_eq!(format_no_color(&rec("|=>")), r#"a="|=>""#);
+}
+
+#[test]
+fn test_value_format_auto() {
+    let mut buf = Vec::new();
+    let result = ValueFormatAuto
+        .format(EncodedString::raw("test"), &mut buf, ExtendedSpaceAction::Inline.into())
+        .unwrap();
+    assert_eq!(buf, b"test");
+    assert!(result.is_ok());
+}
+
+#[test]
+fn test_message_format_auto_empty() {
+    let vf = MessageFormatAutoQuoted;
+    let mut buf = Vec::new();
+    let result = vf
+        .format(EncodedString::raw(""), &mut buf, ExtendedSpaceAction::Abort.into())
+        .unwrap();
+    assert_eq!(buf, br#""""#);
+    assert!(result.is_ok());
+}
+
+#[test]
+fn test_expand_mode_inline() {
+    let rec = |value| Record {
+        fields: RecordFields::from_slice(&[("a", EncodedString::raw(value).into())]),
+        ..Default::default()
+    };
+
+    let formatter = formatter()
+        .with_theme(Default::default())
+        .with_expansion(ExpansionMode::Inline.into())
+        .build();
+
+    assert_eq!(
+        formatter.format_to_string(&rec("some single-line message")),
+        r#"a="some single-line message""#
+    );
+    assert_eq!(
+        formatter.format_to_string(&rec("some\nmultiline\nmessage")),
+        "a=`some\nmultiline\nmessage`"
+    );
 }
 
 #[rstest]
@@ -1028,12 +1512,13 @@ fn test_format_string_scientific_notation(#[case] input: &str, #[case] expected:
 // ---
 
 mod string {
-    use crate::formatting::string::{
-        Format, MessageFormatAlwaysQuoted, MessageFormatAutoQuoted, MessageFormatDelimited, MessageFormatDoubleQuoted,
-        MessageFormatRaw, ValueFormatAuto, ValueFormatDoubleQuoted, ValueFormatRaw,
-    };
-    use encstr::{EncodedString, Result, raw::RawString};
     use rstest::rstest;
+
+    use crate::formatting::string::{
+        ExtendedSpaceAction, Format, MessageFormatAlwaysQuoted, MessageFormatAutoQuoted, MessageFormatDelimited,
+        MessageFormatDoubleQuoted, MessageFormatRaw, Result, ValueFormatAuto, ValueFormatDoubleQuoted, ValueFormatRaw,
+    };
+    use encstr::{EncodedString, json::JsonEncodedString, raw::RawString};
 
     /// Helper to format a string using a formatter and return the result
     fn format<F: Format>(formatter: &F, input: &str) -> String {
@@ -1043,7 +1528,11 @@ mod string {
     /// Helper to format a string using a formatter and return the result
     fn try_format<F: Format>(formatter: &F, input: &str) -> Result<String> {
         let mut buf = Vec::new();
-        formatter.format(EncodedString::Raw(RawString::new(input)), &mut buf)?;
+        let _ = formatter.format(
+            EncodedString::Raw(RawString::new(input)),
+            &mut buf,
+            ExtendedSpaceAction::Inline.into(),
+        )?;
         Ok(String::from_utf8(buf).unwrap())
     }
 
@@ -1198,11 +1687,13 @@ mod string {
 
     #[test]
     fn test_value_format_auto_invalid_json() {
-        use encstr::json::JsonEncodedString;
-
         let invalid_json = JsonEncodedString::new(r#""invalid\xZZ""#);
         let mut buf = Vec::new();
-        let result = ValueFormatAuto.format(EncodedString::Json(invalid_json), &mut buf);
+        let result = ValueFormatAuto.format(
+            EncodedString::Json(invalid_json),
+            &mut buf,
+            ExtendedSpaceAction::Inline.into(),
+        );
         assert!(result.is_err());
     }
 
@@ -1342,8 +1833,7 @@ mod string {
 
     #[test]
     fn test_message_format_auto_quoted_empty() {
-        // Empty messages produce no output (not even quotes)
-        assert_eq!(format(&MessageFormatAutoQuoted, ""), "");
+        assert_eq!(format(&MessageFormatAutoQuoted, ""), r#""""#);
     }
 
     // ---
@@ -1797,4 +2287,516 @@ mod string {
         let formatter = MessageFormatAutoQuoted.rtrim(1);
         assert_eq!(format(&formatter, "key=value"), r#""key=value"#); // Trim closing quote
     }
+}
+
+#[test]
+fn test_array_of_objects() {
+    let ka = json_raw_value(r#"[{"name":"a","value":1},{"name":"b","value":2}]"#);
+    let rec = Record {
+        ts: Some(Timestamp::new("2000-01-02T03:04:05.123Z")),
+        message: Some(RawValue::String(EncodedString::json(r#""test message""#))),
+        level: Some(Level::Info),
+        fields: RecordFields::from_slice(&[("items", RawValue::from(RawArray::Json(&ka)))]),
+        ..Default::default()
+    };
+
+    // Test with expansion mode always - this is where the bug occurs
+    let output = formatter()
+        .with_theme(Default::default())
+        .with_expansion(Expansion {
+            mode: ExpansionMode::Always,
+        })
+        .build()
+        .format_to_string(&rec);
+
+    // The array should contain the objects, not be empty
+    assert!(
+        output.contains("name"),
+        "Array should contain 'name' field from objects, but got: {}",
+        output
+    );
+    assert!(
+        output.contains("value"),
+        "Array should contain 'value' field from objects, but got: {}",
+        output
+    );
+    assert!(
+        output.contains("items"),
+        "Output should contain 'items' field name, but got: {}",
+        output
+    );
+
+    // Check that both objects are present
+    assert!(
+        output.contains("a") && output.contains("b"),
+        "Array should contain object values 'a' and 'b', but got: {}",
+        output
+    );
+}
+
+#[test]
+fn test_expansion_mode_never_simple() {
+    let rec = Record {
+        ts: Some(Timestamp::new("2000-01-02T03:04:05.123Z")),
+        message: Some(RawValue::String(EncodedString::json(r#""simple message""#))),
+        level: Some(Level::Info),
+        fields: RecordFields::from_slice(&[("key", RawValue::String(EncodedString::json(r#""value""#)))]),
+        ..Default::default()
+    };
+
+    let output = formatter()
+        .with_theme(Default::default())
+        .with_expansion(Expansion {
+            mode: ExpansionMode::Never,
+        })
+        .build()
+        .format_to_string(&rec);
+
+    assert!(!output.contains('\n') || output.lines().count() == 1);
+    assert!(output.contains("simple message"));
+    assert!(output.contains("key=value"));
+}
+
+#[test]
+fn test_expansion_mode_never_multiline() {
+    let rec = Record {
+        ts: Some(Timestamp::new("2000-01-02T03:04:05.123Z")),
+        message: Some(RawValue::String(EncodedString::json(r#""line1\nline2\nline3""#))),
+        level: Some(Level::Info),
+        fields: RecordFields::from_slice(&[("error", RawValue::String(EncodedString::json(r#""tab\there""#)))]),
+        ..Default::default()
+    };
+
+    let output = formatter()
+        .with_theme(Default::default())
+        .with_expansion(Expansion {
+            mode: ExpansionMode::Never,
+        })
+        .build()
+        .format_to_string(&rec);
+
+    assert!(output.contains("line1"));
+    assert!(output.contains("error="));
+}
+
+#[test]
+fn test_expansion_mode_inline_simple() {
+    let rec = Record {
+        ts: Some(Timestamp::new("2000-01-02T03:04:05.123Z")),
+        message: Some(RawValue::String(EncodedString::json(r#""simple message""#))),
+        level: Some(Level::Info),
+        fields: RecordFields::from_slice(&[("key", RawValue::String(EncodedString::json(r#""value""#)))]),
+        ..Default::default()
+    };
+
+    let output = formatter()
+        .with_theme(Default::default())
+        .with_expansion(Expansion {
+            mode: ExpansionMode::Inline,
+        })
+        .build()
+        .format_to_string(&rec);
+
+    assert!(output.contains("simple message"));
+    assert!(output.contains("key=value"));
+}
+
+#[test]
+fn test_expansion_mode_inline_multiline() {
+    let rec = Record {
+        ts: Some(Timestamp::new("2000-01-02T03:04:05.123Z")),
+        message: Some(RawValue::String(EncodedString::json(r#""line1\nline2\nline3""#))),
+        level: Some(Level::Info),
+        fields: RecordFields::from_slice(&[("error", RawValue::String(EncodedString::json(r#""tab\there""#)))]),
+        ..Default::default()
+    };
+
+    let output = formatter()
+        .with_theme(Default::default())
+        .with_expansion(Expansion {
+            mode: ExpansionMode::Inline,
+        })
+        .build()
+        .format_to_string(&rec);
+
+    assert!(output.contains("line1"));
+    assert!(output.contains("line2"));
+    assert!(output.contains("line3"));
+    assert!(output.contains("error="));
+}
+
+#[test]
+fn test_expansion_mode_auto_simple() {
+    let rec = Record {
+        ts: Some(Timestamp::new("2000-01-02T03:04:05.123Z")),
+        message: Some(RawValue::String(EncodedString::json(r#""simple message""#))),
+        level: Some(Level::Info),
+        fields: RecordFields::from_slice(&[("key", RawValue::String(EncodedString::json(r#""value""#)))]),
+        ..Default::default()
+    };
+
+    let output = formatter()
+        .with_theme(Default::default())
+        .with_expansion(Expansion {
+            mode: ExpansionMode::Auto,
+        })
+        .build()
+        .format_to_string(&rec);
+
+    assert!(output.contains("simple message"));
+    assert!(output.contains("key=value"));
+}
+
+#[test]
+fn test_expansion_mode_auto_multiline_message() {
+    let rec = Record {
+        ts: Some(Timestamp::new("2000-01-02T03:04:05.123Z")),
+        message: Some(RawValue::String(EncodedString::json(r#""line1\nline2\nline3""#))),
+        level: Some(Level::Info),
+        fields: RecordFields::from_slice(&[("simple", RawValue::String(EncodedString::json(r#""value""#)))]),
+        ..Default::default()
+    };
+
+    let output = formatter()
+        .with_theme(Default::default())
+        .with_expansion(Expansion {
+            mode: ExpansionMode::Auto,
+        })
+        .build()
+        .format_to_string(&rec);
+
+    assert!(output.contains("line1"));
+    assert!(output.contains("line2"));
+    assert!(output.contains("line3"));
+    assert!(output.contains("simple=value"));
+}
+
+#[test]
+fn test_expansion_mode_auto_multiline_field() {
+    let rec = Record {
+        ts: Some(Timestamp::new("2000-01-02T03:04:05.123Z")),
+        message: Some(RawValue::String(EncodedString::json(r#""simple message""#))),
+        level: Some(Level::Info),
+        fields: RecordFields::from_slice(&[
+            ("error", RawValue::String(EncodedString::json(r#""line1\nline2""#))),
+            ("simple", RawValue::String(EncodedString::json(r#""value""#))),
+        ]),
+        ..Default::default()
+    };
+
+    let output = formatter()
+        .with_theme(Default::default())
+        .with_expansion(Expansion {
+            mode: ExpansionMode::Auto,
+        })
+        .build()
+        .format_to_string(&rec);
+
+    assert!(output.contains("simple message"));
+    assert!(output.contains("error="));
+    assert!(output.contains("line1"));
+    assert!(output.contains("line2"));
+    assert!(output.contains("simple=value"));
+}
+
+#[test]
+fn test_expansion_mode_auto_tab_in_field() {
+    let rec = Record {
+        ts: Some(Timestamp::new("2000-01-02T03:04:05.123Z")),
+        message: Some(RawValue::String(EncodedString::json(r#""simple message""#))),
+        level: Some(Level::Info),
+        fields: RecordFields::from_slice(&[
+            ("error", RawValue::String(EncodedString::json(r#""tab\there""#))),
+            ("normal", RawValue::String(EncodedString::json(r#""value""#))),
+        ]),
+        ..Default::default()
+    };
+
+    let output = formatter()
+        .with_theme(Default::default())
+        .with_expansion(Expansion {
+            mode: ExpansionMode::Auto,
+        })
+        .build()
+        .format_to_string(&rec);
+
+    assert!(output.contains("simple message"));
+    assert!(output.contains("error="));
+    assert!(output.contains("tab"));
+    assert!(output.contains("here"));
+    assert!(output.contains("normal=value"));
+}
+
+#[test]
+fn test_expansion_mode_always_simple() {
+    let rec = Record {
+        ts: Some(Timestamp::new("2000-01-02T03:04:05.123Z")),
+        message: Some(RawValue::String(EncodedString::json(r#""simple message""#))),
+        level: Some(Level::Info),
+        fields: RecordFields::from_slice(&[("key", RawValue::String(EncodedString::json(r#""value""#)))]),
+        ..Default::default()
+    };
+
+    let output = formatter()
+        .with_theme(Default::default())
+        .with_expansion(Expansion {
+            mode: ExpansionMode::Always,
+        })
+        .build()
+        .format_to_string(&rec);
+
+    assert!(output.contains("simple message"));
+    assert!(output.contains("key=value"));
+}
+
+#[test]
+fn test_expansion_mode_always_multiline() {
+    let rec = Record {
+        ts: Some(Timestamp::new("2000-01-02T03:04:05.123Z")),
+        message: Some(RawValue::String(EncodedString::json(r#""line1\nline2\nline3""#))),
+        level: Some(Level::Info),
+        fields: RecordFields::from_slice(&[("error", RawValue::String(EncodedString::json(r#""tab\there""#)))]),
+        ..Default::default()
+    };
+
+    let output = formatter()
+        .with_theme(Default::default())
+        .with_expansion(Expansion {
+            mode: ExpansionMode::Always,
+        })
+        .build()
+        .format_to_string(&rec);
+
+    assert!(output.contains("line1"));
+    assert!(output.contains("line2"));
+    assert!(output.contains("line3"));
+    assert!(output.contains("error="));
+    assert!(output.contains("tab"));
+    assert!(output.contains("here"));
+}
+
+#[test]
+fn test_expansion_mode_auto_with_objects() {
+    let nested_obj = json_raw_value(r#"{"key":"value"}"#);
+    let rec = Record {
+        ts: Some(Timestamp::new("2000-01-02T03:04:05.123Z")),
+        message: Some(RawValue::String(EncodedString::json(r#""test message""#))),
+        level: Some(Level::Info),
+        fields: RecordFields::from_slice(&[
+            ("nested", RawValue::Object(RawObject::Json(&nested_obj))),
+            ("simple", RawValue::String(EncodedString::json(r#""text""#))),
+        ]),
+        ..Default::default()
+    };
+
+    let output = formatter()
+        .with_theme(Default::default())
+        .with_expansion(Expansion {
+            mode: ExpansionMode::Auto,
+        })
+        .build()
+        .format_to_string(&rec);
+
+    assert!(output.contains("test message"));
+    assert!(output.contains("simple=text"));
+}
+
+#[test]
+fn test_expansion_mode_auto_only_expands_multiline() {
+    let rec = Record {
+        ts: Some(Timestamp::new("2000-01-02T03:04:05.123Z")),
+        message: Some(RawValue::String(EncodedString::json(r#""single line""#))),
+        level: Some(Level::Info),
+        fields: RecordFields::from_slice(&[
+            ("field1", RawValue::String(EncodedString::json(r#""value1""#))),
+            ("field2", RawValue::String(EncodedString::json(r#""value2""#))),
+            ("field3", RawValue::String(EncodedString::json(r#""value3""#))),
+        ]),
+        ..Default::default()
+    };
+
+    let output = formatter()
+        .with_theme(Default::default())
+        .with_expansion(Expansion {
+            mode: ExpansionMode::Auto,
+        })
+        .build()
+        .format_to_string(&rec);
+
+    assert!(output.contains("single line"));
+    assert!(output.contains("field1=value1"));
+    assert!(output.contains("field2=value2"));
+    assert!(output.contains("field3=value3"));
+}
+
+#[test]
+fn test_expansion_mode_always_with_hidden_no_double_space() {
+    let mut fields = IncludeExcludeKeyFilter::default();
+    fields.entry("hidden").exclude();
+
+    let formatter = RecordFormatterBuilder {
+        theme: Default::default(),
+        flatten: false,
+        expansion: Some(ExpansionMode::Always.into()),
+        fields: Some(fields.into()),
+        ..formatter()
+    }
+    .build();
+
+    let rec = Record {
+        message: Some(EncodedString::raw("m").into()),
+        fields: RecordFields::from_slice(&[
+            ("a", EncodedString::raw("1").into()),
+            ("hidden", EncodedString::raw("2").into()),
+            ("b", EncodedString::raw("3").into()),
+        ]),
+        ..Default::default()
+    };
+
+    let result = formatter.format_to_string(&rec);
+
+    assert!(
+        !result.contains("  ..."),
+        "Should not have double space before ellipsis, got: {}",
+        result
+    );
+    assert!(result.contains(" ..."), "Should have single space before ellipsis");
+}
+
+#[test]
+fn test_arc_record_formatter() {
+    let rec = Record {
+        ts: Some(Timestamp::new("2000-01-02T03:04:05.123Z")),
+        message: Some(RawValue::String(EncodedString::json(r#""test message""#))),
+        level: Some(Level::Info),
+        fields: RecordFields::from_slice(&[("key", RawValue::String(EncodedString::json(r#""value""#)))]),
+        ..Default::default()
+    };
+
+    let formatter = Arc::new(formatter().with_theme(Default::default()).build());
+
+    let output = formatter.format_to_string(&rec);
+
+    assert!(output.contains("test message"));
+    assert!(output.contains("key=value"));
+}
+
+#[test]
+fn test_ref_record_with_source_formatter() {
+    use crate::model::RecordWithSource;
+
+    fn call_formatter<F: RecordWithSourceFormatter>(f: F, buf: &mut Vec<u8>, rec: RecordWithSource) {
+        f.format_record(buf, 0..0, rec);
+    }
+
+    let source = br#"{"msg":"hello"}"#;
+    let rec = Record {
+        message: Some(RawValue::String(EncodedString::raw("hello"))),
+        ..Default::default()
+    };
+
+    let formatter = RawRecordFormatter {};
+
+    let mut buf = Vec::new();
+    call_formatter(&formatter, &mut buf, RecordWithSource::new(&rec, source));
+
+    assert_eq!(buf, source);
+}
+
+#[test]
+fn test_expand_many_fields_overflow() {
+    const MAX_FIELDS: usize = 32;
+
+    let fields: Vec<_> = (0..MAX_FIELDS + 5)
+        .map(|i| (format!("field{:02}", i), EncodedString::raw("value").into()))
+        .collect();
+    let field_refs: Vec<_> = fields.iter().map(|(k, v)| (k.as_str(), *v)).collect();
+
+    let rec = Record {
+        message: Some(EncodedString::raw("msg").into()),
+        fields: RecordFields::from_slice(&field_refs),
+        ..Default::default()
+    };
+
+    let formatter = RecordFormatterBuilder {
+        theme: Default::default(),
+        expansion: Some(ExpansionMode::Always.into()),
+        ..formatter()
+    }
+    .build();
+
+    let result = formatter.format_to_string(&rec);
+
+    let expected_lines: Vec<_> = std::iter::once("msg".to_string())
+        .chain((0..MAX_FIELDS + 5).map(|i| format!("  > field{:02}=value", i)))
+        .collect();
+    let expected = expected_lines.join("\n");
+
+    assert_eq!(result, expected);
+}
+
+#[test]
+fn test_expand_nested_object_with_multiline_string() {
+    let obj = json_raw_value(r#"{"nested":"line1\nline2"}"#);
+    let rec = Record {
+        message: Some(EncodedString::raw("msg").into()),
+        fields: RecordFields::from_slice(&[("obj", RawObject::Json(&obj).into())]),
+        ..Default::default()
+    };
+
+    let formatter = RecordFormatterBuilder {
+        theme: Default::default(),
+        expansion: Some(ExpansionMode::Auto.into()),
+        ..formatter()
+    }
+    .build();
+
+    let result = formatter.format_to_string(&rec);
+
+    assert_eq!(
+        result,
+        "msg\n  > obj:\n    > nested=|=>\n       \tline1\n       \tline2"
+    );
+}
+
+#[test]
+fn test_array_with_multiline_string_in_object_auto_mode() {
+    let arr = json_raw_value(r#"[{"multiline":"a\nb\nc"}]"#);
+    let rec = Record {
+        message: Some(EncodedString::raw("msg").into()),
+        fields: RecordFields::from_slice(&[("arr", RawArray::Json(&arr).into())]),
+        ..Default::default()
+    };
+
+    let formatter = RecordFormatterBuilder {
+        theme: Default::default(),
+        expansion: Some(ExpansionMode::Auto.into()),
+        ..formatter()
+    }
+    .build();
+
+    let result = formatter.format_to_string(&rec);
+
+    assert_eq!(result, r#"msg arr=[{ multiline="a\nb\nc" }]"#);
+}
+
+#[test]
+fn test_array_with_multiline_string_in_object_inline_mode() {
+    let arr = json_raw_value(r#"[{"multiline":"a\nb\nc"}]"#);
+    let rec = Record {
+        message: Some(EncodedString::raw("msg").into()),
+        fields: RecordFields::from_slice(&[("arr", RawArray::Json(&arr).into())]),
+        ..Default::default()
+    };
+
+    let formatter = RecordFormatterBuilder {
+        theme: Default::default(),
+        expansion: Some(ExpansionMode::Inline.into()),
+        ..formatter()
+    }
+    .build();
+
+    let result = formatter.format_to_string(&rec);
+
+    assert_eq!(result, "msg arr=[{ multiline=`a\nb\nc` }]");
 }

@@ -16,6 +16,11 @@ High-performance log viewer and processor that transforms logs in JSON and logfm
   * User-friendly shortcuts like `today`, `yesterday`, `friday`, or relative offsets such as `-3h` or `-14d`.
 * __[Field Visibility Control](#hiding-or-revealing-selected-fields)__: Quickly hide or reveal specific fields using the `-h` option.
 * __Empty Field Hiding__: Automatically hide empty fields with the `-e` flag.
+* __Field Expansion__: Control multi-line field and message formatting with the `-x` option:
+  * `never`: Compact single-line output with escaped newlines.
+  * `inline`: Preserve newlines as-is in the output.
+  * `auto`: Automatically expand fields containing multi-line content.
+  * `always`: Expand all fields into structured multi-line format.
 * __[High-Speed Message Sorting](#sorting-messages-chronologically)__: Achieve lightning-fast message sorting with automatic indexing via the `-s` flag.
   * Performs the initial scan at approximately 2 GiB/s, enabling rapid filtering by timestamp and level without re-scanning.
   * Efficiently handles hundreds of local files totaling hundreds of gigabytes.
@@ -794,6 +799,7 @@ Output Options:
   -E, --show-empty-fields     Show empty fields, overrides --hide-empty-fields option [env: HL_SHOW_EMPTY_FIELDS=]
       --input-info <LAYOUTS>  Input number and filename layouts [default: auto] [possible values: auto, none, minimal, compact, full]
       --ascii [<WHEN>]        Whether to restrict punctuation to ASCII characters only [env: HL_ASCII=] [default: auto] [possible values: auto, never, always]
+  -x, --expansion [<MODE>]    Whether to expand fields and messages [env: HL_EXPANSION=] [default: auto] [possible values: never, inline, auto, always]
   -o, --output <FILE>         Output file
 
 Input Options:

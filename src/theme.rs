@@ -11,7 +11,8 @@ use crate::{
     error::*,
     eseq::{Brightness, Color, ColorCode, Mode, Sequence, StyleCode},
     fmtx::Push,
-    level::{self},
+    level,
+    syntax::*,
     themecfg,
 };
 
@@ -45,6 +46,8 @@ struct LevelStyles {
 pub struct Theme {
     levels: LevelStyles,
     pub indicators: IndicatorPack,
+    pub expanded_value_prefix: ExpandedValuePrefix,
+    pub expanded_value_suffix: ExpandedValueSuffix,
 }
 
 impl Theme {
@@ -68,6 +71,16 @@ impl Theme {
         Self {
             levels,
             indicators: IndicatorPack::new(&cfg.indicators),
+            expanded_value_prefix: cfg
+                .elements
+                .get(&Element::ValueExpansion)
+                .map(ExpandedValuePrefix::from)
+                .unwrap_or_default(),
+            expanded_value_suffix: cfg
+                .elements
+                .get(&Element::ValueExpansion)
+                .map(ExpandedValueSuffix::from)
+                .unwrap_or_default(),
         }
     }
 
@@ -128,7 +141,7 @@ impl Sample for Arc<Theme> {
 
 // ---
 
-#[derive(Clone, Eq, PartialEq, Debug)]
+#[derive(Clone, Eq, PartialEq, Debug, Default)]
 struct Style(Sequence);
 
 impl Style {
@@ -176,12 +189,6 @@ impl Style {
             themecfg::Color::Palette(code) => ColorCode::Palette(*code),
             themecfg::Color::RGB(themecfg::RGB(r, g, b)) => ColorCode::Rgb(*r, *g, *b),
         }
-    }
-}
-
-impl Default for Style {
-    fn default() -> Self {
-        Self::reset()
     }
 }
 
@@ -241,6 +248,7 @@ impl<'a, B: Push<u8>> Styler<'a, B> {
         if let Some(style) = self.pack.reset {
             self.pack.styles[style].apply(self.buf)
         }
+        self.current = None;
         self.synced = None;
     }
 
@@ -262,6 +270,25 @@ impl<'a, B: Push<u8>> Styler<'a, B> {
             }
             self.synced = self.current;
         }
+    }
+}
+
+impl<'a> Styler<'a, Vec<u8>> {
+    #[inline]
+    pub fn transact<R, E, F>(&mut self, f: F) -> std::result::Result<R, E>
+    where
+        F: FnOnce(&mut Self) -> std::result::Result<R, E>,
+    {
+        let current = self.current;
+        let synced = self.synced;
+        let n = self.buf.len();
+        let result = f(self);
+        if result.is_err() {
+            self.buf.truncate(n);
+            self.current = current;
+            self.synced = synced;
+        }
+        result
     }
 }
 
@@ -392,6 +419,64 @@ impl Indicator {
                 + indicator.inner.suffix.width(),
         }
     }
+}
+
+// ---
+
+pub struct ExpandedValuePrefix {
+    pub value: String,
+}
+
+impl From<&themecfg::Style> for ExpandedValuePrefix {
+    fn from(style: &themecfg::Style) -> Self {
+        Self {
+            value: styled(style.into(), &Self::default().value),
+        }
+    }
+}
+
+impl Default for ExpandedValuePrefix {
+    fn default() -> Self {
+        Self {
+            value: " ".repeat(EXPANDED_KEY_HEADER.len()) + EXPANDED_VALUE_INDENT,
+        }
+    }
+}
+
+// ---
+
+pub struct ExpandedValueSuffix {
+    pub value: String,
+}
+
+impl From<&themecfg::Style> for ExpandedValueSuffix {
+    fn from(style: &themecfg::Style) -> Self {
+        Self {
+            value: styled(style.into(), &Self::default().value),
+        }
+    }
+}
+
+impl Default for ExpandedValueSuffix {
+    fn default() -> Self {
+        Self {
+            value: EXPANDED_VALUE_HEADER.to_string(),
+        }
+    }
+}
+
+// ---
+
+fn styled(style: Style, text: &str) -> String {
+    if style == Style::reset() {
+        return text.into();
+    }
+
+    let mut buf = Vec::new();
+    style.with(&mut buf, |buf| {
+        buf.extend(text.as_bytes());
+    });
+    String::from_utf8(buf).unwrap()
 }
 
 // ---
