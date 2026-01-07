@@ -1037,26 +1037,15 @@ mod string {
     use rstest::rstest;
 
     /// Helper to format a string using a formatter and return the result
-    fn format_to_string<F: Format>(formatter: &F, input: &str) -> Result<String> {
+    fn format<F: Format>(formatter: &F, input: &str) -> String {
+        try_format(formatter, input).unwrap()
+    }
+
+    /// Helper to format a string using a formatter and return the result
+    fn try_format<F: Format>(formatter: &F, input: &str) -> Result<String> {
         let mut buf = Vec::new();
         formatter.format(EncodedString::Raw(RawString::new(input)), &mut buf)?;
         Ok(String::from_utf8(buf).unwrap())
-    }
-
-    /// Helper to assert that formatting produces expected output
-    fn assert_formats_to<F: Format>(formatter: &F, input: &str, expected: &str) {
-        match format_to_string(formatter, input) {
-            Ok(result) => {
-                assert_eq!(
-                    result, expected,
-                    "\n  Input:    {:?}\n  Expected: {:?}\n  Got:      {:?}",
-                    input, expected, result
-                );
-            }
-            Err(e) => {
-                panic!("Format failed for input {:?}: {:?}", input, e);
-            }
-        }
     }
 
     // ---
@@ -1066,7 +1055,7 @@ mod string {
     #[test]
     fn test_value_format_auto_empty_string() {
         // Empty string should produce empty quotes
-        assert_formats_to(&ValueFormatAuto, "", r#""""#);
+        assert_eq!(format(&ValueFormatAuto, ""), r#""""#);
     }
 
     #[rstest]
@@ -1077,7 +1066,7 @@ mod string {
     #[case::with_hyphen("hello-world", "hello-world")]
     fn test_value_format_auto_simple_words(#[case] input: &str, #[case] expected: &str) {
         // Simple words without special characters should stay plain (unquoted)
-        assert_formats_to(&ValueFormatAuto, input, expected);
+        assert_eq!(format(&ValueFormatAuto, input), expected);
     }
 
     // ---
@@ -1115,7 +1104,7 @@ mod string {
     #[case::scientific_notation("1e10", r#""1e10""#)]
     #[case::negative_exponent("2.5e-3", r#""2.5e-3""#)]
     fn test_value_format_auto_numbers(#[case] input: &str, #[case] expected: &str) {
-        assert_formats_to(&ValueFormatAuto, input, expected);
+        assert_eq!(format(&ValueFormatAuto, input), expected);
     }
 
     // ---
@@ -1138,7 +1127,7 @@ mod string {
     #[case::truth("truth", "truth")]
     #[case::null_upper("Null", "Null")]
     fn test_value_format_auto_json_literals(#[case] input: &str, #[case] expected: &str) {
-        assert_formats_to(&ValueFormatAuto, input, expected);
+        assert_eq!(format(&ValueFormatAuto, input), expected);
     }
 
     // ---
@@ -1165,7 +1154,7 @@ mod string {
     // Backslash uses backticks (backslash doesn't prevent backtick usage)
     #[case::backslash(r#"path\to\file"#, r#"`path\to\file`"#)]
     fn test_value_format_auto_quote_selection(#[case] input: &str, #[case] expected: &str) {
-        assert_formats_to(&ValueFormatAuto, input, expected);
+        assert_eq!(format(&ValueFormatAuto, input), expected);
     }
 
     // ---
@@ -1187,7 +1176,7 @@ mod string {
     #[case::leading_tab("\thello", "`\thello`")]
     #[case::both_sides(" hello ", r#"" hello""#)]
     fn test_value_format_auto_whitespace(#[case] input: &str, #[case] expected: &str) {
-        assert_formats_to(&ValueFormatAuto, input, expected);
+        assert_eq!(format(&ValueFormatAuto, input), expected);
     }
 
     // ---
@@ -1201,7 +1190,7 @@ mod string {
     #[case::mixed("test🎉done", "test🎉done")]
     #[case::emoji_needs_quotes("a b👍", r#""a b👍""#)]
     fn test_value_format_auto_utf8(#[case] input: &str, #[case] expected: &str) {
-        assert_formats_to(&ValueFormatAuto, input, expected);
+        assert_eq!(format(&ValueFormatAuto, input), expected);
     }
 
     // ---
@@ -1242,7 +1231,7 @@ mod string {
     #[case::starts_with_single("'quoted'", r#""'quoted'""#)]
     #[case::starts_with_backtick("`quoted`", r#""`quoted`""#)]
     fn test_value_format_auto_special_chars(#[case] input: &str, #[case] expected: &str) {
-        assert_formats_to(&ValueFormatAuto, input, expected);
+        assert_eq!(format(&ValueFormatAuto, input), expected);
     }
 
     // ---
@@ -1262,7 +1251,7 @@ mod string {
     // Plus sign at start - looks_like_number returns true, so gets quoted
     #[case::plus_sign("+123", r#""+123""#)]
     fn test_value_format_auto_number_edge_cases(#[case] input: &str, #[case] expected: &str) {
-        assert_formats_to(&ValueFormatAuto, input, expected);
+        assert_eq!(format(&ValueFormatAuto, input), expected);
     }
 
     // ---
@@ -1279,7 +1268,7 @@ mod string {
     #[case::trailing_newline("hello\n", "hello\n")]
     #[case::utf8("café👍", "café👍")]
     fn test_value_format_raw(#[case] input: &str, #[case] expected: &str) {
-        assert_formats_to(&ValueFormatRaw, input, expected);
+        assert_eq!(format(&ValueFormatRaw, input), expected);
     }
 
     // ---
@@ -1298,7 +1287,7 @@ mod string {
     #[case::utf8_preserved("café", r#""café""#)]
     #[case::emoji("👍", r#""👍""#)]
     fn test_value_format_double_quoted(#[case] input: &str, #[case] expected: &str) {
-        assert_formats_to(&ValueFormatDoubleQuoted, input, expected);
+        assert_eq!(format(&ValueFormatDoubleQuoted, input), expected);
     }
 
     // ---
@@ -1345,7 +1334,7 @@ mod string {
     #[case::del("\x7f", r#""\u007f""#)]
     fn test_value_format_double_quoted_control_chars(#[case] input: &str, #[case] expected: &str) {
         // Tests the complete control character suite (0x00-0x1F, 0x7F)
-        assert_formats_to(&ValueFormatDoubleQuoted, input, expected);
+        assert_eq!(format(&ValueFormatDoubleQuoted, input), expected);
     }
 
     // ---
@@ -1355,7 +1344,7 @@ mod string {
     #[test]
     fn test_message_format_auto_quoted_empty() {
         // Empty messages produce no output (not even quotes)
-        assert_formats_to(&MessageFormatAutoQuoted, "", "");
+        assert_eq!(format(&MessageFormatAutoQuoted, ""), "");
     }
 
     // ---
@@ -1372,7 +1361,7 @@ mod string {
     #[case::with_numbers("test123", "test123")]
     fn test_message_format_auto_quoted_plain(#[case] input: &str, #[case] expected: &str) {
         // Messages without equal sign, control chars, newlines, backslashes, or leading quotes
-        assert_formats_to(&MessageFormatAutoQuoted, input, expected);
+        assert_eq!(format(&MessageFormatAutoQuoted, input), expected);
     }
 
     // ---
@@ -1386,7 +1375,7 @@ mod string {
     #[case::multiple("a=1, b=2", r#""a=1, b=2""#)]
     #[case::url_param("url?id=123", r#""url?id=123""#)]
     fn test_message_format_auto_quoted_equal_sign(#[case] input: &str, #[case] expected: &str) {
-        assert_formats_to(&MessageFormatAutoQuoted, input, expected);
+        assert_eq!(format(&MessageFormatAutoQuoted, input), expected);
     }
 
     // ---
@@ -1400,7 +1389,7 @@ mod string {
     // Double quote in middle doesn't trigger quoting (only LEADING quotes do)
     #[case::double_in_middle(r#"say "hi""#, r#"say "hi""#)]
     fn test_message_format_auto_quoted_leading_quote(#[case] input: &str, #[case] expected: &str) {
-        assert_formats_to(&MessageFormatAutoQuoted, input, expected);
+        assert_eq!(format(&MessageFormatAutoQuoted, input), expected);
     }
 
     // ---
@@ -1415,7 +1404,7 @@ mod string {
     #[case::control_char("text\x00here", r#""text\u0000here""#)]
     #[case::carriage_return("a\rb", "`a\rb`")]
     fn test_message_format_auto_quoted_control_chars(#[case] input: &str, #[case] expected: &str) {
-        assert_formats_to(&MessageFormatAutoQuoted, input, expected);
+        assert_eq!(format(&MessageFormatAutoQuoted, input), expected);
     }
 
     // ---
@@ -1432,7 +1421,7 @@ mod string {
     // JSON when all quotes present
     #[case::all_quotes(r#"a="b" 'c' `d`"#, r#""a=\"b\" 'c' `d`""#)]
     fn test_message_format_auto_quoted_quote_selection(#[case] input: &str, #[case] expected: &str) {
-        assert_formats_to(&MessageFormatAutoQuoted, input, expected);
+        assert_eq!(format(&MessageFormatAutoQuoted, input), expected);
     }
 
     // ---
@@ -1453,7 +1442,7 @@ mod string {
     // Equal sign with trailing space
     #[case::equal_with_trailing("key=value ", r#""key=value""#)]
     fn test_message_format_auto_quoted_whitespace(#[case] input: &str, #[case] expected: &str) {
-        assert_formats_to(&MessageFormatAutoQuoted, input, expected);
+        assert_eq!(format(&MessageFormatAutoQuoted, input), expected);
     }
 
     // ---
@@ -1463,7 +1452,7 @@ mod string {
     #[test]
     fn test_message_format_always_quoted_empty() {
         // Empty messages produce no output (not even quotes)
-        assert_formats_to(&MessageFormatAlwaysQuoted, "", "");
+        assert_eq!(format(&MessageFormatAlwaysQuoted, ""), "");
     }
 
     #[rstest]
@@ -1473,7 +1462,7 @@ mod string {
     #[case::safe_chars("test123", r#""test123""#)]
     fn test_message_format_always_quoted_double(#[case] input: &str, #[case] expected: &str) {
         // Simple cases use double quotes
-        assert_formats_to(&MessageFormatAlwaysQuoted, input, expected);
+        assert_eq!(format(&MessageFormatAlwaysQuoted, input), expected);
     }
 
     // ---
@@ -1484,7 +1473,7 @@ mod string {
     #[case::has_double(r#"say "hi""#, r#"'say "hi"'"#)]
     #[case::multiple_doubles(r#"a "b" c "d""#, r#"'a "b" c "d"'"#)]
     fn test_message_format_always_quoted_single(#[case] input: &str, #[case] expected: &str) {
-        assert_formats_to(&MessageFormatAlwaysQuoted, input, expected);
+        assert_eq!(format(&MessageFormatAlwaysQuoted, input), expected);
     }
 
     // ---
@@ -1495,7 +1484,7 @@ mod string {
     #[case::both_quotes(r#""both" and 'single'"#, r#"`"both" and 'single'`"#)]
     #[case::complex(r#"a "b" c 'd'"#, r#"`a "b" c 'd'`"#)]
     fn test_message_format_always_quoted_backtick(#[case] input: &str, #[case] expected: &str) {
-        assert_formats_to(&MessageFormatAlwaysQuoted, input, expected);
+        assert_eq!(format(&MessageFormatAlwaysQuoted, input), expected);
     }
 
     // ---
@@ -1508,7 +1497,7 @@ mod string {
     // Newline with double quotes uses backticks (newline doesn't prevent backticks)
     #[case::newline_and_quotes("line1\n\"quote\"", "`line1\n\"quote\"`")]
     fn test_message_format_always_quoted_json(#[case] input: &str, #[case] expected: &str) {
-        assert_formats_to(&MessageFormatAlwaysQuoted, input, expected);
+        assert_eq!(format(&MessageFormatAlwaysQuoted, input), expected);
     }
 
     // ---
@@ -1519,7 +1508,7 @@ mod string {
     fn test_message_format_delimited_empty() {
         // Empty messages produce no output (no delimiter either)
         let formatter = MessageFormatDelimited::new(" | ".to_string());
-        assert_formats_to(&formatter, "", "");
+        assert_eq!(format(&formatter, ""), "");
     }
 
     // ---
@@ -1535,7 +1524,7 @@ mod string {
     #[case::empty_delim("test", "", r#""test""#)]
     fn test_message_format_delimited_plain(#[case] input: &str, #[case] delim: &str, #[case] expected: &str) {
         let formatter = MessageFormatDelimited::new(delim.to_string());
-        assert_formats_to(&formatter, input, expected);
+        assert_eq!(format(&formatter, input), expected);
     }
 
     // ---
@@ -1551,7 +1540,7 @@ mod string {
     #[case::delim_at_end("test |", " | ", "test | | ")]
     fn test_message_format_delimited_in_content(#[case] input: &str, #[case] delim: &str, #[case] expected: &str) {
         let formatter = MessageFormatDelimited::new(delim.to_string());
-        assert_formats_to(&formatter, input, expected);
+        assert_eq!(format(&formatter, input), expected);
     }
 
     // ---
@@ -1565,7 +1554,7 @@ mod string {
     #[case::tab("a\tb", " | ", "a\tb | ")]
     fn test_message_format_delimited_control_chars(#[case] input: &str, #[case] delim: &str, #[case] expected: &str) {
         let formatter = MessageFormatDelimited::new(delim.to_string());
-        assert_formats_to(&formatter, input, expected);
+        assert_eq!(format(&formatter, input), expected);
     }
 
     // ---
@@ -1578,7 +1567,7 @@ mod string {
     #[case::starts_with_backtick("`quoted`", " | ", r#""`quoted`" | "#)]
     fn test_message_format_delimited_leading_quote(#[case] input: &str, #[case] delim: &str, #[case] expected: &str) {
         let formatter = MessageFormatDelimited::new(delim.to_string());
-        assert_formats_to(&formatter, input, expected);
+        assert_eq!(format(&formatter, input), expected);
     }
 
     // ---
@@ -1596,7 +1585,7 @@ mod string {
     #[case::all_quotes(r#""a" 'b' `c` | d"#, " | ", r#""\"a\" 'b' `c` | d" | "#)]
     fn test_message_format_delimited_quote_selection(#[case] input: &str, #[case] delim: &str, #[case] expected: &str) {
         let formatter = MessageFormatDelimited::new(delim.to_string());
-        assert_formats_to(&formatter, input, expected);
+        assert_eq!(format(&formatter, input), expected);
     }
 
     // ---
@@ -1611,7 +1600,7 @@ mod string {
     #[case::only_spaces("   ", " | ", " | ")]
     fn test_message_format_delimited_whitespace(#[case] input: &str, #[case] delim: &str, #[case] expected: &str) {
         let formatter = MessageFormatDelimited::new(delim.to_string());
-        assert_formats_to(&formatter, input, expected);
+        assert_eq!(format(&formatter, input), expected);
     }
 
     // ---
@@ -1629,7 +1618,7 @@ mod string {
     #[case::utf8("café👍", "café👍")]
     fn test_message_format_raw(#[case] input: &str, #[case] expected: &str) {
         // MessageFormatRaw is identical to ValueFormatRaw - no auto-trim, pure passthrough
-        assert_formats_to(&MessageFormatRaw, input, expected);
+        assert_eq!(format(&MessageFormatRaw, input), expected);
     }
 
     // ---
@@ -1653,7 +1642,7 @@ mod string {
     #[case::vertical_tab("\x0b", r#""\u000b""#)]
     #[case::form_feed("\x0c", r#""\f""#)]
     fn test_message_format_double_quoted(#[case] input: &str, #[case] expected: &str) {
-        assert_formats_to(&MessageFormatDoubleQuoted, input, expected);
+        assert_eq!(format(&MessageFormatDoubleQuoted, input), expected);
     }
 
     // ---
@@ -1700,7 +1689,7 @@ mod string {
     #[case::del("\x7f", r#""\u007f""#)]
     fn test_message_format_double_quoted_control_chars(#[case] input: &str, #[case] expected: &str) {
         // Tests the complete control character suite (0x00-0x1F, 0x7F)
-        assert_formats_to(&MessageFormatDoubleQuoted, input, expected);
+        assert_eq!(format(&MessageFormatDoubleQuoted, input), expected);
     }
 
     // ---
@@ -1710,7 +1699,7 @@ mod string {
     #[test]
     fn test_format_right_trimmed_no_trim() {
         let formatter = ValueFormatRaw.rtrim(0);
-        assert_formats_to(&formatter, "hello", "hello");
+        assert_eq!(format(&formatter, "hello"), "hello");
     }
 
     #[rstest]
@@ -1720,7 +1709,7 @@ mod string {
     #[case::trim_1("test", 1, "tes")]
     fn test_format_right_trimmed_basic(#[case] input: &str, #[case] n: usize, #[case] expected: &str) {
         let formatter = ValueFormatRaw.rtrim(n);
-        assert_formats_to(&formatter, input, expected);
+        assert_eq!(format(&formatter, input), expected);
     }
 
     // ---
@@ -1732,7 +1721,7 @@ mod string {
     #[case::empty_with_trim("", 5, "")]
     fn test_format_right_trimmed_empty(#[case] input: &str, #[case] n: usize, #[case] expected: &str) {
         let formatter = ValueFormatRaw.rtrim(n);
-        assert_formats_to(&formatter, input, expected);
+        assert_eq!(format(&formatter, input), expected);
     }
 
     // ---
@@ -1743,21 +1732,21 @@ mod string {
     fn test_format_right_trimmed_with_auto() {
         // ValueFormatAuto adds quotes, then trim removes from the quotes
         let formatter = ValueFormatAuto.rtrim(1);
-        assert_formats_to(&formatter, "42", r#""42"#); // Trims closing quote
+        assert_eq!(format(&formatter, "42"), r#""42"#); // Trims closing quote
     }
 
     #[test]
     fn test_format_right_trimmed_with_double_quoted() {
         // ValueFormatDoubleQuoted adds "text", trim 1 removes closing quote
         let formatter = ValueFormatDoubleQuoted.rtrim(1);
-        assert_formats_to(&formatter, "hello", r#""hello"#);
+        assert_eq!(format(&formatter, "hello"), r#""hello"#);
     }
 
     #[test]
     fn test_format_right_trimmed_with_delimited() {
         // MessageFormatDelimited appends delimiter, trim removes it
         let formatter = MessageFormatDelimited::new(" | ".to_string()).rtrim(3);
-        assert_formats_to(&formatter, "test", "test");
+        assert_eq!(format(&formatter, "test"), "test");
     }
 
     // ---
@@ -1768,7 +1757,7 @@ mod string {
     fn test_format_right_trimmed_nested() {
         // Double wrapping: inner trims 2, outer trims 1
         let formatter = ValueFormatRaw.rtrim(2).rtrim(1);
-        assert_formats_to(&formatter, "hello", "he"); // "hello" -> "hel" -> "he"
+        assert_eq!(format(&formatter, "hello"), "he"); // "hello" -> "hel" -> "he"
     }
 
     // ---
@@ -1779,14 +1768,14 @@ mod string {
     fn test_format_right_trimmed_emoji() {
         // 👍 is 4 bytes, trimming 4 should remove it completely
         let formatter = ValueFormatRaw.rtrim(4);
-        assert_formats_to(&formatter, "test👍", "test");
+        assert_eq!(format(&formatter, "test👍"), "test");
     }
 
     #[test]
     fn test_format_right_trimmed_utf8_safe() {
         // Trim ASCII characters safely
         let formatter = ValueFormatRaw.rtrim(1);
-        assert_formats_to(&formatter, "hello", "hell");
+        assert_eq!(format(&formatter, "hello"), "hell");
     }
 
     // Note: Trimming can split multi-byte UTF-8 characters, causing invalid UTF-8.
@@ -1800,13 +1789,13 @@ mod string {
     fn test_format_right_trimmed_with_message_auto() {
         // Plain message, no trimming
         let formatter = MessageFormatAutoQuoted.rtrim(0);
-        assert_formats_to(&formatter, "hello", "hello");
+        assert_eq!(format(&formatter, "hello"), "hello");
     }
 
     #[test]
     fn test_format_right_trimmed_message_auto_with_quotes() {
         // Message with equal sign gets quoted, then trim
         let formatter = MessageFormatAutoQuoted.rtrim(1);
-        assert_formats_to(&formatter, "key=value", r#""key=value"#); // Trim closing quote
+        assert_eq!(format(&formatter, "key=value"), r#""key=value"#); // Trim closing quote
     }
 }
