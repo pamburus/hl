@@ -112,6 +112,10 @@ check-schema: (setup "schema")
 install: (setup "build") build-release install-man-pages
     cargo install --path . --locked
 
+# Install binary and man pages and copy with versioned name
+install-versioned: install
+    @cp ~/.cargo/bin/hl ~/.cargo/bin/$(~/.cargo/bin/hl --version | tr ' ' '-')
+
 # Install man pages
 install-man-pages:
     #!/usr/bin/env bash
