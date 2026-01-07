@@ -1,4 +1,4 @@
-#:schema https://raw.githubusercontent.com/pamburus/hl/v0.34.1/schema/json/config.schema.json
+#:schema ../../schema/json/config.schema.json
 
 #
 # Time format, see https://man7.org/linux/man-pages/man1/date.1.html for details.
@@ -144,7 +144,7 @@ field-key-value-separator = "="
 string-opening-quote = "'"
 string-closing-quote = "'"
 caller-name-file-separator = " @ "
-hidden-fields-indicator = " ..."
+hidden-fields-indicator = "..."
 level-left-separator = "["
 level-right-separator = "]"
 input-number-prefix = "#"
@@ -157,3 +157,12 @@ input-name-right-separator = { ascii = " | ", unicode = " │ " }
 input-name-clipping = { ascii = "..", unicode = "··" }
 input-name-common-part = { ascii = "..", unicode = "··" }
 message-delimiter = { ascii = "::", unicode = "›" }
+
+# Expansion settings.
+[formatting.expansion]
+# Field expansion mode [never|inline|auto|always].
+# - never: single line output, no expansion
+# - inline: expand inline (backward compatible with master branch)
+# - auto: automatically expand fields with multi-line content (newlines, tabs)
+# - always: always expand fields into multiple lines
+mode = "auto"

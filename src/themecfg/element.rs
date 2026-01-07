@@ -36,6 +36,8 @@ pub enum Element {
     BooleanFalse,
     Null,
     Ellipsis,
+    Bullet,
+    ValueExpansion,
 }
 
 impl Element {

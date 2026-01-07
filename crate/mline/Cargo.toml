@@ -1,0 +1,12 @@
+[package]
+name = "mline"
+version = "0.1.0"
+edition.workspace = true
+description = "Multi-line string manipulation library for Rust"
+repository.workspace = true
+license.workspace = true
+workspace = "../.."
+
+[dependencies]
+heapopt = { path = "../heapopt" }
+itertools = "0.13"

@@ -128,3 +128,21 @@ fn test_vec() {
     assert_eq!(vec.as_slices().0, &[1, 2, 3]);
     assert_eq!(vec.as_slices().1, &[4, 5, 6]);
 }
+
+#[test]
+fn test_from_iter() {
+    let vec = Vec::<i32, 3>::from_iter([1, 2]);
+    assert_eq!(vec.len(), 2);
+    assert_eq!(vec.as_slices().0, &[1, 2]);
+    assert_eq!(vec.as_slices().1, &[]);
+
+    let vec = Vec::<i32, 3>::from_iter([1, 2, 3]);
+    assert_eq!(vec.len(), 3);
+    assert_eq!(vec.as_slices().0, &[1, 2, 3]);
+    assert_eq!(vec.as_slices().1, &[]);
+
+    let vec = Vec::<i32, 3>::from_iter([1, 2, 3, 4, 5]);
+    assert_eq!(vec.len(), 5);
+    assert_eq!(vec.as_slices().0, &[1, 2, 3]);
+    assert_eq!(vec.as_slices().1, &[4, 5]);
+}

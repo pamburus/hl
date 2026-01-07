@@ -2,6 +2,7 @@
 name = "heapopt"
 version = "0.1.1"
 edition.workspace = true
+description = "Optimized collections for minimal heap usage"
 repository.workspace = true
 license.workspace = true
 

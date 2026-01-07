@@ -392,6 +392,7 @@ impl FromStr for InputInfo {
 #[serde(rename_all = "kebab-case")]
 pub struct Formatting {
     pub flatten: Option<FlattenOption>,
+    pub expansion: ExpansionOptions,
     pub message: MessageFormatting,
     pub punctuation: Punctuation,
 }
@@ -401,12 +402,34 @@ impl Sample for Formatting {
     fn sample() -> Self {
         Self {
             flatten: None,
+            expansion: ExpansionOptions::default(),
             message: MessageFormatting {
                 format: MessageFormat::AutoQuoted,
             },
             punctuation: Punctuation::sample(),
         }
     }
+}
+
+// ---
+
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq)]
+#[serde(rename_all = "kebab-case")]
+pub struct ExpansionOptions {
+    pub mode: Option<ExpansionMode>,
+}
+
+// ---
+
+#[derive(Clone, Copy, Debug, Default, Deserialize, Display, Eq, PartialEq)]
+#[serde(rename_all = "kebab-case")]
+#[strum(serialize_all = "kebab-case")]
+pub enum ExpansionMode {
+    Never,
+    Inline,
+    #[default]
+    Auto,
+    Always,
 }
 
 // ---
@@ -491,7 +514,9 @@ impl Punctuation {
             string_closing_quote: Self::resolve_field(&self.string_closing_quote, mode),
             source_location_separator: Self::resolve_field(&self.source_location_separator, mode),
             caller_name_file_separator: Self::resolve_field(&self.caller_name_file_separator, mode),
-            hidden_fields_indicator: Self::resolve_field(&self.hidden_fields_indicator, mode),
+            hidden_fields_indicator: Self::resolve_field(&self.hidden_fields_indicator, mode)
+                .trim()
+                .to_string(),
             level_left_separator: Self::resolve_field(&self.level_left_separator, mode),
             level_right_separator: Self::resolve_field(&self.level_right_separator, mode),
             input_number_prefix: Self::resolve_field(&self.input_number_prefix, mode),
@@ -520,7 +545,7 @@ impl Default for Punctuation {
             string_closing_quote: "'".into(),
             source_location_separator: "@ ".into(),
             caller_name_file_separator: " ".into(),
-            hidden_fields_indicator: " ...".into(),
+            hidden_fields_indicator: "...".into(),
             level_left_separator: "|".into(),
             level_right_separator: "|".into(),
             input_number_prefix: "#".into(),
@@ -546,7 +571,7 @@ impl Sample for Punctuation {
             string_closing_quote: "'".into(),
             source_location_separator: DisplayVariant::ascii("-> ").unicode("→ "),
             caller_name_file_separator: " @ ".into(),
-            hidden_fields_indicator: DisplayVariant::ascii(" ...").unicode(" …"),
+            hidden_fields_indicator: DisplayVariant::ascii("...").unicode("…"),
             level_left_separator: "|".into(),
             level_right_separator: "|".into(),
             input_number_prefix: "#".into(),

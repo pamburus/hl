@@ -12,25 +12,30 @@ use hl::{
     DateTimeFormatter, Filter, LinuxDateFormat, Parser, ParserSettings, SegmentProcessor, Settings, Theme,
     app::{RecordIgnorer, SegmentProcess, SegmentProcessorOptions},
     formatting::{NoOpRecordWithSourceFormatter, RecordFormatterBuilder},
-    settings,
+    settings::{self, ExpansionMode},
     timezone::Tz,
 };
 
 const GROUP: &str = strcat!(super::GROUP, ND, "combined");
 
 const THEME: &str = "universal";
-const SAMPLES: [(&str, &[u8]); 4] = [
-    ("json", samples::log::elk01::JSON),
-    ("logfmt", samples::log::elk01::LOGFMT),
-    ("json", samples::log::int01::JSON),
-    ("logfmt", samples::log::int01::LOGFMT),
+const SAMPLES: [(&str, &[u8], ExpansionMode); 6] = [
+    ("json", samples::log::elk01::JSON, ExpansionMode::Inline),
+    ("logfmt", samples::log::elk01::LOGFMT, ExpansionMode::Inline),
+    ("json", samples::log::elk01::JSON, ExpansionMode::Always),
+    ("logfmt", samples::log::elk01::LOGFMT, ExpansionMode::Always),
+    ("json", samples::log::int01::JSON, ExpansionMode::Inline),
+    ("logfmt", samples::log::int01::LOGFMT, ExpansionMode::Inline),
 ];
 
 pub(super) fn bench(c: &mut Criterion) {
     let mut c = c.benchmark_group(GROUP);
 
-    for (format, input) in SAMPLES {
-        let param = format!("{}:{}:{}", format, input.len(), hash(input));
+    for (format, input, expansion) in SAMPLES {
+        let mut param = format!("{}:{}:{}", format, input.len(), hash(input));
+        if expansion != ExpansionMode::Inline {
+            param = format!("{}:x={}", param, expansion);
+        }
 
         c.throughput(Throughput::Bytes(input.len() as u64));
 
@@ -43,6 +48,7 @@ pub(super) fn bench(c: &mut Criterion) {
                 LinuxDateFormat::new("%b %d %T.%3N").compile(),
                 Tz::FixedOffset(Utc.fix()),
             ))
+            .with_expansion(expansion.into())
             .with_options(settings::Formatting::default())
             .build();
 
