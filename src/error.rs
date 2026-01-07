@@ -36,9 +36,9 @@ pub enum Error {
     #[error(transparent)]
     Capnp(#[from] capnp::Error),
     #[error(transparent)]
-    BincodeEncode(#[from] bincode::error::EncodeError),
+    CiboriumSerialize(#[from] ciborium::ser::Error<std::io::Error>),
     #[error(transparent)]
-    BincodeDecode(#[from] bincode::error::DecodeError),
+    CiboriumDeserialize(#[from] ciborium::de::Error<std::io::Error>),
     #[error(transparent)]
     Boxed(#[from] Box<dyn std::error::Error + std::marker::Send>),
     #[error("file {filename:?} not found")]
