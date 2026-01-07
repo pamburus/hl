@@ -22,7 +22,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.35.0-alpha.3"
+version = "0.35.0-alpha.4"
 edition = "2024"
 repository = "https://github.com/pamburus/hl"
 license = "MIT"
@@ -38,11 +38,11 @@ name = "bench"
 
 [dependencies]
 anstream = "0.6"
-bincode = { version = "2", features = ["serde"] }
 bytefmt = "0.1"
 capnp = "0.24"
 chrono = { version = "0.4", default-features = false, features = ["clock", "serde", "std"] }
 chrono-tz = { version = "0.10", features = ["serde"] }
+ciborium = "0.2"
 clap = { workspace = true }
 clap_complete = { workspace = true }
 clap_mangen = { workspace = true }

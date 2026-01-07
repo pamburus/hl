@@ -191,20 +191,18 @@ impl<'a, FS: FileSystem> IndexerSettings<'a, FS> {
 
     pub fn hash(&self) -> Result<[u8; 32]> {
         let mut hasher = Sha256::new();
-        bincode::serde::encode_into_std_write(
-            (
-                CURRENT_VERSION,
-                &self.buffer_size,
-                &self.max_message_size,
-                &self.fields,
-                &self.delimiter,
-                &self.allow_prefix,
-                &self.unix_ts_unit,
-                &self.format,
-            ),
-            &mut hasher,
-            bincode::config::legacy(),
-        )?;
+        let data = (
+            VALID_MAGIC,
+            CURRENT_VERSION,
+            &self.buffer_size,
+            &self.max_message_size,
+            &self.fields,
+            &self.delimiter,
+            &self.allow_prefix,
+            &self.unix_ts_unit,
+            &self.format,
+        );
+        ciborium::into_writer(&data, &mut hasher)?;
         Ok(hasher.finalize().into())
     }
 }
@@ -1040,11 +1038,8 @@ impl Header {
     }
 
     #[inline]
-    fn load(mut reader: &mut Reader) -> Result<Self> {
-        Ok(bincode::serde::decode_from_std_read(
-            &mut reader,
-            bincode::config::legacy(),
-        )?)
+    fn load(reader: &mut Reader) -> Result<Self> {
+        Ok(ciborium::from_reader(reader)?)
     }
 
     #[inline]
@@ -1061,8 +1056,8 @@ impl Header {
         }
     }
 
-    fn save(&self, mut writer: &mut Writer) -> Result<()> {
-        bincode::serde::encode_into_std_write(self, &mut writer, bincode::config::legacy())?;
+    fn save(&self, writer: &mut Writer) -> Result<()> {
+        ciborium::into_writer(self, writer)?;
         Ok(())
     }
 }
@@ -1191,8 +1186,8 @@ fn level_mask_higher_or_eq(flag: u64) -> u64 {
     flag | level_mask_higher(flag)
 }
 
-const VALID_MAGIC: u64 = 0x5845444e492d4c48;
-const CURRENT_VERSION: u64 = 3;
+const VALID_MAGIC: u64 = 0x484c2d494e444558;
+const CURRENT_VERSION: u64 = 4;
 
 /*
 ---
