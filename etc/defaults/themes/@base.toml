@@ -1,6 +1,6 @@
-#:schema https://raw.githubusercontent.com/pamburus/hl/v0.34.1/schema/json/theme.schema.v1.json
+#:schema ../../../schema/json/theme.schema.v1.json
 
-version = "1.0"
+version = "1.1"
 tags = ["base", "dark", "light", "16color"]
 
 # Styles define general purpose styles used throughout the theme.
@@ -18,6 +18,7 @@ status.modes = ["-faint"]
 key.style = "accent"
 value.style = "primary"
 level.style = "status"
+unknown.style = "muted"
 trace.style = "secondary"
 debug.foreground = "magenta"
 info.foreground = "cyan"
@@ -46,6 +47,7 @@ null.style = "value"
 
 # Levels define styles for different log levels.
 [levels]
+unknown.level-inner.style = ["level", "unknown"]
 trace.level-inner.style = ["level", "trace"]
 debug.level-inner.style = ["level", "debug"]
 info.level-inner.style = ["level", "info"]

@@ -1,4 +1,4 @@
-# Theme Configuration Reference (v1.0)
+# Theme Configuration Reference (v1.1)
 
 ## Table of Contents
 
@@ -26,7 +26,7 @@
 
 ## Overview
 
-Theme configuration v1.0 introduces role-based styling with inheritance, making themes more maintainable and consistent. All themes automatically inherit from a built-in `@base` theme that provides sensible defaults.
+Theme configuration v1.1 introduces role-based styling with inheritance, making themes more maintainable and consistent. All themes automatically inherit from a built-in `@base` theme that provides sensible defaults.
 
 **Key Features:**
 - **Role-based styling**: Define reusable styles
@@ -82,7 +82,7 @@ Theme configuration v1.0 introduces role-based styling with inheritance, making 
 A v1 theme consists of six sections:
 
 ```toml
-version = "1.0"                    # Required: Theme version
+version = "1.1"                    # Required: Theme version
 tags = ["dark", "256color"]        # Optional: Theme metadata
 
 [styles]                           # Optional: Reusable style definitions
@@ -103,7 +103,7 @@ tags = ["dark", "256color"]        # Optional: Theme metadata
 The simplest valid v1 theme:
 
 ```toml
-version = "1.0"
+version = "1.1"
 ```
 
 This theme inherits everything from `@base`.
@@ -126,11 +126,15 @@ foreground = "yellow"  # Override error's red with yellow
 
 ### Version
 
-**Required.** Must be `"1.0"`.
+**Required.** Must be `"1.1"` for the current version.
 
 ```toml
-version = "1.0"
+version = "1.1"
 ```
+
+**Supported versions:**
+- `"1.1"` - Current version, adds `unknown` level support
+- `"1.0"` - Previous version
 
 ### Tags
 
@@ -157,7 +161,7 @@ Tags can be combined (e.g., `["dark", "light"]` means compatible with both).
 > ensuring consistency and better forward compatibility. The more you use generic style roles instead 
 > of specific element overrides, the better your theme will adapt to future versions.
 
-**All 18 predefined role names:**
+**All 19 predefined role names:**
 
 | Role Name | Default Purpose |
 |------|----------------|
@@ -174,6 +178,7 @@ Tags can be combined (e.g., `["dark", "light"]` means compatible with both).
 | `syntax` | Syntax elements (arrays, objects) |
 | `status` | Status indicators |
 | `level` | Log level styling |
+| `unknown` | Unrecognized log level (v1.1+) |
 | `trace` | Trace level specific |
 | `debug` | Debug level specific |
 | `info` | Info level specific |
@@ -228,9 +233,13 @@ string = { style = "value", foreground = "#98C379" }
 
 ### Levels
 
-**Optional.** Override element styles for specific log levels.
-
-**Available levels:** `trace`, `debug`, `info`, `warning`, `error`
+**Optional.** Override element styles per log level. Supports six log levels:
+- `unknown` - Unrecognized log level (v1.1+)
+- `trace` - Trace level
+- `debug` - Debug level
+- `info` - Info level
+- `warning` - Warning level
+- `error` - Error level
 
 **Example:**
 
@@ -457,7 +466,7 @@ The inner element's explicit properties override the parent's.
 ### Minimal Custom Theme
 
 ```toml
-version = "1.0"
+version = "1.1"
 tags = ["dark"]
 
 [styles]
@@ -468,7 +477,7 @@ error = { foreground = "red" }
 ### Medium Complexity Theme
 
 ```toml
-version = "1.0"
+version = "1.1"
 tags = ["dark", "256color"]
 
 [styles]
@@ -496,7 +505,7 @@ message = { style = "error" }
 ### Full-Featured Theme
 
 ```toml
-version = "1.0"
+version = "1.1"
 tags = ["dark", "truecolor"]
 
 # Define semantic styles with role names
@@ -557,7 +566,32 @@ failed = {
 
 v0 themes are still supported but v1 offers more powerful features.
 
-### Simple Migration
+### Version 1.1 Changes
+
+**Added in v1.1:**
+- Support for `unknown` style role - used for unrecognized log levels
+- Support for `unknown` in `levels` section for styling entries with unrecognized levels
+
+**Migration:**
+If you have a v1.0 theme, simply update the version:
+
+```toml
+version = "1.1"
+```
+
+Entries with unrecognized levels will use default styling from `@base` theme (muted style). To customize:
+
+```toml
+version = "1.1"
+
+[styles]
+unknown.foreground = "bright-black"  # Custom styling for unrecognized levels
+
+[levels.unknown]
+level-inner.style = ["level", "unknown"]
+```
+
+### Simple Migration from v0
 
 **v0 theme:**
 ```yaml
@@ -571,7 +605,7 @@ elements:
 
 **v1 equivalent:**
 ```toml
-version = "1.0"
+version = "1.1"
 
 [elements]
 message = { foreground = "bright-white", modes = ["bold"] }
@@ -594,7 +628,7 @@ elements:
 
 **v1 (DRY with styles):**
 ```toml
-version = "1.0"
+version = "1.1"
 
 [styles]
 primary = { foreground = "#E0E0E0" }

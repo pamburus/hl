@@ -7,6 +7,7 @@ use std::{
 
 // third-party imports
 use serde::{Deserialize, Deserializer, Serialize, de::Visitor};
+use static_assertions::const_assert;
 
 use crate::themecfg::MergeOptions;
 
@@ -38,13 +39,94 @@ impl Version {
     /// Version 1.0 (first versioned theme format)
     pub const V1_0: Self = Self::new(1, 0);
 
+    /// Version 1.1 (added unknown style and level)
+    pub const V1_1: Self = Self::new(1, 1);
+
     /// Current supported version
-    pub const CURRENT: Self = Self::V1;
+    pub const CURRENT: Self = Self::V1_1;
 
     /// Check if this version is compatible with a supported version
     pub fn is_compatible_with(&self, supported: &Version) -> bool {
         // Same major version and minor <= supported
         self.major == supported.major && self.minor <= supported.minor
+    }
+
+    /// Const fn to parse a version string at compile time
+    pub const fn must_parse(s: &str) -> Version {
+        match Self::parse(s) {
+            Some(v) => v,
+            None => panic!("invalid version string"),
+        }
+    }
+
+    /// Const fn to parse a version string at compile time
+    pub const fn parse(s: &str) -> Option<Version> {
+        let bytes = s.as_bytes();
+        let len = bytes.len();
+
+        if len == 0 {
+            return None;
+        }
+
+        // Find the dot position
+        let mut dot_pos = None;
+        let mut i = 0;
+        while i < len {
+            if bytes[i] == b'.' {
+                if dot_pos.is_some() {
+                    // Multiple dots found
+                    return None;
+                }
+                dot_pos = Some(i);
+            }
+            i += 1;
+        }
+
+        // Dot is mandatory
+        let dot_pos = match dot_pos {
+            Some(pos) => pos,
+            None => return None,
+        };
+
+        // Helper function to parse a number segment
+        const fn parse_segment(bytes: &[u8], start: usize, end: usize) -> Option<u32> {
+            if start >= end {
+                return None;
+            }
+
+            let mut result = 0u32;
+            let mut i = start;
+            while i < end {
+                let c = bytes[i];
+                if c < b'0' || c > b'9' {
+                    return None;
+                }
+                // Check for leading zero
+                if i == start && c == b'0' && end - start > 1 {
+                    return None;
+                }
+                result = result * 10 + (c - b'0') as u32;
+                i += 1;
+            }
+            Some(result)
+        }
+
+        // Parse major and minor
+        let major = match parse_segment(bytes, 0, dot_pos) {
+            Some(v) => v,
+            None => return None,
+        };
+
+        let minor = match parse_segment(bytes, dot_pos + 1, len) {
+            Some(v) => v,
+            None => return None,
+        };
+
+        Some(Self::new(major, minor))
+    }
+
+    const fn equals(&self, other: &Version) -> bool {
+        self.major == other.major && self.minor == other.minor
     }
 }
 
@@ -66,22 +148,7 @@ impl FromStr for Version {
     type Err = Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let parts: Vec<&str> = s.split('.').collect();
-        let err = || Error::InvalidVersion(s.into());
-
-        if parts.len() != 2 {
-            return Err(err());
-        }
-
-        let major: u32 = parts[0].parse().map_err(|_| err())?;
-        let minor: u32 = parts[1].parse().map_err(|_| err())?;
-
-        // Reject leading zeros (except "0" itself)
-        if (parts[0].len() > 1 && parts[0].starts_with('0')) || (parts[1].len() > 1 && parts[1].starts_with('0')) {
-            return Err(err());
-        }
-
-        Ok(Version { major, minor })
+        Self::parse(s).ok_or_else(|| Error::InvalidVersion(s.into()))
     }
 }
 
@@ -125,6 +192,12 @@ impl<'de> Deserialize<'de> for Version {
         deserializer.deserialize_str(ThemeVersionVisitor)
     }
 }
+
+// Build-time check to ensure CURRENT version matches the schema version
+const CURRENT_VERSION: Version = Version::must_parse(env!("HL_BUILD_THEME_VERSION"));
+
+// Ensure that the CURRENT version matches the parsed schema version at compile time
+const_assert!(Version::CURRENT.equals(&CURRENT_VERSION));
 
 #[cfg(test)]
 pub(crate) mod tests;

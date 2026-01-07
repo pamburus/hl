@@ -33,12 +33,17 @@ pub trait StylingPush<B: Push<u8>> {
     fn reset(&mut self);
 }
 
+#[derive(Default)]
+struct LevelStyles {
+    known: EnumMap<Level, StylePack>,
+    unknown: StylePack,
+}
+
 // ---
 
 #[derive(Default)]
 pub struct Theme {
-    packs: EnumMap<Level, StylePack>,
-    default: StylePack,
+    levels: LevelStyles,
     pub indicators: IndicatorPack,
 }
 
@@ -49,14 +54,19 @@ impl Theme {
 
     fn new(cfg: impl Borrow<themecfg::Theme>) -> Self {
         let cfg = cfg.borrow();
-        let default = StylePack::load(&cfg.elements);
-        let mut packs = EnumMap::default();
+        let mut levels = LevelStyles {
+            unknown: StylePack::load(&cfg.elements),
+            ..Default::default()
+        };
         for (level, pack) in &cfg.levels {
-            packs[*level] = StylePack::load(pack);
+            if let Some(level) = level {
+                levels.known[*level] = StylePack::load(pack);
+            } else {
+                levels.unknown = StylePack::load(pack);
+            }
         }
         Self {
-            default,
-            packs,
+            levels,
             indicators: IndicatorPack::new(&cfg.indicators),
         }
     }
@@ -86,8 +96,8 @@ impl Theme {
         let mut styler = Styler {
             buf,
             pack: match level {
-                Some(level) => &self.packs[*level],
-                None => &self.default,
+                &Some(level) => &self.levels.known[level],
+                None => &self.levels.unknown,
             },
             synced: None,
             current: None,

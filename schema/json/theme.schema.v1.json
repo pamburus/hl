@@ -1,6 +1,7 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "Theme Version 1",
+  "version": "1.1",
   "type": "object",
   "additionalProperties": false,
   "properties": {
@@ -96,6 +97,7 @@
         "key",
         "value",
         "level",
+        "unknown",
         "trace",
         "debug",
         "info",
@@ -144,6 +146,9 @@
           "$ref": "#/$defs/style"
         },
         "level": {
+          "$ref": "#/$defs/style"
+        },
+        "unknown": {
           "$ref": "#/$defs/style"
         },
         "trace": {
@@ -386,6 +391,9 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
+        "unknown": {
+          "$ref": "#/$defs/elements"
+        },
         "trace": {
           "$ref": "#/$defs/elements"
         },

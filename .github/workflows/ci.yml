@@ -71,6 +71,40 @@ jobs:
       - name: Build
         run: cargo build --locked --workspace --verbose --benches
 
+      - name: Check for uncommitted changes after build
+        run: |
+          # Ensure that build.rs doesn't produce uncommitted changes
+          # This catches cases where:
+          # - Theme files are out of sync with schema version
+          # - Generated files weren't committed
+          # - Build scripts modified source files
+
+          # Check for modified files
+          if ! git diff --exit-code; then
+            echo "::error::Build produced uncommitted changes to tracked files"
+            echo "The following files were modified during build:"
+            git diff --name-only
+            echo ""
+            echo "Diff:"
+            git diff
+            echo ""
+            echo "Please run 'cargo build' locally and commit the changes."
+            exit 1
+          fi
+
+          # Check for untracked files (excluding target/ and other build artifacts)
+          UNTRACKED=$(git ls-files --others --exclude-standard | grep -v '^target/' | grep -v '\.build/' || true)
+          if [ -n "$UNTRACKED" ]; then
+            echo "::error::Build produced untracked files"
+            echo "The following untracked files were created during build:"
+            echo "$UNTRACKED"
+            echo ""
+            echo "Please run 'cargo build' locally and commit any generated files."
+            exit 1
+          fi
+
+          echo "✓ No uncommitted changes produced by build"
+
       - name: Run tests
         run: cargo test --locked --workspace --verbose
 

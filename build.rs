@@ -1,6 +1,6 @@
 // std imports
-use std::fs::File;
-use std::io::{BufRead, BufReader};
+use std::fs::{self, File};
+use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -11,6 +11,9 @@ use serde::{Deserialize, Serialize};
 use serde_json as json;
 use sha2::{Digest, Sha256};
 
+const THEME_DIR: &str = "etc/defaults/themes";
+const THEME_SCHEMA_PATH: &str = "schema/json/theme.schema.v1.json";
+
 fn main() {
     if let Err(e) = run() {
         eprintln!("{:?}", e);
@@ -20,7 +23,8 @@ fn main() {
 
 fn run() -> Result<()> {
     build_capnp()?;
-    set_git_build_info()
+    set_git_build_info()?;
+    set_theme_version()
 }
 
 fn set_git_build_info() -> Result<()> {
@@ -126,6 +130,93 @@ fn build_capnp() -> Result<()> {
 
         std::fs::write(&hash_file, json::to_string_pretty(&hashes).unwrap())?;
     }
+    Ok(())
+}
+
+fn set_theme_version() -> Result<()> {
+    let schema_path = Path::new(THEME_SCHEMA_PATH);
+    let file =
+        File::open(schema_path).map_err(|e| anyhow!("Failed to open theme schema {}: {}", schema_path.display(), e))?;
+
+    let schema: json::Value = json::from_reader(file)
+        .map_err(|e| anyhow!("Failed to parse theme schema {}: {}", schema_path.display(), e))?;
+
+    let version = schema
+        .get("version")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| anyhow!("Missing 'version' field in theme schema"))?;
+
+    println!("cargo:rustc-env=HL_BUILD_THEME_VERSION={}", version);
+    println!("cargo:rerun-if-changed={}", schema_path.display());
+
+    // Update version and schema directive in all theme TOML files
+    update_theme_toml_files(version)?;
+
+    Ok(())
+}
+
+fn update_theme_toml_files(version: &str) -> Result<()> {
+    let themes_dir = Path::new(THEME_DIR);
+    let expected_version_line = format!("version = \"{}\"", version);
+
+    // Calculate relative path from THEME_DIR to root
+    let depth = themes_dir.components().count();
+    let rel = "../".repeat(depth);
+
+    // Use relative URL - release workflow will replace with absolute tagged URL
+    let expected_schema_line = format!("#:schema {}{}", rel, THEME_SCHEMA_PATH);
+
+    for entry in fs::read_dir(themes_dir)
+        .map_err(|e| anyhow!("Failed to read themes directory {}: {}", themes_dir.display(), e))?
+    {
+        let entry = entry.map_err(|e| anyhow!("Failed to read directory entry: {}", e))?;
+        let path = entry.path();
+
+        if path.extension().and_then(|s| s.to_str()) != Some("toml") {
+            continue;
+        }
+
+        println!("cargo:rerun-if-changed={}", path.display());
+
+        let content =
+            fs::read_to_string(&path).map_err(|e| anyhow!("Failed to read theme file {}: {}", path.display(), e))?;
+
+        // Check if version needs updating
+        let version_needs_update = content
+            .lines()
+            .any(|line| line.starts_with("version = \"") && line != expected_version_line);
+
+        // Only update files if version differs
+        if !version_needs_update {
+            continue;
+        }
+
+        // Update both version and schema directive when version changes
+        let new_content: Vec<String> = content
+            .lines()
+            .map(|line| {
+                if line.starts_with("#:schema ") {
+                    expected_schema_line.clone()
+                } else if line.starts_with("version = \"") {
+                    expected_version_line.clone()
+                } else {
+                    line.to_string()
+                }
+            })
+            .collect();
+
+        let mut file = File::create(&path)
+            .map_err(|e| anyhow!("Failed to open theme file for writing {}: {}", path.display(), e))?;
+
+        for (i, line) in new_content.iter().enumerate() {
+            if i > 0 {
+                writeln!(file)?;
+            }
+            write!(file, "{}", line)?;
+        }
+        writeln!(file)?;
+    }
+
     Ok(())
 }
 

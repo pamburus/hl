@@ -25,6 +25,7 @@ pub enum Role {
     Syntax,
     Status,
     Level,
+    Unknown,
     Trace,
     Debug,
     Info,
