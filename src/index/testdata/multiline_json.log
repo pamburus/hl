@@ -1,0 +1,6 @@
+{"timestamp":"2024-01-01T00:00:00Z","level":"info",
+  "message":"first"}
+{"timestamp":"2024-01-01T00:00:01Z","level":"warn",
+  "message":"second"}
+{"timestamp":"2024-01-01T00:00:02Z","level":"error",
+  "message":"third"}

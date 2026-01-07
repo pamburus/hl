@@ -3,7 +3,7 @@ use std::cmp::min;
 use std::collections::VecDeque;
 use std::convert::From;
 use std::io::Read;
-use std::ops::Range;
+use std::ops::{Deref, Range};
 use std::sync::Arc;
 
 // third-party imports
@@ -15,6 +15,12 @@ use serde::{Deserialize, Serialize};
 use crate::error::*;
 
 // ---
+
+mod auto;
+mod json;
+
+pub use auto::AutoDelimiter;
+pub use json::JsonDelimiter;
 
 /// Scans input stream and splits it into segments containing a whole number of tokens delimited by the given delimiter.
 /// If a single token exceeds size of a buffer allocated by SegmentBufFactory, it is split into multiple Incomplete segments.
@@ -40,20 +46,16 @@ impl<D: Delimit> Scanner<D> {
 // ---
 
 /// Defines a token delimiter for Scanner.
-#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
 pub enum Delimiter {
+    #[default]
+    Auto,
     Byte(u8),
-    Bytes(Vec<u8>),
+    Bytes(Arc<[u8]>),
     Char(char),
-    Str(String),
+    Str(Arc<str>),
     SmartNewLine,
-}
-
-impl Default for Delimiter {
-    #[inline]
-    fn default() -> Self {
-        Self::SmartNewLine
-    }
+    Json,
 }
 
 impl From<u8> for Delimiter {
@@ -63,10 +65,17 @@ impl From<u8> for Delimiter {
     }
 }
 
+impl From<Arc<[u8]>> for Delimiter {
+    #[inline]
+    fn from(d: Arc<[u8]>) -> Self {
+        Self::Bytes(d)
+    }
+}
+
 impl From<Vec<u8>> for Delimiter {
     #[inline]
     fn from(d: Vec<u8>) -> Self {
-        Self::Bytes(d)
+        Self::Bytes(d.into())
     }
 }
 
@@ -91,10 +100,17 @@ impl From<&str> for Delimiter {
     }
 }
 
+impl From<Arc<str>> for Delimiter {
+    #[inline]
+    fn from(d: Arc<str>) -> Self {
+        Self::Str(d)
+    }
+}
+
 impl From<String> for Delimiter {
     #[inline]
     fn from(d: String) -> Self {
-        Self::Str(d)
+        Self::Str(d.into())
     }
 }
 
@@ -106,16 +122,18 @@ impl From<SmartNewLine> for Delimiter {
 }
 
 impl Delimit for Delimiter {
-    type Searcher = Box<dyn Search>;
+    type Searcher = Arc<dyn Search>;
 
     #[inline]
     fn into_searcher(self) -> Self::Searcher {
         match self {
-            Self::Byte(b) => Box::new(b.into_searcher()),
-            Self::Bytes(b) => Box::new(b.into_searcher()),
-            Self::Char(c) => Box::new(c.into_searcher()),
-            Self::Str(s) => Box::new(s.into_searcher()),
-            Self::SmartNewLine => Box::new(SmartNewLine.into_searcher()),
+            Self::Byte(b) => Arc::new(b.into_searcher()),
+            Self::Bytes(b) => Arc::new(b.into_searcher()),
+            Self::Char(c) => Arc::new(c.into_searcher()),
+            Self::Str(s) => Arc::new(s.into_searcher()),
+            Self::SmartNewLine => Arc::new(SmartNewLine.into_searcher()),
+            Self::Json => Arc::new(JsonDelimiter.into_searcher()),
+            Self::Auto => Arc::new(AutoDelimiter.into_searcher()),
         }
     }
 }
@@ -194,8 +212,26 @@ impl Delimit for Vec<u8> {
     }
 }
 
+impl Delimit for Arc<[u8]> {
+    type Searcher = SubStrSearcher<Self>;
+
+    #[inline]
+    fn into_searcher(self) -> Self::Searcher {
+        SubStrSearcher::new(self)
+    }
+}
+
+impl Delimit for Arc<str> {
+    type Searcher = SubStrSearcher<Self>;
+
+    #[inline]
+    fn into_searcher(self) -> Self::Searcher {
+        SubStrSearcher::new(self)
+    }
+}
+
 impl Delimit for &Delimiter {
-    type Searcher = Box<dyn Search>;
+    type Searcher = Arc<dyn Search>;
 
     #[inline]
     fn into_searcher(self) -> Self::Searcher {
@@ -212,7 +248,7 @@ pub struct SmartNewLine;
 impl Delimit for SmartNewLine {
     type Searcher = SmartNewLineSearcher;
 
-    #[inline]
+    #[inline(always)]
     fn into_searcher(self) -> Self::Searcher {
         Self::Searcher {}
     }
@@ -222,51 +258,101 @@ impl Delimit for SmartNewLine {
 
 /// Defines a token delimiter search algorithm.
 pub trait Search {
+    /// Searches for the delimiter in the buffer from the right.
+    #[must_use]
     fn search_r(&self, buf: &[u8], edge: bool) -> Option<Range<usize>>;
+
+    /// Searches for the delimiter in the buffer from the left.
+    #[must_use]
     fn search_l(&self, buf: &[u8], edge: bool) -> Option<Range<usize>>;
+
+    /// Searches for a partial match of the delimiter at the right edge of the buffer.
+    ///
+    /// Returns the position (index from the beginning of the buffer) where a potential
+    /// partial delimiter match starts at the end of the buffer.
+    ///
+    /// For example, if delimiter is "abc" and buffer is "xyzab", this returns Some(3)
+    /// because "ab" at position 3 could be the start of "abc".
+    ///
+    /// Used in Scanner as: `bs - position` to calculate the length of bytes to extract.
+    #[must_use]
     fn partial_match_r(&self, buf: &[u8]) -> Option<usize>;
+
+    /// Searches for a partial match of the delimiter at the left edge of the buffer.
+    ///
+    /// Returns the position (index from the beginning of the buffer) where a potential
+    /// partial delimiter match ends at the start of the buffer.
+    ///
+    /// For example, if delimiter is "abc" and buffer is "bcxyz", this returns Some(2)
+    /// because "bc" at buf[0..2] could be the end of "abc".
+    ///
+    /// Since the match starts at position 0, the returned position also equals the length
+    /// of the partial match.
+    #[must_use]
     fn partial_match_l(&self, buf: &[u8]) -> Option<usize>;
 }
 
 impl Search for u8 {
-    #[inline]
+    #[inline(always)]
     fn search_r(&self, buf: &[u8], _: bool) -> Option<Range<usize>> {
         memrchr(*self, buf).map(|x| x..x + 1)
     }
 
-    #[inline]
+    #[inline(always)]
     fn search_l(&self, buf: &[u8], _: bool) -> Option<Range<usize>> {
         memchr(*self, buf).map(|x| x..x + 1)
     }
 
-    #[inline]
+    #[inline(always)]
     fn partial_match_l(&self, _: &[u8]) -> Option<usize> {
         None
     }
 
-    #[inline]
+    #[inline(always)]
     fn partial_match_r(&self, _: &[u8]) -> Option<usize> {
         None
     }
 }
 
 impl Search for Box<dyn Search> {
-    #[inline]
+    #[inline(always)]
     fn search_r(&self, buf: &[u8], edge: bool) -> Option<Range<usize>> {
         self.as_ref().search_r(buf, edge)
     }
 
-    #[inline]
+    #[inline(always)]
     fn search_l(&self, buf: &[u8], edge: bool) -> Option<Range<usize>> {
         self.as_ref().search_l(buf, edge)
     }
 
-    #[inline]
+    #[inline(always)]
     fn partial_match_r(&self, buf: &[u8]) -> Option<usize> {
         self.as_ref().partial_match_r(buf)
     }
 
-    #[inline]
+    #[inline(always)]
+    fn partial_match_l(&self, buf: &[u8]) -> Option<usize> {
+        self.as_ref().partial_match_l(buf)
+    }
+}
+
+impl Search for Arc<dyn Search> {
+    #[inline(always)]
+    fn search_r(&self, buf: &[u8], edge: bool) -> Option<Range<usize>> {
+        self.as_ref().search_r(buf, edge)
+    }
+
+    #[inline(always)]
+    fn search_l(&self, buf: &[u8], edge: bool) -> Option<Range<usize>> {
+        self.as_ref().search_l(buf, edge)
+    }
+
+    #[inline(always)]
+    fn partial_match_r(&self, buf: &[u8]) -> Option<usize> {
+        self.as_ref().partial_match_r(buf)
+    }
+
+    #[inline(always)]
     fn partial_match_l(&self, buf: &[u8]) -> Option<usize> {
         self.as_ref().partial_match_l(buf)
     }
@@ -326,7 +412,11 @@ pub struct SubStrSearcher<D> {
     delimiter: D,
 }
 
-impl<D: AsRef<[u8]>> SubStrSearcher<D> {
+impl<D> SubStrSearcher<D>
+where
+    D: Deref,
+    D::Target: AsRef<[u8]>,
+{
     #[inline]
     pub fn new(delimiter: D) -> Self {
         Self { delimiter }
@@ -334,14 +424,18 @@ impl<D: AsRef<[u8]>> SubStrSearcher<D> {
 
     #[inline]
     fn len(&self) -> usize {
-        self.delimiter.as_ref().len()
+        self.delimiter.deref().as_ref().len()
     }
 }
 
-impl<D: AsRef<[u8]>> Search for SubStrSearcher<D> {
+impl<D> Search for SubStrSearcher<D>
+where
+    D: Deref,
+    D::Target: AsRef<[u8]>,
+{
     #[inline]
     fn search_r(&self, buf: &[u8], _edge: bool) -> Option<Range<usize>> {
-        let needle = self.delimiter.as_ref();
+        let needle = self.delimiter.deref().as_ref();
         if needle.is_empty() {
             return None;
         }
@@ -362,7 +456,7 @@ impl<D: AsRef<[u8]>> Search for SubStrSearcher<D> {
 
     #[inline]
     fn search_l(&self, buf: &[u8], _edge: bool) -> Option<Range<usize>> {
-        let needle = self.delimiter.as_ref();
+        let needle = self.delimiter.deref().as_ref();
         if needle.is_empty() {
             return None;
         }
