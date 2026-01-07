@@ -11,12 +11,13 @@ use enumset::EnumSet;
 use serde::Deserialize;
 
 // local imports
-use crate::level::{InfallibleLevel, Level};
+use crate::level::InfallibleLevel;
 
 // relative imports
 use super::{
-    Element, IndicatorPack, Merge, MergeFlag, MergeFlags, MergeOptions, MergeWithOptions, ResolvedIndicatorPack,
-    ResolvedTheme, Result, Role, Style, StyleInventory, StylePack, StyleResolveError, Tag, ThemeLoadError, Version, v0,
+    super::Level, Element, IndicatorPack, Merge, MergeFlag, MergeFlags, MergeOptions, MergeWithOptions,
+    ResolvedIndicatorPack, ResolvedTheme, Result, Role, Style, StyleInventory, StylePack, StyleResolveError, Tag,
+    ThemeLoadError, Version, v0,
 };
 
 // ---
@@ -89,7 +90,7 @@ impl Theme {
             // This ensures level-specific properties override base properties while
             // allowing base roles to be resolved first
             levels.insert(
-                *level,
+                **level,
                 self.elements
                     .resolved(&inventory, flags)
                     .merged(pack.resolved(&inventory, flags), flags - MergeFlag::ReplaceHierarchies),
@@ -230,7 +231,7 @@ impl From<v0::Theme> for Theme {
             // Only convert valid levels - v1 is strict, invalid levels are dropped
             if let InfallibleLevel::Valid(level) = level {
                 let pack: HashMap<Element, Style> = pack.iter().map(|(e, style)| (*e, style.clone().into())).collect();
-                levels.insert(level, StylePack::new(pack));
+                levels.insert(level.into(), StylePack::new(pack));
             }
         }
 

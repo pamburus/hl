@@ -41,6 +41,7 @@ mod color;
 mod element;
 mod error;
 mod indicator;
+mod level;
 mod mode;
 mod raw;
 mod style;
@@ -51,7 +52,7 @@ mod version;
 
 // Re-export commonly used types
 pub use v1::{Role, StyleBase};
-pub use {color::*, element::*, error::*, indicator::*, mode::*, raw::*, style::*, theme::*, version::*};
+pub use {color::*, element::*, error::*, indicator::*, level::*, mode::*, raw::*, style::*, theme::*, version::*};
 pub type StylePack = v1::StylePack<Element, Style>;
 pub type StyleInventory = v1::StylePack<Role, Style>;
 pub type RawStyle = v1::Style;

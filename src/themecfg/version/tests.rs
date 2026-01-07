@@ -1,8 +1,10 @@
 use std::str::FromStr;
 
-use super::super::tests::{dirs, load_raw_theme};
+use rstest::rstest;
+
+use super::super::tests::load_raw_theme;
 use super::Version;
-use crate::themecfg::{Error, MergeFlags, MergeOptions, Theme, ThemeLoadError};
+use crate::themecfg::{Format, MergeFlags, MergeOptions, Theme};
 
 #[test]
 fn test_theme_version_parsing() {
@@ -93,30 +95,6 @@ fn test_theme_version_serde() {
 fn test_theme_version_constants() {
     assert_eq!(Version::V0_0, Version::new(0, 0));
     assert_eq!(Version::V1_0, Version::new(1, 0));
-    assert_eq!(Version::CURRENT, Version::V1_0);
-}
-
-#[test]
-fn test_future_version_rejected() {
-    let result = Theme::load(&dirs(), "test-future-version");
-
-    assert!(result.is_err());
-    match result {
-        Err(Error::FailedToLoadCustomTheme {
-            source:
-                ThemeLoadError::UnsupportedVersion {
-                    requested,
-                    nearest,
-                    latest,
-                },
-            ..
-        }) => {
-            assert_eq!(requested, Version::new(1, 1));
-            assert_eq!(nearest, Version::CURRENT);
-            assert_eq!(latest, Version::CURRENT);
-        }
-        _ => panic!("Expected UnsupportedVersion error, got {:?}", result),
-    }
 }
 
 #[test]
@@ -136,18 +114,21 @@ fn test_v0_version_0_1_rejected() {
 }
 
 #[test]
-fn test_v1_version_1_1_rejected_before_deserialization() {
-    let result = load_raw_theme("v1-unsupported-version");
+fn test_future_version_rejected_before_deserialization() {
+    let version = format!("{}.{}", Version::CURRENT.major, Version::CURRENT.minor + 1);
+    let data = format!(r#"version = "{}""#, &version);
+    let result = Theme::from_buf(data.as_bytes(), Format::Toml);
 
-    assert!(result.is_err(), "v1 theme with version 1.1 should be rejected");
+    assert!(result.is_err(), "theme with version {} should be rejected", version);
 
     let err = result.unwrap_err();
-    let err_msg = err.to_string();
+    let msg = err.to_string();
 
     assert!(
-        err_msg.contains("1.1") && err_msg.contains("not supported"),
-        "Error should indicate version 1.1 is not supported, got: {}",
-        err_msg
+        msg.contains(&version) && msg.contains("not supported"),
+        "error should indicate version {} is not supported, got: {}",
+        version,
+        msg
     );
 }
 
@@ -156,4 +137,53 @@ fn test_version_merge_flags_unknown() {
     let version = Version::new(99, 0);
     let flags = version.merge_options();
     assert_eq!(flags, MergeFlags::new());
+}
+
+#[test]
+fn test_version_parse_empty_string() {
+    assert_eq!(Version::parse(""), None);
+}
+
+#[test]
+fn test_version_must_parse_valid() {
+    let version = Version::must_parse("1.0");
+    assert_eq!(version, Version::new(1, 0));
+}
+
+#[test]
+fn test_version_equals() {
+    let v1 = Version::new(1, 0);
+    let v2 = Version::new(1, 0);
+    let v3 = Version::new(1, 1);
+
+    assert!(v1.equals(&v2));
+    assert!(!v1.equals(&v3));
+}
+
+#[rstest]
+#[case("01.0")]
+#[case("1.01")]
+#[case("0.01")]
+#[case("00.0")]
+#[case("0.00")]
+#[case(".0")]
+#[case("1.")]
+fn test_version_const_parse_leading_zeros(#[case] input: &str) {
+    assert_eq!(Version::parse(input), None);
+}
+
+#[rstest]
+#[case("0.0", Version::new(0, 0))]
+#[case("0.1", Version::new(0, 1))]
+#[case("1.0", Version::new(1, 0))]
+fn test_version_parse_single_zero_valid(#[case] input: &str, #[case] expected: Version) {
+    assert_eq!(Version::parse(input), Some(expected));
+}
+
+#[rstest]
+#[case("01.0")]
+#[case("1.01")]
+fn test_version_parse_runtime_leading_zeros(#[case] input: &str) {
+    let version_str = String::from(input);
+    assert_eq!(Version::parse(&version_str), None);
 }

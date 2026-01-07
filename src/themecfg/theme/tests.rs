@@ -150,7 +150,7 @@ fn test_v0_level_specific_overrides() {
 
     let debug_level = theme
         .levels
-        .get(&Level::Debug)
+        .get(&Level::Debug.into())
         .and_then(|pack| pack.get(&Element::Level));
     assert!(debug_level.is_some());
     let debug_level = debug_level.unwrap();
@@ -159,7 +159,7 @@ fn test_v0_level_specific_overrides() {
 
     let error_level = theme
         .levels
-        .get(&Level::Error)
+        .get(&Level::Error.into())
         .and_then(|pack| pack.get(&Element::Level));
     assert!(error_level.is_some());
     let error_level = error_level.unwrap();
@@ -393,7 +393,7 @@ fn test_v0_level_override_merge_behavior() {
 
     let error_message = theme
         .levels
-        .get(&Level::Error)
+        .get(&Level::Error.into())
         .and_then(|pack| pack.get(&Element::Message));
     assert!(error_message.is_some());
     let error_message = error_message.unwrap();
@@ -499,7 +499,7 @@ fn test_v1_element_replacement_preserves_per_level_modes() {
         "level-inner element should have bold mode"
     );
 
-    let info_level = theme.levels.get(&Level::Info);
+    let info_level = theme.levels.get(&Level::Info.into());
     assert!(info_level.is_some(), "info level should exist");
     let info_level_inner = info_level.unwrap().get(&Element::LevelInner);
     assert!(info_level_inner.is_some(), "info level-inner should exist");
@@ -531,7 +531,7 @@ fn test_v0_boolean_merge_with_level_overrides() {
     let base_boolean_true = &theme.elements[&Element::BooleanTrue];
     assert_eq!(base_boolean_true.foreground, Some(Color::RGB(RGB(0, 255, 255))));
 
-    let error_pack = &theme.levels[&Level::Error];
+    let error_pack = &theme.levels[&Level::Error.into()];
 
     let error_boolean = &error_pack[&Element::Boolean];
     assert_eq!(error_boolean.foreground, Some(Color::RGB(RGB(255, 0, 255))));
@@ -887,13 +887,13 @@ fn test_v1_level_overrides_with_styles() {
 
     let error_level = Level::Error;
     assert!(
-        theme.levels.contains_key(&error_level),
+        theme.levels.contains_key(&error_level.into()),
         "Theme should have error level overrides"
     );
 
     let error_message = theme
         .levels
-        .get(&error_level)
+        .get(&error_level.into())
         .and_then(|pack| pack.get(&Element::Message));
     assert!(error_message.is_some(), "Error level should override message element");
 
@@ -927,7 +927,7 @@ fn test_v1_level_override_foreground() {
     );
 
     assert_eq!(
-        theme.levels[&Level::Warning][&Element::Level],
+        theme.levels[&Level::Warning.into()][&Element::Level],
         Style {
             foreground: Some(Color::Palette(139)),
             modes: Mode::Faint.into(),
@@ -936,7 +936,7 @@ fn test_v1_level_override_foreground() {
     );
 
     assert_eq!(
-        theme.levels[&Level::Warning][&Element::LevelInner],
+        theme.levels[&Level::Warning.into()][&Element::LevelInner],
         Style {
             foreground: Some(Color::Palette(214)),
             modes: ModeSetDiff::new() - Mode::Faint,
@@ -966,7 +966,7 @@ fn test_v1_empty() {
     );
 
     assert_eq!(
-        theme.levels[&Level::Warning][&Element::Level],
+        theme.levels[&Level::Warning.into()][&Element::Level],
         Style {
             modes: Mode::Faint.into(),
             ..Default::default()
@@ -974,7 +974,7 @@ fn test_v1_empty() {
     );
 
     assert_eq!(
-        theme.levels[&Level::Warning][&Element::LevelInner],
+        theme.levels[&Level::Warning.into()][&Element::LevelInner],
         Style {
             foreground: Some(Color::Plain(PlainColor::Yellow)),
             modes: ModeSetDiff::new() - Mode::Faint,

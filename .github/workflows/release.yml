@@ -117,10 +117,13 @@ jobs:
         run: |
           VERSION=${{ steps.update-version.outputs.version }}
 
-          # Find all TOML files with schema references and update them
-          find . -name "*.toml" -type f -exec grep -l "#:schema https://raw.githubusercontent.com/pamburus/hl/" {} \; | while read -r file; do
+          # Find all TOML files with schema references (both relative and absolute) and update them
+          # Matches both:
+          # - Relative: #:schema (../)+schema/...
+          # - Absolute: #:schema https://raw.githubusercontent.com/pamburus/hl/[ref]/schema/...
+          find . -name "*.toml" -type f -exec grep -l "#:schema" {} \; | while read -r file; do
             echo "Updating schema reference in ${file}"
-            sed -i.bak -E "s|#:schema https://raw.githubusercontent.com/pamburus/hl/[^/]+/schema/|#:schema https://raw.githubusercontent.com/pamburus/hl/v${VERSION}/schema/|g" "${file}"
+            sed -i.bak -E 's|#:schema ((\.\./)+\|https://raw\.githubusercontent\.com/pamburus/hl/[^/]+/)schema/|#:schema https://raw.githubusercontent.com/pamburus/hl/v'"${VERSION}"'/schema/|g' "${file}"
             rm -f "${file}.bak"
           done
 

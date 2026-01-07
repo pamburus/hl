@@ -1,3 +1,5 @@
+*.bak
+*.tmp
 /.debug
 /.vscode
 /.zed

@@ -70,7 +70,10 @@ fn test_v0_unknown_elements_ignored() {
 fn test_v0_unknown_level_names_ignored() {
     let theme = raw_theme("v0-unknown-levels");
 
-    assert!(theme.levels.contains_key(&Level::Error), "Should have error level");
+    assert!(
+        theme.levels.contains_key(&Level::Error.into()),
+        "Should have error level"
+    );
 
     assert_eq!(
         theme.levels.len(),
@@ -337,7 +340,7 @@ fn test_v0_level_section_blocking() {
             modes: Default::default(),
         },
     );
-    base.levels.insert(Level::Error, error_pack);
+    base.levels.insert(Level::Error.into(), error_pack);
 
     let mut info_pack = v1::StylePack::default();
     info_pack.insert(
@@ -349,7 +352,7 @@ fn test_v0_level_section_blocking() {
             modes: Default::default(),
         },
     );
-    base.levels.insert(Level::Info, info_pack);
+    base.levels.insert(Level::Info.into(), info_pack);
 
     let mut child = RawTheme::default();
     let mut child_error_pack = v1::StylePack::default();
@@ -362,11 +365,11 @@ fn test_v0_level_section_blocking() {
             background: None,
         },
     );
-    child.levels.insert(Level::Error, child_error_pack);
+    child.levels.insert(Level::Error.into(), child_error_pack);
 
     let merged = base.merged(child);
 
-    let error_level = &merged.levels[&Level::Error];
+    let error_level = &merged.levels[&Level::Error.into()];
     assert!(error_level.contains_key(&Element::Time), "Child time should be present");
     assert!(
         !error_level.contains_key(&Element::Message),
@@ -377,7 +380,7 @@ fn test_v0_level_section_blocking() {
         "Base error level should be blocked"
     );
 
-    let info_level = &merged.levels[&Level::Info];
+    let info_level = &merged.levels[&Level::Info.into()];
     assert!(
         info_level.contains_key(&Element::Message),
         "Base info message should remain"
@@ -396,7 +399,7 @@ fn test_v0_multiple_blocking_rules_combined() {
 
     let mut error_pack = v1::StylePack::default();
     error_pack.insert(Element::Message, RawStyle::default());
-    base.levels.insert(Level::Error, error_pack);
+    base.levels.insert(Level::Error.into(), error_pack);
 
     let mut child = RawTheme::default();
     child.elements.insert(Element::Level, RawStyle::default());
@@ -405,7 +408,7 @@ fn test_v0_multiple_blocking_rules_combined() {
 
     let mut child_error_pack = v1::StylePack::default();
     child_error_pack.insert(Element::Time, RawStyle::default());
-    child.levels.insert(Level::Error, child_error_pack);
+    child.levels.insert(Level::Error.into(), child_error_pack);
 
     let merged = base.merged(child);
 
@@ -426,7 +429,7 @@ fn test_v0_multiple_blocking_rules_combined() {
         "input-name blocked by input rule"
     );
 
-    let error_level = &merged.levels[&Level::Error];
+    let error_level = &merged.levels[&Level::Error.into()];
     assert!(
         !error_level.contains_key(&Element::Message),
         "Base error message blocked by level section rule"
@@ -465,7 +468,7 @@ fn test_v1_no_blocking_rules() {
             modes: Default::default(),
         },
     );
-    base.levels.insert(Level::Error, error_pack);
+    base.levels.insert(Level::Error.into(), error_pack);
 
     let mut child = RawTheme::default();
     child.inner_mut().version = Version { major: 1, minor: 0 };
@@ -474,7 +477,7 @@ fn test_v1_no_blocking_rules() {
 
     let mut child_error_pack = v1::StylePack::default();
     child_error_pack.insert(Element::Time, RawStyle::default());
-    child.levels.insert(Level::Error, child_error_pack);
+    child.levels.insert(Level::Error.into(), child_error_pack);
 
     let merged = base.merged(child);
 
@@ -495,7 +498,7 @@ fn test_v1_no_blocking_rules() {
         "Child input should be present"
     );
 
-    let error_level = &merged.levels[&Level::Error];
+    let error_level = &merged.levels[&Level::Error.into()];
     assert!(
         error_level.contains_key(&Element::Message),
         "v1 should preserve base error message"
@@ -585,7 +588,7 @@ fn test_v0_theme_merge_with_overlapping_level_overrides() {
 
     let merged = base.merged(patch);
 
-    let error_pack = merged.levels.get(&Level::Error);
+    let error_pack = merged.levels.get(&Some(Level::Error).into());
     assert!(error_pack.is_some());
 
     let message = error_pack.unwrap().get(&Element::Message);

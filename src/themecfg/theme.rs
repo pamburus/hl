@@ -41,7 +41,7 @@ pub struct Theme {
     pub tags: EnumSet<Tag>,
     pub version: Version,
     pub elements: StylePack,
-    pub levels: HashMap<Level, StylePack>,
+    pub levels: HashMap<Option<Level>, StylePack>,
     pub indicators: IndicatorPack,
 }
 
