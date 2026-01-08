@@ -16,7 +16,6 @@ use chrono::{DateTime, Utc};
 use enumset::{EnumSet, EnumSetType, enum_set};
 use regex::Regex;
 use serde::de::{Deserialize, Deserializer, MapAccess, SeqAccess, Visitor};
-use serde_json::{self as json};
 use titlecase::titlecase;
 use wildflower::Pattern;
 
@@ -1080,7 +1079,7 @@ struct RawRecordJsonStream<'a, R> {
 
 impl<'a, R> RawRecordIterator<'a> for RawRecordJsonStream<'a, R>
 where
-    R: serde_json::de::Read<'a>,
+    R: json::de::Read<'a>,
 {
     #[inline]
     fn next(&mut self) -> Option<Result<AnnotatedRawRecord<'a>>> {

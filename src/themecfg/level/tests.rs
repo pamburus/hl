@@ -9,20 +9,20 @@ use super::{InnerLevel, Level};
 #[case::error(InnerLevel::Error, r#""error""#)]
 fn test_level_serialize_some(#[case] level: InnerLevel, #[case] expected: &str) {
     let level = Level::from(level);
-    let json = serde_json::to_string(&level).unwrap();
+    let json = json::to_string(&level).unwrap();
     assert_eq!(json, expected);
 }
 
 #[test]
 fn test_level_serialize_none() {
     let level = Level { inner: None };
-    let json = serde_json::to_string(&level).unwrap();
+    let json = json::to_string(&level).unwrap();
     assert_eq!(json, r#""unknown""#);
 }
 
 #[test]
 fn test_level_deserialize_unknown() {
-    let level: Level = serde_json::from_str(r#""unknown""#).unwrap();
+    let level: Level = json::from_str(r#""unknown""#).unwrap();
     assert_eq!(level.inner, None);
 }
 
@@ -32,6 +32,6 @@ fn test_level_deserialize_unknown() {
 #[case::warning(r#""warning""#, InnerLevel::Warning)]
 #[case::error(r#""error""#, InnerLevel::Error)]
 fn test_level_deserialize_known(#[case] json: &str, #[case] expected: InnerLevel) {
-    let level: Level = serde_json::from_str(json).unwrap();
+    let level: Level = json::from_str(json).unwrap();
     assert_eq!(level.inner, Some(expected));
 }

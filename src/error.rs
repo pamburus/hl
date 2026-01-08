@@ -97,12 +97,12 @@ pub enum Error {
     FailedToParseJsonLine {
         line: usize,
         #[source]
-        source: serde_json::Error,
+        source: json::Error,
     },
     #[error("invalid index header")]
     InvalidIndexHeader,
     #[error("failed to parse json: {0}")]
-    JsonParseError(#[from] serde_json::Error),
+    JsonParseError(#[from] json::Error),
     #[error("failed to parse logfmt: {0}")]
     LogfmtParseError(#[from] logfmt::error::Error),
     #[error(transparent)]

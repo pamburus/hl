@@ -22,7 +22,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.35.0-alpha.8"
+version = "0.35.0-alpha.9"
 edition = "2024"
 repository = "https://github.com/pamburus/hl"
 license = "MIT"
@@ -33,6 +33,7 @@ capnpc = "0.25"
 clap = { version = "4", features = ["derive", "env", "string", "wrap_help"] }
 clap_complete = { version = "4" }
 clap_mangen = { git = "https://github.com/pamburus/rust-clap.git", rev = "20f0ffd737581a5ebf7479d2174f2c197f25c94d" }
+json = { package = "serde_json", version = "1", features = ["raw_value"] }
 
 [[bench]]
 harness = false
@@ -74,6 +75,7 @@ htp = { git = "https://github.com/pamburus/htp.git" }
 humantime = "2"
 itertools = "0.14"
 itoa = { version = "1", default-features = false }
+json.workspace = true
 known-folders = "1"
 log = "0.4"
 logos = "0.16"
@@ -88,7 +90,6 @@ pest_derive = "2"
 regex = "1"
 rust-embed = "8"
 serde = { version = "1", features = ["derive", "rc"] }
-serde_json = { version = "1", features = ["raw_value"] }
 serde-logfmt = { path = "./crate/serde-logfmt" }
 serde_plain = "1"
 serde-value = "0.7"
@@ -133,9 +134,9 @@ anyhow = "1"
 capnpc.workspace = true
 const-str = "1"
 hex = "0.4"
+json.workspace = true
 semver = "1"
 serde = { version = "1", features = ["derive"] }
-serde_json = { version = "1", features = ["raw_value"] }
 sha2 = "0.10"
 ureq = "3"
 

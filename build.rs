@@ -9,7 +9,6 @@ use anyhow::{Result, anyhow};
 use const_str::join;
 use semver::Version;
 use serde::{Deserialize, Serialize};
-use serde_json as json;
 use sha2::{Digest, Sha256};
 
 const DEFAULTS_DIR: &str = "etc/defaults";

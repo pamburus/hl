@@ -4,7 +4,7 @@ use std::{hint::black_box, time::Duration};
 // third-party imports
 use const_str::concat as strcat;
 use criterion::{BatchSize, BenchmarkId, Criterion, Throughput, criterion_group};
-use serde_json::de::{Read, StrRead};
+use json::de::{Read, StrRead};
 
 // local imports
 use super::{BencherExt, ND, hash, samples};
@@ -49,7 +49,7 @@ fn bench_with<I: InputConstruct>(
             b.iter_batched_ref_fixed(
                 setup,
                 |input| {
-                    let _: serde_json::Value = serde_json::from_str(input).unwrap();
+                    let _: json::Value = json::from_str(input).unwrap();
                 },
                 batch,
             );
