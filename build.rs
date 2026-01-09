@@ -229,12 +229,17 @@ fn find_local_schema_file(filename: &str) -> Result<PathBuf> {
 }
 
 fn fetch_and_hash_url(url: &str) -> Result<Hash> {
-    let response = ureq::get(url)
-        .timeout(std::time::Duration::from_secs(10))
+    let agent = ureq::Agent::config_builder()
+        .timeout_global(Some(std::time::Duration::from_secs(10)))
+        .build()
+        .new_agent();
+
+    let mut response = agent
+        .get(url)
         .call()
         .map_err(|e| anyhow!("Failed to fetch URL {}: {}", url, e))?;
 
-    text_reader_hash(BufReader::new(response.into_reader()))
+    text_reader_hash(BufReader::new(response.body_mut().as_reader()))
 }
 
 fn text_file_hash(path: &Path) -> Result<Hash> {
