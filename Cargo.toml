@@ -54,7 +54,7 @@ const-str = "1"
 crossbeam-channel = "0.5"
 crossbeam-queue = "0.3"
 crossbeam-utils = "0.8"
-deko = "0.5"
+deko = "0.6"
 derive_more = { version = "2", features = ["deref", "deref_mut", "display", "eq", "from", "into", "into_iterator"] }
 dirs = "6"
 dirs-sys = "0.5"
