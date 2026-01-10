@@ -548,3 +548,27 @@ fn test_query_scientific_notation(#[case] raw_query: &str, #[case] input: &str, 
         input,
     );
 }
+
+#[rstest]
+#[case::match_suffix(r#"v like "test*""#, r#"{"v":"test123"}"#, true)]
+#[case::match_exact(r#"v like "test*""#, r#"{"v":"test"}"#, true)]
+#[case::match_longer(r#"v like "test*""#, r#"{"v":"testing"}"#, true)]
+#[case::no_match(r#"v like "test*""#, r#"{"v":"notest"}"#, false)]
+#[case::field_mismatch(r#"v like "test*""#, r#"{"x":"test123"}"#, false)]
+fn test_query_like(#[case] raw_query: &str, #[case] input: &str, #[case] should_match: bool) {
+    let query = Query::parse(raw_query).unwrap();
+    let record = parse(input);
+    assert_eq!(record.matches(&query), should_match);
+}
+
+#[rstest]
+#[case::no_match_suffix(r#"v not like "test*""#, r#"{"v":"test123"}"#, false)]
+#[case::no_match_exact(r#"v not like "test*""#, r#"{"v":"test"}"#, false)]
+#[case::no_match_longer(r#"v not like "test*""#, r#"{"v":"testing"}"#, false)]
+#[case::match_different(r#"v not like "test*""#, r#"{"v":"notest"}"#, true)]
+#[case::field_mismatch(r#"v not like "test*""#, r#"{"x":"anything"}"#, false)]
+fn test_query_not_like(#[case] raw_query: &str, #[case] input: &str, #[case] should_match: bool) {
+    let query = Query::parse(raw_query).unwrap();
+    let record = parse(input);
+    assert_eq!(record.matches(&query), should_match);
+}

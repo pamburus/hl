@@ -19,10 +19,11 @@ members = [
   "crate/heapopt",
   "crate/serde-logfmt",
   "crate/styled-help",
+  "crate/wildcard",
 ]
 
 [workspace.package]
-version = "0.35.0-alpha.9"
+version = "0.35.0-alpha.10"
 edition = "2024"
 repository = "https://github.com/pamburus/hl"
 license = "MIT"
@@ -34,6 +35,9 @@ clap = { version = "4", features = ["derive", "env", "string", "wrap_help"] }
 clap_complete = { version = "4" }
 clap_mangen = { git = "https://github.com/pamburus/rust-clap.git", rev = "20f0ffd737581a5ebf7479d2174f2c197f25c94d" }
 json = { package = "serde_json", version = "1", features = ["raw_value"] }
+memchr = "2"
+rstest = "0.26"
+wildcard = { path = "crate/wildcard" }
 
 [[bench]]
 harness = false
@@ -79,7 +83,7 @@ json.workspace = true
 known-folders = "1"
 log = "0.4"
 logos = "0.16"
-memchr = "2"
+memchr.workspace = true
 nonzero_ext = "0.3"
 notify = { version = "8", features = ["macos_kqueue"] }
 num_cpus = "1"
@@ -109,7 +113,7 @@ unicode-segmentation = "1.12"
 unicode-width = "0.2"
 utf8-supported = "1"
 wild = "2"
-wildflower = { git = "https://github.com/cassaundra/wildflower.git" }
+wildcard.workspace = true
 winapi-util = { version = "0.1" }
 wyhash = "0.6"
 yaml = { package = "yaml-peg", version = "1" }
@@ -125,8 +129,9 @@ maplit = "1"
 mockall = "0.14"
 rand = "0.9"
 regex = "1"
-rstest = "0.26"
+rstest.workspace = true
 stats_alloc = "0.1"
+wildflower = { git = "https://github.com/cassaundra/wildflower.git" }
 wildmatch = "2"
 
 [build-dependencies]

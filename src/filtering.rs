@@ -1,5 +1,5 @@
 use std::{collections::HashMap, hash::Hash};
-use wildflower::{Pattern, WILDCARD_MANY_CHAR, WILDCARD_SINGLE_CHAR};
+use wildcard::Pattern;
 
 // ---
 
@@ -82,7 +82,7 @@ impl<N: KeyNormalize + Default> Default for MatchOptions<N> {
 #[derive(Default)]
 pub struct IncludeExcludeKeyFilter<N: KeyNormalize> {
     children: HashMap<Key, IncludeExcludeKeyFilter<N>>,
-    patterns: Vec<(Pattern<String>, IncludeExcludeKeyFilter<N>)>,
+    patterns: Vec<(Pattern, IncludeExcludeKeyFilter<N>)>,
     fallback: Option<Box<IncludeExcludeKeyFilter<N>>>,
     options: MatchOptions<N>,
     setting: IncludeExcludeSetting,
@@ -197,7 +197,7 @@ impl<N: KeyNormalize> IncludeExcludeKeyFilter<N> {
 
     fn is_pattern(key: &Key) -> bool {
         let b = key.as_bytes();
-        b.contains(&(WILDCARD_MANY_CHAR as u8)) || b.contains(&(WILDCARD_SINGLE_CHAR as u8))
+        b.contains(&(b'*')) || b.contains(&(b'?'))
     }
 
     fn add_pattern<'a>(&'a mut self, key: Key, tail: Option<&'a str>) -> &'a mut IncludeExcludeKeyFilter<N> {

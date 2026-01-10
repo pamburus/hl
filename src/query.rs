@@ -9,7 +9,7 @@ use std::{
 use closure::closure;
 use pest::{Parser, iterators::Pair};
 use pest_derive::Parser;
-use wildflower::Pattern;
+use wildcard::Pattern;
 
 // local imports
 use crate::{
@@ -183,7 +183,7 @@ fn field_expr_filter(pair: Pair<Rule>) -> Result<Query> {
             (ValueMatchPolicy::Exact(parse_string(rhs)?), op == Rule::op_not_equal)
         }
         (Rule::op_like | Rule::op_not_like, Rule::string) => (
-            ValueMatchPolicy::WildCard(Pattern::new(parse_string(rhs)?.to_string())),
+            ValueMatchPolicy::WildCard(Pattern::new(&parse_string(rhs)?)),
             op == Rule::op_not_like,
         ),
         (Rule::op_contain | Rule::op_not_contain, Rule::string) => (

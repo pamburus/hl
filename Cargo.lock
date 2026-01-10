@@ -1111,7 +1111,7 @@ checksum = "7f24254aa9a54b5c858eaee2f5bccdb46aaf0e486a595ed5fd8f86ba55232a70"
 
 [[package]]
 name = "hl"
-version = "0.35.0-alpha.9"
+version = "0.35.0-alpha.10"
 dependencies = [
  "anstream",
  "anyhow",
@@ -1198,6 +1198,7 @@ dependencies = [
  "ureq",
  "utf8-supported",
  "wild",
+ "wildcard",
  "wildflower",
  "wildmatch",
  "winapi-util",
@@ -2767,6 +2768,14 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a3131afc8c575281e1e80f36ed6a092aa502c08b18ed7524e86fbbb12bb410e1"
 dependencies = [
  "glob",
+]
+
+[[package]]
+name = "wildcard"
+version = "0.1.0"
+dependencies = [
+ "memchr",
+ "rstest",
 ]
 
 [[package]]

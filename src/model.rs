@@ -17,7 +17,7 @@ use enumset::{EnumSet, EnumSetType, enum_set};
 use regex::Regex;
 use serde::de::{Deserialize, Deserializer, MapAccess, SeqAccess, Visitor};
 use titlecase::titlecase;
-use wildflower::Pattern;
+use wildcard::Pattern;
 
 // other local crates
 use encstr::{AnyEncodedString, EncodedString};
@@ -536,7 +536,7 @@ pub struct ParserSettings {
     unix_ts_unit: Option<UnixTimestampUnit>,
     level: Vec<(HashMap<String, Level>, Option<Level>)>,
     blocks: Vec<ParserSettingsBlock>,
-    ignore: Vec<Pattern<String>>,
+    ignore: Vec<Pattern>,
 }
 
 impl ParserSettings {
@@ -549,7 +549,7 @@ impl ParserSettings {
             unix_ts_unit,
             level: Vec::new(),
             blocks: vec![ParserSettingsBlock::default()],
-            ignore: ignore.into_iter().map(|x| Pattern::new(x.to_string())).collect(),
+            ignore: ignore.into_iter().map(Pattern::new).collect(),
         };
 
         result.init(predefined);
@@ -1375,7 +1375,7 @@ pub enum ValueMatchPolicy {
     SubString(String),
     RegularExpression(Regex),
     In(HashSet<String>),
-    WildCard(Pattern<String>),
+    WildCard(Pattern),
     Numerically(NumericOp),
     Any,
 }
