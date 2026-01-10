@@ -28,6 +28,8 @@ repository = "https://github.com/pamburus/hl"
 license = "MIT"
 
 [workspace.dependencies]
+capnp = "0.25"
+capnpc = "0.25"
 clap = { version = "4", features = ["derive", "env", "string", "wrap_help"] }
 clap_complete = { version = "4" }
 clap_mangen = { git = "https://github.com/pamburus/rust-clap.git", rev = "20f0ffd737581a5ebf7479d2174f2c197f25c94d" }
@@ -39,7 +41,7 @@ name = "bench"
 [dependencies]
 anstream = "0.6"
 bytefmt = "0.1"
-capnp = "0.24"
+capnp.workspace = true
 chrono = { version = "0.4", default-features = false, features = ["clock", "serde", "std"] }
 chrono-tz = { version = "0.10", features = ["serde"] }
 ciborium = "0.2"
@@ -128,7 +130,7 @@ wildmatch = "2"
 
 [build-dependencies]
 anyhow = "1"
-capnpc = "0.24"
+capnpc.workspace = true
 const-str = "1"
 hex = "0.4"
 semver = "1"
