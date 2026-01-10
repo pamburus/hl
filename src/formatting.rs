@@ -15,7 +15,7 @@ use crate::{
     ExactIncludeExcludeKeyFilter, IncludeExcludeKeyFilter,
     datefmt::{DateTimeFormatter, TextWidth},
     filtering::IncludeExcludeSetting,
-    fmtx::{OptimizedBuf, Push, aligned_left, centered},
+    fmtx::{OptimizedBuf, Push, aligned_left},
     model::{self, Caller, Level, RawValue},
     settings::{self, AsciiMode, ExpansionMode, Formatting, ResolvedPunctuation},
     syntax::*,
@@ -297,12 +297,14 @@ impl RecordFormatterBuilder {
             .unwrap_or_else(|| cfg.punctuation.resolve(self.ascii).into());
         let ts_formatter = self.ts_formatter.unwrap_or_default();
         let ts_width = ts_formatter.max_width();
+        let ts_stub = "-".repeat(ts_width.chars);
 
         RecordFormatter {
             theme: self.theme.unwrap_or_default(),
             unescape_fields: !self.raw_fields,
             ts_formatter,
             ts_width,
+            ts_stub,
             hide_empty_fields: self.hide_empty_fields,
             flatten: self.flatten,
             always_show_time: self.always_show_time,
@@ -333,6 +335,7 @@ pub struct RecordFormatter {
     unescape_fields: bool,
     ts_formatter: DateTimeFormatter,
     ts_width: TextWidth,
+    ts_stub: String,
     hide_empty_fields: bool,
     flatten: bool,
     always_show_time: bool,
@@ -365,7 +368,8 @@ impl RecordFormatter {
                     fs.extra_fields
                         .push(("ts", RawValue::String(EncodedString::raw(ts.raw()))))
                         .ok();
-                } else if self.always_show_time {
+                }
+                if self.always_show_time {
                     self.format_timestamp_stub(&mut fs, s);
                 }
             }
@@ -520,9 +524,7 @@ impl RecordFormatter {
         fs.add_element(|| {});
         s.element(Element::Time, |s| {
             s.batch(|buf| {
-                centered(buf, self.ts_width.chars, b'-', |mut buf| {
-                    buf.extend_from_slice(b"-");
-                });
+                buf.extend_from_slice(self.ts_stub.as_bytes());
             })
         });
     }
@@ -1618,28 +1620,14 @@ pub mod string {
             let analysis = buf[begin..].analyze();
             let mask = analysis.chars;
 
-            const NOT_PLAIN: Mask = mask!(
-                Flag::EqualSign | Flag::Control | Flag::NewLine | Flag::Backslash // | Flag::Colon
-                                                                                  // | Flag::Tilde
-                                                                                  // | Flag::AngleBrackets
-                                                                                  // | Flag::DoubleQuote
-                                                                                  // | Flag::SingleQuote
-                                                                                  // | Flag::Backtick
-            );
+            const NOT_PLAIN: Mask = mask!(Flag::EqualSign | Flag::Control | Flag::NewLine | Flag::Backslash);
 
             if !mask.intersects(NOT_PLAIN)
-                && (begin == buf.len()
-                    || !CHAR_GROUPS[buf[begin] as usize]
-                        .intersects(Flag::DoubleQuote | Flag::SingleQuote | Flag::Backtick))
+                && !matches!(buf.get(begin), Some(b'"' | b'\'' | b'`'))
+                && &buf[begin..] != b"~"
             {
                 return Ok(FormatResult::Ok(Some(analysis)));
             }
-
-            // if !mask.intersects(Flag::EqualSign | Flag::Control | Flag::NewLine | Flag::Backslash)
-            //     && !matches!(buf[begin..], [b'"', ..] | [b'\'', ..] | [b'`', ..])
-            // {
-            //     return Ok(());
-            // }
 
             if !mask.intersects(Flag::DoubleQuote | Flag::Control | Flag::Tab | Flag::NewLine | Flag::Backslash) {
                 buf.push(b'"');
@@ -1655,27 +1643,27 @@ pub mod string {
                 return Ok(FormatResult::Ok(Some(analysis)));
             }
 
-            const Z: Mask = Mask::empty();
             const XS: Mask = mask!(Flag::NewLine);
-            const BT: Mask = mask!(Flag::Backtick);
-            const CTL: Mask = mask!(Flag::Control);
+            let has_control = mask.contains(Flag::Control);
+            let has_backtick = mask.contains(Flag::Backtick);
+            let has_newline = mask.intersects(XS);
 
-            match (mask & CTL, (mask & BT, (mask & XS) != Z), xsa) {
-                (Z, (Z, false), _) | (Z, (Z, true), ExtendedSpaceAction::Inline) => {
+            if !has_control {
+                if !has_backtick && (!has_newline || matches!(xsa, ExtendedSpaceAction::Inline)) {
                     buf.push(b'`');
                     buf.push(b'`');
                     buf[begin..].rotate_right(1);
-                    Ok(FormatResult::Ok(Some(analysis)))
+                    return Ok(FormatResult::Ok(Some(analysis)));
                 }
-                (Z, _, ExtendedSpaceAction::Abort) => {
+
+                if matches!(xsa, ExtendedSpaceAction::Abort) {
                     buf.truncate(begin);
-                    Ok(FormatResult::Aborted)
-                }
-                _ => {
-                    buf.truncate(begin);
-                    MessageFormatDoubleQuoted.format(input, buf, xsa)
+                    return Ok(FormatResult::Aborted);
                 }
             }
+
+            buf.truncate(begin);
+            MessageFormatDoubleQuoted.format(input, buf, xsa)
         }
     }
 
@@ -1760,6 +1748,7 @@ pub mod string {
 
             if !mask.contains(Flag::Control)
                 && !matches!(buf.get(begin), Some(b'"' | b'\'' | b'`'))
+                && &buf[begin..] != b"~"
                 && memmem::find(&buf[begin..], self.0.as_bytes()).is_none()
             {
                 buf.extend(self.0.as_bytes());
