@@ -284,11 +284,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "145052bdd345b87320e369255277e3fb5152762ad123a901ef5c262dd38fe8d2"
 dependencies = [
  "iana-time-zone",
- "js-sys",
  "num-traits",
  "serde",
- "wasm-bindgen",
  "windows-link",
+]
+
+[[package]]
+name = "chrono-english"
+version = "0.1.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "38a56613410c9249673f4676ab8d27c70949814accb27b6b738009e2ff1034a1"
+dependencies = [
+ "chrono",
+ "scanlex",
 ]
 
 [[package]]
@@ -1111,7 +1119,7 @@ checksum = "7f24254aa9a54b5c858eaee2f5bccdb46aaf0e486a595ed5fd8f86ba55232a70"
 
 [[package]]
 name = "hl"
-version = "0.35.0-alpha.10"
+version = "0.35.0-alpha.11"
 dependencies = [
  "anstream",
  "anyhow",
@@ -1122,6 +1130,7 @@ dependencies = [
  "capnp",
  "capnpc",
  "chrono",
+ "chrono-english",
  "chrono-tz",
  "ciborium",
  "clap",
@@ -1152,7 +1161,6 @@ dependencies = [
  "heapless",
  "heapopt",
  "hex",
- "htp",
  "humantime",
  "itertools 0.14.0",
  "itoa",
@@ -1190,7 +1198,7 @@ dependencies = [
  "strum",
  "styled-help",
  "terminal_size",
- "thiserror 2.0.17",
+ "thiserror",
  "titlecase",
  "toml",
  "unicode-segmentation",
@@ -1204,17 +1212,6 @@ dependencies = [
  "winapi-util",
  "wyhash",
  "yaml-peg",
-]
-
-[[package]]
-name = "htp"
-version = "0.4.2"
-source = "git+https://github.com/pamburus/htp.git#3fd9234bd64807d855faf404f7ea5f77672c5e7e"
-dependencies = [
- "chrono",
- "pest",
- "pest_derive",
- "thiserror 1.0.69",
 ]
 
 [[package]]
@@ -1956,7 +1953,7 @@ checksum = "a4e608c6638b9c18977b00b475ac1f28d14e84b27d8d42f70e0bf1e3dec127ac"
 dependencies = [
  "getrandom 0.2.16",
  "libredox",
- "thiserror 2.0.17",
+ "thiserror",
 ]
 
 [[package]]
@@ -2183,6 +2180,12 @@ checksum = "93fc1dc3aaa9bfed95e02e6eadabb4baf7e3078b0bd1b4d7b6b0b68378900502"
 dependencies = [
  "winapi-util",
 ]
+
+[[package]]
+name = "scanlex"
+version = "0.1.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "088c5d71572124929ea7549a8ce98e1a6fd33d0a38367b09027b382e67c033db"
 
 [[package]]
 name = "semver"
@@ -2451,31 +2454,11 @@ checksum = "8f50febec83f5ee1df3015341d8bd429f2d1cc62bcba7ea2076759d315084683"
 
 [[package]]
 name = "thiserror"
-version = "1.0.69"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b6aaf5339b578ea85b50e080feb250a3e8ae8cfcdff9a461c9ec2904bc923f52"
-dependencies = [
- "thiserror-impl 1.0.69",
-]
-
-[[package]]
-name = "thiserror"
 version = "2.0.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f63587ca0f12b72a0600bcba1d40081f830876000bb46dd2337a3051618f4fc8"
 dependencies = [
- "thiserror-impl 2.0.17",
-]
-
-[[package]]
-name = "thiserror-impl"
-version = "1.0.69"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4fee6c4efc90059e10f81e6d42c60a18f76588c3d74cb83a0b242a2b6c7504c1"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn",
+ "thiserror-impl",
 ]
 
 [[package]]

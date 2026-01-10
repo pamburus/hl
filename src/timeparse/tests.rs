@@ -1,5 +1,8 @@
 // std imports
-use chrono::{FixedOffset, TimeZone};
+use chrono::{Datelike, FixedOffset, TimeZone, Timelike};
+
+// third-party imports
+use rstest::rstest;
 
 // local imports
 use super::*;
@@ -199,76 +202,327 @@ fn test_rfc3339_weak() {
     );
 }
 
-#[test]
-fn test_relative_past_parsing() {
+#[rstest]
+#[case("-1h", true, "Should parse '-1h' successfully")]
+#[case("-30m", true, "Should parse '-30m' successfully")]
+#[case("-1d", true, "Should parse '-1d' successfully")]
+#[case("-5s", true, "Should parse '-5s' successfully")]
+#[case("-invalid", false, "Should fail to parse '-invalid'")]
+#[case("1h", false, "Should reject '1h' as it would be a future timestamp")]
+fn test_relative_past_parsing(#[case] input: &str, #[case] should_succeed: bool, #[case] msg: &str) {
     let tz = Tz::FixedOffset(Utc.fix());
     let format = DateTimeFormat::new();
 
-    // Test valid relative past times
-    let result = parse_time("-1h", &tz, &format);
-    assert!(result.is_ok(), "Should parse '-1h' successfully");
+    let result = parse_time(input, &tz, &format);
+    if should_succeed {
+        assert!(result.is_ok(), "{}", msg);
+    } else {
+        assert!(result.is_err(), "{}", msg);
+    }
+}
 
-    let result = parse_time("-30m", &tz, &format);
-    assert!(result.is_ok(), "Should parse '-30m' successfully");
+#[rstest]
+#[case("+1h", true, "Should parse '+1h' successfully")]
+#[case("+30m", true, "Should parse '+30m' successfully")]
+#[case("+1d", true, "Should parse '+1d' successfully")]
+#[case("+5s", true, "Should parse '+5s' successfully")]
+#[case("+invalid", false, "Should fail to parse '+invalid'")]
+#[case("1h", false, "Should reject '1h' as it would be a future timestamp")]
+fn test_relative_future_parsing(#[case] input: &str, #[case] should_succeed: bool, #[case] msg: &str) {
+    let tz = Tz::FixedOffset(Utc.fix());
+    let format = DateTimeFormat::new();
 
-    let result = parse_time("-1d", &tz, &format);
-    assert!(result.is_ok(), "Should parse '-1d' successfully");
+    let result = parse_time(input, &tz, &format);
+    if should_succeed {
+        assert!(result.is_ok(), "{}", msg);
+    } else {
+        assert!(result.is_err(), "{}", msg);
+    }
+}
 
-    let result = parse_time("-5s", &tz, &format);
-    assert!(result.is_ok(), "Should parse '-5s' successfully");
+#[rstest]
+#[case("-", "Should fail to parse lone '-'")]
+#[case("+", "Should fail to parse lone '+'")]
+#[case("-0invalidunit", "Should fail to parse '-0invalidunit'")]
+#[case("+0invalidunit", "Should fail to parse '+0invalidunit'")]
+fn test_relative_time_boundary_cases(#[case] input: &str, #[case] msg: &str) {
+    let tz = Tz::FixedOffset(Utc.fix());
+    let format = DateTimeFormat::new();
 
-    // Test invalid relative past times
-    let result = parse_time("-invalid", &tz, &format);
-    assert!(result.is_err(), "Should fail to parse '-invalid'");
+    let result = parse_time(input, &tz, &format);
+    assert!(result.is_err(), "{}", msg);
+}
 
-    // Test non-relative time (should not use relative_past)
-    let result = parse_time("1h", &tz, &format);
-    assert!(result.is_err(), "Should not parse '1h' as relative past");
+#[rstest]
+#[case("1 hour ago", true, "Should parse '1 hour ago' successfully")]
+#[case("yesterday", true, "Should parse 'yesterday' successfully")]
+#[case("1h", false, "Should reject '1h' (ambiguous bare duration)")]
+#[case("2d", false, "Should reject '2d' (ambiguous bare duration)")]
+#[case("30m", false, "Should reject '30m' (ambiguous bare duration)")]
+#[case("5s", false, "Should reject '5s' (ambiguous bare duration)")]
+#[case("tomorrow", true, "Should parse 'tomorrow' successfully")]
+#[case("2027", true, "Should parse '2027' successfully")]
+fn test_chrono_english_past_timestamps(#[case] input: &str, #[case] should_succeed: bool, #[case] msg: &str) {
+    let tz = Tz::FixedOffset(Utc.fix());
+    let format = DateTimeFormat::new();
+
+    let result = parse_time(input, &tz, &format);
+    if should_succeed {
+        assert!(result.is_ok(), "{}", msg);
+    } else {
+        assert!(result.is_err(), "{}", msg);
+    }
+}
+
+#[rstest]
+#[case("1 hour ago")]
+#[case("30 minutes ago")]
+#[case("2 days ago")]
+#[case("1 week ago")]
+fn test_chrono_english_ago_syntax(#[case] input: &str) {
+    let tz = Tz::FixedOffset(Utc.fix());
+    let format = DateTimeFormat::new();
+
+    let result = parse_time(input, &tz, &format);
+    assert!(result.is_ok(), "Should parse '{}' successfully", input);
+}
+
+#[rstest]
+#[case("in 1 hour")]
+#[case("in 2 days")]
+fn test_chrono_english_in_syntax(#[case] input: &str) {
+    let tz = Tz::FixedOffset(Utc.fix());
+    let format = DateTimeFormat::new();
+
+    // Test that "in X" future syntax does not work (chrono-english doesn't support it)
+    let result = parse_time(input, &tz, &format);
+    assert!(
+        result.is_err(),
+        "'{}' should fail (not supported by chrono-english)",
+        input
+    );
 }
 
 #[test]
-fn test_relative_future_parsing() {
+fn test_chrono_english_now() {
     let tz = Tz::FixedOffset(Utc.fix());
     let format = DateTimeFormat::new();
 
-    // Test valid relative future times
-    let result = parse_time("+1h", &tz, &format);
-    assert!(result.is_ok(), "Should parse '+1h' successfully");
-
-    let result = parse_time("+30m", &tz, &format);
-    assert!(result.is_ok(), "Should parse '+30m' successfully");
-
-    let result = parse_time("+1d", &tz, &format);
-    assert!(result.is_ok(), "Should parse '+1d' successfully");
-
-    let result = parse_time("+5s", &tz, &format);
-    assert!(result.is_ok(), "Should parse '+5s' successfully");
-
-    // Test invalid relative future times
-    let result = parse_time("+invalid", &tz, &format);
-    assert!(result.is_err(), "Should fail to parse '+invalid'");
-
-    // Test non-relative time (should not use relative_future)
-    let result = parse_time("1h", &tz, &format);
-    assert!(result.is_err(), "Should not parse '1h' as relative future");
+    // Test that "now" works
+    let result = parse_time("now", &tz, &format);
+    assert!(result.is_ok(), "Should parse 'now' successfully");
 }
 
-#[test]
-fn test_relative_time_boundary_cases() {
+#[rstest]
+#[case("today")]
+#[case("yesterday")]
+fn test_workaround_today_yesterday_start_of_day(#[case] input: &str) {
     let tz = Tz::FixedOffset(Utc.fix());
     let format = DateTimeFormat::new();
 
-    // Test edge cases that should not match relative parsing
-    let result = parse_time("-", &tz, &format);
-    assert!(result.is_err(), "Should fail to parse lone '-'");
+    let result = parse_time(input, &tz, &format);
+    assert!(result.is_ok(), "Should parse '{}' successfully", input);
 
-    let result = parse_time("+", &tz, &format);
-    assert!(result.is_err(), "Should fail to parse lone '+'");
+    let dt = result.unwrap();
+    // Verify it's at start of day (00:00:00)
+    assert_eq!(dt.hour(), 0, "'{}' should be at hour 00", input);
+    assert_eq!(dt.minute(), 0, "'{}' should be at minute 00", input);
+    assert_eq!(dt.second(), 0, "'{}' should be at second 00", input);
+}
 
-    // Test combinations that should trigger relative parsing logic but fail
-    let result = parse_time("-0invalidunit", &tz, &format);
-    assert!(result.is_err(), "Should fail to parse '-0invalidunit'");
+#[rstest]
+#[case("friday")]
+#[case("monday")]
+#[case("tuesday")]
+#[case("wednesday")]
+#[case("thursday")]
+#[case("saturday")]
+#[case("sunday")]
+#[case("fri")]
+#[case("mon")]
+#[case("tue")]
+#[case("wed")]
+#[case("thu")]
+#[case("sat")]
+#[case("sun")]
+fn test_workaround_bare_weekday_means_last(#[case] input: &str) {
+    let tz = Tz::FixedOffset(Utc.fix());
+    let format = DateTimeFormat::new();
 
-    let result = parse_time("+0invalidunit", &tz, &format);
-    assert!(result.is_err(), "Should fail to parse '+0invalidunit'");
+    let now = Utc::now().with_timezone(&tz);
+    let result = parse_time(input, &tz, &format);
+
+    assert!(result.is_ok(), "Should parse '{}' successfully", input);
+
+    let dt = result.unwrap();
+    // Bare weekday should refer to the past (last occurrence)
+    assert!(
+        dt <= now,
+        "'{}' should be in the past, got {} vs now {}",
+        input,
+        dt,
+        now
+    );
+
+    // Should be at start of day
+    assert_eq!(dt.hour(), 0, "'{}' should be at hour 00", input);
+    assert_eq!(dt.minute(), 0, "'{}' should be at minute 00", input);
+    assert_eq!(dt.second(), 0, "'{}' should be at second 00", input);
+}
+
+#[rstest]
+#[case("last friday")]
+#[case("last monday")]
+fn test_explicit_last_weekday_still_works(#[case] input: &str) {
+    let tz = Tz::FixedOffset(Utc.fix());
+    let format = DateTimeFormat::new();
+
+    let now = Utc::now().with_timezone(&tz);
+    let result = parse_time(input, &tz, &format);
+
+    assert!(result.is_ok(), "Should parse '{}' successfully", input);
+
+    let dt = result.unwrap();
+    assert!(dt <= now, "'{}' should be in the past", input);
+}
+
+#[rstest]
+#[case("january")]
+#[case("february")]
+#[case("march")]
+#[case("april")]
+#[case("may")]
+#[case("june")]
+#[case("july")]
+#[case("august")]
+#[case("september")]
+#[case("october")]
+#[case("november")]
+#[case("december")]
+#[case("jan")]
+#[case("feb")]
+#[case("mar")]
+#[case("apr")]
+#[case("jun")]
+#[case("jul")]
+#[case("aug")]
+#[case("sep")]
+#[case("oct")]
+#[case("nov")]
+#[case("dec")]
+fn test_workaround_bare_month_means_last(#[case] input: &str) {
+    let tz = Tz::FixedOffset(Utc.fix());
+    let format = DateTimeFormat::new();
+
+    let now = Utc::now().with_timezone(&tz);
+    let result = parse_time(input, &tz, &format);
+
+    assert!(result.is_ok(), "Should parse '{}' successfully", input);
+
+    let dt = result.unwrap();
+    // Bare month should refer to the past (last occurrence)
+    assert!(
+        dt <= now,
+        "'{}' should be in the past, got {} vs now {}",
+        input,
+        dt,
+        now
+    );
+
+    // Should be at 1st of the month at start of day
+    assert_eq!(dt.day(), 1, "'{}' should be 1st of month", input);
+    assert_eq!(dt.hour(), 0, "'{}' should be at hour 00", input);
+    assert_eq!(dt.minute(), 0, "'{}' should be at minute 00", input);
+    assert_eq!(dt.second(), 0, "'{}' should be at second 00", input);
+}
+
+#[rstest]
+#[case("last april")]
+#[case("last december")]
+fn test_explicit_last_month_still_works(#[case] input: &str) {
+    let tz = Tz::FixedOffset(Utc.fix());
+    let format = DateTimeFormat::new();
+
+    let now = Utc::now().with_timezone(&tz);
+    let result = parse_time(input, &tz, &format);
+
+    assert!(result.is_ok(), "Should parse '{}' successfully", input);
+
+    let dt = result.unwrap();
+    assert!(dt <= now, "'{}' should be in the past", input);
+    assert_eq!(dt.day(), 1, "'{}' should be 1st of month", input);
+}
+
+#[rstest]
+#[case("friday 19:00")]
+#[case("monday 9:00")]
+#[case("tuesday 14:30")]
+fn test_workaround_weekday_with_time(#[case] input: &str) {
+    let tz = Tz::FixedOffset(Utc.fix());
+    let format = DateTimeFormat::new();
+
+    let now = Utc::now().with_timezone(&tz);
+    let result = parse_time(input, &tz, &format);
+
+    assert!(result.is_ok(), "Should parse '{}' successfully", input);
+
+    let dt = result.unwrap();
+    // Should refer to the past (last occurrence of that weekday)
+    assert!(
+        dt <= now,
+        "'{}' should be in the past, got {} vs now {}",
+        input,
+        dt,
+        now
+    );
+}
+
+#[rstest]
+#[case("april 15")]
+#[case("december 25")]
+#[case("jan 1")]
+fn test_workaround_month_with_day(#[case] input: &str) {
+    let tz = Tz::FixedOffset(Utc.fix());
+    let format = DateTimeFormat::new();
+
+    let now = Utc::now().with_timezone(&tz);
+    let result = parse_time(input, &tz, &format);
+
+    assert!(result.is_ok(), "Should parse '{}' successfully", input);
+
+    let dt = result.unwrap();
+    // Should refer to the past (last occurrence of that month)
+    assert!(
+        dt <= now,
+        "'{}' should be in the past, got {} vs now {}",
+        input,
+        dt,
+        now
+    );
+}
+
+#[rstest]
+#[case("15 april")]
+#[case("25 december")]
+#[case("1 jan")]
+#[case("15 apr")]
+#[case("25 dec")]
+fn test_workaround_day_month(#[case] input: &str) {
+    let tz = Tz::FixedOffset(Utc.fix());
+    let format = DateTimeFormat::new();
+
+    let now = Utc::now().with_timezone(&tz);
+    let result = parse_time(input, &tz, &format);
+
+    assert!(result.is_ok(), "Should parse '{}' successfully", input);
+
+    let dt = result.unwrap();
+    // Should refer to the past (last occurrence of that month)
+    assert!(
+        dt <= now,
+        "'{}' should be in the past, got {} vs now {}",
+        input,
+        dt,
+        now
+    );
 }

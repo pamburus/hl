@@ -1,5 +1,6 @@
 // third-party imports
 use chrono::{DateTime, Datelike, Duration, NaiveDateTime, Offset, Utc};
+use chrono_english::{Dialect, parse_date_string};
 use humantime::parse_duration;
 
 // workspace imports
@@ -42,7 +43,98 @@ fn relative_future(s: &str) -> Option<DateTime<Tz>> {
 }
 
 fn human(s: &str, tz: &Tz) -> Option<DateTime<Tz>> {
-    htp::parse(s, Utc::now().with_timezone(tz)).ok()
+    let now = Utc::now().with_timezone(tz);
+
+    // Add "last " prefix to bare weekday/month names for backward compatibility.
+    // htp doesn't support these, but chrono-english interprets them as future by default.
+    // Also handle "number month" patterns like "15 april".
+    let trimmed = s.trim();
+    let words: Vec<&str> = trimmed.split_whitespace().collect();
+    let first_word = words.first().copied().unwrap_or("");
+    let second_word = words.get(1).copied().unwrap_or("");
+
+    let input = if is_bare_weekday(first_word)
+        || is_bare_month(first_word)
+        || (words.len() == 2 && first_word.chars().all(|c| c.is_ascii_digit()) && is_bare_month(second_word))
+    {
+        format!("last {}", s)
+    } else {
+        s.to_string()
+    };
+
+    let result = parse_date_string(&input, now, Dialect::Us).ok()?;
+
+    // Reject ambiguous bare duration formats like "1h", "2d", "30m" that would be interpreted
+    // as future times. These should use explicit "-1h" (past) or "+1h" (future) syntax instead.
+    // Allow other future timestamps like "2027", "tomorrow", etc. to work normally.
+    // We detect bare durations by checking if humantime can parse it as a duration.
+    if result > now && parse_duration(s).is_ok() {
+        return None;
+    }
+
+    // Fix "today" and "yesterday" to use start-of-day (00:00:00) for log filtering.
+    // chrono-english defaults to current time, which is not useful for querying logs.
+    let result = match s.trim().to_lowercase().as_str() {
+        "today" | "yesterday" => result
+            .date_naive()
+            .and_hms_opt(0, 0, 0)?
+            .and_local_timezone(result.timezone())
+            .earliest()?,
+        _ => result,
+    };
+
+    Some(result)
+}
+
+fn is_bare_weekday(s: &str) -> bool {
+    let s = s.trim().to_lowercase();
+    matches!(
+        s.as_str(),
+        "monday"
+            | "mon"
+            | "tuesday"
+            | "tue"
+            | "wednesday"
+            | "wed"
+            | "thursday"
+            | "thu"
+            | "friday"
+            | "fri"
+            | "saturday"
+            | "sat"
+            | "sunday"
+            | "sun"
+    )
+}
+
+fn is_bare_month(s: &str) -> bool {
+    let s = s.trim().to_lowercase();
+    matches!(
+        s.as_str(),
+        "january"
+            | "jan"
+            | "february"
+            | "feb"
+            | "march"
+            | "mar"
+            | "april"
+            | "apr"
+            | "may"
+            | "june"
+            | "jun"
+            | "july"
+            | "jul"
+            | "august"
+            | "aug"
+            | "september"
+            | "sep"
+            | "october"
+            | "oct"
+            | "november"
+            | "nov"
+            | "december"
+            | "dec"
+    )
 }
 
 fn rfc3339(s: &str, tz: &Tz) -> Option<DateTime<Tz>> {
