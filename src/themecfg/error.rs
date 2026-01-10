@@ -3,7 +3,7 @@ use std::{io, path::Path, str, sync::Arc};
 
 // third-party imports
 use thiserror::Error;
-use yaml_peg::serde as yaml;
+use yaml::serde as yaml;
 
 // local imports
 use crate::xerr::{Highlight, HighlightQuoted, Suggestions};

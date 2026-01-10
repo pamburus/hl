@@ -1,4 +1,4 @@
-use yaml_peg::serde as yaml;
+use yaml::serde as yaml;
 
 use super::super::super::{Color, Element, MergeWithOptions, Mode, PlainColor, tests::modes};
 use super::super::{MergeOptions, Style, Version};
