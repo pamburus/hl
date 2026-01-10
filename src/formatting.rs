@@ -5,6 +5,7 @@ use std::{
 };
 
 // third-party imports
+use chrono::{DateTime, NaiveDate, NaiveDateTime, NaiveTime, Offset};
 use enumset::{EnumSet, EnumSetType};
 
 // workspace imports
@@ -297,7 +298,7 @@ impl RecordFormatterBuilder {
             .unwrap_or_else(|| cfg.punctuation.resolve(self.ascii).into());
         let ts_formatter = self.ts_formatter.unwrap_or_default();
         let ts_width = ts_formatter.max_width();
-        let ts_stub = "-".repeat(ts_width.chars);
+        let ts_stub = Self::make_ts_stub(&ts_formatter);
 
         RecordFormatter {
             theme: self.theme.unwrap_or_default(),
@@ -317,6 +318,26 @@ impl RecordFormatterBuilder {
             punctuation,
             expansion: self.expansion.unwrap_or_default(),
         }
+    }
+
+    fn make_ts_stub(ts_formatter: &DateTimeFormatter) -> String {
+        let mut buf = Vec::new();
+        ts_formatter.format(
+            &mut buf,
+            DateTime::from_naive_utc_and_offset(
+                NaiveDateTime::new(
+                    NaiveDate::from_ymd_opt(0, 1, 1).unwrap_or_default(),
+                    NaiveTime::default(),
+                ),
+                chrono::Utc.fix(),
+            ),
+        );
+        buf.iter_mut().for_each(|b| {
+            if matches!(*b, b'0' | b'1') {
+                *b = TIME_PLACEHOLDER
+            }
+        });
+        String::from_utf8(buf).unwrap_or_default()
     }
 }
 
