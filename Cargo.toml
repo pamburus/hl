@@ -22,7 +22,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.35.0-alpha.7"
+version = "0.35.0-alpha.8"
 edition = "2024"
 repository = "https://github.com/pamburus/hl"
 license = "MIT"
@@ -111,7 +111,7 @@ wild = "2"
 wildflower = { git = "https://github.com/cassaundra/wildflower.git" }
 winapi-util = { version = "0.1" }
 wyhash = "0.6"
-yaml-peg = "1"
+yaml = { package = "yaml-peg", version = "1" }
 
 [dev-dependencies]
 assert_matches = "1"

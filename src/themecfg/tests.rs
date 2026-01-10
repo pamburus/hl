@@ -3,7 +3,7 @@ use std::path::PathBuf;
 
 // third-party imports
 
-use yaml_peg::serde as yaml;
+use yaml::serde as yaml;
 
 // local imports
 use crate::appdirs::AppDirs;

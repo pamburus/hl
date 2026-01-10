@@ -16,7 +16,7 @@ use rust_embed::RustEmbed;
 use serde::Deserialize;
 use serde_json as json;
 use strum::{Display, EnumIter, IntoEnumIterator};
-use yaml_peg::serde as yaml;
+use yaml::serde as yaml;
 
 // local imports
 use crate::{appdirs::AppDirs, level::Level, xerr::Suggestions};
