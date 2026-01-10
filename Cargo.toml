@@ -23,7 +23,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.35.0-alpha.10"
+version = "0.35.0-alpha.11"
 edition = "2024"
 repository = "https://github.com/pamburus/hl"
 license = "MIT"
@@ -48,6 +48,7 @@ anstream = "0.6"
 bytefmt = "0.1"
 capnp.workspace = true
 chrono = { version = "0.4", default-features = false, features = ["clock", "serde", "std"] }
+chrono-english = "0.1"
 chrono-tz = { version = "0.10", features = ["serde"] }
 ciborium = "0.2"
 clap = { workspace = true }
@@ -75,7 +76,6 @@ flate2 = "1"
 heapless = "0.9"
 heapopt = { path = "./crate/heapopt" }
 hex = "0.4"
-htp = { git = "https://github.com/pamburus/htp.git" }
 humantime = "2"
 itertools = "0.14"
 itoa = { version = "1", default-features = false }
