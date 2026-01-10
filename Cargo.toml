@@ -23,7 +23,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.35.0-alpha.11"
+version = "0.35.0-alpha.12"
 edition = "2024"
 repository = "https://github.com/pamburus/hl"
 license = "MIT"
@@ -131,7 +131,6 @@ rand = "0.9"
 regex = "1"
 rstest.workspace = true
 stats_alloc = "0.1"
-wildflower = { git = "https://github.com/cassaundra/wildflower.git" }
 wildmatch = "2"
 
 [build-dependencies]

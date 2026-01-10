@@ -14,7 +14,6 @@ const GROUP: &str = strcat!(super::GROUP, ND, "wildcard");
 
 fn bench(c: &mut Criterion) {
     bench_with::<wildmatch::WildMatch>(c, "wildmatch");
-    bench_with::<wildflower::Pattern<&str>>(c, "wildflower");
     bench_with::<wildcard::Pattern>(c, "wildcard");
 }
 
@@ -67,18 +66,6 @@ trait Wildcard {
 impl Wildcard for wildmatch::WildMatch {
     #[inline(always)]
     fn new(pattern: &str) -> Self {
-        Self::new(pattern)
-    }
-
-    #[inline(always)]
-    fn matches(&self, what: &str) -> bool {
-        self.matches(what)
-    }
-}
-
-impl Wildcard for wildflower::Pattern<&'static str> {
-    #[inline(always)]
-    fn new(pattern: &'static str) -> Self {
         Self::new(pattern)
     }
 
