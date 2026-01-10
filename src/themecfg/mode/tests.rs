@@ -17,7 +17,7 @@ fn test_mode_set_diff_serialization() {
     diff.adds.insert(Mode::Italic);
     diff.removes.insert(Mode::Underline);
 
-    let json = serde_json::to_string(&diff).unwrap();
+    let json = json::to_string(&diff).unwrap();
     assert!(json.contains("bold") || json.contains("Bold"));
     assert!(json.contains("italic") || json.contains("Italic"));
     assert!(json.contains("underline") || json.contains("Underline"));
@@ -26,11 +26,11 @@ fn test_mode_set_diff_serialization() {
 #[test]
 fn test_mode_diff_serialization() {
     let add_diff = ModeDiff::add(Mode::Bold);
-    let json = serde_json::to_string(&add_diff).unwrap();
+    let json = json::to_string(&add_diff).unwrap();
     assert!(json.contains("+bold") || json.contains("bold"));
 
     let remove_diff = ModeDiff::remove(Mode::Italic);
-    let json = serde_json::to_string(&remove_diff).unwrap();
+    let json = json::to_string(&remove_diff).unwrap();
     assert!(json.contains("-italic") || json.contains("italic"));
 }
 

@@ -14,7 +14,6 @@ use enumset::{EnumSet, EnumSetType};
 use enumset_ext::EnumSetExt;
 use rust_embed::RustEmbed;
 use serde::Deserialize;
-use serde_json as json;
 use strum::{Display, EnumIter, IntoEnumIterator};
 use yaml::serde as yaml;
 

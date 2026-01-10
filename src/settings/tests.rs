@@ -91,13 +91,13 @@ fn test_csl() {
     let csl: ListOrCommaSeparatedList<String> = serde_plain::from_str("").unwrap();
     assert_eq!(csl.deref(), Vec::<String>::new());
 
-    let csl = serde_json::from_str::<ListOrCommaSeparatedList<String>>(r#""a,b,c""#).unwrap();
+    let csl = json::from_str::<ListOrCommaSeparatedList<String>>(r#""a,b,c""#).unwrap();
     assert_eq!(csl.deref(), vec!["a", "b", "c"]);
 
-    let csl = serde_json::from_str::<ListOrCommaSeparatedList<String>>(r#""""#).unwrap();
+    let csl = json::from_str::<ListOrCommaSeparatedList<String>>(r#""""#).unwrap();
     assert_eq!(csl.deref(), Vec::<String>::new());
 
-    let res = serde_json::from_str::<ListOrCommaSeparatedList<String>>(r#"12"#);
+    let res = json::from_str::<ListOrCommaSeparatedList<String>>(r#"12"#);
     assert!(res.is_err());
 }
 

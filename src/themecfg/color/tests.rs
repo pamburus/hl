@@ -8,7 +8,7 @@ use super::RGB;
 fn test_rgb() {
     let a = RGB::from_str("#102030").unwrap();
     assert_eq!(a, RGB(16, 32, 48));
-    let b: RGB = serde_json::from_str(r##""#102030""##).unwrap();
+    let b: RGB = json::from_str(r##""#102030""##).unwrap();
     assert_eq!(b, RGB(16, 32, 48));
 }
 

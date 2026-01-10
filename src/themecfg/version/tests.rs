@@ -70,25 +70,25 @@ fn test_theme_version_compatibility() {
 #[test]
 fn test_theme_version_serde() {
     // Deserialize
-    let version: Version = serde_json::from_str(r#""1.0""#).unwrap();
+    let version: Version = json::from_str(r#""1.0""#).unwrap();
     assert_eq!(version, Version::new(1, 0));
 
-    let version: Version = serde_json::from_str(r#""2.15""#).unwrap();
+    let version: Version = json::from_str(r#""2.15""#).unwrap();
     assert_eq!(version, Version::new(2, 15));
 
     // Serialize
     let version = Version::new(1, 0);
-    let json = serde_json::to_string(&version).unwrap();
+    let json = json::to_string(&version).unwrap();
     assert_eq!(json, r#""1.0""#);
 
     let version = Version::new(2, 15);
-    let json = serde_json::to_string(&version).unwrap();
+    let json = json::to_string(&version).unwrap();
     assert_eq!(json, r#""2.15""#);
 
     // Invalid formats should fail
-    assert!(serde_json::from_str::<Version>(r#""1.01""#).is_err());
-    assert!(serde_json::from_str::<Version>(r#""1""#).is_err());
-    assert!(serde_json::from_str::<Version>(r#"1"#).is_err());
+    assert!(json::from_str::<Version>(r#""1.01""#).is_err());
+    assert!(json::from_str::<Version>(r#""1""#).is_err());
+    assert!(json::from_str::<Version>(r#"1"#).is_err());
 }
 
 #[test]

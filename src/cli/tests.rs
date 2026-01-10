@@ -34,13 +34,13 @@ fn test_input_info() {
     let set = InputInfoSet::from_str("auto,none").unwrap();
     assert_eq!(InputInfo::resolve(*set), enum_set!(InputInfo::None));
 
-    let set: InputInfoSet = serde_json::from_str(r#"["none","minimal"]"#).unwrap();
+    let set: InputInfoSet = json::from_str(r#"["none","minimal"]"#).unwrap();
     assert_eq!(
         InputInfo::resolve(*set),
         enum_set!(InputInfo::None | InputInfo::Minimal)
     );
 
-    let res = serde_json::from_str::<InputInfoSet>(r#"12"#);
+    let res = json::from_str::<InputInfoSet>(r#"12"#);
     assert!(res.is_err());
 }
 

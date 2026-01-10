@@ -9,7 +9,6 @@ use std::{
 use closure::closure;
 use pest::{Parser, iterators::Pair};
 use pest_derive::Parser;
-use serde_json as json;
 use wildflower::Pattern;
 
 // local imports

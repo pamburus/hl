@@ -10,7 +10,6 @@ use crate::{
 use chrono::{Offset, Utc};
 use encstr::EncodedString;
 use rstest::rstest;
-use serde_json as json;
 
 trait FormatToVec {
     fn format_to_vec(&self, rec: &Record) -> Vec<u8>;

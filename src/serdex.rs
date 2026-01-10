@@ -1,14 +1,14 @@
-use serde_json::StreamDeserializer;
+use json::StreamDeserializer;
 use std::ops::Range;
 
 pub struct StreamDeserializerWithOffsets<'de, R, T>(pub StreamDeserializer<'de, R, T>);
 
 impl<'de, R, T> Iterator for StreamDeserializerWithOffsets<'de, R, T>
 where
-    R: serde_json::de::Read<'de>,
+    R: json::de::Read<'de>,
     T: serde::de::Deserialize<'de>,
 {
-    type Item = serde_json::Result<(T, Range<usize>)>;
+    type Item = json::Result<(T, Range<usize>)>;
 
     #[inline(always)]
     fn next(&mut self) -> Option<Self::Item> {

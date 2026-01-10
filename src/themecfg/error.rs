@@ -113,7 +113,7 @@ pub enum ExternalError {
 
     /// JSON parsing error.
     #[error("failed to parse json: {0}")]
-    JsonError(#[from] serde_json::Error),
+    JsonError(#[from] json::Error),
 
     /// UTF-8 decoding error.
     #[error("failed to parse utf-8: {0}")]
