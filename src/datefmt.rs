@@ -711,7 +711,7 @@ where
                     f.numeric(dt.and_utc().timestamp(), 10, flags);
                 }
             }
-            Item::TimeZoneOffset((_, precision)) => {
+            Item::TimeZoneOffset((flags, precision)) => {
                 if sts.timezone().is_utc() {
                     f.char(b'+');
                     f.char(b'0');
@@ -725,6 +725,9 @@ where
                     }
                 }
                 if precision == 0 || precision > 1 {
+                    if !flags.contains(NoDelimiters) {
+                        f.char(b':');
+                    }
                     if let Some(minute) = sts.timezone().minute() {
                         f.text(minute.as_bytes());
                     } else {
@@ -733,6 +736,9 @@ where
                     }
                 }
                 if precision == 0 || precision > 2 {
+                    if !flags.contains(NoDelimiters) {
+                        f.char(b':');
+                    }
                     f.char(b'0');
                     f.char(b'0');
                 }

@@ -1,6 +1,7 @@
 use super::*;
 
 use chrono_tz::UTC;
+use rstest::rstest;
 
 fn format(s: &str) -> DateTimeFormat {
     LinuxDateFormat::new(s).compile()
@@ -153,4 +154,23 @@ fn test_year_padding_flags_rfc3339() {
     formatter2.reformat_rfc3339(&mut buf2, tsr);
     let result2 = String::from_utf8(buf2).unwrap();
     assert_eq!(result2, "2023"); // Should trigger SpacePadding branch
+}
+
+#[rstest]
+#[case("%z", "+0000")]
+#[case("%:z", "+00:00")]
+#[case("%::z", "+00:00:00")]
+fn test_timezone_offset_formats_rfc3339(#[case] format_str: &str, #[case] expected: &str) {
+    use crate::timestamp::Timestamp;
+
+    let tz = Tz::FixedOffset(FixedOffset::east_opt(0).unwrap());
+    let tsr = Timestamp::new("2020-06-27T00:48:30.466249792+00:00");
+    let tsr = tsr.as_rfc3339().unwrap();
+
+    let format = LinuxDateFormat::new(format_str).compile();
+    let formatter = DateTimeFormatter::new(format, tz);
+    let mut buf = Vec::new();
+    formatter.reformat_rfc3339(&mut buf, tsr);
+    let result = String::from_utf8(buf).unwrap();
+    assert_eq!(result, expected, "{} should format as {}", format_str, expected);
 }
