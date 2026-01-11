@@ -495,9 +495,10 @@ pub struct Opt {
         long,
         num_args=0..=1,
         value_name = "VERBOSITY",
+        default_missing_value = "short",
         require_equals = true,
     )]
-    pub help: Option<Option<HelpVerbosity>>,
+    pub help: Option<HelpVerbosity>,
 
     /// Files to process
     #[arg(name = "FILE")]

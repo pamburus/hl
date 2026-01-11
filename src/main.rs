@@ -133,7 +133,7 @@ fn run() -> Result<()> {
             false => anstream::ColorChoice::Never,
         };
         let mut out = anstream::AutoStream::new(pager(), color_when);
-        let help = match verbosity.unwrap_or(cli::HelpVerbosity::Short) {
+        let help = match verbosity {
             cli::HelpVerbosity::Short => command().render_help(),
             cli::HelpVerbosity::Long => command().render_long_help(),
         };
