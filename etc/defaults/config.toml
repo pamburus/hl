@@ -161,8 +161,8 @@ message-delimiter = { ascii = "::", unicode = "›" }
 # Expansion settings.
 [formatting.expansion]
 # Field expansion mode [never|inline|auto|always].
-# - never: single line output, no expansion
-# - inline: expand inline (backward compatible with master branch)
-# - auto: automatically expand fields with multi-line content (newlines, tabs)
-# - always: always expand fields into multiple lines
+# * "never"  • Single-line output, escape newlines/tabs as \n/\t
+# * "inline" • Preserve newlines/tabs as-is (legacy behavior)
+# * "auto"   • Expand fields with newlines/tabs into indented multi-line blocks
+# * "always" • Show each field on its own line, expand multi-line content with indentation
 mode = "auto"
