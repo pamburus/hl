@@ -16,6 +16,13 @@ use crate::timezone::Tz;
 
 // ---
 
+pub struct TextWidth {
+    pub bytes: usize,
+    pub chars: usize,
+}
+
+// ---
+
 #[derive(Clone)]
 pub struct DateTimeFormatter {
     format: Vec<Item>,
@@ -34,6 +41,11 @@ impl DateTimeFormatter {
         B: Push<u8>,
     {
         format_date(buf, dt.with_timezone(&self.tz), &self.format)
+    }
+
+    #[inline]
+    pub fn tz(&self) -> &Tz {
+        &self.tz
     }
 
     #[inline]
@@ -56,6 +68,19 @@ impl DateTimeFormatter {
         let ts = DateTime::from_naive_utc_and_offset(ts, self.tz.offset_from_utc_date(&ts.date()).fix());
         self.format(&mut counter, ts);
         counter.result()
+    }
+
+    pub fn max_width(&self) -> TextWidth {
+        let mut buf = Vec::new();
+        let ts = DateTime::from_timestamp(1654041600, 999_999_999).unwrap().naive_utc();
+        let ts = DateTime::from_naive_utc_and_offset(ts, self.tz.offset_from_utc_date(&ts.date()).fix());
+
+        self.format(&mut buf, ts);
+
+        TextWidth {
+            bytes: buf.len(),
+            chars: std::str::from_utf8(&buf).unwrap().chars().count(),
+        }
     }
 }
 
@@ -497,7 +522,7 @@ where
             }
             Item::TimeZoneName((flags, width)) => {
                 let offset = dto.offset();
-                let name = offset.abbreviation().unwrap_or("(?)");
+                let name = offset.abbreviation().unwrap_or("###");
                 let width = if width != 0 { width as usize } else { name.len() };
                 aligned_left(f.buf, width, b' ', |mut buf| {
                     let mut f = Formatter::new(&mut buf);
@@ -600,21 +625,21 @@ where
                 if let Some(dt) = dt() {
                     f.weekday_numeric(&dt, flags);
                 } else {
-                    f.char(b'?');
+                    f.char(b'#');
                 };
             }
             Item::WeekdayShort(flags) => {
                 if let Some(dt) = dt() {
                     f.weekday_short(dt.weekday().num_days_from_monday() as usize, flags);
                 } else {
-                    f.text(b"(?)");
+                    f.text(b"###");
                 }
             }
             Item::WeekdayLong(flags) => {
                 if let Some(dt) = dt() {
                     f.weekday_long(dt.weekday().num_days_from_monday() as usize, flags);
                 } else {
-                    let text = b"(?)";
+                    let text = b"###";
                     if flags.contains(NoPadding) {
                         f.text(text);
                     } else {
@@ -626,28 +651,28 @@ where
                 if let Some(dt) = dt() {
                     f.year_day(&dt, flags);
                 } else {
-                    f.text(b"(?)")
+                    f.text(b"###")
                 }
             }
             Item::IsoWeek(flags) => {
                 if let Some(dt) = dt() {
                     f.iso_week(&dt, flags);
                 } else {
-                    f.text(b"??");
+                    f.text(b"##");
                 }
             }
             Item::IsoYear(flags) => {
                 if let Some(dt) = dt() {
                     f.numeric(dt.iso_week().year(), 4, flags);
                 } else {
-                    f.text(b"(??)");
+                    f.text(b"####");
                 }
             }
             Item::IsoYearShort(flags) => {
                 if let Some(dt) = dt() {
                     f.numeric(dt.iso_week().year() % 100, 2, flags);
                 } else {
-                    f.text(b"??");
+                    f.text(b"##");
                 }
             }
             Item::Hour(n) => {

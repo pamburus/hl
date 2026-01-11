@@ -35,15 +35,17 @@ use crate::{
     datefmt::{DateTimeFormat, DateTimeFormatter},
     error::*,
     filtering::{MatchOptions, NoNormalizing},
-    fmtx::aligned_left,
-    formatting::{DynRecordWithSourceFormatter, RawRecordFormatter, RecordFormatterBuilder, RecordWithSourceFormatter},
+    fmtx::{Adjustment, Alignment, Padding, aligned},
+    formatting::{
+        DynRecordWithSourceFormatter, Expansion, RawRecordFormatter, RecordFormatterBuilder, RecordWithSourceFormatter,
+    },
     fsmon::{self, EventKind},
     index::{Indexer, IndexerSettings, Timestamp},
     input::{BlockEntry, Input, InputHolder, InputReference},
     model::{Filter, Parser, ParserSettings, RawRecord, Record, RecordFilter, RecordWithSourceConstructor},
     query::Query,
     scanning::{BufFactory, Delimit, Delimiter, Scanner, SearchExt, Segment, SegmentBuf, SegmentBufFactory},
-    settings::{AsciiMode, FieldShowOption, Fields, Formatting, InputInfo, ResolvedPunctuation},
+    settings::{AsciiMode, ExpansionMode, FieldShowOption, Fields, Formatting, InputInfo, ResolvedPunctuation},
     theme::{Element, StylingPush, SyncIndicatorPack, Theme},
     timezone::Tz,
     vfs::LocalFileSystem,
@@ -83,6 +85,7 @@ pub struct Options {
     pub unix_ts_unit: Option<UnixTimestampUnit>,
     pub flatten: bool,
     pub ascii: AsciiMode,
+    pub expand: ExpansionMode,
 }
 
 impl Options {
@@ -119,6 +122,11 @@ impl Options {
     #[cfg(test)]
     fn with_input_info(self, input_info: InputInfoSet) -> Self {
         Self { input_info, ..self }
+    }
+
+    #[cfg(test)]
+    fn with_expansion(self, expand: ExpansionMode) -> Self {
+        Self { expand, ..self }
     }
 }
 
@@ -426,7 +434,7 @@ impl App {
             // spawn worker threads
             let mut workers = Vec::with_capacity(n);
             for (rxp, txw) in izip!(rxp, txw) {
-                workers.push(scope.spawn(closure!(ref parser, |_| -> Result<()> {
+                workers.push(scope.spawn(closure!(ref parser, ref input_badges, |_| -> Result<()> {
                     let mut processor = self.new_segment_processor(parser);
                     for (block, ts_min, i, j) in rxp.iter() {
                         let mut buf = Vec::with_capacity(2 * usize::try_from(block.size())?);
@@ -435,10 +443,11 @@ impl App {
                             if line.is_empty() {
                                 continue;
                             }
+                            let prefix = input_badges.as_ref().map(|b| b[i].as_str()).unwrap_or("");
                             processor.process(
                                 line.bytes(),
                                 &mut buf,
-                                "",
+                                prefix,
                                 Some(1),
                                 &mut |record: &Record, location: Range<usize>| {
                                     if let Some(ts) = &record.ts {
@@ -503,9 +512,6 @@ impl App {
                     if tso >= tsi && !done {
                         continue;
                     }
-                    if let Some(badges) = &input_badges {
-                        output.write_all(badges[item.2].as_bytes())?;
-                    }
                     output.write_all((item.0).1.bytes())?;
                     output.write_all(b"\n")?;
                     match item.1.next() {
@@ -551,6 +557,7 @@ impl App {
         let parser = self.parser();
         let sfi = Arc::new(SegmentBufFactory::new(self.options.buffer_size.into()));
         let bfo = BufFactory::new(self.options.buffer_size.into());
+
         thread::scope(|scope| -> Result<()> {
             // prepare receive/transmit channels for input data
             let (txi, rxi) = channel::bounded(1);
@@ -820,10 +827,20 @@ impl App {
                         s.batch(|buf| buf.extend(opt.input_number_left_separator.as_bytes()));
                         s.element(Element::InputNumberInner, |s| {
                             s.batch(|buf| {
-                                aligned_left(buf, num_width + 1, b' ', |mut buf| {
-                                    buf.extend_from_slice(opt.input_number_prefix.as_bytes());
-                                    buf.extend_from_slice(format!("{}", i).as_bytes());
-                                });
+                                aligned(
+                                    buf,
+                                    Some(Adjustment {
+                                        alignment: Alignment::Right,
+                                        padding: Padding {
+                                            pad: b' ',
+                                            width: num_width + 1,
+                                        },
+                                    }),
+                                    |mut buf| {
+                                        buf.extend_from_slice(opt.input_number_prefix.as_bytes());
+                                        buf.extend_from_slice(format!("{}", i).as_bytes());
+                                    },
+                                );
                                 buf.extend(opt.input_name_left_separator.as_bytes());
                             });
                         });
@@ -885,9 +902,11 @@ impl App {
                     .with_raw_fields(options.raw_fields)
                     .with_flatten(options.flatten)
                     .with_ascii(options.ascii)
+                    .with_expansion(Expansion::from(options.formatting.expansion.clone()).with_mode(options.expand))
                     .with_always_show_time(options.fields.settings.predefined.time.show == FieldShowOption::Always)
                     .with_always_show_level(options.fields.settings.predefined.level.show == FieldShowOption::Always)
                     .with_punctuation(punctuation)
+                    .with_expansion(Expansion::from(options.formatting.expansion.clone()).with_mode(options.expand))
                     .build(),
             )
         }
@@ -999,7 +1018,9 @@ impl<'a, Formatter: RecordWithSourceFormatter, Filter: RecordFilter> SegmentProc
                     if ar.prefix.last().map(|&x| x == b' ') == Some(false) {
                         buf.push(b' ');
                     }
-                    self.formatter.format_record(buf, record.with_source(&line[ar.offsets]));
+                    let prefix_range = begin..buf.len();
+                    self.formatter
+                        .format_record(buf, prefix_range, record.with_source(&line[ar.offsets]));
                     let end = buf.len();
                     observer.observe_record(&record, begin..end);
                     produced_some = true;

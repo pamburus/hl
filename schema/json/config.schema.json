@@ -253,6 +253,15 @@
             }
           }
         },
+        "expansion": {
+          "type": "object",
+          "properties": {
+            "mode": {
+              "type": "string",
+              "enum": ["never", "inline", "auto", "always"]
+            }
+          }
+        },
         "punctuation": {
           "type": "object",
           "additionalProperties": false,

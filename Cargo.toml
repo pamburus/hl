@@ -23,7 +23,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.35.0-alpha.12"
+version = "0.35.0-alpha.13"
 edition = "2024"
 repository = "https://github.com/pamburus/hl"
 license = "MIT"
@@ -84,6 +84,7 @@ known-folders = "1"
 log = "0.4"
 logos = "0.16"
 memchr.workspace = true
+mline = { path = "./crate/mline" }
 nonzero_ext = "0.3"
 notify = { version = "8", features = ["macos_kqueue"] }
 num_cpus = "1"

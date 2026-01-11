@@ -168,7 +168,24 @@ fn test_counter_default() {
     let counter1 = Counter::default();
     let counter2 = Counter::new();
 
-    // Both should have the same initial state
     assert_eq!(counter1.result(), counter2.result());
     assert_eq!(counter1.result(), 0);
+}
+
+#[test]
+fn test_centered() {
+    let mut buf = Vec::new();
+    centered(&mut buf, 7, b' ', |mut aligner| {
+        aligner.push(b'a');
+        aligner.push(b'b');
+        aligner.push(b'c');
+    });
+    assert_eq!(buf, b"  abc  ");
+
+    let mut buf = Vec::new();
+    centered(&mut buf, 6, b'_', |mut aligner| {
+        aligner.push(b'x');
+        aligner.push(b'y');
+    });
+    assert_eq!(buf, b"__xy__");
 }

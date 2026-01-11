@@ -16,7 +16,7 @@ use crate::{
     config,
     error::*,
     level::{LevelValueParser, RelaxedLevel},
-    settings::{self, AsciiModeOpt, InputInfo},
+    settings::{self, AsciiModeOpt, ExpansionMode, InputInfo},
     themecfg,
 };
 use enumset_ext::convert::str::EnumSet;
@@ -371,6 +371,24 @@ pub struct Opt {
     )]
     pub ascii: AsciiOption,
 
+    /// Whether to expand fields and messages
+    ///
+    /// Controls how large field values and messages are formatted.
+    /// Higher expansion levels will break up long content into multiple lines.
+    #[arg(
+        long,
+        short = 'x',
+        env = "HL_EXPANSION",
+        value_name = "MODE",
+        value_enum,
+        default_value_t = ExpansionOption::from(config::global::get().formatting.expansion.mode),
+        default_missing_value = "always",
+        num_args = 0..=1,
+        overrides_with = "expansion",
+        help_heading = heading::OUTPUT
+    )]
+    pub expansion: ExpansionOption,
+
     /// Output file
     #[arg(long, short = 'o', overrides_with = "output", value_name = "FILE", help_heading = heading::OUTPUT)]
     pub output: Option<String>,
@@ -530,10 +548,35 @@ pub enum UnixTimestampUnit {
     Ns,
 }
 
-#[derive(ValueEnum, Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(ValueEnum, Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum FlattenOption {
     Never,
+    #[default]
     Always,
+}
+
+impl From<settings::FlattenOption> for FlattenOption {
+    fn from(value: settings::FlattenOption) -> Self {
+        match value {
+            settings::FlattenOption::Never => Self::Never,
+            settings::FlattenOption::Always => Self::Always,
+        }
+    }
+}
+
+impl From<Option<settings::FlattenOption>> for FlattenOption {
+    fn from(value: Option<settings::FlattenOption>) -> Self {
+        value.map(|x| x.into()).unwrap_or_default()
+    }
+}
+
+impl From<FlattenOption> for settings::FlattenOption {
+    fn from(value: FlattenOption) -> settings::FlattenOption {
+        match value {
+            FlattenOption::Never => settings::FlattenOption::Never,
+            FlattenOption::Always => settings::FlattenOption::Always,
+        }
+    }
 }
 
 #[derive(ValueEnum, Debug, Clone, Copy, PartialEq, Eq)]
@@ -587,6 +630,45 @@ mod heading {
     pub const INPUT: &str = "Input Options";
     pub const OUTPUT: &str = "Output Options";
     pub const ADVANCED: &str = "Advanced Options";
+}
+
+// ---
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, ValueEnum)]
+pub enum ExpansionOption {
+    Never,
+    Inline,
+    #[default]
+    Auto,
+    Always,
+}
+
+impl From<ExpansionMode> for ExpansionOption {
+    fn from(value: ExpansionMode) -> Self {
+        match value {
+            ExpansionMode::Never => Self::Never,
+            ExpansionMode::Inline => Self::Inline,
+            ExpansionMode::Auto => Self::Auto,
+            ExpansionMode::Always => Self::Always,
+        }
+    }
+}
+
+impl From<Option<ExpansionMode>> for ExpansionOption {
+    fn from(value: Option<ExpansionMode>) -> Self {
+        Self::from(value.unwrap_or_default())
+    }
+}
+
+impl From<ExpansionOption> for ExpansionMode {
+    fn from(value: ExpansionOption) -> Self {
+        match value {
+            ExpansionOption::Never => ExpansionMode::Never,
+            ExpansionOption::Inline => ExpansionMode::Inline,
+            ExpansionOption::Auto => ExpansionMode::Auto,
+            ExpansionOption::Always => ExpansionMode::Always,
+        }
+    }
 }
 
 fn parse_size(s: &str) -> std::result::Result<usize, SizeParseError> {
