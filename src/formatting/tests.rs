@@ -1466,6 +1466,103 @@ fn test_expand_mode_inline() {
     );
 }
 
+/// Tests for message formats with different expansion modes.
+///
+/// Expected behavior:
+/// - `never` mode: all formats should escape newlines
+/// - `inline` mode: all formats should use literal newlines in their chosen quote style
+/// - `auto` and `always` modes: multiline messages should expand to msg=|=> format
+#[rstest]
+#[case::auto_quoted_never(
+    MessageFormat::AutoQuoted,
+    ExpansionMode::Never,
+    r#""line1\nline2\nline3" field=value"#
+)]
+#[case::auto_quoted_inline(
+    MessageFormat::AutoQuoted,
+    ExpansionMode::Inline,
+    "`line1\nline2\nline3` field=value"
+)]
+#[case::auto_quoted_auto(MessageFormat::AutoQuoted, ExpansionMode::Auto, concat!(
+    "field=value\n",
+    "  > msg=|=>\n",
+    "     \tline1\n",
+    "     \tline2\n",
+    "     \tline3"
+))]
+#[case::auto_quoted_always(MessageFormat::AutoQuoted, ExpansionMode::Always, concat!(
+    "~\n",
+    "  > msg=|=>\n",
+    "     \tline1\n",
+    "     \tline2\n",
+    "     \tline3\n",
+    "  > field=value"
+))]
+#[case::always_quoted_never(
+    MessageFormat::AlwaysQuoted,
+    ExpansionMode::Never,
+    r#""line1\nline2\nline3" field=value"#
+)]
+#[case::always_quoted_inline(
+    MessageFormat::AlwaysQuoted,
+    ExpansionMode::Inline,
+    "`line1\nline2\nline3` field=value"
+)]
+#[case::always_quoted_auto(MessageFormat::AlwaysQuoted, ExpansionMode::Auto, concat!(
+    "field=value\n",
+    "  > msg=|=>\n",
+    "     \tline1\n",
+    "     \tline2\n",
+    "     \tline3"
+))]
+#[case::always_quoted_always(MessageFormat::AlwaysQuoted, ExpansionMode::Always, concat!(
+    "~\n",
+    "  > msg=|=>\n",
+    "     \tline1\n",
+    "     \tline2\n",
+    "     \tline3\n",
+    "  > field=value"
+))]
+#[case::always_double_quoted_never(
+    MessageFormat::AlwaysDoubleQuoted,
+    ExpansionMode::Never,
+    r#""line1\nline2\nline3" field=value"#
+)]
+#[case::always_double_quoted_inline(
+    MessageFormat::AlwaysDoubleQuoted,
+    ExpansionMode::Inline,
+    r#""line1\nline2\nline3" field=value"#
+)]
+#[case::always_double_quoted_auto(
+    MessageFormat::AlwaysDoubleQuoted,
+    ExpansionMode::Auto,
+    r#""line1\nline2\nline3" field=value"#
+)]
+#[case::always_double_quoted_always(MessageFormat::AlwaysDoubleQuoted, ExpansionMode::Always, concat!(
+    r#""line1\nline2\nline3""#, "\n",
+    "  > field=value"
+))]
+fn test_message_formats_with_expansion(
+    #[case] msg_format: MessageFormat,
+    #[case] expansion_mode: ExpansionMode,
+    #[case] expected: &str,
+) {
+    let formatter = formatter()
+        .with_theme(Default::default())
+        .with_message_format(new_message_format(msg_format, ""))
+        .with_expansion(expansion_mode.into())
+        .build();
+
+    let rec = Record {
+        message: Some(EncodedString::raw("line1\nline2\nline3").into()),
+        fields: RecordFields::from_slice(&[("field", EncodedString::raw("value").into())]),
+        ..Default::default()
+    };
+
+    let result = formatter.format_to_string(&rec);
+    assert_eq!(result, expected);
+}
+
 #[rstest]
 #[case::simple_exponent(r#"{"val":1e10}"#, "val=1e10")]
 #[case::decimal_with_exponent(r#"{"val":1.5e10}"#, "val=1.5e10")]
@@ -2799,4 +2896,45 @@ fn test_array_with_multiline_string_in_object_inline_mode() {
     let result = formatter.format_to_string(&rec);
 
     assert_eq!(result, "msg arr=[{ multiline=`a\nb\nc` }]");
+}
+
+#[test]
+fn test_multiline_message_in_never_mode() {
+    let rec = Record {
+        message: Some(EncodedString::raw("line 1\nline 2\nline 3\n").into()),
+        fields: RecordFields::from_slice(&[("key", EncodedString::raw("value").into())]),
+        ..Default::default()
+    };
+
+    let formatter = RecordFormatterBuilder {
+        theme: Default::default(),
+        expansion: Some(ExpansionMode::Never.into()),
+        message_format: Some(new_message_format(MessageFormat::Delimited, || "›")),
+        ..formatter()
+    }
+    .build();
+
+    let result = formatter.format_to_string(&rec);
+
+    assert_eq!(result, r#""line 1\nline 2\nline 3\n" :: key=value"#);
+}
+
+#[test]
+fn test_multiline_message_in_inline_mode() {
+    let rec = Record {
+        message: Some(EncodedString::raw("line1\nline2\nline3").into()),
+        fields: RecordFields::from_slice(&[("key", EncodedString::raw("value").into())]),
+        ..Default::default()
+    };
+
+    let formatter = RecordFormatterBuilder {
+        theme: Default::default(),
+        expansion: Some(ExpansionMode::Inline.into()),
+        ..formatter()
+    }
+    .build();
+
+    let result = formatter.format_to_string(&rec);
+
+    assert_eq!(result, "`line1\nline2\nline3` key=value");
 }

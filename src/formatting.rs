@@ -1734,6 +1734,9 @@ pub mod string {
             let analysis = buf[begin + 1..].analyze();
             let mask = analysis.chars;
 
+            const XS: Mask = mask!(Flag::NewLine);
+            let has_newline = mask.intersects(XS);
+
             if !mask.intersects(Flag::DoubleQuote | Flag::Control | Flag::Tab | Flag::NewLine | Flag::Backslash) {
                 buf.push(b'"');
                 return Ok(FormatResult::Ok(None));
@@ -1746,9 +1749,18 @@ pub mod string {
             }
 
             if !mask.intersects(Flag::Backtick | Flag::Control) {
-                buf[begin] = b'`';
-                buf.push(b'`');
-                return Ok(FormatResult::Ok(None));
+                // Backticks can contain newlines, but only in inline mode
+                if !has_newline || matches!(options.xsa, ExtendedSpaceAction::Inline) {
+                    buf[begin] = b'`';
+                    buf.push(b'`');
+                    return Ok(FormatResult::Ok(None));
+                }
+
+                // For newlines in non-inline modes, fall through to double-quoted or abort
+                if matches!(options.xsa, ExtendedSpaceAction::Abort) {
+                    buf.truncate(begin);
+                    return Ok(FormatResult::Aborted);
+                }
             }
 
             buf.truncate(begin);
@@ -1790,16 +1802,19 @@ pub mod string {
                 return Ok(FormatResult::Aborted);
             }
 
+            let can_inline = !mask.intersects(XS) || matches!(options.xsa, ExtendedSpaceAction::Inline);
+
             if !mask.contains(Flag::Control)
                 && !matches!(buf.get(begin), Some(b'"' | b'\'' | b'`'))
                 && &buf[begin..] != b"~"
                 && memmem::find(&buf[begin..], self.0.as_bytes()).is_none()
+                && can_inline
             {
                 buf.extend(self.0.as_bytes());
                 return Ok(FormatResult::Ok(Some(analysis)));
             }
 
-            if !mask.intersects(Flag::DoubleQuote | Flag::Control | Flag::Backslash) {
+            if !mask.intersects(Flag::DoubleQuote | Flag::Control | Flag::Tab | Flag::NewLine | Flag::Backslash) {
                 buf.push(b'"');
                 buf.push(b'"');
                 buf[begin..].rotate_right(1);
@@ -1807,7 +1822,7 @@ pub mod string {
                 return Ok(FormatResult::Ok(Some(analysis)));
             }
 
-            if !mask.intersects(Flag::SingleQuote | Flag::Control | Flag::Backslash) {
+            if !mask.intersects(Flag::SingleQuote | Flag::Control | Flag::Tab | Flag::NewLine | Flag::Backslash) {
                 buf.push(b'\'');
                 buf.push(b'\'');
                 buf[begin..].rotate_right(1);
@@ -1815,7 +1830,7 @@ pub mod string {
                 return Ok(FormatResult::Ok(Some(analysis)));
             }
 
-            if !mask.intersects(Flag::Backtick | Flag::Control) {
+            if !mask.intersects(Flag::Backtick | Flag::Control) && can_inline {
                 buf.push(b'`');
                 buf.push(b'`');
                 buf[begin..].rotate_right(1);
