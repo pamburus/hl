@@ -55,7 +55,9 @@ hide = []
 #
 # Configuration of the predefined "time" field.
 [fields.predefined.time]
-show = "auto"
+# Determines when to show the time field automatically based on the presence of time variants.
+# Options: ["always", "auto"].
+show = "always"
 names = [
   "ts",
   "TS",
@@ -76,7 +78,9 @@ names = ["logger", "LOGGER", "Logger", "span.name"]
 
 # Configuration of the predefined "level" field.
 [fields.predefined.level]
-show = "auto"
+# Determines when to show the level field automatically based on the presence of level variants.
+# Options: ["always", "auto"].
+show = "always"
 
 # Common levels.
 [[fields.predefined.level.variants]]
@@ -121,7 +125,7 @@ names = []
 
 [formatting]
 #
-# Flatten nested fields by joining them with a dot. Options: [always, never].
+# Flatten nested fields by joining them with a dot. Options: ["always", "never"].
 flatten = "always"
 
 # Message format [auto-quoted, always-quoted, always-double-quoted, delimited, raw]:

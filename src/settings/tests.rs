@@ -21,7 +21,7 @@ fn test_load_settings_k8s() {
         settings.fields.predefined.time,
         TimeField(Field {
             names: vec!["ts".into()],
-            show: FieldShowOption::Auto,
+            show: FieldShowOption::Always,
         })
     );
     assert_eq!(settings.time_format, "%b %d %T.%3N");
