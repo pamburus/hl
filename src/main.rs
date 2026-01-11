@@ -53,7 +53,7 @@ fn bootstrap() -> Result<Settings> {
         log::debug!("logging initialized");
     } else {
         logger::Builder::new()
-            .filter_level(log::LevelFilter::Warn)
+            .filter_level(log::LevelFilter::Error)
             .format_timestamp_millis()
             .init()
     }
