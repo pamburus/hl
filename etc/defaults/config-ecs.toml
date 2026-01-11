@@ -1,4 +1,4 @@
-#:schema ../../schema/json/config.schema.json
+#:schema https://raw.githubusercontent.com/pamburus/hl/v0.35.0/schema/json/config.schema.json
 
 # Settings for fields processing.
 [fields]
