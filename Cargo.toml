@@ -23,7 +23,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.35.1"
+version = "0.35.2-alpha.1"
 edition = "2024"
 repository = "https://github.com/pamburus/hl"
 license = "MIT"
@@ -81,6 +81,7 @@ itertools = "0.14"
 itoa = { version = "1", default-features = false }
 json.workspace = true
 known-folders = "1"
+liblzma = { version = "*", features = ["static"] }
 log = "0.4"
 logos = "0.16"
 memchr.workspace = true
