@@ -65,7 +65,7 @@ jobs:
         run: cargo install cargo-quickinstall
 
       - name: Install cargo-edit
-        run: cargo quickinstall cargo-edit
+        run: cargo quickinstall --force cargo-edit
 
       - name: Update version in Cargo.toml
         id: update-version
