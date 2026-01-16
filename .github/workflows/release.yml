@@ -120,10 +120,10 @@ jobs:
           # Find all TOML files with schema references (both relative and absolute) and update them
           # Matches both:
           # - Relative: #:schema (../)+schema/...
-          # - Absolute: #:schema https://raw.githubusercontent.com/${{ github.repository_owner }}/${{ github.repository }}/[ref]/schema/...
+          # - Absolute: #:schema https://raw.githubusercontent.com/${{ github.repository }}/[ref]/schema/...
           find . -name "*.toml" -type f -exec grep -l "#:schema" {} \; | while read -r file; do
             echo "Updating schema reference in ${file}"
-            sed -i.bak -E 's|#:schema ((\.\./)+\|https://raw\.githubusercontent\.com/${{ github.repository_owner }}/${{ github.repository }}/[^/]+/)schema/|#:schema https://raw.githubusercontent.com/${{ github.repository_owner }}/${{ github.repository }}/v'"${VERSION}"'/schema/|g' "${file}"
+            sed -i.bak -E 's|#:schema ((\.\./)+\|https://raw\.githubusercontent\.com/${{ github.repository }}/[^/]+/)schema/|#:schema https://raw.githubusercontent.com/${{ github.repository }}/v'"${VERSION}"'/schema/|g' "${file}"
             rm -f "${file}.bak"
           done
 
@@ -132,12 +132,12 @@ jobs:
           VERSION=${{ steps.update-version.outputs.version }}
 
           # Find all JSON schema files with schema references and update them
-          find . -name "*.schema.json" -type f -exec grep -l "https://raw.githubusercontent.com/${{ github.repository_owner }}/${{ github.repository }}/" {} \; | while read -r file; do
+          find . -name "*.schema.json" -type f -exec grep -l "https://raw.githubusercontent.com/${{ github.repository }}/" {} \; | while read -r file; do
             echo "Updating schema reference in ${file}"
             jq --arg version "v${VERSION}" '
               walk(
-                if type == "string" and test("https://raw.githubusercontent.com/${{ github.repository_owner }}/${{ github.repository }}/[^/]+/schema/") then
-                  gsub("https://raw.githubusercontent.com/${{ github.repository_owner }}/${{ github.repository }}/[^/]+/schema/"; "https://raw.githubusercontent.com/${{ github.repository_owner }}/${{ github.repository }}/\($version)/schema/")
+                if type == "string" and test("https://raw.githubusercontent.com/${{ github.repository }}/[^/]+/schema/") then
+                  gsub("https://raw.githubusercontent.com/${{ github.repository }}/[^/]+/schema/"; "https://raw.githubusercontent.com/${{ github.repository }}/\($version)/schema/")
                 else
                   .
                 end
