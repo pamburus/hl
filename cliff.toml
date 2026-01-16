@@ -159,45 +159,38 @@ conventional_commits = true
 filter_unconventional = false
 split_commits = false
 commit_preprocessors = [
-    { pattern = '^(.*) \((#[0-9]+)\)', replace = "${1} by @{AUTHOR} in ${2}"},
-    { pattern = '^([a-z]+)(\([a-zA-Z0-9\-]+\))?: [Aa]dd (.*)$', replace = "${1}${2}: added ${3}"},
-    { pattern = '^([a-z]+)(\([a-zA-Z0-9\-]+\))?: [Ff]ix (.*)$', replace = "${1}${2}: fixed ${3}"},
-    { pattern = '^build\(deps\): bump the patch-updates group (across [0-9]+ director(y|ies) )?with [0-9]+ updates', replace = "build(deps): bump multiple patch updates"},
-    # Zero-pad version numbers for proper alphanumeric sorting (e.g., 7.0.8 -> 7.z00000000.z00000008)
-    { pattern = '( from | to )([0-9]+)\.([0-9]+)\.([0-9]+)', replace = "${1}${2}.z00000000${3}.z00000000${4}"},
-    { pattern = 'z0*([0-9]{8})', replace = "z${1}"},
+  { pattern = '^(.*) \((#[0-9]+)\)', replace = "${1} by @{AUTHOR} in ${2}" },
+  { pattern = '^([a-z]+)(\([a-zA-Z0-9\-]+\))?: [Aa]dd (.*)$', replace = "${1}${2}: added ${3}" },
+  { pattern = '^([a-z]+)(\([a-zA-Z0-9\-]+\))?: [Ff]ix (.*)$', replace = "${1}${2}: fixed ${3}" },
+  { pattern = '^build\(deps\): bump the patch-updates group (across [0-9]+ director(y|ies) )?with [0-9]+ updates', replace = "build(deps): bump multiple patch updates" },
+  # Zero-pad version numbers for proper alphanumeric sorting (e.g., 7.0.8 -> 7.z00000000.z00000008)
+  { pattern = '( from | to )([0-9]+)\.([0-9]+)\.([0-9]+)', replace = "${1}${2}.z00000000${3}.z00000000${4}" },
+  { pattern = "z0*([0-9]{8})", replace = "z${1}" },
 ]
 commit_parsers = [
-    # Features - things that add new functionality
-    { message = '^feat(\(.+\))?: add', group = "<!-- 0 -->Added"},
-
-    # Changes - improvements, updates to existing functionality
-    { message = '^feat', group = "<!-- 1 -->Changed"},
-    { message = "^refactor", group = "<!-- 1 -->Changed"},
-    { message = "^change", group = "<!-- 1 -->Changed"},
-    { message = "^set.+minimum.+rust", group = "<!-- 1 -->Changed"},
-    { message = "^replace.*", group = "<!-- 1 -->Changed"},
-
-    # Bug fixes
-    { message = "^fix", group = "<!-- 2 -->Fixed"},
-
-    # Performance improvements
-    { message = "^perf", group = "<!-- 3 -->Performance"},
-
-    # Documentation
-    { message = "^docs?", group = "<!-- 4 -->Documentation"},
-    { message = "added.+examples", group = "<!-- 4 -->Documentation"},
-
-    # Dependencies - all dependency updates
-    { message = '^(build|chore)\(deps\).*patch.*', group = "<!-- 6 -->Dependencies", scope = "0-deps/2-patch"},
-    { message = '^(build|chore)\(deps\)', group = "<!-- 6 -->Dependencies", scope = "0-deps/1-other"},
-    { message = "^build\\(nix\\): update flake", group = "<!-- 6 -->Dependencies", scope = "2-nix/flake"},
-
-    # Skip release commits
-    { message = "^chore\\(release\\)", skip = true},
-
-    # Everything else goes to Other (build, ci, chore, etc.)
-    { message = ".*", group = "<!-- 5 -->Other"},
+  # Features - things that add new functionality
+  { message = '^feat(\(.+\))?: add', group = "<!-- 0 -->Added" },
+  # Changes - improvements, updates to existing functionality
+  { message = "^feat", group = "<!-- 1 -->Changed" },
+  { message = "^refactor", group = "<!-- 1 -->Changed" },
+  { message = "^change", group = "<!-- 1 -->Changed" },
+  { message = "^set.+minimum.+rust", group = "<!-- 1 -->Changed" },
+  { message = "^replace.*", group = "<!-- 1 -->Changed" },
+  # Bug fixes
+  { message = "^fix", group = "<!-- 2 -->Fixed" },
+  # Performance improvements
+  { message = "^perf", group = "<!-- 3 -->Performance" },
+  # Documentation
+  { message = "^docs?", group = "<!-- 4 -->Documentation" },
+  { message = "added.+examples", group = "<!-- 4 -->Documentation" },
+  # Dependencies - all dependency updates
+  { message = '^(build|chore)\(deps\).*patch.*', group = "<!-- 6 -->Dependencies", scope = "0-deps/2-patch" },
+  { message = '^(build|chore)\(deps\)', group = "<!-- 6 -->Dependencies", scope = "0-deps/1-other" },
+  { message = "^build\\(nix\\): update flake", group = "<!-- 6 -->Dependencies", scope = "2-nix/flake" },
+  # Skip release commits
+  { message = "^chore\\(release\\)", skip = true },
+  # Everything else goes to Other (build, ci, chore, etc.)
+  { message = ".*", group = "<!-- 5 -->Other" },
 ]
 # Set group order - Fixed comes before Dependencies and Other
 protect_breaking_commits = false
