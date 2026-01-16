@@ -37,8 +37,7 @@ jobs:
       - name: Setup taplo
         uses: uncenter/setup-taplo@4f203fdb4f3b1e289c8382cf90d8397d2338df2e # v1.0.8
 
-      - if: matrix.os != 'windows-latest'
-        name: Setup tombi
+      - name: Setup tombi
         uses: tombi-toml/setup-tombi@f7cb38e77d9a62bc27a8445bf50e660e9496b893 # v1.0.7
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -46,8 +45,7 @@ jobs:
       - name: Validate TOML configs and themes with taplo
         run: taplo check
 
-      - if: matrix.os != 'windows-latest'
-        name: Validate TOML configs and themes with tombi
+      - name: Validate TOML configs and themes with tombi
         run: tombi lint
 
       - name: Install latest nightly
