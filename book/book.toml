@@ -1,0 +1,9 @@
+[book]
+authors = ["hl contributors"]
+language = "en"
+src = "src"
+title = "hl - JSON Log Viewer Guide"
+description = "Complete guide to using hl, a high-performance JSON and logfmt log viewer"
+
+[output.html]
+git-repository-url = "https://github.com/pamburus/hl"
