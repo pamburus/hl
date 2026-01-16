@@ -825,42 +825,48 @@ Advanced Options:
 
 * MacBook Pro (16-inch, 2021)
   * __CPU__:   Apple M1 Max CPU
-  * __OS__:    macOS Sequoia 15.2
+  * __OS__:    macOS Tahoe 26.2
   * __Data__:  ~ __2.3 GiB__ log file, __6 000 000__ lines
-    * [hl](https://github.com/pamburus/hl) __v0.30.2__ ~ *1.1 seconds*
+    * [hl](https://github.com/pamburus/hl) __v0.35.2__ ~ *1.1 seconds*
 
         ```sh
         $ time hl --config - example.log -c -o /dev/null
-        hl --config - example.log -c -o /dev/null  9.80s user 0.61s system 915% cpu 1.138 total
+        hl --config - example.log -c -o /dev/null  9.33s user 0.45s system 922% cpu 1.060 total
         ```
 
-    * [hlogf](https://github.com/ssgreg/hlogf) __v1.4.1__ ~ *8.7 seconds*
+    * [hl](https://github.com/pamburus/hl) with `-x always` flag __v0.35.2__ ~ *1.2 seconds*
+
+        ```sh
+        $ time hl --config - example.log -c -x always -o /dev/null
+        hl --config - example.log -c -x always -o /dev/null  11.19s user 0.50s system 936% cpu 1.248 total
+        ```
+
+    * [hlogf](https://github.com/ssgreg/hlogf) __v1.4.1__ ~ *8.8 seconds*
 
         ```sh
         $ time hlogf example.log --color always >/dev/null
-        hlogf example.log --color always > /dev/null  6.85s user 1.94s system 100% cpu 8.738 total
+        hlogf example.log --color always > /dev/null  6.79s user 2.05s system 100% cpu 8.787 total
         ```
 
-    * [humanlog](https://github.com/humanlogio/humanlog) __v0.7.8__ ~ *79 seconds*
+    * [humanlog](https://github.com/humanlogio/humanlog) __v0.8.9__ ~ *123 seconds*
 
         ```sh
         $ time humanlog <example.log --color always >/dev/null
-        humanlog> reading stdin...
-        humanlog --color always < example.log > /dev/null  87.68s user 7.33s system 120% cpu 1:19.01 total
+        humanlog --color always < example.log > /dev/null  136.18s user 7.17s system 116% cpu 2:03.25 total
         ```
 
-    * [fblog](https://github.com/brocode/fblog) __v4.13.1__ ~ *34 seconds*
+    * [fblog](https://github.com/brocode/fblog) __v4.17.0__ ~ *34 seconds*
 
         ```sh
         $ time fblog example.log >/dev/null
-        fblog example.log > /dev/null  31.32s user 2.22s system 99% cpu 33.553 total
+        fblog example.log > /dev/null  31.92s user 2.39s system 99% cpu 34.327 total
         ```
 
-    * [fblog](https://github.com/brocode/fblog) with `-d` flag __v4.13.1__ ~ *146 seconds*
+    * [fblog](https://github.com/brocode/fblog) with `-d` flag __v4.17.0__ ~ *164 seconds*
 
         ```sh
         $ time fblog -d example.log >/dev/null
-        fblog -d example.log > /dev/null  131.88s user 14.55s system 99% cpu 2:26.45 total
+        fblog -d example.log > /dev/null  147.57s user 16.20s system 99% cpu 2:43.82 total
         ```
 
   * See [#132](https://github.com/pamburus/hl/issues/132) for how to repeat measurements
