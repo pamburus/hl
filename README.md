@@ -1,4 +1,4 @@
-# hl [![Build Status][ci-img]][ci] [![Coverage Status][cov-img]][cov] [![Release][release-img]][release]
+# hl [![Book][book-img]][book] [![Build Status][ci-img]][ci] [![Coverage Status][cov-img]][cov] [![Release][release-img]][release]
 
 [![banner](docs/assets/banner.svg)](#screenshot)
 
@@ -871,9 +871,11 @@ Advanced Options:
 
   * See [#132](https://github.com/pamburus/hl/issues/132) for how to repeat measurements
 
+[book-img]: https://github.com/pamburus/hl/actions/workflows/book.yml/badge.svg?branch=feature/book
+[book]: https://pamburus.github.io/hl/
 [ci-img]: https://github.com/pamburus/hl/actions/workflows/ci.yml/badge.svg
 [ci]: https://github.com/pamburus/hl/actions/workflows/ci.yml
 [cov-img]: https://codecov.io/gh/pamburus/hl/graph/badge.svg?token=464MN13408
 [cov]: https://codecov.io/gh/pamburus/hl
-[release-img]: https://img.shields.io/github/v/release/pamburus/hl?sort=semver
+[release-img]: https://img.shields.io/github/v/release/pamburus/hl?sort=semver&label=Release
 [release]: https://github.com/pamburus/hl/releases/latest
