@@ -8,33 +8,33 @@ previous-tag := "git tag -l \"v*.*.*\" --merged HEAD --sort=-version:refname | h
 default:
     @just --list
 
-# Build the project in debug mode
+[doc('Build the project in debug mode')]
 build: (setup "build")
     cargo build
 
-# Build the project in release mode
+[doc('Build the project in release mode')]
 build-release: (setup "build")
     cargo build --release
 
-# Run the application, example: `just run -- --help`
+[doc('Run the application, example: `just run -- --help`')]
 run *args: build
     cargo run -- {{ args }}
 
-# Run tests for all packages in the workspace
+[doc('Run tests for all packages in the workspace')]
 test: (setup "build")
     cargo test --workspace
 
-# Check the code for errors without building an executable
+[doc('Check the code for errors without building an executable')]
 check: (setup "build")
     cargo check --workspace --locked
 
-# Lint all code
+[doc('Lint all code')]
 lint: lint-rust lint-markdown
 
-# • Lint Rust
+[doc('• Lint Rust')]
 lint-rust: clippy
 
-# • Lint Markdown files
+[doc('• Lint Markdown files')]
 lint-markdown: (setup "markdown-lint")
     @markdownlint-cli2 README.md
 
@@ -43,23 +43,23 @@ lint-markdown: (setup "markdown-lint")
 clippy: (setup "clippy")
     cargo clippy --workspace --all-targets --all-features
 
-# Check for security vulnerabilities in dependencies
+[doc('Check for security vulnerabilities in dependencies')]
 audit: (setup "audit")
     cargo audit
 
-# Check for outdated dependencies
+[doc('Check for outdated dependencies')]
 outdated: (setup "outdated")
     cargo outdated --workspace
 
-# Format all Rust and Nix files
-fmt: fmt-rust fmt-nix
+[doc('Format all Rust and Nix files')]
+fmt: fmt-rust fmt-nix fmt-toml
     @echo "✓ All files formatted successfully"
 
-# Format Rust code
+[doc('Format Rust code')]
 fmt-rust: (setup "build-nightly")
-    cargo +nightly fmt --workspace --all
+    cargo +nightly fmt --all
 
-# Format Nix files (gracefully skips if Nix is not installed)
+[doc('Format Nix files (gracefully skips if Nix is not installed)')]
 fmt-nix:
     @if command -v nix > /dev/null; then \
         echo "Formatting Nix files..."; \
@@ -68,55 +68,59 @@ fmt-nix:
         echo "Nix not found, skipping Nix formatting"; \
     fi
 
-# Check formatting without applying changes (for CI)
+[doc('Format TOML files')]
+fmt-toml: (setup "schema")
+    tombi format
+
+[doc('Check formatting without applying changes (for CI)')]
 fmt-check: fmt-check-rust fmt-check-nix
     @echo "✓ Formatting is correct"
 
-# Check Rust formatting
+[doc('Check Rust formatting')]
 fmt-check-rust: (setup "build-nightly")
     @cargo +nightly fmt --all --check
 
-# Check Nix formatting
+[doc('Check Nix formatting')]
 fmt-check-nix:
     @if command -v nix > /dev/null; then \
         nix fmt --check; \
     fi
 
-# Clean build artifacts
+[doc('Clean build artifacts')]
 clean:
     cargo clean
     @rm -f result*
 
-# Run all CI checks locally
+[doc('Run all CI checks locally')]
 ci: check test lint audit fmt-check check-schema
     @echo "✅ All local CI checks passed"
 
-# Generate code coverage
+[doc('Generate code coverage')]
 coverage: (setup "coverage")
     @bash build/ci/coverage.sh
 
-# Show uncovered changed lines comparing to {{base}}
+[doc('Show uncovered changed lines comparing to {{base}}')]
 uncovered base="origin/master": (setup "coverage")
     @scripts/coverage-diff-analysis.py -q --ide-links {{ base }}
 
-# Run benchmarks
-bench *ARGS: (setup "build")
-    cargo bench --workspace --locked {{ ARGS }}
+[doc('Run benchmarks')]
+bench *args: (setup "build")
+    cargo bench --workspace --locked {{ args }}
 
-# Check schema validation
+[doc('Check schema validation')]
 check-schema: (setup "schema")
     tombi lint
     taplo check
 
-# Install binary and man pages
+[doc('Install binary and man pages')]
 install: (setup "build") build-release install-man-pages
     cargo install --path . --locked
 
-# Install binary and man pages and copy with versioned name
+[doc('Install binary and man pages and copy with versioned name')]
 install-versioned: install
     @cp ~/.cargo/bin/hl ~/.cargo/bin/$(~/.cargo/bin/hl --version | tr ' ' '-')
 
-# Install man pages
+[doc('Install man pages')]
 install-man-pages:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -125,15 +129,15 @@ install-man-pages:
     mv -f ~/share/man/man1/hl.1.tmp ~/share/man/man1/hl.1
     echo $(tput setaf 3)NOTE:$(tput sgr0) ensure $(tput setaf 2)~/share/man$(tput sgr0) is added to $(tput setaf 2)MANPATH$(tput sgr0) environment variable
 
-# Build and publish new release
+[doc('Build and publish new release')]
 release type="patch": (setup "cargo-edit")
     gh workflow run -R pamburus/hl release.yml --ref $(git branch --show-current) --field release-type={{ type }}
 
-# Bump version
+[doc('Bump version')]
 bump type="alpha": (setup "cargo-edit")
     cargo set-version --package hl --bump {{ type }}
 
-# List changes since the previous release
+[doc('List changes since the previous release')]
 changes since="auto": (setup "git-cliff" "bat" "gh")
     #!/usr/bin/env bash
     set -euo pipefail
@@ -144,33 +148,33 @@ changes since="auto": (setup "git-cliff" "bat" "gh")
         git-cliff --tag "v${version:?}" "${since:?}..HEAD" \
         | bat -l md --paging=never
 
-# Show previous release tag
+[doc('Show previous release tag')]
 previous-tag:
     @{{ previous-tag }}
 
-# Create screenshots
+[doc('Create screenshots')]
 screenshots: (setup "screenshots") build
     @bash contrib/bin/screenshot.sh light cafe.log
     @bash contrib/bin/screenshot.sh dark cafe.log
 
-# Nix-specific commands (require Nix to be installed)
+[doc('Nix-specific commands (require Nix to be installed)')]
 nix-dev:
     nix develop
 
-# Run all Nix flake checks
+[doc('Run all Nix flake checks')]
 nix-check:
     nix flake check --all-systems --print-build-logs
 
-# Update all Nix flake inputs
+[doc('Update all Nix flake inputs')]
 nix-update:
     nix flake update
 
-# Build all defined Nix package variants
+[doc('Build all defined Nix package variants')]
 nix-build-all:
     nix build .#hl
     nix build .#hl-bin
 
-# Show the dependency tree of the Nix derivation
+[doc('Show the dependency tree of the Nix derivation')]
 nix-deps:
     @if command -v nix-tree > /dev/null; then \
         nix-tree ./result; \
@@ -178,15 +182,15 @@ nix-deps:
         echo "nix-tree is not installed. Run 'nix develop' to enter a shell where it is available"; \
     fi
 
-# Show `hl --help`
-usage *ARGS: build
-    @./target/debug/hl --config - --help {{ ARGS }}
+[doc('Show `hl --help`')]
+usage *args: build
+    @./target/debug/hl --config - --help {{ args }}
 
-# Show `hl --help=long`
-usage-long *ARGS: build
-    @./target/debug/hl --config - --help=long {{ ARGS }}
+[doc('Show `hl --help=long`')]
+usage-long *args: build
+    @./target/debug/hl --config - --help=long {{ args }}
 
-# Convert all Mermaid (.mmd) files to SVG with transparent background using Docker
+[doc('Convert all Mermaid (.mmd) files to SVG')]
 mmd2svg:
     #!/usr/bin/env bash
     set -euo pipefail

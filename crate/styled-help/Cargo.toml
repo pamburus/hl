@@ -8,6 +8,6 @@ license = "MIT"
 proc-macro = true
 
 [dependencies]
-quote = "1"
-syn = { version = "2", features = ["full", "extra-traits"] }
 proc-macro2 = "1"
+quote = "1"
+syn = { version = "2", features = ["extra-traits", "full"] }
