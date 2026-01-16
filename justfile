@@ -26,6 +26,12 @@ default:
     @just --list
 
 [doc('Build the project in debug mode')]
+book: (setup "mdbook")
+    #!/usr/bin/env bash
+    set -euo pipefail
+    mdbook watch -o docs
+
+[doc('Build the project in debug mode')]
 build: (setup "build")
     cargo build
 
@@ -107,11 +113,6 @@ fmt-check-nix:
     @if command -v nix > /dev/null; then \
         nix fmt --check; \
     fi
-
-[doc('Clean build artifacts')]
-clean:
-    cargo clean
-    @rm -f result*
 
 [doc('Run all CI checks locally')]
 ci: check test lint audit fmt-check check-schema
@@ -256,6 +257,11 @@ mmd2svg:
     done
 
     echo "✓ All Mermaid files converted to SVG"
+
+[doc('Clean build artifacts')]
+clean:
+    cargo clean
+    @rm -f result*
 
 # Helper function to run a command locally or in Docker if not installed
 [private]

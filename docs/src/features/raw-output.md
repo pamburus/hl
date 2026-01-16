@@ -1,0 +1,388 @@
+# Raw Output
+
+Raw output mode allows you to output the original JSON source entries instead of `hl`'s formatted representation. This is useful for piping to other tools, preserving exact formatting, or re-processing filtered results.
+
+## Enabling Raw Output
+
+Use the `--raw` (or `-r`) flag:
+
+```sh
+# Output raw JSON instead of formatted output
+hl --raw app.log
+
+# Disable raw mode (if enabled in config)
+hl --no-raw app.log
+```
+
+## How Raw Output Works
+
+When raw output is enabled, `hl`:
+
+1. **Reads and parses** log entries normally
+2. **Applies all filters** (level, query, time range, field filters)
+3. **Outputs the original source JSON** for entries that pass filters
+4. **Preserves exact formatting** from the source (whitespace, field order, etc.)
+
+The key point: **filtering still applies in raw mode**. Raw output doesn't mean "bypass all processing"—it means "output the original format instead of the formatted representation."
+
+## Use Cases
+
+### Piping to JSON Tools
+
+Raw mode is ideal for piping to tools that expect JSON input:
+
+```sh
+# Filter with hl, process with jq
+hl -r --level error app.log | jq '.message'
+
+# Extract specific field values
+hl -r --query 'user-id = "123"' app.log | jq -r '."request-id"'
+
+# Pipe to another JSON processor
+hl -r --since '1 hour ago' app.log | json_pp
+```
+
+### Re-processing Filtered Results
+
+Filter with `hl` and save the matching entries in their original format:
+
+```sh
+# Extract errors to a new file
+hl -r --level error app.log > errors.json
+
+# Save entries for a specific time range
+hl -r --since '2024-01-15 10:00' --until '2024-01-15 11:00' \
+   app.log > time-range.json
+```
+
+### Preserving Exact Format
+
+When you need the exact original JSON format:
+
+```sh
+# Keep original formatting and field order
+hl --raw --query '.important=true' app.log > important.json
+```
+
+### Building JSON Pipelines
+
+Combine `hl`'s filtering with other JSON tools:
+
+```sh
+# Use hl for filtering, jq for extraction/transformation
+hl -r --level warn -q 'duration > 1000' app.log \
+  | jq -r '."request-id"'
+
+# Extract and transform
+hl -r --query '.event=purchase' app.log \
+  | jq '{user: ."user-id", amount: .amount, time: .timestamp}'
+```
+
+### Ensuring JSON-Only Output
+
+When building data processing pipelines, you can combine `--raw` with `--input-format json` to guarantee only valid JSON objects in the output:
+
+```sh
+# Ensure only JSON records are output (no logfmt, no unparsed lines)
+hl -r --input-format json app.log | jq '.message'
+
+# Safe for strict JSON processors
+hl -r --input-format json --level error mixed-format.log \
+  | your-strict-json-processor
+
+# Data pipeline with guaranteed JSON stream
+hl -r --input-format json -q 'duration > 1000' app.log \
+  | jq -c '{id: ."request-id", duration}' \
+  | mongodb-import
+```
+
+This combination is especially useful when:
+- Input files contain mixed formats (JSON and logfmt)
+- Some lines might not parse as structured logs
+- Downstream tools require strictly valid JSON
+- Building automated data pipelines that cannot tolerate non-JSON output
+
+**Without `--input-format json`:** Raw output includes logfmt entries and unparsed lines (when filters match).
+
+**With `--input-format json`:** Only JSON entries are processed and output, ensuring a clean JSON stream.
+
+### Data Export
+
+Export filtered logs for analysis in other tools:
+
+```sh
+# Export to file for analysis
+hl -r --since 'yesterday' --level error app.log > analysis-errors.json
+
+# Import into database or analytics tool
+hl -r --query '.service=api' app.log | mongoimport --collection logs
+```
+
+## Raw Output vs Formatted Output
+
+### Formatted Output (Default)
+
+```sh
+hl app.log
+```
+
+Example output:
+```
+2024-01-15 10:30:45.123 INFO [api] user.id: 123, user.name: "Alice", action: "login"
+```
+
+Features:
+- Human-readable formatting
+- Field visibility controls apply
+- Time display customization
+- Color and theme styling
+- Field flattening and expansion
+
+### Raw Output
+
+```sh
+hl --raw app.log
+```
+
+Example output:
+```json
+{"timestamp":"2024-01-15T10:30:45.123Z","level":"info","service":"api","user":{"id":123,"name":"Alice"},"action":"login"}
+```
+
+Characteristics:
+- Original JSON format preserved
+- Exact whitespace and field order from source
+- No color or styling (plain JSON)
+- Field visibility controls **do not apply**
+- Suitable for machine processing
+
+## Filtering with Raw Output
+
+All filtering options work with raw output:
+
+### Level Filtering
+
+```sh
+# Only output raw entries at error level or above
+hl -r --level error app.log
+```
+
+### Query Filtering
+
+```sh
+# Output raw entries matching query
+hl --raw --query '.status >= 500' access.log
+
+# Complex queries work too
+hl --raw --query 'level >= warn and exists(.error_details)' app.log
+```
+
+### Time Filtering
+
+```sh
+# Output raw entries within time range
+hl --raw --since '2024-01-15 10:00' --until '2024-01-15 11:00' app.log
+```
+
+### Field Filtering
+
+```sh
+# Output raw entries matching field values
+hl --raw --filter 'user-id=123' app.log
+```
+
+## Raw Output with Multiple Files
+
+Raw output works with multiple input files:
+
+```sh
+# Output raw entries from multiple files
+hl -r app.log.1 app.log.2 app.log.3
+
+# Sorted raw output
+hl -r --sort *.log
+
+# Follow mode with raw output
+hl -r -F app.log
+```
+
+Each matching entry's original JSON is output, regardless of which file it came from.
+
+## Raw Field Values
+
+There's a related but different option: `--raw-fields`
+
+```sh
+# Output field values without unescaping or prettifying
+hl --raw-fields app.log
+```
+
+`--raw-fields` affects **formatted output** (not raw mode):
+- Shows field values exactly as they appear in source
+- Doesn't unescape strings
+- Doesn't prettify numbers or values
+
+This is different from `--raw`, which outputs entire entries in original JSON format.
+
+You can combine them:
+
+```sh
+# Raw output with raw field values (redundant but allowed)
+hl -r --raw-fields app.log
+```
+
+In raw mode, `--raw-fields` has no effect since the entire entry is already raw.
+
+## Output Format
+
+Raw output preserves the source format exactly:
+
+### Single-line JSON (most common)
+
+```json
+{"timestamp":"2024-01-15T10:30:45Z","level":"info","message":"request processed"}
+```
+
+### Pretty-printed JSON (if source was formatted)
+
+```json
+{
+  "timestamp": "2024-01-15T10:30:45Z",
+  "level": "info",
+  "message": "request processed"
+}
+```
+
+### Logfmt entries
+
+If the source format is logfmt, raw output will output logfmt:
+
+```
+timestamp=2024-01-15T10:30:45Z level=info message="request processed"
+```
+
+Raw mode preserves whatever format was in the source files.
+
+**Note:** To output only JSON entries (excluding logfmt and unparsed lines), combine `--raw` with `--input-format json`. See [Ensuring JSON-Only Output](#ensuring-json-only-output) above.
+
+## Examples
+
+### Extract Errors for External Analysis
+
+```sh
+# Get all errors in JSON format
+hl -r --level error /var/log/app.log > errors.json
+
+# Import into analysis tool
+cat errors.json | your-analysis-tool
+```
+
+### Complex Query + JSON Processing
+
+```sh
+# Filter with hl, extract fields with jq
+hl -r --query 'status >= 500 and duration > 1000' access.log \
+  | jq -r '[.timestamp, .status, .url, .duration] | @csv' \
+  > slow-errors.csv
+```
+
+### Multi-File Filtered Export
+
+```sh
+# Extract and combine entries from multiple files
+hl --raw --sort --since 'yesterday' \
+   service-a.log service-b.log service-c.log \
+   --query 'trace-id = "abc-123"' \
+   > trace-abc-123.json
+```
+
+### Live Stream to Processing Tool
+
+```sh
+# Follow and pipe raw JSON to processing pipeline
+hl -r -F app.log | your-log-processor
+```
+
+### Time Range Extraction
+
+```sh
+# Extract specific hour for detailed analysis
+hl --raw \
+   --since '2024-01-15 10:00' \
+   --until '2024-01-15 11:00' \
+   --sort \
+   app.log app.log.1.gz \
+   > 2024-01-15-10h.json
+```
+
+### Conditional Export
+
+```sh
+# Export only entries with specific attributes
+hl --raw --query 'exists(.error) and .severity=critical' *.log \
+  | jq -s '.' \
+  > critical-errors-collection.json
+```
+
+### Data Pipeline
+
+```sh
+# Multi-stage data extraction and transformation
+hl -r --level info --query '.event=user_login' app.log \
+  | jq -c '{user: ."user-id", time: .timestamp, ip: ."client-ip"}' \
+  | awk '{print}' \
+  | sort -u \
+  > unique-logins.jsonl
+```
+
+## When to Use Raw Output
+
+**Use raw output when you need:**
+- Original JSON format preserved
+- Piping to JSON processing tools (jq, json_pp, etc.)
+- Exporting filtered results for external analysis
+- Building data pipelines (combine with `--input-format json` for JSON-only streams)
+- Exact source format (not `hl`'s formatting)
+
+**Use formatted output when you need:**
+- Human-readable log viewing
+- Terminal-friendly display
+- Color and theme styling
+- Field visibility control
+- Interactive log exploration
+
+## Performance Considerations
+
+Raw output is typically **faster** than formatted output because:
+
+- No formatting or prettifying required
+- No color/theme processing
+- No field flattening or expansion
+- Direct pass-through of source JSON
+
+For large-scale filtering and export operations, raw mode can provide a performance benefit.
+
+## Configuration
+
+Set raw mode as default in your config file:
+
+```toml
+# ~/.config/hl/config.toml
+raw = true
+```
+
+Or via environment variable:
+
+```sh
+export HL_RAW=true
+hl app.log
+```
+
+You can always override with `--no-raw` on the command line.
+
+## Related Topics
+
+- [Output Formatting](./formatting.md) — overview of formatting options
+- [Field Visibility](./field-visibility.md) — controlling formatted output
+- [Filtering by Queries](./filtering-queries.md) — query expressions for filtering
+- [Multiple Files](./multiple-files.md) — working with multiple log sources

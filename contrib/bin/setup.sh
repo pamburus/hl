@@ -100,6 +100,13 @@ setup_cargo_edit() {
     fi
 }
 
+setup_mdbook() {
+    setup_cargo
+    if [ ! cargo set-version --help >/dev/null 2>&1 ]; then
+        cargo install mdbook
+    fi
+}
+
 setup_rustfilt() {
     setup_cargo
     if [ ! -x "$(command -v rustfilt)" ]; then
@@ -293,6 +300,9 @@ while [ $# -gt 0 ]; do
             ;;
         cargo-edit)
             setup_cargo_edit
+            ;;
+        mdbook)
+            setup_mdbook
             ;;
         git-cliff)
             setup_git_cliff
