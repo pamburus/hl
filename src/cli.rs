@@ -426,10 +426,10 @@ pub struct Opt {
     /// This works well for most JSON and logfmt logs, including series of pretty-printed JSON objects.
     ///
     /// Possible values:
-    /// • <c>auto</>: Auto-detect delimiter (default)
-    /// • <c>cr</>: Carriage return (\r)
-    /// • <c>lf</>: Line feed (\n)
-    /// • <c>crlf</>: Carriage return + line feed (\r\n)
+    /// • <c>auto</>: Smart newline (LF or CRLF) + skip continuation lines (default)
+    /// • <c>cr</>: Carriage return (\r) only
+    /// • <c>lf</>: Line feed (\n) only
+    /// • <c>crlf</>: Smart newline (accepts either \n or \r\n)
     /// • <c>nul</>: Null character (\0)
     #[arg(long, env = "HL_DELIMITER", default_value = "auto", overrides_with = "delimiter", help_heading = heading::INPUT)]
     pub delimiter: Delimiter,
