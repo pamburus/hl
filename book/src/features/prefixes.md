@@ -290,8 +290,8 @@ kubectl logs -f deployment/api | hl --allow-prefix --query 'user-id = "123"' -P
 # Process syslog with JSON messages
 hl --allow-prefix --input-format json /var/log/syslog
 
-# Filter by application
-grep 'myapp' /var/log/syslog | hl --allow-prefix
+# Filter by application (use ripgrep for fast pre-filtering)
+rg 'myapp' /var/log/syslog | hl --allow-prefix
 ```
 
 ### Mixed Sources

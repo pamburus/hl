@@ -270,7 +270,7 @@ You can also create custom themes or theme overlays. See [Themes](../customizati
 
 Strategies for large files:
 - Use time ranges: `--since` and `--until`
-- Pre-filter with `grep` before piping to `hl`
+- Pre-filter with `ripgrep` (`rg`) before piping to `hl` (much faster than `grep`)
 - Increase `--concurrency` for faster processing
 
 See [Performance Tips](../reference/performance.md) for optimization strategies.

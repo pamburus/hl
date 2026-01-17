@@ -395,7 +395,7 @@ If processing many files is slow:
 - Use time filtering to limit the data range
 - Check if indexes are being used (`~/.cache/hl/`)
 - Reduce the number of files processed
-- Consider pre-filtering with grep/awk before piping to hl
+- Consider pre-filtering with `ripgrep` (`rg`) before piping to `hl` (much faster than `grep`)
 
 ### Source Names Not Showing
 
