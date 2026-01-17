@@ -140,26 +140,57 @@ See [Non-JSON Prefixes](./prefixes.md) for more details and examples.
 
 ## Entry Delimiters
 
-By default, `hl` treats each line as a separate log entry. You can change the delimiter:
+By default, `hl` automatically detects log entry boundaries. You can explicitly set the delimiter:
 
 ```bash
-# Auto-detect delimiter (default)
+# Auto delimiter (default) - smart newline + skip continuation lines
 hl --delimiter auto app.log
 
-# Use line feed (Unix style)
+# Line feed only (strict Unix style)
 hl --delimiter lf app.log
 
-# Use carriage return + line feed (Windows style)
+# Smart newline (accepts LF or CRLF)
 hl --delimiter crlf app.log
 
-# Use carriage return only (old Mac style)
+# Carriage return only (old Mac style)
 hl --delimiter cr app.log
 
-# Use null byte (for null-delimited logs)
+# Null byte (for null-delimited logs)
 hl --delimiter nul binary.log
 ```
 
-**Default:** `auto` (detects LF, CRLF, or CR based on input)
+**Default:** `auto`
+
+### How Delimiters Work
+
+- **`lf`**: Treats `\n` (line feed) as delimiter. Strict Unix newlines only.
+- **`cr`**: Treats `\r` (carriage return) as delimiter. Old Mac style.
+- **`crlf`**: Accepts **either** `\n` or `\r\n` as delimiter (not strict CRLF only). This is a "smart newline" that works with both Unix and Windows line endings.
+- **`nul`**: Treats null byte (`\0`) as delimiter. For null-delimited streams.
+- **`auto`**: Smart newline (accepts `\n` or `\r\n`) **plus** continuation line detection. Skips newlines followed by lines starting with `}`, space, or tab. This works well for pretty-printed JSON and most structured logs.
+
+**Note:** The `crlf` delimiter name is somewhat misleading - it accepts both LF-only and CRLF line endings, making it compatible with both Unix and Windows files. It does not require strict `\r\n` sequences.
+
+### When to Use Each Delimiter
+
+**Use `auto` (default)** for:
+- Pretty-printed JSON logs
+- Mixed or unknown line endings
+- Logs with multi-line entries
+
+**Use `lf`** for:
+- Strict Unix/Linux logs
+- Single-line JSON/logfmt entries
+- When you know entries never span multiple lines
+
+**Use `crlf`** for:
+- Logs that may have Unix or Windows line endings
+- When you want flexibility without continuation line detection
+- Single-line entries from mixed sources
+
+**Use `nul`** for:
+- Null-delimited output from tools
+- Binary log formats
 
 ### Null-Delimited Logs
 

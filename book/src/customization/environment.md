@@ -288,16 +288,18 @@ export HL_ALLOW_PREFIX=true
 Set log entry delimiter.
 
 ```bash
-export HL_DELIMITER=auto   # default
-export HL_DELIMITER=lf     # line feed
-export HL_DELIMITER=crlf   # carriage return + line feed
-export HL_DELIMITER=cr     # carriage return
+export HL_DELIMITER=auto   # default - smart newline + continuation detection
+export HL_DELIMITER=lf     # line feed only (strict Unix)
+export HL_DELIMITER=crlf   # smart newline (accepts LF or CRLF)
+export HL_DELIMITER=cr     # carriage return only
 export HL_DELIMITER=nul    # null byte
 ```
 
+**Note:** `crlf` accepts **either** `\n` or `\r\n` (not strict CRLF only). Use this for files with mixed or Windows line endings.
+
 Example:
 ```bash
-# Use CRLF for Windows logs
+# For logs with Unix or Windows line endings
 export HL_DELIMITER=crlf
 ```
 
