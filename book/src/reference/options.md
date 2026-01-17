@@ -35,8 +35,10 @@ See the [Configuration](../configuration/overview.md) section for details on con
 Print help information.
 
 - **Possible values**: `short`, `long`
-- **Short form**: `--help` or `-h` (prints short help)
+- **Default**: `--help` (prints short help)
 - **Long form**: `--help=long` (prints detailed help with descriptions)
+
+**Note**: There is no `-h` short form for help; `-h` is used for `--hide`.
 
 ```/dev/null/example.sh#L1-4
 # Short help
@@ -297,9 +299,9 @@ This outputs the original JSON or logfmt for matching entries. Filtering still a
 # Output raw JSON for matching entries
 hl --raw -q 'status>=500' app.log
 
-# Combine with --input-info json for JSON-only output
+# Combine with --input-format json for JSON-only output
 # (useful for strict JSON processors)
-hl -r --input-info json -q 'status>=500' app.log | jq '.status'
+hl -r --input-format json -q 'status>=500' app.log | jq '.status'
 ```
 
 See [Raw Output](../features/raw-output.md) for details.
@@ -322,14 +324,14 @@ Hide or reveal fields with the specified keys.
 - Use `!*` to reveal all fields
 
 ```/dev/null/example.sh#L1-8
-# Hide the 'caller' field
-hl --hide caller app.log
+# Hide a field
+hl --hide request.body app.log
 
 # Hide multiple fields
-hl --hide caller --hide pid app.log
+hl --hide request.body --hide request.headers app.log
 
 # Reveal a specific field (if hidden by config)
-hl --hide '!caller' app.log
+hl --hide '!request.headers' app.log
 ```
 
 See [Hiding Fields](../features/hiding-fields.md) for details.
@@ -436,11 +438,9 @@ When processing multiple files or when combined with `--raw`, this option contro
 # Show full filenames
 hl --input-info full app1.log app2.log
 
-# No input info (useful for clean JSON output)
-hl --raw --input-info json app.log | jq
+# No input info
+hl --input-info none app.log
 ```
-
-The special value `json` can be used with `--raw` to ensure only valid JSON is output (no logfmt, no prefix text).
 
 ### `--ascii [<WHEN>]`
 

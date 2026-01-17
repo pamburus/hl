@@ -546,14 +546,13 @@ hl --unix-timestamp-unit ns app.log
 
 2. **Mixed formats in output**:
    ```bash
-   # Ensure JSON-only output
-   hl --raw --input-info json app.log | jq
+   # Ensure JSON-only output (force JSON format)
+   hl --raw --input-format json app.log | jq
    ```
 
 **Solution**:
 - Use `--raw` to output original JSON
-- Use `--input-info json` to ensure JSON-only output
-- Disable pager with `-P`
+- Use `--input-format json` to ensure JSON-only output (no logfmt)
 
 ### Shell Redirects Not Working as Expected
 

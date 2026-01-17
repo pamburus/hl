@@ -214,11 +214,11 @@ Filtering still applies, but the output is in the original format.
 
 ### How do I pipe `hl` output to `jq` or other JSON tools?
 
-Use `--raw` with `--input-info json`:
+Use `--raw` with `--input-format json`:
 
 ```bash
 # Clean JSON output for strict processors
-hl --raw --input-info json -q 'status>=500' app.log | jq '.status'
+hl --raw --input-format json -q 'status>=500' app.log | jq '.status'
 ```
 
 This ensures only valid JSON objects are output (no logfmt, no prefix text).
