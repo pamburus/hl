@@ -24,10 +24,12 @@ Each layer **overrides only the specific settings it defines**, leaving other se
 - **Linux/macOS**: `/etc/hl/config`
 - **Windows**: `%ProgramData%\hl\config` (if exists)
 
-**User configuration** (first found is used):
-- **Linux/macOS**: `~/.config/hl/config` (or `$XDG_CONFIG_HOME/hl/config`)
-- **macOS alternative**: `~/.config/hl/config` (if `XDG_CONFIG_HOME` not set)
+**User configuration**:
+- **macOS**: `~/.config/hl/config` (or `$XDG_CONFIG_HOME/hl/config` if `XDG_CONFIG_HOME` is set to an absolute path)
+- **Linux**: `~/.config/hl/config` (or `$XDG_CONFIG_HOME/hl/config` if set)
 - **Windows**: `%APPDATA%\hl\config`
+
+**Note**: On macOS, `XDG_CONFIG_HOME` is only respected if it contains an absolute path (e.g., `/Users/username/my-config`). Relative paths are ignored and `~/.config` is used instead. This absolute path requirement is specific to macOS; on Linux, the `dirs` crate handles `XDG_CONFIG_HOME` according to the XDG Base Directory specification.
 
 ### Layer Examples
 

@@ -4,23 +4,29 @@
 
 ## Theme File Location
 
-Custom themes are stored in:
+Custom themes are stored in platform-specific locations:
 
-```hl/dev/null/path.txt#L1
-~/.config/hl/themes/
-```
+| OS      | Location                                                |
+| ------- | ------------------------------------------------------- |
+| macOS   | `~/.config/hl/themes/` (or `$XDG_CONFIG_HOME/hl/themes/` if `XDG_CONFIG_HOME` is set to an absolute path) |
+| Linux   | `~/.config/hl/themes/` (or `$XDG_CONFIG_HOME/hl/themes/` if set) |
+| Windows | `%APPDATA%\hl\themes\`                                  |
 
-Or more generally:
+**Note**: On macOS, `XDG_CONFIG_HOME` is only respected if it contains an absolute path (e.g., `/Users/username/my-config`). Relative paths are ignored and `~/.config` is used instead. This absolute path requirement is specific to macOS; on Linux, the `dirs` crate handles `XDG_CONFIG_HOME` according to the XDG Base Directory specification.
 
-```hl/dev/null/path.txt#L1
-$XDG_CONFIG_HOME/hl/themes/    # Unix/Linux
-~/Library/Application Support/hl/themes/    # macOS (if XDG not set)
-%APPDATA%\hl\themes\    # Windows
-```
+Theme files can use any of the following formats:
+- `.toml` — TOML format (recommended, default)
+- `.yaml` or `.yml` — YAML format
+- `.json` — JSON format
 
-Theme files must have a `.toml` extension. The theme name is the filename without the extension.
+The theme name is the filename without the extension.
 
-For example, a file `~/.config/hl/themes/my-theme.toml` defines a theme named `my-theme`, which you can activate with:
+For example, any of these files define a theme named `my-theme`:
+- `~/.config/hl/themes/my-theme.toml`
+- `~/.config/hl/themes/my-theme.yaml`
+- `~/.config/hl/themes/my-theme.json`
+
+You can activate the theme with:
 
 ```hl/dev/null/shell.sh#L1
 hl --theme my-theme app.log
@@ -404,8 +410,8 @@ The easiest way to create a custom theme is to start from a stock theme:
 If `hl` reports "theme not found":
 
 - Verify the file exists in `~/.config/hl/themes/`.
-- Check the filename matches the theme name (without `.toml`).
-- Ensure the file has a `.toml` extension.
+- Check the filename matches the theme name (without the extension).
+- Ensure the file has a supported extension: `.toml`, `.yaml`, `.yml`, or `.json`.
 
 ### Colors Not Showing
 
