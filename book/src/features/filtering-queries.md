@@ -236,11 +236,11 @@ Use regex patterns for complex matching:
 
 ```sh
 # Matches email addresses
-hl -q 'email match "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$"' application.log
+hl -q 'email matches "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$"' application.log
 hl -q 'email ~~= "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$"' application.log
 
 # Does not match pattern
-hl -q 'username not match "^admin"' application.log
+hl -q 'username not matches "^admin"' application.log
 hl -q 'username !~~= "^admin"' application.log
 ```
 
@@ -625,7 +625,7 @@ Query operator precedence from **lowest to highest** (loosest to tightest bindin
 2. **`and`, `&&`**
 3. **`not`, `!`**
 4. **Comparison operators** (`=`, `!=`, `>`, `<`, `>=`, `<=`)
-5. **String operators** (`~=`, `~~=`, `like`, `match`, etc.)
+5. **String operators** (`~=`, `~~=`, `like`, `matches`, etc.)
 6. **Field access** (`.field`)
 7. **Function calls** (`exists()`)
 8. **Parentheses** `()` — highest precedence (binds tightest)

@@ -495,9 +495,9 @@ If you see unexpected entries:
    hl -q 'service = "api" or service = "web"' application.log
    ```
 
-2. **No regex** - Use query with `match` operator:
+2. **No regex** - Use query with `matches` operator:
    ```sh
-   hl -q 'message match "error|warning"' application.log
+   hl -q 'message matches "error|warning"' application.log
    ```
 
 3. **No numeric comparisons** - Use query:

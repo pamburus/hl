@@ -231,7 +231,7 @@ When investigating detailed object structures, use `--expansion always`:
 
 ```bash
 # See full structure of complex log entries
-hl --expansion always --query '.error_details' app.log
+hl --expansion always -q 'exists(error-details)' app.log
 ```
 
 ### Monitoring Production Logs
@@ -284,7 +284,7 @@ Combine with field hiding to expand only specific fields:
 hl --hide '*' \
    --hide '!level' --hide '!timestamp' --hide '!error' \
    --expansion always \
-   --query 'exists(.error)' \
+   -q 'exists(error)' \
    app.log
 ```
 
@@ -306,7 +306,7 @@ hl -F \
 hl --expansion always \
    --local \
    --show-empty-fields \
-   --query '.request_id=abc-123' \
+   -q 'request-id = "abc-123"' \
    app.log
 ```
 
@@ -326,7 +326,8 @@ Set default expansion mode in your config file:
 
 ```toml
 # ~/.config/hl/config.toml
-expansion = "inline"
+[formatting.expansion]
+mode = "inline"
 ```
 
 Or via environment variable:
