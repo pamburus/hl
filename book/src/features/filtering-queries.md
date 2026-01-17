@@ -74,7 +74,13 @@ hl -q 'level = info' application.log
 
 The `".level"` syntax (JSON-escaped) matches a field literally named `".level"`, while `.level` matches a field named `"level"` in the source.
 
-**Note on field name matching:** Underscores and hyphens in field names are treated interchangeably (e.g., `user_name` matches `user-name`). This applies even when using JSON-escaped field names like `"user_name"`.
+**Field name matching rules:**
+- **Underscores and hyphens** are treated interchangeably: `user_name` matches `user-name` (applies with or without JSON-escaping)
+- **Dot-delimited names** match both hierarchical and flat fields automatically:
+  - `user.id` matches `{"user":{"id":123}}` (hierarchical/nested)
+  - `user.id` matches `{"user.id":123}` (flat with dot in name)
+  - Even with JSON-escaping: `"user.id"` matches both formats
+  - This allows hl to work seamlessly with different log formats
 
 **Semantic vs. Raw Field Access:**
 
@@ -360,6 +366,52 @@ hl -q 'user.id = 12345' application.log
 
 # Deep nesting
 hl -q 'request.headers.authorization ~= "Bearer"' application.log
+```
+
+### Automatic Matching: Hierarchical and Flat Fields
+
+hl automatically matches dot-delimited field names against **both** hierarchical JSON objects and flat fields with dots in their names:
+
+```sh
+# This query: user.id = 12345
+# Matches BOTH of these log formats:
+
+# 1. Hierarchical JSON
+{"user": {"id": 12345, "name": "Alice"}}
+
+# 2. Flat field with dot in name
+{"user.id": 12345, "user.name": "Alice"}
+```
+
+**This works even with JSON-escaped field names:**
+
+```sh
+# Using JSON-escaping still matches both formats
+hl -q '"user.id" = 12345' application.log
+
+# Matches: {"user": {"id": 12345}}
+# Also matches: {"user.id": 12345}
+```
+
+**Why this matters:**
+- Different logging frameworks use different structures
+- hl works seamlessly with both formats
+- You don't need to know how fields are stored internally
+- Queries work consistently across different log sources
+
+**Examples:**
+
+```sh
+# Match request.method in either format
+hl -q 'request.method = POST' application.log
+# Hierarchical: {"request": {"method": "POST"}}
+# Flat: {"request.method": "POST"}
+
+# Deep nesting works the same way
+hl -q 'a.b.c.d = value' application.log
+# Hierarchical: {"a": {"b": {"c": {"d": "value"}}}}
+# Flat: {"a.b.c.d": "value"}
+# Mixed: {"a": {"b.c": {"d": "value"}}}
 ```
 
 ## Array Fields
