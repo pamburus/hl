@@ -33,13 +33,13 @@ Raw mode is ideal for piping to tools that expect JSON input:
 
 ```bash
 # Filter with hl, process with jq
-hl --raw --level error app.log | jq '.message'
+hl -r --level error app.log | jq '.message'
 
 # Extract specific field values
-hl --raw --query 'user-id = "123"' app.log | jq -r '."request-id"'
+hl -r --query 'user-id = "123"' app.log | jq -r '."request-id"'
 
 # Pipe to another JSON processor
-hl --raw --since '1 hour ago' app.log | json_pp
+hl -r --since '1 hour ago' app.log | json_pp
 ```
 
 ### Re-processing Filtered Results
@@ -48,10 +48,10 @@ Filter with `hl` and save the matching entries in their original format:
 
 ```bash
 # Extract errors to a new file
-hl --raw --level error app.log > errors.json
+hl -r --level error app.log > errors.json
 
 # Save entries for a specific time range
-hl --raw --since '2024-01-15 10:00' --until '2024-01-15 11:00' \
+hl -r --since '2024-01-15 10:00' --until '2024-01-15 11:00' \
    app.log > time-range.json
 ```
 
@@ -70,11 +70,11 @@ Combine `hl`'s filtering with other JSON tools:
 
 ```bash
 # Use hl for filtering, jq for extraction/transformation
-hl --raw --level warn -q 'duration > 1000' app.log \
+hl -r --level warn -q 'duration > 1000' app.log \
   | jq -r '."request-id"'
 
 # Extract and transform
-hl --raw --query '.event=purchase' app.log \
+hl -r --query '.event=purchase' app.log \
   | jq '{user: ."user-id", amount: .amount, time: .timestamp}'
 ```
 
@@ -84,14 +84,14 @@ When building data processing pipelines, you can combine `--raw` with `--input-i
 
 ```bash
 # Ensure only JSON records are output (no logfmt, no unparsed lines)
-hl --raw --input-info json app.log | jq '.message'
+hl -r --input-info json app.log | jq '.message'
 
 # Safe for strict JSON processors
-hl --raw --input-info json --level error mixed-format.log \
+hl -r --input-info json --level error mixed-format.log \
   | your-strict-json-processor
 
 # Data pipeline with guaranteed JSON stream
-hl --raw --input-info json -q 'duration > 1000' app.log \
+hl -r --input-info json -q 'duration > 1000' app.log \
   | jq -c '{id: ."request-id", duration}' \
   | mongodb-import
 ```
@@ -112,10 +112,10 @@ Export filtered logs for analysis in other tools:
 
 ```bash
 # Export to file for analysis
-hl --raw --since 'yesterday' --level error app.log > analysis-errors.json
+hl -r --since 'yesterday' --level error app.log > analysis-errors.json
 
 # Import into database or analytics tool
-hl --raw --query '.service=api' app.log | mongoimport --collection logs
+hl -r --query '.service=api' app.log | mongoimport --collection logs
 ```
 
 ## Raw Output vs Formatted Output
@@ -164,7 +164,7 @@ All filtering options work with raw output:
 
 ```bash
 # Only output raw entries at error level or above
-hl --raw --level error app.log
+hl -r --level error app.log
 ```
 
 ### Query Filtering
@@ -197,13 +197,13 @@ Raw output works with multiple input files:
 
 ```bash
 # Output raw entries from multiple files
-hl --raw app.log.1 app.log.2 app.log.3
+hl -r app.log.1 app.log.2 app.log.3
 
 # Sorted raw output
-hl --raw --sort *.log
+hl -r --sort *.log
 
 # Follow mode with raw output
-hl --raw -F app.log
+hl -r -F app.log
 ```
 
 Each matching entry's original JSON is output, regardless of which file it came from.
@@ -228,7 +228,7 @@ You can combine them:
 
 ```bash
 # Raw output with raw field values (redundant but allowed)
-hl --raw --raw-fields app.log
+hl -r --raw-fields app.log
 ```
 
 In raw mode, `--raw-fields` has no effect since the entire entry is already raw.
@@ -271,7 +271,7 @@ Raw mode preserves whatever format was in the source files.
 
 ```bash
 # Get all errors in JSON format
-hl --raw --level error /var/log/app.log > errors.json
+hl -r --level error /var/log/app.log > errors.json
 
 # Import into analysis tool
 cat errors.json | your-analysis-tool
@@ -281,7 +281,7 @@ cat errors.json | your-analysis-tool
 
 ```bash
 # Filter with hl, extract fields with jq
-hl --raw --query 'status >= 500 and duration > 1000' access.log \
+hl -r --query 'status >= 500 and duration > 1000' access.log \
   | jq -r '[.timestamp, .status, .url, .duration] | @csv' \
   > slow-errors.csv
 ```
@@ -300,7 +300,7 @@ hl --raw --sort --since 'yesterday' \
 
 ```bash
 # Follow and pipe raw JSON to processing pipeline
-hl --raw -F app.log | your-log-processor
+hl -r -F app.log | your-log-processor
 ```
 
 ### Time Range Extraction
@@ -328,7 +328,7 @@ hl --raw --query 'exists(.error) and .severity=critical' *.log \
 
 ```bash
 # Multi-stage data extraction and transformation
-hl --raw --level info --query '.event=user_login' app.log \
+hl -r --level info --query '.event=user_login' app.log \
   | jq -c '{user: ."user-id", time: .timestamp, ip: ."client-ip"}' \
   | awk '{print}' \
   | sort -u \
