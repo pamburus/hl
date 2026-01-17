@@ -22,7 +22,6 @@
   - [Complex Queries](./features/filtering-queries.md)
 
 - [Sorting and Following](./features/sorting.md)
-  - [Chronological Sorting](./features/sorting-chrono.md)
   - [Follow Mode](./features/follow-mode.md)
 
 - [Output Formatting](./features/formatting.md)
