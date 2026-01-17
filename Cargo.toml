@@ -23,7 +23,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.35.2"
+version = "0.35.3-alpha.1"
 edition = "2024"
 repository = "https://github.com/pamburus/hl"
 license = "MIT"
@@ -144,6 +144,13 @@ json.workspace = true
 semver = "1"
 serde = { version = "1", features = ["derive"] }
 sha2 = "0.10"
+
+# Use native-tls on Windows ARM64 to avoid ring/clang requirement
+# Use rustls (default) on all other platforms
+[target.'cfg(all(target_os = "windows", target_arch = "aarch64"))'.build-dependencies]
+ureq = { version = "3", default-features = false, features = ["gzip", "native-tls", "platform-verifier"] }
+
+[target.'cfg(not(all(target_os = "windows", target_arch = "aarch64")))'.build-dependencies]
 ureq = "3"
 
 [target.'cfg(target_os = "macos")'.dependencies]
