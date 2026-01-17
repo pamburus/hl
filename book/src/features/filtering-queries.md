@@ -41,13 +41,22 @@ This queries the actual `status` field in your logs.
 
 ### Exact Field Names
 
-Use JSON-formatted strings for field names with special characters or to avoid ambiguity:
+Use JSON-formatted strings to avoid special syntax or match exact field names:
 
 ```sh
+# Match field literally named ".level" (with the dot)
 hl -q '".level" = info' application.log
+
+# Match source field named "level" (without dot prefix)
+hl -q '.level = info' application.log
+
+# Match predefined level field
+hl -q 'level = info' application.log
 ```
 
-This queries a source field literally named "level" rather than the predefined level field.
+The `".level"` syntax (JSON-escaped) matches a field literally named `".level"`, while `.level` matches a field named `"level"` in the source.
+
+**Note on field name matching:** Underscores and hyphens in field names are treated interchangeably (e.g., `user_name` matches `user-name`), except when using JSON-escaped field names like `"user_name"`, which match exactly.
 
 ## Comparison Operators
 
@@ -108,10 +117,19 @@ hl -q 'level = error || status >= 500' application.log
 Negate a condition:
 
 ```sh
+# NOT has lower precedence than comparison operators
 hl -q 'not level = debug' application.log
 hl -q '!level = debug' application.log
+
+# Use parentheses for complex expressions
+hl -q 'not (level = debug and status >= 400)' application.log
+hl -q '!(level = debug and status >= 400)' application.log
+
+# Or use inequality operator for simple equality checks
 hl -q 'level != debug' application.log
 ```
+
+**Note:** `not` has lower precedence than comparison operators, so `not level = debug` is parsed as `not (level = debug)`. Use explicit parentheses for clarity in complex expressions.
 
 ### Combining Operators
 
@@ -214,23 +232,37 @@ echo -e "error\nwarn" | hl -q 'level in @-' application.log
 ### Checking if Fields Exist
 
 ```sh
-# Field exists
+# Field exists (regardless of value)
 hl -q 'exists(.price)' application.log
 hl -q 'exist(.price)' application.log
 
 # Field does not exist
 hl -q 'not exists(.internal)' application.log
+
+# Show entries with errors OR high status codes
+hl -q 'exists(.error) or status >= 400' application.log
 ```
 
 ### Combining with Other Conditions
 
 ```sh
-# Field exists and has specific value
-hl -q 'exists(.price) and .price > 100' application.log
+# Show if no price field OR price > 100
+hl -q 'not exists(.price) or .price > 100' application.log
 
-# Field exists and contains substring
-hl -q 'exists(message) and message ~= "warning"' application.log
+# Equivalent using ? modifier
+hl -q '.price? > 100' application.log
+
+# Show entries with errors OR failed requests
+hl -q 'exists(.error) or status >= 500' application.log
+
+# Show entries with stack trace (for debugging)
+hl -q 'exists(.stack)' application.log
 ```
+
+**Note:** For simple value comparisons like `.price > 100`, the field must exist, so `exists()` is redundant. Use `exists()` when:
+- Combining with `or` to include absent fields: `not exists(.price) or .price > 100`
+- Checking existence is the primary goal: `exists(.error)`, `exists(.stack)`
+- Finding entries that have optional fields populated
 
 ## Include Absent Modifier
 
@@ -423,9 +455,11 @@ From highest to lowest:
 3. Function calls `exists()`
 4. Comparison operators `=`, `!=`, `>`, `<`, etc.
 5. String operators `~=`, `like`, `match`
-6. `not`, `!`
+6. `not`, `!` (lower than comparisons)
 7. `and`, `&&`
 8. `or`, `||`
+
+This means `not level = debug` is parsed as `not (level = debug)`, which is usually what you want.
 
 When in doubt, use parentheses to be explicit.
 
@@ -455,7 +489,7 @@ When in doubt, use parentheses to be explicit.
    hl -s -q 'level = error' --since -1d *.log
    ```
 
-## Common Mistakes
+### Common Mistakes
 
 1. **Forgetting quotes for values with spaces**
    ```sh
@@ -482,6 +516,18 @@ When in doubt, use parentheses to be explicit.
    
    # Include records without .price
    hl -q 'not exists(.price) or .price > 100' application.log
+   ```
+
+4. **Confusing NOT operator precedence**
+   ```sh
+   # This works - NOT has lower precedence than comparison
+   hl -q 'not level = debug' application.log
+   
+   # But use parentheses for clarity in complex expressions
+   hl -q 'not (level = debug or level = trace)' application.log
+   
+   # Without parentheses, this would be parsed incorrectly:
+   # hl -q 'not level = debug or level = trace'  # means: (not level = debug) or (level = trace)
    ```
 
 ## Next Steps
