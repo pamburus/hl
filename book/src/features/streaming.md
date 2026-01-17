@@ -2,9 +2,36 @@
 
 hl supports viewing live log streams in real-time, making it perfect for monitoring applications as they run. This page covers how to use hl with live log data.
 
+> **💡 Two Different Approaches**
+> 
+> - **`hl -F application.log`** - Parses, filters, and sorts messages chronologically. Only shows entries with valid timestamps that can be parsed.
+> - **`tail -f application.log | hl -P`** - Shows everything in original order, including unparsable input and messages without recognized timestamps.
+> 
+> Choose based on your needs: structured sorting vs. raw completeness.
+
 ## Basic Live Streaming
 
-The simplest way to stream live logs is to pipe them into hl:
+### Method 1: hl's Follow Mode (`-F`)
+
+Use hl's native `-F` flag for parsed, sorted log streaming:
+
+```sh
+hl -F application.log
+```
+
+The `-F` flag:
+- Watches the file for changes
+- Parses and sorts entries chronologically
+- Disables the pager automatically
+- Handles file rotations gracefully
+- **Only shows entries with valid, recognized timestamps**
+- **Filters out unparsable input**
+
+This is ideal when you want chronologically sorted output across multiple files.
+
+### Method 2: Piping from `tail -f`
+
+Pipe from `tail -f` to see everything in original order:
 
 ```sh
 tail -f application.log | hl -P
@@ -12,18 +39,62 @@ tail -f application.log | hl -P
 
 The `-P` flag disables the pager, allowing you to see new entries as they arrive.
 
-## Why Use `-P` for Streaming?
+**Key differences from `-F`:**
+- Shows **all input** including unparsable lines
+- Shows entries **without recognized timestamps**
+- Preserves **original order** (no chronological sorting)
+- Shows entries **as they arrive** in the file
 
-When streaming live logs, the pager would interfere with seeing new entries in real-time. The `-P` flag ensures:
+This is ideal when you need to see everything, including malformed entries or during debugging.
 
-- New log entries appear immediately
-- No buffering delays
-- Output flows continuously
-- Standard terminal scrolling works
+## When to Use Each Method
+
+### Use `hl -F` when:
+- You want chronologically sorted output
+- You're monitoring multiple log files simultaneously
+- You only care about valid, parsable log entries
+- You want to filter by time range or use `--tail` to see recent history
+
+### Use `tail -f | hl -P` when:
+- You need to see **everything**, including unparsable input
+- You want logs in their **original order**
+- You're debugging and need to see malformed entries
+- You're following non-file sources (Docker, kubectl, etc.)
+- Your logs might have lines without timestamps
+
+## Practical Example: The Difference
+
+Consider a log file with mixed content:
+
+```
+2024-01-15 10:00:00 {"level":"info","message":"Server started"}
+Starting up...
+2024-01-15 10:00:01 {"level":"info","message":"Port opened"}
+Some debug output without timestamp
+2024-01-15 10:00:02 {"level":"error","message":"Connection failed"}
+```
+
+**With `hl -F`:**
+- Shows only the 3 JSON lines with timestamps
+- Displays them in chronological order
+- Skips "Starting up..." and "Some debug output without timestamp"
+
+**With `tail -f | hl -P`:**
+- Shows all 5 lines in original order
+- Formats the parsable JSON lines
+- Shows unparsable lines as-is
 
 ## Common Streaming Scenarios
 
 ### Following a Single Log File
+
+For parsed, sorted output:
+
+```sh
+hl -F /var/log/application.log
+```
+
+For raw, complete output in original order:
 
 ```sh
 tail -f /var/log/application.log | hl -P
@@ -193,16 +264,21 @@ This allows up to 5 accidental `Ctrl+C` presses before actually exiting.
 |---------|-------------------|---------|
 | Single file | ✓ | ✓ |
 | Multiple files | Manual setup | Native support |
-| Chronological sorting | No | Yes |
+| Chronological sorting | ❌ (original order) | ✓ (sorted) |
 | File rotation handling | Limited | Automatic |
 | Preload history | Manual | `--tail` option |
-| Performance | Good | Optimized |
+| Shows unparsable input | ✓ (everything) | ❌ (parsed only) |
+| Shows entries without timestamp | ✓ | ❌ |
+| Order | Original | Chronological |
+| **Best for** | Complete output, debugging | Sorted multi-file monitoring |
+
+**Key Difference:** `hl -F` parses, filters, and sorts. `tail -f \| hl -P` shows everything as-is.
 
 ## Use Cases
 
 ### Development
 
-Monitor your application during development:
+Monitor your application during development (shows all output including non-JSON):
 
 ```sh
 npm start 2>&1 | hl -P -l d
@@ -210,15 +286,25 @@ npm start 2>&1 | hl -P -l d
 
 ### Production Monitoring
 
-Follow production logs with error filtering:
+Follow production logs with error filtering and chronological sorting:
 
 ```sh
 hl -F -l e --tail 20 /var/log/app/*.log
 ```
 
-### Debugging
+### Debugging Application Issues
 
-Stream logs with specific query:
+When debugging, use `tail -f | hl -P` to see everything including startup messages, errors, and unparsable output:
+
+```sh
+tail -f app.log | hl -P
+```
+
+This ensures you don't miss important diagnostic information that might not be in valid JSON format.
+
+### Tracing Specific Requests
+
+Stream logs with specific query (use piping to preserve all output):
 
 ```sh
 kubectl logs -f pod | hl -P -q 'request.id = "abc123"'
@@ -237,27 +323,36 @@ hl -F --sync-interval-ms 200 \
 
 ## Tips and Tricks
 
-1. **Use color themes** - Even with `-P`, colors are enabled if outputting to a terminal:
+1. **Choose the right method** - Use `-F` for clean, sorted output across multiple files. Use `tail -f | hl -P` when you need to see everything including non-JSON output:
+   ```sh
+   # Sorted, parsed output only
+   hl -F app.log
+   
+   # Everything, including unparsable lines
+   tail -f app.log | hl -P
+   ```
+
+2. **Use color themes** - Even with `-P`, colors are enabled if outputting to a terminal:
    ```sh
    tail -f app.log | hl -P --theme hl-dark
    ```
 
-2. **Hide noisy fields** - Reduce clutter in live streams:
+3. **Hide noisy fields** - Reduce clutter in live streams:
    ```sh
    tail -f app.log | hl -P -h headers -h metadata
    ```
 
-3. **Combine with grep** - Post-filter the output:
+4. **Combine with grep** - Post-filter the output:
    ```sh
    tail -f app.log | hl -P -l e | grep "database"
    ```
 
-4. **Save to file while viewing** - Tee the output:
+5. **Save to file while viewing** - Tee the output:
    ```sh
    tail -f app.log | hl -P | tee formatted.log
    ```
 
-5. **Local timezone** - View timestamps in your local time:
+6. **Local timezone** - View timestamps in your local time:
    ```sh
    tail -f app.log | hl -P -L
    ```

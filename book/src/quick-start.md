@@ -27,13 +27,19 @@ hl app.log app.log.1 app.log.2
 
 ### Streaming Live Logs
 
-Follow a live log file (similar to `tail -f`):
+Follow a live log file with chronological sorting:
+
+```sh
+hl -F application.log
+```
+
+Or follow a log file showing everything in original order:
 
 ```sh
 tail -f application.log | hl -P
 ```
 
-The `-P` flag disables the pager, allowing you to see updates in real-time.
+**Key difference:** `-F` parses and sorts entries chronologically (only shows parsable entries with timestamps), while `tail -f | hl -P` shows everything including unparsable input and entries without timestamps.
 
 ### Viewing Compressed Logs
 
@@ -145,11 +151,13 @@ This is especially useful when logs are from different servers or services.
 
 ### Follow Multiple Files
 
-Monitor multiple log files in real-time, sorted by timestamp:
+Monitor multiple log files in real-time, sorted chronologically:
 
 ```sh
 hl -F app1.log app2.log app3.log
 ```
+
+This shows entries sorted by timestamp across all files. Note that `-F` only displays entries with valid, parsable timestamps.
 
 ## Choosing a Theme
 

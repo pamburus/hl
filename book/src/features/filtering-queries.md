@@ -1,0 +1,492 @@
+# Complex Queries
+
+Complex queries allow you to build sophisticated filtering expressions using logical operators, comparisons, and pattern matching. This is hl's most powerful filtering feature.
+
+## Basic Query Syntax
+
+Use the `-q` or `--query` option to specify a query:
+
+```sh
+hl -q 'level > info' application.log
+```
+
+Queries are expressions that evaluate to true or false for each log entry. Only entries where the query evaluates to true are displayed.
+
+## Field References
+
+### Predefined Fields
+
+These special field names reference standard log fields regardless of the source field names:
+
+- `level` - Log level
+- `message` - Log message
+- `caller` - Caller information
+- `logger` - Logger name
+
+Example:
+
+```sh
+hl -q 'level = error' application.log
+```
+
+### Source Fields
+
+Reference source fields by prefixing with a period (`.`):
+
+```sh
+hl -q '.status = 200' application.log
+```
+
+This queries the actual `status` field in your logs.
+
+### Exact Field Names
+
+Use JSON-formatted strings for field names with special characters or to avoid ambiguity:
+
+```sh
+hl -q '".level" = info' application.log
+```
+
+This queries a source field literally named "level" rather than the predefined level field.
+
+## Comparison Operators
+
+### Equality and Inequality
+
+```sh
+# Equal to
+hl -q 'status = 200' application.log
+hl -q 'status eq 200' application.log
+
+# Not equal to
+hl -q 'status != 200' application.log
+hl -q 'status ne 200' application.log
+```
+
+### Numeric Comparisons
+
+```sh
+# Greater than
+hl -q 'status > 400' application.log
+hl -q 'status gt 400' application.log
+
+# Greater than or equal
+hl -q 'status >= 400' application.log
+hl -q 'status ge 400' application.log
+
+# Less than
+hl -q 'duration < 0.5' application.log
+hl -q 'duration lt 0.5' application.log
+
+# Less than or equal
+hl -q 'duration <= 1.0' application.log
+hl -q 'duration le 1.0' application.log
+```
+
+## Logical Operators
+
+### AND
+
+Combine conditions that must all be true:
+
+```sh
+hl -q 'level = error and status >= 500' application.log
+hl -q 'level = error && status >= 500' application.log
+```
+
+### OR
+
+Match if any condition is true:
+
+```sh
+hl -q 'level = error or status >= 500' application.log
+hl -q 'level = error || status >= 500' application.log
+```
+
+### NOT
+
+Negate a condition:
+
+```sh
+hl -q 'not level = debug' application.log
+hl -q '!level = debug' application.log
+hl -q 'level != debug' application.log
+```
+
+### Combining Operators
+
+Use parentheses to control precedence:
+
+```sh
+hl -q '(level = error or level = warn) and status >= 400' application.log
+```
+
+## String Matching
+
+### Substring Match
+
+Check if a field contains a substring:
+
+```sh
+# Contains
+hl -q 'message contain "error"' application.log
+hl -q 'message ~= "error"' application.log
+
+# Does not contain
+hl -q 'message not contain "debug"' application.log
+hl -q 'message !~= "debug"' application.log
+```
+
+### Wildcard Match
+
+Use `*` for zero or more characters and `?` for a single character:
+
+```sh
+# Matches "user123", "user456", etc.
+hl -q 'username like "user*"' application.log
+
+# Matches "user1", "user2", but not "user12"
+hl -q 'username like "user?"' application.log
+
+# Negation
+hl -q 'username not like "admin*"' application.log
+```
+
+### Regular Expression Match
+
+Use regex patterns for complex matching:
+
+```sh
+# Matches email addresses
+hl -q 'email match "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$"' application.log
+hl -q 'email ~~= "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$"' application.log
+
+# Does not match pattern
+hl -q 'username not match "^admin"' application.log
+hl -q 'username !~~= "^admin"' application.log
+```
+
+## Set Operations
+
+### In-List Matching
+
+Check if a value is in a set:
+
+```sh
+# Value in list
+hl -q 'status in (200, 201, 204)' application.log
+
+# String values
+hl -q 'method in (GET, POST, PUT)' application.log
+
+# Not in list
+hl -q 'status not in (200, 304)' application.log
+```
+
+### Loading Sets from Files
+
+Load values from a file (one per line):
+
+```sh
+# Create a file with allowed IPs
+echo "192.168.1.1" > allowed-ips.txt
+echo "10.0.0.1" >> allowed-ips.txt
+
+# Query using the file
+hl -q 'ip in @allowed-ips.txt' application.log
+hl -q 'ip not in @blocked-ips.txt' application.log
+```
+
+File format:
+- One value per line
+- Can be plain strings or JSON strings
+- Empty lines are ignored
+
+### Loading Sets from stdin
+
+```sh
+# Read values from stdin
+echo -e "error\nwarn" | hl -q 'level in @-' application.log
+```
+
+## Field Existence
+
+### Checking if Fields Exist
+
+```sh
+# Field exists
+hl -q 'exists(.price)' application.log
+hl -q 'exist(.price)' application.log
+
+# Field does not exist
+hl -q 'not exists(.internal)' application.log
+```
+
+### Combining with Other Conditions
+
+```sh
+# Field exists and has specific value
+hl -q 'exists(.price) and .price > 100' application.log
+
+# Field exists and contains substring
+hl -q 'exists(message) and message ~= "warning"' application.log
+```
+
+## Include Absent Modifier
+
+The `?` modifier after a field name changes how missing fields are handled.
+
+### Without `?` (Default Behavior)
+
+```sh
+# Only matches records WHERE .status exists AND equals "error"
+hl -q '.status = error' application.log
+```
+
+Records without a `status` field are excluded.
+
+### With `?` (Include Absent)
+
+```sh
+# Matches records WHERE .status = "error" OR .status doesn't exist
+hl -q '.status?=error' application.log
+```
+
+This is useful when you want to include records that might not have the field.
+
+### Common Use Cases
+
+```sh
+# Show non-errors OR records without status field
+hl -q '.status?!=error' application.log
+
+# Show records with price=0 OR no price field
+hl -q '.price?=0' application.log
+```
+
+## Nested Fields
+
+Access nested JSON fields using dot notation:
+
+```sh
+# Simple nested field
+hl -q 'user.id = 12345' application.log
+
+# Deep nesting
+hl -q 'request.headers.authorization ~= "Bearer"' application.log
+```
+
+## Array Fields
+
+### Array Element Access
+
+```sh
+# Access specific array index (0-based)
+hl -q 'tags.[0] = "important"' application.log
+
+# Second element
+hl -q 'tags.[1] = "verified"' application.log
+```
+
+### Array Contains
+
+```sh
+# Check if any array element matches
+hl -q 'tags.[] = "error"' application.log
+
+# Nested object in array
+hl -q 'users.[].role = "admin"' application.log
+```
+
+## Special Characters in Values
+
+Use JSON-formatted strings for values with special characters:
+
+```sh
+# Newlines in strings
+hl -q 'message contain "Error:\nConnection failed"' application.log
+
+# Quotes in strings
+hl -q 'message = "He said \"hello\""' application.log
+
+# Tabs and special characters
+hl -q 'data contain "\t\r\n"' application.log
+```
+
+## Complete Examples
+
+### Error Investigation
+
+```sh
+# All errors with stack traces
+hl -q 'level = error and exists(stack)' application.log
+
+# Errors from specific service
+hl -q 'level = error and service = "payment"' application.log
+
+# Errors excluding known issues
+hl -q 'level = error and message not contain "Expected timeout"' application.log
+```
+
+### Performance Analysis
+
+```sh
+# Slow requests
+hl -q 'duration > 1.0' application.log
+
+# Slow OR failed requests
+hl -q 'duration > 1.0 or status >= 500' application.log
+
+# Database queries over threshold
+hl -q 'component = "database" and duration > 0.1' application.log
+```
+
+### Security Monitoring
+
+```sh
+# Failed login attempts
+hl -q 'event = "login" and success = false' application.log
+
+# Suspicious IP addresses
+hl -q 'ip not in @allowed-ips.txt and level = warn' application.log
+
+# Admin actions
+hl -q 'user.role = "admin" and action not in (login, logout)' application.log
+```
+
+### Request Tracing
+
+```sh
+# Trace specific request
+hl -q 'request.id = "abc-123-def"' application.log
+
+# Requests from specific user
+hl -q 'user.id = 12345 and method != GET' application.log
+
+# Multi-step request flow
+hl -q 'trace.id = "xyz789" and (step in (auth, process, respond))' application.log
+```
+
+### HTTP API Monitoring
+
+```sh
+# Client errors (4xx)
+hl -q 'status >= 400 and status < 500' application.log
+
+# Server errors (5xx)
+hl -q 'status >= 500' application.log
+
+# Slow or failed requests
+hl -q 'status >= 400 or duration > 0.5' application.log
+
+# Specific endpoints
+hl -q 'path like "/api/v1/*" and method = POST' application.log
+```
+
+## Query Best Practices
+
+1. **Use parentheses for clarity** - Make complex queries readable
+   ```sh
+   hl -q '(level = error or level = warn) and (status >= 400 or duration > 1)' application.log
+   ```
+
+2. **Start simple, then refine** - Test basic queries before adding complexity
+   ```sh
+   # Start with
+   hl -q 'level = error' application.log
+   
+   # Then add conditions
+   hl -q 'level = error and service = "api"' application.log
+   ```
+
+3. **Use exists() for optional fields** - Prevent unexpected filtering
+   ```sh
+   hl -q 'not exists(.optional) or .optional != "skip"' application.log
+   ```
+
+4. **Quote strings with spaces** - Avoid parsing issues
+   ```sh
+   hl -q 'message = "Connection timeout"' application.log
+   ```
+
+5. **Combine with other filters** - Layer filtering methods
+   ```sh
+   hl -l e -q 'duration > 1' --since -1h application.log
+   ```
+
+## Operator Precedence
+
+From highest to lowest:
+
+1. Parentheses `()`
+2. Field access `.field`
+3. Function calls `exists()`
+4. Comparison operators `=`, `!=`, `>`, `<`, etc.
+5. String operators `~=`, `like`, `match`
+6. `not`, `!`
+7. `and`, `&&`
+8. `or`, `||`
+
+When in doubt, use parentheses to be explicit.
+
+## Performance Tips
+
+1. **Put selective filters first** - Help short-circuit evaluation
+   ```sh
+   hl -q 'status = 500 and exists(stack)' application.log
+   ```
+
+2. **Use field filters for simple cases** - Faster than queries
+   ```sh
+   # Prefer this
+   hl -f service=api application.log
+   
+   # Over this
+   hl -q 'service = "api"' application.log
+   ```
+
+3. **Combine with time ranges** - Reduce data to process
+   ```sh
+   hl -q 'status >= 400' --since -1h application.log
+   ```
+
+4. **Use sorted mode for time-sensitive queries** - Much faster
+   ```sh
+   hl -s -q 'level = error' --since -1d *.log
+   ```
+
+## Common Mistakes
+
+1. **Forgetting quotes for values with spaces**
+   ```sh
+   # Wrong
+   hl -q 'message = Connection timeout' application.log
+   
+   # Correct
+   hl -q 'message = "Connection timeout"' application.log
+   ```
+
+2. **Using wrong field reference**
+   ```sh
+   # Query predefined field
+   hl -q 'level = error' application.log
+   
+   # Query source field named "level"
+   hl -q '.level = error' application.log
+   ```
+
+3. **Not handling missing fields**
+   ```sh
+   # Excludes records without .price
+   hl -q '.price > 100' application.log
+   
+   # Include records without .price
+   hl -q 'not exists(.price) or .price > 100' application.log
+   ```
+
+## Next Steps
+
+- [Query Syntax Reference](../reference/query-syntax.md) - Complete syntax specification
+- [Query Examples](../examples/queries.md) - More real-world examples
+- [Filtering by Field Values](./filtering-fields.md) - Simpler field-based filtering
+- [Filtering by Log Level](./filtering-level.md) - Level-based filtering
