@@ -27,7 +27,7 @@ The `-F` flag:
 - **Only shows entries with valid, recognized timestamps**
 - **Filters out unparsable input**
 
-This is ideal when you want chronologically sorted output across multiple files.
+See [Follow Mode](./follow-mode.md) for comprehensive documentation on follow mode features and configuration.
 
 ### Method 2: Piping from `tail -f`
 
@@ -166,35 +166,7 @@ This is different from using `tail -f` because hl:
 - Handles file rotations gracefully
 - Displays which file each entry came from
 
-### Follow Mode Features
-
-When using `-F`:
-- Pager is automatically disabled
-- Entries are sorted chronologically within a time window
-- New entries appear in real-time
-- Works with multiple files and compressed files
-
-### Controlling Sync Interval
-
-The `--sync-interval-ms` option controls how often entries are sorted:
-
-```sh
-hl -F --sync-interval-ms 500 app1.log app2.log
-```
-
-- Lower values (e.g., 100ms) give faster updates but use more CPU
-- Higher values (e.g., 1000ms) are more efficient for high-volume logs
-- Default is 100ms
-
-### Preloading Historical Entries
-
-Use `--tail` to show the last N entries before following:
-
-```sh
-hl -F --tail 100 app1.log app2.log
-```
-
-This displays the last 100 entries from each file before switching to live mode.
+See [Follow Mode](./follow-mode.md) for detailed configuration options including `--sync-interval-ms`, `--tail`, and multi-file monitoring strategies.
 
 ## Advanced Live Streaming
 
@@ -207,22 +179,6 @@ hl -F \
   <(kubectl logs -f deployment/web-1) \
   <(kubectl logs -f deployment/web-2) \
   <(kubectl logs -f deployment/api-1)
-```
-
-### Combining Static and Live Sources
-
-```sh
-hl -F archived.log current.log
-```
-
-hl will read `archived.log` completely, then follow changes in `current.log`.
-
-### With Time Range Filtering
-
-Show only recent entries when starting:
-
-```sh
-hl -F --since -1h --tail 50 application.log
 ```
 
 ## Performance Considerations
@@ -286,10 +242,10 @@ npm start 2>&1 | hl -P -l d
 
 ### Production Monitoring
 
-Follow production logs with error filtering and chronological sorting:
+Follow production logs with error filtering and chronological sorting (see [Follow Mode](./follow-mode.md) for more options):
 
 ```sh
-hl -F -l e --tail 20 /var/log/app/*.log
+hl -F --level error /var/log/app/*.log
 ```
 
 ### Debugging Application Issues
@@ -307,18 +263,7 @@ This ensures you don't miss important diagnostic information that might not be i
 Stream logs with specific query (use piping to preserve all output):
 
 ```sh
-kubectl logs -f pod | hl -P -q 'request.id = "abc123"'
-```
-
-### Multi-Service Monitoring
-
-Watch multiple services in sync:
-
-```sh
-hl -F --sync-interval-ms 200 \
-  <(kubectl logs -f svc/web) \
-  <(kubectl logs -f svc/api) \
-  <(kubectl logs -f svc/worker)
+kubectl logs -f pod | hl -P -q 'request-id = "abc123"'
 ```
 
 ## Tips and Tricks
@@ -384,8 +329,9 @@ If CPU usage is high:
 2. Reduce the number of files being followed
 3. Apply filters to reduce processing load
 
-## Next Steps
+## Related Topics
 
-- [Multiple Files](./multiple-files.md) - Learn more about handling multiple log sources
-- [Follow Mode](./follow-mode.md) - Deep dive into `-F` flag features
-- [Filtering](./filtering.md) - Apply filters to reduce noise in live streams
+- [Follow Mode](./follow-mode.md) — comprehensive guide to `-F` flag features
+- [Chronological Sorting](./sorting.md) — batch sorting with `--sort`
+- [Multiple Files](./multiple-files.md) — handling multiple log sources
+- [Filtering](./filtering.md) — apply filters to reduce noise in live streams

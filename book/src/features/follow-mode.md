@@ -10,9 +10,6 @@ Use the `--follow` (or `-F`) flag:
 # Follow a single log file
 hl -F /var/log/app.log
 
-# Follow multiple files
-hl -F service-*.log
-
 # Follow with filtering
 hl -F --level error --query 'request-id = "abc"' *.log
 ```
@@ -79,9 +76,6 @@ You don't need to specify `-P` when using `-F`—it's implied.
 Control how many recent entries to display when follow mode starts:
 
 ```bash
-# Show last 20 entries from each file
-hl -F --tail 20 *.log
-
 # Show last 50 entries (useful for context)
 hl -F --tail 50 app.log
 
@@ -100,9 +94,6 @@ The sync interval controls the time window for chronological sorting:
 ```bash
 # Use 500ms window (better ordering, more latency)
 hl -F --sync-interval-ms 500 *.log
-
-# Use 50ms window (faster, less accurate ordering)
-hl -F --sync-interval-ms 50 *.log
 ```
 
 **Default:** `--sync-interval-ms 100`
@@ -268,9 +259,6 @@ Follow mode excels at monitoring multiple files simultaneously:
 # Monitor all service logs
 hl -F /var/log/service-*.log
 
-# Monitor logs from multiple directories
-hl -F /var/log/app/service-a.log /var/log/app/service-b.log
-
 # Monitor with pattern expansion
 hl -F logs/**/*.log
 ```
@@ -353,13 +341,6 @@ When following many files (dozens or more):
 
 ## Common Patterns
 
-### Development Monitoring
-
-```bash
-# Follow application log during development
-hl -F --tail 20 --level debug app.log
-```
-
 ### Production Monitoring
 
 ```bash
@@ -386,12 +367,7 @@ hl -F --sync-interval-ms 200 \
    --input-info compact
 ```
 
-### Continuous Integration Monitoring
 
-```bash
-# Follow build logs with context
-hl -F --tail 0 --level info /var/log/ci/build.log
-```
 
 ## Troubleshooting
 
@@ -440,7 +416,6 @@ Check that:
 ## Related Topics
 
 - [Live Streaming](./streaming.md) — streaming behavior and `-F` vs piping
-- [Sorting and Following](./sorting.md) — overview of sorting modes
-- [Chronological Sorting](./sorting-chrono.md) — batch sorting with `--sort`
+- [Chronological Sorting](./sorting.md) — batch sorting with `--sort`
 - [Multiple Files](./multiple-files.md) — working with multiple log sources
 - [Filtering](./filtering.md) — all filtering options

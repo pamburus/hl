@@ -1,37 +1,35 @@
-# Sorting and Following
+# Chronological Sorting
 
-`hl` provides powerful capabilities for organizing and monitoring log entries across time and multiple sources.
+Chronological sorting organizes log entries by their timestamps, regardless of which file or source they came from. This is essential for understanding event sequences in distributed systems, analyzing rotated logs, and debugging issues across multiple services.
 
-## Overview
+## Enabling Chronological Sorting
 
-By default, `hl` displays log entries in the order they appear in the input—line by line, file by file. However, when working with logs from distributed systems, rotated files, or live streams, you often need entries sorted chronologically to understand the sequence of events.
-
-`hl` offers two main modes for time-based ordering:
-
-- **Sort mode** (`-s, --sort`) — chronologically sorts all entries before displaying
-- **Follow mode** (`-F, --follow`) — continuously monitors files and displays entries in near-real-time chronological order
-
-## Sort Mode
-
-The `--sort` (or `-s`) option tells `hl` to:
-
-1. Read all log entries from all input files
-2. Parse timestamps from each entry
-3. Sort entries chronologically across all sources
-4. Display the sorted output
+Use the `--sort` (or `-s`) flag:
 
 ```bash
-# Sort entries from multiple log files chronologically
+# Sort a single file
+hl -s application.log
+
+# Sort multiple files together
 hl -s app.log app.log.1 app.log.2
 
-# Sort and filter
+# Sort with filtering
 hl -s --level warn *.log
-
-# Sort entries from compressed archives
-hl -s logs-2024-01-*.log.gz
 ```
 
-### When to Use Sort Mode
+## How Sorting Works
+
+When you enable sorting, `hl`:
+
+1. **Reads all entries** from all input files
+2. **Parses timestamps and levels** from each entry
+3. **Builds an index** with timestamp ranges, level bitmasks, and offsets (cached for reuse)
+4. **Sorts entries** chronologically using the index
+5. **Outputs sorted entries** in chronological order
+
+The key advantage: **filtering still applies**, and the index-based approach makes sorted filtering very efficient even on large files. The index contains level information, so level filtering is extremely fast—if a file segment doesn't contain the requested log levels at all, it's skipped entirely during processing (never read, parsed, or filtered).
+
+## When to Use Sort Mode
 
 Sort mode is ideal when you need to:
 
@@ -39,152 +37,212 @@ Sort mode is ideal when you need to:
 - **Analyze rotated logs** where newer entries might be split across files
 - **Correlate events** from different services with interleaved timestamps
 - **Debug distributed systems** where logs from different nodes need chronological ordering
+- **Investigate historical data** with precise time-based ordering
 
-### Performance Considerations
+## Timestamp Extraction
 
-Sort mode uses an efficient two-pass indexing approach:
+`hl` automatically detects and parses timestamps in various formats:
 
-- **First pass** — builds an index with timestamp ranges and offsets (cached for reuse)
-- **Second pass** — reads entries in optimized order using the index
-- **Memory usage** — minimal for sorted data, moderate for shuffled data (never loads all entries)
-- **Index caching** — subsequent runs on the same files are significantly faster
+- **ISO 8601**: `2024-01-15T10:30:45.123Z`, `2024-01-15T10:30:45+00:00`
+- **RFC 3339**: `2024-01-15 10:30:45.123`
+- **Unix timestamps**: numeric seconds, milliseconds, microseconds, or nanoseconds
+- **Common formats**: `Jan 15 10:30:45`, `15/Jan/2024:10:30:45 +0000`
 
-Filters (`-l`, `-q`, `--since`, `--until`) leverage the index to skip irrelevant segments, making filtered sorting very efficient even on large files.
+Timestamps can appear in various field names (`timestamp`, `time`, `@timestamp`, `ts`, `date`, etc.) and can be located anywhere in the JSON structure (top-level or nested).
 
-## Follow Mode
+### Handling Multiple Timestamp Fields
 
-The `--follow` (or `-F`) option enables live log monitoring with automatic chronological sorting across multiple streams:
+When an entry contains multiple timestamp fields, `hl` uses a priority order:
 
-```bash
-# Follow a single log file
-hl -F /var/log/app.log
+1. `@timestamp` (common in ELK/Elasticsearch)
+2. `timestamp`
+3. `time`
+4. `ts`
+5. Other recognized timestamp field names
 
-# Follow multiple files with chronological merging
-hl -F service-*.log
+You typically don't need to configure this—`hl` chooses the most semantic timestamp automatically.
 
-# Follow with filtering
-hl -F --level error --query '.service=api' *.log
-```
+## Entries Without Timestamps
 
-### How Follow Mode Works
+Log entries without a recognized timestamp are **discarded** in sort mode.
 
-When you use `-F`, `hl`:
+Sort mode requires valid timestamps to determine chronological ordering. Entries that cannot be parsed or don't contain recognizable timestamp fields are filtered out during the indexing phase.
 
-1. **Opens all specified files** and seeks to recent entries
-2. **Preloads recent history** (controlled by `--tail`)
-3. **Monitors files continuously** for new entries
-4. **Sorts entries** within a time window (controlled by `--sync-interval-ms`)
-5. **Displays sorted entries** as they arrive
-6. **Handles file rotation** automatically (detects when files are truncated or recreated)
+**Note:** If you need to see all entries including those without timestamps, use unsorted mode (the default) or piped input with `tail -f | hl -P`.
 
-### Key Characteristics
+## Sorting Stability
 
-Follow mode has important behavioral differences from piped input:
+When multiple entries have the **same timestamp**, `hl` maintains their relative order based on:
 
-- **Only shows entries with valid timestamps** — unparsable lines or entries without recognized timestamps are skipped
-- **Sorts entries chronologically** across all monitored files within the sync interval
-- **Handles rotation** — detects and follows rotated files automatically
-- **Disables paging automatically** — output streams directly to your terminal
-- **Preloads recent context** — shows recent entries when starting (configurable with `--tail`)
+1. **Source order** — entries from earlier files come before entries from later files
+2. **Line order** — within the same file, entries maintain their original sequence
 
-### Configuration Options
+This stable sorting ensures deterministic, reproducible output.
 
-#### Tail Window
+## Performance Characteristics
 
-Control how many recent entries to display when follow mode starts:
+Sorting uses an efficient two-pass indexing approach:
 
-```bash
-# Show last 20 entries from each file when starting
-hl -F --tail 20 *.log
+### First Pass - Indexing
 
-# Start from the end without showing history
-hl -F --tail 0 *.log
-```
+- Sequential scan of all input files
+- Parses each entry to extract timestamp and log level
+- Builds an index per segment containing:
+  - Timestamp ranges (min/max)
+  - Level bitmasks (which log levels are present)
+  - Entry offsets and ordering information
+- Index is cached in `~/.cache/hl/` for reuse on subsequent runs
+- **Minimal memory usage**—doesn't load all entries into memory
 
-Default: `--tail 10`
+### Second Pass - Output
 
-#### Sync Interval
+- Uses the index to determine which segments to process
+- **Skips entire segments** that don't match level filters (using level bitmasks—never reads or parses them)
+- **Skips segments** outside time range filters (using timestamp ranges—never reads or parses them)
+- Reads and processes only matching segments in chronological order
+- Nearly sequential I/O when entries are mostly sorted
+- Memory usage increases only if entries are heavily shuffled
 
-Control the time window for chronological sorting:
+### Index Caching
 
-```bash
-# Use 500ms window for sorting (better ordering, slightly more delay)
-hl -F --sync-interval-ms 500 *.log
-
-# Use 50ms window (faster display, less accurate ordering)
-hl -F --sync-interval-ms 50 *.log
-```
-
-Default: `--sync-interval-ms 100`
-
-The sync interval represents the time buffer `hl` uses to collect and sort entries before displaying them. A larger interval provides better chronological accuracy when entries arrive out of order, but introduces more display latency.
-
-### Follow Mode vs Piped Input
-
-There's a fundamental difference between `hl -F` and piping with `tail -f`:
+The sorting index is cached and reused:
 
 ```bash
-# Built-in follow: parsed, sorted, handles rotation, skips unparsable
-hl -F /var/log/app.log
+# First run builds index (slower)
+hl -s large.log
 
-# Piped follow: raw, unsorted, shows everything including unparsable
-tail -f /var/log/app.log | hl -P
+# Subsequent runs reuse index (faster)
+hl -s --level error large.log
 ```
 
-**Use `hl -F` when you want:**
-- Chronologically sorted output across multiple files
-- Automatic file rotation handling
-- Clean, parsed log entries only
-- Multi-file monitoring with merged streams
+The index is automatically invalidated when files change, ensuring correctness.
 
-**Use `tail -f | hl -P` when you want:**
-- Complete raw output including unparsable lines
-- Original ordering preserved
-- Debugging (seeing startup messages, mixed formats, etc.)
-- Simple single-file monitoring
+### Optimization Tips
 
-See [Live Streaming](./streaming.md) for more details on streaming behavior and the differences between these approaches.
+**Use filters to reduce dataset size:**
 
-## File Rotation Handling
+```bash
+# Level filtering uses index bitmasks to skip entire segments
+hl -s --level error large.log
 
-In follow mode, `hl` automatically detects when log files are rotated:
+# Time filtering leverages index timestamp ranges to skip irrelevant segments
+hl -s --since '1 hour ago' --level warn large.log
 
-- **Truncation detection** — notices when a file shrinks or is recreated
-- **Continues monitoring** — switches to the new file seamlessly
-- **No data loss** — catches entries written during rotation
+# Combined filters maximize segment skipping
+hl -s --level error --since '1 hour ago' huge.log.gz
+```
 
-This works transparently with common rotation schemes (logrotate, application-managed rotation, etc.).
+**Sort only what you need:**
 
-## Sorting Without Timestamps
+```bash
+# Efficient segment selection with time filters
+hl -s --since '2024-01-15 10:00' --until '2024-01-15 11:00' *.log
+```
 
-Entries without recognizable timestamps:
+**Leverage cached indexes:**
 
-- In **sort mode**: appear at the beginning of output (treated as having a zero/minimum timestamp)
-- In **follow mode**: are **skipped** (not displayed)
+- Repeatedly filtering the same files is fast due to cached index
+- Clear cache with `rm -rf ~/.cache/hl/` if needed
 
-This is an important distinction—if you need to see all output including unparsable entries, use piped input with `-P` instead of `-F`.
+## Multi-File Sorting
 
-## Exit Behavior
+Sorting excels when working with multiple files:
 
-- **Sort mode** exits after displaying all entries
-- **Follow mode** runs indefinitely until interrupted (Ctrl-C exits immediately)
+```bash
+# Sort rotated logs chronologically
+hl -s app.log app.log.1.gz app.log.2.gz
 
-Follow mode exits immediately on a single Ctrl-C. The `--interrupt-ignore-count` option is ignored in follow mode—it only applies when using a pager or piping from another application.
+# Sort logs from multiple services
+hl -s api.log worker.log scheduler.log
+
+# Sort with wildcards
+hl -s logs-2024-01-*.log.gz
+```
+
+This allows you to:
+
+- **Reconstruct event timelines** across file boundaries
+- **Follow request flows** through distributed components
+- **Analyze log rotation artifacts** where events span multiple files
+- **Debug race conditions** by seeing exact chronological order
+
+## Combining with Filters
+
+### Time Filtering
+
+```bash
+# Sort entries within a specific time range
+hl -s --since 'yesterday' --until 'today' *.log
+
+# Recent entries only
+hl -s --since '2 hours ago' app.log app.log.1
+```
+
+Time filtering happens **during index scan**, reducing the dataset size efficiently.
+
+### Level Filtering
+
+```bash
+# Sort only error entries
+hl -s --level error app.log
+
+# Warnings and above
+hl -s --level warn *.log
+```
+
+### Query Filtering
+
+```bash
+# Sort entries matching a query
+hl -s --query 'status >= 500' access.log
+
+# Complex queries
+hl -s --query 'level >= warn and exists(.error)' app.log
+```
+
+Filters are applied during reading—only matching entries are kept for sorting.
+
+### Field Visibility
+
+```bash
+# Sort and show only specific fields
+hl -s --hide '*' --hide '!timestamp' --hide '!level' --hide '!message' app.log
+```
+
+Field visibility affects output formatting, not sorting behavior.
 
 ## Examples
 
-### Reconstructing Distributed Traces
+### Distributed System Debugging
 
 ```bash
-# Sort logs from multiple services to see the complete request flow
-hl -s api.log auth.log database.log --query 'trace-id = "abc123"'
+# Sort logs from multiple microservices to see complete request flow
+hl -s api-gateway.log auth-service.log payment-service.log \
+   --query 'request-id = "abc-123-def"'
 ```
 
-### Live Monitoring with Context
+### Log Rotation Analysis
 
 ```bash
-# Follow with 50 lines of history and error-level filtering
-hl -F --tail 50 --level error *.log
+# Sort across rotated files to find when an issue started
+hl -s --since '2 hours ago' app.log app.log.1 app.log.2.gz \
+   --level error
+```
+
+### Compressed Archive Investigation
+
+```bash
+# Sort historical compressed logs for a specific day
+hl -s logs/app-2024-01-15-*.log.gz --query '.endpoint=/api/users'
+```
+
+### Cross-Service Correlation
+
+```bash
+# Sort logs from different services to correlate events
+hl -s service-a.log service-b.log service-c.log \
+   --since '10:00' --until '10:15' \
+   --query 'exists(.correlation-id)'
 ```
 
 ### Analyzing Rotated Archives
@@ -195,16 +253,27 @@ hl -s --since '2024-01-15 00:00' --until '2024-01-15 23:59' \
    app.log.2024-01-*.gz
 ```
 
-### High-Frequency Log Monitoring
+## Sorting vs Follow Mode
 
-```bash
-# Reduce sync interval for high-volume logs
-hl -F --sync-interval-ms 50 --tail 5 high-volume.log
-```
+Don't confuse `--sort` with `--follow`:
+
+| Feature | `--sort` (`-s`) | `--follow` (`-F`) |
+|---------|-----------------|-------------------|
+| **Use case** | Batch processing | Live monitoring |
+| **Input** | Static files | Growing files |
+| **Timing** | All at once at end | Continuous streaming |
+| **Memory** | Indexed buffering | Only recent entries |
+| **Sorting scope** | Entire dataset | Within sync window |
+| **Exit** | After output complete | Runs until interrupted |
+
+Use `--sort` for analyzing historical logs. Use `--follow` for monitoring live logs.
+
+See [Follow Mode](./follow-mode.md) for details on live log monitoring.
 
 ## Related Topics
 
-- [Live Streaming](./streaming.md) — detailed streaming behavior and `-F` vs piping
-- [Multiple Files](./multiple-files.md) — working with multiple log sources
-- [Time Display](./time-display.md) — controlling timestamp formatting
+- [Follow Mode](./follow-mode.md) — live monitoring with chronological sorting
+- [Live Streaming](./streaming.md) — streaming behavior and `-F` vs piping
+- [Time Display](./time-display.md) — formatting timestamps in output
 - [Filtering by Time](./filtering-time.md) — using `--since` and `--until`
+- [Multiple Files](./multiple-files.md) — working with multiple log sources
