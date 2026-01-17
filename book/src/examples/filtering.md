@@ -52,6 +52,8 @@ Show only entries where `service` equals `"api"`:
 hl --filter 'service = api' app.log
 ```
 
+**Note**: Field names use hyphens. Underscores and hyphens are interchangeable when querying (e.g., `user-id` matches both `user-id` and `user_id` in the source), but examples use hyphens for consistency with display output.
+
 Or using the short form:
 
 ```hl/dev/null/shell.sh#L1
@@ -94,14 +96,11 @@ hl -f 'status >= 200 and status < 300' app.log
 Filter using string patterns:
 
 ```hl/dev/null/shell.sh#L1
-# Contains substring
+# Contains substring (case-sensitive)
 hl -f 'message ~= "database"' app.log
 
-# Case-insensitive match
-hl -f 'message ~= i"error"' app.log
-
-# Regex matching
-hl -f 'url ~ "^/api/v[0-9]+"' app.log
+# Regex matching (case-sensitive)
+hl -f 'url ~~ "^/api/v[0-9]+"' app.log
 ```
 
 ### Filtering by Field Presence
@@ -115,7 +114,7 @@ hl -f 'exists(error)' app.log
 Show entries that don't have a field:
 
 ```hl/dev/null/shell.sh#L1
-hl -f 'not exists(user_id)' app.log
+hl -f 'not exists(user-id)' app.log
 ```
 
 ### Nested Field Filtering
@@ -214,13 +213,13 @@ hl -l error --since "1h ago" app.log
 ### Debug a Specific User Session
 
 ```hl/dev/null/shell.sh#L1
-hl -f 'session_id = "abc123xyz"' app.log
+hl -f 'session-id = "abc123xyz"' app.log
 ```
 
 ### Find Slow Database Queries
 
 ```hl/dev/null/shell.sh#L1
-hl -f 'query_time > 1000 and operation ~= "SELECT"' db.log
+hl -f 'query-time > 1000 and operation ~= "SELECT"' db.log
 ```
 
 ### Show API Errors by Endpoint
@@ -250,7 +249,7 @@ hl -l error -f 'env = production' app.log
 ### Find Entries with High Memory Usage
 
 ```hl/dev/null/shell.sh#L1
-hl -f 'memory_mb > 500' app.log
+hl -f 'memory-mb > 500' app.log
 ```
 
 ### Complex Multi-Condition Filter

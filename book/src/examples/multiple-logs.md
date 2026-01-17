@@ -55,13 +55,13 @@ Each entry is prefixed with the filename or a shortened source indicator.
 
 ### Hiding Source Names
 
-Hide the input source indicator:
+Hide the input source indicator using `--input-info`:
 
 ```hl/dev/null/shell.sh#L1
-hl --hide-input service-a.log service-b.log
+hl --input-info none service-a.log service-b.log
 ```
 
-Useful when you don't care which file an entry came from.
+Useful when you don't care which file an entry came from. Possible values: `auto`, `none`, `minimal`, `compact`, `full`.
 
 ## Chronological Sorting Across Files
 
@@ -125,7 +125,7 @@ hl -f 'duration > 1000' app.log worker.log api.log
 While `hl` doesn't have built-in source-specific filtering, you can use queries on fields that identify sources:
 
 ```hl/dev/null/shell.sh#L1
-# If logs have a 'service' field
+# If logs have a 'service' field (use hyphens in field names)
 hl -f 'service = "api"' service-*.log
 
 # Or filter by filename patterns after the fact
@@ -308,8 +308,8 @@ hl -l error --since "1h ago" service-*.log
 ### Multi-File with Field Management
 
 ```hl/dev/null/shell.sh#L1
-# Show only specific fields across all files
-hl --hide-all --show request_id --show status --show duration api-*.log
+# Hide verbose fields across all files
+hl --hide trace-id --hide span-id --hide metadata api-*.log
 ```
 
 ## Input Source in Queries
@@ -320,8 +320,8 @@ If logs include a source field, you can filter by it:
 # If logs have 'hostname' field
 hl -f 'hostname = "server-1"' distributed-*.log
 
-# If logs have 'service_name' field
-hl -f 'service_name in ["api", "worker"]' all-services.log
+# If logs have 'service-name' field
+hl -f 'service-name in ["api", "worker"]' all-services.log
 ```
 
 ## Tips and Best Practices
@@ -402,8 +402,9 @@ If processing many files is slow:
 If source names aren't displayed:
 
 - Verify you're processing multiple files (single-file mode may not show source)
-- Check if `--hide-input` is set
+- Check if `--input-info none` is set
 - Ensure output is formatted (not using `--raw`)
+- Try `--input-info full` to force display
 
 ## Next Steps
 

@@ -252,7 +252,7 @@ hl --since "12h ago" app.log
 Combine time filtering with level and field filters:
 
 ```hl/dev/null/shell.sh#L1
-# Recent errors from API service
+# Recent errors from API service (use hyphens in field names)
 hl -l error --since "1h ago" -f 'service = "api"' app.log
 
 # Slow requests in the last 30 minutes

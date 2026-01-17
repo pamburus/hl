@@ -37,7 +37,7 @@ Combine follow mode with filters to monitor specific events:
 # Watch for errors only
 hl -F -l error app.log
 
-# Watch for specific service
+# Watch for specific service (use hyphens in field names)
 hl -F -f 'service = "api"' app.log
 
 # Watch slow requests
@@ -173,7 +173,7 @@ kubectl logs -f deployment/api | hl -P -f 'duration > 2000'
 ### Monitor Specific User Activity
 
 ```hl/dev/null/shell.sh#L1
-hl -F -f 'user_id = 12345' app.log
+hl -F -f 'user-id = 12345' app.log
 ```
 
 ### Monitor Authentication Events
@@ -224,14 +224,14 @@ done
 
 ```hl/dev/null/shell.sh#L1
 # Track requests over threshold
-hl -F -f 'duration > 3000' --hide-all --show path --show duration --show status app.log
+hl -F -f 'duration > 3000' app.log
 ```
 
 ### Security Monitoring
 
 ```hl/dev/null/shell.sh#L1
 # Monitor failed authentication attempts
-hl -F -f 'event = "auth_failed"' --show user --show ip --show reason auth.log
+hl -F -f 'event = "auth_failed"' auth.log
 ```
 
 ### Health Check Filtering
@@ -298,15 +298,15 @@ hl -F --theme neutral app.log
 ### Hide Noise
 
 ```hl/dev/null/shell.sh#L1
-# Focus on important fields only
-hl -F --hide-all --show error --show message --show user -l error app.log
+# Focus on errors and hide verbose fields
+hl -F -l error --hide stack-trace --hide metadata app.log
 ```
 
 ### Show Compact Output
 
 ```hl/dev/null/shell.sh#L1
-# Minimal output for quick scanning
-hl -F --hide-time --hide-caller app.log
+# Hide verbose fields for quick scanning
+hl -F --hide trace-id --hide span-id app.log
 ```
 
 ### Timestamp Format

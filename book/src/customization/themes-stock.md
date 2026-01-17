@@ -133,13 +133,13 @@ hl --list-themes
 To see themes filtered by specific tags (e.g., only dark themes):
 
 ```hl/dev/null/shell.sh#L1
-hl --list-themes --theme-tag dark
+hl --list-themes=dark
 ```
 
-To exclude themes by tag (e.g., exclude truecolor themes):
+To see 256-color themes:
 
 ```hl/dev/null/shell.sh#L1
-hl --list-themes --theme-tag-exclude truecolor
+hl --list-themes=256color
 ```
 
 ## Theme Overlays

@@ -99,10 +99,10 @@ Filter themes by characteristics:
 
 ```hl/dev/null/shell.sh#L1
 # Show only dark themes
-hl --list-themes --theme-tag dark
+hl --list-themes=dark
 
 # Show 256-color themes
-hl --list-themes --theme-tag 256color
+hl --list-themes=256color
 ```
 
 ## Disabling the Pager
@@ -110,13 +110,13 @@ hl --list-themes --theme-tag 256color
 View output directly in the terminal without a pager:
 
 ```hl/dev/null/shell.sh#L1
-hl --no-pager app.log
+hl --paging never app.log
 ```
 
-Or use the short form:
+Or use the short form `-P`:
 
 ```hl/dev/null/shell.sh#L1
-hl -P- app.log
+hl -P app.log
 ```
 
 ## Sorting by Occurrence

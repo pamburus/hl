@@ -19,52 +19,25 @@ Overlays are perfect for:
 
 ## Using Theme Overlays
 
-### Apply an Overlay
-
-Use `--theme-overlay` to apply an overlay to the active theme:
-
-```hl/dev/null/shell.sh#L1
-hl --theme one-dark-24 --theme-overlay @accent-italic app.log
-```
-
-The base theme (`one-dark-24`) is loaded first, then the overlay (`@accent-italic`) is merged on top.
-
-### Apply Multiple Overlays
-
-You can stack multiple overlays (they are applied in order):
-
-```hl/dev/null/shell.sh#L1
-hl --theme classic --theme-overlay @accent-italic --theme-overlay @my-tweaks app.log
-```
-
-Each overlay is merged sequentially, so later overlays can override earlier ones.
-
-### Overlays with Default Theme
-
-If you don't specify a base theme, overlays are applied to the default theme (`universal`):
-
-```hl/dev/null/shell.sh#L1
-hl --theme-overlay @accent-italic app.log
-```
-
-### Environment Variable
-
-Set a default overlay for all invocations:
-
-```hl/dev/null/shell.sh#L1
-export HL_THEME_OVERLAY=@accent-italic
-hl app.log  # Applies @accent-italic to the default theme
-```
+**Important**: Theme overlays can only be configured via the configuration file. There are no command-line options or environment variables for overlays.
 
 ### Configuration File
 
-Add overlays to your config file:
+Add overlays to your config file (`~/.config/hl/config.toml` or similar):
 
 ```hl/dev/null/config.toml#L1
-[theme]
-name = "one-dark-24"
-overlays = ["@accent-italic"]
+theme = "one-dark-24"
+theme-overlays = ["@accent-italic"]
 ```
+
+Multiple overlays can be specified (they are applied in order):
+
+```hl/dev/null/config.toml#L1
+theme = "classic"
+theme-overlays = ["@accent-italic", "@my-tweaks"]
+```
+
+Each overlay is merged sequentially, so later overlays can override earlier ones.
 
 ## Built-in Overlays
 
@@ -72,13 +45,15 @@ overlays = ["@accent-italic"]
 
 ### `@accent-italic`
 
-Makes accent text (logger names, field names, etc.) display in italic:
-
-```hl/dev/null/shell.sh#L1
-hl --theme-overlay @accent-italic app.log
-```
+Makes accent text (logger names, field names, etc.) display in italic.
 
 This overlay works with any theme and any terminal that supports italic text.
+
+To use it, add it to your configuration file:
+
+```hl/dev/null/config.toml#L1
+theme-overlays = ["@accent-italic"]
+```
 
 ## Creating Custom Overlays
 
@@ -120,10 +95,10 @@ tags = ["overlay", "dark", "light"]
 message.modes = ["bold", "underline"]
 ```
 
-Save this as `~/.config/hl/themes/@bold-errors.toml` and use it with:
+Save this as `~/.config/hl/themes/@bold-errors.toml` and configure it in your config file:
 
-```hl/dev/null/shell.sh#L1
-hl --theme-overlay @bold-errors app.log
+```hl/dev/null/config.toml#L1
+theme-overlays = ["@bold-errors"]
 ```
 
 ### Overlay for Multiple Themes
@@ -155,10 +130,10 @@ tags = ["overlay", "dark", "light"]
 key.modes = ["underline"]
 ```
 
-Usage:
+Save as `~/.config/hl/themes/@underline-keys.toml` and configure:
 
-```hl/dev/null/shell.sh#L1
-hl --theme one-dark-24 --theme-overlay @underline-keys app.log
+```hl/dev/null/config.toml#L1
+theme-overlays = ["@underline-keys"]
 ```
 
 ### Example 2: Dim Timestamps
@@ -260,10 +235,11 @@ key.modes = ["bold", "italic"]  # Explicitly include both
 
 ## Combining Overlays and Custom Themes
 
-You can use overlays with your own custom themes:
+You can use overlays with your own custom themes in the configuration file:
 
-```hl/dev/null/shell.sh#L1
-hl --theme my-custom-theme --theme-overlay @accent-italic app.log
+```hl/dev/null/config.toml#L1
+theme = "my-custom-theme"
+theme-overlays = ["@accent-italic"]
 ```
 
 This allows you to create a base custom theme and then apply small modifications via overlays without duplicating theme files.
@@ -290,10 +266,10 @@ If the overlay produces unexpected results:
 
 If multiple overlays conflict:
 
-- The last overlay applied wins for any given property.
-- Use `--theme-overlay` multiple times to control order:
-  ```hl/dev/null/shell.sh#L1
-  hl --theme-overlay @first --theme-overlay @second app.log
+- The last overlay in the `theme-overlays` array wins for any given property.
+- Control order in the config file:
+  ```hl/dev/null/config.toml#L1
+  theme-overlays = ["@first", "@second"]
   ```
   `@second` will override any conflicting properties from `@first`.
 

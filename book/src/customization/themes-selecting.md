@@ -26,20 +26,7 @@ Theme overlays modify the active theme. Apply them using `--theme-overlay`:
 hl --theme one-dark-24 --theme-overlay @accent-italic app.log
 ```
 
-You can apply multiple overlays (they are merged in order):
-
-```hl/dev/null/shell.sh#L1
-hl --theme classic --theme-overlay @accent-italic --theme-overlay @custom-tweaks app.log
-```
-
-### Combining Themes and Overlays
-
-When both `--theme` and `--theme-overlay` are specified, the base theme is loaded first, then overlays are applied on top:
-
-```hl/dev/null/shell.sh#L1
-# Load ayu-dark-24, then apply italic accents
-hl -T ayu-dark-24 --theme-overlay @accent-italic app.log
-```
+**Note**: Theme overlays cannot be specified via command-line options. To use overlays, you must configure them in your configuration file (see below).
 
 ## Environment Variables
 
@@ -59,22 +46,7 @@ export HL_THEME=one-dark-24
 hl --theme classic app.log  # Uses classic, not one-dark-24
 ```
 
-### Setting Default Theme Overlays
-
-Use `HL_THEME_OVERLAY` to set default overlays:
-
-```hl/dev/null/shell.sh#L1
-export HL_THEME_OVERLAY=@accent-italic
-hl app.log  # Applies @accent-italic overlay
-```
-
-Multiple overlays can be specified (separated by commas or as a repeated environment variable if your shell supports it):
-
-```hl/dev/null/shell.sh#L1
-export HL_THEME_OVERLAY=@accent-italic,@custom
-```
-
-Command-line `--theme-overlay` options **add to** (not replace) the environment variable overlays.
+There is no environment variable for theme overlays. To set default overlays, use your configuration file (see below).
 
 ## Configuration Files
 
@@ -90,9 +62,8 @@ name = "one-dark-24"
 To apply overlays by default:
 
 ```hl/dev/null/config.toml#L1
-[theme]
-name = "ayu-dark-24"
-overlays = ["@accent-italic"]
+theme = "ayu-dark-24"
+theme-overlays = ["@accent-italic"]
 ```
 
 ### Priority and Layering
@@ -102,10 +73,10 @@ Configuration settings are layered with the following priority (lowest to highes
 1. Embedded default configuration (theme = `universal`)
 2. System configuration files (e.g., `/etc/hl/config.toml`)
 3. User configuration file (e.g., `~/.config/hl/config.toml`)
-4. `HL_THEME` and `HL_THEME_OVERLAY` environment variables
-5. Command-line options (`--theme`, `--theme-overlay`)
+4. `HL_THEME` environment variable
+5. Command-line `--theme` option
 
-Later layers override earlier ones for the theme name. Overlays from all layers are accumulated and applied in order.
+Later layers override earlier ones for the theme name. Theme overlays are only configurable via the configuration file's `theme-overlays` array.
 
 ## Discovering Available Themes
 
@@ -124,25 +95,14 @@ This displays each theme name and its tags (e.g., `dark`, `light`, `16color`, `2
 To list only themes with specific tags:
 
 ```hl/dev/null/shell.sh#L1
-# List only dark themes
-hl --list-themes --theme-tag dark
+# Show only dark themes
+hl --list-themes=dark
 
-# List only truecolor themes
-hl --list-themes --theme-tag truecolor
-```
+# Show 256-color themes
+hl --list-themes=256color
 
-To exclude themes by tag:
-
-```hl/dev/null/shell.sh#L1
-# List all themes except truecolor
-hl --list-themes --theme-tag-exclude truecolor
-```
-
-You can combine inclusion and exclusion filters:
-
-```hl/dev/null/shell.sh#L1
-# List dark 256-color themes, excluding truecolor
-hl --list-themes --theme-tag dark --theme-tag 256color --theme-tag-exclude truecolor
+# Show truecolor themes
+hl --list-themes=truecolor
 ```
 
 ## Choosing the Right Theme
@@ -203,9 +163,8 @@ export HL_THEME_OVERLAY=@accent-italic
 Or configure in `~/.config/hl/config.toml`:
 
 ```hl/dev/null/config.toml#L1
-[theme]
-name = "one-dark-24"
-overlays = ["@accent-italic"]
+theme = "one-dark-24"
+theme-overlays = ["@accent-italic"]
 ```
 
 ### Switching Themes by Time of Day

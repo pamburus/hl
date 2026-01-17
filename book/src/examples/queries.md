@@ -32,38 +32,35 @@ hl -f 'retry_count <= 3' app.log
 
 ### String Contains
 
-Use `~=` for substring matching:
+Use `~=` for substring matching (case-sensitive):
 
 ```hl/dev/null/shell.sh#L1
-# Case-sensitive substring match
+# Substring match
 hl -f 'message ~= "database"' app.log
-
-# Case-insensitive substring match
-hl -f 'message ~= i"error"' app.log
 ```
 
 ### Regular Expressions
 
-Use `~` for regex matching:
+Use `~~=` for regex matching (case-sensitive):
 
 ```hl/dev/null/shell.sh#L1
 # Match pattern
-hl -f 'url ~ "^/api/v[0-9]+"' app.log
+hl -f 'url ~~= "^/api/v[0-9]+"' app.log
 
-# Case-insensitive regex
-hl -f 'message ~ i"(error|warning|failure)"' app.log
+# Match multiple patterns
+hl -f 'message ~~= "(error|warning|failure)"' app.log
 ```
 
 ### String Equality with Wildcards
 
-The `*=` operator supports glob-style wildcards:
+The `like` operator supports glob-style wildcards:
 
 ```hl/dev/null/shell.sh#L1
 # Match with wildcards
-hl -f 'path *= "/api/*/users"' app.log
+hl -f 'path like "/api/*/users"' app.log
 
-# Case-insensitive wildcard match
-hl -f 'filename *= i"*.json"' app.log
+# Wildcard pattern
+hl -f 'filename like "*.json"' app.log
 ```
 
 ## Boolean Logic
@@ -109,7 +106,7 @@ hl -f 'not (status >= 200 and status < 300)' app.log
 Operators are evaluated in this order (highest to lowest precedence):
 
 1. Parentheses `()`
-2. Comparisons and string operators (`=`, `!=`, `<`, `>`, `~=`, `~`, `*=`, `in`)
+2. Comparisons and string operators (`=`, `!=`, `<`, `>`, `~=`, `~~=`, `like`, `in`)
 3. `not` / `!`
 4. `and` / `&&`
 5. `or` / `||`
@@ -218,7 +215,7 @@ hl -f 'user.name = "alice"' app.log
 hl -f 'request.headers.content-type ~= "json"' app.log
 
 # Numeric nested fields
-hl -f 'response.body.total_count > 100' app.log
+hl -f 'response.body.total-count > 100' app.log
 ```
 
 **Note**: Dot notation matches both:
@@ -227,11 +224,10 @@ hl -f 'response.body.total_count > 100' app.log
 
 ### Underscore/Hyphen Equivalence
 
-Field names treat underscores and hyphens as interchangeable:
+Field names treat underscores and hyphens as interchangeable when matching. Use hyphens in examples for consistency with display output:
 
 ```hl/dev/null/shell.sh#L1
-# These are equivalent
-hl -f 'user_id = 123' app.log
+# Both match fields named 'user_id' or 'user-id' in the source
 hl -f 'user-id = 123' app.log
 ```
 
@@ -294,7 +290,7 @@ hl -f 'transaction_type = "payment" and amount > 10000 and status != "completed"
 
 ```hl/dev/null/shell.sh#L1
 # Track a request by ID across services
-hl -f 'request_id = "abc-123-xyz"' service-*.log
+hl -f 'request-id = "abc-123-xyz"' service-*.log
 ```
 
 ### Finding Anomalies
@@ -308,7 +304,7 @@ hl -f 'duration > 2000 and status >= 500' app.log
 
 ```hl/dev/null/shell.sh#L1
 # Failed authentication attempts from specific IPs
-hl -f 'event = "auth_failed" and ip ~ "^192\\.168\\."' security.log
+hl -f 'event = "auth-failed" and ip ~~ "^192\\.168\\."' security.log
 ```
 
 ### Rate Limiting Detection
@@ -322,7 +318,7 @@ hl -f 'status = 429 or message ~= "rate limit"' app.log
 
 ```hl/dev/null/shell.sh#L1
 # Errors calling downstream services
-hl -f 'exists(downstream_service) and (status >= 500 or exists(timeout))' app.log
+hl -f 'exists(downstream-service) and (status >= 500 or exists(timeout))' app.log
 ```
 
 ## Combining Queries with Other Filters
