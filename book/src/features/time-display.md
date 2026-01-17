@@ -154,14 +154,14 @@ Set defaults in your configuration file:
 # ~/.config/hl/config.toml
 time-format = "%Y-%m-%d %H:%M:%S.%3N"
 time-zone = "America/New_York"
-local = false
 ```
 
-Or use local timezone:
+Or use local timezone (note: `--local` is a command-line flag only, set `time-zone` to your local timezone in config):
 
 ```toml
 time-format = "%Y-%m-%d %H:%M:%S.%3N"
-local = true
+# Set to your local timezone, e.g., "America/New_York"
+# Or use -L/--local flag on command line for local time
 ```
 
 ## Precedence
@@ -239,8 +239,8 @@ hl -L -t '%B %d, %Y at %I:%M:%S %p %Z' application.log
 
 5. **Set defaults** - Put common settings in your config file:
    ```toml
-   local = true
    time-format = "%Y-%m-%d %H:%M:%S.%3N"
+   # Note: use -L flag for local time, or set time-zone to your timezone
    ```
 
 ## Timezone Names

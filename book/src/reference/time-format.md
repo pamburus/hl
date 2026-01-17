@@ -233,7 +233,6 @@ Set a default time format in your configuration file:
 # config.toml
 time-format = "%Y-%m-%d %H:%M:%S.%3N"
 time-zone = "UTC"
-local = false
 ```
 
 ## Tips
