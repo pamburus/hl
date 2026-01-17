@@ -2,11 +2,7 @@
 
 ![hl banner](images/banner.svg)
 
-Welcome to **hl**, a high-performance JSON and logfmt log viewer that transforms raw log data into human-readable output. Built with efficiency in mind, hl enables quick parsing and analysis of large log files with minimal overhead.
-
-## What is hl?
-
-hl is a command-line tool designed to help developers, system administrators, and DevOps engineers make sense of structured logs. It takes JSON and logfmt formatted log files and presents them in a clean, colorized, and easily scannable format.
+Welcome to **hl**, a high-performance command-line tool for viewing and analyzing structured logs. Built with efficiency in mind, hl transforms JSON and logfmt formatted log data into clean, colorized, human-readable output—making it easy for developers, system administrators, DevOps engineers, and SREs to make sense of their logs.
 
 ## Key Features
 
