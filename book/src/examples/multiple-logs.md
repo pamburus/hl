@@ -155,7 +155,7 @@ The index allows efficient time-range queries across all files.
 Process a mix of compressed and uncompressed files:
 
 ```hl/dev/null/shell.sh#L1
-hl app.log app.log.1.gz app.log.2.bz2 app.log.3.xz
+hl app.log app.log.1.gz app.log.2.bz2 app.log.3.xz app.log.4.zst
 ```
 
 All files are automatically decompressed and merged.

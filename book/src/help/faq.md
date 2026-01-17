@@ -19,11 +19,13 @@ Yes! `hl` automatically detects and decompresses common formats:
 - **gzip** (`.gz`)
 - **bzip2** (`.bz2`)
 - **xz** (`.xz`)
+- **zstd** (`.zst`)
 
 ```bash
 # Works automatically
 hl app.log.gz
 hl app.log.bz2
+hl app.log.zst
 ```
 
 ### Can I use `hl` with stdin?

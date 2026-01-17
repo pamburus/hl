@@ -148,7 +148,7 @@ export HL_TIME_FORMAT="%b %d %T.%3N"
 export HL_TIME_FORMAT="%H:%M:%S"
 ```
 
-Default: `%Y-%m-%d %T.%3N`
+Default: `%b %d %T.%3N`
 
 Common patterns:
 - `%Y-%m-%d %T.%3N` → `2024-01-15 10:30:45.123`

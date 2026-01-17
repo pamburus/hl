@@ -47,6 +47,7 @@ When `hl`'s output goes to a terminal, the pager runs by default. Use `-P` to di
 hl app.log.gz
 hl app.log.bz2
 hl app.log.xz
+hl app.log.zst
 ```
 
 No need to manually decompress the files.

@@ -70,7 +70,7 @@ hl --time-format '%Y-%m-%d %H:%M:%S' app.log
 hl --time-zone 'America/New_York' app.log
 ```
 
-Default format: `%Y-%m-%d %T.%3N` (e.g., `2024-01-15 10:30:45.123`)
+Default format: `%b %d %T.%3N` (e.g., `Jan 15 10:30:45.123`)
 
 See [Time Display](./time-display.md) for format specifications and timezone handling.
 

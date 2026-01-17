@@ -275,7 +275,7 @@ Shorthand alias for `--color=always`. Overrides the `--color` option.
 Specify the color theme to use.
 
 - **Environment variable**: `HL_THEME`
-- **Default**: `hl-dark`
+- **Default**: `uni`
 
 Run `hl --list-themes` to see all available themes.
 
@@ -359,7 +359,7 @@ hl --flatten=always app.log
 Specify the time format for displaying timestamps.
 
 - **Environment variable**: `HL_TIME_FORMAT`
-- **Default**: `"%Y-%m-%d %T.%3N"`
+- **Default**: `"%b %d %T.%3N"`
 - **Format**: Uses `strftime` format specifiers (see `man date` or [strftime documentation](https://man7.org/linux/man-pages/man1/date.1.html))
 
 ```/dev/null/example.sh#L1-5
@@ -424,7 +424,7 @@ Show empty fields. Overrides the `--hide-empty-fields` option.
 
 Control the display of input file information (file number and filename).
 
-- **Default**: `none,minimal`
+- **Default**: `auto`
 - **Possible values**: `auto`, `none`, `minimal`, `compact`, `full`
   - `none`: No input information
   - `minimal`: Minimal information (number only when needed)
