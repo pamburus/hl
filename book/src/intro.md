@@ -1,5 +1,7 @@
 # Introduction
 
+![hl banner](images/banner.svg)
+
 Welcome to **hl**, a high-performance JSON and logfmt log viewer that transforms raw log data into human-readable output. Built with efficiency in mind, hl enables quick parsing and analysis of large log files with minimal overhead.
 
 ## What is hl?

@@ -112,6 +112,12 @@ strong.modes = ["bold"]
 accent.style = ["primary", "strong"]
 ```
 
+The following diagram illustrates how style inheritance works in the theme system:
+
+![Style Inheritance Diagram](../images/theme-style-roles.svg)
+
+This shows how styles can reference other styles to build a hierarchy of reusable style definitions.
+
 ## Sections in Detail
 
 ### `[styles]` — Named Styles
@@ -151,7 +157,16 @@ error.foreground = "#e06c75"
 
 ### `[elements]` — Log Element Styles
 
-Define styles for specific parts of log entries:
+Define styles for specific parts of log entries.
+
+The following diagram illustrates how element styles inherit from base styles and can be overridden at the level-specific configuration:
+
+![Element Inheritance Diagram](../images/theme-element-inheritance.svg)
+
+This shows the complete inheritance chain from base styles through elements to level-specific overrides.
+
+#### Available Elements
+
 
 - `input` — Input source indicator (filename or stream name).
 - `time` — Timestamp field.

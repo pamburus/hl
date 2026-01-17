@@ -43,7 +43,12 @@ Generated HTML will be in `book/` directory (gitignored).
 book/
 ├── src/                      # Documentation source files
 │   ├── SUMMARY.md           # Table of contents
-│   ├── intro.md             # Introduction
+│   ├── intro.md             # Introduction (with hl banner)
+│   ├── images/              # Visual assets
+│   │   ├── banner.svg       # hl logo banner
+│   │   ├── logo.svg         # hl logo
+│   │   ├── theme-style-roles.svg  # Style inheritance diagram
+│   │   └── theme-element-inheritance.svg  # Element inheritance diagram
 │   ├── features/            # Feature documentation (20 pages)
 │   ├── customization/       # Customization guides (7 pages)
 │   ├── examples/            # Practical examples (7 pages)
@@ -88,6 +93,11 @@ book/
 ### ✅ Help
 - Troubleshooting guide
 - FAQ
+
+### ✅ Visual Assets
+- hl banner logo (introduction page)
+- Style inheritance diagram (custom themes)
+- Element inheritance diagram (custom themes)
 
 ## Documentation Quality
 
