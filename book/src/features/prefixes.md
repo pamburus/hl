@@ -243,9 +243,11 @@ Prefixes must be on the same line as the JSON object. Multi-line prefixes aren't
 
 If your prefix is on a separate line, the JSON line will be parsed normally (since it starts with `{`).
 
-### Prefix Information is Lost
+### Prefix is Preserved in Output
 
-The prefix text is completely discarded. If you need information from the prefix, you'll need to preprocess the logs.
+The prefix text is output transparently (as-is) before the formatted log entry. A single space delimiter is automatically added between the prefix and the parsed log entry if the prefix doesn't already end with a space.
+
+**Note:** The prefix is not parsed or processed - it's simply passed through to the output. If you need to filter or query based on information in the prefix, you'll need to preprocess the logs.
 
 ## Examples
 
@@ -279,7 +281,7 @@ journalctl -u app -f | hl --allow-prefix --level warn -P
 kubectl logs pod-name | hl --allow-prefix
 
 # Follow with filtering
-kubectl logs -f deployment/api | hl --allow-prefix --query '.user_id=123' -P
+kubectl logs -f deployment/api | hl --allow-prefix --query 'user-id = "123"' -P
 ```
 
 ### Syslog

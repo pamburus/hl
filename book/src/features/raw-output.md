@@ -36,7 +36,7 @@ Raw mode is ideal for piping to tools that expect JSON input:
 hl --raw --level error app.log | jq '.message'
 
 # Extract specific field values
-hl --raw --query '.user_id=123' app.log | jq -r '.request_id'
+hl --raw --query 'user-id = "123"' app.log | jq -r '."request-id"'
 
 # Pipe to another JSON processor
 hl --raw --since '1 hour ago' app.log | json_pp
@@ -69,14 +69,13 @@ hl --raw --query '.important=true' app.log > important.json
 Combine `hl`'s filtering with other JSON tools:
 
 ```bash
-# Multi-stage filtering pipeline
-hl --raw --level warn app.log \
-  | jq 'select(.duration > 1000)' \
-  | jq -r '.request_id'
+# Use hl for filtering, jq for extraction/transformation
+hl --raw --level warn -q 'duration > 1000' app.log \
+  | jq -r '."request-id"'
 
 # Extract and transform
 hl --raw --query '.event=purchase' app.log \
-  | jq '{user: .user_id, amount: .amount, time: .timestamp}'
+  | jq '{user: ."user-id", amount: .amount, time: .timestamp}'
 ```
 
 ### Data Export
@@ -161,7 +160,7 @@ hl --raw --since '2024-01-15 10:00' --until '2024-01-15 11:00' app.log
 
 ```bash
 # Output raw entries matching field values
-hl --raw --filter 'user_id=123' app.log
+hl --raw --filter 'user-id=123' app.log
 ```
 
 ## Raw Output with Multiple Files
@@ -263,7 +262,7 @@ hl --raw --query 'status >= 500 and duration > 1000' access.log \
 # Extract and combine entries from multiple files
 hl --raw --sort --since 'yesterday' \
    service-a.log service-b.log service-c.log \
-   --query '.trace_id=abc-123' \
+   --query 'trace-id = "abc-123"' \
    > trace-abc-123.json
 ```
 
@@ -300,7 +299,7 @@ hl --raw --query 'exists(.error) and .severity=critical' *.log \
 ```bash
 # Multi-stage data extraction and transformation
 hl --raw --level info --query '.event=user_login' app.log \
-  | jq -c '{user: .user_id, time: .timestamp, ip: .client_ip}' \
+  | jq -c '{user: ."user-id", time: .timestamp, ip: ."client-ip"}' \
   | awk '{print}' \
   | sort -u \
   > unique-logins.jsonl

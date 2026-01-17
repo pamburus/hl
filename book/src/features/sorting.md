@@ -177,7 +177,7 @@ Follow mode exits immediately on a single Ctrl-C. The `--interrupt-ignore-count`
 
 ```bash
 # Sort logs from multiple services to see the complete request flow
-hl -s api.log auth.log database.log --query '.trace_id=abc123'
+hl -s api.log auth.log database.log --query 'trace-id = "abc123"'
 ```
 
 ### Live Monitoring with Context

@@ -165,7 +165,7 @@ Index is invalidated when files change, ensuring correctness.
 hl -s --since '1 hour ago' --level warn large.log
 
 # Query filtering reduces processing work
-hl -s --query '.user_id=12345' huge.log.gz
+hl -s --query 'user-id = "12345"' huge.log.gz
 ```
 
 **Sort only what you need:**
@@ -246,7 +246,7 @@ Field visibility affects output formatting, not sorting behavior.
 ```bash
 # Sort logs from multiple microservices to see complete request flow
 hl -s api-gateway.log auth-service.log payment-service.log \
-   --query '.request_id=abc-123-def'
+   --query 'request-id = "abc-123-def"'
 ```
 
 ### Log Rotation Analysis

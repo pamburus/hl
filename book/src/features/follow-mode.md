@@ -14,7 +14,7 @@ hl -F /var/log/app.log
 hl -F service-*.log
 
 # Follow with filtering
-hl -F --level error --query '.request_id=abc' *.log
+hl -F --level error --query 'request-id = "abc"' *.log
 ```
 
 ## How Follow Mode Works
@@ -199,13 +199,13 @@ hl -F --level warn service-a.log service-b.log
 
 ```bash
 # Follow specific user's activity
-hl -F --query '.user_id=12345' app.log
+hl -F --query 'user-id = "12345"' app.log
 
 # Follow failed requests
 hl -F --query 'status >= 500' access.log
 
 # Complex query
-hl -F --query 'level >= warn and (.service=api or .service=auth)' *.log
+hl -F --query 'level >= warn and (service = "api" or service = "auth")' *.log
 ```
 
 ### Time Filtering
@@ -307,19 +307,40 @@ Follow mode is designed to be lightweight:
 - **Minimal memory** — only buffers entries within the sync window
 - **Efficient I/O** — uses OS-level file monitoring where available
 
-### High-Volume Logs
+### Reducing Output Volume
 
-For high-volume logs (thousands of entries per second):
+Use filters to reduce the volume of displayed entries:
 
 ```bash
-# Reduce sync interval to minimize buffering
-hl -F --sync-interval-ms 50 high-volume.log
+# Filter to only warnings and errors
+hl -F --level warn high-volume.log
 
-# Use filters to reduce output
-hl -F --level warn --query '.critical=true' high-volume.log
+# Combine level and query filters
+hl -F --level warn --query 'critical = true' app.log
+```
 
-# Disable tail preload for faster startup
-hl -F --tail 0 high-volume.log
+### Starting Without History
+
+By default, follow mode shows the last 10 entries from each file. To start fresh:
+
+```bash
+# Start from now without showing historical entries
+hl -F --tail 0 app.log
+
+# Show more history if needed
+hl -F --tail 50 app.log
+```
+
+### Multi-Source Synchronization
+
+When following multiple sources that may have clock skew or network latency:
+
+```bash
+# Increase sync interval to allow more time for proper ordering
+hl -F --sync-interval-ms 500 app1.log app2.log app3.log
+
+# Default 100ms is fine for local files with synchronized clocks
+hl -F service1.log service2.log
 ```
 
 ### Many Files
@@ -352,7 +373,7 @@ hl -F --tail 50 --level error \
 
 ```bash
 # Follow logs for a specific request/transaction
-hl -F --tail 100 --query '.trace_id=abc-123-def' *.log
+hl -F --tail 100 --query 'trace-id = "abc-123-def"' *.log
 ```
 
 ### Multi-Service Correlation
@@ -361,7 +382,7 @@ hl -F --tail 100 --query '.trace_id=abc-123-def' *.log
 # Follow logs from different services, sorted chronologically
 hl -F --sync-interval-ms 200 \
    api.log worker.log database.log \
-   --query 'exists(.request_id)' \
+   --query 'exists(request-id)' \
    --input-info compact
 ```
 
