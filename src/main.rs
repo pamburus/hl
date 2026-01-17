@@ -75,6 +75,11 @@ fn bootstrap() -> Result<Settings> {
 }
 
 fn run() -> Result<()> {
+    // On Windows, force console to UTF-8 for the duration of the program.
+    // This works around PowerShell resetting the output code page.
+    #[cfg(windows)]
+    let _utf8_guard = utf8_supported::set_console_utf8().ok();
+
     let settings = bootstrap()?;
 
     let opt = cli::Opt::parse_from(wild::args());
