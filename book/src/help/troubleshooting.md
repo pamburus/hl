@@ -561,13 +561,10 @@ hl --unix-timestamp-unit ns app.log
 
 **Common Issues**:
 
-1. **Pager interfering**:
+1. **Special characters in shell**:
    ```bash
-   # Wrong: pager may intercept output
+   # Be careful with special characters in filenames
    hl app.log > output.txt
-   
-   # Correct: disable pager
-   hl -P app.log > output.txt
    ```
 
 2. **Special characters in query**:
@@ -580,8 +577,8 @@ hl --unix-timestamp-unit ns app.log
    ```
 
 **Solution**:
-- Always disable pager when redirecting
 - Quote query expressions to prevent shell interpretation
+- Note: The pager is automatically disabled when output is redirected, so `-P` is not needed
 
 ## Getting Help
 

@@ -37,7 +37,7 @@ Pipe from `tail -f` to see everything in original order:
 tail -f application.log | hl -P
 ```
 
-The `-P` flag disables the pager, allowing you to see new entries as they arrive.
+Use `-P` to disable the pager for streaming scenarios where you want immediate, continuous output as entries arrive.
 
 **Key differences from `-F`:**
 - Shows **all input** including unparsable lines

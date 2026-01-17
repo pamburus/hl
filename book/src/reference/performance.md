@@ -283,20 +283,19 @@ rg "ERROR" huge-file.log | hl
 Use shell timing to measure performance:
 
 ```bash
-# Time a command
-time hl --sort --level error large-file.log -P > /dev/null
+# Time a command (pager auto-disabled when redirecting)
+time hl --sort --level error large-file.log > /dev/null
 
 # Compare different settings
-time hl --sort --concurrency 4 large-file.log -P > /dev/null
-time hl --sort --concurrency 16 large-file.log -P > /dev/null
+time hl --sort --concurrency 4 large-file.log > /dev/null
+time hl --sort --concurrency 16 large-file.log > /dev/null
 ```
 
 ### Profiling Tips
 
-1. **Disable output**: Redirect to `/dev/null` to measure processing time
-2. **Disable paging**: Use `-P` to avoid pager overhead
-3. **Use consistent data**: Test with the same files for comparison
-4. **Warm cache**: Run twice, measure the second run to eliminate cold cache effects
+1. **Disable output**: Redirect to `/dev/null` to measure processing time (pager is automatically disabled)
+2. **Use consistent data**: Test with the same files for comparison
+3. **Warm cache**: Run twice, measure the second run to eliminate cold cache effects
 
 ## Common Performance Patterns
 
@@ -336,11 +335,9 @@ hl --raw -f 'status>=500' app.log | jq '.status' | sort | uniq -c
 **For best performance**:
 
 1. **Use `--sort`** when processing multiple files or filtering by level
-2. **Disable paging** (`-P`) in scripts and pipelines
-3. **Adjust concurrency** based on file size and CPU count
-4. **Use `--raw`** when you don't need formatted output
-5. **Specify input format** when known to skip auto-detection
-6. **Use simple filters** when possible instead of complex queries
-7. **Increase buffer size** for files with large log entries
+2. **Use index-optimized filters** (`--level`, `--since`, `--until`) with `--sort` for dramatic speedups
+3. **Combine index filters** to reduce data before per-entry filtering
+4. **Adjust concurrency** only if resources are constrained or you're fine-tuning huge workloads
+5. **Keep default buffer size** unless you've profiled and confirmed a change helps
 
 **Remember**: Profile your specific workload to find optimal settings. Performance characteristics vary based on log format, entry size, and query complexity.

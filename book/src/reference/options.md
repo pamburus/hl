@@ -120,10 +120,18 @@ hl --paging=always app.log
 
 Shorthand alias for `--paging=never`. Overrides the `--paging` option.
 
-```/dev/null/example.sh#L1-2
-# Disable pager (useful in scripts and pipelines)
-hl -P app.log | grep ERROR
+```/dev/null/example.sh#L1-8
+# Disable pager when outputting to terminal
+hl -P app.log
+
+# For streaming scenarios (input is piped, output to terminal)
+kubectl logs -f my-pod | hl -P
+
+# When piping hl's output, pager is auto-disabled
+hl app.log | grep ERROR  # -P not needed here
 ```
+
+**Note**: The pager only runs when `hl`'s **output** goes to a terminal. It auto-disables when output is piped or redirected.
 
 ## Filtering Options
 

@@ -30,10 +30,14 @@ hl app.log app.log.1 app.log.2
 Pipe log output directly to `hl`:
 
 ```hl/dev/null/shell.sh#L1
-kubectl logs my-pod | hl -P
+# For finite logs, pager helps with navigation
+kubectl logs my-pod | hl
+
+# For streaming logs, disable pager for real-time output
+kubectl logs -f my-pod | hl -P
 ```
 
-The `-P` flag disables the pager (equivalent to `--paging=never`), which is useful when piping output to other commands or when you want immediate output without pagination.
+When `hl`'s output goes to a terminal, the pager runs by default. Use `-P` to disable it for streaming scenarios where you want immediate, continuous output.
 
 ## Viewing Compressed Files
 
