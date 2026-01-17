@@ -9,6 +9,7 @@ use std::{
     ops::Range,
     path::PathBuf,
     rc::Rc,
+    str,
     sync::Arc,
     time::{Duration, Instant},
 };
@@ -44,7 +45,9 @@ use crate::{
     input::{BlockEntry, Input, InputHolder, InputReference},
     model::{Filter, Parser, ParserSettings, RawRecord, Record, RecordFilter, RecordWithSourceConstructor},
     query::Query,
-    scanning::{BufFactory, Delimit, Delimiter, Scanner, SearchExt, Segment, SegmentBuf, SegmentBufFactory},
+    scanning::{
+        BufFactory, Delimit, Delimiter, Scanner, SearchExt, Segment, SegmentBuf, SegmentBufFactory, SmartNewLine,
+    },
     settings::{AsciiMode, ExpansionMode, FieldShowOption, Fields, Formatting, InputInfo, ResolvedPunctuation},
     theme::{Element, StylingPush, SyncIndicatorPack, Theme},
     timezone::Tz,
@@ -988,9 +991,10 @@ impl<'a, Formatter: RecordWithSourceFormatter, Filter: RecordFilter> SegmentProc
         let mut i = 0;
         let limit = limit.unwrap_or(usize::MAX);
 
-        for line in self.delim.split(data) {
-            if line.is_empty() {
+        for chunk in self.delim.split(data) {
+            if chunk.is_empty() {
                 if self.show_unparsed() {
+                    buf.extend(prefix.as_bytes());
                     buf.push(b'\n');
                 }
                 continue;
@@ -999,7 +1003,7 @@ impl<'a, Formatter: RecordWithSourceFormatter, Filter: RecordFilter> SegmentProc
             let mut stream = RawRecord::parser()
                 .allow_prefix(self.options.allow_prefix)
                 .format(self.options.input_format)
-                .parse(line);
+                .parse(chunk);
             let mut parsed_some = false;
             let mut produced_some = false;
             let mut last_offset = 0;
@@ -1020,7 +1024,7 @@ impl<'a, Formatter: RecordWithSourceFormatter, Filter: RecordFilter> SegmentProc
                     }
                     let prefix_range = begin..buf.len();
                     self.formatter
-                        .format_record(buf, prefix_range, record.with_source(&line[ar.offsets]));
+                        .format_record(buf, prefix_range, record.with_source(&chunk[ar.offsets]));
                     let end = buf.len();
                     observer.observe_record(&record, begin..end);
                     produced_some = true;
@@ -1029,14 +1033,18 @@ impl<'a, Formatter: RecordWithSourceFormatter, Filter: RecordFilter> SegmentProc
                     break;
                 }
             }
-            let remainder = if parsed_some { &line[last_offset..] } else { line };
+            let remainder = if parsed_some { &chunk[last_offset..] } else { chunk };
             if !remainder.is_empty() && self.show_unparsed() {
-                if !parsed_some {
-                    buf.extend(prefix.as_bytes());
-                }
                 if !parsed_some || produced_some {
-                    buf.extend_from_slice(remainder);
-                    buf.push(b'\n');
+                    let mut should_prefix = !parsed_some;
+                    for line in SmartNewLine.into_searcher().split(remainder) {
+                        if should_prefix {
+                            buf.extend(prefix.as_bytes());
+                        }
+                        should_prefix = true;
+                        buf.extend_from_slice(line);
+                        buf.push(b'\n');
+                    }
                 }
             } else if produced_some {
                 buf.push(b'\n');

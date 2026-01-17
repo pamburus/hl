@@ -987,16 +987,22 @@ impl RawRecordParser {
     #[inline]
     pub fn parse<'a>(
         &self,
-        line: &'a [u8],
+        chunk: &'a [u8],
     ) -> RawRecordStream<impl RawRecordIterator<'a> + use<'a>, impl RawRecordIterator<'a> + use<'a>> {
-        let prefix = if self.allow_prefix && line.last() == Some(&b'}') {
-            line.split(|c| *c == b'{').next().unwrap()
+        let prefix = if self.allow_prefix && chunk.last() == Some(&b'}') {
+            memchr::memchr(b'{', chunk).map_or(chunk, |pos| &chunk[..pos])
         } else {
             b""
         };
 
         let xn = prefix.len();
-        let data = &line[xn..];
+        let data = &chunk[xn..];
+
+        let prefix = if let Some(nl) = memchr::memrchr3(b'\r', b'\n', b'}', prefix) {
+            if prefix[nl] == b'}' { b"" } else { &prefix[nl + 1..] }
+        } else {
+            prefix
+        };
 
         let format = self.format.or_else(|| {
             if data.is_empty() {
@@ -1012,10 +1018,11 @@ impl RawRecordParser {
             None => RawRecordStream::Empty,
             Some(InputFormat::Json) => RawRecordStream::Json(RawRecordJsonStream {
                 prefix,
+                xn,
                 delegate: StreamDeserializerWithOffsets(json::Deserializer::from_slice(data).into_iter::<RawRecord>()),
             }),
             Some(InputFormat::Logfmt) => RawRecordStream::Logfmt(RawRecordLogfmtStream {
-                line,
+                chunk,
                 prefix,
                 done: false,
             }),
@@ -1074,6 +1081,7 @@ pub struct AnnotatedRawRecord<'a> {
 
 struct RawRecordJsonStream<'a, R> {
     prefix: &'a [u8],
+    xn: usize,
     delegate: StreamDeserializerWithOffsets<'a, R, RawRecord<'a>>,
 }
 
@@ -1083,10 +1091,9 @@ where
 {
     #[inline]
     fn next(&mut self) -> Option<Result<AnnotatedRawRecord<'a>>> {
-        let pl = self.prefix.len();
         self.delegate.next().map(|res| {
             res.map(|(record, range)| {
-                let range = range.start + pl..range.end + pl;
+                let range = range.start + self.xn..range.end + self.xn;
                 AnnotatedRawRecord {
                     prefix: self.prefix,
                     record,
@@ -1101,7 +1108,7 @@ where
 // ---
 
 struct RawRecordLogfmtStream<'a> {
-    line: &'a [u8],
+    chunk: &'a [u8],
     prefix: &'a [u8],
     done: bool,
 }
@@ -1114,11 +1121,11 @@ impl<'a> RawRecordIterator<'a> for RawRecordLogfmtStream<'a> {
         }
 
         self.done = true;
-        match logfmt::from_slice::<LogfmtRawRecord>(self.line) {
+        match logfmt::from_slice::<LogfmtRawRecord>(self.chunk) {
             Ok(record) => Some(Ok(AnnotatedRawRecord {
                 prefix: self.prefix,
                 record: record.0,
-                offsets: 0..self.line.len(),
+                offsets: 0..self.chunk.len(),
             })),
             Err(err) => Some(Err(err.into())),
         }
