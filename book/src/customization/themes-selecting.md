@@ -12,21 +12,13 @@ Use the `--theme` option to select a theme:
 hl --theme one-dark-24 app.log
 ```
 
-You can also use the short form `-T`:
+**Note**: There is no short form for `--theme`.
 
-```hl/dev/null/shell.sh#L1
-hl -T ayu-dark-24 app.log
-```
+## Theme Overlays
 
-### Applying Multiple Theme Overlays
+Theme overlays modify the active theme and can **only** be configured in your configuration file. There is no command-line option or environment variable for theme overlays.
 
-Theme overlays modify the active theme. Apply them using `--theme-overlay`:
-
-```hl/dev/null/shell.sh#L1
-hl --theme one-dark-24 --theme-overlay @accent-italic app.log
-```
-
-**Note**: Theme overlays cannot be specified via command-line options. To use overlays, you must configure them in your configuration file (see below).
+To use theme overlays, add them to your configuration file (see below).
 
 ## Environment Variables
 
@@ -46,7 +38,7 @@ export HL_THEME=one-dark-24
 hl --theme classic app.log  # Uses classic, not one-dark-24
 ```
 
-There is no environment variable for theme overlays. To set default overlays, use your configuration file (see below).
+**Note**: There is no `HL_THEME_OVERLAY` environment variable. Theme overlays can only be configured in your configuration file (see below).
 
 ## Configuration Files
 
@@ -55,11 +47,10 @@ There is no environment variable for theme overlays. To set default overlays, us
 You can set a default theme in your configuration file (`~/.config/hl/config.toml` or similar):
 
 ```hl/dev/null/config.toml#L1
-[theme]
-name = "one-dark-24"
+theme = "one-dark-24"
 ```
 
-To apply overlays by default:
+To apply theme overlays (configuration file only):
 
 ```hl/dev/null/config.toml#L1
 theme = "ayu-dark-24"
@@ -157,10 +148,9 @@ Add to your shell profile (`~/.bashrc`, `~/.zshrc`, etc.):
 
 ```hl/dev/null/shell.sh#L1
 export HL_THEME=one-dark-24
-export HL_THEME_OVERLAY=@accent-italic
 ```
 
-Or configure in `~/.config/hl/config.toml`:
+And configure theme overlays in `~/.config/hl/config.toml`:
 
 ```hl/dev/null/config.toml#L1
 theme = "one-dark-24"

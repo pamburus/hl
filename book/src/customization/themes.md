@@ -180,11 +180,7 @@ Overlays are mini-themes that modify specific aspects without replacing the enti
 
 ### Using Overlays
 
-**Command line:**
-```bash
-# Apply italic accent overlay
-hl --theme universal --theme-overlay @accent-italic app.log
-```
+**Note**: Theme overlays can only be configured in your configuration file. There is no command-line option for overlays.
 
 **Configuration file:**
 ```toml

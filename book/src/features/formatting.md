@@ -258,11 +258,11 @@ See [Configuration Files](../customization/config-files.md) for details.
 Many formatting options can be set via environment variables:
 
 ```bash
-export HL_TIME_ZONE=local
 export HL_THEME=universal
 export HL_HIDE_EMPTY_FIELDS=true
 
-hl app.log
+# For local time, use -L flag
+hl -L app.log
 ```
 
 See [Environment Variables](../customization/environment.md) for the complete list.

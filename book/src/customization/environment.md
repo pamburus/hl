@@ -169,19 +169,21 @@ Set the timezone for timestamp display.
 
 ```bash
 export HL_TIME_ZONE=UTC              # default
-export HL_TIME_ZONE=local
 export HL_TIME_ZONE=America/New_York
 export HL_TIME_ZONE=Europe/London
 ```
 
-Use IANA timezone names or:
-- `UTC` — Coordinated Universal Time
-- `local` — system local timezone
+Use IANA timezone names (see [IANA timezone database](https://en.wikipedia.org/wiki/List_of_tz_database_time_zones)).
+
+**Note:** To use the system local timezone, use the `-L` or `--local` command-line flag instead. There is no environment variable for this
 
 Example:
 ```bash
-# Display timestamps in local time
-export HL_TIME_ZONE=local
+# Display timestamps in New York time
+export HL_TIME_ZONE=America/New_York
+
+# For local time, use the -L flag when running hl
+# hl -L app.log
 ```
 
 ### Filtering
@@ -482,10 +484,12 @@ export HL_CONCURRENCY=4
 # ~/.bashrc or ~/.zshrc
 
 # Developer-friendly defaults
-export HL_TIME_ZONE=local
 export HL_TIME_FORMAT="%H:%M:%S.%3N"
 export HL_THEME=universal
 export HL_HIDE_EMPTY_FIELDS=true
+
+# Note: For local time, use 'hl -L' or create a shell alias:
+# alias hl='hl -L'
 ```
 
 ### Production Monitoring
@@ -543,9 +547,11 @@ Add environment variables to your shell profile for persistent defaults.
 ```bash
 # ~/.bashrc or ~/.bash_profile
 
-export HL_TIME_ZONE=local
 export HL_THEME=universal
 export HL_PAGER="less -R --mouse"
+
+# For local time, create an alias:
+alias hl='hl -L'
 ```
 
 ### Zsh
@@ -553,9 +559,11 @@ export HL_PAGER="less -R --mouse"
 ```bash
 # ~/.zshrc
 
-export HL_TIME_ZONE=local
 export HL_THEME=universal
 export HL_PAGER="less -R --mouse"
+
+# For local time, create an alias:
+alias hl='hl -L'
 ```
 
 ### Fish
@@ -563,9 +571,11 @@ export HL_PAGER="less -R --mouse"
 ```fish
 # ~/.config/fish/config.fish
 
-set -x HL_TIME_ZONE local
 set -x HL_THEME universal
 set -x HL_PAGER "less -R --mouse"
+
+# For local time, create an alias:
+alias hl='hl -L'
 ```
 
 ### PowerShell
@@ -573,9 +583,11 @@ set -x HL_PAGER "less -R --mouse"
 ```powershell
 # $PROFILE
 
-$env:HL_TIME_ZONE = "local"
 $env:HL_THEME = "universal"
 $env:HL_PAGER = "less -R"
+
+# For local time, create a function:
+function hl { hl.exe -L @args }
 ```
 
 ## Temporary Overrides
@@ -589,8 +601,11 @@ HL_THEME=monokai hl app.log
 # Force colors when piping
 HL_COLOR=always hl app.log | less -R
 
-# Use local time temporarily
-HL_TIME_ZONE=local hl app.log
+# Use local time for one command
+hl -L app.log
+
+# Use specific timezone temporarily
+HL_TIME_ZONE=America/New_York hl app.log
 ```
 
 ## Debugging Environment Configuration

@@ -33,7 +33,7 @@ Pipe log output directly to `hl`:
 kubectl logs my-pod | hl -P
 ```
 
-The `-P` (or `--paging`) flag ensures the pager is used even when reading from a pipe.
+The `-P` flag disables the pager (equivalent to `--paging=never`), which is useful when piping output to other commands or when you want immediate output without pagination.
 
 ## Viewing Compressed Files
 
@@ -119,15 +119,15 @@ Or use the short form `-P`:
 hl -P app.log
 ```
 
-## Sorting by Occurrence
+## Default (Unsorted) Mode
 
-Display entries in the order they appear in the file (no chronological sorting):
+By default, `hl` displays entries in the order they appear in the file(s):
 
 ```hl/dev/null/shell.sh#L1
-hl --sort=none app.log
+hl app.log
 ```
 
-This is faster for already-sorted logs or when order doesn't matter.
+This is faster than sorting and works well for already-sorted logs or when chronological order doesn't matter. Use `-s` or `--sort` to enable chronological sorting across files.
 
 ## Showing Raw Logs
 

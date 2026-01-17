@@ -252,7 +252,7 @@ If an overlay doesn't seem to apply:
 
 - Verify the `"overlay"` tag is present in the theme file.
 - Check the overlay file location (`~/.config/hl/themes/`).
-- Ensure the filename matches what you're passing to `--theme-overlay`.
+- Ensure the overlay name in your configuration file matches the theme filename.
 
 ### Unexpected Results
 

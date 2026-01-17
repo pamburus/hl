@@ -59,12 +59,13 @@ export HL_TIME_ZONE='Europe/Berlin'
 hl application.log
 ```
 
-Or for local timezone:
+Or use local timezone:
 
 ```sh
-export HL_LOCAL=true
-hl application.log
+hl -L application.log
 ```
+
+**Note:** There is no `HL_LOCAL` environment variable. Use the `-L` or `--local` command-line flag to display timestamps in local time.
 
 ## Time Format
 
@@ -171,7 +172,7 @@ Configuration sources are applied in this order (highest priority last):
 
 1. Default values (UTC, default format)
 2. Configuration file
-3. Environment variables (`HL_TIME_FORMAT`, `HL_TIME_ZONE`, `HL_LOCAL`)
+3. Environment variables (`HL_TIME_FORMAT`, `HL_TIME_ZONE`)
 4. Command-line options (`-t`, `-Z`, `-L`)
 
 ## Use Cases

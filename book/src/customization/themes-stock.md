@@ -148,7 +148,7 @@ In addition to full themes, `hl` provides **theme overlays** that modify the act
 
 **`@accent-italic`** (overlay)
 - Makes accent text (e.g., logger names, field names) italic.
-- Apply with `--theme <base-theme> --theme-overlay @accent-italic`.
+- Apply by configuring in your config file: `theme-overlays = ["@accent-italic"]`.
 
 **`@base`** (base)
 - The fundamental base theme defining the default styling structure.

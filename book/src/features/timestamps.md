@@ -358,8 +358,9 @@ Or via environment variables:
 
 ```bash
 export HL_UNIX_TIMESTAMP_UNIT=ms
-export HL_TIME_ZONE=local
-hl app.log
+
+# For local time, use -L flag
+hl -L app.log
 ```
 
 ## Troubleshooting

@@ -12,24 +12,12 @@ Display entries after a specific timestamp:
 hl --since "2024-01-15 10:00:00" app.log
 ```
 
-Short form:
-
-```hl/dev/null/shell.sh#L1
-hl -S "2024-01-15 10:00:00" app.log
-```
-
 ### Show Logs Before a Time
 
 Display entries before a specific timestamp:
 
 ```hl/dev/null/shell.sh#L1
 hl --until "2024-01-15 18:00:00" app.log
-```
-
-Short form:
-
-```hl/dev/null/shell.sh#L1
-hl -U "2024-01-15 18:00:00" app.log
 ```
 
 ### Show Logs in a Time Range
