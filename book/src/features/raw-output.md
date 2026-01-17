@@ -78,6 +78,34 @@ hl --raw --query '.event=purchase' app.log \
   | jq '{user: ."user-id", amount: .amount, time: .timestamp}'
 ```
 
+### Ensuring JSON-Only Output
+
+When building data processing pipelines, you can combine `--raw` with `--input-info` to guarantee only valid JSON objects in the output:
+
+```bash
+# Ensure only JSON records are output (no logfmt, no unparsed lines)
+hl --raw --input-info json app.log | jq '.message'
+
+# Safe for strict JSON processors
+hl --raw --input-info json --level error mixed-format.log \
+  | your-strict-json-processor
+
+# Data pipeline with guaranteed JSON stream
+hl --raw --input-info json -q 'duration > 1000' app.log \
+  | jq -c '{id: ."request-id", duration}' \
+  | mongodb-import
+```
+
+This combination is especially useful when:
+- Input files contain mixed formats (JSON and logfmt)
+- Some lines might not parse as structured logs
+- Downstream tools require strictly valid JSON
+- Building automated data pipelines that cannot tolerate non-JSON output
+
+**Without `--input-info json`:** Raw output includes logfmt entries and unparsed lines (when filters match).
+
+**With `--input-info json`:** Only JSON entries are processed and output, ensuring a clean JSON stream.
+
 ### Data Export
 
 Export filtered logs for analysis in other tools:
@@ -235,6 +263,8 @@ timestamp=2024-01-15T10:30:45Z level=info message="request processed"
 
 Raw mode preserves whatever format was in the source files.
 
+**Note:** To output only JSON entries (excluding logfmt and unparsed lines), combine `--raw` with `--input-info json`. See [Ensuring JSON-Only Output](#ensuring-json-only-output) above.
+
 ## Examples
 
 ### Extract Errors for External Analysis
@@ -311,7 +341,7 @@ hl --raw --level info --query '.event=user_login' app.log \
 - Original JSON format preserved
 - Piping to JSON processing tools (jq, json_pp, etc.)
 - Exporting filtered results for external analysis
-- Building data pipelines
+- Building data pipelines (combine with `--input-info json` for JSON-only streams)
 - Exact source format (not `hl`'s formatting)
 
 **Use formatted output when you need:**
