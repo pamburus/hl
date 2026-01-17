@@ -43,12 +43,21 @@ Sort mode is ideal when you need to:
 
 `hl` automatically detects and parses timestamps in various formats:
 
-- **ISO 8601**: `2024-01-15T10:30:45.123Z`, `2024-01-15T10:30:45+00:00`
-- **RFC 3339**: `2024-01-15 10:30:45.123`
+- **RFC 3339**: `2024-01-15T10:30:45.123Z`, `2024-01-15T10:30:45+00:00` (strict: 'T' separator, timezone required)
+- **ISO 8601 variants**: `2024-01-15 10:30:45.123Z` (relaxed: allows space separator, timezone required)
 - **Unix timestamps**: numeric seconds, milliseconds, microseconds, or nanoseconds
 - **Common formats**: `Jan 15 10:30:45`, `15/Jan/2024:10:30:45 +0000`
 
-Timestamps can appear in various field names (`timestamp`, `time`, `@timestamp`, `ts`, `date`, etc.) and can be located anywhere in the JSON structure (top-level or nested).
+Timestamps can appear in various field names and can be located anywhere in the JSON structure (top-level or nested).
+
+**Default timestamp field names:** `timestamp`, `time`, `ts`
+
+These field names are configurable via the configuration file (see [Configuration Files](../customization/config-files.md)):
+
+```toml
+[fields.predefined.time]
+names = ["timestamp", "time", "ts", "@timestamp", "date"]
+```
 
 ### Handling Multiple Timestamp Fields
 
