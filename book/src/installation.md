@@ -1,12 +1,12 @@
 # Installation
 
-hl is available for macOS, Linux, Windows, and NixOS. Choose the installation method that works best for your system.
+`hl` is available for macOS, Linux, Windows, and NixOS. Choose the installation method that works best for your system.
 
 ## macOS
 
 ### Using Homebrew (Recommended)
 
-The easiest way to install hl on macOS is using [Homebrew](https://brew.sh):
+The easiest way to install `hl` on macOS is using [Homebrew](https://brew.sh):
 
 ```sh
 brew install hl
@@ -63,25 +63,25 @@ sudo mv hl /usr/local/bin/
 
 ### Using Scoop (Recommended)
 
-[Scoop](https://scoop.sh) is the recommended way to install hl on Windows:
+[Scoop](https://scoop.sh) is the recommended way to install `hl` on Windows:
 
 ```powershell
 scoop bucket add pamburus https://github.com/pamburus/scoop-bucket.git
 scoop install hl
 ```
 
-This automatically installs hl along with the `less` pager as a dependency.
+This automatically installs `hl` along with the `less` pager as a dependency.
 
-> **Tip**: Use [Windows Terminal](https://aka.ms/terminal) for the best experience with hl.
+> **Tip**: Use [Windows Terminal](https://aka.ms/terminal) for the best experience with `hl`.
 
 > **Tip**: To enable mouse scrolling in the `less` pager, set the `LESS` environment variable to `-R --mouse`.
 
 ### Important Note About Pagers on Windows
 
-hl relies on external pagers like `less` for displaying output. The Windows build of `less` distributed through WinGet has known issues with ANSI escape sequences and may not display hl's colored output correctly.
+`hl` relies on external pagers like `less` for displaying output. The Windows build of `less` distributed through WinGet has known issues with ANSI escape sequences and may not display `hl`'s colored output correctly.
 
 **Recommended solutions:**
-- Install `less` via Scoop (included automatically when installing hl via Scoop)
+- Install `less` via Scoop (included automatically when installing `hl` via Scoop)
 - Install `less` via Chocolatey
 
 To verify which `less` is being used:
@@ -102,7 +102,7 @@ Download the latest release from the [GitHub releases page](https://github.com/p
 
 ### Run Without Installing
 
-Try hl without installing:
+Try `hl` without installing:
 
 ```sh
 nix run github:pamburus/hl
@@ -116,7 +116,7 @@ nix run github:pamburus/hl#bin
 
 ### Install with Nix Profile
 
-Install hl to your profile:
+Install `hl` to your profile:
 
 ```sh
 nix profile add github:pamburus/hl
@@ -130,11 +130,11 @@ nix profile add github:pamburus/hl#bin
 
 ### NixOS System Configuration
 
-Add hl to your NixOS system configuration using flakes.
+Add `hl` to your NixOS system configuration using flakes.
 
 ## Using Cargo
 
-If you have Rust installed, you can build and install hl from source:
+If you have Rust installed, you can build and install `hl` from source:
 
 ```sh
 cargo install --locked --git https://github.com/pamburus/hl.git
@@ -144,14 +144,14 @@ This method works on all platforms but requires a Rust toolchain.
 
 ## Verifying Installation
 
-After installation, verify that hl is working:
+After installation, verify that `hl` is working:
 
 ```sh
 hl --version
 ```
 
-You should see output showing the installed version of hl.
+You should see output showing the installed version of `hl`.
 
 ## Next Steps
 
-Now that you have hl installed, proceed to the [Quick Start](./quick-start.md) guide to learn how to use it.
+Now that you have `hl` installed, proceed to the [Quick Start](./quick-start.md) guide to learn how to use it.
