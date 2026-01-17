@@ -167,9 +167,9 @@ This is an important distinction—if you need to see all output including unpar
 ## Exit Behavior
 
 - **Sort mode** exits after displaying all entries
-- **Follow mode** runs indefinitely until interrupted (Ctrl-C)
+- **Follow mode** runs indefinitely until interrupted (Ctrl-C exits immediately)
 
-In follow mode, `hl` ignores the first few interrupt signals (default: 3) to prevent accidental termination. Keep holding Ctrl-C or adjust with `--interrupt-ignore-count`.
+Follow mode exits immediately on a single Ctrl-C. The `--interrupt-ignore-count` option is ignored in follow mode—it only applies when using a pager or piping from another application.
 
 ## Examples
 

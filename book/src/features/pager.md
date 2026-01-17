@@ -257,6 +257,94 @@ export PAGER=less
 export LESS="-R --mouse -i"
 ```
 
+## Interrupt Handling
+
+When viewing logs with a pager or piping from another application, `hl` provides interrupt tolerance to prevent premature termination.
+
+### The --interrupt-ignore-count Option
+
+By default, `hl` ignores the first 3 interrupt signals (Ctrl-C) before actually exiting:
+
+```sh
+# Default: ignore first 3 interrupts
+hl application.log
+
+# Adjust to ignore 5 interrupts
+hl --interrupt-ignore-count 5 application.log
+
+# Exit immediately on first Ctrl-C
+hl --interrupt-ignore-count 0 application.log
+```
+
+When you press Ctrl-C, you'll see a message indicating how many more times you need to press it:
+
+```
+^C interrupted, press Ctrl-C 2 more times to exit
+```
+
+### Why This Matters
+
+**When using a pager (like `less`):**
+
+If you're viewing logs in `less` and using Shift+F to follow new data in real-time, pressing Ctrl-C tells `less` to stop loading and let you navigate the already-loaded buffer. Without interrupt ignore count, `hl` would terminate immediately, closing the pager before you could navigate.
+
+```sh
+# View large log file
+hl large.log
+
+# In less, press Shift+F to follow new data
+# Press Ctrl-C to stop following and navigate buffer
+# hl stays running so you can continue viewing
+```
+
+**When piping from an application:**
+
+When you pipe an application's output to `hl`, pressing Ctrl-C sends the interrupt to both processes. The interrupt ignore count allows `hl` to continue running so you can see the application's graceful shutdown messages.
+
+```sh
+# Application receives Ctrl-C and starts graceful shutdown
+myapp | hl -P
+
+# Press Ctrl-C - myapp starts shutting down
+# hl continues running and displays shutdown logs
+# Press Ctrl-C again (3 times total) to force exit
+```
+
+This is especially useful for applications that log important cleanup or error messages during shutdown.
+
+### When Interrupt Ignore Count Doesn't Apply
+
+The `--interrupt-ignore-count` option is **ignored in follow mode** (`-F`):
+
+```sh
+# Follow mode exits immediately on Ctrl-C
+hl -F application.log
+```
+
+Follow mode provides immediate exit because you're monitoring files directly and want quick termination when you're done.
+
+### Configuration
+
+Set a default interrupt ignore count:
+
+```toml
+# ~/.config/hl/config.toml
+interrupt-ignore-count = 5
+```
+
+Or via environment variable:
+
+```sh
+export HL_INTERRUPT_IGNORE_COUNT=5
+```
+
+### Best Practices
+
+- **Use default (3)** for interactive log viewing with a pager
+- **Set to 0** in scripts or automated workflows for immediate exit
+- **Increase to 5+** when working with applications that have long shutdown sequences
+- **Don't rely on it in follow mode** - follow mode always exits immediately
+
 ## Next Steps
 
 - [Live Streaming](./streaming.md) - View logs in real-time without a pager

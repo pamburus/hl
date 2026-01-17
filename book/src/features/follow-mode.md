@@ -226,32 +226,39 @@ Note: In live follow mode, `--until` will cause `hl` to exit once that time is r
 
 Follow mode runs indefinitely until interrupted. Press Ctrl-C to exit.
 
-### Interrupt Tolerance
-
-By default, `hl` ignores the first 3 interrupt signals (Ctrl-C) to prevent accidental termination when monitoring critical systems:
-
-```bash
-# Adjust interrupt tolerance
-hl -F --interrupt-ignore-count 5 app.log
-
-# Make it exit immediately on first Ctrl-C
-hl -F --interrupt-ignore-count 0 app.log
-```
-
-When you press Ctrl-C, you'll see a message like:
-```
-^C interrupted, press Ctrl-C 2 more times to exit
-```
-
-Hold Ctrl-C or press it repeatedly to force exit.
+**Follow mode exits immediately on Ctrl-C** — unlike pager mode, there is no interrupt ignore count in follow mode. A single Ctrl-C will terminate the process.
 
 ### Automatic Exit Conditions
 
 Follow mode exits automatically when:
 
+- **Ctrl-C is pressed** (single interrupt, immediate exit)
 - **All files are deleted** and not recreated
 - **--until** time is reached (if specified)
 - **Unrecoverable error** occurs (e.g., permission denied)
+
+### Note on --interrupt-ignore-count
+
+The `--interrupt-ignore-count` option is **ignored in follow mode**. This option is only useful in other scenarios:
+
+**When piping from an application:**
+```bash
+# myapp receives Ctrl-C and shuts down gracefully
+# hl continues running to display shutdown logs
+myapp | hl -P
+```
+
+Without interrupt ignore count, pressing Ctrl-C would terminate `hl` immediately, preventing you from seeing the application's graceful shutdown messages.
+
+**When using a pager:**
+```bash
+# In pager (less), press Ctrl-C to stop loading and navigate buffer
+hl large.log
+```
+
+If you're in `less` with Shift+F (follow mode in less) and data is still loading, Ctrl-C tells `less` to stop loading so you can navigate the already-loaded buffer. The interrupt ignore count prevents `hl` from terminating prematurely in this scenario.
+
+**In follow mode, immediate exit is desired** — you're monitoring files directly and want quick termination when you're done.
 
 ## Multiple File Monitoring
 
