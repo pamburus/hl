@@ -41,7 +41,7 @@ hl -F -l error app.log
 hl -F -f 'service = "api"' app.log
 
 # Watch slow requests
-hl -F -f 'duration > 1000' app.log
+hl -F -q 'duration > 1000' app.log
 ```
 
 ### Follow with Time Range
@@ -104,10 +104,10 @@ Apply filters to piped input:
 kubectl logs -f my-pod | hl -P -l error
 
 # Filter by field
-docker logs -f my-container | hl -P -f 'status >= 400'
+docker logs -f my-container | hl -P -q 'status >= 400'
 
 # Complex filtering
-./myapp 2>&1 | hl -P -l warn -f 'duration > 2000'
+./myapp 2>&1 | hl -P -l warn -q 'duration > 2000'
 ```
 
 ## Follow Mode vs Piped Mode
@@ -164,10 +164,10 @@ kubectl logs -f deployment/api | hl -P -l error
 
 ```hl/dev/null/shell.sh#L1
 # Multiple files
-hl -F -f 'duration > 2000' api.log worker.log scheduler.log
+hl -F -q 'duration > 2000' api.log worker.log scheduler.log
 
 # Piped from multiple sources
-kubectl logs -f deployment/api | hl -P -f 'duration > 2000'
+kubectl logs -f deployment/api | hl -P -q 'duration > 2000'
 ```
 
 ### Monitor Specific User Activity
@@ -179,13 +179,13 @@ hl -F -f 'user-id = 12345' app.log
 ### Monitor Authentication Events
 
 ```hl/dev/null/shell.sh#L1
-hl -F -f 'event in ["login", "logout", "auth_failed"]' auth.log
+hl -F -q 'event in ["login", "logout", "auth_failed"]' auth.log
 ```
 
 ### Monitor Database Operations
 
 ```hl/dev/null/shell.sh#L1
-hl -F -f 'operation ~= "query" and duration > 1000' db.log
+hl -F -q 'operation ~= "query" and duration > 1000' db.log
 ```
 
 ### Watch Deployment Progress
@@ -224,7 +224,7 @@ done
 
 ```hl/dev/null/shell.sh#L1
 # Track requests over threshold
-hl -F -f 'duration > 3000' app.log
+hl -F -q 'duration > 3000' app.log
 ```
 
 ### Security Monitoring
@@ -238,7 +238,7 @@ hl -F -f 'event = "auth_failed"' auth.log
 
 ```hl/dev/null/shell.sh#L1
 # Exclude health checks from monitoring
-hl -F -f 'not (path = "/health" or path = "/ping")' app.log
+hl -F -q 'not (path = "/health" or path = "/ping")' app.log
 ```
 
 ### Multi-Region Monitoring
@@ -313,10 +313,10 @@ hl -F --hide trace-id --hide span-id app.log
 
 ```hl/dev/null/shell.sh#L1
 # Use local timezone for monitoring
-hl -F --time-zone local app.log
+hl -F -L app.log
 
-# Or UTC for coordination
-hl -F --time-zone utc app.log
+# Use UTC (default)
+hl -F app.log
 ```
 
 ## Performance Considerations

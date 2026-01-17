@@ -117,7 +117,7 @@ Filters apply to all input files:
 hl -l error service-*.log
 
 # Show slow requests across all files
-hl -f 'duration > 1000' app.log worker.log api.log
+hl -q 'duration > 1000' app.log worker.log api.log
 ```
 
 ### Source-Specific Filtering
@@ -295,7 +295,7 @@ hl --since "2024-01-15" --until "2024-01-16" \
 
 ```hl/dev/null/shell.sh#L1
 # Find slow database queries across all application servers
-hl -f 'operation = "query" and duration > 1000' app-server-*.log
+hl -q 'operation = "query" and duration > 1000' app-server-*.log
 ```
 
 ### Multi-File with Level and Time Filters
@@ -321,7 +321,7 @@ If logs include a source field, you can filter by it:
 hl -f 'hostname = "server-1"' distributed-*.log
 
 # If logs have 'service-name' field
-hl -f 'service-name in ["api", "worker"]' all-services.log
+hl -q 'service-name in ["api", "worker"]' all-services.log
 ```
 
 ## Tips and Best Practices
@@ -378,7 +378,7 @@ If entries aren't merging in the expected order:
 - Verify all files have recognized timestamps
 - Check timezone consistency across files
 - Use `--dump-index` to inspect file metadata
-- Ensure `--sort` is not set to `none`
+- Verify chronological sorting is enabled with `-s` or `--sort` flag if needed
 
 ### Missing Entries
 
