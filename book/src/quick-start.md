@@ -129,6 +129,8 @@ Display time in a custom format:
 hl -t '%Y-%m-%d %H:%M:%S' application.log
 ```
 
+See the [Time Format Reference](./reference/time-format.md) for all available format specifiers.
+
 ### Use Local Timezone
 
 Display timestamps in your local timezone instead of UTC:
