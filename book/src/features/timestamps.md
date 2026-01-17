@@ -351,7 +351,7 @@ Set timestamp handling defaults:
 ```toml
 # ~/.config/hl/config.toml
 unix-timestamp-unit = "ms"
-time-zone = "local"
+time-zone = "UTC"
 ```
 
 Or via environment variables:

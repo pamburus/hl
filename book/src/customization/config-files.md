@@ -125,9 +125,9 @@ theme = "universal"
 # Inherits: time-zone = "UTC" from base
 
 # Layer 4 (--config project.toml):
-time-zone = "local"
+time-zone = "America/New_York"
 # Inherits: theme = "universal" from Layer 3
-# Final result: theme = "universal", time-zone = "local"
+# Final result: theme = "universal", time-zone = "America/New_York"
 ```
 
 ## Configuration File Format
@@ -141,7 +141,7 @@ Configuration files use TOML format, which is human-readable and easy to edit.
 
 # Time display settings
 time-format = "%Y-%m-%d %H:%M:%S.%3N"
-time-zone = "local"
+time-zone = "UTC"
 
 # Default theme
 theme = "universal"
@@ -171,10 +171,10 @@ Control how timestamps are displayed:
 # Time format (strftime syntax)
 time-format = "%b %d %T.%3N"
 
-# Time zone (IANA timezone name or "UTC" or "local")
+# Time zone (IANA timezone name)
 time-zone = "UTC"
 # time-zone = "America/New_York"
-# time-zone = "local"
+# time-zone = "Europe/London"
 ```
 
 Common time format patterns:
@@ -390,7 +390,7 @@ See [Field Expansion](../features/field-expansion.md) for details.
 
 # Display settings
 time-format = "%Y-%m-%d %H:%M:%S.%3N"
-time-zone = "local"
+time-zone = "UTC"
 theme = "universal"
 theme-overlays = ["@accent-italic"]
 input-info = "auto"
@@ -602,7 +602,7 @@ Begin with a minimal configuration and add settings as needed:
 
 ```toml
 # Minimal starter config
-time-zone = "local"
+time-zone = "UTC"
 theme = "universal"
 
 [fields]
@@ -614,8 +614,8 @@ hide = ["host", "pid"]
 Document your configuration choices:
 
 ```toml
-# Show local time for easier debugging
-time-zone = "local"
+# Use UTC for consistency
+time-zone = "UTC"
 
 # Hide noisy fields that don't help debugging
 [fields]
@@ -675,7 +675,7 @@ hide = ["host", "pid", "version"]  # Include all desired values
 
 ```toml
 # Developer-friendly configuration
-time-zone = "local"
+time-zone = "UTC"
 time-format = "%H:%M:%S.%3N"
 theme = "universal"
 
@@ -705,7 +705,7 @@ hide = ["version", "build"]
 ```toml
 # ~/.config/hl/config - Personal defaults
 theme = "universal"
-time-zone = "local"
+time-zone = "UTC"
 
 # team-defaults - Team standards
 time-format = "%Y-%m-%d %H:%M:%S"

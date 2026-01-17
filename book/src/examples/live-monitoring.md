@@ -76,7 +76,7 @@ docker logs -f my-container | hl -P
 journalctl -f | hl -P
 ```
 
-The `-P` (or `--paging`) flag ensures the pager is used even when reading from a pipe.
+The `-P` flag disables the pager (equivalent to `--paging=never`), which is necessary when reading from a pipe to get immediate output.
 
 ### Piped Streaming Shows Everything
 
@@ -127,7 +127,7 @@ hl -F /var/log/app/*.log
 
 ### When to Use Piped Mode (-P)
 
-Use piped input with `-P` when:
+Use piped input (with `-P` to disable pager) when:
 - Streaming from a command (kubectl, docker, journalctl, etc.)
 - You want to see ALL output, including unparseable lines
 - You want original arrival order

@@ -281,7 +281,6 @@ Set default hidden fields in your config file:
 ```toml
 # ~/.config/hl/config.toml
 hide = ["headers", "metadata", "debug_info"]
-hide-empty-fields = true
 ```
 
 Or in YAML:
@@ -292,7 +291,6 @@ hide:
   - headers
   - metadata
   - debug_info
-hide-empty-fields: true
 ```
 
 ## Environment Variables

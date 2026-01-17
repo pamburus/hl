@@ -244,10 +244,11 @@ All formatting options can be saved in configuration files to avoid repeating th
 
 ```toml
 # ~/.config/hl/config.toml
-time-zone = "local"
+time-zone = "UTC"
 time-format = "%Y-%m-%d %H:%M:%S"
 theme = "monokai"
-hide-empty-fields = true
+
+[fields]
 hide = ["timestamp", "host", "pid"]
 ```
 
