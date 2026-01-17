@@ -94,9 +94,16 @@ hl --config - --config base.toml --config override.toml app.log
 ### Important Notes
 
 **File extension:**
-Configuration files are loaded **without** extension. The actual files should be named:
-- `config` (not `config.toml`)
-- Or `config.toml`, `config.yaml`, etc. depending on your setup
+Configuration files can be loaded with or without specifying the extension:
+- **With extension**: `config.toml`, `config.yaml`, `config.json` - loads exactly that file in the specified format
+- **Without extension**: `config` - automatically searches for files with supported extensions in priority order
+
+When using automatic extension detection (no extension specified), the priority order is:
+1. **TOML** (`.toml`)
+2. **JSON** (`.json`)
+3. **YAML** (`.yaml` or `.yml`)
+
+The first matching file is loaded. If you want a specific format, specify the extension explicitly.
 
 **HL_CONFIG behavior:**
 - `HL_CONFIG` **appends** to the layer chain (does not replace user config)
