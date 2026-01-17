@@ -1626,3 +1626,223 @@ fn test_input_badges_compact_mode_two_char_prefix() {
     assert!(!badges[0].is_empty());
     assert!(!badges[1].is_empty());
 }
+
+// Critical tests based on real-world pretty-broken.log scenarios
+
+#[test]
+fn test_bug_multiline_json_missing_input_badges_on_closing_braces() {
+    // This test catches the critical bug where closing braces in multi-line JSON
+    // lose their input badge prefix when using auto delimiter with input badges
+    let input = input("{\n\"level\":\"info\",\n\"msg\":\"test\"\n}\n");
+    let mut output = Vec::new();
+    let mut opts = options();
+    opts.delimiter = Delimiter::Auto;
+    opts.input_info = InputInfo::Minimal.into();
+    let app = App::new(opts);
+    app.run(vec![input], &mut output).unwrap();
+    let output_str = std::str::from_utf8(&output).unwrap();
+
+    // Every line should have the input badge, including the closing brace
+    let lines: Vec<&str> = output_str.lines().collect();
+
+    // Find the closing brace line - it should have the input badge
+    let closing_brace_lines: Vec<&str> = lines
+        .iter()
+        .filter(|l| l.contains("}") && l.trim().ends_with("}"))
+        .copied()
+        .collect();
+    assert!(
+        !closing_brace_lines.is_empty(),
+        "should find closing brace lines. Lines: {:?}",
+        lines
+    );
+
+    // The closing brace line should have an input badge
+    let closing_brace_with_badge = closing_brace_lines.iter().any(|l| l.starts_with("#0"));
+    assert!(
+        closing_brace_with_badge,
+        "closing brace should have input badge prefix. Lines: {:?}",
+        closing_brace_lines
+    );
+
+    // All non-empty lines should start with the input badge
+    for line in lines.iter().filter(|l| !l.is_empty()) {
+        assert!(line.starts_with("#0"), "Line should have input badge: {:?}", line);
+    }
+}
+
+#[test]
+fn test_bug_multiline_remainder_missing_input_badges() {
+    // This test catches the bug where multi-line remainder text (unparsed data)
+    // after a JSON object loses input badges on subsequent lines
+    let input = input(concat!(
+        r#"{"level":"info","msg":"test"}"#,
+        "\n",
+        "\trem1\n",
+        "\trem2\n",
+    ));
+    let mut output = Vec::new();
+    let mut opts = options();
+    opts.delimiter = Delimiter::Auto;
+    opts.input_info = InputInfo::Minimal.into();
+    let app = App::new(opts);
+    app.run(vec![input], &mut output).unwrap();
+    let output_str = std::str::from_utf8(&output).unwrap();
+
+    let lines: Vec<&str> = output_str.lines().collect();
+
+    assert_eq!(lines.len(), 3, "should have exactly 3 lines: {:?}", lines);
+
+    // Find remainder lines
+    let l1 = lines[1];
+    let l2 = lines[2];
+
+    // Both should have input badges
+    assert!(l1.starts_with("#0"), "remainder line should have input badge: {:?}", l1);
+    assert!(l2.starts_with("#0"), "remainder line should have input badge: {:?}", l2);
+}
+
+#[test]
+fn test_bug_prefix_with_closing_brace_included_in_display() {
+    // This test catches the bug where when auto delimiter creates a block
+    // that includes a closing brace followed by JSON on the same "block",
+    // the closing brace gets included in the prefix and displayed before the message
+    let input = input(concat!(
+        "{\n",
+        r#""level":"info"#,
+        "\n",
+        r#""nested":{"#,
+        "\n",
+        r#""key":"val""#,
+        "\n",
+        "}\n",
+        "}",
+        r#"{"level":"info","msg":"test"}"#,
+        "\n",
+    ));
+    let mut output = Vec::new();
+    let mut opts = options();
+    opts.delimiter = Delimiter::Auto;
+    opts.allow_prefix = true;
+    let app = App::new(opts);
+    app.run(vec![input], &mut output).unwrap();
+    let output_str = std::str::from_utf8(&output).unwrap();
+
+    // The "test" message should be formatted
+    assert!(output_str.contains("test"), "should find 'test' message");
+
+    // The line with "test" should NOT have the closing brace as a prefix
+    // On master, this would show: "} ####-##-## ##:##:##.### [INF] test"
+    // On feature branch, it should show: "####-##-## ##:##:##.### [INF] test"
+    let test_line = output_str.lines().find(|l| l.contains("test")).unwrap();
+
+    // The formatted output should not have "}" before the formatted message
+    // Check that we don't have "}␣" (brace followed by space)
+    let has_brace_prefix = test_line.starts_with("} ") || test_line.contains(" } ");
+    assert!(
+        !has_brace_prefix,
+        "message should not have closing brace in prefix, line: {:?}",
+        test_line
+    );
+}
+
+#[test]
+fn test_bug_complex_pretty_broken_scenario() {
+    // This is the full scenario from pretty-broken.log that exhibits multiple bugs
+    let input = input(concat!(
+        "{\n",
+        "\"level\":\"info\",\n",
+        "\"nested\":{\n",
+        "\"key\":\"val\"\n",
+        "}\n",
+        "}{\"level\":\"info\",\"msg\":\"test\"}\n",
+        "\trem1\n",
+        "\n",
+        "\trem2\n",
+    ));
+    let mut output = Vec::new();
+    let mut opts = options();
+    opts.delimiter = Delimiter::Auto;
+    opts.allow_prefix = true;
+    opts.input_info = InputInfo::Minimal.into();
+    let app = App::new(opts);
+    app.run(vec![input], &mut output).unwrap();
+    let output_str = std::str::from_utf8(&output).unwrap();
+
+    let lines: Vec<&str> = output_str.lines().collect();
+
+    // Count how many lines have input badges
+    let badged_lines = lines.iter().filter(|l| l.starts_with("#0")).count();
+    let non_empty_lines = lines.iter().filter(|l| !l.trim().is_empty()).count();
+
+    // All non-empty lines should have input badges
+    assert_eq!(
+        badged_lines, non_empty_lines,
+        "all non-empty lines should have input badges, found {} badged out of {} non-empty lines\nlines: {:?}",
+        badged_lines, non_empty_lines, lines
+    );
+
+    // The closing braces should have badges
+    let closing_brace_lines: Vec<&str> = lines
+        .iter()
+        .filter(|l| l.contains("}") && l.trim().ends_with("}"))
+        .copied()
+        .collect();
+    assert!(!closing_brace_lines.is_empty(), "should find closing brace lines");
+
+    // All closing braces should have input badges
+    for line in &closing_brace_lines {
+        assert!(line.starts_with("#0"), "closing brace should have badge: {:?}", line);
+    }
+
+    // The remainder lines should have badges
+    let rem1_line = lines.iter().find(|l| l.contains("rem1"));
+    assert!(rem1_line.is_some() && rem1_line.unwrap().starts_with("#0"));
+
+    let rem2_line = lines.iter().find(|l| l.contains("rem2"));
+    assert!(rem2_line.is_some() && rem2_line.unwrap().starts_with("#0"));
+
+    // The "test" message should not have "}␣" prefix
+    let test_line = lines.iter().find(|l| l.contains("test"));
+    assert!(test_line.is_some());
+    let test_line = test_line.unwrap();
+    assert!(
+        !test_line.starts_with("} ") && !test_line.contains(" } "),
+        "message should not have brace prefix: {:?}",
+        test_line
+    );
+}
+
+#[test]
+fn test_bug_continuation_lines_with_input_badges() {
+    // Multi-line pretty-printed JSON where continuation lines (indented) should
+    // all have input badges when input-info is enabled
+    let input = input(concat!(
+        "{\n",
+        "\"level\":\"info\",\n",
+        "\"msg\":\"test\",\n",
+        "\"nested\":{\n",
+        "\"key\":\"val\"\n",
+        "}\n",
+        "}\n",
+    ));
+    let mut output = Vec::new();
+    let mut opts = options();
+    opts.delimiter = Delimiter::Auto;
+    opts.input_info = InputInfo::Minimal.into();
+    let app = App::new(opts);
+    app.run(vec![input], &mut output).unwrap();
+    let output_str = std::str::from_utf8(&output).unwrap();
+
+    let lines: Vec<&str> = output_str.lines().collect();
+
+    // Every line should have the input badge
+    for (i, line) in lines.iter().enumerate() {
+        if !line.is_empty() {
+            assert!(line.starts_with("#0"), "line {} should have input badge: {:?}", i, line);
+        }
+    }
+
+    // Should have at least 5 lines (multi-line JSON)
+    assert!(lines.len() >= 5, "should have multiple lines for pretty-printed JSON");
+}
