@@ -10,6 +10,7 @@ use const_str::join;
 use semver::Version;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
+use ureq::tls;
 
 const DEFAULTS_DIR: &str = "etc/defaults";
 const THEME_DIR: &str = join!(&[DEFAULTS_DIR, "themes"], "/");
@@ -228,10 +229,13 @@ fn find_local_schema_file(filename: &str) -> Result<PathBuf> {
 }
 
 fn fetch_and_hash_url(url: &str) -> Result<Hash> {
-    let agent = ureq::Agent::config_builder()
-        .timeout_global(Some(std::time::Duration::from_secs(10)))
-        .build()
-        .new_agent();
+    let agent = {
+        ureq::Agent::config_builder()
+            .timeout_global(Some(std::time::Duration::from_secs(10)))
+            .tls_config(tls_config())
+            .build()
+            .new_agent()
+    };
 
     let mut response = agent
         .get(url)
@@ -239,6 +243,20 @@ fn fetch_and_hash_url(url: &str) -> Result<Hash> {
         .map_err(|e| anyhow!("Failed to fetch URL {}: {}", url, e))?;
 
     text_reader_hash(BufReader::new(response.body_mut().as_reader()))
+}
+
+// On Windows ARM64, use native-tls to avoid ring/clang requirement
+#[cfg(all(target_os = "windows", target_arch = "aarch64"))]
+fn tls_config() -> tls::TlsConfig {
+    tls::TlsConfig::builder()
+        .provider(tls::TlsProvider::NativeTls)
+        .root_certs(tls::RootCerts::PlatformVerifier)
+        .build()
+}
+
+#[cfg(not(all(target_os = "windows", target_arch = "aarch64")))]
+fn tls_config() -> tls::TlsConfig {
+    tls::TlsConfig::builder().build()
 }
 
 fn text_file_hash(path: &Path) -> Result<Hash> {
