@@ -36,16 +36,26 @@ Command-line time filtering supports many more formats than log entry parsing.
 
 **Supported formats:**
 - Everything from input parsing (RFC 3339, Unix timestamps)
-- **Plus:** Relative times (`-1h`, `1 hour ago`)
-- **Plus:** Natural language (`yesterday`, `friday`, `today`)
+- **Plus:** Relative times (`-1h`, `-30m`, `-7d`, `-1M`, `-1y`, `1 hour ago`, `30 minutes ago`)
+- **Plus:** Natural language (`yesterday`, `friday`, `today`, `last month`)
 - **Plus:** Your configured output format (copy-paste from output!)
+
+**Note:** Duration syntax with `-` prefix uses fixed approximations:
+- `-1M` = 30.44 days (approximate month)
+- `-1y` = 365.25 days (approximate year)
+
+Natural language ("1 month ago", "last month") is calendar-aware and more precise for month/year boundaries.
 
 **Examples:**
 ```bash
-hl --since "-1h" app.log                    # Relative duration
+hl --since "-1h" app.log                    # Duration: 1 hour ago
+hl --since "-7d" app.log                    # Duration: 7 days ago
+hl --since "-1M" app.log                    # Duration: ~30.44 days ago
 hl --since "1 hour ago" app.log             # Natural language
-hl --since "yesterday" app.log              # Named day
-hl --since "friday 6pm" app.log             # Day + time
+hl --since "yesterday" app.log              # Natural language (named day)
+hl --since "1 month ago" app.log            # Natural language (calendar-aware)
+hl --since "last month" app.log             # Natural language (calendar month)
+hl --since "friday 6pm" app.log             # Natural language (day + time)
 hl --since "2024-01-15T10:00:00Z" app.log   # Absolute RFC 3339
 hl --since "Jan 15 10:30:45.123" app.log    # Copy from output (if format matches)
 ```
@@ -109,6 +119,13 @@ You can use either:
 
 Both work. The bare `1h` is NOT accepted (it's ambiguous).
 
+### "What's the difference between `-1M` and `last month`?"
+
+- `-1M` = approximately 30.44 days ago (fixed duration from humantime crate)
+- `"1 month ago"` or `"last month"` = calendar-aware parsing (via chrono-english crate)
+
+Use duration syntax (`-1M`) for "roughly 30 days" and natural language (`"1 month ago"`, `"last month"`) for calendar month boundaries.
+
 ### "How do I change the timestamp format in my logs?"
 
 `hl` doesn't change log files. The `--time-format` option only affects how `hl` **displays** timestamps. Your log files remain unchanged. To change timestamps in log files, reconfigure your application's logging.
@@ -144,7 +161,7 @@ hl --since "yesterday" --until "today" app.log
 | **What**              | **Format Example**                | **Where**              |
 |-----------------------|-----------------------------------|------------------------|
 | **Log entry field**   | `"2024-01-15T10:30:45.123Z"`     | Inside JSON/logfmt     |
-| **Filter (recent)**   | `--since "-1h"` or `"1 hour ago"` | Command line           |
+| **Filter (recent)**   | `--since "-1h"` or `"1 hour ago"` or `"-1M"` | Command line           |
 | **Filter (natural)**  | `--since "yesterday"`            | Command line           |
 | **Filter (absolute)** | `--since "2024-01-15 10:00"`     | Command line           |
 | **Filter (copy)**     | `--since "Jan 15 10:30:45.123"`  | Copy from output       |

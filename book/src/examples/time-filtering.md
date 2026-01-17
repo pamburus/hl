@@ -148,11 +148,21 @@ hl --since "4w ago" app.log
 ### Months Ago
 
 ```hl/dev/null/shell.sh#L1
-# Last month
-hl --since "1M ago" app.log
+# Duration syntax: approximately 30.44 days
+hl --since "-1M" app.log
+hl --since "-3M" app.log
+```
 
-# Last 3 months
-hl --since "3M ago" app.log
+**Note:** Duration syntax (`-1M`, `-3M`) uses a fixed approximation of 30.44 days per month. For exact calendar month boundaries, use natural language:
+
+```hl/dev/null/shell.sh#L1
+# Natural language: exact calendar month
+hl --since "1 month ago" app.log
+hl --since "last month" app.log
+hl --since "3 months ago" app.log
+
+# Or specify exact date
+hl --since "2024-11-01" app.log
 ```
 
 ### Seconds Ago
@@ -160,7 +170,21 @@ hl --since "3M ago" app.log
 ```hl/dev/null/shell.sh#L1
 # Last 30 seconds
 hl --since "30s ago" app.log
+hl --since "-30s" app.log
 ```
+
+### Years Ago
+
+```hl/dev/null/shell.sh#L1
+# Duration syntax: approximately 365.25 days
+hl --since "-1y" app.log
+
+# Natural language: likely more precise
+hl --since "1 year ago" app.log
+hl --since "last year" app.log
+```
+
+**Note:** Duration syntax (`-1y`) uses a fixed approximation of 365.25 days. Natural language ("1 year ago", "last year") may provide more calendar-aware results.
 
 ## Using Output Format for Filtering
 

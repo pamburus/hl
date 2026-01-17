@@ -160,14 +160,18 @@ The `--since` and `--until` options support many more formats than log entry tim
 
 **Relative times (most common):**
 ```bash
-# Duration ago syntax
-hl --since "-1h" app.log          # Last hour
-hl --since "-30m" app.log         # Last 30 minutes
-hl --since "-7d" app.log          # Last 7 days
+# Duration syntax (fixed time spans)
+hl --since "-1h" app.log          # 1 hour ago
+hl --since "-30m" app.log         # 30 minutes ago
+hl --since "-7d" app.log          # 7 days ago
+hl --since "-1M" app.log          # ~30.44 days ago (approx. 1 month)
+hl --since "-1y" app.log          # ~365.25 days ago (approx. 1 year)
 
-# Natural language
+# Natural language (more flexible)
 hl --since "1 hour ago" app.log
 hl --since "30 minutes ago" app.log
+hl --since "1 month ago" app.log  # Calendar-aware
+hl --since "1 year ago" app.log   # Calendar-aware
 ```
 
 **Human-readable dates:**
@@ -175,9 +179,12 @@ hl --since "30 minutes ago" app.log
 hl --since "today" app.log
 hl --since "yesterday" app.log
 hl --since "friday" app.log        # Last Friday
+hl --since "last month" app.log    # First day of last calendar month
 hl --since "january" app.log       # Last January 1st
 hl --since "friday 6pm" app.log
 ```
+
+**Note:** Duration syntax with `-` prefix (`-1M`, `-1y`) uses fixed approximations (30.44 days/month, 365.25 days/year). Natural language ("1 month ago", "last month") is calendar-aware and more precise for month/year boundaries.
 
 **Absolute times:**
 ```bash
