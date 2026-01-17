@@ -65,8 +65,6 @@ Or use local timezone:
 hl -L application.log
 ```
 
-**Note:** There is no `HL_LOCAL` environment variable. Use the `-L` or `--local` command-line flag to display timestamps in local time.
-
 ## Time Format
 
 ### Default Format

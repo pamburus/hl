@@ -180,8 +180,6 @@ Overlays are mini-themes that modify specific aspects without replacing the enti
 
 ### Using Overlays
 
-**Note**: Theme overlays can only be configured in your configuration file. There is no command-line option for overlays.
-
 **Configuration file:**
 ```toml
 theme = "universal"

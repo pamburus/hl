@@ -175,15 +175,10 @@ export HL_TIME_ZONE=Europe/London
 
 Use IANA timezone names (see [IANA timezone database](https://en.wikipedia.org/wiki/List_of_tz_database_time_zones)).
 
-**Note:** To use the system local timezone, use the `-L` or `--local` command-line flag instead. There is no environment variable for this
-
 Example:
 ```bash
 # Display timestamps in New York time
 export HL_TIME_ZONE=America/New_York
-
-# For local time, use the -L flag when running hl
-# hl -L app.log
 ```
 
 ### Filtering
@@ -487,9 +482,6 @@ export HL_CONCURRENCY=4
 export HL_TIME_FORMAT="%H:%M:%S.%3N"
 export HL_THEME=universal
 export HL_HIDE_EMPTY_FIELDS=true
-
-# Note: For local time, use 'hl -L' or create a shell alias:
-# alias hl='hl -L'
 ```
 
 ### Production Monitoring
@@ -549,9 +541,6 @@ Add environment variables to your shell profile for persistent defaults.
 
 export HL_THEME=universal
 export HL_PAGER="less -R --mouse"
-
-# For local time, create an alias:
-alias hl='hl -L'
 ```
 
 ### Zsh
@@ -561,9 +550,6 @@ alias hl='hl -L'
 
 export HL_THEME=universal
 export HL_PAGER="less -R --mouse"
-
-# For local time, create an alias:
-alias hl='hl -L'
 ```
 
 ### Fish
@@ -573,9 +559,6 @@ alias hl='hl -L'
 
 set -x HL_THEME universal
 set -x HL_PAGER "less -R --mouse"
-
-# For local time, create an alias:
-alias hl='hl -L'
 ```
 
 ### PowerShell
@@ -585,9 +568,6 @@ alias hl='hl -L'
 
 $env:HL_THEME = "universal"
 $env:HL_PAGER = "less -R"
-
-# For local time, create a function:
-function hl { hl.exe -L @args }
 ```
 
 ## Temporary Overrides

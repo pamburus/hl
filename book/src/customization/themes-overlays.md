@@ -19,8 +19,6 @@ Overlays are perfect for:
 
 ## Using Theme Overlays
 
-**Important**: Theme overlays can only be configured via the configuration file. There are no command-line options or environment variables for overlays.
-
 ### Configuration File
 
 Add overlays to your config file (`~/.config/hl/config.toml` or similar):

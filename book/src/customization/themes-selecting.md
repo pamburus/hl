@@ -12,13 +12,9 @@ Use the `--theme` option to select a theme:
 hl --theme one-dark-24 app.log
 ```
 
-**Note**: There is no short form for `--theme`.
-
 ## Theme Overlays
 
-Theme overlays modify the active theme and can **only** be configured in your configuration file. There is no command-line option or environment variable for theme overlays.
-
-To use theme overlays, add them to your configuration file (see below).
+Theme overlays modify the active theme. To use overlays, add them to your configuration file (see below).
 
 ## Environment Variables
 
@@ -37,8 +33,6 @@ The command-line `--theme` option overrides the environment variable:
 export HL_THEME=one-dark-24
 hl --theme classic app.log  # Uses classic, not one-dark-24
 ```
-
-**Note**: There is no `HL_THEME_OVERLAY` environment variable. Theme overlays can only be configured in your configuration file (see below).
 
 ## Configuration Files
 
