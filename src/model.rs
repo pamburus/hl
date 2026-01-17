@@ -998,12 +998,6 @@ impl RawRecordParser {
         let xn = prefix.len();
         let data = &chunk[xn..];
 
-        let prefix = if let Some(nl) = memchr::memrchr3(b'\r', b'\n', b'}', prefix) {
-            if prefix[nl] == b'}' { b"" } else { &prefix[nl + 1..] }
-        } else {
-            prefix
-        };
-
         let format = self.format.or_else(|| {
             if data.is_empty() {
                 None

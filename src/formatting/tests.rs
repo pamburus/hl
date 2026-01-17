@@ -624,6 +624,18 @@ fn test_record_with_source_formatter_arc() {
 }
 
 #[test]
+fn test_raw_record_formatter_multiline_with_prefix() {
+    let formatter = RawRecordFormatter {};
+    let rec = Record::default();
+    let rec = rec.with_source(b"line1\nline2\nline3");
+    let mut buf = Buf::default();
+    buf.extend_from_slice(b"#0 | ");
+    let prefix_range = 0..buf.len();
+    formatter.format_record(&mut buf, prefix_range, rec);
+    assert_eq!(buf.as_slice(), b"#0 | line1\n#0 | line2\n#0 | line3");
+}
+
+#[test]
 fn test_delimited_message_with_colors() {
     let formatter = formatter()
         .with_message_format(new_message_format(MessageFormat::Delimited, "::"))

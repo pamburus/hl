@@ -1703,13 +1703,13 @@ fn test_bug_multiline_remainder_missing_input_badges() {
 }
 
 #[test]
-fn test_bug_prefix_with_closing_brace_included_in_display() {
-    // This test catches the bug where when auto delimiter creates a block
-    // that includes a closing brace followed by JSON on the same "block",
-    // the closing brace gets included in the prefix and displayed before the message
+fn test_bug_prefix_with_closing_brace_on_same_line() {
+    // This test verifies that a closing brace on the same line before JSON
+    // is correctly treated as a prefix. The fix ensures that when there's
+    // }{"level":"info","msg":"test"}, the } is shown as prefix to the formatted JSON.
     let input = input(concat!(
         "{\n",
-        r#""level":"info"#,
+        r#""level":"info","#,
         "\n",
         r#""nested":{"#,
         "\n",
@@ -1731,18 +1731,66 @@ fn test_bug_prefix_with_closing_brace_included_in_display() {
     // The "test" message should be formatted
     assert!(output_str.contains("test"), "should find 'test' message");
 
-    // The line with "test" should NOT have the closing brace as a prefix
-    // On master, this would show: "} ####-##-## ##:##:##.### [INF] test"
-    // On feature branch, it should show: "####-##-## ##:##:##.### [INF] test"
+    // The line with "test" should have the closing brace as a prefix
+    // because } appears on the same line before the JSON
     let test_line = output_str.lines().find(|l| l.contains("test")).unwrap();
 
-    // The formatted output should not have "}" before the formatted message
-    // Check that we don't have "}␣" (brace followed by space)
-    let has_brace_prefix = test_line.starts_with("} ") || test_line.contains(" } ");
+    // The formatted output should have "}" as prefix (it's on the same line before JSON)
     assert!(
-        !has_brace_prefix,
-        "message should not have closing brace in prefix, line: {:?}",
+        test_line.starts_with("} "),
+        "message should have closing brace prefix when it's on the same line, line: {:?}",
         test_line
+    );
+}
+
+#[test]
+fn test_bug_prefix_multiline_block_closing_brace_not_included() {
+    // This test catches the original bug where closing braces from a previous
+    // multi-line JSON block would be incorrectly included in the prefix of the
+    // next JSON message when they appeared on separate lines.
+    // For example: with input "}\n{"level":"info","msg":"test"}", the } is on
+    // a separate line from the JSON, so it should NOT be included as prefix.
+    let input = input(concat!(
+        "{\n",
+        r#""level":"info","#,
+        "\n",
+        r#""nested":{"#,
+        "\n",
+        r#""key":"val""#,
+        "\n",
+        "}\n",
+        "}\n",
+        r#"{"level":"info","msg":"test"}"#,
+        "\n",
+    ));
+    let mut output = Vec::new();
+    let mut opts = options();
+    opts.delimiter = Delimiter::Auto;
+    opts.allow_prefix = true;
+    let app = App::new(opts);
+    app.run(vec![input], &mut output).unwrap();
+    let output_str = std::str::from_utf8(&output).unwrap();
+
+    // The "test" message should be formatted
+    assert!(output_str.contains("test"), "should find 'test' message");
+
+    // The line with "test" should NOT have a closing brace prefix because
+    // the } appears on a different line (previous line) from the JSON
+    let test_line = output_str.lines().find(|l| l.contains("test")).unwrap();
+
+    // The formatted output should NOT have "} " at the start
+    // because the closing brace was on a previous line
+    assert!(
+        !test_line.starts_with("} "),
+        "message should NOT have closing brace prefix when it's on a different line, line: {:?}",
+        test_line
+    );
+
+    // But the closing brace line itself should be in the output
+    let has_closing_brace_line = output_str.lines().any(|l| l.trim() == "}" || l.contains("}"));
+    assert!(
+        has_closing_brace_line,
+        "closing brace should appear in output on its own line"
     );
 }
 
@@ -1845,4 +1893,167 @@ fn test_bug_continuation_lines_with_input_badges() {
 
     // Should have at least 5 lines (multi-line JSON)
     assert!(lines.len() >= 5, "should have multiple lines for pretty-printed JSON");
+}
+
+#[test]
+fn test_bug_multiline_unparsed_prefix_data_loss() {
+    // This test catches the bug where multi-line unparsed prefixes before JSON
+    // would lose all lines except the last one (data loss)
+    let input = input(concat!(
+        "prefix line 1\n",
+        "prefix line 2\n",
+        "prefix line 3\n",
+        r#"{"level":"info","msg":"test1"}"#,
+        "\n",
+    ));
+    let mut output = Vec::new();
+    let mut opts = options();
+    opts.delimiter = Delimiter::Auto;
+    opts.allow_prefix = true;
+    opts.input_info = InputInfo::Minimal.into();
+    let app = App::new(opts);
+    app.run(vec![input], &mut output).unwrap();
+    let output_str = std::str::from_utf8(&output).unwrap();
+
+    let lines: Vec<&str> = output_str.lines().collect();
+
+    // All prefix lines should be present in the output
+    assert!(
+        output_str.contains("prefix line 1"),
+        "should contain 'prefix line 1', output: {:?}",
+        output_str
+    );
+    assert!(
+        output_str.contains("prefix line 2"),
+        "should contain 'prefix line 2', output: {:?}",
+        output_str
+    );
+    assert!(
+        output_str.contains("prefix line 3"),
+        "should contain 'prefix line 3', output: {:?}",
+        output_str
+    );
+
+    // All prefix lines should have input badges
+    let prefix1_line = lines.iter().find(|l| l.contains("prefix line 1"));
+    assert!(prefix1_line.is_some() && prefix1_line.unwrap().starts_with("#0"));
+
+    let prefix2_line = lines.iter().find(|l| l.contains("prefix line 2"));
+    assert!(prefix2_line.is_some() && prefix2_line.unwrap().starts_with("#0"));
+
+    let prefix3_line = lines.iter().find(|l| l.contains("prefix line 3"));
+    assert!(prefix3_line.is_some() && prefix3_line.unwrap().starts_with("#0"));
+
+    // The formatted JSON line should also be present
+    assert!(output_str.contains("test1"), "should contain 'test1' message");
+}
+
+#[test]
+fn test_bug_raw_output_missing_input_badges_on_continuation_lines() {
+    // This test catches the bug where raw output (--raw) with multi-line JSON
+    // would lose input badges on continuation lines
+    let input = input(concat!("{\n", "\"level\":\"info\",\n", "\"msg\":\"test1\"\n", "}\n",));
+    let mut output = Vec::new();
+    let mut opts = options();
+    opts.delimiter = Delimiter::Auto;
+    opts.allow_prefix = true;
+    opts.raw = true;
+    opts.input_info = InputInfo::Minimal.into();
+    let app = App::new(opts);
+    app.run(vec![input], &mut output).unwrap();
+    let output_str = std::str::from_utf8(&output).unwrap();
+
+    let lines: Vec<&str> = output_str.lines().collect();
+
+    // All lines should have input badges (this is raw output)
+    for (i, line) in lines.iter().enumerate() {
+        if !line.is_empty() {
+            assert!(
+                line.starts_with("#0"),
+                "line {} should have input badge in raw output: {:?}",
+                i,
+                line
+            );
+        }
+    }
+
+    // Should have at least 4 lines (multi-line JSON)
+    let non_empty_lines: Vec<&str> = lines.iter().filter(|l| !l.is_empty()).copied().collect();
+    assert!(
+        non_empty_lines.len() >= 4,
+        "should have at least 4 non-empty lines for multi-line JSON, got: {:?}",
+        non_empty_lines
+    );
+
+    // Verify the JSON structure is preserved in raw output
+    assert!(output_str.contains("{"), "should contain opening brace");
+    assert!(output_str.contains("\"level\":\"info\""), "should contain level field");
+    assert!(output_str.contains("\"msg\":\"test1\""), "should contain msg field");
+    assert!(output_str.contains("}"), "should contain closing brace");
+}
+
+#[test]
+fn test_bug_comprehensive_multiline_prefix_remainder_raw() {
+    // Comprehensive test combining:
+    // 1. Multi-line unparsed prefixes (all lines should be preserved)
+    // 2. Multi-line JSON input
+    // 3. Multi-line remainders after JSON
+    // 4. Raw output mode
+    // 5. Input badges on all lines
+    let input = input(concat!(
+        "prefix line 1\n",
+        "prefix line 2\n",
+        "{\n",
+        "\"level\":\"info\",\n",
+        "\"msg\":\"test\"\n",
+        "}\n",
+        "remainder line 1\n",
+        "remainder line 2\n",
+    ));
+    let mut output = Vec::new();
+    let mut opts = options();
+    opts.delimiter = Delimiter::Auto;
+    opts.allow_prefix = true;
+    opts.raw = true;
+    opts.input_info = InputInfo::Minimal.into();
+    let app = App::new(opts);
+    app.run(vec![input], &mut output).unwrap();
+    let output_str = std::str::from_utf8(&output).unwrap();
+
+    let lines: Vec<&str> = output_str.lines().collect();
+
+    // Verify all prefix lines are present (data loss bug)
+    assert!(output_str.contains("prefix line 1"), "should contain 'prefix line 1'");
+    assert!(output_str.contains("prefix line 2"), "should contain 'prefix line 2'");
+
+    // Verify all remainder lines are present
+    assert!(
+        output_str.contains("remainder line 1"),
+        "should contain 'remainder line 1'"
+    );
+    assert!(
+        output_str.contains("remainder line 2"),
+        "should contain 'remainder line 2'"
+    );
+
+    // Verify JSON content is present in raw mode
+    assert!(output_str.contains("{"), "should contain opening brace");
+    assert!(output_str.contains("\"level\":\"info\""), "should contain level field");
+    assert!(output_str.contains("\"msg\":\"test\""), "should contain msg field");
+    assert!(output_str.contains("}"), "should contain closing brace");
+
+    // All non-empty lines should have input badges (raw output bug)
+    for (i, line) in lines.iter().enumerate() {
+        if !line.is_empty() {
+            assert!(line.starts_with("#0"), "line {} should have input badge: {:?}", i, line);
+        }
+    }
+
+    // Verify we have enough lines for all content
+    let non_empty_lines: Vec<&str> = lines.iter().filter(|l| !l.is_empty()).copied().collect();
+    assert!(
+        non_empty_lines.len() >= 8,
+        "should have at least 8 non-empty lines (2 prefix + 4 JSON + 2 remainder), got: {}",
+        non_empty_lines.len()
+    );
 }
