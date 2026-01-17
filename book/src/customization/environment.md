@@ -15,11 +15,17 @@ Environment variables are useful for:
 
 Settings are applied in this order (lowest to highest priority):
 
-1. **Configuration file** — `~/.config/hl/config.toml`
-2. **Environment variables** — `HL_*` variables
-3. **Command-line options** — explicit flags
+1. **Embedded default configuration** — built-in defaults (base layer)
+2. **System configuration file(s)** — `/etc/hl/config` or `%ProgramData%\hl\config` (if found)
+3. **User configuration file** — `~/.config/hl/config` (if found)
+4. **HL_CONFIG environment variable** — appends config file to layer chain
+5. **--config option(s)** — each appends a layer to the chain (can repeat)
+6. **Other environment variables** — `HL_THEME`, `HL_LEVEL`, etc.
+7. **Command-line options** — explicit flags (highest priority)
 
-Command-line options always override environment variables, which override configuration files.
+Configuration files (1-5) are layered, with each layer overriding specific settings from previous layers. Other environment variables (6) and command-line options (7) override all configuration layers.
+
+See [Configuration Files](./config-files.md) for details on the layered configuration system.
 
 ## Available Environment Variables
 
@@ -357,18 +363,50 @@ export PAGER="less -R --mouse"
 
 #### HL_CONFIG
 
-Specify custom configuration file path.
+Add a configuration file layer to the configuration chain.
 
 ```bash
-export HL_CONFIG=/path/to/custom/config.toml
-export HL_CONFIG=./project-hl.toml
+export HL_CONFIG=/path/to/custom/config
+export HL_CONFIG=./project-config
+```
+
+This adds a configuration layer **in addition to** system and user configs. The complete layer chain becomes:
+1. Embedded defaults
+2. System config (`/etc/hl/config` if exists)
+3. User config (`~/.config/hl/config` if exists)
+4. File specified by `HL_CONFIG`
+
+Settings in `HL_CONFIG` override settings from previous layers, but all configs are loaded and layered.
+
+**Disabling implicit configs:**
+
+Set `HL_CONFIG` to an empty string or `-` to skip system and user configuration files:
+
+```bash
+# Skip system and user configs, use only embedded defaults
+export HL_CONFIG=
+# or
+export HL_CONFIG=-
+
+hl app.log  # Uses only embedded defaults
+```
+
+This is equivalent to using `--config -` but applies automatically to all `hl` invocations.
+
+To skip implicit configs and use a specific config file:
+```bash
+# Skip system/user configs, use only embedded defaults + custom config
+HL_CONFIG=- hl --config ./my-config app.log
 ```
 
 Example:
 ```bash
-# Use project-specific config
-export HL_CONFIG=./hl.toml
+# Add project config as a layer on top of system and user configs
+# Loads: embedded defaults → /etc/hl/config → ~/.config/hl/config → ./project-config
+export HL_CONFIG=./project-config
 ```
+
+**Note:** Configuration files should be named without extension (e.g., `config`, not `config.toml`).
 
 #### HL_INTERRUPT_IGNORE_COUNT
 

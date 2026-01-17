@@ -2,28 +2,132 @@
 
 `hl` supports configuration files to customize default behavior without requiring command-line options every time. This allows you to set personal preferences and project-specific defaults.
 
-## Configuration File Location
+## Configuration File Layering
 
-`hl` looks for configuration files in the following locations (in order of precedence):
+`hl` uses a **layered configuration system** where multiple configuration files are merged together, with each layer able to override settings from previous layers.
 
-1. **Custom path** specified with `--config` option
-2. **Current directory**: `./hl.toml` or `./.hl.toml`
-3. **XDG config directory**: `~/.config/hl/config.toml` (Linux/macOS)
-4. **User config directory**: `~/.hl/config.toml` (fallback)
-5. **System config**: `/etc/hl/config.toml` (Linux)
+### Configuration Layers
 
-The first configuration file found is used. Later files are not merged.
+Configuration is built up in layers (from base to top):
 
-### Platform-Specific Paths
+1. **Embedded default configuration** (base layer, always present)
+2. **System configuration(s)** (if found)
+3. **User configuration** (if found at default location)
+4. **`HL_CONFIG` environment variable** (if set, appends to the layer chain)
+5. **`--config` option(s)** (each option appends to the layer chain)
 
-**Linux/macOS:**
+Each layer **overrides only the specific settings it defines**, leaving other settings from previous layers intact. This allows partial configuration at each level.
+
+### Configuration File Locations
+
+**System configuration** (searched in order, all found files are loaded as layers):
+- **Linux/macOS**: `/etc/hl/config`
+- **Windows**: `%ProgramData%\hl\config` (if exists)
+
+**User configuration** (first found is used):
+- **Linux/macOS**: `~/.config/hl/config` (or `$XDG_CONFIG_HOME/hl/config`)
+- **macOS alternative**: `~/.config/hl/config` (if `XDG_CONFIG_HOME` not set)
+- **Windows**: `%APPDATA%\hl\config`
+
+### Layer Examples
+
+**Simple layering:**
+```bash
+# Layers loaded:
+# 1. Embedded defaults
+# 2. /etc/hl/config (if exists)
+# 3. ~/.config/hl/config (if exists)
+hl app.log
 ```
-~/.config/hl/config.toml
+
+**With HL_CONFIG environment variable:**
+```bash
+# Layers loaded:
+# 1. Embedded defaults
+# 2. /etc/hl/config (if exists)
+# 3. ~/.config/hl/config (if exists)
+# 4. project-config.toml
+HL_CONFIG=project-config.toml hl app.log
 ```
 
-**Windows:**
+**Multiple --config options:**
+```bash
+# Layers loaded:
+# 1. Embedded defaults
+# 2. /etc/hl/config (if exists)
+# 3. ~/.config/hl/config (if exists)
+# 4. team-defaults.toml
+# 5. project-specific.toml
+hl --config team-defaults.toml --config project-specific.toml app.log
 ```
-%APPDATA%\hl\config.toml
+
+**Combining HL_CONFIG and --config:**
+```bash
+# Layers loaded:
+# 1. Embedded defaults
+# 2. /etc/hl/config (if exists)
+# 3. ~/.config/hl/config (if exists)
+# 4. base.toml (from HL_CONFIG)
+# 5. override.toml (from --config)
+HL_CONFIG=base.toml hl --config override.toml app.log
+```
+
+**Resetting the configuration chain:**
+```bash
+# Reset: skip system and user configs, use only embedded defaults
+hl --config - app.log
+
+# Reset and add specific config
+# Layers loaded:
+# 1. Embedded defaults
+# 2. custom.toml (only)
+hl --config - --config custom.toml app.log
+
+# Reset then add multiple configs
+# Layers loaded:
+# 1. Embedded defaults
+# 2. base.toml
+# 3. override.toml
+hl --config - --config base.toml --config override.toml app.log
+```
+
+### Important Notes
+
+**File extension:**
+Configuration files are loaded **without** extension. The actual files should be named:
+- `config` (not `config.toml`)
+- Or `config.toml`, `config.yaml`, etc. depending on your setup
+
+**HL_CONFIG behavior:**
+- `HL_CONFIG` **appends** to the layer chain (does not replace user config)
+- Both `~/.config/hl/config` and the file specified by `HL_CONFIG` are loaded
+- To skip the user config, use `--config -`
+
+### How Layering Works
+
+When multiple configuration files are loaded:
+
+- **Base layer** (embedded defaults) provides all default values
+- **Each subsequent layer** can override specific settings
+- **Unspecified settings** in a layer are inherited from previous layers
+- **Arrays and tables** in later layers completely replace those from earlier layers (not merged)
+
+Example:
+
+```toml
+# Layer 1 (embedded): theme = "hl-dark", time-zone = "UTC"
+
+# Layer 2 (/etc/hl/config):
+# (empty or doesn't exist)
+
+# Layer 3 (~/.config/hl/config):
+theme = "universal"
+# Inherits: time-zone = "UTC" from base
+
+# Layer 4 (--config project.toml):
+time-zone = "local"
+# Inherits: theme = "universal" from Layer 3
+# Final result: theme = "universal", time-zone = "local"
 ```
 
 ## Configuration File Format
@@ -385,28 +489,79 @@ Configured for AWS ECS log format.
 
 ## Command-Line Override
 
-Configuration file settings can be overridden by command-line options:
+Command-line options override all configuration layers:
 
 ```bash
-# Config file sets time-zone = "UTC"
+# Config layers set time-zone = "UTC"
 # Command line overrides to local
 hl --local app.log
 ```
 
-Command-line options always take precedence over configuration files.
+Command-line options always take precedence over all configuration file layers.
 
-## Environment Variables
+## Precedence Order
 
-Environment variables take precedence over configuration files but are overridden by command-line options:
+Settings are applied in this order (lowest to highest priority):
 
 ```
-Precedence (lowest to highest):
-1. Configuration file
-2. Environment variables
-3. Command-line options
+1. Embedded default configuration (base layer)
+2. System configuration file(s) (/etc/hl/config)
+3. User configuration file (~/.config/hl/config)
+4. HL_CONFIG environment variable (appends config file to layer chain)
+5. --config option(s) (each appends a layer to the chain)
+6. Other environment variables (HL_THEME, HL_LEVEL, etc.)
+7. Command-line options (highest priority)
 ```
+
+Within configuration file layers (1-5), later layers override earlier layers for the specific settings they define. Other environment variables (6) and command-line options (7) override all configuration layers.
 
 See [Environment Variables](./environment.md) for available variables.
+
+## Resetting Configuration
+
+### Using --config -
+
+Use `--config -` (or `--config ""`) to reset the configuration chain, discarding all previous layers except the embedded defaults:
+
+```bash
+# Skip system and user configs, use only embedded defaults
+hl --config - app.log
+
+# Reset and use only specific config(s)
+hl --config - --config my-config.toml app.log
+hl --config - --config base.toml --config override.toml app.log
+```
+
+This is useful when:
+- You want to ignore system and user configuration files
+- You need a clean slate for testing
+- You want precise control over which configs are loaded
+- You need to debug configuration issues
+
+**Note:** Any `--config` options **before** the reset are discarded. `HL_CONFIG` is also ignored if `--config -` is used.
+
+### Using HL_CONFIG to Disable Implicit Configs
+
+Set `HL_CONFIG` to an empty string or `-` to skip system and user configuration files for all invocations:
+
+```bash
+# Skip system and user configs, use only embedded defaults
+export HL_CONFIG=
+# or
+export HL_CONFIG=-
+
+hl app.log  # Uses only embedded defaults
+```
+
+This applies to all `hl` commands in the current shell session, unlike `--config -` which only affects a single invocation.
+
+You can combine this with `--config` to use specific configs while skipping the implicit ones:
+
+```bash
+# Skip system/user configs, use only custom config
+export HL_CONFIG=-
+hl --config ./project-config app.log
+```
 
 ## Validation and Debugging
 
@@ -478,7 +633,41 @@ hl test.log
 
 ### Per-Project Configs
 
-Use local configuration files for project-specific needs while keeping global defaults in `~/.config/hl/config.toml`.
+Leverage the layering system for project-specific settings:
+
+```bash
+# Use HL_CONFIG for project-specific settings
+cd my-project
+HL_CONFIG=./project-hl-config hl app.log
+
+# Or explicitly layer team + project configs
+hl --config team-defaults.toml --config project.toml app.log
+
+# Reset to skip global configs, use only project config
+hl --config - --config ./project-config app.log
+```
+
+### Understanding Layer Merging
+
+Remember: each layer **replaces** complete settings, not merges them:
+
+```toml
+# ~/.config/hl/config
+[fields]
+hide = ["host", "pid"]
+
+# project-config (via HL_CONFIG or --config)
+[fields]
+hide = ["version"]  # This REPLACES ["host", "pid"], not adds to it
+# Final result: hide = ["version"] only
+```
+
+To extend settings, repeat all desired values:
+```toml
+# project-config - to extend the hide list
+[fields]
+hide = ["host", "pid", "version"]  # Include all desired values
+```
 
 ## Common Configuration Patterns
 
@@ -510,6 +699,44 @@ input-info = "compact"
 # Hide less critical fields
 hide = ["version", "build"]
 ```
+
+### Multi-Layer Project Setup
+
+```toml
+# ~/.config/hl/config - Personal defaults
+theme = "universal"
+time-zone = "local"
+
+# team-defaults - Team standards
+time-format = "%Y-%m-%d %H:%M:%S"
+[fields]
+hide = ["host", "pid"]
+
+# project-config - Project-specific
+[fields]
+hide = ["host", "pid", "internal_id"]  # Extends team defaults
+
+# Usage (all three configs are layered):
+# hl --config team-defaults --config project-config app.log
+```
+
+### Isolated Project Configuration
+
+```bash
+# Use only project config, skip all system and user configs
+# Useful for reproducible builds or containerized environments
+
+# Set in shell profile or project .envrc
+export HL_CONFIG=-
+
+# Then use project-specific config
+hl --config ./project-config app.log
+
+# Or in CI/CD
+HL_CONFIG=- hl --config ./ci-config app.log
+```
+
+This ensures consistent behavior regardless of what's in `/etc/hl/config` or `~/.config/hl/config`.
 
 ### Minimal Output
 
