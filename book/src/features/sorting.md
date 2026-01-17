@@ -42,13 +42,14 @@ Sort mode is ideal when you need to:
 
 ### Performance Considerations
 
-Sort mode requires:
+Sort mode uses an efficient two-pass indexing approach:
 
-- **Reading all input** before displaying any output (no streaming)
-- **Memory** to hold all entries during sorting
-- **Processing time** proportional to the total number of entries
+- **First pass** — builds an index with timestamp ranges and offsets (cached for reuse)
+- **Second pass** — reads entries in optimized order using the index
+- **Memory usage** — minimal for sorted data, moderate for shuffled data (never loads all entries)
+- **Index caching** — subsequent runs on the same files are significantly faster
 
-For very large log files (gigabytes), sort mode may consume significant memory and time. Consider using filters (`-l`, `-q`, `--since`, `--until`) to reduce the dataset before sorting.
+Filters (`-l`, `-q`, `--since`, `--until`) leverage the index to skip irrelevant segments, making filtered sorting very efficient even on large files.
 
 ## Follow Mode
 

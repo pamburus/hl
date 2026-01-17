@@ -111,44 +111,86 @@ This allows you to:
 
 ## Performance Characteristics
 
-Sorting performance depends on several factors:
+Sorting uses an efficient two-pass indexing approach:
+
+### How Sorting Works Internally
+
+**First Pass - Indexing:**
+- Sequential scan of all input files
+- Builds an index with timestamp ranges and level bitmasks per segment
+- Creates an optimized map of entry offsets and ordering within segments
+- Index is cached in the cache directory for reuse on subsequent runs
+- Minimal memory usage—doesn't load all entries into memory
+
+**Second Pass - Output:**
+- Uses the index to determine which segments from which files to read and in what order
+- Reads entries in optimized order for chronological output
+- Nearly sequential I/O when entries are mostly sorted
+- Memory usage increases only if entries are heavily shuffled
 
 ### Memory Usage
 
-- All log entries must be held in memory during sorting
-- Memory usage is proportional to the number and size of entries
-- Large log files (multiple gigabytes) may require significant RAM
+- **Best case** (mostly sorted input): minimal memory, close to streaming
+- **Typical case**: moderate memory for buffering out-of-order segments
+- **Worst case** (completely shuffled): higher memory usage, but still far less than loading all entries
+- Index metadata is compact and cached between runs
 
 ### Processing Time
 
-- Time complexity is O(n log n) where n is the number of entries
-- Dominated by I/O time for reading files (especially compressed files)
-- Sorting itself is typically fast—decompression and parsing take longer
+- First run: two sequential passes through the data
+- Subsequent runs: index reuse speeds up processing significantly
+- I/O time dominates (especially for compressed files)
+- Filtering before sorting reduces both passes' work
+
+### Index Caching
+
+The sorting index is cached and reused:
+
+```bash
+# First run builds index (slower)
+hl -s large.log
+
+# Subsequent runs reuse index (faster)
+hl -s --level error large.log
+```
+
+Index is invalidated when files change, ensuring correctness.
 
 ### Optimization Tips
 
 **Use filters to reduce dataset size:**
 
 ```bash
-# Filter before sorting reduces memory and time
+# Filtering uses index metadata to skip irrelevant segments
 hl -s --since '1 hour ago' --level warn large.log
 
-# Query filtering also reduces the dataset
+# Query filtering reduces processing work
 hl -s --query '.user_id=12345' huge.log.gz
 ```
 
 **Sort only what you need:**
 
 ```bash
-# Instead of sorting everything, target specific time ranges
+# Time filters leverage index for efficient segment selection
 hl -s --since '2024-01-15 10:00' --until '2024-01-15 11:00' *.log
 ```
 
-**Consider alternatives for very large datasets:**
+**Leverage index caching:**
 
-- Use external tools (GNU `sort`, database import) for multi-gigabyte files
-- Split large time ranges into smaller chunks
-- Use follow mode (`-F`) for live monitoring instead of sorting archives
+- Repeatedly filtering the same large files is fast due to cached index
+- Index is stored in cache directory (typically `~/.cache/hl/`)
+- Clear cache with `rm -rf ~/.cache/hl/` if needed
+
+**Debug index behavior:**
+
+```bash
+# View index metadata (shows timestamp ranges, segments, etc.)
+hl -s --dump-index large.log
+
+# This prints the index structure and exits without processing entries
+```
+
+This is useful for understanding how files are being indexed and troubleshooting sorting issues.
 
 ## Sorting vs Follow Mode
 

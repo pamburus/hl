@@ -319,10 +319,17 @@ hl -q 'exists(.error) or status >= 500' application.log
 hl -q 'exists(.stack)' application.log
 ```
 
-**Note:** For simple value comparisons like `.price > 100`, the field must exist, so `exists()` is redundant. Use `exists()` when:
-- Combining with `or` to include absent fields: `not exists(.price) or .price > 100`
-- Checking existence is the primary goal: `exists(.error)`, `exists(.stack)`
-- Finding entries that have optional fields populated
+**Important:** By default, any field comparison **implicitly requires the field to exist**. This means:
+
+- `.price > 100` already means "field exists AND value > 100"
+- `exists(.price) and .price > 100` is **redundant** — the `exists()` does nothing useful
+- To include records without the field, use `?` modifier: `.price? > 100`
+- Or use explicit logic: `not exists(.price) or .price > 100`
+
+Use `exists()` **only** when:
+- Checking existence is the sole condition: `exists(.error)`, `exists(.stack)`
+- Combining with `or` for complex logic: `exists(.error) or status >= 500`
+- The field check stands alone, not combined with a value comparison on the same field
 
 ## Include Absent Modifier
 
