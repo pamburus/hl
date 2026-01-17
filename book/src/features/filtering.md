@@ -141,7 +141,7 @@ hl -l e --since yesterday --until today application.log
 ### Query Operators (`-q`)
 
 - **Comparison**: `=`, `!=`, `>`, `>=`, `<`, `<=`
-- **String**: `~=` (contains), `!~=`, `like` (wildcards), `match` (regex)
+- **String**: `~=` (contains), `!~=`, `like` (wildcards), `matches` (regex)
 - **Logical**: `and`, `or`, `not`
 - **Sets**: `in (...)`, `not in (...)`
 - **Existence**: `exists(field)`
