@@ -2,6 +2,19 @@
 
 hl uses strftime-style format codes to display timestamps. This page describes all available format specifiers.
 
+> **Note on Format Usage**
+>
+> The format you configure with `--time-format` serves two purposes:
+>
+> 1. **Display formatting:** Controls how timestamps appear in `hl` output
+> 2. **Parsing for filters:** The format is also recognized by `--since` and `--until`, allowing you to copy
+>    timestamps from output and paste them directly as filter arguments
+>
+> Example: If your format is `%b %d %T.%3N`, you can copy `Jan 15 10:30:45.123` from output and use:
+> ```bash
+> hl --since "Jan 15 10:30:45.123" app.log
+> ```
+
 ## Default Format
 
 The default time format is:
@@ -160,6 +173,31 @@ hl -t '%H:%M:%S.%6N' application.log
 
 # With nanoseconds
 hl -t '%H:%M:%S.%9N' application.log
+```
+
+### Copy-Paste Workflow
+
+Choose a format that's easy to copy and use for filtering:
+
+```sh
+# ISO format is precise and unambiguous
+hl -t '%Y-%m-%d %H:%M:%S.%3N' application.log
+
+# Copy from output: 2024-01-15 14:30:45.123
+# Paste to filter:
+hl --since "2024-01-15 14:30:45.123" application.log
+
+# Compact format for quick work
+hl -t '%m-%d %T' application.log
+
+# Copy: 01-15 14:30:45
+# Use: 
+hl --since "01-15 14:30:45" application.log
+```
+
+**Recommendation:** Use ISO 8601 format for maximum precision and clarity:
+```sh
+time-format = "%Y-%m-%d %H:%M:%S.%3N"
 ```
 
 ## Timezone Handling

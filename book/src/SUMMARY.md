@@ -33,6 +33,7 @@
 
 - [Input Options](./features/input.md)
   - [Input Formats](./features/input-formats.md)
+  - [Time Handling Overview](./features/time-handling-overview.md)
   - [Timestamp Handling](./features/timestamps.md)
   - [Non-JSON Prefixes](./features/prefixes.md)
 

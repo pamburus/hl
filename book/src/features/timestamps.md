@@ -1,5 +1,15 @@
 # Timestamp Handling
 
+> **About This Page**
+>
+> This page describes how `hl` **parses timestamps from log entry fields** (like `timestamp`, `time`, `ts`).
+>
+> For time filtering with `--since` and `--until`, which supports additional human-readable formats like
+> "1 hour ago" and "yesterday", see [Time Filtering](../examples/time-filtering.md).
+>
+> For customizing how timestamps are displayed in output, see [Time Display](./time-display.md) and
+> [Time Format Reference](../reference/time-format.md).
+
 `hl` automatically detects and parses timestamps in various formats from log entries. Understanding how timestamp handling works helps you work with logs from different sources and ensure correct chronological ordering.
 
 ## Overview
@@ -102,6 +112,22 @@ See [Unix Timestamp Units](#unix-timestamp-units) for unit detection.
 ### Custom Formats
 
 Many custom timestamp formats are automatically recognized through heuristics. If your format isn't recognized, the entry will still be processed but may not sort correctly.
+
+### What is NOT Supported
+
+The following formats are **not** recognized when parsing log entry timestamps:
+
+- Human-readable relative times: `"1 hour ago"`, `"30 minutes ago"`
+- Natural language dates: `"yesterday"`, `"today"`, `"last friday"`
+- Bare duration syntax: `"-1h"`, `"-30m"`, `"+1d"`
+- Month/weekday names without context: `"january"`, `"friday"`
+
+**Note:** These formats ARE supported for `--since` and `--until` filtering, just not in log entries themselves.
+
+If your logs contain timestamps in non-standard formats, consider:
+- Standardizing to ISO 8601/RFC 3339 in your logging configuration
+- Using Unix timestamps (seconds, milliseconds, etc.)
+- Pre-processing logs to convert timestamps to a supported format
 
 ## Unix Timestamp Units
 

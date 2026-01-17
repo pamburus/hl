@@ -2,6 +2,14 @@
 
 This page demonstrates how to filter log entries by time ranges using `--since` and `--until` options.
 
+> **Important Distinction**
+>
+> The formats shown on this page are for `--since` and `--until` command-line parameters ONLY.
+>
+> These formats are **not** recognized in log entries themselves. Log entries must use standard formats
+> like RFC 3339 (`2024-01-15T10:30:45Z`) or Unix timestamps. See [Timestamp Handling](../features/timestamps.md)
+> for details on log entry timestamp formats.
+
 ## Basic Time Filtering
 
 ### Show Logs After a Time
@@ -152,6 +160,54 @@ hl --since "3M ago" app.log
 ```hl/dev/null/shell.sh#L1
 # Last 30 seconds
 hl --since "30s ago" app.log
+```
+
+## Using Output Format for Filtering
+
+The timestamp format configured via `--time-format` is also recognized by `--since` and `--until`. This means you can **copy a timestamp from `hl` output and paste it directly** as a filter argument.
+
+### Copy-Paste Workflow
+
+```hl/dev/null/shell.sh#L1
+# Your config uses: time-format = "%b %d %T.%3N"
+# Output shows: Jan 15 10:30:45.123
+
+# Copy that timestamp and use it:
+hl --since "Jan 15 10:30:45.123" app.log
+```
+
+### With Custom Formats
+
+```hl/dev/null/shell.sh#L1
+# Config: time-format = "%Y-%m-%d %H:%M:%S"
+# Output: 2024-01-15 10:30:45
+
+# Use directly:
+hl --since "2024-01-15 10:30:45" --until "2024-01-15 11:00:00" app.log
+```
+
+This works because `hl` tries to parse filter times using your configured format before falling back to other formats.
+
+### Finding the Right Timestamp
+
+```hl/dev/null/shell.sh#L1
+# Step 1: View logs to find the event
+hl app.log | grep "deployment started"
+
+# Output shows: Jan 15 14:30:22.456 ... deployment started
+
+# Step 2: Copy that timestamp and use it
+hl --since "Jan 15 14:30:22.456" app.log
+```
+
+**Tip:** To see timestamps in a specific format for copying, use `--time-format`:
+
+```hl/dev/null/shell.sh#L1
+# Show timestamps in ISO format for precise copy-paste
+hl -t "%Y-%m-%dT%H:%M:%S.%3N" app.log | grep "error"
+
+# Then use the copied timestamp
+hl --since "2024-01-15T14:30:45.123" app.log
 ```
 
 ## Combining Relative and Absolute Times

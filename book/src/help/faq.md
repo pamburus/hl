@@ -141,16 +141,62 @@ hl -q 'message not contains "health check"' app.log
 
 ## Timestamps and Sorting
 
-### What timestamp formats does `hl` support?
+### What timestamp formats are recognized in log entries?
 
-`hl` supports:
+`hl` automatically recognizes these formats when parsing timestamps from log entry fields (`timestamp`, `time`, `ts`, etc.):
+
 - **RFC 3339**: `2024-01-15T10:30:45.123Z`
-- **ISO 8601-like with space**: `2024-01-15 10:30:45.123Z` (relaxed variant)
-- **Unix timestamps**: Seconds, milliseconds, microseconds, nanoseconds
+- **RFC 3339 with offset**: `2024-01-15T10:30:45+05:30`
+- **ISO 8601-like with space**: `2024-01-15 10:30:45.123Z` (allows space instead of `T`, but timezone is still required)
+- **Unix timestamps**: Seconds, milliseconds, microseconds, nanoseconds (auto-detected or via `--unix-timestamp-unit`)
 
-The timezone component is mandatory for RFC 3339-like timestamps.
+**Note:** Human-readable formats like "1 hour ago" or "yesterday" are NOT recognized in log entries. These formats are only supported for `--since` and `--until` filtering (see next question).
 
-See [Timestamp Formats](../features/timestamps.md) for complete details.
+See [Timestamp Handling](../features/timestamps.md) for complete details on input parsing.
+
+### What time formats can I use with `--since` and `--until`?
+
+The `--since` and `--until` options support many more formats than log entry timestamps:
+
+**Relative times (most common):**
+```bash
+# Duration ago syntax
+hl --since "-1h" app.log          # Last hour
+hl --since "-30m" app.log         # Last 30 minutes
+hl --since "-7d" app.log          # Last 7 days
+
+# Natural language
+hl --since "1 hour ago" app.log
+hl --since "30 minutes ago" app.log
+```
+
+**Human-readable dates:**
+```bash
+hl --since "today" app.log
+hl --since "yesterday" app.log
+hl --since "friday" app.log        # Last Friday
+hl --since "january" app.log       # Last January 1st
+hl --since "friday 6pm" app.log
+```
+
+**Absolute times:**
+```bash
+hl --since "2024-01-15" app.log
+hl --since "2024-01-15 10:00:00" app.log
+hl --since "2024-01-15T10:00:00Z" app.log
+```
+
+**Copy from output (important!):**
+
+You can copy timestamps directly from `hl` output and use them with `--since` or `--until`:
+```bash
+# If output shows: Jan 15 10:30:45.123
+hl --since "Jan 15 10:30:45.123" app.log
+```
+
+This works because `hl` recognizes the configured output format (from `--time-format`) when parsing filter times.
+
+See [Time Filtering Examples](../examples/time-filtering.md) for more examples.
 
 ### How do I sort logs from multiple files chronologically?
 
