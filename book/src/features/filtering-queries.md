@@ -619,20 +619,50 @@ hl -q 'path like "/api/v1/*" and method = POST' application.log
 
 ## Operator Precedence
 
-From highest to lowest:
+Query operator precedence from **lowest to highest** (loosest to tightest binding):
 
-1. Parentheses `()`
-2. Field access `.field`
-3. Function calls `exists()`
-4. Comparison operators `=`, `!=`, `>`, `<`, etc.
-5. String operators `~=`, `like`, `match`
-6. `not`, `!` (lower than comparisons)
-7. `and`, `&&`
-8. `or`, `||`
+1. **`or`, `||`** — lowest precedence (binds loosest)
+2. **`and`, `&&`**
+3. **`not`, `!`**
+4. **Comparison operators** (`=`, `!=`, `>`, `<`, `>=`, `<=`)
+5. **String operators** (`~=`, `~~=`, `like`, `match`, etc.)
+6. **Field access** (`.field`)
+7. **Function calls** (`exists()`)
+8. **Parentheses** `()` — highest precedence (binds tightest)
 
-This means `not level = debug` is parsed as `not (level = debug)`, which is usually what you want.
+### What This Means in Practice
 
-When in doubt, use parentheses to be explicit.
+```sh
+# Comparisons bind tighter than 'not'
+hl -q 'not level = debug' application.log
+# Parsed as: not (level = debug) ✓
+
+# 'not' binds tighter than 'and'
+hl -q 'not level = debug and status > 400' application.log
+# Parsed as: (not (level = debug)) and (status > 400)
+
+# 'not' binds tighter than 'or'
+hl -q 'not level = debug or level = trace' application.log
+# Parsed as: (not (level = debug)) or (level = trace)
+
+# 'and' binds tighter than 'or'
+hl -q 'level = info or level = warn and status > 400' application.log
+# Parsed as: (level = info) or ((level = warn) and (status > 400))
+```
+
+### When Parentheses Are Needed
+
+```sh
+# To negate a complex expression (not just a single comparison)
+hl -q 'not (level = debug or level = trace)' application.log
+# Without parens: (not (level = debug)) or (level = trace) ≠ intended
+
+# To change default 'and'/'or' grouping
+hl -q '(level = info or level = warn) and status > 400' application.log
+# Without parens: (level = info) or ((level = warn) and (status > 400)) ≠ intended
+```
+
+**Best practice:** Use parentheses for clarity in complex expressions, even when not strictly required by precedence rules.
 
 ## Performance Tips
 
