@@ -485,8 +485,11 @@ hl -q '.level = "INFO"' application.log
 # Only matches: "level":"INFO" (case-sensitive)
 # Does NOT match: "level":"info" or "severity":"INFO"
 
-# Check if level field exists with specific raw value
-hl -q 'exists(.level) and .level = "custom-level"' application.log
+# Match custom level value (field must exist)
+hl -q '.level = "custom-level"' application.log
+
+# Or include entries without level field
+hl -q '.level? = "custom-level"' application.log
 
 # Match non-standard level values
 hl -q '.level = "VERBOSE"' application.log
