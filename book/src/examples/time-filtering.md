@@ -338,25 +338,42 @@ hl -l error --since "2024-01-15 10:00" --until "2024-01-15 10:30" -f 'env = "pro
 
 ## Time Zones
 
-### UTC Times
+### UTC Times (Default)
 
-Specify UTC explicitly:
+By default, times without timezone info are interpreted as UTC:
 
 ```hl/dev/null/shell.sh#L1
-# ISO 8601 with Z suffix
+# Interpreted as UTC (default)
+hl --since "2024-01-15 10:00:00" app.log
+
+# Or explicitly specify UTC with Z suffix
 hl --since 2024-01-15T10:00:00Z app.log
 ```
 
-### Local Time Zone
+### Using Local Time Zone
 
-Times without timezone info are interpreted as local time:
+Use `-L` or `--local` to interpret times as local timezone:
 
 ```hl/dev/null/shell.sh#L1
-# Uses local timezone
-hl --since "2024-01-15 10:00:00" app.log
+# Interpret times as local timezone
+hl -L --since "2024-01-15 10:00:00" app.log
 ```
 
-### Explicit Time Zone Offset
+### Using Specific Time Zone
+
+Use `-Z` or `--time-zone` to interpret times in a specific timezone:
+
+```hl/dev/null/shell.sh#L1
+# Interpret times as America/New_York
+hl -Z America/New_York --since "2024-01-15 10:00:00" app.log
+
+# Interpret times as Europe/London
+hl -Z Europe/London --since "2024-01-15 10:00:00" app.log
+```
+
+### Explicit Time Zone Offset in Timestamp
+
+You can also include timezone offset directly in the timestamp:
 
 ```hl/dev/null/shell.sh#L1
 # Pacific Time (UTC-8)
@@ -368,6 +385,8 @@ hl --since "2024-01-15T10:00:00-05:00" app.log
 # Central European Time (UTC+1)
 hl --since "2024-01-15T10:00:00+01:00" app.log
 ```
+
+**Note:** The `-Z/--time-zone` and `-L/--local` options affect how timestamps **without** timezone info are interpreted. Timestamps with explicit timezone offsets are always interpreted according to their offset.
 
 ## Performance Benefits
 
