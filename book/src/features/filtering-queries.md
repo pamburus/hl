@@ -18,7 +18,7 @@ Queries are expressions that evaluate to true or false for each log entry. Only 
 
 These special field names reference standard log fields regardless of the source field names:
 
-- `level` - Log level
+- `level` - Log level (supports semantic level comparisons)
 - `message` - Log message
 - `caller` - Caller information
 - `logger` - Logger name
@@ -29,6 +29,8 @@ Example:
 hl -q 'level = error' application.log
 ```
 
+**Important:** Predefined fields like `level` perform semantic comparisons. For example, `level > info` correctly compares log levels (debug < info < warn < error), not string values. The actual field name and format in your logs can vary (e.g., `"PRIORITY": 6`, `"severity": "ERROR"`) as long as it's recognized by hl's configuration.
+
 ### Source Fields
 
 Reference source fields by prefixing with a period (`.`):
@@ -37,7 +39,23 @@ Reference source fields by prefixing with a period (`.`):
 hl -q '.status = 200' application.log
 ```
 
-This queries the actual `status` field in your logs.
+This queries the actual `status` field in your logs as a raw value (string or number).
+
+**Important distinction with predefined fields:**
+
+```sh
+# Semantic level comparison (recognizes different formats)
+hl -q 'level = info' application.log
+# Matches: "level":"info", "severity":"INFO", "PRIORITY":6, etc.
+# Supports: level > info, level >= warn
+
+# Raw string/number comparison (exact field name and value)
+hl -q '.level = info' application.log
+# Matches only: "level":"info" (exact, case-sensitive)
+# Does NOT support semantic comparisons like .level > info
+```
+
+When using source field selectors (`.level`), you're operating on raw field values as strings or numbers. There's no semantic interpretation - it's a direct value comparison.
 
 ### Exact Field Names
 
@@ -56,7 +74,17 @@ hl -q 'level = info' application.log
 
 The `".level"` syntax (JSON-escaped) matches a field literally named `".level"`, while `.level` matches a field named `"level"` in the source.
 
-**Note on field name matching:** Underscores and hyphens in field names are treated interchangeably (e.g., `user_name` matches `user-name`), except when using JSON-escaped field names like `"user_name"`, which match exactly.
+**Note on field name matching:** Underscores and hyphens in field names are treated interchangeably (e.g., `user_name` matches `user-name`). This applies even when using JSON-escaped field names like `"user_name"`.
+
+**Semantic vs. Raw Field Access:**
+
+| Syntax | Field Name | Comparison Type | Example |
+|--------|------------|-----------------|---------|
+| `level` | Configured level field | Semantic level | `level > info` works |
+| `.level` | Literal "level" field | Raw string/number | `.level = "info"` (case-sensitive) |
+| `".level"` | Literal ".level" field | Raw string/number | Only exact match |
+
+Predefined fields like `level`, `message`, `caller`, and `logger` have semantic meaning and special comparison behavior. Source field selectors (`.field` or `"field"`) always use raw value comparison.
 
 ## Comparison Operators
 
@@ -91,6 +119,32 @@ hl -q 'duration lt 0.5' application.log
 hl -q 'duration <= 1.0' application.log
 hl -q 'duration le 1.0' application.log
 ```
+
+### Semantic Level Comparisons
+
+The predefined `level` field supports semantic comparisons that understand log level hierarchy:
+
+```sh
+# Show warnings and errors (level >= warn)
+hl -q 'level >= warn' application.log
+
+# Show info and above (excludes debug and trace)
+hl -q 'level >= info' application.log
+
+# Show only errors (level higher than warn)
+hl -q 'level > warn' application.log
+
+# Show debug and trace (lower levels)
+hl -q 'level < info' application.log
+```
+
+Level hierarchy (from lowest to highest):
+- `trace` < `debug` < `info` < `warn` < `error`
+
+**These comparisons work regardless of the actual field format in your logs:**
+- `"level": "info"`, `"severity": "INFO"`, `"PRIORITY": 6` all match `level = info`
+- Case-insensitive: `INFO`, `Info`, `info` all match
+- Different field names configured in hl settings
 
 ## Logical Operators
 
@@ -345,6 +399,61 @@ hl -q 'message = "He said \"hello\""' application.log
 hl -q 'data contain "\t\r\n"' application.log
 ```
 
+## Semantic vs Raw Field Access - Practical Examples
+
+### When to Use Predefined `level` Field
+
+```sh
+# Show all warnings and errors (semantic comparison)
+hl -q 'level >= warn' application.log
+
+# Works with any log format
+# Matches: "level":"WARN", "severity":"ERROR", "PRIORITY":4, etc.
+
+# Show errors only
+hl -q 'level = error' application.log
+# Case-insensitive, format-agnostic
+
+# Exclude debug logs
+hl -q 'level > debug' application.log
+```
+
+### When to Use Source `.level` Field
+
+```sh
+# Match exact string value in "level" field
+hl -q '.level = "INFO"' application.log
+# Only matches: "level":"INFO" (case-sensitive)
+# Does NOT match: "level":"info" or "severity":"INFO"
+
+# Check if level field exists with specific raw value
+hl -q 'exists(.level) and .level = "custom-level"' application.log
+
+# Match non-standard level values
+hl -q '.level = "VERBOSE"' application.log
+```
+
+### Comparing the Difference
+
+```sh
+# Semantic (predefined field)
+hl -q 'level >= info' application.log
+# ✓ Matches: trace=false, debug=false, info=true, warn=true, error=true
+# ✓ Works across different log formats
+# ✓ Understands level hierarchy
+
+# Raw (source field)
+hl -q '.level >= "info"' application.log
+# ✓ Alphabetical string comparison
+# ✗ "error" < "info" < "warn" (alphabetically wrong!)
+# ✗ Only matches exact "level" field name
+# ✗ Case-sensitive
+```
+
+**Use predefined `level`** for log level filtering (almost always what you want).
+
+**Use source `.level`** only when you need exact raw value matching or the field has non-standard values.
+
 ## Complete Examples
 
 ### Error Investigation
@@ -528,6 +637,20 @@ When in doubt, use parentheses to be explicit.
    
    # Without parentheses, this would be parsed incorrectly:
    # hl -q 'not level = debug or level = trace'  # means: (not level = debug) or (level = trace)
+   ```
+
+5. **Using raw field instead of predefined field for level comparisons**
+   ```sh
+   # Wrong - alphabetical string comparison
+   hl -q '.level > info' application.log
+   # "error" < "info" < "warn" (alphabetically wrong!)
+   
+   # Correct - semantic level comparison
+   hl -q 'level > info' application.log
+   # Understands: trace < debug < info < warn < error
+   
+   # Use .level only for exact raw value matching
+   hl -q '.level = "CUSTOM_LEVEL"' application.log
    ```
 
 ## Next Steps
