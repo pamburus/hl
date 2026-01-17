@@ -283,7 +283,7 @@ hl -f 'env = "production"' production-*.log > production-errors.txt
 
 ```hl/dev/null/shell.sh#L1
 # Aggregate logs from all sources for a time period
-hl --since "2024-01-15" --until "2024-01-16" \
+hl --since 2024-01-15 --until 2024-01-16 \
   /var/log/app/*.log \
   /var/log/services/*.log \
   > daily-aggregate-2024-01-15.txt

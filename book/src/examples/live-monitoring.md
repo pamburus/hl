@@ -52,8 +52,8 @@ Start following from a specific point in time:
 # Follow from 1 hour ago onwards
 hl -F --since "1h ago" app.log
 
-# Follow from a specific timestamp
-hl -F --since "2024-01-15 14:00:00" app.log
+# Follow from a specific timestamp (seconds optional)
+hl -F --since "2024-01-15 14:00" app.log
 ```
 
 ## Piped Streaming
@@ -191,7 +191,7 @@ hl -F -q 'operation ~= "query" and duration > 1000' db.log
 ### Watch Deployment Progress
 
 ```hl/dev/null/shell.sh#L1
-# Start from deployment time
+# Start from deployment time (with seconds)
 hl -F --since "2024-01-15 14:30:00" app.log
 
 # Or use relative time

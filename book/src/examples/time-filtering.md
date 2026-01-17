@@ -25,7 +25,7 @@ hl --since "2024-01-15 10:00:00" app.log
 Display entries before a specific timestamp:
 
 ```hl/dev/null/shell.sh#L1
-hl --until "2024-01-15 18:00:00" app.log
+hl --until "2024-01-15 18:00" app.log
 ```
 
 ### Show Logs in a Time Range
@@ -33,7 +33,7 @@ hl --until "2024-01-15 18:00:00" app.log
 Combine `--since` and `--until` to specify a time window:
 
 ```hl/dev/null/shell.sh#L1
-hl --since "2024-01-15 10:00:00" --until "2024-01-15 12:00:00" app.log
+hl --since "2024-01-15 10:00" --until "2024-01-15 12:00" app.log
 ```
 
 This shows only entries between 10:00 AM and 12:00 PM on January 15, 2024.
@@ -63,7 +63,7 @@ Various date-time formats are supported:
 # YYYY-MM-DD HH:MM:SS
 hl --since "2024-01-15 10:00:00" app.log
 
-# YYYY-MM-DD HH:MM
+# YYYY-MM-DD HH:MM (seconds default to :00)
 hl --since "2024-01-15 10:00" app.log
 
 # YYYY-MM-DD (midnight)
@@ -76,10 +76,10 @@ When only a date is specified, it defaults to midnight:
 
 ```hl/dev/null/shell.sh#L1
 # Shows entries from 2024-01-15 00:00:00 onwards
-hl --since "2024-01-15" app.log
+hl --since 2024-01-15 app.log
 
 # Shows entries up to 2024-01-16 00:00:00
-hl --until "2024-01-16" app.log
+hl --until 2024-01-16 app.log
 ```
 
 ### Time Only (Today)
@@ -90,8 +90,8 @@ Specify time without date to use today's date:
 # Since 10:00 AM today
 hl --since "10:00:00" app.log
 
-# Until 6:00 PM today
-hl --until "18:00:00" app.log
+# Until 6:00 PM today (seconds optional)
+hl --until "18:00" app.log
 ```
 
 ## Relative Time Formats
@@ -123,16 +123,16 @@ hl --since "5m ago" app.log
 
 ```hl/dev/null/shell.sh#L1
 # Today (since midnight)
-hl --since "0d ago" app.log
+hl --since today app.log
 
 # Yesterday onwards
-hl --since "1d ago" app.log
+hl --since yesterday app.log
 
 # Last 7 days
-hl --since "7d ago" app.log
+hl --since "7 days ago" app.log
 
 # Last 30 days
-hl --since "30d ago" app.log
+hl --since "30 days ago" app.log
 ```
 
 ### Weeks Ago
@@ -162,7 +162,7 @@ hl --since "last month" app.log
 hl --since "3 months ago" app.log
 
 # Or specify exact date
-hl --since "2024-11-01" app.log
+hl --since 2024-11-01 app.log
 ```
 
 ### Seconds Ago
@@ -206,8 +206,8 @@ hl --since "Jan 15 10:30:45.123" app.log
 # Config: time-format = "%Y-%m-%d %H:%M:%S"
 # Output: 2024-01-15 10:30:45
 
-# Use directly:
-hl --since "2024-01-15 10:30:45" --until "2024-01-15 11:00:00" app.log
+# Use directly (seconds optional):
+hl --since "2024-01-15 10:30:45" --until "2024-01-15 11:00" app.log
 ```
 
 This works because `hl` tries to parse filter times using your configured format before falling back to other formats.
@@ -220,17 +220,23 @@ hl app.log | grep "deployment started"
 
 # Output shows: Jan 15 14:30:22.456 ... deployment started
 
-# Step 2: Copy that timestamp and use it
+# Step 2: Copy that timestamp and use it directly
 hl --since "Jan 15 14:30:22.456" app.log
 ```
 
-**Tip:** To see timestamps in a specific format for copying, use `--time-format`:
+**Note:** Your configured output format is automatically recognized by `--since` and `--until`, so you can always copy timestamps directly from output. No format conversion needed!
 
 ```hl/dev/null/shell.sh#L1
-# Show timestamps in ISO format for precise copy-paste
-hl -t "%Y-%m-%dT%H:%M:%S.%3N" app.log | grep "error"
+# With default format (%b %d %T.%3N)
+hl app.log | grep "error"
+# Output: Jan 15 14:30:45.123 ERROR ...
+# Copy and paste works immediately:
+hl --since "Jan 15 14:30:45.123" app.log
 
-# Then use the copied timestamp
+# With custom ISO format (if configured in your settings)
+hl -t "%Y-%m-%dT%H:%M:%S.%3N" app.log | grep "error"
+# Output: 2024-01-15T14:30:45.123 ERROR ...
+# Copy and paste also works:
 hl --since "2024-01-15T14:30:45.123" app.log
 ```
 
@@ -240,10 +246,10 @@ Mix relative and absolute time specifications:
 
 ```hl/dev/null/shell.sh#L1
 # From a specific date until 2 hours ago
-hl --since "2024-01-15" --until "2h ago" app.log
+hl --since 2024-01-15 --until "2h ago" app.log
 
 # Last hour up to a specific time
-hl --since "1h ago" --until "2024-01-15 18:00:00" app.log
+hl --since "1h ago" --until "2024-01-15 18:00" app.log
 ```
 
 ## Practical Time Filtering Examples
@@ -252,10 +258,10 @@ hl --since "1h ago" --until "2024-01-15 18:00:00" app.log
 
 ```hl/dev/null/shell.sh#L1
 # All logs from today (since midnight)
-hl --since "0d ago" app.log
+hl --since today app.log
 
-# Or using a date
-hl --since "2024-01-15" --until "2024-01-16" app.log
+# Or using specific dates
+hl --since 2024-01-15 --until 2024-01-16 app.log
 ```
 
 ### Business Hours
@@ -264,8 +270,8 @@ hl --since "2024-01-15" --until "2024-01-16" app.log
 # Today's business hours (9 AM to 5 PM)
 hl --since "09:00" --until "17:00" app.log
 
-# Specific date business hours
-hl --since "2024-01-15 09:00" --until "2024-01-15 17:00" app.log
+# Specific date business hours (with seconds)
+hl --since "2024-01-15 09:00:00" --until "2024-01-15 17:00:00" app.log
 ```
 
 ### Recent Errors
@@ -284,25 +290,25 @@ hl -l warn --since "30m ago" app.log
 # Logs during a known incident window
 hl --since "2024-01-15 14:30:00" --until "2024-01-15 15:45:00" app.log
 
-# Include context before and after
-hl --since "2024-01-15 14:00:00" --until "2024-01-15 16:00:00" app.log
+# Include context before and after (without seconds)
+hl --since "2024-01-15 14:00" --until "2024-01-15 16:00" app.log
 ```
 
 ### Overnight Logs
 
 ```hl/dev/null/shell.sh#L1
 # Last night (6 PM to 6 AM)
-hl --since "2024-01-14 18:00" --until "2024-01-15 06:00" app.log
+hl --since "2024-01-14 18:00:00" --until "2024-01-15 06:00:00" app.log
 ```
 
 ### Weekly Report
 
 ```hl/dev/null/shell.sh#L1
 # Last 7 days of errors
-hl -l error --since "7d ago" app.log
+hl -l error --since "7 days ago" app.log
 
 # Specific week
-hl --since "2024-01-08" --until "2024-01-15" app.log
+hl --since 2024-01-08 --until 2024-01-15 app.log
 ```
 
 ### Rolling Window
@@ -338,7 +344,7 @@ Specify UTC explicitly:
 
 ```hl/dev/null/shell.sh#L1
 # ISO 8601 with Z suffix
-hl --since "2024-01-15T10:00:00Z" app.log
+hl --since 2024-01-15T10:00:00Z app.log
 ```
 
 ### Local Time Zone
@@ -375,7 +381,7 @@ Time filtering with sorted logs is efficient:
 # Fast even on large files
 hl --since "1h ago" large-app.log
 
-# Efficient across multiple files
+# Efficient across multiple files (seconds optional)
 hl --since "2024-01-15 10:00" app.log app.log.1 app.log.2
 ```
 
@@ -399,15 +405,15 @@ hl --since "18:00 yesterday" --until "08:00 today" app.log
 
 ```hl/dev/null/shell.sh#L1
 # Check logs since deployment
-hl --since "2024-01-15 14:30:00" app.log
+hl --since "2024-01-15 14:30" app.log
 ```
 
 ### Historical Analysis
 
 ```hl/dev/null/shell.sh#L1
 # Compare yesterday to today
-hl --since "1d ago" --until "0d ago" app.log  # Yesterday
-hl --since "0d ago" app.log                    # Today
+hl --since yesterday --until today app.log  # Yesterday
+hl --since today app.log                     # Today
 ```
 
 ### Peak Hours Analysis

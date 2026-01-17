@@ -177,28 +177,36 @@ hl -t '%H:%M:%S.%9N' application.log
 
 ### Copy-Paste Workflow
 
-Choose a format that's easy to copy and use for filtering:
+Your configured format is automatically recognized by `--since` and `--until`, so you can copy timestamps directly from output without changing anything:
 
 ```sh
-# ISO format is precise and unambiguous
+# With default format (%b %d %T.%3N)
+hl application.log | grep "error"
+# Output: Jan 15 10:30:45.123 ERROR ...
+
+# Copy timestamp and paste directly:
+hl --since "Jan 15 10:30:45.123" application.log
+```
+
+If you prefer a different format for readability or consistency, configure it once and copy-paste will still work:
+
+```sh
+# Configure ISO format (personal preference)
 hl -t '%Y-%m-%d %H:%M:%S.%3N' application.log
+# Output: 2024-01-15 10:30:45.123 ERROR ...
 
-# Copy from output: 2024-01-15 14:30:45.123
-# Paste to filter:
-hl --since "2024-01-15 14:30:45.123" application.log
+# Copy and paste works with any configured format:
+hl --since "2024-01-15 10:30:45.123" application.log
 
-# Compact format for quick work
+# Or compact format
 hl -t '%m-%d %T' application.log
+# Output: 01-15 10:30:45 ERROR ...
 
-# Copy: 01-15 14:30:45
-# Use: 
-hl --since "01-15 14:30:45" application.log
+# Copy and paste still works:
+hl --since "01-15 10:30:45" application.log
 ```
 
-**Recommendation:** Use ISO 8601 format for maximum precision and clarity:
-```sh
-time-format = "%Y-%m-%d %H:%M:%S.%3N"
-```
+**Key point:** You don't need to change the format for copy-paste to work. Choose a format you like, and `hl` will recognize it in `--since`/`--until`.
 
 ## Timezone Handling
 

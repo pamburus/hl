@@ -156,7 +156,7 @@ hl --since "2024-01-15 10:00:00" app.log
 Display entries before a given timestamp:
 
 ```hl/dev/null/shell.sh#L1
-hl --until "2024-01-15 18:00:00" app.log
+hl --until "2024-01-15 18:00" app.log
 ```
 
 ### Show Logs in a Time Range
@@ -164,7 +164,7 @@ hl --until "2024-01-15 18:00:00" app.log
 Combine `--since` and `--until`:
 
 ```hl/dev/null/shell.sh#L1
-hl --since "2024-01-15 10:00:00" --until "2024-01-15 12:00:00" app.log
+hl --since "2024-01-15 10:00" --until "2024-01-15 12:00:00" app.log
 ```
 
 ### Relative Time Filters
