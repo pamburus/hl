@@ -329,10 +329,10 @@ flatten = "always"
 ```
 
 With `flatten = "always"`:
-- `{"user": {"id": 123}}` → `user.id: 123`
+- `{"user": {"id": 123, "name": "alice"}}` → `user.id=123 user.name=alice`
 
 With `flatten = "never"`:
-- `{"user": {"id": 123}}` → `user: {id: 123}`
+- `{"user": {"id": 123, "name": "alice"}}` → `user={ id=123 name=alice }`
 
 #### Message Format
 
@@ -451,10 +451,67 @@ message-delimiter = { ascii = "::", unicode = "›" }
 
 ## Project-Specific Configuration
 
-Place an `hl.toml` or `.hl.toml` file in your project directory for project-specific settings:
+**Note**: `hl` does not currently support automatic loading of project-specific configuration files from the current directory.
+
+### Workarounds
+
+To use project-specific configuration, you have several options:
+
+#### 1. Use `HL_CONFIG` Environment Variable
+
+Set `HL_CONFIG` to point to a project-specific config file:
+
+```bash
+export HL_CONFIG=/path/to/project/hl-config.toml
+hl app.log
+```
+
+**Note**: If you're already using `HL_CONFIG` for user-scope configuration, this approach won't work since `HL_CONFIG` can only point to one file.
+
+#### 2. Use `direnv` for Per-Project Environment
+
+The [`direnv`](https://direnv.net/) tool can automatically load project-specific environment variables:
+
+```bash
+# In your project directory, create .envrc
+echo 'export HL_CONFIG=$(pwd)/.hl-config.toml' > .envrc
+direnv allow
+
+# Create your project-specific config
+cat > .hl-config.toml << 'EOF'
+time-format = "%Y-%m-%d %H:%M:%S"
+
+[fields]
+hide = ["build_id", "deployment_id", "trace_context"]
+EOF
+
+# Now hl will use project config automatically when in this directory
+hl app.log
+```
+
+#### 3. Use `--config` Option Explicitly
+
+Specify the project config file with the `--config` option:
+
+```bash
+hl --config ./.hl-config.toml app.log
+```
+
+This is the most explicit but least convenient approach for regular use.
+
+#### 4. Create Shell Aliases
+
+Add project-specific aliases to your shell configuration:
+
+```bash
+# In project directory or shell config
+alias hlp='hl --config /path/to/project/hl-config.toml'
+```
+
+### Example Project Configuration
 
 ```toml
-# ./hl.toml - Project-specific configuration
+# .hl-config.toml - Example project-specific configuration
 
 # Project uses specific time format
 time-format = "%Y-%m-%d %H:%M:%S"
