@@ -16,7 +16,7 @@
 // 10. Exact boundary position handling
 // 11. Scanner simulation scenarios (multi-chunk processing)
 
-use super::AutoDelimitSearcher;
+use super::PrettyCompatibleSearcher;
 use crate::scanning::{Search, SearchExt};
 use rstest::rstest;
 use std::ops::Range;
@@ -32,7 +32,7 @@ fn test_auto_search_r_valid_delimiters(
     #[case] edge: bool,
     #[case] expected: Option<Range<usize>>,
 ) {
-    let searcher = AutoDelimitSearcher;
+    let searcher = PrettyCompatibleSearcher;
     assert_eq!(searcher.search_r(input, edge), expected);
 }
 
@@ -48,7 +48,7 @@ fn test_auto_search_r_skip_continuations(
     #[case] edge: bool,
     #[case] expected: Option<Range<usize>>,
 ) {
-    let searcher = AutoDelimitSearcher;
+    let searcher = PrettyCompatibleSearcher;
     assert_eq!(searcher.search_r(input, edge), expected);
 }
 
@@ -59,7 +59,7 @@ fn test_auto_search_r_skip_continuations(
 #[case(b"", false, None)]
 #[case(b"no_newline", false, None)]
 fn test_auto_search_r_edge_cases(#[case] input: &[u8], #[case] edge: bool, #[case] expected: Option<Range<usize>>) {
-    let searcher = AutoDelimitSearcher;
+    let searcher = PrettyCompatibleSearcher;
     assert_eq!(searcher.search_r(input, edge), expected);
 }
 
@@ -72,7 +72,7 @@ fn test_auto_search_r_edge_mode_at_buffer_end(
     #[case] edge: bool,
     #[case] expected: Option<Range<usize>>,
 ) {
-    let searcher = AutoDelimitSearcher;
+    let searcher = PrettyCompatibleSearcher;
     assert_eq!(searcher.search_r(input, edge), expected);
 }
 
@@ -87,7 +87,7 @@ fn test_auto_search_l_valid_delimiters(
     #[case] edge: bool,
     #[case] expected: Option<Range<usize>>,
 ) {
-    let searcher = AutoDelimitSearcher;
+    let searcher = PrettyCompatibleSearcher;
     assert_eq!(searcher.search_l(input, edge), expected);
 }
 
@@ -103,7 +103,7 @@ fn test_auto_search_l_skip_continuations(
     #[case] edge: bool,
     #[case] expected: Option<Range<usize>>,
 ) {
-    let searcher = AutoDelimitSearcher;
+    let searcher = PrettyCompatibleSearcher;
     assert_eq!(searcher.search_l(input, edge), expected);
 }
 
@@ -115,7 +115,7 @@ fn test_auto_search_l_skip_continuations(
 #[case(b"", false, None)]
 #[case(b"no_newline", false, None)]
 fn test_auto_search_l_edge_cases(#[case] input: &[u8], #[case] edge: bool, #[case] expected: Option<Range<usize>>) {
-    let searcher = AutoDelimitSearcher;
+    let searcher = PrettyCompatibleSearcher;
     assert_eq!(searcher.search_l(input, edge), expected);
 }
 
@@ -128,7 +128,7 @@ fn test_auto_search_l_edge_mode_at_buffer_start(
     #[case] edge: bool,
     #[case] expected: Option<Range<usize>>,
 ) {
-    let searcher = AutoDelimitSearcher;
+    let searcher = PrettyCompatibleSearcher;
     assert_eq!(searcher.search_l(input, edge), expected);
 }
 
@@ -143,7 +143,7 @@ fn test_auto_search_l_edge_mode_at_buffer_start(
 #[case(b"\r\n", Some(0))]
 #[case(b"\r", Some(0))]
 fn test_auto_partial_match_r_basic(#[case] input: &[u8], #[case] expected: Option<usize>) {
-    let searcher = AutoDelimitSearcher;
+    let searcher = PrettyCompatibleSearcher;
     assert_eq!(searcher.partial_match_r(input), expected);
 }
 
@@ -153,7 +153,7 @@ fn test_auto_partial_match_r_basic(#[case] input: &[u8], #[case] expected: Optio
 #[case(b"a\n", Some(1))]
 #[case(b"abcdef", None)]
 fn test_auto_partial_match_r_positions(#[case] input: &[u8], #[case] expected: Option<usize>) {
-    let searcher = AutoDelimitSearcher;
+    let searcher = PrettyCompatibleSearcher;
     let result = searcher.partial_match_r(input);
     assert_eq!(result, expected);
 
@@ -173,7 +173,7 @@ fn test_auto_partial_match_r_positions(#[case] input: &[u8], #[case] expected: O
 #[case(b"", None)]
 #[case(b"\n", Some(1))]
 fn test_auto_partial_match_l_basic(#[case] input: &[u8], #[case] expected: Option<usize>) {
-    let searcher = AutoDelimitSearcher;
+    let searcher = PrettyCompatibleSearcher;
     assert_eq!(searcher.partial_match_l(input), expected);
 }
 
@@ -184,7 +184,7 @@ fn test_auto_partial_match_l_basic(#[case] input: &[u8], #[case] expected: Optio
 #[case(b"a\n\n\n", false, Some(1..2))]
 #[case(b"\n}\n}\n}", false, None)]
 fn test_auto_multiple_newlines(#[case] input: &[u8], #[case] edge: bool, #[case] expected: Option<Range<usize>>) {
-    let searcher = AutoDelimitSearcher;
+    let searcher = PrettyCompatibleSearcher;
     assert_eq!(searcher.search_l(input, edge), expected);
 }
 
@@ -196,7 +196,7 @@ fn test_auto_multiple_newlines(#[case] input: &[u8], #[case] edge: bool, #[case]
 #[case(b"x\n\ty\nz", vec![&b"x\n\ty"[..], &b"z"[..]])]
 #[case(b"no_delim", vec![&b"no_delim"[..]])]
 fn test_auto_split_combinations(#[case] input: &[u8], #[case] expected: Vec<&[u8]>) {
-    let searcher = AutoDelimitSearcher;
+    let searcher = PrettyCompatibleSearcher;
     let result: Vec<&[u8]> = searcher.split(input).collect();
     assert_eq!(result, expected);
 }
@@ -208,7 +208,7 @@ fn test_auto_split_combinations(#[case] input: &[u8], #[case] expected: Vec<&[u8
 #[case(b"line\n", b"}", b"line\n}")]
 #[case(b"line\n", b" next", b"line\n next")]
 fn test_auto_cross_boundary_scenarios(#[case] left: &[u8], #[case] right: &[u8], #[case] combined: &[u8]) {
-    let searcher = AutoDelimitSearcher;
+    let searcher = PrettyCompatibleSearcher;
 
     let partial = searcher.partial_match_r(left);
     assert!(partial.is_some(), "Should have partial match at boundary");
@@ -229,7 +229,7 @@ fn test_auto_cross_boundary_scenarios(#[case] left: &[u8], #[case] right: &[u8],
 #[case(b' ')]
 #[case(b'\t')]
 fn test_auto_all_continuation_chars_search_r(#[case] cont: u8) {
-    let searcher = AutoDelimitSearcher;
+    let searcher = PrettyCompatibleSearcher;
     let mut input = Vec::from(&b"line\n"[..]);
     input.push(cont);
 
@@ -242,7 +242,7 @@ fn test_auto_all_continuation_chars_search_r(#[case] cont: u8) {
 #[case(b' ')]
 #[case(b'\t')]
 fn test_auto_all_continuation_chars_search_l(#[case] cont: u8) {
-    let searcher = AutoDelimitSearcher;
+    let searcher = PrettyCompatibleSearcher;
     let mut input = Vec::from(&b"line\n"[..]);
     input.push(cont);
 
@@ -255,7 +255,7 @@ fn test_auto_all_continuation_chars_search_l(#[case] cont: u8) {
 #[case(b"a\nb\r\nc\nd", false)]
 #[case(b"a\r\nb\nc\r\nd", false)]
 fn test_auto_mixed_line_endings_search_r(#[case] input: &[u8], #[case] edge: bool) {
-    let searcher = AutoDelimitSearcher;
+    let searcher = PrettyCompatibleSearcher;
     let result = searcher.search_r(input, edge);
     assert!(result.is_some(), "Should handle mixed line endings");
 
@@ -268,7 +268,7 @@ fn test_auto_mixed_line_endings_search_r(#[case] input: &[u8], #[case] edge: boo
 #[case(b"a\nb\r\nc\nd", false)]
 #[case(b"a\r\nb\nc\r\nd", false)]
 fn test_auto_mixed_line_endings_search_l(#[case] input: &[u8], #[case] edge: bool) {
-    let searcher = AutoDelimitSearcher;
+    let searcher = PrettyCompatibleSearcher;
     let result = searcher.search_l(input, edge);
     assert!(result.is_some(), "Should handle mixed line endings");
 
@@ -283,7 +283,7 @@ fn test_auto_mixed_line_endings_search_l(#[case] input: &[u8], #[case] edge: boo
 #[case(b"a\n}\n}\n}b\nc", Some(8..9))]
 #[case(b"x\n \n\t\n}y\nz", Some(8..9))]
 fn test_auto_continuation_sequences_search_r(#[case] input: &[u8], #[case] expected: Option<Range<usize>>) {
-    let searcher = AutoDelimitSearcher;
+    let searcher = PrettyCompatibleSearcher;
     assert_eq!(searcher.search_r(input, false), expected);
 }
 
@@ -292,7 +292,7 @@ fn test_auto_continuation_sequences_search_r(#[case] input: &[u8], #[case] expec
 #[case(b"a\n}\n}\n}b\nc", Some(8..9))]
 #[case(b"x\n \n\t\n}y\nz", Some(8..9))]
 fn test_auto_continuation_sequences_search_l(#[case] input: &[u8], #[case] expected: Option<Range<usize>>) {
-    let searcher = AutoDelimitSearcher;
+    let searcher = PrettyCompatibleSearcher;
     assert_eq!(searcher.search_l(input, false), expected);
 }
 
@@ -301,7 +301,7 @@ fn test_auto_continuation_sequences_search_l(#[case] input: &[u8], #[case] expec
 #[case(1000)]
 #[case(10000)]
 fn test_auto_long_lines(#[case] length: usize) {
-    let searcher = AutoDelimitSearcher;
+    let searcher = PrettyCompatibleSearcher;
     let mut input = vec![b'x'; length];
     input.push(b'\n');
     input.push(b'y');
@@ -325,14 +325,14 @@ fn test_auto_exact_edge_boundaries_search_r(
     #[case] exp_start: usize,
     #[case] exp_end: usize,
 ) {
-    let searcher = AutoDelimitSearcher;
+    let searcher = PrettyCompatibleSearcher;
     let result = searcher.search_r(input, edge);
     assert_eq!(result, Some(exp_start..exp_end));
 }
 
 #[test]
 fn test_auto_exact_edge_boundaries_search_l() {
-    let searcher = AutoDelimitSearcher;
+    let searcher = PrettyCompatibleSearcher;
 
     let result = searcher.search_l(b"\nx", true);
     assert_eq!(result, Some(0..1));
@@ -346,7 +346,7 @@ fn test_auto_exact_edge_boundaries_search_l() {
 #[case(b"line1\n", b"line2\n", b"line3\n")]
 #[case(b"a\n", b"b\n", b"c\n")]
 fn test_auto_scanner_simulation_no_extra_blocks(#[case] chunk1: &[u8], #[case] chunk2: &[u8], #[case] chunk3: &[u8]) {
-    let searcher = AutoDelimitSearcher;
+    let searcher = PrettyCompatibleSearcher;
 
     // Simulate scanner behavior across chunk boundaries
     // Chunk 1: ends with \n

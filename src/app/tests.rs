@@ -1636,7 +1636,7 @@ fn test_bug_multiline_json_missing_input_badges_on_closing_braces() {
     let input = input("{\n\"level\":\"info\",\n\"msg\":\"test\"\n}\n");
     let mut output = Vec::new();
     let mut opts = options();
-    opts.delimiter = Delimiter::Auto;
+    opts.delimiter = Delimiter::PrettyCompatible;
     opts.input_info = InputInfo::Minimal.into();
     let app = App::new(opts);
     app.run(vec![input], &mut output).unwrap();
@@ -1683,7 +1683,7 @@ fn test_bug_multiline_remainder_missing_input_badges() {
     ));
     let mut output = Vec::new();
     let mut opts = options();
-    opts.delimiter = Delimiter::Auto;
+    opts.delimiter = Delimiter::PrettyCompatible;
     opts.input_info = InputInfo::Minimal.into();
     let app = App::new(opts);
     app.run(vec![input], &mut output).unwrap();
@@ -1722,7 +1722,7 @@ fn test_bug_prefix_with_closing_brace_on_same_line() {
     ));
     let mut output = Vec::new();
     let mut opts = options();
-    opts.delimiter = Delimiter::Auto;
+    opts.delimiter = Delimiter::PrettyCompatible;
     opts.allow_prefix = true;
     let app = App::new(opts);
     app.run(vec![input], &mut output).unwrap();
@@ -1765,7 +1765,7 @@ fn test_bug_prefix_multiline_block_closing_brace_not_included() {
     ));
     let mut output = Vec::new();
     let mut opts = options();
-    opts.delimiter = Delimiter::Auto;
+    opts.delimiter = Delimiter::PrettyCompatible;
     opts.allow_prefix = true;
     let app = App::new(opts);
     app.run(vec![input], &mut output).unwrap();
@@ -1810,7 +1810,7 @@ fn test_bug_complex_pretty_broken_scenario() {
     ));
     let mut output = Vec::new();
     let mut opts = options();
-    opts.delimiter = Delimiter::Auto;
+    opts.delimiter = Delimiter::PrettyCompatible;
     opts.allow_prefix = true;
     opts.input_info = InputInfo::Minimal.into();
     let app = App::new(opts);
@@ -1876,7 +1876,7 @@ fn test_bug_continuation_lines_with_input_badges() {
     ));
     let mut output = Vec::new();
     let mut opts = options();
-    opts.delimiter = Delimiter::Auto;
+    opts.delimiter = Delimiter::PrettyCompatible;
     opts.input_info = InputInfo::Minimal.into();
     let app = App::new(opts);
     app.run(vec![input], &mut output).unwrap();
@@ -1908,7 +1908,7 @@ fn test_bug_multiline_unparsed_prefix_data_loss() {
     ));
     let mut output = Vec::new();
     let mut opts = options();
-    opts.delimiter = Delimiter::Auto;
+    opts.delimiter = Delimiter::PrettyCompatible;
     opts.allow_prefix = true;
     opts.input_info = InputInfo::Minimal.into();
     let app = App::new(opts);
@@ -1955,7 +1955,7 @@ fn test_bug_raw_output_missing_input_badges_on_continuation_lines() {
     let input = input(concat!("{\n", "\"level\":\"info\",\n", "\"msg\":\"test1\"\n", "}\n",));
     let mut output = Vec::new();
     let mut opts = options();
-    opts.delimiter = Delimiter::Auto;
+    opts.delimiter = Delimiter::PrettyCompatible;
     opts.allow_prefix = true;
     opts.raw = true;
     opts.input_info = InputInfo::Minimal.into();
@@ -2012,7 +2012,7 @@ fn test_bug_comprehensive_multiline_prefix_remainder_raw() {
     ));
     let mut output = Vec::new();
     let mut opts = options();
-    opts.delimiter = Delimiter::Auto;
+    opts.delimiter = Delimiter::PrettyCompatible;
     opts.allow_prefix = true;
     opts.raw = true;
     opts.input_info = InputInfo::Minimal.into();

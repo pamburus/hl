@@ -30,15 +30,15 @@ pub(super) fn bench(c: &mut Criterion) {
             BatchSize::NumIterations(8192),
         ),
         (
-            "s1:smart-new-line:lf:e",
+            "s1:new-line:lf:e",
             Vec::from(samples::log::elk01::JSON),
-            Delimiter::SmartNewLine,
+            Delimiter::NewLine,
             BatchSize::NumIterations(8192),
         ),
         (
-            "s1:smart-new-line:lf:s",
+            "s1:new-line:lf:s",
             rotated(samples::log::elk01::JSON, 1),
-            Delimiter::SmartNewLine,
+            Delimiter::NewLine,
             BatchSize::NumIterations(8192),
         ),
     ];
