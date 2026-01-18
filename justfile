@@ -3,6 +3,23 @@
 
 previous-tag := "git tag -l \"v*.*.*\" --merged HEAD --sort=-version:refname | head -1"
 
+# NixOS helpers
+
+nix-files := "."
+nix-docker-image := "hl-nixos-helper"
+nix-docker-base := """
+    docker run --rm \
+        -it \
+        --platform=linux/$(uname -m) \
+        --security-opt seccomp=unconfined \
+        -v "$(pwd)":/etc/nixos \
+        -w /etc/nixos \
+        """
+nix-docker := nix-docker-base + nix-docker-image + " "
+nix-result := ".build/nix"
+
+# Recipes
+
 # Default recipe, executed on `just` without arguments
 [private]
 default:
@@ -59,14 +76,8 @@ fmt: fmt-rust fmt-nix fmt-toml
 fmt-rust: (setup "build-nightly")
     cargo +nightly fmt --all
 
-[doc('Format Nix files (gracefully skips if Nix is not installed)')]
-fmt-nix:
-    @if command -v nix > /dev/null; then \
-        echo "Formatting Nix files..."; \
-        nix fmt; \
-    else \
-        echo "Nix not found, skipping Nix formatting"; \
-    fi
+[doc('Format Nix files')]
+fmt-nix: (run-nixfmt nix-files)
 
 [doc('Format TOML files')]
 fmt-toml: (setup "schema")
@@ -162,24 +173,22 @@ nix-dev:
     nix develop
 
 [doc('Run all Nix flake checks')]
-nix-check:
-    nix flake check --all-systems --print-build-logs
+nix-check: (run-nix "flake" "check" "--all-systems" "--print-build-logs")
 
 [doc('Update all Nix flake inputs')]
-nix-update:
-    nix flake update
+nix-update: (run-nix "flake" "update")
 
 [doc('Build all defined Nix package variants')]
-nix-build-all:
-    nix build .#hl
-    nix build .#hl-bin
+nix-build: (run-nix "build" ".#default" "--out-link" (nix-result / "default")) (run-nix "build" ".#bin" "--out-link" (nix-result / "bin"))
 
 [doc('Show the dependency tree of the Nix derivation')]
 nix-deps:
-    @if command -v nix-tree > /dev/null; then \
-        nix-tree ./result; \
-    else \
-        echo "nix-tree is not installed. Run 'nix develop' to enter a shell where it is available"; \
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if command -v nix-tree > /dev/null; then
+        nix-tree ./result
+    else
+        echo "Error: nix-tree is not installed. Run 'nix develop' to enter a shell where it is available"
     fi
 
 [doc('Show `hl --help`')]
@@ -232,6 +241,31 @@ mmd2svg:
     done
 
     echo "✓ All Mermaid files converted to SVG"
+
+# Helper function to run a command locally or in Docker if not installed
+[private]
+nix-run-local-or-docker docker cmd *args:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if command -v {{ cmd }} >/dev/null 2>&1; then
+        {{ cmd }} {{ args }}
+    else
+        just build-nix-docker-image
+        {{ docker }} {{ cmd }} {{ args }}
+    fi
+
+# Helper function to run nix commands locally or in Docker
+[private]
+run-nix *args: (nix-run-local-or-docker nix-docker "nix" args)
+
+# Helper function to run nixfmt commands locally or in Docker
+[private]
+run-nixfmt *args: (nix-run-local-or-docker nix-docker "nixfmt" args)
+
+# Helper function to build NixOS docker image
+[private]
+build-nix-docker-image:
+    docker build -t {{ nix-docker-image }} build/docker/nix
 
 # Helper recipe to ensure required tools are available for a given task
 [private]
