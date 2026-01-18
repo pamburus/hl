@@ -1017,10 +1017,21 @@ impl<'a, Formatter: RecordWithSourceFormatter, Filter: RecordFilter> SegmentProc
                 let record = self.parser.parse(&ar.record);
                 if record.matches(&self.filter) {
                     let begin = buf.len();
-                    buf.extend(prefix.as_bytes());
-                    buf.extend(ar.prefix);
-                    if ar.prefix.last().map(|&x| x == b' ') == Some(false) {
-                        buf.push(b' ');
+                    if ar.prefix.is_empty() {
+                        buf.extend(prefix.as_bytes());
+                    } else {
+                        let mut first = true;
+                        for line in SmartNewLine.into_searcher().split(ar.prefix) {
+                            if !first {
+                                buf.push(b'\n');
+                            }
+                            first = false;
+                            buf.extend(prefix.as_bytes());
+                            buf.extend(line);
+                        }
+                        if ar.prefix.last().map(|&x| x == b' ') == Some(false) {
+                            buf.push(b' ');
+                        }
                     }
                     let prefix_range = begin..buf.len();
                     self.formatter
