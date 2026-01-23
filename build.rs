@@ -1,4 +1,5 @@
 // std imports
+use std::collections::HashMap;
 use std::fs::{self, File};
 use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
@@ -135,27 +136,30 @@ fn build_capnp() -> Result<()> {
 }
 
 fn update_schema_directives() -> Result<()> {
+    // Build middleware chain: cache wraps retry wraps fetch
+    let fetch_hash = with_cache(with_retry(fetch_and_hash_url, 5));
+
     // Process all TOML files in etc/defaults recursively
-    update_toml_schema_urls_in_dir(Path::new(DEFAULTS_DIR))?;
+    update_toml_schema_urls_in_dir(Path::new(DEFAULTS_DIR), &fetch_hash)?;
     Ok(())
 }
 
-fn update_toml_schema_urls_in_dir(dir: &Path) -> Result<()> {
+fn update_toml_schema_urls_in_dir(dir: &Path, fetch_hash: &impl Fn(&str) -> Result<Hash>) -> Result<()> {
     for entry in fs::read_dir(dir).map_err(|e| anyhow!("Failed to read directory {}: {}", dir.display(), e))? {
         let entry = entry.map_err(|e| anyhow!("Failed to read directory entry: {}", e))?;
         let path = entry.path();
 
         if path.is_dir() {
-            update_toml_schema_urls_in_dir(&path)?;
+            update_toml_schema_urls_in_dir(&path, fetch_hash)?;
         } else if path.extension().and_then(|s| s.to_str()) == Some("toml") {
             println!("cargo:rerun-if-changed={}", path.display());
-            update_toml_schema_url(&path)?;
+            update_toml_schema_url(&path, fetch_hash)?;
         }
     }
     Ok(())
 }
 
-fn update_toml_schema_url(toml_path: &Path) -> Result<()> {
+fn update_toml_schema_url(toml_path: &Path, fetch_hash: &impl Fn(&str) -> Result<Hash>) -> Result<()> {
     const SCHEMA_PREFIX: &str = "#:schema ";
 
     let content = fs::read_to_string(toml_path)
@@ -188,17 +192,29 @@ fn update_toml_schema_url(toml_path: &Path) -> Result<()> {
     // Find the local schema file
     let local_schema_path = find_local_schema_file(schema_filename)?;
 
-    // Compare sha256 hashes
-    if let Ok(remote_hash) = fetch_and_hash_url(schema_url) {
-        let local_hash = text_file_hash(&local_schema_path)?;
-
-        // If hashes match, no need to update
-        if remote_hash == local_hash {
+    // Fetch remote hash with caching and retry
+    let remote_hash = match fetch_hash(schema_url) {
+        Ok(hash) => hash,
+        Err(e) => {
+            // Remote fetch failed after retries - log warning and skip update
+            println!(
+                "cargo:warning=failed to fetch schema for {}: {}, skipped update",
+                toml_path.display(),
+                e
+            );
             return Ok(());
         }
+    };
+
+    // Compare sha256 hashes
+    let local_hash = text_file_hash(&local_schema_path)?;
+
+    // If hashes match, no need to update
+    if remote_hash == local_hash {
+        return Ok(());
     }
 
-    // Hashes differ or remote fetch failed - replace with relative path
+    // Hashes differ - replace with relative path
     let relative_path = calculate_relative_path(toml_path, &local_schema_path)?;
     let new_schema_line = format!("#:schema {}", relative_path);
 
@@ -228,6 +244,53 @@ fn find_local_schema_file(filename: &str) -> Result<PathBuf> {
     }
 }
 
+/// Middleware that adds retry logic with exponential backoff.
+fn with_retry<F>(fetch: F, max_attempts: u32) -> impl Fn(&str) -> Result<Hash>
+where
+    F: Fn(&str) -> Result<Hash>,
+{
+    move |url: &str| {
+        let mut last_error = None;
+        for attempt in 1..=max_attempts {
+            match fetch(url) {
+                Ok(hash) => return Ok(hash),
+                Err(e) => {
+                    if attempt < max_attempts {
+                        let delay_ms = 125 * (1 << (attempt - 1));
+                        println!(
+                            "cargo:warning=retrying {}, attempt {}/{}, delay {}ms",
+                            url, attempt, max_attempts, delay_ms
+                        );
+                        std::thread::sleep(std::time::Duration::from_millis(delay_ms));
+                    }
+                    last_error = Some(e);
+                }
+            }
+        }
+        Err(last_error.unwrap())
+    }
+}
+
+/// Middleware that caches successful results by URL.
+fn with_cache<F>(fetch: F) -> impl Fn(&str) -> Result<Hash>
+where
+    F: Fn(&str) -> Result<Hash>,
+{
+    let cache = std::sync::Mutex::new(HashMap::new());
+    move |url: &str| {
+        let mut cache = cache.lock().unwrap();
+        if let Some(&hash) = cache.get(url) {
+            Ok(hash)
+        } else {
+            let result = fetch(url);
+            if let Ok(hash) = result {
+                cache.insert(url.to_string(), hash);
+            }
+            result
+        }
+    }
+}
+
 fn fetch_and_hash_url(url: &str) -> Result<Hash> {
     let agent = {
         ureq::Agent::config_builder()
@@ -237,10 +300,7 @@ fn fetch_and_hash_url(url: &str) -> Result<Hash> {
             .new_agent()
     };
 
-    let mut response = agent
-        .get(url)
-        .call()
-        .map_err(|e| anyhow!("Failed to fetch URL {}: {}", url, e))?;
+    let mut response = agent.get(url).call().map_err(|e| anyhow!("{}", e))?;
 
     text_reader_hash(BufReader::new(response.body_mut().as_reader()))
 }
