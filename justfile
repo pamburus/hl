@@ -53,12 +53,23 @@ lint-rust: clippy
 
 [doc('• Lint Markdown files')]
 lint-markdown: (setup "markdown-lint")
-    @markdownlint-cli2 README.md
+    @markdownlint-cli2 "*.md"
 
 # Run the Rust linter (clippy)
 [private]
 clippy: (setup "clippy")
     cargo clippy --workspace --all-targets --all-features
+
+[doc('Automatically fix linting issues where possible')]
+fix: fix-markdown fix-clippy
+
+[private]
+fix-clippy: (setup "clippy")
+    cargo clippy --workspace --all-targets --all-features --fix --allow-dirty --allow-staged
+
+[private]
+fix-markdown: (setup "markdown-lint")
+    @markdownlint-cli2 "*.md" --fix
 
 [doc('Check for security vulnerabilities in dependencies')]
 audit: (setup "audit")
