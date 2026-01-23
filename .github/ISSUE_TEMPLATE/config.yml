@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 💬 Questions & Discussions
+    url: https://github.com/pamburus/hl/discussions/categories/q-a
+    about: Have a question? Ask in our Discussions forum instead of creating an issue.
+  - name: 💡 Ideas & Feature Discussions
+    url: https://github.com/pamburus/hl/discussions
+    about: Want to discuss a potential feature or idea? Start a discussion first.
