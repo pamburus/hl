@@ -806,7 +806,7 @@ Input Options:
       --input-format <FORMAT>       Input format [env: HL_INPUT_FORMAT=] [default: auto] [possible values: auto, json, logfmt]
       --unix-timestamp-unit <UNIT>  Unix timestamp unit [env: HL_UNIX_TIMESTAMP_UNIT=] [default: auto] [possible values: auto, s, ms, us, ns]
       --allow-prefix                Allow non-JSON prefixes before JSON log entries [env: HL_ALLOW_PREFIX=]
-      --delimiter <DELIMITER>       Log entry delimiter [env: HL_DELIMITER=] [possible values: auto, cr, lf, crlf, nul]
+      --delimiter <DELIMITER>       Log entry delimiter [env: HL_DELIMITER=] [default: auto] [possible values: auto, cr, lf, crlf, nul]
 
 Advanced Options:
       --interrupt-ignore-count <N>  Number of interrupts to ignore, i.e. Ctrl-C (SIGINT) [env: HL_INTERRUPT_IGNORE_COUNT=] [default: 3]
