@@ -45,9 +45,7 @@ use crate::{
     input::{BlockEntry, Input, InputHolder, InputReference},
     model::{Filter, Parser, ParserSettings, RawRecord, Record, RecordFilter, RecordWithSourceConstructor},
     query::Query,
-    scanning::{
-        BufFactory, Delimit, Delimiter, Scanner, SearchExt, Segment, SegmentBuf, SegmentBufFactory, SmartNewLine,
-    },
+    scanning::{BufFactory, Delimit, Delimiter, NewLine, Scanner, SearchExt, Segment, SegmentBuf, SegmentBufFactory},
     settings::{AsciiMode, ExpansionMode, FieldShowOption, Fields, Formatting, InputInfo, ResolvedPunctuation},
     theme::{Element, StylingPush, SyncIndicatorPack, Theme},
     timezone::Tz,
@@ -1021,7 +1019,7 @@ impl<'a, Formatter: RecordWithSourceFormatter, Filter: RecordFilter> SegmentProc
                         buf.extend(prefix.as_bytes());
                     } else {
                         let mut first = true;
-                        for line in SmartNewLine.into_searcher().split(ar.prefix) {
+                        for line in NewLine.into_searcher().split(ar.prefix) {
                             if !first {
                                 buf.push(b'\n');
                             }
@@ -1048,7 +1046,7 @@ impl<'a, Formatter: RecordWithSourceFormatter, Filter: RecordFilter> SegmentProc
             if !remainder.is_empty() && self.show_unparsed() {
                 if !parsed_some || produced_some {
                     let mut should_prefix = !parsed_some;
-                    for line in SmartNewLine.into_searcher().split(remainder) {
+                    for line in NewLine.into_searcher().split(remainder) {
                         if should_prefix {
                             buf.extend(prefix.as_bytes());
                         }

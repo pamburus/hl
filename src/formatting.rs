@@ -20,7 +20,7 @@ use crate::{
     filtering::IncludeExcludeSetting,
     fmtx::{OptimizedBuf, Push, aligned_left},
     model::{self, Caller, Level, RawValue},
-    scanning::{Delimit, SearchExt, SmartNewLine},
+    scanning::{Delimit, NewLine, SearchExt},
     settings::{self, AsciiMode, ExpansionMode, Formatting, ResolvedPunctuation},
     syntax::*,
     theme::{Element, Styler, StylingPush, Theme},
@@ -146,7 +146,7 @@ impl RecordWithSourceFormatter for RawRecordFormatter {
     #[inline(always)]
     fn format_record(&self, buf: &mut Buf, prefix: Range<usize>, rec: model::RecordWithSource) {
         let mut first = true;
-        for line in SmartNewLine.into_searcher().split(rec.source) {
+        for line in NewLine.into_searcher().split(rec.source) {
             if !first {
                 buf.push(b'\n');
                 buf.extend_from_within(prefix.clone());

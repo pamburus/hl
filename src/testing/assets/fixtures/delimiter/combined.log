@@ -1,0 +1,14 @@
+{"ts":"2024-01-01T00:00:01Z","level":"info","msg":"jsonl entry"}
+ts=2024-01-01T00:00:02Z level=info msg="logfmt entry"
+prefix: {"ts":"2024-01-01T00:00:03Z","level":"info","msg":"prefixed entry"}
+ space: {"ts":"2024-01-01T00:00:04Z","level":"info","msg":"space-prefixed entry"}
+{
+  "ts": "2024-01-01T00:00:05Z",
+  "level": "info",
+  "msg": "pretty entry"
+}
+{
+"ts": "2024-01-01T00:00:06Z",
+"level": "info",
+"msg": "pretty-stripped entry"
+}

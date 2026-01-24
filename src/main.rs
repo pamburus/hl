@@ -232,22 +232,21 @@ fn run() -> Result<()> {
         }
     }
 
-    let mut delimiter = Delimiter::default();
-    if let Some(d) = opt.delimiter {
-        delimiter = match d {
-            cli::Delimiter::Nul => Delimiter::Byte(0),
-            cli::Delimiter::Lf => Delimiter::Byte(b'\n'),
-            cli::Delimiter::Cr => Delimiter::Byte(b'\r'),
-            cli::Delimiter::Crlf => Delimiter::SmartNewLine,
-            cli::Delimiter::Auto => Delimiter::Auto,
-        };
-    } else {
-        match opt.input_format {
-            cli::InputFormat::Json => delimiter = Delimiter::Json,
-            cli::InputFormat::Logfmt => delimiter = Delimiter::SmartNewLine,
-            cli::InputFormat::Auto => {}
+    let delimiter = match opt.delimiter {
+        cli::Delimiter::Nul => Delimiter::Byte(0),
+        cli::Delimiter::Lf => Delimiter::Byte(b'\n'),
+        cli::Delimiter::Cr => Delimiter::Byte(b'\r'),
+        cli::Delimiter::Crlf => Delimiter::NewLine,
+        cli::Delimiter::Auto => {
+            if opt.allow_prefix || opt.input_format == cli::InputFormat::Logfmt {
+                Delimiter::NewLine
+            } else if opt.input_format == cli::InputFormat::Json {
+                Delimiter::Json
+            } else {
+                Delimiter::PrettyCompatible
+            }
         }
-    }
+    };
 
     let mut input_info = *opt.input_info;
     if input_info.contains(InputInfo::Auto) {

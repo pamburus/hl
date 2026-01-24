@@ -19,7 +19,7 @@ use crate::error::*;
 mod auto;
 mod json;
 
-pub use auto::AutoDelimiter;
+pub use auto::PrettyCompatibleDelimiter;
 pub use json::JsonDelimiter;
 
 /// Scans input stream and splits it into segments containing a whole number of tokens delimited by the given delimiter.
@@ -49,12 +49,12 @@ impl<D: Delimit> Scanner<D> {
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
 pub enum Delimiter {
     #[default]
-    Auto,
+    PrettyCompatible,
     Byte(u8),
     Bytes(Arc<[u8]>),
     Char(char),
     Str(Arc<str>),
-    SmartNewLine,
+    NewLine,
     Json,
 }
 
@@ -114,10 +114,10 @@ impl From<String> for Delimiter {
     }
 }
 
-impl From<SmartNewLine> for Delimiter {
+impl From<NewLine> for Delimiter {
     #[inline]
-    fn from(_: SmartNewLine) -> Self {
-        Self::SmartNewLine
+    fn from(_: NewLine) -> Self {
+        Self::NewLine
     }
 }
 
@@ -131,9 +131,9 @@ impl Delimit for Delimiter {
             Self::Bytes(b) => Arc::new(b.into_searcher()),
             Self::Char(c) => Arc::new(c.into_searcher()),
             Self::Str(s) => Arc::new(s.into_searcher()),
-            Self::SmartNewLine => Arc::new(SmartNewLine.into_searcher()),
+            Self::NewLine => Arc::new(NewLine.into_searcher()),
             Self::Json => Arc::new(JsonDelimiter.into_searcher()),
-            Self::Auto => Arc::new(AutoDelimiter.into_searcher()),
+            Self::PrettyCompatible => Arc::new(PrettyCompatibleDelimiter.into_searcher()),
         }
     }
 }
@@ -243,10 +243,10 @@ impl Delimit for &Delimiter {
 
 /// Defines a smart new line delimiter that can be either LF or CRLF.
 #[derive(Clone)]
-pub struct SmartNewLine;
+pub struct NewLine;
 
-impl Delimit for SmartNewLine {
-    type Searcher = SmartNewLineSearcher;
+impl Delimit for NewLine {
+    type Searcher = NewLineSearcher;
 
     #[inline(always)]
     fn into_searcher(self) -> Self::Searcher {
@@ -504,9 +504,9 @@ where
 // ---
 
 /// Searches for a new line in a byte slice that can be either LF or CRLF.
-pub struct SmartNewLineSearcher;
+pub struct NewLineSearcher;
 
-impl Search for SmartNewLineSearcher {
+impl Search for NewLineSearcher {
     #[inline]
     fn search_r(&self, buf: &[u8], _edge: bool) -> Option<Range<usize>> {
         memrchr(b'\n', buf).map(|i| {

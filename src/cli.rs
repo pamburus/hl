@@ -431,8 +431,8 @@ pub struct Opt {
     /// • <c>lf</>: Line feed (\n)
     /// • <c>crlf</>: Carriage return + line feed (\r\n)
     /// • <c>nul</>: Null character (\0)
-    #[arg(long, env = "HL_DELIMITER", overrides_with = "delimiter", help_heading = heading::INPUT)]
-    pub delimiter: Option<Delimiter>,
+    #[arg(long, env = "HL_DELIMITER", default_value = "auto", overrides_with = "delimiter", help_heading = heading::INPUT)]
+    pub delimiter: Delimiter,
 
     /// Number of interrupts to ignore, i.e. Ctrl-C (SIGINT)
     #[arg(

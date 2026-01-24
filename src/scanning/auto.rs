@@ -2,13 +2,13 @@
 use std::ops::Range;
 
 // relative imports
-use super::{Delimit, Search, SmartNewLineSearcher};
+use super::{Delimit, NewLineSearcher, Search};
 
 #[derive(Clone)]
-pub struct AutoDelimiter;
+pub struct PrettyCompatibleDelimiter;
 
-impl Delimit for AutoDelimiter {
-    type Searcher = AutoDelimitSearcher;
+impl Delimit for PrettyCompatibleDelimiter {
+    type Searcher = PrettyCompatibleSearcher;
 
     #[inline]
     fn into_searcher(self) -> Self::Searcher {
@@ -18,13 +18,13 @@ impl Delimit for AutoDelimiter {
 
 /// Searches for a new line in a byte slice that can be either LF or CRLF
 /// surrounded by lines starting with non-whitespace characters.
-pub struct AutoDelimitSearcher;
+pub struct PrettyCompatibleSearcher;
 
-impl Search for AutoDelimitSearcher {
+impl Search for PrettyCompatibleSearcher {
     #[inline]
     fn search_r(&self, buf: &[u8], edge: bool) -> Option<Range<usize>> {
         let mut r = buf.len();
-        while let Some(range) = SmartNewLineSearcher.search_r(&buf[..r], edge) {
+        while let Some(range) = NewLineSearcher.search_r(&buf[..r], edge) {
             if edge && range.end == buf.len() {
                 return Some(range);
             }
@@ -42,7 +42,7 @@ impl Search for AutoDelimitSearcher {
     #[inline]
     fn search_l(&self, buf: &[u8], edge: bool) -> Option<Range<usize>> {
         let mut l = 0;
-        while let Some(range) = SmartNewLineSearcher.search_l(&buf[l..], edge) {
+        while let Some(range) = NewLineSearcher.search_l(&buf[l..], edge) {
             let range = (l + range.start)..(l + range.end);
 
             if edge && range.start == 0 {
@@ -61,7 +61,7 @@ impl Search for AutoDelimitSearcher {
 
     #[inline]
     fn partial_match_r(&self, buf: &[u8]) -> Option<usize> {
-        if let Some(m) = SmartNewLineSearcher.partial_match_r(buf) {
+        if let Some(m) = NewLineSearcher.partial_match_r(buf) {
             return Some(m);
         }
         if let Some(&b'\n') = buf.last() {
@@ -75,7 +75,7 @@ impl Search for AutoDelimitSearcher {
 
     #[inline]
     fn partial_match_l(&self, buf: &[u8]) -> Option<usize> {
-        SmartNewLineSearcher.partial_match_l(buf)
+        NewLineSearcher.partial_match_l(buf)
     }
 }
 

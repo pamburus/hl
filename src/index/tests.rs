@@ -395,7 +395,7 @@ fn test_indexer_with_auto_delimiter() {
         PathBuf::from("/tmp/cache"),
         IndexerSettings {
             buffer_size: nonzero!(4096u32).into(),
-            delimiter: Delimiter::Auto,
+            delimiter: Delimiter::PrettyCompatible,
             ..IndexerSettings::with_fs(fs)
         },
     );
@@ -448,7 +448,7 @@ fn test_indexer_chronology_with_unsorted_entries() {
         PathBuf::from("/tmp/cache"),
         IndexerSettings {
             buffer_size: nonzero!(4096u32).into(),
-            delimiter: Delimiter::SmartNewLine,
+            delimiter: Delimiter::NewLine,
             ..IndexerSettings::with_fs(fs)
         },
     );
@@ -483,7 +483,7 @@ fn test_indexer_with_empty_entries() {
         PathBuf::from("/tmp/cache"),
         IndexerSettings {
             buffer_size: nonzero!(4096u32).into(),
-            delimiter: Delimiter::SmartNewLine,
+            delimiter: Delimiter::NewLine,
             ..IndexerSettings::with_fs(fs)
         },
     );
@@ -536,7 +536,7 @@ fn test_indexer_auto_delimiter_skips_continuation_lines() {
         PathBuf::from("/tmp/cache"),
         IndexerSettings {
             buffer_size: nonzero!(4096u32).into(),
-            delimiter: Delimiter::Auto,
+            delimiter: Delimiter::PrettyCompatible,
             ..IndexerSettings::with_fs(fs)
         },
     );
@@ -562,7 +562,7 @@ fn test_indexer_with_mixed_valid_invalid_entries() {
         PathBuf::from("/tmp/cache"),
         IndexerSettings {
             buffer_size: nonzero!(4096u32).into(),
-            delimiter: Delimiter::SmartNewLine,
+            delimiter: Delimiter::NewLine,
             ..IndexerSettings::with_fs(fs)
         },
     );
@@ -595,7 +595,7 @@ fn test_indexer_large_entries_across_blocks() {
         PathBuf::from("/tmp/cache"),
         IndexerSettings {
             buffer_size: nonzero!(1024u32).into(),
-            delimiter: Delimiter::SmartNewLine,
+            delimiter: Delimiter::NewLine,
             ..IndexerSettings::with_fs(fs)
         },
     );
@@ -635,7 +635,7 @@ fn test_chronology_bitmap_structure() {
         PathBuf::from("/tmp/cache"),
         IndexerSettings {
             buffer_size: nonzero!(16384u32).into(),
-            delimiter: Delimiter::SmartNewLine,
+            delimiter: Delimiter::NewLine,
             ..IndexerSettings::with_fs(fs)
         },
     );
@@ -667,11 +667,11 @@ fn test_indexer_delimiter_in_settings() {
 
     let settings_auto = IndexerSettings {
         buffer_size: nonzero!(1024u32).into(),
-        delimiter: Delimiter::Auto,
+        delimiter: Delimiter::PrettyCompatible,
         ..IndexerSettings::with_fs(vfs::mem::FileSystem::new())
     };
 
     // Verify delimiter is stored correctly
     assert_eq!(settings_json.delimiter, Delimiter::Json);
-    assert_eq!(settings_auto.delimiter, Delimiter::Auto);
+    assert_eq!(settings_auto.delimiter, Delimiter::PrettyCompatible);
 }
