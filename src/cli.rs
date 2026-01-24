@@ -426,7 +426,7 @@ pub struct Opt {
     /// This works well for most JSON and logfmt logs, including series of pretty-printed JSON objects.
     ///
     /// Possible values:
-    /// • <c>auto</>: Auto-detect delimiter (default)
+    /// • <c>auto</>: Auto-select delimiter based on input format (default)
     /// • <c>cr</>: Carriage return (\r)
     /// • <c>lf</>: Line feed (\n)
     /// • <c>crlf</>: Carriage return followed by line feed (\r\n)
