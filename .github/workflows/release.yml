@@ -77,7 +77,7 @@ jobs:
       - name: Install git-cliff
         run: |
           # Install git-cliff for generating release notes
-          CLIFF_VERSION="2.10.1"
+          CLIFF_VERSION="2.12.0"
           curl -sSfL "https://github.com/orhun/git-cliff/releases/download/v${CLIFF_VERSION}/git-cliff-${CLIFF_VERSION}-x86_64-unknown-linux-gnu.tar.gz" | tar -xz
           sudo mv git-cliff-*/git-cliff /usr/local/bin/
           git-cliff --version
