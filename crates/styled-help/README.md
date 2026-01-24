@@ -23,7 +23,7 @@ Add this to your `Cargo.toml`:
 [dependencies]
 clap = { version = "4", features = ["derive"] }
 color-print = "0.3"
-styled-help = { path = "./crate/styled-help" }
+styled-help = { path = "./crates/styled-help" }
 ```
 
 ## Usage

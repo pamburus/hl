@@ -13,17 +13,17 @@ build = "build.rs"
 [workspace]
 members = [
   ".",
-  "crate/encstr",
-  "crate/enumset-ext",
-  "crate/enumset-serde",
-  "crate/heapopt",
-  "crate/serde-logfmt",
-  "crate/styled-help",
-  "crate/wildcard",
+  "crates/encstr",
+  "crates/enumset-ext",
+  "crates/enumset-serde",
+  "crates/heapopt",
+  "crates/serde-logfmt",
+  "crates/styled-help",
+  "crates/wildcard",
 ]
 
 [workspace.package]
-version = "0.35.3"
+version = "0.36.0-alpha.1"
 edition = "2024"
 repository = "https://github.com/pamburus/hl"
 license = "MIT"
@@ -37,7 +37,7 @@ clap_mangen = { git = "https://github.com/pamburus/rust-clap.git", rev = "20f0ff
 json = { package = "serde_json", version = "1", features = ["raw_value"] }
 memchr = "2"
 rstest = "0.26"
-wildcard = { path = "crate/wildcard" }
+wildcard = { path = "crates/wildcard" }
 
 [[bench]]
 harness = false
@@ -66,15 +66,15 @@ deko = "0.6"
 derive_more = { version = "2", features = ["deref", "deref_mut", "display", "eq", "from", "into", "into_iterator"] }
 dirs = "6"
 dirs-sys = "0.5"
-encstr = { path = "./crate/encstr" }
+encstr = { path = "./crates/encstr" }
 enum-map = "2"
 enumset = "1"
-enumset-ext = { path = "./crate/enumset-ext", features = ["clap", "serde"] }
-enumset-serde = { path = "./crate/enumset-serde" }
+enumset-ext = { path = "./crates/enumset-ext", features = ["clap", "serde"] }
+enumset-serde = { path = "./crates/enumset-serde" }
 env_logger = "0.11"
 flate2 = "1"
 heapless = "0.9"
-heapopt = { path = "./crate/heapopt" }
+heapopt = { path = "./crates/heapopt" }
 hex = "0.4"
 humantime = "2"
 itertools = "0.14"
@@ -85,7 +85,7 @@ liblzma = { version = "*", features = ["static"] }
 log = "0.4"
 logos = "0.16"
 memchr.workspace = true
-mline = { path = "./crate/mline" }
+mline = { path = "./crates/mline" }
 nonzero_ext = "0.3"
 notify = { version = "8", features = ["macos_kqueue"] }
 num_cpus = "1"
@@ -96,7 +96,7 @@ pest_derive = "2"
 regex = "1"
 rust-embed = "8"
 serde = { version = "1", features = ["derive", "rc"] }
-serde-logfmt = { path = "./crate/serde-logfmt" }
+serde-logfmt = { path = "./crates/serde-logfmt" }
 serde_plain = "1"
 serde-value = "0.7"
 sha2 = "0.10"
@@ -106,7 +106,7 @@ snap = "1"
 static_assertions = "1"
 strsim = "0.11"
 strum = { version = "0.27", features = ["derive"] }
-styled-help = { path = "./crate/styled-help" }
+styled-help = { path = "./crates/styled-help" }
 terminal_size = "0.4"
 thiserror = "2"
 titlecase = "3"

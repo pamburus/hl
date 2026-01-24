@@ -18,7 +18,7 @@ IGNORE=(
     'rustc/.*/library/'
     '_capnp\.rs$'
     '/tests\.rs$'
-    '/crate/styled-help/src/'
+    '/crates/styled-help/src/'
 )
 
 function executables() {
@@ -37,7 +37,7 @@ LLVM_COV_FLAGS=(
 function clean() {
     rm -f \
         ${LLVM_PROFILE_PATTERN:?} \
-        crate/*/${LLVM_PROFILE_PATTERN:?}
+        crates/*/${LLVM_PROFILE_PATTERN:?}
 }
 
 function check_hash() {
@@ -115,7 +115,7 @@ function merge() {
         -o ${PROFDATA_FILE:?} \
         -sparse \
         ${LLVM_PROFILE_PATTERN:?} \
-        crate/*/${LLVM_PROFILE_PATTERN:?}
+        crates/*/${LLVM_PROFILE_PATTERN:?}
 }
 
 function report() {
