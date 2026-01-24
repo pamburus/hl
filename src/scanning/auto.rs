@@ -2,7 +2,7 @@
 use std::ops::Range;
 
 // relative imports
-use super::{Delimit, NewLineSearcher, Search};
+use super::{Delimit, NewlineSearcher, Search};
 
 #[derive(Clone)]
 pub struct PrettyCompatibleDelimiter;
@@ -24,7 +24,7 @@ impl Search for PrettyCompatibleSearcher {
     #[inline]
     fn search_r(&self, buf: &[u8], edge: bool) -> Option<Range<usize>> {
         let mut r = buf.len();
-        while let Some(range) = NewLineSearcher.search_r(&buf[..r], edge) {
+        while let Some(range) = NewlineSearcher.search_r(&buf[..r], edge) {
             if edge && range.end == buf.len() {
                 return Some(range);
             }
@@ -42,7 +42,7 @@ impl Search for PrettyCompatibleSearcher {
     #[inline]
     fn search_l(&self, buf: &[u8], edge: bool) -> Option<Range<usize>> {
         let mut l = 0;
-        while let Some(range) = NewLineSearcher.search_l(&buf[l..], edge) {
+        while let Some(range) = NewlineSearcher.search_l(&buf[l..], edge) {
             let range = (l + range.start)..(l + range.end);
 
             if edge && range.start == 0 {
@@ -61,7 +61,7 @@ impl Search for PrettyCompatibleSearcher {
 
     #[inline]
     fn partial_match_r(&self, buf: &[u8]) -> Option<usize> {
-        if let Some(m) = NewLineSearcher.partial_match_r(buf) {
+        if let Some(m) = NewlineSearcher.partial_match_r(buf) {
             return Some(m);
         }
         if let Some(&b'\n') = buf.last() {
@@ -75,7 +75,7 @@ impl Search for PrettyCompatibleSearcher {
 
     #[inline]
     fn partial_match_l(&self, buf: &[u8]) -> Option<usize> {
-        NewLineSearcher.partial_match_l(buf)
+        NewlineSearcher.partial_match_l(buf)
     }
 }
 

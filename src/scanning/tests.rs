@@ -89,7 +89,7 @@ fn test_only_delim() {
 
 #[test]
 fn test_only_delim_auto() {
-    let searcher = NewLine.into_searcher();
+    let searcher = Newline.into_searcher();
     let buf = b"\n";
     let mut iter = searcher.split(buf);
 
@@ -99,7 +99,7 @@ fn test_only_delim_auto() {
 
 #[test]
 fn test_delim_combo_auto() {
-    let searcher = NewLine.into_searcher();
+    let searcher = Newline.into_searcher();
     let buf = b"a\n\r\nb\naaaa\n\r\nbbbb\n";
     let mut iter = searcher.split(buf);
 
@@ -327,7 +327,7 @@ fn test_jumbo_0() {
 #[test]
 fn test_jumbo_smart_new_line() {
     let sf = Arc::new(SegmentBufFactory::new(3));
-    let scanner = Scanner::new(sf.clone(), NewLine);
+    let scanner = Scanner::new(sf.clone(), Newline);
     let mut data = std::io::Cursor::new(b"test\r\ntoken\r\nvery\r\nlarge\nx/");
     let tokens = scanner
         .items(&mut data)
@@ -349,7 +349,7 @@ fn test_jumbo_smart_new_line() {
 #[test]
 fn test_jumbo_smart_new_line_2() {
     let sf = Arc::new(SegmentBufFactory::new(3));
-    let scanner = Scanner::new(sf.clone(), NewLine);
+    let scanner = Scanner::new(sf.clone(), Newline);
     let mut data = std::io::Cursor::new(b"test token\r\neof\r\n");
     let tokens = scanner
         .items(&mut data)
@@ -407,7 +407,7 @@ fn test_substr_searcher_partial_match_l() {
 
 #[test]
 fn test_smart_newline_searcher_partial_match_l() {
-    let searcher = NewLineSearcher;
+    let searcher = NewlineSearcher;
 
     // Buffer starting with \n
     let buf = b"\n";
@@ -453,7 +453,7 @@ fn test_smart_newline_search_l_edge_cases(
     #[case] edge: bool,
     #[case] expected: Option<Range<usize>>,
 ) {
-    let searcher = NewLineSearcher;
+    let searcher = NewlineSearcher;
     let result = searcher.search_l(buf, edge);
     assert_eq!(result, expected);
 }
@@ -472,7 +472,7 @@ fn test_smart_newline_search_l_multiple_newlines(
     #[case] edge: bool,
     #[case] expected: Option<Range<usize>>,
 ) {
-    let searcher = NewLineSearcher;
+    let searcher = NewlineSearcher;
     let result = searcher.search_l(buf, edge);
     assert_eq!(result, expected);
 }
@@ -487,7 +487,7 @@ fn test_smart_newline_search_l_multiple_newlines(
 #[case(b"first\nsecond\n", Some(12..13))] // case 7
 #[case(b"first\r\nsecond\r\n", Some(13..15))] // case 8
 fn test_smart_newline_search_r(#[case] buf: &[u8], #[case] expected: Option<Range<usize>>) {
-    let searcher = NewLineSearcher;
+    let searcher = NewlineSearcher;
     let result = searcher.search_r(buf, false);
     assert_eq!(result, expected);
     let result = searcher.search_r(buf, true);
@@ -502,14 +502,14 @@ fn test_smart_newline_search_r(#[case] buf: &[u8], #[case] expected: Option<Rang
 #[case(b"test\n", None)] // case 5
 #[case(b"test\r\n", None)] // case 6
 fn test_smart_newline_partial_match_r(#[case] buf: &[u8], #[case] expected: Option<usize>) {
-    let searcher = NewLineSearcher;
+    let searcher = NewlineSearcher;
     let result = searcher.partial_match_r(buf);
     assert_eq!(result, expected);
 }
 
 #[test]
 fn test_smart_newline_split_mixed_line_endings() {
-    let searcher = NewLineSearcher;
+    let searcher = NewlineSearcher;
     let buf = b"line1\nline2\r\nline3\nline4\r\n";
     let parts: Vec<_> = searcher.split(buf).collect();
     assert_eq!(parts, vec![&b"line1"[..], &b"line2"[..], &b"line3"[..], &b"line4"[..]]);
@@ -517,7 +517,7 @@ fn test_smart_newline_split_mixed_line_endings() {
 
 #[test]
 fn test_smart_newline_split_only_lf() {
-    let searcher = NewLineSearcher;
+    let searcher = NewlineSearcher;
     let buf = b"a\nb\nc\n";
     let parts: Vec<_> = searcher.split(buf).collect();
     assert_eq!(parts, vec![&b"a"[..], &b"b"[..], &b"c"[..]]);
@@ -525,7 +525,7 @@ fn test_smart_newline_split_only_lf() {
 
 #[test]
 fn test_smart_newline_split_only_crlf() {
-    let searcher = NewLineSearcher;
+    let searcher = NewlineSearcher;
     let buf = b"a\r\nb\r\nc\r\n";
     let parts: Vec<_> = searcher.split(buf).collect();
     assert_eq!(parts, vec![&b"a"[..], &b"b"[..], &b"c"[..]]);
@@ -533,7 +533,7 @@ fn test_smart_newline_split_only_crlf() {
 
 #[test]
 fn test_smart_newline_split_empty_lines() {
-    let searcher = NewLineSearcher;
+    let searcher = NewlineSearcher;
     let buf = b"a\n\nb\r\n\r\nc\n";
     let parts: Vec<_> = searcher.split(buf).collect();
     assert_eq!(parts, vec![&b"a"[..], &b""[..], &b"b"[..], &b""[..], &b"c"[..]]);
@@ -541,7 +541,7 @@ fn test_smart_newline_split_empty_lines() {
 
 #[test]
 fn test_smart_newline_search_l_edge_false_with_crlf() {
-    let searcher = NewLineSearcher;
+    let searcher = NewlineSearcher;
 
     // When edge=false, search_l skips the first byte
     // This test verifies correct offset calculation for both LF and CRLF
@@ -616,9 +616,9 @@ fn test_delimiter_enum_conversions() {
         _ => panic!("Expected Delimiter::Str"),
     }
 
-    // Test conversion from NewLine
-    let delimiter = Delimiter::from(NewLine);
-    assert_eq!(delimiter, Delimiter::NewLine);
+    // Test conversion from Newline
+    let delimiter = Delimiter::from(Newline);
+    assert_eq!(delimiter, Delimiter::Newline);
 }
 
 #[test]
@@ -670,10 +670,10 @@ fn test_auto_delimiter_with_scanner() {
 
 #[test]
 fn test_partial_match_r_position_semantics() {
-    use super::NewLineSearcher;
+    use super::NewlineSearcher;
 
-    // Verify NewLineSearcher correctly returns positions
-    let searcher = NewLineSearcher;
+    // Verify NewlineSearcher correctly returns positions
+    let searcher = NewlineSearcher;
 
     // Buffer ending with CR
     let buf = b"test\r";
