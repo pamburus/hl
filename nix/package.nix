@@ -1,4 +1,10 @@
-{ lib, stdenv, makeRustPlatform, rust-bin, installShellFiles, }:
+{
+  lib,
+  stdenv,
+  makeRustPlatform,
+  rust-bin,
+  installShellFiles,
+}:
 let
   cargoToml = builtins.fromTOML (builtins.readFile ../Cargo.toml);
   toolchain = rust-bin.fromRustupToolchainFile ../rust-toolchain.toml;
@@ -6,7 +12,8 @@ let
     cargo = toolchain;
     rustc = toolchain;
   };
-in rustPlatform.buildRustPackage {
+in
+rustPlatform.buildRustPackage {
   pname = cargoToml.package.name;
   version = cargoToml.workspace.package.version;
 
@@ -39,11 +46,13 @@ in rustPlatform.buildRustPackage {
     homepage = cargoToml.workspace.package.repository;
     license = lib.licenses.mit;
     changelog = "${cargoToml.workspace.package.repository}/releases";
-    maintainers = [{
-      name = "Pavel Ivanov";
-      github = "pamburus";
-      email = "mr.pavel.ivanov@gmail.com";
-    }];
+    maintainers = [
+      {
+        name = "Pavel Ivanov";
+        github = "pamburus";
+        email = "mr.pavel.ivanov@gmail.com";
+      }
+    ];
     platforms = lib.platforms.unix ++ lib.platforms.windows;
     mainProgram = cargoToml.package.name;
     categories = cargoToml.package.categories or [ ];
