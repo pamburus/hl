@@ -429,7 +429,8 @@ pub struct Opt {
     /// • <c>auto</>: Auto-detect delimiter (default)
     /// • <c>cr</>: Carriage return (\r)
     /// • <c>lf</>: Line feed (\n)
-    /// • <c>crlf</>: Carriage return + line feed (\r\n)
+    /// • <c>crlf</>: Carriage return followed by line feed (\r\n)
+    /// • <c>newline</>: Either lf or crlf, whichever comes first
     /// • <c>nul</>: Null character (\0)
     #[arg(long, env = "HL_DELIMITER", default_value = "auto", overrides_with = "delimiter", help_heading = heading::INPUT)]
     pub delimiter: Delimiter,
@@ -591,6 +592,7 @@ pub enum Delimiter {
     Cr,
     Lf,
     Crlf,
+    Newline,
     Nul,
 }
 
