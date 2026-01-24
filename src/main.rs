@@ -236,16 +236,25 @@ fn run() -> Result<()> {
         cli::Delimiter::Nul => Delimiter::Byte(0),
         cli::Delimiter::Lf => Delimiter::Byte(b'\n'),
         cli::Delimiter::Cr => Delimiter::Byte(b'\r'),
-        cli::Delimiter::Crlf => Delimiter::Newline,
-        cli::Delimiter::Auto => {
-            if opt.allow_prefix || opt.input_format == cli::InputFormat::Logfmt {
-                Delimiter::Newline
-            } else if opt.input_format == cli::InputFormat::Json {
-                Delimiter::Json
-            } else {
-                Delimiter::PrettyCompatible
+        cli::Delimiter::Crlf => Delimiter::Str("\r\n".into()),
+        cli::Delimiter::Newline => Delimiter::Newline,
+        cli::Delimiter::Auto => match opt.input_format {
+            cli::InputFormat::Auto => {
+                if opt.allow_prefix {
+                    Delimiter::Newline
+                } else {
+                    Delimiter::PrettyCompatible
+                }
             }
-        }
+            cli::InputFormat::Logfmt => Delimiter::Newline,
+            cli::InputFormat::Json => {
+                if opt.allow_prefix {
+                    Delimiter::Newline
+                } else {
+                    Delimiter::Json
+                }
+            }
+        },
     };
 
     let mut input_info = *opt.input_info;
