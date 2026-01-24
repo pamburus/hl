@@ -1013,7 +1013,10 @@ impl RawRecordParser {
             Some(InputFormat::Json) => RawRecordStream::Json(RawRecordJsonStream {
                 prefix,
                 xn,
-                delegate: StreamDeserializerWithOffsets(json::Deserializer::from_slice(data).into_iter::<RawRecord>()),
+                delegate: StreamDeserializerWithOffsets {
+                    inner: json::Deserializer::from_slice(data).into_iter::<RawRecord>(),
+                    source: data,
+                },
             }),
             Some(InputFormat::Logfmt) => RawRecordStream::Logfmt(RawRecordLogfmtStream {
                 chunk,
