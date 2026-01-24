@@ -236,10 +236,10 @@ fn run() -> Result<()> {
         cli::Delimiter::Nul => Delimiter::Byte(0),
         cli::Delimiter::Lf => Delimiter::Byte(b'\n'),
         cli::Delimiter::Cr => Delimiter::Byte(b'\r'),
-        cli::Delimiter::Crlf => Delimiter::NewLine,
+        cli::Delimiter::Crlf => Delimiter::Newline,
         cli::Delimiter::Auto => {
             if opt.allow_prefix || opt.input_format == cli::InputFormat::Logfmt {
-                Delimiter::NewLine
+                Delimiter::Newline
             } else if opt.input_format == cli::InputFormat::Json {
                 Delimiter::Json
             } else {

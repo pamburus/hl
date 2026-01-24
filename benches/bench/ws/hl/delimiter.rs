@@ -32,13 +32,13 @@ pub(super) fn bench(c: &mut Criterion) {
         (
             "s1:new-line:lf:e",
             Vec::from(samples::log::elk01::JSON),
-            Delimiter::NewLine,
+            Delimiter::Newline,
             BatchSize::NumIterations(8192),
         ),
         (
             "s1:new-line:lf:s",
             rotated(samples::log::elk01::JSON, 1),
-            Delimiter::NewLine,
+            Delimiter::Newline,
             BatchSize::NumIterations(8192),
         ),
     ];

@@ -52,7 +52,7 @@ fn test_input() {
 
 #[test]
 fn test_input_tail() {
-    let input = Input::stdin().unwrap().tail(1, Delimiter::NewLine).unwrap();
+    let input = Input::stdin().unwrap().tail(1, Delimiter::Newline).unwrap();
     assert!(matches!(input.stream, Stream::Sequential(_)));
 
     for &(filename, requested, expected) in &[
@@ -63,7 +63,7 @@ fn test_input_tail() {
     ] {
         let input = Input::open(&PathBuf::from(filename))
             .unwrap()
-            .tail(requested, Delimiter::NewLine)
+            .tail(requested, Delimiter::Newline)
             .unwrap();
         let mut buf = Vec::new();
         let n = input.stream.into_sequential().read_to_end(&mut buf).unwrap();
@@ -197,7 +197,7 @@ fn test_indexed_input_file_random_access() {
                 ..IndexerSettings::with_fs(fs.clone())
             },
         );
-        let input = IndexedInput::open(&path, &indexer, Delimiter::NewLine).unwrap();
+        let input = IndexedInput::open(&path, &indexer, Delimiter::Newline).unwrap();
         let mut blocks = input.into_blocks().sorted().collect_vec();
         assert_eq!(blocks.len(), 2);
         assert_eq!(blocks[0].entries_valid(), 1);
@@ -375,7 +375,7 @@ fn test_input_tail_ending_with_delimiter() {
     let input = Input::new(reference, stream);
 
     // Request last 1 entry
-    let input = input.tail(1, Delimiter::NewLine).unwrap();
+    let input = input.tail(1, Delimiter::Newline).unwrap();
     let mut buf = Vec::new();
     input.stream.into_sequential().read_to_end(&mut buf).unwrap();
 
@@ -410,7 +410,7 @@ fn test_input_tail_more_than_available() {
     let input = Input::new(reference, stream);
 
     // Request more entries than available
-    let input = input.tail(10, Delimiter::NewLine).unwrap();
+    let input = input.tail(10, Delimiter::Newline).unwrap();
     let mut buf = Vec::new();
     input.stream.into_sequential().read_to_end(&mut buf).unwrap();
 
@@ -428,7 +428,7 @@ fn test_input_tail_with_crlf() {
     let input = Input::new(reference, stream);
 
     // Request last 2 entries
-    let input = input.tail(2, Delimiter::NewLine).unwrap();
+    let input = input.tail(2, Delimiter::Newline).unwrap();
     let mut buf = Vec::new();
     input.stream.into_sequential().read_to_end(&mut buf).unwrap();
 
@@ -445,7 +445,7 @@ fn test_input_tail_partial_match_handling() {
     let reference = InputReference::Stdin;
     let input = Input::new(reference, stream);
 
-    let input = input.tail(3, Delimiter::NewLine).unwrap();
+    let input = input.tail(3, Delimiter::Newline).unwrap();
     let mut buf = Vec::new();
     input.stream.into_sequential().read_to_end(&mut buf).unwrap();
 
@@ -507,7 +507,7 @@ fn test_block_entry_methods() {
     let data = include_bytes!("testdata/two_messages.jsonl");
     let stream = Stream::RandomAccess(Box::new(Cursor::new(data)));
     let indexer = Indexer::<LocalFileSystem>::new(1, PathBuf::new(), IndexerSettings::with_fs(LocalFileSystem));
-    let input = IndexedInput::from_stream(InputReference::Stdin, stream, Delimiter::NewLine, &indexer).unwrap();
+    let input = IndexedInput::from_stream(InputReference::Stdin, stream, Delimiter::Newline, &indexer).unwrap();
 
     let blocks = input.into_blocks().collect_vec();
     assert!(!blocks.is_empty());
@@ -566,7 +566,7 @@ fn test_block_entry_empty() {
     let data = b"\n\n";
     let stream = Stream::RandomAccess(Box::new(Cursor::new(data)));
     let indexer = Indexer::<LocalFileSystem>::new(1, PathBuf::new(), IndexerSettings::with_fs(LocalFileSystem));
-    let input = IndexedInput::from_stream(InputReference::Stdin, stream, Delimiter::NewLine, &indexer).unwrap();
+    let input = IndexedInput::from_stream(InputReference::Stdin, stream, Delimiter::Newline, &indexer).unwrap();
 
     let blocks = input.into_blocks().collect_vec();
     assert!(!blocks.is_empty());

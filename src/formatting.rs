@@ -20,7 +20,7 @@ use crate::{
     filtering::IncludeExcludeSetting,
     fmtx::{OptimizedBuf, Push, aligned_left},
     model::{self, Caller, Level, RawValue},
-    scanning::{Delimit, NewLine, SearchExt},
+    scanning::{Delimit, Newline, SearchExt},
     settings::{self, AsciiMode, ExpansionMode, Formatting, ResolvedPunctuation},
     syntax::*,
     theme::{Element, Styler, StylingPush, Theme},
@@ -146,7 +146,7 @@ impl RecordWithSourceFormatter for RawRecordFormatter {
     #[inline(always)]
     fn format_record(&self, buf: &mut Buf, prefix: Range<usize>, rec: model::RecordWithSource) {
         let mut first = true;
-        for line in NewLine.into_searcher().split(rec.source) {
+        for line in Newline.into_searcher().split(rec.source) {
             if !first {
                 buf.push(b'\n');
                 buf.extend_from_within(prefix.clone());
@@ -1551,7 +1551,7 @@ pub mod string {
                     | Flag::Backtick
                     | Flag::Space
                     | Flag::Tab
-                    | Flag::NewLine
+                    | Flag::Newline
                     | Flag::EqualSign
             );
 
@@ -1565,25 +1565,25 @@ pub mod string {
                 return Ok(FormatResult::Ok(None));
             }
 
-            if !mask.intersects(Flag::DoubleQuote | Flag::Control | Flag::Tab | Flag::NewLine | Flag::Backslash) {
+            if !mask.intersects(Flag::DoubleQuote | Flag::Control | Flag::Tab | Flag::Newline | Flag::Backslash) {
                 buf.push(b'"');
                 buf.push(b'"');
                 buf[begin..].rotate_right(1);
                 return Ok(FormatResult::Ok(None));
             }
 
-            if !mask.intersects(Flag::SingleQuote | Flag::Control | Flag::Tab | Flag::NewLine | Flag::Backslash) {
+            if !mask.intersects(Flag::SingleQuote | Flag::Control | Flag::Tab | Flag::Newline | Flag::Backslash) {
                 buf.push(b'\'');
                 buf.push(b'\'');
                 buf[begin..].rotate_right(1);
                 return Ok(FormatResult::Ok(None));
             }
 
-            const WS: Mask = mask!(Flag::NewLine | Flag::Tab | Flag::Space);
+            const WS: Mask = mask!(Flag::Newline | Flag::Tab | Flag::Space);
 
             let has_control = mask.contains(Flag::Control);
             let has_backtick = mask.contains(Flag::Backtick);
-            let has_extended_space = mask.intersects(Flag::NewLine | Flag::Tab);
+            let has_extended_space = mask.intersects(Flag::Newline | Flag::Tab);
             let has_non_whitespace = mask.intersects(!WS);
 
             if !has_control && has_non_whitespace {
@@ -1673,7 +1673,7 @@ pub mod string {
             let analysis = buf[begin..].analyze();
             let mask = analysis.chars;
 
-            const NOT_PLAIN: Mask = mask!(Flag::EqualSign | Flag::Control | Flag::NewLine | Flag::Backslash);
+            const NOT_PLAIN: Mask = mask!(Flag::EqualSign | Flag::Control | Flag::Newline | Flag::Backslash);
 
             if !mask.intersects(NOT_PLAIN)
                 && !matches!(buf.get(begin), Some(b'"' | b'\'' | b'`'))
@@ -1682,21 +1682,21 @@ pub mod string {
                 return Ok(FormatResult::Ok(Some(analysis)));
             }
 
-            if !mask.intersects(Flag::DoubleQuote | Flag::Control | Flag::Tab | Flag::NewLine | Flag::Backslash) {
+            if !mask.intersects(Flag::DoubleQuote | Flag::Control | Flag::Tab | Flag::Newline | Flag::Backslash) {
                 buf.push(b'"');
                 buf.push(b'"');
                 buf[begin..].rotate_right(1);
                 return Ok(FormatResult::Ok(Some(analysis)));
             }
 
-            if !mask.intersects(Flag::SingleQuote | Flag::Control | Flag::Tab | Flag::NewLine | Flag::Backslash) {
+            if !mask.intersects(Flag::SingleQuote | Flag::Control | Flag::Tab | Flag::Newline | Flag::Backslash) {
                 buf.push(b'\'');
                 buf.push(b'\'');
                 buf[begin..].rotate_right(1);
                 return Ok(FormatResult::Ok(Some(analysis)));
             }
 
-            const XS: Mask = mask!(Flag::NewLine);
+            const XS: Mask = mask!(Flag::Newline);
             let has_control = mask.contains(Flag::Control);
             let has_backtick = mask.contains(Flag::Backtick);
             let has_newline = mask.intersects(XS);
@@ -1743,15 +1743,15 @@ pub mod string {
             let analysis = buf[begin + 1..].analyze();
             let mask = analysis.chars;
 
-            const XS: Mask = mask!(Flag::NewLine);
+            const XS: Mask = mask!(Flag::Newline);
             let has_newline = mask.intersects(XS);
 
-            if !mask.intersects(Flag::DoubleQuote | Flag::Control | Flag::Tab | Flag::NewLine | Flag::Backslash) {
+            if !mask.intersects(Flag::DoubleQuote | Flag::Control | Flag::Tab | Flag::Newline | Flag::Backslash) {
                 buf.push(b'"');
                 return Ok(FormatResult::Ok(None));
             }
 
-            if !mask.intersects(Flag::SingleQuote | Flag::Control | Flag::Tab | Flag::NewLine | Flag::Backslash) {
+            if !mask.intersects(Flag::SingleQuote | Flag::Control | Flag::Tab | Flag::Newline | Flag::Backslash) {
                 buf[begin] = b'\'';
                 buf.push(b'\'');
                 return Ok(FormatResult::Ok(None));
@@ -1805,7 +1805,7 @@ pub mod string {
             let analysis = buf[begin..].analyze();
             let mask = analysis.chars;
 
-            const XS: Mask = mask!(Flag::NewLine);
+            const XS: Mask = mask!(Flag::Newline);
             if mask.intersects(XS) && matches!(options.xsa, ExtendedSpaceAction::Abort) {
                 buf.truncate(begin);
                 return Ok(FormatResult::Aborted);
@@ -1823,7 +1823,7 @@ pub mod string {
                 return Ok(FormatResult::Ok(Some(analysis)));
             }
 
-            if !mask.intersects(Flag::DoubleQuote | Flag::Control | Flag::Tab | Flag::NewLine | Flag::Backslash) {
+            if !mask.intersects(Flag::DoubleQuote | Flag::Control | Flag::Tab | Flag::Newline | Flag::Backslash) {
                 buf.push(b'"');
                 buf.push(b'"');
                 buf[begin..].rotate_right(1);
@@ -1831,7 +1831,7 @@ pub mod string {
                 return Ok(FormatResult::Ok(Some(analysis)));
             }
 
-            if !mask.intersects(Flag::SingleQuote | Flag::Control | Flag::Tab | Flag::NewLine | Flag::Backslash) {
+            if !mask.intersects(Flag::SingleQuote | Flag::Control | Flag::Tab | Flag::Newline | Flag::Backslash) {
                 buf.push(b'\'');
                 buf.push(b'\'');
                 buf[begin..].rotate_right(1);
@@ -1946,7 +1946,7 @@ pub mod string {
         const BT: Mask = mask!(Flag::Backtick); // 0x60
         const SP: Mask = mask!(Flag::Space); // 0x20
         const TB: Mask = mask!(Flag::Tab); // 0x09
-        const NL: Mask = mask!(Flag::NewLine); // 0x0A, 0x0D
+        const NL: Mask = mask!(Flag::Newline); // 0x0A, 0x0D
         const EQ: Mask = mask!(Flag::EqualSign); // 0x3D
         const HY: Mask = mask!(Flag::Minus); // Hyphen, 0x2D
         const DO: Mask = mask!(Flag::Dot); // Dot, 0x2E
@@ -1988,7 +1988,7 @@ pub mod string {
         Backtick,
         Space,
         Tab,
-        NewLine,
+        Newline,
         EqualSign,
         Digit,
         Minus,
