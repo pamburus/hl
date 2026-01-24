@@ -6,7 +6,7 @@ ENV NIX_CONFIG="experimental-features = nix-command flakes"
 # Install `just`, `ruff`, and `nixfmt` into the root user's nix profile
 RUN nix profile add \
     nixpkgs#just \
-    nixpkgs#nixfmt-classic \
+    nixpkgs#nixfmt-rfc-style \
     nixpkgs#ruff  \
     && nix-collect-garbage -d
 
