@@ -1,6 +1,6 @@
 # hl [![Build Status][ci-img]][ci] [![Coverage Status][cov-img]][cov] [![Release][release-img]][release]
 
-[![banner](doc/banner.svg)](#screenshot)
+[![banner](docs/assets/banner.svg)](#screenshot)
 
 High-performance log viewer and processor that transforms logs in JSON and logfmt formats into a human-readable output. Built with efficiency in mind, it enables quick parsing and analysis of large log files with minimal overhead.
 
@@ -35,7 +35,7 @@ High-performance log viewer and processor that transforms logs in JSON and logfm
 
 ### Performance comparison with [humanlog](https://github.com/humanlogio/humanlog), [hlogf](https://github.com/ssgreg/hlogf) and [fblog](https://github.com/brocode/fblog) on a 2.3 GiB log file
 
-![performance chart](doc/performance-chart.svg)
+![performance chart](docs/assets/performance-chart.svg)
 
 * See [performance](#performance) section for more details.
 
@@ -666,7 +666,7 @@ hl --list-themes | fzf --color='bg+:23,gutter:-1,pointer:210' --highlight-line -
 
 #### Custom themes
 
-For complete theme configuration reference, see __[Theme Configuration Guide](doc/theme.md)__.
+For complete theme configuration reference, see __[Theme Configuration Guide](docs/theme/theme.md)__.
 
 * Custom themes are automatically loaded when found in a predefined platform-specific location.
 
@@ -821,7 +821,7 @@ Advanced Options:
 
 ## Performance
 
-![performance chart](doc/performance-chart.svg)
+![performance chart](docs/assets/performance-chart.svg)
 
 * MacBook Pro (16-inch, 2021)
   * __CPU__:   Apple M1 Max CPU
