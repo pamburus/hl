@@ -2,6 +2,12 @@
 
 Raw output mode allows you to output the original JSON source entries instead of `hl`'s formatted representation. This is useful for piping to other tools, preserving exact formatting, or re-processing filtered results.
 
+## Configuration
+
+| Method | Setting |
+|--------|---------|
+| CLI option | [`-r, --raw`](../reference/options.md#raw), [`--no-raw`](../reference/options.md#no-raw) |
+
 ## Enabling Raw Output
 
 Use the `--raw` (or `-r`) flag:
@@ -361,24 +367,6 @@ Raw output is typically **faster** than formatted output because:
 - Direct pass-through of source JSON
 
 For large-scale filtering and export operations, raw mode can provide a performance benefit.
-
-## Configuration
-
-Set raw mode as default in your config file:
-
-```toml
-# ~/.config/hl/config.toml
-raw = true
-```
-
-Or via environment variable:
-
-```sh
-export HL_RAW=true
-hl app.log
-```
-
-You can always override with `--no-raw` on the command line.
 
 ## Related Topics
 

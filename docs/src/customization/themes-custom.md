@@ -47,7 +47,7 @@ A theme file is written in TOML format and consists of several sections:
 
 Here's a minimal custom theme:
 
-```hl/dev/null/my-theme.toml#L1
+```toml
 version = "1.1"
 tags = ["dark", "16color"]
 
@@ -91,7 +91,7 @@ Available modes:
 
 To **remove** a mode inherited from another style, prefix it with `-`:
 
-```hl/dev/null/example.toml#L1
+```toml
 [styles]
 primary.modes = ["bold", "italic"]
 secondary.style = "primary"
@@ -102,7 +102,7 @@ secondary.modes = ["-bold"]  # Inherits italic, removes bold
 
 Styles can inherit from other styles using the `style` property:
 
-```hl/dev/null/example.toml#L1
+```toml
 [styles]
 primary.foreground = "cyan"
 accent.style = "primary"
@@ -111,7 +111,7 @@ accent.modes = ["bold"]
 
 You can inherit from multiple styles (they are merged in order):
 
-```hl/dev/null/example.toml#L1
+```toml
 [styles]
 primary.foreground = "white"
 strong.modes = ["bold"]
@@ -147,7 +147,7 @@ Define general-purpose styles that can be referenced elsewhere. Common style nam
 
 Example:
 
-```hl/dev/null/styles-example.toml#L1
+```toml
 [styles]
 primary.foreground = "#abb2bf"
 secondary.foreground = "#636d83"
@@ -199,7 +199,7 @@ This shows the complete inheritance chain from base styles through elements to l
 
 Example:
 
-```hl/dev/null/elements-example.toml#L1
+```toml
 [elements]
 input.style = "secondary"
 time.style = "secondary"
@@ -221,7 +221,7 @@ null.foreground = "#e06c75"
 
 Customize styles for specific log levels. You can override any element style for a given level:
 
-```hl/dev/null/levels-example.toml#L1
+```toml
 [levels]
 [levels.warning]
 time.style = "warning"
@@ -240,7 +240,7 @@ Supported level names: `unknown`, `trace`, `debug`, `info`, `warning`, `error`.
 
 Customize status indicators (rarely needed):
 
-```hl/dev/null/indicators-example.toml#L1
+```toml
 [indicators]
 [indicators.sync]
 synced.text = "✓"
@@ -253,7 +253,7 @@ failed.inner.modes = ["bold"]
 
 Here's a complete custom theme based on a fictional "midnight" color scheme:
 
-```hl/dev/null/midnight.toml#L1
+```toml
 #:schema https://raw.githubusercontent.com/pamburus/hl/latest/schema/json/theme.schema.v1.json
 
 version = "1.1"

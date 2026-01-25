@@ -314,14 +314,13 @@ Override the pager command (takes precedence over `PAGER`).
 ```sh
 export HL_PAGER=less
 export HL_PAGER="less -R"
-export HL_PAGER=bat
 export HL_PAGER=most
 ```
 
 Example:
 ```sh
-# Use bat as pager
-export HL_PAGER="bat --style=plain --paging=always"
+# Use most as pager with "wrap lines" mode
+export HL_PAGER="most -w"
 ```
 
 #### PAGER

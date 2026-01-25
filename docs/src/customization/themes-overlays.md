@@ -23,14 +23,14 @@ Overlays are perfect for:
 
 Add overlays to your config file (`~/.config/hl/config.toml` or similar):
 
-```hl/dev/null/config.toml#L1
+```toml
 theme = "one-dark-24"
 theme-overlays = ["@accent-italic"]
 ```
 
 Multiple overlays can be specified (they are applied in order):
 
-```hl/dev/null/config.toml#L1
+```toml
 theme = "classic"
 theme-overlays = ["@accent-italic", "@my-tweaks"]
 ```
@@ -49,7 +49,7 @@ This overlay works with any theme and any terminal that supports italic text.
 
 To use it, add it to your configuration file:
 
-```hl/dev/null/config.toml#L1
+```toml
 theme-overlays = ["@accent-italic"]
 ```
 
@@ -59,7 +59,7 @@ theme-overlays = ["@accent-italic"]
 
 Like regular themes, overlay files are stored in:
 
-```hl/dev/null/path.txt#L1
+```text
 ~/.config/hl/themes/
 ```
 
@@ -69,7 +69,7 @@ Overlay filenames conventionally start with `@` (e.g., `@my-overlay.toml`), but 
 
 An overlay is a theme file with the `"overlay"` tag:
 
-```hl/dev/null/my-overlay.toml#L1
+```toml
 #:schema https://raw.githubusercontent.com/pamburus/hl/latest/schema/json/theme.schema.v1.json
 
 version = "1.1"
@@ -85,7 +85,7 @@ The `"overlay"` tag tells `hl` that this theme should be merged with a base them
 
 Here's a simple overlay that makes error messages bold and underlined:
 
-```hl/dev/null/@bold-errors.toml#L1
+```toml
 version = "1.1"
 tags = ["overlay", "dark", "light"]
 
@@ -95,7 +95,7 @@ message.modes = ["bold", "underline"]
 
 Save this as `~/.config/hl/themes/@bold-errors.toml` and configure it in your config file:
 
-```hl/dev/null/config.toml#L1
+```toml
 theme-overlays = ["@bold-errors"]
 ```
 
@@ -103,7 +103,7 @@ theme-overlays = ["@bold-errors"]
 
 You can create overlays that work with both dark and light themes by tagging appropriately:
 
-```hl/dev/null/@subtle-accents.toml#L1
+```toml
 version = "1.1"
 tags = ["overlay", "dark", "light", "16color", "256color", "truecolor"]
 
@@ -120,7 +120,7 @@ This overlay will work with any theme because it only modifies modes, not colors
 
 Create an overlay to underline all field keys:
 
-```hl/dev/null/@underline-keys.toml#L1
+```toml
 version = "1.1"
 tags = ["overlay", "dark", "light"]
 
@@ -130,7 +130,7 @@ key.modes = ["underline"]
 
 Save as `~/.config/hl/themes/@underline-keys.toml` and configure:
 
-```hl/dev/null/config.toml#L1
+```toml
 theme-overlays = ["@underline-keys"]
 ```
 
@@ -138,7 +138,7 @@ theme-overlays = ["@underline-keys"]
 
 Make timestamps less prominent:
 
-```hl/dev/null/@dim-time.toml#L1
+```toml
 version = "1.1"
 tags = ["overlay", "dark", "light"]
 
@@ -150,7 +150,7 @@ time.modes = ["faint"]
 
 Create an overlay that changes number colors for dark themes only:
 
-```hl/dev/null/@green-numbers-dark.toml#L1
+```toml
 version = "1.1"
 tags = ["overlay", "dark", "truecolor"]
 
@@ -164,7 +164,7 @@ This overlay should only be used with dark truecolor themes.
 
 Combine several modifications:
 
-```hl/dev/null/@my-style.toml#L1
+```toml
 version = "1.1"
 tags = ["overlay", "dark", "light"]
 
@@ -196,7 +196,7 @@ When an overlay is applied:
 
 Base theme:
 
-```hl/dev/null/base.toml#L1
+```toml
 [elements]
 key.foreground = "blue"
 key.modes = ["bold"]
@@ -204,21 +204,21 @@ key.modes = ["bold"]
 
 Overlay:
 
-```hl/dev/null/overlay.toml#L1
+```toml
 [elements]
 key.modes = ["italic"]
 ```
 
 Result:
 
-```hl/dev/null/result.txt#L1
+```text
 key.foreground = "blue"       # From base (unchanged)
 key.modes = ["italic"]        # From overlay (replaces base modes)
 ```
 
 If you want to **add** modes rather than replace them, you must specify all desired modes in the overlay:
 
-```hl/dev/null/overlay-add.toml#L1
+```toml
 [elements]
 key.modes = ["bold", "italic"]  # Explicitly include both
 ```
@@ -235,7 +235,7 @@ key.modes = ["bold", "italic"]  # Explicitly include both
 
 You can use overlays with your own custom themes in the configuration file:
 
-```hl/dev/null/config.toml#L1
+```toml
 theme = "my-custom-theme"
 theme-overlays = ["@accent-italic"]
 ```
@@ -266,7 +266,7 @@ If multiple overlays conflict:
 
 - The last overlay in the `theme-overlays` array wins for any given property.
 - Control order in the config file:
-  ```hl/dev/null/config.toml#L1
+  ```toml
   theme-overlays = ["@first", "@second"]
   ```
   `@second` will override any conflicting properties from `@first`.

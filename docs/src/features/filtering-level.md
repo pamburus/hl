@@ -2,6 +2,15 @@
 
 Log level filtering is the quickest way to narrow down logs by their severity. hl makes it easy to filter logs to show only messages at or above a specific level.
 
+## Configuration
+
+| Method | Setting |
+|--------|---------|
+| CLI option | [`-l, --level`](../reference/options.md#level) |
+| Environment | [`HL_LEVEL`](../customization/environment.md#hl-level) |
+
+**Values:** `trace` (`t`), `debug` (`d`), `info` (`i`), `warn` (`w`), `error` (`e`)
+
 ## Understanding Log Levels
 
 hl recognizes five standard log levels, ordered from most verbose to most severe:

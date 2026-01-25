@@ -2,6 +2,14 @@
 
 Complex queries allow you to build sophisticated filtering expressions using logical operators, comparisons, and pattern matching. This is hl's most powerful filtering feature.
 
+## Configuration
+
+| Method | Setting |
+|--------|---------|
+| CLI option | [`-q, --query`](../reference/options.md#query) |
+
+See [Query Syntax Reference](../reference/query-syntax.md) for the complete grammar.
+
 ## Basic Query Syntax
 
 Use the `-q` or `--query` option to specify a query:
