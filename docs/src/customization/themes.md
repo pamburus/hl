@@ -215,9 +215,14 @@ Available modes:
 
 ### Stylable Elements
 
-**General elements:** `number`, `string`, `boolean`, `null`, `key`, `punctuation`
+All 28 predefined elements organized by category:
 
-**Log-specific elements:** `time`, `level`, `logger`, `caller`, `message`
+| Category | Elements |
+|----------|----------|
+| **Input** | `input`, `input-number`, `input-number-inner`, `input-name`, `input-name-inner` |
+| **Metadata** | `time`, `level`, `level-inner`, `logger`, `logger-inner`, `caller`, `caller-inner` |
+| **Message** | `message`, `message-delimiter`, `field`, `key`, `ellipsis` |
+| **Values** | `array`, `object`, `string`, `number`, `boolean`, `boolean-true`, `boolean-false`, `null` |
 
 **Level-specific styling:**
 ```toml
