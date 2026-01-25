@@ -189,6 +189,25 @@ When set to `always`, restricts output to ASCII characters only.
 
 ---
 
+### allow-prefix {#allow-prefix}
+
+Allow non-JSON prefixes before JSON entries.
+
+- **Type:** boolean
+- **Default:** `false`
+- **CLI:** `--allow-prefix`
+- **Env:** `HL_ALLOW_PREFIX`
+
+```toml
+allow-prefix = true
+```
+
+Useful for Docker logs, systemd journal output, and other sources that add metadata before JSON.
+
+See [Non-JSON Prefixes](../features/prefixes.md) for details.
+
+---
+
 ### fields.hide {#fields-hide}
 
 Hide specific fields from display.
@@ -500,6 +519,26 @@ time-zone = "UTC"
 ```
 
 See [Time Display](../features/time-display.md#timezone-options) for timezone configuration.
+
+---
+
+### unix-timestamp-unit {#unix-timestamp-unit}
+
+Unit for interpreting numeric Unix timestamps.
+
+- **Type:** string
+- **Default:** `auto`
+- **Values:** `auto`, `s` (seconds), `ms` (milliseconds), `us` (microseconds), `ns` (nanoseconds)
+- **CLI:** `--unix-timestamp-unit <UNIT>`
+- **Env:** `HL_UNIX_TIMESTAMP_UNIT`
+
+```toml
+unix-timestamp-unit = "ms"
+```
+
+When set to `auto`, the unit is detected based on the magnitude of the timestamp value.
+
+See [Timestamp Handling](../features/timestamps.md) for details.
 
 ---
 
