@@ -24,30 +24,55 @@ Special tags include:
 
 ### Universal (Multi-Mode)
 
-**`uni`** (dark, light, 16-color)
+#### **`uni`** (dark, light, 16-color) {#uni}
 - The default theme; works on all terminals with both dark and light backgrounds.
 - Balances readability and compatibility.
 - Uses only the standard 16 ANSI colors.
 
-**`universal`** (dark, light, 16-color)
+<picture>
+  <source srcset="https://raw.githubusercontent.com/pamburus/hl-extra/refs/heads/main/screenshot/uni/dark.svg" media="(prefers-color-scheme: dark)">
+  <img src="https://raw.githubusercontent.com/pamburus/hl-extra/refs/heads/main/screenshot/uni/light.svg" alt="screenshot-uni">
+</picture>
+
+#### **`universal`** (dark, light, 16-color) {#universal}
 - Variant of `uni` with green accent colors and reversed warning and errors levels.
 - Works on both dark and light backgrounds.
 - Balances readability and compatibility.
 - Uses only the standard 16 ANSI colors.
 
-**`universal-blue`** (dark, light, 16-color)
+<picture>
+  <source srcset="https://raw.githubusercontent.com/pamburus/hl-extra/refs/heads/main/screenshot/universal/dark.svg" media="(prefers-color-scheme: dark)">
+  <img src="https://raw.githubusercontent.com/pamburus/hl-extra/refs/heads/main/screenshot/universal/light.svg" alt="screenshot-universal">
+</picture>
+
+#### **`universal-blue`** (dark, light, 16-color) {#universal-blue}
 - Variant of `universal` with blue accent colors.
 - Works on both dark and light backgrounds.
 
-**`neutral`** (dark, light, 16-color)
+<picture>
+  <source srcset="https://raw.githubusercontent.com/pamburus/hl-extra/refs/heads/main/screenshot/universal-blue/dark.svg" media="(prefers-color-scheme: dark)">
+  <img src="https://raw.githubusercontent.com/pamburus/hl-extra/refs/heads/main/screenshot/universal-blue/light.svg" alt="screenshot-universal-blue">
+</picture>
+
+#### **`neutral`** (dark, light, 16-color) {#neutral}
 - Minimal colorization; emphasizes log levels only.
 - Most content displayed in terminal default colors.
 - Suitable for minimal or monochrome aesthetics.
 
-**`frostline`** (dark, light, 16-color)
+<picture>
+  <source srcset="https://raw.githubusercontent.com/pamburus/hl-extra/refs/heads/main/screenshot/neutral/dark.svg" media="(prefers-color-scheme: dark)">
+  <img src="https://raw.githubusercontent.com/pamburus/hl-extra/refs/heads/main/screenshot/neutral/light.svg" alt="screenshot-neutral">
+</picture>
+
+#### **`frostline`** (dark, light, 16-color) {#frostline}
 - Cool cyan-based theme with bold syntax highlighting.
 - Works on both dark and light backgrounds.
 - Distinguishes `true`/`false` boolean values with different colors.
+
+<picture>
+  <source srcset="https://raw.githubusercontent.com/pamburus/hl-extra/refs/heads/main/screenshot/frostline/dark.svg" media="(prefers-color-scheme: dark)">
+  <img src="https://raw.githubusercontent.com/pamburus/hl-extra/refs/heads/main/screenshot/frostline/light.svg" alt="screenshot-frostline">
+</picture>
 
 ### Dark Themes (256-color)
 
