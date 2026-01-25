@@ -274,7 +274,7 @@ hl --input-format json large-file.json.gz
 
 ```sh
 # Auto-detect and process JSON logs
-hl application.log
+hl app.log
 
 # Explicit JSON with filtering
 hl --input-format json --level error app.log

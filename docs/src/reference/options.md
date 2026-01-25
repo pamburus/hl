@@ -10,7 +10,7 @@ Files to process. If no files are specified, `hl` reads from standard input.
 
 ```/dev/null/example.sh#L1-2
 # Read from file
-hl application.log
+hl app.log
 
 # Read from multiple files
 hl app1.log app2.log
@@ -79,7 +79,7 @@ This mode is designed for live log monitoring. It provides near-real-time output
 
 ```/dev/null/example.sh#L1-2
 # Follow a log file with live updates
-hl --follow application.log
+hl --follow app.log
 ```
 
 See [Follow Mode](../features/follow-mode.md) for details.

@@ -7,7 +7,7 @@ hl automatically integrates with a pager to make viewing large log files comfort
 When you run hl with a log file, it automatically opens the output in a pager:
 
 ```sh
-hl application.log
+hl app.log
 ```
 
 By default, hl uses the `less` pager if available, which provides:
@@ -30,13 +30,13 @@ hl determines which pager to use in this order:
 Set your preferred pager using the `PAGER` environment variable:
 
 ```sh
-PAGER=most hl application.log
+PAGER=most hl app.log
 ```
 
 Or use `HL_PAGER` to override `PAGER` specifically for hl:
 
 ```sh
-HL_PAGER=bat hl application.log
+HL_PAGER=bat hl app.log
 ```
 
 ## Pager Options
@@ -47,13 +47,13 @@ You can customize the behavior of `less` using the `LESS` environment variable:
 
 ```sh
 # Disable line wrapping
-LESS=-SR hl application.log
+LESS=-SR hl app.log
 
 # Enable mouse scrolling
-LESS="-R --mouse" hl application.log
+LESS="-R --mouse" hl app.log
 
 # Quit if output fits on one screen
-LESS=-FX hl application.log
+LESS=-FX hl app.log
 ```
 
 Common `less` options:
@@ -80,20 +80,20 @@ export LESS="-R --mouse"
 Use the `-P` flag to disable the pager entirely:
 
 ```sh
-hl -P application.log
+hl -P app.log
 ```
 
 Or use the `--paging` option for more control:
 
 ```sh
 # Never use pager
-hl --paging=never application.log
+hl --paging=never app.log
 
 # Always use pager
-hl --paging=always application.log
+hl --paging=always app.log
 
 # Automatic (default)
-hl --paging=auto application.log
+hl --paging=auto app.log
 ```
 
 ### Paging Modes
@@ -167,7 +167,7 @@ Add to your PowerShell profile to make it permanent.
 [bat](https://github.com/sharkdp/bat) is a modern pager with syntax highlighting:
 
 ```sh
-PAGER="bat --style=plain --paging=always" hl application.log
+PAGER="bat --style=plain --paging=always" hl app.log
 ```
 
 ### most
@@ -175,7 +175,7 @@ PAGER="bat --style=plain --paging=always" hl application.log
 [most](https://www.jedsoft.org/most/) is another alternative:
 
 ```sh
-PAGER="most -w" hl application.log
+PAGER="most -w" hl app.log
 ```
 
 ### moar
@@ -183,7 +183,7 @@ PAGER="most -w" hl application.log
 [moar](https://github.com/walles/moar) is designed for ANSI escape sequences:
 
 ```sh
-PAGER=moar hl application.log
+PAGER=moar hl app.log
 ```
 
 ## Troubleshooting
@@ -195,12 +195,12 @@ If colors aren't displaying correctly:
 1. Make sure your pager supports ANSI escape sequences
 2. For `less`, ensure `-R` option is set:
    ```sh
-   LESS=-R hl application.log
+   LESS=-R hl app.log
    ```
 
 3. Try forcing color output:
    ```sh
-   hl -c application.log
+   hl -c app.log
    ```
 
 ### Mouse Scrolling Not Working
@@ -208,7 +208,7 @@ If colors aren't displaying correctly:
 For `less`, enable mouse support:
 
 ```sh
-LESS="--mouse" hl application.log
+LESS="--mouse" hl app.log
 ```
 
 Note: This requires a terminal that supports mouse reporting.
@@ -218,8 +218,8 @@ Note: This requires a terminal that supports mouse reporting.
 If hl can't find a pager:
 
 1. Install `less`: See platform-specific instructions above
-2. Or disable paging: `hl -P application.log`
-3. Or specify a pager: `PAGER=cat hl application.log`
+2. Or disable paging: `hl -P app.log`
+3. Or specify a pager: `PAGER=cat hl app.log`
 
 ## Best Practices
 
@@ -234,19 +234,19 @@ If hl can't find a pager:
 ### Basic Usage with Custom Pager Settings
 
 ```sh
-LESS="-RSi --mouse" hl application.log
+LESS="-RSi --mouse" hl app.log
 ```
 
 ### Disable Pager for Grep
 
 ```sh
-hl -P application.log | grep ERROR
+hl -P app.log | grep ERROR
 ```
 
 ### Temporary Pager Override
 
 ```sh
-HL_PAGER="most -w" hl application.log
+HL_PAGER="most -w" hl app.log
 ```
 
 ### Set Permanent Defaults
@@ -267,13 +267,13 @@ By default, `hl` ignores the first 3 interrupt signals (Ctrl-C) before actually 
 
 ```sh
 # Default: ignore first 3 interrupts
-hl application.log
+hl app.log
 
 # Adjust to ignore 5 interrupts
-hl --interrupt-ignore-count 5 application.log
+hl --interrupt-ignore-count 5 app.log
 
 # Exit immediately on first Ctrl-C
-hl --interrupt-ignore-count 0 application.log
+hl --interrupt-ignore-count 0 app.log
 ```
 
 When you press Ctrl-C, you'll see a message indicating how many more times you need to press it:
@@ -318,7 +318,7 @@ The `--interrupt-ignore-count` option is **ignored in follow mode** (`-F`):
 
 ```sh
 # Follow mode exits immediately on Ctrl-C
-hl -F application.log
+hl -F app.log
 ```
 
 Follow mode provides immediate exit because you're monitoring files directly and want quick termination when you're done.

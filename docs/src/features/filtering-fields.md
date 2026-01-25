@@ -7,13 +7,13 @@ Field filtering allows you to show only log entries where specific fields match 
 Use the `-f` or `--filter` option to filter by field values:
 
 ```sh
-hl -f KEY=VALUE application.log
+hl -f KEY=VALUE app.log
 ```
 
 You can specify multiple filters, and all must match (AND logic):
 
 ```sh
-hl -f service=api -f environment=production application.log
+hl -f service=api -f environment=production app.log
 ```
 
 ## Filter Operators
@@ -24,13 +24,13 @@ Show entries where a field equals a specific value:
 
 ```sh
 # Single value
-hl -f status=200 application.log
+hl -f status=200 app.log
 
 # String value
-hl -f method=GET application.log
+hl -f method=GET app.log
 
 # Numeric value
-hl -f port=8080 application.log
+hl -f port=8080 app.log
 ```
 
 ### Not Equal (`!=`)
@@ -39,10 +39,10 @@ Show entries where a field exists and is NOT equal to a value:
 
 ```sh
 # Exclude specific status
-hl -f 'status!=200' application.log
+hl -f 'status!=200' app.log
 
 # Exclude specific method
-hl -f 'method!=GET' application.log
+hl -f 'method!=GET' app.log
 ```
 
 **Important:** This only matches entries that **have** the field. Entries without the field are excluded.
@@ -53,13 +53,13 @@ Show entries where a field contains a substring:
 
 ```sh
 # Contains substring
-hl -f 'message~=error' application.log
+hl -f 'message~=error' app.log
 
-# Contains in any field
-hl -f 'url~=/api/v1' application.log
+# Contains /api/v1/ in URL
+hl -f 'url~=/api/v1/' app.log
 
 # Case-sensitive
-hl -f 'user~=Admin' application.log
+hl -f 'user~=Admin' app.log
 ```
 
 ### Does Not Contain (`!~=`)
@@ -68,10 +68,10 @@ Show entries where a field exists and does NOT contain a substring:
 
 ```sh
 # Does not contain
-hl -f 'message!~=debug' application.log
+hl -f 'message!~=debug' app.log
 
 # Exclude pattern
-hl -f 'path!~=/health' application.log
+hl -f 'path!~=/health' app.log
 ```
 
 **Important:** Like `!=`, this requires the field to exist.
@@ -84,7 +84,7 @@ By default, field filters only match entries that **have** the field. The `?` mo
 
 ```sh
 # Only matches entries that HAVE status field AND status != 200
-hl -f 'status!=200' application.log
+hl -f 'status!=200' app.log
 ```
 
 Entries without a `status` field are **excluded**.
@@ -93,7 +93,7 @@ Entries without a `status` field are **excluded**.
 
 ```sh
 # Matches entries WHERE status != 200 OR status field is absent
-hl -f 'status?!=200' application.log
+hl -f 'status?!=200' app.log
 ```
 
 Entries without a `status` field are **included**.
@@ -102,13 +102,13 @@ Entries without a `status` field are **included**.
 
 ```sh
 # Show entries with status=error OR no status field
-hl -f 'status?=error' application.log
+hl -f 'status?=error' app.log
 
 # Show entries without 'ok' status OR no status field
-hl -f 'status?!=ok' application.log
+hl -f 'status?!=ok' app.log
 
 # Show entries with price=0 OR no price field
-hl -f 'price?=0' application.log
+hl -f 'price?=0' app.log
 ```
 
 This is particularly useful for logfmt or logs where fields are optional.
@@ -119,13 +119,13 @@ Access nested fields using dot notation:
 
 ```sh
 # Simple nested field
-hl -f user.id=12345 application.log
+hl -f user.id=12345 app.log
 
 # Deep nesting
-hl -f request.headers.content-type=application/json application.log
+hl -f request.headers.content-type=application/json app.log
 
 # Nested with operators
-hl -f 'response.error.code!=404' application.log
+hl -f 'response.error.code!=404' app.log
 ```
 
 For JSON logs like:
@@ -135,8 +135,8 @@ For JSON logs like:
 
 You can filter with:
 ```sh
-hl -f user.id=12345 application.log
-hl -f user.name=Alice application.log
+hl -f user.id=12345 app.log
+hl -f user.name=Alice app.log
 ```
 
 ## Array Fields
@@ -147,10 +147,10 @@ Check if any element in an array matches:
 
 ```sh
 # Any tag equals "error"
-hl -f 'tags.[]=error' application.log
+hl -f 'tags.[]=error' app.log
 
-# Any IP in list
-hl -f 'ip_addresses.[]=192.168.1.1' application.log
+# Match an IP address in the list of addresses
+hl -f 'addresses.[]=192.168.1.1' app.log
 ```
 
 For JSON like:
@@ -160,7 +160,7 @@ For JSON like:
 
 This matches:
 ```sh
-hl -f 'tags.[]=database' application.log
+hl -f 'tags.[]=database' app.log
 ```
 
 ### Specific Index (`[N]`)
@@ -169,23 +169,23 @@ Access a specific array element (0-based):
 
 ```sh
 # First element
-hl -f 'tags.[0]=critical' application.log
+hl -f 'tags.[0]=critical' app.log
 
 # Second element
-hl -f 'users.[1].name=admin' application.log
+hl -f 'users.[1].name=admin' app.log
 
 # Third element with nested field
-hl -f 'items.[2].price=9.99' application.log
+hl -f 'items.[2].price=9.99' app.log
 ```
 
 ### Nested Objects in Arrays
 
 ```sh
 # Any user with role=admin
-hl -f 'users.[].role=admin' application.log
+hl -f 'users.[].role=admin' app.log
 
 # Specific user's status
-hl -f 'users.[0].status=active' application.log
+hl -f 'users.[0].status=active' app.log
 ```
 
 For JSON like:
@@ -199,13 +199,13 @@ All filters must match:
 
 ```sh
 # Service=api AND environment=production
-hl -f service=api -f environment=production application.log
+hl -f service=api -f environment=production app.log
 
 # Service=api AND status!=200
-hl -f service=api -f 'status!=200' application.log
+hl -f service=api -f 'status!=200' app.log
 
 # Three conditions
-hl -f service=api -f method=POST -f 'status~=50' application.log
+hl -f service=api -f method=POST -f 'status~=50' app.log
 ```
 
 ## Common Filtering Patterns
@@ -214,62 +214,59 @@ hl -f service=api -f method=POST -f 'status~=50' application.log
 
 ```sh
 # Specific service
-hl -f service=payment application.log
+hl -f service=payment app.log
 
 # Specific component
-hl -f component=database application.log
+hl -f component=database app.log
 
 # Exclude component
-hl -f 'component!=health-check' application.log
+hl -f 'component!=health-check' app.log
 ```
 
 ### HTTP Status Filtering
 
 ```sh
 # Success
-hl -f status=200 application.log
+hl -f status=200 app.log
 
 # Client errors (4xx)
-hl -f 'status~=4' application.log
+hl -f 'status~~=^4' app.log
 
 # Not successful
-hl -f 'status!=200' application.log
+hl -f 'status!=200' app.log
 ```
 
 ### User/Request Tracking
 
 ```sh
 # Specific user
-hl -f user.id=12345 application.log
+hl -f user.id=12345 app.log
 
 # Specific request
-hl -f request.id=abc-123-def application.log
+hl -f request.id=abc-123-def app.log
 
 # Specific session
-hl -f session.id=xyz789 application.log
+hl -f session.id=xyz789 app.log
 ```
 
 ### Environment Filtering
 
 ```sh
 # Production only
-hl -f environment=production application.log
+hl -f environment=production app.log
 
 # Exclude development
-hl -f 'environment!=development' application.log
+hl -f 'environment!=development' app.log
 ```
 
 ### Error Filtering
 
 ```sh
 # Has error field
-hl -f 'error~=' application.log
+hl -f 'error~=' app.log
 
-# Specific error type
-hl -f error.type=DatabaseError application.log
-
-# No errors (requires field to exist)
-hl -f error= application.log
+# Specific error code
+hl -f error.code=DatabaseError app.log
 ```
 
 ## Combining with Other Filters
@@ -278,21 +275,21 @@ hl -f error= application.log
 
 ```sh
 # Errors from payment service
-hl -l e -f service=payment application.log
+hl -l e -f service=payment app.log
 ```
 
 ### Field + Time Range
 
 ```sh
 # API calls in last hour
-hl -f service=api --since -1h application.log
+hl -f service=api --since -1h app.log
 ```
 
 ### Field + Query
 
 ```sh
 # API service with slow requests
-hl -f service=api -q 'duration > 0.5' application.log
+hl -f service=api -q 'duration > 0.5' app.log
 ```
 
 ### Multiple Field Filters + Level + Time
@@ -302,7 +299,7 @@ hl -l w \
    -f service=api \
    -f environment=production \
    --since -1h \
-   application.log
+   app.log
 ```
 
 ## Case Sensitivity
@@ -311,11 +308,11 @@ Field filters are **case-sensitive** for values:
 
 ```sh
 # These are different
-hl -f method=GET application.log
-hl -f method=get application.log
+hl -f method=GET app.log
+hl -f method=get app.log
 
 # Field names are also case-sensitive
-hl -f Status=200 application.log  # Different from status=200
+hl -f Status=200 app.log  # Different from status=200
 ```
 
 ## Quoting Values
@@ -324,36 +321,30 @@ Use quotes for values with special characters or spaces:
 
 ```sh
 # Spaces
-hl -f 'message=Connection timeout' application.log
+hl -f 'message=Connection timeout' app.log
 
 # Special characters
-hl -f 'path=/api/v1/users?active=true' application.log
+hl -f 'url=/api/v1/users?active=true' app.log
 
 # Shell-safe
-hl -f "user.name=O'Brien" application.log
+hl -f "user.name=O'Brien" app.log
 ```
 
 ## Performance Tips
 
-1. **Use field filters for simple equality** - Faster than queries:
+1. **Use chronologocal sorting** - Quick builds index for time-based logs:
    ```sh
-   # Prefer this
-   hl -f service=api application.log
-   
-   # Over this
-   hl -q 'service = "api"' application.log
+   hl -s app.log
    ```
 
-2. **Apply most selective filters first** - Though order doesn't matter for correctness, hl is optimized
-
-3. **Combine with level filtering** - Quick reduction of data:
+1. **Combine with level filtering** - Quick reduction of data:
    ```sh
-   hl -l e -f service=api application.log
+   hl -s -l e -f service=api app.log
    ```
 
-4. **Use time ranges** - Dramatically reduces processing:
+2. **Use time ranges** - Dramatically reduces processing:
    ```sh
-   hl -f service=api --since -1h application.log
+   hl -s -f service=api --since -1h app.log
    ```
 
 ## Examples by Use Case
@@ -362,68 +353,68 @@ hl -f "user.name=O'Brien" application.log
 
 ```sh
 # All logs from payment service
-hl -f service=payment application.log
+hl -f service=payment app.log
 
 # Payment service errors
-hl -l e -f service=payment application.log
+hl -l e -f service=payment app.log
 
 # Payment service excluding health checks
-hl -f service=payment -f 'endpoint!=/health' application.log
+hl -f service=payment -f 'endpoint!=/health' app.log
 ```
 
 ### Tracking Requests
 
 ```sh
 # Specific request ID
-hl -f request.id=abc-123 application.log
+hl -f request.id=abc-123 app.log
 
 # All requests from user
-hl -f user.id=12345 application.log
+hl -f user.id=12345 app.log
 
 # Requests with specific trace
-hl -f trace.id=xyz789 application.log
+hl -f trace.id=xyz789 app.log
 ```
 
 ### HTTP API Monitoring
 
 ```sh
 # All POST requests
-hl -f method=POST application.log
+hl -f method=POST app.log
 
 # Non-GET requests
-hl -f 'method!=GET' application.log
+hl -f 'method!=GET' app.log
 
 # Specific endpoint
-hl -f path=/api/v1/users application.log
+hl -f path=/api/v1/users app.log
 
 # Endpoint pattern
-hl -f 'path~=/api/v1' application.log
+hl -f 'path~=/api/v1' app.log
 ```
 
 ### Error Investigation
 
 ```sh
 # Entries with errors
-hl -f 'error~=' application.log
+hl -f 'error~=' app.log
 
 # Specific error type
-hl -f error.type=ValidationError application.log
+hl -f error.type=ValidationError app.log
 
 # Database errors
-hl -f 'error.message~=database' application.log
+hl -f 'error.message~=database' app.log
 ```
 
 ### Multi-Tenant Applications
 
 ```sh
 # Specific tenant
-hl -f tenant.id=acme-corp application.log
+hl -f tenant.name=acme-corp app.log
 
 # Exclude system tenant
-hl -f 'tenant.id!=system' application.log
+hl -f 'tenant.name!=system' app.log
 
 # Tenant with errors
-hl -l e -f tenant.id=acme-corp application.log
+hl -l e -f tenant.name=acme-corp app.log
 ```
 
 ## Troubleshooting
@@ -434,24 +425,17 @@ If you get no output:
 
 1. **Check field exists**:
    ```sh
-   hl --raw application.log | head
+   hl --raw app.log | head
    ```
 
 2. **Check field name casing**:
    ```sh
    # Try different cases
-   hl -f Service=api application.log
-   hl -f service=api application.log
+   hl -f Service=api app.log
+   hl -f service=api app.log
    ```
 
-3. **Check value format**:
-   ```sh
-   # Numeric vs string
-   hl -f status=200 application.log
-   hl -f status="200" application.log
-   ```
-
-4. **Remove filters one by one** to find which is too restrictive
+3. **Remove filters one by one** to find which is too restrictive
 
 ### Unexpected Results
 
@@ -464,10 +448,10 @@ If you see unexpected entries:
 3. **Verify nested field syntax**:
    ```sh
    # Correct
-   hl -f user.name=Alice application.log
+   hl -f user.name=Alice app.log
    
    # Incorrect
-   hl -f user[name]=Alice application.log
+   hl -f user[name]=Alice app.log
    ```
 
 ### Field Not Filtering
@@ -475,13 +459,13 @@ If you see unexpected entries:
 1. **Check if field is nested**:
    ```sh
    # May need dot notation
-   hl -f response.status=200 application.log
+   hl -f response.status=200 app.log
    ```
 
 2. **Check if field is in array**:
    ```sh
    # May need array syntax
-   hl -f 'tags.[]=error' application.log
+   hl -f 'tags.[]=error' app.log
    ```
 
 ## Limitations
@@ -489,25 +473,20 @@ If you see unexpected entries:
 1. **No OR logic** - All filters must match (use `-q` for OR):
    ```sh
    # This is AND (both must match)
-   hl -f service=api -f service=web application.log  # No matches!
+   hl -f service=api -f service=web app.log  # No matches!
    
    # Use query for OR
-   hl -q 'service = "api" or service = "web"' application.log
+   hl -q 'service = "api" or service = "web"' app.log
    ```
 
-2. **No regex** - Use query with `matches` operator:
+2. **No numeric comparisons** - Use query:
    ```sh
-   hl -q 'message matches "error|warning"' application.log
+   hl -q 'status >= 400' app.log
    ```
 
-3. **No numeric comparisons** - Use query:
+3. **No wildcards** - Use `~=` for substring or query with `like`:
    ```sh
-   hl -q 'status >= 400' application.log
-   ```
-
-4. **No wildcards** - Use `~=` for substring or query with `like`:
-   ```sh
-   hl -q 'path like "/api/v*"' application.log
+   hl -q 'path like "/api/v*/*"' app.log
    ```
 
 ## When to Use Field Filters vs Queries
@@ -517,7 +496,6 @@ If you see unexpected entries:
 - ✓ Simple substring matching
 - ✓ Filtering by known field values
 - ✓ Combining multiple simple conditions (AND)
-- ✓ Performance is critical
 
 ### Use Queries (`-q`) When:
 - ✓ Need OR logic
@@ -532,25 +510,25 @@ See [Complex Queries](./filtering-queries.md) for advanced filtering.
 
 1. **Start with one filter** - Add more incrementally:
    ```sh
-   hl -f service=api application.log
-   hl -f service=api -f method=POST application.log
+   hl -f service=api app.log
+   hl -f service=api -f method=POST app.log
    ```
 
 2. **Use meaningful field names** from your logs
 
 3. **Quote complex values** to avoid shell interpretation:
    ```sh
-   hl -f 'message=Error: Connection failed' application.log
+   hl -f 'message=Error: Connection failed' app.log
    ```
 
 4. **Combine with level filtering** for quick reduction:
    ```sh
-   hl -l e -f service=payment application.log
+   hl -l e -f service=payment app.log
    ```
 
 5. **Use `?` modifier for optional fields** in sparse logs:
    ```sh
-   hl -f 'error?!=' application.log  # Include entries without error field
+   hl -f 'error?!=' app.log  # Include entries without error field
    ```
 
 ## Next Steps

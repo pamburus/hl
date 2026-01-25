@@ -8,7 +8,7 @@ Use the `--sort` (or `-s`) flag:
 
 ```sh
 # Sort a single file
-hl -s application.log
+hl -s app.log
 
 # Sort multiple files together
 hl -s app.log app.log.1 app.log.2
@@ -27,7 +27,7 @@ When you enable sorting, `hl`:
 4. **Sorts entries** chronologically using the index
 5. **Outputs sorted entries** in chronological order
 
-The key advantage: **filtering still applies**, and the index-based approach makes sorted filtering very efficient even on large files. The index contains level information, so level filtering is extremely fast – if a file segment doesn't contain the requested log levels at all, it's skipped entirely during processing (never read, parsed, or filtered).
+The key advantage: **filtering still applies**, and the index-based approach makes sorted filtering very efficient even on large files. The index contains level information, so level filtering is extremely fast – if a file segment doesn't contain the requested time range or log levels at all, it's skipped entirely during processing (never read, parsed, or filtered).
 
 ## When to Use Sort Mode
 
@@ -50,24 +50,18 @@ Sort mode is ideal when you need to:
 
 Timestamps can appear in various field names and can be located anywhere in the JSON structure (top-level or nested).
 
-**Default timestamp field names:** `timestamp`, `time`, `ts`
+**Commonly used timestamp field names:** `ts`, `time`, `timestamp`, `@timestamp`
 
 These field names are configurable via the configuration file (see [Configuration Files](../customization/config-files.md)):
 
 ```toml
 [fields.predefined.time]
-names = ["timestamp", "time", "ts", "@timestamp", "date"]
+names = ["ts", "time", "timestamp", "@timestamp"]
 ```
 
 ### Handling Multiple Timestamp Fields
 
-When an entry contains multiple timestamp fields, `hl` uses a priority order:
-
-1. `@timestamp` (common in ELK/Elasticsearch)
-2. `timestamp`
-3. `time`
-4. `ts`
-5. Other recognized timestamp field names
+When an entry contains multiple timestamp fields, `hl` uses the priority order according to the configuration.
 
 You typically don't need to configure this – `hl` chooses the most semantic timestamp automatically.
 

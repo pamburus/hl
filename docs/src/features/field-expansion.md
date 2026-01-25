@@ -4,30 +4,29 @@ Field expansion controls how `hl` displays nested objects, arrays, and complex f
 
 ## Overview
 
-When log entries contain nested structures like objects or arrays, `hl` can display them in different ways:
+When log entries contain many custom fields and nested objects, `hl` can display them in different ways:
 
-- **Inline** — keep nested structures on the same line when they're short
-- **Expanded** — display nested structures across multiple indented lines
-- **Never expand** — always keep structures inline regardless of size
-- **Always expand** — always break out nested structures
-- **Auto** — let `hl` decide based on context
+- **Auto** — keep each entry on a single line but expand fields with multi-line values using consistent indentation
+- **Never expand** — always keep each entry on a single line
+- **Always expand** — display each field on its own indented line and expand all nested objects
+- **Inline** — keep each entry on a single line but show multi-line values as raw data surrounded by backticks
 
 ## Enabling Field Expansion
 
 Use the `--expansion` (or `-x`) option:
 
 ```sh
-# Never expand nested structures
-hl --expansion never app.log
-
-# Expand inline when short enough
-hl --expansion inline app.log
-
-# Auto mode (context-dependent)
+# Expand only multi-line fields using consistent indentation
 hl --expansion auto app.log
 
-# Always expand nested structures
+# Never expand fields, keep each entry on a single line
+hl --expansion never app.log
+
+# Always expand all fields into multi-line format
 hl --expansion always app.log
+
+# Show multi-line values as raw data surrounded by backticks (legacy mode)
+hl --expansion inline app.log
 ```
 
 **Default:** `auto`
@@ -36,7 +35,7 @@ hl --expansion always app.log
 
 ### Never
 
-`--expansion never` keeps all nested structures inline:
+`--expansion never` keeps all fields on a single line:
 
 ```sh
 hl --expansion never app.log
@@ -44,53 +43,27 @@ hl --expansion never app.log
 
 Example output:
 ```
-2024-01-15 10:30:45.123 INFO user: {id: 123, name: "Alice", roles: ["admin", "user"]}
+2024-01-15 10:30:45.123 [ERR] user registration failed › user.id=123 user.name=Alice user.roles=[admin user] error="failed to register user\nfailed to connect to database\n\tuser.go:123"
 ```
 
 This is most compact but can be hard to read for complex structures.
 
-### Inline
-
-`--expansion inline` expands structures only when they're short enough to fit comfortably inline:
-
-```sh
-hl --expansion inline app.log
-```
-
-Example output:
-```
-# Short structure stays inline
-2024-01-15 10:30:45.123 INFO user: {id: 123, name: "Alice"}
-
-# Long structure gets expanded
-2024-01-15 10:30:45.124 INFO user:
-  id: 123
-  name: "Alice"
-  email: "alice@example.com"
-  roles: ["admin", "user", "developer"]
-  metadata: {created: "2024-01-01", updated: "2024-01-15"}
-```
-
-This mode balances readability and compactness.
-
 ### Auto
 
-`--expansion auto` is context-aware and makes intelligent decisions based on:
-
-- Terminal width
-- Entry complexity
-- Field value types
-- Overall entry size
+`--expansion auto` automatically expands multi-line fields with consistent indentation:
 
 ```sh
 hl --expansion auto app.log
 ```
 
-Auto mode typically:
-- Keeps simple objects inline
-- Expands complex nested structures
-- Adapts to your terminal width
-- Considers the total line length
+Example output:
+```
+2024-01-15 10:30:45.123 [ERR] user registration failed › user.id=123 user.name=Alice user.roles=[admin user]
+                        [ ~ ]   > error=|=>
+                        [ ~ ]       failed to register user
+                        [ ~ ]       failed to connect to database
+                        [ ~ ]           user.go:123
+```
 
 This is the default mode and works well for most use cases.
 
@@ -104,14 +77,35 @@ hl --expansion always app.log
 
 Example output:
 ```
-2024-01-15 10:30:45.123 INFO
-  user:
-    id: 123
-    name: "Alice"
-  action: "login"
+2024-01-15 10:30:45.123 [ERR] user registration failed
+                        [ ~ ]   > user.id=123
+                        [ ~ ]   > user.name=Alice
+                        [ ~ ]   > user.roles=[admin user]
+                        [ ~ ]   > error=|=>
+                        [ ~ ]       failed to register user
+                        [ ~ ]       failed to connect to database
+                        [ ~ ]           user.go:123
 ```
 
 Even simple objects are expanded, which can make output very verbose but maximizes readability.
+
+### Inline
+
+`--expansion inline` shows multi-line values as raw data surrounded by backticks, preserving newlines:
+
+```sh
+hl --expansion inline app.log
+```
+
+Example output:
+```
+2024-01-15 10:30:45.123 [ERR] user registration failed › user.id=123 user.name=Alice user.roles=[admin user] error=`failed to register user
+failed to connect to database
+        user.go:123`
+```
+
+This is legacy behavior prior to v0.35.0 and is useful for preserving original formatting.
+Can be convenient for selecting and copying multi-line values in the terminal, but not as readable as expanded formats.
 
 ## How Expansion Works
 

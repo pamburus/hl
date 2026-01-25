@@ -76,23 +76,24 @@ See [Time Display](./time-display.md) for format specifications and timezone han
 
 ## Field Expansion
 
-Control how nested objects and arrays are displayed:
+Control when fields should be expanded into multiple lines view:
 
 ```sh
-# Never expand (keep nested objects inline)
+# Never expand (show all fields on a single line, use escaped JSON for multi-line values)
 hl --expansion never app.log
 
-# Always expand (show nested objects on separate lines)
+# Always expand (show all fields in expanded multi-line format)
 hl --expansion always app.log
 
-# Expand inline when short enough
-hl --expansion inline app.log
-
-# Auto mode (context-dependent)
+# Expand multi-line fields only, use consistent continuation indentation
 hl --expansion auto app.log
+
+# Show values of multi-line fields as raw data, surrounded by backticks, but preserving newline characters without escaping
+# This emulates legacy behavior (before v0.35.0)
+hl --expansion inline app.log
 ```
 
-Expansion affects readability of complex nested structures.
+Expansion affects readability of multi-line fields or entries with many fields.
 
 See [Field Expansion](./field-expansion.md) for detailed behavior.
 
@@ -105,9 +106,9 @@ Output the original JSON source instead of formatted output:
 hl --raw app.log
 
 # Raw mode with filters (filters still apply)
-hl --raw --level error --query '.user_id=123' app.log
+hl --raw --level error --query '.user.id=123' app.log
 
-# Disable raw mode (if enabled in config)
+# Disable raw mode (if `hl` is an alias which includes `--raw` by default)
 hl --no-raw app.log
 ```
 
@@ -136,15 +137,22 @@ Control color usage and visual styling:
 ```sh
 # Force colors even when piping
 hl --color always app.log
+hl -c app.log
 
 # Disable colors
 hl --color never app.log
 
 # Use a different theme
-hl --theme monokai app.log
+hl --theme frostline app.log
 
 # List available themes
 hl --list-themes
+
+# List available themes compatible with dark backgrounds
+hl --list-themes=dark
+
+# List available themes compatible with light backgrounds
+hl --list-themes=light
 ```
 
 See [Themes](../customization/themes.md) for available themes and customization options.
@@ -156,9 +164,11 @@ Control whether empty fields are displayed:
 ```sh
 # Hide fields with null, empty string, empty object, or empty array values
 hl --hide-empty-fields app.log
+hl -e app.log
 
 # Show empty fields (default)
 hl --show-empty-fields app.log
+hl -E app.log
 ```
 
 This is useful for reducing clutter in logs with many optional fields.
@@ -171,17 +181,24 @@ When processing multiple files, show which file each entry came from:
 # No input info
 hl --input-info none *.log
 
-# Minimal (just filename)
+# Minimal (file number)
 hl --input-info minimal *.log
 
-# Compact (file number and name)
+# Compact (file number and truncated path/name)
 hl --input-info compact *.log
 
-# Full (full path)
+# Full (file number and full path)
 hl --input-info full *.log
+
+# Automatically choose best layout among enabled layouts
+hl --input-info none,minimal,compact *.log
 ```
 
-Default: `none` for single file, `minimal` for multiple files.
+Default: `auto`.
+
+If set to `auto`, then all input info layouts will be considered. The most suitable layout will be automatically chosen from the enabled layouts based on the number of input files and the width of the terminal screen.
+
+If only a single file is being processed, no input info will be shown by default.
 
 See [Multiple Files](./multiple-files.md) for more details.
 
@@ -202,8 +219,8 @@ Example:
 {"user": {"id": 123, "name": "Alice"}}
 ```
 
-- With `--flatten always`: displayed as `user.id: 123, user.name: Alice`
-- With `--flatten never`: displayed as `user: {id: 123, name: Alice}`
+- With `--flatten always`: displayed as `user.id=123  user.name=Alice`
+- With `--flatten never`: displayed as `user={ id=123 name=Alice }`
 
 ## ASCII-Only Mode
 
@@ -229,7 +246,7 @@ All formatting options can be combined:
 ```sh
 # Highly customized output
 hl --hide '*' \
-   --hide '!timestamp' --hide '!level' --hide '!message' \
+   --hide '!method' --hide '!url' \
    --local \
    --time-format '%H:%M:%S' \
    --hide-empty-fields \
@@ -246,10 +263,10 @@ All formatting options can be saved in configuration files to avoid repeating th
 # ~/.config/hl/config.toml
 time-zone = "UTC"
 time-format = "%Y-%m-%d %H:%M:%S"
-theme = "monokai"
+theme = "frostline"
 
 [fields]
-hide = ["timestamp", "host", "pid"]
+hide = ["headers", "body", "host", "pid"]
 ```
 
 See [Configuration Files](../customization/config-files.md) for details.
@@ -273,9 +290,9 @@ See [Environment Variables](../customization/environment.md) for the complete li
 ### Minimal Clean Output
 
 ```sh
-# Show only level, time, and message
+# Show only method and url fields, hide empty fields
 hl --hide '*' \
-   --hide '!level' --hide '!timestamp' --hide '!message' \
+   --hide '!method' --hide '!url' \
    --hide-empty-fields \
    app.log
 ```
@@ -283,7 +300,7 @@ hl --hide '*' \
 ### Development-Friendly Format
 
 ```sh
-# Local time, expanded objects, no empty fields
+# Local time, expanded fields, no empty fields
 hl --local \
    --time-format '%T.%3N' \
    --expansion always \
