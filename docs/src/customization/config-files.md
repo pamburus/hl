@@ -478,7 +478,7 @@ cat > .hl-config.toml << 'EOF'
 time-format = "%Y-%m-%d %H:%M:%S"
 
 [fields]
-hide = ["build_id", "deployment_id", "trace_context"]
+hide = ["build-id", "deployment-id", "trace-context"]
 EOF
 
 # Now hl will use project config automatically when in this directory
@@ -514,7 +514,7 @@ time-format = "%Y-%m-%d %H:%M:%S"
 
 # Hide project-specific internal fields
 [fields]
-hide = ["build_id", "deployment_id", "trace_context"]
+hide = ["build-id", "deployment-id", "trace-context"]
 
 # Project uses custom level field names
 [[fields.predefined.level.variants]]

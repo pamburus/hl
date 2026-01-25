@@ -1,320 +1,95 @@
 # Output Formatting
 
-`hl` provides extensive control over how log entries are displayed, allowing you to customize the output to match your needs and preferences.
+`hl` provides extensive control over how log entries are displayed. This page provides an overview of the formatting options available, with links to detailed documentation for each feature.
 
 ## Overview
 
 Output formatting in `hl` covers several aspects:
 
-- **Field visibility** — choosing which fields to show or hide
-- **Time display** — formatting timestamps in various ways
-- **Field expansion** — controlling how nested objects and arrays are displayed
-- **Raw output** — outputting original source entries instead of formatted output
-- **Colors and themes** — visual styling and color schemes
-- **Field value formatting** — controlling how values are escaped and displayed
+| Feature | Description | Documentation |
+|---------|-------------|---------------|
+| **Field visibility** | Choose which fields to show or hide | [Field Visibility](./field-visibility.md) |
+| **Time display** | Format timestamps and set timezones | [Time Display](./time-display.md) |
+| **Field expansion** | Control how multi-line values are displayed | [Field Expansion](./field-expansion.md) |
+| **Raw output** | Output original JSON/logfmt instead of formatted output | [Raw Output](./raw-output.md) |
+| **Colors and themes** | Visual styling and color schemes | [Themes](../customization/themes.md) |
 
-## Quick Examples
+## Quick Reference
 
-```sh
-# Hide specific fields
-hl --hide host --hide pid app.log
-
-# Hide all except specific fields
-hl --hide '*' --hide '!service' --hide '!request-id' app.log
-
-# Use local timezone
-hl --local app.log
-
-# Expand nested objects
-hl --expansion always app.log
-
-# Output raw JSON
-hl --raw app.log
-
-# Use a different theme
-hl --theme universal app.log
-```
+| Option | Short | Description |
+|--------|-------|-------------|
+| `--hide <KEY>` | `-h` | Hide or reveal fields |
+| `--time-format <FMT>` | `-t` | Set timestamp format |
+| `--time-zone <TZ>` | `-Z` | Set display timezone |
+| `--local` | `-L` | Use local timezone |
+| `--expansion <MODE>` | `-x` | Control field expansion |
+| `--raw` | `-r` | Output original format |
+| `--theme <NAME>` | | Select color theme |
+| `--hide-empty-fields` | `-e` | Hide fields with empty values |
+| `--flatten <WHEN>` | | Control nested object flattening |
 
 ## Field Visibility
 
-Control which fields appear in the output using the `--hide` (or `-h`) option:
+Control which fields appear in the output. You can hide specific fields, hide all fields except certain ones, or use patterns.
 
-```sh
-# Hide specific fields
-hl --hide host --hide pid --hide version app.log
-
-# Hide all except specific fields
-hl --hide '*' --hide '!service' --hide '!request-id' app.log
-```
-
-See [Field Visibility](./field-visibility.md) for detailed behavior and examples.
+See [Field Visibility](./field-visibility.md) for syntax, patterns, and examples.
 
 ## Time Display
 
-Customize how timestamps are displayed:
+Customize how timestamps are displayed, including format and timezone.
 
-```sh
-# Use local timezone instead of UTC
-hl --local app.log
+- **Default format**: `%b %d %T.%3N` (e.g., `Jan 15 10:30:45.123`)
+- **Default timezone**: UTC
 
-# Custom time format
-hl --time-format '%Y-%m-%d %H:%M:%S' app.log
-
-# Specific timezone
-hl --time-zone 'America/New_York' app.log
-```
-
-Default format: `%b %d %T.%3N` (e.g., `Jan 15 10:30:45.123`)
-
-See [Time Display](./time-display.md) for format specifications and timezone handling.
+See [Time Display](./time-display.md) for format specifiers and timezone handling.
 
 ## Field Expansion
 
-Control how multi-line field values (such as stack traces or error details) are displayed using the `--expansion` (or `-x`) option. Available modes: `never`, `inline`, `auto` (default), `always`.
-
-```sh
-# Compact single-line output
-hl --expansion never app.log
-
-# Expand all fields for maximum readability
-hl -x always app.log
-```
+Control how multi-line field values (such as stack traces or error details) are displayed. Available modes: `never`, `inline`, `auto` (default), `always`.
 
 See [Field Expansion](./field-expansion.md) for mode descriptions and examples.
 
 ## Raw Output
 
-Output the original JSON source instead of formatted output:
+Output the original JSON or logfmt instead of formatted output. Useful for piping to other tools like `jq`.
 
-```sh
-# Raw mode
-hl --raw app.log
-
-# Raw mode with filters (filters still apply)
-hl --raw --level error --query '.user.id=123' app.log
-
-# Disable raw mode (if `hl` is an alias which includes `--raw` by default)
-hl --no-raw app.log
-```
-
-Raw mode is useful for:
-- Piping to other tools that expect JSON
-- Preserving exact original format
-- Re-processing filtered results
-
-See [Raw Output](./raw-output.md) for more details.
-
-## Field Value Formatting
-
-Control how field values are displayed:
-
-```sh
-# Show raw field values without unescaping
-hl --raw-fields app.log
-```
-
-By default, `hl` prettifies and unescapes field values for better readability. Use `--raw-fields` to see the exact values as they appear in the source.
-
-## Colors and Themes
-
-Control color usage and visual styling:
-
-```sh
-# Force colors even when piping
-hl --color always app.log
-hl -c app.log
-
-# Disable colors
-hl --color never app.log
-
-# Use a different theme
-hl --theme frostline app.log
-
-# List available themes
-hl --list-themes
-
-# List available themes compatible with dark backgrounds
-hl --list-themes=dark
-
-# List available themes compatible with light backgrounds
-hl --list-themes=light
-```
-
-See [Themes](../customization/themes.md) for available themes and customization options.
+See [Raw Output](./raw-output.md) for details.
 
 ## Empty Field Handling
 
-Control whether empty fields are displayed:
-
-```sh
-# Hide fields with null, empty string, empty object, or empty array values
-hl --hide-empty-fields app.log
-hl -e app.log
-
-# Show empty fields (default)
-hl --show-empty-fields app.log
-hl -E app.log
-```
-
-This is useful for reducing clutter in logs with many optional fields.
-
-## Input Info Display
-
-When processing multiple files, show which file each entry came from:
-
-```sh
-# No input info
-hl --input-info none *.log
-
-# Minimal (file number)
-hl --input-info minimal *.log
-
-# Compact (file number and truncated path/name)
-hl --input-info compact *.log
-
-# Full (file number and full path)
-hl --input-info full *.log
-
-# Automatically choose best layout among enabled layouts
-hl --input-info none,minimal,compact *.log
-```
-
-Default: `auto`.
-
-If set to `auto`, then all input info layouts will be considered. The most suitable layout will be automatically chosen from the enabled layouts based on the number of input files and the width of the terminal screen.
-
-If only a single file is being processed, no input info will be shown by default.
-
-See [Multiple Files](./multiple-files.md) for more details.
+Hide fields with empty values (null, empty string, empty object, or empty array) using `-e` or `--hide-empty-fields`.
 
 ## Object Flattening
 
 Control whether nested objects are flattened into dot-notation fields:
 
-```sh
-# Never flatten
-hl --flatten never app.log
+- `--flatten always` (default): `user.id=123 user.name=Alice`
+- `--flatten never`: `user={ id=123 name=Alice }`
 
-# Always flatten (default)
-hl --flatten always app.log
-```
+## Colors and Themes
 
-Example:
-```json
-{"user": {"id": 123, "name": "Alice"}}
-```
+Control color usage and visual styling with `--theme` and `--color`.
 
-- With `--flatten always`: displayed as `user.id=123  user.name=Alice`
-- With `--flatten never`: displayed as `user={ id=123 name=Alice }`
+See [Themes](../customization/themes.md) for available themes and customization.
 
-## ASCII-Only Mode
+## Input Info Display
 
-Restrict punctuation to ASCII characters only (useful for terminals with limited Unicode support):
+When processing multiple files, control how source file information is displayed with `--input-info`.
 
-```sh
-# Force ASCII
-hl --ascii always app.log
+See [Multiple Files](./multiple-files.md) for details.
 
-# Auto-detect based on terminal capabilities
-hl --ascii auto app.log
+## Configuration
 
-# Never restrict (use Unicode box-drawing characters)
-hl --ascii never app.log
-```
+All formatting options can be saved in configuration files or set via environment variables.
 
-Default: `auto` (uses Unicode if terminal supports it)
-
-## Combining Formatting Options
-
-All formatting options can be combined:
-
-```sh
-# Highly customized output
-hl --hide '*' \
-   --hide '!method' --hide '!url' \
-   --local \
-   --time-format '%H:%M:%S' \
-   --hide-empty-fields \
-   --theme universal \
-   --expansion inline \
-   app.log
-```
-
-## Configuration Files
-
-All formatting options can be saved in configuration files to avoid repeating them:
-
-```toml
-# ~/.config/hl/config.toml
-time-zone = "UTC"
-time-format = "%Y-%m-%d %H:%M:%S"
-theme = "frostline"
-
-[fields]
-hide = ["headers", "body", "host", "pid"]
-```
-
-See [Configuration Files](../customization/config-files.md) for details.
-
-## Environment Variables
-
-Many formatting options can be set via environment variables:
-
-```sh
-export HL_THEME=universal
-export HL_HIDE_EMPTY_FIELDS=true
-
-# For local time, use -L flag
-hl -L app.log
-```
-
-See [Environment Variables](../customization/environment.md) for the complete list.
-
-## Examples
-
-### Minimal Clean Output
-
-```sh
-# Show only method and url fields, hide empty fields
-hl --hide '*' \
-   --hide '!method' --hide '!url' \
-   --hide-empty-fields \
-   app.log
-```
-
-### Development-Friendly Format
-
-```sh
-# Local time, expanded fields, no empty fields
-hl --local \
-   --time-format '%T.%3N' \
-   --expansion always \
-   --hide-empty-fields \
-   app.log
-```
-
-### Production Monitoring
-
-```sh
-# UTC time, compact format, show source files
-hl --time-format '%Y-%m-%d %T' \
-   --expansion never \
-   --input-info compact \
-   /var/log/service-*.log
-```
-
-### JSON Pipeline
-
-```sh
-# Filter and output raw JSON for further processing
-hl --raw --level error --query '.service=api' app.log | jq '.message'
-```
+See:
+- [Configuration Files](../customization/config-files.md)
+- [Environment Variables](../customization/environment.md)
 
 ## Related Topics
 
 - [Field Visibility](./field-visibility.md) — controlling which fields are shown
 - [Time Display](./time-display.md) — timestamp formatting and timezones
-- [Field Expansion](./field-expansion.md) — nested object display
-- [Raw Output](./raw-output.md) — outputting original JSON
+- [Field Expansion](./field-expansion.md) — multi-line value display
+- [Raw Output](./raw-output.md) — outputting original format
 - [Themes](../customization/themes.md) — color schemes and styling
-- [Configuration Files](../customization/config-files.md) — saving preferences

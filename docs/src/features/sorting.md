@@ -172,89 +172,38 @@ This allows you to:
 
 ## Combining with Filters
 
-### Time Filtering
+### With Filters
+
+All standard filters work with sorting. Filters are applied efficiently during the index scan, reducing the dataset size before sorting.
 
 ```sh
-# Sort entries within a specific time range
+# Sort with time range
 hl -s --since 'yesterday' --until 'today' *.log
 
-# Recent entries only
-hl -s --since '2 hours ago' app.log app.log.1
-```
-
-Time filtering happens **during index scan**, reducing the dataset size efficiently.
-
-### Level Filtering
-
-```sh
-# Sort only error entries
+# Sort with level filter
 hl -s --level error app.log
 
-# Warnings and above
-hl -s --level warn *.log
-```
-
-### Query Filtering
-
-```sh
-# Sort entries matching a query
+# Sort with query
 hl -s --query 'status >= 500' access.log
-
-# Complex queries
-hl -s --query 'level >= warn and exists(.error)' app.log
 ```
 
-Filters are applied during reading – only matching entries are kept for sorting.
-
-### Field Visibility
-
-```sh
-# Sort and hide most fields
-hl -s --hide '*' --hide '!service' --hide '!request-id' app.log
-```
-
-Field visibility affects output formatting, not sorting behavior.
+See [Filtering](./filtering.md) for complete filter documentation.
 
 ## Examples
 
-### Distributed System Debugging
+### Multi-Service Debugging
 
 ```sh
-# Sort logs from multiple microservices to see complete request flow
+# Sort logs from multiple microservices to trace a request
 hl -s api-gateway.log auth-service.log payment-service.log \
    --query 'request-id = "abc-123-def"'
 ```
 
-### Log Rotation Analysis
+### Rotated Log Analysis
 
 ```sh
-# Sort across rotated files to find when an issue started
-hl -s --since '2 hours ago' app.log app.log.1 app.log.2.gz \
-   --level error
-```
-
-### Compressed Archive Investigation
-
-```sh
-# Sort historical compressed logs for a specific day
-hl -s logs/app-2024-01-15-*.log.gz --query '.endpoint=/api/users'
-```
-
-### Cross-Service Correlation
-
-```sh
-# Sort logs from different services to correlate events
-hl -s service-a.log service-b.log service-c.log \
-   --since '10:00' --until '10:15' \
-   --query 'exists(.correlation-id)'
-```
-
-### Analyzing Rotated Archives
-
-```sh
-# Sort all archived logs for a specific time range
-hl -s --since '2024-01-15 00:00' --until '2024-01-15 23:59' \
-   app.log.2024-01-*.gz
+# Sort across rotated files (including compressed)
+hl -s app.log app.log.1 app.log.2.gz
 ```
 
 ## Sorting vs Follow Mode
