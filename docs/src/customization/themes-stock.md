@@ -24,36 +24,27 @@ Special tags include:
 
 ### Universal (Multi-Mode)
 
-**`uni`** (16-color)
+**`uni`** (dark, light, 16-color)
 - The default theme; works on all terminals with both dark and light backgrounds.
 - Balances readability and compatibility.
 - Uses only the standard 16 ANSI colors.
 
-**`universal`** (16-color, dark, light)
+**`universal`** (dark, light, 16-color)
 - Variant of `uni` with green accent colors and reversed warning and errors levels.
 - Works on both dark and light backgrounds.
 - Balances readability and compatibility.
 - Uses only the standard 16 ANSI colors.
 
-**`universal-blue`** (16-color, dark, light)
+**`universal-blue`** (dark, light, 16-color)
 - Variant of `universal` with blue accent colors.
 - Works on both dark and light backgrounds.
 
-**`classic`** (dark, 16-color)
-- Classic color scheme optimized for dark backgrounds.
-- Uses bright white for messages and standard ANSI colors for syntax.
-- Reverse video highlighting for warning and error levels.
-
-**`classic-light`** (light, 16-color)
-- Classic color scheme optimized for light backgrounds.
-- Uses black for messages; reverse video for warning/error levels.
-
-**`neutral`** (16-color, dark, light)
+**`neutral`** (dark, light, 16-color)
 - Minimal colorization; emphasizes log levels only.
 - Most content displayed in terminal default colors.
 - Suitable for minimal or monochrome aesthetics.
 
-**`frostline`** (16-color, dark, light)
+**`frostline`** (dark, light, 16-color)
 - Cool cyan-based theme with bold syntax highlighting.
 - Works on both dark and light backgrounds.
 - Distinguishes `true`/`false` boolean values with different colors.
@@ -65,29 +56,12 @@ Special tags include:
 - Faint level labels with distinct inner level colors.
 - Distinct colors for `true` vs `false` booleans.
 
-**`dmt`** (dark, 256-color)
-- Dark theme with muted tones and subtle accents.
-- Underlined keys for emphasis.
-- Bright input source indicators.
-
-**`lsd`** (dark, 16-color)
-- Green-based primary color with bright blue accents.
-- Underlined keys; yellow for numbers and booleans.
-- Time field changes color for warning/error levels.
-
 ### Light Themes (256-color)
 
 **`hl-light`** (light, 256-color)
 - Modern light theme with dark text on light backgrounds.
 - Faint level labels with distinct inner level colors.
 - Distinct colors for `true` vs `false` booleans.
-
-**`tc24l-b2`** (light, truecolor)
-- Light truecolor theme with royal blue accents.
-- Bold syntax highlighting; dark text on light background.
-
-**`tc24l-blue`** (light, truecolor)
-- Light truecolor theme variant with blue color scheme.
 
 ### Dark Themes (Truecolor / 24-bit)
 
@@ -123,6 +97,13 @@ Special tags include:
 - Clear, readable colors optimized for light backgrounds.
 - Warning and error messages inherit level colors; red error messages.
 
+**`tc24l-b2`** (light, truecolor)
+- Light truecolor theme with royal blue accents.
+- Bold syntax highlighting; dark text on light background.
+
+**`tc24l-blue`** (light, truecolor)
+- Light truecolor theme variant with blue color scheme.
+
 
 ## Listing Available Themes
 
@@ -138,10 +119,10 @@ To see themes filtered by specific tags (e.g., only dark themes):
 hl --list-themes=dark
 ```
 
-To see 256-color themes:
+To see dark 256-color themes:
 
 ```sh
-hl --list-themes=256color
+hl --list-themes=dark,256color
 ```
 
 ## Theme Overlays
