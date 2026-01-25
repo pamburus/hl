@@ -254,7 +254,7 @@ failed.inner.modes = ["bold"]
 Here's a complete custom theme based on a fictional "midnight" color scheme:
 
 ```toml
-#:schema https://raw.githubusercontent.com/pamburus/hl/latest/schema/json/theme.schema.v1.json
+#:schema https://raw.githubusercontent.com/pamburus/hl/schema/theme/v1.1/schema/json/theme.schema.v1.json
 
 version = "1.1"
 tags = ["dark", "truecolor"]
@@ -267,18 +267,18 @@ tags = ["dark", "truecolor"]
 foreground = "#d0d0f0"
 
 [styles.secondary]
-foreground = "#606080"
-modes = ["faint"]
+foreground = "#707090"
+modes = ["-faint"]
 
 [styles.strong]
 style = "primary"
-modes = ["bold"]
 
 [styles.accent]
 foreground = "#80a0ff"
 
 [styles.message]
 style = "strong"
+modes = ["-bold"]
 
 [styles.syntax]
 foreground = "#a0a0c0"
@@ -291,10 +291,10 @@ foreground = "#c080ff"
 foreground = "#60c0e0"
 
 [styles.warning]
-foreground = "#ffb060"
+foreground = "#eeb080"
 
 [styles.error]
-foreground = "#ff6060"
+foreground = "#dda080"
 
 #
 # Elements define specific styles for different log elements.
@@ -327,16 +327,16 @@ style = "message"
 style = "accent"
 
 [elements.number]
-foreground = "#80ff80"
+foreground = "#80e0a0"
 
 [elements.boolean-true]
-foreground = "#60e060"
+foreground = "#60d080"
 
 [elements.boolean-false]
-foreground = "#ff8080"
+foreground = "#dd8080"
 
 [elements.null]
-foreground = "#ff6060"
+foreground = "#ee6060"
 
 #
 # Levels define styles for different log levels.
