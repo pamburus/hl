@@ -41,7 +41,7 @@ While `hl` prefers single-line JSON, it can handle pretty-printed JSON entries i
 
 ### JSON Field Requirements
 
-`hl` doesn't require specific fields—any valid JSON object is accepted. However, certain field names are recognized for special handling:
+`hl` doesn't require specific fields – any valid JSON object is accepted. However, certain field names are recognized for special handling:
 
 **Timestamp fields:**
 - `timestamp`, `@timestamp`, `time`, `ts`, `t`
@@ -373,7 +373,7 @@ hl app.log
 
 **Solutions:**
 - Use explicit `--input-format json` or `--input-format logfmt`
-- Check first few lines—they influence detection
+- Check first few lines — they influence detection
 - Ensure entries are well-formed
 
 ### Mixed Format Issues

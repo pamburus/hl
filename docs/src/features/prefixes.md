@@ -34,7 +34,7 @@ When `--allow-prefix` is enabled, for each line `hl`:
 3. **Ignores all text before the `{`** 
 4. **Falls back to normal parsing** if no `{` is found
 
-The prefix is discarded—only the JSON portion is parsed and processed.
+The prefix is discarded – only the JSON portion is parsed and processed.
 
 ## Common Use Cases
 
@@ -345,7 +345,7 @@ hl app.log
 
 **Cause:** Prefix timestamp is different from entry timestamp.
 
-**Understanding:** `hl` uses the timestamp from the JSON, not the prefix. This is usually correct—the prefix timestamp is when the log was collected, the entry timestamp is when the event occurred.
+**Understanding:** `hl` uses the timestamp from the JSON, not the prefix. This is usually correct – the prefix timestamp is when the log was collected, the entry timestamp is when the event occurred.
 
 ### Logfmt with Prefixes
 

@@ -49,7 +49,7 @@ hl automatically handles compressed files:
 hl app.log.gz app.log.zst app.log.bz2
 ```
 
-No need to decompress first—hl supports gzip, zstd, bzip2, and xz formats.
+No need to decompress first – hl supports gzip, zstd, bzip2, and xz formats.
 
 ## Common Filtering Tasks
 

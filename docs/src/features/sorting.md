@@ -27,7 +27,7 @@ When you enable sorting, `hl`:
 4. **Sorts entries** chronologically using the index
 5. **Outputs sorted entries** in chronological order
 
-The key advantage: **filtering still applies**, and the index-based approach makes sorted filtering very efficient even on large files. The index contains level information, so level filtering is extremely fast—if a file segment doesn't contain the requested log levels at all, it's skipped entirely during processing (never read, parsed, or filtered).
+The key advantage: **filtering still applies**, and the index-based approach makes sorted filtering very efficient even on large files. The index contains level information, so level filtering is extremely fast – if a file segment doesn't contain the requested log levels at all, it's skipped entirely during processing (never read, parsed, or filtered).
 
 ## When to Use Sort Mode
 
@@ -69,7 +69,7 @@ When an entry contains multiple timestamp fields, `hl` uses a priority order:
 4. `ts`
 5. Other recognized timestamp field names
 
-You typically don't need to configure this—`hl` chooses the most semantic timestamp automatically.
+You typically don't need to configure this – `hl` chooses the most semantic timestamp automatically.
 
 ## Entries Without Timestamps
 
@@ -101,13 +101,13 @@ Sorting uses an efficient two-pass indexing approach:
   - Level bitmasks (which log levels are present)
   - Entry offsets and ordering information
 - Index is cached in `~/.cache/hl/` for reuse on subsequent runs
-- **Minimal memory usage**—doesn't load all entries into memory
+- **Minimal memory usage** — doesn't load all entries into memory
 
 ### Second Pass - Output
 
 - Uses the index to determine which segments to process
-- **Skips entire segments** that don't match level filters (using level bitmasks—never reads or parses them)
-- **Skips segments** outside time range filters (using timestamp ranges—never reads or parses them)
+- **Skips entire segments** that don't match level filters (using level bitmasks — never reads or parses them)
+- **Skips segments** outside time range filters (using timestamp ranges — never reads or parses them)
 - Reads and processes only matching segments in chronological order
 - Nearly sequential I/O when entries are mostly sorted
 - Memory usage increases only if entries are heavily shuffled
@@ -209,7 +209,7 @@ hl -s --query 'status >= 500' access.log
 hl -s --query 'level >= warn and exists(.error)' app.log
 ```
 
-Filters are applied during reading—only matching entries are kept for sorting.
+Filters are applied during reading – only matching entries are kept for sorting.
 
 ### Field Visibility
 

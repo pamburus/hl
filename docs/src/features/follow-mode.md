@@ -67,7 +67,7 @@ The sorting window is controlled by `--sync-interval-ms` (default: 100ms).
 
 Follow mode automatically disables the pager and streams output directly to your terminal, since paging doesn't make sense for infinite streams.
 
-You don't need to specify `-P` when using `-F`—it's implied.
+You don't need to specify `-P` when using `-F` – it's implied.
 
 ## Configuration Options
 
@@ -217,7 +217,7 @@ Note: In live follow mode, `--until` will cause `hl` to exit once that time is r
 
 Follow mode runs indefinitely until interrupted. Press Ctrl-C to exit.
 
-**Follow mode exits immediately on Ctrl-C** — unlike pager mode, there is no interrupt ignore count in follow mode. A single Ctrl-C will terminate the process.
+**Follow mode exits immediately on Ctrl-C** – unlike pager mode, there is no interrupt ignore count in follow mode. A single Ctrl-C will terminate the process.
 
 ### Automatic Exit Conditions
 
@@ -249,7 +249,7 @@ hl large.log
 
 If you're in `less` with Shift+F (follow mode in less) and data is still loading, Ctrl-C tells `less` to stop loading so you can navigate the already-loaded buffer. The interrupt ignore count prevents `hl` from terminating prematurely in this scenario.
 
-**In follow mode, immediate exit is desired** — you're monitoring files directly and want quick termination when you're done.
+**In follow mode, immediate exit is desired** – you're monitoring files directly and want quick termination when you're done.
 
 ## Multiple File Monitoring
 
