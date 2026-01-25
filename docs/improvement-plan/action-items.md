@@ -134,7 +134,8 @@ These items improve content accuracy and completeness.
 
 ### 3.2 Standardize Terminology
 
-- [ ] Create glossary of standard terms (lower priority)
+- [x] Create glossary of standard terms — DONE: Added `reference/glossary.md` with 19 term definitions
+- [x] Audit terminology usage — DONE: Confirmed "entry/entries" is the dominant term (411 occurrences); glossary updated to reflect this as preferred term
 - [ ] Apply consistent terminology across all files (lower priority)
 
 ### 3.3 Standardize Example Output Format
