@@ -70,7 +70,7 @@ Overlay filenames conventionally start with `@` (e.g., `@my-overlay.toml`), but 
 An overlay is a theme file with the `"overlay"` tag:
 
 ```hl/dev/null/my-overlay.toml#L1
-#:schema https://raw.githubusercontent.com/pamburus/hl/v0.35.2/schema/json/theme.schema.v1.json
+#:schema https://raw.githubusercontent.com/pamburus/hl/latest/schema/json/theme.schema.v1.json
 
 version = "1.1"
 tags = ["overlay", "dark", "light"]

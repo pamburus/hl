@@ -11,6 +11,16 @@ When log entries contain fields with multi-line values (such as stack traces or 
 - **Always** — display each field on its own indented line, expand multi-line values
 - **Inline** — preserve actual newlines in multi-line values, surrounded by backticks
 
+## Configuration
+
+| Method | Setting |
+|--------|---------|
+| Config file | [`formatting.expansion.mode`](../customization/config-files.md#formatting-expansion-mode) |
+| CLI option | `-x, --expansion <MODE>` |
+| Environment | `HL_EXPANSION` |
+
+**Values:** `never`, `inline`, `auto` (default), `always`
+
 ## Enabling Field Expansion
 
 Use the `--expansion` (or `-x`) option:
@@ -206,26 +216,9 @@ Note: Arrays are always displayed inline (e.g., `tags=[admin user]`) regardless 
 
 See [Field Visibility](./field-visibility.md) for more on flattening.
 
-## Configuration
-
-Set default expansion mode in your config file:
-
-```toml
-# ~/.config/hl/config.toml
-[formatting.expansion]
-mode = "auto"
-```
-
-Or via environment variable:
-
-```sh
-export HL_EXPANSION=always
-hl app.log
-```
-
 ## Related Topics
 
 - [Output Formatting](./formatting.md) — overview of formatting options
 - [Field Visibility](./field-visibility.md) — controlling which fields are shown
 - [Raw Output](./raw-output.md) — outputting original JSON
-- [Configuration Files](../customization/config-files.md) — saving preferences
+- [Configuration Files](../customization/config-files.md#formatting-expansion-mode) — persistent configuration

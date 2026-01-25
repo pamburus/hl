@@ -165,120 +165,90 @@ hide = ["host", "pid", "version"]
 The configuration file supports a JSON schema for validation and autocompletion in editors:
 
 ```toml
-#:schema https://raw.githubusercontent.com/pamburus/hl/v0.35.2/schema/json/config.schema.json
+#:schema https://raw.githubusercontent.com/pamburus/hl/latest/schema/json/config.schema.json
 ```
 
 Add this at the top of your config file for editor support.
 
-## Available Options
+## Configuration Options Reference
 
-### Time and Timezone
+This section provides a reference for all configuration options. Each option has its own section for easy navigation.
 
-Control how timestamps are displayed:
+---
 
-```toml
-# Time format (strftime syntax)
-time-format = "%b %d %T.%3N"
+### ascii {#ascii}
 
-# Time zone (IANA timezone name)
-time-zone = "UTC"
-# time-zone = "America/New_York"
-# time-zone = "Europe/London"
-```
+Control Unicode vs ASCII characters for punctuation.
 
-Common time format patterns:
-- `%Y-%m-%d %T.%3N` → `2024-01-15 10:30:45.123`
-- `%b %d %T.%3N` → `Jan 15 10:30:45.123`
-- `%H:%M:%S` → `10:30:45`
-
-See [Time Display](../features/time-display.md) for format details.
-
-### Theme Selection
-
-```toml
-# Current theme name
-theme = "universal"
-
-# Theme overlays to apply
-theme-overlays = ["@accent-italic"]
-```
-
-Available themes can be listed with:
-```sh
-hl --list-themes
-```
-
-See [Themes](./themes.md) for more on themes and overlays.
-
-### Input Information Display
-
-Control how file information is shown when processing multiple files:
-
-```toml
-# Options: "auto", "none", "minimal", "compact", "full"
-input-info = "auto"
-```
-
-See [Multiple Files](../features/multiple-files.md) for mode descriptions.
-
-### ASCII Mode
-
-Control Unicode vs ASCII characters for punctuation:
-
-```toml
-# Options: "auto", "never", "always"
-ascii = "auto"
-```
+- **Type:** string
+- **Default:** `auto`
+- **Values:** `auto`, `never`, `always`
+- **CLI:** `--ascii`
 
 When set to `always`, restricts output to ASCII characters only.
 
-### Field Configuration
+---
 
-#### Hiding and Ignoring Fields
+### fields.hide {#fields-hide}
+
+Hide specific fields from display.
+
+- **Type:** array of strings
+- **Default:** `[]`
+- **CLI:** `-h, --hide <KEY>`
 
 ```toml
 [fields]
-# Ignore fields matching wildcard patterns
-ignore = ["_*", "internal.*"]
-
-# Hide specific field names
 hide = ["host", "pid", "version"]
 ```
 
-The `ignore` option skips fields during parsing (performance optimization), while `hide` parses fields but excludes them from display (they can still be used in queries).
+Hidden fields are still parsed and can be used in queries.
 
 See [Field Visibility](../features/field-visibility.md) for patterns and examples.
 
-#### Predefined Fields
+---
 
-Configure how `hl` recognizes standard log fields:
+### fields.ignore {#fields-ignore}
+
+Ignore fields matching wildcard patterns during parsing.
+
+- **Type:** array of strings
+- **Default:** `[]`
 
 ```toml
-[fields.predefined.time]
-# When to show time field: "always" or "auto"
-show = "always"
-
-# Field names to recognize as timestamp
-names = [
-  "ts",
-  "time",
-  "timestamp",
-  "@timestamp"
-]
+[fields]
+ignore = ["_*", "internal.*"]
 ```
 
-**Logger field:**
+Ignored fields are skipped during parsing (performance optimization) and cannot be used in queries.
+
+See [Field Visibility](../features/field-visibility.md) for patterns and examples.
+
+---
+
+### fields.predefined.caller {#fields-predefined-caller}
+
+Configure field names recognized as caller/source location.
+
+- **Type:** object with `names` array
+
 ```toml
-[fields.predefined.logger]
-names = ["logger", "Logger", "span.name"]
+[fields.predefined.caller]
+names = ["caller", "Caller"]
 ```
 
-**Level field:**
+---
+
+### fields.predefined.level {#fields-predefined-level}
+
+Configure field names and values recognized as log level.
+
+- **Type:** object with `show`, `variants` arrays
+
 ```toml
 [fields.predefined.level]
 show = "always"
 
-# Common level fields
 [[fields.predefined.level.variants]]
 names = ["level", "Level", "severity"]
 
@@ -300,41 +270,112 @@ info = [6]
 debug = [7]
 ```
 
-**Message field:**
+---
+
+### fields.predefined.logger {#fields-predefined-logger}
+
+Configure field names recognized as logger name.
+
+- **Type:** object with `names` array
+
+```toml
+[fields.predefined.logger]
+names = ["logger", "Logger", "span.name"]
+```
+
+---
+
+### fields.predefined.message {#fields-predefined-message}
+
+Configure field names recognized as log message.
+
+- **Type:** object with `names` array
+
 ```toml
 [fields.predefined.message]
 names = ["msg", "message", "MESSAGE"]
 ```
 
-**Caller field:**
+---
+
+### fields.predefined.time {#fields-predefined-time}
+
+Configure field names recognized as timestamp.
+
+- **Type:** object with `show` and `names` properties
+
 ```toml
-[fields.predefined.caller]
-names = ["caller", "Caller"]
+[fields.predefined.time]
+show = "always"
+names = [
+  "ts",
+  "time",
+  "timestamp",
+  "@timestamp"
+]
 ```
 
-### Formatting Options
+See [Time Display](../features/time-display.md) for timestamp formatting.
 
-#### Field Flattening
+---
+
+### formatting.expansion.mode {#formatting-expansion-mode}
+
+Controls how multi-line field values are displayed.
+
+- **Type:** string
+- **Default:** `auto`
+- **Values:** `never`, `inline`, `auto`, `always`
+- **CLI:** `-x, --expansion <MODE>`
+- **Env:** `HL_EXPANSION`
+
+```toml
+[formatting.expansion]
+mode = "auto"
+```
+
+See [Field Expansion](../features/field-expansion.md) for mode descriptions and examples.
+
+---
+
+### formatting.flatten {#formatting-flatten}
+
+Controls whether nested objects are flattened into dot-notation fields.
+
+- **Type:** string
+- **Default:** `always`
+- **Values:** `always`, `never`
+- **CLI:** `--flatten <MODE>`
 
 ```toml
 [formatting]
-# Flatten nested objects to dot notation: "always" or "never"
 flatten = "always"
 ```
 
-Controls whether nested objects are flattened into dot-notation fields. See [Output Formatting](../features/formatting.md#object-flattening) for examples.
+See [Field Expansion](../features/field-expansion.md#interaction-with-field-flattening) for examples.
 
-#### Message Format
+---
 
-```toml
-[formatting.message]
-# Options: "auto-quoted", "always-quoted", "always-double-quoted", "delimited", "raw"
-format = "delimited"
-```
+### formatting.message.format {#formatting-message-format}
 
 Controls how messages are quoted or delimited in output.
 
-#### Punctuation Customization
+- **Type:** string
+- **Default:** `delimited`
+- **Values:** `auto-quoted`, `always-quoted`, `always-double-quoted`, `delimited`, `raw`
+
+```toml
+[formatting.message]
+format = "delimited"
+```
+
+---
+
+### formatting.punctuation {#formatting-punctuation}
+
+Customize punctuation characters used in output.
+
+- **Type:** object with string or `{ascii, unicode}` values
 
 ```toml
 [formatting.punctuation]
@@ -359,20 +400,113 @@ Each punctuation item can be:
 - A string (same for ASCII and Unicode mode)
 - An object with `ascii` and `unicode` keys (different based on mode)
 
-#### Field Expansion
+---
+
+### hide-empty-fields {#hide-empty-fields}
+
+Hide fields with empty values (null, empty strings, empty objects, empty arrays).
+
+- **Type:** boolean
+- **Default:** `false`
+- **CLI:** `-e, --hide-empty-fields` or `-E, --show-empty-fields`
+- **Env:** `HL_HIDE_EMPTY_FIELDS`
+
+See [Field Visibility](../features/field-visibility.md#hiding-empty-fields) for details.
+
+---
+
+### input-info {#input-info}
+
+Control how file information is shown when processing multiple files.
+
+- **Type:** string
+- **Default:** `auto`
+- **Values:** `auto`, `none`, `minimal`, `compact`, `full`
+- **CLI:** `--input-info <MODE>`
+
+See [Multiple Files](../features/multiple-files.md#input-indicators) for mode descriptions.
+
+---
+
+### theme {#theme}
+
+The color theme for output formatting.
+
+- **Type:** string
+- **Default:** `uni`
+- **CLI:** `--theme <NAME>`
+- **Env:** `HL_THEME`
 
 ```toml
-[formatting.expansion]
-# Options: "never", "inline", "auto", "always"
-mode = "auto"
+theme = "universal"
 ```
 
-Controls how multi-line field values are displayed. See [Field Expansion](../features/field-expansion.md) for mode descriptions and examples.
+Available themes can be listed with `hl --list-themes`.
+
+See [Themes](./themes.md) for available themes and customization.
+
+---
+
+### theme-overlays {#theme-overlays}
+
+Theme overlays to apply on top of the base theme.
+
+- **Type:** array of strings
+- **Default:** `["@accent-italic"]`
+
+```toml
+theme-overlays = ["@accent-italic"]
+```
+
+See [Theme Overlays](./themes-overlays.md) for details.
+
+---
+
+### time-format {#time-format}
+
+Controls timestamp display format using strftime syntax.
+
+- **Type:** string
+- **Default:** `%b %d %T.%3N`
+- **CLI:** `-t, --time-format <FORMAT>`
+- **Env:** `HL_TIME_FORMAT`
+
+```toml
+time-format = "%Y-%m-%d %H:%M:%S.%3N"
+```
+
+Common patterns:
+- `%Y-%m-%d %T.%3N` → `2024-01-15 10:30:45.123`
+- `%b %d %T.%3N` → `Jan 15 10:30:45.123`
+- `%H:%M:%S` → `10:30:45`
+
+See [Time Display](../features/time-display.md) for format details and [Time Format Reference](../reference/time-format.md) for all specifiers.
+
+---
+
+### time-zone {#time-zone}
+
+Timezone for displaying timestamps.
+
+- **Type:** string
+- **Default:** `UTC`
+- **CLI:** `-Z, --time-zone <TZ>` or `-L, --local`
+- **Env:** `HL_TIME_ZONE`
+
+```toml
+time-zone = "UTC"
+# time-zone = "America/New_York"
+# time-zone = "Europe/London"
+```
+
+See [Time Display](../features/time-display.md#timezone-options) for timezone configuration.
+
+---
 
 ## Complete Example Configuration
 
 ```toml
-#:schema https://raw.githubusercontent.com/pamburus/hl/v0.35.2/schema/json/config.schema.json
+#:schema https://raw.githubusercontent.com/pamburus/hl/latest/schema/json/config.schema.json
 
 # Display settings
 time-format = "%Y-%m-%d %H:%M:%S.%3N"

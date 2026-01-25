@@ -12,6 +12,20 @@ Themes in `hl` define:
 - **Element-specific styling** (numbers, strings, booleans, nulls)
 - **Level-specific colors** (error, warning, info, debug, trace)
 
+## Configuration
+
+| Method | Setting |
+|--------|---------|
+| Config file | [`theme`](./config-files.md#theme) |
+| CLI option | `--theme <NAME>` |
+| Environment | `HL_THEME` |
+
+For theme overlays:
+
+| Method | Setting |
+|--------|---------|
+| Config file | [`theme-overlays`](./config-files.md#theme-overlays) |
+
 ## Default Theme
 
 The default theme is `uni`, which:
@@ -20,7 +34,7 @@ The default theme is `uni`, which:
 - Uses 16 basic ANSI colors for maximum compatibility
 - Uses blue accents
 
-You can change the default in your [configuration file](./config-files.md).
+You can change the default in your [configuration file](./config-files.md#theme).
 
 ## Selecting a Theme
 
@@ -228,4 +242,4 @@ modes = ["reverse"]
 
 - [Custom Themes](./themes-custom.md) — creating your own themes
 - [Theme Overlays](./themes-overlays.md) — modifying themes with overlays
-- [Configuration Files](./config-files.md) — persistent theme configuration
+- [Configuration Files](./config-files.md#theme) — persistent theme configuration
