@@ -25,16 +25,16 @@ hl -L -t '%Y-%m-%d %H:%M:%S.%3N' app.log
 | Method | Setting |
 |--------|---------|
 | Config file | [`time-format`](../customization/config-files.md#time-format) |
-| CLI option | `-t, --time-format <FORMAT>` |
-| Environment | `HL_TIME_FORMAT` |
+| CLI option | [`-t, --time-format`](../reference/options.md#time-format) |
+| Environment | [`HL_TIME_FORMAT`](../customization/environment.md#hl-time-format) |
 
 **Timezone:**
 
 | Method | Setting |
 |--------|---------|
 | Config file | [`time-zone`](../customization/config-files.md#time-zone) |
-| CLI option | `-Z, --time-zone <TZ>` or `-L, --local` |
-| Environment | `HL_TIME_ZONE` |
+| CLI option | [`-Z, --time-zone`](../reference/options.md#time-zone) or [`-L, --local`](../reference/options.md#local) |
+| Environment | [`HL_TIME_ZONE`](../customization/environment.md#hl-time-zone) |
 
 **Defaults:** Format is `%b %d %T.%3N`, timezone is `UTC`.
 

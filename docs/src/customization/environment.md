@@ -31,7 +31,7 @@ See [Configuration Files](./config-files.md) for details on the layered configur
 
 ### Display and Formatting
 
-#### HL_COLOR
+#### HL_COLOR {#hl-color}
 
 Control ANSI color output.
 
@@ -52,7 +52,7 @@ Example:
 HL_COLOR=always hl app.log | less -R
 ```
 
-#### HL_THEME
+#### HL_THEME {#hl-theme}
 
 Select the color theme.
 
@@ -70,7 +70,7 @@ List available themes with `hl --list-themes`.
 
 See [Themes](./themes.md) for details.
 
-#### HL_ASCII
+#### HL_ASCII {#hl-ascii}
 
 Control Unicode vs ASCII characters for punctuation.
 
@@ -91,7 +91,7 @@ Example:
 export HL_ASCII=always
 ```
 
-#### HL_EXPANSION
+#### HL_EXPANSION {#hl-expansion}
 
 Control field expansion mode for multi-line values.
 
@@ -108,7 +108,7 @@ export HL_EXPANSION=always
 
 See [Field Expansion](../features/field-expansion.md) for mode descriptions and examples.
 
-#### HL_FLATTEN
+#### HL_FLATTEN {#hl-flatten}
 
 Control whether nested objects are flattened to dot notation.
 
@@ -125,7 +125,7 @@ See [Output Formatting](../features/formatting.md#object-flattening) for example
 
 ### Time and Timezone
 
-#### HL_TIME_FORMAT
+#### HL_TIME_FORMAT {#hl-time-format}
 
 Customize timestamp format using strftime syntax.
 
@@ -150,7 +150,7 @@ export HL_TIME_FORMAT="%H:%M:%S.%3N"
 
 See [Time Display](../features/time-display.md) for format details.
 
-#### HL_TIME_ZONE
+#### HL_TIME_ZONE {#hl-time-zone}
 
 Set the timezone for timestamp display.
 
@@ -170,7 +170,7 @@ export HL_TIME_ZONE=Europe/Berlin
 
 ### Filtering
 
-#### HL_LEVEL
+#### HL_LEVEL {#hl-level}
 
 Set default minimum log level to display.
 
@@ -190,7 +190,7 @@ export HL_LEVEL=warn
 
 ### Field Visibility
 
-#### HL_HIDE_EMPTY_FIELDS
+#### HL_HIDE_EMPTY_FIELDS {#hl-hide-empty-fields}
 
 Hide fields with empty values (null, empty string, empty object, empty array).
 
@@ -205,7 +205,7 @@ Example:
 export HL_HIDE_EMPTY_FIELDS=true
 ```
 
-#### HL_SHOW_EMPTY_FIELDS
+#### HL_SHOW_EMPTY_FIELDS {#hl-show-empty-fields}
 
 Override to show empty fields (takes precedence over `HL_HIDE_EMPTY_FIELDS`).
 
@@ -216,7 +216,7 @@ export HL_SHOW_EMPTY_FIELDS=false
 
 ### Input Options
 
-#### HL_INPUT_FORMAT
+#### HL_INPUT_FORMAT {#hl-input-format}
 
 Force specific input format.
 
@@ -234,7 +234,7 @@ Example:
 export HL_INPUT_FORMAT=json
 ```
 
-#### HL_UNIX_TIMESTAMP_UNIT
+#### HL_UNIX_TIMESTAMP_UNIT {#hl-unix-timestamp-unit}
 
 Specify Unix timestamp unit for numeric timestamps.
 
@@ -252,7 +252,7 @@ Example:
 export HL_UNIX_TIMESTAMP_UNIT=ms
 ```
 
-#### HL_ALLOW_PREFIX
+#### HL_ALLOW_PREFIX {#hl-allow-prefix}
 
 Allow non-JSON prefixes before JSON entries (for Docker, systemd logs).
 
@@ -267,7 +267,7 @@ Example:
 export HL_ALLOW_PREFIX=true
 ```
 
-#### HL_DELIMITER
+#### HL_DELIMITER {#hl-delimiter}
 
 Set log entry delimiter.
 
@@ -289,7 +289,7 @@ export HL_DELIMITER=crlf
 
 ### Paging
 
-#### HL_PAGING
+#### HL_PAGING {#hl-paging}
 
 Control pager usage.
 
@@ -307,7 +307,7 @@ Example:
 export HL_PAGING=never
 ```
 
-#### HL_PAGER
+#### HL_PAGER {#hl-pager}
 
 Override the pager command (takes precedence over `PAGER`).
 

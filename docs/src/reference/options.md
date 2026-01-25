@@ -4,7 +4,7 @@ This page provides a complete reference for all `hl` command-line options.
 
 ## Arguments
 
-### `[FILE]...`
+### `[FILE]...` {#file}
 
 Files to process. If no files are specified, `hl` reads from standard input.
 
@@ -21,7 +21,7 @@ kubectl logs my-pod | hl
 
 ## General Options
 
-### `--config <FILE>`
+### `--config <FILE>` {#config}
 
 Specify a custom configuration file path.
 
@@ -30,7 +30,7 @@ Specify a custom configuration file path.
 
 See [Configuration Files](../customization/config-files.md) for details.
 
-### `--help[=<VERBOSITY>]`
+### `--help[=<VERBOSITY>]` {#help}
 
 Print help information.
 
@@ -48,7 +48,7 @@ hl --help
 hl --help=long
 ```
 
-### `-V, --version`
+### `-V, --version` {#version}
 
 Print version information.
 
@@ -58,7 +58,7 @@ hl --version
 
 ## Sorting and Streaming Options
 
-### `-s, --sort`
+### `-s, --sort` {#sort}
 
 Sort log entries chronologically across all input files.
 
@@ -71,7 +71,7 @@ hl --sort app1.log app2.log app3.log
 
 See [Sorting](../features/sorting.md) for details.
 
-### `-F, --follow`
+### `-F, --follow` {#follow}
 
 Follow input streams and sort entries chronologically within the time window set by `--sync-interval-ms`.
 
@@ -84,14 +84,14 @@ hl --follow app.log
 
 See [Follow Mode](../features/follow-mode.md) for details.
 
-### `--tail <N>`
+### `--tail <N>` {#tail}
 
 Number of last entries to preload from each file in `--follow` mode.
 
 - **Default**: `10`
 - **Example**: `hl --follow --tail 50 app.log`
 
-### `--sync-interval-ms <MILLISECONDS>`
+### `--sync-interval-ms <MILLISECONDS>` {#sync-interval-ms}
 
 Synchronization interval (in milliseconds) for live streaming mode enabled by `--follow`.
 
@@ -102,7 +102,7 @@ This controls the time window within which entries are sorted in follow mode.
 
 ## Paging Options
 
-### `--paging <WHEN>`
+### `--paging <WHEN>` {#paging}
 
 Control pager usage. The pager used is determined by the `HL_PAGER` or `PAGER` environment variables.
 
@@ -118,7 +118,7 @@ Control pager usage. The pager used is determined by the `HL_PAGER` or `PAGER` e
 hl --paging=always app.log
 ```
 
-### `-P`
+### `-P` {#-p}
 
 Shorthand alias for `--paging=never`. Overrides the `--paging` option.
 
@@ -137,7 +137,7 @@ hl app.log | grep ERROR  # -P not needed here
 
 ## Filtering Options
 
-### `-l, --level <LEVEL>`
+### `-l, --level <LEVEL>` {#level}
 
 Display only entries with log level greater than or equal to the specified level.
 
@@ -154,7 +154,7 @@ hl -l error app.log
 
 When used with `--sort`, the timestamp index's level bitmasks allow extremely fast filtering: file segments that don't contain the requested level(s) are skipped entirely without reading or parsing.
 
-### `--since <TIME>`
+### `--since <TIME>` {#since}
 
 Display entries with timestamp greater than or equal to the specified time.
 
@@ -168,7 +168,7 @@ hl --since "2024-01-15 10:00:00" app.log
 hl --since "2024-01-15 10:00:00" --time-zone "America/New_York" app.log
 ```
 
-### `--until <TIME>`
+### `--until <TIME>` {#until}
 
 Display entries with timestamp less than or equal to the specified time.
 
@@ -179,7 +179,7 @@ The `--time-zone` and `--local` options are honored when parsing the time value.
 hl --until "2024-01-15 18:00:00" app.log
 ```
 
-### `-f, --filter <FILTER>`
+### `-f, --filter <FILTER>` {#filter}
 
 Filter entries by matching field values using simple field matching expressions.
 
@@ -213,7 +213,7 @@ hl -f 'status=500' -f 'method=POST' app.log
 
 For complex filtering with boolean logic, comparisons, and more, use `--query` instead.
 
-### `-q, --query <QUERY>`
+### `-q, --query <QUERY>` {#query}
 
 Filter entries using complex query expressions.
 
@@ -250,7 +250,7 @@ See [Query Syntax](./query-syntax.md) for complete syntax details.
 
 ## Output Options
 
-### `--color [<WHEN>]`
+### `--color [<WHEN>]` {#color}
 
 Control ANSI color and style output.
 
@@ -266,11 +266,11 @@ Control ANSI color and style output.
 hl --color=always app.log | less -R
 ```
 
-### `-c`
+### `-c` {#-c}
 
 Shorthand alias for `--color=always`. Overrides the `--color` option.
 
-### `--theme <THEME>`
+### `--theme <THEME>` {#theme}
 
 Specify the color theme to use.
 
@@ -290,7 +290,7 @@ hl --list-themes
 
 See [Themes](../customization/themes.md) for details on themes and customization.
 
-### `-r, --raw`
+### `-r, --raw` {#raw}
 
 Output raw source entries instead of formatted entries.
 
@@ -307,17 +307,17 @@ hl -r --input-format json -q 'status>=500' app.log | jq '.status'
 
 See [Raw Output](../features/raw-output.md) for details.
 
-### `--no-raw`
+### `--no-raw` {#no-raw}
 
 Disable raw output. Overrides the `--raw` option.
 
-### `--raw-fields`
+### `--raw-fields` {#raw-fields}
 
 Output field values as-is, without unescaping or prettifying.
 
 This is useful when you need the exact original field values without any transformations.
 
-### `-h, --hide <KEY>`
+### `-h, --hide <KEY>` {#hide}
 
 Hide or reveal fields with the specified keys.
 
@@ -338,7 +338,7 @@ hl --hide '!request.headers' app.log
 
 See [Field Visibility](../features/field-visibility.md) for details.
 
-### `--flatten <WHEN>`
+### `--flatten <WHEN>` {#flatten}
 
 Control whether to flatten nested objects.
 
@@ -357,7 +357,7 @@ hl --flatten=never app.log
 hl --flatten=always app.log
 ```
 
-### `-t, --time-format <FORMAT>`
+### `-t, --time-format <FORMAT>` {#time-format}
 
 Specify the time format for displaying timestamps.
 
@@ -374,7 +374,7 @@ hl --time-format "%Y-%m-%dT%H:%M:%S%z" app.log
 hl -t "%b %d %H:%M:%S" app.log
 ```
 
-### `-Z, --time-zone <TZ>`
+### `-Z, --time-zone <TZ>` {#time-zone}
 
 Specify the time zone for displaying timestamps.
 
@@ -395,7 +395,7 @@ hl -Z "Asia/Shanghai" app.log
 
 **Note**: The value `local` is not a valid IANA timezone. Use `--local` instead.
 
-### `-L, --local`
+### `-L, --local` {#local}
 
 Use the local system time zone for displaying timestamps. Overrides the `--time-zone` option.
 
@@ -404,11 +404,11 @@ Use the local system time zone for displaying timestamps. Overrides the `--time-
 hl --local app.log
 ```
 
-### `--no-local`
+### `--no-local` {#no-local}
 
 Disable local time zone. Overrides the `--local` option.
 
-### `-e, --hide-empty-fields`
+### `-e, --hide-empty-fields` {#hide-empty-fields}
 
 Hide empty fields (null, empty string, empty object, empty array).
 
@@ -420,13 +420,13 @@ Hide empty fields (null, empty string, empty object, empty array).
 hl --hide-empty-fields app.log
 ```
 
-### `-E, --show-empty-fields`
+### `-E, --show-empty-fields` {#show-empty-fields}
 
 Show empty fields. Overrides the `--hide-empty-fields` option.
 
 - **Environment**: `HL_SHOW_EMPTY_FIELDS`
 
-### `--input-info <LAYOUTS>`
+### `--input-info <LAYOUTS>` {#input-info}
 
 Control the display of input file information (file number and filename).
 
@@ -449,7 +449,7 @@ hl --input-info full app1.log app2.log
 hl --input-info none app.log
 ```
 
-### `--ascii [<WHEN>]`
+### `--ascii [<WHEN>]` {#ascii}
 
 Control ASCII mode for terminal output.
 
@@ -465,7 +465,7 @@ When enabled, Unicode punctuation (like fancy quotes) is replaced with ASCII equ
 hl --ascii=always app.log
 ```
 
-### `-x, --expansion [<MODE>]`
+### `-x, --expansion [<MODE>]` {#expansion}
 
 Control how multi-line field values are displayed.
 
@@ -476,7 +476,7 @@ Control how multi-line field values are displayed.
 
 See [Field Expansion](../features/field-expansion.md) for mode descriptions and examples.
 
-### `-o, --output <FILE>`
+### `-o, --output <FILE>` {#output}
 
 Write output to the specified file instead of stdout.
 
@@ -487,7 +487,7 @@ hl --output formatted.log -q 'status>=500' app.log
 
 ## Input Options
 
-### `--input-format <FORMAT>`
+### `--input-format <FORMAT>` {#input-format}
 
 Specify the input log format.
 
@@ -503,7 +503,7 @@ hl --input-format json app.log
 hl --input-format logfmt app.log
 ```
 
-### `--unix-timestamp-unit <UNIT>`
+### `--unix-timestamp-unit <UNIT>` {#unix-timestamp-unit}
 
 Specify the unit for Unix timestamps.
 
@@ -520,7 +520,7 @@ Specify the unit for Unix timestamps.
 hl --unix-timestamp-unit ms app.log
 ```
 
-### `--allow-prefix`
+### `--allow-prefix` {#allow-prefix}
 
 Allow non-JSON prefixes before JSON log entries.
 
@@ -535,7 +535,7 @@ hl --allow-prefix app.log
 
 See [Non-JSON Prefixes](../features/prefixes.md) for details.
 
-### `--delimiter <DELIMITER>`
+### `--delimiter <DELIMITER>` {#delimiter}
 
 Specify the log entry delimiter.
 
@@ -558,7 +558,7 @@ hl --delimiter nul app.log
 
 ## Advanced Options
 
-### `--interrupt-ignore-count <N>`
+### `--interrupt-ignore-count <N>` {#interrupt-ignore-count}
 
 Number of interrupt signals (Ctrl-C / SIGINT) to ignore before exiting.
 
@@ -572,7 +572,7 @@ This allows you to press Ctrl-C multiple times to force exit when `hl` is proces
 hl --interrupt-ignore-count 5 large-file.log
 ```
 
-### `--buffer-size <SIZE>`
+### `--buffer-size <SIZE>` {#buffer-size}
 
 Set the internal buffer size.
 
@@ -584,7 +584,7 @@ Set the internal buffer size.
 hl --buffer-size "1 MiB" app.log
 ```
 
-### `--max-message-size <SIZE>`
+### `--max-message-size <SIZE>` {#max-message-size}
 
 Set the maximum log entry size.
 
@@ -598,7 +598,7 @@ Entries larger than this will be truncated or skipped.
 hl --max-message-size "128 MiB" app.log
 ```
 
-### `-C, --concurrency <N>`
+### `-C, --concurrency <N>` {#concurrency}
 
 Set the number of processing threads.
 
@@ -610,7 +610,7 @@ Set the number of processing threads.
 hl --concurrency 4 app.log
 ```
 
-### `--shell-completions <SHELL>`
+### `--shell-completions <SHELL>` {#shell-completions}
 
 Print shell auto-completion script and exit.
 
@@ -624,7 +624,7 @@ hl --shell-completions bash > ~/.local/share/bash-completion/completions/hl
 hl --shell-completions zsh > ~/.zsh/completions/_hl
 ```
 
-### `--man-page`
+### `--man-page` {#man-page}
 
 Print man page and exit.
 
@@ -633,7 +633,7 @@ Print man page and exit.
 hl --man-page | man -l -
 ```
 
-### `--list-themes[=<TAGS>]`
+### `--list-themes[=<TAGS>]` {#list-themes}
 
 Print available themes, optionally filtered by tags.
 
@@ -650,7 +650,7 @@ hl --list-themes=dark
 hl --list-themes=256color
 ```
 
-### `--dump-index`
+### `--dump-index` {#dump-index}
 
 Print debug index metadata (in `--sort` mode) and exit.
 

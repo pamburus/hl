@@ -17,8 +17,8 @@ Themes in `hl` define:
 | Method | Setting |
 |--------|---------|
 | Config file | [`theme`](./config-files.md#theme) |
-| CLI option | `--theme <NAME>` |
-| Environment | `HL_THEME` |
+| CLI option | [`--theme`](../reference/options.md#theme) |
+| Environment | [`HL_THEME`](./environment.md#hl-theme) |
 
 For theme overlays:
 
