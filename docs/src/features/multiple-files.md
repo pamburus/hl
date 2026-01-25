@@ -7,7 +7,7 @@ hl makes it easy to work with multiple log files simultaneously, whether you're 
 | Method | Setting |
 |--------|---------|
 | Config file | [`input-info`](../customization/config-files.md#input-info) |
-| CLI option | `--input-info <MODE>` |
+| CLI option | [`--input-info`](../reference/options.md#input-info) |
 
 **Values:** `auto` (default), `none`, `minimal`, `compact`, `full`
 

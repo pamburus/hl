@@ -16,8 +16,8 @@ When log entries contain fields with multi-line values (such as stack traces or 
 | Method | Setting |
 |--------|---------|
 | Config file | [`formatting.expansion.mode`](../customization/config-files.md#formatting-expansion-mode) |
-| CLI option | `-x, --expansion <MODE>` |
-| Environment | `HL_EXPANSION` |
+| CLI option | [`-x, --expansion`](../reference/options.md#expansion) |
+| Environment | [`HL_EXPANSION`](../customization/environment.md#hl-expansion) |
 
 **Values:** `never`, `inline`, `auto` (default), `always`
 

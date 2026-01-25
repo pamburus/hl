@@ -21,15 +21,15 @@ hl -h headers -h metadata app.log
 | Method | Setting |
 |--------|---------|
 | Config file | [`fields.hide`](../customization/config-files.md#fields-hide) |
-| CLI option | `-h, --hide <KEY>` |
+| CLI option | [`-h, --hide`](../reference/options.md#hide) |
 
 For hiding empty fields:
 
 | Method | Setting |
 |--------|---------|
 | Config file | [`hide-empty-fields`](../customization/config-files.md#hide-empty-fields) |
-| CLI option | `-e, --hide-empty-fields` or `-E, --show-empty-fields` |
-| Environment | `HL_HIDE_EMPTY_FIELDS` |
+| CLI option | [`-e, --hide-empty-fields`](../reference/options.md#hide-empty-fields) or [`-E, --show-empty-fields`](../reference/options.md#show-empty-fields) |
+| Environment | [`HL_HIDE_EMPTY_FIELDS`](../customization/environment.md#hl-hide-empty-fields) |
 
 ## Hiding Fields
 
