@@ -97,7 +97,7 @@ Tests MUST use external data files instead of inline multiline string literals f
 **Testing**: cargo test, criterion for benchmarks, proptest for property-based tests
 **Output Format**: Primary output designed for human readability using ANSI colors and styles. Additional formats (JSON, etc.) may be added as needed but are not required.
 **Compatibility**: SEMVER for versioning; breaking changes require major version bump and migration guide
-**Documentation**: README, man pages, inline examples, architecture decision records for major changes
+**Documentation**: README, man pages, inline examples, architecture decision records for major changes. The documentation book (`docs/src/`) MUST conform to architectural rules defined in `docs/constitution/`. These subsidiary rules govern documentation structure, cross-referencing, and single-source-of-truth principles for the user-facing book.
 **Typography**: Use spaced en dash ( – ) where an em dash would otherwise be unspaced; keep spaced em dashes in contexts where dashes are already separated (e.g., option description lists).
 
 ## Development Workflow & Quality Gates
