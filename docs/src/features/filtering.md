@@ -216,7 +216,7 @@ When filters are applied:
 - Matching entries are displayed normally
 - Non-matching entries are completely omitted
 - The total number of entries processed is not shown (for performance)
-- Filters are case-sensitive by default for field values
+- Filters are case-sensitive for field values
 
 ## When to Use Each Filter Type
 
