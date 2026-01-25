@@ -8,7 +8,7 @@ hl automatically integrates with a pager to make viewing large log files comfort
 |--------|---------|--------|
 | CLI option | [`--paging`](../reference/options.md#paging), [`-P`](../reference/options.md#-p) | `auto` (default), `always`, `never` |
 | Environment | [`HL_PAGING`](../customization/environment.md#hl-paging) | `auto` (default), `always`, `never` |
-| Environment | [`HL_PAGER`](../customization/environment.md#hl-pager) | Program name (e.g., `less`, `bat`, `most`) |
+| Environment | [`HL_PAGER`](../customization/environment.md#hl-pager) | Program name (e.g., `less`, `most`) |
 
 ## Default Behavior
 
@@ -44,7 +44,7 @@ PAGER=most hl app.log
 Or use `HL_PAGER` to override `PAGER` specifically for hl:
 
 ```sh
-HL_PAGER=bat hl app.log
+HL_PAGER=most hl app.log
 ```
 
 ## Pager Options
@@ -170,14 +170,6 @@ Add to your PowerShell profile to make it permanent.
 
 ## Alternative Pagers
 
-### bat
-
-[bat](https://github.com/sharkdp/bat) is a modern pager with syntax highlighting:
-
-```sh
-PAGER="bat --style=plain --paging=always" hl app.log
-```
-
 ### most
 
 [most](https://www.jedsoft.org/most/) is another alternative:
@@ -186,12 +178,12 @@ PAGER="bat --style=plain --paging=always" hl app.log
 PAGER="most -w" hl app.log
 ```
 
-### moar
+### moor
 
-[moar](https://github.com/walles/moar) is designed for ANSI escape sequences:
+[moor](https://github.com/walles/moor) is designed for ANSI escape sequences:
 
 ```sh
-PAGER=moar hl app.log
+PAGER="moor -no-line-numbers" hl app.log
 ```
 
 ## Troubleshooting
