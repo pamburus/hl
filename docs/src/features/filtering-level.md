@@ -17,7 +17,7 @@ hl recognizes five standard log levels, ordered from most verbose to most severe
 Use the `-l` or `--level` option to filter by minimum log level:
 
 ```sh
-hl -l LEVEL application.log
+hl -l LEVEL app.log
 ```
 
 ## Level Shortcuts
@@ -26,19 +26,19 @@ Each level has a single-character shortcut:
 
 ```sh
 # Show only errors
-hl -l e application.log
+hl -l e app.log
 
 # Show warnings and errors
-hl -l w application.log
+hl -l w app.log
 
 # Show info, warnings, and errors (excludes debug and trace)
-hl -l i application.log
+hl -l i app.log
 
 # Show debug and above (excludes only trace)
-hl -l d application.log
+hl -l d app.log
 
 # Show all messages including trace
-hl -l t application.log
+hl -l t app.log
 ```
 
 ## How Level Filtering Works
@@ -60,7 +60,7 @@ When you specify a level, hl displays that level **and all more severe levels**.
 Show debug messages and above (excludes trace):
 
 ```sh
-hl -l d application.log
+hl -l d app.log
 ```
 
 ### Production Monitoring
@@ -68,7 +68,7 @@ hl -l d application.log
 In production, you typically don't want debug or trace messages:
 
 ```sh
-hl -l i application.log
+hl -l i app.log
 ```
 
 ### Error Investigation
@@ -76,7 +76,7 @@ hl -l i application.log
 Focus only on errors:
 
 ```sh
-hl -l e application.log
+hl -l e app.log
 ```
 
 ### Warning Review
@@ -84,7 +84,7 @@ hl -l e application.log
 Check warnings and errors:
 
 ```sh
-hl -l w application.log
+hl -l w app.log
 ```
 
 ## Combining with Other Filters
@@ -96,7 +96,7 @@ Level filtering combines well with other filter types:
 Errors in the last hour:
 
 ```sh
-hl -l e --since -1h application.log
+hl -l e --since -1h app.log
 ```
 
 ### Level + Field Filter
@@ -104,7 +104,7 @@ hl -l e --since -1h application.log
 Errors from a specific service:
 
 ```sh
-hl -l e -f service=api application.log
+hl -l e -f service=api app.log
 ```
 
 ### Level + Query
@@ -112,7 +112,7 @@ hl -l e -f service=api application.log
 Warnings with slow response times:
 
 ```sh
-hl -l w -q 'duration > 0.5' application.log
+hl -l w -q 'duration > 0.5' app.log
 ```
 
 ### Level + Multiple Files
@@ -129,7 +129,7 @@ Use an environment variable to set a default level filter:
 
 ```sh
 export HL_LEVEL=i
-hl application.log
+hl app.log
 ```
 
 This will filter to info and above by default, but can be overridden with `-l`.
@@ -139,11 +139,11 @@ This will filter to info and above by default, but can be overridden with `-l`.
 You can also use full level names instead of shortcuts:
 
 ```sh
-hl -l error application.log
-hl -l warning application.log
-hl -l info application.log
-hl -l debug application.log
-hl -l trace application.log
+hl -l error app.log
+hl -l warning app.log
+hl -l info app.log
+hl -l debug app.log
+hl -l trace app.log
 ```
 
 ## Case Insensitivity
@@ -151,33 +151,39 @@ hl -l trace application.log
 Level filtering is case-insensitive:
 
 ```sh
-hl -l ERROR application.log
-hl -l Error application.log
-hl -l error application.log
+hl -l ERROR app.log
+hl -l Error app.log
+hl -l error app.log
 ```
 
 All three commands are equivalent.
 
 ## Level Detection
 
-hl automatically detects log levels from common field names:
+`hl` by default detects log levels from common field names:
 
-- `level`
-- `severity`
-- `loglevel`
-- `log_level`
+- `level` / `Level` / `LEVEL`
+- `PRIORITY`
 
 And recognizes various level value formats:
 
-- Lowercase: `error`, `warn`, `info`, `debug`, `trace`
-- Uppercase: `ERROR`, `WARN`, `INFO`, `DEBUG`, `TRACE`
-- Capitalized: `Error`, `Warn`, `Info`, `Debug`, `Trace`
-- Short forms: `ERR`, `WRN`, `INF`, `DBG`, `TRC`
-- Numeric: Standard syslog levels
+- For `level`:
+  - Error: `error` / `err` / `fatal` / `critical` / `panic`
+  - Warning: `warning` / `warn` 
+  - Info: `info` / `information`
+  - Debug: `debug`
+  - Trace: `trace`
+- For `PRIORITY`:
+  - Error: `3` or lower
+  - Warning: `5` and `4`
+  - Info: `6`
+  - Debug: `7`
+
+If your logs use different field names or values, you can customize level detection via configuration. See [Configuration Files](../customization/config-files.md) for details.
 
 ## Performance Considerations
 
-Level filtering is extremely fast because hl:
+Level filtering is extremely fast because `hl`:
 
 1. Parses the level early in processing
 2. Uses bitmap indexing for level checks
@@ -236,17 +242,17 @@ If you get no output when filtering by level:
 
 1. Verify logs contain entries at that level:
    ```sh
-   hl application.log | grep -i error
+   hl app.log | grep -i error
    ```
 
 2. Check if level field is named differently:
    ```sh
-   hl --raw application.log | head
+   hl --raw app.log | head
    ```
 
 3. Try without level filter to see all entries:
    ```sh
-   hl application.log
+   hl app.log
    ```
 
 ### Unexpected Entries
@@ -257,16 +263,16 @@ If you see entries you didn't expect:
 - For example, `-l w` shows both warnings AND errors
 - To show only warnings (excluding errors), use a query:
   ```sh
-  hl -q 'level = warning' application.log
+  hl -q 'level = warning' app.log
   ```
 
 ## Best Practices
 
-1. **Start with level filtering** - It's the fastest way to reduce log volume
-2. **Use shortcuts** - `-l e` is quicker than `-l error`
-3. **Combine with time ranges** - Limit both by time and severity
-4. **Set defaults** - Use `HL_LEVEL` for your typical use case
-5. **Layer filters** - Apply level filter first, then add field/query filters
+1. **Start with level filtering** — It's the fastest way to reduce log volume
+2. **Use shortcuts** — `-l e` is quicker than `-l error`
+3. **Combine with time ranges** — Limit both by time and severity
+4. **Set defaults** — Use `HL_LEVEL` for your typical use case
+5. **Layer filters** — Apply level filter first, then add field/query filters
 
 ## Next Steps
 

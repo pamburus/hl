@@ -98,7 +98,7 @@ trace = ["trace"]
 names = ["PRIORITY"]
 
 [fields.predefined.level.variants.values]
-error = [3, 2, 1]
+error = [3, 2, 1, 0]
 warning = [5, 4]
 info = [6]
 debug = [7]

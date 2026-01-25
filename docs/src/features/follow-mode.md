@@ -202,14 +202,14 @@ hl -F --query 'level >= warn and (service = "api" or service = "auth")' *.log
 ### Time Filtering
 
 ```sh
-# Only show entries from the last hour
-hl -F --since '1 hour ago' app.log
+# Start by showing entries from the last hour (no more than tail window)
+hl -F --tail 100 --since '1 hour ago' app.log
 
-# Show entries within a time range (useful for historical follow)
-hl -F --since '10:00' --until '11:00' app.log
+# Follow changes in the app.log but only display entries from today between 18:00 and 19:00
+hl -F --since 'today 18:00' --until 'today 19:00' app.log
 ```
 
-Note: In live follow mode, `--until` will cause `hl` to exit once that time is reached.
+Note: In live follow mode, `--until` will **not** cause `hl` to exit once that time is reached.
 
 ## Exit Behavior
 
@@ -224,8 +224,6 @@ Follow mode runs indefinitely until interrupted. Press Ctrl-C to exit.
 Follow mode exits automatically when:
 
 - **Ctrl-C is pressed** (single interrupt, immediate exit)
-- **All files are deleted** and not recreated
-- **--until** time is reached (if specified)
 - **Unrecoverable error** occurs (e.g., permission denied)
 
 ### Note on --interrupt-ignore-count
@@ -309,7 +307,7 @@ hl -F --level warn --query 'critical = true' app.log
 
 ### Starting Without History
 
-By default, follow mode shows the last 10 entries from each file. To start fresh:
+By default, follow mode shows the last 10 entries from each file. To change this:
 
 ```sh
 # Start from now without showing historical entries
@@ -383,19 +381,14 @@ Check that:
 
 - Increase `--sync-interval-ms` to allow more time for buffering
 - Check if source systems have clock skew
-- Verify that timestamps are correct in the source logs
+- Verify that timestamps are correct in the source logs and have the supported format
+- Check that configured timestamp field names match the log format
 
 ### Missing Entries After Rotation
 
 - Ensure file rotation preserves the filename (hl follows by name)
 - Check that rotation doesn't happen too frequently for the sync interval
 - Verify file permissions after rotation
-
-### High CPU Usage
-
-- Reduce `--sync-interval-ms` if it's very large
-- Use filters to reduce the volume of processed entries
-- Check for runaway log generation in source applications
 
 ## When to Use Follow Mode
 

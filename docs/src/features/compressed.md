@@ -19,16 +19,16 @@ Simply pass the compressed file as you would a plain file:
 
 ```sh
 # gzip
-hl application.log.gz
+hl app.log.gz
 
 # bzip2
-hl application.log.bz2
+hl app.log.bz2
 
 # xz
-hl application.log.xz
+hl app.log.xz
 
 # zstd
-hl application.log.zst
+hl app.log.zst
 ```
 
 hl automatically detects the compression format and decompresses on the fly.

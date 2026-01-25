@@ -30,7 +30,7 @@ Which displays as: `Jan 15 10:30:45.123`
 Use the `-t` or `--time-format` option:
 
 ```sh
-hl -t '%Y-%m-%d %H:%M:%S' application.log
+hl -t '%Y-%m-%d %H:%M:%S' app.log
 ```
 
 Or set via environment variable:
@@ -137,42 +137,42 @@ hl extends strftime with subsecond precision:
 
 ```sh
 # Basic ISO-8601
-hl -t '%Y-%m-%dT%H:%M:%S' application.log
+hl -t '%Y-%m-%dT%H:%M:%S' app.log
 
 # ISO-8601 with milliseconds
-hl -t '%Y-%m-%dT%H:%M:%S.%3N' application.log
+hl -t '%Y-%m-%dT%H:%M:%S.%3N' app.log
 
 # ISO-8601 with timezone
-hl -t '%Y-%m-%dT%H:%M:%S%z' application.log
+hl -t '%Y-%m-%dT%H:%M:%S%z' app.log
 
 # Full ISO-8601 with timezone
-hl -t '%Y-%m-%dT%H:%M:%S.%3N%z' application.log
+hl -t '%Y-%m-%dT%H:%M:%S.%3N%z' app.log
 ```
 
 ### Human-Readable Formats
 
 ```sh
 # Compact format
-hl -t '%y-%m-%d %T' application.log
+hl -t '%y-%m-%d %T' app.log
 
 # Verbose format
-hl -t '%A, %B %d, %Y at %I:%M:%S %p' application.log
+hl -t '%A, %B %d, %Y at %I:%M:%S %p' app.log
 
 # Unix-style
-hl -t '%b %d %H:%M:%S' application.log
+hl -t '%b %d %H:%M:%S' app.log
 ```
 
 ### High Precision
 
 ```sh
 # With milliseconds
-hl -t '%H:%M:%S.%3N' application.log
+hl -t '%H:%M:%S.%3N' app.log
 
 # With microseconds
-hl -t '%H:%M:%S.%6N' application.log
+hl -t '%H:%M:%S.%6N' app.log
 
 # With nanoseconds
-hl -t '%H:%M:%S.%9N' application.log
+hl -t '%H:%M:%S.%9N' app.log
 ```
 
 ### Copy-Paste Workflow
@@ -181,29 +181,29 @@ Your configured format is automatically recognized by `--since` and `--until`, s
 
 ```sh
 # With default format (%b %d %T.%3N)
-hl application.log | grep "error"
+hl app.log | grep "error"
 # Output: Jan 15 10:30:45.123 ERROR ...
 
 # Copy timestamp and paste directly:
-hl --since "Jan 15 10:30:45.123" application.log
+hl --since "Jan 15 10:30:45.123" app.log
 ```
 
 If you prefer a different format for readability or consistency, configure it once and copy-paste will still work:
 
 ```sh
 # Configure ISO format (personal preference)
-hl -t '%Y-%m-%d %H:%M:%S.%3N' application.log
+hl -t '%Y-%m-%d %H:%M:%S.%3N' app.log
 # Output: 2024-01-15 10:30:45.123 ERROR ...
 
 # Copy and paste works with any configured format:
-hl --since "2024-01-15 10:30:45.123" application.log
+hl --since "2024-01-15 10:30:45.123" app.log
 
 # Or compact format
-hl -t '%m-%d %T' application.log
+hl -t '%m-%d %T' app.log
 # Output: 01-15 10:30:45 ERROR ...
 
 # Copy and paste still works:
-hl --since "01-15 10:30:45" application.log
+hl --since "01-15 10:30:45" app.log
 ```
 
 **Key point:** You don't need to change the format for copy-paste to work. Choose a format you like, and `hl` will recognize it in `--since`/`--until`.
@@ -214,13 +214,13 @@ Time format works together with timezone settings:
 
 ```sh
 # Display in UTC (default)
-hl -t '%Y-%m-%d %H:%M:%S %Z' application.log
+hl -t '%Y-%m-%d %H:%M:%S %Z' app.log
 
 # Display in local timezone
-hl -L -t '%Y-%m-%d %H:%M:%S %Z' application.log
+hl -L -t '%Y-%m-%d %H:%M:%S %Z' app.log
 
 # Display in specific timezone
-hl -Z 'America/New_York' -t '%Y-%m-%d %H:%M:%S %Z' application.log
+hl -Z 'America/New_York' -t '%Y-%m-%d %H:%M:%S %Z' app.log
 ```
 
 See [Time Display](../features/time-display.md) for more about timezone options.
@@ -239,22 +239,22 @@ time-zone = "UTC"
 
 1. **Use subsecond precision for debugging**
    ```sh
-   hl -t '%T.%6N' application.log
+   hl -t '%T.%6N' app.log
    ```
 
 2. **Use ISO-8601 for logs that will be shared**
    ```sh
-   hl -t '%Y-%m-%dT%H:%M:%S.%3N%z' application.log
+   hl -t '%Y-%m-%dT%H:%M:%S.%3N%z' app.log
    ```
 
 3. **Use compact formats for quick viewing**
    ```sh
-   hl -t '%m-%d %T' application.log
+   hl -t '%m-%d %T' app.log
    ```
 
 4. **Use verbose formats for presentations**
    ```sh
-   hl -t '%B %d, %Y - %I:%M:%S %p' application.log
+   hl -t '%B %d, %Y - %I:%M:%S %p' app.log
    ```
 
 ## Platform Differences

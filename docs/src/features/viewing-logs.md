@@ -7,7 +7,7 @@ hl is designed to make viewing structured logs effortless. This section covers t
 The most straightforward way to view a log file is to simply pass it as an argument:
 
 ```sh
-hl application.log
+hl app.log
 ```
 
 This command:
@@ -83,7 +83,7 @@ When viewing logs in a pager (the default behavior), you can use standard pager 
 For some use cases, you might want to disable the pager:
 
 ```sh
-hl -P application.log
+hl -P app.log
 ```
 
 The `-P` flag is useful when:

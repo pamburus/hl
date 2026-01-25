@@ -6,16 +6,16 @@ hl provides flexible options for displaying timestamps in log entries. You can c
 
 ```sh
 # Use local timezone instead of UTC
-hl -L application.log
+hl -L app.log
 
 # Use specific timezone
-hl -Z 'America/New_York' application.log
+hl -Z 'America/New_York' app.log
 
 # Custom time format
-hl -t '%Y-%m-%d %H:%M:%S' application.log
+hl -t '%Y-%m-%d %H:%M:%S' app.log
 
 # Combine timezone and format
-hl -L -t '%Y-%m-%d %H:%M:%S.%3N' application.log
+hl -L -t '%Y-%m-%d %H:%M:%S.%3N' app.log
 ```
 
 ## Timezone Options
@@ -25,7 +25,7 @@ hl -L -t '%Y-%m-%d %H:%M:%S.%3N' application.log
 By default, hl displays all timestamps in UTC:
 
 ```sh
-hl application.log
+hl app.log
 ```
 
 ### Local Timezone
@@ -33,7 +33,7 @@ hl application.log
 Use the `-L` or `--local` flag to display timestamps in your local timezone:
 
 ```sh
-hl -L application.log
+hl -L app.log
 ```
 
 This uses your system's timezone configuration.
@@ -43,9 +43,9 @@ This uses your system's timezone configuration.
 Use the `-Z` or `--time-zone` option to specify any timezone:
 
 ```sh
-hl -Z 'Europe/London' application.log
-hl -Z 'Asia/Tokyo' application.log
-hl -Z 'America/Los_Angeles' application.log
+hl -Z 'Europe/London' app.log
+hl -Z 'Asia/Tokyo' app.log
+hl -Z 'America/Los_Angeles' app.log
 ```
 
 Timezone names use the [IANA Time Zone Database](https://en.wikipedia.org/wiki/List_of_tz_database_time_zones) format (see the "TZ identifier" column).
@@ -56,13 +56,13 @@ Set a default timezone:
 
 ```sh
 export HL_TIME_ZONE='Europe/Berlin'
-hl application.log
+hl app.log
 ```
 
 Or use local timezone:
 
 ```sh
-hl -L application.log
+hl -L app.log
 ```
 
 ## Time Format
@@ -82,26 +82,26 @@ Which displays as: `Jan 15 10:30:45.123`
 Use the `-t` or `--time-format` option:
 
 ```sh
-hl -t '%Y-%m-%d %H:%M:%S' application.log
+hl -t '%Y-%m-%d %H:%M:%S' app.log
 ```
 
 ### Common Formats
 
 ```sh
 # ISO-8601 with milliseconds
-hl -t '%Y-%m-%d %H:%M:%S.%3N' application.log
+hl -t '%Y-%m-%d %H:%M:%S.%3N' app.log
 
 # US format
-hl -t '%m/%d/%Y %I:%M:%S %p' application.log
+hl -t '%m/%d/%Y %I:%M:%S %p' app.log
 
 # European format
-hl -t '%d/%m/%Y %H:%M:%S' application.log
+hl -t '%d/%m/%Y %H:%M:%S' app.log
 
 # Time only with microsecond precision
-hl -t '%H:%M:%S.%6N' application.log
+hl -t '%H:%M:%S.%6N' app.log
 
 # Unix timestamp
-hl -t '%s' application.log
+hl -t '%s' app.log
 ```
 
 ### Environment Variable
@@ -110,7 +110,7 @@ Set a default format:
 
 ```sh
 export HL_TIME_FORMAT='%Y-%m-%d %H:%M:%S.%3N'
-hl application.log
+hl app.log
 ```
 
 ## Complete Format Reference
@@ -122,13 +122,13 @@ For all available time format codes, see the [Time Format Reference](../referenc
 ### Local Time with Custom Format
 
 ```sh
-hl -L -t '%Y-%m-%d %H:%M:%S %Z' application.log
+hl -L -t '%Y-%m-%d %H:%M:%S %Z' app.log
 ```
 
 ### Specific Timezone with ISO Format
 
 ```sh
-hl -Z 'America/New_York' -t '%Y-%m-%dT%H:%M:%S%z' application.log
+hl -Z 'Asia/Tokyo' -t '%Y-%m-%dT%H:%M:%S%z' app.log
 ```
 
 ## Subsecond Precision
@@ -137,13 +137,13 @@ hl supports millisecond, microsecond, and nanosecond precision:
 
 ```sh
 # Milliseconds (3 digits)
-hl -t '%H:%M:%S.%3N' application.log
+hl -t '%H:%M:%S.%3N' app.log
 
 # Microseconds (6 digits)
-hl -t '%H:%M:%S.%6N' application.log
+hl -t '%H:%M:%S.%6N' app.log
 
 # Nanoseconds (9 digits)
-hl -t '%H:%M:%S.%9N' application.log
+hl -t '%H:%M:%S.%9N' app.log
 ```
 
 ## Configuration File
@@ -153,14 +153,14 @@ Set defaults in your configuration file:
 ```toml
 # ~/.config/hl/config.toml
 time-format = "%Y-%m-%d %H:%M:%S.%3N"
-time-zone = "America/New_York"
+time-zone = "Asia/Singapore"
 ```
 
 Or use local timezone (note: `--local` is a command-line flag only, set `time-zone` to your local timezone in config):
 
 ```toml
 time-format = "%Y-%m-%d %H:%M:%S.%3N"
-# Set to your local timezone, e.g., "America/New_York"
+# Set to your local timezone, e.g., "Asia/Seoul"
 # Or use -L/--local flag on command line for local time
 ```
 
@@ -180,7 +180,7 @@ Configuration sources are applied in this order (highest priority last):
 Quick, readable format with milliseconds:
 
 ```sh
-hl -L -t '%H:%M:%S.%3N' application.log
+hl -L -t '%H:%M:%S.%3N' app.log
 ```
 
 ### Production Monitoring
@@ -188,7 +188,7 @@ hl -L -t '%H:%M:%S.%3N' application.log
 ISO-8601 with timezone for unambiguous timestamps:
 
 ```sh
-hl -t '%Y-%m-%dT%H:%M:%S.%3N%z' application.log
+hl -t '%Y-%m-%dT%H:%M:%S.%3N%z' app.log
 ```
 
 ### Incident Investigation
@@ -196,7 +196,7 @@ hl -t '%Y-%m-%dT%H:%M:%S.%3N%z' application.log
 Local timezone for easier correlation with other systems:
 
 ```sh
-hl -L -t '%Y-%m-%d %H:%M:%S.%3N %Z' application.log
+hl -L -t '%Y-%m-%d %H:%M:%S.%3N %Z' app.log
 ```
 
 ### Log Archival
@@ -204,7 +204,7 @@ hl -L -t '%Y-%m-%d %H:%M:%S.%3N %Z' application.log
 Unix timestamps for machine processing:
 
 ```sh
-hl -t '%s' application.log
+hl -t '%s' app.log
 ```
 
 ### Sharing Logs
@@ -212,29 +212,30 @@ hl -t '%s' application.log
 Use local timezone with verbose format for clarity:
 
 ```sh
-hl -L -t '%B %d, %Y at %I:%M:%S %p %Z' application.log
+hl -L -t '%B %d, %Y at %I:%M:%S %p %Z' app.log
 ```
 
 ## Tips
 
-1. **Use local timezone for investigation** - Easier to correlate with your activities:
+1. **Use local timezone for development** - Easier to correlate with your activities:
    ```sh
-   hl -L application.log
+   hl -L app.log
    ```
 
 2. **Use UTC for production** - Avoids timezone confusion in distributed systems:
    ```sh
-   hl -Z UTC application.log
+   hl -Z UTC app.log
+   hl app.log # Default is UTC unless "time-zone" is set in the configuration file
    ```
 
 3. **Match your logging format** - If your app logs in ISO-8601, display in ISO-8601:
    ```sh
-   hl -t '%Y-%m-%dT%H:%M:%S.%3N' application.log
+   hl -t '%Y-%m-%dT%H:%M:%S.%3N' app.log
    ```
 
 4. **Use subsecond precision for performance analysis**:
    ```sh
-   hl -t '%H:%M:%S.%6N' application.log
+   hl -t '%H:%M:%S.%6N' app.log
    ```
 
 5. **Set defaults** - Put common settings in your config file:
@@ -266,32 +267,32 @@ For a complete list, see the [List of tz database time zones](https://en.wikiped
 
 ```sh
 # UTC
-hl -Z UTC application.log
+hl -Z UTC app.log
 
 # New York
-hl -Z 'America/New_York' application.log
+hl -Z 'America/New_York' app.log
 
 # Tokyo
-hl -Z 'Asia/Tokyo' application.log
+hl -Z 'Asia/Tokyo' app.log
 
 # London
-hl -Z 'Europe/London' application.log
+hl -Z 'Europe/London' app.log
 ```
 
 ### Different Format Styles
 
 ```sh
 # Compact
-hl -t '%y%m%d %H%M%S' application.log
+hl -t '%y%m%d %H%M%S' app.log
 
 # Human-readable
-hl -t '%A, %B %d %Y - %H:%M:%S' application.log
+hl -t '%A, %B %d %Y - %H:%M:%S' app.log
 
 # Technical
-hl -t '%Y-%m-%dT%H:%M:%S.%6N%z' application.log
+hl -t '%Y-%m-%dT%H:%M:%S.%6N%z' app.log
 
 # Simple
-hl -t '%T' application.log
+hl -t '%T' app.log
 ```
 
 ## Related

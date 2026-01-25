@@ -134,9 +134,9 @@ theme = "universal"
 # Inherits: time-zone = "UTC" from base
 
 # Layer 4 (--config project.toml):
-time-zone = "America/New_York"
+time-zone = "Europe/Oslo"
 # Inherits: theme = "universal" from Layer 3
-# Final result: theme = "universal", time-zone = "America/New_York"
+# Final result: theme = "universal", time-zone = "Europe/Oslo"
 ```
 
 ## Configuration File Format

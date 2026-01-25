@@ -7,7 +7,7 @@ This guide will get you up and running with hl in minutes. We'll cover the most 
 The simplest way to use hl is to point it at a log file:
 
 ```sh
-hl application.log
+hl app.log
 ```
 
 This will:
@@ -30,13 +30,13 @@ hl app.log app.log.1 app.log.2
 Follow a live log file with chronological sorting:
 
 ```sh
-hl -F application.log
+hl -F app.log
 ```
 
 Or follow a log file showing everything in original order:
 
 ```sh
-tail -f application.log | hl -P
+tail -f app.log | hl -P
 ```
 
 **Key difference:** `-F` parses and sorts entries chronologically (only shows parsable entries with timestamps), while `tail -f | hl -P` shows everything including unparsable input and entries without timestamps.
@@ -58,19 +58,19 @@ No need to decompress first – hl supports gzip, zstd, bzip2, and xz formats.
 Show only errors:
 
 ```sh
-hl -l e application.log
+hl -l e app.log
 ```
 
 Show warnings and errors:
 
 ```sh
-hl -l w application.log
+hl -l w app.log
 ```
 
-Show info and above (excludes debug):
+Show info and above (excludes debug and trace):
 
 ```sh
-hl -l i application.log
+hl -l i app.log
 ```
 
 ### Filter by Field Value
@@ -78,13 +78,13 @@ hl -l i application.log
 Show logs where `service` equals `api`:
 
 ```sh
-hl -f service=api application.log
+hl -f service=api app.log
 ```
 
 Show logs where `status` is not `200`:
 
 ```sh
-hl -f 'status!=200' application.log
+hl -f 'status!=200' app.log
 ```
 
 ### Filter by Time Range
@@ -92,13 +92,13 @@ hl -f 'status!=200' application.log
 Show logs from the last 3 hours:
 
 ```sh
-hl --since -3h application.log
+hl --since -3h app.log
 ```
 
 Show logs from a specific day:
 
 ```sh
-hl --since '2024-01-15' --until '2024-01-16' application.log
+hl --since '2024-01-15' --until '2024-01-16' app.log
 ```
 
 ## Customizing the Display
@@ -108,7 +108,7 @@ hl --since '2024-01-15' --until '2024-01-16' application.log
 Hide verbose fields you don't need:
 
 ```sh
-hl -h headers -h metadata application.log
+hl -h headers -h metadata app.log
 ```
 
 ### Show Only Specific Fields
@@ -116,7 +116,7 @@ hl -h headers -h metadata application.log
 Hide all fields except the ones you want:
 
 ```sh
-hl -h '*' -h '!message' -h '!level' -h '!time' application.log
+hl -h '*' -h '!method' -h '!url' app.log
 ```
 
 The `!` prefix reveals a field when others are hidden.
@@ -126,7 +126,7 @@ The `!` prefix reveals a field when others are hidden.
 Display time in a custom format:
 
 ```sh
-hl -t '%Y-%m-%d %H:%M:%S' application.log
+hl -t '%Y-%m-%d %H:%M:%S' app.log
 ```
 
 See the [Time Format Reference](./reference/time-format.md) for all available format specifiers.
@@ -136,7 +136,7 @@ See the [Time Format Reference](./reference/time-format.md) for all available fo
 Display timestamps in your local timezone instead of UTC:
 
 ```sh
-hl -L application.log
+hl -L app.log
 ```
 
 ## Working with Multiple Sources
@@ -163,7 +163,7 @@ This shows entries sorted by timestamp across all files. Note that `-F` only dis
 
 ## Choosing a Theme
 
-hl comes with several built-in themes. List available themes:
+`hl` comes with several built-in themes. List available themes:
 
 ```sh
 hl --list-themes
@@ -172,14 +172,23 @@ hl --list-themes
 Use a specific theme:
 
 ```sh
-hl --theme classic application.log
+hl --theme frostline app.log
 ```
 
 Or set it as default via environment variable:
 
 ```sh
-export HL_THEME=classic
-hl application.log
+export HL_THEME=frostline
+hl app.log
+```
+
+### Interactive Theme Selection
+
+Use [fzf](https://junegunn.github.io/fzf/) to interactively select a theme:
+
+```sh
+# Interactively choose a dark-friendly theme with live preview
+hl --list-themes=dark | fzf --color='bg+:23,gutter:-1,pointer:210' --highlight-line --preview-window 'right,border-left,88%,<142(up,88%,border-bottom)' --preview="hl -t '%b %d %T' --input-info minimal -c --theme {} sample/*.log"
 ```
 
 ## Getting Help
@@ -217,26 +226,26 @@ Common options:
 
 ```sh
 # Find all errors in the last hour
-hl -l e --since -1h application.log
+hl -l e --since -1h app.log
 
 # Find errors from a specific service
-hl -l e -f service=payment application.log
+hl -l e -f service=payment app.log
 
 # Find errors with stack traces
-hl -l e -q 'exists(stack)' application.log
+hl -l e -q 'exists(stack)' app.log
 ```
 
 ### Monitoring Performance
 
 ```sh
 # Find slow requests (duration > 1 second)
-hl -q 'duration > 1' application.log
+hl -q 'duration > 1' app.log
 
 # Find failed HTTP requests
-hl -q 'status >= 400' application.log
+hl -q 'status >= 400' app.log
 
 # Combine conditions
-hl -q 'duration > 0.5 or status >= 500' application.log
+hl -q 'duration > 0.5 or status >= 500' app.log
 ```
 
 ### Investigating an Incident

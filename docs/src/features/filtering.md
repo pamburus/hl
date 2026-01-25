@@ -21,7 +21,7 @@ hl provides several complementary filtering methods:
 Filter by severity level (trace, debug, info, warning, error):
 
 ```sh
-hl -l e application.log
+hl -l e app.log
 ```
 
 This is the quickest way to narrow down logs by importance. See [Filtering by Log Level](./filtering-level.md) for details.
@@ -31,7 +31,7 @@ This is the quickest way to narrow down logs by importance. See [Filtering by Lo
 Filter by specific field values:
 
 ```sh
-hl -f service=api application.log
+hl -f service=api app.log
 ```
 
 Perfect for focusing on a particular component, user, or request. Learn more in [Filtering by Field Values](./filtering-fields.md).
@@ -41,7 +41,7 @@ Perfect for focusing on a particular component, user, or request. Learn more in 
 Filter by timestamp range:
 
 ```sh
-hl --since '2024-01-15 10:00:00' --until '2024-01-15 11:00:00' application.log
+hl --since '2024-01-15 10:00:00' --until '2024-01-15 11:00:00' app.log
 ```
 
 Essential for investigating incidents or analyzing specific time windows. See [Filtering by Time Range](./filtering-time.md).
@@ -51,7 +51,7 @@ Essential for investigating incidents or analyzing specific time windows. See [F
 Build sophisticated filters with logical operators:
 
 ```sh
-hl -q 'level >= warn and (status >= 400 or duration > 1)' application.log
+hl -q 'level >= warn and (status >= 400 or duration > 1)' app.log
 ```
 
 The most flexible filtering option for complex scenarios. Covered in [Complex Queries](./filtering-queries.md).
@@ -65,7 +65,7 @@ hl -l w \
    -f service=api \
    --since -1h \
    -q 'duration > 0.5' \
-   application.log
+   app.log
 ```
 
 This shows warning-level or higher logs from the `api` service in the last hour where duration exceeds 0.5 seconds.
@@ -92,13 +92,13 @@ hl is optimized for filtering:
 ### Finding Errors in a Time Window
 
 ```sh
-hl -l e --since -2h application.log
+hl -l e --since -2h app.log
 ```
 
 ### Excluding Debug Messages
 
 ```sh
-hl -l i application.log
+hl -l i app.log
 ```
 
 Info level and above (excludes trace and debug).
@@ -106,25 +106,25 @@ Info level and above (excludes trace and debug).
 ### Tracking a Specific Request
 
 ```sh
-hl -f request.id=abc-123 application.log
+hl -f request.id=abc-123 app.log
 ```
 
 ### Finding Slow Operations
 
 ```sh
-hl -q 'duration > 1.0' application.log
+hl -q 'duration > 1.0' app.log
 ```
 
 ### Multiple Conditions
 
 ```sh
-hl -q 'service = "api" and (status >= 400 or error != null)' application.log
+hl -q 'service = "api" and (status >= 400 or error != null)' app.log
 ```
 
 ### Investigating Recent Errors
 
 ```sh
-hl -l e --since yesterday --until today application.log
+hl -l e --since yesterday --until today app.log
 ```
 
 ## Filter Operators Quick Reference
@@ -160,43 +160,43 @@ hl -l e --since yesterday --until today application.log
 
 ```sh
 # Find failed authentication attempts
-hl -q 'event = "auth_failed"' application.log
+hl -q 'event = "auth-failed"' app.log
 
 # Find access from suspicious IPs
-hl -q 'ip in @suspicious-ips.txt' application.log
+hl -q 'ip in @suspicious-ips.txt' app.log
 ```
 
 ### Performance Analysis
 
 ```sh
 # Find requests over 500ms
-hl -q 'duration > 0.5' application.log
+hl -q 'duration > 0.5' app.log
 
 # Find slow database queries
-hl -f component=database -q 'duration > 0.1' application.log
+hl -f component=database -q 'duration > 0.1' app.log
 ```
 
 ### Error Investigation
 
 ```sh
 # All errors in the last hour
-hl -l e --since -1h application.log
+hl -l e --since -1h app.log
 
 # Errors from specific service
-hl -l e -f service=payment application.log
+hl -l e -f service=payment app.log
 
 # Errors with stack traces
-hl -l e -q 'exists(stack)' application.log
+hl -l e -q 'exists(stack)' app.log
 ```
 
 ### User Activity Tracking
 
 ```sh
 # All actions by specific user
-hl -f user.id=12345 application.log
+hl -f user.id=12345 app.log
 
 # User actions in time range
-hl -f user.id=12345 --since '2024-01-15' --until '2024-01-16' application.log
+hl -f user.id=12345 --since '2024-01-15' --until '2024-01-16' app.log
 ```
 
 ### Multi-Service Debugging

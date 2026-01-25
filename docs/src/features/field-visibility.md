@@ -8,10 +8,10 @@ Use the `-h` or `--hide` option to control field visibility:
 
 ```sh
 # Hide a specific field
-hl -h metadata application.log
+hl -h metadata app.log
 
 # Hide multiple fields
-hl -h headers -h metadata application.log
+hl -h headers -h metadata app.log
 ```
 
 ## Hiding Fields
@@ -20,24 +20,24 @@ hl -h headers -h metadata application.log
 
 ```sh
 # Hide the 'headers' field
-hl -h headers application.log
+hl -h headers app.log
 ```
 
 ### Multiple Fields
 
 ```sh
 # Hide several fields
-hl -h headers -h metadata -h debug_info application.log
+hl -h headers -h metadata -h debug_info app.log
 ```
 
 ### Nested Fields
 
 ```sh
 # Hide nested field
-hl -h request.headers application.log
+hl -h request.headers app.log
 
 # Hide deeply nested field
-hl -h user.profile.preferences application.log
+hl -h user.profile.preferences app.log
 ```
 
 ## Revealing Fields
@@ -47,21 +47,18 @@ Use the `!` prefix to reveal fields when others are hidden:
 ### Hide All Except Specific Fields
 
 ```sh
-# Hide all fields, show only message and level
-hl -h '*' -h '!message' -h '!level' application.log
-
-# Show only specific fields
-hl -h '*' -h '!message' -h '!level' -h '!time' application.log
+# Hide all fields, show only method and url
+hl -h '*' -h '!method' -h '!url' app.log
 ```
 
 ### Reveal Nested Field
 
 ```sh
 # Hide headers but show content-type
-hl -h headers -h '!headers.content-type' application.log
+hl -h headers -h '!headers.content-type' app.log
 
 # Hide request but show method and path
-hl -h request -h '!request.method' -h '!request.path' application.log
+hl -h request -h '!request.method' -h '!request.path' app.log
 ```
 
 ## Wildcard Patterns
@@ -70,17 +67,17 @@ hl -h request -h '!request.method' -h '!request.path' application.log
 
 ```sh
 # Hide all custom fields (keeps standard fields like time, level, message)
-hl -h '*' application.log
+hl -h '*' app.log
 ```
 
 ### Pattern Matching
 
 ```sh
 # Hide all fields starting with 'debug'
-hl -h 'debug*' application.log
+hl -h 'debug*' app.log
 
 # Hide all fields containing 'internal'
-hl -h '*internal*' application.log
+hl -h '*internal*' app.log
 ```
 
 ## Common Patterns
@@ -90,25 +87,25 @@ hl -h '*internal*' application.log
 Show only essential fields:
 
 ```sh
-# Only time, level, and message
-hl -h '*' -h '!time' -h '!level' -h '!message' application.log
+# Only method and url
+hl -h '*' -h '!method' -h '!url' app.log
 ```
 
 ### Hide Verbose Fields
 
 ```sh
 # Hide noisy fields
-hl -h headers -h body -h metadata application.log
+hl -h headers -h body -h metadata app.log
 
 # Hide debug fields
-hl -h 'debug*' -h 'trace*' application.log
+hl -h 'debug-*' -h 'trace-*' app.log
 ```
 
 ### Focus on Errors
 
 ```sh
 # Show errors with minimal fields
-hl -l e -h '*' -h '!message' -h '!error' -h '!stack' application.log
+hl -l e -h '*' -h '!error' -h '!stack' app.log
 ```
 
 ### API Monitoring
@@ -117,10 +114,10 @@ hl -l e -h '*' -h '!message' -h '!error' -h '!stack' application.log
 # Show only request/response info
 hl -h '*' \
    -h '!method' \
-   -h '!path' \
+   -h '!url' \
    -h '!status' \
    -h '!duration' \
-   application.log
+   app.log
 ```
 
 ## Hiding Empty Fields
@@ -129,10 +126,10 @@ Use the `-e` or `--hide-empty-fields` flag to automatically hide fields with emp
 
 ```sh
 # Hide null, empty strings, empty objects, and empty arrays
-hl -e application.log
+hl -e app.log
 
 # Combine with field hiding
-hl -e -h metadata application.log
+hl -e -h metadata app.log
 ```
 
 ### Show Empty Fields
@@ -141,7 +138,7 @@ Use `-E` or `--show-empty-fields` to override config defaults:
 
 ```sh
 # Explicitly show empty fields
-hl -E application.log
+hl -E app.log
 ```
 
 ## Nested Field Visibility
@@ -150,14 +147,14 @@ hl -E application.log
 
 ```sh
 # Hide entire request object except specific fields
-hl -h request -h '!request.method' -h '!request.path' application.log
+hl -h request -h '!request.method' -h '!request.url' app.log
 ```
 
 ### Partial Object Display
 
 ```sh
 # Hide some nested fields, keep others
-hl -h user.profile -h user.settings application.log
+hl -h user.profile -h user.settings app.log
 ```
 
 For JSON like:
@@ -178,10 +175,10 @@ This shows `user.id` and `user.name` but hides `user.profile` and `user.settings
 
 ```sh
 # Hide array field
-hl -h tags application.log
+hl -h tags app.log
 
 # Hide nested array
-hl -h user.roles application.log
+hl -h user.roles app.log
 ```
 
 ## Use Cases
@@ -190,10 +187,10 @@ hl -h user.roles application.log
 
 ```sh
 # Focus on error details
-hl -l e -h '*' -h '!message' -h '!error' -h '!stack' application.log
+hl -l e -h '*' -h '!error' -h '!stack' app.log
 
 # Database query debugging
-hl -h '*' -h '!query' -h '!duration' -h '!rows' application.log
+hl -h '*' -h '!query' -h '!duration' -h '!rows' app.log
 ```
 
 ### Performance Analysis
@@ -204,8 +201,8 @@ hl -h '*' \
    -h '!time' \
    -h '!duration' \
    -h '!method' \
-   -h '!path' \
-   application.log
+   -h '!url' \
+   app.log
 ```
 
 ### Security Audit
@@ -217,7 +214,7 @@ hl -h '*' \
    -h '!ip' \
    -h '!action' \
    -h '!result' \
-   application.log
+   app.log
 ```
 
 ### Request Tracing
@@ -225,11 +222,10 @@ hl -h '*' \
 ```sh
 # Show trace information
 hl -h '*' \
-   -h '!trace_id' \
-   -h '!span_id' \
+   -h '!trace.id' \
+   -h '!span.id' \
    -h '!service' \
-   -h '!message' \
-   application.log
+   app.log
 ```
 
 ### HTTP API Logs
@@ -238,10 +234,10 @@ hl -h '*' \
 # Essential HTTP info
 hl -h headers -h body \
    -h '!method' \
-   -h '!path' \
+   -h '!url' \
    -h '!status' \
    -h '!duration' \
-   application.log
+   app.log
 ```
 
 ## Combining with Other Options
@@ -250,28 +246,28 @@ hl -h headers -h body \
 
 ```sh
 # Show only essential error fields
-hl -l e -h '*' -h '!message' -h '!error' application.log
+hl -l e -h '*' -h '!error' app.log
 ```
 
 ### With Time Range
 
 ```sh
 # Recent logs with minimal fields
-hl --since -1h -h headers -h metadata application.log
+hl --since -1h -h headers -h metadata app.log
 ```
 
 ### With Field Filtering
 
 ```sh
 # Specific service with minimal output
-hl -f service=api -h '*' -h '!message' -h '!status' application.log
+hl -f service=api -h '*' -h '!message' -h '!status' app.log
 ```
 
 ### With Queries
 
 ```sh
 # Slow requests with timing info only
-hl -q 'duration > 1.0' -h '*' -h '!duration' -h '!path' application.log
+hl -q 'duration > 1.0' -h '*' -h '!duration' -h '!path' app.log
 ```
 
 ## Configuration File
@@ -280,7 +276,7 @@ Set default hidden fields in your config file:
 
 ```toml
 # ~/.config/hl/config.toml
-hide = ["headers", "metadata", "debug_info"]
+hide = ["headers", "metadata", "debug-info"]
 ```
 
 Or in YAML:
@@ -290,32 +286,14 @@ Or in YAML:
 hide:
   - headers
   - metadata
-  - debug_info
+  - debug-info
 ```
 
 ## Environment Variables
 
 ```sh
-# Set default hidden fields
-export HL_HIDE="headers,metadata"
-
 # Hide empty fields by default
 export HL_HIDE_EMPTY_FIELDS=true
-```
-
-## Field Visibility vs Field Expansion
-
-These are independent controls:
-
-```sh
-# Hide fields (controls which fields appear)
-hl -h headers application.log
-
-# Field expansion (controls how fields are displayed)
-hl -x always application.log
-
-# Combine both
-hl -h metadata -x inline application.log
 ```
 
 See [Field Expansion](./field-expansion.md) for details on `-x` option.
@@ -326,32 +304,23 @@ Hiding fields has minimal performance impact:
 
 - Fields are hidden during output formatting
 - Parsing still processes all fields
-- No performance benefit from hiding fields
-- Use filtering (`-f`, `-q`) to reduce parsing
-
-```sh
-# Hiding doesn't improve performance
-hl -h headers application.log
-
-# Filtering improves performance
-hl -f 'headers!~=' application.log  # Skip entries with headers
-```
+- Minimal performance benefit from hiding fields
 
 ## Tips and Best Practices
 
 1. **Start with `-h '*'` then reveal**:
    ```sh
-   hl -h '*' -h '!message' -h '!level' application.log
+   hl -h '*' -h '!method' -h '!url' app.log
    ```
 
 2. **Hide verbose fields for readability**:
    ```sh
-   hl -h headers -h body application.log
+   hl -h headers -h body app.log
    ```
 
 3. **Use patterns for related fields**:
    ```sh
-   hl -h 'debug*' -h 'internal*' application.log
+   hl -h 'debug-*' -h 'internal-*' app.log
    ```
 
 4. **Configure defaults in config file**:
@@ -361,13 +330,13 @@ hl -f 'headers!~=' application.log  # Skip entries with headers
 
 5. **Combine with empty field hiding**:
    ```sh
-   hl -e -h metadata application.log
+   hl -e -h metadata app.log
    ```
 
 6. **Override config with command line**:
    ```sh
    # Config hides headers, but show them for this run
-   hl -h '!headers' application.log
+   hl -h '!headers' app.log
    ```
 
 ## Examples by Use Case
@@ -376,7 +345,7 @@ hl -f 'headers!~=' application.log  # Skip entries with headers
 
 ```sh
 # Minimal debug output
-hl -l d -h '*' -h '!message' -h '!file' -h '!line' application.log
+hl -l d -h '*' -h '!message' -h '!file' -h '!line' app.log
 ```
 
 ### Production Monitoring
@@ -384,11 +353,11 @@ hl -l d -h '*' -h '!message' -h '!file' -h '!line' application.log
 ```sh
 # Essential production fields
 hl -h '*' \
-   -h '!time' \
-   -h '!level' \
    -h '!service' \
-   -h '!message' \
-   application.log
+   -h '!method' \
+   -h '!url' \
+   -h '!status' \
+   app.log
 ```
 
 ### Error Investigation
@@ -396,11 +365,11 @@ hl -h '*' \
 ```sh
 # Error context only
 hl -l e -h '*' \
-   -h '!message' \
+   -h '!method' \
    -h '!error' \
    -h '!stack' \
    -h '!request.id' \
-   application.log
+   app.log
 ```
 
 ### Performance Tuning
@@ -411,8 +380,8 @@ hl -q 'duration > 0.1' -h '*' \
    -h '!method' \
    -h '!path' \
    -h '!duration' \
-   -h '!db_queries' \
-   application.log
+   -h '!db.queries' \
+   app.log
 ```
 
 ## Troubleshooting
@@ -423,19 +392,13 @@ If a field you tried to hide still appears:
 
 1. **Check exact field name**:
    ```sh
-   hl --raw application.log | head
+   hl --raw app.log | head
    ```
 
 2. **Check for nested structure**:
    ```sh
    # May need to hide nested field
-   hl -h request.headers application.log
-   ```
-
-3. **Check wildcard pattern**:
-   ```sh
-   # Pattern might not match
-   hl -h 'meta*' application.log  # Won't match 'metadata'
+   hl -h request.headers app.log
    ```
 
 ### All Fields Hidden
@@ -445,7 +408,7 @@ If all fields disappeared:
 1. **Check for conflicting hide rules**:
    ```sh
    # Remove -h '*' or add reveals
-   hl -h '*' -h '!message' application.log
+   hl -h '*' -h '!method' app.log
    ```
 
 2. **Check config file**:
@@ -459,18 +422,18 @@ If revealing a field doesn't work:
 
 1. **Verify field exists**:
    ```sh
-   hl --raw application.log | grep "field_name"
+   hl --raw app.log | grep "field-name"
    ```
 
 2. **Check exact casing**:
    ```sh
    # Field names are case-sensitive
-   hl -h '!Message' application.log  # Different from 'message'
+   hl -h '!Message' app.log  # Different from 'message'
    ```
 
 ## Limitations
 
-1. **Cannot hide standard fields** - `time`, `level`, `message` always show (can be hidden with `-h '*'` and selective reveal)
+1. **Cannot hide standard fields** - `time`, `level`, `message` are always shown (cannot be hidden with `-h '*'` and selective reveal)
 
 2. **Pattern matching is simple** - Use `*` for wildcards, not regex
 
@@ -489,7 +452,6 @@ If revealing a field doesn't work:
 
 ### Use Filtering When:
 - ✓ Excluding entries based on field values
-- ✓ Improving performance
 - ✓ Reducing data volume
 - ✓ Finding specific log entries
 

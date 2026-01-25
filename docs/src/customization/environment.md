@@ -177,8 +177,8 @@ Use IANA timezone names (see [IANA timezone database](https://en.wikipedia.org/w
 
 Example:
 ```sh
-# Display timestamps in New York time
-export HL_TIME_ZONE=America/New_York
+# Display timestamps in Berlin time
+export HL_TIME_ZONE=Europe/Berlin
 ```
 
 ### Filtering
@@ -587,7 +587,7 @@ HL_COLOR=always hl app.log | less -R
 hl -L app.log
 
 # Use specific timezone temporarily
-HL_TIME_ZONE=America/New_York hl app.log
+HL_TIME_ZONE=Europe/Berlin hl app.log
 ```
 
 ## Debugging Environment Configuration

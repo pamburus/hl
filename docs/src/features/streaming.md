@@ -4,8 +4,8 @@ hl supports viewing live log streams in real-time, making it perfect for monitor
 
 > **💡 Two Different Approaches**
 > 
-> - **`hl -F application.log`** - Parses, filters, and sorts messages chronologically. Only shows entries with valid timestamps that can be parsed.
-> - **`tail -f application.log | hl -P`** - Shows everything in original order, including unparsable input and messages without recognized timestamps.
+> - **`hl -F app.log`** - Parses, filters, and sorts messages chronologically. Only shows entries with valid timestamps that can be parsed.
+> - **`tail -f app.log | hl -P`** - Shows everything in original order, including unparsable input and messages without recognized timestamps.
 > 
 > Choose based on your needs: structured sorting vs. raw completeness.
 
@@ -16,7 +16,7 @@ hl supports viewing live log streams in real-time, making it perfect for monitor
 Use hl's native `-F` flag for parsed, sorted log streaming:
 
 ```sh
-hl -F application.log
+hl -F app.log
 ```
 
 The `-F` flag:
@@ -34,7 +34,7 @@ See [Follow Mode](./follow-mode.md) for comprehensive documentation on follow mo
 Pipe from `tail -f` to see everything in original order:
 
 ```sh
-tail -f application.log | hl -P
+tail -f app.log | hl -P
 ```
 
 Use `-P` to disable the pager for streaming scenarios where you want immediate, continuous output as entries arrive.
@@ -91,13 +91,13 @@ Some debug output without timestamp
 For parsed, sorted output:
 
 ```sh
-hl -F /var/log/application.log
+hl -F /var/log/app.log
 ```
 
 For raw, complete output in original order:
 
 ```sh
-tail -f /var/log/application.log | hl -P
+tail -f /var/log/app.log | hl -P
 ```
 
 ### Following Application Output
