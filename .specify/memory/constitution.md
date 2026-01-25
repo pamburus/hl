@@ -1,10 +1,10 @@
 <!-- 
 Sync Impact Report:
-- Version: 1.1.0 → 1.2.0
-- Added: Principle VII - Test Data Management
-- Rationale: MINOR version bump - new principle added to governance
+- Version: 1.2.0 → 1.2.1
+- Modified: Technology Stack & Standards – Documentation typography guidance
+- Rationale: PATCH version bump - typography rule for dash usage
 - Templates requiring updates: ✅ All templates reviewed and compatible
-- Date: 2025-01-07
+- Date: 2026-01-25
 -->
 
 # hl (High-performance Log viewer) Constitution
@@ -69,6 +69,7 @@ Tests MUST use external data files instead of inline multiline string literals f
 **Output Format**: Primary output designed for human readability using ANSI colors and styles. Additional formats (JSON, etc.) may be added as needed but are not required.
 **Compatibility**: SEMVER for versioning; breaking changes require major version bump and migration guide
 **Documentation**: README, man pages, inline examples, architecture decision records for major changes
+**Typography**: Use spaced en dash ( – ) instead of unspaced em dash in prose and documentation.
 
 ## Development Workflow & Quality Gates
 
@@ -90,4 +91,4 @@ This constitution supersedes all other practices and informal conventions. All P
 3. Documentation of rationale
 4. Migration plan for any breaking changes
 
-**Version**: 1.2.0 | **Ratified**: 2025-11-02 | **Last Amended**: 2025-01-07
+**Version**: 1.2.1 | **Ratified**: 2025-11-02 | **Last Amended**: 2026-01-25
