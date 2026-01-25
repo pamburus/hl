@@ -4,12 +4,11 @@ hl automatically integrates with a pager to make viewing large log files comfort
 
 ## Configuration
 
-| Method | Setting |
-|--------|---------|
-| CLI option | [`--paging`](../reference/options.md#paging), [`-P`](../reference/options.md#-p) |
-| Environment | [`HL_PAGING`](../customization/environment.md#hl-paging), [`HL_PAGER`](../customization/environment.md#hl-pager) |
-
-**Values:** `auto` (default), `always`, `never`
+| Method | Setting | Values |
+|--------|---------|--------|
+| CLI option | [`--paging`](../reference/options.md#paging), [`-P`](../reference/options.md#-p) | `auto` (default), `always`, `never` |
+| Environment | [`HL_PAGING`](../customization/environment.md#hl-paging) | `auto` (default), `always`, `never` |
+| Environment | [`HL_PAGER`](../customization/environment.md#hl-pager) | Program name (e.g., `less`, `bat`, `most`) |
 
 ## Default Behavior
 
