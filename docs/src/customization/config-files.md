@@ -250,7 +250,7 @@ ascii = "auto"
 ignore = ["_*", "internal.*"]
 
 # Hide specific field names
-hide = ["timestamp", "host", "pid"]
+hide = ["host", "pid", "version"]
 ```
 
 The difference:
@@ -809,7 +809,7 @@ This ensures consistent behavior regardless of what's in `/etc/hl/config` or `~/
 ```toml
 # Minimal, clean output
 [fields]
-hide = ["host", "pid", "version", "logger"]
+hide = ["host", "pid", "version"]
 
 [formatting.message]
 format = "raw"

@@ -16,11 +16,11 @@ Output formatting in `hl` covers several aspects:
 ## Quick Examples
 
 ```sh
-# Hide verbose fields
-hl --hide timestamp --hide host app.log
+# Hide specific fields
+hl --hide host --hide pid app.log
 
-# Show only specific fields
-hl --hide '*' --hide '!level' --hide '!message' app.log
+# Hide all except specific fields
+hl --hide '*' --hide '!service' --hide '!request-id' app.log
 
 # Use local timezone
 hl --local app.log
@@ -41,17 +41,11 @@ Control which fields appear in the output using the `--hide` (or `-h`) option:
 
 ```sh
 # Hide specific fields
-hl --hide timestamp --hide host --hide pid app.log
+hl --hide host --hide pid --hide version app.log
 
-# Hide all fields except specific ones
-hl --hide '*' --hide '!level' --hide '!message' --hide '!service' app.log
+# Hide all except specific fields
+hl --hide '*' --hide '!service' --hide '!request-id' app.log
 ```
-
-Field visibility rules:
-- `--hide field` hides the field
-- `--hide '!field'` reveals/shows the field (overrides previous hides)
-- `--hide '*'` hides all fields (use with reveals to show only specific fields)
-- Rules are processed in order
 
 See [Field Visibility](./field-visibility.md) for detailed behavior and examples.
 

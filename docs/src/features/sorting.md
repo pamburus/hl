@@ -43,10 +43,9 @@ Sort mode is ideal when you need to:
 
 `hl` automatically detects and parses timestamps in various formats:
 
-- **RFC 3339**: `2024-01-15T10:30:45.123Z`, `2024-01-15T10:30:45+00:00` (strict: 'T' separator, timezone required)
-- **ISO 8601 variants**: `2024-01-15 10:30:45.123Z` (relaxed: allows space separator, timezone required)
-- **Unix timestamps**: numeric seconds, milliseconds, microseconds, or nanoseconds
-- **Common formats**: `Jan 15 10:30:45`, `15/Jan/2024:10:30:45 +0000`
+- **RFC 3339**: `2024-01-15T10:30:45.123Z`, `2024-01-15T10:30:45+00:00`
+- **ISO 8601 variants**: `2024-01-15 10:30:45.123`, `2024-01-15 10:30:45` (space separator, optional timezone)
+- **Unix timestamps**: numeric seconds, milliseconds, microseconds, or nanoseconds (integer or float)
 
 Timestamps can appear in various field names and can be located anywhere in the JSON structure (top-level or nested).
 
@@ -208,8 +207,8 @@ Filters are applied during reading – only matching entries are kept for sortin
 ### Field Visibility
 
 ```sh
-# Sort and show only specific fields
-hl -s --hide '*' --hide '!timestamp' --hide '!level' --hide '!message' app.log
+# Sort and hide most fields
+hl -s --hide '*' --hide '!service' --hide '!request-id' app.log
 ```
 
 Field visibility affects output formatting, not sorting behavior.

@@ -2,6 +2,8 @@
 
 Field visibility controls allow you to hide or reveal specific fields in log entries, helping you focus on what matters and reduce visual clutter.
 
+> **Note:** Field visibility only affects **custom fields**. Predefined fields (time, level, message, caller, logger) are always shown and cannot be hidden.
+
 ## Basic Usage
 
 Use the `-h` or `--hide` option to control field visibility:
@@ -66,7 +68,7 @@ hl -h request -h '!request.method' -h '!request.path' app.log
 ### Hide All Fields
 
 ```sh
-# Hide all custom fields (keeps standard fields like time, level, message)
+# Hide all fields
 hl -h '*' app.log
 ```
 
@@ -84,10 +86,10 @@ hl -h '*internal*' app.log
 
 ### Minimal Output
 
-Show only essential fields:
+Show only specific fields:
 
 ```sh
-# Only method and url
+# Show only method and url
 hl -h '*' -h '!method' -h '!url' app.log
 ```
 
@@ -431,11 +433,11 @@ If revealing a field doesn't work:
 
 ## Limitations
 
-1. **Cannot hide standard fields** - `time`, `level`, `message` are always shown (cannot be hidden with `-h '*'` and selective reveal)
+1. **Cannot hide predefined fields** - `time`, `level`, `message`, `caller`, and `logger` are always shown and cannot be hidden
 
 2. **Pattern matching is simple** - Use `*` for wildcards, not regex
 
-3. **Reveal requires prior hide** - `!field` only works if field was hidden
+3. **Reveal requires prior hide** - `!field` only works if the field was previously hidden
 
 4. **No conditional hiding** - Cannot hide based on field value (use filtering for that)
 
