@@ -98,7 +98,7 @@ Tests MUST use external data files instead of inline multiline string literals f
 **Output Format**: Primary output designed for human readability using ANSI colors and styles. Additional formats (JSON, etc.) may be added as needed but are not required.
 **Compatibility**: SEMVER for versioning; breaking changes require major version bump and migration guide
 **Documentation**: README, man pages, inline examples, architecture decision records for major changes
-**Typography**: Use spaced en dash ( – ) instead of unspaced em dash in prose and documentation.
+**Typography**: Use spaced en dash ( – ) where an em dash would otherwise be unspaced; keep spaced em dashes in contexts where dashes are already separated (e.g., option description lists).
 
 ## Development Workflow & Quality Gates
 
