@@ -62,6 +62,7 @@
 - [Query Syntax](./reference/query-syntax.md)
 - [Time Format Specifications](./reference/time-format.md)
 - [Performance Tips](./reference/performance.md)
+- [Glossary](./reference/glossary.md)
 
 # Help
 
