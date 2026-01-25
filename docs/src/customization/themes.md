@@ -16,15 +16,9 @@ Themes in `hl` define:
 
 | Method | Setting |
 |--------|---------|
-| Config file | [`theme`](./config-files.md#theme) |
+| Config file | [`theme`](./config-files.md#theme), [`theme-overlays`](./config-files.md#theme-overlays) |
 | CLI option | [`--theme`](../reference/options.md#theme) |
 | Environment | [`HL_THEME`](./environment.md#hl-theme) |
-
-For theme overlays:
-
-| Method | Setting |
-|--------|---------|
-| Config file | [`theme-overlays`](./config-files.md#theme-overlays) |
 
 ## Default Theme
 
@@ -194,8 +188,7 @@ foreground = 214  # Orange-ish
 
 **24-bit RGB:**
 ```toml
-foreground = "#FF5733"
-foreground = "rgb(255, 87, 51)"
+foreground = "#ff5733"
 ```
 
 **Default color:**

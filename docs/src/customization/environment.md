@@ -58,7 +58,7 @@ Select the color theme.
 
 ```sh
 export HL_THEME=universal
-export HL_THEME=monokai
+export HL_THEME=frostline
 export HL_THEME=ayu-dark-24
 ```
 
@@ -558,7 +558,7 @@ Set environment variables for a single command:
 
 ```sh
 # Use different theme for one command
-HL_THEME=monokai hl app.log
+HL_THEME=frostline hl app.log
 
 # Force colors when piping
 HL_COLOR=always hl app.log | less -R

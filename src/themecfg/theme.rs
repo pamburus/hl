@@ -68,7 +68,7 @@ impl Theme {
     /// # Usage
     ///
     /// Call with application directories and theme name:
-    /// - `Theme::load(app_dirs, "monokai")` loads the monokai theme
+    /// - `Theme::load(app_dirs, "frostline")` loads the frostline theme
     /// - Searches custom directory first, then embedded themes
     /// - Automatically merges with `@base` theme
     /// - Returns fully resolved theme ready for use
@@ -106,7 +106,7 @@ impl Theme {
     /// // Load theme with overlays
     /// let theme = Theme::load_with_overlays(
     ///     &app_dirs,
-    ///     "monokai",
+    ///     "frostline",
     ///     &["@dark", "@compact"]
     /// )?;
     /// ```
@@ -171,7 +171,7 @@ impl Theme {
     /// # Usage
     ///
     /// For advanced theme customization:
-    /// 1. `let mut raw = Theme::load_raw(app_dirs, "monokai")?;`
+    /// 1. `let mut raw = Theme::load_raw(app_dirs, "frostline")?;`
     /// 2. Modify the theme: `raw.styles.0.insert(role, style);`
     /// 3. Resolve: `let theme = raw.resolve()?;`
     ///
