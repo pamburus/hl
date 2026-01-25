@@ -77,7 +77,7 @@ hl --flatten always app.log
 hl --flatten never app.log
 ```
 
-See [Field Expansion](../features/field-expansion.md) for more details.
+See [Field Expansion](../features/field-expansion.md) for how flattening interacts with expansion modes.
 
 ## Practical Examples
 
