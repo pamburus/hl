@@ -70,23 +70,17 @@ See [Time Display](./time-display.md) for format specifications and timezone han
 
 ## Field Expansion
 
-Control how multi-line field values (such as stack traces or error details) are displayed:
+Control how multi-line field values (such as stack traces or error details) are displayed using the `--expansion` (or `-x`) option. Available modes: `never`, `inline`, `auto` (default), `always`.
 
 ```sh
-# Never expand — escape newlines as \n, keep everything on one line
+# Compact single-line output
 hl --expansion never app.log
 
-# Auto (default) — expand only fields with multi-line values
-hl --expansion auto app.log
-
-# Always expand — display each field on its own indented line
-hl --expansion always app.log
-
-# Inline — preserve actual newlines, surrounded by backticks (legacy mode)
-hl --expansion inline app.log
+# Expand all fields for maximum readability
+hl -x always app.log
 ```
 
-See [Field Expansion](./field-expansion.md) for detailed behavior.
+See [Field Expansion](./field-expansion.md) for mode descriptions and examples.
 
 ## Raw Output
 

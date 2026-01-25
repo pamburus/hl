@@ -96,7 +96,7 @@ export HL_ASCII=always
 
 #### HL_EXPANSION
 
-Control field expansion mode.
+Control field expansion mode for multi-line values.
 
 ```sh
 export HL_EXPANSION=auto    # default
@@ -105,17 +105,7 @@ export HL_EXPANSION=inline
 export HL_EXPANSION=always
 ```
 
-Values:
-- `never` — keep everything on a single line, escape newlines as `\n`
-- `inline` — preserve actual newlines in multi-line values, surrounded by backticks
-- `auto` — expand only fields with multi-line values, keep single-line fields inline
-- `always` — display each field on its own indented line
-
-Example:
-```sh
-# Always expand fields for readability
-export HL_EXPANSION=always
-```
+See [Field Expansion](../features/field-expansion.md) for mode descriptions and examples.
 
 #### HL_FLATTEN
 

@@ -384,13 +384,7 @@ Each punctuation item can be:
 mode = "auto"
 ```
 
-Expansion modes:
-- `never` — keep everything on a single line, escape newlines as `\n`
-- `inline` — preserve actual newlines in multi-line values, surrounded by backticks
-- `auto` — expand only fields with multi-line values, keep single-line fields inline
-- `always` — display each field on its own indented line
-
-See [Field Expansion](../features/field-expansion.md) for details.
+Controls how multi-line field values are displayed. See [Field Expansion](../features/field-expansion.md) for mode descriptions and examples.
 
 ## Complete Example Configuration
 
