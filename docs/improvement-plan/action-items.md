@@ -120,6 +120,8 @@ These items improve content accuracy and completeness.
 
 - [x] `features/sorting.md` — Fixed unsupported timestamp formats, added link to timestamps.md
 - [x] `features/timestamps.md` — Fixed unsupported timestamp formats
+- [x] `features/timestamps.md` — Fixed incorrect sort mode behavior (said entries placed at beginning, actually discarded)
+- [x] `features/filtering.md` — Fixed misleading "case-sensitive by default" (removed "by default")
 - [x] Multiple files — Fixed field hiding examples for predefined fields
 - [x] `reference/options.md` — Fixed broken link (hiding-fields.md → field-visibility.md)
 - [x] `help/faq.md` — Fixed broken link (hiding-fields.md → field-visibility.md)
@@ -127,7 +129,7 @@ These items improve content accuracy and completeness.
 - [x] `help/faq.md` — Fixed broken link (examples/advanced.md → examples/queries.md)
 - [x] `reference/options.md` — Fixed broken link (prefix-handling.md → prefixes.md)
 - [x] `help/troubleshooting.md` — Fixed broken link (prefix-handling.md → prefixes.md)
-- [ ] Review remaining files for other potential inaccuracies (lower priority)
+- [x] Review remaining files for other potential inaccuracies — Completed audit of all example and reference files
 - [ ] Test command examples to verify they work (lower priority)
 
 ### 3.2 Standardize Terminology
@@ -313,15 +315,59 @@ For each file, verify:
 
 | File | Audited | Issues Found | Fixed |
 |------|---------|--------------|-------|
+| **Customization** | | | |
 | `customization/config-files.md` | ✅ | See below | ✅ |
 | `customization/environment.md` | ✅ | Minor - added links | ✅ |
 | `customization/themes.md` | ✅ | See below | ✅ |
-| `reference/options.md` | ✅ | Broken links | ✅ |
+| `customization/themes-custom.md` | ✅ | None | ✅ |
+| `customization/themes-overlays.md` | ✅ | None | ✅ |
+| `customization/themes-selecting.md` | ✅ | None | ✅ |
+| `customization/themes-stock.md` | ✅ | None | ✅ |
+| **Examples** | | | |
+| `examples/basic.md` | ✅ | None | ✅ |
+| `examples/field-management.md` | ✅ | None | ✅ |
+| `examples/filtering.md` | ✅ | None | ✅ |
+| `examples/live-monitoring.md` | ✅ | None | ✅ |
+| `examples/multiple-logs.md` | ✅ | None | ✅ |
+| `examples/queries.md` | ✅ | None | ✅ |
+| `examples/time-filtering.md` | ✅ | None | ✅ |
+| **Features** | | | |
+| `features/compressed.md` | ✅ | None | ✅ |
+| `features/field-expansion.md` | ✅ | None | ✅ |
+| `features/field-visibility.md` | ✅ | None | ✅ |
+| `features/filtering.md` | ✅ | Misleading "by default" | ✅ |
+| `features/filtering-fields.md` | ✅ | None | ✅ |
+| `features/filtering-level.md` | ✅ | None | ✅ |
+| `features/filtering-queries.md` | ✅ | None | ✅ |
+| `features/filtering-time.md` | ✅ | None | ✅ |
+| `features/follow-mode.md` | ✅ | None | ✅ |
+| `features/formatting.md` | ✅ | None | ✅ |
+| `features/input.md` | ✅ | None | ✅ |
+| `features/input-formats.md` | ✅ | None | ✅ |
+| `features/multiple-files.md` | ✅ | None | ✅ |
+| `features/pager.md` | ✅ | None | ✅ |
+| `features/prefixes.md` | ✅ | Config section moved | ✅ |
+| `features/raw-output.md` | ✅ | None | ✅ |
+| `features/sorting.md` | ✅ | None | ✅ |
+| `features/sorting-chrono.md` | ✅ | Empty placeholder | N/A |
+| `features/streaming.md` | ✅ | None | ✅ |
+| `features/time-display.md` | ✅ | None | ✅ |
+| `features/time-handling-overview.md` | ✅ | None | ✅ |
+| `features/timestamps.md` | ✅ | Sort mode error, config moved | ✅ |
+| `features/viewing-logs.md` | ✅ | None | ✅ |
+| **Help** | | | |
 | `help/faq.md` | ✅ | None | ✅ |
 | `help/troubleshooting.md` | ✅ | None | ✅ |
-| `examples/basic.md` | ✅ | None | ✅ |
-| `examples/filtering.md` | ✅ | None | ✅ |
-| `examples/queries.md` | ✅ | None | ✅ |
+| **Reference** | | | |
+| `reference/options.md` | ✅ | Broken links | ✅ |
+| `reference/performance.md` | ✅ | None | ✅ |
+| `reference/query-syntax.md` | ✅ | None | ✅ |
+| `reference/time-format.md` | ✅ | None | ✅ |
+| **Root** | | | |
+| `intro.md` | ✅ | None | ✅ |
+| `installation.md` | ✅ | None | ✅ |
+| `quick-start.md` | ✅ | None | ✅ |
+| `SUMMARY.md` | ✅ | N/A (navigation) | N/A |
 
 ### Audit Results: `customization/config-files.md`
 
@@ -490,6 +536,55 @@ The Themes section should be restructured to focus on:
 
 **Overall Assessment:** The file demonstrates advanced query syntax with practical examples. While comprehensive, it appropriately focuses on query patterns and usage rather than duplicating the formal grammar from `reference/query-syntax.md`. Has "Next Steps" section with link to the formal reference.
 
+### Audit Results: `examples/field-management.md`
+
+**Issues Found:** None
+
+**Overall Assessment:** The file demonstrates practical field hiding/revealing patterns with clear examples. Links to feature pages (`field-expansion.md`, `formatting.md`) for detailed explanations. Has "Next Steps" section with relevant links.
+
+### Audit Results: `examples/live-monitoring.md`
+
+**Issues Found:** None
+
+**Overall Assessment:** Comprehensive examples for follow mode and piped streaming. Includes helpful comparison table of `-F` vs `-P` modes. Links to feature pages for detailed documentation. Has "Next Steps" section.
+
+### Audit Results: `examples/multiple-logs.md`
+
+**Issues Found:** None
+
+**Overall Assessment:** Demonstrates multi-file viewing, sorting, and source identification. Links to feature pages for detailed documentation. Well-structured with practical examples.
+
+### Audit Results: `examples/time-filtering.md`
+
+**Issues Found:** None
+
+**Overall Assessment:** Clear distinction at the top between `--since`/`--until` formats and log entry timestamp formats. Links to `timestamps.md` for log entry formats. Comprehensive examples of absolute and relative time formats.
+
+### Audit Results: `reference/performance.md`
+
+**Issues Found:** None
+
+**Overall Assessment:** Provides performance optimization guidance. Correctly states that entries without timestamps are discarded in sort mode. Links to relevant feature documentation.
+
+### Audit Results: `reference/query-syntax.md`
+
+**Issues Found:** None
+
+**Overall Assessment:** Authoritative reference for query syntax. Comprehensive operator tables and examples. Appropriately detailed as a reference document.
+
+### Audit Results: `reference/time-format.md`
+
+**Issues Found:** None
+
+**Overall Assessment:** Authoritative reference for strftime format specifiers. Includes helpful note about format usage for both display and filter parsing.
+
+### Audit Results: `features/filtering.md`
+
+**Issues Found:**
+
+1. **Line 219:** Said "case-sensitive by default" implying there's a way to make it case-insensitive
+   - ✅ Fixed: Changed to "case-sensitive" (no "by default")
+
 ---
 
 ## Reference: Where to Find Default Values
@@ -520,8 +615,3 @@ After completing the above tasks:
    - `examples/filtering.md`: 274→105 lines (~62% reduction)
    - `features/sorting.md`: ~260→210 lines (~20% reduction)
    - `help/faq.md`: significant reduction in duplicate examples
-6. [x] Code block language identifiers — ✅ All code blocks now have proper language identifiers
-   - Fixed 14 files with bare code blocks (log output examples now use `text`)
-   - Files fixed: `config-files.md`, `field-expansion.md`, `follow-mode.md`, `input-formats.md`,
-     `input.md`, `multiple-files.md`, `pager.md`, `prefixes.md`, `raw-output.md`, `streaming.md`,
-     `time-display.md`, `viewing-logs.md`, `performance.md`, `time-format.md`
