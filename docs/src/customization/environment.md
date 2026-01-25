@@ -62,16 +62,13 @@ export HL_THEME=monokai
 export HL_THEME=ayu-dark-24
 ```
 
-List available themes:
-```sh
-hl --list-themes
-```
+- **Default:** `uni`
+- **Config:** `theme`
+- **CLI:** `--theme`
 
-Example:
-```sh
-# Use universal theme by default
-export HL_THEME=universal
-```
+List available themes with `hl --list-themes`.
+
+See [Themes](./themes.md) for details.
 
 #### HL_ASCII
 
@@ -105,6 +102,10 @@ export HL_EXPANSION=inline
 export HL_EXPANSION=always
 ```
 
+- **Values:** `never`, `inline`, `auto` (default), `always`
+- **Config:** `formatting.expansion.mode`
+- **CLI:** `-x, --expansion`
+
 See [Field Expansion](../features/field-expansion.md) for mode descriptions and examples.
 
 #### HL_FLATTEN
@@ -116,13 +117,11 @@ export HL_FLATTEN=always  # default
 export HL_FLATTEN=never
 ```
 
-Values: `always` (default), `never`. See [Output Formatting](../features/formatting.md#object-flattening) for examples.
+- **Values:** `always` (default), `never`
+- **Config:** `formatting.flatten`
+- **CLI:** `--flatten`
 
-Example:
-```sh
-# Keep nested structure
-export HL_FLATTEN=never
-```
+See [Output Formatting](../features/formatting.md#object-flattening) for examples.
 
 ### Time and Timezone
 

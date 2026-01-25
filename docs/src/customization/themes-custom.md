@@ -254,7 +254,7 @@ failed.inner.modes = ["bold"]
 Here's a complete custom theme based on a fictional "midnight" color scheme:
 
 ```hl/dev/null/midnight.toml#L1
-#:schema https://raw.githubusercontent.com/pamburus/hl/v0.35.2/schema/json/theme.schema.v1.json
+#:schema https://raw.githubusercontent.com/pamburus/hl/latest/schema/json/theme.schema.v1.json
 
 version = "1.1"
 tags = ["dark", "truecolor"]

@@ -2,6 +2,15 @@
 
 hl makes it easy to work with multiple log files simultaneously, whether you're concatenating them for viewing, sorting them chronologically, or following them in real-time.
 
+## Configuration
+
+| Method | Setting |
+|--------|---------|
+| Config file | [`input-info`](../customization/config-files.md#input-info) |
+| CLI option | `--input-info <MODE>` |
+
+**Values:** `auto` (default), `none`, `minimal`, `compact`, `full`
+
 ## Basic Usage
 
 ### Viewing Multiple Files

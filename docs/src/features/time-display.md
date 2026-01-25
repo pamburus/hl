@@ -18,6 +18,26 @@ hl -t '%Y-%m-%d %H:%M:%S' app.log
 hl -L -t '%Y-%m-%d %H:%M:%S.%3N' app.log
 ```
 
+## Configuration
+
+**Time format:**
+
+| Method | Setting |
+|--------|---------|
+| Config file | [`time-format`](../customization/config-files.md#time-format) |
+| CLI option | `-t, --time-format <FORMAT>` |
+| Environment | `HL_TIME_FORMAT` |
+
+**Timezone:**
+
+| Method | Setting |
+|--------|---------|
+| Config file | [`time-zone`](../customization/config-files.md#time-zone) |
+| CLI option | `-Z, --time-zone <TZ>` or `-L, --local` |
+| Environment | `HL_TIME_ZONE` |
+
+**Defaults:** Format is `%b %d %T.%3N`, timezone is `UTC`.
+
 ## Timezone Options
 
 ### Default: UTC
@@ -146,33 +166,6 @@ hl -t '%H:%M:%S.%6N' app.log
 hl -t '%H:%M:%S.%9N' app.log
 ```
 
-## Configuration File
-
-Set defaults in your configuration file:
-
-```toml
-# ~/.config/hl/config.toml
-time-format = "%Y-%m-%d %H:%M:%S.%3N"
-time-zone = "Asia/Singapore"
-```
-
-Or use local timezone (note: `--local` is a command-line flag only, set `time-zone` to your local timezone in config):
-
-```toml
-time-format = "%Y-%m-%d %H:%M:%S.%3N"
-# Set to your local timezone, e.g., "Asia/Seoul"
-# Or use -L/--local flag on command line for local time
-```
-
-## Precedence
-
-Configuration sources are applied in this order (highest priority last):
-
-1. Default values (UTC, default format)
-2. Configuration file
-3. Environment variables (`HL_TIME_FORMAT`, `HL_TIME_ZONE`)
-4. Command-line options (`-t`, `-Z`, `-L`)
-
 ## Use Cases
 
 ### Development
@@ -299,4 +292,5 @@ hl -t '%T' app.log
 
 - [Time Format Reference](../reference/time-format.md) - Complete format specification
 - [Filtering by Time Range](./filtering-time.md) - Time-based filtering
-- [Configuration Files](../customization/config-files.md) - Set default time display options
+- [Configuration Files](../customization/config-files.md#time-format) - Persistent time format configuration
+- [Configuration Files](../customization/config-files.md#time-zone) - Persistent timezone configuration

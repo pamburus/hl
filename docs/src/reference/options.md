@@ -274,8 +274,9 @@ Shorthand alias for `--color=always`. Overrides the `--color` option.
 
 Specify the color theme to use.
 
-- **Environment variable**: `HL_THEME`
 - **Default**: `uni`
+- **Environment**: `HL_THEME`
+- **Config**: [`theme`](../customization/config-files.md#theme)
 
 Run `hl --list-themes` to see all available themes.
 
@@ -320,6 +321,7 @@ This is useful when you need the exact original field values without any transfo
 
 Hide or reveal fields with the specified keys.
 
+- **Config**: [`fields.hide`](../customization/config-files.md#fields-hide)
 - Prefix with `!` to reveal a field
 - Use `!*` to reveal all fields
 
@@ -340,9 +342,10 @@ See [Field Visibility](../features/field-visibility.md) for details.
 
 Control whether to flatten nested objects.
 
-- **Environment variable**: `HL_FLATTEN`
 - **Default**: `always`
-- **Possible values**: `never`, `always`
+- **Values**: `never`, `always`
+- **Environment**: `HL_FLATTEN`
+- **Config**: [`formatting.flatten`](../customization/config-files.md#formatting-flatten)
 
 When flattening is enabled, nested objects are displayed with dot-notation field names (e.g., `user.name`, `error.details.code`).
 
@@ -358,9 +361,10 @@ hl --flatten=always app.log
 
 Specify the time format for displaying timestamps.
 
-- **Environment variable**: `HL_TIME_FORMAT`
-- **Default**: `"%b %d %T.%3N"`
-- **Format**: Uses `strftime` format specifiers (see `man date` or [strftime documentation](https://man7.org/linux/man-pages/man1/date.1.html))
+- **Default**: `%b %d %T.%3N`
+- **Environment**: `HL_TIME_FORMAT`
+- **Config**: [`time-format`](../customization/config-files.md#time-format)
+- **Format**: Uses `strftime` format specifiers (see [Time Format Reference](./time-format.md))
 
 ```/dev/null/example.sh#L1-5
 # ISO 8601 format
@@ -374,8 +378,9 @@ hl -t "%b %d %H:%M:%S" app.log
 
 Specify the time zone for displaying timestamps.
 
-- **Environment variable**: `HL_TIME_ZONE`
 - **Default**: `UTC`
+- **Environment**: `HL_TIME_ZONE`
+- **Config**: [`time-zone`](../customization/config-files.md#time-zone)
 - **Format**: IANA time zone identifier (e.g., `America/New_York`, `Europe/Berlin`, `Asia/Shanghai`)
 
 See the [list of tz database time zones](https://en.wikipedia.org/wiki/List_of_tz_database_time_zones) for valid identifiers.
@@ -407,7 +412,8 @@ Disable local time zone. Overrides the `--local` option.
 
 Hide empty fields (null, empty string, empty object, empty array).
 
-- **Environment variable**: `HL_HIDE_EMPTY_FIELDS`
+- **Environment**: `HL_HIDE_EMPTY_FIELDS`
+- **Config**: [`hide-empty-fields`](../customization/config-files.md#hide-empty-fields)
 
 ```/dev/null/example.sh#L1-2
 # Hide all empty fields
@@ -418,14 +424,15 @@ hl --hide-empty-fields app.log
 
 Show empty fields. Overrides the `--hide-empty-fields` option.
 
-- **Environment variable**: `HL_SHOW_EMPTY_FIELDS`
+- **Environment**: `HL_SHOW_EMPTY_FIELDS`
 
 ### `--input-info <LAYOUTS>`
 
 Control the display of input file information (file number and filename).
 
 - **Default**: `auto`
-- **Possible values**: `auto`, `none`, `minimal`, `compact`, `full`
+- **Values**: `auto`, `none`, `minimal`, `compact`, `full`
+- **Config**: [`input-info`](../customization/config-files.md#input-info)
   - `none`: No input information
   - `minimal`: Minimal information (number only when needed)
   - `compact`: Compact format
@@ -444,11 +451,12 @@ hl --input-info none app.log
 
 ### `--ascii [<WHEN>]`
 
-Control whether to restrict punctuation to ASCII characters only.
+Control ASCII mode for terminal output.
 
-- **Environment variable**: `HL_ASCII`
 - **Default**: `auto`
-- **Possible values**: `auto`, `never`, `always`
+- **Values**: `auto`, `never`, `always`
+- **Environment**: `HL_ASCII`
+- **Config**: [`ascii`](../customization/config-files.md#ascii)
 
 When enabled, Unicode punctuation (like fancy quotes) is replaced with ASCII equivalents. The actual character mappings can be configured in the configuration file.
 
@@ -461,9 +469,10 @@ hl --ascii=always app.log
 
 Control how multi-line field values are displayed.
 
-- **Environment variable**: `HL_EXPANSION`
 - **Default**: `auto`
-- **Possible values**: `never`, `inline`, `auto`, `always`
+- **Values**: `never`, `inline`, `auto`, `always`
+- **Environment**: `HL_EXPANSION`
+- **Config**: [`formatting.expansion.mode`](../customization/config-files.md#formatting-expansion-mode)
 
 See [Field Expansion](../features/field-expansion.md) for mode descriptions and examples.
 

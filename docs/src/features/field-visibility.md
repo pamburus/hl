@@ -16,6 +16,21 @@ hl -h metadata app.log
 hl -h headers -h metadata app.log
 ```
 
+## Configuration
+
+| Method | Setting |
+|--------|---------|
+| Config file | [`fields.hide`](../customization/config-files.md#fields-hide) |
+| CLI option | `-h, --hide <KEY>` |
+
+For hiding empty fields:
+
+| Method | Setting |
+|--------|---------|
+| Config file | [`hide-empty-fields`](../customization/config-files.md#hide-empty-fields) |
+| CLI option | `-e, --hide-empty-fields` or `-E, --show-empty-fields` |
+| Environment | `HL_HIDE_EMPTY_FIELDS` |
+
 ## Hiding Fields
 
 ### Single Field
@@ -272,32 +287,6 @@ hl -f service=api -h '*' -h '!message' -h '!status' app.log
 hl -q 'duration > 1.0' -h '*' -h '!duration' -h '!path' app.log
 ```
 
-## Configuration File
-
-Set default hidden fields in your config file:
-
-```toml
-# ~/.config/hl/config.toml
-hide = ["headers", "metadata", "debug-info"]
-```
-
-Or in YAML:
-
-```yaml
-# ~/.config/hl/config.yaml
-hide:
-  - headers
-  - metadata
-  - debug-info
-```
-
-## Environment Variables
-
-```sh
-# Hide empty fields by default
-export HL_HIDE_EMPTY_FIELDS=true
-```
-
 ## Performance Impact
 
 Hiding fields has minimal performance impact:
@@ -460,4 +449,5 @@ If revealing a field doesn't work:
 - [Field Expansion](./field-expansion.md) - Control how fields are displayed
 - [Filtering by Field Values](./filtering-fields.md) - Filter entries by field values
 - [Output Formatting](./formatting.md) - General output options
+- [Configuration Files](../customization/config-files.md#fields-hide) - Persistent field hiding configuration
 - [Field Management Examples](../examples/field-management.md) - Real-world scenarios
