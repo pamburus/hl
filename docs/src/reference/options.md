@@ -28,7 +28,7 @@ Specify a custom configuration file path.
 - **Environment variable**: `HL_CONFIG`
 - **Example**: `hl --config ~/my-hl-config.yaml app.log`
 
-See the [Configuration](../configuration/overview.md) section for details on configuration files.
+See [Configuration Files](../customization/config-files.md) for details.
 
 ### `--help[=<VERBOSITY>]`
 
@@ -287,7 +287,7 @@ hl --theme hl-light app.log
 hl --list-themes
 ```
 
-See [Themes](../configuration/themes.md) for details on themes and customization.
+See [Themes](../customization/themes.md) for details on themes and customization.
 
 ### `-r, --raw`
 

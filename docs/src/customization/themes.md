@@ -12,6 +12,16 @@ Themes in `hl` define:
 - **Element-specific styling** (numbers, strings, booleans, nulls)
 - **Level-specific colors** (error, warning, info, debug, trace)
 
+## Default Theme
+
+The default theme is `uni`, which:
+
+- Works on both light and dark backgrounds
+- Uses 16 basic ANSI colors for maximum compatibility
+- Uses blue accents
+
+You can change the default in your [configuration file](./config-files.md).
+
 ## Selecting a Theme
 
 ### Command Line
@@ -19,13 +29,8 @@ Themes in `hl` define:
 Use the `--theme` option:
 
 ```sh
-# Use universal theme
 hl --theme universal app.log
-
-# Use monokai-inspired theme
 hl --theme one-dark-24 app.log
-
-# Use light theme
 hl --theme ayu-light-24 app.log
 ```
 
@@ -61,122 +66,15 @@ hl --list-themes=256color
 hl --list-themes=truecolor
 ```
 
-Output example:
-```
-ayu-dark-24
-ayu-light-24
-classic
-classic-light
-hl-dark
-hl-light
-universal
-one-dark-24
-one-light-24
-```
-
-## Stock Themes
-
-`hl` includes several stock themes optimized for different preferences and terminal capabilities.
-
-### Universal Themes
-
-**uni**
-- Works on both light and dark backgrounds
-- Uses 16 basic ANSI colors
-- Maximum compatibility
-- Uses blue accents
-- Default theme
-
-**universal**
-- The same as `uni` but uses green accents and reversed colors for warning and error levels
-
-**universal-blue**
-- Variant with blue accents
-- Good for terminals with modified color schemes
-
-### Classic Themes
-
-**classic**
-- Traditional log viewer appearance
-- Dark background optimized
-- Familiar color scheme
-
-**classic-light**
-- Light background variant
-- Softer colors for reduced eye strain
-
-**classic-plus**
-- Enhanced classic theme with additional visual cues
-
-### Modern 24-bit Themes
-
-**ayu-dark-24**
-- Based on the popular Ayu color scheme
-- Requires 24-bit color (true color) support
-- Modern, aesthetic appearance
-
-**ayu-light-24**
-- Light background variant of Ayu
-- Excellent readability on light terminals
-
-**ayu-mirage-24**
-- Medium contrast variant
-- Balanced between dark and light
-
-**one-dark-24**
-- Based on Atom's One Dark theme
-- Popular among developers
-- Requires true color support
-
-**one-light-24**
-- Light variant of One theme
-- Clean and professional
-
-### Color Capability Themes
-
-**16-color themes**: `universal`, `classic`, `classic-light`
-- Maximum compatibility
-- Work on any color-capable terminal
-
-**256-color themes**: `lsd`, `neutral`
-- Enhanced color palette
-- Requires 256-color terminal support
-
-**24-bit themes**: `ayu-*`, `one-*`, `tc24*`
-- Full RGB color support
-- Requires true color terminal
-
-### Special Purpose Themes
-
-**neutral**
-- Minimal color usage
-- Focuses on content over aesthetics
-- Good for environments with custom color schemes
-
-**lsd**
-- Inspired by the lsd (LSDeluxe) file listing tool
-- Bright, colorful output
-
-**dmt**
-- Dark Monokai-inspired theme
-- Popular with code editors
-
-**frostline**
-- Cool color palette
-- Blue and cyan emphasis
-
-See [Stock Themes](./themes-stock.md) for detailed descriptions and screenshots.
+Themes are tagged by color capability and background preference, making it easy to find one that suits your terminal.
 
 ## Theme Overlays
 
-Overlays are mini-themes that modify specific aspects without replacing the entire theme.
+Overlays are mini-themes that modify specific aspects without replacing the entire theme. They allow you to customize built-in themes without creating entirely new ones.
 
-### Available Overlays
+### Default Overlay
 
-**@accent-italic**
-- Applies italic style to accent elements
-- Adds visual emphasis
-- Default overlay in configuration
+The default configuration applies the `@accent-italic` overlay, which adds italic styling to accent elements.
 
 ### Using Overlays
 
@@ -191,208 +89,55 @@ Multiple overlays can be applied in order:
 theme-overlays = ["@accent-italic", "@custom-overlay"]
 ```
 
+Overlays are merged in order: base theme → main theme → overlays (in list order).
+
 See [Theme Overlays](./themes-overlays.md) for creating custom overlays.
-
-## Theme Structure
-
-Themes are TOML files with this structure:
-
-```toml
-#:schema https://raw.githubusercontent.com/pamburus/hl/v0.35.2/schema/json/theme.schema.v1.json
-
-version = "1.1"
-tags = ["dark", "16color"]
-
-[styles]
-# General purpose styles
-[styles.accent]
-foreground = "green"
-modes = ["-faint"]
-
-[styles.warning]
-foreground = "yellow"
-
-[elements]
-# Element-specific styles
-[elements.number]
-foreground = "bright-blue"
-
-[elements.string]
-foreground = "green"
-
-[levels]
-# Level-specific styles
-[levels.error.level]
-style = ["level", "error"]
-modes = ["reverse"]
-```
-
-## Color Specifications
-
-Themes can use several color formats:
-
-### Named ANSI Colors
-
-Basic 16 colors:
-```toml
-foreground = "red"
-foreground = "bright-blue"
-foreground = "black"
-```
-
-Available: `black`, `red`, `green`, `yellow`, `blue`, `magenta`, `cyan`, `white`, and `bright-*` variants.
-
-### 256-Color Palette
-
-```toml
-foreground = 214  # Orange-ish
-background = 235  # Dark gray
-```
-
-### 24-bit RGB
-
-```toml
-foreground = "#FF5733"  # Hex notation
-foreground = "rgb(255, 87, 51)"  # RGB function
-```
-
-### Special Values
-
-```toml
-foreground = "default"  # Terminal default color
-```
-
-## Text Styles and Modes
-
-Apply text attributes:
-
-```toml
-[styles.emphasis]
-foreground = "yellow"
-modes = ["bold", "italic"]
-
-[styles.subtle]
-foreground = "white"
-modes = ["dim"]  # Faint/dim text
-```
-
-Available modes:
-- `bold` — bold text
-- `italic` — italic text (if terminal supports)
-- `underline` — underlined text
-- `dim` / `faint` — dimmed text
-- `reverse` — swap foreground/background
-- `strikethrough` — strikethrough text
-- `-mode` — disable a mode (e.g., `-faint`)
-
-## Theme Elements
-
-Themes can style these elements:
-
-### General Elements
-
-- `number` — numeric values
-- `string` — string values
-- `boolean` — true/false values
-- `null` — null values
-- `key` — field keys
-- `punctuation` — separators and delimiters
-
-### Log-Specific Elements
-
-- `time` — timestamps
-- `level` — log level indicator
-- `logger` — logger name
-- `caller` — caller information
-- `message` — log message
-
-### Level-Specific Elements
-
-Each log level can have custom styling:
-
-```toml
-[levels.error.time]
-foreground = "bright-red"
-
-[levels.error.level]
-foreground = "white"
-background = "red"
-modes = ["bold"]
-
-[levels.warning.level]
-foreground = "yellow"
-modes = ["reverse"]
-```
 
 ## Terminal Compatibility
 
-### Checking Color Support
+Themes are categorized by color capability:
 
-Most modern terminals support at least 256 colors. To verify:
+- **16-color themes** — Maximum compatibility, work on any color-capable terminal
+- **256-color themes** — Enhanced color palette, requires 256-color terminal support
+- **24-bit themes** — Full RGB color support, requires true color terminal
 
-```sh
-# Check TERM variable
-echo $TERM
-
-# Test 256 colors
-hl --theme ayu-dark-24 app.log
-```
-
-If colors don't display correctly, use a 16-color theme:
-```sh
-hl --theme universal app.log
-```
-
-### Common Terminal Capabilities
-
-| Terminal | 16-color | 256-color | 24-bit |
-|----------|----------|-----------|--------|
-| xterm-256color | ✓ | ✓ | ✓ |
-| iTerm2 | ✓ | ✓ | ✓ |
-| Alacritty | ✓ | ✓ | ✓ |
-| Windows Terminal | ✓ | ✓ | ✓ |
-| GNOME Terminal | ✓ | ✓ | ✓ |
-| macOS Terminal.app | ✓ | ✓ | ✓ (10.12+) |
-| tmux | ✓ | ✓ | ✓ (with config) |
-| screen | ✓ | ✓ | ✗ |
+Use `hl --list-themes=16color` to find themes compatible with basic terminals.
 
 ### Troubleshooting Colors
 
 **Colors not showing:**
 ```sh
 # Force color output
-hl --color always --theme universal app.log
+hl --color always app.log
 
-# Check if terminal supports colors
+# Check terminal color support
+echo $TERM
 echo $COLORTERM
 ```
 
-**Wrong colors:**
+**Colors look wrong:**
 ```sh
-# Use 16-color theme for compatibility
-hl --theme universal app.log
-
-# Check TERM setting
-echo $TERM
+# Try a 16-color theme for maximum compatibility
+hl --theme uni app.log
 ```
 
 **Colors in pager:**
 ```sh
 # Ensure pager preserves colors
-LESS=-R hl --theme universal app.log
+LESS=-R hl app.log
 ```
 
 ## Custom Themes
 
-Create your own themes for specific needs.
+You can create custom themes to match your preferences or combine built-in themes with your own customizations.
 
 ### Creating a Theme
 
 1. Create a TOML file: `~/.config/hl/themes/my-theme.toml`
-2. Define theme structure
+2. Define theme structure (see below)
 3. Use it: `hl --theme my-theme app.log`
 
-Basic custom theme:
+Basic custom theme structure:
 ```toml
 version = "1.1"
 tags = ["dark", "custom"]
@@ -410,111 +155,77 @@ foreground = "yellow"
 modes = ["bold"]
 ```
 
-See [Custom Themes](./themes-custom.md) for detailed guide.
+See [Custom Themes](./themes-custom.md) for a detailed guide on theme creation.
 
-## Theme Use Cases
+## Theme Structure Reference
 
-### Development
+Themes are TOML files with the following sections:
 
-```sh
-# Readable on any background
-hl --theme universal dev.log
+### Color Specifications
 
-# Modern aesthetic with full colors
-hl --theme ayu-dark-24 dev.log
+Themes support several color formats:
+
+**Named ANSI colors:**
+```toml
+foreground = "red"
+foreground = "bright-blue"
 ```
 
-### Production Monitoring
+Available: `black`, `red`, `green`, `yellow`, `blue`, `magenta`, `cyan`, `white`, and `bright-*` variants.
 
-```sh
-# Clear, high-contrast for quick scanning
-hl --theme classic-plus production.log
-
-# Neutral colors to avoid alert fatigue
-hl --theme neutral production.log
+**256-color palette:**
+```toml
+foreground = 214  # Orange-ish
 ```
 
-### Light Background
-
-```sh
-# Optimized for light terminals
-hl --theme ayu-light-24 app.log
-hl --theme one-light-24 app.log
-hl --theme classic-light app.log
+**24-bit RGB:**
+```toml
+foreground = "#FF5733"
+foreground = "rgb(255, 87, 51)"
 ```
 
-### Dark Background
-
-```sh
-# Dark theme options
-hl --theme ayu-dark-24 app.log
-hl --theme one-dark-24 app.log
-hl --theme classic app.log
+**Default color:**
+```toml
+foreground = "default"  # Terminal default
 ```
 
-### Maximum Compatibility
-
-```sh
-# Works everywhere
-hl --theme universal app.log
-
-# Classic appearance
-hl --theme classic app.log
-```
-
-## Best Practices
-
-1. **Choose by terminal capabilities** — use 16-color themes for maximum compatibility
-2. **Match your background** — use light themes for light terminals, dark for dark
-3. **Test in actual environment** — colors may look different across terminals
-4. **Use overlays for tweaks** — modify existing themes instead of creating new ones
-5. **Set a default** — configure your preferred theme in config file
-
-## Examples
-
-### Personal Development Setup
-
-```sh
-# ~/.bashrc or ~/.zshrc
-export HL_THEME=universal
-```
+### Text Modes
 
 ```toml
-# ~/.config/hl/config.toml
-theme = "universal"
-theme-overlays = ["@accent-italic"]
+[styles.emphasis]
+foreground = "yellow"
+modes = ["bold", "italic"]
 ```
 
-### Team Standard
+Available modes:
+- `bold` — bold text
+- `italic` — italic text
+- `underline` — underlined text
+- `dim` / `faint` — dimmed text
+- `reverse` — swap foreground/background
+- `strikethrough` — strikethrough text
+- `-mode` — disable a mode (e.g., `-faint`)
 
-```sh
-# Project .hl.toml
-theme = "one-dark-24"
-```
+### Stylable Elements
 
-### CI/CD Environment
+**General elements:** `number`, `string`, `boolean`, `null`, `key`, `punctuation`
 
-```sh
-# Disable colors in CI
-export HL_COLOR=never
-```
+**Log-specific elements:** `time`, `level`, `logger`, `caller`, `message`
 
-Or use a minimal theme:
-```sh
-export HL_THEME=neutral
-```
-
-### Light Terminal Setup
-
+**Level-specific styling:**
 ```toml
-# ~/.config/hl/config.toml
-theme = "ayu-light-24"
+[levels.error.level]
+foreground = "white"
+background = "red"
+modes = ["bold"]
+
+[levels.warning.level]
+foreground = "yellow"
+modes = ["reverse"]
 ```
 
 ## Related Topics
 
-- [Stock Themes](./themes-stock.md) — detailed descriptions of built-in themes
-- [Selecting Themes](./themes-selecting.md) — theme selection and switching
 - [Custom Themes](./themes-custom.md) — creating your own themes
 - [Theme Overlays](./themes-overlays.md) — modifying themes with overlays
 - [Configuration Files](./config-files.md) — persistent theme configuration
