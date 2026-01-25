@@ -56,88 +56,32 @@ This is especially useful in scripts and pipelines.
 
 ### What's the difference between `--filter` and `--query`?
 
-- **`--filter` (`-f`)**: Simple field matching with basic operators (`=`, `~=`, `~~=`)
-- **`--query` (`-q`)**: Complex expressions with boolean logic, comparisons, set membership, etc.
-
-```sh
-# Simple filter
-hl -f 'status=500' app.log
-
-# Complex query
-hl -q 'status>=500 and method in (POST,PUT)' app.log
-```
+- **`--filter` (`-f`)**: Simple field matching with basic operators
+- **`--query` (`-q`)**: Complex expressions with boolean logic, comparisons, set membership
 
 Use `--filter` for simple cases, `--query` when you need boolean logic or comparisons.
 
-See [Query Syntax](../reference/query-syntax.md) for complete details.
+See [Filtering by Field Values](../features/filtering-fields.md) and [Complex Queries](../features/filtering-queries.md) for details and examples.
 
 ### How do I filter by multiple values?
 
-Use set membership in a query:
+Use set membership: `hl -q 'status in (500,502,503)' app.log`
 
-```sh
-# Multiple status codes
-hl -q 'status in (500,502,503,504)' app.log
-
-# Multiple HTTP methods
-hl -q 'method in (POST,PUT,DELETE)' app.log
-```
+See [Complex Queries](../features/filtering-queries.md) for more examples.
 
 ### How do I search for text in log messages?
 
-Use the substring operator (`~=` or `contains`):
-
-```sh
-# Using operator
-hl -f 'message~=timeout' app.log
-
-# Using query with 'contains'
-hl -q 'message contains "connection refused"' app.log
-```
-
-For regular expressions, use `~~=` or `matches`:
-
-```sh
-hl -q 'message matches "error.*timeout"' app.log
-```
+Use substring (`~=`) or regex (`~~=`) operators. See [Filtering by Field Values](../features/filtering-fields.md).
 
 ### How do I combine multiple filters?
 
-Use multiple `--filter` options (they are ANDed together):
+Multiple `-f` options are ANDed together. Use `-q` for complex logic with `and`, `or`, `not`.
 
-```sh
-# Both conditions must match
-hl -f 'status=500' -f 'method=POST' app.log
-```
-
-Or use `--query` for more complex logic:
-
-```sh
-# AND logic
-hl -q 'status=500 and method=POST' app.log
-
-# OR logic
-hl -q 'status>=500 or duration>10' app.log
-
-# Complex expression
-hl -q '(status>=500 and method=POST) or level=error' app.log
-```
+See [Complex Queries](../features/filtering-queries.md) for examples.
 
 ### How do I exclude certain entries?
 
-Use negation in filters or queries:
-
-```sh
-# Using filter (negate with !)
-hl -f 'status!=200' app.log
-
-# Using query (negate with != or 'not')
-hl -q 'status!=200' app.log
-hl -q 'not status=200' app.log
-
-# Exclude substring
-hl -q 'message not contains "health check"' app.log
-```
+Use `!=` or `not` operators. See [Complex Queries](../features/filtering-queries.md).
 
 ## Timestamps and Sorting
 
@@ -150,109 +94,38 @@ hl -q 'message not contains "health check"' app.log
 - **ISO 8601-like with space**: `2024-01-15 10:30:45.123Z` (allows space instead of `T`, but timezone is still required)
 - **Unix timestamps**: Seconds, milliseconds, microseconds, nanoseconds (auto-detected or via `--unix-timestamp-unit`)
 
-**Note:** Human-readable formats like "1 hour ago" or "yesterday" are NOT recognized in log entries. These formats are only supported for `--since` and `--until` filtering (see next question).
+**Note:** Human-readable formats like "1 hour ago" or "yesterday" are NOT recognized in log entries. These formats are only supported for `--since` and `--until` filtering.
 
-See [Timestamp Handling](../features/timestamps.md) for complete details on input parsing.
+See [Timestamp Handling](../features/timestamps.md) for complete details.
 
 ### What time formats can I use with `--since` and `--until`?
 
-The `--since` and `--until` options support many more formats than log entry timestamps:
+The `--since` and `--until` options support:
+- **Relative times**: `-1h`, `-30m`, `-7d`, `"1 hour ago"`, `"yesterday"`
+- **Absolute times**: `2024-01-15`, `"2024-01-15 10:00:00"`
+- **Copy from output**: Timestamps copied from `hl` output work directly
 
-**Relative times (most common):**
-```sh
-# Duration syntax (fixed time spans)
-hl --since "-1h" app.log          # 1 hour ago
-hl --since "-30m" app.log         # 30 minutes ago
-hl --since "-7d" app.log          # 7 days ago
-hl --since "-1M" app.log          # ~30.44 days ago (approx. 1 month)
-hl --since "-1y" app.log          # ~365.25 days ago (approx. 1 year)
-
-# Natural language (more flexible)
-hl --since "1 hour ago" app.log
-hl --since "30 minutes ago" app.log
-hl --since "1 month ago" app.log  # Calendar-aware
-hl --since "1 year ago" app.log   # Calendar-aware
-```
-
-**Human-readable dates:**
-```sh
-hl --since "today" app.log
-hl --since "yesterday" app.log
-hl --since "friday" app.log        # Last Friday
-hl --since "last month" app.log    # First day of last calendar month
-hl --since "january" app.log       # Last January 1st
-hl --since "friday 6pm" app.log
-```
-
-**Note:** Duration syntax with `-` prefix (`-1M`, `-1y`) uses fixed approximations (30.44 days/month, 365.25 days/year). Natural language ("1 month ago", "last month") is calendar-aware and more precise for month/year boundaries.
-
-**Absolute times:**
-```sh
-hl --since "2024-01-15" app.log
-hl --since "2024-01-15 10:00:00" app.log
-hl --since "2024-01-15T10:00:00Z" app.log
-```
-
-**Copy from output (important!):**
-
-You can copy timestamps directly from `hl` output and use them with `--since` or `--until`:
-```sh
-# If output shows: Jan 15 10:30:45.123
-hl --since "Jan 15 10:30:45.123" app.log
-```
-
-This works because `hl` recognizes the configured output format (from `--time-format`) when parsing filter times.
-
-See [Time Filtering Examples](../examples/time-filtering.md) for more examples.
+See [Filtering by Time Range](../features/filtering-time.md) for complete format documentation.
 
 ### How do I sort logs from multiple files chronologically?
 
-Use the `--sort` flag:
-
-```sh
-hl --sort app1.log app2.log app3.log
-```
-
-This builds a timestamp index and merges entries chronologically across all files.
+Use the `--sort` (or `-s`) flag. See [Chronological Sorting](../features/sorting.md).
 
 ### What happens to entries without timestamps when sorting?
 
-Entries without recognized timestamps are **discarded** in `--sort` mode.
-
-If you need to preserve all entries, use streaming mode (no `--sort`):
-
-```sh
-# Preserves all entries
-hl app.log
-```
+Entries without recognized timestamps are **discarded** in `--sort` mode. Use streaming mode (no `--sort`) to preserve all entries.
 
 ### How do I change the timezone for displayed timestamps?
 
-Use `--time-zone` or `--local`:
+Use `--time-zone "America/New_York"` or `--local` for local timezone.
 
-```sh
-# Specific timezone
-hl --time-zone "America/New_York" app.log
+**Note**: Use `--local`, not `--time-zone local`.
 
-# Local system timezone
-hl --local app.log
-```
-
-**Note**: The value `local` is not a valid timezone. Use `--local` instead of `--time-zone local`.
+See [Time Display](../features/time-display.md).
 
 ### How do I change the timestamp display format?
 
-Use `--time-format` with strftime format specifiers:
-
-```sh
-# ISO 8601 format
-hl --time-format "%Y-%m-%dT%H:%M:%S%z" app.log
-
-# Custom format
-hl -t "%b %d %H:%M:%S" app.log
-```
-
-See `man date` or [strftime documentation](https://man7.org/linux/man-pages/man1/date.1.html) for format specifiers.
+Use `--time-format` with strftime specifiers. See [Time Format Reference](../reference/time-format.md).
 
 ## Output and Formatting
 
@@ -280,42 +153,15 @@ This ensures only valid JSON objects are output (no logfmt, no prefix text).
 
 ### How do I hide specific fields?
 
-Use `--hide`:
-
-```sh
-# Hide one field
-hl --hide host app.log
-
-# Hide multiple fields
-hl --hide host --hide pid app.log
-```
-
-See [Field Visibility](../features/field-visibility.md) for details.
+Use `--hide` (or `-h`). See [Field Visibility](../features/field-visibility.md) for patterns and examples.
 
 ### How do I show only specific fields?
 
-Hide all fields, then reveal the ones you want:
-
-```sh
-# Hide all except specific fields
-hl --hide '*' --hide '!service' --hide '!request-id' app.log
-```
-
-Or configure default hidden fields in your config file.
+Hide all fields with `-h '*'`, then reveal specific ones with `-h '!field'`. See [Field Visibility](../features/field-visibility.md).
 
 ### Can I customize the colors?
 
-Yes! Use themes:
-
-```sh
-# List available themes
-hl --list-themes
-
-# Use a specific theme
-hl --theme hl-light app.log
-```
-
-You can also create custom themes or theme overlays. See [Themes](../customization/themes.md) for details.
+Yes! Use `--theme` or `--list-themes`. See [Themes](../customization/themes.md).
 
 ## Performance
 

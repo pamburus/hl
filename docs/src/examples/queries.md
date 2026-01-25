@@ -71,7 +71,7 @@ Combine conditions with `and` (or `&&`):
 
 ```sh
 # Both conditions must be true
-hl -q 'status >= 400 and duration > 1000' app.log
+hl -q 'status >= 400 and duration > 15' app.log
 
 # Multiple AND conditions
 hl -q 'service = "api" and env = "production" and status >= 500' app.log

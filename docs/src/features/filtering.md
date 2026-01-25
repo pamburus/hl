@@ -225,7 +225,7 @@ When filters are applied:
 | Level (`-l`) | Quick severity filtering | `-l e` for errors only |
 | Field (`-f`) | Specific field matching | `-f service=api` |
 | Time (`--since/--until`) | Time-based investigation | `--since -2h` |
-| Query (`-q`) | Complex conditions | `-q 'status >= 400 and duration > 1'` |
+| Query (`-q`) | Complex conditions | `-q 'status >= 400 or duration > 5'` |
 
 ## Next Steps
 
