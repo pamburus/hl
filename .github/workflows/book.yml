@@ -2,7 +2,7 @@ name: Book
 
 on:
   push:
-    branches: ["master"]
+    branches: ["master", "feature/book"]
     paths:
       - "docs/src/**"
       - "docs/book.toml"
