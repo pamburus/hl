@@ -296,8 +296,6 @@ hide:
 export HL_HIDE_EMPTY_FIELDS=true
 ```
 
-See [Field Expansion](./field-expansion.md) for details on `-x` option.
-
 ## Performance Impact
 
 Hiding fields has minimal performance impact:

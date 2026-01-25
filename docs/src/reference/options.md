@@ -459,21 +459,27 @@ hl --ascii=always app.log
 
 ### `-x, --expansion [<MODE>]`
 
-Control how large field values and messages are formatted.
+Control how multi-line field values (such as stack traces or error details) are displayed.
 
 - **Environment variable**: `HL_EXPANSION`
 - **Default**: `auto`
 - **Possible values**: `never`, `inline`, `auto`, `always`
 
-Higher expansion levels break up long content into multiple lines for better readability.
+Modes:
+- `never` — keep everything on a single line, escape newlines as `\n`
+- `inline` — preserve actual newlines in multi-line values, surrounded by backticks
+- `auto` — expand only fields with multi-line values, keep single-line fields inline
+- `always` — display each field on its own indented line
 
 ```/dev/null/example.sh#L1-5
-# Never expand fields
+# Compact single-line output
 hl --expansion=never app.log
 
-# Always expand fields to multiple lines
+# Expand all fields for maximum readability
 hl -x always app.log
 ```
+
+See [Field Expansion](../features/field-expansion.md) for detailed behavior.
 
 ### `-o, --output <FILE>`
 

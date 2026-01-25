@@ -106,10 +106,10 @@ export HL_EXPANSION=always
 ```
 
 Values:
-- `never` — single-line output, escape newlines
-- `inline` — preserve newlines/tabs as-is
-- `auto` — expand multi-line content intelligently
-- `always` — each field on its own line
+- `never` — keep everything on a single line, escape newlines as `\n`
+- `inline` — preserve actual newlines in multi-line values, surrounded by backticks
+- `auto` — expand only fields with multi-line values, keep single-line fields inline
+- `always` — display each field on its own indented line
 
 Example:
 ```sh

@@ -76,24 +76,21 @@ See [Time Display](./time-display.md) for format specifications and timezone han
 
 ## Field Expansion
 
-Control when fields should be expanded into multiple lines view:
+Control how multi-line field values (such as stack traces or error details) are displayed:
 
 ```sh
-# Never expand (show all fields on a single line, use escaped JSON for multi-line values)
+# Never expand — escape newlines as \n, keep everything on one line
 hl --expansion never app.log
 
-# Always expand (show all fields in expanded multi-line format)
-hl --expansion always app.log
-
-# Expand multi-line fields only, use consistent continuation indentation
+# Auto (default) — expand only fields with multi-line values
 hl --expansion auto app.log
 
-# Show values of multi-line fields as raw data, surrounded by backticks, but preserving newline characters without escaping
-# This emulates legacy behavior (before v0.35.0)
+# Always expand — display each field on its own indented line
+hl --expansion always app.log
+
+# Inline — preserve actual newlines, surrounded by backticks (legacy mode)
 hl --expansion inline app.log
 ```
-
-Expansion affects readability of multi-line fields or entries with many fields.
 
 See [Field Expansion](./field-expansion.md) for detailed behavior.
 
