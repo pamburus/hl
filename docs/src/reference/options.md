@@ -334,7 +334,7 @@ hl --hide request.body --hide request.headers app.log
 hl --hide '!request.headers' app.log
 ```
 
-See [Hiding Fields](../features/hiding-fields.md) for details.
+See [Field Visibility](../features/field-visibility.md) for details.
 
 ### `--flatten <WHEN>`
 
@@ -459,27 +459,13 @@ hl --ascii=always app.log
 
 ### `-x, --expansion [<MODE>]`
 
-Control how multi-line field values (such as stack traces or error details) are displayed.
+Control how multi-line field values are displayed.
 
 - **Environment variable**: `HL_EXPANSION`
 - **Default**: `auto`
 - **Possible values**: `never`, `inline`, `auto`, `always`
 
-Modes:
-- `never` — keep everything on a single line, escape newlines as `\n`
-- `inline` — preserve actual newlines in multi-line values, surrounded by backticks
-- `auto` — expand only fields with multi-line values, keep single-line fields inline
-- `always` — display each field on its own indented line
-
-```/dev/null/example.sh#L1-5
-# Compact single-line output
-hl --expansion=never app.log
-
-# Expand all fields for maximum readability
-hl -x always app.log
-```
-
-See [Field Expansion](../features/field-expansion.md) for detailed behavior.
+See [Field Expansion](../features/field-expansion.md) for mode descriptions and examples.
 
 ### `-o, --output <FILE>`
 
@@ -538,7 +524,7 @@ When enabled, `hl` will detect and skip text that appears before JSON objects on
 hl --allow-prefix app.log
 ```
 
-See [Prefix Handling](../features/prefix-handling.md) for details.
+See [Non-JSON Prefixes](../features/prefixes.md) for details.
 
 ### `--delimiter <DELIMITER>`
 

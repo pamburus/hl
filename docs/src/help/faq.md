@@ -11,7 +11,7 @@ This page answers frequently asked questions about using `hl`.
 - **logfmt**: Key-value pairs in logfmt format
 - **Auto-detection**: Automatically detects the format by default
 
-See [Supported Formats](../getting-started/supported-formats.md) for details.
+See [Input Formats](../features/input-formats.md) for details.
 
 ### Does `hl` work with compressed files?
 
@@ -290,7 +290,7 @@ hl --hide host app.log
 hl --hide host --hide pid app.log
 ```
 
-See [Hiding Fields](../features/hiding-fields.md) for details.
+See [Field Visibility](../features/field-visibility.md) for details.
 
 ### How do I show only specific fields?
 
@@ -554,7 +554,7 @@ hl -q 'message matches "error.*timeout"' app.log
 See:
 - [Basic Examples](../examples/basic.md)
 - [Filtering Examples](../examples/filtering.md)
-- [Advanced Examples](../examples/advanced.md)
+- [Query Examples](../examples/queries.md)
 
 ### How do I report a bug or request a feature?
 

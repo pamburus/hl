@@ -47,6 +47,8 @@ Sort mode is ideal when you need to:
 - **ISO 8601 variants**: `2024-01-15 10:30:45.123`, `2024-01-15 10:30:45` (space separator, optional timezone)
 - **Unix timestamps**: numeric seconds, milliseconds, microseconds, or nanoseconds (integer or float)
 
+See [Timestamp Handling](./timestamps.md) for the complete list of supported formats and parsing details.
+
 Timestamps can appear in various field names and can be located anywhere in the JSON structure (top-level or nested).
 
 **Commonly used timestamp field names:** `ts`, `time`, `timestamp`, `@timestamp`

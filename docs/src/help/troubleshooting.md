@@ -54,7 +54,7 @@ hl --allow-prefix app.log
 
 The prefix text is preserved in the output.
 
-See [Prefix Handling](../features/prefix-handling.md) for details.
+See [Non-JSON Prefixes](../features/prefixes.md) for details.
 
 ### Pretty-Printed JSON Not Detected
 
