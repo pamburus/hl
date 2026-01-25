@@ -6,7 +6,7 @@ The `--query` (or `-q`) option allows you to filter log entries using powerful q
 
 A query expression consists of field filters combined with logical operators.
 
-```/dev/null/example.sh#L1-2
+```sh
 # Basic field comparison
 hl -q 'status=200' app.log
 ```
@@ -21,7 +21,7 @@ Field names can be specified in two forms:
 2. **Quoted form**: JSON-style quoted strings for field names containing special characters
    - Examples: `"field with spaces"`, `"field:with:colons"`
 
-```/dev/null/example.sh#L1-5
+```sh
 # Simple field name
 hl -q 'status=200' app.log
 
@@ -44,7 +44,7 @@ Comparison operators work with both numeric and string values.
 | `>` | `gt` | Greater than | `status>399` |
 | `>=` | `ge` | Greater than or equal to | `status>=500` |
 
-```/dev/null/example.sh#L1-8
+```sh
 # Numeric comparisons
 hl -q 'status>=500' app.log
 hl -q 'duration>1.5' app.log
@@ -65,7 +65,7 @@ hl -q 'level!=debug' app.log
 | `like` | | Wildcard pattern match | `path like "/api/*"` |
 | `not like` | | Negated wildcard match | `path not like "/internal/*"` |
 
-```/dev/null/example.sh#L1-11
+```sh
 # Substring matching
 hl -q 'message contains "timeout"' app.log
 hl -q 'message~="connection refused"' app.log
@@ -91,7 +91,7 @@ hl -q 'hostname not like "prod-*"' app.log
 - **File**: `@filename.txt` (one value per line)
 - **Stdin**: `@-` (read values from stdin)
 
-```/dev/null/example.sh#L1-11
+```sh
 # Literal set
 hl -q 'status in (500,502,503,504)' app.log
 
@@ -112,7 +112,7 @@ hl -q 'method not in (OPTIONS,HEAD)' app.log
 | `exists(field)` | `exist(field)` | Field exists | `exists(user-id)` |
 | `not exists(field)` | `not exist(field)` | Field does not exist | `not exists(trace-id)` |
 
-```/dev/null/example.sh#L1-5
+```sh
 # Check if field exists
 hl -q 'exists(user-id)' app.log
 
@@ -130,7 +130,7 @@ Combine multiple conditions using logical operators.
 | `or` | `\|\|` | Logical OR | `status>=500 or duration>10` |
 | `not` | `!` | Logical NOT | `not status=200` |
 
-```/dev/null/example.sh#L1-8
+```sh
 # AND logic
 hl -q 'status>=500 and method=POST' app.log
 
@@ -145,7 +145,7 @@ hl -q 'not status=200' app.log
 
 Use parentheses to group expressions and control precedence.
 
-```/dev/null/example.sh#L1-8
+```sh
 # Without grouping (AND has higher precedence than OR)
 hl -q 'status=404 or status>=500 and method=POST' app.log
 # Equivalent to: status=404 or (status>=500 and method=POST)
@@ -163,7 +163,7 @@ hl -q '(status>=500 and status<600) or (status=404 and path contains "/api")' ap
 
 The `?` modifier (placed after the field name) includes entries where the field is missing.
 
-```/dev/null/example.sh#L1-5
+```sh
 # Match entries where user-id=123 OR user-id is absent
 hl -q 'user-id?=123' app.log
 
@@ -177,7 +177,7 @@ This is useful when you want to include log entries that don't have a particular
 
 Query expressions support special level filtering with the `level` pseudo-field.
 
-```/dev/null/example.sh#L1-8
+```sh
 # Filter by log level
 hl -q 'level=error' app.log
 hl -q 'level>=warn' app.log
@@ -196,7 +196,7 @@ Numbers can be:
 - **Decimals**: `3.14`, `-0.5`, `2.0`
 - **Scientific notation**: `1.5e10`, `2e-3`, `-3.14E+2`
 
-```/dev/null/example.sh#L1-5
+```sh
 # Integer comparison
 hl -q 'status>=500' app.log
 
@@ -217,7 +217,7 @@ Strings can be specified in two forms:
 2. **JSON strings**: Quoted strings with escape sequences
    - Examples: `"hello world"`, `"path with\nline break"`, `"quote: \"hi\""`
 
-```/dev/null/example.sh#L1-5
+```sh
 # Simple string
 hl -q 'method=POST' app.log
 
@@ -232,7 +232,7 @@ hl -q 'message="error: \"connection refused\""' app.log
 
 ### Error Analysis
 
-```/dev/null/example.sh#L1-8
+```sh
 # All 5xx errors
 hl -q 'status>=500 and status<600' app.log
 
@@ -245,7 +245,7 @@ hl -q 'method=POST and status>=400' app.log
 
 ### User Activity
 
-```/dev/null/example.sh#L1-8
+```sh
 # Specific user's requests
 hl -q 'user-id=12345' app.log
 
@@ -258,7 +258,7 @@ hl -q 'exists(user-id)' app.log
 
 ### Pattern Matching
 
-```/dev/null/example.sh#L1-8
+```sh
 # API endpoints
 hl -q 'path like "/api/*"' app.log
 
@@ -271,7 +271,7 @@ hl -q 'path matches "^/api/v[0-9]+/"' app.log
 
 ### Complex Filtering
 
-```/dev/null/example.sh#L1-8
+```sh
 # Errors excluding health checks
 hl -q 'status>=500 and path not like "/health*"' app.log
 
@@ -292,7 +292,7 @@ From highest to lowest precedence:
 4. **AND**: `and`, `&&`
 5. **OR**: `or`, `||`
 
-```/dev/null/example.sh#L1-5
+```sh
 # These are equivalent:
 hl -q 'a=1 and b=2 or c=3' app.log
 hl -q '(a=1 and b=2) or c=3' app.log
@@ -316,13 +316,13 @@ The `--query` option is more powerful than `--filter`:
 | Grouping | ✗ | ✓ |
 
 **Use `--filter`** for simple field matching:
-```/dev/null/example.sh#L1-2
+```sh
 # Simple exact match
 hl -f 'status=200' app.log
 ```
 
 **Use `--query`** for complex expressions:
-```/dev/null/example.sh#L1-2
+```sh
 # Complex expression with multiple conditions
 hl -q 'status>=500 and (method=POST or method=PUT)' app.log
 ```
@@ -330,7 +330,7 @@ hl -q 'status>=500 and (method=POST or method=PUT)' app.log
 ## Tips
 
 1. **Quote the entire query** to avoid shell interpretation:
-   ```/dev/null/example.sh#L1-2
+   ```sh
    # Good
    hl -q 'status>=500 and method=POST' app.log
    
@@ -339,7 +339,7 @@ hl -q 'status>=500 and (method=POST or method=PUT)' app.log
    ```
 
 2. **Use literal sets for multiple values** instead of multiple OR conditions:
-   ```/dev/null/example.sh#L1-5
+   ```sh
    # Good
    hl -q 'status in (500,502,503,504)' app.log
    
@@ -348,7 +348,7 @@ hl -q 'status>=500 and (method=POST or method=PUT)' app.log
    ```
 
 3. **Combine with other options** for powerful filtering:
-   ```/dev/null/example.sh#L1-5
+   ```sh
    # Filter by level AND query
    hl -l error -q 'status>=500' app.log
    
@@ -357,7 +357,7 @@ hl -q 'status>=500 and (method=POST or method=PUT)' app.log
    ```
 
 4. **Use `--raw` with queries** to export filtered data:
-   ```/dev/null/example.sh#L1-2
+   ```sh
    # Export matching entries as JSON
    hl --raw -q 'status>=500' app.log > errors.json
    ```

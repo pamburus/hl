@@ -40,13 +40,13 @@ hl --theme classic app.log  # Uses classic, not one-dark-24
 
 You can set a default theme in your configuration file (`~/.config/hl/config.toml` or similar):
 
-```hl/dev/null/config.toml#L1
+```toml
 theme = "one-dark-24"
 ```
 
 To apply theme overlays (configuration file only):
 
-```hl/dev/null/config.toml#L1
+```toml
 theme = "ayu-dark-24"
 theme-overlays = ["@accent-italic"]
 ```
@@ -146,7 +146,7 @@ export HL_THEME=one-dark-24
 
 And configure theme overlays in `~/.config/hl/config.toml`:
 
-```hl/dev/null/config.toml#L1
+```toml
 theme = "one-dark-24"
 theme-overlays = ["@accent-italic"]
 ```

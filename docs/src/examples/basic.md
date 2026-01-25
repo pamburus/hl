@@ -70,7 +70,7 @@ The `-F` (follow) mode:
 
 Many applications emit non-JSON prefixes (timestamps, log levels) before JSON:
 
-```hl/dev/null/example-log.txt#L1
+```text
 2024-01-15 10:30:45 INFO {"message": "Server started", "port": 8080}
 ```
 

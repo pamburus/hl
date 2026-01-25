@@ -2,6 +2,12 @@
 
 Field filtering allows you to show only log entries where specific fields match certain conditions. This is one of the most common and useful filtering techniques in hl.
 
+## Configuration
+
+| Method | Setting |
+|--------|---------|
+| CLI option | [`-f, --filter`](../reference/options.md#filter) |
+
 ## Basic Syntax
 
 Use the `-f` or `--filter` option to filter by field values:

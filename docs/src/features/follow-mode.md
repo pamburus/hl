@@ -2,6 +2,16 @@
 
 Follow mode provides live log monitoring with automatic chronological sorting and file rotation handling. It's designed for real-time log observation across multiple sources.
 
+## Configuration
+
+| Method | Setting |
+|--------|---------|
+| CLI option | [`-F, --follow`](../reference/options.md#follow) |
+
+**Related options:**
+- [`--tail`](../reference/options.md#tail) — number of recent entries to preload (default: 10)
+- [`--sync-interval-ms`](../reference/options.md#sync-interval-ms) — sorting window in milliseconds (default: 100)
+
 ## Enabling Follow Mode
 
 Use the `--follow` (or `-F`) flag:

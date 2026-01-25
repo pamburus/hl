@@ -2,6 +2,12 @@
 
 Chronological sorting organizes log entries by their timestamps, regardless of which file or source they came from. This is essential for understanding event sequences in distributed systems, analyzing rotated logs, and debugging issues across multiple services.
 
+## Configuration
+
+| Method | Setting |
+|--------|---------|
+| CLI option | [`-s, --sort`](../reference/options.md#sort) |
+
 ## Enabling Chronological Sorting
 
 Use the `--sort` (or `-s`) flag:

@@ -160,7 +160,7 @@ hl -f 'service = "api"' --hide trace-id --hide span-id --hide metadata app.log
 
 Set default field visibility in your config file:
 
-```hl/dev/null/config.toml#L1
+```toml
 [fields]
 hide = ["user-id", "session-id", "internal-*"]
 ```
@@ -195,7 +195,7 @@ hl --raw-fields app.log
 
 This is useful when logs have non-JSON prefixes:
 
-```hl/dev/null/example.txt#L1
+```text
 2024-01-15 10:30:45 INFO {"message": "Started"}
 ```
 

@@ -2,6 +2,14 @@
 
 Time range filtering allows you to show only log entries that fall within a specific time window. This is essential for investigating incidents, analyzing specific periods, or reducing log volume.
 
+## Configuration
+
+| Method | Setting |
+|--------|---------|
+| CLI option | [`--since`](../reference/options.md#since), [`--until`](../reference/options.md#until) |
+
+**Formats:** RFC-3339, human-readable dates, relative offsets (e.g., `-1h`, `-30m`)
+
 ## Basic Syntax
 
 Use `--since` and `--until` options to filter by time:

@@ -2,6 +2,15 @@
 
 `hl` supports multiple structured log formats, with automatic detection and explicit format specification options.
 
+## Configuration
+
+| Method | Setting |
+|--------|---------|
+| CLI option | [`--input-format`](../reference/options.md#input-format) |
+| Environment | [`HL_INPUT_FORMAT`](../customization/environment.md#hl-input-format) |
+
+**Values:** `auto` (default), `json`, `logfmt`
+
 ## Supported Formats
 
 `hl` can parse two main structured log formats:
@@ -339,21 +348,7 @@ Use auto-detection for lenient processing:
 hl --input-format auto mixed-quality.log
 ```
 
-## Configuration
 
-Set default format in configuration:
-
-```toml
-# ~/.config/hl/config.toml
-input-format = "json"
-```
-
-Or via environment variable:
-
-```sh
-export HL_INPUT_FORMAT=json
-hl app.log
-```
 
 ## Troubleshooting
 

@@ -8,7 +8,7 @@ This page provides a complete reference for all `hl` command-line options.
 
 Files to process. If no files are specified, `hl` reads from standard input.
 
-```/dev/null/example.sh#L1-2
+```sh
 # Read from file
 hl app.log
 
@@ -40,7 +40,7 @@ Print help information.
 
 **Note**: There is no `-h` short form for help; `-h` is used for `--hide`.
 
-```/dev/null/example.sh#L1-4
+```sh
 # Short help
 hl --help
 
@@ -52,7 +52,7 @@ hl --help=long
 
 Print version information.
 
-```/dev/null/example.sh#L1
+```sh
 hl --version
 ```
 
@@ -64,7 +64,7 @@ Sort log entries chronologically across all input files.
 
 This option enables batch chronological sorting by building a timestamp index. Entries without recognized timestamps are discarded. The index includes timestamp ranges and level bitmasks, allowing very fast filtering by level.
 
-```/dev/null/example.sh#L1-2
+```sh
 # Sort entries from multiple log files chronologically
 hl --sort app1.log app2.log app3.log
 ```
@@ -77,7 +77,7 @@ Follow input streams and sort entries chronologically within the time window set
 
 This mode is designed for live log monitoring. It provides near-real-time output with sorting within a short time window.
 
-```/dev/null/example.sh#L1-2
+```sh
 # Follow a log file with live updates
 hl --follow app.log
 ```
@@ -113,7 +113,7 @@ Control pager usage. The pager used is determined by the `HL_PAGER` or `PAGER` e
   - `always`: Always use pager
   - `never`: Never use pager
 
-```/dev/null/example.sh#L1-2
+```sh
 # Always use pager
 hl --paging=always app.log
 ```
@@ -122,7 +122,7 @@ hl --paging=always app.log
 
 Shorthand alias for `--paging=never`. Overrides the `--paging` option.
 
-```/dev/null/example.sh#L1-8
+```sh
 # Disable pager when outputting to terminal
 hl -P app.log
 
@@ -144,7 +144,7 @@ Display only entries with log level greater than or equal to the specified level
 - **Environment variable**: `HL_LEVEL`
 - **Common levels**: `trace`, `debug`, `info`, `warn`, `error`, `fatal`
 
-```/dev/null/example.sh#L1-5
+```sh
 # Show only warnings and errors
 hl --level warn app.log
 
@@ -160,7 +160,7 @@ Display entries with timestamp greater than or equal to the specified time.
 
 The `--time-zone` and `--local` options are honored when parsing the time value.
 
-```/dev/null/example.sh#L1-5
+```sh
 # Show entries since a specific time
 hl --since "2024-01-15 10:00:00" app.log
 
@@ -174,7 +174,7 @@ Display entries with timestamp less than or equal to the specified time.
 
 The `--time-zone` and `--local` options are honored when parsing the time value.
 
-```/dev/null/example.sh#L1-2
+```sh
 # Show entries until a specific time
 hl --until "2024-01-15 18:00:00" app.log
 ```
@@ -194,7 +194,7 @@ Filter entries by matching field values using simple field matching expressions.
 - `!`: Negate the match (placed before operator): `k!=v`, `k!~=v`, etc.
 - `?`: Include entry if the field is missing (placed after the key): `k?=v`, `k?!~=v`, etc.
 
-```/dev/null/example.sh#L1-8
+```sh
 # Exact match
 hl -f 'status=200' app.log
 
@@ -226,7 +226,7 @@ Query expressions support:
 - **Existence checks**: `exists(user-id)`, `not exists(user-id)`
 - **Grouping**: `(status>=500 and status<=504) or status==404`
 
-```/dev/null/example.sh#L1-11
+```sh
 # Logical operators
 hl -q 'status>=400 or duration>=15' app.log
 
@@ -261,7 +261,7 @@ Control ANSI color and style output.
   - `always`: Always use colors
   - `never`: Never use colors
 
-```/dev/null/example.sh#L1-2
+```sh
 # Force colors even when piping
 hl --color=always app.log | less -R
 ```
@@ -280,7 +280,7 @@ Specify the color theme to use.
 
 Run `hl --list-themes` to see all available themes.
 
-```/dev/null/example.sh#L1-5
+```sh
 # Use a specific theme
 hl --theme hl-light app.log
 
@@ -296,7 +296,7 @@ Output raw source entries instead of formatted entries.
 
 This outputs the original JSON or logfmt for matching entries. Filtering still applies, but the output is in the original format rather than `hl`'s formatted representation.
 
-```/dev/null/example.sh#L1-5
+```sh
 # Output raw JSON for matching entries
 hl --raw -q 'status>=500' app.log
 
@@ -325,7 +325,7 @@ Hide or reveal fields with the specified keys.
 - Prefix with `!` to reveal a field
 - Use `!*` to reveal all fields
 
-```/dev/null/example.sh#L1-8
+```sh
 # Hide a field
 hl --hide request.body app.log
 
@@ -349,7 +349,7 @@ Control whether to flatten nested objects.
 
 When flattening is enabled, nested objects are displayed with dot-notation field names (e.g., `user.name`, `error.details.code`).
 
-```/dev/null/example.sh#L1-5
+```sh
 # Don't flatten nested objects
 hl --flatten=never app.log
 
@@ -366,7 +366,7 @@ Specify the time format for displaying timestamps.
 - **Config**: [`time-format`](../customization/config-files.md#time-format)
 - **Format**: Uses `strftime` format specifiers (see [Time Format Reference](./time-format.md))
 
-```/dev/null/example.sh#L1-5
+```sh
 # ISO 8601 format
 hl --time-format "%Y-%m-%dT%H:%M:%S%z" app.log
 
@@ -385,7 +385,7 @@ Specify the time zone for displaying timestamps.
 
 See the [list of tz database time zones](https://en.wikipedia.org/wiki/List_of_tz_database_time_zones) for valid identifiers.
 
-```/dev/null/example.sh#L1-5
+```sh
 # Display times in New York timezone
 hl --time-zone "America/New_York" app.log
 
@@ -399,7 +399,7 @@ hl -Z "Asia/Shanghai" app.log
 
 Use the local system time zone for displaying timestamps. Overrides the `--time-zone` option.
 
-```/dev/null/example.sh#L1-2
+```sh
 # Display times in local timezone
 hl --local app.log
 ```
@@ -415,7 +415,7 @@ Hide empty fields (null, empty string, empty object, empty array).
 - **Environment**: `HL_HIDE_EMPTY_FIELDS`
 - **Config**: [`hide-empty-fields`](../customization/config-files.md#hide-empty-fields)
 
-```/dev/null/example.sh#L1-2
+```sh
 # Hide all empty fields
 hl --hide-empty-fields app.log
 ```
@@ -441,7 +441,7 @@ Control the display of input file information (file number and filename).
 
 When processing multiple files or when combined with `--raw`, this option controls how file information is displayed.
 
-```/dev/null/example.sh#L1-5
+```sh
 # Show full filenames
 hl --input-info full app1.log app2.log
 
@@ -460,7 +460,7 @@ Control ASCII mode for terminal output.
 
 When enabled, Unicode punctuation (like fancy quotes) is replaced with ASCII equivalents. The actual character mappings can be configured in the configuration file.
 
-```/dev/null/example.sh#L1-2
+```sh
 # Force ASCII-only punctuation
 hl --ascii=always app.log
 ```
@@ -480,7 +480,7 @@ See [Field Expansion](../features/field-expansion.md) for mode descriptions and 
 
 Write output to the specified file instead of stdout.
 
-```/dev/null/example.sh#L1-2
+```sh
 # Write formatted output to file
 hl --output formatted.log -q 'status>=500' app.log
 ```
@@ -495,7 +495,7 @@ Specify the input log format.
 - **Default**: `auto`
 - **Possible values**: `auto`, `json`, `logfmt`
 
-```/dev/null/example.sh#L1-5
+```sh
 # Force JSON parsing
 hl --input-format json app.log
 
@@ -515,7 +515,7 @@ Specify the unit for Unix timestamps.
   - `us`: Microseconds
   - `ns`: Nanoseconds
 
-```/dev/null/example.sh#L1-2
+```sh
 # Treat numeric timestamps as milliseconds
 hl --unix-timestamp-unit ms app.log
 ```
@@ -528,7 +528,7 @@ Allow non-JSON prefixes before JSON log entries.
 
 When enabled, `hl` will detect and skip text that appears before JSON objects on a line. The prefix text is preserved in the output.
 
-```/dev/null/example.sh#L1-2
+```sh
 # Allow and preserve prefixes like "2024-01-15 10:30:45 {"level":"info",...}"
 hl --allow-prefix app.log
 ```
@@ -551,7 +551,7 @@ Specify the log entry delimiter.
 
 The default auto-detection works well for most JSON and logfmt logs, including pretty-printed JSON.
 
-```/dev/null/example.sh#L1-2
+```sh
 # Use null character as delimiter
 hl --delimiter nul app.log
 ```
@@ -567,7 +567,7 @@ Number of interrupt signals (Ctrl-C / SIGINT) to ignore before exiting.
 
 This allows you to press Ctrl-C multiple times to force exit when `hl` is processing large files.
 
-```/dev/null/example.sh#L1-2
+```sh
 # Ignore first 5 interrupts
 hl --interrupt-ignore-count 5 large-file.log
 ```
@@ -579,7 +579,7 @@ Set the internal buffer size.
 - **Environment variable**: `HL_BUFFER_SIZE`
 - **Default**: `256 KiB`
 
-```/dev/null/example.sh#L1-2
+```sh
 # Use 1 MiB buffer
 hl --buffer-size "1 MiB" app.log
 ```
@@ -593,7 +593,7 @@ Set the maximum log entry size.
 
 Entries larger than this will be truncated or skipped.
 
-```/dev/null/example.sh#L1-2
+```sh
 # Allow up to 128 MiB per entry
 hl --max-message-size "128 MiB" app.log
 ```
@@ -605,7 +605,7 @@ Set the number of processing threads.
 - **Environment variable**: `HL_CONCURRENCY`
 - **Default**: Number of CPU cores
 
-```/dev/null/example.sh#L1-2
+```sh
 # Use 4 threads
 hl --concurrency 4 app.log
 ```
@@ -616,7 +616,7 @@ Print shell auto-completion script and exit.
 
 - **Possible values**: `bash`, `elvish`, `fish`, `powershell`, `zsh`
 
-```/dev/null/example.sh#L1-5
+```sh
 # Generate bash completions
 hl --shell-completions bash > ~/.local/share/bash-completion/completions/hl
 
@@ -628,7 +628,7 @@ hl --shell-completions zsh > ~/.zsh/completions/_hl
 
 Print man page and exit.
 
-```/dev/null/example.sh#L1-2
+```sh
 # View man page
 hl --man-page | man -l -
 ```
@@ -639,7 +639,7 @@ Print available themes, optionally filtered by tags.
 
 - **Possible values**: `dark`, `light`, `16color`, `256color`, `truecolor`, `overlay`, `base`
 
-```/dev/null/example.sh#L1-8
+```sh
 # List all themes
 hl --list-themes
 
@@ -656,7 +656,7 @@ Print debug index metadata (in `--sort` mode) and exit.
 
 This is a debugging option that shows the structure of the timestamp index built for chronological sorting.
 
-```/dev/null/example.sh#L1-2
+```sh
 # Show index structure
 hl --sort --dump-index app.log
 ```

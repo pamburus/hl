@@ -2,6 +2,15 @@
 
 hl automatically integrates with a pager to make viewing large log files comfortable and efficient. This page explains how pager integration works and how to customize it.
 
+## Configuration
+
+| Method | Setting |
+|--------|---------|
+| CLI option | [`--paging`](../reference/options.md#paging), [`-P`](../reference/options.md#-p) |
+| Environment | [`HL_PAGING`](../customization/environment.md#hl-paging), [`HL_PAGER`](../customization/environment.md#hl-pager) |
+
+**Values:** `auto` (default), `always`, `never`
+
 ## Default Behavior
 
 When you run hl with a log file, it automatically opens the output in a pager:
