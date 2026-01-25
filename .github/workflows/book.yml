@@ -3,6 +3,10 @@ name: Book
 on:
   push:
     branches: ["master"]
+    paths:
+      - "docs/src/**"
+      - "docs/book.toml"
+      - ".github/workflows/book.yml"
 
 permissions:
   contents: read
