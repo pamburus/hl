@@ -1,8 +1,9 @@
 <!-- 
 Sync Impact Report:
-- Version: 1.2.1 → 1.2.2
-- Modified: Technology Stack & Standards – Documentation typography guidance
-- Rationale: PATCH version bump - clarify en dash vs spaced em dash usage
+- Version: 1.2.2 → 1.3.0
+- Modified: Technology Stack & Standards – Documentation section expanded
+- Added: Reference to docs/constitution/ for documentation book architectural rules
+- Rationale: MINOR version bump - new guidance for documentation governance
 - Templates requiring updates: ✅ All templates reviewed and compatible
 - Date: 2026-01-25
 -->
@@ -68,7 +69,7 @@ Tests MUST use external data files instead of inline multiline string literals f
 **Testing**: cargo test, criterion for benchmarks, proptest for property-based tests
 **Output Format**: Primary output designed for human readability using ANSI colors and styles. Additional formats (JSON, etc.) may be added as needed but are not required.
 **Compatibility**: SEMVER for versioning; breaking changes require major version bump and migration guide
-**Documentation**: README, man pages, inline examples, architecture decision records for major changes
+**Documentation**: README, man pages, inline examples, architecture decision records for major changes. The documentation book (`docs/src/`) MUST conform to architectural rules defined in `docs/constitution/`. These subsidiary rules govern documentation structure, cross-referencing, and single-source-of-truth principles for the user-facing book.
 **Typography**: Use spaced en dash ( – ) where an em dash would otherwise be unspaced; keep spaced em dashes in contexts where dashes are already separated (e.g., option description lists).
 
 ## Development Workflow & Quality Gates
@@ -91,4 +92,4 @@ This constitution supersedes all other practices and informal conventions. All P
 3. Documentation of rationale
 4. Migration plan for any breaking changes
 
-**Version**: 1.2.2 | **Ratified**: 2025-11-02 | **Last Amended**: 2026-01-25
+**Version**: 1.3.0 | **Ratified**: 2025-11-02 | **Last Amended**: 2026-01-25
