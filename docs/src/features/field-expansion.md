@@ -4,12 +4,12 @@ Field expansion controls how `hl` displays nested objects, arrays, and complex f
 
 ## Overview
 
-When log entries contain many custom fields and nested objects, `hl` can display them in different ways:
+When log entries contain fields with multi-line values (such as stack traces or error details), `hl` can display them in different ways:
 
-- **Auto** — keep each entry on a single line but expand fields with multi-line values using consistent indentation
-- **Never expand** — always keep each entry on a single line
-- **Always expand** — display each field on its own indented line and expand all nested objects
-- **Inline** — keep each entry on a single line but show multi-line values as raw data surrounded by backticks
+- **Auto** — expand only fields with multi-line values into indented blocks, keep single-line fields inline
+- **Never** — keep everything on a single line, escape newlines as `\n`
+- **Always** — display each field on its own indented line, expand multi-line values
+- **Inline** — preserve actual newlines in multi-line values, surrounded by backticks
 
 ## Enabling Field Expansion
 
@@ -35,284 +35,176 @@ hl --expansion inline app.log
 
 ### Never
 
-`--expansion never` keeps all fields on a single line:
+`--expansion never` keeps all fields on a single line, escaping newlines and tabs:
 
-```sh
-hl --expansion never app.log
+```
+10:30:45 [ERR] database connection failed › attempt=3 error="connection refused\n\tretry 1/3\n\tretry 2/3"
 ```
 
-Example output:
-```
-2024-01-15 10:30:45.123 [ERR] user registration failed › user.id=123 user.name=Alice user.roles=[admin user] error="failed to register user\nfailed to connect to database\n\tuser.go:123"
-```
-
-This is most compact but can be hard to read for complex structures.
+This is most compact but can be hard to read when fields contain multi-line values.
 
 ### Auto
 
-`--expansion auto` automatically expands multi-line fields with consistent indentation:
+`--expansion auto` expands only fields with multi-line values, keeping single-line fields inline:
 
-```sh
-hl --expansion auto app.log
+```
+10:30:45 [ERR] database connection failed › attempt=3
+         [ ~ ]   > error=|=>
+         [ ~ ]      	connection refused
+         [ ~ ]      		retry 1/3
+         [ ~ ]      		retry 2/3
 ```
 
-Example output:
-```
-2024-01-15 10:30:45.123 [ERR] user registration failed › user.id=123 user.name=Alice user.roles=[admin user]
-                        [ ~ ]   > error=|=>
-                        [ ~ ]       failed to register user
-                        [ ~ ]       failed to connect to database
-                        [ ~ ]           user.go:123
-```
-
-This is the default mode and works well for most use cases.
+This is the default mode, providing a good balance between compactness and readability.
 
 ### Always
 
-`--expansion always` expands all nested structures:
+`--expansion always` displays each field on its own line, regardless of content:
 
-```sh
-hl --expansion always app.log
+```
+10:30:45 [ERR] database connection failed
+         [ ~ ]   > attempt=3
+         [ ~ ]   > error=|=>
+         [ ~ ]      	connection refused
+         [ ~ ]      		retry 1/3
+         [ ~ ]      		retry 2/3
 ```
 
-Example output:
-```
-2024-01-15 10:30:45.123 [ERR] user registration failed
-                        [ ~ ]   > user.id=123
-                        [ ~ ]   > user.name=Alice
-                        [ ~ ]   > user.roles=[admin user]
-                        [ ~ ]   > error=|=>
-                        [ ~ ]       failed to register user
-                        [ ~ ]       failed to connect to database
-                        [ ~ ]           user.go:123
-```
-
-Even simple objects are expanded, which can make output very verbose but maximizes readability.
+This mode maximizes readability but produces more verbose output.
 
 ### Inline
 
-`--expansion inline` shows multi-line values as raw data surrounded by backticks, preserving newlines:
+`--expansion inline` shows multi-line values surrounded by backticks, preserving actual newlines:
 
-```sh
-hl --expansion inline app.log
+```
+10:30:45 [ERR] database connection failed › attempt=3 error=`connection refused
+	retry 1/3
+	retry 2/3`
 ```
 
-Example output:
-```
-2024-01-15 10:30:45.123 [ERR] user registration failed › user.id=123 user.name=Alice user.roles=[admin user] error=`failed to register user
-failed to connect to database
-        user.go:123`
-```
-
-This is legacy behavior prior to v0.35.0 and is useful for preserving original formatting.
-Can be convenient for selecting and copying multi-line values in the terminal, but not as readable as expanded formats.
+This legacy mode (default prior to v0.35.0) is convenient for selecting and copying multi-line values in the terminal.
 
 ## How Expansion Works
 
-### Objects
+### Multi-line Field Values
 
-JSON objects are expanded into indented key-value pairs:
+The primary purpose of expansion is handling multi-line string values (containing newlines or tabs), such as stack traces or error details.
 
-Input:
-```json
-{"user": {"id": 123, "name": "Alice", "email": "alice@example.com"}}
+With `--expansion never`, newlines and tabs are escaped as `\n` and `\t`:
+
+```
+10:30:45 [ERR] connection failed › error="dial tcp 10.0.0.5:5432: connection refused\n\tretry 1/3 failed\n\tretry 2/3 failed"
 ```
 
-With `--expansion always`:
+With `--expansion inline`, multi-line values are shown with backticks, preserving actual newlines:
+
 ```
-user:
-  id: 123
-  name: "Alice"
-  email: "alice@example.com"
+10:30:45 [ERR] connection failed › error=`dial tcp 10.0.0.5:5432: connection refused
+	retry 1/3 failed
+	retry 2/3 failed`
 ```
 
-With `--expansion never`:
+With `--expansion auto` or `--expansion always`, multi-line values are expanded into indented blocks marked with `|=>`:
+
 ```
-user: {id: 123, name: "Alice", email: "alice@example.com"}
-```
-
-### Arrays
-
-Arrays are expanded into indented lists:
-
-Input:
-```json
-{"tags": ["important", "security", "audit"]}
+10:30:45 [ERR] connection failed
+         [ ~ ]   > error=|=>
+         [ ~ ]      	dial tcp 10.0.0.5:5432: connection refused
+         [ ~ ]      		retry 1/3 failed
+         [ ~ ]      		retry 2/3 failed
 ```
 
-With `--expansion always`:
+The `[ ~ ]` indicator replaces the level badge on continuation lines, and each line of the value is prefixed with a tab character for consistent indentation.
+
+### Field Placement
+
+With `--expansion always`, all fields appear on separate lines regardless of whether they contain multi-line values:
+
 ```
-tags:
-  - important
-  - security
-  - audit
+10:30:45 [INF] request completed
+         [ ~ ]   > method=GET
+         [ ~ ]   > path=/api/users
+         [ ~ ]   > status=200
+         [ ~ ]   > latency-ms=42
 ```
 
-With `--expansion never`:
+With `--expansion auto`, only fields with multi-line values trigger expansion. Single-line fields remain inline:
+
 ```
-tags: ["important", "security", "audit"]
-```
-
-### Nested Structures
-
-Deeply nested structures are expanded recursively:
-
-Input:
-```json
-{
-  "user": {
-    "id": 123,
-    "profile": {
-      "name": "Alice",
-      "contacts": {
-        "email": "alice@example.com",
-        "phone": "+1234567890"
-      }
-    }
-  }
-}
+10:30:45 [INF] request completed › method=GET path=/api/users status=200 latency-ms=42
 ```
 
-With `--expansion always`:
+### Multi-line Messages
+
+Multi-line messages (e.g., stack traces in the message field) are also handled by expansion.
+
+With `--expansion inline`, multi-line messages are shown directly, which may break visual alignment:
+
 ```
-user:
-  id: 123
-  profile:
-    name: "Alice"
-    contacts:
-      email: "alice@example.com"
-      phone: "+1234567890"
+10:30:45 [ERR] panic: runtime error
+	goroutine 1 [running]:
+	main.main() › request-id=abc-123
+```
+
+With `--expansion never`, newlines are escaped:
+
+```
+10:30:45 [ERR] "panic: runtime error\n\tgoroutine 1 [running]:\n\tmain.main()" › request-id=abc-123
+```
+
+With `--expansion auto`, the message is expanded separately from inline fields:
+
+```
+10:30:45 [ERR] › request-id=abc-123
+         [ ~ ]   > msg=|=>
+         [ ~ ]      	panic: runtime error
+         [ ~ ]      		goroutine 1 [running]:
+         [ ~ ]      		main.main()
+```
+
+With `--expansion always`, the message placeholder `~` appears where the message would normally be, and all fields are expanded:
+
+```
+10:30:45 [ERR] ~
+         [ ~ ]   > msg=|=>
+         [ ~ ]      	panic: runtime error
+         [ ~ ]      		goroutine 1 [running]:
+         [ ~ ]      		main.main()
+         [ ~ ]   > request-id=abc-123
 ```
 
 ## Interaction with Field Flattening
 
-Field expansion interacts with the `--flatten` option:
+Field expansion interacts with the `--flatten` option, which controls how nested objects are displayed.
 
-```sh
-# Flatten and never expand
-hl --flatten always --expansion never app.log
+With `--flatten always` (default), nested objects become dot-notation keys:
 
-# Don't flatten but expand
-hl --flatten never --expansion always app.log
+```
+10:30:45 [INF] user logged in › user.id=42 user.name=alice
 ```
 
-When `--flatten always` (default), nested objects are flattened into dot-notation before expansion rules are applied:
-
-Input:
-```json
-{"user": {"id": 123, "name": "Alice"}}
+```
+10:30:45 [INF] user logged in
+         [ ~ ]   > user.id=42
+         [ ~ ]   > user.name=alice
 ```
 
-With `--flatten always --expansion never`:
+With `--flatten never`, nested objects are preserved as hierarchical structures:
+
 ```
-user.id: 123, user.name: "Alice"
+10:30:45 [INF] user logged in › user={ id=42 name=alice }
 ```
 
-With `--flatten never --expansion always`:
 ```
-user:
-  id: 123
-  name: "Alice"
+10:30:45 [INF] user logged in
+         [ ~ ]   > user:
+         [ ~ ]     > id=42
+         [ ~ ]     > name=alice
 ```
+
+Note: Arrays are always displayed inline (e.g., `tags=[admin user]`) regardless of expansion mode.
 
 See [Field Visibility](./field-visibility.md) for more on flattening.
-
-## Use Cases
-
-### Debugging Complex Structures
-
-When investigating detailed object structures, use `--expansion always`:
-
-```sh
-# See full structure of complex log entries
-hl --expansion always -q 'exists(error-details)' app.log
-```
-
-### Monitoring Production Logs
-
-For high-volume production monitoring, use `--expansion never` or `inline`:
-
-```sh
-# Compact output for quick scanning
-hl -F --expansion never --level error /var/log/app.log
-```
-
-### Development and Testing
-
-During development, `auto` or `inline` modes provide good readability:
-
-```sh
-# Balanced view for development
-hl --expansion inline --local app.log
-```
-
-### Pipeline Processing
-
-When piping to other tools, use `--raw` instead of controlling expansion:
-
-```sh
-# Use raw mode for JSON pipelines
-hl --raw --level error app.log | jq '.user.id'
-```
-
-## Examples
-
-### Compare Expansion Modes
-
-```sh
-# Same log file, different expansion modes
-hl --expansion never app.log > never.txt
-hl --expansion inline app.log > inline.txt
-hl --expansion always app.log > always.txt
-
-# Compare the outputs
-diff never.txt always.txt
-```
-
-### Selective Expansion
-
-Combine with field hiding to expand only specific fields:
-
-```sh
-# Hide most fields, expand only error details
-hl --hide '*' \
-   --hide '!level' --hide '!timestamp' --hide '!error' \
-   --expansion always \
-   -q 'exists(error)' \
-   app.log
-```
-
-### Compact Production View
-
-```sh
-# Minimal expansion for production monitoring
-hl -F \
-   --expansion never \
-   --hide-empty-fields \
-   --level warn \
-   /var/log/service-*.log
-```
-
-### Development Deep Dive
-
-```sh
-# Maximum detail for debugging
-hl --expansion always \
-   --local \
-   --show-empty-fields \
-   -q 'request-id = "abc-123"' \
-   app.log
-```
-
-## Performance Considerations
-
-Expansion mode has minimal performance impact:
-
-- **Never/inline** — slightly faster (less formatting work)
-- **Always** — slightly slower (more indentation and line breaks)
-- **Auto** — adaptive (minimal overhead)
-
-The difference is negligible for typical use cases. Choose based on readability needs, not performance.
 
 ## Configuration
 
@@ -321,13 +213,13 @@ Set default expansion mode in your config file:
 ```toml
 # ~/.config/hl/config.toml
 [formatting.expansion]
-mode = "inline"
+mode = "auto"
 ```
 
 Or via environment variable:
 
 ```sh
-export HL_EXPANSION=inline
+export HL_EXPANSION=always
 hl app.log
 ```
 
