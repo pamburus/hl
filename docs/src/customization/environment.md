@@ -116,9 +116,7 @@ export HL_FLATTEN=always  # default
 export HL_FLATTEN=never
 ```
 
-Values:
-- `always` — flatten nested objects (`user.id`)
-- `never` — keep nested structure (`user: {id: 123}`)
+Values: `always` (default), `never`. See [Output Formatting](../features/formatting.md#object-flattening) for examples.
 
 Example:
 ```sh
@@ -183,7 +181,7 @@ export HL_LEVEL=warn
 export HL_LEVEL=error
 ```
 
-Values: `trace`, `debug`, `info`, `warn`, `error` (or abbreviations: `t`, `d`, `i`, `w`, `e`)
+Values: `trace`, `debug`, `info`, `warn`, `error` (or abbreviations: `t`, `d`, `i`, `w`, `e`). See [Filtering by Log Level](../features/filtering-level.md) for details.
 
 Example:
 ```sh
@@ -229,10 +227,7 @@ export HL_INPUT_FORMAT=json
 export HL_INPUT_FORMAT=logfmt
 ```
 
-Values:
-- `auto` — automatically detect format
-- `json` — expect JSON format
-- `logfmt` — expect logfmt format
+Values: `auto` (default), `json`, `logfmt`. See [Input Formats](../features/input-formats.md) for details.
 
 Example:
 ```sh
@@ -305,10 +300,7 @@ export HL_PAGING=always
 export HL_PAGING=never
 ```
 
-Values:
-- `auto` — use pager for terminal output (not in follow mode)
-- `always` — always use pager
-- `never` — never use pager (same as `-P`)
+Values: `auto` (default), `always`, `never`. See [Automatic Pager Integration](../features/pager.md) for details.
 
 Example:
 ```sh
