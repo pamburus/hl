@@ -48,7 +48,7 @@ Logfmt is a key=value format popular in many logging frameworks. hl handles quot
 
 ### Auto-Detection
 
-You don't need to specify the format—hl automatically detects which format your logs use and processes them accordingly.
+You don't need to specify the format – hl automatically detects which format your logs use and processes them accordingly.
 
 ## Output Structure
 

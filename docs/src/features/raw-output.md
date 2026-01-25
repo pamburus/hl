@@ -23,7 +23,7 @@ When raw output is enabled, `hl`:
 3. **Outputs the original source JSON** for entries that pass filters
 4. **Preserves exact formatting** from the source (whitespace, field order, etc.)
 
-The key point: **filtering still applies in raw mode**. Raw output doesn't mean "bypass all processing"—it means "output the original format instead of the formatted representation."
+The key point: **filtering still applies in raw mode**. Raw output doesn't mean "bypass all processing" – it means "output the original format instead of the formatted representation."
 
 ## Use Cases
 

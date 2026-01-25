@@ -2,7 +2,7 @@
 
 ![hl banner](images/banner.svg)
 
-Welcome to `hl`, a high-performance command-line tool for viewing and analyzing structured logs. Built with efficiency in mind, `hl` transforms JSON and logfmt formatted log data into clean, colorized, human-readable output—making it easy for developers, system administrators, DevOps engineers, and SREs to make sense of their logs.
+Welcome to `hl`, a high-performance command-line tool for viewing and analyzing structured logs. Built with efficiency in mind, `hl` transforms JSON and logfmt formatted log data into clean, colorized, human-readable output – making it easy for developers, system administrators, DevOps engineers, and SREs to make sense of their logs.
 
 ## Key Features
 
@@ -33,7 +33,7 @@ Traditional log viewing tools often struggle with large files or lack the flexib
 1. **Speed**: Processes logs at approximately 2 GiB/s during initial indexing, handles hundreds of gigabytes across hundreds of files
 2. **Flexibility**: Powerful query language for complex filtering scenarios
 3. **Usability**: Intuitive command-line interface with sensible defaults
-4. **Reliability**: Written in Rust with stable libraries for rock-solid performance—no crashes, no surprises
+4. **Reliability**: Written in Rust with stable libraries for rock-solid performance — no crashes, no surprises
 5. **Beauty**: Customizable themes make logs easier to read and understand
 
 ## How It Works

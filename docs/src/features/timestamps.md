@@ -265,7 +265,7 @@ Entries without recognized timestamps are **skipped** and not displayed:
 hl -F app.log
 ```
 
-This is a key behavioral difference—follow mode requires valid timestamps for chronological sorting.
+This is a key behavioral difference – follow mode requires valid timestamps for chronological sorting.
 
 ### Time Filtering
 
@@ -396,7 +396,7 @@ hl -L app.log
 **Problem:** Entries appear without timestamps or at wrong times.
 
 **Solutions:**
-- Check field names—use standard names like `timestamp`, `time`, `ts`
+- Check field names — use standard names like `timestamp`, `time`, `ts`
 - Verify timestamp format is one of the supported formats
 - Inspect raw entry: `hl --raw app.log | head -1`
 - Try explicit unit: `--unix-timestamp-unit ms`
@@ -465,7 +465,7 @@ Recommendations:
 
 When processing logs with `hl`:
 
-- Let auto-detection work—it's accurate for standard formats
+- Let auto-detection work — it's accurate for standard formats
 - Use `--unix-timestamp-unit` only when auto-detection fails
 - Check entries without timestamps if sorting seems wrong
 - Use `--local` for easier reading of recent logs

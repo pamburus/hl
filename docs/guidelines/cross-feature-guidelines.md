@@ -2,7 +2,7 @@
 
 ## 1. Purpose
 
-Feature specification documents should clearly define **how a single feature works** — its behavior, purpose, inputs, and outputs — without duplicating or redefining logic that belongs to other features.  
+Feature specification documents should clearly define **how a single feature works** – its behavior, purpose, inputs, and outputs – without duplicating or redefining logic that belongs to other features.  
 Cross-feature references are allowed but must be **intentional, minimal, and clearly scoped**.
 
 ---
