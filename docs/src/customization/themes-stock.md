@@ -24,7 +24,8 @@ Special tags include:
 
 ### Universal (Multi-Mode)
 
-#### **`uni`** (dark, light, 16-color) {#uni}
+#### **uni** {#uni}
+- Tags: **`dark`** **`light`** **`16-color`**
 - The default theme; works on all terminals with both dark and light backgrounds.
 - Balances readability and compatibility.
 - Uses only the standard 16 ANSI colors.
@@ -34,8 +35,9 @@ Special tags include:
   <img src="https://raw.githubusercontent.com/pamburus/hl-extra/refs/heads/main/screenshot/uni/light.svg" alt="screenshot-uni">
 </picture>
 
-#### **`universal`** (dark, light, 16-color) {#universal}
-- Variant of `uni` with green accent colors and reversed warning and errors levels.
+#### **universal** {#universal}
+- Tags: **`dark`** **`light`** **`16-color`**
+- Variant of **uni** with green accent colors and reversed warning and errors levels.
 - Works on both dark and light backgrounds.
 - Balances readability and compatibility.
 - Uses only the standard 16 ANSI colors.
@@ -45,8 +47,9 @@ Special tags include:
   <img src="https://raw.githubusercontent.com/pamburus/hl-extra/refs/heads/main/screenshot/universal/light.svg" alt="screenshot-universal">
 </picture>
 
-#### **`universal-blue`** (dark, light, 16-color) {#universal-blue}
-- Variant of `universal` with blue accent colors.
+#### **universal-blue** {#universal-blue}
+- Tags: **`dark`** **`light`** **`16-color`**
+- Variant of **universal** with blue accent colors.
 - Works on both dark and light backgrounds.
 
 <picture>
@@ -54,8 +57,9 @@ Special tags include:
   <img src="https://raw.githubusercontent.com/pamburus/hl-extra/refs/heads/main/screenshot/universal-blue/light.svg" alt="screenshot-universal-blue">
 </picture>
 
-#### **`neutral`** (dark, light, 16-color) {#neutral}
-- Minimal colorization; emphasizes log levels only.
+#### **neutral** {#neutral}
+- Tags: **`dark`** **`light`** **`16-color`**
+- Minimal colorization; emphasizes log levels, warnings and errors only.
 - Most content displayed in terminal default colors.
 - Suitable for minimal or monochrome aesthetics.
 
@@ -64,7 +68,8 @@ Special tags include:
   <img src="https://raw.githubusercontent.com/pamburus/hl-extra/refs/heads/main/screenshot/neutral/light.svg" alt="screenshot-neutral">
 </picture>
 
-#### **`frostline`** (dark, light, 16-color) {#frostline}
+#### **frostline** {#frostline}
+- Tags: **`dark`** **`light`** **`16-color`**
 - Cool cyan-based theme with bold syntax highlighting.
 - Works on both dark and light backgrounds.
 - Distinguishes `true`/`false` boolean values with different colors.

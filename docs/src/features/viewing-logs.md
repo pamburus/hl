@@ -44,7 +44,7 @@ hl parses standard JSON logs and extracts common fields like timestamp, level, m
 time=2024-01-15T10:30:45Z level=info message="Server started" port=8080
 ```
 
-Logfmt is a key=value format popular in many logging frameworks. hl handles quoted values, escaping, and nested structures.
+Logfmt is a key=value format popular in many logging frameworks. `hl` handles quoted values, escaping, and nested structures.
 
 ### Auto-Detection
 
