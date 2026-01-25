@@ -15,7 +15,7 @@
 //! ```no_run
 //! # use hl::themecfg::Theme;
 //! # let app_dirs = hl::appdirs::AppDirs::new("hl").unwrap();
-//! let theme = Theme::load(&app_dirs, "monokai")?;
+//! let theme = Theme::load(&app_dirs, "frostline")?;
 //! # Ok::<(), hl::themecfg::Error>(())
 //! ```
 //!
@@ -23,7 +23,7 @@
 //! ```no_run
 //! # use hl::themecfg::Theme;
 //! # let app_dirs = hl::appdirs::AppDirs::new("hl").unwrap();
-//! let raw = Theme::load_raw(&app_dirs, "monokai")?;
+//! let raw = Theme::load_raw(&app_dirs, "frostline")?;
 //! let theme = raw.resolve()?;
 //! # Ok::<(), hl::themecfg::Error>(())
 //! ```

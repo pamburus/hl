@@ -213,13 +213,12 @@ LESS="--mouse" hl app.log
 
 Note: This requires a terminal that supports mouse reporting.
 
-### Pager Not Found
+### Pager Is Not Used
 
 If hl can't find a pager:
 
 1. Install `less`: See platform-specific instructions above
-2. Or disable paging: `hl -P app.log`
-3. Or specify a pager: `PAGER=cat hl app.log`
+2. Or specify another pager: `PAGER=most hl app.log`
 
 ## Best Practices
 
@@ -237,10 +236,10 @@ If hl can't find a pager:
 LESS="-RSi --mouse" hl app.log
 ```
 
-### Disable Pager for Grep
+### Disable Pager for Live Viewing
 
 ```sh
-hl -P app.log | grep ERROR
+./my-app | hl -P
 ```
 
 ### Temporary Pager Override
@@ -327,22 +326,14 @@ Follow mode provides immediate exit because you're monitoring files directly and
 
 Set a default interrupt ignore count:
 
-```toml
-# ~/.config/hl/config.toml
-interrupt-ignore-count = 5
-```
-
-Or via environment variable:
-
 ```sh
-export HL_INTERRUPT_IGNORE_COUNT=5
+export HL_INTERRUPT_IGNORE_COUNT=1
 ```
 
 ### Best Practices
 
 - **Use default (3)** for interactive log viewing with a pager
 - **Set to 0** in scripts or automated workflows for immediate exit
-- **Increase to 5+** when working with applications that have long shutdown sequences
 - **Don't rely on it in follow mode** - follow mode always exits immediately
 
 ## Next Steps
