@@ -141,7 +141,7 @@ time-zone = "Europe/Oslo"
 
 ## Configuration File Format
 
-Configuration files use TOML format, which is human-readable and easy to edit.
+Configuration files can be written in TOML (recommended), YAML, or JSON format. This documentation uses TOML examples throughout. TOML is human-readable and easy to edit.
 
 ### Basic Example
 
@@ -216,16 +216,10 @@ Control how file information is shown when processing multiple files:
 
 ```toml
 # Options: "auto", "none", "minimal", "compact", "full"
-# Can specify multiple: ["auto", "minimal", "compact"]
 input-info = "auto"
 ```
 
-Modes:
-- `auto` — automatically choose based on number of files and terminal width
-- `none` — no file information
-- `minimal` — file number only
-- `compact` — file number and shortened path
-- `full` — file number and full path
+See [Multiple Files](../features/multiple-files.md) for mode descriptions.
 
 ### ASCII Mode
 
@@ -236,9 +230,7 @@ Control Unicode vs ASCII characters for punctuation:
 ascii = "auto"
 ```
 
-- `auto` — detect terminal Unicode support
-- `never` — always use Unicode box-drawing characters
-- `always` — restrict to ASCII characters only
+When set to `always`, restricts output to ASCII characters only.
 
 ### Field Configuration
 
@@ -253,9 +245,9 @@ ignore = ["_*", "internal.*"]
 hide = ["host", "pid", "version"]
 ```
 
-The difference:
-- `ignore` — completely skip these fields during parsing (performance optimization)
-- `hide` — parse but don't display (can still be used in queries)
+The `ignore` option skips fields during parsing (performance optimization), while `hide` parses fields but excludes them from display (they can still be used in queries).
+
+See [Field Visibility](../features/field-visibility.md) for patterns and examples.
 
 #### Predefined Fields
 
@@ -330,11 +322,7 @@ names = ["caller", "Caller"]
 flatten = "always"
 ```
 
-With `flatten = "always"`:
-- `{"user": {"id": 123, "name": "alice"}}` → `user.id=123 user.name=alice`
-
-With `flatten = "never"`:
-- `{"user": {"id": 123, "name": "alice"}}` → `user={ id=123 name=alice }`
+Controls whether nested objects are flattened into dot-notation fields. See [Output Formatting](../features/formatting.md#object-flattening) for examples.
 
 #### Message Format
 
@@ -344,12 +332,7 @@ With `flatten = "never"`:
 format = "delimited"
 ```
 
-Modes:
-- `auto-quoted` — quote messages when needed for clarity
-- `always-quoted` — always quote messages (most appropriate quotes)
-- `always-double-quoted` — always use double quotes
-- `delimited` — use delimiter instead of quotes
-- `raw` — no quotes or delimiters
+Controls how messages are quoted or delimited in output.
 
 #### Punctuation Customization
 
@@ -514,7 +497,7 @@ time-format = "%Y-%m-%d %H:%M:%S"
 
 # Hide project-specific internal fields
 [fields]
-hide = ["build-id", "deployment-id", "trace-context"]
+hide = ["correlation-id", "request-context", "span-id"]
 
 # Project uses custom level field names
 [[fields.predefined.level.variants]]
