@@ -13,6 +13,16 @@ Example of prefixed log:
 
 With `--allow-prefix`, `hl` finds the first `{` and parses from that point.
 
+## Configuration
+
+| Method | Setting |
+|--------|---------|
+| Config file | [`allow-prefix`](../customization/config-files.md#allow-prefix) |
+| CLI option | [`--allow-prefix`](../reference/options.md#allow-prefix) |
+| Environment | [`HL_ALLOW_PREFIX`](../customization/environment.md#hl-allow-prefix) |
+
+**Values:** `true`, `false` (default)
+
 ## Enabling Prefix Handling
 
 Use the `--allow-prefix` flag:
@@ -302,22 +312,6 @@ hl --allow-prefix --sort \
    docker-app.log \
    systemd-service.log \
    custom-framework.log
-```
-
-## Configuration
-
-Enable prefix handling by default:
-
-```toml
-# ~/.config/hl/config.toml
-allow-prefix = true
-```
-
-Or via environment variable:
-
-```sh
-export HL_ALLOW_PREFIX=true
-hl app.log
 ```
 
 ## Troubleshooting

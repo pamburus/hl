@@ -22,6 +22,18 @@ Timestamp handling in `hl` involves:
 - **Timezone handling** for display and filtering
 - **Fallback behavior** for entries without timestamps
 
+## Configuration
+
+| Method | Setting |
+|--------|---------|
+| Config file | [`unix-timestamp-unit`](../customization/config-files.md#unix-timestamp-unit) |
+| CLI option | [`--unix-timestamp-unit`](../reference/options.md#unix-timestamp-unit) |
+| Environment | [`HL_UNIX_TIMESTAMP_UNIT`](../customization/environment.md#hl-unix-timestamp-unit) |
+
+**Values:** `s` (seconds), `ms` (milliseconds), `us` (microseconds), `ns` (nanoseconds), `auto` (default)
+
+See also: [Time Display](./time-display.md) for output timezone configuration.
+
 ## Timestamp Field Detection
 
 `hl` looks for timestamps in several common field names:
@@ -257,13 +269,13 @@ They appear in the output in their original order.
 
 ### In Sort Mode
 
-Entries without timestamps are placed at the beginning of sorted output:
+Entries without recognized timestamps are **discarded** in sort mode:
 
 ```sh
 hl --sort app.log
 ```
 
-They're treated as having a timestamp of zero (epoch start: 1970-01-01 00:00:00 UTC).
+Sort mode requires valid timestamps to determine chronological ordering. Entries that cannot be parsed or don't contain recognizable timestamp fields are filtered out.
 
 ### In Follow Mode
 
@@ -377,25 +389,6 @@ hl --time-zone 'America/Los_Angeles' app.log
 ```
 
 Both timestamps are parsed correctly despite different source timezones.
-
-## Configuration
-
-Set timestamp handling defaults:
-
-```toml
-# ~/.config/hl/config.toml
-unix-timestamp-unit = "ms"
-time-zone = "UTC"
-```
-
-Or via environment variables:
-
-```sh
-export HL_UNIX_TIMESTAMP_UNIT=ms
-
-# For local time, use -L flag
-hl -L app.log
-```
 
 ## Troubleshooting
 
