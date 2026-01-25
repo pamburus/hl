@@ -284,10 +284,10 @@ Use `--hide`:
 
 ```sh
 # Hide one field
-hl --hide caller app.log
+hl --hide host app.log
 
 # Hide multiple fields
-hl --hide caller --hide pid app.log
+hl --hide host --hide pid app.log
 ```
 
 See [Hiding Fields](../features/hiding-fields.md) for details.
@@ -297,8 +297,8 @@ See [Hiding Fields](../features/hiding-fields.md) for details.
 Hide all fields, then reveal the ones you want:
 
 ```sh
-# Show only message and level
-hl --hide '*' --hide '!message' --hide '!level' app.log
+# Hide all except specific fields
+hl --hide '*' --hide '!service' --hide '!request-id' app.log
 ```
 
 Or configure default hidden fields in your config file.

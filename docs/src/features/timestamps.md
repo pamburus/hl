@@ -99,19 +99,27 @@ Supported as:
 
 See [Unix Timestamp Units](#unix-timestamp-units) for unit detection.
 
-### Common Log Formats
+### ISO 8601 Variants
+
+```json
+{"timestamp": "2024-01-15 10:30:45"}
+{"timestamp": "2024-01-15 10:30:45.123"}
+```
+
+These formats use a space separator instead of 'T' and do not require a timezone (UTC is assumed).
+
+### Unsupported Formats
+
+The following timestamp formats are **not** supported in log entries:
 
 ```json
 {"time": "Jan 15 10:30:45"}
 {"time": "Jan 15, 2024 10:30:45"}
 {"time": "15/Jan/2024:10:30:45 +0000"}
-{"timestamp": "2024-01-15 10:30:45"}
 {"timestamp": "01/15/2024 10:30:45"}
 ```
 
-### Custom Formats
-
-Many custom timestamp formats are automatically recognized through heuristics. If your format isn't recognized, the entry will still be processed but may not sort correctly.
+If your logs use these formats, consider standardizing to ISO 8601/RFC 3339 or Unix timestamps.
 
 ### What is NOT Supported
 
@@ -344,7 +352,7 @@ Nested timestamps are found and parsed automatically.
 ```json
 {"timestamp":"2024-01-15T10:30:45Z","level":"info"}
 {"ts":1705315845,"level":"info"}
-{"time":"Jan 15 10:30:45","level":"info"}
+{"time":"2024-01-15 10:30:45","level":"info"}
 ```
 
 ```sh
