@@ -3,6 +3,40 @@
   "type": "object",
   "additionalProperties": false,
   "definitions": {
+    "pager-role": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "args": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Additional arguments to append to the base command for this role"
+        }
+      }
+    },
+    "pager-profile": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "command": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Base command and arguments for the pager"
+        },
+        "view": {
+          "$ref": "#/definitions/pager-role",
+          "description": "Configuration for view mode (non-follow)"
+        },
+        "follow": {
+          "$ref": "#/definitions/pager-role",
+          "description": "Configuration for follow mode"
+        }
+      }
+    },
     "input-info-layout": {
       "type": "string",
       "enum": ["auto", "none", "minimal", "compact", "full"]
@@ -336,6 +370,29 @@
         "type": "string"
       },
       "description": "Ordered list of theme overlays to apply on top of the base theme and main configured theme"
+    },
+    "pager": {
+      "oneOf": [
+        {
+          "type": "string",
+          "description": "Single pager profile name"
+        },
+        {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "List of pager profile names in priority order"
+        }
+      ],
+      "description": "Pager profile(s) to use for output pagination. If a list is provided, profiles are tried in order until one with an available command is found."
+    },
+    "pagers": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/definitions/pager-profile"
+      },
+      "description": "Pager profiles defining commands and role-specific arguments"
     }
   }
 }
