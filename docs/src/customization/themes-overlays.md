@@ -148,17 +148,17 @@ time.modes = ["faint"]
 
 ### Example 3: Color-Specific Overlay
 
-Create an overlay that changes number colors for dark themes only:
+Create an overlay that changes number colors:
 
 ```toml
 version = "1.1"
-tags = ["overlay", "dark", "truecolor"]
+tags = ["overlay", "truecolor"]
 
 [elements]
 number.foreground = "#00ff00"
 ```
 
-This overlay should only be used with dark truecolor themes.
+This overlay should only be used with truecolor themes.
 
 ### Example 4: Multi-Element Overlay
 
