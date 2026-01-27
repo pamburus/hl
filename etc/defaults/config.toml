@@ -1,6 +1,12 @@
 #:schema ../../schema/json/config.schema.json
 
 #
+# Pager profile(s) to use for output pagination.
+# Can be a single profile name or a list of profile names in priority order.
+# If a list is provided, profiles are tried in order until one with an available command is found.
+# Profile names must match those defined in the [pagers] section.
+pager = ["fzf", "less"]
+#
 # Time format, see https://man7.org/linux/man-pages/man1/date.1.html for details.
 time-format = "%Y-%m-%d %T.%3N"
 #
@@ -173,3 +179,58 @@ message-delimiter = { ascii = "::", unicode = "›" }
 # * "auto"   • Expand fields with newlines/tabs into indented multi-line blocks
 # * "always" • Show each field on its own line, expand multi-line content with indentation
 mode = "auto"
+
+# Pager profiles.
+# Each profile defines a pager command and optional role-specific arguments.
+# Roles:
+#   - view: Used when viewing logs (non-follow mode)
+#   - follow: Used when following logs (--follow mode); if not configured, pager is disabled in follow mode
+#
+# Profile structure:
+#   command = [...]       # Base command and arguments
+#   view.args = [...]     # Additional arguments for view mode (appended to command)
+#   follow.args = [...]   # Additional arguments for follow mode (appended to command)
+[pagers]
+# Pager profile for `less`.
+[pagers.less]
+command = ["less", "-R", "--mouse"]
+env = { LESSCHARSET = "UTF-8" }
+
+# Pager profile for `fzf`.
+[pagers.fzf]
+command = [
+  "fzf",
+  "--color=bg+:#323841",
+  "--highlight-line",
+  "--ansi",
+  "--no-sort",
+  "--exact",
+  "--layout=reverse-list",
+  "--multi",
+  "--bind=ctrl-y:execute-silent(printf %s\\n {+} | pbcopy)",
+  "--bind=esc:track-current+clear-query+clear-multi+disable-raw",
+  "--bind=ctrl-q:abort",
+  "--bind=ctrl-e:yank",
+  "--bind=enter:toggle-raw",
+  "--bind=scroll-down:offset-down",
+  "--bind=scroll-up:offset-up",
+  "--bind=home:first",
+  "--bind=end:last"
+]
+# Additional arguments for view mode.
+view.args = ["--layout=reverse-list"]
+# Enable pager for follow mode.
+follow.enabled = true
+# Additional arguments for follow mode.
+follow.args = [
+  "--tac",
+  "--bind=scroll-up:offset-up+unbind(result)",
+  "--bind=home:unbind(result)+last",
+  "--bind=end:rebind(result)+first",
+  "--bind=result:first",
+  "--bind=ctrl-f:rebind(result)+first",
+  "--bind=up:unbind(result)+up",
+  "--bind=page-up:unbind(result)+page-up",
+  "--bind=change:unbind(result)",
+  "--track",
+]
