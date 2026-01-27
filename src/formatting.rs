@@ -140,7 +140,9 @@ pub trait RecordWithSourceFormatter {
     fn format_record(&self, buf: &mut Buf, prefix: Range<usize>, rec: model::RecordWithSource);
 }
 
-pub struct RawRecordFormatter {}
+pub struct RawRecordFormatter {
+    pub delimiter: String,
+}
 
 impl RecordWithSourceFormatter for RawRecordFormatter {
     #[inline(always)]
@@ -148,7 +150,7 @@ impl RecordWithSourceFormatter for RawRecordFormatter {
         let mut first = true;
         for line in Newline.into_searcher().split(rec.source) {
             if !first {
-                buf.push(b'\n');
+                buf.extend_from_slice(self.delimiter.as_bytes());
                 buf.extend_from_within(prefix.clone());
             }
             first = false;

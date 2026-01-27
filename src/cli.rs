@@ -145,6 +145,19 @@ pub struct Opt {
     #[arg(short = 'P')]
     pub paging_never: bool,
 
+    /// Output entry delimiter when pager is used
+    ///
+    /// Possible values:
+    /// • <c>newline</>: Either lf or crlf, depends on the platform (default)
+    /// • <c>nul</>: Null character (\0)
+    #[arg(
+        long,
+        env = "HL_PAGER_DELIMITER",
+        default_value = "newline",
+        overrides_with = "pager_delimiter"
+    )]
+    pub pager_delimiter: OutputDelimiter,
+
     /// Display entries with level <s>>>=</> <c><<LEVEL>></>
     #[arg(
         short,
@@ -393,6 +406,14 @@ pub struct Opt {
     #[arg(long, short = 'o', overrides_with = "output", value_name = "FILE", help_heading = heading::OUTPUT)]
     pub output: Option<String>,
 
+    /// Output entry delimiter
+    ///
+    /// Possible values:
+    /// • <c>newline</>: Either lf or crlf, depends on the platform (default)
+    /// • <c>nul</>: Null character (\0)
+    #[arg(long, env = "HL_OUTPUT_DELIMITER", default_value = "newline", overrides_with = "output_delimiter", help_heading = heading::OUTPUT)]
+    pub output_delimiter: OutputDelimiter,
+
     /// Input format
     #[arg(
         long,
@@ -592,6 +613,12 @@ pub enum Delimiter {
     Cr,
     Lf,
     Crlf,
+    Newline,
+    Nul,
+}
+
+#[derive(ValueEnum, Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OutputDelimiter {
     Newline,
     Nul,
 }
