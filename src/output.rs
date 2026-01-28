@@ -9,7 +9,7 @@ use std::{
 };
 
 #[cfg(unix)]
-use std::os::unix::io::{AsRawFd, RawFd};
+use std::os::unix::io::AsRawFd;
 
 use crate::pager::SelectedPager;
 
@@ -19,26 +19,28 @@ pub struct Pager {
     process: Child,
 }
 
-/// A handle that can be used to detect when the pager's stdin pipe is closed.
-/// This is useful for event-based detection of pager exit.
-#[cfg(unix)]
-pub struct PagerPipeHandle {
-    fd: RawFd,
+/// An opaque signal that fires when a pipe closes.
+///
+/// This is used to detect when a pager process exits, allowing follow mode
+/// to terminate immediately rather than waiting for the next write to fail.
+///
+/// Platform-specific implementation details are hidden behind this type.
+pub struct PipeCloseSignal {
+    #[cfg(unix)]
+    pub(crate) fd: std::os::unix::io::RawFd,
+    #[cfg(not(unix))]
+    _private: (),
 }
 
-#[cfg(unix)]
-impl PagerPipeHandle {
-    /// Returns the raw file descriptor of the pager's stdin pipe.
-    /// This fd can be monitored with kqueue/poll for POLLHUP to detect pipe closure.
-    pub fn as_raw_fd(&self) -> RawFd {
-        self.fd
+impl PipeCloseSignal {
+    #[cfg(unix)]
+    pub(crate) fn from_fd(fd: std::os::unix::io::RawFd) -> Self {
+        Self { fd }
     }
-}
 
-#[cfg(unix)]
-impl AsRawFd for PagerPipeHandle {
-    fn as_raw_fd(&self) -> RawFd {
-        self.fd
+    #[cfg(not(unix))]
+    pub(crate) fn new() -> Self {
+        Self { _private: () }
     }
 }
 
@@ -79,12 +81,19 @@ impl Pager {
         Ok(Self { process })
     }
 
-    /// Returns a handle to the pager's stdin pipe that can be used to detect when it closes.
-    #[cfg(unix)]
-    pub fn pipe_handle(&self) -> Option<PagerPipeHandle> {
-        self.process.stdin.as_ref().map(|stdin| PagerPipeHandle {
-            fd: stdin.as_raw_fd(),
-        })
+    /// Returns a signal that fires when the pager's stdin pipe closes.
+    ///
+    /// This can be used with `fsmon::Cancellation::with_close_signal()` to
+    /// exit follow mode immediately when the pager closes.
+    pub fn close_signal(&self) -> Option<PipeCloseSignal> {
+        #[cfg(unix)]
+        {
+            self.process.stdin.as_ref().map(|stdin| PipeCloseSignal::from_fd(stdin.as_raw_fd()))
+        }
+        #[cfg(not(unix))]
+        {
+            None
+        }
     }
 
     #[cfg(unix)]

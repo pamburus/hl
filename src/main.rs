@@ -329,36 +329,27 @@ fn run() -> Result<()> {
         .map(|input| input.hold().map_err(Error::Io))
         .collect::<Result<Vec<_>>>()?;
 
-    // Create output, keeping track of pager pipe fd for follow mode
-    #[cfg(unix)]
-    let (mut output, using_pager, pager_pipe_fd): (OutputStream, bool, Option<std::os::unix::io::RawFd>) = match opt.output {
-        Some(output) => (Box::new(std::fs::File::create(PathBuf::from(&output))?), false, None),
+    // Create output, keeping track of close signal for follow mode
+    let (mut output, using_pager, close_signal) = match opt.output {
+        Some(output) => (Box::new(std::fs::File::create(PathBuf::from(&output))?) as OutputStream, false, None),
         None => {
             if paging {
                 let selection = selector.select(role);
                 match Pager::from_selection(selection) {
                     Ok(Some(pager)) => {
-                        let pipe_fd = pager.pipe_handle().map(|h| h.as_raw_fd());
-                        (Box::new(pager), true, pipe_fd)
+                        let signal = pager.close_signal();
+                        (Box::new(pager) as OutputStream, true, signal)
                     }
-                    Ok(None) => (Box::new(stdout()), false, None),
+                    Ok(None) => (Box::new(stdout()) as OutputStream, false, None),
                     Err(e) => {
                         log::debug!("failed to spawn pager: {}", e);
-                        (Box::new(stdout()), false, None)
+                        (Box::new(stdout()) as OutputStream, false, None)
                     }
                 }
             } else {
-                (Box::new(stdout()), false, None)
+                (Box::new(stdout()) as OutputStream, false, None)
             }
         }
-    };
-
-    #[cfg(not(unix))]
-    let (mut output, using_pager): (OutputStream, bool) = match opt.output {
-        Some(output) => (Box::new(std::fs::File::create(PathBuf::from(&output))?), false),
-        None => pager()
-            .map(|p| (p, true))
-            .unwrap_or_else(|| (Box::new(stdout()), false)),
     };
 
     // Create app.
@@ -414,20 +405,9 @@ fn run() -> Result<()> {
 
     log::debug!("run the app");
 
-    // Run the app.
-    #[cfg(unix)]
-    let run = || {
-        // Pass the pager pipe fd for follow mode to enable immediate exit when pager closes
-        let output_fd = if opt.follow { pager_pipe_fd } else { None };
-        match app.run_with_output_fd(inputs, output.as_mut(), output_fd) {
-            Ok(()) => Ok(()),
-            Err(Error::Io(ref e)) if e.kind() == std::io::ErrorKind::BrokenPipe => Ok(()),
-            Err(err) => Err(err),
-        }
-    };
-
-    #[cfg(not(unix))]
-    let run = || match app.run(inputs, output.as_mut()) {
+    // Run the app with close signal for follow mode to enable immediate exit when pager closes
+    let signal = if opt.follow { close_signal } else { None };
+    let run = || match app.run_with_close_signal(inputs, output.as_mut(), signal) {
         Ok(()) => Ok(()),
         Err(Error::Io(ref e)) if e.kind() == std::io::ErrorKind::BrokenPipe => Ok(()),
         Err(err) => Err(err),

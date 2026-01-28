@@ -1,11 +1,9 @@
 // std imports
 use std::path::PathBuf;
 
-#[cfg(unix)]
-use std::os::unix::io::RawFd;
-
 // local imports
 use crate::error::Result;
+use crate::output::PipeCloseSignal;
 
 // ---
 
@@ -20,10 +18,9 @@ pub type EventKind = notify::EventKind;
 /// The implementation is platform-specific but provides a unified interface.
 pub struct Cancellation {
     inner: imp::Cancellation,
-    /// Optional external fd to monitor for closure (e.g., pager stdin).
-    /// When this fd signals (POLLHUP/EOF), it triggers cancellation.
-    #[cfg(unix)]
-    trigger_fd: Option<RawFd>,
+    /// Optional signal to monitor for pipe closure (e.g., pager stdin).
+    /// When this signals, it triggers cancellation.
+    close_signal: Option<PipeCloseSignal>,
 }
 
 impl Cancellation {
@@ -31,24 +28,17 @@ impl Cancellation {
     pub fn new() -> std::io::Result<Self> {
         Ok(Self {
             inner: imp::Cancellation::new()?,
-            #[cfg(unix)]
-            trigger_fd: None,
+            close_signal: None,
         })
     }
 
-    /// Sets an external file descriptor to monitor for closure.
-    /// When this fd signals (e.g., pipe closed), it will trigger cancellation.
-    /// This is useful for detecting when a pager process exits.
-    #[cfg(unix)]
-    pub fn with_trigger_fd(mut self, fd: RawFd) -> Self {
-        self.trigger_fd = Some(fd);
+    /// Configures the cancellation to also trigger when the given pipe close signal fires.
+    ///
+    /// This is useful for detecting when a pager process exits, allowing follow mode
+    /// to terminate immediately.
+    pub fn with_close_signal(mut self, signal: PipeCloseSignal) -> Self {
+        self.close_signal = Some(signal);
         self
-    }
-
-    /// Returns the trigger fd if set.
-    #[cfg(unix)]
-    pub fn trigger_fd(&self) -> Option<RawFd> {
-        self.trigger_fd
     }
 
     /// Signals cancellation. This is thread-safe and triggers immediate wakeup.
@@ -107,7 +97,7 @@ where
     log::debug!("fsmon::run: entering imp::run with {} watch paths", watch.len());
 
     #[cfg(unix)]
-    let trigger_fd = cancellation.and_then(|c| c.trigger_fd());
+    let trigger_fd = cancellation.and_then(|c| c.close_signal.as_ref().map(|s| s.fd));
     #[cfg(not(unix))]
     let trigger_fd: Option<()> = None;
 
