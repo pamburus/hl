@@ -8,6 +8,7 @@ use std::{
     time::Duration,
 };
 
+
 // third-party imports
 use chrono::Utc;
 use clap::{CommandFactory, Parser};
@@ -37,6 +38,7 @@ use hl::{
     timeparse::parse_time,
     timezone::Tz,
 };
+
 
 // private modules
 mod help;
@@ -327,6 +329,31 @@ fn run() -> Result<()> {
         .map(|input| input.hold().map_err(Error::Io))
         .collect::<Result<Vec<_>>>()?;
 
+    // Create output, keeping track of pager pipe fd for follow mode
+    #[cfg(unix)]
+    let (mut output, using_pager, pager_pipe_fd): (OutputStream, bool, Option<std::os::unix::io::RawFd>) = match opt.output {
+        Some(output) => (Box::new(std::fs::File::create(PathBuf::from(&output))?), false, None),
+        None => {
+            if paging {
+                let selection = selector.select(role);
+                match Pager::from_selection(selection) {
+                    Ok(Some(pager)) => {
+                        let pipe_fd = pager.pipe_handle().map(|h| h.as_raw_fd());
+                        (Box::new(pager), true, pipe_fd)
+                    }
+                    Ok(None) => (Box::new(stdout()), false, None),
+                    Err(e) => {
+                        log::debug!("failed to spawn pager: {}", e);
+                        (Box::new(stdout()), false, None)
+                    }
+                }
+            } else {
+                (Box::new(stdout()), false, None)
+            }
+        }
+    };
+
+    #[cfg(not(unix))]
     let (mut output, using_pager): (OutputStream, bool) = match opt.output {
         Some(output) => (Box::new(std::fs::File::create(PathBuf::from(&output))?), false),
         None => pager()
@@ -388,6 +415,18 @@ fn run() -> Result<()> {
     log::debug!("run the app");
 
     // Run the app.
+    #[cfg(unix)]
+    let run = || {
+        // Pass the pager pipe fd for follow mode to enable immediate exit when pager closes
+        let output_fd = if opt.follow { pager_pipe_fd } else { None };
+        match app.run_with_output_fd(inputs, output.as_mut(), output_fd) {
+            Ok(()) => Ok(()),
+            Err(Error::Io(ref e)) if e.kind() == std::io::ErrorKind::BrokenPipe => Ok(()),
+            Err(err) => Err(err),
+        }
+    };
+
+    #[cfg(not(unix))]
     let run = || match app.run(inputs, output.as_mut()) {
         Ok(()) => Ok(()),
         Err(Error::Io(ref e)) if e.kind() == std::io::ErrorKind::BrokenPipe => Ok(()),

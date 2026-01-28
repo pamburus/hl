@@ -82,6 +82,7 @@ itoa = { version = "1", default-features = false }
 json.workspace = true
 known-folders = "1"
 liblzma = { version = "*", features = ["static"] }
+libc = "0.2"
 log = "0.4"
 logos = "0.16"
 memchr.workspace = true
