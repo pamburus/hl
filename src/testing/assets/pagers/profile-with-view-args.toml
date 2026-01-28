@@ -1,0 +1,6 @@
+# Profile with view-specific arguments
+# Used for testing role-specific argument configuration
+
+[pagers.fzf]
+command = ["fzf", "--ansi"]
+view.args = ["--layout=reverse-list"]

@@ -1,0 +1,4 @@
+# Empty priority list pager configuration
+# Falls back to stdout when no profiles are specified
+
+pager = []

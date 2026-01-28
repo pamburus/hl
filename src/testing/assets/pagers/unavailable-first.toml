@@ -1,0 +1,11 @@
+# Test config: first pager is unavailable, should fall back to second
+# Used for testing priority-based fallback selection
+
+pager = ["nonexistent-pager-xyz", "less"]
+
+[pagers.nonexistent-pager-xyz]
+command = ["nonexistent-pager-xyz", "--some-arg"]
+
+[pagers.less]
+command = ["less", "-R"]
+env = { LESSCHARSET = "UTF-8" }
