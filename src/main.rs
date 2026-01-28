@@ -28,6 +28,7 @@ use hl::{
     error::*,
     input::InputReference,
     output::{OutputStream, Pager},
+    pager::{PagerRole, PagerSelector},
     query::Query,
     settings::{AsciiModeOpt, InputInfo, Settings},
     signal::SignalHandler,
@@ -119,13 +120,19 @@ fn run() -> Result<()> {
         cli::PagingOption::Always => true,
         cli::PagingOption::Never => false,
     };
-    let paging = if opt.paging_never || opt.follow { false } else { paging };
+    let paging = !opt.paging_never && paging;
+    let role = if opt.follow { PagerRole::Follow } else { PagerRole::View };
+    let selector = PagerSelector::new(settings.pager.as_ref(), &settings.pagers);
     let pager = || -> Option<OutputStream> {
         if paging {
-            if let Ok(pager) = Pager::new() {
-                Some(Box::new(pager))
-            } else {
-                None
+            let selection = selector.select(role);
+            match Pager::from_selection(selection) {
+                Ok(Some(pager)) => Some(Box::new(pager)),
+                Ok(None) => None,
+                Err(e) => {
+                    log::debug!("failed to spawn pager: {}", e);
+                    None
+                }
             }
         } else {
             None
