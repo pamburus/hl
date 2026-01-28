@@ -221,7 +221,7 @@ mod imp {
                     }
                     Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
                         return Err(Error::RecvTimeoutError {
-                            source: std::sync::mpsc::RecvTimeoutError::Disconnected.into(),
+                            source: std::sync::mpsc::RecvTimeoutError::Disconnected,
                         });
                     }
                 }
