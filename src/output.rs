@@ -37,11 +37,6 @@ impl PipeCloseSignal {
     pub(crate) fn from_fd(fd: std::os::unix::io::RawFd) -> Self {
         Self { fd }
     }
-
-    #[cfg(not(unix))]
-    pub(crate) fn new() -> Self {
-        Self { _private: () }
-    }
 }
 
 impl Pager {
