@@ -1,7 +1,5 @@
-use std::env;
-use std::ffi::OsString;
-use std::io::Write;
-use std::path::PathBuf;
+use std::collections::HashMap;
+use std::io::{self, Write};
 use std::process::{Child, Command, ExitStatus, Stdio};
 
 #[cfg(unix)]
@@ -10,7 +8,7 @@ use std::{
     os::unix::process::ExitStatusExt,
 };
 
-use crate::error::*;
+use crate::pager::SelectedPager;
 
 pub type OutputStream = Box<dyn Write + Send + Sync>;
 
@@ -19,35 +17,38 @@ pub struct Pager {
 }
 
 impl Pager {
-    pub fn new() -> Result<Self> {
-        let mut pager = "less".to_owned();
-
-        if let Ok(p) = env::var("HL_PAGER") {
-            if !p.is_empty() {
-                pager = p;
+    /// Creates a new pager from a selection result.
+    ///
+    /// Returns `Ok(Some(Pager))` if a pager was selected and spawned successfully.
+    /// Returns `Ok(None)` if no pager was selected (`SelectedPager::None`).
+    /// Returns `Err` if spawning the pager process failed.
+    pub fn from_selection(selection: SelectedPager) -> io::Result<Option<Self>> {
+        match selection {
+            SelectedPager::None => Ok(None),
+            SelectedPager::Pager { command, env } => {
+                let pager = Self::spawn(command, env)?;
+                Ok(Some(pager))
             }
-        } else if let Ok(p) = env::var("PAGER") {
-            if !p.is_empty() {
-                pager = p;
+        }
+    }
+
+    /// Spawns a pager process with the given command and environment variables.
+    fn spawn(command: Vec<String>, env: HashMap<String, String>) -> io::Result<Self> {
+        let (executable, args) = match command.split_first() {
+            Some((exe, args)) => (exe, args),
+            None => {
+                return Err(io::Error::new(io::ErrorKind::InvalidInput, "empty pager command"));
             }
         };
 
-        let pager = shellwords::split(&pager).unwrap_or(vec![pager]);
-        let (pager, args) = match pager.split_first() {
-            Some((pager, args)) => (pager, args),
-            None => (&pager[0], &pager[0..0]),
-        };
-        let pager = PathBuf::from(pager);
-        let mut command = Command::new(&pager);
-        for arg in args {
-            command.arg(arg);
-        }
-        if pager.file_stem() == Some(&OsString::from("less")) {
-            command.arg("-R");
-            command.env("LESSCHARSET", "UTF-8");
+        let mut cmd = Command::new(executable);
+        cmd.args(args);
+
+        for (key, value) in &env {
+            cmd.env(key, value);
         }
 
-        let process = command.stdin(Stdio::piped()).spawn()?;
+        let process = cmd.stdin(Stdio::piped()).spawn()?;
 
         Ok(Self { process })
     }
