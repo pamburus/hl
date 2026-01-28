@@ -127,10 +127,20 @@ impl<'a, E: EnvProvider, C: ExeChecker> PagerSelector<'a, E, C> {
 
     /// Selects a pager for the given role.
     pub fn select(&self, role: PagerRole) -> SelectedPager {
-        match role {
+        log::debug!("selecting pager for {role:?} mode");
+        let result = match role {
             PagerRole::View => self.select_for_view(),
             PagerRole::Follow => self.select_for_follow(),
+        };
+        match &result {
+            SelectedPager::Pager { command, .. } => {
+                log::debug!("selected pager: {command:?}");
+            }
+            SelectedPager::None => {
+                log::debug!("no pager selected, using stdout");
+            }
         }
+        result
     }
 
     /// Selects a pager for view mode.
@@ -145,6 +155,7 @@ impl<'a, E: EnvProvider, C: ExeChecker> PagerSelector<'a, E, C> {
         if let Some(pager) = self.resolve_env_var(HL_PAGER) {
             match pager {
                 PagerOverride::Disabled => {
+                    log::debug!("{HL_PAGER} is empty, pager disabled");
                     return SelectedPager::None;
                 }
                 PagerOverride::Value(cmd) => {
@@ -168,6 +179,7 @@ impl<'a, E: EnvProvider, C: ExeChecker> PagerSelector<'a, E, C> {
         if let Some(pager) = self.resolve_env_var(PAGER) {
             match pager {
                 PagerOverride::Disabled => {
+                    log::debug!("{PAGER} is empty, pager disabled");
                     return SelectedPager::None;
                 }
                 PagerOverride::Value(cmd) => {
@@ -194,6 +206,7 @@ impl<'a, E: EnvProvider, C: ExeChecker> PagerSelector<'a, E, C> {
         if let Some(pager) = self.resolve_env_var(HL_FOLLOW_PAGER) {
             match pager {
                 PagerOverride::Disabled => {
+                    log::debug!("{HL_FOLLOW_PAGER} is empty, pager disabled");
                     return SelectedPager::None;
                 }
                 PagerOverride::Value(cmd) => {
@@ -210,6 +223,7 @@ impl<'a, E: EnvProvider, C: ExeChecker> PagerSelector<'a, E, C> {
                 PagerOverride::Disabled => {
                     // HL_PAGER="" disables pager, but HL_FOLLOW_PAGER can override
                     // (already checked above), so return None here
+                    log::debug!("{HL_PAGER} is empty, pager disabled");
                     return SelectedPager::None;
                 }
                 PagerOverride::Value(cmd) => {
@@ -290,6 +304,7 @@ impl<'a, E: EnvProvider, C: ExeChecker> PagerSelector<'a, E, C> {
             return None;
         }
 
+        log::debug!("using profile {name:?}");
         let command = profile.build_command(role).into_iter().map(String::from).collect();
         let env = profile.env.clone();
 
@@ -304,6 +319,8 @@ impl<'a, E: EnvProvider, C: ExeChecker> PagerSelector<'a, E, C> {
             log::debug!("{source}: {executable:?} not found in PATH");
             return None;
         }
+
+        log::debug!("{source}: using as command");
 
         // Apply special handling for `less`
         let (command, env) = apply_less_defaults(command);
