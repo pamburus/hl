@@ -111,20 +111,11 @@ where
     }, cancellation.map(|c| &c.inner), trigger_fd)
 }
 
-#[cfg(not(target_os = "macos"))]
-mod imp {
+// Platform-specific cancellation implementations
+#[cfg(unix)]
+mod cancellation {
     use std::io::{self, Read, Write};
-    use std::os::unix::io::RawFd;
     use std::os::unix::net::UnixStream;
-    use std::sync::mpsc::{self};
-    use std::time::Duration;
-
-    use notify::{Config, RecommendedWatcher, RecursiveMode, Watcher};
-
-    use super::*;
-    use crate::error::Error;
-
-    const FALLBACK_POLLING_INTERVAL: Duration = Duration::from_secs(1);
 
     pub struct Cancellation {
         reader: UnixStream,
@@ -144,17 +135,64 @@ mod imp {
             let _ = (&self.writer).write(&[0u8]);
         }
 
-        fn is_cancelled(&self) -> bool {
+        pub fn is_cancelled(&self) -> bool {
             let mut buf = [0u8; 1];
             matches!((&self.reader).read(&mut buf), Ok(1..))
         }
     }
+}
 
-    pub fn run<H>(paths: Vec<PathBuf>, mut handle: H, cancellation: Option<&Cancellation>, _trigger_fd: Option<RawFd>) -> Result<()>
+#[cfg(windows)]
+mod cancellation {
+    use std::io;
+    use std::sync::atomic::{AtomicBool, Ordering};
+
+    pub struct Cancellation {
+        cancelled: AtomicBool,
+    }
+
+    impl Cancellation {
+        pub fn new() -> io::Result<Self> {
+            Ok(Self {
+                cancelled: AtomicBool::new(false),
+            })
+        }
+
+        pub fn cancel(&self) {
+            self.cancelled.store(true, Ordering::SeqCst);
+        }
+
+        pub fn is_cancelled(&self) -> bool {
+            self.cancelled.load(Ordering::SeqCst)
+        }
+    }
+}
+
+// Non-macOS implementation using notify's RecommendedWatcher
+#[cfg(not(target_os = "macos"))]
+mod imp {
+    use std::sync::mpsc::{self};
+    use std::time::Duration;
+
+    use notify::{Config, RecommendedWatcher, RecursiveMode, Watcher};
+
+    use super::*;
+    use crate::error::Error;
+
+    pub use super::cancellation::Cancellation;
+
+    const FALLBACK_POLLING_INTERVAL: Duration = Duration::from_secs(1);
+
+    #[cfg(unix)]
+    type TriggerFd = std::os::unix::io::RawFd;
+    #[cfg(not(unix))]
+    type TriggerFd = ();
+
+    pub fn run<H>(paths: Vec<PathBuf>, mut handle: H, cancellation: Option<&Cancellation>, _trigger_fd: Option<TriggerFd>) -> Result<()>
     where
         H: FnMut(Event) -> Result<()>,
     {
-        // TODO: Use poll() to properly monitor trigger_fd on non-macOS platforms
+        // TODO: Use poll() to properly monitor trigger_fd on non-macOS Unix platforms
         // For now, we rely on the cancellation mechanism
 
         let (tx, rx) = mpsc::channel();
@@ -223,6 +261,7 @@ mod imp {
         }
     }
 
+    // macOS needs its own Cancellation with as_raw_fd() for kqueue integration
     pub struct Cancellation {
         reader: UnixStream,
         writer: UnixStream,
