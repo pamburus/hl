@@ -570,6 +570,7 @@ impl App {
             for (i, input_ref) in inputs.into_iter().enumerate() {
                 let delimiter = &self.options.delimiter;
                 let reader = scope.spawn(closure!(clone sfi, clone txi, |_| -> Result<()> {
+                    log::debug!("reader {}: started", i);
                     let scanner = Scanner::new(sfi.clone(), delimiter.clone());
                     let mut meta = None;
                     if let InputReference::File(path) = &input_ref {
@@ -577,10 +578,13 @@ impl App {
                     }
                     let mut input = Some(input_ref.open()?.tail(self.options.tail, delimiter.clone())?);
                     let is_file = |meta: &Option<fs::Metadata>| meta.as_ref().map(|m|m.is_file()).unwrap_or(false);
-                    let process = |input: &mut Option<Input>, is_file: bool| {
+                    let mut send_failed = false;
+                    let process = |input: &mut Option<Input>, is_file: bool, send_failed: &mut bool| {
                         if let Some(input) = input {
                             for (j, item) in scanner.items(&mut input.stream.as_sequential()).with_max_segment_size(self.options.max_message_size.into()).enumerate() {
                                 if txi.send((i, j, item?)).is_err() {
+                                    log::debug!("reader {}: send failed, channel disconnected", i);
+                                    *send_failed = true;
                                     break;
                                 }
                             }
@@ -590,10 +594,17 @@ impl App {
                         }
                     };
                     if let InputReference::File(path) = &input_ref {
-                        if process(&mut input, is_file(&meta))? {
+                        if process(&mut input, is_file(&meta), &mut send_failed)? {
+                            log::debug!("reader {}: exiting after initial process (not a file)", i);
                             return Ok(())
                         }
+                        if send_failed {
+                            log::debug!("reader {}: exiting before fsmon due to send failure", i);
+                            return Ok(())
+                        }
+                        log::debug!("reader {}: entering fsmon::run", i);
                         fsmon::run(vec![path.canonical.clone()], |event| {
+                            log::debug!("reader {}: fsmon event: {:?}", i, event.kind);
                             match event.kind {
                                 EventKind::Modify(_) | EventKind::Create(_) | EventKind::Any | EventKind::Other => {
                                     if let (Some(old_meta), Ok(new_meta)) = (&meta, fs::metadata(&path.canonical)) {
@@ -609,12 +620,17 @@ impl App {
                                     if input.is_none() {
                                         input = input_ref.open().ok();
                                     }
-                                    if process(&mut input, is_file(&meta))? {
+                                    if process(&mut input, is_file(&meta), &mut send_failed)? {
+                                        log::debug!("reader {}: exiting fsmon (not a file)", i);
                                         return Ok(())
+                                    }
+                                    if send_failed {
+                                        log::debug!("reader {}: send failed inside fsmon, but cannot exit fsmon::run", i);
                                     }
                                     Ok(())
                                 }
                                 EventKind::Remove(_) => {
+                                    log::debug!("reader {}: file removed", i);
                                     input = None;
                                     Ok(())
                                 },
@@ -622,7 +638,7 @@ impl App {
                             }
                         })
                     } else {
-                        process(&mut input, is_file(&meta)).map(|_|())
+                        process(&mut input, is_file(&meta), &mut send_failed).map(|_|())
                     }
                 }));
                 readers.push(reader);
@@ -642,6 +658,7 @@ impl App {
 
             // spawn merger thread
             let merger = scope.spawn(closure!(ref badges, |_| -> Result<()> {
+                log::debug!("merger: started");
                 type Key = (Timestamp, usize, usize, usize); // (ts, input, block, offset)
                 type Line = (Rc<Vec<u8>>, Range<usize>, Instant); // (buf, location, instant)
 
@@ -665,9 +682,18 @@ impl App {
                             };
                             prev_ts = Some(entry.0.0);
                             mem_usage -= entry.1.1.end - entry.1.1.start;
-                            output.write_all(sync_indicator.as_bytes())?;
-                            output.write_all(&entry.1.0[entry.1.1.clone()][badges.si.width..])?;
-                            output.write_all(self.options.output_delimiter.as_bytes())?;
+                            if let Err(e) = output.write_all(sync_indicator.as_bytes()) {
+                                log::debug!("merger: write error (sync_indicator): {} (kind: {:?})", e, e.kind());
+                                return Err(e.into());
+                            }
+                            if let Err(e) = output.write_all(&entry.1.0[entry.1.1.clone()][badges.si.width..]) {
+                                log::debug!("merger: write error (line content): {} (kind: {:?})", e, e.kind());
+                                return Err(e.into());
+                            }
+                            if let Err(e) = output.write_all(self.options.output_delimiter.as_bytes()) {
+                                log::debug!("merger: write error (delimiter): {} (kind: {:?})", e, e.kind());
+                                return Err(e.into());
+                            }
                         }
                     }
 
@@ -690,25 +716,36 @@ impl App {
                         }
                         Err(RecvTimeoutError::Timeout) => {}
                         Err(RecvTimeoutError::Disconnected) => {
+                            log::debug!("merger: channel disconnected, timeout.is_none()={}", timeout.is_none());
                             if timeout.is_none() {
+                                log::debug!("merger: exiting loop due to disconnection");
                                 break
                             }
                         }
                     }
                 }
 
+                log::debug!("merger: finished normally");
                 Ok(())
             }));
 
-            for reader in readers {
+            log::debug!("follow: waiting for readers to finish");
+            for (idx, reader) in readers.into_iter().enumerate() {
+                log::debug!("follow: waiting for reader {}", idx);
                 reader.join().unwrap()?;
+                log::debug!("follow: reader {} finished", idx);
             }
 
-            for worker in workers {
+            log::debug!("follow: waiting for workers to finish");
+            for (idx, worker) in workers.into_iter().enumerate() {
+                log::debug!("follow: waiting for worker {}", idx);
                 worker.join().unwrap();
+                log::debug!("follow: worker {} finished", idx);
             }
 
+            log::debug!("follow: waiting for merger to finish");
             merger.join().unwrap()?;
+            log::debug!("follow: merger finished");
 
             Ok(())
         })
@@ -726,6 +763,7 @@ impl App {
         rxi: Receiver<(usize, usize, Segment)>,
         txo: Sender<(usize, Vec<u8>, TimestampIndex)>,
     ) {
+        log::debug!("worker: started");
         let mut processor = self.new_segment_processor(parser);
         for (i, j, segment) in rxi.iter() {
             let prefix = badges
@@ -742,12 +780,14 @@ impl App {
                     processor.process(segment.data(), &mut buf, prefix, None, &mut index_builder);
                     sfi.recycle(segment);
                     if txo.send((i, buf, index_builder.result)).is_err() {
+                        log::debug!("worker: txo.send failed, channel disconnected, returning");
                         return;
                     };
                 }
                 Segment::Incomplete(_, _) => {}
             }
         }
+        log::debug!("worker: rxi channel closed, exiting");
     }
 
     fn parser(&self) -> Parser {
