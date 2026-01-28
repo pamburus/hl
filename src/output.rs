@@ -72,18 +72,31 @@ impl Pager {
 
 impl Drop for Pager {
     fn drop(&mut self) {
+        log::debug!("pager: drop called, waiting for process to exit");
         if let Ok(status) = self.process.wait() {
+            log::debug!("pager: process exited with status: {:?}", status);
             Self::recover(status);
+        } else {
+            log::debug!("pager: wait() failed");
         }
+        log::debug!("pager: drop finished");
     }
 }
 
 impl Write for Pager {
     fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-        self.process.stdin.as_mut().unwrap().write(buf)
+        let result = self.process.stdin.as_mut().unwrap().write(buf);
+        if let Err(ref e) = result {
+            log::debug!("pager write error: {} (kind: {:?})", e, e.kind());
+        }
+        result
     }
 
     fn flush(&mut self) -> std::io::Result<()> {
-        self.process.stdin.as_mut().unwrap().flush()
+        let result = self.process.stdin.as_mut().unwrap().flush();
+        if let Err(ref e) = result {
+            log::debug!("pager flush error: {} (kind: {:?})", e, e.kind());
+        }
+        result
     }
 }

@@ -15,7 +15,9 @@ pub fn run<H>(mut paths: Vec<PathBuf>, mut handle: H) -> Result<()>
 where
     H: FnMut(Event) -> Result<()>,
 {
+    log::debug!("fsmon::run: starting with {} paths", paths.len());
     if paths.is_empty() {
+        log::debug!("fsmon::run: no paths, returning early");
         return Ok(());
     }
 
@@ -45,7 +47,9 @@ where
     watch.sort_unstable();
     watch.dedup();
 
+    log::debug!("fsmon::run: entering imp::run with {} watch paths", watch.len());
     imp::run(watch, |event| {
+        log::debug!("fsmon::run: received event: {:?}", event.kind);
         if event.paths.iter().any(|path| paths.binary_search(path).is_ok()) {
             handle(event)
         } else {
@@ -100,6 +104,7 @@ mod imp {
     where
         H: FnMut(Event) -> Result<()>,
     {
+        log::debug!("fsmon::imp::run (macos): starting with {} paths", paths.len());
         let mut watcher = Watcher::new()?;
         let mut added = HashSet::<&PathBuf>::new();
         let mut synced = true;
@@ -111,31 +116,37 @@ mod imp {
             | FilterFlag::NOTE_EXTEND;
 
         loop {
+            log::debug!("fsmon::imp::run (macos): outer loop iteration, synced={}", synced);
             for path in &paths {
                 if watcher.add_filename(path, EventFilter::EVFILT_VNODE, flags).is_ok() {
                     added.insert(path);
                     if !synced {
+                        log::debug!("fsmon::imp::run (macos): calling handle for path {:?}", path);
                         handle(Event::new(EventKind::Create(CreateKind::Any)).add_path(path.clone()))?;
                     }
                 }
             }
 
             synced = true;
+            log::debug!("fsmon::imp::run (macos): calling watcher.watch()");
             watcher.watch()?;
 
             while synced {
                 let event = if let Some(event) = watcher.poll(Some(Duration::from_secs(1))) {
                     event
                 } else {
+                    log::trace!("fsmon::imp::run (macos): poll timeout, continuing");
                     continue;
                 };
 
+                log::debug!("fsmon::imp::run (macos): received kqueue event");
                 match event {
                     kqueue::Event {
                         data: EventData::Vnode(data),
                         ident: Ident::Filename(_, path),
                     } => {
                         let path = PathBuf::from(path);
+                        log::debug!("fsmon::imp::run (macos): vnode event {:?} for {:?}", data, path);
                         let event = match data {
                             Vnode::Delete | Vnode::Revoke => {
                                 if added.contains(&path) {
@@ -168,6 +179,7 @@ mod imp {
                             #[allow(unreachable_patterns)]
                             _ => Event::new(EventKind::Other),
                         };
+                        log::debug!("fsmon::imp::run (macos): calling handle for event");
                         handle(event)?;
                     }
                     _ => unreachable!(),
