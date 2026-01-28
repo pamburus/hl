@@ -1,0 +1,8 @@
+# Test config: profile with follow mode explicitly enabled
+pager = "fzf"
+
+[pagers.fzf]
+command = ["fzf", "--ansi"]
+view.args = ["--layout=reverse-list"]
+follow.enabled = true
+follow.args = ["--tac", "--track"]
