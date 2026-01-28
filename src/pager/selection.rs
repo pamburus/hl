@@ -12,11 +12,11 @@ use super::config::{PagerConfig, PagerProfile, PagerRole};
 
 // ---
 
-/// Represents a resolved pager specification from environment variables.
+/// Represents a pager override from an environment variable.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum PagerSpec {
-    /// A command (parsed from env var).
-    Command(Vec<String>),
+pub enum PagerOverride {
+    /// A value that could be a profile name or command (parsed from env var).
+    Value(Vec<String>),
     /// Explicitly disabled (empty string in env var).
     Disabled,
 }
@@ -131,10 +131,10 @@ impl<'a, E: EnvProvider, C: ExeChecker> PagerSelector<'a, E, C> {
     /// 4. Fall back to stdout
     fn select_for_view(&self) -> SelectedPager {
         // 1. Check HL_PAGER env var
-        if let Some(spec) = self.resolve_env_var("HL_PAGER") {
-            match spec {
-                PagerSpec::Disabled => return SelectedPager::None,
-                PagerSpec::Command(cmd) => {
+        if let Some(pager) = self.resolve_env_var("HL_PAGER") {
+            match pager {
+                PagerOverride::Disabled => return SelectedPager::None,
+                PagerOverride::Value(cmd) => {
                     if let Some(selected) = self.try_spec_as_profile_or_command(&cmd, PagerRole::View) {
                         return selected;
                     }
@@ -153,10 +153,10 @@ impl<'a, E: EnvProvider, C: ExeChecker> PagerSelector<'a, E, C> {
         }
 
         // 3. Check PAGER env var (backward compatibility)
-        if let Some(spec) = self.resolve_env_var("PAGER") {
-            match spec {
-                PagerSpec::Disabled => return SelectedPager::None,
-                PagerSpec::Command(cmd) => {
+        if let Some(pager) = self.resolve_env_var("PAGER") {
+            match pager {
+                PagerOverride::Disabled => return SelectedPager::None,
+                PagerOverride::Value(cmd) => {
                     if let Some(selected) = self.try_spec_as_profile_or_command(&cmd, PagerRole::View) {
                         return selected;
                     }
@@ -177,10 +177,10 @@ impl<'a, E: EnvProvider, C: ExeChecker> PagerSelector<'a, E, C> {
     /// 4. Fall back to stdout
     fn select_for_follow(&self) -> SelectedPager {
         // 1. Check HL_FOLLOW_PAGER env var (takes precedence)
-        if let Some(spec) = self.resolve_env_var("HL_FOLLOW_PAGER") {
-            match spec {
-                PagerSpec::Disabled => return SelectedPager::None,
-                PagerSpec::Command(cmd) => {
+        if let Some(pager) = self.resolve_env_var("HL_FOLLOW_PAGER") {
+            match pager {
+                PagerOverride::Disabled => return SelectedPager::None,
+                PagerOverride::Value(cmd) => {
                     if let Some(selected) = self.try_spec_as_profile_or_command(&cmd, PagerRole::Follow) {
                         return selected;
                     }
@@ -189,14 +189,14 @@ impl<'a, E: EnvProvider, C: ExeChecker> PagerSelector<'a, E, C> {
         }
 
         // 2. Check HL_PAGER env var
-        if let Some(spec) = self.resolve_env_var("HL_PAGER") {
-            match spec {
-                PagerSpec::Disabled => {
+        if let Some(pager) = self.resolve_env_var("HL_PAGER") {
+            match pager {
+                PagerOverride::Disabled => {
                     // HL_PAGER="" disables pager, but HL_FOLLOW_PAGER can override
                     // (already checked above), so return None here
                     return SelectedPager::None;
                 }
-                PagerSpec::Command(cmd) => {
+                PagerOverride::Value(cmd) => {
                     if let Some(selected) = self.try_spec_as_profile_or_command(&cmd, PagerRole::Follow) {
                         return selected;
                     }
@@ -221,21 +221,21 @@ impl<'a, E: EnvProvider, C: ExeChecker> PagerSelector<'a, E, C> {
         SelectedPager::None
     }
 
-    /// Resolves an environment variable to a `PagerSpec`.
+    /// Resolves an environment variable to a `PagerOverride`.
     ///
-    /// - Empty string → `PagerSpec::Disabled`
-    /// - Otherwise → `PagerSpec::Command` (parsed with shellwords)
-    fn resolve_env_var(&self, name: &str) -> Option<PagerSpec> {
+    /// - Empty string → `PagerOverride::Disabled`
+    /// - Otherwise → `PagerOverride::Value` (parsed with shellwords)
+    fn resolve_env_var(&self, name: &str) -> Option<PagerOverride> {
         let value = self.env_provider.get(name)?;
 
         if value.is_empty() {
-            return Some(PagerSpec::Disabled);
+            return Some(PagerOverride::Disabled);
         }
 
         // Parse as a command string
         match shellwords::split(&value) {
-            Ok(parts) if !parts.is_empty() => Some(PagerSpec::Command(parts)),
-            _ => Some(PagerSpec::Command(vec![value])),
+            Ok(parts) if !parts.is_empty() => Some(PagerOverride::Value(parts)),
+            _ => Some(PagerOverride::Value(vec![value])),
         }
     }
 
