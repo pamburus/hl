@@ -2,6 +2,7 @@
 
 **Feature Branch**: `008-pager-config`
 **Date**: 2025-01-15
+**Updated**: 2025-01-27
 
 ## Overview
 
@@ -16,7 +17,7 @@ Represents the top-level `pager` configuration option.
 **Location**: `src/pager/config.rs`
 
 ```rust
-#[derive(Debug, Clone, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
 #[serde(untagged)]
 pub enum PagerConfig {
     /// Single profile name: `pager = "fzf"`
@@ -27,15 +28,8 @@ pub enum PagerConfig {
 
 impl PagerConfig {
     /// Returns profile names in priority order
-    pub fn profiles(&self) -> impl Iterator<Item = &str> {
-        match self {
-            PagerConfig::Single(name) => std::iter::once(name.as_str()).chain(std::iter::empty()),
-            PagerConfig::Priority(names) => names.iter().map(|s| s.as_str()),
-        }
-    }
+    pub fn profiles(&self) -> impl Iterator<Item = &str> { ... }
 }
-
-// Note: No Default impl - defaults come from etc/defaults/config.toml (embedded at compile time)
 ```
 
 **Validation Rules**:
@@ -52,8 +46,7 @@ Represents a named pager profile in the `[pagers.<name>]` section.
 **Location**: `src/pager/config.rs`
 
 ```rust
-// Note: No Default derive - defaults come from etc/defaults/config.toml (embedded at compile time)
-#[derive(Debug, Clone, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
 pub struct PagerProfile {
     /// Base command and arguments: `command = ["fzf", "--ansi"]`
     #[serde(default)]
@@ -74,25 +67,13 @@ pub struct PagerProfile {
 
 impl PagerProfile {
     /// Returns true if this profile has a valid command
-    pub fn is_valid(&self) -> bool {
-        !self.command.is_empty()
-    }
+    pub fn is_valid(&self) -> bool { ... }
     
     /// Returns the executable name (first element of command)
-    pub fn executable(&self) -> Option<&str> {
-        self.command.first().map(|s| s.as_str())
-    }
+    pub fn executable(&self) -> Option<&str> { ... }
     
     /// Builds the full command for a given role
-    pub fn build_command(&self, role: PagerRole) -> Vec<&str> {
-        let mut cmd: Vec<&str> = self.command.iter().map(|s| s.as_str()).collect();
-        let args = match role {
-            PagerRole::View => &self.view.args,
-            PagerRole::Follow => &self.follow.args,
-        };
-        cmd.extend(args.iter().map(|s| s.as_str()));
-        cmd
-    }
+    pub fn build_command(&self, role: PagerRole) -> Vec<&str> { ... }
 }
 ```
 
@@ -111,8 +92,7 @@ Represents role-specific configuration (`view` or `follow`).
 **Location**: `src/pager/config.rs`
 
 ```rust
-// Note: No Default derive - defaults come from etc/defaults/config.toml (embedded at compile time)
-#[derive(Debug, Clone, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Default, Deserialize, PartialEq, Eq)]
 pub struct PagerRoleConfig {
     /// Whether pager is enabled for this role (only meaningful for follow)
     #[serde(default)]
@@ -124,15 +104,10 @@ pub struct PagerRoleConfig {
 }
 
 impl PagerRoleConfig {
-    /// Returns true if this role is enabled
-    /// For view: always true (implicit)
-    /// For follow: only if explicitly enabled
-    pub fn is_enabled(&self, role: PagerRole) -> bool {
-        match role {
-            PagerRole::View => true,
-            PagerRole::Follow => self.enabled.unwrap_or(false),
-        }
-    }
+    /// Returns true if pager is enabled for the given role.
+    /// For view: always returns true (implicit).
+    /// For follow: only returns true if explicitly enabled.
+    pub fn is_enabled(&self, role: PagerRole) -> bool { ... }
 }
 ```
 
@@ -160,23 +135,26 @@ pub enum PagerRole {
 
 ---
 
-### 5. PagerSpec
+### 5. PagerOverride
 
-Represents a resolved pager specification from environment variables.
+Represents a pager override parsed from an environment variable.
 
 **Location**: `src/pager/selection.rs`
 
 ```rust
-#[derive(Debug, Clone, PartialEq)]
-pub enum PagerSpec {
-    /// References a named profile
-    Profile(String),
-    /// Direct command (parsed from env var)
-    Command(Vec<String>),
-    /// Explicitly disabled (empty string in env var)
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PagerOverride {
+    /// A value that could be a profile name or command (parsed from env var).
+    Value(Vec<String>),
+    /// Explicitly disabled (empty string in env var).
     Disabled,
 }
 ```
+
+**Resolution Logic**:
+- When `Value` contains a single element matching a profile name in config, use that profile
+- Otherwise, treat the entire `Value` as a direct command
+- This allows `HL_PAGER=less` to use a `[pagers.less]` profile if defined, or run `less` directly
 
 ---
 
@@ -187,7 +165,7 @@ Represents the final pager selection result.
 **Location**: `src/pager/selection.rs`
 
 ```rust
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SelectedPager {
     /// Use a pager with the given command, args, and env
     Pager {
@@ -197,6 +175,62 @@ pub enum SelectedPager {
     /// No pager, output to stdout
     None,
 }
+```
+
+---
+
+### 7. PagerSelector
+
+Main selection logic with dependency injection for testing.
+
+**Location**: `src/pager/selection.rs`
+
+```rust
+pub struct PagerSelector<'a, E = SystemEnv, C = SystemExeChecker> {
+    config: Option<&'a PagerConfig>,
+    profiles: &'a HashMap<String, PagerProfile>,
+    env_provider: E,
+    exe_checker: C,
+}
+
+impl<'a> PagerSelector<'a, SystemEnv, SystemExeChecker> {
+    /// Creates a new pager selector with the given configuration.
+    pub fn new(config: Option<&'a PagerConfig>, profiles: &'a HashMap<String, PagerProfile>) -> Self { ... }
+}
+
+impl<'a, E: EnvProvider, C: ExeChecker> PagerSelector<'a, E, C> {
+    /// Creates a new pager selector with custom environment and executable checker.
+    pub fn with_providers(...) -> Self { ... }
+    
+    /// Selects a pager for the given role.
+    pub fn select(&self, role: PagerRole) -> SelectedPager { ... }
+}
+```
+
+---
+
+### 8. Dependency Injection Traits
+
+Traits for testability without mocking the real environment.
+
+**Location**: `src/pager/selection.rs`
+
+```rust
+/// Trait for providing environment variable access.
+pub trait EnvProvider {
+    fn get(&self, name: &str) -> Option<String>;
+}
+
+/// Default implementation using std::env.
+pub struct SystemEnv;
+
+/// Trait for checking executable availability.
+pub trait ExeChecker {
+    fn is_available(&self, executable: &str) -> bool;
+}
+
+/// Default implementation using the `which` crate.
+pub struct SystemExeChecker;
 ```
 
 ---
@@ -223,6 +257,13 @@ Settings
                             └── follow: PagerRoleConfig
                                         ├── enabled: Option<bool>
                                         └── args: Vec<String>
+
+PagerSelector<E, C>
+    │
+    ├── config: &PagerConfig
+    ├── profiles: &HashMap<String, PagerProfile>
+    ├── env_provider: E (implements EnvProvider)
+    └── exe_checker: C (implements ExeChecker)
 ```
 
 ## State Transitions
@@ -240,7 +281,7 @@ Settings
 │ Check env vars  │
 │ (HL_PAGER, etc) │
 └────────┬────────┘
-         │ not set or profile
+         │ not set
          ▼
 ┌─────────────────┐
 │ Check config    │
@@ -279,6 +320,44 @@ Settings
 ┌─────────────────┐
 │SelectedPager::  │
 │ Pager { ... }   │
+└─────────────────┘
+```
+
+### Environment Variable Resolution
+
+```
+┌─────────────────┐
+│ Get env var     │
+│ value           │
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐
+│ Empty string?   │──Yes──► PagerOverride::Disabled
+└────────┬────────┘
+         │ No
+         ▼
+┌─────────────────┐
+│ Parse with      │
+│ shellwords      │
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐
+│ PagerOverride:: │
+│ Value(parts)    │
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐
+│ Single word &   │──Yes──► Use profile
+│ matches profile?│
+└────────┬────────┘
+         │ No
+         ▼
+┌─────────────────┐
+│ Treat as direct │
+│ command         │
 └─────────────────┘
 ```
 
@@ -330,29 +409,14 @@ pub struct Settings {
 
 Located in `src/testing/assets/pagers/`:
 
-### basic.toml
-```toml
-pager = "less"
-
-[pagers.less]
-command = ["less", "-R"]
-```
-
-### priority.toml
-```toml
-pager = ["nonexistent", "less"]
-
-[pagers.less]
-command = ["less", "-R"]
-```
-
-### follow-mode.toml
-```toml
-pager = "fzf"
-
-[pagers.fzf]
-command = ["fzf", "--ansi"]
-view.args = ["--layout=reverse-list"]
-follow.enabled = true
-follow.args = ["--tac"]
-```
+| File | Purpose |
+|------|---------|
+| `basic.toml` | Basic single profile configuration |
+| `single-profile.toml` | Single profile with env vars |
+| `priority-list.toml` | Multiple profiles in priority order |
+| `follow-enabled.toml` | Profile with follow mode enabled |
+| `minimal-profile.toml` | Minimal profile (tests defaults) |
+| `profile-with-env.toml` | Profile with environment variables |
+| `profile-with-view-args.toml` | Profile with view-specific args |
+| `empty-priority.toml` | Empty priority list (falls back to stdout) |
+| `unavailable-first.toml` | First pager unavailable (tests fallback) |
