@@ -101,6 +101,7 @@ As a user, I want to override the pager specifically for follow mode using the `
 2. **Given** `HL_FOLLOW_PAGER=less` set, **When** the user runs `hl logfile.log` (view mode), **Then** `HL_FOLLOW_PAGER` is ignored and the normal pager selection applies.
 3. **Given** `HL_FOLLOW_PAGER=fzf` set (matching a profile name), **When** the user runs `hl --follow logfile.log`, **Then** the `fzf` profile is used with `follow.args` (if defined) or base command.
 4. **Given** `HL_FOLLOW_PAGER=""` (empty string) set, **When** the user runs `hl --follow logfile.log`, **Then** pager is disabled for follow mode (output to stdout).
+5. **Given** a pager is being used in follow mode (e.g., `less` with `follow.enabled = true`), **When** the user closes the pager (e.g., presses 'q' in less), **Then** follow mode stops and the application exits gracefully.
 
 ---
 
@@ -130,6 +131,7 @@ As a user migrating from other tools, I want `hl` to respect the standard `PAGER
 - What happens when `HL_FOLLOW_PAGER` is set to an empty string? → Should be treated as "disable pager for follow mode" (output to stdout).
 - What happens when all configured pagers are unavailable? → Output goes to stdout without any error indication (log to debug).
 - What happens when `HL_FOLLOW_PAGER` is set but not in follow mode? → It is ignored; normal pager selection applies.
+- What happens when the pager is closed by the user in follow mode? → Follow mode should stop and the application should exit gracefully.
 
 ## Requirements *(mandatory)*
 
@@ -158,6 +160,11 @@ As a user migrating from other tools, I want `hl` to respect the standard `PAGER
 - **FR-012**: When in view mode (non-follow), system MUST use the pager with base `command` plus `view.args` (if defined), and set environment variables from `env` (if defined).
 - **FR-013**: When in follow mode and `follow.enabled = true` for the selected profile, system MUST use the pager with base `command` plus `follow.args` (if defined), and set environment variables from `env` (if defined).
 - **FR-014**: When in follow mode and `follow.enabled` is not set or is `false`, system MUST NOT use a pager and output directly to stdout, regardless of `--paging=always` CLI flag.
+
+#### Follow Mode Pager Behavior
+
+- **FR-014a**: When using a pager in follow mode and the pager process is closed (e.g., user presses 'q' in less, or the pager process terminates), system MUST stop follow mode and exit the application gracefully.
+- **FR-014b**: System MUST detect pager closure by monitoring the pager's stdin pipe (write failure indicates pager has closed).
 
 #### Environment Variable Handling
 
