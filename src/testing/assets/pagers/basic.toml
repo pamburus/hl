@@ -1,0 +1,5 @@
+# Basic pager configuration with a single profile
+pager = "less"
+
+[pagers.less]
+command = ["less", "-R"]
