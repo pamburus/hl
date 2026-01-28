@@ -1,0 +1,11 @@
+# Priority list pager configuration
+# Used for testing priority-based profile selection
+
+pager = ["fzf", "less"]
+
+[pagers.fzf]
+command = ["fzf", "--ansi", "--no-sort"]
+
+[pagers.less]
+command = ["less", "-R"]
+env = { LESSCHARSET = "UTF-8" }

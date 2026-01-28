@@ -1,0 +1,6 @@
+# Single profile pager configuration
+pager = "less"
+
+[pagers.less]
+command = ["less", "-R", "--mouse"]
+env = { LESSCHARSET = "UTF-8" }

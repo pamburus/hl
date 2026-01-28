@@ -13,6 +13,7 @@ pub mod input;
 pub mod iox;
 pub mod level;
 pub mod output;
+pub mod pager;
 pub mod query;
 pub mod settings;
 pub mod syntax;
