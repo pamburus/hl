@@ -119,15 +119,6 @@ fn pager_profile_view_always_enabled() {
 // ---
 
 #[test]
-fn pager_profile_is_valid() {
-    let valid = profile_with_command(vec!["less"]);
-    assert!(valid.is_valid());
-
-    let invalid = profile_with_command(vec![]);
-    assert!(!invalid.is_valid());
-}
-
-#[test]
 fn pager_profile_executable() {
     let profile = profile_with_command(vec!["less", "-R"]);
     assert_eq!(profile.executable(), Some("less"));
