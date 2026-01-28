@@ -1239,6 +1239,7 @@ dependencies = [
  "itoa",
  "known-folders",
  "kqueue",
+ "libc",
  "liblzma",
  "log",
  "logos",

@@ -17,6 +17,8 @@ use std::{
 // unix-only std imports
 #[cfg(unix)]
 use std::os::unix::fs::MetadataExt;
+#[cfg(unix)]
+use std::os::unix::io::RawFd;
 
 // third-party imports
 use closure::closure;
@@ -248,8 +250,27 @@ impl App {
     }
 
     pub fn run(&self, inputs: Vec<InputHolder>, output: &mut Output) -> Result<()> {
+        #[cfg(unix)]
+        return self.run_with_output_fd(inputs, output, None);
+
+        #[cfg(not(unix))]
+        {
+            if self.options.follow {
+                self.follow(inputs.into_iter().map(|x| x.reference).collect(), output, None)
+            } else if self.options.sort {
+                self.sort(inputs, output)
+            } else {
+                self.cat(inputs, output)
+            }
+        }
+    }
+
+    /// Run the application with an optional output file descriptor for monitoring.
+    /// When the output fd signals (e.g., pipe closed), follow mode will exit immediately.
+    #[cfg(unix)]
+    pub fn run_with_output_fd(&self, inputs: Vec<InputHolder>, output: &mut Output, output_fd: Option<RawFd>) -> Result<()> {
         if self.options.follow {
-            self.follow(inputs.into_iter().map(|x| x.reference).collect(), output)
+            self.follow(inputs.into_iter().map(|x| x.reference).collect(), output, output_fd)
         } else if self.options.sort {
             self.sort(inputs, output)
         } else {
@@ -551,7 +572,8 @@ impl App {
         FollowBadges { si, input: badges }
     }
 
-    fn follow(&self, inputs: Vec<InputReference>, output: &mut Output) -> Result<()> {
+    #[cfg(unix)]
+    fn follow(&self, inputs: Vec<InputReference>, output: &mut Output, output_fd: Option<RawFd>) -> Result<()> {
         let badges = self.prepare_follow_badges(inputs.iter());
 
         let m = inputs.len();
@@ -559,6 +581,18 @@ impl App {
         let parser = self.parser();
         let sfi = Arc::new(SegmentBufFactory::new(self.options.buffer_size.into()));
         let bfo = BufFactory::new(self.options.buffer_size.into());
+
+        // Create shared cancellation token for all readers
+        // If we have an output fd (e.g., pager stdin), monitor it for closure
+        let cancellation = {
+            let c = fsmon::Cancellation::new()?;
+            if let Some(fd) = output_fd {
+                log::debug!("follow: setting up output fd {} for monitoring", fd);
+                Arc::new(c.with_trigger_fd(fd))
+            } else {
+                Arc::new(c)
+            }
+        };
 
         thread::scope(|scope| -> Result<()> {
             // prepare receive/transmit channels for input data
@@ -569,7 +603,7 @@ impl App {
             let mut readers = Vec::with_capacity(m);
             for (i, input_ref) in inputs.into_iter().enumerate() {
                 let delimiter = &self.options.delimiter;
-                let reader = scope.spawn(closure!(clone sfi, clone txi, |_| -> Result<()> {
+                let reader = scope.spawn(closure!(clone sfi, clone txi, clone cancellation, |_| -> Result<()> {
                     log::debug!("reader {}: started", i);
                     let scanner = Scanner::new(sfi.clone(), delimiter.clone());
                     let mut meta = None;
@@ -602,8 +636,8 @@ impl App {
                             log::debug!("reader {}: exiting before fsmon due to send failure", i);
                             return Ok(())
                         }
-                        log::debug!("reader {}: entering fsmon::run", i);
-                        fsmon::run(vec![path.canonical.clone()], |event| {
+                        log::debug!("reader {}: entering fsmon::run with cancellation", i);
+                        fsmon::run_with_cancellation(vec![path.canonical.clone()], |event| {
                             log::debug!("reader {}: fsmon event: {:?}", i, event.kind);
                             match event.kind {
                                 EventKind::Modify(_) | EventKind::Create(_) | EventKind::Any | EventKind::Other => {
@@ -625,7 +659,8 @@ impl App {
                                         return Ok(())
                                     }
                                     if send_failed {
-                                        log::debug!("reader {}: send failed inside fsmon, but cannot exit fsmon::run", i);
+                                        log::debug!("reader {}: send failed inside fsmon, returning Ok to exit", i);
+                                        return Ok(())
                                     }
                                     Ok(())
                                 }
@@ -636,7 +671,7 @@ impl App {
                                 },
                                 EventKind::Access(_) => Ok(()),
                             }
-                        })
+                        }, Some(&cancellation))
                     } else {
                         process(&mut input, is_file(&meta), &mut send_failed).map(|_|())
                     }
@@ -657,7 +692,7 @@ impl App {
             drop(txo);
 
             // spawn merger thread
-            let merger = scope.spawn(closure!(ref badges, |_| -> Result<()> {
+            let merger = scope.spawn(closure!(ref badges, ref cancellation, |_| -> Result<()> {
                 log::debug!("merger: started");
                 type Key = (Timestamp, usize, usize, usize); // (ts, input, block, offset)
                 type Line = (Rc<Vec<u8>>, Range<usize>, Instant); // (buf, location, instant)
@@ -683,15 +718,18 @@ impl App {
                             prev_ts = Some(entry.0.0);
                             mem_usage -= entry.1.1.end - entry.1.1.start;
                             if let Err(e) = output.write_all(sync_indicator.as_bytes()) {
-                                log::debug!("merger: write error (sync_indicator): {} (kind: {:?})", e, e.kind());
+                                log::debug!("merger: write error (sync_indicator): {} (kind: {:?}), cancelling readers", e, e.kind());
+                                cancellation.cancel();
                                 return Err(e.into());
                             }
                             if let Err(e) = output.write_all(&entry.1.0[entry.1.1.clone()][badges.si.width..]) {
-                                log::debug!("merger: write error (line content): {} (kind: {:?})", e, e.kind());
+                                log::debug!("merger: write error (line content): {} (kind: {:?}), cancelling readers", e, e.kind());
+                                cancellation.cancel();
                                 return Err(e.into());
                             }
                             if let Err(e) = output.write_all(self.options.output_delimiter.as_bytes()) {
-                                log::debug!("merger: write error (delimiter): {} (kind: {:?})", e, e.kind());
+                                log::debug!("merger: write error (delimiter): {} (kind: {:?}), cancelling readers", e, e.kind());
+                                cancellation.cancel();
                                 return Err(e.into());
                             }
                         }
@@ -716,16 +754,14 @@ impl App {
                         }
                         Err(RecvTimeoutError::Timeout) => {}
                         Err(RecvTimeoutError::Disconnected) => {
-                            log::debug!("merger: channel disconnected, timeout.is_none()={}", timeout.is_none());
-                            if timeout.is_none() {
-                                log::debug!("merger: exiting loop due to disconnection");
-                                break
-                            }
+                            log::debug!("merger: channel disconnected");
+                            break
                         }
                     }
                 }
 
-                log::debug!("merger: finished normally");
+                log::debug!("merger: finished normally, cancelling readers");
+                cancellation.cancel();
                 Ok(())
             }));
 
