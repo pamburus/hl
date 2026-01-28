@@ -8,12 +8,38 @@ use std::{
     os::unix::process::ExitStatusExt,
 };
 
+#[cfg(unix)]
+use std::os::unix::io::{AsRawFd, RawFd};
+
 use crate::pager::SelectedPager;
 
 pub type OutputStream = Box<dyn Write + Send + Sync>;
 
 pub struct Pager {
     process: Child,
+}
+
+/// A handle that can be used to detect when the pager's stdin pipe is closed.
+/// This is useful for event-based detection of pager exit.
+#[cfg(unix)]
+pub struct PagerPipeHandle {
+    fd: RawFd,
+}
+
+#[cfg(unix)]
+impl PagerPipeHandle {
+    /// Returns the raw file descriptor of the pager's stdin pipe.
+    /// This fd can be monitored with kqueue/poll for POLLHUP to detect pipe closure.
+    pub fn as_raw_fd(&self) -> RawFd {
+        self.fd
+    }
+}
+
+#[cfg(unix)]
+impl AsRawFd for PagerPipeHandle {
+    fn as_raw_fd(&self) -> RawFd {
+        self.fd
+    }
 }
 
 impl Pager {
@@ -51,6 +77,14 @@ impl Pager {
         let process = cmd.stdin(Stdio::piped()).spawn()?;
 
         Ok(Self { process })
+    }
+
+    /// Returns a handle to the pager's stdin pipe that can be used to detect when it closes.
+    #[cfg(unix)]
+    pub fn pipe_handle(&self) -> Option<PagerPipeHandle> {
+        self.process.stdin.as_ref().map(|stdin| PagerPipeHandle {
+            fd: stdin.as_raw_fd(),
+        })
     }
 
     #[cfg(unix)]
