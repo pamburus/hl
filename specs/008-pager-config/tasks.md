@@ -166,6 +166,27 @@
 
 ---
 
+## Phase 7b: Follow Mode Pager Closure Behavior (FR-014a, FR-014b)
+
+**Goal**: When pager is closed in follow mode, stop following and exit the application gracefully
+
+**Independent Test**: Run `hl --follow logfile.log` with a pager, close the pager (e.g., press 'q' in less), verify application exits
+
+### Tests for Pager Closure Behavior
+
+- [ ] T048a [P] [US5] Create unit test for detecting pager stdin pipe closure in `src/pager/tests.rs`
+- [ ] T048b [P] [US5] Create integration test for follow mode exit on pager close
+
+### Implementation for Pager Closure Behavior
+
+- [x] T048c [US5] Implement write error detection on pager stdin pipe in `src/app.rs`
+- [x] T048d [US5] Propagate pager closure signal to stop follow mode in `src/app.rs`
+- [x] T048e [US5] Ensure graceful shutdown (cleanup resources, exit code 0) on pager closure
+
+**Checkpoint**: Pager closure behavior implementation complete ✅
+
+---
+
 ## Phase 8: User Story 6 - Backward Compatibility with PAGER (Priority: P3) ✅
 
 **Goal**: Standard `PAGER` env var works when `HL_PAGER` not set and no config
@@ -203,9 +224,9 @@
 
 ## Summary
 
-- **Total tasks**: 60
-- **Completed**: 47
-- **Remaining**: 13 (mostly integration tasks)
+- **Total tasks**: 65
+- **Completed**: 50
+- **Remaining**: 15 (integration tasks + pager closure tests)
 
 ### Completed Phases
 - Phase 1 (Setup): 5/5 ✅
@@ -215,10 +236,12 @@
 - Phase 5 (US3 - Role-Specific Args): 6/8 (core logic done, integration pending)
 - Phase 6 (US4 - HL_PAGER Override): 8/8 ✅
 - Phase 7 (US5 - HL_FOLLOW_PAGER): 6/6 ✅
+- Phase 7b (Pager Closure): 3/5 (implementation done, tests pending)
 - Phase 8 (US6 - PAGER Compat): 4/4 ✅
 - Phase 9 (Integration & Polish): 0/8
 
 ### Next Steps
 1. Complete integration tasks (T053, T054, T055) to wire selection into output.rs and main.rs
-2. Documentation updates (T056, T057)
-3. Final validation (T058, T059, T060)
+2. Implement pager closure behavior (T048a-T048e) for follow mode graceful exit
+3. Documentation updates (T056, T057)
+4. Final validation (T058, T059, T060)
