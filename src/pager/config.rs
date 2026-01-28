@@ -56,11 +56,6 @@ pub struct PagerProfile {
 }
 
 impl PagerProfile {
-    /// Returns `true` if this profile has a valid command.
-    pub fn is_valid(&self) -> bool {
-        !self.command.is_empty()
-    }
-
     /// Returns the executable name (first element of command).
     pub fn executable(&self) -> Option<&str> {
         self.command.first().map(|s| s.as_str())
