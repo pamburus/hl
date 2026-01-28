@@ -15,9 +15,7 @@ use super::config::{PagerConfig, PagerProfile, PagerRole};
 /// Represents a resolved pager specification from environment variables.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PagerSpec {
-    /// References a named profile.
-    Profile(String),
-    /// Direct command (parsed from env var).
+    /// A command (parsed from env var).
     Command(Vec<String>),
     /// Explicitly disabled (empty string in env var).
     Disabled,
@@ -136,19 +134,8 @@ impl<'a, E: EnvProvider, C: ExeChecker> PagerSelector<'a, E, C> {
         if let Some(spec) = self.resolve_env_var("HL_PAGER") {
             match spec {
                 PagerSpec::Disabled => return SelectedPager::None,
-                PagerSpec::Profile(name) => {
-                    // Try as profile first, then fall back to treating as command
-                    if let Some(selected) = self.try_profile(&name, PagerRole::View) {
-                        return selected;
-                    }
-                    // Profile not found, try as a direct command
-                    if let Some(selected) = self.try_command(vec![name]) {
-                        return selected;
-                    }
-                    // Command not available, fall through
-                }
                 PagerSpec::Command(cmd) => {
-                    if let Some(selected) = self.try_command(cmd) {
+                    if let Some(selected) = self.try_spec_as_profile_or_command(&cmd, PagerRole::View) {
                         return selected;
                     }
                     // Command not available, fall through
@@ -158,8 +145,8 @@ impl<'a, E: EnvProvider, C: ExeChecker> PagerSelector<'a, E, C> {
 
         // 2. Check config pager setting
         if let Some(config) = self.config {
-            for profile_name in config.profiles() {
-                if let Some(selected) = self.try_profile(profile_name, PagerRole::View) {
+            for profile in config.profiles() {
+                if let Some(selected) = self.try_profile(profile, PagerRole::View) {
                     return selected;
                 }
             }
@@ -169,18 +156,8 @@ impl<'a, E: EnvProvider, C: ExeChecker> PagerSelector<'a, E, C> {
         if let Some(spec) = self.resolve_env_var("PAGER") {
             match spec {
                 PagerSpec::Disabled => return SelectedPager::None,
-                PagerSpec::Profile(name) => {
-                    // Try as profile first, then fall back to treating as command
-                    if let Some(selected) = self.try_profile(&name, PagerRole::View) {
-                        return selected;
-                    }
-                    // Profile not found, try as a direct command
-                    if let Some(selected) = self.try_command(vec![name]) {
-                        return selected;
-                    }
-                }
                 PagerSpec::Command(cmd) => {
-                    if let Some(selected) = self.try_command(cmd) {
+                    if let Some(selected) = self.try_spec_as_profile_or_command(&cmd, PagerRole::View) {
                         return selected;
                     }
                 }
@@ -203,18 +180,8 @@ impl<'a, E: EnvProvider, C: ExeChecker> PagerSelector<'a, E, C> {
         if let Some(spec) = self.resolve_env_var("HL_FOLLOW_PAGER") {
             match spec {
                 PagerSpec::Disabled => return SelectedPager::None,
-                PagerSpec::Profile(name) => {
-                    // Try as profile first, then fall back to treating as command
-                    if let Some(selected) = self.try_profile(&name, PagerRole::Follow) {
-                        return selected;
-                    }
-                    // Profile not found, try as a direct command
-                    if let Some(selected) = self.try_command(vec![name]) {
-                        return selected;
-                    }
-                }
                 PagerSpec::Command(cmd) => {
-                    if let Some(selected) = self.try_command(cmd) {
+                    if let Some(selected) = self.try_spec_as_profile_or_command(&cmd, PagerRole::Follow) {
                         return selected;
                     }
                 }
@@ -229,24 +196,8 @@ impl<'a, E: EnvProvider, C: ExeChecker> PagerSelector<'a, E, C> {
                     // (already checked above), so return None here
                     return SelectedPager::None;
                 }
-                PagerSpec::Profile(name) => {
-                    // Only use if profile has follow enabled
-                    if let Some(profile) = self.profiles.get(&name) {
-                        if profile.follow.is_enabled(PagerRole::Follow) {
-                            if let Some(selected) = self.try_profile(&name, PagerRole::Follow) {
-                                return selected;
-                            }
-                        }
-                    } else {
-                        // Profile not found, try as a direct command for follow mode
-                        if let Some(selected) = self.try_command(vec![name]) {
-                            return selected;
-                        }
-                    }
-                }
                 PagerSpec::Command(cmd) => {
-                    // Direct command from env var - use it for follow mode
-                    if let Some(selected) = self.try_command(cmd) {
+                    if let Some(selected) = self.try_spec_as_profile_or_command(&cmd, PagerRole::Follow) {
                         return selected;
                     }
                 }
@@ -273,7 +224,6 @@ impl<'a, E: EnvProvider, C: ExeChecker> PagerSelector<'a, E, C> {
     /// Resolves an environment variable to a `PagerSpec`.
     ///
     /// - Empty string → `PagerSpec::Disabled`
-    /// - Matches a simple name (no spaces, no path separators) → `PagerSpec::Profile`
     /// - Otherwise → `PagerSpec::Command` (parsed with shellwords)
     fn resolve_env_var(&self, name: &str) -> Option<PagerSpec> {
         let value = self.env_provider.get(name)?;
@@ -282,16 +232,28 @@ impl<'a, E: EnvProvider, C: ExeChecker> PagerSelector<'a, E, C> {
             return Some(PagerSpec::Disabled);
         }
 
-        // Check if it looks like a profile name (simple identifier, no spaces or path separators)
-        if is_profile_name(&value) {
-            return Some(PagerSpec::Profile(value));
-        }
-
         // Parse as a command string
         match shellwords::split(&value) {
             Ok(parts) if !parts.is_empty() => Some(PagerSpec::Command(parts)),
             _ => Some(PagerSpec::Command(vec![value])),
         }
+    }
+
+    /// Tries to interpret a command spec as either a profile name or a direct command.
+    ///
+    /// If the first element matches a profile name, uses that profile.
+    /// Otherwise, treats the entire spec as a direct command.
+    fn try_spec_as_profile_or_command(&self, cmd: &[String], role: PagerRole) -> Option<SelectedPager> {
+        // If it's a single word and matches a profile name, use the profile
+        if cmd.len() == 1 {
+            let name = &cmd[0];
+            if self.profiles.contains_key(name) {
+                return self.try_profile(name, role);
+            }
+        }
+
+        // Otherwise treat as a direct command
+        self.try_command(cmd.to_vec())
     }
 
     /// Tries to use a named profile, returning `Some(SelectedPager)` if successful.
@@ -336,11 +298,6 @@ impl<'a, E: EnvProvider, C: ExeChecker> PagerSelector<'a, E, C> {
 
 // ---
 
-/// Checks if a string looks like a profile name (simple identifier).
-fn is_profile_name(s: &str) -> bool {
-    !s.is_empty() && !s.contains(char::is_whitespace) && !s.contains('/') && !s.contains('\\') && !s.contains('=')
-}
-
 /// Applies default settings for `less` command.
 ///
 /// When using `less` via direct command (not profile), we auto-add `-R` for ANSI colors
@@ -356,10 +313,7 @@ fn apply_less_defaults(mut command: Vec<String>) -> (Vec<String>, HashMap<String
 
         if exe_name == "less" {
             // Add -R if not already present
-            if !command
-                .iter()
-                .any(|arg| arg == "-R" || arg.starts_with("-R") || arg.contains('R'))
-            {
+            if !command.iter().any(|arg| arg == "-R" || arg.starts_with("-R")) {
                 command.push("-R".to_string());
             }
             // Set LESSCHARSET
@@ -382,22 +336,6 @@ pub fn is_available(executable: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn is_profile_name_simple() {
-        assert!(is_profile_name("less"));
-        assert!(is_profile_name("fzf"));
-        assert!(is_profile_name("my-pager"));
-        assert!(is_profile_name("pager_v2"));
-    }
-
-    #[test]
-    fn is_profile_name_rejects_commands() {
-        assert!(!is_profile_name("less -R"));
-        assert!(!is_profile_name("/usr/bin/less"));
-        assert!(!is_profile_name("FOO=bar less"));
-        assert!(!is_profile_name(""));
-    }
 
     #[test]
     fn apply_less_defaults_adds_flag() {
