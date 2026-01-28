@@ -603,7 +603,9 @@ fn test_no_op_record_with_source_formatter() {
 
 #[test]
 fn test_record_with_source_formatter_ref() {
-    let formatter = RawRecordFormatter {};
+    let formatter = RawRecordFormatter {
+        delimiter: "\n".to_string(),
+    };
     let formatter_ref = &formatter;
     let rec = Record::default();
     let rec = rec.with_source(b"test_source");
@@ -615,7 +617,9 @@ fn test_record_with_source_formatter_ref() {
 #[test]
 fn test_record_with_source_formatter_arc() {
     use std::sync::Arc;
-    let formatter = Arc::new(RawRecordFormatter {});
+    let formatter = Arc::new(RawRecordFormatter {
+        delimiter: "\n".to_string(),
+    });
     let rec = Record::default();
     let rec = rec.with_source(b"arc_test");
     let mut buf = Buf::default();
@@ -625,7 +629,9 @@ fn test_record_with_source_formatter_arc() {
 
 #[test]
 fn test_raw_record_formatter_multiline_with_prefix() {
-    let formatter = RawRecordFormatter {};
+    let formatter = RawRecordFormatter {
+        delimiter: "\n".to_string(),
+    };
     let rec = Record::default();
     let rec = rec.with_source(b"line1\nline2\nline3");
     let mut buf = Buf::default();
@@ -2804,7 +2810,9 @@ fn test_ref_record_with_source_formatter() {
         ..Default::default()
     };
 
-    let formatter = RawRecordFormatter {};
+    let formatter = RawRecordFormatter {
+        delimiter: "\n".to_string(),
+    };
 
     let mut buf = Vec::new();
     call_formatter(&formatter, &mut buf, RecordWithSource::new(&rec, source));

@@ -1,0 +1,7 @@
+# Minimal pager profile - tests default values
+# follow.enabled defaults to false when not specified
+
+pager = "less"
+
+[pagers.less]
+command = ["less", "-R"]

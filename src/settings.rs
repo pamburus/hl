@@ -19,6 +19,7 @@ use strum::{Display, IntoEnumIterator};
 
 // local imports
 use crate::level::{InfallibleLevel, Level};
+use crate::pager::{PagerConfig, PagerProfile};
 use crate::{error::Error, xerr::Suggestions};
 
 // test imports
@@ -49,6 +50,12 @@ pub struct Settings {
     #[serde(deserialize_with = "enumset_serde::deserialize")]
     pub input_info: InputInfoSet,
     pub ascii: AsciiModeOpt,
+    /// Pager profile(s) to use for output pagination.
+    #[serde(default)]
+    pub pager: Option<PagerConfig>,
+    /// Named pager profiles.
+    #[serde(default)]
+    pub pagers: HashMap<String, PagerProfile>,
 }
 
 impl Settings {

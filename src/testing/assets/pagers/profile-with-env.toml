@@ -1,0 +1,8 @@
+# Pager profile with environment variables
+# Used for testing env var configuration
+
+pager = "less"
+
+[pagers.less]
+command = ["less", "-R"]
+env = { LESSCHARSET = "UTF-8" }
