@@ -17,8 +17,6 @@ use std::{
 // unix-only std imports
 #[cfg(unix)]
 use std::os::unix::fs::MetadataExt;
-#[cfg(unix)]
-use std::os::unix::io::RawFd;
 
 // third-party imports
 use closure::closure;
@@ -46,6 +44,7 @@ use crate::{
     index::{Indexer, IndexerSettings, Timestamp},
     input::{BlockEntry, Input, InputHolder, InputReference},
     model::{Filter, Parser, ParserSettings, RawRecord, Record, RecordFilter, RecordWithSourceConstructor},
+    output::PipeCloseSignal,
     query::Query,
     scanning::{BufFactory, Delimit, Delimiter, Newline, Scanner, SearchExt, Segment, SegmentBuf, SegmentBufFactory},
     settings::{AsciiMode, ExpansionMode, FieldShowOption, Fields, Formatting, InputInfo, ResolvedPunctuation},
@@ -250,27 +249,22 @@ impl App {
     }
 
     pub fn run(&self, inputs: Vec<InputHolder>, output: &mut Output) -> Result<()> {
-        #[cfg(unix)]
-        return self.run_with_output_fd(inputs, output, None);
-
-        #[cfg(not(unix))]
-        {
-            if self.options.follow {
-                self.follow(inputs.into_iter().map(|x| x.reference).collect(), output, None)
-            } else if self.options.sort {
-                self.sort(inputs, output)
-            } else {
-                self.cat(inputs, output)
-            }
-        }
+        self.run_with_close_signal(inputs, output, None)
     }
 
-    /// Run the application with an optional output file descriptor for monitoring.
-    /// When the output fd signals (e.g., pipe closed), follow mode will exit immediately.
-    #[cfg(unix)]
-    pub fn run_with_output_fd(&self, inputs: Vec<InputHolder>, output: &mut Output, output_fd: Option<RawFd>) -> Result<()> {
+    /// Run the application with an optional close signal for monitoring.
+    ///
+    /// When the close signal fires (e.g., pager pipe closed), follow mode will exit immediately.
+    /// This enables immediate exit when the user closes the pager, rather than waiting for
+    /// the next write to fail.
+    pub fn run_with_close_signal(
+        &self,
+        inputs: Vec<InputHolder>,
+        output: &mut Output,
+        close_signal: Option<PipeCloseSignal>,
+    ) -> Result<()> {
         if self.options.follow {
-            self.follow(inputs.into_iter().map(|x| x.reference).collect(), output, output_fd)
+            self.follow(inputs.into_iter().map(|x| x.reference).collect(), output, close_signal)
         } else if self.options.sort {
             self.sort(inputs, output)
         } else {
@@ -572,8 +566,12 @@ impl App {
         FollowBadges { si, input: badges }
     }
 
-    #[cfg(unix)]
-    fn follow(&self, inputs: Vec<InputReference>, output: &mut Output, output_fd: Option<RawFd>) -> Result<()> {
+    fn follow(
+        &self,
+        inputs: Vec<InputReference>,
+        output: &mut Output,
+        close_signal: Option<PipeCloseSignal>,
+    ) -> Result<()> {
         let badges = self.prepare_follow_badges(inputs.iter());
 
         let m = inputs.len();
@@ -583,12 +581,12 @@ impl App {
         let bfo = BufFactory::new(self.options.buffer_size.into());
 
         // Create shared cancellation token for all readers
-        // If we have an output fd (e.g., pager stdin), monitor it for closure
+        // If we have a close signal (e.g., from pager), monitor it for closure
         let cancellation = {
             let c = fsmon::Cancellation::new()?;
-            if let Some(fd) = output_fd {
-                log::debug!("follow: setting up output fd {} for monitoring", fd);
-                Arc::new(c.with_trigger_fd(fd))
+            if let Some(signal) = close_signal {
+                log::debug!("follow: setting up close signal for monitoring");
+                Arc::new(c.with_close_signal(signal))
             } else {
                 Arc::new(c)
             }
