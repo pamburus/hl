@@ -10,7 +10,10 @@ use std::{
     path::PathBuf,
     rc::Rc,
     str,
-    sync::Arc,
+    sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+    },
     time::{Duration, Instant},
 };
 
@@ -40,10 +43,11 @@ use crate::{
     formatting::{
         DynRecordWithSourceFormatter, Expansion, RawRecordFormatter, RecordFormatterBuilder, RecordWithSourceFormatter,
     },
-    fsmon::{self, EventKind},
+    fsmon::{self, ControlFlow, EventKind},
     index::{Indexer, IndexerSettings, Timestamp},
     input::{BlockEntry, Input, InputHolder, InputReference},
     model::{Filter, Parser, ParserSettings, RawRecord, Record, RecordFilter, RecordWithSourceConstructor},
+    output::{OutputMonitor, StdoutMonitor},
     query::Query,
     scanning::{BufFactory, Delimit, Delimiter, Newline, Scanner, SearchExt, Segment, SegmentBuf, SegmentBufFactory},
     settings::{AsciiMode, ExpansionMode, FieldShowOption, Fields, Formatting, InputInfo, ResolvedPunctuation},
@@ -57,6 +61,36 @@ use crate::{
 use crate::testing::Sample;
 
 // TODO: merge Options to Settings and replace Options with Settings.
+
+// ---
+
+const CANCELLATION_CHECK_INTERVAL: Duration = Duration::from_millis(50);
+
+// ---
+
+/// A cooperative cancellation token using an atomic boolean.
+///
+/// Used to signal cancellation to readers and fsmon when the output (pager) closes.
+#[derive(Default)]
+pub struct Cancelled(AtomicBool);
+
+impl Cancelled {
+    /// Creates a new cancellation token in non-cancelled state.
+    pub fn new() -> Self {
+        Self(AtomicBool::new(false))
+    }
+
+    /// Signals cancellation.
+    pub fn cancel(&self) {
+        log::debug!("Cancelled::cancel() called");
+        self.0.store(true, Ordering::SeqCst);
+    }
+
+    /// Returns true if cancellation has been signalled.
+    pub fn is_cancelled(&self) -> bool {
+        self.0.load(Ordering::SeqCst)
+    }
+}
 
 // ---
 
@@ -558,6 +592,8 @@ impl App {
         let parser = self.parser();
         let sfi = Arc::new(SegmentBufFactory::new(self.options.buffer_size.into()));
         let bfo = BufFactory::new(self.options.buffer_size.into());
+        let cancelled = Arc::new(Cancelled::new());
+        let stdout_monitor = StdoutMonitor::new();
 
         thread::scope(|scope| -> Result<()> {
             // prepare receive/transmit channels for input data
@@ -568,7 +604,7 @@ impl App {
             let mut readers = Vec::with_capacity(m);
             for (i, input_ref) in inputs.into_iter().enumerate() {
                 let delimiter = &self.options.delimiter;
-                let reader = scope.spawn(closure!(clone sfi, clone txi, |_| -> Result<()> {
+                let reader = scope.spawn(closure!(clone sfi, clone txi, clone cancelled, |_| -> Result<()> {
                     log::debug!("reader {}: started", i);
                     let scanner = Scanner::new(sfi.clone(), delimiter.clone());
                     let mut meta = None;
@@ -602,40 +638,45 @@ impl App {
                             return Ok(())
                         }
                         log::debug!("reader {}: entering fsmon::run", i);
-                        fsmon::run(vec![path.canonical.clone()], |event| {
-                            log::debug!("reader {}: fsmon event: {:?}", i, event.kind);
-                            match event.kind {
-                                EventKind::Modify(_) | EventKind::Create(_) | EventKind::Any | EventKind::Other => {
-                                    if let (Some(old_meta), Ok(new_meta)) = (&meta, fs::metadata(&path.canonical)) {
-                                        if old_meta.len() > new_meta.len() {
-                                            input = None;
+                        fsmon::run(
+                            vec![path.canonical.clone()],
+                            |event| {
+                                log::debug!("reader {}: fsmon event: {:?}", i, event.kind);
+                                match event.kind {
+                                    EventKind::Modify(_) | EventKind::Create(_) | EventKind::Any | EventKind::Other => {
+                                        if let (Some(old_meta), Ok(new_meta)) = (&meta, fs::metadata(&path.canonical)) {
+                                            if old_meta.len() > new_meta.len() {
+                                                input = None;
+                                            }
+                                            #[cfg(unix)]
+                                            if old_meta.ino() != new_meta.ino() || old_meta.dev() != new_meta.dev() {
+                                                input = None;
+                                            }
+                                            meta = Some(new_meta);
                                         }
-                                        #[cfg(unix)]
-                                        if old_meta.ino() != new_meta.ino() || old_meta.dev() != new_meta.dev() {
-                                            input = None;
+                                        if input.is_none() {
+                                            input = input_ref.open().ok();
                                         }
-                                        meta = Some(new_meta);
+                                        if process(&mut input, is_file(&meta), &mut send_failed)? {
+                                            log::debug!("reader {}: exiting fsmon (not a file)", i);
+                                            return Ok(ControlFlow::Stop)
+                                        }
+                                        if send_failed {
+                                            log::debug!("reader {}: send failed inside fsmon, stopping", i);
+                                            return Ok(ControlFlow::Stop)
+                                        }
+                                        Ok(ControlFlow::Continue)
                                     }
-                                    if input.is_none() {
-                                        input = input_ref.open().ok();
-                                    }
-                                    if process(&mut input, is_file(&meta), &mut send_failed)? {
-                                        log::debug!("reader {}: exiting fsmon (not a file)", i);
-                                        return Ok(())
-                                    }
-                                    if send_failed {
-                                        log::debug!("reader {}: send failed inside fsmon, but cannot exit fsmon::run", i);
-                                    }
-                                    Ok(())
+                                    EventKind::Remove(_) => {
+                                        log::debug!("reader {}: file removed", i);
+                                        input = None;
+                                        Ok(ControlFlow::Continue)
+                                    },
+                                    EventKind::Access(_) => Ok(ControlFlow::Continue),
                                 }
-                                EventKind::Remove(_) => {
-                                    log::debug!("reader {}: file removed", i);
-                                    input = None;
-                                    Ok(())
-                                },
-                                EventKind::Access(_) => Ok(()),
-                            }
-                        })
+                            },
+                            || cancelled.is_cancelled(),
+                        )
                     } else {
                         process(&mut input, is_file(&meta), &mut send_failed).map(|_|())
                     }
@@ -656,7 +697,7 @@ impl App {
             drop(txo);
 
             // spawn merger thread
-            let merger = scope.spawn(closure!(ref badges, |_| -> Result<()> {
+            let merger = scope.spawn(closure!(ref badges, ref cancelled, ref stdout_monitor, |_| -> Result<()> {
                 log::debug!("merger: started");
                 type Key = (Timestamp, usize, usize, usize); // (ts, input, block, offset)
                 type Line = (Rc<Vec<u8>>, Range<usize>, Instant); // (buf, location, instant)
@@ -666,6 +707,12 @@ impl App {
                 let mut prev_ts: Option<Timestamp> = None;
                 let mut mem_usage = 0;
                 let mem_limit = n * usize::from(self.options.buffer_size);
+
+                let write_line = |output: &mut Output, sync_indicator: &str, data: &[u8]| -> std::io::Result<()> {
+                    output.write_all(sync_indicator.as_bytes())?;
+                    output.write_all(data)?;
+                    output.write_all(b"\n")
+                };
 
                 loop {
                     let deadline = Instant::now().checked_sub(self.options.sync_interval);
@@ -681,16 +728,10 @@ impl App {
                             };
                             prev_ts = Some(entry.0.0);
                             mem_usage -= entry.1.1.end - entry.1.1.start;
-                            if let Err(e) = output.write_all(sync_indicator.as_bytes()) {
-                                log::debug!("merger: write error (sync_indicator): {} (kind: {:?})", e, e.kind());
-                                return Err(e.into());
-                            }
-                            if let Err(e) = output.write_all(&entry.1.0[entry.1.1.clone()][badges.si.width..]) {
-                                log::debug!("merger: write error (line content): {} (kind: {:?})", e, e.kind());
-                                return Err(e.into());
-                            }
-                            if let Err(e) = output.write_all(b"\n") {
-                                log::debug!("merger: write error (delimiter): {} (kind: {:?})", e, e.kind());
+                            let data = &entry.1.0[entry.1.1.clone()][badges.si.width..];
+                            if let Err(e) = write_line(output, sync_indicator, data) {
+                                log::debug!("merger: write error: {} (kind: {:?}), signalling cancellation", e, e.kind());
+                                cancelled.cancel();
                                 return Err(e.into());
                             }
                         }
@@ -702,7 +743,10 @@ impl App {
                     } else {
                         None
                     };
-                    match rxo.recv_timeout(timeout.unwrap_or(std::time::Duration::MAX)) {
+                    let timeout = timeout
+                        .map(|t| t.min(CANCELLATION_CHECK_INTERVAL))
+                        .unwrap_or(CANCELLATION_CHECK_INTERVAL);
+                    match rxo.recv_timeout(timeout) {
                         Ok((i, buf, index)) => {
                             let buf = Rc::new(buf);
                             for line in index.lines {
@@ -713,13 +757,24 @@ impl App {
                                 window.insert(key, value);
                             }
                         }
-                        Err(RecvTimeoutError::Timeout) => {}
-                        Err(RecvTimeoutError::Disconnected) => {
-                            log::debug!("merger: channel disconnected, timeout.is_none()={}", timeout.is_none());
-                            if timeout.is_none() {
-                                log::debug!("merger: exiting loop due to disconnection");
-                                break
+                        Err(RecvTimeoutError::Timeout) => {
+                            if cancelled.is_cancelled() {
+                                log::debug!("merger: cancelled, exiting loop immediately");
+                                break;
                             }
+                            if stdout_monitor.is_closed() {
+                                log::debug!("merger: stdout closed (detected by monitor), signalling cancellation");
+                                cancelled.cancel();
+                                break;
+                            }
+                        }
+                        Err(RecvTimeoutError::Disconnected) => {
+                            log::debug!("merger: channel disconnected, window.is_empty()={}", window.is_empty());
+                            if window.is_empty() {
+                                log::debug!("merger: exiting loop, nothing left to flush");
+                                break;
+                            }
+                            // Continue looping to flush remaining entries
                         }
                     }
                 }
