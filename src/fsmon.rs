@@ -105,6 +105,8 @@ where
     #[cfg(not(unix))]
     let trigger_fd: Option<()> = None;
 
+    let close_signal = cancellation.and_then(|c| c.close_signal.as_ref());
+
     imp::run(
         watch,
         |event| {
@@ -117,6 +119,7 @@ where
         },
         cancellation.map(|c| &c.inner),
         trigger_fd,
+        close_signal,
     )
 }
 
@@ -178,10 +181,16 @@ mod cancellation {
     }
 }
 
-// Non-macOS implementation using notify's RecommendedWatcher
-#[cfg(not(target_os = "macos"))]
+// Non-macOS Unix implementation using notify's RecommendedWatcher with poll()
+#[cfg(all(not(target_os = "macos"), unix))]
 mod imp {
-    use std::sync::mpsc::{self};
+    use std::collections::VecDeque;
+    use std::io::Write;
+    use std::os::fd::AsRawFd;
+    use std::os::unix::net::UnixStream;
+    use std::sync::mpsc;
+    use std::sync::{Arc, Mutex};
+    use std::thread;
     use std::time::Duration;
 
     use notify::{Config, RecommendedWatcher, RecursiveMode, Watcher};
@@ -193,9 +202,222 @@ mod imp {
 
     const FALLBACK_POLLING_INTERVAL: Duration = Duration::from_secs(1);
 
-    #[cfg(unix)]
     type TriggerFd = std::os::unix::io::RawFd;
-    #[cfg(not(unix))]
+
+    pub fn run<H>(
+        paths: Vec<PathBuf>,
+        mut handle: H,
+        cancellation: Option<&Cancellation>,
+        trigger_fd: Option<TriggerFd>,
+        _close_signal: Option<&PipeCloseSignal>,
+    ) -> Result<()>
+    where
+        H: FnMut(Event) -> Result<()>,
+    {
+        // If we have both cancellation and a trigger fd, use fully event-based poll() loop
+        if cancellation.is_some() && trigger_fd.is_some() {
+            let trigger_fd = trigger_fd.unwrap();
+            let cancellation = cancellation.unwrap();
+
+            // Create a socket pair for notify event signaling
+            let (notify_reader, notify_writer) = UnixStream::pair()?;
+            notify_reader.set_nonblocking(true)?;
+
+            let notify_read_fd = notify_reader.as_raw_fd();
+
+            // Shared queue for events from the notify thread
+            let event_queue: Arc<Mutex<VecDeque<notify::Result<Event>>>> =
+                Arc::new(Mutex::new(VecDeque::new()));
+            let event_queue_writer = Arc::clone(&event_queue);
+
+            // Create the watcher with a channel
+            let (tx, rx) = mpsc::channel();
+            let mut watcher =
+                RecommendedWatcher::new(tx, Config::default().with_poll_interval(FALLBACK_POLLING_INTERVAL))?;
+
+            for path in &paths {
+                watcher.watch(path, RecursiveMode::NonRecursive)?;
+            }
+
+            // Spawn thread to receive notify events and signal the main loop
+            let _notify_thread = thread::spawn(move || {
+                for event in rx {
+                    // Store the event in the shared queue
+                    if let Ok(mut queue) = event_queue_writer.lock() {
+                        queue.push_back(event);
+                    }
+                    // Signal that an event is available (write a byte to wake up poll)
+                    let _ = (&notify_writer).write(&[1u8]);
+                }
+            });
+
+            // Main event loop using poll() with infinite timeout
+            loop {
+                // Build the poll fd array
+                let mut pollfds = [
+                    libc::pollfd {
+                        fd: trigger_fd,
+                        events: 0, // We only care about POLLHUP/POLLERR
+                        revents: 0,
+                    },
+                    libc::pollfd {
+                        fd: notify_read_fd,
+                        events: libc::POLLIN as i16,
+                        revents: 0,
+                    },
+                ];
+
+                // Poll with infinite timeout (-1) - fully event-based, no busy waiting
+                let poll_result = unsafe { libc::poll(pollfds.as_mut_ptr(), 2, -1) };
+
+                if poll_result < 0 {
+                    let err = std::io::Error::last_os_error();
+                    if err.kind() == std::io::ErrorKind::Interrupted {
+                        continue;
+                    }
+                    return Err(err.into());
+                }
+
+                // Check for cancellation
+                if cancellation.is_cancelled() {
+                    log::debug!("fsmon::imp::run (linux): cancellation detected");
+                    return Ok(());
+                }
+
+                // Check for pipe closure (POLLHUP or POLLERR on trigger_fd)
+                if (pollfds[0].revents & (libc::POLLHUP | libc::POLLERR) as i16) != 0 {
+                    log::debug!("fsmon::imp::run (linux): pipe closed (POLLHUP/POLLERR), exiting");
+                    return Ok(());
+                }
+
+                // Check for notify events
+                if (pollfds[1].revents & libc::POLLIN as i16) != 0 {
+                    // Drain the signaling bytes
+                    let mut buf = [0u8; 64];
+                    let _ = std::io::Read::read(&mut &notify_reader, &mut buf);
+
+                    // Process all queued events
+                    loop {
+                        let event = {
+                            let mut queue = event_queue.lock().unwrap();
+                            queue.pop_front()
+                        };
+                        match event {
+                            Some(Ok(event)) => handle(event)?,
+                            Some(Err(err)) => return Err(err.into()),
+                            None => break,
+                        }
+                    }
+                }
+            }
+        } else if let Some(cancellation) = cancellation {
+            // Cancellation without trigger fd - need to use a signaling mechanism
+            let (cancel_reader, cancel_writer) = UnixStream::pair()?;
+            cancel_reader.set_nonblocking(true)?;
+
+            let cancel_read_fd = cancel_reader.as_raw_fd();
+
+            // Shared queue for events
+            let event_queue: Arc<Mutex<VecDeque<notify::Result<Event>>>> =
+                Arc::new(Mutex::new(VecDeque::new()));
+            let event_queue_writer = Arc::clone(&event_queue);
+
+            let (tx, rx) = mpsc::channel();
+            let mut watcher =
+                RecommendedWatcher::new(tx, Config::default().with_poll_interval(FALLBACK_POLLING_INTERVAL))?;
+
+            for path in &paths {
+                watcher.watch(path, RecursiveMode::NonRecursive)?;
+            }
+
+            // Spawn thread to receive notify events
+            let _notify_thread = thread::spawn(move || {
+                for event in rx {
+                    if let Ok(mut queue) = event_queue_writer.lock() {
+                        queue.push_back(event);
+                    }
+                    let _ = (&cancel_writer).write(&[1u8]);
+                }
+            });
+
+            loop {
+                let mut pollfds = [libc::pollfd {
+                    fd: cancel_read_fd,
+                    events: libc::POLLIN as i16,
+                    revents: 0,
+                }];
+
+                let poll_result = unsafe { libc::poll(pollfds.as_mut_ptr(), 1, -1) };
+
+                if poll_result < 0 {
+                    let err = std::io::Error::last_os_error();
+                    if err.kind() == std::io::ErrorKind::Interrupted {
+                        continue;
+                    }
+                    return Err(err.into());
+                }
+
+                if cancellation.is_cancelled() {
+                    log::debug!("fsmon::imp::run (linux): cancellation detected");
+                    return Ok(());
+                }
+
+                if (pollfds[0].revents & libc::POLLIN as i16) != 0 {
+                    let mut buf = [0u8; 64];
+                    let _ = std::io::Read::read(&mut &cancel_reader, &mut buf);
+
+                    loop {
+                        let event = {
+                            let mut queue = event_queue.lock().unwrap();
+                            queue.pop_front()
+                        };
+                        match event {
+                            Some(Ok(event)) => handle(event)?,
+                            Some(Err(err)) => return Err(err.into()),
+                            None => break,
+                        }
+                    }
+                }
+            }
+        } else {
+            // Original behavior without cancellation
+            let (tx, rx) = mpsc::channel();
+            let mut watcher =
+                RecommendedWatcher::new(tx, Config::default().with_poll_interval(FALLBACK_POLLING_INTERVAL))?;
+
+            for path in &paths {
+                watcher.watch(path, RecursiveMode::NonRecursive)?;
+            }
+
+            loop {
+                match rx.recv() {
+                    Ok(Ok(event)) => handle(event)?,
+                    Ok(Err(err)) => return Err(err.into()),
+                    Err(err) => return Err(Error::RecvTimeoutError { source: err.into() }),
+                };
+            }
+        }
+    }
+}
+
+// Windows implementation using notify's RecommendedWatcher
+#[cfg(windows)]
+mod imp {
+    use std::collections::VecDeque;
+    use std::sync::mpsc;
+    use std::sync::{Arc, Condvar, Mutex};
+    use std::thread;
+    use std::time::Duration;
+
+    use notify::{Config, RecommendedWatcher, RecursiveMode, Watcher};
+
+    use super::*;
+    use crate::error::Error;
+
+    pub use super::cancellation::Cancellation;
+
+    const FALLBACK_POLLING_INTERVAL: Duration = Duration::from_secs(1);
+
     type TriggerFd = ();
 
     pub fn run<H>(
@@ -203,46 +425,148 @@ mod imp {
         mut handle: H,
         cancellation: Option<&Cancellation>,
         _trigger_fd: Option<TriggerFd>,
+        close_signal: Option<&PipeCloseSignal>,
     ) -> Result<()>
     where
         H: FnMut(Event) -> Result<()>,
     {
-        // TODO: Use poll() to properly monitor trigger_fd on non-macOS Unix platforms
-        // For now, we rely on the cancellation mechanism
+        use windows_sys::Win32::Foundation::{CloseHandle, HANDLE, WAIT_OBJECT_0};
+        use windows_sys::Win32::System::Threading::{
+            CreateEventW, OpenProcess, SetEvent, WaitForMultipleObjects, INFINITE, PROCESS_SYNCHRONIZE,
+        };
 
-        let (tx, rx) = mpsc::channel();
-        let mut watcher = RecommendedWatcher::new(tx, Config::default().with_poll_interval(FALLBACK_POLLING_INTERVAL))?;
-
-        for path in &paths {
-            watcher.watch(path, RecursiveMode::NonRecursive)?;
-        }
-
-        // If we have a cancellation token, we need to check it periodically
-        // since std::sync::mpsc doesn't expose a pollable fd.
         if let Some(cancellation) = cancellation {
+            // Create a Windows Event for signaling notify events
+            let notify_event: HANDLE = unsafe { CreateEventW(std::ptr::null(), 0, 0, std::ptr::null()) };
+            if notify_event.is_null() {
+                return Err(std::io::Error::last_os_error().into());
+            }
+
+            // Ensure we close the event handle when done
+            struct EventGuard(HANDLE);
+            impl Drop for EventGuard {
+                fn drop(&mut self) {
+                    unsafe { CloseHandle(self.0) };
+                }
+            }
+            let _notify_event_guard = EventGuard(notify_event);
+
+            // Shared queue for events
+            let event_queue: Arc<Mutex<VecDeque<notify::Result<Event>>>> =
+                Arc::new(Mutex::new(VecDeque::new()));
+            let event_queue_writer = Arc::clone(&event_queue);
+
+            // Shared flag for signaling termination
+            let terminated = Arc::new((Mutex::new(false), Condvar::new()));
+            let terminated_writer = Arc::clone(&terminated);
+
+            let (tx, rx) = mpsc::channel();
+            let mut watcher =
+                RecommendedWatcher::new(tx, Config::default().with_poll_interval(FALLBACK_POLLING_INTERVAL))?;
+
+            for path in &paths {
+                watcher.watch(path, RecursiveMode::NonRecursive)?;
+            }
+
+            // Spawn thread to receive notify events and signal via Windows Event
+            // We cast HANDLE to isize to make it Send (it's safe because we only use it for SetEvent)
+            let notify_event_raw = notify_event as isize;
+            let _notify_thread = thread::spawn(move || {
+                for event in rx {
+                    if let Ok(mut queue) = event_queue_writer.lock() {
+                        queue.push_back(event);
+                    }
+                    // Signal that an event is available
+                    unsafe { SetEvent(notify_event_raw as HANDLE) };
+                }
+                // Channel closed, signal termination
+                let (lock, _cvar) = &*terminated_writer;
+                if let Ok(mut term) = lock.lock() {
+                    *term = true;
+                }
+                unsafe { SetEvent(notify_event_raw as HANDLE) };
+            });
+
+            // Open the process handle if we have a close signal
+            let process_handle: HANDLE = if let Some(signal) = close_signal {
+                unsafe { OpenProcess(PROCESS_SYNCHRONIZE, 0, signal.process_id) }
+            } else {
+                std::ptr::null_mut()
+            };
+
+            struct ProcessHandleGuard(HANDLE);
+            impl Drop for ProcessHandleGuard {
+                fn drop(&mut self) {
+                    if !self.0.is_null() {
+                        unsafe { CloseHandle(self.0) };
+                    }
+                }
+            }
+            let _process_handle_guard = ProcessHandleGuard(process_handle);
+
+            // Main event loop using WaitForMultipleObjects with INFINITE timeout
             loop {
-                // First, check if cancellation was requested
                 if cancellation.is_cancelled() {
-                    log::debug!("fsmon::imp::run: cancellation detected");
+                    log::debug!("fsmon::imp::run (windows): cancellation detected");
                     return Ok(());
                 }
 
-                // Try to receive with a short timeout, then check cancellation again
-                match rx.recv_timeout(Duration::from_millis(100)) {
-                    Ok(Ok(event)) => handle(event)?,
-                    Ok(Err(err)) => return Err(err.into()),
-                    Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
-                        // Loop will check cancellation at the top
+                // Build the handle array for WaitForMultipleObjects
+                let (handles, handle_count): ([HANDLE; 2], u32) = if !process_handle.is_null() {
+                    ([notify_event, process_handle], 2)
+                } else {
+                    ([notify_event, std::ptr::null_mut()], 1)
+                };
+
+                // Wait with INFINITE timeout - fully event-based
+                let wait_result =
+                    unsafe { WaitForMultipleObjects(handle_count, handles.as_ptr(), 0, INFINITE) };
+
+                if wait_result == WAIT_OBJECT_0 {
+                    // Notify event signaled - process events from the queue
+                    loop {
+                        let event = {
+                            let mut queue = event_queue.lock().unwrap();
+                            queue.pop_front()
+                        };
+                        match event {
+                            Some(Ok(event)) => handle(event)?,
+                            Some(Err(err)) => return Err(err.into()),
+                            None => break,
+                        }
                     }
-                    Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
-                        return Err(Error::RecvTimeoutError {
-                            source: std::sync::mpsc::RecvTimeoutError::Disconnected,
-                        });
+
+                    // Check if the notify thread terminated
+                    let (lock, _) = &*terminated;
+                    if let Ok(term) = lock.lock() {
+                        if *term {
+                            return Err(Error::RecvTimeoutError {
+                                source: mpsc::RecvTimeoutError::Disconnected,
+                            });
+                        }
+                    }
+                } else if wait_result == WAIT_OBJECT_0 + 1 && !process_handle.is_null() {
+                    // Process handle signaled - pager has exited
+                    log::debug!("fsmon::imp::run (windows): pager process exited");
+                    return Ok(());
+                } else {
+                    // Error or timeout (shouldn't happen with INFINITE)
+                    let err = std::io::Error::last_os_error();
+                    if err.raw_os_error() != Some(0) {
+                        return Err(err.into());
                     }
                 }
             }
         } else {
             // Original behavior without cancellation
+            let (tx, rx) = mpsc::channel();
+            let mut watcher =
+                RecommendedWatcher::new(tx, Config::default().with_poll_interval(FALLBACK_POLLING_INTERVAL))?;
+
+            for path in &paths {
+                watcher.watch(path, RecursiveMode::NonRecursive)?;
+            }
+
             loop {
                 match rx.recv() {
                     Ok(Ok(event)) => handle(event)?,
@@ -303,10 +627,12 @@ mod imp {
         mut handle: H,
         cancellation: Option<&Cancellation>,
         trigger_fd: Option<RawFd>,
+        _close_signal: Option<&PipeCloseSignal>,
     ) -> Result<()>
     where
         H: FnMut(Event) -> Result<()>,
     {
+        // Note: _close_signal is not used on macOS since we use the fd-based trigger_fd mechanism
         log::debug!("fsmon::imp::run (macos): starting with {} paths", paths.len());
         let mut watcher = Watcher::new()?;
         let mut added = HashSet::<&PathBuf>::new();
