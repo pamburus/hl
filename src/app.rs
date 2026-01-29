@@ -18,6 +18,11 @@ use std::{
 #[cfg(unix)]
 use std::os::unix::fs::MetadataExt;
 
+#[cfg(unix)]
+use std::os::unix::io::AsRawFd;
+
+// Note: AsRawFd is used both for stdin reading and stdout monitoring
+
 // third-party imports
 use closure::closure;
 use crossbeam_channel::{self as channel, Receiver, RecvTimeoutError, Sender};
@@ -56,6 +61,65 @@ use crate::{
 // test imports
 #[cfg(test)]
 use crate::testing::Sample;
+
+// ---
+
+/// A reader that reads from a raw file descriptor with poll()-based cancellation support.
+/// This allows the read to be interrupted when cancellation is signaled via a pipe.
+#[cfg(unix)]
+struct CancellableReader {
+    fd: std::os::unix::io::RawFd,
+    cancel_fd: std::os::unix::io::RawFd,
+}
+
+#[cfg(unix)]
+impl std::io::Read for CancellableReader {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        // Use poll() to wait on both the data fd and the cancel fd
+        let mut pollfds = [
+            libc::pollfd {
+                fd: self.fd,
+                events: libc::POLLIN,
+                revents: 0,
+            },
+            libc::pollfd {
+                fd: self.cancel_fd,
+                events: libc::POLLIN,
+                revents: 0,
+            },
+        ];
+
+        loop {
+            let ret = unsafe { libc::poll(pollfds.as_mut_ptr(), 2, -1) };
+            if ret < 0 {
+                let err = std::io::Error::last_os_error();
+                if err.kind() == std::io::ErrorKind::Interrupted {
+                    continue; // Retry on EINTR
+                }
+                return Err(err);
+            }
+
+            // Check if cancellation was signaled
+            if pollfds[1].revents & libc::POLLIN != 0 {
+                return Err(std::io::Error::new(std::io::ErrorKind::Interrupted, "cancelled"));
+            }
+
+            // Check if data is available on the main fd
+            if pollfds[0].revents & libc::POLLIN != 0 {
+                let ret = unsafe { libc::read(self.fd, buf.as_mut_ptr() as *mut libc::c_void, buf.len()) };
+                if ret < 0 {
+                    return Err(std::io::Error::last_os_error());
+                }
+                return Ok(ret as usize);
+            }
+
+            // Check for hangup/error on main fd (EOF)
+            if pollfds[0].revents & (libc::POLLHUP | libc::POLLERR) != 0 {
+                return Ok(0); // EOF
+            }
+        }
+    }
+}
 
 // TODO: merge Options to Settings and replace Options with Settings.
 
@@ -570,7 +634,7 @@ impl App {
         &self,
         inputs: Vec<InputReference>,
         output: &mut Output,
-        close_signal: Option<PipeCloseSignal>,
+        _close_signal: Option<PipeCloseSignal>,
     ) -> Result<()> {
         let badges = self.prepare_follow_badges(inputs.iter());
 
@@ -581,18 +645,64 @@ impl App {
         let bfo = BufFactory::new(self.options.buffer_size.into());
 
         // Create shared cancellation token for all readers
-        // If we have a close signal (e.g., from pager), monitor it for closure
-        let cancellation = {
-            let c = fsmon::Cancellation::new()?;
-            if let Some(signal) = close_signal {
-                log::debug!("follow: setting up close signal for monitoring");
-                Arc::new(c.with_close_signal(signal))
-            } else {
-                Arc::new(c)
-            }
-        };
+        let cancellation = Arc::new(fsmon::Cancellation::new()?);
 
         thread::scope(|scope| -> Result<()> {
+            // Spawn output monitor thread to detect when output pipe closes
+            // Use close_signal fd (pager's stdin) when available, otherwise stdout
+            #[cfg(unix)]
+            let _output_monitor = {
+                let cancel = cancellation.clone();
+                let cancel_fd = cancel.cancel_fd();
+                let output_fd = _close_signal
+                    .as_ref()
+                    .map(|s| s.fd)
+                    .unwrap_or_else(|| std::io::stdout().as_raw_fd());
+                log::debug!("follow: spawning output monitor thread for output_fd={}, cancel_fd={}", output_fd, cancel_fd);
+                Some(scope.spawn(move |_| {
+                    // Use poll() to detect when the output pipe closes or cancellation is signaled
+                    // Poll on both the output fd and the cancel fd
+                    let mut pollfds = [
+                        libc::pollfd {
+                            fd: output_fd,
+                            events: libc::POLLOUT, // Request POLLOUT to also get POLLHUP/POLLERR
+                            revents: 0,
+                        },
+                        libc::pollfd {
+                            fd: cancel_fd,
+                            events: libc::POLLIN,
+                            revents: 0,
+                        },
+                    ];
+                    loop {
+                        let ret = unsafe { libc::poll(pollfds.as_mut_ptr(), 2, -1) };
+                        if ret < 0 {
+                            let err = std::io::Error::last_os_error();
+                            if err.kind() == std::io::ErrorKind::Interrupted {
+                                continue;
+                            }
+                            log::debug!("output_monitor: poll error: {}", err);
+                            break;
+                        }
+                        // Check for cancellation signal
+                        if pollfds[1].revents & libc::POLLIN != 0 {
+                            log::debug!("output_monitor: cancellation signaled, exiting");
+                            break;
+                        }
+                        // Check for hangup or error on output (pipe closed)
+                        if pollfds[0].revents & (libc::POLLHUP | libc::POLLERR) != 0 {
+                            log::debug!("output_monitor: output closed (revents={:#x}), cancelling", pollfds[0].revents);
+                            cancel.cancel();
+                            break;
+                        }
+                    }
+                    log::debug!("output_monitor: exiting");
+                }))
+            };
+
+            #[cfg(not(unix))]
+            let _output_monitor: Option<()> = None;
+
             // prepare receive/transmit channels for input data
             let (txi, rxi) = channel::bounded(1);
             // prepare receive/transmit channels for output data
@@ -611,7 +721,7 @@ impl App {
                     let mut input = Some(input_ref.open()?.tail(self.options.tail, delimiter.clone())?);
                     let is_file = |meta: &Option<fs::Metadata>| meta.as_ref().map(|m|m.is_file()).unwrap_or(false);
                     let mut send_failed = false;
-                    let process = |input: &mut Option<Input>, is_file: bool, send_failed: &mut bool| {
+                    let process = |input: &mut Option<Input>, is_file: bool, send_failed: &mut bool| -> Result<bool> {
                         if let Some(input) = input {
                             for (j, item) in scanner.items(&mut input.stream.as_sequential()).with_max_segment_size(self.options.max_message_size.into()).enumerate() {
                                 if txi.send((i, j, item?)).is_err() {
@@ -671,7 +781,37 @@ impl App {
                             }
                         }, Some(&cancellation))
                     } else {
-                        process(&mut input, is_file(&meta), &mut send_failed).map(|_|())
+                        // For stdin, we need to make the read interruptible.
+                        // On Unix, we use poll() to wait on both stdin and a cancellation pipe.
+                        #[cfg(unix)]
+                        {
+                            log::debug!("reader {}: stdin detected, setting up interruptible read with poll()", i);
+                            let stdin_fd = std::io::stdin().as_raw_fd();
+                            let cancel_fd = cancellation.cancel_fd();
+                            let mut reader = CancellableReader { fd: stdin_fd, cancel_fd };
+                            log::debug!("reader {}: starting stdin read loop with cancel_fd={}", i, cancel_fd);
+                            for (j, item) in scanner.items(&mut reader).with_max_segment_size(self.options.max_message_size.into()).enumerate() {
+                                match item {
+                                    Ok(segment) => {
+                                        if txi.send((i, j, segment)).is_err() {
+                                            log::debug!("reader {}: send failed, channel disconnected", i);
+                                            break;
+                                        }
+                                    }
+                                    Err(e) => {
+                                        // When cancellation signals, poll() returns and we get Interrupted.
+                                        log::debug!("reader {}: read error (likely cancellation): {}", i, e);
+                                        break;
+                                    }
+                                }
+                            }
+                            log::debug!("reader {}: exited stdin read loop", i);
+                            Ok(())
+                        }
+                        #[cfg(not(unix))]
+                        {
+                            process(&mut input, is_file(&meta), &mut send_failed).map(|_|())
+                        }
                     }
                 }));
                 readers.push(reader);

@@ -3,7 +3,6 @@ use std::path::PathBuf;
 
 // local imports
 use crate::error::Result;
-use crate::output::PipeCloseSignal;
 
 // ---
 
@@ -18,33 +17,54 @@ pub type EventKind = notify::EventKind;
 /// The implementation is platform-specific but provides a unified interface.
 pub struct Cancellation {
     inner: imp::Cancellation,
-    /// Optional signal to monitor for pipe closure (e.g., pager stdin).
-    /// When this signals, it triggers cancellation.
-    close_signal: Option<PipeCloseSignal>,
+    /// Cancellation pipe for interrupting blocked reads.
+    /// Writing to writer wakes up any poll() waiting on reader.
+    #[cfg(unix)]
+    cancel_pipe: (std::os::unix::io::RawFd, std::os::unix::io::RawFd), // (reader, writer)
 }
 
 impl Cancellation {
     /// Creates a new cancellation token.
     pub fn new() -> std::io::Result<Self> {
+        #[cfg(unix)]
+        let cancel_pipe = {
+            let mut fds = [0i32; 2];
+            if unsafe { libc::pipe(fds.as_mut_ptr()) } == -1 {
+                return Err(std::io::Error::last_os_error());
+            }
+            // Set non-blocking on reader
+            unsafe { libc::fcntl(fds[0], libc::F_SETFL, libc::O_NONBLOCK) };
+            (fds[0], fds[1])
+        };
         Ok(Self {
             inner: imp::Cancellation::new()?,
-            close_signal: None,
+            #[cfg(unix)]
+            cancel_pipe,
         })
     }
 
-    /// Configures the cancellation to also trigger when the given pipe close signal fires.
-    ///
-    /// This is useful for detecting when a pager process exits, allowing follow mode
-    /// to terminate immediately.
-    pub fn with_close_signal(mut self, signal: PipeCloseSignal) -> Self {
-        self.close_signal = Some(signal);
-        self
-    }
-
     /// Signals cancellation. This is thread-safe and triggers immediate wakeup.
+    ///
+    /// This will also close any file descriptors registered via `register_kill_fd`,
+    /// which will cause any threads blocked on reading from those fds to wake up
+    /// with an error.
     pub fn cancel(&self) {
         log::debug!("fsmon::Cancellation::cancel() called");
-        self.inner.cancel()
+        self.inner.cancel();
+
+        // Write to cancel pipe to wake up any poll() waiting on it
+        #[cfg(unix)]
+        {
+            log::debug!("fsmon::Cancellation::cancel: writing to cancel pipe");
+            unsafe { libc::write(self.cancel_pipe.1, [1u8].as_ptr() as *const libc::c_void, 1) };
+        }
+    }
+
+    /// Returns the read end of the cancellation pipe.
+    /// This can be used with poll() to wait for cancellation.
+    #[cfg(unix)]
+    pub fn cancel_fd(&self) -> std::os::unix::io::RawFd {
+        self.cancel_pipe.0
     }
 }
 
@@ -100,13 +120,6 @@ where
 
     log::debug!("fsmon::run: entering imp::run with {} watch paths", watch.len());
 
-    #[cfg(unix)]
-    let trigger_fd = cancellation.and_then(|c| c.close_signal.as_ref().map(|s| s.fd));
-    #[cfg(not(unix))]
-    let trigger_fd: Option<()> = None;
-
-    let close_signal = cancellation.and_then(|c| c.close_signal.as_ref());
-
     imp::run(
         watch,
         |event| {
@@ -118,8 +131,6 @@ where
             }
         },
         cancellation.map(|c| &c.inner),
-        trigger_fd,
-        close_signal,
     )
 }
 
@@ -202,23 +213,12 @@ mod imp {
 
     const FALLBACK_POLLING_INTERVAL: Duration = Duration::from_secs(1);
 
-    type TriggerFd = std::os::unix::io::RawFd;
-
-    pub fn run<H>(
-        paths: Vec<PathBuf>,
-        mut handle: H,
-        cancellation: Option<&Cancellation>,
-        trigger_fd: Option<TriggerFd>,
-        _close_signal: Option<&PipeCloseSignal>,
-    ) -> Result<()>
+    pub fn run<H>(paths: Vec<PathBuf>, mut handle: H, cancellation: Option<&Cancellation>) -> Result<()>
     where
         H: FnMut(Event) -> Result<()>,
     {
-        // If we have both cancellation and a trigger fd, use fully event-based poll() loop
-        if cancellation.is_some() && trigger_fd.is_some() {
-            let trigger_fd = trigger_fd.unwrap();
-            let cancellation = cancellation.unwrap();
-
+        // If we have cancellation, use fully event-based poll() loop
+        if let Some(cancellation) = cancellation {
             // Create a socket pair for notify event signaling
             let (notify_reader, notify_writer) = UnixStream::pair()?;
             notify_reader.set_nonblocking(true)?;
@@ -226,8 +226,7 @@ mod imp {
             let notify_read_fd = notify_reader.as_raw_fd();
 
             // Shared queue for events from the notify thread
-            let event_queue: Arc<Mutex<VecDeque<notify::Result<Event>>>> =
-                Arc::new(Mutex::new(VecDeque::new()));
+            let event_queue: Arc<Mutex<VecDeque<notify::Result<Event>>>> = Arc::new(Mutex::new(VecDeque::new()));
             let event_queue_writer = Arc::clone(&event_queue);
 
             // Create the watcher with a channel
@@ -318,8 +317,7 @@ mod imp {
             let cancel_read_fd = cancel_reader.as_raw_fd();
 
             // Shared queue for events
-            let event_queue: Arc<Mutex<VecDeque<notify::Result<Event>>>> =
-                Arc::new(Mutex::new(VecDeque::new()));
+            let event_queue: Arc<Mutex<VecDeque<notify::Result<Event>>>> = Arc::new(Mutex::new(VecDeque::new()));
             let event_queue_writer = Arc::clone(&event_queue);
 
             let (tx, rx) = mpsc::channel();
@@ -418,22 +416,12 @@ mod imp {
 
     const FALLBACK_POLLING_INTERVAL: Duration = Duration::from_secs(1);
 
-    type TriggerFd = ();
-
-    pub fn run<H>(
-        paths: Vec<PathBuf>,
-        mut handle: H,
-        cancellation: Option<&Cancellation>,
-        _trigger_fd: Option<TriggerFd>,
-        close_signal: Option<&PipeCloseSignal>,
-    ) -> Result<()>
+    pub fn run<H>(paths: Vec<PathBuf>, mut handle: H, cancellation: Option<&Cancellation>) -> Result<()>
     where
         H: FnMut(Event) -> Result<()>,
     {
         use windows_sys::Win32::Foundation::{CloseHandle, HANDLE, WAIT_OBJECT_0};
-        use windows_sys::Win32::System::Threading::{
-            CreateEventW, OpenProcess, SetEvent, WaitForMultipleObjects, INFINITE, PROCESS_SYNCHRONIZE,
-        };
+        use windows_sys::Win32::System::Threading::{CreateEventW, INFINITE, SetEvent, WaitForMultipleObjects};
 
         if let Some(cancellation) = cancellation {
             // Create a Windows Event for signaling notify events
@@ -452,8 +440,7 @@ mod imp {
             let _notify_event_guard = EventGuard(notify_event);
 
             // Shared queue for events
-            let event_queue: Arc<Mutex<VecDeque<notify::Result<Event>>>> =
-                Arc::new(Mutex::new(VecDeque::new()));
+            let event_queue: Arc<Mutex<VecDeque<notify::Result<Event>>>> = Arc::new(Mutex::new(VecDeque::new()));
             let event_queue_writer = Arc::clone(&event_queue);
 
             // Shared flag for signaling termination
@@ -468,59 +455,30 @@ mod imp {
                 watcher.watch(path, RecursiveMode::NonRecursive)?;
             }
 
-            // Spawn thread to receive notify events and signal via Windows Event
-            // We cast HANDLE to isize to make it Send (it's safe because we only use it for SetEvent)
-            let notify_event_raw = notify_event as isize;
-            let _notify_thread = thread::spawn(move || {
+            // Spawn a thread to receive notify events and push to the queue
+            let notify_thread = thread::spawn(move || {
                 for event in rx {
                     if let Ok(mut queue) = event_queue_writer.lock() {
                         queue.push_back(event);
                     }
-                    // Signal that an event is available
-                    unsafe { SetEvent(notify_event_raw as HANDLE) };
+                    unsafe { SetEvent(notify_event) };
                 }
-                // Channel closed, signal termination
-                let (lock, _cvar) = &*terminated_writer;
+                // Signal termination when the channel closes
+                let (lock, cvar) = &*terminated_writer;
                 if let Ok(mut term) = lock.lock() {
                     *term = true;
+                    cvar.notify_all();
                 }
-                unsafe { SetEvent(notify_event_raw as HANDLE) };
             });
 
-            // Open the process handle if we have a close signal
-            let process_handle: HANDLE = if let Some(signal) = close_signal {
-                unsafe { OpenProcess(PROCESS_SYNCHRONIZE, 0, signal.process_id) }
-            } else {
-                std::ptr::null_mut()
-            };
-
-            struct ProcessHandleGuard(HANDLE);
-            impl Drop for ProcessHandleGuard {
-                fn drop(&mut self) {
-                    if !self.0.is_null() {
-                        unsafe { CloseHandle(self.0) };
-                    }
-                }
-            }
-            let _process_handle_guard = ProcessHandleGuard(process_handle);
-
-            // Main event loop using WaitForMultipleObjects with INFINITE timeout
             loop {
                 if cancellation.is_cancelled() {
                     log::debug!("fsmon::imp::run (windows): cancellation detected");
                     return Ok(());
                 }
 
-                // Build the handle array for WaitForMultipleObjects
-                let (handles, handle_count): ([HANDLE; 2], u32) = if !process_handle.is_null() {
-                    ([notify_event, process_handle], 2)
-                } else {
-                    ([notify_event, std::ptr::null_mut()], 1)
-                };
-
                 // Wait with INFINITE timeout - fully event-based
-                let wait_result =
-                    unsafe { WaitForMultipleObjects(handle_count, handles.as_ptr(), 0, INFINITE) };
+                let wait_result = unsafe { WaitForMultipleObjects(1, [notify_event].as_ptr(), 0, INFINITE) };
 
                 if wait_result == WAIT_OBJECT_0 {
                     // Notify event signaled - process events from the queue
@@ -536,27 +494,20 @@ mod imp {
                         }
                     }
 
-                    // Check if the notify thread terminated
+                    // Check if notify thread terminated
                     let (lock, _) = &*terminated;
                     if let Ok(term) = lock.lock() {
                         if *term {
-                            return Err(Error::RecvTimeoutError {
-                                source: mpsc::RecvTimeoutError::Disconnected,
-                            });
+                            log::debug!("fsmon::imp::run (windows): notify thread terminated");
+                            break;
                         }
-                    }
-                } else if wait_result == WAIT_OBJECT_0 + 1 && !process_handle.is_null() {
-                    // Process handle signaled - pager has exited
-                    log::debug!("fsmon::imp::run (windows): pager process exited");
-                    return Ok(());
-                } else {
-                    // Error or timeout (shouldn't happen with INFINITE)
-                    let err = std::io::Error::last_os_error();
-                    if err.raw_os_error() != Some(0) {
-                        return Err(err.into());
                     }
                 }
             }
+
+            // Wait for notify thread to finish
+            let _ = notify_thread.join();
+            Ok(())
         } else {
             // Original behavior without cancellation
             let (tx, rx) = mpsc::channel();
@@ -622,17 +573,10 @@ mod imp {
         }
     }
 
-    pub fn run<H>(
-        paths: Vec<PathBuf>,
-        mut handle: H,
-        cancellation: Option<&Cancellation>,
-        trigger_fd: Option<RawFd>,
-        _close_signal: Option<&PipeCloseSignal>,
-    ) -> Result<()>
+    pub fn run<H>(paths: Vec<PathBuf>, mut handle: H, cancellation: Option<&Cancellation>) -> Result<()>
     where
         H: FnMut(Event) -> Result<()>,
     {
-        // Note: _close_signal is not used on macOS since we use the fd-based trigger_fd mechanism
         log::debug!("fsmon::imp::run (macos): starting with {} paths", paths.len());
         let mut watcher = Watcher::new()?;
         let mut added = HashSet::<&PathBuf>::new();
@@ -640,25 +584,15 @@ mod imp {
 
         // Store cancellation fd for comparison
         let cancel_fd_orig = cancellation.map(|c| c.as_raw_fd());
-        log::debug!(
-            "fsmon::imp::run (macos): cancellation fd = {:?}, trigger fd = {:?}",
-            cancel_fd_orig,
-            trigger_fd
-        );
+        log::debug!("fsmon::imp::run (macos): cancellation fd = {:?}", cancel_fd_orig);
 
-        // Duplicate fds so kqueue can own the duplicates without affecting the originals.
-        // The kqueue crate's add_fd takes ownership of the fd, so we must give it duplicates.
+        // Duplicate fd so kqueue can own the duplicate without affecting the original.
+        // The kqueue crate's add_fd takes ownership of the fd, so we must give it a duplicate.
         let cancel_fd_dup = match cancel_fd_orig {
             Some(fd) => Some(dup_fd(fd)?),
             None => None,
         };
         let cancel_fd = cancel_fd_dup.as_ref().map(|fd| fd.as_raw_fd());
-
-        let trigger_fd_dup = match trigger_fd {
-            Some(fd) => Some(dup_fd(fd)?),
-            None => None,
-        };
-        let trigger_fd_raw = trigger_fd_dup.as_ref().map(|fd| fd.as_raw_fd());
 
         // Add cancellation fd to kqueue if provided
         if let Some(fd) = cancel_fd {
@@ -666,20 +600,8 @@ mod imp {
             log::debug!("fsmon::imp::run (macos): added cancellation fd {} to watcher", fd);
         }
 
-        // Add trigger fd to kqueue if provided (for detecting pager exit)
-        // We use EVFILT_READ which will signal when the pipe is closed (EOF)
-        if let Some(fd) = trigger_fd_raw {
-            watcher.add_fd(fd, EventFilter::EVFILT_READ, FilterFlag::empty())?;
-            log::debug!(
-                "fsmon::imp::run (macos): added trigger fd {} to watcher (dup of {:?})",
-                fd,
-                trigger_fd
-            );
-        }
-
-        // Keep the duplicated fds alive - they will be dropped when this function returns
+        // Keep the duplicated fd alive - it will be dropped when this function returns
         let _cancel_fd_guard = cancel_fd_dup;
-        let _trigger_fd_guard = trigger_fd_dup;
 
         let flags = FilterFlag::NOTE_FFNOP
             | FilterFlag::NOTE_DELETE
@@ -692,11 +614,6 @@ mod imp {
 
             // Re-add cancellation fd on each outer loop iteration since watch() clears the changelist
             if let Some(fd) = cancel_fd {
-                watcher.add_fd(fd, EventFilter::EVFILT_READ, FilterFlag::empty())?;
-            }
-
-            // Re-add trigger fd on each outer loop iteration
-            if let Some(fd) = trigger_fd_raw {
                 watcher.add_fd(fd, EventFilter::EVFILT_READ, FilterFlag::empty())?;
             }
 
@@ -726,17 +643,12 @@ mod imp {
 
                 log::debug!("fsmon::imp::run (macos): received kqueue event: {:?}", event);
 
-                // Check if this is a cancellation or trigger event (check by fd)
-                match &event.ident {
-                    Ident::Fd(fd) if cancel_fd == Some(*fd) => {
+                // Check if this is a cancellation event (check by fd)
+                if let Ident::Fd(fd) = &event.ident {
+                    if cancel_fd == Some(*fd) {
                         log::debug!("fsmon::imp::run (macos): cancellation detected via fd match");
                         return Ok(());
                     }
-                    Ident::Fd(fd) if trigger_fd_raw == Some(*fd) => {
-                        log::debug!("fsmon::imp::run (macos): trigger fd signaled (pager closed), exiting");
-                        return Ok(());
-                    }
-                    _ => {}
                 }
 
                 match event {

@@ -25,6 +25,7 @@ pub struct Pager {
 /// to terminate immediately rather than waiting for the next write to fail.
 ///
 /// Platform-specific implementation details are hidden behind this type.
+#[allow(dead_code)]
 pub struct PipeCloseSignal {
     #[cfg(unix)]
     pub(crate) fd: std::os::unix::io::RawFd,
@@ -88,7 +89,10 @@ impl Pager {
     pub fn close_signal(&self) -> Option<PipeCloseSignal> {
         #[cfg(unix)]
         {
-            self.process.stdin.as_ref().map(|stdin| PipeCloseSignal::from_fd(stdin.as_raw_fd()))
+            self.process
+                .stdin
+                .as_ref()
+                .map(|stdin| PipeCloseSignal::from_fd(stdin.as_raw_fd()))
         }
         #[cfg(windows)]
         {
