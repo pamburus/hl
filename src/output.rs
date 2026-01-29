@@ -13,11 +13,9 @@ use std::time::Duration;
 #[cfg(unix)]
 use std::{
     io::{IsTerminal, stdin},
+    os::unix::io::AsRawFd,
     os::unix::process::ExitStatusExt,
 };
-
-#[cfg(target_os = "macos")]
-use std::os::unix::io::AsRawFd;
 
 use crate::error::*;
 
@@ -43,10 +41,11 @@ impl OutputMonitor for NoOpMonitor {
 
 /// Monitor for stdout that detects when the read end of the pipe closes.
 /// On macOS, this uses kqueue to detect EOF on the write end.
+/// On Linux, this uses poll() to detect POLLHUP/POLLERR on the write end.
 /// On other platforms, this is a no-op (returns false).
 pub struct StdoutMonitor {
     closed: Arc<AtomicBool>,
-    #[cfg(target_os = "macos")]
+    #[cfg(any(target_os = "macos", target_os = "linux"))]
     _handle: Option<thread::JoinHandle<()>>,
 }
 
@@ -129,8 +128,80 @@ impl StdoutMonitor {
         }
     }
 
-    /// Creates a new stdout monitor (non-macOS version - no-op).
-    #[cfg(not(target_os = "macos"))]
+    /// Creates a new stdout monitor (Linux version using poll).
+    #[cfg(target_os = "linux")]
+    pub fn new() -> Self {
+        use std::io::stdout;
+
+        let closed = Arc::new(AtomicBool::new(false));
+        let closed_clone = Arc::clone(&closed);
+
+        // Get the raw fd for stdout
+        let stdout_fd = stdout().as_raw_fd();
+
+        let handle = thread::spawn(move || {
+            Self::monitor_with_poll(stdout_fd, closed_clone);
+        });
+
+        Self {
+            closed,
+            _handle: Some(handle),
+        }
+    }
+
+    #[cfg(target_os = "linux")]
+    fn monitor_with_poll(fd: std::os::unix::io::RawFd, closed: Arc<AtomicBool>) {
+        use libc::{POLLERR, POLLHUP, POLLNVAL, poll, pollfd};
+
+        let timeout_ms = MONITOR_CHECK_INTERVAL.as_millis() as i32;
+
+        let mut pfd = pollfd {
+            fd,
+            events: 0, // We only care about POLLHUP/POLLERR which are always reported
+            revents: 0,
+        };
+
+        log::debug!("stdout monitor: started monitoring fd {} (linux)", fd);
+
+        loop {
+            if closed.load(Ordering::SeqCst) {
+                log::debug!("stdout monitor: already closed, exiting");
+                break;
+            }
+
+            let ret = unsafe { poll(&mut pfd, 1, timeout_ms) };
+
+            if ret == -1 {
+                let err = std::io::Error::last_os_error();
+                if err.kind() == std::io::ErrorKind::Interrupted {
+                    continue;
+                }
+                log::debug!("stdout monitor: poll() failed: {}", err);
+                break;
+            }
+
+            if ret > 0 {
+                if (pfd.revents & POLLNVAL) != 0 {
+                    log::debug!("stdout monitor: POLLNVAL - invalid fd");
+                    break;
+                }
+
+                if (pfd.revents & (POLLERR | POLLHUP)) != 0 {
+                    log::debug!("stdout monitor: POLLHUP/POLLERR detected on stdout");
+                    closed.store(true, Ordering::SeqCst);
+                    break;
+                }
+            }
+
+            // Reset revents for next iteration
+            pfd.revents = 0;
+        }
+
+        log::debug!("stdout monitor: stopped");
+    }
+
+    /// Creates a new stdout monitor (non-macOS/non-Linux version - no-op).
+    #[cfg(not(any(target_os = "macos", target_os = "linux")))]
     pub fn new() -> Self {
         Self {
             closed: Arc::new(AtomicBool::new(false)),

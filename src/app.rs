@@ -56,6 +56,9 @@ use crate::{
     vfs::LocalFileSystem,
 };
 
+#[cfg(unix)]
+use crate::iox::CancellableReader;
+
 // test imports
 #[cfg(test)]
 use crate::testing::Sample;
@@ -614,7 +617,7 @@ impl App {
                     let mut input = Some(input_ref.open()?.tail(self.options.tail, delimiter.clone())?);
                     let is_file = |meta: &Option<fs::Metadata>| meta.as_ref().map(|m|m.is_file()).unwrap_or(false);
                     let mut send_failed = false;
-                    let process = |input: &mut Option<Input>, is_file: bool, send_failed: &mut bool| {
+                    let process = |input: &mut Option<Input>, is_file: bool, send_failed: &mut bool| -> Result<bool> {
                         if let Some(input) = input {
                             for (j, item) in scanner.items(&mut input.stream.as_sequential()).with_max_segment_size(self.options.max_message_size.into()).enumerate() {
                                 if txi.send((i, j, item?)).is_err() {
@@ -678,7 +681,51 @@ impl App {
                             || cancelled.is_cancelled(),
                         )
                     } else {
-                        process(&mut input, is_file(&meta), &mut send_failed).map(|_|())
+                        // For stdin, we need cancellable reads to respect the cancellation flag.
+                        // On Unix, wrap the stream with CancellableReader that uses poll().
+                        #[cfg(unix)]
+                        {
+                            use std::io::stdin;
+
+                            log::debug!("reader {}: stdin mode with cancellable reader", i);
+                            let stdin_handle = stdin();
+
+                            // Create a cancellable reader that wraps stdin
+                            let cancellable_stdin = CancellableReader::new(
+                                stdin_handle,
+                                || cancelled.is_cancelled(),
+                                CANCELLATION_CHECK_INTERVAL,
+                            );
+
+                            // We need to use the cancellable reader directly with the scanner
+                            let mut cancellable_stdin = cancellable_stdin;
+                            for (j, item) in scanner.items(&mut cancellable_stdin).with_max_segment_size(self.options.max_message_size.into()).enumerate() {
+                                match item {
+                                    Ok(segment) => {
+                                        if txi.send((i, j, segment)).is_err() {
+                                            log::debug!("reader {}: send failed, channel disconnected", i);
+                                            break;
+                                        }
+                                    }
+                                    Err(e) => {
+                                        // Check if this is a cancellation (Interrupted) error
+                                        if let Error::Io(ref io_err) = e {
+                                            if io_err.kind() == std::io::ErrorKind::Interrupted {
+                                                log::debug!("reader {}: stdin read cancelled", i);
+                                                break;
+                                            }
+                                        }
+                                        return Err(e);
+                                    }
+                                }
+                            }
+                            log::debug!("reader {}: stdin loop finished", i);
+                            Ok(())
+                        }
+                        #[cfg(not(unix))]
+                        {
+                            process(&mut input, is_file(&meta), &mut send_failed).map(|_|())
+                        }
                     }
                 }));
                 readers.push(reader);
