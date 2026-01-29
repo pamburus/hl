@@ -155,6 +155,8 @@ ureq = "3"
 
 [target.'cfg(target_os = "macos")'.dependencies]
 kqueue = "1"
+
+[target.'cfg(unix)'.dependencies]
 libc = "0.2"
 
 [profile.release]
