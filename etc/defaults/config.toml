@@ -205,7 +205,6 @@ command = [
   "--ansi",
   "--no-sort",
   "--exact",
-  "--layout=reverse-list",
   "--multi",
   "--bind=ctrl-y:execute-silent(printf %s\\n {+} | pbcopy)",
   "--bind=esc:track-current+clear-query+clear-multi+disable-raw",
