@@ -1,5 +1,6 @@
 // std imports
 use std::path::PathBuf;
+use std::time::Duration;
 
 // local imports
 use crate::error::Result;
@@ -9,11 +10,19 @@ use crate::error::Result;
 pub type Event = notify::Event;
 pub type EventKind = notify::EventKind;
 
+/// Result of handling an event - indicates whether to continue or stop.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ControlFlow {
+    Continue,
+    Stop,
+}
+
 // ---
 
-pub fn run<H>(mut paths: Vec<PathBuf>, mut handle: H) -> Result<()>
+pub fn run<H, C>(mut paths: Vec<PathBuf>, mut handle: H, is_cancelled: C) -> Result<()>
 where
-    H: FnMut(Event) -> Result<()>,
+    H: FnMut(Event) -> Result<ControlFlow>,
+    C: Fn() -> bool,
 {
     log::debug!("fsmon::run: starting with {} paths", paths.len());
     if paths.is_empty() {
@@ -48,20 +57,23 @@ where
     watch.dedup();
 
     log::debug!("fsmon::run: entering imp::run with {} watch paths", watch.len());
-    imp::run(watch, |event| {
-        log::debug!("fsmon::run: received event: {:?}", event.kind);
-        if event.paths.iter().any(|path| paths.binary_search(path).is_ok()) {
-            handle(event)
-        } else {
-            Ok(())
-        }
-    })
+    imp::run(
+        watch,
+        |event| {
+            log::debug!("fsmon::run: received event: {:?}", event.kind);
+            if event.paths.iter().any(|path| paths.binary_search(path).is_ok()) {
+                handle(event)
+            } else {
+                Ok(ControlFlow::Continue)
+            }
+        },
+        &is_cancelled,
+    )
 }
 
 #[cfg(not(target_os = "macos"))]
 mod imp {
-    use std::sync::mpsc::{self};
-    use std::time::Duration;
+    use std::sync::mpsc::{self, RecvTimeoutError};
 
     use notify::{Config, RecommendedWatcher, RecursiveMode, Watcher};
 
@@ -69,10 +81,12 @@ mod imp {
     use crate::error::Error;
 
     const FALLBACK_POLLING_INTERVAL: Duration = Duration::from_secs(1);
+    const CANCELLATION_CHECK_INTERVAL: Duration = Duration::from_millis(50);
 
-    pub fn run<H>(paths: Vec<PathBuf>, mut handle: H) -> Result<()>
+    pub fn run<H, C>(paths: Vec<PathBuf>, mut handle: H, is_cancelled: C) -> Result<()>
     where
-        H: FnMut(Event) -> Result<()>,
+        H: FnMut(Event) -> Result<ControlFlow>,
+        C: Fn() -> bool,
     {
         let (tx, rx) = mpsc::channel();
         let mut watcher = RecommendedWatcher::new(tx, Config::default().with_poll_interval(FALLBACK_POLLING_INTERVAL))?;
@@ -82,10 +96,25 @@ mod imp {
         }
 
         loop {
-            match rx.recv() {
-                Ok(Ok(event)) => handle(event)?,
+            if is_cancelled() {
+                log::debug!("fsmon::imp::run: cancelled, exiting");
+                return Ok(());
+            }
+
+            match rx.recv_timeout(CANCELLATION_CHECK_INTERVAL) {
+                Ok(Ok(event)) => {
+                    if handle(event)? == ControlFlow::Stop {
+                        log::debug!("fsmon::imp::run: handler requested stop");
+                        return Ok(());
+                    }
+                }
                 Ok(Err(err)) => return Err(err.into()),
-                Err(err) => return Err(Error::RecvTimeoutError { source: err.into() }),
+                Err(RecvTimeoutError::Timeout) => continue,
+                Err(RecvTimeoutError::Disconnected) => {
+                    return Err(Error::RecvTimeoutError {
+                        source: RecvTimeoutError::Disconnected.into(),
+                    });
+                }
             };
         }
     }
@@ -93,16 +122,19 @@ mod imp {
 
 #[cfg(target_os = "macos")]
 mod imp {
-    use std::{collections::HashSet, time::Duration};
+    use std::collections::HashSet;
 
     use kqueue::{EventData, EventFilter, FilterFlag, Ident, Vnode, Watcher};
     use notify::event::{CreateKind, DataChange, MetadataKind, ModifyKind, RemoveKind, RenameMode};
 
     use super::*;
 
-    pub fn run<H>(paths: Vec<PathBuf>, mut handle: H) -> Result<()>
+    const CANCELLATION_CHECK_INTERVAL: Duration = Duration::from_millis(50);
+
+    pub fn run<H, C>(paths: Vec<PathBuf>, mut handle: H, is_cancelled: C) -> Result<()>
     where
-        H: FnMut(Event) -> Result<()>,
+        H: FnMut(Event) -> Result<ControlFlow>,
+        C: Fn() -> bool,
     {
         log::debug!("fsmon::imp::run (macos): starting with {} paths", paths.len());
         let mut watcher = Watcher::new()?;
@@ -116,13 +148,23 @@ mod imp {
             | FilterFlag::NOTE_EXTEND;
 
         loop {
+            if is_cancelled() {
+                log::debug!("fsmon::imp::run (macos): cancelled, exiting");
+                return Ok(());
+            }
+
             log::debug!("fsmon::imp::run (macos): outer loop iteration, synced={}", synced);
             for path in &paths {
                 if watcher.add_filename(path, EventFilter::EVFILT_VNODE, flags).is_ok() {
                     added.insert(path);
                     if !synced {
                         log::debug!("fsmon::imp::run (macos): calling handle for path {:?}", path);
-                        handle(Event::new(EventKind::Create(CreateKind::Any)).add_path(path.clone()))?;
+                        if handle(Event::new(EventKind::Create(CreateKind::Any)).add_path(path.clone()))?
+                            == ControlFlow::Stop
+                        {
+                            log::debug!("fsmon::imp::run (macos): handler requested stop");
+                            return Ok(());
+                        }
                     }
                 }
             }
@@ -132,7 +174,12 @@ mod imp {
             watcher.watch()?;
 
             while synced {
-                let event = if let Some(event) = watcher.poll(Some(Duration::from_secs(1))) {
+                if is_cancelled() {
+                    log::debug!("fsmon::imp::run (macos): cancelled in inner loop, exiting");
+                    return Ok(());
+                }
+
+                let event = if let Some(event) = watcher.poll(Some(CANCELLATION_CHECK_INTERVAL)) {
                     event
                 } else {
                     log::trace!("fsmon::imp::run (macos): poll timeout, continuing");
@@ -180,7 +227,10 @@ mod imp {
                             _ => Event::new(EventKind::Other),
                         };
                         log::debug!("fsmon::imp::run (macos): calling handle for event");
-                        handle(event)?;
+                        if handle(event)? == ControlFlow::Stop {
+                            log::debug!("fsmon::imp::run (macos): handler requested stop");
+                            return Ok(());
+                        }
                     }
                     _ => unreachable!(),
                 };
