@@ -1344,6 +1344,7 @@ dependencies = [
  "wildcard",
  "wildmatch",
  "winapi-util",
+ "windows-sys 0.59.0",
  "wyhash",
  "yaml-peg",
 ]

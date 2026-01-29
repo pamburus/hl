@@ -28,14 +28,19 @@ pub struct Pager {
 pub struct PipeCloseSignal {
     #[cfg(unix)]
     pub(crate) fd: std::os::unix::io::RawFd,
-    #[cfg(not(unix))]
-    _private: (),
+    #[cfg(windows)]
+    pub(crate) process_id: u32,
 }
 
 impl PipeCloseSignal {
     #[cfg(unix)]
     pub(crate) fn from_fd(fd: std::os::unix::io::RawFd) -> Self {
         Self { fd }
+    }
+
+    #[cfg(windows)]
+    pub(crate) fn from_process_id(process_id: u32) -> Self {
+        Self { process_id }
     }
 }
 
@@ -85,9 +90,9 @@ impl Pager {
         {
             self.process.stdin.as_ref().map(|stdin| PipeCloseSignal::from_fd(stdin.as_raw_fd()))
         }
-        #[cfg(not(unix))]
+        #[cfg(windows)]
         {
-            None
+            Some(PipeCloseSignal::from_process_id(self.process.id()))
         }
     }
 
