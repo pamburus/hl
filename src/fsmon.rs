@@ -58,7 +58,11 @@ where
     run_with_cancellation(paths, handle, None)
 }
 
-pub fn run_with_cancellation<H>(mut paths: Vec<PathBuf>, mut handle: H, cancellation: Option<&Cancellation>) -> Result<()>
+pub fn run_with_cancellation<H>(
+    mut paths: Vec<PathBuf>,
+    mut handle: H,
+    cancellation: Option<&Cancellation>,
+) -> Result<()>
 where
     H: FnMut(Event) -> Result<()>,
 {
@@ -101,18 +105,24 @@ where
     #[cfg(not(unix))]
     let trigger_fd: Option<()> = None;
 
-    imp::run(watch, |event| {
-        log::debug!("fsmon::run: received event: {:?}", event.kind);
-        if event.paths.iter().any(|path| paths.binary_search(path).is_ok()) {
-            handle(event)
-        } else {
-            Ok(())
-        }
-    }, cancellation.map(|c| &c.inner), trigger_fd)
+    imp::run(
+        watch,
+        |event| {
+            log::debug!("fsmon::run: received event: {:?}", event.kind);
+            if event.paths.iter().any(|path| paths.binary_search(path).is_ok()) {
+                handle(event)
+            } else {
+                Ok(())
+            }
+        },
+        cancellation.map(|c| &c.inner),
+        trigger_fd,
+    )
 }
 
 // Platform-specific cancellation implementations
-#[cfg(unix)]
+// Only used on non-macOS platforms; macOS has its own implementation in imp
+#[cfg(all(unix, not(target_os = "macos")))]
 mod cancellation {
     use std::io::{self, Read, Write};
     use std::os::unix::net::UnixStream;
@@ -188,7 +198,12 @@ mod imp {
     #[cfg(not(unix))]
     type TriggerFd = ();
 
-    pub fn run<H>(paths: Vec<PathBuf>, mut handle: H, cancellation: Option<&Cancellation>, _trigger_fd: Option<TriggerFd>) -> Result<()>
+    pub fn run<H>(
+        paths: Vec<PathBuf>,
+        mut handle: H,
+        cancellation: Option<&Cancellation>,
+        _trigger_fd: Option<TriggerFd>,
+    ) -> Result<()>
     where
         H: FnMut(Event) -> Result<()>,
     {
@@ -283,7 +298,12 @@ mod imp {
         }
     }
 
-    pub fn run<H>(paths: Vec<PathBuf>, mut handle: H, cancellation: Option<&Cancellation>, trigger_fd: Option<RawFd>) -> Result<()>
+    pub fn run<H>(
+        paths: Vec<PathBuf>,
+        mut handle: H,
+        cancellation: Option<&Cancellation>,
+        trigger_fd: Option<RawFd>,
+    ) -> Result<()>
     where
         H: FnMut(Event) -> Result<()>,
     {
@@ -294,7 +314,11 @@ mod imp {
 
         // Store cancellation fd for comparison
         let cancel_fd_orig = cancellation.map(|c| c.as_raw_fd());
-        log::debug!("fsmon::imp::run (macos): cancellation fd = {:?}, trigger fd = {:?}", cancel_fd_orig, trigger_fd);
+        log::debug!(
+            "fsmon::imp::run (macos): cancellation fd = {:?}, trigger fd = {:?}",
+            cancel_fd_orig,
+            trigger_fd
+        );
 
         // Duplicate fds so kqueue can own the duplicates without affecting the originals.
         // The kqueue crate's add_fd takes ownership of the fd, so we must give it duplicates.
@@ -320,7 +344,11 @@ mod imp {
         // We use EVFILT_READ which will signal when the pipe is closed (EOF)
         if let Some(fd) = trigger_fd_raw {
             watcher.add_fd(fd, EventFilter::EVFILT_READ, FilterFlag::empty())?;
-            log::debug!("fsmon::imp::run (macos): added trigger fd {} to watcher (dup of {:?})", fd, trigger_fd);
+            log::debug!(
+                "fsmon::imp::run (macos): added trigger fd {} to watcher (dup of {:?})",
+                fd,
+                trigger_fd
+            );
         }
 
         // Keep the duplicated fds alive - they will be dropped when this function returns
