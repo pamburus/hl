@@ -314,6 +314,7 @@ impl RecordFormatterBuilder {
         RecordFormatter {
             theme: self.theme.unwrap_or_default(),
             unescape_fields: !self.raw_fields,
+            prettify_field_keys: !self.raw_fields && cfg.prettify_field_keys.unwrap_or(true),
             ts_formatter,
             ts_width,
             ts_stub,
@@ -379,6 +380,7 @@ impl Sample for RecordFormatterBuilder {
 pub struct RecordFormatter {
     theme: Arc<Theme>,
     unescape_fields: bool,
+    prettify_field_keys: bool,
     ts_formatter: DateTimeFormatter,
     ts_width: TextWidth,
     ts_stub: String,
@@ -893,12 +895,16 @@ impl KeyPrefix {
     }
 
     #[inline(always)]
-    fn push(&mut self, key: &str) -> usize {
+    fn push(&mut self, key: &str, prettify: bool) -> usize {
         let len = self.len();
         if len != 0 {
             self.value.push(b'.');
         }
-        key.key_prettify(&mut self.value);
+        if prettify {
+            key.key_prettify(&mut self.value);
+        } else {
+            self.value.extend_from_slice(key.as_bytes());
+        }
         self.len() - len
     }
 
@@ -1178,7 +1184,7 @@ impl<'a> FieldFormatter<'a> {
         fs: &mut FormattingStateWithRec,
     ) -> FormattedFieldVariant {
         if fs.flatten && matches!(value, RawValue::Object(_)) {
-            return FormattedFieldVariant::Flattened(fs.key_prefix.push(key));
+            return FormattedFieldVariant::Flattened(fs.key_prefix.push(key, self.rf.prettify_field_keys));
         }
 
         if !fs.has_fields {
@@ -1208,7 +1214,11 @@ impl<'a> FieldFormatter<'a> {
                         buf.push(b'.');
                     }
                 }
-                key.key_prettify(buf);
+                if self.rf.prettify_field_keys {
+                    key.key_prettify(buf);
+                } else {
+                    buf.extend_from_slice(key.as_bytes());
+                }
             });
         });
 

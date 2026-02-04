@@ -55,6 +55,7 @@ fn formatter() -> RecordFormatterBuilder {
                 format: MessageFormat::AutoQuoted,
             },
             punctuation: Sample::sample(),
+            prettify_field_keys: None,
         })
 }
 
@@ -2949,4 +2950,127 @@ fn test_multiline_message_in_inline_mode() {
     let result = formatter.format_to_string(&rec);
 
     assert_eq!(result, "`line1\nline2\nline3` key=value");
+}
+
+#[test]
+fn test_prettify_field_keys_disabled() {
+    let rec = Record {
+        message: Some(RawValue::String(EncodedString::json(r#""test message""#))),
+        level: Some(Level::Info),
+        fields: RecordFields::from_slice(&[("k_a", RawValue::String(EncodedString::json(r#""value""#)))]),
+        ..Default::default()
+    };
+
+    let formatter = formatter()
+        .with_theme(Default::default())
+        .with_options(Formatting {
+            flatten: None,
+            expansion: Default::default(),
+            message: MessageFormatting {
+                format: MessageFormat::AutoQuoted,
+            },
+            punctuation: Sample::sample(),
+            prettify_field_keys: Some(false),
+        })
+        .build();
+
+    let result = formatter.format_to_string(&rec);
+    assert!(
+        result.contains("k_a="),
+        "Expected k_a (with underscore) but got: {}",
+        result
+    );
+}
+
+#[test]
+fn test_prettify_field_keys_enabled_default() {
+    let rec = Record {
+        message: Some(RawValue::String(EncodedString::json(r#""test message""#))),
+        level: Some(Level::Info),
+        fields: RecordFields::from_slice(&[("k_a", RawValue::String(EncodedString::json(r#""value""#)))]),
+        ..Default::default()
+    };
+
+    let formatter = formatter()
+        .with_theme(Default::default())
+        .with_options(Formatting {
+            flatten: None,
+            expansion: Default::default(),
+            message: MessageFormatting {
+                format: MessageFormat::AutoQuoted,
+            },
+            punctuation: Sample::sample(),
+            prettify_field_keys: Some(true),
+        })
+        .build();
+
+    let result = formatter.format_to_string(&rec);
+    assert!(
+        result.contains("k-a="),
+        "Expected k-a (with hyphen) but got: {}",
+        result
+    );
+}
+
+#[test]
+fn test_prettify_field_keys_flattened() {
+    let ka = json_raw_value(r#"{"va":{"k_b":42}}"#);
+    let rec = Record {
+        message: Some(RawValue::String(EncodedString::json(r#""test message""#))),
+        level: Some(Level::Info),
+        fields: RecordFields::from_slice(&[("k_a", RawValue::from(RawObject::Json(&ka)))]),
+        ..Default::default()
+    };
+
+    let formatter = formatter()
+        .with_theme(Default::default())
+        .with_flatten(true)
+        .with_options(Formatting {
+            flatten: None,
+            expansion: Default::default(),
+            message: MessageFormatting {
+                format: MessageFormat::AutoQuoted,
+            },
+            punctuation: Sample::sample(),
+            prettify_field_keys: Some(false),
+        })
+        .build();
+
+    let result = formatter.format_to_string(&rec);
+    assert!(
+        result.contains("k_a.va.k_b="),
+        "Expected k_a.va.k_b (with underscores) but got: {}",
+        result
+    );
+}
+
+#[test]
+fn test_prettify_field_keys_raw_fields_override() {
+    let rec = Record {
+        message: Some(RawValue::String(EncodedString::json(r#""test message""#))),
+        level: Some(Level::Info),
+        fields: RecordFields::from_slice(&[("k_a", RawValue::String(EncodedString::json(r#""value""#)))]),
+        ..Default::default()
+    };
+
+    let formatter = formatter()
+        .with_theme(Default::default())
+        .with_raw_fields(true)
+        .with_options(Formatting {
+            flatten: None,
+            expansion: Default::default(),
+            message: MessageFormatting {
+                format: MessageFormat::AutoQuoted,
+            },
+            punctuation: Sample::sample(),
+            prettify_field_keys: Some(true),
+        })
+        .build();
+
+    let result = formatter.format_to_string(&rec);
+    assert!(
+        result.contains("k_a="),
+        "Expected k_a (raw_fields should override prettify) but got: {}",
+        result
+    );
 }
