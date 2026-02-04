@@ -1,4 +1,4 @@
-#:schema https://raw.githubusercontent.com/pamburus/hl/v0.35.3/schema/json/config.schema.json
+#:schema ../../schema/json/config.schema.json
 
 #
 # Time format, see https://man7.org/linux/man-pages/man1/date.1.html for details.
@@ -127,6 +127,9 @@ names = []
 #
 # Flatten nested fields by joining them with a dot. Options: ["always", "never"].
 flatten = "always"
+#
+# Prettify field keys by replacing underscores with hyphens. Options: [true, false].
+prettify-field-keys = true
 
 # Message format [auto-quoted, always-quoted, always-double-quoted, delimited, raw]:
 # * "auto-quoted"          • Automatically enables or disables message quotation to improve clarity or avoid ambiguities.

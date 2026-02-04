@@ -395,6 +395,7 @@ pub struct Formatting {
     pub expansion: ExpansionOptions,
     pub message: MessageFormatting,
     pub punctuation: Punctuation,
+    pub prettify_field_keys: Option<bool>,
 }
 
 #[cfg(test)]
@@ -407,6 +408,7 @@ impl Sample for Formatting {
                 format: MessageFormat::AutoQuoted,
             },
             punctuation: Punctuation::sample(),
+            prettify_field_keys: None,
         }
     }
 }

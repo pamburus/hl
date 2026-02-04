@@ -321,6 +321,9 @@
               "$ref": "#/definitions/display-variant"
             }
           }
+        },
+        "prettify-field-keys": {
+          "type": "boolean"
         }
       }
     },
