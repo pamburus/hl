@@ -155,6 +155,10 @@ install-man-pages:
 release type="patch": (setup "cargo-edit")
     gh workflow run -R pamburus/hl release.yml --ref $(git branch --show-current) --field release-type={{ type }}
 
+[doc('Show current version')]
+version:
+    @cargo read-manifest | jq -r .version
+
 [doc('Bump version')]
 bump type="alpha": (setup "cargo-edit")
     cargo set-version --package hl --bump {{ type }}
