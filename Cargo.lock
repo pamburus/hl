@@ -2472,6 +2472,7 @@ name = "serde-logfmt"
 version = "0.1.2"
 dependencies = [
  "serde",
+ "serde_json",
 ]
 
 [[package]]

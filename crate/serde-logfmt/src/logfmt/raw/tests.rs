@@ -253,3 +253,40 @@ fn test_raw_value_deserialize() {
     assert!(result.is_err());
     let _ = result.unwrap_err().to_string();
 }
+
+#[test]
+fn test_raw_value_from_json_with_escapes_issue_1313() {
+    // Test to reproduce issue #1313
+    // https://github.com/pamburus/hl/issues/1313
+    //
+    // Panic: "invalid type: string \"k:{\\\"uid\\\":\\\"...\\\"}\"", expected a borrowed string"
+    // Location: src/formatting.rs:1065:42 (value.parse().unwrap())
+    //
+    // Root cause: When deserializing JSON with escaped strings into &RawValue,
+    // serde_json must unescape them, so it cannot provide borrowed references.
+    // It calls visit_str() with an owned string instead of visit_borrowed_str().
+    // Since ReferenceFromString visitor only implements visit_borrowed_str(),
+    // this causes the error.
+    //
+    // This happens when:
+    // 1. A JSON object is being parsed (e.g., in formatting.rs:1065)
+    // 2. The ObjectVisitor is configured to use logfmt::raw::RawValue
+    // 3. A field value contains escape sequences like \" or \\
+    // 4. JSON deserializer needs to unescape, preventing borrowed deserialization
+
+    // JSON string that requires unescaping (has \" inside)
+    let json_with_escapes = r#"{"$serde_logfmt::private::RawValue":"k:{\"uid\":\"def35946-79ca-4e02-8aeb-ef79db20c081\"}"}"#;
+
+    let result: Result<&RawValue, _> = serde_json::from_str(json_with_escapes);
+
+    // This fails because JSON deserializer needs to unescape the string
+    assert!(result.is_err(), "Expected error but deserialization succeeded");
+    let error_msg = format!("{}", result.unwrap_err());
+
+    // The error indicates the deserializer called visit_str but we only accept visit_borrowed_str
+    assert!(
+        error_msg.contains("borrowed string") || error_msg.contains("invalid type"),
+        "Error message should indicate the borrowed string issue, got: {}",
+        error_msg
+    );
+}
