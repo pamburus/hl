@@ -1,16 +1,17 @@
 <!--
 Sync Impact Report:
-- Version: 1.4.2 → 1.4.3
+- Version: 1.4.3 → 1.5.0
 - Modified Sections:
-  - Development Workflow & Quality Gates (Version Check): Added git fetch -t requirement
-- Rationale: PATCH version bump - workflow clarification to fetch latest tags
+  - Technology Stack & Standards: Added Typography guidance and expanded Documentation governance
+- Added:
+  - Typography rule: Use spaced en dash ( – ) where em dash would be unspaced
+  - Documentation governance: mdBook documentation must conform to docs/constitution/ architectural rules
+- Rationale: MINOR version bump - new governance guidance for documentation and typography standards
 - Templates requiring updates:
   - ✅ plan-template.md: Compatible - no structural changes needed
   - ✅ spec-template.md: Compatible - no structural changes needed
-  - ✅ tasks-template.md: Compatible - workflow guidance orthogonal to task structure
-- Modified Requirements:
-  - Step 2 of version check now includes git fetch -t to ensure latest tags
-- Date: 2026-02-04
+  - ✅ tasks-template.md: Compatible - guidance additions orthogonal to task structure
+- Date: 2026-02-10
 -->
 
 # hl (High-performance Log viewer) Constitution
@@ -192,4 +193,4 @@ This constitution supersedes all other practices and informal conventions. All P
 3. Documentation of rationale
 4. Migration plan for any breaking changes
 
-**Version**: 1.4.3 | **Ratified**: 2025-11-02 | **Last Amended**: 2026-02-04
+**Version**: 1.5.0 | **Ratified**: 2025-11-02 | **Last Amended**: 2026-02-10
