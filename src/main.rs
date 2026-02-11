@@ -119,7 +119,7 @@ fn run() -> Result<()> {
         cli::PagingOption::Always => true,
         cli::PagingOption::Never => false,
     };
-    let paging = if opt.paging_never || opt.follow { false } else { paging };
+    let paging = if opt.paging_never { false } else { paging };
     let pager = || -> OutputStream {
         if paging {
             if let Ok(pager) = Pager::new() {

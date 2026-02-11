@@ -13,6 +13,7 @@ build = "build.rs"
 [workspace]
 members = [
   ".",
+  "crates/cancel",
   "crates/encstr",
   "crates/enumset-ext",
   "crates/enumset-serde",
@@ -45,6 +46,7 @@ name = "bench"
 
 [dependencies]
 anstream = "0.6"
+cancel = { path = "./crates/cancel" }
 bytefmt = "0.1"
 capnp.workspace = true
 chrono = { version = "0.4", default-features = false, features = ["clock", "serde", "std"] }
@@ -152,6 +154,9 @@ ureq = { version = "3", default-features = false, features = ["gzip", "native-tl
 
 [target.'cfg(not(all(target_os = "windows", target_arch = "aarch64")))'.build-dependencies]
 ureq = "3"
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
 
 [target.'cfg(target_os = "macos")'.dependencies]
 kqueue = "1"

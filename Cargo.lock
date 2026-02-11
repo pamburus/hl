@@ -236,6 +236,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "cancel"
+version = "0.1.0"
+dependencies = [
+ "libc",
+ "windows-sys 0.59.0",
+]
+
+[[package]]
 name = "capnp"
 version = "0.25.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1194,6 +1202,7 @@ dependencies = [
  "base32",
  "byte-strings",
  "bytefmt",
+ "cancel",
  "capnp",
  "capnpc",
  "chrono",
@@ -1233,6 +1242,7 @@ dependencies = [
  "itoa",
  "known-folders",
  "kqueue",
+ "libc",
  "liblzma",
  "log",
  "logos",
