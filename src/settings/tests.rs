@@ -4,7 +4,7 @@ use super::*;
 fn test_default_settings() {
     let test = |settings: &Settings| {
         assert_eq!(settings.concurrency, None);
-        assert_eq!(settings.time_format, "%b %d %T.%3N");
+        assert_eq!(settings.time_format, "%Y-%m-%d %T.%3N");
         assert_eq!(settings.time_zone, chrono_tz::UTC);
         assert_eq!(settings.theme, "uni");
     };
@@ -24,7 +24,7 @@ fn test_load_settings_k8s() {
             show: FieldShowOption::Always,
         })
     );
-    assert_eq!(settings.time_format, "%b %d %T.%3N");
+    assert_eq!(settings.time_format, "%Y-%m-%d %T.%3N");
     assert_eq!(settings.time_zone, chrono_tz::UTC);
     assert_eq!(settings.theme, "uni");
 }
