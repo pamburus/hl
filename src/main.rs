@@ -19,6 +19,8 @@ use terminal_size::terminal_size_of;
 use utf8_supported::{Utf8Support, utf8_supported};
 
 // local imports
+use cancel::CancellationToken;
+
 use hl::{
     Delimiter, IncludeExcludeKeyFilter, KeyMatchOptions, app,
     appdirs::AppDirs,
@@ -373,10 +375,22 @@ fn run() -> Result<()> {
         }
     };
 
+    // Set up cancellation for pager exit in follow mode.
+    let cancellation = pager_process.map(|mut pp| {
+        let ct = Arc::new(CancellationToken::new().expect("failed to create cancellation token"));
+        let ct2 = ct.clone();
+        let handle = std::thread::spawn(move || {
+            pp.wait();
+            ct2.cancel();
+        });
+        (ct, handle)
+    });
+    let cancellation_token = cancellation.as_ref().map(|(ct, _)| ct.clone());
+
     log::debug!("run the app");
 
     // Run the app.
-    let run = || match app.run_with_pager(inputs, output.as_mut(), pager_process.as_mut()) {
+    let run = || match app.run_with_cancellation(inputs, output.as_mut(), cancellation_token) {
         Ok(()) => Ok(()),
         Err(Error::Io(ref e)) if e.kind() == std::io::ErrorKind::BrokenPipe => Ok(()),
         Err(err) => Err(err),
@@ -385,7 +399,15 @@ fn run() -> Result<()> {
     let interrupt_ignore_count = if opt.follow { 0 } else { opt.interrupt_ignore_count };
 
     // Run the app with signal handling.
-    SignalHandler::run(interrupt_ignore_count, std::time::Duration::from_secs(1), run)
+    let result = SignalHandler::run(interrupt_ignore_count, std::time::Duration::from_secs(1), run);
+
+    // Close the output first so the pager gets EOF, then wait for the monitor thread.
+    drop(output);
+    if let Some((_, handle)) = cancellation {
+        handle.join().ok();
+    }
+
+    result
 }
 
 fn list_themes(dirs: &AppDirs, tags: Option<cli::ThemeTagSet>) -> Result<()> {
