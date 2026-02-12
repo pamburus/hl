@@ -73,49 +73,49 @@ function test() {
     local hl="${MAIN_EXECUTABLE:?} --config - -P --color never"
 
     # Default (no options): parses jsonl, logfmt, pretty; shows prefixed and pretty-stripped raw
-    $hl $fixture | check_hash "81e53d5944f93cfc5f26f9eca2c0a4cd99ec7ae48cfccf6f92011b66c6aa584d"
+    $hl $fixture | check_hash "e8fa6e11738adb14ae4dbaa6bdc76778fac74c079cdb144da04bf2ab963ddd69"
     # --delimiter auto: same as default
-    $hl $fixture --delimiter auto | check_hash "81e53d5944f93cfc5f26f9eca2c0a4cd99ec7ae48cfccf6f92011b66c6aa584d"
+    $hl $fixture --delimiter auto | check_hash "e8fa6e11738adb14ae4dbaa6bdc76778fac74c079cdb144da04bf2ab963ddd69"
     # --delimiter crlf: parses first jsonl entry only; everything else is raw
-    $hl $fixture --delimiter crlf | check_hash "4fbecc426cb22b575ce64146a5229dde3923051366f4b3e6ffd24b2205ea6c18"
+    $hl $fixture --delimiter crlf | check_hash "38597e9ed4d0b26d28eabc1f2f82006b76731fe56c9a3f9c301c1f1327d0d1d2"
     # --delimiter newline: parses jsonl, logfmt; shows prefixed, pretty, pretty-stripped raw
-    $hl $fixture --delimiter newline | check_hash "1776b8f301b8809374bdb6fad936c5649f52d2a29c230c13db93db7b86a79e93"
+    $hl $fixture --delimiter newline | check_hash "b6b8befa4872f54ca321e3618e83ad46f6543f82cb378cf3c9051b0c85dca9fc"
 
     # --input-format json: parses only json entries (jsonl, pretty, pretty-stripped)
-    $hl $fixture --input-format json | check_hash "32250d3814dd03f2c5692b31daa73e5273c80914a0c1935acc318ceeb16e9401"
+    $hl $fixture --input-format json | check_hash "3466aeccb479e6d925fdc96319db8de4343813c87fff6cf38c461dcb9dec47f0"
     # --input-format json --delimiter auto: same as above
-    $hl $fixture --input-format json --delimiter auto | check_hash "32250d3814dd03f2c5692b31daa73e5273c80914a0c1935acc318ceeb16e9401"
+    $hl $fixture --input-format json --delimiter auto | check_hash "3466aeccb479e6d925fdc96319db8de4343813c87fff6cf38c461dcb9dec47f0"
     # --input-format json --delimiter crlf: shows first jsonl entry only
-    $hl $fixture --input-format json --delimiter crlf | check_hash "0185e71755887aff184accfd23a8d3778d7d849d1b10a8ac7f0d828ddcbb8e80"
+    $hl $fixture --input-format json --delimiter crlf | check_hash "588779f9f3294429ea8c0b2132b81e862b53041f9dc85beddd40158a223171b8"
     # --input-format json --delimiter newline: shows first jsonl entry only
-    $hl $fixture --input-format json --delimiter newline | check_hash "0185e71755887aff184accfd23a8d3778d7d849d1b10a8ac7f0d828ddcbb8e80"
+    $hl $fixture --input-format json --delimiter newline | check_hash "588779f9f3294429ea8c0b2132b81e862b53041f9dc85beddd40158a223171b8"
     # --input-format json --allow-prefix: parses jsonl and prefixed json entries
-    $hl $fixture --input-format json --allow-prefix | check_hash "f6267579b4e3c4233af9f8dbd09110d34a5fc7556378ae134da3a2959e892e9d"
+    $hl $fixture --input-format json --allow-prefix | check_hash "28c4157badd62d80e185ad48e04b263f8e3623ff354598e736976b408f8011bb"
 
     # --input-format logfmt: parses only logfmt entry
-    $hl $fixture --input-format logfmt | check_hash "604d0912654c2375a9487234de91b3204c2f70de3652e175596d7028f94fb3d1"
+    $hl $fixture --input-format logfmt | check_hash "bef7a37564bcf3fbe1182a0877e1d2cc3d7bfc762f6d823e71c6bd2e6a744ad8"
     # --input-format logfmt --delimiter auto: same as above
-    $hl $fixture --input-format logfmt --delimiter auto | check_hash "604d0912654c2375a9487234de91b3204c2f70de3652e175596d7028f94fb3d1"
+    $hl $fixture --input-format logfmt --delimiter auto | check_hash "bef7a37564bcf3fbe1182a0877e1d2cc3d7bfc762f6d823e71c6bd2e6a744ad8"
     # --input-format logfmt --delimiter crlf: shows nothing
     $hl $fixture --input-format logfmt --delimiter crlf | check_hash "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
     # --input-format logfmt --delimiter newline: same as 'auto' above
-    $hl $fixture --input-format logfmt --delimiter newline | check_hash "604d0912654c2375a9487234de91b3204c2f70de3652e175596d7028f94fb3d1"
+    $hl $fixture --input-format logfmt --delimiter newline | check_hash "bef7a37564bcf3fbe1182a0877e1d2cc3d7bfc762f6d823e71c6bd2e6a744ad8"
     # --input-format logfmt --allow-prefix: same as above
-    $hl $fixture --input-format logfmt --allow-prefix | check_hash "604d0912654c2375a9487234de91b3204c2f70de3652e175596d7028f94fb3d1"
+    $hl $fixture --input-format logfmt --allow-prefix | check_hash "bef7a37564bcf3fbe1182a0877e1d2cc3d7bfc762f6d823e71c6bd2e6a744ad8"
 
     # --allow-prefix: parses jsonl, logfmt, prefixed, space-prefixed; shows pretty raw
-    $hl $fixture --allow-prefix | check_hash "9e56c27e1a2389eec5dfd37ea9e13310454686ce706e7a247bde66803bf1c17c"
+    $hl $fixture --allow-prefix | check_hash "87f593c84d77286a7accaafb2e546e476adbace3356c53e121600264ef965378"
     # --allow-prefix --delimiter auto: same as above
-    $hl $fixture --allow-prefix --delimiter auto | check_hash "9e56c27e1a2389eec5dfd37ea9e13310454686ce706e7a247bde66803bf1c17c"
+    $hl $fixture --allow-prefix --delimiter auto | check_hash "87f593c84d77286a7accaafb2e546e476adbace3356c53e121600264ef965378"
     # --allow-prefix --delimiter crlf: parses first jsonl entry only; everything else is raw
-    $hl $fixture --allow-prefix --delimiter crlf | check_hash "4fbecc426cb22b575ce64146a5229dde3923051366f4b3e6ffd24b2205ea6c18"
+    $hl $fixture --allow-prefix --delimiter crlf | check_hash "38597e9ed4d0b26d28eabc1f2f82006b76731fe56c9a3f9c301c1f1327d0d1d2"
     # --allow-prefix --delimiter newline: same as 'auto' above
-    $hl $fixture --allow-prefix --delimiter newline | check_hash "9e56c27e1a2389eec5dfd37ea9e13310454686ce706e7a247bde66803bf1c17c"
+    $hl $fixture --allow-prefix --delimiter newline | check_hash "87f593c84d77286a7accaafb2e546e476adbace3356c53e121600264ef965378"
 
     # Special delimiters: single test each
-    $hl $fixture --delimiter lf | check_hash "1776b8f301b8809374bdb6fad936c5649f52d2a29c230c13db93db7b86a79e93"
-    $hl $fixture --delimiter cr | check_hash "4fbecc426cb22b575ce64146a5229dde3923051366f4b3e6ffd24b2205ea6c18"
-    $hl $fixture --delimiter nul | check_hash "4fbecc426cb22b575ce64146a5229dde3923051366f4b3e6ffd24b2205ea6c18"
+    $hl $fixture --delimiter lf | check_hash "b6b8befa4872f54ca321e3618e83ad46f6543f82cb378cf3c9051b0c85dca9fc"
+    $hl $fixture --delimiter cr | check_hash "38597e9ed4d0b26d28eabc1f2f82006b76731fe56c9a3f9c301c1f1327d0d1d2"
+    $hl $fixture --delimiter nul | check_hash "38597e9ed4d0b26d28eabc1f2f82006b76731fe56c9a3f9c301c1f1327d0d1d2"
 }
 
 function merge() {
