@@ -54,6 +54,7 @@ use crate::{
 
 // other local crates
 use cancel::CancellationToken;
+use crate::output::PagerProcess;
 
 // test imports
 #[cfg(test)]
@@ -250,8 +251,17 @@ impl App {
     }
 
     pub fn run(&self, inputs: Vec<InputHolder>, output: &mut Output) -> Result<()> {
+        self.run_with_pager(inputs, output, None)
+    }
+
+    pub fn run_with_pager(
+        &self,
+        inputs: Vec<InputHolder>,
+        output: &mut Output,
+        pager_process: Option<&mut PagerProcess>,
+    ) -> Result<()> {
         if self.options.follow {
-            self.follow(inputs.into_iter().map(|x| x.reference).collect(), output)
+            self.follow(inputs.into_iter().map(|x| x.reference).collect(), output, pager_process)
         } else if self.options.sort {
             self.sort(inputs, output)
         } else {
@@ -553,7 +563,12 @@ impl App {
         FollowBadges { si, input: badges }
     }
 
-    fn follow(&self, inputs: Vec<InputReference>, output: &mut Output) -> Result<()> {
+    fn follow(
+        &self,
+        inputs: Vec<InputReference>,
+        output: &mut Output,
+        mut pager_process: Option<&mut PagerProcess>,
+    ) -> Result<()> {
         let badges = self.prepare_follow_badges(inputs.iter());
 
         let m = inputs.len();
@@ -565,6 +580,14 @@ impl App {
         let cancellation = Arc::new(CancellationToken::new()?);
 
         thread::scope(|scope| -> Result<()> {
+            // spawn pager monitor thread
+            if let Some(pp) = pager_process.take() {
+                let cancellation = cancellation.clone();
+                scope.spawn(move |_| {
+                    pp.wait();
+                    cancellation.cancel();
+                });
+            }
             // prepare receive/transmit channels for input data
             let (txi, rxi) = channel::bounded(1);
             // prepare receive/transmit channels for output data

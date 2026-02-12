@@ -15,11 +15,15 @@ use crate::error::*;
 pub type OutputStream = Box<dyn Write + Send + Sync>;
 
 pub struct Pager {
-    process: Child,
+    stdin: std::process::ChildStdin,
+}
+
+pub struct PagerProcess {
+    child: Option<Child>,
 }
 
 impl Pager {
-    pub fn new() -> Result<Self> {
+    pub fn new() -> Result<(Self, PagerProcess)> {
         let mut pager = "less".to_owned();
 
         if let Ok(p) = env::var("HL_PAGER") {
@@ -47,9 +51,19 @@ impl Pager {
             command.env("LESSCHARSET", "UTF-8");
         }
 
-        let process = command.stdin(Stdio::piped()).spawn()?;
+        let mut process = command.stdin(Stdio::piped()).spawn()?;
+        let stdin = process.stdin.take().unwrap();
 
-        Ok(Self { process })
+        Ok((Self { stdin }, PagerProcess { child: Some(process) }))
+    }
+}
+
+impl PagerProcess {
+    pub fn wait(&mut self) -> Option<ExitStatus> {
+        let mut child = self.child.take()?;
+        let status = child.wait().ok()?;
+        Self::recover(status);
+        Some(status)
     }
 
     #[cfg(unix)]
@@ -69,20 +83,18 @@ impl Pager {
     fn recover(status: ExitStatus) {}
 }
 
-impl Drop for Pager {
+impl Drop for PagerProcess {
     fn drop(&mut self) {
-        if let Ok(status) = self.process.wait() {
-            Self::recover(status);
-        }
+        self.wait();
     }
 }
 
 impl Write for Pager {
     fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-        self.process.stdin.as_mut().unwrap().write(buf)
+        self.stdin.write(buf)
     }
 
     fn flush(&mut self) -> std::io::Result<()> {
-        self.process.stdin.as_mut().unwrap().flush()
+        self.stdin.flush()
     }
 }

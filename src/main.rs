@@ -27,7 +27,7 @@ use hl::{
     datefmt::LinuxDateFormat,
     error::*,
     input::InputReference,
-    output::{OutputStream, Pager},
+    output::{OutputStream, Pager, PagerProcess},
     query::Query,
     settings::{AsciiModeOpt, InputInfo, Settings},
     signal::SignalHandler,
@@ -120,15 +120,15 @@ fn run() -> Result<()> {
         cli::PagingOption::Never => false,
     };
     let paging = if opt.paging_never { false } else { paging };
-    let pager = || -> OutputStream {
+    let pager = || -> (OutputStream, Option<PagerProcess>) {
         if paging {
-            if let Ok(pager) = Pager::new() {
-                Box::new(pager)
+            if let Ok((pager, process)) = Pager::new() {
+                (Box::new(pager), Some(process))
             } else {
-                Box::new(stdout())
+                (Box::new(stdout()), None)
             }
         } else {
-            Box::new(stdout())
+            (Box::new(stdout()), None)
         }
     };
 
@@ -137,7 +137,8 @@ fn run() -> Result<()> {
             true => anstream::ColorChoice::Always,
             false => anstream::ColorChoice::Never,
         };
-        let mut out = anstream::AutoStream::new(pager(), color_when);
+        let (output, _pager_process) = pager();
+        let mut out = anstream::AutoStream::new(output, color_when);
         let help = match verbosity {
             cli::HelpVerbosity::Short => command().render_help(),
             cli::HelpVerbosity::Long => command().render_long_help(),
@@ -362,15 +363,20 @@ fn run() -> Result<()> {
         .map(|input| input.hold().map_err(Error::Io))
         .collect::<Result<Vec<_>>>()?;
 
+    let mut pager_process: Option<PagerProcess> = None;
     let mut output: OutputStream = match opt.output {
         Some(output) => Box::new(std::fs::File::create(PathBuf::from(&output))?),
-        None => pager(),
+        None => {
+            let (output, pp) = pager();
+            pager_process = pp;
+            output
+        }
     };
 
     log::debug!("run the app");
 
     // Run the app.
-    let run = || match app.run(inputs, output.as_mut()) {
+    let run = || match app.run_with_pager(inputs, output.as_mut(), pager_process.as_mut()) {
         Ok(()) => Ok(()),
         Err(Error::Io(ref e)) if e.kind() == std::io::ErrorKind::BrokenPipe => Ok(()),
         Err(err) => Err(err),
