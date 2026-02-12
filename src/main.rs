@@ -19,8 +19,6 @@ use terminal_size::terminal_size_of;
 use utf8_supported::{Utf8Support, utf8_supported};
 
 // local imports
-use cancel::CancellationToken;
-
 use hl::{
     Delimiter, IncludeExcludeKeyFilter, KeyMatchOptions, app,
     appdirs::AppDirs,
@@ -364,21 +362,14 @@ fn run() -> Result<()> {
         .map(|input| input.hold().map_err(Error::Io))
         .collect::<Result<Vec<_>>>()?;
 
-    let mut cancellation: Option<Arc<CancellationToken>> = None;
+    let mut cancellation = None;
     let mut output: OutputStream = match opt.output {
         Some(output) => Box::new(std::fs::File::create(PathBuf::from(&output))?),
         None => {
             if paging {
                 match Pager::new() {
-                    Ok(mut pager) => {
-                        if opt.follow {
-                            let ct = Arc::new(CancellationToken::new()?);
-                            pager.on_close({
-                                let ct = ct.clone();
-                                move || ct.cancel()
-                            });
-                            cancellation = Some(ct);
-                        }
+                    Ok(pager) => {
+                        cancellation = Some(pager.cancellation_token());
                         Box::new(pager)
                     }
                     Err(_) => Box::new(stdout()),
