@@ -29,7 +29,7 @@ use hl::{
     datefmt::LinuxDateFormat,
     error::*,
     input::InputReference,
-    output::{OutputStream, Pager, PagerProcess},
+    output::{OutputStream, Pager},
     query::Query,
     settings::{AsciiModeOpt, InputInfo, Settings},
     signal::SignalHandler,
@@ -122,15 +122,15 @@ fn run() -> Result<()> {
         cli::PagingOption::Never => false,
     };
     let paging = if opt.paging_never { false } else { paging };
-    let pager = || -> (OutputStream, Option<PagerProcess>) {
+    let pager = || -> OutputStream {
         if paging {
-            if let Ok((pager, process)) = Pager::new() {
-                (Box::new(pager), Some(process))
+            if let Ok(pager) = Pager::new() {
+                Box::new(pager)
             } else {
-                (Box::new(stdout()), None)
+                Box::new(stdout())
             }
         } else {
-            (Box::new(stdout()), None)
+            Box::new(stdout())
         }
     };
 
@@ -139,8 +139,7 @@ fn run() -> Result<()> {
             true => anstream::ColorChoice::Always,
             false => anstream::ColorChoice::Never,
         };
-        let (output, _pager_process) = pager();
-        let mut out = anstream::AutoStream::new(output, color_when);
+        let mut out = anstream::AutoStream::new(pager(), color_when);
         let help = match verbosity {
             cli::HelpVerbosity::Short => command().render_help(),
             cli::HelpVerbosity::Long => command().render_long_help(),
@@ -365,32 +364,35 @@ fn run() -> Result<()> {
         .map(|input| input.hold().map_err(Error::Io))
         .collect::<Result<Vec<_>>>()?;
 
-    let mut pager_process: Option<PagerProcess> = None;
+    let mut cancellation: Option<Arc<CancellationToken>> = None;
     let mut output: OutputStream = match opt.output {
         Some(output) => Box::new(std::fs::File::create(PathBuf::from(&output))?),
         None => {
-            let (output, pp) = pager();
-            pager_process = pp;
-            output
+            if paging {
+                match Pager::new() {
+                    Ok(mut pager) => {
+                        if opt.follow {
+                            let ct = Arc::new(CancellationToken::new()?);
+                            pager.on_close({
+                                let ct = ct.clone();
+                                move || ct.cancel()
+                            });
+                            cancellation = Some(ct);
+                        }
+                        Box::new(pager)
+                    }
+                    Err(_) => Box::new(stdout()),
+                }
+            } else {
+                Box::new(stdout())
+            }
         }
     };
-
-    // Set up cancellation for pager exit in follow mode.
-    let cancellation = pager_process.map(|mut pp| {
-        let ct = Arc::new(CancellationToken::new().expect("failed to create cancellation token"));
-        let ct2 = ct.clone();
-        let handle = std::thread::spawn(move || {
-            pp.wait();
-            ct2.cancel();
-        });
-        (ct, handle)
-    });
-    let cancellation_token = cancellation.as_ref().map(|(ct, _)| ct.clone());
 
     log::debug!("run the app");
 
     // Run the app.
-    let run = || match app.run_with_cancellation(inputs, output.as_mut(), cancellation_token) {
+    let run = || match app.run_with_cancellation(inputs, output.as_mut(), cancellation) {
         Ok(()) => Ok(()),
         Err(Error::Io(ref e)) if e.kind() == std::io::ErrorKind::BrokenPipe => Ok(()),
         Err(err) => Err(err),
@@ -399,15 +401,7 @@ fn run() -> Result<()> {
     let interrupt_ignore_count = if opt.follow { 0 } else { opt.interrupt_ignore_count };
 
     // Run the app with signal handling.
-    let result = SignalHandler::run(interrupt_ignore_count, std::time::Duration::from_secs(1), run);
-
-    // Close the output first so the pager gets EOF, then wait for the monitor thread.
-    drop(output);
-    if let Some((_, handle)) = cancellation {
-        handle.join().ok();
-    }
-
-    result
+    SignalHandler::run(interrupt_ignore_count, std::time::Duration::from_secs(1), run)
 }
 
 fn list_themes(dirs: &AppDirs, tags: Option<cli::ThemeTagSet>) -> Result<()> {

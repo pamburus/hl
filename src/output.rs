@@ -15,15 +15,13 @@ use crate::error::*;
 pub type OutputStream = Box<dyn Write + Send + Sync>;
 
 pub struct Pager {
-    stdin: std::process::ChildStdin,
-}
-
-pub struct PagerProcess {
+    stdin: Option<std::process::ChildStdin>,
     child: Option<Child>,
+    monitor: Option<std::thread::JoinHandle<()>>,
 }
 
 impl Pager {
-    pub fn new() -> Result<(Self, PagerProcess)> {
+    pub fn new() -> Result<Self> {
         let mut pager = "less".to_owned();
 
         if let Ok(p) = env::var("HL_PAGER") {
@@ -52,18 +50,27 @@ impl Pager {
         }
 
         let mut process = command.stdin(Stdio::piped()).spawn()?;
-        let stdin = process.stdin.take().unwrap();
+        let stdin = process.stdin.take();
 
-        Ok((Self { stdin }, PagerProcess { child: Some(process) }))
+        Ok(Self {
+            stdin,
+            child: Some(process),
+            monitor: None,
+        })
     }
-}
 
-impl PagerProcess {
-    pub fn wait(&mut self) -> Option<ExitStatus> {
-        let mut child = self.child.take()?;
-        let status = child.wait().ok()?;
-        Self::recover(status);
-        Some(status)
+    /// Registers a callback to be invoked when the pager process exits.
+    ///
+    /// The callback runs in a background thread that waits for the child process.
+    pub fn on_close<F: FnOnce() + Send + 'static>(&mut self, callback: F) {
+        if let Some(mut child) = self.child.take() {
+            self.monitor = Some(std::thread::spawn(move || {
+                if let Ok(status) = child.wait() {
+                    Self::recover(status);
+                }
+                callback();
+            }));
+        }
     }
 
     #[cfg(unix)]
@@ -83,18 +90,29 @@ impl PagerProcess {
     fn recover(status: ExitStatus) {}
 }
 
-impl Drop for PagerProcess {
+impl Drop for Pager {
     fn drop(&mut self) {
-        self.wait();
+        // Close stdin first so the pager receives EOF.
+        self.stdin.take();
+        // Wait for child to exit if on_close was not called.
+        if let Some(mut child) = self.child.take() {
+            if let Ok(status) = child.wait() {
+                Self::recover(status);
+            }
+        }
+        // Wait for the monitor thread to finish if on_close was called.
+        if let Some(handle) = self.monitor.take() {
+            handle.join().ok();
+        }
     }
 }
 
 impl Write for Pager {
     fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-        self.stdin.write(buf)
+        self.stdin.as_mut().unwrap().write(buf)
     }
 
     fn flush(&mut self) -> std::io::Result<()> {
-        self.stdin.flush()
+        self.stdin.as_mut().unwrap().flush()
     }
 }
