@@ -110,7 +110,7 @@ styled-help = { path = "./crates/styled-help" }
 terminal_size = "0.4"
 thiserror = "2"
 titlecase = "3"
-toml = "0.9"
+toml = "1"
 unicode-segmentation = "1.12"
 unicode-width = "0.2"
 utf8-supported = "1"
