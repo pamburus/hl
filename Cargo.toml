@@ -44,7 +44,7 @@ harness = false
 name = "bench"
 
 [dependencies]
-anstream = "0.6"
+anstream = "1"
 bytefmt = "0.1"
 capnp.workspace = true
 chrono = { version = "0.4", default-features = false, features = ["clock", "serde", "std"] }
