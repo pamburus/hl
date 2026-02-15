@@ -262,23 +262,10 @@ pub fn list_themes(
 
 // ---
 
-pub struct CancelHandle {
-    inner: fsmon::CancelHandle,
-}
-
-impl CancelHandle {
-    pub fn cancel(&self) {
-        self.inner.cancel();
-    }
-}
-
-// ---
-
 pub struct App {
     options: Options,
     punctuation: Arc<ResolvedPunctuation>,
     formatter: DynRecordWithSourceFormatter,
-    monitor: Option<fsmon::Monitor>,
 }
 
 impl App {
@@ -292,32 +279,10 @@ impl App {
 
         let formatter = Self::new_formatter(&options, punctuation.clone());
 
-        let monitor = if options.follow {
-            Some(fsmon::Monitor::new())
-        } else {
-            None
-        };
-
         Self {
             options,
             punctuation,
             formatter,
-            monitor,
-        }
-    }
-
-    pub fn cancellable(self) -> std::io::Result<(Self, Option<CancelHandle>)> {
-        if let Some(monitor) = self.monitor {
-            let (monitor, cancel) = monitor.cancellable()?;
-            Ok((
-                Self {
-                    monitor: Some(monitor),
-                    ..self
-                },
-                Some(CancelHandle { inner: cancel }),
-            ))
-        } else {
-            Ok((self, None))
         }
     }
 
@@ -643,10 +608,6 @@ impl App {
             let mut readers = Vec::with_capacity(m);
             for (i, input_ref) in inputs.into_iter().enumerate() {
                 let delimiter = &self.options.delimiter;
-                let monitor = match &self.monitor {
-                    Some(m) => m.try_clone()?,
-                    None => fsmon::Monitor::new(),
-                };
                 let reader = scope.spawn(closure!(clone sfi, clone txi, |_| -> Result<()> {
                     let scanner = Scanner::new(sfi.clone(), delimiter.clone());
                     let mut meta = None;
@@ -671,7 +632,7 @@ impl App {
                         if process(&mut input, is_file(&meta))? {
                             return Ok(())
                         }
-                        monitor.run(vec![path.canonical.clone()], |event| {
+                        fsmon::run(vec![path.canonical.clone()], |event| {
                             match event.kind {
                                 EventKind::Modify(_) | EventKind::Create(_) | EventKind::Any | EventKind::Other => {
                                     if let (Some(old_meta), Ok(new_meta)) = (&meta, fs::metadata(&path.canonical)) {
