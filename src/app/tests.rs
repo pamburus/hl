@@ -35,7 +35,7 @@ fn test_common_prefix_len() {
 fn test_cat_empty() {
     let input = input("");
     let mut output = Vec::new();
-    let app = App::new(options());
+    let mut app = App::new(options());
     app.run(vec![input], &mut output).unwrap();
     assert_eq!(std::str::from_utf8(&output).unwrap(), "");
 }
@@ -46,7 +46,7 @@ fn test_cat_one_line() {
         r#"{"caller":"main.go:539","duration":"15d","level":"info","msg":"No time or size retention was set so using the default time retention","ts":"2023-12-07T20:07:05.949Z"}"#,
     );
     let mut output = Vec::new();
-    let app = App::new(options());
+    let mut app = App::new(options());
     app.run(vec![input], &mut output).unwrap();
     assert_eq!(
         std::str::from_utf8(&output).unwrap(),
@@ -60,7 +60,7 @@ fn test_cat_with_theme() {
         r#"{"caller":"main.go:539","duration":"15d","level":"warning","msg":"No time or size retention was set so using the default time retention","ts":"2023-12-07T20:07:05.949Z"}"#,
     );
     let mut output = Vec::new();
-    let app = App::new(options().with_theme(theme()));
+    let mut app = App::new(options().with_theme(theme()));
     app.run(vec![input], &mut output).unwrap();
     assert_eq!(
         std::str::from_utf8(&output).unwrap(),
@@ -72,7 +72,7 @@ fn test_cat_with_theme() {
 fn test_cat_no_msg() {
     let input = input(r#"{"caller":"main.go:539","duration":"15d","level":"info","ts":"2023-12-07T20:07:05.949Z"}"#);
     let mut output = Vec::new();
-    let app = App::new(options().with_theme(theme()));
+    let mut app = App::new(options().with_theme(theme()));
     app.run(vec![input], &mut output).unwrap();
     assert_eq!(
         std::str::from_utf8(&output).unwrap(),
@@ -86,7 +86,7 @@ fn test_cat_msg_array() {
         r#"{"caller":"main.go:539","duration":"15d","level":"info","ts":"2023-12-07T20:07:05.949Z","msg":["x","y"]}"#,
     );
     let mut output = Vec::new();
-    let app = App::new(options().with_theme(theme()));
+    let mut app = App::new(options().with_theme(theme()));
     app.run(vec![input], &mut output).unwrap();
     assert_eq!(
         std::str::from_utf8(&output).unwrap(),
@@ -101,7 +101,7 @@ fn test_cat_field_exclude() {
     let mut output = Vec::new();
     let mut ff = IncludeExcludeKeyFilter::new(MatchOptions::default());
     ff.entry("duration").exclude();
-    let app = App::new(options().with_fields(FieldOptions {
+    let mut app = App::new(options().with_fields(FieldOptions {
         filter: Arc::new(ff),
         ..FieldOptions::default()
     }));
@@ -119,7 +119,7 @@ fn test_cat_raw_fields() {
     let mut output = Vec::new();
     let mut ff = IncludeExcludeKeyFilter::new(MatchOptions::default());
     ff.entry("duration").exclude();
-    let app = App::new(options().with_raw_fields(true));
+    let mut app = App::new(options().with_raw_fields(true));
     app.run(vec![input], &mut output).unwrap();
     assert_eq!(
         std::str::from_utf8(&output).unwrap(),
@@ -136,7 +136,7 @@ fn test_cat_raw_multiple_inputs() {
     let mut output = Vec::new();
     let mut ff = IncludeExcludeKeyFilter::new(MatchOptions::default());
     ff.entry("duration").exclude();
-    let app = App::new(options().with_input_info(InputInfo::Auto.into()).with_raw(true));
+    let mut app = App::new(options().with_input_info(InputInfo::Auto.into()).with_raw(true));
     app.run(vec![input(input1), input(input2)], &mut output).unwrap();
     assert_eq!(
         std::str::from_utf8(&output).unwrap(),
@@ -151,7 +151,7 @@ fn test_smart_delim_combo() {
 
     let input = input(format!("{}\n\r\n{}\n", L1, L2));
     let mut output = Vec::new();
-    let app = App::new(options().with_raw(true));
+    let mut app = App::new(options().with_raw(true));
     app.run(vec![input], &mut output).unwrap();
     assert_eq!(std::str::from_utf8(&output).unwrap(), format!("{}\n\n{}\n", L1, L2),);
 }
@@ -166,7 +166,7 @@ fn test_sort_with_blank_lines() {
     ));
 
     let mut output = Vec::new();
-    let app = App::new(options().with_sort(true));
+    let mut app = App::new(options().with_sort(true));
     app.run(vec![input], &mut output).unwrap();
     assert_eq!(
         std::str::from_utf8(&output).unwrap(),
@@ -187,7 +187,7 @@ fn test_filter_with_blank_lines() {
     ));
 
     let mut output = Vec::new();
-    let app = App::new(
+    let mut app = App::new(
         options().with_filter(
             Filter {
                 fields: FieldFilterSet::new(["msg=m2"]).unwrap(),
@@ -212,7 +212,7 @@ fn test_sort_with_clingy_lines() {
     ));
 
     let mut output = Vec::new();
-    let app = App::new(options().with_sort(true));
+    let mut app = App::new(options().with_sort(true));
     app.run(vec![input], &mut output).unwrap();
     assert_eq!(
         std::str::from_utf8(&output).unwrap(),
@@ -233,7 +233,7 @@ fn test_sort_with_clingy_and_invalid_lines() {
     ));
 
     let mut output = Vec::new();
-    let app = App::new(options().with_sort(true));
+    let mut app = App::new(options().with_sort(true));
     app.run(vec![input], &mut output).unwrap();
     assert_eq!(
         std::str::from_utf8(&output).unwrap(),
@@ -252,7 +252,7 @@ fn test_hide_by_prefix() {
     filter.entry("a.b").exclude();
 
     let mut output = Vec::new();
-    let app = App::new(options().with_fields(FieldOptions {
+    let mut app = App::new(options().with_fields(FieldOptions {
         filter: Arc::new(filter),
         ..FieldOptions::default()
     }));
@@ -275,7 +275,7 @@ fn test_hide_by_prefix_and_reveal_child() {
     filter.entry("a.b.d").include();
 
     let mut output = Vec::new();
-    let app = App::new(options().with_fields(FieldOptions {
+    let mut app = App::new(options().with_fields(FieldOptions {
         filter: Arc::new(filter),
         ..FieldOptions::default()
     }));
@@ -294,7 +294,7 @@ fn test_incomplete_segment() {
     ));
 
     let mut output = Vec::new();
-    let app = App::new(Options {
+    let mut app = App::new(Options {
         buffer_size: NonZeroUsize::new(32).unwrap(),
         max_message_size: NonZeroUsize::new(64).unwrap(),
         ..options()
@@ -318,7 +318,7 @@ fn test_incomplete_segment_sorted() {
     let input = input(data);
 
     let mut output = Vec::new();
-    let app = App::new(Options {
+    let mut app = App::new(Options {
         buffer_size: NonZeroUsize::new(16).unwrap(),
         max_message_size: NonZeroUsize::new(64).unwrap(),
         sort: true,
@@ -339,7 +339,7 @@ fn test_issue_288_t1() {
     ));
 
     let mut output = Vec::new();
-    let app = App::new(options().with_fields(FieldOptions {
+    let mut app = App::new(options().with_fields(FieldOptions {
         settings: Fields {
             predefined: settings::PredefinedFields {
                 level: settings::LevelField {
@@ -372,7 +372,7 @@ fn test_issue_288_t1() {
 fn test_issue_176_simple_span_json() {
     let input = input(concat!(r#"{"message":"test","span":{"name":"main"}}"#, "\n",));
     let mut output = Vec::new();
-    let app = App::new(
+    let mut app = App::new(
         options().with_fields(FieldOptions {
             settings: Fields {
                 predefined: settings::PredefinedFields {
@@ -396,7 +396,7 @@ fn test_issue_176_simple_span_json() {
 fn test_issue_176_simple_span_logfmt() {
     let input = input(concat!(r#"message=test span.name=main"#, "\n",));
     let mut output = Vec::new();
-    let app = App::new(
+    let mut app = App::new(
         options().with_fields(FieldOptions {
             settings: Fields {
                 predefined: settings::PredefinedFields {
@@ -423,7 +423,7 @@ fn test_issue_176_complex_span_json() {
         "\n",
     ));
     let mut output = Vec::new();
-    let app = App::new(
+    let mut app = App::new(
         options()
             .with_expansion(ExpansionMode::Never)
             .with_fields(FieldOptions {
@@ -460,7 +460,7 @@ fn test_issue_176_complex_span_logfmt() {
         "\n",
     ));
     let mut output = Vec::new();
-    let app = App::new(
+    let mut app = App::new(
         options().with_fields(FieldOptions {
             settings: Fields {
                 predefined: settings::PredefinedFields {
@@ -492,7 +492,7 @@ fn test_issue_176_complex_span_logfmt() {
 fn test_issue_176_unmatched_json() {
     let input = input(concat!(r#"{"message":"test","span":{"name":"main"}}"#, "\n",));
     let mut output = Vec::new();
-    let app = App::new(
+    let mut app = App::new(
         options().with_fields(FieldOptions {
             settings: Fields {
                 predefined: settings::PredefinedFields {
@@ -516,7 +516,7 @@ fn test_issue_176_unmatched_json() {
 fn test_issue_176_unmatched_logfmt() {
     let input = input(concat!(r#"message=test span.name=main"#, "\n",));
     let mut output = Vec::new();
-    let app = App::new(
+    let mut app = App::new(
         options().with_fields(FieldOptions {
             settings: Fields {
                 predefined: settings::PredefinedFields {
@@ -702,7 +702,7 @@ fn test_expand_always() {
     ));
 
     let mut output = Vec::new();
-    let app = App::new(Options {
+    let mut app = App::new(Options {
         expand: ExpansionMode::Always,
         ..options()
     });
@@ -731,7 +731,7 @@ fn test_expand_never() {
     ));
 
     let mut output = Vec::new();
-    let app = App::new(Options {
+    let mut app = App::new(Options {
         expand: ExpansionMode::Never,
         ..options()
     });
@@ -751,7 +751,7 @@ fn test_expand_value_with_time() {
     ));
 
     let mut output = Vec::new();
-    let app = App::new(Options {
+    let mut app = App::new(Options {
         expand: ExpansionMode::Always,
         theme: Theme::from(themecfg::Theme {
             elements: themecfg::StylePack::new(hashmap! {
@@ -791,7 +791,7 @@ fn test_expand_value_without_time() {
     ));
 
     let mut output = Vec::new();
-    let app = App::new(Options {
+    let mut app = App::new(Options {
         expand: ExpansionMode::Always,
         theme: Theme::from(themecfg::Theme {
             elements: themecfg::StylePack::new(hashmap! {
@@ -828,7 +828,7 @@ fn test_expand_empty_values() {
     let input = input(concat!(r#"level=debug msg=hello caller=src1 a="" b="" c="""#, "\n",));
 
     let mut output = Vec::new();
-    let app = App::new(options());
+    let mut app = App::new(options());
 
     app.run(vec![input], &mut output).unwrap();
 
@@ -843,7 +843,7 @@ fn test_expand_empty_hidden_values() {
     let input = input(concat!(r#"level=debug msg=hello caller=src1 a="" b="" c="""#, "\n",));
 
     let mut output = Vec::new();
-    let app = App::new(Options {
+    let mut app = App::new(Options {
         hide_empty_fields: true,
         ..options()
     });
@@ -864,7 +864,7 @@ fn test_expand_unparseable_timestamp() {
     ));
 
     let mut output = Vec::new();
-    let app = App::new(Options {
+    let mut app = App::new(Options {
         expand: ExpansionMode::Always,
         theme: Theme::from(themecfg::Theme {
             elements: themecfg::StylePack::new(hashmap! {
@@ -901,7 +901,7 @@ fn test_expand_unparseable_timestamp() {
 fn test_input_badges() {
     let inputs = (1..12).map(|i| input(format!("msg=hello input={}\n", i))).collect_vec();
 
-    let app = App::new(Options {
+    let mut app = App::new(Options {
         input_info: InputInfo::Minimal.into(),
         ..options()
     });
@@ -1638,7 +1638,7 @@ fn test_bug_multiline_json_missing_input_badges_on_closing_braces() {
     let mut opts = options();
     opts.delimiter = Delimiter::PrettyCompatible;
     opts.input_info = InputInfo::Minimal.into();
-    let app = App::new(opts);
+    let mut app = App::new(opts);
     app.run(vec![input], &mut output).unwrap();
     let output_str = std::str::from_utf8(&output).unwrap();
 
@@ -1685,7 +1685,7 @@ fn test_bug_multiline_remainder_missing_input_badges() {
     let mut opts = options();
     opts.delimiter = Delimiter::PrettyCompatible;
     opts.input_info = InputInfo::Minimal.into();
-    let app = App::new(opts);
+    let mut app = App::new(opts);
     app.run(vec![input], &mut output).unwrap();
     let output_str = std::str::from_utf8(&output).unwrap();
 
@@ -1724,7 +1724,7 @@ fn test_bug_prefix_with_closing_brace_on_same_line() {
     let mut opts = options();
     opts.delimiter = Delimiter::PrettyCompatible;
     opts.allow_prefix = true;
-    let app = App::new(opts);
+    let mut app = App::new(opts);
     app.run(vec![input], &mut output).unwrap();
     let output_str = std::str::from_utf8(&output).unwrap();
 
@@ -1767,7 +1767,7 @@ fn test_bug_prefix_multiline_block_closing_brace_not_included() {
     let mut opts = options();
     opts.delimiter = Delimiter::PrettyCompatible;
     opts.allow_prefix = true;
-    let app = App::new(opts);
+    let mut app = App::new(opts);
     app.run(vec![input], &mut output).unwrap();
     let output_str = std::str::from_utf8(&output).unwrap();
 
@@ -1813,7 +1813,7 @@ fn test_bug_complex_pretty_broken_scenario() {
     opts.delimiter = Delimiter::PrettyCompatible;
     opts.allow_prefix = true;
     opts.input_info = InputInfo::Minimal.into();
-    let app = App::new(opts);
+    let mut app = App::new(opts);
     app.run(vec![input], &mut output).unwrap();
     let output_str = std::str::from_utf8(&output).unwrap();
 
@@ -1878,7 +1878,7 @@ fn test_bug_continuation_lines_with_input_badges() {
     let mut opts = options();
     opts.delimiter = Delimiter::PrettyCompatible;
     opts.input_info = InputInfo::Minimal.into();
-    let app = App::new(opts);
+    let mut app = App::new(opts);
     app.run(vec![input], &mut output).unwrap();
     let output_str = std::str::from_utf8(&output).unwrap();
 
@@ -1911,7 +1911,7 @@ fn test_bug_multiline_unparsed_prefix_data_loss() {
     opts.delimiter = Delimiter::PrettyCompatible;
     opts.allow_prefix = true;
     opts.input_info = InputInfo::Minimal.into();
-    let app = App::new(opts);
+    let mut app = App::new(opts);
     app.run(vec![input], &mut output).unwrap();
     let output_str = std::str::from_utf8(&output).unwrap();
 
@@ -1959,7 +1959,7 @@ fn test_bug_raw_output_missing_input_badges_on_continuation_lines() {
     opts.allow_prefix = true;
     opts.raw = true;
     opts.input_info = InputInfo::Minimal.into();
-    let app = App::new(opts);
+    let mut app = App::new(opts);
     app.run(vec![input], &mut output).unwrap();
     let output_str = std::str::from_utf8(&output).unwrap();
 
@@ -2016,7 +2016,7 @@ fn test_bug_comprehensive_multiline_prefix_remainder_raw() {
     opts.allow_prefix = true;
     opts.raw = true;
     opts.input_info = InputInfo::Minimal.into();
-    let app = App::new(opts);
+    let mut app = App::new(opts);
     app.run(vec![input], &mut output).unwrap();
     let output_str = std::str::from_utf8(&output).unwrap();
 

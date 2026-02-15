@@ -260,13 +260,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "cancel"
-version = "0.1.0"
-dependencies = [
- "libc",
-]
-
-[[package]]
 name = "capnp"
 version = "0.25.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1259,7 +1252,6 @@ dependencies = [
  "base32",
  "byte-strings",
  "bytefmt",
- "cancel",
  "capnp",
  "capnpc",
  "chrono",
@@ -1301,6 +1293,7 @@ dependencies = [
  "kqueue",
  "libc",
  "liblzma",
+ "lifecycle",
  "log",
  "logos",
  "maplit",
@@ -1629,6 +1622,10 @@ dependencies = [
  "bitflags 2.10.0",
  "libc",
 ]
+
+[[package]]
+name = "lifecycle"
+version = "0.1.0"
 
 [[package]]
 name = "linux-raw-sys"

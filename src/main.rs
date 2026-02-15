@@ -18,7 +18,7 @@ use terminal_size::terminal_size_of;
 use utf8_supported::{Utf8Support, utf8_supported};
 
 // local imports
-use cancel::{AsyncDrop, CancellationToken, DropNotifier};
+use lifecycle::{AsyncDrop, DropNotifier};
 use hl::{
     Delimiter, IncludeExcludeKeyFilter, KeyMatchOptions, app, cli, config,
     datefmt::LinuxDateFormat,
@@ -37,6 +37,7 @@ use pager::{Pager, StartedPager};
 
 const HL_DEBUG_LOG: &str = "HL_DEBUG_LOG";
 const HL_DEBUG_LOG_STYLE: &str = "HL_DEBUG_LOG_STYLE";
+const HL_PAGER: &str = "HL_PAGER";
 
 // ---
 
@@ -287,7 +288,7 @@ fn run() -> Result<()> {
     let utf8_is_supported = matches!(utf8_supported(), Utf8Support::UTF8);
     let ascii = ascii_opt.resolve(utf8_is_supported);
 
-    // Create app.
+    // Create app and get optional cancel handle.
     let app = hl::App::new(hl::Options {
         theme: Arc::new(theme),
         raw: opt.raw,
@@ -329,6 +330,7 @@ fn run() -> Result<()> {
         ascii,
         expand: opt.expansion.into(),
     });
+    let (mut app, cancel) = app.cancellable()?;
 
     // Configure the input.
     let mut inputs = opt
@@ -357,18 +359,16 @@ fn run() -> Result<()> {
         .map(|input| input.hold().map_err(Error::Io))
         .collect::<Result<Vec<_>>>()?;
 
-    let mut cancellation = None;
     let mut _pager_watcher: Option<AsyncDrop> = None;
     let mut output: OutputStream = match opt.output {
         Some(output) => Box::new(std::fs::File::create(PathBuf::from(&output))?),
         None => match start_pager() {
             Some(mut pager) => {
-                let ct = Arc::new(CancellationToken::new()?);
-                let ctc = ct.clone();
-                _pager_watcher = pager
-                    .detach_process()
-                    .map(|p| AsyncDrop::new(DropNotifier::new(p, move || ctc.cancel())));
-                cancellation = Some(ct);
+                if let Some(cancel) = cancel {
+                    _pager_watcher = pager
+                        .detach_process()
+                        .map(|p| AsyncDrop::new(DropNotifier::new(p, move || cancel.cancel())));
+                }
                 Box::new(pager)
             }
             None => Box::new(stdout()),
@@ -378,7 +378,7 @@ fn run() -> Result<()> {
     log::debug!("run the app");
 
     // Run the app.
-    let run = || match app.run_with_cancellation(inputs, output.as_mut(), cancellation) {
+    let run = || match app.run(inputs, output.as_mut()) {
         Ok(()) => Ok(()),
         Err(Error::Io(ref e)) if e.kind() == std::io::ErrorKind::BrokenPipe => Ok(()),
         Err(err) => Err(err),

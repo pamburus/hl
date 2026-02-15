@@ -263,6 +263,17 @@ pub struct App {
     options: Options,
     punctuation: Arc<ResolvedPunctuation>,
     formatter: DynRecordWithSourceFormatter,
+    monitor: Option<fsmon::Monitor>,
+}
+
+pub struct CancelHandle {
+    inner: fsmon::CancelHandle,
+}
+
+impl CancelHandle {
+    pub fn cancel(&self) {
+        self.inner.cancel();
+    }
 }
 
 pub type Output = dyn Write + Send + Sync;
@@ -278,25 +289,35 @@ impl App {
 
         let formatter = Self::new_formatter(&options, punctuation.clone());
 
+        let monitor = if options.follow { Some(fsmon::Monitor::new()) } else { None };
+
         Self {
             options,
             punctuation,
             formatter,
+            monitor,
         }
     }
 
-    pub fn run(&self, inputs: Vec<InputHolder>, output: &mut Output) -> Result<()> {
-        self.run_with_cancellation(inputs, output, None)
+    pub fn cancellable(self) -> std::io::Result<(Self, Option<CancelHandle>)> {
+        if let Some(monitor) = self.monitor {
+            let (monitor, cancel) = monitor.cancellable()?;
+            Ok((
+                Self {
+                    monitor: Some(monitor),
+                    ..self
+                },
+                Some(CancelHandle { inner: cancel }),
+            ))
+        } else {
+            Ok((self, None))
+        }
     }
 
-    pub fn run_with_cancellation(
-        &self,
-        inputs: Vec<InputHolder>,
-        output: &mut Output,
-        cancellation: Option<Arc<cancel::CancellationToken>>,
-    ) -> Result<()> {
+    pub fn run(&mut self, inputs: Vec<InputHolder>, output: &mut Output) -> Result<()> {
         if self.options.follow {
-            self.follow(inputs.into_iter().map(|x| x.reference).collect(), output, cancellation)
+            let monitor = self.monitor.take();
+            self.follow(inputs.into_iter().map(|x| x.reference).collect(), output, monitor)
         } else if self.options.sort {
             self.sort(inputs, output)
         } else {
@@ -602,7 +623,7 @@ impl App {
         &self,
         inputs: Vec<InputReference>,
         output: &mut Output,
-        cancellation: Option<Arc<cancel::CancellationToken>>,
+        monitor: Option<fsmon::Monitor>,
     ) -> Result<()> {
         let badges = self.prepare_follow_badges(inputs.iter());
 
@@ -612,10 +633,12 @@ impl App {
         let sfi = Arc::new(SegmentBufFactory::new(self.options.buffer_size.into()));
         let bfo = BufFactory::new(self.options.buffer_size.into());
 
-        let cancellation = match cancellation {
-            Some(ct) => ct,
-            None => Arc::new(cancel::CancellationToken::new()?),
-        };
+        let monitors: Vec<_> = (0..m)
+            .map(|_| match &monitor {
+                Some(m) => m.try_clone().map(Some),
+                None => Ok(None),
+            })
+            .collect::<std::io::Result<_>>()?;
 
         thread::scope(|scope| -> Result<()> {
             // prepare receive/transmit channels for input data
@@ -624,9 +647,11 @@ impl App {
             let (txo, rxo) = channel::bounded(1);
             // spawn reader threads
             let mut readers = Vec::with_capacity(m);
+            let mut monitors = monitors.into_iter();
             for (i, input_ref) in inputs.into_iter().enumerate() {
                 let delimiter = &self.options.delimiter;
-                let reader = scope.spawn(closure!(clone sfi, clone txi, clone cancellation, |_| -> Result<()> {
+                let monitor = monitors.next().unwrap();
+                let reader = scope.spawn(closure!(clone sfi, clone txi, |_| -> Result<()> {
                     let scanner = Scanner::new(sfi.clone(), delimiter.clone());
                     let mut meta = None;
                     if let InputReference::File(path) = &input_ref {
@@ -650,16 +675,8 @@ impl App {
                         if process(&mut input, is_file(&meta))? {
                             return Ok(())
                         }
-                        let monitor = fsmon::Monitor::new(vec![path.canonical.clone()]);
-                        let (monitor, cancel) = monitor.cancellable()?;
-                        let _bridge = std::thread::spawn({
-                            let cancellation = cancellation.clone();
-                            move || {
-                                cancellation.wait();
-                                cancel.cancel();
-                            }
-                        });
-                        monitor.run(|event| {
+                        let monitor = monitor.unwrap_or_else(fsmon::Monitor::new);
+                        monitor.run(vec![path.canonical.clone()], |event| {
                             match event.kind {
                                 EventKind::Modify(_) | EventKind::Create(_) | EventKind::Any | EventKind::Other => {
                                     if let (Some(old_meta), Ok(new_meta)) = (&meta, fs::metadata(&path.canonical)) {
@@ -707,9 +724,7 @@ impl App {
             drop(txo);
 
             // spawn merger thread
-            let merger = scope.spawn(closure!(ref badges, ref cancellation, |_| -> Result<()> {
-                let _cancel_guard = cancellation.drop_guard();
-
+            let merger = scope.spawn(closure!(ref badges, |_| -> Result<()> {
                 type Key = (Timestamp, usize, usize, usize); // (ts, input, block, offset)
                 type Line = (Rc<Vec<u8>>, Range<usize>, Instant); // (buf, location, instant)
 

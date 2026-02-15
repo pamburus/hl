@@ -13,7 +13,7 @@ build = "build.rs"
 [workspace]
 members = [
   ".",
-  "crates/cancel",
+  "crates/lifecycle",
   "crates/encstr",
   "crates/enumset-ext",
   "crates/enumset-serde",
@@ -48,7 +48,7 @@ name = "bench"
 [dependencies]
 anstream = "1"
 bytefmt = "0.1"
-cancel = { path = "./crates/cancel" }
+lifecycle = { path = "./crates/lifecycle" }
 capnp.workspace = true
 chrono = { version = "0.4", default-features = false, features = ["clock", "serde", "std"] }
 chrono-english = "0.1"

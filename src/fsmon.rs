@@ -1,10 +1,11 @@
 // std imports
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicBool, Ordering};
 
 // unix-only std imports
 #[cfg(unix)]
 use std::os::unix::io::{AsRawFd, FromRawFd, OwnedFd};
+#[cfg(unix)]
+use std::sync::atomic::{AtomicBool, Ordering};
 
 // local imports
 use crate::error::Result;
@@ -17,16 +18,81 @@ pub type EventKind = notify::EventKind;
 // ---
 
 pub struct Monitor {
-    paths: Vec<PathBuf>,
-    watch: Vec<PathBuf>,
+    #[cfg(unix)]
+    cancel_fd: Option<OwnedFd>,
 }
 
-#[cfg(unix)]
-pub struct CancellableMonitor {
-    paths: Vec<PathBuf>,
-    watch: Vec<PathBuf>,
-    cancel_fd: OwnedFd,
+impl Monitor {
+    pub fn new() -> Self {
+        Self {
+            #[cfg(unix)]
+            cancel_fd: None,
+        }
+    }
+
+    pub fn cancellable(self) -> std::io::Result<(Self, CancelHandle)> {
+        #[cfg(unix)]
+        {
+            let (read_fd, write_fd) = pipe()?;
+            Ok((
+                Self {
+                    cancel_fd: Some(read_fd),
+                },
+                CancelHandle {
+                    cancelled: AtomicBool::new(false),
+                    write_fd,
+                },
+            ))
+        }
+        #[cfg(not(unix))]
+        {
+            Ok((self, CancelHandle {}))
+        }
+    }
+
+    pub fn try_clone(&self) -> std::io::Result<Self> {
+        #[cfg(unix)]
+        {
+            let cancel_fd = match &self.cancel_fd {
+                Some(fd) => {
+                    let new_fd = unsafe { libc::dup(fd.as_raw_fd()) };
+                    if new_fd == -1 {
+                        return Err(std::io::Error::last_os_error());
+                    }
+                    Some(unsafe { OwnedFd::from_raw_fd(new_fd) })
+                }
+                None => None,
+            };
+            Ok(Self { cancel_fd })
+        }
+        #[cfg(not(unix))]
+        {
+            Ok(Self {})
+        }
+    }
+
+    pub fn run<H>(self, paths: Vec<PathBuf>, handle: H) -> Result<()>
+    where
+        H: FnMut(Event) -> Result<()>,
+    {
+        let (paths, watch) = prepare_paths(paths);
+
+        if paths.is_empty() {
+            return Ok(());
+        }
+
+        #[cfg(unix)]
+        {
+            imp::run(watch, into_filter(paths, handle), self.cancel_fd)
+        }
+        #[cfg(not(unix))]
+        {
+            imp::run(watch, into_filter(paths, handle), None)
+        }
+    }
 }
+
+// ---
 
 #[cfg(unix)]
 pub struct CancelHandle {
@@ -34,93 +100,56 @@ pub struct CancelHandle {
     write_fd: OwnedFd,
 }
 
+#[cfg(not(unix))]
+pub struct CancelHandle {}
+
 // Safety: write_fd is only written to once, guarded by the AtomicBool.
 #[cfg(unix)]
 unsafe impl Sync for CancelHandle {}
 
-#[cfg(unix)]
 impl CancelHandle {
     pub fn cancel(&self) {
-        if !self.cancelled.swap(true, Ordering::SeqCst) {
-            unsafe {
-                libc::write(self.write_fd.as_raw_fd(), [1u8].as_ptr() as *const libc::c_void, 1);
-            }
-        }
-    }
-}
-
-impl Monitor {
-    pub fn new(mut paths: Vec<PathBuf>) -> Self {
-        paths.retain(|path| path.metadata().is_ok_and(|metadata| metadata.file_type().is_file()));
-
-        for i in 0..paths.len() {
-            if let Ok(canonical_path) = paths[i].canonicalize() {
-                match paths[i].symlink_metadata() {
-                    Ok(metadata) if metadata.file_type().is_symlink() => paths.push(canonical_path),
-                    _ => paths[i] = canonical_path,
+        #[cfg(unix)]
+        {
+            if !self.cancelled.swap(true, Ordering::SeqCst) {
+                unsafe {
+                    libc::write(self.write_fd.as_raw_fd(), [1u8].as_ptr() as *const libc::c_void, 1);
                 }
             }
         }
-
-        paths.sort_unstable();
-        paths.dedup();
-
-        let mut watch = paths
-            .iter()
-            .map(|path| {
-                let mut path = path.clone();
-                path.pop();
-                path
-            })
-            .collect::<Vec<PathBuf>>();
-        watch.extend_from_slice(&paths);
-        watch.sort_unstable();
-        watch.dedup();
-
-        Self { paths, watch }
-    }
-
-    #[cfg(unix)]
-    pub fn cancellable(self) -> std::io::Result<(CancellableMonitor, CancelHandle)> {
-        let (read_fd, write_fd) = pipe()?;
-        Ok((
-            CancellableMonitor {
-                paths: self.paths,
-                watch: self.watch,
-                cancel_fd: read_fd,
-            },
-            CancelHandle {
-                cancelled: AtomicBool::new(false),
-                write_fd,
-            },
-        ))
-    }
-
-    #[allow(dead_code)]
-    pub fn run<H>(self, handle: H) -> Result<()>
-    where
-        H: FnMut(Event) -> Result<()>,
-    {
-        if self.paths.is_empty() {
-            return Ok(());
-        }
-
-        imp::run(self.watch, into_filter(self.paths, handle), None)
     }
 }
 
-#[cfg(unix)]
-impl CancellableMonitor {
-    pub fn run<H>(self, handle: H) -> Result<()>
-    where
-        H: FnMut(Event) -> Result<()>,
-    {
-        if self.paths.is_empty() {
-            return Ok(());
-        }
+// ---
 
-        imp::run(self.watch, into_filter(self.paths, handle), Some(self.cancel_fd))
+fn prepare_paths(mut paths: Vec<PathBuf>) -> (Vec<PathBuf>, Vec<PathBuf>) {
+    paths.retain(|path| path.metadata().is_ok_and(|metadata| metadata.file_type().is_file()));
+
+    for i in 0..paths.len() {
+        if let Ok(canonical_path) = paths[i].canonicalize() {
+            match paths[i].symlink_metadata() {
+                Ok(metadata) if metadata.file_type().is_symlink() => paths.push(canonical_path),
+                _ => paths[i] = canonical_path,
+            }
+        }
     }
+
+    paths.sort_unstable();
+    paths.dedup();
+
+    let mut watch = paths
+        .iter()
+        .map(|path| {
+            let mut path = path.clone();
+            path.pop();
+            path
+        })
+        .collect::<Vec<PathBuf>>();
+    watch.extend_from_slice(&paths);
+    watch.sort_unstable();
+    watch.dedup();
+
+    (paths, watch)
 }
 
 fn into_filter<H>(paths: Vec<PathBuf>, mut handle: H) -> impl FnMut(Event) -> Result<()>
