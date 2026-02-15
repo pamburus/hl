@@ -364,9 +364,10 @@ fn run() -> Result<()> {
         None => match start_pager() {
             Some(mut pager) => {
                 let ct = Arc::new(CancellationToken::new()?);
+                let ctc = ct.clone();
                 _pager_watcher = pager
                     .detach_process()
-                    .map(|p| AsyncDrop::new(DropNotifier::new(p, ct.clone())));
+                    .map(|p| AsyncDrop::new(DropNotifier::new(p, move || ctc.cancel())));
                 cancellation = Some(ct);
                 Box::new(pager)
             }

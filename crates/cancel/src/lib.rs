@@ -1,6 +1,6 @@
 use std::io;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread::{self, JoinHandle};
 
 #[cfg(unix)]
@@ -109,28 +109,37 @@ impl Drop for CancelGuard {
 // ---
 
 /// Wraps a value, drops it, then signals a `CancellationToken`.
-pub struct DropNotifier<T> {
+pub struct DropNotifier<T, F>
+where
+    F: FnOnce(),
+{
     inner: Option<T>,
-    token: Arc<CancellationToken>,
+    notify: Option<F>,
 }
 
-impl<T> DropNotifier<T> {
+impl<T, F> DropNotifier<T, F>
+where
+    F: FnOnce(),
+{
     /// Creates a new `DropNotifier` wrapping `value`.
     ///
     /// When this `DropNotifier` is dropped, it will first drop `value`,
     /// then signal cancellation on `token`.
-    pub fn new(value: T, token: Arc<CancellationToken>) -> Self {
+    pub fn new(value: T, notify: F) -> Self {
         Self {
             inner: Some(value),
-            token,
+            notify: Some(notify),
         }
     }
 }
 
-impl<T> Drop for DropNotifier<T> {
+impl<T, F> Drop for DropNotifier<T, F>
+where
+    F: FnOnce(),
+{
     fn drop(&mut self) {
         self.inner.take(); // drops the inner value
-        self.token.cancel();
+        self.notify.take().map(|f| f());
     }
 }
 
@@ -151,9 +160,7 @@ impl AsyncDrop {
         let handle = thread::spawn(move || {
             drop(value);
         });
-        Self {
-            handle: Some(handle),
-        }
+        Self { handle: Some(handle) }
     }
 }
 
