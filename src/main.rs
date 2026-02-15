@@ -360,17 +360,17 @@ fn run() -> Result<()> {
         .map(|input| input.hold().map_err(Error::Io))
         .collect::<Result<Vec<_>>>()?;
 
-    let mut _pager_watcher: Option<AsyncDrop> = None;
+    let mut _pager_watcher = None;
     let output: OutputStream = match opt.output {
         Some(output) => Box::new(std::fs::File::create(PathBuf::from(&output))?),
         None => match start_pager() {
             Some(mut pager) => {
                 let detached = pager.detach_process();
-                log::debug!("pager detached: {}", detached.is_some());
                 let shutdown = shutdown.clone();
                 _pager_watcher = detached.map(|p| {
+                    log::debug!("monitor pager process");
                     AsyncDrop::new(DropNotifier::new(p, move || {
-                        log::debug!("pager exited");
+                        log::debug!("pager process exited");
                         shutdown.initiate();
                     }))
                 });
