@@ -5,6 +5,20 @@ use std::{fmt, io, os};
 use owo_colors::OwoColorize;
 use terminal_size::terminal_size_of;
 
+pub trait Format {
+    fn format_grouped_list<G, V, GI, I>(&mut self, groups: GI) -> io::Result<()>
+    where
+        GI: IntoIterator<Item = (G, I)>,
+        I: IntoIterator<Item = V>,
+        G: fmt::Display,
+        V: AsRef<str>;
+
+    fn format_raw_list<I, V>(&mut self, items: I) -> io::Result<()>
+    where
+        I: IntoIterator<Item = V>,
+        V: AsRef<str>;
+}
+
 pub struct Formatter<O> {
     width: Option<usize>,
     output: O,
@@ -83,6 +97,31 @@ where
             writeln!(&mut self.output, "{}", item.as_ref())?;
         }
         Ok(())
+    }
+}
+
+impl<O> Format for Formatter<O>
+where
+    O: io::Write,
+{
+    #[inline]
+    fn format_grouped_list<G, V, GI, I>(&mut self, groups: GI) -> io::Result<()>
+    where
+        GI: IntoIterator<Item = (G, I)>,
+        I: IntoIterator<Item = V>,
+        G: fmt::Display,
+        V: AsRef<str>,
+    {
+        self.format_grouped_list(groups)
+    }
+
+    #[inline]
+    fn format_raw_list<I, V>(&mut self, items: I) -> io::Result<()>
+    where
+        I: IntoIterator<Item = V>,
+        V: AsRef<str>,
+    {
+        self.format_raw_list(items)
     }
 }
 

@@ -14,31 +14,24 @@ use clap::{CommandFactory, Parser};
 use enumset::enum_set;
 use enumset_ext::EnumSetExt;
 use env_logger::{self as logger};
-use itertools::Itertools;
 use terminal_size::terminal_size_of;
 use utf8_supported::{Utf8Support, utf8_supported};
 
 // local imports
 use hl::{
-    Delimiter, IncludeExcludeKeyFilter, KeyMatchOptions, app,
-    appdirs::AppDirs,
-    cli::{self, ThemeTagSet},
-    config,
+    Delimiter, IncludeExcludeKeyFilter, KeyMatchOptions, app, cli, config,
     datefmt::LinuxDateFormat,
     error::*,
+    help,
     input::InputReference,
     output::{OutputStream, Pager},
     query::Query,
     settings::{AsciiModeOpt, InputInfo, Settings},
     signal::SignalHandler,
     theme::Theme,
-    themecfg,
     timeparse::parse_time,
     timezone::Tz,
 };
-
-// private modules
-mod help;
 
 const HL_DEBUG_LOG: &str = "HL_DEBUG_LOG";
 const HL_DEBUG_LOG_STYLE: &str = "HL_DEBUG_LOG_STYLE";
@@ -161,7 +154,7 @@ fn run() -> Result<()> {
     let app_dirs = config::app_dirs().ok_or(Error::AppDirs)?;
 
     if let Some(tags) = opt.list_themes {
-        return list_themes(&app_dirs, tags);
+        return app::list_themes(&app_dirs, tags.map(|t| *t), help::Formatter::new(stdout()));
     }
 
     let theme = if use_colors {
@@ -380,36 +373,6 @@ fn run() -> Result<()> {
 
     // Run the app with signal handling.
     SignalHandler::run(interrupt_ignore_count, std::time::Duration::from_secs(1), run)
-}
-
-fn list_themes(dirs: &AppDirs, tags: Option<cli::ThemeTagSet>) -> Result<()> {
-    let items = Theme::list(dirs)?;
-    let mut formatter = help::Formatter::new(stdout());
-
-    let tags = tags.unwrap_or_default();
-    let mut exclude = ThemeTagSet::default();
-    if !tags.contains(cli::ThemeTag::Base) {
-        exclude.insert(cli::ThemeTag::Base);
-    }
-    if !tags.contains(cli::ThemeTag::Overlay) {
-        exclude.insert(cli::ThemeTag::Overlay);
-    }
-
-    formatter.format_grouped_list(
-        items
-            .into_iter()
-            .filter(|(name, _)| {
-                themecfg::Theme::load(dirs, name)
-                    .ok()
-                    .map(|theme| theme.tags.includes(*tags) && !theme.tags.intersects(*exclude))
-                    .unwrap_or(false)
-            })
-            .sorted_by_key(|x| (x.1.origin, x.0.clone()))
-            .chunk_by(|x| x.1.origin)
-            .into_iter()
-            .map(|(origin, group)| (origin, group.map(|x| x.0))),
-    )?;
-    Ok(())
 }
 
 fn main() {

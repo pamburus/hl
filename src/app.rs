@@ -41,6 +41,7 @@ use crate::{
         DynRecordWithSourceFormatter, Expansion, RawRecordFormatter, RecordFormatterBuilder, RecordWithSourceFormatter,
     },
     fsmon::{self, EventKind},
+    help,
     index::{Indexer, IndexerSettings, Timestamp},
     input::{BlockEntry, Input, InputHolder, InputReference},
     model::{Filter, Parser, ParserSettings, RawRecord, Record, RecordFilter, RecordWithSourceConstructor},
@@ -48,6 +49,7 @@ use crate::{
     scanning::{BufFactory, Delimit, Delimiter, Newline, Scanner, SearchExt, Segment, SegmentBuf, SegmentBufFactory},
     settings::{AsciiMode, ExpansionMode, FieldShowOption, Fields, Formatting, InputInfo, ResolvedPunctuation},
     theme::{Element, StylingPush, SyncIndicatorPack, Theme},
+    themecfg,
     timezone::Tz,
     vfs::LocalFileSystem,
 };
@@ -216,6 +218,43 @@ impl UnixTimestampUnit {
     const TS_UNIX_AUTO_MS_MAX: i64 = Self::TS_UNIX_AUTO_S_MAX * 1000;
     const TS_UNIX_AUTO_US_MIN: i64 = Self::TS_UNIX_AUTO_MS_MIN * 1000;
     const TS_UNIX_AUTO_US_MAX: i64 = Self::TS_UNIX_AUTO_MS_MAX * 1000;
+}
+
+// ---
+
+pub fn list_themes(
+    dirs: &AppDirs,
+    tags: Option<EnumSet<themecfg::Tag>>,
+    mut formatter: impl help::Format,
+) -> Result<()> {
+    use themecfg::Tag;
+
+    let items = Theme::list(dirs)?;
+
+    let tags = tags.unwrap_or_default();
+    let mut exclude = EnumSet::default();
+    if !tags.contains(Tag::Base) {
+        exclude.insert(Tag::Base);
+    }
+    if !tags.contains(Tag::Overlay) {
+        exclude.insert(Tag::Overlay);
+    }
+
+    formatter.format_grouped_list(
+        items
+            .into_iter()
+            .filter(|(name, _)| {
+                themecfg::Theme::load(dirs, name)
+                    .ok()
+                    .map(|theme| theme.tags.includes(tags) && !theme.tags.intersects(exclude))
+                    .unwrap_or(false)
+            })
+            .sorted_by_key(|x| (x.1.origin, x.0.clone()))
+            .chunk_by(|x| x.1.origin)
+            .into_iter()
+            .map(|(origin, group)| (origin, group.map(|x| x.0))),
+    )?;
+    Ok(())
 }
 
 // ---
