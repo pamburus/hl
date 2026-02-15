@@ -164,3 +164,34 @@ fn recover(status: ExitStatus) {
 #[cfg(not(unix))]
 #[allow(unused_variables)]
 fn recover(status: ExitStatus) {}
+
+// ---
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn pager_new_creates_default_instance() {
+        let pager = Pager::new();
+        assert!(pager.app_env_var.is_none());
+    }
+
+    #[test]
+    fn pager_default_creates_default_instance() {
+        let pager = Pager::default();
+        assert!(pager.app_env_var.is_none());
+    }
+
+    #[test]
+    fn pager_env_var_sets_app_env_var() {
+        let pager = Pager::new().env_var("HL_PAGER");
+        assert_eq!(pager.app_env_var, Some("HL_PAGER".to_string()));
+    }
+
+    #[test]
+    fn pager_env_var_accepts_string() {
+        let pager = Pager::new().env_var("CUSTOM_PAGER".to_string());
+        assert_eq!(pager.app_env_var, Some("CUSTOM_PAGER".to_string()));
+    }
+}
