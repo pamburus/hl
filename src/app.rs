@@ -651,7 +651,7 @@ impl App {
                             return Ok(())
                         }
                         let monitor = fsmon::Monitor::new(vec![path.canonical.clone()]);
-                        let (monitor, cancel) = monitor.cancellable();
+                        let (monitor, cancel) = monitor.cancellable()?;
                         let _bridge = std::thread::spawn({
                             let cancellation = cancellation.clone();
                             move || {
