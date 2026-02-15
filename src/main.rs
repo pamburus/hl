@@ -18,7 +18,6 @@ use terminal_size::terminal_size_of;
 use utf8_supported::{Utf8Support, utf8_supported};
 
 // local imports
-use lifecycle::{AsyncDrop, DropNotifier};
 use hl::{
     Delimiter, IncludeExcludeKeyFilter, KeyMatchOptions, app, cli, config,
     datefmt::LinuxDateFormat,
@@ -33,6 +32,7 @@ use hl::{
     timeparse::parse_time,
     timezone::Tz,
 };
+use lifecycle::{AsyncDrop, DropNotifier};
 use pager::{Pager, StartedPager};
 
 const HL_DEBUG_LOG: &str = "HL_DEBUG_LOG";
@@ -364,11 +364,22 @@ fn run() -> Result<()> {
         Some(output) => Box::new(std::fs::File::create(PathBuf::from(&output))?),
         None => match start_pager() {
             Some(mut pager) => {
-                if let Some(cancel) = cancel {
-                    _pager_watcher = pager
-                        .detach_process()
-                        .map(|p| AsyncDrop::new(DropNotifier::new(p, move || cancel.cancel())));
-                }
+                let detached = pager.detach_process();
+                log::debug!("pager detached: {}", detached.is_some());
+                _pager_watcher = detached.map(|p| {
+                    AsyncDrop::new(DropNotifier::new(p, move || {
+                        log::debug!("pager exited");
+                        if let Some(cancel) = cancel {
+                            log::debug!("initiate shutdown");
+                            cancel.cancel();
+                        }
+                        if let Err(err) = signal_hook::low_level::raise(signal_hook::consts::SIGINT) {
+                            log::error!("failed to raise SIGINT: {err}");
+                        } else {
+                            log::debug!("SIGINT raised");
+                        }
+                    }))
+                });
                 Box::new(pager)
             }
             None => Box::new(stdout()),
