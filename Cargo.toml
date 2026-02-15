@@ -13,10 +13,12 @@ build = "build.rs"
 [workspace]
 members = [
   ".",
+  "crates/cancel",
   "crates/encstr",
   "crates/enumset-ext",
   "crates/enumset-serde",
   "crates/heapopt",
+  "crates/pager",
   "crates/serde-logfmt",
   "crates/styled-help",
   "crates/wildcard",
@@ -46,6 +48,7 @@ name = "bench"
 [dependencies]
 anstream = "1"
 bytefmt = "0.1"
+cancel = { path = "./crates/cancel" }
 capnp.workspace = true
 chrono = { version = "0.4", default-features = false, features = ["clock", "serde", "std"] }
 chrono-english = "0.1"
@@ -91,6 +94,7 @@ notify = { version = "8", features = ["macos_kqueue"] }
 num_cpus = "1"
 once_cell = "1"
 owo-colors = "4"
+pager = { path = "./crates/pager" }
 pest = "2"
 pest_derive = "2"
 regex = "1"
@@ -155,6 +159,9 @@ ureq = "3"
 
 [target.'cfg(target_os = "macos")'.dependencies]
 kqueue = "1"
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
 
 [profile.release]
 opt-level = 3

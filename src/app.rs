@@ -286,8 +286,17 @@ impl App {
     }
 
     pub fn run(&self, inputs: Vec<InputHolder>, output: &mut Output) -> Result<()> {
+        self.run_with_cancellation(inputs, output, None)
+    }
+
+    pub fn run_with_cancellation(
+        &self,
+        inputs: Vec<InputHolder>,
+        output: &mut Output,
+        cancellation: Option<Arc<cancel::CancellationToken>>,
+    ) -> Result<()> {
         if self.options.follow {
-            self.follow(inputs.into_iter().map(|x| x.reference).collect(), output)
+            self.follow(inputs.into_iter().map(|x| x.reference).collect(), output, cancellation)
         } else if self.options.sort {
             self.sort(inputs, output)
         } else {
@@ -589,7 +598,12 @@ impl App {
         FollowBadges { si, input: badges }
     }
 
-    fn follow(&self, inputs: Vec<InputReference>, output: &mut Output) -> Result<()> {
+    fn follow(
+        &self,
+        inputs: Vec<InputReference>,
+        output: &mut Output,
+        cancellation: Option<Arc<cancel::CancellationToken>>,
+    ) -> Result<()> {
         let badges = self.prepare_follow_badges(inputs.iter());
 
         let m = inputs.len();
@@ -597,6 +611,11 @@ impl App {
         let parser = self.parser();
         let sfi = Arc::new(SegmentBufFactory::new(self.options.buffer_size.into()));
         let bfo = BufFactory::new(self.options.buffer_size.into());
+
+        let cancellation = match cancellation {
+            Some(ct) => ct,
+            None => Arc::new(cancel::CancellationToken::new()?),
+        };
 
         thread::scope(|scope| -> Result<()> {
             // prepare receive/transmit channels for input data
@@ -607,7 +626,7 @@ impl App {
             let mut readers = Vec::with_capacity(m);
             for (i, input_ref) in inputs.into_iter().enumerate() {
                 let delimiter = &self.options.delimiter;
-                let reader = scope.spawn(closure!(clone sfi, clone txi, |_| -> Result<()> {
+                let reader = scope.spawn(closure!(clone sfi, clone txi, clone cancellation, |_| -> Result<()> {
                     let scanner = Scanner::new(sfi.clone(), delimiter.clone());
                     let mut meta = None;
                     if let InputReference::File(path) = &input_ref {
@@ -631,7 +650,7 @@ impl App {
                         if process(&mut input, is_file(&meta))? {
                             return Ok(())
                         }
-                        fsmon::run(vec![path.canonical.clone()], |event| {
+                        fsmon::run_with_cancellation(vec![path.canonical.clone()], |event| {
                             match event.kind {
                                 EventKind::Modify(_) | EventKind::Create(_) | EventKind::Any | EventKind::Other => {
                                     if let (Some(old_meta), Ok(new_meta)) = (&meta, fs::metadata(&path.canonical)) {
@@ -658,7 +677,7 @@ impl App {
                                 },
                                 EventKind::Access(_) => Ok(()),
                             }
-                        })
+                        }, Some(&cancellation))
                     } else {
                         process(&mut input, is_file(&meta)).map(|_|())
                     }
@@ -679,7 +698,9 @@ impl App {
             drop(txo);
 
             // spawn merger thread
-            let merger = scope.spawn(closure!(ref badges, |_| -> Result<()> {
+            let merger = scope.spawn(closure!(ref badges, ref cancellation, |_| -> Result<()> {
+                let _cancel_guard = cancellation.drop_guard();
+
                 type Key = (Timestamp, usize, usize, usize); // (ts, input, block, offset)
                 type Line = (Rc<Vec<u8>>, Range<usize>, Instant); // (buf, location, instant)
 

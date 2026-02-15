@@ -18,13 +18,14 @@ use terminal_size::terminal_size_of;
 use utf8_supported::{Utf8Support, utf8_supported};
 
 // local imports
+use cancel::{AsyncDrop, CancellationToken, DropNotifier};
 use hl::{
     Delimiter, IncludeExcludeKeyFilter, KeyMatchOptions, app, cli, config,
     datefmt::LinuxDateFormat,
     error::*,
     help,
     input::InputReference,
-    output::{OutputStream, Pager},
+    output::OutputStream,
     query::Query,
     settings::{AsciiModeOpt, InputInfo, Settings},
     signal::SignalHandler,
@@ -32,6 +33,7 @@ use hl::{
     timeparse::parse_time,
     timezone::Tz,
 };
+use pager::{Pager, StartedPager};
 
 const HL_DEBUG_LOG: &str = "HL_DEBUG_LOG";
 const HL_DEBUG_LOG_STYLE: &str = "HL_DEBUG_LOG_STYLE";
@@ -112,16 +114,12 @@ fn run() -> Result<()> {
         cli::PagingOption::Always => true,
         cli::PagingOption::Never => false,
     };
-    let paging = if opt.paging_never || opt.follow { false } else { paging };
-    let pager = || -> OutputStream {
+    let paging = if opt.paging_never { false } else { paging };
+    let start_pager = || -> Option<StartedPager> {
         if paging {
-            if let Ok(pager) = Pager::new() {
-                Box::new(pager)
-            } else {
-                Box::new(stdout())
-            }
+            Pager::new().env_var(HL_PAGER).start().ok()
         } else {
-            Box::new(stdout())
+            None
         }
     };
 
@@ -130,7 +128,11 @@ fn run() -> Result<()> {
             true => anstream::ColorChoice::Always,
             false => anstream::ColorChoice::Never,
         };
-        let mut out = anstream::AutoStream::new(pager(), color_when);
+        let output: OutputStream = match start_pager() {
+            Some(pager) => Box::new(pager),
+            None => Box::new(stdout()),
+        };
+        let mut out = anstream::AutoStream::new(output, color_when);
         let help = match verbosity {
             cli::HelpVerbosity::Short => command().render_help(),
             cli::HelpVerbosity::Long => command().render_long_help(),
@@ -355,15 +357,27 @@ fn run() -> Result<()> {
         .map(|input| input.hold().map_err(Error::Io))
         .collect::<Result<Vec<_>>>()?;
 
+    let mut cancellation = None;
+    let mut _pager_watcher: Option<AsyncDrop> = None;
     let mut output: OutputStream = match opt.output {
         Some(output) => Box::new(std::fs::File::create(PathBuf::from(&output))?),
-        None => pager(),
+        None => match start_pager() {
+            Some(mut pager) => {
+                let ct = Arc::new(CancellationToken::new()?);
+                _pager_watcher = pager
+                    .detach_process()
+                    .map(|p| AsyncDrop::new(DropNotifier::new(p, ct.clone())));
+                cancellation = Some(ct);
+                Box::new(pager)
+            }
+            None => Box::new(stdout()),
+        },
     };
 
     log::debug!("run the app");
 
     // Run the app.
-    let run = || match app.run(inputs, output.as_mut()) {
+    let run = || match app.run_with_cancellation(inputs, output.as_mut(), cancellation) {
         Ok(()) => Ok(()),
         Err(Error::Io(ref e)) if e.kind() == std::io::ErrorKind::BrokenPipe => Ok(()),
         Err(err) => Err(err),
