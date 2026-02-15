@@ -1,12 +1,6 @@
 // std imports
 use std::path::PathBuf;
 
-// unix-only std imports
-#[cfg(unix)]
-use std::os::unix::io::{AsRawFd, FromRawFd, OwnedFd};
-#[cfg(unix)]
-use std::sync::atomic::{AtomicBool, Ordering};
-
 // local imports
 use crate::error::Result;
 
@@ -18,57 +12,23 @@ pub type EventKind = notify::EventKind;
 // ---
 
 pub struct Monitor {
-    #[cfg(unix)]
-    cancel_fd: Option<OwnedFd>,
+    cancel_token: Option<imp::CancelToken>,
 }
 
 impl Monitor {
     pub fn new() -> Self {
-        Self {
-            #[cfg(unix)]
-            cancel_fd: None,
-        }
+        Self { cancel_token: None }
     }
 
     pub fn cancellable(self) -> std::io::Result<(Self, CancelHandle)> {
-        #[cfg(unix)]
-        {
-            let (read_fd, write_fd) = pipe()?;
-            Ok((
-                Self {
-                    cancel_fd: Some(read_fd),
-                },
-                CancelHandle {
-                    cancelled: AtomicBool::new(false),
-                    write_fd,
-                },
-            ))
-        }
-        #[cfg(not(unix))]
-        {
-            Ok((self, CancelHandle {}))
-        }
+        let (token, handle) = imp::create_cancel_pair()?;
+        Ok((Self { cancel_token: Some(token) }, CancelHandle { inner: handle }))
     }
 
     pub fn try_clone(&self) -> std::io::Result<Self> {
-        #[cfg(unix)]
-        {
-            let cancel_fd = match &self.cancel_fd {
-                Some(fd) => {
-                    let new_fd = unsafe { libc::dup(fd.as_raw_fd()) };
-                    if new_fd == -1 {
-                        return Err(std::io::Error::last_os_error());
-                    }
-                    Some(unsafe { OwnedFd::from_raw_fd(new_fd) })
-                }
-                None => None,
-            };
-            Ok(Self { cancel_fd })
-        }
-        #[cfg(not(unix))]
-        {
-            Ok(Self {})
-        }
+        Ok(Self {
+            cancel_token: self.cancel_token.as_ref().map(|t| t.try_clone()).transpose()?,
+        })
     }
 
     pub fn run<H>(self, paths: Vec<PathBuf>, handle: H) -> Result<()>
@@ -81,38 +41,19 @@ impl Monitor {
             return Ok(());
         }
 
-        #[cfg(unix)]
-        {
-            imp::run(watch, into_filter(paths, handle), self.cancel_fd)
-        }
-        #[cfg(not(unix))]
-        {
-            imp::run(watch, into_filter(paths, handle))
-        }
+        imp::run(watch, into_filter(paths, handle), self.cancel_token)
     }
 }
 
 // ---
 
-#[cfg(unix)]
 pub struct CancelHandle {
-    cancelled: AtomicBool,
-    write_fd: OwnedFd,
+    inner: imp::CancelHandle,
 }
-
-#[cfg(not(unix))]
-pub struct CancelHandle {}
 
 impl CancelHandle {
     pub fn cancel(&self) {
-        #[cfg(unix)]
-        {
-            if !self.cancelled.swap(true, Ordering::SeqCst) {
-                unsafe {
-                    libc::write(self.write_fd.as_raw_fd(), [1u8].as_ptr() as *const libc::c_void, 1);
-                }
-            }
-        }
+        self.inner.cancel();
     }
 }
 
@@ -161,17 +102,9 @@ where
     }
 }
 
-#[cfg(unix)]
-fn pipe() -> std::io::Result<(OwnedFd, OwnedFd)> {
-    let mut fds = [0i32; 2];
-    if unsafe { libc::pipe(fds.as_mut_ptr()) } == -1 {
-        return Err(std::io::Error::last_os_error());
-    }
-    Ok(unsafe { (OwnedFd::from_raw_fd(fds[0]), OwnedFd::from_raw_fd(fds[1])) })
-}
-
 #[cfg(not(target_os = "macos"))]
 mod imp {
+    use std::path::PathBuf;
     use std::sync::mpsc;
     use std::time::Duration;
 
@@ -182,36 +115,27 @@ mod imp {
 
     const FALLBACK_POLLING_INTERVAL: Duration = Duration::from_secs(1);
 
-    #[cfg(unix)]
-    pub fn run<H>(paths: Vec<PathBuf>, mut handle: H, cancel_fd: Option<OwnedFd>) -> Result<()>
+    pub use self::platform::*;
+
+    pub fn run<H>(paths: Vec<PathBuf>, mut handle: H, cancel: Option<CancelToken>) -> Result<()>
     where
         H: FnMut(Event) -> Result<()>,
     {
         let (tx, rx) = mpsc::channel();
-        let mut watcher = RecommendedWatcher::new(tx, Config::default().with_poll_interval(FALLBACK_POLLING_INTERVAL))?;
+        let mut watcher =
+            RecommendedWatcher::new(tx, Config::default().with_poll_interval(FALLBACK_POLLING_INTERVAL))?;
 
         for path in &paths {
             watcher.watch(path, RecursiveMode::NonRecursive)?;
         }
 
-        if let Some(cancel_fd) = cancel_fd {
-            run_cancellable(rx, &mut handle, cancel_fd)
-        } else {
-            run_simple(rx, &mut handle)
+        #[cfg(unix)]
+        if let Some(cancel) = cancel {
+            return run_cancellable(rx, &mut handle, cancel);
         }
-    }
 
-    #[cfg(not(unix))]
-    pub fn run<H>(paths: Vec<PathBuf>, mut handle: H) -> Result<()>
-    where
-        H: FnMut(Event) -> Result<()>,
-    {
-        let (tx, rx) = mpsc::channel();
-        let mut watcher = RecommendedWatcher::new(tx, Config::default().with_poll_interval(FALLBACK_POLLING_INTERVAL))?;
-
-        for path in &paths {
-            watcher.watch(path, RecursiveMode::NonRecursive)?;
-        }
+        #[cfg(not(unix))]
+        let _ = cancel;
 
         run_simple(rx, &mut handle)
     }
@@ -230,12 +154,17 @@ mod imp {
     }
 
     #[cfg(unix)]
-    fn run_cancellable<H>(rx: mpsc::Receiver<notify::Result<Event>>, handle: &mut H, cancel_fd: OwnedFd) -> Result<()>
+    fn run_cancellable<H>(
+        rx: mpsc::Receiver<notify::Result<Event>>,
+        handle: &mut H,
+        cancel: CancelToken,
+    ) -> Result<()>
     where
         H: FnMut(Event) -> Result<()>,
     {
         use std::collections::VecDeque;
         use std::io::Write;
+        use std::os::unix::io::AsRawFd;
         use std::os::unix::net::UnixStream;
         use std::sync::{Arc, Mutex};
         use std::thread;
@@ -244,7 +173,7 @@ mod imp {
         notify_reader.set_nonblocking(true)?;
 
         let notify_read_fd = notify_reader.as_raw_fd();
-        let cancel_raw_fd = cancel_fd.as_raw_fd();
+        let cancel_raw_fd = cancel.0.as_raw_fd();
 
         let event_queue: Arc<Mutex<VecDeque<notify::Result<Event>>>> = Arc::new(Mutex::new(VecDeque::new()));
         let event_queue_writer = Arc::clone(&event_queue);
@@ -306,18 +235,132 @@ mod imp {
             }
         }
     }
+
+    #[cfg(unix)]
+    mod platform {
+        use std::os::unix::io::{AsRawFd, FromRawFd, OwnedFd};
+        use std::sync::atomic::{AtomicBool, Ordering};
+
+        pub struct CancelToken(pub(super) OwnedFd);
+
+        pub struct CancelHandle {
+            cancelled: AtomicBool,
+            write_fd: OwnedFd,
+        }
+
+        // Safety: write_fd is only written to once, guarded by the AtomicBool.
+        unsafe impl Sync for CancelHandle {}
+
+        impl CancelToken {
+            pub fn try_clone(&self) -> std::io::Result<Self> {
+                let new_fd = unsafe { libc::dup(self.0.as_raw_fd()) };
+                if new_fd == -1 {
+                    return Err(std::io::Error::last_os_error());
+                }
+                Ok(Self(unsafe { OwnedFd::from_raw_fd(new_fd) }))
+            }
+        }
+
+        impl CancelHandle {
+            pub fn cancel(&self) {
+                if !self.cancelled.swap(true, Ordering::SeqCst) {
+                    unsafe {
+                        libc::write(self.write_fd.as_raw_fd(), [1u8].as_ptr() as *const libc::c_void, 1);
+                    }
+                }
+            }
+        }
+
+        pub fn create_cancel_pair() -> std::io::Result<(CancelToken, CancelHandle)> {
+            let mut fds = [0i32; 2];
+            if unsafe { libc::pipe(fds.as_mut_ptr()) } == -1 {
+                return Err(std::io::Error::last_os_error());
+            }
+            let (read_fd, write_fd) = unsafe { (OwnedFd::from_raw_fd(fds[0]), OwnedFd::from_raw_fd(fds[1])) };
+            Ok((
+                CancelToken(read_fd),
+                CancelHandle {
+                    cancelled: AtomicBool::new(false),
+                    write_fd,
+                },
+            ))
+        }
+    }
+
+    #[cfg(not(unix))]
+    mod platform {
+        pub struct CancelToken;
+
+        pub struct CancelHandle;
+
+        impl CancelToken {
+            pub fn try_clone(&self) -> std::io::Result<Self> {
+                Ok(Self)
+            }
+        }
+
+        impl CancelHandle {
+            pub fn cancel(&self) {}
+        }
+
+        pub fn create_cancel_pair() -> std::io::Result<(CancelToken, CancelHandle)> {
+            Ok((CancelToken, CancelHandle))
+        }
+    }
 }
 
 #[cfg(target_os = "macos")]
 mod imp {
     use std::io;
     use std::os::fd::{AsRawFd, FromRawFd, OwnedFd, RawFd};
+    use std::sync::atomic::{AtomicBool, Ordering};
     use std::{collections::HashSet, time::Duration};
 
     use kqueue::{EventData, EventFilter, FilterFlag, Ident, Vnode, Watcher};
     use notify::event::{CreateKind, DataChange, MetadataKind, ModifyKind, RemoveKind, RenameMode};
 
     use super::*;
+
+    pub struct CancelToken(OwnedFd);
+
+    pub struct CancelHandle {
+        cancelled: AtomicBool,
+        write_fd: OwnedFd,
+    }
+
+    // Safety: write_fd is only written to once, guarded by the AtomicBool.
+    unsafe impl Sync for CancelHandle {}
+
+    impl CancelToken {
+        pub fn try_clone(&self) -> io::Result<Self> {
+            Ok(Self(dup_fd(self.0.as_raw_fd())?))
+        }
+    }
+
+    impl CancelHandle {
+        pub fn cancel(&self) {
+            if !self.cancelled.swap(true, Ordering::SeqCst) {
+                unsafe {
+                    libc::write(self.write_fd.as_raw_fd(), [1u8].as_ptr() as *const libc::c_void, 1);
+                }
+            }
+        }
+    }
+
+    pub fn create_cancel_pair() -> io::Result<(CancelToken, CancelHandle)> {
+        let mut fds = [0i32; 2];
+        if unsafe { libc::pipe(fds.as_mut_ptr()) } == -1 {
+            return Err(io::Error::last_os_error());
+        }
+        let (read_fd, write_fd) = unsafe { (OwnedFd::from_raw_fd(fds[0]), OwnedFd::from_raw_fd(fds[1])) };
+        Ok((
+            CancelToken(read_fd),
+            CancelHandle {
+                cancelled: AtomicBool::new(false),
+                write_fd,
+            },
+        ))
+    }
 
     fn dup_fd(fd: RawFd) -> io::Result<OwnedFd> {
         let new_fd = unsafe { libc::dup(fd) };
@@ -328,7 +371,7 @@ mod imp {
         }
     }
 
-    pub fn run<H>(paths: Vec<PathBuf>, mut handle: H, cancel_fd: Option<OwnedFd>) -> Result<()>
+    pub fn run<H>(paths: Vec<PathBuf>, mut handle: H, cancel_token: Option<CancelToken>) -> Result<()>
     where
         H: FnMut(Event) -> Result<()>,
     {
@@ -338,7 +381,7 @@ mod imp {
 
         // Duplicate the cancel fd so kqueue can own the duplicate
         // without affecting the original.
-        let cancel_fd_dup = cancel_fd.as_ref().map(|fd| dup_fd(fd.as_raw_fd())).transpose()?;
+        let cancel_fd_dup = cancel_token.as_ref().map(|fd| dup_fd(fd.0.as_raw_fd())).transpose()?;
         let cancel_fd_raw = cancel_fd_dup.as_ref().map(|fd| fd.as_raw_fd());
 
         if let Some(fd) = cancel_fd_raw {
