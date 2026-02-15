@@ -33,7 +33,7 @@ use hl::{
     timezone::Tz,
 };
 use lifecycle::{AsyncDrop, DropNotifier};
-use pager::{Pager, StartedPager};
+use pager::Pager;
 
 const HL_DEBUG_LOG: &str = "HL_DEBUG_LOG";
 const HL_DEBUG_LOG_STYLE: &str = "HL_DEBUG_LOG_STYLE";
@@ -116,7 +116,7 @@ fn run() -> Result<()> {
         cli::PagingOption::Never => false,
     };
     let paging = if opt.paging_never { false } else { paging };
-    let start_pager = || -> Option<StartedPager> {
+    let start_pager = || {
         if paging {
             Pager::new().env_var(HL_PAGER).start().ok()
         } else {
@@ -377,7 +377,7 @@ fn run() -> Result<()> {
         },
     };
 
-    let mut output: Box<dyn Write + Send + Sync> = Box::new(ExitOnWriteError(output));
+    let mut output: OutputStream = Box::new(ExitOnWriteError(output));
 
     log::debug!("run the app");
 
