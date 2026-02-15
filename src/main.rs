@@ -118,7 +118,13 @@ fn run() -> Result<()> {
     let paging = if opt.paging_never { false } else { paging };
     let start_pager = || {
         if paging {
-            Pager::new().env_var(HL_PAGER).start().ok()
+            Pager::new()
+                .env_var(HL_PAGER)
+                .start()
+                .inspect_err(|err| {
+                    log::debug!("failed to start pager: {}", err);
+                })
+                .ok()
         } else {
             None
         }
@@ -416,20 +422,21 @@ impl AppInfoProvider for AppInfo {
 
 struct ExitOnWriteError<W>(W);
 
+impl<W> ExitOnWriteError<W> {
+    fn inspect<R>(res: std::io::Result<R>) -> std::io::Result<R> {
+        res.inspect_err(|err| {
+            log::debug!("write error: {}", err);
+            process::exit(0);
+        })
+    }
+}
+
 impl<W: Write> Write for ExitOnWriteError<W> {
     fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-        let result = self.0.write(buf);
-        if result.is_err() {
-            process::exit(0);
-        }
-        result
+        Self::inspect(self.0.write(buf))
     }
 
     fn flush(&mut self) -> std::io::Result<()> {
-        let result = self.0.flush();
-        if result.is_err() {
-            process::exit(0);
-        }
-        result
+        Self::inspect(self.0.flush())
     }
 }
