@@ -58,6 +58,11 @@ use crate::{
 #[cfg(test)]
 use crate::testing::Sample;
 
+// ---
+
+pub type Output = dyn Write + Send + Sync;
+pub type InputInfoSet = EnumSet<InputInfo>;
+
 // TODO: merge Options to Settings and replace Options with Settings.
 
 // ---
@@ -132,8 +137,6 @@ impl Options {
         Self { expand, ..self }
     }
 }
-
-pub type InputInfoSet = EnumSet<InputInfo>;
 
 #[derive(Default)]
 pub struct AdvancedFilter {
@@ -259,13 +262,6 @@ pub fn list_themes(
 
 // ---
 
-pub struct App {
-    options: Options,
-    punctuation: Arc<ResolvedPunctuation>,
-    formatter: DynRecordWithSourceFormatter,
-    monitor: Option<fsmon::Monitor>,
-}
-
 pub struct CancelHandle {
     inner: fsmon::CancelHandle,
 }
@@ -276,7 +272,14 @@ impl CancelHandle {
     }
 }
 
-pub type Output = dyn Write + Send + Sync;
+// ---
+
+pub struct App {
+    options: Options,
+    punctuation: Arc<ResolvedPunctuation>,
+    formatter: DynRecordWithSourceFormatter,
+    monitor: Option<fsmon::Monitor>,
+}
 
 impl App {
     pub fn new(mut options: Options) -> Self {
@@ -289,7 +292,11 @@ impl App {
 
         let formatter = Self::new_formatter(&options, punctuation.clone());
 
-        let monitor = if options.follow { Some(fsmon::Monitor::new()) } else { None };
+        let monitor = if options.follow {
+            Some(fsmon::Monitor::new())
+        } else {
+            None
+        };
 
         Self {
             options,
@@ -618,11 +625,7 @@ impl App {
         FollowBadges { si, input: badges }
     }
 
-    fn follow(
-        &self,
-        inputs: Vec<InputReference>,
-        output: &mut Output,
-    ) -> Result<()> {
+    fn follow(&self, inputs: Vec<InputReference>, output: &mut Output) -> Result<()> {
         let badges = self.prepare_follow_badges(inputs.iter());
 
         let m = inputs.len();
