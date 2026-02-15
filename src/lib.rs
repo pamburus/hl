@@ -7,6 +7,7 @@ pub mod datefmt;
 pub mod error;
 pub mod fmtx;
 pub mod formatting;
+pub mod help;
 pub mod index;
 pub mod index_capnp;
 pub mod input;
