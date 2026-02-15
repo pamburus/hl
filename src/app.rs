@@ -634,13 +634,6 @@ impl App {
         let sfi = Arc::new(SegmentBufFactory::new(self.options.buffer_size.into()));
         let bfo = BufFactory::new(self.options.buffer_size.into());
 
-        let monitors: Vec<_> = (0..m)
-            .map(|_| match &self.monitor {
-                Some(m) => m.try_clone().map(Some),
-                None => Ok(None),
-            })
-            .collect::<std::io::Result<_>>()?;
-
         thread::scope(|scope| -> Result<()> {
             // prepare receive/transmit channels for input data
             let (txi, rxi) = channel::bounded(1);
@@ -648,10 +641,12 @@ impl App {
             let (txo, rxo) = channel::bounded(1);
             // spawn reader threads
             let mut readers = Vec::with_capacity(m);
-            let mut monitors = monitors.into_iter();
             for (i, input_ref) in inputs.into_iter().enumerate() {
                 let delimiter = &self.options.delimiter;
-                let monitor = monitors.next().unwrap();
+                let monitor = match &self.monitor {
+                    Some(m) => m.try_clone()?,
+                    None => fsmon::Monitor::new(),
+                };
                 let reader = scope.spawn(closure!(clone sfi, clone txi, |_| -> Result<()> {
                     let scanner = Scanner::new(sfi.clone(), delimiter.clone());
                     let mut meta = None;
@@ -676,7 +671,6 @@ impl App {
                         if process(&mut input, is_file(&meta))? {
                             return Ok(())
                         }
-                        let monitor = monitor.unwrap_or_else(fsmon::Monitor::new);
                         monitor.run(vec![path.canonical.clone()], |event| {
                             match event.kind {
                                 EventKind::Modify(_) | EventKind::Create(_) | EventKind::Any | EventKind::Other => {
