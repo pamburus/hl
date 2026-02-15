@@ -650,7 +650,16 @@ impl App {
                         if process(&mut input, is_file(&meta))? {
                             return Ok(())
                         }
-                        fsmon::run_with_cancellation(vec![path.canonical.clone()], |event| {
+                        let monitor = fsmon::Monitor::new(vec![path.canonical.clone()]);
+                        let (monitor, cancel) = monitor.cancellable();
+                        let _bridge = std::thread::spawn({
+                            let cancellation = cancellation.clone();
+                            move || {
+                                cancellation.wait();
+                                cancel.cancel();
+                            }
+                        });
+                        monitor.run(|event| {
                             match event.kind {
                                 EventKind::Modify(_) | EventKind::Create(_) | EventKind::Any | EventKind::Other => {
                                     if let (Some(old_meta), Ok(new_meta)) = (&meta, fs::metadata(&path.canonical)) {
@@ -677,7 +686,7 @@ impl App {
                                 },
                                 EventKind::Access(_) => Ok(()),
                             }
-                        }, Some(&cancellation))
+                        })
                     } else {
                         process(&mut input, is_file(&meta)).map(|_|())
                     }

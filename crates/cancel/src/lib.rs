@@ -59,6 +59,26 @@ impl CancellationToken {
         self.cancelled.load(Ordering::SeqCst)
     }
 
+    /// Blocks the calling thread until cancellation is signaled.
+    #[cfg(unix)]
+    pub fn wait(&self) {
+        if self.is_cancelled() {
+            return;
+        }
+        let fd = self.pipe.0.as_raw_fd();
+        loop {
+            let mut pollfd = libc::pollfd {
+                fd,
+                events: libc::POLLIN,
+                revents: 0,
+            };
+            let ret = unsafe { libc::poll(&mut pollfd, 1, -1) };
+            if ret > 0 || self.is_cancelled() {
+                return;
+            }
+        }
+    }
+
     /// Returns a guard that calls `cancel()` when dropped.
     pub fn drop_guard(self: &Arc<Self>) -> CancelGuard {
         CancelGuard(self.clone())
