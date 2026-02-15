@@ -102,6 +102,10 @@ impl StartedPager {
     pub fn detach_process(&mut self) -> Option<PagerProcess> {
         self.process.take().map(PagerProcess)
     }
+
+    fn stdin(&mut self) -> &mut ChildStdin {
+        self.stdin.as_mut().expect("pager stdin is not available")
+    }
 }
 
 impl Drop for StartedPager {
@@ -120,17 +124,11 @@ impl Drop for StartedPager {
 
 impl Write for StartedPager {
     fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-        self.stdin
-            .as_mut()
-            .expect("pager stdin is not available")
-            .write(buf)
+        self.stdin().write(buf)
     }
 
     fn flush(&mut self) -> std::io::Result<()> {
-        self.stdin
-            .as_mut()
-            .expect("pager stdin is not available")
-            .flush()
+        self.stdin().flush()
     }
 }
 
