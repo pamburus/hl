@@ -57,6 +57,7 @@ function test() {
     ${MAIN_EXECUTABLE:?} --config - --help > /dev/null
     ${MAIN_EXECUTABLE:?} --config - --help=short --color never > /dev/null
     ${MAIN_EXECUTABLE:?} --config - --help=long -c --paging never > /dev/null
+    ${MAIN_EXECUTABLE:?} --config - --help --color always --paging always | head -n 1 > /dev/null
     ${MAIN_EXECUTABLE:?} --config - --config=etc/defaults/config-k8s.toml > /dev/null
     ${MAIN_EXECUTABLE:?} --config - --config=etc/defaults/config-ecs.toml > /dev/null
     ${MAIN_EXECUTABLE:?} --config - --shell-completions bash > /dev/null
