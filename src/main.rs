@@ -331,6 +331,7 @@ fn run() -> Result<()> {
         expand: opt.expansion.into(),
     });
     let (app, cancel) = app.cancellable()?;
+    let shutdown = Arc::new(Shutdown::new(cancel));
 
     // Configure the input.
     let mut inputs = opt
@@ -360,24 +361,17 @@ fn run() -> Result<()> {
         .collect::<Result<Vec<_>>>()?;
 
     let mut _pager_watcher: Option<AsyncDrop> = None;
-    let mut output: OutputStream = match opt.output {
+    let output: OutputStream = match opt.output {
         Some(output) => Box::new(std::fs::File::create(PathBuf::from(&output))?),
         None => match start_pager() {
             Some(mut pager) => {
                 let detached = pager.detach_process();
                 log::debug!("pager detached: {}", detached.is_some());
+                let shutdown = shutdown.clone();
                 _pager_watcher = detached.map(|p| {
                     AsyncDrop::new(DropNotifier::new(p, move || {
                         log::debug!("pager exited");
-                        if let Some(cancel) = cancel {
-                            log::debug!("initiate shutdown");
-                            cancel.cancel();
-                        }
-                        if let Err(err) = signal_hook::low_level::raise(signal_hook::consts::SIGINT) {
-                            log::error!("failed to raise SIGINT: {err}");
-                        } else {
-                            log::debug!("SIGINT raised");
-                        }
+                        shutdown.initiate();
                     }))
                 });
                 Box::new(pager)
@@ -385,6 +379,11 @@ fn run() -> Result<()> {
             None => Box::new(stdout()),
         },
     };
+
+    let mut output: Box<dyn Write + Send + Sync> = Box::new(ShutdownOnError {
+        inner: output,
+        shutdown: shutdown.clone(),
+    });
 
     log::debug!("run the app");
 
@@ -416,5 +415,55 @@ impl AppInfoProvider for AppInfo {
             UsageRequest::ListThemes => Some(("--list-themes".into(), "".into())),
             UsageRequest::ListThemeOverlays => Some(("--list-themes=overlay".into(), "".into())),
         }
+    }
+}
+
+// ---
+
+struct Shutdown {
+    cancel: Option<app::CancelHandle>,
+}
+
+impl Shutdown {
+    fn new(cancel: Option<app::CancelHandle>) -> Self {
+        Self { cancel }
+    }
+
+    fn initiate(&self) {
+        log::debug!("initiating shutdown");
+        if let Some(cancel) = &self.cancel {
+            cancel.cancel();
+            log::debug!("cancel handle signaled");
+        }
+        if let Err(err) = signal_hook::low_level::raise(signal_hook::consts::SIGINT) {
+            log::error!("failed to raise SIGINT: {err}");
+        } else {
+            log::debug!("SIGINT raised");
+        }
+    }
+}
+
+// ---
+
+struct ShutdownOnError<W> {
+    inner: W,
+    shutdown: Arc<Shutdown>,
+}
+
+impl<W: Write> Write for ShutdownOnError<W> {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        let result = self.inner.write(buf);
+        if result.is_err() {
+            self.shutdown.initiate();
+        }
+        result
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        let result = self.inner.flush();
+        if result.is_err() {
+            self.shutdown.initiate();
+        }
+        result
     }
 }
