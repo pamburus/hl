@@ -314,10 +314,9 @@ impl App {
         }
     }
 
-    pub fn run(&mut self, inputs: Vec<InputHolder>, output: &mut Output) -> Result<()> {
+    pub fn run(&self, inputs: Vec<InputHolder>, output: &mut Output) -> Result<()> {
         if self.options.follow {
-            let monitor = self.monitor.take();
-            self.follow(inputs.into_iter().map(|x| x.reference).collect(), output, monitor)
+            self.follow(inputs.into_iter().map(|x| x.reference).collect(), output)
         } else if self.options.sort {
             self.sort(inputs, output)
         } else {
@@ -623,7 +622,6 @@ impl App {
         &self,
         inputs: Vec<InputReference>,
         output: &mut Output,
-        monitor: Option<fsmon::Monitor>,
     ) -> Result<()> {
         let badges = self.prepare_follow_badges(inputs.iter());
 
@@ -634,7 +632,7 @@ impl App {
         let bfo = BufFactory::new(self.options.buffer_size.into());
 
         let monitors: Vec<_> = (0..m)
-            .map(|_| match &monitor {
+            .map(|_| match &self.monitor {
                 Some(m) => m.try_clone().map(Some),
                 None => Ok(None),
             })

@@ -330,7 +330,7 @@ fn run() -> Result<()> {
         ascii,
         expand: opt.expansion.into(),
     });
-    let (mut app, cancel) = app.cancellable()?;
+    let (app, cancel) = app.cancellable()?;
 
     // Configure the input.
     let mut inputs = opt
