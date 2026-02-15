@@ -105,7 +105,7 @@ impl Monitor {
             return Ok(());
         }
 
-        imp::run(self.watch, into_filter(self.paths, handle))
+        imp::run(self.watch, into_filter(self.paths, handle), None)
     }
 }
 
@@ -119,7 +119,7 @@ impl CancellableMonitor {
             return Ok(());
         }
 
-        imp::run_cancellable(self.watch, into_filter(self.paths, handle), self.cancel_fd)
+        imp::run(self.watch, into_filter(self.paths, handle), Some(self.cancel_fd))
     }
 }
 
@@ -157,7 +157,7 @@ mod imp {
 
     const FALLBACK_POLLING_INTERVAL: Duration = Duration::from_secs(1);
 
-    pub fn run<H>(paths: Vec<PathBuf>, mut handle: H) -> Result<()>
+    pub fn run<H>(paths: Vec<PathBuf>, mut handle: H, cancel_fd: Option<OwnedFd>) -> Result<()>
     where
         H: FnMut(Event) -> Result<()>,
     {
@@ -168,17 +168,25 @@ mod imp {
             watcher.watch(path, RecursiveMode::NonRecursive)?;
         }
 
-        loop {
-            match rx.recv() {
-                Ok(Ok(event)) => handle(event)?,
-                Ok(Err(err)) => return Err(err.into()),
-                Err(err) => return Err(Error::RecvTimeoutError { source: err.into() }),
-            };
+        if let Some(cancel_fd) = cancel_fd {
+            run_cancellable(rx, &mut handle, cancel_fd)
+        } else {
+            loop {
+                match rx.recv() {
+                    Ok(Ok(event)) => handle(event)?,
+                    Ok(Err(err)) => return Err(err.into()),
+                    Err(err) => return Err(Error::RecvTimeoutError { source: err.into() }),
+                };
+            }
         }
     }
 
     #[cfg(unix)]
-    pub fn run_cancellable<H>(paths: Vec<PathBuf>, mut handle: H, cancel_fd: OwnedFd) -> Result<()>
+    fn run_cancellable<H>(
+        rx: mpsc::Receiver<notify::Result<Event>>,
+        handle: &mut H,
+        cancel_fd: OwnedFd,
+    ) -> Result<()>
     where
         H: FnMut(Event) -> Result<()>,
     {
@@ -187,13 +195,6 @@ mod imp {
         use std::os::unix::net::UnixStream;
         use std::sync::{Arc, Mutex};
         use std::thread;
-
-        let (tx, rx) = mpsc::channel();
-        let mut watcher = RecommendedWatcher::new(tx, Config::default().with_poll_interval(FALLBACK_POLLING_INTERVAL))?;
-
-        for path in &paths {
-            watcher.watch(path, RecursiveMode::NonRecursive)?;
-        }
 
         let (notify_reader, notify_writer) = UnixStream::pair()?;
         notify_reader.set_nonblocking(true)?;
@@ -283,87 +284,7 @@ mod imp {
         }
     }
 
-    pub fn run<H>(paths: Vec<PathBuf>, mut handle: H) -> Result<()>
-    where
-        H: FnMut(Event) -> Result<()>,
-    {
-        let mut watcher = Watcher::new()?;
-        let mut added = HashSet::<&PathBuf>::new();
-        let mut synced = true;
-
-        let flags = FilterFlag::NOTE_FFNOP
-            | FilterFlag::NOTE_DELETE
-            | FilterFlag::NOTE_WRITE
-            | FilterFlag::NOTE_RENAME
-            | FilterFlag::NOTE_EXTEND;
-
-        loop {
-            for path in &paths {
-                if watcher.add_filename(path, EventFilter::EVFILT_VNODE, flags).is_ok() {
-                    added.insert(path);
-                    if !synced {
-                        handle(Event::new(EventKind::Create(CreateKind::Any)).add_path(path.clone()))?;
-                    }
-                }
-            }
-
-            synced = true;
-            watcher.watch()?;
-
-            while synced {
-                let event = if let Some(event) = watcher.poll(Some(Duration::from_secs(1))) {
-                    event
-                } else {
-                    continue;
-                };
-
-                match event {
-                    kqueue::Event {
-                        data: EventData::Vnode(data),
-                        ident: Ident::Filename(_, path),
-                    } => {
-                        let path = PathBuf::from(path);
-                        let event = match data {
-                            Vnode::Delete | Vnode::Revoke => {
-                                if added.contains(&path) {
-                                    watcher.remove_filename(&path, EventFilter::EVFILT_VNODE)?;
-                                    added.remove(&path);
-                                }
-                                Event::new(EventKind::Remove(RemoveKind::Any)).add_path(path)
-                            }
-                            Vnode::Write => {
-                                if added.len() < paths.len() && path.is_dir() {
-                                    synced = false;
-                                }
-                                Event::new(EventKind::Modify(ModifyKind::Data(DataChange::Any))).add_path(path)
-                            }
-                            Vnode::Extend | Vnode::Truncate => {
-                                Event::new(EventKind::Modify(ModifyKind::Data(DataChange::Size))).add_path(path)
-                            }
-                            Vnode::Rename => {
-                                if added.contains(&path) {
-                                    watcher.remove_filename(&path, EventFilter::EVFILT_VNODE)?;
-                                    added.remove(&path);
-                                }
-                                Event::new(EventKind::Modify(ModifyKind::Name(RenameMode::Any))).add_path(path)
-                            }
-                            Vnode::Link => Event::new(EventKind::Create(CreateKind::Any)).add_path(path),
-                            Vnode::Attrib => {
-                                Event::new(EventKind::Modify(ModifyKind::Metadata(MetadataKind::Any))).add_path(path)
-                            }
-
-                            #[allow(unreachable_patterns)]
-                            _ => Event::new(EventKind::Other),
-                        };
-                        handle(event)?;
-                    }
-                    _ => unreachable!(),
-                };
-            }
-        }
-    }
-
-    pub fn run_cancellable<H>(paths: Vec<PathBuf>, mut handle: H, cancel_fd: OwnedFd) -> Result<()>
+    pub fn run<H>(paths: Vec<PathBuf>, mut handle: H, cancel_fd: Option<OwnedFd>) -> Result<()>
     where
         H: FnMut(Event) -> Result<()>,
     {
@@ -373,10 +294,12 @@ mod imp {
 
         // Duplicate the cancel fd so kqueue can own the duplicate
         // without affecting the original.
-        let cancel_fd_dup = dup_fd(cancel_fd.as_raw_fd())?;
-        let cancel_fd_raw = cancel_fd_dup.as_raw_fd();
+        let cancel_fd_dup = cancel_fd.as_ref().map(|fd| dup_fd(fd.as_raw_fd())).transpose()?;
+        let cancel_fd_raw = cancel_fd_dup.as_ref().map(|fd| fd.as_raw_fd());
 
-        watcher.add_fd(cancel_fd_raw, EventFilter::EVFILT_READ, FilterFlag::empty())?;
+        if let Some(fd) = cancel_fd_raw {
+            watcher.add_fd(fd, EventFilter::EVFILT_READ, FilterFlag::empty())?;
+        }
 
         let flags = FilterFlag::NOTE_FFNOP
             | FilterFlag::NOTE_DELETE
@@ -386,7 +309,9 @@ mod imp {
 
         loop {
             // Re-add cancel fd on each outer loop iteration since watch() clears the changelist.
-            watcher.add_fd(cancel_fd_raw, EventFilter::EVFILT_READ, FilterFlag::empty())?;
+            if let Some(fd) = cancel_fd_raw {
+                watcher.add_fd(fd, EventFilter::EVFILT_READ, FilterFlag::empty())?;
+            }
 
             for path in &paths {
                 if watcher.add_filename(path, EventFilter::EVFILT_VNODE, flags).is_ok() {
@@ -409,7 +334,7 @@ mod imp {
 
                 // Check if this is a cancellation event.
                 if let Ident::Fd(fd) = &event.ident {
-                    if *fd == cancel_fd_raw {
+                    if cancel_fd_raw == Some(*fd) {
                         return Ok(());
                     }
                 }
