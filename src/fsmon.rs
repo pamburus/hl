@@ -103,10 +103,6 @@ pub struct CancelHandle {
 #[cfg(not(unix))]
 pub struct CancelHandle {}
 
-// Safety: write_fd is only written to once, guarded by the AtomicBool.
-#[cfg(unix)]
-unsafe impl Sync for CancelHandle {}
-
 impl CancelHandle {
     pub fn cancel(&self) {
         #[cfg(unix)]
@@ -234,11 +230,7 @@ mod imp {
     }
 
     #[cfg(unix)]
-    fn run_cancellable<H>(
-        rx: mpsc::Receiver<notify::Result<Event>>,
-        handle: &mut H,
-        cancel_fd: OwnedFd,
-    ) -> Result<()>
+    fn run_cancellable<H>(rx: mpsc::Receiver<notify::Result<Event>>, handle: &mut H, cancel_fd: OwnedFd) -> Result<()>
     where
         H: FnMut(Event) -> Result<()>,
     {
