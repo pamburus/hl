@@ -24,7 +24,7 @@ use hl::{
     error::*,
     help,
     input::InputReference,
-    output::{OutputStream, Pager},
+    output::OutputStream,
     query::Query,
     settings::{AsciiModeOpt, InputInfo, Settings},
     signal::SignalHandler,
@@ -32,9 +32,12 @@ use hl::{
     timeparse::parse_time,
     timezone::Tz,
 };
+use lifecycle::{AsyncDrop, DropNotifier};
+use pager::Pager;
 
 const HL_DEBUG_LOG: &str = "HL_DEBUG_LOG";
 const HL_DEBUG_LOG_STYLE: &str = "HL_DEBUG_LOG_STYLE";
+const HL_PAGER: &str = "HL_PAGER";
 
 // ---
 
@@ -113,15 +116,17 @@ fn run() -> Result<()> {
         cli::PagingOption::Never => false,
     };
     let paging = if opt.paging_never || opt.follow { false } else { paging };
-    let pager = || -> OutputStream {
+    let start_pager = || {
         if paging {
-            if let Ok(pager) = Pager::new() {
-                Box::new(pager)
-            } else {
-                Box::new(stdout())
-            }
+            Pager::new()
+                .env_var(HL_PAGER)
+                .start()
+                .inspect_err(|err| {
+                    log::debug!("failed to start pager: {}", err);
+                })
+                .ok()
         } else {
-            Box::new(stdout())
+            None
         }
     };
 
@@ -130,7 +135,11 @@ fn run() -> Result<()> {
             true => anstream::ColorChoice::Always,
             false => anstream::ColorChoice::Never,
         };
-        let mut out = anstream::AutoStream::new(pager(), color_when);
+        let output: OutputStream = match start_pager() {
+            Some(pager) => Box::new(pager),
+            None => Box::new(stdout()),
+        };
+        let mut out = anstream::AutoStream::new(output, color_when);
         let help = match verbosity {
             cli::HelpVerbosity::Short => command().render_help(),
             cli::HelpVerbosity::Long => command().render_long_help(),
@@ -355,10 +364,26 @@ fn run() -> Result<()> {
         .map(|input| input.hold().map_err(Error::Io))
         .collect::<Result<Vec<_>>>()?;
 
-    let mut output: OutputStream = match opt.output {
+    let mut _pager_watcher = None;
+    let output: OutputStream = match opt.output {
         Some(output) => Box::new(std::fs::File::create(PathBuf::from(&output))?),
-        None => pager(),
+        None => match start_pager() {
+            Some(mut pager) => {
+                let detached = pager.detach_process();
+                _pager_watcher = detached.map(|p| {
+                    log::debug!("monitor pager process");
+                    AsyncDrop::new(DropNotifier::new(p, || {
+                        log::debug!("pager process exited");
+                        process::exit(0);
+                    }))
+                });
+                Box::new(pager)
+            }
+            None => Box::new(stdout()),
+        },
     };
+
+    let mut output: OutputStream = Box::new(ExitOnWriteError(output));
 
     log::debug!("run the app");
 
@@ -390,5 +415,28 @@ impl AppInfoProvider for AppInfo {
             UsageRequest::ListThemes => Some(("--list-themes".into(), "".into())),
             UsageRequest::ListThemeOverlays => Some(("--list-themes=overlay".into(), "".into())),
         }
+    }
+}
+
+// ---
+
+struct ExitOnWriteError<W>(W);
+
+impl<W> ExitOnWriteError<W> {
+    fn inspect<R>(res: std::io::Result<R>) -> std::io::Result<R> {
+        res.inspect_err(|err| {
+            log::debug!("write error: {}", err);
+            process::exit(0);
+        })
+    }
+}
+
+impl<W: Write> Write for ExitOnWriteError<W> {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        Self::inspect(self.0.write(buf))
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        Self::inspect(self.0.flush())
     }
 }

@@ -36,6 +36,7 @@ impl SignalHandler {
             let mut count = 0;
             let mut ts = Instant::now();
             for signal in &mut signals {
+                log::debug!("signal handler received signal {signal}");
                 match signal {
                     SIGINT => {
                         if count < max_count {
@@ -46,6 +47,7 @@ impl SignalHandler {
                             count = 0;
                         }
                         if count == max_count {
+                            log::debug!("signal handler calling exit({})", 0x80 + signal);
                             exit(0x80 + signal);
                         }
                         ts = now;

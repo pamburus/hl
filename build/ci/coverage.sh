@@ -57,6 +57,7 @@ function test() {
     ${MAIN_EXECUTABLE:?} --config - --help > /dev/null
     ${MAIN_EXECUTABLE:?} --config - --help=short --color never > /dev/null
     ${MAIN_EXECUTABLE:?} --config - --help=long -c --paging never > /dev/null
+    ${MAIN_EXECUTABLE:?} --config - --help --color always --paging always | head -n 1 > /dev/null
     ${MAIN_EXECUTABLE:?} --config - --config=etc/defaults/config-k8s.toml > /dev/null
     ${MAIN_EXECUTABLE:?} --config - --config=etc/defaults/config-ecs.toml > /dev/null
     ${MAIN_EXECUTABLE:?} --config - --shell-completions bash > /dev/null
@@ -67,6 +68,9 @@ function test() {
     HL_DEBUG_LOG=info ${MAIN_EXECUTABLE:?} --config - sample/prometheus.log -P -o /dev/null
     echo "" | ${MAIN_EXECUTABLE:?} --config - --concurrency 4 > /dev/null
     echo "level=info" | ${MAIN_EXECUTABLE:?} --config - sample/prometheus.log -P -q 'level=x' 2> /dev/null > /dev/null || true
+    HL_PAGER=/nonexistent/pager/command HL_DEBUG_LOG=debug ${MAIN_EXECUTABLE:?} --config - sample/prometheus.log --paging always 2>&1 | head -n 1 > /dev/null
+    HL_PAGER=cat HL_DEBUG_LOG=debug ${MAIN_EXECUTABLE:?} --config - sample/prometheus.log --paging always 2>&1 | head -n 5 > /dev/null
+    PAGER=cat ${MAIN_EXECUTABLE:?} --config - sample/prometheus.log --paging always 2>&1 | head -n 3 > /dev/null
 
     # Test delimiter options with combined fixture containing all log formats
     local fixture="src/testing/assets/fixtures/delimiter/combined.log"

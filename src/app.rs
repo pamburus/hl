@@ -58,6 +58,11 @@ use crate::{
 #[cfg(test)]
 use crate::testing::Sample;
 
+// ---
+
+pub type Output = dyn Write + Send + Sync;
+pub type InputInfoSet = EnumSet<InputInfo>;
+
 // TODO: merge Options to Settings and replace Options with Settings.
 
 // ---
@@ -132,8 +137,6 @@ impl Options {
         Self { expand, ..self }
     }
 }
-
-pub type InputInfoSet = EnumSet<InputInfo>;
 
 #[derive(Default)]
 pub struct AdvancedFilter {
@@ -264,8 +267,6 @@ pub struct App {
     punctuation: Arc<ResolvedPunctuation>,
     formatter: DynRecordWithSourceFormatter,
 }
-
-pub type Output = dyn Write + Send + Sync;
 
 impl App {
     pub fn new(mut options: Options) -> Self {

@@ -1,5 +1,6 @@
 *.bak
 *.tmp
+/.claude
 /.debug
 /.vscode
 /.zed
