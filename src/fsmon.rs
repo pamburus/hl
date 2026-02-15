@@ -87,7 +87,7 @@ impl Monitor {
         }
         #[cfg(not(unix))]
         {
-            imp::run(watch, into_filter(paths, handle), None)
+            imp::run(watch, into_filter(paths, handle))
         }
     }
 }
@@ -186,6 +186,7 @@ mod imp {
 
     const FALLBACK_POLLING_INTERVAL: Duration = Duration::from_secs(1);
 
+    #[cfg(unix)]
     pub fn run<H>(paths: Vec<PathBuf>, mut handle: H, cancel_fd: Option<OwnedFd>) -> Result<()>
     where
         H: FnMut(Event) -> Result<()>,
@@ -200,13 +201,35 @@ mod imp {
         if let Some(cancel_fd) = cancel_fd {
             run_cancellable(rx, &mut handle, cancel_fd)
         } else {
-            loop {
-                match rx.recv() {
-                    Ok(Ok(event)) => handle(event)?,
-                    Ok(Err(err)) => return Err(err.into()),
-                    Err(err) => return Err(Error::RecvTimeoutError { source: err.into() }),
-                };
-            }
+            run_simple(rx, &mut handle)
+        }
+    }
+
+    #[cfg(not(unix))]
+    pub fn run<H>(paths: Vec<PathBuf>, mut handle: H) -> Result<()>
+    where
+        H: FnMut(Event) -> Result<()>,
+    {
+        let (tx, rx) = mpsc::channel();
+        let mut watcher = RecommendedWatcher::new(tx, Config::default().with_poll_interval(FALLBACK_POLLING_INTERVAL))?;
+
+        for path in &paths {
+            watcher.watch(path, RecursiveMode::NonRecursive)?;
+        }
+
+        run_simple(rx, &mut handle)
+    }
+
+    fn run_simple<H>(rx: mpsc::Receiver<notify::Result<Event>>, handle: &mut H) -> Result<()>
+    where
+        H: FnMut(Event) -> Result<()>,
+    {
+        loop {
+            match rx.recv() {
+                Ok(Ok(event)) => handle(event)?,
+                Ok(Err(err)) => return Err(err.into()),
+                Err(err) => return Err(Error::RecvTimeoutError { source: err.into() }),
+            };
         }
     }
 
