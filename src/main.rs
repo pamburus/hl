@@ -136,6 +136,10 @@ fn run() -> Result<()> {
                 .ok()
                 .map(|pager| (pager, delimiter)),
             SelectedPager::None => None,
+            SelectedPager::Error(msg) => {
+                eprintln!("error: {}", msg);
+                std::process::exit(1);
+            }
         }
     };
 

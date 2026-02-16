@@ -390,7 +390,7 @@ fn selector_follow_hl_follow_pager_overrides_hl_pager_empty() {
 }
 
 #[test]
-fn selector_view_at_prefix_with_nonexistent_profile_returns_none() {
+fn selector_view_at_prefix_with_nonexistent_profile_returns_error() {
     let config: TestConfig = toml::from_str(MINIMAL_PROFILE).expect("failed to parse");
     let pager_config = config.pager.as_ref();
     let env = MockEnv::new().with_var("HL_PAGER", "@nonexistent");
@@ -398,8 +398,8 @@ fn selector_view_at_prefix_with_nonexistent_profile_returns_none() {
 
     let selected = selector.select(PagerRole::View);
 
-    // @nonexistent refers to a profile that doesn't exist
-    assert!(matches!(selected, SelectedPager::None));
+    // @nonexistent refers to a profile that doesn't exist - should return Error
+    assert!(matches!(selected, SelectedPager::Error(_)));
 }
 
 #[test]
@@ -418,6 +418,59 @@ fn selector_follow_at_prefix_uses_profile() {
         assert!(command.contains(&"--tac".to_string()));
         assert!(command.contains(&"--track".to_string()));
     }
+}
+
+#[test]
+fn selector_view_env_command_not_found_returns_error() {
+    let config: TestConfig = toml::from_str(MINIMAL_PROFILE).expect("failed to parse");
+    let pager_config = config.pager.as_ref();
+    let env = MockEnv::new().with_var("HL_PAGER", "nonexistent-command");
+    let selector = selector_with_mocks(pager_config, &config.pagers, env, &["less"]);
+
+    let selected = selector.select(PagerRole::View);
+
+    // HL_PAGER with unavailable command should return Error
+    assert!(matches!(selected, SelectedPager::Error(_)));
+}
+
+#[test]
+fn selector_view_pager_env_command_not_found_returns_error() {
+    let config: TestConfig = toml::from_str(EMPTY_PRIORITY).expect("failed to parse");
+    let pager_config = config.pager.as_ref();
+    let env = MockEnv::new().with_var("PAGER", "nonexistent-pager");
+    let selector = selector_with_mocks(pager_config, &config.pagers, env, &["less"]);
+
+    let selected = selector.select(PagerRole::View);
+
+    // PAGER with unavailable command should return Error
+    assert!(matches!(selected, SelectedPager::Error(_)));
+}
+
+#[test]
+fn selector_follow_env_command_not_found_returns_error() {
+    let config: TestConfig = toml::from_str(MINIMAL_PROFILE).expect("failed to parse");
+    let pager_config = config.pager.as_ref();
+    let env = MockEnv::new().with_var("HL_FOLLOW_PAGER", "nonexistent-cmd");
+    let selector = selector_with_mocks(pager_config, &config.pagers, env, &["less"]);
+
+    let selected = selector.select(PagerRole::Follow);
+
+    // HL_FOLLOW_PAGER with unavailable command should return Error
+    assert!(matches!(selected, SelectedPager::Error(_)));
+}
+
+#[test]
+fn selector_view_at_prefix_command_not_found_returns_error() {
+    let config: TestConfig = toml::from_str(MINIMAL_PROFILE).expect("failed to parse");
+    let pager_config = config.pager.as_ref();
+    let env = MockEnv::new().with_var("HL_PAGER", "@less");
+    // "less" executable is not available
+    let selector = selector_with_mocks(pager_config, &config.pagers, env, &[]);
+
+    let selected = selector.select(PagerRole::View);
+
+    // @less profile exists but executable not in PATH - should return Error
+    assert!(matches!(selected, SelectedPager::Error(_)));
 }
 
 #[test]
