@@ -204,22 +204,21 @@ follow.enabled = false
 
 # Pager profile for `fzf`.
 [pagers.fzf]
-# Entry delimiter for fzf to separate message from fields when using "delimited" message format.
-delimiter = "nul"
+# Entry delimiter.
+delimiter = "newline"
 # Base command for both view and follow modes.
 command = [
   "fzf",
-  "--color=bg+:#323841",
+  "--color=bg+:#3a404a",
   "--highlight-line",
   "--ansi",
-  "--no-sort",
   "--exact",
   "--multi",
-  "--read0",
-  "--bind=ctrl-y:execute-silent(printf %s\\n {+} | pbcopy)",
+  "--no-sort",
+  "--no-bold",
+  "--bind=ctrl-y:execute-silent(printf %s\\\\n {+} | pbcopy)",
   "--bind=esc:track-current+clear-query+clear-multi+disable-raw",
   "--bind=ctrl-q:abort",
-  "--bind=ctrl-e:yank",
   "--bind=enter:toggle-raw",
   "--bind=scroll-down:offset-down",
   "--bind=scroll-up:offset-up",
@@ -240,8 +239,30 @@ follow.args = [
   "--bind=page-up:unbind(result)+page-up",
   "--bind=change:unbind(result)",
   "--track",
-  "--tail",
-  "100000"
+  "--tail=100000",
+]
+# Enable pager for follow mode.
+follow.enabled = true
+
+# Pager profile for `most`.
+[pagers.most]
+# Base command for both view and follow modes.
+command = ["most"]
+# Enable pager for follow mode.
+follow.enabled = false
+
+# Pager profile for `ov`.
+[pagers.ov]
+# Base command for both view and follow modes.
+command = [
+  "ov",
+  "--caption=>",
+  "--wrap=false",
+  "--hscroll-width=4",
+]
+# Additional arguments for follow mode.
+follow.args = [
+  "--follow-mode",
 ]
 # Enable pager for follow mode.
 follow.enabled = true
