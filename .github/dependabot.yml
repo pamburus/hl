@@ -27,12 +27,6 @@ updates:
     allow:
       - dependency-type: all
     groups:
-      patch-updates:
-        applies-to: version-updates
-        patterns:
-          - "*"
-        update-types:
-          - "patch"
       anstyle-security:
         applies-to: security-updates
         patterns:
