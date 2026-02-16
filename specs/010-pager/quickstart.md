@@ -139,7 +139,7 @@ let pager_selection = if opt.paging_never {
 ### View Mode (FR-020)
 
 1. `--paging=never` / `-P` → No pager
-2. `HL_PAGER` → Profile or command
+2. `HL_PAGER` → Command (or `@profile` for explicit profile reference)
 3. Config `pager` → Profile(s)
 4. `PAGER` → Command
 5. Fallback → stdout
@@ -147,9 +147,9 @@ let pager_selection = if opt.paging_never {
 ### Follow Mode (FR-020a)
 
 1. `--paging=never` / `-P` → No pager
-2. `HL_FOLLOW_PAGER` → Profile or command
+2. `HL_FOLLOW_PAGER` → Command (or `@profile` for explicit profile reference)
 3. `HL_PAGER=""` → No pager
-4. `HL_PAGER` → Profile (if `follow.enabled`)
+4. `HL_PAGER` → Command or `@profile` (if `follow.enabled`)
 5. Config `pager` → Profile (if `follow.enabled`)
 6. Fallback → stdout
 
@@ -160,9 +160,10 @@ let pager_selection = if opt.paging_never {
 - [ ] Profile selection: first available
 - [ ] Profile selection: fallback to second
 - [ ] Profile selection: all unavailable → stdout
-- [ ] Environment: `HL_PAGER` as profile name
-- [ ] Environment: `HL_PAGER` as command
+- [ ] Environment: `HL_PAGER=@profile` uses profile explicitly
+- [ ] Environment: `HL_PAGER=command` uses direct command
 - [ ] Environment: `HL_PAGER=""` disables
+- [ ] Environment: `HL_PAGER=@nonexistent` fails and disables (no fallback)
 - [ ] Environment: `HL_FOLLOW_PAGER` override
 - [ ] Follow mode: `follow.enabled = false` → stdout
 - [ ] Follow mode: `follow.enabled = true` → pager with follow.args

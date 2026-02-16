@@ -298,7 +298,23 @@ fn selector_follow_when_enabled() {
 }
 
 #[test]
-fn selector_view_env_override_with_profile() {
+fn selector_view_env_override_with_profile_using_at_prefix() {
+    let config: TestConfig = toml::from_str(PRIORITY_LIST).expect("failed to parse");
+    let pager_config = config.pager.as_ref();
+    let env = MockEnv::new().with_var("HL_PAGER", "@less");
+    let selector = selector_with_mocks(pager_config, &config.pagers, env, &["fzf", "less"]);
+
+    let selected = selector.select(PagerRole::View);
+
+    // Should use `less` profile from HL_PAGER, not `fzf` from config priority
+    assert!(matches!(selected, SelectedPager::Pager { .. }));
+    if let SelectedPager::Pager { command, .. } = selected {
+        assert_eq!(command[0], "less");
+    }
+}
+
+#[test]
+fn selector_view_env_override_without_at_prefix_uses_command() {
     let config: TestConfig = toml::from_str(PRIORITY_LIST).expect("failed to parse");
     let pager_config = config.pager.as_ref();
     let env = MockEnv::new().with_var("HL_PAGER", "less");
@@ -306,10 +322,12 @@ fn selector_view_env_override_with_profile() {
 
     let selected = selector.select(PagerRole::View);
 
-    // Should use `less` from HL_PAGER, not `fzf` from config priority
+    // Without @ prefix, should use `less` as direct command (with -R added automatically)
     assert!(matches!(selected, SelectedPager::Pager { .. }));
     if let SelectedPager::Pager { command, .. } = selected {
         assert_eq!(command[0], "less");
+        // Should have -R added by apply_less_defaults
+        assert!(command.contains(&"-R".to_string()));
     }
 }
 
@@ -369,6 +387,37 @@ fn selector_follow_hl_follow_pager_overrides_hl_pager_empty() {
     let selected = selector.select(PagerRole::Follow);
 
     assert!(matches!(selected, SelectedPager::Pager { .. }));
+}
+
+#[test]
+fn selector_view_at_prefix_with_nonexistent_profile_returns_none() {
+    let config: TestConfig = toml::from_str(MINIMAL_PROFILE).expect("failed to parse");
+    let pager_config = config.pager.as_ref();
+    let env = MockEnv::new().with_var("HL_PAGER", "@nonexistent");
+    let selector = selector_with_mocks(pager_config, &config.pagers, env, &["less"]);
+
+    let selected = selector.select(PagerRole::View);
+
+    // @nonexistent refers to a profile that doesn't exist
+    assert!(matches!(selected, SelectedPager::None));
+}
+
+#[test]
+fn selector_follow_at_prefix_uses_profile() {
+    let config: TestConfig = toml::from_str(FOLLOW_ENABLED).expect("failed to parse");
+    let pager_config = config.pager.as_ref();
+    let env = MockEnv::new().with_var("HL_FOLLOW_PAGER", "@fzf");
+    let selector = selector_with_mocks(pager_config, &config.pagers, env, &["fzf"]);
+
+    let selected = selector.select(PagerRole::Follow);
+
+    assert!(matches!(selected, SelectedPager::Pager { .. }));
+    if let SelectedPager::Pager { command, .. } = selected {
+        assert_eq!(command[0], "fzf");
+        // Should include follow.args from profile
+        assert!(command.contains(&"--tac".to_string()));
+        assert!(command.contains(&"--track".to_string()));
+    }
 }
 
 #[test]

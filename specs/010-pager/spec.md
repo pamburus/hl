@@ -295,15 +295,15 @@ As a user migrating from other tools, I want `hl` to respect the standard `PAGER
 #### Environment Variable Handling
 
 - **FR-022**: System MUST check `HL_PAGER` environment variable before using config file settings.
-- **FR-023**: If `HL_PAGER` value matches a defined profile name, system MUST use that profile with all its configured arguments and environment variables.
-- **FR-024**: If `HL_PAGER` value does not match any profile name, system MUST parse it using shell-style argument splitting (e.g., `shellwords::split`) and execute directly without invoking a shell (for backward compatibility and security).
+- **FR-023**: If `HL_PAGER` value starts with `@` (e.g., `@less`), system MUST treat the remainder as an explicit profile name reference. The profile MUST exist in configuration, otherwise the system MUST log an error and disable pager usage (no fallback to other pager settings).
+- **FR-024**: If `HL_PAGER` value does not start with `@`, system MUST parse it using shell-style argument splitting (e.g., `shellwords::split`) and execute as a direct command without invoking a shell (for backward compatibility and security). If the command is not available, system MAY fall back to next precedence level.
 - **FR-024a**: When using HL_PAGER or PAGER as a command string (not a profile), system MUST apply special handling for `less`: automatically add `-R` flag and set `LESSCHARSET=UTF-8`.
 - **FR-024b**: When using HL_PAGER or PAGER as a command string (not a profile) in follow mode, system MUST NOT use a pager and output directly to stdout (unless overridden by HL_FOLLOW_PAGER).
 - **FR-024c**: In follow mode, system MUST check `HL_FOLLOW_PAGER` environment variable before other pager settings.
-- **FR-024d**: If `HL_FOLLOW_PAGER` value matches a defined profile name, system MUST use that profile with base `command` plus `follow.args` (if defined).
-- **FR-024e**: If `HL_FOLLOW_PAGER` value does not match any profile name, system MUST treat it as a command string (same parsing as HL_PAGER, including special `less` handling).
+- **FR-024d**: If `HL_FOLLOW_PAGER` value starts with `@`, system MUST treat it as an explicit profile reference (same behavior as FR-023).
+- **FR-024e**: If `HL_FOLLOW_PAGER` value does not start with `@`, system MUST treat it as a command string (same parsing as HL_PAGER, including special `less` handling).
 - **FR-024f**: If `HL_FOLLOW_PAGER` is set to an empty string, system MUST disable pager usage for follow mode.
-- **FR-025**: System MUST check `PAGER` environment variable only when both `HL_PAGER` is not set and no `pager` config option is defined.
+- **FR-025**: System MUST check `PAGER` environment variable only when both `HL_PAGER` is not set and no `pager` config option is defined. The `@` prefix syntax applies to `PAGER` as well.
 - **FR-026**: If `HL_PAGER` is set to an empty string, system MUST disable pager usage entirely (both view and follow modes). Note: This is a behavior change from the current implementation.
 
 #### Precedence
