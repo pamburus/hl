@@ -18,7 +18,7 @@ const HL_PAGER: &str = "HL_PAGER";
 /// Environment variable for overriding the pager in follow mode.
 const HL_FOLLOW_PAGER: &str = "HL_FOLLOW_PAGER";
 
-/// Standard environment variable for the pager (backward compatibility).
+/// Standard environment variable for the pager.
 const PAGER: &str = "PAGER";
 
 // ---

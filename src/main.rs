@@ -14,32 +14,27 @@ use clap::{CommandFactory, Parser};
 use enumset::enum_set;
 use enumset_ext::EnumSetExt;
 use env_logger::{self as logger};
-use itertools::Itertools;
 use terminal_size::terminal_size_of;
 use utf8_supported::{Utf8Support, utf8_supported};
 
 // local imports
 use hl::{
-    Delimiter, IncludeExcludeKeyFilter, KeyMatchOptions, app,
-    appdirs::AppDirs,
-    cli::{self, ThemeTagSet},
-    config,
+    Delimiter, IncludeExcludeKeyFilter, KeyMatchOptions, app, cli, config,
     datefmt::LinuxDateFormat,
     error::*,
+    help,
     input::InputReference,
-    output::{OutputStream, Pager},
-    pager::{PagerRole, PagerSelector},
+    output::OutputStream,
+    pager::{PagerRole, PagerSelector, SelectedPager},
     query::Query,
     settings::{AsciiModeOpt, InputInfo, Settings},
     signal::SignalHandler,
     theme::Theme,
-    themecfg,
     timeparse::parse_time,
     timezone::Tz,
 };
-
-// private modules
-mod help;
+use lifecycle::{AsyncDrop, DropNotifier};
+use pager::Pager;
 
 const HL_DEBUG_LOG: &str = "HL_DEBUG_LOG";
 const HL_DEBUG_LOG_STYLE: &str = "HL_DEBUG_LOG_STYLE";
@@ -120,32 +115,35 @@ fn run() -> Result<()> {
         cli::PagingOption::Always => true,
         cli::PagingOption::Never => false,
     };
-    let paging = !opt.paging_never && paging;
+    let paging = if opt.paging_never || opt.follow { false } else { paging };
     let role = if opt.follow { PagerRole::Follow } else { PagerRole::View };
     let selector = PagerSelector::new(settings.pager.as_ref(), &settings.pagers);
-    let pager = || -> Option<OutputStream> {
-        if paging {
-            let selection = selector.select(role);
-            match Pager::from_selection(selection) {
-                Ok(Some(pager)) => Some(Box::new(pager)),
-                Ok(None) => None,
-                Err(e) => {
-                    log::debug!("failed to spawn pager: {}", e);
-                    None
-                }
-            }
-        } else {
-            None
+    let start_pager = |role: PagerRole| {
+        if !paging {
+            return None;
+        }
+        match selector.select(role) {
+            SelectedPager::Pager { command, env } => Pager::custom(command)
+                .envs(env)
+                .start()
+                .inspect_err(|err| {
+                    log::debug!("failed to start pager: {}", err);
+                })
+                .ok(),
+            SelectedPager::None => None,
         }
     };
-    let pager_or_stdout = || pager().unwrap_or_else(|| Box::new(stdout()));
 
     if let Some(verbosity) = opt.help {
         let color_when = match use_colors {
             true => anstream::ColorChoice::Always,
             false => anstream::ColorChoice::Never,
         };
-        let mut out = anstream::AutoStream::new(pager_or_stdout(), color_when);
+        let output: OutputStream = match start_pager(PagerRole::View) {
+            Some(pager) => Box::new(pager),
+            None => Box::new(stdout()),
+        };
+        let mut out = anstream::AutoStream::new(output, color_when);
         let help = match verbosity {
             cli::HelpVerbosity::Short => command().render_help(),
             cli::HelpVerbosity::Long => command().render_long_help(),
@@ -169,7 +167,7 @@ fn run() -> Result<()> {
     let app_dirs = config::app_dirs().ok_or(Error::AppDirs)?;
 
     if let Some(tags) = opt.list_themes {
-        return list_themes(&app_dirs, tags);
+        return app::list_themes(&app_dirs, tags.map(|t| *t), help::Formatter::new(stdout()));
     }
 
     let theme = if use_colors {
@@ -327,12 +325,26 @@ fn run() -> Result<()> {
         .map(|input| input.hold().map_err(Error::Io))
         .collect::<Result<Vec<_>>>()?;
 
-    let (mut output, using_pager): (OutputStream, bool) = match opt.output {
+    let mut _pager_watcher = None;
+    let (output, using_pager): (OutputStream, bool) = match opt.output {
         Some(output) => (Box::new(std::fs::File::create(PathBuf::from(&output))?), false),
-        None => pager()
-            .map(|p| (p, true))
-            .unwrap_or_else(|| (Box::new(stdout()), false)),
+        None => match start_pager(role) {
+            Some(mut pager) => {
+                let detached = pager.detach_process();
+                _pager_watcher = detached.map(|p| {
+                    log::debug!("monitor pager process");
+                    AsyncDrop::new(DropNotifier::new(p, || {
+                        log::debug!("pager process exited");
+                        process::exit(0);
+                    }))
+                });
+                (Box::new(pager), true)
+            }
+            None => (Box::new(stdout()), false),
+        },
     };
+
+    let mut output: OutputStream = Box::new(ExitOnWriteError(output));
 
     // Create app.
     let app = hl::App::new(hl::Options {
@@ -400,36 +412,6 @@ fn run() -> Result<()> {
     SignalHandler::run(interrupt_ignore_count, std::time::Duration::from_secs(1), run)
 }
 
-fn list_themes(dirs: &AppDirs, tags: Option<cli::ThemeTagSet>) -> Result<()> {
-    let items = Theme::list(dirs)?;
-    let mut formatter = help::Formatter::new(stdout());
-
-    let tags = tags.unwrap_or_default();
-    let mut exclude = ThemeTagSet::default();
-    if !tags.contains(cli::ThemeTag::Base) {
-        exclude.insert(cli::ThemeTag::Base);
-    }
-    if !tags.contains(cli::ThemeTag::Overlay) {
-        exclude.insert(cli::ThemeTag::Overlay);
-    }
-
-    formatter.format_grouped_list(
-        items
-            .into_iter()
-            .filter(|(name, _)| {
-                themecfg::Theme::load(dirs, name)
-                    .ok()
-                    .map(|theme| theme.tags.includes(*tags) && !theme.tags.intersects(*exclude))
-                    .unwrap_or(false)
-            })
-            .sorted_by_key(|x| (x.1.origin, x.0.clone()))
-            .chunk_by(|x| x.1.origin)
-            .into_iter()
-            .map(|(origin, group)| (origin, group.map(|x| x.0))),
-    )?;
-    Ok(())
-}
-
 fn main() {
     if let Err(err) = run() {
         err.log(&AppInfo);
@@ -445,5 +427,28 @@ impl AppInfoProvider for AppInfo {
             UsageRequest::ListThemes => Some(("--list-themes".into(), "".into())),
             UsageRequest::ListThemeOverlays => Some(("--list-themes=overlay".into(), "".into())),
         }
+    }
+}
+
+// ---
+
+struct ExitOnWriteError<W>(W);
+
+impl<W> ExitOnWriteError<W> {
+    fn inspect<R>(res: std::io::Result<R>) -> std::io::Result<R> {
+        res.inspect_err(|err| {
+            log::debug!("write error: {}", err);
+            process::exit(0);
+        })
+    }
+}
+
+impl<W: Write> Write for ExitOnWriteError<W> {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        Self::inspect(self.0.write(buf))
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        Self::inspect(self.0.flush())
     }
 }
