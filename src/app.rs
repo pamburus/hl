@@ -94,6 +94,7 @@ pub struct Options {
     pub flatten: bool,
     pub ascii: AsciiMode,
     pub expand: ExpansionMode,
+    pub output_delimiter: String,
 }
 
 impl Options {
@@ -554,7 +555,7 @@ impl App {
                         continue;
                     }
                     output.write_all((item.0).1.bytes())?;
-                    output.write_all(b"\n")?;
+                    output.write_all(self.options.output_delimiter.as_bytes())?;
                     match item.1.next() {
                         Some(head) => item.0 = head,
                         None => drop(workspace.swap_remove(k)),
@@ -706,7 +707,7 @@ impl App {
                             mem_usage -= entry.1.1.end - entry.1.1.start;
                             output.write_all(sync_indicator.as_bytes())?;
                             output.write_all(&entry.1.0[entry.1.1.clone()][badges.si.width..])?;
-                            output.write_all(b"\n")?;
+                            output.write_all(self.options.output_delimiter.as_bytes())?;
                         }
                     }
 
@@ -914,6 +915,7 @@ impl App {
             allow_unparsed_data: self.options.filter.is_empty() && self.options.input_format.is_none(),
             delimiter: self.options.delimiter.clone(),
             input_format: self.options.input_format,
+            output_delimiter: self.options.output_delimiter.clone(),
         };
 
         SegmentProcessor::new(
@@ -929,7 +931,9 @@ impl App {
     /// Returns either a RawRecordFormatter or a RecordFormatter depending on the options.
     fn new_formatter(options: &Options, punctuation: Arc<ResolvedPunctuation>) -> DynRecordWithSourceFormatter {
         if options.raw {
-            Arc::new(RawRecordFormatter {})
+            Arc::new(RawRecordFormatter {
+                delimiter: options.output_delimiter.clone(),
+            })
         } else {
             let predefined_filter = Self::build_predefined_filter(options);
             Arc::new(
@@ -988,6 +992,7 @@ pub struct SegmentProcessorOptions {
     pub allow_unparsed_data: bool,
     pub delimiter: Delimiter,
     pub input_format: Option<InputFormat>,
+    pub output_delimiter: String,
 }
 
 // ---
@@ -1033,7 +1038,7 @@ impl<'a, Formatter: RecordWithSourceFormatter, Filter: RecordFilter> SegmentProc
             if chunk.is_empty() {
                 if self.show_unparsed() {
                     buf.extend(prefix.as_bytes());
-                    buf.push(b'\n');
+                    buf.extend(self.options.output_delimiter.as_bytes());
                 }
                 continue;
             }
@@ -1049,7 +1054,7 @@ impl<'a, Formatter: RecordWithSourceFormatter, Filter: RecordFilter> SegmentProc
                 i += 1;
                 last_offset = ar.offsets.end;
                 if parsed_some {
-                    buf.push(b'\n');
+                    buf.extend(self.options.output_delimiter.as_bytes());
                 }
                 parsed_some = true;
                 let record = self.parser.parse(&ar.record);
@@ -1061,7 +1066,7 @@ impl<'a, Formatter: RecordWithSourceFormatter, Filter: RecordFilter> SegmentProc
                         let mut first = true;
                         for line in Newline.into_searcher().split(ar.prefix) {
                             if !first {
-                                buf.push(b'\n');
+                                buf.extend(self.options.output_delimiter.as_bytes());
                             }
                             first = false;
                             buf.extend(prefix.as_bytes());
@@ -1092,11 +1097,11 @@ impl<'a, Formatter: RecordWithSourceFormatter, Filter: RecordFilter> SegmentProc
                         }
                         should_prefix = true;
                         buf.extend_from_slice(line);
-                        buf.push(b'\n');
+                        buf.extend(self.options.output_delimiter.as_bytes());
                     }
                 }
             } else if produced_some {
-                buf.push(b'\n');
+                buf.extend(self.options.output_delimiter.as_bytes());
             }
         }
     }
