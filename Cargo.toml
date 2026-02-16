@@ -25,7 +25,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.36.0-alpha.9"
+version = "0.36.0-alpha.10"
 edition = "2024"
 repository = "https://github.com/pamburus/hl"
 license = "MIT"
@@ -37,8 +37,10 @@ clap = { version = "4", features = ["derive", "env", "string", "wrap_help"] }
 clap_complete = { version = "4" }
 clap_mangen = { git = "https://github.com/pamburus/rust-clap.git", rev = "20f0ffd737581a5ebf7479d2174f2c197f25c94d" }
 json = { package = "serde_json", version = "1", features = ["raw_value"] }
+log = "0.4"
 memchr = "2"
 rstest = "0.26"
+shellwords = "1"
 wildcard = { path = "crates/wildcard" }
 
 [[bench]]
@@ -85,7 +87,7 @@ json.workspace = true
 known-folders = "1"
 liblzma = { version = "*", features = ["static"] }
 lifecycle = { path = "./crates/lifecycle" }
-log = "0.4"
+log.workspace = true
 logos = "0.16"
 memchr.workspace = true
 mline = { path = "./crates/mline" }
@@ -104,7 +106,7 @@ serde-logfmt = { path = "./crates/serde-logfmt" }
 serde_plain = "1"
 serde-value = "0.7"
 sha2 = "0.10"
-shellwords = "1"
+shellwords.workspace = true
 signal-hook = "0.4"
 snap = "1"
 static_assertions = "1"
@@ -118,6 +120,7 @@ toml = "1"
 unicode-segmentation = "1"
 unicode-width = "0.2"
 utf8-supported = "1"
+which = "7"
 wild = "2"
 wildcard.workspace = true
 winapi-util = { version = "0.1" }

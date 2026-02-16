@@ -1,0 +1,13 @@
+# Single profile pager configuration
+[pager]
+candidates = [
+  { env = { pager = "HL_PAGER", follow = "HL_FOLLOW_PAGER", delimiter = "HL_PAGER_DELIMITER" }, profiles = true },
+  { profile = "less" },
+  { env = "PAGER" },
+]
+
+[[pager.profiles]]
+name = "less"
+command = "less"
+args = ["-R", "--mouse"]
+env = { LESSCHARSET = "UTF-8" }

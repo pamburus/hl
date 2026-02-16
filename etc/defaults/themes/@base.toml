@@ -5,7 +5,7 @@ tags = ["base", "dark", "light", "16color"]
 
 # Styles define general purpose styles used throughout the theme.
 [styles]
-default = {  }
+default = {}
 primary.modes = ["-faint"]
 secondary = { style = "primary", modes = ["faint"] }
 strong = { style = "primary", modes = ["bold"] }

@@ -1,6 +1,6 @@
+use std::collections::HashMap;
 use std::env;
-use std::ffi::OsString;
-use std::io::Write;
+use std::io::{self, Write};
 use std::path::PathBuf;
 use std::process::{Child, ChildStdin, Command, ExitStatus, Stdio};
 
@@ -10,76 +10,150 @@ use std::{
     os::unix::process::ExitStatusExt,
 };
 
+type EnvProvider = Box<dyn Fn(&str) -> Option<String>>;
+
 // ---
 
 /// Pager configuration and builder.
 ///
-/// Resolves the pager command from environment variables and starts the process.
-/// Checks an optional application-specific env var first, then `PAGER`,
-/// falling back to `less`.
+/// Supports two origins:
+/// - **FromEnv**: Resolves the pager command from environment variables. Checks an
+///   application-specific variable first (if set), then falls back to `PAGER`.
+///   Returns `None` from `start()` if no pager is configured.
+/// - **Custom**: Uses a pre-resolved command and environment variables, skipping all
+///   resolution logic. Useful when the caller has already determined the pager command
+///   (e.g., from a configuration file).
 pub struct Pager {
-    app_env_var: Option<String>,
+    origin: CommandOrigin,
+    env: HashMap<String, String>,
+    env_provider: EnvProvider,
 }
 
 impl Pager {
-    /// Creates a new pager configuration with default settings.
-    pub fn new() -> Self {
-        Self { app_env_var: None }
+    /// Creates a new pager configuration that resolves from environment variables.
+    ///
+    /// Checks `PAGER` by default. Use [`lookup_var`](Pager::lookup_var) to add an
+    /// application-specific variable that takes priority. Returns `None` from `start()`
+    /// if no pager is configured.
+    pub fn from_env() -> Self {
+        Self {
+            origin: CommandOrigin::FromEnv { app_env_var: None },
+            env: HashMap::new(),
+            env_provider: Box::new(|v| env::var(v).ok()),
+        }
+    }
+
+    /// Creates a pager with a pre-resolved command, skipping environment variable resolution.
+    pub fn custom(command: impl IntoIterator<Item = impl Into<String>>) -> Self {
+        Self {
+            origin: CommandOrigin::Custom {
+                command: command.into_iter().map(Into::into).collect(),
+            },
+            env: HashMap::new(),
+            env_provider: Box::new(|v| env::var(v).ok()),
+        }
     }
 
     /// Sets an application-specific environment variable to check
     /// for the pager command (e.g. `"HL_PAGER"`).
     /// Takes priority over `PAGER`.
-    pub fn env_var(mut self, name: impl Into<String>) -> Self {
-        self.app_env_var = Some(name.into());
+    ///
+    /// Only used with environment origin (created with [`Pager::from_env`]).
+    pub fn lookup_var(mut self, name: impl Into<String>) -> Self {
+        if let CommandOrigin::FromEnv { ref mut app_env_var } = self.origin {
+            *app_env_var = Some(name.into());
+        }
+        self
+    }
+
+    /// Sets an environment variable to pass to the pager process.
+    pub fn with_env_var(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
+        self.env.insert(key.into(), value.into());
+        self
+    }
+
+    /// Sets multiple environment variables to pass to the pager process.
+    pub fn with_env(mut self, vars: impl IntoIterator<Item = (impl Into<String>, impl Into<String>)>) -> Self {
+        self.env.extend(vars.into_iter().map(|(k, v)| (k.into(), v.into())));
+        self
+    }
+
+    /// Overrides the environment variable provider used to resolve pager commands.
+    ///
+    /// By default, [`start`](Pager::start) reads from the actual process environment
+    /// using [`std::env::var`]. Use this method to inject a custom provider, for example
+    /// in tests.
+    ///
+    /// Only used with environment origin (created with [`Pager::from_env`]).
+    pub fn with_env_provider(mut self, f: impl Fn(&str) -> Option<String> + 'static) -> Self {
+        self.env_provider = Box::new(f);
         self
     }
 
     /// Starts the pager process.
-    pub fn start(self) -> std::io::Result<StartedPager> {
-        let mut pager = "less".to_owned();
-
-        let app_pager = self
-            .app_env_var
-            .and_then(|v| env::var(v).ok())
-            .filter(|v| !v.is_empty());
-        if let Some(p) = app_pager {
-            pager = p;
-        } else if let Ok(p) = env::var("PAGER")
-            && !p.is_empty()
-        {
-            pager = p;
+    ///
+    /// Returns `None` if the origin is `FromEnv` and no pager is configured in environment variables.
+    pub fn start(self) -> Option<io::Result<StartedPager>> {
+        let (pager_path, args) = match &self.origin {
+            CommandOrigin::FromEnv { app_env_var } => self.resolve(app_env_var.as_deref())?,
+            CommandOrigin::Custom { command } => match command.split_first() {
+                Some((pager, args)) => (PathBuf::from(pager), args.to_vec()),
+                None => {
+                    return Some(Err(io::Error::new(io::ErrorKind::InvalidInput, "empty pager command")));
+                }
+            },
         };
 
-        let pager = shellwords::split(&pager).unwrap_or(vec![pager]);
-        let (pager, args) = match pager.split_first() {
-            Some((pager, args)) => (pager, args),
-            None => (&pager[0], &pager[0..0]),
+        let pager_command = {
+            let mut parts = vec![pager_path.to_string_lossy().into_owned()];
+            parts.extend(args.iter().cloned());
+            parts
         };
-        let pager = PathBuf::from(pager);
-        let mut command = Command::new(&pager);
-        for arg in args {
-            command.arg(arg);
-        }
-        if pager.file_stem() == Some(&OsString::from("less")) {
-            command.arg("-R");
-            command.env("LESSCHARSET", "UTF-8");
+
+        let mut cmd = Command::new(&pager_path);
+        cmd.args(&args);
+        for (key, value) in &self.env {
+            cmd.env(key, value);
         }
 
-        let mut process = command.stdin(Stdio::piped()).spawn()?;
+        let mut process = match cmd.stdin(Stdio::piped()).spawn() {
+            Ok(p) => p,
+            Err(e) => return Some(Err(e)),
+        };
+
         let stdin = process.stdin.take();
 
-        Ok(StartedPager {
+        Some(Ok(StartedPager {
             stdin,
             process: Some(process),
-        })
+            command: pager_command,
+        }))
+    }
+
+    /// Resolves the pager command from environment variables using this pager's env provider.
+    ///
+    /// Returns `None` if no pager is configured.
+    fn resolve(&self, app_env_var: Option<&str>) -> Option<(PathBuf, Vec<String>)> {
+        let pager = app_env_var
+            .and_then(|v| (self.env_provider)(v))
+            .filter(|v| !v.is_empty())
+            .or_else(|| (self.env_provider)("PAGER").filter(|v| !v.is_empty()))?;
+
+        let parts = shellwords::split(&pager).unwrap_or_else(|_| vec![pager]);
+        parts
+            .split_first()
+            .map(|(exe, args)| (PathBuf::from(exe), args.to_vec()))
     }
 }
 
-impl Default for Pager {
-    fn default() -> Self {
-        Self::new()
-    }
+// ---
+
+/// The origin of the pager command, determining how it should be resolved.
+enum CommandOrigin {
+    /// Resolve pager from environment variables.
+    FromEnv { app_env_var: Option<String> },
+    /// Use a custom command.
+    Custom { command: Vec<String> },
 }
 
 // ---
@@ -91,6 +165,7 @@ impl Default for Pager {
 pub struct StartedPager {
     stdin: Option<ChildStdin>,
     process: Option<Child>,
+    command: Vec<String>,
 }
 
 impl StartedPager {
@@ -98,9 +173,10 @@ impl StartedPager {
     ///
     /// After calling this, this pager's `Drop` will no longer wait for the process.
     /// The caller is responsible for ensuring the returned `PagerProcess` is
-    /// dropped to wait for the child and recover terminal state.
+    /// either waited on or dropped, so that the child process and terminal state are recovered.
     pub fn detach_process(&mut self) -> Option<PagerProcess> {
-        self.process.take().map(PagerProcess)
+        let command = self.command.clone();
+        self.process.take().map(|child| PagerProcess { child, command })
     }
 
     fn stdin(&mut self) -> &mut ChildStdin {
@@ -123,11 +199,11 @@ impl Drop for StartedPager {
 }
 
 impl Write for StartedPager {
-    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
         self.stdin().write(buf)
     }
 
-    fn flush(&mut self) -> std::io::Result<()> {
+    fn flush(&mut self) -> io::Result<()> {
         self.stdin().flush()
     }
 }
@@ -136,12 +212,33 @@ impl Write for StartedPager {
 
 /// A detached pager child process.
 ///
-/// When dropped, waits for the child process to exit and recovers terminal state.
-pub struct PagerProcess(Child);
+/// Provides [`wait`](PagerProcess::wait) to explicitly wait for the process and obtain
+/// its exit status.
+///
+/// If dropped without calling `wait`, the process is still waited on and terminal
+/// state is recovered, but exit status is discarded.
+pub struct PagerProcess {
+    child: Child,
+    command: Vec<String>,
+}
+
+impl PagerProcess {
+    /// Waits for the pager process to exit and recovers terminal state.
+    ///
+    /// Returns the exit result containing the process exit status.
+    pub fn wait(&mut self) -> io::Result<PagerExitResult> {
+        let status = self.child.wait()?;
+        recover(status);
+        Ok(PagerExitResult {
+            command: self.command.clone(),
+            status,
+        })
+    }
+}
 
 impl Drop for PagerProcess {
     fn drop(&mut self) {
-        if let Ok(status) = self.0.wait() {
+        if let Ok(status) = self.child.wait() {
             recover(status);
         }
     }
@@ -149,49 +246,57 @@ impl Drop for PagerProcess {
 
 // ---
 
+/// Result of waiting for a pager process to exit.
+pub struct PagerExitResult {
+    /// The command that was used to start the pager.
+    pub command: Vec<String>,
+    /// The exit status of the pager process.
+    pub status: ExitStatus,
+}
+
+impl PagerExitResult {
+    /// Returns `true` if the pager exited successfully.
+    ///
+    /// Both exit code 0 (normal success) and 130 (user interrupted with Ctrl+C)
+    /// are considered successful.
+    pub fn is_success(&self) -> bool {
+        self.status.success() || self.status.code() == Some(130)
+    }
+
+    /// Returns the exit code of the pager process, if available.
+    pub fn exit_code(&self) -> Option<i32> {
+        self.status.code()
+    }
+
+    /// Returns the signal that terminated the pager process, if any.
+    #[cfg(unix)]
+    pub fn signal(&self) -> Option<i32> {
+        self.status.signal()
+    }
+}
+
+// ---
+
+/// Recovers terminal state after a pager process exits.
+///
+/// This only resets terminal state when needed (e.g., re-enabling echo after
+/// the pager was killed by SIGKILL). It does not interpret exit codes or
+/// make any decisions about how the application should exit.
 #[cfg(unix)]
 fn recover(status: ExitStatus) {
     if let Some(signal) = status.signal()
         && signal == 9
+        && stdin().is_terminal()
     {
-        eprintln!("\x1bm\nhl: pager killed");
-        if stdin().is_terminal() {
-            Command::new("stty").arg("echo").status().ok();
-        }
+        Command::new("stty").arg("echo").status().ok();
     }
 }
 
+/// Recovers terminal state after a pager process exits (non-Unix stub).
 #[cfg(not(unix))]
-#[allow(unused_variables)]
-fn recover(status: ExitStatus) {}
+fn recover(_status: ExitStatus) {}
 
 // ---
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn pager_new_creates_default_instance() {
-        let pager = Pager::new();
-        assert!(pager.app_env_var.is_none());
-    }
-
-    #[test]
-    fn pager_default_creates_default_instance() {
-        let pager = Pager::default();
-        assert!(pager.app_env_var.is_none());
-    }
-
-    #[test]
-    fn pager_env_var_sets_app_env_var() {
-        let pager = Pager::new().env_var("HL_PAGER");
-        assert_eq!(pager.app_env_var, Some("HL_PAGER".to_string()));
-    }
-
-    #[test]
-    fn pager_env_var_accepts_string() {
-        let pager = Pager::new().env_var("CUSTOM_PAGER".to_string());
-        assert_eq!(pager.app_env_var, Some("CUSTOM_PAGER".to_string()));
-    }
-}
+mod tests;

@@ -16,6 +16,7 @@ use crate::{
     config,
     error::*,
     level::{LevelValueParser, RelaxedLevel},
+    output::OutputDelimiter,
     settings::{self, AsciiModeOpt, ExpansionMode, InputInfo},
     themecfg,
 };
@@ -392,6 +393,14 @@ pub struct Opt {
     /// Output file
     #[arg(long, short = 'o', overrides_with = "output", value_name = "FILE", help_heading = heading::OUTPUT)]
     pub output: Option<String>,
+
+    /// Output entry delimiter
+    ///
+    /// Possible values:
+    /// • <c>newline</>: Either lf or crlf, depends on the platform (default)
+    /// • <c>nul</>: Null character (\0)
+    #[arg(long, env = "HL_OUTPUT_DELIMITER", default_value = "newline", overrides_with = "output_delimiter", help_heading = heading::OUTPUT)]
+    pub output_delimiter: OutputDelimiter,
 
     /// Input format
     #[arg(

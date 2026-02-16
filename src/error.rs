@@ -17,6 +17,7 @@ use serde_logfmt::logfmt;
 
 // local imports
 use crate::level;
+use crate::pager;
 use crate::themecfg;
 use crate::xerr::{Highlight, HighlightQuoted, Suggestions};
 
@@ -31,6 +32,8 @@ pub enum Error {
     NonZeroSizeParseError(#[from] NonZeroSizeParseError),
     #[error("failed to load configuration: {0}")]
     Config(Box<ConfigError>),
+    #[error(transparent)]
+    PagerSelection(#[from] pager::Error),
     #[error(transparent)]
     Infallible(#[from] std::convert::Infallible),
     #[error(transparent)]
@@ -63,31 +66,31 @@ pub enum Error {
     WrongRegularExpression(#[from] regex::Error),
     #[error("inconsistent index: {details}")]
     InconsistentIndex { details: String },
-    #[error("failed to open file '{}' for reading: {source}", .path.hlq())]
+    #[error("failed to open file {} for reading: {source}", .path.hlq())]
     FailedToOpenFileForReading {
         path: PathBuf,
         #[source]
         source: io::Error,
     },
-    #[error("failed to open file '{}' for writing: {source}", .path.hlq())]
+    #[error("failed to open file {} for writing: {source}", .path.hlq())]
     FailedToOpenFileForWriting {
         path: PathBuf,
         #[source]
         source: io::Error,
     },
-    #[error("failed to get metadata of file '{}': {source}", .path.hlq())]
+    #[error("failed to get metadata of file {}: {source}", .path.hlq())]
     FailedToGetFileMetadata {
         path: PathBuf,
         #[source]
         source: io::Error,
     },
-    #[error("failed to read file '{}': {source}", .path.hlq())]
+    #[error("failed to read file {}: {source}", .path.hlq())]
     FailedToReadFile {
         path: String,
         #[source]
         source: io::Error,
     },
-    #[error("failed to load file '{}': {source}", .path.hlq())]
+    #[error("failed to load file {}: {source}", .path.hlq())]
     FailedToLoadFile {
         path: String,
         #[source]
