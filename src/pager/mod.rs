@@ -55,7 +55,6 @@ where
                     Err(Error::PagerFailed {
                         command: result.command,
                         exit_code,
-                        stderr: result.stderr,
                     })
                 }
             }

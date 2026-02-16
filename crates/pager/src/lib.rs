@@ -1,9 +1,8 @@
 use std::collections::HashMap;
 use std::env;
-use std::io::{self, Read, Write};
+use std::io::{self, Write};
 use std::path::PathBuf;
 use std::process::{Child, ChildStdin, Command, ExitStatus, Stdio};
-use std::thread::{self, JoinHandle};
 
 #[cfg(unix)]
 use std::{
@@ -100,25 +99,16 @@ impl Pager {
             cmd.env(key, value);
         }
 
-        let mut process = match cmd.stdin(Stdio::piped()).stderr(Stdio::piped()).spawn() {
+        let mut process = match cmd.stdin(Stdio::piped()).spawn() {
             Ok(p) => p,
             Err(e) => return Some(Err(e)),
         };
 
         let stdin = process.stdin.take();
-        let stderr_reader = process.stderr.take().map(|stderr| {
-            thread::spawn(move || {
-                let mut buf = String::new();
-                let mut reader = io::BufReader::new(stderr);
-                reader.read_to_string(&mut buf)?;
-                Ok(buf)
-            })
-        });
 
         Some(Ok(StartedPager {
             stdin,
             process: Some(process),
-            stderr_reader,
             command: pager_command,
         }))
     }
@@ -162,7 +152,6 @@ fn resolve(app_env_var: Option<String>) -> Option<(PathBuf, Vec<String>)> {
 pub struct StartedPager {
     stdin: Option<ChildStdin>,
     process: Option<Child>,
-    stderr_reader: Option<JoinHandle<io::Result<String>>>,
     command: Vec<String>,
 }
 
@@ -174,11 +163,7 @@ impl StartedPager {
     /// waited on or dropped to recover terminal state.
     pub fn detach_process(&mut self) -> Option<PagerProcess> {
         let command = self.command.clone();
-        self.process.take().map(|child| PagerProcess {
-            child,
-            stderr_reader: self.stderr_reader.take(),
-            command,
-        })
+        self.process.take().map(|child| PagerProcess { child, command })
     }
 
     fn stdin(&mut self) -> &mut ChildStdin {
@@ -215,38 +200,26 @@ impl Write for StartedPager {
 /// A detached pager child process.
 ///
 /// Provides [`wait`](PagerProcess::wait) to explicitly wait for the process and obtain
-/// its exit status along with any captured stderr output.
+/// its exit status.
 ///
 /// If dropped without calling `wait`, the process is still waited on and terminal
-/// state is recovered, but exit status and stderr are discarded.
+/// state is recovered, but exit status is discarded.
 pub struct PagerProcess {
     child: Child,
-    stderr_reader: Option<JoinHandle<io::Result<String>>>,
     command: Vec<String>,
 }
 
 impl PagerProcess {
     /// Waits for the pager process to exit and recovers terminal state.
     ///
-    /// Returns the exit result containing the process exit status and any
-    /// captured stderr output.
+    /// Returns the exit result containing the process exit status.
     pub fn wait(&mut self) -> io::Result<PagerExitResult> {
         let status = self.child.wait()?;
         recover(status);
-        let stderr = self.collect_stderr();
         Ok(PagerExitResult {
             command: self.command.clone(),
             status,
-            stderr,
         })
-    }
-
-    fn collect_stderr(&mut self) -> String {
-        self.stderr_reader
-            .take()
-            .and_then(|h| h.join().ok())
-            .and_then(|r| r.ok())
-            .unwrap_or_default()
     }
 }
 
@@ -266,8 +239,6 @@ pub struct PagerExitResult {
     pub command: Vec<String>,
     /// The exit status of the pager process.
     pub status: ExitStatus,
-    /// Captured stderr output from the pager process.
-    pub stderr: String,
 }
 
 impl PagerExitResult {
