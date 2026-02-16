@@ -59,12 +59,8 @@ pub enum Error {
         source: std::io::Error,
     },
 
-    #[error("pager '{}' {}", quote_command(.command), format_pager_failure(*.exit_code, .stderr))]
-    PagerFailed {
-        command: Vec<String>,
-        exit_code: i32,
-        stderr: String,
-    },
+    #[error("pager '{}' exited with code {exit_code}", quote_command(.command))]
+    PagerFailed { command: Vec<String>, exit_code: i32 },
 
     #[error("failed to wait for pager process: {source}")]
     WaitFailed {
@@ -75,15 +71,6 @@ pub enum Error {
 
 fn quote_command(command: &[String]) -> String {
     shellwords::join(&command.iter().map(String::as_str).collect::<Vec<_>>())
-}
-
-fn format_pager_failure(exit_code: i32, stderr: &str) -> String {
-    let stderr = stderr.trim();
-    if stderr.is_empty() {
-        format!("exited with code {exit_code}")
-    } else {
-        format!("exited with code {exit_code}: {stderr}")
-    }
 }
 
 // ---
