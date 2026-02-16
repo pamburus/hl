@@ -8,6 +8,7 @@ use std::env;
 use std::ffi::OsStr;
 use std::path::Path;
 
+use pager::{Pager, StartedPager};
 use thiserror::Error;
 
 use super::config::{PagerConfig, PagerProfile, PagerRole};
@@ -50,6 +51,13 @@ pub enum Error {
 
     #[error("{var}: command '{command}' not found in PATH")]
     CommandNotFound { var: String, command: String },
+
+    #[error("failed to start pager '{command}': {source}")]
+    StartFailed {
+        command: String,
+        #[source]
+        source: std::io::Error,
+    },
 }
 
 // ---
@@ -76,6 +84,36 @@ pub enum SelectedPager {
     },
     /// No pager, output to stdout.
     None,
+}
+
+impl SelectedPager {
+    /// Starts the selected pager process.
+    ///
+    /// Returns `Ok(Some((started_pager, delimiter)))` if a pager was selected and started,
+    /// or `Ok(None)` if no pager was selected.
+    pub fn start(self) -> Result<Option<(StartedPager, Option<OutputDelimiter>)>, Error> {
+        match self {
+            SelectedPager::Pager {
+                command,
+                env,
+                delimiter,
+            } => {
+                let label = command.join(" ");
+                let started = Pager::custom(command)
+                    .with_env(env)
+                    .start()
+                    .map(|r| {
+                        r.map_err(|source| Error::StartFailed {
+                            command: label.clone(),
+                            source,
+                        })
+                    })
+                    .transpose()?;
+                Ok(started.map(|pager| (pager, delimiter)))
+            }
+            SelectedPager::None => Ok(None),
+        }
+    }
 }
 
 // ---

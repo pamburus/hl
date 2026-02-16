@@ -14,7 +14,7 @@ use clap::{CommandFactory, Parser};
 use enumset::enum_set;
 use enumset_ext::EnumSetExt;
 use env_logger::{self as logger};
-use pager::{Pager, StartedPager};
+use pager::StartedPager;
 use terminal_size::terminal_size_of;
 use utf8_supported::{Utf8Support, utf8_supported};
 
@@ -26,7 +26,7 @@ use hl::{
     help,
     input::InputReference,
     output::{OutputDelimiter, OutputStream},
-    pager::{PagerRole, PagerSelector, SelectedPager},
+    pager::{PagerRole, PagerSelector},
     query::Query,
     settings::{AsciiModeOpt, InputInfo, Settings},
     signal::SignalHandler,
@@ -122,24 +122,7 @@ fn run() -> Result<()> {
         if !paging {
             return Ok(None);
         }
-        let selected = selector.select(role)?;
-        match selected {
-            SelectedPager::Pager {
-                command,
-                env,
-                delimiter,
-            } => Ok(Pager::custom(command)
-                .with_env(env)
-                .start()
-                .and_then(|r| {
-                    r.inspect_err(|err| {
-                        log::debug!("failed to start pager: {}", err);
-                    })
-                    .ok()
-                })
-                .map(|pager| (pager, delimiter))),
-            SelectedPager::None => Ok(None),
-        }
+        Ok(selector.select(role)?.start()?)
     };
 
     if let Some(verbosity) = opt.help {
