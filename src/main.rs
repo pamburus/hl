@@ -355,7 +355,7 @@ fn run() -> Result<()> {
         },
     };
 
-    let mut output: OutputStream = Box::new(ExitOnWriteError(output));
+    let mut output: OutputStream = Box::new(ExitOnWriteError::new(output, using_pager));
 
     // Create app.
     let app = hl::App::new(hl::Options {
@@ -450,23 +450,33 @@ impl AppInfoProvider for AppInfo {
 
 // ---
 
-struct ExitOnWriteError<W>(W);
+struct ExitOnWriteError<W> {
+    inner: W,
+    using_pager: bool,
+}
 
 impl<W> ExitOnWriteError<W> {
-    fn inspect<R>(res: std::io::Result<R>) -> std::io::Result<R> {
+    fn new(inner: W, using_pager: bool) -> Self {
+        Self { inner, using_pager }
+    }
+
+    fn inspect<R>(res: std::io::Result<R>, using_pager: bool) -> std::io::Result<R> {
         res.inspect_err(|err| {
             log::debug!("write error: {}", err);
-            process::exit(0);
+            // Exit with 141 (128 + SIGPIPE) when writing to pager fails
+            // This matches git and other tools' behavior
+            let exit_code = if using_pager { 141 } else { 0 };
+            process::exit(exit_code);
         })
     }
 }
 
 impl<W: Write> Write for ExitOnWriteError<W> {
     fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-        Self::inspect(self.0.write(buf))
+        Self::inspect(self.inner.write(buf), self.using_pager)
     }
 
     fn flush(&mut self) -> std::io::Result<()> {
-        Self::inspect(self.0.flush())
+        Self::inspect(self.inner.flush(), self.using_pager)
     }
 }

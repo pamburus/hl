@@ -198,7 +198,9 @@ pub struct PagerProcess(Child);
 impl Drop for PagerProcess {
     fn drop(&mut self) {
         if let Ok(status) = self.0.wait() {
-            recover(status);
+            if let Some(code) = recover(status) {
+                std::process::exit(code);
+            }
         }
     }
 }
@@ -206,20 +208,38 @@ impl Drop for PagerProcess {
 // ---
 
 #[cfg(unix)]
-fn recover(status: ExitStatus) {
-    if let Some(signal) = status.signal()
-        && signal == 9
-    {
-        eprintln!("\x1bm\nhl: pager killed");
-        if stdin().is_terminal() {
-            Command::new("stty").arg("echo").status().ok();
+fn recover(status: ExitStatus) -> Option<i32> {
+    if let Some(signal) = status.signal() {
+        if signal == 9 {
+            eprintln!("\x1bm\nhl: pager killed");
+            if stdin().is_terminal() {
+                Command::new("stty").arg("echo").status().ok();
+            }
+        }
+        // Exit with 128 + signal number (standard Unix convention)
+        // SIGPIPE is 13, so 128 + 13 = 141 (matches git behavior)
+        return Some(128 + signal);
+    } else if let Some(code) = status.code() {
+        if code != 0 {
+            // When pager exits with non-zero, exit with 141 (SIGPIPE convention)
+            // This matches git's behavior when the pager fails
+            return Some(141);
         }
     }
+    None
 }
 
 #[cfg(not(unix))]
-#[allow(unused_variables)]
-fn recover(status: ExitStatus) {}
+fn recover(status: ExitStatus) -> Option<i32> {
+    if let Some(code) = status.code() {
+        if code != 0 {
+            // When pager exits with non-zero, exit with 141 (SIGPIPE convention)
+            // This matches git's behavior when the pager fails
+            return Some(141);
+        }
+    }
+    None
+}
 
 // ---
 

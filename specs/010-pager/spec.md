@@ -324,6 +324,12 @@ As a user migrating from other tools, I want `hl` to respect the standard `PAGER
   5. `pager` config file option (best-effort fallback, no error if unavailable)
   6. No pager (stdout)
 
+#### Pager Exit Code Handling
+
+- **FR-029**: When the pager process exits with a non-zero exit code, system MUST exit with status code 141 (following Unix SIGPIPE convention and matching behavior of `git`, `bat`, and other tools).
+- **FR-030**: When the pager process exits successfully (exit code 0), system MUST exit with status code 0.
+- **FR-031**: When writing to the pager fails with a broken pipe error (pager closed stdin prematurely), system MUST exit with status code 141.
+
 #### Pager Lifecycle and Error Handling
 
 - **FR-028**: System MUST detect when the pager process exits or terminates
