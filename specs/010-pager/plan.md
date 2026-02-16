@@ -1,7 +1,7 @@
 # Implementation Plan: Pager Configuration System
 
-**Branch**: `008-pager-config` | **Date**: 2025-01-15 | **Spec**: [spec.md](./spec.md)
-**Input**: Feature specification from `/specs/008-pager-config/spec.md`
+**Branch**: `010-pager` | **Date**: 2025-01-15 | **Spec**: [spec.md](./spec.md)
+**Input**: Feature specification from `/specs/010-pager/spec.md`
 
 ## Summary
 
@@ -38,7 +38,7 @@ Implement a configurable pager system that allows users to define named pager pr
 ### Documentation (this feature)
 
 ```text
-specs/008-pager-config/
+specs/010-pager/
 ├── plan.md              # This file
 ├── spec.md              # Feature specification
 ├── research.md          # Phase 0 output

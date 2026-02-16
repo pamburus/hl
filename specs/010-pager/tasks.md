@@ -1,6 +1,6 @@
 # Tasks: Pager Configuration System
 
-**Input**: Design documents from `/specs/008-pager-config/`
+**Input**: Design documents from `/specs/010-pager/`
 **Prerequisites**: plan.md, spec.md, research.md, data-model.md, quickstart.md
 **Updated**: 2025-01-27
 
