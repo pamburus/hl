@@ -167,6 +167,11 @@ impl<'a, E: EnvProvider, C: ExeChecker> PagerSelector<'a, E, C> {
                     if let Some(selected) = self.try_override(&cmd, PagerRole::View, HL_PAGER) {
                         return selected;
                     }
+                    // If explicit profile reference (@profile) failed, error is already logged
+                    // and we don't fall back
+                    if Self::is_profile_ref(&cmd).is_some() {
+                        return SelectedPager::None;
+                    }
                 }
             }
         }
@@ -190,6 +195,11 @@ impl<'a, E: EnvProvider, C: ExeChecker> PagerSelector<'a, E, C> {
                 PagerOverride::Value(cmd) => {
                     if let Some(selected) = self.try_override(&cmd, PagerRole::View, PAGER) {
                         return selected;
+                    }
+                    // If explicit profile reference (@profile) failed, error is already logged
+                    // and we don't fall back
+                    if Self::is_profile_ref(&cmd).is_some() {
+                        return SelectedPager::None;
                     }
                 }
             }
@@ -218,6 +228,11 @@ impl<'a, E: EnvProvider, C: ExeChecker> PagerSelector<'a, E, C> {
                     if let Some(selected) = self.try_override(&cmd, PagerRole::Follow, HL_FOLLOW_PAGER) {
                         return selected;
                     }
+                    // If explicit profile reference (@profile) failed, error is already logged
+                    // and we don't fall back to config
+                    if Self::is_profile_ref(&cmd).is_some() {
+                        return SelectedPager::None;
+                    }
                 }
             }
         }
@@ -234,6 +249,11 @@ impl<'a, E: EnvProvider, C: ExeChecker> PagerSelector<'a, E, C> {
                 PagerOverride::Value(cmd) => {
                     if let Some(selected) = self.try_override(&cmd, PagerRole::Follow, HL_PAGER) {
                         return selected;
+                    }
+                    // If explicit profile reference (@profile) failed, error is already logged
+                    // and we don't fall back to config
+                    if Self::is_profile_ref(&cmd).is_some() {
+                        return SelectedPager::None;
                     }
                 }
             }
@@ -281,21 +301,58 @@ impl<'a, E: EnvProvider, C: ExeChecker> PagerSelector<'a, E, C> {
         }
     }
 
+    /// Checks if a command spec is an explicit profile reference (starts with '@').
+    /// Returns Some(profile_name) if it is, None otherwise.
+    fn is_profile_ref(cmd: &[String]) -> Option<&str> {
+        if cmd.len() == 1 { cmd[0].strip_prefix('@') } else { None }
+    }
+
     /// Tries to interpret a command spec as either a profile name or a direct command.
     ///
-    /// If the first element matches a profile name, uses that profile.
+    /// If the first element starts with '@', treats it as an explicit profile name reference.
     /// Otherwise, treats the entire spec as a direct command.
     fn try_override(&self, cmd: &[String], role: PagerRole, source: &str) -> Option<SelectedPager> {
-        // If it's a single word and matches a profile name, use the profile
-        if cmd.len() == 1 {
-            let name = &cmd[0];
-            if self.profiles.contains_key(name) {
-                return self.try_profile(name, role);
-            }
+        // If it's a single word starting with '@', treat as explicit profile reference
+        if let Some(name) = Self::is_profile_ref(cmd) {
+            return self.try_profile_explicit(name, role, source);
         }
 
         // Otherwise treat as a direct command
         self.try_command(cmd.to_vec(), source)
+    }
+
+    /// Tries to use a named profile that was explicitly referenced with '@'.
+    /// Logs errors if the profile doesn't exist or executable is not available.
+    fn try_profile_explicit(&self, name: &str, role: PagerRole, source: &str) -> Option<SelectedPager> {
+        let profile = self.profiles.get(name);
+        if profile.is_none() {
+            log::error!("{source}: profile '{name}' does not exist in configuration");
+            return None;
+        }
+        let profile = profile.unwrap();
+
+        let executable = profile.executable();
+        if executable.is_none() {
+            log::error!("{source}: profile '{name}' has no command configured");
+            return None;
+        }
+        let executable = executable.unwrap();
+
+        if !self.exe_checker.is_available(executable) {
+            log::error!("{source}: profile '{name}' executable '{executable}' not found in PATH");
+            return None;
+        }
+
+        log::debug!("using profile {name:?}");
+        let command = profile.build_command(role).into_iter().map(String::from).collect();
+        let env = profile.env.clone();
+        let delimiter = self.resolve_delimiter(profile.delimiter);
+
+        Some(SelectedPager::Pager {
+            command,
+            env,
+            delimiter,
+        })
     }
 
     /// Tries to use a named profile, returning `Some(SelectedPager)` if successful.

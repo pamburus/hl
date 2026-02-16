@@ -154,7 +154,9 @@ pub enum PagerOverride {
 **Resolution Logic**:
 - When `Value` contains a single element matching a profile name in config, use that profile
 - Otherwise, treat the entire `Value` as a direct command
-- This allows `HL_PAGER=less` to use a `[pagers.less]` profile if defined, or run `less` directly
+- `HL_PAGER=less` runs `less` command directly (with automatic `-R` flag added)
+- `HL_PAGER=@less` uses `[pagers.less]` profile (fails if profile doesn't exist)
+- Multi-word values like `HL_PAGER=less -R` are always treated as direct commands
 
 ---
 

@@ -60,9 +60,10 @@ pub enum PagerConfig {
 **Rationale**:
 - Simpler parsing logic - no heuristics about what "looks like" a profile name
 - Profile names are checked at selection time against actual config
-- Single-word values like `HL_PAGER=less` work as either:
-  - A profile name (if `[pagers.less]` exists in config)
-  - A direct command (if no matching profile)
+- Single-word values like `HL_PAGER=less` are always treated as direct commands (backward compatible)
+- To explicitly reference a profile, use `@` prefix: `HL_PAGER=@less` uses `[pagers.less]` profile
+  - If profile doesn't exist, system logs error and disables pager (no fallback)
+  - This makes it clear when you want a profile vs. a command
 - Multi-word values like `HL_PAGER=less -R` are always treated as commands
 - Maintains backward compatibility - env vars don't require profile definitions
 
