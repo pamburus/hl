@@ -1,8 +1,9 @@
 use std::collections::HashMap;
 use std::env;
-use std::io::Write;
+use std::io::{self, Read, Write};
 use std::path::PathBuf;
 use std::process::{Child, ChildStdin, Command, ExitStatus, Stdio};
+use std::thread::{self, JoinHandle};
 
 #[cfg(unix)]
 use std::{
@@ -73,38 +74,52 @@ impl Pager {
     /// Starts the pager process.
     ///
     /// Returns `None` if the origin is `FromEnv` and no pager is configured in environment variables.
-    pub fn start(self) -> Option<std::io::Result<StartedPager>> {
+    pub fn start(self) -> Option<io::Result<StartedPager>> {
         let (pager_path, args) = match self.origin {
             CommandOrigin::FromEnv { app_env_var } => resolve(app_env_var)?,
             CommandOrigin::Custom { command } => {
                 let (pager, args) = match command.split_first() {
                     Some((pager, args)) => (PathBuf::from(pager), args.to_vec()),
                     None => {
-                        return Some(Err(std::io::Error::new(
-                            std::io::ErrorKind::InvalidInput,
-                            "empty pager command",
-                        )));
+                        return Some(Err(io::Error::new(io::ErrorKind::InvalidInput, "empty pager command")));
                     }
                 };
                 (pager, args)
             }
         };
 
-        let mut command = Command::new(&pager_path);
-        command.args(&args);
+        let pager_command = {
+            let mut parts = vec![pager_path.to_string_lossy().into_owned()];
+            parts.extend(args.iter().cloned());
+            parts
+        };
+
+        let mut cmd = Command::new(&pager_path);
+        cmd.args(&args);
         for (key, value) in &self.env {
-            command.env(key, value);
+            cmd.env(key, value);
         }
 
-        let mut process = match command.stdin(Stdio::piped()).spawn() {
+        let mut process = match cmd.stdin(Stdio::piped()).stderr(Stdio::piped()).spawn() {
             Ok(p) => p,
             Err(e) => return Some(Err(e)),
         };
+
         let stdin = process.stdin.take();
+        let stderr_reader = process.stderr.take().map(|stderr| {
+            thread::spawn(move || {
+                let mut buf = String::new();
+                let mut reader = io::BufReader::new(stderr);
+                reader.read_to_string(&mut buf)?;
+                Ok(buf)
+            })
+        });
 
         Some(Ok(StartedPager {
             stdin,
             process: Some(process),
+            stderr_reader,
+            command: pager_command,
         }))
     }
 }
@@ -147,6 +162,8 @@ fn resolve(app_env_var: Option<String>) -> Option<(PathBuf, Vec<String>)> {
 pub struct StartedPager {
     stdin: Option<ChildStdin>,
     process: Option<Child>,
+    stderr_reader: Option<JoinHandle<io::Result<String>>>,
+    command: Vec<String>,
 }
 
 impl StartedPager {
@@ -154,9 +171,14 @@ impl StartedPager {
     ///
     /// After calling this, this pager's `Drop` will no longer wait for the process.
     /// The caller is responsible for ensuring the returned `PagerProcess` is
-    /// dropped to wait for the child and recover terminal state.
+    /// waited on or dropped to recover terminal state.
     pub fn detach_process(&mut self) -> Option<PagerProcess> {
-        self.process.take().map(PagerProcess)
+        let command = self.command.clone();
+        self.process.take().map(|child| PagerProcess {
+            child,
+            stderr_reader: self.stderr_reader.take(),
+            command,
+        })
     }
 
     fn stdin(&mut self) -> &mut ChildStdin {
@@ -179,11 +201,11 @@ impl Drop for StartedPager {
 }
 
 impl Write for StartedPager {
-    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
         self.stdin().write(buf)
     }
 
-    fn flush(&mut self) -> std::io::Result<()> {
+    fn flush(&mut self) -> io::Result<()> {
         self.stdin().flush()
     }
 }
@@ -192,73 +214,103 @@ impl Write for StartedPager {
 
 /// A detached pager child process.
 ///
-/// When dropped, waits for the child process to exit and recovers terminal state.
-pub struct PagerProcess(Child);
+/// Provides [`wait`](PagerProcess::wait) to explicitly wait for the process and obtain
+/// its exit status along with any captured stderr output.
+///
+/// If dropped without calling `wait`, the process is still waited on and terminal
+/// state is recovered, but exit status and stderr are discarded.
+pub struct PagerProcess {
+    child: Child,
+    stderr_reader: Option<JoinHandle<io::Result<String>>>,
+    command: Vec<String>,
+}
+
+impl PagerProcess {
+    /// Waits for the pager process to exit and recovers terminal state.
+    ///
+    /// Returns the exit result containing the process exit status and any
+    /// captured stderr output.
+    pub fn wait(&mut self) -> io::Result<PagerExitResult> {
+        let status = self.child.wait()?;
+        recover(status);
+        let stderr = self.collect_stderr();
+        Ok(PagerExitResult {
+            command: self.command.clone(),
+            status,
+            stderr,
+        })
+    }
+
+    fn collect_stderr(&mut self) -> String {
+        self.stderr_reader
+            .take()
+            .and_then(|h| h.join().ok())
+            .and_then(|r| r.ok())
+            .unwrap_or_default()
+    }
+}
 
 impl Drop for PagerProcess {
     fn drop(&mut self) {
-        if let Ok(status) = self.0.wait() {
-            log::debug!("pager process exited with status: {:?}", status);
-            if let Some(code) = recover(status) {
-                log::debug!("exiting with code: {}", code);
-                std::process::exit(code);
-            }
+        if let Ok(status) = self.child.wait() {
+            recover(status);
         }
     }
 }
 
 // ---
 
-#[cfg(unix)]
-fn recover(status: ExitStatus) -> Option<i32> {
-    if let Some(signal) = status.signal() {
-        if signal == 9 {
-            eprintln!("\x1bm\nhl: pager killed");
-            if stdin().is_terminal() {
-                Command::new("stty").arg("echo").status().ok();
-            }
-        }
-        // Exit with 128 + signal number (standard Unix convention)
-        // SIGPIPE is 13, so 128 + 13 = 141 (matches git behavior)
-        log::debug!("pager killed by signal {}, exiting with {}", signal, 128 + signal);
-        return Some(128 + signal);
-    } else if let Some(code) = status.code() {
-        if code == 0 {
-            // Exit code 0: success
-            log::debug!("pager exited successfully with code 0");
-        } else if code == 130 {
-            // Exit code 130: user interrupted with Ctrl+C (SIGINT)
-            // This is a normal exit, treat as success
-            log::debug!("pager interrupted by user (Ctrl+C), treating as success");
-        } else {
-            // Any other non-zero exit code: actual error
-            // This matches git's behavior when the pager fails
-            log::debug!("pager exited with error code {}, exiting with 141", code);
-            return Some(141);
-        }
-    }
-    None
+/// Result of waiting for a pager process to exit.
+pub struct PagerExitResult {
+    /// The command that was used to start the pager.
+    pub command: Vec<String>,
+    /// The exit status of the pager process.
+    pub status: ExitStatus,
+    /// Captured stderr output from the pager process.
+    pub stderr: String,
 }
 
-#[cfg(not(unix))]
-fn recover(status: ExitStatus) -> Option<i32> {
-    if let Some(code) = status.code() {
-        if code == 0 {
-            // Exit code 0: success
-            log::debug!("pager exited successfully with code 0");
-        } else if code == 130 {
-            // Exit code 130: user interrupted with Ctrl+C (SIGINT)
-            // This is a normal exit, treat as success
-            log::debug!("pager interrupted by user (Ctrl+C), treating as success");
-        } else {
-            // Any other non-zero exit code: actual error
-            // This matches git's behavior when the pager fails
-            log::debug!("pager exited with error code {}, exiting with 141", code);
-            return Some(141);
-        }
+impl PagerExitResult {
+    /// Returns `true` if the pager exited successfully.
+    ///
+    /// Both exit code 0 (normal success) and 130 (user interrupted with Ctrl+C)
+    /// are considered successful.
+    pub fn is_success(&self) -> bool {
+        self.status.success() || self.status.code() == Some(130)
     }
-    None
+
+    /// Returns the exit code of the pager process, if available.
+    pub fn exit_code(&self) -> Option<i32> {
+        self.status.code()
+    }
+
+    /// Returns the signal that terminated the pager process, if any.
+    #[cfg(unix)]
+    pub fn signal(&self) -> Option<i32> {
+        self.status.signal()
+    }
 }
+
+// ---
+
+/// Recovers terminal state after a pager process exits.
+///
+/// This only resets terminal state when needed (e.g., re-enabling echo after
+/// the pager was killed by SIGKILL). It does not interpret exit codes or
+/// make any decisions about how the application should exit.
+#[cfg(unix)]
+fn recover(status: ExitStatus) {
+    if let Some(signal) = status.signal()
+        && signal == 9
+        && stdin().is_terminal()
+    {
+        Command::new("stty").arg("echo").status().ok();
+    }
+}
+
+/// Recovers terminal state after a pager process exits (non-Unix stub).
+#[cfg(not(unix))]
+fn recover(_status: ExitStatus) {}
 
 // ---
 

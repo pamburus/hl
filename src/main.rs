@@ -14,7 +14,7 @@ use clap::{CommandFactory, Parser};
 use enumset::enum_set;
 use enumset_ext::EnumSetExt;
 use env_logger::{self as logger};
-use pager::StartedPager;
+use pager::{PagerProcess, StartedPager};
 use terminal_size::terminal_size_of;
 use utf8_supported::{Utf8Support, utf8_supported};
 
@@ -34,7 +34,7 @@ use hl::{
     timeparse::parse_time,
     timezone::Tz,
 };
-use lifecycle::{AsyncDrop, DropNotifier};
+use lifecycle::AsyncDrop;
 
 const HL_DEBUG_LOG: &str = "HL_DEBUG_LOG";
 const HL_DEBUG_LOG_STYLE: &str = "HL_DEBUG_LOG_STYLE";
@@ -323,13 +323,9 @@ fn run() -> Result<()> {
         None => match start_pager(role)? {
             Some((mut pager, delimiter)) => {
                 pager_delimiter = delimiter;
-                let detached = pager.detach_process();
-                _pager_watcher = detached.map(|p| {
+                _pager_watcher = pager.detach_process().map(|p| {
                     log::debug!("monitor pager process");
-                    AsyncDrop::new(DropNotifier::new(p, || {
-                        log::debug!("pager process exited");
-                        process::exit(0);
-                    }))
+                    AsyncDrop::new(PagerWatcher(p))
                 });
                 (Box::new(pager), true)
             }
@@ -414,6 +410,37 @@ fn run() -> Result<()> {
 
 fn main() {
     if let Err(err) = run() {
+        err.log(&AppInfo);
+        process::exit(1);
+    }
+}
+
+struct PagerWatcher(PagerProcess);
+
+impl Drop for PagerWatcher {
+    fn drop(&mut self) {
+        let result = match self.0.wait() {
+            Ok(result) => result,
+            Err(err) => {
+                log::debug!("failed to wait for pager: {err}");
+                process::exit(1);
+            }
+        };
+
+        log::debug!("pager process exited with status: {:?}", result.status);
+
+        if result.is_success() {
+            process::exit(0);
+        }
+
+        let exit_code = result.exit_code().unwrap_or(141);
+
+        let err: Error = hl::pager::Error::PagerFailed {
+            command: result.command,
+            exit_code,
+            stderr: result.stderr,
+        }
+        .into();
         err.log(&AppInfo);
         process::exit(1);
     }

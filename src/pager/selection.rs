@@ -30,7 +30,7 @@ const HL_PAGER_DELIMITER: &str = "HL_PAGER_DELIMITER";
 
 // ---
 
-/// Error that can occur during pager selection.
+/// Error that can occur during pager selection or execution.
 #[derive(Error, Debug)]
 pub enum Error {
     #[error("{var}: profile '{profile}' does not exist in configuration")]
@@ -58,10 +58,26 @@ pub enum Error {
         #[source]
         source: std::io::Error,
     },
+
+    #[error("pager '{}' {}", quote_command(.command), format_pager_failure(*.exit_code, .stderr))]
+    PagerFailed {
+        command: Vec<String>,
+        exit_code: i32,
+        stderr: String,
+    },
 }
 
 fn quote_command(command: &[String]) -> String {
     shellwords::join(&command.iter().map(String::as_str).collect::<Vec<_>>())
+}
+
+fn format_pager_failure(exit_code: i32, stderr: &str) -> String {
+    let stderr = stderr.trim();
+    if stderr.is_empty() {
+        format!("exited with code {exit_code}")
+    } else {
+        format!("exited with code {exit_code}: {stderr}")
+    }
 }
 
 // ---
