@@ -26,13 +26,6 @@ pub struct Pager {
     env: HashMap<String, String>,
 }
 
-enum PagerMode {
-    /// Resolve pager from environment variables.
-    Resolve { app_env_var: Option<String> },
-    /// Use a pre-resolved command.
-    Custom { command: Vec<String> },
-}
-
 impl Pager {
     /// Creates a new pager configuration with default settings.
     ///
@@ -82,7 +75,7 @@ impl Pager {
     pub fn start(mut self) -> std::io::Result<StartedPager> {
         let (pager_path, args, apply_less_defaults) = match self.mode {
             PagerMode::Resolve { app_env_var } => {
-                let (path, args) = resolve_pager(app_env_var);
+                let (path, args) = resolve(app_env_var);
                 (path, args, true)
             }
             PagerMode::Custom { command } => {
@@ -123,8 +116,23 @@ impl Pager {
     }
 }
 
+impl Default for Pager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+// ---
+
+enum PagerMode {
+    /// Resolve pager from environment variables.
+    Resolve { app_env_var: Option<String> },
+    /// Use a pre-resolved command.
+    Custom { command: Vec<String> },
+}
+
 /// Resolves the pager command from environment variables, falling back to `less`.
-fn resolve_pager(app_env_var: Option<String>) -> (PathBuf, Vec<String>) {
+fn resolve(app_env_var: Option<String>) -> (PathBuf, Vec<String>) {
     let mut pager = "less".to_owned();
 
     let app_pager = app_env_var.and_then(|v| env::var(v).ok()).filter(|v| !v.is_empty());
@@ -144,12 +152,6 @@ fn resolve_pager(app_env_var: Option<String>) -> (PathBuf, Vec<String>) {
     let pager_path = PathBuf::from(&exe);
 
     (pager_path, args)
-}
-
-impl Default for Pager {
-    fn default() -> Self {
-        Self::new()
-    }
 }
 
 // ---
