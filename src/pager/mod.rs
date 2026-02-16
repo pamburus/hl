@@ -47,7 +47,7 @@ where
     fn drop(&mut self) {
         let result = match self.process.wait() {
             Ok(result) => {
-                log::debug!("pager process exited with status: {:?}", result.status);
+                log::debug!("pager process exited: {}", result.status);
                 if result.is_success() {
                     Ok(())
                 } else {
