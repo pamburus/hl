@@ -117,7 +117,7 @@ fn run() -> Result<()> {
     };
     let paging = if opt.paging_never { false } else { paging };
     let role = if opt.follow { PagerRole::Follow } else { PagerRole::View };
-    let selector = PagerSelector::new(settings.pager.as_ref(), &settings.pagers);
+    let selector = PagerSelector::new(&settings.pager);
     let start_pager = |role: PagerRole| -> Result<Option<(StartedPager, Option<OutputDelimiter>)>> {
         if !paging {
             return Ok(None);

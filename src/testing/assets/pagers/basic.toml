@@ -1,5 +1,6 @@
 # Basic pager configuration with a single profile
-pager = "less"
+[pager]
+candidates = [{ profile = "less" }]
 
-[pagers.less]
+[pager.profiles.less]
 command = ["less", "-R"]

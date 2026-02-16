@@ -11,22 +11,8 @@ use std::path::Path;
 use pager::{Pager, StartedPager};
 use thiserror::Error;
 
-use super::config::{PagerConfig, PagerProfile, PagerRole};
+use super::config::{EnvReference, PagerCandidate, PagerConfig, PagerRole, StructuredEnvReference};
 use crate::output::OutputDelimiter;
-
-// ---
-
-/// Environment variable for overriding the pager.
-const HL_PAGER: &str = "HL_PAGER";
-
-/// Environment variable for overriding the pager in follow mode.
-const HL_FOLLOW_PAGER: &str = "HL_FOLLOW_PAGER";
-
-/// Standard environment variable for the pager.
-const PAGER: &str = "PAGER";
-
-/// Environment variable for overriding the pager delimiter.
-const HL_PAGER_DELIMITER: &str = "HL_PAGER_DELIMITER";
 
 // ---
 
@@ -164,10 +150,8 @@ impl ExeChecker for SystemExeChecker {
 /// Pager selector that handles pager selection based on environment variables,
 /// configuration, and executable availability.
 pub struct PagerSelector<'a, E = SystemEnv, C = SystemExeChecker> {
-    /// The pager configuration (profile priority list).
-    config: Option<&'a PagerConfig>,
-    /// Available pager profiles.
-    profiles: &'a HashMap<String, PagerProfile>,
+    /// The pager configuration.
+    config: &'a PagerConfig,
     /// Environment provider.
     env_provider: E,
     /// Executable checker.
@@ -176,10 +160,9 @@ pub struct PagerSelector<'a, E = SystemEnv, C = SystemExeChecker> {
 
 impl<'a> PagerSelector<'a, SystemEnv, SystemExeChecker> {
     /// Creates a new pager selector with the given configuration.
-    pub fn new(config: Option<&'a PagerConfig>, profiles: &'a HashMap<String, PagerProfile>) -> Self {
+    pub fn new(config: &'a PagerConfig) -> Self {
         Self {
             config,
-            profiles,
             env_provider: SystemEnv,
             exe_checker: SystemExeChecker,
         }
@@ -188,15 +171,9 @@ impl<'a> PagerSelector<'a, SystemEnv, SystemExeChecker> {
 
 impl<'a, E: EnvProvider, C: ExeChecker> PagerSelector<'a, E, C> {
     /// Creates a new pager selector with custom environment and executable checker.
-    pub fn with_providers(
-        config: Option<&'a PagerConfig>,
-        profiles: &'a HashMap<String, PagerProfile>,
-        env_provider: E,
-        exe_checker: C,
-    ) -> Self {
+    pub fn with_providers(config: &'a PagerConfig, env_provider: E, exe_checker: C) -> Self {
         Self {
             config,
-            profiles,
             env_provider,
             exe_checker,
         }
@@ -224,184 +201,272 @@ impl<'a, E: EnvProvider, C: ExeChecker> PagerSelector<'a, E, C> {
 
     /// Selects a pager for view mode.
     ///
-    /// Precedence order:
-    /// 1. `HL_PAGER` env var (profile name or command string; empty = disabled)
-    /// 2. Config `pager` setting (priority list of profiles)
-    /// 3. `PAGER` env var (backward compatibility)
-    /// 4. Fall back to stdout
+    /// Iterates through pager.candidates in order until a usable pager is found.
     fn select_for_view(&self) -> Result<SelectedPager, Error> {
-        // 1. Check HL_PAGER env var
-        if let Some(pager) = self.resolve_env_var(HL_PAGER) {
-            match pager {
-                PagerOverride::Disabled => {
-                    log::debug!("{HL_PAGER} is empty, pager disabled");
-                    return Ok(SelectedPager::None);
+        for candidate in self.config.candidates() {
+            match candidate {
+                PagerCandidate::Profile(name) => {
+                    if let Some(selected) = self.try_profile(name, PagerRole::View) {
+                        return Ok(selected);
+                    }
                 }
-                PagerOverride::Value(cmd) => {
-                    return self.try_override(&cmd, PagerRole::View, HL_PAGER);
-                }
-            }
-        }
-
-        // 2. Check config pager setting
-        if let Some(config) = self.config {
-            for profile in config.profiles() {
-                if let Some(selected) = self.try_profile(profile, PagerRole::View) {
-                    return Ok(selected);
-                }
-            }
-        }
-
-        // 3. Check PAGER env var (backward compatibility)
-        if let Some(pager) = self.resolve_env_var(PAGER) {
-            match pager {
-                PagerOverride::Disabled => {
-                    log::debug!("{PAGER} is empty, pager disabled");
-                    return Ok(SelectedPager::None);
-                }
-                PagerOverride::Value(cmd) => {
-                    return self.try_override(&cmd, PagerRole::View, PAGER);
-                }
-            }
-        }
-
-        // 4. Fall back to stdout
-        Ok(SelectedPager::None)
-    }
-
-    /// Selects a pager for follow mode.
-    ///
-    /// Precedence order:
-    /// 1. `HL_FOLLOW_PAGER` env var (profile name or command string; empty = disabled)
-    /// 2. `HL_PAGER` env var (unless empty, which is overridden by HL_FOLLOW_PAGER)
-    /// 3. Config `pager` setting (only if profile has `follow.enabled = true`)
-    /// 4. Fall back to stdout
-    fn select_for_follow(&self) -> Result<SelectedPager, Error> {
-        // 1. Check HL_FOLLOW_PAGER env var (takes precedence)
-        if let Some(pager) = self.resolve_env_var(HL_FOLLOW_PAGER) {
-            match pager {
-                PagerOverride::Disabled => {
-                    log::debug!("{HL_FOLLOW_PAGER} is empty, pager disabled");
-                    return Ok(SelectedPager::None);
-                }
-                PagerOverride::Value(cmd) => {
-                    return self.try_override(&cmd, PagerRole::Follow, HL_FOLLOW_PAGER);
-                }
-            }
-        }
-
-        // 2. Check HL_PAGER env var
-        if let Some(pager) = self.resolve_env_var(HL_PAGER) {
-            match pager {
-                PagerOverride::Disabled => {
-                    // HL_PAGER="" disables pager, but HL_FOLLOW_PAGER can override
-                    // (already checked above), so return None here
-                    log::debug!("{HL_PAGER} is empty, pager disabled");
-                    return Ok(SelectedPager::None);
-                }
-                PagerOverride::Value(cmd) => {
-                    return self.try_override(&cmd, PagerRole::Follow, HL_PAGER);
-                }
-            }
-        }
-
-        // 3. Check config pager setting (only if profile has follow.enabled = true)
-        if let Some(config) = self.config {
-            for profile_name in config.profiles() {
-                if let Some(profile) = self.profiles.get(profile_name) {
-                    if profile.follow.is_enabled(PagerRole::Follow) {
-                        if let Some(selected) = self.try_profile(profile_name, PagerRole::Follow) {
-                            return Ok(selected);
-                        }
+                PagerCandidate::Env(env_ref) => {
+                    if let Some(result) = self.try_env_candidate(env_ref, PagerRole::View)? {
+                        return Ok(result);
                     }
                 }
             }
         }
 
-        // 4. Fall back to stdout
+        log::debug!("no pager configured, using stdout");
         Ok(SelectedPager::None)
     }
 
-    /// Resolves an environment variable to a `PagerOverride`.
+    /// Selects a pager for follow mode.
     ///
-    /// - Empty string → `PagerOverride::Disabled`
-    /// - Otherwise → `PagerOverride::Value` (parsed with shellwords)
-    fn resolve_env_var(&self, name: &str) -> Option<PagerOverride> {
-        let value = self.env_provider.get(name)?;
-
-        if value.is_empty() {
-            return Some(PagerOverride::Disabled);
+    /// Iterates through pager.candidates in order until a usable pager is found.
+    /// Only uses profiles that have follow.enabled = true.
+    fn select_for_follow(&self) -> Result<SelectedPager, Error> {
+        for candidate in self.config.candidates() {
+            match candidate {
+                PagerCandidate::Profile(name) => {
+                    // Only use profiles with follow.enabled = true
+                    if let Some(profile) = self.config.profile(name) {
+                        if profile.follow.is_enabled(PagerRole::Follow) {
+                            if let Some(selected) = self.try_profile(name, PagerRole::Follow) {
+                                return Ok(selected);
+                            }
+                        }
+                    }
+                }
+                PagerCandidate::Env(env_ref) => {
+                    if let Some(result) = self.try_env_candidate(env_ref, PagerRole::Follow)? {
+                        return Ok(result);
+                    }
+                }
+            }
         }
 
-        // Parse as a command string
-        match shellwords::split(&value) {
-            Ok(parts) if !parts.is_empty() => Some(PagerOverride::Value(parts)),
-            Ok(_) => {
-                log::warn!("{name}: parsed to empty command, treating as disabled");
-                Some(PagerOverride::Disabled)
+        log::debug!("no pager configured for follow mode, using stdout");
+        Ok(SelectedPager::None)
+    }
+
+    /// Tries to resolve an environment variable candidate.
+    ///
+    /// Returns:
+    /// - `Ok(Some(SelectedPager))` if a pager was successfully selected
+    /// - `Ok(None)` if the candidate should be skipped (env var not set, command not available for profile refs)
+    /// - `Err(Error)` if there's a fatal error (command not available for direct commands or @profile refs)
+    fn try_env_candidate(&self, env_ref: &EnvReference, role: PagerRole) -> Result<Option<SelectedPager>, Error> {
+        match env_ref {
+            EnvReference::Simple(var_name) => self.try_simple_env_candidate(var_name, role),
+            EnvReference::Structured(structured) => self.try_structured_env_candidate(structured, role),
+        }
+    }
+
+    /// Tries to resolve a simple environment variable candidate.
+    fn try_simple_env_candidate(&self, var_name: &str, role: PagerRole) -> Result<Option<SelectedPager>, Error> {
+        let value = match self.env_provider.get(var_name) {
+            Some(v) if !v.is_empty() => v,
+            _ => {
+                log::debug!("env var {var_name} not set or empty, skipping candidate");
+                return Ok(None);
             }
+        };
+
+        // Parse the value
+        let parts = self.parse_command(&value, var_name)?;
+
+        // Check if it's a profile reference
+        if let Some(profile_name) = parts.first().and_then(|s| s.strip_prefix('@')) {
+            log::debug!("env var {var_name} references profile: {profile_name}");
+            return self.resolve_profile_reference(profile_name, role, var_name);
+        }
+
+        // It's a direct command - resolve it
+        self.resolve_direct_command(&parts, role, var_name, None)
+    }
+
+    /// Tries to resolve a structured environment variable candidate.
+    fn try_structured_env_candidate(
+        &self,
+        structured: &StructuredEnvReference,
+        role: PagerRole,
+    ) -> Result<Option<SelectedPager>, Error> {
+        // Determine which env var to use based on role
+        let (var_name, is_follow_explicit) = match role {
+            PagerRole::View => (structured.pager.as_deref(), false),
+            PagerRole::Follow => {
+                // For follow mode, check follow field first
+                if let Some(follow_var) = structured.follow.as_deref() {
+                    (Some(follow_var), true)
+                } else {
+                    // Fall back to pager field, but it's not explicit for follow
+                    (structured.pager.as_deref(), false)
+                }
+            }
+        };
+
+        let var_name = match var_name {
+            Some(name) => name,
+            None => {
+                log::debug!("structured env candidate has no var for {role:?} mode, skipping");
+                return Ok(None);
+            }
+        };
+
+        let value = match self.env_provider.get(var_name) {
+            Some(v) if !v.is_empty() => v,
+            _ => {
+                log::debug!("env var {var_name} not set or empty, skipping candidate");
+                // If follow field was specified but not set, and we're in follow mode, disable paging
+                if role == PagerRole::Follow && is_follow_explicit {
+                    log::debug!("follow field specified but not set, disabling paging for follow mode");
+                    return Ok(Some(SelectedPager::None));
+                }
+                return Ok(None);
+            }
+        };
+
+        // Parse the value
+        let parts = self.parse_command(&value, var_name)?;
+
+        // Check if it's a profile reference
+        if let Some(profile_name) = parts.first().and_then(|s| s.strip_prefix('@')) {
+            log::debug!("env var {var_name} references profile: {profile_name}");
+            // Profile reference - ignore delimiter field
+            return self.resolve_profile_reference(profile_name, role, var_name);
+        }
+
+        // It's a direct command
+        // For follow mode: only use if explicitly set via follow field
+        if role == PagerRole::Follow && !is_follow_explicit {
+            log::debug!("direct command in follow mode without explicit follow field, disabling paging");
+            return Ok(Some(SelectedPager::None));
+        }
+
+        // Check delimiter field
+        let delimiter = structured
+            .delimiter
+            .as_deref()
+            .and_then(|var| self.env_provider.get(var))
+            .and_then(|v| if v.is_empty() { None } else { Some(v) })
+            .and_then(|v| match v.to_lowercase().as_str() {
+                "nul" => Some(OutputDelimiter::Nul),
+                "newline" => Some(OutputDelimiter::Newline),
+                _ => {
+                    log::warn!("delimiter: unknown value {v:?}, ignoring");
+                    None
+                }
+            });
+
+        self.resolve_direct_command(&parts, role, var_name, delimiter)
+    }
+
+    /// Parses a command string using shellwords.
+    fn parse_command(&self, value: &str, var_name: &str) -> Result<Vec<String>, Error> {
+        match shellwords::split(value) {
+            Ok(parts) if !parts.is_empty() => Ok(parts),
+            Ok(_) => Err(Error::EmptyCommand {
+                var: var_name.to_owned(),
+            }),
             Err(e) => {
-                log::warn!("{name}: failed to parse, {e}, using raw value");
-                Some(PagerOverride::Value(vec![value]))
+                log::warn!("{var_name}: failed to parse with shellwords: {e}, using raw value");
+                Ok(vec![value.to_owned()])
             }
         }
     }
 
-    /// Checks if a command spec is an explicit profile reference (starts with '@').
-    /// Returns Some(profile_name) if it is, None otherwise.
-    fn is_profile_ref(cmd: &[String]) -> Option<&str> {
-        if cmd.len() == 1 { cmd[0].strip_prefix('@') } else { None }
-    }
-
-    /// Tries to interpret a command spec as either a profile name or a direct command.
+    /// Resolves a profile reference (from @profile syntax).
     ///
-    /// If the first element starts with '@', treats it as an explicit profile name reference.
-    /// Otherwise, treats the entire spec as a direct command.
-    fn try_override(&self, cmd: &[String], role: PagerRole, var: &str) -> Result<SelectedPager, Error> {
-        // If it's a single word starting with '@', treat as explicit profile reference
-        if let Some(name) = Self::is_profile_ref(cmd) {
-            return self.try_profile_explicit(name, role, var);
-        }
-
-        // Otherwise treat as a direct command
-        self.try_command(cmd.to_vec(), var)
-    }
-
-    /// Tries to use a named profile that was explicitly referenced with '@'.
-    fn try_profile_explicit(&self, name: &str, role: PagerRole, var: &str) -> Result<SelectedPager, Error> {
-        let profile = self.profiles.get(name).ok_or_else(|| Error::ProfileNotFound {
-            var: var.to_owned(),
-            profile: name.to_owned(),
-        })?;
+    /// Returns:
+    /// - `Ok(Some(SelectedPager))` if profile exists and command is available
+    /// - `Ok(None)` if profile doesn't exist or command not available (for profile candidates)
+    /// - `Err(Error)` if profile doesn't exist or command not available (for env var references)
+    fn resolve_profile_reference(
+        &self,
+        profile_name: &str,
+        role: PagerRole,
+        var_name: &str,
+    ) -> Result<Option<SelectedPager>, Error> {
+        let profile = self
+            .config
+            .profile(profile_name)
+            .ok_or_else(|| Error::ProfileNotFound {
+                var: var_name.to_owned(),
+                profile: profile_name.to_owned(),
+            })?;
 
         let executable = profile.executable().ok_or_else(|| Error::ProfileMisconfigured {
-            var: var.to_owned(),
-            profile: name.to_owned(),
+            var: var_name.to_owned(),
+            profile: profile_name.to_owned(),
         })?;
 
         if !self.exe_checker.is_available(executable) {
             return Err(Error::ExecutableNotFound {
-                var: var.to_owned(),
-                profile: name.to_owned(),
+                var: var_name.to_owned(),
+                profile: profile_name.to_owned(),
                 executable: executable.to_owned(),
             });
         }
 
-        log::debug!("using profile {name:?}");
+        // Check if profile supports this role (for follow mode)
+        if role == PagerRole::Follow && !profile.follow.is_enabled(role) {
+            log::debug!("profile {profile_name:?} does not support follow mode");
+            return Ok(Some(SelectedPager::None));
+        }
+
+        log::debug!("using profile {profile_name:?}");
         let command = profile.build_command(role).into_iter().map(String::from).collect();
         let env = profile.env.clone();
-        let delimiter = self.resolve_delimiter(profile.delimiter);
+        // Profile delimiter takes precedence - env.delimiter is ignored for profile references
+        let delimiter = profile.delimiter;
 
-        Ok(SelectedPager::Pager {
+        Ok(Some(SelectedPager::Pager {
             command,
             env,
             delimiter,
-        })
+        }))
+    }
+
+    /// Resolves a direct command (not a profile reference).
+    ///
+    /// Returns:
+    /// - `Ok(Some(SelectedPager))` if command is available
+    /// - `Err(Error)` if command is not available
+    fn resolve_direct_command(
+        &self,
+        parts: &[String],
+        _role: PagerRole,
+        var_name: &str,
+        delimiter: Option<OutputDelimiter>,
+    ) -> Result<Option<SelectedPager>, Error> {
+        let executable = parts.first().ok_or_else(|| Error::EmptyCommand {
+            var: var_name.to_owned(),
+        })?;
+
+        if !self.exe_checker.is_available(executable) {
+            return Err(Error::CommandNotFound {
+                var: var_name.to_owned(),
+                command: executable.to_owned(),
+            });
+        }
+
+        log::debug!("{var_name}: using as direct command");
+
+        // Apply special handling for `less`
+        let (command, env) = apply_less_defaults(parts.to_vec());
+
+        Ok(Some(SelectedPager::Pager {
+            command,
+            env,
+            delimiter,
+        }))
     }
 
     /// Tries to use a named profile, returning `Some(SelectedPager)` if successful.
     fn try_profile(&self, name: &str, role: PagerRole) -> Option<SelectedPager> {
-        let profile = self.profiles.get(name)?;
+        let profile = self.config.profile(name)?;
 
         let executable = profile.executable()?;
 
@@ -410,61 +475,22 @@ impl<'a, E: EnvProvider, C: ExeChecker> PagerSelector<'a, E, C> {
             return None;
         }
 
+        // Check if profile supports this role (for follow mode)
+        if role == PagerRole::Follow && !profile.follow.is_enabled(role) {
+            log::debug!("profile {name:?} does not support follow mode");
+            return None;
+        }
+
         log::debug!("using profile {name:?}");
         let command = profile.build_command(role).into_iter().map(String::from).collect();
         let env = profile.env.clone();
-        let delimiter = self.resolve_delimiter(profile.delimiter);
+        let delimiter = profile.delimiter;
 
         Some(SelectedPager::Pager {
             command,
             env,
             delimiter,
         })
-    }
-
-    /// Tries to use a direct command.
-    fn try_command(&self, command: Vec<String>, var: &str) -> Result<SelectedPager, Error> {
-        let executable = match command.first() {
-            Some(exe) => exe,
-            None => {
-                return Err(Error::EmptyCommand { var: var.to_owned() });
-            }
-        };
-
-        if !self.exe_checker.is_available(executable) {
-            return Err(Error::CommandNotFound {
-                var: var.to_owned(),
-                command: executable.to_owned(),
-            });
-        }
-
-        log::debug!("{var}: using as command");
-
-        // Apply special handling for `less`
-        let (command, env) = apply_less_defaults(command);
-        let delimiter = self.resolve_delimiter(None);
-
-        Ok(SelectedPager::Pager {
-            command,
-            env,
-            delimiter,
-        })
-    }
-
-    /// Resolves the pager delimiter from environment variable or profile config.
-    ///
-    /// Precedence:
-    /// 1. `HL_PAGER_DELIMITER` env var
-    /// 2. Profile's `delimiter` field
-    fn resolve_delimiter(&self, profile_delimiter: Option<OutputDelimiter>) -> Option<OutputDelimiter> {
-        if let Some(value) = self.env_provider.get(HL_PAGER_DELIMITER) {
-            match value.to_lowercase().as_str() {
-                "nul" => return Some(OutputDelimiter::Nul),
-                "newline" | "" => return Some(OutputDelimiter::Newline),
-                other => log::warn!("{HL_PAGER_DELIMITER}: unknown value {other:?}, ignoring"),
-            }
-        }
-        profile_delimiter
     }
 }
 

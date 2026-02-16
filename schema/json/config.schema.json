@@ -53,6 +53,75 @@
         }
       }
     },
+    "pager-candidate": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "profile": {
+              "type": "string",
+              "description": "Reference to a named pager profile"
+            }
+          },
+          "required": ["profile"]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "env": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "description": "Simple environment variable reference (applies to both view and follow modes)"
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "pager": {
+                      "type": "string",
+                      "description": "Environment variable for view mode (or both modes if follow not specified)"
+                    },
+                    "follow": {
+                      "type": "string",
+                      "description": "Environment variable for follow mode"
+                    },
+                    "delimiter": {
+                      "type": "string",
+                      "description": "Environment variable for delimiter override (only applies to direct commands, not profile references)"
+                    }
+                  },
+                  "description": "Structured environment variable reference with role-specific variables"
+                }
+              ]
+            }
+          },
+          "required": ["env"]
+        }
+      ]
+    },
+    "pager-config": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "candidates": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/pager-candidate"
+          },
+          "description": "List of pager candidates to try in order. Each candidate can be an environment variable reference or a profile reference."
+        },
+        "profiles": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/pager-profile"
+          },
+          "description": "Named pager profiles defining commands and role-specific arguments"
+        }
+      }
+    },
     "input-info-layout": {
       "type": "string",
       "enum": ["auto", "none", "minimal", "compact", "full"]
@@ -391,27 +460,8 @@
       "description": "Ordered list of theme overlays to apply on top of the base theme and main configured theme"
     },
     "pager": {
-      "oneOf": [
-        {
-          "type": "string",
-          "description": "Single pager profile name"
-        },
-        {
-          "type": "array",
-          "items": {
-            "type": "string"
-          },
-          "description": "List of pager profile names in priority order"
-        }
-      ],
-      "description": "Pager profile(s) to use for output pagination. If a list is provided, profiles are tried in order until one with an available command is found."
-    },
-    "pagers": {
-      "type": "object",
-      "additionalProperties": {
-        "$ref": "#/definitions/pager-profile"
-      },
-      "description": "Pager profiles defining commands and role-specific arguments"
+      "$ref": "#/definitions/pager-config",
+      "description": "Pager configuration containing a list of candidates to try in order and named pager profiles"
     }
   }
 }

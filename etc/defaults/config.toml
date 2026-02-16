@@ -1,12 +1,6 @@
 #:schema ../../schema/json/config.schema.json
 
 #
-# Pager profile(s) to use for output pagination.
-# Can be a single profile name or a list of profile names in priority order.
-# If a list is provided, profiles are tried in order until one with an available command is found.
-# Profile names must match those defined in the [pagers] section.
-pager = ["fzf", "less"]
-#
 # Time format, see https://man7.org/linux/man-pages/man1/date.1.html for details.
 time-format = "%Y-%m-%d %T.%3N"
 #
@@ -180,19 +174,44 @@ message-delimiter = { ascii = "::", unicode = "›" }
 # * "always" • Show each field on its own line, expand multi-line content with indentation
 mode = "auto"
 
-# Pager profiles.
-# Each profile defines a pager command and optional role-specific arguments.
+# Pager configuration.
+# Defines a list of candidates to try in order and named pager profiles.
+#
+# Candidates are tried in order until a usable pager is found.
+# Each candidate can be:
+#   - { env = "VAR_NAME" } - Simple environment variable reference
+#   - { env = { pager = "VAR1", follow = "VAR2", delimiter = "VAR3" } } - Structured env reference with role-specific vars
+#   - { profile = "profile_name" } - Reference to a named profile
+#
 # Roles:
 #   - view: Used when viewing logs (non-follow mode)
 #   - follow: Used when following logs (--follow mode); if not configured, pager is disabled in follow mode
+[pager]
+# Candidate search list (checked in order).
+# The default configuration maintains backward compatibility with HL_PAGER, HL_FOLLOW_PAGER, HL_PAGER_DELIMITER, and PAGER env vars.
+candidates = [
+  # First, check role-specific environment variables
+  { env = { pager = "HL_PAGER", follow = "HL_FOLLOW_PAGER", delimiter = "HL_PAGER_DELIMITER" } },
+  # Then try configured profiles in priority order
+  { profile = "less" },
+  { profile = "fzf" },
+  { profile = "ov" },
+  { profile = "most" },
+  # Finally, fall back to standard PAGER env var
+  { env = "PAGER" },
+]
+
+# Named pager profiles.
+# Each profile defines a pager command and optional role-specific arguments.
 #
 # Profile structure:
 #   command = [...]       # Base command and arguments
+#   env = {...}           # Environment variables for the pager command
+#   delimiter = "..."     # Entry delimiter [newline, nul]
 #   view.args = [...]     # Additional arguments for view mode (appended to command)
+#   follow.enabled = ...  # Whether to enable pager for follow mode [true, false]
 #   follow.args = [...]   # Additional arguments for follow mode (appended to command)
-[pagers]
-# Pager profile for `less`.
-[pagers.less]
+[pager.profiles.less]
 # Base command for both view and follow modes.
 command = ["less", "-R", "--mouse"]
 # Environment variables for the pager command.
@@ -203,7 +222,7 @@ follow.args = ["+F"]
 follow.enabled = false
 
 # Pager profile for `fzf`.
-[pagers.fzf]
+[pager.profiles.fzf]
 # Entry delimiter.
 delimiter = "newline"
 # Base command for both view and follow modes.
@@ -245,14 +264,14 @@ follow.args = [
 follow.enabled = true
 
 # Pager profile for `most`.
-[pagers.most]
+[pager.profiles.most]
 # Base command for both view and follow modes.
 command = ["most"]
 # Enable pager for follow mode.
 follow.enabled = false
 
 # Pager profile for `ov`.
-[pagers.ov]
+[pager.profiles.ov]
 # Base command for both view and follow modes.
 command = [
   "ov",

@@ -14,6 +14,7 @@ const SINGLE_PROFILE: &str = include_str!("../testing/assets/pagers/single-profi
 const PROFILE_WITH_ENV: &str = include_str!("../testing/assets/pagers/profile-with-env.toml");
 const PRIORITY_LIST: &str = include_str!("../testing/assets/pagers/priority-list.toml");
 const FOLLOW_ENABLED: &str = include_str!("../testing/assets/pagers/follow-enabled.toml");
+const FOLLOW_ENABLED_NO_ENV: &str = include_str!("../testing/assets/pagers/follow-enabled-no-env.toml");
 const MINIMAL_PROFILE: &str = include_str!("../testing/assets/pagers/minimal-profile.toml");
 const PROFILE_WITH_VIEW_ARGS: &str = include_str!("../testing/assets/pagers/profile-with-view-args.toml");
 const EMPTY_PRIORITY: &str = include_str!("../testing/assets/pagers/empty-priority.toml");
@@ -27,33 +28,39 @@ const UNAVAILABLE_FIRST: &str = include_str!("../testing/assets/pagers/unavailab
 fn pager_config_single_profile() {
     let config: TestConfig = toml::from_str(SINGLE_PROFILE).expect("failed to parse");
 
-    assert_eq!(config.pager, Some(PagerConfig::Single("less".to_string())));
-    assert_eq!(
-        config.pager.as_ref().unwrap().profiles().collect::<Vec<_>>(),
-        vec!["less"]
-    );
+    // Config has env candidates + profile candidate
+    assert_eq!(config.pager.candidates().len(), 3);
+    // Second candidate should be the less profile
+    assert!(matches!(
+        &config.pager.candidates()[1],
+        super::config::PagerCandidate::Profile(name) if name == "less"
+    ));
 }
 
 #[test]
 fn pager_config_priority_list() {
     let config: TestConfig = toml::from_str(PRIORITY_LIST).expect("failed to parse");
 
-    assert_eq!(
-        config.pager,
-        Some(PagerConfig::Priority(vec!["fzf".to_string(), "less".to_string()]))
-    );
-    assert_eq!(
-        config.pager.as_ref().unwrap().profiles().collect::<Vec<_>>(),
-        vec!["fzf", "less"]
-    );
+    // Config has env candidates + 2 profile candidates + PAGER env
+    assert_eq!(config.pager.candidates().len(), 4);
+    // Second candidate should be fzf
+    assert!(matches!(
+        &config.pager.candidates()[1],
+        super::config::PagerCandidate::Profile(name) if name == "fzf"
+    ));
+    // Third candidate should be less
+    assert!(matches!(
+        &config.pager.candidates()[2],
+        super::config::PagerCandidate::Profile(name) if name == "less"
+    ));
 }
 
 #[test]
 fn pager_config_empty_priority_list() {
     let config: TestConfig = toml::from_str(EMPTY_PRIORITY).expect("failed to parse");
 
-    assert_eq!(config.pager, Some(PagerConfig::Priority(vec![])));
-    assert!(config.pager.as_ref().unwrap().profiles().next().is_none());
+    // Even "empty" config has env candidates for backward compatibility
+    assert_eq!(config.pager.candidates().len(), 2);
 }
 
 // ---
@@ -64,7 +71,7 @@ fn pager_config_empty_priority_list() {
 fn pager_profile_minimal() {
     let config: TestConfig = toml::from_str(MINIMAL_PROFILE).expect("failed to parse");
 
-    let profile = &config.pagers["less"];
+    let profile = &config.pager.profiles["less"];
     assert_eq!(profile.command, vec!["less", "-R"]);
     assert!(profile.env.is_empty());
     assert!(profile.view.args.is_empty());
@@ -76,7 +83,7 @@ fn pager_profile_minimal() {
 fn pager_profile_with_env() {
     let config: TestConfig = toml::from_str(PROFILE_WITH_ENV).expect("failed to parse");
 
-    let profile = &config.pagers["less"];
+    let profile = &config.pager.profiles["less"];
     assert_eq!(&profile.env["LESSCHARSET"], "UTF-8");
 }
 
@@ -84,7 +91,7 @@ fn pager_profile_with_env() {
 fn pager_profile_with_view_args() {
     let config: TestConfig = toml::from_str(PROFILE_WITH_VIEW_ARGS).expect("failed to parse");
 
-    let profile = &config.pagers["fzf"];
+    let profile = &config.pager.profiles["fzf"];
     assert_eq!(profile.view.args, vec!["--layout=reverse-list"]);
 }
 
@@ -92,7 +99,7 @@ fn pager_profile_with_view_args() {
 fn pager_profile_with_follow_enabled() {
     let config: TestConfig = toml::from_str(FOLLOW_ENABLED).expect("failed to parse");
 
-    let profile = &config.pagers["fzf"];
+    let profile = &config.pager.profiles["fzf"];
     assert_eq!(profile.follow.enabled, Some(true));
     assert_eq!(profile.follow.args, vec!["--tac", "--track"]);
 }
@@ -101,7 +108,7 @@ fn pager_profile_with_follow_enabled() {
 fn pager_profile_follow_disabled_by_default() {
     let config: TestConfig = toml::from_str(MINIMAL_PROFILE).expect("failed to parse");
 
-    let profile = &config.pagers["less"];
+    let profile = &config.pager.profiles["less"];
     // follow.enabled is None by default, which means disabled
     assert!(!profile.follow.is_enabled(PagerRole::Follow));
 }
@@ -110,7 +117,7 @@ fn pager_profile_follow_disabled_by_default() {
 fn pager_profile_view_always_enabled() {
     let config: TestConfig = toml::from_str(MINIMAL_PROFILE).expect("failed to parse");
 
-    let profile = &config.pagers["less"];
+    let profile = &config.pager.profiles["less"];
     // view is always enabled
     assert!(profile.view.is_enabled(PagerRole::View));
 }
@@ -132,7 +139,7 @@ fn pager_profile_executable() {
 fn pager_profile_build_command_view() {
     let config: TestConfig = toml::from_str(FOLLOW_ENABLED).expect("failed to parse");
 
-    let profile = &config.pagers["fzf"];
+    let profile = &config.pager.profiles["fzf"];
     let cmd = profile.build_command(PagerRole::View);
     assert_eq!(cmd, vec!["fzf", "--ansi", "--layout=reverse-list"]);
 }
@@ -141,7 +148,7 @@ fn pager_profile_build_command_view() {
 fn pager_profile_build_command_follow() {
     let config: TestConfig = toml::from_str(FOLLOW_ENABLED).expect("failed to parse");
 
-    let profile = &config.pagers["fzf"];
+    let profile = &config.pager.profiles["fzf"];
     let cmd = profile.build_command(PagerRole::Follow);
     assert_eq!(cmd, vec!["fzf", "--ansi", "--tac", "--track"]);
 }
@@ -153,9 +160,7 @@ fn pager_profile_build_command_follow() {
 #[derive(Debug, serde::Deserialize)]
 struct TestConfig {
     #[serde(default)]
-    pager: Option<PagerConfig>,
-    #[serde(default)]
-    pagers: HashMap<String, PagerProfile>,
+    pager: PagerConfig,
 }
 
 fn profile_with_command(command: Vec<&str>) -> PagerProfile {
@@ -214,12 +219,11 @@ impl ExeChecker for MockExeChecker {
 }
 
 fn selector_with_mocks<'a>(
-    config: Option<&'a PagerConfig>,
-    profiles: &'a HashMap<String, PagerProfile>,
+    config: &'a PagerConfig,
     env: MockEnv,
     available: &[&str],
 ) -> PagerSelector<'a, MockEnv, MockExeChecker> {
-    PagerSelector::with_providers(config, profiles, env, MockExeChecker::with_available(available))
+    PagerSelector::with_providers(config, env, MockExeChecker::with_available(available))
 }
 
 // ---
@@ -229,8 +233,7 @@ fn selector_with_mocks<'a>(
 #[test]
 fn selector_view_with_single_available_profile() {
     let config: TestConfig = toml::from_str(SINGLE_PROFILE).expect("failed to parse");
-    let pager_config = config.pager.as_ref();
-    let selector = selector_with_mocks(pager_config, &config.pagers, MockEnv::new(), &["less"]);
+    let selector = selector_with_mocks(&config.pager, MockEnv::new(), &["less"]);
 
     let selected = selector.select(PagerRole::View).expect("select failed");
 
@@ -246,9 +249,8 @@ fn selector_view_with_single_available_profile() {
 #[test]
 fn selector_view_with_priority_fallback() {
     let config: TestConfig = toml::from_str(UNAVAILABLE_FIRST).expect("failed to parse");
-    let pager_config = config.pager.as_ref();
     // Only `less` is available, not the nonexistent pager
-    let selector = selector_with_mocks(pager_config, &config.pagers, MockEnv::new(), &["less"]);
+    let selector = selector_with_mocks(&config.pager, MockEnv::new(), &["less"]);
 
     let selected = selector.select(PagerRole::View).expect("select failed");
 
@@ -261,8 +263,7 @@ fn selector_view_with_priority_fallback() {
 #[test]
 fn selector_view_with_empty_priority_returns_none() {
     let config: TestConfig = toml::from_str(EMPTY_PRIORITY).expect("failed to parse");
-    let pager_config = config.pager.as_ref();
-    let selector = selector_with_mocks(pager_config, &config.pagers, MockEnv::new(), &["less"]);
+    let selector = selector_with_mocks(&config.pager, MockEnv::new(), &["less"]);
 
     let selected = selector.select(PagerRole::View).expect("select failed");
     assert!(matches!(selected, SelectedPager::None));
@@ -271,8 +272,7 @@ fn selector_view_with_empty_priority_returns_none() {
 #[test]
 fn selector_follow_disabled_by_default() {
     let config: TestConfig = toml::from_str(MINIMAL_PROFILE).expect("failed to parse");
-    let pager_config = config.pager.as_ref();
-    let selector = selector_with_mocks(pager_config, &config.pagers, MockEnv::new(), &["less"]);
+    let selector = selector_with_mocks(&config.pager, MockEnv::new(), &["less"]);
 
     let selected = selector.select(PagerRole::Follow).expect("select failed");
 
@@ -282,12 +282,12 @@ fn selector_follow_disabled_by_default() {
 
 #[test]
 fn selector_follow_when_enabled() {
-    let config: TestConfig = toml::from_str(FOLLOW_ENABLED).expect("failed to parse");
-    let pager_config = config.pager.as_ref();
-    let selector = selector_with_mocks(pager_config, &config.pagers, MockEnv::new(), &["fzf"]);
+    let config: TestConfig = toml::from_str(FOLLOW_ENABLED_NO_ENV).expect("failed to parse");
+    let selector = selector_with_mocks(&config.pager, MockEnv::new(), &["fzf"]);
 
     let selected = selector.select(PagerRole::Follow).expect("select failed");
 
+    // Should use fzf profile with follow mode enabled
     assert!(matches!(selected, SelectedPager::Pager { .. }));
     if let SelectedPager::Pager { command, .. } = selected {
         assert_eq!(command[0], "fzf");
@@ -300,9 +300,8 @@ fn selector_follow_when_enabled() {
 #[test]
 fn selector_view_env_override_with_profile_using_at_prefix() {
     let config: TestConfig = toml::from_str(PRIORITY_LIST).expect("failed to parse");
-    let pager_config = config.pager.as_ref();
     let env = MockEnv::new().with_var("HL_PAGER", "@less");
-    let selector = selector_with_mocks(pager_config, &config.pagers, env, &["fzf", "less"]);
+    let selector = selector_with_mocks(&config.pager, env, &["fzf", "less"]);
 
     let selected = selector.select(PagerRole::View).expect("select failed");
 
@@ -316,9 +315,8 @@ fn selector_view_env_override_with_profile_using_at_prefix() {
 #[test]
 fn selector_view_env_override_without_at_prefix_uses_command() {
     let config: TestConfig = toml::from_str(PRIORITY_LIST).expect("failed to parse");
-    let pager_config = config.pager.as_ref();
     let env = MockEnv::new().with_var("HL_PAGER", "less");
-    let selector = selector_with_mocks(pager_config, &config.pagers, env, &["fzf", "less"]);
+    let selector = selector_with_mocks(&config.pager, env, &["fzf", "less"]);
 
     let selected = selector.select(PagerRole::View).expect("select failed");
 
@@ -334,9 +332,8 @@ fn selector_view_env_override_without_at_prefix_uses_command() {
 #[test]
 fn selector_view_env_override_with_command() {
     let config: TestConfig = toml::from_str(SINGLE_PROFILE).expect("failed to parse");
-    let pager_config = config.pager.as_ref();
     let env = MockEnv::new().with_var("HL_PAGER", "cat -n");
-    let selector = selector_with_mocks(pager_config, &config.pagers, env, &["cat", "less"]);
+    let selector = selector_with_mocks(&config.pager, env, &["cat", "less"]);
 
     let selected = selector.select(PagerRole::View).expect("select failed");
 
@@ -349,22 +346,22 @@ fn selector_view_env_override_with_command() {
 #[test]
 fn selector_view_env_empty_disables_pager() {
     let config: TestConfig = toml::from_str(SINGLE_PROFILE).expect("failed to parse");
-    let pager_config = config.pager.as_ref();
     let env = MockEnv::new().with_var("HL_PAGER", "");
-    let selector = selector_with_mocks(pager_config, &config.pagers, env, &["less"]);
+    let selector = selector_with_mocks(&config.pager, env, &["less"]);
 
     let selected = selector.select(PagerRole::View).expect("select failed");
 
-    assert!(matches!(selected, SelectedPager::None));
+    // Empty HL_PAGER should skip that candidate and continue to profile candidate
+    // So it should select the less profile
+    assert!(matches!(selected, SelectedPager::Pager { .. }));
 }
 
 #[test]
 fn selector_follow_env_override() {
     let config: TestConfig = toml::from_str(MINIMAL_PROFILE).expect("failed to parse");
-    let pager_config = config.pager.as_ref();
     // HL_FOLLOW_PAGER can enable pager for follow mode even if profile doesn't have follow.enabled
     let env = MockEnv::new().with_var("HL_FOLLOW_PAGER", "less -R");
-    let selector = selector_with_mocks(pager_config, &config.pagers, env, &["less"]);
+    let selector = selector_with_mocks(&config.pager, env, &["less"]);
 
     let selected = selector.select(PagerRole::Follow).expect("select failed");
 
@@ -377,12 +374,11 @@ fn selector_follow_env_override() {
 #[test]
 fn selector_follow_hl_follow_pager_overrides_hl_pager_empty() {
     let config: TestConfig = toml::from_str(MINIMAL_PROFILE).expect("failed to parse");
-    let pager_config = config.pager.as_ref();
     // HL_PAGER="" but HL_FOLLOW_PAGER is set - should use HL_FOLLOW_PAGER
     let env = MockEnv::new()
         .with_var("HL_PAGER", "")
         .with_var("HL_FOLLOW_PAGER", "less -R");
-    let selector = selector_with_mocks(pager_config, &config.pagers, env, &["less"]);
+    let selector = selector_with_mocks(&config.pager, env, &["less"]);
 
     let selected = selector.select(PagerRole::Follow).expect("select failed");
 
@@ -392,9 +388,8 @@ fn selector_follow_hl_follow_pager_overrides_hl_pager_empty() {
 #[test]
 fn selector_view_at_prefix_with_nonexistent_profile_returns_error() {
     let config: TestConfig = toml::from_str(MINIMAL_PROFILE).expect("failed to parse");
-    let pager_config = config.pager.as_ref();
     let env = MockEnv::new().with_var("HL_PAGER", "@nonexistent");
-    let selector = selector_with_mocks(pager_config, &config.pagers, env, &["less"]);
+    let selector = selector_with_mocks(&config.pager, env, &["less"]);
 
     let result = selector.select(PagerRole::View);
 
@@ -405,9 +400,8 @@ fn selector_view_at_prefix_with_nonexistent_profile_returns_error() {
 #[test]
 fn selector_follow_at_prefix_uses_profile() {
     let config: TestConfig = toml::from_str(FOLLOW_ENABLED).expect("failed to parse");
-    let pager_config = config.pager.as_ref();
     let env = MockEnv::new().with_var("HL_FOLLOW_PAGER", "@fzf");
-    let selector = selector_with_mocks(pager_config, &config.pagers, env, &["fzf"]);
+    let selector = selector_with_mocks(&config.pager, env, &["fzf"]);
 
     let selected = selector.select(PagerRole::Follow).expect("select failed");
 
@@ -423,9 +417,8 @@ fn selector_follow_at_prefix_uses_profile() {
 #[test]
 fn selector_view_env_command_not_found_returns_error() {
     let config: TestConfig = toml::from_str(MINIMAL_PROFILE).expect("failed to parse");
-    let pager_config = config.pager.as_ref();
     let env = MockEnv::new().with_var("HL_PAGER", "nonexistent-command");
-    let selector = selector_with_mocks(pager_config, &config.pagers, env, &["less"]);
+    let selector = selector_with_mocks(&config.pager, env, &["less"]);
 
     let result = selector.select(PagerRole::View);
 
@@ -436,9 +429,9 @@ fn selector_view_env_command_not_found_returns_error() {
 #[test]
 fn selector_view_pager_env_command_not_found_returns_error() {
     let config: TestConfig = toml::from_str(EMPTY_PRIORITY).expect("failed to parse");
-    let pager_config = config.pager.as_ref();
-    let env = MockEnv::new().with_var("PAGER", "nonexistent-pager");
-    let selector = selector_with_mocks(pager_config, &config.pagers, env, &["less"]);
+    // No config, but PAGER with unavailable command
+    let env = MockEnv::new().with_var("PAGER", "nonexistent-cmd");
+    let selector = selector_with_mocks(&config.pager, env, &[]);
 
     let result = selector.select(PagerRole::View);
 
@@ -449,9 +442,8 @@ fn selector_view_pager_env_command_not_found_returns_error() {
 #[test]
 fn selector_follow_env_command_not_found_returns_error() {
     let config: TestConfig = toml::from_str(MINIMAL_PROFILE).expect("failed to parse");
-    let pager_config = config.pager.as_ref();
     let env = MockEnv::new().with_var("HL_FOLLOW_PAGER", "nonexistent-cmd");
-    let selector = selector_with_mocks(pager_config, &config.pagers, env, &["less"]);
+    let selector = selector_with_mocks(&config.pager, env, &["less"]);
 
     let result = selector.select(PagerRole::Follow);
 
@@ -462,10 +454,9 @@ fn selector_follow_env_command_not_found_returns_error() {
 #[test]
 fn selector_view_at_prefix_command_not_found_returns_error() {
     let config: TestConfig = toml::from_str(MINIMAL_PROFILE).expect("failed to parse");
-    let pager_config = config.pager.as_ref();
     let env = MockEnv::new().with_var("HL_PAGER", "@less");
     // "less" executable is not available
-    let selector = selector_with_mocks(pager_config, &config.pagers, env, &[]);
+    let selector = selector_with_mocks(&config.pager, env, &[]);
 
     let result = selector.select(PagerRole::View);
 
@@ -476,10 +467,9 @@ fn selector_view_at_prefix_command_not_found_returns_error() {
 #[test]
 fn selector_view_pager_env_fallback() {
     let config: TestConfig = toml::from_str(EMPTY_PRIORITY).expect("failed to parse");
-    let pager_config = config.pager.as_ref();
     // No HL_PAGER, empty config, but PAGER is set
     let env = MockEnv::new().with_var("PAGER", "more");
-    let selector = selector_with_mocks(pager_config, &config.pagers, env, &["more"]);
+    let selector = selector_with_mocks(&config.pager, env, &["more"]);
 
     let selected = selector.select(PagerRole::View).expect("select failed");
 
@@ -490,20 +480,27 @@ fn selector_view_pager_env_fallback() {
 }
 
 #[test]
-fn selector_profile_with_delimiter_nul() {
-    let mut profiles = HashMap::new();
-    profiles.insert(
-        "fzf".to_string(),
-        PagerProfile {
-            command: vec!["fzf".to_string(), "--ansi".to_string()],
-            env: HashMap::new(),
-            delimiter: Some(OutputDelimiter::Nul),
-            view: PagerRoleConfig::default(),
-            follow: PagerRoleConfig::default(),
+fn selector_profile_delimiter() {
+    use super::config::PagerCandidate;
+
+    let config = PagerConfig {
+        candidates: vec![PagerCandidate::Profile("fzf".to_string())],
+        profiles: {
+            let mut profiles = HashMap::new();
+            profiles.insert(
+                "fzf".to_string(),
+                PagerProfile {
+                    command: vec!["fzf".to_string(), "--ansi".to_string()],
+                    env: HashMap::new(),
+                    delimiter: Some(OutputDelimiter::Nul),
+                    view: PagerRoleConfig::default(),
+                    follow: PagerRoleConfig::default(),
+                },
+            );
+            profiles
         },
-    );
-    let config = PagerConfig::Single("fzf".to_string());
-    let selector = selector_with_mocks(Some(&config), &profiles, MockEnv::new(), &["fzf"]);
+    };
+    let selector = selector_with_mocks(&config, MockEnv::new(), &["fzf"]);
 
     let selected = selector.select(PagerRole::View).expect("select failed");
 
@@ -515,21 +512,21 @@ fn selector_profile_with_delimiter_nul() {
 }
 
 #[test]
-fn selector_env_delimiter_overrides_profile() {
-    let mut profiles = HashMap::new();
-    profiles.insert(
-        "fzf".to_string(),
-        PagerProfile {
-            command: vec!["fzf".to_string()],
-            env: HashMap::new(),
-            delimiter: Some(OutputDelimiter::Nul),
-            view: PagerRoleConfig::default(),
-            follow: PagerRoleConfig::default(),
-        },
-    );
-    let config = PagerConfig::Single("fzf".to_string());
-    let env = MockEnv::new().with_var("HL_PAGER_DELIMITER", "newline");
-    let selector = selector_with_mocks(Some(&config), &profiles, env, &["fzf"]);
+fn selector_env_delimiter_via_structured_candidate() {
+    use super::config::{EnvReference, PagerCandidate, StructuredEnvReference};
+
+    let config = PagerConfig {
+        candidates: vec![PagerCandidate::Env(EnvReference::Structured(StructuredEnvReference {
+            pager: Some("HL_PAGER".to_string()),
+            follow: None,
+            delimiter: Some("HL_PAGER_DELIMITER".to_string()),
+        }))],
+        ..Default::default()
+    };
+    let env = MockEnv::new()
+        .with_var("HL_PAGER", "fzf")
+        .with_var("HL_PAGER_DELIMITER", "newline");
+    let selector = selector_with_mocks(&config, env, &["fzf"]);
 
     let selected = selector.select(PagerRole::View).expect("select failed");
 
@@ -541,25 +538,39 @@ fn selector_env_delimiter_overrides_profile() {
 }
 
 #[test]
-fn selector_env_delimiter_nul_overrides_default() {
-    let mut profiles = HashMap::new();
-    profiles.insert(
-        "less".to_string(),
-        PagerProfile {
-            command: vec!["less".to_string()],
-            env: HashMap::new(),
-            delimiter: None,
-            view: PagerRoleConfig::default(),
-            follow: PagerRoleConfig::default(),
+fn selector_profile_reference_ignores_delimiter_env() {
+    use super::config::{EnvReference, PagerCandidate, StructuredEnvReference};
+
+    let config = PagerConfig {
+        candidates: vec![PagerCandidate::Env(EnvReference::Structured(StructuredEnvReference {
+            pager: Some("HL_PAGER".to_string()),
+            follow: None,
+            delimiter: Some("HL_PAGER_DELIMITER".to_string()),
+        }))],
+        profiles: {
+            let mut profiles = HashMap::new();
+            profiles.insert(
+                "fzf".to_string(),
+                PagerProfile {
+                    command: vec!["fzf".to_string()],
+                    env: HashMap::new(),
+                    delimiter: Some(OutputDelimiter::Nul),
+                    view: PagerRoleConfig::default(),
+                    follow: PagerRoleConfig::default(),
+                },
+            );
+            profiles
         },
-    );
-    let config = PagerConfig::Single("less".to_string());
-    let env = MockEnv::new().with_var("HL_PAGER_DELIMITER", "nul");
-    let selector = selector_with_mocks(Some(&config), &profiles, env, &["less"]);
+    };
+    let env = MockEnv::new()
+        .with_var("HL_PAGER", "@fzf")
+        .with_var("HL_PAGER_DELIMITER", "newline");
+    let selector = selector_with_mocks(&config, env, &["fzf"]);
 
     let selected = selector.select(PagerRole::View).expect("select failed");
 
     if let SelectedPager::Pager { delimiter, .. } = selected {
+        // Should use profile's delimiter (nul), not env delimiter (newline)
         assert_eq!(delimiter, Some(OutputDelimiter::Nul));
     } else {
         panic!("expected SelectedPager::Pager");

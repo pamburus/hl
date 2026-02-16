@@ -19,7 +19,7 @@ use strum::{Display, IntoEnumIterator};
 
 // local imports
 use crate::level::{InfallibleLevel, Level};
-use crate::pager::{PagerConfig, PagerProfile};
+use crate::pager::PagerConfig;
 use crate::{error::Error, xerr::Suggestions};
 
 // test imports
