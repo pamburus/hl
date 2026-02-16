@@ -128,7 +128,7 @@ fn run() -> Result<()> {
                 env,
                 delimiter,
             } => Pager::custom(command)
-                .envs(env)
+                .with_env(env)
                 .start()?
                 .inspect_err(|err| {
                     log::debug!("failed to start pager: {}", err);
