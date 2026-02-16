@@ -17,6 +17,7 @@ use serde_logfmt::logfmt;
 
 // local imports
 use crate::level;
+use crate::pager;
 use crate::themecfg;
 use crate::xerr::{Highlight, HighlightQuoted, Suggestions};
 
@@ -31,6 +32,8 @@ pub enum Error {
     NonZeroSizeParseError(#[from] NonZeroSizeParseError),
     #[error("failed to load configuration: {0}")]
     Config(Box<ConfigError>),
+    #[error(transparent)]
+    PagerSelection(#[from] pager::Error),
     #[error(transparent)]
     Infallible(#[from] std::convert::Infallible),
     #[error(transparent)]

@@ -12,5 +12,6 @@ mod tests;
 
 pub use config::{PagerConfig, PagerProfile, PagerRole, PagerRoleConfig};
 pub use selection::{
-    EnvProvider, ExeChecker, PagerOverride, PagerSelector, SelectedPager, SystemEnv, SystemExeChecker, is_available,
+    EnvProvider, Error, ExeChecker, PagerOverride, PagerSelector, SelectedPager, SystemEnv, SystemExeChecker,
+    is_available,
 };
