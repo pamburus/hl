@@ -198,7 +198,9 @@ pub struct PagerProcess(Child);
 impl Drop for PagerProcess {
     fn drop(&mut self) {
         if let Ok(status) = self.0.wait() {
+            log::debug!("pager process exited with status: {:?}", status);
             if let Some(code) = recover(status) {
+                log::debug!("exiting with code: {}", code);
                 std::process::exit(code);
             }
         }
@@ -218,11 +220,20 @@ fn recover(status: ExitStatus) -> Option<i32> {
         }
         // Exit with 128 + signal number (standard Unix convention)
         // SIGPIPE is 13, so 128 + 13 = 141 (matches git behavior)
+        log::debug!("pager killed by signal {}, exiting with {}", signal, 128 + signal);
         return Some(128 + signal);
     } else if let Some(code) = status.code() {
-        if code != 0 {
-            // When pager exits with non-zero, exit with 141 (SIGPIPE convention)
+        if code == 0 {
+            // Exit code 0: success
+            log::debug!("pager exited successfully with code 0");
+        } else if code == 130 {
+            // Exit code 130: user interrupted with Ctrl+C (SIGINT)
+            // This is a normal exit, treat as success
+            log::debug!("pager interrupted by user (Ctrl+C), treating as success");
+        } else {
+            // Any other non-zero exit code: actual error
             // This matches git's behavior when the pager fails
+            log::debug!("pager exited with error code {}, exiting with 141", code);
             return Some(141);
         }
     }
@@ -232,9 +243,17 @@ fn recover(status: ExitStatus) -> Option<i32> {
 #[cfg(not(unix))]
 fn recover(status: ExitStatus) -> Option<i32> {
     if let Some(code) = status.code() {
-        if code != 0 {
-            // When pager exits with non-zero, exit with 141 (SIGPIPE convention)
+        if code == 0 {
+            // Exit code 0: success
+            log::debug!("pager exited successfully with code 0");
+        } else if code == 130 {
+            // Exit code 130: user interrupted with Ctrl+C (SIGINT)
+            // This is a normal exit, treat as success
+            log::debug!("pager interrupted by user (Ctrl+C), treating as success");
+        } else {
+            // Any other non-zero exit code: actual error
             // This matches git's behavior when the pager fails
+            log::debug!("pager exited with error code {}, exiting with 141", code);
             return Some(141);
         }
     }
