@@ -115,7 +115,7 @@ fn run() -> Result<()> {
         cli::PagingOption::Always => true,
         cli::PagingOption::Never => false,
     };
-    let paging = if opt.paging_never || opt.follow { false } else { paging };
+    let paging = if opt.paging_never { false } else { paging };
     let role = if opt.follow { PagerRole::Follow } else { PagerRole::View };
     let selector = PagerSelector::new(settings.pager.as_ref(), &settings.pagers);
     let start_pager = |role: PagerRole| {
