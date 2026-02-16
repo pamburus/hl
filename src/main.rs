@@ -294,6 +294,40 @@ fn run() -> Result<()> {
     let utf8_is_supported = matches!(utf8_supported(), Utf8Support::UTF8);
     let ascii = ascii_opt.resolve(utf8_is_supported);
 
+    // Configure the input.
+    let mut inputs = opt
+        .files
+        .iter()
+        .map(|x| {
+            if x.to_str() == Some("-") {
+                Ok::<_, std::io::Error>(InputReference::Stdin)
+            } else {
+                Ok(InputReference::File(x.clone().try_into()?))
+            }
+        })
+        .collect::<std::result::Result<Vec<_>, _>>()?;
+    if inputs.is_empty() {
+        if stdin().is_terminal() {
+            let mut cmd = cli::Opt::command();
+            return cmd.print_help().map_err(Error::Io);
+        }
+        inputs.push(InputReference::Stdin);
+    }
+
+    let n = inputs.len();
+    log::debug!("hold {n} inputs");
+    let inputs = inputs
+        .into_iter()
+        .map(|input| input.hold().map_err(Error::Io))
+        .collect::<Result<Vec<_>>>()?;
+
+    let (mut output, using_pager): (OutputStream, bool) = match opt.output {
+        Some(output) => (Box::new(std::fs::File::create(PathBuf::from(&output))?), false),
+        None => pager()
+            .map(|p| (p, true))
+            .unwrap_or_else(|| (Box::new(stdout()), false)),
+    };
+
     // Create app.
     let app = hl::App::new(hl::Options {
         theme: Arc::new(theme),
@@ -335,8 +369,17 @@ fn run() -> Result<()> {
         flatten: opt.flatten != cli::FlattenOption::Never,
         ascii,
         expand: opt.expansion.into(),
+        output_delimiter: match if using_pager {
+            opt.pager_delimiter
+        } else {
+            opt.output_delimiter
+        } {
+            cli::OutputDelimiter::Newline => "\n".into(),
+            cli::OutputDelimiter::Nul => "\0".into(),
+        },
     });
 
+<<<<<<< HEAD
     // Configure the input.
     let mut inputs = opt
         .files
@@ -384,6 +427,7 @@ fn run() -> Result<()> {
     };
 
     let mut output: OutputStream = Box::new(ExitOnWriteError(output));
+
 
     log::debug!("run the app");
 
