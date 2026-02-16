@@ -12,40 +12,43 @@ use pager::{Pager, StartedPager};
 use thiserror::Error;
 
 use super::config::{EnvReference, PagerCandidate, PagerConfig, PagerRole, StructuredEnvReference};
-use crate::output::OutputDelimiter;
+use crate::{
+    output::OutputDelimiter,
+    xerr::{Highlight, HighlightQuoted},
+};
 
 // ---
 
 /// Error that can occur during pager selection or execution.
 #[derive(Error, Debug)]
 pub enum Error {
-    #[error("{var}: profile '{profile}' does not exist in configuration")]
+    #[error("{}: profile {} does not exist in configuration", .var.hl(), .profile.hlq())]
     ProfileNotFound { var: String, profile: String },
 
-    #[error("{var}: profile '{profile}' has no command configured")]
+    #[error("{}: profile {} has no command configured", .var.hl(), .profile.hlq())]
     ProfileMisconfigured { var: String, profile: String },
 
-    #[error("{var}: profile '{profile}' executable '{executable}' not found in PATH")]
+    #[error("{}: profile {} executable {} not found in PATH", .var.hl(), .profile.hlq(), .executable.hlq())]
     ExecutableNotFound {
         var: String,
         profile: String,
         executable: String,
     },
 
-    #[error("{var}: empty command")]
+    #[error("{var}: empty command", var=.var.hl())]
     EmptyCommand { var: String },
 
-    #[error("{var}: command '{command}' not found in PATH")]
+    #[error("{}: command {} not found in PATH", .var.hl(), .command.hlq())]
     CommandNotFound { var: String, command: String },
 
-    #[error("failed to start pager '{}': {source}", quote_command(.command))]
+    #[error("failed to start pager {}: {source}", quote_command(.command).hlq())]
     StartFailed {
         command: Vec<String>,
         #[source]
         source: std::io::Error,
     },
 
-    #[error("pager '{}' exited with code {exit_code}", quote_command(.command))]
+    #[error("pager {} exited with code {exit_code}", quote_command(.command).hlq())]
     PagerFailed { command: Vec<String>, exit_code: i32 },
 
     #[error("failed to wait for pager process: {source}")]
