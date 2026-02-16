@@ -20,12 +20,32 @@ updates:
   - package-ecosystem: "cargo"
     directory: "/"
     schedule:
+      interval: daily
+      time: "18:00"
+      timezone: "Etc/UTC"
+    open-pull-requests-limit: 0
+    labels:
+      - "dependencies"
+      - "rust"
+      - "security"
+    commit-message:
+      prefix: "build"
+      include: "scope"
+  - package-ecosystem: "cargo"
+    directory: "/"
+    schedule:
       interval: weekly
       day: friday
       time: "18:00"
       timezone: "Etc/UTC"
     allow:
       - dependency-type: direct
+    labels:
+      - "dependencies"
+      - "rust"
+    commit-message:
+      prefix: "build"
+      include: "scope"
     ignore:
       - dependency-name: "*"
         update-types: ["version-update:semver-patch"]
