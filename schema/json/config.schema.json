@@ -38,6 +38,11 @@
           },
           "description": "Environment variables to set when invoking the pager"
         },
+        "delimiter": {
+          "type": "string",
+          "enum": ["newline", "nul"],
+          "description": "Output entry delimiter when this pager is used"
+        },
         "view": {
           "$ref": "#/definitions/pager-role",
           "description": "Configuration for view mode (non-follow)"

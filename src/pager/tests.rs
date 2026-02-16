@@ -4,6 +4,7 @@ use std::collections::HashMap;
 
 use super::config::{PagerConfig, PagerProfile, PagerRole, PagerRoleConfig};
 use super::selection::{EnvProvider, ExeChecker, PagerSelector, SelectedPager};
+use crate::output::OutputDelimiter;
 
 // ---
 // Test data files embedded at compile time
@@ -161,6 +162,7 @@ fn profile_with_command(command: Vec<&str>) -> PagerProfile {
     PagerProfile {
         command: command.into_iter().map(String::from).collect(),
         env: HashMap::new(),
+        delimiter: None,
         view: PagerRoleConfig::default(),
         follow: PagerRoleConfig::default(),
     }
@@ -233,7 +235,7 @@ fn selector_view_with_single_available_profile() {
     let selected = selector.select(PagerRole::View);
 
     assert!(matches!(selected, SelectedPager::Pager { .. }));
-    if let SelectedPager::Pager { command, env } = selected {
+    if let SelectedPager::Pager { command, env, .. } = selected {
         assert_eq!(command[0], "less");
         assert!(command.contains(&"-R".to_string()));
         assert!(command.contains(&"--mouse".to_string()));
@@ -382,5 +384,82 @@ fn selector_view_pager_env_fallback() {
     assert!(matches!(selected, SelectedPager::Pager { .. }));
     if let SelectedPager::Pager { command, .. } = selected {
         assert_eq!(command[0], "more");
+    }
+}
+
+#[test]
+fn selector_profile_with_delimiter_nul() {
+    let mut profiles = HashMap::new();
+    profiles.insert(
+        "fzf".to_string(),
+        PagerProfile {
+            command: vec!["fzf".to_string(), "--ansi".to_string()],
+            env: HashMap::new(),
+            delimiter: Some(OutputDelimiter::Nul),
+            view: PagerRoleConfig::default(),
+            follow: PagerRoleConfig::default(),
+        },
+    );
+    let config = PagerConfig::Single("fzf".to_string());
+    let selector = selector_with_mocks(Some(&config), &profiles, MockEnv::new(), &["fzf"]);
+
+    let selected = selector.select(PagerRole::View);
+
+    if let SelectedPager::Pager { delimiter, .. } = selected {
+        assert_eq!(delimiter, Some(OutputDelimiter::Nul));
+    } else {
+        panic!("expected SelectedPager::Pager");
+    }
+}
+
+#[test]
+fn selector_env_delimiter_overrides_profile() {
+    let mut profiles = HashMap::new();
+    profiles.insert(
+        "fzf".to_string(),
+        PagerProfile {
+            command: vec!["fzf".to_string()],
+            env: HashMap::new(),
+            delimiter: Some(OutputDelimiter::Nul),
+            view: PagerRoleConfig::default(),
+            follow: PagerRoleConfig::default(),
+        },
+    );
+    let config = PagerConfig::Single("fzf".to_string());
+    let env = MockEnv::new().with_var("HL_PAGER_DELIMITER", "newline");
+    let selector = selector_with_mocks(Some(&config), &profiles, env, &["fzf"]);
+
+    let selected = selector.select(PagerRole::View);
+
+    if let SelectedPager::Pager { delimiter, .. } = selected {
+        assert_eq!(delimiter, Some(OutputDelimiter::Newline));
+    } else {
+        panic!("expected SelectedPager::Pager");
+    }
+}
+
+#[test]
+fn selector_env_delimiter_nul_overrides_default() {
+    let mut profiles = HashMap::new();
+    profiles.insert(
+        "less".to_string(),
+        PagerProfile {
+            command: vec!["less".to_string()],
+            env: HashMap::new(),
+            delimiter: None,
+            view: PagerRoleConfig::default(),
+            follow: PagerRoleConfig::default(),
+        },
+    );
+    let config = PagerConfig::Single("less".to_string());
+    let env = MockEnv::new().with_var("HL_PAGER_DELIMITER", "nul");
+    let selector = selector_with_mocks(Some(&config), &profiles, env, &["less"]);
+
+    let selected = selector.select(PagerRole::View);
+
+    if let SelectedPager::Pager { delimiter, .. } = selected {
+        assert_eq!(delimiter, Some(OutputDelimiter::Nul));
+    } else {
+        panic!("expected SelectedPager::Pager");
     }
 }

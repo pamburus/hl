@@ -8,6 +8,8 @@ use std::collections::HashMap;
 
 use serde::Deserialize;
 
+use crate::output::OutputDelimiter;
+
 // ---
 
 /// Represents the top-level `pager` configuration option.
@@ -45,6 +47,10 @@ pub struct PagerProfile {
     /// Environment variables to set: `env = { LESSCHARSET = "UTF-8" }`
     #[serde(default)]
     pub env: HashMap<String, String>,
+
+    /// Output entry delimiter when this pager is used.
+    #[serde(default)]
+    pub delimiter: Option<OutputDelimiter>,
 
     /// View mode configuration.
     #[serde(default)]

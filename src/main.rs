@@ -14,6 +14,7 @@ use clap::{CommandFactory, Parser};
 use enumset::enum_set;
 use enumset_ext::EnumSetExt;
 use env_logger::{self as logger};
+use pager::{Pager, StartedPager};
 use terminal_size::terminal_size_of;
 use utf8_supported::{Utf8Support, utf8_supported};
 
@@ -24,7 +25,7 @@ use hl::{
     error::*,
     help,
     input::InputReference,
-    output::OutputStream,
+    output::{OutputDelimiter, OutputStream},
     pager::{PagerRole, PagerSelector, SelectedPager},
     query::Query,
     settings::{AsciiModeOpt, InputInfo, Settings},
@@ -34,7 +35,6 @@ use hl::{
     timezone::Tz,
 };
 use lifecycle::{AsyncDrop, DropNotifier};
-use pager::Pager;
 
 const HL_DEBUG_LOG: &str = "HL_DEBUG_LOG";
 const HL_DEBUG_LOG_STYLE: &str = "HL_DEBUG_LOG_STYLE";
@@ -118,18 +118,23 @@ fn run() -> Result<()> {
     let paging = if opt.paging_never { false } else { paging };
     let role = if opt.follow { PagerRole::Follow } else { PagerRole::View };
     let selector = PagerSelector::new(settings.pager.as_ref(), &settings.pagers);
-    let start_pager = |role: PagerRole| {
+    let start_pager = |role: PagerRole| -> Option<(StartedPager, Option<OutputDelimiter>)> {
         if !paging {
             return None;
         }
         match selector.select(role) {
-            SelectedPager::Pager { command, env } => Pager::custom(command)
+            SelectedPager::Pager {
+                command,
+                env,
+                delimiter,
+            } => Pager::custom(command)
                 .envs(env)
                 .start()
                 .inspect_err(|err| {
                     log::debug!("failed to start pager: {}", err);
                 })
-                .ok(),
+                .ok()
+                .map(|pager| (pager, delimiter)),
             SelectedPager::None => None,
         }
     };
@@ -140,7 +145,7 @@ fn run() -> Result<()> {
             false => anstream::ColorChoice::Never,
         };
         let output: OutputStream = match start_pager(PagerRole::View) {
-            Some(pager) => Box::new(pager),
+            Some((pager, _)) => Box::new(pager),
             None => Box::new(stdout()),
         };
         let mut out = anstream::AutoStream::new(output, color_when);
@@ -326,10 +331,12 @@ fn run() -> Result<()> {
         .collect::<Result<Vec<_>>>()?;
 
     let mut _pager_watcher = None;
+    let mut pager_delimiter = None;
     let (output, using_pager): (OutputStream, bool) = match opt.output {
         Some(output) => (Box::new(std::fs::File::create(PathBuf::from(&output))?), false),
         None => match start_pager(role) {
-            Some(mut pager) => {
+            Some((mut pager, delimiter)) => {
+                pager_delimiter = delimiter;
                 let detached = pager.detach_process();
                 _pager_watcher = detached.map(|p| {
                     log::debug!("monitor pager process");
@@ -387,13 +394,16 @@ fn run() -> Result<()> {
         flatten: opt.flatten != cli::FlattenOption::Never,
         ascii,
         expand: opt.expansion.into(),
-        output_delimiter: match if using_pager {
-            opt.pager_delimiter
-        } else {
-            opt.output_delimiter
-        } {
-            cli::OutputDelimiter::Newline => "\n".into(),
-            cli::OutputDelimiter::Nul => "\0".into(),
+        output_delimiter: {
+            let delim = if using_pager {
+                pager_delimiter.unwrap_or(OutputDelimiter::Newline)
+            } else {
+                opt.output_delimiter
+            };
+            match delim {
+                OutputDelimiter::Newline => "\n".into(),
+                OutputDelimiter::Nul => "\0".into(),
+            }
         },
     });
 

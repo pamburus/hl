@@ -9,6 +9,7 @@ use std::ffi::OsStr;
 use std::path::Path;
 
 use super::config::{PagerConfig, PagerProfile, PagerRole};
+use crate::output::OutputDelimiter;
 
 // ---
 
@@ -20,6 +21,9 @@ const HL_FOLLOW_PAGER: &str = "HL_FOLLOW_PAGER";
 
 /// Standard environment variable for the pager.
 const PAGER: &str = "PAGER";
+
+/// Environment variable for overriding the pager delimiter.
+const HL_PAGER_DELIMITER: &str = "HL_PAGER_DELIMITER";
 
 // ---
 
@@ -41,6 +45,7 @@ pub enum SelectedPager {
     Pager {
         command: Vec<String>,
         env: HashMap<String, String>,
+        delimiter: Option<OutputDelimiter>,
     },
     /// No pager, output to stdout.
     None,
@@ -307,8 +312,13 @@ impl<'a, E: EnvProvider, C: ExeChecker> PagerSelector<'a, E, C> {
         log::debug!("using profile {name:?}");
         let command = profile.build_command(role).into_iter().map(String::from).collect();
         let env = profile.env.clone();
+        let delimiter = self.resolve_delimiter(profile.delimiter);
 
-        Some(SelectedPager::Pager { command, env })
+        Some(SelectedPager::Pager {
+            command,
+            env,
+            delimiter,
+        })
     }
 
     /// Tries to use a direct command, returning `Some(SelectedPager)` if successful.
@@ -324,8 +334,29 @@ impl<'a, E: EnvProvider, C: ExeChecker> PagerSelector<'a, E, C> {
 
         // Apply special handling for `less`
         let (command, env) = apply_less_defaults(command);
+        let delimiter = self.resolve_delimiter(None);
 
-        Some(SelectedPager::Pager { command, env })
+        Some(SelectedPager::Pager {
+            command,
+            env,
+            delimiter,
+        })
+    }
+
+    /// Resolves the pager delimiter from environment variable or profile config.
+    ///
+    /// Precedence:
+    /// 1. `HL_PAGER_DELIMITER` env var
+    /// 2. Profile's `delimiter` field
+    fn resolve_delimiter(&self, profile_delimiter: Option<OutputDelimiter>) -> Option<OutputDelimiter> {
+        if let Some(value) = self.env_provider.get(HL_PAGER_DELIMITER) {
+            match value.to_lowercase().as_str() {
+                "nul" => return Some(OutputDelimiter::Nul),
+                "newline" | "" => return Some(OutputDelimiter::Newline),
+                other => log::warn!("{HL_PAGER_DELIMITER}: unknown value {other:?}, ignoring"),
+            }
+        }
+        profile_delimiter
     }
 }
 
