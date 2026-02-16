@@ -1,0 +1,15 @@
+# Test config: profile with follow mode explicitly enabled
+[pager]
+candidates = [
+  { env = { pager = "HL_PAGER", follow = "HL_FOLLOW_PAGER", delimiter = "HL_PAGER_DELIMITER" } },
+  { profile = "fzf" },
+  { env = "PAGER" },
+]
+
+[[pager.profiles]]
+name = "fzf"
+command = "fzf"
+args = ["--ansi"]
+modes.view.args = ["--layout=reverse-list"]
+modes.follow.enabled = true
+modes.follow.args = ["--tac", "--track"]

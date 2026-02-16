@@ -1,0 +1,21 @@
+# Candidate with `if` condition configuration
+[pager]
+candidates = [
+  { env = { pager = "HL_PAGER", follow = "HL_FOLLOW_PAGER", delimiter = "HL_PAGER_DELIMITER" } },
+  { profile = "fzf", if = "!os:windows" },
+  { profile = "less" },
+  { env = "PAGER" },
+]
+
+[[pager.profiles]]
+name = "fzf"
+command = "fzf"
+args = ["--ansi"]
+modes.follow.enabled = true
+modes.follow.args = ["--tac", "--track"]
+
+[[pager.profiles]]
+name = "less"
+command = "less"
+args = ["-R", "--mouse"]
+env = { LESSCHARSET = "UTF-8" }

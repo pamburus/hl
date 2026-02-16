@@ -14,6 +14,7 @@ use clap::{CommandFactory, Parser};
 use enumset::enum_set;
 use enumset_ext::EnumSetExt;
 use env_logger::{self as logger};
+use pager::StartedPager;
 use terminal_size::terminal_size_of;
 use utf8_supported::{Utf8Support, utf8_supported};
 
@@ -24,7 +25,8 @@ use hl::{
     error::*,
     help,
     input::InputReference,
-    output::OutputStream,
+    output::{OutputDelimiter, OutputStream},
+    pager::{PagerRole, PagerSelector, PagerWatcher},
     query::Query,
     settings::{AsciiModeOpt, InputInfo, Settings},
     signal::SignalHandler,
@@ -32,12 +34,10 @@ use hl::{
     timeparse::parse_time,
     timezone::Tz,
 };
-use lifecycle::{AsyncDrop, DropNotifier};
-use pager::Pager;
+use lifecycle::AsyncDrop;
 
 const HL_DEBUG_LOG: &str = "HL_DEBUG_LOG";
 const HL_DEBUG_LOG_STYLE: &str = "HL_DEBUG_LOG_STYLE";
-const HL_PAGER: &str = "HL_PAGER";
 
 // ---
 
@@ -115,19 +115,14 @@ fn run() -> Result<()> {
         cli::PagingOption::Always => true,
         cli::PagingOption::Never => false,
     };
-    let paging = if opt.paging_never || opt.follow { false } else { paging };
-    let start_pager = || {
-        if paging {
-            Pager::new()
-                .env_var(HL_PAGER)
-                .start()
-                .inspect_err(|err| {
-                    log::debug!("failed to start pager: {}", err);
-                })
-                .ok()
-        } else {
-            None
+    let paging = if opt.paging_never { false } else { paging };
+    let role = if opt.follow { PagerRole::Follow } else { PagerRole::View };
+    let selector = PagerSelector::new(&settings.pager);
+    let start_pager = |role: PagerRole| -> Result<Option<(StartedPager, Option<OutputDelimiter>)>> {
+        if !paging {
+            return Ok(None);
         }
+        Ok(selector.select(role)?.start()?)
     };
 
     if let Some(verbosity) = opt.help {
@@ -135,8 +130,8 @@ fn run() -> Result<()> {
             true => anstream::ColorChoice::Always,
             false => anstream::ColorChoice::Never,
         };
-        let output: OutputStream = match start_pager() {
-            Some(pager) => Box::new(pager),
+        let output: OutputStream = match start_pager(PagerRole::View)? {
+            Some((pager, _)) => Box::new(pager),
             None => Box::new(stdout()),
         };
         let mut out = anstream::AutoStream::new(output, color_when);
@@ -294,6 +289,59 @@ fn run() -> Result<()> {
     let utf8_is_supported = matches!(utf8_supported(), Utf8Support::UTF8);
     let ascii = ascii_opt.resolve(utf8_is_supported);
 
+    // Configure the input.
+    let mut inputs = opt
+        .files
+        .iter()
+        .map(|x| {
+            if x.to_str() == Some("-") {
+                Ok::<_, std::io::Error>(InputReference::Stdin)
+            } else {
+                Ok(InputReference::File(x.clone().try_into()?))
+            }
+        })
+        .collect::<std::result::Result<Vec<_>, _>>()?;
+    if inputs.is_empty() {
+        if stdin().is_terminal() {
+            let mut cmd = cli::Opt::command();
+            return cmd.print_help().map_err(Error::Io);
+        }
+        inputs.push(InputReference::Stdin);
+    }
+
+    let n = inputs.len();
+    log::debug!("holding {n} inputs");
+    let inputs = inputs
+        .into_iter()
+        .map(|input| input.hold().map_err(Error::Io))
+        .collect::<Result<Vec<_>>>()?;
+
+    let mut _pager_watcher = None;
+    let mut pager_delimiter = None;
+    let (output, using_pager): (OutputStream, bool) = match opt.output {
+        Some(output) => (Box::new(std::fs::File::create(PathBuf::from(&output))?), false),
+        None => match start_pager(role)? {
+            Some((mut pager, delimiter)) => {
+                pager_delimiter = delimiter;
+                _pager_watcher = pager.detach_process().map(|p| {
+                    log::debug!("monitoring pager process");
+                    AsyncDrop::new(PagerWatcher::new(p, |result| match result {
+                        Ok(()) => process::exit(0),
+                        Err(err) => {
+                            let err: Error = err.into();
+                            err.log(&AppInfo);
+                            process::exit(1);
+                        }
+                    }))
+                });
+                (Box::new(pager), true)
+            }
+            None => (Box::new(stdout()), false),
+        },
+    };
+
+    let mut output: OutputStream = Box::new(ExitOnWriteError::new(output, using_pager));
+
     // Create app.
     let app = hl::App::new(hl::Options {
         theme: Arc::new(theme),
@@ -335,55 +383,18 @@ fn run() -> Result<()> {
         flatten: opt.flatten != cli::FlattenOption::Never,
         ascii,
         expand: opt.expansion.into(),
-    });
-
-    // Configure the input.
-    let mut inputs = opt
-        .files
-        .iter()
-        .map(|x| {
-            if x.to_str() == Some("-") {
-                Ok::<_, std::io::Error>(InputReference::Stdin)
+        output_delimiter: {
+            let delim = if using_pager {
+                pager_delimiter.unwrap_or(OutputDelimiter::Newline)
             } else {
-                Ok(InputReference::File(x.clone().try_into()?))
+                opt.output_delimiter
+            };
+            match delim {
+                OutputDelimiter::Newline => "\n".into(),
+                OutputDelimiter::Nul => "\0".into(),
             }
-        })
-        .collect::<std::result::Result<Vec<_>, _>>()?;
-    if inputs.is_empty() {
-        if stdin().is_terminal() {
-            let mut cmd = cli::Opt::command();
-            return cmd.print_help().map_err(Error::Io);
-        }
-        inputs.push(InputReference::Stdin);
-    }
-
-    let n = inputs.len();
-    log::debug!("hold {n} inputs");
-    let inputs = inputs
-        .into_iter()
-        .map(|input| input.hold().map_err(Error::Io))
-        .collect::<Result<Vec<_>>>()?;
-
-    let mut _pager_watcher = None;
-    let output: OutputStream = match opt.output {
-        Some(output) => Box::new(std::fs::File::create(PathBuf::from(&output))?),
-        None => match start_pager() {
-            Some(mut pager) => {
-                let detached = pager.detach_process();
-                _pager_watcher = detached.map(|p| {
-                    log::debug!("monitor pager process");
-                    AsyncDrop::new(DropNotifier::new(p, || {
-                        log::debug!("pager process exited");
-                        process::exit(0);
-                    }))
-                });
-                Box::new(pager)
-            }
-            None => Box::new(stdout()),
         },
-    };
-
-    let mut output: OutputStream = Box::new(ExitOnWriteError(output));
+    });
 
     log::debug!("run the app");
 
@@ -394,7 +405,11 @@ fn run() -> Result<()> {
         Err(err) => Err(err),
     };
 
-    let interrupt_ignore_count = if opt.follow { 0 } else { opt.interrupt_ignore_count };
+    let interrupt_ignore_count = if opt.follow && !using_pager {
+        0
+    } else {
+        opt.interrupt_ignore_count
+    };
 
     // Run the app with signal handling.
     SignalHandler::run(interrupt_ignore_count, std::time::Duration::from_secs(1), run)
@@ -420,23 +435,33 @@ impl AppInfoProvider for AppInfo {
 
 // ---
 
-struct ExitOnWriteError<W>(W);
+struct ExitOnWriteError<W> {
+    inner: W,
+    using_pager: bool,
+}
 
 impl<W> ExitOnWriteError<W> {
-    fn inspect<R>(res: std::io::Result<R>) -> std::io::Result<R> {
+    fn new(inner: W, using_pager: bool) -> Self {
+        Self { inner, using_pager }
+    }
+
+    fn inspect<R>(res: std::io::Result<R>, using_pager: bool) -> std::io::Result<R> {
         res.inspect_err(|err| {
             log::debug!("write error: {}", err);
-            process::exit(0);
+            // Exit with 141 (128 + SIGPIPE) when writing to pager fails
+            // This matches git and other tools' behavior
+            let exit_code = if using_pager { 141 } else { 0 };
+            process::exit(exit_code);
         })
     }
 }
 
 impl<W: Write> Write for ExitOnWriteError<W> {
     fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-        Self::inspect(self.0.write(buf))
+        Self::inspect(self.inner.write(buf), self.using_pager)
     }
 
     fn flush(&mut self) -> std::io::Result<()> {
-        Self::inspect(self.0.flush())
+        Self::inspect(self.inner.flush(), self.using_pager)
     }
 }

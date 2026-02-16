@@ -1,0 +1,21 @@
+# Priority list pager configuration
+# Used for testing priority-based profile selection
+
+[pager]
+candidates = [
+  { env = { pager = "HL_PAGER", follow = "HL_FOLLOW_PAGER", delimiter = "HL_PAGER_DELIMITER" } },
+  { profile = "fzf" },
+  { profile = "less" },
+  { env = "PAGER" },
+]
+
+[[pager.profiles]]
+name = "fzf"
+command = "fzf"
+args = ["--ansi", "--no-sort"]
+
+[[pager.profiles]]
+name = "less"
+command = "less"
+args = ["-R"]
+env = { LESSCHARSET = "UTF-8" }

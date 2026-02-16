@@ -573,6 +573,7 @@ fn options() -> Options {
         flatten: false,
         ascii: AsciiMode::Off,
         expand: Default::default(),
+        output_delimiter: "\n".to_string(),
     }
 }
 

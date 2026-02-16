@@ -1,0 +1,8 @@
+# Empty priority list pager configuration
+# Falls back to environment variables when no profile candidates are specified
+
+[pager]
+candidates = [
+  { env = { pager = "HL_PAGER", follow = "HL_FOLLOW_PAGER", delimiter = "HL_PAGER_DELIMITER" } },
+  { env = "PAGER" },
+]

@@ -1,0 +1,12 @@
+# Test config: profile with follow mode explicitly enabled
+# No env candidates - for testing pure profile selection
+[pager]
+candidates = [{ profile = "fzf" }]
+
+[[pager.profiles]]
+name = "fzf"
+command = "fzf"
+args = ["--ansi"]
+modes.view.args = ["--layout=reverse-list"]
+modes.follow.enabled = true
+modes.follow.args = ["--tac", "--track"]
