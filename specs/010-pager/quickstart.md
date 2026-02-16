@@ -159,11 +159,13 @@ let pager_selection = if opt.paging_never {
 - [ ] Config parsing: priority list
 - [ ] Profile selection: first available
 - [ ] Profile selection: fallback to second
-- [ ] Profile selection: all unavailable → stdout
+- [ ] Profile selection: all unavailable → stdout (no error)
 - [ ] Environment: `HL_PAGER=@profile` uses profile explicitly
 - [ ] Environment: `HL_PAGER=command` uses direct command
 - [ ] Environment: `HL_PAGER=""` disables
-- [ ] Environment: `HL_PAGER=@nonexistent` fails and disables (no fallback)
+- [ ] Environment: `HL_PAGER=@nonexistent` exits with error (profile not found)
+- [ ] Environment: `HL_PAGER=nonexistent` exits with error (command not found)
+- [ ] Environment: `PAGER=nonexistent` exits with error (command not found)
 - [ ] Environment: `HL_FOLLOW_PAGER` override
 - [ ] Follow mode: `follow.enabled = false` → stdout
 - [ ] Follow mode: `follow.enabled = true` → pager with follow.args
@@ -173,8 +175,32 @@ let pager_selection = if opt.paging_never {
 
 1. **Don't forget `follow.enabled`**: Follow mode defaults to no pager
 2. **Empty command array**: Skip profile, don't panic
-3. **Profile not found**: Skip and try next, don't error
-4. **`HL_PAGER=""` behavior change**: Now disables pager (document in CHANGELOG)
+3. **Environment variable failures exit**: Unlike config-based selection, env var pager failures (command not found, profile not found) cause the program to exit with an error
+4. **Config-based selection is best-effort**: Profile not found in config → try next profile → eventually fall back to stdout (no error)
+5. **`HL_PAGER=""` behavior change**: Now disables pager (document in CHANGELOG)
+
+## Example: Error Behavior
+
+```bash
+# Config file has: pager = ["fzf", "less"]
+# If fzf is not installed, falls back to less (best-effort)
+hl logfile.log
+
+# If user explicitly sets HL_PAGER, it MUST work or fail
+HL_PAGER=nonexistent hl logfile.log
+# error: HL_PAGER: command 'nonexistent' not found in PATH
+# exit code: 1
+
+# Same for explicit profile references
+HL_PAGER=@myprofile hl logfile.log
+# error: HL_PAGER: profile 'myprofile' does not exist in configuration
+# exit code: 1
+
+# PAGER also exits on error
+PAGER=badcmd hl logfile.log
+# error: PAGER: command 'badcmd' not found in PATH
+# exit code: 1
+```
 
 ## Files Modified/Created
 
