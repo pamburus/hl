@@ -6,6 +6,8 @@ candidates = [
   { env = "PAGER" },
 ]
 
-[pager.profiles.less]
-command = ["less", "-R", "--mouse"]
+[[pager.profiles]]
+name = "less"
+command = "less"
+args = ["-R", "--mouse"]
 env = { LESSCHARSET = "UTF-8" }

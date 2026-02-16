@@ -23,13 +23,22 @@
     "pager-profile": {
       "type": "object",
       "additionalProperties": false,
+      "required": ["name"],
       "properties": {
+        "name": {
+          "type": "string",
+          "description": "Profile name"
+        },
         "command": {
+          "type": "string",
+          "description": "Base command (executable) for the pager"
+        },
+        "args": {
           "type": "array",
           "items": {
             "type": "string"
           },
-          "description": "Base command and arguments for the pager"
+          "description": "Base arguments for the pager"
         },
         "env": {
           "type": "object",
@@ -114,11 +123,11 @@
           "description": "List of pager candidates to try in order. Each candidate can be an environment variable reference or a profile reference."
         },
         "profiles": {
-          "type": "object",
-          "additionalProperties": {
+          "type": "array",
+          "items": {
             "$ref": "#/definitions/pager-profile"
           },
-          "description": "Named pager profiles defining commands and role-specific arguments"
+          "description": "List of named pager profiles defining commands and role-specific arguments"
         }
       }
     },

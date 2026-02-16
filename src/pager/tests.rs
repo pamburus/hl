@@ -71,8 +71,10 @@ fn pager_config_empty_priority_list() {
 fn pager_profile_minimal() {
     let config: TestConfig = toml::from_str(MINIMAL_PROFILE).expect("failed to parse");
 
-    let profile = &config.pager.profiles["less"];
-    assert_eq!(profile.command, vec!["less", "-R"]);
+    let profile = config.pager.profile("less").expect("profile not found");
+    assert_eq!(profile.name, "less");
+    assert_eq!(profile.command, "less");
+    assert_eq!(profile.args, vec!["-R"]);
     assert!(profile.env.is_empty());
     assert!(profile.view.args.is_empty());
     assert!(profile.follow.args.is_empty());
@@ -83,7 +85,7 @@ fn pager_profile_minimal() {
 fn pager_profile_with_env() {
     let config: TestConfig = toml::from_str(PROFILE_WITH_ENV).expect("failed to parse");
 
-    let profile = &config.pager.profiles["less"];
+    let profile = config.pager.profile("less").expect("profile not found");
     assert_eq!(&profile.env["LESSCHARSET"], "UTF-8");
 }
 
@@ -91,7 +93,7 @@ fn pager_profile_with_env() {
 fn pager_profile_with_view_args() {
     let config: TestConfig = toml::from_str(PROFILE_WITH_VIEW_ARGS).expect("failed to parse");
 
-    let profile = &config.pager.profiles["fzf"];
+    let profile = config.pager.profile("fzf").expect("profile not found");
     assert_eq!(profile.view.args, vec!["--layout=reverse-list"]);
 }
 
@@ -99,7 +101,7 @@ fn pager_profile_with_view_args() {
 fn pager_profile_with_follow_enabled() {
     let config: TestConfig = toml::from_str(FOLLOW_ENABLED).expect("failed to parse");
 
-    let profile = &config.pager.profiles["fzf"];
+    let profile = config.pager.profile("fzf").expect("profile not found");
     assert_eq!(profile.follow.enabled, Some(true));
     assert_eq!(profile.follow.args, vec!["--tac", "--track"]);
 }
@@ -108,7 +110,7 @@ fn pager_profile_with_follow_enabled() {
 fn pager_profile_follow_disabled_by_default() {
     let config: TestConfig = toml::from_str(MINIMAL_PROFILE).expect("failed to parse");
 
-    let profile = &config.pager.profiles["less"];
+    let profile = config.pager.profile("less").expect("profile not found");
     // follow.enabled is None by default, which means disabled
     assert!(!profile.follow.is_enabled(PagerRole::Follow));
 }
@@ -117,7 +119,7 @@ fn pager_profile_follow_disabled_by_default() {
 fn pager_profile_view_always_enabled() {
     let config: TestConfig = toml::from_str(MINIMAL_PROFILE).expect("failed to parse");
 
-    let profile = &config.pager.profiles["less"];
+    let profile = config.pager.profile("less").expect("profile not found");
     // view is always enabled
     assert!(profile.view.is_enabled(PagerRole::View));
 }
@@ -128,10 +130,10 @@ fn pager_profile_view_always_enabled() {
 
 #[test]
 fn pager_profile_executable() {
-    let profile = profile_with_command(vec!["less", "-R"]);
+    let profile = profile_with_command("less", vec!["-R"]);
     assert_eq!(profile.executable(), Some("less"));
 
-    let empty = profile_with_command(vec![]);
+    let empty = profile_with_command("", vec![]);
     assert_eq!(empty.executable(), None);
 }
 
@@ -139,7 +141,7 @@ fn pager_profile_executable() {
 fn pager_profile_build_command_view() {
     let config: TestConfig = toml::from_str(FOLLOW_ENABLED).expect("failed to parse");
 
-    let profile = &config.pager.profiles["fzf"];
+    let profile = config.pager.profile("fzf").expect("profile not found");
     let cmd = profile.build_command(PagerRole::View);
     assert_eq!(cmd, vec!["fzf", "--ansi", "--layout=reverse-list"]);
 }
@@ -148,7 +150,7 @@ fn pager_profile_build_command_view() {
 fn pager_profile_build_command_follow() {
     let config: TestConfig = toml::from_str(FOLLOW_ENABLED).expect("failed to parse");
 
-    let profile = &config.pager.profiles["fzf"];
+    let profile = config.pager.profile("fzf").expect("profile not found");
     let cmd = profile.build_command(PagerRole::Follow);
     assert_eq!(cmd, vec!["fzf", "--ansi", "--tac", "--track"]);
 }
@@ -163,9 +165,11 @@ struct TestConfig {
     pager: PagerConfig,
 }
 
-fn profile_with_command(command: Vec<&str>) -> PagerProfile {
+fn profile_with_command(command: &str, args: Vec<&str>) -> PagerProfile {
     PagerProfile {
-        command: command.into_iter().map(String::from).collect(),
+        name: "test".to_string(),
+        command: command.to_string(),
+        args: args.into_iter().map(String::from).collect(),
         env: HashMap::new(),
         delimiter: None,
         view: PagerRoleConfig::default(),
@@ -485,20 +489,15 @@ fn selector_profile_delimiter() {
 
     let config = PagerConfig {
         candidates: vec![PagerCandidate::Profile("fzf".to_string())],
-        profiles: {
-            let mut profiles = HashMap::new();
-            profiles.insert(
-                "fzf".to_string(),
-                PagerProfile {
-                    command: vec!["fzf".to_string(), "--ansi".to_string()],
-                    env: HashMap::new(),
-                    delimiter: Some(OutputDelimiter::Nul),
-                    view: PagerRoleConfig::default(),
-                    follow: PagerRoleConfig::default(),
-                },
-            );
-            profiles
-        },
+        profiles: vec![PagerProfile {
+            name: "fzf".to_string(),
+            command: "fzf".to_string(),
+            args: vec!["--ansi".to_string()],
+            env: HashMap::new(),
+            delimiter: Some(OutputDelimiter::Nul),
+            view: PagerRoleConfig::default(),
+            follow: PagerRoleConfig::default(),
+        }],
     };
     let selector = selector_with_mocks(&config, MockEnv::new(), &["fzf"]);
 
@@ -547,20 +546,15 @@ fn selector_profile_reference_ignores_delimiter_env() {
             follow: None,
             delimiter: Some("HL_PAGER_DELIMITER".to_string()),
         }))],
-        profiles: {
-            let mut profiles = HashMap::new();
-            profiles.insert(
-                "fzf".to_string(),
-                PagerProfile {
-                    command: vec!["fzf".to_string()],
-                    env: HashMap::new(),
-                    delimiter: Some(OutputDelimiter::Nul),
-                    view: PagerRoleConfig::default(),
-                    follow: PagerRoleConfig::default(),
-                },
-            );
-            profiles
-        },
+        profiles: vec![PagerProfile {
+            name: "fzf".to_string(),
+            command: "fzf".to_string(),
+            args: vec![],
+            env: HashMap::new(),
+            delimiter: Some(OutputDelimiter::Nul),
+            view: PagerRoleConfig::default(),
+            follow: PagerRoleConfig::default(),
+        }],
     };
     let env = MockEnv::new()
         .with_var("HL_PAGER", "@fzf")

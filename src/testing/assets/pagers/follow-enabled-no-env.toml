@@ -3,8 +3,10 @@
 [pager]
 candidates = [{ profile = "fzf" }]
 
-[pager.profiles.fzf]
-command = ["fzf", "--ansi"]
+[[pager.profiles]]
+name = "fzf"
+command = "fzf"
+args = ["--ansi"]
 view.args = ["--layout=reverse-list"]
 follow.enabled = true
 follow.args = ["--tac", "--track"]

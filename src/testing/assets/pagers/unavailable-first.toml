@@ -4,9 +4,13 @@
 [pager]
 candidates = [{ profile = "nonexistent-pager-xyz" }, { profile = "less" }]
 
-[pager.profiles.nonexistent-pager-xyz]
-command = ["nonexistent-pager-xyz", "--some-arg"]
+[[pager.profiles]]
+name = "nonexistent-pager-xyz"
+command = "nonexistent-pager-xyz"
+args = ["--some-arg"]
 
-[pager.profiles.less]
-command = ["less", "-R"]
+[[pager.profiles]]
+name = "less"
+command = "less"
+args = ["-R"]
 env = { LESSCHARSET = "UTF-8" }

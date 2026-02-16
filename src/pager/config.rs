@@ -66,7 +66,7 @@ pub struct PagerConfig {
 
     /// Named pager profiles.
     #[serde(default)]
-    pub profiles: HashMap<String, PagerProfile>,
+    pub profiles: Vec<PagerProfile>,
 }
 
 impl PagerConfig {
@@ -77,18 +77,25 @@ impl PagerConfig {
 
     /// Gets a profile by name.
     pub fn profile(&self, name: &str) -> Option<&PagerProfile> {
-        self.profiles.get(name)
+        self.profiles.iter().find(|p| p.name == name)
     }
 }
 
 // ---
 
-/// Represents a named pager profile in the `[pagers.<name>]` section.
+/// Represents a named pager profile.
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
 pub struct PagerProfile {
-    /// Base command and arguments: `command = ["fzf", "--ansi"]`
+    /// Profile name.
+    pub name: String,
+
+    /// Base command (executable): `command = "fzf"`
     #[serde(default)]
-    pub command: Vec<String>,
+    pub command: String,
+
+    /// Base arguments: `args = ["--ansi", "--exact"]`
+    #[serde(default)]
+    pub args: Vec<String>,
 
     /// Environment variables to set: `env = { LESSCHARSET = "UTF-8" }`
     #[serde(default)]
@@ -108,19 +115,24 @@ pub struct PagerProfile {
 }
 
 impl PagerProfile {
-    /// Returns the executable name (first element of command).
+    /// Returns the executable name.
     pub fn executable(&self) -> Option<&str> {
-        self.command.first().map(|s| s.as_str())
+        if self.command.is_empty() {
+            None
+        } else {
+            Some(self.command.as_str())
+        }
     }
 
     /// Builds the full command for a given role.
     pub fn build_command(&self, role: PagerRole) -> Vec<&str> {
-        let mut cmd: Vec<&str> = self.command.iter().map(|s| s.as_str()).collect();
-        let args = match role {
+        let mut cmd = vec![self.command.as_str()];
+        cmd.extend(self.args.iter().map(|s| s.as_str()));
+        let role_args = match role {
             PagerRole::View => &self.view.args,
             PagerRole::Follow => &self.follow.args,
         };
-        cmd.extend(args.iter().map(|s| s.as_str()));
+        cmd.extend(role_args.iter().map(|s| s.as_str()));
         cmd
     }
 }
