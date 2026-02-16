@@ -9,9 +9,13 @@ candidates = [
   { env = "PAGER" },
 ]
 
-[pager.profiles.fzf]
-command = ["fzf", "--ansi", "--no-sort"]
+[[pager.profiles]]
+name = "fzf"
+command = "fzf"
+args = ["--ansi", "--no-sort"]
 
-[pager.profiles.less]
-command = ["less", "-R"]
+[[pager.profiles]]
+name = "less"
+command = "less"
+args = ["-R"]
 env = { LESSCHARSET = "UTF-8" }

@@ -190,7 +190,7 @@ mode = "auto"
 # Candidate search list (checked in order).
 # The default configuration maintains backward compatibility with HL_PAGER, HL_FOLLOW_PAGER, HL_PAGER_DELIMITER, and PAGER env vars.
 candidates = [
-  # First, check role-specific environment variables
+  # First, check application-specific environment variables
   { env = { pager = "HL_PAGER", follow = "HL_FOLLOW_PAGER", delimiter = "HL_PAGER_DELIMITER" } },
   # Then try configured profiles in priority order
   { profile = "less" },
@@ -205,15 +205,20 @@ candidates = [
 # Each profile defines a pager command and optional role-specific arguments.
 #
 # Profile structure:
-#   command = [...]       # Base command and arguments
+#   name = "..."          # Profile name
+#   command = "..."       # Base command (executable)
+#   args = [...]          # Base arguments
 #   env = {...}           # Environment variables for the pager command
 #   delimiter = "..."     # Entry delimiter [newline, nul]
 #   view.args = [...]     # Additional arguments for view mode (appended to command)
 #   follow.enabled = ...  # Whether to enable pager for follow mode [true, false]
 #   follow.args = [...]   # Additional arguments for follow mode (appended to command)
-[pager.profiles.less]
-# Base command for both view and follow modes.
-command = ["less", "-R", "--mouse"]
+[[pager.profiles]]
+name = "less"
+# Base command (executable).
+command = "less"
+# Base arguments for both view and follow modes.
+args = ["-R", "--mouse"]
 # Environment variables for the pager command.
 env = { LESSCHARSET = "UTF-8" }
 # Additional arguments for follow mode.
@@ -222,12 +227,14 @@ follow.args = ["+F"]
 follow.enabled = false
 
 # Pager profile for `fzf`.
-[pager.profiles.fzf]
+[[pager.profiles]]
+name = "fzf"
 # Entry delimiter.
 delimiter = "newline"
-# Base command for both view and follow modes.
-command = [
-  "fzf",
+# Base command (executable).
+command = "fzf"
+# Base arguments for both view and follow modes.
+args = [
   "--color=bg+:#3a404a",
   "--highlight-line",
   "--ansi",
@@ -235,7 +242,7 @@ command = [
   "--multi",
   "--no-sort",
   "--no-bold",
-  "--bind=ctrl-y:execute-silent(printf %s\\\\n {+} | pbcopy)",
+  "--bind=ctrl-y:execute-silent(printf %s\\n {+} | pbcopy)",
   "--bind=esc:track-current+clear-query+clear-multi+disable-raw",
   "--bind=ctrl-q:abort",
   "--bind=enter:toggle-raw",
@@ -264,17 +271,20 @@ follow.args = [
 follow.enabled = true
 
 # Pager profile for `most`.
-[pager.profiles.most]
-# Base command for both view and follow modes.
-command = ["most"]
+[[pager.profiles]]
+name = "most"
+# Base command (executable).
+command = "most"
 # Enable pager for follow mode.
 follow.enabled = false
 
 # Pager profile for `ov`.
-[pager.profiles.ov]
-# Base command for both view and follow modes.
-command = [
-  "ov",
+[[pager.profiles]]
+name = "ov"
+# Base command (executable).
+command = "ov"
+# Base arguments for both view and follow modes.
+args = [
   "--caption=>",
   "--wrap=false",
   "--hscroll-width=4",

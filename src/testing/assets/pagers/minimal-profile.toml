@@ -8,5 +8,7 @@ candidates = [
   { env = "PAGER" },
 ]
 
-[pager.profiles.less]
-command = ["less", "-R"]
+[[pager.profiles]]
+name = "less"
+command = "less"
+args = ["-R"]
