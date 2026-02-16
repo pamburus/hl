@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 use std::env;
-use std::ffi::OsString;
 use std::io::Write;
 use std::path::PathBuf;
 use std::process::{Child, ChildStdin, Command, ExitStatus, Stdio};
@@ -16,8 +15,8 @@ use std::{
 /// Pager configuration and builder.
 ///
 /// Supports two origins:
-/// - **Default**: Resolves the pager command from environment variables (`PAGER`, or an
-///   application-specific variable), falling back to `less`.
+/// - **FromEnv**: Resolves the pager command from environment variables (`PAGER`, or an
+///   application-specific variable). Returns `None` from `start()` if no pager is configured.
 /// - **Custom**: Uses a pre-resolved command and environment variables, skipping all
 ///   resolution logic. Useful when the caller has already determined the pager command
 ///   (e.g., from a configuration file).
@@ -27,10 +26,10 @@ pub struct Pager {
 }
 
 impl Pager {
-    /// Creates a new pager configuration with default settings.
+    /// Creates a new pager configuration that resolves from environment variables.
     ///
-    /// Resolves the pager command from environment variables and falls back to `less`.
-    pub fn new() -> Self {
+    /// Checks `PAGER` environment variable. Returns `None` from `start()` if not set.
+    pub fn from_env() -> Self {
         Self {
             origin: CommandOrigin::FromEnv { app_env_var: None },
             env: HashMap::new(),
@@ -51,7 +50,7 @@ impl Pager {
     /// for the pager command (e.g. `"HL_PAGER"`).
     /// Takes priority over `PAGER`.
     ///
-    /// Only used with environment origin (created with [`Pager::new`]).
+    /// Only used with environment origin (created with [`Pager::from_env`]).
     pub fn env_var(mut self, name: impl Into<String>) -> Self {
         if let CommandOrigin::FromEnv { ref mut app_env_var } = self.origin {
             *app_env_var = Some(name.into());
@@ -72,53 +71,41 @@ impl Pager {
     }
 
     /// Starts the pager process.
-    pub fn start(mut self) -> std::io::Result<StartedPager> {
-        let (pager_path, args, apply_less_defaults) = match self.origin {
-            CommandOrigin::FromEnv { app_env_var } => {
-                let (path, args) = resolve(app_env_var);
-                (path, args, true)
-            }
+    ///
+    /// Returns `None` if the origin is `FromEnv` and no pager is configured in environment variables.
+    pub fn start(self) -> Option<std::io::Result<StartedPager>> {
+        let (pager_path, args) = match self.origin {
+            CommandOrigin::FromEnv { app_env_var } => resolve(app_env_var)?,
             CommandOrigin::Custom { command } => {
                 let (pager, args) = match command.split_first() {
                     Some((pager, args)) => (PathBuf::from(pager), args.to_vec()),
                     None => {
-                        return Err(std::io::Error::new(
+                        return Some(Err(std::io::Error::new(
                             std::io::ErrorKind::InvalidInput,
                             "empty pager command",
-                        ));
+                        )));
                     }
                 };
-                (pager, args, false)
+                (pager, args)
             }
         };
 
-        // Apply `less` defaults when resolved from env vars.
-        if apply_less_defaults && pager_path.file_stem() == Some(&OsString::from("less")) {
-            self.env.entry("LESSCHARSET".into()).or_insert("UTF-8".into());
-        }
-
         let mut command = Command::new(&pager_path);
         command.args(&args);
-        if apply_less_defaults && pager_path.file_stem() == Some(&OsString::from("less")) {
-            command.arg("-R");
-        }
         for (key, value) in &self.env {
             command.env(key, value);
         }
 
-        let mut process = command.stdin(Stdio::piped()).spawn()?;
+        let mut process = match command.stdin(Stdio::piped()).spawn() {
+            Ok(p) => p,
+            Err(e) => return Some(Err(e)),
+        };
         let stdin = process.stdin.take();
 
-        Ok(StartedPager {
+        Some(Ok(StartedPager {
             stdin,
             process: Some(process),
-        })
-    }
-}
-
-impl Default for Pager {
-    fn default() -> Self {
-        Self::new()
+        }))
     }
 }
 
@@ -132,18 +119,14 @@ enum CommandOrigin {
     Custom { command: Vec<String> },
 }
 
-/// Resolves the pager command from environment variables, falling back to `less`.
-fn resolve(app_env_var: Option<String>) -> (PathBuf, Vec<String>) {
-    let mut pager = "less".to_owned();
-
-    let app_pager = app_env_var.and_then(|v| env::var(v).ok()).filter(|v| !v.is_empty());
-    if let Some(p) = app_pager {
-        pager = p;
-    } else if let Ok(p) = env::var("PAGER")
-        && !p.is_empty()
-    {
-        pager = p;
-    };
+/// Resolves the pager command from environment variables.
+///
+/// Returns `None` if no pager is configured.
+fn resolve(app_env_var: Option<String>) -> Option<(PathBuf, Vec<String>)> {
+    let pager = app_env_var
+        .and_then(|v| env::var(v).ok())
+        .filter(|v| !v.is_empty())
+        .or_else(|| env::var("PAGER").ok().filter(|v| !v.is_empty()))?;
 
     let parts = shellwords::split(&pager).unwrap_or(vec![pager]);
     let (exe, args) = match parts.split_first() {
@@ -152,7 +135,7 @@ fn resolve(app_env_var: Option<String>) -> (PathBuf, Vec<String>) {
     };
     let pager_path = PathBuf::from(&exe);
 
-    (pager_path, args)
+    Some((pager_path, args))
 }
 
 // ---
@@ -245,20 +228,14 @@ mod tests {
     use super::*;
 
     #[test]
-    fn pager_new_creates_default_instance() {
-        let pager = Pager::new();
-        assert!(matches!(pager.origin, CommandOrigin::FromEnv { app_env_var: None }));
-    }
-
-    #[test]
-    fn pager_default_creates_default_instance() {
-        let pager = Pager::default();
+    fn pager_from_env_creates_instance() {
+        let pager = Pager::from_env();
         assert!(matches!(pager.origin, CommandOrigin::FromEnv { app_env_var: None }));
     }
 
     #[test]
     fn pager_env_var_sets_app_env_var() {
-        let pager = Pager::new().env_var("HL_PAGER");
+        let pager = Pager::from_env().env_var("HL_PAGER");
         assert!(matches!(pager.origin, CommandOrigin::FromEnv { app_env_var: Some(ref v) } if v == "HL_PAGER"));
     }
 
