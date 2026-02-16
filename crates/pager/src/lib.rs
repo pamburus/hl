@@ -15,14 +15,14 @@ use std::{
 
 /// Pager configuration and builder.
 ///
-/// Supports two modes:
+/// Supports two origins:
 /// - **Default**: Resolves the pager command from environment variables (`PAGER`, or an
 ///   application-specific variable), falling back to `less`.
 /// - **Custom**: Uses a pre-resolved command and environment variables, skipping all
 ///   resolution logic. Useful when the caller has already determined the pager command
 ///   (e.g., from a configuration file).
 pub struct Pager {
-    mode: PagerMode,
+    origin: CommandOrigin,
     env: HashMap<String, String>,
 }
 
@@ -32,7 +32,7 @@ impl Pager {
     /// Resolves the pager command from environment variables and falls back to `less`.
     pub fn new() -> Self {
         Self {
-            mode: PagerMode::Resolve { app_env_var: None },
+            origin: CommandOrigin::FromEnv { app_env_var: None },
             env: HashMap::new(),
         }
     }
@@ -40,7 +40,7 @@ impl Pager {
     /// Creates a pager with a pre-resolved command, skipping environment variable resolution.
     pub fn custom(command: impl IntoIterator<Item = impl Into<String>>) -> Self {
         Self {
-            mode: PagerMode::Custom {
+            origin: CommandOrigin::Custom {
                 command: command.into_iter().map(Into::into).collect(),
             },
             env: HashMap::new(),
@@ -51,9 +51,9 @@ impl Pager {
     /// for the pager command (e.g. `"HL_PAGER"`).
     /// Takes priority over `PAGER`.
     ///
-    /// Only used in resolve mode (created with [`Pager::new`]).
+    /// Only used with environment origin (created with [`Pager::new`]).
     pub fn env_var(mut self, name: impl Into<String>) -> Self {
-        if let PagerMode::Resolve { ref mut app_env_var } = self.mode {
+        if let CommandOrigin::FromEnv { ref mut app_env_var } = self.origin {
             *app_env_var = Some(name.into());
         }
         self
@@ -73,12 +73,12 @@ impl Pager {
 
     /// Starts the pager process.
     pub fn start(mut self) -> std::io::Result<StartedPager> {
-        let (pager_path, args, apply_less_defaults) = match self.mode {
-            PagerMode::Resolve { app_env_var } => {
+        let (pager_path, args, apply_less_defaults) = match self.origin {
+            CommandOrigin::FromEnv { app_env_var } => {
                 let (path, args) = resolve(app_env_var);
                 (path, args, true)
             }
-            PagerMode::Custom { command } => {
+            CommandOrigin::Custom { command } => {
                 let (pager, args) = match command.split_first() {
                     Some((pager, args)) => (PathBuf::from(pager), args.to_vec()),
                     None => {
@@ -124,10 +124,11 @@ impl Default for Pager {
 
 // ---
 
-enum PagerMode {
+/// The origin of the pager command, determining how it should be resolved.
+enum CommandOrigin {
     /// Resolve pager from environment variables.
-    Resolve { app_env_var: Option<String> },
-    /// Use a pre-resolved command.
+    FromEnv { app_env_var: Option<String> },
+    /// Use a custom command.
     Custom { command: Vec<String> },
 }
 
@@ -246,25 +247,25 @@ mod tests {
     #[test]
     fn pager_new_creates_default_instance() {
         let pager = Pager::new();
-        assert!(matches!(pager.mode, PagerMode::Resolve { app_env_var: None }));
+        assert!(matches!(pager.origin, CommandOrigin::FromEnv { app_env_var: None }));
     }
 
     #[test]
     fn pager_default_creates_default_instance() {
         let pager = Pager::default();
-        assert!(matches!(pager.mode, PagerMode::Resolve { app_env_var: None }));
+        assert!(matches!(pager.origin, CommandOrigin::FromEnv { app_env_var: None }));
     }
 
     #[test]
     fn pager_env_var_sets_app_env_var() {
         let pager = Pager::new().env_var("HL_PAGER");
-        assert!(matches!(pager.mode, PagerMode::Resolve { app_env_var: Some(ref v) } if v == "HL_PAGER"));
+        assert!(matches!(pager.origin, CommandOrigin::FromEnv { app_env_var: Some(ref v) } if v == "HL_PAGER"));
     }
 
     #[test]
     fn pager_custom_stores_command() {
         let pager = Pager::custom(["less", "-R"]);
-        assert!(matches!(pager.mode, PagerMode::Custom { ref command } if command == &["less", "-R"]));
+        assert!(matches!(pager.origin, CommandOrigin::Custom { ref command } if command == &["less", "-R"]));
     }
 
     #[test]
