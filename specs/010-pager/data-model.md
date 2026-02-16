@@ -54,27 +54,80 @@ Represents a candidate in the `pager.candidates` array.
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum PagerCandidate {
-    /// Reference to an environment variable: `{ env = "HL_PAGER" }`
-    Env(String),
+    /// Simple environment variable reference: `{ env = "HL_PAGER" }`
+    /// or structured reference: `{ env = { pager = "...", follow = "...", delimiter = "..." } }`
+    Env(EnvReference),
     /// Reference to a profile: `{ profile = "fzf" }`
     Profile(String),
 }
 ```
 
 **Validation Rules**:
-- Externally-tagged enum: only one field (`env` or `profile`) may be present
+- Externally-tagged enum: only one field (`env` or `profile`) may be present at top level
 - If both `env` and `profile` are specified, deserialization fails with clear error
 - Empty strings are technically valid but will fail at runtime
 
 **Examples**:
 ```toml
 candidates = [
-  { env = "HL_PAGER" },
+  # Structured form with role-specific vars
+  { env = { pager = "HL_PAGER", follow = "HL_FOLLOW_PAGER", delimiter = "HL_PAGER_DELIMITER" } },
   { profile = "fzf" },
   { profile = "less" },
+  # Simple form
   { env = "PAGER" },
 ]
 ```
+
+---
+
+### 2a. EnvReference
+
+Represents an environment variable reference, either simple or structured.
+
+**Location**: `src/pager/config.rs`
+
+```rust
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
+#[serde(untagged)]
+pub enum EnvReference {
+    /// Simple form: just a variable name
+    Simple(String),
+    /// Structured form with role-specific variables
+    Structured(StructuredEnvReference),
+}
+
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
+pub struct StructuredEnvReference {
+    /// Environment variable for view mode (or both modes if follow not specified)
+    #[serde(default)]
+    pub pager: Option<String>,
+    
+    /// Environment variable for follow mode
+    #[serde(default)]
+    pub follow: Option<String>,
+    
+    /// Environment variable for delimiter override
+    #[serde(default)]
+    pub delimiter: Option<String>,
+}
+```
+
+**Validation Rules**:
+- Simple form: string must not be empty (validated at runtime)
+- Structured form: all fields are optional
+- If structured form has all fields `None`, it's valid but will be skipped at runtime
+- Untagged enum: deserialization tries Simple first, then Structured
+
+**Resolution Logic**:
+- **Simple form**: Read env var, use for both view and follow modes (subject to follow-mode restrictions)
+- **Structured form**:
+  - If `pager` is `None` or env var not set/empty: skip candidate
+  - If `pager` resolves to `@profile`: use profile entirely, ignore `follow` and `delimiter` fields
+  - If `pager` resolves to direct command:
+    - Use for view mode
+    - Check `follow`: if set and resolves, use for follow mode; else disable follow paging
+    - Check `delimiter`: if set and resolves, use it; else use default `newline`
 
 ---
 
@@ -427,9 +480,11 @@ PagerSelector<E, C>
 [pager]
 # Candidate search list (checked in order)
 candidates = [
-  { env = "HL_PAGER" },
+  # Structured env reference with role-specific vars
+  { env = { pager = "HL_PAGER", follow = "HL_FOLLOW_PAGER", delimiter = "HL_PAGER_DELIMITER" } },
   { profile = "fzf" },
   { profile = "less" },
+  # Simple env reference
   { env = "PAGER" },
 ]
 
@@ -474,7 +529,8 @@ Located in `src/testing/assets/pagers/`:
 | File | Purpose |
 |------|---------|
 | `basic.toml` | Basic configuration with one profile candidate |
-| `env-candidate.toml` | Candidate referencing environment variable |
+| `simple-env-candidate.toml` | Simple env candidate referencing one variable |
+| `structured-env-candidate.toml` | Structured env candidate with role-specific vars |
 | `profile-candidate.toml` | Candidate referencing a profile |
 | `mixed-candidates.toml` | Mix of env and profile candidates |
 | `follow-enabled.toml` | Profile with follow mode enabled |
