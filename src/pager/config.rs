@@ -18,10 +18,39 @@ use crate::output::OutputDelimiter;
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum PagerCandidate {
-    /// Reference to an environment variable: `{ env = "HL_PAGER" }`
-    Env(String),
+    /// Simple environment variable reference: `{ env = "HL_PAGER" }`
+    /// or structured reference: `{ env = { pager = "...", follow = "...", delimiter = "..." } }`
+    Env(EnvReference),
     /// Reference to a profile: `{ profile = "fzf" }`
     Profile(String),
+}
+
+// ---
+
+/// Represents an environment variable reference, either simple or structured.
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
+#[serde(untagged)]
+pub enum EnvReference {
+    /// Simple form: just a variable name
+    Simple(String),
+    /// Structured form with role-specific variables
+    Structured(StructuredEnvReference),
+}
+
+/// Structured environment variable reference with role-specific variables.
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
+pub struct StructuredEnvReference {
+    /// Environment variable for view mode (or both modes if follow not specified).
+    #[serde(default)]
+    pub pager: Option<String>,
+
+    /// Environment variable for follow mode.
+    #[serde(default)]
+    pub follow: Option<String>,
+
+    /// Environment variable for delimiter override.
+    #[serde(default)]
+    pub delimiter: Option<String>,
 }
 
 // ---
