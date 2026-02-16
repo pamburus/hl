@@ -1,6 +1,9 @@
 # Profile with view-specific arguments
 # Used for testing role-specific argument configuration
 
-[pagers.fzf]
+[pager]
+candidates = [{ profile = "fzf" }]
+
+[pager.profiles.fzf]
 command = ["fzf", "--ansi"]
 view.args = ["--layout=reverse-list"]

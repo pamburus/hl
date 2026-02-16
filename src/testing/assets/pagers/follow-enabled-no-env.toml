@@ -1,10 +1,7 @@
 # Test config: profile with follow mode explicitly enabled
+# No env candidates - for testing pure profile selection
 [pager]
-candidates = [
-  { env = { pager = "HL_PAGER", follow = "HL_FOLLOW_PAGER", delimiter = "HL_PAGER_DELIMITER" } },
-  { profile = "fzf" },
-  { env = "PAGER" },
-]
+candidates = [{ profile = "fzf" }]
 
 [pager.profiles.fzf]
 command = ["fzf", "--ansi"]
