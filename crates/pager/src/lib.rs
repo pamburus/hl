@@ -51,7 +51,7 @@ impl Pager {
     /// Takes priority over `PAGER`.
     ///
     /// Only used with environment origin (created with [`Pager::from_env`]).
-    pub fn env_var(mut self, name: impl Into<String>) -> Self {
+    pub fn lookup_var(mut self, name: impl Into<String>) -> Self {
         if let CommandOrigin::FromEnv { ref mut app_env_var } = self.origin {
             *app_env_var = Some(name.into());
         }
@@ -59,13 +59,13 @@ impl Pager {
     }
 
     /// Sets an environment variable to pass to the pager process.
-    pub fn env(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
+    pub fn with_env_var(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
         self.env.insert(key.into(), value.into());
         self
     }
 
     /// Sets multiple environment variables to pass to the pager process.
-    pub fn envs(mut self, vars: impl IntoIterator<Item = (impl Into<String>, impl Into<String>)>) -> Self {
+    pub fn with_env(mut self, vars: impl IntoIterator<Item = (impl Into<String>, impl Into<String>)>) -> Self {
         self.env.extend(vars.into_iter().map(|(k, v)| (k.into(), v.into())));
         self
     }
@@ -235,7 +235,7 @@ mod tests {
 
     #[test]
     fn pager_env_var_sets_app_env_var() {
-        let pager = Pager::from_env().env_var("HL_PAGER");
+        let pager = Pager::from_env().lookup_var("HL_PAGER");
         assert!(matches!(pager.origin, CommandOrigin::FromEnv { app_env_var: Some(ref v) } if v == "HL_PAGER"));
     }
 
@@ -247,13 +247,13 @@ mod tests {
 
     #[test]
     fn pager_env_sets_env_var() {
-        let pager = Pager::custom(["less"]).env("LESSCHARSET", "UTF-8");
+        let pager = Pager::custom(["less"]).with_env_var("LESSCHARSET", "UTF-8");
         assert_eq!(pager.env.get("LESSCHARSET"), Some(&"UTF-8".to_string()));
     }
 
     #[test]
     fn pager_envs_sets_multiple() {
-        let pager = Pager::custom(["less"]).envs([("A", "1"), ("B", "2")]);
+        let pager = Pager::custom(["less"]).with_env([("A", "1"), ("B", "2")]);
         assert_eq!(pager.env.get("A"), Some(&"1".to_string()));
         assert_eq!(pager.env.get("B"), Some(&"2".to_string()));
     }
