@@ -25,474 +25,91 @@ updates:
       time: "18:00"
       timezone: "Etc/UTC"
     allow:
-      - dependency-type: all
-    groups:
-      patch-updates:
-        applies-to: version-updates
-        patterns:
-          - "*"
-        update-types:
-          - "patch"
-      anstyle-security:
-        applies-to: security-updates
-        patterns:
-          - "anstyle"
-          - "anstyle-*"
-      anstyle-version:
-        applies-to: version-updates
-        patterns:
-          - "anstyle"
-          - "anstyle-*"
-        update-types:
-          - "major"
-          - "minor"
-      byte-strings-security:
-        applies-to: security-updates
-        patterns:
-          - "byte-strings"
-          - "byte-strings-*"
-      byte-strings-version:
-        applies-to: version-updates
-        patterns:
-          - "byte-strings"
-          - "byte-strings-*"
-        update-types:
-          - "major"
-          - "minor"
-      bzip2-security:
-        applies-to: security-updates
-        patterns:
-          - "bzip2"
-          - "bzip2-*"
-      bzip2-version:
-        applies-to: version-updates
-        patterns:
-          - "bzip2"
-          - "bzip2-*"
-        update-types:
-          - "major"
-          - "minor"
-      capnp-security:
-        applies-to: security-updates
-        patterns:
-          - "capnp"
-          - "capnpc"
-      capnp-version:
-        applies-to: version-updates
-        patterns:
-          - "capnp"
-          - "capnpc"
-        update-types:
-          - "major"
-          - "minor"
-      chrono-security:
-        applies-to: security-updates
-        patterns:
-          - "chrono"
-          - "chrono-*"
-      chrono-version:
-        applies-to: version-updates
-        patterns:
-          - "chrono"
-          - "chrono-*"
-        update-types:
-          - "major"
-          - "minor"
-      ciborium-security:
-        applies-to: security-updates
-        patterns:
-          - "ciborium"
-          - "ciborium-*"
-      ciborium-version:
-        applies-to: version-updates
-        patterns:
-          - "ciborium"
-          - "ciborium-*"
-        update-types:
-          - "major"
-          - "minor"
-      clap-security:
-        applies-to: security-updates
-        patterns:
-          - "clap"
-          - "clap_*"
-      clap-version:
-        applies-to: version-updates
-        patterns:
-          - "clap"
-          - "clap_*"
-        update-types:
-          - "major"
-          - "minor"
-      const-random-security:
-        applies-to: security-updates
-        patterns:
-          - "const-random"
-          - "const-random-*"
-      const-random-version:
-        applies-to: version-updates
-        patterns:
-          - "const-random"
-          - "const-random-*"
-        update-types:
-          - "major"
-          - "minor"
-      criterion-security:
-        applies-to: security-updates
-        patterns:
-          - "criterion"
-          - "criterion-*"
-      criterion-version:
-        applies-to: version-updates
-        patterns:
-          - "criterion"
-          - "criterion-*"
-        update-types:
-          - "major"
-          - "minor"
-      crossbeam-security:
-        applies-to: security-updates
-        patterns:
-          - "crossbeam"
-          - "crossbeam-*"
-      crossbeam-version:
-        applies-to: version-updates
-        patterns:
-          - "crossbeam"
-          - "crossbeam-*"
-        update-types:
-          - "major"
-          - "minor"
-      darling-security:
-        applies-to: security-updates
-        patterns:
-          - "darling"
-          - "darling_*"
-      darling-version:
-        applies-to: version-updates
-        patterns:
-          - "darling"
-          - "darling_*"
-        update-types:
-          - "major"
-          - "minor"
-      enum-map-security:
-        applies-to: security-updates
-        patterns:
-          - "enum-map"
-          - "enum-map-*"
-      enum-map-version:
-        applies-to: version-updates
-        patterns:
-          - "enum-map"
-          - "enum-map-*"
-        update-types:
-          - "major"
-          - "minor"
-      enumset-security:
-        applies-to: security-updates
-        patterns:
-          - "enumset"
-          - "enumset-*"
-          - "enumset_*"
-      enumset-version:
-        applies-to: version-updates
-        patterns:
-          - "enumset"
-          - "enumset-*"
-          - "enumset_*"
-        update-types:
-          - "major"
-          - "minor"
-      iana-time-zone-security:
-        applies-to: security-updates
-        patterns:
-          - "iana-time-zone"
-          - "iana-time-zone-*"
-      iana-time-zone-version:
-        applies-to: version-updates
-        patterns:
-          - "iana-time-zone"
-          - "iana-time-zone-*"
-        update-types:
-          - "major"
-          - "minor"
-      inotify-security:
-        applies-to: security-updates
-        patterns:
-          - "inotify"
-          - "inotify-*"
-      inotify-version:
-        applies-to: version-updates
-        patterns:
-          - "inotify"
-          - "inotify-*"
-        update-types:
-          - "major"
-          - "minor"
-      is-terminal-security:
-        applies-to: security-updates
-        patterns:
-          - "is-terminal"
-          - "is-terminal-*"
-          - "is_terminal_*"
-      is-terminal-version:
-        applies-to: version-updates
-        patterns:
-          - "is-terminal"
-          - "is-terminal-*"
-          - "is_terminal_*"
-        update-types:
-          - "major"
-          - "minor"
-      kqueue-security:
-        applies-to: security-updates
-        patterns:
-          - "kqueue"
-          - "kqueue-*"
-      kqueue-version:
-        applies-to: version-updates
-        patterns:
-          - "kqueue"
-          - "kqueue-*"
-        update-types:
-          - "major"
-          - "minor"
-      pest-security:
-        applies-to: security-updates
-        patterns:
-          - "pest"
-          - "pest_*"
-      pest-version:
-        applies-to: version-updates
-        patterns:
-          - "pest"
-          - "pest_*"
-        update-types:
-          - "major"
-          - "minor"
-      phf-security:
-        applies-to: security-updates
-        patterns:
-          - "phf"
-          - "phf_*"
-      phf-version:
-        applies-to: version-updates
-        patterns:
-          - "phf"
-          - "phf_*"
-        update-types:
-          - "major"
-          - "minor"
-      plotters-security:
-        applies-to: security-updates
-        patterns:
-          - "plotters"
-          - "plotters-*"
-      plotters-version:
-        applies-to: version-updates
-        patterns:
-          - "plotters"
-          - "plotters-*"
-        update-types:
-          - "major"
-          - "minor"
-      predicates-security:
-        applies-to: security-updates
-        patterns:
-          - "predicates"
-          - "predicates-*"
-      predicates-version:
-        applies-to: version-updates
-        patterns:
-          - "predicates"
-          - "predicates-*"
-        update-types:
-          - "major"
-          - "minor"
-      rand-security:
-        applies-to: security-updates
-        patterns:
-          - "rand"
-          - "rand_*"
-      rand-version:
-        applies-to: version-updates
-        patterns:
-          - "rand"
-          - "rand_*"
-        update-types:
-          - "major"
-          - "minor"
-      rayon-security:
-        applies-to: security-updates
-        patterns:
-          - "rayon"
-          - "rayon-*"
-      rayon-version:
-        applies-to: version-updates
-        patterns:
-          - "rayon"
-          - "rayon-*"
-        update-types:
-          - "major"
-          - "minor"
-      redox-security:
-        applies-to: security-updates
-        patterns:
-          - "redox_*"
-      redox-version:
-        applies-to: version-updates
-        patterns:
-          - "redox_*"
-        update-types:
-          - "major"
-          - "minor"
-      regex-security:
-        applies-to: security-updates
-        patterns:
-          - "regex"
-          - "regex-*"
-      regex-version:
-        applies-to: version-updates
-        patterns:
-          - "regex"
-          - "regex-*"
-        update-types:
-          - "major"
-          - "minor"
-      rust-embed-security:
-        applies-to: security-updates
-        patterns:
-          - "rust-embed"
-          - "rust-embed-*"
-      rust-embed-version:
-        applies-to: version-updates
-        patterns:
-          - "rust-embed"
-          - "rust-embed-*"
-        update-types:
-          - "major"
-          - "minor"
-      strum-security:
-        applies-to: security-updates
-        patterns:
-          - "strum"
-          - "strum_*"
-      strum-version:
-        applies-to: version-updates
-        patterns:
-          - "strum"
-          - "strum_*"
-        update-types:
-          - "major"
-          - "minor"
-      thiserror-security:
-        applies-to: security-updates
-        patterns:
-          - "thiserror"
-          - "thiserror-*"
-      thiserror-version:
-        applies-to: version-updates
-        patterns:
-          - "thiserror"
-          - "thiserror-*"
-        update-types:
-          - "major"
-          - "minor"
-      toml-security:
-        applies-to: security-updates
-        patterns:
-          - "serde_spanned"
-          - "serde_toml"
-          - "toml"
-          - "toml_*"
-      toml-version:
-        applies-to: version-updates
-        patterns:
-          - "serde_spanned"
-          - "serde_toml"
-          - "toml"
-          - "toml_*"
-        update-types:
-          - "major"
-          - "minor"
-      unicode-security:
-        applies-to: security-updates
-        patterns:
-          - "unicode-*"
-      unicode-version:
-        applies-to: version-updates
-        patterns:
-          - "unicode-*"
-        update-types:
-          - "major"
-          - "minor"
-      wasm-security:
-        applies-to: security-updates
-        patterns:
-          - "js-sys"
-          - "wasi"
-          - "wasm-*"
-          - "web-sys"
-      wasm-version:
-        applies-to: version-updates
-        patterns:
-          - "js-sys"
-          - "wasi"
-          - "wasm-*"
-          - "web-sys"
-        update-types:
-          - "major"
-          - "minor"
-      winapi-security:
-        applies-to: security-updates
-        patterns:
-          - "winapi"
-          - "winapi-*"
-      winapi-version:
-        applies-to: version-updates
-        patterns:
-          - "winapi"
-          - "winapi-*"
-        update-types:
-          - "major"
-          - "minor"
-      windows-security:
-        applies-to: security-updates
-        patterns:
-          - "windows-*"
-          - "windows_*"
-      windows-version:
-        applies-to: version-updates
-        patterns:
-          - "windows-*"
-          - "windows_*"
-        update-types:
-          - "major"
-          - "minor"
-      zerofrom-security:
-        applies-to: security-updates
-        patterns:
-          - "zerofrom"
-          - "zerofrom-*"
-      zerofrom-version:
-        applies-to: version-updates
-        patterns:
-          - "zerofrom"
-          - "zerofrom-*"
-        update-types:
-          - "major"
-          - "minor"
-      zstd-security:
-        applies-to: security-updates
-        patterns:
-          - "zstd"
-          - "zstd-*"
-      zstd-version:
-        applies-to: version-updates
-        patterns:
-          - "zstd"
-          - "zstd-*"
-        update-types:
-          - "major"
-          - "minor"
+      - dependency-type: direct
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-patch"]
+      - dependency-name: "anstream"
+        update-types: ["version-update:semver-minor"]
+      - dependency-name: "anyhow"
+        update-types: ["version-update:semver-minor"]
+      - dependency-name: "assert_matches"
+        update-types: ["version-update:semver-minor"]
+      - dependency-name: "clap"
+        update-types: ["version-update:semver-minor"]
+      - dependency-name: "clap_complete"
+        update-types: ["version-update:semver-minor"]
+      - dependency-name: "const-str"
+        update-types: ["version-update:semver-minor"]
+      - dependency-name: "derive_more"
+        update-types: ["version-update:semver-minor"]
+      - dependency-name: "dirs"
+        update-types: ["version-update:semver-minor"]
+      - dependency-name: "enum-map"
+        update-types: ["version-update:semver-minor"]
+      - dependency-name: "enumset"
+        update-types: ["version-update:semver-minor"]
+      - dependency-name: "flate2"
+        update-types: ["version-update:semver-minor"]
+      - dependency-name: "fnv"
+        update-types: ["version-update:semver-minor"]
+      - dependency-name: "humantime"
+        update-types: ["version-update:semver-minor"]
+      - dependency-name: "itoa"
+        update-types: ["version-update:semver-minor"]
+      - dependency-name: "known-folders"
+        update-types: ["version-update:semver-minor"]
+      - dependency-name: "kqueue"
+        update-types: ["version-update:semver-minor"]
+      - dependency-name: "maplit"
+        update-types: ["version-update:semver-minor"]
+      - dependency-name: "memchr"
+        update-types: ["version-update:semver-minor"]
+      - dependency-name: "notify"
+        update-types: ["version-update:semver-minor"]
+      - dependency-name: "num_cpus"
+        update-types: ["version-update:semver-minor"]
+      - dependency-name: "once_cell"
+        update-types: ["version-update:semver-minor"]
+      - dependency-name: "owo-colors"
+        update-types: ["version-update:semver-minor"]
+      - dependency-name: "pest"
+        update-types: ["version-update:semver-minor"]
+      - dependency-name: "pest_derive"
+        update-types: ["version-update:semver-minor"]
+      - dependency-name: "regex"
+        update-types: ["version-update:semver-minor"]
+      - dependency-name: "rust-embed"
+        update-types: ["version-update:semver-minor"]
+      - dependency-name: "semver"
+        update-types: ["version-update:semver-minor"]
+      - dependency-name: "serde"
+        update-types: ["version-update:semver-minor"]
+      - dependency-name: "serde_json"
+        update-types: ["version-update:semver-minor"]
+      - dependency-name: "serde_plain"
+        update-types: ["version-update:semver-minor"]
+      - dependency-name: "shellwords"
+        update-types: ["version-update:semver-minor"]
+      - dependency-name: "snap"
+        update-types: ["version-update:semver-minor"]
+      - dependency-name: "static_assertions"
+        update-types: ["version-update:semver-minor"]
+      - dependency-name: "thiserror"
+        update-types: ["version-update:semver-minor"]
+      - dependency-name: "titlecase"
+        update-types: ["version-update:semver-minor"]
+      - dependency-name: "toml"
+        update-types: ["version-update:semver-minor"]
+      - dependency-name: "unicode-segmentation"
+        update-types: ["version-update:semver-minor"]
+      - dependency-name: "ureq"
+        update-types: ["version-update:semver-minor"]
+      - dependency-name: "utf8-supported"
+        update-types: ["version-update:semver-minor"]
+      - dependency-name: "wild"
+        update-types: ["version-update:semver-minor"]
+      - dependency-name: "wildmatch"
+        update-types: ["version-update:semver-minor"]
+      - dependency-name: "yaml-peg"
+        update-types: ["version-update:semver-minor"]
