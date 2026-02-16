@@ -14,30 +14,35 @@ use clap::{CommandFactory, Parser};
 use enumset::enum_set;
 use enumset_ext::EnumSetExt;
 use env_logger::{self as logger};
+use itertools::Itertools;
 use terminal_size::terminal_size_of;
 use utf8_supported::{Utf8Support, utf8_supported};
 
 // local imports
 use hl::{
-    Delimiter, IncludeExcludeKeyFilter, KeyMatchOptions, app, cli, config,
+    Delimiter, IncludeExcludeKeyFilter, KeyMatchOptions, app,
+    appdirs::AppDirs,
+    cli::{self, ThemeTagSet},
+    config,
     datefmt::LinuxDateFormat,
     error::*,
-    help,
     input::InputReference,
-    output::OutputStream,
+    output::{OutputStream, Pager},
+    pager::{PagerRole, PagerSelector},
     query::Query,
     settings::{AsciiModeOpt, InputInfo, Settings},
     signal::SignalHandler,
     theme::Theme,
+    themecfg,
     timeparse::parse_time,
     timezone::Tz,
 };
-use lifecycle::{AsyncDrop, DropNotifier};
-use pager::Pager;
+
+// private modules
+mod help;
 
 const HL_DEBUG_LOG: &str = "HL_DEBUG_LOG";
 const HL_DEBUG_LOG_STYLE: &str = "HL_DEBUG_LOG_STYLE";
-const HL_PAGER: &str = "HL_PAGER";
 
 // ---
 
@@ -115,31 +120,32 @@ fn run() -> Result<()> {
         cli::PagingOption::Always => true,
         cli::PagingOption::Never => false,
     };
-    let paging = if opt.paging_never || opt.follow { false } else { paging };
-    let start_pager = || {
+    let paging = !opt.paging_never && paging;
+    let role = if opt.follow { PagerRole::Follow } else { PagerRole::View };
+    let selector = PagerSelector::new(settings.pager.as_ref(), &settings.pagers);
+    let pager = || -> Option<OutputStream> {
         if paging {
-            Pager::new()
-                .env_var(HL_PAGER)
-                .start()
-                .inspect_err(|err| {
-                    log::debug!("failed to start pager: {}", err);
-                })
-                .ok()
+            let selection = selector.select(role);
+            match Pager::from_selection(selection) {
+                Ok(Some(pager)) => Some(Box::new(pager)),
+                Ok(None) => None,
+                Err(e) => {
+                    log::debug!("failed to spawn pager: {}", e);
+                    None
+                }
+            }
         } else {
             None
         }
     };
+    let pager_or_stdout = || pager().unwrap_or_else(|| Box::new(stdout()));
 
     if let Some(verbosity) = opt.help {
         let color_when = match use_colors {
             true => anstream::ColorChoice::Always,
             false => anstream::ColorChoice::Never,
         };
-        let output: OutputStream = match start_pager() {
-            Some(pager) => Box::new(pager),
-            None => Box::new(stdout()),
-        };
-        let mut out = anstream::AutoStream::new(output, color_when);
+        let mut out = anstream::AutoStream::new(pager_or_stdout(), color_when);
         let help = match verbosity {
             cli::HelpVerbosity::Short => command().render_help(),
             cli::HelpVerbosity::Long => command().render_long_help(),
@@ -163,7 +169,7 @@ fn run() -> Result<()> {
     let app_dirs = config::app_dirs().ok_or(Error::AppDirs)?;
 
     if let Some(tags) = opt.list_themes {
-        return app::list_themes(&app_dirs, tags.map(|t| *t), help::Formatter::new(stdout()));
+        return list_themes(&app_dirs, tags);
     }
 
     let theme = if use_colors {
@@ -379,56 +385,6 @@ fn run() -> Result<()> {
         },
     });
 
-<<<<<<< HEAD
-    // Configure the input.
-    let mut inputs = opt
-        .files
-        .iter()
-        .map(|x| {
-            if x.to_str() == Some("-") {
-                Ok::<_, std::io::Error>(InputReference::Stdin)
-            } else {
-                Ok(InputReference::File(x.clone().try_into()?))
-            }
-        })
-        .collect::<std::result::Result<Vec<_>, _>>()?;
-    if inputs.is_empty() {
-        if stdin().is_terminal() {
-            let mut cmd = cli::Opt::command();
-            return cmd.print_help().map_err(Error::Io);
-        }
-        inputs.push(InputReference::Stdin);
-    }
-
-    let n = inputs.len();
-    log::debug!("hold {n} inputs");
-    let inputs = inputs
-        .into_iter()
-        .map(|input| input.hold().map_err(Error::Io))
-        .collect::<Result<Vec<_>>>()?;
-
-    let mut _pager_watcher = None;
-    let output: OutputStream = match opt.output {
-        Some(output) => Box::new(std::fs::File::create(PathBuf::from(&output))?),
-        None => match start_pager() {
-            Some(mut pager) => {
-                let detached = pager.detach_process();
-                _pager_watcher = detached.map(|p| {
-                    log::debug!("monitor pager process");
-                    AsyncDrop::new(DropNotifier::new(p, || {
-                        log::debug!("pager process exited");
-                        process::exit(0);
-                    }))
-                });
-                Box::new(pager)
-            }
-            None => Box::new(stdout()),
-        },
-    };
-
-    let mut output: OutputStream = Box::new(ExitOnWriteError(output));
-
-
     log::debug!("run the app");
 
     // Run the app.
@@ -442,6 +398,36 @@ fn run() -> Result<()> {
 
     // Run the app with signal handling.
     SignalHandler::run(interrupt_ignore_count, std::time::Duration::from_secs(1), run)
+}
+
+fn list_themes(dirs: &AppDirs, tags: Option<cli::ThemeTagSet>) -> Result<()> {
+    let items = Theme::list(dirs)?;
+    let mut formatter = help::Formatter::new(stdout());
+
+    let tags = tags.unwrap_or_default();
+    let mut exclude = ThemeTagSet::default();
+    if !tags.contains(cli::ThemeTag::Base) {
+        exclude.insert(cli::ThemeTag::Base);
+    }
+    if !tags.contains(cli::ThemeTag::Overlay) {
+        exclude.insert(cli::ThemeTag::Overlay);
+    }
+
+    formatter.format_grouped_list(
+        items
+            .into_iter()
+            .filter(|(name, _)| {
+                themecfg::Theme::load(dirs, name)
+                    .ok()
+                    .map(|theme| theme.tags.includes(*tags) && !theme.tags.intersects(*exclude))
+                    .unwrap_or(false)
+            })
+            .sorted_by_key(|x| (x.1.origin, x.0.clone()))
+            .chunk_by(|x| x.1.origin)
+            .into_iter()
+            .map(|(origin, group)| (origin, group.map(|x| x.0))),
+    )?;
+    Ok(())
 }
 
 fn main() {
@@ -459,28 +445,5 @@ impl AppInfoProvider for AppInfo {
             UsageRequest::ListThemes => Some(("--list-themes".into(), "".into())),
             UsageRequest::ListThemeOverlays => Some(("--list-themes=overlay".into(), "".into())),
         }
-    }
-}
-
-// ---
-
-struct ExitOnWriteError<W>(W);
-
-impl<W> ExitOnWriteError<W> {
-    fn inspect<R>(res: std::io::Result<R>) -> std::io::Result<R> {
-        res.inspect_err(|err| {
-            log::debug!("write error: {}", err);
-            process::exit(0);
-        })
-    }
-}
-
-impl<W: Write> Write for ExitOnWriteError<W> {
-    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-        Self::inspect(self.0.write(buf))
-    }
-
-    fn flush(&mut self) -> std::io::Result<()> {
-        Self::inspect(self.0.flush())
     }
 }
