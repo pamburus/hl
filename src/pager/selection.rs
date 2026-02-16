@@ -65,6 +65,12 @@ pub enum Error {
         exit_code: i32,
         stderr: String,
     },
+
+    #[error("failed to wait for pager process: {source}")]
+    WaitFailed {
+        #[source]
+        source: std::io::Error,
+    },
 }
 
 fn quote_command(command: &[String]) -> String {
