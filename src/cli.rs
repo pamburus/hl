@@ -16,6 +16,7 @@ use crate::{
     config,
     error::*,
     level::{LevelValueParser, RelaxedLevel},
+    output::OutputDelimiter,
     settings::{self, AsciiModeOpt, ExpansionMode, InputInfo},
     themecfg,
 };
@@ -144,19 +145,6 @@ pub struct Opt {
     /// Handful alias for <c>--paging=never</>, overrides <c>--paging</> option
     #[arg(short = 'P')]
     pub paging_never: bool,
-
-    /// Output entry delimiter when pager is used
-    ///
-    /// Possible values:
-    /// • <c>newline</>: Either lf or crlf, depends on the platform (default)
-    /// • <c>nul</>: Null character (\0)
-    #[arg(
-        long,
-        env = "HL_PAGER_DELIMITER",
-        default_value = "newline",
-        overrides_with = "pager_delimiter"
-    )]
-    pub pager_delimiter: OutputDelimiter,
 
     /// Display entries with level <s>>>=</> <c><<LEVEL>></>
     #[arg(
@@ -613,12 +601,6 @@ pub enum Delimiter {
     Cr,
     Lf,
     Crlf,
-    Newline,
-    Nul,
-}
-
-#[derive(ValueEnum, Debug, Clone, Copy, PartialEq, Eq)]
-pub enum OutputDelimiter {
     Newline,
     Nul,
 }
