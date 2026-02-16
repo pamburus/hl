@@ -13,11 +13,11 @@ build = "build.rs"
 [workspace]
 members = [
   ".",
-  "crates/lifecycle",
   "crates/encstr",
   "crates/enumset-ext",
   "crates/enumset-serde",
   "crates/heapopt",
+  "crates/lifecycle",
   "crates/pager",
   "crates/serde-logfmt",
   "crates/styled-help",
@@ -48,7 +48,6 @@ name = "bench"
 [dependencies]
 anstream = "1"
 bytefmt = "0.1"
-lifecycle = { path = "./crates/lifecycle" }
 capnp.workspace = true
 chrono = { version = "0.4", default-features = false, features = ["clock", "serde", "std"] }
 chrono-english = "0.1"
@@ -85,6 +84,7 @@ itoa = { version = "1", default-features = false }
 json.workspace = true
 known-folders = "1"
 liblzma = { version = "*", features = ["static"] }
+lifecycle = { path = "./crates/lifecycle" }
 log = "0.4"
 logos = "0.16"
 memchr.workspace = true
@@ -115,7 +115,7 @@ terminal_size = "0.4"
 thiserror = "2"
 titlecase = "3"
 toml = "1"
-unicode-segmentation = "1.12"
+unicode-segmentation = "1"
 unicode-width = "0.2"
 utf8-supported = "1"
 wild = "2"
