@@ -12,26 +12,43 @@ use crate::output::OutputDelimiter;
 
 // ---
 
-/// Represents the top-level `pager` configuration option.
+/// Represents a candidate in the `pager.candidates` array.
 ///
-/// Can be either a single profile name or a priority-ordered list of profiles.
+/// Each candidate is either an environment variable reference or a profile reference.
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
-#[serde(untagged)]
-pub enum PagerConfig {
-    /// Single profile name: `pager = "fzf"`
-    Single(String),
-    /// Priority list: `pager = ["fzf", "less"]`
-    Priority(Vec<String>),
+#[serde(rename_all = "lowercase")]
+pub enum PagerCandidate {
+    /// Reference to an environment variable: `{ env = "HL_PAGER" }`
+    Env(String),
+    /// Reference to a profile: `{ profile = "fzf" }`
+    Profile(String),
+}
+
+// ---
+
+/// Represents the top-level `pager` configuration section.
+///
+/// Contains a list of candidates to try in order and named pager profiles.
+#[derive(Debug, Clone, Default, Deserialize, PartialEq, Eq)]
+pub struct PagerConfig {
+    /// List of pager candidates to try in order.
+    #[serde(default)]
+    pub candidates: Vec<PagerCandidate>,
+
+    /// Named pager profiles.
+    #[serde(default)]
+    pub profiles: HashMap<String, PagerProfile>,
 }
 
 impl PagerConfig {
-    /// Returns profile names in priority order.
-    pub fn profiles(&self) -> impl Iterator<Item = &str> {
-        let iter: Box<dyn Iterator<Item = &str>> = match self {
-            PagerConfig::Single(name) => Box::new(std::iter::once(name.as_str())),
-            PagerConfig::Priority(names) => Box::new(names.iter().map(|s| s.as_str())),
-        };
-        iter
+    /// Returns candidates in priority order.
+    pub fn candidates(&self) -> &[PagerCandidate] {
+        &self.candidates
+    }
+
+    /// Gets a profile by name.
+    pub fn profile(&self, name: &str) -> Option<&PagerProfile> {
+        self.profiles.get(name)
     }
 }
 

@@ -2,7 +2,7 @@
 
 **Feature Branch**: `010-pager`
 **Date**: 2025-01-15
-**Updated**: 2025-01-27
+**Updated**: 2026-02-16
 
 ## Overview
 
@@ -12,34 +12,73 @@ This document defines the data structures for the pager configuration system, in
 
 ### 1. PagerConfig
 
-Represents the top-level `pager` configuration option.
+Represents the top-level `pager` configuration section.
+
+**Location**: `src/pager/config.rs`
+
+```rust
+#[derive(Debug, Clone, Default, Deserialize, PartialEq, Eq)]
+pub struct PagerConfig {
+    /// List of pager candidates to try in order
+    #[serde(default)]
+    pub candidates: Vec<PagerCandidate>,
+    
+    /// Named pager profiles
+    #[serde(default)]
+    pub profiles: HashMap<String, PagerProfile>,
+}
+
+impl PagerConfig {
+    /// Returns candidates in priority order
+    pub fn candidates(&self) -> &[PagerCandidate] { ... }
+    
+    /// Gets a profile by name
+    pub fn profile(&self, name: &str) -> Option<&PagerProfile> { ... }
+}
+```
+
+**Validation Rules**:
+- `candidates` may be empty (falls back to stdout)
+- `profiles` may be empty
+- Profile names in candidates are validated lazily at selection time
+
+---
+
+### 2. PagerCandidate
+
+Represents a candidate in the `pager.candidates` array.
 
 **Location**: `src/pager/config.rs`
 
 ```rust
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
-#[serde(untagged)]
-pub enum PagerConfig {
-    /// Single profile name: `pager = "fzf"`
-    Single(String),
-    /// Priority list: `pager = ["fzf", "less"]`
-    Priority(Vec<String>),
-}
-
-impl PagerConfig {
-    /// Returns profile names in priority order
-    pub fn profiles(&self) -> impl Iterator<Item = &str> { ... }
+#[serde(rename_all = "lowercase")]
+pub enum PagerCandidate {
+    /// Reference to an environment variable: `{ env = "HL_PAGER" }`
+    Env(String),
+    /// Reference to a profile: `{ profile = "fzf" }`
+    Profile(String),
 }
 ```
 
 **Validation Rules**:
-- If `Single`, the string must not be empty
-- If `Priority`, the vector may be empty (falls back to stdout)
-- Profile names are validated lazily at selection time
+- Externally-tagged enum: only one field (`env` or `profile`) may be present
+- If both `env` and `profile` are specified, deserialization fails with clear error
+- Empty strings are technically valid but will fail at runtime
+
+**Examples**:
+```toml
+candidates = [
+  { env = "HL_PAGER" },
+  { profile = "fzf" },
+  { profile = "less" },
+  { env = "PAGER" },
+]
+```
 
 ---
 
-### 2. PagerProfile
+### 3. PagerProfile
 
 Represents a named pager profile in the `[pagers.<name>]` section.
 
@@ -85,7 +124,7 @@ impl PagerProfile {
 
 ---
 
-### 3. PagerRoleConfig
+### 4. PagerRoleConfig
 
 Represents role-specific configuration (`view` or `follow`).
 
@@ -117,7 +156,7 @@ impl PagerRoleConfig {
 
 ---
 
-### 4. PagerRole
+### 5. PagerRole
 
 Enum representing the context in which a pager is used.
 
@@ -135,7 +174,7 @@ pub enum PagerRole {
 
 ---
 
-### 5. PagerOverride
+### 6. PagerOverride
 
 Represents a pager override parsed from an environment variable.
 
@@ -160,7 +199,7 @@ pub enum PagerOverride {
 
 ---
 
-### 6. SelectedPager
+### 7. SelectedPager
 
 Represents the final pager selection result.
 
@@ -181,7 +220,7 @@ pub enum SelectedPager {
 
 ---
 
-### 7. PagerSelector
+### 8. PagerSelector
 
 Main selection logic with dependency injection for testing.
 
@@ -189,15 +228,14 @@ Main selection logic with dependency injection for testing.
 
 ```rust
 pub struct PagerSelector<'a, E = SystemEnv, C = SystemExeChecker> {
-    config: Option<&'a PagerConfig>,
-    profiles: &'a HashMap<String, PagerProfile>,
+    config: &'a PagerConfig,
     env_provider: E,
     exe_checker: C,
 }
 
 impl<'a> PagerSelector<'a, SystemEnv, SystemExeChecker> {
     /// Creates a new pager selector with the given configuration.
-    pub fn new(config: Option<&'a PagerConfig>, profiles: &'a HashMap<String, PagerProfile>) -> Self { ... }
+    pub fn new(config: &'a PagerConfig) -> Self { ... }
 }
 
 impl<'a, E: EnvProvider, C: ExeChecker> PagerSelector<'a, E, C> {
@@ -205,13 +243,13 @@ impl<'a, E: EnvProvider, C: ExeChecker> PagerSelector<'a, E, C> {
     pub fn with_providers(...) -> Self { ... }
     
     /// Selects a pager for the given role.
-    pub fn select(&self, role: PagerRole) -> SelectedPager { ... }
+    pub fn select(&self, role: PagerRole) -> Result<SelectedPager, Error> { ... }
 }
 ```
 
 ---
 
-### 8. Dependency Injection Traits
+### 9. Dependency Injection Traits
 
 Traits for testability without mocking the real environment.
 
@@ -242,28 +280,31 @@ pub struct SystemExeChecker;
 ```
 Settings
     │
-    ├── pager: Option<PagerConfig>
-    │       │
-    │       └── profiles() → Iterator<&str>
-    │
-    └── pagers: HashMap<String, PagerProfile>
-                    │
-                    └── PagerProfile
+    └── pager: PagerConfig
+            │
+            ├── candidates: Vec<PagerCandidate>
+            │       │
+            │       └── PagerCandidate (enum)
+            │               ├── Env(String)
+            │               └── Profile(String)
+            │
+            └── profiles: HashMap<String, PagerProfile>
                             │
-                            ├── command: Vec<String>
-                            ├── env: HashMap<String, String>
-                            ├── view: PagerRoleConfig
-                            │           ├── enabled: Option<bool>
-                            │           └── args: Vec<String>
-                            │
-                            └── follow: PagerRoleConfig
-                                        ├── enabled: Option<bool>
-                                        └── args: Vec<String>
+                            └── PagerProfile
+                                    │
+                                    ├── command: Vec<String>
+                                    ├── env: HashMap<String, String>
+                                    ├── view: PagerRoleConfig
+                                    │           ├── enabled: Option<bool>
+                                    │           └── args: Vec<String>
+                                    │
+                                    └── follow: PagerRoleConfig
+                                                ├── enabled: Option<bool>
+                                                └── args: Vec<String>
 
 PagerSelector<E, C>
     │
     ├── config: &PagerConfig
-    ├── profiles: &HashMap<String, PagerProfile>
     ├── env_provider: E (implements EnvProvider)
     └── exe_checker: C (implements ExeChecker)
 ```
@@ -287,30 +328,47 @@ PagerSelector<E, C>
          ▼
 ┌─────────────────┐
 │ Check config    │
-│ (pager option)  │
+│(pager.candidates│
 └────────┬────────┘
          │
          ▼
 ┌─────────────────┐
-│ Priority loop:  │
-│ For each profile│◄───────┐
+│ Candidate loop: │
+│ For each        │◄───────┐
+│ candidate       │        │
 └────────┬────────┘        │
          │                 │
          ▼                 │
 ┌─────────────────┐        │
-│ Profile exists? │──No───►│
-└────────┬────────┘        │
-         │ Yes             │
-         ▼                 │
-┌─────────────────┐        │
-│ Command valid?  │──No───►│
-└────────┬────────┘        │
-         │ Yes             │
-         ▼                 │
-┌─────────────────┐        │
-│ Executable in   │──No───►┘
-│ PATH?           │
-└────────┬────────┘
+│ Candidate type? │        │
+└────┬───────┬────┘        │
+     │       │             │
+ Env │       │ Profile     │
+     │       │             │
+     ▼       ▼             │
+┌─────┐   ┌──────┐         │
+│Read │   │Lookup│         │
+│ var │   │profile│        │
+└──┬──┘   └───┬──┘         │
+   │          │            │
+   │          ▼            │
+   │    ┌─────────────┐    │
+   │    │Profile      │    │
+   │    │exists?      │─No─►│
+   │    └──────┬──────┘    │
+   │           │Yes        │
+   └───────┬───┘           │
+           ▼               │
+    ┌─────────────┐        │
+    │Command      │        │
+    │valid?       │──No───►│
+    └──────┬──────┘        │
+           │Yes            │
+           ▼               │
+    ┌─────────────┐        │
+    │Executable   │        │
+    │in PATH?     │──No───►┘
+    └──────┬──────┘
          │ Yes
          ▼
 ┌─────────────────┐
@@ -366,15 +424,21 @@ PagerSelector<E, C>
 ## Configuration Example
 
 ```toml
-# Top-level pager selection (priority list)
-pager = ["fzf", "less"]
+[pager]
+# Candidate search list (checked in order)
+candidates = [
+  { env = "HL_PAGER" },
+  { profile = "fzf" },
+  { profile = "less" },
+  { env = "PAGER" },
+]
 
 # Pager profiles
-[pagers.less]
+[pager.profiles.less]
 command = ["less", "-R", "--mouse"]
 env = { LESSCHARSET = "UTF-8" }
 
-[pagers.fzf]
+[pager.profiles.fzf]
 command = [
   "fzf",
   "--ansi",
@@ -397,13 +461,9 @@ follow.args = [
 pub struct Settings {
     // ... existing fields ...
     
-    /// Pager profile(s) to use for output pagination
+    /// Pager configuration (candidates and profiles)
     #[serde(default)]
-    pub pager: Option<PagerConfig>,
-    
-    /// Named pager profiles
-    #[serde(default)]
-    pub pagers: HashMap<String, PagerProfile>,
+    pub pager: PagerConfig,
 }
 ```
 
@@ -413,12 +473,14 @@ Located in `src/testing/assets/pagers/`:
 
 | File | Purpose |
 |------|---------|
-| `basic.toml` | Basic single profile configuration |
-| `single-profile.toml` | Single profile with env vars |
-| `priority-list.toml` | Multiple profiles in priority order |
+| `basic.toml` | Basic configuration with one profile candidate |
+| `env-candidate.toml` | Candidate referencing environment variable |
+| `profile-candidate.toml` | Candidate referencing a profile |
+| `mixed-candidates.toml` | Mix of env and profile candidates |
 | `follow-enabled.toml` | Profile with follow mode enabled |
 | `minimal-profile.toml` | Minimal profile (tests defaults) |
 | `profile-with-env.toml` | Profile with environment variables |
 | `profile-with-view-args.toml` | Profile with view-specific args |
-| `empty-priority.toml` | Empty priority list (falls back to stdout) |
-| `unavailable-first.toml` | First pager unavailable (tests fallback) |
+| `empty-candidates.toml` | Empty candidates list (falls back to stdout) |
+| `unavailable-first.toml` | First candidate unavailable (tests fallback) |
+| `env-and-profile-error.toml` | Invalid: both env and profile fields (deserialization error test) |
