@@ -406,7 +406,11 @@ fn run() -> Result<()> {
         Err(err) => Err(err),
     };
 
-    let interrupt_ignore_count = if opt.follow { 0 } else { opt.interrupt_ignore_count };
+    let interrupt_ignore_count = if opt.follow && !using_pager {
+        0
+    } else {
+        opt.interrupt_ignore_count
+    };
 
     // Run the app with signal handling.
     SignalHandler::run(interrupt_ignore_count, std::time::Duration::from_secs(1), run)
