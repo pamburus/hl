@@ -164,15 +164,14 @@ impl<'a, E: EnvProvider, C: ExeChecker> PagerSelector<'a, E, C> {
             PagerRole::View => self.select_for_view(),
             PagerRole::Follow => self.select_for_follow(),
         };
-        match &result {
-            Ok(SelectedPager::Pager { command, .. }) => {
-                log::debug!("selected pager: {command:?}");
-            }
-            Ok(SelectedPager::None) => {
-                log::debug!("no pager selected, using stdout");
-            }
-            Err(err) => {
-                log::error!("pager selection failed: {err}");
+        if let Ok(selected) = &result {
+            match selected {
+                SelectedPager::Pager { command, .. } => {
+                    log::debug!("selected pager: {command:?}");
+                }
+                SelectedPager::None => {
+                    log::debug!("no pager selected, using stdout");
+                }
             }
         }
         result
