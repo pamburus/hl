@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::env;
 use std::ffi::OsString;
 use std::io::Write;
@@ -14,56 +15,102 @@ use std::{
 
 /// Pager configuration and builder.
 ///
-/// Resolves the pager command from environment variables and starts the process.
-/// Checks an optional application-specific env var first, then `PAGER`,
-/// falling back to `less`.
+/// Supports two modes:
+/// - **Default**: Resolves the pager command from environment variables (`PAGER`, or an
+///   application-specific variable), falling back to `less`.
+/// - **Custom**: Uses a pre-resolved command and environment variables, skipping all
+///   resolution logic. Useful when the caller has already determined the pager command
+///   (e.g., from a configuration file).
 pub struct Pager {
-    app_env_var: Option<String>,
+    mode: PagerMode,
+    env: HashMap<String, String>,
+}
+
+enum PagerMode {
+    /// Resolve pager from environment variables.
+    Resolve { app_env_var: Option<String> },
+    /// Use a pre-resolved command.
+    Custom { command: Vec<String> },
 }
 
 impl Pager {
     /// Creates a new pager configuration with default settings.
+    ///
+    /// Resolves the pager command from environment variables and falls back to `less`.
     pub fn new() -> Self {
-        Self { app_env_var: None }
+        Self {
+            mode: PagerMode::Resolve { app_env_var: None },
+            env: HashMap::new(),
+        }
+    }
+
+    /// Creates a pager with a pre-resolved command, skipping environment variable resolution.
+    pub fn custom(command: impl IntoIterator<Item = impl Into<String>>) -> Self {
+        Self {
+            mode: PagerMode::Custom {
+                command: command.into_iter().map(Into::into).collect(),
+            },
+            env: HashMap::new(),
+        }
     }
 
     /// Sets an application-specific environment variable to check
     /// for the pager command (e.g. `"HL_PAGER"`).
     /// Takes priority over `PAGER`.
+    ///
+    /// Only used in resolve mode (created with [`Pager::new`]).
     pub fn env_var(mut self, name: impl Into<String>) -> Self {
-        self.app_env_var = Some(name.into());
+        if let PagerMode::Resolve { ref mut app_env_var } = self.mode {
+            *app_env_var = Some(name.into());
+        }
+        self
+    }
+
+    /// Sets an environment variable to pass to the pager process.
+    pub fn env(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
+        self.env.insert(key.into(), value.into());
+        self
+    }
+
+    /// Sets multiple environment variables to pass to the pager process.
+    pub fn envs(mut self, vars: impl IntoIterator<Item = (impl Into<String>, impl Into<String>)>) -> Self {
+        self.env.extend(vars.into_iter().map(|(k, v)| (k.into(), v.into())));
         self
     }
 
     /// Starts the pager process.
-    pub fn start(self) -> std::io::Result<StartedPager> {
-        let mut pager = "less".to_owned();
-
-        let app_pager = self
-            .app_env_var
-            .and_then(|v| env::var(v).ok())
-            .filter(|v| !v.is_empty());
-        if let Some(p) = app_pager {
-            pager = p;
-        } else if let Ok(p) = env::var("PAGER")
-            && !p.is_empty()
-        {
-            pager = p;
+    pub fn start(mut self) -> std::io::Result<StartedPager> {
+        let (pager_path, args, apply_less_defaults) = match self.mode {
+            PagerMode::Resolve { app_env_var } => {
+                let (path, args) = resolve_pager(app_env_var);
+                (path, args, true)
+            }
+            PagerMode::Custom { command } => {
+                let (pager, args) = match command.split_first() {
+                    Some((pager, args)) => (PathBuf::from(pager), args.to_vec()),
+                    None => {
+                        return Err(std::io::Error::new(
+                            std::io::ErrorKind::InvalidInput,
+                            "empty pager command",
+                        ));
+                    }
+                };
+                (pager, args, false)
+            }
         };
 
-        let pager = shellwords::split(&pager).unwrap_or(vec![pager]);
-        let (pager, args) = match pager.split_first() {
-            Some((pager, args)) => (pager, args),
-            None => (&pager[0], &pager[0..0]),
-        };
-        let pager = PathBuf::from(pager);
-        let mut command = Command::new(&pager);
-        for arg in args {
-            command.arg(arg);
+        // Apply `less` defaults when resolved from env vars.
+        if apply_less_defaults && pager_path.file_stem() == Some(&OsString::from("less")) {
+            self.env.entry("LESSCHARSET".into()).or_insert("UTF-8".into());
         }
-        if pager.file_stem() == Some(&OsString::from("less")) {
+
+        let mut command = Command::new(&pager_path);
+        command.args(&args);
+        if apply_less_defaults && pager_path.file_stem() == Some(&OsString::from("less")) {
             command.arg("-R");
-            command.env("LESSCHARSET", "UTF-8");
+        }
+        for (key, value) in &self.env {
+            command.env(key, value);
         }
 
         let mut process = command.stdin(Stdio::piped()).spawn()?;
@@ -74,6 +121,29 @@ impl Pager {
             process: Some(process),
         })
     }
+}
+
+/// Resolves the pager command from environment variables, falling back to `less`.
+fn resolve_pager(app_env_var: Option<String>) -> (PathBuf, Vec<String>) {
+    let mut pager = "less".to_owned();
+
+    let app_pager = app_env_var.and_then(|v| env::var(v).ok()).filter(|v| !v.is_empty());
+    if let Some(p) = app_pager {
+        pager = p;
+    } else if let Ok(p) = env::var("PAGER")
+        && !p.is_empty()
+    {
+        pager = p;
+    };
+
+    let parts = shellwords::split(&pager).unwrap_or(vec![pager]);
+    let (exe, args) = match parts.split_first() {
+        Some((exe, args)) => (exe.clone(), args.to_vec()),
+        None => (parts[0].clone(), vec![]),
+    };
+    let pager_path = PathBuf::from(&exe);
+
+    (pager_path, args)
 }
 
 impl Default for Pager {
@@ -174,24 +244,37 @@ mod tests {
     #[test]
     fn pager_new_creates_default_instance() {
         let pager = Pager::new();
-        assert!(pager.app_env_var.is_none());
+        assert!(matches!(pager.mode, PagerMode::Resolve { app_env_var: None }));
     }
 
     #[test]
     fn pager_default_creates_default_instance() {
         let pager = Pager::default();
-        assert!(pager.app_env_var.is_none());
+        assert!(matches!(pager.mode, PagerMode::Resolve { app_env_var: None }));
     }
 
     #[test]
     fn pager_env_var_sets_app_env_var() {
         let pager = Pager::new().env_var("HL_PAGER");
-        assert_eq!(pager.app_env_var, Some("HL_PAGER".to_string()));
+        assert!(matches!(pager.mode, PagerMode::Resolve { app_env_var: Some(ref v) } if v == "HL_PAGER"));
     }
 
     #[test]
-    fn pager_env_var_accepts_string() {
-        let pager = Pager::new().env_var("CUSTOM_PAGER".to_string());
-        assert_eq!(pager.app_env_var, Some("CUSTOM_PAGER".to_string()));
+    fn pager_custom_stores_command() {
+        let pager = Pager::custom(["less", "-R"]);
+        assert!(matches!(pager.mode, PagerMode::Custom { ref command } if command == &["less", "-R"]));
+    }
+
+    #[test]
+    fn pager_env_sets_env_var() {
+        let pager = Pager::custom(["less"]).env("LESSCHARSET", "UTF-8");
+        assert_eq!(pager.env.get("LESSCHARSET"), Some(&"UTF-8".to_string()));
+    }
+
+    #[test]
+    fn pager_envs_sets_multiple() {
+        let pager = Pager::custom(["less"]).envs([("A", "1"), ("B", "2")]);
+        assert_eq!(pager.env.get("A"), Some(&"1".to_string()));
+        assert_eq!(pager.env.get("B"), Some(&"2".to_string()));
     }
 }
