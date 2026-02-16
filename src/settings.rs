@@ -50,12 +50,9 @@ pub struct Settings {
     #[serde(deserialize_with = "enumset_serde::deserialize")]
     pub input_info: InputInfoSet,
     pub ascii: AsciiModeOpt,
-    /// Pager profile(s) to use for output pagination.
+    /// Pager configuration (candidates and profiles).
     #[serde(default)]
-    pub pager: Option<PagerConfig>,
-    /// Named pager profiles.
-    #[serde(default)]
-    pub pagers: HashMap<String, PagerProfile>,
+    pub pager: PagerConfig,
 }
 
 impl Settings {

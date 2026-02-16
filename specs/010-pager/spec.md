@@ -7,6 +7,16 @@
 
 ## Clarifications
 
+### Session 2026-02-16
+
+- Q: How should the pager configuration be structured to clearly distinguish profile references from environment variable references? → A: Use `pager.candidates` array with explicit `{ env = "VAR" }` and `{ profile = "name" }` objects. This provides clear structure and enables validation.
+- Q: What should happen if both `env` and `profile` fields are specified in a candidate object? → A: Deserialize as externally-tagged enum - serde will reject configs where both fields are present with a clear error message.
+- Q: Should the `pagers` section be moved under `pager` to group all pager-related configuration? → A: Yes, rename `pagers` to `pager.profiles` to clearly namespace all pager configuration under a single `[pager]` section.
+- Q: What should the `pager` top-level option be renamed to for clarity? → A: Rename to `pager.candidates` - clearly indicates it's a search/fallback list and distinguishes it from the profiles themselves.
+- Q: Should hard-coded environment variable checks (HL_PAGER, PAGER) be removed from code and made configurable? → A: Yes, move them into default config as `{ env = "HL_PAGER" }` and `{ env = "PAGER" }` entries. Users can reorder or remove these to customize precedence.
+- Q: How does this restructuring affect the precedence rules? → A: Environment variables specified in candidates are checked in order along with profiles. `HL_FOLLOW_PAGER` remains special (checked first in follow mode before candidates list). CLI flags (`--paging=never`) still override everything.
+- Q: What is the migration path for existing configs? → A: Old `pager = ["fzf", "less"]` and `[pagers.X]` sections will be deprecated but supported temporarily. Document migration in changelog. New default config uses `pager.candidates` and `pager.profiles`.
+
 ### Session 2026-02-15
 
 - Q: How should the application execute the pager program to prevent security vulnerabilities? → A: Execute pager directly from PATH without shell, validate it's executable before spawning
@@ -265,20 +275,25 @@ As a user migrating from other tools, I want `hl` to respect the standard `PAGER
 
 #### Configuration
 
-- **FR-007**: System MUST support a `pager` configuration option that accepts either a single profile name (string) or a list of profile names (array of strings).
-- **FR-008**: System MUST support a `[pagers]` configuration section containing named pager profiles.
+- **FR-007**: System MUST support a `pager.candidates` configuration option that accepts an array of candidate objects, where each candidate is either `{ env = "VAR_NAME" }` (environment variable reference) or `{ profile = "profile_name" }` (profile reference).
+- **FR-007a**: System MUST reject configuration if a candidate object contains both `env` and `profile` fields with a clear deserialization error message.
+- **FR-007b**: System MUST process candidates in array order, trying each until a usable pager is found.
+- **FR-008**: System MUST support a `[pager.profiles]` configuration section containing named pager profiles.
+- **FR-008a**: System SHOULD support legacy `pager` (string or array of strings) and `[pagers]` configuration for backward compatibility, with deprecation warning logged when `HL_DEBUG_LOG` is set.
 - **FR-009**: Each pager profile MUST support a `command` property containing an array of strings representing the pager command and its base arguments.
 - **FR-010**: Each pager profile MUST support optional `env` property containing a map of environment variables to set when invoking the pager.
 - **FR-011**: Each pager profile MUST support optional `view.args` property containing additional arguments for view mode.
 - **FR-012**: Each pager profile MUST support optional `follow.enabled` property (boolean) to enable pager usage in follow mode.
 - **FR-013**: Each pager profile MUST support optional `follow.args` property containing additional arguments for follow mode.
 
-#### Priority-Based Selection
+#### Candidate-Based Selection
 
-- **FR-014**: When `pager` is a list, system MUST try each profile in order until one with an available command is found.
+- **FR-014**: System MUST process `pager.candidates` array in order, trying each candidate until a usable pager is found.
+- **FR-014a**: For `{ env = "VAR_NAME" }` candidates, system MUST read the environment variable value and apply same parsing logic as current HL_PAGER handling (shell-style splitting, `@profile` prefix support).
+- **FR-014b**: For `{ profile = "name" }` candidates, system MUST look up the profile in `pager.profiles` and use it if the command is available.
 - **FR-015**: System MUST check if a pager command is available by searching for the executable in the system PATH.
-- **FR-016**: System MUST skip profiles whose command executable is not found and continue to the next profile.
-- **FR-017**: If no profile has an available command, system MUST fall back to outputting directly to stdout without error indication.
+- **FR-016**: System MUST skip candidates whose referenced profile doesn't exist or whose command executable is not found, continuing to the next candidate.
+- **FR-017**: If no candidate yields a usable pager, system MUST fall back to outputting directly to stdout without error indication.
 - **FR-017a**: System SHOULD log pager selection decisions and failures to debug logs when `HL_DEBUG_LOG` environment variable is set.
 
 #### Role-Based Arguments
@@ -294,35 +309,33 @@ As a user migrating from other tools, I want `hl` to respect the standard `PAGER
 
 #### Environment Variable Handling
 
-- **FR-022**: System MUST check `HL_PAGER` environment variable before using config file settings.
-- **FR-023**: If `HL_PAGER` value starts with `@` (e.g., `@less`), system MUST treat the remainder as an explicit profile name reference. If the profile does not exist or the executable is not available, system MUST display an error message and exit with non-zero status (no fallback to other pager settings).
-- **FR-024**: If `HL_PAGER` value does not start with `@`, system MUST parse it using shell-style argument splitting (e.g., `shellwords::split`) and execute as a direct command without invoking a shell. If the command is not available, system MUST display an error message and exit with non-zero status (matching behavior of tools like `git`, `bat`, etc.).
-- **FR-024a**: When using HL_PAGER or PAGER as a command string (not a profile), system MUST apply special handling for `less`: automatically add `-R` flag and set `LESSCHARSET=UTF-8`.
-- **FR-024b**: When using HL_PAGER or PAGER as a command string (not a profile) in follow mode, system MUST NOT use a pager and output directly to stdout (unless overridden by HL_FOLLOW_PAGER).
-- **FR-024c**: In follow mode, system MUST check `HL_FOLLOW_PAGER` environment variable before other pager settings.
+- **FR-022**: When an environment variable is referenced in `pager.candidates` via `{ env = "VAR_NAME" }`, system MUST read that variable and apply same resolution logic as explicit overrides.
+- **FR-023**: If environment variable value starts with `@` (e.g., `@less`), system MUST treat the remainder as an explicit profile name reference. If the profile does not exist or the executable is not available, system MUST display an error message and exit with non-zero status (no fallback to other candidates).
+- **FR-024**: If environment variable value does not start with `@`, system MUST parse it using shell-style argument splitting (e.g., `shellwords::split`) and execute as a direct command without invoking a shell. If the command is not available, system MUST display an error message and exit with non-zero status.
+- **FR-024a**: When using an environment variable as a command string (not a profile reference), system MUST apply special handling for `less`: automatically add `-R` flag and set `LESSCHARSET=UTF-8`.
+- **FR-024b**: When using an environment variable as a command string (not a profile) in follow mode, system MUST NOT use a pager and output directly to stdout (unless overridden by HL_FOLLOW_PAGER).
+- **FR-024c**: In follow mode, system MUST check `HL_FOLLOW_PAGER` environment variable before processing `pager.candidates` list.
 - **FR-024d**: If `HL_FOLLOW_PAGER` value starts with `@`, system MUST treat it as an explicit profile reference. If the profile does not exist or the executable is not available, system MUST display an error message and exit with non-zero status.
 - **FR-024e**: If `HL_FOLLOW_PAGER` value does not start with `@`, system MUST treat it as a command string. If the command is not available, system MUST display an error message and exit with non-zero status.
 - **FR-024f**: If `HL_FOLLOW_PAGER` is set to an empty string, system MUST disable pager usage for follow mode.
-- **FR-025**: System MUST check `PAGER` environment variable only when both `HL_PAGER` is not set and no `pager` config option is defined. The `@` prefix syntax applies to `PAGER` as well. If the command is not available, system MUST display an error message and exit with non-zero status.
-- **FR-026**: If `HL_PAGER` is set to an empty string, system MUST disable pager usage entirely (both view and follow modes). Note: This is a behavior change from the current implementation.
-- **FR-027**: Config file `pager` setting uses best-effort fallback: if a profile's executable is not available, system MUST try the next profile in the priority list. If none are available, system MUST fall back to stdout (no error).
+- **FR-025**: The default configuration SHOULD include `{ env = "HL_PAGER" }` and `{ env = "PAGER" }` in the `pager.candidates` list to maintain backward compatibility. Users MAY reorder, remove, or add environment variable references as needed.
+- **FR-026**: If an environment variable referenced in candidates is set to an empty string, system MUST disable pager usage for that resolution attempt and continue to next candidate (best-effort fallback).
+- **FR-027**: Config file `pager.candidates` uses best-effort fallback: if a candidate's profile doesn't exist or executable is not available, system MUST try the next candidate. If none succeed, system MUST fall back to stdout (no error).
 
 #### Precedence
 
 - **FR-028**: Pager selection for view mode MUST follow this precedence order (highest to lowest):
   1. `--paging=never` / `-P` CLI flag (disables pager)
-  2. `HL_PAGER` environment variable (exits on error if command/profile unavailable)
-  3. `pager` config file option (best-effort fallback, no error if unavailable)
-  4. `PAGER` environment variable (exits on error if command unavailable)
-  5. No pager (stdout)
+  2. `pager.candidates` config option processed in array order (best-effort fallback for profile references, exits on error for env var references with `@` prefix or unavailable commands)
+  3. No pager (stdout)
 
 - **FR-028a**: Pager selection for follow mode MUST follow this precedence order (highest to lowest):
   1. `--paging=never` / `-P` CLI flag (disables pager)
   2. `HL_FOLLOW_PAGER` environment variable (exits on error if command/profile unavailable)
-  3. `HL_PAGER` set to empty string (disables pager)
-  4. `HL_PAGER` environment variable (exits on error if command/profile unavailable)
-  5. `pager` config file option (best-effort fallback, no error if unavailable)
-  6. No pager (stdout)
+  3. `pager.candidates` config option processed in array order (same semantics as view mode)
+  4. No pager (stdout)
+
+- **FR-028b**: The default `pager.candidates` SHOULD be ordered as: `[{ env = "HL_PAGER" }, { profile = "fzf" }, { profile = "less" }, { env = "PAGER" }]` to maintain backward compatibility while allowing users to customize order.
 
 #### Pager Exit Code Handling
 
