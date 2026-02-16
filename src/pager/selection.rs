@@ -52,12 +52,16 @@ pub enum Error {
     #[error("{var}: command '{command}' not found in PATH")]
     CommandNotFound { var: String, command: String },
 
-    #[error("failed to start pager '{command}': {source}")]
+    #[error("failed to start pager '{}': {source}", quote_command(.command))]
     StartFailed {
-        command: String,
+        command: Vec<String>,
         #[source]
         source: std::io::Error,
     },
+}
+
+fn quote_command(command: &[String]) -> String {
+    shellwords::join(&command.iter().map(String::as_str).collect::<Vec<_>>())
 }
 
 // ---
@@ -98,16 +102,10 @@ impl SelectedPager {
                 env,
                 delimiter,
             } => {
-                let label = command.join(" ");
-                let started = Pager::custom(command)
+                let started = Pager::custom(&command)
                     .with_env(env)
                     .start()
-                    .map(|r| {
-                        r.map_err(|source| Error::StartFailed {
-                            command: label.clone(),
-                            source,
-                        })
-                    })
+                    .map(|r| r.map_err(|source| Error::StartFailed { command, source }))
                     .transpose()?;
                 Ok(started.map(|pager| (pager, delimiter)))
             }
