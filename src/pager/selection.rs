@@ -8,6 +8,8 @@ use std::env;
 use std::ffi::OsStr;
 use std::path::Path;
 
+use thiserror::Error;
+
 use super::config::{PagerConfig, PagerProfile, PagerRole};
 use crate::output::OutputDelimiter;
 
@@ -24,6 +26,31 @@ const PAGER: &str = "PAGER";
 
 /// Environment variable for overriding the pager delimiter.
 const HL_PAGER_DELIMITER: &str = "HL_PAGER_DELIMITER";
+
+// ---
+
+/// Error that can occur during pager selection.
+#[derive(Error, Debug)]
+pub enum Error {
+    #[error("{var}: profile '{profile}' does not exist in configuration")]
+    ProfileNotFound { var: String, profile: String },
+
+    #[error("{var}: profile '{profile}' has no command configured")]
+    ProfileMisconfigured { var: String, profile: String },
+
+    #[error("{var}: profile '{profile}' executable '{executable}' not found in PATH")]
+    ExecutableNotFound {
+        var: String,
+        profile: String,
+        executable: String,
+    },
+
+    #[error("{var}: empty command")]
+    EmptyCommand { var: String },
+
+    #[error("{var}: command '{command}' not found in PATH")]
+    CommandNotFound { var: String, command: String },
+}
 
 // ---
 
@@ -49,8 +76,6 @@ pub enum SelectedPager {
     },
     /// No pager, output to stdout.
     None,
-    /// Fatal error - pager was explicitly requested but could not be started.
-    Error(String),
 }
 
 // ---
@@ -133,21 +158,21 @@ impl<'a, E: EnvProvider, C: ExeChecker> PagerSelector<'a, E, C> {
     }
 
     /// Selects a pager for the given role.
-    pub fn select(&self, role: PagerRole) -> SelectedPager {
+    pub fn select(&self, role: PagerRole) -> Result<SelectedPager, Error> {
         log::debug!("selecting pager for {role:?} mode");
         let result = match role {
             PagerRole::View => self.select_for_view(),
             PagerRole::Follow => self.select_for_follow(),
         };
         match &result {
-            SelectedPager::Pager { command, .. } => {
+            Ok(SelectedPager::Pager { command, .. }) => {
                 log::debug!("selected pager: {command:?}");
             }
-            SelectedPager::None => {
+            Ok(SelectedPager::None) => {
                 log::debug!("no pager selected, using stdout");
             }
-            SelectedPager::Error(msg) => {
-                log::error!("pager selection failed: {msg}");
+            Err(err) => {
+                log::error!("pager selection failed: {err}");
             }
         }
         result
@@ -160,16 +185,16 @@ impl<'a, E: EnvProvider, C: ExeChecker> PagerSelector<'a, E, C> {
     /// 2. Config `pager` setting (priority list of profiles)
     /// 3. `PAGER` env var (backward compatibility)
     /// 4. Fall back to stdout
-    fn select_for_view(&self) -> SelectedPager {
+    fn select_for_view(&self) -> Result<SelectedPager, Error> {
         // 1. Check HL_PAGER env var
         if let Some(pager) = self.resolve_env_var(HL_PAGER) {
             match pager {
                 PagerOverride::Disabled => {
                     log::debug!("{HL_PAGER} is empty, pager disabled");
-                    return SelectedPager::None;
+                    return Ok(SelectedPager::None);
                 }
                 PagerOverride::Value(cmd) => {
-                    return self.try_override(&cmd, PagerRole::View, HL_PAGER, true);
+                    return self.try_override(&cmd, PagerRole::View, HL_PAGER);
                 }
             }
         }
@@ -178,7 +203,7 @@ impl<'a, E: EnvProvider, C: ExeChecker> PagerSelector<'a, E, C> {
         if let Some(config) = self.config {
             for profile in config.profiles() {
                 if let Some(selected) = self.try_profile(profile, PagerRole::View) {
-                    return selected;
+                    return Ok(selected);
                 }
             }
         }
@@ -188,16 +213,16 @@ impl<'a, E: EnvProvider, C: ExeChecker> PagerSelector<'a, E, C> {
             match pager {
                 PagerOverride::Disabled => {
                     log::debug!("{PAGER} is empty, pager disabled");
-                    return SelectedPager::None;
+                    return Ok(SelectedPager::None);
                 }
                 PagerOverride::Value(cmd) => {
-                    return self.try_override(&cmd, PagerRole::View, PAGER, true);
+                    return self.try_override(&cmd, PagerRole::View, PAGER);
                 }
             }
         }
 
         // 4. Fall back to stdout
-        SelectedPager::None
+        Ok(SelectedPager::None)
     }
 
     /// Selects a pager for follow mode.
@@ -207,16 +232,16 @@ impl<'a, E: EnvProvider, C: ExeChecker> PagerSelector<'a, E, C> {
     /// 2. `HL_PAGER` env var (unless empty, which is overridden by HL_FOLLOW_PAGER)
     /// 3. Config `pager` setting (only if profile has `follow.enabled = true`)
     /// 4. Fall back to stdout
-    fn select_for_follow(&self) -> SelectedPager {
+    fn select_for_follow(&self) -> Result<SelectedPager, Error> {
         // 1. Check HL_FOLLOW_PAGER env var (takes precedence)
         if let Some(pager) = self.resolve_env_var(HL_FOLLOW_PAGER) {
             match pager {
                 PagerOverride::Disabled => {
                     log::debug!("{HL_FOLLOW_PAGER} is empty, pager disabled");
-                    return SelectedPager::None;
+                    return Ok(SelectedPager::None);
                 }
                 PagerOverride::Value(cmd) => {
-                    return self.try_override(&cmd, PagerRole::Follow, HL_FOLLOW_PAGER, true);
+                    return self.try_override(&cmd, PagerRole::Follow, HL_FOLLOW_PAGER);
                 }
             }
         }
@@ -228,10 +253,10 @@ impl<'a, E: EnvProvider, C: ExeChecker> PagerSelector<'a, E, C> {
                     // HL_PAGER="" disables pager, but HL_FOLLOW_PAGER can override
                     // (already checked above), so return None here
                     log::debug!("{HL_PAGER} is empty, pager disabled");
-                    return SelectedPager::None;
+                    return Ok(SelectedPager::None);
                 }
                 PagerOverride::Value(cmd) => {
-                    return self.try_override(&cmd, PagerRole::Follow, HL_PAGER, true);
+                    return self.try_override(&cmd, PagerRole::Follow, HL_PAGER);
                 }
             }
         }
@@ -242,7 +267,7 @@ impl<'a, E: EnvProvider, C: ExeChecker> PagerSelector<'a, E, C> {
                 if let Some(profile) = self.profiles.get(profile_name) {
                     if profile.follow.is_enabled(PagerRole::Follow) {
                         if let Some(selected) = self.try_profile(profile_name, PagerRole::Follow) {
-                            return selected;
+                            return Ok(selected);
                         }
                     }
                 }
@@ -250,7 +275,7 @@ impl<'a, E: EnvProvider, C: ExeChecker> PagerSelector<'a, E, C> {
         }
 
         // 4. Fall back to stdout
-        SelectedPager::None
+        Ok(SelectedPager::None)
     }
 
     /// Resolves an environment variable to a `PagerOverride`.
@@ -288,55 +313,34 @@ impl<'a, E: EnvProvider, C: ExeChecker> PagerSelector<'a, E, C> {
     ///
     /// If the first element starts with '@', treats it as an explicit profile name reference.
     /// Otherwise, treats the entire spec as a direct command.
-    ///
-    /// When `fail_on_error` is true, returns `SelectedPager::Error` if the pager cannot be started.
-    /// When false, returns `None` to allow fallback to next precedence level.
-    fn try_override(&self, cmd: &[String], role: PagerRole, source: &str, fail_on_error: bool) -> SelectedPager {
+    fn try_override(&self, cmd: &[String], role: PagerRole, var: &str) -> Result<SelectedPager, Error> {
         // If it's a single word starting with '@', treat as explicit profile reference
         if let Some(name) = Self::is_profile_ref(cmd) {
-            return self.try_profile_explicit(name, role, source, fail_on_error);
+            return self.try_profile_explicit(name, role, var);
         }
 
         // Otherwise treat as a direct command
-        self.try_command(cmd.to_vec(), source, fail_on_error)
+        self.try_command(cmd.to_vec(), var)
     }
 
     /// Tries to use a named profile that was explicitly referenced with '@'.
-    /// When `fail_on_error` is true, returns `SelectedPager::Error` on failure.
-    /// When false, returns `SelectedPager::None` to allow fallback.
-    fn try_profile_explicit(&self, name: &str, role: PagerRole, source: &str, fail_on_error: bool) -> SelectedPager {
-        let profile = self.profiles.get(name);
-        if profile.is_none() {
-            let msg = format!("{source}: profile '{name}' does not exist in configuration");
-            log::error!("{msg}");
-            return if fail_on_error {
-                SelectedPager::Error(msg)
-            } else {
-                SelectedPager::None
-            };
-        }
-        let profile = profile.unwrap();
+    fn try_profile_explicit(&self, name: &str, role: PagerRole, var: &str) -> Result<SelectedPager, Error> {
+        let profile = self.profiles.get(name).ok_or_else(|| Error::ProfileNotFound {
+            var: var.to_owned(),
+            profile: name.to_owned(),
+        })?;
 
-        let executable = profile.executable();
-        if executable.is_none() {
-            let msg = format!("{source}: profile '{name}' has no command configured");
-            log::error!("{msg}");
-            return if fail_on_error {
-                SelectedPager::Error(msg)
-            } else {
-                SelectedPager::None
-            };
-        }
-        let executable = executable.unwrap();
+        let executable = profile.executable().ok_or_else(|| Error::ProfileMisconfigured {
+            var: var.to_owned(),
+            profile: name.to_owned(),
+        })?;
 
         if !self.exe_checker.is_available(executable) {
-            let msg = format!("{source}: profile '{name}' executable '{executable}' not found in PATH");
-            log::error!("{msg}");
-            return if fail_on_error {
-                SelectedPager::Error(msg)
-            } else {
-                SelectedPager::None
-            };
+            return Err(Error::ExecutableNotFound {
+                var: var.to_owned(),
+                profile: name.to_owned(),
+                executable: executable.to_owned(),
+            });
         }
 
         log::debug!("using profile {name:?}");
@@ -344,11 +348,11 @@ impl<'a, E: EnvProvider, C: ExeChecker> PagerSelector<'a, E, C> {
         let env = profile.env.clone();
         let delimiter = self.resolve_delimiter(profile.delimiter);
 
-        SelectedPager::Pager {
+        Ok(SelectedPager::Pager {
             command,
             env,
             delimiter,
-        }
+        })
     }
 
     /// Tries to use a named profile, returning `Some(SelectedPager)` if successful.
@@ -375,44 +379,32 @@ impl<'a, E: EnvProvider, C: ExeChecker> PagerSelector<'a, E, C> {
     }
 
     /// Tries to use a direct command.
-    /// When `fail_on_error` is true, returns `SelectedPager::Error` if command not available.
-    /// When false, returns `SelectedPager::None` to allow fallback.
-    fn try_command(&self, command: Vec<String>, source: &str, fail_on_error: bool) -> SelectedPager {
+    fn try_command(&self, command: Vec<String>, var: &str) -> Result<SelectedPager, Error> {
         let executable = match command.first() {
             Some(exe) => exe,
             None => {
-                let msg = format!("{source}: empty command");
-                log::error!("{msg}");
-                return if fail_on_error {
-                    SelectedPager::Error(msg)
-                } else {
-                    SelectedPager::None
-                };
+                return Err(Error::EmptyCommand { var: var.to_owned() });
             }
         };
 
         if !self.exe_checker.is_available(executable) {
-            let msg = format!("{source}: command '{executable}' not found in PATH");
-            if fail_on_error {
-                log::error!("{msg}");
-                return SelectedPager::Error(msg);
-            } else {
-                log::debug!("{msg}");
-                return SelectedPager::None;
-            }
+            return Err(Error::CommandNotFound {
+                var: var.to_owned(),
+                command: executable.to_owned(),
+            });
         }
 
-        log::debug!("{source}: using as command");
+        log::debug!("{var}: using as command");
 
         // Apply special handling for `less`
         let (command, env) = apply_less_defaults(command);
         let delimiter = self.resolve_delimiter(None);
 
-        SelectedPager::Pager {
+        Ok(SelectedPager::Pager {
             command,
             env,
             delimiter,
-        }
+        })
     }
 
     /// Resolves the pager delimiter from environment variable or profile config.

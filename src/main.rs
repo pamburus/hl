@@ -118,28 +118,27 @@ fn run() -> Result<()> {
     let paging = if opt.paging_never { false } else { paging };
     let role = if opt.follow { PagerRole::Follow } else { PagerRole::View };
     let selector = PagerSelector::new(settings.pager.as_ref(), &settings.pagers);
-    let start_pager = |role: PagerRole| -> Option<(StartedPager, Option<OutputDelimiter>)> {
+    let start_pager = |role: PagerRole| -> Result<Option<(StartedPager, Option<OutputDelimiter>)>> {
         if !paging {
-            return None;
+            return Ok(None);
         }
-        match selector.select(role) {
+        let selected = selector.select(role)?;
+        match selected {
             SelectedPager::Pager {
                 command,
                 env,
                 delimiter,
-            } => Pager::custom(command)
+            } => Ok(Pager::custom(command)
                 .with_env(env)
-                .start()?
-                .inspect_err(|err| {
-                    log::debug!("failed to start pager: {}", err);
+                .start()
+                .and_then(|r| {
+                    r.inspect_err(|err| {
+                        log::debug!("failed to start pager: {}", err);
+                    })
+                    .ok()
                 })
-                .ok()
-                .map(|pager| (pager, delimiter)),
-            SelectedPager::None => None,
-            SelectedPager::Error(msg) => {
-                eprintln!("error: {}", msg);
-                std::process::exit(1);
-            }
+                .map(|pager| (pager, delimiter))),
+            SelectedPager::None => Ok(None),
         }
     };
 
@@ -148,7 +147,7 @@ fn run() -> Result<()> {
             true => anstream::ColorChoice::Always,
             false => anstream::ColorChoice::Never,
         };
-        let output: OutputStream = match start_pager(PagerRole::View) {
+        let output: OutputStream = match start_pager(PagerRole::View)? {
             Some((pager, _)) => Box::new(pager),
             None => Box::new(stdout()),
         };
@@ -338,7 +337,7 @@ fn run() -> Result<()> {
     let mut pager_delimiter = None;
     let (output, using_pager): (OutputStream, bool) = match opt.output {
         Some(output) => (Box::new(std::fs::File::create(PathBuf::from(&output))?), false),
-        None => match start_pager(role) {
+        None => match start_pager(role)? {
             Some((mut pager, delimiter)) => {
                 pager_delimiter = delimiter;
                 let detached = pager.detach_process();

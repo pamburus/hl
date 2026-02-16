@@ -3,7 +3,7 @@
 use std::collections::HashMap;
 
 use super::config::{PagerConfig, PagerProfile, PagerRole, PagerRoleConfig};
-use super::selection::{EnvProvider, ExeChecker, PagerSelector, SelectedPager};
+use super::selection::{EnvProvider, Error, ExeChecker, PagerSelector, SelectedPager};
 use crate::output::OutputDelimiter;
 
 // ---
@@ -232,7 +232,7 @@ fn selector_view_with_single_available_profile() {
     let pager_config = config.pager.as_ref();
     let selector = selector_with_mocks(pager_config, &config.pagers, MockEnv::new(), &["less"]);
 
-    let selected = selector.select(PagerRole::View);
+    let selected = selector.select(PagerRole::View).expect("select failed");
 
     assert!(matches!(selected, SelectedPager::Pager { .. }));
     if let SelectedPager::Pager { command, env, .. } = selected {
@@ -250,7 +250,7 @@ fn selector_view_with_priority_fallback() {
     // Only `less` is available, not the nonexistent pager
     let selector = selector_with_mocks(pager_config, &config.pagers, MockEnv::new(), &["less"]);
 
-    let selected = selector.select(PagerRole::View);
+    let selected = selector.select(PagerRole::View).expect("select failed");
 
     assert!(matches!(selected, SelectedPager::Pager { .. }));
     if let SelectedPager::Pager { command, .. } = selected {
@@ -264,7 +264,7 @@ fn selector_view_with_empty_priority_returns_none() {
     let pager_config = config.pager.as_ref();
     let selector = selector_with_mocks(pager_config, &config.pagers, MockEnv::new(), &["less"]);
 
-    let selected = selector.select(PagerRole::View);
+    let selected = selector.select(PagerRole::View).expect("select failed");
     assert!(matches!(selected, SelectedPager::None));
 }
 
@@ -274,7 +274,7 @@ fn selector_follow_disabled_by_default() {
     let pager_config = config.pager.as_ref();
     let selector = selector_with_mocks(pager_config, &config.pagers, MockEnv::new(), &["less"]);
 
-    let selected = selector.select(PagerRole::Follow);
+    let selected = selector.select(PagerRole::Follow).expect("select failed");
 
     // Follow mode should return None since follow.enabled is not set
     assert!(matches!(selected, SelectedPager::None));
@@ -286,7 +286,7 @@ fn selector_follow_when_enabled() {
     let pager_config = config.pager.as_ref();
     let selector = selector_with_mocks(pager_config, &config.pagers, MockEnv::new(), &["fzf"]);
 
-    let selected = selector.select(PagerRole::Follow);
+    let selected = selector.select(PagerRole::Follow).expect("select failed");
 
     assert!(matches!(selected, SelectedPager::Pager { .. }));
     if let SelectedPager::Pager { command, .. } = selected {
@@ -304,7 +304,7 @@ fn selector_view_env_override_with_profile_using_at_prefix() {
     let env = MockEnv::new().with_var("HL_PAGER", "@less");
     let selector = selector_with_mocks(pager_config, &config.pagers, env, &["fzf", "less"]);
 
-    let selected = selector.select(PagerRole::View);
+    let selected = selector.select(PagerRole::View).expect("select failed");
 
     // Should use `less` profile from HL_PAGER, not `fzf` from config priority
     assert!(matches!(selected, SelectedPager::Pager { .. }));
@@ -320,7 +320,7 @@ fn selector_view_env_override_without_at_prefix_uses_command() {
     let env = MockEnv::new().with_var("HL_PAGER", "less");
     let selector = selector_with_mocks(pager_config, &config.pagers, env, &["fzf", "less"]);
 
-    let selected = selector.select(PagerRole::View);
+    let selected = selector.select(PagerRole::View).expect("select failed");
 
     // Without @ prefix, should use `less` as direct command (with -R added automatically)
     assert!(matches!(selected, SelectedPager::Pager { .. }));
@@ -338,7 +338,7 @@ fn selector_view_env_override_with_command() {
     let env = MockEnv::new().with_var("HL_PAGER", "cat -n");
     let selector = selector_with_mocks(pager_config, &config.pagers, env, &["cat", "less"]);
 
-    let selected = selector.select(PagerRole::View);
+    let selected = selector.select(PagerRole::View).expect("select failed");
 
     assert!(matches!(selected, SelectedPager::Pager { .. }));
     if let SelectedPager::Pager { command, .. } = selected {
@@ -353,7 +353,7 @@ fn selector_view_env_empty_disables_pager() {
     let env = MockEnv::new().with_var("HL_PAGER", "");
     let selector = selector_with_mocks(pager_config, &config.pagers, env, &["less"]);
 
-    let selected = selector.select(PagerRole::View);
+    let selected = selector.select(PagerRole::View).expect("select failed");
 
     assert!(matches!(selected, SelectedPager::None));
 }
@@ -366,7 +366,7 @@ fn selector_follow_env_override() {
     let env = MockEnv::new().with_var("HL_FOLLOW_PAGER", "less -R");
     let selector = selector_with_mocks(pager_config, &config.pagers, env, &["less"]);
 
-    let selected = selector.select(PagerRole::Follow);
+    let selected = selector.select(PagerRole::Follow).expect("select failed");
 
     assert!(matches!(selected, SelectedPager::Pager { .. }));
     if let SelectedPager::Pager { command, .. } = selected {
@@ -384,7 +384,7 @@ fn selector_follow_hl_follow_pager_overrides_hl_pager_empty() {
         .with_var("HL_FOLLOW_PAGER", "less -R");
     let selector = selector_with_mocks(pager_config, &config.pagers, env, &["less"]);
 
-    let selected = selector.select(PagerRole::Follow);
+    let selected = selector.select(PagerRole::Follow).expect("select failed");
 
     assert!(matches!(selected, SelectedPager::Pager { .. }));
 }
@@ -396,10 +396,10 @@ fn selector_view_at_prefix_with_nonexistent_profile_returns_error() {
     let env = MockEnv::new().with_var("HL_PAGER", "@nonexistent");
     let selector = selector_with_mocks(pager_config, &config.pagers, env, &["less"]);
 
-    let selected = selector.select(PagerRole::View);
+    let result = selector.select(PagerRole::View);
 
     // @nonexistent refers to a profile that doesn't exist - should return Error
-    assert!(matches!(selected, SelectedPager::Error(_)));
+    assert!(matches!(result, Err(Error::ProfileNotFound { .. })));
 }
 
 #[test]
@@ -409,7 +409,7 @@ fn selector_follow_at_prefix_uses_profile() {
     let env = MockEnv::new().with_var("HL_FOLLOW_PAGER", "@fzf");
     let selector = selector_with_mocks(pager_config, &config.pagers, env, &["fzf"]);
 
-    let selected = selector.select(PagerRole::Follow);
+    let selected = selector.select(PagerRole::Follow).expect("select failed");
 
     assert!(matches!(selected, SelectedPager::Pager { .. }));
     if let SelectedPager::Pager { command, .. } = selected {
@@ -427,10 +427,10 @@ fn selector_view_env_command_not_found_returns_error() {
     let env = MockEnv::new().with_var("HL_PAGER", "nonexistent-command");
     let selector = selector_with_mocks(pager_config, &config.pagers, env, &["less"]);
 
-    let selected = selector.select(PagerRole::View);
+    let result = selector.select(PagerRole::View);
 
     // HL_PAGER with unavailable command should return Error
-    assert!(matches!(selected, SelectedPager::Error(_)));
+    assert!(matches!(result, Err(Error::CommandNotFound { .. })));
 }
 
 #[test]
@@ -440,10 +440,10 @@ fn selector_view_pager_env_command_not_found_returns_error() {
     let env = MockEnv::new().with_var("PAGER", "nonexistent-pager");
     let selector = selector_with_mocks(pager_config, &config.pagers, env, &["less"]);
 
-    let selected = selector.select(PagerRole::View);
+    let result = selector.select(PagerRole::View);
 
     // PAGER with unavailable command should return Error
-    assert!(matches!(selected, SelectedPager::Error(_)));
+    assert!(matches!(result, Err(Error::CommandNotFound { .. })));
 }
 
 #[test]
@@ -453,10 +453,10 @@ fn selector_follow_env_command_not_found_returns_error() {
     let env = MockEnv::new().with_var("HL_FOLLOW_PAGER", "nonexistent-cmd");
     let selector = selector_with_mocks(pager_config, &config.pagers, env, &["less"]);
 
-    let selected = selector.select(PagerRole::Follow);
+    let result = selector.select(PagerRole::Follow);
 
     // HL_FOLLOW_PAGER with unavailable command should return Error
-    assert!(matches!(selected, SelectedPager::Error(_)));
+    assert!(matches!(result, Err(Error::CommandNotFound { .. })));
 }
 
 #[test]
@@ -467,10 +467,10 @@ fn selector_view_at_prefix_command_not_found_returns_error() {
     // "less" executable is not available
     let selector = selector_with_mocks(pager_config, &config.pagers, env, &[]);
 
-    let selected = selector.select(PagerRole::View);
+    let result = selector.select(PagerRole::View);
 
     // @less profile exists but executable not in PATH - should return Error
-    assert!(matches!(selected, SelectedPager::Error(_)));
+    assert!(matches!(result, Err(Error::ExecutableNotFound { .. })));
 }
 
 #[test]
@@ -481,7 +481,7 @@ fn selector_view_pager_env_fallback() {
     let env = MockEnv::new().with_var("PAGER", "more");
     let selector = selector_with_mocks(pager_config, &config.pagers, env, &["more"]);
 
-    let selected = selector.select(PagerRole::View);
+    let selected = selector.select(PagerRole::View).expect("select failed");
 
     assert!(matches!(selected, SelectedPager::Pager { .. }));
     if let SelectedPager::Pager { command, .. } = selected {
@@ -505,7 +505,7 @@ fn selector_profile_with_delimiter_nul() {
     let config = PagerConfig::Single("fzf".to_string());
     let selector = selector_with_mocks(Some(&config), &profiles, MockEnv::new(), &["fzf"]);
 
-    let selected = selector.select(PagerRole::View);
+    let selected = selector.select(PagerRole::View).expect("select failed");
 
     if let SelectedPager::Pager { delimiter, .. } = selected {
         assert_eq!(delimiter, Some(OutputDelimiter::Nul));
@@ -531,7 +531,7 @@ fn selector_env_delimiter_overrides_profile() {
     let env = MockEnv::new().with_var("HL_PAGER_DELIMITER", "newline");
     let selector = selector_with_mocks(Some(&config), &profiles, env, &["fzf"]);
 
-    let selected = selector.select(PagerRole::View);
+    let selected = selector.select(PagerRole::View).expect("select failed");
 
     if let SelectedPager::Pager { delimiter, .. } = selected {
         assert_eq!(delimiter, Some(OutputDelimiter::Newline));
@@ -557,7 +557,7 @@ fn selector_env_delimiter_nul_overrides_default() {
     let env = MockEnv::new().with_var("HL_PAGER_DELIMITER", "nul");
     let selector = selector_with_mocks(Some(&config), &profiles, env, &["less"]);
 
-    let selected = selector.select(PagerRole::View);
+    let selected = selector.select(PagerRole::View).expect("select failed");
 
     if let SelectedPager::Pager { delimiter, .. } = selected {
         assert_eq!(delimiter, Some(OutputDelimiter::Nul));
