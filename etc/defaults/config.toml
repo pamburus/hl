@@ -193,11 +193,18 @@ mode = "auto"
 [pagers]
 # Pager profile for `less`.
 [pagers.less]
+# Base command for both view and follow modes.
 command = ["less", "-R", "--mouse"]
+# Environment variables for the pager command.
 env = { LESSCHARSET = "UTF-8" }
+# Additional arguments for follow mode.
+follow.args = ["+F"]
+# Enable pager for follow mode.
+follow.enabled = true
 
 # Pager profile for `fzf`.
 [pagers.fzf]
+# Base command for both view and follow modes.
 command = [
   "fzf",
   "--color=bg+:#323841",
@@ -218,8 +225,6 @@ command = [
 ]
 # Additional arguments for view mode.
 view.args = ["--layout=reverse-list"]
-# Enable pager for follow mode.
-follow.enabled = true
 # Additional arguments for follow mode.
 follow.args = [
   "--tac",
@@ -232,4 +237,8 @@ follow.args = [
   "--bind=page-up:unbind(result)+page-up",
   "--bind=change:unbind(result)",
   "--track",
+  "--tail",
+  "100000"
 ]
+# Enable pager for follow mode.
+follow.enabled = true
