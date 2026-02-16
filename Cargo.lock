@@ -1244,7 +1244,7 @@ checksum = "7f24254aa9a54b5c858eaee2f5bccdb46aaf0e486a595ed5fd8f86ba55232a70"
 
 [[package]]
 name = "hl"
-version = "0.36.0-alpha.8"
+version = "0.36.0-alpha.9"
 dependencies = [
  "anstream 1.0.0",
  "anyhow",
@@ -1291,7 +1291,9 @@ dependencies = [
  "itoa",
  "known-folders",
  "kqueue",
+ "libc",
  "liblzma",
+ "lifecycle",
  "log",
  "logos",
  "maplit",
@@ -1303,6 +1305,7 @@ dependencies = [
  "num_cpus",
  "once_cell",
  "owo-colors",
+ "pager",
  "pest",
  "pest_derive",
  "rand",
@@ -1621,6 +1624,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "lifecycle"
+version = "0.1.0"
+
+[[package]]
 name = "linux-raw-sys"
 version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1930,6 +1937,13 @@ checksum = "30d5b2194ed13191c1999ae0704b7839fb18384fa22e49b57eeaa97d79ce40da"
 dependencies = [
  "libc",
  "winapi",
+]
+
+[[package]]
+name = "pager"
+version = "0.1.0"
+dependencies = [
+ "shellwords",
 ]
 
 [[package]]
