@@ -19,6 +19,7 @@ const MINIMAL_PROFILE: &str = include_str!("../testing/assets/pagers/minimal-pro
 const PROFILE_WITH_VIEW_ARGS: &str = include_str!("../testing/assets/pagers/profile-with-view-args.toml");
 const EMPTY_PRIORITY: &str = include_str!("../testing/assets/pagers/empty-priority.toml");
 const UNAVAILABLE_FIRST: &str = include_str!("../testing/assets/pagers/unavailable-first.toml");
+const CONDITIONAL_ARGS: &str = include_str!("../testing/assets/pagers/conditional-args.toml");
 
 // ---
 // PagerConfig deserialization tests
@@ -156,6 +157,164 @@ fn pager_profile_build_command_follow() {
 }
 
 // ---
+// Conditional args tests
+// ---
+
+#[test]
+fn pager_profile_conditional_args_os() {
+    use super::config::{Condition, ConditionalArgs, OsCondition};
+
+    let mut profile = profile_with_command("fzf", vec!["--ansi"]);
+
+    profile.conditions.push(ConditionalArgs {
+        when: Condition::Os(OsCondition::MacOS),
+        args: vec!["--macos-only".to_string()],
+        env: HashMap::new(),
+    });
+
+    profile.conditions.push(ConditionalArgs {
+        when: Condition::Os(OsCondition::Linux),
+        args: vec!["--linux-only".to_string()],
+        env: HashMap::new(),
+    });
+
+    let cmd = profile.build_command(PagerRole::View);
+
+    #[cfg(target_os = "macos")]
+    assert_eq!(cmd, vec!["fzf", "--ansi", "--macos-only"]);
+
+    #[cfg(target_os = "linux")]
+    assert_eq!(cmd, vec!["fzf", "--ansi", "--linux-only"]);
+
+    #[cfg(target_os = "windows")]
+    assert_eq!(cmd, vec!["fzf", "--ansi"]);
+}
+
+#[test]
+fn pager_profile_conditional_args_mode() {
+    use super::config::{Condition, ConditionalArgs, ModeCondition};
+
+    let mut profile = profile_with_command("fzf", vec!["--ansi"]);
+
+    profile.conditions.push(ConditionalArgs {
+        when: Condition::Mode(ModeCondition::View),
+        args: vec!["--layout=reverse-list".to_string()],
+        env: HashMap::new(),
+    });
+
+    profile.conditions.push(ConditionalArgs {
+        when: Condition::Mode(ModeCondition::Follow),
+        args: vec!["--tac".to_string()],
+        env: HashMap::new(),
+    });
+
+    let cmd_view = profile.build_command(PagerRole::View);
+    assert_eq!(cmd_view, vec!["fzf", "--ansi", "--layout=reverse-list"]);
+
+    let cmd_follow = profile.build_command(PagerRole::Follow);
+    assert_eq!(cmd_follow, vec!["fzf", "--ansi", "--tac"]);
+}
+
+#[test]
+fn pager_profile_conditional_args_negation() {
+    use super::config::{Condition, ConditionalArgs, ModeCondition};
+
+    let mut profile = profile_with_command("fzf", vec!["--ansi"]);
+
+    profile.conditions.push(ConditionalArgs {
+        when: Condition::Not(Box::new(Condition::Mode(ModeCondition::Follow))),
+        args: vec!["--non-follow".to_string()],
+        env: HashMap::new(),
+    });
+
+    let cmd_view = profile.build_command(PagerRole::View);
+    assert_eq!(cmd_view, vec!["fzf", "--ansi", "--non-follow"]);
+
+    let cmd_follow = profile.build_command(PagerRole::Follow);
+    assert_eq!(cmd_follow, vec!["fzf", "--ansi"]);
+}
+
+#[test]
+fn pager_profile_conditional_env() {
+    use super::config::{Condition, ConditionalArgs, OsCondition};
+
+    let mut profile = profile_with_command("less", vec!["-R"]);
+
+    let mut env_vars = HashMap::new();
+    env_vars.insert("MACOS_VAR".to_string(), "macos_value".to_string());
+
+    profile.conditions.push(ConditionalArgs {
+        when: Condition::Os(OsCondition::MacOS),
+        args: Vec::new(),
+        env: env_vars,
+    });
+
+    let env = profile.build_env(PagerRole::View);
+
+    #[cfg(target_os = "macos")]
+    assert_eq!(env.get("MACOS_VAR"), Some(&"macos_value".to_string()));
+
+    #[cfg(not(target_os = "macos"))]
+    assert_eq!(env.get("MACOS_VAR"), None);
+}
+
+#[test]
+fn pager_profile_conditions_order() {
+    use super::config::{Condition, ConditionalArgs, ModeCondition, OsCondition};
+
+    let mut profile = profile_with_command("fzf", vec!["--ansi"]);
+
+    profile.conditions.push(ConditionalArgs {
+        when: Condition::Os(OsCondition::Unix),
+        args: vec!["--unix".to_string()],
+        env: HashMap::new(),
+    });
+
+    profile.conditions.push(ConditionalArgs {
+        when: Condition::Mode(ModeCondition::View),
+        args: vec!["--view".to_string()],
+        env: HashMap::new(),
+    });
+
+    profile.view.args = vec!["--view-role".to_string()];
+
+    let cmd = profile.build_command(PagerRole::View);
+
+    #[cfg(unix)]
+    assert_eq!(cmd, vec!["fzf", "--ansi", "--unix", "--view", "--view-role"]);
+
+    #[cfg(not(unix))]
+    assert_eq!(cmd, vec!["fzf", "--ansi", "--view", "--view-role"]);
+}
+
+#[test]
+fn pager_profile_conditional_args_deserialize() {
+    let config: TestConfig = toml::from_str(CONDITIONAL_ARGS).expect("failed to parse");
+
+    let profile = config.pager.profile("fzf").expect("profile not found");
+    assert_eq!(profile.name, "fzf");
+    assert_eq!(profile.command, "fzf");
+    assert_eq!(profile.args, vec!["--ansi", "--exact"]);
+    assert_eq!(profile.conditions.len(), 4);
+
+    // Check OS conditions
+    assert_eq!(profile.conditions[0].when.to_string(), "os:macos");
+    assert_eq!(profile.conditions[0].args.len(), 1);
+    assert!(profile.conditions[0].args[0].contains("pbcopy"));
+
+    assert_eq!(profile.conditions[1].when.to_string(), "os:linux");
+    assert_eq!(profile.conditions[1].args.len(), 1);
+    assert!(profile.conditions[1].args[0].contains("xclip"));
+
+    // Check mode conditions
+    assert_eq!(profile.conditions[2].when.to_string(), "!mode:follow");
+    assert_eq!(profile.conditions[2].args, vec!["--layout=reverse-list"]);
+
+    assert_eq!(profile.conditions[3].when.to_string(), "mode:follow");
+    assert_eq!(profile.conditions[3].args, vec!["--tac", "--track"]);
+}
+
+// ---
 // Helper types and functions
 // ---
 
@@ -174,6 +333,7 @@ fn profile_with_command(command: &str, args: Vec<&str>) -> PagerProfile {
         delimiter: None,
         view: PagerRoleConfig::default(),
         follow: PagerRoleConfig::default(),
+        conditions: Vec::new(),
     }
 }
 
@@ -497,6 +657,7 @@ fn selector_profile_delimiter() {
             delimiter: Some(OutputDelimiter::Nul),
             view: PagerRoleConfig::default(),
             follow: PagerRoleConfig::default(),
+            conditions: Vec::new(),
         }],
     };
     let selector = selector_with_mocks(&config, MockEnv::new(), &["fzf"]);
@@ -554,6 +715,7 @@ fn selector_profile_reference_ignores_delimiter_env() {
             delimiter: Some(OutputDelimiter::Nul),
             view: PagerRoleConfig::default(),
             follow: PagerRoleConfig::default(),
+            conditions: Vec::new(),
         }],
     };
     let env = MockEnv::new()
