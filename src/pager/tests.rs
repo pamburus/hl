@@ -461,6 +461,21 @@ fn selector_follow_when_enabled() {
 }
 
 #[test]
+fn selector_follow_fallback_to_profile_when_env_not_set() {
+    let config: TestConfig = toml::from_str(FOLLOW_ENABLED).expect("failed to parse");
+    // No env vars set - should skip env candidate and use fzf profile
+    let selector = selector_with_mocks(&config.pager, MockEnv::new(), &["fzf"]);
+
+    let selected = selector.select(PagerRole::Follow).expect("select failed");
+
+    // Should use fzf profile with follow mode enabled
+    assert!(matches!(selected, SelectedPager::Pager { .. }));
+    if let SelectedPager::Pager { command, .. } = selected {
+        assert_eq!(command[0], "fzf");
+    }
+}
+
+#[test]
 fn selector_view_env_override_with_profile_using_at_prefix() {
     let config: TestConfig = toml::from_str(PRIORITY_LIST).expect("failed to parse");
     let env = MockEnv::new().with_var("HL_PAGER", "@less");
