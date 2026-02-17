@@ -8,24 +8,39 @@ use std::collections::HashMap;
 
 use serde::Deserialize;
 
+use crate::condition::{ConditionContext, ConditionMode};
 use crate::output::OutputDelimiter;
 
 // ---
 
-mod condition;
-
-pub use condition::Condition;
+pub use crate::condition::Condition;
 #[cfg(test)]
-pub use condition::{ModeCondition, OsCondition};
+pub use crate::condition::{ModeCondition, OsCondition};
 
 // ---
 
 /// Represents a candidate in the `pager.candidates` array.
 ///
 /// Each candidate is either an environment variable reference or a profile reference.
+/// The optional `when` field imposes a condition that must be satisfied for this
+/// candidate to be considered at all.
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
+pub struct PagerCandidate {
+    /// The kind of candidate (env or profile).
+    #[serde(flatten)]
+    pub kind: PagerCandidateKind,
+
+    /// Optional condition; if specified the candidate is only considered when it matches.
+    #[serde(default)]
+    pub when: Option<Condition>,
+}
+
+// ---
+
+/// Discriminates between the two kinds of pager candidates.
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
-pub enum PagerCandidate {
+pub enum PagerCandidateKind {
     /// Simple environment variable reference: `{ env = "HL_PAGER" }`
     /// or structured reference: `{ env = { pager = "...", follow = "...", delimiter = "..." } }`
     Env(EnvReference),
@@ -165,12 +180,13 @@ impl PagerProfile {
 
     /// Builds the full command for a given role.
     pub fn build_command(&self, role: PagerRole) -> Vec<&str> {
+        let ctx = ConditionContext::from(role);
         let mut cmd = vec![self.command.as_str()];
         cmd.extend(self.args.iter().map(|s| s.as_str()));
 
         // Add conditional args that match current platform and mode
         for conditional in &self.conditions {
-            if conditional.when.matches(role) {
+            if conditional.when.matches(&ctx) {
                 cmd.extend(conditional.args.iter().map(|s| s.as_str()));
             }
         }
@@ -185,11 +201,12 @@ impl PagerProfile {
 
     /// Builds the environment variables for a given role.
     pub fn build_env(&self, role: PagerRole) -> HashMap<String, String> {
+        let ctx = ConditionContext::from(role);
         let mut env = self.env.clone();
 
         // Add conditional env vars that match current platform and mode
         for conditional in &self.conditions {
-            if conditional.when.matches(role) {
+            if conditional.when.matches(&ctx) {
                 env.extend(conditional.env.clone());
             }
         }
@@ -234,4 +251,13 @@ pub enum PagerRole {
     View,
     /// Live log streaming (`--follow` mode).
     Follow,
+}
+
+impl From<PagerRole> for ConditionContext {
+    fn from(role: PagerRole) -> Self {
+        ConditionContext::with_mode(match role {
+            PagerRole::View => ConditionMode::View,
+            PagerRole::Follow => ConditionMode::Follow,
+        })
+    }
 }

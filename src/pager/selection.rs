@@ -11,7 +11,9 @@ use std::path::Path;
 use pager::{Pager, StartedPager};
 use thiserror::Error;
 
-use super::config::{EnvReference, PagerCandidate, PagerConfig, PagerRole, StructuredEnvReference};
+use crate::condition::ConditionContext;
+
+use super::config::{EnvReference, PagerCandidate, PagerCandidateKind, PagerConfig, PagerRole, StructuredEnvReference};
 use crate::{
     output::OutputDelimiter,
     xerr::{Highlight, HighlightQuoted},
@@ -206,14 +208,18 @@ impl<'a, E: EnvProvider, C: ExeChecker> PagerSelector<'a, E, C> {
     ///
     /// Iterates through pager.candidates in order until a usable pager is found.
     fn select_for_view(&self) -> Result<SelectedPager, Error> {
+        let ctx = ConditionContext::from(PagerRole::View);
         for candidate in self.config.candidates() {
-            match candidate {
-                PagerCandidate::Profile(name) => {
+            if !self.candidate_matches_condition(candidate, &ctx) {
+                continue;
+            }
+            match &candidate.kind {
+                PagerCandidateKind::Profile(name) => {
                     if let Some(selected) = self.try_profile(name, PagerRole::View) {
                         return Ok(selected);
                     }
                 }
-                PagerCandidate::Env(env_ref) => {
+                PagerCandidateKind::Env(env_ref) => {
                     if let Some(result) = self.try_env_candidate(env_ref, PagerRole::View)? {
                         return Ok(result);
                     }
@@ -230,9 +236,13 @@ impl<'a, E: EnvProvider, C: ExeChecker> PagerSelector<'a, E, C> {
     /// Iterates through pager.candidates in order until a usable pager is found.
     /// Only uses profiles that have follow.enabled = true.
     fn select_for_follow(&self) -> Result<SelectedPager, Error> {
+        let ctx = ConditionContext::from(PagerRole::Follow);
         for candidate in self.config.candidates() {
-            match candidate {
-                PagerCandidate::Profile(name) => {
+            if !self.candidate_matches_condition(candidate, &ctx) {
+                continue;
+            }
+            match &candidate.kind {
+                PagerCandidateKind::Profile(name) => {
                     // Only use profiles with follow.enabled = true
                     if let Some(profile) = self.config.profile(name) {
                         if profile.modes.follow.is_enabled(PagerRole::Follow) {
@@ -242,7 +252,7 @@ impl<'a, E: EnvProvider, C: ExeChecker> PagerSelector<'a, E, C> {
                         }
                     }
                 }
-                PagerCandidate::Env(env_ref) => {
+                PagerCandidateKind::Env(env_ref) => {
                     if let Some(result) = self.try_env_candidate(env_ref, PagerRole::Follow)? {
                         return Ok(result);
                     }
@@ -252,6 +262,20 @@ impl<'a, E: EnvProvider, C: ExeChecker> PagerSelector<'a, E, C> {
 
         log::debug!("no pager configured for follow mode, using stdout");
         Ok(SelectedPager::None)
+    }
+
+    /// Returns `true` if the candidate's `when` condition is satisfied (or absent).
+    fn candidate_matches_condition(&self, candidate: &PagerCandidate, ctx: &ConditionContext) -> bool {
+        match &candidate.when {
+            Some(cond) => {
+                let result = cond.matches(ctx);
+                if !result {
+                    log::debug!("candidate {:?} skipped: condition {cond} not met", candidate.kind);
+                }
+                result
+            }
+            None => true,
+        }
     }
 
     /// Tries to resolve an environment variable candidate.

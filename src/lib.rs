@@ -2,6 +2,7 @@
 pub mod app;
 pub mod appdirs;
 pub mod cli;
+pub mod condition;
 pub mod config;
 pub mod datefmt;
 pub mod error;

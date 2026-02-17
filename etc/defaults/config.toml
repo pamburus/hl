@@ -183,6 +183,11 @@ mode = "auto"
 #   - { env = { pager = "VAR1", follow = "VAR2", delimiter = "VAR3" } } - Structured env reference with role-specific vars
 #   - { profile = "profile_name" } - Reference to a named profile
 #
+# All candidate forms accept an optional `when` field with a condition string.
+# When specified, the candidate is skipped entirely unless the condition holds.
+# This is useful to exclude pagers that have issues on certain platforms.
+# See the conditions reference below for supported condition strings.
+#
 # Roles:
 #   - view: Used when viewing logs (non-follow mode)
 #   - follow: Used when following logs (--follow mode); if not configured, pager is disabled in follow mode
@@ -192,11 +197,13 @@ mode = "auto"
 candidates = [
   # First, check application-specific environment variables
   { env = { pager = "HL_PAGER", follow = "HL_FOLLOW_PAGER", delimiter = "HL_PAGER_DELIMITER" } },
-  # Then try configured profiles in priority order
-  { profile = "fzf" },
+  # Then try configured profiles in priority order.
+  # fzf has known issues on Windows, so prefer it only on non-Windows platforms.
+  { profile = "fzf", when = "!os:windows" },
   { profile = "ov" },
   { profile = "less" },
   { profile = "most" },
+  { profile = "fzf", when = "os:windows" },
   # Finally, fall back to standard PAGER env var
   { env = "PAGER" },
 ]
@@ -222,22 +229,24 @@ candidates = [
 #     args = [...]        # Arguments to append when condition matches
 #     env = {...}         # Environment variables to set when condition matches
 #
-#   Supported conditions:
+#   Supported condition strings (used in both candidate `when` and profile `conditions[].when`):
 #     OS conditions:
 #       "os:macos"   - macOS only
 #       "os:linux"   - Linux only
 #       "os:windows" - Windows only
 #       "os:unix"    - Unix-like systems (macOS or Linux)
 #
-#     Mode conditions:
+#     Mode conditions (only meaningful inside profile conditions; candidates are tested
+#     separately for each role, so mode conditions work there too):
 #       "mode:view"   - View mode (non-follow)
 #       "mode:follow" - Follow mode (--follow flag)
 #
 #     Negation:
 #       "!<condition>" - Negates any condition
 #       Example: "!mode:follow" matches in view mode
+#       Example: "!os:windows" matches on any non-Windows platform
 #
-#   Conditions are evaluated in order, and matching conditions append their args/env.
+#   For profile conditions: evaluated in order; matching conditions append their args/env.
 [[pager.profiles]]
 name = "less"
 # Base command (executable).
