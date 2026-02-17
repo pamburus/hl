@@ -198,14 +198,15 @@ candidates = [
   # First, check application-specific environment variables
   { env = { pager = "HL_PAGER", follow = "HL_FOLLOW_PAGER", delimiter = "HL_PAGER_DELIMITER" } },
   # Then try configured profiles in priority order.
-  # fzf has known issues on Windows, so prefer it only on non-Windows platforms.
+  # Try fzf first if not on Windows, skip on Windows due to known issues.
   { profile = "fzf", if = "!os:windows" },
   { profile = "ov" },
+  # If PAGER env var is set, use it as a simple pager reference (same command for view and follow modes, no delimiter).
+  { env = "PAGER" },
+  # Finally, try other common pagers with default configurations.
   { profile = "less" },
   { profile = "most" },
   { profile = "fzf", if = "os:windows" },
-  # Finally, fall back to standard PAGER env var
-  { env = "PAGER" },
 ]
 
 # Named pager profiles.
