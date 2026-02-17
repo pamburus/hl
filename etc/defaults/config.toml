@@ -193,9 +193,9 @@ candidates = [
   # First, check application-specific environment variables
   { env = { pager = "HL_PAGER", follow = "HL_FOLLOW_PAGER", delimiter = "HL_PAGER_DELIMITER" } },
   # Then try configured profiles in priority order
-  { profile = "less" },
   { profile = "fzf" },
   { profile = "ov" },
+  { profile = "less" },
   { profile = "most" },
   # Finally, fall back to standard PAGER env var
   { env = "PAGER" },
@@ -205,10 +205,10 @@ candidates = [
 # Each profile defines a pager command and optional role-specific arguments.
 #
 # Profile structure:
-#   name = "..."          # Profile name
-#   command = "..."       # Base command (executable)
-#   args = [...]          # Base arguments
-#   env = {...}           # Environment variables for the pager command
+#   name = "..."                # Profile name
+#   command = "..."             # Base command (executable)
+#   args = [...]                # Base arguments
+#   env = {...}                 # Environment variables for the pager command
 #   delimiter = "..."           # Entry delimiter [newline, nul]
 #   conditions = [...]          # Conditional arguments and env vars based on platform/mode (see below)
 #   modes.view.args = [...]     # Additional arguments for view mode (appended to command)
