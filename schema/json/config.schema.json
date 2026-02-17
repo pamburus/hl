@@ -3,6 +3,46 @@
   "type": "object",
   "additionalProperties": false,
   "definitions": {
+    "condition": {
+      "type": "string",
+      "pattern": "^(!)?((os|mode):.+)$",
+      "description": "Condition string in format 'os:macos', 'mode:follow', '!mode:follow', etc. Valid OS values: macos, linux, windows, unix. Valid mode values: view, follow.",
+      "examples": [
+        "os:macos",
+        "os:linux",
+        "os:windows",
+        "os:unix",
+        "mode:view",
+        "mode:follow",
+        "!mode:follow",
+        "!os:windows"
+      ]
+    },
+    "conditional-args": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["when"],
+      "properties": {
+        "when": {
+          "$ref": "#/definitions/condition",
+          "description": "Condition that must be met for these args/env to apply"
+        },
+        "args": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Arguments to append when condition is met"
+        },
+        "env": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Environment variables to set when condition is met"
+        }
+      }
+    },
     "pager-role": {
       "type": "object",
       "additionalProperties": false,
@@ -59,6 +99,13 @@
         "follow": {
           "$ref": "#/definitions/pager-role",
           "description": "Configuration for follow mode"
+        },
+        "conditions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/conditional-args"
+          },
+          "description": "Conditional arguments and environment variables based on platform (OS) and mode"
         }
       }
     },

@@ -210,9 +210,34 @@ candidates = [
 #   args = [...]          # Base arguments
 #   env = {...}           # Environment variables for the pager command
 #   delimiter = "..."     # Entry delimiter [newline, nul]
+#   conditions = [...]    # Conditional arguments and env vars based on platform/mode (see below)
 #   view.args = [...]     # Additional arguments for view mode (appended to command)
 #   follow.enabled = ...  # Whether to enable pager for follow mode [true, false]
 #   follow.args = [...]   # Additional arguments for follow mode (appended to command)
+#
+# Conditional arguments (conditions field):
+#   Allows specifying platform-specific and mode-specific arguments.
+#   Each condition has:
+#     when = "condition"  # Condition string (see supported conditions below)
+#     args = [...]        # Arguments to append when condition matches
+#     env = {...}         # Environment variables to set when condition matches
+#
+#   Supported conditions:
+#     OS conditions:
+#       "os:macos"   - macOS only
+#       "os:linux"   - Linux only
+#       "os:windows" - Windows only
+#       "os:unix"    - Unix-like systems (macOS or Linux)
+#
+#     Mode conditions:
+#       "mode:view"   - View mode (non-follow)
+#       "mode:follow" - Follow mode (--follow flag)
+#
+#     Negation:
+#       "!<condition>" - Negates any condition
+#       Example: "!mode:follow" matches in view mode
+#
+#   Conditions are evaluated in order, and matching conditions append their args/env.
 [[pager.profiles]]
 name = "less"
 # Base command (executable).
@@ -242,7 +267,6 @@ args = [
   "--multi",
   "--no-sort",
   "--no-bold",
-  "--bind=ctrl-y:execute-silent(printf %s\\n {+} | pbcopy)",
   "--bind=esc:track-current+clear-query+clear-multi+disable-raw",
   "--bind=ctrl-q:abort",
   "--bind=enter:toggle-raw",
@@ -251,21 +275,30 @@ args = [
   "--bind=home:first",
   "--bind=end:last"
 ]
-# Additional arguments for view mode.
-view.args = ["--layout=reverse-list"]
-# Additional arguments for follow mode.
-follow.args = [
-  "--tac",
-  "--bind=scroll-up:offset-up+unbind(result)",
-  "--bind=home:unbind(result)+last",
-  "--bind=end:rebind(result)+first",
-  "--bind=result:first",
-  "--bind=ctrl-f:rebind(result)+first",
-  "--bind=up:unbind(result)+up",
-  "--bind=page-up:unbind(result)+page-up",
-  "--bind=change:unbind(result)",
-  "--track",
-  "--tail=100000",
+# Conditional arguments based on platform and modes.
+conditions = [
+  { when = "os:macos", args = [
+    "--bind=ctrl-y:execute-silent(printf %s\\n {+} | pbcopy)",
+  ] },
+  { when = "os:linux", args = [
+    "--bind=ctrl-y:execute-silent(printf %s\\n {+} | xclip -in -sel clip)",
+  ] },
+  { when = "!mode:follow", args = [
+    "--layout=reverse-list",
+  ] },
+  { when = "mode:follow", args = [
+    "--tac",
+    "--bind=scroll-up:offset-up+unbind(result)",
+    "--bind=home:unbind(result)+last",
+    "--bind=end:rebind(result)+first",
+    "--bind=result:first",
+    "--bind=ctrl-f:rebind(result)+first",
+    "--bind=up:unbind(result)+up",
+    "--bind=page-up:unbind(result)+page-up",
+    "--bind=change:unbind(result)",
+    "--track",
+    "--tail=100000",
+  ] },
 ]
 # Enable pager for follow mode.
 follow.enabled = true

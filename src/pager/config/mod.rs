@@ -12,6 +12,14 @@ use crate::output::OutputDelimiter;
 
 // ---
 
+mod condition;
+
+pub use condition::Condition;
+#[cfg(test)]
+pub use condition::{ModeCondition, OsCondition};
+
+// ---
+
 /// Represents a candidate in the `pager.candidates` array.
 ///
 /// Each candidate is either an environment variable reference or a profile reference.
@@ -112,6 +120,27 @@ pub struct PagerProfile {
     /// Follow mode configuration.
     #[serde(default)]
     pub follow: PagerRoleConfig,
+
+    /// Conditional arguments based on platform and mode.
+    #[serde(default)]
+    pub conditions: Vec<ConditionalArgs>,
+}
+
+// ---
+
+/// Represents conditional arguments that apply when a condition is met.
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
+pub struct ConditionalArgs {
+    /// Condition that must be met for these args to apply.
+    pub when: Condition,
+
+    /// Arguments to append when condition is met.
+    #[serde(default)]
+    pub args: Vec<String>,
+
+    /// Environment variables to set when condition is met.
+    #[serde(default)]
+    pub env: HashMap<String, String>,
 }
 
 impl PagerProfile {
@@ -128,12 +157,34 @@ impl PagerProfile {
     pub fn build_command(&self, role: PagerRole) -> Vec<&str> {
         let mut cmd = vec![self.command.as_str()];
         cmd.extend(self.args.iter().map(|s| s.as_str()));
+
+        // Add conditional args that match current platform and mode
+        for conditional in &self.conditions {
+            if conditional.when.matches(role) {
+                cmd.extend(conditional.args.iter().map(|s| s.as_str()));
+            }
+        }
+
         let role_args = match role {
             PagerRole::View => &self.view.args,
             PagerRole::Follow => &self.follow.args,
         };
         cmd.extend(role_args.iter().map(|s| s.as_str()));
         cmd
+    }
+
+    /// Builds the environment variables for a given role.
+    pub fn build_env(&self, role: PagerRole) -> HashMap<String, String> {
+        let mut env = self.env.clone();
+
+        // Add conditional env vars that match current platform and mode
+        for conditional in &self.conditions {
+            if conditional.when.matches(role) {
+                env.extend(conditional.env.clone());
+            }
+        }
+
+        env
     }
 }
 
