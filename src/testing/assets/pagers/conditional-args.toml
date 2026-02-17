@@ -8,17 +8,17 @@ command = "fzf"
 args = ["--ansi", "--exact"]
 
 [[pager.profiles.conditions]]
-when = "os:macos"
+if = "os:macos"
 args = ["--bind=ctrl-y:execute-silent(printf %s\\n {+} | pbcopy)"]
 
 [[pager.profiles.conditions]]
-when = "os:linux"
+if = "os:linux"
 args = ["--bind=ctrl-y:execute-silent(printf %s\\n {+} | xclip -selection clipboard)"]
 
 [[pager.profiles.conditions]]
-when = "!mode:follow"
+if = "!mode:follow"
 args = ["--layout=reverse-list"]
 
 [[pager.profiles.conditions]]
-when = "mode:follow"
+if = "mode:follow"
 args = ["--tac", "--track"]

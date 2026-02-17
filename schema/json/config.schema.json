@@ -21,9 +21,9 @@
     "conditional-args": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["when"],
+      "required": ["if"],
       "properties": {
-        "when": {
+        "if": {
           "$ref": "#/definitions/condition",
           "description": "Condition that must be met for these args/env to apply"
         },
@@ -129,7 +129,7 @@
               "type": "string",
               "description": "Reference to a named pager profile"
             },
-            "when": {
+            "if": {
               "$ref": "#/definitions/condition",
               "description": "Optional condition; if specified the candidate is only considered when the condition is met"
             }
@@ -167,7 +167,7 @@
                 }
               ]
             },
-            "when": {
+            "if": {
               "$ref": "#/definitions/condition",
               "description": "Optional condition; if specified the candidate is only considered when the condition is met"
             }

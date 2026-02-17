@@ -30,9 +30,9 @@ pub struct PagerCandidate {
     #[serde(flatten)]
     pub kind: PagerCandidateKind,
 
-    /// Optional condition; if specified the candidate is only considered when it matches.
+    /// Optional condition; if set the candidate is only considered when it matches.
     #[serde(default)]
-    pub when: Option<Condition>,
+    pub r#if: Option<Condition>,
 }
 
 // ---
@@ -157,7 +157,7 @@ pub struct PagerModes {
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
 pub struct ConditionalArgs {
     /// Condition that must be met for these args to apply.
-    pub when: Condition,
+    pub r#if: Condition,
 
     /// Arguments to append when condition is met.
     #[serde(default)]
@@ -186,7 +186,7 @@ impl PagerProfile {
 
         // Add conditional args that match current platform and mode
         for conditional in &self.conditions {
-            if conditional.when.matches(&ctx) {
+            if conditional.r#if.matches(&ctx) {
                 cmd.extend(conditional.args.iter().map(|s| s.as_str()));
             }
         }
@@ -206,7 +206,7 @@ impl PagerProfile {
 
         // Add conditional env vars that match current platform and mode
         for conditional in &self.conditions {
-            if conditional.when.matches(&ctx) {
+            if conditional.r#if.matches(&ctx) {
                 env.extend(conditional.env.clone());
             }
         }

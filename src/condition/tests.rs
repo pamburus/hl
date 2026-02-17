@@ -155,17 +155,17 @@ fn condition_matches_mode_without_context() {
 fn condition_deserialize_from_toml() {
     #[derive(Deserialize)]
     struct TestConfig {
-        when: Condition,
+        r#if: Condition,
     }
 
-    let toml = r#"when = "os:macos""#;
+    let toml = r#"if = "os:macos""#;
     let config: TestConfig = toml::from_str(toml).expect("failed to parse");
-    assert_eq!(config.when, Condition::Os(OsCondition::MacOS));
+    assert_eq!(config.r#if, Condition::Os(OsCondition::MacOS));
 
-    let toml = r#"when = "!mode:follow""#;
+    let toml = r#"if = "!mode:follow""#;
     let config: TestConfig = toml::from_str(toml).expect("failed to parse");
     assert_eq!(
-        config.when,
+        config.r#if,
         Condition::Not(Box::new(Condition::Mode(ModeCondition::Follow)))
     );
 }

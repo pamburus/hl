@@ -264,9 +264,9 @@ impl<'a, E: EnvProvider, C: ExeChecker> PagerSelector<'a, E, C> {
         Ok(SelectedPager::None)
     }
 
-    /// Returns `true` if the candidate's `when` condition is satisfied (or absent).
+    /// Returns `true` if the candidate's `if` condition is satisfied (or absent).
     fn candidate_matches_condition(&self, candidate: &PagerCandidate, ctx: &ConditionContext) -> bool {
-        match &candidate.when {
+        match &candidate.r#if {
             Some(cond) => {
                 let result = cond.matches(ctx);
                 if !result {
