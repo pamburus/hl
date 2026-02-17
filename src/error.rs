@@ -66,31 +66,31 @@ pub enum Error {
     WrongRegularExpression(#[from] regex::Error),
     #[error("inconsistent index: {details}")]
     InconsistentIndex { details: String },
-    #[error("failed to open file '{}' for reading: {source}", .path.hlq())]
+    #[error("failed to open file {} for reading: {source}", .path.hlq())]
     FailedToOpenFileForReading {
         path: PathBuf,
         #[source]
         source: io::Error,
     },
-    #[error("failed to open file '{}' for writing: {source}", .path.hlq())]
+    #[error("failed to open file {} for writing: {source}", .path.hlq())]
     FailedToOpenFileForWriting {
         path: PathBuf,
         #[source]
         source: io::Error,
     },
-    #[error("failed to get metadata of file '{}': {source}", .path.hlq())]
+    #[error("failed to get metadata of file {}: {source}", .path.hlq())]
     FailedToGetFileMetadata {
         path: PathBuf,
         #[source]
         source: io::Error,
     },
-    #[error("failed to read file '{}': {source}", .path.hlq())]
+    #[error("failed to read file {}: {source}", .path.hlq())]
     FailedToReadFile {
         path: String,
         #[source]
         source: io::Error,
     },
-    #[error("failed to load file '{}': {source}", .path.hlq())]
+    #[error("failed to load file {}: {source}", .path.hlq())]
     FailedToLoadFile {
         path: String,
         #[source]

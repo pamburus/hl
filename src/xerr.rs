@@ -41,6 +41,28 @@ impl<'a> Highlight for &'a Path {
     }
 }
 
+impl<'a, S> Highlight for &'a [S]
+where
+    S: fmt::Display,
+{
+    type Output = HighlightedSequence<&'a [S]>;
+
+    fn hl(self) -> Self::Output {
+        HighlightedSequence(self)
+    }
+}
+
+impl<S, const N: usize> Highlight for [S; N]
+where
+    S: fmt::Display,
+{
+    type Output = HighlightedSequence<[S; N]>;
+
+    fn hl(self) -> Self::Output {
+        HighlightedSequence(self)
+    }
+}
+
 // ---
 
 pub trait HighlightQuoted {
@@ -78,6 +100,35 @@ where
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.0.style(HIGHLIGHT))
+    }
+}
+
+// ---
+
+pub struct HighlightedSequence<S>(S);
+
+impl<S> fmt::Display for HighlightedSequence<&[S]>
+where
+    S: fmt::Display + Sized,
+{
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "[")?;
+        for (i, item) in self.0.iter().enumerate() {
+            if i > 0 {
+                write!(f, ", ")?;
+            }
+            write!(f, "{}", item.style(HIGHLIGHT))?;
+        }
+        write!(f, "]")
+    }
+}
+
+impl<S, const N: usize> fmt::Display for HighlightedSequence<[S; N]>
+where
+    S: fmt::Display + Sized,
+{
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        HighlightedSequence(&self.0[..]).fmt(f)
     }
 }
 

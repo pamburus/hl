@@ -13,8 +13,12 @@
 use std::fmt;
 use std::str::FromStr;
 
+use itertools::Itertools;
 use serde::{Deserialize, Deserializer};
+use strum::{AsRefStr, EnumIter, IntoEnumIterator};
 use thiserror::Error;
+
+use crate::xerr::{Highlight, HighlightQuoted};
 
 use super::PagerRole;
 
@@ -32,6 +36,8 @@ pub enum Condition {
 }
 
 impl Condition {
+    pub const PREFIXES: [&'static str; 2] = ["os", "mode"];
+
     /// Evaluates whether this condition matches the current platform and role.
     pub fn matches(&self, role: PagerRole) -> bool {
         match self {
@@ -96,7 +102,7 @@ impl fmt::Display for Condition {
 // ---
 
 /// OS-based condition.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, EnumIter, AsRefStr)]
 pub enum OsCondition {
     /// macOS
     MacOS,
@@ -148,7 +154,7 @@ impl fmt::Display for OsCondition {
 // ---
 
 /// Mode-based condition.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, EnumIter, AsRefStr)]
 pub enum ModeCondition {
     /// View mode (non-follow)
     View,
@@ -193,19 +199,19 @@ impl fmt::Display for ModeCondition {
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
 pub enum ConditionError {
     /// Unknown prefix (expected "os" or "mode")
-    #[error("unknown condition prefix '{0}' (expected 'os' or 'mode')")]
+    #[error("unknown condition prefix {} (valid: {})", .0.hlq(), Condition::PREFIXES.hl())]
     UnknownPrefix(String),
 
     /// Missing prefix separator ':'
-    #[error("condition '{0}' must have 'os:' or 'mode:' prefix")]
+    #[error("condition {} must have any of {} prefixes", .0.hlq(), Condition::PREFIXES.hl())]
     MissingPrefix(String),
 
     /// Unknown OS value
-    #[error("unknown OS '{0}' (expected 'macos', 'linux', 'windows', or 'unix')")]
+    #[error("unknown os {} (valid: {})", .0.hlq(), OsCondition::iter().collect_vec().hl())]
     UnknownOs(String),
 
     /// Unknown mode value
-    #[error("unknown mode '{0}' (expected 'view' or 'follow')")]
+    #[error("unknown mode {} (valid: {})", .0.hlq(), ModeCondition::iter().collect_vec().hl())]
     UnknownMode(String),
 }
 
@@ -378,7 +384,7 @@ mod tests {
     fn condition_error_display() {
         let err = ConditionError::UnknownPrefix("arch".to_string());
         assert!(err.to_string().contains("arch"));
-        assert!(err.to_string().contains("expected"));
+        assert!(err.to_string().contains("valid"));
 
         let err = ConditionError::MissingPrefix("macos".to_string());
         assert!(err.to_string().contains("macos"));
