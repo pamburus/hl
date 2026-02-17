@@ -14,6 +14,7 @@ use std::fmt;
 use std::str::FromStr;
 
 use serde::{Deserialize, Deserializer};
+use thiserror::Error;
 
 use super::PagerRole;
 
@@ -189,42 +190,24 @@ impl fmt::Display for ModeCondition {
 // ---
 
 /// Error type for condition parsing.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Error)]
 pub enum ConditionError {
     /// Unknown prefix (expected "os" or "mode")
+    #[error("unknown condition prefix '{0}' (expected 'os' or 'mode')")]
     UnknownPrefix(String),
+
     /// Missing prefix separator ':'
+    #[error("condition '{0}' must have 'os:' or 'mode:' prefix")]
     MissingPrefix(String),
+
     /// Unknown OS value
+    #[error("unknown OS '{0}' (expected 'macos', 'linux', 'windows', or 'unix')")]
     UnknownOs(String),
+
     /// Unknown mode value
+    #[error("unknown mode '{0}' (expected 'view' or 'follow')")]
     UnknownMode(String),
 }
-
-impl fmt::Display for ConditionError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            ConditionError::UnknownPrefix(prefix) => {
-                write!(f, "unknown condition prefix '{}' (expected 'os' or 'mode')", prefix)
-            }
-            ConditionError::MissingPrefix(cond) => {
-                write!(f, "condition '{}' must have 'os:' or 'mode:' prefix", cond)
-            }
-            ConditionError::UnknownOs(os) => {
-                write!(
-                    f,
-                    "unknown OS '{}' (expected 'macos', 'linux', 'windows', or 'unix')",
-                    os
-                )
-            }
-            ConditionError::UnknownMode(mode) => {
-                write!(f, "unknown mode '{}' (expected 'view' or 'follow')", mode)
-            }
-        }
-    }
-}
-
-impl std::error::Error for ConditionError {}
 
 // ---
 
