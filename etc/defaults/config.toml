@@ -183,12 +183,12 @@ mode = "auto"
 #   - { env = { pager = "VAR1", follow = "VAR2", delimiter = "VAR3" } } - Structured env reference with role-specific vars
 #   - { profile = "profile_name" } - Reference to a named profile
 #
-# All candidate forms accept an optional `when` field with a condition string.
+# All candidate forms accept an optional `if` field with a condition string.
 # When specified, the candidate is skipped entirely unless the condition holds.
 # This is useful to exclude pagers that have issues on certain platforms.
 # See the conditions reference below for supported condition strings.
 #
-# Roles:
+# Modes:
 #   - view: Used when viewing logs (non-follow mode)
 #   - follow: Used when following logs (--follow mode); if not configured, pager is disabled in follow mode
 [pager]
@@ -210,7 +210,7 @@ candidates = [
 ]
 
 # Named pager profiles.
-# Each profile defines a pager command and optional role-specific arguments.
+# Each profile defines a pager command and optional mode-specific arguments.
 #
 # Profile structure:
 #   name = "..."                # Profile name
@@ -219,6 +219,7 @@ candidates = [
 #   env = {...}                 # Environment variables for the pager command
 #   delimiter = "..."           # Entry delimiter [newline, nul]
 #   conditions = [...]          # Conditional arguments and env vars based on platform/mode (see below)
+#   modes.view.enabled = ...    # Whether to enable pager for view mode [true, false]
 #   modes.view.args = [...]     # Additional arguments for view mode (appended to command)
 #   modes.follow.enabled = ...  # Whether to enable pager for follow mode [true, false]
 #   modes.follow.args = [...]   # Additional arguments for follow mode (appended to command)
@@ -238,7 +239,7 @@ candidates = [
 #       "os:unix"    - Unix-like systems (macOS or Linux)
 #
 #     Mode conditions (only meaningful inside profile conditions; candidates are tested
-#     separately for each role, so mode conditions work there too):
+#       separately for each mode, so mode conditions work there too):
 #       "mode:view"   - View mode (non-follow)
 #       "mode:follow" - Follow mode (--follow flag)
 #

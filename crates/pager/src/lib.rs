@@ -15,8 +15,9 @@ use std::{
 /// Pager configuration and builder.
 ///
 /// Supports two origins:
-/// - **FromEnv**: Resolves the pager command from environment variables (`PAGER`, or an
-///   application-specific variable). Returns `None` from `start()` if no pager is configured.
+/// - **FromEnv**: Resolves the pager command from environment variables. Checks an
+///   application-specific variable first (if set), then falls back to `PAGER`.
+///   Returns `None` from `start()` if no pager is configured.
 /// - **Custom**: Uses a pre-resolved command and environment variables, skipping all
 ///   resolution logic. Useful when the caller has already determined the pager command
 ///   (e.g., from a configuration file).
@@ -28,7 +29,9 @@ pub struct Pager {
 impl Pager {
     /// Creates a new pager configuration that resolves from environment variables.
     ///
-    /// Checks `PAGER` environment variable. Returns `None` from `start()` if not set.
+    /// Checks `PAGER` by default. Use [`lookup_var`](Pager::lookup_var) to add an
+    /// application-specific variable that takes priority. Returns `None` from `start()`
+    /// if no pager is configured.
     pub fn from_env() -> Self {
         Self {
             origin: CommandOrigin::FromEnv { app_env_var: None },
