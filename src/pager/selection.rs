@@ -235,7 +235,7 @@ impl<'a, E: EnvProvider, C: ExeChecker> PagerSelector<'a, E, C> {
                 PagerCandidate::Profile(name) => {
                     // Only use profiles with follow.enabled = true
                     if let Some(profile) = self.config.profile(name) {
-                        if profile.follow.is_enabled(PagerRole::Follow) {
+                        if profile.modes.follow.is_enabled(PagerRole::Follow) {
                             if let Some(selected) = self.try_profile(name, PagerRole::Follow) {
                                 return Ok(selected);
                             }
@@ -414,7 +414,7 @@ impl<'a, E: EnvProvider, C: ExeChecker> PagerSelector<'a, E, C> {
         }
 
         // Check if profile supports this role (for follow mode)
-        if role == PagerRole::Follow && !profile.follow.is_enabled(role) {
+        if role == PagerRole::Follow && !profile.modes.follow.is_enabled(role) {
             log::debug!("profile {profile_name:?} does not support follow mode");
             return Ok(Some(SelectedPager::None));
         }
@@ -479,7 +479,7 @@ impl<'a, E: EnvProvider, C: ExeChecker> PagerSelector<'a, E, C> {
         }
 
         // Check if profile supports this role (for follow mode)
-        if role == PagerRole::Follow && !profile.follow.is_enabled(role) {
+        if role == PagerRole::Follow && !profile.modes.follow.is_enabled(role) {
             log::debug!("profile {name:?} does not support follow mode");
             return None;
         }

@@ -60,6 +60,20 @@
         }
       }
     },
+    "pager-modes": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "view": {
+          "$ref": "#/definitions/pager-role",
+          "description": "Configuration for view mode (non-follow)"
+        },
+        "follow": {
+          "$ref": "#/definitions/pager-role",
+          "description": "Configuration for follow mode"
+        }
+      }
+    },
     "pager-profile": {
       "type": "object",
       "additionalProperties": false,
@@ -92,13 +106,9 @@
           "enum": ["newline", "nul"],
           "description": "Output entry delimiter when this pager is used"
         },
-        "view": {
-          "$ref": "#/definitions/pager-role",
-          "description": "Configuration for view mode (non-follow)"
-        },
-        "follow": {
-          "$ref": "#/definitions/pager-role",
-          "description": "Configuration for follow mode"
+        "modes": {
+          "$ref": "#/definitions/pager-modes",
+          "description": "Mode-specific configuration (view and follow)"
         },
         "conditions": {
           "type": "array",
