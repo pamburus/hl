@@ -2,7 +2,7 @@
 
 use std::collections::HashMap;
 
-use super::config::{PagerConfig, PagerModes, PagerProfile, PagerRole};
+use super::config::{PagerCandidateKind, PagerConfig, PagerModes, PagerProfile, PagerRole};
 use super::selection::{EnvProvider, Error, ExeChecker, PagerSelector, SelectedPager};
 use crate::output::OutputDelimiter;
 
@@ -20,6 +20,7 @@ const PROFILE_WITH_VIEW_ARGS: &str = include_str!("../testing/assets/pagers/prof
 const EMPTY_PRIORITY: &str = include_str!("../testing/assets/pagers/empty-priority.toml");
 const UNAVAILABLE_FIRST: &str = include_str!("../testing/assets/pagers/unavailable-first.toml");
 const CONDITIONAL_ARGS: &str = include_str!("../testing/assets/pagers/conditional-args.toml");
+const CANDIDATE_WITH_WHEN: &str = include_str!("../testing/assets/pagers/candidate-with-when.toml");
 
 // ---
 // PagerConfig deserialization tests
@@ -34,7 +35,7 @@ fn pager_config_single_profile() {
     // Second candidate should be the less profile
     assert!(matches!(
         &config.pager.candidates()[1],
-        super::config::PagerCandidate::Profile(name) if name == "less"
+        super::config::PagerCandidate { kind: PagerCandidateKind::Profile(name), .. } if name == "less"
     ));
 }
 
@@ -47,12 +48,12 @@ fn pager_config_priority_list() {
     // Second candidate should be fzf
     assert!(matches!(
         &config.pager.candidates()[1],
-        super::config::PagerCandidate::Profile(name) if name == "fzf"
+        super::config::PagerCandidate { kind: PagerCandidateKind::Profile(name), .. } if name == "fzf"
     ));
     // Third candidate should be less
     assert!(matches!(
         &config.pager.candidates()[2],
-        super::config::PagerCandidate::Profile(name) if name == "less"
+        super::config::PagerCandidate { kind: PagerCandidateKind::Profile(name), .. } if name == "less"
     ));
 }
 
@@ -62,6 +63,120 @@ fn pager_config_empty_priority_list() {
 
     // Even "empty" config has env candidates for backward compatibility
     assert_eq!(config.pager.candidates().len(), 2);
+}
+
+#[test]
+fn pager_config_candidate_with_when() {
+    use super::config::PagerCandidate;
+    use crate::condition::{Condition, OsCondition};
+
+    let config: TestConfig = toml::from_str(CANDIDATE_WITH_WHEN).expect("failed to parse");
+
+    // Config has env + fzf (with when) + less + PAGER
+    assert_eq!(config.pager.candidates().len(), 4);
+
+    // Second candidate (fzf) should have a `when` condition
+    let fzf_candidate: &PagerCandidate = &config.pager.candidates()[1];
+    assert!(matches!(
+        fzf_candidate,
+        PagerCandidate { kind: PagerCandidateKind::Profile(name), .. } if name == "fzf"
+    ));
+    assert_eq!(
+        fzf_candidate.when,
+        Some(Condition::Not(Box::new(Condition::Os(OsCondition::Windows))))
+    );
+
+    // Third candidate (less) should have no `when` condition
+    let less_candidate: &PagerCandidate = &config.pager.candidates()[2];
+    assert!(matches!(
+        less_candidate,
+        PagerCandidate { kind: PagerCandidateKind::Profile(name), when: None, .. } if name == "less"
+    ));
+}
+
+#[test]
+fn selector_candidate_when_skips_on_mismatch() {
+    use super::config::{PagerCandidate, PagerCandidateKind};
+    use crate::condition::{Condition, OsCondition};
+
+    // Put fzf first but only for Windows, then less as fallback.
+    // Since we're not on Windows, fzf candidate should be skipped.
+    let config = PagerConfig {
+        candidates: vec![
+            PagerCandidate {
+                kind: PagerCandidateKind::Profile("fzf".to_string()),
+                when: Some(Condition::Os(OsCondition::Windows)),
+            },
+            PagerCandidate {
+                kind: PagerCandidateKind::Profile("less".to_string()),
+                when: None,
+            },
+        ],
+        profiles: vec![
+            PagerProfile {
+                name: "fzf".to_string(),
+                command: "fzf".to_string(),
+                args: vec![],
+                env: HashMap::new(),
+                delimiter: None,
+                modes: PagerModes::default(),
+                conditions: Vec::new(),
+            },
+            PagerProfile {
+                name: "less".to_string(),
+                command: "less".to_string(),
+                args: vec!["-R".to_string()],
+                env: HashMap::new(),
+                delimiter: None,
+                modes: PagerModes::default(),
+                conditions: Vec::new(),
+            },
+        ],
+    };
+
+    let selector = selector_with_mocks(&config, MockEnv::new(), &["fzf", "less"]);
+    let selected = selector.select(PagerRole::View).expect("select failed");
+
+    // On non-Windows platforms, fzf should be skipped; less should be selected.
+    #[cfg(not(target_os = "windows"))]
+    if let SelectedPager::Pager { command, .. } = selected {
+        assert_eq!(command[0], "less");
+    } else {
+        panic!("expected SelectedPager::Pager");
+    }
+
+    // On Windows, fzf would be selected (condition matches).
+    #[cfg(target_os = "windows")]
+    if let SelectedPager::Pager { command, .. } = selected {
+        assert_eq!(command[0], "fzf");
+    } else {
+        panic!("expected SelectedPager::Pager");
+    }
+}
+
+#[test]
+fn selector_candidate_when_no_condition_always_considered() {
+    use super::config::{PagerCandidate, PagerCandidateKind};
+
+    let config = PagerConfig {
+        candidates: vec![PagerCandidate {
+            kind: PagerCandidateKind::Profile("less".to_string()),
+            when: None,
+        }],
+        profiles: vec![PagerProfile {
+            name: "less".to_string(),
+            command: "less".to_string(),
+            args: vec!["-R".to_string()],
+            env: HashMap::new(),
+            delimiter: None,
+            modes: PagerModes::default(),
+            conditions: Vec::new(),
+        }],
+    };
+
+    let selector = selector_with_mocks(&config, MockEnv::new(), &["less"]);
+    let selected = selector.select(PagerRole::View).expect("select failed");
+    assert!(matches!(selected, SelectedPager::Pager { .. }));
 }
 
 // ---
@@ -659,10 +774,13 @@ fn selector_view_pager_env_fallback() {
 
 #[test]
 fn selector_profile_delimiter() {
-    use super::config::PagerCandidate;
+    use super::config::{PagerCandidate, PagerCandidateKind};
 
     let config = PagerConfig {
-        candidates: vec![PagerCandidate::Profile("fzf".to_string())],
+        candidates: vec![PagerCandidate {
+            kind: PagerCandidateKind::Profile("fzf".to_string()),
+            when: None,
+        }],
         profiles: vec![PagerProfile {
             name: "fzf".to_string(),
             command: "fzf".to_string(),
@@ -686,14 +804,17 @@ fn selector_profile_delimiter() {
 
 #[test]
 fn selector_env_delimiter_via_structured_candidate() {
-    use super::config::{EnvReference, PagerCandidate, StructuredEnvReference};
+    use super::config::{EnvReference, PagerCandidate, PagerCandidateKind, StructuredEnvReference};
 
     let config = PagerConfig {
-        candidates: vec![PagerCandidate::Env(EnvReference::Structured(StructuredEnvReference {
-            pager: Some("HL_PAGER".to_string()),
-            follow: None,
-            delimiter: Some("HL_PAGER_DELIMITER".to_string()),
-        }))],
+        candidates: vec![PagerCandidate {
+            kind: PagerCandidateKind::Env(EnvReference::Structured(StructuredEnvReference {
+                pager: Some("HL_PAGER".to_string()),
+                follow: None,
+                delimiter: Some("HL_PAGER_DELIMITER".to_string()),
+            })),
+            when: None,
+        }],
         ..Default::default()
     };
     let env = MockEnv::new()
@@ -712,14 +833,17 @@ fn selector_env_delimiter_via_structured_candidate() {
 
 #[test]
 fn selector_profile_reference_ignores_delimiter_env() {
-    use super::config::{EnvReference, PagerCandidate, StructuredEnvReference};
+    use super::config::{EnvReference, PagerCandidate, PagerCandidateKind, StructuredEnvReference};
 
     let config = PagerConfig {
-        candidates: vec![PagerCandidate::Env(EnvReference::Structured(StructuredEnvReference {
-            pager: Some("HL_PAGER".to_string()),
-            follow: None,
-            delimiter: Some("HL_PAGER_DELIMITER".to_string()),
-        }))],
+        candidates: vec![PagerCandidate {
+            kind: PagerCandidateKind::Env(EnvReference::Structured(StructuredEnvReference {
+                pager: Some("HL_PAGER".to_string()),
+                follow: None,
+                delimiter: Some("HL_PAGER_DELIMITER".to_string()),
+            })),
+            when: None,
+        }],
         profiles: vec![PagerProfile {
             name: "fzf".to_string(),
             command: "fzf".to_string(),

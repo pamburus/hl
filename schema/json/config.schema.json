@@ -128,6 +128,10 @@
             "profile": {
               "type": "string",
               "description": "Reference to a named pager profile"
+            },
+            "when": {
+              "$ref": "#/definitions/condition",
+              "description": "Optional condition; if specified the candidate is only considered when the condition is met"
             }
           },
           "required": ["profile"]
@@ -162,6 +166,10 @@
                   "description": "Structured environment variable reference with role-specific variables"
                 }
               ]
+            },
+            "when": {
+              "$ref": "#/definitions/condition",
+              "description": "Optional condition; if specified the candidate is only considered when the condition is met"
             }
           },
           "required": ["env"]

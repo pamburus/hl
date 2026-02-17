@@ -20,30 +20,63 @@ use thiserror::Error;
 
 use crate::xerr::{Highlight, HighlightQuoted};
 
-use super::PagerRole;
+// ---
+
+/// Context for evaluating conditions.
+///
+/// Callers populate this from their domain-specific state before calling
+/// [`Condition::matches`].  Fields that are not relevant to a particular
+/// context are left as `None`, which causes the corresponding condition
+/// variants to evaluate to `false`.
+#[derive(Debug, Clone, Default)]
+pub struct ConditionContext {
+    /// The current mode, if any.
+    pub mode: Option<ConditionMode>,
+}
+
+impl ConditionContext {
+    /// Creates a context with the given mode.
+    pub fn with_mode(mode: ConditionMode) -> Self {
+        Self { mode: Some(mode) }
+    }
+}
 
 // ---
 
-/// Represents a condition that can be evaluated against the current platform and mode.
+/// Represents a mode for condition evaluation.
+///
+/// Callers convert their own mode representation to this enum before building
+/// a [`ConditionContext`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ConditionMode {
+    /// View mode (non-follow).
+    View,
+    /// Follow mode.
+    Follow,
+}
+
+// ---
+
+/// Represents a condition that can be evaluated against a [`ConditionContext`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Condition {
-    /// OS-based condition
+    /// OS-based condition.
     Os(OsCondition),
-    /// Mode-based condition
+    /// Mode-based condition.
     Mode(ModeCondition),
-    /// Negation of a condition
+    /// Negation of a condition.
     Not(Box<Condition>),
 }
 
 impl Condition {
     pub const PREFIXES: [&'static str; 2] = ["os", "mode"];
 
-    /// Evaluates whether this condition matches the current platform and role.
-    pub fn matches(&self, role: PagerRole) -> bool {
+    /// Evaluates whether this condition matches the given context.
+    pub fn matches(&self, ctx: &ConditionContext) -> bool {
         match self {
             Condition::Os(os) => os.matches(),
-            Condition::Mode(mode) => mode.matches(role),
-            Condition::Not(cond) => !cond.matches(role),
+            Condition::Mode(mode) => mode.matches(ctx),
+            Condition::Not(cond) => !cond.matches(ctx),
         }
     }
 }
@@ -163,12 +196,15 @@ pub enum ModeCondition {
 }
 
 impl ModeCondition {
-    /// Evaluates whether this mode condition matches the given role.
-    pub fn matches(&self, role: PagerRole) -> bool {
-        matches!(
-            (self, role),
-            (ModeCondition::View, PagerRole::View) | (ModeCondition::Follow, PagerRole::Follow)
-        )
+    /// Evaluates whether this mode condition matches the given context.
+    ///
+    /// Returns `false` if the context carries no mode information.
+    pub fn matches(&self, ctx: &ConditionContext) -> bool {
+        match ctx.mode {
+            Some(ConditionMode::View) => *self == ModeCondition::View,
+            Some(ConditionMode::Follow) => *self == ModeCondition::Follow,
+            None => false,
+        }
     }
 }
 
