@@ -8,7 +8,7 @@ use std::collections::HashMap;
 
 use serde::Deserialize;
 
-use crate::condition::{ConditionContext, ConditionMode};
+use crate::condition::{ConditionContext, Mode};
 use crate::output::OutputDelimiter;
 
 // ---
@@ -256,8 +256,8 @@ pub enum PagerRole {
 impl From<PagerRole> for ConditionContext {
     fn from(role: PagerRole) -> Self {
         ConditionContext::with_mode(match role {
-            PagerRole::View => ConditionMode::View,
-            PagerRole::Follow => ConditionMode::Follow,
+            PagerRole::View => Mode::View,
+            PagerRole::Follow => Mode::Follow,
         })
     }
 }

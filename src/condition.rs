@@ -31,12 +31,12 @@ use crate::xerr::{Highlight, HighlightQuoted};
 #[derive(Debug, Clone, Default)]
 pub struct ConditionContext {
     /// The current mode, if any.
-    pub mode: Option<ConditionMode>,
+    pub mode: Option<Mode>,
 }
 
 impl ConditionContext {
     /// Creates a context with the given mode.
-    pub fn with_mode(mode: ConditionMode) -> Self {
+    pub fn with_mode(mode: Mode) -> Self {
         Self { mode: Some(mode) }
     }
 }
@@ -48,7 +48,7 @@ impl ConditionContext {
 /// Callers convert their own mode representation to this enum before building
 /// a [`ConditionContext`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ConditionMode {
+pub enum Mode {
     /// View mode (non-follow).
     View,
     /// Follow mode.
@@ -201,8 +201,8 @@ impl ModeCondition {
     /// Returns `false` if the context carries no mode information.
     pub fn matches(&self, ctx: &ConditionContext) -> bool {
         match ctx.mode {
-            Some(ConditionMode::View) => *self == ModeCondition::View,
-            Some(ConditionMode::Follow) => *self == ModeCondition::Follow,
+            Some(Mode::View) => *self == ModeCondition::View,
+            Some(Mode::Follow) => *self == ModeCondition::Follow,
             None => false,
         }
     }

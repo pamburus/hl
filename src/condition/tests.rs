@@ -90,15 +90,15 @@ fn condition_matches_os() {
     #[cfg(target_os = "macos")]
     {
         let cond = Condition::Os(OsCondition::MacOS);
-        assert!(cond.matches(&ConditionContext::with_mode(ConditionMode::View)));
-        assert!(cond.matches(&ConditionContext::with_mode(ConditionMode::Follow)));
+        assert!(cond.matches(&ConditionContext::with_mode(Mode::View)));
+        assert!(cond.matches(&ConditionContext::with_mode(Mode::Follow)));
     }
 
     #[cfg(target_os = "linux")]
     {
         let cond = Condition::Os(OsCondition::Linux);
-        assert!(cond.matches(&ConditionContext::with_mode(ConditionMode::View)));
-        assert!(cond.matches(&ConditionContext::with_mode(ConditionMode::Follow)));
+        assert!(cond.matches(&ConditionContext::with_mode(Mode::View)));
+        assert!(cond.matches(&ConditionContext::with_mode(Mode::Follow)));
     }
 }
 
@@ -107,37 +107,37 @@ fn condition_matches_unix() {
     #[cfg(unix)]
     {
         let cond = Condition::Os(OsCondition::Unix);
-        assert!(cond.matches(&ConditionContext::with_mode(ConditionMode::View)));
-        assert!(cond.matches(&ConditionContext::with_mode(ConditionMode::Follow)));
+        assert!(cond.matches(&ConditionContext::with_mode(Mode::View)));
+        assert!(cond.matches(&ConditionContext::with_mode(Mode::Follow)));
     }
 
     #[cfg(not(unix))]
     {
         let cond = Condition::Os(OsCondition::Unix);
-        assert!(!cond.matches(&ConditionContext::with_mode(ConditionMode::View)));
-        assert!(!cond.matches(&ConditionContext::with_mode(ConditionMode::Follow)));
+        assert!(!cond.matches(&ConditionContext::with_mode(Mode::View)));
+        assert!(!cond.matches(&ConditionContext::with_mode(Mode::Follow)));
     }
 }
 
 #[test]
 fn condition_matches_mode_view() {
     let cond = Condition::Mode(ModeCondition::View);
-    assert!(cond.matches(&ConditionContext::with_mode(ConditionMode::View)));
-    assert!(!cond.matches(&ConditionContext::with_mode(ConditionMode::Follow)));
+    assert!(cond.matches(&ConditionContext::with_mode(Mode::View)));
+    assert!(!cond.matches(&ConditionContext::with_mode(Mode::Follow)));
 }
 
 #[test]
 fn condition_matches_mode_follow() {
     let cond = Condition::Mode(ModeCondition::Follow);
-    assert!(!cond.matches(&ConditionContext::with_mode(ConditionMode::View)));
-    assert!(cond.matches(&ConditionContext::with_mode(ConditionMode::Follow)));
+    assert!(!cond.matches(&ConditionContext::with_mode(Mode::View)));
+    assert!(cond.matches(&ConditionContext::with_mode(Mode::Follow)));
 }
 
 #[test]
 fn condition_matches_negation() {
     let cond = Condition::Not(Box::new(Condition::Mode(ModeCondition::Follow)));
-    assert!(cond.matches(&ConditionContext::with_mode(ConditionMode::View)));
-    assert!(!cond.matches(&ConditionContext::with_mode(ConditionMode::Follow)));
+    assert!(cond.matches(&ConditionContext::with_mode(Mode::View)));
+    assert!(!cond.matches(&ConditionContext::with_mode(Mode::Follow)));
 }
 
 #[test]
