@@ -321,12 +321,22 @@ impl<'a, E: EnvProvider, C: ExeChecker> PagerSelector<'a, E, C> {
         let value = match self.env_provider.get(var_name) {
             Some(v) if !v.is_empty() => v,
             _ => {
-                log::debug!("env var {var_name} not set or empty, skipping candidate");
-                // If follow field was specified but not set, and we're in follow mode, disable paging
+                // Env var not set or empty (FR-026: treat empty as "not set")
+                log::debug!("env var {var_name} not set or empty, treating field as unset");
+                // For follow mode: if follow field was checked but not set/empty, try pager field as fallback
                 if role == PagerRole::Follow && is_follow_explicit {
-                    log::debug!("follow field specified but not set, disabling paging for follow mode");
-                    return Ok(Some(SelectedPager::None));
+                    if let Some(pager_var) = structured.pager.as_deref() {
+                        log::debug!("env var {var_name} not set, trying pager field {pager_var} as fallback");
+                        // Recursively try with pager field, but not as explicit
+                        let fallback_structured = StructuredEnvReference {
+                            pager: Some(pager_var.to_string()),
+                            follow: None,
+                            delimiter: structured.delimiter.clone(),
+                        };
+                        return self.try_structured_env_candidate(&fallback_structured, role);
+                    }
                 }
+                // If pager field was checked but not set/empty, skip this candidate
                 return Ok(None);
             }
         };
