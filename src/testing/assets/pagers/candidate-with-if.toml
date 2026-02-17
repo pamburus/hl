@@ -1,8 +1,8 @@
-# Candidate with `when` condition configuration
+# Candidate with `if` condition configuration
 [pager]
 candidates = [
   { env = { pager = "HL_PAGER", follow = "HL_FOLLOW_PAGER", delimiter = "HL_PAGER_DELIMITER" } },
-  { profile = "fzf", when = "!os:windows" },
+  { profile = "fzf", if = "!os:windows" },
   { profile = "less" },
   { env = "PAGER" },
 ]

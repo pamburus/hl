@@ -20,7 +20,7 @@ const PROFILE_WITH_VIEW_ARGS: &str = include_str!("../testing/assets/pagers/prof
 const EMPTY_PRIORITY: &str = include_str!("../testing/assets/pagers/empty-priority.toml");
 const UNAVAILABLE_FIRST: &str = include_str!("../testing/assets/pagers/unavailable-first.toml");
 const CONDITIONAL_ARGS: &str = include_str!("../testing/assets/pagers/conditional-args.toml");
-const CANDIDATE_WITH_WHEN: &str = include_str!("../testing/assets/pagers/candidate-with-when.toml");
+const CANDIDATE_WITH_IF: &str = include_str!("../testing/assets/pagers/candidate-with-if.toml");
 
 // ---
 // PagerConfig deserialization tests
@@ -66,11 +66,11 @@ fn pager_config_empty_priority_list() {
 }
 
 #[test]
-fn pager_config_candidate_with_when() {
+fn pager_config_candidate_with_if() {
     use super::config::PagerCandidate;
     use crate::condition::{Condition, OsCondition};
 
-    let config: TestConfig = toml::from_str(CANDIDATE_WITH_WHEN).expect("failed to parse");
+    let config: TestConfig = toml::from_str(CANDIDATE_WITH_IF).expect("failed to parse");
 
     // Config has env + fzf (with when) + less + PAGER
     assert_eq!(config.pager.candidates().len(), 4);
@@ -82,7 +82,7 @@ fn pager_config_candidate_with_when() {
         PagerCandidate { kind: PagerCandidateKind::Profile(name), .. } if name == "fzf"
     ));
     assert_eq!(
-        fzf_candidate.when,
+        fzf_candidate.r#if,
         Some(Condition::Not(Box::new(Condition::Os(OsCondition::Windows))))
     );
 
@@ -90,12 +90,12 @@ fn pager_config_candidate_with_when() {
     let less_candidate: &PagerCandidate = &config.pager.candidates()[2];
     assert!(matches!(
         less_candidate,
-        PagerCandidate { kind: PagerCandidateKind::Profile(name), when: None, .. } if name == "less"
+        PagerCandidate { kind: PagerCandidateKind::Profile(name), r#if: None, .. } if name == "less"
     ));
 }
 
 #[test]
-fn selector_candidate_when_skips_on_mismatch() {
+fn selector_candidate_if_skips_on_mismatch() {
     use super::config::{PagerCandidate, PagerCandidateKind};
     use crate::condition::{Condition, OsCondition};
 
@@ -105,11 +105,11 @@ fn selector_candidate_when_skips_on_mismatch() {
         candidates: vec![
             PagerCandidate {
                 kind: PagerCandidateKind::Profile("fzf".to_string()),
-                when: Some(Condition::Os(OsCondition::Windows)),
+                r#if: Some(Condition::Os(OsCondition::Windows)),
             },
             PagerCandidate {
                 kind: PagerCandidateKind::Profile("less".to_string()),
-                when: None,
+                r#if: None,
             },
         ],
         profiles: vec![
@@ -155,13 +155,13 @@ fn selector_candidate_when_skips_on_mismatch() {
 }
 
 #[test]
-fn selector_candidate_when_no_condition_always_considered() {
+fn selector_candidate_no_if_always_considered() {
     use super::config::{PagerCandidate, PagerCandidateKind};
 
     let config = PagerConfig {
         candidates: vec![PagerCandidate {
             kind: PagerCandidateKind::Profile("less".to_string()),
-            when: None,
+            r#if: None,
         }],
         profiles: vec![PagerProfile {
             name: "less".to_string(),
@@ -282,13 +282,13 @@ fn pager_profile_conditional_args_os() {
     let mut profile = profile_with_command("fzf", vec!["--ansi"]);
 
     profile.conditions.push(ConditionalArgs {
-        when: Condition::Os(OsCondition::MacOS),
+        r#if: Condition::Os(OsCondition::MacOS),
         args: vec!["--macos-only".to_string()],
         env: HashMap::new(),
     });
 
     profile.conditions.push(ConditionalArgs {
-        when: Condition::Os(OsCondition::Linux),
+        r#if: Condition::Os(OsCondition::Linux),
         args: vec!["--linux-only".to_string()],
         env: HashMap::new(),
     });
@@ -312,13 +312,13 @@ fn pager_profile_conditional_args_mode() {
     let mut profile = profile_with_command("fzf", vec!["--ansi"]);
 
     profile.conditions.push(ConditionalArgs {
-        when: Condition::Mode(ModeCondition::View),
+        r#if: Condition::Mode(ModeCondition::View),
         args: vec!["--layout=reverse-list".to_string()],
         env: HashMap::new(),
     });
 
     profile.conditions.push(ConditionalArgs {
-        when: Condition::Mode(ModeCondition::Follow),
+        r#if: Condition::Mode(ModeCondition::Follow),
         args: vec!["--tac".to_string()],
         env: HashMap::new(),
     });
@@ -337,7 +337,7 @@ fn pager_profile_conditional_args_negation() {
     let mut profile = profile_with_command("fzf", vec!["--ansi"]);
 
     profile.conditions.push(ConditionalArgs {
-        when: Condition::Not(Box::new(Condition::Mode(ModeCondition::Follow))),
+        r#if: Condition::Not(Box::new(Condition::Mode(ModeCondition::Follow))),
         args: vec!["--non-follow".to_string()],
         env: HashMap::new(),
     });
@@ -359,7 +359,7 @@ fn pager_profile_conditional_env() {
     env_vars.insert("MACOS_VAR".to_string(), "macos_value".to_string());
 
     profile.conditions.push(ConditionalArgs {
-        when: Condition::Os(OsCondition::MacOS),
+        r#if: Condition::Os(OsCondition::MacOS),
         args: Vec::new(),
         env: env_vars,
     });
@@ -380,13 +380,13 @@ fn pager_profile_conditions_order() {
     let mut profile = profile_with_command("fzf", vec!["--ansi"]);
 
     profile.conditions.push(ConditionalArgs {
-        when: Condition::Os(OsCondition::Unix),
+        r#if: Condition::Os(OsCondition::Unix),
         args: vec!["--unix".to_string()],
         env: HashMap::new(),
     });
 
     profile.conditions.push(ConditionalArgs {
-        when: Condition::Mode(ModeCondition::View),
+        r#if: Condition::Mode(ModeCondition::View),
         args: vec!["--view".to_string()],
         env: HashMap::new(),
     });
@@ -413,19 +413,19 @@ fn pager_profile_conditional_args_deserialize() {
     assert_eq!(profile.conditions.len(), 4);
 
     // Check OS conditions
-    assert_eq!(profile.conditions[0].when.to_string(), "os:macos");
+    assert_eq!(profile.conditions[0].r#if.to_string(), "os:macos");
     assert_eq!(profile.conditions[0].args.len(), 1);
     assert!(profile.conditions[0].args[0].contains("pbcopy"));
 
-    assert_eq!(profile.conditions[1].when.to_string(), "os:linux");
+    assert_eq!(profile.conditions[1].r#if.to_string(), "os:linux");
     assert_eq!(profile.conditions[1].args.len(), 1);
     assert!(profile.conditions[1].args[0].contains("xclip"));
 
     // Check mode conditions
-    assert_eq!(profile.conditions[2].when.to_string(), "!mode:follow");
+    assert_eq!(profile.conditions[2].r#if.to_string(), "!mode:follow");
     assert_eq!(profile.conditions[2].args, vec!["--layout=reverse-list"]);
 
-    assert_eq!(profile.conditions[3].when.to_string(), "mode:follow");
+    assert_eq!(profile.conditions[3].r#if.to_string(), "mode:follow");
     assert_eq!(profile.conditions[3].args, vec!["--tac", "--track"]);
 }
 
@@ -779,7 +779,7 @@ fn selector_profile_delimiter() {
     let config = PagerConfig {
         candidates: vec![PagerCandidate {
             kind: PagerCandidateKind::Profile("fzf".to_string()),
-            when: None,
+            r#if: None,
         }],
         profiles: vec![PagerProfile {
             name: "fzf".to_string(),
@@ -813,7 +813,7 @@ fn selector_env_delimiter_via_structured_candidate() {
                 follow: None,
                 delimiter: Some("HL_PAGER_DELIMITER".to_string()),
             })),
-            when: None,
+            r#if: None,
         }],
         ..Default::default()
     };
@@ -842,7 +842,7 @@ fn selector_profile_reference_ignores_delimiter_env() {
                 follow: None,
                 delimiter: Some("HL_PAGER_DELIMITER".to_string()),
             })),
-            when: None,
+            r#if: None,
         }],
         profiles: vec![PagerProfile {
             name: "fzf".to_string(),

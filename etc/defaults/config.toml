@@ -199,11 +199,11 @@ candidates = [
   { env = { pager = "HL_PAGER", follow = "HL_FOLLOW_PAGER", delimiter = "HL_PAGER_DELIMITER" } },
   # Then try configured profiles in priority order.
   # fzf has known issues on Windows, so prefer it only on non-Windows platforms.
-  { profile = "fzf", when = "!os:windows" },
+  { profile = "fzf", if = "!os:windows" },
   { profile = "ov" },
   { profile = "less" },
   { profile = "most" },
-  { profile = "fzf", when = "os:windows" },
+  { profile = "fzf", if = "os:windows" },
   # Finally, fall back to standard PAGER env var
   { env = "PAGER" },
 ]
@@ -225,11 +225,11 @@ candidates = [
 # Conditional arguments (conditions field):
 #   Allows specifying platform-specific and mode-specific arguments.
 #   Each condition has:
-#     when = "condition"  # Condition string (see supported conditions below)
+#     if = "condition"    # Condition string (see supported conditions below)
 #     args = [...]        # Arguments to append when condition matches
 #     env = {...}         # Environment variables to set when condition matches
 #
-#   Supported condition strings (used in both candidate `when` and profile `conditions[].when`):
+#   Supported condition strings (used in both candidate `if` and profile `conditions[].if`):
 #     OS conditions:
 #       "os:macos"   - macOS only
 #       "os:linux"   - Linux only
@@ -286,16 +286,16 @@ args = [
 ]
 # Conditional arguments based on platform and modes.
 conditions = [
-  { when = "os:macos", args = [
+  { if = "os:macos", args = [
     "--bind=ctrl-y:execute-silent(printf %s\\n {+} | pbcopy)",
   ] },
-  { when = "os:linux", args = [
+  { if = "os:linux", args = [
     "--bind=ctrl-y:execute-silent(printf %s\\n {+} | xclip -in -sel clip)",
   ] },
-  { when = "!mode:follow", args = [
+  { if = "!mode:follow", args = [
     "--layout=reverse-list",
   ] },
-  { when = "mode:follow", args = [
+  { if = "mode:follow", args = [
     "--tac",
     "--bind=scroll-up:offset-up+unbind(result)",
     "--bind=home:unbind(result)+last",
