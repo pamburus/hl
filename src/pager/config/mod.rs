@@ -113,6 +113,20 @@ pub struct PagerProfile {
     #[serde(default)]
     pub delimiter: Option<OutputDelimiter>,
 
+    /// Mode-specific configuration.
+    #[serde(default)]
+    pub modes: PagerModes,
+
+    /// Conditional arguments based on platform and mode.
+    #[serde(default)]
+    pub conditions: Vec<ConditionalArgs>,
+}
+
+// ---
+
+/// Mode-specific configuration wrapper.
+#[derive(Debug, Clone, Default, Deserialize, PartialEq, Eq)]
+pub struct PagerModes {
     /// View mode configuration.
     #[serde(default)]
     pub view: PagerRoleConfig,
@@ -120,10 +134,6 @@ pub struct PagerProfile {
     /// Follow mode configuration.
     #[serde(default)]
     pub follow: PagerRoleConfig,
-
-    /// Conditional arguments based on platform and mode.
-    #[serde(default)]
-    pub conditions: Vec<ConditionalArgs>,
 }
 
 // ---
@@ -166,8 +176,8 @@ impl PagerProfile {
         }
 
         let role_args = match role {
-            PagerRole::View => &self.view.args,
-            PagerRole::Follow => &self.follow.args,
+            PagerRole::View => &self.modes.view.args,
+            PagerRole::Follow => &self.modes.follow.args,
         };
         cmd.extend(role_args.iter().map(|s| s.as_str()));
         cmd

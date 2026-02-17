@@ -8,4 +8,4 @@ candidates = [{ profile = "fzf" }]
 name = "fzf"
 command = "fzf"
 args = ["--ansi"]
-view.args = ["--layout=reverse-list"]
+modes.view.args = ["--layout=reverse-list"]

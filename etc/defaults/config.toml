@@ -209,11 +209,11 @@ candidates = [
 #   command = "..."       # Base command (executable)
 #   args = [...]          # Base arguments
 #   env = {...}           # Environment variables for the pager command
-#   delimiter = "..."     # Entry delimiter [newline, nul]
-#   conditions = [...]    # Conditional arguments and env vars based on platform/mode (see below)
-#   view.args = [...]     # Additional arguments for view mode (appended to command)
-#   follow.enabled = ...  # Whether to enable pager for follow mode [true, false]
-#   follow.args = [...]   # Additional arguments for follow mode (appended to command)
+#   delimiter = "..."           # Entry delimiter [newline, nul]
+#   conditions = [...]          # Conditional arguments and env vars based on platform/mode (see below)
+#   modes.view.args = [...]     # Additional arguments for view mode (appended to command)
+#   modes.follow.enabled = ...  # Whether to enable pager for follow mode [true, false]
+#   modes.follow.args = [...]   # Additional arguments for follow mode (appended to command)
 #
 # Conditional arguments (conditions field):
 #   Allows specifying platform-specific and mode-specific arguments.
@@ -247,9 +247,9 @@ args = ["-R", "--mouse"]
 # Environment variables for the pager command.
 env = { LESSCHARSET = "UTF-8" }
 # Additional arguments for follow mode.
-follow.args = ["+F"]
+modes.follow.args = ["+F"]
 # Enable pager for follow mode.
-follow.enabled = false
+modes.follow.enabled = false
 
 # Pager profile for `fzf`.
 [[pager.profiles]]
@@ -301,7 +301,7 @@ conditions = [
   ] },
 ]
 # Enable pager for follow mode.
-follow.enabled = true
+modes.follow.enabled = true
 
 # Pager profile for `most`.
 [[pager.profiles]]
@@ -309,7 +309,7 @@ name = "most"
 # Base command (executable).
 command = "most"
 # Enable pager for follow mode.
-follow.enabled = false
+modes.follow.enabled = false
 
 # Pager profile for `ov`.
 [[pager.profiles]]
@@ -323,8 +323,8 @@ args = [
   "--hscroll-width=4",
 ]
 # Additional arguments for follow mode.
-follow.args = [
+modes.follow.args = [
   "--follow-mode",
 ]
 # Enable pager for follow mode.
-follow.enabled = true
+modes.follow.enabled = true

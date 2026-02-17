@@ -2,7 +2,7 @@
 
 use std::collections::HashMap;
 
-use super::config::{PagerConfig, PagerProfile, PagerRole, PagerRoleConfig};
+use super::config::{PagerConfig, PagerModes, PagerProfile, PagerRole};
 use super::selection::{EnvProvider, Error, ExeChecker, PagerSelector, SelectedPager};
 use crate::output::OutputDelimiter;
 
@@ -77,9 +77,9 @@ fn pager_profile_minimal() {
     assert_eq!(profile.command, "less");
     assert_eq!(profile.args, vec!["-R"]);
     assert!(profile.env.is_empty());
-    assert!(profile.view.args.is_empty());
-    assert!(profile.follow.args.is_empty());
-    assert_eq!(profile.follow.enabled, None);
+    assert!(profile.modes.view.args.is_empty());
+    assert!(profile.modes.follow.args.is_empty());
+    assert_eq!(profile.modes.follow.enabled, None);
 }
 
 #[test]
@@ -95,7 +95,7 @@ fn pager_profile_with_view_args() {
     let config: TestConfig = toml::from_str(PROFILE_WITH_VIEW_ARGS).expect("failed to parse");
 
     let profile = config.pager.profile("fzf").expect("profile not found");
-    assert_eq!(profile.view.args, vec!["--layout=reverse-list"]);
+    assert_eq!(profile.modes.view.args, vec!["--layout=reverse-list"]);
 }
 
 #[test]
@@ -103,8 +103,8 @@ fn pager_profile_with_follow_enabled() {
     let config: TestConfig = toml::from_str(FOLLOW_ENABLED).expect("failed to parse");
 
     let profile = config.pager.profile("fzf").expect("profile not found");
-    assert_eq!(profile.follow.enabled, Some(true));
-    assert_eq!(profile.follow.args, vec!["--tac", "--track"]);
+    assert_eq!(profile.modes.follow.enabled, Some(true));
+    assert_eq!(profile.modes.follow.args, vec!["--tac", "--track"]);
 }
 
 #[test]
@@ -113,7 +113,7 @@ fn pager_profile_follow_disabled_by_default() {
 
     let profile = config.pager.profile("less").expect("profile not found");
     // follow.enabled is None by default, which means disabled
-    assert!(!profile.follow.is_enabled(PagerRole::Follow));
+    assert!(!profile.modes.follow.is_enabled(PagerRole::Follow));
 }
 
 #[test]
@@ -122,7 +122,7 @@ fn pager_profile_view_always_enabled() {
 
     let profile = config.pager.profile("less").expect("profile not found");
     // view is always enabled
-    assert!(profile.view.is_enabled(PagerRole::View));
+    assert!(profile.modes.view.is_enabled(PagerRole::View));
 }
 
 // ---
@@ -276,7 +276,7 @@ fn pager_profile_conditions_order() {
         env: HashMap::new(),
     });
 
-    profile.view.args = vec!["--view-role".to_string()];
+    profile.modes.view.args = vec!["--view-role".to_string()];
 
     let cmd = profile.build_command(PagerRole::View);
 
@@ -331,8 +331,7 @@ fn profile_with_command(command: &str, args: Vec<&str>) -> PagerProfile {
         args: args.into_iter().map(String::from).collect(),
         env: HashMap::new(),
         delimiter: None,
-        view: PagerRoleConfig::default(),
-        follow: PagerRoleConfig::default(),
+        modes: PagerModes::default(),
         conditions: Vec::new(),
     }
 }
@@ -655,8 +654,7 @@ fn selector_profile_delimiter() {
             args: vec!["--ansi".to_string()],
             env: HashMap::new(),
             delimiter: Some(OutputDelimiter::Nul),
-            view: PagerRoleConfig::default(),
-            follow: PagerRoleConfig::default(),
+            modes: PagerModes::default(),
             conditions: Vec::new(),
         }],
     };
@@ -713,8 +711,7 @@ fn selector_profile_reference_ignores_delimiter_env() {
             args: vec![],
             env: HashMap::new(),
             delimiter: Some(OutputDelimiter::Nul),
-            view: PagerRoleConfig::default(),
-            follow: PagerRoleConfig::default(),
+            modes: PagerModes::default(),
             conditions: Vec::new(),
         }],
     };
