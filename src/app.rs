@@ -719,6 +719,24 @@ impl App {
                     };
                     match rxo.recv_timeout(timeout.unwrap_or(std::time::Duration::MAX)) {
                         Ok((i, buf, index)) => {
+                            // Pass through ranges not covered by timestamp-indexed lines.
+                            // Each produced line is followed by output_delimiter in buf, so
+                            // the gap between line[k].end and line[k+1].start is:
+                            //   output_delimiter + any bypass content.
+                            let delim_len = self.options.output_delimiter.len();
+                            let mut pos = 0usize;
+                            for line in &index.lines {
+                                if pos < line.location.start {
+                                    output.write_all(&buf[pos..line.location.start])?;
+                                }
+                                pos = line.location.end + delim_len;
+                            }
+                            if pos < buf.len() {
+                                output.write_all(&buf[pos..])?;
+                            }
+                            if index.lines.is_empty() {
+                                continue;
+                            }
                             let buf = Rc::new(buf);
                             for line in index.lines {
                                 last_ts = Some(last_ts.map(|last_ts| std::cmp::max(last_ts, line.ts)).unwrap_or(line.ts));
