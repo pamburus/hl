@@ -1,7 +1,7 @@
 // std imports
 use std::{
     cmp::{Reverse, max},
-    collections::BTreeMap,
+    collections::{BTreeMap, HashMap},
     convert::{TryFrom, TryInto},
     fs,
     io::{BufWriter, Write},
@@ -688,6 +688,7 @@ impl App {
                 let mut window = BTreeMap::<Key,Line>::new();
                 let mut last_ts: Option<Timestamp> = None;
                 let mut prev_ts: Option<Timestamp> = None;
+                let mut source_last_ts: HashMap<usize, Timestamp> = HashMap::new();
                 let mut mem_usage = 0;
                 let mem_limit = n * usize::from(self.options.buffer_size);
 
@@ -719,29 +720,58 @@ impl App {
                     };
                     match rxo.recv_timeout(timeout.unwrap_or(std::time::Duration::MAX)) {
                         Ok((i, buf, index)) => {
-                            // Pass through ranges not covered by timestamp-indexed lines.
-                            // Each produced line is followed by output_delimiter in buf, so
-                            // the gap between line[k].end and line[k+1].start is:
-                            //   output_delimiter + any bypass content.
                             let delim_len = self.options.output_delimiter.len();
+                            let delim = self.options.output_delimiter.as_bytes();
+                            let buf = Rc::new(buf);
+
+                            // Insert unparsed gaps into the window with the last known
+                            // timestamp for the source so they get sorted together with
+                            // parsed records instead of being output immediately.
                             let mut pos = 0usize;
+                            let mut gap_ts = source_last_ts.get(&i).copied();
                             for line in &index.lines {
                                 if pos < line.location.start {
-                                    output.write_all(&buf[pos..line.location.start])?;
+                                    let mut end = line.location.start;
+                                    if end >= pos + delim_len && buf[end - delim_len..end] == *delim {
+                                        end -= delim_len;
+                                    }
+                                    if pos < end {
+                                        if let Some(ts) = gap_ts {
+                                            mem_usage += end - pos;
+                                            let key = (ts, i, index.block, pos);
+                                            let value = (buf.clone(), pos..end, Instant::now());
+                                            window.insert(key, value);
+                                        } else {
+                                            output.write_all(&buf[pos..line.location.start])?;
+                                        }
+                                    }
                                 }
+                                gap_ts = Some(line.ts);
                                 pos = line.location.end + delim_len;
                             }
                             if pos < buf.len() {
-                                output.write_all(&buf[pos..])?;
+                                let mut end = buf.len();
+                                if end >= pos + delim_len && buf[end - delim_len..end] == *delim {
+                                    end -= delim_len;
+                                }
+                                if pos < end {
+                                    if let Some(ts) = gap_ts {
+                                        mem_usage += end - pos;
+                                        let key = (ts, i, index.block, pos);
+                                        let value = (buf.clone(), pos..end, Instant::now());
+                                        window.insert(key, value);
+                                    } else {
+                                        output.write_all(&buf[pos..buf.len()])?;
+                                    }
+                                }
                             }
-                            if index.lines.is_empty() {
-                                continue;
-                            }
-                            let buf = Rc::new(buf);
+
                             for line in index.lines {
-                                last_ts = Some(last_ts.map(|last_ts| std::cmp::max(last_ts, line.ts)).unwrap_or(line.ts));
+                                let ts = line.ts;
+                                source_last_ts.entry(i).and_modify(|prev| *prev = std::cmp::max(*prev, ts)).or_insert(ts);
+                                last_ts = Some(last_ts.map(|last_ts| std::cmp::max(last_ts, ts)).unwrap_or(ts));
                                 mem_usage += line.location.end - line.location.start;
-                                let key = (line.ts, i, index.block, line.location.start);
+                                let key = (ts, i, index.block, line.location.start);
                                 let value = (buf.clone(), line.location, Instant::now());
                                 window.insert(key, value);
                             }
