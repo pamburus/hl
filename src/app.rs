@@ -723,57 +723,44 @@ impl App {
                             let delim_len = self.options.output_delimiter.len();
                             let delim = self.options.output_delimiter.as_bytes();
                             let buf = Rc::new(buf);
+                            let now = Instant::now();
 
-                            // Insert unparsed gaps into the window with the last known
-                            // timestamp for the source so they get sorted together with
-                            // parsed records instead of being output immediately.
-                            let mut pos = 0usize;
-                            let mut gap_ts = source_last_ts.get(&i).copied();
-                            for line in &index.lines {
-                                if pos < line.location.start {
-                                    let mut end = line.location.start;
-                                    if end >= pos + delim_len && buf[end - delim_len..end] == *delim {
-                                        end -= delim_len;
-                                    }
-                                    if pos < end {
-                                        if let Some(ts) = gap_ts {
-                                            mem_usage += end - pos;
-                                            let key = (ts, i, index.block, pos);
-                                            let value = (buf.clone(), pos..end, Instant::now());
-                                            window.insert(key, value);
-                                        } else {
-                                            output.write_all(&buf[pos..line.location.start])?;
-                                        }
-                                    }
+                            // Iterate over gaps between indexed lines and insert them
+                            // into the window with the last known timestamp for the
+                            // source so they get sorted together with parsed records.
+                            let gap_starts = std::iter::once(0usize)
+                                .chain(index.lines.iter().map(|l| l.location.end + delim_len));
+                            let gap_ends = index.lines.iter().map(|l| l.location.start)
+                                .chain(std::iter::once(buf.len()));
+                            let gap_timestamps = std::iter::once(source_last_ts.get(&i).copied())
+                                .chain(index.lines.iter().map(|l| Some(l.ts)));
+
+                            for ((start, end), ts) in gap_starts.zip(gap_ends).zip(gap_timestamps) {
+                                if start >= end {
+                                    continue;
                                 }
-                                gap_ts = Some(line.ts);
-                                pos = line.location.end + delim_len;
-                            }
-                            if pos < buf.len() {
-                                let mut end = buf.len();
-                                if end >= pos + delim_len && buf[end - delim_len..end] == *delim {
-                                    end -= delim_len;
-                                }
-                                if pos < end {
-                                    if let Some(ts) = gap_ts {
-                                        mem_usage += end - pos;
-                                        let key = (ts, i, index.block, pos);
-                                        let value = (buf.clone(), pos..end, Instant::now());
-                                        window.insert(key, value);
+                                let trimmed = if end >= start + delim_len && buf[end - delim_len..end] == *delim {
+                                    end - delim_len
+                                } else {
+                                    end
+                                };
+                                if start < trimmed {
+                                    if let Some(ts) = ts {
+                                        mem_usage += trimmed - start;
+                                        window.insert((ts, i, index.block, start), (buf.clone(), start..trimmed, now));
                                     } else {
-                                        output.write_all(&buf[pos..buf.len()])?;
+                                        output.write_all(&buf[start..end])?;
                                     }
                                 }
                             }
 
+                            // Insert indexed lines into the window.
                             for line in index.lines {
                                 let ts = line.ts;
-                                source_last_ts.entry(i).and_modify(|prev| *prev = std::cmp::max(*prev, ts)).or_insert(ts);
-                                last_ts = Some(last_ts.map(|last_ts| std::cmp::max(last_ts, ts)).unwrap_or(ts));
+                                source_last_ts.entry(i).and_modify(|prev| *prev = max(*prev, ts)).or_insert(ts);
+                                last_ts = Some(last_ts.map(|v| max(v, ts)).unwrap_or(ts));
                                 mem_usage += line.location.end - line.location.start;
-                                let key = (ts, i, index.block, line.location.start);
-                                let value = (buf.clone(), line.location, Instant::now());
-                                window.insert(key, value);
+                                window.insert((ts, i, index.block, line.location.start), (buf.clone(), line.location, now));
                             }
                         }
                         Err(RecvTimeoutError::Timeout) => {}
