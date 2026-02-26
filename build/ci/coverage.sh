@@ -6,6 +6,8 @@ export RUSTFLAGS="-C instrument-coverage"
 export CARGO_TARGET_DIR="target/coverage"
 export LLVM_PROFILE_FILE="target/coverage/test-%m-%p.profraw"
 export MAIN_EXECUTABLE="target/coverage/debug/hl"
+unset HL_PAGER
+unset PAGER
 
 LLVM_BIN=$(rustc --print sysroot)/lib/rustlib/$(rustc -vV | sed -n 's|host: ||p')/bin
 
@@ -71,6 +73,15 @@ function test() {
     HL_PAGER=/nonexistent/pager/command HL_DEBUG_LOG=debug ${MAIN_EXECUTABLE:?} --config - sample/prometheus.log --paging always 2>&1 | head -n 1 > /dev/null
     HL_PAGER=cat HL_DEBUG_LOG=debug ${MAIN_EXECUTABLE:?} --config - sample/prometheus.log --paging always 2>&1 | head -n 5 > /dev/null
     PAGER=cat ${MAIN_EXECUTABLE:?} --config - sample/prometheus.log --paging always 2>&1 | head -n 3 > /dev/null
+    # Test stdin as explicit file argument (-) and follow mode without pager
+    echo '{"level":"info","msg":"test"}' | ${MAIN_EXECUTABLE:?} --config - - --color never > /dev/null
+    echo '{"level":"info","msg":"test"}' | ${MAIN_EXECUTABLE:?} --config - --follow --paging never --color never > /dev/null
+    # Test NUL pager delimiter
+    HL_PAGER=cat HL_PAGER_DELIMITER=nul ${MAIN_EXECUTABLE:?} --config - sample/prometheus.log --paging always > /dev/null
+    # Test multiple records in a single CRLF-delimited chunk (covers inter-record delimiter path)
+    printf '{"level":"info","msg":"a"}\n{"level":"info","msg":"b"}\r\n' | ${MAIN_EXECUTABLE:?} --config - --delimiter crlf --color never > /dev/null
+    # Test multi-file input to exercise concurrent output path
+    ${MAIN_EXECUTABLE:?} --config - sample/prometheus.log sample/prometheus.log --color never > /dev/null
 
     # Test delimiter options with combined fixture containing all log formats
     local fixture="src/testing/assets/fixtures/delimiter/combined.log"

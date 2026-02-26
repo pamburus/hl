@@ -1,0 +1,11 @@
+# Profile with view-specific arguments
+# Used for testing role-specific argument configuration
+
+[pager]
+candidates = [{ profile = "fzf" }]
+
+[[pager.profiles]]
+name = "fzf"
+command = "fzf"
+args = ["--ansi"]
+modes.view.args = ["--layout=reverse-list"]

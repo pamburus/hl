@@ -3,6 +3,203 @@
   "type": "object",
   "additionalProperties": false,
   "definitions": {
+    "condition": {
+      "type": "string",
+      "pattern": "^(!)?((os|mode):.+)$",
+      "description": "Condition string in format 'os:macos', 'mode:follow', '!mode:follow', etc. Valid OS values: macos, linux, windows, unix. Valid mode values: view, follow.",
+      "examples": [
+        "os:macos",
+        "os:linux",
+        "os:windows",
+        "os:unix",
+        "mode:view",
+        "mode:follow",
+        "!mode:follow",
+        "!os:windows"
+      ]
+    },
+    "conditional-args": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["if"],
+      "properties": {
+        "if": {
+          "$ref": "#/definitions/condition",
+          "description": "Condition that must be met for these args/env to apply"
+        },
+        "args": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Arguments to append when condition is met"
+        },
+        "env": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Environment variables to set when condition is met"
+        }
+      }
+    },
+    "pager-role": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Whether to enable pager for this role (required for follow mode, implicit for view mode)"
+        },
+        "args": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Additional arguments to append to the base command for this role"
+        }
+      }
+    },
+    "pager-modes": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "view": {
+          "$ref": "#/definitions/pager-role",
+          "description": "Configuration for view mode (non-follow)"
+        },
+        "follow": {
+          "$ref": "#/definitions/pager-role",
+          "description": "Configuration for follow mode"
+        }
+      }
+    },
+    "pager-profile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Profile name"
+        },
+        "command": {
+          "type": "string",
+          "description": "Base command (executable) for the pager"
+        },
+        "args": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Base arguments for the pager"
+        },
+        "env": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Environment variables to set when invoking the pager"
+        },
+        "delimiter": {
+          "type": "string",
+          "enum": ["newline", "nul"],
+          "description": "Output entry delimiter when this pager is used"
+        },
+        "modes": {
+          "$ref": "#/definitions/pager-modes",
+          "description": "Mode-specific configuration (view and follow)"
+        },
+        "conditions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/conditional-args"
+          },
+          "description": "Conditional arguments and environment variables based on platform (OS) and mode"
+        }
+      }
+    },
+    "pager-candidate": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "profile": {
+              "type": "string",
+              "description": "Reference to a named pager profile"
+            },
+            "if": {
+              "$ref": "#/definitions/condition",
+              "description": "Optional condition; if specified the candidate is only considered when the condition is met"
+            }
+          },
+          "required": ["profile"]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "env": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "description": "Simple environment variable reference (applies to both view and follow modes)"
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "pager": {
+                      "type": "string",
+                      "description": "Environment variable for view mode (or both modes if follow not specified)"
+                    },
+                    "follow": {
+                      "type": "string",
+                      "description": "Environment variable for follow mode"
+                    },
+                    "delimiter": {
+                      "type": "string",
+                      "description": "Environment variable for delimiter override (only applies to direct commands, not profile references)"
+                    }
+                  },
+                  "description": "Structured environment variable reference with role-specific variables"
+                }
+              ]
+            },
+            "profiles": {
+              "type": "boolean",
+              "description": "When true, values starting with '@' in the resolved environment variable are treated as profile references. Defaults to false."
+            },
+            "if": {
+              "$ref": "#/definitions/condition",
+              "description": "Optional condition; if specified the candidate is only considered when the condition is met"
+            }
+          },
+          "required": ["env"]
+        }
+      ]
+    },
+    "pager-config": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "candidates": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/pager-candidate"
+          },
+          "description": "List of pager candidates to try in order. Each candidate can be an environment variable reference or a profile reference."
+        },
+        "profiles": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/pager-profile"
+          },
+          "description": "List of named pager profiles defining commands and role-specific arguments"
+        }
+      }
+    },
     "input-info-layout": {
       "type": "string",
       "enum": ["auto", "none", "minimal", "compact", "full"]
@@ -339,6 +536,10 @@
         "type": "string"
       },
       "description": "Ordered list of theme overlays to apply on top of the base theme and main configured theme"
+    },
+    "pager": {
+      "$ref": "#/definitions/pager-config",
+      "description": "Pager configuration containing a list of candidates to try in order and named pager profiles"
     }
   }
 }

@@ -1,0 +1,24 @@
+# Test config: profile with conditional arguments based on OS and mode
+[pager]
+candidates = [{ profile = "fzf" }]
+
+[[pager.profiles]]
+name = "fzf"
+command = "fzf"
+args = ["--ansi", "--exact"]
+
+[[pager.profiles.conditions]]
+if = "os:macos"
+args = ["--bind=ctrl-y:execute-silent(printf %s\\n {+} | pbcopy)"]
+
+[[pager.profiles.conditions]]
+if = "os:linux"
+args = ["--bind=ctrl-y:execute-silent(printf %s\\n {+} | xclip -selection clipboard)"]
+
+[[pager.profiles.conditions]]
+if = "!mode:follow"
+args = ["--layout=reverse-list"]
+
+[[pager.profiles.conditions]]
+if = "mode:follow"
+args = ["--tac", "--track"]

@@ -173,3 +173,169 @@ message-delimiter = { ascii = "::", unicode = "›" }
 # * "auto"   • Expand fields with newlines/tabs into indented multi-line blocks
 # * "always" • Show each field on its own line, expand multi-line content with indentation
 mode = "auto"
+
+# Pager configuration.
+# Defines a list of candidates to try in order and named pager profiles.
+#
+# Candidates are tried in order until a usable pager is found.
+# Each candidate can be:
+#   - { env = "VAR_NAME" } - Simple environment variable reference
+#   - { env = { pager = "VAR1", follow = "VAR2", delimiter = "VAR3" } } - Structured env reference with role-specific vars
+#   - { profile = "profile_name" } - Reference to a named profile
+#
+# All candidate forms accept an optional `if` field with a condition string.
+# When specified, the candidate is skipped entirely unless the condition holds.
+# This is useful to exclude pagers that have issues on certain platforms.
+# See the conditions reference below for supported condition strings.
+#
+# Modes:
+#   - view: Used when viewing logs (non-follow mode)
+#   - follow: Used when following logs (--follow mode); if not configured, pager is disabled in follow mode
+[pager]
+# Candidate search list (checked in order).
+# The default configuration maintains backward compatibility with HL_PAGER, HL_FOLLOW_PAGER, HL_PAGER_DELIMITER, and PAGER env vars.
+candidates = [
+  # First, check application-specific environment variables.
+  { env = { pager = "HL_PAGER", follow = "HL_FOLLOW_PAGER", delimiter = "HL_PAGER_DELIMITER" }, profiles = true },
+  # Then, check if `PAGER` is set.
+  { env = "PAGER" },
+  # Then try configured profiles in priority order. Use `less` first for backward compatibility.
+  { profile = "less" },
+  # Prioritize `fzf` if not on Windows, skip on Windows due to known issues.
+  { profile = "fzf", if = "!os:windows" },
+  # Finally, try other common pagers with default configurations.
+  { profile = "ov" },
+  { profile = "most" },
+  { profile = "fzf", if = "os:windows" },
+]
+
+# Named pager profiles.
+# Each profile defines a pager command and optional mode-specific arguments.
+#
+# Profile structure:
+#   name = "..."                # Profile name
+#   command = "..."             # Base command (executable)
+#   args = [...]                # Base arguments
+#   env = {...}                 # Environment variables for the pager command
+#   delimiter = "..."           # Entry delimiter [newline, nul]
+#   conditions = [...]          # Conditional arguments and env vars based on platform/mode (see below)
+#   modes.view.enabled = ...    # Whether to enable pager for view mode [true, false]
+#   modes.view.args = [...]     # Additional arguments for view mode (appended to command)
+#   modes.follow.enabled = ...  # Whether to enable pager for follow mode [true, false]
+#   modes.follow.args = [...]   # Additional arguments for follow mode (appended to command)
+#
+# Conditional arguments (conditions field):
+#   Allows specifying platform-specific and mode-specific arguments.
+#   Each condition has:
+#     if = "condition"    # Condition string (see supported conditions below)
+#     args = [...]        # Arguments to append when condition matches
+#     env = {...}         # Environment variables to set when condition matches
+#
+#   Supported condition strings (used in both candidate `if` and profile `conditions[].if`):
+#     OS conditions:
+#       "os:macos"   - macOS only
+#       "os:linux"   - Linux only
+#       "os:windows" - Windows only
+#       "os:unix"    - Unix-like systems (macOS or Linux)
+#
+#     Mode conditions (only meaningful inside profile conditions; candidates are tested
+#       separately for each mode, so mode conditions work there too):
+#       "mode:view"   - View mode (non-follow)
+#       "mode:follow" - Follow mode (--follow flag)
+#
+#     Negation:
+#       "!<condition>" - Negates any condition
+#       Example: "!mode:follow" matches in view mode
+#       Example: "!os:windows" matches on any non-Windows platform
+#
+#   For profile conditions: evaluated in order; matching conditions append their args/env.
+[[pager.profiles]]
+name = "less"
+# Base command (executable).
+command = "less"
+# Base arguments for both view and follow modes.
+args = ["-R", "--mouse"]
+# Environment variables for the pager command.
+env = { LESSCHARSET = "UTF-8" }
+# Additional arguments for follow mode.
+modes.follow.args = ["+F"]
+# Enable pager for follow mode.
+modes.follow.enabled = false
+
+# Pager profile for `fzf`.
+[[pager.profiles]]
+name = "fzf"
+# Entry delimiter.
+delimiter = "newline"
+# Base command (executable).
+command = "fzf"
+# Base arguments for both view and follow modes.
+args = [
+  "--color=bg+:#3a404a",
+  "--highlight-line",
+  "--ansi",
+  "--exact",
+  "--multi",
+  "--no-sort",
+  "--no-bold",
+  "--bind=esc:track-current+clear-query+clear-multi+disable-raw",
+  "--bind=ctrl-q:abort",
+  "--bind=enter:toggle-raw",
+  "--bind=scroll-down:offset-down",
+  "--bind=scroll-up:offset-up",
+  "--bind=home:first",
+  "--bind=end:last"
+]
+# Conditional arguments based on platform and modes.
+conditions = [
+  { if = "os:macos", args = [
+    "--bind=ctrl-y:execute-silent(printf %s\\\\n {+} | pbcopy)",
+  ] },
+  { if = "os:linux", args = [
+    "--bind=ctrl-y:execute-silent(printf %s\\\\n {+} | xclip -in -sel clip)",
+  ] },
+  { if = "!mode:follow", args = [
+    "--layout=reverse-list",
+  ] },
+  { if = "mode:follow", args = [
+    "--tac",
+    "--bind=scroll-up:offset-up+unbind(result)",
+    "--bind=home:unbind(result)+last",
+    "--bind=end:rebind(result)+first",
+    "--bind=result:first",
+    "--bind=ctrl-f:rebind(result)+first",
+    "--bind=up:unbind(result)+up",
+    "--bind=page-up:unbind(result)+page-up",
+    "--bind=change:unbind(result)",
+    "--track",
+    "--tail=100000",
+  ] },
+]
+# Enable pager for follow mode.
+modes.follow.enabled = true
+
+# Pager profile for `most`.
+[[pager.profiles]]
+name = "most"
+# Base command (executable).
+command = "most"
+# Enable pager for follow mode.
+modes.follow.enabled = false
+
+# Pager profile for `ov`.
+[[pager.profiles]]
+name = "ov"
+# Base command (executable).
+command = "ov"
+# Base arguments for both view and follow modes.
+args = [
+  "--caption=>",
+  "--wrap=false",
+  "--hscroll-width=4",
+]
+# Additional arguments for follow mode.
+modes.follow.args = [
+  "--follow-mode",
+]
+# Enable pager for follow mode.
+modes.follow.enabled = true

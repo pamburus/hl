@@ -1,0 +1,1076 @@
+//! Tests for the pager module.
+
+use std::collections::HashMap;
+
+use super::config::{
+    Condition, ConditionalArgs, EnvReference, PagerCandidate, PagerCandidateKind, PagerConfig, PagerModes,
+    PagerProfile, PagerRole, StructuredEnvReference,
+};
+use super::selection::{EnvProvider, Error, ExeChecker, PagerSelector, SelectedPager};
+use crate::condition::{ModeCondition, OsCondition};
+use crate::output::OutputDelimiter;
+
+// ---
+// Test data files embedded at compile time
+// ---
+
+const SINGLE_PROFILE: &str = include_str!("../testing/assets/pagers/single-profile.toml");
+const PROFILE_WITH_ENV: &str = include_str!("../testing/assets/pagers/profile-with-env.toml");
+const PRIORITY_LIST: &str = include_str!("../testing/assets/pagers/priority-list.toml");
+const FOLLOW_ENABLED: &str = include_str!("../testing/assets/pagers/follow-enabled.toml");
+const FOLLOW_ENABLED_NO_ENV: &str = include_str!("../testing/assets/pagers/follow-enabled-no-env.toml");
+const MINIMAL_PROFILE: &str = include_str!("../testing/assets/pagers/minimal-profile.toml");
+const PROFILE_WITH_VIEW_ARGS: &str = include_str!("../testing/assets/pagers/profile-with-view-args.toml");
+const EMPTY_PRIORITY: &str = include_str!("../testing/assets/pagers/empty-priority.toml");
+const UNAVAILABLE_FIRST: &str = include_str!("../testing/assets/pagers/unavailable-first.toml");
+const CONDITIONAL_ARGS: &str = include_str!("../testing/assets/pagers/conditional-args.toml");
+const CANDIDATE_WITH_IF: &str = include_str!("../testing/assets/pagers/candidate-with-if.toml");
+
+// ---
+// PagerConfig deserialization tests
+// ---
+
+#[test]
+fn pager_config_single_profile() {
+    let config: TestConfig = toml::from_str(SINGLE_PROFILE).expect("failed to parse");
+
+    // Config has env candidates + profile candidate
+    assert_eq!(config.pager.candidates().len(), 3);
+    // Second candidate should be the less profile
+    assert!(matches!(
+        &config.pager.candidates()[1],
+        super::config::PagerCandidate { kind: PagerCandidateKind::Profile(name), .. } if name == "less"
+    ));
+}
+
+#[test]
+fn pager_config_priority_list() {
+    let config: TestConfig = toml::from_str(PRIORITY_LIST).expect("failed to parse");
+
+    // Config has env candidates + 2 profile candidates + PAGER env
+    assert_eq!(config.pager.candidates().len(), 4);
+    // Second candidate should be fzf
+    assert!(matches!(
+        &config.pager.candidates()[1],
+        super::config::PagerCandidate { kind: PagerCandidateKind::Profile(name), .. } if name == "fzf"
+    ));
+    // Third candidate should be less
+    assert!(matches!(
+        &config.pager.candidates()[2],
+        super::config::PagerCandidate { kind: PagerCandidateKind::Profile(name), .. } if name == "less"
+    ));
+}
+
+#[test]
+fn pager_config_empty_priority_list() {
+    let config: TestConfig = toml::from_str(EMPTY_PRIORITY).expect("failed to parse");
+
+    // Even "empty" config has env candidates for backward compatibility
+    assert_eq!(config.pager.candidates().len(), 2);
+}
+
+#[test]
+fn pager_config_candidate_with_if() {
+    let config: TestConfig = toml::from_str(CANDIDATE_WITH_IF).expect("failed to parse");
+
+    // Config has env + fzf (with when) + less + PAGER
+    assert_eq!(config.pager.candidates().len(), 4);
+
+    // Second candidate (fzf) should have a `when` condition
+    let fzf_candidate: &PagerCandidate = &config.pager.candidates()[1];
+    assert!(matches!(
+        fzf_candidate,
+        PagerCandidate { kind: PagerCandidateKind::Profile(name), .. } if name == "fzf"
+    ));
+    assert_eq!(
+        fzf_candidate.r#if,
+        Some(Condition::Not(Box::new(Condition::Os(OsCondition::Windows))))
+    );
+
+    // Third candidate (less) should have no `when` condition
+    let less_candidate: &PagerCandidate = &config.pager.candidates()[2];
+    assert!(matches!(
+        less_candidate,
+        PagerCandidate { kind: PagerCandidateKind::Profile(name), r#if: None, .. } if name == "less"
+    ));
+}
+
+#[test]
+fn selector_candidate_if_skips_on_mismatch() {
+    // Put fzf first but only for Windows, then less as fallback.
+    // Since we're not on Windows, fzf candidate should be skipped.
+    let config = PagerConfig {
+        candidates: vec![
+            PagerCandidate {
+                kind: PagerCandidateKind::Profile("fzf".to_string()),
+                r#if: Some(Condition::Os(OsCondition::Windows)),
+                profiles: false,
+            },
+            PagerCandidate {
+                kind: PagerCandidateKind::Profile("less".to_string()),
+                r#if: None,
+                profiles: false,
+            },
+        ],
+        profiles: vec![
+            PagerProfile {
+                name: "fzf".to_string(),
+                command: "fzf".to_string(),
+                args: vec![],
+                env: HashMap::new(),
+                delimiter: None,
+                modes: PagerModes::default(),
+                conditions: Vec::new(),
+            },
+            PagerProfile {
+                name: "less".to_string(),
+                command: "less".to_string(),
+                args: vec!["-R".to_string()],
+                env: HashMap::new(),
+                delimiter: None,
+                modes: PagerModes::default(),
+                conditions: Vec::new(),
+            },
+        ],
+    };
+
+    let selector = selector_with_mocks(&config, MockEnv::new(), &["fzf", "less"]);
+    let selected = selector.select(PagerRole::View).expect("select failed");
+
+    // On non-Windows platforms, fzf should be skipped; less should be selected.
+    #[cfg(not(target_os = "windows"))]
+    if let SelectedPager::Pager { command, .. } = selected {
+        assert_eq!(command[0], "less");
+    } else {
+        panic!("expected SelectedPager::Pager");
+    }
+
+    // On Windows, fzf would be selected (condition matches).
+    #[cfg(target_os = "windows")]
+    if let SelectedPager::Pager { command, .. } = selected {
+        assert_eq!(command[0], "fzf");
+    } else {
+        panic!("expected SelectedPager::Pager");
+    }
+}
+
+#[test]
+fn selector_candidate_no_if_always_considered() {
+    let config = PagerConfig {
+        candidates: vec![PagerCandidate {
+            kind: PagerCandidateKind::Profile("less".to_string()),
+            r#if: None,
+            profiles: false,
+        }],
+        profiles: vec![PagerProfile {
+            name: "less".to_string(),
+            command: "less".to_string(),
+            args: vec!["-R".to_string()],
+            env: HashMap::new(),
+            delimiter: None,
+            modes: PagerModes::default(),
+            conditions: Vec::new(),
+        }],
+    };
+
+    let selector = selector_with_mocks(&config, MockEnv::new(), &["less"]);
+    let selected = selector.select(PagerRole::View).expect("select failed");
+    assert!(matches!(selected, SelectedPager::Pager { .. }));
+}
+
+// ---
+// PagerProfile deserialization tests
+// ---
+
+#[test]
+fn pager_profile_minimal() {
+    let config: TestConfig = toml::from_str(MINIMAL_PROFILE).expect("failed to parse");
+
+    let profile = config.pager.profile("less").expect("profile not found");
+    assert_eq!(profile.name, "less");
+    assert_eq!(profile.command, "less");
+    assert_eq!(profile.args, vec!["-R"]);
+    assert!(profile.env.is_empty());
+    assert!(profile.modes.view.args.is_empty());
+    assert!(profile.modes.follow.args.is_empty());
+    assert_eq!(profile.modes.follow.enabled, None);
+}
+
+#[test]
+fn pager_profile_with_env() {
+    let config: TestConfig = toml::from_str(PROFILE_WITH_ENV).expect("failed to parse");
+
+    let profile = config.pager.profile("less").expect("profile not found");
+    assert_eq!(&profile.env["LESSCHARSET"], "UTF-8");
+}
+
+#[test]
+fn pager_profile_with_view_args() {
+    let config: TestConfig = toml::from_str(PROFILE_WITH_VIEW_ARGS).expect("failed to parse");
+
+    let profile = config.pager.profile("fzf").expect("profile not found");
+    assert_eq!(profile.modes.view.args, vec!["--layout=reverse-list"]);
+}
+
+#[test]
+fn pager_profile_with_follow_enabled() {
+    let config: TestConfig = toml::from_str(FOLLOW_ENABLED).expect("failed to parse");
+
+    let profile = config.pager.profile("fzf").expect("profile not found");
+    assert_eq!(profile.modes.follow.enabled, Some(true));
+    assert_eq!(profile.modes.follow.args, vec!["--tac", "--track"]);
+}
+
+#[test]
+fn pager_profile_follow_disabled_by_default() {
+    let config: TestConfig = toml::from_str(MINIMAL_PROFILE).expect("failed to parse");
+
+    let profile = config.pager.profile("less").expect("profile not found");
+    // follow.enabled is None by default, which means disabled
+    assert!(!profile.modes.follow.is_enabled(PagerRole::Follow));
+}
+
+#[test]
+fn pager_profile_view_always_enabled() {
+    let config: TestConfig = toml::from_str(MINIMAL_PROFILE).expect("failed to parse");
+
+    let profile = config.pager.profile("less").expect("profile not found");
+    // view is always enabled
+    assert!(profile.modes.view.is_enabled(PagerRole::View));
+}
+
+// ---
+// PagerProfile method tests
+// ---
+
+#[test]
+fn pager_profile_executable() {
+    let profile = profile_with_command("less", vec!["-R"]);
+    assert_eq!(profile.executable(), Some("less"));
+
+    let empty = profile_with_command("", vec![]);
+    assert_eq!(empty.executable(), None);
+}
+
+#[test]
+fn pager_profile_build_command_view() {
+    let config: TestConfig = toml::from_str(FOLLOW_ENABLED).expect("failed to parse");
+
+    let profile = config.pager.profile("fzf").expect("profile not found");
+    let cmd = profile.build_command(PagerRole::View);
+    assert_eq!(cmd, vec!["fzf", "--ansi", "--layout=reverse-list"]);
+}
+
+#[test]
+fn pager_profile_build_command_follow() {
+    let config: TestConfig = toml::from_str(FOLLOW_ENABLED).expect("failed to parse");
+
+    let profile = config.pager.profile("fzf").expect("profile not found");
+    let cmd = profile.build_command(PagerRole::Follow);
+    assert_eq!(cmd, vec!["fzf", "--ansi", "--tac", "--track"]);
+}
+
+// ---
+// Conditional args tests
+// ---
+
+#[test]
+fn pager_profile_conditional_args_os() {
+    let mut profile = profile_with_command("fzf", vec!["--ansi"]);
+
+    profile.conditions.push(ConditionalArgs {
+        r#if: Condition::Os(OsCondition::MacOS),
+        args: vec!["--macos-only".to_string()],
+        env: HashMap::new(),
+    });
+
+    profile.conditions.push(ConditionalArgs {
+        r#if: Condition::Os(OsCondition::Linux),
+        args: vec!["--linux-only".to_string()],
+        env: HashMap::new(),
+    });
+
+    let cmd = profile.build_command(PagerRole::View);
+
+    #[cfg(target_os = "macos")]
+    assert_eq!(cmd, vec!["fzf", "--ansi", "--macos-only"]);
+
+    #[cfg(target_os = "linux")]
+    assert_eq!(cmd, vec!["fzf", "--ansi", "--linux-only"]);
+
+    #[cfg(target_os = "windows")]
+    assert_eq!(cmd, vec!["fzf", "--ansi"]);
+}
+
+#[test]
+fn pager_profile_conditional_args_mode() {
+    let mut profile = profile_with_command("fzf", vec!["--ansi"]);
+
+    profile.conditions.push(ConditionalArgs {
+        r#if: Condition::Mode(ModeCondition::View),
+        args: vec!["--layout=reverse-list".to_string()],
+        env: HashMap::new(),
+    });
+
+    profile.conditions.push(ConditionalArgs {
+        r#if: Condition::Mode(ModeCondition::Follow),
+        args: vec!["--tac".to_string()],
+        env: HashMap::new(),
+    });
+
+    let cmd_view = profile.build_command(PagerRole::View);
+    assert_eq!(cmd_view, vec!["fzf", "--ansi", "--layout=reverse-list"]);
+
+    let cmd_follow = profile.build_command(PagerRole::Follow);
+    assert_eq!(cmd_follow, vec!["fzf", "--ansi", "--tac"]);
+}
+
+#[test]
+fn pager_profile_conditional_args_negation() {
+    let mut profile = profile_with_command("fzf", vec!["--ansi"]);
+
+    profile.conditions.push(ConditionalArgs {
+        r#if: Condition::Not(Box::new(Condition::Mode(ModeCondition::Follow))),
+        args: vec!["--non-follow".to_string()],
+        env: HashMap::new(),
+    });
+
+    let cmd_view = profile.build_command(PagerRole::View);
+    assert_eq!(cmd_view, vec!["fzf", "--ansi", "--non-follow"]);
+
+    let cmd_follow = profile.build_command(PagerRole::Follow);
+    assert_eq!(cmd_follow, vec!["fzf", "--ansi"]);
+}
+
+#[test]
+fn pager_profile_conditional_env() {
+    let mut profile = profile_with_command("less", vec!["-R"]);
+
+    let mut env_vars = HashMap::new();
+    env_vars.insert("MACOS_VAR".to_string(), "macos_value".to_string());
+
+    profile.conditions.push(ConditionalArgs {
+        r#if: Condition::Os(OsCondition::MacOS),
+        args: Vec::new(),
+        env: env_vars,
+    });
+
+    let env = profile.build_env(PagerRole::View);
+
+    #[cfg(target_os = "macos")]
+    assert_eq!(env.get("MACOS_VAR"), Some(&"macos_value".to_string()));
+
+    #[cfg(not(target_os = "macos"))]
+    assert_eq!(env.get("MACOS_VAR"), None);
+}
+
+#[test]
+fn pager_profile_conditions_order() {
+    let mut profile = profile_with_command("fzf", vec!["--ansi"]);
+
+    profile.conditions.push(ConditionalArgs {
+        r#if: Condition::Os(OsCondition::Unix),
+        args: vec!["--unix".to_string()],
+        env: HashMap::new(),
+    });
+
+    profile.conditions.push(ConditionalArgs {
+        r#if: Condition::Mode(ModeCondition::View),
+        args: vec!["--view".to_string()],
+        env: HashMap::new(),
+    });
+
+    profile.modes.view.args = vec!["--view-role".to_string()];
+
+    let cmd = profile.build_command(PagerRole::View);
+
+    #[cfg(unix)]
+    assert_eq!(cmd, vec!["fzf", "--ansi", "--unix", "--view", "--view-role"]);
+
+    #[cfg(not(unix))]
+    assert_eq!(cmd, vec!["fzf", "--ansi", "--view", "--view-role"]);
+}
+
+#[test]
+fn pager_profile_conditional_args_deserialize() {
+    let config: TestConfig = toml::from_str(CONDITIONAL_ARGS).expect("failed to parse");
+
+    let profile = config.pager.profile("fzf").expect("profile not found");
+    assert_eq!(profile.name, "fzf");
+    assert_eq!(profile.command, "fzf");
+    assert_eq!(profile.args, vec!["--ansi", "--exact"]);
+    assert_eq!(profile.conditions.len(), 4);
+
+    // Check OS conditions
+    assert_eq!(profile.conditions[0].r#if.to_string(), "os:macos");
+    assert_eq!(profile.conditions[0].args.len(), 1);
+    assert!(profile.conditions[0].args[0].contains("pbcopy"));
+
+    assert_eq!(profile.conditions[1].r#if.to_string(), "os:linux");
+    assert_eq!(profile.conditions[1].args.len(), 1);
+    assert!(profile.conditions[1].args[0].contains("xclip"));
+
+    // Check mode conditions
+    assert_eq!(profile.conditions[2].r#if.to_string(), "!mode:follow");
+    assert_eq!(profile.conditions[2].args, vec!["--layout=reverse-list"]);
+
+    assert_eq!(profile.conditions[3].r#if.to_string(), "mode:follow");
+    assert_eq!(profile.conditions[3].args, vec!["--tac", "--track"]);
+}
+
+// ---
+// Helper types and functions
+// ---
+
+#[derive(Debug, serde::Deserialize)]
+struct TestConfig {
+    #[serde(default)]
+    pager: PagerConfig,
+}
+
+fn profile_with_command(command: &str, args: Vec<&str>) -> PagerProfile {
+    PagerProfile {
+        name: "test".to_string(),
+        command: command.to_string(),
+        args: args.into_iter().map(String::from).collect(),
+        env: HashMap::new(),
+        delimiter: None,
+        modes: PagerModes::default(),
+        conditions: Vec::new(),
+    }
+}
+
+// ---
+// Mock providers for testing
+// ---
+
+/// Mock environment provider for isolated testing.
+struct MockEnv {
+    vars: HashMap<String, String>,
+}
+
+impl MockEnv {
+    fn new() -> Self {
+        Self { vars: HashMap::new() }
+    }
+
+    fn with_var(mut self, name: &str, value: &str) -> Self {
+        self.vars.insert(name.to_string(), value.to_string());
+        self
+    }
+}
+
+impl EnvProvider for MockEnv {
+    fn get(&self, name: &str) -> Option<String> {
+        self.vars.get(name).cloned()
+    }
+}
+
+/// Mock executable checker for isolated testing.
+struct MockExeChecker {
+    available: Vec<String>,
+}
+
+impl MockExeChecker {
+    fn with_available(executables: &[&str]) -> Self {
+        Self {
+            available: executables.iter().map(|s| s.to_string()).collect(),
+        }
+    }
+}
+
+impl ExeChecker for MockExeChecker {
+    fn is_available(&self, executable: &str) -> bool {
+        self.available.contains(&executable.to_string())
+    }
+}
+
+fn selector_with_mocks<'a>(
+    config: &'a PagerConfig,
+    env: MockEnv,
+    available: &[&str],
+) -> PagerSelector<'a, MockEnv, MockExeChecker> {
+    PagerSelector::with_providers(config, env, MockExeChecker::with_available(available))
+}
+
+// ---
+// PagerSelector tests
+// ---
+
+#[test]
+fn selector_view_with_single_available_profile() {
+    let config: TestConfig = toml::from_str(SINGLE_PROFILE).expect("failed to parse");
+    let selector = selector_with_mocks(&config.pager, MockEnv::new(), &["less"]);
+
+    let selected = selector.select(PagerRole::View).expect("select failed");
+
+    assert!(matches!(selected, SelectedPager::Pager { .. }));
+    if let SelectedPager::Pager { command, env, .. } = selected {
+        assert_eq!(command[0], "less");
+        assert!(command.contains(&"-R".to_string()));
+        assert!(command.contains(&"--mouse".to_string()));
+        assert_eq!(env.get("LESSCHARSET"), Some(&"UTF-8".to_string()));
+    }
+}
+
+#[test]
+fn selector_view_with_priority_fallback() {
+    let config: TestConfig = toml::from_str(UNAVAILABLE_FIRST).expect("failed to parse");
+    // Only `less` is available, not the nonexistent pager
+    let selector = selector_with_mocks(&config.pager, MockEnv::new(), &["less"]);
+
+    let selected = selector.select(PagerRole::View).expect("select failed");
+
+    assert!(matches!(selected, SelectedPager::Pager { .. }));
+    if let SelectedPager::Pager { command, .. } = selected {
+        assert_eq!(command[0], "less");
+    }
+}
+
+#[test]
+fn selector_view_with_empty_priority_returns_none() {
+    let config: TestConfig = toml::from_str(EMPTY_PRIORITY).expect("failed to parse");
+    let selector = selector_with_mocks(&config.pager, MockEnv::new(), &["less"]);
+
+    let selected = selector.select(PagerRole::View).expect("select failed");
+    assert!(matches!(selected, SelectedPager::None));
+}
+
+#[test]
+fn selector_follow_disabled_by_default() {
+    let config: TestConfig = toml::from_str(MINIMAL_PROFILE).expect("failed to parse");
+    let selector = selector_with_mocks(&config.pager, MockEnv::new(), &["less"]);
+
+    let selected = selector.select(PagerRole::Follow).expect("select failed");
+
+    // Follow mode should return None since follow.enabled is not set
+    assert!(matches!(selected, SelectedPager::None));
+}
+
+#[test]
+fn selector_follow_when_enabled() {
+    let config: TestConfig = toml::from_str(FOLLOW_ENABLED_NO_ENV).expect("failed to parse");
+    let selector = selector_with_mocks(&config.pager, MockEnv::new(), &["fzf"]);
+
+    let selected = selector.select(PagerRole::Follow).expect("select failed");
+
+    // Should use fzf profile with follow mode enabled
+    assert!(matches!(selected, SelectedPager::Pager { .. }));
+    if let SelectedPager::Pager { command, .. } = selected {
+        assert_eq!(command[0], "fzf");
+        // Should include follow.args
+        assert!(command.contains(&"--tac".to_string()));
+        assert!(command.contains(&"--track".to_string()));
+    }
+}
+
+#[test]
+fn selector_follow_fallback_to_profile_when_env_not_set() {
+    let config: TestConfig = toml::from_str(FOLLOW_ENABLED).expect("failed to parse");
+    // No env vars set - should skip env candidate and use fzf profile
+    let selector = selector_with_mocks(&config.pager, MockEnv::new(), &["fzf"]);
+
+    let selected = selector.select(PagerRole::Follow).expect("select failed");
+
+    // Should use fzf profile with follow mode enabled
+    assert!(matches!(selected, SelectedPager::Pager { .. }));
+    if let SelectedPager::Pager { command, .. } = selected {
+        assert_eq!(command[0], "fzf");
+    }
+}
+
+#[test]
+fn selector_view_env_override_with_profile_using_at_prefix() {
+    let config: TestConfig = toml::from_str(PRIORITY_LIST).expect("failed to parse");
+    let env = MockEnv::new().with_var("HL_PAGER", "@less");
+    let selector = selector_with_mocks(&config.pager, env, &["fzf", "less"]);
+
+    let selected = selector.select(PagerRole::View).expect("select failed");
+
+    // Should use `less` profile from HL_PAGER, not `fzf` from config priority
+    assert!(matches!(selected, SelectedPager::Pager { .. }));
+    if let SelectedPager::Pager { command, .. } = selected {
+        assert_eq!(command[0], "less");
+    }
+}
+
+#[test]
+fn selector_view_env_override_without_at_prefix_uses_command() {
+    let config: TestConfig = toml::from_str(PRIORITY_LIST).expect("failed to parse");
+    let env = MockEnv::new().with_var("HL_PAGER", "less");
+    let selector = selector_with_mocks(&config.pager, env, &["fzf", "less"]);
+
+    let selected = selector.select(PagerRole::View).expect("select failed");
+
+    // Without @ prefix, should use `less` as a direct command with no extra args injected
+    assert!(matches!(selected, SelectedPager::Pager { .. }));
+    if let SelectedPager::Pager { command, .. } = selected {
+        assert_eq!(command, vec!["less"]);
+    }
+}
+
+#[test]
+fn selector_view_env_override_with_command() {
+    let config: TestConfig = toml::from_str(SINGLE_PROFILE).expect("failed to parse");
+    let env = MockEnv::new().with_var("HL_PAGER", "cat -n");
+    let selector = selector_with_mocks(&config.pager, env, &["cat", "less"]);
+
+    let selected = selector.select(PagerRole::View).expect("select failed");
+
+    assert!(matches!(selected, SelectedPager::Pager { .. }));
+    if let SelectedPager::Pager { command, .. } = selected {
+        assert_eq!(command, vec!["cat", "-n"]);
+    }
+}
+
+#[test]
+fn selector_view_env_empty_disables_pager() {
+    let config: TestConfig = toml::from_str(SINGLE_PROFILE).expect("failed to parse");
+    let env = MockEnv::new().with_var("HL_PAGER", "");
+    let selector = selector_with_mocks(&config.pager, env, &["less"]);
+
+    let selected = selector.select(PagerRole::View).expect("select failed");
+
+    // Empty HL_PAGER is treated as not set — falls through to the less profile candidate.
+    assert!(matches!(selected, SelectedPager::Pager { .. }));
+}
+
+#[test]
+fn selector_follow_hl_pager_direct_uses_hl_follow_pager() {
+    // HL_PAGER holds a direct command; HL_FOLLOW_PAGER is the follow-mode command.
+    let config: TestConfig = toml::from_str(MINIMAL_PROFILE).expect("failed to parse");
+    let env = MockEnv::new()
+        .with_var("HL_PAGER", "cat")
+        .with_var("HL_FOLLOW_PAGER", "less -R");
+    let selector = selector_with_mocks(&config.pager, env, &["cat", "less"]);
+
+    let selected = selector.select(PagerRole::Follow).expect("select failed");
+
+    assert!(matches!(selected, SelectedPager::Pager { .. }));
+    if let SelectedPager::Pager { command, .. } = selected {
+        assert_eq!(command, vec!["less", "-R"]);
+    }
+}
+
+#[test]
+fn selector_follow_hl_pager_direct_without_hl_follow_pager_disables_pager() {
+    // HL_PAGER holds a direct command but HL_FOLLOW_PAGER is not set.
+    // Paging must be disabled rather than using the direct command in follow mode.
+    let config: TestConfig = toml::from_str(MINIMAL_PROFILE).expect("failed to parse");
+    let env = MockEnv::new().with_var("HL_PAGER", "cat");
+    let selector = selector_with_mocks(&config.pager, env, &["cat", "less"]);
+
+    let selected = selector.select(PagerRole::Follow).expect("select failed");
+
+    assert!(matches!(selected, SelectedPager::None));
+}
+
+#[test]
+fn selector_view_at_prefix_with_nonexistent_profile_returns_error() {
+    let config: TestConfig = toml::from_str(MINIMAL_PROFILE).expect("failed to parse");
+    let env = MockEnv::new().with_var("HL_PAGER", "@nonexistent");
+    let selector = selector_with_mocks(&config.pager, env, &["less"]);
+
+    let result = selector.select(PagerRole::View);
+
+    // @nonexistent refers to a profile that doesn't exist - should return Error
+    assert!(matches!(result, Err(Error::ProfileNotFound { .. })));
+}
+
+#[test]
+fn selector_follow_hl_pager_profile_ref_uses_profile_for_both_modes() {
+    // HL_PAGER=@fzf → profile reference; HL_FOLLOW_PAGER is completely ignored.
+    let config: TestConfig = toml::from_str(FOLLOW_ENABLED).expect("failed to parse");
+    let env = MockEnv::new()
+        .with_var("HL_PAGER", "@fzf")
+        .with_var("HL_FOLLOW_PAGER", "less"); // should be ignored
+    let selector = selector_with_mocks(&config.pager, env, &["fzf", "less"]);
+
+    let selected = selector.select(PagerRole::Follow).expect("select failed");
+
+    assert!(matches!(selected, SelectedPager::Pager { .. }));
+    if let SelectedPager::Pager { command, .. } = selected {
+        assert_eq!(command[0], "fzf");
+        // Should include follow.args from the fzf profile, not anything from less
+        assert!(command.contains(&"--tac".to_string()));
+        assert!(command.contains(&"--track".to_string()));
+    }
+}
+
+#[test]
+fn selector_view_env_command_not_found_returns_error() {
+    let config: TestConfig = toml::from_str(MINIMAL_PROFILE).expect("failed to parse");
+    let env = MockEnv::new().with_var("HL_PAGER", "nonexistent-command");
+    let selector = selector_with_mocks(&config.pager, env, &["less"]);
+
+    let result = selector.select(PagerRole::View);
+
+    // HL_PAGER with unavailable command should return Error
+    assert!(matches!(result, Err(Error::CommandNotFound { .. })));
+}
+
+#[test]
+fn selector_view_pager_env_command_not_found_returns_error() {
+    let config: TestConfig = toml::from_str(EMPTY_PRIORITY).expect("failed to parse");
+    // No config, but PAGER with unavailable command
+    let env = MockEnv::new().with_var("PAGER", "nonexistent-cmd");
+    let selector = selector_with_mocks(&config.pager, env, &[]);
+
+    let result = selector.select(PagerRole::View);
+
+    // PAGER with unavailable command should return Error
+    assert!(matches!(result, Err(Error::CommandNotFound { .. })));
+}
+
+#[test]
+fn selector_follow_env_command_not_found_returns_error() {
+    // HL_PAGER is set (direct command), HL_FOLLOW_PAGER points to an unavailable command.
+    let config: TestConfig = toml::from_str(MINIMAL_PROFILE).expect("failed to parse");
+    let env = MockEnv::new()
+        .with_var("HL_PAGER", "cat")
+        .with_var("HL_FOLLOW_PAGER", "nonexistent-cmd");
+    let selector = selector_with_mocks(&config.pager, env, &["cat"]);
+
+    let result = selector.select(PagerRole::Follow);
+
+    // HL_FOLLOW_PAGER with unavailable command should return Error
+    assert!(matches!(result, Err(Error::CommandNotFound { .. })));
+}
+
+#[test]
+fn selector_view_at_prefix_command_not_found_returns_error() {
+    let config: TestConfig = toml::from_str(MINIMAL_PROFILE).expect("failed to parse");
+    let env = MockEnv::new().with_var("HL_PAGER", "@less");
+    // "less" executable is not available
+    let selector = selector_with_mocks(&config.pager, env, &[]);
+
+    let result = selector.select(PagerRole::View);
+
+    // @less profile exists but executable not in PATH - should return Error
+    assert!(matches!(result, Err(Error::ExecutableNotFound { .. })));
+}
+
+#[test]
+fn selector_view_pager_env_fallback() {
+    let config: TestConfig = toml::from_str(EMPTY_PRIORITY).expect("failed to parse");
+    // No HL_PAGER, empty config, but PAGER is set
+    let env = MockEnv::new().with_var("PAGER", "more");
+    let selector = selector_with_mocks(&config.pager, env, &["more"]);
+
+    let selected = selector.select(PagerRole::View).expect("select failed");
+
+    assert!(matches!(selected, SelectedPager::Pager { .. }));
+    if let SelectedPager::Pager { command, .. } = selected {
+        assert_eq!(command[0], "more");
+    }
+}
+
+#[test]
+fn selector_profile_delimiter() {
+    let config = PagerConfig {
+        candidates: vec![PagerCandidate {
+            kind: PagerCandidateKind::Profile("fzf".to_string()),
+            r#if: None,
+            profiles: false,
+        }],
+        profiles: vec![PagerProfile {
+            name: "fzf".to_string(),
+            command: "fzf".to_string(),
+            args: vec!["--ansi".to_string()],
+            env: HashMap::new(),
+            delimiter: Some(OutputDelimiter::Nul),
+            modes: PagerModes::default(),
+            conditions: Vec::new(),
+        }],
+    };
+    let selector = selector_with_mocks(&config, MockEnv::new(), &["fzf"]);
+
+    let selected = selector.select(PagerRole::View).expect("select failed");
+
+    if let SelectedPager::Pager { delimiter, .. } = selected {
+        assert_eq!(delimiter, Some(OutputDelimiter::Nul));
+    } else {
+        panic!("expected SelectedPager::Pager");
+    }
+}
+
+#[test]
+fn selector_env_delimiter_via_structured_candidate() {
+    let config = PagerConfig {
+        candidates: vec![PagerCandidate {
+            kind: PagerCandidateKind::Env(EnvReference::Structured(StructuredEnvReference {
+                pager: Some("HL_PAGER".to_string()),
+                follow: None,
+                delimiter: Some("HL_PAGER_DELIMITER".to_string()),
+            })),
+            r#if: None,
+            profiles: false,
+        }],
+        ..Default::default()
+    };
+    let env = MockEnv::new()
+        .with_var("HL_PAGER", "fzf")
+        .with_var("HL_PAGER_DELIMITER", "newline");
+    let selector = selector_with_mocks(&config, env, &["fzf"]);
+
+    let selected = selector.select(PagerRole::View).expect("select failed");
+
+    if let SelectedPager::Pager { delimiter, .. } = selected {
+        assert_eq!(delimiter, Some(OutputDelimiter::Newline));
+    } else {
+        panic!("expected SelectedPager::Pager");
+    }
+}
+
+#[test]
+fn selector_profile_reference_ignores_delimiter_env() {
+    let config = PagerConfig {
+        candidates: vec![PagerCandidate {
+            kind: PagerCandidateKind::Env(EnvReference::Structured(StructuredEnvReference {
+                pager: Some("HL_PAGER".to_string()),
+                follow: None,
+                delimiter: Some("HL_PAGER_DELIMITER".to_string()),
+            })),
+            r#if: None,
+            profiles: true,
+        }],
+        profiles: vec![PagerProfile {
+            name: "fzf".to_string(),
+            command: "fzf".to_string(),
+            args: vec![],
+            env: HashMap::new(),
+            delimiter: Some(OutputDelimiter::Nul),
+            modes: PagerModes::default(),
+            conditions: Vec::new(),
+        }],
+    };
+    let env = MockEnv::new()
+        .with_var("HL_PAGER", "@fzf")
+        .with_var("HL_PAGER_DELIMITER", "newline");
+    let selector = selector_with_mocks(&config, env, &["fzf"]);
+
+    let selected = selector.select(PagerRole::View).expect("select failed");
+
+    if let SelectedPager::Pager { delimiter, .. } = selected {
+        // Should use profile's delimiter (nul), not env delimiter (newline)
+        assert_eq!(delimiter, Some(OutputDelimiter::Nul));
+    } else {
+        panic!("expected SelectedPager::Pager");
+    }
+}
+
+#[test]
+fn selector_pager_env_not_used_in_follow_mode() {
+    let config: TestConfig = toml::from_str(EMPTY_PRIORITY).expect("failed to parse");
+    let env = MockEnv::new().with_var("PAGER", "less");
+    let selector = selector_with_mocks(&config.pager, env, &["less"]);
+
+    let selected = selector.select(PagerRole::Follow).expect("select failed");
+
+    // Simple env candidate (PAGER) must be skipped in follow mode
+    assert!(matches!(selected, SelectedPager::None));
+}
+
+#[test]
+fn selector_pager_env_at_prefix_treated_as_literal_command() {
+    // PAGER=@less should be treated as a literal command name "@less", not a profile reference
+    let config: TestConfig = toml::from_str(EMPTY_PRIORITY).expect("failed to parse");
+    let env = MockEnv::new().with_var("PAGER", "@less");
+    // "@less" is not a real executable, so it should fail with CommandNotFound
+    let selector = selector_with_mocks(&config.pager, env, &["less"]);
+
+    let result = selector.select(PagerRole::View);
+
+    assert!(matches!(result, Err(Error::CommandNotFound { .. })));
+}
+
+#[test]
+fn selected_pager_none_start_returns_none() {
+    let result = SelectedPager::None.start().expect("start failed");
+    assert!(result.is_none());
+}
+
+#[test]
+fn error_display_formats_command_with_quoting() {
+    let err = Error::PagerFailed {
+        command: vec!["less".to_string(), "-R".to_string()],
+        exit_code: 1,
+    };
+    let msg = err.to_string();
+    assert!(msg.contains("less"));
+    assert!(msg.contains("-R"));
+}
+
+#[test]
+fn selector_structured_env_no_pager_field_skips_candidate() {
+    let config = PagerConfig {
+        candidates: vec![PagerCandidate {
+            kind: PagerCandidateKind::Env(EnvReference::Structured(StructuredEnvReference {
+                pager: None,
+                follow: None,
+                delimiter: None,
+            })),
+            r#if: None,
+            profiles: false,
+        }],
+        ..Default::default()
+    };
+    let selector = selector_with_mocks(&config, MockEnv::new(), &[]);
+    let selected = selector.select(PagerRole::View).expect("select failed");
+    assert!(matches!(selected, SelectedPager::None));
+}
+
+#[test]
+fn selector_structured_env_no_follow_field_disables_follow_mode() {
+    let config = PagerConfig {
+        candidates: vec![PagerCandidate {
+            kind: PagerCandidateKind::Env(EnvReference::Structured(StructuredEnvReference {
+                pager: Some("HL_PAGER".to_string()),
+                follow: None,
+                delimiter: None,
+            })),
+            r#if: None,
+            profiles: false,
+        }],
+        ..Default::default()
+    };
+    let env = MockEnv::new().with_var("HL_PAGER", "cat");
+    let selector = selector_with_mocks(&config, env, &["cat"]);
+    let selected = selector.select(PagerRole::Follow).expect("select failed");
+    assert!(matches!(selected, SelectedPager::None));
+}
+
+#[test]
+fn selector_follow_hl_follow_pager_at_profile_uses_profile() {
+    let config: TestConfig = toml::from_str(FOLLOW_ENABLED).expect("failed to parse");
+    let env = MockEnv::new()
+        .with_var("HL_PAGER", "cat")
+        .with_var("HL_FOLLOW_PAGER", "@fzf");
+    let selector = selector_with_mocks(&config.pager, env, &["cat", "fzf"]);
+    let selected = selector.select(PagerRole::Follow).expect("select failed");
+    assert!(matches!(selected, SelectedPager::Pager { .. }));
+    if let SelectedPager::Pager { command, .. } = selected {
+        assert_eq!(command[0], "fzf");
+        assert!(command.contains(&"--tac".to_string()));
+    } else {
+        panic!("expected SelectedPager::Pager");
+    }
+}
+
+#[test]
+fn selector_structured_env_unknown_delimiter_is_ignored() {
+    let config = PagerConfig {
+        candidates: vec![PagerCandidate {
+            kind: PagerCandidateKind::Env(EnvReference::Structured(StructuredEnvReference {
+                pager: Some("HL_PAGER".to_string()),
+                follow: None,
+                delimiter: Some("HL_PAGER_DELIMITER".to_string()),
+            })),
+            r#if: None,
+            profiles: false,
+        }],
+        ..Default::default()
+    };
+    let env = MockEnv::new()
+        .with_var("HL_PAGER", "cat")
+        .with_var("HL_PAGER_DELIMITER", "invalid-value");
+    let selector = selector_with_mocks(&config, env, &["cat"]);
+    let selected = selector.select(PagerRole::View).expect("select failed");
+    if let SelectedPager::Pager { delimiter, .. } = selected {
+        assert_eq!(delimiter, None);
+    } else {
+        panic!("expected SelectedPager::Pager");
+    }
+}
+
+#[test]
+fn selector_env_whitespace_only_command_returns_empty_command_error() {
+    let config: TestConfig = toml::from_str(EMPTY_PRIORITY).expect("failed to parse");
+    let env = MockEnv::new().with_var("HL_PAGER", "   ");
+    let selector = selector_with_mocks(&config.pager, env, &[]);
+    let result = selector.select(PagerRole::View);
+    assert!(matches!(result, Err(Error::EmptyCommand { .. })));
+}
+
+#[test]
+fn selector_env_unmatched_quote_uses_raw_value() {
+    let config: TestConfig = toml::from_str(MINIMAL_PROFILE).expect("failed to parse");
+    let env = MockEnv::new().with_var("HL_PAGER", "'unclosed");
+    let selector = selector_with_mocks(&config.pager, env, &["'unclosed"]);
+    let selected = selector.select(PagerRole::View).expect("select failed");
+    if let SelectedPager::Pager { command, .. } = selected {
+        assert_eq!(command[0], "'unclosed");
+    } else {
+        panic!("expected SelectedPager::Pager");
+    }
+}
+
+#[test]
+fn selector_at_profile_with_no_command_returns_misconfigured_error() {
+    let config = PagerConfig {
+        candidates: vec![PagerCandidate {
+            kind: PagerCandidateKind::Env(EnvReference::Structured(StructuredEnvReference {
+                pager: Some("HL_PAGER".to_string()),
+                follow: None,
+                delimiter: None,
+            })),
+            r#if: None,
+            profiles: true,
+        }],
+        profiles: vec![PagerProfile {
+            name: "empty-cmd".to_string(),
+            command: String::new(),
+            args: vec![],
+            env: HashMap::new(),
+            delimiter: None,
+            modes: PagerModes::default(),
+            conditions: vec![],
+        }],
+    };
+    let env = MockEnv::new().with_var("HL_PAGER", "@empty-cmd");
+    let selector = selector_with_mocks(&config, env, &[]);
+    let result = selector.select(PagerRole::View);
+    assert!(matches!(result, Err(Error::ProfileMisconfigured { .. })));
+}
+
+#[test]
+fn selector_at_profile_ref_in_follow_mode_with_follow_disabled_returns_none() {
+    let config: TestConfig = toml::from_str(SINGLE_PROFILE).expect("failed to parse");
+    let env = MockEnv::new().with_var("HL_PAGER", "@less");
+    let selector = selector_with_mocks(&config.pager, env, &["less"]);
+    let selected = selector.select(PagerRole::Follow).expect("select failed");
+    assert!(matches!(selected, SelectedPager::None));
+}
+
+#[test]
+fn selector_candidate_if_matches_selects_profile() {
+    let config = PagerConfig {
+        candidates: vec![PagerCandidate {
+            kind: PagerCandidateKind::Profile("less".to_string()),
+            r#if: Some(Condition::Mode(ModeCondition::View)),
+            profiles: false,
+        }],
+        profiles: vec![PagerProfile {
+            name: "less".to_string(),
+            command: "less".to_string(),
+            args: vec!["-R".to_string()],
+            env: HashMap::new(),
+            delimiter: None,
+            modes: PagerModes::default(),
+            conditions: vec![],
+        }],
+    };
+    let selector = selector_with_mocks(&config, MockEnv::new(), &["less"]);
+    let selected = selector.select(PagerRole::View).expect("select failed");
+    assert!(matches!(selected, SelectedPager::Pager { .. }));
+}
+
+#[test]
+fn is_available_returns_true_for_existing_binary() {
+    assert!(super::selection::is_available("cat"));
+}
+
+#[test]
+fn is_available_returns_false_for_nonexistent_binary() {
+    assert!(!super::selection::is_available("_nonexistent_binary_xyz_abc_123"));
+}
