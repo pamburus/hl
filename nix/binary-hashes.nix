@@ -1,8 +1,8 @@
 {
-  "0.35.3" = {
-    "hl-linux-arm64-musl.tar.gz" = "sha256-A5RhmamcFFFM9FHp5tLTOgjLZvNuF3riY/hnOocu2to=";
-    "hl-linux-x86_64-musl.tar.gz" = "sha256-k2m92xAges+giT3vf12NtIHj8MH/LzOYz8hmxrq/EJA=";
-    "hl-macos-arm64.tar.gz" = "sha256-L+GuGzbxcZ4914GT7OUHVoALSOMcU2JLqhUhaNffT+I=";
-    "hl-macos-x86_64.tar.gz" = "sha256-23DMZGdWiWrGgDkQ/guO3YF7dLLUQQaiZR9P++nqJnY=";
+  "0.35.4" = {
+    "hl-linux-arm64-musl.tar.gz" = "sha256-oRWYqhPbDYZYayFnhvQwFsLWTlUH3joAUUX23bopXHo=";
+    "hl-linux-x86_64-musl.tar.gz" = "sha256-HBj7hrQJ3iH+nOC8s91jHBECW4jR5m/5Ni7F3X7EX2k=";
+    "hl-macos-arm64.tar.gz" = "sha256-7Pas4OjSs3Dx4ddnZJY7I7RQIrOs8L6GQiOIwP6aj3g=";
+    "hl-macos-x86_64.tar.gz" = "sha256-XZf1uD9nJWJPjM8h6X4dHqgSScu9MFWT9AHYbU58q/c=";
   };
 }
