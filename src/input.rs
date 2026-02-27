@@ -319,7 +319,7 @@ impl Input {
                 r = i.start;
             }
 
-            if r != 0 {
+            if r != 0 && pos != 0 {
                 if let Some(i) = searcher.partial_match_r(&buf[..r]) {
                     pos += i as u64;
                 }
