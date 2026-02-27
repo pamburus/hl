@@ -111,7 +111,7 @@ signal-hook = "0.4"
 snap = "1"
 static_assertions = "1"
 strsim = "0.11"
-strum = { version = "0.27", features = ["derive"] }
+strum = { version = "0.28", features = ["derive"] }
 styled-help = { path = "./crates/styled-help" }
 terminal_size = "0.4"
 thiserror = "2"
