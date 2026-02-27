@@ -1,4 +1,4 @@
-#:schema https://raw.githubusercontent.com/pamburus/hl/v0.35.3/schema/json/config.schema.json
+#:schema https://raw.githubusercontent.com/pamburus/hl/v0.35.4/schema/json/config.schema.json
 
 # Configuration of the predefined set of fields.
 [fields.predefined]
