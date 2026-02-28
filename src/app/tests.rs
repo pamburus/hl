@@ -2259,3 +2259,169 @@ fn test_merge_segments_multiple_lines_per_segment() {
     // BTreeMap sorts by timestamp, so ts=100 (line-B) comes first
     assert_eq!(result, "SSline-B\nSSline-A\n");
 }
+
+#[test]
+fn test_merge_segments_gap_with_timestamp() {
+    // Gap text before an indexed line gets the next indexed line's timestamp
+    // and is inserted into the window.
+    let app = App::new(options());
+    let badges = test_badges(2);
+    let (txo, rxo) = channel::bounded(10);
+
+    // Buffer layout: "gap-text\n  line-A"
+    // gap is 0..8 ("gap-text"), delimiter at 8..9, indexed line at 9..17 ("  line-A")
+    let buf = b"gap-text\n  line-A".to_vec();
+    let index = TimestampIndex {
+        block: 0,
+        lines: vec![TimestampIndexLine {
+            location: 9..17, // "  line-A"
+            ts: ts(100, 0),
+        }],
+    };
+    txo.send((0, buf, index)).unwrap();
+    drop(txo);
+
+    let mut output = Vec::new();
+    app.merge_segments(&badges, rxo, &mut output, 1).unwrap();
+
+    let result = String::from_utf8(output).unwrap();
+    // Gap "gap-text" gets ts=100 from the next indexed line, inserted into window.
+    // Both gap and line have ts=100, so they sort by offset: gap(0) before line(9).
+    // Gap goes through window flush: sync + buf[0..8][2..] + delim = "SS" + "p-text" + "\n"
+    // Line goes through window flush: sync + buf[9..17][2..] + delim = "SS" + "line-A" + "\n"
+    assert_eq!(result, "SSp-text\nSSline-A\n");
+}
+
+#[test]
+fn test_merge_segments_gap_without_timestamp_direct_output() {
+    // When there's no timestamp for a gap (no indexed lines, no source history),
+    // the gap is written directly to output.
+    let app = App::new(options());
+    let badges = test_badges(2);
+    let (txo, rxo) = channel::bounded(10);
+
+    // Buffer with no indexed lines → entire buffer is a trailing gap with no timestamp
+    let buf = b"unparsed text\n".to_vec();
+    let index = TimestampIndex {
+        block: 0,
+        lines: vec![],
+    };
+    txo.send((0, buf, index)).unwrap();
+    drop(txo);
+
+    let mut output = Vec::new();
+    app.merge_segments(&badges, rxo, &mut output, 1).unwrap();
+
+    let result = String::from_utf8(output).unwrap();
+    // No timestamp available → gap written directly (raw, no sync indicator stripping)
+    assert_eq!(result, "unparsed text\n");
+}
+
+#[test]
+fn test_merge_segments_gap_trimming_no_trailing_delimiter() {
+    // When the gap region doesn't end with the output delimiter,
+    // trimmed == end, so start < trimmed may still hold.
+    let app = App::new(options());
+    let badges = test_badges(2);
+    let (txo, rxo) = channel::bounded(10);
+
+    // Buffer: "  gap-no-delim  line-A"
+    // Gap region: 0..14 ("  gap-no-delim"), no trailing \n before the indexed line
+    let buf = b"  gap-no-delim  line-A".to_vec();
+    let index = TimestampIndex {
+        block: 0,
+        lines: vec![TimestampIndexLine {
+            location: 14..22, // "  line-A"
+            ts: ts(100, 0),
+        }],
+    };
+    txo.send((0, buf, index)).unwrap();
+    drop(txo);
+
+    let mut output = Vec::new();
+    app.merge_segments(&badges, rxo, &mut output, 1).unwrap();
+
+    let result = String::from_utf8(output).unwrap();
+    // Gap "  gap-no-delim" doesn't end with \n, so trimmed=14=end.
+    // start(0) < trimmed(14), ts is Some(100), so inserted into window.
+    // Output: sync + gap[2..] + delim, sync + line[2..] + delim
+    assert_eq!(result, "SSgap-no-delim\nSSline-A\n");
+}
+
+#[test]
+fn test_merge_segments_empty_gap_skipped() {
+    // When indexed lines are adjacent (no gap between them), start >= end → continue
+    let app = App::new(options());
+    let badges = test_badges(2);
+    let (txo, rxo) = channel::bounded(10);
+
+    // Two adjacent indexed lines with only a delimiter between them
+    // Buffer: "  line-A\n  line-B"
+    let buf = b"  line-A\n  line-B".to_vec();
+    let index = TimestampIndex {
+        block: 0,
+        lines: vec![
+            TimestampIndexLine {
+                location: 0..8, // "  line-A"
+                ts: ts(100, 0),
+            },
+            TimestampIndexLine {
+                location: 9..17, // "  line-B"
+                ts: ts(200, 0),
+            },
+        ],
+    };
+    txo.send((0, buf, index)).unwrap();
+    drop(txo);
+
+    let mut output = Vec::new();
+    app.merge_segments(&badges, rxo, &mut output, 1).unwrap();
+
+    let result = String::from_utf8(output).unwrap();
+    // Gap between lines: start = 0+8+1 = 9, end = 9 → start >= end, skipped
+    // Only the two indexed lines appear
+    assert_eq!(result, "SSline-A\nSSline-B\n");
+}
+
+#[test]
+fn test_merge_segments_trailing_gap_with_source_history() {
+    // Trailing gap (after last indexed line) uses source_last_ts as fallback
+    let app = App::new(options());
+    let badges = test_badges(2);
+    let (txo, rxo) = channel::bounded(10);
+
+    // First segment establishes source_last_ts for source 0
+    let buf1 = b"  line-A".to_vec();
+    let index1 = TimestampIndex {
+        block: 0,
+        lines: vec![TimestampIndexLine {
+            location: 0..8,
+            ts: ts(100, 0),
+        }],
+    };
+
+    // Second segment from same source has an indexed line + trailing gap
+    // Buffer: "  line-B\n  trailing-gap"
+    let buf2 = b"  line-B\n  trailing-gap".to_vec();
+    let index2 = TimestampIndex {
+        block: 1,
+        lines: vec![TimestampIndexLine {
+            location: 0..8, // "  line-B"
+            ts: ts(200, 0),
+        }],
+    };
+
+    txo.send((0, buf1, index1)).unwrap();
+    txo.send((0, buf2, index2)).unwrap();
+    drop(txo);
+
+    let mut output = Vec::new();
+    app.merge_segments(&badges, rxo, &mut output, 1).unwrap();
+
+    let result = String::from_utf8(output).unwrap();
+    // line-A (ts=100) flushed first, then segment 2 arrives.
+    // Trailing gap uses source_last_ts from segment 1 (ts=100) since gap timestamps
+    // are computed before indexed lines update source_last_ts.
+    // So: trailing-gap(ts=100) sorts before line-B(ts=200).
+    assert_eq!(result, "SSline-A\nSStrailing-gap\nSSline-B\n");
+}

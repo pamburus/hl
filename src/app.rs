@@ -1,7 +1,7 @@
 // std imports
 use std::{
     cmp::{Reverse, max},
-    collections::BTreeMap,
+    collections::{BTreeMap, HashMap},
     convert::{TryFrom, TryInto},
     fs,
     io::{BufWriter, Write},
@@ -748,6 +748,7 @@ impl App {
         let mut window = BTreeMap::<Key, Line>::new();
         let mut last_ts: Option<Timestamp> = None;
         let mut prev_ts: Option<Timestamp> = None;
+        let mut source_last_ts: HashMap<usize, Timestamp> = HashMap::new();
         let mut mem_usage = 0;
         let mem_limit = concurrency * usize::from(self.options.buffer_size);
 
@@ -779,16 +780,59 @@ impl App {
             };
             match rxo.recv_timeout(timeout.unwrap_or(std::time::Duration::MAX)) {
                 Ok((i, buf, index)) => {
+                    let delim_len = self.options.output_delimiter.len();
+                    let delim = self.options.output_delimiter.as_bytes();
                     let buf = Rc::new(buf);
+                    let now = Instant::now();
+
+                    // Iterate over gaps between indexed lines and insert them
+                    // into the window with the timestamp of the next indexed
+                    // line (or the last known timestamp for the source as
+                    // fallback for the trailing gap) so they get sorted
+                    // together with parsed records.
+                    let gap_starts =
+                        std::iter::once(0usize).chain(index.lines.iter().map(|l| l.location.end + delim_len));
+                    let gap_ends = index
+                        .lines
+                        .iter()
+                        .map(|l| l.location.start)
+                        .chain(std::iter::once(buf.len()));
+                    let gap_timestamps = index
+                        .lines
+                        .iter()
+                        .map(|l| Some(l.ts))
+                        .chain(std::iter::once(source_last_ts.get(&i).copied()));
+
+                    for ((start, end), ts) in gap_starts.zip(gap_ends).zip(gap_timestamps) {
+                        if start >= end {
+                            continue;
+                        }
+                        let trimmed = if end >= start + delim_len && buf[end - delim_len..end] == *delim {
+                            end - delim_len
+                        } else {
+                            end
+                        };
+                        if start < trimmed {
+                            if let Some(ts) = ts {
+                                mem_usage += trimmed - start;
+                                window.insert((ts, i, index.block, start), (buf.clone(), start..trimmed, now));
+                            } else {
+                                output.write_all(&buf[start..end])?;
+                            }
+                        }
+                    }
+
+                    // Insert indexed lines into the window.
                     for line in index.lines {
-                        last_ts = Some(
-                            last_ts
-                                .map(|last_ts| std::cmp::max(last_ts, line.ts))
-                                .unwrap_or(line.ts),
-                        );
+                        let ts = line.ts;
+                        source_last_ts
+                            .entry(i)
+                            .and_modify(|prev| *prev = max(*prev, ts))
+                            .or_insert(ts);
+                        last_ts = Some(last_ts.map(|v| max(v, ts)).unwrap_or(ts));
                         mem_usage += line.location.end - line.location.start;
-                        let key = (line.ts, i, index.block, line.location.start);
-                        let value = (buf.clone(), line.location, Instant::now());
+                        let key = (ts, i, index.block, line.location.start);
+                        let value = (buf.clone(), line.location, now);
                         window.insert(key, value);
                     }
                 }
