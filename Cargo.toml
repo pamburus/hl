@@ -120,7 +120,7 @@ toml = "1"
 unicode-segmentation = "1"
 unicode-width = "0.2"
 utf8-supported = "1"
-which = "7"
+which = "8"
 wild = "2"
 wildcard.workspace = true
 winapi-util = { version = "0.1" }
