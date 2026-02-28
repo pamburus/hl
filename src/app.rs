@@ -726,14 +726,16 @@ impl App {
                             let now = Instant::now();
 
                             // Iterate over gaps between indexed lines and insert them
-                            // into the window with the last known timestamp for the
-                            // source so they get sorted together with parsed records.
+                            // into the window with the timestamp of the next indexed
+                            // line (or the last known timestamp for the source as
+                            // fallback for the trailing gap) so they get sorted
+                            // together with parsed records.
                             let gap_starts = std::iter::once(0usize)
                                 .chain(index.lines.iter().map(|l| l.location.end + delim_len));
                             let gap_ends = index.lines.iter().map(|l| l.location.start)
                                 .chain(std::iter::once(buf.len()));
-                            let gap_timestamps = std::iter::once(source_last_ts.get(&i).copied())
-                                .chain(index.lines.iter().map(|l| Some(l.ts)));
+                            let gap_timestamps = index.lines.iter().map(|l| Some(l.ts))
+                                .chain(std::iter::once(source_last_ts.get(&i).copied()));
 
                             for ((start, end), ts) in gap_starts.zip(gap_ends).zip(gap_timestamps) {
                                 if start >= end {
