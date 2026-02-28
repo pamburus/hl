@@ -801,6 +801,7 @@ Output Options:
       --ascii [<WHEN>]        Whether to restrict punctuation to ASCII characters only [env: HL_ASCII=] [default: auto] [possible values: auto, never, always]
   -x, --expansion [<MODE>]    Whether to expand fields and messages [env: HL_EXPANSION=] [default: auto] [possible values: never, inline, auto, always]
   -o, --output <FILE>         Output file
+      --output-delimiter <D>  Output entry delimiter [env: HL_OUTPUT_DELIMITER=] [default: newline] [possible values: newline, nul]
 
 Input Options:
       --input-format <FORMAT>       Input format [env: HL_INPUT_FORMAT=] [default: auto] [possible values: auto, json, logfmt]
