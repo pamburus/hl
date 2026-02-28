@@ -2058,3 +2058,204 @@ fn test_bug_comprehensive_multiline_prefix_remainder_raw() {
         non_empty_lines.len()
     );
 }
+
+// --- merge_segments tests ---
+
+fn test_badges(width: usize) -> FollowBadges {
+    FollowBadges {
+        si: SyncIndicator {
+            width,
+            synced: "S".repeat(width),
+            failed: "F".repeat(width),
+            placeholder: " ".repeat(width),
+        },
+        input: None,
+    }
+}
+
+fn ts(sec: i64, nsec: u32) -> Timestamp {
+    Timestamp { sec, nsec }
+}
+
+#[test]
+fn test_merge_segments_single_line() {
+    let app = App::new(options());
+    let badges = test_badges(2);
+    let (txo, rxo) = channel::bounded(10);
+
+    // Buffer: 2 bytes placeholder + content
+    let buf = b"  hello world".to_vec();
+    let index = TimestampIndex {
+        block: 0,
+        lines: vec![TimestampIndexLine {
+            location: 0..buf.len(),
+            ts: ts(100, 0),
+        }],
+    };
+    txo.send((0, buf, index)).unwrap();
+    drop(txo);
+
+    let mut output = Vec::new();
+    app.merge_segments(&badges, rxo, &mut output, 1).unwrap();
+
+    let result = String::from_utf8(output).unwrap();
+    assert_eq!(result, "SShello world\n");
+}
+
+#[test]
+fn test_merge_segments_ordered_timestamps() {
+    let app = App::new(options());
+    let badges = test_badges(2);
+    let (txo, rxo) = channel::bounded(10);
+
+    // Send two lines with ascending timestamps from same source
+    let buf1 = b"  line-one".to_vec();
+    let index1 = TimestampIndex {
+        block: 0,
+        lines: vec![TimestampIndexLine {
+            location: 0..buf1.len(),
+            ts: ts(100, 0),
+        }],
+    };
+
+    let buf2 = b"  line-two".to_vec();
+    let index2 = TimestampIndex {
+        block: 1,
+        lines: vec![TimestampIndexLine {
+            location: 0..buf2.len(),
+            ts: ts(200, 0),
+        }],
+    };
+
+    txo.send((0, buf1, index1)).unwrap();
+    txo.send((0, buf2, index2)).unwrap();
+    drop(txo);
+
+    let mut output = Vec::new();
+    app.merge_segments(&badges, rxo, &mut output, 1).unwrap();
+
+    let result = String::from_utf8(output).unwrap();
+    assert_eq!(result, "SSline-one\nSSline-two\n");
+}
+
+#[test]
+fn test_merge_segments_interleaved_sources() {
+    let app = App::new(options());
+    let badges = test_badges(2);
+    let (txo, rxo) = channel::bounded(10);
+
+    // Source 0: ts=200, Source 1: ts=100 → output should be sorted by ts
+    let buf0 = b"  from-source-0".to_vec();
+    let index0 = TimestampIndex {
+        block: 0,
+        lines: vec![TimestampIndexLine {
+            location: 0..buf0.len(),
+            ts: ts(200, 0),
+        }],
+    };
+
+    let buf1 = b"  from-source-1".to_vec();
+    let index1 = TimestampIndex {
+        block: 0,
+        lines: vec![TimestampIndexLine {
+            location: 0..buf1.len(),
+            ts: ts(100, 0),
+        }],
+    };
+
+    txo.send((0, buf0, index0)).unwrap();
+    txo.send((1, buf1, index1)).unwrap();
+    drop(txo);
+
+    let mut output = Vec::new();
+    app.merge_segments(&badges, rxo, &mut output, 1).unwrap();
+
+    let result = String::from_utf8(output).unwrap();
+    // Source 1 (ts=100) should come before Source 0 (ts=200)
+    assert_eq!(result, "SSfrom-source-1\nSSfrom-source-0\n");
+}
+
+#[test]
+fn test_merge_segments_out_of_order_shows_failed() {
+    let app = App::new(Options {
+        sync_interval: Duration::ZERO,
+        ..options()
+    });
+    let badges = test_badges(2);
+    let (txo, rxo) = channel::bounded(10);
+
+    // First batch: ts=200
+    let buf1 = b"  late".to_vec();
+    let index1 = TimestampIndex {
+        block: 0,
+        lines: vec![TimestampIndexLine {
+            location: 0..buf1.len(),
+            ts: ts(200, 0),
+        }],
+    };
+    txo.send((0, buf1, index1)).unwrap();
+
+    // Second batch: ts=100 (arrives after ts=200 has been flushed)
+    let buf2 = b"  early".to_vec();
+    let index2 = TimestampIndex {
+        block: 1,
+        lines: vec![TimestampIndexLine {
+            location: 0..buf2.len(),
+            ts: ts(100, 0),
+        }],
+    };
+    txo.send((0, buf2, index2)).unwrap();
+    drop(txo);
+
+    let mut output = Vec::new();
+    app.merge_segments(&badges, rxo, &mut output, 1).unwrap();
+
+    let result = String::from_utf8(output).unwrap();
+    // ts=200 flushed first (synced), then ts=100 arrives and gets flushed (failed because 200 > 100)
+    assert_eq!(result, "SSlate\nFFearly\n");
+}
+
+#[test]
+fn test_merge_segments_empty_channel() {
+    let app = App::new(options());
+    let badges = test_badges(2);
+    let (txo, rxo) = channel::bounded::<(usize, Vec<u8>, TimestampIndex)>(10);
+    drop(txo);
+
+    let mut output = Vec::new();
+    app.merge_segments(&badges, rxo, &mut output, 1).unwrap();
+
+    assert!(output.is_empty());
+}
+
+#[test]
+fn test_merge_segments_multiple_lines_per_segment() {
+    let app = App::new(options());
+    let badges = test_badges(2);
+    let (txo, rxo) = channel::bounded(10);
+
+    // Buffer with two lines separated by delimiter
+    let buf = b"  line-A\n  line-B".to_vec();
+    let index = TimestampIndex {
+        block: 0,
+        lines: vec![
+            TimestampIndexLine {
+                location: 0..8, // "  line-A"
+                ts: ts(200, 0),
+            },
+            TimestampIndexLine {
+                location: 9..17, // "  line-B"
+                ts: ts(100, 0),
+            },
+        ],
+    };
+    txo.send((0, buf, index)).unwrap();
+    drop(txo);
+
+    let mut output = Vec::new();
+    app.merge_segments(&badges, rxo, &mut output, 1).unwrap();
+
+    let result = String::from_utf8(output).unwrap();
+    // BTreeMap sorts by timestamp, so ts=100 (line-B) comes first
+    assert_eq!(result, "SSline-B\nSSline-A\n");
+}

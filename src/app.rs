@@ -681,64 +681,9 @@ impl App {
             drop(txo);
 
             // spawn merger thread
-            let merger = scope.spawn(closure!(ref badges, |_| -> Result<()> {
-                type Key = (Timestamp, usize, usize, usize); // (ts, input, block, offset)
-                type Line = (Rc<Vec<u8>>, Range<usize>, Instant); // (buf, location, instant)
-
-                let mut window = BTreeMap::<Key,Line>::new();
-                let mut last_ts: Option<Timestamp> = None;
-                let mut prev_ts: Option<Timestamp> = None;
-                let mut mem_usage = 0;
-                let mem_limit = n * usize::from(self.options.buffer_size);
-
-                loop {
-                    let deadline = Instant::now().checked_sub(self.options.sync_interval);
-                    while let Some(first) = window.first_key_value() {
-                        if deadline.map(|deadline| first.1.2 > deadline).unwrap_or(true) && mem_usage < mem_limit {
-                            break;
-                        }
-                        if let Some(entry) = window.pop_first() {
-                            let sync_indicator = if prev_ts.map(|ts| ts <= entry.0.0).unwrap_or(true) {
-                                &badges.si.synced
-                            } else {
-                                &badges.si.failed
-                            };
-                            prev_ts = Some(entry.0.0);
-                            mem_usage -= entry.1.1.end - entry.1.1.start;
-                            output.write_all(sync_indicator.as_bytes())?;
-                            output.write_all(&entry.1.0[entry.1.1.clone()][badges.si.width..])?;
-                            output.write_all(self.options.output_delimiter.as_bytes())?;
-                        }
-                    }
-
-                    let next_ts = window.first_entry().map(|e|e.get().2);
-                    let timeout = if let (Some(next_ts), Some(deadline)) = (next_ts, deadline) {
-                        Some(max(deadline, next_ts) - next_ts)
-                    } else {
-                        None
-                    };
-                    match rxo.recv_timeout(timeout.unwrap_or(std::time::Duration::MAX)) {
-                        Ok((i, buf, index)) => {
-                            let buf = Rc::new(buf);
-                            for line in index.lines {
-                                last_ts = Some(last_ts.map(|last_ts| std::cmp::max(last_ts, line.ts)).unwrap_or(line.ts));
-                                mem_usage += line.location.end - line.location.start;
-                                let key = (line.ts, i, index.block, line.location.start);
-                                let value = (buf.clone(), line.location, Instant::now());
-                                window.insert(key, value);
-                            }
-                        }
-                        Err(RecvTimeoutError::Timeout) => {}
-                        Err(RecvTimeoutError::Disconnected) => {
-                            if timeout.is_none() {
-                                break
-                            }
-                        }
-                    }
-                }
-
-                Ok(())
-            }));
+            let merger = scope.spawn(|_| -> Result<()> {
+                self.merge_segments(&badges, rxo, output, n)
+            });
 
             for reader in readers {
                 reader.join().unwrap()?;
@@ -788,6 +733,75 @@ impl App {
                 Segment::Incomplete(_, _) => {}
             }
         }
+    }
+
+    fn merge_segments(
+        &self,
+        badges: &FollowBadges,
+        rxo: Receiver<(usize, Vec<u8>, TimestampIndex)>,
+        output: &mut Output,
+        concurrency: usize,
+    ) -> Result<()> {
+        type Key = (Timestamp, usize, usize, usize); // (ts, input, block, offset)
+        type Line = (Rc<Vec<u8>>, Range<usize>, Instant); // (buf, location, instant)
+
+        let mut window = BTreeMap::<Key, Line>::new();
+        let mut last_ts: Option<Timestamp> = None;
+        let mut prev_ts: Option<Timestamp> = None;
+        let mut mem_usage = 0;
+        let mem_limit = concurrency * usize::from(self.options.buffer_size);
+
+        loop {
+            let deadline = Instant::now().checked_sub(self.options.sync_interval);
+            while let Some(first) = window.first_key_value() {
+                if deadline.map(|deadline| first.1.2 > deadline).unwrap_or(true) && mem_usage < mem_limit {
+                    break;
+                }
+                if let Some(entry) = window.pop_first() {
+                    let sync_indicator = if prev_ts.map(|ts| ts <= entry.0.0).unwrap_or(true) {
+                        &badges.si.synced
+                    } else {
+                        &badges.si.failed
+                    };
+                    prev_ts = Some(entry.0.0);
+                    mem_usage -= entry.1.1.end - entry.1.1.start;
+                    output.write_all(sync_indicator.as_bytes())?;
+                    output.write_all(&entry.1.0[entry.1.1.clone()][badges.si.width..])?;
+                    output.write_all(self.options.output_delimiter.as_bytes())?;
+                }
+            }
+
+            let next_ts = window.first_entry().map(|e| e.get().2);
+            let timeout = if let (Some(next_ts), Some(deadline)) = (next_ts, deadline) {
+                Some(max(deadline, next_ts) - next_ts)
+            } else {
+                None
+            };
+            match rxo.recv_timeout(timeout.unwrap_or(std::time::Duration::MAX)) {
+                Ok((i, buf, index)) => {
+                    let buf = Rc::new(buf);
+                    for line in index.lines {
+                        last_ts = Some(
+                            last_ts
+                                .map(|last_ts| std::cmp::max(last_ts, line.ts))
+                                .unwrap_or(line.ts),
+                        );
+                        mem_usage += line.location.end - line.location.start;
+                        let key = (line.ts, i, index.block, line.location.start);
+                        let value = (buf.clone(), line.location, Instant::now());
+                        window.insert(key, value);
+                    }
+                }
+                Err(RecvTimeoutError::Timeout) => {}
+                Err(RecvTimeoutError::Disconnected) => {
+                    if timeout.is_none() {
+                        break;
+                    }
+                }
+            }
+        }
+
+        Ok(())
     }
 
     fn parser(&self) -> Parser {
