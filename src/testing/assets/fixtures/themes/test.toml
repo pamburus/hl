@@ -1,4 +1,4 @@
-#:schema https://raw.githubusercontent.com/pamburus/hl/v0.35.4/schema/json/theme.schema.v0.json
+#:schema https://raw.githubusercontent.com/pamburus/hl/v0.36.0/schema/json/theme.schema.v0.json
 
 [elements.input]
 modes = ["faint"]
