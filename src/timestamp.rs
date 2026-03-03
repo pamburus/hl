@@ -94,6 +94,7 @@ impl<'a> Timestamp<'a> {
             ts.map(|ts| ts.into())
         } else {
             NaiveDateTime::parse_from_str(self.raw, "%Y-%m-%d %H:%M:%S%.f")
+                .or_else(|_| NaiveDateTime::parse_from_str(self.raw, "%Y-%m-%dT%H:%M:%S%.f"))
                 .ok()
                 .map(|ts| ts.and_utc().into())
         }
