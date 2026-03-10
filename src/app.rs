@@ -80,6 +80,7 @@ pub struct Options {
     pub fields: FieldOptions,
     pub formatting: Formatting,
     pub time_zone: Tz,
+    pub assume_tz: Option<chrono_tz::Tz>,
     pub hide_empty_fields: bool,
     pub sort: bool,
     pub follow: bool,
@@ -378,6 +379,7 @@ impl App {
             delimiter: self.options.delimiter.clone(),
             allow_prefix: self.options.allow_prefix,
             unix_ts_unit: self.options.unix_ts_unit,
+            assume_tz: self.options.assume_tz,
             format: self.options.input_format,
             ..IndexerSettings::with_fs(LocalFileSystem)
         };
@@ -853,6 +855,7 @@ impl App {
             &self.options.fields.settings.predefined,
             &self.options.fields.settings.ignore,
             self.options.unix_ts_unit,
+            self.options.assume_tz,
         ))
     }
 

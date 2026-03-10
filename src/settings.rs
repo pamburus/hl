@@ -43,6 +43,8 @@ pub struct Settings {
     pub concurrency: Option<usize>,
     pub time_format: String,
     pub time_zone: Tz,
+    #[serde(default)]
+    pub assume_time_zone: Option<Tz>,
     pub formatting: Formatting,
     pub theme: String,
     #[serde(default)]

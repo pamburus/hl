@@ -316,6 +316,21 @@ pub struct Opt {
     )]
     pub time_zone: chrono_tz::Tz,
 
+    /// Time zone to assume for log timestamps that have no time zone specified
+    ///
+    /// When set, naive timestamps (without time zone) are interpreted as being in this time zone.
+    /// When not set, naive timestamps are displayed as-is without any offset shift.
+    ///
+    /// Examples: <c>'UTC'</>, <c>'America/New_York'</>, <c>'Asia/Shanghai'</>, <c>'Europe/Berlin'</>, etc.
+    #[arg(
+        long,
+        env = "HL_ASSUME_TIME_ZONE",
+        overrides_with = "assume_time_zone",
+        value_name = "TZ",
+        help_heading = heading::OUTPUT,
+    )]
+    pub assume_time_zone: Option<chrono_tz::Tz>,
+
     /// Use local time zone, overrides <c>--time-zone</> option
     #[arg(long, short = 'L', overrides_with = "local", help_heading = heading::OUTPUT)]
     pub local: bool,

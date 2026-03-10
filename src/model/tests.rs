@@ -616,7 +616,7 @@ fn test_nested_predefined_fields(#[case] input: &[u8], #[case] expected: Option<
         .into(),
         ..Default::default()
     };
-    let settings = ParserSettings::new(&predefined, [], None);
+    let settings = ParserSettings::new(&predefined, [], None, None);
     let parser = Parser::new(settings);
 
     let record = RawRecord::parser().parse(input).next().unwrap().unwrap();
@@ -628,7 +628,7 @@ fn test_nested_predefined_fields(#[case] input: &[u8], #[case] expected: Option<
 fn test_ignore_pattern() {
     let predefined = PredefinedFields::default();
     let ignore = vec!["secret".to_string(), "password*".to_string()];
-    let settings = ParserSettings::new(&predefined, &ignore, None);
+    let settings = ParserSettings::new(&predefined, &ignore, None, None);
     let parser = Parser::new(settings);
 
     let input = br#"{"msg":"test","secret":"value","password123":"hidden","visible":"shown"}"#;
@@ -741,7 +741,7 @@ fn test_caller_file_line(#[case] input: &[u8], #[case] expected: Caller) {
         .into(),
         ..Default::default()
     };
-    let parser = Parser::new(ParserSettings::new(&predefined, [], None));
+    let parser = Parser::new(ParserSettings::new(&predefined, [], None, None));
     let record = RawRecord::parser().parse(input).next().unwrap().unwrap();
     let record = parser.parse(&record.record);
     assert_eq!(record.caller, expected);

@@ -559,6 +559,7 @@ fn options() -> Options {
             ..Formatting::default()
         },
         time_zone: Tz::IANA(UTC),
+        assume_tz: None,
         hide_empty_fields: false,
         sort: false,
         follow: false,
