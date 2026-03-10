@@ -855,7 +855,6 @@ impl App {
             &self.options.fields.settings.predefined,
             &self.options.fields.settings.ignore,
             self.options.unix_ts_unit,
-            self.options.assume_tz,
         ))
     }
 
@@ -1001,6 +1000,7 @@ impl App {
                 RecordFormatterBuilder::new()
                     .with_theme(options.theme.clone())
                     .with_timestamp_formatter(DateTimeFormatter::new(options.time_format.clone(), options.time_zone))
+                    .with_assume_tz(options.assume_tz)
                     .with_empty_fields_hiding(options.hide_empty_fields)
                     .with_field_filter(options.fields.filter.clone())
                     .with_predefined_field_filter(predefined_filter)

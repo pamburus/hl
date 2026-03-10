@@ -10,12 +10,60 @@ use crate::app::UnixTimestampUnit;
 
 // ---
 
+/// A parsed timestamp that is either naive (no time zone) or aware (with explicit offset).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ParsedTimestamp {
+    /// A datetime with no time zone information, stored as seconds since epoch as if UTC.
+    Naive(NaiveDateTime),
+    /// A datetime with an explicit UTC offset.
+    Aware(DateTime<FixedOffset>),
+}
+
+impl ParsedTimestamp {
+    /// Converts to a `DateTime<FixedOffset>` for display or filtering.
+    ///
+    /// For naive timestamps, applies `assume_tz` if provided, otherwise treats as UTC.
+    pub fn to_datetime(self, assume_tz: Option<Tz>) -> DateTime<FixedOffset> {
+        match self {
+            Self::Aware(dt) => dt,
+            Self::Naive(naive) => match assume_tz {
+                Some(tz) => tz
+                    .from_local_datetime(&naive)
+                    .earliest()
+                    .map(|dt| dt.fixed_offset())
+                    .unwrap_or_else(|| naive.and_utc().fixed_offset()),
+                None => naive.and_utc().fixed_offset(),
+            },
+        }
+    }
+
+    /// Returns the seconds and nanoseconds since epoch for index storage.
+    ///
+    /// For naive timestamps, returns the raw seconds as if UTC (no offset applied).
+    /// For aware timestamps, returns the actual UTC seconds.
+    pub fn to_index_ts(self) -> (i64, u32) {
+        match self {
+            Self::Naive(naive) => {
+                let dt = naive.and_utc();
+                (dt.timestamp(), dt.timestamp_subsec_nanos())
+            }
+            Self::Aware(dt) => (dt.timestamp(), dt.timestamp_subsec_nanos()),
+        }
+    }
+
+    /// Returns true if the timestamp has no time zone information.
+    pub fn is_naive(self) -> bool {
+        matches!(self, Self::Naive(_))
+    }
+}
+
+// ---
+
 #[derive(Debug)]
 pub struct Timestamp<'a> {
     raw: &'a str,
-    parsed: OnceCell<Option<DateTime<FixedOffset>>>,
+    parsed: OnceCell<Option<ParsedTimestamp>>,
     unix_unit: Option<UnixTimestampUnit>,
-    assume_tz: Option<Tz>,
 }
 
 impl<'a> Timestamp<'a> {
@@ -24,7 +72,6 @@ impl<'a> Timestamp<'a> {
             raw: value,
             parsed: OnceCell::new(),
             unix_unit: None,
-            assume_tz: None,
         }
     }
 
@@ -41,34 +88,16 @@ impl<'a> Timestamp<'a> {
                 OnceCell::new()
             },
             unix_unit: unit,
-            assume_tz: self.assume_tz,
         }
     }
 
-    pub fn with_assume_tz(self, tz: Option<Tz>) -> Self {
-        Self {
-            raw: self.raw,
-            parsed: if tz == self.assume_tz {
-                self.parsed
-            } else {
-                OnceCell::new()
-            },
-            unix_unit: self.unix_unit,
-            assume_tz: tz,
-        }
+    pub fn parse(&self) -> Option<ParsedTimestamp> {
+        *self.parsed.get_or_init(|| self.reparse())
     }
 
-    pub fn parsed(&self) -> &Option<DateTime<FixedOffset>> {
-        self.parsed.get_or_init(|| self.reparse())
-    }
-
-    pub fn parse(&self) -> Option<DateTime<FixedOffset>> {
-        *self.parsed()
-    }
-
-    fn reparse(&self) -> Option<DateTime<FixedOffset>> {
-        if let Ok(ts) = self.raw.parse() {
-            Some(ts)
+    fn reparse(&self) -> Option<ParsedTimestamp> {
+        if let Ok(ts) = self.raw.parse::<DateTime<FixedOffset>>() {
+            Some(ParsedTimestamp::Aware(ts))
         } else if let Some(nt) = guess_number_type(self.raw.as_bytes()) {
             let ts = match (nt, self.unix_unit) {
                 (NumberType::Integer, unit) => self.raw.parse::<i64>().ok().and_then(|ts| {
@@ -108,18 +137,12 @@ impl<'a> Timestamp<'a> {
                     }
                 }),
             };
-            ts.map(|ts| ts.into())
+            ts.map(|ts| ParsedTimestamp::Aware(ts.into()))
         } else {
             NaiveDateTime::parse_from_str(self.raw, "%Y-%m-%d %H:%M:%S%.f")
                 .or_else(|_| NaiveDateTime::parse_from_str(self.raw, "%Y-%m-%dT%H:%M:%S%.f"))
                 .ok()
-                .and_then(|naive| {
-                    if let Some(tz) = self.assume_tz {
-                        tz.from_local_datetime(&naive).earliest().map(|dt| dt.fixed_offset())
-                    } else {
-                        Some(naive.and_utc().fixed_offset())
-                    }
-                })
+                .map(ParsedTimestamp::Naive)
         }
     }
 
@@ -128,8 +151,7 @@ impl<'a> Timestamp<'a> {
     }
 
     pub fn unix_utc(&self) -> Option<(i64, u32)> {
-        self.parsed()
-            .and_then(|ts| Some((ts.timestamp(), ts.timestamp_subsec_nanos())))
+        self.parse().map(|ts| ts.to_index_ts())
     }
 }
 

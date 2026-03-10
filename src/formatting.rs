@@ -194,6 +194,7 @@ pub struct RecordFormatterBuilder {
     theme: Option<Arc<Theme>>,
     raw_fields: bool,
     ts_formatter: Option<DateTimeFormatter>,
+    assume_tz: Option<chrono_tz::Tz>,
     hide_empty_fields: bool,
     flatten: bool,
     ascii: AsciiMode,
@@ -262,6 +263,13 @@ impl RecordFormatterBuilder {
         }
     }
 
+    pub fn with_assume_tz(self, value: Option<chrono_tz::Tz>) -> Self {
+        Self {
+            assume_tz: value,
+            ..self
+        }
+    }
+
     pub fn with_options(self, value: Formatting) -> Self {
         Self {
             cfg: Some(value),
@@ -318,6 +326,7 @@ impl RecordFormatterBuilder {
             unescape_fields: !self.raw_fields,
             prettify_field_keys: !self.raw_fields && cfg.prettify_field_keys.unwrap_or(true),
             ts_formatter,
+            assume_tz: self.assume_tz,
             ts_width,
             ts_stub,
             hide_empty_fields: self.hide_empty_fields,
@@ -384,6 +393,7 @@ pub struct RecordFormatter {
     unescape_fields: bool,
     prettify_field_keys: bool,
     ts_formatter: DateTimeFormatter,
+    assume_tz: Option<chrono_tz::Tz>,
     ts_width: TextWidth,
     ts_stub: String,
     hide_empty_fields: bool,
@@ -558,7 +568,7 @@ impl RecordFormatter {
                     {
                         Ok(())
                     } else if let Some(ts) = ts.parse() {
-                        self.ts_formatter.format(&mut buf, ts);
+                        self.ts_formatter.format(&mut buf, ts.to_datetime(self.assume_tz));
                         Ok(())
                     } else {
                         Err(())
