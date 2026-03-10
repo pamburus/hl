@@ -2,7 +2,8 @@
 use std::cell::OnceCell;
 
 // third-party imports
-use chrono::{DateTime, Duration, FixedOffset, NaiveDateTime};
+use chrono::{DateTime, Duration, FixedOffset, NaiveDateTime, TimeZone};
+use chrono_tz::Tz;
 
 // local imports
 use crate::app::UnixTimestampUnit;
@@ -14,6 +15,7 @@ pub struct Timestamp<'a> {
     raw: &'a str,
     parsed: OnceCell<Option<DateTime<FixedOffset>>>,
     unix_unit: Option<UnixTimestampUnit>,
+    assume_tz: Option<Tz>,
 }
 
 impl<'a> Timestamp<'a> {
@@ -22,6 +24,7 @@ impl<'a> Timestamp<'a> {
             raw: value,
             parsed: OnceCell::new(),
             unix_unit: None,
+            assume_tz: None,
         }
     }
 
@@ -38,6 +41,20 @@ impl<'a> Timestamp<'a> {
                 OnceCell::new()
             },
             unix_unit: unit,
+            assume_tz: self.assume_tz,
+        }
+    }
+
+    pub fn with_assume_tz(self, tz: Option<Tz>) -> Self {
+        Self {
+            raw: self.raw,
+            parsed: if tz == self.assume_tz {
+                self.parsed
+            } else {
+                OnceCell::new()
+            },
+            unix_unit: self.unix_unit,
+            assume_tz: tz,
         }
     }
 
@@ -96,7 +113,13 @@ impl<'a> Timestamp<'a> {
             NaiveDateTime::parse_from_str(self.raw, "%Y-%m-%d %H:%M:%S%.f")
                 .or_else(|_| NaiveDateTime::parse_from_str(self.raw, "%Y-%m-%dT%H:%M:%S%.f"))
                 .ok()
-                .map(|ts| ts.and_utc().into())
+                .and_then(|naive| {
+                    if let Some(tz) = self.assume_tz {
+                        tz.from_local_datetime(&naive).earliest().map(|dt| dt.fixed_offset())
+                    } else {
+                        Some(naive.and_utc().fixed_offset())
+                    }
+                })
         }
     }
 

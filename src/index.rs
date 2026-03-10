@@ -166,6 +166,7 @@ pub struct IndexerSettings<'a, FS: FileSystem> {
     pub delimiter: Delimiter,
     pub allow_prefix: bool,
     pub unix_ts_unit: Option<UnixTimestampUnit>,
+    pub assume_tz: Option<chrono_tz::Tz>,
     pub format: Option<InputFormat>,
 }
 
@@ -185,12 +186,14 @@ impl<'a, FS: FileSystem> IndexerSettings<'a, FS> {
             delimiter: Delimiter::default(),
             allow_prefix: false,
             unix_ts_unit: None,
+            assume_tz: None,
             format: None,
         }
     }
 
     pub fn hash(&self) -> Result<[u8; 32]> {
         let mut hasher = Sha256::new();
+        let assume_tz_name = self.assume_tz.map(|tz| tz.name());
         let data = (
             VALID_MAGIC,
             CURRENT_VERSION,
@@ -200,6 +203,7 @@ impl<'a, FS: FileSystem> IndexerSettings<'a, FS> {
             &self.delimiter,
             &self.allow_prefix,
             &self.unix_ts_unit,
+            &assume_tz_name,
             &self.format,
         );
         ciborium::into_writer(&data, &mut hasher)?;
@@ -300,7 +304,12 @@ where
             buffer_size: settings.buffer_size.into(),
             max_message_size: settings.max_message_size.into(),
             dir,
-            parser: Parser::new(ParserSettings::new(settings.fields, empty(), settings.unix_ts_unit)),
+            parser: Parser::new(ParserSettings::new(
+                settings.fields,
+                empty(),
+                settings.unix_ts_unit,
+                settings.assume_tz,
+            )),
             delimiter: settings.delimiter,
             allow_prefix: settings.allow_prefix,
             format: settings.format,

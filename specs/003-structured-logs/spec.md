@@ -7,6 +7,10 @@
 
 ## Clarifications
 
+### Session 2026-03-10
+
+- Q: How should naive datetimes (without time zone) be interpreted — as UTC or using a configurable default? → A: A new `--assume-time-zone` CLI option (and corresponding `HL_ASSUME_TIME_ZONE` env var and `assume-time-zone` config key) is introduced. When not specified, naive datetimes are displayed as-is with no offset shift. When explicitly set to a time zone identifier, naive datetimes are interpreted as being in that time zone and converted accordingly.
+
 ### Session 2025-11-02
 
 - Q: How should missing/null predefined fields be represented in the output record? → A: Missing predefined fields are omitted from the record entirely. However, the configuration file (`fields.predefined.time.show` and `fields.predefined.level.show`) controls rendering behavior for specific fields in output. Some fields like timestamp and level may be rendered with special placeholders when missing, as configured in the configuration file.
@@ -228,14 +232,17 @@ names = ["caller", "CALLER", "Caller"]
 ### Timestamp Parsing
 
 **Supported Formats:**
-- RFC-3339 with timezone (e.g., `2025-01-01T10:00:00Z`, `2025-01-01T10:00:00+01:00`)
+- RFC-3339 with time zone (e.g., `2025-01-01T10:00:00Z`, `2025-01-01T10:00:00+01:00`)
 - Unix timestamps (seconds, milliseconds, microseconds, nanoseconds)
-- ISO 8601 date-time format without timezone (e.g., `2025-01-01 10:00:00`, `2025-01-01 10:00:00.123`)
+- ISO 8601 date-time format without time zone, with space separator (e.g., `2025-01-01 10:00:00`, `2025-01-01 10:00:00.123`)
+- ISO 8601 date-time format without time zone, with `T` separator (e.g., `2025-01-01T10:00:00`, `2025-01-01T10:00:00.123`)
 
 **Behavior:**
 - Timestamps are automatically detected and converted to a normalized representation
-- Timezone information in RFC-3339 is preserved
-- Naive datetime (without timezone) assumes UTC
+- Time zone information in RFC-3339 is preserved
+- Naive datetimes (without time zone) are interpreted according to the `--assume-time-zone` option:
+  - When `--assume-time-zone` is not set (the default): the naive datetime is treated as-is and displayed without any offset shift
+  - When `--assume-time-zone` is set to a specific time zone: the naive datetime is interpreted as being in that time zone and converted accordingly
 
 **Unknown Format Handling:**
 - If a timestamp field value doesn't match any recognized format, it is treated as a string literal
@@ -280,12 +287,16 @@ When a numeric timestamp is detected, the unit (seconds, milliseconds, microseco
 
 **CLI Flags:**
 - `--unix-timestamp-unit <UNIT>` — Specify Unix timestamp unit for ambiguous numeric timestamps (auto/s/ms/us/ns)
+- `--assume-time-zone <TZ>` — Specify the time zone assumed for naive datetimes (without time zone) found in logs; when not set, no offset shift is applied and timestamps are displayed as they appear in the logs
 
 **Environment Variables:**
 - `HL_UNIX_TIMESTAMP_UNIT=ms` — Set Unix timestamp unit
+- `HL_ASSUME_TIME_ZONE=America/New_York` — Set the assumed time zone for naive datetimes
 
 **Configuration File** (`config.toml`):
 ```toml
+assume-time-zone = "a TZ identifier, e.g. UTC or America/New_York"
+
 [fields.predefined.time]
 names = ["field names to recognize as timestamp"]
 show = "placeholder display strategy when timestamp is missing"

@@ -359,6 +359,7 @@ fn run() -> Result<()> {
         },
         formatting: settings.formatting.clone(),
         time_zone: tz,
+        assume_tz: opt.assume_time_zone.or(settings.assume_time_zone),
         hide_empty_fields,
         sort: opt.sort,
         follow: opt.follow,

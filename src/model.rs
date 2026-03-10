@@ -4,7 +4,7 @@ use std::{
     collections::{HashMap, HashSet},
     convert::From,
     fmt,
-    iter::IntoIterator,
+    iter::{IntoIterator, empty},
     marker::PhantomData,
     ops::Range,
     str::FromStr,
@@ -534,6 +534,7 @@ impl RecordFilter for RecordFilterNone {
 
 pub struct ParserSettings {
     unix_ts_unit: Option<UnixTimestampUnit>,
+    assume_tz: Option<chrono_tz::Tz>,
     level: Vec<(HashMap<String, Level>, Option<Level>)>,
     blocks: Vec<ParserSettingsBlock>,
     ignore: Vec<Pattern>,
@@ -544,9 +545,11 @@ impl ParserSettings {
         predefined: &PredefinedFields,
         ignore: I,
         unix_ts_unit: Option<UnixTimestampUnit>,
+        assume_tz: Option<chrono_tz::Tz>,
     ) -> Self {
         let mut result = Self {
             unix_ts_unit,
+            assume_tz,
             level: Vec::new(),
             blocks: vec![ParserSettingsBlock::default()],
             ignore: ignore.into_iter().map(Pattern::new).collect(),
@@ -659,7 +662,7 @@ impl ParserSettings {
 impl Default for ParserSettings {
     #[inline]
     fn default() -> Self {
-        Self::new(&PredefinedFields::default(), Vec::new(), None)
+        Self::new(Default::default(), empty::<&String>(), None, None)
     }
 }
 
@@ -788,7 +791,9 @@ impl FieldSettings {
                     s
                 };
                 if !s.is_empty() {
-                    let ts = Timestamp::new(s).with_unix_unit(ps.unix_ts_unit);
+                    let ts = Timestamp::new(s)
+                        .with_unix_unit(ps.unix_ts_unit)
+                        .with_assume_tz(ps.assume_tz);
                     to.ts = Some(ts);
                     true
                 } else {

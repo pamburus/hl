@@ -1,3 +1,5 @@
+use chrono_tz::Tz;
+
 use super::*;
 
 #[test]
@@ -18,7 +20,7 @@ fn test_parse() {
     test("1597994448.123", None, 1597994448, 123000000, 0);
     test("1597994448.123456", None, 1597994448, 123456000, 0);
     test("1597994448.123456789", None, 1597994448, 123456789, 0);
-    test("-1.123456789", None, -2, 1000000000 - 123456789, 0);
+    test("-1.123456789", None, -2, 1_000_000_000 - 123456789, 0);
     test(
         "1597994448123.456789",
         Some(UnixTimestampUnit::Milliseconds),
@@ -40,6 +42,33 @@ fn test_parse() {
         123456789,
         0,
     );
+}
+
+#[test]
+fn test_parse_naive_assume_tz() {
+    let test = |s, tz: Option<Tz>, unix_timestamp, nanos| {
+        let ts = Timestamp::new(s).with_assume_tz(tz).parse().unwrap();
+        assert_eq!(ts.timestamp(), unix_timestamp);
+        assert_eq!(ts.timestamp_subsec_nanos(), nanos);
+    };
+    // No assumed time zone: naive datetime treated as UTC (offset 0)
+    test("2020-08-21 07:20:48", None, 1597994448, 0);
+    test("2020-08-21T07:20:48", None, 1597994448, 0);
+    test("2020-08-21T07:20:48.123", None, 1597994448, 123_000_000);
+    // UTC explicit: same result as no assumed time zone
+    test("2020-08-21 07:20:48", Some(Tz::UTC), 1597994448, 0);
+    test("2020-08-21T07:20:48", Some(Tz::UTC), 1597994448, 0);
+    // UTC+2 (Europe/Berlin in summer/CEST): 07:20:48 local = 05:20:48 UTC
+    test("2020-08-21 07:20:48", Some(Tz::Europe__Berlin), 1597987248, 0);
+    test("2020-08-21T07:20:48", Some(Tz::Europe__Berlin), 1597987248, 0);
+    // Timezone offset does not affect RFC 3339 timestamps (they carry their own offset)
+    let rfc = "2020-08-21T07:20:48+00:00";
+    let ts_no_tz = Timestamp::new(rfc).with_assume_tz(None).parse().unwrap();
+    let ts_berlin = Timestamp::new(rfc)
+        .with_assume_tz(Some(Tz::Europe__Berlin))
+        .parse()
+        .unwrap();
+    assert_eq!(ts_no_tz.timestamp(), ts_berlin.timestamp());
 }
 
 #[test]
