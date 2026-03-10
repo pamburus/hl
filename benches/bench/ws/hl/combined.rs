@@ -40,7 +40,7 @@ pub(super) fn bench(c: &mut Criterion) {
         c.throughput(Throughput::Bytes(input.len() as u64));
 
         let settings = Settings::default();
-        let parser = Parser::new(ParserSettings::new(&settings.fields.predefined, empty(), None, None));
+        let parser = Parser::new(ParserSettings::new(&settings.fields.predefined, empty(), None));
         let filter = Filter::default();
         let formatter = RecordFormatterBuilder::new()
             .with_theme(Arc::new(Theme::embedded(THEME).unwrap()))

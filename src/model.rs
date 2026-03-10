@@ -4,7 +4,7 @@ use std::{
     collections::{HashMap, HashSet},
     convert::From,
     fmt,
-    iter::{IntoIterator, empty},
+    iter::IntoIterator,
     marker::PhantomData,
     ops::Range,
     str::FromStr,
@@ -534,7 +534,6 @@ impl RecordFilter for RecordFilterNone {
 
 pub struct ParserSettings {
     unix_ts_unit: Option<UnixTimestampUnit>,
-    assume_tz: Option<chrono_tz::Tz>,
     level: Vec<(HashMap<String, Level>, Option<Level>)>,
     blocks: Vec<ParserSettingsBlock>,
     ignore: Vec<Pattern>,
@@ -545,11 +544,9 @@ impl ParserSettings {
         predefined: &PredefinedFields,
         ignore: I,
         unix_ts_unit: Option<UnixTimestampUnit>,
-        assume_tz: Option<chrono_tz::Tz>,
     ) -> Self {
         let mut result = Self {
             unix_ts_unit,
-            assume_tz,
             level: Vec::new(),
             blocks: vec![ParserSettingsBlock::default()],
             ignore: ignore.into_iter().map(Pattern::new).collect(),
@@ -662,7 +659,7 @@ impl ParserSettings {
 impl Default for ParserSettings {
     #[inline]
     fn default() -> Self {
-        Self::new(Default::default(), empty::<&String>(), None, None)
+        Self::new(Default::default(), std::iter::empty::<&String>(), None)
     }
 }
 
@@ -791,9 +788,7 @@ impl FieldSettings {
                     s
                 };
                 if !s.is_empty() {
-                    let ts = Timestamp::new(s)
-                        .with_unix_unit(ps.unix_ts_unit)
-                        .with_assume_tz(ps.assume_tz);
+                    let ts = Timestamp::new(s).with_unix_unit(ps.unix_ts_unit);
                     to.ts = Some(ts);
                     true
                 } else {
@@ -1717,6 +1712,7 @@ pub struct Filter {
     pub level: Option<Level>,
     pub since: Option<DateTime<Utc>>,
     pub until: Option<DateTime<Utc>>,
+    pub assume_tz: Option<chrono_tz::Tz>,
 }
 
 impl Filter {
@@ -1730,6 +1726,7 @@ impl RecordFilter for Filter {
     fn apply<'a>(&self, record: &Record<'a>) -> bool {
         if self.since.is_some() || self.until.is_some() {
             if let Some(ts) = record.ts.as_ref().and_then(|ts| ts.parse()) {
+                let ts = ts.to_datetime(self.assume_tz);
                 if let Some(since) = self.since {
                     if ts < since {
                         return false;

@@ -178,6 +178,7 @@ fn run() -> Result<()> {
     // Configure time format.
     let time_format = LinuxDateFormat::new(&opt.time_format).compile();
     // Configure filter.
+    let assume_tz = opt.assume_time_zone.or(settings.assume_time_zone);
     let filter = hl::Filter {
         fields: hl::FieldFilterSet::new(&opt.filter)?,
         level: opt.level.map(|x| x.into()),
@@ -191,6 +192,7 @@ fn run() -> Result<()> {
         } else {
             None
         },
+        assume_tz,
     };
     // Configure hide_empty_fields
     let hide_empty_fields = !opt.show_empty_fields && opt.hide_empty_fields;
@@ -359,7 +361,7 @@ fn run() -> Result<()> {
         },
         formatting: settings.formatting.clone(),
         time_zone: tz,
-        assume_tz: opt.assume_time_zone.or(settings.assume_time_zone),
+        assume_tz,
         hide_empty_fields,
         sort: opt.sort,
         follow: opt.follow,
