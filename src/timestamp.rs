@@ -55,6 +55,32 @@ impl ParsedTimestamp {
     pub fn is_naive(self) -> bool {
         matches!(self, Self::Naive(_))
     }
+
+    /// Returns the UTC timestamp in seconds since epoch.
+    ///
+    /// For naive timestamps, treats the datetime as UTC.
+    pub fn timestamp(self) -> i64 {
+        match self {
+            Self::Naive(naive) => naive.and_utc().timestamp(),
+            Self::Aware(dt) => dt.timestamp(),
+        }
+    }
+
+    /// Returns the nanosecond component of the timestamp.
+    pub fn timestamp_subsec_nanos(self) -> u32 {
+        match self {
+            Self::Naive(naive) => naive.and_utc().timestamp_subsec_nanos(),
+            Self::Aware(dt) => dt.timestamp_subsec_nanos(),
+        }
+    }
+
+    /// Returns the timezone offset for aware timestamps, or UTC offset (0) for naive timestamps.
+    pub fn timezone(self) -> FixedOffset {
+        match self {
+            Self::Naive(_) => FixedOffset::east_opt(0).unwrap(),
+            Self::Aware(dt) => *dt.offset(),
+        }
+    }
 }
 
 // ---

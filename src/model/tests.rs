@@ -427,6 +427,7 @@ fn test_record_filter_all() {
         since: Some(Utc.with_ymd_and_hms(2021, 1, 1, 0, 0, 0).unwrap()),
         until: Some(Utc.with_ymd_and_hms(2021, 1, 2, 0, 0, 0).unwrap()),
         fields: FieldFilterSet::new(["mod=test", "v=42"]).unwrap(),
+        assume_tz: None,
     };
     let record = parse(r#"{"level":"error","ts":"2021-01-01T00:00:00Z","mod":"test","v":42}"#);
     assert!(filter.apply(&record));

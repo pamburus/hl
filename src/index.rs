@@ -308,7 +308,6 @@ where
                 settings.fields,
                 empty(),
                 settings.unix_ts_unit,
-                settings.assume_tz,
             )),
             delimiter: settings.delimiter,
             allow_prefix: settings.allow_prefix,

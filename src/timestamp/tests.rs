@@ -47,7 +47,7 @@ fn test_parse() {
 #[test]
 fn test_parse_naive_assume_tz() {
     let test = |s, tz: Option<Tz>, unix_timestamp, nanos| {
-        let ts = Timestamp::new(s).with_assume_tz(tz).parse().unwrap();
+        let ts = Timestamp::new(s).parse().unwrap().to_datetime(tz);
         assert_eq!(ts.timestamp(), unix_timestamp);
         assert_eq!(ts.timestamp_subsec_nanos(), nanos);
     };
@@ -63,11 +63,11 @@ fn test_parse_naive_assume_tz() {
     test("2020-08-21T07:20:48", Some(Tz::Europe__Berlin), 1597987248, 0);
     // Timezone offset does not affect RFC 3339 timestamps (they carry their own offset)
     let rfc = "2020-08-21T07:20:48+00:00";
-    let ts_no_tz = Timestamp::new(rfc).with_assume_tz(None).parse().unwrap();
+    let ts_no_tz = Timestamp::new(rfc).parse().unwrap().to_datetime(None);
     let ts_berlin = Timestamp::new(rfc)
-        .with_assume_tz(Some(Tz::Europe__Berlin))
         .parse()
-        .unwrap();
+        .unwrap()
+        .to_datetime(Some(Tz::Europe__Berlin));
     assert_eq!(ts_no_tz.timestamp(), ts_berlin.timestamp());
 }
 
