@@ -91,7 +91,7 @@ pub mod formatting {
         c.measurement_time(Duration::from_secs(1));
 
         let tsr = || Timestamp::new("2020-06-27T00:48:30.466249792+00:00");
-        let ts = || tsr().parse().unwrap();
+        let ts = || tsr().parse().unwrap().to_datetime(None);
         let tz = |secs| Tz::FixedOffset(FixedOffset::east_opt(secs).unwrap());
 
         c.bench_function("chrono:naive-local", |b| {
