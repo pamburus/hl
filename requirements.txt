@@ -1,4 +1,5 @@
-jsonschema
-pyyaml
-rich
-ruamel.yaml
+jsonschema>=4.0.0,<5
+pygments>=2.19.2,<3
+pyyaml>=6.0,<7
+rich>=13.0.0,<15
+ruamel.yaml>=0.18.0,<1
