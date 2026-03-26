@@ -294,11 +294,11 @@ fn test_chrono_english_in_syntax(#[case] input: &str) {
     let tz = Tz::FixedOffset(Utc.fix());
     let format = DateTimeFormat::new();
 
-    // Test that "in X" future syntax does not work (chrono-english doesn't support it)
+    // Test that "in X" future syntax does not work (interim doesn't support it)
     let result = parse_time(input, &tz, &format);
     assert!(
         result.is_err(),
-        "'{}' should fail (not supported by chrono-english)",
+        "'{}' should fail (not supported by interim)",
         input
     );
 }
