@@ -5,18 +5,6 @@
 
 version: 2
 updates:
-  - package-ecosystem: "pip"
-    directory: "/"
-    schedule:
-      interval: "weekly"
-      day: "monday"
-      time: "04:00"
-    labels:
-      - "dependencies"
-      - "python"
-    commit-message:
-      prefix: "build"
-      include: "scope"
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
