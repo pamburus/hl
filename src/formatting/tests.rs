@@ -3082,3 +3082,16 @@ fn test_prettify_field_keys_raw_fields_override() {
         result
     );
 }
+
+#[test]
+fn test_nested_object_key_with_escaped_quotes() {
+    let value = json_raw_value(r#"{"k:{\"type\":\"Ready\"}":{"f:status":{}}}"#);
+    let rec = Record {
+        message: Some(RawValue::String(EncodedString::json(r#""m""#))),
+        level: Some(Level::Info),
+        fields: RecordFields::from_slice(&[("a", RawValue::from(RawObject::Json(&value)))]),
+        ..Default::default()
+    };
+
+    format_no_color(&rec);
+}
