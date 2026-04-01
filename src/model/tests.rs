@@ -919,3 +919,22 @@ fn test_number_equality_scientific() {
 
     assert_eq!(n1, n2, "10000000000 should equal 1e10");
 }
+
+#[test]
+fn test_object_key_default() {
+    let key = ObjectKey::default();
+    assert_eq!(&*key, "");
+}
+
+#[test]
+fn test_object_key_deserialize_invalid_type() {
+    let result = json::from_str::<ObjectKey>(r#"42"#);
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_object_parser_invalid_type() {
+    let obj = RawObject::Json(json::from_str(r#"12"#).unwrap());
+    let result = obj.parse();
+    assert!(matches!(result, Err(Error::JsonParseError(_))));
+}

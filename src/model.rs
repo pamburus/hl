@@ -680,17 +680,7 @@ impl ParserSettingsBlock {
         pc: &mut PriorityController,
         is_root: bool,
     ) -> bool {
-        let done = match self.fields.get(key) {
-            Some((field, priority)) => {
-                let kind = field.kind();
-                if let Some(kind) = kind {
-                    pc.prioritize(kind, *priority, |pc| field.apply_ctx(ps, value, to, pc))
-                } else {
-                    field.apply_ctx(ps, value, to, pc)
-                }
-            }
-            None => false,
-        };
+        let done = self.apply_match(ps, key, value, to, pc);
         if is_root && done {
             to.predefined.push((key, value)).ok();
         }
@@ -707,24 +697,25 @@ impl ParserSettingsBlock {
         false
     }
 
-    #[inline]
-    fn apply_each_ctx<'a, 'i, I>(
+    fn apply_match<'a>(
         &self,
         ps: &ParserSettings,
-        items: I,
+        key: &str,
+        value: RawValue<'a>,
         to: &mut Record<'a>,
-        ctx: &mut PriorityController,
-        is_root: bool,
-    ) -> bool
-    where
-        I: IntoIterator<Item = &'i (&'a str, RawValue<'a>)>,
-        'a: 'i,
-    {
-        let mut any_matched = false;
-        for (key, value) in items {
-            any_matched |= self.apply(ps, key, *value, to, ctx, is_root);
+        pc: &mut PriorityController,
+    ) -> bool {
+        match self.fields.get(key) {
+            Some((field, priority)) => {
+                let kind = field.kind();
+                if let Some(kind) = kind {
+                    pc.prioritize(kind, *priority, |pc| field.apply_ctx(ps, value, to, pc))
+                } else {
+                    field.apply_ctx(ps, value, to, pc)
+                }
+            }
+            None => false,
         }
-        any_matched
     }
 }
 
@@ -854,7 +845,9 @@ impl FieldSettings {
                 RawValue::Object(value) => {
                     let mut object = Object::default();
                     if value.parse_into(&mut object).is_ok() {
-                        ps.blocks[nested].apply_each_ctx(ps, object.fields.iter(), to, ctx, false);
+                        for (key, value) in object.fields.iter() {
+                            ps.blocks[nested].apply_match(ps, key, *value, to, ctx);
+                        }
                     }
                     false
                 }
@@ -1760,7 +1753,7 @@ impl RecordFilter for Filter {
 
 #[derive(Default)]
 pub struct Object<'a, const N: usize = 32> {
-    pub fields: heapopt::Vec<(&'a str, RawValue<'a>), N>,
+    pub fields: heapopt::Vec<(ObjectKey<'a>, RawValue<'a>), N>,
 }
 
 impl<'a, const N: usize> Object<'a, N> {
@@ -1773,9 +1766,112 @@ impl<'a, const N: usize> Object<'a, N> {
 
     #[inline]
     pub fn set_from_json(&mut self, s: &'a str) -> Result<()> {
-        let visitor = ObjectVisitor::<json::value::RawValue, N>::new(&mut self.fields);
+        let visitor = ObjectKeyVisitor::<N>::new(&mut self.fields);
         let mut deserializer = json::Deserializer::from_str(s);
         deserializer.deserialize_map(visitor).map_err(Error::JsonParseError)
+    }
+}
+
+// ---
+
+/// A key in a parsed JSON object. Borrows from the input when possible (no escape sequences),
+/// otherwise stores a cheaply-cloneable `Arc<str>`.
+#[derive(Clone, Debug)]
+pub enum ObjectKey<'a> {
+    Borrowed(&'a str),
+    Owned(Arc<str>),
+}
+
+impl PartialEq<&str> for ObjectKey<'_> {
+    #[inline]
+    fn eq(&self, other: &&str) -> bool {
+        &**self == *other
+    }
+}
+
+impl Default for ObjectKey<'_> {
+    #[inline]
+    fn default() -> Self {
+        Self::Borrowed("")
+    }
+}
+
+impl std::ops::Deref for ObjectKey<'_> {
+    type Target = str;
+
+    #[inline]
+    fn deref(&self) -> &str {
+        match self {
+            Self::Borrowed(s) => s,
+            Self::Owned(s) => s,
+        }
+    }
+}
+
+impl<'a> Deserialize<'a> for ObjectKey<'a> {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'a>,
+    {
+        struct ObjectKeyVisitor;
+
+        impl<'a> Visitor<'a> for ObjectKeyVisitor {
+            type Value = ObjectKey<'a>;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str("a string")
+            }
+
+            #[inline]
+            fn visit_borrowed_str<E>(self, v: &'a str) -> Result<ObjectKey<'a>, E> {
+                Ok(ObjectKey::Borrowed(v))
+            }
+
+            #[inline]
+            fn visit_str<E>(self, v: &str) -> Result<ObjectKey<'a>, E> {
+                Ok(ObjectKey::Owned(Arc::from(v)))
+            }
+
+            #[inline]
+            fn visit_string<E>(self, v: String) -> Result<ObjectKey<'a>, E> {
+                Ok(ObjectKey::Owned(Arc::from(v)))
+            }
+        }
+
+        deserializer.deserialize_str(ObjectKeyVisitor)
+    }
+}
+
+// ---
+
+struct ObjectKeyVisitor<'a, 't, const N: usize> {
+    target: &'t mut heapopt::Vec<(ObjectKey<'a>, RawValue<'a>), N>,
+}
+
+impl<'a, 't, const N: usize> ObjectKeyVisitor<'a, 't, N> {
+    #[inline]
+    fn new(target: &'t mut heapopt::Vec<(ObjectKey<'a>, RawValue<'a>), N>) -> Self {
+        Self { target }
+    }
+}
+
+impl<'a, 'r, const N: usize> Visitor<'a> for ObjectKeyVisitor<'a, 'r, N> {
+    type Value = ();
+
+    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+        formatter.write_str("json object")
+    }
+
+    #[inline]
+    fn visit_map<M: MapAccess<'a>>(self, mut access: M) -> Result<Self::Value, M::Error> {
+        self.target.clear();
+        self.target.reserve(access.size_hint().unwrap_or(0));
+
+        while let Some((key, value)) = access.next_entry::<ObjectKey<'a>, &'a json::value::RawValue>()? {
+            self.target.push((key, value.into()));
+        }
+
+        Ok(())
     }
 }
 
