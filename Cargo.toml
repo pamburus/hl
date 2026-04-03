@@ -52,7 +52,7 @@ anstream = "1"
 bytefmt = "0.1"
 capnp.workspace = true
 chrono = { version = "0.4", default-features = false, features = ["clock", "serde", "std"] }
-chrono-english = "0.1"
+interim = { version = "0.2", features = ["chrono_0_4"] }
 chrono-tz = { version = "0.10", features = ["serde"] }
 ciborium = "0.2"
 clap = { workspace = true }
