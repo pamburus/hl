@@ -35,6 +35,7 @@ use crossbeam_channel as channel;
 
 use crossbeam_utils::thread;
 use derive_more::{Deref, From};
+use digest_io::IoWrapper;
 use itertools::izip;
 use nonzero_ext::nonzero;
 use serde::{Deserialize, Serialize};
@@ -190,7 +191,6 @@ impl<'a, FS: FileSystem> IndexerSettings<'a, FS> {
     }
 
     pub fn hash(&self) -> Result<[u8; 32]> {
-        let mut hasher = Sha256::new();
         let data = (
             VALID_MAGIC,
             CURRENT_VERSION,
@@ -202,8 +202,9 @@ impl<'a, FS: FileSystem> IndexerSettings<'a, FS> {
             &self.unix_ts_unit,
             &self.format,
         );
+        let mut hasher = IoWrapper(Sha256::new());
         ciborium::into_writer(&data, &mut hasher)?;
-        Ok(hasher.finalize().into())
+        Ok(hasher.0.finalize().into())
     }
 }
 

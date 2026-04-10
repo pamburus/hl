@@ -68,6 +68,7 @@ crossbeam-queue = "0.3"
 crossbeam-utils = "0.8"
 deko = "0.6"
 derive_more = { version = "2", features = ["deref", "deref_mut", "display", "eq", "from", "into", "into_iterator"] }
+digest-io = "0.1"
 dirs = "6"
 dirs-sys = "0.5"
 encstr = { path = "./crates/encstr" }
@@ -105,7 +106,7 @@ serde = { version = "1", features = ["derive", "rc"] }
 serde-logfmt = { path = "./crates/serde-logfmt" }
 serde_plain = "1"
 serde-value = "0.7"
-sha2 = "0.10"
+sha2 = "0.11"
 shellwords.workspace = true
 signal-hook = "0.4"
 snap = "1"
