@@ -1,7 +1,7 @@
 // third-party imports
 use chrono::{DateTime, Datelike, Duration, NaiveDateTime, Offset, Utc};
-use chrono_english::{Dialect, parse_date_string};
 use humantime::parse_duration;
+use interim::{Dialect, parse_date_string};
 
 // workspace imports
 use enumset_ext::EnumSetExt;
@@ -46,7 +46,7 @@ fn human(s: &str, tz: &Tz) -> Option<DateTime<Tz>> {
     let now = Utc::now().with_timezone(tz);
 
     // Add "last " prefix to bare weekday/month names for backward compatibility.
-    // htp doesn't support these, but chrono-english interprets them as future by default.
+    // interim interprets bare weekday/month names as future by default.
     // Also handle "number month" patterns like "15 april".
     let trimmed = s.trim();
     let words: Vec<&str> = trimmed.split_whitespace().collect();
@@ -73,7 +73,7 @@ fn human(s: &str, tz: &Tz) -> Option<DateTime<Tz>> {
     }
 
     // Fix "today" and "yesterday" to use start-of-day (00:00:00) for log filtering.
-    // chrono-english defaults to current time, which is not useful for querying logs.
+    // interim defaults to current time, which is not useful for querying logs.
     let result = match s.trim().to_lowercase().as_str() {
         "today" | "yesterday" => result
             .date_naive()

@@ -262,7 +262,7 @@ fn test_relative_time_boundary_cases(#[case] input: &str, #[case] msg: &str) {
 #[case("5s", false, "Should reject '5s' (ambiguous bare duration)")]
 #[case("tomorrow", true, "Should parse 'tomorrow' successfully")]
 #[case("2027", true, "Should parse '2027' successfully")]
-fn test_chrono_english_past_timestamps(#[case] input: &str, #[case] should_succeed: bool, #[case] msg: &str) {
+fn test_interim_past_timestamps(#[case] input: &str, #[case] should_succeed: bool, #[case] msg: &str) {
     let tz = Tz::FixedOffset(Utc.fix());
     let format = DateTimeFormat::new();
 
@@ -279,7 +279,7 @@ fn test_chrono_english_past_timestamps(#[case] input: &str, #[case] should_succe
 #[case("30 minutes ago")]
 #[case("2 days ago")]
 #[case("1 week ago")]
-fn test_chrono_english_ago_syntax(#[case] input: &str) {
+fn test_interim_ago_syntax(#[case] input: &str) {
     let tz = Tz::FixedOffset(Utc.fix());
     let format = DateTimeFormat::new();
 
@@ -290,21 +290,17 @@ fn test_chrono_english_ago_syntax(#[case] input: &str) {
 #[rstest]
 #[case("in 1 hour")]
 #[case("in 2 days")]
-fn test_chrono_english_in_syntax(#[case] input: &str) {
+fn test_interim_in_syntax(#[case] input: &str) {
     let tz = Tz::FixedOffset(Utc.fix());
     let format = DateTimeFormat::new();
 
-    // Test that "in X" future syntax does not work (chrono-english doesn't support it)
+    // Test that "in X" future syntax does not work (interim doesn't support it)
     let result = parse_time(input, &tz, &format);
-    assert!(
-        result.is_err(),
-        "'{}' should fail (not supported by chrono-english)",
-        input
-    );
+    assert!(result.is_err(), "'{}' should fail (not supported by interim)", input);
 }
 
 #[test]
-fn test_chrono_english_now() {
+fn test_interim_now() {
     let tz = Tz::FixedOffset(Utc.fix());
     let format = DateTimeFormat::new();
 
