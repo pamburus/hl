@@ -94,6 +94,80 @@ fn test_cat_msg_array() {
     );
 }
 
+fn otel_field_options() -> FieldOptions {
+    FieldOptions {
+        settings: settings::Fields {
+            predefined: settings::Settings::default().fields.predefined.clone(),
+            ..Default::default()
+        },
+        ..FieldOptions::default()
+    }
+}
+
+#[test]
+fn test_cat_otel_pascal_case() {
+    let input = input(
+        r#"{"Timestamp":"2026-04-16T10:15:30.123Z","SeverityText":"INFO","Body":"server started","service.name":"api"}"#,
+    );
+    let mut output = Vec::new();
+    let app = App::new(options().with_fields(otel_field_options()));
+    app.run(vec![input], &mut output).unwrap();
+    assert_eq!(
+        std::str::from_utf8(&output).unwrap(),
+        "2026-04-16 10:15:30.123 |INF| server started service.name=api\n",
+    );
+}
+
+#[test]
+fn test_cat_otel_snake_case() {
+    let input = input(
+        r#"{"timestamp":"2026-04-16T10:15:31.456Z","severity_text":"WARN","body":"slow request","duration_ms":1523}"#,
+    );
+    let mut output = Vec::new();
+    let app = App::new(options().with_fields(otel_field_options()));
+    app.run(vec![input], &mut output).unwrap();
+    assert_eq!(
+        std::str::from_utf8(&output).unwrap(),
+        "2026-04-16 10:15:31.456 |WRN| slow request duration-ms=1523\n",
+    );
+}
+
+#[test]
+fn test_cat_otel_severity_number_only() {
+    let input = input(r#"{"Timestamp":"2026-04-16T10:15:32.000Z","SeverityNumber":17,"Body":"db failure"}"#);
+    let mut output = Vec::new();
+    let app = App::new(options().with_fields(otel_field_options()));
+    app.run(vec![input], &mut output).unwrap();
+    assert_eq!(
+        std::str::from_utf8(&output).unwrap(),
+        "2026-04-16 10:15:32.000 |ERR| db failure\n",
+    );
+}
+
+#[test]
+fn test_cat_otel_fatal_maps_to_error() {
+    let input = input(r#"{"Timestamp":"2026-04-16T10:15:33.000Z","SeverityText":"FATAL","Body":"unrecoverable"}"#);
+    let mut output = Vec::new();
+    let app = App::new(options().with_fields(otel_field_options()));
+    app.run(vec![input], &mut output).unwrap();
+    assert_eq!(
+        std::str::from_utf8(&output).unwrap(),
+        "2026-04-16 10:15:33.000 |ERR| unrecoverable\n",
+    );
+}
+
+#[test]
+fn test_cat_otel_numbered_severity_text() {
+    let input = input(r#"{"Timestamp":"2026-04-16T10:15:34.000Z","SeverityText":"INFO2","Body":"heartbeat"}"#);
+    let mut output = Vec::new();
+    let app = App::new(options().with_fields(otel_field_options()));
+    app.run(vec![input], &mut output).unwrap();
+    assert_eq!(
+        std::str::from_utf8(&output).unwrap(),
+        "2026-04-16 10:15:34.000 |INF| heartbeat\n",
+    );
+}
+
 #[test]
 fn test_cat_field_exclude() {
     let input =

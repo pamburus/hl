@@ -30,6 +30,44 @@ fn test_load_settings_k8s() {
 }
 
 #[test]
+fn test_default_settings_otel_fields() {
+    let settings = Settings::default();
+    let time_names = &settings.fields.predefined.time.0.names;
+    assert!(
+        time_names.iter().any(|n| n == "ObservedTimestamp"),
+        "ObservedTimestamp missing from time.names: {time_names:?}"
+    );
+    let message_names = &settings.fields.predefined.message.0.names;
+    assert!(
+        message_names.iter().any(|n| n == "Body"),
+        "Body missing from message.names: {message_names:?}"
+    );
+
+    let variants = &settings.fields.predefined.level.variants;
+    let text_variant = variants
+        .iter()
+        .find(|v| v.names.iter().any(|n| n == "SeverityText"))
+        .expect("SeverityText variant missing");
+    assert!(
+        text_variant.values[&InfallibleLevel::new(Level::Error)]
+            .iter()
+            .any(|v| v == "fatal"),
+        "fatal should map to error in SeverityText variant"
+    );
+
+    let num_variant = variants
+        .iter()
+        .find(|v| v.names.iter().any(|n| n == "SeverityNumber"))
+        .expect("SeverityNumber variant missing");
+    assert!(
+        num_variant.values[&InfallibleLevel::new(Level::Error)]
+            .iter()
+            .any(|v| v == "21"),
+        "OTel FATAL number 21 should map to error in SeverityNumber variant"
+    );
+}
+
+#[test]
 fn test_unknown_level_values() {
     let variant = RawLevelFieldVariant {
         names: vec!["level".into()],

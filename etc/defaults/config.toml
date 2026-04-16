@@ -69,7 +69,9 @@ names = [
   "TIMESTAMP",
   "_SOURCE_REALTIME_TIMESTAMP",
   "__REALTIME_TIMESTAMP",
-  "@timestamp"
+  "@timestamp",
+  "ObservedTimestamp",
+  "observed_timestamp"
 ]
 
 # Configuration of the predefined "logger" field.
@@ -103,9 +105,36 @@ warning = [5, 4]
 info = [6]
 debug = [7]
 
+# OpenTelemetry severity text.
+# See https://opentelemetry.io/docs/specs/otel/logs/data-model/#field-severitytext
+[[fields.predefined.level.variants]]
+names = ["SeverityText", "severity_text"]
+
+[fields.predefined.level.variants.values]
+trace = ["trace", "trace2", "trace3", "trace4"]
+debug = ["debug", "debug2", "debug3", "debug4"]
+info = ["info", "info2", "info3", "info4"]
+warning = ["warn", "warn2", "warn3", "warn4"]
+error = [
+  "error", "error2", "error3", "error4",
+  "fatal", "fatal2", "fatal3", "fatal4"
+]
+
+# OpenTelemetry severity number.
+# See https://opentelemetry.io/docs/specs/otel/logs/data-model/#field-severitynumber
+[[fields.predefined.level.variants]]
+names = ["SeverityNumber", "severity_number"]
+
+[fields.predefined.level.variants.values]
+trace = [1, 2, 3, 4]
+debug = [5, 6, 7, 8]
+info = [9, 10, 11, 12]
+warning = [13, 14, 15, 16]
+error = [17, 18, 19, 20, 21, 22, 23, 24]
+
 # Configuration of the predefined "message" field.
 [fields.predefined.message]
-names = ["msg", "message", "MESSAGE", "Message"]
+names = ["msg", "message", "MESSAGE", "Message", "Body", "body"]
 
 # Configuration of the predefined "caller" field.
 [fields.predefined.caller]
