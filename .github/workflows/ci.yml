@@ -35,7 +35,7 @@ jobs:
         uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
 
       - name: Setup taplo
-        uses: uncenter/setup-taplo@4f203fdb4f3b1e289c8382cf90d8397d2338df2e # v1.0.8
+        uses: uncenter/setup-taplo@b18c8c8302695fe63d6853bc004006215ac52b91 # v2
 
       - name: Setup tombi
         uses: tombi-toml/setup-tombi@04531a538f559c50feccb0da6f79a41d4048ad93 # v1.0.9
