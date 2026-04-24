@@ -1,7 +1,6 @@
 #:schema https://raw.githubusercontent.com/pamburus/hl/v0.36.1/schema/json/config.schema.json
 
-# Preset for OpenTelemetry logs serialized as flat JSON.
-# Covers both OTLP JSON (PascalCase) and snake_case conventions.
+# Preset for OpenTelemetry logs serialized as flat JSON (OTLP JSON).
 # See https://opentelemetry.io/docs/specs/otel/logs/data-model/
 
 # Settings for fields processing.
@@ -11,9 +10,9 @@ hide = []
 
 # Configuration of the predefined set of fields.
 [fields.predefined]
-time.names = ["Timestamp", "timestamp", "ObservedTimestamp", "observed_timestamp"]
-logger.names = ["InstrumentationScope.Name", "scope.name"]
-message.names = ["Body", "body"]
+time.names = ["Timestamp", "ObservedTimestamp"]
+logger.names = ["InstrumentationScope.Name"]
+message.names = ["Body"]
 caller.names = ["code.function"]
 caller-file.names = ["code.filepath"]
 caller-line.names = ["code.lineno"]
@@ -21,7 +20,7 @@ caller-line.names = ["code.lineno"]
 # OpenTelemetry severity text.
 # See https://opentelemetry.io/docs/specs/otel/logs/data-model/#field-severitytext
 [[fields.predefined.level.variants]]
-names = ["SeverityText", "severity_text"]
+names = ["SeverityText"]
 
 [fields.predefined.level.variants.values]
 trace = ["trace", "trace2", "trace3", "trace4"]
@@ -36,7 +35,7 @@ error = [
 # OpenTelemetry severity number.
 # See https://opentelemetry.io/docs/specs/otel/logs/data-model/#field-severitynumber
 [[fields.predefined.level.variants]]
-names = ["SeverityNumber", "severity_number"]
+names = ["SeverityNumber"]
 
 [fields.predefined.level.variants.values]
 trace = [1, 2, 3, 4]

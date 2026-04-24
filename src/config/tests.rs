@@ -44,9 +44,9 @@ fn test_load_otel() {
     let settings = super::at(["etc/defaults/config-otel.toml"]).load().unwrap();
     assert_eq!(
         settings.fields.predefined.time.0.names,
-        &["Timestamp", "timestamp", "ObservedTimestamp", "observed_timestamp"]
+        &["Timestamp", "ObservedTimestamp"]
     );
-    assert_eq!(settings.fields.predefined.message.0.names, &["Body", "body"]);
+    assert_eq!(settings.fields.predefined.message.0.names, &["Body"]);
     assert_eq!(settings.fields.predefined.caller.names, &["code.function"]);
     assert_eq!(settings.fields.predefined.caller_file.names, &["code.filepath"]);
     assert_eq!(settings.fields.predefined.caller_line.names, &["code.lineno"]);
@@ -54,11 +54,11 @@ fn test_load_otel() {
     assert_eq!(settings.fields.predefined.level.variants.len(), 2);
     assert_eq!(
         settings.fields.predefined.level.variants[0].names,
-        vec!["SeverityText".to_owned(), "severity_text".to_owned()],
+        vec!["SeverityText".to_owned()],
     );
     assert_eq!(
         settings.fields.predefined.level.variants[1].names,
-        vec!["SeverityNumber".to_owned(), "severity_number".to_owned()],
+        vec!["SeverityNumber".to_owned()],
     );
     assert_eq!(
         settings.fields.predefined.level.variants[0].values[&InfallibleLevel::new(Level::Error)],
