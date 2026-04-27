@@ -38,7 +38,7 @@ jobs:
         uses: uncenter/setup-taplo@b18c8c8302695fe63d6853bc004006215ac52b91 # v2
 
       - name: Setup tombi
-        uses: tombi-toml/setup-tombi@04531a538f559c50feccb0da6f79a41d4048ad93 # v1.0.9
+        uses: tombi-toml/setup-tombi@cf8079c4d3d2f76b279fd0e165ea5fb724e92534 # v1.0.10
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -141,7 +141,7 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
       - name: Install Nix
-        uses: cachix/install-nix-action@616559265b40713947b9c190a8ff4b507b5df49b # v31.10.4
+        uses: cachix/install-nix-action@ab739621df7a23f52766f9ccc97f38da6b7af14f # v31.10.5
 
       - name: Cache Nix store
         uses: cachix/cachix-action@1eb2ef646ac0255473d23a5907ad7b04ce94065c # v17
