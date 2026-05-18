@@ -179,6 +179,10 @@ where
     fn next(&mut self) -> Option<Self::Item> {
         loop {
             match self.head {
+                #[allow(
+                    clippy::collapsible_match,
+                    reason = "https://github.com/rust-lang/rust-clippy/issues/17033"
+                )]
                 Some(BytesHead::Char(s, n, ref mut i)) => {
                     if *i < n {
                         let j = *i;
