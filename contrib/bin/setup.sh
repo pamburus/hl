@@ -95,7 +95,7 @@ setup_cargo_nightly() {
 
 setup_cargo_edit() {
     setup_cargo
-    if [ ! cargo set-version --help >/dev/null 2>&1 ]; then
+    if ! cargo set-version --help >/dev/null 2>&1; then
         cargo install cargo-edit
     fi
 }
