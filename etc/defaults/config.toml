@@ -254,7 +254,7 @@ name = "less"
 # Base command (executable).
 command = "less"
 # Base arguments for both view and follow modes.
-args = ["-R", "--mouse"]
+args = ["-R"]
 # Environment variables for the pager command.
 env = { LESSCHARSET = "UTF-8" }
 # Additional arguments for follow mode.
