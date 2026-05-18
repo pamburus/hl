@@ -73,7 +73,7 @@ dirs = "6"
 dirs-sys = "0.5"
 encstr = { path = "./crates/encstr" }
 enum-map = "2"
-enumset = "1"
+enumset = "=1.1.10" # see https://github.com/Lymia/enumset/issues/84
 enumset-ext = { path = "./crates/enumset-ext", features = ["clap", "serde"] }
 enumset-serde = { path = "./crates/enumset-serde" }
 env_logger = "0.11"
