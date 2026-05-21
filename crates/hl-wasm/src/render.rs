@@ -1,12 +1,18 @@
 //! Wire `hl`'s parser + formatter together for use from WebAssembly.
 //!
-//! A single shared [`Renderer`] is created once at startup. Each call to [`Renderer::format`]
-//! produces an HTML string for one log line, with no global state. Multi-line input is also
-//! supported — JSON records can be packed multiple to a chunk; logfmt is one record per chunk.
+//! Mirrors the construction path in `hl::main` so the WASM output matches what `hl` would write to
+//! the terminal: same theme (loaded from the embedded `config.toml`), same time format, same
+//! formatting options, same punctuation.
 
 use std::sync::Arc;
 
-use hl::{Parser, ParserSettings, RawRecordParser, RecordFormatter, RecordFormatterBuilder, Theme};
+use hl::formatting::Expansion;
+use hl::settings::{AsciiMode, FieldShowOption};
+use hl::timezone::Tz;
+use hl::{
+    DateTimeFormatter, LinuxDateFormat, Parser, ParserSettings, RawRecordParser, RecordFormatter,
+    RecordFormatterBuilder, Settings, Theme,
+};
 
 use crate::ansi_html;
 
@@ -17,17 +23,35 @@ pub struct Renderer {
 }
 
 impl Renderer {
-    /// Construct a renderer with the embedded `universal` theme and default settings.
+    /// Construct a renderer using the embedded default `config.toml` shipped with `hl`.
     pub fn new() -> Result<Self, String> {
-        let theme = Theme::embedded("universal").map_err(|e| format!("failed to load embedded theme: {e}"))?;
+        let settings = Settings::default();
+        let theme = Theme::embedded_with_overlays(&settings.theme, &settings.theme_overlays)
+            .map_err(|e| format!("failed to load embedded theme: {e}"))?;
+        // Browsers can display Unicode unconditionally; pick the non-ASCII (Unicode) glyph set.
+        let ascii_mode = AsciiMode::Off;
+        let punctuation = Arc::new(settings.formatting.punctuation.resolve(ascii_mode));
+        let tz = Tz::IANA(settings.time_zone);
+        let time_format = LinuxDateFormat::new(&settings.time_format).compile();
+
         let formatter = RecordFormatterBuilder::new()
             .with_theme(Arc::new(theme))
-            .with_flatten(false)
-            .with_always_show_time(true)
-            .with_always_show_level(true)
+            .with_timestamp_formatter(DateTimeFormatter::new(time_format, tz))
+            .with_options(settings.formatting.clone())
+            .with_punctuation(punctuation)
+            .with_ascii(ascii_mode)
+            .with_expansion(Expansion::from(settings.formatting.expansion.clone()))
+            .with_always_show_time(settings.fields.predefined.time.show == FieldShowOption::Always)
+            .with_always_show_level(settings.fields.predefined.level.show == FieldShowOption::Always)
             .build();
-        let parser = Parser::new(ParserSettings::default());
+
+        let parser = Parser::new(ParserSettings::new(
+            &settings.fields.predefined,
+            &settings.fields.ignore,
+            None,
+        ));
         let raw_parser = RawRecordParser::new();
+
         Ok(Self {
             formatter,
             parser,
@@ -92,6 +116,8 @@ mod tests {
         let html = r.format(br#"{"time":"2024-01-01T00:00:00Z","level":"info","msg":"hello"}"#);
         assert!(!html.is_empty(), "expected non-empty HTML output");
         assert!(html.contains("hello"), "expected the message text to appear in output: {html}");
+        // The default theme paints — there should be at least one color span.
+        assert!(html.contains("<span style="), "expected styled spans; got: {html}");
     }
 
     #[test]

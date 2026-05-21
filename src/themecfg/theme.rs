@@ -228,6 +228,30 @@ impl Theme {
         Self::load_embedded::<Assets>(name)?.resolve()
     }
 
+    /// Load a fully resolved theme using only embedded assets (no filesystem access).
+    ///
+    /// Equivalent to [`Theme::load_with_overlays`] but skips the custom-theme directory lookup,
+    /// so it works on targets without a filesystem (such as `wasm32-unknown-unknown`). The
+    /// `@base` theme is merged in unless the loaded theme already has the `Base` or `Overlay` tag,
+    /// and the listed overlay themes are merged in order.
+    pub fn embedded_with_overlays(name: &str, overlays: &[impl AsRef<str>]) -> Result<Self> {
+        let theme = Self::load_embedded::<Assets>(name)?;
+        let mut theme = if theme.tags.intersects(Tag::Base | Tag::Overlay) {
+            theme
+        } else {
+            RawTheme::base().clone().merged(theme)
+        };
+        for overlay in overlays {
+            let overlay = overlay.as_ref();
+            let loaded = Self::load_embedded::<Assets>(overlay).map_err(|e| match e {
+                Error::ThemeNotFound { name, suggestions } => Error::ThemeOverlayNotFound { name, suggestions },
+                other => other,
+            })?;
+            theme = theme.merged(loaded);
+        }
+        theme.resolve()
+    }
+
     pub fn list(app_dirs: &AppDirs) -> Result<HashMap<Arc<str>, ThemeInfo>> {
         let mut result = HashMap::new();
 

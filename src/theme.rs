@@ -96,6 +96,12 @@ impl Theme {
         Ok(themecfg::Theme::embedded(name)?.into())
     }
 
+    /// Resolved theme loaded entirely from embedded assets, merging `@base` and the requested overlays.
+    /// Suitable for use in environments without a filesystem (e.g. WebAssembly).
+    pub fn embedded_with_overlays(name: &str, overlays: &[impl AsRef<str>]) -> Result<Self> {
+        Ok(themecfg::Theme::embedded_with_overlays(name, overlays)?.into())
+    }
+
     pub fn list(dirs: &AppDirs) -> Result<HashMap<Arc<str>, ThemeInfo>> {
         Ok(themecfg::Theme::list(dirs)?)
     }
