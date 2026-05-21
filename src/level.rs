@@ -6,6 +6,7 @@ use std::result::Result;
 use std::sync::Arc;
 
 // third-party imports
+#[cfg(feature = "native")]
 use clap::{
     ValueEnum,
     builder::{EnumValueParser, TypedValueParser, ValueParserFactory},
@@ -19,8 +20,8 @@ use crate::xerr::{HighlightQuoted, Suggestions};
 
 // ---
 
+#[cfg_attr(feature = "native", derive(ValueEnum))]
 #[derive(
-    ValueEnum,
     Clone,
     Copy,
     Debug,
@@ -105,6 +106,7 @@ impl Deref for RelaxedLevel {
     }
 }
 
+#[cfg(feature = "native")]
 impl ValueParserFactory for RelaxedLevel {
     type Parser = LevelValueParser;
     fn value_parser() -> Self::Parser {
@@ -116,7 +118,7 @@ impl TryFrom<&str> for RelaxedLevel {
     type Error = ParseError;
 
     fn try_from(value: &str) -> Result<Self, Self::Error> {
-        LevelValueParser::alternate_values()
+        level_alternate_values()
             .iter()
             .find(|(_, values)| values.iter().cloned().any(|x| value.eq_ignore_ascii_case(x)))
             .map(|(level, _)| RelaxedLevel(*level))
@@ -129,9 +131,11 @@ impl TryFrom<&str> for RelaxedLevel {
 
 // ---
 
+#[cfg(feature = "native")]
 #[derive(Clone, Debug)]
 pub struct LevelValueParser;
 
+#[cfg(feature = "native")]
 impl TypedValueParser for LevelValueParser {
     type Value = RelaxedLevel;
 
@@ -153,16 +157,21 @@ impl TypedValueParser for LevelValueParser {
     }
 }
 
+#[cfg(feature = "native")]
 impl LevelValueParser {
-    fn alternate_values<'a>() -> &'a [(Level, &'a [&'a str])] {
-        &[
-            (Level::Error, &["error", "err", "e"]),
-            (Level::Warning, &["warning", "warn", "wrn", "w"]),
-            (Level::Info, &["info", "inf", "i"]),
-            (Level::Debug, &["debug", "dbg", "d"]),
-            (Level::Trace, &["trace", "trc", "t"]),
-        ]
+    pub fn alternate_values<'a>() -> &'a [(Level, &'a [&'a str])] {
+        level_alternate_values()
     }
+}
+
+fn level_alternate_values<'a>() -> &'a [(Level, &'a [&'a str])] {
+    &[
+        (Level::Error, &["error", "err", "e"]),
+        (Level::Warning, &["warning", "warn", "wrn", "w"]),
+        (Level::Info, &["info", "inf", "i"]),
+        (Level::Debug, &["debug", "dbg", "d"]),
+        (Level::Trace, &["trace", "trc", "t"]),
+    ]
 }
 
 #[cfg(test)]

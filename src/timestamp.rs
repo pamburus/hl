@@ -5,7 +5,7 @@ use std::cell::OnceCell;
 use chrono::{DateTime, Duration, FixedOffset, NaiveDateTime};
 
 // local imports
-use crate::app::UnixTimestampUnit;
+use crate::types::UnixTimestampUnit;
 
 // ---
 

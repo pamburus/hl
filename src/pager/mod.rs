@@ -5,14 +5,17 @@
 //! and priority-based fallback selection.
 
 mod config;
+#[cfg(feature = "native")]
 mod selection;
 
-#[cfg(test)]
+#[cfg(all(test, feature = "native"))]
 mod tests;
 
+#[cfg(feature = "native")]
 use pager::PagerProcess;
 
 pub use config::{PagerConfig, PagerProfile, PagerRole, PagerRoleConfig};
+#[cfg(feature = "native")]
 pub use selection::{
     EnvProvider, Error, ExeChecker, PagerOverride, PagerSelector, SelectedPager, SystemEnv, SystemExeChecker,
     is_available,
@@ -22,11 +25,13 @@ pub use selection::{
 ///
 /// On drop, waits for the pager process to finish, recovers terminal state, and
 /// calls the provided callback with `Ok(())` on success or `Err(Error)` on failure.
+#[cfg(feature = "native")]
 pub struct PagerWatcher<F: FnOnce(Result<(), Error>)> {
     process: PagerProcess,
     on_exit: Option<F>,
 }
 
+#[cfg(feature = "native")]
 impl<F> PagerWatcher<F>
 where
     F: FnOnce(Result<(), Error>),
@@ -40,6 +45,7 @@ where
     }
 }
 
+#[cfg(feature = "native")]
 impl<F> Drop for PagerWatcher<F>
 where
     F: FnOnce(Result<(), Error>),

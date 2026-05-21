@@ -17,6 +17,7 @@ use serde_logfmt::logfmt;
 
 // local imports
 use crate::level;
+#[cfg(feature = "native")]
 use crate::pager;
 use crate::themecfg;
 use crate::xerr::{Highlight, HighlightQuoted, Suggestions};
@@ -32,10 +33,12 @@ pub enum Error {
     NonZeroSizeParseError(#[from] NonZeroSizeParseError),
     #[error("failed to load configuration: {0}")]
     Config(Box<ConfigError>),
+    #[cfg(feature = "native")]
     #[error(transparent)]
     PagerSelection(#[from] pager::Error),
     #[error(transparent)]
     Infallible(#[from] std::convert::Infallible),
+    #[cfg(feature = "native")]
     #[error(transparent)]
     Capnp(#[from] capnp::Error),
     #[error(transparent)]
@@ -110,6 +113,7 @@ pub enum Error {
     LogfmtParseError(#[from] logfmt::error::Error),
     #[error(transparent)]
     TryFromIntError(#[from] TryFromIntError),
+    #[cfg(feature = "native")]
     #[error(transparent)]
     NotifyError(Box<notify::Error>),
     #[error("failed to receive from mpsc channel: {source}")]
@@ -241,6 +245,7 @@ impl From<ConfigError> for Error {
     }
 }
 
+#[cfg(feature = "native")]
 impl From<notify::Error> for Error {
     fn from(err: notify::Error) -> Self {
         Error::NotifyError(Box::new(err))

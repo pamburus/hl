@@ -25,13 +25,12 @@ use serde_logfmt::logfmt;
 
 // local imports
 use crate::{
-    app::{InputFormat, UnixTimestampUnit},
     error::{Error, Result},
     level::{self},
     serdex::StreamDeserializerWithOffsets,
     settings::PredefinedFields,
     timestamp::Timestamp,
-    types::FieldKind,
+    types::{FieldKind, InputFormat, UnixTimestampUnit},
 };
 
 // test imports
