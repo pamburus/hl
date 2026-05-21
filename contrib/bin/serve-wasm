@@ -1,15 +1,14 @@
 #!/usr/bin/env bash
 #
 # Serve the hl-wasm viewer over a Range-capable static server and open the given log
-# file in the default browser.
+# file in the default browser. Runs in the foreground until Ctrl-C.
 #
 # On Ctrl-C (SIGINT) or SIGTERM the server is shut down cleanly and the script exits 0.
-# When this script is invoked directly the exit code is 0 on a normal Ctrl-C; when
-# invoked via `just serve-wasm` the just wrapper itself still exits 130 (just always
-# returns 130 when it receives SIGINT — see the justfile recipe for context).
+# Invoked via `just serve-wasm` the wrapper just process still exits 130 — invoke this
+# script directly to get exit 0 on Ctrl-C.
 #
-# Assumes `wasm-pack` and `miniserve` are installed (run via `just serve-wasm <log>`
-# once to provision them via the justfile's setup pipeline).
+# Assumes `wasm-pack` and `miniserve` are installed (run `just serve-wasm <log>` once
+# to provision them via the justfile's setup pipeline).
 #
 # Usage:
 #   contrib/bin/serve-wasm <log-file> [port]
@@ -36,14 +35,8 @@ fi
 
 log_abs=$(cd "$(dirname "$log_path")" && pwd)/$(basename "$log_path")
 name=$(basename "$log_abs")
-mkdir -p crates/hl-wasm/www/logs target
+mkdir -p crates/hl-wasm/www/logs
 ln -sfn "$log_abs" "crates/hl-wasm/www/logs/$name"
-
-pidfile="target/hl-wasm-serve.pid"
-if [ -f "$pidfile" ] && kill -0 "$(cat "$pidfile")" 2>/dev/null; then
-    echo "error: server already running (pid $(cat "$pidfile")); run 'just stop-wasm' first" >&2
-    exit 1
-fi
 
 url="http://localhost:${port}/?src=/logs/${name}"
 echo "Opening $url"
@@ -55,12 +48,5 @@ fi
 
 miniserve --index index.html --port "$port" crates/hl-wasm/www &
 server_pid=$!
-echo "$server_pid" > "$pidfile"
-
-cleanup() {
-    kill -INT "$server_pid" 2>/dev/null || true
-    rm -f "$pidfile"
-}
-trap 'cleanup; exit 0' INT TERM
-trap cleanup EXIT
+trap 'kill -INT "$server_pid" 2>/dev/null || true; exit 0' INT TERM
 wait "$server_pid"

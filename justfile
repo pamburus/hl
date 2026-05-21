@@ -43,10 +43,6 @@ build-wasm: (setup "wasm-pack")
 serve-wasm log port="8080": build-wasm (setup "miniserve")
     @contrib/bin/serve-wasm "{{ log }}" "{{ port }}"
 
-[doc('Stop a background WASM viewer started by serve-wasm')]
-stop-wasm:
-    @contrib/bin/stop-wasm
-
 [doc('Run the application, example: `just run -- --help`')]
 run *args: build
     cargo run -- {{ args }}
