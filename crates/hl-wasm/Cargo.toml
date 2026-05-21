@@ -1,18 +1,11 @@
 [package]
 name = "hl-wasm"
 version = "0.1.0"
-edition = "2024"
+edition.workspace = true
 description = "WebAssembly bindings exposing the hl log renderer to the browser."
-license = "MIT"
+repository.workspace = true
+license.workspace = true
 publish = false
-
-# Standalone workspace — kept out of the root workspace so the main `cargo build` is unaffected.
-[workspace]
-
-# wasm-opt needs explicit feature flags for the modern instructions rustc emits
-# (bulk memory + nontrapping-fptoint are enabled by default since rust 1.82+).
-[package.metadata.wasm-pack.profile.release]
-wasm-opt = ['-O', '--enable-bulk-memory', '--enable-nontrapping-float-to-int']
 
 [lib]
 crate-type = ["cdylib", "rlib"]
@@ -35,8 +28,7 @@ features = [
   "console",
 ]
 
-[profile.release]
-opt-level = "z"
-lto = true
-codegen-units = 1
-strip = true
+# wasm-opt needs explicit feature flags for the modern instructions rustc emits
+# (bulk memory + nontrapping-fptoint are enabled by default since rust 1.82+).
+[package.metadata.wasm-pack.profile.release]
+wasm-opt = ['-O', '--enable-bulk-memory', '--enable-nontrapping-float-to-int']

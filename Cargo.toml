@@ -17,15 +17,13 @@ members = [
   "crates/enumset-ext",
   "crates/enumset-serde",
   "crates/heapopt",
+  "crates/hl-wasm",
   "crates/lifecycle",
   "crates/pager",
   "crates/serde-logfmt",
   "crates/styled-help",
   "crates/wildcard",
 ]
-# The hl-wasm crate is excluded from the default `cargo build` because it targets wasm32 only
-# and uses different dependencies. Build it explicitly with `wasm-pack` or `cargo --target wasm32-unknown-unknown -p hl-wasm`.
-exclude = ["crates/hl-wasm"]
 
 [workspace.package]
 version = "0.36.2"
@@ -206,3 +204,9 @@ opt-level = 3
 debug = false
 lto = true
 codegen-units = 1
+
+# Override profile for the WASM crate: optimize for size, strip debug info.
+# Workspace-wide profile overrides must live in the root manifest.
+[profile.release.package.hl-wasm]
+opt-level = "z"
+strip = true
