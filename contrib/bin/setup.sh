@@ -20,6 +20,7 @@ while :; do
             echo "  outdated"
             echo "  schema"
             echo "  screenshots"
+            echo "  wasm-pack"
             exit 1
             ;;
         --)
@@ -260,6 +261,30 @@ setup_markdownlint() {
     fi
 }
 
+setup_wasm_target() {
+    setup_rustup
+    if ! (rustup target list --installed | grep -q '^wasm32-unknown-unknown$'); then
+        echo installing wasm32-unknown-unknown target
+        rustup target add wasm32-unknown-unknown
+    fi
+}
+
+setup_wasm_pack() {
+    setup_wasm_target
+    if [ ! -x "$(command -v wasm-pack)" ]; then
+        if [ -x "$(command -v brew)" ]; then
+            brew install wasm-pack
+        elif [ -x "$(command -v apt-get)" ]; then
+            sudo apt-get install wasm-pack
+        elif [ -x "$(command -v pacman)" ]; then
+            sudo pacman -S wasm-pack
+        else
+            setup_cargo
+            cargo install wasm-pack --locked
+        fi
+    fi
+}
+
 
 
 # --- main ---
@@ -305,6 +330,9 @@ while [ $# -gt 0 ]; do
             ;;
         markdown-lint)
             setup_markdownlint
+            ;;
+        wasm-pack)
+            setup_wasm_pack
             ;;
         *)
             echo "Unknown setup $1"

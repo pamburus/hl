@@ -26,7 +26,7 @@ impl Renderer {
     /// Construct a renderer using the embedded default `config.toml` shipped with `hl`.
     pub fn new() -> Result<Self, String> {
         let settings = Settings::default();
-        let theme = Theme::embedded_with_overlays(&settings.theme, &settings.theme_overlays)
+        let theme = Theme::embedded_with_overlays("hl-dark", &settings.theme_overlays)
             .map_err(|e| format!("failed to load embedded theme: {e}"))?;
         // Browsers can display Unicode unconditionally; pick the non-ASCII (Unicode) glyph set.
         let ascii_mode = AsciiMode::Off;
@@ -115,7 +115,10 @@ mod tests {
         let r = Renderer::new().expect("renderer init");
         let html = r.format(br#"{"time":"2024-01-01T00:00:00Z","level":"info","msg":"hello"}"#);
         assert!(!html.is_empty(), "expected non-empty HTML output");
-        assert!(html.contains("hello"), "expected the message text to appear in output: {html}");
+        assert!(
+            html.contains("hello"),
+            "expected the message text to appear in output: {html}"
+        );
         // The default theme paints — there should be at least one color span.
         assert!(html.contains("<span style="), "expected styled spans; got: {html}");
     }

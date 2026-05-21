@@ -33,6 +33,10 @@ build: (setup "build")
 build-release: (setup "build")
     cargo build --release
 
+[doc('Build the WebAssembly bundle into crates/hl-wasm/www/pkg')]
+build-wasm: (setup "wasm-pack")
+    wasm-pack build crates/hl-wasm --target web --release --out-dir www/pkg
+
 [doc('Run the application, example: `just run -- --help`')]
 run *args: build
     cargo run -- {{ args }}
