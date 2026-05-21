@@ -1,3 +1,8 @@
+// The scanner / segment-buffer machinery in this module is only consumed by the gated
+// `app` and `index` modules. Without `feature = "native"` those callers are absent, so
+// Rust would otherwise emit dead_code warnings on the still-public types.
+#![cfg_attr(not(feature = "native"), allow(dead_code))]
+
 // std imports
 use std::cmp::min;
 use std::collections::VecDeque;

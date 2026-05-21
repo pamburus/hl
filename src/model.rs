@@ -368,6 +368,7 @@ pub type RecordFields<'a> = heapopt::Vec<(&'a str, RawValue<'a>), RECORD_EXTRA_C
 
 // ---
 
+#[cfg_attr(not(feature = "native"), allow(dead_code))]
 pub trait RecordWithSourceConstructor<'r, 's> {
     fn with_source(&'r self, source: &'s [u8]) -> RecordWithSource<'r, 's>;
 }
