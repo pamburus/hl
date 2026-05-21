@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+#
+# Shell-level wrapper around `just serve-wasm` that ignores SIGINT in this process,
+# so when the user presses Ctrl-C in the terminal:
+#
+#   1. The just / bash / miniserve processes in the foreground process group receive
+#      SIGINT. miniserve shuts down cleanly via the recipe's trap, bash exits 0, just
+#      exits 130 (its intrinsic behavior for signal-terminated runs).
+#   2. This wrapper script ignores SIGINT (`trap '' INT`), so it survives, observes
+#      just's exit code, and reports 0 if it was 130.
+#
+# The wrapper has to live outside just because just itself always exits 130 when it
+# receives SIGINT, regardless of what the recipe does.
+#
+# Usage:
+#   contrib/bin/serve-wasm <log-file> [port]
+
+set -uo pipefail
+
+trap '' INT
+
+repo_root=$(cd "$(dirname "$0")/../.." && pwd)
+cd "$repo_root"
+
+just serve-wasm "$@"
+rc=$?
+if [ "$rc" -eq 130 ]; then
+    exit 0
+fi
+exit "$rc"
