@@ -90,13 +90,15 @@ body {
 .row {
   position: absolute;
   left: 0;
-  right: 0;
+  /* No `right` anchor — let the row's content govern its width so long lines push
+     #viewport's scrollWidth, which makes horizontal scrolling actually work. */
   font: var(--row-font);
   line-height: var(--row-height);
   height: var(--row-height);
   white-space: pre;
   padding: 0 8px;
-  contain: layout style;
+  /* `contain: layout` is OK; dropping `style` to be safe with absolute children. */
+  contain: layout;
 }
 
 .row.placeholder {
