@@ -35,60 +35,17 @@ build-release: (setup "build")
 
 [doc('Build the WebAssembly bundle into crates/hl-wasm/www/pkg')]
 build-wasm: (setup "wasm-pack")
-    wasm-pack build crates/hl-wasm --target web --release --out-dir www/pkg
+    @contrib/bin/build-wasm
 
-# For exit code 0 on Ctrl-C, invoke contrib/bin/serve-wasm instead — just always
-# propagates 130 when it receives SIGINT, and that can only be swallowed by a wrapper
-# outside the just process.
+# `just serve-wasm` always exits 130 on Ctrl-C — that's just's intrinsic SIGINT handling.
+# Invoke contrib/bin/serve-wasm directly to get exit code 0 on Ctrl-C.
 [doc('Serve the WASM viewer and open <log> in the default browser')]
 serve-wasm log port="8080": build-wasm (setup "miniserve")
-    #!/usr/bin/env bash
-    set -euo pipefail
-    log_path="{{ log }}"
-    if [ ! -f "$log_path" ]; then
-        echo "error: log file not found: $log_path" >&2
-        exit 1
-    fi
-    log_abs=$(cd "$(dirname "$log_path")" && pwd)/$(basename "$log_path")
-    name=$(basename "$log_abs")
-    mkdir -p crates/hl-wasm/www/logs target
-    ln -sfn "$log_abs" "crates/hl-wasm/www/logs/$name"
-    pidfile="target/hl-wasm-serve.pid"
-    if [ -f "$pidfile" ] && kill -0 "$(cat "$pidfile")" 2>/dev/null; then
-        echo "error: server already running (pid $(cat "$pidfile")); run 'just stop-wasm' first" >&2
-        exit 1
-    fi
-    url="http://localhost:{{ port }}/?src=/logs/$name"
-    echo "Opening $url"
-    if command -v open >/dev/null 2>&1; then
-        (sleep 0.4 && open "$url") &
-    elif command -v xdg-open >/dev/null 2>&1; then
-        (sleep 0.4 && xdg-open "$url") &
-    fi
-    miniserve --index index.html --port {{ port }} crates/hl-wasm/www &
-    server_pid=$!
-    echo "$server_pid" > "$pidfile"
-    trap 'rm -f "$pidfile"' EXIT
-    trap 'kill -INT "$server_pid" 2>/dev/null || true; rm -f "$pidfile"; exit 0' INT TERM
-    wait "$server_pid"
+    @contrib/bin/serve-wasm "{{ log }}" "{{ port }}"
 
 [doc('Stop a background WASM viewer started by serve-wasm')]
 stop-wasm:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    pidfile="target/hl-wasm-serve.pid"
-    if [ ! -f "$pidfile" ]; then
-        echo "no pidfile at $pidfile — nothing to stop"
-        exit 0
-    fi
-    pid=$(cat "$pidfile")
-    if kill -0 "$pid" 2>/dev/null; then
-        kill -INT "$pid"
-        echo "stopped pid $pid"
-    else
-        echo "pid $pid not running; removing stale pidfile"
-    fi
-    rm -f "$pidfile"
+    @contrib/bin/stop-wasm
 
 [doc('Run the application, example: `just run -- --help`')]
 run *args: build

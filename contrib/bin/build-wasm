@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+#
+# Build the hl-wasm bundle into crates/hl-wasm/www/pkg/.
+#
+# Assumes `wasm-pack` is installed (run `just build-wasm` once to provision it via the
+# justfile's setup pipeline, or install manually).
+#
+# Usage:
+#   contrib/bin/build-wasm
+
+set -euo pipefail
+
+repo_root=$(cd "$(dirname "$0")/../.." && pwd)
+cd "$repo_root"
+
+exec wasm-pack build crates/hl-wasm --target web --release --out-dir www/pkg
