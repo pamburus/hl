@@ -4,15 +4,53 @@
 //   - LogSource: HTTP fetcher with byte-range support, line-boundary slop, and an LRU chunk cache.
 //   - LineIndex: sparse (line -> byte offset) map built lazily as the user scrolls.
 //   - VirtualList: tall spacer + recycled row pool with translateY positioning.
-//   - Renderer is the WASM module; format_line(bytes) returns ready-to-insert HTML.
+//   - Formatter: a Web Worker owns the WASM renderer so format work doesn't block the UI thread.
 
-import init, { init as wasmInit, format_line } from "./pkg/hl_wasm.js";
+// Formatter routes line-format requests to a dedicated worker. The worker hosts the WASM
+// module and runs `format_line` per record off the main thread. We keep one worker
+// because the WASM module is single-threaded; the throughput win comes from not blocking
+// scroll/paint, not from parallelism.
+class Formatter {
+  constructor() {
+    this.worker = new Worker(new URL("./worker.js", import.meta.url), { type: "module" });
+    this.pending = new Map();
+    this.nextId = 1;
+    this.ready = new Promise((resolve) => {
+      this._readyResolve = resolve;
+    });
+    this.worker.onmessage = (ev) => {
+      const data = ev.data;
+      if (data.type === "ready") {
+        this._readyResolve();
+        return;
+      }
+      if (data.type === "format_chunk_result") {
+        const resolver = this.pending.get(data.id);
+        if (resolver) {
+          this.pending.delete(data.id);
+          resolver(data.out);
+        }
+      }
+    };
+  }
+
+  formatChunk(firstLine, bytes) {
+    return new Promise((resolve) => {
+      const id = this.nextId++;
+      this.pending.set(id, resolve);
+      this.worker.postMessage({ type: "format_chunk", id, firstLine, bytes });
+    });
+  }
+}
+
+const formatter = new Formatter();
 
 const CHUNK_SIZE = 256 * 1024; // 256 KiB per range fetch
 const SLOP = 64 * 1024; // bytes fetched beyond requested boundaries to absorb partial lines
-const CACHE_CHUNKS = 32; // simple LRU bound on cached chunks
+const CACHE_BYTES = 128 * 1024 * 1024; // 128 MiB byte-budget LRU for fetched chunks
 const ROW_HEIGHT_PX = 18;
-const PREFETCH_VIEWPORTS = 2; // load this many pages above/below the visible window
+const PREFETCH_LINES = 1024; // keep at least this many lines above and below the visible window
+const RENDER_CACHE_LINES = 32_768; // formatted-HTML LRU cap; well exceeds the prefetch window so backtracking is instant
 
 const status = document.getElementById("status");
 const viewport = document.getElementById("viewport");
@@ -32,8 +70,9 @@ class LogSource {
     this.url = url;
     this.totalSize = null;
     this.supportsRange = false;
-    this.cache = new Map(); // chunkStart -> Uint8Array
-    this.inflight = new Map(); // chunkStart -> Promise<Uint8Array>
+    this.cache = new Map(); // chunkStart -> {bytes, startOffset, endOffset}
+    this.cacheBytes = 0; // total bytes resident in `cache`
+    this.inflight = new Map(); // chunkStart -> Promise<chunk>
   }
 
   async probe() {
@@ -105,12 +144,15 @@ class LogSource {
         endOffset: fetchStart + trimEnd,
       };
 
-      // LRU eviction
-      if (this.cache.size >= CACHE_CHUNKS) {
-        const oldest = this.cache.keys().next().value;
-        this.cache.delete(oldest);
+      // Byte-budget LRU: evict oldest entries until the new chunk fits.
+      while (this.cacheBytes + result.bytes.length > CACHE_BYTES && this.cache.size > 0) {
+        const oldestKey = this.cache.keys().next().value;
+        const oldest = this.cache.get(oldestKey);
+        this.cache.delete(oldestKey);
+        this.cacheBytes -= oldest.bytes.length;
       }
       this.cache.set(chunkStart, result);
+      this.cacheBytes += result.bytes.length;
       return result;
     })();
     this.inflight.set(chunkStart, p);
@@ -224,7 +266,16 @@ class Viewer {
       rowsHost.appendChild(div);
       this.rowPool.push(div);
     }
-    this.scrollListener = () => this.updateVisible();
+    // Coalesce burst scroll events into one visible-window recompute per frame.
+    this.rafPending = false;
+    this.scrollListener = () => {
+      if (this.rafPending) return;
+      this.rafPending = true;
+      requestAnimationFrame(() => {
+        this.rafPending = false;
+        this.updateVisible();
+      });
+    };
     viewport.addEventListener("scroll", this.scrollListener, { passive: true });
     this.resizeListener = () => this.resize();
     window.addEventListener("resize", this.resizeListener);
@@ -259,10 +310,9 @@ class Viewer {
     const first = Math.max(0, Math.floor(scrollTop / ROW_HEIGHT_PX) - 2);
     const last = first + this.poolSize - 1;
 
-    // Prefetch 2 viewports above/below.
-    const reach = this.poolSize * PREFETCH_VIEWPORTS;
-    const wantFirst = Math.max(0, first - reach);
-    const wantLast = Math.min(this.index.estimatedTotal() - 1, last + reach);
+    // Prefetch a fixed line window above/below so backwards/forwards motion stays instant.
+    const wantFirst = Math.max(0, first - PREFETCH_LINES);
+    const wantLast = Math.min(this.index.estimatedTotal() - 1, last + PREFETCH_LINES);
     this.ensureLinesLoaded(wantFirst, wantLast);
 
     if (first === this.lastRange.first && last === this.lastRange.last) {
@@ -333,17 +383,29 @@ class Viewer {
     );
   }
 
-  absorbChunk(chunk) {
+  async absorbChunk(chunk) {
     const startLine = this.lineAtOffset(chunk.startOffset);
     this.index.ingest(startLine, chunk.startOffset, chunk.bytes);
-    // Re-render visible rows whose lines now have data.
-    this.renderLinesInChunk(startLine, chunk);
     spacer.style.height = `${this.index.estimatedTotal() * ROW_HEIGHT_PX}px`;
     this.pendingChunks.delete(Math.floor(chunk.startOffset / CHUNK_SIZE) * CHUNK_SIZE);
+    // Repaint immediately so placeholders reflect the new total line count;
+    // the actual line HTML lands once the worker responds.
     this.updateVisible();
     setStatus(
       `Indexed ${this.index.knownLines.toLocaleString()} of ~${this.index.estimatedTotal().toLocaleString()} lines (${formatBytes(this.source.totalSize)})`,
     );
+
+    const out = await formatter.formatChunk(startLine, chunk.bytes);
+    for (let i = 0; i < out.length; i += 2) {
+      const line = out[i];
+      const html = out[i + 1];
+      this.renderCache.set(line, html);
+      if (this.renderCache.size > RENDER_CACHE_LINES) {
+        const oldest = this.renderCache.keys().next().value;
+        this.renderCache.delete(oldest);
+      }
+    }
+    this.updateVisible();
   }
 
   lineAtOffset(byteOffset) {
@@ -363,43 +425,6 @@ class Viewer {
     return best.line + Math.round(gap / this.index.avgBytesPerLine);
   }
 
-  renderLinesInChunk(firstLine, chunk) {
-    let cursor = 0;
-    let line = firstLine;
-    while (cursor < chunk.bytes.length) {
-      const nl = indexOf(chunk.bytes, 0x0a, cursor);
-      const end = nl < 0 ? chunk.bytes.length : nl;
-      const slice = chunk.bytes.subarray(cursor, end);
-      let html;
-      try {
-        html = format_line(slice);
-      } catch (e) {
-        html = `<span class="row error">parse error: ${escapeHtml(e.message ?? String(e))}</span>`;
-      }
-      if (html.length === 0) {
-        html = escapeHtml(decodeUtf8(slice));
-      }
-      this.renderCache.set(line, html);
-      // simple cache cap
-      if (this.renderCache.size > 4096) {
-        const oldest = this.renderCache.keys().next().value;
-        this.renderCache.delete(oldest);
-      }
-      cursor = nl < 0 ? chunk.bytes.length : nl + 1;
-      line += 1;
-    }
-  }
-}
-
-function escapeHtml(s) {
-  return s
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;");
-}
-
-function decodeUtf8(bytes) {
-  return new TextDecoder("utf-8", { fatal: false }).decode(bytes);
 }
 
 // ---
@@ -425,8 +450,7 @@ async function openLog(url) {
 
 async function bootstrap() {
   setStatus("Loading WASM…");
-  await init();
-  wasmInit();
+  await formatter.ready;
   setStatus("Ready");
 
   const params = new URLSearchParams(window.location.search);
