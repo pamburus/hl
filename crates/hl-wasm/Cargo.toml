@@ -30,5 +30,7 @@ features = [
 
 # wasm-opt needs explicit feature flags for the modern instructions rustc emits
 # (bulk memory + nontrapping-fptoint are enabled by default since rust 1.82+).
+# `-O3` tunes for speed; the default `-O` is size-leaning and noticeably slower on the
+# formatter hot path.
 [package.metadata.wasm-pack.profile.release]
-wasm-opt = ['-O', '--enable-bulk-memory', '--enable-nontrapping-float-to-int']
+wasm-opt = ['-O3', '--enable-bulk-memory', '--enable-nontrapping-float-to-int']

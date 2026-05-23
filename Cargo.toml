@@ -205,8 +205,10 @@ debug = false
 lto = true
 codegen-units = 1
 
-# Override profile for the WASM crate: optimize for size, strip debug info.
-# Workspace-wide profile overrides must live in the root manifest.
+# Override profile for the WASM crate. Speed > size: the formatter is a hot path that
+# runs millions of times during search/scan, and size-tuned (`opt-level = "z"`) cost us
+# roughly an order of magnitude there. The binary grows a few MiB but the viewer becomes
+# usable. Workspace-wide profile overrides must live in the root manifest.
 [profile.release.package.hl-wasm]
-opt-level = "z"
+opt-level = 3
 strip = true
