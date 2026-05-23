@@ -11,6 +11,13 @@
       <input id="url-input" type="url" placeholder="Paste a log URL (must serve Range requests)…" />
       <button id="open-btn" type="button">Open</button>
       <span id="status">Idle</span>
+      <div id="search-bar" hidden>
+        <input id="search-input" type="text" placeholder="Find in log…" spellcheck="false" autocomplete="off" />
+        <span id="search-count">0 / 0</span>
+        <button id="search-prev" type="button" title="Previous match (Shift+Enter)">&#x25B2;</button>
+        <button id="search-next" type="button" title="Next match (Enter)">&#x25BC;</button>
+        <button id="search-close" type="button" title="Close (Esc)">&times;</button>
+      </div>
     </header>
     <main id="viewport" tabindex="0">
       <div id="spacer">

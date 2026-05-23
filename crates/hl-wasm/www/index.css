@@ -108,3 +108,63 @@ body {
 .row.error {
   color: #ff6b6b;
 }
+
+#search-bar {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  margin-left: 6px;
+}
+
+#search-bar[hidden] {
+  display: none;
+}
+
+#search-input {
+  background: #1f2125;
+  color: var(--fg);
+  border: 1px solid #444;
+  padding: 4px 6px;
+  border-radius: 3px;
+  font-family: var(--row-font);
+  width: 18em;
+}
+
+#search-count {
+  font-size: 12px;
+  color: #888;
+  min-width: 7em;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+#search-bar button {
+  padding: 2px 8px;
+  background: transparent;
+  color: var(--fg);
+  border: 1px solid #444;
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1;
+}
+
+#search-bar button:hover {
+  background: #333;
+}
+
+#search-bar button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+mark.search-hit {
+  background: #5e4b1e;
+  color: var(--fg);
+  border-radius: 2px;
+}
+
+mark.search-hit.current {
+  background: #f0b429;
+  color: #000;
+}

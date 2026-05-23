@@ -30,6 +30,14 @@ class Formatter {
           this.pending.delete(data.id);
           resolver(data.out);
         }
+        return;
+      }
+      if (data.type === "search_chunk_result") {
+        const resolver = this.pending.get(data.id);
+        if (resolver) {
+          this.pending.delete(data.id);
+          resolver(data);
+        }
       }
     };
   }
@@ -39,6 +47,21 @@ class Formatter {
       const id = this.nextId++;
       this.pending.set(id, resolve);
       this.worker.postMessage({ type: "format_chunk", id, firstLine, bytes });
+    });
+  }
+
+  searchChunk(firstLine, bytes, needle, caseInsensitive) {
+    return new Promise((resolve) => {
+      const id = this.nextId++;
+      this.pending.set(id, resolve);
+      this.worker.postMessage({
+        type: "search_chunk",
+        id,
+        firstLine,
+        bytes,
+        needle,
+        caseInsensitive,
+      });
     });
   }
 }
@@ -58,6 +81,12 @@ const spacer = document.getElementById("spacer");
 const rowsHost = document.getElementById("rows");
 const openBtn = document.getElementById("open-btn");
 const urlInput = document.getElementById("url-input");
+const searchBar = document.getElementById("search-bar");
+const searchInput = document.getElementById("search-input");
+const searchCount = document.getElementById("search-count");
+const searchPrev = document.getElementById("search-prev");
+const searchNext = document.getElementById("search-next");
+const searchClose = document.getElementById("search-close");
 
 function setStatus(text) {
   status.textContent = text;
@@ -242,6 +271,252 @@ class LineIndex {
 
 // ---
 
+// Wrap match ranges in `<mark>` tags inside an HTML fragment. `ranges` is a flat
+// `[start, end, start, end, …]` array of plain-text character offsets (i.e., positions in
+// the decoded textContent, which is what the worker uses to compute matches). We parse the
+// HTML via `<template>` and walk text nodes so we correctly handle entity-decoded content
+// and nested style spans without producing malformed markup.
+function injectMarks(html, ranges, currentRangeIdx) {
+  if (!ranges || ranges.length === 0) return html;
+  const tpl = document.createElement("template");
+  tpl.innerHTML = html;
+  const walker = document.createTreeWalker(tpl.content, NodeFilter.SHOW_TEXT);
+  const nodes = [];
+  while (walker.nextNode()) nodes.push(walker.currentNode);
+
+  let textPos = 0;
+  let rangeIdx = 0;
+  for (const node of nodes) {
+    if (rangeIdx * 2 >= ranges.length) break;
+    const text = node.nodeValue;
+    const nodeStart = textPos;
+    const nodeEnd = textPos + text.length;
+    textPos = nodeEnd;
+
+    if (ranges[rangeIdx * 2] >= nodeEnd) continue;
+
+    const pieces = [];
+    let p = 0;
+    while (rangeIdx * 2 < ranges.length) {
+      const rs = ranges[rangeIdx * 2];
+      const re = ranges[rangeIdx * 2 + 1];
+      if (rs >= nodeEnd) break;
+      const ls = Math.max(0, rs - nodeStart);
+      const le = Math.min(text.length, re - nodeStart);
+      if (p < ls) pieces.push([p, ls, false, false]);
+      pieces.push([ls, le, true, rangeIdx === currentRangeIdx]);
+      p = le;
+      if (re <= nodeEnd) rangeIdx++;
+      else break;
+    }
+    if (p < text.length) pieces.push([p, text.length, false, false]);
+
+    const frag = document.createDocumentFragment();
+    for (const [a, b, mark, current] of pieces) {
+      const piece = text.substring(a, b);
+      if (piece.length === 0) continue;
+      if (mark) {
+        const m = document.createElement("mark");
+        m.className = current ? "search-hit current" : "search-hit";
+        m.textContent = piece;
+        frag.appendChild(m);
+      } else {
+        frag.appendChild(document.createTextNode(piece));
+      }
+    }
+    node.parentNode.replaceChild(frag, node);
+  }
+
+  return tpl.innerHTML;
+}
+
+// Drives a sequential scan of the document and maintains a sorted match list. Each entry
+// is `{line, ranges, idxStart, idxEnd}` where `idxStart..idxEnd` is the global match-index
+// range contributed by that line (so we can render "X of Y" without summing on every move).
+// Cancellation: the current scan checks a per-scan `cancelled` flag at every await point.
+const SEARCH_MATCH_CAP = 100_000;
+
+class Search {
+  constructor(viewer) {
+    this.viewer = viewer;
+    this.query = "";
+    this.caseInsensitive = true;
+    this.matches = [];
+    this.matchesByLine = new Map();
+    this.totalMatches = 0;
+    this.currentIndex = -1; // global match index, -1 = no current selection
+    this.scanController = null;
+    this.truncated = false;
+    this.scanning = false;
+  }
+
+  setQuery(q) {
+    if (q === this.query) return;
+    this.cancel();
+    this.query = q;
+    this.matches = [];
+    this.matchesByLine = new Map();
+    this.totalMatches = 0;
+    this.currentIndex = -1;
+    this.truncated = false;
+    this.scanning = false;
+    if (q.length === 0) {
+      this.viewer.onSearchUpdate({ repaint: true });
+      return;
+    }
+    this.scanning = true;
+    const ctrl = { cancelled: false };
+    this.scanController = ctrl;
+    this.runScan(ctrl).catch((e) => {
+      if (!ctrl.cancelled) {
+        console.error("search scan failed", e);
+      }
+    });
+  }
+
+  cancel() {
+    if (this.scanController) this.scanController.cancelled = true;
+    this.scanController = null;
+    this.scanning = false;
+  }
+
+  async runScan(ctrl) {
+    const src = this.viewer.source;
+    if (!src) return;
+    const totalSize = src.totalSize;
+    for (let chunkStart = 0; chunkStart < totalSize; chunkStart += CHUNK_SIZE) {
+      if (ctrl.cancelled) return;
+      let chunk;
+      try {
+        chunk = await src.fetchChunk(chunkStart);
+      } catch (e) {
+        console.warn("search fetch failed", e);
+        continue;
+      }
+      if (ctrl.cancelled) return;
+      // Keep the line index in sync so lineAtOffset for later chunks resolves correctly.
+      const startLine = this.viewer.lineAtOffset(chunk.startOffset);
+      this.viewer.index.ingest(startLine, chunk.startOffset, chunk.bytes);
+
+      const result = await formatter.searchChunk(
+        startLine,
+        chunk.bytes,
+        this.query,
+        this.caseInsensitive,
+      );
+      if (ctrl.cancelled) return;
+
+      let appended = false;
+      for (const hit of result.hits) {
+        if (this.matchesByLine.has(hit.line)) continue; // dedupe overlap from slop
+        const count = hit.ranges.length / 2;
+        const entry = {
+          line: hit.line,
+          ranges: hit.ranges,
+          idxStart: this.totalMatches,
+          idxEnd: this.totalMatches + count - 1,
+        };
+        this.matches.push(entry);
+        this.matchesByLine.set(hit.line, entry);
+        this.totalMatches += count;
+        appended = true;
+        if (this.totalMatches >= SEARCH_MATCH_CAP) {
+          this.truncated = true;
+          break;
+        }
+      }
+      this.viewer.onSearchUpdate({ repaint: appended });
+      if (this.truncated) {
+        this.scanning = false;
+        return;
+      }
+    }
+    this.scanning = false;
+    this.viewer.onSearchUpdate({ repaint: false });
+  }
+
+  // Locate the entry that contains the given global match index.
+  entryForGlobalIdx(globalIdx) {
+    let lo = 0,
+      hi = this.matches.length - 1;
+    while (lo <= hi) {
+      const mid = (lo + hi) >> 1;
+      const e = this.matches[mid];
+      if (globalIdx < e.idxStart) hi = mid - 1;
+      else if (globalIdx > e.idxEnd) lo = mid + 1;
+      else return e;
+    }
+    return null;
+  }
+
+  // Returns the global match index for "the first match at or after `line`" (or -1).
+  firstAtOrAfterLine(line) {
+    let lo = 0,
+      hi = this.matches.length - 1;
+    while (lo <= hi) {
+      const mid = (lo + hi) >> 1;
+      if (this.matches[mid].line < line) lo = mid + 1;
+      else hi = mid - 1;
+    }
+    if (lo >= this.matches.length) return -1;
+    return this.matches[lo].idxStart;
+  }
+
+  lastBeforeLine(line) {
+    let lo = 0,
+      hi = this.matches.length - 1;
+    while (lo <= hi) {
+      const mid = (lo + hi) >> 1;
+      if (this.matches[mid].line >= line) hi = mid - 1;
+      else lo = mid + 1;
+    }
+    if (hi < 0) return -1;
+    return this.matches[hi].idxEnd;
+  }
+
+  next() {
+    if (this.totalMatches === 0) return;
+    if (this.currentIndex < 0) {
+      const viewLine = Math.floor(viewport.scrollTop / ROW_HEIGHT_PX);
+      const found = this.firstAtOrAfterLine(viewLine);
+      this.currentIndex = found >= 0 ? found : 0;
+    } else {
+      this.currentIndex = (this.currentIndex + 1) % this.totalMatches;
+    }
+    this.gotoCurrent();
+  }
+
+  prev() {
+    if (this.totalMatches === 0) return;
+    if (this.currentIndex < 0) {
+      const viewLine = Math.floor(viewport.scrollTop / ROW_HEIGHT_PX);
+      const found = this.lastBeforeLine(viewLine);
+      this.currentIndex = found >= 0 ? found : this.totalMatches - 1;
+    } else {
+      this.currentIndex = (this.currentIndex - 1 + this.totalMatches) % this.totalMatches;
+    }
+    this.gotoCurrent();
+  }
+
+  gotoCurrent() {
+    const entry = this.entryForGlobalIdx(this.currentIndex);
+    if (!entry) return;
+    this.viewer.scrollToLine(entry.line);
+    this.viewer.onSearchUpdate({ repaint: true });
+  }
+
+  // For the row painter: which range within this line, if any, is the current match.
+  currentRangeIdxForLine(line) {
+    if (this.currentIndex < 0) return -1;
+    const entry = this.matchesByLine.get(line);
+    if (!entry) return -1;
+    if (this.currentIndex < entry.idxStart || this.currentIndex > entry.idxEnd) return -1;
+    return this.currentIndex - entry.idxStart;
+  }
+}
+
+// ---
+
 class Viewer {
   constructor(source) {
     this.source = source;
@@ -253,6 +528,8 @@ class Viewer {
     this.resizeListener = null;
     this.lastRange = { first: -1, last: -1 };
     this.renderCache = new Map(); // line index -> HTML string (small LRU)
+    this.search = new Search(this);
+    this.onSearchStateChanged = null; // bootstrap-installed callback for count UI
   }
 
   start() {
@@ -287,8 +564,29 @@ class Viewer {
   stop() {
     if (this.scrollListener) viewport.removeEventListener("scroll", this.scrollListener);
     if (this.resizeListener) window.removeEventListener("resize", this.resizeListener);
+    if (this.search) this.search.cancel();
     rowsHost.innerHTML = "";
     this.rowPool = [];
+  }
+
+  // Center the given line in the viewport if it isn't already on-screen; bias toward the
+  // top third when scrolling (mirrors browser Find behavior so the user has reading context
+  // below the match).
+  scrollToLine(line) {
+    const target = line * ROW_HEIGHT_PX;
+    const top = viewport.scrollTop;
+    const bottom = top + viewport.clientHeight;
+    if (target < top || target + ROW_HEIGHT_PX > bottom) {
+      const desired = Math.max(0, target - viewport.clientHeight / 3);
+      viewport.scrollTo({ top: desired });
+    }
+  }
+
+  onSearchUpdate({ repaint }) {
+    if (repaint && this.lastRange.first >= 0) {
+      this.paintRows(this.lastRange.first, this.lastRange.last);
+    }
+    if (this.onSearchStateChanged) this.onSearchStateChanged();
   }
 
   resize() {
@@ -325,22 +623,38 @@ class Viewer {
   }
 
   paintRows(first, last) {
+    const search = this.search;
+    const searchActive = search && search.query.length > 0;
     for (let i = 0; i < this.poolSize; i++) {
       const line = first + i;
       const row = this.rowPool[i];
       row.style.transform = `translateY(${line * ROW_HEIGHT_PX}px)`;
       const html = this.renderCache.get(line);
       if (html !== undefined) {
-        if (row.dataset.line !== String(line) || !row.classList.contains("rendered")) {
-          row.innerHTML = html;
+        let displayHtml = html;
+        let marker = "n";
+        if (searchActive) {
+          const entry = search.matchesByLine.get(line);
+          if (entry) {
+            const curIdx = search.currentRangeIdxForLine(line);
+            displayHtml = injectMarks(html, entry.ranges, curIdx);
+            marker = curIdx >= 0 ? `c${curIdx}` : "h";
+          }
+        }
+        const sig = `r|${line}|${marker}`;
+        if (row.dataset.sig !== sig) {
+          row.innerHTML = displayHtml;
           row.className = "row rendered";
           row.dataset.line = String(line);
+          row.dataset.sig = sig;
         }
       } else {
-        if (row.dataset.line !== String(line) || !row.classList.contains("placeholder")) {
+        const sig = `p|${line}`;
+        if (row.dataset.sig !== sig) {
           row.textContent = `${line + 1}`;
           row.className = "row placeholder";
           row.dataset.line = String(line);
+          row.dataset.sig = sig;
         }
       }
     }
@@ -436,16 +750,67 @@ async function openLog(url) {
     currentViewer.stop();
     currentViewer = null;
   }
+  closeSearchBar();
   try {
     const source = new LogSource(url);
     await source.probe();
     const viewer = new Viewer(source);
+    viewer.onSearchStateChanged = updateSearchCountUI;
     viewer.start();
     currentViewer = viewer;
   } catch (e) {
     setStatus(`error: ${e.message ?? e}`);
     console.error(e);
   }
+}
+
+function updateSearchCountUI() {
+  const s = currentViewer && currentViewer.search;
+  if (!s || s.query.length === 0) {
+    searchCount.textContent = "0 / 0";
+    searchPrev.disabled = true;
+    searchNext.disabled = true;
+    return;
+  }
+  const total = s.totalMatches;
+  const cur = s.currentIndex < 0 ? 0 : s.currentIndex + 1;
+  let label = `${cur.toLocaleString()} / ${total.toLocaleString()}`;
+  if (s.truncated) label += "+";
+  else if (s.scanning) label += "…";
+  searchCount.textContent = label;
+  searchPrev.disabled = total === 0;
+  searchNext.disabled = total === 0;
+}
+
+function openSearchBar() {
+  if (!searchBar.hidden) {
+    searchInput.focus();
+    searchInput.select();
+    return;
+  }
+  searchBar.hidden = false;
+  searchInput.focus();
+  searchInput.select();
+  updateSearchCountUI();
+}
+
+function closeSearchBar() {
+  searchBar.hidden = true;
+  if (currentViewer && currentViewer.search) {
+    currentViewer.search.setQuery("");
+  }
+  updateSearchCountUI();
+}
+
+let searchDebounceTimer = null;
+function scheduleSearch(q) {
+  if (searchDebounceTimer !== null) clearTimeout(searchDebounceTimer);
+  searchDebounceTimer = setTimeout(() => {
+    searchDebounceTimer = null;
+    if (!currentViewer) return;
+    currentViewer.search.setQuery(q);
+    updateSearchCountUI();
+  }, 120);
 }
 
 async function bootstrap() {
@@ -502,6 +867,69 @@ async function bootstrap() {
         return;
     }
     e.preventDefault();
+  });
+
+  // Cmd/Ctrl+F opens the in-page search bar; we intercept so the browser's native Find
+  // (which can only see the handful of virtualized rows currently in the DOM) doesn't win.
+  document.addEventListener("keydown", (e) => {
+    const meta = e.metaKey || e.ctrlKey;
+    if (meta && (e.key === "f" || e.key === "F")) {
+      if (!currentViewer) return;
+      e.preventDefault();
+      openSearchBar();
+      return;
+    }
+    if (e.key === "F3") {
+      if (!currentViewer) return;
+      e.preventDefault();
+      openSearchBar();
+      if (e.shiftKey) currentViewer.search.prev();
+      else currentViewer.search.next();
+      updateSearchCountUI();
+      return;
+    }
+    if (e.key === "Escape" && !searchBar.hidden) {
+      e.preventDefault();
+      closeSearchBar();
+      viewport.focus();
+    }
+  });
+
+  searchInput.addEventListener("input", () => {
+    scheduleSearch(searchInput.value);
+  });
+  searchInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      if (!currentViewer) return;
+      // Flush any pending debounce so the search reflects what's typed before navigating.
+      if (searchDebounceTimer !== null) {
+        clearTimeout(searchDebounceTimer);
+        searchDebounceTimer = null;
+        currentViewer.search.setQuery(searchInput.value);
+      }
+      if (e.shiftKey) currentViewer.search.prev();
+      else currentViewer.search.next();
+      updateSearchCountUI();
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      closeSearchBar();
+      viewport.focus();
+    }
+  });
+  searchPrev.addEventListener("click", () => {
+    if (!currentViewer) return;
+    currentViewer.search.prev();
+    updateSearchCountUI();
+  });
+  searchNext.addEventListener("click", () => {
+    if (!currentViewer) return;
+    currentViewer.search.next();
+    updateSearchCountUI();
+  });
+  searchClose.addEventListener("click", () => {
+    closeSearchBar();
+    viewport.focus();
   });
 }
 
