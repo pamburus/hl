@@ -6,6 +6,8 @@
 //! intact — none of it runs in the browser.
 
 mod api;
+mod render;
+mod segments;
 mod source;
 
 use std::net::SocketAddr;
@@ -19,6 +21,7 @@ use clap::Parser;
 use tower_http::{services::ServeDir, trace::TraceLayer};
 use tracing::info;
 
+use crate::render::RenderConfig;
 use crate::source::{Config as SourceConfig, HostPattern, SourceClient};
 
 /// CLI surface for the binary. Keep it small — anything the user might want to override
@@ -104,8 +107,10 @@ fn init_tracing() {
 
 fn build_app(cli: &Cli) -> anyhow::Result<Router> {
     let source = SourceClient::new(source_config(cli))?;
+    let render = RenderConfig::new()?;
     let state = api::AppState {
         source: Arc::new(source),
+        render,
     };
     let static_dir = ServeDir::new(&cli.www_dir);
     let app = Router::new()

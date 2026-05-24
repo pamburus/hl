@@ -193,6 +193,63 @@ impl SourceClient {
         })
     }
 
+    /// Fetch a byte range from the source. The returned vector is the raw bytes the
+    /// upstream gave us; line alignment is the caller's responsibility. Refuses up
+    /// front if the requested range length exceeds `max_size` (so a malicious client
+    /// can't trick us into buffering the whole net).
+    pub async fn get_range(&self, url: &str, start: u64, end: u64) -> Result<Vec<u8>, SourceError> {
+        if end <= start {
+            return Ok(Vec::new());
+        }
+        let requested = end - start;
+        if requested > self.config.max_size {
+            return Err(SourceError::TooLarge {
+                bytes: requested,
+                max: self.config.max_size,
+            });
+        }
+        let parsed = self.validate(url).await?;
+        if parsed.scheme() == "file" {
+            return self.get_range_file(&parsed, start, end).await;
+        }
+        let range = format!("bytes={}-{}", start, end - 1);
+        let resp = self
+            .http
+            .get(parsed)
+            .header(header::RANGE, range)
+            .send()
+            .await?;
+        let status = resp.status();
+        // Most servers reply 206 Partial Content; some (or non-range-capable proxies)
+        // ignore the header and reply 200 with the whole body. We accept both; the
+        // caller's line aligner will trim accordingly.
+        if !status.is_success() {
+            return Err(SourceError::UpstreamStatus {
+                status: status.as_u16(),
+            });
+        }
+        let bytes = resp.bytes().await?;
+        Ok(bytes.to_vec())
+    }
+
+    async fn get_range_file(&self, url: &Url, start: u64, end: u64) -> Result<Vec<u8>, SourceError> {
+        use tokio::io::{AsyncReadExt, AsyncSeekExt};
+        let path = url
+            .to_file_path()
+            .map_err(|_| SourceError::InvalidUrl("file URL is not a valid path".into()))?;
+        let mut f = tokio::fs::File::open(&path).await?;
+        let file_len = f.metadata().await?.len();
+        let real_end = end.min(file_len);
+        if start >= real_end {
+            return Ok(Vec::new());
+        }
+        let len = (real_end - start) as usize;
+        let mut buf = vec![0u8; len];
+        f.seek(std::io::SeekFrom::Start(start)).await?;
+        f.read_exact(&mut buf).await?;
+        Ok(buf)
+    }
+
     async fn probe_file(&self, url: &Url) -> Result<Metadata, SourceError> {
         let path = url
             .to_file_path()
