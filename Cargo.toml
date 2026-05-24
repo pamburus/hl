@@ -17,6 +17,7 @@ members = [
   "crates/enumset-ext",
   "crates/enumset-serde",
   "crates/heapopt",
+  "crates/hl-server",
   "crates/lifecycle",
   "crates/pager",
   "crates/serde-logfmt",

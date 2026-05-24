@@ -1,0 +1,27 @@
+[package]
+name = "hl-server"
+version.workspace = true
+edition.workspace = true
+description = "HTTP backend that renders log files via the hl pipeline and serves a thin web viewer."
+repository.workspace = true
+license.workspace = true
+publish = false
+
+[[bin]]
+name = "hl-server"
+path = "src/main.rs"
+
+[dependencies]
+hl = { path = "../.." }
+anyhow = "1"
+axum = { version = "0.8", features = ["macros"] }
+clap = { workspace = true }
+json = { workspace = true }
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "http2", "stream"] }
+serde = { workspace = true }
+thiserror = "2"
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "signal", "net", "fs"] }
+tower = "0.5"
+tower-http = { version = "0.6", features = ["fs", "trace", "compression-gzip", "set-header"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
