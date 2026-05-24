@@ -40,6 +40,7 @@ json = { package = "serde_json", version = "1", features = ["raw_value"] }
 log = "0.4"
 memchr = "2"
 rstest = "0.26"
+serde = { version = "1", features = ["derive", "rc"] }
 shellwords = "1"
 wildcard = { path = "crates/wildcard" }
 
@@ -102,7 +103,7 @@ pest = "2"
 pest_derive = "2"
 regex = "1"
 rust-embed = "8"
-serde = { version = "1", features = ["derive", "rc"] }
+serde = { workspace = true }
 serde-logfmt = { path = "./crates/serde-logfmt" }
 serde_plain = "1"
 serde-value = "0.7"
@@ -150,7 +151,7 @@ const-str = "1"
 hex = "0.4"
 json.workspace = true
 semver = "1"
-serde = { version = "1", features = ["derive"] }
+serde = { workspace = true }
 sha2 = "0.10"
 
 # Use native-tls on Windows ARM64 to avoid ring/clang requirement
