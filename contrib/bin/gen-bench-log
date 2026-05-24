@@ -1,0 +1,226 @@
+#!/usr/bin/env python3
+"""
+Generate a synthetic JSON-lines log file for benchmarking hl and hl-server.
+
+The output mirrors the *structure* commonly seen in structured production logs (the same
+fields hl is built for: level, ts, logger, msg, caller, plus a handful of extras) — but
+all string content is drawn from a fictional pronounceable-nonsense vocabulary so the
+file shares nothing with anyone's real logs. Seeded RNG means successive runs produce
+identical bytes; reproducible benchmarks.
+
+Usage:
+    contrib/bin/gen-bench-log <output> [--size-mib N] [--seed N]
+
+Examples:
+    contrib/bin/gen-bench-log /tmp/bench.log
+    contrib/bin/gen-bench-log /tmp/bench.log --size-mib 500
+    contrib/bin/gen-bench-log - --size-mib 1 | head -3      # pipe to stdout
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import random
+import sys
+from datetime import datetime, timedelta, timezone
+from typing import IO
+
+# Fictional pronounceable nonsense roots. Each is intentionally not a real word in any
+# of the major languages I'm aware of, and not a known product/brand acronym. Used for
+# all "branded" string content (logger paths, file/dir names in caller, region tags).
+NONSENSE = (
+    "nurev tabok vyrad domun kemar boryx trapen sulom grila porix vunda koler "
+    "merid naras feluk drila hyrev wopal mirol delor tovan syrad halor viren "
+    "trada novyx lyrek warok feran kunav perid hagar zelup tofar kurim balox "
+    "minra dolep rasul gomir hyvek paton vrest fluga miran torek vader bylom "
+    "kaster vorlan trimex hurok pendor lumir gravex senit zorek kalir nurosh"
+).split()
+
+LEVELS = ("debug", "info", "warn", "error")
+LEVEL_WEIGHTS = (55, 30, 12, 3)
+
+# Generic, neutral log verbs/phrases — common to any structured-logging codebase, no
+# product-specific phrasing from the source log file.
+MSG_TEMPLATES = (
+    "loop tick",
+    "loop started",
+    "loop stopped",
+    "task scheduled",
+    "task accepted",
+    "task discarded",
+    "task drained",
+    "snapshot persisted",
+    "snapshot promoted",
+    "checkpoint written",
+    "checkpoint skipped",
+    "lease acquired",
+    "lease renewed",
+    "lease released",
+    "compaction started",
+    "compaction finished",
+    "background sweep complete",
+    "metric flushed",
+    "metric batched",
+    "config reloaded",
+    "watchdog reset",
+    "shutdown initiated",
+    "shutdown complete",
+    "rebalance step finished",
+    "leader election started",
+    "leader confirmed",
+    "follower joined",
+    "follower departed",
+    "incoming connection accepted",
+    "outgoing channel closed",
+    "queue drained",
+    "queue paused",
+    "queue resumed",
+    "retry scheduled",
+    "retry exhausted",
+    "fence raised",
+    "fence cleared",
+)
+
+# Generic error phrases for level=error records. None of these are taken from any
+# particular product's error catalog.
+ERROR_PHRASES = (
+    "context deadline exceeded",
+    "operation canceled",
+    "connection reset by peer",
+    "no route to upstream",
+    "upstream returned 502",
+    "stale lease, refusing write",
+    "object not found",
+    "permission denied",
+    "rate limit exceeded",
+    "schema mismatch",
+    "checksum mismatch",
+    "buffer overflow, dropping batch",
+)
+
+# Realistic time-zone offsets so hl's timestamp parser sees a mix of TZ formats.
+TZ_OFFSETS = ("+00:00", "+01:00", "+02:00", "+05:30", "-04:00", "-07:00")
+
+
+def pick(rng: random.Random, n: int) -> list[str]:
+    """Pick `n` distinct nonsense roots without replacement, for compound names."""
+    return rng.sample(NONSENSE, n)
+
+
+def make_record(rng: random.Random, ts: datetime, tz_offset: str) -> dict:
+    level = rng.choices(LEVELS, weights=LEVEL_WEIGHTS, k=1)[0]
+    logger = ".".join(pick(rng, 3))  # e.g. "kemar.vunda.tovan"
+    msg = rng.choice(MSG_TEMPLATES)
+    # caller looks like Go-style "<dir>/<file>.go:<line>"
+    caller_dir, caller_file = pick(rng, 2)
+    caller_line = rng.randint(20, 900)
+    caller = f"{caller_dir}/{caller_file}.go:{caller_line}"
+
+    # Compose the timestamp with the chosen offset. We carry microseconds so hl exercises
+    # its sub-second formatting path.
+    ts_str = ts.strftime("%Y-%m-%dT%H:%M:%S") + f".{ts.microsecond:06d}{tz_offset}"
+
+    rec: dict = {
+        "level": level,
+        "ts": ts_str,
+        "logger": logger,
+        "msg": msg,
+        "caller": caller,
+    }
+
+    # Sprinkle in optional extras so line widths vary the way real logs do.
+    kind = rng.randint(0, 7)
+    if kind == 0:
+        rec["count"] = rng.randint(0, 200_000)
+    elif kind == 1:
+        rec["duration_ms"] = round(rng.expovariate(1.0 / 30.0), 3)
+    elif kind == 2:
+        rec["batch_size"] = rng.randint(1, 4096)
+        rec["pending"] = rng.randint(0, 1024)
+    elif kind == 3:
+        rec["tenant"] = f"t{rng.randint(1, 0xFFFF):04x}"
+        rec["region"] = rng.choice(NONSENSE[:8])
+    elif kind == 4:
+        # 64-bit hex id, formatted as the user's logs would have such things.
+        rec["request_id"] = f"{rng.getrandbits(64):016x}"
+    elif kind == 5:
+        rec["progress"] = round(rng.random(), 4)
+        rec["target"] = rng.randint(1, 1024)
+    elif kind == 6 and level == "error":
+        rec["error"] = rng.choice(ERROR_PHRASES)
+    # kind == 7: no extras
+
+    return rec
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser(
+        description=__doc__,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    ap.add_argument("output", help="Output file path, or '-' for stdout.")
+    ap.add_argument(
+        "--size-mib",
+        type=float,
+        default=100.0,
+        help="Target size in MiB (default: 100).",
+    )
+    ap.add_argument(
+        "--seed",
+        type=int,
+        default=0xDEADBEEF,
+        help="PRNG seed (default: 0xdeadbeef). Same seed -> identical bytes.",
+    )
+    args = ap.parse_args()
+
+    target = int(args.size_mib * 1024 * 1024)
+    rng = random.Random(args.seed)
+    ts = datetime(2024, 6, 1, 0, 0, 0, tzinfo=timezone.utc)
+    tz_offset = rng.choice(TZ_OFFSETS)
+
+    out: IO[bytes]
+    if args.output == "-":
+        out = sys.stdout.buffer
+        close_out = False
+    else:
+        out = open(args.output, "wb")
+        close_out = True
+
+    # Local aliases shave a few percent off the hot loop.
+    rand_int = rng.randint
+    dumps = json.dumps
+    write = out.write
+
+    written = 0
+    next_progress = 10 * 1024 * 1024
+    try:
+        while written < target:
+            # Advance timestamp by 0–50 ms + microsecond jitter, like a busy service.
+            ts += timedelta(milliseconds=rand_int(0, 50), microseconds=rand_int(0, 999))
+            # Occasionally roll the tz offset, so we exercise the parser's TZ path.
+            if rand_int(0, 9999) == 0:
+                tz_offset = rng.choice(TZ_OFFSETS)
+            rec = make_record(rng, ts, tz_offset)
+            line = dumps(rec, separators=(",", ":")).encode("utf-8") + b"\n"
+            write(line)
+            written += len(line)
+            if written >= next_progress and args.output != "-":
+                sys.stderr.write(
+                    f"  ... {written / 1024 / 1024:7.1f} / {target / 1024 / 1024:.1f} MiB\r"
+                )
+                sys.stderr.flush()
+                next_progress += 10 * 1024 * 1024
+    finally:
+        if close_out:
+            out.close()
+
+    if args.output != "-":
+        sys.stderr.write(
+            f"  wrote {written / 1024 / 1024:.1f} MiB to {args.output}\n"
+        )
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
