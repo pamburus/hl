@@ -92,7 +92,7 @@ impl SgrState {
         // SGR parameter list: numbers separated by ';'. Empty parameter (just ';' or
         // empty `[m`) is equivalent to 0 per the standard.
         let s = std::str::from_utf8(params).unwrap_or("");
-        let mut nums = s.split(|c| c == ';' || c == ':').map(|p| {
+        let mut nums = s.split([';', ':']).map(|p| {
             if p.is_empty() {
                 Some(0u32)
             } else {

@@ -62,10 +62,7 @@ struct ProbeQuery {
     url: String,
 }
 
-async fn probe(
-    State(state): State<AppState>,
-    Query(q): Query<ProbeQuery>,
-) -> Result<Json<Metadata>, ApiError> {
+async fn probe(State(state): State<AppState>, Query(q): Query<ProbeQuery>) -> Result<Json<Metadata>, ApiError> {
     let meta = state.source.probe(&q.url).await?;
     Ok(Json(meta))
 }
@@ -98,10 +95,7 @@ struct RenderedLine {
     segments: Vec<Segment>,
 }
 
-async fn render(
-    State(state): State<AppState>,
-    Query(q): Query<RenderQuery>,
-) -> Result<Json<RenderResponse>, ApiError> {
+async fn render(State(state): State<AppState>, Query(q): Query<RenderQuery>) -> Result<Json<RenderResponse>, ApiError> {
     if q.end <= q.start {
         return Ok(Json(RenderResponse {
             first_byte: q.start,
@@ -138,7 +132,7 @@ async fn render(
     }))
 }
 
-fn align_leading<'a>(bytes: &'a [u8], start: u64, skip_partial: bool) -> (&'a [u8], u64) {
+fn align_leading(bytes: &[u8], start: u64, skip_partial: bool) -> (&[u8], u64) {
     if !skip_partial || bytes.is_empty() {
         return (bytes, start);
     }

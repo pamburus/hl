@@ -22,10 +22,7 @@ use hl::app::{RecordIgnorer, SegmentProcess, SegmentProcessor, SegmentProcessorO
 use hl::formatting::{Expansion, RecordFormatterBuilder};
 use hl::settings::{AsciiMode, FieldShowOption, ResolvedPunctuation};
 use hl::timezone::Tz;
-use hl::{
-    DateTimeFormatter, Filter, LinuxDateFormat, Parser, ParserSettings, RecordFormatter,
-    Settings, Theme,
-};
+use hl::{DateTimeFormatter, Filter, LinuxDateFormat, Parser, ParserSettings, RecordFormatter, Settings, Theme};
 
 /// Shared rendering config. Construct one per server, clone into per-request handlers
 /// (cloning is an Arc bump). Heavy setup — theme load, timezone resolution, derived
@@ -59,10 +56,8 @@ impl RenderConfig {
         let time_format = LinuxDateFormat::new(&settings.time_format).compile();
         let time_formatter = DateTimeFormatter::new(time_format, tz);
         let expansion = Expansion::from(settings.formatting.expansion.clone());
-        let always_show_time =
-            settings.fields.predefined.time.show == FieldShowOption::Always;
-        let always_show_level =
-            settings.fields.predefined.level.show == FieldShowOption::Always;
+        let always_show_time = settings.fields.predefined.time.show == FieldShowOption::Always;
+        let always_show_level = settings.fields.predefined.level.show == FieldShowOption::Always;
         Ok(Self {
             inner: Arc::new(Inner {
                 settings,
@@ -145,12 +140,7 @@ impl Renderer {
                 allow_unparsed_data: true,
                 ..SegmentProcessorOptions::default()
             };
-            let mut sp = SegmentProcessor::new(
-                &self.parser,
-                &self.formatter,
-                Filter::default(),
-                opts,
-            );
+            let mut sp = SegmentProcessor::new(&self.parser, &self.formatter, Filter::default(), opts);
             let mut observer = RecordIgnorer {};
             sp.process(line, &mut self.line_buf, "", None, &mut observer);
 
@@ -164,9 +154,5 @@ impl Renderer {
 }
 
 fn trim_trailing_newline(s: &[u8]) -> &[u8] {
-    if s.last() == Some(&b'\n') {
-        &s[..s.len() - 1]
-    } else {
-        s
-    }
+    if s.last() == Some(&b'\n') { &s[..s.len() - 1] } else { s }
 }

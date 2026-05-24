@@ -172,13 +172,13 @@ impl SourceClient {
             .get(header::CONTENT_LENGTH)
             .and_then(|v| v.to_str().ok())
             .and_then(|s| s.parse::<u64>().ok());
-        if let Some(n) = content_length {
-            if n > self.config.max_size {
-                return Err(SourceError::TooLarge {
-                    bytes: n,
-                    max: self.config.max_size,
-                });
-            }
+        if let Some(n) = content_length
+            && n > self.config.max_size
+        {
+            return Err(SourceError::TooLarge {
+                bytes: n,
+                max: self.config.max_size,
+            });
         }
         Ok(Metadata {
             content_length,
@@ -213,12 +213,7 @@ impl SourceClient {
             return self.get_range_file(&parsed, start, end).await;
         }
         let range = format!("bytes={}-{}", start, end - 1);
-        let resp = self
-            .http
-            .get(parsed)
-            .header(header::RANGE, range)
-            .send()
-            .await?;
+        let resp = self.http.get(parsed).header(header::RANGE, range).send().await?;
         let status = resp.status();
         // Most servers reply 206 Partial Content; some (or non-range-capable proxies)
         // ignore the header and reply 200 with the whole body. We accept both; the
@@ -281,9 +276,7 @@ impl SourceClient {
             .host_str()
             .ok_or_else(|| SourceError::InvalidUrl("URL has no host".into()))?
             .to_string();
-        if !self.config.allow_hosts.is_empty()
-            && !self.config.allow_hosts.iter().any(|p| p.matches(&host))
-        {
+        if !self.config.allow_hosts.is_empty() && !self.config.allow_hosts.iter().any(|p| p.matches(&host)) {
             return Err(SourceError::HostNotAllowed(host));
         }
         // Port doesn't matter for DNS lookup; just feed lookup_host any non-zero port.
@@ -304,10 +297,7 @@ impl SourceClient {
         if !self.config.allow_private {
             for sa in &addrs {
                 if is_blocked_ip(&sa.ip()) {
-                    return Err(SourceError::AddressBlocked {
-                        host,
-                        addr: sa.ip(),
-                    });
+                    return Err(SourceError::AddressBlocked { host, addr: sa.ip() });
                 }
             }
         }
@@ -359,16 +349,16 @@ fn is_blocked_v6(ip: &Ipv6Addr) -> bool {
     if ip.is_loopback() || ip.is_multicast() || ip.is_unspecified() {
         return true;
     }
-    if let Some(v4) = ip.to_ipv4_mapped() {
-        if is_blocked_v4(&v4) {
-            return true;
-        }
+    if let Some(v4) = ip.to_ipv4_mapped()
+        && is_blocked_v4(&v4)
+    {
+        return true;
     }
     // Also catch 6to4 / IPv4-compatible style embeddings.
-    if let Some(v4) = ip.to_ipv4() {
-        if is_blocked_v4(&v4) {
-            return true;
-        }
+    if let Some(v4) = ip.to_ipv4()
+        && is_blocked_v4(&v4)
+    {
+        return true;
     }
     let s = ip.segments();
     // fc00::/7 — Unique Local Addresses.

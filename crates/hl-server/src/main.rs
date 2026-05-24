@@ -100,8 +100,8 @@ async fn main() -> anyhow::Result<()> {
 
 fn init_tracing() {
     use tracing_subscriber::{EnvFilter, fmt};
-    let filter = EnvFilter::try_from_default_env()
-        .unwrap_or_else(|_| EnvFilter::new("warn,hl_server=info,tower_http=info"));
+    let filter =
+        EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("warn,hl_server=info,tower_http=info"));
     fmt().with_env_filter(filter).with_target(false).init();
 }
 
@@ -135,9 +135,7 @@ fn source_config(cli: &Cli) -> SourceConfig {
 async fn shutdown_signal() {
     use tokio::signal;
     let ctrl_c = async {
-        signal::ctrl_c()
-            .await
-            .expect("failed to install Ctrl-C handler");
+        signal::ctrl_c().await.expect("failed to install Ctrl-C handler");
     };
     #[cfg(unix)]
     let terminate = async {
