@@ -9,7 +9,7 @@ use crate::themecfg::Merge;
 // relative imports
 use super::{Assets, Error, MergeFlags, MergeOptions, Result, Tag, Theme, ThemeInfo, ThemeOrigin, ThemeSource, v1};
 
-static BASE: LazyLock<RawTheme> = LazyLock::new(|| Theme::load_embedded::<Assets>("@base").unwrap());
+static BASE: LazyLock<RawTheme> = LazyLock::new(|| Theme::load_embedded_raw::<Assets>("@base").unwrap());
 
 /// An unresolved theme with metadata, before style resolution.
 ///

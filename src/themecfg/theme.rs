@@ -44,6 +44,20 @@ pub struct Theme {
     pub indicators: IndicatorPack,
 }
 
+/// Merge a freshly-loaded raw theme on top of `@base`, unless the theme itself is a
+/// base or overlay (in which case `@base` would be redundant or wrong). Mirrors the
+/// rule [`Theme::load_with_overlays`] and [`Theme::embedded`] both rely on so the two
+/// loading paths stay in lockstep. `name` is only used for the debug log line.
+fn merge_with_base(theme: RawTheme, name: &str) -> RawTheme {
+    if theme.tags.intersects(Tag::Base | Tag::Overlay) {
+        log::trace!("theme '{}' has base or overlay tag, skipping @base merge", name);
+        theme
+    } else {
+        log::debug!("merging theme '{}' with @base", name);
+        RawTheme::base().clone().merged(theme)
+    }
+}
+
 impl Theme {
     /// Load a fully resolved theme by name.
     ///
@@ -123,17 +137,9 @@ impl Theme {
     pub fn load_with_overlays(dirs: &AppDirs, name: &str, overlays: &[impl AsRef<str>]) -> Result<Self> {
         log::debug!("loading theme: {}", name);
         let theme = Self::load_raw(dirs, name)?;
-
-        let theme = if theme.tags.intersects(Tag::Base | Tag::Overlay) {
-            log::trace!("theme '{}' has base or overlay tag, skipping @base merge", name);
-            theme
-        } else {
-            log::debug!("merging theme '{}' with @base", name);
-            RawTheme::base().clone().merged(theme)
-        };
+        let mut theme = merge_with_base(theme, name);
 
         // Apply overlays in order
-        let mut theme = theme;
         for name in overlays {
             let name = name.as_ref();
             log::debug!("loading overlay theme: {}", name);
@@ -202,7 +208,7 @@ impl Theme {
             }
             Err(Error::ThemeNotFound { .. }) => {
                 log::trace!("theme '{}' not found in custom directory, trying embedded themes", name);
-                match Self::load_embedded::<Assets>(name) {
+                match Self::load_embedded_raw::<Assets>(name) {
                     Ok(v) => {
                         log::debug!("loaded theme '{}' from embedded resources", name);
                         Ok(v)
@@ -225,7 +231,8 @@ impl Theme {
     }
 
     pub fn embedded(name: &str) -> Result<Self> {
-        Self::load_embedded::<Assets>(name)?.resolve()
+        let theme = Self::load_embedded_raw::<Assets>(name)?;
+        merge_with_base(theme, name).resolve()
     }
 
     pub fn list(app_dirs: &AppDirs) -> Result<HashMap<Arc<str>, ThemeInfo>> {
@@ -251,7 +258,7 @@ impl Theme {
         Ok(result)
     }
 
-    pub(super) fn load_embedded<S: RustEmbed>(name: &str) -> Result<RawTheme> {
+    pub(super) fn load_embedded_raw<S: RustEmbed>(name: &str) -> Result<RawTheme> {
         for format in Format::iter() {
             let filename = Self::filename(name, format);
             if let Some(file) = S::get(&filename) {
@@ -553,7 +560,7 @@ pub mod testing {
     struct Assets;
 
     pub fn theme() -> Result<Theme> {
-        Theme::load_embedded::<Assets>("test")?.resolve()
+        Theme::load_embedded_raw::<Assets>("test")?.resolve()
     }
 }
 
