@@ -1,0 +1,11 @@
+/* Dark theme. Overrides the CSS variables defined in viewer.css; the JS-injected
+   xterm-256 palette already provides reasonable defaults for hl-fg-N / hl-bg-N, so
+   themes only need to touch what they actually want to change. */
+
+:root {
+  --bg: #1d1f21;
+  --fg: #d6d6d6;
+  --bg-toolbar: #2b2d30;
+  --border: #444;
+  --placeholder: #555;
+}
