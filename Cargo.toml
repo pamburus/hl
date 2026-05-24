@@ -37,6 +37,7 @@ capnpc = "0.25"
 clap = { version = "4", features = ["derive", "env", "string", "wrap_help"] }
 clap_complete = { version = "4" }
 clap_mangen = { git = "https://github.com/pamburus/rust-clap.git", rev = "20f0ffd737581a5ebf7479d2174f2c197f25c94d" }
+crossbeam-queue = "0.3"
 json = { package = "serde_json", version = "1", features = ["raw_value"] }
 log = "0.4"
 memchr = "2"
@@ -66,7 +67,7 @@ color-print = "0.3"
 config = { version = "0.15", features = ["json", "toml", "yaml"] }
 const-str = "1"
 crossbeam-channel = "0.5"
-crossbeam-queue = "0.3"
+crossbeam-queue = { workspace = true }
 crossbeam-utils = "0.8"
 deko = "0.6"
 derive_more = { version = "2", features = ["deref", "deref_mut", "display", "eq", "from", "into", "into_iterator"] }

@@ -1546,6 +1546,7 @@ dependencies = [
  "anyhow",
  "axum",
  "clap",
+ "crossbeam-queue",
  "hl",
  "reqwest",
  "serde",

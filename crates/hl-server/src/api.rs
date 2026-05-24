@@ -115,7 +115,7 @@ async fn render(State(state): State<AppState>, Query(q): Query<RenderQuery>) -> 
     // complete line in the source.
     let (aligned, first_byte) = align_leading(&bytes, q.start, q.start > 0);
 
-    let mut renderer = state.render.make_renderer();
+    let mut renderer = state.render.renderer();
     let mut lines = Vec::new();
     renderer.render_chunk(aligned, first_byte, |r| {
         lines.push(RenderedLine {
