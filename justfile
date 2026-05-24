@@ -37,6 +37,12 @@ build-release: (setup "build")
 run *args: build
     cargo run -- {{ args }}
 
+# `just serve` always exits 130 on Ctrl-C — that's just's intrinsic SIGINT handling.
+# Invoke contrib/bin/serve directly to get exit code 0 on Ctrl-C.
+[doc('Build hl-server, run it in the foreground, and open <log> in the default browser')]
+serve log server-port="8080" source-port="": (setup "miniserve")
+    @contrib/bin/serve "{{ log }}" "{{ server-port }}" "{{ source-port }}"
+
 [doc('Run tests for all packages in the workspace')]
 test: (setup "build")
     cargo test --workspace
