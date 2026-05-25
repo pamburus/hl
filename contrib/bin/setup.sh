@@ -260,6 +260,21 @@ setup_markdownlint() {
     fi
 }
 
+setup_miniserve() {
+    if [ ! -x "$(command -v miniserve)" ]; then
+        if [ -x "$(command -v brew)" ]; then
+            brew install miniserve
+        elif [ -x "$(command -v apt-get)" ]; then
+            sudo apt-get install miniserve
+        elif [ -x "$(command -v pacman)" ]; then
+            sudo pacman -S miniserve
+        else
+            setup_cargo
+            cargo install miniserve --locked
+        fi
+    fi
+}
+
 
 
 # --- main ---
@@ -305,6 +320,9 @@ while [ $# -gt 0 ]; do
             ;;
         markdown-lint)
             setup_markdownlint
+            ;;
+        miniserve)
+            setup_miniserve
             ;;
         *)
             echo "Unknown setup $1"
