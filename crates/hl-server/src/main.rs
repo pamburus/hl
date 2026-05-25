@@ -7,6 +7,7 @@
 
 mod api;
 mod render;
+mod search;
 mod segments;
 mod source;
 

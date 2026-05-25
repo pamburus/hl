@@ -13,6 +13,7 @@ use serde::{Deserialize, Serialize};
 use tracing::warn;
 
 use crate::render::RenderConfig;
+use crate::search::{SearchError, SearchMatch, SearchMode, search_chunk};
 use crate::segments::{Segment, ansi_to_segments};
 use crate::source::{Metadata, SourceClient, SourceError};
 
@@ -37,6 +38,7 @@ pub fn router(state: AppState) -> Router {
         .route("/health", get(health))
         .route("/probe", get(probe))
         .route("/render", get(render))
+        .route("/search", get(search))
         .with_state(state)
 }
 
@@ -117,7 +119,7 @@ async fn render(State(state): State<AppState>, Query(q): Query<RenderQuery>) -> 
 
     let mut renderer = state.render.renderer();
     let mut lines = Vec::new();
-    renderer.render_chunk(aligned, first_byte, |r| {
+    renderer.render_chunk(aligned, first_byte, hl::Filter::default(), |r| {
         lines.push(RenderedLine {
             start: r.start,
             segments: ansi_to_segments(r.ansi),
@@ -142,6 +144,58 @@ fn align_leading(bytes: &[u8], start: u64, skip_partial: bool) -> (&[u8], u64) {
         // nothing; the caller can widen the range and retry.
         None => (&[], start + bytes.len() as u64),
     }
+}
+
+// ---
+
+#[derive(Debug, Deserialize)]
+struct SearchQuery {
+    url: String,
+    q: String,
+    #[serde(default)]
+    mode: SearchMode,
+    start: u64,
+    end: u64,
+    /// Case-insensitive substring matching. Defaults to true to match what
+    /// browser-native find behaves like. Ignored in query mode.
+    #[serde(default = "default_case_insensitive")]
+    case_insensitive: bool,
+}
+
+fn default_case_insensitive() -> bool {
+    true
+}
+
+#[derive(Serialize)]
+struct SearchResponse {
+    first_byte: u64,
+    last_byte: u64,
+    matches: Vec<SearchMatch>,
+}
+
+async fn search(State(state): State<AppState>, Query(q): Query<SearchQuery>) -> Result<Json<SearchResponse>, ApiError> {
+    if q.end <= q.start {
+        return Ok(Json(SearchResponse {
+            first_byte: q.start,
+            last_byte: q.start,
+            matches: Vec::new(),
+        }));
+    }
+    let span = q.end - q.start;
+    if span > MAX_RENDER_BYTES {
+        return Err(ApiError::range_too_large(span, MAX_RENDER_BYTES));
+    }
+
+    let bytes = state.source.get_range(&q.url, q.start, q.end).await?;
+    let (aligned, first_byte) = align_leading(&bytes, q.start, q.start > 0);
+
+    let matches = search_chunk(&state.render, aligned, first_byte, &q.q, q.mode, q.case_insensitive)?;
+
+    Ok(Json(SearchResponse {
+        first_byte,
+        last_byte: first_byte + aligned.len() as u64,
+        matches,
+    }))
 }
 
 // ---
@@ -174,6 +228,21 @@ impl ApiError {
 impl IntoResponse for ApiError {
     fn into_response(self) -> Response {
         (self.status, Json(self.body)).into_response()
+    }
+}
+
+impl From<SearchError> for ApiError {
+    fn from(e: SearchError) -> Self {
+        let (status, kind) = match &e {
+            SearchError::InvalidQuery(_) => (StatusCode::BAD_REQUEST, "invalid_query"),
+        };
+        ApiError {
+            status,
+            body: ErrorBody {
+                error: e.to_string(),
+                kind,
+            },
+        }
     }
 }
 

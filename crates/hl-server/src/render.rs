@@ -26,7 +26,7 @@ use hl::app::{RecordIgnorer, SegmentProcess, SegmentProcessor, SegmentProcessorO
 use hl::formatting::{Expansion, RecordFormatterBuilder};
 use hl::settings::{AsciiMode, FieldShowOption};
 use hl::timezone::Tz;
-use hl::{DateTimeFormatter, Filter, LinuxDateFormat, Parser, ParserSettings, RecordFormatter, Settings, Theme};
+use hl::{DateTimeFormatter, LinuxDateFormat, Parser, ParserSettings, RecordFilter, RecordFormatter, Settings, Theme};
 
 /// Shared, immutable rendering state plus the buffer pool. Cloning a `RenderConfig`
 /// is a single Arc bump, so passing it through `AppState` is free.
@@ -113,11 +113,16 @@ pub struct Rendered<'a> {
 }
 
 impl Renderer {
-    /// Iterate over input bytes one line at a time, emitting a `Rendered` for each.
-    /// The closure receives a borrowed view of the renderer's output buffer — copy or
-    /// convert it before the next iteration if you need to keep it.
-    pub fn render_chunk<F>(&mut self, bytes: &[u8], first_byte: u64, mut sink: F)
+    /// Iterate over input bytes one line at a time, emitting a `Rendered` for each
+    /// input line (regardless of whether the record passed the filter). The closure
+    /// receives a borrowed view of the renderer's output buffer — copy or convert it
+    /// before the next iteration if you need to keep it. An empty `ansi` slice means
+    /// either the line wasn't parseable as a record OR the filter rejected it; the
+    /// caller can disambiguate by tracking the input line count vs filtered count if
+    /// it cares.
+    pub fn render_chunk<Fil, F>(&mut self, bytes: &[u8], first_byte: u64, filter: Fil, mut sink: F)
     where
+        Fil: RecordFilter,
         F: FnMut(Rendered<'_>),
     {
         let buf = self.buf.as_mut().expect("renderer guard already dropped");
@@ -126,7 +131,7 @@ impl Renderer {
             allow_unparsed_data: true,
             ..SegmentProcessorOptions::default()
         };
-        let mut sp = SegmentProcessor::new(&self.inner.parser, &self.inner.formatter, Filter::default(), opts);
+        let mut sp = SegmentProcessor::new(&self.inner.parser, &self.inner.formatter, filter, opts);
         let mut observer = RecordIgnorer {};
 
         let mut cursor: u64 = first_byte;
