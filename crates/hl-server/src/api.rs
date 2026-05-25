@@ -110,12 +110,21 @@ async fn render(State(state): State<AppState>, Query(q): Query<RenderQuery>) -> 
         return Err(ApiError::range_too_large(span, MAX_RENDER_BYTES));
     }
 
-    let bytes = state.source.get_range(&q.url, q.start, q.end).await?;
+    // Fetch one extra byte to the left when q.start > 0 so we can tell whether
+    // q.start sits on a line boundary or mid-line. Without this peek the leading
+    // alignment would eat the first line whenever the client made a request whose
+    // start happened to coincide with the previous chunk's last_byte.
+    let (fetch_start, lookahead) = if q.start > 0 { (q.start - 1, true) } else { (0, false) };
+    let bytes = state.source.get_range(&q.url, fetch_start, q.end).await?;
 
-    // If we requested a non-zero start, the first bytes likely belong to the tail of a
-    // line we don't fully see. Skip to the first newline so every rendered line is a
-    // complete line in the source.
-    let (aligned, first_byte) = align_leading(&bytes, q.start, q.start > 0);
+    let (aligned, first_byte) = align_leading(&bytes, fetch_start, lookahead);
+    // Trim trailing partial line so chunk boundaries are always line boundaries.
+    // The contract we expose: last_byte is the byte right after the chunk's last
+    // newline (i.e., the start of the next line in the source). The next chunk's
+    // request can use this directly as `start` and the lookahead-based align_leading
+    // will leave it alone.
+    let aligned = trim_trailing(aligned);
+    let last_byte = first_byte + aligned.len() as u64;
 
     let mut renderer = state.render.renderer();
     let mut lines = Vec::new();
@@ -125,7 +134,6 @@ async fn render(State(state): State<AppState>, Query(q): Query<RenderQuery>) -> 
             segments: ansi_to_segments(r.ansi),
         });
     });
-    let last_byte = first_byte + aligned.len() as u64;
 
     Ok(Json(RenderResponse {
         first_byte,
@@ -134,15 +142,47 @@ async fn render(State(state): State<AppState>, Query(q): Query<RenderQuery>) -> 
     }))
 }
 
-fn align_leading(bytes: &[u8], start: u64, skip_partial: bool) -> (&[u8], u64) {
-    if !skip_partial || bytes.is_empty() {
-        return (bytes, start);
+/// Align the leading edge of the fetched bytes to a line boundary. With
+/// `lookahead = true`, `bytes[0]` is byte `fetch_start` in the source and we use it
+/// to decide whether `fetch_start + 1` (= the request's actual start) is on a line
+/// boundary — if so, no skip; otherwise skip past the next newline.
+fn align_leading(bytes: &[u8], fetch_start: u64, lookahead: bool) -> (&[u8], u64) {
+    if bytes.is_empty() {
+        return (bytes, fetch_start + if lookahead { 1 } else { 0 });
     }
+    if !lookahead {
+        // No lookahead means we started at byte 0 of the file, which is by
+        // definition the start of line 0.
+        return (bytes, fetch_start);
+    }
+    if bytes[0] == b'\n' {
+        // The byte just before the requested start is a newline — so the requested
+        // start (= fetch_start + 1) is line-aligned. Skip the lookahead byte only.
+        return (&bytes[1..], fetch_start + 1);
+    }
+    // `bytes[0]` is mid-line. Walk forward to the next newline; the byte after that
+    // is the start of the next whole line.
     match bytes.iter().position(|&b| b == b'\n') {
-        Some(pos) => (&bytes[pos + 1..], start + pos as u64 + 1),
-        // No newline in the slice — the whole thing is a fragment of one line. Render
-        // nothing; the caller can widen the range and retry.
-        None => (&[], start + bytes.len() as u64),
+        Some(pos) => (&bytes[pos + 1..], fetch_start + pos as u64 + 1),
+        // No newline anywhere — the whole fetched span is one (very long) line.
+        // Render nothing; caller can widen and retry.
+        None => (&[], fetch_start + bytes.len() as u64),
+    }
+}
+
+/// Trim the trailing edge to a line boundary. If `bytes` ends with a newline, it's
+/// already aligned. Otherwise, walk back to the last newline and drop everything
+/// after it. For the very last chunk in a file whose final line has no trailing
+/// newline, this drops that line; v1 accepts that minor loss in exchange for
+/// stitch-clean chunk boundaries.
+fn trim_trailing(bytes: &[u8]) -> &[u8] {
+    if bytes.last() == Some(&b'\n') {
+        bytes
+    } else {
+        match bytes.iter().rposition(|&b| b == b'\n') {
+            Some(pos) => &bytes[..=pos],
+            None => &[],
+        }
     }
 }
 
@@ -186,14 +226,17 @@ async fn search(State(state): State<AppState>, Query(q): Query<SearchQuery>) -> 
         return Err(ApiError::range_too_large(span, MAX_RENDER_BYTES));
     }
 
-    let bytes = state.source.get_range(&q.url, q.start, q.end).await?;
-    let (aligned, first_byte) = align_leading(&bytes, q.start, q.start > 0);
+    let (fetch_start, lookahead) = if q.start > 0 { (q.start - 1, true) } else { (0, false) };
+    let bytes = state.source.get_range(&q.url, fetch_start, q.end).await?;
+    let (aligned, first_byte) = align_leading(&bytes, fetch_start, lookahead);
+    let aligned = trim_trailing(aligned);
+    let last_byte = first_byte + aligned.len() as u64;
 
     let matches = search_chunk(&state.render, aligned, first_byte, &q.q, q.mode, q.case_insensitive)?;
 
     Ok(Json(SearchResponse {
         first_byte,
-        last_byte: first_byte + aligned.len() as u64,
+        last_byte,
         matches,
     }))
 }

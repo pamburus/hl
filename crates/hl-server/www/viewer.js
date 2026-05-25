@@ -53,13 +53,24 @@ const searchClose = document.getElementById("search-close");
 
 // --- bootstrap ---
 
+// Module-scope state that `openLog` reads. Declared BEFORE any code path that can
+// call openLog — otherwise the auto-load below trips the temporal dead zone and
+// dies with `ReferenceError: Cannot access 'currentViewer' before initialization`.
+let currentViewer = null;
+let currentSearch = null;
+
 injectPalette();
 
 const params = new URLSearchParams(window.location.search);
 const initialSrc = params.get("src");
 if (initialSrc) {
-  urlInput.value = initialSrc;
+  // src came in on the URL — load it; no URL input needed in the chrome.
   openLog(initialSrc);
+} else {
+  // No URL provided — show the fallback input so the user can paste one.
+  urlInput.hidden = false;
+  openBtn.hidden = false;
+  urlInput.focus();
 }
 
 openBtn.addEventListener("click", () => {
@@ -68,6 +79,10 @@ openBtn.addEventListener("click", () => {
   const p = new URLSearchParams(window.location.search);
   p.set("src", url);
   history.replaceState(null, "", `?${p.toString()}`);
+  // Once we have a source, hide the input/button — the URL bar is now the source
+  // of truth. To change source, edit the URL bar and reload.
+  urlInput.hidden = true;
+  openBtn.hidden = true;
   openLog(url);
 });
 
@@ -77,9 +92,6 @@ urlInput.addEventListener("keydown", (e) => {
     openBtn.click();
   }
 });
-
-let currentViewer = null;
-let currentSearch = null;
 
 async function openLog(url) {
   if (currentViewer) {
@@ -287,13 +299,18 @@ class LineIndex {
   }
 
   /// Register a chunk we just received. Returns the line number we assigned to its
-  /// first line so the caller can stuff the cache.
+  /// first line so the caller can stuff the cache. Plants anchors at both the start
+  /// AND the end of the chunk's byte range — with the server now returning
+  /// line-aligned chunks (both leading and trailing), the next contiguous chunk's
+  /// `first_byte` equals this chunk's `last_byte`, and that lookup resolves to an
+  /// exact line number via the end-anchor rather than extrapolating via avgBpl.
   ingest(chunk) {
     if (!chunk.lines || chunk.lines.length === 0) {
       return null;
     }
     const baseLine = this.lineAt(chunk.first_byte);
     this.upsertAnchor(chunk.first_byte, baseLine);
+    this.upsertAnchor(chunk.last_byte, baseLine + chunk.lines.length);
     // Refine the running average from the observed span.
     const span = chunk.last_byte - chunk.first_byte;
     if (span > 0) {
