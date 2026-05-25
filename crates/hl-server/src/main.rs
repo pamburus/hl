@@ -115,17 +115,19 @@ fn build_app(cli: &Cli) -> anyhow::Result<Router> {
         render,
     };
     let static_dir = ServeDir::new(&cli.www_dir);
-    // `no-cache` (NOT `no-store`) lets the browser keep a copy but forces it to
-    // revalidate with If-None-Match / If-Modified-Since before reusing — so when
-    // we change a static asset, the next request actually sees the new file
-    // instead of silently using the cached one. ServeDir provides ETag and
-    // Last-Modified, so revalidations are cheap (304s when unchanged).
+    // `no-store` means never cache — the browser must hit the server every time.
+    // We tried `no-cache` first (allow caching, force revalidation), but if the
+    // browser had previously cached the response under its own heuristic policy
+    // (because we hadn't been sending Cache-Control at all), it kept using the
+    // stale copy even after hard reload. `no-store` is the strictest option and
+    // the safest default during active development. Once the project stabilises
+    // we can switch back to `no-cache` + ETag-based revalidation.
     let app = Router::new()
         .nest("/api", api::router(state))
         .fallback_service(static_dir)
         .layer(SetResponseHeaderLayer::overriding(
             header::CACHE_CONTROL,
-            HeaderValue::from_static("no-cache"),
+            HeaderValue::from_static("no-store"),
         ))
         .layer(TraceLayer::new_for_http());
     Ok(app)
