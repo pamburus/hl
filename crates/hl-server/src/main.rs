@@ -18,8 +18,9 @@ use std::time::Duration;
 
 use anyhow::Context;
 use axum::Router;
+use axum::http::{HeaderValue, header};
 use clap::Parser;
-use tower_http::{services::ServeDir, trace::TraceLayer};
+use tower_http::{services::ServeDir, set_header::SetResponseHeaderLayer, trace::TraceLayer};
 use tracing::info;
 
 use crate::render::RenderConfig;
@@ -114,9 +115,18 @@ fn build_app(cli: &Cli) -> anyhow::Result<Router> {
         render,
     };
     let static_dir = ServeDir::new(&cli.www_dir);
+    // `no-cache` (NOT `no-store`) lets the browser keep a copy but forces it to
+    // revalidate with If-None-Match / If-Modified-Since before reusing — so when
+    // we change a static asset, the next request actually sees the new file
+    // instead of silently using the cached one. ServeDir provides ETag and
+    // Last-Modified, so revalidations are cheap (304s when unchanged).
     let app = Router::new()
         .nest("/api", api::router(state))
         .fallback_service(static_dir)
+        .layer(SetResponseHeaderLayer::overriding(
+            header::CACHE_CONTROL,
+            HeaderValue::from_static("no-cache"),
+        ))
         .layer(TraceLayer::new_for_http());
     Ok(app)
 }
