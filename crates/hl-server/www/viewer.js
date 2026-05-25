@@ -30,6 +30,10 @@ const MAX_SPACER_HEIGHT_PX = 16_000_000;
 // Initial guess until we observe the first chunk's actual bytes-per-line.
 const INITIAL_BYTES_PER_LINE = 120;
 
+// Bytes to scan per /api/search request. Bigger means fewer round trips but more
+// work server-side per request; the server caps requests at 16 MiB.
+const SEARCH_CHUNK_SIZE = 1024 * 1024;
+
 // --- DOM refs ---
 
 const urlInput = document.getElementById("url-input");
@@ -38,6 +42,14 @@ const statusEl = document.getElementById("status");
 const viewport = document.getElementById("viewport");
 const spacer = document.getElementById("spacer");
 const rowsHost = document.getElementById("rows");
+
+const searchBar = document.getElementById("search-bar");
+const searchInput = document.getElementById("search-input");
+const searchModeSel = document.getElementById("search-mode");
+const searchCount = document.getElementById("search-count");
+const searchPrev = document.getElementById("search-prev");
+const searchNext = document.getElementById("search-next");
+const searchClose = document.getElementById("search-close");
 
 // --- bootstrap ---
 
@@ -67,12 +79,15 @@ urlInput.addEventListener("keydown", (e) => {
 });
 
 let currentViewer = null;
+let currentSearch = null;
 
 async function openLog(url) {
   if (currentViewer) {
     currentViewer.stop();
     currentViewer = null;
   }
+  closeSearchBar();
+  currentSearch = null;
   setStatus("Probing…");
   try {
     const meta = await probe(url);
@@ -82,11 +97,100 @@ async function openLog(url) {
     setStatus(`Connected. ${formatBytes(meta.content_length)}`);
     currentViewer = new Viewer(url, meta.content_length);
     currentViewer.start();
+    currentSearch = new Search(url, meta.content_length, currentViewer);
   } catch (e) {
     setStatus(`error: ${e.message ?? e}`);
     console.error(e);
   }
 }
+
+// --- search bar wiring ---
+
+function openSearchBar() {
+  if (!currentSearch) return;
+  if (searchBar.hidden) searchBar.hidden = false;
+  searchInput.focus();
+  searchInput.select();
+  updateSearchUI();
+}
+
+function closeSearchBar() {
+  searchBar.hidden = true;
+  if (currentSearch) currentSearch.setQuery("", currentSearch.mode);
+  viewport.focus();
+}
+
+function updateSearchUI() {
+  const s = currentSearch;
+  if (!s || s.query.length === 0) {
+    searchCount.textContent = "0 / 0";
+    searchPrev.disabled = true;
+    searchNext.disabled = true;
+    return;
+  }
+  if (s.error) {
+    searchCount.textContent = s.error.kind === "invalid_query" ? "invalid query" : "error";
+    searchPrev.disabled = true;
+    searchNext.disabled = true;
+    return;
+  }
+  const total = s.matches.length;
+  const cur = s.current < 0 ? 0 : s.current + 1;
+  let label = `${cur.toLocaleString()} / ${total.toLocaleString()}`;
+  if (!s.scanComplete) {
+    const pct = s.totalSize > 0 ? Math.floor((s.scanProgress / s.totalSize) * 100) : 0;
+    label += ` (${pct}%)`;
+  }
+  searchCount.textContent = label;
+  searchPrev.disabled = total === 0;
+  searchNext.disabled = total === 0;
+}
+
+function fireSearch() {
+  if (!currentSearch) return;
+  const q = searchInput.value;
+  const mode = searchModeSel.value;
+  currentSearch.setQuery(q, mode);
+}
+
+searchInput.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") {
+    e.preventDefault();
+    // If the query just changed, kick off the scan; if it hadn't, treat Enter as
+    // "navigate to next" (Shift+Enter -> previous).
+    const liveQuery = searchInput.value;
+    const liveMode = searchModeSel.value;
+    if (!currentSearch) return;
+    if (currentSearch.query !== liveQuery || currentSearch.mode !== liveMode) {
+      currentSearch.setQuery(liveQuery, liveMode);
+    } else if (e.shiftKey) {
+      currentSearch.prev();
+    } else {
+      currentSearch.next();
+    }
+  } else if (e.key === "Escape") {
+    e.preventDefault();
+    closeSearchBar();
+  }
+});
+
+searchModeSel.addEventListener("change", () => {
+  if (searchInput.value.length > 0) fireSearch();
+});
+
+searchPrev.addEventListener("click", () => currentSearch && currentSearch.prev());
+searchNext.addEventListener("click", () => currentSearch && currentSearch.next());
+searchClose.addEventListener("click", closeSearchBar);
+
+// Cmd/Ctrl+F intercepts the browser's native Find (which can only see the few
+// virtualised rows currently in the DOM) and opens our in-page bar instead.
+document.addEventListener("keydown", (e) => {
+  if ((e.metaKey || e.ctrlKey) && (e.key === "f" || e.key === "F")) {
+    if (!currentSearch) return;
+    e.preventDefault();
+    openSearchBar();
+  }
+});
 
 // --- API client ---
 
@@ -106,6 +210,24 @@ async function renderRange(url, start, end) {
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
     throw new Error(body.error ?? `render failed: ${res.status}`);
+  }
+  return res.json();
+}
+
+async function searchRange(url, q, mode, start, end) {
+  const p = new URLSearchParams({
+    url,
+    q,
+    mode,
+    start: String(start),
+    end: String(end),
+  });
+  const res = await fetch(`/api/search?${p}`);
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    const err = new Error(body.error ?? `search failed: ${res.status}`);
+    err.kind = body.kind;
+    throw err;
   }
   return res.json();
 }
@@ -365,6 +487,140 @@ class Viewer {
       }
     }
   }
+}
+
+// --- search ---
+
+// Drives the /api/search endpoint. Walks the file in 1 MiB chunks starting at byte
+// 0, accumulating matches. The user can navigate to any match the moment it lands
+// — the scan keeps going in the background. Cancellable: a new query / closing the
+// bar cancels the in-flight scan so we don't waste server cycles.
+class Search {
+  constructor(srcUrl, totalSize, viewer) {
+    this.srcUrl = srcUrl;
+    this.totalSize = totalSize;
+    this.viewer = viewer;
+    this.query = "";
+    this.mode = "substring";
+    this.matches = []; // [{ start: u64, ranges: [[s, e], ...] }] sorted by start
+    this.current = -1; // index into matches, or -1
+    this.scanController = null; // { cancelled: bool }
+    this.scanProgress = 0;
+    this.scanComplete = false;
+    this.error = null;
+  }
+
+  cancel() {
+    if (this.scanController) this.scanController.cancelled = true;
+    this.scanController = null;
+  }
+
+  setQuery(q, mode) {
+    if (q === this.query && mode === this.mode) return;
+    this.cancel();
+    this.query = q;
+    this.mode = mode;
+    this.matches = [];
+    this.current = -1;
+    this.scanProgress = 0;
+    this.scanComplete = false;
+    this.error = null;
+    updateSearchUI();
+    if (q.length === 0) return;
+    const ctrl = { cancelled: false };
+    this.scanController = ctrl;
+    this.runScan(ctrl).catch((e) => {
+      if (ctrl.cancelled) return;
+      this.error = e;
+      updateSearchUI();
+    });
+  }
+
+  async runScan(ctrl) {
+    let offset = 0;
+    while (offset < this.totalSize) {
+      if (ctrl.cancelled) return;
+      const end = Math.min(this.totalSize, offset + SEARCH_CHUNK_SIZE);
+      const r = await searchRange(this.srcUrl, this.query, this.mode, offset, end);
+      if (ctrl.cancelled) return;
+      // Skip dupes if the server's leading-line alignment overlaps with the previous
+      // chunk's tail (it shouldn't, since we advance by full chunks, but be safe).
+      const lastSeenStart =
+        this.matches.length > 0 ? this.matches[this.matches.length - 1].start : -1;
+      for (const m of r.matches) {
+        if (m.start > lastSeenStart) {
+          this.matches.push(m);
+        }
+      }
+      offset = r.last_byte;
+      this.scanProgress = offset;
+      updateSearchUI();
+    }
+    this.scanComplete = true;
+    updateSearchUI();
+  }
+
+  hasMatches() {
+    return this.matches.length > 0;
+  }
+
+  next() {
+    if (this.matches.length === 0) return;
+    if (this.current < 0) {
+      // First navigation: jump to the first match at or after the current scroll
+      // position, falling back to wrap-around.
+      const viewByte = this.viewer ? this.viewer.index.byteAt(
+        Math.floor(viewport.scrollTop / ROW_HEIGHT_PX),
+      ) : 0;
+      const i = lowerBoundByStart(this.matches, viewByte);
+      this.current = i < this.matches.length ? i : 0;
+    } else {
+      this.current = (this.current + 1) % this.matches.length;
+    }
+    this.gotoCurrent();
+  }
+
+  prev() {
+    if (this.matches.length === 0) return;
+    if (this.current < 0) {
+      const viewByte = this.viewer ? this.viewer.index.byteAt(
+        Math.floor(viewport.scrollTop / ROW_HEIGHT_PX),
+      ) : 0;
+      const i = lowerBoundByStart(this.matches, viewByte);
+      this.current = i > 0 ? i - 1 : this.matches.length - 1;
+    } else {
+      this.current = (this.current - 1 + this.matches.length) % this.matches.length;
+    }
+    this.gotoCurrent();
+  }
+
+  gotoCurrent() {
+    if (this.current < 0 || this.current >= this.matches.length) return;
+    const m = this.matches[this.current];
+    if (!this.viewer) return;
+    const lineEst = this.viewer.index.lineAt(m.start);
+    const target = lineEst * ROW_HEIGHT_PX;
+    const top = viewport.scrollTop;
+    const bottom = top + viewport.clientHeight;
+    if (target < top || target + ROW_HEIGHT_PX > bottom) {
+      // Land the match about a third of the way down for reading context below.
+      viewport.scrollTo({ top: Math.max(0, target - viewport.clientHeight / 3) });
+    }
+    updateSearchUI();
+  }
+}
+
+/// Smallest index i such that matches[i].start >= byte. Returns matches.length if
+/// no such index exists.
+function lowerBoundByStart(matches, byte) {
+  let lo = 0,
+    hi = matches.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if (matches[mid].start < byte) lo = mid + 1;
+    else hi = mid;
+  }
+  return lo;
 }
 
 // --- segment painter ---

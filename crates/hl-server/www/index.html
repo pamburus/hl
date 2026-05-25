@@ -19,6 +19,23 @@
       <button id="open-btn" type="button">Open</button>
       <span id="status">Idle</span>
     </header>
+    <div id="search-bar" hidden>
+      <input
+        id="search-input"
+        type="text"
+        placeholder="Find in log…"
+        autocomplete="off"
+        spellcheck="false"
+      />
+      <select id="search-mode" title="Search mode">
+        <option value="substring" selected>substring</option>
+        <option value="query">query</option>
+      </select>
+      <span id="search-count">0 / 0</span>
+      <button id="search-prev" type="button" title="Previous (Shift+Enter)">&#x25B2;</button>
+      <button id="search-next" type="button" title="Next (Enter)">&#x25BC;</button>
+      <button id="search-close" type="button" title="Close (Esc)">&times;</button>
+    </div>
     <main id="viewport" tabindex="0">
       <div id="spacer">
         <div id="rows"></div>
