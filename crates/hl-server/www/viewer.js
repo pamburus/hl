@@ -428,6 +428,18 @@ class Viewer {
     );
     const lastChunk =
       Math.floor(lastByte / CHUNK_SIZE) * CHUNK_SIZE + READ_AHEAD_CHUNKS * CHUNK_SIZE;
+    if (first !== this.lastRange.first || last !== this.lastRange.last) {
+      debug("updateVisible window changed", {
+        scrollTop,
+        first,
+        last,
+        firstByte,
+        lastByte,
+        firstChunk,
+        lastChunk,
+        fetchedCount: this.fetched.size,
+      });
+    }
     for (let c = firstChunk; c <= lastChunk; c += CHUNK_SIZE) {
       this.fetchChunkAt(c);
     }
@@ -442,12 +454,23 @@ class Viewer {
     if (this.stopped) return;
     if (chunkStart >= this.index.totalSize) return;
     if (this.fetched.has(chunkStart) || this.inflight.has(chunkStart)) return;
+    debug("fetchChunkAt", { chunkStart });
     const p = (async () => {
       try {
         const end = Math.min(this.index.totalSize, chunkStart + CHUNK_SIZE);
         const chunk = await renderRange(this.srcUrl, chunkStart, end);
         if (this.stopped) return;
         const baseLine = this.index.ingest(chunk);
+        debug("chunk ingested", {
+          chunkStart,
+          first_byte: chunk.first_byte,
+          last_byte: chunk.last_byte,
+          lines: chunk.lines.length,
+          baseLine,
+          avgBpl: this.index.avgBytesPerLine.toFixed(1),
+          cacheSize: this.lineCache.size,
+          anchorCount: this.index.anchors.length,
+        });
         if (baseLine !== null) {
           for (let i = 0; i < chunk.lines.length; i++) {
             this.lineCache.set(baseLine + i, chunk.lines[i]);
@@ -712,6 +735,18 @@ function hex(n) {
 
 function setStatus(text) {
   statusEl.textContent = text;
+}
+
+// Verbose viewer trace. Off by default; flip on with `?debug=1` (or
+// `localStorage.hlDebug = '1'`) and reload — useful while we're stabilising the
+// virtual-scroll / chunk-fetch path. Quiet in normal use.
+const DEBUG =
+  new URLSearchParams(window.location.search).get("debug") === "1" ||
+  (typeof localStorage !== "undefined" && localStorage.getItem("hlDebug") === "1");
+
+function debug(label, fields) {
+  if (!DEBUG) return;
+  console.log(`[viewer] ${label}`, fields ?? "");
 }
 
 function formatBytes(n) {
