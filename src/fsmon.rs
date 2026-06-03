@@ -141,6 +141,7 @@ mod imp {
                                 if added.contains(&path) {
                                     watcher.remove_filename(&path, EventFilter::EVFILT_VNODE)?;
                                     added.remove(&path);
+                                    synced = false;
                                 }
                                 Event::new(EventKind::Remove(RemoveKind::Any)).add_path(path)
                             }
@@ -157,6 +158,7 @@ mod imp {
                                 if added.contains(&path) {
                                     watcher.remove_filename(&path, EventFilter::EVFILT_VNODE)?;
                                     added.remove(&path);
+                                    synced = false;
                                 }
                                 Event::new(EventKind::Modify(ModifyKind::Name(RenameMode::Any))).add_path(path)
                             }
