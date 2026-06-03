@@ -378,8 +378,17 @@ class Viewer {
   }
 
   allocatePool() {
-    const visibleRows = Math.max(1, Math.ceil(viewport.clientHeight / ROW_HEIGHT_PX) + 4);
-    this.poolSize = visibleRows;
+    const visibleRows = Math.max(1, Math.ceil(viewport.clientHeight / ROW_HEIGHT_PX));
+    // Keep BUFFER_VIEWPORTS viewports of already-painted rows above AND below the
+    // visible area. Scrolls within the buffer range (PgUp/PgDn, trackpad flicks,
+    // mouse-wheel flings up to ~BUFFER_VIEWPORTS viewports) reveal rows that already
+    // have their styled DOM in place, instead of empty spacer until the next rAF can
+    // reposition the pool. The pool re-centers on the next updateVisible call,
+    // refilling the buffer for the new scroll position.
+    const BUFFER_VIEWPORTS = 2;
+    this.visibleRows = visibleRows;
+    this.bufferAbove = visibleRows * BUFFER_VIEWPORTS;
+    this.poolSize = visibleRows * (1 + 2 * BUFFER_VIEWPORTS);
     rowsHost.replaceChildren();
     this.rowPool = [];
     for (let i = 0; i < this.poolSize; i++) {
@@ -415,7 +424,8 @@ class Viewer {
 
   updateVisible() {
     const scrollTop = viewport.scrollTop;
-    const first = Math.max(0, Math.floor(scrollTop / ROW_HEIGHT_PX) - 2);
+    const visibleFirst = Math.max(0, Math.floor(scrollTop / ROW_HEIGHT_PX));
+    const first = Math.max(0, visibleFirst - this.bufferAbove);
     const last = first + this.poolSize - 1;
 
     // Translate the visible line window into a byte range, then dispatch the chunks
