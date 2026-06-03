@@ -22,6 +22,16 @@ use crate::source::{Metadata, SourceClient, SourceError};
 /// GiB log in one call." Tunable later if it becomes the bottleneck.
 const MAX_RENDER_BYTES: u64 = 16 * 1024 * 1024;
 
+/// How many bytes past `q.end` we fetch so that lines whose start is in
+/// `[q.start, q.end)` but whose terminating newline lands past `q.end` can be included
+/// in their entirety. Without this, every line that straddles a chunk boundary is
+/// silently dropped (it's not in this chunk because trim_trailing removes the partial
+/// tail, and not in the next chunk because align_leading skips past it). For typical
+/// log files most lines are well under 1 KiB; 64 KiB is comfortably above the longest
+/// realistic structured-log line. Lines longer than this still get dropped, but that's
+/// the same failure mode the server already had — this fix doesn't make it worse.
+const TRAILING_LOOKAHEAD: u64 = 64 * 1024;
+
 /// Cloneable handle to the per-app state. All handlers receive this via axum's `State`
 /// extractor; cloning is just Arc bumps.
 #[derive(Clone)]
@@ -115,15 +125,19 @@ async fn render(State(state): State<AppState>, Query(q): Query<RenderQuery>) -> 
     // alignment would eat the first line whenever the client made a request whose
     // start happened to coincide with the previous chunk's last_byte.
     let (fetch_start, lookahead) = if q.start > 0 { (q.start - 1, true) } else { (0, false) };
-    let bytes = state.source.get_range(&q.url, fetch_start, q.end).await?;
+    // Fetch slightly past q.end so we can include the full body of the last line
+    // whose start sits in [q.start, q.end) but whose newline lands past q.end. The
+    // source's get_range clamps to the actual content length so reading past EOF
+    // is safe.
+    let fetch_end = q.end + TRAILING_LOOKAHEAD;
+    let bytes = state.source.get_range(&q.url, fetch_start, fetch_end).await?;
 
     let (aligned, first_byte) = align_leading(&bytes, fetch_start, lookahead);
-    // Trim trailing partial line so chunk boundaries are always line boundaries.
-    // The contract we expose: last_byte is the byte right after the chunk's last
-    // newline (i.e., the start of the next line in the source). The next chunk's
-    // request can use this directly as `start` and the lookahead-based align_leading
-    // will leave it alone.
-    let aligned = trim_trailing(aligned);
+    // Each chunk owns the lines whose START byte sits in [q.start, q.end). We
+    // include their full content (terminating newlines may be past q.end). The
+    // resulting last_byte may exceed q.end, which is fine — the client keys
+    // its chunk cache by the requested start, not by where the data lands.
+    let aligned = trim_to_chunk_end(aligned, first_byte, q.end);
     let last_byte = first_byte + aligned.len() as u64;
 
     let mut renderer = state.render.renderer();
@@ -170,20 +184,34 @@ fn align_leading(bytes: &[u8], fetch_start: u64, lookahead: bool) -> (&[u8], u64
     }
 }
 
-/// Trim the trailing edge to a line boundary. If `bytes` ends with a newline, it's
-/// already aligned. Otherwise, walk back to the last newline and drop everything
-/// after it. For the very last chunk in a file whose final line has no trailing
-/// newline, this drops that line; v1 accepts that minor loss in exchange for
-/// stitch-clean chunk boundaries.
-fn trim_trailing(bytes: &[u8]) -> &[u8] {
-    if bytes.last() == Some(&b'\n') {
-        bytes
-    } else {
-        match bytes.iter().rposition(|&b| b == b'\n') {
-            Some(pos) => &bytes[..=pos],
-            None => &[],
+/// Return the prefix of `aligned` that covers exactly the lines whose start byte
+/// (in source coordinates) lies in `[first_byte, q_end)`. Each such line is included
+/// in full, up to and including its terminating newline — even if that newline lies
+/// past `q_end` (caller must have fetched a few extra bytes beyond `q_end` to make
+/// this possible).
+///
+/// Walks line by line: every newline at position `p` terminates the line starting at
+/// `cursor`; if that line's start was past `q_end` we stop, otherwise we extend the
+/// kept range to include the newline and step `cursor` forward. If a line's body
+/// extends past the fetched buffer (no newline found), we drop it — the caller's
+/// `TRAILING_LOOKAHEAD` already covers any realistic log line length.
+fn trim_to_chunk_end<'a>(aligned: &'a [u8], first_byte: u64, q_end: u64) -> &'a [u8] {
+    let mut trimmed_end = 0usize;
+    let mut search_from = 0usize;
+    loop {
+        let line_start = first_byte + search_from as u64;
+        if line_start >= q_end {
+            break;
+        }
+        match aligned[search_from..].iter().position(|&b| b == b'\n') {
+            Some(p) => {
+                trimmed_end = search_from + p + 1;
+                search_from = trimmed_end;
+            }
+            None => break,
         }
     }
+    &aligned[..trimmed_end]
 }
 
 // ---
@@ -227,9 +255,10 @@ async fn search(State(state): State<AppState>, Query(q): Query<SearchQuery>) -> 
     }
 
     let (fetch_start, lookahead) = if q.start > 0 { (q.start - 1, true) } else { (0, false) };
-    let bytes = state.source.get_range(&q.url, fetch_start, q.end).await?;
+    let fetch_end = q.end + TRAILING_LOOKAHEAD;
+    let bytes = state.source.get_range(&q.url, fetch_start, fetch_end).await?;
     let (aligned, first_byte) = align_leading(&bytes, fetch_start, lookahead);
-    let aligned = trim_trailing(aligned);
+    let aligned = trim_to_chunk_end(aligned, first_byte, q.end);
     let last_byte = first_byte + aligned.len() as u64;
 
     let matches = search_chunk(&state.render, aligned, first_byte, &q.q, q.mode, q.case_insensitive)?;

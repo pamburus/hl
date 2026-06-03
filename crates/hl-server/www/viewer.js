@@ -260,6 +260,15 @@ class LineIndex {
   }
 
   estimatedTotalLines() {
+    // Once any ingested chunk's last_byte has reached totalSize, its end-anchor's
+    // line value IS the exact total line count of the file — no more extrapolation
+    // needed. Use it directly so the spacer stops drifting as avgBytesPerLine
+    // refines and End/PgEnd actually lands on the last line in one press.
+    let exact = 0;
+    for (const a of this.anchors) {
+      if (a.byte >= this.totalSize && a.line > exact) exact = a.line;
+    }
+    if (exact > 0) return exact;
     return Math.max(1, Math.ceil(this.totalSize / this.avgBytesPerLine));
   }
 
