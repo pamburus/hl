@@ -343,8 +343,17 @@ class Viewer {
     this.srcUrl = srcUrl;
     this.index = new LineIndex(totalSize);
     this.lineCache = new Map(); // line -> { start, segments }
-    this.inflight = new Map(); // chunkStart -> Promise
+    this.inflight = new Map(); // chunkStart -> fetch Promise
     this.fetched = new Set(); // chunkStart that completed
+    // Serial promise chain for chunk INGEST (cache + anchor updates). Network fetches
+    // still run in parallel; the chain only serialises the moment when each chunk's
+    // baseLine is computed against anchors from prior chunks. Without this, a later
+    // chunk that returns first would extrapolate its baseLine from the seed anchor
+    // {0,0} and the initial avgBpL guess, planting its cache entries at wildly wrong
+    // line numbers; when the earlier chunk later ingests and corrects anchors, those
+    // stale cache entries don't move, so the visible window past the boundary stays
+    // a sea of "…" placeholders. (Hit at the chunk0/chunk1 seam on 64m.log.)
+    this.ingestChain = Promise.resolve();
     this.rowPool = [];
     this.poolSize = 0;
     this.rafPending = false;
@@ -460,15 +469,36 @@ class Viewer {
     this.paintRows(first, last);
   }
 
-  async fetchChunkAt(chunkStart) {
+  fetchChunkAt(chunkStart) {
     if (this.stopped) return;
     if (chunkStart >= this.index.totalSize) return;
     if (this.fetched.has(chunkStart) || this.inflight.has(chunkStart)) return;
     debug("fetchChunkAt", { chunkStart });
-    const p = (async () => {
+    // Kick the network fetch off NOW so multiple chunks fly to the server in
+    // parallel — they're independent and we want concurrency on the wire.
+    const end = Math.min(this.index.totalSize, chunkStart + CHUNK_SIZE);
+    const fetchPromise = renderRange(this.srcUrl, chunkStart, end);
+    this.inflight.set(chunkStart, fetchPromise);
+
+    // Ingest is serialised. Each chunk's `baseLine` is computed from anchors planted
+    // by previous chunks' ingests, so it stays consistent with how paintRows derives
+    // line numbers from scrollTop. Without this chain, a later chunk arriving first
+    // extrapolates its baseLine from the seed anchor {0,0} and the initial avgBpL
+    // guess (120), planting cache entries at wrong line keys; when the earlier
+    // chunk later ingests and patches anchors, those stale entries don't move and
+    // paintRows misses forever.
+    // Wrap the whole step in try/catch — an error in one chunk's ingest must not
+    // poison the chain for subsequent chunks.
+    this.ingestChain = this.ingestChain.then(async () => {
       try {
-        const end = Math.min(this.index.totalSize, chunkStart + CHUNK_SIZE);
-        const chunk = await renderRange(this.srcUrl, chunkStart, end);
+        let chunk;
+        try {
+          chunk = await fetchPromise;
+        } catch (e) {
+          setStatus(`fetch error: ${e.message ?? e}`);
+          console.error("chunk fetch failed", chunkStart, e);
+          return;
+        }
         if (this.stopped) return;
         const baseLine = this.index.ingest(chunk);
         debug("chunk ingested", {
@@ -491,13 +521,11 @@ class Viewer {
         this.updateSpacerHeight();
         this.updateVisible();
       } catch (e) {
-        setStatus(`fetch error: ${e.message ?? e}`);
-        console.error("chunk fetch failed", chunkStart, e);
+        console.error("ingest failed", chunkStart, e);
       } finally {
         this.inflight.delete(chunkStart);
       }
-    })();
-    this.inflight.set(chunkStart, p);
+    });
   }
 
   evictIfNeeded() {
