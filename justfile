@@ -136,8 +136,8 @@ bench *args: (setup "build")
     cargo bench --workspace --locked {{ args }}
 
 [doc('Generate a deterministic synthetic JSON-lines log of <size-mib> MiB at <output>')]
-gen-bench-log output size-mib="100" seed="3735928559":
-    @contrib/bin/gen-bench-log "{{ output }}" --size-mib "{{ size-mib }}" --seed "{{ seed }}"
+gen-log output size="1M" seed="0":
+    @contrib/bin/gen-log "{{ output }}" --size "{{ size }}" --seed "{{ seed }}"
 
 [doc('Check schema validation')]
 check-schema: (setup "schema")

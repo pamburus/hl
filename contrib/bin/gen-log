@@ -9,12 +9,12 @@ file shares nothing with anyone's real logs. Seeded RNG means successive runs pr
 identical bytes; reproducible benchmarks.
 
 Usage:
-    contrib/bin/gen-bench-log <output> [--size-mib N] [--seed N]
+    contrib/bin/gen-log <output> [--size-mib N] [--seed N]
 
 Examples:
-    contrib/bin/gen-bench-log /tmp/bench.log
-    contrib/bin/gen-bench-log /tmp/bench.log --size-mib 500
-    contrib/bin/gen-bench-log - --size-mib 1 | head -3      # pipe to stdout
+    contrib/bin/gen-log /tmp/bench.log
+    contrib/bin/gen-log /tmp/bench.log --size-mib 500
+    contrib/bin/gen-log - --size-mib 1 | head -3      # pipe to stdout
 """
 
 from __future__ import annotations
@@ -119,7 +119,9 @@ def make_record(rng: random.Random, ts: datetime, tz_offset: str) -> dict:
 
     # Compose the timestamp with the chosen offset. We carry microseconds so hl exercises
     # its sub-second formatting path.
-    ts_str = ts.strftime("%Y-%m-%dT%H:%M:%S") + f".{ts.microsecond:06d}{tz_offset}"
+    ts_str = (
+        ts.strftime("%Y-%m-%dT%H:%M:%S") + f".{ts.microsecond:06d}{tz_offset}"
+    )
 
     rec: dict = {
         "level": level,
@@ -161,10 +163,10 @@ def main() -> int:
     )
     ap.add_argument("output", help="Output file path, or '-' for stdout.")
     ap.add_argument(
-        "--size-mib",
-        type=float,
-        default=100.0,
-        help="Target size in MiB (default: 100).",
+        "--size",
+        type=str,
+        default="1M",
+        help="Target size (default: 1M).",
     )
     ap.add_argument(
         "--seed",
@@ -174,7 +176,16 @@ def main() -> int:
     )
     args = ap.parse_args()
 
-    target = int(args.size_mib * 1024 * 1024)
+    size_str = args.size.strip()
+    if size_str[-1] in ("k", "K"):
+        target = int(float(size_str[:-1]) * 1024)
+    elif size_str[-1] in ("m", "M"):
+        target = int(float(size_str[:-1]) * 1024 * 1024)
+    elif size_str[-1] in ("g", "G"):
+        target = int(float(size_str[:-1]) * 1024 * 1024 * 1024)
+    else:
+        target = int(size_str)
+
     rng = random.Random(args.seed)
     ts = datetime(2024, 6, 1, 0, 0, 0, tzinfo=timezone.utc)
     tz_offset = rng.choice(TZ_OFFSETS)
@@ -197,7 +208,9 @@ def main() -> int:
     try:
         while written < target:
             # Advance timestamp by 0–50 ms + microsecond jitter, like a busy service.
-            ts += timedelta(milliseconds=rand_int(0, 50), microseconds=rand_int(0, 999))
+            ts += timedelta(
+                milliseconds=rand_int(0, 50), microseconds=rand_int(0, 999)
+            )
             # Occasionally roll the tz offset, so we exercise the parser's TZ path.
             if rand_int(0, 9999) == 0:
                 tz_offset = rng.choice(TZ_OFFSETS)
