@@ -54,7 +54,7 @@ where
     })
 }
 
-#[cfg(not(target_os = "macos"))]
+#[cfg(target_os = "linux")]
 mod imp {
     use std::sync::mpsc::{self};
     use std::time::Duration;
@@ -72,6 +72,39 @@ mod imp {
     {
         let (tx, rx) = mpsc::channel();
         let mut watcher = RecommendedWatcher::new(tx, Config::default().with_poll_interval(FALLBACK_POLLING_INTERVAL))?;
+
+        for path in &paths {
+            watcher.watch(path, RecursiveMode::NonRecursive)?;
+        }
+
+        loop {
+            match rx.recv() {
+                Ok(Ok(event)) => handle(event)?,
+                Ok(Err(err)) => return Err(err.into()),
+                Err(err) => return Err(Error::RecvTimeoutError { source: err.into() }),
+            };
+        }
+    }
+}
+
+#[cfg(target_os = "windows")]
+mod imp {
+    use std::sync::mpsc::{self};
+    use std::time::Duration;
+
+    use notify::{Config, PollWatcher, RecursiveMode, Watcher};
+
+    use super::*;
+    use crate::error::Error;
+
+    const POLL_INTERVAL: Duration = Duration::from_millis(200);
+
+    pub fn run<H>(paths: Vec<PathBuf>, mut handle: H) -> Result<()>
+    where
+        H: FnMut(Event) -> Result<()>,
+    {
+        let (tx, rx) = mpsc::channel();
+        let mut watcher = PollWatcher::new(tx, Config::default().with_poll_interval(POLL_INTERVAL))?;
 
         for path in &paths {
             watcher.watch(path, RecursiveMode::NonRecursive)?;
