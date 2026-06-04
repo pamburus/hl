@@ -1,5 +1,5 @@
 // std imports
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 // local imports
 use crate::error::Result;
@@ -8,6 +8,54 @@ use crate::error::Result;
 
 pub type Event = notify::Event;
 pub type EventKind = notify::EventKind;
+
+// ---
+
+/// Platform-independent file identity based on the underlying filesystem object,
+/// used to detect whether a file at a given path has been replaced.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FileId {
+    #[cfg(unix)]
+    dev: u64,
+    #[cfg(unix)]
+    ino: u64,
+    #[cfg(windows)]
+    volume_serial_number: u64,
+    #[cfg(windows)]
+    file_index: u64,
+    #[cfg(not(any(unix, windows)))]
+    _private: (),
+}
+
+impl FileId {
+    /// Returns the file identity for the file at the given path,
+    /// or `None` if it cannot be determined.
+    pub fn get(path: &Path) -> Option<Self> {
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::MetadataExt;
+            let meta = std::fs::metadata(path).ok()?;
+            Some(Self {
+                dev: meta.dev(),
+                ino: meta.ino(),
+            })
+        }
+        #[cfg(windows)]
+        {
+            let file = std::fs::File::open(path).ok()?;
+            let info = winapi_util::file::information(&file).ok()?;
+            Some(Self {
+                volume_serial_number: info.volume_serial_number(),
+                file_index: info.file_index(),
+            })
+        }
+        #[cfg(not(any(unix, windows)))]
+        {
+            let _ = path;
+            None
+        }
+    }
+}
 
 // ---
 
@@ -74,7 +122,13 @@ mod imp {
         let mut watcher = RecommendedWatcher::new(tx, Config::default().with_poll_interval(FALLBACK_POLLING_INTERVAL))?;
 
         for path in &paths {
-            watcher.watch(path, RecursiveMode::NonRecursive)?;
+            // Watch directories only. Watching a file path via notify on Windows internally
+            // opens a directory handle anyway, creating two competing ReadDirectoryChangesW
+            // loops on the same directory when we also watch the parent — causing double
+            // events and silent re-arming failures after the first rotation.
+            if path.is_dir() {
+                watcher.watch(path, RecursiveMode::NonRecursive)?;
+            }
         }
 
         loop {
