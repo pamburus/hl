@@ -14,10 +14,6 @@ use std::{
     time::{Duration, Instant},
 };
 
-// unix-only std imports
-#[cfg(unix)]
-use std::os::unix::fs::MetadataExt;
-
 // third-party imports
 use closure::closure;
 use crossbeam_channel::{self as channel, Receiver, RecvTimeoutError, Sender};
@@ -40,7 +36,7 @@ use crate::{
     formatting::{
         DynRecordWithSourceFormatter, Expansion, RawRecordFormatter, RecordFormatterBuilder, RecordWithSourceFormatter,
     },
-    fsmon::{self, EventKind},
+    fsmon::{self, EventKind, FileId},
     help,
     index::{Indexer, IndexerSettings, Timestamp},
     input::{BlockEntry, Input, InputHolder, InputReference},
@@ -612,8 +608,10 @@ impl App {
                 let reader = scope.spawn(closure!(clone sfi, clone txi, |_| -> Result<()> {
                     let scanner = Scanner::new(sfi.clone(), delimiter.clone());
                     let mut meta = None;
+                    let mut file_id = None;
                     if let InputReference::File(path) = &input_ref {
                         meta = Some(fs::metadata(&path.canonical)?);
+                        file_id = FileId::get(&path.canonical);
                     }
                     let mut input = Some(input_ref.open()?.tail(self.options.tail, delimiter.clone())?);
                     let is_file = |meta: &Option<fs::Metadata>| meta.as_ref().map(|m|m.is_file()).unwrap_or(false);
@@ -634,20 +632,28 @@ impl App {
                             return Ok(())
                         }
                         fsmon::run(vec![path.canonical.clone()], |event| {
+                            log::debug!("fsmon event: {:?}", event.kind);
                             match event.kind {
                                 EventKind::Modify(_) | EventKind::Create(_) | EventKind::Any | EventKind::Other => {
                                     if let (Some(old_meta), Ok(new_meta)) = (&meta, fs::metadata(&path.canonical)) {
                                         if old_meta.len() > new_meta.len() {
+                                            log::debug!("file shrank, resetting input");
                                             input = None;
                                         }
-                                        #[cfg(unix)]
-                                        if old_meta.ino() != new_meta.ino() || old_meta.dev() != new_meta.dev() {
+                                        let new_file_id = FileId::get(&path.canonical);
+                                        log::debug!("file_id: old={:?} new={:?}", file_id, new_file_id);
+                                        if file_id.is_none() || (new_file_id.is_some() && new_file_id != file_id) {
+                                            log::debug!("file replaced, resetting input");
                                             input = None;
                                         }
+                                        file_id = new_file_id;
                                         meta = Some(new_meta);
+                                    } else {
+                                        log::debug!("meta check skipped: meta={} fs::metadata={}", meta.is_some(), fs::metadata(&path.canonical).is_ok());
                                     }
                                     if input.is_none() {
                                         input = input_ref.open().ok();
+                                        log::debug!("reopened input: {}", input.is_some());
                                     }
                                     if process(&mut input, is_file(&meta))? {
                                         return Ok(())
@@ -655,7 +661,9 @@ impl App {
                                     Ok(())
                                 }
                                 EventKind::Remove(_) => {
+                                    log::debug!("file removed, clearing input");
                                     input = None;
+                                    file_id = None;
                                     Ok(())
                                 },
                                 EventKind::Access(_) => Ok(()),

@@ -1,5 +1,5 @@
 // std imports
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 // local imports
 use crate::error::Result;
@@ -8,6 +8,54 @@ use crate::error::Result;
 
 pub type Event = notify::Event;
 pub type EventKind = notify::EventKind;
+
+// ---
+
+/// Platform-independent file identity based on the underlying filesystem object,
+/// used to detect whether a file at a given path has been replaced.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FileId {
+    #[cfg(unix)]
+    dev: u64,
+    #[cfg(unix)]
+    ino: u64,
+    #[cfg(windows)]
+    volume_serial_number: u64,
+    #[cfg(windows)]
+    file_index: u64,
+    #[cfg(not(any(unix, windows)))]
+    _private: (),
+}
+
+impl FileId {
+    /// Returns the file identity for the file at the given path,
+    /// or `None` if it cannot be determined.
+    pub fn get(path: &Path) -> Option<Self> {
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::MetadataExt;
+            let meta = std::fs::metadata(path).ok()?;
+            Some(Self {
+                dev: meta.dev(),
+                ino: meta.ino(),
+            })
+        }
+        #[cfg(windows)]
+        {
+            let file = std::fs::File::open(path).ok()?;
+            let info = winapi_util::file::information(&file).ok()?;
+            Some(Self {
+                volume_serial_number: info.volume_serial_number(),
+                file_index: info.file_index(),
+            })
+        }
+        #[cfg(not(any(unix, windows)))]
+        {
+            let _ = path;
+            None
+        }
+    }
+}
 
 // ---
 
@@ -59,19 +107,29 @@ mod imp {
     use std::sync::mpsc::{self};
     use std::time::Duration;
 
-    use notify::{Config, RecommendedWatcher, RecursiveMode, Watcher};
+    use notify::{Config, RecursiveMode, Watcher};
 
     use super::*;
     use crate::error::Error;
 
-    const FALLBACK_POLLING_INTERVAL: Duration = Duration::from_secs(1);
+    const POLL_INTERVAL: Duration = Duration::from_millis(200);
 
     pub fn run<H>(paths: Vec<PathBuf>, mut handle: H) -> Result<()>
     where
         H: FnMut(Event) -> Result<()>,
     {
         let (tx, rx) = mpsc::channel();
-        let mut watcher = RecommendedWatcher::new(tx, Config::default().with_poll_interval(FALLBACK_POLLING_INTERVAL))?;
+
+        #[cfg(windows)]
+        let mut watcher = {
+            use notify::PollWatcher;
+            PollWatcher::new(tx, Config::default().with_poll_interval(POLL_INTERVAL))?
+        };
+        #[cfg(not(windows))]
+        let mut watcher = {
+            use notify::RecommendedWatcher;
+            RecommendedWatcher::new(tx, Config::default().with_poll_interval(POLL_INTERVAL))?
+        };
 
         for path in &paths {
             watcher.watch(path, RecursiveMode::NonRecursive)?;
