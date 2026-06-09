@@ -25,9 +25,9 @@ description: "Task list for robust file following (tail -F parity)"
 
 **Purpose**: Create the crate, wire it into the workspace, define the public option surface.
 
-- [ ] T001 Create `crates/fsmon/Cargo.toml` with platform-gated deps (`notify` v8, `log`; `libc` on `cfg(unix)`; `kqueue` v1 on `cfg(macos)`; `windows-sys` with `Win32_Storage_FileSystem`/`Win32_System_IO`/`Win32_Foundation` on `cfg(windows)`) and add `"crates/fsmon"` to the `members` list in root `Cargo.toml`
-- [ ] T002 Create `crates/fsmon/src/lib.rs` with module declarations, public `Error`/`Result` skeleton (`UnsupportedInput`/`Watch`/`Io` variants per contracts/api.md), and crate-level docs
-- [ ] T003 [P] Define `FollowOptions` (poll_interval=1s, recheck_cadence=5s, retry_missing=true, fallback_policy=Conservative, read_buffer) with `Default`, and `FallbackPolicy { Conservative, Optimistic }`, in `crates/fsmon/src/options.rs`
+- [X] T001 Create `crates/fsmon/Cargo.toml` with platform-gated deps (`notify` v8, `log`; `libc` on `cfg(unix)`; `kqueue` v1 on `cfg(macos)`; `windows-sys` with `Win32_Storage_FileSystem`/`Win32_System_IO`/`Win32_Foundation` on `cfg(windows)`) and add `"crates/fsmon"` to the `members` list in root `Cargo.toml`
+- [X] T002 Create `crates/fsmon/src/lib.rs` with module declarations, public `Error`/`Result` skeleton (`UnsupportedInput`/`Watch`/`Io` variants per contracts/api.md), and crate-level docs
+- [X] T003 [P] Define `FollowOptions` (poll_interval=1s, recheck_cadence=5s, retry_missing=true, fallback_policy=Conservative, read_buffer) with `Default`, and `FallbackPolicy { Conservative, Optimistic }`, in `crates/fsmon/src/options.rs`
 
 ---
 
@@ -37,19 +37,19 @@ description: "Task list for robust file following (tail -F parity)"
 
 **⚠️ CRITICAL**: No user story work can begin until this phase is complete.
 
-- [ ] T004 [P] Define `FileId` abstraction in `crates/fsmon/src/identity/mod.rs` and the Unix impl (`(dev, ino)` via `libc`) in `crates/fsmon/src/identity/unix.rs`
-- [ ] T005 [P] Implement Windows `FileId` (volume serial + 128-bit file id via `GetFileInformationByHandleEx`/`FILE_ID_INFO`, fallback `GetFileInformationByHandle` `nFileIndex*`) in `crates/fsmon/src/identity/windows.rs`
-- [ ] T006 [P] Implement `Reliability { KnownLocal, NotConfirmed }` and the `classify(path)` dispatch with conservative default (any error/unknown → `NotConfirmed`) in `crates/fsmon/src/classify/mod.rs`
-- [ ] T007 [P] Implement Linux classification (`statfs` `f_type` matched against the coreutils/gnulib known-local magic table) in `crates/fsmon/src/classify/linux.rs`
-- [ ] T008 [P] Implement macOS classification (`statfs` `f_fstypename` known-local allowlist) in `crates/fsmon/src/classify/macos.rs`
-- [ ] T009 [P] Implement Windows classification (`GetDriveTypeW` → `DRIVE_REMOTE` and UNC `\\server\share` detection → `NotConfirmed`) in `crates/fsmon/src/classify/windows.rs`
-- [ ] T010 Define core `Event` enum (`DataAvailable`/`Rotated`/`Truncated`/`Removed`/`Reappeared` + internal `Tick`) and the `Watcher` skeleton (construct with `AsRef<Path>` items, `recv`, `engine`) in `crates/fsmon/src/watch/mod.rs`
-- [ ] T011 [P] Implement the native backend wrapper over `notify` `RecommendedWatcher` in `crates/fsmon/src/watch/backend/native.rs`
-- [ ] T012 [P] Implement the polling backend wrapper over `notify` `PollWatcher` (using `poll_interval`) in `crates/fsmon/src/watch/backend/poll.rs`
-- [ ] T013 Implement engine routing (per-path `classify` → `Native`/`Polling`), raw-event coalescing to a per-path dirty signal, and the periodic tick at `min(applicable intervals)` in `crates/fsmon/src/watch/engine.rs` (depends on T006–T012)
-- [ ] T014 Implement the input-type guard — classify path as `Regular` vs `Pipe`; reject directory/socket/device with `Error::UnsupportedInput` (FR-026) — in `crates/fsmon/src/follow/source.rs`
-- [ ] T015 Implement the `FollowedSource` skeleton: open a regular file and read appended bytes from `offset`, with EOF-start default (`offset = last_size` at open); plus the FIFO/pipe streaming path (read-to-EOF then wait, bounded buffer, no identity tracking) in `crates/fsmon/src/follow/source.rs` (depends on T004, T014)
-- [ ] T016 Implement `Follower` and the per-source blocking surface (`into_reader` → `impl Read + Send`; `next_chunk`) wiring the watcher to the source state machine in `crates/fsmon/src/follow/mod.rs` (depends on T015)
+- [X] T004 [P] Define `FileId` abstraction in `crates/fsmon/src/identity/mod.rs` and the Unix impl (`(dev, ino)` via `libc`) in `crates/fsmon/src/identity/unix.rs`
+- [X] T005 [P] Implement Windows `FileId` (volume serial + 128-bit file id via `GetFileInformationByHandleEx`/`FILE_ID_INFO`, fallback `GetFileInformationByHandle` `nFileIndex*`) in `crates/fsmon/src/identity/windows.rs`
+- [X] T006 [P] Implement `Reliability { KnownLocal, NotConfirmed }` and the `classify(path)` dispatch with conservative default (any error/unknown → `NotConfirmed`) in `crates/fsmon/src/classify/mod.rs`
+- [X] T007 [P] Implement Linux classification (`statfs` `f_type` matched against the coreutils/gnulib known-local magic table) in `crates/fsmon/src/classify/linux.rs`
+- [X] T008 [P] Implement macOS classification (`statfs` `f_fstypename` known-local allowlist) in `crates/fsmon/src/classify/macos.rs`
+- [X] T009 [P] Implement Windows classification (`GetDriveTypeW` → `DRIVE_REMOTE` and UNC `\\server\share` detection → `NotConfirmed`) in `crates/fsmon/src/classify/windows.rs`
+- [X] T010 Define core `Event` enum (`DataAvailable`/`Rotated`/`Truncated`/`Removed`/`Reappeared` + internal `Tick`) and the `Watcher` skeleton (construct with `AsRef<Path>` items, `recv`, `engine`) in `crates/fsmon/src/watch/mod.rs`
+- [X] T011 [P] Implement the native backend wrapper over `notify` `RecommendedWatcher` in `crates/fsmon/src/watch/backend/native.rs`
+- [X] T012 [P] Implement the polling backend wrapper over `notify` `PollWatcher` (using `poll_interval`) in `crates/fsmon/src/watch/backend/poll.rs`
+- [X] T013 Implement engine routing (per-path `classify` → `Native`/`Polling`), raw-event coalescing to a per-path dirty signal, and the periodic tick at `min(applicable intervals)` in `crates/fsmon/src/watch/engine.rs` (depends on T006–T012)
+- [X] T014 Implement the input-type guard — classify path as `Regular` vs `Pipe`; reject directory/socket/device with `Error::UnsupportedInput` (FR-026) — in `crates/fsmon/src/follow/source.rs`
+- [X] T015 Implement the `FollowedSource` skeleton: open a regular file and read appended bytes from `offset`, with EOF-start default (`offset = last_size` at open); plus the FIFO/pipe streaming path (read-to-EOF then wait, bounded buffer, no identity tracking) in `crates/fsmon/src/follow/source.rs` (depends on T004, T014)
+- [X] T016 Implement `Follower` and the per-source blocking surface (`into_reader` → `impl Read + Send`; `next_chunk`) wiring the watcher to the source state machine in `crates/fsmon/src/follow/mod.rs` (depends on T015)
 
 **Checkpoint**: Crate compiles; a local file can be opened and skeleton-followed. User stories can begin.
 
@@ -63,15 +63,15 @@ description: "Task list for robust file following (tail -F parity)"
 
 ### Tests for User Story 1
 
-- [ ] T017 [P] [US1] Integration test: appends to a local file are delivered in order via `into_reader` (SC-001) in `crates/fsmon/tests/follow_regular.rs`
-- [ ] T018 [P] [US1] Integration test: idle follow does not busy-wait — no output without writes, prompt delivery on the next append (FR-015, SC-004) in `crates/fsmon/tests/follow_regular.rs`
-- [ ] T019 [P] [US1] Integration test: EOF-start handoff — content present before follow start is not re-emitted; only post-open appends are delivered (FR-008 handoff) in `crates/fsmon/tests/follow_regular.rs`
+- [X] T017 [P] [US1] Integration test: appends to a local file are delivered in order via `into_reader` (SC-001) in `crates/fsmon/tests/follow_regular.rs`
+- [X] T018 [P] [US1] Integration test: idle follow does not busy-wait — no output without writes, prompt delivery on the next append (FR-015, SC-004) in `crates/fsmon/tests/follow_regular.rs`
+- [X] T019 [P] [US1] Integration test: EOF-start handoff — content present before follow start is not re-emitted; only post-open appends are delivered (FR-008 handoff) in `crates/fsmon/tests/follow_regular.rs`
 
 ### Implementation for User Story 1
 
-- [ ] T020 [US1] Wire the `KnownLocal → Native` engine path end-to-end so a local follow uses native notifications in `crates/fsmon/src/watch/engine.rs`
-- [ ] T021 [US1] Deliver appended bytes at consumer pace (reconcile-on-wake append case; reads on the consumer thread) in `crates/fsmon/src/follow/source.rs`
-- [ ] T022 [US1] Ensure idle efficiency: block on event/tick with no polling spin for native paths in `crates/fsmon/src/watch/mod.rs`
+- [X] T020 [US1] Wire the `KnownLocal → Native` engine path end-to-end so a local follow uses native notifications in `crates/fsmon/src/watch/engine.rs`
+- [X] T021 [US1] Deliver appended bytes at consumer pace (reconcile-on-wake append case; reads on the consumer thread) in `crates/fsmon/src/follow/source.rs`
+- [X] T022 [US1] Ensure idle efficiency: block on event/tick with no polling spin for native paths in `crates/fsmon/src/watch/mod.rs`
 
 **Checkpoint**: MVP — `fsmon::follow(local_path)?.into_reader()` shows live appends.
 
@@ -85,17 +85,17 @@ description: "Task list for robust file following (tail -F parity)"
 
 ### Tests for User Story 2
 
-- [ ] T023 [P] [US2] Integration test: rotation (rename away + recreate at path) loses no trailing bytes of the old file and follows the new file (FR-005, SC-002) in `crates/fsmon/tests/follow_regular.rs`
-- [ ] T024 [P] [US2] Integration test: truncation (size shrinks) re-reads from start (FR-004) in `crates/fsmon/tests/follow_regular.rs`
-- [ ] T025 [P] [US2] Integration test: delete→recreate resumes, and start-before-exists begins following on appearance (FR-002, FR-007) in `crates/fsmon/tests/follow_regular.rs`
-- [ ] T026 [P] [US2] Integration test: same-size replacement detected within `recheck_cadence` (FR-006, SC-005) in `crates/fsmon/tests/follow_regular.rs`
+- [X] T023 [P] [US2] Integration test: rotation (rename away + recreate at path) loses no trailing bytes of the old file and follows the new file (FR-005, SC-002) in `crates/fsmon/tests/follow_regular.rs`
+- [X] T024 [P] [US2] Integration test: truncation (size shrinks) re-reads from start (FR-004) in `crates/fsmon/tests/follow_regular.rs`
+- [X] T025 [P] [US2] Integration test: delete→recreate resumes, and start-before-exists begins following on appearance (FR-002, FR-007) in `crates/fsmon/tests/follow_regular.rs`
+- [X] T026 [P] [US2] Integration test: same-size replacement detected within `recheck_cadence` (FR-006, SC-005) in `crates/fsmon/tests/follow_regular.rs`
 
 ### Implementation for User Story 2
 
-- [ ] T027 [US2] Implement reconcile-from-`stat` transitions (append / truncate seek-0 / identity-change) in `FollowedSource` in `crates/fsmon/src/follow/source.rs`
-- [ ] T028 [US2] Implement the `Draining` state — drain the old fd to EOF before closing/reopening by name (race-free handoff, research §3) in `crates/fsmon/src/follow/source.rs`
-- [ ] T029 [US2] Implement the `Waiting`/retry path (deletion, start-before-exists, reappearance) in `crates/fsmon/src/follow/source.rs`
-- [ ] T030 [US2] Drive the same-size re-check tick (`recheck_cadence`, default 5s) into reconcile in `crates/fsmon/src/watch/engine.rs`
+- [X] T027 [US2] Implement reconcile-from-`stat` transitions (append / truncate seek-0 / identity-change) in `FollowedSource` in `crates/fsmon/src/follow/source.rs`
+- [X] T028 [US2] Implement the `Draining` state — drain the old fd to EOF before closing/reopening by name (race-free handoff, research §3) in `crates/fsmon/src/follow/source.rs`
+- [X] T029 [US2] Implement the `Waiting`/retry path (deletion, start-before-exists, reappearance) in `crates/fsmon/src/follow/source.rs`
+- [X] T030 [US2] Drive the same-size re-check tick (`recheck_cadence`, default 5s) into reconcile in `crates/fsmon/src/watch/engine.rs`
 
 **Checkpoint**: Following survives all rotation/truncation/deletion scenarios with no data loss.
 
@@ -109,15 +109,15 @@ description: "Task list for robust file following (tail -F parity)"
 
 ### Tests for User Story 3
 
-- [ ] T031 [P] [US3] Unit tests: `classify` returns `KnownLocal` for known-local and `NotConfirmed` for remote/unknown/error (conservative) (FR-009–FR-011) in `crates/fsmon/tests/classification.rs`
-- [ ] T032 [P] [US3] Integration test (environment-gated where a remote/unknown mount is unavailable): updates on a polled path appear within `poll_interval` and `engine()==Polling` for `NotConfirmed` (SC-003) in `crates/fsmon/tests/classification.rs`
-- [ ] T033 [P] [US3] Integration test: behavior parity between native and polling backends for the same scenario (SC-010) in `crates/fsmon/tests/follow_regular.rs`
+- [X] T031 [P] [US3] Unit tests: `classify` returns `KnownLocal` for known-local and `NotConfirmed` for remote/unknown/error (conservative) (FR-009–FR-011) in `crates/fsmon/tests/classification.rs`
+- [X] T032 [P] [US3] Integration test (environment-gated where a remote/unknown mount is unavailable): updates on a polled path appear within `poll_interval` and `engine()==Polling` for `NotConfirmed` (SC-003) in `crates/fsmon/tests/classification.rs`
+- [X] T033 [P] [US3] Integration test: behavior parity between native and polling backends for the same scenario (SC-010) in `crates/fsmon/tests/follow_regular.rs`
 
 ### Implementation for User Story 3
 
-- [ ] T034 [US3] Wire `NotConfirmed → Polling` routing plus the conservative default into engine selection in `crates/fsmon/src/watch/engine.rs`
-- [ ] T035 [US3] Gate the macOS kqueue backend to `KnownLocal`-only (route `NotConfirmed` to polling) in `crates/fsmon/src/watch/backend/kqueue_macos.rs` (FR-020)
-- [ ] T036 [US3] Ensure the polling-driven reconcile produces identical `FollowedSource` behavior to native (shared reconcile path) in `crates/fsmon/src/follow/source.rs`
+- [X] T034 [US3] Wire `NotConfirmed → Polling` routing plus the conservative default into engine selection in `crates/fsmon/src/watch/engine.rs`
+- [X] T035 [US3] Gate the macOS kqueue backend to `KnownLocal`-only (route `NotConfirmed` to polling) in `crates/fsmon/src/watch/backend/kqueue_macos.rs` (FR-020)
+- [X] T036 [US3] Ensure the polling-driven reconcile produces identical `FollowedSource` behavior to native (shared reconcile path) in `crates/fsmon/src/follow/source.rs`
 
 **Checkpoint**: Remote/unknown filesystems follow correctly via polling; local files unaffected.
 
@@ -131,13 +131,13 @@ description: "Task list for robust file following (tail -F parity)"
 
 ### Tests for User Story 4
 
-- [ ] T037 [P] [US4] Integration test: multi-path `Follower` yields `Chunk`s correctly tagged by `SourceId` for each file (FR-025) in `crates/fsmon/tests/follow_regular.rs`
-- [ ] T038 [P] [US4] Integration test: a local+remote mix is routed independently and local native latency is unaffected (SC-006) in `crates/fsmon/tests/classification.rs`
+- [X] T037 [P] [US4] Integration test: multi-path `Follower` yields `Chunk`s correctly tagged by `SourceId` for each file (FR-025) in `crates/fsmon/tests/follow_regular.rs`
+- [X] T038 [P] [US4] Integration test: a local+remote mix is routed independently and local native latency is unaffected (SC-006) in `crates/fsmon/tests/classification.rs`
 
 ### Implementation for User Story 4
 
-- [ ] T039 [US4] Implement multi-path `Follower::new` + `SourceId` tagging + `next_chunk` in `crates/fsmon/src/follow/mod.rs`
-- [ ] T040 [US4] Ensure per-path independent engine selection across the followed set in `crates/fsmon/src/watch/engine.rs`
+- [X] T039 [US4] Implement multi-path `Follower::new` + `SourceId` tagging + `next_chunk` in `crates/fsmon/src/follow/mod.rs`
+- [X] T040 [US4] Ensure per-path independent engine selection across the followed set in `crates/fsmon/src/watch/engine.rs`
 
 **Checkpoint**: Mixed-storage multi-file following works with independent per-path engines.
 
@@ -151,12 +151,12 @@ description: "Task list for robust file following (tail -F parity)"
 
 ### Tests for User Story 5
 
-- [ ] T041 [P] [US5] Integration test: simulated native watch error/loss → following continues via polling with zero lost subsequent entries (FR-014, SC-007) in `crates/fsmon/tests/follow_regular.rs`
+- [X] T041 [P] [US5] Integration test: simulated native watch error/loss → following continues via polling with zero lost subsequent entries (FR-014, SC-007) in `crates/fsmon/tests/follow_regular.rs`
 
 ### Implementation for User Story 5
 
-- [ ] T042 [US5] Detect native watch error/loss and migrate that single path `Native → Polling` in place (no restart) in `crates/fsmon/src/watch/engine.rs`
-- [ ] T043 [US5] Emit a degradation diagnostic via `log` and guarantee no lost bytes across the migration in `crates/fsmon/src/watch/mod.rs`
+- [X] T042 [US5] Detect native watch error/loss and migrate that single path `Native → Polling` in place (no restart) in `crates/fsmon/src/watch/engine.rs`
+- [X] T043 [US5] Emit a degradation diagnostic via `log` and guarantee no lost bytes across the migration in `crates/fsmon/src/watch/mod.rs`
 
 **Checkpoint**: Runtime watch loss is survived transparently.
 
@@ -170,16 +170,16 @@ description: "Task list for robust file following (tail -F parity)"
 
 ### Tests for User Story 6
 
-- [ ] T044 [P] [US6] Test: a minimal consumer using only `FollowOptions::default()` follows append+rotation correctly (FR-022, SC-008) in `crates/fsmon/tests/follow_regular.rs`
+- [X] T044 [P] [US6] Test: a minimal consumer using only `FollowOptions::default()` follows append+rotation correctly (FR-022, SC-008) in `crates/fsmon/tests/follow_regular.rs`
 - [ ] T045 [P] [US6] hl follow integration test exercising the new crate path (append + rotation visible through `hl -F`) in an in-crate `#[cfg(test)]` module under `src/app.rs`
 
 ### Implementation for User Story 6
 
-- [ ] T046 [US6] Finalize the public facade API (`follow()` and `Follower::new` with `AsRef<Path>` bounds, `into_reader`) and crate docs in `crates/fsmon/src/follow/mod.rs` and `crates/fsmon/src/lib.rs`
-- [ ] T047 [US6] Wire observability: emit engine selection, conservative fallback, and degradation via the `log` crate (FR-016a) in `crates/fsmon/src/watch/engine.rs`
-- [ ] T048 [US6] hl: add the `fsmon` path dependency in root `Cargo.toml`, remove `src/fsmon.rs`, and drop `mod fsmon;` from `src/lib.rs` (FR-024)
-- [ ] T049 [US6] hl: rewrite `app.rs::follow()` to run the existing `Scanner` over the facade `into_reader`, removing the manual reopen/offset block (app.rs:636-662) while keeping the `Input::tail` preload (app.rs:618) and starting the facade at EOF, in `src/app.rs`
-- [ ] T050 [US6] hl: map `fsmon::Error` into hl's `Error` in `src/error.rs` and route fsmon `log` diagnostics into the `HL_DEBUG_LOG` channel
+- [X] T046 [US6] Finalize the public facade API (`follow()` and `Follower::new` with `AsRef<Path>` bounds, `into_reader`) and crate docs in `crates/fsmon/src/follow/mod.rs` and `crates/fsmon/src/lib.rs`
+- [X] T047 [US6] Wire observability: emit engine selection, conservative fallback, and degradation via the `log` crate (FR-016a) in `crates/fsmon/src/watch/engine.rs`
+- [X] T048 [US6] hl: add the `fsmon` path dependency in root `Cargo.toml`, remove `src/fsmon.rs`, and drop `mod fsmon;` from `src/lib.rs` (FR-024)
+- [X] T049 [US6] hl: rewrite `app.rs::follow()` to run the existing `Scanner` over the facade `into_reader`, removing the manual reopen/offset block (app.rs:636-662) while keeping the `Input::tail` preload (app.rs:618) and starting the facade at EOF, in `src/app.rs`
+- [X] T050 [US6] hl: map `fsmon::Error` into hl's `Error` in `src/error.rs` and route fsmon `log` diagnostics into the `HL_DEBUG_LOG` channel
 
 **Checkpoint**: hl follows via the reusable crate; old module removed; other consumers can adopt it with defaults.
 
@@ -189,8 +189,8 @@ description: "Task list for robust file following (tail -F parity)"
 
 **Purpose**: Stress, edge-case, coverage, and documentation work spanning all stories.
 
-- [ ] T051 [P] Backpressure stress test: a fast writer outpacing the consumer keeps memory bounded with zero loss (FR-015a, SC-011) in `crates/fsmon/tests/backpressure.rs`
-- [ ] T052 [P] FIFO/pipe streaming test and directory/special-file rejection test (FR-026) in `crates/fsmon/tests/follow_pipe.rs`
+- [X] T051 [P] Backpressure stress test: a fast writer outpacing the consumer keeps memory bounded with zero loss (FR-015a, SC-011) in `crates/fsmon/tests/backpressure.rs`
+- [X] T052 [P] FIFO/pipe streaming test and directory/special-file rejection test (FR-026) in `crates/fsmon/tests/follow_pipe.rs`
 - [ ] T053 Run `just uncovered` and add tests for changed lines lacking coverage; document any environment-gated exclusions (SC-009, constitution V)
 - [ ] T054 [P] Update `CHANGELOG.md` and crate README/docs describing the new robust-follow behavior (no source-internals per commit guidelines)
 - [ ] T055 Validate `quickstart.md` snippets against the built crate and against `hl -F` on a local file

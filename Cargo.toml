@@ -16,6 +16,7 @@ members = [
   "crates/encstr",
   "crates/enumset-ext",
   "crates/enumset-serde",
+  "crates/fsmon",
   "crates/heapopt",
   "crates/lifecycle",
   "crates/pager",
@@ -72,6 +73,7 @@ digest-io = "0.1"
 dirs = "6"
 dirs-sys = "0.5"
 encstr = { path = "./crates/encstr" }
+fsmon = { path = "crates/fsmon" }
 enum-map = "2"
 enumset = "1"
 enumset-ext = { path = "./crates/enumset-ext", features = ["clap", "serde"] }

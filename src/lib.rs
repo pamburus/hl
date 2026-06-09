@@ -30,7 +30,6 @@ pub mod types;
 mod console;
 mod eseq;
 mod filtering;
-mod fsmon;
 mod model;
 mod number;
 mod replay;
