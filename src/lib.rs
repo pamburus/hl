@@ -38,6 +38,8 @@ mod scanning;
 mod serdex;
 mod tee;
 mod vfs;
+#[cfg(windows)]
+mod win_file_id;
 mod xerr;
 
 // test utilities

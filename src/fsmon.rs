@@ -54,7 +54,12 @@ where
     })
 }
 
-#[cfg(not(target_os = "macos"))]
+#[cfg(windows)]
+mod windows;
+#[cfg(windows)]
+use windows as imp;
+
+#[cfg(not(any(target_os = "macos", windows)))]
 mod imp {
     use std::sync::mpsc::{self};
     use std::time::Duration;
