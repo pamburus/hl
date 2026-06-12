@@ -93,17 +93,30 @@ setup_cargo_nightly() {
     fi
 }
 
+setup_cargo_binstall() {
+    if [ -x "$(command -v cargo-binstall)" ]; then
+        true
+    elif [ -x "$(command -v scoop)" ]; then
+        scoop install cargo-binstall
+    elif [ -x "$(command -v cargo)" ]; then
+        cargo install cargo-binstall
+    else
+        echo "Please install cargo-binstall"
+        exit 1
+    fi
+}
+
 setup_cargo_edit() {
-    setup_cargo
     if ! cargo set-version --help >/dev/null 2>&1; then
-        cargo install cargo-edit
+        setup_cargo_binstall
+        cargo binstall cargo-edit
     fi
 }
 
 setup_rustfilt() {
-    setup_cargo
     if [ ! -x "$(command -v rustfilt)" ]; then
-        cargo install rustfilt
+        setup_cargo_binstall
+        cargo binstall rustfilt
     fi
 }
 
@@ -131,17 +144,17 @@ setup_sed() {
 }
 
 setup_llvm_profdata() {
-    setup_rustup
-    setup_rustc
-    setup_sed
     if [ ! -x "$(command -v $(rustc --print sysroot)/lib/rustlib/$(rustc -vV | sed -n 's|host: ||p')/bin/llvm-profdata)" ]; then
+        setup_rustup
+        setup_rustc
+        setup_sed
         rustup component add llvm-tools-preview
     fi
 }
 
 setup_clippy() {
-    setup_rustup
     if ! (rustup component list | grep -q 'clippy.*(installed)'); then
+        setup_rustup
         rustup component add clippy
     fi
 }
@@ -155,17 +168,19 @@ setup_cargo_audit() {
         elif [ -x "$(command -v pacman)" ]; then
             sudo pacman -S cargo-audit
         elif [ -x "$(command -v cargo)" ]; then
-            cargo install cargo-audit
+            setup_cargo_binstall
+            cargo binstall cargo-audit
         else
             echo "Please install cargo-audit manually"
+            exit 1
         fi
     fi
 }
 
 setup_cargo_outdated() {
-    setup_cargo
     if [ ! -x "$(command -v cargo-outdated)" ]; then
-        cargo install cargo-outdated
+        setup_cargo_binstall
+        cargo binstall cargo-outdated
     fi
 }
 
@@ -180,9 +195,9 @@ setup_screenshot_tools() {
 }
 
 setup_taplo() {
-    setup_cargo
     if [ ! -x "$(command -v taplo)" ]; then
-        cargo install taplo-cli --locked --features lsp
+        setup_cargo_binstall
+        cargo binstall taplo-cli --locked --features lsp
     fi
 }
 
@@ -194,6 +209,7 @@ setup_tombi() {
             uv add --dev tombi
         else
             echo "Please install tombi manually"
+            exit 1
         fi
     fi
 }
@@ -210,6 +226,7 @@ setup_gh() {
             sudo pacman -S gh
         else
             echo "Please install gh manually"
+            exit 1
         fi
     fi
 }
@@ -225,8 +242,8 @@ setup_git_cliff() {
         elif [ -x "$(command -v pacman)" ]; then
             sudo pacman -S git-cliff
         else
-            setup_cargo
-            cargo install git-cliff --locked
+            setup_cargo_binstall
+            cargo binstall git-cliff --locked
         fi
     fi
 }
@@ -242,8 +259,8 @@ setup_bat() {
         elif [ -x "$(command -v pacman)" ]; then
             sudo pacman -S bat
         else
-            setup_cargo
-            cargo install bat --locked
+            setup_cargo_binstall
+            cargo bininstall bat --locked
         fi
     fi
 }
@@ -256,6 +273,7 @@ setup_markdownlint() {
             npm install markdownlint-cli2 --global
         else
             echo "Please install markdownlint-cli2 manually"
+            exit 1
         fi
     fi
 }

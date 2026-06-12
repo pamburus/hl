@@ -1,7 +1,7 @@
 # Justfile for hl project - convenient command runner
 # Run `just --list` to see all available commands
 
-previous-tag := "git tag -l \"v*.*.*\" --merged HEAD --sort=-version:refname | head -1"
+set lazy
 
 # NixOS helpers
 
@@ -17,6 +17,15 @@ nix-docker-base := """
         """
 nix-docker := nix-docker-base + nix-docker-image + " "
 nix-result := ".build/nix"
+
+# Previous version tag
+previous-tag := shell("git tag -l \"v*.*.*\" --merged HEAD --sort=-version:refname | head -1")
+
+# Repository state, needed for build metadata in the resulting version
+repository-state := shell('git rev-parse HEAD') / if shell('git status --porcelain') == '' { 'clean' } else { 'dirty' }
+
+# Export repository state for the cargo build script
+export HL_BUILD_SRC_STATE := repository-state
 
 # Recipes
 
@@ -135,7 +144,7 @@ check-schema: (setup "schema")
     taplo check
 
 [doc('Install binary and man pages')]
-install: (setup "build") build-release install-man-pages
+install: (setup "build") install-man-pages
     cargo install --path . --locked
 
 [doc('Install binary and man pages and copy with versioned name')]
@@ -143,8 +152,8 @@ install-versioned: install
     @cp ~/.cargo/bin/hl ~/.cargo/bin/$(~/.cargo/bin/hl --version | tr ' ' '-')
 
 [doc('Install man pages')]
+[script]
 install-man-pages:
-    #!/usr/bin/env bash
     set -euo pipefail
     mkdir -p ~/share/man/man1
     cargo run --release --locked -- --config - --man-page >~/share/man/man1/hl.1.tmp
@@ -164,10 +173,10 @@ bump type="alpha": (setup "cargo-edit")
     cargo set-version --package hl --bump {{ type }}
 
 [doc('List changes since the previous release')]
+[script]
 changes since="auto": (setup "git-cliff" "bat" "gh")
-    #!/usr/bin/env bash
     set -euo pipefail
-    since=$(if [ "{{ since }}" = auto ]; then {{ previous-tag }}; else echo "{{ since }}"; fi)
+    since={{ if since == 'auto' { previous-tag } else { since } }}
     version=$(cargo metadata --format-version 1 | jq -r '.packages[] | select(.name == "hl") | .version')
     GITHUB_REPO=pamburus/hl \
     GITHUB_TOKEN=$(gh auth token) \
@@ -286,3 +295,8 @@ build-nix-docker-image:
 [private]
 setup *tools:
     @contrib/bin/setup.sh {{ tools }}
+
+# Helper to evaluate repository state hash needed for version build metadata
+[private]
+repository-state:
+    @echo {{ repository-state }}
