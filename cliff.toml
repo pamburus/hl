@@ -2,11 +2,29 @@
 header = ""
 body = """
 {%- macro add_commit(message, author) -%}
-    - {{ message | trim | upper_first | replace(from="{AUTHOR}", to=author | replace(from="[bot]", to="")) }}
+    {%- set clean = self::strip_padding(version=message) -%}
+    - {{ clean | trim | upper_first | replace(from="{AUTHOR}", to=author | replace(from="[bot]", to="")) }}
 {% endmacro -%}
 
 {%- macro strip_padding(version) -%}
-    {{- version | replace(from=".z00000000", to=".0") | replace(from=".z0000000", to=".") | replace(from=".z000000", to=".") | replace(from=".z00000", to=".") | replace(from=".z0000", to=".") | replace(from=".z000", to=".") | replace(from=".z00", to=".") | replace(from=".z0", to=".") | replace(from=".z", to=".") -}}
+    {%- set v = version
+        | replace(from=".z00000000", to=".0")
+        | replace(from=".z0000000", to=".")
+        | replace(from=".z000000", to=".")
+        | replace(from=".z00000", to=".")
+        | replace(from=".z0000", to=".")
+        | replace(from=".z000", to=".")
+        | replace(from=".z00", to=".")
+        | replace(from=".z0", to=".")
+        | replace(from=".z0", to=".")
+        | replace(from=".z0", to=".")
+        | replace(from=".z0", to=".")
+        | replace(from=".z0", to=".")
+        | replace(from=".z0", to=".")
+        | replace(from=".z0", to=".")
+        | replace(from=".z0", to=".")
+        | replace(from=".z", to=".") -%}
+    {{- v -}}
 {%- endmacro -%}
 
 {%- macro bump_finalize(pkg, first_from, last_to, pr_numbers, author) -%}
