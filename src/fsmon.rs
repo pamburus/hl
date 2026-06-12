@@ -109,11 +109,16 @@ mod imp {
         let mut added = HashSet::<&PathBuf>::new();
         let mut synced = true;
 
+        // NOTE_ATTRIB is required to detect in-place truncation (O_TRUNC) on APFS/macOS.
+        // APFS fires NOTE_ATTRIB for file-size metadata changes (truncation) rather than
+        // NOTE_WRITE, so without this flag the follower misses the transient size=0 state
+        // and cannot seek to offset 0 before the subsequent write fills the file again.
         let flags = FilterFlag::NOTE_FFNOP
             | FilterFlag::NOTE_DELETE
             | FilterFlag::NOTE_WRITE
             | FilterFlag::NOTE_RENAME
-            | FilterFlag::NOTE_EXTEND;
+            | FilterFlag::NOTE_EXTEND
+            | FilterFlag::NOTE_ATTRIB;
 
         loop {
             for path in &paths {
