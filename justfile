@@ -185,7 +185,7 @@ changes since="auto": (setup "git-cliff" "bat" "gh")
 
 [doc('Show previous release tag')]
 previous-tag:
-    @{{ previous-tag }}
+    @echo {{ previous-tag }}
 
 [doc('Create screenshots')]
 screenshots: (setup "screenshots") build
