@@ -41,6 +41,8 @@ fn run() -> Result<()> {
 }
 
 fn set_git_build_info() -> Result<()> {
+    println!("cargo:rerun-if-env-changed=HL_BUILD_SRC_STATE");
+
     let base_version = env!("CARGO_PKG_VERSION");
 
     // Parse the base version
