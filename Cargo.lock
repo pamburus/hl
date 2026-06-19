@@ -248,12 +248,21 @@ dependencies = [
 ]
 
 [[package]]
-name = "capnpc"
-version = "0.25.3"
+name = "capnp"
+version = "0.26.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fca02be865c8c5a78bfc24b9819006ab6b59bef238467203928e26459557af93"
+checksum = "71338171543626713e427635f7de390328d9e85828a816a0c88d959032b34a2f"
 dependencies = [
- "capnp",
+ "embedded-io",
+]
+
+[[package]]
+name = "capnpc"
+version = "0.26.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "13aea06b902f885cb0313b11e900e96cd57fef775e9e601a96e14e1d655f3cd3"
+dependencies = [
+ "capnp 0.26.0",
 ]
 
 [[package]]
@@ -1256,7 +1265,7 @@ dependencies = [
  "base32",
  "byte-strings",
  "bytefmt",
- "capnp",
+ "capnp 0.25.6",
  "capnpc",
  "chrono",
  "chrono-english",

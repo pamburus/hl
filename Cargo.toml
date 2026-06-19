@@ -32,7 +32,7 @@ license = "MIT"
 
 [workspace.dependencies]
 capnp = "0.25"
-capnpc = "0.25"
+capnpc = "0.26"
 clap = { version = "4", features = ["derive", "env", "string", "wrap_help"] }
 clap_complete = { version = "4" }
 clap_mangen = { git = "https://github.com/pamburus/rust-clap.git", rev = "20f0ffd737581a5ebf7479d2174f2c197f25c94d" }
