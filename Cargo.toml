@@ -82,7 +82,7 @@ heapless = "0.9"
 heapopt = { path = "./crates/heapopt" }
 hex = "0.4"
 humantime = "2"
-itertools = "0.14"
+itertools = "0.15"
 itoa = { version = "1", default-features = false }
 json.workspace = true
 known-folders = "1"
