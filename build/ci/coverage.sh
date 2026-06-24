@@ -20,6 +20,7 @@ IGNORE=(
     'rustc/.*/library/'
     '_capnp\.rs$'
     '/tests\.rs$'
+    '/tests/[^/]*\.rs$'
     '/crates/styled-help/src/'
 )
 
