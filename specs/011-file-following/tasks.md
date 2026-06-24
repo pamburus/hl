@@ -192,8 +192,8 @@ description: "Task list for robust file following (tail -F parity)"
 - [X] T051 [P] Backpressure stress test: a fast writer outpacing the consumer keeps memory bounded with zero loss (FR-015a, SC-011) in `crates/fsmon/tests/backpressure.rs`
 - [X] T052 [P] FIFO/pipe streaming test and directory/special-file rejection test (FR-026) in `crates/fsmon/tests/follow_pipe.rs`
 - [ ] T053 Run `just uncovered` and add tests for changed lines lacking coverage; document any environment-gated exclusions (SC-009, constitution V)
-- [ ] T054 [P] Update `CHANGELOG.md` and crate README/docs describing the new robust-follow behavior (no source-internals per commit guidelines)
-- [ ] T055 Validate `quickstart.md` snippets against the built crate and against `hl -F` on a local file
+- [X] T054 [P] Update `CHANGELOG.md` and crate README/docs describing the new robust-follow behavior (no source-internals per commit guidelines). Note: the repo has no committed `CHANGELOG.md` — it is generated from conventional commits via `git-cliff`/`cliff.toml`, so the `feat(follow): ...` commit subject is the changelog entry. Per-crate READMEs are not the convention (only 1 of 11 crates has one); `fsmon` ships a `description` plus thorough `lib.rs` crate docs instead.
+- [X] T055 Validate `quickstart.md` snippets against the built crate and against `hl -F` on a local file. Verified: API matches (`Chunk.source`/`bytes`, `FollowOptions` fields, `pub mod watch`, all five `Event` variants); `cargo test --doc -p fsmon` passes; a real `hl -F` run showed live append + rotation delivered with the documented `HL_DEBUG_LOG` classification line (fixed the observability example to match the actual log format).
 - [ ] T056 Cross-platform verification: `cargo test` on Linux, macOS, and Windows (note the dev Windows box's missing CI tooling is tracked separately; `cargo test` is the gate for this feature)
 
 ---

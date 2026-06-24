@@ -106,5 +106,5 @@ the `log` crate (no stdout/stderr noise). In hl they surface through
 
 ```text
 HL_DEBUG_LOG=debug hl -F /mnt/nfs/app.log
-# ... fsmon: /mnt/nfs/app.log classified NotConfirmed (nfs) -> polling
+# ... fsmon: /mnt/nfs/app.log classified NotConfirmed -> polling (conservative fallback)
 ```
