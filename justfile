@@ -5,11 +5,11 @@ set lazy
 
 # NixOS helpers
 
-nix-files := "."
+nix-files := "flake.nix nix/*.nix"
 nix-docker-image := "hl-nixos-helper"
 nix-docker-base := """
     docker run --rm \
-        -it \
+        -t \
         --platform=linux/$(uname -m) \
         --security-opt seccomp=unconfined \
         -v "$(pwd)":/etc/nixos \
