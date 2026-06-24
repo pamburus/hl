@@ -111,7 +111,7 @@ pub enum Error {
     #[error(transparent)]
     TryFromIntError(#[from] TryFromIntError),
     #[error(transparent)]
-    NotifyError(Box<notify::Error>),
+    FsmonError(#[from] Box<fsmon::Error>),
     #[error("failed to receive from mpsc channel: {source}")]
     RecvTimeoutError {
         #[source]
@@ -241,9 +241,9 @@ impl From<ConfigError> for Error {
     }
 }
 
-impl From<notify::Error> for Error {
-    fn from(err: notify::Error) -> Self {
-        Error::NotifyError(Box::new(err))
+impl From<fsmon::Error> for Error {
+    fn from(err: fsmon::Error) -> Self {
+        Error::FsmonError(Box::new(err))
     }
 }
 

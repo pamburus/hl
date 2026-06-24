@@ -540,6 +540,130 @@ fn input<S: Into<String>>(s: S) -> InputHolder {
     InputHolder::new(InputReference::Stdin, Some(Box::new(Cursor::new(s.into()))))
 }
 
+/// A `Write` sink shared with the test thread that records all bytes written
+/// to it and wakes up waiters as new output arrives.
+#[derive(Clone)]
+struct SharedSink(Arc<(std::sync::Mutex<Vec<u8>>, std::sync::Condvar)>);
+
+impl SharedSink {
+    fn new() -> Self {
+        Self(Arc::new((std::sync::Mutex::new(Vec::new()), std::sync::Condvar::new())))
+    }
+
+    /// Blocks until the accumulated output contains `needle` or `timeout`
+    /// elapses, returning whatever output was captured.
+    fn wait_for(&self, needle: &str, timeout: Duration) -> String {
+        let (lock, cv) = &*self.0;
+        let deadline = std::time::Instant::now() + timeout;
+        let mut guard = lock.lock().unwrap();
+        loop {
+            if let Ok(s) = std::str::from_utf8(&guard)
+                && s.contains(needle)
+            {
+                return s.to_string();
+            }
+            let now = std::time::Instant::now();
+            if now >= deadline {
+                return String::from_utf8_lossy(&guard).to_string();
+            }
+            let (g, _) = cv.wait_timeout(guard, deadline - now).unwrap();
+            guard = g;
+        }
+    }
+}
+
+impl std::io::Write for SharedSink {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        let (lock, cv) = &*self.0;
+        lock.lock().unwrap().extend_from_slice(buf);
+        cv.notify_all();
+        Ok(buf.len())
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
+}
+
+/// Exercises hl's `-F` follow path end-to-end through the `fsmon` crate:
+/// a live append and then a log rotation (rename-away + recreate at the same
+/// path) must both become visible in the formatted output (T045, FR-024, SC-002).
+///
+/// Follow runs forever by design, so it is driven on a background thread that is
+/// intentionally not joined; it is reclaimed when the test process exits.
+#[cfg(unix)]
+#[test]
+fn test_follow_through_fsmon_append_and_rotation() {
+    use std::fs::{File, OpenOptions};
+    use std::io::Write as _;
+
+    let dir = tempfile::TempDir::new().unwrap();
+    let path = dir.path().join("app.log");
+
+    // Pre-existing content: with tail=0 the follower starts at EOF, so this is
+    // not asserted on — it only establishes the file before following begins.
+    {
+        let mut f = File::create(&path).unwrap();
+        writeln!(
+            f,
+            r#"{{"level":"info","msg":"initial","ts":"2023-12-07T20:07:05.001Z"}}"#
+        )
+        .unwrap();
+        f.flush().unwrap();
+    }
+
+    let sink = SharedSink::new();
+
+    let mut opts = options();
+    opts.follow = true;
+    opts.tail = 0;
+
+    let input_path = crate::input::InputPath::resolve(path.clone()).unwrap();
+    let holder = InputHolder::new(InputReference::File(input_path), None);
+
+    let app = App::new(opts);
+    let mut writer = sink.clone();
+    std::thread::spawn(move || {
+        let _ = app.run(vec![holder], &mut writer);
+    });
+
+    // Let the follower open the file and start watching from its current EOF.
+    std::thread::sleep(Duration::from_millis(300));
+
+    // Live append to the followed file.
+    {
+        let mut f = OpenOptions::new().append(true).open(&path).unwrap();
+        writeln!(
+            f,
+            r#"{{"level":"info","msg":"after-append","ts":"2023-12-07T20:07:05.123Z"}}"#
+        )
+        .unwrap();
+        f.flush().unwrap();
+    }
+    let out = sink.wait_for("after-append", Duration::from_secs(5));
+    assert!(
+        out.contains("after-append"),
+        "appended entry not followed; output so far:\n{out}"
+    );
+
+    // Rotate: rename the current file away and create a fresh one at the path.
+    std::fs::rename(&path, dir.path().join("app.log.1")).unwrap();
+    {
+        let mut f = File::create(&path).unwrap();
+        writeln!(
+            f,
+            r#"{{"level":"info","msg":"after-rotate","ts":"2023-12-07T20:07:05.456Z"}}"#
+        )
+        .unwrap();
+        f.flush().unwrap();
+    }
+    let out = sink.wait_for("after-rotate", Duration::from_secs(10));
+    assert!(
+        out.contains("after-rotate"),
+        "post-rotation entry not followed; output so far:\n{out}"
+    );
+}
+
 fn options() -> Options {
     Options {
         theme: Arc::new(Theme::none()),

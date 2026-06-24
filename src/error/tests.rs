@@ -92,10 +92,10 @@ fn test_from_config_error() {
 }
 
 #[test]
-fn test_from_notify_error() {
-    let notify_err = notify::Error::path_not_found();
-    let err = Error::from(notify_err);
-    assert_matches!(err, Error::NotifyError(boxed_err) if !boxed_err.to_string().is_empty());
+fn test_from_fsmon_error() {
+    let fsmon_err = fsmon::Error::Io(std::io::Error::new(std::io::ErrorKind::NotFound, "test error"));
+    let err = Error::from(fsmon_err);
+    assert_matches!(err, Error::FsmonError(boxed_err) if !boxed_err.to_string().is_empty());
 }
 
 #[test]

@@ -1,0 +1,29 @@
+[package]
+name = "fsmon"
+version.workspace = true
+edition.workspace = true
+description = "Robust file following (tail -F parity) for hl"
+repository.workspace = true
+license.workspace = true
+
+[dependencies]
+log.workspace = true
+notify = { version = "8", features = ["macos_kqueue"] }
+thiserror = "2"
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+kqueue = "1"
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.52", features = [
+    "Win32_Foundation",
+    "Win32_Storage_FileSystem",
+    "Win32_System_IO",
+] }
+
+[dev-dependencies]
+rstest.workspace = true
+tempfile = "3"

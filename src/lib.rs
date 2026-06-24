@@ -30,7 +30,6 @@ pub mod types;
 mod console;
 mod eseq;
 mod filtering;
-mod fsmon;
 mod model;
 mod number;
 mod replay;
@@ -38,8 +37,6 @@ mod scanning;
 mod serdex;
 mod tee;
 mod vfs;
-#[cfg(windows)]
-mod win_file_id;
 mod xerr;
 
 // test utilities

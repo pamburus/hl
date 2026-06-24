@@ -1048,6 +1048,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "fsmon"
+version = "0.36.3"
+dependencies = [
+ "kqueue",
+ "libc",
+ "log",
+ "notify",
+ "rstest",
+ "tempfile",
+ "thiserror 2.0.18",
+ "windows-sys 0.52.0",
+]
+
+[[package]]
 name = "futures-core"
 version = "0.3.32"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1288,6 +1302,7 @@ dependencies = [
  "env_logger",
  "flate2",
  "fnv",
+ "fsmon",
  "heapless",
  "heapopt",
  "hex",
@@ -1333,6 +1348,7 @@ dependencies = [
  "strsim",
  "strum",
  "styled-help",
+ "tempfile",
  "terminal_size",
  "thiserror 2.0.18",
  "titlecase",

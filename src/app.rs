@@ -14,10 +14,6 @@ use std::{
     time::{Duration, Instant},
 };
 
-// unix-only std imports
-#[cfg(unix)]
-use std::os::unix::fs::MetadataExt;
-
 // third-party imports
 use closure::closure;
 use crossbeam_channel::{self as channel, Receiver, RecvTimeoutError, Sender};
@@ -40,10 +36,9 @@ use crate::{
     formatting::{
         DynRecordWithSourceFormatter, Expansion, RawRecordFormatter, RecordFormatterBuilder, RecordWithSourceFormatter,
     },
-    fsmon::{self, EventKind},
     help,
     index::{Indexer, IndexerSettings, Timestamp},
-    input::{BlockEntry, Input, InputHolder, InputReference},
+    input::{BlockEntry, InputHolder, InputReference},
     model::{Filter, Parser, ParserSettings, RawRecord, Record, RecordFilter, RecordWithSourceConstructor},
     query::Query,
     scanning::{BufFactory, Delimit, Delimiter, Newline, Scanner, SearchExt, Segment, SegmentBuf, SegmentBufFactory},
@@ -611,79 +606,61 @@ impl App {
                 let delimiter = &self.options.delimiter;
                 let reader = scope.spawn(closure!(clone sfi, clone txi, |_| -> Result<()> {
                     let scanner = Scanner::new(sfi.clone(), delimiter.clone());
-                    let mut meta = None;
+                    let mut input = input_ref.open()?.tail(self.options.tail, delimiter.clone())?;
                     if let InputReference::File(path) = &input_ref {
-                        meta = Some(fs::metadata(&path.canonical)?);
-                    }
-                    let mut input = Some(input_ref.open()?.tail(self.options.tail, delimiter.clone())?);
-                    let is_file = |meta: &Option<fs::Metadata>| meta.as_ref().map(|m|m.is_file()).unwrap_or(false);
-                    let process = |input: &mut Option<Input>, is_file: bool| {
-                        if let Some(input) = input {
-                            for (j, item) in scanner.items(&mut input.stream.as_sequential()).with_max_segment_size(self.options.max_message_size.into()).enumerate() {
-                                if txi.send((i, j, item?)).is_err() {
-                                    break;
-                                }
+                        // Emit the tail preload.
+                        for (j, item) in scanner
+                            .items(&mut input.stream.as_sequential())
+                            .with_max_segment_size(self.options.max_message_size.into())
+                            .enumerate()
+                        {
+                            if txi.send((i, j, item?)).is_err() {
+                                return Ok(());
                             }
-                            Ok(!is_file)
-                        } else {
-                            Ok(false)
                         }
-                    };
-                    if let InputReference::File(path) = &input_ref {
-                        if process(&mut input, is_file(&meta))? {
-                            return Ok(())
-                        }
-                        fsmon::run(vec![path.canonical.clone()], |event| {
-                            match event.kind {
-                                EventKind::Modify(_) | EventKind::Create(_) | EventKind::Any | EventKind::Other => {
-                                    if let (Some(old_meta), Ok(new_meta)) = (&meta, fs::metadata(&path.canonical)) {
-                                        if old_meta.len() > new_meta.len() {
-                                            input = None;
-                                        }
-                                        #[cfg(unix)]
-                                        if old_meta.ino() != new_meta.ino() || old_meta.dev() != new_meta.dev() {
-                                            input = None;
-                                        }
-                                        meta = Some(new_meta);
-                                    }
-                                    if input.is_none() {
-                                        input = input_ref.open().ok();
-                                    }
-                                    if process(&mut input, is_file(&meta))? {
-                                        return Ok(())
-                                    }
-                                    Ok(())
-                                }
-                                EventKind::Remove(_) => {
-                                    input = None;
-                                    Ok(())
-                                },
-                                EventKind::Access(_) => Ok(()),
+                        // Follow from current EOF via the fsmon facade.
+                        let mut follow_reader = fsmon::follow(path.canonical.clone())?.into_reader();
+                        for (j, item) in scanner
+                            .items(&mut follow_reader)
+                            .with_max_segment_size(self.options.max_message_size.into())
+                            .enumerate()
+                        {
+                            if txi.send((i, j, item?)).is_err() {
+                                return Ok(());
                             }
-                        })
+                        }
+                        Ok(())
                     } else {
-                        process(&mut input, is_file(&meta)).map(|_|())
+                        for (j, item) in scanner
+                            .items(&mut input.stream.as_sequential())
+                            .with_max_segment_size(self.options.max_message_size.into())
+                            .enumerate()
+                        {
+                            if txi.send((i, j, item?)).is_err() {
+                                return Ok(());
+                            }
+                        }
+                        Ok(())
                     }
                 }));
                 readers.push(reader);
             }
             drop(txi);
 
-
             // spawn processing threads
             let mut workers = Vec::with_capacity(n);
             for _ in 0..n {
-                let worker = scope.spawn(closure!(ref bfo, ref parser, ref sfi, ref badges, clone rxi, clone txo, |_| {
-                    self.process_segments(parser, bfo, sfi, badges, rxi, txo);
-                }));
+                let worker = scope.spawn(
+                    closure!(ref bfo, ref parser, ref sfi, ref badges, clone rxi, clone txo, |_| {
+                        self.process_segments(parser, bfo, sfi, badges, rxi, txo);
+                    }),
+                );
                 workers.push(worker);
             }
             drop(txo);
 
             // spawn merger thread
-            let merger = scope.spawn(|_| -> Result<()> {
-                self.merge_segments(&badges, rxo, output, n)
-            });
+            let merger = scope.spawn(|_| -> Result<()> { self.merge_segments(&badges, rxo, output, n) });
 
             for reader in readers {
                 reader.join().unwrap()?;
