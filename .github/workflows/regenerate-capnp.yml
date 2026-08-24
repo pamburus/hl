@@ -1,0 +1,67 @@
+---
+name: Regenerate Cap'n Proto bindings
+
+# The generated Cap'n Proto bindings are checked in, and the code they contain is tied to the exact
+# `capnpc` version that produced them. A dependency update that moves `capnpc` therefore leaves the
+# checked-in sources stale, and the build script refuses to accept them — but neither Dependabot nor
+# the scheduled update job runs a build, so the staleness only surfaces as a red CI run.
+#
+# This job closes that gap: whenever an automated dependency branch is pushed, it installs the Cap'n
+# Proto compiler, lets the build script regenerate whatever is out of date, and pushes the result
+# back onto the same branch so the pull request stays self-consistent.
+
+"on":
+  push:
+    branches:
+      - "dependabot/**"
+      - "update-*"
+
+permissions:
+  contents: read
+
+jobs:
+  regenerate:
+    name: Regenerate Cap'n Proto bindings
+    runs-on: ubuntu-latest
+    steps:
+      - name: Generate GitHub App Token
+        id: generate-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          token: ${{ steps.generate-token.outputs.token }}
+
+      - name: Install latest toolchain
+        uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # v1
+        with:
+          toolchain: stable
+
+      - name: Setup Rust cache
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+
+      - name: Install Cap'n Proto compiler
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y capnproto
+
+      - name: Run the build script
+        run: cargo check --quiet --all-targets
+
+      - name: Commit and push regenerated bindings
+        run: |
+          if git diff --quiet -- src/index_capnp.rs .build/capnp; then
+            echo "Generated bindings are already up to date."
+            exit 0
+          fi
+          git config user.name "missionis[bot]"
+          git config user.email "234988995+missionis[bot]@users.noreply.github.com"
+          git add -- src/index_capnp.rs .build/capnp
+          git commit -m "build(capnp): regenerate bindings for the updated toolchain"
+          git push origin HEAD:"${GITHUB_REF_NAME}"
