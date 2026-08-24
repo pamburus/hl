@@ -112,6 +112,10 @@ jobs:
   coverage:
     runs-on: ubuntu-latest
 
+    env:
+      # renovate: datasource=crate depName=rustfilt
+      RUSTFILT_VERSION: "0.2.1"
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -123,6 +127,11 @@ jobs:
 
       - name: Setup Rust cache
         uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+
+      - name: Install coverage tools
+        uses: taiki-e/install-action@b6ff580856c41316412a0b9b60540fbc6f8c82cc # v2.86.7
+        with:
+          tool: rustfilt@${{ env.RUSTFILT_VERSION }}
 
       - name: Generate code coverage
         run: |
