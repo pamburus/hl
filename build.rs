@@ -40,6 +40,63 @@ fn run() -> Result<()> {
     update_theme_versions(&theme_version)
 }
 
+/// Resolves the exact `capnpc` version in use from `Cargo.lock`.
+///
+/// The crate embeds its version in the code it generates but exposes no constant for it, and Cargo
+/// publishes no environment variable carrying a build-dependency's version, so the lock file is the
+/// only authoritative source reachable from here.
+///
+/// A name alone does not identify a package: a lock file may legitimately contain several versions
+/// of the same crate. Resolution therefore goes through this package's own dependency edge, which
+/// Cargo qualifies with a version precisely when the name is ambiguous.
+///
+/// Returns `None` when the version cannot be determined — the lock file is absent from packaged
+/// sources, and an undetermined version must not fail the build or force a regeneration that needs
+/// a Cap'n Proto compiler the builder may not have.
+fn capnpc_version() -> Option<String> {
+    const LOCK_FILE: &str = "Cargo.lock";
+    const DEPENDENCY: &str = "capnpc";
+
+    #[derive(Deserialize)]
+    struct Lock {
+        #[serde(default)]
+        package: Vec<Package>,
+    }
+
+    #[derive(Deserialize)]
+    struct Package {
+        name: String,
+        version: String,
+        #[serde(default)]
+        dependencies: Vec<String>,
+    }
+
+    println!("cargo:rerun-if-changed={LOCK_FILE}");
+
+    let lock: Lock = toml::from_str(&fs::read_to_string(LOCK_FILE).ok()?).ok()?;
+
+    let this = lock
+        .package
+        .iter()
+        .find(|p| p.name == env!("CARGO_PKG_NAME") && p.version == env!("CARGO_PKG_VERSION"))?;
+
+    // Cargo writes `"<name> <version>"` when several versions of the name are locked, and a bare
+    // `"<name>"` when exactly one is, so an unqualified edge is itself proof of uniqueness.
+    let edge = this
+        .dependencies
+        .iter()
+        .find(|d| d.split(' ').next() == Some(DEPENDENCY))?;
+
+    if let Some(version) = edge.strip_prefix(DEPENDENCY).map(str::trim).filter(|v| !v.is_empty()) {
+        return Some(version.to_string());
+    }
+
+    let mut candidates = lock.package.iter().filter(|p| p.name == DEPENDENCY);
+    let only = candidates.next()?;
+
+    candidates.next().is_none().then(|| only.version.clone())
+}
+
 fn set_git_build_info() -> Result<()> {
     println!("cargo:rerun-if-env-changed=HL_BUILD_SRC_STATE");
 
@@ -110,19 +167,22 @@ fn set_git_build_info() -> Result<()> {
 }
 
 fn build_capnp() -> Result<()> {
+    let generator = capnpc_version();
+
     for filename in ["index.capnp"] {
         let source_file = Path::new(CAPNP_DIR).join(filename);
         let target_file = Path::new(SRC_DIR).join(filename.replace(".", "_") + ".rs");
         let hashes = HashInfo {
             source: hex::encode(text_file_hash(&source_file)?),
             target: hex::encode(text_file_hash(&target_file)?),
+            generator: generator.clone(),
         };
         let hash_file = Path::new(BUILD_CAPNP_DIR).join(format!("{}.json", filename));
         if hash_file.is_file() {
             let file = File::open(&hash_file)
                 .map_err(|e| anyhow!("Failed to open hash file {}: {}", hash_file.display(), e))?;
             if let Ok(stored_hashes) = json::from_reader::<_, HashInfo>(file) {
-                if stored_hashes == hashes {
+                if hashes.is_current_against(&stored_hashes) {
                     continue;
                 }
             }
@@ -133,7 +193,20 @@ fn build_capnp() -> Result<()> {
             .file(source_file)
             .output_path(SRC_DIR)
             .run()
-            .map_err(|e| anyhow!("Failed to compile capnp schema {}: {}", filename, e))?;
+            .map_err(|e| {
+                anyhow!(
+                    "Failed to regenerate {} from capnp schema {}: {}.\n\
+                     The checked-in generated sources are stale (expected capnpc {}), so they must be \
+                     rebuilt. Install the capnp compiler, run the build again, and commit the updated \
+                     {} together with {}.",
+                    target_file.display(),
+                    filename,
+                    e,
+                    generator.as_deref().unwrap_or("unknown"),
+                    target_file.display(),
+                    hash_file.display(),
+                )
+            })?;
 
         std::fs::write(&hash_file, json::to_string_pretty(&hashes).unwrap())?;
     }
@@ -472,4 +545,23 @@ type Hash = [u8; 32];
 struct HashInfo {
     source: String,
     target: String,
+    /// Version of the `capnpc` crate that produced the target file, when it could be determined.
+    ///
+    /// Without this, bumping `capnpc` leaves the committed generated sources untouched — the
+    /// schema and its output are both unchanged, so the hashes still match — and the stale
+    /// bindings only surface much later as compile errors against the new runtime.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    generator: Option<String>,
+}
+
+impl HashInfo {
+    /// Reports whether `cached` state proves the target file is still up to date.
+    ///
+    /// An undeterminable current version degrades to comparing content hashes alone, matching the
+    /// behaviour from before the version was tracked, rather than regenerating on no evidence.
+    fn is_current_against(&self, cached: &Self) -> bool {
+        self.source == cached.source
+            && self.target == cached.target
+            && (self.generator.is_none() || self.generator == cached.generator)
+    }
 }
