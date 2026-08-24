@@ -46,6 +46,14 @@ updates:
     commit-message:
       prefix: "build"
       include: "scope"
+    groups:
+      # capnp and capnpc must move together: the runtime and the code generator share a release
+      # cadence, and a version skew between them leaves the committed generated bindings unable to
+      # compile against the runtime.
+      capnp:
+        patterns:
+          - "capnp"
+          - "capnpc"
     ignore:
       - dependency-name: "*"
         update-types: ["version-update:semver-patch"]
