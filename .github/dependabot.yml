@@ -40,15 +40,9 @@ updates:
         patterns:
           - "capnp"
           - "capnpc"
-      # Patch releases are batched into a single pull request rather than suppressed, so the fixes
-      # still land without one pull request per crate.
-      patch-updates:
-        applies-to: version-updates
-        patterns:
-          - "*"
-        update-types:
-          - "patch"
     ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-patch"]
       - dependency-name: "anstream"
         update-types: ["version-update:semver-minor"]
       - dependency-name: "anyhow"
