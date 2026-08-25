@@ -6,7 +6,7 @@ repository.workspace = true
 license.workspace = true
 
 [dependencies]
-memchr.workspace = true
+memchr = "2"
 
 [dev-dependencies]
-rstest.workspace = true
+rstest = "0.26"
