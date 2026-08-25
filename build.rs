@@ -178,6 +178,13 @@ fn build_capnp() -> Result<()> {
             generator: generator.clone(),
         };
         let hash_file = Path::new(BUILD_CAPNP_DIR).join(format!("{}.json", filename));
+
+        // Cargo watches only the paths a build script names, so without these a schema edit, a hand
+        // edit of the generated sources, or a missing record would all go unnoticed until something
+        // else happened to trigger a rerun.
+        for path in [&source_file, &target_file, &hash_file] {
+            println!("cargo:rerun-if-changed={}", path.display());
+        }
         if hash_file.is_file() {
             let file = File::open(&hash_file)
                 .map_err(|e| anyhow!("Failed to open hash file {}: {}", hash_file.display(), e))?;
@@ -207,6 +214,14 @@ fn build_capnp() -> Result<()> {
                     hash_file.display(),
                 )
             })?;
+
+        // The hashes above describe the file as it was before regeneration, and the target has just
+        // been replaced. Recording them unchanged would leave the stored target hash disagreeing
+        // with the file it is meant to describe, and every later build would regenerate again.
+        let hashes = HashInfo {
+            target: hex::encode(text_file_hash(&target_file)?),
+            ..hashes
+        };
 
         std::fs::write(&hash_file, json::to_string_pretty(&hashes).unwrap())?;
     }
