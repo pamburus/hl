@@ -10,6 +10,7 @@
 /*.log.xz
 /*.log.zst
 /target
+/.build/cargo-capnp
 
 # devenv
 .direnv

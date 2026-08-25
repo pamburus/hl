@@ -1,0 +1,78 @@
+---
+name: Regenerate Cap'n Proto bindings
+
+# The generated Cap'n Proto bindings are checked in, and the code they contain is tied to both the
+# `capnpc` crate and the Cap'n Proto compiler that produced them — each records its version in the
+# generated header. A dependency update that moves `capnpc` therefore leaves the checked-in sources
+# stale, and the build script refuses to accept them, but neither Dependabot nor the scheduled update
+# job runs a build, so the staleness only surfaces as a red CI run.
+#
+# This job closes that gap: whenever an automated dependency branch is pushed, it regenerates
+# whatever is out of date and pushes the result back onto the same branch.
+#
+# The compiler comes from the nixpkgs revision pinned in `flake.lock` rather than from the runner
+# image, because its version is embedded verbatim in the generated output. An unpinned compiler would
+# rewrite that header whenever the image changed. `just regenerate-capnp` runs the same script
+# against the same pinned compiler, so a contributor reproducing this locally gets the same bytes.
+
+"on":
+  push:
+    branches:
+      - "dependabot/**"
+      - "update-*"
+
+permissions:
+  contents: read
+
+jobs:
+  regenerate:
+    name: Regenerate Cap'n Proto bindings
+    runs-on: ubuntu-latest
+    steps:
+      - name: Generate GitHub App Token
+        id: generate-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          token: ${{ steps.generate-token.outputs.token }}
+
+      - name: Install latest toolchain
+        uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # v1
+        with:
+          toolchain: stable
+
+      - name: Setup Rust cache
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31.11.1
+
+      - name: Cache Nix store
+        uses: cachix/cachix-action@5f2d7c5294214f71b873db4b969586b980625e71 # v17
+        with:
+          name: hl
+          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
+
+      - name: Regenerate bindings
+        env:
+          CARGO_TARGET_DIR: target
+        run: nix shell --inputs-from . nixpkgs#capnproto --command contrib/bin/regenerate-capnp.sh
+
+      - name: Commit and push regenerated bindings
+        run: |
+          if git diff --quiet -- src/index_capnp.rs .build/capnp; then
+            echo "Generated bindings are already up to date."
+            exit 0
+          fi
+          git config user.name "missionis[bot]"
+          git config user.email "234988995+missionis[bot]@users.noreply.github.com"
+          git add -- src/index_capnp.rs .build/capnp
+          git commit -m "build(capnp): regenerate bindings for the updated toolchain"
+          git push origin HEAD:"${GITHUB_REF_NAME}"
