@@ -143,6 +143,15 @@ check-schema: (setup "schema")
     tombi lint
     taplo check
 
+# Regenerates the checked-in Cap'n Proto bindings with the compiler pinned in `flake.lock`.
+#
+# The compiler stamps its own version into the generated sources, so taking it from the flake keeps
+# the result identical everywhere rather than depending on what happens to be installed locally. The
+# Rust toolchain comes from the same place because the fallback container has none; a machine with
+# `nix` installed uses it directly, one without falls back to Docker.
+[doc("Regenerate the Cap'n Proto bindings with the pinned compiler")]
+regenerate-capnp: (run-nix "shell" "--inputs-from" "path:." "nixpkgs#capnproto" "nixpkgs#cargo" "nixpkgs#rustc" "nixpkgs#gcc" "--command" "contrib/bin/regenerate-capnp.sh")
+
 [doc('Install binary and man pages')]
 install: (setup "build") install-man-pages
     cargo install --path . --locked

@@ -12,8 +12,8 @@ name: Regenerate Cap'n Proto bindings
 #
 # The compiler comes from the nixpkgs revision pinned in `flake.lock` rather than from the runner
 # image, because its version is embedded verbatim in the generated output. An unpinned compiler would
-# rewrite that header whenever the image changed, and would disagree with whatever a contributor has
-# installed locally — the two would take turns reverting each other.
+# rewrite that header whenever the image changed. `just regenerate-capnp` runs the same script
+# against the same pinned compiler, so a contributor reproducing this locally gets the same bytes.
 
 "on":
   push:
@@ -61,11 +61,9 @@ jobs:
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
 
       - name: Regenerate bindings
-        run: |
-          nix shell --inputs-from . nixpkgs#capnproto --command bash -euo pipefail -c '
-            capnp --version
-            cargo check --quiet --all-targets
-          '
+        env:
+          CARGO_TARGET_DIR: target
+        run: nix shell --inputs-from . nixpkgs#capnproto --command contrib/bin/regenerate-capnp.sh
 
       - name: Commit and push regenerated bindings
         run: |
