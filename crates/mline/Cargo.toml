@@ -8,5 +8,5 @@ license.workspace = true
 workspace = "../.."
 
 [dependencies]
-heapopt = { path = "../heapopt" }
-itertools = "0.13"
+heapopt.workspace = true
+itertools.workspace = true

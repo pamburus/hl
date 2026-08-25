@@ -7,8 +7,8 @@ repository.workspace = true
 license.workspace = true
 
 [dependencies]
-derive-where = "1"
-heapless = "0"
+derive-where.workspace = true
+heapless.workspace = true
 
 [dev-dependencies]
-more-asserts = "0"
+more-asserts.workspace = true

@@ -9,9 +9,9 @@ workspace = "../.."
 
 [dependencies]
 clap = { workspace = true, optional = true }
-enumset = { version = "1", features = [] }
-enumset-serde = { path = "../enumset-serde", optional = true }
-serde = { version = "1", optional = true }
+enumset.workspace = true
+enumset-serde = { workspace = true, optional = true }
+serde = { workspace = true, optional = true }
 
 [features]
 clap = ["dep:clap"]
