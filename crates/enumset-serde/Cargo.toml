@@ -8,5 +8,5 @@ license.workspace = true
 workspace = "../.."
 
 [dependencies]
-enumset = { version = "1", features = [] }
-serde = { version = "1" }
+enumset.workspace = true
+serde.workspace = true

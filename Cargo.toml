@@ -24,49 +24,34 @@ members = [
   "crates/wildcard",
 ]
 
-[workspace.package]
-version = "0.36.3"
-edition = "2024"
-repository = "https://github.com/pamburus/hl"
-license = "MIT"
-
 [workspace.dependencies]
+anstream = "1"
+anyhow = "1"
+assert_matches = "1"
+base32 = "0.5"
+byte-strings = "0.3"
+bytefmt = "0.1"
 capnp = "0.27"
 capnpc = "0.27"
-clap = { version = "4", features = ["derive", "env", "string", "wrap_help"] }
-clap_complete = { version = "4" }
-clap_mangen = { git = "https://github.com/pamburus/rust-clap.git", rev = "20f0ffd737581a5ebf7479d2174f2c197f25c94d" }
-json = { package = "serde_json", version = "1", features = ["raw_value"] }
-log = "0.4"
-memchr = "2"
-rstest = "0.26"
-shellwords = "1"
-wildcard = { path = "crates/wildcard" }
-
-[[bench]]
-harness = false
-name = "bench"
-
-[dependencies]
-anstream = "1"
-bytefmt = "0.1"
-capnp.workspace = true
 chrono = { version = "0.4", default-features = false, features = ["clock", "serde", "std"] }
 chrono-english = "0.1"
 chrono-tz = { version = "0.10", features = ["serde"] }
 ciborium = "0.2"
-clap = { workspace = true }
-clap_complete = { workspace = true }
-clap_mangen = { workspace = true }
+clap = { version = "4", features = ["derive", "env", "string", "wrap_help"] }
+clap_complete = { version = "4" }
+clap_mangen = { git = "https://github.com/pamburus/rust-clap.git", rev = "20f0ffd737581a5ebf7479d2174f2c197f25c94d" }
+clean-path = "0.2"
 closure = "0.3"
 collection_macros = "0.2"
 color-print = "0.3"
 config = { version = "0.15", features = ["json", "toml", "yaml"] }
 const-str = "1"
+criterion = "0.8"
 crossbeam-channel = "0.5"
 crossbeam-queue = "0.3"
 crossbeam-utils = "0.8"
 deko = "0.6"
+derive-where = "1"
 derive_more = { version = "2", features = ["deref", "deref_mut", "display", "eq", "from", "into", "into_iterator"] }
 digest-io = "0.1"
 dirs = "6"
@@ -78,20 +63,26 @@ enumset-ext = { path = "./crates/enumset-ext", features = ["clap", "serde"] }
 enumset-serde = { path = "./crates/enumset-serde" }
 env_logger = "0.11"
 flate2 = "1"
+fnv = "1"
 heapless = "0.9"
 heapopt = { path = "./crates/heapopt" }
 hex = "0.4"
 humantime = "2"
 itertools = "0.15"
 itoa = { version = "1", default-features = false }
-json.workspace = true
+json = { package = "serde_json", version = "1", features = ["raw_value"] }
 known-folders = "1"
+kqueue = "1"
+libc = "0.2"
 liblzma = { version = "*", features = ["static"] }
 lifecycle = { path = "./crates/lifecycle" }
-log.workspace = true
+log = "0.4"
 logos = "0.16"
-memchr.workspace = true
+maplit = "1"
+memchr = "2"
 mline = { path = "./crates/mline" }
+mockall = "0.15"
+more-asserts = "0"
 nonzero_ext = "0.3"
 notify = { version = "8", features = ["macos_kqueue"] }
 num_cpus = "1"
@@ -100,20 +91,27 @@ owo-colors = "4"
 pager = { path = "./crates/pager" }
 pest = "2"
 pest_derive = "2"
+proc-macro2 = "1"
+quote = "1"
+rand = "0.10"
 regex = "1"
+rstest = "0.26"
 rust-embed = "8"
-serde = { version = "1", features = ["derive", "rc"] }
+semver = "1"
+serde = { version = "1", features = ["derive"] }
 serde-logfmt = { path = "./crates/serde-logfmt" }
-serde_plain = "1"
 serde-value = "0.7"
+serde_plain = "1"
 sha2 = "0.11"
-shellwords.workspace = true
+shellwords = "1"
 signal-hook = "0.4"
 snap = "1"
 static_assertions = "1"
+stats_alloc = "0.1"
 strsim = "0.11"
 strum = { version = "0.28", features = ["derive"] }
 styled-help = { path = "./crates/styled-help" }
+syn = { version = "3", features = ["extra-traits", "full"] }
 terminal_size = "0.4"
 thiserror = "2"
 titlecase = "3"
@@ -123,36 +121,128 @@ unicode-width = "0.2"
 utf8-supported = "1"
 which = "8"
 wild = "2"
-wildcard.workspace = true
+wildcard = { path = "crates/wildcard" }
+wildmatch = "2"
 winapi-util = { version = "0.1" }
 wyhash = "0.6"
 yaml = { package = "yaml-peg", version = "1" }
 
+[workspace.package]
+version = "0.36.3"
+edition = "2024"
+repository = "https://github.com/pamburus/hl"
+license = "MIT"
+
+[[bench]]
+harness = false
+name = "bench"
+
+[dependencies]
+anstream.workspace = true
+bytefmt.workspace = true
+capnp.workspace = true
+chrono.workspace = true
+chrono-english.workspace = true
+chrono-tz.workspace = true
+ciborium.workspace = true
+clap.workspace = true
+clap_complete.workspace = true
+clap_mangen.workspace = true
+closure.workspace = true
+collection_macros.workspace = true
+color-print.workspace = true
+config.workspace = true
+const-str.workspace = true
+crossbeam-channel.workspace = true
+crossbeam-queue.workspace = true
+crossbeam-utils.workspace = true
+deko.workspace = true
+derive_more.workspace = true
+digest-io.workspace = true
+dirs.workspace = true
+dirs-sys.workspace = true
+encstr.workspace = true
+enum-map.workspace = true
+enumset.workspace = true
+enumset-ext.workspace = true
+enumset-serde.workspace = true
+env_logger.workspace = true
+flate2.workspace = true
+heapless.workspace = true
+heapopt.workspace = true
+hex.workspace = true
+humantime.workspace = true
+itertools.workspace = true
+itoa.workspace = true
+json.workspace = true
+known-folders.workspace = true
+liblzma.workspace = true
+lifecycle.workspace = true
+log.workspace = true
+logos.workspace = true
+memchr.workspace = true
+mline.workspace = true
+nonzero_ext.workspace = true
+notify.workspace = true
+num_cpus.workspace = true
+once_cell.workspace = true
+owo-colors.workspace = true
+pager.workspace = true
+pest.workspace = true
+pest_derive.workspace = true
+regex.workspace = true
+rust-embed.workspace = true
+serde = { workspace = true, features = ["rc"] }
+serde-logfmt.workspace = true
+serde_plain.workspace = true
+serde-value.workspace = true
+sha2.workspace = true
+shellwords.workspace = true
+signal-hook.workspace = true
+snap.workspace = true
+static_assertions.workspace = true
+strsim.workspace = true
+strum.workspace = true
+styled-help.workspace = true
+terminal_size.workspace = true
+thiserror.workspace = true
+titlecase.workspace = true
+toml.workspace = true
+unicode-segmentation.workspace = true
+unicode-width.workspace = true
+utf8-supported.workspace = true
+which.workspace = true
+wild.workspace = true
+wildcard.workspace = true
+winapi-util.workspace = true
+wyhash.workspace = true
+yaml.workspace = true
+
 [dev-dependencies]
-assert_matches = "1"
-base32 = "0.5"
-byte-strings = "0.3"
-clean-path = "0.2"
-criterion = "0.8"
-fnv = "1"
-maplit = "1"
-mockall = "0.15"
-rand = "0.10"
-regex = "1"
+assert_matches.workspace = true
+base32.workspace = true
+byte-strings.workspace = true
+clean-path.workspace = true
+criterion.workspace = true
+fnv.workspace = true
+maplit.workspace = true
+mockall.workspace = true
+rand.workspace = true
+regex.workspace = true
 rstest.workspace = true
-stats_alloc = "0.1"
-wildmatch = "2"
+stats_alloc.workspace = true
+wildmatch.workspace = true
 
 [build-dependencies]
-anyhow = "1"
+anyhow.workspace = true
 capnpc.workspace = true
-const-str = "1"
-hex = "0.4"
+const-str.workspace = true
+hex.workspace = true
 json.workspace = true
-semver = "1"
-serde = { version = "1", features = ["derive"] }
-sha2 = "0.10"
-toml = "1"
+semver.workspace = true
+serde.workspace = true
+sha2.workspace = true
+toml.workspace = true
 
 # Use native-tls on Windows ARM64 to avoid ring/clang requirement
 # Use rustls (default) on all other platforms
@@ -163,10 +253,10 @@ ureq = { version = "3", default-features = false, features = ["gzip", "native-tl
 ureq = "3"
 
 [target.'cfg(target_os = "macos")'.dependencies]
-kqueue = "1"
+kqueue.workspace = true
 
 [target.'cfg(unix)'.dependencies]
-libc = "0.2"
+libc.workspace = true
 
 [profile.release]
 opt-level = 3

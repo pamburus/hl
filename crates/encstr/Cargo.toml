@@ -8,4 +8,4 @@ license.workspace = true
 workspace = "../.."
 
 [dependencies]
-memchr = "2"
+memchr.workspace = true
