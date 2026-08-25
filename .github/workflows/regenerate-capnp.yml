@@ -1,14 +1,19 @@
 ---
 name: Regenerate Cap'n Proto bindings
 
-# The generated Cap'n Proto bindings are checked in, and the code they contain is tied to the exact
-# `capnpc` version that produced them. A dependency update that moves `capnpc` therefore leaves the
-# checked-in sources stale, and the build script refuses to accept them — but neither Dependabot nor
-# the scheduled update job runs a build, so the staleness only surfaces as a red CI run.
+# The generated Cap'n Proto bindings are checked in, and the code they contain is tied to both the
+# `capnpc` crate and the Cap'n Proto compiler that produced them — each records its version in the
+# generated header. A dependency update that moves `capnpc` therefore leaves the checked-in sources
+# stale, and the build script refuses to accept them, but neither Dependabot nor the scheduled update
+# job runs a build, so the staleness only surfaces as a red CI run.
 #
-# This job closes that gap: whenever an automated dependency branch is pushed, it installs the Cap'n
-# Proto compiler, lets the build script regenerate whatever is out of date, and pushes the result
-# back onto the same branch so the pull request stays self-consistent.
+# This job closes that gap: whenever an automated dependency branch is pushed, it regenerates
+# whatever is out of date and pushes the result back onto the same branch.
+#
+# The compiler comes from the nixpkgs revision pinned in `flake.lock` rather than from the runner
+# image, because its version is embedded verbatim in the generated output. An unpinned compiler would
+# rewrite that header whenever the image changed, and would disagree with whatever a contributor has
+# installed locally — the two would take turns reverting each other.
 
 "on":
   push:
@@ -46,13 +51,21 @@ jobs:
       - name: Setup Rust cache
         uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
 
-      - name: Install Cap'n Proto compiler
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y capnproto
+      - name: Install Nix
+        uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31.11.1
 
-      - name: Run the build script
-        run: cargo check --quiet --all-targets
+      - name: Cache Nix store
+        uses: cachix/cachix-action@5f2d7c5294214f71b873db4b969586b980625e71 # v17
+        with:
+          name: hl
+          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
+
+      - name: Regenerate bindings
+        run: |
+          nix shell --inputs-from . nixpkgs#capnproto --command bash -euo pipefail -c '
+            capnp --version
+            cargo check --quiet --all-targets
+          '
 
       - name: Commit and push regenerated bindings
         run: |
