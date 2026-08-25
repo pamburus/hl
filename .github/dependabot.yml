@@ -26,10 +26,6 @@ updates:
       timezone: "Etc/UTC"
     allow:
       - dependency-type: direct
-    # Cargo's default strategy widens the existing requirement, which cannot express a semver-
-    # incompatible bump such as 0.1 to 0.2. Dependabot then updates only the lock file, producing a
-    # pull request whose lock file contradicts the manifest and fails `cargo check --locked`.
-    versioning-strategy: increase
     labels:
       - "dependencies"
       - "rust"
