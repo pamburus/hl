@@ -49,6 +49,11 @@ updates:
         update-types: ["version-update:semver-minor"]
       - dependency-name: "assert_matches"
         update-types: ["version-update:semver-minor"]
+      # 0.2.0 stopped parsing bare month names such as `january`, which `--since` and `--until` accept.
+      # Reported upstream as stevedonovan/chrono-english#38; the release is also absent from the
+      # project repository (stevedonovan/chrono-english#39). Later releases are still offered.
+      - dependency-name: "chrono-english"
+        versions: ["0.2.0"]
       - dependency-name: "clap"
         update-types: ["version-update:semver-minor"]
       - dependency-name: "clap_complete"
