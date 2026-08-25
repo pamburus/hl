@@ -30,19 +30,6 @@ edition = "2024"
 repository = "https://github.com/pamburus/hl"
 license = "MIT"
 
-[workspace.dependencies]
-capnp = "0.27"
-capnpc = "0.27"
-clap = { version = "4", features = ["derive", "env", "string", "wrap_help"] }
-clap_complete = { version = "4" }
-clap_mangen = { git = "https://github.com/pamburus/rust-clap.git", rev = "20f0ffd737581a5ebf7479d2174f2c197f25c94d" }
-json = { package = "serde_json", version = "1", features = ["raw_value"] }
-log = "0.4"
-memchr = "2"
-rstest = "0.26"
-shellwords = "1"
-wildcard = { path = "crates/wildcard" }
-
 [[bench]]
 harness = false
 name = "bench"
@@ -50,14 +37,14 @@ name = "bench"
 [dependencies]
 anstream = "1"
 bytefmt = "0.1"
-capnp.workspace = true
+capnp = "0.27"
 chrono = { version = "0.4", default-features = false, features = ["clock", "serde", "std"] }
 chrono-english = "0.1"
 chrono-tz = { version = "0.10", features = ["serde"] }
 ciborium = "0.2"
-clap = { workspace = true }
-clap_complete = { workspace = true }
-clap_mangen = { workspace = true }
+clap = { version = "4", features = ["derive", "env", "string", "wrap_help"] }
+clap_complete = { version = "4" }
+clap_mangen = { git = "https://github.com/pamburus/rust-clap.git", rev = "20f0ffd737581a5ebf7479d2174f2c197f25c94d" }
 closure = "0.3"
 collection_macros = "0.2"
 color-print = "0.3"
@@ -84,13 +71,13 @@ hex = "0.4"
 humantime = "2"
 itertools = "0.15"
 itoa = { version = "1", default-features = false }
-json.workspace = true
+json = { package = "serde_json", version = "1", features = ["raw_value"] }
 known-folders = "1"
 liblzma = { version = "*", features = ["static"] }
 lifecycle = { path = "./crates/lifecycle" }
-log.workspace = true
+log = "0.4"
 logos = "0.16"
-memchr.workspace = true
+memchr = "2"
 mline = { path = "./crates/mline" }
 nonzero_ext = "0.3"
 notify = { version = "8", features = ["macos_kqueue"] }
@@ -107,7 +94,7 @@ serde-logfmt = { path = "./crates/serde-logfmt" }
 serde_plain = "1"
 serde-value = "0.7"
 sha2 = "0.11"
-shellwords.workspace = true
+shellwords = "1"
 signal-hook = "0.4"
 snap = "1"
 static_assertions = "1"
@@ -123,7 +110,7 @@ unicode-width = "0.2"
 utf8-supported = "1"
 which = "8"
 wild = "2"
-wildcard.workspace = true
+wildcard = { path = "crates/wildcard" }
 winapi-util = { version = "0.1" }
 wyhash = "0.6"
 yaml = { package = "yaml-peg", version = "1" }
@@ -139,16 +126,16 @@ maplit = "1"
 mockall = "0.15"
 rand = "0.10"
 regex = "1"
-rstest.workspace = true
+rstest = "0.26"
 stats_alloc = "0.1"
 wildmatch = "2"
 
 [build-dependencies]
 anyhow = "1"
-capnpc.workspace = true
+capnpc = "0.27"
 const-str = "1"
 hex = "0.4"
-json.workspace = true
+json = { package = "serde_json", version = "1", features = ["raw_value"] }
 semver = "1"
 serde = { version = "1", features = ["derive"] }
 sha2 = "0.10"

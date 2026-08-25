@@ -7,5 +7,5 @@ repository.workspace = true
 license.workspace = true
 
 [dependencies]
-log.workspace = true
-shellwords.workspace = true
+log = "0.4"
+shellwords = "1"
