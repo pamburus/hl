@@ -2425,3 +2425,63 @@ fn test_merge_segments_trailing_gap_with_source_history() {
     // So: trailing-gap(ts=100) sorts before line-B(ts=200).
     assert_eq!(result, "SSline-A\nSStrailing-gap\nSSline-B\n");
 }
+
+// --- BlockScanner tests ---
+
+#[test]
+fn test_block_scanner_continues_numbering_across_scans() {
+    // In follow mode a fresh scan starts on every filesystem event. Block numbers
+    // must keep growing across those scans, otherwise lines of different events
+    // collide in the merge window key and all but the last are dropped.
+    //
+    // Segments are sized so that each of these lines lands in a segment of its
+    // own, which makes numbering observable within a scan as well as across scans.
+    const SEGMENT_SIZE: usize = 3;
+
+    let sfi = Arc::new(SegmentBufFactory::new(SEGMENT_SIZE));
+    let scanner = Scanner::new(sfi, Delimiter::default());
+    let (txi, rxi) = channel::unbounded();
+
+    let mut blocks = BlockScanner::new(&scanner, SEGMENT_SIZE);
+    blocks.scan(&mut Cursor::new(b"a1\na2\n".to_vec()), 0, &txi).unwrap();
+    blocks.scan(&mut Cursor::new(b"b1\nb2\n".to_vec()), 0, &txi).unwrap();
+    drop(txi);
+
+    let text = |segment: &Segment| match segment {
+        Segment::Complete(buf) | Segment::Incomplete(buf, _) => String::from_utf8_lossy(buf.data()).into_owned(),
+    };
+    let scanned = rxi
+        .iter()
+        .map(|(_, block, segment)| (block, text(&segment)))
+        .collect_vec();
+
+    assert_eq!(
+        scanned,
+        vec![
+            (0, "a1\n".to_owned()),
+            (1, "a2\n".to_owned()),
+            (2, "b1\n".to_owned()),
+            (3, "b2\n".to_owned()),
+        ]
+    );
+}
+
+#[test]
+fn test_block_scanner_stops_scanning_when_receiver_is_gone() {
+    // Once the processing threads are gone there is nobody left to hand segments
+    // to, so scanning stops instead of draining the rest of the input.
+    const SEGMENT_SIZE: usize = 3;
+
+    let sfi = Arc::new(SegmentBufFactory::new(SEGMENT_SIZE));
+    let scanner = Scanner::new(sfi, Delimiter::default());
+    let (txi, rxi) = channel::unbounded::<(usize, usize, Segment)>();
+    drop(rxi);
+
+    let mut blocks = BlockScanner::new(&scanner, SEGMENT_SIZE);
+    let mut input = Cursor::new(b"a1\na2\na3\na4\n".to_vec());
+    blocks.scan(&mut input, 0, &txi).unwrap();
+
+    // Only the first segment was read, and its failed hand-off was not counted.
+    assert_eq!(input.position(), SEGMENT_SIZE as u64);
+    assert_eq!(blocks.block, 0);
+}
