@@ -3,6 +3,7 @@
 /.claude
 /.debug
 /.vscode
+/.worktrees
 /.zed
 /*.log
 /*.log.bz2
