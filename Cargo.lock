@@ -302,9 +302,9 @@ dependencies = [
 
 [[package]]
 name = "chrono-english"
-version = "0.1.8"
+version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "38a56613410c9249673f4676ab8d27c70949814accb27b6b738009e2ff1034a1"
+checksum = "01f13833384af0b2e8d3dbba6d611a2b9ee3ced8b141fcb5d932706d63b5680e"
 dependencies = [
  "chrono",
  "scanlex",
@@ -2484,9 +2484,9 @@ dependencies = [
 
 [[package]]
 name = "scanlex"
-version = "0.1.4"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "088c5d71572124929ea7549a8ce98e1a6fd33d0a38367b09027b382e67c033db"
+checksum = "2d1ccd92ba75bf41b8f357c0ed1c74c64d6361a3b22303872d89197cda291e42"
 
 [[package]]
 name = "schannel"
