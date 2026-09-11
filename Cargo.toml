@@ -54,7 +54,7 @@ deko = "0.6"
 derive-where = "1"
 derive_more = { version = "2", features = ["deref", "deref_mut", "display", "eq", "from", "into", "into_iterator"] }
 digest-io = "0.1"
-dirs = "6"
+dirs = "7"
 dirs-sys = "0.5"
 encstr = { path = "./crates/encstr" }
 enum-map = "2"
