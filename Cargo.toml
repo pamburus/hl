@@ -95,7 +95,7 @@ proc-macro2 = "1"
 quote = "1"
 rand = "0.10"
 regex = "1"
-rstest = "0.26"
+rstest = "0.27"
 rust-embed = "8"
 semver = "1"
 serde = { version = "1", features = ["derive"] }
