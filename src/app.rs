@@ -4,7 +4,7 @@ use std::{
     collections::{BTreeMap, HashMap},
     convert::{TryFrom, TryInto},
     fs,
-    io::{BufWriter, Write},
+    io::{BufWriter, Read, Write},
     num::NonZeroUsize,
     ops::Range,
     path::PathBuf,
@@ -617,13 +617,10 @@ impl App {
                     }
                     let mut input = Some(input_ref.open()?.tail(self.options.tail, delimiter.clone())?);
                     let is_file = |meta: &Option<fs::Metadata>| meta.as_ref().map(|m|m.is_file()).unwrap_or(false);
-                    let process = |input: &mut Option<Input>, is_file: bool| {
+                    let mut blocks = BlockScanner::new(&scanner, self.options.max_message_size.into());
+                    let mut process = |input: &mut Option<Input>, is_file: bool| {
                         if let Some(input) = input {
-                            for (j, item) in scanner.items(&mut input.stream.as_sequential()).with_max_segment_size(self.options.max_message_size.into()).enumerate() {
-                                if txi.send((i, j, item?)).is_err() {
-                                    break;
-                                }
-                            }
+                            blocks.scan(&mut input.stream.as_sequential(), i, &txi)?;
                             Ok(!is_file)
                         } else {
                             Ok(false)
@@ -669,21 +666,20 @@ impl App {
             }
             drop(txi);
 
-
             // spawn processing threads
             let mut workers = Vec::with_capacity(n);
             for _ in 0..n {
-                let worker = scope.spawn(closure!(ref bfo, ref parser, ref sfi, ref badges, clone rxi, clone txo, |_| {
-                    self.process_segments(parser, bfo, sfi, badges, rxi, txo);
-                }));
+                let worker = scope.spawn(
+                    closure!(ref bfo, ref parser, ref sfi, ref badges, clone rxi, clone txo, |_| {
+                        self.process_segments(parser, bfo, sfi, badges, rxi, txo);
+                    }),
+                );
                 workers.push(worker);
             }
             drop(txo);
 
             // spawn merger thread
-            let merger = scope.spawn(|_| -> Result<()> {
-                self.merge_segments(&badges, rxo, output, n)
-            });
+            let merger = scope.spawn(|_| -> Result<()> { self.merge_segments(&badges, rxo, output, n) });
 
             for reader in readers {
                 reader.join().unwrap()?;
@@ -742,10 +738,15 @@ impl App {
         output: &mut Output,
         concurrency: usize,
     ) -> Result<()> {
-        type Key = (Timestamp, usize, usize, usize); // (ts, input, block, offset)
+        // The `seq` component is a strictly increasing insertion counter. It is
+        // redundant as long as `block` is unique per input, but it keeps the key
+        // injective regardless: `BTreeMap::insert` silently drops a line on a key
+        // collision, and that invariant is enforced far away, in the reader thread.
+        type Key = (Timestamp, usize, usize, usize, u64); // (ts, input, block, offset, seq)
         type Line = (Rc<Vec<u8>>, Range<usize>, Instant); // (buf, location, instant)
 
         let mut window = BTreeMap::<Key, Line>::new();
+        let mut seq = 0u64;
         let mut last_ts: Option<Timestamp> = None;
         let mut prev_ts: Option<Timestamp> = None;
         let mut source_last_ts: HashMap<usize, Timestamp> = HashMap::new();
@@ -815,7 +816,8 @@ impl App {
                         if start < trimmed {
                             if let Some(ts) = ts {
                                 mem_usage += trimmed - start;
-                                window.insert((ts, i, index.block, start), (buf.clone(), start..trimmed, now));
+                                window.insert((ts, i, index.block, start, seq), (buf.clone(), start..trimmed, now));
+                                seq += 1;
                             } else {
                                 output.write_all(&buf[start..end])?;
                             }
@@ -831,9 +833,10 @@ impl App {
                             .or_insert(ts);
                         last_ts = Some(last_ts.map(|v| max(v, ts)).unwrap_or(ts));
                         mem_usage += line.location.end - line.location.start;
-                        let key = (ts, i, index.block, line.location.start);
+                        let key = (ts, i, index.block, line.location.start, seq);
                         let value = (buf.clone(), line.location, now);
                         window.insert(key, value);
+                        seq += 1;
                     }
                 }
                 Err(RecvTimeoutError::Timeout) => {}
@@ -1178,6 +1181,40 @@ pub struct RecordIgnorer {}
 impl RecordObserver for RecordIgnorer {
     #[inline]
     fn observe_record<'a>(&mut self, _: &Record<'a>, _: Range<usize>) {}
+}
+
+// ---
+
+/// Scans an input stream into segments and sends them numbered by block index.
+///
+/// In follow mode the same input is scanned again on every filesystem event,
+/// so the block counter is kept here, across `scan` calls: it is part of the
+/// merge window key `(ts, input, block, offset, seq)` and must stay unique for
+/// the whole lifetime of the input.
+struct BlockScanner<'a, D: Delimit> {
+    scanner: &'a Scanner<D>,
+    max_segment_size: usize,
+    block: usize,
+}
+
+impl<'a, D: Delimit> BlockScanner<'a, D> {
+    fn new(scanner: &'a Scanner<D>, max_segment_size: usize) -> Self {
+        Self {
+            scanner,
+            max_segment_size,
+            block: 0,
+        }
+    }
+
+    fn scan(&mut self, stream: &mut dyn Read, i: usize, txi: &Sender<(usize, usize, Segment)>) -> Result<()> {
+        for item in self.scanner.items(stream).with_max_segment_size(self.max_segment_size) {
+            if txi.send((i, self.block, item?)).is_err() {
+                break;
+            }
+            self.block += 1;
+        }
+        Ok(())
+    }
 }
 
 // ---
