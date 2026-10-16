@@ -2425,3 +2425,60 @@ fn test_merge_segments_trailing_gap_with_source_history() {
     // So: trailing-gap(ts=100) sorts before line-B(ts=200).
     assert_eq!(result, "SSline-A\nSStrailing-gap\nSSline-B\n");
 }
+
+#[test]
+fn test_merge_segments_same_source_same_ts_keeps_both_lines() {
+    // Two segments from the same source sharing block, timestamp and offset:
+    // the merge window must not let one overwrite the other.
+    let app = App::new(options());
+    let badges = test_badges(2);
+    let (txo, rxo) = channel::bounded(10);
+
+    let buf1 = b"  line-one".to_vec();
+    let index1 = TimestampIndex {
+        block: 0,
+        lines: vec![TimestampIndexLine {
+            location: 0..buf1.len(),
+            ts: ts(100, 0),
+        }],
+    };
+
+    let buf2 = b"  line-two".to_vec();
+    let index2 = TimestampIndex {
+        block: 0,
+        lines: vec![TimestampIndexLine {
+            location: 0..buf2.len(),
+            ts: ts(100, 0),
+        }],
+    };
+
+    txo.send((0, buf1, index1)).unwrap();
+    txo.send((0, buf2, index2)).unwrap();
+    drop(txo);
+
+    let mut output = Vec::new();
+    app.merge_segments(&badges, rxo, &mut output, 1).unwrap();
+
+    let result = String::from_utf8(output).unwrap();
+    assert_eq!(result, "SSline-one\nSSline-two\n");
+}
+
+// --- BlockScanner tests ---
+
+#[test]
+fn test_block_scanner_continues_numbering_across_scans() {
+    // In follow mode the same input is re-scanned on every filesystem event.
+    // Block numbers must keep growing across those scans, otherwise segments
+    // of different events collide in the merge window key.
+    let sfi = Arc::new(SegmentBufFactory::new(4096));
+    let scanner = Scanner::new(sfi, Delimiter::default());
+    let (txi, rxi) = channel::unbounded();
+
+    let mut blocks = BlockScanner::new(&scanner, 4096 * 1024);
+    blocks.scan(&mut Cursor::new(b"line-one\n".to_vec()), 0, &txi).unwrap();
+    blocks.scan(&mut Cursor::new(b"line-two\n".to_vec()), 0, &txi).unwrap();
+    drop(txi);
+
+    let blocks = rxi.iter().map(|(_, block, _)| block).collect_vec();
+    assert_eq!(blocks, vec![0, 1]);
+}
