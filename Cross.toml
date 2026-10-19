@@ -1,0 +1,4 @@
+# The image's glibc sets the minimum glibc required by the released binary.
+# This one is based on Ubuntu 16.04 (glibc 2.23); the resulting binary requires glibc 2.18.
+[target.x86_64-unknown-linux-gnu]
+image = "ghcr.io/cross-rs/x86_64-unknown-linux-gnu:0.2.5"
