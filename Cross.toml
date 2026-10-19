@@ -2,3 +2,8 @@
 # This one is based on Ubuntu 16.04 (glibc 2.23); the resulting binary requires glibc 2.18.
 [target.x86_64-unknown-linux-gnu]
 image = "ghcr.io/cross-rs/x86_64-unknown-linux-gnu:0.2.5"
+
+# Link with the toolchain's gcc directly. The image's default linker is a wrapper that only matters
+# for Rust < 1.48 and traces itself with `set -x`; rustc reports that trace as a `linker_messages` warning.
+[target.aarch64-unknown-linux-musl.env]
+passthrough = ["CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER=aarch64-linux-musl-gcc"]
