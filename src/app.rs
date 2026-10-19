@@ -747,11 +747,16 @@ impl App {
         let mut source_last_ts: HashMap<usize, Timestamp> = HashMap::new();
         let mut mem_usage = 0;
         let mem_limit = concurrency * usize::from(self.options.buffer_size);
+        let sync_interval = self.options.sync_interval;
+        let mut disconnected = false;
 
         loop {
-            let deadline = Instant::now().checked_sub(self.options.sync_interval);
+            let now = Instant::now();
             while let Some(first) = window.first_key_value() {
-                if deadline.map(|deadline| first.1.2 > deadline).unwrap_or(true) && mem_usage < mem_limit {
+                // Once all inputs are closed nothing can arrive to be sorted in
+                // between, so the rest of the window is flushed right away.
+                let due = disconnected || mem_usage >= mem_limit || flush_wait(first.1.2, now, sync_interval).is_zero();
+                if !due {
                     break;
                 }
                 if let Some(entry) = window.pop_first() {
@@ -768,13 +773,15 @@ impl App {
                 }
             }
 
-            let next_ts = window.first_entry().map(|e| e.get().2);
-            let timeout = if let (Some(next_ts), Some(deadline)) = (next_ts, deadline) {
-                Some(max(deadline, next_ts) - next_ts)
-            } else {
-                None
-            };
-            match rxo.recv_timeout(timeout.unwrap_or(std::time::Duration::MAX)) {
+            if disconnected {
+                break;
+            }
+
+            let timeout = window
+                .first_key_value()
+                .map(|first| flush_wait(first.1.2, now, sync_interval))
+                .unwrap_or(Duration::MAX);
+            match rxo.recv_timeout(timeout) {
                 Ok((i, buf, index)) => {
                     let delim_len = self.options.output_delimiter.len();
                     let delim = self.options.output_delimiter.as_bytes();
@@ -833,11 +840,7 @@ impl App {
                     }
                 }
                 Err(RecvTimeoutError::Timeout) => {}
-                Err(RecvTimeoutError::Disconnected) => {
-                    if timeout.is_none() {
-                        break;
-                    }
-                }
+                Err(RecvTimeoutError::Disconnected) => disconnected = true,
             }
         }
 
@@ -1209,6 +1212,14 @@ impl<'a, D: Delimit> BlockScanner<'a, D> {
         }
         Ok(())
     }
+}
+
+// ---
+
+/// Returns how long a line received at `received` still has to stay in the
+/// follow mode merge window, as of `now`; zero means it is due for output.
+fn flush_wait(received: Instant, now: Instant, sync_interval: Duration) -> Duration {
+    sync_interval.saturating_sub(now.saturating_duration_since(received))
 }
 
 // ---

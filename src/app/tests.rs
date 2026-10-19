@@ -2229,6 +2229,64 @@ fn test_merge_segments_empty_channel() {
 }
 
 #[test]
+fn test_merge_segments_flushes_window_when_inputs_close() {
+    // With a sync interval far longer than the test, the buffered line can only
+    // be written because the input channel was closed, not because it timed out.
+    let app = App::new(Options {
+        sync_interval: Duration::from_secs(3600),
+        ..options()
+    });
+    let badges = test_badges(2);
+    let (txo, rxo) = channel::bounded(10);
+
+    let buf = b"  hello".to_vec();
+    let index = TimestampIndex {
+        block: 0,
+        lines: vec![TimestampIndexLine {
+            location: 0..buf.len(),
+            ts: ts(100, 0),
+        }],
+    };
+    txo.send((0, buf, index)).unwrap();
+    drop(txo);
+
+    let (txr, rxr) = channel::bounded(1);
+    std::thread::spawn(move || {
+        let mut output = Vec::new();
+        let result = app.merge_segments(&badges, rxo, &mut output, 1);
+        txr.send(result.map(|_| output)).ok();
+    });
+
+    let output = rxr
+        .recv_timeout(Duration::from_secs(10))
+        .expect("merge_segments did not return after inputs closed")
+        .unwrap();
+    assert_eq!(String::from_utf8(output).unwrap(), "SShello\n");
+}
+
+#[test]
+fn test_flush_wait() {
+    let interval = Duration::from_secs(5);
+    let received = Instant::now();
+
+    assert_eq!(flush_wait(received, received, interval), interval);
+    assert_eq!(
+        flush_wait(received, received + Duration::from_secs(2), interval),
+        Duration::from_secs(3)
+    );
+    assert_eq!(flush_wait(received, received + interval, interval), Duration::ZERO);
+    assert_eq!(
+        flush_wait(received, received + Duration::from_secs(6), interval),
+        Duration::ZERO
+    );
+    // A clock reading earlier than the receive time must not underflow.
+    assert_eq!(
+        flush_wait(received + Duration::from_secs(1), received, interval),
+        interval
+    );
+}
+
+#[test]
 fn test_merge_segments_multiple_lines_per_segment() {
     let app = App::new(options());
     let badges = test_badges(2);
