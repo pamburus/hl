@@ -14,10 +14,6 @@ use std::{
     time::{Duration, Instant},
 };
 
-// unix-only std imports
-#[cfg(unix)]
-use std::os::unix::fs::MetadataExt;
-
 // third-party imports
 use closure::closure;
 use crossbeam_channel::{self as channel, Receiver, RecvTimeoutError, Sender};
@@ -35,6 +31,7 @@ use crate::{
     appdirs::AppDirs,
     datefmt::{DateTimeFormat, DateTimeFormatter},
     error::*,
+    fileid::MetadataExt,
     filtering::{MatchOptions, NoNormalizing},
     fmtx::{Adjustment, Alignment, Padding, aligned},
     formatting::{
@@ -637,8 +634,7 @@ impl App {
                                         if old_meta.len() > new_meta.len() {
                                             input = None;
                                         }
-                                        #[cfg(unix)]
-                                        if old_meta.ino() != new_meta.ino() || old_meta.dev() != new_meta.dev() {
+                                        if old_meta.file_id() != new_meta.file_id() {
                                             input = None;
                                         }
                                         meta = Some(new_meta);

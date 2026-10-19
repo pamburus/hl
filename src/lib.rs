@@ -29,6 +29,7 @@ pub mod types;
 // private modules
 mod console;
 mod eseq;
+mod fileid;
 mod filtering;
 mod fsmon;
 mod model;
