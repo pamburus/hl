@@ -46,6 +46,7 @@ jobs:
             target: x86_64-unknown-linux-gnu
             archiver: tar.gz
             asset: hl-linux-x86_64-gnu.tar.gz
+            cross: true
           - name: linux-x86-musl
             os: ubuntu-latest
             family: linux
@@ -120,7 +121,7 @@ jobs:
       - name: Install Cross
         if: matrix.cross
         run: |
-          cargo install cross
+          cargo install cross --version 0.2.5 --locked
           echo "CARGO=cross" >> $GITHUB_ENV
 
       - name: Add Target
