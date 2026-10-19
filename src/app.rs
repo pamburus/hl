@@ -4,7 +4,7 @@ use std::{
     collections::{BTreeMap, HashMap},
     convert::{TryFrom, TryInto},
     fs,
-    io::{BufWriter, Read, Write},
+    io::{BufWriter, Cursor, Read, Write},
     num::NonZeroUsize,
     ops::Range,
     path::PathBuf,
@@ -43,7 +43,9 @@ use crate::{
     input::{BlockEntry, Input, InputHolder, InputReference},
     model::{Filter, Parser, ParserSettings, RawRecord, Record, RecordFilter, RecordWithSourceConstructor},
     query::Query,
-    scanning::{BufFactory, Delimit, Delimiter, Newline, Scanner, SearchExt, Segment, SegmentBuf, SegmentBufFactory},
+    scanning::{
+        BufFactory, Delimit, Delimiter, Newline, Scanner, Search, SearchExt, Segment, SegmentBuf, SegmentBufFactory,
+    },
     settings::{AsciiMode, ExpansionMode, FieldShowOption, Fields, Formatting, InputInfo, ResolvedPunctuation},
     theme::{Element, StylingPush, SyncIndicatorPack, Theme},
     themecfg,
@@ -614,12 +616,16 @@ impl App {
                     }
                     let mut input = Some(input_ref.open()?.tail(self.options.tail, delimiter.clone())?);
                     let is_file = |meta: &Option<fs::Metadata>| meta.as_ref().map(|m|m.is_file()).unwrap_or(false);
-                    let mut blocks = BlockScanner::new(&scanner, self.options.max_message_size.into());
+                    let mut blocks = BlockScanner::new(&scanner, delimiter.clone(), self.options.max_message_size.into());
+                    // Only a regular file is scanned again when it grows, so only there
+                    // an unterminated tail is held back to be completed by the next scan.
+                    // Without an input, a tail held from the previous one is flushed.
                     let mut process = |input: &mut Option<Input>, is_file: bool| {
                         if let Some(input) = input {
-                            blocks.scan(&mut input.stream.as_sequential(), i, &txi)?;
+                            blocks.scan(&mut input.stream.as_sequential(), i, &txi, is_file)?;
                             Ok(!is_file)
                         } else {
+                            blocks.scan(&mut std::io::empty(), i, &txi, false)?;
                             Ok(false)
                         }
                     };
@@ -631,11 +637,11 @@ impl App {
                             match event.kind {
                                 EventKind::Modify(_) | EventKind::Create(_) | EventKind::Any | EventKind::Other => {
                                     if let (Some(old_meta), Ok(new_meta)) = (&meta, fs::metadata(&path.canonical)) {
-                                        if old_meta.len() > new_meta.len() {
+                                        let replaced = old_meta.len() > new_meta.len() || old_meta.file_id() != new_meta.file_id();
+                                        if replaced && input.is_some() {
+                                            // The rest of the old file will not come, flush its tail.
                                             input = None;
-                                        }
-                                        if old_meta.file_id() != new_meta.file_id() {
-                                            input = None;
+                                            process(&mut input, false)?;
                                         }
                                         meta = Some(new_meta);
                                     }
@@ -649,7 +655,7 @@ impl App {
                                 }
                                 EventKind::Remove(_) => {
                                     input = None;
-                                    Ok(())
+                                    process(&mut input, false).map(|_| ())
                                 },
                                 EventKind::Access(_) => Ok(()),
                             }
@@ -1184,29 +1190,142 @@ impl RecordObserver for RecordIgnorer {
 /// therefore lives here and keeps counting across scans: it is part of the
 /// merge window key `(ts, input, block, offset)`, and restarting it makes lines
 /// of different scans collide on one key, where all but the last are lost.
+///
+/// For the same reason it also keeps the unterminated tail of the stream: end of
+/// file in the middle of a line usually means the writer has not finished it
+/// yet, so the tail is held back and prepended to the data of the next scan.
 struct BlockScanner<'a, D: Delimit> {
     scanner: &'a Scanner<D>,
+    searcher: D::Searcher,
     max_segment_size: usize,
     block: usize,
+    tail: Vec<u8>,
 }
 
 impl<'a, D: Delimit> BlockScanner<'a, D> {
-    fn new(scanner: &'a Scanner<D>, max_segment_size: usize) -> Self {
+    fn new(scanner: &'a Scanner<D>, delimiter: D, max_segment_size: usize) -> Self {
         Self {
             scanner,
+            searcher: delimiter.into_searcher(),
             max_segment_size,
             block: 0,
+            tail: Vec::new(),
         }
     }
 
-    fn scan(&mut self, stream: &mut dyn Read, i: usize, txi: &Sender<(usize, usize, Segment)>) -> Result<()> {
-        for item in self.scanner.items(stream).with_max_segment_size(self.max_segment_size) {
-            if txi.send((i, self.block, item?)).is_err() {
-                break;
-            }
-            self.block += 1;
+    /// Scans the held tail followed by `stream` up to its end.
+    ///
+    /// With `hold_tail`, the data after the last delimiter is held back for the
+    /// next scan instead of being sent as a complete segment. Without it, all
+    /// data is sent, which also flushes a tail held by a previous scan.
+    fn scan(
+        &mut self,
+        stream: &mut dyn Read,
+        i: usize,
+        txi: &Sender<(usize, usize, Segment)>,
+        hold_tail: bool,
+    ) -> Result<()> {
+        let tail = std::mem::take(&mut self.tail);
+        let mut holding = None;
+        let mut chained = None;
+        let reader: &mut dyn Read = if hold_tail {
+            holding.insert(TailHoldingReader::new(
+                tail,
+                stream,
+                &self.searcher,
+                self.max_segment_size,
+            ))
+        } else {
+            chained.insert(Cursor::new(tail).chain(stream))
+        };
+        Self::send(self.scanner, self.max_segment_size, &mut self.block, reader, i, txi)?;
+        if let Some(reader) = holding {
+            self.tail = reader.into_tail();
         }
         Ok(())
+    }
+
+    fn send(
+        scanner: &Scanner<D>,
+        max_segment_size: usize,
+        block: &mut usize,
+        stream: &mut dyn Read,
+        i: usize,
+        txi: &Sender<(usize, usize, Segment)>,
+    ) -> Result<()> {
+        for item in scanner.items(stream).with_max_segment_size(max_segment_size) {
+            if txi.send((i, *block, item?)).is_err() {
+                break;
+            }
+            *block += 1;
+        }
+        Ok(())
+    }
+}
+
+// ---
+
+/// Reads a previously held tail followed by an inner stream, and holds back the
+/// data after the last delimiter once the inner stream reaches its end.
+///
+/// The held data stops growing at `limit` bytes: a line that long is passed on
+/// even if unterminated, as the scanner would split it into parts anyway.
+struct TailHoldingReader<'a, S> {
+    inner: &'a mut dyn Read,
+    searcher: &'a S,
+    limit: usize,
+    buf: Vec<u8>,
+    // `buf[pos..ready]` can be passed on, `buf[ready..]` is held back.
+    pos: usize,
+    ready: usize,
+}
+
+impl<'a, S: Search> TailHoldingReader<'a, S> {
+    const CHUNK_SIZE: usize = 64 * 1024;
+
+    fn new(tail: Vec<u8>, inner: &'a mut dyn Read, searcher: &'a S, limit: usize) -> Self {
+        Self {
+            inner,
+            searcher,
+            limit,
+            buf: tail,
+            pos: 0,
+            ready: 0,
+        }
+    }
+
+    fn into_tail(mut self) -> Vec<u8> {
+        self.buf.drain(..self.pos);
+        self.buf
+    }
+}
+
+impl<S: Search> Read for TailHoldingReader<'_, S> {
+    fn read(&mut self, out: &mut [u8]) -> std::io::Result<usize> {
+        while self.pos == self.ready {
+            self.buf.drain(..self.pos);
+            self.pos = 0;
+            self.ready = 0;
+
+            let len = self.buf.len();
+            self.buf.resize(len + Self::CHUNK_SIZE, 0);
+            let n = self.inner.read(&mut self.buf[len..]);
+            self.buf.truncate(len + n.as_ref().copied().unwrap_or(0));
+            if n? == 0 {
+                return Ok(0);
+            }
+
+            self.ready = if self.buf.len() >= self.limit {
+                self.buf.len()
+            } else {
+                self.searcher.search_r(&self.buf, true).map(|r| r.end).unwrap_or(0)
+            };
+        }
+
+        let n = out.len().min(self.ready - self.pos);
+        out[..n].copy_from_slice(&self.buf[self.pos..self.pos + n]);
+        self.pos += n;
+        Ok(n)
     }
 }
 
