@@ -1,16 +1,16 @@
 <!--
 Sync Impact Report:
-- Version: 1.4.2 → 1.4.3
+- Version: 1.4.3 → 1.5.0
 - Modified Sections:
-  - Development Workflow & Quality Gates (Version Check): Added git fetch -t requirement
-- Rationale: PATCH version bump - workflow clarification to fetch latest tags
+  - Development Workflow & Quality Gates: "Version Check Before Implementation" → "Versioning of Pull Requests"
+  - Development Workflow & Quality Gates (Commit Workflow): command names updated to spec-kit 1.2.2 skills (`/speckit-specify` etc.)
+- Rationale: MINOR version bump. The versioning guidance is materially redefined: feature branches no longer bump at the start of implementation, the bump moves to the PR that merges the feature, and the alpha bump for non-feature PRs is now codified.
 - Templates requiring updates:
-  - ✅ plan-template.md: Compatible - no structural changes needed
-  - ✅ spec-template.md: Compatible - no structural changes needed
-  - ✅ tasks-template.md: Compatible - workflow guidance orthogonal to task structure
-- Modified Requirements:
-  - Step 2 of version check now includes git fetch -t to ensure latest tags
-- Date: 2026-02-04
+  - ✅ plan-template.md: Compatible - no version-related steps
+  - ✅ spec-template.md: Compatible - no version-related steps
+  - ✅ tasks-template.md: Compatible - no version-related steps
+- Follow-up TODOs: none
+- Date: 2026-10-20
 -->
 
 # hl (High-performance Log viewer) Constitution
@@ -111,20 +111,24 @@ Tests MUST use external data files instead of inline multiline string literals f
 
 **Backwards Compatibility**: Maintained across minor versions. Deprecation period required before removing features.
 
-**Version Check Before Implementation**: Before starting feature implementation, ensure version is properly bumped:
+**Versioning of Pull Requests**: The version identifies a state of master, not a branch.
 
-1. Run `just version` to get current version (e.g., `0.36.0-alpha.5`)
-2. Run `git fetch -t && just previous-tag` to get latest tags and previous release tag (e.g., `v0.35.3`)
+- Feature branches MUST NOT change the version while work is in progress. They keep whatever version master has, and pick up master's alpha bumps by rebasing or merging master as usual.
+- Non-feature PRs (fixes, chores, docs, dependency updates) MUST bump the alpha in the same PR with `just bump`, e.g. `0.36.5-alpha.2` → `0.36.5-alpha.3`.
+- The PR that merges a feature into master MUST set the version as follows, after rebasing onto the latest master:
+
+1. Run `just version` to get the current version (e.g., `0.36.5-alpha.3`)
+2. Run `git fetch -t && just previous-tag` to get the latest tags and the previous release tag (e.g., `v0.36.4`)
 3. Compare the major.minor versions:
-   - Extract major.minor from current version (e.g., `0.36`)
-   - Extract major.minor from previous tag, removing `v` prefix (e.g., `0.35`)
-4. If major.minor versions are the SAME:
-   - Calculate next minor version: `major.(minor+1).0-alpha.1`
-   - Run `cargo set-version <next-version>` (e.g., `cargo set-version 0.36.0-alpha.1`)
-5. If major.minor versions are DIFFERENT:
-   - Run `just bump` to increment alpha version (e.g., `0.36.0-alpha.5` → `0.36.0-alpha.6`)
+   - Extract major.minor from the current version (e.g., `0.36`)
+   - Extract major.minor from the previous tag, removing the `v` prefix (e.g., `0.36`)
+4. If the major.minor versions are the SAME (master is still on the patch line):
+   - Calculate the next minor version: `major.(minor+1).0-alpha.1`
+   - Run `cargo set-version <next-version>` (e.g., `cargo set-version 0.37.0-alpha.1`)
+5. If the major.minor versions are DIFFERENT (master is already on the next minor line):
+   - Run `just bump` to increment the alpha version (e.g., `0.37.0-alpha.1` → `0.37.0-alpha.2`)
 
-**Rationale**: This ensures each feature branch has a unique version identifier, preventing version conflicts and enabling proper release tracking.
+**Rationale**: Versions identify releases of a single line on master. If parallel feature branches each claimed the next minor alpha, they would produce identical pre-release versions with different contents, which violates SemVer's rule that a released version's contents never change. Bumping early also conflicts with every alpha bump on master. Assigning the version at merge time keeps every master version unique and in order.
 
 **Commit Workflow**: When using speckit workflow commands, commits MUST follow this discipline:
 
@@ -139,10 +143,10 @@ Tests MUST use external data files instead of inline multiline string literals f
    ALL reported issues MUST be resolved before proceeding with the commit.
 
 2. **Conventional Commits**: After completing each speckit step, create a commit using conventional commit format:
-   - After `/speckit.specify`: `docs(spec): add [feature-name] specification`
-   - After `/speckit.clarify`: `docs(spec): clarify [aspect] in [feature-name]`
-   - After `/speckit.tasks`: `docs(tasks): generate task breakdown for [feature-name]`
-   - After `/speckit.implement`: `feat([scope]): [user-visible change]` or `fix([scope]): [user-visible fix]`
+   - After `/speckit-specify`: `docs(spec): add [feature-name] specification`
+   - After `/speckit-clarify`: `docs(spec): clarify [aspect] in [feature-name]`
+   - After `/speckit-tasks`: `docs(tasks): generate task breakdown for [feature-name]`
+   - After `/speckit-implement`: `feat([scope]): [user-visible change]` or `fix([scope]): [user-visible fix]`
 
 3. **Commit Message Content Guidelines**:
    Commit messages are used to automatically generate release notes and MUST focus on user-visible behavior:
@@ -191,4 +195,4 @@ This constitution supersedes all other practices and informal conventions. All P
 3. Documentation of rationale
 4. Migration plan for any breaking changes
 
-**Version**: 1.4.3 | **Ratified**: 2025-11-02 | **Last Amended**: 2026-02-04
+**Version**: 1.5.0 | **Ratified**: 2025-11-02 | **Last Amended**: 2026-10-20
