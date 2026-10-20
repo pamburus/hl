@@ -44,3 +44,25 @@ cargo clippy
 | `src/formatting.rs` | Conditional `key_prettify` application |
 | `src/formatting/tests.rs` | Unit tests |
 | `etc/defaults/config.toml` | Default config with new option |
+
+---
+
+## Amendment 2026-10-21: Key Quoting (#1609)
+
+### Verify behavior
+
+```bash
+printf '%s\n' '{"ts":"2026-10-21T10:00:00Z","level":"info","msg":"hello","user name":"alice smith","a=b":"x","":"empty","n":{"inner key":3}}' | hl -P --color never
+# 2026-10-21 10:00:00.000 [INF] hello › "user name"="alice smith" "a=b"=x ""=empty n."inner key"=3
+
+# Same input, no flattening:
+#   … n={ "inner key"=3 }
+
+# With --raw-fields, keys are shown as is:
+#   … user name="alice smith" a=b="x" …
+
+printf '%s\n' '{"ts":"2026-10-21T10:00:00Z","level":"info","msg":"hello","n":{"say \"hi\"":1,"line\nbreak":2}}' | hl -P --color never
+# … n.'say "hi"'=1 n."line\nbreak"=2
+```
+
+Plain keys, such as `request_id` → `request-id` or `http.method`, are displayed exactly as before.
