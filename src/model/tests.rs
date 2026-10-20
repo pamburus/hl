@@ -344,6 +344,29 @@ fn test_parse_single_word() {
 }
 
 #[test]
+fn test_parse_logfmt_quoted_keys() {
+    let record = parse(r#""user name"=alice "items[0]"=1 ""=x v=2"#);
+    let field_keys: Vec<&str> = record.fields().map(|(k, _)| *k).collect();
+    assert_eq!(field_keys, vec!["user name", "items[0]", "", "v"]);
+}
+
+#[test]
+fn test_field_filter_logfmt_quoted_key() {
+    let filter = FieldFilter::parse("mod=test").unwrap();
+    let record = parse(r#""mod"=test"#);
+    assert!(filter.apply(&record));
+    let record = parse(r#""mod"="test2""#);
+    assert!(!filter.apply(&record));
+}
+
+#[test]
+fn test_parse_logfmt_quoted_key_with_escape() {
+    // Keys are borrowed from the input, so a key that needs unescaping is rejected,
+    // the same way as a JSON key with escape sequences.
+    assert!(try_parse(r#""a\"b"=1"#).is_err());
+}
+
+#[test]
 fn test_record_filter_empty() {
     let filter = Filter::default();
     let record = parse(r#"{"v":42}"#);
