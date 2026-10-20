@@ -3,7 +3,7 @@
 **Feature Name:** Logfmt Input Format Support  
 **Feature ID:** 005-logfmt-input-format  
 **Status:** Existing Implementation (Documented)  
-**Last Updated:** 2025-11-02  
+**Last Updated:** 2026-10-21  
 
 ## Clarifications
 
@@ -13,6 +13,11 @@
 - Q: Does type inference in logfmt affect filtering operations? → A: No. Logfmt uses the same two-tier filtering approach as JSON: (1) Field filtering (`-f`) uses string-based matching only; (2) Query filtering (`-q`) with numeric operators requires the field value to successfully parse as a number. Type inference is used only for output formatting/display, not for filtering comparisons.
 - Q: When logfmt parsing fails in auto mode, what should happen? → A: Same as JSON: try remaining supported input formats sequentially. If none match, process as raw line: pass through unfiltered in concatenation mode, or discard if filters are applied or sorting/following mode is enabled.
 - Q: How should empty lines and records with no key-value pairs be handled? → A: Empty lines (blank or whitespace-only) are treated as raw content and follow the raw content fallback strategy: pass through unfiltered in concatenation mode, discard with filters or in sorting/following mode.
+
+### Session 2026-10-21
+
+- Q: Should keys that are not valid bare keys be accepted when quoted, as some writers (e.g. Go `log/slog`) produce them? → A: Yes. A key that starts with `"` is a quoted string with the same syntax and escapes as a quoted value (JSON string syntax), e.g. `"user name"=alice`, `"items[0]"=1`, `""=x`. The set of characters allowed in bare keys is unchanged and stays strict, so characters like `{`, `[`, `(`, `,` and `'` are still rejected in bare keys. This keeps logfmt distinguishable from JSON and plain text, and avoids compatibility obligations for input no logfmt spec defines.
+- Q: What happens to a quoted key that contains escape sequences? → A: Like a JSON key with escape sequences, the line is not parsed as a record and follows the raw content fallback strategy. Quoted keys without escape sequences are fully supported.
 
 ## Overview
 </parameter>
@@ -128,12 +133,14 @@ This feature works with line-delimited logfmt records where each line contains s
 - Each line is a complete logfmt record
 - Lines are separated by newline (LF, CR, or CRLF depending on configuration)
 - Each record consists of space-separated key=value pairs
-- Key names are unquoted identifiers
+- Key names are bare (unquoted) or quoted strings
 - Values can be unquoted strings, quoted strings, numbers, or booleans
 - Each record is processed independently
 
 **Key-Value Pairs:**
-- Keys are alphanumeric identifiers (and underscores)
+- Bare keys are non-empty and must not contain control characters, space, `"`, `'`, `(`, `)`, `,`, `;`, `<`, `=`, `>`, `[`, `\`, `]`, `^`, `` ` ``, `{`, `|`, `}` or DEL; non-ASCII characters are allowed
+- Quoted keys are enclosed in double quotes and follow the same rules as quoted values, so they can contain any character and can be empty (e.g. `"user name"=alice`, `""=x`)
+- A quoted key that contains escape sequences makes the line fall back to raw content, the same as a JSON key with escape sequences
 - Values follow the key after an `=` character
 - In the logfmt standard, all values are semantically strings
 - Unquoted values are terminated by whitespace or end of line
@@ -236,6 +243,9 @@ input_format = "auto"    # or: "json", "logfmt"
 - Logfmt record with very long value: no truncation or loss of data
 - Record with duplicate key names: each key/value pair is preserved independently in order of appearance; filtering uses OR logic (record passes if any duplicate key matches filter)
 - Type preservation: unquoted `true` inferred as boolean, `false` inferred as boolean, `null` inferred as null, `"null"` treated as string literal
+- Quoted keys (`"user name"=alice`, `"items[0]"=1`, `""=x`): parsed, key text extracted without quotes, filterable like bare keys
+- Bare keys with disallowed characters (`{a=1`, `a[0]=1`, `a,b=1`): rejected
+- Quoted key with escape sequences (`"a\"b"=1`): line falls back to raw content
 
 ### Integration Tests
 - CLI: `hl --input-format logfmt file.log` forces logfmt parsing

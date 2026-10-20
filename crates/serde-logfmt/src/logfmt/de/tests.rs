@@ -179,3 +179,73 @@ fn test_invalid_surrogate_pair_calculation() {
     // This should succeed as it's a valid surrogate pair, let's just ensure it works
     assert!(result.is_ok());
 }
+
+#[test]
+fn test_quoted_key() {
+    let input = r#""user name"=alice "items[0]"=1 ""=empty plain=x"#;
+    let map: HashMap<String, String> = from_str(input).unwrap();
+    assert_eq!(map.len(), 4);
+    assert_eq!(map.get("user name"), Some(&"alice".to_string()));
+    assert_eq!(map.get("items[0]"), Some(&"1".to_string()));
+    assert_eq!(map.get(""), Some(&"empty".to_string()));
+    assert_eq!(map.get("plain"), Some(&"x".to_string()));
+}
+
+#[test]
+fn test_quoted_key_borrowed() {
+    let input = r#""a b"="c d""#;
+    let map: HashMap<&str, &str> = from_str(input).unwrap();
+    assert_eq!(map.get("a b"), Some(&"c d"));
+}
+
+#[test]
+fn test_quoted_key_escape() {
+    let input = r#""a\"b\\cé\n"=v"#;
+    let map: HashMap<String, String> = from_str(input).unwrap();
+    assert_eq!(map.get("a\"b\\cé\n"), Some(&"v".to_string()));
+}
+
+#[test]
+fn test_quoted_key_escape_not_borrowed() {
+    let result = from_str::<HashMap<&str, &str>>(r#""a\"b"=v"#);
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_quoted_key_errors() {
+    assert_eq!(
+        from_str::<HashMap<String, String>>(r#""a b" =v"#),
+        Err(Error::ExpectedKeyValueDelimiter)
+    );
+    assert_eq!(
+        from_str::<HashMap<String, String>>(r#""a b""#),
+        Err(Error::ExpectedKeyValueDelimiter)
+    );
+    assert_eq!(from_str::<HashMap<String, String>>(r#""a b=v"#), Err(Error::Eof));
+    assert_eq!(
+        from_str::<HashMap<String, String>>(r#""a\qb"=v"#),
+        Err(Error::InvalidEscape)
+    );
+}
+
+#[test]
+fn test_bare_key_stays_strict() {
+    for input in ["{a=1", "a[0]=1", "a,b=1", "'a'=1", "a\"b=1"] {
+        assert!(
+            from_str::<HashMap<String, String>>(input).is_err(),
+            "expected {input:?} to be rejected"
+        );
+    }
+}
+
+#[test]
+fn test_quoted_key_raw_value() {
+    #[derive(Deserialize)]
+    struct Test<'a> {
+        #[serde(borrow, rename = "a b")]
+        v: &'a RawValue,
+    }
+
+    let parsed: Test = from_str(r#""a b"="x y""#).unwrap();
+    assert_eq!(parsed.v.get(), r#""x y""#);
+}

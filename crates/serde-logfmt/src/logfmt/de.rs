@@ -489,15 +489,27 @@ impl<'de> Parser<'de> {
 
     fn parse_string<'s>(&'s mut self, scratch: &'s mut Vec<u8>, ignore: bool) -> Result<Reference<'de, 's, str>> {
         if self.key {
-            self.parse_key().map(Reference::Borrowed)
+            self.parse_key(scratch, ignore)
         } else {
             self.parse_value(scratch, ignore)
         }
     }
 
-    fn parse_key(&mut self) -> Result<&'de str> {
+    fn parse_key<'s>(&mut self, scratch: &'s mut Vec<u8>, ignore: bool) -> Result<Reference<'de, 's, str>> {
         self.skip_garbage();
 
+        if self.peek() == Some(b'"') {
+            let key = self.parse_quoted_value(scratch, ignore)?;
+            if self.next() != Some(b'=') {
+                return Err(Error::ExpectedKeyValueDelimiter);
+            }
+            return Ok(key);
+        }
+
+        self.parse_unquoted_key().map(Reference::Borrowed)
+    }
+
+    fn parse_unquoted_key(&mut self) -> Result<&'de str> {
         let start = self.index;
         let mut unicode = false;
 
@@ -579,7 +591,7 @@ impl<'de> Parser<'de> {
         Ok(unsafe { str::from_utf8_unchecked(s) })
     }
 
-    fn parse_quoted_value<'s>(&'s mut self, scratch: &'s mut Vec<u8>, ignore: bool) -> Result<Reference<'de, 's, str>> {
+    fn parse_quoted_value<'s>(&mut self, scratch: &'s mut Vec<u8>, ignore: bool) -> Result<Reference<'de, 's, str>> {
         self.next();
         let mut no_escapes = true;
         let mut start = self.index;
