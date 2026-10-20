@@ -1,10 +1,11 @@
 <!--
 Sync Impact Report:
-- Version: 1.4.3 → 1.5.0
+- Version: 1.5.0 → 1.6.0
 - Modified Sections:
-  - Development Workflow & Quality Gates: "Version Check Before Implementation" → "Versioning of Pull Requests"
-  - Development Workflow & Quality Gates (Commit Workflow): command names updated to spec-kit 1.2.2 skills (`/speckit-specify` etc.)
-- Rationale: MINOR version bump. The versioning guidance is materially redefined: feature branches no longer bump at the start of implementation, the bump moves to the PR that merges the feature, and the alpha bump for non-feature PRs is now codified.
+  - Development Workflow & Quality Gates (Versioning of Pull Requests): the bump is now derived from each PR's SemVer impact, for every PR targeting `master` or a `release/*` branch. Feature-branch PRs never bump. `release/*` branches accept only patch-level changes.
+  - Technology Stack & Standards (Compatibility): breaking changes bump the minor version while on 0.x, and the major version from 1.0 onwards.
+  - Development Workflow & Quality Gates (Backwards Compatibility): aligned with the 0.x rule. Compatibility is guaranteed across patch versions on 0.x, and across minor versions from 1.0 onwards.
+- Rationale: MINOR version bump. The versioning guidance is materially expanded: a SemVer-based bump for all PRs to release lines, release branches, and 0.x breaking-change handling. No principle is removed.
 - Templates requiring updates:
   - ✅ plan-template.md: Compatible - no version-related steps
   - ✅ spec-template.md: Compatible - no version-related steps
@@ -96,7 +97,7 @@ Tests MUST use external data files instead of inline multiline string literals f
 **Build System**: Cargo
 **Testing**: cargo test, criterion for benchmarks, proptest for property-based tests
 **Output Format**: Primary output designed for human readability using ANSI colors and styles. Additional formats (JSON, etc.) may be added as needed but are not required.
-**Compatibility**: SEMVER for versioning; breaking changes require major version bump and migration guide
+**Compatibility**: SEMVER for versioning. From 1.0 onwards, breaking changes require a major version bump and a migration guide. While on 0.x, breaking changes bump the minor version and still require a migration guide.
 **Documentation**: README, man pages, inline examples, architecture decision records for major changes
 
 ## Development Workflow & Quality Gates
@@ -109,26 +110,27 @@ Tests MUST use external data files instead of inline multiline string literals f
 
 **Performance**: New features benchmarked. Regressions >5% must be justified and documented.
 
-**Backwards Compatibility**: Maintained across minor versions. Deprecation period required before removing features.
+**Backwards Compatibility**: From 1.0 onwards, maintained across minor versions. While on 0.x, maintained across patch versions. Breaking minor bumps are allowed but SHOULD be avoided. Deprecation period required before removing features.
 
-**Versioning of Pull Requests**: The version identifies a state of master, not a branch.
+**Versioning of Pull Requests**: The version identifies a state of a release line (`master` or a `release/*` branch), not a working branch.
 
-- Feature branches MUST NOT change the version while work is in progress. They keep whatever version master has, and pick up master's alpha bumps by rebasing or merging master as usual.
-- Non-feature PRs (fixes, chores, docs, dependency updates) MUST bump the alpha in the same PR with `just bump`, e.g. `0.36.5-alpha.2` → `0.36.5-alpha.3`.
-- The PR that merges a feature into master MUST set the version as follows, after rebasing onto the latest master:
+- Every PR targeting `master` or a `release/*` branch MUST bump the version according to the SemVer impact of its change. The impact is measured against the last release tag on that line.
+- PRs targeting a feature branch MUST NOT change the version. Feature branches keep the version of the line they were branched from, and pick up its bumps by rebasing or merging as usual. The PR that merges a feature branch into a release line follows the steps below like any other PR.
+- `release/*` branches MUST accept only patch-level changes: fixes and changes with no SemVer impact.
 
-1. Run `just version` to get the current version (e.g., `0.36.5-alpha.3`)
-2. Run `git fetch -t && just previous-tag` to get the latest tags and the previous release tag (e.g., `v0.36.4`)
-3. Compare the major.minor versions:
-   - Extract major.minor from the current version (e.g., `0.36`)
-   - Extract major.minor from the previous tag, removing the `v` prefix (e.g., `0.36`)
-4. If the major.minor versions are the SAME (master is still on the patch line):
-   - Calculate the next minor version: `major.(minor+1).0-alpha.1`
-   - Run `cargo set-version <next-version>` (e.g., `cargo set-version 0.37.0-alpha.1`)
-5. If the major.minor versions are DIFFERENT (master is already on the next minor line):
-   - Run `just bump` to increment the alpha version (e.g., `0.37.0-alpha.1` → `0.37.0-alpha.2`)
+Each such PR MUST set the version as follows, after rebasing onto the latest target branch:
 
-**Rationale**: Versions identify releases of a single line on master. If parallel feature branches each claimed the next minor alpha, they would produce identical pre-release versions with different contents, which violates SemVer's rule that a released version's contents never change. Bumping early also conflicts with every alpha bump on master. Assigning the version at merge time keeps every master version unique and in order.
+1. Run `git fetch -t && just previous-tag` to get the last release tag on the line (e.g., `v0.36.4`). Run `just version` to get the current version (e.g., `0.36.5-alpha.3`).
+2. Determine the next release the line now requires, from the highest-impact change since that tag, including this PR:
+   - breaking change → next major (`(major+1).0.0`). While on 0.x, a breaking change bumps the minor version instead (`0.(minor+1).0`).
+   - new feature → next minor (`major.(minor+1).0`)
+   - fixes only → next patch (`major.minor.(patch+1)`)
+3. If the current version is already a pre-release of that release, or of a higher one, run `just bump` to increment its alpha (e.g., `0.37.0-alpha.1` → `0.37.0-alpha.2`). Otherwise run `cargo set-version <next release>-alpha.1` (e.g., `cargo set-version 0.37.0-alpha.1`).
+4. Changes with no SemVer impact (docs, chores, CI, refactoring, dependency updates without behavior changes) MUST still run `just bump`, so every merged state of the line has a unique version.
+
+Example: after `v0.36.4`, the first fix sets `0.36.5-alpha.1`, a later feature sets `0.37.0-alpha.1`, and a fix after that sets `0.37.0-alpha.2`.
+
+**Rationale**: Versions identify releases of a single line. Deriving the bump from the change's SemVer impact keeps the pre-release version an accurate preview of the next release. Assigning it only on the release line keeps every version unique and in order. If parallel feature branches each claimed the next minor alpha, they would produce identical pre-release versions with different contents, which violates SemVer's rule that a released version's contents never change, and early bumps would conflict with every bump on the line.
 
 **Commit Workflow**: When using speckit workflow commands, commits MUST follow this discipline:
 
@@ -195,4 +197,4 @@ This constitution supersedes all other practices and informal conventions. All P
 3. Documentation of rationale
 4. Migration plan for any breaking changes
 
-**Version**: 1.5.0 | **Ratified**: 2025-11-02 | **Last Amended**: 2026-10-20
+**Version**: 1.6.0 | **Ratified**: 2025-11-02 | **Last Amended**: 2026-10-20
