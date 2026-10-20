@@ -28,6 +28,10 @@
 - Q: When a source record contains the same key more than once, what should structured output do with the repeats? → A: Keep the last occurrence's value at the position of the first occurrence, and drop the others with a debug-level diagnostic entry.
 - Q: Which spelling should structured output use for level values, and should a configuration be able to change it? → A: Always hl's canonical names (`error`, `warning`, `info`, `debug`, `trace`), with no configuration in this iteration.
 - Q: When a logfmt value counts as a number by hl's rules but is not valid JSON number syntax (e.g. `+5`, `.5`, `5.`, `007`), how should `json` mode emit it? → A: Rewrite it to valid JSON number syntax with the same value (`+5` → `5`, `.5` → `0.5`, `5.` → `5`, `007` → `7`). Values that are already valid JSON numbers are emitted exactly as written.
+- Q: When a source timestamp has no time zone or offset, what should structured output emit for it? → A: Interpret it as UTC, as hl already does for filtering and sorting, e.g. `2026-07-06 10:00:00.123` → `2026-07-06T10:00:00.123Z`.
+- Q: When a field key cannot be written as a bare logfmt key (e.g. it contains a space, `=` or `"`, or is empty), what should `logfmt` mode do with it? → A: Quote it the same way as a value, as Go's `log/slog` does (`"user name"=x`). hl's logfmt parser is fixed to read quoted keys before this feature lands. Its set of characters allowed in bare keys stays as strict as it is, and any key with other characters is written quoted.
+- Q: Should SC-005 (structured output at least as fast as `pretty`) block merging, or be a target? → A: A target. Benchmark results are reported in the PR, and a shortfall is allowed when explained, but the common case without collisions or dotted output keys must stay close to `pretty`.
+- Q: When a predefined field's source value is not a string, what type should structured output give it? → A: Keep the source type for every predefined field, e.g. an object message stays an object, and an unparsable numeric timestamp stays a number.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -120,11 +124,14 @@ A user notices that fewer records came out than they expected and wants to know 
 - **FR-002**: With the default output format, the system MUST behave exactly as it does today, byte for byte, for all existing options.
 - **FR-003**: In `json` mode, the system MUST emit each record as a single-line JSON object, one record per output entry, separated by the configured output delimiter (newline by default, i.e. NDJSON).
 - **FR-004**: In `logfmt` mode, the system MUST emit each record as a single line of space-separated `key=value` pairs, quoting and escaping values only when required for a standard logfmt parser to recover them.
+- **FR-004a**: In `logfmt` mode, keys MUST follow the same notation as string values. A key is written bare when it is non-empty and every character in it is allowed in a bare key by hl's logfmt parser. Otherwise it MUST be written as a quoted, escaped string, e.g. `"user name"=x`, `"items[0]"=x` or `""=x`. This guarantees that hl reads its own logfmt output back. Keys MUST NOT be altered or dropped to avoid quoting.
 - **FR-005**: Each emitted record MUST place the recognized predefined fields first, in this fixed order: time, level, logger, message, caller. Each MUST appear under its output key (FR-026), which defaults to `timestamp`, `level`, `logger`, `message` and `caller` respectively. A key MUST be omitted when the record has no value for it.
+- **FR-005a**: Predefined field values MUST keep their source type, except where FR-006, FR-007 and FR-008 define a normalized value. For example, a message that is an object or a number is emitted as an object or a number, and an unparsable timestamp that is a number stays a number. In `logfmt` mode, objects and arrays follow FR-013.
 - **FR-006**: The level value MUST be one of hl's canonical level names (`error`, `warning`, `info`, `debug`, `trace`), regardless of how the level was spelled in the source. The spelling is fixed and not configurable in this iteration; e.g. a source `WARN` is emitted as `warning`.
 - **FR-007**: The time value MUST be a string in RFC 3339 format in UTC, e.g. `2026-07-06T10:00:00.123Z`.
   - Its fractional-second precision MUST match the precision of the source value. Whole seconds have no fraction.
   - This applies regardless of the source representation: textual date-times, Unix timestamps in any supported unit, and so on.
+  - A timestamp with no time zone or offset MUST be interpreted as UTC, the same way hl interprets it for time-range filtering and sorting, e.g. `2026-07-06 10:00:00.123` → `2026-07-06T10:00:00.123Z`.
   - If the timestamp cannot be parsed, its original value MUST be emitted unchanged.
   - The output MUST NOT depend on `--time-format`, `--time-zone` or `--local`.
 - **FR-008**: By default, the caller MUST be emitted as one string under the `caller` output key, combining the caller information available in the record. A caller name is emitted as is. A file and line are emitted as `file:line`, or just `file` if there is no line. When both a name and a file are present, they are emitted as `name @ file:line`.
@@ -196,7 +203,7 @@ A user notices that fewer records came out than they expected and wants to know 
 - **SC-002**: For the same input and record selection options, the number of records emitted is identical in `pretty`, `json` and `logfmt` modes.
 - **SC-003**: Converting a logfmt file to JSON and back to logfmt yields the same keys, values and value types as the original.
 - **SC-004**: Throughput of the default output mode on the project's benchmark inputs does not regress by more than 5%.
-- **SC-005**: Throughput of `json` and `logfmt` output on the same benchmark inputs is no lower than that of the default output mode.
+- **SC-005**: Throughput of `json` and `logfmt` output on the same benchmark inputs is targeted to be no lower than that of the default output mode. This is a target, not a merge gate: the results are reported in the PR, and a shortfall is acceptable when explained. For records without key collisions, repeated keys or dotted output keys, structured output is no more than 5% slower than the default output mode.
 - **SC-006**: Every pipeline example in issue #1481 that does not depend on out-of-scope behavior works unmodified and produces the expected results.
 - **SC-007**: Test coverage on the target branch does not decrease.
 
@@ -206,5 +213,7 @@ A user notices that fewer records came out than they expected and wants to know 
 - **Preview length**: the content preview in diagnostic entries is limited to about 100 characters, as a reasonable default.
 - **Formatting-only options**: options that affect only human-readable presentation have no effect in structured modes: `--theme`, `--time-format`, `--expansion`, `--ascii` and `--raw-fields`. Time zone options are covered by FR-007. `--input-info` is covered by FR-029.
 - **Existing configuration files**: a user configuration file that explicitly sets `flatten = "always"` will produce flattened JSON. This is intentional, because an explicit value is honored in every mode. The change is called out in the release notes so that users who copied the old default can switch to `auto`.
+- **Prerequisite parser fix**: hl's logfmt input parser currently rejects quoted keys, so it cannot read lines with such keys written by Go's `log/slog` or by this feature. It will be fixed in a separate change that lands before this feature, to accept quoted keys with the same escaping as quoted values. This also makes such slog lines readable by hl in the default output.
+- **Bare key characters stay strict**: the parser keeps rejecting characters such as `{`, `[`, `(`, `,` and `'` in bare keys. This keeps logfmt easy to tell apart from JSON, plain text and other formats during detection. Because logfmt has no specification, it also avoids committing to accept arbitrary input that would then have to stay supported for backward compatibility.
 - **Out of scope**: faithful passthrough of original keys, original key order for predefined fields, and source text formatting is not part of this feature. It is deferred until the internal record model rework lands, and the normalized schema is designed so that the rework does not change this feature's output.
 - **Out of scope**: emitting dropped lines in-band as structured error records (e.g. an `_hl_error` field) is not part of this feature.
