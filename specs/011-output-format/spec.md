@@ -1,0 +1,165 @@
+# Feature Specification: Machine-Readable Output Formats
+
+**Feature Branch**: `feature/output-format`
+
+**Created**: 2026-10-20
+
+**Status**: Draft
+
+**Input**: User description: "Machine-readable output formats for hl (GitHub issue #1481). Add `--output-format=json|logfmt` (plus the default human-readable mode) so hl re-emits parsed, filtered, sorted records as structured output (NDJSON for json, standard key=value for logfmt). Default behavior unchanged; opt-in. Works with sorting (-s), following (-F), filtering (-l, -q, -h/fields), --output-delimiter, multiple inputs. Schema is normalized: fixed predefined keys (timestamp, level, message, logger, caller) with canonical level values, then remaining fields in original order; must not depend on the internal model refactoring (faithful passthrough of original keys/order is out of scope, deferred until the v2 model lands). logfmt-sourced values have types inferred (numbers, booleans, null) consistent with how hl detects them, so output stays stable across future model changes. Machine-readable modes: no ANSI colors, no pager, nothing but records on stdout. Unparsed lines and non-JSON prefixes are dropped from structured output; each dropped line is logged via internal logging (HL_DEBUG_LOG) at debug level with source, line number and truncated content, plus a single info-level summary with counts per source at the end. Must not degrade performance of the default human-readable mode."
+
+## Clarifications
+
+### Session 2026-10-20
+
+- Q: How should the `timestamp` value be represented in structured output? → A: Normalize to RFC 3339 in UTC, keeping the precision of the source. If a timestamp cannot be parsed, its original value is emitted unchanged.
+- Q: Should nested objects in JSON mode follow `--flatten`, whose current default is `always`? → A: Add an `auto` variant to `--flatten` and make it the default everywhere, including the default configuration file. `auto` resolves to `always` in the default (`pretty`) mode and in `logfmt` mode, and to `never` in `json` mode. An explicit `always` flattens nested objects into dotted keys even in JSON. An explicit `never` in logfmt mode emits nested objects as quoted compact JSON values, as arrays already are.
+
+## User Scenarios & Testing *(mandatory)*
+
+### User Story 1 - Emit filtered records as JSON for further processing (Priority: P1)
+
+A user investigating an incident has large JSON or logfmt log files. They use hl to filter (by level, time range, query) and optionally sort records, and want the result as one JSON object per line so they can pipe it into `jq` or another JSON-aware tool to extract or aggregate fields.
+
+**Why this priority**: This is the core value of the feature: hl's parsing, filtering and sorting become usable as a preprocessing stage in pipelines. It covers the main use cases in issue #1481 on its own.
+
+**Independent Test**: Run hl with `--output-format=json` over a sample file, apply a level filter, and pipe the output into a JSON parser; every output line parses as a JSON object and contains only the records matching the filter.
+
+**Acceptance Scenarios**:
+
+1. **Given** a JSON log file with records of mixed levels, **When** the user runs `hl --output-format=json -l error app.log`, **Then** stdout contains exactly one JSON object per matching record, one per line, and nothing else.
+2. **Given** a logfmt log file, **When** the user runs `hl --output-format=json app.log`, **Then** each record is emitted as a JSON object whose numeric, boolean and null values are JSON numbers, booleans and null rather than strings.
+3. **Given** several log files with interleaved timestamps, **When** the user runs `hl -s --output-format=json a.log b.log`, **Then** the records are emitted in chronological order as JSON lines.
+4. **Given** a record with predefined fields under source-specific names (e.g. `ts`, `lvl`, `msg`), **When** it is emitted as JSON, **Then** those values appear under the normalized keys `timestamp`, `level` and `message`, with the level expressed as one of hl's canonical level names.
+5. **Given** the user hides a field with `-h secret`, **When** records are emitted as JSON, **Then** the `secret` field is absent from every output object.
+
+---
+
+### User Story 2 - Convert between JSON and logfmt (Priority: P2)
+
+A user has logs in one structured format and needs them in the other, for example JSON logs that must be fed into a logfmt-based tool, or logfmt logs that must be stored as JSON.
+
+**Why this priority**: Format conversion is a frequently requested capability with no good single-binary alternative. It builds on the same normalized record representation as Story 1 but adds a second serializer.
+
+**Independent Test**: Run hl with `--output-format=logfmt` over a JSON file and parse the output with a logfmt parser; every record round-trips with the same keys and values.
+
+**Acceptance Scenarios**:
+
+1. **Given** a JSON log file, **When** the user runs `hl --output-format=logfmt app.log`, **Then** each record is emitted on one line as space-separated `key=value` pairs, with values quoted and escaped only when required.
+2. **Given** a JSON record containing a nested object `{"http":{"status":500}}`, **When** it is emitted as logfmt, **Then** the nested field appears as a flattened dotted key, e.g. `http.status=500`.
+3. **Given** a value containing spaces, quotes, `=` or newlines, **When** it is emitted as logfmt, **Then** the value is quoted and escaped so that a standard logfmt parser recovers the original value.
+4. **Given** the record from scenario 2, **When** it is emitted as JSON with the default flatten mode, **Then** the object stays nested (`"http":{"status":500}`). **When** `--flatten=always` is given, **Then** it is emitted as `"http.status":500`.
+
+---
+
+### User Story 3 - Stream structured output while following logs (Priority: P3)
+
+An operator follows live log files and forwards the parsed, filtered records as JSON to a log shipper or dashboard process reading from hl's stdout.
+
+**Why this priority**: Valuable for live pipelines, but it reuses the behavior of Stories 1 and 2. The only new requirements are timely per-record emission and the absence of any decoration on stdout.
+
+**Independent Test**: Run `hl -F --output-format=json app.log`, append records to the file, and verify that each appended matching record appears promptly on stdout as a complete JSON line, with no pager, colors or banners.
+
+**Acceptance Scenarios**:
+
+1. **Given** hl is following a file with `--output-format=json`, **When** a new matching record is appended, **Then** it appears on stdout as a complete JSON line within the normal follow-mode latency.
+2. **Given** hl is following several files, **When** records arrive from different files, **Then** each is emitted as a standalone record with no file badges or other prefixes on stdout.
+
+---
+
+### User Story 4 - Diagnose dropped lines (Priority: P4)
+
+A user notices that fewer records came out than they expected and wants to know which input lines hl could not parse and dropped from the structured output.
+
+**Why this priority**: Structured output must be clean, so non-record content is dropped silently. Users still need a way to see what was dropped without polluting stdout.
+
+**Independent Test**: Run hl with `--output-format=json` and `HL_DEBUG_LOG=debug` over a file mixing JSON records and plain-text lines; stdout contains only the JSON records, while the diagnostic log lists each dropped line with its source and line number and ends with a per-source summary.
+
+**Acceptance Scenarios**:
+
+1. **Given** an input containing non-record lines (e.g. stack traces, banners), **When** hl runs with `--output-format=json` and no diagnostic logging enabled, **Then** stdout contains only records and nothing is written about the dropped lines.
+2. **Given** the same input, **When** hl runs with `HL_DEBUG_LOG=debug`, **Then** each dropped line is reported in the diagnostic log at debug level with the source name, line number and a truncated preview of its content.
+3. **Given** the same input, **When** hl runs with `HL_DEBUG_LOG=info`, **Then** only one summary entry per source is reported at info level, giving the number of dropped lines, and no per-line entries appear.
+
+---
+
+### Edge Cases
+
+- **No parsable records**: the input has no parsable records at all. Stdout is empty, the exit status is the same as for an equivalent run in the default mode, and the summary reports the dropped lines.
+- **Missing predefined fields**: a record lacks some of them, e.g. it has no timestamp or level. The missing keys are omitted from the output; they are not emitted as null or empty values.
+- **Unrecognized level**: a record has a level value that hl does not recognize. The level key is omitted from the normalized position, and the original field is emitted among the regular fields under its original key with its original value.
+- **Field named like a normalized key**: a non-predefined field has the same name as a normalized key, e.g. a custom `message` field when the message was taken from `msg`. The record keeps both values. The predefined value occupies the normalized key, and the colliding field is emitted after it, unchanged, among the remaining fields. [See Assumptions for the duplicate-key policy.]
+- **Prefix before the record**: a record is preceded by non-JSON text (with `--allow-prefix`). The prefix is dropped from the output and counted and logged like an unparsed line; the record itself is still emitted.
+- **Multi-line pretty-printed JSON input**: the record is emitted as a single compact line.
+- **`--raw` together with a structured output format**: see FR-016.
+- **Output written to a file with `-o`**: behavior is identical to stdout, with no colors and no pager.
+- **NUL delimiter**: with `--output-delimiter=nul`, records are separated by NUL instead of newlines.
+- **Very large records or fields**: records up to the existing maximum message size are emitted in full, never truncated.
+- **Invalid UTF-8 or escape sequences in source values**: the output is still valid JSON or logfmt. Invalid sequences are replaced, never emitted raw.
+
+## Requirements *(mandatory)*
+
+### Functional Requirements
+
+- **FR-001**: The system MUST provide an output format option `--output-format` accepting `pretty` (default, the current human-readable output), `json` and `logfmt`. It MUST also be settable through the `HL_OUTPUT_FORMAT` environment variable, with the command-line option taking precedence.
+- **FR-002**: With the default output format, the system MUST behave exactly as it does today, byte for byte, for all existing options.
+- **FR-003**: In `json` mode, the system MUST emit each record as a single-line JSON object, one record per output entry, separated by the configured output delimiter (newline by default, i.e. NDJSON).
+- **FR-004**: In `logfmt` mode, the system MUST emit each record as a single line of space-separated `key=value` pairs, quoting and escaping values only when required for a standard logfmt parser to recover them.
+- **FR-005**: Each emitted record MUST place the recognized predefined fields first, in this fixed order and under these keys: `timestamp`, `level`, `logger`, `message`, `caller`. A key MUST be omitted when the record has no value for it.
+- **FR-006**: The `level` value MUST be one of hl's canonical level names (`error`, `warning`, `info`, `debug`, `trace`), regardless of how the level was spelled in the source.
+- **FR-007**: The `timestamp` value MUST be a string in RFC 3339 format in UTC, e.g. `2026-07-06T10:00:00.123Z`.
+  - Its fractional-second precision MUST match the precision of the source value. Whole seconds have no fraction.
+  - This applies regardless of the source representation: textual date-times, Unix timestamps in any supported unit, and so on.
+  - If the timestamp cannot be parsed, its original value MUST be emitted unchanged.
+  - The output MUST NOT depend on `--time-format`, `--time-zone` or `--local`.
+- **FR-008**: The `caller` value MUST combine the caller information available in the record into one string. A caller name is emitted as is. A file and line are emitted as `file:line`, or just `file` if there is no line. When both a name and a file are present, they are emitted as `name @ file:line`.
+- **FR-009**: All remaining fields MUST follow the predefined fields in the order they appear in the source record, under their original keys. Keys MUST NOT be prettified or otherwise transformed.
+- **FR-010**: Values from logfmt sources MUST be typed using the same rules hl applies when detecting value types: unquoted numbers become numbers, `true`/`false` become booleans, and `null` becomes null. All other values, and all quoted values, become strings.
+- **FR-011**: String values MUST be emitted with their decoded content, unescaped from the source encoding and re-escaped for the target format, so the output is always valid in that format.
+- **FR-012**: In `json` mode, nested objects MUST be preserved as nested JSON objects when the effective flatten mode is `never`, and flattened into dotted keys when it is `always` (see FR-024). Arrays MUST always be preserved as JSON arrays. All content MUST be emitted compactly on one line.
+- **FR-013**: In `logfmt` mode, nested objects MUST be flattened into dotted keys when the effective flatten mode is `always`. When it is `never`, each nested object MUST be emitted as its compact JSON representation in a quoted value. Arrays MUST always be emitted as their compact JSON representation in a quoted value.
+- **FR-014**: The field visibility options (`-h`/`--hide`, including revealing with `!`) and `--hide-empty-fields` MUST apply to structured output the same way they apply to the default output, including for predefined fields.
+- **FR-015**: Record selection options MUST produce the same set of records in every output format. These are level, time-range, query and field filters, sorting (`-s`), following (`-F`), `--tail`, and multiple inputs.
+- **FR-016**: When `--raw` is in effect, it MUST take precedence over a structured `--output-format`, emitting the original source entries as today.
+- **FR-017**: In structured modes, the system MUST NOT emit ANSI escape sequences, MUST NOT start a pager, and MUST NOT write anything to the output except records and delimiters. This applies regardless of `--color` and `--paging`. It excludes input badges, file names, unparsed lines and prefixes.
+- **FR-018**: In structured modes, the system MUST drop input lines that do not parse as records, as well as non-record prefixes before records.
+- **FR-019**: For each dropped line or prefix, the system MUST write a debug-level entry to the internal diagnostic log (controlled by `HL_DEBUG_LOG`). The entry contains the source name, the line number and a preview of the content truncated to a bounded length.
+- **FR-020**: At the end of processing, the system MUST write one info-level entry per source that had dropped lines, giving the number of lines dropped from it. In follow mode, these summaries MUST be written when hl exits.
+- **FR-021**: Diagnostic log entries MUST be written to stderr only, never to the record output, and only when diagnostic logging is enabled.
+- **FR-022**: In follow mode, each matching record MUST be written and flushed as a complete entry as soon as it is emitted, so downstream readers never observe partial records.
+- **FR-023**: Output written to a file via `-o`/`--output` MUST be identical to output written to stdout.
+- **FR-024**: The `--flatten` option, the `HL_FLATTEN` environment variable and the `formatting.flatten` configuration setting MUST accept a new value `auto`, which MUST become the default.
+  - `auto` MUST resolve to `always` in `pretty` and `logfmt` modes, and to `never` in `json` mode.
+  - Explicit `always` and `never` values MUST apply in every output format.
+- **FR-025**: The default configuration file MUST set `formatting.flatten` to `auto`, and the configuration schema MUST accept `auto`. With no explicit flatten setting, the default (`pretty`) output MUST be unchanged, consistent with FR-002.
+
+### Key Entities
+
+- **Normalized record**: the structured representation hl emits for one source record. It consists of an ordered list of key/value pairs: the predefined fields in the fixed order of FR-005, followed by the remaining visible fields in source order. Values are typed as string, number, boolean, null, object or array.
+- **Dropped line**: a contiguous piece of input that hl could not parse as a record, or a prefix preceding a record. It is identified by source and line number, reported in the diagnostic log, and counted per source.
+
+## Success Criteria *(mandatory)*
+
+### Measurable Outcomes
+
+- **SC-001**: For any supported input, 100% of output lines in `json` mode parse as JSON objects with a standard JSON parser, and 100% of output lines in `logfmt` mode parse with a standard logfmt parser.
+- **SC-002**: For the same input and record selection options, the number of records emitted is identical in `pretty`, `json` and `logfmt` modes.
+- **SC-003**: Converting a logfmt file to JSON and back to logfmt yields the same keys, values and value types as the original.
+- **SC-004**: Throughput of the default output mode on the project's benchmark inputs does not regress by more than 5%.
+- **SC-005**: Throughput of `json` and `logfmt` output on the same benchmark inputs is no lower than that of the default output mode.
+- **SC-006**: Every pipeline example in issue #1481 that does not depend on out-of-scope behavior works unmodified and produces the expected results.
+- **SC-007**: Test coverage on the target branch does not decrease.
+
+## Assumptions
+
+- **Output format name**: the default human-readable format is named `pretty`, as proposed in the issue. The option and environment variable follow the existing `--input-format`/`HL_INPUT_FORMAT` naming.
+- **Configuration file**: no configuration file setting is added for the output format in this iteration. This matches `--input-format`, which is also CLI- and environment-only.
+- **`--raw` precedence**: `--raw` taking precedence over `--output-format` (FR-016) avoids hard errors when `HL_OUTPUT_FORMAT` is set in the environment and a user passes `-r` ad hoc.
+- **Duplicate keys**: when the predefined value and a regular field end up under the same key, both are emitted in order and nothing is renamed or dropped. JSON consumers such as `jq` keep the last occurrence. Keeping both values avoids data loss.
+- **Source names**: in diagnostic entries, standard input is identified as `<stdin>` and files by the names they were given on the command line.
+- **Preview length**: the content preview in diagnostic entries is limited to about 100 characters, as a reasonable default.
+- **Formatting-only options**: options that affect only human-readable presentation have no effect in structured modes: `--theme`, `--time-format`, `--expansion`, `--ascii`, `--input-info` and `--raw-fields`. Time zone options are covered by FR-007.
+- **Existing configuration files**: a user configuration file that explicitly sets `flatten = "always"` will produce flattened JSON. This is intentional, because an explicit value is honored in every mode. The change is called out in the release notes so that users who copied the old default can switch to `auto`.
+- **Out of scope**: faithful passthrough of original keys, original key order for predefined fields, and source text formatting is not part of this feature. It is deferred until the internal record model rework lands, and the normalized schema is designed so that the rework does not change this feature's output.
+- **Out of scope**: emitting dropped lines in-band as structured error records (e.g. an `_hl_error` field) is not part of this feature.
+- **Out of scope**: adding the source file name to emitted records when processing multiple inputs is not part of this feature.
