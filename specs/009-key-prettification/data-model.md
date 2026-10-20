@@ -61,7 +61,7 @@ No new config fields and no new formatter state. Quoting is gated on the existin
 | Plain | is non-empty and has none of the trigger classes (research Decision 6) | `user-id` |
 | Double-quoted | has no `"`, backslash, control, tab or newline | `"user name"` |
 | Single-quoted | has `"` but no `'`, backslash, control, tab or newline | `'say "hi"'` |
-| Backtick-quoted | has `"` and `'` but no backtick, control, tab or newline | `` `it's "x"` `` |
+| Backtick-quoted | has a backslash, or both `"` and `'`, but no backtick, control, tab or newline | `` `it's "x"` ``, `` `a\b` `` |
 | Escaped | anything else | `"line\nbreak"` |
 
 An empty key is double-quoted: `""`.

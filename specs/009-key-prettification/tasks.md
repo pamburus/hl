@@ -185,9 +185,9 @@ This feature consists of a single user story, so delivery is atomic:
 
 **Purpose**: The shared key writer used by every story below.
 
-- [ ] T025 Add a key quote-style decision in the `string` module of src/formatting.rs: analyze the key bytes with the existing `Analyze` trait and return Plain, DoubleQuoted, SingleQuoted, Backtick or Escaped per research.md Decisions 6 and 8 (empty key → DoubleQuoted; trigger mask = `Control | DoubleQuote | SingleQuote | Backslash | Backtick | Space | Tab | Newline | EqualSign`; backticks only when the key has no tab, newline or control character)
-- [ ] T026 Add a shared key writer in src/formatting.rs that takes the key, the prettify flag, the quote flag and a `Push<u8>` buffer, and writes the opening quote, the (prettified) key and the closing quote; for Escaped, prettify into a temporary buffer when needed and append it JSON-escaped via `encstr` (research.md Decisions 7, 9, 11)
-- [ ] T027 Add unit tests for the quote-style decision and the key writer in src/formatting/tests.rs: plain, empty, spaces only, leading/trailing spaces, `=`, `"`, `'` and `"` together, backtick, backslash, newline, tab, control character, non-ASCII letters, `123`, `true`, `null`, `{x`, `http.method`, `user_id` with prettify on and off
+- [X] T025 Add a key quote-style decision in the `string` module of src/formatting.rs: analyze the key bytes with the existing `Analyze` trait and return Plain, DoubleQuoted, SingleQuoted, Backtick or Escaped per research.md Decisions 6 and 8 (empty key → DoubleQuoted; trigger mask = `Control | DoubleQuote | SingleQuote | Backslash | Backtick | Space | Tab | Newline | EqualSign`; backticks only when the key has no tab, newline or control character)
+- [X] T026 Add a shared key writer in src/formatting.rs that takes the key, the prettify flag, the quote flag and a `Push<u8>` buffer, and writes the opening quote, the (prettified) key and the closing quote; for Escaped, prettify into a temporary buffer when needed and append it JSON-escaped via `encstr` (research.md Decisions 7, 9, 11)
+- [X] T027 Add unit tests for the quote-style decision and the key writer in src/formatting/tests.rs: plain, empty, spaces only, leading/trailing spaces, `=`, `"`, `'` and `"` together, backtick, backslash, newline, tab, control character, non-ASCII letters, `123`, `true`, `null`, `{x`, `http.method`, `user_id` with prettify on and off
 
 **Checkpoint**: Key writer tested in isolation.
 
@@ -199,9 +199,9 @@ This feature consists of a single user story, so delivery is atomic:
 
 **Independent Test**: The record from issue #1609 displays as `hello › "user name"="alice smith" "a=b"=x ""=empty n."inner key"=3`.
 
-- [ ] T028 [US2] Add tests in src/formatting/tests.rs for acceptance scenarios 1-4 of User Story 2 (`"user name"="alice smith"`, `"a=b"=x`, `""=empty`, and the full issue record)
-- [ ] T029 [US2] Use the shared key writer in `FieldFormatter::begin()` in src/formatting.rs, with quoting gated on `self.rf.unescape_fields` (research.md Decision 10); keep the writes inside the `Element::Key` batch (FR-015)
-- [ ] T030 [US2] Add a test in src/formatting/tests.rs that `--raw-fields` (`with_raw_fields(true)`) displays such keys as is (FR-013)
+- [X] T028 [US2] Add tests in src/formatting/tests.rs for acceptance scenarios 1-4 of User Story 2 (`"user name"="alice smith"`, `"a=b"=x`, `""=empty`, and the full issue record)
+- [X] T029 [US2] Use the shared key writer in `FieldFormatter::begin()` in src/formatting.rs, with quoting gated on `self.rf.unescape_fields` (research.md Decision 10); keep the writes inside the `Element::Key` batch (FR-015)
+- [X] T030 [US2] Add a test in src/formatting/tests.rs that `--raw-fields` (`with_raw_fields(true)`) displays such keys as is (FR-013)
 
 **Checkpoint**: The issue repro is fixed for top-level keys.
 
@@ -213,8 +213,8 @@ This feature consists of a single user story, so delivery is atomic:
 
 **Independent Test**: All existing formatter tests pass unchanged; plain-key records format byte-for-byte as before.
 
-- [ ] T031 [US3] Add tests in src/formatting/tests.rs for acceptance scenarios 1-3 of User Story 3 (`user_id` → `user-id`, `http.method`, `a:b/c@d`, `123`, `true`, `null` all unquoted)
-- [ ] T032 [US3] Run `cargo test` and confirm no existing expected outputs had to change, apart from keys that now legitimately need quotes (SC-005); review any such change
+- [X] T031 [US3] Add tests in src/formatting/tests.rs for acceptance scenarios 1-3 of User Story 3 (`user_id` → `user-id`, `http.method`, `a:b/c@d`, `123`, `true`, `null` all unquoted)
+- [X] T032 [US3] Run `cargo test` and confirm no existing expected outputs had to change, apart from keys that now legitimately need quotes (SC-005); review any such change
 
 **Checkpoint**: No regressions for typical logs.
 
@@ -226,9 +226,9 @@ This feature consists of a single user story, so delivery is atomic:
 
 **Independent Test**: `{"n":{"inner key":3}}` → `n."inner key"=3`; `{"outer key":{"x":1}}` → `"outer key".x=1`; with flattening off → `n={ "inner key"=3 }`.
 
-- [ ] T033 [US4] Add tests in src/formatting/tests.rs for acceptance scenarios 1-4 of User Story 4 (flattened inner and outer segment, non-flattened, expanded layout)
-- [ ] T034 [US4] Give `KeyPrefix::push()` in src/formatting.rs a quote flag and write the segment through the shared key writer; pass `self.rf.unescape_fields` from `FieldFormatter::begin()` (FR-010)
-- [ ] T035 [US4] Verify non-flattened and expanded output need no further change, since both use `FieldFormatter::begin()` (FR-011, FR-013)
+- [X] T033 [US4] Add tests in src/formatting/tests.rs for acceptance scenarios 1-4 of User Story 4 (flattened inner and outer segment, non-flattened, expanded layout)
+- [X] T034 [US4] Give `KeyPrefix::push()` in src/formatting.rs a quote flag and write the segment through the shared key writer; pass `self.rf.unescape_fields` from `FieldFormatter::begin()` (FR-010)
+- [X] T035 [US4] Verify non-flattened and expanded output need no further change, since both use `FieldFormatter::begin()` (FR-011, FR-013)
 
 **Checkpoint**: Nested fields unambiguous in every layout.
 
@@ -240,8 +240,8 @@ This feature consists of a single user story, so delivery is atomic:
 
 **Independent Test**: Nested keys `say "hi"` → `'say "hi"'`; `"` and `'` together → backticks; `line\nbreak` → `"line\nbreak"` on one line.
 
-- [ ] T036 [US5] Add tests in src/formatting/tests.rs for acceptance scenarios 1-3 of User Story 5, using nested objects so the keys go through escape decoding (see plan.md Known Limitation)
-- [ ] T037 [US5] Add a test in src/formatting/tests.rs that the existing Kubernetes-style key `k:{"type":"Ready"}` displays as `'k:{"type":"Ready"}'`
+- [X] T036 [US5] Add tests in src/formatting/tests.rs for acceptance scenarios 1-3 of User Story 5, using nested objects so the keys go through escape decoding (see plan.md Known Limitation)
+- [X] T037 [US5] Add a test in src/formatting/tests.rs that the existing Kubernetes-style key `k:{"type":"Ready"}` displays as `'k:{"type":"Ready"}'`
 
 **Checkpoint**: All quote styles covered.
 
@@ -249,11 +249,11 @@ This feature consists of a single user story, so delivery is atomic:
 
 ## Phase 10: Polish & Cross-Cutting Concerns
 
-- [ ] T038 Add a test in src/formatting/tests.rs that a hide filter (`-h "user name"`) still matches the original key (FR-014)
-- [ ] T039 Run the quickstart.md amendment scenarios with the built binary and confirm the outputs
-- [ ] T040 Run `just uncovered` and add tests for any uncovered changed lines
-- [ ] T041 Run the formatting benchmarks in benches/bench before and after the change and confirm no regression over 5% (FR-016, SC-007)
-- [ ] T042 Format with `just fmt-rust`, then run `just ci`
+- [X] T038 Add a test in src/formatting/tests.rs that a hide filter (`-h "user name"`) still matches the original key (FR-014)
+- [X] T039 Run the quickstart.md amendment scenarios with the built binary and confirm the outputs
+- [X] T040 Run `just uncovered` and add tests for any uncovered changed lines
+- [X] T041 Run the formatting benchmarks in benches/bench before and after the change and confirm no regression over 5% (FR-016, SC-007)
+- [X] T042 Format with `just fmt-rust`, then run `just ci`
 
 ---
 
