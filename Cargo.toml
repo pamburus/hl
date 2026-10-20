@@ -128,7 +128,7 @@ wyhash = "0.6"
 yaml = { package = "yaml-peg", version = "1" }
 
 [workspace.package]
-version = "0.36.5-alpha.2"
+version = "0.36.5-alpha.3"
 edition = "2024"
 repository = "https://github.com/pamburus/hl"
 license = "MIT"
