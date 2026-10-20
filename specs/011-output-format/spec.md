@@ -15,6 +15,14 @@
 - Q: How should the `timestamp` value be represented in structured output? → A: Normalize to RFC 3339 in UTC, keeping the precision of the source. If a timestamp cannot be parsed, its original value is emitted unchanged.
 - Q: Should nested objects in JSON mode follow `--flatten`, whose current default is `always`? → A: Add an `auto` variant to `--flatten` and make it the default everywhere, including the default configuration file. `auto` resolves to `always` in the default (`pretty`) mode and in `logfmt` mode, and to `never` in `json` mode. An explicit `always` flattens nested objects into dotted keys even in JSON. An explicit `never` in logfmt mode emits nested objects as quoted compact JSON values, as arrays already are.
 
+### Session 2026-10-21
+
+- Q: What should determine the key name each predefined field gets in structured output? → A: Fixed hl-defined defaults (`timestamp`, `level`, `logger`, `message`, `caller`), each overridable by a new per-field configuration setting `output-key` under `fields.predefined.<field>`, e.g. `fields.predefined.time.output-key = "@timestamp"`. The bundled ECS and k8s presets set it to their ecosystem's names.
+- Q: When a regular field has the same key as one of the predefined fields' output keys, what should structured output do with that regular field? → A: The predefined field keeps the key. The regular field is dropped and reported in the debug-level diagnostic log.
+- Q: When an output key contains dots, such as `log.level`, should JSON output nest it or use it as a literal key? → A: Treat it as a path. When the effective flatten mode is `never`, the value is nested and merged into an existing object of the same name, replacing that object's own copy of the field. Under `always`, it is emitted as the dotted key.
+- Q: How should the caller be emitted when a configuration needs its parts in separate fields, as ECS does? → A: `caller-file` and `caller-line` also accept `output-key`. When either is set, the caller is emitted as separate parts: the name under the `caller` output key, the file as a string, and the line as a number. Otherwise the combined string is used. ECS maps the parts to `log.origin.function`, `log.origin.file.name` and `log.origin.file.line`.
+- Q: When several inputs are processed together, should each emitted record say which input it came from? → A: Opt-in. There is no input field by default. When `--input-info` explicitly requests a layout, records get an `input` field, whose key is configurable via `output-key`.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Emit filtered records as JSON for further processing (Priority: P1)
@@ -88,7 +96,7 @@ A user notices that fewer records came out than they expected and wants to know 
 - **No parsable records**: the input has no parsable records at all. Stdout is empty, the exit status is the same as for an equivalent run in the default mode, and the summary reports the dropped lines.
 - **Missing predefined fields**: a record lacks some of them, e.g. it has no timestamp or level. The missing keys are omitted from the output; they are not emitted as null or empty values.
 - **Unrecognized level**: a record has a level value that hl does not recognize. The level key is omitted from the normalized position, and the original field is emitted among the regular fields under its original key with its original value.
-- **Field named like a normalized key**: a non-predefined field has the same name as a normalized key, e.g. a custom `message` field when the message was taken from `msg`. The record keeps both values. The predefined value occupies the normalized key, and the colliding field is emitted after it, unchanged, among the remaining fields. [See Assumptions for the duplicate-key policy.]
+- **Regular field with the same key as a predefined output key**: e.g. a raw `message` field when the message was taken from `msg`, or a raw `timestamp` field when the time was taken from `ts`. The predefined value keeps the key, and the regular field is dropped and reported in the diagnostic log (FR-027).
 - **Prefix before the record**: a record is preceded by non-JSON text (with `--allow-prefix`). The prefix is dropped from the output and counted and logged like an unparsed line; the record itself is still emitted.
 - **Multi-line pretty-printed JSON input**: the record is emitted as a single compact line.
 - **`--raw` together with a structured output format**: see FR-016.
@@ -105,14 +113,18 @@ A user notices that fewer records came out than they expected and wants to know 
 - **FR-002**: With the default output format, the system MUST behave exactly as it does today, byte for byte, for all existing options.
 - **FR-003**: In `json` mode, the system MUST emit each record as a single-line JSON object, one record per output entry, separated by the configured output delimiter (newline by default, i.e. NDJSON).
 - **FR-004**: In `logfmt` mode, the system MUST emit each record as a single line of space-separated `key=value` pairs, quoting and escaping values only when required for a standard logfmt parser to recover them.
-- **FR-005**: Each emitted record MUST place the recognized predefined fields first, in this fixed order and under these keys: `timestamp`, `level`, `logger`, `message`, `caller`. A key MUST be omitted when the record has no value for it.
-- **FR-006**: The `level` value MUST be one of hl's canonical level names (`error`, `warning`, `info`, `debug`, `trace`), regardless of how the level was spelled in the source.
-- **FR-007**: The `timestamp` value MUST be a string in RFC 3339 format in UTC, e.g. `2026-07-06T10:00:00.123Z`.
+- **FR-005**: Each emitted record MUST place the recognized predefined fields first, in this fixed order: time, level, logger, message, caller. Each MUST appear under its output key (FR-026), which defaults to `timestamp`, `level`, `logger`, `message` and `caller` respectively. A key MUST be omitted when the record has no value for it.
+- **FR-006**: The level value MUST be one of hl's canonical level names (`error`, `warning`, `info`, `debug`, `trace`), regardless of how the level was spelled in the source.
+- **FR-007**: The time value MUST be a string in RFC 3339 format in UTC, e.g. `2026-07-06T10:00:00.123Z`.
   - Its fractional-second precision MUST match the precision of the source value. Whole seconds have no fraction.
   - This applies regardless of the source representation: textual date-times, Unix timestamps in any supported unit, and so on.
   - If the timestamp cannot be parsed, its original value MUST be emitted unchanged.
   - The output MUST NOT depend on `--time-format`, `--time-zone` or `--local`.
-- **FR-008**: The `caller` value MUST combine the caller information available in the record into one string. A caller name is emitted as is. A file and line are emitted as `file:line`, or just `file` if there is no line. When both a name and a file are present, they are emitted as `name @ file:line`.
+- **FR-008**: By default, the caller MUST be emitted as one string under the `caller` output key, combining the caller information available in the record. A caller name is emitted as is. A file and line are emitted as `file:line`, or just `file` if there is no line. When both a name and a file are present, they are emitted as `name @ file:line`.
+- **FR-008a**: When `output-key` is set for `caller-file` or `caller-line` (FR-026), the caller MUST instead be emitted as separate parts, each in the predefined-field position of FR-005 and each omitted when absent:
+  - the caller name under the `caller` output key;
+  - the file as a string under the `caller-file` output key, defaulting to `caller-file`;
+  - the line under the `caller-line` output key, defaulting to `caller-line`. The line is a number when its value is numeric, and a string otherwise.
 - **FR-009**: All remaining fields MUST follow the predefined fields in the order they appear in the source record, under their original keys. Keys MUST NOT be prettified or otherwise transformed.
 - **FR-010**: Values from logfmt sources MUST be typed using the same rules hl applies when detecting value types: unquoted numbers become numbers, `true`/`false` become booleans, and `null` becomes null. All other values, and all quoted values, become strings.
 - **FR-011**: String values MUST be emitted with their decoded content, unescaped from the source encoding and re-escaped for the target format, so the output is always valid in that format.
@@ -121,7 +133,7 @@ A user notices that fewer records came out than they expected and wants to know 
 - **FR-014**: The field visibility options (`-h`/`--hide`, including revealing with `!`) and `--hide-empty-fields` MUST apply to structured output the same way they apply to the default output, including for predefined fields.
 - **FR-015**: Record selection options MUST produce the same set of records in every output format. These are level, time-range, query and field filters, sorting (`-s`), following (`-F`), `--tail`, and multiple inputs.
 - **FR-016**: When `--raw` is in effect, it MUST take precedence over a structured `--output-format`, emitting the original source entries as today.
-- **FR-017**: In structured modes, the system MUST NOT emit ANSI escape sequences, MUST NOT start a pager, and MUST NOT write anything to the output except records and delimiters. This applies regardless of `--color` and `--paging`. It excludes input badges, file names, unparsed lines and prefixes.
+- **FR-017**: In structured modes, the system MUST NOT emit ANSI escape sequences, MUST NOT start a pager, and MUST NOT write anything to the output except records and delimiters. This applies regardless of `--color` and `--paging`. It excludes input badges, unparsed lines and prefixes. Input identification appears only as a record field (FR-029).
 - **FR-018**: In structured modes, the system MUST drop input lines that do not parse as records, as well as non-record prefixes before records.
 - **FR-019**: For each dropped line or prefix, the system MUST write a debug-level entry to the internal diagnostic log (controlled by `HL_DEBUG_LOG`). The entry contains the source name, the line number and a preview of the content truncated to a bounded length.
 - **FR-020**: At the end of processing, the system MUST write one info-level entry per source that had dropped lines, giving the number of lines dropped from it. In follow mode, these summaries MUST be written when hl exits.
@@ -132,10 +144,35 @@ A user notices that fewer records came out than they expected and wants to know 
   - `auto` MUST resolve to `always` in `pretty` and `logfmt` modes, and to `never` in `json` mode.
   - Explicit `always` and `never` values MUST apply in every output format.
 - **FR-025**: The default configuration file MUST set `formatting.flatten` to `auto`, and the configuration schema MUST accept `auto`. With no explicit flatten setting, the default (`pretty`) output MUST be unchanged, consistent with FR-002.
+- **FR-026**: The configuration MUST accept an optional `output-key` string setting for each of the predefined fields `time`, `level`, `logger`, `message`, `caller`, `caller-file` and `caller-line`, under `fields.predefined.<field>`.
+  - When set, it MUST replace that field's default output key in `json` and `logfmt` modes. It MUST have no effect on the default (`pretty`) output.
+  - The level field has a single `output-key` shared by all level variants.
+  - Setting `output-key` for `caller-file` or `caller-line` switches the caller from the combined string to separate parts (FR-008a).
+  - An empty `output-key`, or two predefined fields configured with the same output key, MUST be rejected with a configuration error that names the offending setting.
+  - The configuration schema MUST describe the new setting.
+- **FR-027**: When a regular field has the same key as an emitted predefined field's output key, the predefined field MUST keep the key in structured output. The regular field MUST be omitted, and a debug-level entry MUST be written to the diagnostic log naming the source, line number and dropped key. Every key in an emitted record is therefore unique.
+- **FR-027a**: An output key containing dots MUST be treated as a path of nested keys.
+  - When the effective flatten mode is `always`, the predefined value MUST be emitted under the dotted key, e.g. `log.level=info`.
+  - When it is `never`, the value MUST be emitted as a nested object, e.g. `{"log":{"level":"info"}}`.
+  - If the record also has a regular field that is an object at the same path prefix (e.g. a `log` object), the predefined value MUST be merged into that object rather than emitted beside it. The merged object takes the position of the predefined field (FR-005). The predefined entries come first inside it, followed by the object's remaining entries in source order.
+- **FR-027b**: Source fields that were recognized as predefined fields, including nested ones such as `log.level` or `span.name`, MUST NOT be repeated among the regular fields. This matches how the default output already hides them.
+  - Hiding a regular field or object (e.g. the ECS preset's `fields.hide = ["log"]`) MUST NOT hide predefined fields that were read from it or are emitted into it.
+  - When such a hidden object receives a merged predefined value, only the predefined entries MUST be emitted in it.
+- **FR-028**: The bundled presets MUST set `output-key` so that structured output uses each ecosystem's field names:
+  - k8s: time → `ts`, message → `msg`, caller → `caller`. The level keeps the default `level`, because the preset reads it from the numeric verbosity field `v`, and writing canonical level names under `v` would change that field's type and meaning.
+  - ECS: time → `@timestamp`, level → `log.level`, logger → `log.logger`, message → `message`. The caller is split into parts (FR-008a): caller → `log.origin.function`, caller-file → `log.origin.file.name`, caller-line → `log.origin.file.line`. Dotted keys follow FR-027a, so with JSON's default flatten mode all `log.*` values are nested in one `log` object.
+- **FR-029**: In structured modes, records MUST NOT identify their input unless `--input-info` (or the `input-info` configuration setting) explicitly requests an input layout.
+  - With `auto` (the default) or `none` alone, no input field is added.
+  - When the requested layouts include `minimal`, `compact` or `full`, each record MUST get an input field, placed after the predefined fields of FR-005 and before the regular fields. The most detailed requested layout determines its value:
+    - `minimal`: the input's number, as a number, counting from 0 as the default output's badges do;
+    - `compact`: the input's name in the compact form used by the default output's badges;
+    - `full`: the input's full name as shown by the default output's badges, with standard input shown as `<stdin>`.
+  - If the requested layouts also include `none`, the field MUST be omitted when there is only one input, matching how `none` suppresses badges for a single input in the default output.
+  - The field's key defaults to `input`. It MUST be configurable via `fields.predefined.input.output-key`, which follows the same rules as FR-026, including the collision rule of FR-027 and the path rule of FR-027a.
 
 ### Key Entities
 
-- **Normalized record**: the structured representation hl emits for one source record. It consists of an ordered list of key/value pairs: the predefined fields in the fixed order of FR-005, followed by the remaining visible fields in source order. Values are typed as string, number, boolean, null, object or array.
+- **Normalized record**: the structured representation hl emits for one source record. It consists of an ordered list of key/value pairs: the predefined fields in the fixed order of FR-005 under their output keys (FR-026), then the optional input field (FR-029), followed by the remaining visible fields in source order. All keys are unique (FR-027). Values are typed as string, number, boolean, null, object or array.
 - **Dropped line**: a contiguous piece of input that hl could not parse as a record, or a prefix preceding a record. It is identified by source and line number, reported in the diagnostic log, and counted per source.
 
 ## Success Criteria *(mandatory)*
@@ -155,11 +192,9 @@ A user notices that fewer records came out than they expected and wants to know 
 - **Output format name**: the default human-readable format is named `pretty`, as proposed in the issue. The option and environment variable follow the existing `--input-format`/`HL_INPUT_FORMAT` naming.
 - **Configuration file**: no configuration file setting is added for the output format in this iteration. This matches `--input-format`, which is also CLI- and environment-only.
 - **`--raw` precedence**: `--raw` taking precedence over `--output-format` (FR-016) avoids hard errors when `HL_OUTPUT_FORMAT` is set in the environment and a user passes `-r` ad hoc.
-- **Duplicate keys**: when the predefined value and a regular field end up under the same key, both are emitted in order and nothing is renamed or dropped. JSON consumers such as `jq` keep the last occurrence. Keeping both values avoids data loss.
 - **Source names**: in diagnostic entries, standard input is identified as `<stdin>` and files by the names they were given on the command line.
 - **Preview length**: the content preview in diagnostic entries is limited to about 100 characters, as a reasonable default.
-- **Formatting-only options**: options that affect only human-readable presentation have no effect in structured modes: `--theme`, `--time-format`, `--expansion`, `--ascii`, `--input-info` and `--raw-fields`. Time zone options are covered by FR-007.
+- **Formatting-only options**: options that affect only human-readable presentation have no effect in structured modes: `--theme`, `--time-format`, `--expansion`, `--ascii` and `--raw-fields`. Time zone options are covered by FR-007. `--input-info` is covered by FR-029.
 - **Existing configuration files**: a user configuration file that explicitly sets `flatten = "always"` will produce flattened JSON. This is intentional, because an explicit value is honored in every mode. The change is called out in the release notes so that users who copied the old default can switch to `auto`.
 - **Out of scope**: faithful passthrough of original keys, original key order for predefined fields, and source text formatting is not part of this feature. It is deferred until the internal record model rework lands, and the normalized schema is designed so that the rework does not change this feature's output.
 - **Out of scope**: emitting dropped lines in-band as structured error records (e.g. an `_hl_error` field) is not part of this feature.
-- **Out of scope**: adding the source file name to emitted records when processing multiple inputs is not part of this feature.
