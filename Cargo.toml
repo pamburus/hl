@@ -124,11 +124,12 @@ wild = "2"
 wildcard = { path = "crates/wildcard" }
 wildmatch = "2"
 winapi-util = { version = "0.1" }
+windows-sys = "0.61"
 wyhash = "0.6"
 yaml = { package = "yaml-peg", version = "1" }
 
 [workspace.package]
-version = "0.36.5-alpha.8"
+version = "0.36.5-alpha.9"
 edition = "2024"
 repository = "https://github.com/pamburus/hl"
 license = "MIT"
@@ -257,6 +258,9 @@ kqueue.workspace = true
 
 [target.'cfg(unix)'.dependencies]
 libc.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { workspace = true, features = ["Win32_Foundation", "Win32_System_Console"] }
 
 [profile.release]
 opt-level = 3
