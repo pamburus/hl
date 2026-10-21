@@ -168,9 +168,9 @@ The structured formatter receives, per input, a pre-rendered value for the input
 
 **Context**: In `pretty`, `-h` never hides predefined fields: `-h msg`, `-h level`, `-h ts` and `-h caller` all leave them visible. Hide rules apply only to regular fields and nested objects, and predefined fields are controlled by `fields.predefined.<field>.show`.
 
-**Decision (needs confirmation)**: Apply hide rules to predefined fields in structured output, matched against their output keys (e.g. `-h caller` drops the caller, `-h message` drops the message), and apply `--hide-empty-fields` to empty predefined values. This follows the literal wording of FR-014, "including for predefined fields", and is useful for pipelines.
+**Decision** (confirmed, recorded in FR-014): Apply hide rules to predefined fields in structured output, matched against their output keys (e.g. `-h caller` drops the caller, `-h message` drops the message), and apply `--hide-empty-fields` to empty predefined values. This follows the literal wording of FR-014, "including for predefined fields", and is useful for pipelines.
 
-**Alternative**: Exact `pretty` parity, where predefined fields are never hidden by `-h`. This matches the "same way" wording. If chosen, FR-014 should be reworded.
+**Alternative considered**: Exact `pretty` parity, where predefined fields are never hidden by `-h`. Rejected, because structured output is mostly consumed by pipelines, where dropping a predefined field is useful.
 
 ## R16. Benchmarks and performance gates (SC-004, SC-005)
 

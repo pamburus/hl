@@ -60,12 +60,10 @@ Details and rationale are in [research.md](./research.md).
 | III. User Experience | ✅ Pass | Opt-in option with env support, and default output unchanged. Dropped lines aren't silent: they are reported through `HL_DEBUG_LOG` (FR-019, FR-020). Configuration errors name the offending setting (FR-026). |
 | IV. Reliability & Robustness | ✅ Pass | Invalid escapes and UTF-8 are replaced, never emitted raw. Unparsable timestamps fall back to the original value. Malformed lines are dropped and counted, never fatal. |
 | V. Test-First & Quality | ✅ Pass | Unit, app-level and property tests per R17. Schema update followed by `cargo build` and then `just ci`. `just uncovered` after implementation. Coverage must not decrease (SC-007). |
-| VI. Specification Integrity | ✅ Pass | No FR or SC renumbering. Spec 005 is unaffected. One open interpretation (R15) is listed below and would be resolved by rewording FR-014, not by renumbering. |
+| VI. Specification Integrity | ✅ Pass | No FR or SC renumbering. Spec 005 is unaffected. FR-014 was reworded in place to record the hiding decision (R15). |
 | VII. Test Data Management | ✅ Pass | Fixture logs, expected outputs and preset configs live in `src/testing/assets/` (R17). |
 | Versioning of PRs | ✅ Pass | Commits on `feature/output-format` keep the version. The PR merging the feature into `master` sets the next minor pre-release (`0.37.0-alpha.1`, or as computed then). The `--flatten` default change keeps `pretty` output identical. Users whose configuration explicitly sets `flatten = "always"` get flattened JSON, which goes in the release notes. |
 | Backwards compatibility | ✅ Pass | No option is removed or changes meaning. `auto` is additive, and existing explicit values behave as before. |
-
-**Open item, not a gate failure**: research R15. In `pretty`, `-h` does not hide predefined fields, but FR-014 says hide options apply "including for predefined fields". The plan follows the literal FR-014 wording: hide rules match the predefined fields' output keys in structured output. This needs confirmation before `/speckit-tasks`; if `pretty` parity is preferred instead, FR-014 is reworded.
 
 **Post-design re-check**: unchanged, all pass. The design adds no new crate, no on-disk format change and no global mutable state beyond a once-only exit hook (R10), which is justified by SIGINT exiting outside `App::run`.
 
