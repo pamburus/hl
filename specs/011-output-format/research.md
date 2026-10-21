@@ -1,0 +1,193 @@
+# Research: Machine-Readable Output Formats
+
+**Feature**: [spec.md](./spec.md) | **Plan**: [plan.md](./plan.md) | **Date**: 2026-10-21
+
+Each decision lists what was chosen, why, and what else was considered. References like `src/app.rs` describe the code as of `master` at `1dfc8536`.
+
+## R1. Where structured output plugs into the pipeline
+
+**Decision**: Add a `StructuredRecordFormatter` that implements the existing `RecordWithSourceFormatter` trait and is selected in `App::new_formatter` next to `RawRecordFormatter` and `RecordFormatter`. It is generic over an `Encoder` (JSON or logfmt), so each format is monomorphized and the per-record path has no dynamic dispatch below the formatter boundary.
+
+**Rationale**: `App` already holds a `DynRecordWithSourceFormatter` and every mode (`cat`, `sort`, `follow`) calls `format_record` on it through `SegmentProcessor`. Plugging in at this boundary reuses parsing, filtering, sorting, following, `--tail` and multiple inputs unchanged, which is what FR-015 and SC-002 require. Nothing on the `pretty` path changes, which protects FR-002 and SC-004.
+
+**Alternatives considered**:
+- A separate pipeline for structured output: duplicates the threading and merge logic of three modes, and the record sets could drift apart.
+- Serializing via `serde::Serialize` on a normalized struct: requires building an owned intermediate per record and gives no control over key order, deduplication or logfmt quoting.
+
+## R2. Normalized record: streaming fast path and tree slow path
+
+**Decision**: The formatter streams key/value pairs straight into the output buffer in the order of FR-005, FR-029 and FR-009. A slow path builds a small tree only when it is needed:
+- an output key contains a dot and the effective flatten mode is `never` (FR-027a); or
+- a regular object field shares the first path segment of such a key and must be merged.
+
+The slow path is decided once per formatter from the configuration. With default settings and the k8s preset, no output key has a dot, so the slow path is never taken.
+
+**Rationale**: SC-005 targets parity with `pretty`, whose formatter also streams. Building a tree per record would allocate in the hot path. Only the ECS preset in JSON mode needs merging, and it pays the cost only for the `log` group.
+
+**Alternatives considered**: Always building a tree: simpler, but it allocates on every record and makes SC-005 unreachable for large records.
+
+## R3. Key uniqueness (FR-009a, FR-027)
+
+**Decision**:
+- Use a per-record key set of `(hash, &str)` entries with inline capacity: `heapopt::Vec`, which hl already uses for record fields, and `wyhash`, which is already a dependency. Strings are compared only when hashes match.
+- The emitted predefined output keys are inserted first. A regular field whose key is already present is dropped and reported (FR-027).
+- Repeated source keys (FR-009a) are found in a pre-pass that hashes the keys at one nesting level. The common case without repeats sets a flag and streams normally. Only when repeats exist is a "last occurrence index" computed, so each key is emitted at its first position with its last value.
+- The same pre-pass runs for every object that is re-encoded (one nesting level at a time). With `--flatten=always`, it runs on full dotted paths.
+
+**Rationale**: Records usually have fewer than 32 fields, so a linear scan over hashes beats a hash map and avoids allocation. Running the pre-pass per object keeps the "same nesting level" rule of FR-009a exact.
+
+**Alternatives considered**:
+- `HashSet<&str>` per record: allocates.
+- Sorting the keys: changes the order, which FR-009 forbids.
+
+## R4. Value encoding (FR-010, FR-010a, FR-011)
+
+**Decision**:
+- **Logfmt-sourced unquoted strings** (`EncodedString::Raw`) are typed with `RawValue::auto`, the same function the `pretty` formatter uses. This gives numbers, booleans and null under exactly hl's existing rules (FR-010).
+- **JSON strings** (and quoted logfmt strings, which use the same encoding) are copied verbatim when they contain no backslash. Otherwise they are decoded and re-encoded with the existing `encstr` JSON appender. This normalizes escapes such as `\/` and `A` and replaces invalid sequences such as lone surrogates with U+FFFD (FR-011, edge case "Invalid UTF-8"). Non-ASCII characters are written as UTF-8.
+- **JSON-sourced numbers** are always valid JSON and are copied verbatim.
+- **Logfmt-sourced numbers** in JSON mode are checked with a single-pass validator. Only invalid ones are rewritten by the rules of FR-010a: strip a leading `+` and redundant leading zeros, add `0` before a leading `.`, and drop a `.` that has no fraction digits. In logfmt mode, numbers are copied verbatim.
+- **Objects and arrays** are re-encoded compactly by walking the parsed `Object`/`Array`, because whitespace must be removed (multi-line input), keys deduplicated and hide filters applied. Arrays are re-encoded element by element, but no filters are applied inside them (FR-012, FR-014). Scalars inside them follow the rules above.
+
+**Rationale**: Copying verbatim avoids decoding in the common case. Reusing `RawValue::auto` guarantees that structured output types values exactly as `pretty` displays them, which is the stability argument of the spec's input.
+
+## R5. Logfmt output and round trip (FR-004, FR-004a, SC-003)
+
+**Decision**: The `serde-logfmt` crate exports predicates that use the parser's own lookup tables:
+- `is_bare_key(&str)`: non-empty, and every byte allowed by the `KEY` table;
+- `is_bare_value(&str)`: non-empty, with no control character, space, `"` or `=`.
+
+The logfmt encoder writes a key bare when `is_bare_key` holds, and quoted as a JSON string otherwise. A string value is written bare only when `is_bare_value` holds, it doesn't start with `"`, and `RawValue::auto` would type it as a string. Otherwise it is quoted. The empty string is written as `""`.
+
+**Rationale**: Sharing the tables makes "hl reads its own logfmt output back" hold by construction. If the parser's bare-key set ever changes, the writer follows it automatically. This builds on the quoted-key parser fix (#1607), which is already merged.
+
+**Alternatives considered**: A separate character table in the writer: it can drift from the parser.
+
+## R6. Timestamp normalization (FR-007)
+
+**Decision**: Add `Timestamp::format_rfc3339_utc(&self, buf) -> bool` to `src/timestamp.rs`:
+- **Precision**: derived from the source text, not from the parsed value.
+  - Integer Unix values: the resolved unit gives 0, 3, 6 or 9 digits.
+  - Fractional Unix values: the unit's digits plus the source's fraction digits, clamped to 9.
+  - Textual values: the number of fraction digits in the source, clamped to 9.
+- **Unit**: resolved with the same rule as parsing: an explicit `--unix-timestamp-unit`, otherwise `UnixTimestampUnit::guess`.
+- **Fast path**: a source that is already `YYYY-MM-DDTHH:MM:SS[.fff]Z` is copied verbatim.
+- **Conversion**: other values are converted to UTC and written as `%Y-%m-%dT%H:%M:%S`, then `.` and the first N digits of the zero-padded nanoseconds when N > 0, then `Z`. Writing goes through a small digit writer, not `chrono`'s formatter, because `chrono` only offers 0, 3, 6 or 9 digits.
+- **Zone-less values**: interpreted as UTC, which `reparse` already does.
+- **Failure**: if parsing fails, or the year is outside 0000 to 9999 (which RFC 3339 can't represent), the function returns `false` and the caller emits the original value with its source type (FR-005a).
+
+**Rationale**: The precision rules are about the source's format, so they must look at the source text. The verbatim fast path covers the most common modern log timestamp at zero cost.
+
+## R7. Level, logger and caller values (FR-006, FR-008, FR-008a)
+
+**Decision**:
+- **Level**: written from `Level`'s lowercase `AsRef<str>` (`error`, `warning`, `info`, `debug`, `trace`). An unrecognized level leaves `record.level` unset and the source field stays among the regular fields, which the parser already does (edge case "Unrecognized level"). A variant's fallback `level` (as in the k8s preset's `err`) still counts as recognized.
+- **Logger**: written as a string.
+- **Combined caller**: written as `name`, `file:line`, `file`, or `name @ file:line`, with fixed punctuation that is independent of the theme or the `punctuation` configuration.
+- **Split caller**: under FR-008a, the line is written as a number when `looks_like_number` holds and as a string otherwise.
+
+**Rationale**: Fixed punctuation keeps the output schema stable across user configurations.
+
+## R8. Input field (FR-029)
+
+**Decision**: Split `App::input_badges` into two steps:
+1. computing plain names (full names, and compact names using the same clipping rules and resolved punctuation);
+2. themed, padded badge rendering, used only by `pretty`.
+
+The structured formatter receives, per input, a pre-rendered value for the input field: the number as JSON/logfmt text, or the name as an encoded string. `SegmentProcessor` already gets a per-input prefix string. In structured mode the prefix is empty and the input index travels in a new per-call input context.
+
+**Requested layouts**: computed from `--input-info` / `input-info` minus `auto`. The terminal-width logic in `main.rs` applies only to `pretty`.
+
+**Rationale**: Reusing the clipping logic keeps compact names identical to the badges, as FR-029 requires, without duplicating it.
+
+## R9. Dropped-line accounting (FR-018 to FR-021)
+
+**Decision**:
+- **Reporting hook**: `RecordObserver` gets a second method, `observe_dropped(&mut self, chunk: &[u8], kind: DropKind)`, with an empty default implementation. `SegmentProcessor` calls it for every non-empty unparsed chunk, remainder after records, and prefix, but only when `show_unparsed()` is false.
+- **Where it applies**: in structured modes, `allow_unparsed_data` is always false. In `pretty`, the observers keep the empty default, so the `pretty` path compiles to the same code.
+- **Counting**: the drop observer increments a per-input counter (`Arc<[AtomicU64]>`).
+- **Per-line entries**: only when `log::log_enabled!(log::Level::Debug)` holds, the observer also writes a debug entry with the source name, line number and a preview of at most 100 characters. The preview is cut at a character boundary and its control characters are escaped.
+- **Empty lines**: empty and whitespace-only lines are not dropped lines. They carry no content and are skipped silently, as `pretty` does with filters active.
+
+**Line numbers** are computed only when debug logging is enabled:
+- **cat and follow**: the reader assigns each segment its base line number by counting newlines (or the configured single-byte delimiter for `nul`/`cr` input) as segments are sent. `SegmentProcessor` keeps a running count while it walks the chunks.
+- **sort**: blocks are processed out of order, so a pre-pass computes the base line number of each block for inputs whose index reports invalid entries. It reads the input once through the indexed input's random-access stream and counts newlines. Blocks skipped by the sort pusher (no valid entries, no timestamps, or excluded by level/time filters) but having invalid entries are sent to workers in a diagnostics-only mode: they are scanned for dropped lines and emit no records.
+
+**Summary**: on completion, `App::run` writes one info-level entry per input with a non-zero count (FR-020).
+
+**Rationale**: The common case has no debug logging, so the only added cost is an atomic increment per dropped line. Line-number bookkeeping happens only in diagnostic runs, where speed doesn't matter. The observer hook already exists for timestamp indexing, so the extension follows its pattern.
+
+**Alternatives considered**:
+- Adding per-block line counts to the on-disk index: requires a schema and version change, and invalidates every user's index cache, for a debug-only feature.
+- Reporting byte offsets instead of line numbers in sort mode: contradicts FR-019.
+
+## R10. Summaries at exit in follow mode (FR-020)
+
+**Decision**: Register a process-wide exit hook that writes the summaries. Call it at the end of `App::run`. `SignalHandler` also calls it just before `exit(130)` on SIGINT, and `ExitOnWriteError` just before its exit on a closed output. The hook runs at most once (`std::sync::Once`). Termination by SIGTERM or SIGKILL is not covered and is documented as such. On Windows, hl installs no Ctrl-C handler today (`src/signal_windows.rs`), so Ctrl-C ends a follow run without summaries. Adding a console control handler is out of scope and is documented as a platform limitation.
+
+**Rationale**: In follow mode the normal exit path is SIGINT, which exits from the signal thread without unwinding `App::run`.
+
+## R11. Flatten mode `auto` (FR-024, FR-025)
+
+**Decision**:
+- **Enums**: add `Auto` to `settings::FlattenOption` and `cli::FlattenOption`.
+- **Defaults**: the default configuration sets `flatten = "auto"`. The CLI default comes from the configuration, falling back to `Auto` when it is absent.
+- **Schema**: the configuration schema enum becomes `["auto", "never", "always"]`.
+- **Resolution**: `main.rs` resolves the option once, after the output format is known: `auto` gives `always` for `pretty` and `logfmt`, and `never` for `json`. `Options.flatten` stays a resolved `bool`.
+
+**Rationale**: Resolving at startup keeps the formatters unaware of `auto`, and `pretty` keeps receiving `true` by default (FR-002).
+
+## R12. Output key configuration (FR-026, FR-028)
+
+**Decision**:
+- **New settings**: add `output_key: Option<String>` (serialized as `output-key`) to `settings::Field` and `settings::LevelField`. Add a new `settings::InputField { output_key }` under `fields.predefined.input`, with all keys optional.
+- **Validation**: a new `Settings::validate()` step in `Settings::load` rejects an empty `output-key` and duplicate effective output keys. The duplicate check runs over the effective set: the defaults (`timestamp`, `level`, `logger`, `message`, `caller`, `caller-file`, `caller-line`, `input`) overridden by configured values. The error names the setting path, e.g. `fields.predefined.logger.output-key`.
+- **Presets**: the ECS and k8s preset files set the values listed in FR-028.
+- **Schema**: `schema/json/config.schema.json` describes `output-key` for each field and the new `input` field. After the schema edit, run `cargo build` and then `just ci` (constitution V).
+
+**Rationale**: Per-field settings sit next to the `names` they map from, which is where users already configure these fields.
+
+## R13. Command line and environment (FR-001, FR-016, FR-017)
+
+**Decision**:
+- **New option**: `cli::OutputFormat { Pretty, Json, Logfmt }` with `--output-format <FORMAT>`, `env = "HL_OUTPUT_FORMAT"`, `default_value = "pretty"` and `overrides_with = "output_format"`, under the Output help heading. No configuration setting.
+- **In `main.rs`, structured output with `--raw` absent**:
+  - the theme is `Theme::none()`, whatever `--color` and `-c` say;
+  - no pager starts, whatever `--paging` says;
+  - the output delimiter comes from `--output-delimiter`;
+  - input-info terminal resolution is skipped.
+- **`--raw`**: when it is in effect, the output format is treated as `pretty`. `RawRecordFormatter` is used and today's raw behavior is kept, including pager and colors.
+
+**Rationale**: Deciding at the composition root keeps `App` free of terminal concerns and makes FR-017 hold for every output path.
+
+## R14. Follow mode emission (FR-022)
+
+**Decision**: In follow mode, `merge_segments` flushes the output after each pass that wrote records. Whole records are written with a single `write_all` of a contiguous buffer, so readers never see a partial record. Flushing doesn't change any bytes, so `pretty` stays byte-identical. The flush matters for structured output piped to another process, especially with the `nul` delimiter, which the line-buffered stdout doesn't flush on.
+
+## R15. Hide options and predefined fields (FR-014)
+
+**Context**: In `pretty`, `-h` never hides predefined fields: `-h msg`, `-h level`, `-h ts` and `-h caller` all leave them visible. Hide rules apply only to regular fields and nested objects, and predefined fields are controlled by `fields.predefined.<field>.show`.
+
+**Decision (needs confirmation)**: Apply hide rules to predefined fields in structured output, matched against their output keys (e.g. `-h caller` drops the caller, `-h message` drops the message), and apply `--hide-empty-fields` to empty predefined values. This follows the literal wording of FR-014, "including for predefined fields", and is useful for pipelines.
+
+**Alternative**: Exact `pretty` parity, where predefined fields are never hidden by `-h`. This matches the "same way" wording. If chosen, FR-014 should be reworded.
+
+## R16. Benchmarks and performance gates (SC-004, SC-005)
+
+**Decision**:
+- Extend `benches/bench/ws/hl/combined.rs` with `format-json` and `format-logfmt` cases over the existing `elk01` and `int01` JSON and logfmt samples, next to `parse-and-format` (`pretty`) and `parse-only`.
+- Add a `structured` group with a sample that has nested objects and a dotted output key, to track the slow path separately.
+- The PR reports the results for `pretty` before and after (SC-004, must not regress more than 5%) and structured against `pretty` (SC-005, a target).
+
+## R17. Testing strategy (constitution V and VII)
+
+**Decision**:
+- **Unit tests** next to each new module:
+  - encoders: quoting, escaping, number rewrites, bare-key and bare-value decisions;
+  - the normalizer: order, collisions, repeats, flattening, merging, hiding;
+  - timestamp precision: every rule and example in FR-007;
+  - settings validation.
+- **App-level tests** in `src/app/tests.rs` for `cat`, `sort` and `follow` with `json` and `logfmt`: record parity with `pretty` (SC-002), `--raw` precedence, delimiters, and dropped-line counts.
+- **Property tests**: `proptest`, added as a dev-dependency, for round trips (logfmt → JSON → logfmt preserves keys, values and types, SC-003), and "every output line parses" (SC-001) using `serde_json` and hl's own logfmt parser.
+- **Fixtures**: input logs and expected outputs in `src/testing/assets/fixtures/output-format/`, with configuration files for presets under `src/testing/assets/configs/`.
+- **Coverage**: `just uncovered` after implementation (SC-007).
