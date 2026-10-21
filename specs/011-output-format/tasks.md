@@ -39,15 +39,15 @@ description: "Task list for machine-readable output formats"
 
 ### Tests (write first, confirm they fail)
 
-- [ ] T000a In src/app/tests.rs, with a capturing `RecordWithSourceFormatter`, check for `cat`, `sort` and `follow` over two inputs that each formatted record's `origin.input` refers to the descriptor of the input it came from (index and name, `<stdin>` for standard input), and that `origin.line` is `None`.
-- [ ] T000b [P] In src/app/tests.rs, test the new input name computation directly: full names and compact names (with clipping and the common-part marker) for the inputs already used by the `prepare_follow_badges` and `input_badges` tests. The existing badge tests stay unchanged and keep passing.
+- [x] T000a In src/app/tests.rs, with a capturing `RecordWithSourceFormatter`, check for `cat`, `sort` and `follow` over two inputs that each formatted record's `origin.input` refers to the descriptor of the input it came from (index and name, `<stdin>` for standard input), and that `origin.line` is `None`.
+- [x] T000b [P] In src/app/tests.rs, test the new input name computation directly: full names and compact names (with clipping and the common-part marker) for the inputs already used by the `prepare_follow_badges` and `input_badges` tests. The existing badge tests stay unchanged and keep passing.
 
 ### Implementation
 
-- [ ] T000c In src/input.rs, add `pub struct InputDescriptor { pub index: usize, pub name: String }`. In src/model.rs, add `#[derive(Default, Clone, Copy)] pub struct Origin<'r> { pub input: Option<&'r InputDescriptor>, pub line: Option<u64> }`, a `pub origin: Origin<'r>` field on `RecordWithSource` defaulting to `Origin::default()`, and a `with_origin` builder. Existing constructors keep their signatures.
-- [ ] T000d In src/app.rs, add an input context parameter (`&InputDescriptor` for now) to `SegmentProcess::process`, and build the descriptors once per run in `cat`, `sort` and `follow`, before any record is processed. `SegmentProcessor` sets `origin.input` when it builds `RecordWithSource`. Update every call site in src/app.rs, src/app/tests.rs and benches/bench/ws/hl/combined.rs.
-- [ ] T000e In src/app.rs, split `App::input_badges` into a name computation (full names, and compact names with the existing clipping rules and resolved punctuation) and the themed, padded badge rendering, which uses the computed names. Badge output is unchanged.
-- [ ] T000f Run `just ci`. Compare `cargo bench --bench bench -- combined` with `develop`. Bump with `just bump` after rebasing onto `develop`, and open the PR with a `refactor(app): ...` title and the benchmark comparison.
+- [x] T000c In src/input.rs, add `pub struct InputDescriptor { pub index: usize, pub name: String }`. In src/model.rs, add `#[derive(Default, Clone, Copy)] pub struct Origin<'r> { pub input: Option<&'r InputDescriptor>, pub line: Option<u64> }`, a `pub origin: Origin<'r>` field on `RecordWithSource` defaulting to `Origin::default()`, and a `with_origin` builder. Existing constructors keep their signatures.
+- [x] T000d In src/app.rs, add an input context parameter (`&InputDescriptor` for now) to `SegmentProcess::process`, and build the descriptors once per run in `cat`, `sort` and `follow`, before any record is processed. `SegmentProcessor` sets `origin.input` when it builds `RecordWithSource`. Update every call site in src/app.rs, src/app/tests.rs and benches/bench/ws/hl/combined.rs.
+- [x] T000e In src/app.rs, split `App::input_badges` into a name computation (full names, and compact names with the existing clipping rules and resolved punctuation) and the themed, padded badge rendering, which uses the computed names. Badge output is unchanged.
+- [x] T000f Run `just ci`. Compare `cargo bench --bench bench -- combined` with `develop`. Bump with `just bump` after rebasing onto `develop`, and open the PR with a `refactor(app): ...` title and the benchmark comparison.
 
 **Checkpoint**: The PR is merged into `develop`, and `feature/output-format` is rebased onto it.
 
