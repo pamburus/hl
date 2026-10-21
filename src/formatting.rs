@@ -31,7 +31,7 @@ use crate::{
 use crate::testing::Sample;
 
 // relative imports
-use string::{DynMessageFormat, ExtendedSpaceAction, Format, ValueFormatAuto};
+use string::{DynMessageFormat, ExtendedSpaceAction, Format, KeyQuoting, ValueFormatAuto};
 
 // ---
 
@@ -897,16 +897,12 @@ impl KeyPrefix {
     }
 
     #[inline(always)]
-    fn push(&mut self, key: &str, prettify: bool) -> usize {
+    fn push(&mut self, key: &str, prettify: bool, quote: bool) -> usize {
         let len = self.len();
         if len != 0 {
             self.value.push(b'.');
         }
-        if prettify {
-            key.key_prettify(&mut self.value);
-        } else {
-            self.value.extend_from_slice(key.as_bytes());
-        }
+        push_key(&mut self.value, key, prettify, quote);
         self.len() - len
     }
 
@@ -1186,7 +1182,11 @@ impl<'a> FieldFormatter<'a> {
         fs: &mut FormattingStateWithRec,
     ) -> FormattedFieldVariant {
         if fs.flatten && matches!(value, RawValue::Object(_)) {
-            return FormattedFieldVariant::Flattened(fs.key_prefix.push(key, self.rf.prettify_field_keys));
+            return FormattedFieldVariant::Flattened(fs.key_prefix.push(
+                key,
+                self.rf.prettify_field_keys,
+                self.rf.unescape_fields,
+            ));
         }
 
         if !fs.has_fields {
@@ -1216,11 +1216,7 @@ impl<'a> FieldFormatter<'a> {
                         buf.push(b'.');
                     }
                 }
-                if self.rf.prettify_field_keys {
-                    key.key_prettify(buf);
-                } else {
-                    buf.extend_from_slice(key.as_bytes());
-                }
+                push_key(buf, key, self.rf.prettify_field_keys, self.rf.unescape_fields);
             });
         });
 
@@ -1315,10 +1311,10 @@ trait KeyPrettify {
     fn key_prettify<B: Push<u8>>(&self, buf: &mut B);
 }
 
-impl KeyPrettify for str {
+impl KeyPrettify for [u8] {
     #[inline(always)]
     fn key_prettify<B: Push<u8>>(&self, buf: &mut B) {
-        let bytes = self.as_bytes();
+        let bytes = self;
         let mut i = 0;
         while let Some(pos) = bytes[i..].iter().position(|&b| b == b'_') {
             buf.extend_from_slice(&bytes[i..i + pos]);
@@ -1326,6 +1322,42 @@ impl KeyPrettify for str {
             i += pos + 1;
         }
         buf.extend_from_slice(&bytes[i..])
+    }
+}
+
+/// Appends a field key to `buf`, prettified if `prettify` is set,
+/// and quoted if `quote` is set and the key would otherwise be ambiguous.
+#[inline(always)]
+fn push_key<B: Push<u8>>(buf: &mut B, key: &str, prettify: bool, quote: bool) {
+    let quoting = if quote {
+        KeyQuoting::of(key.as_bytes())
+    } else {
+        KeyQuoting::Plain
+    };
+
+    match quoting {
+        KeyQuoting::Plain => push_key_plain(buf, key.as_bytes(), prettify),
+        KeyQuoting::Quoted(q) => {
+            buf.push(q.byte());
+            push_key_plain(buf, key.as_bytes(), prettify);
+            buf.push(q.byte());
+        }
+        KeyQuoting::JsonEscaped => {
+            // Rare path: keys with control characters, so an allocation is acceptable here.
+            // JSON escape sequences never contain `_`, so prettifying after escaping gives the same result.
+            let mut tmp = Vec::with_capacity(key.len() + 8);
+            string::format_json_str(key, &mut tmp);
+            push_key_plain(buf, &tmp, prettify);
+        }
+    }
+}
+
+#[inline(always)]
+fn push_key_plain<B: Push<u8>>(buf: &mut B, key: &[u8], prettify: bool) {
+    if prettify {
+        key.key_prettify(buf);
+    } else {
+        buf.extend_from_slice(key);
     }
 }
 
@@ -1530,6 +1562,92 @@ pub mod string {
 
     // ---
 
+    /// Characters that make an unquoted key or value ambiguous in `key=value` output.
+    const NON_PLAIN: Mask = mask!(
+        Flag::Control
+            | Flag::DoubleQuote
+            | Flag::SingleQuote
+            | Flag::Backslash
+            | Flag::Backtick
+            | Flag::Space
+            | Flag::Tab
+            | Flag::Newline
+            | Flag::EqualSign
+    );
+
+    // ---
+
+    /// How a field key is quoted in the output.
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    pub enum KeyQuoting {
+        /// Written as is.
+        Plain,
+        /// Wrapped in the quote character, without escaping.
+        Quoted(Quote),
+        /// Written as a double-quoted JSON string with escape sequences.
+        JsonEscaped,
+    }
+
+    /// A quote character that can wrap a string without escaping.
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    pub enum Quote {
+        Double,
+        Single,
+        Backtick,
+    }
+
+    impl Quote {
+        #[inline(always)]
+        pub const fn byte(self) -> u8 {
+            match self {
+                Self::Double => b'"',
+                Self::Single => b'\'',
+                Self::Backtick => b'`',
+            }
+        }
+    }
+
+    impl KeyQuoting {
+        /// Picks the quoting for a key using the same quote-character cascade as string values.
+        ///
+        /// Unlike values, keys never look like numbers or literals in key position,
+        /// so only the characters in [`NON_PLAIN`] trigger quoting, and keys always stay on one line.
+        /// Key prettification only replaces `_` with `-`, neither of which affects the result,
+        /// so the original key can be analyzed.
+        #[inline(always)]
+        pub fn of(key: &[u8]) -> Self {
+            if key.is_empty() {
+                return Self::Quoted(Quote::Double);
+            }
+
+            let mask = key.analyze().chars;
+            if !mask.intersects(NON_PLAIN) {
+                return Self::Plain;
+            }
+
+            const BREAKING: Mask = mask!(Flag::Control | Flag::Tab | Flag::Newline);
+
+            if !mask.intersects(BREAKING | Flag::Backslash | Flag::DoubleQuote) {
+                Self::Quoted(Quote::Double)
+            } else if !mask.intersects(BREAKING | Flag::Backslash | Flag::SingleQuote) {
+                Self::Quoted(Quote::Single)
+            } else if !mask.intersects(BREAKING | Flag::Backtick) {
+                Self::Quoted(Quote::Backtick)
+            } else {
+                Self::JsonEscaped
+            }
+        }
+    }
+
+    /// Appends `input` to `buf` as a double-quoted JSON string, escaping special characters.
+    #[inline]
+    pub fn format_json_str(input: &str, buf: &mut Vec<u8>) {
+        // Decoding a raw string never fails.
+        _ = EncodedString::raw(input).format_json(buf);
+    }
+
+    // ---
+
     #[derive(Default)]
     pub struct ValueFormatAuto;
 
@@ -1554,18 +1672,6 @@ pub mod string {
 
             let analysis = buf[begin..].analyze();
             let mask = analysis.chars;
-
-            const NON_PLAIN: Mask = mask!(
-                Flag::Control
-                    | Flag::DoubleQuote
-                    | Flag::SingleQuote
-                    | Flag::Backslash
-                    | Flag::Backtick
-                    | Flag::Space
-                    | Flag::Tab
-                    | Flag::Newline
-                    | Flag::EqualSign
-            );
 
             let confusing = || matches!(&buf[begin..], [b'{', ..] | [b'[', ..] | b"true" | b"false" | b"null");
 

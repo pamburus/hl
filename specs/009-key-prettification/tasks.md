@@ -172,3 +172,111 @@ This feature consists of a single user story, so delivery is atomic:
 - Tests validate all acceptance scenarios from spec.md
 - Default behavior preserved (prettify=true) for backward compatibility
 - Commit after logical groups (config layer, formatter layer, tests)
+
+---
+
+# Amendment 2026-10-21: Key Quoting (#1609)
+
+**Input**: User Stories 2-5, FR-006 to FR-016 in [spec.md](spec.md); Amendment sections of [plan.md](plan.md), [research.md](research.md) (Decisions 6-11), [data-model.md](data-model.md), [quickstart.md](quickstart.md)
+
+**Tests**: Included. The constitution requires test-first development (Principle V).
+
+## Phase 5: Foundational (Blocking Prerequisites)
+
+**Purpose**: The shared key writer used by every story below.
+
+- [X] T025 Add a key quote-style decision in the `string` module of src/formatting.rs: analyze the key bytes with the existing `Analyze` trait and return `Plain`, `Quoted(Quote::Double | Quote::Single | Quote::Backtick)` or `JsonEscaped` per research.md Decisions 6 and 8 (empty key → `Quoted(Quote::Double)`; trigger mask = `Control | DoubleQuote | SingleQuote | Backslash | Backtick | Space | Tab | Newline | EqualSign`; backticks only when the key has no tab, newline or control character)
+- [X] T026 Add a shared key writer in src/formatting.rs that takes the key, the prettify flag, the quote flag and a `Push<u8>` buffer, and writes the opening quote, the (prettified) key and the closing quote; for `JsonEscaped`, JSON-escape the original key into a temporary buffer via `encstr`, then prettify the escaped bytes when needed (research.md Decisions 7, 9, 11)
+- [X] T027 Add unit tests for the quote-style decision and the key writer in src/formatting/tests.rs: plain, empty, spaces only, leading/trailing spaces, `=`, `"`, `'` and `"` together, backtick, backslash, newline, tab, control character, non-ASCII letters, `123`, `true`, `null`, `{x`, `http.method`, `user_id` with prettify on and off
+
+**Checkpoint**: Key writer tested in isolation.
+
+---
+
+## Phase 6: User Story 2 - Read Fields Whose Keys Contain Spaces or Separators (Priority: P1) 🎯 MVP
+
+**Goal**: Top-level keys that are empty or contain trigger characters are quoted.
+
+**Independent Test**: The record from issue #1609 displays as `hello › "user name"="alice smith" "a=b"=x ""=empty n."inner key"=3`.
+
+- [X] T028 [US2] Add tests in src/formatting/tests.rs for acceptance scenarios 1-4 of User Story 2 (`"user name"="alice smith"`, `"a=b"=x`, `""=empty`, and the full issue record)
+- [X] T029 [US2] Use the shared key writer in `FieldFormatter::begin()` in src/formatting.rs, with quoting gated on `self.rf.unescape_fields` (research.md Decision 10); keep the writes inside the `Element::Key` batch (FR-015)
+- [X] T030 [US2] Add a test in src/formatting/tests.rs that `--raw-fields` (`with_raw_fields(true)`) displays such keys as is (FR-013)
+
+**Checkpoint**: The issue repro is fixed for top-level keys.
+
+---
+
+## Phase 7: User Story 3 - Plain Keys Stay Unquoted (Priority: P1)
+
+**Goal**: Output for plain keys is unchanged.
+
+**Independent Test**: All existing formatter tests pass unchanged; plain-key records format byte-for-byte as before.
+
+- [X] T031 [US3] Add tests in src/formatting/tests.rs for acceptance scenarios 1-3 of User Story 3 (`user_id` → `user-id`, `http.method`, `a:b/c@d`, `123`, `true`, `null` all unquoted)
+- [X] T032 [US3] Run `cargo test` and confirm no existing expected outputs had to change, apart from keys that now legitimately need quotes (SC-005); review any such change
+
+**Checkpoint**: No regressions for typical logs.
+
+---
+
+## Phase 8: User Story 4 - Nested Keys Quote Each Path Segment (Priority: P2)
+
+**Goal**: Flattened paths quote only the segments that need it; non-flattened and expanded layouts quote keys the same way.
+
+**Independent Test**: `{"n":{"inner key":3}}` → `n."inner key"=3`; `{"outer key":{"x":1}}` → `"outer key".x=1`; with flattening off → `n={ "inner key"=3 }`.
+
+- [X] T033 [US4] Add tests in src/formatting/tests.rs for acceptance scenarios 1-4 of User Story 4 (flattened inner and outer segment, non-flattened, expanded layout)
+- [X] T034 [US4] Give `KeyPrefix::push()` in src/formatting.rs a quote flag and write the segment through the shared key writer; pass `self.rf.unescape_fields` from `FieldFormatter::begin()` (FR-010)
+- [X] T035 [US4] Verify non-flattened and expanded output need no further change, since both use `FieldFormatter::begin()` (FR-011, FR-013)
+
+**Checkpoint**: Nested fields unambiguous in every layout.
+
+---
+
+## Phase 9: User Story 5 - Quote Character Adapts to the Key (Priority: P3)
+
+**Goal**: Keys with quotes or control characters pick the right quote style and stay on one line.
+
+**Independent Test**: Nested keys `say "hi"` → `'say "hi"'`; `"` and `'` together → backticks; `line\nbreak` → `"line\nbreak"` on one line.
+
+- [X] T036 [US5] Add tests in src/formatting/tests.rs for acceptance scenarios 1-3 of User Story 5, using nested objects so the keys go through escape decoding (see plan.md Known Limitation)
+- [X] T037 [US5] Add a test in src/formatting/tests.rs that the existing Kubernetes-style key `k:{"type":"Ready"}` displays as `'k:{"type":"Ready"}'`
+
+**Checkpoint**: All quote styles covered.
+
+---
+
+## Phase 10: Polish & Cross-Cutting Concerns
+
+- [X] T038 Add a test in src/formatting/tests.rs that a hide filter (`-h "user name"`) still matches the original key (FR-014)
+- [X] T039 Run the quickstart.md amendment scenarios with the built binary and confirm the outputs
+- [X] T040 Run `just uncovered` and add tests for any uncovered changed lines
+- [X] T041 Run the formatting benchmarks in benches/bench before and after the change and confirm no regression over 5% (FR-016, SC-007)
+- [X] T042 Format with `just fmt-rust`, then run `just ci`
+
+---
+
+## Amendment Dependencies & Execution Order
+
+- **Phase 5** blocks all later phases.
+- **US2 (Phase 6)** and **US3 (Phase 7)** depend only on Phase 5. US3 verifies US2 caused no regressions, so run it right after US2.
+- **US4 (Phase 8)** depends on Phase 5. T034 touches `KeyPrefix::push()` and its call in `FieldFormatter::begin()`, so do it after T029.
+- **US5 (Phase 9)** depends on Phases 6 and 8 (nested keys go through both call sites).
+- **Phase 10** runs last.
+
+### Parallel Opportunities
+
+All amendment tasks touch the same two files, so code tasks are sequential. Test-writing tasks T028, T031, T033 and T036 can be drafted in parallel once T026 exists.
+
+## Amendment Implementation Strategy
+
+1. Phase 5 (key writer), then Phase 6 (US2): the issue repro is fixed for top-level keys. This is the MVP.
+2. Phase 7 (US3): confirm nothing else changed.
+3. Phase 8 (US4) and Phase 9 (US5): nested paths and quote styles.
+4. Phase 10: coverage, benchmarks, CI.
+
+## Amendment Summary
+
+- **Total**: 18 tasks (T025-T042)
+- Foundational: 3 · US2: 3 · US3: 2 · US4: 3 · US5: 2 · Polish: 5

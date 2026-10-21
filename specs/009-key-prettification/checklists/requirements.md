@@ -1,7 +1,8 @@
-# Specification Quality Checklist: Key Prettification Config Option
+# Specification Quality Checklist: Field Key Display
 
 **Purpose**: Validate specification completeness and quality before proceeding to planning
 **Created**: 2026-02-04
+**Updated**: 2026-10-21 (key quoting amendment, issue #1609)
 **Feature**: [spec.md](../spec.md)
 
 ## Content Quality
@@ -31,5 +32,6 @@
 
 ## Notes
 
-- All items pass validation.
+- All items pass validation, including the 2026-10-21 amendment (User Stories 2-5, FR-006 to FR-016, SC-004 to SC-007).
+- CLI flags such as `--raw-fields` and `-P` are named because they are the user-facing interface of this CLI tool, not implementation details.
 - The spec is ready for `/speckit.clarify` or `/speckit.plan`.

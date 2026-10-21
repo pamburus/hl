@@ -2,7 +2,7 @@ use chrono::{Offset, Utc};
 use rstest::rstest;
 
 use super::{
-    string::{MessageFormatAutoQuoted, new_message_format},
+    string::{MessageFormatAutoQuoted, Quote, new_message_format},
     *,
 };
 use crate::{
@@ -3094,4 +3094,140 @@ fn test_nested_object_key_with_escaped_quotes() {
     };
 
     format_no_color(&rec);
+}
+
+// --- Key quoting (#1609)
+
+fn format_json_line(formatter: &RecordFormatter, input: &str) -> String {
+    let raw = RawRecord::parser()
+        .parse(input.as_bytes())
+        .next()
+        .unwrap()
+        .unwrap()
+        .record;
+    let record = Parser::new(ParserSettings::default()).parse(&raw);
+    formatter.format_to_string(&record)
+}
+
+fn key_quoting_formatter() -> RecordFormatterBuilder {
+    formatter().with_theme(Default::default()).with_flatten(true)
+}
+
+#[rstest]
+#[case::plain("status", KeyQuoting::Plain)]
+#[case::underscore("user_id", KeyQuoting::Plain)]
+#[case::dotted("http.method", KeyQuoting::Plain)]
+#[case::punctuation("a:b/c@d-e", KeyQuoting::Plain)]
+#[case::number("123", KeyQuoting::Plain)]
+#[case::literal_true("true", KeyQuoting::Plain)]
+#[case::literal_null("null", KeyQuoting::Plain)]
+#[case::brace("{x", KeyQuoting::Plain)]
+#[case::bracket("[x]", KeyQuoting::Plain)]
+#[case::non_ascii("имя", KeyQuoting::Plain)]
+#[case::empty("", KeyQuoting::Quoted(Quote::Double))]
+#[case::space("user name", KeyQuoting::Quoted(Quote::Double))]
+#[case::spaces_only("  ", KeyQuoting::Quoted(Quote::Double))]
+#[case::equal_sign("a=b", KeyQuoting::Quoted(Quote::Double))]
+#[case::single_quote("it's", KeyQuoting::Quoted(Quote::Double))]
+#[case::backtick("a`b", KeyQuoting::Quoted(Quote::Double))]
+#[case::double_quote(r#"say "hi""#, KeyQuoting::Quoted(Quote::Single))]
+#[case::double_and_single_quotes(r#"it's "x""#, KeyQuoting::Quoted(Quote::Backtick))]
+#[case::backslash(r"a\b", KeyQuoting::Quoted(Quote::Backtick))]
+#[case::backslash_and_quotes(r#"a\'b"c"#, KeyQuoting::Quoted(Quote::Backtick))]
+#[case::all_quotes(r#"a'b"c`d"#, KeyQuoting::JsonEscaped)]
+#[case::newline("line\nbreak", KeyQuoting::JsonEscaped)]
+#[case::tab("a\tb", KeyQuoting::JsonEscaped)]
+#[case::control("a\u{1}b", KeyQuoting::JsonEscaped)]
+fn test_key_quoting_of(#[case] key: &str, #[case] expected: KeyQuoting) {
+    assert_eq!(KeyQuoting::of(key.as_bytes()), expected);
+}
+
+#[rstest]
+#[case::plain("user_id", true, true, "user-id")]
+#[case::plain_no_prettify("user_id", false, true, "user_id")]
+#[case::empty("", true, true, r#""""#)]
+#[case::leading_trailing_spaces(" a ", true, true, r#"" a ""#)]
+#[case::space_prettified("user_name x", true, true, r#""user-name x""#)]
+#[case::single_quoted(r#"say "hi""#, true, true, r#"'say "hi"'"#)]
+#[case::backtick(r#"it's "x""#, true, true, r#"`it's "x"`"#)]
+#[case::escaped_prettified("a_b\nc", true, true, r#""a-b\nc""#)]
+#[case::escaped_no_prettify("a_b\tc", false, true, r#""a_b\tc""#)]
+#[case::no_quote("user name", true, false, "user name")]
+fn test_push_key(#[case] key: &str, #[case] prettify: bool, #[case] quote: bool, #[case] expected: &str) {
+    let mut buf = Vec::new();
+    push_key(&mut buf, key, prettify, quote);
+    assert_eq!(std::str::from_utf8(&buf).unwrap(), expected);
+}
+
+#[test]
+fn test_key_quoting_issue_example() {
+    let input = r#"{"ts":"2026-10-21T10:00:00Z","level":"info","msg":"hello","user name":"alice smith","a=b":"x","":"empty","n":{"inner key":3}}"#;
+    let formatter = key_quoting_formatter().build();
+    assert_eq!(
+        format_json_line(&formatter, input),
+        r#"26-10-21 10:00:00.000 |INF| hello "user name"="alice smith" "a=b"=x ""=empty n."inner key"=3"#
+    );
+}
+
+#[rstest]
+#[case::space(r#"{"user name":"alice smith"}"#, r#""user name"="alice smith""#)]
+#[case::equal_sign(r#"{"a=b":"x"}"#, r#""a=b"=x"#)]
+#[case::empty(r#"{"":"empty"}"#, r#"""=empty"#)]
+#[case::spaces_only(r#"{"  ":"x"}"#, r#""  "=x"#)]
+#[case::prettified(r#"{"user_id":1}"#, "user-id=1")]
+#[case::dotted(r#"{"http.method":"GET"}"#, "http.method=GET")]
+#[case::punctuation(r#"{"a:b/c@d":1}"#, "a:b/c@d=1")]
+#[case::number(r#"{"123":1}"#, "123=1")]
+#[case::literals(r#"{"true":1,"null":2}"#, "true=1 null=2")]
+#[case::non_ascii(r#"{"имя":1}"#, "имя=1")]
+#[case::nested_inner(r#"{"n":{"inner key":3}}"#, r#"n."inner key"=3"#)]
+#[case::nested_outer(r#"{"outer key":{"x":1}}"#, r#""outer key".x=1"#)]
+#[case::nested_single_quoted(r#"{"n":{"say \"hi\"":1}}"#, r#"n.'say "hi"'=1"#)]
+#[case::nested_backtick(r#"{"n":{"it's \"x\"":1}}"#, r#"n.`it's "x"`=1"#)]
+#[case::nested_escaped(r#"{"n":{"line\nbreak":2}}"#, r#"n."line\nbreak"=2"#)]
+#[case::kubernetes(r#"{"f":{"k:{\"type\":\"Ready\"}":1}}"#, r#"f.'k:{"type":"Ready"}'=1"#)]
+fn test_key_quoting_flattened(#[case] input: &str, #[case] expected: &str) {
+    let formatter = key_quoting_formatter().build();
+    assert_eq!(format_json_line(&formatter, input), expected);
+}
+
+#[rstest]
+#[case::nested_inner(r#"{"n":{"inner key":3}}"#, r#"n={ "inner key"=3 }"#)]
+#[case::nested_outer(r#"{"outer key":{"x":1}}"#, r#""outer key"={ x=1 }"#)]
+#[case::nested_escaped(r#"{"n":{"say \"hi\"":1,"line\nbreak":2}}"#, r#"n={ 'say "hi"'=1 "line\nbreak"=2 }"#)]
+fn test_key_quoting_not_flattened(#[case] input: &str, #[case] expected: &str) {
+    let formatter = key_quoting_formatter().with_flatten(false).build();
+    assert_eq!(format_json_line(&formatter, input), expected);
+}
+
+#[test]
+fn test_key_quoting_expanded() {
+    let formatter = key_quoting_formatter()
+        .with_expansion(Expansion {
+            mode: ExpansionMode::Always,
+        })
+        .build();
+    let result = format_json_line(&formatter, r#"{"msg":"m","user name":"a","n":{"inner key":3}}"#);
+    assert!(result.contains(r#"> "user name"=a"#), "{}", result);
+    assert!(result.contains(r#"> n."inner key"=3"#), "{}", result);
+}
+
+#[test]
+fn test_key_quoting_raw_fields() {
+    let formatter = key_quoting_formatter().with_raw_fields(true).build();
+    assert_eq!(
+        format_json_line(&formatter, r#"{"user name":"alice smith","a=b":"x","":"empty"}"#),
+        r#"user name="alice smith" a=b="x" ="empty""#
+    );
+}
+
+#[test]
+fn test_key_quoting_hide_filter_matches_original_key() {
+    let mut fields = IncludeExcludeKeyFilter::default();
+    fields.entry("user name").exclude();
+    let formatter = key_quoting_formatter().with_field_filter(fields.into()).build();
+    assert_eq!(
+        format_json_line(&formatter, r#"{"user name":"alice smith","a b":1}"#),
+        r#""a b"=1 ..."#
+    );
 }
