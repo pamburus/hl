@@ -96,7 +96,7 @@ The logfmt encoder writes a key bare when `is_bare_key` holds, and quoted as a J
 1. computing plain names (full names, and compact names using the same clipping rules and resolved punctuation);
 2. themed, padded badge rendering, used only by `pretty`.
 
-The structured formatter receives, per input, a pre-rendered value for the input field: the number as JSON/logfmt text, or the name as an encoded string. `SegmentProcessor` already gets a per-input prefix string. In structured mode the prefix is empty and the input index travels in a new per-call input context.
+The structured formatter receives, per record, the origin of the record in `RecordWithSource`: a reference to the input's descriptor and, when debug logging counts lines, the line number. The descriptor is built once per run and holds the input's name and the pre-rendered input field value (the number, or the compact or full name). The formatter itself is built before the inputs are known, so it holds no per-input data. The same origin gives repeat and collision diagnostics their source name and line (FR-009a, FR-027), and the `pretty` formatter ignores it.
 
 **Requested layouts**: computed from `--input-info` / `input-info` minus `auto`. The terminal-width logic in `main.rs` applies only to `pretty`.
 

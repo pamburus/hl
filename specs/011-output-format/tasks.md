@@ -249,12 +249,14 @@ description: "Task list for machine-readable output formats"
   - `report_dropped(source, line, kind, chunk)` with the preview rules;
   - `report_repeat` and `report_collision`;
   - the summary writer;
-  - a once-only exit hook (`std::sync::Once` plus a registered `Arc<DropStats>`);
-  - a thread-local record context (source index, line) that `SegmentProcessor` sets before calling `format_record` when debug logging is enabled, and `StructuredRecordFormatter` reads for repeat and collision entries.
+  - a once-only exit hook (`std::sync::Once` plus a registered `Arc<DropStats>`).
 - [ ] T035 [US4] In src/app.rs:
   - add `fn observe_dropped(&mut self, _chunk: &[u8], _kind: DropKind) {}` with a default body to `RecordObserver`;
   - in `SegmentProcessor::process`, call it for every unparsed chunk, remainder and prefix when `show_unparsed()` is false, skipping chunks that are empty or contain only whitespace;
-  - add an input context parameter (input index and base line) to `SegmentProcess::process`, and update all call sites in src/app.rs and benches/bench/ws/hl/combined.rs.
+  - add an input context parameter (input index and base line) to `SegmentProcess::process`, and update all call sites in src/app.rs and benches/bench/ws/hl/combined.rs;
+  - in src/model.rs, add `pub origin: Origin<'r>` to `RecordWithSource`, with `#[derive(Default, Clone, Copy)] pub struct Origin<'r> { pub input: Option<&'r InputDescriptor>, pub line: Option<u64> }` and a `with_origin` builder;
+  - add `InputDescriptor { index: usize, name: String }` (the input's name as given on the command line, or `<stdin>`), built once per run in `App::run` for every input, before any record is processed;
+  - `SegmentProcessor` fills `origin` from the input context, with `line` set only when lines are counted (T036, T037). The `pretty` formatter ignores it.
 - [ ] T036 [US4] In `cat` in src/app.rs, when `log::log_enabled!(log::Level::Debug)`:
   - the reader thread sends each segment with its base line number, counting `\n` with `memchr`, or the single-byte delimiter for `nul`/`cr` input;
   - `SegmentProcessor` advances a running line count per chunk.
@@ -267,7 +269,7 @@ description: "Task list for machine-readable output formats"
   - at the end of `App::run` in src/app.rs;
   - before `exit` in the Ctrl-C handlers in src/signal_unix.rs and src/signal_windows.rs;
   - before `process::exit` in `ExitOnWriteError::inspect` in src/main.rs (research R10).
-- [ ] T040 [US4] In src/formatting/structured.rs, replace the silent drops from T021 with `diagnostics::report_repeat` and `report_collision` calls, guarded by `log::log_enabled!(log::Level::Debug)`.
+- [ ] T040 [US4] In src/formatting/structured.rs, replace the silent drops from T021 with `diagnostics::report_repeat` and `report_collision` calls, guarded by `log::log_enabled!(log::Level::Debug)`. They take the source name from `rec.origin.input` and the line from `rec.origin.line`.
 
 **Checkpoint**: Run quickstart scenario 6, and commit.
 
@@ -318,8 +320,8 @@ description: "Task list for machine-readable output formats"
 - [ ] T047 [US1] In src/app.rs (research R8):
   - split `input_badges` into a name computation (full names, and compact names with the existing clipping and resolved punctuation) and the themed rendering for `pretty`;
   - compute the requested layouts as the configured set minus `auto`;
-  - pre-render a per-input field value (the number, or an encoded name), and pass the input index to the formatter through the input context from T035;
-  - add the field after the predefined section, with collision handling.
+  - add the pre-rendered input field value (the number, or the compact or full name) to `InputDescriptor` from T035, so it reaches the formatter through `RecordWithSource::origin`;
+  - in src/formatting/structured.rs, add the field after the predefined section, with collision handling.
 - [ ] T048 [US1] In src/main.rs, pass the requested input-info layouts unresolved to `App` for structured formats, and keep today's resolution for `pretty`.
 
 **Checkpoint**: Run quickstart scenario 8, and commit.
