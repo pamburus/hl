@@ -29,7 +29,7 @@ use hl::{
     pager::{PagerRole, PagerSelector, PagerWatcher},
     query::Query,
     settings::{AsciiModeOpt, InputInfo, Settings},
-    signal::SignalHandler,
+    signal::{SignalExitStatus, SignalHandler},
     theme::Theme,
     timeparse::parse_time,
     timezone::Tz,
@@ -53,6 +53,8 @@ fn bootstrap() -> Result<Settings> {
             .format_timestamp_millis()
             .init()
     }
+
+    log::info!("hl {} started", env!("VERSION"));
 
     let opt = cli::BootstrapOpt::parse().args;
 
@@ -411,8 +413,20 @@ fn run() -> Result<()> {
         opt.interrupt_ignore_count
     };
 
+    // In follow mode, a signal is the normal way to stop, so it is not reported as a failure.
+    let signal_exit_status = if opt.follow {
+        SignalExitStatus::Success
+    } else {
+        SignalExitStatus::Conventional
+    };
+
     // Run the app with signal handling.
-    SignalHandler::run(interrupt_ignore_count, std::time::Duration::from_secs(1), run)
+    SignalHandler::run(
+        interrupt_ignore_count,
+        std::time::Duration::from_secs(1),
+        signal_exit_status,
+        run,
+    )
 }
 
 fn main() {
@@ -420,6 +434,7 @@ fn main() {
         err.log(&AppInfo);
         process::exit(1);
     }
+    log::info!("shutdown complete");
 }
 
 struct AppInfo;
