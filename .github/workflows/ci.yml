@@ -3,8 +3,10 @@ name: ci
 on:
   push:
     branches: [develop, release/*]
+  # Pull requests to master are retargeted to develop. Checking them from the start gives them the checks that
+  # develop requires, because a base change alone does not trigger new runs.
   pull_request:
-    branches: [develop, release/*]
+    branches: [master, develop, release/*]
 
 permissions:
   contents: read
