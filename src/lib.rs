@@ -37,6 +37,7 @@ mod number;
 mod replay;
 mod scanning;
 mod serdex;
+mod signal_common;
 mod tee;
 mod vfs;
 #[cfg(windows)]

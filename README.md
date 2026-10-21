@@ -599,6 +599,8 @@ See other [screenshots](https://github.com/pamburus/hl-extra/blob/37b444fcd81256
     Runs without a pager in follow mode, following the changes in three log files in the current directory and sorting them chronologically at a default interval of 100ms.
     Preloads 100 lines from the end of each file before filtering.
 
+Follow mode runs until it is stopped. Stopping it with Ctrl-C or `SIGTERM` (e.g. `kill`, `docker stop`, or Kubernetes pod termination) exits with status 0.
+
 ### Configuration files
 
 * Configuration files are automatically loaded if found in predefined platform-specific locations.

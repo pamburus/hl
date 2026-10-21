@@ -52,6 +52,84 @@ function check_hash() {
     fi
 }
 
+function wait_for() {
+    local file="$1" pattern="$2"
+    for _ in $(seq 200); do
+        grep -q "$pattern" "$file" && return 0
+        sleep 0.05
+    done
+    echo "${BASH_SOURCE[1]}:${BASH_LINENO[0]}: Timed out waiting for '$pattern' in $file" >&2
+    return 1
+}
+
+function expect_exit() {
+    local pid="$1" expected="$2" actual=0
+    wait "$pid" || actual=$?
+    if [ "$actual" != "$expected" ]; then
+        echo "${BASH_SOURCE[1]}:${BASH_LINENO[0]}: Exit code mismatch: expected $expected, got $actual" >&2
+        return 1
+    fi
+}
+
+function expect_log() {
+    local file="$1" pattern="$2"
+    if ! grep -q "$pattern" "$file"; then
+        echo "${BASH_SOURCE[1]}:${BASH_LINENO[0]}: Missing '$pattern' in $file" >&2
+        return 1
+    fi
+}
+
+function test_signals() {
+    local dir pid
+    dir=$(mktemp -d)
+    local hl="${MAIN_EXECUTABLE:?} --config - --color never"
+    echo '{"level":"info","msg":"test"}' > "$dir/app.log"
+    mkfifo "$dir/stdin"
+
+    # SIGTERM in follow mode exits right away with success
+    HL_DEBUG_LOG=debug $hl --follow --paging never "$dir/app.log" < /dev/null > /dev/null 2> "$dir/err" & pid=$!
+    wait_for "$dir/err" "signal handler installed"
+    kill -TERM $pid
+    expect_exit $pid 0
+    expect_log "$dir/err" "received SIGTERM"
+    expect_log "$dir/err" "shutdown complete on signal 15"
+
+    # SIGINT in follow mode exits right away with success
+    HL_DEBUG_LOG=debug $hl --follow --paging never "$dir/app.log" < /dev/null > /dev/null 2> "$dir/err" & pid=$!
+    wait_for "$dir/err" "signal handler installed"
+    kill -INT $pid
+    expect_exit $pid 0
+    expect_log "$dir/err" "received SIGINT"
+
+    # SIGTERM is not subject to --interrupt-ignore-count
+    HL_DEBUG_LOG=debug $hl -P --interrupt-ignore-count 3 < "$dir/stdin" > /dev/null 2> "$dir/err" & pid=$!
+    exec 3> "$dir/stdin"
+    wait_for "$dir/err" "signal handler installed"
+    kill -TERM $pid
+    expect_exit $pid 143
+    exec 3>&-
+
+    # SIGINT is ignored up to --interrupt-ignore-count times
+    HL_DEBUG_LOG=debug $hl -P --interrupt-ignore-count 2 < "$dir/stdin" > /dev/null 2> "$dir/err" & pid=$!
+    exec 3> "$dir/stdin"
+    wait_for "$dir/err" "signal handler installed"
+    kill -INT $pid
+    wait_for "$dir/err" "interrupt ignored"
+    if grep -q "shutdown complete" "$dir/err"; then
+        echo "${BASH_SOURCE[0]}:${LINENO}: Exited on an ignored interrupt" >&2
+        return 1
+    fi
+    for _ in $(seq 10); do
+        kill -INT $pid
+        sleep 0.1
+        grep -q "shutdown complete on signal 2" "$dir/err" && break
+    done
+    expect_exit $pid 130
+    exec 3>&-
+
+    rm -rf "$dir"
+}
+
 function test() {
     cargo test --tests --workspace
     cargo build
@@ -82,6 +160,8 @@ function test() {
     printf '{"level":"info","msg":"a"}\n{"level":"info","msg":"b"}\r\n' | ${MAIN_EXECUTABLE:?} --config - --delimiter crlf --color never > /dev/null
     # Test multi-file input to exercise concurrent output path
     ${MAIN_EXECUTABLE:?} --config - sample/prometheus.log sample/prometheus.log --color never > /dev/null
+    # Test signal handling
+    test_signals
 
     # Test delimiter options with combined fixture containing all log formats
     local fixture="src/testing/assets/fixtures/delimiter/combined.log"
