@@ -25,15 +25,15 @@ description: "Task list for machine-readable output formats"
 - Test data longer than a couple of lines goes in `src/testing/assets/` (constitution VII).
 - Format with `just fmt-rust`, not plain `cargo fmt`.
 - Run `just ci` before every commit. Commit at each checkpoint at the latest.
-- No version bump on this branch; the PR merging it into `master` sets it.
+- No version bump on this branch; the PR merging it into `develop` sets it, and its commit ends with `Closes: #1481`.
 
 ---
 
-## Phase 0: Prerequisite refactoring (separate PR to `master`)
+## Phase 0: Prerequisite refactoring (separate PR to `develop`)
 
-**Purpose**: Behavior-neutral groundwork that later phases build on: per-record origin and per-input descriptors for the formatter, and the badge name computation split from its rendering (research R8, R9). It lands on `master` before this feature, like the quoted-key parser fix (#1607).
+**Purpose**: Behavior-neutral groundwork that later phases build on: per-record origin and per-input descriptors for the formatter, and the badge name computation split from its rendering (research R8, R9). It lands on `develop` before this feature, like the quoted-key parser fix (#1607).
 
-**Branch**: `refactor/record-origin` from `master`, in its own worktree. The PR bumps the version with `just bump` (no SemVer impact), and `feature/output-format` is rebased onto `master` after it merges.
+**Branch**: `refactor/record-origin` from `develop`, in its own worktree. The PR bumps the version with `just bump` (no SemVer impact, but it changes the built program), its commit carries `Refs: #1481` since it resolves no issue of its own, and `feature/output-format` is rebased onto `develop` after it merges.
 
 **Independent Test**: `pretty` and `--raw` output stay byte-identical: all existing tests pass unchanged, and `parse-and-format` in `benches/bench/ws/hl/combined.rs` doesn't regress.
 
@@ -47,9 +47,9 @@ description: "Task list for machine-readable output formats"
 - [ ] T000c In src/input.rs, add `pub struct InputDescriptor { pub index: usize, pub name: String }`. In src/model.rs, add `#[derive(Default, Clone, Copy)] pub struct Origin<'r> { pub input: Option<&'r InputDescriptor>, pub line: Option<u64> }`, a `pub origin: Origin<'r>` field on `RecordWithSource` defaulting to `Origin::default()`, and a `with_origin` builder. Existing constructors keep their signatures.
 - [ ] T000d In src/app.rs, add an input context parameter (`&InputDescriptor` for now) to `SegmentProcess::process`, and build the descriptors once per run in `cat`, `sort` and `follow`, before any record is processed. `SegmentProcessor` sets `origin.input` when it builds `RecordWithSource`. Update every call site in src/app.rs, src/app/tests.rs and benches/bench/ws/hl/combined.rs.
 - [ ] T000e In src/app.rs, split `App::input_badges` into a name computation (full names, and compact names with the existing clipping rules and resolved punctuation) and the themed, padded badge rendering, which uses the computed names. Badge output is unchanged.
-- [ ] T000f Run `just ci`. Compare `cargo bench --bench bench -- combined` with `master`. Bump with `just bump` after rebasing onto `master`, and open the PR with a `refactor(app): ...` title and the benchmark comparison.
+- [ ] T000f Run `just ci`. Compare `cargo bench --bench bench -- combined` with `develop`. Bump with `just bump` after rebasing onto `develop`, and open the PR with a `refactor(app): ...` title and the benchmark comparison.
 
-**Checkpoint**: The PR is merged into `master`, and `feature/output-format` is rebased onto it.
+**Checkpoint**: The PR is merged into `develop`, and `feature/output-format` is rebased onto it.
 
 ---
 
@@ -355,7 +355,7 @@ description: "Task list for machine-readable output formats"
 - [ ] T051 [P] Review the help text in src/cli.rs for `--output-format` and `--flatten`, and the comments in etc/defaults/config.toml, against contracts/cli.md.
 - [ ] T052 Run every quickstart.md scenario against `target/debug/hl` and fix any deviation from the expected results.
 - [ ] T053 Run `just uncovered` and add tests for uncovered changed lines. Document any that need environmental interaction, such as signal and console handlers (constitution V, SC-007).
-- [ ] T054 Run `cargo bench --bench bench -- combined` on `master` and on this branch. Record `pretty` before and after (SC-004: at most 5% regression) and structured against `pretty` (SC-005, a target) for the PR description.
+- [ ] T054 Run `cargo bench --bench bench -- combined` on `develop` and on this branch. Record `pretty` before and after (SC-004: at most 5% regression) and structured against `pretty` (SC-005, a target) for the PR description.
 - [ ] T055 Run `just ci` for the final gate.
 
 ---
@@ -364,7 +364,7 @@ description: "Task list for machine-readable output formats"
 
 ### Phase Dependencies
 
-- **Prerequisite refactoring (Phase 0)**: lands on `master` first, as its own PR; every later phase builds on it after the rebase.
+- **Prerequisite refactoring (Phase 0)**: lands on `develop` first, as its own PR; every later phase builds on it after the rebase.
 - **Setup (Phase 1)**: depends on Phase 0 being merged and rebased in.
 - **Foundational (Phase 2)**: depends on Setup; blocks every user story.
 - **US1 (Phase 3)**: depends on Foundational.
@@ -417,7 +417,7 @@ Task: "T020 Encoder trait and JsonEncoder in src/formatting/structured.rs and js
 
 ### MVP First (User Story 1)
 
-1. Phase 0 as a separate PR to `master`, then Phase 1 (Setup) and Phase 2 (Foundational).
+1. Phase 0 as a separate PR to `develop`, then Phase 1 (Setup) and Phase 2 (Foundational).
 2. Phase 3 (US1): JSON output with default output keys.
 3. **Stop and validate** with quickstart scenarios 1, 2 and 5. This alone covers the main use cases of #1481.
 
@@ -428,7 +428,7 @@ Task: "T020 Encoder trait and JsonEncoder in src/formatting/structured.rs and js
 3. US3: follow mode.
 4. US4: diagnostics.
 5. US1 continued: configurable keys, presets and the input field.
-6. Polish, then the PR to `master` with the version bump and the benchmark results.
+6. Polish, then the PR to `develop` with the version bump, the benchmark results and a `Closes: #1481` footer.
 
 Each step leaves `pretty` output byte-identical and `just ci` green.
 

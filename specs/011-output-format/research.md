@@ -2,7 +2,7 @@
 
 **Feature**: [spec.md](./spec.md) | **Plan**: [plan.md](./plan.md) | **Date**: 2026-10-21
 
-Each decision lists what was chosen, why, and what else was considered. References like `src/app.rs` describe the code as of `master` at `1dfc8536`.
+Each decision lists what was chosen, why, and what else was considered. References like `src/app.rs` describe the code as of commit `1dfc8536`.
 
 ## R1. Where structured output plugs into the pipeline
 

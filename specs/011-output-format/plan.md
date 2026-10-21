@@ -62,7 +62,7 @@ Details and rationale are in [research.md](./research.md).
 | V. Test-First & Quality | ✅ Pass | Unit, app-level and property tests per R17. Schema update followed by `cargo build` and then `just ci`. `just uncovered` after implementation. Coverage must not decrease (SC-007). |
 | VI. Specification Integrity | ✅ Pass | No FR or SC renumbering. Spec 005 is unaffected. FR-014 was reworded in place to record the hiding decision (R15). |
 | VII. Test Data Management | ✅ Pass | Fixture logs, expected outputs and preset configs live in `src/testing/assets/` (R17). |
-| Versioning of PRs | ✅ Pass | Commits on `feature/output-format` keep the version. The PR merging the feature into `master` sets the next minor pre-release (`0.37.0-alpha.1`, or as computed then). The `--flatten` default change keeps `pretty` output identical. Users whose configuration explicitly sets `flatten = "always"` get flattened JSON, which goes in the release notes. |
+| Versioning of PRs | ✅ Pass | Commits on `feature/output-format` keep the version. The PR merging the feature into `develop` sets the next minor pre-release (`0.37.0-alpha.1`, or as computed then), and its commit ends with `Closes: #1481`. The `--flatten` default change keeps `pretty` output identical. Users whose configuration explicitly sets `flatten = "always"` get flattened JSON, which goes in the release notes. |
 | Backwards compatibility | ✅ Pass | No option is removed or changes meaning. `auto` is additive, and existing explicit values behave as before. |
 
 **Post-design re-check**: unchanged, all pass. The design adds no new crate, no on-disk format change and no global mutable state beyond a once-only exit hook (R10), which is justified by Ctrl-C exiting outside `App::run`. SIGTERM handling is tracked separately (#1612).
@@ -134,7 +134,7 @@ README.md                          # MODIFY: options listing, usage section for 
 
 Phases for `/speckit-tasks` to break down. Each phase ends with `just ci` passing.
 
-0. **Prerequisite refactoring, separate PR to `master`**: record origin and per-input descriptors passed to the formatter, an input context for the line processor, and the badge name computation split from its rendering. No behavior change.
+0. **Prerequisite refactoring, separate PR to `develop`**: record origin and per-input descriptors passed to the formatter, an input context for the line processor, and the badge name computation split from its rendering. No behavior change.
 1. **Foundations**:
    - `FlattenOption::Auto` across the CLI, settings, defaults and schema, resolving to today's behavior for `pretty`;
    - the `--output-format` and `HL_OUTPUT_FORMAT` option;
