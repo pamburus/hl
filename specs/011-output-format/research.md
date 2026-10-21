@@ -125,11 +125,9 @@ The structured formatter receives, per input, a pre-rendered value for the input
 
 ## R10. Summaries at exit in follow mode (FR-020)
 
-**Decision**: Register a process-wide exit hook that writes the summaries. Call it at the end of `App::run`. `SignalHandler` also calls it just before `exit(130)` on SIGINT, and `ExitOnWriteError` just before its exit on a closed output. The hook runs at most once (`std::sync::Once`). Termination by SIGKILL can't be covered. Two related gaps are tracked separately and are out of scope for this feature:
-- SIGTERM is not handled, so it ends hl without summaries until #1612 adds handling. Once it does, the same hook is called there.
-- On Windows, hl installs no Ctrl-C handler (#1613), so Ctrl-C ends a follow run without summaries until that is fixed.
+**Decision**: Register a process-wide exit hook that writes the summaries. Call it at the end of `App::run`. `SignalHandler` also calls it just before `exit(130)` on Ctrl-C, both in the Unix SIGINT handler and in the Windows console control handler (#1614), and `ExitOnWriteError` just before its exit on a closed output. The hook runs at most once (`std::sync::Once`). Termination by SIGKILL can't be covered. SIGTERM is not handled yet, so it ends hl without summaries; handling it is tracked separately in #1612 and is out of scope for this feature, and once it lands the same hook is called there.
 
-**Rationale**: In follow mode the normal exit path is SIGINT, which exits from the signal thread without unwinding `App::run`.
+**Rationale**: In follow mode the normal exit path is Ctrl-C, which exits from the signal handler without unwinding `App::run`.
 
 ## R11. Flatten mode `auto` (FR-024, FR-025)
 
