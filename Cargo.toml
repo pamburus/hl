@@ -10,6 +10,24 @@ keywords = ["cli", "json", "log", "logfmt", "viewer"]
 categories = ["command-line-utilities", "development-tools", "parsing", "text-processing"]
 build = "build.rs"
 
+# Prebuilt binaries for `cargo binstall --git https://github.com/pamburus/hl hl`.
+# Binstall reads this manifest from the default branch and substitutes its version into the URLs,
+# so the default branch must carry the version of the latest release.
+[package.metadata.binstall]
+pkg-fmt = "tgz"
+bin-dir = "{ bin }{ binary-ext }"
+
+[package.metadata.binstall.overrides]
+x86_64-unknown-linux-gnu = { pkg-url = "{ repo }/releases/download/v{ version }/hl-linux-x86_64-gnu.tar.gz" }
+x86_64-unknown-linux-musl = { pkg-url = "{ repo }/releases/download/v{ version }/hl-linux-x86_64-musl.tar.gz" }
+aarch64-unknown-linux-gnu = { pkg-url = "{ repo }/releases/download/v{ version }/hl-linux-arm64-gnu.tar.gz" }
+aarch64-unknown-linux-musl = { pkg-url = "{ repo }/releases/download/v{ version }/hl-linux-arm64-musl.tar.gz" }
+x86_64-apple-darwin = { pkg-url = "{ repo }/releases/download/v{ version }/hl-macos-x86_64.tar.gz" }
+aarch64-apple-darwin = { pkg-url = "{ repo }/releases/download/v{ version }/hl-macos-arm64.tar.gz" }
+universal-apple-darwin = { pkg-url = "{ repo }/releases/download/v{ version }/hl-macos.tar.gz" }
+x86_64-pc-windows-msvc = { pkg-url = "{ repo }/releases/download/v{ version }/hl-windows.zip", pkg-fmt = "zip" }
+aarch64-pc-windows-msvc = { pkg-url = "{ repo }/releases/download/v{ version }/hl-windows-arm64.zip", pkg-fmt = "zip" }
+
 [workspace]
 members = [
   ".",
@@ -129,7 +147,7 @@ wyhash = "0.6"
 yaml = { package = "yaml-peg", version = "1" }
 
 [workspace.package]
-version = "0.36.5"
+version = "0.37.0-alpha.1"
 edition = "2024"
 repository = "https://github.com/pamburus/hl"
 license = "MIT"

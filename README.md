@@ -64,6 +64,12 @@ High-performance log viewer and processor that transforms logs in JSON and logfm
     cargo install --locked --git https://github.com/pamburus/hl.git
     ```
 
+* Install a prebuilt binary using [cargo-binstall](https://github.com/cargo-bins/cargo-binstall)
+
+    ```sh
+    cargo binstall --git https://github.com/pamburus/hl hl
+    ```
+
 * Download latest release from [download page](https://github.com/pamburus/hl/releases/latest)
 
 </details>
@@ -95,6 +101,12 @@ High-performance log viewer and processor that transforms logs in JSON and logfm
 
     ```sh
     cargo install --locked --git https://github.com/pamburus/hl.git
+    ```
+
+* Install a prebuilt binary using [cargo-binstall](https://github.com/cargo-bins/cargo-binstall)
+
+    ```sh
+    cargo binstall --git https://github.com/pamburus/hl hl
     ```
 
 </details>
@@ -131,6 +143,12 @@ High-performance log viewer and processor that transforms logs in JSON and logfm
 
     ```sh
     cargo install --locked --git https://github.com/pamburus/hl.git
+    ```
+
+* Install a prebuilt binary using [cargo-binstall](https://github.com/cargo-bins/cargo-binstall)
+
+    ```sh
+    cargo binstall --git https://github.com/pamburus/hl hl
     ```
 
 </details>
