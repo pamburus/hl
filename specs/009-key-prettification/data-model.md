@@ -47,3 +47,28 @@ N/A — This is a stateless boolean flag. No lifecycle transitions.
 
 - `prettify-field-keys` in TOML must be a boolean (`true` or `false`)
 - Invalid values cause a deserialization error (handled by serde)
+
+---
+
+## Amendment 2026-10-21: Key Quoting (#1609)
+
+No new config fields and no new formatter state. Quoting is gated on the existing `RecordFormatter::unescape_fields`.
+
+### Key quote style (derived per key)
+
+| Style | Chosen when the key… | Example |
+|-------|----------------------|---------|
+| Plain | is non-empty and has none of the trigger classes (research Decision 6) | `user-id` |
+| Double-quoted | has no `"`, backslash, control, tab or newline | `"user name"` |
+| Single-quoted | has `"` but no `'`, backslash, control, tab or newline | `'say "hi"'` |
+| Backtick-quoted | has a backslash, or both `"` and `'`, but no backtick, control, tab or newline | `` `it's "x"` ``, `` `a\b` `` |
+| JSON-escaped | anything else | `"line\nbreak"` |
+
+An empty key is double-quoted: `""`.
+
+### Modified functions
+
+| Function | Change |
+|----------|--------|
+| `KeyPrefix::push()` | Gains a quote flag; quotes the pushed segment when needed |
+| `FieldFormatter::begin()` | Writes the key through the shared key writer |

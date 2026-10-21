@@ -142,3 +142,60 @@ Add tests verifying:
 2. prettify=false: `k_a` stays `k_a`
 3. Flattened with prettify=false: `k_a.va.kb` preserves underscores in all segments
 4. raw_fields=true overrides prettify: keys not prettified
+
+---
+
+## Amendment 2026-10-21: Key Quoting (#1609)
+
+**Spec**: User Stories 2-5, FR-006 to FR-016, SC-004 to SC-007 in [spec.md](spec.md)
+
+### Summary
+
+Quote field keys in the human-readable output when they are empty or contain characters that make a field ambiguous. Keys are quoted by the same quote-character cascade as string values, but without the value-only checks (number-like, literals, `{`/`[`) and without trimming. Each flattened path segment is quoted on its own. Plain keys keep the current, allocation-free path.
+
+### Technical Context
+
+**Language/Version**: Rust (stable, edition 2024)
+**Primary Dependencies**: `encstr` (JSON escaping for the fallback quote style), `enumset` (character class masks)
+**Testing**: cargo test (unit tests in `src/formatting/tests.rs`)
+**Performance Goals**: No measurable regression for plain keys (FR-016, SC-007); one table-lookup pass over the key bytes, which are short
+**Constraints**: Output for plain keys byte-for-byte unchanged (SC-005); no new config option (spec Out of Scope)
+**Scale/Scope**: 1 source file modified (`src/formatting.rs`) plus tests
+
+### Constitution Check
+
+| Principle | Status | Notes |
+|-----------|--------|-------|
+| I. Performance First | PASS | Plain keys: one byte-class scan, no allocation. Allocation only in the rare escape fallback |
+| II. Composability & Modularity | PASS | New key format lives next to the value formats in the `string` module and reuses its character analysis |
+| III. User Experience & Intuitiveness | PASS | Removes ambiguous output; typical output unchanged |
+| IV. Reliability & Robustness | PASS | Control characters in keys are escaped, so a key can no longer break a line |
+| V. Test-First Development & Quality | PASS | Tests for every acceptance scenario and edge case; `just uncovered` after implementation |
+| VI. Specification & Cross-Reference Integrity | PASS | New IDs appended (FR-006+, SC-004+); nothing renumbered |
+| VII. Test Data Management | PASS | Test inputs are single-line records (<3 lines), inline is acceptable |
+
+No violations.
+
+### Source Code (files to modify)
+
+```text
+src/
+├── formatting.rs        # Key quoting in FieldFormatter::begin() and KeyPrefix::push(); new key format in `string` module
+└── formatting/
+    └── tests.rs         # Tests for key quoting
+```
+
+### Design Decisions
+
+See [research.md](research.md), Decisions 6-11.
+
+- **Decide on the original key**: Prettification only maps `_` to `-`, and neither is a trigger character, so the quoting decision can be made on the original key bytes (FR-012 holds). This lets both call sites write the opening quote, the (prettified) key, and the closing quote straight into their buffers.
+- **Quote-style cascade** (FR-008, FR-009): no `"`, control, tab, newline or backslash → `"…"`; else no `'` and none of those → `'…'`; else no backtick, control, tab or newline → `` `…` ``; else JSON-escaped double quotes. The backtick step never applies to keys with tabs or newlines, because keys are always single-line.
+- **Flattened prefix** (FR-010): `KeyPrefix::push()` quotes the segment it pushes, so `n."inner key"` and `"outer key".x` come out naturally.
+- **Non-flattened and expanded** (FR-011, FR-013): both go through `FieldFormatter::begin()`, so they get quoting with no extra work.
+- **`--raw-fields`** (FR-013): quoting is gated on `unescape_fields`, which is `false` with `--raw-fields`.
+- **Styling** (FR-015): quotes are written inside the `Element::Key` batch.
+
+### Known Limitation
+
+Top-level record keys that contain JSON escape sequences (for example `"say \"hi\""`) still make the record fail to parse and print raw. That is the unfinished part of the object key refactoring (#1313) and is out of scope here. Nested keys with escapes are already decoded and are covered by this fix.
