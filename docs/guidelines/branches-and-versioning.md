@@ -34,11 +34,12 @@ A forward merge:
 
 The version identifies a state of a release line, not a working branch.
 
-* Every pull request targeting a release line MUST bump the version according to the SemVer impact of its change. The impact is measured against the last release tag on that line.
+* Every pull request targeting a release line MUST bump the version according to the SemVer impact of its change, unless it cannot affect the built program (see below). The impact is measured against the last release tag on that line.
 * Pull requests targeting a feature branch MUST NOT change the version. Feature branches keep the version of the line they were branched from, and pick up its bumps by rebasing or merging as usual. The pull request that merges a feature branch into a release line follows the steps below like any other.
 * `release/*` branches MUST accept only patch-level changes: fixes and changes with no SemVer impact.
+* Pull requests that cannot affect the built program, such as changes to CI workflows, repository configuration under `.github/` and development guidelines, MUST NOT change the version.
 
-Each such pull request MUST set the version as follows, after rebasing onto the latest target branch:
+Every other pull request targeting a release line MUST set the version as follows, after rebasing onto the latest target branch:
 
 1. Run `git fetch -t && just previous-tag` to get the last release tag on the line (e.g., `v0.36.4`). Run `just version` to get the current version (e.g., `0.36.5-alpha.3`).
 2. Determine the next release the line now requires, from the highest-impact change since that tag, including this pull request:
@@ -46,7 +47,7 @@ Each such pull request MUST set the version as follows, after rebasing onto the 
    * new feature → next minor (`major.(minor+1).0`)
    * fixes only → next patch (`major.minor.(patch+1)`)
 3. If the current version is already a pre-release of that release, or of a higher one, run `just bump` to increment its alpha (e.g., `0.37.0-alpha.1` → `0.37.0-alpha.2`). Otherwise run `cargo set-version -p hl <next release>-alpha.1` (e.g., `cargo set-version -p hl 0.37.0-alpha.1`).
-4. Changes with no SemVer impact (docs, chores, CI, refactoring, dependency updates without behavior changes) MUST still run `just bump`, so every merged state of the line has a unique version.
+4. Changes with no SemVer impact that still affect the built program (refactoring, dependency updates without behavior changes, built-in help and other embedded text) MUST still run `just bump`, so every state of the line that can produce a different program has a unique version.
 
 Example: after `v0.36.4`, the first fix sets `0.36.5-alpha.1`, a later feature sets `0.37.0-alpha.1`, and a fix after that sets `0.37.0-alpha.2`.
 
