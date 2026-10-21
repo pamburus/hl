@@ -103,6 +103,7 @@ The `master` branch holds only the latest release and does not accept pull reque
 - **Keep changes focused**: One feature or bug fix per pull request
 - **Follow existing code style**: Match the style of the existing codebase
 - **Write clear commit messages**: Describe what and why, not just how
+- **Close issues from the commit message**: End the message with a `Closes: #N` footer when the commit resolves issue N. The issue closes when the release containing the commit reaches `master`; a `Closes` line in the pull request description has no effect, because pull requests target `develop`
 - **Update documentation**: If your changes affect user-facing behavior
 - **Add tests**: For new features or bug fixes when applicable
 - **Keep the PR description clear**: Explain the problem and your solution
