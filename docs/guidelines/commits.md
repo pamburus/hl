@@ -54,6 +54,20 @@ Examples:
 * ❌ Bad: `feat(formatting): implement prettify_field_keys in RecordFormatter struct`
 * ❌ Bad: `fix: update formatting.rs line 1211 to check prettify flag. All 1464 tests pass`
 
+## Issue references
+
+A commit that resolves an issue MUST end with a `Closes: #N` footer, one per resolved issue:
+
+```text
+fix(parser): handle timestamps with microsecond precision correctly
+
+Closes: #1234
+```
+
+This is a valid Conventional Commits footer and a GitHub closing keyword. Pull requests target `develop` rather than the default branch, so a closing keyword in a pull request description has no effect. The footer closes the issue when the release workflow fast-forwards `master` to a release that contains the commit, which is when the change becomes available to users.
+
+Other footers, such as `Refs: #N` for related issues, MAY be added alongside it.
+
 ## Rationale
 
 This workflow ensures:
