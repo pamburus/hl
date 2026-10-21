@@ -872,9 +872,9 @@ Advanced Options:
 
   * See [#132](https://github.com/pamburus/hl/issues/132) for how to repeat measurements
 
-[ci-img]: https://github.com/pamburus/hl/actions/workflows/ci.yml/badge.svg
+[ci-img]: https://github.com/pamburus/hl/actions/workflows/ci.yml/badge.svg?branch=develop
 [ci]: https://github.com/pamburus/hl/actions/workflows/ci.yml
-[cov-img]: https://codecov.io/gh/pamburus/hl/graph/badge.svg?token=464MN13408
+[cov-img]: https://codecov.io/gh/pamburus/hl/branch/develop/graph/badge.svg?token=464MN13408
 [cov]: https://codecov.io/gh/pamburus/hl
 [release-img]: https://img.shields.io/github/v/release/pamburus/hl?sort=semver
 [release]: https://github.com/pamburus/hl/releases/latest

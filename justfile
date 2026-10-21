@@ -131,7 +131,7 @@ coverage: (setup "coverage")
     @bash build/ci/coverage.sh
 
 [doc('Show uncovered changed lines comparing to {{base}}')]
-uncovered base="origin/master": (setup "coverage")
+uncovered base="origin/develop": (setup "coverage")
     @scripts/coverage-diff-analysis.py -q --ide-links {{ base }}
 
 [doc('Run benchmarks')]

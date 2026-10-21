@@ -33,10 +33,10 @@ jobs:
     steps:
       - name: Check if running on allowed branch
         run: |
-          if [[ "${{ github.ref_name }}" == "master" || "${{ github.ref_name }}" == "release/"* ]]; then
+          if [[ "${{ github.ref_name }}" == "develop" || "${{ github.ref_name }}" == "release/"* ]]; then
             echo "✅ Running on allowed branch: ${{ github.ref_name }}"
           else
-            echo "❌ Release workflow can only be triggered from 'master' or 'release/*' branches"
+            echo "❌ Release workflow can only be triggered from 'develop' or 'release/*' branches"
             echo "Current branch: ${{ github.ref_name }}"
             exit 1
           fi
@@ -256,11 +256,14 @@ jobs:
           # Check if release is marked as pre-release and publish accordingly
           IS_PRERELEASE=$(gh release view "${RELEASE_TAG:?}" --json isPrerelease --jq '.isPrerelease')
 
-          # Update latest tag if it exists and release is not a pre-release
+          # Update latest tag and master if the release is not a pre-release and is newer than the current latest one.
+          # Both point to the release commit rather than HEAD, because the target branch may have received other changes during the release.
+          # The push to master is a fast-forward, so it fails rather than dropping history if master is not an ancestor of the release.
           if [[ "${IS_PRERELEASE:?}" == "false" ]] && [ "$(git tag -l latest --merged HEAD)" = latest ]; then
             gh release edit "${RELEASE_TAG:?}" --tag "v${VERSION:?}" --draft=false --latest
-            git tag -f latest HEAD
+            git tag -f latest "v${VERSION:?}^{commit}"
             git push -f origin refs/tags/latest
+            git push origin "$(git rev-parse "v${VERSION:?}^{commit}"):refs/heads/master"
           else
             gh release edit "${RELEASE_TAG:?}" --tag "v${VERSION:?}" --draft=false
           fi

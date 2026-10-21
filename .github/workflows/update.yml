@@ -18,6 +18,10 @@ jobs:
   update-dependencies:
     name: Update dependencies
     runs-on: ubuntu-latest
+    env:
+      # Scheduled runs and manual runs on master update develop, because master holds only the latest release.
+      # Manual runs on any other branch, such as release/*, update that branch.
+      TARGET_BRANCH: ${{ (github.event_name == 'schedule' || github.ref_name == 'master') && 'develop' || github.ref_name }}
     steps:
       - name: Generate GitHub App Token
         id: generate-token
@@ -40,6 +44,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ env.TARGET_BRANCH }}
           token: ${{ steps.generate-token.outputs.token }}
 
       - name: Run cargo update
@@ -54,6 +59,7 @@ jobs:
         uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8.1.1
         with:
           token: ${{ steps.generate-token.outputs.token }}
+          base: ${{ env.TARGET_BRANCH }}
           commit-message: |
             build(deps): update dependencies
 

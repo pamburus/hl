@@ -1,0 +1,31 @@
+---
+name: Retarget pull requests to develop
+
+# The master branch holds only the latest release and is updated solely by the release workflow, but it stays the
+# default branch, so GitHub offers it as the base for new pull requests. This job moves such pull requests to develop,
+# where changes are integrated.
+#
+# It runs from `pull_request_target` so that pull requests from forks get a token that can change the base. It never
+# checks out the pull request's code.
+
+"on":
+  pull_request_target:
+    types: [opened, reopened, edited]
+    branches: [master]
+
+permissions:
+  pull-requests: write
+
+jobs:
+  retarget:
+    name: Retarget to develop
+    runs-on: ubuntu-latest
+    steps:
+      - name: Change base branch to develop
+        run: |
+          gh pr edit "${PR_NUMBER:?}" --repo "${REPO:?}" --base develop
+          gh pr comment "${PR_NUMBER:?}" --repo "${REPO:?}" --body "The base branch has been changed to \`develop\`. The \`master\` branch holds only the latest release and does not accept pull requests."
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
