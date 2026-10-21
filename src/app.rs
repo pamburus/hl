@@ -40,8 +40,8 @@ use crate::{
     fsmon::{self, EventKind},
     help,
     index::{Indexer, IndexerSettings, Timestamp},
-    input::{BlockEntry, Input, InputHolder, InputReference},
-    model::{Filter, Parser, ParserSettings, RawRecord, Record, RecordFilter, RecordWithSourceConstructor},
+    input::{BlockEntry, Input, InputDescriptor, InputHolder, InputReference},
+    model::{Filter, Origin, Parser, ParserSettings, RawRecord, Record, RecordFilter, RecordWithSourceConstructor},
     query::Query,
     scanning::{
         BufFactory, Delimit, Delimiter, Newline, Scanner, Search, SearchExt, Segment, SegmentBuf, SegmentBufFactory,
@@ -297,7 +297,13 @@ impl App {
     }
 
     fn cat(&self, inputs: Vec<InputHolder>, output: &mut Output) -> Result<()> {
-        let input_badges = self.input_badges(inputs.iter().map(|x| &x.reference));
+        let descriptors = inputs
+            .iter()
+            .map(|x| &x.reference)
+            .enumerate()
+            .map(Into::into)
+            .collect_vec();
+        let input_badges = self.input_badges(&descriptors);
 
         let inputs = inputs
             .into_iter()
@@ -318,24 +324,29 @@ impl App {
                 let mut tx = StripedSender::new(txi);
                 let scanner = Scanner::new(sfi, &self.options.delimiter);
                 for (i, mut input) in inputs.into_iter().enumerate() {
+                    let mut offset = 0;
                     for item in scanner.items(&mut input.stream.as_sequential()).with_max_segment_size(self.options.max_message_size.into()) {
-                        if tx.send((i, item?)).is_none() {
+                        let item = item?;
+                        let len = item.data().len();
+                        if tx.send((i, offset, item)).is_none() {
                             break;
                         }
+                        offset += len as u64;
                     }
                 }
                 Ok(())
             }));
             // spawn processing threads
             for (rxi, txo) in izip!(rxi, txo) {
-                scope.spawn(closure!(ref bfo, ref parser, ref sfi, ref input_badges, |_| {
+                scope.spawn(closure!(ref bfo, ref parser, ref sfi, ref descriptors, ref input_badges, |_| {
                     let mut processor = self.new_segment_processor(parser);
-                    for (i, segment) in rxi.iter() {
+                    for (i, offset, segment) in rxi.iter() {
                         let prefix = input_badges.as_ref().map(|b|b[i].as_str()).unwrap_or("");
                         match segment {
                             Segment::Complete(segment) => {
                                 let mut buf = bfo.new_buf();
-                                processor.process(segment.data(), &mut buf, prefix, None, &mut RecordIgnorer{});
+                                let origin = Origin::new(&descriptors[i], offset, segment.data().len());
+                                processor.process(segment.data(), &mut buf, origin, prefix, None, &mut RecordIgnorer{});
                                 sfi.recycle(segment);
                                 if txo.send((i, buf.into())).is_err() {
                                     break;
@@ -391,7 +402,13 @@ impl App {
         fs::create_dir_all(&cache_dir)?;
 
         let indexer = Indexer::new(self.options.concurrency, cache_dir, indexer_settings);
-        let input_badges = self.input_badges(inputs.iter().map(|x| &x.reference));
+        let descriptors = inputs
+            .iter()
+            .map(|x| &x.reference)
+            .enumerate()
+            .map(Into::into)
+            .collect_vec();
+        let input_badges = self.input_badges(&descriptors);
 
         let inputs = inputs
             .into_iter()
@@ -475,19 +492,27 @@ impl App {
             // spawn worker threads
             let mut workers = Vec::with_capacity(n);
             for (rxp, txw) in izip!(rxp, txw) {
-                workers.push(scope.spawn(closure!(ref parser, ref input_badges, |_| -> Result<()> {
-                    let mut processor = self.new_segment_processor(parser);
-                    for (block, ts_min, i, j) in rxp.iter() {
-                        let mut buf = Vec::with_capacity(2 * usize::try_from(block.size())?);
-                        let mut items = Vec::with_capacity(2 * usize::try_from(block.entries_valid())?);
-                        for line in block.into_entries()? {
-                            if line.is_empty() {
-                                continue;
-                            }
-                            let prefix = input_badges.as_ref().map(|b| b[i].as_str()).unwrap_or("");
-                            processor.process(
+                workers.push(scope.spawn(closure!(
+                    ref parser,
+                    ref descriptors,
+                    ref input_badges,
+                    |_| -> Result<()> {
+                        let mut processor = self.new_segment_processor(parser);
+                        for (block, ts_min, i, j) in rxp.iter() {
+                            let block_offset = block.offset();
+                            let mut buf = Vec::with_capacity(2 * usize::try_from(block.size())?);
+                            let mut items = Vec::with_capacity(2 * usize::try_from(block.entries_valid())?);
+                            for line in block.into_entries()? {
+                                if line.is_empty() {
+                                    continue;
+                                }
+                                let prefix = input_badges.as_ref().map(|b| b[i].as_str()).unwrap_or("");
+                                let origin =
+                                    Origin::new(&descriptors[i], block_offset + line.offset() as u64, line.len());
+                                processor.process(
                                 line.bytes(),
                                 &mut buf,
+                                origin,
                                 prefix,
                                 Some(1),
                                 &mut |record: &Record, location: Range<usize>| {
@@ -503,15 +528,16 @@ impl App {
                                     }
                                 },
                             );
-                        }
+                            }
 
-                        let buf = Arc::new(buf);
-                        if txw.send((OutputBlock { ts_min, buf, items }, i, j)).is_err() {
-                            break;
+                            let buf = Arc::new(buf);
+                            if txw.send((OutputBlock { ts_min, buf, items }, i, j)).is_err() {
+                                break;
+                            }
                         }
+                        Ok(())
                     }
-                    Ok(())
-                })));
+                )));
             }
             // spawn merger thread
             let merger = scope.spawn(|_| -> Result<()> {
@@ -577,7 +603,7 @@ impl App {
         Ok(())
     }
 
-    fn prepare_follow_badges<'a, I: IntoIterator<Item = &'a InputReference>>(&self, inputs: I) -> FollowBadges {
+    fn prepare_follow_badges(&self, inputs: &[InputDescriptor]) -> FollowBadges {
         let si = SyncIndicator::from(&self.options.theme.indicators.sync);
 
         let mut badges = self.input_badges(inputs);
@@ -591,7 +617,8 @@ impl App {
     }
 
     fn follow(&self, inputs: Vec<InputReference>, output: &mut Output) -> Result<()> {
-        let badges = self.prepare_follow_badges(inputs.iter());
+        let descriptors = inputs.iter().enumerate().map(Into::into).collect_vec();
+        let badges = self.prepare_follow_badges(&descriptors);
 
         let m = inputs.len();
         let n = self.options.concurrency;
@@ -614,9 +641,11 @@ impl App {
                     if let InputReference::File(path) = &input_ref {
                         meta = Some(fs::metadata(&path.canonical)?);
                     }
-                    let mut input = Some(input_ref.open()?.tail(self.options.tail, delimiter.clone())?);
+                    let mut input = input_ref.open()?.tail(self.options.tail, delimiter.clone())?;
                     let is_file = |meta: &Option<fs::Metadata>| meta.as_ref().map(|m|m.is_file()).unwrap_or(false);
                     let mut blocks = BlockScanner::new(&scanner, delimiter.clone(), self.options.max_message_size.into());
+                    blocks.start(input.position()?);
+                    let mut input = Some(input);
                     // Only a regular file is scanned again when it grows, so only there
                     // an unterminated tail is held back to be completed by the next scan.
                     // Without an input, a tail held from the previous one is flushed.
@@ -626,6 +655,8 @@ impl App {
                             Ok(!is_file)
                         } else {
                             blocks.scan(&mut std::io::empty(), i, &txi, false)?;
+                            // The next input is a newly opened file read from its start.
+                            blocks.start(0);
                             Ok(false)
                         }
                     };
@@ -672,8 +703,8 @@ impl App {
             let mut workers = Vec::with_capacity(n);
             for _ in 0..n {
                 let worker = scope.spawn(
-                    closure!(ref bfo, ref parser, ref sfi, ref badges, clone rxi, clone txo, |_| {
-                        self.process_segments(parser, bfo, sfi, badges, rxi, txo);
+                    closure!(ref bfo, ref parser, ref sfi, ref badges, ref descriptors, clone rxi, clone txo, |_| {
+                        self.process_segments(parser, bfo, sfi, badges, descriptors, rxi, txo);
                     }),
                 );
                 workers.push(worker);
@@ -700,17 +731,19 @@ impl App {
         Ok(())
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn process_segments(
         &self,
         parser: &Parser,
         bfo: &BufFactory,
         sfi: &SegmentBufFactory,
         badges: &FollowBadges,
-        rxi: Receiver<(usize, usize, Segment)>,
+        inputs: &[InputDescriptor],
+        rxi: Receiver<(usize, usize, u64, Segment)>,
         txo: Sender<(usize, Vec<u8>, TimestampIndex)>,
     ) {
         let mut processor = self.new_segment_processor(parser);
-        for (i, j, segment) in rxi.iter() {
+        for (i, j, offset, segment) in rxi.iter() {
             let prefix = badges
                 .input
                 .as_ref()
@@ -722,7 +755,8 @@ impl App {
                     let mut index_builder = TimestampIndexBuilder {
                         result: TimestampIndex::new(j),
                     };
-                    processor.process(segment.data(), &mut buf, prefix, None, &mut index_builder);
+                    let origin = Origin::new(&inputs[i], offset, segment.data().len());
+                    processor.process(segment.data(), &mut buf, origin, prefix, None, &mut index_builder);
                     sfi.recycle(segment);
                     if txo.send((i, buf, index_builder.result)).is_err() {
                         return;
@@ -857,14 +891,8 @@ impl App {
         ))
     }
 
-    fn input_badges<'a, I: IntoIterator<Item = &'a InputReference>>(&self, inputs: I) -> Option<Vec<String>> {
-        let name = |input: &InputReference| match input {
-            InputReference::Stdin => "<stdin>".to_owned(),
-            InputReference::File(path) => path.original.to_string_lossy().to_string(),
-        };
-
-        let names = inputs.into_iter().map(name).collect_vec();
-        let mut badges = names.iter().map(|x| x.graphemes(true).collect_vec()).collect_vec();
+    fn input_badges(&self, inputs: &[InputDescriptor]) -> Option<Vec<String>> {
+        let names = inputs.iter().map(|input| input.name.as_str()).collect_vec();
 
         let ii = self.options.input_info;
 
@@ -874,43 +902,67 @@ impl App {
             return None;
         }
 
-        if ii.contains(InputInfo::None) && badges.len() < 2 {
+        if ii.contains(InputInfo::None) && names.len() < 2 {
             return None;
         }
 
-        let num_width = format!("{}", badges.len()).len();
+        let names = if ii.contains(InputInfo::Compact) {
+            self.compact_input_names(&names)
+        } else {
+            names.iter().map(|x| x.graphemes(true).collect_vec()).collect_vec()
+        };
+
+        Some(self.render_input_badges(names))
+    }
+
+    /// Shortens the input names for compact input badges.
+    ///
+    /// A common prefix longer than 7 characters is replaced with the common-part
+    /// marker, keeping its last 4 characters, and names that are still too long
+    /// are clipped in the middle. The names are returned as grapheme clusters.
+    fn compact_input_names<'a>(&'a self, names: &[&'a str]) -> Vec<Vec<&'a str>> {
+        let mut names = names.iter().map(|x| x.graphemes(true).collect_vec()).collect_vec();
         let opt = &self.punctuation;
 
-        if ii.contains(InputInfo::Compact) {
-            let pl = common_prefix_len(&badges);
-            for badge in badges.iter_mut() {
-                let cl = opt.input_name_clipping.width();
-                if badge.len() > 24 + cl + pl {
-                    if pl > 7 {
-                        *badge = opt
-                            .input_name_common_part
-                            .graphemes(true)
-                            .chain(badge[pl - 4..pl + 8].iter().cloned())
-                            .chain(opt.input_name_clipping.graphemes(true))
-                            .chain(badge[badge.len() - 16..].iter().cloned())
-                            .collect();
-                    } else {
-                        *badge = badge[0..pl + 12]
-                            .iter()
-                            .cloned()
-                            .chain(opt.input_name_clipping.graphemes(true))
-                            .chain(badge[badge.len() - 12..].iter().cloned())
-                            .collect();
-                    }
-                } else if pl > 7 {
-                    *badge = opt
+        let pl = common_prefix_len(&names);
+        for name in names.iter_mut() {
+            let cl = opt.input_name_clipping.width();
+            if name.len() > 24 + cl + pl {
+                if pl > 7 {
+                    *name = opt
                         .input_name_common_part
                         .graphemes(true)
-                        .chain(badge[pl - 4..].iter().cloned())
+                        .chain(name[pl - 4..pl + 8].iter().cloned())
+                        .chain(opt.input_name_clipping.graphemes(true))
+                        .chain(name[name.len() - 16..].iter().cloned())
+                        .collect();
+                } else {
+                    *name = name[0..pl + 12]
+                        .iter()
+                        .cloned()
+                        .chain(opt.input_name_clipping.graphemes(true))
+                        .chain(name[name.len() - 12..].iter().cloned())
                         .collect();
                 }
+            } else if pl > 7 {
+                *name = opt
+                    .input_name_common_part
+                    .graphemes(true)
+                    .chain(name[pl - 4..].iter().cloned())
+                    .collect();
             }
         }
+
+        names
+    }
+
+    /// Renders themed input badges with the given input names, as grapheme clusters,
+    /// padded to the same width.
+    fn render_input_badges(&self, names: Vec<Vec<&str>>) -> Vec<String> {
+        let ii = self.options.input_info;
+        let mut badges = names;
+        let num_width = format!("{}", badges.len()).len();
+        let opt = &self.punctuation;
 
         if let Some(max_width) = badges.iter().map(|badge| grapheme_slice_width(badge)).max() {
             for badge in badges.iter_mut() {
@@ -965,7 +1017,7 @@ impl App {
             result.push(String::from_utf8(buf).unwrap());
         }
 
-        Some(result)
+        result
     }
 
     fn new_segment_processor<'a>(&'a self, parser: &'a Parser) -> impl SegmentProcess + 'a {
@@ -1037,6 +1089,7 @@ pub trait SegmentProcess {
         &mut self,
         data: &[u8],
         buf: &mut Vec<u8>,
+        origin: Origin<'_>,
         prefix: &str,
         limit: Option<usize>,
         observer: &mut O,
@@ -1086,14 +1139,22 @@ impl<'a, Formatter: RecordWithSourceFormatter, Filter: RecordFilter> SegmentProc
 impl<'a, Formatter: RecordWithSourceFormatter, Filter: RecordFilter> SegmentProcess
     for SegmentProcessor<'a, Formatter, Filter>
 {
-    fn process<O>(&mut self, data: &[u8], buf: &mut Vec<u8>, prefix: &str, limit: Option<usize>, observer: &mut O)
-    where
+    fn process<O>(
+        &mut self,
+        data: &[u8],
+        buf: &mut Vec<u8>,
+        origin: Origin<'_>,
+        prefix: &str,
+        limit: Option<usize>,
+        observer: &mut O,
+    ) where
         O: RecordObserver,
     {
         let mut i = 0;
         let limit = limit.unwrap_or(usize::MAX);
 
         for chunk in self.delim.split(data) {
+            let chunk_offset = chunk.as_ptr() as usize - data.as_ptr() as usize;
             if chunk.is_empty() {
                 if self.show_unparsed() {
                     buf.extend(prefix.as_bytes());
@@ -1136,8 +1197,12 @@ impl<'a, Formatter: RecordWithSourceFormatter, Filter: RecordFilter> SegmentProc
                         }
                     }
                     let prefix_range = begin..buf.len();
-                    self.formatter
-                        .format_record(buf, prefix_range, record.with_source(&chunk[ar.offsets]));
+                    let source_range = chunk_offset + ar.offsets.start..chunk_offset + ar.offsets.end;
+                    self.formatter.format_record(
+                        buf,
+                        prefix_range,
+                        record.with_source(&chunk[ar.offsets], origin.slice(source_range)),
+                    );
                     let end = buf.len();
                     observer.observe_record(&record, begin..end);
                     produced_some = true;
@@ -1194,11 +1259,15 @@ impl RecordObserver for RecordIgnorer {
 /// For the same reason it also keeps the unterminated tail of the stream: end of
 /// file in the middle of a line usually means the writer has not finished it
 /// yet, so the tail is held back and prepended to the data of the next scan.
+///
+/// Each segment is also sent with its byte offset in the stream, which keeps
+/// counting across scans until [`BlockScanner::start`] starts a new stream.
 struct BlockScanner<'a, D: Delimit> {
     scanner: &'a Scanner<D>,
     searcher: D::Searcher,
     max_segment_size: usize,
     block: usize,
+    offset: u64,
     tail: Vec<u8>,
 }
 
@@ -1209,8 +1278,16 @@ impl<'a, D: Delimit> BlockScanner<'a, D> {
             searcher: delimiter.into_searcher(),
             max_segment_size,
             block: 0,
+            offset: 0,
             tail: Vec::new(),
         }
+    }
+
+    /// Starts counting byte offsets from `offset` for a new stream, such as a replaced file,
+    /// or for a stream that is read from the middle, such as a file seeked to its tail.
+    /// Block numbers keep counting, as they must stay unique for the input.
+    fn start(&mut self, offset: u64) {
+        self.offset = offset;
     }
 
     /// Scans the held tail followed by `stream` up to its end.
@@ -1222,7 +1299,7 @@ impl<'a, D: Delimit> BlockScanner<'a, D> {
         &mut self,
         stream: &mut dyn Read,
         i: usize,
-        txi: &Sender<(usize, usize, Segment)>,
+        txi: &Sender<(usize, usize, u64, Segment)>,
         hold_tail: bool,
     ) -> Result<()> {
         let tail = std::mem::take(&mut self.tail);
@@ -1238,7 +1315,14 @@ impl<'a, D: Delimit> BlockScanner<'a, D> {
         } else {
             chained.insert(Cursor::new(tail).chain(stream))
         };
-        Self::send(self.scanner, self.max_segment_size, &mut self.block, reader, i, txi)?;
+        Self::send(
+            self.scanner,
+            self.max_segment_size,
+            (&mut self.block, &mut self.offset),
+            reader,
+            i,
+            txi,
+        )?;
         if let Some(reader) = holding {
             self.tail = reader.into_tail();
         }
@@ -1248,16 +1332,19 @@ impl<'a, D: Delimit> BlockScanner<'a, D> {
     fn send(
         scanner: &Scanner<D>,
         max_segment_size: usize,
-        block: &mut usize,
+        (block, offset): (&mut usize, &mut u64),
         stream: &mut dyn Read,
         i: usize,
-        txi: &Sender<(usize, usize, Segment)>,
+        txi: &Sender<(usize, usize, u64, Segment)>,
     ) -> Result<()> {
         for item in scanner.items(stream).with_max_segment_size(max_segment_size) {
-            if txi.send((i, *block, item?)).is_err() {
+            let item = item?;
+            let len = item.data().len();
+            if txi.send((i, *block, *offset, item)).is_err() {
                 break;
             }
             *block += 1;
+            *offset += len as u64;
         }
         Ok(())
     }

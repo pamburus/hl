@@ -7,8 +7,9 @@ use super::{
 };
 use crate::{
     datefmt::LinuxDateFormat,
+    input::InputDescriptor,
     model::{
-        Caller, Level, Parser, ParserSettings, RawArray, RawObject, RawRecord, Record, RecordFields,
+        Caller, Level, Origin, Parser, ParserSettings, RawArray, RawObject, RawRecord, Record, RecordFields,
         RecordWithSourceConstructor,
     },
     settings::{AsciiMode, MessageFormat, MessageFormatting},
@@ -597,8 +598,10 @@ fn test_caller() {
 #[test]
 fn test_no_op_record_with_source_formatter() {
     let formatter = NoOpRecordWithSourceFormatter;
+    let input = InputDescriptor::new(0, "test");
     let rec = Record::default();
-    let rec = rec.with_source(b"src");
+    let source = b"src";
+    let rec = rec.with_source(source, Origin::new(&input, 0, source.len()));
     formatter.format_record(&mut Buf::default(), 0..0, rec);
 }
 
@@ -608,8 +611,10 @@ fn test_record_with_source_formatter_ref() {
         delimiter: "\n".to_string(),
     };
     let formatter_ref = &formatter;
+    let input = InputDescriptor::new(0, "test");
     let rec = Record::default();
-    let rec = rec.with_source(b"test_source");
+    let source = b"test_source";
+    let rec = rec.with_source(source, Origin::new(&input, 0, source.len()));
     let mut buf = Buf::default();
     formatter_ref.format_record(&mut buf, 0..0, rec);
     assert_eq!(buf.as_slice(), b"test_source");
@@ -621,8 +626,10 @@ fn test_record_with_source_formatter_arc() {
     let formatter = Arc::new(RawRecordFormatter {
         delimiter: "\n".to_string(),
     });
+    let input = InputDescriptor::new(0, "test");
     let rec = Record::default();
-    let rec = rec.with_source(b"arc_test");
+    let source = b"arc_test";
+    let rec = rec.with_source(source, Origin::new(&input, 0, source.len()));
     let mut buf = Buf::default();
     formatter.format_record(&mut buf, 0..0, rec);
     assert_eq!(buf.as_slice(), b"arc_test");
@@ -633,8 +640,10 @@ fn test_raw_record_formatter_multiline_with_prefix() {
     let formatter = RawRecordFormatter {
         delimiter: "\n".to_string(),
     };
+    let input = InputDescriptor::new(0, "test");
     let rec = Record::default();
-    let rec = rec.with_source(b"line1\nline2\nline3");
+    let source = b"line1\nline2\nline3";
+    let rec = rec.with_source(source, Origin::new(&input, 0, source.len()));
     let mut buf = Buf::default();
     buf.extend_from_slice(b"#0 | ");
     let prefix_range = 0..buf.len();
@@ -2816,7 +2825,9 @@ fn test_ref_record_with_source_formatter() {
     };
 
     let mut buf = Vec::new();
-    call_formatter(&formatter, &mut buf, RecordWithSource::new(&rec, source));
+    let input = InputDescriptor::new(0, "test");
+    let origin = Origin::new(&input, 0, source.len());
+    call_formatter(&formatter, &mut buf, RecordWithSource::new(&rec, source, origin));
 
     assert_eq!(buf, source);
 }
