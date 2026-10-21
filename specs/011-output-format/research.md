@@ -14,17 +14,19 @@ Each decision lists what was chosen, why, and what else was considered. Referenc
 - A separate pipeline for structured output: duplicates the threading and merge logic of three modes, and the record sets could drift apart.
 - Serializing via `serde::Serialize` on a normalized struct: requires building an owned intermediate per record and gives no control over key order, deduplication or logfmt quoting.
 
-## R2. Normalized record: streaming fast path and tree slow path
+## R2. Normalized record: streaming with a precomputed output-key tree
 
-**Decision**: The formatter streams key/value pairs straight into the output buffer in the order of FR-005, FR-029 and FR-009. A slow path builds a small tree only when it is needed:
-- an output key contains a dot and the effective flatten mode is `never` (FR-027a); or
-- a regular object field shares the first path segment of such a key and must be merged.
+**Decision**: The formatter streams key/value pairs straight into the output buffer in the order of FR-005, FR-029 and FR-009.
 
-The slow path is decided once per formatter from the configuration. With default settings and the k8s preset, no output key has a dot, so the slow path is never taken.
+Dotted output keys (FR-027a) are handled by an output-key tree built once at startup from the configuration. It applies only when the effective flatten mode is `never` and at least one emitted output key contains a dot, which with the bundled configurations means the ECS preset in JSON mode. Each tree node is a group, such as `log` or `log.origin`, that lists the predefined entries it receives in FR-005 order. For each record:
+- a group is written once, at the position of its first predefined entry;
+- before a group's `{` is written, one scan of the record's fields at the same level looks for a regular object with the group's key;
+- the group's predefined entries are written first, then the matching regular object's other entries in source order, recursing for nested groups such as `log.origin`;
+- the matched regular field is marked as consumed, so it isn't written again among the regular fields.
 
-**Rationale**: SC-005 targets parity with `pretty`, whose formatter also streams. Building a tree per record would allocate in the hot path. Only the ECS preset in JSON mode needs merging, and it pays the cost only for the `log` group.
+**Rationale**: The tree's shape depends only on configuration, so per record the extra cost is one scan of a level's fields per group, plus the merge when a matching object exists. Nothing is allocated per record, so this path stays close to the plain streaming path and SC-005 still applies to it. With default settings and the k8s preset, no output key has a dot and the tree is empty.
 
-**Alternatives considered**: Always building a tree: simpler, but it allocates on every record and makes SC-005 unreachable for large records.
+**Alternatives considered**: Building a tree of the whole record per record: simpler, but it allocates on every record and makes SC-005 unreachable for large records.
 
 ## R3. Key uniqueness (FR-009a, FR-027)
 
@@ -123,7 +125,9 @@ The structured formatter receives, per input, a pre-rendered value for the input
 
 ## R10. Summaries at exit in follow mode (FR-020)
 
-**Decision**: Register a process-wide exit hook that writes the summaries. Call it at the end of `App::run`. `SignalHandler` also calls it just before `exit(130)` on SIGINT, and `ExitOnWriteError` just before its exit on a closed output. The hook runs at most once (`std::sync::Once`). Termination by SIGTERM or SIGKILL is not covered and is documented as such. On Windows, hl installs no Ctrl-C handler today (`src/signal_windows.rs`), so Ctrl-C ends a follow run without summaries. Adding a console control handler is out of scope and is documented as a platform limitation.
+**Decision**: Register a process-wide exit hook that writes the summaries. Call it at the end of `App::run`. `SignalHandler` also calls it just before `exit(130)` on SIGINT, and `ExitOnWriteError` just before its exit on a closed output. The hook runs at most once (`std::sync::Once`). Termination by SIGKILL can't be covered. Two related gaps are tracked separately and are out of scope for this feature:
+- SIGTERM is not handled, so it ends hl without summaries until #1612 adds handling. Once it does, the same hook is called there.
+- On Windows, hl installs no Ctrl-C handler (#1613), so Ctrl-C ends a follow run without summaries until that is fixed.
 
 **Rationale**: In follow mode the normal exit path is SIGINT, which exits from the signal thread without unwinding `App::run`.
 
@@ -176,7 +180,7 @@ The structured formatter receives, per input, a pre-rendered value for the input
 
 **Decision**:
 - Extend `benches/bench/ws/hl/combined.rs` with `format-json` and `format-logfmt` cases over the existing `elk01` and `int01` JSON and logfmt samples, next to `parse-and-format` (`pretty`) and `parse-only`.
-- Add a `structured` group with a sample that has nested objects and a dotted output key, to track the slow path separately.
+- Add a `structured` group with a sample that has nested objects and a dotted output key, to track the output-key tree path separately.
 - The PR reports the results for `pretty` before and after (SC-004, must not regress more than 5%) and structured against `pretty` (SC-005, a target).
 
 ## R17. Testing strategy (constitution V and VII)

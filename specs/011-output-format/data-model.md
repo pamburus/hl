@@ -51,7 +51,7 @@ A per-run table mapping each predefined field to its key in structured output (F
 
 **Derived values**:
 - **Path segments**: each key is split at dots. A key with more than one segment is a *dotted output key* (FR-027a).
-- **Slow path flag**: true when the effective flatten mode is `never` and at least one emitted key is dotted (research R2).
+- **Output-key tree**: built when the effective flatten mode is `never` and at least one emitted key is dotted; empty otherwise (research R2).
 
 ## CallerMode
 

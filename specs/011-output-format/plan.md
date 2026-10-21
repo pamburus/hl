@@ -13,7 +13,7 @@ Add `--output-format=pretty|json|logfmt`, also settable as `HL_OUTPUT_FORMAT`, s
 
 **Technical approach**:
 - **Formatter**: a new `StructuredRecordFormatter`, generic over a JSON or logfmt encoder, plugs into the existing `RecordWithSourceFormatter` boundary. Every mode (`cat`, `sort`, `follow`) and every record selection option is therefore reused unchanged.
-- **Normalization**: records are streamed straight into the output buffer. A small tree is built only when a dotted output key must be nested and merged (the ECS preset in JSON mode).
+- **Normalization**: records are streamed straight into the output buffer. Dotted output keys that must be nested and merged (the ECS preset in JSON mode) follow an output-key tree built once at startup, so no per-record tree is needed.
 - **Dropped lines**: unparsed lines and prefixes are reported through a new no-op-by-default `RecordObserver` hook. They are counted per input, logged at debug level with line numbers only when debug logging is enabled, and summarized at info level on exit.
 - **Configuration**: `--flatten` gains an `auto` default that resolves per output format. Predefined fields gain an `output-key` setting, which the ECS and k8s presets set.
 
@@ -65,7 +65,7 @@ Details and rationale are in [research.md](./research.md).
 | Versioning of PRs | ✅ Pass | Commits on `feature/output-format` keep the version. The PR merging the feature into `master` sets the next minor pre-release (`0.37.0-alpha.1`, or as computed then). The `--flatten` default change keeps `pretty` output identical. Users whose configuration explicitly sets `flatten = "always"` get flattened JSON, which goes in the release notes. |
 | Backwards compatibility | ✅ Pass | No option is removed or changes meaning. `auto` is additive, and existing explicit values behave as before. |
 
-**Post-design re-check**: unchanged, all pass. The design adds no new crate, no on-disk format change and no global mutable state beyond a once-only exit hook (R10), which is justified by SIGINT exiting outside `App::run`.
+**Post-design re-check**: unchanged, all pass. The design adds no new crate, no on-disk format change and no global mutable state beyond a once-only exit hook (R10), which is justified by SIGINT exiting outside `App::run`. SIGTERM handling (#1612) and Windows Ctrl-C handling (#1613) are tracked separately.
 
 ## Project Structure
 
@@ -144,7 +144,7 @@ Phases for `/speckit-tasks` to break down. Each phase ends with `just ci` passin
    - `Timestamp::format_rfc3339_utc`.
    - Unit tests first.
 3. **Normalizer, fast path**: predefined section, regular fields, hiding, flattening, key set, repeats and collisions. Wired into `App::new_formatter`. Structured mode in `main.rs` (no colors, no pager). Delivers User Stories 1 and 2 for default settings.
-4. **Normalizer, slow path**: dotted output keys, merging into regular objects, split caller, input field. Preset updates (FR-028).
+4. **Normalizer, output-key tree**: dotted output keys, merging into regular objects, split caller, input field. Preset updates (FR-028).
 5. **Diagnostics**: observer hook, DropStats, debug entries with line numbers (cat, follow, then sort), summaries and the exit hook. Delivers User Story 4.
 6. **Follow and polish**: follow flush (User Story 3), README and help text, benchmarks, property tests, `just uncovered`.
 
