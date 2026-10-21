@@ -53,6 +53,12 @@ jobs:
       - name: Update flake.lock
         run: nix flake update
 
+      # One pull request branch per target, so that runs for different targets do not overwrite each other's pull
+      # request. Slashes are replaced because the `update-*` branch filter of other workflows does not match them.
+      - name: Choose pull request branch
+        id: pr-branch
+        run: echo "name=update-flake-lock-${TARGET_BRANCH//\//-}" >> "${GITHUB_OUTPUT}"
+
       - name: Create pull request for flake.lock update
         id: create-pr
         uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8.1.1
@@ -60,7 +66,7 @@ jobs:
           token: ${{ steps.generate-token.outputs.token }}
           base: ${{ env.TARGET_BRANCH }}
           commit-message: "chore(deps): update nix flake dependencies"
-          branch: update-flake-lock
+          branch: ${{ steps.pr-branch.outputs.name }}
           title: "chore(deps): update flake.lock"
           body: "This pull request updates the flake.lock file with the latest flake inputs."
           author: "missionis[bot] <234988995+missionis[bot]@users.noreply.github.com>"
