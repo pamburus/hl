@@ -2500,9 +2500,13 @@ fn test_block_scanner_continues_numbering_across_scans() {
     let scanner = Scanner::new(sfi, Delimiter::default());
     let (txi, rxi) = channel::unbounded();
 
-    let mut blocks = BlockScanner::new(&scanner, SEGMENT_SIZE);
-    blocks.scan(&mut Cursor::new(b"a1\na2\n".to_vec()), 0, &txi).unwrap();
-    blocks.scan(&mut Cursor::new(b"b1\nb2\n".to_vec()), 0, &txi).unwrap();
+    let mut blocks = BlockScanner::new(&scanner, Delimiter::default(), SEGMENT_SIZE);
+    blocks
+        .scan(&mut Cursor::new(b"a1\na2\n".to_vec()), 0, &txi, true)
+        .unwrap();
+    blocks
+        .scan(&mut Cursor::new(b"b1\nb2\n".to_vec()), 0, &txi, true)
+        .unwrap();
     drop(txi);
 
     let text = |segment: &Segment| match segment {
@@ -2535,11 +2539,98 @@ fn test_block_scanner_stops_scanning_when_receiver_is_gone() {
     let (txi, rxi) = channel::unbounded::<(usize, usize, Segment)>();
     drop(rxi);
 
-    let mut blocks = BlockScanner::new(&scanner, SEGMENT_SIZE);
+    let mut blocks = BlockScanner::new(&scanner, Delimiter::default(), SEGMENT_SIZE);
     let mut input = Cursor::new(b"a1\na2\na3\na4\n".to_vec());
-    blocks.scan(&mut input, 0, &txi).unwrap();
+    blocks.scan(&mut input, 0, &txi, false).unwrap();
 
     // Only the first segment was read, and its failed hand-off was not counted.
     assert_eq!(input.position(), SEGMENT_SIZE as u64);
+    assert_eq!(blocks.block, 0);
+}
+
+/// Scans each chunk as a separate follow mode scan and returns the text of the
+/// segments sent after each of them.
+fn scan_chunks(segment_size: usize, chunks: &[(&[u8], bool)]) -> Vec<Vec<String>> {
+    let sfi = Arc::new(SegmentBufFactory::new(segment_size));
+    let scanner = Scanner::new(sfi, Delimiter::default());
+    let (txi, rxi) = channel::unbounded();
+    let mut blocks = BlockScanner::new(&scanner, Delimiter::default(), segment_size);
+
+    let text = |segment: Segment| match segment {
+        Segment::Complete(buf) | Segment::Incomplete(buf, _) => String::from_utf8_lossy(buf.data()).into_owned(),
+    };
+
+    chunks
+        .iter()
+        .map(|&(chunk, hold_tail)| {
+            blocks
+                .scan(&mut Cursor::new(chunk.to_vec()), 0, &txi, hold_tail)
+                .unwrap();
+            rxi.try_iter().map(|(_, _, segment)| text(segment)).collect_vec()
+        })
+        .collect()
+}
+
+#[test]
+fn test_block_scanner_completes_line_split_across_scans() {
+    // A writer may append a single line in several writes, each of them
+    // triggering a separate scan. The unterminated end of the first write must
+    // wait for the rest of its line instead of being sent as a line of its own.
+    let scanned = scan_chunks(
+        1024,
+        &[
+            (br#"{"msg":"a"}"#.as_slice(), true),
+            (b"\n{\"msg\":\"hel", true),
+            (b"lo\"}\n", true),
+        ],
+    );
+
+    assert_eq!(
+        scanned,
+        vec![
+            vec![],
+            vec!["{\"msg\":\"a\"}\n".to_owned()],
+            vec!["{\"msg\":\"hello\"}\n".to_owned()],
+        ]
+    );
+}
+
+#[test]
+fn test_block_scanner_flushes_held_tail() {
+    // When the input is replaced or ends, the held tail will not be completed
+    // and is sent as it is.
+    let scanned = scan_chunks(1024, &[(b"a1\na2", true), (b"", false)]);
+
+    assert_eq!(scanned, vec![vec!["a1\n".to_owned()], vec!["a2".to_owned()]]);
+}
+
+#[test]
+fn test_block_scanner_passes_overlong_tail() {
+    // An unterminated tail is not held back once it reaches the maximum segment
+    // size, as it would not fit in a single segment anyway.
+    let scanned = scan_chunks(4, &[(b"abcdefgh", true), (b"", true)]);
+
+    assert_eq!(scanned[0].concat(), "abcdefgh");
+    assert!(scanned[1].is_empty());
+}
+
+#[test]
+fn test_block_scanner_propagates_read_error() {
+    struct FailingReader;
+
+    impl Read for FailingReader {
+        fn read(&mut self, _: &mut [u8]) -> std::io::Result<usize> {
+            Err(std::io::Error::other("read error"))
+        }
+    }
+
+    let sfi = Arc::new(SegmentBufFactory::new(1024));
+    let scanner = Scanner::new(sfi, Delimiter::default());
+    let (txi, _rxi) = channel::unbounded();
+    let mut blocks = BlockScanner::new(&scanner, Delimiter::default(), 1024);
+
+    for hold_tail in [true, false] {
+        assert!(blocks.scan(&mut FailingReader, 0, &txi, hold_tail).is_err());
+    }
     assert_eq!(blocks.block, 0);
 }
