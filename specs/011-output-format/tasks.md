@@ -29,6 +29,30 @@ description: "Task list for machine-readable output formats"
 
 ---
 
+## Phase 0: Prerequisite refactoring (separate PR to `master`)
+
+**Purpose**: Behavior-neutral groundwork that later phases build on: per-record origin and per-input descriptors for the formatter, and the badge name computation split from its rendering (research R8, R9). It lands on `master` before this feature, like the quoted-key parser fix (#1607).
+
+**Branch**: `refactor/record-origin` from `master`, in its own worktree. The PR bumps the version with `just bump` (no SemVer impact), and `feature/output-format` is rebased onto `master` after it merges.
+
+**Independent Test**: `pretty` and `--raw` output stay byte-identical: all existing tests pass unchanged, and `parse-and-format` in `benches/bench/ws/hl/combined.rs` doesn't regress.
+
+### Tests (write first, confirm they fail)
+
+- [ ] T000a In src/app/tests.rs, with a capturing `RecordWithSourceFormatter`, check for `cat`, `sort` and `follow` over two inputs that each formatted record's `origin.input` refers to the descriptor of the input it came from (index and name, `<stdin>` for standard input), and that `origin.line` is `None`.
+- [ ] T000b [P] In src/app/tests.rs, test the new input name computation directly: full names and compact names (with clipping and the common-part marker) for the inputs already used by the `prepare_follow_badges` and `input_badges` tests. The existing badge tests stay unchanged and keep passing.
+
+### Implementation
+
+- [ ] T000c In src/input.rs, add `pub struct InputDescriptor { pub index: usize, pub name: String }`. In src/model.rs, add `#[derive(Default, Clone, Copy)] pub struct Origin<'r> { pub input: Option<&'r InputDescriptor>, pub line: Option<u64> }`, a `pub origin: Origin<'r>` field on `RecordWithSource` defaulting to `Origin::default()`, and a `with_origin` builder. Existing constructors keep their signatures.
+- [ ] T000d In src/app.rs, add an input context parameter (`&InputDescriptor` for now) to `SegmentProcess::process`, and build the descriptors once per run in `cat`, `sort` and `follow`, before any record is processed. `SegmentProcessor` sets `origin.input` when it builds `RecordWithSource`. Update every call site in src/app.rs, src/app/tests.rs and benches/bench/ws/hl/combined.rs.
+- [ ] T000e In src/app.rs, split `App::input_badges` into a name computation (full names, and compact names with the existing clipping rules and resolved punctuation) and the themed, padded badge rendering, which uses the computed names. Badge output is unchanged.
+- [ ] T000f Run `just ci`. Compare `cargo bench --bench bench -- combined` with `master`. Bump with `just bump` after rebasing onto `master`, and open the PR with a `refactor(app): ...` title and the benchmark comparison.
+
+**Checkpoint**: The PR is merged into `master`, and `feature/output-format` is rebased onto it.
+
+---
+
 ## Phase 1: Setup
 
 **Purpose**: Dependencies, module skeleton and test fixtures
@@ -253,10 +277,7 @@ description: "Task list for machine-readable output formats"
 - [ ] T035 [US4] In src/app.rs:
   - add `fn observe_dropped(&mut self, _chunk: &[u8], _kind: DropKind) {}` with a default body to `RecordObserver`;
   - in `SegmentProcessor::process`, call it for every unparsed chunk, remainder and prefix when `show_unparsed()` is false, skipping chunks that are empty or contain only whitespace;
-  - add an input context parameter (input index and base line) to `SegmentProcess::process`, and update all call sites in src/app.rs and benches/bench/ws/hl/combined.rs;
-  - in src/model.rs, add `pub origin: Origin<'r>` to `RecordWithSource`, with `#[derive(Default, Clone, Copy)] pub struct Origin<'r> { pub input: Option<&'r InputDescriptor>, pub line: Option<u64> }` and a `with_origin` builder;
-  - add `InputDescriptor { index: usize, name: String }` (the input's name as given on the command line, or `<stdin>`), built once per run in `App::run` for every input, before any record is processed;
-  - `SegmentProcessor` fills `origin` from the input context, with `line` set only when lines are counted (T036, T037). The `pretty` formatter ignores it.
+  - extend the input context from T000d with the base line number, and set `origin.line` only when lines are counted (T036, T037).
 - [ ] T036 [US4] In `cat` in src/app.rs, when `log::log_enabled!(log::Level::Debug)`:
   - the reader thread sends each segment with its base line number, counting `\n` with `memchr`, or the single-byte delimiter for `nul`/`cr` input;
   - `SegmentProcessor` advances a running line count per chunk.
@@ -318,9 +339,8 @@ description: "Task list for machine-readable output formats"
   - for groups hidden by user filters, emit only the predefined entries;
   - add the split caller.
 - [ ] T047 [US1] In src/app.rs (research R8):
-  - split `input_badges` into a name computation (full names, and compact names with the existing clipping and resolved punctuation) and the themed rendering for `pretty`;
   - compute the requested layouts as the configured set minus `auto`;
-  - add the pre-rendered input field value (the number, or the compact or full name) to `InputDescriptor` from T035, so it reaches the formatter through `RecordWithSource::origin`;
+  - add the pre-rendered input field value (the number, or the compact or full name) to `InputDescriptor` from T000c, using the names computed by T000e, so it reaches the formatter through `RecordWithSource::origin`;
   - in src/formatting/structured.rs, add the field after the predefined section, with collision handling.
 - [ ] T048 [US1] In src/main.rs, pass the requested input-info layouts unresolved to `App` for structured formats, and keep today's resolution for `pretty`.
 
@@ -344,7 +364,8 @@ description: "Task list for machine-readable output formats"
 
 ### Phase Dependencies
 
-- **Setup (Phase 1)**: no dependencies.
+- **Prerequisite refactoring (Phase 0)**: lands on `master` first, as its own PR; every later phase builds on it after the rebase.
+- **Setup (Phase 1)**: depends on Phase 0 being merged and rebased in.
 - **Foundational (Phase 2)**: depends on Setup; blocks every user story.
 - **US1 (Phase 3)**: depends on Foundational.
 - **US2 (Phase 4)**: depends on US1's `Encoder` trait, `StructuredRecordFormatter` and `JsonEncoder` (T020, T021); `LogfmtEncoder` reuses `JsonEncoder` for nested values.
@@ -396,7 +417,7 @@ Task: "T020 Encoder trait and JsonEncoder in src/formatting/structured.rs and js
 
 ### MVP First (User Story 1)
 
-1. Phase 1 (Setup) and Phase 2 (Foundational).
+1. Phase 0 as a separate PR to `master`, then Phase 1 (Setup) and Phase 2 (Foundational).
 2. Phase 3 (US1): JSON output with default output keys.
 3. **Stop and validate** with quickstart scenarios 1, 2 and 5. This alone covers the main use cases of #1481.
 

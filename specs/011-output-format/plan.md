@@ -134,6 +134,7 @@ README.md                          # MODIFY: options listing, usage section for 
 
 Phases for `/speckit-tasks` to break down. Each phase ends with `just ci` passing.
 
+0. **Prerequisite refactoring, separate PR to `master`**: record origin and per-input descriptors passed to the formatter, an input context for the line processor, and the badge name computation split from its rendering. No behavior change.
 1. **Foundations**:
    - `FlattenOption::Auto` across the CLI, settings, defaults and schema, resolving to today's behavior for `pretty`;
    - the `--output-format` and `HL_OUTPUT_FORMAT` option;
