@@ -8,6 +8,8 @@ Before starting any work, load and follow the project constitution at
 [`.specify/memory/constitution.md`](.specify/memory/constitution.md).
 Its principles are mandatory and take precedence over the guidelines below.
 
+Also follow [`docs/guidelines/branches-and-versioning.md`](docs/guidelines/branches-and-versioning.md) for branches and version bumps, and [`docs/guidelines/commits.md`](docs/guidelines/commits.md) for commits.
+
 ## Active Technologies
 
 - Rust (stable, edition 2024) + serde (config deserialization), clap (CLI argument parsing) (009-key-prettification)

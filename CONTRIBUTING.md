@@ -90,11 +90,13 @@ We welcome code contributions! Here's how to get started:
 
 ### Getting Started
 
-1. **Fork the repository** and create a new branch for your changes
+1. **Fork the repository** and create a new branch off `develop` for your changes
 2. **Set up your development environment** (see [Development Setup](#development-setup))
 3. **Make your changes** with clear, focused commits
 4. **Test your changes** thoroughly
-5. **Submit a pull request** with a clear description of your changes
+5. **Submit a pull request** against `develop` with a clear description of your changes
+
+The `master` branch holds only the latest release and does not accept pull requests. Pull requests opened against it are moved to `develop` automatically. See [Branches and Versioning](docs/guidelines/branches-and-versioning.md) for details.
 
 ### Pull Request Guidelines
 

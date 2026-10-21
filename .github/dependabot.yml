@@ -7,6 +7,7 @@ version: 2
 updates:
   - package-ecosystem: "github-actions"
     directory: "/"
+    target-branch: "develop"
     schedule:
       interval: "weekly"
       day: "monday"
@@ -19,6 +20,7 @@ updates:
       include: "scope"
   - package-ecosystem: "cargo"
     directory: "/"
+    target-branch: "develop"
     schedule:
       interval: weekly
       day: friday

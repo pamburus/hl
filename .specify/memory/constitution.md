@@ -1,17 +1,16 @@
 <!--
 Sync Impact Report:
-- Version: 1.5.0 → 1.6.0
+- Version: 1.6.0 → 2.0.0
 - Modified Sections:
-  - Development Workflow & Quality Gates (Versioning of Pull Requests): the bump is now derived from each PR's SemVer impact, for every PR targeting `master` or a `release/*` branch. Feature-branch PRs never bump. `release/*` branches accept only patch-level changes.
-  - Technology Stack & Standards (Compatibility): breaking changes bump the minor version while on 0.x, and the major version from 1.0 onwards.
-  - Development Workflow & Quality Gates (Backwards Compatibility): aligned with the 0.x rule. Compatibility is guaranteed across patch versions on 0.x, and across minor versions from 1.0 onwards.
-- Rationale: MINOR version bump. The versioning guidance is materially expanded: a SemVer-based bump for all PRs to release lines, release branches, and 0.x breaking-change handling. No principle is removed.
+  - Development Workflow & Quality Gates (Versioning): replaces "Versioning of Pull Requests" with the principle only. Branch roles, the release flow and the procedure moved to docs/guidelines/branches-and-versioning.md.
+  - Development Workflow & Quality Gates (Commits): replaces "Commit Workflow". The procedure and message guidelines moved to docs/guidelines/commits.md.
+- Rationale: MAJOR version bump. Procedures are removed, and the constitution no longer defines release lines, which keeps it to principles that do not depend on the branch setup.
 - Templates requiring updates:
   - ✅ plan-template.md: Compatible - no version-related steps
   - ✅ spec-template.md: Compatible - no version-related steps
   - ✅ tasks-template.md: Compatible - no version-related steps
 - Follow-up TODOs: none
-- Date: 2026-10-20
+- Date: 2026-10-21
 -->
 
 # hl (High-performance Log viewer) Constitution
@@ -112,78 +111,9 @@ Tests MUST use external data files instead of inline multiline string literals f
 
 **Backwards Compatibility**: From 1.0 onwards, maintained across minor versions. While on 0.x, maintained across patch versions. Breaking minor bumps are allowed but SHOULD be avoided. Deprecation period required before removing features.
 
-**Versioning of Pull Requests**: The version identifies a state of a release line (`master` or a `release/*` branch), not a working branch.
+**Versioning**: Every merged state of a release line has a unique version that reflects the SemVer impact of the changes since the line's last release. Branch roles, the release flow and the versioning procedure are in [Branches and Versioning](../../docs/guidelines/branches-and-versioning.md).
 
-- Every PR targeting `master` or a `release/*` branch MUST bump the version according to the SemVer impact of its change. The impact is measured against the last release tag on that line.
-- PRs targeting a feature branch MUST NOT change the version. Feature branches keep the version of the line they were branched from, and pick up its bumps by rebasing or merging as usual. The PR that merges a feature branch into a release line follows the steps below like any other PR.
-- `release/*` branches MUST accept only patch-level changes: fixes and changes with no SemVer impact.
-
-Each such PR MUST set the version as follows, after rebasing onto the latest target branch:
-
-1. Run `git fetch -t && just previous-tag` to get the last release tag on the line (e.g., `v0.36.4`). Run `just version` to get the current version (e.g., `0.36.5-alpha.3`).
-2. Determine the next release the line now requires, from the highest-impact change since that tag, including this PR:
-   - breaking change → next major (`(major+1).0.0`). While on 0.x, a breaking change bumps the minor version instead (`0.(minor+1).0`).
-   - new feature → next minor (`major.(minor+1).0`)
-   - fixes only → next patch (`major.minor.(patch+1)`)
-3. If the current version is already a pre-release of that release, or of a higher one, run `just bump` to increment its alpha (e.g., `0.37.0-alpha.1` → `0.37.0-alpha.2`). Otherwise run `cargo set-version <next release>-alpha.1` (e.g., `cargo set-version 0.37.0-alpha.1`).
-4. Changes with no SemVer impact (docs, chores, CI, refactoring, dependency updates without behavior changes) MUST still run `just bump`, so every merged state of the line has a unique version.
-
-Example: after `v0.36.4`, the first fix sets `0.36.5-alpha.1`, a later feature sets `0.37.0-alpha.1`, and a fix after that sets `0.37.0-alpha.2`.
-
-**Rationale**: Versions identify releases of a single line. Deriving the bump from the change's SemVer impact keeps the pre-release version an accurate preview of the next release. Assigning it only on the release line keeps every version unique and in order. If parallel feature branches each claimed the next minor alpha, they would produce identical pre-release versions with different contents, which violates SemVer's rule that a released version's contents never change, and early bumps would conflict with every bump on the line.
-
-**Commit Workflow**: When using speckit workflow commands, commits MUST follow this discipline:
-
-1. **Pre-commit Validation**: Before ANY commit, run `just ci` which executes:
-   - `check`: Cargo check for compilation errors
-   - `test`: Full test suite execution
-   - `lint`: Clippy warnings resolution
-   - `audit`: Security vulnerability checks
-   - `fmt-check`: Code formatting verification
-   - `check-schema`: JSON schema validation
-
-   ALL reported issues MUST be resolved before proceeding with the commit.
-
-2. **Conventional Commits**: After completing each speckit step, create a commit using conventional commit format:
-   - After `/speckit-specify`: `docs(spec): add [feature-name] specification`
-   - After `/speckit-clarify`: `docs(spec): clarify [aspect] in [feature-name]`
-   - After `/speckit-tasks`: `docs(tasks): generate task breakdown for [feature-name]`
-   - After `/speckit-implement`: `feat([scope]): [user-visible change]` or `fix([scope]): [user-visible fix]`
-
-3. **Commit Message Content Guidelines**:
-   Commit messages are used to automatically generate release notes and MUST focus on user-visible behavior:
-
-   **DO write about**:
-   - New features users can access
-   - Bug fixes that affect user experience
-   - Configuration options added or changed
-   - Command-line flags or arguments modified
-   - Output format changes
-   - Performance improvements users will notice
-   - Breaking changes requiring user action
-
-   **DO NOT write about**:
-   - Implementation details (functions, structs, modules)
-   - Source code references (file names, line numbers)
-   - Test statistics ("1464 tests passing")
-   - CI validation status ("Full CI validation passed")
-   - Internal refactoring unless it affects users
-   - Code quality metrics
-
-   **Exception**: Internal changes with no user-visible impact may include brief technical context, but still avoid source code specifics. Focus on "what changed" in system behavior, not "how it was implemented."
-
-   **Examples**:
-   - ✅ Good: `feat(config): add prettify-field-keys option to control key prettification`
-   - ✅ Good: `fix(parser): handle timestamps with microsecond precision correctly`
-   - ❌ Bad: `feat(formatting): implement prettify_field_keys in RecordFormatter struct`
-   - ❌ Bad: `fix: update formatting.rs line 1211 to check prettify flag. All 1464 tests pass`
-
-4. **Rationale**: This workflow ensures:
-   - Clean, atomic commits representing logical completion points
-   - All code passing quality gates before entering version control
-   - Clear commit history enabling easy navigation and rollback
-   - Prevention of broken commits that fail CI pipelines
-   - Release notes are immediately useful to end users
+**Commits**: Every commit passes `just ci`. Commit messages follow Conventional Commits and describe user-visible behavior, because they generate the release notes. Details are in [Commits](../../docs/guidelines/commits.md).
 
 ## Governance
 
@@ -197,4 +127,4 @@ This constitution supersedes all other practices and informal conventions. All P
 3. Documentation of rationale
 4. Migration plan for any breaking changes
 
-**Version**: 1.6.0 | **Ratified**: 2025-11-02 | **Last Amended**: 2026-10-20
+**Version**: 2.0.0 | **Ratified**: 2025-11-02 | **Last Amended**: 2026-10-21
