@@ -3,7 +3,8 @@ name: Retarget pull requests to develop
 
 # The master branch holds only the latest release and is updated solely by the release workflow, but it stays the
 # default branch, so GitHub offers it as the base for new pull requests. This job moves such pull requests to develop,
-# where changes are integrated.
+# where changes are integrated. Pull requests from develop or a release branch of this repository cannot be moved there,
+# and master receives their changes through releases, so they are closed instead.
 #
 # It runs from `pull_request_target` so that pull requests from forks get a token that can change the base. It never
 # checks out the pull request's code.
@@ -21,11 +22,17 @@ jobs:
     name: Retarget to develop
     runs-on: ubuntu-latest
     steps:
-      - name: Change base branch to develop
+      - name: Change base branch to develop or close
         run: |
-          gh pr edit "${PR_NUMBER:?}" --repo "${REPO:?}" --base develop
-          gh pr comment "${PR_NUMBER:?}" --repo "${REPO:?}" --body "The base branch has been changed to \`develop\`. The \`master\` branch holds only the latest release and does not accept pull requests."
+          if [[ "${HEAD_REPO:?}" == "${REPO:?}" && ( "${HEAD_REF:?}" == "develop" || "${HEAD_REF:?}" == release/* ) ]]; then
+            gh pr close "${PR_NUMBER:?}" --repo "${REPO:?}" --comment "The \`master\` branch holds only the latest release and is updated only by the release workflow. Changes from \`${HEAD_REF:?}\` reach it with the next release, so this pull request is closed."
+          else
+            gh pr edit "${PR_NUMBER:?}" --repo "${REPO:?}" --base develop
+            gh pr comment "${PR_NUMBER:?}" --repo "${REPO:?}" --body "The base branch has been changed to \`develop\`. The \`master\` branch holds only the latest release and does not accept pull requests."
+          fi
         env:
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           REPO: ${{ github.repository }}
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
