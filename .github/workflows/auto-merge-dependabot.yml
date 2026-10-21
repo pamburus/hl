@@ -4,6 +4,7 @@ name: Auto-merge Dependabot PRs
 "on":
   pull_request_target:
     types: [opened, synchronize, reopened]
+    branches: [develop, "release/**"]
 
 permissions:
   contents: read
