@@ -1,16 +1,15 @@
 <!--
 Sync Impact Report:
-- Version: 1.6.0 → 2.0.0
+- Version: 2.0.0 → 2.1.0
 - Modified Sections:
-  - Development Workflow & Quality Gates (Versioning): replaces "Versioning of Pull Requests" with the principle only. Branch roles, the release flow and the procedure moved to docs/guidelines/branches-and-versioning.md.
-  - Development Workflow & Quality Gates (Commits): replaces "Commit Workflow". The procedure and message guidelines moved to docs/guidelines/commits.md.
-- Rationale: MAJOR version bump. Procedures are removed, and the constitution no longer defines release lines, which keeps it to principles that do not depend on the branch setup.
+  - Development Workflow & Quality Gates (Versioning): changes that cannot affect the built program, such as CI workflows, no longer bump the version.
+- Rationale: MINOR version bump. The versioning rule is relaxed for changes outside the built program; no principle is removed.
 - Templates requiring updates:
   - ✅ plan-template.md: Compatible - no version-related steps
   - ✅ spec-template.md: Compatible - no version-related steps
   - ✅ tasks-template.md: Compatible - no version-related steps
 - Follow-up TODOs: none
-- Date: 2026-10-21
+- Date: 2026-10-22
 -->
 
 # hl (High-performance Log viewer) Constitution
@@ -111,7 +110,7 @@ Tests MUST use external data files instead of inline multiline string literals f
 
 **Backwards Compatibility**: From 1.0 onwards, maintained across minor versions. While on 0.x, maintained across patch versions. Breaking minor bumps are allowed but SHOULD be avoided. Deprecation period required before removing features.
 
-**Versioning**: Every merged state of a release line has a unique version that reflects the SemVer impact of the changes since the line's last release. Branch roles, the release flow and the versioning procedure are in [Branches and Versioning](../../docs/guidelines/branches-and-versioning.md).
+**Versioning**: Every merged state of a release line that can produce a different program has a unique version that reflects the SemVer impact of the changes since the line's last release. Changes that cannot affect the built program, such as CI workflows, keep the version. Branch roles, the release flow and the versioning procedure are in [Branches and Versioning](../../docs/guidelines/branches-and-versioning.md).
 
 **Commits**: Every commit passes `just ci`. Commit messages follow Conventional Commits and describe user-visible behavior, because they generate the release notes. Details are in [Commits](../../docs/guidelines/commits.md).
 
@@ -127,4 +126,4 @@ This constitution supersedes all other practices and informal conventions. All P
 3. Documentation of rationale
 4. Migration plan for any breaking changes
 
-**Version**: 2.0.0 | **Ratified**: 2025-11-02 | **Last Amended**: 2026-10-21
+**Version**: 2.1.0 | **Ratified**: 2025-11-02 | **Last Amended**: 2026-10-22
