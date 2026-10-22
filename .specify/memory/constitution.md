@@ -1,15 +1,15 @@
 <!--
 Sync Impact Report:
-- Version: 2.0.0 → 2.1.0
+- Version: 2.1.0 → 2.2.0
 - Modified Sections:
-  - Development Workflow & Quality Gates (Versioning): changes that cannot affect the built program, such as CI workflows, no longer bump the version.
-- Rationale: MINOR version bump. The versioning rule is relaxed for changes outside the built program; no principle is removed.
+  - V. Test-First Development & Quality: added Test Placement requirements, which put all tests of a module in its tests.rs and exclude tests.rs files from coverage.
+- Rationale: MINOR version bump. A new requirement is added; no principle is removed or redefined.
 - Templates requiring updates:
-  - ✅ plan-template.md: Compatible - no version-related steps
-  - ✅ spec-template.md: Compatible - no version-related steps
-  - ✅ tasks-template.md: Compatible - no version-related steps
+  - ✅ plan-template.md: Compatible - no test layout steps
+  - ✅ spec-template.md: Compatible - no test layout steps
+  - ✅ tasks-template.md: Compatible - test paths are given per task
 - Follow-up TODOs: none
-- Date: 2026-10-22
+- Date: 2026-10-23
 -->
 
 # hl (High-performance Log viewer) Constitution
@@ -59,6 +59,14 @@ After implementing any new feature, run `just uncovered` to identify changed lin
 - Aim to maintain or improve overall project coverage percentage
 
 This ensures new features are properly tested and maintains the high-quality bar established by existing code.
+
+**Test Placement Requirements:**
+- All tests of a module, including property-based tests, MUST be in a `tests.rs` file in the module's directory (`foo.rs` → `foo/tests.rs`), declared at the end of the module as `#[cfg(test)] mod tests;`
+- Test modules with other names or in other places MUST NOT be added
+- Test helpers shared by several modules belong in the `testing` module
+- All `tests.rs` files MUST be excluded from coverage reports, so that coverage measures only the code under test
+
+This keeps tests easy to find and keeps test code from inflating coverage.
 
 ### VI. Specification & Cross-Reference Integrity
 <!-- Maintain referential integrity across all documentation and code -->
@@ -126,4 +134,4 @@ This constitution supersedes all other practices and informal conventions. All P
 3. Documentation of rationale
 4. Migration plan for any breaking changes
 
-**Version**: 2.1.0 | **Ratified**: 2025-11-02 | **Last Amended**: 2026-10-22
+**Version**: 2.2.0 | **Ratified**: 2025-11-02 | **Last Amended**: 2026-10-23
