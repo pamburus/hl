@@ -1,7 +1,7 @@
 //! JSON encoding of structured output.
 
 // workspace imports
-use encstr::{AnyEncodedString, EncodedString};
+use encstr::{AnyEncodedString, EncodedString, Handler, JsonAppender, Token};
 
 // relative imports
 use super::{Encoder, NumberSource};
@@ -121,7 +121,8 @@ pub fn push_encoded_str(buf: &mut Vec<u8>, value: EncodedString) {
                 buf.extend(source.as_bytes());
             } else {
                 buf.push(b'"');
-                decode_json_str(&source[1..source.len() - 1], |s| push_str_content(buf, s));
+                // Strings in parsed records are terminated, so decoding can't fail half way.
+                _ = value.decode_lossy(JsonAppender::new(buf));
                 buf.push(b'"');
             }
         }
@@ -138,96 +139,9 @@ pub fn push_str(buf: &mut Vec<u8>, value: &str) {
 }
 
 /// Writes plain text as the content of a JSON string, escaping where required.
-/// Characters other than quotes, backslashes and control characters are written as is.
 #[inline]
 fn push_str_content(buf: &mut Vec<u8>, value: &str) {
-    let mut bytes = value.as_bytes();
-    while let Some(pos) = bytes.iter().position(|&b| b < 0x20 || b == b'"' || b == b'\\') {
-        buf.extend(&bytes[..pos]);
-        push_escape(buf, bytes[pos]);
-        bytes = &bytes[pos + 1..];
-    }
-    buf.extend(bytes);
-}
-
-#[inline]
-fn push_escape(buf: &mut Vec<u8>, byte: u8) {
-    const HEX: &[u8; 16] = b"0123456789abcdef";
-    buf.push(b'\\');
-    match byte {
-        b'"' | b'\\' => buf.push(byte),
-        b'\n' => buf.push(b'n'),
-        b'\r' => buf.push(b'r'),
-        b'\t' => buf.push(b't'),
-        b'\x08' => buf.push(b'b'),
-        b'\x0c' => buf.push(b'f'),
-        _ => buf.extend([b'u', b'0', b'0', HEX[(byte >> 4) as usize], HEX[(byte & 0xf) as usize]]),
-    }
-}
-
-/// Decodes the content of a JSON string, passing the decoded text to `push` in pieces.
-///
-/// Invalid escapes and lone surrogates are decoded as U+FFFD.
-pub fn decode_json_str(mut s: &str, mut push: impl FnMut(&str)) {
-    const REPLACEMENT: &str = "\u{fffd}";
-
-    while let Some(pos) = s.find('\\') {
-        push(&s[..pos]);
-        s = &s[pos + 1..];
-        let mut chars = s.chars();
-        let decoded = match chars.next() {
-            Some('"') => '"',
-            Some('\\') => '\\',
-            Some('/') => '/',
-            Some('b') => '\x08',
-            Some('f') => '\x0c',
-            Some('n') => '\n',
-            Some('r') => '\r',
-            Some('t') => '\t',
-            Some('u') => {
-                let (decoded, rest) = decode_unicode_escape(&s[1..]);
-                s = rest;
-                let mut tmp = [0; 4];
-                push(decoded.map(|c| &*c.encode_utf8(&mut tmp)).unwrap_or(REPLACEMENT));
-                continue;
-            }
-            Some(_) | None => {
-                push(REPLACEMENT);
-                s = chars.as_str();
-                continue;
-            }
-        };
-        let mut tmp = [0; 4];
-        push(decoded.encode_utf8(&mut tmp));
-        s = chars.as_str();
-    }
-    push(s);
-}
-
-/// Decodes the hex digits of a `\u` escape at the start of `s`, including a following
-/// low surrogate escape for a high surrogate. Returns the character, or `None` for an
-/// invalid escape or a lone surrogate, and the rest of `s`.
-fn decode_unicode_escape(s: &str) -> (Option<char>, &str) {
-    let hex = |s: &str| {
-        s.get(..4)
-            .filter(|h| h.bytes().all(|b| b.is_ascii_hexdigit()))
-            .and_then(|h| u16::from_str_radix(h, 16).ok())
-    };
-    let Some(n1) = hex(s) else {
-        return (None, s);
-    };
-    let s = &s[4..];
-    match n1 {
-        0xD800..=0xDBFF => match s.strip_prefix("\\u").and_then(|rest| Some((hex(rest)?, &rest[4..]))) {
-            Some((n2 @ 0xDC00..=0xDFFF, rest)) => {
-                let n = (((n1 - 0xD800) as u32) << 10 | (n2 - 0xDC00) as u32) + 0x1_0000;
-                (char::from_u32(n), rest)
-            }
-            _ => (None, s),
-        },
-        0xDC00..=0xDFFF => (None, s),
-        n => (char::from_u32(n as u32), s),
-    }
+    JsonAppender::new(buf).handle(Token::Sequence(value));
 }
 
 /// Writes a number in valid JSON syntax with the same value.

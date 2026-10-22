@@ -174,3 +174,25 @@ fn test_invalid_json_string_no_closing_quote() {
 fn test_invalid_json_string_no_opening_quote() {
     JsonEncodedString::new(r#"hello, world""#);
 }
+
+#[test]
+fn test_decode_lossy() {
+    let decode = |s| {
+        let mut result = Vec::new();
+        JsonEncodedString::new(s).decode_lossy(&mut result).unwrap();
+        String::from_utf8(result).unwrap()
+    };
+    assert_eq!(decode(r#""aA\n\/""#), "aA\n/");
+    assert_eq!(decode(r#""😀""#), "😀");
+    assert_eq!(decode(r#""a\ud800b""#), "a\u{fffd}b");
+    assert_eq!(decode(r#""\udc00""#), "\u{fffd}");
+    assert_eq!(decode(r#""\ud800A""#), "\u{fffd}A");
+    assert_eq!(decode(r#""\ud800𐀀""#), "\u{fffd}𐀀");
+    assert_eq!(decode(r#""\ud800\x""#), "\u{fffd}\u{fffd}");
+    assert_eq!(decode(r#""\q""#), "\u{fffd}");
+    assert!(
+        JsonEncodedString::new(r#""\u12""#)
+            .decode_lossy(&mut Vec::new())
+            .is_err()
+    );
+}

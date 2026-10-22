@@ -43,7 +43,7 @@ fn test_json_string_normalized() {
 fn test_raw_string_escaped() {
     assert_eq!(string(EncodedString::raw("plain")), r#""plain""#);
     assert_eq!(string(EncodedString::raw("a\"b\\c")), r#""a\"b\\c""#);
-    assert_eq!(string(EncodedString::raw("line\nnext\x7f")), "\"line\\nnext\x7f\"");
+    assert_eq!(string(EncodedString::raw("line\nnext\x7f")), r#""line\nnext\u007f""#);
     assert_eq!(string(EncodedString::raw("\x1b")), r#""\u001b""#);
     assert_eq!(string(EncodedString::raw("日本")), r#""日本""#);
 }
