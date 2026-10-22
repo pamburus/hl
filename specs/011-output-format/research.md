@@ -112,7 +112,7 @@ The structured formatter receives, per record, the origin of the record in `Reco
 - **Empty lines**: empty and whitespace-only lines are not dropped lines. They carry no content and are skipped silently, as `pretty` does with filters active.
 
 **Byte ranges** locate dropped content and records in their input, measured in the input's decoded data from where hl started reading it (after `--tail` positioning in follow mode):
-- **cat and follow**: the reader sends each segment with its base offset, a running sum of the segment sizes. In follow mode, `BlockScanner` keeps it across scans and resets it when the file is replaced or truncated. `SegmentProcessor` adds the chunk's position within the segment and the record's offsets within the chunk.
+- **cat and follow**: the reader sends each segment with its base offset, a running sum of the segment sizes. In follow mode, `BlockScanner` keeps it across scans and resets it when the file is replaced. This is in place since the record origin refactoring (#1630), which tracks the range of every record. `SegmentProcessor` adds the chunk's position within the segment and the record's offsets within the chunk.
 - **sort**: each entry already knows its position, the block offset plus the entry offset, so no extra pass is needed. Blocks skipped by the sort pusher (no valid entries, no timestamps, or excluded by level/time filters) but having invalid entries are sent to workers in a diagnostics-only mode: they are scanned for dropped lines and emit no records.
 
 **Summary**: on completion, `App::run` writes one info-level entry per input with a non-zero count (FR-020).

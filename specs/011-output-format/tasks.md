@@ -39,13 +39,13 @@ description: "Task list for machine-readable output formats"
 
 ### Tests (write first, confirm they fail)
 
-- [x] T000a In src/app/tests.rs, with a capturing `RecordWithSourceFormatter`, check for `cat`, `sort` and `follow` over two inputs that each formatted record's `origin.input` refers to the descriptor of the input it came from (index and name, `<stdin>` for standard input), and that `origin.range` is `None`.
+- [x] T000a In src/app/tests.rs, with a capturing `RecordWithSourceFormatter`, check for `cat`, `sort` and `follow` over two inputs that each formatted record's `origin.input` refers to the descriptor of the input it came from (index and name, `<stdin>` for standard input), and that `origin.range` is the record's byte range in that input, also across segments and index blocks.
 - [x] T000b [P] In src/app/tests.rs, test the new input name computation directly: full names and compact names (with clipping and the common-part marker) for the inputs already used by the `prepare_follow_badges` and `input_badges` tests. The existing badge tests stay unchanged and keep passing.
 
 ### Implementation
 
-- [x] T000c In src/input.rs, add `pub struct InputDescriptor { pub index: usize, pub name: String }`. In src/model.rs, add `#[derive(Clone, Debug, Default)] pub struct Origin<'r> { pub input: Option<&'r InputDescriptor>, pub range: Option<Range<u64>> }`, a `pub origin: Origin<'r>` field on `RecordWithSource` defaulting to `Origin::default()`, and a `with_origin` builder. Existing constructors keep their signatures.
-- [x] T000d In src/app.rs, add an input context parameter (`&InputDescriptor` for now) to `SegmentProcess::process`, and build the descriptors once per run in `cat`, `sort` and `follow`, before any record is processed. `SegmentProcessor` sets `origin.input` when it builds `RecordWithSource`. Update every call site in src/app.rs, src/app/tests.rs and benches/bench/ws/hl/combined.rs.
+- [x] T000c In src/input.rs, add `pub struct InputDescriptor { pub index: usize, pub name: String }`, with `From<(usize, String)>` and `From<(usize, &InputReference)>`. In src/model.rs, add `#[derive(Clone, Debug)] pub struct Origin<'r> { pub input: &'r InputDescriptor, pub range: Range<u64> }` with `new` and `slice`, a `pub origin: Option<Origin<'r>>` field on `RecordWithSource` (`None` for records built without one), and a `with_origin` builder. Existing constructors keep their signatures.
+- [x] T000d In src/app.rs, add the origin of the processed data (`Origin`) as a parameter of `SegmentProcess::process`, and build the descriptors once per run in `cat`, `sort` and `follow`, before any record is processed. Readers send each segment with its byte offset in the input: a running sum of segment sizes in `cat`, kept across scans by `BlockScanner` in `follow` and reset when a file is replaced, and the block offset plus the entry offset in `sort`. `SegmentProcessor` sets each record's origin to its slice of the data's origin. Update every call site in src/app.rs, src/app/tests.rs and benches/bench/ws/hl/combined.rs.
 - [x] T000e In src/app.rs, split `App::input_badges` into a name computation (full names, and compact names with the existing clipping rules and resolved punctuation) and the themed, padded badge rendering, which uses the computed names. Badge output is unchanged.
 - [x] T000f Run `just ci`. Compare `cargo bench --bench bench -- combined` with `develop`. Bump with `just bump` after rebasing onto `develop`, and open the PR with a `refactor(app): ...` title and the benchmark comparison.
 
@@ -277,14 +277,11 @@ description: "Task list for machine-readable output formats"
 - [ ] T035 [US4] In src/app.rs:
   - add `fn observe_dropped(&mut self, _chunk: &[u8], _kind: DropKind) {}` with a default body to `RecordObserver`;
   - in `SegmentProcessor::process`, call it for every unparsed chunk, remainder and prefix when `show_unparsed()` is false, skipping chunks that are empty or contain only whitespace;
-  - extend the input context from T000d with the segment's base byte offset, and set `origin.range` to the base offset plus the chunk's position in the segment plus the record's offsets in the chunk; pass the same kind of range to `observe_dropped` (T036, T037).
-- [ ] T036 [US4] In `cat` in src/app.rs:
-  - the reader thread sends each segment with its base byte offset, a running sum of the sizes of the segments sent for that input;
-  - wire a drop observer that updates `DropStats` and reports entries.
-- [ ] T037 [US4] In `follow` in src/app.rs, carry the base byte offset in `BlockScanner` across scans, reset it when the file is replaced or truncated, send it with each segment, and wire the drop observer in `process_segments`.
+  - pass the dropped content's origin, sliced from the data's origin from T000d, to `observe_dropped`.
+- [ ] T036 [US4] In `cat` in src/app.rs, wire a drop observer that updates `DropStats` and reports entries.
+- [ ] T037 [US4] In `follow` in src/app.rs, wire the drop observer in `process_segments`.
 - [ ] T038 [US4] In `sort` in src/app.rs (research R9):
-  - in structured mode, send blocks that the pusher would skip but whose `stat.entries_invalid > 0` to workers in a diagnostics-only mode, which reports drops and emits no items;
-  - pass each entry's base byte offset, the block offset plus the entry offset, in the input context.
+  - in structured mode, send blocks that the pusher would skip but whose `stat.entries_invalid > 0` to workers in a diagnostics-only mode, which reports drops and emits no items.
 - [ ] T039 [US4] Call the exit hook:
   - at the end of `App::run` in src/app.rs;
   - before `exit` in the Ctrl-C handlers in src/signal_unix.rs and src/signal_windows.rs;
@@ -370,7 +367,7 @@ description: "Task list for machine-readable output formats"
 - **US2 (Phase 4)**: depends on US1's `Encoder` trait, `StructuredRecordFormatter` and `JsonEncoder` (T020, T021); `LogfmtEncoder` reuses `JsonEncoder` for nested values.
 - **US3 (Phase 5)**: depends on US1 (T022); independent of US2 and US4.
 - **US4 (Phase 6)**: depends on Foundational. T040 depends on T021. The rest is independent of US2 and US3.
-- **US1 continued (Phase 7)**: depends on US1. T047 depends on T035, the input context.
+- **US1 continued (Phase 7)**: depends on US1. T047 depends on T000c, the input descriptor.
 - **Polish (Phase 8)**: depends on every phase.
 
 ### Within Each Phase
