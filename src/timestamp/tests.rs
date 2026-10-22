@@ -19,6 +19,27 @@ fn test_parse() {
     test("1597994448.123456", None, 1597994448, 123456000, 0);
     test("1597994448.123456789", None, 1597994448, 123456789, 0);
     test("-1.123456789", None, -2, 1000000000 - 123456789, 0);
+    // The integer part may be zero or left out, and the fraction may be left out.
+    test("0.5", None, 0, 500000000, 0);
+    test(".5", None, 0, 500000000, 0);
+    test("+.5", None, 0, 500000000, 0);
+    test("-0.5", None, -1, 500000000, 0);
+    test("-.5", None, -1, 500000000, 0);
+    test("5.", None, 5, 0, 0);
+    test("-5.", None, -5, 0, 0);
+    test("1597994448.", None, 1597994448, 0, 0);
+    test("-0.5", Some(UnixTimestampUnit::Milliseconds), -1, 999500000, 0);
+    test("-.5", Some(UnixTimestampUnit::Microseconds), -1, 999999500, 0);
+    // A fraction that rounds up to a whole second carries into the next one.
+    test("59.9999999999", None, 60, 0, 0);
+    test("1597994448.9999999996", None, 1597994449, 0, 0);
+    test("-0.9999999999", None, -1, 0, 0);
+    // The integer part may be as large as any integer timestamp.
+    test("-9223372036854775808.0", None, -9223372037, 145224192, 0);
+    // Fractions of nanoseconds are rounded, as in other units.
+    test("-1.7", Some(UnixTimestampUnit::Nanoseconds), -1, 999999998, 0);
+    test("-.7", Some(UnixTimestampUnit::Nanoseconds), -1, 999999999, 0);
+    test("1.5", Some(UnixTimestampUnit::Nanoseconds), 0, 2, 0);
     test(
         "1597994448123.456789",
         Some(UnixTimestampUnit::Milliseconds),
@@ -40,6 +61,22 @@ fn test_parse() {
         123456789,
         0,
     );
+}
+
+#[test]
+fn test_parse_out_of_range() {
+    let test = |s, unit| assert_eq!(Timestamp::new(s).with_unix_unit(Some(unit)).parse(), None, "{s}");
+    test("-8334601228800000.5", UnixTimestampUnit::Milliseconds);
+    test("-8334601228800000000.5", UnixTimestampUnit::Microseconds);
+    let max = format!("{}.9999999999", chrono::DateTime::<chrono::Utc>::MAX_UTC.timestamp());
+    test(&max, UnixTimestampUnit::Seconds);
+}
+
+#[test]
+fn test_parse_invalid_numbers() {
+    for s in [".", "-.", "+", "-", "1.2.3", "--1", "1-"] {
+        assert_eq!(Timestamp::new(s).parse(), None, "{s}");
+    }
 }
 
 #[test]
