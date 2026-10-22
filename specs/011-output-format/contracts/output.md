@@ -79,14 +79,14 @@ Diagnostic entries are written through hl's internal logger to stderr, in the lo
 
 | Level | When | Contains |
 |---|---|---|
-| debug | each dropped line, remainder or prefix | source name, line number, kind, preview (up to 100 characters) |
-| debug | a repeated key was resolved (FR-009a) | source name, line number, key |
-| debug | a regular field collided with a predefined or input output key (FR-027) | source name, line number, key |
+| debug | each dropped line, remainder or prefix | source name, byte range, kind, preview (up to 100 characters) |
+| debug | a repeated key was resolved (FR-009a) | source name, byte range of the record, key |
+| debug | a regular field collided with a predefined or input output key (FR-027) | source name, byte range of the record, key |
 | info | at exit, per source with drops | source name, number of dropped lines |
 
 Example with `HL_DEBUG_LOG=debug`:
 
 ```text
-[2026-10-21T10:00:00.000000Z DEBUG hl::app] dropped unparsed line: source=app.log line=17 preview="panic: runtime error: index out of range"
+[2026-10-21T10:00:00.000000Z DEBUG hl::app] dropped unparsed line: source=app.log range=1024..1064 preview="panic: runtime error: index out of range"
 [2026-10-21T10:00:00.000100Z INFO  hl::app] dropped 3 lines from app.log
 ```

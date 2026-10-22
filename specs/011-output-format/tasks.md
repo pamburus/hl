@@ -39,12 +39,12 @@ description: "Task list for machine-readable output formats"
 
 ### Tests (write first, confirm they fail)
 
-- [x] T000a In src/app/tests.rs, with a capturing `RecordWithSourceFormatter`, check for `cat`, `sort` and `follow` over two inputs that each formatted record's `origin.input` refers to the descriptor of the input it came from (index and name, `<stdin>` for standard input), and that `origin.line` is `None`.
+- [x] T000a In src/app/tests.rs, with a capturing `RecordWithSourceFormatter`, check for `cat`, `sort` and `follow` over two inputs that each formatted record's `origin.input` refers to the descriptor of the input it came from (index and name, `<stdin>` for standard input), and that `origin.range` is `None`.
 - [x] T000b [P] In src/app/tests.rs, test the new input name computation directly: full names and compact names (with clipping and the common-part marker) for the inputs already used by the `prepare_follow_badges` and `input_badges` tests. The existing badge tests stay unchanged and keep passing.
 
 ### Implementation
 
-- [x] T000c In src/input.rs, add `pub struct InputDescriptor { pub index: usize, pub name: String }`. In src/model.rs, add `#[derive(Default, Clone, Copy)] pub struct Origin<'r> { pub input: Option<&'r InputDescriptor>, pub line: Option<u64> }`, a `pub origin: Origin<'r>` field on `RecordWithSource` defaulting to `Origin::default()`, and a `with_origin` builder. Existing constructors keep their signatures.
+- [x] T000c In src/input.rs, add `pub struct InputDescriptor { pub index: usize, pub name: String }`. In src/model.rs, add `#[derive(Clone, Debug, Default)] pub struct Origin<'r> { pub input: Option<&'r InputDescriptor>, pub range: Option<Range<u64>> }`, a `pub origin: Origin<'r>` field on `RecordWithSource` defaulting to `Origin::default()`, and a `with_origin` builder. Existing constructors keep their signatures.
 - [x] T000d In src/app.rs, add an input context parameter (`&InputDescriptor` for now) to `SegmentProcess::process`, and build the descriptors once per run in `cat`, `sort` and `follow`, before any record is processed. `SegmentProcessor` sets `origin.input` when it builds `RecordWithSource`. Update every call site in src/app.rs, src/app/tests.rs and benches/bench/ws/hl/combined.rs.
 - [x] T000e In src/app.rs, split `App::input_badges` into a name computation (full names, and compact names with the existing clipping rules and resolved punctuation) and the themed, padded badge rendering, which uses the computed names. Badge output is unchanged.
 - [x] T000f Run `just ci`. Compare `cargo bench --bench bench -- combined` with `develop`. Bump with `just bump` after rebasing onto `develop`, and open the PR with a `refactor(app): ...` title and the benchmark comparison.
@@ -258,10 +258,10 @@ description: "Task list for machine-readable output formats"
   - the summary lists only inputs with a non-zero count;
   - the exit hook writes once even when called twice.
 - [ ] T033 [P] [US4] App-level tests in src/app/tests.rs with a capturing sink, for `cat`, `sort` and `follow` over mixed.log in JSON mode:
-  - counts and line numbers of dropped lines, remainders and prefixes are correct;
+  - counts and byte ranges of dropped lines, remainders and prefixes are correct;
   - empty and whitespace-only lines are neither counted nor reported;
   - in `sort`, dropped lines in blocks without timestamps, and in blocks excluded by a time filter, are still counted;
-  - the repeat and collision debug entries name the source, line and key (FR-009a, FR-027);
+  - the repeat and collision debug entries name the source, the record's byte range and the key (FR-009a, FR-027);
   - in `pretty` mode the sink receives nothing.
 
 ### Implementation for User Story 4
@@ -270,27 +270,26 @@ description: "Task list for machine-readable output formats"
   - `DropKind { Unparsed, Remainder, Prefix }`;
   - `DropStats` with `Arc<[AtomicU64]>` and source names;
   - a `DiagnosticSink` trait, whose default implementation writes through `log::debug!` and `log::info!`;
-  - `report_dropped(source, line, kind, chunk)` with the preview rules;
+  - `report_dropped(source, range, kind, chunk)` with the preview rules;
   - `report_repeat` and `report_collision`;
   - the summary writer;
   - a once-only exit hook (`std::sync::Once` plus a registered `Arc<DropStats>`).
 - [ ] T035 [US4] In src/app.rs:
   - add `fn observe_dropped(&mut self, _chunk: &[u8], _kind: DropKind) {}` with a default body to `RecordObserver`;
   - in `SegmentProcessor::process`, call it for every unparsed chunk, remainder and prefix when `show_unparsed()` is false, skipping chunks that are empty or contain only whitespace;
-  - extend the input context from T000d with the base line number, and set `origin.line` only when lines are counted (T036, T037).
-- [ ] T036 [US4] In `cat` in src/app.rs, when `log::log_enabled!(log::Level::Debug)`:
-  - the reader thread sends each segment with its base line number, counting `\n` with `memchr`, or the single-byte delimiter for `nul`/`cr` input;
-  - `SegmentProcessor` advances a running line count per chunk.
-  - Wire a drop observer that updates `DropStats` and reports entries.
-- [ ] T037 [US4] In `follow` in src/app.rs, carry the base line count in `BlockScanner` across scans when debug logging is enabled, and wire the drop observer in `process_segments`.
+  - extend the input context from T000d with the segment's base byte offset, and set `origin.range` to the base offset plus the chunk's position in the segment plus the record's offsets in the chunk; pass the same kind of range to `observe_dropped` (T036, T037).
+- [ ] T036 [US4] In `cat` in src/app.rs:
+  - the reader thread sends each segment with its base byte offset, a running sum of the sizes of the segments sent for that input;
+  - wire a drop observer that updates `DropStats` and reports entries.
+- [ ] T037 [US4] In `follow` in src/app.rs, carry the base byte offset in `BlockScanner` across scans, reset it when the file is replaced or truncated, send it with each segment, and wire the drop observer in `process_segments`.
 - [ ] T038 [US4] In `sort` in src/app.rs (research R9):
   - in structured mode, send blocks that the pusher would skip but whose `stat.entries_invalid > 0` to workers in a diagnostics-only mode, which reports drops and emits no items;
-  - when debug logging is enabled, compute per-block base line numbers for inputs with invalid entries, in a sequential pre-pass over the indexed input's stream.
+  - pass each entry's base byte offset, the block offset plus the entry offset, in the input context.
 - [ ] T039 [US4] Call the exit hook:
   - at the end of `App::run` in src/app.rs;
   - before `exit` in the Ctrl-C handlers in src/signal_unix.rs and src/signal_windows.rs;
   - before `process::exit` in `ExitOnWriteError::inspect` in src/main.rs (research R10).
-- [ ] T040 [US4] In src/formatting/structured.rs, replace the silent drops from T021 with `diagnostics::report_repeat` and `report_collision` calls, guarded by `log::log_enabled!(log::Level::Debug)`. They take the source name from `rec.origin.input` and the line from `rec.origin.line`.
+- [ ] T040 [US4] In src/formatting/structured.rs, replace the silent drops from T021 with `diagnostics::report_repeat` and `report_collision` calls, guarded by `log::log_enabled!(log::Level::Debug)`. They take the source name from `rec.origin.input` and the byte range from `rec.origin.range`.
 
 **Checkpoint**: Run quickstart scenario 6, and commit.
 

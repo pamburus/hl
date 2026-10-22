@@ -38,6 +38,10 @@
 - Q: Should `-h` hide predefined fields in structured output, although it does not in `pretty`? → A: Yes. Hide rules match predefined fields by their output keys, e.g. `-h caller` drops the caller, and `--hide-empty-fields` drops empty predefined values.
 - Q: Should empty or whitespace-only input lines be reported as dropped lines? → A: No. They are dropped without a diagnostic entry and are not counted in the summary.
 
+### Session 2026-10-22
+
+- Q: How should diagnostic entries locate a dropped line or a record in its input? → A: By the byte range of its content in the input. Line and column numbers are not tracked: the input delimiter may not be a newline, and the entries are only for debugging.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Emit filtered records as JSON for further processing (Priority: P1)
@@ -96,12 +100,12 @@ A user notices that fewer records came out than they expected and wants to know 
 
 **Why this priority**: Structured output must be clean, so non-record content is dropped silently. Users still need a way to see what was dropped without polluting stdout.
 
-**Independent Test**: Run hl with `--output-format=json` and `HL_DEBUG_LOG=debug` over a file mixing JSON records and plain-text lines; stdout contains only the JSON records, while the diagnostic log lists each dropped line with its source and line number and ends with a per-source summary.
+**Independent Test**: Run hl with `--output-format=json` and `HL_DEBUG_LOG=debug` over a file mixing JSON records and plain-text lines; stdout contains only the JSON records, while the diagnostic log lists each dropped line with its source and byte range and ends with a per-source summary.
 
 **Acceptance Scenarios**:
 
 1. **Given** an input containing non-record lines (e.g. stack traces, banners), **When** hl runs with `--output-format=json` and no diagnostic logging enabled, **Then** stdout contains only records and nothing is written about the dropped lines.
-2. **Given** the same input, **When** hl runs with `HL_DEBUG_LOG=debug`, **Then** each dropped line is reported in the diagnostic log at debug level with the source name, line number and a truncated preview of its content.
+2. **Given** the same input, **When** hl runs with `HL_DEBUG_LOG=debug`, **Then** each dropped line is reported in the diagnostic log at debug level with the source name, byte range and a truncated preview of its content.
 3. **Given** the same input, **When** hl runs with `HL_DEBUG_LOG=info`, **Then** only one summary entry per source is reported at info level, giving the number of dropped lines, and no per-line entries appear.
 
 ---
@@ -152,7 +156,7 @@ A user notices that fewer records came out than they expected and wants to know 
   - the file as a string under the `caller-file` output key, defaulting to `caller-file`;
   - the line under the `caller-line` output key, defaulting to `caller-line`. The line is a number when its value is numeric, and a string otherwise.
 - **FR-009**: All remaining fields MUST follow the predefined fields in the order they appear in the source record, under their original keys. Keys MUST NOT be prettified or otherwise transformed.
-- **FR-009a**: When a record contains the same key more than once at the same nesting level, the output MUST contain that key once. It MUST be placed at the position of the first occurrence and hold the value of the last occurrence. The other occurrences MUST be omitted, and a debug-level entry MUST be written to the diagnostic log naming the source, line number and repeated key.
+- **FR-009a**: When a record contains the same key more than once at the same nesting level, the output MUST contain that key once. It MUST be placed at the position of the first occurrence and hold the value of the last occurrence. The other occurrences MUST be omitted, and a debug-level entry MUST be written to the diagnostic log naming the source, the byte range of the record and the repeated key.
   - The same rule MUST apply to keys that become equal only after flattening, e.g. a nested `{"a":{"b":1}}` and a literal `"a.b"` key under `--flatten=always`.
   - FR-027 takes precedence: a regular field that collides with a predefined output key is dropped even if it is the last occurrence.
 - **FR-010**: Values from logfmt sources MUST be typed using the same rules hl applies when detecting value types: unquoted numbers become numbers, `true`/`false` become booleans, and `null` becomes null. All other values, and all quoted values, become strings.
@@ -167,7 +171,7 @@ A user notices that fewer records came out than they expected and wants to know 
 - **FR-016**: When `--raw` is in effect, it MUST take precedence over a structured `--output-format`, emitting the original source entries as today. This avoids hard errors when `HL_OUTPUT_FORMAT` is set in the environment and a user passes `-r` ad hoc.
 - **FR-017**: In structured modes, the system MUST NOT emit ANSI escape sequences, MUST NOT start a pager, and MUST NOT write anything to the output except records and delimiters. This applies regardless of `--color` and `--paging`. It excludes input badges, unparsed lines and prefixes. Input identification appears only as a record field (FR-029).
 - **FR-018**: In structured modes, the system MUST drop input lines that do not parse as records, as well as non-record prefixes before records.
-- **FR-019**: For each dropped line or prefix, the system MUST write a debug-level entry to the internal diagnostic log (controlled by `HL_DEBUG_LOG`). The entry contains the source name, the line number and a preview of the content truncated to a bounded length.
+- **FR-019**: For each dropped line or prefix, the system MUST write a debug-level entry to the internal diagnostic log (controlled by `HL_DEBUG_LOG`). The entry contains the source name, the byte range of the dropped content in the input and a preview of the content truncated to a bounded length.
 - **FR-020**: At the end of processing, the system MUST write one info-level entry per source that had dropped lines, giving the number of lines dropped from it. In follow mode, these summaries MUST be written when hl exits.
 - **FR-021**: Diagnostic log entries MUST be written to stderr only, never to the record output, and only when diagnostic logging is enabled.
 - **FR-022**: In follow mode, each matching record MUST be written and flushed as a complete entry as soon as it is emitted, so downstream readers never observe partial records.
@@ -182,7 +186,7 @@ A user notices that fewer records came out than they expected and wants to know 
   - Setting `output-key` for `caller-file` or `caller-line` switches the caller from the combined string to separate parts (FR-008a).
   - An empty `output-key`, or two predefined fields configured with the same output key, MUST be rejected with a configuration error that names the offending setting.
   - The configuration schema MUST describe the new setting.
-- **FR-027**: When a regular field has the same key as an emitted predefined field's output key, the predefined field MUST keep the key in structured output. The regular field MUST be omitted, and a debug-level entry MUST be written to the diagnostic log naming the source, line number and dropped key. Every key in an emitted record is therefore unique.
+- **FR-027**: When a regular field has the same key as an emitted predefined field's output key, the predefined field MUST keep the key in structured output. The regular field MUST be omitted, and a debug-level entry MUST be written to the diagnostic log naming the source, the byte range of the record and the dropped key. Every key in an emitted record is therefore unique.
 - **FR-027a**: An output key containing dots MUST be treated as a path of nested keys.
   - When the effective flatten mode is `always`, the predefined value MUST be emitted under the dotted key, e.g. `log.level=info`.
   - When it is `never`, the value MUST be emitted as a nested object, e.g. `{"log":{"level":"info"}}`.
@@ -205,7 +209,7 @@ A user notices that fewer records came out than they expected and wants to know 
 ### Key Entities
 
 - **Normalized record**: the structured representation hl emits for one source record. It consists of an ordered list of key/value pairs: the predefined fields in the fixed order of FR-005 under their output keys (FR-026), then the optional input field (FR-029), followed by the remaining visible fields in source order. All keys are unique (FR-009a, FR-027). Values are typed as string, number, boolean, null, object or array.
-- **Dropped line**: a contiguous piece of input that hl could not parse as a record, or a prefix preceding a record. It is identified by source and line number, reported in the diagnostic log, and counted per source.
+- **Dropped line**: a contiguous piece of input that hl could not parse as a record, or a prefix preceding a record. It is identified by source and byte range, reported in the diagnostic log, and counted per source.
 
 ## Success Criteria *(mandatory)*
 

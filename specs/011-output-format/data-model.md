@@ -121,7 +121,7 @@ The structured representation emitted for one source record. It is not materiali
 | Attribute | Description |
 |---|---|
 | source | input name: path as given on the command line, or `<stdin>` |
-| line | 1-based line number of the chunk's first byte. It counts newlines, or the configured single-byte delimiter for `nul` and `cr` input. Computed only when debug logging is enabled. |
+| range | byte range of the dropped content in the input's decoded data, counted from where hl started reading the input (research R9) |
 | kind | `unparsed` (a whole line), `remainder` (text after records on a line) or `prefix` (text before a record) |
 | preview | at most 100 characters, cut at a character boundary, with control characters escaped |
 

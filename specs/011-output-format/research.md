@@ -96,7 +96,7 @@ The logfmt encoder writes a key bare when `is_bare_key` holds, and quoted as a J
 1. computing plain names (full names, and compact names using the same clipping rules and resolved punctuation);
 2. themed, padded badge rendering, used only by `pretty`.
 
-The structured formatter receives, per record, the origin of the record in `RecordWithSource`: a reference to the input's descriptor and, when debug logging counts lines, the line number. The descriptor is built once per run and holds the input's name and the pre-rendered input field value (the number, or the compact or full name). The formatter itself is built before the inputs are known, so it holds no per-input data. The same origin gives repeat and collision diagnostics their source name and line (FR-009a, FR-027), and the `pretty` formatter ignores it.
+The structured formatter receives, per record, the origin of the record in `RecordWithSource`: a reference to the input's descriptor and the byte range of the record's source in the input. The descriptor is built once per run and holds the input's name and the pre-rendered input field value (the number, or the compact or full name). The formatter itself is built before the inputs are known, so it holds no per-input data. The same origin gives repeat and collision diagnostics their source name and byte range (FR-009a, FR-027), and the `pretty` formatter ignores it.
 
 **Requested layouts**: computed from `--input-info` / `input-info` minus `auto`. The terminal-width logic in `main.rs` applies only to `pretty`.
 
@@ -108,20 +108,20 @@ The structured formatter receives, per record, the origin of the record in `Reco
 - **Reporting hook**: `RecordObserver` gets a second method, `observe_dropped(&mut self, chunk: &[u8], kind: DropKind)`, with an empty default implementation. `SegmentProcessor` calls it for every non-empty unparsed chunk, remainder after records, and prefix, but only when `show_unparsed()` is false.
 - **Where it applies**: in structured modes, `allow_unparsed_data` is always false. In `pretty`, the observers keep the empty default, so the `pretty` path compiles to the same code.
 - **Counting**: the drop observer increments a per-input counter (`Arc<[AtomicU64]>`).
-- **Per-line entries**: only when `log::log_enabled!(log::Level::Debug)` holds, the observer also writes a debug entry with the source name, line number and a preview of at most 100 characters. The preview is cut at a character boundary and its control characters are escaped.
+- **Per-line entries**: only when `log::log_enabled!(log::Level::Debug)` holds, the observer also writes a debug entry with the source name, byte range and a preview of at most 100 characters. The preview is cut at a character boundary and its control characters are escaped.
 - **Empty lines**: empty and whitespace-only lines are not dropped lines. They carry no content and are skipped silently, as `pretty` does with filters active.
 
-**Line numbers** are computed only when debug logging is enabled:
-- **cat and follow**: the reader assigns each segment its base line number by counting newlines (or the configured single-byte delimiter for `nul`/`cr` input) as segments are sent. `SegmentProcessor` keeps a running count while it walks the chunks.
-- **sort**: blocks are processed out of order, so a pre-pass computes the base line number of each block for inputs whose index reports invalid entries. It reads the input once through the indexed input's random-access stream and counts newlines. Blocks skipped by the sort pusher (no valid entries, no timestamps, or excluded by level/time filters) but having invalid entries are sent to workers in a diagnostics-only mode: they are scanned for dropped lines and emit no records.
+**Byte ranges** locate dropped content and records in their input, measured in the input's decoded data from where hl started reading it (after `--tail` positioning in follow mode):
+- **cat and follow**: the reader sends each segment with its base offset, a running sum of the segment sizes. In follow mode, `BlockScanner` keeps it across scans and resets it when the file is replaced or truncated. `SegmentProcessor` adds the chunk's position within the segment and the record's offsets within the chunk.
+- **sort**: each entry already knows its position, the block offset plus the entry offset, so no extra pass is needed. Blocks skipped by the sort pusher (no valid entries, no timestamps, or excluded by level/time filters) but having invalid entries are sent to workers in a diagnostics-only mode: they are scanned for dropped lines and emit no records.
 
 **Summary**: on completion, `App::run` writes one info-level entry per input with a non-zero count (FR-020).
 
-**Rationale**: The common case has no debug logging, so the only added cost is an atomic increment per dropped line. Line-number bookkeeping happens only in diagnostic runs, where speed doesn't matter. The observer hook already exists for timestamp indexing, so the extension follows its pattern.
+**Rationale**: The common case has no debug logging, so the only added cost is an atomic increment per dropped line. Byte ranges cost a few additions per segment and per record, and need no scan of the data. The observer hook already exists for timestamp indexing, so the extension follows its pattern.
 
 **Alternatives considered**:
-- Adding per-block line counts to the on-disk index: requires a schema and version change, and invalidates every user's index cache, for a debug-only feature.
-- Reporting byte offsets instead of line numbers in sort mode: contradicts FR-019.
+- Line and column numbers: they need a scan for delimiters, which don't have to be newlines (`nul` input has no lines at all), and in sort mode either a pre-pass over the input or per-block line counts in the on-disk index, which requires a schema change and invalidates every user's index cache. Nobody reads these entries except while debugging, where a byte range is enough.
+- A start offset only: a range also shows where the content ends, without reading the preview.
 
 ## R10. Summaries at exit in follow mode (FR-020)
 

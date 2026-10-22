@@ -14,7 +14,7 @@ Add `--output-format=pretty|json|logfmt`, also settable as `HL_OUTPUT_FORMAT`, s
 **Technical approach**:
 - **Formatter**: a new `StructuredRecordFormatter`, generic over a JSON or logfmt encoder, plugs into the existing `RecordWithSourceFormatter` boundary. Every mode (`cat`, `sort`, `follow`) and every record selection option is therefore reused unchanged.
 - **Normalization**: records are streamed straight into the output buffer. Dotted output keys that must be nested and merged (the ECS preset in JSON mode) follow an output-key tree built once at startup, so no per-record tree is needed.
-- **Dropped lines**: unparsed lines and prefixes are reported through a new no-op-by-default `RecordObserver` hook. They are counted per input, logged at debug level with line numbers only when debug logging is enabled, and summarized at info level on exit.
+- **Dropped lines**: unparsed lines and prefixes are reported through a new no-op-by-default `RecordObserver` hook. They are counted per input, logged at debug level with their byte ranges when debug logging is enabled, and summarized at info level on exit.
 - **Configuration**: `--flatten` gains an `auto` default that resolves per output format. Predefined fields gain an `output-key` setting, which the ECS and k8s presets set.
 
 Details and rationale are in [research.md](./research.md).
@@ -24,7 +24,7 @@ Details and rationale are in [research.md](./research.md).
 **Language/Version**: Rust 1.95 (`rust-toolchain.toml`), edition 2024
 
 **Primary Dependencies**:
-- existing: `clap` (CLI), `serde`, `config` and `serde_json` (settings and JSON parsing), `serde-logfmt` (workspace crate: logfmt parsing, plus new bare-key and bare-value predicates), `encstr` (workspace crate: string decoding and JSON encoding), `chrono` (time conversion), `wyhash` (key hashing), `heapopt` (inline vectors), `log` and `env_logger` (diagnostics), `memchr` (line counting);
+- existing: `clap` (CLI), `serde`, `config` and `serde_json` (settings and JSON parsing), `serde-logfmt` (workspace crate: logfmt parsing, plus new bare-key and bare-value predicates), `encstr` (workspace crate: string decoding and JSON encoding), `chrono` (time conversion), `wyhash` (key hashing), `heapopt` (inline vectors), `log` and `env_logger` (diagnostics);
 - new: `proptest` as a dev-dependency only, the property testing tool the constitution names; no new runtime crates.
 
 **Storage**: N/A. The on-disk sort index is unchanged (research R9).
@@ -146,7 +146,7 @@ Phases for `/speckit-tasks` to break down. Each phase ends with `just ci` passin
    - Unit tests first.
 3. **Normalizer, fast path**: predefined section, regular fields, hiding, flattening, key set, repeats and collisions. Wired into `App::new_formatter`. Structured mode in `main.rs` (no colors, no pager). Delivers User Stories 1 and 2 for default settings.
 4. **Normalizer, output-key tree**: dotted output keys, merging into regular objects, split caller, input field. Preset updates (FR-028).
-5. **Diagnostics**: observer hook, DropStats, debug entries with line numbers (cat, follow, then sort), summaries and the exit hook. Delivers User Story 4.
+5. **Diagnostics**: observer hook, DropStats, debug entries with byte ranges (cat, follow, then sort), summaries and the exit hook. Delivers User Story 4.
 6. **Follow and polish**: follow flush (User Story 3), README and help text, benchmarks, property tests, `just uncovered`.
 
 ## Complexity Tracking
