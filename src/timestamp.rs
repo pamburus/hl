@@ -64,31 +64,27 @@ impl<'a> Timestamp<'a> {
                     }
                 }),
                 (NumberType::Float, unit) => self.raw.bytes().position(|b| b == b'.').and_then(|i| {
-                    let whole = self.raw[..i].parse::<i64>().ok()?;
-                    let fractional = self.raw[i..].parse::<f64>().ok()?;
+                    // Either part may be left out, as in `.5` or `5.`.
+                    let (whole, fraction) = self.raw.split_at(i);
+                    // The sign is kept apart, since the integer part of `-0.5` is zero.
+                    let negative = whole.starts_with('-');
+                    let whole = match whole {
+                        "" | "-" | "+" => 0,
+                        _ => whole.parse::<i64>().ok()?,
+                    };
+                    let fraction = match fraction {
+                        "." => 0.0,
+                        _ => fraction.parse::<f64>().ok()?,
+                    };
                     let unit = unit.unwrap_or_else(|| UnixTimestampUnit::guess(whole));
-                    match unit {
-                        UnixTimestampUnit::Seconds => {
-                            let ns = (fractional * 1e9).round() as u32;
-                            let (whole, ns) = if whole < 0 && ns > 0 {
-                                (whole - 1, 1_000_000_000 - ns)
-                            } else {
-                                (whole, ns)
-                            };
-                            DateTime::from_timestamp(whole, ns)
-                        }
-                        UnixTimestampUnit::Milliseconds => {
-                            let ns = (fractional * 1e6).round() as i64;
-                            let ns = if whole < 0 { -ns } else { ns };
-                            DateTime::from_timestamp_millis(whole).map(|ts| ts + Duration::nanoseconds(ns))
-                        }
-                        UnixTimestampUnit::Microseconds => {
-                            let ns = (fractional * 1e3).round() as i64;
-                            let ns = if whole < 0 { -ns } else { ns };
-                            DateTime::from_timestamp_micros(whole).map(|ts| ts + Duration::nanoseconds(ns))
-                        }
-                        _ => Some(DateTime::from_timestamp_nanos(whole)),
-                    }
+                    let (ts, scale) = match unit {
+                        UnixTimestampUnit::Seconds => (DateTime::from_timestamp(whole, 0), 1e9),
+                        UnixTimestampUnit::Milliseconds => (DateTime::from_timestamp_millis(whole), 1e6),
+                        UnixTimestampUnit::Microseconds => (DateTime::from_timestamp_micros(whole), 1e3),
+                        UnixTimestampUnit::Nanoseconds => (Some(DateTime::from_timestamp_nanos(whole)), 1.0),
+                    };
+                    let ns = (fraction * scale).round() as i64;
+                    ts?.checked_add_signed(Duration::nanoseconds(if negative { -ns } else { ns }))
                 }),
             };
             ts.map(|ts| ts.into())
@@ -465,6 +461,10 @@ fn guess_number_type(b: &[u8]) -> Option<NumberType> {
         b'0'..=b'9' => true,
         _ => false,
     };
+
+    if !b.iter().any(u8::is_ascii_digit) {
+        return None;
+    }
 
     match (!b.iter().map(|b| check(*b)).any(|x| !x), dots) {
         (true, 0) => Some(NumberType::Integer),
