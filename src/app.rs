@@ -36,6 +36,7 @@ use crate::{
     fmtx::{Adjustment, Alignment, Padding, aligned},
     formatting::{
         DynRecordWithSourceFormatter, Expansion, RawRecordFormatter, RecordFormatterBuilder, RecordWithSourceFormatter,
+        structured::{JsonEncoder, StructuredRecordFormatterBuilder},
     },
     fsmon::{self, EventKind},
     help,
@@ -292,6 +293,10 @@ impl App {
     pub fn new(mut options: Options) -> Self {
         if options.raw && options.input_info.intersects(InputInfo::None | InputInfo::Auto) {
             options.input_info = InputInfo::None.into()
+        }
+        if options.raw {
+            // Raw output takes precedence over a structured output format.
+            options.output_format = OutputFormat::Pretty;
         }
         options.input_info = InputInfo::resolve(options.input_info);
 
@@ -1084,6 +1089,15 @@ impl App {
             Arc::new(RawRecordFormatter {
                 delimiter: options.output_delimiter.clone(),
             })
+        } else if options.output_format == OutputFormat::Json {
+            Arc::new(
+                StructuredRecordFormatterBuilder::new()
+                    .with_flatten(options.flatten)
+                    .with_empty_fields_hiding(options.hide_empty_fields)
+                    .with_field_filter(options.fields.filter.clone())
+                    .with_predefined_fields(&options.fields.settings.predefined)
+                    .build::<JsonEncoder>(),
+            )
         } else {
             let predefined_filter = Self::build_predefined_filter(options);
             Arc::new(

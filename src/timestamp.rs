@@ -2,10 +2,10 @@
 use std::cell::OnceCell;
 
 // third-party imports
-use chrono::{DateTime, Duration, FixedOffset, NaiveDateTime};
+use chrono::{DateTime, Datelike, Duration, FixedOffset, NaiveDateTime, Timelike};
 
 // local imports
-use crate::app::UnixTimestampUnit;
+use crate::{app::UnixTimestampUnit, model::RawValue};
 
 // ---
 
@@ -14,6 +14,7 @@ pub struct Timestamp<'a> {
     raw: &'a str,
     parsed: OnceCell<Option<DateTime<FixedOffset>>>,
     unix_unit: Option<UnixTimestampUnit>,
+    source: Option<RawValue<'a>>,
 }
 
 impl<'a> Timestamp<'a> {
@@ -22,6 +23,7 @@ impl<'a> Timestamp<'a> {
             raw: value,
             parsed: OnceCell::new(),
             unix_unit: None,
+            source: None,
         }
     }
 
@@ -38,7 +40,21 @@ impl<'a> Timestamp<'a> {
                 OnceCell::new()
             },
             unix_unit: unit,
+            source: self.source,
         }
+    }
+
+    /// Sets the source value the timestamp was read from.
+    pub fn with_source(self, source: RawValue<'a>) -> Self {
+        Self {
+            source: Some(source),
+            ..self
+        }
+    }
+
+    /// Returns the source value the timestamp was read from, if it is known.
+    pub fn source(&self) -> Option<RawValue<'a>> {
+        self.source
     }
 
     pub fn parsed(&self) -> &Option<DateTime<FixedOffset>> {
@@ -103,6 +119,81 @@ impl<'a> Timestamp<'a> {
     pub fn unix_utc(&self) -> Option<(i64, u32)> {
         self.parsed()
             .and_then(|ts| Some((ts.timestamp(), ts.timestamp_subsec_nanos())))
+    }
+
+    /// Writes the timestamp in RFC 3339 format in UTC, with as many fraction digits as the source has.
+    ///
+    /// The precision comes from the source text: a Unix timestamp gets the digits of its unit
+    /// plus its own fraction digits, and a textual timestamp keeps its fraction digits,
+    /// at most 9 in both cases. Returns `false` and writes nothing if the timestamp
+    /// can't be parsed, or its year is outside the range RFC 3339 can represent.
+    pub fn format_rfc3339_utc(&self, buf: &mut Vec<u8>) -> bool {
+        if let Some(ts) = self.as_rfc3339() {
+            let fraction = ts.fraction().as_bytes();
+            if ts.as_bytes()[10] == b'T' && ts.timezone().as_bytes() == b"Z" && fraction.len() <= 10 {
+                buf.extend(ts.as_bytes());
+                return true;
+            }
+        }
+
+        let Some(ts) = self.parse() else {
+            return false;
+        };
+        let ts = ts.naive_utc();
+        let year = ts.year();
+        if !(0..=9999).contains(&year) {
+            return false;
+        }
+
+        push_digits(buf, year as u32, 4);
+        buf.push(b'-');
+        push_digits(buf, ts.month(), 2);
+        buf.push(b'-');
+        push_digits(buf, ts.day(), 2);
+        buf.push(b'T');
+        push_digits(buf, ts.hour(), 2);
+        buf.push(b':');
+        push_digits(buf, ts.minute(), 2);
+        buf.push(b':');
+        push_digits(buf, ts.second(), 2);
+        let digits = self.fraction_digits();
+        if digits != 0 {
+            buf.push(b'.');
+            let nanos = ts.nanosecond().min(999_999_999);
+            push_digits(buf, nanos / 10u32.pow(9 - digits as u32), digits);
+        }
+        buf.push(b'Z');
+        true
+    }
+
+    /// Returns the number of fraction digits that the source text implies, at most 9.
+    fn fraction_digits(&self) -> usize {
+        let raw = self.raw.as_bytes();
+        let unit_digits = |whole: &str| {
+            let unit = self
+                .unix_unit
+                .or_else(|| whole.parse().ok().map(UnixTimestampUnit::guess))
+                .unwrap_or(UnixTimestampUnit::Seconds);
+            match unit {
+                UnixTimestampUnit::Seconds => 0,
+                UnixTimestampUnit::Milliseconds => 3,
+                UnixTimestampUnit::Microseconds => 6,
+                UnixTimestampUnit::Nanoseconds => 9,
+            }
+        };
+        let digits = match guess_number_type(raw) {
+            Some(NumberType::Integer) => unit_digits(self.raw),
+            // A float has exactly one dot.
+            Some(NumberType::Float) => self
+                .raw
+                .split_once('.')
+                .map_or(0, |(whole, fraction)| unit_digits(whole) + fraction.len()),
+            None => (3..raw.len())
+                .find(|&i| raw[i] == b'.' && raw[i - 3] == b':' && raw[i - 2..i].iter().all(u8::is_ascii_digit))
+                .map(|i| raw[i + 1..].iter().take_while(|b| b.is_ascii_digit()).count())
+                .unwrap_or(0),
+        };
+        digits.min(9)
     }
 }
 
@@ -441,6 +532,17 @@ pub mod rfc3339 {
 }
 
 // ---
+
+/// Writes `value` as decimal digits, zero-padded to `width`.
+fn push_digits(buf: &mut Vec<u8>, value: u32, width: usize) {
+    let start = buf.len();
+    buf.resize(start + width, b'0');
+    let mut value = value;
+    for byte in buf[start..].iter_mut().rev() {
+        *byte = b'0' + (value % 10) as u8;
+        value /= 10;
+    }
+}
 
 fn only_digits(b: &[u8]) -> bool {
     !b.iter().map(|&b| b.is_ascii_digit()).any(|x| !x)

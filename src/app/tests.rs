@@ -3096,3 +3096,131 @@ fn test_structured_output_has_no_empty_entries() {
         assert!(output.contains("m2") && output.ends_with('\n'), "{output:?}");
     }
 }
+
+fn fixture(name: &str) -> String {
+    std::fs::read_to_string(format!("src/testing/assets/fixtures/output-format/{name}")).unwrap()
+}
+
+fn run_json(options: Options, inputs: Vec<InputHolder>) -> Vec<json::Value> {
+    let app = App::new(Options {
+        output_format: OutputFormat::Json,
+        ..options
+    });
+    let mut output = Vec::new();
+    app.run(inputs, &mut output).unwrap();
+    std::str::from_utf8(&output)
+        .unwrap()
+        .lines()
+        .map(|line| json::from_str(line).unwrap_or_else(|err| panic!("{err}: {line}")))
+        .collect()
+}
+
+fn count_records(options: Options, inputs: Vec<InputHolder>) -> usize {
+    let app = App::new(options);
+    let mut output = Vec::new();
+    app.run(inputs, &mut output).unwrap();
+    output.split(|&b| b == b'\n').filter(|line| !line.is_empty()).count()
+}
+
+#[test]
+fn test_json_output_cat() {
+    let filter = || {
+        Arc::new(AdvancedFilter::new(
+            Filter {
+                level: Some(Level::Warning),
+                ..Default::default()
+            },
+            None,
+        ))
+    };
+    // Multi-line records are read with the delimiter that the default options choose for them,
+    // and level names are recognized as with the default configuration.
+    let options = || Options {
+        filter: filter(),
+        delimiter: Delimiter::PrettyCompatible,
+        fields: FieldOptions {
+            settings: crate::settings::Settings::default().fields,
+            ..Default::default()
+        },
+        ..options()
+    };
+    let records = run_json(options(), vec![input(fixture("mixed.log"))]);
+    assert_eq!(records.len(), 2);
+    assert_eq!(records[0]["level"], "warning");
+    assert_eq!(records[0]["message"], "slow request");
+    assert_eq!(records[0]["timestamp"], "2026-07-06T10:00:01Z");
+    assert_eq!(records[1]["level"], "error");
+    assert_eq!(records[1]["error"]["code"], 7);
+
+    // The same records are selected in pretty output.
+    assert_eq!(
+        count_records(options(), vec![input(fixture("mixed.log"))]),
+        records.len()
+    );
+}
+
+#[test]
+fn test_json_output_sort() {
+    let a = concat!(
+        r#"{"ts":"2026-07-06T10:00:00Z","msg":"a1"}"#,
+        "\n",
+        r#"{"ts":"2026-07-06T10:00:02Z","msg":"a2"}"#,
+        "\n"
+    );
+    let b = concat!(
+        r#"{"ts":"2026-07-06T10:00:01Z","msg":"b1"}"#,
+        "\n",
+        "not a record\n",
+        r#"{"ts":"2026-07-06T10:00:03Z","msg":"b2"}"#,
+        "\n"
+    );
+    let records = run_json(options().with_sort(true), vec![input(a), input(b)]);
+    let messages = records.iter().map(|r| r["message"].as_str().unwrap()).collect_vec();
+    assert_eq!(messages, ["a1", "b1", "a2", "b2"]);
+    assert_eq!(
+        count_records(options().with_sort(true), vec![input(a), input(b)]),
+        records.len()
+    );
+}
+
+#[test]
+fn test_json_output_raw_precedence() {
+    let data = "{\"msg\":\"m\", \"x\": 1}\nnot a record\n";
+    let run = |output_format| {
+        let app = App::new(Options {
+            raw: true,
+            output_format,
+            ..options()
+        });
+        let mut output = Vec::new();
+        app.run(vec![input(data)], &mut output).unwrap();
+        String::from_utf8(output).unwrap()
+    };
+    assert_eq!(run(OutputFormat::Json), data);
+    assert_eq!(run(OutputFormat::Logfmt), data);
+}
+
+#[test]
+fn test_json_output_nul_delimiter() {
+    let app = App::new(Options {
+        output_format: OutputFormat::Json,
+        output_delimiter: "\0".to_owned(),
+        ..options()
+    });
+    let mut output = Vec::new();
+    app.run(vec![input("{\"msg\":\"a\"}\n{\"msg\":\"b\"}\n")], &mut output)
+        .unwrap();
+    assert_eq!(output, b"{\"message\":\"a\"}\0{\"message\":\"b\"}\0");
+}
+
+#[test]
+fn test_json_output_drops_prefix() {
+    let records = run_json(
+        Options {
+            allow_prefix: true,
+            ..options()
+        },
+        vec![input("2026-07-06 prefix {\"msg\":\"m\"}\n")],
+    );
+    assert_eq!(records, [json::json!({"message": "m"})]);
+}

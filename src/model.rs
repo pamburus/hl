@@ -810,7 +810,7 @@ impl FieldSettings {
                     s
                 };
                 if !s.is_empty() {
-                    let ts = Timestamp::new(s).with_unix_unit(ps.unix_ts_unit);
+                    let ts = Timestamp::new(s).with_unix_unit(ps.unix_ts_unit).with_source(value);
                     to.ts = Some(ts);
                     true
                 } else {

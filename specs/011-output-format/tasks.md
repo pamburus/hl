@@ -119,7 +119,7 @@ description: "Task list for machine-readable output formats"
 
 ### Tests for User Story 1 (write first, confirm they fail)
 
-- [ ] T012 [P] [US1] Tests for `Timestamp::format_rfc3339_utc` in src/timestamp/tests.rs, one case per FR-007 rule:
+- [x] T012 [P] [US1] Tests for `Timestamp::format_rfc3339_utc` in src/timestamp/tests.rs, one case per FR-007 rule:
   - `2026-07-06T10:00:00.123Z` is copied verbatim;
   - `2026-07-06T12:00:00.5+02:00` gives `2026-07-06T10:00:00.5Z`;
   - Unix `1700000000` gives `2023-11-14T22:13:20Z`, `1700000000000` gives `.000Z`, the microsecond value gives 6 digits and the nanosecond value 9;
@@ -128,8 +128,8 @@ description: "Task list for machine-readable output formats"
   - `2026-07-06 10:00:00.123` is interpreted as UTC;
   - an explicit `UnixTimestampUnit` is honored;
   - a year outside 0000 to 9999, and an unparsable value, return `false` and write nothing.
-- [ ] T013 [P] [US1] Tests for the key set in src/formatting/structured/keyset/tests.rs: insert reports new versus present; keys with equal hashes but different text are distinct; more than the inline capacity spills correctly.
-- [ ] T014 [P] [US1] Tests for the JSON encoder in src/formatting/structured/json/tests.rs:
+- [x] T013 [P] [US1] Tests for the key set in src/formatting/structured/keyset/tests.rs: insert reports new versus present; keys with equal hashes but different text are distinct; more than the inline capacity spills correctly.
+- [x] T014 [P] [US1] Tests for the JSON encoder in src/formatting/structured/json/tests.rs:
   - a JSON string without a backslash is copied verbatim;
   - `\/` and `A` are normalized;
   - a lone surrogate `\ud800` becomes U+FFFD;
@@ -138,7 +138,7 @@ description: "Task list for machine-readable output formats"
   - valid JSON numbers are copied verbatim;
   - logfmt numbers are rewritten as in FR-010a: `+5` → `5`, `.5` → `0.5`, `5.` → `5`, `007` → `7`, `-007.50` → `-7.50`, `5.e3` → `5e3`, `+.5e-3` → `0.5e-3`;
   - output is compact, with no whitespace.
-- [ ] T015 [P] [US1] Normalizer tests with the JSON encoder in src/formatting/structured/tests.rs, using default output keys:
+- [x] T015 [P] [US1] Normalizer tests with the JSON encoder in src/formatting/structured/tests.rs, using default output keys:
   - **order and presence**: predefined order time, level, logger, message, caller, then regular fields in source order (FR-005, FR-009); a missing predefined key is omitted;
   - **predefined values**: `WARN` gives `"warning"` (FR-006); an unrecognized level stays among the regular fields under its source key; an object message stays an object and an unparsable numeric timestamp stays a number (FR-005a);
   - **caller**: combined forms `name`, `file:line`, `file` and `name @ file:line` (FR-008);
@@ -147,8 +147,8 @@ description: "Task list for machine-readable output formats"
   - **flattening**: `never` nests, `always` gives dotted keys, flattening stops at arrays (`"items":[{"id":1,"tags":{"a":1}}]`), and `{"a":{"b":1}}` with a literal `"a.b"` under `always` is a repeat (FR-009a, FR-012);
   - **hiding**: `-h secret` hides a regular field, hiding a nested key leaves its siblings, `!` reveals, `-h caller` and `-h message` hide predefined fields by output key, `--hide-empty-fields` drops an empty message and empty objects, and hide rules don't reach into arrays (FR-014);
   - **compaction**: a multi-line pretty-printed input record is emitted on one line.
-- [ ] T016 [P] [US1] Property test in src/formatting/structured/proptests.rs: for generated JSON and logfmt records, every JSON output line parses with `serde_json` as an object with unique keys (SC-001).
-- [ ] T017 [P] [US1] App-level tests in src/app/tests.rs with `output_format: OutputFormat::Json`:
+- [x] T016 [P] [US1] Property test in src/formatting/structured/proptests.rs: for generated JSON and logfmt records, every JSON output line parses with `serde_json` as an object with unique keys (SC-001).
+- [x] T017 [P] [US1] App-level tests in src/app/tests.rs with `output_format: OutputFormat::Json`:
   - `cat` over mixed.log with a level filter outputs only the matching records, with no unparsed lines;
   - `sort` over two inputs is chronological;
   - the record counts equal `pretty`'s for the same options in `cat` and `sort` (SC-002);
@@ -158,24 +158,25 @@ description: "Task list for machine-readable output formats"
 
 ### Implementation for User Story 1
 
-- [ ] T018 [P] [US1] Implement `Timestamp::format_rfc3339_utc(&self, buf: &mut Vec<u8>) -> bool` in src/timestamp.rs (research R6):
+- [x] T018 [P] [US1] Implement `Timestamp::format_rfc3339_utc(&self, buf: &mut Vec<u8>) -> bool` in src/timestamp.rs (research R6):
   - derive the precision from the source text, with the unit resolved as in `reparse` (an explicit unit, else `UnixTimestampUnit::guess`);
   - copy an RFC 3339 `Z` source verbatim;
   - otherwise write `%Y-%m-%dT%H:%M:%S`, `.` and N digits of the zero-padded nanoseconds when N > 0, then `Z`;
   - return `false` for unparsable values and for years outside 0000 to 9999.
-- [ ] T019 [P] [US1] Implement `KeySet<'a>` in src/formatting/structured/keyset.rs: `heapopt::Vec<(u64, &'a str), 32>` hashed with `wyhash`, with `insert(&mut self, key: &'a str) -> bool` and `clear()`, comparing strings only on hash equality (research R3).
-- [ ] T020 [P] [US1] In src/formatting/structured.rs, define the `Encoder` trait: `begin_record`, `end_record`, `key`, `string(EncodedString)`, `number(&str, NumberSource)`, `boolean`, `null`, `begin_object`, `end_object`, `begin_array`, `end_array`, and `flattens()`. Implement `JsonEncoder` in src/formatting/structured/json.rs:
+- [x] T019 [P] [US1] Implement `KeySet<'a>` in src/formatting/structured/keyset.rs: `heapopt::Vec<(u64, &'a str), 32>` hashed with `wyhash`, with `insert(&mut self, key: &'a str) -> bool` and `clear()`, comparing strings only on hash equality (research R3).
+- [x] T020 [P] [US1] In src/formatting/structured.rs, define the `Encoder` trait: `begin_record`, `end_record`, `key`, `item`, `string(EncodedString)`, `text(&[&str])`, `plain`, `number(&str, NumberSource)`, `boolean`, `null`, `begin_object`, `end_object`, `begin_array`, `end_array`. Encoders are `Copy` state, so a copy and the buffer length make a checkpoint; flattening is decided by the formatter. Implement `JsonEncoder` in src/formatting/structured/json.rs:
   - strings verbatim when they have no backslash, otherwise decoded and re-encoded through the `encstr` JSON appender;
   - the FR-010a number rewrite for logfmt-sourced numbers only;
   - commas and colons with no whitespace.
-- [ ] T021 [US1] Implement `StructuredRecordFormatter<E: Encoder>` and its builder in src/formatting/structured.rs (research R2 to R4, R7):
+- [x] T021 [US1] Implement `StructuredRecordFormatter<E: Encoder>` and its builder in src/formatting/structured.rs (research R2 to R4, R7):
   - **settings**: output keys, defaulting to `timestamp`, `level`, `logger`, `message` and `caller`; the flatten flag; the user hide filter (`Arc<IncludeExcludeKeyFilter>`); the predefined filter built like `App::build_predefined_filter`; `hide_empty_fields`;
   - **predefined section**: time via `format_rfc3339_utc`, falling back to the raw value with its source type; level from `Level::as_ref()`; logger; message with its source type; the combined caller; all subject to the hide filter matched on output keys;
   - **regular section**: the repeat pre-pass with `KeySet`, the collision check against emitted keys, `RawValue::auto` typing for `EncodedString::Raw`, and recursive object re-encoding with per-level repeat handling, hide filters and the predefined filter, flattened under `always`;
   - arrays re-encoded element by element with no filters;
   - repeats and collisions dropped silently for now (US4 adds the debug entries);
+  - no allocation per record once warmed up: working memory (key hashes, resolution order, flattened keys, leaves) lives in a per-thread scratch reused across records, checked by a counting-allocator test;
   - implements `RecordWithSourceFormatter`, writing nothing for the prefix range.
-- [ ] T022 [US1] In `App::new_formatter` in src/app.rs, build `StructuredRecordFormatter<JsonEncoder>` from `Options` (flatten, `fields.filter`, the predefined filter, `hide_empty_fields`) when the effective output format is `Json`. `--raw` keeps `RawRecordFormatter`.
+- [x] T022 [US1] In `App::new_formatter` in src/app.rs, build `StructuredRecordFormatter<JsonEncoder>` from `Options` (flatten, `fields.filter`, the predefined filter, `hide_empty_fields`) when the effective output format is `Json`. `--raw` keeps `RawRecordFormatter`.
 
 **Checkpoint**: User Story 1 works end to end with default settings. Run quickstart scenarios 1, 2 and 5, and commit.
 
