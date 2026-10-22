@@ -36,7 +36,7 @@ use crate::{
     fmtx::{Adjustment, Alignment, Padding, aligned},
     formatting::{
         DynRecordWithSourceFormatter, Expansion, RawRecordFormatter, RecordFormatterBuilder, RecordWithSourceFormatter,
-        structured::{JsonEncoder, StructuredRecordFormatterBuilder},
+        structured::{JsonEncoder, LogfmtEncoder, StructuredRecordFormatterBuilder},
     },
     fsmon::{self, EventKind},
     help,
@@ -1089,15 +1089,16 @@ impl App {
             Arc::new(RawRecordFormatter {
                 delimiter: options.output_delimiter.clone(),
             })
-        } else if options.output_format == OutputFormat::Json {
-            Arc::new(
-                StructuredRecordFormatterBuilder::new()
-                    .with_flatten(options.flatten)
-                    .with_empty_fields_hiding(options.hide_empty_fields)
-                    .with_field_filter(options.fields.filter.clone())
-                    .with_predefined_fields(&options.fields.settings.predefined)
-                    .build::<JsonEncoder>(),
-            )
+        } else if options.output_format.is_structured() {
+            let builder = StructuredRecordFormatterBuilder::new()
+                .with_flatten(options.flatten)
+                .with_empty_fields_hiding(options.hide_empty_fields)
+                .with_field_filter(options.fields.filter.clone())
+                .with_predefined_fields(&options.fields.settings.predefined);
+            match options.output_format {
+                OutputFormat::Logfmt => Arc::new(builder.build::<LogfmtEncoder>()),
+                _ => Arc::new(builder.build::<JsonEncoder>()),
+            }
         } else {
             let predefined_filter = Self::build_predefined_filter(options);
             Arc::new(

@@ -59,7 +59,7 @@ description: "Task list for machine-readable output formats"
 
 - [x] T001 Add `proptest` to `[workspace.dependencies]` and as a dev-dependency of the `hl` package in Cargo.toml (research R17)
 - [x] T002 [P] Create the module skeleton:
-  - `src/formatting/structured.rs`, declaring `mod json; mod logfmt; mod keyset;` and `#[cfg(test)] mod tests; #[cfg(test)] mod proptests;`;
+  - `src/formatting/structured.rs`, declaring `mod json; mod logfmt; mod keyset;` and `#[cfg(test)] mod tests;`, with property tests in the same `tests.rs`;
   - empty `src/formatting/structured/json.rs`, `logfmt.rs` and `keyset.rs`, each with its own `#[cfg(test)] mod tests;`;
   - `pub mod structured;` in src/formatting.rs.
 - [x] T003 [P] Create the fixtures in `src/testing/assets/fixtures/output-format/`:
@@ -147,7 +147,7 @@ description: "Task list for machine-readable output formats"
   - **flattening**: `never` nests, `always` gives dotted keys, flattening stops at arrays (`"items":[{"id":1,"tags":{"a":1}}]`), and `{"a":{"b":1}}` with a literal `"a.b"` under `always` is a repeat (FR-009a, FR-012);
   - **hiding**: `-h secret` hides a regular field, hiding a nested key leaves its siblings, `!` reveals, `-h caller` and `-h message` hide predefined fields by output key, `--hide-empty-fields` drops an empty message and empty objects, and hide rules don't reach into arrays (FR-014);
   - **compaction**: a multi-line pretty-printed input record is emitted on one line.
-- [x] T016 [P] [US1] Property test in src/formatting/structured/proptests.rs: for generated JSON and logfmt records, every JSON output line parses with `serde_json` as an object with unique keys (SC-001).
+- [x] T016 [P] [US1] Property test in src/formatting/structured/tests.rs: for generated JSON and logfmt records, every JSON output line parses with `serde_json` as an object with unique keys (SC-001).
 - [x] T017 [P] [US1] App-level tests in src/app/tests.rs with `output_format: OutputFormat::Json`:
   - `cat` over mixed.log with a level filter outputs only the matching records, with no unparsed lines;
   - `sort` over two inputs is chronological;
@@ -190,11 +190,11 @@ description: "Task list for machine-readable output formats"
 
 ### Tests for User Story 2 (write first, confirm they fail)
 
-- [ ] T023 [P] [US2] Predicate tests in crates/serde-logfmt/src/logfmt/de/tests.rs:
+- [x] T023 [P] [US2] Predicate tests in crates/serde-logfmt/src/logfmt/de/tests.rs:
   - `is_bare_key`: true for `a`, `a.b`, `café`, `a-b_c`; false for `""`, `user name`, `items[0]`, `{a`, `a,b`, `'a'`, `a"b`, `a=b`;
   - `is_bare_value`: false for `""`, values with a space, `=`, `"` or a control character;
   - property: for generated keys, `is_bare_key(k)` holds exactly when `from_str::<HashMap<String,String>>(&format!("{k}=1"))` succeeds with key `k`.
-- [ ] T024 [P] [US2] Tests for the logfmt encoder in src/formatting/structured/logfmt/tests.rs:
+- [x] T024 [P] [US2] Tests for the logfmt encoder in src/formatting/structured/logfmt/tests.rs:
   - bare `message=started`, quoted `"slow request"`;
   - quoting for `=`, `"` and control characters, with JSON escapes and non-ASCII kept as UTF-8;
   - `"42"`, `"-1.5"`, `"true"`, `"null"` and a string starting with `"` are quoted (FR-004);
@@ -203,23 +203,22 @@ description: "Task list for machine-readable output formats"
   - numbers verbatim, including `+5` (FR-010a);
   - objects under `never` are quoted compact JSON, `http="{\"status\":200}"`, and under `always` are dotted, `http.status=200`;
   - arrays are quoted compact JSON (FR-013).
-- [ ] T025 [P] [US2] Round-trip property tests in src/formatting/structured/proptests.rs, through hl's own parsers and formatters:
+- [x] T025 [P] [US2] Round-trip property tests in src/formatting/structured/tests.rs, through hl's own parsers and formatters:
   - logfmt → JSON → logfmt preserves keys, values and types;
-  - JSON → logfmt → JSON preserves them as well;
+  - JSON → logfmt → JSON preserves them for records without arrays, empty objects and objects in predefined fields, which logfmt holds as strings (FR-013);
   - every logfmt output line parses with `serde_logfmt::logfmt::from_str` (SC-001, SC-003).
-- [ ] T026 [P] [US2] App-level tests in src/app/tests.rs for `OutputFormat::Logfmt`: User Story 2 acceptance scenarios 1 to 4, including JSON's default nesting versus `--flatten=always` dotted keys.
+- [x] T026 [P] [US2] App-level tests in src/app/tests.rs for `OutputFormat::Logfmt`: User Story 2 acceptance scenarios 1 to 4, including JSON's default nesting versus `--flatten=always` dotted keys.
 
 ### Implementation for User Story 2
 
-- [ ] T027 [P] [US2] In crates/serde-logfmt/src/logfmt/de.rs, add `pub fn is_bare_key(s: &str) -> bool` (non-empty, every byte `KeyCh::ALLOWED` or `KeyCh::UNICODE` in `KEY`) and `pub fn is_bare_value(s: &str) -> bool` (non-empty, no byte `<= b' '`, no `"`, no `=`). Re-export both from crates/serde-logfmt/src/logfmt/mod.rs (research R5).
-- [ ] T028 [US2] Implement `LogfmtEncoder` in src/formatting/structured/logfmt.rs:
-  - `flattens()` follows the flatten flag;
+- [x] T027 [P] [US2] In crates/serde-logfmt/src/logfmt/de.rs, add `pub fn is_bare_key(s: &str) -> bool` (non-empty, every byte `KeyCh::ALLOWED` or `KeyCh::UNICODE` in `KEY`) and `pub fn is_bare_value(s: &str) -> bool` (non-empty, no byte `<= b' '`, no `"`, no `=`). Re-export both from crates/serde-logfmt/src/logfmt/mod.rs (research R5).
+- [x] T028 [US2] Implement `LogfmtEncoder` in src/formatting/structured/logfmt.rs:
   - keys bare when `is_bare_key` holds, else quoted JSON strings;
   - strings decoded, bare when `is_bare_value` holds, they don't start with `"` and `RawValue::auto` types them as a string, else quoted;
   - numbers, booleans and null verbatim;
-  - nested objects under `never`, and arrays, rendered with a `JsonEncoder` into a scratch buffer, then written as a quoted string;
+  - nested objects under `never`, and arrays, rendered with a `JsonEncoder` in place, then turned into a quoted string in place, with no allocation;
   - pairs separated by single spaces.
-- [ ] T029 [US2] In `App::new_formatter` in src/app.rs, build `StructuredRecordFormatter<LogfmtEncoder>` when the effective output format is `Logfmt`.
+- [x] T029 [US2] In `App::new_formatter` in src/app.rs, build `StructuredRecordFormatter<LogfmtEncoder>` when the effective output format is `Logfmt`.
 
 **Checkpoint**: Both formats work with default settings. Run quickstart scenarios 3 and 4, and commit.
 
@@ -399,7 +398,7 @@ Task: "T012 Timestamp precision tests in src/timestamp/tests.rs"
 Task: "T013 Key set tests in src/formatting/structured/keyset/tests.rs"
 Task: "T014 JSON encoder tests in src/formatting/structured/json/tests.rs"
 Task: "T015 Normalizer tests in src/formatting/structured/tests.rs"
-Task: "T016 JSON validity property test in src/formatting/structured/proptests.rs"
+Task: "T016 JSON validity property test in src/formatting/structured/tests.rs"
 Task: "T017 App-level JSON tests in src/app/tests.rs"
 
 # Then the independent building blocks:

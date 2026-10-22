@@ -249,3 +249,51 @@ fn test_quoted_key_raw_value() {
     let parsed: Test = from_str(r#""a b"="x y""#).unwrap();
     assert_eq!(parsed.v.get(), r#""x y""#);
 }
+
+#[test]
+fn test_is_bare_key() {
+    for key in ["a", "a.b", "café", "a-b_c", "a/b", "@a"] {
+        assert!(is_bare_key(key), "expected {key:?} to be bare");
+    }
+    for key in [
+        "",
+        "user name",
+        "items[0]",
+        "{a",
+        "a,b",
+        "'a'",
+        "a\"b",
+        "a=b",
+        "a\tb",
+        "a\u{7f}",
+    ] {
+        assert!(!is_bare_key(key), "expected {key:?} not to be bare");
+    }
+}
+
+#[test]
+fn test_is_bare_value() {
+    for value in ["a", "a.b", "café", "42", "[1,2]", "{a}", "a\\b", "a'b"] {
+        assert!(is_bare_value(value), "expected {value:?} to be bare");
+    }
+    for value in ["", "a b", "a=b", "a\"b", "\"a", "a\tb", "a\nb", "a\u{1}b"] {
+        assert!(!is_bare_value(value), "expected {value:?} not to be bare");
+    }
+}
+
+proptest::proptest! {
+    #[test]
+    fn test_is_bare_key_matches_parser(key in "\\PC{0,4}|[ -~]{0,4}") {
+        let parsed = from_str::<HashMap<String, String>>(&format!("{key}=1"));
+        let accepted = matches!(&parsed, Ok(map) if map.len() == 1 && map.contains_key(&key));
+        proptest::prop_assert_eq!(is_bare_key(&key), accepted, "key {:?}, parsed {:?}", key, parsed);
+    }
+
+    /// An empty value is also accepted by the parser, but is written quoted for clarity.
+    #[test]
+    fn test_is_bare_value_matches_parser(value in "\\PC{1,4}|[\\x00-~]{1,4}") {
+        let parsed = from_str::<HashMap<String, String>>(&format!("a={value}"));
+        let accepted = matches!(&parsed, Ok(map) if map.get("a") == Some(&value));
+        proptest::prop_assert_eq!(is_bare_value(&value), accepted, "value {:?}, parsed {:?}", value, parsed);
+    }
+}

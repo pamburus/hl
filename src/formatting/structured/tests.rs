@@ -1,3 +1,15 @@
+// std imports
+use std::{
+    collections::{HashMap, HashSet},
+    fmt,
+    sync::LazyLock,
+};
+
+// third-party imports
+use proptest::prelude::*;
+use serde::de::{Deserialize, Deserializer, IgnoredAny, MapAccess, SeqAccess, Visitor};
+
+// local imports
 use super::*;
 use crate::{
     IncludeExcludeKeyFilter, KeyMatchOptions,
@@ -5,6 +17,7 @@ use crate::{
     model::{Origin, Parser, ParserSettings, RawRecord, RecordWithSourceConstructor},
     settings::{Field, PredefinedFields, Settings},
 };
+use ::json;
 
 fn predefined() -> PredefinedFields {
     Settings::default().fields.predefined
@@ -33,8 +46,17 @@ fn format_with<E: Encoder>(
     predefined: &PredefinedFields,
     input: &str,
 ) -> String {
+    try_format_with(formatter, predefined, input).unwrap()
+}
+
+/// Formats the first record of `input`, or returns `None` if there is no record in it.
+fn try_format_with<E: Encoder>(
+    formatter: &StructuredRecordFormatter<E>,
+    predefined: &PredefinedFields,
+    input: &str,
+) -> Option<String> {
     let parser = Parser::new(ParserSettings::new(predefined, [], None));
-    let raw = RawRecord::parser().parse(input.as_bytes()).next().unwrap().unwrap();
+    let raw = RawRecord::parser().parse(input.as_bytes()).next()?.ok()?;
     let record = parser.parse(&raw.record);
     let descriptor = InputDescriptor::new(0, "test");
     let origin = Origin::new(&descriptor, 0, input.len());
@@ -45,7 +67,7 @@ fn format_with<E: Encoder>(
         0..0,
         record.with_source(&input.as_bytes()[raw.offsets], origin),
     );
-    String::from_utf8(buf).unwrap()
+    Some(String::from_utf8(buf).unwrap())
 }
 
 fn json(builder: StructuredRecordFormatterBuilder, input: &str) -> String {
@@ -260,6 +282,11 @@ fn test_compaction() {
 
 #[test]
 fn test_no_allocations_after_warm_up() {
+    no_allocations_after_warm_up::<JsonEncoder>();
+    no_allocations_after_warm_up::<LogfmtEncoder>();
+}
+
+fn no_allocations_after_warm_up<E: Encoder>() {
     use crate::testing::alloc::count_allocations;
 
     // Values nested two levels deep within an object are left out here: parsing such an object
@@ -274,7 +301,7 @@ fn test_no_allocations_after_warm_up() {
     let descriptor = InputDescriptor::new(0, "test");
 
     for flatten in [false, true] {
-        let formatter = formatter().with_flatten(flatten).build::<JsonEncoder>();
+        let formatter = formatter().with_flatten(flatten).build::<E>();
         for input in inputs {
             let raw = RawRecord::parser().parse(input.as_bytes()).next().unwrap().unwrap();
             let record = parser.parse(&raw.record);
@@ -292,7 +319,264 @@ fn test_no_allocations_after_warm_up() {
             // The first run may grow the per-thread scratch.
             format();
             let ((), allocations) = count_allocations(&mut format);
-            assert_eq!(allocations, 0, "flatten={flatten}: {input}");
+            assert_eq!(
+                allocations,
+                0,
+                "{}, flatten={flatten}: {input}",
+                std::any::type_name::<E>()
+            );
+        }
+    }
+}
+
+// ---
+// Property tests.
+
+/// Formats the first record of `input` with the default settings and `flatten`.
+fn format<E: Encoder>(input: &str, flatten: bool) -> Option<String> {
+    try_format_with(&formatter().with_flatten(flatten).build::<E>(), &predefined(), input)
+}
+
+/// A JSON value that checks that every object in it has unique keys.
+struct UniqueKeys;
+
+impl<'de> Deserialize<'de> for UniqueKeys {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        deserializer.deserialize_any(UniqueKeysVisitor)
+    }
+}
+
+struct UniqueKeysVisitor;
+
+impl<'de> Visitor<'de> for UniqueKeysVisitor {
+    type Value = UniqueKeys;
+
+    fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str("any JSON value")
+    }
+
+    fn visit_map<A: MapAccess<'de>>(self, mut map: A) -> Result<UniqueKeys, A::Error> {
+        let mut keys = HashSet::new();
+        while let Some(key) = map.next_key::<String>()? {
+            if !keys.insert(key.clone()) {
+                return Err(serde::de::Error::custom(format!("duplicate key {key:?}")));
+            }
+            map.next_value::<UniqueKeys>()?;
+        }
+        Ok(UniqueKeys)
+    }
+
+    fn visit_seq<A: SeqAccess<'de>>(self, mut seq: A) -> Result<UniqueKeys, A::Error> {
+        while seq.next_element::<UniqueKeys>()?.is_some() {}
+        Ok(UniqueKeys)
+    }
+
+    fn visit_bool<E>(self, _: bool) -> Result<UniqueKeys, E> {
+        Ok(UniqueKeys)
+    }
+
+    fn visit_i64<E>(self, _: i64) -> Result<UniqueKeys, E> {
+        Ok(UniqueKeys)
+    }
+
+    fn visit_u64<E>(self, _: u64) -> Result<UniqueKeys, E> {
+        Ok(UniqueKeys)
+    }
+
+    fn visit_f64<E>(self, _: f64) -> Result<UniqueKeys, E> {
+        Ok(UniqueKeys)
+    }
+
+    fn visit_str<E>(self, _: &str) -> Result<UniqueKeys, E> {
+        Ok(UniqueKeys)
+    }
+
+    fn visit_unit<E>(self) -> Result<UniqueKeys, E> {
+        Ok(UniqueKeys)
+    }
+}
+
+fn assert_json_object_with_unique_keys(line: &str) {
+    assert!(line.starts_with('{'), "not an object: {line}");
+    assert!(!line.contains('\n'), "not a single line: {line}");
+    if let Err(err) = json::from_str::<UniqueKeys>(line) {
+        panic!("invalid output {line}: {err}");
+    }
+    json::from_str::<IgnoredAny>(line).unwrap();
+}
+
+// ---
+
+/// Keys, including the names of predefined fields and keys with dots.
+fn key() -> impl Strategy<Value = String> {
+    prop_oneof![
+        Just("ts".to_owned()),
+        Just("timestamp".to_owned()),
+        Just("level".to_owned()),
+        Just("msg".to_owned()),
+        Just("message".to_owned()),
+        Just("logger".to_owned()),
+        Just("caller".to_owned()),
+        Just("a".to_owned()),
+        Just("b".to_owned()),
+        Just("a.b".to_owned()),
+        "[a-z]{1,3}(\\.[a-z]{1,2})?",
+    ]
+}
+
+fn json_leaf() -> impl Strategy<Value = json::Value> {
+    prop_oneof![
+        Just(json::Value::Null),
+        any::<bool>().prop_map(json::Value::Bool),
+        any::<i64>().prop_map(json::Value::from),
+        (-1e10f64..1e10).prop_map(json::Value::from),
+        "\\PC{0,8}".prop_map(json::Value::String),
+        Just(json::Value::String("2026-07-06T10:00:00.5Z".into())),
+        Just(json::Value::String("info".into())),
+    ]
+}
+
+/// A JSON object with the given entries, possibly with repeated keys.
+fn json_object(entries: &[(String, impl fmt::Display)]) -> String {
+    // Repeated keys are written as is, since serde_json's map would merge them.
+    let body = entries
+        .iter()
+        .map(|(k, v)| format!("{}:{}", json::to_string(k).unwrap(), v))
+        .collect::<Vec<_>>()
+        .join(",");
+    format!("{{{body}}}")
+}
+
+fn json_value() -> impl Strategy<Value = json::Value> {
+    json_leaf().prop_recursive(3, 24, 4, |inner| {
+        prop_oneof![
+            prop::collection::vec(inner.clone(), 0..4).prop_map(json::Value::Array),
+            prop::collection::vec((key(), inner), 0..4)
+                .prop_map(|entries| json::from_str(&json_object(&entries)).unwrap_or(json::Value::Null)),
+        ]
+    })
+}
+
+/// A JSON value that logfmt output keeps as is when flattening: no arrays and no empty objects.
+fn json_flat_value() -> impl Strategy<Value = json::Value> {
+    json_leaf().prop_recursive(3, 24, 4, |inner| {
+        prop::collection::vec((key(), inner), 1..4)
+            .prop_map(|entries| json::from_str(&json_object(&entries)).unwrap_or(json::Value::Null))
+    })
+}
+
+/// A JSON record, possibly with repeated keys.
+fn json_record() -> impl Strategy<Value = String> {
+    prop::collection::vec((key(), json_value()), 0..8).prop_map(|entries| json_object(&entries))
+}
+
+/// Source keys of the predefined fields with the default settings.
+static PREDEFINED: LazyLock<HashSet<String>> = LazyLock::new(|| {
+    let p = Settings::default().fields.predefined;
+    let names = [&p.time.names, &p.message.names, &p.logger.names, &p.caller.names];
+    let levels = p.level.variants.iter().map(|v| &v.names);
+    names.into_iter().chain(levels).flatten().cloned().collect()
+});
+
+/// A JSON record with values from [`json_flat_value`], possibly with repeated keys.
+///
+/// Predefined fields hold no objects, since they are written as values and not flattened.
+fn json_flat_record() -> impl Strategy<Value = String> {
+    prop::collection::vec((key(), json_flat_value()), 0..8).prop_map(|mut entries| {
+        entries.retain(|(k, v)| !(v.is_object() && PREDEFINED.contains(k)));
+        json_object(&entries)
+    })
+}
+
+fn logfmt_value() -> impl Strategy<Value = String> {
+    prop_oneof![
+        "[a-zA-Z0-9_.:+-]{1,8}",
+        Just("true".to_owned()),
+        Just("null".to_owned()),
+        Just("+5".to_owned()),
+        Just(".5".to_owned()),
+        Just("007".to_owned()),
+        Just("5.e3".to_owned()),
+        "\\PC{0,8}".prop_map(|s| json::to_string(&s).unwrap()),
+    ]
+}
+
+/// A logfmt record, possibly with repeated keys.
+fn logfmt_record() -> impl Strategy<Value = String> {
+    prop::collection::vec(("[a-z]{1,3}(\\.[a-z]{1,2})?", logfmt_value()), 1..8).prop_map(|entries| {
+        entries
+            .iter()
+            .map(|(k, v)| format!("{k}={v}"))
+            .collect::<Vec<_>>()
+            .join(" ")
+    })
+}
+
+fn assert_logfmt_record(line: &str) {
+    assert!(!line.contains('\n'), "not a single line: {line}");
+    if let Err(err) = serde_logfmt::logfmt::from_str::<HashMap<String, String>>(line) {
+        panic!("invalid output {line}: {err:?}");
+    }
+}
+
+/// Formats `input` as JSON, both directly and through logfmt output read back.
+fn json_directly_and_through_logfmt(input: &str, flatten: bool) -> Option<(String, String)> {
+    let json = format::<JsonEncoder>(input, flatten)?;
+    let logfmt = format::<LogfmtEncoder>(input, flatten)?;
+    assert_logfmt_record(&logfmt);
+    let through = format::<JsonEncoder>(&logfmt, flatten)?;
+    Some((json, through))
+}
+
+// ---
+
+proptest! {
+    #[test]
+    fn json_output_is_valid(input in json_record(), flatten in any::<bool>()) {
+        if let Some(output) = format::<JsonEncoder>(&input, flatten) {
+            assert_json_object_with_unique_keys(&output);
+        }
+    }
+
+    #[test]
+    fn json_output_from_logfmt_is_valid(input in logfmt_record(), flatten in any::<bool>()) {
+        if let Some(output) = format::<JsonEncoder>(&input, flatten) {
+            assert_json_object_with_unique_keys(&output);
+        }
+    }
+}
+
+proptest! {
+    #[test]
+    fn logfmt_output_is_valid(input in json_record(), flatten in any::<bool>()) {
+        if let Some(output) = format::<LogfmtEncoder>(&input, flatten) {
+            assert_logfmt_record(&output);
+        }
+    }
+
+    /// Logfmt converted to JSON and back to logfmt keeps keys, values and types (SC-003).
+    #[test]
+    fn logfmt_round_trip(input in logfmt_record(), flatten in any::<bool>()) {
+        let Some(json) = format::<JsonEncoder>(&input, flatten) else {
+            return Ok(());
+        };
+        let logfmt = format::<LogfmtEncoder>(&json, flatten).unwrap();
+        assert_logfmt_record(&logfmt);
+        let direct = format::<LogfmtEncoder>(&input, flatten).unwrap();
+        // Both read back as the same record, though numbers may be written differently.
+        prop_assert_eq!(
+            format::<JsonEncoder>(&logfmt, flatten),
+            format::<JsonEncoder>(&direct, flatten)
+        );
+        prop_assert_eq!(format::<JsonEncoder>(&logfmt, flatten).unwrap(), json);
+    }
+
+    /// JSON converted to logfmt and back keeps keys, values and types, except for arrays and
+    /// empty objects, which logfmt holds as strings.
+    #[test]
+    fn json_round_trip(input in json_flat_record()) {
+        if let Some((json, through)) = json_directly_and_through_logfmt(&input, true) {
+            prop_assert_eq!(through, json);
         }
     }
 }

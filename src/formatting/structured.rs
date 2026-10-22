@@ -28,6 +28,7 @@ mod keyset;
 mod logfmt;
 
 pub use json::JsonEncoder;
+pub use logfmt::LogfmtEncoder;
 
 // ---
 
@@ -763,7 +764,5 @@ fn format_caller<E: Encoder>(e: &mut E, buf: &mut Buf, caller: &Caller) {
     }
 }
 
-#[cfg(test)]
-mod proptests;
 #[cfg(test)]
 mod tests;

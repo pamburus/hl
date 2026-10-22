@@ -3133,16 +3133,9 @@ fn test_json_output_cat() {
             None,
         ))
     };
-    // Multi-line records are read with the delimiter that the default options choose for them,
-    // and level names are recognized as with the default configuration.
     let options = || Options {
         filter: filter(),
-        delimiter: Delimiter::PrettyCompatible,
-        fields: FieldOptions {
-            settings: crate::settings::Settings::default().fields,
-            ..Default::default()
-        },
-        ..options()
+        ..mixed_fixture_options()
     };
     let records = run_json(options(), vec![input(fixture("mixed.log"))]);
     assert_eq!(records.len(), 2);
@@ -3223,4 +3216,113 @@ fn test_json_output_drops_prefix() {
         vec![input("2026-07-06 prefix {\"msg\":\"m\"}\n")],
     );
     assert_eq!(records, [json::json!({"message": "m"})]);
+}
+
+fn run_logfmt(options: Options, inputs: Vec<InputHolder>) -> Vec<HashMap<String, String>> {
+    let app = App::new(Options {
+        output_format: OutputFormat::Logfmt,
+        ..options
+    });
+    let mut output = Vec::new();
+    app.run(inputs, &mut output).unwrap();
+    std::str::from_utf8(&output)
+        .unwrap()
+        .lines()
+        .map(|line| serde_logfmt::logfmt::from_str(line).unwrap_or_else(|err| panic!("{err:?}: {line}")))
+        .collect()
+}
+
+/// Options that read the mixed fixture as the command line does by default: multi-line records
+/// are read with the delimiter chosen for them, and level names are recognized as with the
+/// default configuration.
+fn mixed_fixture_options() -> Options {
+    Options {
+        delimiter: Delimiter::PrettyCompatible,
+        fields: FieldOptions {
+            settings: crate::settings::Settings::default().fields,
+            ..Default::default()
+        },
+        ..options()
+    }
+}
+
+#[test]
+fn test_logfmt_output_cat() {
+    let options = || Options {
+        flatten: true,
+        ..mixed_fixture_options()
+    };
+    let records = run_logfmt(options(), vec![input(fixture("mixed.log"))]);
+    assert_eq!(
+        records.len(),
+        run_json(options(), vec![input(fixture("mixed.log"))]).len()
+    );
+    assert_eq!(records[0]["timestamp"], "2026-07-06T10:00:00.123Z");
+    assert_eq!(records[0]["level"], "info");
+    assert_eq!(records[0]["message"], "started");
+    assert_eq!(records[0]["http.status"], "200");
+    assert_eq!(records[0]["tags"], r#"["a","b"]"#);
+    assert_eq!(records[1]["message"], "slow request");
+    assert_eq!(records[1]["span.attrs.user"], "alice");
+}
+
+#[test]
+fn test_logfmt_output_quoting() {
+    let data = r#"{"msg":"a b","q":"say \"hi\"","e":"a=b","n":"l1\nl2","s":"42","b":"true"}"#;
+    let app = App::new(Options {
+        output_format: OutputFormat::Logfmt,
+        ..options()
+    });
+    let mut output = Vec::new();
+    app.run(vec![input(format!("{data}\n"))], &mut output).unwrap();
+    assert_eq!(
+        std::str::from_utf8(&output).unwrap(),
+        concat!(
+            r#"message="a b" q="say \"hi\"" e="a=b" n="l1\nl2" s="42" b="true""#,
+            "\n"
+        )
+    );
+    let records = run_logfmt(options(), vec![input(format!("{data}\n"))]);
+    assert_eq!(records[0]["message"], "a b");
+    assert_eq!(records[0]["q"], r#"say "hi""#);
+    assert_eq!(records[0]["e"], "a=b");
+    assert_eq!(records[0]["n"], "l1\nl2");
+}
+
+#[test]
+fn test_logfmt_output_nesting() {
+    let data = || input("{\"msg\":\"m\",\"http\":{\"status\":500}}\n");
+    let run = |flatten| {
+        let app = App::new(Options {
+            output_format: OutputFormat::Logfmt,
+            flatten,
+            ..options()
+        });
+        let mut output = Vec::new();
+        app.run(vec![data()], &mut output).unwrap();
+        String::from_utf8(output).unwrap()
+    };
+    assert_eq!(run(true), "message=m http.status=500\n");
+    assert_eq!(run(false), "message=m http=\"{\\\"status\\\":500}\"\n");
+
+    // JSON keeps the object nested unless flattening is asked for.
+    let json = |flatten| run_json(Options { flatten, ..options() }, vec![data()]);
+    assert_eq!(json(false), [json::json!({"message": "m", "http": {"status": 500}})]);
+    assert_eq!(json(true), [json::json!({"message": "m", "http.status": 500})]);
+}
+
+#[test]
+fn test_logfmt_output_reads_back_as_json() {
+    let options = || Options {
+        flatten: true,
+        ..mixed_fixture_options()
+    };
+    let app = App::new(Options {
+        output_format: OutputFormat::Logfmt,
+        ..options()
+    });
+    let mut logfmt = Vec::new();
+    app.run(vec![input(fixture("types.logfmt"))], &mut logfmt).unwrap();
+    let through = run_json(options(), vec![input(String::from_utf8(logfmt).unwrap())]);
+    assert_eq!(through, run_json(options(), vec![input(fixture("types.logfmt"))]));
 }
