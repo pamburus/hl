@@ -36,6 +36,7 @@ use string::{DynMessageFormat, ExtendedSpaceAction, Format, KeyQuoting, ValueFor
 // ---
 
 pub mod string;
+pub mod structured;
 
 // ---
 

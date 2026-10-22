@@ -57,12 +57,12 @@ description: "Task list for machine-readable output formats"
 
 **Purpose**: Dependencies, module skeleton and test fixtures
 
-- [ ] T001 Add `proptest` to `[workspace.dependencies]` and as a dev-dependency of the `hl` package in Cargo.toml (research R17)
-- [ ] T002 [P] Create the module skeleton:
+- [x] T001 Add `proptest` to `[workspace.dependencies]` and as a dev-dependency of the `hl` package in Cargo.toml (research R17)
+- [x] T002 [P] Create the module skeleton:
   - `src/formatting/structured.rs`, declaring `mod json; mod logfmt; mod keyset;` and `#[cfg(test)] mod tests; #[cfg(test)] mod proptests;`;
   - empty `src/formatting/structured/json.rs`, `logfmt.rs` and `keyset.rs`, each with its own `#[cfg(test)] mod tests;`;
   - `pub mod structured;` in src/formatting.rs.
-- [ ] T003 [P] Create the fixtures in `src/testing/assets/fixtures/output-format/`:
+- [x] T003 [P] Create the fixtures in `src/testing/assets/fixtures/output-format/`:
   - `mixed.log`: JSON records of mixed levels, with nested objects, arrays, a `secret` field, a multi-line pretty-printed record, a plain-text stack trace line, an empty line and a whitespace-only line;
   - `types.logfmt`: unquoted numbers including `+5`, `.5`, `5.`, `007` and `5.e3`, booleans, `null`, quoted `"42"`, `"true"` and `""`, the quoted keys `"user name"` and `"items[0]"`, and repeated keys `tag=a tag=b`;
   - `timestamps.log`: one record per FR-007 example (Unix s, ms, µs and ns; fractional seconds and milliseconds; a textual timestamp with trailing zeros; zone-less; a non-UTC offset; unparsable string; unparsable number);

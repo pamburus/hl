@@ -1,0 +1,2 @@
+{"@timestamp":"2026-07-06T10:00:00.000Z","log.level":"info","log":{"logger":"app","origin":{"function":"main","file":{"name":"main.go","line":12}}},"message":"hello","service":{"name":"api"}}
+{"@timestamp":"2026-07-06T10:00:01.000Z","log":{"level":"warn","logger":"app"},"message":"careful","event":{"duration":1500}}

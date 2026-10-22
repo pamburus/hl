@@ -1,0 +1,14 @@
+{"ts":"2026-07-06T10:00:00.123Z","level":"info","logger":"api","msg":"started","caller":"main.go:10","http":{"status":200,"method":"GET"},"tags":["a","b"]}
+{"ts":"2026-07-06T10:00:01Z","level":"WARN","msg":"slow request","latency":1.25,"secret":"x","span":{"id":7,"attrs":{"user":"alice"}}}
+panic: runtime error: index out of range
+	at main.handler(main.go:42)
+
+   
+{
+  "ts": "2026-07-06T10:00:02Z",
+  "level": "error",
+  "msg": "failed",
+  "error": {"code": 7, "text": "boom"},
+  "items": [{"id": 1, "tags": {"a": 1}}]
+}
+{"ts":"2026-07-06T10:00:03Z","level":"debug","msg":"details","empty":"","nested":{},"secret":"y"}
