@@ -65,7 +65,7 @@ Details and rationale are in [research.md](./research.md).
 | Versioning of PRs | ✅ Pass | Commits on `feature/output-format` keep the version. The PR merging the feature into `develop` sets the next minor pre-release (`0.37.0-alpha.1`, or as computed then), and its commit ends with `Closes: #1481`. The `--flatten` default change keeps `pretty` output identical. Users whose configuration explicitly sets `flatten = "always"` get flattened JSON, which goes in the release notes. |
 | Backwards compatibility | ✅ Pass | No option is removed or changes meaning. `auto` is additive, and existing explicit values behave as before. |
 
-**Post-design re-check**: unchanged, all pass. The design adds no new crate, no on-disk format change and no global mutable state beyond a once-only exit hook (R10), which is justified by Ctrl-C exiting outside `App::run`. SIGTERM handling is tracked separately (#1612).
+**Post-design re-check**: unchanged, all pass. The design adds no new crate, no on-disk format change and no global mutable state beyond a once-only exit hook (R10), which is justified by Ctrl-C and SIGTERM exiting outside `App::run`.
 
 ## Project Structure
 
@@ -108,7 +108,7 @@ src/
 ├── settings.rs                    # MODIFY: output_key on Field and LevelField; InputField; FlattenOption::Auto; validate()
 ├── settings/error.rs              # MODIFY: output-key validation errors
 ├── settings/tests.rs              # MODIFY: validation and defaults tests
-├── signal_unix.rs, signal_windows.rs  # MODIFY: call the exit hook before exiting on Ctrl-C
+├── signal_common.rs     # MODIFY: call the exit hook in shutdown, before exiting on a signal
 ├── diagnostics.rs                 # NEW: DropStats, DroppedLine reporting, exit hook
 └── testing/assets/
     ├── fixtures/output-format/    # NEW: input logs and expected json/logfmt outputs

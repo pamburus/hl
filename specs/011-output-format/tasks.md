@@ -45,7 +45,7 @@ description: "Task list for machine-readable output formats"
 ### Implementation
 
 - [x] T000c In src/input.rs, add `pub struct InputDescriptor { pub index: usize, pub name: String }`, with `From<(usize, String)>` and `From<(usize, &InputReference)>`. In src/model.rs, add `#[derive(Clone, Debug)] pub struct Origin<'r> { pub input: &'r InputDescriptor, pub range: Range<u64> }` with `new` and `slice`, and a required `pub origin: Origin<'r>` field on `RecordWithSource`, taken by its constructors.
-- [x] T000d In src/app.rs, add the origin of the processed data (`Origin`) as a parameter of `SegmentProcess::process`, and build the descriptors once per run in `cat`, `sort` and `follow`, before any record is processed. Readers send each segment with its byte offset in the input: a running sum of segment sizes in `cat`, kept across scans by `BlockScanner` in `follow` and reset when a file is replaced, and the block offset plus the entry offset in `sort`. `SegmentProcessor` sets each record's origin to its slice of the data's origin. Update every call site in src/app.rs, src/app/tests.rs and benches/bench/ws/hl/combined.rs.
+- [x] T000d In src/app.rs, add the origin of the processed data (`Origin`) as a parameter of `SegmentProcess::process`, and build the descriptors once per run in `cat`, `sort` and `follow`, before any record is processed. Readers send each segment with its byte offset in the input: a running sum of segment sizes in `cat`, kept across scans by `BlockScanner` in `follow`, starting at the position after `--tail` and reset when a file is replaced, and the block offset plus the entry offset in `sort`. Offsets are in the decompressed data. `SegmentProcessor` sets each record's origin to its slice of the data's origin. Update every call site in src/app.rs, src/app/tests.rs and benches/bench/ws/hl/combined.rs.
 - [x] T000e In src/app.rs, split `App::input_badges` into a name computation (full names, and compact names with the existing clipping rules and resolved punctuation) and the themed, padded badge rendering, which uses the computed names. Badge output is unchanged.
 - [x] T000f Run `just ci`. Compare `cargo bench --bench bench -- combined` with `develop`. Bump with `just bump` after rebasing onto `develop`, and open the PR with a `refactor(app): ...` title and the benchmark comparison.
 
@@ -284,7 +284,7 @@ description: "Task list for machine-readable output formats"
   - in structured mode, send blocks that the pusher would skip but whose `stat.entries_invalid > 0` to workers in a diagnostics-only mode, which reports drops and emits no items.
 - [ ] T039 [US4] Call the exit hook:
   - at the end of `App::run` in src/app.rs;
-  - before `exit` in the Ctrl-C handlers in src/signal_unix.rs and src/signal_windows.rs;
+  - in `shutdown` in src/signal_common.rs, before `exit`, which covers SIGINT, SIGTERM and the Windows console control handler;
   - before `process::exit` in `ExitOnWriteError::inspect` in src/main.rs (research R10).
 - [ ] T040 [US4] In src/formatting/structured.rs, replace the silent drops from T021 with `diagnostics::report_repeat` and `report_collision` calls, guarded by `log::log_enabled!(log::Level::Debug)`. They take the source name from `rec.origin.input` and the byte range from `rec.origin.range`.
 

@@ -129,7 +129,7 @@ Lines that are empty or contain only whitespace are not dropped lines.
 
 ## DropStats
 
-Per-run state: one counter per input, incremented for each DroppedLine. At exit, one info-level summary entry is written for every input with a non-zero counter (FR-020). The summary is written once, on normal completion, on SIGINT and on a closed output (research R10).
+Per-run state: one counter per input, incremented for each DroppedLine. At exit, one info-level summary entry is written for every input with a non-zero counter (FR-020). The summary is written once, on normal completion, on SIGINT or SIGTERM, and on a closed output (research R10).
 
 ## State transitions
 
