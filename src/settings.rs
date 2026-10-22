@@ -162,17 +162,18 @@ pub struct PredefinedFields {
 
 impl PredefinedFields {
     pub fn nested_field_names(&self) -> impl Iterator<Item = &str> {
-        let fields: [&[String]; 7] = [
+        let fields: [&[String]; 6] = [
             &self.time.0.names,
             &self.message.0.names,
             &self.logger.0.names,
             &self.caller.0.names,
             &self.caller_file.0.names,
             &self.caller_line.0.names,
-            self.level.variants.first().map(|v| v.names.as_slice()).unwrap_or(&[]),
         ];
+        let levels = self.level.variants.iter().map(|v| v.names.as_slice());
         fields
             .into_iter()
+            .chain(levels)
             .flatten()
             .filter(|name| name.contains('.'))
             .map(|s| s.as_str())

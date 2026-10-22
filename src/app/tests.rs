@@ -454,6 +454,43 @@ fn test_issue_176_complex_span_json() {
 }
 
 #[test]
+fn test_nested_level_field_in_second_variant() {
+    let variant = |name: &str, level: Level, value: &str| settings::RawLevelFieldVariant {
+        names: vec![name.to_owned()],
+        values: [(level.into(), vec![value.to_owned()])].into_iter().collect(),
+        level: None,
+    };
+    let fields = || FieldOptions {
+        settings: Fields {
+            predefined: settings::PredefinedFields {
+                level: settings::LevelField {
+                    variants: vec![
+                        variant("level", Level::Info, "info"),
+                        variant("log.level", Level::Warning, "warn"),
+                    ],
+                    ..Default::default()
+                },
+                ..Default::default()
+            },
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+    for (data, expected) in [
+        (
+            r#"{"message":"test","log":{"level":"warn","x":1}}"#,
+            "|WRN| test log={ x=1 }\n",
+        ),
+        (r#"message=test log.level=warn log.x=1"#, "|WRN| test log.x=1\n"),
+    ] {
+        let mut output = Vec::new();
+        let app = App::new(options().with_expansion(ExpansionMode::Never).with_fields(fields()));
+        app.run(vec![input(format!("{data}\n"))], &mut output).unwrap();
+        assert_eq!(std::str::from_utf8(&output).unwrap(), expected, "{data}");
+    }
+}
+
+#[test]
 fn test_issue_176_complex_span_logfmt() {
     let input = input(concat!(
         r#"message=test span.name=main span.source=main.rs:12 span.extra=included"#,
