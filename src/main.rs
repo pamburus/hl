@@ -118,6 +118,16 @@ fn run() -> Result<()> {
         cli::PagingOption::Never => false,
     };
     let paging = if opt.paging_never { false } else { paging };
+
+    // Configure the output format; raw output takes precedence over a structured format.
+    let output_format = match opt.output_format {
+        _ if opt.raw => app::OutputFormat::Pretty,
+        cli::OutputFormat::Pretty => app::OutputFormat::Pretty,
+        cli::OutputFormat::Json => app::OutputFormat::Json,
+        cli::OutputFormat::Logfmt => app::OutputFormat::Logfmt,
+    };
+    // Structured output holds nothing but records, so it is never colored or paged.
+    let structured = output_format.is_structured();
     let role = if opt.follow { PagerRole::Follow } else { PagerRole::View };
     let selector = PagerSelector::new(&settings.pager);
     let start_pager = |role: PagerRole| -> Result<Option<(StartedPager, Option<OutputDelimiter>)>> {
@@ -163,7 +173,7 @@ fn run() -> Result<()> {
         return app::list_themes(&app_dirs, tags.map(|t| *t), help::Formatter::new(stdout()));
     }
 
-    let theme = if use_colors {
+    let theme = if use_colors && !structured {
         let theme = &opt.theme;
         Theme::load_with_overlays(&app_dirs, theme, &settings.theme_overlays)?
     } else {
@@ -257,7 +267,7 @@ fn run() -> Result<()> {
     };
 
     let mut input_info = *opt.input_info;
-    if input_info.contains(InputInfo::Auto) {
+    if input_info.contains(InputInfo::Auto) && !structured {
         log::debug!("configured input info layouts: {input_info}");
         input_info = InputInfo::resolve(input_info);
         log::debug!("* resolved input info layouts: {input_info}");
@@ -322,7 +332,7 @@ fn run() -> Result<()> {
     let mut pager_delimiter = None;
     let (output, using_pager): (OutputStream, bool) = match opt.output {
         Some(output) => (Box::new(std::fs::File::create(PathBuf::from(&output))?), false),
-        None => match start_pager(role)? {
+        None => match if structured { None } else { start_pager(role)? } {
             Some((mut pager, delimiter)) => {
                 pager_delimiter = delimiter;
                 _pager_watcher = pager.detach_process().map(|p| {
@@ -382,7 +392,11 @@ fn run() -> Result<()> {
             cli::UnixTimestampUnit::Us => Some(app::UnixTimestampUnit::Microseconds),
             cli::UnixTimestampUnit::Ns => Some(app::UnixTimestampUnit::Nanoseconds),
         },
-        flatten: opt.flatten != cli::FlattenOption::Never,
+        flatten: match opt.flatten {
+            cli::FlattenOption::Auto => output_format != app::OutputFormat::Json,
+            cli::FlattenOption::Never => false,
+            cli::FlattenOption::Always => true,
+        },
         ascii,
         expand: opt.expansion.into(),
         output_delimiter: {
@@ -396,6 +410,7 @@ fn run() -> Result<()> {
                 OutputDelimiter::Nul => "\0".into(),
             }
         },
+        output_format,
     });
 
     log::debug!("run the app");

@@ -233,3 +233,21 @@ fn test_punctuation_resolve() {
         assert_ne!(ascii_val, utf8_val, "ASCII and Unicode values should be different");
     }
 }
+
+#[test]
+fn test_flatten_option_values() {
+    #[derive(Deserialize)]
+    struct Wrapper {
+        flatten: FlattenOption,
+    }
+    let parse = |value: &str| toml::from_str::<Wrapper>(&format!("flatten = {value:?}")).map(|x| x.flatten);
+    assert_eq!(parse("auto").unwrap(), FlattenOption::Auto);
+    assert_eq!(parse("never").unwrap(), FlattenOption::Never);
+    assert_eq!(parse("always").unwrap(), FlattenOption::Always);
+    assert!(parse("sometimes").is_err());
+}
+
+#[test]
+fn test_default_flatten_is_auto() {
+    assert_eq!(Settings::default().formatting.flatten, Some(FlattenOption::Auto));
+}

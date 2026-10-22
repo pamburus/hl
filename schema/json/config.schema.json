@@ -433,7 +433,7 @@
       "properties": {
         "flatten": {
           "type": "string",
-          "enum": ["never", "always"]
+          "enum": ["auto", "never", "always"]
         },
         "message": {
           "type": "object",

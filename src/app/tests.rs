@@ -83,6 +83,7 @@ fn options() -> Options {
         ascii: AsciiMode::Off,
         expand: Default::default(),
         output_delimiter: "\n".to_string(),
+        output_format: OutputFormat::Pretty,
     }
 }
 
@@ -3019,4 +3020,79 @@ fn test_sort_passes_record_origin_across_blocks() {
         .collect_vec();
     ranges.sort_by_key(|x| x.start);
     assert_eq!(ranges, (0..4).map(|i| i * (n + 1)..i * (n + 1) + n).collect_vec());
+}
+
+#[test]
+fn test_structured_output_has_no_badges() {
+    let inputs = [InputReference::Stdin, InputReference::Stdin];
+    for format in [OutputFormat::Json, OutputFormat::Logfmt] {
+        let app = App::new(Options {
+            input_info: InputInfo::Full.into(),
+            theme: theme(),
+            output_format: format,
+            ..options()
+        });
+
+        assert_eq!(app.input_badges(&descriptors(&inputs)), None);
+
+        let result = app.prepare_follow_badges(&descriptors(&inputs));
+        assert_eq!(result.si.width, 0);
+        assert_eq!(result.si.synced, "");
+        assert_eq!(result.si.failed, "");
+        assert_eq!(result.si.placeholder, "");
+        assert!(result.input.is_none());
+    }
+}
+
+#[test]
+fn test_structured_output_drops_unparsed_data() {
+    // Unparsed lines and prefixes are dropped even when nothing filters the records,
+    // which would show them in pretty output.
+    let data = concat!(
+        "plain text\n",
+        "\n",
+        "prefix {\"msg\":\"m1\"}\n",
+        "{\"msg\":\"m2\"} trailing text\n",
+    );
+    for format in [OutputFormat::Json, OutputFormat::Logfmt] {
+        let app = App::new(Options {
+            allow_prefix: true,
+            output_format: format,
+            ..options()
+        });
+        let mut output = Vec::new();
+        app.run(vec![input(data)], &mut output).unwrap();
+        let output = std::str::from_utf8(&output).unwrap();
+        let lines = output.lines().collect_vec();
+        assert_eq!(lines.len(), 2, "{format:?}: {output:?}");
+        assert!(lines[0].contains("m1") && !lines[0].contains("prefix"), "{output:?}");
+        assert!(lines[1].contains("m2") && !lines[1].contains("trailing"), "{output:?}");
+        assert!(output.ends_with('\n'), "{output:?}");
+    }
+}
+
+#[test]
+fn test_structured_output_has_no_empty_entries() {
+    // A record filtered out leaves no empty entry, also between records in the same chunk.
+    let data = "{\"level\":\"debug\",\"msg\":\"m1\"}{\"level\":\"info\",\"msg\":\"m2\"}\n";
+    for format in [OutputFormat::Json, OutputFormat::Logfmt] {
+        let app = App::new(
+            Options {
+                output_format: format,
+                ..options()
+            }
+            .with_filter(
+                Filter {
+                    level: Some(Level::Info),
+                    ..Default::default()
+                }
+                .into(),
+            ),
+        );
+        let mut output = Vec::new();
+        app.run(vec![input(data)], &mut output).unwrap();
+        let output = std::str::from_utf8(&output).unwrap();
+        assert_eq!(output.lines().collect_vec().len(), 1, "{format:?}: {output:?}");
+        assert!(output.contains("m2") && output.ends_with('\n'), "{output:?}");
+    }
 }

@@ -1,4 +1,4 @@
-#:schema https://raw.githubusercontent.com/pamburus/hl/v0.36.5/schema/json/config.schema.json
+#:schema ../../schema/json/config.schema.json
 
 #
 # Time format, see https://man7.org/linux/man-pages/man1/date.1.html for details.
@@ -125,8 +125,9 @@ names = []
 
 [formatting]
 #
-# Flatten nested fields by joining them with a dot. Options: ["always", "never"].
-flatten = "always"
+# Flatten nested fields by joining them with a dot. Options: ["auto", "never", "always"].
+# With "auto", fields are flattened in the default and logfmt output formats, and kept nested in the json output format.
+flatten = "auto"
 #
 # Prettify field keys by replacing underscores with hyphens. Options: [true, false].
 prettify-field-keys = true

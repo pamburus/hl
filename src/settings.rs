@@ -465,6 +465,7 @@ pub enum MessageFormat {
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub enum FlattenOption {
+    Auto,
     Never,
     Always,
 }

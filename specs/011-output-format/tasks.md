@@ -78,10 +78,10 @@ description: "Task list for machine-readable output formats"
 
 ### Tests (write first, confirm they fail)
 
-- [ ] T004 [P] Settings tests in src/settings/tests.rs:
+- [x] T004 [P] Settings tests in src/settings/tests.rs:
   - `formatting.flatten` accepts `"auto"`, `"never"` and `"always"`;
   - the embedded default configuration resolves `formatting.flatten` to `auto`.
-- [ ] T005 [P] CLI tests in src/cli/tests.rs:
+- [x] T005 [P] CLI tests in src/cli/tests.rs:
   - `--output-format` accepts `pretty`, `json` and `logfmt`, defaults to `pretty`, and rejects other values;
   - `HL_OUTPUT_FORMAT` is used when the option is absent, and the option wins over it;
   - a repeated option overrides the earlier one;
@@ -89,23 +89,23 @@ description: "Task list for machine-readable output formats"
 
 ### Implementation
 
-- [ ] T006 Add `Auto` to `settings::FlattenOption` in src/settings.rs. Set `flatten = "auto"` in etc/defaults/config.toml, with its comment listing `auto`, `never` and `always`. Change the `formatting.flatten` enum in schema/json/config.schema.json to `["auto", "never", "always"]`.
-- [ ] T007 In src/cli.rs:
+- [x] T006 Add `Auto` to `settings::FlattenOption` in src/settings.rs. Set `flatten = "auto"` in etc/defaults/config.toml, with its comment listing `auto`, `never` and `always`. Change the `formatting.flatten` enum in schema/json/config.schema.json to `["auto", "never", "always"]`.
+- [x] T007 In src/cli.rs:
   - add `Auto` to `cli::FlattenOption`, map it in both `From` impls, and make the `--flatten` default fall back to `Auto`;
   - add `#[derive(ValueEnum)] pub enum OutputFormat { Pretty, Json, Logfmt }` and an `output_format` option with `long`, `env = "HL_OUTPUT_FORMAT"`, `default_value = "pretty"`, `overrides_with = "output_format"`, `value_name = "FORMAT"` and `help_heading = heading::OUTPUT`, with the help text from contracts/cli.md.
-- [ ] T008 In src/app.rs:
+- [x] T008 In src/app.rs:
   - add `pub enum OutputFormat { Pretty, Json, Logfmt }` and `pub output_format: OutputFormat` to `Options`, with `is_structured()`;
   - set `output_format: OutputFormat::Pretty` in `options()` in src/app/tests.rs and in every other `Options` literal (`grep -rn "hl::Options {" src benches`).
-- [ ] T009 In src/main.rs:
+- [x] T009 In src/main.rs:
   - compute the effective output format: `Pretty` whenever `opt.raw` is set (FR-016);
   - resolve `opt.flatten`: `Auto` gives `true` for `Pretty` and `Logfmt` and `false` for `Json`;
   - when the format is structured: use `Theme::none()` whatever the color options say, never start a pager, use `opt.output_delimiter`, and skip the terminal-width input-info resolution (FR-017);
   - pass `output_format` into `hl::Options`.
-- [ ] T010 In src/app.rs, when `options.output_format.is_structured()`:
+- [x] T010 In src/app.rs, when `options.output_format.is_structured()`:
   - `input_badges` returns `None`;
   - `prepare_follow_badges` yields a `SyncIndicator` with width 0 and empty strings;
   - `new_segment_processor` sets `allow_unparsed_data: false` (FR-017, FR-018).
-- [ ] T011 Run `cargo build`, then `just ci`, since the schema changed (constitution V). Verify that `pretty` output is unchanged: the existing tests in src/app/tests.rs and src/formatting/tests.rs pass without edits (FR-002).
+- [x] T011 Run `cargo build`, then `just ci`, since the schema changed (constitution V). Verify that `pretty` output is unchanged: the existing tests in src/app/tests.rs and src/formatting/tests.rs pass without edits (FR-002).
 
 **Checkpoint**: `--output-format` parses and structured mode suppresses colors, pager, badges and unparsed lines, but still formats with the `pretty` formatter until US1 wires in the new one.
 

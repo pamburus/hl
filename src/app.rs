@@ -94,6 +94,7 @@ pub struct Options {
     pub ascii: AsciiMode,
     pub expand: ExpansionMode,
     pub output_delimiter: String,
+    pub output_format: OutputFormat,
 }
 
 impl Options {
@@ -193,6 +194,25 @@ pub struct FieldOptions {
 pub enum InputFormat {
     Json,
     Logfmt,
+}
+
+/// Format of the output records.
+#[derive(Eq, PartialEq, Copy, Clone, Debug, Default)]
+pub enum OutputFormat {
+    /// Human-readable output.
+    #[default]
+    Pretty,
+    /// One JSON object per record.
+    Json,
+    /// One line of logfmt pairs per record.
+    Logfmt,
+}
+
+impl OutputFormat {
+    /// Tells whether the format is machine-readable, so the output must hold nothing but records.
+    pub fn is_structured(self) -> bool {
+        !matches!(self, Self::Pretty)
+    }
 }
 
 // ---
@@ -604,7 +624,11 @@ impl App {
     }
 
     fn prepare_follow_badges(&self, inputs: &[InputDescriptor]) -> FollowBadges {
-        let si = SyncIndicator::from(&self.options.theme.indicators.sync);
+        let si = if self.options.output_format.is_structured() {
+            SyncIndicator::default()
+        } else {
+            SyncIndicator::from(&self.options.theme.indicators.sync)
+        };
 
         let mut badges = self.input_badges(inputs);
         if let Some(badges) = &mut badges {
@@ -900,6 +924,10 @@ impl App {
     }
 
     fn input_badges(&self, inputs: &[InputDescriptor]) -> Option<Vec<String>> {
+        if self.options.output_format.is_structured() {
+            return None;
+        }
+
         let names = inputs.iter().map(|input| input.name.as_str()).collect_vec();
 
         let ii = self.options.input_info;
@@ -1031,7 +1059,10 @@ impl App {
     fn new_segment_processor<'a>(&'a self, parser: &'a Parser) -> impl SegmentProcess + 'a {
         let options = SegmentProcessorOptions {
             allow_prefix: self.options.allow_prefix,
-            allow_unparsed_data: self.options.filter.is_empty() && self.options.input_format.is_none(),
+            allow_unparsed_data: self.options.filter.is_empty()
+                && self.options.input_format.is_none()
+                && !self.options.output_format.is_structured(),
+            records_only: self.options.output_format.is_structured(),
             delimiter: self.options.delimiter.clone(),
             input_format: self.options.input_format,
             output_delimiter: self.options.output_delimiter.clone(),
@@ -1110,6 +1141,8 @@ pub trait SegmentProcess {
 pub struct SegmentProcessorOptions {
     pub allow_prefix: bool,
     pub allow_unparsed_data: bool,
+    /// Output holds nothing but records: no prefixes before them and no empty entries.
+    pub records_only: bool,
     pub delimiter: Delimiter,
     pub input_format: Option<InputFormat>,
     pub output_delimiter: String,
@@ -1181,14 +1214,20 @@ impl<'a, Formatter: RecordWithSourceFormatter, Filter: RecordFilter> SegmentProc
             while let Some(Ok(ar)) = stream.next() {
                 i += 1;
                 last_offset = ar.offsets.end;
-                if parsed_some {
+                let record = self.parser.parse(&ar.record);
+                let matches = record.matches(&self.filter);
+                let separated = if self.options.records_only {
+                    matches && produced_some
+                } else {
+                    parsed_some
+                };
+                if separated {
                     buf.extend(self.options.output_delimiter.as_bytes());
                 }
                 parsed_some = true;
-                let record = self.parser.parse(&ar.record);
-                if record.matches(&self.filter) {
+                if matches {
                     let begin = buf.len();
-                    if ar.prefix.is_empty() {
+                    if ar.prefix.is_empty() || self.options.records_only {
                         buf.extend(prefix.as_bytes());
                     } else {
                         let mut first = true;
@@ -1545,6 +1584,7 @@ struct FollowBadges {
     input: Option<Vec<String>>,
 }
 
+#[derive(Default)]
 struct SyncIndicator {
     width: usize,
     synced: String,
