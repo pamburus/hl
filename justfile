@@ -67,7 +67,7 @@ lint-markdown: (setup "markdown-lint")
 # Run the Rust linter (clippy)
 [private]
 clippy: (setup "clippy")
-    cargo clippy --workspace --all-targets --all-features
+    cargo clippy --workspace --all-targets --all-features -- -D warnings
 
 [doc('Automatically fix linting issues where possible')]
 fix: fix-markdown fix-clippy
