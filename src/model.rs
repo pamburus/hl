@@ -27,6 +27,7 @@ use serde_logfmt::logfmt;
 use crate::{
     app::{InputFormat, UnixTimestampUnit},
     error::{Error, Result},
+    input::InputDescriptor,
     level::{self},
     serdex::StreamDeserializerWithOffsets,
     settings::PredefinedFields,
@@ -370,7 +371,7 @@ pub type RecordFields<'a> = heapopt::Vec<(&'a str, RawValue<'a>), RECORD_EXTRA_C
 // ---
 
 pub trait RecordWithSourceConstructor<'r, 's> {
-    fn with_source(&'r self, source: &'s [u8]) -> RecordWithSource<'r, 's>;
+    fn with_source(&'r self, source: &'s [u8], origin: Origin<'r>) -> RecordWithSource<'r, 's>;
 }
 
 // ---
@@ -409,22 +410,52 @@ impl<'a> Caller<'a> {
 
 // ---
 
+/// Where data, such as a record's source, comes from.
+#[derive(Clone, Debug)]
+pub struct Origin<'r> {
+    /// The input the data was read from.
+    pub input: &'r InputDescriptor,
+    /// The byte range of the data in the input after decompression,
+    /// which for an uncompressed file is the range in the file itself.
+    pub range: Range<u64>,
+}
+
+impl<'r> Origin<'r> {
+    /// Creates the origin of `len` bytes read from `input` at `offset`.
+    #[inline]
+    pub fn new(input: &'r InputDescriptor, offset: u64, len: usize) -> Self {
+        Self {
+            input,
+            range: offset..offset + len as u64,
+        }
+    }
+
+    /// Returns the origin of a part of the data, given by its range within the data.
+    #[inline]
+    pub fn slice(&self, range: Range<usize>) -> Self {
+        Self::new(self.input, self.range.start + range.start as u64, range.len())
+    }
+}
+
+// ---
+
 pub struct RecordWithSource<'r, 's> {
     pub record: &'r Record<'s>,
     pub source: &'s [u8],
+    pub origin: Origin<'r>,
 }
 
 impl<'r, 's> RecordWithSource<'r, 's> {
     #[inline]
-    pub fn new(record: &'r Record<'s>, source: &'s [u8]) -> Self {
-        Self { record, source }
+    pub fn new(record: &'r Record<'s>, source: &'s [u8], origin: Origin<'r>) -> Self {
+        Self { record, source, origin }
     }
 }
 
 impl<'r, 's> RecordWithSourceConstructor<'r, 's> for Record<'s> {
     #[inline]
-    fn with_source(&'r self, source: &'s [u8]) -> RecordWithSource<'r, 's> {
-        RecordWithSource::new(self, source)
+    fn with_source(&'r self, source: &'s [u8], origin: Origin<'r>) -> RecordWithSource<'r, 's> {
+        RecordWithSource::new(self, source, origin)
     }
 }
 

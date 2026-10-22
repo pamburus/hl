@@ -134,12 +134,55 @@ impl InputReference {
         }
     }
 
+    /// Returns the name of the input as shown to the user.
+    pub fn name(&self) -> String {
+        match self {
+            Self::Stdin => "<stdin>".to_owned(),
+            Self::File(path) => path.original.to_string_lossy().into_owned(),
+        }
+    }
+
     #[inline]
     fn path(&self) -> Option<&PathBuf> {
         match self {
             Self::Stdin => None,
             Self::File(path) => Some(&path.canonical),
         }
+    }
+}
+
+// ---
+
+/// Describes an input of a run, for the records that come from it.
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct InputDescriptor {
+    /// The position of the input in the list of inputs.
+    pub index: usize,
+    /// The name of the input as shown to the user.
+    pub name: String,
+}
+
+impl InputDescriptor {
+    /// Creates a new input descriptor.
+    pub fn new(index: usize, name: impl Into<String>) -> Self {
+        Self {
+            index,
+            name: name.into(),
+        }
+    }
+}
+
+impl From<(usize, String)> for InputDescriptor {
+    /// Creates a descriptor from an index and a name, as produced by enumerating input names.
+    fn from((index, name): (usize, String)) -> Self {
+        Self::new(index, name)
+    }
+}
+
+impl<'a> From<(usize, &'a InputReference)> for InputDescriptor {
+    /// Creates a descriptor from an index and an input reference, as produced by enumerating inputs.
+    fn from((index, input): (usize, &'a InputReference)) -> Self {
+        (index, input.name()).into()
     }
 }
 
@@ -277,6 +320,15 @@ impl Input {
     /// Opens the stdin for reading.
     pub fn stdin() -> io::Result<Self> {
         InputReference::Stdin.open()
+    }
+
+    /// Returns the byte position reading starts from, so it must be called before reading.
+    /// A sequential stream is never seeked, so it is taken to start from zero.
+    pub fn position(&mut self) -> io::Result<u64> {
+        match &mut self.stream {
+            Stream::Sequential(_) => Ok(0),
+            Stream::RandomAccess(stream) => stream.stream_position(),
+        }
     }
 
     /// Seeks to the last `entries` entries of the input.

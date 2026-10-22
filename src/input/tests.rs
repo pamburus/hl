@@ -73,6 +73,23 @@ fn test_input_tail() {
 }
 
 #[test]
+fn test_input_position() {
+    // A file seeked to its tail is read from the tail, a sequential stream from its start.
+    let mut input = Input::open(&PathBuf::from("sample/test.log")).unwrap();
+    assert_eq!(input.position().unwrap(), 0);
+    let size = std::fs::metadata("sample/test.log").unwrap().len();
+    let mut input = input.tail(1, Delimiter::Newline).unwrap();
+    let position = input.position().unwrap();
+    let mut buf = Vec::new();
+    let n = input.stream.into_sequential().read_to_end(&mut buf).unwrap();
+    assert_eq!(position + n as u64, size);
+    assert!(position > 0);
+
+    let mut input = Input::stdin().unwrap();
+    assert_eq!(input.position().unwrap(), 0);
+}
+
+#[test]
 fn test_stream() {
     let stream = Stream::Sequential(Box::new(Cursor::new(b"test")));
     let stream = stream.verified().decoded().tagged(InputReference::Stdin);
@@ -575,4 +592,23 @@ fn test_block_entry_empty() {
     for block in blocks {
         let _entries = block.into_entries().unwrap().collect_vec();
     }
+}
+
+#[test]
+fn test_input_descriptor_from() {
+    let expected = |index, name: &str| InputDescriptor {
+        index,
+        name: name.into(),
+    };
+
+    assert_eq!(InputDescriptor::from((1, "a.log".to_owned())), expected(1, "a.log"));
+
+    let inputs = [
+        InputReference::File(InputPath::ephemeral("a.log".into())),
+        InputReference::Stdin,
+    ];
+    assert_eq!(
+        inputs.iter().enumerate().map(InputDescriptor::from).collect_vec(),
+        vec![expected(0, "a.log"), expected(1, "<stdin>")]
+    );
 }

@@ -656,6 +656,14 @@ pub enum Segment {
 }
 
 impl Segment {
+    /// Returns the data of the segment, whether it is complete or not.
+    #[inline]
+    pub fn data(&self) -> &[u8] {
+        match self {
+            Self::Complete(buf) | Self::Incomplete(buf, _) => buf.data(),
+        }
+    }
+
     /// Returns a new Segment containing the given SegmentBuf.
     #[inline]
     fn new(buf: SegmentBuf, placement: Option<PartialPlacement>) -> Self {

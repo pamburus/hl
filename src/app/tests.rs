@@ -14,7 +14,7 @@ use crate::{
     LinuxDateFormat,
     filtering::MatchOptions,
     level::{InfallibleLevel, Level},
-    model::FieldFilterSet,
+    model::{FieldFilterSet, RecordWithSource},
     scanning::{BufFactory, PartialPlacement, Segment, SegmentBuf, SegmentBufFactory},
     settings::{self, AsciiMode, DisplayVariant, ExpansionMode, MessageFormat, MessageFormatting},
     syntax::*,
@@ -667,13 +667,13 @@ fn test_input_badges_with_ascii_mode() {
     let app_unicode = App::new(options_unicode);
 
     // Get badges with ASCII mode ON
-    let badges_ascii = app_ascii.input_badges(inputs.iter());
+    let badges_ascii = app_ascii.input_badges(&descriptors(&inputs));
     assert!(badges_ascii.is_some(), "Should produce badges");
     let badges_a = badges_ascii.unwrap();
     println!("ASCII badges: {:?}", badges_a);
 
     // Get badges with ASCII mode OFF (Unicode)
-    let badges_utf8 = app_unicode.input_badges(inputs.iter());
+    let badges_utf8 = app_unicode.input_badges(&descriptors(&inputs));
     assert!(badges_utf8.is_some(), "Should produce badges");
     let badges_u = badges_utf8.unwrap();
     println!("Unicode badges: {:?}", badges_u);
@@ -970,7 +970,7 @@ fn test_input_badges_with_emoji_variation_selectors() {
     opts.input_info = InputInfo::Full.into();
     let app = App::new(opts);
 
-    let badges = app.input_badges(inputs.iter()).expect("Should produce badges");
+    let badges = app.input_badges(&descriptors(&inputs)).expect("Should produce badges");
     assert_eq!(badges.len(), 1);
 
     // The badge should contain the emoji with variation selector
@@ -998,7 +998,7 @@ fn test_input_badges_with_emojis() {
     opts.input_info = InputInfo::Full.into();
     let app = App::new(opts);
 
-    let badges = app.input_badges(inputs.iter()).expect("Should produce badges");
+    let badges = app.input_badges(&descriptors(&inputs)).expect("Should produce badges");
 
     // Both badges should be padded to the same width
     // The emoji file has width: 2 (emoji) + 8 (test.log) = 10
@@ -1026,7 +1026,7 @@ fn test_input_badges_compact_mode_with_emojis() {
     opts.input_info = InputInfo::Compact.into();
     let app = App::new(opts);
 
-    let badges = app.input_badges(inputs.iter());
+    let badges = app.input_badges(&descriptors(&inputs));
 
     // Should produce badges even with emojis in compact mode
     assert!(badges.is_some());
@@ -1052,7 +1052,7 @@ fn test_input_badges_cjk_characters() {
     opts.input_info = InputInfo::Full.into();
     let app = App::new(opts);
 
-    let badges = app.input_badges(inputs.iter()).expect("Should produce badges");
+    let badges = app.input_badges(&descriptors(&inputs)).expect("Should produce badges");
 
     // Both badges should be generated and padded correctly
     assert_eq!(badges.len(), 2);
@@ -1077,7 +1077,7 @@ fn test_input_badges_mixed_width_characters() {
     opts.input_info = InputInfo::Full.into();
     let app = App::new(opts);
 
-    let badges = app.input_badges(inputs.iter()).expect("Should produce badges");
+    let badges = app.input_badges(&descriptors(&inputs)).expect("Should produce badges");
 
     assert_eq!(badges.len(), 2);
     // Verify both badges were created
@@ -1102,7 +1102,7 @@ fn test_input_badges_compact_mode_common_prefix_with_emojis() {
     opts.input_info = InputInfo::Compact.into();
     let app = App::new(opts);
 
-    let badges = app.input_badges(inputs.iter());
+    let badges = app.input_badges(&descriptors(&inputs));
 
     assert!(badges.is_some());
     let badges = badges.unwrap();
@@ -1123,7 +1123,7 @@ fn test_input_badges_minimal_mode() {
     let app = App::new(opts);
 
     // Minimal mode with single input should still produce badge
-    let badges = app.input_badges(inputs.iter());
+    let badges = app.input_badges(&descriptors(&inputs));
     assert!(badges.is_some());
 }
 
@@ -1140,7 +1140,7 @@ fn test_input_badges_none_mode_single_input() {
     let app = App::new(opts);
 
     // Minimal+None mode with single input should not produce badges
-    let badges = app.input_badges(inputs.iter());
+    let badges = app.input_badges(&descriptors(&inputs));
     assert!(badges.is_none());
 }
 
@@ -1163,7 +1163,7 @@ fn test_input_badges_none_mode_multiple_inputs() {
     let app = App::new(opts);
 
     // Minimal+None mode with multiple inputs should produce badges
-    let badges = app.input_badges(inputs.iter());
+    let badges = app.input_badges(&descriptors(&inputs));
     assert!(badges.is_some());
 }
 
@@ -1181,7 +1181,7 @@ fn test_input_badges_stdin() {
     opts.input_info = InputInfo::Full.into();
     let app = App::new(opts);
 
-    let badges = app.input_badges(inputs.iter()).expect("Should produce badges");
+    let badges = app.input_badges(&descriptors(&inputs)).expect("Should produce badges");
 
     assert_eq!(badges.len(), 2);
     assert!(badges[0].contains("<stdin>") || !badges[0].is_empty());
@@ -1217,7 +1217,7 @@ fn test_input_badges_compact_mode_long_prefix() {
     opts.input_info = InputInfo::Compact.into();
     let app = App::new(opts);
 
-    let badges = app.input_badges(inputs.iter());
+    let badges = app.input_badges(&descriptors(&inputs));
 
     assert!(badges.is_some());
     let badges = badges.unwrap();
@@ -1247,7 +1247,7 @@ fn test_input_badges_compact_mode_short_prefix() {
     opts.input_info = InputInfo::Compact.into();
     let app = App::new(opts);
 
-    let badges = app.input_badges(inputs.iter());
+    let badges = app.input_badges(&descriptors(&inputs));
 
     assert!(badges.is_some());
     let badges = badges.unwrap();
@@ -1286,7 +1286,7 @@ fn test_input_badges_compact_mode_emoji_in_long_names() {
     opts.input_info = InputInfo::Compact.into();
     let app = App::new(opts);
 
-    let badges = app.input_badges(inputs.iter());
+    let badges = app.input_badges(&descriptors(&inputs));
 
     assert!(badges.is_some());
     let badges = badges.unwrap();
@@ -1325,7 +1325,7 @@ fn test_input_badges_compact_mode_medium_prefix() {
     opts.input_info = InputInfo::Compact.into();
     let app = App::new(opts);
 
-    let badges = app.input_badges(inputs.iter());
+    let badges = app.input_badges(&descriptors(&inputs));
 
     assert!(badges.is_some());
     let badges = badges.unwrap();
@@ -1359,7 +1359,7 @@ fn test_input_badges_compact_mode_very_short_prefix() {
     opts.input_info = InputInfo::Compact.into();
     let app = App::new(opts);
 
-    let badges = app.input_badges(inputs.iter());
+    let badges = app.input_badges(&descriptors(&inputs));
 
     assert!(badges.is_some());
     let badges = badges.unwrap();
@@ -1386,7 +1386,7 @@ fn test_prepare_follow_badges() {
     opts.theme = theme();
     let app = App::new(opts);
 
-    let result = app.prepare_follow_badges(inputs.iter());
+    let result = app.prepare_follow_badges(&descriptors(&inputs));
 
     assert!(result.si.width > 0);
     assert!(result.si.synced.len() >= result.si.width);
@@ -1417,7 +1417,7 @@ fn test_prepare_follow_badges_single_input() {
     opts.theme = theme();
     let app = App::new(opts);
 
-    let result = app.prepare_follow_badges(inputs.iter());
+    let result = app.prepare_follow_badges(&descriptors(&inputs));
 
     assert!(result.si.width > 0);
     assert!(result.si.synced.len() >= result.si.width);
@@ -1448,8 +1448,8 @@ fn test_prepare_follow_badges_formatting() {
     opts.theme = theme();
     let app = App::new(opts);
 
-    let raw_badges = app.input_badges(inputs.iter()).unwrap();
-    let result = app.prepare_follow_badges(inputs.iter());
+    let raw_badges = app.input_badges(&descriptors(&inputs)).unwrap();
+    let result = app.prepare_follow_badges(&descriptors(&inputs));
 
     assert!(result.input.is_some());
     let formatted_badges = result.input.unwrap();
@@ -1477,7 +1477,7 @@ fn test_prepare_follow_badges_no_badges() {
     opts.theme = theme();
     let app = App::new(opts);
 
-    let result = app.prepare_follow_badges(inputs.iter());
+    let result = app.prepare_follow_badges(&descriptors(&inputs));
 
     assert!(result.si.width > 0);
     assert!(result.input.is_none());
@@ -1510,10 +1510,18 @@ fn test_process_segments() {
     let segment_buf = SegmentBuf::from(log_data.as_bytes());
     let segment = Segment::Complete(segment_buf);
 
-    txi.send((0, 0, segment)).unwrap();
+    txi.send((0, 0, 0, segment)).unwrap();
     drop(txi);
 
-    app.process_segments(&parser, &bfo, &sfi, &badges, rxi, txo.clone());
+    app.process_segments(
+        &parser,
+        &bfo,
+        &sfi,
+        &badges,
+        &[InputDescriptor::new(0, "<stdin>")],
+        rxi,
+        txo.clone(),
+    );
     drop(txo);
 
     let result = rxo.try_recv();
@@ -1551,10 +1559,18 @@ fn test_process_segments_incomplete() {
 
     let segment = Segment::Incomplete(SegmentBuf::from(b"incomplete"), PartialPlacement::First);
 
-    txi.send((0, 0, segment)).unwrap();
+    txi.send((0, 0, 0, segment)).unwrap();
     drop(txi);
 
-    app.process_segments(&parser, &bfo, &sfi, &badges, rxi, txo.clone());
+    app.process_segments(
+        &parser,
+        &bfo,
+        &sfi,
+        &badges,
+        &[InputDescriptor::new(0, "<stdin>")],
+        rxi,
+        txo.clone(),
+    );
     drop(txo);
 
     assert!(rxo.try_recv().is_err(), "Incomplete segments should not produce output");
@@ -1588,10 +1604,18 @@ fn test_process_segments_receiver_dropped() {
 
     drop(rxo);
 
-    txi.send((0, 0, segment)).unwrap();
+    txi.send((0, 0, 0, segment)).unwrap();
     drop(txi);
 
-    app.process_segments(&parser, &bfo, &sfi, &badges, rxi, txo);
+    app.process_segments(
+        &parser,
+        &bfo,
+        &sfi,
+        &badges,
+        &[InputDescriptor::new(0, "<stdin>")],
+        rxi,
+        txo,
+    );
 }
 
 #[test]
@@ -1619,7 +1643,7 @@ fn test_input_badges_compact_mode_two_char_prefix() {
     opts.input_info = InputInfo::Compact.into();
     let app = App::new(opts);
 
-    let badges = app.input_badges(inputs.iter());
+    let badges = app.input_badges(&descriptors(&inputs));
 
     assert!(badges.is_some());
     let badges = badges.unwrap();
@@ -2514,16 +2538,16 @@ fn test_block_scanner_continues_numbering_across_scans() {
     };
     let scanned = rxi
         .iter()
-        .map(|(_, block, segment)| (block, text(&segment)))
+        .map(|(_, block, offset, segment)| (block, offset, text(&segment)))
         .collect_vec();
 
     assert_eq!(
         scanned,
         vec![
-            (0, "a1\n".to_owned()),
-            (1, "a2\n".to_owned()),
-            (2, "b1\n".to_owned()),
-            (3, "b2\n".to_owned()),
+            (0, 0, "a1\n".to_owned()),
+            (1, 3, "a2\n".to_owned()),
+            (2, 6, "b1\n".to_owned()),
+            (3, 9, "b2\n".to_owned()),
         ]
     );
 }
@@ -2536,7 +2560,7 @@ fn test_block_scanner_stops_scanning_when_receiver_is_gone() {
 
     let sfi = Arc::new(SegmentBufFactory::new(SEGMENT_SIZE));
     let scanner = Scanner::new(sfi, Delimiter::default());
-    let (txi, rxi) = channel::unbounded::<(usize, usize, Segment)>();
+    let (txi, rxi) = channel::unbounded::<(usize, usize, u64, Segment)>();
     drop(rxi);
 
     let mut blocks = BlockScanner::new(&scanner, Delimiter::default(), SEGMENT_SIZE);
@@ -2566,7 +2590,7 @@ fn scan_chunks(segment_size: usize, chunks: &[(&[u8], bool)]) -> Vec<Vec<String>
             blocks
                 .scan(&mut Cursor::new(chunk.to_vec()), 0, &txi, hold_tail)
                 .unwrap();
-            rxi.try_iter().map(|(_, _, segment)| text(segment)).collect_vec()
+            rxi.try_iter().map(|(_, _, _, segment)| text(segment)).collect_vec()
         })
         .collect()
 }
@@ -2633,4 +2657,269 @@ fn test_block_scanner_propagates_read_error() {
         assert!(blocks.scan(&mut FailingReader, 0, &txi, hold_tail).is_err());
     }
     assert_eq!(blocks.block, 0);
+}
+
+/// The input and byte range of a formatted record, as seen by the formatter.
+type CapturedOrigin = (InputDescriptor, Range<u64>);
+
+/// Records the origin of each formatted record and writes its source.
+#[derive(Default)]
+struct OriginCapture {
+    origins: std::sync::Mutex<Vec<CapturedOrigin>>,
+}
+
+impl RecordWithSourceFormatter for OriginCapture {
+    fn format_record(&self, buf: &mut Vec<u8>, _: Range<usize>, rec: RecordWithSource) {
+        buf.extend_from_slice(rec.source);
+        self.origins
+            .lock()
+            .unwrap()
+            .push((rec.origin.input.clone(), rec.origin.range));
+    }
+}
+
+fn app_with_origin_capture(options: Options) -> (App, Arc<OriginCapture>) {
+    let capture = Arc::new(OriginCapture::default());
+    let mut app = App::new(options);
+    app.formatter = capture.clone();
+    (app, capture)
+}
+
+fn file_input<S: Into<String>>(name: &str, s: S) -> InputHolder {
+    InputHolder::new(
+        InputReference::File(crate::input::InputPath::ephemeral(name.into())),
+        Some(Box::new(Cursor::new(s.into()))),
+    )
+}
+
+fn descriptor(index: usize, name: &str) -> InputDescriptor {
+    InputDescriptor::new(index, name)
+}
+
+fn descriptors(inputs: &[InputReference]) -> Vec<InputDescriptor> {
+    inputs.iter().enumerate().map(Into::into).collect_vec()
+}
+
+#[test]
+fn test_cat_passes_record_origin() {
+    let (app, capture) = app_with_origin_capture(options().with_input_info(InputInfo::None.into()));
+
+    let inputs = vec![
+        file_input("a.log", "msg=a1\nmsg=a2\n"),
+        file_input("b.log", "msg=b1\n"),
+        input("msg=c1\n"),
+    ];
+    let mut output = Vec::new();
+    app.run(inputs, &mut output).unwrap();
+
+    assert_eq!(
+        std::str::from_utf8(&output).unwrap(),
+        "msg=a1\nmsg=a2\nmsg=b1\nmsg=c1\n"
+    );
+    assert_eq!(
+        *capture.origins.lock().unwrap(),
+        vec![
+            (descriptor(0, "a.log"), 0..6),
+            (descriptor(0, "a.log"), 7..13),
+            (descriptor(1, "b.log"), 0..6),
+            (descriptor(2, "<stdin>"), 0..6),
+        ]
+    );
+}
+
+#[test]
+fn test_cat_passes_record_origin_across_segments() {
+    // A small buffer splits the input into several segments, so the offsets of
+    // later records include the sizes of the segments before them.
+    let (app, capture) = app_with_origin_capture(Options {
+        buffer_size: NonZeroUsize::new(8).unwrap(),
+        ..options()
+    });
+
+    let mut output = Vec::new();
+    app.run(vec![input("msg=a1\nmsg=a2\nmsg=a3\n")], &mut output).unwrap();
+
+    assert_eq!(
+        *capture.origins.lock().unwrap(),
+        vec![
+            (descriptor(0, "<stdin>"), 0..6),
+            (descriptor(0, "<stdin>"), 7..13),
+            (descriptor(0, "<stdin>"), 14..20),
+        ]
+    );
+}
+
+#[test]
+fn test_sort_passes_record_origin() {
+    let (app, capture) = app_with_origin_capture(options().with_sort(true));
+
+    const M1: &str = r#"{"ts":"2024-01-25T19:10:01Z","msg":"m1"}"#;
+    const M2: &str = r#"{"ts":"2024-01-25T19:10:02Z","msg":"m2"}"#;
+    const M3: &str = r#"{"ts":"2024-01-25T19:10:03Z","msg":"m3"}"#;
+    let inputs = vec![input(format!("{M1}\n{M3}\n")), input(format!("{M2}\n"))];
+    let mut output = Vec::new();
+    app.run(inputs, &mut output).unwrap();
+
+    let n = M1.len() as u64;
+    let mut origins = capture.origins.lock().unwrap().clone();
+    origins.sort_by_key(|(input, range)| (input.index, range.start));
+    assert_eq!(
+        origins,
+        vec![
+            (descriptor(0, "<stdin>"), 0..n),
+            (descriptor(0, "<stdin>"), n + 1..2 * n + 1),
+            (descriptor(1, "<stdin>"), 0..n),
+        ]
+    );
+}
+
+#[test]
+fn test_process_segments_passes_record_origin() {
+    let (app, capture) = app_with_origin_capture(options());
+
+    let parser = app.parser();
+    let bfo = BufFactory::new(4096);
+    let sfi = SegmentBufFactory::new(4096);
+    let badges = test_badges(2);
+    let inputs = [descriptor(0, "a.log"), descriptor(1, "b.log")];
+
+    let (txi, rxi) = channel::bounded(10);
+    let (txo, rxo) = channel::bounded(10);
+
+    const A1: &str = r#"{"ts":"2024-01-25T19:10:02Z","msg":"a1"}"#;
+    const B1: &str = r#"{"ts":"2024-01-25T19:10:01Z","msg":"b1"}"#;
+    let segment = |data: &str| Segment::Complete(SegmentBuf::from(data.as_bytes()));
+    txi.send((1, 0, 100, segment(B1))).unwrap();
+    txi.send((0, 0, 200, segment(A1))).unwrap();
+    drop(txi);
+
+    app.process_segments(&parser, &bfo, &sfi, &badges, &inputs, rxi, txo);
+
+    let n = A1.len() as u64;
+    assert_eq!(rxo.iter().count(), 2);
+    assert_eq!(
+        *capture.origins.lock().unwrap(),
+        vec![
+            (descriptor(1, "b.log"), 100..100 + n),
+            (descriptor(0, "a.log"), 200..200 + n),
+        ]
+    );
+}
+
+#[test]
+fn test_origin_slice() {
+    let input = descriptor(0, "a.log");
+    let origin = Origin::new(&input, 100, 20);
+    assert_eq!(origin.range, 100..120);
+
+    let part = origin.slice(5..8);
+    assert_eq!(part.input, &input);
+    assert_eq!(part.range, 105..108);
+}
+
+#[test]
+fn test_input_reference_name() {
+    assert_eq!(InputReference::Stdin.name(), "<stdin>");
+    let path = crate::input::InputPath::new("logs/a.log".into(), "/var/logs/a.log".into());
+    assert_eq!(InputReference::File(path).name(), "logs/a.log");
+}
+
+#[test]
+fn test_compact_input_names() {
+    let app = App::new(options());
+    let p = &app.punctuation;
+    let names = |names: &[&str]| {
+        app.compact_input_names(names)
+            .into_iter()
+            .map(|name| name.concat())
+            .collect_vec()
+    };
+
+    // Short names without a long common prefix stay as they are.
+    assert_eq!(names(&["a.log", "b.log"]), vec!["a.log", "b.log"]);
+
+    // A long common prefix is replaced with the common-part marker, keeping 4 of its last characters.
+    assert_eq!(
+        names(&["/var/log/app/a.log", "/var/log/app/b.log"]),
+        vec![
+            format!("{}app/a.log", p.input_name_common_part),
+            format!("{}app/b.log", p.input_name_common_part),
+        ]
+    );
+
+    // A long name after a long common prefix is also clipped in the middle.
+    let long = "/var/log/app/0123456789abcdefghijklmnopqrstuvwxyz.log";
+    assert_eq!(
+        names(&[long, "/var/log/app/b.log"]),
+        vec![
+            format!(
+                "{}app/01234567{}opqrstuvwxyz.log",
+                p.input_name_common_part, p.input_name_clipping
+            ),
+            format!("{}app/b.log", p.input_name_common_part),
+        ]
+    );
+
+    // A long name with a short common prefix is clipped in the middle only.
+    let long = "0123456789abcdefghijklmnopqrstuvwxyz.log";
+    assert_eq!(
+        names(&[long, "b.log"]),
+        vec![
+            format!("0123456789ab{}stuvwxyz.log", p.input_name_clipping),
+            "b.log".to_owned(),
+        ]
+    );
+}
+
+#[test]
+fn test_block_scanner_start_sets_offsets_only() {
+    // A new stream, such as a replaced file or a file seeked to its tail, has its
+    // own offsets, while block numbers keep counting to stay unique for the input.
+    let sfi = Arc::new(SegmentBufFactory::new(3));
+    let scanner = Scanner::new(sfi, Delimiter::default());
+    let (txi, rxi) = channel::unbounded();
+    let mut blocks = BlockScanner::new(&scanner, Delimiter::default(), 3);
+
+    blocks
+        .scan(&mut Cursor::new(b"a1\na2\n".to_vec()), 0, &txi, false)
+        .unwrap();
+    blocks.start(0);
+    blocks.scan(&mut Cursor::new(b"b1\n".to_vec()), 0, &txi, false).unwrap();
+    blocks.start(100);
+    blocks.scan(&mut Cursor::new(b"c1\n".to_vec()), 0, &txi, false).unwrap();
+    drop(txi);
+
+    let scanned = rxi.iter().map(|(_, block, offset, _)| (block, offset)).collect_vec();
+    assert_eq!(scanned, vec![(0, 0), (1, 3), (2, 0), (3, 100)]);
+}
+
+#[test]
+fn test_sort_passes_record_origin_across_blocks() {
+    // A small buffer splits the input into several index blocks, so the offsets
+    // of later records include the block offsets.
+    let (app, capture) = app_with_origin_capture(Options {
+        buffer_size: NonZeroUsize::new(64).unwrap(),
+        ..options().with_sort(true)
+    });
+
+    let lines = (1..=4)
+        .map(|i| format!(r#"{{"ts":"2024-01-25T19:10:0{i}Z","msg":"m{i}"}}"#))
+        .collect_vec();
+    let mut output = Vec::new();
+    app.run(
+        vec![input(lines.iter().map(|x| format!("{x}\n")).join(""))],
+        &mut output,
+    )
+    .unwrap();
+
+    let n = lines[0].len() as u64;
+    let mut ranges = capture
+        .origins
+        .lock()
+        .unwrap()
+        .iter()
+        .map(|x| x.1.clone())
+        .collect_vec();
+    ranges.sort_by_key(|x| x.start);
+    assert_eq!(ranges, (0..4).map(|i| i * (n + 1)..i * (n + 1) + n).collect_vec());
 }

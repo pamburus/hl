@@ -58,7 +58,7 @@ pub use app::{App, FieldOptions, Options, SegmentProcessor};
 pub use datefmt::{DateTimeFormatter, LinuxDateFormat};
 pub use filtering::DefaultNormalizing;
 pub use formatting::RecordFormatter;
-pub use model::{FieldFilterSet, Filter, Level, Parser, ParserSettings, RecordFilter};
+pub use model::{FieldFilterSet, Filter, Level, Origin, Parser, ParserSettings, RecordFilter};
 pub use query::Query;
 pub use scanning::{Delimit, Delimiter, SearchExt};
 pub use settings::Settings;
