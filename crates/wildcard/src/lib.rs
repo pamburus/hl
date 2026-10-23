@@ -72,6 +72,3 @@ mod pattern;
 mod utf8;
 
 pub use pattern::*;
-
-#[cfg(test)]
-mod tests {}
