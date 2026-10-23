@@ -3151,6 +3151,81 @@ fn test_structured_output_has_no_empty_entries() {
 }
 
 #[test]
+fn test_structured_output_follow() {
+    // Records from several inputs are merged by time into plain records,
+    // with no badges, sync indicators or unparsed lines in between.
+    let inputs = [
+        InputReference::File(crate::input::InputPath::ephemeral("a.log".into())),
+        InputReference::File(crate::input::InputPath::ephemeral("b.log".into())),
+    ];
+    let data = [
+        concat!(
+            r#"{"ts":"2026-07-06T10:00:00Z","level":"info","msg":"a1"}"#,
+            "\n",
+            r#"{"ts":"2026-07-06T10:00:02Z","level":"warn","msg":"a2"}"#,
+            "\n",
+        ),
+        concat!(
+            "not a record\n",
+            r#"{"ts":"2026-07-06T10:00:01Z","level":"error","msg":"b1","n":1}"#,
+            "\n",
+        ),
+    ];
+    let expected = [
+        (
+            OutputFormat::Json,
+            concat!(
+                r#"{"timestamp":"2026-07-06T10:00:00Z","level":"info","message":"a1"}"#,
+                "\n",
+                r#"{"timestamp":"2026-07-06T10:00:01Z","level":"error","message":"b1","n":1}"#,
+                "\n",
+                r#"{"timestamp":"2026-07-06T10:00:02Z","level":"warning","message":"a2"}"#,
+                "\n",
+            ),
+        ),
+        (
+            OutputFormat::Logfmt,
+            concat!(
+                "timestamp=2026-07-06T10:00:00Z level=info message=a1\n",
+                "timestamp=2026-07-06T10:00:01Z level=error message=b1 n=1\n",
+                "timestamp=2026-07-06T10:00:02Z level=warning message=a2\n",
+            ),
+        ),
+    ];
+    for (format, expected) in expected {
+        let app = App::new(Options {
+            input_info: InputInfo::Full.into(),
+            theme: theme(),
+            output_format: format,
+            ..mixed_fixture_options()
+        });
+        let descriptors = descriptors(&inputs);
+        let badges = app.prepare_follow_badges(&descriptors);
+        let sfi = SegmentBufFactory::new(4096);
+        let (txi, rxi) = channel::bounded(10);
+        let (txo, rxo) = channel::bounded(10);
+        for (i, data) in data.iter().enumerate() {
+            let segment = Segment::Complete(SegmentBuf::from(data.as_bytes()));
+            txi.send((i, 0, 0, segment)).unwrap();
+        }
+        drop(txi);
+        app.process_segments(
+            &app.parser(),
+            &BufFactory::new(4096),
+            &sfi,
+            &badges,
+            &descriptors,
+            rxi,
+            txo,
+        );
+
+        let mut output = Vec::new();
+        app.merge_segments(&badges, rxo, &mut output, 1).unwrap();
+        assert_eq!(std::str::from_utf8(&output).unwrap(), expected, "{format:?}");
+    }
+}
+
+#[test]
 fn test_json_output_cat() {
     let filter = || {
         Arc::new(AdvancedFilter::new(

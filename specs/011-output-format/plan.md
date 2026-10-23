@@ -92,7 +92,7 @@ specs/011-output-format/
 src/
 ├── cli.rs                         # MODIFY: OutputFormat enum and --output-format; FlattenOption::Auto
 ├── main.rs                        # MODIFY: resolve output format, flatten and input-info; structured mode disables colors and pager; exit hook on write error
-├── app.rs                         # MODIFY: Options.output_format; formatter selection; per-input context for SegmentProcessor; dropped-line observer; sort diagnostics-only blocks; follow flush; exit summary
+├── app.rs                         # MODIFY: Options.output_format; formatter selection; per-input context for SegmentProcessor; dropped-line observer; sort diagnostics-only blocks; exit summary
 ├── app/tests.rs                   # MODIFY: app-level tests per mode and format
 ├── formatting.rs                  # MODIFY: declare the structured submodule; share string helpers
 ├── formatting/
@@ -147,7 +147,7 @@ Phases for `/speckit-tasks` to break down. Each phase ends with `just ci` passin
 3. **Normalizer, fast path**: predefined section, regular fields, hiding, flattening, key set, repeats and collisions. Wired into `App::new_formatter`. Structured mode in `main.rs` (no colors, no pager). Delivers User Stories 1 and 2 for default settings.
 4. **Normalizer, output-key tree**: dotted output keys, merging into regular objects, split caller, input field. Preset updates (FR-028).
 5. **Diagnostics**: observer hook, DropStats, debug entries with byte ranges (cat, follow, then sort), summaries and the exit hook. Delivers User Story 4.
-6. **Follow and polish**: follow flush (User Story 3), README and help text, benchmarks, property tests, `just uncovered`.
+6. **Follow and polish**: a follow test for User Story 3 (the flush is fixed separately in [#1635](https://github.com/pamburus/hl/issues/1635)), README and help text, benchmarks, property tests, `just uncovered`.
 
 ## Complexity Tracking
 

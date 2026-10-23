@@ -230,15 +230,13 @@ description: "Task list for machine-readable output formats"
 
 **Independent Test**: Quickstart scenario 7.
 
-### Tests for User Story 3 (write first, confirm they fail)
+### Tests for User Story 3
 
-- [ ] T030 [US3] App-level follow tests in src/app/tests.rs, modeled on the existing follow tests, with `OutputFormat::Json` and two inputs:
-  - records from both inputs appear as complete JSON lines, with no sync indicator or badge bytes;
-  - with `"\0"` as the output delimiter, the output is flushed after each batch (use a `Write` mock that counts `flush` calls).
+- [x] T030 [US3] App-level follow test in src/app/tests.rs, modeled on the existing follow tests, with `OutputFormat::Json` and `OutputFormat::Logfmt` and two inputs: records from both inputs are merged by time into complete lines, with no sync indicator, badge bytes or unparsed lines. The behavior already exists (T010), so the test passes from the start; it was checked to fail with badges enabled.
 
 ### Implementation for User Story 3
 
-- [ ] T031 [US3] In `merge_segments` in src/app.rs, call `output.flush()` after each pass that wrote at least one record (research R14). Check that the zero-width sync indicator from T010 writes no bytes in structured mode.
+- [x] T031 [US3] Nothing to implement (research R14). The flush after each pass that writes records was fixed separately for every output format in [#1635](https://github.com/pamburus/hl/issues/1635), with its own test.
 
 **Checkpoint**: Run quickstart scenario 7, and commit.
 

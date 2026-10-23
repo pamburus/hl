@@ -166,7 +166,7 @@ The structured formatter receives, per record, the origin of the record in `Reco
 
 ## R14. Follow mode emission (FR-022)
 
-**Decision**: In follow mode, `merge_segments` flushes the output after each pass that wrote records. Whole records are written with a single `write_all` of a contiguous buffer, so readers never see a partial record. Flushing doesn't change any bytes, so `pretty` stays byte-identical. The flush matters for structured output piped to another process, especially with the `nul` delimiter, which the line-buffered stdout doesn't flush on.
+**Decision**: Nothing specific to structured output is needed. Follow mode already flushes the output after each pass that wrote records, before it waits for more input. That fix landed separately for every output format ([#1635](https://github.com/pamburus/hl/issues/1635)), because the line-buffered stdout doesn't flush on the `nul` delimiter. Structured output only needs to leave out the sync indicator and input badges (FR-017), which the zero-width sync indicator from T010 does. A test pins down that follow output in `json` and `logfmt` holds nothing but the records.
 
 ## R15. Hide options and predefined fields (FR-014)
 
