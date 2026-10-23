@@ -25,6 +25,26 @@ fn theme() -> Arc<Theme> {
     Sample::sample()
 }
 
+/// Holds written bytes until flushed and then sends them to a channel.
+struct FlushProbe {
+    pending: Vec<u8>,
+    flushed: channel::Sender<Vec<u8>>,
+}
+
+impl Write for FlushProbe {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        self.pending.extend_from_slice(buf);
+        Ok(buf.len())
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        if !self.pending.is_empty() {
+            self.flushed.send(std::mem::take(&mut self.pending)).ok();
+        }
+        Ok(())
+    }
+}
+
 #[test]
 fn test_common_prefix_len() {
     let items = vec!["abc", "abcd", "ab", "ab"];
@@ -2323,6 +2343,46 @@ fn test_merge_segments_flushes_window_when_inputs_close() {
         .expect("merge_segments did not return after inputs closed")
         .unwrap();
     assert_eq!(String::from_utf8(output).unwrap(), "SShello\n");
+}
+
+#[test]
+fn test_merge_segments_flushes_output_before_waiting() {
+    // The input channel stays open, so the record can reach the output only
+    // through a flush made before waiting for more input.
+    let app = App::new(Options {
+        sync_interval: Duration::ZERO,
+        output_delimiter: "\0".into(),
+        ..options()
+    });
+    let badges = test_badges(2);
+    let (txo, rxo) = channel::bounded(10);
+    let (txf, rxf) = channel::unbounded();
+
+    let buf = b"  hello".to_vec();
+    let index = TimestampIndex {
+        block: 0,
+        lines: vec![TimestampIndexLine {
+            location: 0..buf.len(),
+            ts: ts(100, 0),
+        }],
+    };
+    txo.send((0, buf, index)).unwrap();
+
+    let merger = std::thread::spawn(move || {
+        let mut output = FlushProbe {
+            pending: Vec::new(),
+            flushed: txf,
+        };
+        app.merge_segments(&badges, rxo, &mut output, 1)
+    });
+
+    let flushed = rxf
+        .recv_timeout(Duration::from_secs(10))
+        .expect("output was not flushed while inputs were open");
+    assert_eq!(flushed, b"SShello\0");
+
+    drop(txo);
+    merger.join().unwrap().unwrap();
 }
 
 #[test]

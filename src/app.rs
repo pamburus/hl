@@ -788,6 +788,7 @@ impl App {
 
         loop {
             let now = Instant::now();
+            let mut written = false;
             while let Some(first) = window.first_key_value() {
                 // Once all inputs are closed nothing can arrive to be sorted in
                 // between, so the rest of the window is flushed right away.
@@ -806,7 +807,14 @@ impl App {
                     output.write_all(sync_indicator.as_bytes())?;
                     output.write_all(&entry.1.0[entry.1.1.clone()][badges.si.width..])?;
                     output.write_all(self.options.output_delimiter.as_bytes())?;
+                    written = true;
                 }
+            }
+
+            // Stdout flushes by itself only at a newline, so records ending with
+            // another delimiter are flushed here, before waiting for more input.
+            if written {
+                output.flush()?;
             }
 
             if disconnected {
