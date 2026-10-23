@@ -7,6 +7,43 @@ fn dual(b: &[u8]) -> (&str, &[u8]) {
     (str::from_utf8(b).unwrap(), b)
 }
 
+fn test_rewinding_reader<F: FnOnce(usize, &str) -> Box<dyn ReadSeek>>(f: F) {
+    let mut r = f(4, "Lorem ipsum dolor sit amet.");
+
+    let mut buf3 = vec![0; 3];
+    assert_eq!(r.read(&mut buf3).unwrap(), 3);
+    assert_eq!(dual(&buf3), dual("Lor".as_bytes()));
+
+    let mut buf4 = vec![0; 4];
+    assert_eq!(r.read(&mut buf4).unwrap(), 4);
+    assert_eq!(dual(&buf4), dual("em i".as_bytes()));
+
+    let mut buf6 = vec![0; 6];
+    assert_eq!(r.read(&mut buf6).unwrap(), 6);
+    assert_eq!(dual(&buf6), dual("psum d".as_bytes()));
+
+    assert_eq!(r.seek(SeekFrom::Start(1)).unwrap(), 1);
+
+    assert_eq!(r.read(&mut buf4).unwrap(), 4);
+    assert_eq!(dual(&buf4), dual("orem".as_bytes()));
+
+    assert_eq!(r.seek(SeekFrom::Current(7)).unwrap(), 12);
+
+    let mut buf5 = vec![0; 5];
+    assert_eq!(r.read(&mut buf5).unwrap(), 5);
+    assert_eq!(dual(&buf5), dual("dolor".as_bytes()));
+
+    assert_eq!(r.seek(SeekFrom::End(-5)).unwrap(), 22);
+
+    assert_eq!(r.read(&mut buf4).unwrap(), 4);
+    assert_eq!(dual(&buf4), dual("amet".as_bytes()));
+
+    assert_eq!(r.read(&mut buf3).unwrap(), 1);
+    assert_eq!(dual(&buf3[..1]), dual(".".as_bytes()));
+
+    assert_eq!(r.read(&mut buf3).unwrap(), 0);
+}
+
 #[test]
 fn test_replay_buf() {
     let mut w = ReplayBufCreator::build().segment_size(nonzero!(4_usize)).done();
@@ -48,43 +85,6 @@ fn test_replay_buf_reader() {
     let mut buf = vec![];
     r.read_to_end(&mut buf).unwrap();
     assert_eq!(dual(&buf), dual(b"sit amet."));
-}
-
-fn test_rewinding_reader<F: FnOnce(usize, &str) -> Box<dyn ReadSeek>>(f: F) {
-    let mut r = f(4, "Lorem ipsum dolor sit amet.");
-
-    let mut buf3 = vec![0; 3];
-    assert_eq!(r.read(&mut buf3).unwrap(), 3);
-    assert_eq!(dual(&buf3), dual("Lor".as_bytes()));
-
-    let mut buf4 = vec![0; 4];
-    assert_eq!(r.read(&mut buf4).unwrap(), 4);
-    assert_eq!(dual(&buf4), dual("em i".as_bytes()));
-
-    let mut buf6 = vec![0; 6];
-    assert_eq!(r.read(&mut buf6).unwrap(), 6);
-    assert_eq!(dual(&buf6), dual("psum d".as_bytes()));
-
-    assert_eq!(r.seek(SeekFrom::Start(1)).unwrap(), 1);
-
-    assert_eq!(r.read(&mut buf4).unwrap(), 4);
-    assert_eq!(dual(&buf4), dual("orem".as_bytes()));
-
-    assert_eq!(r.seek(SeekFrom::Current(7)).unwrap(), 12);
-
-    let mut buf5 = vec![0; 5];
-    assert_eq!(r.read(&mut buf5).unwrap(), 5);
-    assert_eq!(dual(&buf5), dual("dolor".as_bytes()));
-
-    assert_eq!(r.seek(SeekFrom::End(-5)).unwrap(), 22);
-
-    assert_eq!(r.read(&mut buf4).unwrap(), 4);
-    assert_eq!(dual(&buf4), dual("amet".as_bytes()));
-
-    assert_eq!(r.read(&mut buf3).unwrap(), 1);
-    assert_eq!(dual(&buf3[..1]), dual(".".as_bytes()));
-
-    assert_eq!(r.read(&mut buf3).unwrap(), 0);
 }
 
 #[test]

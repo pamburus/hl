@@ -7,6 +7,18 @@ use serde_logfmt::logfmt;
 
 use crate::settings::{Field, FieldShowOption};
 
+fn parse(s: &str) -> Record<'_> {
+    try_parse(s).unwrap()
+}
+
+fn try_parse(s: &str) -> Result<Record<'_>> {
+    let items = RawRecord::parser().parse(s.as_bytes()).collect_vec();
+    assert_eq!(items.len(), 1);
+    let raw = items.into_iter().next().unwrap()?.record;
+    let parser = Parser::new(ParserSettings::default());
+    Ok(parser.parse(&raw))
+}
+
 #[test]
 fn test_raw_record_parser_empty_line() {
     let parser = RawRecordParser::new();
@@ -818,18 +830,6 @@ fn test_logfmt_filter_include_absent(#[case] filter: &str, #[case] input: &str, 
     let filter = FieldFilter::parse(filter).unwrap();
     let record = parse(input);
     assert_eq!(filter.apply(&record), expected);
-}
-
-fn parse(s: &str) -> Record<'_> {
-    try_parse(s).unwrap()
-}
-
-fn try_parse(s: &str) -> Result<Record<'_>> {
-    let items = RawRecord::parser().parse(s.as_bytes()).collect_vec();
-    assert_eq!(items.len(), 1);
-    let raw = items.into_iter().next().unwrap()?.record;
-    let parser = Parser::new(ParserSettings::default());
-    Ok(parser.parse(&raw))
 }
 
 #[test]

@@ -27,6 +27,81 @@ const CONDITIONAL_ARGS: &str = include_str!("../testing/assets/pagers/conditiona
 const CANDIDATE_WITH_IF: &str = include_str!("../testing/assets/pagers/candidate-with-if.toml");
 
 // ---
+// Helper types and functions
+// ---
+
+#[derive(Debug, serde::Deserialize)]
+struct TestConfig {
+    #[serde(default)]
+    pager: PagerConfig,
+}
+
+fn profile_with_command(command: &str, args: Vec<&str>) -> PagerProfile {
+    PagerProfile {
+        name: "test".to_string(),
+        command: command.to_string(),
+        args: args.into_iter().map(String::from).collect(),
+        env: HashMap::new(),
+        delimiter: None,
+        modes: PagerModes::default(),
+        conditions: Vec::new(),
+    }
+}
+
+// ---
+// Mock providers for testing
+// ---
+
+/// Mock environment provider for isolated testing.
+struct MockEnv {
+    vars: HashMap<String, String>,
+}
+
+impl MockEnv {
+    fn new() -> Self {
+        Self { vars: HashMap::new() }
+    }
+
+    fn with_var(mut self, name: &str, value: &str) -> Self {
+        self.vars.insert(name.to_string(), value.to_string());
+        self
+    }
+}
+
+impl EnvProvider for MockEnv {
+    fn get(&self, name: &str) -> Option<String> {
+        self.vars.get(name).cloned()
+    }
+}
+
+/// Mock executable checker for isolated testing.
+struct MockExeChecker {
+    available: Vec<String>,
+}
+
+impl MockExeChecker {
+    fn with_available(executables: &[&str]) -> Self {
+        Self {
+            available: executables.iter().map(|s| s.to_string()).collect(),
+        }
+    }
+}
+
+impl ExeChecker for MockExeChecker {
+    fn is_available(&self, executable: &str) -> bool {
+        self.available.contains(&executable.to_string())
+    }
+}
+
+fn selector_with_mocks<'a>(
+    config: &'a PagerConfig,
+    env: MockEnv,
+    available: &[&str],
+) -> PagerSelector<'a, MockEnv, MockExeChecker> {
+    PagerSelector::with_providers(config, env, MockExeChecker::with_available(available))
+}
+
+// ---
 // PagerConfig deserialization tests
 // ---
 
@@ -416,81 +491,6 @@ fn pager_profile_conditional_args_deserialize() {
 
     assert_eq!(profile.conditions[3].r#if.to_string(), "mode:follow");
     assert_eq!(profile.conditions[3].args, vec!["--tac", "--track"]);
-}
-
-// ---
-// Helper types and functions
-// ---
-
-#[derive(Debug, serde::Deserialize)]
-struct TestConfig {
-    #[serde(default)]
-    pager: PagerConfig,
-}
-
-fn profile_with_command(command: &str, args: Vec<&str>) -> PagerProfile {
-    PagerProfile {
-        name: "test".to_string(),
-        command: command.to_string(),
-        args: args.into_iter().map(String::from).collect(),
-        env: HashMap::new(),
-        delimiter: None,
-        modes: PagerModes::default(),
-        conditions: Vec::new(),
-    }
-}
-
-// ---
-// Mock providers for testing
-// ---
-
-/// Mock environment provider for isolated testing.
-struct MockEnv {
-    vars: HashMap<String, String>,
-}
-
-impl MockEnv {
-    fn new() -> Self {
-        Self { vars: HashMap::new() }
-    }
-
-    fn with_var(mut self, name: &str, value: &str) -> Self {
-        self.vars.insert(name.to_string(), value.to_string());
-        self
-    }
-}
-
-impl EnvProvider for MockEnv {
-    fn get(&self, name: &str) -> Option<String> {
-        self.vars.get(name).cloned()
-    }
-}
-
-/// Mock executable checker for isolated testing.
-struct MockExeChecker {
-    available: Vec<String>,
-}
-
-impl MockExeChecker {
-    fn with_available(executables: &[&str]) -> Self {
-        Self {
-            available: executables.iter().map(|s| s.to_string()).collect(),
-        }
-    }
-}
-
-impl ExeChecker for MockExeChecker {
-    fn is_available(&self, executable: &str) -> bool {
-        self.available.contains(&executable.to_string())
-    }
-}
-
-fn selector_with_mocks<'a>(
-    config: &'a PagerConfig,
-    env: MockEnv,
-    available: &[&str],
-) -> PagerSelector<'a, MockEnv, MockExeChecker> {
-    PagerSelector::with_providers(config, env, MockExeChecker::with_available(available))
 }
 
 // ---

@@ -7,6 +7,14 @@ use std::{path::Component, time::Duration};
 use crate::vfs::{self, MockFileSystem};
 use assert_matches::assert_matches;
 
+struct FailingReader;
+
+impl Read for FailingReader {
+    fn read(&mut self, _: &mut [u8]) -> io::Result<usize> {
+        Err(io::Error::other("read error"))
+    }
+}
+
 #[test]
 fn test_process_file_success() {
     use io::Cursor;
@@ -287,14 +295,6 @@ fn test_indexer_with_json_delimiter() {
 }
 
 // ---
-
-struct FailingReader;
-
-impl Read for FailingReader {
-    fn read(&mut self, _: &mut [u8]) -> io::Result<usize> {
-        Err(io::Error::other("read error"))
-    }
-}
 
 #[test]
 fn test_stat_default() {
