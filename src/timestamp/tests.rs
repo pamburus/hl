@@ -1,5 +1,15 @@
 use super::*;
 
+fn rfc3339_utc(s: &str, unit: Option<UnixTimestampUnit>) -> Option<String> {
+    let mut buf = Vec::new();
+    if Timestamp::new(s).with_unix_unit(unit).format_rfc3339_utc(&mut buf) {
+        Some(String::from_utf8(buf).unwrap())
+    } else {
+        assert!(buf.is_empty(), "nothing is written on failure");
+        None
+    }
+}
+
 #[test]
 fn test_parse() {
     let test = |s, unit, unix_timestamp, nanos, tz| {
@@ -207,16 +217,6 @@ fn test_fraction_parse() {
     // Test invalid fractional seconds (doesn't start with .)
     let frac_invalid3 = Fraction::parse("123");
     assert!(frac_invalid3.is_none());
-}
-
-fn rfc3339_utc(s: &str, unit: Option<UnixTimestampUnit>) -> Option<String> {
-    let mut buf = Vec::new();
-    if Timestamp::new(s).with_unix_unit(unit).format_rfc3339_utc(&mut buf) {
-        Some(String::from_utf8(buf).unwrap())
-    } else {
-        assert!(buf.is_empty(), "nothing is written on failure");
-        None
-    }
 }
 
 #[test]

@@ -5,6 +5,10 @@ use std::str::FromStr;
 
 type InputInfoSet = EnumSet<InputInfo>;
 
+fn parse(args: &[&str]) -> std::result::Result<Opt, clap::Error> {
+    Opt::try_parse_from(std::iter::once("hl").chain(args.iter().copied()))
+}
+
 #[test]
 fn test_input_info() {
     let set = InputInfoSet::all();
@@ -145,10 +149,6 @@ fn test_expansion_option() {
         Into::<settings::ExpansionMode>::into(ExpansionOption::Always),
         settings::ExpansionMode::Always
     );
-}
-
-fn parse(args: &[&str]) -> std::result::Result<Opt, clap::Error> {
-    Opt::try_parse_from(std::iter::once("hl").chain(args.iter().copied()))
 }
 
 #[test]

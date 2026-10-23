@@ -167,6 +167,59 @@ fn descriptors(inputs: &[InputReference]) -> Vec<InputDescriptor> {
     inputs.iter().enumerate().map(Into::into).collect_vec()
 }
 
+fn fixture(name: &str) -> String {
+    std::fs::read_to_string(format!("src/testing/assets/fixtures/output-format/{name}")).unwrap()
+}
+
+fn run_json(options: Options, inputs: Vec<InputHolder>) -> Vec<json::Value> {
+    let app = App::new(Options {
+        output_format: OutputFormat::Json,
+        ..options
+    });
+    let mut output = Vec::new();
+    app.run(inputs, &mut output).unwrap();
+    std::str::from_utf8(&output)
+        .unwrap()
+        .lines()
+        .map(|line| json::from_str(line).unwrap_or_else(|err| panic!("{err}: {line}")))
+        .collect()
+}
+
+fn count_records(options: Options, inputs: Vec<InputHolder>) -> usize {
+    let app = App::new(options);
+    let mut output = Vec::new();
+    app.run(inputs, &mut output).unwrap();
+    output.split(|&b| b == b'\n').filter(|line| !line.is_empty()).count()
+}
+
+fn run_logfmt(options: Options, inputs: Vec<InputHolder>) -> Vec<HashMap<String, String>> {
+    let app = App::new(Options {
+        output_format: OutputFormat::Logfmt,
+        ..options
+    });
+    let mut output = Vec::new();
+    app.run(inputs, &mut output).unwrap();
+    std::str::from_utf8(&output)
+        .unwrap()
+        .lines()
+        .map(|line| serde_logfmt::logfmt::from_str(line).unwrap_or_else(|err| panic!("{err:?}: {line}")))
+        .collect()
+}
+
+/// Options that read the mixed fixture as the command line does by default: multi-line records
+/// are read with the delimiter chosen for them, and level names are recognized as with the
+/// default configuration.
+fn mixed_fixture_options() -> Options {
+    Options {
+        delimiter: Delimiter::PrettyCompatible,
+        fields: FieldOptions {
+            settings: crate::settings::Settings::default().fields,
+            ..Default::default()
+        },
+        ..options()
+    }
+}
+
 #[test]
 fn test_common_prefix_len() {
     let items = vec!["abc", "abcd", "ab", "ab"];
@@ -3097,31 +3150,6 @@ fn test_structured_output_has_no_empty_entries() {
     }
 }
 
-fn fixture(name: &str) -> String {
-    std::fs::read_to_string(format!("src/testing/assets/fixtures/output-format/{name}")).unwrap()
-}
-
-fn run_json(options: Options, inputs: Vec<InputHolder>) -> Vec<json::Value> {
-    let app = App::new(Options {
-        output_format: OutputFormat::Json,
-        ..options
-    });
-    let mut output = Vec::new();
-    app.run(inputs, &mut output).unwrap();
-    std::str::from_utf8(&output)
-        .unwrap()
-        .lines()
-        .map(|line| json::from_str(line).unwrap_or_else(|err| panic!("{err}: {line}")))
-        .collect()
-}
-
-fn count_records(options: Options, inputs: Vec<InputHolder>) -> usize {
-    let app = App::new(options);
-    let mut output = Vec::new();
-    app.run(inputs, &mut output).unwrap();
-    output.split(|&b| b == b'\n').filter(|line| !line.is_empty()).count()
-}
-
 #[test]
 fn test_json_output_cat() {
     let filter = || {
@@ -3216,34 +3244,6 @@ fn test_json_output_drops_prefix() {
         vec![input("2026-07-06 prefix {\"msg\":\"m\"}\n")],
     );
     assert_eq!(records, [json::json!({"message": "m"})]);
-}
-
-fn run_logfmt(options: Options, inputs: Vec<InputHolder>) -> Vec<HashMap<String, String>> {
-    let app = App::new(Options {
-        output_format: OutputFormat::Logfmt,
-        ..options
-    });
-    let mut output = Vec::new();
-    app.run(inputs, &mut output).unwrap();
-    std::str::from_utf8(&output)
-        .unwrap()
-        .lines()
-        .map(|line| serde_logfmt::logfmt::from_str(line).unwrap_or_else(|err| panic!("{err:?}: {line}")))
-        .collect()
-}
-
-/// Options that read the mixed fixture as the command line does by default: multi-line records
-/// are read with the delimiter chosen for them, and level names are recognized as with the
-/// default configuration.
-fn mixed_fixture_options() -> Options {
-    Options {
-        delimiter: Delimiter::PrettyCompatible,
-        fields: FieldOptions {
-            settings: crate::settings::Settings::default().fields,
-            ..Default::default()
-        },
-        ..options()
-    }
 }
 
 #[test]
