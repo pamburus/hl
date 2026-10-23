@@ -14,8 +14,9 @@ use encstr::EncodedString;
 // local imports
 use crate::{
     ExactIncludeExcludeKeyFilter, IncludeExcludeKeyFilter,
+    diagnostics::{DiagnosticSink, RecordDiagnostics},
     filtering::{IncludeExcludeSetting, MatchOptions, NoNormalizing},
-    model::{self, Caller, ObjectKey, RawValue, RecordFields},
+    model::{self, Caller, ObjectKey, Origin, RawValue, RecordFields},
     settings::PredefinedFields,
 };
 
@@ -118,6 +119,7 @@ pub struct StructuredRecordFormatterBuilder {
     hide_empty_fields: bool,
     fields: Option<Arc<IncludeExcludeKeyFilter>>,
     predefined_fields: Option<Arc<ExactIncludeExcludeKeyFilter>>,
+    diagnostic_sink: Option<Arc<dyn DiagnosticSink>>,
 }
 
 impl StructuredRecordFormatterBuilder {
@@ -158,6 +160,14 @@ impl StructuredRecordFormatterBuilder {
         }
     }
 
+    /// Sets the sink for reporting the keys dropped from records.
+    pub fn with_diagnostic_sink(self, sink: Arc<dyn DiagnosticSink>) -> Self {
+        Self {
+            diagnostic_sink: Some(sink),
+            ..self
+        }
+    }
+
     pub fn build<E: Encoder>(self) -> StructuredRecordFormatter<E> {
         let keys = OutputKeys::default();
         let fields = self.fields.unwrap_or_default();
@@ -177,6 +187,7 @@ impl StructuredRecordFormatterBuilder {
             hide_empty_fields: self.hide_empty_fields,
             fields,
             predefined_fields: self.predefined_fields.unwrap_or_default(),
+            diagnostic_sink: self.diagnostic_sink,
             encoder: PhantomData,
         }
     }
@@ -204,6 +215,7 @@ pub struct StructuredRecordFormatter<E> {
     hide_empty_fields: bool,
     fields: Arc<IncludeExcludeKeyFilter>,
     predefined_fields: Arc<ExactIncludeExcludeKeyFilter>,
+    diagnostic_sink: Option<Arc<dyn DiagnosticSink>>,
     encoder: PhantomData<fn() -> E>,
 }
 
@@ -213,17 +225,33 @@ impl<E: Encoder> StructuredRecordFormatter<E> {
     /// Working memory comes from a per-thread scratch that is reused for every record,
     /// so formatting allocates nothing once the scratch has grown to fit the records.
     pub fn format_record(&self, buf: &mut Buf, rec: &model::Record) {
+        self.format_record_from(buf, rec, None)
+    }
+
+    /// Formats a record from `origin`, reporting the keys dropped from it to the diagnostic sink.
+    fn format_record_from(&self, buf: &mut Buf, rec: &model::Record, origin: Option<&Origin>) {
+        let diagnostics = match (&self.diagnostic_sink, origin) {
+            (Some(sink), Some(origin)) => RecordDiagnostics::new(&**sink, origin),
+            _ => None,
+        };
         SCRATCH.with(|scratch| match scratch.try_borrow_mut() {
-            Ok(mut scratch) => self.format_record_with(buf, rec, &mut scratch),
-            Err(_) => self.format_record_with(buf, rec, &mut Scratch::default()),
+            Ok(mut scratch) => self.format_record_with(buf, rec, diagnostics, &mut scratch),
+            Err(_) => self.format_record_with(buf, rec, diagnostics, &mut Scratch::default()),
         })
     }
 
-    fn format_record_with(&self, buf: &mut Buf, rec: &model::Record, s: &mut Scratch) {
+    fn format_record_with(
+        &self,
+        buf: &mut Buf,
+        rec: &model::Record,
+        diagnostics: Option<RecordDiagnostics>,
+        s: &mut Scratch,
+    ) {
         let mut w = Writer {
             buf,
             e: E::default(),
             emitted: KeySet::default(),
+            diagnostics,
         };
 
         w.e.begin_record(w.buf);
@@ -280,6 +308,7 @@ impl<E: Encoder> StructuredRecordFormatter<E> {
             s.end(level);
             return self.format_leaves(w, s, fields, ctx, top);
         }
+        report_repeats(w.diagnostics, s, &level, fields);
 
         let mut any = false;
         for i in 0..level.len {
@@ -314,7 +343,12 @@ impl<E: Encoder> StructuredRecordFormatter<E> {
         let collision = top && w.emitted.contains(if self.flatten { &s.path } else { key });
 
         let written = match value {
-            _ if collision => false,
+            _ if collision => {
+                if let Some(diagnostics) = w.diagnostics {
+                    diagnostics.report_collision(if self.flatten { &s.path } else { key });
+                }
+                false
+            }
             RawValue::Object(object) => {
                 let object = object.parse().unwrap_or_default();
                 if object.fields.is_empty() {
@@ -359,7 +393,8 @@ impl<E: Encoder> StructuredRecordFormatter<E> {
         let base = s.leaves.len();
         let text_base = s.leaf_keys.len();
 
-        self.walk_leaves(s, fields, ctx, &mut |s, _| {
+        let diagnostics = w.diagnostics;
+        self.walk_leaves(s, fields, ctx, diagnostics, &mut |s, _| {
             let begin = s.leaf_keys.len();
             s.leaf_keys.push_str(&s.path);
             let key = begin..s.leaf_keys.len();
@@ -370,6 +405,10 @@ impl<E: Encoder> StructuredRecordFormatter<E> {
             });
             let last = match first {
                 Some(first) => {
+                    if let (Some(diagnostics), true) = (diagnostics, s.leaves[base + first].last == Some(base + first))
+                    {
+                        diagnostics.report_repeat(&s.path);
+                    }
                     s.leaves[base + first].last = Some(i);
                     None
                 }
@@ -380,13 +419,16 @@ impl<E: Encoder> StructuredRecordFormatter<E> {
 
         let mut any = false;
         let mut i = base;
-        self.walk_leaves(s, fields, ctx, &mut |s, value| {
+        self.walk_leaves(s, fields, ctx, None, &mut |s, value| {
             let leaf = i;
             i += 1;
             let Some(last) = s.leaves[leaf].last else {
                 return;
             };
             if top && w.emitted.contains(&s.path) {
+                if let Some(diagnostics) = w.diagnostics {
+                    diagnostics.report_collision(&s.path);
+                }
                 return;
             }
             let value = if last == leaf {
@@ -394,7 +436,7 @@ impl<E: Encoder> StructuredRecordFormatter<E> {
             } else {
                 let mut value = value;
                 let mut j = base;
-                self.walk_leaves(s, fields, ctx, &mut |_, v| {
+                self.walk_leaves(s, fields, ctx, None, &mut |_, v| {
                     if j == last {
                         value = v;
                     }
@@ -414,14 +456,18 @@ impl<E: Encoder> StructuredRecordFormatter<E> {
 
     /// Calls `visit` for each visible leaf of a subtree, in order, with the flattened key
     /// of the leaf in the scratch path. Objects are flattened, and arrays and empty objects are leaves.
+    ///
+    /// Repeated keys within the nesting levels of the subtree are reported to `diagnostics`, if given.
     fn walk_leaves<'a>(
         &self,
         s: &mut Scratch,
         fields: Fields<'_, 'a>,
         ctx: Context,
+        diagnostics: Option<RecordDiagnostics>,
         visit: &mut dyn FnMut(&mut Scratch, RawValue<'a>),
     ) {
         let level = s.resolve(fields, false);
+        report_repeats(diagnostics, s, &level, fields);
         for i in 0..level.len {
             let (first, last) = s.entry(&level, i);
             let (key, value) = (fields.key(first), fields.value(last));
@@ -439,7 +485,7 @@ impl<E: Encoder> StructuredRecordFormatter<E> {
                     if object.fields.is_empty() {
                         visit(s, value);
                     } else {
-                        self.walk_leaves(s, Fields::Object(&object.fields), child, visit);
+                        self.walk_leaves(s, Fields::Object(&object.fields), child, diagnostics, visit);
                     }
                 }
                 _ => visit(s, value),
@@ -466,6 +512,7 @@ impl<E: Encoder> StructuredRecordFormatter<E> {
                 let fields = Fields::Object(&object.fields);
                 w.e.begin_object(w.buf);
                 let level = s.resolve(fields, false);
+                report_repeats(w.diagnostics, s, &level, fields);
                 for i in 0..level.len {
                     let (first, last) = s.entry(&level, i);
                     w.e.key(w.buf, fields.key(first));
@@ -491,7 +538,7 @@ impl<E: Encoder> RecordWithSourceFormatter for StructuredRecordFormatter<E> {
     /// Formats a record. The prefix is not written, as structured output holds nothing but records.
     #[inline]
     fn format_record(&self, buf: &mut Buf, _prefix: Range<usize>, rec: model::RecordWithSource) {
-        StructuredRecordFormatter::format_record(self, buf, rec.record)
+        self.format_record_from(buf, rec.record, Some(&rec.origin))
     }
 }
 
@@ -503,6 +550,8 @@ struct Writer<'b, 's, E> {
     e: E,
     /// Output keys of the predefined fields written so far.
     emitted: KeySet<'s>,
+    /// Where the keys dropped from the record are reported, if debug entries are enabled.
+    diagnostics: Option<RecordDiagnostics<'b>>,
 }
 
 impl<'s, E: Encoder> Writer<'_, 's, E> {
@@ -611,6 +660,18 @@ impl Scratch {
     fn end(&mut self, level: ResolvedLevel) {
         if let Some(order) = level.order {
             self.order.truncate(order);
+        }
+    }
+}
+
+/// Reports the keys of a resolved nesting level that occur more than once.
+#[inline]
+fn report_repeats(diagnostics: Option<RecordDiagnostics>, s: &Scratch, level: &ResolvedLevel, fields: Fields) {
+    if let (Some(diagnostics), Some(order)) = (diagnostics, level.order) {
+        for &(first, last) in &s.order[order..order + level.len] {
+            if first != last {
+                diagnostics.report_repeat(fields.key(first));
+            }
         }
     }
 }

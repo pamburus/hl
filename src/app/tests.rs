@@ -5,7 +5,7 @@ use super::*;
 use std::io::Cursor;
 
 // third-party imports
-use chrono::{Offset, Utc};
+use chrono::{DateTime, Offset, Utc};
 use chrono_tz::UTC;
 use maplit::hashmap;
 
@@ -18,6 +18,7 @@ use crate::{
     scanning::{BufFactory, PartialPlacement, Segment, SegmentBuf, SegmentBufFactory},
     settings::{self, AsciiMode, DisplayVariant, ExpansionMode, MessageFormat, MessageFormatting},
     syntax::*,
+    testing::diagnostics::CaptureSink,
     themecfg,
 };
 
@@ -218,6 +219,35 @@ fn mixed_fixture_options() -> Options {
         },
         ..options()
     }
+}
+
+/// Diagnostics for inputs, written to the internal log as in the app.
+fn diagnostics(inputs: &[InputDescriptor]) -> Diagnostics {
+    Diagnostics::new(Arc::new(LogSink), inputs)
+}
+
+type DiagnosticEntries = Vec<(log::Level, String)>;
+
+/// Runs the app with a sink capturing its diagnostic entries, returning the output and the entries.
+fn run_with_diagnostics(options: Options, inputs: Vec<InputHolder>) -> (String, DiagnosticEntries) {
+    let sink = Arc::new(CaptureSink::new(log::Level::Debug));
+    let app = App::with_diagnostic_sink(options, sink.clone());
+    let mut output = Vec::new();
+    app.run(inputs, &mut output).unwrap();
+    (String::from_utf8(output).unwrap(), sink.entries())
+}
+
+fn debug_entry(text: &str) -> (log::Level, String) {
+    (log::Level::Debug, text.to_owned())
+}
+
+fn info_entry(text: &str) -> (log::Level, String) {
+    (log::Level::Info, text.to_owned())
+}
+
+/// Pads a line to 60 bytes, so that two lines fit in a 128-byte block and three don't.
+fn padded(line: &str) -> String {
+    format!("{line:<60}\n")
 }
 
 #[test]
@@ -1710,6 +1740,7 @@ fn test_process_segments() {
         &sfi,
         &badges,
         &[InputDescriptor::new(0, "<stdin>")],
+        &diagnostics(&[InputDescriptor::new(0, "<stdin>")]),
         rxi,
         txo.clone(),
     );
@@ -1759,6 +1790,7 @@ fn test_process_segments_incomplete() {
         &sfi,
         &badges,
         &[InputDescriptor::new(0, "<stdin>")],
+        &diagnostics(&[InputDescriptor::new(0, "<stdin>")]),
         rxi,
         txo.clone(),
     );
@@ -1804,6 +1836,7 @@ fn test_process_segments_receiver_dropped() {
         &sfi,
         &badges,
         &[InputDescriptor::new(0, "<stdin>")],
+        &diagnostics(&[InputDescriptor::new(0, "<stdin>")]),
         rxi,
         txo,
     );
@@ -2944,7 +2977,7 @@ fn test_process_segments_passes_record_origin() {
     txi.send((0, 0, 200, segment(A1))).unwrap();
     drop(txi);
 
-    app.process_segments(&parser, &bfo, &sfi, &badges, &inputs, rxi, txo);
+    app.process_segments(&parser, &bfo, &sfi, &badges, &inputs, &diagnostics(&inputs), rxi, txo);
 
     let n = A1.len() as u64;
     assert_eq!(rxo.iter().count(), 2);
@@ -3215,6 +3248,7 @@ fn test_structured_output_follow() {
             &sfi,
             &badges,
             &descriptors,
+            &diagnostics(&descriptors),
             rxi,
             txo,
         );
@@ -3400,4 +3434,234 @@ fn test_logfmt_output_reads_back_as_json() {
     app.run(vec![input(fixture("types.logfmt"))], &mut logfmt).unwrap();
     let through = run_json(options(), vec![input(String::from_utf8(logfmt).unwrap())]);
     assert_eq!(through, run_json(options(), vec![input(fixture("types.logfmt"))]));
+}
+
+#[test]
+fn test_dropped_lines_cat() {
+    let options = Options {
+        output_format: OutputFormat::Json,
+        ..mixed_fixture_options()
+    };
+    let (output, entries) = run_with_diagnostics(options, vec![file_input("mixed.log", fixture("mixed.log"))]);
+    assert_eq!(output.lines().count(), 4);
+    assert_eq!(
+        entries,
+        [
+            debug_entry(r#"mixed.log: dropped unparsed line at 291..331: "panic: runtime error: index out of range""#),
+            debug_entry(r#"mixed.log: dropped unparsed line at 333..360: "at main.handler(main.go:42)""#),
+            info_entry("mixed.log: dropped 2 pieces of unparsed text"),
+        ]
+    );
+}
+
+#[test]
+fn test_dropped_remainders_and_prefixes() {
+    let options = Options {
+        output_format: OutputFormat::Json,
+        allow_prefix: true,
+        ..options()
+    };
+    let data = "{\"msg\":\"a\"} tail\n2026-07-06 prefix {\"msg\":\"b\"}\n";
+    let (output, entries) = run_with_diagnostics(options, vec![file_input("p.log", data)]);
+    assert_eq!(output, "{\"message\":\"a\"}\n{\"message\":\"b\"}\n");
+    assert_eq!(
+        entries,
+        [
+            debug_entry(r#"p.log: dropped unparsed text after a record at 12..16: "tail""#),
+            debug_entry(r#"p.log: dropped prefix before a record at 17..34: "2026-07-06 prefix""#),
+            info_entry("p.log: dropped 2 pieces of unparsed text"),
+        ]
+    );
+}
+
+#[test]
+fn test_dropped_lines_skip_blank_lines() {
+    let options = Options {
+        output_format: OutputFormat::Json,
+        ..options()
+    };
+    let data = "\n  \n\t\r\n{\"msg\":\"a\"}  \r\n \n";
+    let (output, entries) = run_with_diagnostics(options, vec![file_input("b.log", data)]);
+    assert_eq!(output, "{\"message\":\"a\"}\n");
+    assert_eq!(entries, []);
+}
+
+#[test]
+fn test_dropped_lines_oversized() {
+    let options = Options {
+        output_format: OutputFormat::Json,
+        buffer_size: NonZeroUsize::new(32).unwrap(),
+        max_message_size: NonZeroUsize::new(64).unwrap(),
+        ..options()
+    };
+    let data = format!("{{\"msg\":\"a\"}}\n{}\n{{\"msg\":\"b\"}}\n", "x".repeat(100));
+    let (output, entries) = run_with_diagnostics(options, vec![file_input("o.log", data)]);
+    assert_eq!(output, "{\"message\":\"a\"}\n{\"message\":\"b\"}\n");
+    assert!(!entries.is_empty());
+    for (level, text) in &entries[..entries.len() - 1] {
+        assert_eq!(*level, log::Level::Debug);
+        assert!(text.starts_with("o.log: dropped unparsed line at "), "{text}");
+    }
+    assert_eq!(
+        entries.last().unwrap(),
+        &info_entry(&format!("o.log: dropped {} pieces of unparsed text", entries.len() - 1))
+    );
+}
+
+#[test]
+fn test_dropped_lines_sort() {
+    let since = DateTime::parse_from_rfc3339("2026-07-06T10:00:05Z").unwrap().to_utc();
+    let options = Options {
+        output_format: OutputFormat::Json,
+        buffer_size: NonZeroUsize::new(128).unwrap(),
+        filter: Arc::new(AdvancedFilter::new(
+            Filter {
+                since: Some(since),
+                ..Default::default()
+            },
+            None,
+        )),
+        ..options()
+    }
+    .with_sort(true);
+    let data = [
+        // A block excluded by the time filter.
+        r#"{"ts":"2026-07-06T10:00:00Z","msg":"early"}"#,
+        "garbage 1",
+        // A block without timestamps.
+        r#"{"msg":"no time"}"#,
+        "garbage 2",
+        // A block without records.
+        "garbage 3",
+        "garbage 4",
+        // A block with records in the time range.
+        r#"{"ts":"2026-07-06T10:00:10Z","msg":"late"}"#,
+        "garbage 5",
+    ]
+    .map(padded)
+    .concat();
+    let (output, entries) = run_with_diagnostics(options, vec![input(data)]);
+    assert_eq!(
+        output,
+        "{\"timestamp\":\"2026-07-06T10:00:10Z\",\"message\":\"late\"}\n"
+    );
+    // Blocks that the index tells to skip are not read, so only the lines dropped from the read block are reported.
+    assert_eq!(
+        entries,
+        [
+            debug_entry(r#"<stdin>: dropped unparsed line at 427..436: "garbage 5""#),
+            info_entry("<stdin>: dropped 1 piece of unparsed text"),
+        ]
+    );
+}
+
+#[test]
+fn test_dropped_lines_follow() {
+    let inputs = vec![InputReference::File(crate::input::InputPath::ephemeral("f.log".into()))];
+    let sink = Arc::new(CaptureSink::new(log::Level::Debug));
+    let app = App::with_diagnostic_sink(
+        Options {
+            output_format: OutputFormat::Json,
+            ..options()
+        },
+        sink.clone(),
+    );
+    let descriptors = descriptors(&inputs);
+    let diagnostics = Diagnostics::new(sink.clone(), &descriptors);
+    let badges = app.prepare_follow_badges(&descriptors);
+    let sfi = SegmentBufFactory::new(4096);
+    let (txi, rxi) = channel::bounded(10);
+    let (txo, rxo) = channel::bounded(10);
+    let data = "garbage\n{\"ts\":\"2026-07-06T10:00:00Z\",\"msg\":\"a\"}\n";
+    txi.send((0, 0, 100, Segment::Complete(SegmentBuf::from(data.as_bytes()))))
+        .unwrap();
+    drop(txi);
+    app.process_segments(
+        &app.parser(),
+        &BufFactory::new(4096),
+        &sfi,
+        &badges,
+        &descriptors,
+        &diagnostics,
+        rxi,
+        txo,
+    );
+    let mut output = Vec::new();
+    app.merge_segments(&badges, rxo, &mut output, 1).unwrap();
+    assert_eq!(
+        std::str::from_utf8(&output).unwrap(),
+        "{\"timestamp\":\"2026-07-06T10:00:00Z\",\"message\":\"a\"}\n"
+    );
+    assert_eq!(
+        sink.entries(),
+        [debug_entry(r#"f.log: dropped unparsed line at 100..107: "garbage""#)]
+    );
+}
+
+#[test]
+fn test_dropped_keys() {
+    let data = concat!(
+        r#"{"msg":"m","message":"raw","tag":"a","tag":"b"}"#,
+        "\n",
+        r#"{"msg":"n","obj":{"k":1,"k":2}}"#,
+        "\n",
+    );
+    for format in [OutputFormat::Json, OutputFormat::Logfmt] {
+        let options = Options {
+            output_format: format,
+            ..options()
+        };
+        let (_, entries) = run_with_diagnostics(options, vec![file_input("k.log", data)]);
+        assert_eq!(
+            entries,
+            [
+                debug_entry(r#"k.log: dropped repeated key "tag" of the record at 0..47, keeping its last value"#),
+                debug_entry(
+                    r#"k.log: dropped field "message" of the record at 0..47, its key is taken by a predefined field"#
+                ),
+                debug_entry(r#"k.log: dropped repeated key "k" of the record at 48..79, keeping its last value"#),
+            ],
+            "{format:?}"
+        );
+    }
+}
+
+#[test]
+fn test_dropped_keys_flattened() {
+    let data = concat!(r#"{"msg":"m","a":{"x":1},"a.x":2,"message":{"y":3}}"#, "\n");
+    let options = Options {
+        output_format: OutputFormat::Json,
+        flatten: true,
+        ..options()
+    };
+    let (output, entries) = run_with_diagnostics(options, vec![file_input("d.log", data)]);
+    assert_eq!(output, "{\"message\":\"m\",\"a.x\":2,\"message.y\":3}\n");
+    assert_eq!(
+        entries,
+        [debug_entry(
+            r#"d.log: dropped repeated key "a.x" of the record at 0..49, keeping its last value"#
+        )]
+    );
+}
+
+#[test]
+fn test_dropped_lines_pretty() {
+    let filter = Arc::new(AdvancedFilter::new(
+        Filter {
+            level: Some(Level::Info),
+            ..Default::default()
+        },
+        None,
+    ));
+    for filter in [Default::default(), filter] {
+        let options = Options {
+            filter,
+            ..mixed_fixture_options()
+        };
+        let (_, entries) = run_with_diagnostics(options, vec![file_input("mixed.log", fixture("mixed.log"))]);
+        assert_eq!(entries, []);
+    }
+    let data = "{\"msg\":\"m\",\"message\":\"raw\",\"tag\":\"a\",\"tag\":\"b\"}\n";
+    let (_, entries) = run_with_diagnostics(options(), vec![file_input("k.log", data)]);
+    assert_eq!(entries, []);
 }

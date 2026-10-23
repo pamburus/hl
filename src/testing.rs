@@ -62,3 +62,44 @@ pub mod alloc {
         (result, ALLOCATIONS.with(Cell::get) - before)
     }
 }
+
+pub mod diagnostics {
+    //! A diagnostic sink that captures entries, for checking diagnostics without the global logger.
+
+    use std::{fmt, sync::Mutex};
+
+    use log::Level;
+
+    use crate::diagnostics::DiagnosticSink;
+
+    /// Captures the entries up to a maximum level.
+    pub struct CaptureSink {
+        max_level: Level,
+        entries: Mutex<Vec<(Level, String)>>,
+    }
+
+    impl CaptureSink {
+        pub fn new(max_level: Level) -> Self {
+            Self {
+                max_level,
+                entries: Mutex::new(Vec::new()),
+            }
+        }
+
+        /// Returns the captured entries.
+        pub fn entries(&self) -> Vec<(Level, String)> {
+            self.entries.lock().unwrap().clone()
+        }
+    }
+
+    impl DiagnosticSink for CaptureSink {
+        fn enabled(&self, level: Level) -> bool {
+            level <= self.max_level
+        }
+
+        fn write(&self, level: Level, args: fmt::Arguments) {
+            assert!(self.enabled(level), "an entry of a disabled level was written");
+            self.entries.lock().unwrap().push((level, args.to_string()));
+        }
+    }
+}

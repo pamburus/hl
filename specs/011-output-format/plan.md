@@ -92,7 +92,7 @@ specs/011-output-format/
 src/
 ├── cli.rs                         # MODIFY: OutputFormat enum and --output-format; FlattenOption::Auto
 ├── main.rs                        # MODIFY: resolve output format, flatten and input-info; structured mode disables colors and pager; exit hook on write error
-├── app.rs                         # MODIFY: Options.output_format; formatter selection; per-input context for SegmentProcessor; dropped-line observer; sort diagnostics-only blocks; exit summary
+├── app.rs                         # MODIFY: Options.output_format; formatter selection; per-input context for SegmentProcessor; dropped-line observer; exit summary
 ├── app/tests.rs                   # MODIFY: app-level tests per mode and format
 ├── formatting.rs                  # MODIFY: declare the structured submodule; share string helpers
 ├── formatting/

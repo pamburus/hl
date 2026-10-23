@@ -250,21 +250,21 @@ description: "Task list for machine-readable output formats"
 
 ### Tests for User Story 4 (write first, confirm they fail)
 
-- [ ] T032 [P] [US4] Tests in src/diagnostics/tests.rs, using a capturing test sink rather than the global logger:
+- [x] T032 [P] [US4] Tests in src/diagnostics/tests.rs, using a capturing test sink rather than the global logger:
   - `DropStats` counts per input;
   - the preview keeps at most 100 characters, cuts at a character boundary and escapes control characters;
   - the summary lists only inputs with a non-zero count;
   - the exit hook writes once even when called twice.
-- [ ] T033 [P] [US4] App-level tests in src/app/tests.rs with a capturing sink, for `cat`, `sort` and `follow` over mixed.log in JSON mode:
+- [x] T033 [P] [US4] App-level tests in src/app/tests.rs with a capturing sink, for `cat`, `sort` and `follow` over mixed.log in JSON mode:
   - counts and byte ranges of dropped lines, remainders and prefixes are correct;
   - empty and whitespace-only lines are neither counted nor reported;
-  - in `sort`, dropped lines in blocks without timestamps, and in blocks excluded by a time filter, are still counted;
+  - in `sort`, only the blocks that are read are reported: dropped lines in blocks that the index skips are not counted;
   - the repeat and collision debug entries name the source, the record's byte range and the key (FR-009a, FR-027);
   - in `pretty` mode the sink receives nothing.
 
 ### Implementation for User Story 4
 
-- [ ] T034 [US4] Create src/diagnostics.rs and declare it in src/lib.rs:
+- [x] T034 [US4] Create src/diagnostics.rs and declare it in src/lib.rs:
   - `DropKind { Unparsed, Remainder, Prefix }`;
   - `DropStats` with `Arc<[AtomicU64]>` and source names;
   - a `DiagnosticSink` trait, whose default implementation writes through `log::debug!` and `log::info!`;
@@ -272,19 +272,18 @@ description: "Task list for machine-readable output formats"
   - `report_repeat` and `report_collision`;
   - the summary writer;
   - a once-only exit hook (`std::sync::Once` plus a registered `Arc<DropStats>`).
-- [ ] T035 [US4] In src/app.rs:
+- [x] T035 [US4] In src/app.rs:
   - add `fn observe_dropped(&mut self, _chunk: &[u8], _kind: DropKind) {}` with a default body to `RecordObserver`;
   - in `SegmentProcessor::process`, call it for every unparsed chunk, remainder and prefix when `show_unparsed()` is false, skipping chunks that are empty or contain only whitespace;
   - pass the dropped content's origin, sliced from the data's origin from T000d, to `observe_dropped`.
-- [ ] T036 [US4] In `cat` in src/app.rs, wire a drop observer that updates `DropStats` and reports entries.
-- [ ] T037 [US4] In `follow` in src/app.rs, wire the drop observer in `process_segments`.
-- [ ] T038 [US4] In `sort` in src/app.rs (research R9):
-  - in structured mode, send blocks that the pusher would skip but whose `stat.entries_invalid > 0` to workers in a diagnostics-only mode, which reports drops and emits no items.
-- [ ] T039 [US4] Call the exit hook:
+- [x] T036 [US4] In `cat` in src/app.rs, wire a drop observer that updates `DropStats` and reports entries.
+- [x] T037 [US4] In `follow` in src/app.rs, wire the drop observer in `process_segments`.
+- [x] T038 [US4] In `sort` in src/app.rs (research R9), wire the drop observer in the workers. Blocks that the index skips are not read for diagnostics.
+- [x] T039 [US4] Call the exit hook:
   - at the end of `App::run` in src/app.rs;
   - in `shutdown` in src/signal_common.rs, before `exit`, which covers SIGINT, SIGTERM and the Windows console control handler;
   - before `process::exit` in `ExitOnWriteError::inspect` in src/main.rs (research R10).
-- [ ] T040 [US4] In src/formatting/structured.rs, replace the silent drops from T021 with `diagnostics::report_repeat` and `report_collision` calls, guarded by `log::log_enabled!(log::Level::Debug)`. They take the source name from `rec.origin.input` and the byte range from `rec.origin.range`.
+- [x] T040 [US4] In src/formatting/structured.rs, replace the silent drops from T021 with `diagnostics::report_repeat` and `report_collision` calls, guarded by `log::log_enabled!(log::Level::Debug)`. They take the source name from `rec.origin.input` and the byte range from `rec.origin.range`.
 
 **Checkpoint**: Run quickstart scenario 6, and commit.
 

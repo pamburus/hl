@@ -82,7 +82,7 @@ HL_DEBUG_LOG=info hl --output-format=json app.log 2>&1 >/dev/null | grep -i drop
 
 **Expected**:
 1. `clean`.
-2. A debug entry for `app.log` with the byte range `87..114` and the `panic:` preview, followed by an info summary of 1 dropped line.
+2. A debug entry for `app.log` with the byte range `87..114` and the `panic:` preview, followed by an info summary of 1 dropped piece of unparsed text.
 3. Only the info summary.
 
 ## Scenario 7: follow mode (User Story 3)

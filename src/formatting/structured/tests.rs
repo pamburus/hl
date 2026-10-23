@@ -6,6 +6,7 @@ use std::{
 };
 
 // third-party imports
+use itertools::Itertools;
 use proptest::prelude::*;
 use serde::de::{Deserialize, Deserializer, IgnoredAny, MapAccess, SeqAccess, Visitor};
 
@@ -74,13 +75,50 @@ fn json(builder: StructuredRecordFormatterBuilder, input: &str) -> String {
     format_with(&builder.build::<JsonEncoder>(), &predefined(), input)
 }
 
+/// Counts diagnostic entries up to a maximum level, without allocating.
+struct CountingSink {
+    max_level: log::Level,
+    count: std::sync::atomic::AtomicUsize,
+}
+
+impl CountingSink {
+    fn new(max_level: log::Level) -> Self {
+        Self {
+            max_level,
+            count: Default::default(),
+        }
+    }
+
+    fn count(&self) -> usize {
+        self.count.load(std::sync::atomic::Ordering::Relaxed)
+    }
+}
+
+impl DiagnosticSink for CountingSink {
+    fn enabled(&self, level: log::Level) -> bool {
+        level <= self.max_level
+    }
+
+    fn write(&self, _: log::Level, args: fmt::Arguments) {
+        // Formatting the entry and discarding the text checks that formatting allocates nothing.
+        struct Discard;
+        impl fmt::Write for Discard {
+            fn write_str(&mut self, _: &str) -> fmt::Result {
+                Ok(())
+            }
+        }
+        fmt::write(&mut Discard, args).ok();
+        self.count.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    }
+}
+
 fn no_allocations_after_warm_up<E: Encoder>() {
     use crate::testing::alloc::count_allocations;
 
     // Values nested two levels deep within an object are left out here: parsing such an object
     // allocates in the JSON parser, which the pretty formatter does as well.
     let inputs = [
-        r#"{"ts":"2026-07-06T10:00:00.5+02:00","level":"warn","logger":"l","msg":"m","caller":"c","a":{"b":[1,2],"d":"x\/y"},"f":[1,{"c":2}],"e":1}"#,
+        r#"{"ts":"2026-07-06T10:00:00.5+02:00","level":"warn","logger":"l","msg":"m","caller":"c","a":{"b":[1,2],"d":"x\/y"},"f":[1,{"c":2}],"e":1,"message":"x"}"#,
         r#"{"ts":1700000000.25,"msg":{"k":1,"k":2},"r":1,"r":2,"a.b":3,"a":{"b":4,"c":{"d":5}}}"#,
         r#"ts=yesterday level=info msg="hello world" n=+5 t=true tag=a tag=b"#,
     ];
@@ -88,8 +126,15 @@ fn no_allocations_after_warm_up<E: Encoder>() {
     let parser = Parser::new(ParserSettings::new(&predefined, [], None));
     let descriptor = InputDescriptor::new(0, "test");
 
-    for flatten in [false, true] {
-        let formatter = formatter().with_flatten(flatten).build::<E>();
+    // Without a sink, with a sink that takes no debug entries, and with one that takes them.
+    let sinks = [None, Some(log::Level::Info), Some(log::Level::Debug)]
+        .map(|level| level.map(|level| Arc::new(CountingSink::new(level))));
+    for (sink, flatten) in sinks.iter().cartesian_product([false, true]) {
+        let mut formatter = formatter().with_flatten(flatten);
+        if let Some(sink) = sink {
+            formatter = formatter.with_diagnostic_sink(sink.clone());
+        }
+        let formatter = formatter.build::<E>();
         for input in inputs {
             let raw = RawRecord::parser().parse(input.as_bytes()).next().unwrap().unwrap();
             let record = parser.parse(&raw.record);
@@ -110,11 +155,16 @@ fn no_allocations_after_warm_up<E: Encoder>() {
             assert_eq!(
                 allocations,
                 0,
-                "{}, flatten={flatten}: {input}",
-                std::any::type_name::<E>()
+                "{}, flatten={flatten}, sink={:?}: {input}",
+                std::any::type_name::<E>(),
+                sink.as_ref().map(|sink| sink.max_level),
             );
         }
     }
+    // Every input has repeated or colliding keys, so each run reports some.
+    let counts = sinks.each_ref().map(|sink| sink.as_ref().map(|sink| sink.count()));
+    assert_eq!(counts[1], Some(0));
+    assert!(counts[2].unwrap() >= 2 * 2 * inputs.len(), "{counts:?}");
 }
 
 // ---

@@ -481,6 +481,7 @@ impl<W> ExitOnWriteError<W> {
             // Exit with 141 (128 + SIGPIPE) when writing to pager fails
             // This matches git and other tools' behavior
             let exit_code = if using_pager { 141 } else { 0 };
+            hl::diagnostics::on_exit();
             process::exit(exit_code);
         })
     }
