@@ -105,6 +105,21 @@ impl<'a> RecordExt<'a> for Record<'a> {
     }
 }
 
+fn format_json_line(formatter: &RecordFormatter, input: &str) -> String {
+    let raw = RawRecord::parser()
+        .parse(input.as_bytes())
+        .next()
+        .unwrap()
+        .unwrap()
+        .record;
+    let record = Parser::new(ParserSettings::default()).parse(&raw);
+    formatter.format_to_string(&record)
+}
+
+fn key_quoting_formatter() -> RecordFormatterBuilder {
+    formatter().with_theme(Default::default()).with_flatten(true)
+}
+
 #[test]
 fn test_nested_objects() {
     let ka = json_raw_value(r#"{"va":{"kb":42,"kc":43}}"#);
@@ -3108,21 +3123,6 @@ fn test_nested_object_key_with_escaped_quotes() {
 }
 
 // --- Key quoting (#1609)
-
-fn format_json_line(formatter: &RecordFormatter, input: &str) -> String {
-    let raw = RawRecord::parser()
-        .parse(input.as_bytes())
-        .next()
-        .unwrap()
-        .unwrap()
-        .record;
-    let record = Parser::new(ParserSettings::default()).parse(&raw);
-    formatter.format_to_string(&record)
-}
-
-fn key_quoting_formatter() -> RecordFormatterBuilder {
-    formatter().with_theme(Default::default()).with_flatten(true)
-}
 
 #[rstest]
 #[case::plain("status", KeyQuoting::Plain)]

@@ -45,6 +45,127 @@ impl Write for FlushProbe {
     }
 }
 
+fn input<S: Into<String>>(s: S) -> InputHolder {
+    InputHolder::new(InputReference::Stdin, Some(Box::new(Cursor::new(s.into()))))
+}
+
+fn options() -> Options {
+    Options {
+        theme: Arc::new(Theme::none()),
+        time_format: LinuxDateFormat::new("%Y-%m-%d %T.%3N").compile(),
+        raw: false,
+        raw_fields: false,
+        allow_prefix: false,
+        buffer_size: NonZeroUsize::new(4096).unwrap(),
+        max_message_size: NonZeroUsize::new(4096 * 1024).unwrap(),
+        concurrency: 1,
+        filter: Default::default(),
+        fields: FieldOptions::default(),
+        formatting: Formatting {
+            message: MessageFormatting {
+                format: MessageFormat::AutoQuoted,
+            },
+            ..Formatting::default()
+        },
+        time_zone: Tz::IANA(UTC),
+        hide_empty_fields: false,
+        sort: false,
+        follow: false,
+        sync_interval: Duration::from_secs(1),
+        input_info: Default::default(),
+        input_format: None,
+        dump_index: false,
+        app_dirs: None,
+        tail: 0,
+        delimiter: Delimiter::default(),
+        unix_ts_unit: None,
+        flatten: false,
+        ascii: AsciiMode::Off,
+        expand: Default::default(),
+        output_delimiter: "\n".to_string(),
+    }
+}
+
+fn test_badges(width: usize) -> FollowBadges {
+    FollowBadges {
+        si: SyncIndicator {
+            width,
+            synced: "S".repeat(width),
+            failed: "F".repeat(width),
+            placeholder: " ".repeat(width),
+        },
+        input: None,
+    }
+}
+
+fn ts(sec: i64, nsec: u32) -> Timestamp {
+    Timestamp { sec, nsec }
+}
+
+/// Scans each chunk as a separate follow mode scan and returns the text of the
+/// segments sent after each of them.
+fn scan_chunks(segment_size: usize, chunks: &[(&[u8], bool)]) -> Vec<Vec<String>> {
+    let sfi = Arc::new(SegmentBufFactory::new(segment_size));
+    let scanner = Scanner::new(sfi, Delimiter::default());
+    let (txi, rxi) = channel::unbounded();
+    let mut blocks = BlockScanner::new(&scanner, Delimiter::default(), segment_size);
+
+    let text = |segment: Segment| match segment {
+        Segment::Complete(buf) | Segment::Incomplete(buf, _) => String::from_utf8_lossy(buf.data()).into_owned(),
+    };
+
+    chunks
+        .iter()
+        .map(|&(chunk, hold_tail)| {
+            blocks
+                .scan(&mut Cursor::new(chunk.to_vec()), 0, &txi, hold_tail)
+                .unwrap();
+            rxi.try_iter().map(|(_, _, _, segment)| text(segment)).collect_vec()
+        })
+        .collect()
+}
+
+/// The input and byte range of a formatted record, as seen by the formatter.
+type CapturedOrigin = (InputDescriptor, Range<u64>);
+
+/// Records the origin of each formatted record and writes its source.
+#[derive(Default)]
+struct OriginCapture {
+    origins: std::sync::Mutex<Vec<CapturedOrigin>>,
+}
+
+impl RecordWithSourceFormatter for OriginCapture {
+    fn format_record(&self, buf: &mut Vec<u8>, _: Range<usize>, rec: RecordWithSource) {
+        buf.extend_from_slice(rec.source);
+        self.origins
+            .lock()
+            .unwrap()
+            .push((rec.origin.input.clone(), rec.origin.range));
+    }
+}
+
+fn app_with_origin_capture(options: Options) -> (App, Arc<OriginCapture>) {
+    let capture = Arc::new(OriginCapture::default());
+    let mut app = App::new(options);
+    app.formatter = capture.clone();
+    (app, capture)
+}
+
+fn file_input<S: Into<String>>(name: &str, s: S) -> InputHolder {
+    InputHolder::new(
+        InputReference::File(crate::input::InputPath::ephemeral(name.into())),
+        Some(Box::new(Cursor::new(s.into()))),
+    )
+}
+
+fn descriptor(index: usize, name: &str) -> InputDescriptor {
+    InputDescriptor::new(index, name)
+}
+
+fn descriptors(inputs: &[InputReference]) -> Vec<InputDescriptor> {
+    inputs.iter().enumerate().map(Into::into).collect_vec()
+}
+
 #[test]
 fn test_common_prefix_len() {
     let items = vec!["abc", "abcd", "ab", "ab"];
@@ -591,47 +712,6 @@ fn test_issue_176_unmatched_logfmt() {
     );
     app.run(vec![input], &mut output).unwrap();
     assert_eq!(std::str::from_utf8(&output).unwrap(), "test span.name=main\n");
-}
-
-fn input<S: Into<String>>(s: S) -> InputHolder {
-    InputHolder::new(InputReference::Stdin, Some(Box::new(Cursor::new(s.into()))))
-}
-
-fn options() -> Options {
-    Options {
-        theme: Arc::new(Theme::none()),
-        time_format: LinuxDateFormat::new("%Y-%m-%d %T.%3N").compile(),
-        raw: false,
-        raw_fields: false,
-        allow_prefix: false,
-        buffer_size: NonZeroUsize::new(4096).unwrap(),
-        max_message_size: NonZeroUsize::new(4096 * 1024).unwrap(),
-        concurrency: 1,
-        filter: Default::default(),
-        fields: FieldOptions::default(),
-        formatting: Formatting {
-            message: MessageFormatting {
-                format: MessageFormat::AutoQuoted,
-            },
-            ..Formatting::default()
-        },
-        time_zone: Tz::IANA(UTC),
-        hide_empty_fields: false,
-        sort: false,
-        follow: false,
-        sync_interval: Duration::from_secs(1),
-        input_info: Default::default(),
-        input_format: None,
-        dump_index: false,
-        app_dirs: None,
-        tail: 0,
-        delimiter: Delimiter::default(),
-        unix_ts_unit: None,
-        flatten: false,
-        ascii: AsciiMode::Off,
-        expand: Default::default(),
-        output_delimiter: "\n".to_string(),
-    }
 }
 
 #[test]
@@ -2142,22 +2222,6 @@ fn test_bug_comprehensive_multiline_prefix_remainder_raw() {
 
 // --- merge_segments tests ---
 
-fn test_badges(width: usize) -> FollowBadges {
-    FollowBadges {
-        si: SyncIndicator {
-            width,
-            synced: "S".repeat(width),
-            failed: "F".repeat(width),
-            placeholder: " ".repeat(width),
-        },
-        input: None,
-    }
-}
-
-fn ts(sec: i64, nsec: u32) -> Timestamp {
-    Timestamp { sec, nsec }
-}
-
 #[test]
 fn test_merge_segments_single_line() {
     let app = App::new(options());
@@ -2669,29 +2733,6 @@ fn test_block_scanner_stops_scanning_when_receiver_is_gone() {
     assert_eq!(blocks.block, 0);
 }
 
-/// Scans each chunk as a separate follow mode scan and returns the text of the
-/// segments sent after each of them.
-fn scan_chunks(segment_size: usize, chunks: &[(&[u8], bool)]) -> Vec<Vec<String>> {
-    let sfi = Arc::new(SegmentBufFactory::new(segment_size));
-    let scanner = Scanner::new(sfi, Delimiter::default());
-    let (txi, rxi) = channel::unbounded();
-    let mut blocks = BlockScanner::new(&scanner, Delimiter::default(), segment_size);
-
-    let text = |segment: Segment| match segment {
-        Segment::Complete(buf) | Segment::Incomplete(buf, _) => String::from_utf8_lossy(buf.data()).into_owned(),
-    };
-
-    chunks
-        .iter()
-        .map(|&(chunk, hold_tail)| {
-            blocks
-                .scan(&mut Cursor::new(chunk.to_vec()), 0, &txi, hold_tail)
-                .unwrap();
-            rxi.try_iter().map(|(_, _, _, segment)| text(segment)).collect_vec()
-        })
-        .collect()
-}
-
 #[test]
 fn test_block_scanner_completes_line_split_across_scans() {
     // A writer may append a single line in several writes, each of them
@@ -2754,47 +2795,6 @@ fn test_block_scanner_propagates_read_error() {
         assert!(blocks.scan(&mut FailingReader, 0, &txi, hold_tail).is_err());
     }
     assert_eq!(blocks.block, 0);
-}
-
-/// The input and byte range of a formatted record, as seen by the formatter.
-type CapturedOrigin = (InputDescriptor, Range<u64>);
-
-/// Records the origin of each formatted record and writes its source.
-#[derive(Default)]
-struct OriginCapture {
-    origins: std::sync::Mutex<Vec<CapturedOrigin>>,
-}
-
-impl RecordWithSourceFormatter for OriginCapture {
-    fn format_record(&self, buf: &mut Vec<u8>, _: Range<usize>, rec: RecordWithSource) {
-        buf.extend_from_slice(rec.source);
-        self.origins
-            .lock()
-            .unwrap()
-            .push((rec.origin.input.clone(), rec.origin.range));
-    }
-}
-
-fn app_with_origin_capture(options: Options) -> (App, Arc<OriginCapture>) {
-    let capture = Arc::new(OriginCapture::default());
-    let mut app = App::new(options);
-    app.formatter = capture.clone();
-    (app, capture)
-}
-
-fn file_input<S: Into<String>>(name: &str, s: S) -> InputHolder {
-    InputHolder::new(
-        InputReference::File(crate::input::InputPath::ephemeral(name.into())),
-        Some(Box::new(Cursor::new(s.into()))),
-    )
-}
-
-fn descriptor(index: usize, name: &str) -> InputDescriptor {
-    InputDescriptor::new(index, name)
-}
-
-fn descriptors(inputs: &[InputReference]) -> Vec<InputDescriptor> {
-    inputs.iter().enumerate().map(Into::into).collect_vec()
 }
 
 #[test]

@@ -2,6 +2,12 @@ use super::*;
 use crate::model::{Parser as RecordParser, ParserSettings, RawRecord};
 use rstest::rstest;
 
+fn parse(s: &str) -> Record<'_> {
+    let raw = RawRecord::parser().parse(s.as_bytes()).next().unwrap().unwrap().record;
+    let parser = RecordParser::new(ParserSettings::default());
+    parser.parse(&raw)
+}
+
 #[test]
 fn test_or_3() {
     let mut pairs = QueryParser::parse(Rule::input, ".a=1 or .b=2 or .c=3").unwrap();
@@ -508,12 +514,6 @@ fn test_query_numerical_type_mismatch(#[case] raw_query: &str, #[case] input: &s
         if should_match { "match" } else { "not match" },
         input,
     );
-}
-
-fn parse(s: &str) -> Record<'_> {
-    let raw = RawRecord::parser().parse(s.as_bytes()).next().unwrap().unwrap().record;
-    let parser = RecordParser::new(ParserSettings::default());
-    parser.parse(&raw)
 }
 
 #[rstest]

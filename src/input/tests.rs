@@ -10,6 +10,51 @@ use crate::{
     vfs::{self, LocalFileSystem},
 };
 
+struct FailingReader;
+
+impl Read for FailingReader {
+    fn read(&mut self, _buf: &mut [u8]) -> io::Result<usize> {
+        Err(io::Error::other("read error"))
+    }
+}
+
+impl Seek for FailingReader {
+    fn seek(&mut self, from: SeekFrom) -> io::Result<u64> {
+        match from {
+            SeekFrom::Start(0) => Ok(0),
+            SeekFrom::Current(0) => Ok(0),
+            SeekFrom::End(0) => Ok(0),
+            _ => Err(io::Error::other("seek error")),
+        }
+    }
+}
+
+impl Meta for FailingReader {
+    fn metadata(&self) -> std::io::Result<Option<Metadata>> {
+        Ok(None)
+    }
+}
+
+struct UnseekableReader<R>(R);
+
+impl<R: Read> Read for UnseekableReader<R> {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        self.0.read(buf)
+    }
+}
+
+impl<R> Seek for UnseekableReader<R> {
+    fn seek(&mut self, _: SeekFrom) -> io::Result<u64> {
+        Err(io::Error::other("seek error"))
+    }
+}
+
+impl<R> Meta for UnseekableReader<R> {
+    fn metadata(&self) -> io::Result<Option<Metadata>> {
+        Ok(None)
+    }
+}
+
 #[test]
 fn test_input_reference() {
     let reference = InputReference::Stdin;
@@ -263,53 +308,6 @@ fn test_indexed_input_sequential_access() {
 }
 
 // ---
-
-struct FailingReader;
-
-impl Read for FailingReader {
-    fn read(&mut self, _buf: &mut [u8]) -> io::Result<usize> {
-        Err(io::Error::other("read error"))
-    }
-}
-
-impl Seek for FailingReader {
-    fn seek(&mut self, from: SeekFrom) -> io::Result<u64> {
-        match from {
-            SeekFrom::Start(0) => Ok(0),
-            SeekFrom::Current(0) => Ok(0),
-            SeekFrom::End(0) => Ok(0),
-            _ => Err(io::Error::other("seek error")),
-        }
-    }
-}
-
-impl Meta for FailingReader {
-    fn metadata(&self) -> std::io::Result<Option<Metadata>> {
-        Ok(None)
-    }
-}
-
-// ---
-
-struct UnseekableReader<R>(R);
-
-impl<R: Read> Read for UnseekableReader<R> {
-    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-        self.0.read(buf)
-    }
-}
-
-impl<R> Seek for UnseekableReader<R> {
-    fn seek(&mut self, _: SeekFrom) -> io::Result<u64> {
-        Err(io::Error::other("seek error"))
-    }
-}
-
-impl<R> Meta for UnseekableReader<R> {
-    fn metadata(&self) -> io::Result<Option<Metadata>> {
-        Ok(None)
-    }
-}
 
 #[test]
 fn test_failing_reader_seek_error() {
