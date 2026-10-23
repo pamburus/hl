@@ -60,6 +60,14 @@ pub trait Encoder: Copy + Default {
     /// Starts an array item, followed by its value with one of the value methods.
     fn item(&mut self, buf: &mut Buf);
     fn string(&mut self, buf: &mut Buf, value: EncodedString);
+    /// Writes an unquoted logfmt source value that is typed as a string, which may be empty.
+    ///
+    /// Such a value has no spaces, control characters, quotes or `=`, so it can be written as is
+    /// where a bare value is allowed.
+    #[inline]
+    fn bare_string(&mut self, buf: &mut Buf, value: &str) {
+        self.string(buf, EncodedString::raw(value));
+    }
     fn number(&mut self, buf: &mut Buf, value: &str, source: NumberSource);
     fn boolean(&mut self, buf: &mut Buf, value: bool);
     fn null(&mut self, buf: &mut Buf);
@@ -113,12 +121,15 @@ impl Default for OutputKeys {
 
 // ---
 
+/// The filter of the nested source fields of predefined fields, with the first segments of their keys.
+type PredefinedFilter = (Arc<ExactIncludeExcludeKeyFilter>, Arc<[Box<str>]>);
+
 #[derive(Default, Clone)]
 pub struct StructuredRecordFormatterBuilder {
     flatten: bool,
     hide_empty_fields: bool,
     fields: Option<Arc<IncludeExcludeKeyFilter>>,
-    predefined_fields: Option<Arc<ExactIncludeExcludeKeyFilter>>,
+    predefined_fields: Option<PredefinedFilter>,
     diagnostic_sink: Option<Arc<dyn DiagnosticSink>>,
 }
 
@@ -151,11 +162,16 @@ impl StructuredRecordFormatterBuilder {
     /// Sets the predefined fields, whose nested source fields are left out of the regular fields.
     pub fn with_predefined_fields(self, predefined: &PredefinedFields) -> Self {
         let mut filter = ExactIncludeExcludeKeyFilter::new(MatchOptions::<NoNormalizing>::default());
+        let mut heads = Vec::<Box<str>>::new();
         for name in predefined.nested_field_names() {
             filter.entry(name).exclude();
+            let head = name.split('.').next().unwrap_or(name);
+            if !heads.iter().any(|h| **h == *head) {
+                heads.push(head.into());
+            }
         }
         Self {
-            predefined_fields: Some(Arc::new(filter)),
+            predefined_fields: Some((Arc::new(filter), heads.into())),
             ..self
         }
     }
@@ -172,6 +188,7 @@ impl StructuredRecordFormatterBuilder {
         let keys = OutputKeys::default();
         let fields = self.fields.unwrap_or_default();
         let visible = |key: &str| Context::root(Some(&*fields), None).child(key).is_some();
+        let (predefined_fields, predefined_heads) = self.predefined_fields.unwrap_or_default();
         let visible = Visibility {
             time: visible(&keys.time),
             level: visible(&keys.level),
@@ -186,7 +203,8 @@ impl StructuredRecordFormatterBuilder {
             flatten: self.flatten,
             hide_empty_fields: self.hide_empty_fields,
             fields,
-            predefined_fields: self.predefined_fields.unwrap_or_default(),
+            predefined_fields,
+            predefined_heads,
             diagnostic_sink: self.diagnostic_sink,
             encoder: PhantomData,
         }
@@ -215,6 +233,8 @@ pub struct StructuredRecordFormatter<E> {
     hide_empty_fields: bool,
     fields: Arc<IncludeExcludeKeyFilter>,
     predefined_fields: Arc<ExactIncludeExcludeKeyFilter>,
+    /// First segments of the nested source fields of predefined fields.
+    predefined_heads: Arc<[Box<str>]>,
     diagnostic_sink: Option<Arc<dyn DiagnosticSink>>,
     encoder: PhantomData<fn() -> E>,
 }
@@ -256,7 +276,10 @@ impl<E: Encoder> StructuredRecordFormatter<E> {
 
         w.e.begin_record(w.buf);
         self.format_predefined(&mut w, s, rec);
-        let ctx = Context::root(Some(&*self.fields), Some(&*self.predefined_fields));
+        let ctx = Context::root(
+            Some(&*self.fields),
+            Some((&*self.predefined_fields, &*self.predefined_heads)),
+        );
         self.format_fields(&mut w, s, Fields::Record(&rec.fields), ctx, true);
         w.e.end_record(w.buf);
     }
@@ -394,15 +417,21 @@ impl<E: Encoder> StructuredRecordFormatter<E> {
         let text_base = s.leaf_keys.len();
 
         let diagnostics = w.diagnostics;
+        let mut filter = HashFilter::default();
         self.walk_leaves(s, fields, ctx, diagnostics, &mut |s, _| {
             let begin = s.leaf_keys.len();
             s.leaf_keys.push_str(&s.path);
             let key = begin..s.leaf_keys.len();
             let hash = hash(&s.path);
             let i = s.leaves.len();
-            let first = s.leaves[base..].iter().position(|leaf| {
-                leaf.last.is_some() && leaf.hash == hash && s.leaf_keys[leaf.key.clone()] == s.leaf_keys[key.clone()]
+            let first = filter.insert(hash).then(|| {
+                s.leaves[base..].iter().position(|leaf| {
+                    leaf.last.is_some()
+                        && leaf.hash == hash
+                        && s.leaf_keys[leaf.key.clone()] == s.leaf_keys[key.clone()]
+                })
             });
+            let first = first.flatten();
             let last = match first {
                 Some(first) => {
                     if let (Some(diagnostics), true) = (diagnostics, s.leaves[base + first].last == Some(base + first))
@@ -500,7 +529,8 @@ impl<E: Encoder> StructuredRecordFormatter<E> {
         match value {
             RawValue::String(EncodedString::Raw(raw)) => match RawValue::auto(raw.as_str()) {
                 RawValue::Number(value) => w.e.number(w.buf, value, NumberSource::Logfmt),
-                RawValue::String(_) => w.e.string(w.buf, EncodedString::Raw(raw)),
+                // Raw strings in records are unquoted logfmt values.
+                RawValue::String(_) => w.e.bare_string(w.buf, raw.as_str()),
                 value => self.format_value(w, s, value),
             },
             RawValue::String(value) => w.e.string(w.buf, value),
@@ -608,14 +638,20 @@ impl Scratch {
     fn resolve(&mut self, fields: Fields, flatten: bool) -> ResolvedLevel {
         let base = self.keys.len();
         let mut dotted = false;
+        let mut objects = false;
         let mut repeats = false;
+        let mut filter = HashFilter::default();
         for i in 0..fields.len() {
             let key = fields.key(i);
-            dotted |= flatten && key.contains('.');
+            if flatten {
+                dotted |= key.contains('.');
+                objects |= matches!(fields.value(i), RawValue::Object(_));
+            }
             let hash = hash(key);
-            if self.keys[base..]
-                .iter()
-                .any(|&(h, j)| h == hash && fields.key(j) == key)
+            if filter.insert(hash)
+                && self.keys[base..]
+                    .iter()
+                    .any(|&(h, j)| h == hash && fields.key(j) == key)
             {
                 repeats = true;
             } else {
@@ -642,7 +678,7 @@ impl Scratch {
         ResolvedLevel {
             len,
             order: repeats.then_some(order),
-            dotted,
+            dotted: dotted && objects,
         }
     }
 
@@ -682,7 +718,9 @@ struct ResolvedLevel {
     len: usize,
     /// Start of the level's entries in the scratch order, if some keys are repeated.
     order: Option<usize>,
-    /// Whether some keys have dots while flattening, which may make them equal to flattened keys.
+    /// Whether some keys have dots and some values are objects while flattening, so a key with dots
+    /// may be equal to the flattened key of a field of an object. Without objects, flattened keys
+    /// are the keys themselves, and they are already unique.
     dotted: bool,
 }
 
@@ -737,6 +775,23 @@ fn hash(key: &str) -> u64 {
     wyhash::wyhash(key.as_bytes(), 0)
 }
 
+/// A 256-bit filter of key hashes, which tells that most keys were not seen before
+/// without comparing them with the keys that were.
+#[derive(Default)]
+struct HashFilter([u64; 4]);
+
+impl HashFilter {
+    /// Adds `hash`, returning `true` if it may have been added before.
+    #[inline]
+    fn insert(&mut self, hash: u64) -> bool {
+        let bit = (hash >> 56) as usize;
+        let (word, mask) = (bit >> 6, 1 << (bit & 63));
+        let seen = self.0[word] & mask != 0;
+        self.0[word] |= mask;
+        seen
+    }
+}
+
 // ---
 
 /// The field filters that apply at a nesting level.
@@ -746,15 +801,22 @@ struct Context<'f> {
     setting: IncludeExcludeSetting,
     predefined: Option<&'f ExactIncludeExcludeKeyFilter>,
     predefined_setting: IncludeExcludeSetting,
+    /// At the root, the first segments of the keys in the predefined filter. A key that starts
+    /// with none of them is not in it, so it is not looked up.
+    predefined_heads: Option<&'f [Box<str>]>,
 }
 
 impl<'f> Context<'f> {
-    fn root(filter: Option<&'f IncludeExcludeKeyFilter>, predefined: Option<&'f ExactIncludeExcludeKeyFilter>) -> Self {
+    fn root(
+        filter: Option<&'f IncludeExcludeKeyFilter>,
+        predefined: Option<(&'f ExactIncludeExcludeKeyFilter, &'f [Box<str>])>,
+    ) -> Self {
         Self {
             filter,
             setting: IncludeExcludeSetting::Unspecified,
-            predefined,
+            predefined: predefined.map(|p| p.0),
             predefined_setting: IncludeExcludeSetting::Unspecified,
+            predefined_heads: predefined.map(|p| p.1),
         }
     }
 
@@ -762,7 +824,12 @@ impl<'f> Context<'f> {
     /// by the user's filter or as a nested source field of a predefined field.
     #[inline]
     fn child(&self, key: &str) -> Option<Self> {
-        let (predefined, predefined_setting, leaf) = descend(self.predefined, self.predefined_setting, key);
+        let (predefined, predefined_setting, leaf) = match self.predefined_heads {
+            Some(heads) if !heads.iter().any(|head| starts_with_segment(key, head)) => {
+                (None, self.predefined_setting, true)
+            }
+            _ => descend(self.predefined, self.predefined_setting, key),
+        };
         if predefined_setting == IncludeExcludeSetting::Exclude && leaf {
             return None;
         }
@@ -775,6 +842,7 @@ impl<'f> Context<'f> {
             setting,
             predefined,
             predefined_setting,
+            predefined_heads: None,
         })
     }
 
@@ -783,6 +851,12 @@ impl<'f> Context<'f> {
     fn has_predefined_filter(&self) -> bool {
         self.predefined.is_some()
     }
+}
+
+/// Tells whether the first segment of the dotted `key` is `head`.
+#[inline]
+fn starts_with_segment(key: &str, head: &str) -> bool {
+    key.as_bytes().starts_with(head.as_bytes()) && matches!(key.as_bytes().get(head.len()), None | Some(b'.'))
 }
 
 #[inline]

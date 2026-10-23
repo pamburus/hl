@@ -4,7 +4,7 @@
 use std::str;
 
 // workspace imports
-use encstr::EncodedString;
+use encstr::{AnyEncodedString, EncodedString};
 use serde_logfmt::logfmt::{is_bare_key, is_bare_value};
 
 // relative imports
@@ -93,18 +93,50 @@ impl Encoder for LogfmtEncoder {
         if self.nested() {
             return self.json.string(buf, value);
         }
-        let begin = buf.len();
-        match value {
-            EncodedString::Raw(raw) => buf.extend(raw.as_str().as_bytes()),
-            EncodedString::Json(json) => {
+        let json = match value {
+            EncodedString::Raw(raw) => {
+                let text = raw.as_str();
+                return if is_bare_str(text) {
+                    buf.extend(text.as_bytes())
+                } else {
+                    json::push_str(buf, text)
+                };
+            }
+            EncodedString::Json(json) => json,
+        };
+
+        // The source of a JSON string has no control characters, which the parsers reject, and no
+        // unescaped quotes. So a space or `=` is all that needs quoting, and a backslash needs
+        // decoding. A single scan stops at the first of them. Only after one that needs quoting
+        // is the rest searched for escapes, to know whether to decode.
+        let source = json.source();
+        let text = &source[1..source.len() - 1];
+        match memchr::memchr3(b' ', b'=', b'\\', text.as_bytes()) {
+            None if !text.is_empty() && reads_as_string(text) => buf.extend(text.as_bytes()),
+            None => json::push_json_str(buf, json, false),
+            Some(i) if text.as_bytes()[i] != b'\\' => {
+                let escaped = memchr::memchr(b'\\', &text.as_bytes()[i + 1..]).is_some();
+                json::push_json_str(buf, json, escaped);
+            }
+            Some(_) => {
+                let begin = buf.len();
                 // Strings in parsed records are terminated, so decoding can't fail half way.
                 _ = json.decode_lossy(&mut *buf);
+                if !is_bare(&buf[begin..]) {
+                    buf.truncate(begin);
+                    json::push_json_str(buf, json, true);
+                }
             }
         }
-        if !is_bare(&buf[begin..]) {
-            buf.truncate(begin);
-            json::push_encoded_str(buf, value);
+    }
+
+    #[inline]
+    fn bare_string(&mut self, buf: &mut Vec<u8>, value: &str) {
+        if self.nested() || value.is_empty() {
+            return self.string(buf, EncodedString::raw(value));
         }
+        debug_assert!(is_bare_str(value), "{value:?}");
+        buf.extend(value.as_bytes());
     }
 
     #[inline]
@@ -184,8 +216,19 @@ impl Encoder for LogfmtEncoder {
 /// Tells whether a string value can be written unquoted, so that it reads back as the same string.
 #[inline]
 fn is_bare(value: &[u8]) -> bool {
-    str::from_utf8(value)
-        .is_ok_and(|value| is_bare_value(value) && matches!(RawValue::auto(value), RawValue::String(_)))
+    str::from_utf8(value).is_ok_and(is_bare_str)
+}
+
+/// Tells whether a string value can be written unquoted, so that it reads back as the same string.
+#[inline]
+fn is_bare_str(value: &str) -> bool {
+    is_bare_value(value) && reads_as_string(value)
+}
+
+/// Tells whether an unquoted value is read back as a string rather than as a number, boolean or null.
+#[inline]
+fn reads_as_string(value: &str) -> bool {
+    matches!(RawValue::auto(value), RawValue::String(_))
 }
 
 /// Turns the compact JSON at `buf[begin..]` into a JSON string holding it, in place.

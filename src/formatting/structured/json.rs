@@ -1,7 +1,7 @@
 //! JSON encoding of structured output.
 
 // workspace imports
-use encstr::{AnyEncodedString, EncodedString, Handler, JsonAppender, Token};
+use encstr::{AnyEncodedString, EncodedString, Handler, JsonAppender, Token, json::JsonEncodedString};
 
 // relative imports
 use super::{Encoder, NumberSource};
@@ -109,24 +109,32 @@ impl Encoder for JsonEncoder {
 
 /// Writes an encoded string as a JSON string.
 ///
-/// A JSON-encoded string with no escapes and no control characters is copied verbatim.
-/// Otherwise it is decoded and encoded again, which normalizes escapes such as `\/`
-/// and replaces invalid sequences, such as lone surrogates, with U+FFFD.
+/// A JSON-encoded string with no escapes is copied verbatim, as the JSON parser accepts no control
+/// characters in strings. Otherwise it is decoded and encoded again, which normalizes escapes
+/// such as `\/` and replaces invalid sequences, such as lone surrogates, with U+FFFD.
 #[inline]
 pub fn push_encoded_str(buf: &mut Vec<u8>, value: EncodedString) {
     match value {
         EncodedString::Json(value) => {
-            let source = value.source();
-            if source.bytes().all(|b| b != b'\\' && b >= 0x20) {
-                buf.extend(source.as_bytes());
-            } else {
-                buf.push(b'"');
-                // Strings in parsed records are terminated, so decoding can't fail half way.
-                _ = value.decode_lossy(JsonAppender::new(buf));
-                buf.push(b'"');
-            }
+            let escaped = memchr::memchr(b'\\', value.source().as_bytes()).is_some();
+            push_json_str(buf, value, escaped);
         }
         EncodedString::Raw(value) => push_str(buf, value.as_str()),
+    }
+}
+
+/// Writes a JSON-encoded string as a JSON string, given whether its source has escapes.
+///
+/// It is for callers that have already scanned the source, so that it is not scanned again.
+#[inline]
+pub fn push_json_str(buf: &mut Vec<u8>, value: JsonEncodedString, escaped: bool) {
+    if !escaped {
+        buf.extend(value.source().as_bytes());
+    } else {
+        buf.push(b'"');
+        // Strings in parsed records are terminated, so decoding can't fail half way.
+        _ = value.decode_lossy(JsonAppender::new(buf));
+        buf.push(b'"');
     }
 }
 

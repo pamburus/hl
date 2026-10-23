@@ -2,49 +2,34 @@
 
 // ---
 
-/// Number of keys kept without allocation.
-const INLINE_CAPACITY: usize = 32;
+/// Number of keys kept without allocation, which covers the output keys of all predefined fields.
+const INLINE_CAPACITY: usize = 8;
 
-/// A set of keys, optimized for the few keys a record usually has.
+/// A set of keys, optimized for the few output keys of predefined fields a record has.
 ///
-/// Keys are kept with their hashes in insertion order, and their text is compared
-/// only when the hashes are equal, so a lookup is a linear scan over hashes.
+/// Keys are kept in insertion order, and a lookup is a linear scan comparing them,
+/// which for a handful of keys is cheaper than hashing the key looked up.
 #[derive(Default)]
 pub struct KeySet<'a> {
-    keys: heapopt::Vec<(u64, &'a str), INLINE_CAPACITY>,
+    keys: heapopt::Vec<&'a str, INLINE_CAPACITY>,
 }
 
 impl<'a> KeySet<'a> {
     /// Inserts `key`, returning `true` if it was not in the set.
     #[inline]
     pub fn insert(&mut self, key: &'a str) -> bool {
-        self.insert_hashed(hash(key), key)
+        if self.contains(key) {
+            return false;
+        }
+        self.keys.push(key);
+        true
     }
 
     /// Tells whether `key` is in the set.
     #[inline]
     pub fn contains(&self, key: &str) -> bool {
-        self.contains_hashed(hash(key), key)
+        self.keys.iter().any(|&k| k == key)
     }
-
-    #[inline]
-    fn insert_hashed(&mut self, hash: u64, key: &'a str) -> bool {
-        if self.contains_hashed(hash, key) {
-            return false;
-        }
-        self.keys.push((hash, key));
-        true
-    }
-
-    #[inline]
-    fn contains_hashed(&self, hash: u64, key: &str) -> bool {
-        self.keys.iter().any(|&(h, k)| h == hash && k == key)
-    }
-}
-
-#[inline]
-fn hash(key: &str) -> u64 {
-    wyhash::wyhash(key.as_bytes(), 0)
 }
 
 #[cfg(test)]

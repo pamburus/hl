@@ -47,7 +47,10 @@ fn test_quoted_strings() {
     assert_eq!(string(EncodedString::json(r#""""#)), r#""""#);
     assert_eq!(string(EncodedString::json(r#""a b""#)), r#""a b""#);
     assert_eq!(string(EncodedString::json(r#""a\nb""#)), r#""a\nb""#);
-    assert_eq!(string(EncodedString::json(r#""a b""#)), r#""a b""#);
+    assert_eq!(string(EncodedString::json(r#""a=b""#)), r#""a=b""#);
+    assert_eq!(string(EncodedString::json(r#""a b\/c""#)), r#""a b/c""#);
+    assert_eq!(string(EncodedString::json(r#""a=b\nc""#)), r#""a=b\nc""#);
+    assert_eq!(string(EncodedString::json(r#""a\/b c""#)), r#""a/b c""#);
 }
 
 #[test]

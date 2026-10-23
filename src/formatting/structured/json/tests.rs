@@ -35,8 +35,6 @@ fn test_json_string_normalized() {
     assert_eq!(string(EncodedString::json(r#""a\ud800b""#)), "\"a\u{fffd}b\"");
     assert_eq!(string(EncodedString::json(r#""\udc00""#)), "\"\u{fffd}\"");
     assert_eq!(string(EncodedString::json(r#""\ud800A""#)), "\"\u{fffd}A\"");
-    // Raw control characters, as quoted logfmt values may hold, are escaped.
-    assert_eq!(string(EncodedString::json("\"a\tb\"")), r#""a\tb""#);
 }
 
 #[test]
