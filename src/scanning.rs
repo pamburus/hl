@@ -766,6 +766,7 @@ pub struct ScannerIter<'a, 'b, D: Delimit> {
     next: SegmentBuf,
     searcher: D::Searcher,
     placement: Option<PartialPlacement>,
+    pending: bool,
     done: bool,
 }
 
@@ -783,6 +784,7 @@ impl<'a, 'b, D: Delimit> ScannerIter<'a, 'b, D> {
             next: scanner.sf.new_segment(),
             searcher: scanner.delimiter.clone().into_searcher(),
             placement: None,
+            pending: false,
             done: false,
         }
     }
@@ -795,8 +797,13 @@ impl<'a, 'b, D: Delimit> ScannerIter<'a, 'b, D> {
 
         let buf = self.next.data();
         let bs = buf.len();
-        self.searcher
-            .search_r(buf, edge)
+        // An incomplete token ends at the first delimiter, and the tokens after it start a new segment.
+        let found = if self.placement.is_some() {
+            self.searcher.search_l(buf, true)
+        } else {
+            self.searcher.search_r(buf, edge)
+        };
+        found
             .map(|range| (range.end, true))
             .or_else(|| {
                 if full {
@@ -839,23 +846,29 @@ impl<'a, 'b, D: Delimit> Iterator for ScannerIter<'a, 'b, D> {
         loop {
             let begin = self.next.size;
             let end = bs;
-            let n = match self.input.read(&mut self.next.buf[begin..end]) {
-                Ok(n) => n,
-                Err(err) => {
-                    self.done = true;
-                    return Some(Err(err.into()));
+            // Tokens left after an incomplete token are split before reading more input.
+            let n = if std::mem::take(&mut self.pending) {
+                None
+            } else {
+                match self.input.read(&mut self.next.buf[begin..end]) {
+                    Ok(n) => Some(n),
+                    Err(err) => {
+                        self.done = true;
+                        return Some(Err(err.into()));
+                    }
                 }
             };
 
-            self.next.size += n;
+            self.next.size += n.unwrap_or(0);
             let full = self.next.size == end;
 
-            let (next, placement) = if n == 0 {
+            let (next, placement) = if n == Some(0) {
                 self.done = true;
                 (SegmentBuf::zero(), self.placement.and(Some(PartialPlacement::Last)))
             } else {
                 match self.split(full, self.done) {
                     Some((next, true)) => {
+                        self.pending = self.placement.is_some() && next.len() != 0;
                         let result = (next, self.placement.and(Some(PartialPlacement::Last)));
                         self.placement = None;
                         result

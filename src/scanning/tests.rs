@@ -1,10 +1,18 @@
-use std::io::Cursor;
+use std::io::{self, Cursor, Read};
 use std::sync::Arc;
 
 use rstest::rstest;
 
 use super::json::JsonDelimitSearcher;
 use super::*;
+
+struct FailingReader;
+
+impl Read for FailingReader {
+    fn read(&mut self, _buf: &mut [u8]) -> io::Result<usize> {
+        Err(io::Error::other("read error"))
+    }
+}
 
 #[test]
 fn test_empty() {
@@ -703,4 +711,59 @@ fn test_partial_match_r_position_semantics() {
         assert_eq!(length, 2);
         assert_eq!(&buf[bs - length..bs], b"ab");
     }
+}
+
+#[test]
+fn test_tokens_after_long_token() {
+    let sf = Arc::new(SegmentBufFactory::new(8));
+    let scanner = Scanner::new(sf.clone(), b'/');
+    let mut data = std::io::Cursor::new(b"abcdefghij/x/y/z");
+    let tokens = scanner.items(&mut data).collect::<Result<Vec<_>>>().unwrap();
+    assert_eq!(
+        tokens,
+        vec![
+            Segment::Incomplete(b"abcdefgh".into(), PartialPlacement::First),
+            Segment::Incomplete(b"ij/".into(), PartialPlacement::Last),
+            Segment::Complete(b"x/y/".into()),
+            Segment::Complete(b"z".into()),
+        ]
+    )
+}
+
+#[test]
+fn test_tokens_after_long_token_without_more_input() {
+    let sf = Arc::new(SegmentBufFactory::new(8));
+    let scanner = Scanner::new(sf.clone(), b'/');
+    let mut data = Cursor::new(b"abcdefghij/x/y/").chain(FailingReader);
+    let mut tokens = scanner.items(&mut data);
+    assert_eq!(
+        tokens.next().unwrap().unwrap(),
+        Segment::Incomplete(b"abcdefgh".into(), PartialPlacement::First)
+    );
+    assert_eq!(
+        tokens.next().unwrap().unwrap(),
+        Segment::Incomplete(b"ij/".into(), PartialPlacement::Last)
+    );
+    assert_eq!(tokens.next().unwrap().unwrap(), Segment::Complete(b"x/y/".into()));
+    assert!(tokens.next().unwrap().is_err());
+}
+
+#[test]
+fn test_jumbo_tokens_after_long_token() {
+    let sf = Arc::new(SegmentBufFactory::new(8));
+    let scanner = Scanner::new(sf.clone(), Newline);
+    let mut data = Cursor::new(b"abcdefghij\r\nx\r\ny\n");
+    let tokens = scanner
+        .items(&mut data)
+        .with_max_segment_size(16)
+        .collect::<Result<Vec<_>>>()
+        .unwrap();
+    assert_eq!(
+        tokens,
+        vec![
+            Segment::Complete(b"abcdefghij\r\n".into()),
+            Segment::Complete(b"x\r\n".into()),
+            Segment::Complete(b"y\n".into()),
+        ]
+    )
 }
