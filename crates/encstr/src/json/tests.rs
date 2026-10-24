@@ -1,3 +1,7 @@
+// third-party imports
+use rstest::rstest;
+
+// local imports
 use super::*;
 
 #[test]
@@ -173,4 +177,47 @@ fn test_invalid_json_string_no_closing_quote() {
 #[should_panic]
 fn test_invalid_json_string_no_opening_quote() {
     JsonEncodedString::new(r#"hello, world""#);
+}
+
+#[rstest]
+fn test_find_escape(
+    #[values(0x00, 0x09, 0x1f, b'"', b'\\', 0x7f)] escape: u8,
+    #[values(b'a', b' ', b'!', b'#', b'[', b']', b'~', 0x80, 0xff)] filler: u8,
+    #[values(0, 1, 7, 8, 9, 15, 16, 17)] pos: usize,
+    #[values(1, 8, 18)] tail: usize,
+) {
+    let mut bytes = vec![filler; pos + tail];
+    bytes[pos] = escape;
+    assert_eq!(find_escape(&bytes), Some(pos));
+
+    bytes[pos + tail - 1] = escape;
+    assert_eq!(find_escape(&bytes), Some(pos));
+}
+
+#[rstest]
+fn test_find_escape_none(
+    #[values(b'a', b' ', b'!', b'#', b'[', b']', b'~', 0x80, 0xff)] filler: u8,
+    #[values(0, 1, 7, 8, 9, 16, 17)] len: usize,
+) {
+    assert_eq!(find_escape(&vec![filler; len]), None);
+}
+
+#[test]
+fn test_find_escape_all_bytes() {
+    let found: Vec<u8> = (0..=u8::MAX).filter(|&b| find_escape(&[b; 8]).is_some()).collect();
+    let expected: Vec<u8> = (0x00..=0x1f).chain([b'"', b'\\', 0x7f]).collect();
+    assert_eq!(found, expected);
+}
+
+#[test]
+fn test_append_sequence_long() {
+    let mut buffer = Vec::new();
+    let mut appender = Appender::new(&mut buffer);
+    appender.handle(Token::Sequence("0123456789 \"quoted\"\tand\x7f∞ more text here\\"));
+    assert_eq!(
+        buffer,
+        r#"0123456789 \"quoted\"\tand\u007f∞ more text here\\"#.as_bytes(),
+        "{:?}",
+        String::from_utf8_lossy(&buffer)
+    );
 }
