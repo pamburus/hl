@@ -1,19 +1,13 @@
 // std imports
 use std::{
-    cmp::Ordering,
-    collections::{HashMap, HashSet},
-    convert::From,
-    fmt,
-    iter::IntoIterator,
-    marker::PhantomData,
-    ops::Range,
-    str::FromStr,
-    sync::Arc,
+    cmp::Ordering, collections::HashSet, convert::From, fmt, iter::IntoIterator, marker::PhantomData, ops::Range,
+    str::FromStr, sync::Arc,
 };
 
 // third-party imports
 use chrono::{DateTime, Utc};
 use enumset::{EnumSet, EnumSetType, enum_set};
+use foldhash::HashMap;
 use regex::Regex;
 use serde::de::{Deserialize, Deserializer, MapAccess, SeqAccess, Visitor};
 use titlecase::titlecase;
@@ -601,7 +595,7 @@ impl ParserSettings {
                 continue;
             };
 
-            let mut mapping = HashMap::new();
+            let mut mapping = HashMap::default();
             for (level, values) in &variant.values {
                 for value in values {
                     mapping.insert(value.clone(), *level);
@@ -630,7 +624,7 @@ impl ParserSettings {
     }
 
     fn build_block_for_name(&mut self, n: usize, name: &str, settings: FieldSettings, priority: usize) {
-        self.blocks[n].fields.insert(name.to_owned(), (settings, priority));
+        self.blocks[n].insert(name, (settings, priority));
         let mut remainder = name;
         while let Some(k) = remainder.rfind('.') {
             let (name, nested) = name.split_at(k);
@@ -649,9 +643,7 @@ impl ParserSettings {
                 .unwrap_or_else(|| {
                     let nest = self.blocks.len();
                     self.blocks.push(ParserSettingsBlock::default());
-                    self.blocks[n]
-                        .fields
-                        .insert(name.to_string(), (FieldSettings::Nested(nest), priority));
+                    self.blocks[n].insert(name, (FieldSettings::Nested(nest), priority));
                     nest
                 });
 
@@ -699,9 +691,15 @@ impl Default for ParserSettings {
 #[derive(Default, Debug)]
 struct ParserSettingsBlock {
     fields: HashMap<String, (FieldSettings, usize)>,
+    filter: KeyFilter,
 }
 
 impl ParserSettingsBlock {
+    fn insert(&mut self, name: &str, value: (FieldSettings, usize)) {
+        self.filter.insert(name);
+        self.fields.insert(name.to_owned(), value);
+    }
+
     fn apply<'a>(
         &self,
         ps: &ParserSettings,
@@ -736,6 +734,10 @@ impl ParserSettingsBlock {
         to: &mut Record<'a>,
         pc: &mut PriorityController,
     ) -> bool {
+        if !self.filter.may_contain(key) {
+            return false;
+        }
+
         match self.fields.get(key) {
             Some((field, priority)) => {
                 let kind = field.kind();
@@ -747,6 +749,42 @@ impl ParserSettingsBlock {
             }
             None => false,
         }
+    }
+}
+
+// ---
+
+/// Cheap check that rejects most keys that are not in a [`ParserSettingsBlock`] before a hash lookup.
+/// It tracks the lengths and the first bytes of the known keys, so it can give false positives but never false negatives.
+#[derive(Default, Debug)]
+struct KeyFilter {
+    lengths: u64,
+    first_bytes: [u64; 4],
+}
+
+impl KeyFilter {
+    fn insert(&mut self, key: &str) {
+        self.lengths |= Self::length_bit(key);
+        if let Some(&b) = key.as_bytes().first() {
+            self.first_bytes[(b >> 6) as usize] |= 1 << (b & 63);
+        }
+    }
+
+    #[inline]
+    fn may_contain(&self, key: &str) -> bool {
+        if self.lengths & Self::length_bit(key) == 0 {
+            return false;
+        }
+        match key.as_bytes().first() {
+            Some(&b) => self.first_bytes[(b >> 6) as usize] & (1 << (b & 63)) != 0,
+            None => true,
+        }
+    }
+
+    /// Returns the bit for the length of `key`, with all lengths of 63 and above sharing the last bit.
+    #[inline]
+    fn length_bit(key: &str) -> u64 {
+        1 << key.len().min(63)
     }
 }
 
