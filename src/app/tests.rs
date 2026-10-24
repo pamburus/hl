@@ -8,6 +8,7 @@ use std::io::Cursor;
 use chrono::{Offset, Utc};
 use chrono_tz::UTC;
 use maplit::hashmap;
+use rstest::rstest;
 
 // local imports
 use crate::{
@@ -342,6 +343,33 @@ fn test_filter_with_blank_lines() {
         std::str::from_utf8(&output).unwrap(),
         "2024-01-25 18:10:20.435 |DBG| m2\n",
     );
+}
+
+#[rstest]
+#[case::filtered_first(r#"{"level":"debug","msg":"m1"}{"level":"info","msg":"m2"}"#, "|INF| m2\n")]
+#[case::filtered_first_two(
+    r#"{"level":"debug","msg":"m1"}{"level":"debug","msg":"m2"}{"level":"info","msg":"m3"}"#,
+    "|INF| m3\n"
+)]
+#[case::filtered_last(r#"{"level":"info","msg":"m1"}{"level":"debug","msg":"m2"}"#, "|INF| m1\n")]
+#[case::filtered_middle(
+    r#"{"level":"info","msg":"m1"}{"level":"debug","msg":"m2"}{"level":"info","msg":"m3"}"#,
+    "|INF| m1\n|INF| m3\n"
+)]
+#[case::filtered_all(r#"{"level":"debug","msg":"m1"}{"level":"debug","msg":"m2"}"#, "")]
+fn test_filter_records_sharing_line(#[case] data: &str, #[case] expected: &str) {
+    let mut output = Vec::new();
+    let app = App::new(
+        options().with_filter(
+            Filter {
+                level: Some(Level::Info),
+                ..Default::default()
+            }
+            .into(),
+        ),
+    );
+    app.run(vec![input(format!("{data}\n"))], &mut output).unwrap();
+    assert_eq!(std::str::from_utf8(&output).unwrap(), expected);
 }
 
 #[test]

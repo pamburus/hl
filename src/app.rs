@@ -1181,12 +1181,12 @@ impl<'a, Formatter: RecordWithSourceFormatter, Filter: RecordFilter> SegmentProc
             while let Some(Ok(ar)) = stream.next() {
                 i += 1;
                 last_offset = ar.offsets.end;
-                if parsed_some {
-                    buf.extend(self.options.output_delimiter.as_bytes());
-                }
                 parsed_some = true;
                 let record = self.parser.parse(&ar.record);
                 if record.matches(&self.filter) {
+                    if produced_some {
+                        buf.extend(self.options.output_delimiter.as_bytes());
+                    }
                     let begin = buf.len();
                     if ar.prefix.is_empty() {
                         buf.extend(prefix.as_bytes());
