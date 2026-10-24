@@ -3158,6 +3158,23 @@ fn test_structured_output_drops_unparsed_data() {
 }
 
 #[test]
+fn test_structured_output_with_plain_observer() {
+    // An observer that does not track dropped content gets the records only, as with diagnostics.
+    let app = App::new(Options {
+        output_format: OutputFormat::Json,
+        ..options()
+    });
+    let parser = app.parser();
+    let mut processor = app.new_segment_processor(&parser);
+    let descriptor = InputDescriptor::new(0, "p.log");
+    let data = b"garbage\n{\"msg\":\"a\"} tail\n";
+    let mut buf = Vec::new();
+    let origin = Origin::new(&descriptor, 0, data.len());
+    processor.process(data, &mut buf, origin, "", None, &mut RecordIgnorer {});
+    assert_eq!(buf, b"{\"message\":\"a\"}\n");
+}
+
+#[test]
 fn test_structured_output_unique_keys_per_format() {
     // Turning off unique keys for one format leaves the other one unchanged.
     let run = |format| {
@@ -3592,6 +3609,14 @@ fn test_dropped_lines_follow() {
     let data = "garbage\n{\"ts\":\"2026-07-06T10:00:00Z\",\"msg\":\"a\"}\n";
     txi.send((0, 0, 100, Segment::Complete(SegmentBuf::from(data.as_bytes()))))
         .unwrap();
+    // A part of a line too long to hold is not a record either.
+    txi.send((
+        0,
+        1,
+        200,
+        Segment::Incomplete(SegmentBuf::from(b"oversized"), PartialPlacement::First),
+    ))
+    .unwrap();
     drop(txi);
     app.process_segments(
         &app.parser(),
@@ -3611,7 +3636,10 @@ fn test_dropped_lines_follow() {
     );
     assert_eq!(
         sink.entries(),
-        [debug_entry(r#"f.log: dropped unparsed line at 100..107: "garbage""#)]
+        [
+            debug_entry(r#"f.log: dropped unparsed line at 100..107: "garbage""#),
+            debug_entry(r#"f.log: dropped unparsed line at 200..209: "oversized""#),
+        ]
     );
 }
 
@@ -3645,19 +3673,31 @@ fn test_dropped_keys() {
 
 #[test]
 fn test_dropped_keys_flattened() {
-    let data = concat!(r#"{"msg":"m","a":{"x":1},"a.x":2,"message":{"y":3}}"#, "\n");
+    let data = concat!(
+        r#"{"msg":"m","a":{"x":1},"a.x":2,"message":{"y":3}}"#,
+        "\n",
+        // A collision in a level whose keys are resolved together with those of its objects.
+        r#"{"msg":"n","b.c":1,"b":{"d":2},"message":"raw"}"#,
+        "\n",
+    );
     let options = Options {
         output_format: OutputFormat::Json,
         flatten: true,
         ..options()
     };
     let (output, entries) = run_with_diagnostics(options, vec![file_input("d.log", data)]);
-    assert_eq!(output, "{\"message\":\"m\",\"a.x\":2,\"message.y\":3}\n");
+    assert_eq!(
+        output,
+        "{\"message\":\"m\",\"a.x\":2,\"message.y\":3}\n{\"message\":\"n\",\"b.c\":1,\"b.d\":2}\n"
+    );
     assert_eq!(
         entries,
-        [debug_entry(
-            r#"d.log: dropped repeated key "a.x" of the record at 0..49, keeping its last value"#
-        )]
+        [
+            debug_entry(r#"d.log: dropped repeated key "a.x" of the record at 0..49, keeping its last value"#),
+            debug_entry(
+                r#"d.log: dropped field "message" of the record at 50..97, its key is taken by a predefined field"#
+            ),
+        ]
     );
 }
 

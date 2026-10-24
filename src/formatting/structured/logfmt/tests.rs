@@ -71,6 +71,12 @@ fn test_text() {
 }
 
 #[test]
+fn test_bare_source_strings() {
+    assert_eq!(encode(|e, buf| e.bare_string(buf, "ok")), "ok");
+    assert_eq!(encode(|e, buf| e.bare_string(buf, "")), r#""""#);
+}
+
+#[test]
 fn test_keys() {
     assert_eq!(key("a"), "a=x");
     assert_eq!(key("a.b"), "a.b=x");
@@ -139,6 +145,23 @@ fn test_nested_values_are_quoted_json() {
         output,
         r#"http="{\"status\":200,\"path\":\"/a \\\"b\\\" \\\\c\",\"tags\":[\"x\",5]}" next=y"#
     );
+
+    // Every kind of string is written as JSON inside a nested value.
+    let output = encode(|e, buf| {
+        e.key(buf, "o");
+        e.begin_object(buf);
+        e.key(buf, "bare");
+        e.bare_string(buf, "x");
+        e.key(buf, "text");
+        e.text(buf, &["a", " b"]);
+        e.key(buf, "plain");
+        e.plain(buf, |buf| {
+            buf.extend(b"p");
+            true
+        });
+        e.end_object(buf);
+    });
+    assert_eq!(output, r#"o="{\"bare\":\"x\",\"text\":\"a b\",\"plain\":\"p\"}""#);
 }
 
 #[test]

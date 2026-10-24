@@ -580,6 +580,14 @@ fn test_hiding() {
         ),
         r#"{"o":{}}"#
     );
+    // Hidden fields are also left out of a level whose keys are resolved together with those of its objects.
+    assert_eq!(
+        json(
+            formatter().with_field_filter(hide(&["o.k"])).with_flatten(true),
+            r#"{"o":{"k":1,"j":2},"o.x":3}"#
+        ),
+        r#"{"o.j":2,"o.x":3}"#
+    );
 }
 
 #[test]
@@ -593,6 +601,42 @@ fn test_hiding_empty_fields() {
         json(formatter().with_empty_fields_hiding(true), input),
         r#"{"g":[""],"h":0}"#
     );
+    assert_eq!(
+        json(
+            formatter().with_empty_fields_hiding(true).with_flatten(true),
+            r#"{"a.b":"","a":{"c":"","e":1},"d":1}"#
+        ),
+        r#"{"a.e":1,"d":1}"#
+    );
+}
+
+#[test]
+fn test_record_without_source() {
+    // A record built in code has a timestamp without a source value, which is written as is
+    // when it cannot be converted.
+    let record = model::Record {
+        ts: Some(crate::timestamp::Timestamp::new("someday")),
+        message: Some(RawValue::String(EncodedString::raw("m"))),
+        ..Default::default()
+    };
+    let mut buf = Vec::new();
+    formatter().build::<JsonEncoder>().format_record(&mut buf, &record);
+    assert_eq!(
+        std::str::from_utf8(&buf).unwrap(),
+        r#"{"timestamp":"someday","message":"m"}"#
+    );
+}
+
+#[test]
+fn test_formatting_with_scratch_in_use() {
+    // When the per-thread scratch is already borrowed, a fresh one is used.
+    SCRATCH.with(|scratch| {
+        let _borrowed = scratch.borrow_mut();
+        assert_eq!(
+            json(formatter(), r#"{"msg":"m","a":1,"a":2}"#),
+            r#"{"message":"m","a":2}"#
+        );
+    });
 }
 
 #[test]
