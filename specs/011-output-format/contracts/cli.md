@@ -43,6 +43,12 @@
 [formatting]
 flatten = "auto"          # new value; new default in etc/defaults/config.toml
 
+[formatting.json]
+unique-keys = true        # new table; false writes repeated keys as they occur (FR-009a)
+
+[formatting.logfmt]
+unique-keys = true        # new table; same for the logfmt output format
+
 [fields.predefined.time]
 output-key = "timestamp"  # optional, per field: time, level, logger, message, caller, caller-file, caller-line
 
@@ -56,6 +62,7 @@ output-key = "input"      # optional; new table
 
 **JSON schema**: `schema/json/config.schema.json` gains:
 - `"auto"` in the `formatting.flatten` enum;
+- the `formatting.json` and `formatting.logfmt` objects with an optional boolean `unique-keys`;
 - an optional `output-key` string (`minLength: 1`) in each predefined field object;
 - the `fields.predefined.input` object with only `output-key`.
 

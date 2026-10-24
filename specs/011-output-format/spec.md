@@ -42,6 +42,10 @@
 
 - Q: How should diagnostic entries locate a dropped line or a record in its input? → A: By the byte range of its content in the input. Line and column numbers are not tracked: the input delimiter may not be a newline, and the entries are only for debugging.
 
+### Session 2026-10-24
+
+- Q: Can resolving repeated keys be turned off? → A: Yes, per structured format, in the configuration file only: `formatting.json.unique-keys` and `formatting.logfmt.unique-keys`, both `true` by default. With `false`, repeated keys are written as they occur, with no diagnostic entries. Fields whose keys are taken by predefined fields are still dropped.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Emit filtered records as JSON for further processing (Priority: P1)
@@ -159,6 +163,7 @@ A user notices that fewer records came out than they expected and wants to know 
 - **FR-009a**: When a record contains the same key more than once at the same nesting level, the output MUST contain that key once. It MUST be placed at the position of the first occurrence and hold the value of the last occurrence. The other occurrences MUST be omitted, and a debug-level entry MUST be written to the diagnostic log naming the source, the byte range of the record and the repeated key.
   - The same rule MUST apply to keys that become equal only after flattening, e.g. a nested `{"a":{"b":1}}` and a literal `"a.b"` key under `--flatten=always`.
   - FR-027 takes precedence: a regular field that collides with a predefined output key is dropped even if it is the last occurrence.
+  - The rule MUST be configurable per structured format, with `formatting.json.unique-keys` and `formatting.logfmt.unique-keys` in the configuration file, both `true` by default. With `false`, every occurrence of a repeated key MUST be written in source order with its own value, including keys that become equal only after flattening, and no diagnostic entries are written for them. FR-027 still applies.
 - **FR-010**: Values from logfmt sources MUST be typed using the same rules hl applies when detecting value types: unquoted numbers become numbers, `true`/`false` become booleans, and `null` becomes null. All other values, and all quoted values, become strings.
 - **FR-010a**: Number values MUST keep their source text and MUST NOT be re-formatted or rounded, except where `json` mode requires a rewrite:
   - In `json` mode, a number whose source text is not valid JSON number syntax MUST be rewritten to the equivalent valid syntax with the same value. A leading `+` and redundant leading zeros are removed, a missing integer part becomes `0`, and a trailing `.` with no fraction digits is removed, e.g. `+5` → `5`, `.5` → `0.5`, `5.` → `5`, `-007.50` → `-7.50`, `5.e3` → `5e3`.

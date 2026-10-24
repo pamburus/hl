@@ -285,6 +285,8 @@ description: "Task list for machine-readable output formats"
   - before `process::exit` in `ExitOnWriteError::inspect` in src/main.rs (research R10).
 - [x] T040 [US4] In src/formatting/structured.rs, replace the silent drops from T021 with `diagnostics::report_repeat` and `report_collision` calls, guarded by `log::log_enabled!(log::Level::Debug)`. They take the source name from `rec.origin.input` and the byte range from `rec.origin.range`.
 
+- [x] T056 [US4] Add `unique-keys` to new `formatting.json` and `formatting.logfmt` configuration tables, `true` by default (FR-009a). With `false`, the structured formatter skips resolving repeated keys. Update src/settings.rs, etc/defaults/config.toml and schema/json/config.schema.json, and select the table by output format in src/app.rs.
+
 **Checkpoint**: Run quickstart scenario 6, and commit.
 
 ---

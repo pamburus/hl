@@ -57,6 +57,8 @@ fn formatter() -> RecordFormatterBuilder {
             },
             punctuation: Sample::sample(),
             prettify_field_keys: None,
+            json: Default::default(),
+            logfmt: Default::default(),
         })
 }
 
@@ -2223,6 +2225,8 @@ fn test_prettify_field_keys_disabled() {
             },
             punctuation: Sample::sample(),
             prettify_field_keys: Some(false),
+            json: Default::default(),
+            logfmt: Default::default(),
         })
         .build();
 
@@ -2253,6 +2257,8 @@ fn test_prettify_field_keys_enabled_default() {
             },
             punctuation: Sample::sample(),
             prettify_field_keys: Some(true),
+            json: Default::default(),
+            logfmt: Default::default(),
         })
         .build();
 
@@ -2285,6 +2291,8 @@ fn test_prettify_field_keys_flattened() {
             },
             punctuation: Sample::sample(),
             prettify_field_keys: Some(false),
+            json: Default::default(),
+            logfmt: Default::default(),
         })
         .build();
 
@@ -2316,6 +2324,8 @@ fn test_prettify_field_keys_raw_fields_override() {
             },
             punctuation: Sample::sample(),
             prettify_field_keys: Some(true),
+            json: Default::default(),
+            logfmt: Default::default(),
         })
         .build();
 

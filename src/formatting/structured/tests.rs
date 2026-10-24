@@ -462,6 +462,28 @@ fn test_repeated_keys() {
 }
 
 #[test]
+fn test_repeated_keys_kept() {
+    let formatter = || formatter().with_unique_keys(false);
+    assert_eq!(
+        json(formatter(), r#"tag=a x=1 tag=b"#),
+        r#"{"tag":"a","x":1,"tag":"b"}"#
+    );
+    assert_eq!(
+        json(formatter(), r#"{"o":{"k":1,"k":3},"p":[{"a":1,"a":2}]}"#),
+        r#"{"o":{"k":1,"k":3},"p":[{"a":1,"a":2}]}"#
+    );
+    assert_eq!(
+        json(formatter().with_flatten(true), r#"{"a":{"b":1},"x":0,"a.b":2}"#),
+        r#"{"a.b":1,"x":0,"a.b":2}"#
+    );
+    // Fields whose keys are taken by predefined fields are still dropped.
+    assert_eq!(
+        json(formatter(), r#"{"msg":"m","message":"raw"}"#),
+        r#"{"message":"m"}"#
+    );
+}
+
+#[test]
 fn test_collisions() {
     // A raw field with a predefined output key is dropped.
     assert_eq!(
@@ -487,6 +509,11 @@ fn test_collisions() {
     assert_eq!(
         json(formatter(), r#"{"span":{"name":"s"},"msg":"m"}"#),
         r#"{"logger":"s","message":"m"}"#
+    );
+    // Only fields under the nested source fields are left out, not fields with keys that start the same.
+    assert_eq!(
+        json(formatter(), r#"{"spanner":{"name":"n"},"msg":"m"}"#),
+        r#"{"message":"m","spanner":{"name":"n"}}"#
     );
 }
 

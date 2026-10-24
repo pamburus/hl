@@ -142,6 +142,18 @@ prettify-field-keys = true
 [formatting.message]
 format = "delimited"
 
+# Options of the json output format.
+[formatting.json]
+# Write each key once per nesting level, keeping the value of its last occurrence. Options: [true, false].
+# With false, repeated keys are written as they occur in the source.
+unique-keys = true
+
+# Options of the logfmt output format.
+[formatting.logfmt]
+# Write each key once per nesting level, keeping the value of its last occurrence. Options: [true, false].
+# With false, repeated keys are written as they occur in the source.
+unique-keys = true
+
 # Punctuation settings.
 # Each item here is either a string or an object with keys "ascii" and "unicode".
 # If set to a string, it is used for both ASCII mode and Unicode mode regardless of the [ascii] setting.

@@ -35,6 +35,7 @@ Dotted output keys (FR-027a) are handled by an output-key tree built once at sta
 - The emitted predefined output keys are inserted first. A regular field whose key is already present is dropped and reported (FR-027).
 - Repeated source keys (FR-009a) are found in a pre-pass that hashes the keys at one nesting level. The common case without repeats sets a flag and streams normally. Only when repeats exist is a "last occurrence index" computed, so each key is emitted at its first position with its last value.
 - The same pre-pass runs for every object that is re-encoded (one nesting level at a time). With `--flatten=always`, it runs on full dotted paths.
+- With `unique-keys = false` for the output format, the pre-pass is skipped and every level is written in source order. The collision check of FR-027 still runs, as it only compares keys with the few emitted output keys.
 
 - **Memory**: formatting allocates nothing per record once warmed up. The pre-pass works on field indices, and its stacks, the flattened key and the leaves of dotted-key subtrees live in a per-thread scratch that each record reuses, since the formatter is shared by the worker threads. Under `--flatten=always`, a level with a dotted key resolves its whole subtree together, walking it again instead of storing values. In logfmt, an object or array value is written as compact JSON and then quoted in place in the output buffer, so it needs no scratch either.
 

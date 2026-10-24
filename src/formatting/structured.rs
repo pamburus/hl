@@ -127,6 +127,7 @@ type PredefinedFilter = (Arc<ExactIncludeExcludeKeyFilter>, Arc<[Box<str>]>);
 #[derive(Default, Clone)]
 pub struct StructuredRecordFormatterBuilder {
     flatten: bool,
+    unique_keys: bool,
     hide_empty_fields: bool,
     fields: Option<Arc<IncludeExcludeKeyFilter>>,
     predefined_fields: Option<PredefinedFilter>,
@@ -135,12 +136,23 @@ pub struct StructuredRecordFormatterBuilder {
 
 impl StructuredRecordFormatterBuilder {
     pub fn new() -> Self {
-        Self::default()
+        Self {
+            unique_keys: true,
+            ..Self::default()
+        }
     }
 
     /// Sets whether nested objects are flattened into dotted keys.
     pub fn with_flatten(self, flatten: bool) -> Self {
         Self { flatten, ..self }
+    }
+
+    /// Sets whether each key is written once per nesting level, keeping the value of its last occurrence.
+    ///
+    /// Otherwise, repeated keys are written as they occur, which saves resolving them.
+    /// Fields whose keys are taken by predefined fields are dropped either way.
+    pub fn with_unique_keys(self, unique_keys: bool) -> Self {
+        Self { unique_keys, ..self }
     }
 
     /// Sets whether empty fields, including empty predefined fields, are left out.
@@ -201,6 +213,7 @@ impl StructuredRecordFormatterBuilder {
             keys,
             visible,
             flatten: self.flatten,
+            unique_keys: self.unique_keys,
             hide_empty_fields: self.hide_empty_fields,
             fields,
             predefined_fields,
@@ -230,6 +243,7 @@ pub struct StructuredRecordFormatter<E> {
     keys: OutputKeys,
     visible: Visibility,
     flatten: bool,
+    unique_keys: bool,
     hide_empty_fields: bool,
     fields: Arc<IncludeExcludeKeyFilter>,
     predefined_fields: Arc<ExactIncludeExcludeKeyFilter>,
@@ -323,7 +337,7 @@ impl<E: Encoder> StructuredRecordFormatter<E> {
     ///
     /// Returns `true` if any field was written.
     fn format_fields(&self, w: &mut Writer<E>, s: &mut Scratch, fields: Fields, ctx: Context, top: bool) -> bool {
-        let level = s.resolve(fields, self.flatten);
+        let level = self.resolve(s, fields, self.flatten);
 
         if level.dotted {
             // Keys with dots at this level can become equal to flattened keys of nested
@@ -495,7 +509,7 @@ impl<E: Encoder> StructuredRecordFormatter<E> {
         diagnostics: Option<RecordDiagnostics>,
         visit: &mut dyn FnMut(&mut Scratch, RawValue<'a>),
     ) {
-        let level = s.resolve(fields, false);
+        let level = self.resolve(s, fields, false);
         report_repeats(diagnostics, s, &level, fields);
         for i in 0..level.len {
             let (first, last) = s.entry(&level, i);
@@ -524,6 +538,20 @@ impl<E: Encoder> StructuredRecordFormatter<E> {
         s.end(level);
     }
 
+    /// Resolves the repeated keys of a nesting level, if keys are unique, see [`Scratch::resolve`].
+    #[inline]
+    fn resolve(&self, s: &mut Scratch, fields: Fields, flatten: bool) -> ResolvedLevel {
+        if self.unique_keys {
+            s.resolve(fields, flatten)
+        } else {
+            ResolvedLevel {
+                len: fields.len(),
+                order: None,
+                dotted: false,
+            }
+        }
+    }
+
     /// Formats a value with no filters, as in arrays and predefined fields.
     fn format_value(&self, w: &mut Writer<E>, s: &mut Scratch, value: RawValue) {
         match value {
@@ -541,7 +569,7 @@ impl<E: Encoder> StructuredRecordFormatter<E> {
                 let object = object.parse().unwrap_or_default();
                 let fields = Fields::Object(&object.fields);
                 w.e.begin_object(w.buf);
-                let level = s.resolve(fields, false);
+                let level = self.resolve(s, fields, false);
                 report_repeats(w.diagnostics, s, &level, fields);
                 for i in 0..level.len {
                     let (first, last) = s.entry(&level, i);

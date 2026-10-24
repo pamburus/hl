@@ -3158,6 +3158,23 @@ fn test_structured_output_drops_unparsed_data() {
 }
 
 #[test]
+fn test_structured_output_unique_keys_per_format() {
+    // Turning off unique keys for one format leaves the other one unchanged.
+    let run = |format| {
+        let mut options = options();
+        options.output_format = format;
+        options.formatting.logfmt.unique_keys = Some(false);
+        let mut output = Vec::new();
+        App::new(options)
+            .run(vec![input("tag=a tag=b\n")], &mut output)
+            .unwrap();
+        String::from_utf8(output).unwrap()
+    };
+    assert_eq!(run(OutputFormat::Json), "{\"tag\":\"b\"}\n");
+    assert_eq!(run(OutputFormat::Logfmt), "tag=a tag=b\n");
+}
+
+#[test]
 fn test_structured_output_has_no_empty_entries() {
     // A record filtered out leaves no empty entry, also between records in the same chunk.
     let data = "{\"level\":\"debug\",\"msg\":\"m1\"}{\"level\":\"info\",\"msg\":\"m2\"}\n";

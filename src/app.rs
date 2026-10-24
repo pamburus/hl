@@ -1131,8 +1131,13 @@ impl App {
                 delimiter: options.output_delimiter.clone(),
             })
         } else if options.output_format.is_structured() {
+            let format = match options.output_format {
+                OutputFormat::Logfmt => &options.formatting.logfmt,
+                _ => &options.formatting.json,
+            };
             let builder = StructuredRecordFormatterBuilder::new()
                 .with_flatten(options.flatten)
+                .with_unique_keys(format.unique_keys.unwrap_or(true))
                 .with_empty_fields_hiding(options.hide_empty_fields)
                 .with_field_filter(options.fields.filter.clone())
                 .with_predefined_fields(&options.fields.settings.predefined)
