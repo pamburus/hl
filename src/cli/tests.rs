@@ -1,8 +1,13 @@
 use super::*;
+use clap::CommandFactory;
 use enumset::enum_set;
 use std::str::FromStr;
 
 type InputInfoSet = EnumSet<InputInfo>;
+
+fn parse(args: &[&str]) -> std::result::Result<Opt, clap::Error> {
+    Opt::try_parse_from(std::iter::once("hl").chain(args.iter().copied()))
+}
 
 #[test]
 fn test_input_info() {
@@ -79,7 +84,6 @@ fn test_ascii_option() {
 
 #[test]
 fn test_flatten_option() {
-    assert_eq!(FlattenOption::from(None), FlattenOption::Always);
     assert_eq!(
         FlattenOption::from(Some(settings::FlattenOption::Never)),
         FlattenOption::Never
@@ -144,5 +148,52 @@ fn test_expansion_option() {
     assert_eq!(
         Into::<settings::ExpansionMode>::into(ExpansionOption::Always),
         settings::ExpansionMode::Always
+    );
+}
+
+#[test]
+fn test_output_format_option() {
+    assert_eq!(parse(&[]).unwrap().output_format, OutputFormat::Pretty);
+    assert_eq!(
+        parse(&["--output-format", "pretty"]).unwrap().output_format,
+        OutputFormat::Pretty
+    );
+    assert_eq!(
+        parse(&["--output-format", "json"]).unwrap().output_format,
+        OutputFormat::Json
+    );
+    assert_eq!(
+        parse(&["--output-format=logfmt"]).unwrap().output_format,
+        OutputFormat::Logfmt
+    );
+    assert!(parse(&["--output-format", "yaml"]).is_err());
+
+    // A repeated option overrides the earlier one.
+    assert_eq!(
+        parse(&["--output-format", "json", "--output-format", "logfmt"])
+            .unwrap()
+            .output_format,
+        OutputFormat::Logfmt
+    );
+}
+
+#[test]
+fn test_output_format_env() {
+    // The environment variable is read by clap only when the option is absent,
+    // so checking the binding is enough, without changing the process environment.
+    let cmd = Opt::command();
+    let arg = cmd.get_arguments().find(|arg| arg.get_id() == "output_format").unwrap();
+    assert_eq!(arg.get_env(), Some(std::ffi::OsStr::new("HL_OUTPUT_FORMAT")));
+}
+
+#[test]
+fn test_flatten_option_auto() {
+    assert_eq!(parse(&["--flatten", "auto"]).unwrap().flatten, FlattenOption::Auto);
+    assert_eq!(parse(&[]).unwrap().flatten, FlattenOption::Auto);
+    assert_eq!(FlattenOption::from(None), FlattenOption::Auto);
+    assert_eq!(FlattenOption::from(settings::FlattenOption::Auto), FlattenOption::Auto);
+    assert_eq!(
+        settings::FlattenOption::from(FlattenOption::Auto),
+        settings::FlattenOption::Auto
     );
 }

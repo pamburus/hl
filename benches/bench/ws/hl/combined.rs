@@ -11,7 +11,10 @@ use super::{BencherExt, ND, hash, samples};
 use hl::{
     DateTimeFormatter, Filter, LinuxDateFormat, Origin, Parser, ParserSettings, SegmentProcessor, Settings, Theme,
     app::{RecordIgnorer, SegmentProcess, SegmentProcessorOptions},
-    formatting::{NoOpRecordWithSourceFormatter, RecordFormatterBuilder},
+    formatting::{
+        NoOpRecordWithSourceFormatter, RecordFormatterBuilder, RecordWithSourceFormatter,
+        structured::{Encoder, JsonEncoder, LogfmtEncoder, StructuredRecordFormatterBuilder},
+    },
     input::InputDescriptor,
     settings::{self, ExpansionMode},
     timezone::Tz,
@@ -74,6 +77,31 @@ pub(super) fn bench(c: &mut Criterion) {
             );
         });
 
+        if expansion == ExpansionMode::Inline {
+            // Structured output formats have no expansion, and logfmt output is always flattened.
+            let structured = |flatten| {
+                StructuredRecordFormatterBuilder::new()
+                    .with_flatten(flatten)
+                    .with_predefined_fields(&settings.fields.predefined)
+            };
+            bench_structured::<JsonEncoder>(
+                &mut c,
+                "parse-and-format-json",
+                &param,
+                input,
+                &parser,
+                structured(false),
+            );
+            bench_structured::<LogfmtEncoder>(
+                &mut c,
+                "parse-and-format-logfmt",
+                &param,
+                input,
+                &parser,
+                structured(true),
+            );
+        }
+
         c.bench_function(BenchmarkId::new("parse-only", &param), |b| {
             let formatter = NoOpRecordWithSourceFormatter;
             let mut processor = SegmentProcessor::new(&parser, formatter, &filter, SegmentProcessorOptions::default());
@@ -95,4 +123,43 @@ pub(super) fn bench(c: &mut Criterion) {
             );
         });
     }
+}
+
+fn bench_structured<E: Encoder + 'static>(
+    c: &mut criterion::BenchmarkGroup<'_, criterion::measurement::WallTime>,
+    name: &str,
+    param: &str,
+    input: &[u8],
+    parser: &Parser,
+    builder: StructuredRecordFormatterBuilder,
+) where
+    hl::formatting::structured::StructuredRecordFormatter<E>: RecordWithSourceFormatter,
+{
+    let filter = Filter::default();
+    let descriptor = InputDescriptor::new(0, "<stdin>");
+    let formatter = builder.build::<E>();
+    let options = || SegmentProcessorOptions {
+        records_only: true,
+        ..Default::default()
+    };
+
+    c.bench_function(BenchmarkId::new(name, param), |b| {
+        let mut processor = SegmentProcessor::new(parser, &formatter, &filter, options());
+        let setup = || Vec::with_capacity(4096);
+
+        b.iter_batched_ref_fixed(
+            setup,
+            |buf| {
+                processor.process(
+                    input,
+                    buf,
+                    Origin::new(&descriptor, 0, input.len()),
+                    "",
+                    None,
+                    &mut RecordIgnorer {},
+                );
+            },
+            BatchSize::SmallInput,
+        );
+    });
 }

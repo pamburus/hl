@@ -211,6 +211,25 @@ function test() {
     $hl $fixture --delimiter lf | check_hash "b6b8befa4872f54ca321e3618e83ad46f6543f82cb378cf3c9051b0c85dca9fc"
     $hl $fixture --delimiter cr | check_hash "38597e9ed4d0b26d28eabc1f2f82006b76731fe56c9a3f9c301c1f1327d0d1d2"
     $hl $fixture --delimiter nul | check_hash "38597e9ed4d0b26d28eabc1f2f82006b76731fe56c9a3f9c301c1f1327d0d1d2"
+
+    # Structured output formats
+    local mixed="src/testing/assets/fixtures/output-format/mixed.log"
+    $hl $mixed --output-format json | check_hash "589df0002a84f47a805dece5a8cda676213cc9e0627a2ee39e201e6713960ebe"
+    $hl $mixed --output-format logfmt | check_hash "a3fb126929bd7977b0b89e4cb47df11341e38b75eba2987bf1a44211b70cb122"
+    $hl $mixed --output-format json --flatten always | check_hash "14ecc15260fbcbbf4f294387eade11f9b9b89e1b0f49844aa663ae210bff293f"
+    $hl $mixed --output-format logfmt --flatten never | check_hash "a9d28d8f2aa6b7557e82b5aaad1fa9c0bd1d37fd40ba79634895d663ec42c355"
+    # --raw takes precedence over a structured output format
+    $hl $mixed --output-format json --raw | check_hash "3a15d9ddabb133a13e045f510e88a722f0b76bef89eaf2de18e4a3b5dccbb8d9"
+    # Dropped lines are reported in the debug log
+    local dir
+    dir=$(mktemp -d)
+    HL_DEBUG_LOG=debug $hl $mixed --output-format json 2> "$dir/err" > /dev/null
+    expect_log "$dir/err" "dropped unparsed line at 291..331"
+    expect_log "$dir/err" "dropped 2 pieces of unparsed text"
+    # A closed output ends the run quietly
+    yes '{"msg":"m"}' | head -n 200000 | HL_DEBUG_LOG=debug $hl --output-format json 2> "$dir/err" | head -n 1 > /dev/null
+    expect_log "$dir/err" "write error"
+    rm -rf "$dir"
 }
 
 function merge() {

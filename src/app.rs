@@ -30,12 +30,14 @@ use crate::{
     ExactIncludeExcludeKeyFilter, IncludeExcludeKeyFilter,
     appdirs::AppDirs,
     datefmt::{DateTimeFormat, DateTimeFormatter},
+    diagnostics::{self, DiagnosticSink, Diagnostics, DropKind, LogSink},
     error::*,
     fileid::MetadataExt,
     filtering::{MatchOptions, NoNormalizing},
     fmtx::{Adjustment, Alignment, Padding, aligned},
     formatting::{
         DynRecordWithSourceFormatter, Expansion, RawRecordFormatter, RecordFormatterBuilder, RecordWithSourceFormatter,
+        structured::{JsonEncoder, LogfmtEncoder, StructuredRecordFormatterBuilder},
     },
     fsmon::{self, EventKind},
     help,
@@ -94,6 +96,7 @@ pub struct Options {
     pub ascii: AsciiMode,
     pub expand: ExpansionMode,
     pub output_delimiter: String,
+    pub output_format: OutputFormat,
 }
 
 impl Options {
@@ -195,6 +198,25 @@ pub enum InputFormat {
     Logfmt,
 }
 
+/// Format of the output records.
+#[derive(Eq, PartialEq, Copy, Clone, Debug, Default)]
+pub enum OutputFormat {
+    /// Human-readable output.
+    #[default]
+    Pretty,
+    /// One JSON object per record.
+    Json,
+    /// One line of logfmt pairs per record.
+    Logfmt,
+}
+
+impl OutputFormat {
+    /// Tells whether the format is machine-readable, so the output must hold nothing but records.
+    pub fn is_structured(self) -> bool {
+        !matches!(self, Self::Pretty)
+    }
+}
+
 // ---
 
 #[derive(Eq, PartialEq, Copy, Clone, Debug, Serialize, Deserialize)]
@@ -266,44 +288,72 @@ pub struct App {
     options: Options,
     punctuation: Arc<ResolvedPunctuation>,
     formatter: DynRecordWithSourceFormatter,
+    diagnostic_sink: Arc<dyn DiagnosticSink>,
 }
 
 impl App {
-    pub fn new(mut options: Options) -> Self {
+    pub fn new(options: Options) -> Self {
+        Self::with_diagnostic_sink(options, Arc::new(LogSink))
+    }
+
+    /// Creates an app that writes its diagnostic entries to `sink`.
+    pub fn with_diagnostic_sink(mut options: Options, sink: Arc<dyn DiagnosticSink>) -> Self {
         if options.raw && options.input_info.intersects(InputInfo::None | InputInfo::Auto) {
             options.input_info = InputInfo::None.into()
+        }
+        if options.raw {
+            // Raw output takes precedence over a structured output format.
+            options.output_format = OutputFormat::Pretty;
         }
         options.input_info = InputInfo::resolve(options.input_info);
 
         let punctuation = Arc::new(options.formatting.punctuation.resolve(options.ascii));
 
-        let formatter = Self::new_formatter(&options, punctuation.clone());
+        let formatter = Self::new_formatter(&options, punctuation.clone(), sink.clone());
 
         Self {
             options,
             punctuation,
             formatter,
+            diagnostic_sink: sink,
         }
     }
 
     pub fn run(&self, inputs: Vec<InputHolder>, output: &mut Output) -> Result<()> {
-        if self.options.follow {
-            self.follow(inputs.into_iter().map(|x| x.reference).collect(), output)
-        } else if self.options.sort {
-            self.sort(inputs, output)
-        } else {
-            self.cat(inputs, output)
-        }
-    }
-
-    fn cat(&self, inputs: Vec<InputHolder>, output: &mut Output) -> Result<()> {
         let descriptors = inputs
             .iter()
             .map(|x| &x.reference)
             .enumerate()
             .map(Into::into)
             .collect_vec();
-        let input_badges = self.input_badges(&descriptors);
+        let diagnostics = Arc::new(Diagnostics::new(self.diagnostic_sink.clone(), &descriptors));
+        diagnostics::register(diagnostics.clone());
+
+        let result = if self.options.follow {
+            self.follow(
+                inputs.into_iter().map(|x| x.reference).collect(),
+                &descriptors,
+                &diagnostics,
+                output,
+            )
+        } else if self.options.sort {
+            self.sort(inputs, &descriptors, &diagnostics, output)
+        } else {
+            self.cat(inputs, &descriptors, &diagnostics, output)
+        };
+
+        diagnostics.write_summary();
+        result
+    }
+
+    fn cat(
+        &self,
+        inputs: Vec<InputHolder>,
+        descriptors: &[InputDescriptor],
+        diagnostics: &Diagnostics,
+        output: &mut Output,
+    ) -> Result<()> {
+        let input_badges = self.input_badges(descriptors);
 
         let inputs = inputs
             .into_iter()
@@ -338,25 +388,28 @@ impl App {
             }));
             // spawn processing threads
             for (rxi, txo) in izip!(rxi, txo) {
-                scope.spawn(closure!(ref bfo, ref parser, ref sfi, ref descriptors, ref input_badges, |_| {
+                scope.spawn(closure!(ref bfo, ref parser, ref sfi, ref input_badges, |_| {
                     let mut processor = self.new_segment_processor(parser);
                     for (i, offset, segment) in rxi.iter() {
                         let prefix = input_badges.as_ref().map(|b|b[i].as_str()).unwrap_or("");
-                        match segment {
+                        let origin = Origin::new(&descriptors[i], offset, segment.data().len());
+                        let mut observer = DropReporter::new(diagnostics, RecordIgnorer{});
+                        let buf = match segment {
                             Segment::Complete(segment) => {
                                 let mut buf = bfo.new_buf();
-                                let origin = Origin::new(&descriptors[i], offset, segment.data().len());
-                                processor.process(segment.data(), &mut buf, origin, prefix, None, &mut RecordIgnorer{});
+                                processor.process(segment.data(), &mut buf, origin, prefix, None, &mut observer);
                                 sfi.recycle(segment);
-                                if txo.send((i, buf.into())).is_err() {
-                                    break;
-                                };
+                                buf.into()
                             }
-                            Segment::Incomplete(segment, _) => {
-                                if txo.send((i, segment)).is_err() {
-                                    break;
-                                }
+                            Segment::Incomplete(segment, _) if self.options.output_format.is_structured() => {
+                                report_dropped_lines(segment.data(), segment.data(), &origin, DropKind::Unparsed, &mut observer);
+                                sfi.recycle(segment);
+                                bfo.new_buf().into()
                             }
+                            Segment::Incomplete(segment, _) => segment,
+                        };
+                        if txo.send((i, buf)).is_err() {
+                            break;
                         }
                     }
                 }));
@@ -379,7 +432,13 @@ impl App {
         Ok(())
     }
 
-    fn sort(&self, inputs: Vec<InputHolder>, output: &mut Output) -> Result<()> {
+    fn sort(
+        &self,
+        inputs: Vec<InputHolder>,
+        descriptors: &[InputDescriptor],
+        diagnostics: &Diagnostics,
+        output: &mut Output,
+    ) -> Result<()> {
         let mut output = BufWriter::new(output);
         let indexer_settings = IndexerSettings {
             buffer_size: self.options.buffer_size.try_into()?,
@@ -402,13 +461,7 @@ impl App {
         fs::create_dir_all(&cache_dir)?;
 
         let indexer = Indexer::new(self.options.concurrency, cache_dir, indexer_settings);
-        let descriptors = inputs
-            .iter()
-            .map(|x| &x.reference)
-            .enumerate()
-            .map(Into::into)
-            .collect_vec();
-        let input_badges = self.input_badges(&descriptors);
+        let input_badges = self.input_badges(descriptors);
 
         let inputs = inputs
             .into_iter()
@@ -492,30 +545,25 @@ impl App {
             // spawn worker threads
             let mut workers = Vec::with_capacity(n);
             for (rxp, txw) in izip!(rxp, txw) {
-                workers.push(scope.spawn(closure!(
-                    ref parser,
-                    ref descriptors,
-                    ref input_badges,
-                    |_| -> Result<()> {
-                        let mut processor = self.new_segment_processor(parser);
-                        for (block, ts_min, i, j) in rxp.iter() {
-                            let block_offset = block.offset();
-                            let mut buf = Vec::with_capacity(2 * usize::try_from(block.size())?);
-                            let mut items = Vec::with_capacity(2 * usize::try_from(block.entries_valid())?);
-                            for line in block.into_entries()? {
-                                if line.is_empty() {
-                                    continue;
-                                }
-                                let prefix = input_badges.as_ref().map(|b| b[i].as_str()).unwrap_or("");
-                                let origin =
-                                    Origin::new(&descriptors[i], block_offset + line.offset() as u64, line.len());
-                                processor.process(
+                workers.push(scope.spawn(closure!(ref parser, ref input_badges, |_| -> Result<()> {
+                    let mut processor = self.new_segment_processor(parser);
+                    for (block, ts_min, i, j) in rxp.iter() {
+                        let block_offset = block.offset();
+                        let mut buf = Vec::with_capacity(2 * usize::try_from(block.size())?);
+                        let mut items = Vec::with_capacity(2 * usize::try_from(block.entries_valid())?);
+                        for line in block.into_entries()? {
+                            if line.is_empty() {
+                                continue;
+                            }
+                            let prefix = input_badges.as_ref().map(|b| b[i].as_str()).unwrap_or("");
+                            let origin = Origin::new(&descriptors[i], block_offset + line.offset() as u64, line.len());
+                            processor.process(
                                 line.bytes(),
                                 &mut buf,
                                 origin,
                                 prefix,
                                 Some(1),
-                                &mut |record: &Record, location: Range<usize>| {
+                                &mut DropReporter::new(diagnostics, |record: &Record, location: Range<usize>| {
                                     if let Some(ts) = &record.ts {
                                         if let Some(unix_ts) = ts.unix_utc() {
                                             items.push((unix_ts.into(), location));
@@ -526,18 +574,17 @@ impl App {
                                             )
                                         }
                                     }
-                                },
+                                }),
                             );
-                            }
-
-                            let buf = Arc::new(buf);
-                            if txw.send((OutputBlock { ts_min, buf, items }, i, j)).is_err() {
-                                break;
-                            }
                         }
-                        Ok(())
+
+                        let buf = Arc::new(buf);
+                        if txw.send((OutputBlock { ts_min, buf, items }, i, j)).is_err() {
+                            break;
+                        }
                     }
-                )));
+                    Ok(())
+                })));
             }
             // spawn merger thread
             let merger = scope.spawn(|_| -> Result<()> {
@@ -604,7 +651,11 @@ impl App {
     }
 
     fn prepare_follow_badges(&self, inputs: &[InputDescriptor]) -> FollowBadges {
-        let si = SyncIndicator::from(&self.options.theme.indicators.sync);
+        let si = if self.options.output_format.is_structured() {
+            SyncIndicator::default()
+        } else {
+            SyncIndicator::from(&self.options.theme.indicators.sync)
+        };
 
         let mut badges = self.input_badges(inputs);
         if let Some(badges) = &mut badges {
@@ -616,9 +667,14 @@ impl App {
         FollowBadges { si, input: badges }
     }
 
-    fn follow(&self, inputs: Vec<InputReference>, output: &mut Output) -> Result<()> {
-        let descriptors = inputs.iter().enumerate().map(Into::into).collect_vec();
-        let badges = self.prepare_follow_badges(&descriptors);
+    fn follow(
+        &self,
+        inputs: Vec<InputReference>,
+        descriptors: &[InputDescriptor],
+        diagnostics: &Diagnostics,
+        output: &mut Output,
+    ) -> Result<()> {
+        let badges = self.prepare_follow_badges(descriptors);
 
         let m = inputs.len();
         let n = self.options.concurrency;
@@ -703,8 +759,8 @@ impl App {
             let mut workers = Vec::with_capacity(n);
             for _ in 0..n {
                 let worker = scope.spawn(
-                    closure!(ref bfo, ref parser, ref sfi, ref badges, ref descriptors, clone rxi, clone txo, |_| {
-                        self.process_segments(parser, bfo, sfi, badges, descriptors, rxi, txo);
+                    closure!(ref bfo, ref parser, ref sfi, ref badges, clone rxi, clone txo, |_| {
+                        self.process_segments(parser, bfo, sfi, badges, descriptors, diagnostics, rxi, txo);
                     }),
                 );
                 workers.push(worker);
@@ -739,6 +795,7 @@ impl App {
         sfi: &SegmentBufFactory,
         badges: &FollowBadges,
         inputs: &[InputDescriptor],
+        diagnostics: &Diagnostics,
         rxi: Receiver<(usize, usize, u64, Segment)>,
         txo: Sender<(usize, Vec<u8>, TimestampIndex)>,
     ) {
@@ -749,20 +806,29 @@ impl App {
                 .as_ref()
                 .map(|b| b[i].as_str())
                 .unwrap_or(&badges.si.placeholder);
+            let origin = Origin::new(&inputs[i], offset, segment.data().len());
             match segment {
                 Segment::Complete(segment) => {
                     let mut buf = bfo.new_buf();
-                    let mut index_builder = TimestampIndexBuilder {
-                        result: TimestampIndex::new(j),
-                    };
-                    let origin = Origin::new(&inputs[i], offset, segment.data().len());
-                    processor.process(segment.data(), &mut buf, origin, prefix, None, &mut index_builder);
+                    let mut observer = DropReporter::new(
+                        diagnostics,
+                        TimestampIndexBuilder {
+                            result: TimestampIndex::new(j),
+                        },
+                    );
+                    processor.process(segment.data(), &mut buf, origin, prefix, None, &mut observer);
                     sfi.recycle(segment);
-                    if txo.send((i, buf, index_builder.result)).is_err() {
+                    if txo.send((i, buf, observer.inner.result)).is_err() {
                         return;
                     };
                 }
-                Segment::Incomplete(_, _) => {}
+                Segment::Incomplete(segment, _) => {
+                    if self.options.output_format.is_structured() {
+                        let data = segment.data();
+                        let mut observer = DropReporter::new(diagnostics, RecordIgnorer {});
+                        report_dropped_lines(data, data, &origin, DropKind::Unparsed, &mut observer);
+                    }
+                }
             }
         }
     }
@@ -900,6 +966,10 @@ impl App {
     }
 
     fn input_badges(&self, inputs: &[InputDescriptor]) -> Option<Vec<String>> {
+        if self.options.output_format.is_structured() {
+            return None;
+        }
+
         let names = inputs.iter().map(|input| input.name.as_str()).collect_vec();
 
         let ii = self.options.input_info;
@@ -1031,7 +1101,10 @@ impl App {
     fn new_segment_processor<'a>(&'a self, parser: &'a Parser) -> impl SegmentProcess + 'a {
         let options = SegmentProcessorOptions {
             allow_prefix: self.options.allow_prefix,
-            allow_unparsed_data: self.options.filter.is_empty() && self.options.input_format.is_none(),
+            allow_unparsed_data: self.options.filter.is_empty()
+                && self.options.input_format.is_none()
+                && !self.options.output_format.is_structured(),
+            records_only: self.options.output_format.is_structured(),
             delimiter: self.options.delimiter.clone(),
             input_format: self.options.input_format,
             output_delimiter: self.options.output_delimiter.clone(),
@@ -1048,11 +1121,31 @@ impl App {
     /// Creates a formatter based on the provided options.
     ///
     /// Returns either a RawRecordFormatter or a RecordFormatter depending on the options.
-    fn new_formatter(options: &Options, punctuation: Arc<ResolvedPunctuation>) -> DynRecordWithSourceFormatter {
+    fn new_formatter(
+        options: &Options,
+        punctuation: Arc<ResolvedPunctuation>,
+        diagnostic_sink: Arc<dyn DiagnosticSink>,
+    ) -> DynRecordWithSourceFormatter {
         if options.raw {
             Arc::new(RawRecordFormatter {
                 delimiter: options.output_delimiter.clone(),
             })
+        } else if options.output_format.is_structured() {
+            let format = match options.output_format {
+                OutputFormat::Logfmt => &options.formatting.logfmt,
+                _ => &options.formatting.json,
+            };
+            let builder = StructuredRecordFormatterBuilder::new()
+                .with_flatten(options.flatten)
+                .with_unique_keys(format.unique_keys.unwrap_or(true))
+                .with_empty_fields_hiding(options.hide_empty_fields)
+                .with_field_filter(options.fields.filter.clone())
+                .with_predefined_fields(&options.fields.settings.predefined)
+                .with_diagnostic_sink(diagnostic_sink);
+            match options.output_format {
+                OutputFormat::Logfmt => Arc::new(builder.build::<LogfmtEncoder>()),
+                _ => Arc::new(builder.build::<JsonEncoder>()),
+            }
         } else {
             let predefined_filter = Self::build_predefined_filter(options);
             Arc::new(
@@ -1110,6 +1203,8 @@ pub trait SegmentProcess {
 pub struct SegmentProcessorOptions {
     pub allow_prefix: bool,
     pub allow_unparsed_data: bool,
+    /// Output holds nothing but records: no prefixes before them and no empty entries.
+    pub records_only: bool,
     pub delimiter: Delimiter,
     pub input_format: Option<InputFormat>,
     pub output_delimiter: String,
@@ -1178,17 +1273,27 @@ impl<'a, Formatter: RecordWithSourceFormatter, Filter: RecordFilter> SegmentProc
             let mut parsed_some = false;
             let mut produced_some = false;
             let mut last_offset = 0;
+            let mut limited = false;
             while let Some(Ok(ar)) = stream.next() {
                 i += 1;
                 last_offset = ar.offsets.end;
-                if parsed_some {
+                let record = self.parser.parse(&ar.record);
+                let matches = record.matches(&self.filter);
+                let separated = if self.options.records_only {
+                    matches && produced_some
+                } else {
+                    parsed_some
+                };
+                if separated {
                     buf.extend(self.options.output_delimiter.as_bytes());
                 }
                 parsed_some = true;
-                let record = self.parser.parse(&ar.record);
-                if record.matches(&self.filter) {
+                if matches {
+                    if self.options.records_only {
+                        report_dropped_lines(data, ar.prefix, &origin, DropKind::Prefix, observer);
+                    }
                     let begin = buf.len();
-                    if ar.prefix.is_empty() {
+                    if ar.prefix.is_empty() || self.options.records_only {
                         buf.extend(prefix.as_bytes());
                     } else {
                         let mut first = true;
@@ -1216,10 +1321,19 @@ impl<'a, Formatter: RecordWithSourceFormatter, Filter: RecordFilter> SegmentProc
                     produced_some = true;
                 }
                 if i >= limit {
+                    limited = true;
                     break;
                 }
             }
             let remainder = if parsed_some { &chunk[last_offset..] } else { chunk };
+            if self.options.records_only && !limited {
+                let kind = if parsed_some {
+                    DropKind::Remainder
+                } else {
+                    DropKind::Unparsed
+                };
+                report_dropped_lines(data, remainder, &origin, kind, observer);
+            }
             if !remainder.is_empty() && self.show_unparsed() {
                 if !parsed_some || produced_some {
                     let mut should_prefix = !parsed_some;
@@ -1243,6 +1357,55 @@ impl<'a, Formatter: RecordWithSourceFormatter, Filter: RecordFilter> SegmentProc
 
 pub trait RecordObserver {
     fn observe_record<'a>(&mut self, record: &Record<'a>, location: Range<usize>);
+
+    /// Observes a line or a part of it that is left out of records-only output, as it is not a record.
+    #[inline]
+    fn observe_dropped(&mut self, _content: &[u8], _origin: Origin<'_>, _kind: DropKind) {}
+}
+
+/// Reports `content`, a part of `data` read from `origin`, as dropped line by line.
+///
+/// Blank lines carry nothing and are not reported, and the spaces around each line are left out.
+fn report_dropped_lines<O: RecordObserver>(
+    data: &[u8],
+    content: &[u8],
+    origin: &Origin,
+    kind: DropKind,
+    observer: &mut O,
+) {
+    for line in Newline.into_searcher().split(content) {
+        let line = line.trim_ascii();
+        if !line.is_empty() {
+            let offset = line.as_ptr() as usize - data.as_ptr() as usize;
+            observer.observe_dropped(line, origin.slice(offset..offset + line.len()), kind);
+        }
+    }
+}
+
+// ---
+
+/// Reports dropped content to diagnostics and passes records on to another observer.
+pub struct DropReporter<'d, O> {
+    diagnostics: &'d Diagnostics,
+    inner: O,
+}
+
+impl<'d, O> DropReporter<'d, O> {
+    pub fn new(diagnostics: &'d Diagnostics, inner: O) -> Self {
+        Self { diagnostics, inner }
+    }
+}
+
+impl<O: RecordObserver> RecordObserver for DropReporter<'_, O> {
+    #[inline]
+    fn observe_record<'a>(&mut self, record: &Record<'a>, location: Range<usize>) {
+        self.inner.observe_record(record, location);
+    }
+
+    #[inline]
+    fn observe_dropped(&mut self, content: &[u8], origin: Origin<'_>, kind: DropKind) {
+        self.diagnostics.report_dropped(content, &origin, kind);
+    }
 }
 
 // ---
@@ -1545,6 +1708,7 @@ struct FollowBadges {
     input: Option<Vec<String>>,
 }
 
+#[derive(Default)]
 struct SyncIndicator {
     width: usize,
     synced: String,

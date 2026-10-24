@@ -1,5 +1,15 @@
 use super::*;
 
+fn rfc3339_utc(s: &str, unit: Option<UnixTimestampUnit>) -> Option<String> {
+    let mut buf = Vec::new();
+    if Timestamp::new(s).with_unix_unit(unit).format_rfc3339_utc(&mut buf) {
+        Some(String::from_utf8(buf).unwrap())
+    } else {
+        assert!(buf.is_empty(), "nothing is written on failure");
+        None
+    }
+}
+
 #[test]
 fn test_parse() {
     let test = |s, unit, unix_timestamp, nanos, tz| {
@@ -207,4 +217,62 @@ fn test_fraction_parse() {
     // Test invalid fractional seconds (doesn't start with .)
     let frac_invalid3 = Fraction::parse("123");
     assert!(frac_invalid3.is_none());
+}
+
+#[test]
+fn test_format_rfc3339_utc_textual() {
+    let test = |s, expected| assert_eq!(rfc3339_utc(s, None).as_deref(), Some(expected), "{s}");
+    // Already in UTC with a `Z` suffix: copied verbatim.
+    test("2026-07-06T10:00:00.123Z", "2026-07-06T10:00:00.123Z");
+    test("2026-07-06T10:00:00Z", "2026-07-06T10:00:00Z");
+    // Converted to UTC, keeping the source's fraction digits.
+    test("2026-07-06T12:00:00.5+02:00", "2026-07-06T10:00:00.5Z");
+    test("2026-07-06T10:00:00.10Z", "2026-07-06T10:00:00.10Z");
+    test("2026-07-06T10:00:00.10+00:00", "2026-07-06T10:00:00.10Z");
+    test("2026-07-06t10:00:00z", "2026-07-06T10:00:00Z");
+    test("2026-07-06T12:00:00-02:30", "2026-07-06T14:30:00Z");
+    // Zone-less values are interpreted as UTC.
+    test("2026-07-06 10:00:00.123", "2026-07-06T10:00:00.123Z");
+    test("2026-07-06T10:00:00", "2026-07-06T10:00:00Z");
+    // At most 9 fraction digits.
+    test("2026-07-06T10:00:00.1234567891Z", "2026-07-06T10:00:00.123456789Z");
+}
+
+#[test]
+fn test_format_rfc3339_utc_unix() {
+    let test = |s, unit, expected| assert_eq!(rfc3339_utc(s, unit).as_deref(), Some(expected), "{s}");
+    // Integer values get the digits of their unit.
+    test("1700000000", None, "2023-11-14T22:13:20Z");
+    test("1700000000000", None, "2023-11-14T22:13:20.000Z");
+    test("1700000000123456", None, "2023-11-14T22:13:20.123456Z");
+    test("1700000000123456789", None, "2023-11-14T22:13:20.123456789Z");
+    // Fractional values add their fraction digits to the unit's.
+    test("1700000000.25", None, "2023-11-14T22:13:20.25Z");
+    test("1700000000000.5", None, "2023-11-14T22:13:20.0005Z");
+    test("1700000000.1234567891", None, "2023-11-14T22:13:20.123456789Z");
+    // An explicit unit is honored.
+    test(
+        "1700000000",
+        Some(UnixTimestampUnit::Milliseconds),
+        "1970-01-20T16:13:20.000Z",
+    );
+    test("1700000000", Some(UnixTimestampUnit::Seconds), "2023-11-14T22:13:20Z");
+    test(
+        "1700000000000000",
+        Some(UnixTimestampUnit::Nanoseconds),
+        "1970-01-20T16:13:20.000000000Z",
+    );
+}
+
+#[test]
+fn test_format_rfc3339_utc_failure() {
+    assert_eq!(rfc3339_utc("yesterday", None), None);
+    assert_eq!(rfc3339_utc("-1e300", None), None);
+    // Years that RFC 3339 can't represent.
+    assert_eq!(
+        rfc3339_utc("-62167219200", Some(UnixTimestampUnit::Seconds)).as_deref(),
+        Some("0000-01-01T00:00:00Z")
+    );
+    assert_eq!(rfc3339_utc("-62167219201", Some(UnixTimestampUnit::Seconds)), None);
+    assert_eq!(rfc3339_utc("253402300800", Some(UnixTimestampUnit::Seconds)), None);
 }
