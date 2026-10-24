@@ -103,7 +103,7 @@ impl<'a> Handler for Appender<'a> {
             },
             Token::Sequence(s) => {
                 let mut ss = s.as_bytes();
-                while let Some(pos) = ss.iter().position(|x| matches!(x, 0..=0x1f | b'"' | b'\\' | 0x7f)) {
+                while let Some(pos) = find_escape(ss) {
                     self.buffer.extend(&ss[..pos]);
                     self.handle_escape(ss[pos]);
                     ss = &ss[pos + 1..];
@@ -342,6 +342,50 @@ impl<'a> Iterator for Tokens<'a> {
         let borrowed = &tail[..pos];
         Some(Ok(Token::Sequence(unsafe { str::from_utf8_unchecked(borrowed) })))
     }
+}
+
+// ---
+
+/// Returns the position of the first byte in `bytes` that must be escaped.
+#[inline]
+fn find_escape(bytes: &[u8]) -> Option<usize> {
+    const WORD: usize = size_of::<u64>();
+
+    let mut words = bytes.chunks_exact(WORD);
+    let mut offset = 0;
+    for word in &mut words {
+        let mask = escape_mask(u64::from_le_bytes(word.try_into().unwrap()));
+        if mask != 0 {
+            return Some(offset + (mask.trailing_zeros() / 8) as usize);
+        }
+        offset += WORD;
+    }
+
+    words
+        .remainder()
+        .iter()
+        .position(|&b| ESCAPE[b as usize])
+        .map(|pos| offset + pos)
+}
+
+/// Returns a mask with the high bit set in each byte of `word` that must be escaped.
+/// Bytes above the lowest flagged byte may be flagged falsely, so only the lowest one is exact.
+#[inline]
+fn escape_mask(word: u64) -> u64 {
+    const LO: u64 = u64::from_ne_bytes([0x01; 8]);
+    const HI: u64 = u64::from_ne_bytes([0x80; 8]);
+
+    #[inline]
+    fn zeros(x: u64) -> u64 {
+        x.wrapping_sub(LO) & !x & HI
+    }
+
+    let control = word.wrapping_sub(LO * 0x20) & !word & HI;
+    let quote = zeros(word ^ (LO * b'"' as u64));
+    let backslash = zeros(word ^ (LO * b'\\' as u64));
+    let delete = zeros(word ^ (LO * 0x7f));
+
+    control | quote | backslash | delete
 }
 
 // ---
