@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use super::*;
 
 use chrono::TimeZone;
@@ -960,4 +962,37 @@ fn test_object_parser_invalid_type() {
     let obj = RawObject::Json(json::from_str(r#"12"#).unwrap());
     let result = obj.parse();
     assert!(matches!(result, Err(Error::JsonParseError(_))));
+}
+
+#[rstest]
+#[case::inserted("level", true)]
+#[case::same_length_and_first_byte("lever", true)]
+#[case::other_length("levels", false)]
+#[case::other_first_byte("bevel", false)]
+#[case::empty("", false)]
+#[case::long_same_first_byte(&"l".repeat(100), true)]
+fn test_key_filter(#[case] key: &str, #[case] expected: bool) {
+    let mut filter = KeyFilter::default();
+    filter.insert("level");
+    filter.insert(&"l".repeat(63));
+    assert_eq!(filter.may_contain(key), expected);
+}
+
+#[test]
+fn test_key_filter_empty_key() {
+    let mut filter = KeyFilter::default();
+    filter.insert("");
+    assert!(filter.may_contain(""));
+    assert!(!filter.may_contain("a"));
+}
+
+#[rstest]
+#[case::predefined("level", Some(Level::Error), 0)]
+#[case::passes_filter("lever", None, 1)]
+#[case::rejected_by_filter("bevel", None, 1)]
+fn test_parse_key_filter(#[case] key: &str, #[case] level: Option<Level>, #[case] fields: usize) {
+    let input = format!(r#"{{"{key}":"error"}}"#);
+    let rec = parse(&input);
+    assert_eq!(rec.level, level);
+    assert_eq!(rec.fields().count(), fields);
 }
