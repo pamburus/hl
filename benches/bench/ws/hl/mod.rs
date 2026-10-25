@@ -7,6 +7,7 @@ use super::{BencherExt, ND, hash, samples};
 
 mod combined;
 mod delimiter;
+mod follow;
 mod theme;
 mod timestamp;
 
@@ -14,6 +15,7 @@ criterion_group!(
     benches,
     combined::bench,
     delimiter::bench,
+    follow::bench,
     theme::bench,
     timestamp::parsing::bench,
     timestamp::formatting::bench

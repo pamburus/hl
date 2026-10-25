@@ -288,7 +288,7 @@ impl App {
 
     pub fn run(&self, inputs: Vec<InputHolder>, output: &mut Output) -> Result<()> {
         if self.options.follow {
-            self.follow(inputs.into_iter().map(|x| x.reference).collect(), output)
+            self.follow(inputs, output)
         } else if self.options.sort {
             self.sort(inputs, output)
         } else {
@@ -616,8 +616,13 @@ impl App {
         FollowBadges { si, input: badges }
     }
 
-    fn follow(&self, inputs: Vec<InputReference>, output: &mut Output) -> Result<()> {
-        let descriptors = inputs.iter().enumerate().map(Into::into).collect_vec();
+    fn follow(&self, inputs: Vec<InputHolder>, output: &mut Output) -> Result<()> {
+        let descriptors = inputs
+            .iter()
+            .map(|x| &x.reference)
+            .enumerate()
+            .map(Into::into)
+            .collect_vec();
         let badges = self.prepare_follow_badges(&descriptors);
 
         let m = inputs.len();
@@ -633,15 +638,15 @@ impl App {
             let (txo, rxo) = channel::bounded(1);
             // spawn reader threads
             let mut readers = Vec::with_capacity(m);
-            for (i, input_ref) in inputs.into_iter().enumerate() {
+            for (i, holder) in inputs.into_iter().enumerate() {
                 let delimiter = &self.options.delimiter;
                 let reader = scope.spawn(closure!(clone sfi, clone txi, |_| -> Result<()> {
                     let scanner = Scanner::new(sfi.clone(), delimiter.clone());
-                    let mut meta = None;
-                    if let InputReference::File(path) = &input_ref {
-                        meta = Some(fs::metadata(&path.canonical)?);
-                    }
-                    let mut input = input_ref.open()?.tail(self.options.tail, delimiter.clone())?;
+                    let input_ref = holder.reference.clone();
+                    // The file read is the one opened before, which may already be
+                    // rotated, so its replacement is detected by its own metadata.
+                    let mut meta = holder.metadata()?;
+                    let mut input = holder.open()?.tail(self.options.tail, delimiter.clone())?;
                     let is_file = |meta: &Option<fs::Metadata>| meta.as_ref().map(|m|m.is_file()).unwrap_or(false);
                     let mut blocks = BlockScanner::new(&scanner, delimiter.clone(), self.options.max_message_size.into());
                     blocks.start(input.position()?);

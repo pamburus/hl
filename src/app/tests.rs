@@ -2697,6 +2697,32 @@ fn test_merge_segments_trailing_gap_with_source_history() {
     assert_eq!(result, "SSline-A\nSStrailing-gap\nSSline-B\n");
 }
 
+#[test]
+fn test_follow_merges_inputs_by_time() {
+    let app = App::new(Options {
+        follow: true,
+        ..options()
+    });
+    let record = |sec, msg| format!(r#"{{"ts":"2026-07-06T10:00:0{sec}Z","msg":"{msg}"}}"#);
+    let inputs = vec![
+        input(format!("{}\n{}\n", record(0, "a0"), record(2, "a2"))),
+        input(format!("{}\n{}\n", record(1, "b1"), record(3, "b3"))),
+    ];
+
+    let mut output = Vec::new();
+    app.run(inputs, &mut output).unwrap();
+
+    assert_eq!(
+        String::from_utf8(output).unwrap(),
+        concat!(
+            "#0 | <stdin> | 2026-07-06 10:00:00.000 a0\n",
+            "#1 | <stdin> | 2026-07-06 10:00:01.000 b1\n",
+            "#0 | <stdin> | 2026-07-06 10:00:02.000 a2\n",
+            "#1 | <stdin> | 2026-07-06 10:00:03.000 b3\n",
+        )
+    );
+}
+
 // --- BlockScanner tests ---
 
 #[test]

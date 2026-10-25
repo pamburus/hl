@@ -252,6 +252,18 @@ impl InputHolder {
         Self { reference, stream }
     }
 
+    /// Returns the metadata of the held stream, or of the referenced file if no stream is held.
+    ///
+    /// The metadata of the held stream describes the file it was opened from, even if
+    /// that file has since been renamed and another one created at its path.
+    pub fn metadata(&self) -> io::Result<Option<Metadata>> {
+        match (&self.stream, &self.reference) {
+            (Some(stream), _) => stream.metadata(),
+            (None, InputReference::File(path)) => fs::metadata(&path.canonical).map(Some),
+            (None, InputReference::Stdin) => Ok(None),
+        }
+    }
+
     /// Opens the input file for reading.
     /// This includes decoding compressed files if needed.
     pub fn open(self) -> io::Result<Input> {
