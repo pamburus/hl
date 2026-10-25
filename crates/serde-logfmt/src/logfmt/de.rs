@@ -40,6 +40,24 @@ where
     }
 }
 
+/// Tells whether `key` can be written as an unquoted key, so that it reads back as is.
+#[inline]
+pub fn is_bare_key(key: &str) -> bool {
+    !key.is_empty()
+        && key
+            .bytes()
+            .all(|c| matches!(KEY[c as usize], KeyCh::ALLOWED | KeyCh::UNICODE))
+}
+
+/// Tells whether `value` can be written as an unquoted value, so that it reads back as the same string.
+///
+/// Whether the value would also be typed as something other than a string, such as a number,
+/// is up to the reader and is not checked here.
+#[inline]
+pub fn is_bare_value(value: &str) -> bool {
+    !value.is_empty() && value.bytes().all(|c| c > b' ' && c != b'"' && c != b'=')
+}
+
 // ---
 
 pub struct Deserializer<'de> {

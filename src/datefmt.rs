@@ -769,7 +769,7 @@ where
 // ---
 
 #[inline]
-fn format_int<B, I>(buf: &mut B, value: I, width: usize, flags: Flags)
+pub(crate) fn format_int<B, I>(buf: &mut B, value: I, width: usize, flags: Flags)
 where
     B: Push<u8>,
     I: itoa::Integer + PartialOrd + Default,

@@ -17,6 +17,7 @@ use encstr::EncodedString;
 use crate::{
     ExactIncludeExcludeKeyFilter, IncludeExcludeKeyFilter,
     datefmt::{DateTimeFormatter, TextWidth},
+    diagnostics::UnparsedKind,
     filtering::IncludeExcludeSetting,
     fmtx::{OptimizedBuf, Push, aligned_left},
     model::{self, Caller, Level, RawValue},
@@ -36,6 +37,7 @@ use string::{DynMessageFormat, ExtendedSpaceAction, Format, KeyQuoting, ValueFor
 // ---
 
 pub mod string;
+pub mod structured;
 
 // ---
 
@@ -142,6 +144,96 @@ impl Default for &ExpansionProfile {
 
 pub trait RecordWithSourceFormatter {
     fn format_record(&self, buf: &mut Buf, prefix: Range<usize>, rec: model::RecordWithSource);
+
+    /// Writes input data that is not a record, or leaves it out and passes it to `sink`,
+    /// and returns whether it is written.
+    ///
+    /// The `prefix` goes before each line of the data and the `delimiter` between its lines.
+    /// By default, the data is written as is unless it is hidden.
+    #[inline]
+    fn format_unparsed(
+        &self,
+        buf: &mut Buf,
+        prefix: &[u8],
+        delimiter: &[u8],
+        unparsed: UnparsedData,
+        _: &mut dyn DropSink,
+    ) -> bool {
+        if !unparsed.hidden {
+            write_unparsed(buf, prefix, delimiter, unparsed.data, unparsed.kind);
+        }
+        !unparsed.hidden
+    }
+
+    /// Returns whether the output carries decorations, such as input badges and sync indicators.
+    #[inline]
+    fn decorations(&self) -> bool {
+        true
+    }
+}
+
+/// Input data that is not a record.
+pub struct UnparsedData<'a> {
+    pub data: &'a [u8],
+    /// Where the data was read from.
+    pub origin: model::Origin<'a>,
+    pub kind: UnparsedKind,
+    /// Whether the data is hidden, for example by filtering, so that output showing such data leaves it out.
+    pub hidden: bool,
+}
+
+/// Takes input data left out of the output, as it is not a record.
+pub trait DropSink {
+    fn take(&mut self, unparsed: UnparsedData);
+}
+
+/// Takes dropped data and does nothing with it.
+impl DropSink for () {
+    #[inline]
+    fn take(&mut self, _: UnparsedData) {}
+}
+
+/// Writes input data that is not a record as is, each of its lines with `prefix`.
+///
+/// An entry ends with `delimiter`. Data before a record ends with a space that sets it apart
+/// from the record, and data after the records continues their line, so neither of them ends
+/// with a delimiter. A fragment, a part of an entry, is written after `prefix` as is.
+fn write_unparsed(buf: &mut Buf, prefix: &[u8], delimiter: &[u8], data: &[u8], kind: UnparsedKind) {
+    let searcher = Newline.into_searcher();
+    let lines = searcher.split(data);
+    match kind {
+        UnparsedKind::Fragment => {
+            buf.extend(prefix);
+            buf.extend(data);
+        }
+        // An empty entry is written as an empty line.
+        UnparsedKind::Entry if data.is_empty() => {
+            buf.extend(prefix);
+            buf.extend(delimiter);
+        }
+        UnparsedKind::Entry => {
+            for line in lines {
+                buf.extend(prefix);
+                buf.extend(line);
+                buf.extend(delimiter);
+            }
+        }
+        UnparsedKind::Prefix | UnparsedKind::Remainder => {
+            for (i, line) in lines.enumerate() {
+                if i != 0 {
+                    buf.extend(delimiter);
+                }
+                // The first line of data after the records continues their line.
+                if i != 0 || kind == UnparsedKind::Prefix {
+                    buf.extend(prefix);
+                }
+                buf.extend(line);
+            }
+            if kind == UnparsedKind::Prefix && data.last() != Some(&b' ') {
+                buf.push(b' ');
+            }
+        }
+    }
 }
 
 pub struct RawRecordFormatter {
@@ -168,12 +260,46 @@ impl<T: RecordWithSourceFormatter + ?Sized> RecordWithSourceFormatter for &T {
     fn format_record(&self, buf: &mut Buf, prefix: Range<usize>, rec: model::RecordWithSource) {
         (**self).format_record(buf, prefix, rec)
     }
+
+    #[inline(always)]
+    fn format_unparsed(
+        &self,
+        buf: &mut Buf,
+        prefix: &[u8],
+        delimiter: &[u8],
+        unparsed: UnparsedData,
+        sink: &mut dyn DropSink,
+    ) -> bool {
+        (**self).format_unparsed(buf, prefix, delimiter, unparsed, sink)
+    }
+
+    #[inline(always)]
+    fn decorations(&self) -> bool {
+        (**self).decorations()
+    }
 }
 
 impl<T: RecordWithSourceFormatter + ?Sized> RecordWithSourceFormatter for Arc<T> {
     #[inline(always)]
     fn format_record(&self, buf: &mut Buf, prefix: Range<usize>, rec: model::RecordWithSource) {
         (**self).format_record(buf, prefix, rec)
+    }
+
+    #[inline(always)]
+    fn format_unparsed(
+        &self,
+        buf: &mut Buf,
+        prefix: &[u8],
+        delimiter: &[u8],
+        unparsed: UnparsedData,
+        sink: &mut dyn DropSink,
+    ) -> bool {
+        (**self).format_unparsed(buf, prefix, delimiter, unparsed, sink)
+    }
+
+    #[inline(always)]
+    fn decorations(&self) -> bool {
+        (**self).decorations()
     }
 }
 
