@@ -577,10 +577,24 @@ impl SegmentBuf {
         self.size
     }
 
+    /// Returns the size of the buffer, which the data may not fill.
+    #[inline]
+    pub fn capacity(&self) -> usize {
+        self.buf.len()
+    }
+
     /// Transforms the SegmentBuf into inner Vec<u8>.
     #[inline]
     pub fn into_inner(self) -> Vec<u8> {
         self.buf
+    }
+
+    /// Transforms the SegmentBuf into inner Vec<u8> holding only the data.
+    #[inline]
+    pub fn into_data(self) -> Vec<u8> {
+        let mut buf = self.buf;
+        buf.truncate(self.size);
+        buf
     }
 
     #[inline]

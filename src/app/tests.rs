@@ -543,7 +543,7 @@ fn test_incomplete_segment() {
     Options { input_format: Some(InputFormat::Json), delimiter: Delimiter::Json, ..options() },
     "2024-01-25 18:10:20.435 |ERR| m1\n2024-01-25 18:10:21.764 |INF| m2\n"
 )]
-fn test_incomplete_segment_hidden(#[case] opts: Options, #[case] expected: &str) {
+fn test_incomplete_segment_hidden(#[case] opts: Options, #[case] expected: &str, #[values(false, true)] follow: bool) {
     let input = input(format!(
         concat!(
             r#"{{"level":"error","ts":"2024-01-25T19:10:20.435369+01:00","msg":"m1"}}"#,
@@ -561,6 +561,7 @@ fn test_incomplete_segment_hidden(#[case] opts: Options, #[case] expected: &str)
         buffer_size: NonZeroUsize::new(32).unwrap(),
         max_message_size: NonZeroUsize::new(128).unwrap(),
         concurrency: 2,
+        follow,
         ..opts
     });
     app.run(vec![input], &mut output).unwrap();
@@ -1849,6 +1850,32 @@ fn test_process_segments_incomplete(
     } else {
         assert!(buf.is_empty());
         assert_eq!(index.part, None);
+    }
+}
+
+#[rstest]
+#[case::first(b"abcdefg", 0, "> abc", false)]
+#[case::next_filling_buffer(b"abcdefg", 1, "def", true)]
+#[case::next_cut_short_by_end_of_input(b"abcdefg", 2, "g", false)]
+#[case::last(b"abcdefg\n", 2, "g", false)]
+fn test_split_entry_part(#[case] input: &[u8], #[case] n: usize, #[case] expected: &str, #[case] in_own_buffer: bool) {
+    let sfi = Arc::new(SegmentBufFactory::new(3));
+    let scanner = Scanner::new(sfi.clone(), b'\n');
+    let mut data = Cursor::new(input);
+    let mut items = scanner.items(&mut data).open_ended(true).with_max_segment_size(3);
+    let Some(Ok(Segment::Incomplete(segment, part))) = items.nth(n) else {
+        panic!("no part {n}");
+    };
+    let at = segment.data().as_ptr();
+
+    let delim = Delimiter::from(Newline).into_searcher();
+    let buf = split_entry_part(segment, part, "> ", delim.as_ref(), &sfi);
+
+    assert_eq!(String::from_utf8(buf.clone()).unwrap(), expected);
+    // A part sent in its own buffer is not copied, and any other is copied into a buffer of its size.
+    assert_eq!(buf.as_ptr() == at, in_own_buffer);
+    if !in_own_buffer {
+        assert_eq!(buf.capacity(), buf.len());
     }
 }
 
