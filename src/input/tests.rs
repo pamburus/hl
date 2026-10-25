@@ -10,6 +10,10 @@ use crate::{
     vfs::{self, LocalFileSystem},
 };
 
+fn temp_path(name: &str) -> PathBuf {
+    std::env::temp_dir().join(format!("hl-input-{}-{}", std::process::id(), name))
+}
+
 struct FailingReader;
 
 impl Read for FailingReader {
@@ -609,4 +613,23 @@ fn test_input_descriptor_from() {
         inputs.iter().enumerate().map(InputDescriptor::from).collect_vec(),
         vec![expected(0, "a.log"), expected(1, "<stdin>")]
     );
+}
+
+#[test]
+fn test_input_holder_metadata_describes_held_file_after_rotation() {
+    let path = temp_path("rotated");
+    let old = temp_path("rotated-old");
+    fs::write(&path, b"old line\n").unwrap();
+    let holder = InputReference::File(InputPath::resolve(path.clone()).unwrap())
+        .hold()
+        .unwrap();
+
+    fs::rename(&path, &old).unwrap();
+    fs::write(&path, b"new\n").unwrap();
+    let meta = holder.metadata();
+    drop(holder);
+    fs::remove_file(&path).unwrap();
+    fs::remove_file(&old).unwrap();
+
+    assert_eq!(meta.unwrap().map(|x| x.len()), Some(9));
 }
