@@ -1,14 +1,12 @@
 // std imports
 use std::{
     cmp::{Reverse, max},
-    collections::{BTreeMap, HashMap},
     convert::{TryFrom, TryInto},
     fs,
     io::{BufWriter, Cursor, Read, Write},
     num::NonZeroUsize,
     ops::Range,
     path::PathBuf,
-    rc::Rc,
     str,
     sync::Arc,
     time::{Duration, Instant},
@@ -56,6 +54,12 @@ use crate::{
 // test imports
 #[cfg(test)]
 use crate::testing::Sample;
+
+// ---
+
+mod follow;
+
+use follow::{MergeWindow, MergeWriter};
 
 // ---
 
@@ -779,41 +783,20 @@ impl App {
         output: &mut Output,
         concurrency: usize,
     ) -> Result<()> {
-        type Key = (Timestamp, usize, usize, usize); // (ts, input, block, offset)
-        type Line = (Rc<Vec<u8>>, Range<usize>, Instant); // (buf, location, instant)
-
-        let mut window = BTreeMap::<Key, Line>::new();
-        let mut last_ts: Option<Timestamp> = None;
-        let mut prev_ts: Option<Timestamp> = None;
-        let mut source_last_ts: HashMap<usize, Timestamp> = HashMap::new();
-        let mut mem_usage = 0;
+        let delim = self.options.output_delimiter.as_bytes();
         let mem_limit = concurrency * usize::from(self.options.buffer_size);
-        let sync_interval = self.options.sync_interval;
+        let mut window = MergeWindow::new(delim, mem_limit, self.options.sync_interval);
+        let mut writer = MergeWriter::new(&badges.si, delim);
         let mut disconnected = false;
 
         loop {
             let now = Instant::now();
             let mut written = false;
-            while let Some(first) = window.first_key_value() {
-                // Once all inputs are closed nothing can arrive to be sorted in
-                // between, so the rest of the window is flushed right away.
-                let due = disconnected || mem_usage >= mem_limit || flush_wait(first.1.2, now, sync_interval).is_zero();
-                if !due {
-                    break;
-                }
-                if let Some(entry) = window.pop_first() {
-                    let sync_indicator = if prev_ts.map(|ts| ts <= entry.0.0).unwrap_or(true) {
-                        &badges.si.synced
-                    } else {
-                        &badges.si.failed
-                    };
-                    prev_ts = Some(entry.0.0);
-                    mem_usage -= entry.1.1.end - entry.1.1.start;
-                    output.write_all(sync_indicator.as_bytes())?;
-                    output.write_all(&entry.1.0[entry.1.1.clone()][badges.si.width..])?;
-                    output.write_all(self.options.output_delimiter.as_bytes())?;
-                    written = true;
-                }
+            // Once all inputs are closed nothing can arrive to be sorted in
+            // between, so the rest of the window is flushed right away.
+            while let Some((key, entry)) = window.pop_due(now, disconnected) {
+                writer.write(output, key.ts, entry.data())?;
+                written = true;
             }
 
             // Stdout flushes by itself only at a newline, so records ending with
@@ -826,66 +809,10 @@ impl App {
                 break;
             }
 
-            let timeout = window
-                .first_key_value()
-                .map(|first| flush_wait(first.1.2, now, sync_interval))
-                .unwrap_or(Duration::MAX);
-            match rxo.recv_timeout(timeout) {
+            match rxo.recv_timeout(window.wait(now)) {
                 Ok((i, buf, index)) => {
-                    let delim_len = self.options.output_delimiter.len();
-                    let delim = self.options.output_delimiter.as_bytes();
-                    let buf = Rc::new(buf);
-                    let now = Instant::now();
-
-                    // Iterate over gaps between indexed lines and insert them
-                    // into the window with the timestamp of the next indexed
-                    // line (or the last known timestamp for the source as
-                    // fallback for the trailing gap) so they get sorted
-                    // together with parsed records.
-                    let gap_starts =
-                        std::iter::once(0usize).chain(index.lines.iter().map(|l| l.location.end + delim_len));
-                    let gap_ends = index
-                        .lines
-                        .iter()
-                        .map(|l| l.location.start)
-                        .chain(std::iter::once(buf.len()));
-                    let gap_timestamps = index
-                        .lines
-                        .iter()
-                        .map(|l| Some(l.ts))
-                        .chain(std::iter::once(source_last_ts.get(&i).copied()));
-
-                    for ((start, end), ts) in gap_starts.zip(gap_ends).zip(gap_timestamps) {
-                        if start >= end {
-                            continue;
-                        }
-                        let trimmed = if end >= start + delim_len && buf[end - delim_len..end] == *delim {
-                            end - delim_len
-                        } else {
-                            end
-                        };
-                        if start < trimmed {
-                            if let Some(ts) = ts {
-                                mem_usage += trimmed - start;
-                                window.insert((ts, i, index.block, start), (buf.clone(), start..trimmed, now));
-                            } else {
-                                output.write_all(&buf[start..end])?;
-                            }
-                        }
-                    }
-
-                    // Insert indexed lines into the window.
-                    for line in index.lines {
-                        let ts = line.ts;
-                        source_last_ts
-                            .entry(i)
-                            .and_modify(|prev| *prev = max(*prev, ts))
-                            .or_insert(ts);
-                        last_ts = Some(last_ts.map(|v| max(v, ts)).unwrap_or(ts));
-                        mem_usage += line.location.end - line.location.start;
-                        let key = (ts, i, index.block, line.location.start);
-                        let value = (buf.clone(), line.location, now);
-                        window.insert(key, value);
+                    if let Some((buf, location)) = window.insert(i, buf, index, Instant::now()) {
+                        output.write_all(&buf[location])?;
                     }
                 }
                 Err(RecvTimeoutError::Timeout) => {}
