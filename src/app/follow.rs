@@ -9,7 +9,7 @@ use std::{
 };
 
 // local imports
-use super::{Output, SyncIndicator, TimestampIndex, flush_wait};
+use super::{FollowBadges, Output, TimestampIndex, flush_wait};
 use crate::{error::*, index::Timestamp, scanning::PartialPlacement};
 
 // ---
@@ -24,7 +24,9 @@ pub(super) struct MergeWindow<'a> {
     /// The timestamp of the last record of each input.
     last_ts: HashMap<usize, Timestamp>,
     /// A split entry being written: the input and block of its next part, and when its last part was given out.
-    /// Until the next part is given out, nothing else is, so that no other entries come in between.
+    /// Until the next part is given out, nothing else is, so that no other entries come in between,
+    /// unless the window holds twice its memory limit. The margin over the limit leaves time for
+    /// the next part, which may still be processed, to come while the other inputs keep the window full.
     open: Option<(usize, usize, Instant)>,
     /// Split entries ended before their rest came: the input and block of the next part of each.
     /// The rest is given out as it comes, as nothing is held for it.
@@ -67,11 +69,13 @@ impl<'a> MergeWindow<'a> {
     pub fn pop_due(&mut self, now: Instant, all: bool) -> Option<Due> {
         if let Some((i, block, since)) = self.open {
             if let Some(entry) = self.pop_part(i, block) {
-                return Some(self.take_part(i, block, entry, now));
+                return Some(Due::Entry(None, self.take_part(i, block, entry, now)));
             }
             let passed = self.order.passed(i, block);
-            if all || passed || flush_wait(since, now, self.sync_interval).is_zero() {
-                // The rest of the entry will not come, or comes too late, so the entry is ended as it is.
+            let full = self.mem_usage >= self.mem_limit.saturating_mul(2);
+            if all || passed || full || flush_wait(since, now, self.sync_interval).is_zero() {
+                // The rest of the entry will not come, comes too late, or cannot be awaited
+                // without holding more than the memory limit, so the entry is ended as it is.
                 self.open = None;
                 if !all && !passed {
                     self.late.push((i, block));
@@ -148,10 +152,10 @@ impl<'a> MergeWindow<'a> {
 
     /// Gives out the next part of a split entry, which is in block `block` of input `i`,
     /// and keeps the split entry open if the part is not its last.
-    fn take_part(&mut self, i: usize, block: usize, entry: Entry, now: Instant) -> Due {
+    fn take_part(&mut self, i: usize, block: usize, entry: Entry, now: Instant) -> Entry {
         self.mem_usage -= entry.location.len();
         self.open = entry.continued().then_some((i, block + 1, now));
-        Due::Entry(None, entry)
+        entry
     }
 
     /// Removes and returns the next part of a split entry ended before its rest came, if it came by now.
@@ -161,7 +165,7 @@ impl<'a> MergeWindow<'a> {
             let (i, block) = self.late[k];
             if let Some(entry) = self.pop_part(i, block) {
                 self.late.swap_remove(k);
-                return Some(self.take_part(i, block, entry, now));
+                return Some(Due::Resumed(i, self.take_part(i, block, entry, now)));
             }
             if self.order.passed(i, block) {
                 // The input moved on without the rest of the entry, so it will not come.
@@ -234,6 +238,8 @@ impl<'a> MergeWindow<'a> {
 pub(super) enum Due {
     /// An entry to be written, with the timestamp it was sorted by, if any.
     Entry(Option<Timestamp>, Entry),
+    /// The next part of a split entry of input `i` ended before it came, which starts a new line.
+    Resumed(usize, Entry),
     /// The end of a split entry, whose rest will not come.
     SplitEnd,
 }
@@ -343,15 +349,15 @@ impl Entry {
 
 /// Writes entries given out by the window, each marked by whether it is in time order with the entry before.
 pub(super) struct MergeWriter<'a> {
-    si: &'a SyncIndicator,
+    badges: &'a FollowBadges,
     delim: &'a [u8],
     prev_ts: Option<Timestamp>,
 }
 
 impl<'a> MergeWriter<'a> {
-    pub fn new(si: &'a SyncIndicator, delim: &'a [u8]) -> Self {
+    pub fn new(badges: &'a FollowBadges, delim: &'a [u8]) -> Self {
         Self {
-            si,
+            badges,
             delim,
             prev_ts: None,
         }
@@ -364,28 +370,42 @@ impl<'a> MergeWriter<'a> {
     /// after its last part, or by [`MergeWriter::end_split`].
     pub fn write(&mut self, output: &mut Output, ts: Option<Timestamp>, entry: &Entry) -> Result<()> {
         let data = entry.data();
+        let si = &self.badges.si;
         match ts {
             Some(ts) if !entry.continues() => {
                 let sync_indicator = if self.prev_ts.map(|prev| prev <= ts).unwrap_or(true) {
-                    &self.si.synced
+                    &si.synced
                 } else {
-                    &self.si.failed
+                    &si.failed
                 };
                 self.prev_ts = Some(ts);
                 output.write_all(sync_indicator.as_bytes())?;
-                output.write_all(&data[self.si.width..])?;
+                output.write_all(&data[si.width..])?;
             }
             _ => output.write_all(data)?,
         }
-        if !entry.continued() {
-            output.write_all(self.delim)?;
-        }
-        Ok(())
+        self.end(output, entry)
+    }
+
+    /// Writes `entry`, the next part of a split entry of input `i` ended before it came,
+    /// on a new line that starts like other entries of the input.
+    pub fn resume(&mut self, output: &mut Output, i: usize, entry: &Entry) -> Result<()> {
+        output.write_all(self.badges.prefix(i).as_bytes())?;
+        output.write_all(entry.data())?;
+        self.end(output, entry)
     }
 
     /// Ends a split entry whose rest will not come.
     pub fn end_split(&mut self, output: &mut Output) -> Result<()> {
         output.write_all(self.delim)?;
+        Ok(())
+    }
+
+    /// Ends the line of `entry`, unless the split entry it is a part of is continued.
+    fn end(&self, output: &mut Output, entry: &Entry) -> Result<()> {
+        if !entry.continued() {
+            output.write_all(self.delim)?;
+        }
         Ok(())
     }
 }
