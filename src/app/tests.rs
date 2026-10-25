@@ -103,6 +103,55 @@ fn ts(sec: i64, nsec: u32) -> Timestamp {
     Timestamp { sec, nsec }
 }
 
+/// A message from a follow mode worker to the merger.
+type Processed = (usize, Vec<u8>, TimestampIndex);
+
+/// Returns a worker message for a block holding a single record with timestamp `sec`.
+fn record_block(input: usize, block: usize, text: &str, sec: i64) -> Processed {
+    let index = TimestampIndex {
+        block,
+        lines: vec![TimestampIndexLine {
+            location: 0..text.len(),
+            ts: ts(sec, 0),
+        }],
+        part: None,
+    };
+    (input, text.as_bytes().to_vec(), index)
+}
+
+/// Returns a worker message for a block holding a part of a log entry too large to be read at once.
+fn part_block(input: usize, block: usize, text: &str, part: PartialPlacement) -> Processed {
+    let index = TimestampIndex {
+        part: Some(part),
+        ..TimestampIndex::new(block)
+    };
+    (input, text.as_bytes().to_vec(), index)
+}
+
+/// Returns a worker message for a block holding text that is not a record.
+fn text_block(input: usize, block: usize, text: &str) -> Processed {
+    (input, text.as_bytes().to_vec(), TimestampIndex::new(block))
+}
+
+/// Merges `messages`, received one by one, with every entry due for output as soon as it comes,
+/// and returns the output.
+fn merge(sync_interval: Duration, messages: Vec<Processed>) -> String {
+    let app = App::new(Options {
+        sync_interval,
+        ..options()
+    });
+    let (txo, rxo) = channel::unbounded();
+    for message in messages {
+        txo.send(message).unwrap();
+    }
+    drop(txo);
+
+    let mut output = Vec::new();
+    // With zero concurrency the memory limit is zero, so nothing waits for the sync interval.
+    app.merge_segments(&test_badges(2), rxo, &mut output, 0).unwrap();
+    String::from_utf8(output).unwrap()
+}
+
 /// Scans each chunk as a separate follow mode scan and returns the text of the
 /// segments sent after each of them.
 fn scan_chunks(segment_size: usize, chunks: &[(&[u8], bool)]) -> Vec<Vec<String>> {
@@ -1699,10 +1748,20 @@ fn test_process_segments() {
     }
 }
 
-#[test]
-fn test_process_segments_incomplete() {
+#[rstest]
+#[case::first(PartialPlacement::First, "long", "  [0] long")]
+#[case::next(PartialPlacement::Next, "long", "long")]
+#[case::last(PartialPlacement::Last, "long\n", "long")]
+#[case::last_unterminated(PartialPlacement::Last, "long", "long")]
+fn test_process_segments_incomplete(
+    #[case] part: PartialPlacement,
+    #[case] data: &str,
+    #[case] expected: &str,
+    #[values(None, Some(InputFormat::Json))] input_format: Option<InputFormat>,
+) {
     let mut opts = options();
     opts.theme = theme();
+    opts.input_format = input_format;
     let app = App::new(opts);
 
     let parser = app.parser();
@@ -1722,9 +1781,9 @@ fn test_process_segments_incomplete() {
     let (txi, rxi) = channel::bounded(10);
     let (txo, rxo) = channel::bounded(10);
 
-    let segment = Segment::Incomplete(SegmentBuf::from(b"incomplete"), PartialPlacement::First);
+    let segment = Segment::Incomplete(SegmentBuf::from(data.as_bytes()), part);
 
-    txi.send((0, 0, 0, segment)).unwrap();
+    txi.send((0, 3, 0, segment)).unwrap();
     drop(txi);
 
     app.process_segments(
@@ -1738,11 +1797,27 @@ fn test_process_segments_incomplete() {
     );
     drop(txo);
 
-    assert!(rxo.try_recv().is_err(), "Incomplete segments should not produce output");
+    // Every block is sent, as the merger takes the blocks of an input in order,
+    // but the part is shown only where text that is not a record is.
+    let (input, buf, index) = rxo.try_recv().expect("a message for the block");
+    assert_eq!(input, 0);
+    assert_eq!(index.block, 3);
+    assert!(index.lines.is_empty());
+    if input_format.is_none() {
+        assert_eq!(String::from_utf8(buf).unwrap(), expected);
+        assert_eq!(index.part, Some(part));
+    } else {
+        assert!(buf.is_empty());
+        assert_eq!(index.part, None);
+    }
 }
 
-#[test]
-fn test_process_segments_receiver_dropped() {
+#[rstest]
+#[case::complete(Segment::Complete(SegmentBuf::from(
+    r#"{"level":"info","msg":"test","ts":"2023-12-07T20:07:05.949Z"}"#.as_bytes()
+)))]
+#[case::incomplete(Segment::Incomplete(SegmentBuf::from(b"long"), PartialPlacement::First))]
+fn test_process_segments_receiver_dropped(#[case] segment: Segment) {
     let mut opts = options();
     opts.theme = theme();
     let app = App::new(opts);
@@ -1763,9 +1838,6 @@ fn test_process_segments_receiver_dropped() {
 
     let (txi, rxi) = channel::bounded(10);
     let (txo, rxo) = channel::bounded(10);
-
-    let log_data = r#"{"level":"info","msg":"test","ts":"2023-12-07T20:07:05.949Z"}"#;
-    let segment = Segment::Complete(SegmentBuf::from(log_data.as_bytes()));
 
     drop(rxo);
 
@@ -2260,6 +2332,7 @@ fn test_merge_segments_single_line() {
     let buf = b"  hello world".to_vec();
     let index = TimestampIndex {
         block: 0,
+        part: None,
         lines: vec![TimestampIndexLine {
             location: 0..buf.len(),
             ts: ts(100, 0),
@@ -2285,6 +2358,7 @@ fn test_merge_segments_ordered_timestamps() {
     let buf1 = b"  line-one".to_vec();
     let index1 = TimestampIndex {
         block: 0,
+        part: None,
         lines: vec![TimestampIndexLine {
             location: 0..buf1.len(),
             ts: ts(100, 0),
@@ -2294,6 +2368,7 @@ fn test_merge_segments_ordered_timestamps() {
     let buf2 = b"  line-two".to_vec();
     let index2 = TimestampIndex {
         block: 1,
+        part: None,
         lines: vec![TimestampIndexLine {
             location: 0..buf2.len(),
             ts: ts(200, 0),
@@ -2321,6 +2396,7 @@ fn test_merge_segments_interleaved_sources() {
     let buf0 = b"  from-source-0".to_vec();
     let index0 = TimestampIndex {
         block: 0,
+        part: None,
         lines: vec![TimestampIndexLine {
             location: 0..buf0.len(),
             ts: ts(200, 0),
@@ -2330,6 +2406,7 @@ fn test_merge_segments_interleaved_sources() {
     let buf1 = b"  from-source-1".to_vec();
     let index1 = TimestampIndex {
         block: 0,
+        part: None,
         lines: vec![TimestampIndexLine {
             location: 0..buf1.len(),
             ts: ts(100, 0),
@@ -2361,6 +2438,7 @@ fn test_merge_segments_out_of_order_shows_failed() {
     let buf1 = b"  late".to_vec();
     let index1 = TimestampIndex {
         block: 0,
+        part: None,
         lines: vec![TimestampIndexLine {
             location: 0..buf1.len(),
             ts: ts(200, 0),
@@ -2372,6 +2450,7 @@ fn test_merge_segments_out_of_order_shows_failed() {
     let buf2 = b"  early".to_vec();
     let index2 = TimestampIndex {
         block: 1,
+        part: None,
         lines: vec![TimestampIndexLine {
             location: 0..buf2.len(),
             ts: ts(100, 0),
@@ -2415,6 +2494,7 @@ fn test_merge_segments_flushes_window_when_inputs_close() {
     let buf = b"  hello".to_vec();
     let index = TimestampIndex {
         block: 0,
+        part: None,
         lines: vec![TimestampIndexLine {
             location: 0..buf.len(),
             ts: ts(100, 0),
@@ -2511,6 +2591,7 @@ fn test_merge_segments_multiple_lines_per_segment() {
     let buf = b"  line-A\n  line-B".to_vec();
     let index = TimestampIndex {
         block: 0,
+        part: None,
         lines: vec![
             TimestampIndexLine {
                 location: 0..8, // "  line-A"
@@ -2545,6 +2626,7 @@ fn test_merge_segments_text_stays_with_record_before_it() {
     let buf0 = b"  line-A\n  trace\n  line-C".to_vec();
     let index0 = TimestampIndex {
         block: 0,
+        part: None,
         lines: vec![
             TimestampIndexLine {
                 location: 0..8, // "  line-A"
@@ -2559,6 +2641,7 @@ fn test_merge_segments_text_stays_with_record_before_it() {
     let buf1 = b"  line-B".to_vec();
     let index1 = TimestampIndex {
         block: 0,
+        part: None,
         lines: vec![TimestampIndexLine {
             location: 0..8,
             ts: ts(200, 0),
@@ -2587,6 +2670,7 @@ fn test_merge_segments_gap_without_timestamp_direct_output() {
     let buf = b"unparsed text\n".to_vec();
     let index = TimestampIndex {
         block: 0,
+        part: None,
         lines: vec![],
     };
     txo.send((0, buf, index)).unwrap();
@@ -2613,6 +2697,7 @@ fn test_merge_segments_gap_trimming_no_trailing_delimiter() {
     let buf = b"  gap-no-delim  line-A".to_vec();
     let index = TimestampIndex {
         block: 0,
+        part: None,
         lines: vec![TimestampIndexLine {
             location: 14..22, // "  line-A"
             ts: ts(100, 0),
@@ -2640,6 +2725,7 @@ fn test_merge_segments_empty_gap_skipped() {
     let buf = b"  line-A\n  line-B".to_vec();
     let index = TimestampIndex {
         block: 0,
+        part: None,
         lines: vec![
             TimestampIndexLine {
                 location: 0..8, // "  line-A"
@@ -2674,6 +2760,7 @@ fn test_merge_segments_trailing_gap_with_source_history() {
     let buf1 = b"  line-A".to_vec();
     let index1 = TimestampIndex {
         block: 0,
+        part: None,
         lines: vec![TimestampIndexLine {
             location: 0..8,
             ts: ts(100, 0),
@@ -2685,6 +2772,7 @@ fn test_merge_segments_trailing_gap_with_source_history() {
     let buf2 = b"  line-B\n  trailing-gap".to_vec();
     let index2 = TimestampIndex {
         block: 1,
+        part: None,
         lines: vec![TimestampIndexLine {
             location: 0..8, // "  line-B"
             ts: ts(200, 0),
@@ -2726,6 +2814,112 @@ fn test_follow_merges_inputs_by_time() {
             "#0 | <stdin> | 2026-07-06 10:00:02.000 a2\n",
             "#1 | <stdin> | 2026-07-06 10:00:03.000 b3\n",
         )
+    );
+}
+
+#[rstest]
+#[case::kept_together(
+    vec![
+        record_block(0, 0, "  rec-a", 100),
+        part_block(0, 1, "  xx", PartialPlacement::First),
+        record_block(1, 0, "  rec-b", 200),
+        part_block(0, 2, "yy", PartialPlacement::Last),
+    ],
+    "SSrec-a\nSSxxyy\nSSrec-b\n",
+)]
+#[case::taken_in_block_order(
+    vec![
+        part_block(0, 1, "  xx", PartialPlacement::First),
+        part_block(0, 3, "zz", PartialPlacement::Last),
+        record_block(0, 0, "  rec-a", 100),
+        part_block(0, 2, "yy", PartialPlacement::Next),
+    ],
+    "SSrec-a\nSSxxyyzz\n",
+)]
+#[case::sorted_after_record_before(
+    vec![
+        record_block(0, 0, "  rec-a", 300),
+        part_block(0, 1, "  xx", PartialPlacement::First),
+        part_block(0, 2, "yy", PartialPlacement::Last),
+        record_block(1, 0, "  rec-b", 200),
+    ],
+    "SSrec-a\nSSxxyy\nFFrec-b\n",
+)]
+#[case::ended_by_next_block(
+    vec![
+        record_block(0, 0, "  rec-a", 100),
+        part_block(0, 1, "  xx", PartialPlacement::First),
+        record_block(0, 2, "  rec-b", 100),
+    ],
+    "SSrec-a\nSSxx\nSSrec-b\n",
+)]
+#[case::ended_when_inputs_close(
+    vec![
+        record_block(0, 0, "  rec-a", 100),
+        part_block(0, 1, "  xx", PartialPlacement::First),
+    ],
+    "SSrec-a\nSSxx\n",
+)]
+#[case::written_as_they_come_without_timestamp(
+    vec![
+        part_block(0, 0, "  xx", PartialPlacement::First),
+        record_block(1, 0, "  rec-b", 100),
+        text_block(2, 0, "text\n"),
+        part_block(0, 1, "yy", PartialPlacement::Last),
+    ],
+    "  xxyy\ntext\nSSrec-b\n",
+)]
+#[case::held_while_other_entry_is_open(
+    vec![
+        record_block(0, 0, "  rec-a", 100),
+        part_block(0, 1, "  aa", PartialPlacement::First),
+        part_block(1, 0, "  xx", PartialPlacement::First),
+        part_block(1, 1, "yy", PartialPlacement::Last),
+        part_block(0, 2, "bb", PartialPlacement::Last),
+    ],
+    "SSrec-a\nSSaabb\n  xxyy\n",
+)]
+fn test_merge_segments_long_entry(#[case] messages: Vec<Processed>, #[case] expected: &str) {
+    // The sync interval is far longer than the test, so a split entry can only end early
+    // because its next part will not come.
+    assert_eq!(merge(Duration::from_secs(3600), messages), expected);
+}
+
+#[test]
+fn test_merge_segments_long_entry_ended_when_rest_is_late() {
+    // With a zero sync interval, the rest of the entry is late at once,
+    // so the entry is ended and the record of the other input is written.
+    let messages = vec![
+        record_block(0, 0, "  rec-a", 100),
+        part_block(0, 1, "  xx", PartialPlacement::First),
+        record_block(1, 0, "  rec-b", 200),
+        part_block(0, 2, "yy", PartialPlacement::Last),
+    ];
+    assert_eq!(merge(Duration::ZERO, messages), "SSrec-a\nSSxx\nSSrec-b\nyy\n");
+}
+
+#[test]
+fn test_follow_shows_long_entry_between_records() {
+    // The entry is larger than the maximum message size, so it is read in several parts.
+    let app = App::new(Options {
+        follow: true,
+        buffer_size: NonZeroUsize::new(1024).unwrap(),
+        max_message_size: NonZeroUsize::new(2048).unwrap(),
+        ..options()
+    });
+    let long = "x".repeat(5000);
+    let data = format!(
+        "{}\n{long}\n{}\n",
+        r#"{"ts":"2026-07-06T10:00:00Z","msg":"before"}"#, r#"{"ts":"2026-07-06T10:00:01Z","msg":"after"}"#,
+    );
+
+    let mut output = Vec::new();
+    app.run(vec![input(data)], &mut output).unwrap();
+
+    let output = String::from_utf8(output).unwrap();
+    assert_eq!(
+        output,
+        format!("2026-07-06 10:00:00.000 before\n{long}\n2026-07-06 10:00:01.000 after\n")
     );
 }
 

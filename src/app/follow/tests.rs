@@ -31,20 +31,45 @@ fn text(n: usize, text: &str) -> (Vec<u8>, TimestampIndex) {
     (text.as_bytes().to_vec(), TimestampIndex::new(n))
 }
 
+/// Returns block `n` with a part of a log entry too large to be read at once.
+fn part(n: usize, text: &str, part: PartialPlacement) -> (Vec<u8>, TimestampIndex) {
+    let index = TimestampIndex {
+        part: Some(part),
+        ..TimestampIndex::new(n)
+    };
+    (text.as_bytes().to_vec(), index)
+}
+
+fn entry(text: &str, part: Option<PartialPlacement>) -> Entry {
+    let buf = Rc::new(text.as_bytes().to_vec());
+    Entry::new(&buf, 0..buf.len(), Instant::now(), part)
+}
+
 fn window(mem_limit: usize) -> MergeWindow<'static> {
     MergeWindow::new(b"\n", mem_limit, INTERVAL)
 }
 
-fn insert(window: &mut MergeWindow, (buf, index): (Vec<u8>, TimestampIndex), now: Instant) -> Option<String> {
-    window
-        .insert(0, buf, index, now)
-        .map(|(buf, location)| String::from_utf8(buf[location].to_vec()).unwrap())
+fn insert(window: &mut MergeWindow, (buf, index): (Vec<u8>, TimestampIndex), now: Instant) {
+    window.insert(0, buf, index, now)
 }
 
+/// Returns what is due, with the end of a split entry shown as `|`.
 fn drain(window: &mut MergeWindow, now: Instant, all: bool) -> Vec<String> {
     std::iter::from_fn(|| window.pop_due(now, all))
-        .map(|(_, entry)| String::from_utf8(entry.data().to_vec()).unwrap())
+        .map(|due| match due {
+            Due::Entry(_, entry) => String::from_utf8(entry.data().to_vec()).unwrap(),
+            Due::SplitEnd => "|".into(),
+        })
         .collect()
+}
+
+fn sync_indicator() -> SyncIndicator {
+    SyncIndicator {
+        width: 2,
+        synced: "S ".into(),
+        failed: "F ".into(),
+        placeholder: "  ".into(),
+    }
 }
 
 // ---
@@ -95,12 +120,14 @@ fn test_merge_window_wait() {
 
 #[test]
 fn test_merge_window_sorts_text_only_after_a_record() {
+    // Text with no record before it has nothing to be sorted by, so it is due right away.
     let mut window = window(usize::MAX);
     let now = Instant::now();
+    insert(&mut window, text(0, "before\n"), now);
+    insert(&mut window, block(1, &[1]), now);
+    insert(&mut window, text(2, "after\n"), now);
 
-    assert_eq!(insert(&mut window, text(0, "before\n"), now).as_deref(), Some("before"));
-    assert_eq!(insert(&mut window, block(1, &[1]), now), None);
-    assert_eq!(insert(&mut window, text(2, "after\n"), now), None);
+    assert_eq!(drain(&mut window, now, false), ["before"]);
     assert_eq!(drain(&mut window, now, true), ["  1", "after"]);
 }
 
@@ -130,7 +157,7 @@ fn test_merge_window_sorts_text_with_record_before_it(
         }
         start += line.len();
     }
-    assert_eq!(insert(&mut window, (last.as_bytes().to_vec(), index), now), None);
+    insert(&mut window, (last.as_bytes().to_vec(), index), now);
     assert_eq!(drain(&mut window, now, true), expected);
 }
 
@@ -139,25 +166,127 @@ fn test_merge_window_skips_empty_text() {
     let mut window = window(usize::MAX);
     let now = Instant::now();
 
-    assert_eq!(insert(&mut window, text(0, "\n"), now), None);
-    assert_eq!(insert(&mut window, block(1, &[1]), now), None);
-    assert_eq!(insert(&mut window, text(2, "\n"), now), None);
+    insert(&mut window, text(0, "\n"), now);
+    insert(&mut window, block(1, &[1]), now);
+    insert(&mut window, text(2, "\n"), now);
     assert_eq!(drain(&mut window, now, true), ["  1"]);
 }
 
 #[test]
+fn test_merge_window_takes_blocks_in_order() {
+    let mut window = window(usize::MAX);
+    let now = Instant::now();
+    insert(&mut window, block(2, &[3]), now);
+    insert(&mut window, text(1, "trace\n"), now);
+    assert_eq!(drain(&mut window, now, true), Vec::<String>::new());
+
+    insert(&mut window, block(0, &[1]), now);
+    assert_eq!(drain(&mut window, now, true), ["  1", "trace", "  3"]);
+}
+
+#[test]
+fn test_merge_window_holds_entries_while_split_entry_is_open() {
+    let mut window = window(usize::MAX);
+    let now = Instant::now();
+    insert(&mut window, block(0, &[1]), now);
+    insert(&mut window, part(1, "  xx", PartialPlacement::First), now);
+    let (buf, index) = block(0, &[2]);
+    window.insert(1, buf, index, now);
+
+    // Until the rest of the split entry comes, nothing else is given out, even if due.
+    let later = now + INTERVAL;
+    assert_eq!(drain(&mut window, later, false), ["  1", "  xx"]);
+    let soon = later + Duration::from_millis(30);
+    assert_eq!(window.wait(soon), Duration::from_millis(70));
+    assert_eq!(drain(&mut window, soon, false), Vec::<String>::new());
+
+    insert(&mut window, part(2, "yy", PartialPlacement::Next), now);
+    insert(&mut window, part(3, "zz", PartialPlacement::Last), now);
+    assert_eq!(drain(&mut window, soon, false), ["yy", "zz", "  2"]);
+}
+
+#[rstest]
+#[case::awaited(false, INTERVAL - Duration::from_millis(1), &[])]
+#[case::by_next_block(true, Duration::ZERO, &["|"])]
+#[case::when_late(false, INTERVAL, &["|"])]
+fn test_merge_window_ends_split_entry(#[case] next_block: bool, #[case] elapsed: Duration, #[case] expected: &[&str]) {
+    let mut window = window(usize::MAX);
+    let now = Instant::now();
+    insert(&mut window, part(0, "  xx", PartialPlacement::First), now);
+    assert_eq!(drain(&mut window, now, false), ["  xx"]);
+    if next_block {
+        insert(&mut window, block(1, &[2]), now);
+    }
+
+    assert_eq!(drain(&mut window, now + elapsed, false), expected);
+}
+
+#[test]
+fn test_merge_window_gives_out_rest_of_split_entry_ended_early() {
+    let mut window = window(usize::MAX);
+    let now = Instant::now();
+    insert(&mut window, part(0, "  xx", PartialPlacement::First), now);
+    assert_eq!(drain(&mut window, now, false), ["  xx"]);
+    let later = now + INTERVAL;
+    assert_eq!(drain(&mut window, later, false), ["|"]);
+
+    // The rest is given out as it comes, and held together again until it ends.
+    insert(&mut window, part(1, "yy", PartialPlacement::Next), later);
+    assert_eq!(drain(&mut window, later, false), ["yy"]);
+    let (buf, index) = block(0, &[1]);
+    window.insert(1, buf, index, now);
+    assert_eq!(drain(&mut window, later, false), Vec::<String>::new());
+
+    insert(&mut window, part(2, "zz", PartialPlacement::Last), later);
+    assert_eq!(drain(&mut window, later, false), ["zz", "  1"]);
+    assert!(window.late.is_empty());
+}
+
+#[test]
+fn test_merge_window_forgets_split_entry_when_input_moves_on() {
+    let mut window = window(usize::MAX);
+    let now = Instant::now();
+    insert(&mut window, part(0, "  xx", PartialPlacement::First), now);
+    assert_eq!(drain(&mut window, now, false), ["  xx"]);
+    let later = now + INTERVAL;
+    assert_eq!(drain(&mut window, later, false), ["|"]);
+
+    insert(&mut window, block(1, &[1]), later);
+    assert_eq!(drain(&mut window, later, true), ["  1"]);
+    assert!(window.late.is_empty());
+}
+
+#[test]
 fn test_merge_writer_marks_entries_out_of_time_order() {
-    let si = SyncIndicator {
-        width: 2,
-        synced: "S ".into(),
-        failed: "F ".into(),
-        placeholder: "  ".into(),
-    };
+    let si = sync_indicator();
     let mut writer = MergeWriter::new(&si, b"\n");
     let mut output = Vec::new();
-    for (sec, entry) in [(2, "  a"), (1, "  b"), (1, "  c"), (3, "  d")] {
-        writer.write(&mut output, ts(sec), entry.as_bytes()).unwrap();
+    for (sec, text) in [(2, "  a"), (1, "  b"), (1, "  c"), (3, "  d")] {
+        writer.write(&mut output, Some(ts(sec)), &entry(text, None)).unwrap();
     }
 
     assert_eq!(String::from_utf8(output).unwrap(), "S a\nF b\nS c\nS d\n");
+}
+
+#[test]
+fn test_merge_writer_writes_split_entries() {
+    let si = sync_indicator();
+    let mut writer = MergeWriter::new(&si, b"\n");
+    let mut output = Vec::new();
+    writer.write(&mut output, None, &entry("  text", None)).unwrap();
+    writer
+        .write(&mut output, Some(ts(1)), &entry("  xx", Some(PartialPlacement::First)))
+        .unwrap();
+    writer
+        .write(&mut output, Some(ts(1)), &entry("yy", Some(PartialPlacement::Next)))
+        .unwrap();
+    writer
+        .write(&mut output, Some(ts(1)), &entry("zz", Some(PartialPlacement::Last)))
+        .unwrap();
+    writer
+        .write(&mut output, None, &entry("  aa", Some(PartialPlacement::First)))
+        .unwrap();
+    writer.end_split(&mut output).unwrap();
+
+    assert_eq!(String::from_utf8(output).unwrap(), "  text\nS xxyyzz\n  aa\n");
 }
