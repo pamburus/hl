@@ -42,7 +42,8 @@ use crate::{
     model::{Filter, Origin, Parser, ParserSettings, RawRecord, Record, RecordFilter, RecordWithSourceConstructor},
     query::Query,
     scanning::{
-        BufFactory, Delimit, Delimiter, Newline, Scanner, Search, SearchExt, Segment, SegmentBuf, SegmentBufFactory,
+        BufFactory, Delimit, Delimiter, Newline, PartialPlacement, Scanner, Search, SearchExt, Segment, SegmentBuf,
+        SegmentBufFactory,
     },
     settings::{AsciiMode, ExpansionMode, FieldShowOption, Fields, Formatting, InputInfo, ResolvedPunctuation},
     theme::{Element, StylingPush, SyncIndicatorPack, Theme},
@@ -59,7 +60,7 @@ use crate::testing::Sample;
 
 mod follow;
 
-use follow::{MergeWindow, MergeWriter};
+use follow::{Due, MergeWindow, MergeWriter};
 
 // ---
 
@@ -752,6 +753,7 @@ impl App {
         txo: Sender<(usize, Vec<u8>, TimestampIndex)>,
     ) {
         let mut processor = self.new_segment_processor(parser);
+        let delim = self.options.delimiter.clone().into_searcher();
         for (i, j, offset, segment) in rxi.iter() {
             let prefix = badges
                 .input
@@ -771,7 +773,30 @@ impl App {
                         return;
                     };
                 }
-                Segment::Incomplete(_, _) => {}
+                Segment::Incomplete(segment, part) => {
+                    // A log entry too large to be read at once is shown as is, part by part,
+                    // like other text that is not a record. Every block is sent, even
+                    // with nothing to show, as the merger takes them in order.
+                    let mut buf = bfo.new_buf();
+                    let mut index = TimestampIndex::new(j);
+                    if self.allow_unparsed_data() {
+                        let mut data = segment.data();
+                        if part == PartialPlacement::First {
+                            buf.extend(prefix.as_bytes());
+                        }
+                        if part == PartialPlacement::Last
+                            && let Some(found) = delim.search_r(data, true).filter(|x| x.end == data.len())
+                        {
+                            data = &data[..found.start];
+                        }
+                        buf.extend_from_slice(data);
+                        index.part = Some(part);
+                    }
+                    sfi.recycle(segment);
+                    if txo.send((i, buf, index)).is_err() {
+                        return;
+                    };
+                }
             }
         }
     }
@@ -788,14 +813,17 @@ impl App {
         let mut window = MergeWindow::new(delim, mem_limit, self.options.sync_interval);
         let mut writer = MergeWriter::new(&badges.si, delim);
         let mut disconnected = false;
-        let mut written = false;
 
         loop {
             let now = Instant::now();
+            let mut written = false;
             // Once all inputs are closed nothing can arrive to be sorted in
             // between, so the rest of the window is flushed right away.
-            while let Some((key, entry)) = window.pop_due(now, disconnected) {
-                writer.write(output, key.ts, entry.data())?;
+            while let Some(due) = window.pop_due(now, disconnected) {
+                match due {
+                    Due::Entry(ts, entry) => writer.write(output, ts, &entry)?,
+                    Due::SplitEnd => writer.end_split(output)?,
+                }
                 written = true;
             }
 
@@ -803,7 +831,6 @@ impl App {
             // another delimiter are flushed here, before waiting for more input.
             if written {
                 output.flush()?;
-                written = false;
             }
 
             if disconnected {
@@ -811,12 +838,7 @@ impl App {
             }
 
             match rxo.recv_timeout(window.wait(now)) {
-                Ok((i, buf, index)) => {
-                    if let Some((buf, location)) = window.insert(i, buf, index, Instant::now()) {
-                        writer.write_unsorted(output, &buf[location])?;
-                        written = true;
-                    }
-                }
+                Ok((i, buf, index)) => window.insert(i, buf, index, Instant::now()),
                 Err(RecvTimeoutError::Timeout) => {}
                 Err(RecvTimeoutError::Disconnected) => disconnected = true,
             }
@@ -962,10 +984,15 @@ impl App {
         result
     }
 
+    /// Returns whether text that is not a record is shown.
+    fn allow_unparsed_data(&self) -> bool {
+        self.options.filter.is_empty() && self.options.input_format.is_none()
+    }
+
     fn new_segment_processor<'a>(&'a self, parser: &'a Parser) -> impl SegmentProcess + 'a {
         let options = SegmentProcessorOptions {
             allow_prefix: self.options.allow_prefix,
-            allow_unparsed_data: self.options.filter.is_empty() && self.options.input_format.is_none(),
+            allow_unparsed_data: self.allow_unparsed_data(),
             delimiter: self.options.delimiter.clone(),
             input_format: self.options.input_format,
             output_delimiter: self.options.output_delimiter.clone(),
@@ -1395,6 +1422,8 @@ impl<T: FnMut(&Record, Range<usize>)> RecordObserver for T {
 struct TimestampIndex {
     block: usize,
     lines: Vec<TimestampIndexLine>,
+    /// The part of a log entry too large to be read at once that the block holds, if it holds one.
+    part: Option<PartialPlacement>,
 }
 
 impl TimestampIndex {
@@ -1402,6 +1431,7 @@ impl TimestampIndex {
         Self {
             block,
             lines: Vec::new(),
+            part: None,
         }
     }
 }
