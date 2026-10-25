@@ -206,10 +206,17 @@ fn test_merge_window_holds_entries_while_split_entry_is_open() {
 }
 
 #[rstest]
-#[case::awaited(false, INTERVAL - Duration::from_millis(1), &[])]
-#[case::by_next_block(true, Duration::ZERO, &["|"])]
-#[case::when_late(false, INTERVAL, &["|"])]
-fn test_merge_window_ends_split_entry(#[case] next_block: bool, #[case] elapsed: Duration, #[case] expected: &[&str]) {
+#[case::awaited(false, None, INTERVAL - Duration::from_millis(1), &[])]
+#[case::by_next_block(true, None, Duration::ZERO, &["|"])]
+#[case::late_with_nothing_else_due(false, None, INTERVAL * 10, &[])]
+#[case::late_before_other_input_is_due(false, Some(Duration::from_millis(50)), INTERVAL, &[])]
+#[case::late_when_other_input_is_due(false, Some(Duration::ZERO), INTERVAL, &["|", "  2"])]
+fn test_merge_window_ends_split_entry(
+    #[case] next_block: bool,
+    #[case] other_input: Option<Duration>,
+    #[case] elapsed: Duration,
+    #[case] expected: &[&str],
+) {
     let mut window = window(usize::MAX);
     let now = Instant::now();
     insert(&mut window, part(0, "  xx", PartialPlacement::First), now);
@@ -217,8 +224,32 @@ fn test_merge_window_ends_split_entry(#[case] next_block: bool, #[case] elapsed:
     if next_block {
         insert(&mut window, block(1, &[2]), now);
     }
+    if let Some(received) = other_input {
+        let (buf, index) = block(0, &[2]);
+        window.insert(1, buf, index, now + received);
+    }
 
     assert_eq!(drain(&mut window, now + elapsed, false), expected);
+}
+
+#[test]
+fn test_merge_window_wait_while_split_entry_is_open() {
+    let mut window = window(usize::MAX);
+    let now = Instant::now();
+    insert(&mut window, part(0, "  xx", PartialPlacement::First), now);
+    assert_eq!(drain(&mut window, now, false), ["  xx"]);
+
+    // With nothing else to be written, the rest is waited for until something comes.
+    assert_eq!(window.wait(now + Duration::from_millis(30)), Duration::MAX);
+    assert_eq!(window.wait(now + INTERVAL * 2), Duration::MAX);
+
+    // Otherwise until the entry of another input is due.
+    let (buf, index) = block(0, &[1]);
+    window.insert(1, buf, index, now + INTERVAL);
+    assert_eq!(
+        window.wait(now + INTERVAL + Duration::from_millis(30)),
+        Duration::from_millis(70)
+    );
 }
 
 #[test]
@@ -227,19 +258,39 @@ fn test_merge_window_gives_out_rest_of_split_entry_ended_early() {
     let now = Instant::now();
     insert(&mut window, part(0, "  xx", PartialPlacement::First), now);
     assert_eq!(drain(&mut window, now, false), ["  xx"]);
+    let (buf, index) = block(0, &[1]);
+    window.insert(1, buf, index, now);
     let later = now + INTERVAL;
-    assert_eq!(drain(&mut window, later, false), ["|"]);
+    assert_eq!(drain(&mut window, later, false), ["|", "  1"]);
 
     // The rest is given out as it comes, and held together again until it ends.
     insert(&mut window, part(1, "yy", PartialPlacement::Next), later);
     assert_eq!(drain(&mut window, later, false), ["yy"]);
-    let (buf, index) = block(0, &[1]);
+    let (buf, index) = block(1, &[2]);
     window.insert(1, buf, index, now);
     assert_eq!(drain(&mut window, later, false), Vec::<String>::new());
 
     insert(&mut window, part(2, "zz", PartialPlacement::Last), later);
-    assert_eq!(drain(&mut window, later, false), ["zz", "  1"]);
+    assert_eq!(drain(&mut window, later, false), ["zz", "  2"]);
     assert!(window.late.is_empty());
+}
+
+#[test]
+fn test_merge_window_ends_split_entry_when_rest_of_split_entry_ended_early_comes() {
+    let mut window = window(usize::MAX);
+    let now = Instant::now();
+    insert(&mut window, part(0, "  xx", PartialPlacement::First), now);
+    assert_eq!(drain(&mut window, now, false), ["  xx"]);
+    let (buf, index) = part(0, "  aa", PartialPlacement::First);
+    window.insert(1, buf, index, now);
+    let later = now + INTERVAL;
+    assert_eq!(drain(&mut window, later, false), ["|", "  aa"]);
+
+    // The rest of the entry ended early is due as it comes, so the open entry is ended when late.
+    insert(&mut window, part(1, "yy", PartialPlacement::Next), later);
+    assert_eq!(drain(&mut window, later, false), Vec::<String>::new());
+    assert_eq!(window.wait(later), INTERVAL);
+    assert_eq!(drain(&mut window, later + INTERVAL, false), ["|", "yy"]);
 }
 
 #[test]
@@ -248,11 +299,13 @@ fn test_merge_window_forgets_split_entry_when_input_moves_on() {
     let now = Instant::now();
     insert(&mut window, part(0, "  xx", PartialPlacement::First), now);
     assert_eq!(drain(&mut window, now, false), ["  xx"]);
+    let (buf, index) = block(0, &[1]);
+    window.insert(1, buf, index, now);
     let later = now + INTERVAL;
-    assert_eq!(drain(&mut window, later, false), ["|"]);
+    assert_eq!(drain(&mut window, later, false), ["|", "  1"]);
 
-    insert(&mut window, block(1, &[1]), later);
-    assert_eq!(drain(&mut window, later, true), ["  1"]);
+    insert(&mut window, block(1, &[2]), later);
+    assert_eq!(drain(&mut window, later, true), ["  2"]);
     assert!(window.late.is_empty());
 }
 
