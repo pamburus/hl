@@ -527,6 +527,39 @@ fn test_incomplete_segment() {
     );
 }
 
+#[rstest]
+#[case::filter(
+    options().with_filter(Filter { level: Some(Level::Error), ..Default::default() }.into()),
+    "2024-01-25 18:10:20.435 |ERR| m1\n"
+)]
+#[case::input_format(
+    Options { input_format: Some(InputFormat::Json), delimiter: Delimiter::Json, ..options() },
+    "2024-01-25 18:10:20.435 |ERR| m1\n2024-01-25 18:10:21.764 |INF| m2\n"
+)]
+fn test_incomplete_segment_hidden(#[case] opts: Options, #[case] expected: &str) {
+    let input = input(format!(
+        concat!(
+            r#"{{"level":"error","ts":"2024-01-25T19:10:20.435369+01:00","msg":"m1"}}"#,
+            "\n",
+            "plain text line\n",
+            "{}\n",
+            r#"{{"level":"info","ts":"2024-01-25T19:10:21.764733+01:00","msg":"m2"}}"#,
+            "\n",
+        ),
+        "x".repeat(200),
+    ));
+
+    let mut output = Vec::new();
+    let app = App::new(Options {
+        buffer_size: NonZeroUsize::new(32).unwrap(),
+        max_message_size: NonZeroUsize::new(128).unwrap(),
+        concurrency: 2,
+        ..opts
+    });
+    app.run(vec![input], &mut output).unwrap();
+    assert_eq!(std::str::from_utf8(&output).unwrap(), expected);
+}
+
 #[test]
 fn test_incomplete_segment_sorted() {
     let data = concat!(

@@ -345,6 +345,7 @@ impl App {
             for (rxi, txo) in izip!(rxi, txo) {
                 scope.spawn(closure!(ref bfo, ref parser, ref sfi, ref descriptors, ref input_badges, |_| {
                     let mut processor = self.new_segment_processor(parser);
+                    let show_unparsed = self.allow_unparsed_data();
                     for (i, offset, segment) in rxi.iter() {
                         let prefix = input_badges.as_ref().map(|b|b[i].as_str()).unwrap_or("");
                         match segment {
@@ -358,6 +359,15 @@ impl App {
                                 };
                             }
                             Segment::Incomplete(segment, _) => {
+                                // A log entry too large to be read at once is shown as is, part by part,
+                                // like other text that is not a record. Every segment is sent, even
+                                // with nothing to show, as the writer takes them in order.
+                                let segment = if show_unparsed {
+                                    segment
+                                } else {
+                                    sfi.recycle(segment);
+                                    SegmentBuf::from(b"")
+                                };
                                 if txo.send((i, segment)).is_err() {
                                     break;
                                 }
