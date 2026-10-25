@@ -2437,9 +2437,11 @@ fn test_merge_segments_flushes_window_when_inputs_close() {
     assert_eq!(String::from_utf8(output).unwrap(), "SShello\n");
 }
 
-#[test]
-fn test_merge_segments_flushes_output_before_waiting() {
-    // The input channel stays open, so the record can reach the output only
+#[rstest]
+#[case::record(true, b"SShello\0")]
+#[case::unsorted_text(false, b"  hello\0")]
+fn test_merge_segments_flushes_output_before_waiting(#[case] record: bool, #[case] expected: &[u8]) {
+    // The input channel stays open, so the entry can reach the output only
     // through a flush made before waiting for more input.
     let app = App::new(Options {
         sync_interval: Duration::ZERO,
@@ -2451,13 +2453,13 @@ fn test_merge_segments_flushes_output_before_waiting() {
     let (txf, rxf) = channel::unbounded();
 
     let buf = b"  hello".to_vec();
-    let index = TimestampIndex {
-        block: 0,
-        lines: vec![TimestampIndexLine {
+    let mut index = TimestampIndex::new(0);
+    if record {
+        index.lines.push(TimestampIndexLine {
             location: 0..buf.len(),
             ts: ts(100, 0),
-        }],
-    };
+        });
+    }
     txo.send((0, buf, index)).unwrap();
 
     let merger = std::thread::spawn(move || {
@@ -2471,7 +2473,7 @@ fn test_merge_segments_flushes_output_before_waiting() {
     let flushed = rxf
         .recv_timeout(Duration::from_secs(10))
         .expect("output was not flushed while inputs were open");
-    assert_eq!(flushed, b"SShello\0");
+    assert_eq!(flushed, expected);
 
     drop(txo);
     merger.join().unwrap().unwrap();
@@ -2532,35 +2534,45 @@ fn test_merge_segments_multiple_lines_per_segment() {
 }
 
 #[test]
-fn test_merge_segments_gap_with_timestamp() {
-    // Gap text before an indexed line gets the next indexed line's timestamp
-    // and is inserted into the window.
+fn test_merge_segments_text_stays_with_record_before_it() {
+    // Text after a record, such as a stack trace, is sorted by that record's
+    // timestamp, so a record of another input does not come in between.
     let app = App::new(options());
     let badges = test_badges(2);
     let (txo, rxo) = channel::bounded(10);
 
-    // Buffer layout: "gap-text\n  line-A"
-    // gap is 0..8 ("gap-text"), delimiter at 8..9, indexed line at 9..17 ("  line-A")
-    let buf = b"gap-text\n  line-A".to_vec();
-    let index = TimestampIndex {
+    // Buffer layout: "  line-A\n  trace\n  line-C"
+    let buf0 = b"  line-A\n  trace\n  line-C".to_vec();
+    let index0 = TimestampIndex {
+        block: 0,
+        lines: vec![
+            TimestampIndexLine {
+                location: 0..8, // "  line-A"
+                ts: ts(100, 0),
+            },
+            TimestampIndexLine {
+                location: 17..25, // "  line-C"
+                ts: ts(300, 0),
+            },
+        ],
+    };
+    let buf1 = b"  line-B".to_vec();
+    let index1 = TimestampIndex {
         block: 0,
         lines: vec![TimestampIndexLine {
-            location: 9..17, // "  line-A"
-            ts: ts(100, 0),
+            location: 0..8,
+            ts: ts(200, 0),
         }],
     };
-    txo.send((0, buf, index)).unwrap();
+    txo.send((0, buf0, index0)).unwrap();
+    txo.send((1, buf1, index1)).unwrap();
     drop(txo);
 
     let mut output = Vec::new();
     app.merge_segments(&badges, rxo, &mut output, 1).unwrap();
 
     let result = String::from_utf8(output).unwrap();
-    // Gap "gap-text" gets ts=100 from the next indexed line, inserted into window.
-    // Both gap and line have ts=100, so they sort by offset: gap(0) before line(9).
-    // Gap goes through window flush: sync + buf[0..8][2..] + delim = "SS" + "p-text" + "\n"
-    // Line goes through window flush: sync + buf[9..17][2..] + delim = "SS" + "line-A" + "\n"
-    assert_eq!(result, "SSp-text\nSSline-A\n");
+    assert_eq!(result, "SSline-A\nSStrace\nSSline-B\nSSline-C\n");
 }
 
 #[test]
@@ -2590,8 +2602,8 @@ fn test_merge_segments_gap_without_timestamp_direct_output() {
 
 #[test]
 fn test_merge_segments_gap_trimming_no_trailing_delimiter() {
-    // When the gap region doesn't end with the output delimiter,
-    // trimmed == end, so start < trimmed may still hold.
+    // Text with no record before it is written as is, ended by the output
+    // delimiter even if it does not end with one.
     let app = App::new(options());
     let badges = test_badges(2);
     let (txo, rxo) = channel::bounded(10);
@@ -2613,10 +2625,7 @@ fn test_merge_segments_gap_trimming_no_trailing_delimiter() {
     app.merge_segments(&badges, rxo, &mut output, 1).unwrap();
 
     let result = String::from_utf8(output).unwrap();
-    // Gap "  gap-no-delim" doesn't end with \n, so trimmed=14=end.
-    // start(0) < trimmed(14), ts is Some(100), so inserted into window.
-    // Output: sync + gap[2..] + delim, sync + line[2..] + delim
-    assert_eq!(result, "SSgap-no-delim\nSSline-A\n");
+    assert_eq!(result, "  gap-no-delim\nSSline-A\n");
 }
 
 #[test]
@@ -2656,7 +2665,7 @@ fn test_merge_segments_empty_gap_skipped() {
 
 #[test]
 fn test_merge_segments_trailing_gap_with_source_history() {
-    // Trailing gap (after last indexed line) uses source_last_ts as fallback
+    // Trailing gap (after last indexed line) is sorted with the record before it
     let app = App::new(options());
     let badges = test_badges(2);
     let (txo, rxo) = channel::bounded(10);
@@ -2690,11 +2699,8 @@ fn test_merge_segments_trailing_gap_with_source_history() {
     app.merge_segments(&badges, rxo, &mut output, 1).unwrap();
 
     let result = String::from_utf8(output).unwrap();
-    // line-A (ts=100) flushed first, then segment 2 arrives.
-    // Trailing gap uses source_last_ts from segment 1 (ts=100) since gap timestamps
-    // are computed before indexed lines update source_last_ts.
-    // So: trailing-gap(ts=100) sorts before line-B(ts=200).
-    assert_eq!(result, "SSline-A\nSStrailing-gap\nSSline-B\n");
+    // The trailing gap is sorted by line-B (ts=200), the record right before it.
+    assert_eq!(result, "SSline-A\nSSline-B\nSStrailing-gap\n");
 }
 
 #[test]
