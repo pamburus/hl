@@ -577,12 +577,6 @@ impl SegmentBuf {
         self.size
     }
 
-    /// Transforms the SegmentBuf into inner Vec<u8>.
-    #[inline]
-    pub fn into_inner(self) -> Vec<u8> {
-        self.buf
-    }
-
     #[inline]
     fn new(capacity: usize) -> Self {
         let buf = vec![0; capacity];
