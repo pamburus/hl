@@ -70,7 +70,9 @@ impl<'a> MergeWindow<'a> {
                 return Some(self.take_part(i, block, entry, now));
             }
             let passed = self.order.passed(i, block);
-            if all || passed || flush_wait(since, now, self.sync_interval).is_zero() {
+            // A late rest is waited for until something else is due, as nothing can be written before it.
+            let late = flush_wait(since, now, self.sync_interval).is_zero() && self.other_wait(now).is_zero();
+            if all || passed || late {
                 // The rest of the entry will not come, or comes too late, so the entry is ended as it is.
                 self.open = None;
                 if !all && !passed {
@@ -89,8 +91,7 @@ impl<'a> MergeWindow<'a> {
 
         // Only the first entry is ever removed from the sorted entries,
         // which keeps the removal cheap in this common path.
-        let (key, first) = self.entries.first_key_value()?;
-        if key.ts.is_some() && !all && self.mem_usage < self.mem_limit && !self.wait_for(first, now).is_zero() {
+        if !all && !self.first_wait(now)?.is_zero() {
             return None;
         }
         let (key, entry) = self.entries.pop_first()?;
@@ -104,12 +105,27 @@ impl<'a> MergeWindow<'a> {
     /// Returns how long, as of `now`, until something is due.
     pub fn wait(&self, now: Instant) -> Duration {
         if let Some((_, _, since)) = self.open {
-            return flush_wait(since, now, self.sync_interval);
+            return flush_wait(since, now, self.sync_interval).max(self.other_wait(now));
         }
-        self.entries
-            .first_key_value()
-            .map(|(_, first)| self.wait_for(first, now))
-            .unwrap_or(Duration::MAX)
+        self.first_wait(now).unwrap_or(Duration::MAX)
+    }
+
+    /// Returns how long, as of `now`, until something other than the rest of the open split entry is due:
+    /// the rest of a split entry ended before, which is due as soon as it comes, or the first of the sorted entries.
+    fn other_wait(&self, now: Instant) -> Duration {
+        if self.late.iter().any(|&(i, block)| self.has_part(i, block)) {
+            return Duration::ZERO;
+        }
+        self.first_wait(now).unwrap_or(Duration::MAX)
+    }
+
+    /// Returns how long, as of `now`, until the first of the sorted entries is due, if there are any.
+    fn first_wait(&self, now: Instant) -> Option<Duration> {
+        let (key, first) = self.entries.first_key_value()?;
+        if key.ts.is_none() || self.mem_usage >= self.mem_limit {
+            return Some(Duration::ZERO);
+        }
+        Some(self.wait_for(first, now))
     }
 
     /// Adds the entries of the next block of input `i`.
@@ -175,11 +191,18 @@ impl<'a> MergeWindow<'a> {
 
     /// Removes and returns the part of a split entry in block `block` of input `i`, if it came.
     fn pop_part(&mut self, i: usize, block: usize) -> Option<Entry> {
-        let parts = self.parts.get_mut(i)?;
-        if parts.front()?.0 != block {
+        if !self.has_part(i, block) {
             return None;
         }
-        parts.pop_front().map(|(_, entry)| entry)
+        self.parts[i].pop_front().map(|(_, entry)| entry)
+    }
+
+    /// Returns whether the part of a split entry in block `block` of input `i` came.
+    fn has_part(&self, i: usize, block: usize) -> bool {
+        self.parts
+            .get(i)
+            .and_then(|parts| parts.front())
+            .is_some_and(|&(b, _)| b == block)
     }
 
     fn push_part(&mut self, i: usize, block: usize, entry: Entry) {

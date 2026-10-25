@@ -1238,6 +1238,8 @@ impl RecordObserver for RecordIgnorer {
 /// For the same reason it also keeps the unterminated tail of the stream: end of
 /// file in the middle of a line usually means the writer has not finished it
 /// yet, so the tail is held back and prepended to the data of the next scan.
+/// A tail too long to be held is a part of a log entry too large to be read at
+/// once. It is passed on, and the entry is left open to be continued by the next scan.
 ///
 /// Each segment is also sent with its byte offset in the stream, which keeps
 /// counting across scans until [`BlockScanner::start`] starts a new stream.
@@ -1248,6 +1250,7 @@ struct BlockScanner<'a, D: Delimit> {
     block: usize,
     offset: u64,
     tail: Vec<u8>,
+    open: bool,
 }
 
 impl<'a, D: Delimit> BlockScanner<'a, D> {
@@ -1259,6 +1262,7 @@ impl<'a, D: Delimit> BlockScanner<'a, D> {
             block: 0,
             offset: 0,
             tail: Vec::new(),
+            open: false,
         }
     }
 
@@ -1272,8 +1276,9 @@ impl<'a, D: Delimit> BlockScanner<'a, D> {
     /// Scans the held tail followed by `stream` up to its end.
     ///
     /// With `hold_tail`, the data after the last delimiter is held back for the
-    /// next scan instead of being sent as a complete segment. Without it, all
-    /// data is sent, which also flushes a tail held by a previous scan.
+    /// next scan instead of being sent as a complete segment, and a log entry too
+    /// large to be read at once is left open. Without it, all data is sent, which
+    /// also flushes a tail held by a previous scan and ends an entry left open.
     fn scan(
         &mut self,
         stream: &mut dyn Read,
@@ -1294,38 +1299,55 @@ impl<'a, D: Delimit> BlockScanner<'a, D> {
         } else {
             chained.insert(Cursor::new(tail).chain(stream))
         };
-        Self::send(
-            self.scanner,
-            self.max_segment_size,
-            (&mut self.block, &mut self.offset),
-            reader,
-            i,
-            txi,
-        )?;
+        let items = self
+            .scanner
+            .items(reader)
+            .continuing(self.open)
+            .open_ended(hold_tail)
+            .with_max_segment_size(self.max_segment_size);
+        let mut position = (&mut self.block, &mut self.offset);
+        let mut open = self.open;
+        for item in items {
+            let item = item?;
+            open = matches!(
+                item,
+                Segment::Incomplete(_, PartialPlacement::First | PartialPlacement::Next)
+            );
+            if !Self::send(&mut position, item, i, txi) {
+                break;
+            }
+        }
+        if open && !hold_tail {
+            // The entry ended right after a whole part, which the scanner does not mark as the last one.
+            Self::send(
+                &mut position,
+                Segment::Incomplete(b"".into(), PartialPlacement::Last),
+                i,
+                txi,
+            );
+            open = false;
+        }
+        self.open = open;
         if let Some(reader) = holding {
             self.tail = reader.into_tail();
         }
         Ok(())
     }
 
+    /// Sends `segment` at the block number and offset of `position`, and advances them if it was received.
     fn send(
-        scanner: &Scanner<D>,
-        max_segment_size: usize,
-        (block, offset): (&mut usize, &mut u64),
-        stream: &mut dyn Read,
+        (block, offset): &mut (&mut usize, &mut u64),
+        segment: Segment,
         i: usize,
         txi: &Sender<(usize, usize, u64, Segment)>,
-    ) -> Result<()> {
-        for item in scanner.items(stream).with_max_segment_size(max_segment_size) {
-            let item = item?;
-            let len = item.data().len();
-            if txi.send((i, *block, *offset, item)).is_err() {
-                break;
-            }
-            *block += 1;
-            *offset += len as u64;
+    ) -> bool {
+        let len = segment.data().len();
+        if txi.send((i, **block, **offset, segment)).is_err() {
+            return false;
         }
-        Ok(())
+        **block += 1;
+        **offset += len as u64;
+        true
     }
 }
 

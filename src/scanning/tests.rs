@@ -376,6 +376,41 @@ fn test_jumbo_smart_new_line_2() {
     )
 }
 
+#[rstest]
+#[case::open_inside_token(false, b"abcdefg", &[Segment::Incomplete(b"abc".into(), PartialPlacement::First), Segment::Incomplete(b"def".into(), PartialPlacement::Next), Segment::Incomplete(b"g".into(), PartialPlacement::Next)])]
+#[case::open_after_token(false, b"abcdef\n", &[Segment::Complete(b"abcdef\n".into())])]
+#[case::continuing_to_delimiter(true, b"ab\ncd\n", &[Segment::Incomplete(b"ab\n".into(), PartialPlacement::Last), Segment::Complete(b"cd\n".into())])]
+#[case::continuing_open(true, b"abcdef", &[Segment::Incomplete(b"abc".into(), PartialPlacement::Next), Segment::Incomplete(b"def".into(), PartialPlacement::Next)])]
+fn test_jumbo_open_ended(#[case] continuing: bool, #[case] input: &[u8], #[case] expected: &[Segment]) {
+    let sf = Arc::new(SegmentBufFactory::new(3));
+    let scanner = Scanner::new(sf.clone(), b'\n');
+    let mut data = Cursor::new(input);
+    let items = scanner
+        .items(&mut data)
+        .continuing(continuing)
+        .open_ended(true)
+        .with_max_segment_size(100);
+    let tokens = items.collect::<Result<Vec<_>>>().unwrap();
+    assert_eq!(tokens, expected);
+}
+
+#[test]
+fn test_jumbo_not_open_ended() {
+    let sf = Arc::new(SegmentBufFactory::new(3));
+    let scanner = Scanner::new(sf.clone(), b'\n');
+    let mut data = Cursor::new(b"abcdefg");
+    let items = scanner.items(&mut data).continuing(true).with_max_segment_size(100);
+    let tokens = items.collect::<Result<Vec<_>>>().unwrap();
+    assert_eq!(
+        tokens,
+        vec![
+            Segment::Incomplete(b"abc".into(), PartialPlacement::Next),
+            Segment::Incomplete(b"def".into(), PartialPlacement::Next),
+            Segment::Incomplete(b"g".into(), PartialPlacement::Last),
+        ]
+    );
+}
+
 #[test]
 fn test_buf_factory_recycle() {
     let factory = BufFactory::new(10);

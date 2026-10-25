@@ -152,17 +152,12 @@ fn merge(sync_interval: Duration, messages: Vec<Processed>) -> String {
     String::from_utf8(output).unwrap()
 }
 
-/// Scans each chunk as a separate follow mode scan and returns the text of the
-/// segments sent after each of them.
-fn scan_chunks(segment_size: usize, chunks: &[(&[u8], bool)]) -> Vec<Vec<String>> {
+/// Scans each chunk as a separate follow mode scan and returns the segments sent after each of them.
+fn scan_segments(segment_size: usize, chunks: &[(&[u8], bool)]) -> Vec<Vec<Segment>> {
     let sfi = Arc::new(SegmentBufFactory::new(segment_size));
     let scanner = Scanner::new(sfi, Delimiter::default());
     let (txi, rxi) = channel::unbounded();
     let mut blocks = BlockScanner::new(&scanner, Delimiter::default(), segment_size);
-
-    let text = |segment: Segment| match segment {
-        Segment::Complete(buf) | Segment::Incomplete(buf, _) => String::from_utf8_lossy(buf.data()).into_owned(),
-    };
 
     chunks
         .iter()
@@ -170,8 +165,21 @@ fn scan_chunks(segment_size: usize, chunks: &[(&[u8], bool)]) -> Vec<Vec<String>
             blocks
                 .scan(&mut Cursor::new(chunk.to_vec()), 0, &txi, hold_tail)
                 .unwrap();
-            rxi.try_iter().map(|(_, _, _, segment)| text(segment)).collect_vec()
+            rxi.try_iter().map(|(_, _, _, segment)| segment).collect_vec()
         })
+        .collect()
+}
+
+/// Scans each chunk as a separate follow mode scan and returns the text of the
+/// segments sent after each of them.
+fn scan_chunks(segment_size: usize, chunks: &[(&[u8], bool)]) -> Vec<Vec<String>> {
+    let text = |segment: Segment| match segment {
+        Segment::Complete(buf) | Segment::Incomplete(buf, _) => String::from_utf8_lossy(buf.data()).into_owned(),
+    };
+
+    scan_segments(segment_size, chunks)
+        .into_iter()
+        .map(|segments| segments.into_iter().map(text).collect())
         .collect()
 }
 
@@ -2932,6 +2940,19 @@ fn test_merge_segments_long_entry_ended_when_rest_is_late() {
 }
 
 #[test]
+fn test_merge_segments_long_entry_kept_when_rest_is_late_and_nothing_else_is_due() {
+    // With a zero sync interval, the rest of the entry is late at once,
+    // but with nothing else to be written in between, it is still waited for.
+    let messages = vec![
+        record_block(0, 0, "  rec-a", 100),
+        part_block(0, 1, "  xx", PartialPlacement::First),
+        part_block(0, 2, "yy", PartialPlacement::Next),
+        part_block(0, 3, "zz", PartialPlacement::Last),
+    ];
+    assert_eq!(merge(Duration::ZERO, messages), "SSrec-a\nSSxxyyzz\n");
+}
+
+#[test]
 fn test_follow_shows_long_entry_between_records() {
     // The entry is larger than the maximum message size, so it is read in several parts.
     let app = App::new(Options {
@@ -3061,6 +3082,77 @@ fn test_block_scanner_passes_overlong_tail() {
 
     assert_eq!(scanned[0].concat(), "abcdefgh");
     assert!(scanned[1].is_empty());
+}
+
+#[test]
+fn test_block_scanner_continues_overlong_line_across_scans() {
+    // A line too long to be held back is passed on as it is written, but it is
+    // left open, so that the next scan continues it instead of starting a new line.
+    use PartialPlacement::*;
+
+    let scanned = scan_segments(4, &[(b"x1\nabcdefgh", true), (b"ijklmn", true), (b"op\ny1\n", true)]);
+
+    assert_eq!(
+        scanned,
+        vec![
+            vec![
+                Segment::Complete(b"x1\n".into()),
+                Segment::Incomplete(b"abcd".into(), First),
+                Segment::Incomplete(b"efgh".into(), Next),
+            ],
+            vec![
+                Segment::Incomplete(b"ijkl".into(), Next),
+                Segment::Incomplete(b"mn".into(), Next),
+            ],
+            vec![
+                Segment::Incomplete(b"op\n".into(), Last),
+                Segment::Complete(b"y1\n".into()),
+            ],
+        ]
+    );
+}
+
+#[test]
+fn test_block_scanner_ends_open_overlong_line_on_flush() {
+    // A short continuation is held back like any unterminated tail, and when the
+    // input is replaced or ends, it is sent as the last part of the open line.
+    use PartialPlacement::*;
+
+    let scanned = scan_segments(4, &[(b"abcdefgh", true), (b"ij", true), (b"", false), (b"x1\n", true)]);
+
+    assert_eq!(
+        scanned,
+        vec![
+            vec![
+                Segment::Incomplete(b"abcd".into(), First),
+                Segment::Incomplete(b"efgh".into(), Next),
+            ],
+            vec![],
+            vec![Segment::Incomplete(b"ij".into(), Last)],
+            vec![Segment::Complete(b"x1\n".into())],
+        ]
+    );
+}
+
+#[test]
+fn test_block_scanner_ends_open_overlong_line_on_flush_after_whole_parts() {
+    // The open line ends right after a whole part, with nothing held back, so when the input
+    // is replaced or ends, an empty last part is sent to end it.
+    use PartialPlacement::*;
+
+    let scanned = scan_segments(4, &[(b"abcdefgh", true), (b"", false), (b"x1\n", true)]);
+
+    assert_eq!(
+        scanned,
+        vec![
+            vec![
+                Segment::Incomplete(b"abcd".into(), First),
+                Segment::Incomplete(b"efgh".into(), Next),
+            ],
+            vec![Segment::Incomplete(b"".into(), Last)],
+            vec![Segment::Complete(b"x1\n".into())],
+        ]
+    );
 }
 
 #[test]
