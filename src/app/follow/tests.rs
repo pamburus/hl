@@ -98,13 +98,40 @@ fn test_merge_window_sorts_text_only_after_a_record() {
     let mut window = window(usize::MAX);
     let now = Instant::now();
 
-    assert_eq!(
-        insert(&mut window, text(0, "before\n"), now).as_deref(),
-        Some("before\n")
-    );
+    assert_eq!(insert(&mut window, text(0, "before\n"), now).as_deref(), Some("before"));
     assert_eq!(insert(&mut window, block(1, &[1]), now), None);
     assert_eq!(insert(&mut window, text(2, "after\n"), now), None);
     assert_eq!(drain(&mut window, now, true), ["  1", "after"]);
+}
+
+#[rstest]
+#[case::after_first_record(&[], "  1\ntrace\n", &["  1", "trace"])]
+#[case::between_records(&[5], "  9\ntrace\n  2\n", &["  2", "  5", "  9", "trace"])]
+#[case::out_of_order(&[5], "  3\ntrace\n", &["  3", "trace", "  5"])]
+fn test_merge_window_sorts_text_with_record_before_it(
+    #[case] before: &[i64],
+    #[case] last: &str,
+    #[case] expected: &[&str],
+) {
+    let mut window = window(usize::MAX);
+    let now = Instant::now();
+    insert(&mut window, block(0, before), now);
+
+    // Records in `last` are the lines starting with spaces, timestamped by their value.
+    let mut index = TimestampIndex::new(1);
+    let mut start = 0;
+    for line in last.split_inclusive('\n') {
+        let text = line.trim_end_matches('\n');
+        if let Some(sec) = text.strip_prefix("  ") {
+            index.lines.push(TimestampIndexLine {
+                location: start..start + text.len(),
+                ts: ts(sec.parse().unwrap()),
+            });
+        }
+        start += line.len();
+    }
+    assert_eq!(insert(&mut window, (last.as_bytes().to_vec(), index), now), None);
+    assert_eq!(drain(&mut window, now, true), expected);
 }
 
 #[test]

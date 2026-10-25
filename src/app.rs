@@ -788,10 +788,10 @@ impl App {
         let mut window = MergeWindow::new(delim, mem_limit, self.options.sync_interval);
         let mut writer = MergeWriter::new(&badges.si, delim);
         let mut disconnected = false;
+        let mut written = false;
 
         loop {
             let now = Instant::now();
-            let mut written = false;
             // Once all inputs are closed nothing can arrive to be sorted in
             // between, so the rest of the window is flushed right away.
             while let Some((key, entry)) = window.pop_due(now, disconnected) {
@@ -803,6 +803,7 @@ impl App {
             // another delimiter are flushed here, before waiting for more input.
             if written {
                 output.flush()?;
+                written = false;
             }
 
             if disconnected {
@@ -812,7 +813,8 @@ impl App {
             match rxo.recv_timeout(window.wait(now)) {
                 Ok((i, buf, index)) => {
                     if let Some((buf, location)) = window.insert(i, buf, index, Instant::now()) {
-                        output.write_all(&buf[location])?;
+                        writer.write_unsorted(output, &buf[location])?;
+                        written = true;
                     }
                 }
                 Err(RecvTimeoutError::Timeout) => {}

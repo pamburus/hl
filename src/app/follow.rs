@@ -2,7 +2,6 @@
 
 // std imports
 use std::{
-    cmp::max,
     collections::{BTreeMap, HashMap},
     ops::Range,
     rc::Rc,
@@ -18,7 +17,8 @@ use crate::{error::*, index::Timestamp};
 /// Holds the entries received from workers until they are due, and gives them out ordered by time.
 pub(super) struct MergeWindow<'a> {
     entries: BTreeMap<Key, Entry>,
-    source_last_ts: HashMap<usize, Timestamp>,
+    /// The timestamp of the last record of each input.
+    last_ts: HashMap<usize, Timestamp>,
     mem_usage: usize,
     mem_limit: usize,
     sync_interval: Duration,
@@ -29,7 +29,7 @@ impl<'a> MergeWindow<'a> {
     pub fn new(delim: &'a [u8], mem_limit: usize, sync_interval: Duration) -> Self {
         Self {
             entries: BTreeMap::new(),
-            source_last_ts: HashMap::new(),
+            last_ts: HashMap::new(),
             mem_usage: 0,
             mem_limit,
             sync_interval,
@@ -39,8 +39,11 @@ impl<'a> MergeWindow<'a> {
 
     /// Adds the entries of a block of input `i` processed into `buf`.
     ///
-    /// Returns the trailing part of the block that has no timestamp to be sorted by,
-    /// as no record of the input came before it, to be written right away.
+    /// Text that is not a record is sorted together with the record before it in its input,
+    /// so that, for example, a stack trace stays right after the record it belongs to.
+    ///
+    /// Returns the leading part of the block that has no record before it to be sorted with,
+    /// as no record of the input came yet, to be written right away.
     pub fn insert(
         &mut self,
         i: usize,
@@ -48,58 +51,24 @@ impl<'a> MergeWindow<'a> {
         index: TimestampIndex,
         now: Instant,
     ) -> Option<(Rc<Vec<u8>>, Range<usize>)> {
-        let delim = self.delim;
-        let delim_len = delim.len();
         let buf = Rc::new(buf);
+        let mut ts = self.last_ts.get(&i).copied();
+        let mut start = 0;
         let mut unsorted = None;
 
-        // Iterate over gaps between indexed records and insert them
-        // into the window with the timestamp of the next indexed
-        // record (or the last known timestamp for the source as
-        // fallback for the trailing gap) so they get sorted
-        // together with parsed records.
-        let gap_starts = std::iter::once(0usize).chain(index.lines.iter().map(|l| l.location.end + delim_len));
-        let gap_ends = index
-            .lines
-            .iter()
-            .map(|l| l.location.start)
-            .chain(std::iter::once(buf.len()));
-        let gap_timestamps = index
-            .lines
-            .iter()
-            .map(|l| Some(l.ts))
-            .chain(std::iter::once(self.source_last_ts.get(&i).copied()));
-
-        for ((start, end), ts) in gap_starts.zip(gap_ends).zip(gap_timestamps) {
-            if start >= end {
-                continue;
-            }
-            let trimmed = if end >= start + delim_len && buf[end - delim_len..end] == *delim {
-                end - delim_len
-            } else {
-                end
-            };
-            if start < trimmed {
-                if let Some(ts) = ts {
-                    self.push(
-                        Key::new(ts, i, index.block, start),
-                        Entry::new(&buf, start..trimmed, now),
-                    );
-                } else {
-                    unsorted = Some((buf.clone(), start..end));
-                }
-            }
-        }
-
-        // Insert indexed records into the window.
         for record in index.lines {
-            let ts = record.ts;
-            self.source_last_ts
-                .entry(i)
-                .and_modify(|prev| *prev = max(*prev, ts))
-                .or_insert(ts);
-            let key = Key::new(ts, i, index.block, record.location.start);
+            let text = self.push_text(ts, i, index.block, &buf, start..record.location.start, now);
+            unsorted = unsorted.or(text);
+            start = record.location.end + self.delim.len();
+            ts = Some(record.ts);
+            let key = Key::new(record.ts, i, index.block, record.location.start);
             self.push(key, Entry::new(&buf, record.location, now));
+        }
+        let text = self.push_text(ts, i, index.block, &buf, start..buf.len(), now);
+        unsorted = unsorted.or(text);
+
+        if let Some(ts) = ts {
+            self.last_ts.insert(i, ts);
         }
 
         unsorted
@@ -126,6 +95,37 @@ impl<'a> MergeWindow<'a> {
 
     fn wait_for(&self, entry: &Entry, now: Instant) -> Duration {
         flush_wait(entry.received, now, self.sync_interval)
+    }
+
+    /// Adds text at `location` in `buf`, sorted by `ts` of the record before it, if any.
+    ///
+    /// Returns the text if there is no such record.
+    fn push_text(
+        &mut self,
+        ts: Option<Timestamp>,
+        i: usize,
+        block: usize,
+        buf: &Rc<Vec<u8>>,
+        location: Range<usize>,
+        now: Instant,
+    ) -> Option<(Rc<Vec<u8>>, Range<usize>)> {
+        let Range { start, end } = location;
+        if start >= end {
+            return None;
+        }
+        let trimmed = if buf[start..end].ends_with(self.delim) {
+            end - self.delim.len()
+        } else {
+            end
+        };
+        if start >= trimmed {
+            return None;
+        }
+        let Some(ts) = ts else {
+            return Some((buf.clone(), start..trimmed));
+        };
+        self.push(Key::new(ts, i, block, start), Entry::new(buf, start..trimmed, now));
+        None
     }
 
     fn push(&mut self, key: Key, entry: Entry) {
@@ -210,6 +210,13 @@ impl<'a> MergeWriter<'a> {
         self.prev_ts = Some(ts);
         output.write_all(sync_indicator.as_bytes())?;
         output.write_all(&entry[self.si.width..])?;
+        output.write_all(self.delim)?;
+        Ok(())
+    }
+
+    /// Writes `text` that has no timestamp to be sorted by, as is.
+    pub fn write_unsorted(&mut self, output: &mut Output, text: &[u8]) -> Result<()> {
+        output.write_all(text)?;
         output.write_all(self.delim)?;
         Ok(())
     }
