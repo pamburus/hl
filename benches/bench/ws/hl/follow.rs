@@ -15,6 +15,7 @@ use criterion::{BatchSize, BenchmarkId, Criterion, Throughput};
 use super::{BencherExt, ND, hash};
 use hl::{
     App, Delimiter, FieldOptions, LinuxDateFormat, Options, Theme,
+    app::OutputFormat,
     input::{InputHolder, InputReference},
     settings::{AsciiMode, ExpansionMode, Formatting},
     timezone::Tz,
@@ -107,5 +108,6 @@ fn options() -> Options {
         ascii: AsciiMode::Off,
         expand: ExpansionMode::default(),
         output_delimiter: "\n".to_string(),
+        output_format: OutputFormat::Pretty,
     }
 }

@@ -111,6 +111,7 @@ pager = { path = "./crates/pager" }
 pest = "2"
 pest_derive = "2"
 proc-macro2 = "1"
+proptest = "1"
 quote = "1"
 rand = "0.10"
 regex = "1"
@@ -248,6 +249,7 @@ criterion.workspace = true
 fnv.workspace = true
 maplit.workspace = true
 mockall.workspace = true
+proptest.workspace = true
 rand.workspace = true
 regex.workspace = true
 rstest.workspace = true

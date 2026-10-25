@@ -28,24 +28,33 @@ use crate::{
     ExactIncludeExcludeKeyFilter, IncludeExcludeKeyFilter,
     appdirs::AppDirs,
     datefmt::{DateTimeFormat, DateTimeFormatter},
+    diagnostics::{self, DiagnosticSink, Diagnostics, LogSink, UnparsedKind},
     error::*,
     fileid::MetadataExt,
     filtering::{MatchOptions, NoNormalizing},
     fmtx::{Adjustment, Alignment, Padding, aligned},
     formatting::{
-        DynRecordWithSourceFormatter, Expansion, RawRecordFormatter, RecordFormatterBuilder, RecordWithSourceFormatter,
+        DropSink, DynRecordWithSourceFormatter, Expansion, RawRecordFormatter, RecordFormatterBuilder,
+        RecordWithSourceFormatter, UnparsedData,
+        structured::{JsonEncoder, LogfmtEncoder, StructuredRecordFormatterBuilder},
     },
     fsmon::{self, EventKind},
     help,
     index::{Indexer, IndexerSettings, Timestamp},
     input::{BlockEntry, Input, InputDescriptor, InputHolder, InputReference},
-    model::{Filter, Origin, Parser, ParserSettings, RawRecord, Record, RecordFilter, RecordWithSourceConstructor},
+    model::{
+        Filter, Origin, Parser, ParserSettings, RawRecord, Record, RecordFilter, RecordWithSource,
+        RecordWithSourceConstructor,
+    },
     query::Query,
     scanning::{
-        BufFactory, Delimit, Delimiter, Newline, PartialPlacement, Scanner, Search, SearchExt, Segment, SegmentBuf,
+        BufFactory, Delimit, Delimiter, PartialPlacement, Scanner, Search, SearchExt, Segment, SegmentBuf,
         SegmentBufFactory,
     },
-    settings::{AsciiMode, ExpansionMode, FieldShowOption, Fields, Formatting, InputInfo, ResolvedPunctuation},
+    settings::{
+        AsciiMode, ExpansionMode, FieldShowOption, Fields, Formatting, InputInfo, ResolvedPunctuation,
+        StructuredFormatting,
+    },
     theme::{Element, StylingPush, SyncIndicatorPack, Theme},
     themecfg,
     timezone::Tz,
@@ -99,6 +108,7 @@ pub struct Options {
     pub ascii: AsciiMode,
     pub expand: ExpansionMode,
     pub output_delimiter: String,
+    pub output_format: OutputFormat,
 }
 
 impl Options {
@@ -200,6 +210,18 @@ pub enum InputFormat {
     Logfmt,
 }
 
+/// Format of the output records.
+#[derive(Eq, PartialEq, Copy, Clone, Debug, Default)]
+pub enum OutputFormat {
+    /// Human-readable output.
+    #[default]
+    Pretty,
+    /// One JSON object per record.
+    Json,
+    /// One line of logfmt pairs per record.
+    Logfmt,
+}
+
 // ---
 
 #[derive(Eq, PartialEq, Copy, Clone, Debug, Serialize, Deserialize)]
@@ -271,44 +293,67 @@ pub struct App {
     options: Options,
     punctuation: Arc<ResolvedPunctuation>,
     formatter: DynRecordWithSourceFormatter,
+    diagnostic_sink: Arc<dyn DiagnosticSink>,
 }
 
 impl App {
-    pub fn new(mut options: Options) -> Self {
+    pub fn new(options: Options) -> Self {
+        Self::with_diagnostic_sink(options, Arc::new(LogSink))
+    }
+
+    /// Creates an app that writes its diagnostic entries to `sink`.
+    pub fn with_diagnostic_sink(mut options: Options, sink: Arc<dyn DiagnosticSink>) -> Self {
         if options.raw && options.input_info.intersects(InputInfo::None | InputInfo::Auto) {
             options.input_info = InputInfo::None.into()
+        }
+        if options.raw {
+            // Raw output takes precedence over a structured output format.
+            options.output_format = OutputFormat::Pretty;
         }
         options.input_info = InputInfo::resolve(options.input_info);
 
         let punctuation = Arc::new(options.formatting.punctuation.resolve(options.ascii));
 
-        let formatter = Self::new_formatter(&options, punctuation.clone());
+        let formatter = Self::new_formatter(&options, punctuation.clone(), sink.clone());
 
         Self {
             options,
             punctuation,
             formatter,
+            diagnostic_sink: sink,
         }
     }
 
     pub fn run(&self, inputs: Vec<InputHolder>, output: &mut Output) -> Result<()> {
-        if self.options.follow {
-            self.follow(inputs, output)
-        } else if self.options.sort {
-            self.sort(inputs, output)
-        } else {
-            self.cat(inputs, output)
-        }
-    }
-
-    fn cat(&self, inputs: Vec<InputHolder>, output: &mut Output) -> Result<()> {
         let descriptors = inputs
             .iter()
             .map(|x| &x.reference)
             .enumerate()
             .map(Into::into)
             .collect_vec();
-        let input_badges = self.input_badges(&descriptors);
+        let diagnostics = Arc::new(Diagnostics::new(self.diagnostic_sink.clone(), &descriptors));
+        diagnostics::register(diagnostics.clone());
+
+        let result = if self.options.follow {
+            self.follow(inputs, &descriptors, &diagnostics, output)
+        } else if self.options.sort {
+            self.sort(inputs, &descriptors, &diagnostics, output)
+        } else {
+            self.cat(inputs, &descriptors, &diagnostics, output)
+        };
+
+        diagnostics.write_summary();
+        result
+    }
+
+    fn cat(
+        &self,
+        inputs: Vec<InputHolder>,
+        descriptors: &[InputDescriptor],
+        diagnostics: &Diagnostics,
+        output: &mut Output,
+    ) -> Result<()> {
+        let input_badges = self.input_badges(descriptors);
 
         let inputs = inputs
             .into_iter()
@@ -343,35 +388,36 @@ impl App {
             }));
             // spawn processing threads
             for (rxi, txo) in izip!(rxi, txo) {
-                scope.spawn(closure!(ref bfo, ref parser, ref sfi, ref descriptors, ref input_badges, |_| {
-                    let mut processor = self.new_segment_processor(parser);
-                    let show_unparsed = self.allow_unparsed_data();
+                scope.spawn(closure!(ref bfo, ref parser, ref sfi, ref input_badges, |_| {
+                    let mut processor = self.new_segment_processor(parser, diagnostics);
+                    let delim = self.options.delimiter.clone().into_searcher();
                     for (i, offset, segment) in rxi.iter() {
                         let prefix = input_badges.as_ref().map(|b|b[i].as_str()).unwrap_or("");
-                        match segment {
+                        let origin = Origin::new(&descriptors[i], offset, segment.data().len());
+                        let buf = match segment {
                             Segment::Complete(segment) => {
                                 let mut buf = bfo.new_buf();
-                                let origin = Origin::new(&descriptors[i], offset, segment.data().len());
                                 processor.process(segment.data(), &mut buf, origin, prefix, None, &mut RecordIgnorer{});
                                 sfi.recycle(segment);
-                                if txo.send((i, buf.into())).is_err() {
-                                    break;
-                                };
+                                buf.into()
                             }
-                            Segment::Incomplete(segment, _) => {
-                                // A log entry too large to be read at once is shown as is, part by part,
-                                // like other text that is not a record. Every segment is sent, even
-                                // with nothing to show, as the writer takes them in order.
-                                let segment = if show_unparsed {
-                                    segment
-                                } else {
-                                    sfi.recycle(segment);
-                                    SegmentBuf::from(b"")
-                                };
-                                if txo.send((i, segment)).is_err() {
-                                    break;
+                            // A log entry too large to be read at once is shown as is, part by part,
+                            // like other text that is not a record, if the output shows such text.
+                            // Every segment is sent, even with nothing to show, as the writer takes them in order.
+                            Segment::Incomplete(segment, part) => {
+                                let mut buf = bfo.new_buf();
+                                let data = segment.data();
+                                let entry = if part == PartialPlacement::Last { strip_delimiter(&delim, data) } else { data };
+                                // The delimiter is written as read, if the entry is written.
+                                if processor.process_fragment(entry, &mut buf, origin, "") {
+                                    buf.extend(&data[entry.len()..]);
                                 }
+                                sfi.recycle(segment);
+                                buf.into()
                             }
+                        };
+                        if txo.send((i, buf)).is_err() {
+                            break;
                         }
                     }
                 }));
@@ -394,7 +440,13 @@ impl App {
         Ok(())
     }
 
-    fn sort(&self, inputs: Vec<InputHolder>, output: &mut Output) -> Result<()> {
+    fn sort(
+        &self,
+        inputs: Vec<InputHolder>,
+        descriptors: &[InputDescriptor],
+        diagnostics: &Diagnostics,
+        output: &mut Output,
+    ) -> Result<()> {
         let mut output = BufWriter::new(output);
         let indexer_settings = IndexerSettings {
             buffer_size: self.options.buffer_size.try_into()?,
@@ -417,13 +469,7 @@ impl App {
         fs::create_dir_all(&cache_dir)?;
 
         let indexer = Indexer::new(self.options.concurrency, cache_dir, indexer_settings);
-        let descriptors = inputs
-            .iter()
-            .map(|x| &x.reference)
-            .enumerate()
-            .map(Into::into)
-            .collect_vec();
-        let input_badges = self.input_badges(&descriptors);
+        let input_badges = self.input_badges(descriptors);
 
         let inputs = inputs
             .into_iter()
@@ -507,24 +553,19 @@ impl App {
             // spawn worker threads
             let mut workers = Vec::with_capacity(n);
             for (rxp, txw) in izip!(rxp, txw) {
-                workers.push(scope.spawn(closure!(
-                    ref parser,
-                    ref descriptors,
-                    ref input_badges,
-                    |_| -> Result<()> {
-                        let mut processor = self.new_segment_processor(parser);
-                        for (block, ts_min, i, j) in rxp.iter() {
-                            let block_offset = block.offset();
-                            let mut buf = Vec::with_capacity(2 * usize::try_from(block.size())?);
-                            let mut items = Vec::with_capacity(2 * usize::try_from(block.entries_valid())?);
-                            for line in block.into_entries()? {
-                                if line.is_empty() {
-                                    continue;
-                                }
-                                let prefix = input_badges.as_ref().map(|b| b[i].as_str()).unwrap_or("");
-                                let origin =
-                                    Origin::new(&descriptors[i], block_offset + line.offset() as u64, line.len());
-                                processor.process(
+                workers.push(scope.spawn(closure!(ref parser, ref input_badges, |_| -> Result<()> {
+                    let mut processor = self.new_segment_processor(parser, diagnostics);
+                    for (block, ts_min, i, j) in rxp.iter() {
+                        let block_offset = block.offset();
+                        let mut buf = Vec::with_capacity(2 * usize::try_from(block.size())?);
+                        let mut items = Vec::with_capacity(2 * usize::try_from(block.entries_valid())?);
+                        for line in block.into_entries()? {
+                            if line.is_empty() {
+                                continue;
+                            }
+                            let prefix = input_badges.as_ref().map(|b| b[i].as_str()).unwrap_or("");
+                            let origin = Origin::new(&descriptors[i], block_offset + line.offset() as u64, line.len());
+                            processor.process(
                                 line.bytes(),
                                 &mut buf,
                                 origin,
@@ -543,16 +584,15 @@ impl App {
                                     }
                                 },
                             );
-                            }
-
-                            let buf = Arc::new(buf);
-                            if txw.send((OutputBlock { ts_min, buf, items }, i, j)).is_err() {
-                                break;
-                            }
                         }
-                        Ok(())
+
+                        let buf = Arc::new(buf);
+                        if txw.send((OutputBlock { ts_min, buf, items }, i, j)).is_err() {
+                            break;
+                        }
                     }
-                )));
+                    Ok(())
+                })));
             }
             // spawn merger thread
             let merger = scope.spawn(|_| -> Result<()> {
@@ -619,7 +659,11 @@ impl App {
     }
 
     fn prepare_follow_badges(&self, inputs: &[InputDescriptor]) -> FollowBadges {
-        let si = SyncIndicator::from(&self.options.theme.indicators.sync);
+        let si = if !self.formatter.decorations() {
+            SyncIndicator::default()
+        } else {
+            SyncIndicator::from(&self.options.theme.indicators.sync)
+        };
 
         let mut badges = self.input_badges(inputs);
         if let Some(badges) = &mut badges {
@@ -631,14 +675,14 @@ impl App {
         FollowBadges { si, input: badges }
     }
 
-    fn follow(&self, inputs: Vec<InputHolder>, output: &mut Output) -> Result<()> {
-        let descriptors = inputs
-            .iter()
-            .map(|x| &x.reference)
-            .enumerate()
-            .map(Into::into)
-            .collect_vec();
-        let badges = self.prepare_follow_badges(&descriptors);
+    fn follow(
+        &self,
+        inputs: Vec<InputHolder>,
+        descriptors: &[InputDescriptor],
+        diagnostics: &Diagnostics,
+        output: &mut Output,
+    ) -> Result<()> {
+        let badges = self.prepare_follow_badges(descriptors);
 
         let m = inputs.len();
         let n = self.options.concurrency;
@@ -723,8 +767,8 @@ impl App {
             let mut workers = Vec::with_capacity(n);
             for _ in 0..n {
                 let worker = scope.spawn(
-                    closure!(ref bfo, ref parser, ref sfi, ref badges, ref descriptors, clone rxi, clone txo, |_| {
-                        self.process_segments(parser, bfo, sfi, badges, descriptors, rxi, txo);
+                    closure!(ref bfo, ref parser, ref sfi, ref badges, clone rxi, clone txo, |_| {
+                        self.process_segments(parser, bfo, sfi, badges, descriptors, diagnostics, rxi, txo);
                     }),
                 );
                 workers.push(worker);
@@ -759,10 +803,11 @@ impl App {
         sfi: &SegmentBufFactory,
         badges: &FollowBadges,
         inputs: &[InputDescriptor],
+        diagnostics: &Diagnostics,
         rxi: Receiver<(usize, usize, u64, Segment)>,
         txo: Sender<(usize, Vec<u8>, TimestampIndex)>,
     ) {
-        let mut processor = self.new_segment_processor(parser);
+        let mut processor = self.new_segment_processor(parser, diagnostics);
         let delim = self.options.delimiter.clone().into_searcher();
         for (i, j, offset, segment) in rxi.iter() {
             let prefix = badges
@@ -770,13 +815,13 @@ impl App {
                 .as_ref()
                 .map(|b| b[i].as_str())
                 .unwrap_or(&badges.si.placeholder);
+            let origin = Origin::new(&inputs[i], offset, segment.data().len());
             match segment {
                 Segment::Complete(segment) => {
                     let mut buf = bfo.new_buf();
                     let mut index_builder = TimestampIndexBuilder {
                         result: TimestampIndex::new(j),
                     };
-                    let origin = Origin::new(&inputs[i], offset, segment.data().len());
                     processor.process(segment.data(), &mut buf, origin, prefix, None, &mut index_builder);
                     sfi.recycle(segment);
                     if txo.send((i, buf, index_builder.result)).is_err() {
@@ -785,21 +830,16 @@ impl App {
                 }
                 Segment::Incomplete(segment, part) => {
                     // A log entry too large to be read at once is shown as is, part by part,
-                    // like other text that is not a record. Every block is sent, even
-                    // with nothing to show, as the merger takes them in order.
+                    // like other text that is not a record, if the output shows such text.
+                    // Every block is sent, even with nothing to show, as the merger takes them in order.
                     let mut buf = bfo.new_buf();
                     let mut index = TimestampIndex::new(j);
-                    if self.allow_unparsed_data() {
-                        let mut data = segment.data();
-                        if part == PartialPlacement::First {
-                            buf.extend(prefix.as_bytes());
-                        }
-                        if part == PartialPlacement::Last
-                            && let Some(found) = delim.search_r(data, true).filter(|x| x.end == data.len())
-                        {
-                            data = &data[..found.start];
-                        }
-                        buf.extend_from_slice(data);
+                    let mut data = segment.data();
+                    if part == PartialPlacement::Last {
+                        data = strip_delimiter(&delim, data);
+                    }
+                    let prefix = if part == PartialPlacement::First { prefix } else { "" };
+                    if processor.process_fragment(data, &mut buf, origin, prefix) {
                         index.part = Some(part);
                     }
                     sfi.recycle(segment);
@@ -866,6 +906,10 @@ impl App {
     }
 
     fn input_badges(&self, inputs: &[InputDescriptor]) -> Option<Vec<String>> {
+        if !self.formatter.decorations() {
+            return None;
+        }
+
         let names = inputs.iter().map(|input| input.name.as_str()).collect_vec();
 
         let ii = self.options.input_info;
@@ -994,12 +1038,13 @@ impl App {
         result
     }
 
-    /// Returns whether text that is not a record is shown.
+    /// Returns whether text that is not a record is shown in output that shows such text.
     fn allow_unparsed_data(&self) -> bool {
         self.options.filter.is_empty() && self.options.input_format.is_none()
     }
 
-    fn new_segment_processor<'a>(&'a self, parser: &'a Parser) -> impl SegmentProcess + 'a {
+    /// Creates a segment processor that passes the input data it drops to `drops`.
+    fn new_segment_processor<'a, D: DropSink + 'a>(&'a self, parser: &'a Parser, drops: D) -> impl SegmentProcess + 'a {
         let options = SegmentProcessorOptions {
             allow_prefix: self.options.allow_prefix,
             allow_unparsed_data: self.allow_unparsed_data(),
@@ -1014,16 +1059,23 @@ impl App {
             Query::from(&self.options.filter),
             options,
         )
+        .with_drop_sink(drops)
     }
 
     /// Creates a formatter based on the provided options.
     ///
     /// Returns either a RawRecordFormatter or a RecordFormatter depending on the options.
-    fn new_formatter(options: &Options, punctuation: Arc<ResolvedPunctuation>) -> DynRecordWithSourceFormatter {
+    fn new_formatter(
+        options: &Options,
+        punctuation: Arc<ResolvedPunctuation>,
+        diagnostic_sink: Arc<dyn DiagnosticSink>,
+    ) -> DynRecordWithSourceFormatter {
         if options.raw {
             Arc::new(RawRecordFormatter {
                 delimiter: options.output_delimiter.clone(),
             })
+        } else if let Some(formatter) = Self::new_structured_formatter(options, diagnostic_sink) {
+            formatter
         } else {
             let predefined_filter = Self::build_predefined_filter(options);
             Arc::new(
@@ -1044,6 +1096,27 @@ impl App {
                     .with_expansion(Expansion::from(options.formatting.expansion.clone()).with_mode(options.expand))
                     .build(),
             )
+        }
+    }
+
+    /// Creates a formatter for a structured output format, or returns `None` for the pretty format.
+    fn new_structured_formatter(
+        options: &Options,
+        diagnostic_sink: Arc<dyn DiagnosticSink>,
+    ) -> Option<DynRecordWithSourceFormatter> {
+        let builder = |format: &StructuredFormatting| {
+            StructuredRecordFormatterBuilder::new()
+                .with_flatten(options.flatten)
+                .with_unique_keys(format.unique_keys.unwrap_or(true))
+                .with_empty_fields_hiding(options.hide_empty_fields)
+                .with_field_filter(options.fields.filter.clone())
+                .with_predefined_fields(&options.fields.settings.predefined)
+                .with_diagnostic_sink(diagnostic_sink.clone())
+        };
+        match options.output_format {
+            OutputFormat::Pretty => None,
+            OutputFormat::Json => Some(Arc::new(builder(&options.formatting.json).build::<JsonEncoder>())),
+            OutputFormat::Logfmt => Some(Arc::new(builder(&options.formatting.logfmt).build::<LogfmtEncoder>())),
         }
     }
 
@@ -1073,6 +1146,10 @@ pub trait SegmentProcess {
         limit: Option<usize>,
         observer: &mut O,
     );
+
+    /// Processes `data`, a part of an entry too long to be read as a record, which is written or dropped,
+    /// and returns whether it is written.
+    fn process_fragment(&mut self, data: &[u8], buf: &mut Vec<u8>, origin: Origin<'_>, prefix: &str) -> bool;
 }
 
 // ---
@@ -1088,24 +1165,48 @@ pub struct SegmentProcessorOptions {
 
 // ---
 
-pub struct SegmentProcessor<'a, Formatter, Filter> {
+pub struct SegmentProcessor<'a, Formatter, Filter, Drops = ()> {
     parser: &'a Parser,
-    formatter: Formatter,
     filter: Filter,
     options: SegmentProcessorOptions,
     delim: <Delimiter as Delimit>::Searcher,
+    emitter: Emitter<Formatter, Drops>,
 }
 
 impl<'a, Formatter: RecordWithSourceFormatter, Filter: RecordFilter> SegmentProcessor<'a, Formatter, Filter> {
     pub fn new(parser: &'a Parser, formatter: Formatter, filter: Filter, options: SegmentProcessorOptions) -> Self {
         let delim = options.delimiter.clone().into_searcher();
+        let emitter = Emitter {
+            formatter,
+            drops: (),
+            delimiter: options.output_delimiter.clone(),
+        };
 
         Self {
             parser,
-            formatter,
             filter,
             options,
             delim,
+            emitter,
+        }
+    }
+}
+
+impl<'a, Formatter: RecordWithSourceFormatter, Filter: RecordFilter, Drops: DropSink>
+    SegmentProcessor<'a, Formatter, Filter, Drops>
+{
+    /// Sets where the input data that the processor drops goes, which is nowhere by default.
+    pub fn with_drop_sink<D: DropSink>(self, drops: D) -> SegmentProcessor<'a, Formatter, Filter, D> {
+        SegmentProcessor {
+            parser: self.parser,
+            filter: self.filter,
+            options: self.options,
+            delim: self.delim,
+            emitter: Emitter {
+                formatter: self.emitter.formatter,
+                drops,
+                delimiter: self.emitter.delimiter,
+            },
         }
     }
 
@@ -1115,8 +1216,35 @@ impl<'a, Formatter: RecordWithSourceFormatter, Filter: RecordFilter> SegmentProc
     }
 }
 
-impl<'a, Formatter: RecordWithSourceFormatter, Filter: RecordFilter> SegmentProcess
-    for SegmentProcessor<'a, Formatter, Filter>
+/// Returns `data` without the delimiter it ends with, if any.
+#[inline]
+fn strip_delimiter<'d>(delim: &impl Search, data: &'d [u8]) -> &'d [u8] {
+    match delim.search_r(data, true) {
+        Some(found) if found.end == data.len() => &data[..found.start],
+        _ => data,
+    }
+}
+
+/// Returns `unparsed`, a part of `data` read from `origin`, as input data that is not a record.
+#[inline]
+fn unparsed_data<'a>(
+    data: &[u8],
+    origin: &Origin<'a>,
+    unparsed: &'a [u8],
+    kind: UnparsedKind,
+    hidden: bool,
+) -> UnparsedData<'a> {
+    let offset = unparsed.as_ptr() as usize - data.as_ptr() as usize;
+    UnparsedData {
+        data: unparsed,
+        origin: origin.slice(offset..offset + unparsed.len()),
+        kind,
+        hidden,
+    }
+}
+
+impl<'a, Formatter: RecordWithSourceFormatter, Filter: RecordFilter, Drops: DropSink> SegmentProcess
+    for SegmentProcessor<'a, Formatter, Filter, Drops>
 {
     fn process<O>(
         &mut self,
@@ -1135,10 +1263,9 @@ impl<'a, Formatter: RecordWithSourceFormatter, Filter: RecordFilter> SegmentProc
         for chunk in self.delim.split(data) {
             let chunk_offset = chunk.as_ptr() as usize - data.as_ptr() as usize;
             if chunk.is_empty() {
-                if self.show_unparsed() {
-                    buf.extend(prefix.as_bytes());
-                    buf.extend(self.options.output_delimiter.as_bytes());
-                }
+                let hidden = !self.show_unparsed();
+                let unparsed = unparsed_data(data, &origin, chunk, UnparsedKind::Entry, hidden);
+                self.emitter.unparsed(buf, prefix, unparsed);
                 continue;
             }
 
@@ -1156,28 +1283,18 @@ impl<'a, Formatter: RecordWithSourceFormatter, Filter: RecordFilter> SegmentProc
                 let record = self.parser.parse(&ar.record);
                 if record.matches(&self.filter) {
                     if produced_some {
-                        buf.extend(self.options.output_delimiter.as_bytes());
+                        self.emitter.delimiter(buf);
                     }
                     let begin = buf.len();
                     if ar.prefix.is_empty() {
                         buf.extend(prefix.as_bytes());
                     } else {
-                        let mut first = true;
-                        for line in Newline.into_searcher().split(ar.prefix) {
-                            if !first {
-                                buf.extend(self.options.output_delimiter.as_bytes());
-                            }
-                            first = false;
-                            buf.extend(prefix.as_bytes());
-                            buf.extend(line);
-                        }
-                        if ar.prefix.last().map(|&x| x == b' ') == Some(false) {
-                            buf.push(b' ');
-                        }
+                        let unparsed = unparsed_data(data, &origin, ar.prefix, UnparsedKind::Prefix, false);
+                        self.emitter.unparsed(buf, prefix, unparsed);
                     }
                     let prefix_range = begin..buf.len();
                     let source_range = chunk_offset + ar.offsets.start..chunk_offset + ar.offsets.end;
-                    self.formatter.format_record(
+                    self.emitter.record(
                         buf,
                         prefix_range,
                         record.with_source(&chunk[ar.offsets], origin.slice(source_range)),
@@ -1185,28 +1302,73 @@ impl<'a, Formatter: RecordWithSourceFormatter, Filter: RecordFilter> SegmentProc
                     let end = buf.len();
                     observer.observe_record(&record, begin..end);
                     produced_some = true;
+                } else if !ar.prefix.is_empty() {
+                    // Data before a record that is filtered out is hidden along with it.
+                    let unparsed = unparsed_data(data, &origin, ar.prefix, UnparsedKind::Prefix, true);
+                    self.emitter.unparsed(buf, prefix, unparsed);
                 }
                 if i >= limit {
                     break;
                 }
             }
             let remainder = if parsed_some { &chunk[last_offset..] } else { chunk };
-            if !remainder.is_empty() && self.show_unparsed() {
-                if !parsed_some || produced_some {
-                    let mut should_prefix = !parsed_some;
-                    for line in Newline.into_searcher().split(remainder) {
-                        if should_prefix {
-                            buf.extend(prefix.as_bytes());
-                        }
-                        should_prefix = true;
-                        buf.extend_from_slice(line);
-                        buf.extend(self.options.output_delimiter.as_bytes());
-                    }
-                }
-            } else if produced_some {
-                buf.extend(self.options.output_delimiter.as_bytes());
+            if !remainder.is_empty() {
+                let (kind, hidden) = if parsed_some {
+                    // Data after records that are filtered out is hidden along with them.
+                    (UnparsedKind::Remainder, !self.show_unparsed() || !produced_some)
+                } else {
+                    (UnparsedKind::Entry, !self.show_unparsed())
+                };
+                self.emitter
+                    .unparsed(buf, prefix, unparsed_data(data, &origin, remainder, kind, hidden));
+            }
+            if produced_some {
+                self.emitter.delimiter(buf);
             }
         }
+    }
+
+    #[inline]
+    fn process_fragment(&mut self, data: &[u8], buf: &mut Vec<u8>, origin: Origin<'_>, prefix: &str) -> bool {
+        let unparsed = UnparsedData {
+            data,
+            origin,
+            kind: UnparsedKind::Fragment,
+            hidden: !self.show_unparsed(),
+        };
+        self.emitter.unparsed(buf, prefix, unparsed)
+    }
+}
+
+// ---
+
+/// Emits what the segment processor finds in the input: records are formatted, and data
+/// that is not a record is written or dropped, as the formatter decides.
+struct Emitter<Formatter, Drops> {
+    formatter: Formatter,
+    drops: Drops,
+    /// The output delimiter.
+    delimiter: String,
+}
+
+impl<Formatter: RecordWithSourceFormatter, Drops: DropSink> Emitter<Formatter, Drops> {
+    #[inline]
+    fn record(&self, buf: &mut Vec<u8>, prefix: Range<usize>, rec: RecordWithSource) {
+        self.formatter.format_record(buf, prefix, rec);
+    }
+
+    /// Writes or drops `unparsed` and returns whether it is written.
+    #[inline]
+    fn unparsed(&mut self, buf: &mut Vec<u8>, prefix: &str, unparsed: UnparsedData) -> bool {
+        let delimiter = self.delimiter.as_bytes();
+        self.formatter
+            .format_unparsed(buf, prefix.as_bytes(), delimiter, unparsed, &mut self.drops)
+    }
+
+    /// Writes the output delimiter.
+    #[inline]
+    fn delimiter(&self, buf: &mut Vec<u8>) {
+        buf.extend(self.delimiter.as_bytes());
     }
 }
 
@@ -1519,6 +1681,7 @@ struct FollowBadges {
     input: Option<Vec<String>>,
 }
 
+#[derive(Default)]
 struct SyncIndicator {
     width: usize,
     synced: String,

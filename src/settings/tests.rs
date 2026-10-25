@@ -1,3 +1,5 @@
+use rstest::rstest;
+
 use super::*;
 
 #[test]
@@ -232,4 +234,23 @@ fn test_punctuation_resolve() {
     ] {
         assert_ne!(ascii_val, utf8_val, "ASCII and Unicode values should be different");
     }
+}
+
+#[rstest]
+#[case::auto("auto", Some(FlattenOption::Auto))]
+#[case::never("never", Some(FlattenOption::Never))]
+#[case::always("always", Some(FlattenOption::Always))]
+#[case::invalid("sometimes", None)]
+fn test_flatten_option_values(#[case] value: &str, #[case] expected: Option<FlattenOption>) {
+    #[derive(Deserialize)]
+    struct Wrapper {
+        flatten: FlattenOption,
+    }
+    let parsed = toml::from_str::<Wrapper>(&format!("flatten = {value:?}")).map(|x| x.flatten);
+    assert_eq!(parsed.ok(), expected);
+}
+
+#[test]
+fn test_default_flatten_is_auto() {
+    assert_eq!(Settings::default().formatting.flatten, Some(FlattenOption::Auto));
 }

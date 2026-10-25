@@ -118,6 +118,13 @@ fn run() -> Result<()> {
         cli::PagingOption::Never => false,
     };
     let paging = if opt.paging_never { false } else { paging };
+
+    // Configure the output format.
+    let output_format = match opt.output_format {
+        cli::OutputFormat::Pretty => app::OutputFormat::Pretty,
+        cli::OutputFormat::Json => app::OutputFormat::Json,
+        cli::OutputFormat::Logfmt => app::OutputFormat::Logfmt,
+    };
     let role = if opt.follow { PagerRole::Follow } else { PagerRole::View };
     let selector = PagerSelector::new(&settings.pager);
     let start_pager = |role: PagerRole| -> Result<Option<(StartedPager, Option<OutputDelimiter>)>> {
@@ -382,7 +389,11 @@ fn run() -> Result<()> {
             cli::UnixTimestampUnit::Us => Some(app::UnixTimestampUnit::Microseconds),
             cli::UnixTimestampUnit::Ns => Some(app::UnixTimestampUnit::Nanoseconds),
         },
-        flatten: opt.flatten != cli::FlattenOption::Never,
+        flatten: match opt.flatten {
+            cli::FlattenOption::Auto => output_format != app::OutputFormat::Json,
+            cli::FlattenOption::Never => false,
+            cli::FlattenOption::Always => true,
+        },
         ascii,
         expand: opt.expansion.into(),
         output_delimiter: {
@@ -396,6 +407,7 @@ fn run() -> Result<()> {
                 OutputDelimiter::Nul => "\0".into(),
             }
         },
+        output_format,
     });
 
     log::debug!("run the app");
@@ -466,6 +478,7 @@ impl<W> ExitOnWriteError<W> {
             // Exit with 141 (128 + SIGPIPE) when writing to pager fails
             // This matches git and other tools' behavior
             let exit_code = if using_pager { 141 } else { 0 };
+            hl::diagnostics::on_exit();
             process::exit(exit_code);
         })
     }
