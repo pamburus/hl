@@ -2,7 +2,7 @@ use super::*;
 
 use rstest::rstest;
 
-use crate::app::TimestampIndexLine;
+use crate::app::{SyncIndicator, TimestampIndexLine};
 
 const INTERVAL: Duration = Duration::from_millis(100);
 
@@ -53,22 +53,27 @@ fn insert(window: &mut MergeWindow, (buf, index): (Vec<u8>, TimestampIndex), now
     window.insert(0, buf, index, now)
 }
 
-/// Returns what is due, with the end of a split entry shown as `|`.
+/// Returns what is due, with the end of a split entry shown as `|`, and a part of a split entry
+/// that starts a new line, as the entry was ended before the part came, marked by `+`.
 fn drain(window: &mut MergeWindow, now: Instant, all: bool) -> Vec<String> {
     std::iter::from_fn(|| window.pop_due(now, all))
         .map(|due| match due {
             Due::Entry(_, entry) => String::from_utf8(entry.data().to_vec()).unwrap(),
+            Due::Resumed(_, entry) => format!("+{}", String::from_utf8(entry.data().to_vec()).unwrap()),
             Due::SplitEnd => "|".into(),
         })
         .collect()
 }
 
-fn sync_indicator() -> SyncIndicator {
-    SyncIndicator {
-        width: 2,
-        synced: "S ".into(),
-        failed: "F ".into(),
-        placeholder: "  ".into(),
+fn badges(input: Option<Vec<String>>) -> FollowBadges {
+    FollowBadges {
+        si: SyncIndicator {
+            width: 2,
+            synced: "S ".into(),
+            failed: "F ".into(),
+            placeholder: "  ".into(),
+        },
+        input,
     }
 }
 
@@ -222,6 +227,30 @@ fn test_merge_window_ends_split_entry(#[case] next_block: bool, #[case] elapsed:
 }
 
 #[test]
+fn test_merge_window_ends_split_entry_at_twice_memory_limit() {
+    // Each record takes 3 bytes, so two records of the other input fill the window,
+    // and four of them fill it twice.
+    let mut window = window(6);
+    let now = Instant::now();
+    insert(&mut window, part(0, "  xx", PartialPlacement::First), now);
+    assert_eq!(drain(&mut window, now, false), ["  xx"]);
+    let (buf, index) = block(0, &[1, 2]);
+    window.insert(1, buf, index, now);
+    assert_eq!(drain(&mut window, now, false), Vec::<String>::new());
+
+    // Then the window is written down to below its memory limit.
+    let (buf, index) = block(1, &[3, 4]);
+    window.insert(1, buf, index, now);
+    assert_eq!(drain(&mut window, now, false), ["|", "  1", "  2", "  3"]);
+
+    // The rest is given out as it comes.
+    insert(&mut window, part(1, "yy", PartialPlacement::Last), now);
+    assert_eq!(drain(&mut window, now, false), ["+yy"]);
+    assert_eq!(drain(&mut window, now, true), ["  4"]);
+    assert!(window.late.is_empty());
+}
+
+#[test]
 fn test_merge_window_gives_out_rest_of_split_entry_ended_early() {
     let mut window = window(usize::MAX);
     let now = Instant::now();
@@ -232,7 +261,7 @@ fn test_merge_window_gives_out_rest_of_split_entry_ended_early() {
 
     // The rest is given out as it comes, and held together again until it ends.
     insert(&mut window, part(1, "yy", PartialPlacement::Next), later);
-    assert_eq!(drain(&mut window, later, false), ["yy"]);
+    assert_eq!(drain(&mut window, later, false), ["+yy"]);
     let (buf, index) = block(0, &[1]);
     window.insert(1, buf, index, now);
     assert_eq!(drain(&mut window, later, false), Vec::<String>::new());
@@ -258,8 +287,8 @@ fn test_merge_window_forgets_split_entry_when_input_moves_on() {
 
 #[test]
 fn test_merge_writer_marks_entries_out_of_time_order() {
-    let si = sync_indicator();
-    let mut writer = MergeWriter::new(&si, b"\n");
+    let badges = badges(None);
+    let mut writer = MergeWriter::new(&badges, b"\n");
     let mut output = Vec::new();
     for (sec, text) in [(2, "  a"), (1, "  b"), (1, "  c"), (3, "  d")] {
         writer.write(&mut output, Some(ts(sec)), &entry(text, None)).unwrap();
@@ -270,8 +299,8 @@ fn test_merge_writer_marks_entries_out_of_time_order() {
 
 #[test]
 fn test_merge_writer_writes_split_entries() {
-    let si = sync_indicator();
-    let mut writer = MergeWriter::new(&si, b"\n");
+    let badges = badges(None);
+    let mut writer = MergeWriter::new(&badges, b"\n");
     let mut output = Vec::new();
     writer.write(&mut output, None, &entry("  text", None)).unwrap();
     writer
@@ -289,4 +318,27 @@ fn test_merge_writer_writes_split_entries() {
     writer.end_split(&mut output).unwrap();
 
     assert_eq!(String::from_utf8(output).unwrap(), "  text\nS xxyyzz\n  aa\n");
+}
+
+#[test]
+fn test_merge_writer_resumes_split_entry_with_input_badge() {
+    let badges = badges(Some(vec!["  #0 ".into(), "  #1 ".into()]));
+    let mut writer = MergeWriter::new(&badges, b"\n");
+    let mut output = Vec::new();
+    writer
+        .write(
+            &mut output,
+            Some(ts(1)),
+            &entry("  #1 xx", Some(PartialPlacement::First)),
+        )
+        .unwrap();
+    writer.end_split(&mut output).unwrap();
+    writer
+        .resume(&mut output, 1, &entry("yy", Some(PartialPlacement::Next)))
+        .unwrap();
+    writer
+        .write(&mut output, None, &entry("zz", Some(PartialPlacement::Last)))
+        .unwrap();
+
+    assert_eq!(String::from_utf8(output).unwrap(), "S #1 xx\n  #1 yyzz\n");
 }
