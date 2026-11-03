@@ -1,4 +1,16 @@
+use rstest::rstest;
+
 use super::*;
+
+fn rfc3339_utc(s: &str, unit: Option<UnixTimestampUnit>) -> Option<String> {
+    let mut buf = Vec::new();
+    if Timestamp::new(s).with_unix_unit(unit).format_rfc3339_utc(&mut buf) {
+        Some(String::from_utf8(buf).unwrap())
+    } else {
+        assert!(buf.is_empty(), "nothing is written on failure");
+        None
+    }
+}
 
 #[test]
 fn test_parse() {
@@ -207,4 +219,60 @@ fn test_fraction_parse() {
     // Test invalid fractional seconds (doesn't start with .)
     let frac_invalid3 = Fraction::parse("123");
     assert!(frac_invalid3.is_none());
+}
+
+#[rstest]
+// Already in UTC with a `Z` suffix: copied verbatim.
+#[case::utc("2026-07-06T10:00:00.123Z", "2026-07-06T10:00:00.123Z")]
+#[case::utc_whole("2026-07-06T10:00:00Z", "2026-07-06T10:00:00Z")]
+// Converted to UTC, keeping the source's fraction digits.
+#[case::offset("2026-07-06T12:00:00.5+02:00", "2026-07-06T10:00:00.5Z")]
+#[case::trailing_zero("2026-07-06T10:00:00.10Z", "2026-07-06T10:00:00.10Z")]
+#[case::zero_offset("2026-07-06T10:00:00.10+00:00", "2026-07-06T10:00:00.10Z")]
+#[case::lowercase("2026-07-06t10:00:00z", "2026-07-06T10:00:00Z")]
+#[case::negative_offset("2026-07-06T12:00:00-02:30", "2026-07-06T14:30:00Z")]
+// Zone-less values are interpreted as UTC.
+#[case::zoneless_space("2026-07-06 10:00:00.123", "2026-07-06T10:00:00.123Z")]
+#[case::zoneless("2026-07-06T10:00:00", "2026-07-06T10:00:00Z")]
+// At most 9 fraction digits.
+#[case::long_fraction("2026-07-06T10:00:00.1234567891Z", "2026-07-06T10:00:00.123456789Z")]
+fn test_format_rfc3339_utc_textual(#[case] input: &str, #[case] expected: &str) {
+    assert_eq!(rfc3339_utc(input, None).as_deref(), Some(expected));
+}
+
+#[rstest]
+// Integer values get the digits of their unit.
+#[case::seconds("1700000000", None, "2023-11-14T22:13:20Z")]
+#[case::milliseconds("1700000000000", None, "2023-11-14T22:13:20.000Z")]
+#[case::microseconds("1700000000123456", None, "2023-11-14T22:13:20.123456Z")]
+#[case::nanoseconds("1700000000123456789", None, "2023-11-14T22:13:20.123456789Z")]
+// Fractional values add their fraction digits to the unit's.
+#[case::seconds_fraction("1700000000.25", None, "2023-11-14T22:13:20.25Z")]
+#[case::milliseconds_fraction("1700000000000.5", None, "2023-11-14T22:13:20.0005Z")]
+#[case::long_fraction("1700000000.1234567891", None, "2023-11-14T22:13:20.123456789Z")]
+// An explicit unit is honored.
+#[case::explicit_milliseconds("1700000000", Some(UnixTimestampUnit::Milliseconds), "1970-01-20T16:13:20.000Z")]
+#[case::explicit_seconds("1700000000", Some(UnixTimestampUnit::Seconds), "2023-11-14T22:13:20Z")]
+#[case::explicit_nanoseconds(
+    "1700000000000000",
+    Some(UnixTimestampUnit::Nanoseconds),
+    "1970-01-20T16:13:20.000000000Z"
+)]
+fn test_format_rfc3339_utc_unix(#[case] input: &str, #[case] unit: Option<UnixTimestampUnit>, #[case] expected: &str) {
+    assert_eq!(rfc3339_utc(input, unit).as_deref(), Some(expected));
+}
+
+#[rstest]
+#[case::text("yesterday", None, None)]
+#[case::out_of_range("-1e300", None, None)]
+// Years that RFC 3339 can't represent.
+#[case::first_year("-62167219200", Some(UnixTimestampUnit::Seconds), Some("0000-01-01T00:00:00Z"))]
+#[case::before_first_year("-62167219201", Some(UnixTimestampUnit::Seconds), None)]
+#[case::after_last_year("253402300800", Some(UnixTimestampUnit::Seconds), None)]
+fn test_format_rfc3339_utc_limits(
+    #[case] input: &str,
+    #[case] unit: Option<UnixTimestampUnit>,
+    #[case] expected: Option<&str>,
+) {
+    assert_eq!(rfc3339_utc(input, unit).as_deref(), expected);
 }

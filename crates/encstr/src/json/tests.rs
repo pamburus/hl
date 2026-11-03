@@ -221,3 +221,27 @@ fn test_append_sequence_long() {
         String::from_utf8_lossy(&buffer)
     );
 }
+
+#[rstest]
+#[case::escapes(r#""aA\n\/""#, "aA\n/")]
+#[case::surrogate_pair(r#""😀""#, "😀")]
+#[case::lone_high_surrogate(r#""a\ud800b""#, "a\u{fffd}b")]
+#[case::lone_low_surrogate(r#""\udc00""#, "\u{fffd}")]
+#[case::high_surrogate_then_ascii(r#""\ud800A""#, "\u{fffd}A")]
+#[case::high_surrogate_then_non_bmp(r#""\ud800𐀀""#, "\u{fffd}𐀀")]
+#[case::high_surrogate_then_invalid_escape(r#""\ud800\x""#, "\u{fffd}\u{fffd}")]
+#[case::invalid_escape(r#""\q""#, "\u{fffd}")]
+fn test_decode_lossy(#[case] input: &str, #[case] expected: &str) {
+    let mut result = Vec::new();
+    JsonEncodedString::new(input).decode_lossy(&mut result).unwrap();
+    assert_eq!(String::from_utf8(result).unwrap(), expected);
+}
+
+#[test]
+fn test_decode_lossy_truncated_escape() {
+    assert!(
+        JsonEncodedString::new(r#""\u12""#)
+            .decode_lossy(&mut Vec::new())
+            .is_err()
+    );
+}

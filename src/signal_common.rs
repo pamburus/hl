@@ -21,6 +21,7 @@ pub enum SignalExitStatus {
 /// so any work that must be done at exit belongs here.
 pub(crate) fn shutdown(signal: i32, status: SignalExitStatus) -> ! {
     let code = exit_code(signal, status);
+    crate::diagnostics::on_exit();
     log::info!("shutdown complete on signal {signal}, exiting with code {code}");
     exit(code)
 }

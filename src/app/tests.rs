@@ -2,10 +2,10 @@
 use super::*;
 
 // std imports
-use std::io::Cursor;
+use std::{collections::HashMap, io::Cursor};
 
 // third-party imports
-use chrono::{Offset, Utc};
+use chrono::{DateTime, Offset, Utc};
 use chrono_tz::UTC;
 use maplit::hashmap;
 use rstest::rstest;
@@ -19,6 +19,7 @@ use crate::{
     scanning::{BufFactory, PartialPlacement, Segment, SegmentBuf, SegmentBufFactory},
     settings::{self, AsciiMode, DisplayVariant, ExpansionMode, MessageFormat, MessageFormatting},
     syntax::*,
+    testing::diagnostics::CaptureSink,
     themecfg,
 };
 
@@ -84,6 +85,7 @@ fn options() -> Options {
         ascii: AsciiMode::Off,
         expand: Default::default(),
         output_delimiter: "\n".to_string(),
+        output_format: OutputFormat::Pretty,
     }
 }
 
@@ -214,6 +216,140 @@ fn descriptor(index: usize, name: &str) -> InputDescriptor {
 
 fn descriptors(inputs: &[InputReference]) -> Vec<InputDescriptor> {
     inputs.iter().enumerate().map(Into::into).collect_vec()
+}
+
+fn fixture(name: &str) -> String {
+    std::fs::read_to_string(format!("src/testing/assets/fixtures/output-format/{name}")).unwrap()
+}
+
+fn run_json(options: Options, inputs: Vec<InputHolder>) -> Vec<json::Value> {
+    let app = App::new(Options {
+        output_format: OutputFormat::Json,
+        ..options
+    });
+    let mut output = Vec::new();
+    app.run(inputs, &mut output).unwrap();
+    std::str::from_utf8(&output)
+        .unwrap()
+        .lines()
+        .map(|line| json::from_str(line).unwrap_or_else(|err| panic!("{err}: {line}")))
+        .collect()
+}
+
+fn count_records(options: Options, inputs: Vec<InputHolder>) -> usize {
+    let app = App::new(options);
+    let mut output = Vec::new();
+    app.run(inputs, &mut output).unwrap();
+    output.split(|&b| b == b'\n').filter(|line| !line.is_empty()).count()
+}
+
+fn run_logfmt(options: Options, inputs: Vec<InputHolder>) -> Vec<HashMap<String, String>> {
+    let app = App::new(Options {
+        output_format: OutputFormat::Logfmt,
+        ..options
+    });
+    let mut output = Vec::new();
+    app.run(inputs, &mut output).unwrap();
+    std::str::from_utf8(&output)
+        .unwrap()
+        .lines()
+        .map(|line| serde_logfmt::logfmt::from_str(line).unwrap_or_else(|err| panic!("{err:?}: {line}")))
+        .collect()
+}
+
+/// Options that read the mixed fixture as the command line does by default: multi-line records
+/// are read with the delimiter chosen for them, and level names are recognized as with the
+/// default configuration.
+fn mixed_fixture_options() -> Options {
+    Options {
+        delimiter: Delimiter::PrettyCompatible,
+        fields: FieldOptions {
+            settings: crate::settings::Settings::default().fields,
+            ..Default::default()
+        },
+        ..options()
+    }
+}
+
+/// Diagnostics for inputs, written to the internal log as in the app.
+fn diagnostics(inputs: &[InputDescriptor]) -> Diagnostics {
+    Diagnostics::new(Arc::new(LogSink), inputs)
+}
+
+type DiagnosticEntries = Vec<(log::Level, String)>;
+
+/// Runs the app with a sink capturing its diagnostic entries, returning the output and the entries.
+fn run_with_diagnostics(options: Options, inputs: Vec<InputHolder>) -> (String, DiagnosticEntries) {
+    let sink = Arc::new(CaptureSink::new(log::Level::Debug));
+    let app = App::with_diagnostic_sink(options, sink.clone());
+    let mut output = Vec::new();
+    app.run(inputs, &mut output).unwrap();
+    (String::from_utf8(output).unwrap(), sink.entries())
+}
+
+fn debug_entry(text: &str) -> (log::Level, String) {
+    (log::Level::Debug, text.to_owned())
+}
+
+fn info_entry(text: &str) -> (log::Level, String) {
+    (log::Level::Info, text.to_owned())
+}
+
+/// Pads a line to 60 bytes, so that two lines fit in a 128-byte block and three don't.
+fn padded(line: &str) -> String {
+    format!("{line:<60}\n")
+}
+
+/// Follows an input with an unparsed entry and a part of an entry too long to read,
+/// returning the output and the diagnostic entries.
+fn follow_with_dropped_lines(format: OutputFormat) -> (String, Vec<(log::Level, String)>) {
+    let inputs = vec![InputReference::File(crate::input::InputPath::ephemeral("f.log".into()))];
+    let sink = Arc::new(CaptureSink::new(log::Level::Debug));
+    let app = App::with_diagnostic_sink(
+        Options {
+            output_format: format,
+            ..options()
+        },
+        sink.clone(),
+    );
+    let descriptors = descriptors(&inputs);
+    let diagnostics = Diagnostics::new(sink.clone(), &descriptors);
+    let badges = app.prepare_follow_badges(&descriptors);
+    let sfi = SegmentBufFactory::new(4096);
+    let (txi, rxi) = channel::bounded(10);
+    let (txo, rxo) = channel::bounded(10);
+    let data = "garbage\n{\"ts\":\"2026-07-06T10:00:00Z\",\"msg\":\"a\"}\n";
+    txi.send((0, 0, 100, Segment::Complete(SegmentBuf::from(data.as_bytes()))))
+        .unwrap();
+    // A part of an entry too long to hold is not a record either.
+    txi.send((
+        0,
+        1,
+        200,
+        Segment::Incomplete(SegmentBuf::from(b"oversized"), PartialPlacement::First),
+    ))
+    .unwrap();
+    txi.send((
+        0,
+        2,
+        209,
+        Segment::Incomplete(SegmentBuf::from(b" tail\n"), PartialPlacement::Last),
+    ))
+    .unwrap();
+    drop(txi);
+    app.process_segments(
+        &app.parser(),
+        &BufFactory::new(4096),
+        &sfi,
+        &badges,
+        &descriptors,
+        &diagnostics,
+        rxi,
+        txo,
+    );
+    let mut output = Vec::new();
+    app.merge_segments(&badges, rxo, &mut output, 1).unwrap();
+    (String::from_utf8(output).unwrap(), sink.entries())
 }
 
 #[test]
@@ -1766,6 +1902,7 @@ fn test_process_segments() {
         &sfi,
         &badges,
         &[InputDescriptor::new(0, "<stdin>")],
+        &diagnostics(&[InputDescriptor::new(0, "<stdin>")]),
         rxi,
         txo.clone(),
     );
@@ -1791,10 +1928,12 @@ fn test_process_segments_incomplete(
     #[case] data: &str,
     #[case] expected: &str,
     #[values(None, Some(InputFormat::Json))] input_format: Option<InputFormat>,
+    #[values(OutputFormat::Pretty, OutputFormat::Json, OutputFormat::Logfmt)] output_format: OutputFormat,
 ) {
     let mut opts = options();
     opts.theme = theme();
     opts.input_format = input_format;
+    opts.output_format = output_format;
     let app = App::new(opts);
 
     let parser = app.parser();
@@ -1825,18 +1964,19 @@ fn test_process_segments_incomplete(
         &sfi,
         &badges,
         &[InputDescriptor::new(0, "<stdin>")],
+        &diagnostics(&[InputDescriptor::new(0, "<stdin>")]),
         rxi,
         txo.clone(),
     );
     drop(txo);
 
     // Every block is sent, as the merger takes the blocks of an input in order,
-    // but the part is shown only where text that is not a record is.
+    // but the part is shown only where text that is not a record is, which structured output never shows.
     let (input, buf, index) = rxo.try_recv().expect("a message for the block");
     assert_eq!(input, 0);
     assert_eq!(index.block, 3);
     assert!(index.lines.is_empty());
-    if input_format.is_none() {
+    if input_format.is_none() && output_format == OutputFormat::Pretty {
         assert_eq!(String::from_utf8(buf).unwrap(), expected);
         assert_eq!(index.part, Some(part));
     } else {
@@ -1883,6 +2023,7 @@ fn test_process_segments_receiver_dropped(#[case] segment: Segment) {
         &sfi,
         &badges,
         &[InputDescriptor::new(0, "<stdin>")],
+        &diagnostics(&[InputDescriptor::new(0, "<stdin>")]),
         rxi,
         txo,
     );
@@ -3177,7 +3318,7 @@ fn test_process_segments_passes_record_origin() {
     txi.send((0, 0, 200, segment(A1))).unwrap();
     drop(txi);
 
-    app.process_segments(&parser, &bfo, &sfi, &badges, &inputs, rxi, txo);
+    app.process_segments(&parser, &bfo, &sfi, &badges, &inputs, &diagnostics(&inputs), rxi, txo);
 
     let n = A1.len() as u64;
     assert_eq!(rxo.iter().count(), 2);
@@ -3306,4 +3447,640 @@ fn test_sort_passes_record_origin_across_blocks() {
         .collect_vec();
     ranges.sort_by_key(|x| x.start);
     assert_eq!(ranges, (0..4).map(|i| i * (n + 1)..i * (n + 1) + n).collect_vec());
+}
+
+#[rstest]
+fn test_structured_output_has_no_badges(#[values(OutputFormat::Json, OutputFormat::Logfmt)] format: OutputFormat) {
+    let inputs = [InputReference::Stdin, InputReference::Stdin];
+    let app = App::new(Options {
+        input_info: InputInfo::Full.into(),
+        theme: theme(),
+        output_format: format,
+        ..options()
+    });
+
+    assert_eq!(app.input_badges(&descriptors(&inputs)), None);
+
+    let result = app.prepare_follow_badges(&descriptors(&inputs));
+    assert_eq!(result.si.width, 0);
+    assert_eq!(result.si.synced, "");
+    assert_eq!(result.si.failed, "");
+    assert_eq!(result.si.placeholder, "");
+    assert!(result.input.is_none());
+}
+
+#[rstest]
+fn test_structured_output_drops_unparsed_data(
+    #[values(OutputFormat::Json, OutputFormat::Logfmt)] format: OutputFormat,
+) {
+    // Unparsed lines and prefixes are dropped even when nothing filters the records,
+    // which would show them in pretty output.
+    let data = concat!(
+        "plain text\n",
+        "\n",
+        "prefix {\"msg\":\"m1\"}\n",
+        "{\"msg\":\"m2\"} trailing text\n",
+    );
+    let app = App::new(Options {
+        allow_prefix: true,
+        output_format: format,
+        ..options()
+    });
+    let mut output = Vec::new();
+    app.run(vec![input(data)], &mut output).unwrap();
+    let output = std::str::from_utf8(&output).unwrap();
+    let lines = output.lines().collect_vec();
+    assert_eq!(lines.len(), 2, "{output:?}");
+    assert!(lines[0].contains("m1") && !lines[0].contains("prefix"), "{output:?}");
+    assert!(lines[1].contains("m2") && !lines[1].contains("trailing"), "{output:?}");
+    assert!(output.ends_with('\n'), "{output:?}");
+}
+
+#[test]
+fn test_structured_output_without_drop_sink() {
+    // A processor without a drop sink writes the records only, as with one.
+    let app = App::new(Options {
+        output_format: OutputFormat::Json,
+        ..options()
+    });
+    let parser = app.parser();
+    let mut processor = app.new_segment_processor(&parser, ());
+    let descriptor = InputDescriptor::new(0, "p.log");
+    let data = b"garbage\n{\"msg\":\"a\"} tail\n";
+    let mut buf = Vec::new();
+    let origin = Origin::new(&descriptor, 0, data.len());
+    processor.process(data, &mut buf, origin, "", None, &mut RecordIgnorer {});
+    assert_eq!(buf, b"{\"message\":\"a\"}\n");
+}
+
+#[rstest]
+// Turning off unique keys for one format leaves the other one unchanged.
+#[case::json(OutputFormat::Json, "{\"tag\":\"b\"}\n")]
+#[case::logfmt(OutputFormat::Logfmt, "tag=a tag=b\n")]
+fn test_structured_output_unique_keys_per_format(#[case] format: OutputFormat, #[case] expected: &str) {
+    let mut options = options();
+    options.output_format = format;
+    options.formatting.logfmt.unique_keys = Some(false);
+    let mut output = Vec::new();
+    App::new(options)
+        .run(vec![input("tag=a tag=b\n")], &mut output)
+        .unwrap();
+    assert_eq!(String::from_utf8(output).unwrap(), expected);
+}
+
+#[rstest]
+fn test_structured_output_has_no_empty_entries(
+    #[values(OutputFormat::Json, OutputFormat::Logfmt)] format: OutputFormat,
+) {
+    // A record filtered out leaves no empty entry, also between records in the same chunk.
+    let data = "{\"level\":\"debug\",\"msg\":\"m1\"}{\"level\":\"info\",\"msg\":\"m2\"}\n";
+    let app = App::new(
+        Options {
+            output_format: format,
+            ..options()
+        }
+        .with_filter(
+            Filter {
+                level: Some(Level::Info),
+                ..Default::default()
+            }
+            .into(),
+        ),
+    );
+    let mut output = Vec::new();
+    app.run(vec![input(data)], &mut output).unwrap();
+    let output = std::str::from_utf8(&output).unwrap();
+    assert_eq!(output.lines().collect_vec().len(), 1, "{output:?}");
+    assert!(output.contains("m2") && output.ends_with('\n'), "{output:?}");
+}
+
+#[rstest]
+#[case::json(
+    OutputFormat::Json,
+    concat!(
+        r#"{"timestamp":"2026-07-06T10:00:00Z","level":"info","message":"a1"}"#,
+        "\n",
+        r#"{"timestamp":"2026-07-06T10:00:01Z","level":"error","message":"b1","n":1}"#,
+        "\n",
+        r#"{"timestamp":"2026-07-06T10:00:02Z","level":"warning","message":"a2"}"#,
+        "\n",
+    )
+)]
+#[case::logfmt(
+    OutputFormat::Logfmt,
+    concat!(
+        "timestamp=2026-07-06T10:00:00Z level=info message=a1\n",
+        "timestamp=2026-07-06T10:00:01Z level=error message=b1 n=1\n",
+        "timestamp=2026-07-06T10:00:02Z level=warning message=a2\n",
+    )
+)]
+fn test_structured_output_follow(#[case] format: OutputFormat, #[case] expected: &str) {
+    // Records from several inputs are merged by time into plain records,
+    // with no badges, sync indicators or unparsed entries in between.
+    let inputs = [
+        InputReference::File(crate::input::InputPath::ephemeral("a.log".into())),
+        InputReference::File(crate::input::InputPath::ephemeral("b.log".into())),
+    ];
+    let data = [
+        concat!(
+            r#"{"ts":"2026-07-06T10:00:00Z","level":"info","msg":"a1"}"#,
+            "\n",
+            r#"{"ts":"2026-07-06T10:00:02Z","level":"warn","msg":"a2"}"#,
+            "\n",
+        ),
+        concat!(
+            "not a record\n",
+            r#"{"ts":"2026-07-06T10:00:01Z","level":"error","msg":"b1","n":1}"#,
+            "\n",
+        ),
+    ];
+    let app = App::new(Options {
+        input_info: InputInfo::Full.into(),
+        theme: theme(),
+        output_format: format,
+        ..mixed_fixture_options()
+    });
+    let descriptors = descriptors(&inputs);
+    let badges = app.prepare_follow_badges(&descriptors);
+    let sfi = SegmentBufFactory::new(4096);
+    let (txi, rxi) = channel::bounded(10);
+    let (txo, rxo) = channel::bounded(10);
+    for (i, data) in data.iter().enumerate() {
+        let segment = Segment::Complete(SegmentBuf::from(data.as_bytes()));
+        txi.send((i, 0, 0, segment)).unwrap();
+    }
+    drop(txi);
+    app.process_segments(
+        &app.parser(),
+        &BufFactory::new(4096),
+        &sfi,
+        &badges,
+        &descriptors,
+        &diagnostics(&descriptors),
+        rxi,
+        txo,
+    );
+
+    let mut output = Vec::new();
+    app.merge_segments(&badges, rxo, &mut output, 1).unwrap();
+    assert_eq!(std::str::from_utf8(&output).unwrap(), expected);
+}
+
+#[test]
+fn test_json_output_cat() {
+    let filter = || {
+        Arc::new(AdvancedFilter::new(
+            Filter {
+                level: Some(Level::Warning),
+                ..Default::default()
+            },
+            None,
+        ))
+    };
+    let options = || Options {
+        filter: filter(),
+        ..mixed_fixture_options()
+    };
+    let records = run_json(options(), vec![input(fixture("mixed.log"))]);
+    assert_eq!(records.len(), 2);
+    assert_eq!(records[0]["level"], "warning");
+    assert_eq!(records[0]["message"], "slow request");
+    assert_eq!(records[0]["timestamp"], "2026-07-06T10:00:01Z");
+    assert_eq!(records[1]["level"], "error");
+    assert_eq!(records[1]["error"]["code"], 7);
+
+    // The same records are selected in pretty output.
+    assert_eq!(
+        count_records(options(), vec![input(fixture("mixed.log"))]),
+        records.len()
+    );
+}
+
+#[test]
+fn test_json_output_sort() {
+    let a = concat!(
+        r#"{"ts":"2026-07-06T10:00:00Z","msg":"a1"}"#,
+        "\n",
+        r#"{"ts":"2026-07-06T10:00:02Z","msg":"a2"}"#,
+        "\n"
+    );
+    let b = concat!(
+        r#"{"ts":"2026-07-06T10:00:01Z","msg":"b1"}"#,
+        "\n",
+        "not a record\n",
+        r#"{"ts":"2026-07-06T10:00:03Z","msg":"b2"}"#,
+        "\n"
+    );
+    let records = run_json(options().with_sort(true), vec![input(a), input(b)]);
+    let messages = records.iter().map(|r| r["message"].as_str().unwrap()).collect_vec();
+    assert_eq!(messages, ["a1", "b1", "a2", "b2"]);
+    assert_eq!(
+        count_records(options().with_sort(true), vec![input(a), input(b)]),
+        records.len()
+    );
+}
+
+#[rstest]
+fn test_structured_output_raw_precedence(#[values(OutputFormat::Json, OutputFormat::Logfmt)] format: OutputFormat) {
+    let data = "{\"msg\":\"m\", \"x\": 1}\nnot a record\n";
+    let app = App::new(Options {
+        raw: true,
+        output_format: format,
+        ..options()
+    });
+    let mut output = Vec::new();
+    app.run(vec![input(data)], &mut output).unwrap();
+    assert_eq!(String::from_utf8(output).unwrap(), data);
+}
+
+#[test]
+fn test_json_output_nul_delimiter() {
+    let app = App::new(Options {
+        output_format: OutputFormat::Json,
+        output_delimiter: "\0".to_owned(),
+        ..options()
+    });
+    let mut output = Vec::new();
+    app.run(vec![input("{\"msg\":\"a\"}\n{\"msg\":\"b\"}\n")], &mut output)
+        .unwrap();
+    assert_eq!(output, b"{\"message\":\"a\"}\0{\"message\":\"b\"}\0");
+}
+
+#[test]
+fn test_json_output_drops_prefix() {
+    let records = run_json(
+        Options {
+            allow_prefix: true,
+            ..options()
+        },
+        vec![input("2026-07-06 prefix {\"msg\":\"m\"}\n")],
+    );
+    assert_eq!(records, [json::json!({"message": "m"})]);
+}
+
+#[test]
+fn test_logfmt_output_cat() {
+    let options = || Options {
+        flatten: true,
+        ..mixed_fixture_options()
+    };
+    let records = run_logfmt(options(), vec![input(fixture("mixed.log"))]);
+    assert_eq!(
+        records.len(),
+        run_json(options(), vec![input(fixture("mixed.log"))]).len()
+    );
+    assert_eq!(records[0]["timestamp"], "2026-07-06T10:00:00.123Z");
+    assert_eq!(records[0]["level"], "info");
+    assert_eq!(records[0]["message"], "started");
+    assert_eq!(records[0]["http.status"], "200");
+    assert_eq!(records[0]["tags"], r#"["a","b"]"#);
+    assert_eq!(records[1]["message"], "slow request");
+    assert_eq!(records[1]["span.attrs.user"], "alice");
+}
+
+#[test]
+fn test_logfmt_output_quoting() {
+    let data = r#"{"msg":"a b","q":"say \"hi\"","e":"a=b","n":"l1\nl2","s":"42","b":"true"}"#;
+    let app = App::new(Options {
+        output_format: OutputFormat::Logfmt,
+        ..options()
+    });
+    let mut output = Vec::new();
+    app.run(vec![input(format!("{data}\n"))], &mut output).unwrap();
+    assert_eq!(
+        std::str::from_utf8(&output).unwrap(),
+        concat!(
+            r#"message="a b" q="say \"hi\"" e="a=b" n="l1\nl2" s="42" b="true""#,
+            "\n"
+        )
+    );
+    let records = run_logfmt(options(), vec![input(format!("{data}\n"))]);
+    assert_eq!(records[0]["message"], "a b");
+    assert_eq!(records[0]["q"], r#"say "hi""#);
+    assert_eq!(records[0]["e"], "a=b");
+    assert_eq!(records[0]["n"], "l1\nl2");
+}
+
+#[rstest]
+#[case::flattened(
+    true,
+    "message=m http.status=500\n",
+    json::json!({"message": "m", "http.status": 500})
+)]
+// JSON keeps the object nested unless flattening is asked for.
+#[case::nested(
+    false,
+    "message=m http=\"{\\\"status\\\":500}\"\n",
+    json::json!({"message": "m", "http": {"status": 500}})
+)]
+fn test_structured_output_nesting(#[case] flatten: bool, #[case] logfmt: &str, #[case] json: json::Value) {
+    let data = || input("{\"msg\":\"m\",\"http\":{\"status\":500}}\n");
+    let app = App::new(Options {
+        output_format: OutputFormat::Logfmt,
+        flatten,
+        ..options()
+    });
+    let mut output = Vec::new();
+    app.run(vec![data()], &mut output).unwrap();
+    assert_eq!(String::from_utf8(output).unwrap(), logfmt);
+    assert_eq!(run_json(Options { flatten, ..options() }, vec![data()]), [json]);
+}
+
+#[test]
+fn test_logfmt_output_reads_back_as_json() {
+    let options = || Options {
+        flatten: true,
+        ..mixed_fixture_options()
+    };
+    let app = App::new(Options {
+        output_format: OutputFormat::Logfmt,
+        ..options()
+    });
+    let mut logfmt = Vec::new();
+    app.run(vec![input(fixture("types.logfmt"))], &mut logfmt).unwrap();
+    let through = run_json(options(), vec![input(String::from_utf8(logfmt).unwrap())]);
+    assert_eq!(through, run_json(options(), vec![input(fixture("types.logfmt"))]));
+}
+
+#[test]
+fn test_dropped_lines_cat() {
+    let options = Options {
+        output_format: OutputFormat::Json,
+        ..mixed_fixture_options()
+    };
+    let (output, entries) = run_with_diagnostics(options, vec![file_input("mixed.log", fixture("mixed.log"))]);
+    assert_eq!(output.lines().count(), 4);
+    assert_eq!(
+        entries,
+        [
+            // An entry continued on indented lines is dropped as a whole.
+            debug_entry(
+                r#"mixed.log: dropped unparsed entry at 291..360: "panic: runtime error: index out of range\n\tat main.handler(main.go:42)""#
+            ),
+            info_entry("mixed.log: dropped 1 piece of unparsed text"),
+        ]
+    );
+}
+
+#[rstest]
+fn test_dropped_remainders_and_prefixes(#[values(false, true)] sort: bool) {
+    let options = Options {
+        output_format: OutputFormat::Json,
+        allow_prefix: true,
+        ..options()
+    }
+    .with_sort(sort);
+    let data = concat!(
+        r#"{"ts":"2026-07-06T10:00:00Z","msg":"a"} tail"#,
+        "\n",
+        r#"2026-07-06 prefix {"ts":"2026-07-06T10:00:01Z","msg":"b"}"#,
+        "\n",
+    );
+    let (output, entries) = run_with_diagnostics(options, vec![file_input("p.log", data)]);
+    assert_eq!(
+        output,
+        concat!(
+            r#"{"timestamp":"2026-07-06T10:00:00Z","message":"a"}"#,
+            "\n",
+            r#"{"timestamp":"2026-07-06T10:00:01Z","message":"b"}"#,
+            "\n",
+        )
+    );
+    assert_eq!(
+        entries,
+        [
+            debug_entry(r#"p.log: dropped unparsed text after a record at 40..44: "tail""#),
+            debug_entry(r#"p.log: dropped prefix before a record at 45..62: "2026-07-06 prefix""#),
+            info_entry("p.log: dropped 2 pieces of unparsed text"),
+        ]
+    );
+}
+
+#[test]
+fn test_dropped_text_around_filtered_records() {
+    let options = Options {
+        output_format: OutputFormat::Json,
+        allow_prefix: true,
+        ..options()
+    }
+    .with_filter(
+        Filter {
+            level: Some(Level::Error),
+            ..Default::default()
+        }
+        .into(),
+    );
+    let data = concat!(
+        r#"noise {"level":"info","msg":"a"}"#,
+        "\n",
+        r#"{"level":"info","msg":"b"} tail"#,
+        "\n",
+        r#"{"level":"error","msg":"c"}"#,
+        "\n",
+    );
+    let (output, entries) = run_with_diagnostics(options, vec![file_input("f.log", data)]);
+    assert_eq!(output, "{\"level\":\"error\",\"message\":\"c\"}\n");
+    // Text next to a record that is filtered out is dropped along with it, so it is reported.
+    assert_eq!(
+        entries,
+        [
+            debug_entry(r#"f.log: dropped prefix before a record at 0..5: "noise""#),
+            debug_entry(r#"f.log: dropped unparsed text after a record at 60..64: "tail""#),
+            info_entry("f.log: dropped 2 pieces of unparsed text"),
+        ]
+    );
+}
+
+#[test]
+fn test_dropped_lines_skip_blank_lines() {
+    let options = Options {
+        output_format: OutputFormat::Json,
+        ..options()
+    };
+    let data = "\n  \n\t\r\n{\"msg\":\"a\"}  \r\n \n";
+    let (output, entries) = run_with_diagnostics(options, vec![file_input("b.log", data)]);
+    assert_eq!(output, "{\"message\":\"a\"}\n");
+    assert_eq!(entries, []);
+}
+
+#[rstest]
+#[case::newline(Delimiter::default(), "\n")]
+#[case::nul(Delimiter::Byte(0), "\0")]
+fn test_dropped_lines_oversized(#[case] delimiter: Delimiter, #[case] separator: &str) {
+    let options = Options {
+        output_format: OutputFormat::Json,
+        buffer_size: NonZeroUsize::new(32).unwrap(),
+        max_message_size: NonZeroUsize::new(64).unwrap(),
+        delimiter,
+        ..options()
+    };
+    let x = "x".repeat(100);
+    let data = format!("{{\"msg\":\"a\"}}{separator}{x}{separator}{{\"msg\":\"b\"}}{separator}");
+    let (output, entries) = run_with_diagnostics(options, vec![file_input("o.log", data)]);
+    assert_eq!(output, "{\"message\":\"a\"}\n{\"message\":\"b\"}\n");
+    // Each part of the entry read on its own is reported, without the delimiter that ends the entry.
+    let part = |range: &str, text: &str| {
+        debug_entry(&format!(
+            r#"o.log: dropped part of an entry too long to parse at {range}: "{text}""#
+        ))
+    };
+    assert_eq!(
+        entries,
+        [
+            part("12..44", &"x".repeat(32)),
+            part("44..76", &"x".repeat(32)),
+            part("76..108", &"x".repeat(32)),
+            part("108..112", "xxxx"),
+            info_entry("o.log: dropped 4 pieces of unparsed text"),
+        ]
+    );
+}
+
+#[test]
+fn test_dropped_lines_sort() {
+    let since = DateTime::parse_from_rfc3339("2026-07-06T10:00:05Z").unwrap().to_utc();
+    let options = Options {
+        output_format: OutputFormat::Json,
+        buffer_size: NonZeroUsize::new(128).unwrap(),
+        filter: Arc::new(AdvancedFilter::new(
+            Filter {
+                since: Some(since),
+                ..Default::default()
+            },
+            None,
+        )),
+        ..options()
+    }
+    .with_sort(true);
+    let data = [
+        // A block excluded by the time filter.
+        r#"{"ts":"2026-07-06T10:00:00Z","msg":"early"}"#,
+        "garbage 1",
+        // A block without timestamps.
+        r#"{"msg":"no time"}"#,
+        "garbage 2",
+        // A block without records.
+        "garbage 3",
+        "garbage 4",
+        // A block with records in the time range.
+        r#"{"ts":"2026-07-06T10:00:10Z","msg":"late"}"#,
+        "garbage 5",
+    ]
+    .map(padded)
+    .concat();
+    let (output, entries) = run_with_diagnostics(options, vec![input(data)]);
+    assert_eq!(
+        output,
+        "{\"timestamp\":\"2026-07-06T10:00:10Z\",\"message\":\"late\"}\n"
+    );
+    // Blocks that the index tells to skip are not read, so only the lines dropped from the read block are reported.
+    assert_eq!(
+        entries,
+        [
+            debug_entry(r#"<stdin>: dropped unparsed entry at 427..436: "garbage 5""#),
+            info_entry("<stdin>: dropped 1 piece of unparsed text"),
+        ]
+    );
+}
+
+#[test]
+fn test_dropped_lines_follow() {
+    let (output, entries) = follow_with_dropped_lines(OutputFormat::Json);
+    assert_eq!(output, "{\"timestamp\":\"2026-07-06T10:00:00Z\",\"message\":\"a\"}\n");
+    assert_eq!(
+        entries,
+        [
+            debug_entry(r#"f.log: dropped unparsed entry at 100..107: "garbage""#),
+            debug_entry(r#"f.log: dropped part of an entry too long to parse at 200..209: "oversized""#),
+            debug_entry(r#"f.log: dropped part of an entry too long to parse at 210..214: "tail""#),
+        ]
+    );
+}
+
+#[test]
+fn test_dropped_lines_follow_pretty() {
+    // Pretty output shows the unparsed entry, and the parts of an entry too long to read joined together.
+    let (output, entries) = follow_with_dropped_lines(OutputFormat::Pretty);
+    assert_eq!(output, "garbage\n2026-07-06 10:00:00.000 a\noversized tail\n");
+    assert_eq!(entries, []);
+}
+
+#[rstest]
+fn test_dropped_keys(#[values(OutputFormat::Json, OutputFormat::Logfmt)] format: OutputFormat) {
+    let data = concat!(
+        r#"{"msg":"m","message":"raw","tag":"a","tag":"b"}"#,
+        "\n",
+        r#"{"msg":"n","obj":{"k":1,"k":2}}"#,
+        "\n",
+    );
+    let options = Options {
+        output_format: format,
+        ..options()
+    };
+    let (_, entries) = run_with_diagnostics(options, vec![file_input("k.log", data)]);
+    assert_eq!(
+        entries,
+        [
+            debug_entry(r#"k.log: dropped repeated key "tag" of the record at 0..47, keeping its last value"#),
+            debug_entry(
+                r#"k.log: dropped field "message" of the record at 0..47, its key is taken by a predefined field"#
+            ),
+            debug_entry(r#"k.log: dropped repeated key "k" of the record at 48..79, keeping its last value"#),
+        ]
+    );
+}
+
+#[test]
+fn test_dropped_keys_flattened() {
+    let data = concat!(
+        r#"{"msg":"m","a":{"x":1},"a.x":2,"message":{"y":3}}"#,
+        "\n",
+        // A collision in a level whose keys are resolved together with those of its objects.
+        r#"{"msg":"n","b.c":1,"b":{"d":2},"message":"raw"}"#,
+        "\n",
+    );
+    let options = Options {
+        output_format: OutputFormat::Json,
+        flatten: true,
+        ..options()
+    };
+    let (output, entries) = run_with_diagnostics(options, vec![file_input("d.log", data)]);
+    assert_eq!(
+        output,
+        "{\"message\":\"m\",\"a.x\":2,\"message.y\":3}\n{\"message\":\"n\",\"b.c\":1,\"b.d\":2}\n"
+    );
+    assert_eq!(
+        entries,
+        [
+            debug_entry(r#"d.log: dropped repeated key "a.x" of the record at 0..49, keeping its last value"#),
+            debug_entry(
+                r#"d.log: dropped field "message" of the record at 50..97, its key is taken by a predefined field"#
+            ),
+        ]
+    );
+}
+
+#[rstest]
+#[case::unfiltered(None)]
+#[case::filtered(Some(Level::Info))]
+fn test_dropped_lines_pretty(#[case] level: Option<Level>) {
+    let options = Options {
+        filter: Arc::new(AdvancedFilter::new(
+            Filter {
+                level,
+                ..Default::default()
+            },
+            None,
+        )),
+        ..mixed_fixture_options()
+    };
+    let (_, entries) = run_with_diagnostics(options, vec![file_input("mixed.log", fixture("mixed.log"))]);
+    assert_eq!(entries, []);
+}
+
+#[test]
+fn test_dropped_keys_pretty() {
+    let data = "{\"msg\":\"m\",\"message\":\"raw\",\"tag\":\"a\",\"tag\":\"b\"}\n";
+    let (_, entries) = run_with_diagnostics(options(), vec![file_input("k.log", data)]);
+    assert_eq!(entries, []);
 }

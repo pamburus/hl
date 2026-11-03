@@ -57,6 +57,8 @@ fn formatter() -> RecordFormatterBuilder {
             },
             punctuation: Sample::sample(),
             prettify_field_keys: None,
+            json: Default::default(),
+            logfmt: Default::default(),
         })
 }
 
@@ -118,6 +120,61 @@ fn format_json_line(formatter: &RecordFormatter, input: &str) -> String {
 
 fn key_quoting_formatter() -> RecordFormatterBuilder {
     formatter().with_theme(Default::default()).with_flatten(true)
+}
+
+/// A sink that fails the test if anything is dropped.
+struct NoDrops;
+
+impl DropSink for NoDrops {
+    fn take(&mut self, unparsed: UnparsedData) {
+        panic!("dropped {:?}", unparsed.data);
+    }
+}
+
+/// Writes input data that is not a record with the default layout, with `>` as the prefix and `|` as the delimiter.
+fn format_unparsed(data: &str, kind: UnparsedKind, hidden: bool) -> String {
+    let descriptor = InputDescriptor::new(0, "test");
+    let unparsed = UnparsedData {
+        data: data.as_bytes(),
+        origin: Origin::new(&descriptor, 0, data.len()),
+        kind,
+        hidden,
+    };
+    let mut buf = Vec::new();
+    let formatter = RawRecordFormatter { delimiter: "|".into() };
+    let written = formatter.format_unparsed(&mut buf, b">", b"|", unparsed, &mut NoDrops);
+    assert_eq!(written, !hidden);
+    String::from_utf8(buf).unwrap()
+}
+
+#[rstest]
+#[case::entry("a", UnparsedKind::Entry, ">a|")]
+#[case::entry_lines("a\nb", UnparsedKind::Entry, ">a|>b|")]
+#[case::empty_entry("", UnparsedKind::Entry, ">|")]
+// Text before a record is set apart from it by a space.
+#[case::prefix("p", UnparsedKind::Prefix, ">p ")]
+#[case::prefix_with_space("p ", UnparsedKind::Prefix, ">p ")]
+#[case::prefix_lines("p\nq", UnparsedKind::Prefix, ">p|>q ")]
+// Text after the records continues their line, which the caller ends.
+#[case::remainder(" r", UnparsedKind::Remainder, " r")]
+#[case::remainder_lines(" r\ns", UnparsedKind::Remainder, " r|>s")]
+// A part of an entry is written after the prefix as is.
+#[case::fragment("x\ny", UnparsedKind::Fragment, ">x\ny")]
+fn test_format_unparsed(#[case] data: &str, #[case] kind: UnparsedKind, #[case] expected: &str) {
+    assert_eq!(format_unparsed(data, kind, false), expected);
+}
+
+#[rstest]
+fn test_format_unparsed_hidden(
+    #[values(
+        UnparsedKind::Entry,
+        UnparsedKind::Prefix,
+        UnparsedKind::Remainder,
+        UnparsedKind::Fragment
+    )]
+    kind: UnparsedKind,
+) {
+    assert_eq!(format_unparsed("a", kind, true), "");
 }
 
 #[test]
@@ -2223,6 +2280,8 @@ fn test_prettify_field_keys_disabled() {
             },
             punctuation: Sample::sample(),
             prettify_field_keys: Some(false),
+            json: Default::default(),
+            logfmt: Default::default(),
         })
         .build();
 
@@ -2253,6 +2312,8 @@ fn test_prettify_field_keys_enabled_default() {
             },
             punctuation: Sample::sample(),
             prettify_field_keys: Some(true),
+            json: Default::default(),
+            logfmt: Default::default(),
         })
         .build();
 
@@ -2285,6 +2346,8 @@ fn test_prettify_field_keys_flattened() {
             },
             punctuation: Sample::sample(),
             prettify_field_keys: Some(false),
+            json: Default::default(),
+            logfmt: Default::default(),
         })
         .build();
 
@@ -2316,6 +2379,8 @@ fn test_prettify_field_keys_raw_fields_override() {
             },
             punctuation: Sample::sample(),
             prettify_field_keys: Some(true),
+            json: Default::default(),
+            logfmt: Default::default(),
         })
         .build();
 

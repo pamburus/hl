@@ -1,6 +1,8 @@
 use super::{super::raw::RawValue, *};
 use std::collections::HashMap;
 
+use rstest::rstest;
+
 #[test]
 fn test_struct_no_escape() {
     #[derive(Deserialize, PartialEq, Debug)]
@@ -248,4 +250,43 @@ fn test_quoted_key_raw_value() {
 
     let parsed: Test = from_str(r#""a b"="x y""#).unwrap();
     assert_eq!(parsed.v.get(), r#""x y""#);
+}
+
+#[rstest]
+fn test_bare_keys(#[values("a", "a.b", "café", "a-b_c", "a/b", "@a")] key: &str) {
+    assert!(is_bare_key(key));
+}
+
+#[rstest]
+fn test_quoted_keys(
+    #[values("", "user name", "items[0]", "{a", "a,b", "'a'", "a\"b", "a=b", "a\tb", "a\u{7f}")] key: &str,
+) {
+    assert!(!is_bare_key(key));
+}
+
+#[rstest]
+fn test_bare_values(#[values("a", "a.b", "café", "42", "[1,2]", "{a}", "a\\b", "a'b")] value: &str) {
+    assert!(is_bare_value(value));
+}
+
+#[rstest]
+fn test_quoted_values(#[values("", "a b", "a=b", "a\"b", "\"a", "a\tb", "a\nb", "a\u{1}b")] value: &str) {
+    assert!(!is_bare_value(value));
+}
+
+proptest::proptest! {
+    #[test]
+    fn test_is_bare_key_matches_parser(key in "\\PC{0,4}|[ -~]{0,4}") {
+        let parsed = from_str::<HashMap<String, String>>(&format!("{key}=1"));
+        let accepted = matches!(&parsed, Ok(map) if map.len() == 1 && map.contains_key(&key));
+        proptest::prop_assert_eq!(is_bare_key(&key), accepted, "key {:?}, parsed {:?}", key, parsed);
+    }
+
+    /// An empty value is also accepted by the parser, but is written quoted for clarity.
+    #[test]
+    fn test_is_bare_value_matches_parser(value in "\\PC{1,4}|[\\x00-~]{1,4}") {
+        let parsed = from_str::<HashMap<String, String>>(&format!("a={value}"));
+        let accepted = matches!(&parsed, Ok(map) if map.get("a") == Some(&value));
+        proptest::prop_assert_eq!(is_bare_value(&value), accepted, "value {:?}, parsed {:?}", value, parsed);
+    }
 }

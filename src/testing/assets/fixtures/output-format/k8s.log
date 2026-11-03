@@ -1,0 +1,2 @@
+{"ts":1751796000.123,"v":1,"caller":"server.go:42","msg":"listening","port":8080}
+{"ts":1751796001.5,"err":"connection refused","caller":"client.go:7","msg":"dial failed"}

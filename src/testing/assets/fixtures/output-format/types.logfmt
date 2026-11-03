@@ -1,0 +1,4 @@
+ts=1700000000000 level=info msg=numbers plus=+5 half=.5 dot=5. zeros=007 exp=5.e3 neg=-007.50 int=42 float=1.25
+ts=1700000001000 level=info msg=literals yes=true no=false nothing=null
+ts=1700000002000 level=info msg=quoted s="42" t="true" e="" "user name"=alice "items[0]"=x
+ts=1700000003000 level=info msg=repeats tag=a tag=b

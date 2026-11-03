@@ -401,6 +401,10 @@ pub struct Formatting {
     pub message: MessageFormatting,
     pub punctuation: Punctuation,
     pub prettify_field_keys: Option<bool>,
+    #[serde(default)]
+    pub json: StructuredFormatting,
+    #[serde(default)]
+    pub logfmt: StructuredFormatting,
 }
 
 #[cfg(test)]
@@ -414,8 +418,21 @@ impl Sample for Formatting {
             },
             punctuation: Punctuation::sample(),
             prettify_field_keys: None,
+            json: StructuredFormatting::default(),
+            logfmt: StructuredFormatting::default(),
         }
     }
+}
+
+// ---
+
+/// Formatting options of a structured output format.
+#[derive(Clone, Debug, Default, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub struct StructuredFormatting {
+    /// Whether each key is written once per nesting level, keeping the value of its last occurrence.
+    /// Defaults to `true`.
+    pub unique_keys: Option<bool>,
 }
 
 // ---
@@ -465,6 +482,7 @@ pub enum MessageFormat {
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub enum FlattenOption {
+    Auto,
     Never,
     Always,
 }

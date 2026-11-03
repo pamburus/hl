@@ -5,6 +5,7 @@ pub mod cli;
 pub mod condition;
 pub mod config;
 pub mod datefmt;
+pub mod diagnostics;
 pub mod error;
 pub mod fmtx;
 pub mod formatting;

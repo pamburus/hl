@@ -18,6 +18,13 @@ impl<'a> JsonEncodedString<'a> {
 
         Self(value)
     }
+
+    /// Decodes the string like [`AnyEncodedString::decode`], but replaces invalid escape
+    /// sequences, such as lone surrogates, with U+FFFD instead of failing on them.
+    #[inline]
+    pub fn decode_lossy<H: Handler>(&self, handler: H) -> Result<()> {
+        Parser::new(self.0).lossy().parse(handler)
+    }
 }
 
 impl<'a> AnyEncodedString<'a> for JsonEncodedString<'a> {
@@ -120,12 +127,23 @@ impl<'a> Handler for Appender<'a> {
 struct Parser<'a> {
     input: &'a str,
     index: usize,
+    lossy: bool,
 }
 
 impl<'a> Parser<'a> {
     #[inline]
     pub fn new(input: &'a str) -> Self {
-        Self { input, index: 0 }
+        Self {
+            input,
+            index: 0,
+            lossy: false,
+        }
+    }
+
+    /// Makes the parser replace invalid escape sequences with U+FFFD.
+    #[inline]
+    fn lossy(self) -> Self {
+        Self { lossy: true, ..self }
     }
 
     fn parse<H: Handler>(&mut self, mut handler: H) -> Result<()> {
@@ -173,6 +191,39 @@ impl<'a> Parser<'a> {
 
     #[inline]
     fn parse_escape(&mut self) -> Result<char> {
+        if !self.lossy {
+            return self.parse_escape_strict();
+        }
+
+        // A high surrogate that is not followed by a valid low surrogate is replaced on its own,
+        // so whatever follows it is decoded as usual.
+        let begin = self.index;
+        match self.parse_escape_strict() {
+            Ok(ch) => Ok(ch),
+            Err(Error::Eof) => Err(Error::Eof),
+            Err(Error::UnexpectedEndOfHexEscape | Error::LoneLeadingSurrogateInHexEscape)
+                if self.input()[begin] == b'u' && (0xD800..=0xDBFF).contains(&self.hex_at(begin + 1)) =>
+            {
+                self.index = begin + 5;
+                Ok(char::REPLACEMENT_CHARACTER)
+            }
+            Err(_) => Ok(char::REPLACEMENT_CHARACTER),
+        }
+    }
+
+    /// Returns the value of the 4 hex digits at `index`, or 0 if they are not hex digits.
+    #[inline]
+    fn hex_at(&self, index: usize) -> u16 {
+        let digits = self.input().get(index..index + 4).unwrap_or_default();
+        digits
+            .iter()
+            .try_fold(0, |n, &b| decode_hex_val(b).map(|v| (n << 4) + v))
+            .filter(|_| digits.len() == 4)
+            .unwrap_or(0)
+    }
+
+    #[inline]
+    fn parse_escape_strict(&mut self) -> Result<char> {
         let Some(ch) = self.next() else {
             return Err(Error::Eof);
         };

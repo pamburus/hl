@@ -281,10 +281,7 @@ pub struct Opt {
         env = "HL_FLATTEN",
         value_name = "WHEN",
         value_enum,
-        default_value_t = config::global::get().formatting.flatten.as_ref().map(|x| match x{
-            settings::FlattenOption::Never => FlattenOption::Never,
-            settings::FlattenOption::Always => FlattenOption::Always,
-        }).unwrap_or(FlattenOption::Always),
+        default_value_t = config::global::get().formatting.flatten.clone().into(),
         overrides_with = "flatten",
         help_heading = heading::OUTPUT
     )]
@@ -401,6 +398,17 @@ pub struct Opt {
     /// • <c>nul</>: Null character (\0)
     #[arg(long, env = "HL_OUTPUT_DELIMITER", value_name = "D", default_value = "newline", overrides_with = "output_delimiter", help_heading = heading::OUTPUT)]
     pub output_delimiter: OutputDelimiter,
+
+    /// Output format
+    #[arg(
+        long,
+        env = "HL_OUTPUT_FORMAT",
+        default_value = "pretty",
+        overrides_with = "output_format",
+        value_name = "FORMAT",
+        help_heading = heading::OUTPUT
+    )]
+    pub output_format: OutputFormat,
 
     /// Input format
     #[arg(
@@ -550,6 +558,13 @@ pub enum InputFormat {
 }
 
 #[derive(ValueEnum, Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OutputFormat {
+    Pretty,
+    Json,
+    Logfmt,
+}
+
+#[derive(ValueEnum, Debug, Clone, Copy, PartialEq, Eq)]
 pub enum UnixTimestampUnit {
     Auto,
     S,
@@ -560,14 +575,16 @@ pub enum UnixTimestampUnit {
 
 #[derive(ValueEnum, Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum FlattenOption {
-    Never,
     #[default]
+    Auto,
+    Never,
     Always,
 }
 
 impl From<settings::FlattenOption> for FlattenOption {
     fn from(value: settings::FlattenOption) -> Self {
         match value {
+            settings::FlattenOption::Auto => Self::Auto,
             settings::FlattenOption::Never => Self::Never,
             settings::FlattenOption::Always => Self::Always,
         }
@@ -583,6 +600,7 @@ impl From<Option<settings::FlattenOption>> for FlattenOption {
 impl From<FlattenOption> for settings::FlattenOption {
     fn from(value: FlattenOption) -> settings::FlattenOption {
         match value {
+            FlattenOption::Auto => settings::FlattenOption::Auto,
             FlattenOption::Never => settings::FlattenOption::Never,
             FlattenOption::Always => settings::FlattenOption::Always,
         }

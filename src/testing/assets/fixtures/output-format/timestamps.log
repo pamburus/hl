@@ -1,0 +1,11 @@
+{"ts":1700000000,"msg":"unix seconds"}
+{"ts":1700000000000,"msg":"unix milliseconds"}
+{"ts":1700000000000000,"msg":"unix microseconds"}
+{"ts":1700000000000000000,"msg":"unix nanoseconds"}
+{"ts":1700000000.25,"msg":"fractional seconds"}
+{"ts":1700000000000.5,"msg":"fractional milliseconds"}
+{"ts":"2026-07-06T10:00:00.10Z","msg":"trailing zeros"}
+{"ts":"2026-07-06 10:00:00.123","msg":"zone-less"}
+{"ts":"2026-07-06T12:00:00.5+02:00","msg":"non-utc offset"}
+{"ts":"yesterday","msg":"unparsable string"}
+{"ts":-1e300,"msg":"unparsable number"}

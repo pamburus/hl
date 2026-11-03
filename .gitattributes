@@ -1,2 +1,5 @@
 # Ensure justfile always uses LF line endings
 justfile text eol=lf
+
+# Keep output-format fixtures byte-exact on every platform, as tests check byte ranges in them
+src/testing/assets/fixtures/output-format/** text eol=lf

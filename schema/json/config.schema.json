@@ -3,6 +3,16 @@
   "type": "object",
   "additionalProperties": false,
   "definitions": {
+    "structured-formatting": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "unique-keys": {
+          "type": "boolean",
+          "description": "Write each key once per nesting level, keeping the value of its last occurrence. With false, repeated keys are written as they occur in the source."
+        }
+      }
+    },
     "condition": {
       "type": "string",
       "pattern": "^(!)?((os|mode):.+)$",
@@ -433,7 +443,7 @@
       "properties": {
         "flatten": {
           "type": "string",
-          "enum": ["never", "always"]
+          "enum": ["auto", "never", "always"]
         },
         "message": {
           "type": "object",
@@ -521,6 +531,12 @@
         },
         "prettify-field-keys": {
           "type": "boolean"
+        },
+        "json": {
+          "$ref": "#/definitions/structured-formatting"
+        },
+        "logfmt": {
+          "$ref": "#/definitions/structured-formatting"
         }
       }
     },

@@ -838,23 +838,30 @@ enum FieldSettings {
 }
 
 impl FieldSettings {
+    /// Sets the timestamp of the record.
+    ///
+    /// It is kept out of line, as building a timestamp inlined into [`FieldSettings::apply`],
+    /// which runs for every field, makes the matching of all fields slower.
+    #[inline(never)]
+    fn apply_time<'a>(ps: &ParserSettings, value: RawValue<'a>, to: &mut Record<'a>) -> bool {
+        let s = value.raw_str();
+        let s = if !s.is_empty() && s.as_bytes()[0] == b'"' {
+            &s[1..s.len() - 1]
+        } else {
+            s
+        };
+        if !s.is_empty() {
+            let ts = Timestamp::new(s).with_unix_unit(ps.unix_ts_unit).with_source(value);
+            to.ts = Some(ts);
+            true
+        } else {
+            false
+        }
+    }
+
     fn apply<'a>(&self, ps: &ParserSettings, value: RawValue<'a>, to: &mut Record<'a>) -> bool {
         match *self {
-            Self::Time => {
-                let s = value.raw_str();
-                let s = if !s.is_empty() && s.as_bytes()[0] == b'"' {
-                    &s[1..s.len() - 1]
-                } else {
-                    s
-                };
-                if !s.is_empty() {
-                    let ts = Timestamp::new(s).with_unix_unit(ps.unix_ts_unit);
-                    to.ts = Some(ts);
-                    true
-                } else {
-                    false
-                }
-            }
+            Self::Time => Self::apply_time(ps, value, to),
             Self::Level(i) => {
                 let value = value.parse().ok().unwrap_or_else(|| value.raw_str());
                 if let Some(level) = ps.level[i].0.get(value) {
