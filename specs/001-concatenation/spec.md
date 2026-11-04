@@ -3,7 +3,7 @@
 **Feature Name:** Multiple Log File Concatenation
 **Branch:** 001-concatenation
 **Status:** Existing Implementation (Documented)
-**Last Updated:** 2025-11-02
+**Last Updated:** 2026-10-25
 
 ## Clarifications
 
@@ -130,6 +130,13 @@ The concatenation feature enables users to process multiple log files in a singl
 - stdin (if specified) is processed at its position in the file list
 - Metadata about which input each segment came from is available to downstream features
 
+### Messages Larger Than the Maximum Message Size
+
+A message larger than `--max-message-size` is not parsed. It is read in several parts and shown in its place as is, like other text that is not a record:
+- It starts with the input badge of its source, when input badges are shown
+- Its trailing input delimiter is replaced by the output delimiter, and the output delimiter is added if it has none
+- It is hidden, like other text that is not a record, when a filter or `--input-format` is set
+
 ### Configuration Options
 
 **CLI Flags (concatenation-specific):**
@@ -229,6 +236,7 @@ Messages are delimited by a configurable character or string (default: LF). Deli
 - Mixed compressed/uncompressed: all decompressed correctly
 - Empty files in list: handled gracefully
 - Very long lines: handled without truncation (up to max message size)
+- Lines larger than max message size: shown as is with the input badge and the output delimiter, hidden with a filter or input format
 
 ### Integration Tests
 - CLI: `hl file1.log file2.log` produces correct output

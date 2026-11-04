@@ -323,20 +323,28 @@ impl App {
             // prepare receive/transmit channels for input data
             let (txi, rxi): (Vec<_>, Vec<_>) = (0..n).map(|_| channel::bounded(1)).unzip();
             // prepare receive/transmit channels for output data
-            let (txo, rxo): (Vec<_>, Vec<_>) = (0..n).map(|_| channel::bounded::<(usize, SegmentBuf)>(1)).unzip();
+            let (txo, rxo): (Vec<_>, Vec<_>) = (0..n).map(|_| channel::bounded::<(usize, Vec<u8>)>(1)).unzip();
             // spawn reader thread
             let reader = scope.spawn(closure!(clone sfi, |_| -> Result<()> {
                 let mut tx = StripedSender::new(txi);
                 let scanner = Scanner::new(sfi, &self.options.delimiter);
                 for (i, mut input) in inputs.into_iter().enumerate() {
                     let mut offset = 0;
+                    let mut split = false;
                     for item in scanner.items(&mut input.stream.as_sequential()).with_max_segment_size(self.options.max_message_size.into()) {
                         let item = item?;
                         let len = item.data().len();
+                        split = matches!(item, Segment::Incomplete(_, PartialPlacement::First | PartialPlacement::Next));
                         if tx.send((i, offset, item)).is_none() {
                             break;
                         }
                         offset += len as u64;
+                    }
+                    // The scanner gives no last part for a log entry too large to be read at once
+                    // that ends right at the end of the input on a buffer boundary, so an empty
+                    // one is sent to end it.
+                    if split && tx.send((i, offset, Segment::Incomplete(SegmentBuf::from(b""), PartialPlacement::Last))).is_none() {
+                        break;
                     }
                 }
                 Ok(())
@@ -346,6 +354,7 @@ impl App {
                 scope.spawn(closure!(ref bfo, ref parser, ref sfi, ref descriptors, ref input_badges, |_| {
                     let mut processor = self.new_segment_processor(parser);
                     let show_unparsed = self.allow_unparsed_data();
+                    let delim = self.options.delimiter.clone().into_searcher();
                     for (i, offset, segment) in rxi.iter() {
                         let prefix = input_badges.as_ref().map(|b|b[i].as_str()).unwrap_or("");
                         match segment {
@@ -354,21 +363,23 @@ impl App {
                                 let origin = Origin::new(&descriptors[i], offset, segment.data().len());
                                 processor.process(segment.data(), &mut buf, origin, prefix, None, &mut RecordIgnorer{});
                                 sfi.recycle(segment);
-                                if txo.send((i, buf.into())).is_err() {
+                                if txo.send((i, buf)).is_err() {
                                     break;
                                 };
                             }
-                            Segment::Incomplete(segment, _) => {
+                            Segment::Incomplete(segment, part) => {
                                 // A log entry too large to be read at once is shown as is, part by part,
                                 // like other text that is not a record. Every segment is sent, even
                                 // with nothing to show, as the writer takes them in order.
-                                let segment = if show_unparsed {
-                                    segment
-                                } else {
-                                    sfi.recycle(segment);
-                                    SegmentBuf::from(b"")
-                                };
-                                if txo.send((i, segment)).is_err() {
+                                let mut buf = bfo.new_buf();
+                                if show_unparsed {
+                                    Self::format_part(&mut buf, segment.data(), part, prefix, &*delim);
+                                    if part == PartialPlacement::Last {
+                                        buf.extend(self.options.output_delimiter.as_bytes());
+                                    }
+                                }
+                                sfi.recycle(segment);
+                                if txo.send((i, buf)).is_err() {
                                     break;
                                 }
                             }
@@ -379,8 +390,8 @@ impl App {
             // spawn writer thread
             let writer = scope.spawn(closure!(ref bfo, |_| -> Result<()> {
                 for (_, buf) in StripedReceiver::new(rxo) {
-                    output.write_all(buf.data())?;
-                    bfo.recycle(buf.into_inner());
+                    output.write_all(&buf)?;
+                    bfo.recycle(buf);
                 }
                 Ok(())
             }));
@@ -790,16 +801,7 @@ impl App {
                     let mut buf = bfo.new_buf();
                     let mut index = TimestampIndex::new(j);
                     if self.allow_unparsed_data() {
-                        let mut data = segment.data();
-                        if part == PartialPlacement::First {
-                            buf.extend(prefix.as_bytes());
-                        }
-                        if part == PartialPlacement::Last
-                            && let Some(found) = delim.search_r(data, true).filter(|x| x.end == data.len())
-                        {
-                            data = &data[..found.start];
-                        }
-                        buf.extend_from_slice(data);
+                        Self::format_part(&mut buf, segment.data(), part, prefix, &*delim);
                         index.part = Some(part);
                     }
                     sfi.recycle(segment);
@@ -809,6 +811,21 @@ impl App {
                 }
             }
         }
+    }
+
+    /// Writes `data`, a part of a log entry too large to be read at once, to `buf`
+    /// as is, after `prefix` if it is the first part and without the final delimiter if it is the last one.
+    fn format_part(buf: &mut Vec<u8>, data: &[u8], part: PartialPlacement, prefix: &str, delim: &dyn Search) {
+        let mut data = data;
+        if part == PartialPlacement::First {
+            buf.extend(prefix.as_bytes());
+        }
+        if part == PartialPlacement::Last
+            && let Some(found) = delim.search_r(data, true).filter(|x| x.end == data.len())
+        {
+            data = &data[..found.start];
+        }
+        buf.extend_from_slice(data);
     }
 
     fn merge_segments(

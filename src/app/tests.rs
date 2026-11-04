@@ -560,6 +560,66 @@ fn test_incomplete_segment_hidden(#[case] opts: Options, #[case] expected: &str)
     assert_eq!(std::str::from_utf8(&output).unwrap(), expected);
 }
 
+#[rstest]
+#[case::input_badges(options().with_input_info(InputInfo::Minimal.into()), "\n", "#0 | ", "#1 | ")]
+#[case::output_delimiter(
+    Options { output_delimiter: "\r\n".into(), ..options().with_input_info(InputInfo::None.into()) },
+    "\r\n",
+    "",
+    ""
+)]
+fn test_incomplete_segment_formatted(
+    #[case] opts: Options,
+    #[case] delim: &str,
+    #[case] badge0: &str,
+    #[case] badge1: &str,
+) {
+    let long = "x".repeat(200);
+    let data = format!(
+        "{}\n{long}\n{}\n",
+        r#"{"ts":"2026-07-06T10:00:00Z","msg":"before"}"#, r#"{"ts":"2026-07-06T10:00:01Z","msg":"after"}"#,
+    );
+
+    let mut output = Vec::new();
+    let app = App::new(Options {
+        buffer_size: NonZeroUsize::new(32).unwrap(),
+        max_message_size: NonZeroUsize::new(64).unwrap(),
+        concurrency: 2,
+        ..opts
+    });
+    app.run(vec![input(data.clone()), input(data)], &mut output).unwrap();
+
+    let expected = [badge0, badge1]
+        .iter()
+        .map(|badge| {
+            format!(
+                "{badge}2026-07-06 10:00:00.000 before{delim}{badge}{long}{delim}{badge}2026-07-06 10:00:01.000 after{delim}"
+            )
+        })
+        .join("");
+    assert_eq!(std::str::from_utf8(&output).unwrap(), expected);
+}
+
+#[rstest]
+fn test_incomplete_segment_at_end(#[values(96, 100)] len: usize) {
+    let long = "x".repeat(len);
+
+    let mut output = Vec::new();
+    let app = App::new(Options {
+        buffer_size: NonZeroUsize::new(32).unwrap(),
+        max_message_size: NonZeroUsize::new(64).unwrap(),
+        concurrency: 2,
+        ..options().with_input_info(InputInfo::Minimal.into())
+    });
+    app.run(vec![input(long.clone()), input(long.clone())], &mut output)
+        .unwrap();
+
+    assert_eq!(
+        std::str::from_utf8(&output).unwrap(),
+        format!("#0 | {long}\n#1 | {long}\n")
+    );
+}
+
 #[test]
 fn test_incomplete_segment_sorted() {
     let data = concat!(
