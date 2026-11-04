@@ -768,12 +768,31 @@ pub struct ScannerIter<'a, 'b, D: Delimit> {
     placement: Option<PartialPlacement>,
     pending: bool,
     done: bool,
+    open_ended: bool,
 }
 
 impl<'a, 'b, D: Delimit> ScannerIter<'a, 'b, D> {
     #[inline]
     pub fn with_max_segment_size(self, max_segment_size: usize) -> ScannerJumboIter<'a, 'b, D> {
         ScannerJumboIter::new(self, max_segment_size)
+    }
+
+    /// Continues a token that a previous input left incomplete, see [`ScannerIter::open_ended`]:
+    /// the data up to the first delimiter is its rest, and none of its parts is marked as the first one.
+    #[inline]
+    pub fn continuing(mut self, continuing: bool) -> Self {
+        if continuing {
+            self.placement = Some(PartialPlacement::Next);
+        }
+        self
+    }
+
+    /// Leaves a token that is incomplete at the end of the input open, to be continued by another input,
+    /// instead of marking its last part as [`PartialPlacement::Last`].
+    #[inline]
+    pub fn open_ended(mut self, open_ended: bool) -> Self {
+        self.open_ended = open_ended;
+        self
     }
 
     #[inline]
@@ -786,6 +805,7 @@ impl<'a, 'b, D: Delimit> ScannerIter<'a, 'b, D> {
             placement: None,
             pending: false,
             done: false,
+            open_ended: false,
         }
     }
 
@@ -864,7 +884,12 @@ impl<'a, 'b, D: Delimit> Iterator for ScannerIter<'a, 'b, D> {
 
             let (next, placement) = if n == Some(0) {
                 self.done = true;
-                (SegmentBuf::zero(), self.placement.and(Some(PartialPlacement::Last)))
+                let end = if self.open_ended {
+                    PartialPlacement::Next
+                } else {
+                    PartialPlacement::Last
+                };
+                (SegmentBuf::zero(), self.placement.and(Some(end)))
             } else {
                 match self.split(full, self.done) {
                     Some((next, true)) => {
