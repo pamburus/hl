@@ -536,7 +536,7 @@ fn test_incomplete_segment() {
     Options { input_format: Some(InputFormat::Json), delimiter: Delimiter::Json, ..options() },
     "2024-01-25 18:10:20.435 |ERR| m1\n2024-01-25 18:10:21.764 |INF| m2\n"
 )]
-fn test_incomplete_segment_hidden(#[case] opts: Options, #[case] expected: &str) {
+fn test_incomplete_segment_hidden(#[case] opts: Options, #[case] expected: &str, #[values(false, true)] follow: bool) {
     let input = input(format!(
         concat!(
             r#"{{"level":"error","ts":"2024-01-25T19:10:20.435369+01:00","msg":"m1"}}"#,
@@ -554,6 +554,7 @@ fn test_incomplete_segment_hidden(#[case] opts: Options, #[case] expected: &str)
         buffer_size: NonZeroUsize::new(32).unwrap(),
         max_message_size: NonZeroUsize::new(128).unwrap(),
         concurrency: 2,
+        follow,
         ..opts
     });
     app.run(vec![input], &mut output).unwrap();

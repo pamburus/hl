@@ -787,22 +787,38 @@ impl App {
                     // A log entry too large to be read at once is shown as is, part by part,
                     // like other text that is not a record. Every block is sent, even
                     // with nothing to show, as the merger takes them in order.
-                    let mut buf = bfo.new_buf();
                     let mut index = TimestampIndex::new(j);
-                    if self.allow_unparsed_data() {
-                        let mut data = segment.data();
-                        if part == PartialPlacement::First {
-                            buf.extend(prefix.as_bytes());
-                        }
-                        if part == PartialPlacement::Last
-                            && let Some(found) = delim.search_r(data, true).filter(|x| x.end == data.len())
-                        {
-                            data = &data[..found.start];
-                        }
-                        buf.extend_from_slice(data);
+                    let buf = if !self.allow_unparsed_data() {
+                        sfi.recycle(segment);
+                        Vec::new()
+                    } else {
                         index.part = Some(part);
-                    }
-                    sfi.recycle(segment);
+                        match part {
+                            // A part in the middle fills nearly all of its buffer, so the buffer is sent as is.
+                            PartialPlacement::Next => {
+                                let len = segment.len();
+                                let mut buf = segment.into_inner();
+                                buf.truncate(len);
+                                buf
+                            }
+                            // The first and the last part are copied into a buffer of their size,
+                            // as the first one needs the prefix and the last one can be short.
+                            PartialPlacement::First | PartialPlacement::Last => {
+                                let mut data = segment.data();
+                                let prefix = if part == PartialPlacement::First { prefix } else { "" };
+                                if part == PartialPlacement::Last
+                                    && let Some(found) = delim.search_r(data, true).filter(|x| x.end == data.len())
+                                {
+                                    data = &data[..found.start];
+                                }
+                                let mut buf = Vec::with_capacity(prefix.len() + data.len());
+                                buf.extend_from_slice(prefix.as_bytes());
+                                buf.extend_from_slice(data);
+                                sfi.recycle(segment);
+                                buf
+                            }
+                        }
+                    };
                     if txo.send((i, buf, index)).is_err() {
                         return;
                     };
