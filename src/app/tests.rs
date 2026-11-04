@@ -133,7 +133,7 @@ fn text_block(input: usize, block: usize, text: &str) -> Processed {
     (input, text.as_bytes().to_vec(), TimestampIndex::new(block))
 }
 
-/// Merges `messages`, received one by one, with every entry due for output as soon as it comes,
+/// Merges `messages`, received one by one, in a window with room for all of them,
 /// and returns the output.
 fn merge(sync_interval: Duration, messages: Vec<Processed>) -> String {
     let app = App::new(Options {
@@ -147,8 +147,7 @@ fn merge(sync_interval: Duration, messages: Vec<Processed>) -> String {
     drop(txo);
 
     let mut output = Vec::new();
-    // With zero concurrency the memory limit is zero, so nothing waits for the sync interval.
-    app.merge_segments(&test_badges(2), rxo, &mut output, 0).unwrap();
+    app.merge_segments(&test_badges(2), rxo, &mut output, 1).unwrap();
     String::from_utf8(output).unwrap()
 }
 
@@ -2853,12 +2852,11 @@ fn test_follow_merges_inputs_by_time() {
 #[rstest]
 #[case::kept_together(
     vec![
-        record_block(0, 0, "  rec-a", 100),
-        part_block(0, 1, "  xx", PartialPlacement::First),
-        record_block(1, 0, "  rec-b", 200),
-        part_block(0, 2, "yy", PartialPlacement::Last),
+        part_block(0, 0, "  xx", PartialPlacement::First),
+        text_block(1, 0, "text\n"),
+        part_block(0, 1, "yy", PartialPlacement::Last),
     ],
-    "SSrec-a\nSSxxyy\nSSrec-b\n",
+    "  xxyy\ntext\n",
 )]
 #[case::taken_in_block_order(
     vec![
@@ -2876,15 +2874,15 @@ fn test_follow_merges_inputs_by_time() {
         part_block(0, 2, "yy", PartialPlacement::Last),
         record_block(1, 0, "  rec-b", 200),
     ],
-    "SSrec-a\nSSxxyy\nFFrec-b\n",
+    "SSrec-b\nSSrec-a\nSSxxyy\n",
 )]
 #[case::ended_by_next_block(
     vec![
-        record_block(0, 0, "  rec-a", 100),
-        part_block(0, 1, "  xx", PartialPlacement::First),
-        record_block(0, 2, "  rec-b", 100),
+        part_block(1, 0, "  xx", PartialPlacement::First),
+        text_block(1, 1, "after\n"),
+        text_block(0, 0, "other\n"),
     ],
-    "SSrec-a\nSSxx\nSSrec-b\n",
+    "  xx\nafter\nother\n",
 )]
 #[case::ended_when_inputs_close(
     vec![
@@ -2904,13 +2902,12 @@ fn test_follow_merges_inputs_by_time() {
 )]
 #[case::held_while_other_entry_is_open(
     vec![
-        record_block(0, 0, "  rec-a", 100),
-        part_block(0, 1, "  aa", PartialPlacement::First),
+        part_block(0, 0, "  aa", PartialPlacement::First),
         part_block(1, 0, "  xx", PartialPlacement::First),
         part_block(1, 1, "yy", PartialPlacement::Last),
-        part_block(0, 2, "bb", PartialPlacement::Last),
+        part_block(0, 1, "bb", PartialPlacement::Last),
     ],
-    "SSrec-a\nSSaabb\n  xxyy\n",
+    "  aabb\n  xxyy\n",
 )]
 fn test_merge_segments_long_entry(#[case] messages: Vec<Processed>, #[case] expected: &str) {
     // The sync interval is far longer than the test, so a split entry can only end early
@@ -2928,7 +2925,7 @@ fn test_merge_segments_long_entry_ended_when_rest_is_late() {
         record_block(1, 0, "  rec-b", 200),
         part_block(0, 2, "yy", PartialPlacement::Last),
     ];
-    assert_eq!(merge(Duration::ZERO, messages), "SSrec-a\nSSxx\nSSrec-b\nyy\n");
+    assert_eq!(merge(Duration::ZERO, messages), "SSrec-a\nSSxx\nSSrec-b\n  yy\n");
 }
 
 #[test]

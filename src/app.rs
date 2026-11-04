@@ -765,11 +765,7 @@ impl App {
         let mut processor = self.new_segment_processor(parser);
         let delim = self.options.delimiter.clone().into_searcher();
         for (i, j, offset, segment) in rxi.iter() {
-            let prefix = badges
-                .input
-                .as_ref()
-                .map(|b| b[i].as_str())
-                .unwrap_or(&badges.si.placeholder);
+            let prefix = badges.prefix(i);
             match segment {
                 Segment::Complete(segment) => {
                     let mut buf = bfo.new_buf();
@@ -821,7 +817,7 @@ impl App {
         let delim = self.options.output_delimiter.as_bytes();
         let mem_limit = concurrency * usize::from(self.options.buffer_size);
         let mut window = MergeWindow::new(delim, mem_limit, self.options.sync_interval);
-        let mut writer = MergeWriter::new(&badges.si, delim);
+        let mut writer = MergeWriter::new(badges, delim);
         let mut disconnected = false;
 
         loop {
@@ -832,6 +828,7 @@ impl App {
             while let Some(due) = window.pop_due(now, disconnected) {
                 match due {
                     Due::Entry(ts, entry) => writer.write(output, ts, &entry)?,
+                    Due::Resumed(i, entry) => writer.resume(output, i, &entry)?,
                     Due::SplitEnd => writer.end_split(output)?,
                 }
                 written = true;
@@ -1517,6 +1514,16 @@ impl<T> StripedSender<T> {
 struct FollowBadges {
     si: SyncIndicator,
     input: Option<Vec<String>>,
+}
+
+impl FollowBadges {
+    /// Returns what an entry of input `i` starts with: its input badge, or the placeholder for the sync indicator.
+    fn prefix(&self, i: usize) -> &str {
+        self.input
+            .as_ref()
+            .map(|b| b[i].as_str())
+            .unwrap_or(&self.si.placeholder)
+    }
 }
 
 struct SyncIndicator {
