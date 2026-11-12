@@ -26,9 +26,9 @@ pub(super) struct MergeWindow<'a> {
     /// A split entry being written: the input and block of its next part, and when its last part was given out.
     /// Until the next part is given out, nothing else is, so that no other entries come in between.
     open: Option<(usize, usize, Instant)>,
-    /// Split entries ended before their rest came: the input and block of the next part of each.
-    /// The rest is given out as it comes, as nothing is held for it.
-    late: Vec<(usize, usize)>,
+    /// Whether the split entry of each input was ended before its rest came.
+    /// If the next block of such an input is that rest, it is sorted first, so that it is given out as it comes.
+    ended: Vec<bool>,
     mem_usage: usize,
     mem_limit: usize,
     sync_interval: Duration,
@@ -43,7 +43,7 @@ impl<'a> MergeWindow<'a> {
             parts: Vec::new(),
             last_ts: HashMap::new(),
             open: None,
-            late: Vec::new(),
+            ended: Vec::new(),
             mem_usage: 0,
             mem_limit,
             sync_interval,
@@ -70,27 +70,25 @@ impl<'a> MergeWindow<'a> {
                 return Some(self.take_part(i, block, entry, now));
             }
             let passed = self.order.passed(i, block);
-            if all || passed || flush_wait(since, now, self.sync_interval).is_zero() {
+            // A late rest is waited for until something else is due, as nothing can be written before it.
+            let late = flush_wait(since, now, self.sync_interval).is_zero() && self.next_entry_wait(now).is_zero();
+            if all || passed || late {
                 // The rest of the entry will not come, or comes too late, so the entry is ended as it is.
                 self.open = None;
                 if !all && !passed {
-                    self.late.push((i, block));
+                    if self.ended.len() <= i {
+                        self.ended.resize(i + 1, false);
+                    }
+                    self.ended[i] = true;
                 }
                 return Some(Due::SplitEnd);
             }
             return None;
         }
 
-        if !self.late.is_empty()
-            && let Some(due) = self.pop_late(now)
-        {
-            return Some(due);
-        }
-
         // Only the first entry is ever removed from the sorted entries,
         // which keeps the removal cheap in this common path.
-        let (key, first) = self.entries.first_key_value()?;
-        if key.ts.is_some() && !all && self.mem_usage < self.mem_limit && !self.wait_for(first, now).is_zero() {
+        if !all && !self.next_entry_wait(now).is_zero() {
             return None;
         }
         let (key, entry) = self.entries.pop_first()?;
@@ -104,12 +102,20 @@ impl<'a> MergeWindow<'a> {
     /// Returns how long, as of `now`, until something is due.
     pub fn wait(&self, now: Instant) -> Duration {
         if let Some((_, _, since)) = self.open {
-            return flush_wait(since, now, self.sync_interval);
+            return flush_wait(since, now, self.sync_interval).max(self.next_entry_wait(now));
         }
-        self.entries
-            .first_key_value()
-            .map(|(_, first)| self.wait_for(first, now))
-            .unwrap_or(Duration::MAX)
+        self.next_entry_wait(now)
+    }
+
+    /// Returns how long, as of `now`, until the first of the sorted entries is due, or [`Duration::MAX`] if there are none.
+    fn next_entry_wait(&self, now: Instant) -> Duration {
+        let Some((key, first)) = self.entries.first_key_value() else {
+            return Duration::MAX;
+        };
+        if key.ts.is_none() || self.mem_usage >= self.mem_limit {
+            return Duration::ZERO;
+        }
+        self.wait_for(first, now)
     }
 
     /// Adds the entries of the next block of input `i`.
@@ -121,9 +127,18 @@ impl<'a> MergeWindow<'a> {
         let buf = Rc::new(buf);
         let mut ts = self.last_ts.get(&i).copied();
 
+        // Whatever the next block of the input is, it settles whether the rest of its ended split entry came.
+        let ended = self.ended.get_mut(i).is_some_and(std::mem::take);
+
         if let Some(part) = index.part {
             let entry = Entry::new(&buf, 0..buf.len(), now, Some(part));
-            if entry.continues() {
+            if entry.continues() && ended {
+                // Without a timestamp, the rest is sorted first and is due right away.
+                // An empty rest adds nothing to the entry already ended, so it is dropped.
+                if !entry.data().is_empty() {
+                    self.push(Key::new(None, i, index.block, 0), entry);
+                }
+            } else if entry.continues() {
                 self.push_part(i, index.block, entry);
             } else {
                 self.push(Key::new(ts, i, index.block, 0), entry);
@@ -152,25 +167,6 @@ impl<'a> MergeWindow<'a> {
         self.mem_usage -= entry.location.len();
         self.open = entry.continued().then_some((i, block + 1, now));
         Due::Entry(None, entry)
-    }
-
-    /// Removes and returns the next part of a split entry ended before its rest came, if it came by now.
-    fn pop_late(&mut self, now: Instant) -> Option<Due> {
-        let mut k = 0;
-        while k < self.late.len() {
-            let (i, block) = self.late[k];
-            if let Some(entry) = self.pop_part(i, block) {
-                self.late.swap_remove(k);
-                return Some(self.take_part(i, block, entry, now));
-            }
-            if self.order.passed(i, block) {
-                // The input moved on without the rest of the entry, so it will not come.
-                self.late.swap_remove(k);
-            } else {
-                k += 1;
-            }
-        }
-        None
     }
 
     /// Removes and returns the part of a split entry in block `block` of input `i`, if it came.
