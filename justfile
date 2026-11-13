@@ -123,7 +123,7 @@ clean:
     @rm -f result*
 
 [doc('Run all CI checks locally')]
-ci: check test lint audit fmt-check check-schema
+ci: check test lint audit fmt-check check-schema stress-test
     @echo "✅ All local CI checks passed"
 
 [doc('Generate code coverage')]
@@ -137,6 +137,10 @@ uncovered base="origin/develop": (setup "coverage")
 [doc('Run benchmarks')]
 bench *args: (setup "build")
     cargo bench --workspace --locked {{ args }}
+
+[doc('Run stress tests on a release build, `profile` is `quick` or `full`, example: `just stress-test full --case long-line`')]
+stress-test profile="quick" *args: build-release
+    @scripts/stress-test.py --hl "${CARGO_TARGET_DIR:-target}/release/hl" --profile {{ profile }} {{ args }}
 
 [doc('Check schema validation')]
 check-schema: (setup "schema")

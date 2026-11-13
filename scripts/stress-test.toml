@@ -1,0 +1,87 @@
+# Cases for `just stress-test`, run by `scripts/stress-test.py`.
+#
+# Each case runs in each of its modes at two sizes of one dimension, the second `factor` times the first, and checks:
+# * that the output is exactly what the input should give,
+# * that CPU time and peak memory grow with that dimension no faster than the case allows: as a ratio of the two runs,
+#   `constant` allows `slack` and `linear` allows `factor * slack`; a case can give a mode its own growth.
+#
+# Sizes come from the profile, so the same cases run in `just ci` and larger in `just stress-test full`. They should be
+# well above the memory hl takes regardless of input, a few tens of MiB, or that memory hides the growth.
+# A check that fails because of an open issue is listed under `known`, keyed by `mode.check`; it is reported but does
+# not fail the run, and it fails the run once it passes, so the entry is removed with the fix. An entry for a check that
+# fails only on some platforms names them, as in `{ issue = "#1", os = ["linux"] }`.
+
+[profiles.quick]
+line = "32MiB"    # length of a line over the limit
+limit = "8MiB"    # --max-message-size
+input = "32MiB"   # total size of inputs made of short lines
+factor = 4
+slack = 1.6
+repeat = 2
+timeout = 60
+
+[profiles.full]
+line = "1GiB"
+limit = "64MiB"
+input = "256MiB"
+factor = 4
+slack = 1.6
+repeat = 2
+timeout = 900
+
+# Sorting input that cannot be read again, from stdin or a compressed file, keeps a compressed copy of all of it.
+
+[[cases]]
+name = "long-line"
+about = "A line over the limit between two short records, by its length"
+input = "long-line"
+modes = ["cat", "sort-file", "sort-stdin", "sort-gz", "follow-stdin", "follow-file"]
+scale = "line"
+cpu = "linear"
+rss = { default = "constant", sort-stdin = "linear", sort-gz = "linear" }
+
+[cases.known]
+"cat.rss" = "#1692"
+
+[[cases]]
+name = "long-line-by-limit"
+about = "A line over the limit between two short records, by the limit"
+input = "long-line"
+modes = ["cat", "sort-file", "sort-stdin", "sort-gz", "follow-stdin", "follow-file"]
+scale = "limit"
+cpu = "constant"
+rss = "linear"
+
+[cases.known]
+"follow-file.cpu" = "#1693"
+
+[[cases]]
+name = "unterminated-long-line"
+about = "A line over the limit at the end of the input, with no delimiter after it"
+input = "unterminated-long-line"
+modes = ["cat", "sort-file", "sort-stdin", "sort-gz", "follow-stdin"]
+scale = "line"
+cpu = "linear"
+rss = { default = "constant", sort-stdin = "linear", sort-gz = "linear" }
+
+[cases.known]
+"cat.rss" = "#1692"
+"cat.output" = "#1695"
+
+[[cases]]
+name = "short-lines"
+about = "Many short records, by the size of the input"
+input = "short-lines"
+modes = ["cat", "sort-file", "sort-stdin", "sort-gz", "follow-stdin", "follow-file"]
+scale = "input"
+cpu = "linear"
+rss = { default = "constant", sort-stdin = "linear", sort-gz = "linear" }
+
+[cases.known]
+"follow-file.rss" = { issue = "#1700", os = ["linux"] }
+
+[[cases]]
+name = "split-record"
+about = "A short record written in two parts, the first one written with enough complete records to reach the limit"
+input = "split-record"
+modes = ["follow-file"]
