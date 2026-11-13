@@ -21,7 +21,7 @@ Run the release workflow on `develop`, or on a `release/*` branch for a patch re
 
 ## Fixes for released lines
 
-Make a fix on the oldest supported line that needs it, then merge it forward into each newer `release/*` branch and finally into `develop`. Cherry-picks are only for backports, where a change made on a newer line is needed on an older one.
+Make a fix on the oldest supported line that needs it, then merge it forward into each newer `release/*` branch and finally into `develop`. Cherry-picks are only for backports, where a change made on a newer line is needed on an older one. Make them as described in [Issue references](commits.md#issue-references).
 
 A forward merge:
 

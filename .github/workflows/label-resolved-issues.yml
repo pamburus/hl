@@ -1,0 +1,55 @@
+---
+name: Label resolved issues
+
+# Commits close issues with a `Closes: #N` footer, but GitHub acts on it only when the commit reaches master, which
+# happens with the next release. Until then, issues fixed on a release line stay open and look the same as unresolved
+# ones. This job adds the `resolved` label to the open issues that commits on a release line close, so the unresolved
+# ones can be found by filtering it out.
+#
+# Each run scans every commit on each release line that is not on master yet, so it also catches up on commits pushed
+# before the workflow existed or while it was failing. Commits undone by `git revert` do not count, and the label is
+# removed from an issue when all commits closing it have been reverted. A label set by hand on an issue that no commit
+# closes is left alone.
+#
+# The label stays when the release closes the issue. When the issue is reopened, it is removed unless unreleased commits
+# still close the issue. The `issues` trigger runs from master, so it takes effect with a release.
+
+"on":
+  push:
+    branches: [develop, "release/*"]
+  issues:
+    types: [reopened]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+# Each run scans everything, so a pending scan can be replaced by a newer one, but not a run for a reopened issue.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.issue.number || 'scan' }}
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash -euo pipefail {0}
+
+jobs:
+  label:
+    name: Label resolved issues
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          filter: tree:0
+
+      - name: Update labels of issues closed by unreleased commits
+        run: ./scripts/label-resolved-issues.sh "${REPO:?}"
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          REOPENED: ${{ github.event.issue.number }}
+          # The partial clone would otherwise fetch commits it lacks, one at a time, instead of reporting them missing.
+          GIT_NO_LAZY_FETCH: 1
