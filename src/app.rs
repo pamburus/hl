@@ -1345,8 +1345,9 @@ impl<'a, D: Delimit> BlockScanner<'a, D> {
 /// Reads a previously held tail followed by an inner stream, and holds back the
 /// data after the last delimiter once the inner stream reaches its end.
 ///
-/// The held data stops growing at `limit` bytes: a line that long is passed on
-/// even if unterminated, as the scanner would split it into parts anyway.
+/// The held data stops growing at `limit` bytes after the last delimiter: a line
+/// that long is passed on even if unterminated, as the scanner would split it
+/// into parts anyway.
 struct TailHoldingReader<'a, S> {
     inner: &'a mut dyn Read,
     searcher: &'a S,
@@ -1392,10 +1393,11 @@ impl<S: Search> Read for TailHoldingReader<'_, S> {
                 return Ok(0);
             }
 
-            self.ready = if self.buf.len() >= self.limit {
+            let end = self.searcher.search_r(&self.buf, true).map(|r| r.end).unwrap_or(0);
+            self.ready = if self.buf.len() - end >= self.limit {
                 self.buf.len()
             } else {
-                self.searcher.search_r(&self.buf, true).map(|r| r.end).unwrap_or(0)
+                end
             };
         }
 
