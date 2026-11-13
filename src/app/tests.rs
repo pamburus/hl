@@ -3112,6 +3112,16 @@ fn test_block_scanner_passes_overlong_tail() {
 }
 
 #[test]
+fn test_block_scanner_holds_short_tail_after_long_data() {
+    // The tail is held back by its own length, not by the length of the
+    // complete lines read along with it.
+    let scanned = scan_chunks(8, &[(b"a1\na2\na3\nb", true), (b"c\n", true)]);
+
+    assert_eq!(scanned[0].concat(), "a1\na2\na3\n");
+    assert_eq!(scanned[1], vec!["bc\n".to_owned()]);
+}
+
+#[test]
 fn test_block_scanner_continues_overlong_line_across_scans() {
     // A line too long to be held back is passed on as it is written, but it is
     // left open, so that the next scan continues it instead of starting a new line.
