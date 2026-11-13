@@ -783,22 +783,14 @@ impl App {
                     // A log entry too large to be read at once is shown as is, part by part,
                     // like other text that is not a record. Every block is sent, even
                     // with nothing to show, as the merger takes them in order.
-                    let mut buf = bfo.new_buf();
                     let mut index = TimestampIndex::new(j);
-                    if self.allow_unparsed_data() {
-                        let mut data = segment.data();
-                        if part == PartialPlacement::First {
-                            buf.extend(prefix.as_bytes());
-                        }
-                        if part == PartialPlacement::Last
-                            && let Some(found) = delim.search_r(data, true).filter(|x| x.end == data.len())
-                        {
-                            data = &data[..found.start];
-                        }
-                        buf.extend_from_slice(data);
+                    let buf = if !self.allow_unparsed_data() {
+                        sfi.recycle(segment);
+                        Vec::new()
+                    } else {
                         index.part = Some(part);
-                    }
-                    sfi.recycle(segment);
+                        split_entry_part(segment, part, prefix, delim.as_ref(), sfi)
+                    };
                     if txo.send((i, buf, index)).is_err() {
                         return;
                     };
@@ -1420,6 +1412,36 @@ impl<S: Search> Read for TailHoldingReader<'_, S> {
 /// follow mode merge window, as of `now`; zero means it is due for output.
 fn flush_wait(received: Instant, now: Instant, sync_interval: Duration) -> Duration {
     sync_interval.saturating_sub(now.saturating_duration_since(received))
+}
+
+/// Returns the data of `segment`, a part of a log entry too large to be read at once, to be sent to the follow mode merger.
+///
+/// The merger counts only the data toward its memory limit, so a part is sent in its own buffer only if it fills most of it,
+/// as a part in the middle usually does. Any other part is copied into a buffer of its size: the first part, which also gets
+/// `prefix`, the last part, which loses its trailing delimiter, and a part in the middle cut short by the end of a file still
+/// being written.
+fn split_entry_part(
+    segment: SegmentBuf,
+    part: PartialPlacement,
+    prefix: &str,
+    delim: &dyn Search,
+    sfi: &SegmentBufFactory,
+) -> Vec<u8> {
+    if part == PartialPlacement::Next && segment.len() * 2 >= segment.capacity() {
+        return segment.into_data();
+    }
+    let mut data = segment.data();
+    let prefix = if part == PartialPlacement::First { prefix } else { "" };
+    if part == PartialPlacement::Last
+        && let Some(found) = delim.search_r(data, true).filter(|x| x.end == data.len())
+    {
+        data = &data[..found.start];
+    }
+    let mut buf = Vec::with_capacity(prefix.len() + data.len());
+    buf.extend_from_slice(prefix.as_bytes());
+    buf.extend_from_slice(data);
+    sfi.recycle(segment);
+    buf
 }
 
 // ---
