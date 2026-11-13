@@ -129,10 +129,102 @@ jobs:
       - name: Build
         run: cargo build --locked --release
 
+      # The perf-gate job measures this build too.
+      - name: Upload release build
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: hl-release
+          path: target/release/hl
+          retention-days: 1
+
       # Only the quick profile runs here, it is meant to take under a minute.
       - name: Run stress tests
         timeout-minutes: 2
         run: scripts/stress-test.py --hl target/release/hl --profile quick
+
+  # Compares the instruction counts of the release build with those of its base, see scripts/README.md. On pushes, it
+  # keeps the release build, so that pull requests based on that commit do not have to build their base.
+  perf-gate:
+    needs: stress-test
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+
+    steps:
+      # For pull requests, the merge commit and its first parent, the base it is compared with.
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 2
+
+      - name: Download release build
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: hl-release
+          path: target/release
+
+      - name: Find the base
+        id: base
+        run: |
+          chmod +x target/release/hl
+          if [[ "$GITHUB_EVENT_NAME" == pull_request ]]; then
+            echo "sha=$(git rev-parse HEAD^1)" >> "$GITHUB_OUTPUT"
+          else
+            mkdir -p target/perf-gate
+            cp target/release/hl "target/perf-gate/hl-$GITHUB_SHA"
+            echo "sha=$GITHUB_SHA" >> "$GITHUB_OUTPUT"
+          fi
+
+      # Saved at the end of the job when missing: on pushes the release build, in pull requests a base build made by
+      # the script, which only that pull request can use.
+      - name: Cache base build
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: target/perf-gate/hl-${{ steps.base.outputs.sha }}
+          key: perf-gate-base-${{ steps.base.outputs.sha }}
+
+      # Without the libc debug symbols it depends on: they must match the libc version exactly, so installing them
+      # upgrades libc, which takes most of the time, and cachegrind counts without them. The package lists of the runner
+      # image are usually recent enough, they are updated only when downloading from them fails.
+      - name: Install valgrind
+        if: github.event_name == 'pull_request'
+        working-directory: ${{ runner.temp }}
+        run: |
+          apt-get download -q valgrind || { sudo apt-get update -q && apt-get download -q valgrind; }
+          sudo dpkg -i --ignore-depends=libc6-dbg valgrind_*.deb
+
+      - name: Compare instruction counts with the base
+        if: github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          # The label is read here rather than from the event, so that re-running the job after adding it takes effect.
+          args=()
+          if gh pr view "$PR" --json labels -q '.labels[].name' | grep -qx perf-regression-accepted; then
+            args+=(--report-only)
+          fi
+          scripts/perf-gate.py --base HEAD^1 --hl target/release/hl --markdown perf-gate.md "${args[@]}"
+
+      # Also when the check fails. Pull requests from forks get a read-only token, they have the job summary only.
+      - name: Report instruction counts
+        if: ${{ !cancelled() && github.event_name == 'pull_request' && hashFiles('perf-gate.md') != '' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+          FORK: ${{ github.event.pull_request.head.repo.full_name != github.repository }}
+        run: |
+          cat perf-gate.md >> "$GITHUB_STEP_SUMMARY"
+          if [[ "$FORK" == true ]]; then
+            exit 0
+          fi
+          # One comment per pull request, updated on each run.
+          id=$(gh api --paginate "repos/$GITHUB_REPOSITORY/issues/$PR/comments" \
+            -q '.[] | select(.user.login == "github-actions[bot]" and (.body | startswith("<!-- perf-gate -->"))) | .id' | head -n 1)
+          if [[ -n "$id" ]]; then
+            gh api -X PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$id" -F body=@perf-gate.md > /dev/null
+          else
+            gh pr comment "$PR" --body-file perf-gate.md
+          fi
 
   coverage:
     runs-on: ubuntu-latest

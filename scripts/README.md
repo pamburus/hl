@@ -35,6 +35,43 @@ The script itself takes the binary with `--hl`, so it can also check another bui
 
 Requires Python 3.11+ and a Unix-like system.
 
+## perf-gate.py
+
+Compares the number of instructions two builds of `hl` execute on the same inputs, to catch changes that make it slower by a constant factor, which the stress test does not see. By default it compares the working tree with the commit where it forked from `origin/develop`.
+
+- **Inputs**: the records from [`sample`](../sample), repeated with new timestamps, as JSON and as logfmt
+- **Modes**:
+  - `cat`
+  - sorting a file, a gzip file and stdin
+  - sorting two files together
+  - sorting a file that is already indexed
+  - `cat` and sorting a file with 4 processing threads
+  - following stdin
+- **Counts**: from cachegrind, with one processing thread unless the mode sets more and an empty cache unless the mode needs an index, so repeated runs differ by well under 1%
+- **Runs**: once per input and mode on each build by default, as many at a time as there are CPUs; with `--repeat N`, the medians are compared
+- **Check**: fails when the head exceeds the base by more than 2% in any input and mode
+
+Following a file is left out, because how much `hl` reads per wakeup depends on timing.
+
+In pull requests, the `perf-gate` job of the CI workflow runs it on the release build of the stress-test job, against the tip of the base branch, and shows the counts in the job summary and in a comment on the pull request, updated on each run. Pull requests from forks get the job summary only, because their token cannot comment. The release build of each push to a release line is cached for the pull requests based on it, so usually nothing else is built. For a change that adds cost on purpose, add the `perf-regression-accepted` label and re-run the job: it then reports the counts without failing.
+
+### Comparing builds
+
+```bash
+# Compare with where the branch forked from origin/develop
+just perf-gate
+
+# Compare with another revision, in some modes only
+just perf-gate v0.36.5 --mode sort
+
+# Compare two builds directly
+./scripts/perf-gate.py --base-hl path/to/base/hl --hl path/to/head/hl
+```
+
+The base is checked out in the `.worktrees/perf-gate-base` worktree, which is kept for the next run so that the base builds incrementally. Local changes in it are discarded.
+
+Requires Python 3 and valgrind, which runs on Linux only. Elsewhere, the script runs itself in a Docker container, keeping the Linux builds and toolchains in Docker volumes.
+
 ## coverage-diff-analysis.py
 
 A comprehensive tool that compares test coverage between two Git commits to identify exactly which changed lines lack test coverage.

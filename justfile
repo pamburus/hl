@@ -142,6 +142,10 @@ bench *args: (setup "build")
 stress-test profile="quick" *args: build-release
     @scripts/stress-test.py --hl "${CARGO_TARGET_DIR:-target}/release/hl" --profile {{ profile }} {{ args }}
 
+[doc('Compare instruction counts of the working tree with where it forked from {{base}}, in Docker on macOS, example: `just perf-gate origin/develop --mode sort`')]
+perf-gate base="origin/develop" *args:
+    @scripts/perf-gate.py --base {{ base }} {{ args }}
+
 [doc('Check schema validation')]
 check-schema: (setup "schema")
     tombi lint
