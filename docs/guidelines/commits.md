@@ -68,6 +68,11 @@ This is a valid Conventional Commits footer and a GitHub closing keyword. Pull r
 
 Other footers, such as `Refs: #N` for related issues, MAY be added alongside it.
 
+Until the release, the `resolved` label marks open issues that commits on a release line close. To keep it accurate:
+
+* A revert MUST keep the lines that `git revert` writes about the reverted commit unchanged, also when the message is rewritten or squashed: `This reverts commit <hash>.`, or for a merge `This reverts commit <hash>, reversing changes made to <parent>.` Otherwise the reverted commit still counts as closing its issues.
+* A backport MUST be made with `git cherry-pick -x` of the commit as it landed on the newer line, such as the squashed commit on `develop`, not a commit of the pull request branch, so that the original commit is recorded. Otherwise a backported revert of the original does not undo the backport, and the backport keeps the label on an issue that was reopened after the original was released.
+
 ## Rationale
 
 This workflow ensures:
