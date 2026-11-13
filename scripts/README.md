@@ -1,6 +1,39 @@
-# Coverage Analysis Scripts
+# Scripts
 
-This directory contains tools for analyzing test coverage in the HL project.
+This directory contains development tools for the HL project.
+
+## stress-test.py
+
+Runs a built `hl` on large inputs in each of its modes (`cat`, sorting a file, stdin or a gzip file, following stdin or a file). Each case runs at two sizes, the second 4 times the first, and checks three things:
+
+- **Output**: exactly what the input should give
+- **CPU time**: the ratio of the two runs stays within what the case allows, so a change from linear to quadratic fails
+- **Peak memory**: the ratio of the two runs stays within what the case allows, so data that cannot be parsed does not pile up
+
+Comparing two runs of the same build makes the checks independent of how fast the machine is.
+
+Cases and size profiles live in [`stress-test.toml`](stress-test.toml). A check that fails because of an open issue is listed under the case's `known` table; it does not fail the run, and once it passes the run fails until the entry is removed.
+
+### Running
+
+```bash
+# Quick profile, under a minute (also part of `just ci` and the CI workflow)
+just stress-test
+
+# Full profile, with larger lines, limits and inputs; takes several minutes
+just stress-test full
+
+# Narrow down to one case or mode, or override a profile setting
+just stress-test full --case long-line --mode follow-file --set limit=256MiB
+```
+
+The script itself takes the binary with `--hl`, so it can also check another build, for example a release:
+
+```bash
+./scripts/stress-test.py --hl ~/.cargo/bin/hl --profile quick
+```
+
+Requires Python 3.11+ and a Unix-like system.
 
 ## coverage-diff-analysis.py
 
