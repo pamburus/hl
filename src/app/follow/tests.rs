@@ -210,6 +210,82 @@ fn test_merge_window_holds_entries_while_split_entry_is_open() {
     assert_eq!(drain(&mut window, soon, false), ["yy", "zz", "  2"]);
 }
 
+#[test]
+fn test_merge_window_gives_out_split_entries_out_of_time_order() {
+    let mut window = window(usize::MAX);
+    let now = Instant::now();
+    for b in [
+        block(0, &[5]),
+        part(1, "  aa", PartialPlacement::First),
+        part(2, "bb", PartialPlacement::Last),
+        block(3, &[3]),
+        part(4, "  cc", PartialPlacement::First),
+        part(5, "dd", PartialPlacement::Last),
+        block(6, &[7]),
+        part(7, "  ee", PartialPlacement::First),
+        part(8, "ff", PartialPlacement::Last),
+    ] {
+        insert(&mut window, b, now);
+    }
+
+    // Each split entry is given out with its own rest, though they are given out in another order than they came.
+    assert_eq!(
+        drain(&mut window, now + INTERVAL, false),
+        ["  3", "  cc", "dd", "  5", "  aa", "bb", "  7", "  ee", "ff"]
+    );
+    assert!(window.parts.is_empty());
+    assert_eq!(window.mem_usage, 0);
+}
+
+#[test]
+fn test_merge_window_gives_out_split_entries_of_inputs_with_same_blocks() {
+    let mut window = window(usize::MAX);
+    let now = Instant::now();
+    for (i, sec, first, last) in [(0, 5, "  aa", "bb"), (1, 3, "  cc", "dd")] {
+        for (buf, index) in [
+            block(0, &[sec]),
+            part(1, first, PartialPlacement::First),
+            part(2, last, PartialPlacement::Last),
+        ] {
+            window.insert(i, buf, index, now);
+        }
+    }
+
+    assert_eq!(
+        drain(&mut window, now + INTERVAL, false),
+        ["  3", "  cc", "dd", "  5", "  aa", "bb"]
+    );
+    assert!(window.parts.is_empty());
+    assert_eq!(window.mem_usage, 0);
+}
+
+#[test]
+fn test_merge_window_ends_split_entry_out_of_time_order_while_rest_of_another_waits() {
+    let mut window = window(usize::MAX);
+    let now = Instant::now();
+    for b in [
+        block(0, &[5]),
+        part(1, "  aa", PartialPlacement::First),
+        part(2, "bb", PartialPlacement::Last),
+        block(3, &[3]),
+        part(4, "  cc", PartialPlacement::First),
+    ] {
+        insert(&mut window, b, now);
+    }
+    let later = now + INTERVAL;
+    assert_eq!(drain(&mut window, later, false), ["  3", "  cc"]);
+
+    // The rest of the later split entry is late, so it is ended, and the earlier one is given out with its rest.
+    let late = later + INTERVAL;
+    assert_eq!(drain(&mut window, late, false), ["|", "  5", "  aa", "bb"]);
+
+    insert(&mut window, part(5, "dd", PartialPlacement::Last), late);
+    assert_eq!(drain(&mut window, late, false), ["+dd"]);
+    assert!(window.parts.is_empty());
+    assert_eq!(window.mem_usage, 0);
+    assert!(!window.ended.contains(&true));
+}
+
 #[rstest]
 #[case::awaited(false, None, INTERVAL - Duration::from_millis(1), &[])]
 #[case::by_next_block(true, None, Duration::ZERO, &["|"])]

@@ -2,7 +2,7 @@
 
 // std imports
 use std::{
-    collections::{BTreeMap, HashMap, VecDeque},
+    collections::{BTreeMap, HashMap},
     ops::Range,
     rc::Rc,
     time::{Duration, Instant},
@@ -19,8 +19,9 @@ pub(super) struct MergeWindow<'a> {
     entries: BTreeMap<Key, Entry>,
     order: BlockOrder,
     /// The parts of split entries, log entries too large to be read at once, that continue them.
-    /// They are not sorted, as each of them is written right after the part before it.
-    parts: Vec<VecDeque<(usize, Entry)>>,
+    /// They are not sorted, as each of them is written right after the part before it,
+    /// but are kept by input and block, as the split entries of an input can be written out of the order they came in.
+    parts: HashMap<(usize, usize), Entry>,
     /// The timestamp of the last record of each input.
     last_ts: HashMap<usize, Timestamp>,
     /// A split entry being written: the input and block of its next part, and when its last part was given out.
@@ -42,7 +43,7 @@ impl<'a> MergeWindow<'a> {
         Self {
             entries: BTreeMap::new(),
             order: BlockOrder::default(),
-            parts: Vec::new(),
+            parts: HashMap::new(),
             last_ts: HashMap::new(),
             open: None,
             ended: Vec::new(),
@@ -68,8 +69,8 @@ impl<'a> MergeWindow<'a> {
     /// Entries without a timestamp to be sorted by are due right away.
     pub fn pop_due(&mut self, now: Instant, all: bool) -> Option<Due> {
         if let Some((i, block, since)) = self.open {
-            if let Some(entry) = self.pop_part(i, block) {
-                return Some(Due::Entry(None, self.take_part(i, block, entry, now)));
+            if let Some(entry) = self.take_part(i, block, now) {
+                return Some(Due::Entry(None, entry));
             }
             let passed = self.order.passed(i, block);
             // A late rest is waited for until something else is due, as nothing can be written before it.
@@ -169,29 +170,18 @@ impl<'a> MergeWindow<'a> {
         }
     }
 
-    /// Gives out the next part of a split entry, which is in block `block` of input `i`,
+    /// Gives out the next part of a split entry, which is in block `block` of input `i`, if it came,
     /// and keeps the split entry open if the part is not its last.
-    fn take_part(&mut self, i: usize, block: usize, entry: Entry, now: Instant) -> Entry {
+    fn take_part(&mut self, i: usize, block: usize, now: Instant) -> Option<Entry> {
+        let entry = self.parts.remove(&(i, block))?;
         self.mem_usage -= entry.location.len();
         self.open = entry.continued().then_some((i, block + 1, now));
-        entry
-    }
-
-    /// Removes and returns the part of a split entry in block `block` of input `i`, if it came.
-    fn pop_part(&mut self, i: usize, block: usize) -> Option<Entry> {
-        let parts = self.parts.get_mut(i)?;
-        if parts.front()?.0 != block {
-            return None;
-        }
-        parts.pop_front().map(|(_, entry)| entry)
+        Some(entry)
     }
 
     fn push_part(&mut self, i: usize, block: usize, entry: Entry) {
-        if self.parts.len() <= i {
-            self.parts.resize_with(i + 1, Default::default);
-        }
         self.mem_usage += entry.location.len();
-        self.parts[i].push_back((block, entry));
+        self.parts.insert((i, block), entry);
     }
 
     fn wait_for(&self, entry: &Entry, now: Instant) -> Duration {
