@@ -12,7 +12,7 @@ Runs a built `hl` on large inputs in each of its modes (`cat`, sorting a file, s
 
 Comparing two runs of the same build makes the checks independent of how fast the machine is.
 
-Cases and size profiles live in [`stress-test.toml`](stress-test.toml). A check that fails because of an open issue is listed under the case's `known` table; it does not fail the run, and once it passes the run fails until the entry is removed.
+Cases and size profiles live in [`stress-test.toml`](stress-test.toml). A check that fails because of an open issue is listed under the case's `known` table; it does not fail the run, and once it passes the run fails until the entry is removed. An entry for a check that fails only at times, depending on timing, is marked as intermittent, and passing does not fail the run.
 
 ### Running
 

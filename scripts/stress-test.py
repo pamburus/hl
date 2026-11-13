@@ -308,11 +308,14 @@ def growth_limit(growth, factor, slack):
 
 
 def known_issue(case, key):
-    # An entry is an issue, or a table with the issue and the platforms it fails on, as named by `sys.platform`.
+    # An entry is an issue, or a table with the issue, the platforms it fails on, as named by `sys.platform`, and whether
+    # it fails only sometimes. Returns the issue and whether it is intermittent, or None.
     entry = case.get("known", {}).get(key)
     if isinstance(entry, dict):
-        return entry["issue"] if sys.platform in entry["os"] else None
-    return entry
+        if sys.platform not in entry.get("os", [sys.platform]):
+            return None
+        return entry["issue"], entry.get("intermittent", False)
+    return (entry, False) if entry else None
 
 
 def mode_growth(growth, mode):
@@ -356,8 +359,11 @@ def main():
 
     def report(name, mode, check, ok, line):
         key = f"{mode}.{check}"
-        issue = known_issue(case, key)
-        if ok and issue:
+        known_entry = known_issue(case, key)
+        issue, intermittent = known_entry or (None, False)
+        if ok and issue and intermittent:
+            status = f"ok, known to fail at times {issue}"
+        elif ok and issue:
             status = f"FIXED? {issue} is listed as known"
             fixed.append(f"{name} {key}")
         elif ok:

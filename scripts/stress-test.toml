@@ -9,7 +9,8 @@
 # well above the memory hl takes regardless of input, a few tens of MiB, or that memory hides the growth.
 # A check that fails because of an open issue is listed under `known`, keyed by `mode.check`; it is reported but does
 # not fail the run, and it fails the run once it passes, so the entry is removed with the fix. An entry for a check that
-# fails only on some platforms names them, as in `{ issue = "#1", os = ["linux"] }`.
+# fails only on some platforms names them, as in `{ issue = "#1", os = ["linux"] }`. An entry for a check that fails only
+# at times, depending on timing, is marked with `intermittent = true`; passing does not fail the run then.
 
 [profiles.quick]
 line = "32MiB"    # length of a line over the limit
@@ -78,7 +79,7 @@ cpu = "linear"
 rss = { default = "constant", sort-stdin = "linear", sort-gz = "linear" }
 
 [cases.known]
-"follow-file.rss" = { issue = "#1700", os = ["linux"] }
+"follow-file.rss" = { issue = "#1700", os = ["linux"], intermittent = true }
 
 [[cases]]
 name = "split-record"
