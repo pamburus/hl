@@ -428,7 +428,12 @@ where
             // spawn reader thread
             let reader = scope.spawn(closure!(clone sfi, |_| -> Result<()> {
                 let scanner = Scanner::new(sfi, &self.delimiter);
-                for (sn, item) in scanner.items(input).with_max_segment_size(self.max_message_size.try_into()?).enumerate() {
+                // The empty last part of an entry that ends right after a whole part adds no block.
+                let items = scanner
+                    .items(input)
+                    .with_max_segment_size(self.max_message_size.try_into()?)
+                    .filter(|item| !matches!(item, Ok(Segment::Incomplete(segment, _)) if segment.data().is_empty()));
+                for (sn, item) in items.enumerate() {
                     if txi[sn % n].send((sn, item?)).is_err() {
                         break;
                     }
@@ -479,13 +484,10 @@ where
                 let mut sn = 0;
                 while let Ok((size, stat, chronology, hash)) = rxo[sn % n].recv() {
                     index.source.stat.merge(&stat);
-                    index.source.blocks.push(SourceBlock::new(
-                        offset,
-                        size.try_into()?,
-                        stat,
-                        chronology,
-                        hash,
-                    ));
+                    index
+                        .source
+                        .blocks
+                        .push(SourceBlock::new(offset, size.try_into()?, stat, chronology, hash));
                     offset += u64::try_from(size)?;
                     sn += 1;
                 }
@@ -1188,7 +1190,7 @@ fn level_mask_higher_or_eq(flag: u64) -> u64 {
 }
 
 const VALID_MAGIC: u64 = 0x484c2d494e444558;
-const CURRENT_VERSION: u64 = 4;
+const CURRENT_VERSION: u64 = 5;
 
 /*
 ---

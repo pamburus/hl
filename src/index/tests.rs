@@ -616,6 +616,35 @@ fn test_indexer_large_entries_across_blocks() {
 }
 
 #[test]
+fn test_indexer_long_entry_ending_on_buffer_boundary() {
+    use crate::scanning::Delimiter;
+
+    let fs = vfs::mem::FileSystem::new();
+
+    // An unterminated entry too large to be read at once, ending right after a whole buffer
+    let mut file = fs.create(&PathBuf::from("test.log")).unwrap();
+    file.write_all(&[b'x'; 2048]).unwrap();
+
+    let indexer = Indexer::new(
+        1,
+        PathBuf::from("/tmp/cache"),
+        IndexerSettings {
+            buffer_size: nonzero!(1024u32).into(),
+            max_message_size: nonzero!(1024u32).into(),
+            delimiter: Delimiter::Newline,
+            ..IndexerSettings::with_fs(fs)
+        },
+    );
+
+    let index = indexer.index(&PathBuf::from("test.log")).unwrap();
+
+    // Each part is a block, and the empty last part adds none
+    let sizes: Vec<_> = index.source.blocks.iter().map(|b| b.size).collect();
+    assert_eq!(sizes, vec![1024, 1024]);
+    assert_eq!(index.source.stat.entries_invalid, 2);
+}
+
+#[test]
 fn test_chronology_bitmap_structure() {
     use crate::scanning::Delimiter;
 

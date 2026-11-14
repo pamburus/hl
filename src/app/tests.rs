@@ -535,6 +535,26 @@ fn test_incomplete_segment() {
 }
 
 #[rstest]
+#[case::below_limit(128)]
+#[case::at_limit(64)]
+fn test_unterminated_record_filling_whole_buffers(#[case] max_message_size: usize) {
+    // The last record has no line break and is exactly two buffers long, so it is read in two whole parts.
+    let input = input("level=debug time=2024-01-25T19:10:21.764733+01:00 msg=m2 x=12345");
+
+    let mut output = Vec::new();
+    let app = App::new(Options {
+        buffer_size: NonZeroUsize::new(32).unwrap(),
+        max_message_size: NonZeroUsize::new(max_message_size).unwrap(),
+        ..options()
+    });
+    app.run(vec![input], &mut output).unwrap();
+    assert_eq!(
+        std::str::from_utf8(&output).unwrap(),
+        "2024-01-25 18:10:21.764 |DBG| m2 x=12345\n"
+    );
+}
+
+#[rstest]
 #[case::filter(
     options().with_filter(Filter { level: Some(Level::Error), ..Default::default() }.into()),
     "2024-01-25 18:10:20.435 |ERR| m1\n"
