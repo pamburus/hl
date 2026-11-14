@@ -1306,16 +1306,6 @@ impl<'a, D: Delimit> BlockScanner<'a, D> {
                 break;
             }
         }
-        if open && !hold_tail {
-            // The entry ended right after a whole part, which the scanner does not mark as the last one.
-            Self::send(
-                &mut position,
-                Segment::Incomplete(b"".into(), PartialPlacement::Last),
-                i,
-                txi,
-            );
-            open = false;
-        }
         self.open = open;
         if let Some(reader) = holding {
             self.tail = reader.into_tail();

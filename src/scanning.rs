@@ -903,7 +903,7 @@ impl<'a, 'b, D: Delimit> Iterator for ScannerIter<'a, 'b, D> {
                 } else {
                     PartialPlacement::Last
                 };
-                (SegmentBuf::zero(), self.placement.and(Some(end)))
+                (SegmentBuf::zero(), self.placement.take().and(Some(end)))
             } else {
                 match self.split(full, self.done) {
                     Some((next, true)) => {
@@ -933,7 +933,8 @@ impl<'a, 'b, D: Delimit> Iterator for ScannerIter<'a, 'b, D> {
             };
 
             let result = self.next.replace(next);
-            return if result.size != 0 {
+            // A token split into parts always ends with its last part, empty if the input ended right after a whole part.
+            return if result.size != 0 || placement == Some(PartialPlacement::Last) {
                 Some(Ok(Segment::new(result, placement)))
             } else {
                 None
@@ -1037,6 +1038,18 @@ impl<'a, 'b, D: Delimit> Iterator for ScannerJumboIter<'a, 'b, D> {
                     }
                 };
                 if total >= self.max_segment_size {
+                    // A token exactly as large as the limit still fits if the input ends right after it.
+                    if total == self.max_segment_size {
+                        match self.inner.next() {
+                            Some(Ok(Segment::Incomplete(buf, PartialPlacement::Last))) if buf.len() == 0 => {
+                                self.push(buf, PartialPlacement::Last);
+                                if self.can_complete() {
+                                    return self.complete();
+                                }
+                            }
+                            next => self.next = next,
+                        }
+                    }
                     break;
                 }
             }

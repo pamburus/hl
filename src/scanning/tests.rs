@@ -411,6 +411,49 @@ fn test_jumbo_not_open_ended() {
     );
 }
 
+#[rstest]
+#[case::too_long(false, 4, &[Segment::Incomplete(b"abc".into(), PartialPlacement::First), Segment::Incomplete(b"def".into(), PartialPlacement::Next), Segment::Incomplete(b"".into(), PartialPlacement::Last)])]
+#[case::continuing(true, 100, &[Segment::Incomplete(b"abc".into(), PartialPlacement::Next), Segment::Incomplete(b"def".into(), PartialPlacement::Next), Segment::Incomplete(b"".into(), PartialPlacement::Last)])]
+#[case::continuing_at_limit(true, 6, &[Segment::Incomplete(b"abc".into(), PartialPlacement::Next), Segment::Incomplete(b"def".into(), PartialPlacement::Next), Segment::Incomplete(b"".into(), PartialPlacement::Last)])]
+#[case::fits(false, 7, &[Segment::Complete(b"abcdef".into())])]
+#[case::fits_exactly(false, 6, &[Segment::Complete(b"abcdef".into())])]
+fn test_jumbo_ends_on_buffer_boundary(
+    #[case] continuing: bool,
+    #[case] max_segment_size: usize,
+    #[case] expected: &[Segment],
+) {
+    let sf = Arc::new(SegmentBufFactory::new(3));
+    let scanner = Scanner::new(sf.clone(), b'\n');
+    let mut data = Cursor::new(b"abcdef");
+    let items = scanner
+        .items(&mut data)
+        .continuing(continuing)
+        .with_max_segment_size(max_segment_size);
+    let tokens = items.collect::<Result<Vec<_>>>().unwrap();
+    assert_eq!(tokens, expected);
+}
+
+#[test]
+fn test_jumbo_reaches_limit_before_last_part() {
+    let sf = Arc::new(SegmentBufFactory::new(3));
+    let scanner = Scanner::new(sf.clone(), b'\n');
+    let mut data = Cursor::new(b"abcdefg\nx\n");
+    let tokens = scanner
+        .items(&mut data)
+        .with_max_segment_size(6)
+        .collect::<Result<Vec<_>>>()
+        .unwrap();
+    assert_eq!(
+        tokens,
+        vec![
+            Segment::Incomplete(b"abc".into(), PartialPlacement::First),
+            Segment::Incomplete(b"def".into(), PartialPlacement::Next),
+            Segment::Incomplete(b"g\n".into(), PartialPlacement::Last),
+            Segment::Complete(b"x\n".into()),
+        ]
+    );
+}
+
 #[test]
 fn test_buf_factory_recycle() {
     let factory = BufFactory::new(10);
