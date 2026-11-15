@@ -62,7 +62,7 @@ def main():
         # another base.
         criterion = target_dir() / "criterion"
         for path in sorted(criterion.rglob(BASELINE)) if criterion.exists() else []:
-            shutil.rmtree(path, ignore_errors=True)
+            shutil.rmtree(path)
         env = dict(base_worktree.env(), CRITERION_HOME=str(criterion), HL_BENCH_NO_REFERENCE="1")
 
         # The benchmarks of the base run in the target directory the bases share, so under its lock, while no other
