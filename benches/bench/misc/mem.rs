@@ -8,13 +8,17 @@ use memchr::{memchr, memchr2, memchr3};
 use rand::random;
 
 // local imports
-use super::{BencherExt, ND};
+use super::{BencherExt, ND, reference};
 
 criterion_group!(benches, bench);
 
 const GROUP: &str = strcat!(super::GROUP, ND, "mem");
 
 fn bench(c: &mut Criterion) {
+    if !reference() {
+        return;
+    }
+
     let mut group = c.benchmark_group(GROUP);
     group.warm_up_time(Duration::from_secs(1));
     group.measurement_time(Duration::from_secs(5));

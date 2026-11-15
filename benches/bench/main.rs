@@ -37,6 +37,12 @@ fn hash<T: Hash>(value: T) -> String {
     base32::encode(Alphabet::Rfc4648Lower { padding: false }, &hash[..])
 }
 
+// Reference benchmarks measure third-party code and language or library primitives rather than the workspace code.
+// Setting HL_BENCH_NO_REFERENCE skips them, so that comparing with a baseline shows only changes in the workspace code.
+fn reference() -> bool {
+    std::env::var_os("HL_BENCH_NO_REFERENCE").is_none()
+}
+
 trait BencherExt {
     fn iter_batched_fixed<I, O, S, R>(&mut self, setup: S, routine: R, size: BatchSize)
     where

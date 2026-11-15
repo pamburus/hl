@@ -6,13 +6,17 @@ use const_str::concat as strcat;
 use criterion::{BatchSize, BenchmarkId, Criterion, Throughput, criterion_group};
 
 // local imports
-use super::{BencherExt, ND, hash};
+use super::{BencherExt, ND, hash, reference};
 
 criterion_group!(benches, bench);
 
 const GROUP: &str = strcat!(super::GROUP, ND, "wildcard");
 
 fn bench(c: &mut Criterion) {
+    if !reference() {
+        return;
+    }
+
     bench_with::<wildmatch::WildMatch>(c, "wildmatch");
     bench_with::<wildcard::Pattern>(c, "wildcard");
 }

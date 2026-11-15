@@ -7,7 +7,7 @@ use criterion::{BatchSize, BenchmarkId, Criterion, Throughput, criterion_group};
 use json::de::{Read, StrRead};
 
 // local imports
-use super::{BencherExt, ND, hash, samples};
+use super::{BencherExt, ND, hash, reference, samples};
 use encstr::{AnyEncodedString, Builder, Handler, Ignorer, JsonAppender, json::JsonEncodedString, raw::RawString};
 
 criterion_group!(benches, bench);
@@ -43,7 +43,7 @@ fn bench_with<I: InputConstruct>(
     group.measurement_time(Duration::from_secs(5));
     group.throughput(Throughput::Bytes(input.len() as u64));
 
-    if title == "json" {
+    if title == "json" && reference() {
         group.bench_function(BenchmarkId::new("serde-json:parse-str", &param), |b| {
             let setup = || String::from(input);
             b.iter_batched_ref_fixed(

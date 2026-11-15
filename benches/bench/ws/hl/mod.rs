@@ -3,7 +3,7 @@ use const_str::concat as strcat;
 use criterion::criterion_group;
 
 // local imports
-use super::{BencherExt, ND, hash, samples};
+use super::{BencherExt, ND, hash, reference, samples};
 
 mod combined;
 mod delimiter;
