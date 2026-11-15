@@ -40,9 +40,10 @@ use crate::{
     index::{Indexer, IndexerSettings, Timestamp},
     input::{BlockEntry, Input, InputDescriptor, InputHolder, InputReference},
     model::{Filter, Origin, Parser, ParserSettings, RawRecord, Record, RecordFilter, RecordWithSourceConstructor},
+    output::{BufFactory, Chunk, OutputBuf},
     query::Query,
     scanning::{
-        BufFactory, Delimit, Delimiter, Newline, PartialPlacement, Scanner, Search, SearchExt, Segment, SegmentBuf,
+        Delimit, Delimiter, Newline, PartialPlacement, Scanner, Search, SearchExt, Segment, SegmentBuf,
         SegmentBufFactory,
     },
     settings::{AsciiMode, ExpansionMode, FieldShowOption, Fields, Formatting, InputInfo, ResolvedPunctuation},
@@ -317,13 +318,13 @@ impl App {
 
         let n = self.options.concurrency;
         let sfi = Arc::new(SegmentBufFactory::new(self.options.buffer_size.into()));
-        let bfo = BufFactory::new(self.options.buffer_size.into());
+        let bfo = Arc::new(BufFactory::new(self.options.buffer_size.into()));
         let parser = self.parser();
         thread::scope(|scope| -> Result<()> {
             // prepare receive/transmit channels for input data
             let (txi, rxi): (Vec<_>, Vec<_>) = (0..n).map(|_| channel::bounded(1)).unzip();
             // prepare receive/transmit channels for output data
-            let (txo, rxo): (Vec<_>, Vec<_>) = (0..n).map(|_| channel::bounded::<(usize, SegmentBuf)>(1)).unzip();
+            let (txo, rxo): (Vec<_>, Vec<_>) = (0..n).map(|_| channel::bounded::<(usize, Chunk)>(1)).unzip();
             // spawn reader thread
             let reader = scope.spawn(closure!(clone sfi, |_| -> Result<()> {
                 let mut tx = StripedSender::new(txi);
@@ -343,7 +344,7 @@ impl App {
             }));
             // spawn processing threads
             for (rxi, txo) in izip!(rxi, txo) {
-                scope.spawn(closure!(ref bfo, ref parser, ref sfi, ref descriptors, ref input_badges, |_| {
+                scope.spawn(closure!(ref bfo, ref parser, ref descriptors, ref input_badges, |_| {
                     let mut processor = self.new_segment_processor(parser);
                     let show_unparsed = self.allow_unparsed_data();
                     for (i, offset, segment) in rxi.iter() {
@@ -353,8 +354,8 @@ impl App {
                                 let mut buf = bfo.new_buf();
                                 let origin = Origin::new(&descriptors[i], offset, segment.data().len());
                                 processor.process(segment.data(), &mut buf, origin, prefix, None, &mut RecordIgnorer{});
-                                sfi.recycle(segment);
-                                if txo.send((i, buf.into())).is_err() {
+                                drop(segment);
+                                if txo.send((i, Chunk::Output(buf))).is_err() {
                                     break;
                                 };
                             }
@@ -364,14 +365,14 @@ impl App {
                                 // with nothing to show, as the writer takes them in order.
                                 // The last part ends with the output delimiter instead of the input one, if any.
                                 let segment = if !show_unparsed {
-                                    sfi.recycle(segment);
+                                    drop(segment);
                                     SegmentBuf::from(b"")
                                 } else if part == PartialPlacement::Last {
                                     end_last_part(segment, delimiter, self.options.output_delimiter.as_bytes())
                                 } else {
                                     segment
                                 };
-                                if txo.send((i, segment)).is_err() {
+                                if txo.send((i, Chunk::Segment(segment))).is_err() {
                                     break;
                                 }
                             }
@@ -380,13 +381,12 @@ impl App {
                 }));
             }
             // spawn writer thread
-            let writer = scope.spawn(closure!(ref bfo, |_| -> Result<()> {
+            let writer = scope.spawn(|_| -> Result<()> {
                 for (_, buf) in StripedReceiver::new(rxo) {
                     output.write_all(buf.data())?;
-                    bfo.recycle(buf.into_inner());
                 }
                 Ok(())
-            }));
+            });
             // collect errors from reader and writer threads
             reader.join().unwrap()?;
             writer.join().unwrap()?;
@@ -647,7 +647,7 @@ impl App {
         let n = self.options.concurrency;
         let parser = self.parser();
         let sfi = Arc::new(SegmentBufFactory::new(self.options.buffer_size.into()));
-        let bfo = BufFactory::new(self.options.buffer_size.into());
+        let bfo = Arc::new(BufFactory::new(self.options.buffer_size.into()));
 
         thread::scope(|scope| -> Result<()> {
             // prepare receive/transmit channels for input data
@@ -726,8 +726,8 @@ impl App {
             let mut workers = Vec::with_capacity(n);
             for _ in 0..n {
                 let worker = scope.spawn(
-                    closure!(ref bfo, ref parser, ref sfi, ref badges, ref descriptors, clone rxi, clone txo, |_| {
-                        self.process_segments(parser, bfo, sfi, badges, descriptors, rxi, txo);
+                    closure!(ref bfo, ref parser, ref badges, ref descriptors, clone rxi, clone txo, |_| {
+                        self.process_segments(parser, bfo, badges, descriptors, rxi, txo);
                     }),
                 );
                 workers.push(worker);
@@ -758,12 +758,11 @@ impl App {
     fn process_segments(
         &self,
         parser: &Parser,
-        bfo: &BufFactory,
-        sfi: &SegmentBufFactory,
+        bfo: &Arc<BufFactory>,
         badges: &FollowBadges,
         inputs: &[InputDescriptor],
         rxi: Receiver<(usize, usize, u64, Segment)>,
-        txo: Sender<(usize, Vec<u8>, TimestampIndex)>,
+        txo: Sender<(usize, OutputBuf, TimestampIndex)>,
     ) {
         let mut processor = self.new_segment_processor(parser);
         for (i, j, offset, segment) in rxi.iter() {
@@ -776,7 +775,7 @@ impl App {
                     };
                     let origin = Origin::new(&inputs[i], offset, segment.data().len());
                     processor.process(segment.data(), &mut buf, origin, prefix, None, &mut index_builder);
-                    sfi.recycle(segment);
+                    drop(segment);
                     if txo.send((i, buf, index_builder.result)).is_err() {
                         return;
                     };
@@ -787,11 +786,11 @@ impl App {
                     // with nothing to show, as the merger takes them in order.
                     let mut index = TimestampIndex::new(j);
                     let buf = if !self.allow_unparsed_data() {
-                        sfi.recycle(segment);
-                        Vec::new()
+                        drop(segment);
+                        Vec::new().into()
                     } else {
                         index.part = Some(part);
-                        split_entry_part(segment, part, delimiter, prefix, sfi)
+                        split_entry_part(segment, part, delimiter, prefix)
                     };
                     if txo.send((i, buf, index)).is_err() {
                         return;
@@ -804,7 +803,7 @@ impl App {
     fn merge_segments(
         &self,
         badges: &FollowBadges,
-        rxo: Receiver<(usize, Vec<u8>, TimestampIndex)>,
+        rxo: Receiver<(usize, OutputBuf, TimestampIndex)>,
         output: &mut Output,
         concurrency: usize,
     ) -> Result<()> {
@@ -1414,15 +1413,9 @@ fn flush_wait(received: Instant, now: Instant, sync_interval: Duration) -> Durat
 /// as a part in the middle usually does. Any other part is copied into a buffer of its size: the first part, which also gets
 /// `prefix`, the last part, which loses its trailing `delimiter` and a line break before it, see [`last_part_len`], and a part
 /// in the middle cut short by the end of a file still being written.
-fn split_entry_part(
-    segment: SegmentBuf,
-    part: PartialPlacement,
-    delimiter: usize,
-    prefix: &str,
-    sfi: &SegmentBufFactory,
-) -> Vec<u8> {
+fn split_entry_part(segment: SegmentBuf, part: PartialPlacement, delimiter: usize, prefix: &str) -> OutputBuf {
     if part == PartialPlacement::Next && segment.len() * 2 >= segment.capacity() {
-        return segment.into_data();
+        return segment.into_data().into();
     }
     let mut data = segment.data();
     let prefix = if part == PartialPlacement::First { prefix } else { "" };
@@ -1432,8 +1425,7 @@ fn split_entry_part(
     let mut buf = Vec::with_capacity(prefix.len() + data.len());
     buf.extend_from_slice(prefix.as_bytes());
     buf.extend_from_slice(data);
-    sfi.recycle(segment);
-    buf
+    buf.into()
 }
 
 /// Ends the last part of a log entry too large to be read at once with the output delimiter instead of the input one, if any,

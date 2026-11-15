@@ -10,7 +10,7 @@ use std::{
 
 // local imports
 use super::{FollowBadges, Output, TimestampIndex, flush_wait};
-use crate::{error::*, index::Timestamp, scanning::PartialPlacement};
+use crate::{error::*, index::Timestamp, output::OutputBuf, scanning::PartialPlacement};
 
 // ---
 
@@ -57,7 +57,7 @@ impl<'a> MergeWindow<'a> {
     /// Adds a block of input `i` processed into `buf`.
     ///
     /// Workers finish blocks in any order, so the blocks of each input are taken in order.
-    pub fn insert(&mut self, i: usize, buf: Vec<u8>, index: TimestampIndex, now: Instant) {
+    pub fn insert(&mut self, i: usize, buf: OutputBuf, index: TimestampIndex, now: Instant) {
         self.order.push(i, buf, index);
         while let Some((buf, index)) = self.order.pop(i) {
             self.insert_block(i, buf, index, now);
@@ -132,7 +132,7 @@ impl<'a> MergeWindow<'a> {
     /// Text that is not a record is sorted together with the record before it in its input,
     /// so that, for example, a stack trace stays right after the record it belongs to.
     /// So are the parts of a log entry too large to be read at once.
-    fn insert_block(&mut self, i: usize, buf: Vec<u8>, index: TimestampIndex, now: Instant) {
+    fn insert_block(&mut self, i: usize, buf: OutputBuf, index: TimestampIndex, now: Instant) {
         let buf = Rc::new(buf);
         let mut ts = self.last_ts.get(&i).copied();
 
@@ -194,7 +194,7 @@ impl<'a> MergeWindow<'a> {
         ts: Option<Timestamp>,
         i: usize,
         block: usize,
-        buf: &Rc<Vec<u8>>,
+        buf: &Rc<OutputBuf>,
         location: Range<usize>,
         now: Instant,
     ) {
@@ -243,7 +243,7 @@ struct BlockOrder {
 }
 
 impl BlockOrder {
-    fn push(&mut self, i: usize, buf: Vec<u8>, index: TimestampIndex) {
+    fn push(&mut self, i: usize, buf: OutputBuf, index: TimestampIndex) {
         if self.inputs.len() <= i {
             self.inputs.resize_with(i + 1, Default::default);
         }
@@ -251,7 +251,7 @@ impl BlockOrder {
     }
 
     /// Removes and returns the next block of input `i` if it came.
-    fn pop(&mut self, i: usize) -> Option<(Vec<u8>, TimestampIndex)> {
+    fn pop(&mut self, i: usize) -> Option<(OutputBuf, TimestampIndex)> {
         let input = self.inputs.get_mut(i)?;
         let block = input.early.remove(&input.next)?;
         input.next += 1;
@@ -268,7 +268,7 @@ impl BlockOrder {
 #[derive(Default)]
 struct InputBlocks {
     next: usize,
-    early: HashMap<usize, (Vec<u8>, TimestampIndex)>,
+    early: HashMap<usize, (OutputBuf, TimestampIndex)>,
 }
 
 // ---
@@ -304,14 +304,14 @@ impl Key {
 ///
 /// It is stored as where it is in its block's buffer, without the final delimiter, and when it was received.
 pub(super) struct Entry {
-    buf: Rc<Vec<u8>>,
+    buf: Rc<OutputBuf>,
     location: Range<usize>,
     received: Instant,
     part: Option<PartialPlacement>,
 }
 
 impl Entry {
-    fn new(buf: &Rc<Vec<u8>>, location: Range<usize>, received: Instant, part: Option<PartialPlacement>) -> Self {
+    fn new(buf: &Rc<OutputBuf>, location: Range<usize>, received: Instant, part: Option<PartialPlacement>) -> Self {
         Self {
             buf: buf.clone(),
             location,

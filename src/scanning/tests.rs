@@ -219,7 +219,7 @@ fn test_substr_search_r() {
 #[case::growing_full(4, b"x", b"abcdx")]
 #[case::growing_more(4, b"xyz", b"abcdxyz")]
 fn test_segment_buf_extend_from_slice(#[case] len: usize, #[case] data: &[u8], #[case] expected: &[u8]) {
-    let sf = SegmentBufFactory::new(4);
+    let sf = Arc::new(SegmentBufFactory::new(4));
     let mut buf = sf.new_segment();
     buf.extend_from_slice(&b"abcd"[..len]);
     buf.extend_from_slice(data);
@@ -468,16 +468,6 @@ fn test_jumbo_reaches_limit_before_last_part() {
             Segment::Complete(b"x\n".into()),
         ]
     );
-}
-
-#[test]
-fn test_buf_factory_recycle() {
-    let factory = BufFactory::new(10);
-    let mut buf = factory.new_buf();
-    buf.extend_from_slice(b"test");
-    factory.recycle(buf);
-    let buf = factory.new_buf();
-    assert_eq!(buf, b"");
 }
 
 #[test]

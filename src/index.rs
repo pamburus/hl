@@ -442,7 +442,7 @@ where
             }));
             // spawn processing threads
             for (rxi, txo) in izip!(rxi, txo) {
-                scope.spawn(closure!(ref sfi, ref existing_index, |_| {
+                scope.spawn(closure!(ref existing_index, |_| {
                     for (sn, segment) in rxi.iter() {
                         let (stat, chronology, segment, hash) = match segment {
                             Segment::Complete(segment) => {
@@ -460,7 +460,7 @@ where
                             }
                         };
                         let size = segment.data().len();
-                        sfi.recycle(segment);
+                        drop(segment);
                         if txo.send((size, stat, chronology, hash)).is_err() {
                             break;
                         };
