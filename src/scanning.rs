@@ -583,6 +583,26 @@ impl SegmentBuf {
         self.buf.len()
     }
 
+    /// Shortens the data to the given length, keeping the buffer.
+    /// Has no effect if the data is already shorter.
+    #[inline]
+    pub fn truncate(&mut self, len: usize) {
+        self.size = self.size.min(len);
+    }
+
+    /// Appends the given data, growing the buffer only if it does not fit.
+    #[inline]
+    pub fn extend_from_slice(&mut self, data: &[u8]) {
+        let end = self.size + data.len();
+        if end > self.buf.len() {
+            // Growing it by the default amortized policy could double the buffer for a few bytes.
+            self.buf.reserve_exact(end - self.buf.len());
+            self.buf.resize(end, 0);
+        }
+        self.buf[self.size..end].copy_from_slice(data);
+        self.size = end;
+    }
+
     /// Transforms the SegmentBuf into inner Vec<u8>.
     #[inline]
     pub fn into_inner(self) -> Vec<u8> {
@@ -666,7 +686,9 @@ impl<T: AsRef<[u8]>> From<T> for SegmentBuf {
 #[derive(Debug, Eq, PartialEq)]
 pub enum Segment {
     Complete(SegmentBuf),
-    Incomplete(SegmentBuf, PartialPlacement),
+    /// Also holds the length of the delimiter the part ends with, zero unless it is the last part,
+    /// and for the last part if the input ended without one.
+    Incomplete(SegmentBuf, PartialPlacement, usize),
 }
 
 impl Segment {
@@ -674,15 +696,15 @@ impl Segment {
     #[inline]
     pub fn data(&self) -> &[u8] {
         match self {
-            Self::Complete(buf) | Self::Incomplete(buf, _) => buf.data(),
+            Self::Complete(buf) | Self::Incomplete(buf, ..) => buf.data(),
         }
     }
 
     /// Returns a new Segment containing the given SegmentBuf.
     #[inline]
-    fn new(buf: SegmentBuf, placement: Option<PartialPlacement>) -> Self {
+    fn new(buf: SegmentBuf, placement: Option<PartialPlacement>, delimiter: usize) -> Self {
         if let Some(placement) = placement {
-            Self::Incomplete(buf, placement)
+            Self::Incomplete(buf, placement, delimiter)
         } else {
             Self::Complete(buf)
         }
@@ -823,8 +845,10 @@ impl<'a, 'b, D: Delimit> ScannerIter<'a, 'b, D> {
         }
     }
 
+    /// Splits off the data after the last token, or after an incomplete token,
+    /// returning it along with the length of the delimiter it was split at, if any.
     #[inline]
-    fn split(&mut self, full: bool, edge: bool) -> Option<(SegmentBuf, bool)> {
+    fn split(&mut self, full: bool, edge: bool) -> Option<(SegmentBuf, Option<usize>)> {
         if self.next.len() < 1 {
             return None;
         }
@@ -838,15 +862,15 @@ impl<'a, 'b, D: Delimit> ScannerIter<'a, 'b, D> {
             self.searcher.search_r(buf, edge)
         };
         found
-            .map(|range| (range.end, true))
+            .map(|range| (range.end, Some(range.len())))
             .or_else(|| {
                 if full {
-                    self.searcher.partial_match_r(buf).map(|n| (n, false))
+                    self.searcher.partial_match_r(buf).map(|n| (n, None))
                 } else {
                     None
                 }
             })
-            .and_then(|(n, ok)| self.split_n(bs - n).map(|sb| (sb, ok)))
+            .and_then(|(n, delimiter)| self.split_n(bs - n).map(|sb| (sb, delimiter)))
     }
 
     #[inline]
@@ -896,28 +920,28 @@ impl<'a, 'b, D: Delimit> Iterator for ScannerIter<'a, 'b, D> {
             self.next.size += n.unwrap_or(0);
             let full = self.next.size == end;
 
-            let (next, placement) = if n == Some(0) {
+            let (next, placement, delimiter) = if n == Some(0) {
                 self.done = true;
                 let end = if self.open_ended {
                     PartialPlacement::Next
                 } else {
                     PartialPlacement::Last
                 };
-                (SegmentBuf::zero(), self.placement.take().and(Some(end)))
+                (SegmentBuf::zero(), self.placement.take().and(Some(end)), 0)
             } else {
                 match self.split(full, self.done) {
-                    Some((next, true)) => {
+                    Some((next, Some(delimiter))) => {
                         self.pending = self.placement.is_some() && next.len() != 0;
-                        let result = (next, self.placement.and(Some(PartialPlacement::Last)));
+                        let result = (next, self.placement.and(Some(PartialPlacement::Last)), delimiter);
                         self.placement = None;
                         result
                     }
-                    Some((next, false)) => {
+                    Some((next, None)) => {
                         self.placement = self
                             .placement
                             .and(Some(PartialPlacement::Next))
                             .or(Some(PartialPlacement::First));
-                        (next, self.placement)
+                        (next, self.placement, 0)
                     }
                     None => {
                         if !full {
@@ -927,7 +951,7 @@ impl<'a, 'b, D: Delimit> Iterator for ScannerIter<'a, 'b, D> {
                             .placement
                             .and(Some(PartialPlacement::Next))
                             .or(Some(PartialPlacement::First));
-                        (self.scanner.sf.new_segment(), self.placement)
+                        (self.scanner.sf.new_segment(), self.placement, 0)
                     }
                 }
             };
@@ -935,7 +959,7 @@ impl<'a, 'b, D: Delimit> Iterator for ScannerIter<'a, 'b, D> {
             let result = self.next.replace(next);
             // A token split into parts always ends with its last part, empty if the input ended right after a whole part.
             return if result.size != 0 || placement == Some(PartialPlacement::Last) {
-                Some(Ok(Segment::new(result, placement)))
+                Some(Ok(Segment::new(result, placement, delimiter)))
             } else {
                 None
             };
@@ -951,7 +975,7 @@ impl<'a, 'b, D: Delimit> Iterator for ScannerIter<'a, 'b, D> {
 pub struct ScannerJumboIter<'a, 'b, D: Delimit> {
     inner: ScannerIter<'a, 'b, D>,
     max_segment_size: usize,
-    fetched: VecDeque<(SegmentBuf, PartialPlacement)>,
+    fetched: VecDeque<(SegmentBuf, PartialPlacement, usize)>,
     next: Option<Result<Segment>>,
 }
 
@@ -967,12 +991,12 @@ impl<'a, 'b, D: Delimit> ScannerJumboIter<'a, 'b, D> {
     }
 
     #[inline]
-    fn push(&mut self, buf: SegmentBuf, placement: PartialPlacement) {
-        self.fetched.push_back((buf, placement));
+    fn push(&mut self, buf: SegmentBuf, placement: PartialPlacement, delimiter: usize) {
+        self.fetched.push_back((buf, placement, delimiter));
     }
 
     #[inline]
-    fn pop(&mut self) -> Option<(SegmentBuf, PartialPlacement)> {
+    fn pop(&mut self) -> Option<(SegmentBuf, PartialPlacement, usize)> {
         self.fetched.pop_front()
     }
 
@@ -988,10 +1012,10 @@ impl<'a, 'b, D: Delimit> ScannerJumboIter<'a, 'b, D> {
         let buf = self
             .fetched
             .iter()
-            .flat_map(|(buf, _)| buf.data())
+            .flat_map(|(buf, ..)| buf.data())
             .cloned()
             .collect::<Vec<u8>>();
-        for (buf, _) in self.fetched.drain(..) {
+        for (buf, ..) in self.fetched.drain(..) {
             self.inner.scanner.sf.recycle(buf);
         }
 
@@ -1004,8 +1028,8 @@ impl<'a, 'b, D: Delimit> Iterator for ScannerJumboIter<'a, 'b, D> {
 
     fn next(&mut self) -> Option<Self::Item> {
         loop {
-            if let Some((buf, placement)) = self.pop() {
-                return Some(Ok(Segment::Incomplete(buf, placement)));
+            if let Some((buf, placement, delimiter)) = self.pop() {
+                return Some(Ok(Segment::Incomplete(buf, placement, delimiter)));
             }
             if let Some(next) = self.next.take() {
                 return Some(next);
@@ -1016,9 +1040,9 @@ impl<'a, 'b, D: Delimit> Iterator for ScannerJumboIter<'a, 'b, D> {
             loop {
                 let next = self.inner.next();
                 match next {
-                    Some(Ok(Segment::Incomplete(buf, placement))) => {
+                    Some(Ok(Segment::Incomplete(buf, placement, delimiter))) => {
                         total += buf.len();
-                        self.push(buf, placement);
+                        self.push(buf, placement, delimiter);
                         if self.can_complete() {
                             return self.complete();
                         }
@@ -1041,8 +1065,8 @@ impl<'a, 'b, D: Delimit> Iterator for ScannerJumboIter<'a, 'b, D> {
                     // A token exactly as large as the limit still fits if the input ends right after it.
                     if total == self.max_segment_size {
                         match self.inner.next() {
-                            Some(Ok(Segment::Incomplete(buf, PartialPlacement::Last))) if buf.len() == 0 => {
-                                self.push(buf, PartialPlacement::Last);
+                            Some(Ok(Segment::Incomplete(buf, PartialPlacement::Last, delimiter))) if buf.len() == 0 => {
+                                self.push(buf, PartialPlacement::Last, delimiter);
                                 if self.can_complete() {
                                     return self.complete();
                                 }

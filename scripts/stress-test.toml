@@ -67,7 +67,6 @@ rss = { default = "constant", sort-stdin = "linear", sort-gz = "linear" }
 
 [cases.known]
 "cat.rss" = "#1692"
-"cat.output" = "#1695"
 
 [[cases]]
 name = "short-lines"

@@ -432,7 +432,7 @@ where
                 let items = scanner
                     .items(input)
                     .with_max_segment_size(self.max_message_size.try_into()?)
-                    .filter(|item| !matches!(item, Ok(Segment::Incomplete(segment, _)) if segment.data().is_empty()));
+                    .filter(|item| !matches!(item, Ok(Segment::Incomplete(segment, ..)) if segment.data().is_empty()));
                 for (sn, item) in items.enumerate() {
                     if txi[sn % n].send((sn, item?)).is_err() {
                         break;
@@ -453,7 +453,7 @@ where
                                     .unwrap_or_else(|| self.process_segment(&segment));
                                 (stat, chronology, segment, Some(hash))
                             }
-                            Segment::Incomplete(segment, _) => {
+                            Segment::Incomplete(segment, ..) => {
                                 let mut stat = Stat::new();
                                 stat.add_invalid();
                                 (stat, Chronology::default(), segment, None)

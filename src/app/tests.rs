@@ -173,7 +173,7 @@ fn scan_segments(segment_size: usize, chunks: &[(&[u8], bool)]) -> Vec<Vec<Segme
 /// segments sent after each of them.
 fn scan_chunks(segment_size: usize, chunks: &[(&[u8], bool)]) -> Vec<Vec<String>> {
     let text = |segment: Segment| match segment {
-        Segment::Complete(buf) | Segment::Incomplete(buf, _) => String::from_utf8_lossy(buf.data()).into_owned(),
+        Segment::Complete(buf) | Segment::Incomplete(buf, ..) => String::from_utf8_lossy(buf.data()).into_owned(),
     };
 
     scan_segments(segment_size, chunks)
@@ -532,6 +532,101 @@ fn test_incomplete_segment() {
             "2024-01-25 18:10:21.764 |DBG| m2 x=2\n",
         )
     );
+}
+
+#[rstest]
+#[case::newline_to_nul(Delimiter::Newline, "\n", "\0")]
+#[case::cr_to_newline(Delimiter::Byte(b'\r'), "\r", "\n")]
+#[case::nul_to_newline(Delimiter::Byte(0), "\0", "\n")]
+#[case::line_break_and_nul_to_nul(Delimiter::Byte(0), "\n\0", "\0")]
+#[case::crlf_and_nul_to_nul(Delimiter::Byte(0), "\r\n\0", "\0")]
+#[case::json_line_break_to_nul(Delimiter::Json, "\n", "\0")]
+#[case::json_crlf_to_nul(Delimiter::Json, "\r\n", "\0")]
+fn test_unparsed_line_output_delimiter(
+    #[case] delimiter: Delimiter,
+    #[case] terminator: &str,
+    #[case] output_delimiter: &str,
+    #[values(10, 64)] len: usize,
+    #[values(false, true)] terminated: bool,
+    #[values(false, true)] follow: bool,
+) {
+    let line = "x".repeat(len);
+    let data = if terminated {
+        format!("{line}{terminator}")
+    } else {
+        line.clone()
+    };
+
+    let mut output = Vec::new();
+    let app = App::new(Options {
+        buffer_size: NonZeroUsize::new(32).unwrap(),
+        max_message_size: NonZeroUsize::new(32).unwrap(),
+        delimiter,
+        output_delimiter: output_delimiter.into(),
+        follow,
+        ..options()
+    });
+    app.run(vec![input(data)], &mut output).unwrap();
+    assert_eq!(
+        std::str::from_utf8(&output).unwrap(),
+        format!("{line}{output_delimiter}")
+    );
+}
+
+#[rstest]
+fn test_overlong_unparsed_line_before_json_object(
+    #[values("", "  ")] indent: &str,
+    #[values(false, true)] follow: bool,
+) {
+    // The delimiter before an object can only be told from text by what follows it.
+    // The line fills whole buffers, as a delimiter that ends a buffer after text is not found yet, see #1710.
+    let line = "x".repeat(64);
+    let data = format!("{line}\n{indent}{{\"msg\":\"m\"}}\n");
+
+    let mut output = Vec::new();
+    let app = App::new(Options {
+        buffer_size: NonZeroUsize::new(32).unwrap(),
+        max_message_size: NonZeroUsize::new(32).unwrap(),
+        delimiter: Delimiter::Json,
+        follow,
+        ..options()
+    });
+    app.run(vec![input(data)], &mut output).unwrap();
+    assert_eq!(std::str::from_utf8(&output).unwrap(), format!("{line}\nm\n"));
+}
+
+#[rstest]
+fn test_overlong_unterminated_line_before_next_input(
+    #[values(64, 70)] len: usize,
+    #[values(false, true)] follow: bool,
+) {
+    // The first input ends with a line longer than the maximum message size and no line break after it.
+    let line = "x".repeat(len);
+    let inputs = vec![input(line.clone()), input("y\n")];
+
+    let mut output = Vec::new();
+    let app = App::new(Options {
+        buffer_size: NonZeroUsize::new(32).unwrap(),
+        max_message_size: NonZeroUsize::new(32).unwrap(),
+        follow,
+        ..options()
+    });
+    app.run(inputs, &mut output).unwrap();
+    let output = std::str::from_utf8(&output).unwrap();
+    let mut lines = output.split_inclusive('\n').collect_vec();
+    assert_eq!(lines.len(), 2, "{output:?}");
+    if follow {
+        // The inputs are followed at once, so the lines can come in either order.
+        lines.sort();
+        assert_eq!(
+            lines,
+            [format!("#0 | <stdin> | {line}\n").as_str(), "#1 | <stdin> | y\n"]
+        );
+    } else {
+        // The overlong line has no input badge yet, see #1660.
+        assert_eq!(lines[0], format!("{line}\n"));
+        assert!(lines[1].ends_with(" y\n"), "{output:?}");
+    }
 }
 
 #[rstest]
@@ -1810,12 +1905,13 @@ fn test_process_segments() {
 }
 
 #[rstest]
-#[case::first(PartialPlacement::First, "long", "  [0] long")]
-#[case::next(PartialPlacement::Next, "long", "long")]
-#[case::last(PartialPlacement::Last, "long\n", "long")]
-#[case::last_unterminated(PartialPlacement::Last, "long", "long")]
+#[case::first(PartialPlacement::First, 0, "long", "  [0] long")]
+#[case::next(PartialPlacement::Next, 0, "long", "long")]
+#[case::last(PartialPlacement::Last, 1, "long\n", "long")]
+#[case::last_unterminated(PartialPlacement::Last, 0, "long", "long")]
 fn test_process_segments_incomplete(
     #[case] part: PartialPlacement,
+    #[case] delimiter: usize,
     #[case] data: &str,
     #[case] expected: &str,
     #[values(None, Some(InputFormat::Json))] input_format: Option<InputFormat>,
@@ -1842,7 +1938,7 @@ fn test_process_segments_incomplete(
     let (txi, rxi) = channel::bounded(10);
     let (txo, rxo) = channel::bounded(10);
 
-    let segment = Segment::Incomplete(SegmentBuf::from(data.as_bytes()), part);
+    let segment = Segment::Incomplete(SegmentBuf::from(data.as_bytes()), part, delimiter);
 
     txi.send((0, 3, 0, segment)).unwrap();
     drop(txi);
@@ -1883,13 +1979,12 @@ fn test_split_entry_part(#[case] input: &[u8], #[case] n: usize, #[case] expecte
     let scanner = Scanner::new(sfi.clone(), b'\n');
     let mut data = Cursor::new(input);
     let mut items = scanner.items(&mut data).open_ended(true).with_max_segment_size(3);
-    let Some(Ok(Segment::Incomplete(segment, part))) = items.nth(n) else {
+    let Some(Ok(Segment::Incomplete(segment, part, delimiter))) = items.nth(n) else {
         panic!("no part {n}");
     };
     let at = segment.data().as_ptr();
 
-    let delim = Delimiter::from(Newline).into_searcher();
-    let buf = split_entry_part(segment, part, "> ", delim.as_ref(), &sfi);
+    let buf = split_entry_part(segment, part, delimiter, "> ", &sfi);
 
     assert_eq!(String::from_utf8(buf.clone()).unwrap(), expected);
     // A part sent in its own buffer is not copied, and any other is copied into a buffer of its size.
@@ -1900,10 +1995,37 @@ fn test_split_entry_part(#[case] input: &[u8], #[case] n: usize, #[case] expecte
 }
 
 #[rstest]
+#[case::terminated(b"abcdefg\n", "\0", "efg\0")]
+#[case::terminated_crlf(b"abcdef\r\n", "\0", "ef\0")]
+#[case::unterminated(b"abcdefg", "\0", "efg\0")]
+#[case::unterminated_filling_buffer(b"abcdefgh", "\0", "\0")]
+#[case::not_fitting_output_delimiter(b"abcdefg\n", "\r\n", "efg\r\n")]
+fn test_end_last_part(#[case] input: &[u8], #[case] output_delimiter: &str, #[case] expected: &str) {
+    let sfi = Arc::new(SegmentBufFactory::new(4));
+    let scanner = Scanner::new(sfi.clone(), Delimiter::from(Newline));
+    let mut data = Cursor::new(input);
+    let Some(Ok(Segment::Incomplete(segment, PartialPlacement::Last, delimiter))) =
+        scanner.items(&mut data).with_max_segment_size(4).last()
+    else {
+        panic!("no last part");
+    };
+    let at = segment.data().as_ptr();
+    let capacity = segment.capacity();
+
+    let buf = end_last_part(segment, delimiter, output_delimiter.as_bytes());
+
+    assert_eq!(std::str::from_utf8(buf.data()).unwrap(), expected);
+    // The part keeps its buffer if the output delimiter fits in it.
+    if expected.len() <= capacity {
+        assert_eq!(buf.data().as_ptr(), at);
+    }
+}
+
+#[rstest]
 #[case::complete(Segment::Complete(SegmentBuf::from(
     r#"{"level":"info","msg":"test","ts":"2023-12-07T20:07:05.949Z"}"#.as_bytes()
 )))]
-#[case::incomplete(Segment::Incomplete(SegmentBuf::from(b"long"), PartialPlacement::First))]
+#[case::incomplete(Segment::Incomplete(SegmentBuf::from(b"long"), PartialPlacement::First, 0))]
 fn test_process_segments_receiver_dropped(#[case] segment: Segment) {
     let mut opts = options();
     opts.theme = theme();
@@ -3050,7 +3172,7 @@ fn test_block_scanner_continues_numbering_across_scans() {
     drop(txi);
 
     let text = |segment: &Segment| match segment {
-        Segment::Complete(buf) | Segment::Incomplete(buf, _) => String::from_utf8_lossy(buf.data()).into_owned(),
+        Segment::Complete(buf) | Segment::Incomplete(buf, ..) => String::from_utf8_lossy(buf.data()).into_owned(),
     };
     let scanned = rxi
         .iter()
@@ -3154,15 +3276,15 @@ fn test_block_scanner_continues_overlong_line_across_scans() {
         vec![
             vec![
                 Segment::Complete(b"x1\n".into()),
-                Segment::Incomplete(b"abcd".into(), First),
-                Segment::Incomplete(b"efgh".into(), Next),
+                Segment::Incomplete(b"abcd".into(), First, 0),
+                Segment::Incomplete(b"efgh".into(), Next, 0),
             ],
             vec![
-                Segment::Incomplete(b"ijkl".into(), Next),
-                Segment::Incomplete(b"mn".into(), Next),
+                Segment::Incomplete(b"ijkl".into(), Next, 0),
+                Segment::Incomplete(b"mn".into(), Next, 0),
             ],
             vec![
-                Segment::Incomplete(b"op\n".into(), Last),
+                Segment::Incomplete(b"op\n".into(), Last, 1),
                 Segment::Complete(b"y1\n".into()),
             ],
         ]
@@ -3181,11 +3303,11 @@ fn test_block_scanner_ends_open_overlong_line_on_flush() {
         scanned,
         vec![
             vec![
-                Segment::Incomplete(b"abcd".into(), First),
-                Segment::Incomplete(b"efgh".into(), Next),
+                Segment::Incomplete(b"abcd".into(), First, 0),
+                Segment::Incomplete(b"efgh".into(), Next, 0),
             ],
             vec![],
-            vec![Segment::Incomplete(b"ij".into(), Last)],
+            vec![Segment::Incomplete(b"ij".into(), Last, 0)],
             vec![Segment::Complete(b"x1\n".into())],
         ]
     );
@@ -3203,10 +3325,10 @@ fn test_block_scanner_ends_open_overlong_line_on_flush_after_whole_parts() {
         scanned,
         vec![
             vec![
-                Segment::Incomplete(b"abcd".into(), First),
-                Segment::Incomplete(b"efgh".into(), Next),
+                Segment::Incomplete(b"abcd".into(), First, 0),
+                Segment::Incomplete(b"efgh".into(), Next, 0),
             ],
-            vec![Segment::Incomplete(b"".into(), Last)],
+            vec![Segment::Incomplete(b"".into(), Last, 0)],
             vec![Segment::Complete(b"x1\n".into())],
         ]
     );

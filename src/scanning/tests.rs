@@ -212,6 +212,22 @@ fn test_substr_search_r() {
     assert_eq!(searcher.search_r(input, true), None);
 }
 
+#[rstest]
+#[case::fitting(2, b"x", b"abx")]
+#[case::filling(3, b"x", b"abcx")]
+#[case::growing(3, b"xy", b"abcxy")]
+#[case::growing_full(4, b"x", b"abcdx")]
+#[case::growing_more(4, b"xyz", b"abcdxyz")]
+fn test_segment_buf_extend_from_slice(#[case] len: usize, #[case] data: &[u8], #[case] expected: &[u8]) {
+    let sf = SegmentBufFactory::new(4);
+    let mut buf = sf.new_segment();
+    buf.extend_from_slice(&b"abcd"[..len]);
+    buf.extend_from_slice(data);
+    assert_eq!(buf.data(), expected);
+    // The buffer grows only as much as needed, as it is not extended again.
+    assert_eq!(buf.buf.capacity(), expected.len().max(4));
+}
+
 #[test]
 fn test_small_token() {
     let sf = Arc::new(SegmentBufFactory::new(20));
@@ -319,15 +335,15 @@ fn test_jumbo_0() {
     assert_eq!(
         tokens,
         vec![
-            Segment::Incomplete(b"tes".into(), PartialPlacement::First),
-            Segment::Incomplete(b"t/:".into(), PartialPlacement::Next),
-            Segment::Incomplete(b"tok".into(), PartialPlacement::Next),
-            Segment::Incomplete(b"en/".into(), PartialPlacement::Next),
-            Segment::Incomplete(b":ve".into(), PartialPlacement::Next),
-            Segment::Incomplete(b"ry/".into(), PartialPlacement::Next),
-            Segment::Incomplete(b":la".into(), PartialPlacement::Next),
-            Segment::Incomplete(b"rge".into(), PartialPlacement::Next),
-            Segment::Incomplete(b"/:".into(), PartialPlacement::Last),
+            Segment::Incomplete(b"tes".into(), PartialPlacement::First, 0),
+            Segment::Incomplete(b"t/:".into(), PartialPlacement::Next, 0),
+            Segment::Incomplete(b"tok".into(), PartialPlacement::Next, 0),
+            Segment::Incomplete(b"en/".into(), PartialPlacement::Next, 0),
+            Segment::Incomplete(b":ve".into(), PartialPlacement::Next, 0),
+            Segment::Incomplete(b"ry/".into(), PartialPlacement::Next, 0),
+            Segment::Incomplete(b":la".into(), PartialPlacement::Next, 0),
+            Segment::Incomplete(b"rge".into(), PartialPlacement::Next, 0),
+            Segment::Incomplete(b"/:".into(), PartialPlacement::Last, 0),
         ]
     )
 }
@@ -367,20 +383,20 @@ fn test_jumbo_smart_new_line_2() {
     assert_eq!(
         tokens,
         vec![
-            Segment::Incomplete(b"tes".into(), PartialPlacement::First),
-            Segment::Incomplete(b"t t".into(), PartialPlacement::Next),
-            Segment::Incomplete(b"oke".into(), PartialPlacement::Next),
-            Segment::Incomplete(b"n\r\n".into(), PartialPlacement::Last),
+            Segment::Incomplete(b"tes".into(), PartialPlacement::First, 0),
+            Segment::Incomplete(b"t t".into(), PartialPlacement::Next, 0),
+            Segment::Incomplete(b"oke".into(), PartialPlacement::Next, 0),
+            Segment::Incomplete(b"n\r\n".into(), PartialPlacement::Last, 2),
             Segment::Complete(b"eof\r\n".into()),
         ]
     )
 }
 
 #[rstest]
-#[case::open_inside_token(false, b"abcdefg", &[Segment::Incomplete(b"abc".into(), PartialPlacement::First), Segment::Incomplete(b"def".into(), PartialPlacement::Next), Segment::Incomplete(b"g".into(), PartialPlacement::Next)])]
+#[case::open_inside_token(false, b"abcdefg", &[Segment::Incomplete(b"abc".into(), PartialPlacement::First, 0), Segment::Incomplete(b"def".into(), PartialPlacement::Next, 0), Segment::Incomplete(b"g".into(), PartialPlacement::Next, 0)])]
 #[case::open_after_token(false, b"abcdef\n", &[Segment::Complete(b"abcdef\n".into())])]
-#[case::continuing_to_delimiter(true, b"ab\ncd\n", &[Segment::Incomplete(b"ab\n".into(), PartialPlacement::Last), Segment::Complete(b"cd\n".into())])]
-#[case::continuing_open(true, b"abcdef", &[Segment::Incomplete(b"abc".into(), PartialPlacement::Next), Segment::Incomplete(b"def".into(), PartialPlacement::Next)])]
+#[case::continuing_to_delimiter(true, b"ab\ncd\n", &[Segment::Incomplete(b"ab\n".into(), PartialPlacement::Last, 1), Segment::Complete(b"cd\n".into())])]
+#[case::continuing_open(true, b"abcdef", &[Segment::Incomplete(b"abc".into(), PartialPlacement::Next, 0), Segment::Incomplete(b"def".into(), PartialPlacement::Next, 0)])]
 fn test_jumbo_open_ended(#[case] continuing: bool, #[case] input: &[u8], #[case] expected: &[Segment]) {
     let sf = Arc::new(SegmentBufFactory::new(3));
     let scanner = Scanner::new(sf.clone(), b'\n');
@@ -404,17 +420,17 @@ fn test_jumbo_not_open_ended() {
     assert_eq!(
         tokens,
         vec![
-            Segment::Incomplete(b"abc".into(), PartialPlacement::Next),
-            Segment::Incomplete(b"def".into(), PartialPlacement::Next),
-            Segment::Incomplete(b"g".into(), PartialPlacement::Last),
+            Segment::Incomplete(b"abc".into(), PartialPlacement::Next, 0),
+            Segment::Incomplete(b"def".into(), PartialPlacement::Next, 0),
+            Segment::Incomplete(b"g".into(), PartialPlacement::Last, 0),
         ]
     );
 }
 
 #[rstest]
-#[case::too_long(false, 4, &[Segment::Incomplete(b"abc".into(), PartialPlacement::First), Segment::Incomplete(b"def".into(), PartialPlacement::Next), Segment::Incomplete(b"".into(), PartialPlacement::Last)])]
-#[case::continuing(true, 100, &[Segment::Incomplete(b"abc".into(), PartialPlacement::Next), Segment::Incomplete(b"def".into(), PartialPlacement::Next), Segment::Incomplete(b"".into(), PartialPlacement::Last)])]
-#[case::continuing_at_limit(true, 6, &[Segment::Incomplete(b"abc".into(), PartialPlacement::Next), Segment::Incomplete(b"def".into(), PartialPlacement::Next), Segment::Incomplete(b"".into(), PartialPlacement::Last)])]
+#[case::too_long(false, 4, &[Segment::Incomplete(b"abc".into(), PartialPlacement::First, 0), Segment::Incomplete(b"def".into(), PartialPlacement::Next, 0), Segment::Incomplete(b"".into(), PartialPlacement::Last, 0)])]
+#[case::continuing(true, 100, &[Segment::Incomplete(b"abc".into(), PartialPlacement::Next, 0), Segment::Incomplete(b"def".into(), PartialPlacement::Next, 0), Segment::Incomplete(b"".into(), PartialPlacement::Last, 0)])]
+#[case::continuing_at_limit(true, 6, &[Segment::Incomplete(b"abc".into(), PartialPlacement::Next, 0), Segment::Incomplete(b"def".into(), PartialPlacement::Next, 0), Segment::Incomplete(b"".into(), PartialPlacement::Last, 0)])]
 #[case::fits(false, 7, &[Segment::Complete(b"abcdef".into())])]
 #[case::fits_exactly(false, 6, &[Segment::Complete(b"abcdef".into())])]
 fn test_jumbo_ends_on_buffer_boundary(
@@ -446,9 +462,9 @@ fn test_jumbo_reaches_limit_before_last_part() {
     assert_eq!(
         tokens,
         vec![
-            Segment::Incomplete(b"abc".into(), PartialPlacement::First),
-            Segment::Incomplete(b"def".into(), PartialPlacement::Next),
-            Segment::Incomplete(b"g\n".into(), PartialPlacement::Last),
+            Segment::Incomplete(b"abc".into(), PartialPlacement::First, 0),
+            Segment::Incomplete(b"def".into(), PartialPlacement::Next, 0),
+            Segment::Incomplete(b"g\n".into(), PartialPlacement::Last, 1),
             Segment::Complete(b"x\n".into()),
         ]
     );
@@ -791,6 +807,29 @@ fn test_partial_match_r_position_semantics() {
     }
 }
 
+#[rstest]
+#[case::newline(Delimiter::Newline, b"abcdefghij\nx\n", b"ij\n", 1)]
+#[case::crlf(Delimiter::Newline, b"abcdefghij\r\nx\n", b"ij\r\n", 2)]
+#[case::unterminated(Delimiter::Newline, b"abcdefghij", b"ij", 0)]
+#[case::json_after_object(Delimiter::Json, b"{\"a\":\"bcdefg\"}\n{}\n", b"defg\"}\n", 1)]
+#[case::json_before_object(Delimiter::Json, b"abcdefghij\n{}\n", b"ij\n", 1)]
+#[case::json_before_indented_object(Delimiter::Json, b"abcdefghij\n  {}\n", b"ij\n  ", 3)]
+fn test_last_part_delimiter(
+    #[case] delimiter: Delimiter,
+    #[case] input: &[u8],
+    #[case] expected: &[u8],
+    #[case] expected_delimiter: usize,
+) {
+    let sf = Arc::new(SegmentBufFactory::new(8));
+    let scanner = Scanner::new(sf, delimiter);
+    let mut data = Cursor::new(input);
+    let last = scanner.items(&mut data).find_map(|item| match item.unwrap() {
+        Segment::Incomplete(buf, PartialPlacement::Last, delimiter) => Some((buf, delimiter)),
+        _ => None,
+    });
+    assert_eq!(last, Some((SegmentBuf::from(expected), expected_delimiter)));
+}
+
 #[test]
 fn test_tokens_after_long_token() {
     let sf = Arc::new(SegmentBufFactory::new(8));
@@ -800,8 +839,8 @@ fn test_tokens_after_long_token() {
     assert_eq!(
         tokens,
         vec![
-            Segment::Incomplete(b"abcdefgh".into(), PartialPlacement::First),
-            Segment::Incomplete(b"ij/".into(), PartialPlacement::Last),
+            Segment::Incomplete(b"abcdefgh".into(), PartialPlacement::First, 0),
+            Segment::Incomplete(b"ij/".into(), PartialPlacement::Last, 1),
             Segment::Complete(b"x/y/".into()),
             Segment::Complete(b"z".into()),
         ]
@@ -816,11 +855,11 @@ fn test_tokens_after_long_token_without_more_input() {
     let mut tokens = scanner.items(&mut data);
     assert_eq!(
         tokens.next().unwrap().unwrap(),
-        Segment::Incomplete(b"abcdefgh".into(), PartialPlacement::First)
+        Segment::Incomplete(b"abcdefgh".into(), PartialPlacement::First, 0)
     );
     assert_eq!(
         tokens.next().unwrap().unwrap(),
-        Segment::Incomplete(b"ij/".into(), PartialPlacement::Last)
+        Segment::Incomplete(b"ij/".into(), PartialPlacement::Last, 1)
     );
     assert_eq!(tokens.next().unwrap().unwrap(), Segment::Complete(b"x/y/".into()));
     assert!(tokens.next().unwrap().is_err());
