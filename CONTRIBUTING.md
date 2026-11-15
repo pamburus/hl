@@ -127,7 +127,7 @@ The unrelated issue gets its own branch and pull request.
 
 ### Performance
 
-The `perf-gate` CI job compares the instruction counts of the pull request with those of its base, and fails when they grow by more than 2%. Run `just perf-gate` to get the same comparison locally. For a change that adds cost on purpose, a maintainer adds the `perf-regression-accepted` label. See [perf-gate.py](scripts/README.md#perf-gatepy) for details.
+The `perf-gate` CI job compares the instruction counts of the pull request with those of its base, and fails when they grow by more than 1%. Run `just perf-gate` to get the same comparison locally. For a change that adds cost on purpose, a maintainer adds the `perf-regression-accepted` label. See [perf-gate.py](scripts/README.md#perf-gatepy) for details.
 
 Instruction counts do not show effects of caches, memory access or threads, so wall-clock time is measured with the benchmarks, locally only, because timings on shared CI runners vary too much. Run `just bench-compare` to compare the benchmarks of the working tree with where it forked from `origin/develop`. A criterion filter narrows it down, for example `just bench-compare origin/develop timestamp`. It skips the reference benchmarks, which measure third-party code and language or library primitives. Run it on an otherwise idle machine. See [bench-compare.py](scripts/README.md#bench-comparepy) for details.
 
