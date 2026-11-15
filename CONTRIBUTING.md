@@ -161,7 +161,7 @@ cd hl
 just build
 
 # Run hl
-just run -- --help
+just run --help
 ```
 
 ### Running Tests
@@ -170,8 +170,8 @@ just run -- --help
 # Run all tests
 just test
 
-# Run a specific test, with output
-cargo test test_name -- --nocapture
+# Run the tests whose names contain the given text, with output
+just test test-name -- --nocapture
 ```
 
 ### Running Benchmarks
