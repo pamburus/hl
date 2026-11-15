@@ -115,7 +115,7 @@ quote = "1"
 rand = "0.10"
 regex = "1"
 rstest = "0.28"
-rust-embed = "8"
+rust-embed = { version = "8", features = ["debug-embed"] }
 semver = "1"
 serde = { version = "1", features = ["derive"] }
 serde-logfmt = { path = "./crates/serde-logfmt" }
@@ -148,7 +148,7 @@ wyhash = "0.6"
 yaml = { package = "yaml-peg", version = "1" }
 
 [workspace.package]
-version = "0.37.0-alpha.25"
+version = "0.37.0-alpha.26"
 edition = "2024"
 repository = "https://github.com/pamburus/hl"
 license = "MIT"
