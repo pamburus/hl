@@ -229,20 +229,25 @@ class Counts:
         return f"{self.median:,.0f}" + (f" ({self.spread:.2%})" if self.spread is not None else "")
 
 
+def change(ratio):
+    # The ratio of head to base as a change in percent.
+    return f"{ratio - 1:+.2%}"
+
+
 def report(rows, threshold, report_only, base, markdown):
     failed = [r for r in rows if r[4] > threshold]
     lines = [
-        "| input | mode | base | head | ratio |",
+        "| input | mode | base | head | change |",
         "| --- | --- | ---: | ---: | ---: |",
     ]
     for name, mode, a, b, ratio in rows:
         mark = " ❌" if ratio > threshold else ""
-        lines.append(f"| {name} | {mode} | {a} | {b} | {ratio:.3f}{mark} |")
+        lines.append(f"| {name} | {mode} | {a} | {b} | {change(ratio)}{mark} |")
     if failed:
-        verdict = f"{len(failed)} of {len(rows)} inputs and modes exceed ×{threshold}"
+        verdict = f"{len(failed)} of {len(rows)} inputs and modes exceed {change(threshold)}"
         verdict += ", reported only" if report_only else ""
     else:
-        verdict = f"all {len(rows)} inputs and modes within ×{threshold}"
+        verdict = f"all {len(rows)} inputs and modes within {change(threshold)}"
     # The results are printed as they come, the table goes to the markdown report.
     print(f"\n{verdict}")
     if markdown:
@@ -253,10 +258,22 @@ def report(rows, threshold, report_only, base, markdown):
             else git("rev-parse", "HEAD")
         )
         title = f"Base {base}, head {head}." if base else ""
-        hint = "Add the `perf-regression-accepted` label and re-run the job if the cost is intended." if failed else ""
-        # The marker lets CI find the comment it posted before, to update it.
-        lines = ["<!-- perf-gate -->", "## Instruction counts", "", title, "", *lines, "", f"**{verdict}**", "", hint]
-        Path(markdown).write_text("\n".join(lines).strip() + "\n")
+        hint = (
+            "Add the `perf-regression-accepted` label and re-run the job if the cost is intended."
+            if failed and not report_only
+            else ""
+        )
+        icon = ("⚠️" if report_only else "❌") if failed else "✅"
+        exceeded = [f"- {name} {mode}: **{change(ratio)}** ({a} → {b})" for name, mode, a, b, ratio in failed]
+        # Only the verdict and the inputs and modes over the threshold are shown, the table is collapsed. GitHub renders
+        # markdown inside the details element only after a blank line. The marker lets CI find the comment it posted
+        # before, to update it.
+        lines = [
+            *["<!-- perf-gate -->", "## Instruction counts", "", f"{icon} **{verdict}**", "", *exceeded, ""],
+            *[title, "", hint, ""],
+            *["<details>", "<summary>Counts by input and mode</summary>", "", *lines, "", "</details>"],
+        ]
+        Path(markdown).write_text(re.sub(r"\n{3,}", "\n\n", "\n".join(lines)).strip() + "\n")
     return bool(failed) and not report_only
 
 
@@ -322,7 +339,7 @@ def main():
                 a, b = Counts([f.result() for f in a]), Counts([f.result() for f in b])
                 ratio = b.median / a.median
                 rows.append((name, mode, a, b, ratio))
-                print(f"  {name:7} {mode:13} {str(a):>24} {str(b):>24} ×{ratio:.3f}", flush=True)
+                print(f"  {name:7} {mode:13} {str(a):>24} {str(b):>24} {change(ratio):>8}", flush=True)
 
     if report(rows, opts.threshold, opts.report_only, opts.base if not opts.base_hl else None, opts.markdown):
         sys.exit(1)
