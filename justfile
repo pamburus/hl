@@ -46,7 +46,7 @@ build-release: (setup "build")
 run *args: build
     cargo run -- {{ args }}
 
-[doc('Run tests for all packages in the workspace, example: `just test test_name -- --nocapture`')]
+[doc('Run tests for all packages in the workspace, example: `just test timestamp -- --nocapture`')]
 [positional-arguments]
 test *args: (setup "build")
     cargo test --workspace "$@"

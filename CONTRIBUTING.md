@@ -170,8 +170,8 @@ just run --help
 # Run all tests
 just test
 
-# Run a specific test, with output
-just test test_name -- --nocapture
+# Run the tests whose names contain a word, with output
+just test timestamp -- --nocapture
 ```
 
 ### Running Benchmarks
