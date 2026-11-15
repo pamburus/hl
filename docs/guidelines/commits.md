@@ -10,6 +10,7 @@ Before every commit, run `just ci`, which executes:
 * `audit`: Security vulnerability checks
 * `fmt-check`: Code formatting verification
 * `check-schema`: JSON schema validation
+* `stress-test`: CPU time and memory growth checks on a release build, see [stress-test.py](../../scripts/README.md#stress-testpy)
 
 All reported issues MUST be resolved before committing.
 
