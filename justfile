@@ -135,9 +135,9 @@ coverage: (setup "coverage")
 uncovered base="origin/develop": (setup "coverage")
     @scripts/coverage-diff-analysis.py -q --ide-links {{ base }}
 
-[doc('Run benchmarks')]
+[doc("Run benchmarks, keeping the results in the hl-criterion directory of the clone's git directory unless CRITERION_HOME is set")]
 bench *args: (setup "build")
-    cargo bench --workspace --locked {{ args }}
+    CRITERION_HOME="${CRITERION_HOME:-$(git rev-parse --path-format=absolute --git-common-dir)/hl-criterion}" cargo bench --workspace --locked {{ args }}
 
 [doc('Compare benchmarks of the working tree with where it forked from {{base}}, without reference benchmarks, example: `just bench-compare origin/develop timestamp`')]
 [positional-arguments]

@@ -180,6 +180,8 @@ just test test-name -- --nocapture
 just bench
 ```
 
+The results are kept in `hl-criterion` of the git directory, which all worktrees of the clone share, so they outlive the worktrees and their target directories. Each run is compared with the previous one, whichever worktree it ran in. Set `CRITERION_HOME` to keep them elsewhere.
+
 ## Code Style
 
 - Format the code with `just fmt`. Rust code is formatted with nightly `rustfmt`, because `rustfmt.toml` uses unstable options; stable `cargo fmt` ignores them, including the exclusion of generated code
