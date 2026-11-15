@@ -6,9 +6,10 @@ Usage:
   perf-gate.py --base-hl PATH --hl PATH [...]
 
 Without --hl, builds the working tree and the commit where it forked from the base revision (origin/develop by
-default) in release mode, the base in a worktree it keeps for the next run. Each build runs on the same inputs in each
-mode under cachegrind, with one processing thread and an empty cache unless the mode sets otherwise, as many runs at a
-time as there are CPUs. The counts repeat to within a fraction of a percent, so one run of each is enough by default.
+default) in release mode, the base in the worktree of that commit and the target directory of the bases, which the
+worktrees of the clone share (see base_worktree.py). Each build runs on the same inputs in each mode under cachegrind,
+with one processing thread and an empty cache unless the mode sets otherwise, as many runs at a time as there are CPUs.
+The counts repeat to within a fraction of a percent, so one run of each is enough by default.
 With more runs, the medians are compared.
 The check fails when the head exceeds the base by more than the threshold in any input and mode.
 
@@ -28,10 +29,11 @@ import tempfile
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
+import base_worktree
+
 ROOT = Path(__file__).resolve().parent.parent
 SAMPLES = ["kitchen-sink.log", "prometheus.log", "cafe.log"]
 IMAGE = "rust:1-bookworm"
-BASE_WORKTREE = ROOT / ".worktrees" / "perf-gate-base"
 
 # Arguments of each mode, and how it takes the input:
 #   file: the input file
@@ -173,18 +175,6 @@ def target_dir():
     return Path(os.environ.get("CARGO_TARGET_DIR", ROOT / "target"))
 
 
-def checkout_base(sha):
-    # A worktree kept from run to run, so that moving it to another base rewrites only the files that differ and the
-    # base builds incrementally. It belongs to this script, so local changes in it are discarded.
-    git("worktree", "prune")
-    if (BASE_WORKTREE / ".git").exists():
-        subprocess.run(["git", "-C", str(BASE_WORKTREE), "checkout", "-q", "--force", "--detach", sha], check=True)
-        subprocess.run(["git", "-C", str(BASE_WORKTREE), "clean", "-q", "-d", "--force"], check=True)
-    else:
-        git("worktree", "add", "-q", "--detach", str(BASE_WORKTREE), sha)
-    return BASE_WORKTREE
-
-
 def build(src, target):
     print(f"building {src}", flush=True)
     env = dict(os.environ, CARGO_TARGET_DIR=str(target))
@@ -192,24 +182,43 @@ def build(src, target):
     return target / "release" / "hl"
 
 
-def build_base(src, sha):
-    # A target directory of its own: cargo gives a workspace crate the same identity wherever its source is, so in a
-    # shared one the head build would take the crates built for the base. The binary is kept by revision.
-    hl = target_dir() / "perf-gate" / f"hl-{sha}"
-    if not hl.exists():
-        hl.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(build(src, target_dir() / "perf-gate" / "base"), hl)
+def build_base(src, sha, git_dir=None):
+    # The bases take turns in one target directory, so the binary is kept by revision, also for the runs that still use
+    # it while another base builds. CI restores the binary of its base here. In Docker, the target directory, the
+    # binaries and the lock are in the volume, which the clones on the machine share.
+    if git_dir:
+        keep, target, lock = target_dir() / "perf-gate", target_dir() / "base", target_dir() / "base.lock"
+        target_dir().mkdir(parents=True, exist_ok=True)
+    else:
+        keep, target, lock = base_worktree.common_dir().parent / "target" / "perf-gate", None, None
+    hl = keep / f"hl-{sha}"
+    if hl.exists():
+        return hl
+
+    def build_and_keep(src, target):
+        # The base target directory of earlier versions.
+        shutil.rmtree(keep / "base", ignore_errors=True)
+        keep.mkdir(parents=True, exist_ok=True)
+        tmp = keep / f"hl-{sha}.tmp"
+        shutil.copy2(build(src, target), tmp)
+        tmp.replace(hl)
+
+    base_worktree.build(src, sha, build_and_keep, target, git_dir, lock)
     return hl
 
 
 def in_docker(opts, base_src):
-    # Linux build directories and the toolchains are kept in volumes, so later runs build incrementally.
-    cmd = ["docker", "run", "--rm", "-v", f"{ROOT}:/src:ro", "-v", f"{base_src}:/base:ro"]
+    # Linux build directories and the toolchains are kept in volumes, so later runs build incrementally. The base
+    # worktree is writable, to touch the files that changed since the base built last, and the git directory gives the
+    # changes.
+    cmd = ["docker", "run", "--rm", "-v", f"{ROOT}:/src:ro", "-v", f"{base_src}:/base"]
+    cmd += ["-v", f"{base_worktree.common_dir()}:/git:ro"]
     cmd += ["-v", "hl-cargo-registry:/usr/local/cargo/registry", "-v", "hl-cargo-git:/usr/local/cargo/git"]
     cmd += ["-v", "hl-rustup:/usr/local/rustup"]
     cmd += ["-v", "hl-perf-gate-target:/target", "-e", "CARGO_TARGET_DIR=/target/linux", "-w", "/src", IMAGE]
     script = "apt-get update -qq >/dev/null && apt-get install -y -qq valgrind >/dev/null && exec scripts/perf-gate.py"
-    cmd += ["bash", "-c", script + ' "$@"', "perf-gate.py", "--base-src", "/base", "--base", opts.base]
+    cmd += ["bash", "-c", script + ' "$@"', "perf-gate.py", "--base-src", "/base", "--base-git", "/git"]
+    cmd += ["--base", opts.base]
     cmd += [f"--threshold={opts.threshold}", f"--repeat={opts.repeat}", f"--size={opts.size}"]
     cmd += [f"--input={opts.input}", f"--mode={opts.mode}"]
     cmd += ["--report-only"] if opts.report_only else []
@@ -283,6 +292,7 @@ def main():
     ap.add_argument("--hl", help="head build, instead of building the working tree")
     ap.add_argument("--base-hl", help="base build, instead of building the base revision")
     ap.add_argument("--base-src", help=argparse.SUPPRESS)
+    ap.add_argument("--base-git", help=argparse.SUPPRESS)
     ap.add_argument("--threshold", type=float, default=1.02, help="largest allowed ratio of head to base medians")
     ap.add_argument("--repeat", type=int, default=1, help="runs of each input and mode on each build")
     ap.add_argument("--size", type=int, default=2 << 20, help="size of each input in bytes")
@@ -298,7 +308,7 @@ def main():
         if not (base_hl and hl):
             if not opts.base_src:
                 opts.base = git("merge-base", "HEAD", opts.base)
-                base_src = checkout_base(opts.base)
+                base_src = base_worktree.checkout(opts.base)
                 if not shutil.which("valgrind"):
                     if sys.platform == "linux" or not shutil.which("docker"):
                         sys.exit("valgrind is not installed")
@@ -306,7 +316,7 @@ def main():
             else:
                 base_src = Path(opts.base_src)
             print(f"base: {opts.base}", flush=True)
-            base_hl = base_hl or build_base(base_src, opts.base)
+            base_hl = base_hl or build_base(base_src, opts.base, opts.base_git)
             hl = hl or build(ROOT, target_dir())
         elif not shutil.which("valgrind"):
             sys.exit("valgrind is not installed")
