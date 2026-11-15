@@ -49,7 +49,7 @@ Compares the number of instructions two builds of `hl` execute on the same input
   - following stdin
 - **Counts**: from cachegrind, with one processing thread unless the mode sets more and an empty cache unless the mode needs an index, so repeated runs differ by well under 1%
 - **Runs**: once per input and mode on each build by default, as many at a time as there are CPUs; with `--repeat N`, the medians are compared
-- **Check**: fails when the head exceeds the base by more than 2% in any input and mode
+- **Check**: fails when the head exceeds the base by more than 1% in any input and mode
 
 Following a file is left out, because how much `hl` reads per wakeup depends on timing.
 

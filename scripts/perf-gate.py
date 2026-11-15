@@ -293,7 +293,7 @@ def main():
     ap.add_argument("--base-hl", help="base build, instead of building the base revision")
     ap.add_argument("--base-src", help=argparse.SUPPRESS)
     ap.add_argument("--base-git", help=argparse.SUPPRESS)
-    ap.add_argument("--threshold", type=float, default=1.02, help="largest allowed ratio of head to base medians")
+    ap.add_argument("--threshold", type=float, default=1.01, help="largest allowed ratio of head to base medians")
     ap.add_argument("--repeat", type=int, default=1, help="runs of each input and mode on each build")
     ap.add_argument("--size", type=int, default=2 << 20, help="size of each input in bytes")
     ap.add_argument("--input", default="", help="run only inputs whose name matches this regex")
