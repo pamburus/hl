@@ -13,6 +13,7 @@ worktrees of one clone do not race on them.
 """
 
 import fcntl
+import functools
 import os
 import subprocess
 import sys
@@ -31,8 +32,20 @@ USED = "hl-base-last-used"
 BUILT = "hl-base-revision"
 
 
+@functools.cache
+def env():
+    # Without the variables that locate a repository, such as those git sets for hooks, which would take precedence over
+    # the worktree or git directory a command names.
+    local = subprocess.run(["git", "rev-parse", "--local-env-vars"], check=True, capture_output=True, text=True)
+    return {k: v for k, v in os.environ.items() if k not in local.stdout.split()}
+
+
+def run(*args, cwd=ROOT, check=False):
+    return subprocess.run(["git", "-C", str(cwd), *args], check=check, capture_output=True, text=True, env=env())
+
+
 def git(*args, cwd=ROOT):
-    return subprocess.run(["git", "-C", str(cwd), *args], check=True, capture_output=True, text=True).stdout.strip()
+    return run(*args, cwd=cwd, check=True).stdout.strip()
 
 
 def common_dir():
@@ -60,9 +73,9 @@ def used(path):
 
 
 def remove(path):
-    proc = subprocess.run(["git", "-C", str(ROOT), "worktree", "remove", "--force", str(path)], capture_output=True)
+    proc = run("worktree", "remove", "--force", str(path))
     if proc.returncode != 0:
-        print(f"cannot remove {path}: {proc.stderr.decode().strip()}", file=sys.stderr)
+        print(f"cannot remove {path}: {proc.stderr.strip()}", file=sys.stderr)
 
 
 def expire(registered, keep):
@@ -93,7 +106,7 @@ def checkout(sha):
         if path in registered:
             # Otherwise the checkout rewrites the files touched for a build, and cargo rebuilds them. Files that differ
             # from the index make it fail, the checkout restores them.
-            subprocess.run(["git", "-C", str(path), "update-index", "-q", "--refresh"], capture_output=True)
+            run("update-index", "-q", "--refresh", cwd=path)
             git("checkout", "-q", "--force", "--detach", sha, cwd=path)
             git("clean", "-q", "-d", "--force", cwd=path)
         else:
@@ -110,11 +123,12 @@ def changed(git_dir, last, sha):
     # does not have, all files count as changed.
     cmd = ["git", "-c", "safe.directory=*", "--git-dir", str(git_dir)]
     if last:
-        proc = subprocess.run([*cmd, "diff", "--name-only", "--no-renames", "-z", last, sha], capture_output=True)
+        diff = [*cmd, "diff", "--name-only", "--no-renames", "-z", last, sha]
+        proc = subprocess.run(diff, capture_output=True, text=True, env=env())
         if proc.returncode == 0:
-            return proc.stdout.decode().split("\0")
-    proc = subprocess.run([*cmd, "ls-tree", "-r", "--name-only", "-z", sha], check=True, capture_output=True)
-    return proc.stdout.decode().split("\0")
+            return proc.stdout.split("\0")
+    tree = [*cmd, "ls-tree", "-r", "--name-only", "-z", sha]
+    return subprocess.run(tree, check=True, capture_output=True, text=True, env=env()).stdout.split("\0")
 
 
 def build(src, sha, run, target=None, git_dir=None, lock=None):
