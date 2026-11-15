@@ -41,9 +41,6 @@ scale = "line"
 cpu = "linear"
 rss = { default = "constant", sort-stdin = "linear", sort-gz = "linear" }
 
-[cases.known]
-"cat.rss" = "#1692"
-
 [[cases]]
 name = "long-line-by-limit"
 about = "A line over the limit between two short records, by the limit"
@@ -64,9 +61,6 @@ modes = ["cat", "sort-file", "sort-stdin", "sort-gz", "follow-stdin"]
 scale = "line"
 cpu = "linear"
 rss = { default = "constant", sort-stdin = "linear", sort-gz = "linear" }
-
-[cases.known]
-"cat.rss" = "#1692"
 
 [[cases]]
 name = "short-lines"

@@ -2,7 +2,11 @@
 use super::*;
 
 // std imports
-use std::io::Cursor;
+use std::{
+    alloc::{GlobalAlloc, Layout, System},
+    io::Cursor,
+    sync::atomic::{AtomicUsize, Ordering},
+};
 
 // third-party imports
 use chrono::{Offset, Utc};
@@ -16,7 +20,8 @@ use crate::{
     filtering::MatchOptions,
     level::{InfallibleLevel, Level},
     model::{FieldFilterSet, RecordWithSource},
-    scanning::{BufFactory, PartialPlacement, Segment, SegmentBuf, SegmentBufFactory},
+    output::{BufFactory, OutputBuf},
+    scanning::{PartialPlacement, Segment, SegmentBuf, SegmentBufFactory},
     settings::{self, AsciiMode, DisplayVariant, ExpansionMode, MessageFormat, MessageFormatting},
     syntax::*,
     themecfg,
@@ -25,6 +30,91 @@ use crate::{
 fn theme() -> Arc<Theme> {
     Sample::sample()
 }
+
+/// Size of the buffers counted by [`BufferCounter`], one no other test uses for its buffers.
+const COUNTED_BUFFER_SIZE: usize = 4099;
+
+/// Serializes the tests that count buffers, as they all count buffers of the same size.
+static BUFFER_COUNTING: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+/// Counts the allocations of [`COUNTED_BUFFER_SIZE`] bytes that are alive at once, and all of them,
+/// so a test can tell how many buffers of that size the app keeps or takes while other tests run.
+struct BufferCounter {
+    live: AtomicUsize,
+    peak: AtomicUsize,
+    total: AtomicUsize,
+}
+
+impl BufferCounter {
+    fn on_alloc(&self, size: usize) {
+        if size == COUNTED_BUFFER_SIZE {
+            self.total.fetch_add(1, Ordering::Relaxed);
+            let live = self.live.fetch_add(1, Ordering::Relaxed) + 1;
+            self.peak.fetch_max(live, Ordering::Relaxed);
+        }
+    }
+
+    fn on_dealloc(&self, size: usize) {
+        if size == COUNTED_BUFFER_SIZE {
+            self.live.fetch_sub(1, Ordering::Relaxed);
+        }
+    }
+
+    /// Starts counting the peak from the buffers alive now, and returns their number.
+    fn reset_peak(&self) -> usize {
+        let live = self.live.load(Ordering::Relaxed);
+        self.peak.store(live, Ordering::Relaxed);
+        live
+    }
+
+    fn peak(&self) -> usize {
+        self.peak.load(Ordering::Relaxed)
+    }
+
+    fn total(&self) -> usize {
+        self.total.load(Ordering::Relaxed)
+    }
+}
+
+unsafe impl GlobalAlloc for BufferCounter {
+    unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
+        let ptr = unsafe { System.alloc(layout) };
+        if !ptr.is_null() {
+            self.on_alloc(layout.size());
+        }
+        ptr
+    }
+
+    unsafe fn alloc_zeroed(&self, layout: Layout) -> *mut u8 {
+        let ptr = unsafe { System.alloc_zeroed(layout) };
+        if !ptr.is_null() {
+            self.on_alloc(layout.size());
+        }
+        ptr
+    }
+
+    unsafe fn realloc(&self, ptr: *mut u8, layout: Layout, new_size: usize) -> *mut u8 {
+        let new_ptr = unsafe { System.realloc(ptr, layout, new_size) };
+        if !new_ptr.is_null() {
+            self.on_dealloc(layout.size());
+            self.on_alloc(new_size);
+        }
+        new_ptr
+    }
+
+    unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
+        unsafe { System.dealloc(ptr, layout) };
+        self.on_dealloc(layout.size());
+    }
+}
+
+// It is the allocator of the whole lib test binary, so it only adds a size check to other tests' allocations.
+#[global_allocator]
+static BUFFERS: BufferCounter = BufferCounter {
+    live: AtomicUsize::new(0),
+    peak: AtomicUsize::new(0),
+    total: AtomicUsize::new(0),
+};
 
 /// Holds written bytes until flushed and then sends them to a channel.
 struct FlushProbe {
@@ -104,7 +194,7 @@ fn ts(sec: i64, nsec: u32) -> Timestamp {
 }
 
 /// A message from a follow mode worker to the merger.
-type Processed = (usize, Vec<u8>, TimestampIndex);
+type Processed = (usize, OutputBuf, TimestampIndex);
 
 /// Returns a worker message for a block holding a single record with timestamp `sec`.
 fn record_block(input: usize, block: usize, text: &str, sec: i64) -> Processed {
@@ -116,7 +206,7 @@ fn record_block(input: usize, block: usize, text: &str, sec: i64) -> Processed {
         }],
         part: None,
     };
-    (input, text.as_bytes().to_vec(), index)
+    (input, text.as_bytes().to_vec().into(), index)
 }
 
 /// Returns a worker message for a block holding a part of a log entry too large to be read at once.
@@ -125,12 +215,12 @@ fn part_block(input: usize, block: usize, text: &str, part: PartialPlacement) ->
         part: Some(part),
         ..TimestampIndex::new(block)
     };
-    (input, text.as_bytes().to_vec(), index)
+    (input, text.as_bytes().to_vec().into(), index)
 }
 
 /// Returns a worker message for a block holding text that is not a record.
 fn text_block(input: usize, block: usize, text: &str) -> Processed {
-    (input, text.as_bytes().to_vec(), TimestampIndex::new(block))
+    (input, text.as_bytes().to_vec().into(), TimestampIndex::new(block))
 }
 
 /// Merges `messages`, received one by one, in a window with room for all of them,
@@ -647,6 +737,60 @@ fn test_unterminated_record_filling_whole_buffers(#[case] max_message_size: usiz
         std::str::from_utf8(&output).unwrap(),
         "2024-01-25 18:10:21.764 |DBG| m2 x=12345\n"
     );
+}
+
+#[rstest]
+fn test_overlong_line_buffers_reused(#[values(false, true)] terminated: bool, #[values(1, 4)] concurrency: usize) {
+    // The line is shown part by part, so the number of buffers it takes at once should not grow with its length.
+    const PARTS: usize = 256;
+    let line = "x".repeat(COUNTED_BUFFER_SIZE * PARTS);
+    let expected = format!("a\n{line}\n");
+    let data = if terminated { format!("{line}\n") } else { line };
+    let data = format!("{{\"msg\":\"a\"}}\n{data}");
+
+    let app = App::new(Options {
+        buffer_size: NonZeroUsize::new(COUNTED_BUFFER_SIZE).unwrap(),
+        max_message_size: NonZeroUsize::new(COUNTED_BUFFER_SIZE * 4).unwrap(),
+        concurrency,
+        ..options()
+    });
+    let input = input(data);
+    // Reserved in advance, so the output does not grow into a buffer of the counted size.
+    let mut output = Vec::with_capacity(expected.len());
+    let _guard = BUFFER_COUNTING.lock().unwrap_or_else(|e| e.into_inner());
+    let baseline = BUFFERS.reset_peak();
+    app.run(vec![input], &mut output).unwrap();
+    let peak = BUFFERS.peak() - baseline;
+    assert!(peak < 32, "{peak} buffers alive at once for a line of {PARTS} parts");
+    assert!(
+        output == expected.as_bytes(),
+        "unexpected output of {} bytes",
+        output.len()
+    );
+}
+
+#[rstest]
+fn test_output_buffers_reused(#[values(1, 4)] concurrency: usize) {
+    // Every line fills a whole buffer and is shown as is, so a new buffer for each of them would show in the count.
+    const LINES: usize = 256;
+    let line = format!("{}\n", "x".repeat(COUNTED_BUFFER_SIZE - 1));
+    let data = line.repeat(LINES);
+
+    let app = App::new(Options {
+        buffer_size: NonZeroUsize::new(COUNTED_BUFFER_SIZE).unwrap(),
+        max_message_size: NonZeroUsize::new(COUNTED_BUFFER_SIZE * 4).unwrap(),
+        concurrency,
+        ..options()
+    });
+    let input = input(data.clone());
+    // Reserved in advance, so the output does not grow into a buffer of the counted size.
+    let mut output = Vec::with_capacity(data.len());
+    let _guard = BUFFER_COUNTING.lock().unwrap_or_else(|e| e.into_inner());
+    let before = BUFFERS.total();
+    app.run(vec![input], &mut output).unwrap();
+    let taken = BUFFERS.total() - before;
+    assert!(taken < 32, "{taken} buffers taken for {LINES} lines");
+    assert!(output == data.as_bytes(), "unexpected output of {} bytes", output.len());
 }
 
 #[rstest]
@@ -1860,8 +2004,7 @@ fn test_process_segments() {
     let app = App::new(opts);
 
     let parser = app.parser();
-    let bfo = BufFactory::new(4096);
-    let sfi = SegmentBufFactory::new(4096);
+    let bfo = Arc::new(BufFactory::new(4096));
 
     let badges = FollowBadges {
         si: SyncIndicator {
@@ -1886,7 +2029,6 @@ fn test_process_segments() {
     app.process_segments(
         &parser,
         &bfo,
-        &sfi,
         &badges,
         &[InputDescriptor::new(0, "<stdin>")],
         rxi,
@@ -1922,8 +2064,7 @@ fn test_process_segments_incomplete(
     let app = App::new(opts);
 
     let parser = app.parser();
-    let bfo = BufFactory::new(4096);
-    let sfi = SegmentBufFactory::new(4096);
+    let bfo = Arc::new(BufFactory::new(4096));
 
     let badges = FollowBadges {
         si: SyncIndicator {
@@ -1946,7 +2087,6 @@ fn test_process_segments_incomplete(
     app.process_segments(
         &parser,
         &bfo,
-        &sfi,
         &badges,
         &[InputDescriptor::new(0, "<stdin>")],
         rxi,
@@ -1961,7 +2101,7 @@ fn test_process_segments_incomplete(
     assert_eq!(index.block, 3);
     assert!(index.lines.is_empty());
     if input_format.is_none() {
-        assert_eq!(String::from_utf8(buf).unwrap(), expected);
+        assert_eq!(std::str::from_utf8(&buf).unwrap(), expected);
         assert_eq!(index.part, Some(part));
     } else {
         assert!(buf.is_empty());
@@ -1984,9 +2124,9 @@ fn test_split_entry_part(#[case] input: &[u8], #[case] n: usize, #[case] expecte
     };
     let at = segment.data().as_ptr();
 
-    let buf = split_entry_part(segment, part, delimiter, "> ", &sfi);
+    let buf = split_entry_part(segment, part, delimiter, "> ");
 
-    assert_eq!(String::from_utf8(buf.clone()).unwrap(), expected);
+    assert_eq!(std::str::from_utf8(&buf).unwrap(), expected);
     // A part sent in its own buffer is not copied, and any other is copied into a buffer of its size.
     assert_eq!(buf.as_ptr() == at, in_own_buffer);
     if !in_own_buffer {
@@ -2032,8 +2172,7 @@ fn test_process_segments_receiver_dropped(#[case] segment: Segment) {
     let app = App::new(opts);
 
     let parser = app.parser();
-    let bfo = BufFactory::new(4096);
-    let sfi = SegmentBufFactory::new(4096);
+    let bfo = Arc::new(BufFactory::new(4096));
 
     let badges = FollowBadges {
         si: SyncIndicator {
@@ -2053,15 +2192,7 @@ fn test_process_segments_receiver_dropped(#[case] segment: Segment) {
     txi.send((0, 0, 0, segment)).unwrap();
     drop(txi);
 
-    app.process_segments(
-        &parser,
-        &bfo,
-        &sfi,
-        &badges,
-        &[InputDescriptor::new(0, "<stdin>")],
-        rxi,
-        txo,
-    );
+    app.process_segments(&parser, &bfo, &badges, &[InputDescriptor::new(0, "<stdin>")], rxi, txo);
 }
 
 #[test]
@@ -2547,7 +2678,7 @@ fn test_merge_segments_single_line() {
             ts: ts(100, 0),
         }],
     };
-    txo.send((0, buf, index)).unwrap();
+    txo.send((0, buf.into(), index)).unwrap();
     drop(txo);
 
     let mut output = Vec::new();
@@ -2584,8 +2715,8 @@ fn test_merge_segments_ordered_timestamps() {
         }],
     };
 
-    txo.send((0, buf1, index1)).unwrap();
-    txo.send((0, buf2, index2)).unwrap();
+    txo.send((0, buf1.into(), index1)).unwrap();
+    txo.send((0, buf2.into(), index2)).unwrap();
     drop(txo);
 
     let mut output = Vec::new();
@@ -2622,8 +2753,8 @@ fn test_merge_segments_interleaved_sources() {
         }],
     };
 
-    txo.send((0, buf0, index0)).unwrap();
-    txo.send((1, buf1, index1)).unwrap();
+    txo.send((0, buf0.into(), index0)).unwrap();
+    txo.send((1, buf1.into(), index1)).unwrap();
     drop(txo);
 
     let mut output = Vec::new();
@@ -2653,7 +2784,7 @@ fn test_merge_segments_out_of_order_shows_failed() {
             ts: ts(200, 0),
         }],
     };
-    txo.send((0, buf1, index1)).unwrap();
+    txo.send((0, buf1.into(), index1)).unwrap();
 
     // Second batch: ts=100 (arrives after ts=200 has been flushed)
     let buf2 = b"  early".to_vec();
@@ -2665,7 +2796,7 @@ fn test_merge_segments_out_of_order_shows_failed() {
             ts: ts(100, 0),
         }],
     };
-    txo.send((0, buf2, index2)).unwrap();
+    txo.send((0, buf2.into(), index2)).unwrap();
     drop(txo);
 
     let mut output = Vec::new();
@@ -2680,7 +2811,7 @@ fn test_merge_segments_out_of_order_shows_failed() {
 fn test_merge_segments_empty_channel() {
     let app = App::new(options());
     let badges = test_badges(2);
-    let (txo, rxo) = channel::bounded::<(usize, Vec<u8>, TimestampIndex)>(10);
+    let (txo, rxo) = channel::bounded::<(usize, OutputBuf, TimestampIndex)>(10);
     drop(txo);
 
     let mut output = Vec::new();
@@ -2709,7 +2840,7 @@ fn test_merge_segments_flushes_window_when_inputs_close() {
             ts: ts(100, 0),
         }],
     };
-    txo.send((0, buf, index)).unwrap();
+    txo.send((0, buf.into(), index)).unwrap();
     drop(txo);
 
     let (txr, rxr) = channel::bounded(1);
@@ -2749,7 +2880,7 @@ fn test_merge_segments_flushes_output_before_waiting(#[case] record: bool, #[cas
             ts: ts(100, 0),
         });
     }
-    txo.send((0, buf, index)).unwrap();
+    txo.send((0, buf.into(), index)).unwrap();
 
     let merger = std::thread::spawn(move || {
         let mut output = FlushProbe {
@@ -2812,7 +2943,7 @@ fn test_merge_segments_multiple_lines_per_segment() {
             },
         ],
     };
-    txo.send((0, buf, index)).unwrap();
+    txo.send((0, buf.into(), index)).unwrap();
     drop(txo);
 
     let mut output = Vec::new();
@@ -2856,8 +2987,8 @@ fn test_merge_segments_text_stays_with_record_before_it() {
             ts: ts(200, 0),
         }],
     };
-    txo.send((0, buf0, index0)).unwrap();
-    txo.send((1, buf1, index1)).unwrap();
+    txo.send((0, buf0.into(), index0)).unwrap();
+    txo.send((1, buf1.into(), index1)).unwrap();
     drop(txo);
 
     let mut output = Vec::new();
@@ -2882,7 +3013,7 @@ fn test_merge_segments_gap_without_timestamp_direct_output() {
         part: None,
         lines: vec![],
     };
-    txo.send((0, buf, index)).unwrap();
+    txo.send((0, buf.into(), index)).unwrap();
     drop(txo);
 
     let mut output = Vec::new();
@@ -2912,7 +3043,7 @@ fn test_merge_segments_gap_trimming_no_trailing_delimiter() {
             ts: ts(100, 0),
         }],
     };
-    txo.send((0, buf, index)).unwrap();
+    txo.send((0, buf.into(), index)).unwrap();
     drop(txo);
 
     let mut output = Vec::new();
@@ -2946,7 +3077,7 @@ fn test_merge_segments_empty_gap_skipped() {
             },
         ],
     };
-    txo.send((0, buf, index)).unwrap();
+    txo.send((0, buf.into(), index)).unwrap();
     drop(txo);
 
     let mut output = Vec::new();
@@ -2988,8 +3119,8 @@ fn test_merge_segments_trailing_gap_with_source_history() {
         }],
     };
 
-    txo.send((0, buf1, index1)).unwrap();
-    txo.send((0, buf2, index2)).unwrap();
+    txo.send((0, buf1.into(), index1)).unwrap();
+    txo.send((0, buf2.into(), index2)).unwrap();
     drop(txo);
 
     let mut output = Vec::new();
@@ -3433,8 +3564,7 @@ fn test_process_segments_passes_record_origin() {
     let (app, capture) = app_with_origin_capture(options());
 
     let parser = app.parser();
-    let bfo = BufFactory::new(4096);
-    let sfi = SegmentBufFactory::new(4096);
+    let bfo = Arc::new(BufFactory::new(4096));
     let badges = test_badges(2);
     let inputs = [descriptor(0, "a.log"), descriptor(1, "b.log")];
 
@@ -3448,7 +3578,7 @@ fn test_process_segments_passes_record_origin() {
     txi.send((0, 0, 200, segment(A1))).unwrap();
     drop(txi);
 
-    app.process_segments(&parser, &bfo, &sfi, &badges, &inputs, rxi, txo);
+    app.process_segments(&parser, &bfo, &badges, &inputs, rxi, txo);
 
     let n = A1.len() as u64;
     assert_eq!(rxo.iter().count(), 2);

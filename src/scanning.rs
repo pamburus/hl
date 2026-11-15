@@ -7,12 +7,12 @@ use std::ops::{Deref, Range};
 use std::sync::Arc;
 
 // third-party imports
-use crossbeam_queue::SegQueue;
 use memchr::{memchr, memrchr};
 use serde::{Deserialize, Serialize};
 
 // local imports
 use crate::error::*;
+use crate::pool::{Pool, Pooled, Recycler};
 
 // ---
 
@@ -558,9 +558,10 @@ impl Search for NewlineSearcher {
 // ---
 
 /// Contains a pre-allocated data buffer for a Segment and data size.
-#[derive(Eq)]
+///
+/// A buffer taken from a [`SegmentBufFactory`] returns to it when dropped.
 pub struct SegmentBuf {
-    buf: Vec<u8>,
+    buf: Pooled<SegmentBufRecycler>,
     size: usize,
 }
 
@@ -596,51 +597,31 @@ impl SegmentBuf {
         let end = self.size + data.len();
         if end > self.buf.len() {
             // Growing it by the default amortized policy could double the buffer for a few bytes.
-            self.buf.reserve_exact(end - self.buf.len());
+            // The length is read first, as two-phase borrows do not reach through `DerefMut`.
+            let additional = end - self.buf.len();
+            self.buf.reserve_exact(additional);
             self.buf.resize(end, 0);
         }
         self.buf[self.size..end].copy_from_slice(data);
         self.size = end;
     }
 
-    /// Transforms the SegmentBuf into inner Vec<u8>.
-    #[inline]
-    pub fn into_inner(self) -> Vec<u8> {
-        self.buf
-    }
-
     /// Transforms the SegmentBuf into inner Vec<u8> holding only the data.
+    /// The buffer no longer returns to its pool.
     #[inline]
     pub fn into_data(self) -> Vec<u8> {
-        let mut buf = self.buf;
-        buf.truncate(self.size);
+        let size = self.size;
+        let mut buf = self.buf.into_inner();
+        buf.truncate(size);
         buf
-    }
-
-    #[inline]
-    fn new(capacity: usize) -> Self {
-        let buf = vec![0; capacity];
-        Self { buf, size: 0 }
     }
 
     #[inline]
     fn zero() -> Self {
         Self {
-            buf: Vec::new(),
+            buf: Pooled::detached(Vec::new()),
             size: 0,
         }
-    }
-
-    #[inline]
-    fn reset(&mut self) {
-        self.buf.resize(self.buf.capacity(), 0);
-        self.size = 0;
-    }
-
-    #[inline]
-    fn resetted(mut self) -> Self {
-        self.reset();
-        self
     }
 
     #[inline]
@@ -649,6 +630,8 @@ impl SegmentBuf {
         other
     }
 }
+
+impl Eq for SegmentBuf {}
 
 impl PartialEq for SegmentBuf {
     #[inline]
@@ -668,11 +651,12 @@ impl std::fmt::Debug for SegmentBuf {
 }
 
 impl<T: AsRef<[u8]>> From<T> for SegmentBuf {
+    /// Returns a SegmentBuf holding a copy of the given data, in a buffer that does not belong to any pool.
     #[inline]
     fn from(data: T) -> Self {
         let size = data.as_ref().len();
         Self {
-            buf: data.as_ref().into(),
+            buf: Pooled::detached(data.as_ref().into()),
             size,
         }
     }
@@ -723,73 +707,49 @@ pub enum PartialPlacement {
 
 // ---
 
-/// Constructs new SegmentBuf's with the configures size and recycles unneeded SegmentBuf's.
-pub struct SegmentBufFactory {
-    buf_size: usize,
-    recycled: SegQueue<SegmentBuf>,
-}
+/// Constructs new SegmentBuf's with the configured size and takes back the ones dropped, see [`SegmentBufRecycler`].
+pub type SegmentBufFactory = Pool<SegmentBufRecycler>;
 
 impl SegmentBufFactory {
     /// Returns a new SegmentBufFactory with the given parameters.
+    #[inline]
     pub fn new(buf_size: usize) -> Self {
-        Self {
-            buf_size,
-            recycled: SegQueue::new(),
-        }
+        Self::with_recycler(SegmentBufRecycler { buf_size })
     }
 
-    /// Returns a new or recycled SegmentBuf.
+    /// Returns a new or recycled SegmentBuf, which returns to the factory when dropped.
     #[inline]
-    pub fn new_segment(&self) -> SegmentBuf {
-        match self.recycled.pop() {
-            Some(buf) => buf.resetted(),
-            None => SegmentBuf::new(self.buf_size),
-        }
-    }
-
-    /// Recycles the given SegmentBuf.
-    #[inline]
-    pub fn recycle(&self, buf: SegmentBuf) {
-        if buf.buf.capacity() == self.buf_size {
-            self.recycled.push(buf);
+    pub fn new_segment(self: &Arc<Self>) -> SegmentBuf {
+        SegmentBuf {
+            buf: self.take(),
+            size: 0,
         }
     }
 }
 
-// ---
-
-/// Constructs new raw Vec<u8> buffers with the configured size.
-pub struct BufFactory {
+/// Creates the buffers of a [`SegmentBufFactory`] and decides which returned ones it keeps.
+///
+/// Only buffers of exactly the configured size are kept, as the scanner reads into the whole buffer.
+pub struct SegmentBufRecycler {
     buf_size: usize,
-    recycled: SegQueue<Vec<u8>>,
 }
 
-impl BufFactory {
-    /// Returns a new BufFactory with the given parameters.
+impl Recycler for SegmentBufRecycler {
+    type Item = Vec<u8>;
+
     #[inline]
-    pub fn new(buf_size: usize) -> Self {
-        Self {
-            buf_size,
-            recycled: SegQueue::new(),
-        }
+    fn create(&self) -> Vec<u8> {
+        vec![0; self.buf_size]
     }
 
-    /// Returns a new or recycled buffer.
     #[inline]
-    pub fn new_buf(&self) -> Vec<u8> {
-        match self.recycled.pop() {
-            Some(mut buf) => {
-                buf.clear();
-                buf
-            }
-            None => Vec::with_capacity(self.buf_size),
-        }
+    fn reuse(&self, buf: &mut Vec<u8>) {
+        buf.resize(buf.capacity(), 0);
     }
 
-    /// Recycles the given buffer.
     #[inline]
-    pub fn recycle(&self, buf: Vec<u8>) {
-        self.recycled.push(buf);
+    fn keep(&self, buf: &Vec<u8>) -> bool {
+        buf.capacity() == self.buf_size
     }
 }
 
@@ -1015,9 +975,8 @@ impl<'a, 'b, D: Delimit> ScannerJumboIter<'a, 'b, D> {
             .flat_map(|(buf, ..)| buf.data())
             .cloned()
             .collect::<Vec<u8>>();
-        for (buf, ..) in self.fetched.drain(..) {
-            self.inner.scanner.sf.recycle(buf);
-        }
+        // The parts return to their pool.
+        self.fetched.clear();
 
         Some(Ok(Segment::Complete(buf.into())))
     }
