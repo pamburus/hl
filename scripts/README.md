@@ -68,7 +68,7 @@ just perf-gate v0.36.5 --mode sort
 ./scripts/perf-gate.py --base-hl path/to/base/hl --hl path/to/head/hl
 ```
 
-The base is checked out in the `.worktrees/perf-gate-base` worktree, which is kept for the next run so that the base builds incrementally. Local changes in it are discarded.
+The base is checked out by [`base_worktree.py`](base_worktree.py), in the `.worktrees/base-<sha>` worktree of the main worktree of the clone, and built in its `target` directory. Every worktree of the clone comparing with the same commit shares the worktree and its build. Local changes in it are discarded, and base worktrees unused for 14 days are removed. The `.worktrees/perf-gate-base` worktree of earlier versions is removed when found.
 
 Requires Python 3 and valgrind, which runs on Linux only. Elsewhere, the script runs itself in a Docker container, keeping the Linux builds and toolchains in Docker volumes.
 

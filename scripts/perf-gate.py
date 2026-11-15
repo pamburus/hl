@@ -6,9 +6,9 @@ Usage:
   perf-gate.py --base-hl PATH --hl PATH [...]
 
 Without --hl, builds the working tree and the commit where it forked from the base revision (origin/develop by
-default) in release mode, the base in a worktree it keeps for the next run. Each build runs on the same inputs in each
-mode under cachegrind, with one processing thread and an empty cache unless the mode sets otherwise, as many runs at a
-time as there are CPUs. The counts repeat to within a fraction of a percent, so one run of each is enough by default.
+default) in release mode, the base in the worktree of that commit shared by the worktrees of the clone (see
+base_worktree.py). Each build runs on the same inputs in each mode under cachegrind, with one processing thread and an
+empty cache unless the mode sets otherwise, as many runs at a time as there are CPUs. The counts repeat to within a fraction of a percent, so one run of each is enough by default.
 With more runs, the medians are compared.
 The check fails when the head exceeds the base by more than the threshold in any input and mode.
 
@@ -28,10 +28,11 @@ import tempfile
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
+import base_worktree
+
 ROOT = Path(__file__).resolve().parent.parent
 SAMPLES = ["kitchen-sink.log", "prometheus.log", "cafe.log"]
 IMAGE = "rust:1-bookworm"
-BASE_WORKTREE = ROOT / ".worktrees" / "perf-gate-base"
 
 # Arguments of each mode, and how it takes the input:
 #   file: the input file
@@ -173,18 +174,6 @@ def target_dir():
     return Path(os.environ.get("CARGO_TARGET_DIR", ROOT / "target"))
 
 
-def checkout_base(sha):
-    # A worktree kept from run to run, so that moving it to another base rewrites only the files that differ and the
-    # base builds incrementally. It belongs to this script, so local changes in it are discarded.
-    git("worktree", "prune")
-    if (BASE_WORKTREE / ".git").exists():
-        subprocess.run(["git", "-C", str(BASE_WORKTREE), "checkout", "-q", "--force", "--detach", sha], check=True)
-        subprocess.run(["git", "-C", str(BASE_WORKTREE), "clean", "-q", "-d", "--force"], check=True)
-    else:
-        git("worktree", "add", "-q", "--detach", str(BASE_WORKTREE), sha)
-    return BASE_WORKTREE
-
-
 def build(src, target):
     print(f"building {src}", flush=True)
     env = dict(os.environ, CARGO_TARGET_DIR=str(target))
@@ -192,9 +181,13 @@ def build(src, target):
     return target / "release" / "hl"
 
 
-def build_base(src, sha):
+def build_base(src, sha, mounted):
     # A target directory of its own: cargo gives a workspace crate the same identity wherever its source is, so in a
-    # shared one the head build would take the crates built for the base. The binary is kept by revision.
+    # shared one the head build would take the crates built for the base. The base worktree holds one revision, so its
+    # build stays next to the source. In Docker, the worktree is mounted read-only, and the bases take turns in one
+    # target directory in a volume, so the binary is kept by revision.
+    if not mounted:
+        return build(src, src / "target")
     hl = target_dir() / "perf-gate" / f"hl-{sha}"
     if not hl.exists():
         hl.parent.mkdir(parents=True, exist_ok=True)
@@ -298,7 +291,7 @@ def main():
         if not (base_hl and hl):
             if not opts.base_src:
                 opts.base = git("merge-base", "HEAD", opts.base)
-                base_src = checkout_base(opts.base)
+                base_src = base_worktree.checkout(opts.base)
                 if not shutil.which("valgrind"):
                     if sys.platform == "linux" or not shutil.which("docker"):
                         sys.exit("valgrind is not installed")
@@ -306,7 +299,7 @@ def main():
             else:
                 base_src = Path(opts.base_src)
             print(f"base: {opts.base}", flush=True)
-            base_hl = base_hl or build_base(base_src, opts.base)
+            base_hl = base_hl or build_base(base_src, opts.base, bool(opts.base_src))
             hl = hl or build(ROOT, target_dir())
         elif not shutil.which("valgrind"):
             sys.exit("valgrind is not installed")
