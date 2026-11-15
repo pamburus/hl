@@ -358,15 +358,18 @@ impl App {
                                     break;
                                 };
                             }
-                            Segment::Incomplete(segment, _) => {
+                            Segment::Incomplete(segment, part, delimiter) => {
                                 // A log entry too large to be read at once is shown as is, part by part,
                                 // like other text that is not a record. Every segment is sent, even
                                 // with nothing to show, as the writer takes them in order.
-                                let segment = if show_unparsed {
-                                    segment
-                                } else {
+                                // The last part ends with the output delimiter instead of the input one, if any.
+                                let segment = if !show_unparsed {
                                     sfi.recycle(segment);
                                     SegmentBuf::from(b"")
+                                } else if part == PartialPlacement::Last {
+                                    end_last_part(segment, delimiter, self.options.output_delimiter.as_bytes())
+                                } else {
+                                    segment
                                 };
                                 if txo.send((i, segment)).is_err() {
                                     break;
@@ -763,7 +766,6 @@ impl App {
         txo: Sender<(usize, Vec<u8>, TimestampIndex)>,
     ) {
         let mut processor = self.new_segment_processor(parser);
-        let delim = self.options.delimiter.clone().into_searcher();
         for (i, j, offset, segment) in rxi.iter() {
             let prefix = badges.prefix(i);
             match segment {
@@ -779,7 +781,7 @@ impl App {
                         return;
                     };
                 }
-                Segment::Incomplete(segment, part) => {
+                Segment::Incomplete(segment, part, delimiter) => {
                     // A log entry too large to be read at once is shown as is, part by part,
                     // like other text that is not a record. Every block is sent, even
                     // with nothing to show, as the merger takes them in order.
@@ -789,7 +791,7 @@ impl App {
                         Vec::new()
                     } else {
                         index.part = Some(part);
-                        split_entry_part(segment, part, prefix, delim.as_ref(), sfi)
+                        split_entry_part(segment, part, delimiter, prefix, sfi)
                     };
                     if txo.send((i, buf, index)).is_err() {
                         return;
@@ -1300,7 +1302,7 @@ impl<'a, D: Delimit> BlockScanner<'a, D> {
             let item = item?;
             open = matches!(
                 item,
-                Segment::Incomplete(_, PartialPlacement::First | PartialPlacement::Next)
+                Segment::Incomplete(_, PartialPlacement::First | PartialPlacement::Next, _)
             );
             if !Self::send(&mut position, item, i, txi) {
                 break;
@@ -1410,13 +1412,13 @@ fn flush_wait(received: Instant, now: Instant, sync_interval: Duration) -> Durat
 ///
 /// The merger counts only the data toward its memory limit, so a part is sent in its own buffer only if it fills most of it,
 /// as a part in the middle usually does. Any other part is copied into a buffer of its size: the first part, which also gets
-/// `prefix`, the last part, which loses its trailing delimiter, and a part in the middle cut short by the end of a file still
-/// being written.
+/// `prefix`, the last part, which loses its trailing `delimiter` and a line break before it, see [`last_part_len`], and a part
+/// in the middle cut short by the end of a file still being written.
 fn split_entry_part(
     segment: SegmentBuf,
     part: PartialPlacement,
+    delimiter: usize,
     prefix: &str,
-    delim: &dyn Search,
     sfi: &SegmentBufFactory,
 ) -> Vec<u8> {
     if part == PartialPlacement::Next && segment.len() * 2 >= segment.capacity() {
@@ -1424,16 +1426,35 @@ fn split_entry_part(
     }
     let mut data = segment.data();
     let prefix = if part == PartialPlacement::First { prefix } else { "" };
-    if part == PartialPlacement::Last
-        && let Some(found) = delim.search_r(data, true).filter(|x| x.end == data.len())
-    {
-        data = &data[..found.start];
+    if part == PartialPlacement::Last {
+        data = &data[..last_part_len(data, delimiter)];
     }
     let mut buf = Vec::with_capacity(prefix.len() + data.len());
     buf.extend_from_slice(prefix.as_bytes());
     buf.extend_from_slice(data);
     sfi.recycle(segment);
     buf
+}
+
+/// Ends the last part of a log entry too large to be read at once with the output delimiter instead of the input one, if any,
+/// and a line break before it, see [`last_part_len`].
+fn end_last_part(mut segment: SegmentBuf, delimiter: usize, output_delimiter: &[u8]) -> SegmentBuf {
+    segment.truncate(last_part_len(segment.data(), delimiter));
+    segment.extend_from_slice(output_delimiter);
+    segment
+}
+
+/// Returns the length of the last part of a log entry too large to be read at once without the delimiter it ends with,
+/// and without a line break before it, which is dropped too when text that is not a record is split into lines.
+///
+/// Only the last part itself is looked at, so a line break that ends the part before it is kept, see #1709.
+#[inline]
+fn last_part_len(data: &[u8], delimiter: usize) -> usize {
+    // Only the end is checked, as searching for the line break would scan the whole part when it has none.
+    match &data[..data.len() - delimiter] {
+        [rest @ .., b'\n'] => rest.len() - usize::from(rest.last() == Some(&b'\r')),
+        rest => rest.len(),
+    }
 }
 
 // ---
