@@ -138,6 +138,11 @@ uncovered base="origin/develop": (setup "coverage")
 bench *args: (setup "build")
     cargo bench --workspace --locked {{ args }}
 
+[doc('Compare benchmarks of the working tree with where it forked from {{base}}, without reference benchmarks, example: `just bench-compare origin/develop timestamp`')]
+[positional-arguments]
+bench-compare base="origin/develop" *args: (setup "build")
+    @base="$1"; shift; scripts/bench-compare.py --base "$base" -- "$@"
+
 [doc('Run stress tests on a release build, `profile` is `quick` or `full`, example: `just stress-test full --case long-line`')]
 stress-test profile="quick" *args: build-release
     @scripts/stress-test.py --hl "${CARGO_TARGET_DIR:-target}/release/hl" --profile {{ profile }} {{ args }}

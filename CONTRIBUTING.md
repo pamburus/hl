@@ -129,6 +129,10 @@ The unrelated issue gets its own branch and pull request.
 
 The `perf-gate` CI job compares the instruction counts of the pull request with those of its base, and fails when they grow by more than 2%. Run `just perf-gate` to get the same comparison locally. For a change that adds cost on purpose, a maintainer adds the `perf-regression-accepted` label. See [perf-gate.py](scripts/README.md#perf-gatepy) for details.
 
+Instruction counts do not show effects of caches, memory access or threads, so wall-clock time is measured with the benchmarks, locally only, because timings on shared CI runners vary too much. Run `just bench-compare` to compare the benchmarks of the working tree with where it forked from `origin/develop`. A criterion filter narrows it down, for example `just bench-compare origin/develop timestamp`. It skips the reference benchmarks, which measure third-party code and language or library primitives. Run it on an otherwise idle machine. See [bench-compare.py](scripts/README.md#bench-comparepy) for details.
+
+For a performance-sensitive change, run `just bench-compare` once the review has settled and the pull request is ready to merge, and post its summary in the pull request.
+
 ### Code Review Process
 
 - Maintainers will review your pull request and may suggest changes
@@ -143,6 +147,7 @@ hl is written in Rust. The common tasks are [just](https://just.systems) recipes
 
 - [Rust](https://rustup.rs/) via rustup, which picks the toolchain from `rust-toolchain.toml`; formatting additionally uses the nightly toolchain
 - [just](https://just.systems/man/en/packages.html)
+- [uv](https://docs.astral.sh/uv/getting-started/installation/), for `just bench-compare`
 - A Rust-compatible IDE or editor (VS Code with rust-analyzer, IntelliJ IDEA, etc.)
 
 ### Building from Source

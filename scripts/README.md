@@ -74,6 +74,26 @@ All bases build in turns in the `target/base` directory of the main worktree, so
 
 Requires Python 3 and valgrind, which runs on Linux only. Elsewhere, the script runs itself in a Docker container, keeping the Linux builds and toolchains in Docker volumes.
 
+## bench-compare.py
+
+Compares the wall-clock time of the benchmarks of the working tree with those of the commit where it forked from `origin/develop`, to see effects of caches, memory access and threads that instruction counts do not show. Timings on shared CI runners vary too much, so it runs locally only, on an otherwise idle machine.
+
+- **Base**: runs the benchmarks in the base worktree and saves them as a criterion baseline. The base worktree and its build are shared with `perf-gate` as described there, and the benchmarks of the base run under the same lock as the base builds.
+- **Head**: runs the benchmarks of the working tree with `--baseline-lenient`, so benchmarks the base does not have are measured without failing the run. Criterion decides whether a difference is beyond the noise.
+- **Benchmarks**: skips the reference benchmarks, which measure third-party code and language or library primitives, by setting `HL_BENCH_NO_REFERENCE`.
+- **Results**: kept in the `criterion` directory of the target directory of the working tree; the baseline of an earlier run is removed first.
+- **Concurrency**: one run at a time in the clone, under a lock in the git common directory; another run fails right away. Separate clones run independently.
+
+```bash
+# Compare with where the branch forked from origin/develop
+just bench-compare
+
+# Compare with another revision, only the benchmarks matching a criterion filter
+just bench-compare v0.36.5 timestamp
+```
+
+Requires [uv](https://docs.astral.sh/uv/), which runs the script.
+
 ## coverage-diff-analysis.py
 
 A comprehensive tool that compares test coverage between two Git commits to identify exactly which changed lines lack test coverage.
