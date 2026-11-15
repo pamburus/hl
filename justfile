@@ -42,13 +42,14 @@ build: (setup "build")
 build-release: (setup "build")
     cargo build --release
 
-[doc('Run the application, example: `just run -- --help`')]
+[doc('Run the application, example: `just run --help`')]
 run *args: build
     cargo run -- {{ args }}
 
-[doc('Run tests for all packages in the workspace')]
-test: (setup "build")
-    cargo test --workspace
+[doc('Run tests for all packages in the workspace, example: `just test test_name -- --nocapture`')]
+[positional-arguments]
+test *args: (setup "build")
+    cargo test --workspace "$@"
 
 [doc('Check the code for errors without building an executable')]
 check: (setup "build")
