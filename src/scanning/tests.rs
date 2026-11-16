@@ -213,6 +213,119 @@ fn test_substr_search_r() {
 }
 
 #[rstest]
+fn test_search_r_incremental_matches_search_r(
+    #[values(
+        Delimiter::Byte(b'\n'),
+        Delimiter::Str("\r\n".into()),
+        Delimiter::Str("{x{".into()),
+        Delimiter::Newline,
+        Delimiter::Json,
+        Delimiter::PrettyCompatible
+    )]
+    delimiter: Delimiter,
+) {
+    // Every buffer of up to 5 bytes of characters that each delimiter depends on, grown byte by byte
+    // until a delimiter is found, and grown from each of those prefixes to its full length at once,
+    // gets the same result as a search of it all.
+    const ALPHABET: &[u8] = b"{}[]:,\n\r\t x";
+    const MAX_LEN: u32 = 5;
+
+    // Boxed, to go through each of the searchers that pass the search on.
+    let searcher: Box<dyn Search> = Box::new(delimiter.into_searcher());
+    for len in 0..=MAX_LEN {
+        for n in 0..ALPHABET.len().pow(len) {
+            let buf = (0..len)
+                .scan(n, |n, _| {
+                    let c = ALPHABET[*n % ALPHABET.len()];
+                    *n /= ALPHABET.len();
+                    Some(c)
+                })
+                .collect::<Vec<_>>();
+            let mut progress = SearchProgress::default();
+            for k in 0..=buf.len() {
+                let mut jumped = progress;
+                assert_eq!(
+                    searcher.search_r_incremental(&buf, &mut jumped),
+                    searcher.search_r(&buf, true),
+                    "buffer {:?} grown from {k}",
+                    String::from_utf8_lossy(&buf),
+                );
+                let found = searcher.search_r_incremental(&buf[..k], &mut progress);
+                assert_eq!(
+                    found,
+                    searcher.search_r(&buf[..k], true),
+                    "buffer {:?} grown to {k}",
+                    String::from_utf8_lossy(&buf),
+                );
+                if found.is_some() {
+                    // A search that finds a delimiter leaves the progress as it was.
+                    assert_eq!(
+                        searcher.search_r_incremental(&buf[..k], &mut progress),
+                        found,
+                        "buffer {:?} grown to {k} and searched again",
+                        String::from_utf8_lossy(&buf),
+                    );
+                    break;
+                }
+            }
+        }
+    }
+}
+
+#[rstest]
+fn test_json_search_r_incremental_skips_searched_whitespace(
+    #[values(" ", "\t", "\r", " \t\r")] blank: &str,
+    #[values(1, 3, 4096)] chunk: usize,
+) {
+    // The whitespace after a closing brace, searched while the buffer grows, is not read again
+    // by the next searches, so that a growing run of it costs no more than its length in total.
+    let blanks = blank.repeat(16384 / blank.len());
+    let mut buf = format!("{{\"a\":1}}{blanks}").into_bytes();
+    let mut progress = SearchProgress::default();
+    for end in (1..buf.len()).step_by(chunk).chain([buf.len()]) {
+        assert_eq!(
+            JsonDelimitSearcher.search_r_incremental(&buf[..end], &mut progress),
+            None
+        );
+    }
+
+    let grown = buf.len();
+    buf.extend_from_slice(b"\nx");
+    let expected = JsonDelimitSearcher.search_r(&buf, true);
+    assert_eq!(expected, Some(7..grown + 1));
+
+    // Replaced with what keeps the brace from ending a delimiter, to tell whether it is read again.
+    buf[7..grown].fill(b'x');
+    assert_eq!(JsonDelimitSearcher.search_r_incremental(&buf, &mut progress), expected);
+}
+
+#[rstest]
+#[case::byte(Delimiter::Byte(b'\n'), b"\n")]
+#[case::str(Delimiter::Str("\r\n".into()), b"\r\n")]
+#[case::newline(Delimiter::Newline, b"\n")]
+#[case::pretty_compatible(Delimiter::PrettyCompatible, b"\n")]
+fn test_search_r_incremental_skips_searched_data(
+    #[case] delimiter: Delimiter,
+    #[case] pattern: &[u8],
+    #[values(1, 3, 4096)] chunk: usize,
+) {
+    // The data searched while the buffer grows is not read again by the next searches,
+    // so that a growing line costs no more than its length in total.
+    let searcher = delimiter.into_searcher();
+    let mut buf = vec![b'x'; 16384];
+    let mut progress = SearchProgress::default();
+    for end in (1..buf.len()).step_by(chunk).chain([buf.len()]) {
+        assert_eq!(searcher.search_r_incremental(&buf[..end], &mut progress), None);
+    }
+
+    // Replaced with a delimiter, to tell whether it is read again.
+    buf[..pattern.len()].copy_from_slice(pattern);
+    buf.push(b'x');
+    assert!(searcher.search_r(&buf, true).is_some());
+    assert_eq!(searcher.search_r_incremental(&buf, &mut progress), None);
+}
+
+#[rstest]
 #[case::fitting(2, b"x", b"abx")]
 #[case::filling(3, b"x", b"abcx")]
 #[case::growing(3, b"xy", b"abcxy")]

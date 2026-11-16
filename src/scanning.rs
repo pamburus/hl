@@ -262,6 +262,17 @@ pub trait Search {
     #[must_use]
     fn search_r(&self, buf: &[u8], edge: bool) -> Option<Range<usize>>;
 
+    /// Searches for the delimiter in the buffer from the right, like [`Search::search_r`] with `edge`,
+    /// in a buffer that only grows at its end between searches.
+    ///
+    /// The first search of a buffer starts from [`SearchProgress::default`]. A search that finds no delimiter
+    /// updates `progress` with what the next search of the grown buffer needs to know, so that only
+    /// the delimiters that the grown data can complete are looked for, and searching a growing buffer
+    /// each time it grows costs no more than its length in total. After a delimiter is found, or the
+    /// buffer changes before its end, the next search starts from [`SearchProgress::default`] again.
+    #[must_use]
+    fn search_r_incremental(&self, buf: &[u8], progress: &mut SearchProgress) -> Option<Range<usize>>;
+
     /// Searches for the delimiter in the buffer from the left.
     #[must_use]
     fn search_l(&self, buf: &[u8], edge: bool) -> Option<Range<usize>>;
@@ -292,10 +303,46 @@ pub trait Search {
     fn partial_match_l(&self, buf: &[u8]) -> Option<usize>;
 }
 
+/// What a search of a growing buffer that found no delimiter knows for the next search,
+/// see [`Search::search_r_incremental`].
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct SearchProgress {
+    // `buf[..len]` has been searched.
+    len: usize,
+    // What the searcher keeps for the next search, which for most of them is where it starts,
+    // as a delimiter can only be completed with the data at `from` or later. The JSON searcher
+    // starts at `len` instead and keeps here a closing brace it has yet to resolve, if `from < len`.
+    from: usize,
+}
+
+impl SearchProgress {
+    /// Returns where the searched data ends.
+    #[inline]
+    pub fn end(&self) -> usize {
+        self.len
+    }
+
+    /// Returns what the next search of `buf` needs to know when a delimiter can only be completed with the data at `from` or later.
+    #[inline]
+    fn up_to(buf: &[u8], from: usize) -> Self {
+        Self { len: buf.len(), from }
+    }
+}
+
 impl Search for u8 {
     #[inline(always)]
     fn search_r(&self, buf: &[u8], _: bool) -> Option<Range<usize>> {
         memrchr(*self, buf).map(|x| x..x + 1)
+    }
+
+    #[inline(always)]
+    fn search_r_incremental(&self, buf: &[u8], progress: &mut SearchProgress) -> Option<Range<usize>> {
+        let from = progress.from;
+        let found = memrchr(*self, &buf[from..]).map(|x| from + x..from + x + 1);
+        if found.is_none() {
+            *progress = SearchProgress::up_to(buf, buf.len());
+        }
+        found
     }
 
     #[inline(always)]
@@ -321,6 +368,11 @@ impl Search for Box<dyn Search> {
     }
 
     #[inline(always)]
+    fn search_r_incremental(&self, buf: &[u8], progress: &mut SearchProgress) -> Option<Range<usize>> {
+        self.as_ref().search_r_incremental(buf, progress)
+    }
+
+    #[inline(always)]
     fn search_l(&self, buf: &[u8], edge: bool) -> Option<Range<usize>> {
         self.as_ref().search_l(buf, edge)
     }
@@ -340,6 +392,11 @@ impl Search for Arc<dyn Search> {
     #[inline(always)]
     fn search_r(&self, buf: &[u8], edge: bool) -> Option<Range<usize>> {
         self.as_ref().search_r(buf, edge)
+    }
+
+    #[inline(always)]
+    fn search_r_incremental(&self, buf: &[u8], progress: &mut SearchProgress) -> Option<Range<usize>> {
+        self.as_ref().search_r_incremental(buf, progress)
     }
 
     #[inline(always)]
@@ -426,6 +483,28 @@ where
     fn len(&self) -> usize {
         self.delimiter.deref().as_ref().len()
     }
+
+    /// Searches for the last delimiter in the buffer that starts at `from` or later.
+    #[inline]
+    fn search_r_from(&self, buf: &[u8], from: usize) -> Option<Range<usize>> {
+        let needle = self.delimiter.deref().as_ref();
+        if needle.is_empty() {
+            return None;
+        }
+
+        let b = needle[0];
+        let mut pos = buf.len();
+        loop {
+            if let Some(i) = memrchr(b, &buf[from..pos]) {
+                pos = from + i;
+            } else {
+                return None;
+            }
+            if buf[pos..].starts_with(needle) {
+                return Some(pos..pos + needle.len());
+            }
+        }
+    }
 }
 
 impl<D> Search for SubStrSearcher<D>
@@ -435,23 +514,17 @@ where
 {
     #[inline]
     fn search_r(&self, buf: &[u8], _edge: bool) -> Option<Range<usize>> {
-        let needle = self.delimiter.deref().as_ref();
-        if needle.is_empty() {
-            return None;
-        }
+        self.search_r_from(buf, 0)
+    }
 
-        let b = needle[0];
-        let mut pos = buf.len();
-        loop {
-            if let Some(i) = memrchr(b, &buf[..pos]) {
-                pos = i;
-            } else {
-                return None;
-            }
-            if buf[pos..].starts_with(needle) {
-                return Some(pos..pos + needle.len());
-            }
+    #[inline]
+    fn search_r_incremental(&self, buf: &[u8], progress: &mut SearchProgress) -> Option<Range<usize>> {
+        let found = self.search_r_from(buf, progress.from);
+        if found.is_none() {
+            // A delimiter that fits in the searched data would have been found there.
+            *progress = SearchProgress::up_to(buf, (buf.len() + 1).saturating_sub(self.len()).min(buf.len()));
         }
+        found
     }
 
     #[inline]
@@ -506,16 +579,35 @@ where
 /// Searches for a new line in a byte slice that can be either LF or CRLF.
 pub struct NewlineSearcher;
 
-impl Search for NewlineSearcher {
+impl NewlineSearcher {
+    /// Searches for the last new line in the buffer with its line feed at `from` or later.
     #[inline]
-    fn search_r(&self, buf: &[u8], _edge: bool) -> Option<Range<usize>> {
-        memrchr(b'\n', buf).map(|i| {
+    fn search_r_from(buf: &[u8], from: usize) -> Option<Range<usize>> {
+        memrchr(b'\n', &buf[from..]).map(|i| {
+            let i = from + i;
             if i > 0 && buf[i - 1] == b'\r' {
                 i - 1..i + 1
             } else {
                 i..i + 1
             }
         })
+    }
+}
+
+impl Search for NewlineSearcher {
+    #[inline]
+    fn search_r(&self, buf: &[u8], _edge: bool) -> Option<Range<usize>> {
+        Self::search_r_from(buf, 0)
+    }
+
+    #[inline]
+    fn search_r_incremental(&self, buf: &[u8], progress: &mut SearchProgress) -> Option<Range<usize>> {
+        let found = Self::search_r_from(buf, progress.from);
+        if found.is_none() {
+            // A line feed in the searched data would have been found there.
+            *progress = SearchProgress::up_to(buf, buf.len());
+        }
+        found
     }
 
     #[inline]
